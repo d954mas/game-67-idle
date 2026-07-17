@@ -9,5 +9,6 @@ items.define({
   tags = { "heal" },
   base_value = 10,
   stack = 99,
+  acquire = { cost = items.free() },
   use = { effect_id = "heal", params = { amount = 25 } },
 })

@@ -38,6 +38,7 @@ bool items_exists(item_id_t id);
 bool items_try_get(item_id_t id, item_def_ref_t *out);
 bool items_try_get_string(const char *def_id, item_def_ref_t *out);
 item_core_t items_core(item_def_ref_t ref);
+const char *items_def_id(item_def_ref_t ref);
 item_transition_t items_acquire_transition(item_def_ref_t ref);
 uint32_t items_cost_count(item_cost_ref_t cost);
 item_cost_entry_t items_cost_at(item_cost_ref_t cost, uint32_t index);
@@ -230,6 +231,10 @@ bool items_can_afford(items_container_ref_t container, const char *def_id, int64
     (defined(ITEMS_RUNTIME_PACKAGE_ENABLED) && ITEMS_RUNTIME_PACKAGE_ENABLED)
 items_result_t items_try_pay_cost(
     item_cost_ref_t cost, items_payment_scope_t scope, const char *reason);
+items_result_t items_try_acquire(
+    items_container_ref_t destination, item_def_ref_t item,
+    items_payment_scope_t payment, const char *reason,
+    item_entry_ref_t *out_entry);
 #endif
 
 items_result_t items_try_unique_create(

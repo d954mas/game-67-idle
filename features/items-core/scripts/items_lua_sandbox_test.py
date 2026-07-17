@@ -132,6 +132,7 @@ class ItemsLuaSandboxTests(unittest.TestCase):
                 "kind": "currency", "name": "Gold", "stack": 0,
             },
             {
+                "acquire": {"cost": {"__studio_kind": "free"}},
                 "authoring_mode": "none", "base_value": 10,
                 "created": "2026-07-07", "icon": "icons/potion",
                 "id": "tmpl.potion", "kind": "consumable",

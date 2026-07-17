@@ -328,6 +328,150 @@ void test_atomic_payment_plans_scope_and_slots_before_one_commit(void) {
     TEST_ASSERT_EQUAL_STRING("shop_buy:sword", items_ev_payment_reason(payment));
 }
 
+void test_paid_acquire_plans_destination_after_projected_payment(void) {
+    items_container_ref_t destination = ITEMS_CONTAINER_REF_NONE;
+    items_container_desc_t desc = {
+        .capacity = 2,
+        .policy = ITEMS_CONTAINER_POLICY_GENERIC,
+        .lifetime = ITEMS_LIFETIME_PERSISTENT,
+    };
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_container_create(desc, &destination));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(destination, "tmpl.gold", 10, 0, "loot:test", NULL, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(destination, "tmpl.wood", 1, 1, "loot:test", NULL, NULL));
+
+    item_def_ref_t sword;
+    TEST_ASSERT_TRUE(items_try_get_string("tmpl.sword", &sword));
+    items_payment_scope_t scope = {.count = 1, .containers = {destination}};
+    ItemsState before = items_state;
+    game_event_frame_reset();
+    item_entry_ref_t acquired = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INSUFFICIENT,
+        items_try_acquire(destination, sword, scope, "shop_buy:sword", &acquired));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    TEST_ASSERT_EQUAL_UINT32(ITEM_ENTRY_REF_NONE.index, acquired.index);
+    int event_count = 0;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(destination, "tmpl.wood", 1, 1, "loot:test", NULL, NULL));
+    game_event_frame_reset();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_acquire(destination, sword, scope, "shop_buy:sword", &acquired));
+    TEST_ASSERT_EQUAL_STRING("tmpl.sword", items_entry_view(acquired).def_id);
+    TEST_ASSERT_EQUAL_INT64(1, items_entry_view(acquired).count);
+    TEST_ASSERT_EQUAL_INT64(0, items_stack_count(destination, "tmpl.gold"));
+    TEST_ASSERT_EQUAL_INT64(0, items_stack_count(destination, "tmpl.wood"));
+    const game_event_t *events = game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(1, event_count);
+    TEST_ASSERT_EQUAL_UINT64(items_ev_acquire_type().value, events[0].type.value);
+    const ItemsEvAcquire *event = (const ItemsEvAcquire *)events[0].payload;
+    TEST_ASSERT_EQUAL_HEX64(items_core(sword).id.value, event->item.value);
+    TEST_ASSERT_EQUAL_INT64(items_container_id(destination), event->destination_id);
+    TEST_ASSERT_EQUAL_INT64(items_entry_id(acquired), event->entry_id);
+    TEST_ASSERT_TRUE(event->paid);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0x5be1d477269e01d7), event->cost_fingerprint.value);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0x01b58d0daea0d040), event->scope_fingerprint.value);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0x993b4bc5078406e5), event->source_fingerprint.value);
+    TEST_ASSERT_EQUAL_INT64(2, event->requirement_count);
+    TEST_ASSERT_EQUAL_INT64(12, event->applied_units);
+    TEST_ASSERT_EQUAL_STRING("shop_buy:sword", items_ev_acquire_reason(event));
+}
+
+void test_acquire_refusals_are_atomic_and_explicit_free_is_distinct(void) {
+    items_container_desc_t generic = {
+        .capacity = 2,
+        .policy = ITEMS_CONTAINER_POLICY_GENERIC,
+        .lifetime = ITEMS_LIFETIME_PERSISTENT,
+    };
+    items_container_ref_t payer = ITEMS_CONTAINER_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_container_create(generic, &payer));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(payer, "tmpl.gold", 10, 0, "loot:test", NULL, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(payer, "tmpl.wood", 2, 1, "loot:test", NULL, NULL));
+    items_payment_scope_t payment = {.count = 1, .containers = {payer}};
+
+    items_container_ref_t full = ITEMS_CONTAINER_REF_NONE;
+    items_container_desc_t one_slot = generic;
+    one_slot.capacity = 1;
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_container_create(one_slot, &full));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(full, "tmpl.wood", 1, 0, "loot:test", NULL, NULL));
+    item_def_ref_t sword;
+    TEST_ASSERT_TRUE(items_try_get_string("tmpl.sword", &sword));
+    item_entry_ref_t acquired = ITEM_ENTRY_REF_NONE;
+    ItemsState before = items_state;
+    game_event_frame_reset();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_CAPACITY,
+        items_try_acquire(full, sword, payment, "shop_buy:sword", &acquired));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+
+    items_container_ref_t wallet = ITEMS_CONTAINER_REF_NONE;
+    items_container_desc_t currency_only = one_slot;
+    currency_only.policy = ITEMS_CONTAINER_POLICY_CURRENCY_ONLY;
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_container_create(currency_only, &wallet));
+    before = items_state;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_POLICY,
+        items_try_acquire(wallet, sword, payment, "shop_buy:sword", &acquired));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+
+    items_container_ref_t temporary = create_ephemeral_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
+    before = items_state;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_WRONG_STORAGE,
+        items_try_acquire(temporary, sword, payment, "shop_buy:sword", &acquired));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+
+    item_def_ref_t energy;
+    TEST_ASSERT_TRUE(items_try_get_string("tmpl.energy", &energy));
+    before = items_state;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_NOT_FOUND,
+        items_try_acquire(wallet, energy, payment, "shop_buy:energy", &acquired));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    int event_count = 0;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+
+    items_container_ref_t free_destination = ITEMS_CONTAINER_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_container_create(one_slot, &free_destination));
+    item_def_ref_t potion;
+    TEST_ASSERT_TRUE(items_try_get_string("tmpl.potion", &potion));
+    items_payment_scope_t no_payment = {0};
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_acquire(
+            free_destination, potion, no_payment, "quest_reward:daily", &acquired));
+    TEST_ASSERT_EQUAL_STRING("tmpl.potion", items_entry_view(acquired).def_id);
+    const game_event_t *events = game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(1, event_count);
+    const ItemsEvAcquire *event = (const ItemsEvAcquire *)events[0].payload;
+    TEST_ASSERT_EQUAL_UINT64(items_ev_acquire_type().value, events[0].type.value);
+    TEST_ASSERT_EQUAL_HEX64(items_core(potion).id.value, event->item.value);
+    TEST_ASSERT_EQUAL_INT64(items_container_id(free_destination), event->destination_id);
+    TEST_ASSERT_EQUAL_INT64(items_entry_id(acquired), event->entry_id);
+    TEST_ASSERT_FALSE(event->paid);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0), event->cost_fingerprint.value);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0), event->scope_fingerprint.value);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0), event->source_fingerprint.value);
+    TEST_ASSERT_EQUAL_INT64(0, event->requirement_count);
+    TEST_ASSERT_EQUAL_INT64(0, event->applied_units);
+    TEST_ASSERT_EQUAL_STRING("quest_reward:daily", items_ev_acquire_reason(event));
+}
+
 void test_rebuild_rejects_reserved_persisted_counters(void) {
     (void)create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
     char error[128] = {0};
@@ -798,6 +942,8 @@ int main(void) {
     RUN_TEST(test_rebuild_rejects_duplicates_and_counter_regression);
     RUN_TEST(test_staged_runtime_validation_rejects_graph_without_publishing_indices);
     RUN_TEST(test_atomic_payment_plans_scope_and_slots_before_one_commit);
+    RUN_TEST(test_paid_acquire_plans_destination_after_projected_payment);
+    RUN_TEST(test_acquire_refusals_are_atomic_and_explicit_free_is_distinct);
     RUN_TEST(test_rebuild_rejects_reserved_persisted_counters);
     RUN_TEST(test_one_hundred_persistent_containers_round_trip);
     RUN_TEST(test_loaded_maximum_ids_and_long_definition_reseed_without_truncation);

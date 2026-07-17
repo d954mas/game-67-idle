@@ -503,6 +503,11 @@ item_core_t items_core(item_def_ref_t ref) {
     return core;
 }
 
+const char *items_def_id(item_def_ref_t ref) {
+    NT_ASSERT(s_catalog != NULL && ref._index < s_item_count && "items_def_id: invalid item ref");
+    return catalog_item_string(ref._index, 8U);
+}
+
 bool items_has_currency(item_def_ref_t ref) {
     if (s_catalog == NULL || ref._index >= s_item_count) {
         return false;

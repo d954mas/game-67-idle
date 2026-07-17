@@ -68,6 +68,7 @@ The ownership API is:
 
 - persistent or ephemeral `items_try_container_create`, destroy-empty, and resize;
 - stack add/remove/count/afford operations against an explicit container ref;
+- atomic composite payment and paid/explicit-free catalog acquisition;
 - unique entry create/destroy and whole/split/merge move operations;
 - persistent ID lookup plus generation-checked runtime refs.
 
@@ -84,7 +85,10 @@ FNV-1a over the named `items.payment.*.v1` domain followed by canonical
 little-endian 64-bit fields. `requirement_count`, `scope_count`, and
 `source_entry_count` describe the bounded plan; `requested_units` and
 `applied_units` are the overflow-checked sums of all resource counts and are
-equal on success. A refusal emits no event.
+equal on success. A refusal emits no event. `items.acquire` is the sole success
+event for the combined verb and records the acquired item and destination/entry
+IDs plus the same payment fingerprints and totals; explicit-free acquisition
+sets paid false and all payment fields to zero.
 
 Games create concrete inventory, wallet, equipment, merchant, and chest
 containers. Capacity is a finite slot range; built-in serializable policy is

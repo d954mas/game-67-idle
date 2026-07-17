@@ -19,22 +19,22 @@ atomicity.
 
 ## Done when
 
-- [ ] `items_try_pay_cost` accepts one normalized resource-only cost plus an
+- [x] `items_try_pay_cost` accepts one normalized resource-only cost plus an
       explicit ordered bounded runtime payment scope. Scope overflow or duplicate
       source containers assert as developer errors. It creates a deterministic plan,
       consumes containers in scope order and compatible stacks by ascending
       slot, preflights every source entry, then commits all or nothing.
-- [ ] Duplicate item requirements are canonicalized by export. Malformed,
+- [x] Duplicate item requirements are canonicalized by export. Malformed,
       overflowing, or non-positive entries in the opaque normalized runtime cost
       are corrupt-catalog/developer assertions, never gameplay refusal. Runtime
       never performs a partial loop of public remove calls or hidden global search.
-- [ ] `items_try_acquire` pays `acquire.cost` and creates/adds the definition in
+- [x] `items_try_acquire` pays `acquire.cost` and creates/adds the definition in
       an explicit destination container as one commit; failed capacity, policy,
       uniqueness, payment, or creation leaves state unchanged.
-- [ ] If destination is also a payment source, acquire applies the complete
+- [x] If destination is also a payment source, acquire applies the complete
       payment plan to projected state before planning placement/merge/ID
       allocation, then commits the combined plan once.
-- [ ] Missing `acquire.cost` makes generic acquisition unavailable; free
+- [x] Missing `acquire.cost` makes generic acquisition unavailable; free
       acquisition is accepted only when authored explicitly as `items.free()`.
 - [ ] `items_try_upgrade_instance(item_entry_ref_t entry, target_level, payment, reason)`
       requires the next valid level in v1, obtains `cost_to_reach[target_level]`,
@@ -73,3 +73,8 @@ atomicity.
   and a truthful typed `items.payment` summary event. Focused Items,
   progression, curve, and template-composition native tests pass; independent
   review findings on event semantics and slot-order evidence were addressed.
+- 2026-07-17: Added atomic paid/explicit-free acquisition against projected
+  post-payment state, including destination-source slot reuse, policy/capacity/
+  storage/unavailable refusal equality, stable result events, and catalog-ID
+  access in generated-C and runtime-package backends. Independent logic review
+  accepted the slice; Items API/runtime, progression, and composition tests pass.

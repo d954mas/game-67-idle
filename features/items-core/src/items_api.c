@@ -57,6 +57,11 @@ item_core_t items_core(item_def_ref_t ref) {
     return items_game_internal_core(ref._index);
 }
 
+const char *items_def_id(item_def_ref_t ref) {
+    NT_ASSERT(ref._index < items_game_internal_item_count() && "items_def_id: invalid item ref");
+    return items_game_internal_def_id(ref._index);
+}
+
 item_transition_t items_acquire_transition(item_def_ref_t ref) {
     NT_ASSERT(ref._index < items_game_internal_item_count() &&
               "items_acquire_transition: invalid item ref");
