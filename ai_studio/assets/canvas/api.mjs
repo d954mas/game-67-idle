@@ -477,13 +477,13 @@ export function createCanvasApi(root) {
       // validates the method + surfaces every refusal.
       if (parts.length === 5 && sub === "alpha" && req.method === "POST") {
         const body = await readJsonBody(req);
-        sendMutation(200, await locked(id, () => alphaCutout(root, {
+        sendMutation(200, await alphaCutout(root, {
           projectId: id,
           elementId: body.elementId,
           elementIds: Array.isArray(body.elementIds) ? body.elementIds : undefined,
           method: body.method,
           regions: body.regions,
-        })));
+        }));
         return true;
       }
 

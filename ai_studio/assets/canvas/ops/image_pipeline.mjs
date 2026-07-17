@@ -1064,7 +1064,7 @@ export function mintAlphaCopy(root, projectId, source, newSrc, chosen, alphaMeta
 // Single-element path. T0336: the cutout is minted as a NEW element beside the source (see
 // mintAlphaCopy); the source element and its pixels are NEVER touched — undo removes the copy and
 // leaves the original byte-identical, because it was never written.
-export async function alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt, corridorKey, vitmatte, birefnet) {
+async function alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt, corridorKey, vitmatte, birefnet, dependencies = {}) {
   const element = (before.elements || []).find((item) => item.id === elementId);
   if (!element) throw new Error(`element not found: ${elementId}`);
   if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
@@ -1075,38 +1075,41 @@ export async function alphaCutoutSingle(root, projectId, before, elementId, chos
   // regions (runCorridorKeyCutoutTool); no early refusal here anymore.
   const specRegions = resolveAlphaRegions(element, regions);
 
-  const { newSrc, report } = await runOneAlphaKeyer(root, projectId, element, chosen, specRegions, corridorKey, vitmatte, birefnet);
+  const runKeyer = dependencies.runKeyer || runOneAlphaKeyer;
+  const prepareTechnicalGate = dependencies.prepareTechnicalGate || prepareAutomaticTechnicalGate;
+  const { newSrc, report } = await runKeyer(root, projectId, element, chosen, specRegions, corridorKey, vitmatte, birefnet);
+  const outputBytes = readFileSync(resolveProjectFile(root, projectId, newSrc));
+  const preparedGate = await prepareTechnicalGate(root, before, outputBytes);
 
-  // Re-read to avoid clobbering concurrent edits, read the SOURCE (untouched) for its
-  // placement/name, then mint the cutout as a NEW element beside it.
-  const current = getProject(root, projectId);
-  const source = (current.elements || []).find((item) => item.id === elementId);
-  if (!source) throw new Error(`element not found: ${elementId}`);
-  const { run, alphaMeta } = buildAlphaProvenance(elementId, chosen, specRegions, report, source.src, elementId);
-  const added = mintAlphaCopy(root, projectId, source, newSrc, chosen, alphaMeta);
+  return withProjectLock(root, projectId, () => {
+    const current = getProject(root, projectId);
+    refuseIfHeadMoved("alphaCutout", before, current);
+    const source = (current.elements || []).find((item) => item.id === elementId);
+    if (!source) throw new Error(`element not found: ${elementId}`);
+    const { run, alphaMeta } = buildAlphaProvenance(elementId, chosen, specRegions, report, source.src, elementId);
+    const added = mintAlphaCopy(root, projectId, source, newSrc, chosen, alphaMeta);
 
-  // Fold the display-box twin (w/h) + front-order into the SAME updateProject the tool_runs
-  // append rides (mirrors alphaDualPlateGenerate's post-mint map). The source element is left
-  // exactly as storeAddImage saw it — no map entry touches it.
-  const fo = frontOrder(before, null);
-  const nextElements = (added.project.elements || []).map((item) => {
-    if (item.id !== added.element.id) return item;
-    const twin = { ...item, w: source.w, h: source.h };
-    if (fo !== null) twin.order = fo;
-    return twin;
+    // Fold the display-box twin (w/h) + front-order into the SAME updateProject the tool_runs
+    // append rides (mirrors alphaDualPlateGenerate's post-mint map). The source element is left
+    // exactly as storeAddImage saw it — no map entry touches it.
+    const fo = frontOrder(before, null);
+    let resultElement = { ...added.element, w: source.w, h: source.h };
+    if (fo !== null) resultElement.order = fo;
+    if (preparedGate) resultElement = applyPreparedTechnicalGate(root, projectId, resultElement, preparedGate).element;
+    const nextElements = (added.project.elements || []).map((item) => item.id === added.element.id ? resultElement : item);
+    const after = updateProject(root, projectId, {
+      elements: nextElements,
+      tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), run]),
+    });
+    const project = commitMutation(root, projectId, {
+      op: "alphaCutout",
+      args_summary: { elementId, method: chosen, regions: run.params.regions, region_count: run.params.regions.length, newElementId: added.element.id },
+      before,
+      after,
+      startedAt,
+    });
+    return { project, element: (project.elements || []).find((item) => item.id === added.element.id) || resultElement, run, method: chosen };
   });
-  const after = updateProject(root, projectId, {
-    elements: nextElements,
-    tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), run]),
-  });
-  const project = commitMutation(root, projectId, {
-    op: "alphaCutout",
-    args_summary: { elementId, method: chosen, regions: run.params.regions, region_count: run.params.regions.length, newElementId: added.element.id },
-    before,
-    after,
-    startedAt,
-  });
-  return { project, element: (project.elements || []).find((item) => item.id === added.element.id) || added.element, run, method: chosen };
 }
 
 // Batch path — the multi-selection "Apply to N images" gesture. Every element is
@@ -1119,7 +1122,7 @@ export async function alphaCutoutSingle(root, projectId, before, elementId, chos
 // "mutated"). Only once EVERY element has keyed successfully does this commit ONE journal
 // entry that MINTS N new copy elements beside their sources (T0336 — the sources are
 // never touched); one undo removes ALL the copies and leaves every original byte-exact.
-export async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt, corridorKey, vitmatte, birefnet) {
+async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt, corridorKey, vitmatte, birefnet, dependencies = {}) {
   const ids = elementIds.map((value) => String(value));
   const unique = [...new Set(ids)];
   const elements = unique.map((elementId) => {
@@ -1132,60 +1135,71 @@ export async function alphaCutoutBatch(root, projectId, before, elementIds, chos
   });
 
   const processed = [];
+  const runKeyer = dependencies.runKeyer || runOneAlphaKeyer;
+  const prepareTechnicalGate = dependencies.prepareTechnicalGate || prepareAutomaticTechnicalGate;
   for (const element of elements) {
-    const { newSrc, report } = await runOneAlphaKeyer(root, projectId, element, chosen, null, corridorKey, vitmatte, birefnet);
-    processed.push({ elementId: element.id, newSrc, report });
+    const { newSrc, report } = await runKeyer(root, projectId, element, chosen, null, corridorKey, vitmatte, birefnet);
+    const outputBytes = readFileSync(resolveProjectFile(root, projectId, newSrc));
+    const preparedGate = await prepareTechnicalGate(root, before, outputBytes);
+    processed.push({ elementId: element.id, newSrc, report, preparedGate });
   }
 
   // Re-read once (defensive against a concurrent edit across the whole sequential run),
   // then MINT one copy per source off that SAME snapshot (each storeAddImage appends to disk,
   // exactly like addImages' sequential mint loop). twinById remembers each copy's source so the
   // display-box (w/h) twin + front-order can be folded in AFTER all mints, in ONE updateProject.
-  const current = getProject(root, projectId);
-  const runs = [];
-  const twinById = new Map(); // newElementId -> source element (for the w/h twin override)
-  const mintedIds = [];
-  for (const item of processed) {
-    const source = (current.elements || []).find((el) => el.id === item.elementId);
-    if (!source) throw new Error(`element not found: ${item.elementId}`);
-    const { run, alphaMeta } = buildAlphaProvenance(item.elementId, chosen, null, item.report, source.src, item.elementId);
-    runs.push(run);
-    const added = mintAlphaCopy(root, projectId, source, item.newSrc, chosen, alphaMeta);
-    twinById.set(added.element.id, source);
-    mintedIds.push(added.element.id);
-  }
+  return withProjectLock(root, projectId, () => {
+    const current = getProject(root, projectId);
+    refuseIfHeadMoved("alphaCutout", before, current);
+    const runs = [];
+    const twinById = new Map(); // newElementId -> source element (for the w/h twin override)
+    const gateById = new Map();
+    const mintedIds = [];
+    for (const item of processed) {
+      const source = (current.elements || []).find((el) => el.id === item.elementId);
+      if (!source) throw new Error(`element not found: ${item.elementId}`);
+      const { run, alphaMeta } = buildAlphaProvenance(item.elementId, chosen, null, item.report, source.src, item.elementId);
+      runs.push(run);
+      const added = mintAlphaCopy(root, projectId, source, item.newSrc, chosen, alphaMeta);
+      twinById.set(added.element.id, source);
+      gateById.set(added.element.id, item.preparedGate);
+      mintedIds.push(added.element.id);
+    }
 
   // Re-read after all mints (they each wrote project.json), fold the w/h twin + front-order
   // for the minted copies, and append every tool_runs row — ONE updateProject, then ONE commit.
-  const minted = getProject(root, projectId);
-  let fo = frontOrder(before, null);
-  const orderById = fo !== null ? new Map(mintedIds.map((id) => [id, fo++])) : null;
-  const nextElements = (minted.elements || []).map((item) => {
-    const source = twinById.get(item.id);
-    if (!source) return item;
-    const twin = { ...item, w: source.w, h: source.h };
-    if (orderById) twin.order = orderById.get(item.id);
-    return twin;
+    const minted = getProject(root, projectId);
+    let fo = frontOrder(before, null);
+    const orderById = fo !== null ? new Map(mintedIds.map((id) => [id, fo++])) : null;
+    const nextElements = (minted.elements || []).map((item) => {
+      const source = twinById.get(item.id);
+      if (!source) return item;
+      let twin = { ...item, w: source.w, h: source.h };
+      if (orderById) twin.order = orderById.get(item.id);
+      const preparedGate = gateById.get(item.id);
+      if (preparedGate) twin = applyPreparedTechnicalGate(root, projectId, twin, preparedGate).element;
+      return twin;
+    });
+    const after = updateProject(root, projectId, {
+      elements: nextElements,
+      tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), ...runs]),
+    });
+    const project = commitMutation(root, projectId, {
+      op: "alphaCutout",
+      args_summary: { elementIds: unique, count: unique.length, method: chosen, newElementIds: mintedIds },
+      before,
+      after,
+      startedAt,
+    });
+    const resultIds = new Set(mintedIds);
+    return {
+      project,
+      elements: (project.elements || []).filter((item) => resultIds.has(item.id)),
+      runs,
+      method: chosen,
+      count: unique.length,
+    };
   });
-  const after = updateProject(root, projectId, {
-    elements: nextElements,
-    tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), ...runs]),
-  });
-  const project = commitMutation(root, projectId, {
-    op: "alphaCutout",
-    args_summary: { elementIds: unique, count: unique.length, method: chosen, newElementIds: mintedIds },
-    before,
-    after,
-    startedAt,
-  });
-  const resultIds = new Set(mintedIds);
-  return {
-    project,
-    elements: (project.elements || []).filter((item) => resultIds.has(item.id)),
-    runs,
-    method: chosen,
-    count: unique.length,
-  };
 }
 
 // Run the element's CURRENT pixels through the image-tools alpha pipeline and mint the cutout
@@ -1219,7 +1233,7 @@ export async function alphaCutoutBatch(root, projectId, before, elementIds, chos
 // INSTEAD of `elementId`, batches a multi-selection into ONE journal entry (T0230) that mints N
 // copies — see alphaCutoutBatch; `regions` is not accepted with a batch. Return: `result.element`
 // (single) / `result.elements` (batch) are the NEW copy element(s).
-export async function alphaCutout(root, { projectId, elementId, elementIds, method, regions, corridorKey, vitmatte, birefnet } = {}) {
+async function alphaCutoutImpl(root, { projectId, elementId, elementIds, method, regions, corridorKey, vitmatte, birefnet } = {}, dependencies = {}) {
   if (!projectId) throw new Error("alphaCutout requires projectId");
   const batch = elementIds !== undefined && elementIds !== null;
   if (batch && elementId != null) {
@@ -1256,9 +1270,18 @@ export async function alphaCutout(root, { projectId, elementId, elementIds, meth
   const before = getProject(root, projectId);
 
   if (batch) {
-    return alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt, corridorKey, vitmatte, birefnet);
+    return alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt, corridorKey, vitmatte, birefnet, dependencies);
   }
-  return alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt, corridorKey, vitmatte, birefnet);
+  return alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt, corridorKey, vitmatte, birefnet, dependencies);
+}
+
+export function alphaCutout(root, args = {}) {
+  return alphaCutoutImpl(root, args);
+}
+
+// Test-only seam: public callers cannot inject trusted technical-gate results.
+export function __alphaCutoutForTest(root, args = {}, dependencies = {}) {
+  return alphaCutoutImpl(root, args, dependencies);
 }
 
 // ---- cleanup: Quantize + Denoise (own Python tools, src-swap) ----------------

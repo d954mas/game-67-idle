@@ -58,7 +58,7 @@ starts QUARANTINED, flag visible in canvas; only accepted art reaches the game):
       a badge on canvas cards; CLI can set/read it.
 - [x] 3. Generation paths default to quarantine; production mode stamps the
       lock id into the sidecar/origin; `--no-lock` taints origin.
-- [ ] 4. `checked` = technical auto-gates pass (T0317: bg purity/spill, halo,
+- [x] 4. `checked` = technical auto-gates pass (T0317: bg purity/spill, halo,
       alpha, bbox, aspect).
 - [ ] 5. `accepted` = style verdict: vision compare vs lock exemplars +
       Do/Don't, 3-way advisory verdict, lead backstop.
@@ -93,3 +93,4 @@ starts QUARANTINED, flag visible in canvas; only accepted art reaches the game):
 - 2026-07-17: Increment 3 slice C completes the shared generation-origin contract for animation and AI dual-plate generation, including CLI/API `noLock` transport, fail-closed type validation, and refusal before generator/background-check work. Focused TDD covers unowned explore, game-owned missing-lock refusal, tainted override, and transport flags. Increment 3 is complete; increment 4 continues through T0317's checked technical-gate transition.
 - 2026-07-17: Increment 4 started through T0317 slice 2: Canvas now has a trusted explicit technical-gate operation that can promote PASS to `checked` or downgrade FAIL to `quarantine` with frozen evidence. Increment 4 stays open until alpha outputs invoke it automatically.
 - 2026-07-17: 2026-07-17: Increment 4 now auto-checks manual alphaDualPlate outputs against accepted style-lock thresholds in the same journal commit. Increment remains open until the remaining alphaCutout/corridorkey paths and promote flow are wired.
+- 2026-07-17: Increment 4 complete: explicit checks plus automatic alphaCutout and alphaDualPlate outputs use accepted style-lock thresholds for checked/quarantine transitions. Hard promote enforcement remains increment 6; style advisory acceptance remains increment 5.

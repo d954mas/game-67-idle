@@ -8,6 +8,7 @@ priority: P1
 tags: [assets, quality, art-gate, vibejam-retro]
 created: 2026-07-05
 updated: 2026-07-17
+quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"focused alphaCutout single/batch tests cover exact output bytes, PASS/FAIL evidence, Explore quarantine, evaluator refusal, one undo, pre-mint HEAD_CONFLICT, and API/CLI lock parity; independent review clean; changed/full verify green"}]}
 ---
 
 ## What
@@ -46,3 +47,5 @@ cutout/slice-операций image tools + promote в ассеты игры (nt
 - 2026-07-17: Slice 2 adds the trusted Canvas checked-transition seam: `asset-status-check` resolves the accepted game style lock, maps its thresholds, runs the real evaluator outside the project lock, then stores frozen evidence and PASS→checked / FAIL→quarantine in one conflict-safe journal step. CLI/API bodies cannot supply verdict evidence. A real adapter test also closed a warm-worker PYTHONPATH parity gap. Automatic alpha-output invocation, promote enforcement, and jam-corpus calibration remain open, so no Done-when checkbox closes yet.
 - 2026-07-17: 2026-07-17: Slice 3 auto-wires the trusted technical gate into manual alphaDualPlate: accepted-lock PASS mints checked, FAIL stays quarantine with frozen thumbnail evidence, Explore/no accepted lock stays quarantine, and HEAD_CONFLICT is checked before mint; API/CLI share the op's single lock and one undo.
 - 2026-07-17: 2026-07-17: Quality: QTECH_001=pass; evidence: focused alphaDualPlate auto-gate tests prove PASS->checked, FAIL->quarantine+thumbnail, Explore quarantine, one journal/undo, pre-mint HEAD_CONFLICT, and API/CLI lock parity; independent review clean; changed/full verify green.
+- 2026-07-17: Slice 4 auto-wires the trusted technical gate into the shared alphaCutout single/batch mint path, covering matte, corridorkey, vitmatte, and birefnet. PASS/FAIL evidence is committed with the copy in one undo; Explore remains quarantine; evaluator failure or HEAD_CONFLICT occurs before the first mint.
+- 2026-07-17: Quality: QTECH_001=pass; evidence: focused alphaCutout single/batch tests cover exact output bytes, PASS/FAIL evidence, Explore quarantine, evaluator refusal, one undo, pre-mint HEAD_CONFLICT, and API/CLI lock parity; independent review clean; changed/full verify green
