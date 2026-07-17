@@ -9,6 +9,7 @@
 #include "items_runtime_test_catalog.h"
 #include "items_state.h"
 #include "items_state_events.gen.h"
+#include "test_helpers/nt_assert_trap.h"
 
 void game_save_mark_dirty(void) {}
 
@@ -362,6 +363,15 @@ void test_paid_acquire_plans_destination_after_projected_payment(void) {
         ITEMS_RESULT_OK,
         items_try_stack_add(destination, "tmpl.wood", 1, 1, "loot:test", NULL, NULL));
     game_event_frame_reset();
+    before = items_state;
+    items_test_fail_next_commit();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_COMMIT_FAILED,
+        items_try_acquire(destination, sword, scope, "shop_buy:sword", &acquired));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+
     TEST_ASSERT_EQUAL_INT(
         ITEMS_RESULT_OK,
         items_try_acquire(destination, sword, scope, "shop_buy:sword", &acquired));
@@ -593,6 +603,31 @@ void test_upgrade_instance_is_atomic_next_level_and_distinguishes_free(void) {
     TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
 }
 
+void test_payment_developer_contract_asserts(void) {
+    items_container_ref_t payer = create_container(2, ITEMS_CONTAINER_POLICY_GENERIC);
+    item_def_ref_t sword;
+    TEST_ASSERT_TRUE(items_try_get_string("tmpl.sword", &sword));
+    item_cost_ref_t cost = items_acquire_transition(sword).cost;
+    items_payment_scope_t duplicate = {
+        .count = 2,
+        .containers = {payer, payer},
+    };
+    NT_TEST_EXPECT_ASSERT(items_try_pay_cost(cost, duplicate, "shop_buy:sword"));
+
+    items_payment_scope_t oversized = {.count = ITEMS_PAYMENT_SCOPE_MAX + 1U};
+    NT_TEST_EXPECT_ASSERT(items_try_pay_cost(cost, oversized, "shop_buy:sword"));
+
+    items_payment_scope_t invalid = {
+        .count = 1,
+        .containers = {{UINT32_MAX, UINT32_MAX}},
+    };
+    NT_TEST_EXPECT_ASSERT(items_try_pay_cost(cost, invalid, "shop_buy:sword"));
+
+    items_payment_scope_t valid = {.count = 1, .containers = {payer}};
+    NT_TEST_EXPECT_ASSERT(items_try_pay_cost(
+        (item_cost_ref_t){UINT32_MAX}, valid, "shop_buy:sword"));
+}
+
 void test_rebuild_rejects_reserved_persisted_counters(void) {
     (void)create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
     char error[128] = {0};
@@ -773,6 +808,14 @@ void test_full_entry_pool_rebuilds_reverse_id_index_and_refuses_atomically(void)
             large, "tmpl.potion", 1,
             ITEMS_STATE_ITEM_CONTAINER_CAPACITY_MAX - 1U,
             "loot:test", NULL, NULL));
+    item_def_ref_t potion;
+    TEST_ASSERT_TRUE(items_try_get_string("tmpl.potion", &potion));
+    item_entry_ref_t refused = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_POOL_EXHAUSTED,
+        items_try_acquire(
+            large, potion, (items_payment_scope_t){0},
+            "quest_reward:daily", &refused));
     cJSON *after = items_state_to_json(&items_state);
     TEST_ASSERT_TRUE(cJSON_Compare(before, after, true));
     cJSON_Delete(after);
@@ -1066,6 +1109,7 @@ int main(void) {
     RUN_TEST(test_paid_acquire_plans_destination_after_projected_payment);
     RUN_TEST(test_acquire_refusals_are_atomic_and_explicit_free_is_distinct);
     RUN_TEST(test_upgrade_instance_is_atomic_next_level_and_distinguishes_free);
+    RUN_TEST(test_payment_developer_contract_asserts);
     RUN_TEST(test_rebuild_rejects_reserved_persisted_counters);
     RUN_TEST(test_one_hundred_persistent_containers_round_trip);
     RUN_TEST(test_loaded_maximum_ids_and_long_definition_reseed_without_truncation);

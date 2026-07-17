@@ -24,6 +24,11 @@ static uint32_t s_entry_index_count;
 static uint32_t s_container_generation[ITEMS_STATE_MAX_CONTAINERS];
 static uint32_t s_entry_generation[ITEMS_STATE_MAX_CONTAINERS_ENTRIES];
 static bool s_ready;
+#if defined(ITEMS_RUNTIME_TESTING) && ITEMS_RUNTIME_TESTING
+static bool s_fail_next_commit;
+
+void items_test_fail_next_commit(void) { s_fail_next_commit = true; }
+#endif
 
 #define ITEMS_EPHEMERAL_REF_BIT UINT32_C(0x80000000)
 #ifndef ITEMS_EPHEMERAL_MAX_CONTAINERS
@@ -1103,6 +1108,16 @@ static bool entry_matches_item(const ItemsItemEntry *entry, item_id_t item) {
         items_core(ref).id.value == item.value;
 }
 
+static bool transaction_commit_allowed(void) {
+#if defined(ITEMS_RUNTIME_TESTING) && ITEMS_RUNTIME_TESTING
+    if (s_fail_next_commit) {
+        s_fail_next_commit = false;
+        return false;
+    }
+#endif
+    return true;
+}
+
 static items_result_t build_payment_plan(
     item_cost_ref_t cost, items_payment_scope_t scope, items_payment_plan_t *out_plan) {
     NT_ASSERT(out_plan != NULL);
@@ -1198,6 +1213,7 @@ items_result_t items_try_pay_cost(
     items_payment_plan_t plan;
     items_result_t result = build_payment_plan(cost, scope, &plan);
     if (result != ITEMS_RESULT_OK) { return result; }
+    if (!transaction_commit_allowed()) { return ITEMS_RESULT_COMMIT_FAILED; }
     apply_payment_plan(&plan);
     bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
@@ -1295,6 +1311,7 @@ items_result_t items_try_acquire(
         new_id = items_state.last_entry_id + 1U;
     }
 
+    if (!transaction_commit_allowed()) { return ITEMS_RESULT_COMMIT_FAILED; }
     if (plan != NULL) { apply_payment_plan(plan); }
     ItemsItemEntry *acquired;
     if (merge != NULL) {
@@ -1363,6 +1380,7 @@ items_result_t items_try_upgrade_instance(
 
     const int from_level = entry->level;
     const uint32_t entry_id_value = entry->entry_id;
+    if (!transaction_commit_allowed()) { return ITEMS_RESULT_COMMIT_FAILED; }
     if (plan != NULL) { apply_payment_plan(plan); }
     entry = require_entry(entry_ref_value);
     entry->level = (int)target_level;

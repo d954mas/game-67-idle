@@ -119,6 +119,7 @@ typedef enum items_result_t {
     ITEMS_RESULT_NOT_EMPTY,
     ITEMS_RESULT_LIFETIME,
     ITEMS_RESULT_STALE_LEVEL,
+    ITEMS_RESULT_COMMIT_FAILED,
 } items_result_t;
 
 typedef struct items_container_ref_t { uint32_t index; uint32_t generation; } items_container_ref_t;
@@ -242,6 +243,10 @@ items_result_t items_try_acquire(
 items_result_t items_try_upgrade_instance(
     item_entry_ref_t entry, uint32_t target_level,
     items_payment_scope_t payment, const char *reason);
+#endif
+
+#if defined(ITEMS_RUNTIME_TESTING) && ITEMS_RUNTIME_TESTING
+void items_test_fail_next_commit(void);
 #endif
 
 items_result_t items_try_unique_create(

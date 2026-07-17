@@ -41,13 +41,13 @@ atomicity.
       pays, changes saved level, marks dirty, and emits one result atomically.
 - [x] Explicit free and paid transitions are distinct; level 1/inapplicable is
       never treated as free. Persistent unlock state is outside this task.
-- [ ] Success/failure fixtures cover two explicit payer containers, duplicate
+- [x] Success/failure fixtures cover two explicit payer containers, duplicate
       resources, overflow, insufficient second resource, full/wrong-policy destination,
       wrong storage route, stale level, and injected commit failure with exact
       before/after state equality.
-- [ ] The implementation preserves existing reason-tag/event/audit contracts
+- [x] The implementation preserves existing reason-tag/event/audit contracts
       and exposes one bounded failure reason rather than intermediate events.
-- [ ] Invalid handles, missing required objects, duplicate/oversized payment
+- [x] Invalid handles, missing required objects, duplicate/oversized payment
       scope, and malformed normalized cost assert. Only expected funds, capacity,
       policy, slot, unavailable acquisition, or pool exhaustion use bounded
       `can/try` refusal enums without partial mutation.
@@ -82,3 +82,7 @@ atomicity.
   and runtime packages plus atomic next-level unique-instance upgrades. Paid,
   free, stale, unavailable, quarantine, and persisted-level-boundary paths have
   exact-state/event fixtures; initial independent review findings were fixed.
+- 2026-07-17: Closed the acceptance gaps with assert-trap developer-contract
+  fixtures, free-acquire pool exhaustion, and a test-only precommit failure
+  seam shared by pay/acquire/upgrade. Failure injection occurs after full
+  preflight and before the first mutation; independent review accepted it.

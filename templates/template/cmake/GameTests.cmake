@@ -459,11 +459,12 @@ if(NOT EMSCRIPTEN)
         "${ITEMS_CORE_SRC}/items_reconcile.c"
         "${ITEMS_CORE_SRC}/items_containers.c"
         src/game_state_json.c
-        "${GAME_EVENTS_SRC}/game_events.c")
+        "${GAME_EVENTS_SRC}/game_events.c"
+        "${ENGINE_DIR}/tests/unit/test_helpers/nt_assert_trap.c")
     configure_items_runtime_catalog_test(test_items_fragment)
     target_link_libraries(test_items_fragment PRIVATE cjson unity nt_hash nt_log nt_core)
-    target_include_directories(test_items_fragment PRIVATE "${ITEMS_CORE_INC}" "${GAME_EVENTS_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
-    target_compile_definitions(test_items_fragment PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_include_directories(test_items_fragment PRIVATE "${ITEMS_CORE_INC}" "${GAME_EVENTS_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/tests/unit")
+    target_compile_definitions(test_items_fragment PRIVATE ITEMS_RUNTIME_TESTING=1 _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_items_fragment PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_items_fragment COMMAND test_items_fragment
