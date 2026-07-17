@@ -58,6 +58,21 @@ static cJSON *required_object(cJSON *parent, const char *key) {
     return value;
 }
 
+static char *read_fixture(const char *path) {
+    FILE *file = fopen(path, "rb");
+    TEST_ASSERT_NOT_NULL(file);
+    TEST_ASSERT_EQUAL_INT(0, fseek(file, 0, SEEK_END));
+    long size = ftell(file);
+    TEST_ASSERT_TRUE(size >= 0);
+    TEST_ASSERT_EQUAL_INT(0, fseek(file, 0, SEEK_SET));
+    char *text = (char *)malloc((size_t)size + 1U);
+    TEST_ASSERT_NOT_NULL(text);
+    TEST_ASSERT_EQUAL_INT(size, (long)fread(text, 1, (size_t)size, file));
+    text[size] = '\0';
+    TEST_ASSERT_EQUAL_INT(0, fclose(file));
+    return text;
+}
+
 static void assert_rejected_import_preserves_state(cJSON *doc, const char *before) {
     char err[128] = {0};
     char *invalid = cJSON_PrintUnformatted(doc);
@@ -449,6 +464,99 @@ void test_hold_to_reset_preserves_settings(void) {
     TEST_ASSERT_EQUAL_INT(0, progression_level("hero")); /* reset, no hook -> empty tracks */
 }
 
+void test_legacy_items_fixture_migrates_deterministically_with_owner_refs(void) {
+    char *fixture = read_fixture(ITEMS_LEGACY_SAVE_V1_FIXTURE);
+    cJSON *first = cJSON_Parse(fixture);
+    cJSON *second = cJSON_Parse(fixture);
+    TEST_ASSERT_NOT_NULL(first);
+    TEST_ASSERT_NOT_NULL(second);
+    char err[128] = {0};
+    cJSON *first_features = required_object(first, "features");
+    cJSON *second_features = required_object(second, "features");
+    TEST_ASSERT_TRUE(game_items_migrate_document_v1_to_v2(
+        first_features, err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_items_migrate_document_v1_to_v2(
+        second_features, err, (int)sizeof err));
+    char *first_text = cJSON_PrintUnformatted(first_features);
+    char *second_text = cJSON_PrintUnformatted(second_features);
+    TEST_ASSERT_NOT_NULL(first_text);
+    TEST_ASSERT_NOT_NULL(second_text);
+    TEST_ASSERT_EQUAL_STRING(first_text, second_text);
+
+    cJSON *items = required_object(first_features, "items");
+    TEST_ASSERT_EQUAL_INT(2, cJSON_GetObjectItemCaseSensitive(items, "last_container_id")->valueint);
+    TEST_ASSERT_EQUAL_INT(4, cJSON_GetObjectItemCaseSensitive(items, "last_entry_id")->valueint);
+    cJSON *containers = cJSON_GetObjectItemCaseSensitive(items, "containers");
+    TEST_ASSERT_EQUAL_INT(2, cJSON_GetArraySize(containers));
+    cJSON *inventory = cJSON_GetArrayItem(containers, 0);
+    cJSON *wallet = cJSON_GetArrayItem(containers, 1);
+    TEST_ASSERT_EQUAL_INT(1, cJSON_GetObjectItemCaseSensitive(inventory, "container_id")->valueint);
+    TEST_ASSERT_EQUAL_INT(20, cJSON_GetObjectItemCaseSensitive(inventory, "capacity")->valueint);
+    TEST_ASSERT_EQUAL_STRING("generic", cJSON_GetObjectItemCaseSensitive(inventory, "policy")->valuestring);
+    TEST_ASSERT_EQUAL_INT(2, cJSON_GetObjectItemCaseSensitive(wallet, "container_id")->valueint);
+    TEST_ASSERT_EQUAL_INT(64, cJSON_GetObjectItemCaseSensitive(wallet, "capacity")->valueint);
+    TEST_ASSERT_EQUAL_STRING("currency_only", cJSON_GetObjectItemCaseSensitive(wallet, "policy")->valuestring);
+    cJSON *inventory_entries = cJSON_GetObjectItemCaseSensitive(inventory, "entries");
+    cJSON *wallet_entries = cJSON_GetObjectItemCaseSensitive(wallet, "entries");
+    TEST_ASSERT_EQUAL_INT(3, cJSON_GetArraySize(inventory_entries));
+    TEST_ASSERT_EQUAL_INT(1, cJSON_GetArraySize(wallet_entries));
+    TEST_ASSERT_EQUAL_INT(1, cJSON_GetObjectItemCaseSensitive(
+        cJSON_GetArrayItem(inventory_entries, 0), "entry_id")->valueint);
+    TEST_ASSERT_EQUAL_STRING("removed.relic", cJSON_GetObjectItemCaseSensitive(
+        cJSON_GetArrayItem(inventory_entries, 0), "def_id")->valuestring);
+    TEST_ASSERT_TRUE(cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(
+        cJSON_GetArrayItem(inventory_entries, 0), "quarantined")));
+    TEST_ASSERT_EQUAL_INT(2, cJSON_GetObjectItemCaseSensitive(
+        cJSON_GetArrayItem(inventory_entries, 1), "entry_id")->valueint);
+    TEST_ASSERT_EQUAL_INT(4, cJSON_GetObjectItemCaseSensitive(
+        cJSON_GetArrayItem(inventory_entries, 2), "entry_id")->valueint);
+    TEST_ASSERT_EQUAL_INT(3, cJSON_GetObjectItemCaseSensitive(
+        cJSON_GetArrayItem(wallet_entries, 0), "entry_id")->valueint);
+    for (int i = 0; i < cJSON_GetArraySize(inventory_entries); i++) {
+        TEST_ASSERT_NOT_EQUAL(0, strcmp("tmpl.wood", cJSON_GetObjectItemCaseSensitive(
+            cJSON_GetArrayItem(inventory_entries, i), "def_id")->valuestring));
+    }
+    cJSON *game = required_object(first_features, "game");
+    TEST_ASSERT_EQUAL_INT(1, cJSON_GetObjectItemCaseSensitive(
+        game, "inventory_container_id")->valueint);
+    TEST_ASSERT_EQUAL_INT(2, cJSON_GetObjectItemCaseSensitive(
+        game, "wallet_container_id")->valueint);
+
+    free(second_text);
+    free(first_text);
+    cJSON_Delete(second);
+    cJSON_Delete(first);
+    free(fixture);
+}
+
+void test_legacy_items_fixture_imports_through_document_stage(void) {
+    char *fixture = read_fixture(ITEMS_LEGACY_SAVE_V1_FIXTURE);
+    char err[128] = {0};
+
+    TEST_ASSERT_TRUE(game_save_import_string(fixture, err, (int)sizeof err));
+
+    TEST_ASSERT_EQUAL_UINT32(1, game_state.inventory_container_id);
+    TEST_ASSERT_EQUAL_UINT32(2, game_state.wallet_container_id);
+    TEST_ASSERT_EQUAL_UINT32(2, items_state.last_container_id);
+    TEST_ASSERT_EQUAL_UINT32(4, items_state.last_entry_id);
+    TEST_ASSERT_EQUAL_INT64(50, items_stack_count(game_wallet_container(), "tmpl.gold"));
+    TEST_ASSERT_EQUAL_INT64(3, items_stack_count(game_inventory_container(), "tmpl.potion"));
+    bool found_removed = false;
+    for (int i = 0; i < ITEMS_STATE_MAX_CONTAINERS_ENTRIES; i++) {
+        if (items_state.containers_entries[i].used &&
+            strcmp(items_state.containers_entries[i].def_id, "removed.relic") == 0) {
+            found_removed = true;
+            TEST_ASSERT_TRUE(items_state.containers_entries[i].quarantined);
+            TEST_ASSERT_EQUAL_INT64(2, items_state.containers_entries[i].count);
+            TEST_ASSERT_EQUAL_INT(4, items_state.containers_entries[i].level);
+            TEST_ASSERT_TRUE(fabsf(items_state.containers_entries[i].durability - 0.5f) <
+                             COMPOSITION_TEST_FLOAT_EPS);
+        }
+    }
+    TEST_ASSERT_TRUE(found_removed);
+    free(fixture);
+}
+
 int main(void) {
     if (!items_runtime_test_catalog_bind()) {
         return 1;
@@ -461,7 +569,7 @@ int main(void) {
     game_save_register_fragment(&items_state_fragment);
     game_save_register_fragment(&progression_state_fragment);
     game_save_register_fragment(&game_state_fragment);
-    game_save_set_document_validator(game_items_validate_save_document);
+    game_items_configure_save();
 
     UNITY_BEGIN();
     RUN_TEST(test_registry_has_four_fragments_in_order);
@@ -478,6 +586,8 @@ int main(void) {
     RUN_TEST(test_devapi_rolls_back_all_successful_patch_groups_when_document_rejects);
 #endif
     RUN_TEST(test_hold_to_reset_preserves_settings);
+    RUN_TEST(test_legacy_items_fixture_migrates_deterministically_with_owner_refs);
+    RUN_TEST(test_legacy_items_fixture_imports_through_document_stage);
 #if NT_DEVAPI_ENABLED
     RUN_TEST(test_devapi_set_rolls_back_a_partially_mutating_setter);
 #endif

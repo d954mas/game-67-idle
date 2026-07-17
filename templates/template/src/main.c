@@ -528,7 +528,7 @@ int main(int argc, char **argv) {
     game_save_register_fragment(&items_state_fragment);    /* L1, no deps: between settings and game */
     game_save_register_fragment(&progression_state_fragment); /* L2 depends on items: register after items */
     game_save_register_fragment(&game_state_fragment);     /* `game` last (most dependent) */
-    game_save_set_document_validator(game_items_validate_save_document);
+    game_items_configure_save();
     game_save_init();
 #ifdef NT_PLATFORM_WEB
     game_save_install_web_flush();
