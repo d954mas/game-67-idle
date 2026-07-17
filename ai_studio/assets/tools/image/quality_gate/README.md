@@ -67,11 +67,12 @@ the evaluator input without inventing values:
 ```
 
 The committed example values separate both the synthetic contract corpus and
-the preserved VibeJam calibration corpus in `fixtures/jam_corpus/`. The latter
-comes from the closed `rb-dark-rpg-vibejam1-2026-07-05` tag with its original
-project-internal license, provenance paths, source blob ids, and SHA-256 values
-recorded in `manifest.json`. The metric ratio limits remain identical to the
-committed example; each fixture supplies its provenance-backed intended width
-and height for the aspect check. The known green-spill failure is rejected for
-both `key_spill` and `edge_halo`, while the neighboring city-style-v2 accepted
-Black Sun prop remains clean. No formula or metric-limit relaxation was needed.
+the archived VibeJam calibration corpus described by
+`fixtures/jam_corpus/manifest.json`. Tests load the exact assets from the closed
+`rb-dark-rpg-vibejam1-2026-07-05` ancestor tag instead of duplicating its
+project-internal binaries in the current tree. The manifest freezes provenance
+paths, source blob ids, SHA-256 values, and intended dimensions; tests verify
+both hashes before evaluation. The metric ratio limits remain identical to the
+committed example. The known green-spill failure is rejected for both
+`key_spill` and `edge_halo`, while the neighboring city-style-v2 accepted Black
+Sun prop remains clean. No formula or metric-limit relaxation was needed.

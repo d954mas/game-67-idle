@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -22,6 +23,28 @@ THRESHOLDS = {
 }
 
 JAM_CORPUS = Path(__file__).with_name("fixtures") / "jam_corpus"
+REPO_ROOT = Path(__file__).resolve().parents[5]
+
+
+def tagged_fixture_bytes(tag: str, source_path: str) -> bytes:
+    result = subprocess.run(
+        [
+            "git",
+            "-c",
+            f"safe.directory={REPO_ROOT.as_posix()}",
+            "show",
+            f"{tag}:{source_path}",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"cannot load archived jam fixture {tag}:{source_path}: "
+            f"{result.stderr.decode('utf-8', errors='replace').strip()}"
+        )
+    return result.stdout
 
 
 def clean_square(size: tuple[int, int] = (32, 32)) -> Image.Image:
@@ -41,10 +64,14 @@ class AssetQualityGateTest(unittest.TestCase):
         self.assertEqual(clean_fixture["origin"], "ai")
 
         reports: dict[str, dict[str, object]] = {}
+        fixture_bytes: dict[str, bytes] = {}
         for fixture in manifest["fixtures"]:
-            source = JAM_CORPUS / fixture["file"]
-            self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest().upper(), fixture["sha256"])
-            with Image.open(source) as opened:
+            source_bytes = tagged_fixture_bytes(manifest["source_tag"], fixture["source_path"])
+            fixture_bytes[fixture["role"]] = source_bytes
+            git_object = f"blob {len(source_bytes)}\0".encode("ascii") + source_bytes
+            self.assertEqual(hashlib.sha1(git_object).hexdigest(), fixture["source_git_blob"])
+            self.assertEqual(hashlib.sha256(source_bytes).hexdigest().upper(), fixture["sha256"])
+            with Image.open(io.BytesIO(source_bytes)) as opened:
                 image = opened.convert("RGBA")
             self.assertEqual(image.size, (fixture["width"], fixture["height"]))
             thresholds = {
@@ -70,7 +97,8 @@ class AssetQualityGateTest(unittest.TestCase):
             report_path = root / "report.json"
             thumbnail = root / "problem.png"
             broken = next(fixture for fixture in manifest["fixtures"] if fixture["role"] == "broken")
-            broken_source = JAM_CORPUS / broken["file"]
+            broken_source = root / broken["file"]
+            broken_source.write_bytes(fixture_bytes["broken"])
             with Image.open(broken_source) as image:
                 thresholds = {
                     **THRESHOLDS,

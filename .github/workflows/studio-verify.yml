@@ -34,6 +34,10 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+      - name: Fetch archived quality fixture tags
+        run: >-
+          git fetch --no-tags --depth=1 origin
+          +refs/tags/rb-dark-rpg-vibejam1-2026-07-05:refs/tags/rb-dark-rpg-vibejam1-2026-07-05
       - name: Resolve native compiler cache key
         id: native-cache-key
         shell: bash
