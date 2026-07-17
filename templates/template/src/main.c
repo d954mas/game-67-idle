@@ -311,6 +311,11 @@ static void game_runtime_try_start(void) {
         game_runtime_fail("items catalog bind failed", (int)bind_error);
         return;
     }
+    char seed_error[128] = {0};
+    if (!game_items_validate_default_seed(seed_error, (int)sizeof seed_error)) {
+        game_runtime_fail(seed_error[0] ? seed_error : "items seed contract is incompatible", 0);
+        return;
+    }
 
     /* Catalog binding is the startup barrier: save reconciliation and every
        feature that can query Items run only after this point. */

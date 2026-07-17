@@ -46,7 +46,10 @@ Every mutation uses a bounded `verb:subject` reason from `reason_tags.h`.
 Malformed, unknown, or oversized reasons return `ITEMS_RESULT_INVALID_REASON`
 before any state change or audit event, including in release builds. Normal new
 games are seeded in `src/game_items.c`; `--fresh-state` intentionally runs only
-the generated reset defaults and skips those grants.
+the generated reset defaults and skips those grants. The game-owned seed plan is
+validated against the bound catalog at the startup barrier and again before
+initialization; incompatible IDs, storage routes, capacities, duplicate grants,
+or minimum amounts fail before any seed state or event is published.
 
 ## Release receipt and destructive changes
 

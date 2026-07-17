@@ -188,6 +188,63 @@ void test_new_game_seeds_across_all_fragments(void) {
     TEST_ASSERT_TRUE(fabsf(settings_master() - 0.8f) < COMPOSITION_TEST_FLOAT_EPS);
 }
 
+static void assert_invalid_seed_plan_preserves_state(
+    const game_items_seed_plan_t *plan, const char *expected_error) {
+    cJSON *before_items = items_state_to_json(&items_state);
+    GameState before_game = game_state;
+    game_event_frame_reset();
+    char error[128] = {0};
+
+    TEST_ASSERT_FALSE(game_items_test_try_create_defaults_from_plan(
+        plan, error, (int)sizeof error));
+    TEST_ASSERT_EQUAL_STRING(expected_error, error);
+
+    cJSON *after_items = items_state_to_json(&items_state);
+    TEST_ASSERT_TRUE(cJSON_Compare(before_items, after_items, true));
+    TEST_ASSERT_EQUAL_MEMORY(&before_game, &game_state, sizeof before_game);
+    cJSON_Delete(after_items);
+    cJSON_Delete(before_items);
+    int event_count = -1;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+}
+
+void test_incompatible_seed_plans_refuse_partial_initialization(void) {
+    char error[128] = {0};
+    TEST_ASSERT_TRUE(game_items_validate_default_seed(error, (int)sizeof error));
+
+    const game_items_seed_grant_t missing[] = {
+        {"missing.seed", 1, GAME_ITEMS_SEED_INVENTORY},
+    };
+    const game_items_seed_plan_t missing_plan = {64, 32, missing, 1};
+    assert_invalid_seed_plan_preserves_state(&missing_plan, "seed item definition is missing");
+
+    const game_items_seed_grant_t wrong_route[] = {
+        {"tmpl.potion", 1, GAME_ITEMS_SEED_WALLET},
+    };
+    const game_items_seed_plan_t wrong_route_plan = {64, 32, wrong_route, 1};
+    assert_invalid_seed_plan_preserves_state(&wrong_route_plan, "seed item storage route is incompatible");
+
+    const game_items_seed_grant_t no_capacity[] = {
+        {"tmpl.gold", 50, GAME_ITEMS_SEED_WALLET},
+    };
+    const game_items_seed_plan_t no_capacity_plan = {64, 0, no_capacity, 1};
+    assert_invalid_seed_plan_preserves_state(&no_capacity_plan, "seed container capacity is incompatible");
+
+    const game_items_seed_grant_t too_small[] = {
+        {"tmpl.potion", 100, GAME_ITEMS_SEED_INVENTORY},
+    };
+    const game_items_seed_plan_t too_small_plan = {64, 32, too_small, 1};
+    assert_invalid_seed_plan_preserves_state(&too_small_plan, "seed minimum amount is incompatible");
+
+    const game_items_seed_grant_t duplicate[] = {
+        {"tmpl.potion", 60, GAME_ITEMS_SEED_INVENTORY},
+        {"tmpl.potion", 60, GAME_ITEMS_SEED_INVENTORY},
+    };
+    const game_items_seed_plan_t duplicate_plan = {2, 32, duplicate, 2};
+    assert_invalid_seed_plan_preserves_state(&duplicate_plan, "duplicate logical seed grant");
+}
+
 /* 3. Proves ONE envelope carries cross-fragment state through
    build_root -> load_from_doc (incl. reconcile_all) -- the composed save/load
    nobody else exercises. Uses the items -> progression edge (purse xp spend on
@@ -667,6 +724,7 @@ int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_registry_has_four_fragments_in_order);
     RUN_TEST(test_new_game_seeds_across_all_fragments);
+    RUN_TEST(test_incompatible_seed_plans_refuse_partial_initialization);
     RUN_TEST(test_cross_fragment_save_load_roundtrip);
     RUN_TEST(test_import_rejects_dangling_owner_before_publish);
     RUN_TEST(test_import_rejects_unreferenced_persistent_container_before_publish);

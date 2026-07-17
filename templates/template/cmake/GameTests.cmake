@@ -621,7 +621,7 @@ if(NOT EMSCRIPTEN)
         "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src
         "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_template_composition PRIVATE
-        GAME_SAVE_TESTING=1 GAME_STORAGE_APP_ID="template_composition_test"
+        GAME_SAVE_TESTING=1 GAME_ITEMS_TESTING=1 GAME_STORAGE_APP_ID="template_composition_test"
         GAME_SAVE_AUTOSAVE_SLOT="test_composition"
         GAME_SAVE_DEBOUNCE_MS=2000 GAME_SAVE_MAX_INTERVAL_MS=30000 GAME_SAVE_DOC_VERSION=2
         ITEMS_LEGACY_SAVE_V1_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/items_save_v1.json"

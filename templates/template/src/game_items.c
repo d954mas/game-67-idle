@@ -390,44 +390,167 @@ items_container_ref_t game_wallet_container(void) {
     return require_container(game_state.wallet_container_id);
 }
 
-void game_items_create_defaults(bool grant_starting_items) {
-    char error[128] = {0};
-    bool rebuilt = items_runtime_rebuild(error, (int)sizeof(error));
-    NT_ASSERT(rebuilt && "reset Items state must rebuild cleanly");
+static const game_items_seed_grant_t k_default_seed_grants[] = {
+    {"tmpl.gold", 50, GAME_ITEMS_SEED_WALLET},
+    {"tmpl.potion", 1, GAME_ITEMS_SEED_INVENTORY},
+};
+
+static const game_items_seed_plan_t k_default_seed_plan = {
+    64,
+    32,
+    k_default_seed_grants,
+    sizeof(k_default_seed_grants) / sizeof(k_default_seed_grants[0]),
+};
+
+static bool seed_error(char *error, int error_cap, const char *message) {
+    if (error && error_cap > 0) {
+        (void)snprintf(error, (size_t)error_cap, "%s", message);
+    }
+    return false;
+}
+
+bool game_items_validate_seed_plan(
+    const game_items_seed_plan_t *plan, char *error, int error_cap) {
+    if (!plan || (plan->grant_count > 0 && !plan->grants)) {
+        return seed_error(error, error_cap, "seed plan is missing");
+    }
+    if (plan->inventory_capacity > ITEMS_STATE_ITEM_CONTAINER_CAPACITY_MAX ||
+        plan->wallet_capacity > ITEMS_STATE_ITEM_CONTAINER_CAPACITY_MAX ||
+        plan->grant_count > ITEMS_STATE_MAX_CONTAINERS_ENTRIES) {
+        return seed_error(error, error_cap, "seed container capacity is incompatible");
+    }
+
+    size_t inventory_slots = 0;
+    size_t wallet_slots = 0;
+    for (size_t i = 0; i < plan->grant_count; i++) {
+        const game_items_seed_grant_t *grant = &plan->grants[i];
+        for (size_t j = 0; j < i; j++) {
+            const game_items_seed_grant_t *prior = &plan->grants[j];
+            if (grant->def_id && prior->def_id && grant->route == prior->route &&
+                strcmp(grant->def_id, prior->def_id) == 0) {
+                return seed_error(error, error_cap, "duplicate logical seed grant");
+            }
+        }
+        item_def_ref_t item;
+        if (!grant->def_id || !items_try_get_string(grant->def_id, &item)) {
+            return seed_error(error, error_cap, "seed item definition is missing");
+        }
+        item_core_t core = items_core(item);
+        const bool currency = items_has_currency(item);
+        if (core.stack == 1 ||
+            (grant->route == GAME_ITEMS_SEED_WALLET && !currency) ||
+            (grant->route == GAME_ITEMS_SEED_INVENTORY && currency) ||
+            (grant->route != GAME_ITEMS_SEED_WALLET && grant->route != GAME_ITEMS_SEED_INVENTORY)) {
+            return seed_error(error, error_cap, "seed item storage route is incompatible");
+        }
+        if (grant->minimum_count <= 0 ||
+            grant->minimum_count > ITEMS_STATE_ITEM_ENTRY_COUNT_MAX ||
+            (core.stack > 1 && grant->minimum_count > core.stack) ||
+            (currency && items_currency_cap(item) > 0 &&
+             grant->minimum_count > items_currency_cap(item))) {
+            return seed_error(error, error_cap, "seed minimum amount is incompatible");
+        }
+        if (grant->route == GAME_ITEMS_SEED_WALLET) { wallet_slots++; }
+        else { inventory_slots++; }
+    }
+    if (inventory_slots > plan->inventory_capacity || wallet_slots > plan->wallet_capacity) {
+        return seed_error(error, error_cap, "seed container capacity is incompatible");
+    }
+    return true;
+}
+
+bool game_items_validate_default_seed(char *error, int error_cap) {
+    return game_items_validate_seed_plan(&k_default_seed_plan, error, error_cap);
+}
+
+static bool game_items_try_create_defaults_from_plan(
+    const game_items_seed_plan_t *plan, bool grant_starting_items,
+    char *error, int error_cap) {
+    if (!game_items_validate_seed_plan(plan, error, error_cap)) { return false; }
+
+    if (items_state.last_container_id != ITEMS_ID_NONE ||
+        items_state.last_entry_id != ITEMS_ID_NONE ||
+        game_state.inventory_container_id != ITEMS_ID_NONE ||
+        game_state.wallet_container_id != ITEMS_ID_NONE) {
+        return seed_error(error, error_cap, "seed initialization target is not reset");
+    }
+    for (size_t i = 0; i < ITEMS_STATE_MAX_CONTAINERS; i++) {
+        if (items_state.containers[i].used) {
+            return seed_error(error, error_cap, "seed initialization target is not reset");
+        }
+    }
+    for (size_t i = 0; i < ITEMS_STATE_MAX_CONTAINERS_ENTRIES; i++) {
+        if (items_state.containers_entries[i].used) {
+            return seed_error(error, error_cap, "seed initialization target is not reset");
+        }
+    }
+
+    const ItemsState items_before = items_state;
+    const GameState game_before = game_state;
+    if (!items_runtime_rebuild(error, error_cap)) { return false; }
 
     items_container_ref_t inventory = ITEMS_CONTAINER_REF_NONE;
     items_container_ref_t wallet = ITEMS_CONTAINER_REF_NONE;
     items_result_t result = items_try_container_create(
         (items_container_desc_t){
-            .capacity = 64,
+            .capacity = plan->inventory_capacity,
             .policy = ITEMS_CONTAINER_POLICY_GENERIC,
             .lifetime = ITEMS_LIFETIME_PERSISTENT,
         },
         &inventory);
-    NT_ASSERT(result == ITEMS_RESULT_OK);
+    if (result != ITEMS_RESULT_OK) { goto rollback; }
     result = items_try_container_create(
         (items_container_desc_t){
-            .capacity = 32,
+            .capacity = plan->wallet_capacity,
             .policy = ITEMS_CONTAINER_POLICY_CURRENCY_ONLY,
             .lifetime = ITEMS_LIFETIME_PERSISTENT,
         },
         &wallet);
-    NT_ASSERT(result == ITEMS_RESULT_OK);
+    if (result != ITEMS_RESULT_OK) { goto rollback; }
 
     game_state.inventory_container_id = items_container_id(inventory);
     game_state.wallet_container_id = items_container_id(wallet);
     progression_bind_resource_container(wallet);
 
     if (grant_starting_items) {
-        result = items_try_stack_add(
-            wallet, "tmpl.gold", 50, ITEMS_SLOT_AUTO,
-            "starting:new_game", NULL, NULL);
-        NT_ASSERT(result == ITEMS_RESULT_OK);
-        result = items_try_stack_add(
-            inventory, "tmpl.potion", 1, ITEMS_SLOT_AUTO,
-            "starting:new_game", NULL, NULL);
-        NT_ASSERT(result == ITEMS_RESULT_OK);
+        for (size_t i = 0; i < plan->grant_count; i++) {
+            const game_items_seed_grant_t *grant = &plan->grants[i];
+            const items_container_ref_t destination =
+                grant->route == GAME_ITEMS_SEED_WALLET ? wallet : inventory;
+            int64_t applied = 0;
+            result = items_try_stack_add(
+                destination, grant->def_id, grant->minimum_count, ITEMS_SLOT_AUTO,
+                "starting:new_game", NULL, &applied);
+            if (result != ITEMS_RESULT_OK || applied < grant->minimum_count) { goto rollback; }
+        }
     }
+    return true;
+
+rollback:
+    items_state = items_before;
+    game_state = game_before;
+    (void)items_runtime_rebuild(NULL, 0);
+    items_container_ref_t restored_wallet = ITEMS_CONTAINER_REF_NONE;
+    if (game_before.wallet_container_id != ITEMS_ID_NONE) {
+        (void)items_container_try_from_id(game_before.wallet_container_id, &restored_wallet);
+    }
+    progression_bind_resource_container(restored_wallet);
+    return seed_error(error, error_cap, "seed initialization failed atomically");
+}
+
+#if defined(GAME_ITEMS_TESTING) && GAME_ITEMS_TESTING
+bool game_items_test_try_create_defaults_from_plan(
+    const game_items_seed_plan_t *plan, char *error, int error_cap) {
+    return game_items_try_create_defaults_from_plan(plan, true, error, error_cap);
+}
+#endif
+
+void game_items_create_defaults(bool grant_starting_items) {
+    char error[128] = {0};
+    const bool created = game_items_try_create_defaults_from_plan(
+        &k_default_seed_plan, grant_starting_items, error, (int)sizeof(error));
+    NT_ASSERT(created && "default Items seed must be catalog-compatible and atomic");
+    (void)created;
 }
 
 void game_on_new_game(void) {
