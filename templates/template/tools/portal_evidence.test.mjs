@@ -20,8 +20,9 @@ import test from "node:test";
 
 import { packageWebArtifact } from "./package_web.mjs";
 import { createPortalEvidence, publishPortalEvidenceReport } from "./portal_evidence.mjs";
+import { findStudioRoot } from "./lib/studio_root.mjs";
 
-const studioRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+const studioRoot = findStudioRoot(fileURLToPath(new URL("..", import.meta.url)));
 const reporterScript = resolve(fileURLToPath(new URL("portal_evidence.mjs", import.meta.url)));
 const RELEASE_WASM = Buffer.from([
   0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
@@ -148,10 +149,11 @@ test("copied game-owned reporter records the exact package from a standalone gam
   const item = fixture(t);
   const toolsDir = join(item.gameDir, "tools");
   mkdirSync(join(toolsDir, "lib"), { recursive: true });
-  for (const rel of ["portal_evidence.mjs", "package_web.mjs", "lib/zip_store.mjs"]) {
+  for (const rel of ["portal_evidence.mjs", "package_web.mjs", "lib/zip_store.mjs", "lib/studio_root.mjs"]) {
     cpSync(join(dirname(reporterScript), ...rel.split("/")), join(toolsDir, ...rel.split("/")));
   }
   cpSync(join(studioRoot, "features", "platform-sdk"), join(item.root, "features", "platform-sdk"), { recursive: true });
+  mkdirSync(join(item.root, "external", "neotolis-engine"), { recursive: true });
   const result = spawnSync(process.execPath, ["tools/portal_evidence.mjs", "--manifest", `release/artifacts/${item.manifestPath.split(/[\\/]/).at(-1)}`], {
     cwd: item.gameDir,
     encoding: "utf8",

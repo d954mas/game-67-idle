@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
 import { main as buildWeb } from "./build_web.mjs";
+import { findStudioRoot } from "./lib/studio_root.mjs";
 import {
   packageWebArtifact,
   validateDependencies,
@@ -152,7 +153,7 @@ function gitRevision(cwd, label) {
 function referenceTemplatePackageMetadata(gameDir) {
   const template = validateTemplateIdentity(readJson(join(gameDir, "template.json"), "template identity"));
   const seed = readJson(join(gameDir, "game-dependencies.json"), "template dependency seed");
-  const studioRoot = resolve(gameDir, "..", "..");
+  const studioRoot = findStudioRoot(gameDir);
   const repoRevision = gitRevision(studioRoot, "reference-template proof");
   const engineRevision = gitRevision(join(studioRoot, seed.engine?.source || ""), "reference-template engine proof");
   const dependencies = {
@@ -184,7 +185,7 @@ function packageGame(options, dependencies = {}, metadata = null) {
     gameDir,
     artifactDir: artifactDir(gameDir, options.target),
     target: options.target,
-    studioRoot: resolve(gameDir, "..", ".."),
+    studioRoot: findStudioRoot(gameDir),
     ...(options.outDir ? { outDir: resolve(gameDir, options.outDir) } : {}),
     ...proof,
     ...(metadata ? { dependencyVerifier: () => {} } : {}),
@@ -197,7 +198,7 @@ export async function executeGameCommand(args, dependencies = {}) {
   const nodeTest = dependencies.nodeTest || runNodeTests;
   const nativeTest = dependencies.nativeTest || runNativeTests;
   const loadMetadata = dependencies.loadMetadata || gamePackageMetadata;
-  const verifyDependencies = dependencies.verifyDependencies || ((metadata) => verifyDependencySources({ studioRoot: resolve(gameDir, "..", ".."), dependencies: metadata.dependencies }));
+  const verifyDependencies = dependencies.verifyDependencies || ((metadata) => verifyDependencySources({ studioRoot: findStudioRoot(gameDir), dependencies: metadata.dependencies }));
   const packageGameOwned = dependencies.package || ((options, metadata) => packageGame(options, { gameDir }, metadata));
   const prepare = (templateProof = false) => {
     doctor({ gameDir, templateProof });
@@ -228,7 +229,7 @@ export async function executeGameCommand(args, dependencies = {}) {
   if (args.command === "playable") {
     prepare(false);
     if (args.build) (dependencies.build || buildGame)(gameDir, args.target);
-    validateWebArtifact({ gameDir, artifactDir: artifactDir(gameDir, args.target), target: args.target, studioRoot: resolve(gameDir, "..", "..") });
+    validateWebArtifact({ gameDir, artifactDir: artifactDir(gameDir, args.target), target: args.target, studioRoot: findStudioRoot(gameDir) });
     return { message: `playable proof passed (${args.target})` };
   }
   if (args.command === "package") {

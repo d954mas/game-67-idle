@@ -7,8 +7,9 @@ import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 
 import { doctorGame, executeGameCommand, nativeTestPlan, parseGameArgs } from "./game.mjs";
+import { findStudioRoot } from "./lib/studio_root.mjs";
 
-const studioRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+const studioRoot = findStudioRoot(fileURLToPath(new URL("..", import.meta.url)));
 const gameModuleRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const RELEASE_WASM = Buffer.from([
   0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
@@ -197,6 +198,32 @@ test("copied game CLI executes doctor and final package from a real games/<id> d
   assert.equal(packaged.status, 0, packaged.stderr);
   assert.match(packaged.stdout, /package passed:.*copied-game-itch-[0-9a-f]{16}\.zip/i);
   assert.equal(readdirSync(join(gameDir, "release", "artifacts")).filter((name) => /\.(?:zip|manifest\.json)$/.test(name)).length, 2);
+});
+
+test("copied game CLI at games/private/<id> reaches dependency verification", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "private-game-cli-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const gameDir = join(root, "games", "private", "copied-game");
+  cpSync(join(gameModuleRoot, "tools"), join(gameDir, "tools"), { recursive: true });
+  cpSync(join(gameModuleRoot, ".github"), join(gameDir, ".github"), { recursive: true });
+  cpSync(join(gameModuleRoot, "release"), join(gameDir, "release"), { recursive: true });
+  cpSync(join(studioRoot, "features", "platform-sdk"), join(root, "features", "platform-sdk"), { recursive: true });
+  write(join(gameDir, "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.25)\n");
+  mkdirSync(join(root, "external", "neotolis-engine"), { recursive: true });
+  write(join(gameDir, "game.json"), `${JSON.stringify({
+    schema: "ai_studio.game.v1", id: "copied-game", title: "Copied Game", storageNamespace: "copied-game",
+  }, null, 2)}\n`);
+  write(join(gameDir, "dependencies.json"), `${JSON.stringify({
+    schema: "ai_studio.game.dependencies.v2",
+    engine: { source: "external/neotolis-engine", version: "0.1.0", revision: "1".repeat(40), compatibility: "tested" },
+    features: [{ id: "platform-sdk", source: "features/platform-sdk", version: "1.1.0", revision: "2".repeat(40), compatibility: "tested" }],
+    compatibility: "private layout fixture",
+  }, null, 2)}\n`);
+
+  const result = spawnSync(process.execPath, ["tools/game.mjs", "doctor"], { cwd: gameDir, encoding: "utf8" });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Studio dependency revision is unavailable/i);
+  assert.doesNotMatch(result.stderr, /ERR_MODULE_NOT_FOUND|games[\\/]features/i);
 });
 
 test("copied CI restores the exact Studio revision and mounts the standalone game under games/<id>", () => {

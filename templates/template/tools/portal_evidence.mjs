@@ -15,6 +15,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { verifyWebPackage } from "./package_web.mjs";
+import { findStudioRoot } from "./lib/studio_root.mjs";
 
 const GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const USAGE = "usage: node tools/portal_evidence.mjs --manifest release/artifacts/<artifact>.manifest.json";
@@ -107,7 +108,7 @@ export function publishPortalEvidenceReport(reportPath, bytes, options = {}) {
 export function createPortalEvidence({
   gameDir = GAME_DIR,
   manifestPath,
-  studioRoot = resolve(gameDir, "..", ".."),
+  studioRoot = findStudioRoot(gameDir),
   beforePublish = () => {},
 }) {
   // The game owner must run this local tool with exclusive ownership of the

@@ -24,8 +24,9 @@ import {
   verifyWebPackage,
 } from "./package_web.mjs";
 import { createStoreZip, readStoreZip } from "./lib/zip_store.mjs";
+import { findStudioRoot } from "./lib/studio_root.mjs";
 
-const studioRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+const studioRoot = findStudioRoot(fileURLToPath(new URL("..", import.meta.url)));
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 test("standalone template ZIP helper matches the canonical Studio helper", () => {
