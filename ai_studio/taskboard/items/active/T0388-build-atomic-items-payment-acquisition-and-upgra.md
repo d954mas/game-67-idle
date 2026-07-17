@@ -1,13 +1,13 @@
 ---
 id: T0388
 title: Build atomic Items payment acquisition and upgrade verbs
-status: backlog
+status: doing
 project: P001
 epic: E019
 priority: P1
 tags: [items, runtime, state, transaction]
 created: 2026-07-10
-updated: 2026-07-14
+updated: 2026-07-17
 ---
 
 ## What
@@ -67,3 +67,9 @@ atomicity.
 - 2026-07-10: Created from independent red-team/runtime reviews after composite
   costs exposed that sequential `can_afford`/`remove` calls cannot guarantee an
   atomic upgrade or acquisition.
+- 2026-07-17: Started after T0390/T0391 closure because Taskboard ready queue ranks this P1 E019 task first; catalog costs and runtime containers are present. Work proceeds incrementally from payment planning tests.
+- 2026-07-17: Implemented the first payment slice: bounded ordered scope,
+  deterministic source/slot planning, exact no-mutation refusal, one commit,
+  and a truthful typed `items.payment` summary event. Focused Items,
+  progression, curve, and template-composition native tests pass; independent
+  review findings on event semantics and slot-order evidence were addressed.

@@ -256,6 +256,78 @@ void test_staged_runtime_validation_rejects_graph_without_publishing_indices(voi
     TEST_ASSERT_EQUAL_UINT32(second.generation, resolved.generation);
 }
 
+void test_atomic_payment_plans_scope_and_slots_before_one_commit(void) {
+    items_container_ref_t first = ITEMS_CONTAINER_REF_NONE;
+    items_container_ref_t second = ITEMS_CONTAINER_REF_NONE;
+    items_container_desc_t desc = {
+        .capacity = 4,
+        .policy = ITEMS_CONTAINER_POLICY_GENERIC,
+        .lifetime = ITEMS_LIFETIME_PERSISTENT,
+    };
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_container_create(desc, &first));
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_container_create(desc, &second));
+    item_entry_ref_t later_slot = ITEM_ENTRY_REF_NONE;
+    item_entry_ref_t earlier_slot = ITEM_ENTRY_REF_NONE;
+    item_entry_ref_t second_source = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(first, "tmpl.gold", 6, 3, "loot:test", &later_slot, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(first, "tmpl.gold", 6, 1, "loot:test", &earlier_slot, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(second, "tmpl.gold", 5, 0, "loot:test", &second_source, NULL));
+    const uint32_t earlier_slot_id = items_entry_id(earlier_slot);
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(second, "tmpl.wood", 1, 2, "loot:test", NULL, NULL));
+
+    item_def_ref_t sword;
+    TEST_ASSERT_TRUE(items_try_get_string("tmpl.sword", &sword));
+    item_transition_t acquire = items_acquire_transition(sword);
+    TEST_ASSERT_EQUAL_INT(ITEM_TRANSITION_COST, acquire.kind);
+    items_payment_scope_t scope = {.count = 2, .containers = {first, second}};
+    ItemsState before = items_state;
+    game_event_frame_reset();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INSUFFICIENT,
+        items_try_pay_cost(acquire.cost, scope, "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    int event_count = 0;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(second, "tmpl.wood", 1, 2, "loot:test", NULL, NULL));
+    game_event_frame_reset();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_pay_cost(acquire.cost, scope, "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_INT64(2, items_stack_count(first, "tmpl.gold"));
+    TEST_ASSERT_EQUAL_INT64(5, items_stack_count(second, "tmpl.gold"));
+    TEST_ASSERT_EQUAL_INT64(0, items_stack_count(second, "tmpl.wood"));
+    item_entry_ref_t resolved = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_FALSE(items_entry_try_from_id(earlier_slot_id, &resolved));
+    TEST_ASSERT_TRUE(items_entry_try_from_id(items_entry_id(later_slot), &resolved));
+    TEST_ASSERT_EQUAL_INT64(2, items_entry_view(resolved).count);
+    TEST_ASSERT_EQUAL_INT64(5, items_entry_view(second_source).count);
+    const game_event_t *events = game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(1, event_count);
+    TEST_ASSERT_EQUAL_UINT64(items_ev_payment_type().value, events[0].type.value);
+    const ItemsEvPayment *payment = (const ItemsEvPayment *)events[0].payload;
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0x5be1d477269e01d7), payment->cost_fingerprint.value);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0x767ccc7cb862dee1), payment->scope_fingerprint.value);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0xb1c03818518b2d77), payment->source_fingerprint.value);
+    TEST_ASSERT_EQUAL_INT64(2, payment->requirement_count);
+    TEST_ASSERT_EQUAL_INT64(2, payment->scope_count);
+    TEST_ASSERT_EQUAL_INT64(3, payment->source_entry_count);
+    TEST_ASSERT_EQUAL_INT64(12, payment->requested_units);
+    TEST_ASSERT_EQUAL_INT64(12, payment->applied_units);
+    TEST_ASSERT_EQUAL_STRING("shop_buy:sword", items_ev_payment_reason(payment));
+}
+
 void test_rebuild_rejects_reserved_persisted_counters(void) {
     (void)create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
     char error[128] = {0};
@@ -725,6 +797,7 @@ int main(void) {
     RUN_TEST(test_resize_requires_all_occupied_slots_to_fit);
     RUN_TEST(test_rebuild_rejects_duplicates_and_counter_regression);
     RUN_TEST(test_staged_runtime_validation_rejects_graph_without_publishing_indices);
+    RUN_TEST(test_atomic_payment_plans_scope_and_slots_before_one_commit);
     RUN_TEST(test_rebuild_rejects_reserved_persisted_counters);
     RUN_TEST(test_one_hundred_persistent_containers_round_trip);
     RUN_TEST(test_loaded_maximum_ids_and_long_definition_reseed_without_truncation);

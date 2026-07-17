@@ -73,8 +73,18 @@ The ownership API is:
 
 `stack == 0` is unlimited, `stack == 1` is unique, and `stack > 1` is a finite
 per-container cap. Currency caps are also enforced by ownership. Mutations
-require a game-owned `verb:subject` reason and emit typed `items.txn` or
+require a game-owned `verb:subject` reason and emit typed `items.txn`, `items.payment`, or
 `items.move` events.
+
+`items.payment` is the single success record for a composite payment. Stable
+`cost_fingerprint`, `scope_fingerprint`, and `source_fingerprint` fields identify
+the normalized item-ID/count requirements, ordered persistent container IDs,
+and ordered container-ID/entry-ID/slot/item-ID/applied-count plan. They use
+FNV-1a over the named `items.payment.*.v1` domain followed by canonical
+little-endian 64-bit fields. `requirement_count`, `scope_count`, and
+`source_entry_count` describe the bounded plan; `requested_units` and
+`applied_units` are the overflow-checked sums of all resource counts and are
+equal on success. A refusal emits no event.
 
 Games create concrete inventory, wallet, equipment, merchant, and chest
 containers. Capacity is a finite slot range; built-in serializable policy is

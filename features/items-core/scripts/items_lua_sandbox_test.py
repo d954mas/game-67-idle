@@ -139,6 +139,19 @@ class ItemsLuaSandboxTests(unittest.TestCase):
                 "use": {"effect_id": "heal", "params": {"amount": 25}},
             },
             {
+                "acquire": {"cost": {
+                    "__studio_kind": "costs",
+                    "entries": [
+                        {
+                            "__studio_kind": "cost", "count": 10,
+                            "item": {"__studio_kind": "item_ref", "id": "tmpl.gold"},
+                        },
+                        {
+                            "__studio_kind": "cost", "count": 2,
+                            "item": {"__studio_kind": "item_ref", "id": "tmpl.wood"},
+                        },
+                    ],
+                }},
                 "authoring_mode": "single", "base_value": 50,
                 "created": "2026-07-07", "equip": {"slot": "weapon"},
                 "icon": "icons/sword", "id": "tmpl.sword", "kind": "weapon",

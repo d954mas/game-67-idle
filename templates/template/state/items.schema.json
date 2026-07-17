@@ -61,6 +61,19 @@
         "reason":          { "type": "string" }
       }
     },
+    "payment": {
+      "fields": {
+        "cost_fingerprint":   { "type": "hash" },
+        "scope_fingerprint":  { "type": "hash" },
+        "source_fingerprint": { "type": "hash" },
+        "requirement_count":  { "type": "i64" },
+        "scope_count":        { "type": "i64" },
+        "source_entry_count": { "type": "i64" },
+        "requested_units":    { "type": "i64" },
+        "applied_units":      { "type": "i64" },
+        "reason":             { "type": "string" }
+      }
+    },
     "move": {
       "fields": {
         "def_id":          { "type": "string" },

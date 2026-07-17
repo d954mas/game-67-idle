@@ -1056,6 +1056,137 @@ static items_result_t ephemeral_entry_move(
     return ITEMS_RESULT_OK;
 }
 
+typedef struct items_payment_plan_row_t {
+    uint32_t entry_index;
+    int64_t count;
+} items_payment_plan_row_t;
+
+#define ITEMS_PAYMENT_FINGERPRINT_OFFSET UINT64_C(14695981039346656037)
+#define ITEMS_PAYMENT_FINGERPRINT_PRIME UINT64_C(1099511628211)
+
+static void payment_fingerprint_bytes(uint64_t *fingerprint, const void *bytes, uint32_t count) {
+    const uint8_t *data = bytes;
+    for (uint32_t i = 0; i < count; i++) {
+        *fingerprint ^= data[i];
+        *fingerprint *= ITEMS_PAYMENT_FINGERPRINT_PRIME;
+    }
+}
+
+static void payment_fingerprint_u64(uint64_t *fingerprint, uint64_t value) {
+    uint8_t little_endian[8];
+    for (uint32_t i = 0; i < 8; i++) {
+        little_endian[i] = (uint8_t)(value >> (i * 8U));
+    }
+    payment_fingerprint_bytes(fingerprint, little_endian, 8);
+}
+
+static uint64_t payment_fingerprint_begin(const char *domain) {
+    uint64_t fingerprint = ITEMS_PAYMENT_FINGERPRINT_OFFSET;
+    payment_fingerprint_bytes(&fingerprint, domain, (uint32_t)strlen(domain));
+    return fingerprint;
+}
+
+static bool entry_matches_item(const ItemsItemEntry *entry, item_id_t item) {
+    item_def_ref_t ref;
+    return !entry->quarantined && items_try_get_string(entry->def_id, &ref) &&
+        items_core(ref).id.value == item.value;
+}
+
+items_result_t items_try_pay_cost(
+    item_cost_ref_t cost, items_payment_scope_t scope, const char *reason) {
+    items_reason_check(reason);
+    ensure_ready();
+    NT_ASSERT(scope.count > 0 && scope.count <= ITEMS_PAYMENT_SCOPE_MAX);
+    uint64_t scope_fingerprint = payment_fingerprint_begin("items.payment.scope.v1");
+    payment_fingerprint_u64(&scope_fingerprint, scope.count);
+    for (uint32_t i = 0; i < scope.count; i++) {
+        NT_ASSERT(!ephemeral_ref(scope.containers[i].index) &&
+                  "payment scope requires persistent containers");
+        ItemsItemContainer *container = require_container(scope.containers[i]);
+        payment_fingerprint_u64(&scope_fingerprint, container->container_id);
+        for (uint32_t j = 0; j < i; j++) {
+            NT_ASSERT((scope.containers[i].index != scope.containers[j].index ||
+                       scope.containers[i].generation != scope.containers[j].generation) &&
+                      "payment scope contains a duplicate container");
+        }
+    }
+
+    items_payment_plan_row_t plan[ITEMS_STATE_MAX_CONTAINERS_ENTRIES];
+    uint32_t plan_count = 0;
+    const uint32_t requirement_count = items_cost_count(cost);
+    int64_t requested_units = 0;
+    uint64_t cost_fingerprint = payment_fingerprint_begin("items.payment.cost.v1");
+    NT_ASSERT(requirement_count > 0);
+    payment_fingerprint_u64(&cost_fingerprint, requirement_count);
+    for (uint32_t requirement = 0; requirement < requirement_count; requirement++) {
+        item_cost_entry_t required = items_cost_at(cost, requirement);
+        NT_ASSERT(required.count > 0 && "runtime cost contains a non-positive requirement");
+        NT_ASSERT(requested_units <= INT64_MAX - required.count &&
+                  "runtime payment cost total overflows i64");
+        requested_units += required.count;
+        item_def_ref_t required_ref = items_get(required.item);
+        NT_ASSERT(item_is_stackable(items_core(required_ref)) &&
+                  "runtime payment cost must contain only stack resources");
+        for (uint32_t prior = 0; prior < requirement; prior++) {
+            NT_ASSERT(items_cost_at(cost, prior).item.value != required.item.value &&
+                      "runtime cost contains duplicate requirements");
+        }
+        payment_fingerprint_u64(&cost_fingerprint, required.item.value);
+        payment_fingerprint_u64(&cost_fingerprint, (uint64_t)required.count);
+    }
+
+    for (uint32_t requirement = 0; requirement < requirement_count; requirement++) {
+        item_cost_entry_t required = items_cost_at(cost, requirement);
+        int64_t remaining = required.count;
+        for (uint32_t source = 0; source < scope.count && remaining > 0; source++) {
+            ItemsItemContainer *container = require_container(scope.containers[source]);
+            for (uint32_t slot = 0; slot < container->capacity && remaining > 0; slot++) {
+                ItemsItemEntry *entry = entry_at_slot(scope.containers[source].index, slot);
+                if (entry == NULL || !entry_matches_item(entry, required.item)) { continue; }
+                int64_t take = entry->count < remaining ? entry->count : remaining;
+                NT_ASSERT(plan_count < ITEMS_STATE_MAX_CONTAINERS_ENTRIES);
+                plan[plan_count++] = (items_payment_plan_row_t){
+                    (uint32_t)(entry - items_state.containers_entries), take};
+                remaining -= take;
+            }
+        }
+        if (remaining > 0) { return ITEMS_RESULT_INSUFFICIENT; }
+    }
+
+    uint64_t source_fingerprint = payment_fingerprint_begin("items.payment.source.v1");
+    payment_fingerprint_u64(&source_fingerprint, plan_count);
+    for (uint32_t i = 0; i < plan_count; i++) {
+        const ItemsItemEntry *entry = &items_state.containers_entries[plan[i].entry_index];
+        const ItemsItemContainer *container = &items_state.containers[entry->parent_index];
+        item_def_ref_t def;
+        NT_ASSERT(items_try_get_string(entry->def_id, &def));
+        payment_fingerprint_u64(&source_fingerprint, container->container_id);
+        payment_fingerprint_u64(&source_fingerprint, entry->entry_id);
+        payment_fingerprint_u64(&source_fingerprint, entry->slot);
+        payment_fingerprint_u64(&source_fingerprint, items_core(def).id.value);
+        payment_fingerprint_u64(&source_fingerprint, (uint64_t)plan[i].count);
+    }
+
+    for (uint32_t i = 0; i < plan_count; i++) {
+        ItemsItemEntry *entry = &items_state.containers_entries[plan[i].entry_index];
+        NT_ASSERT(entry->used && entry->count >= plan[i].count);
+        entry->count -= plan[i].count;
+        if (entry->count == 0) {
+            memset(entry, 0, sizeof(*entry));
+            s_entry_generation[plan[i].entry_index] =
+                next_generation(s_entry_generation[plan[i].entry_index]);
+        }
+    }
+    bool ok = build_indices(&items_state, true, false, NULL, 0);
+    NT_ASSERT(ok);
+    game_save_mark_dirty();
+    items_emit_payment(
+        (nt_hash64_t){cost_fingerprint}, (nt_hash64_t){scope_fingerprint},
+        (nt_hash64_t){source_fingerprint}, requirement_count, scope.count, plan_count,
+        requested_units, requested_units, reason);
+    return ITEMS_RESULT_OK;
+}
+
 items_result_t items_try_entry_move(
     item_entry_ref_t source_ref, items_container_ref_t destination_ref,
     int64_t count, uint32_t requested_slot, const char *reason,

@@ -89,6 +89,7 @@ int64_t items_currency_cap(item_def_ref_t ref);
 #define ITEMS_ID_NONE UINT32_C(0)
 #define ITEMS_ID_RESERVED UINT32_MAX
 #define ITEMS_SLOT_AUTO UINT32_MAX
+#define ITEMS_PAYMENT_SCOPE_MAX UINT32_C(8)
 
 typedef enum items_container_policy_t {
     ITEMS_CONTAINER_POLICY_GENERIC = 0,
@@ -126,6 +127,11 @@ typedef struct items_container_desc_t {
     items_container_policy_t policy;
     items_lifetime_t lifetime;
 } items_container_desc_t;
+
+typedef struct items_payment_scope_t {
+    uint32_t count;
+    items_container_ref_t containers[ITEMS_PAYMENT_SCOPE_MAX];
+} items_payment_scope_t;
 
 typedef struct items_entry_view_t {
     uint32_t entry_id;
@@ -220,6 +226,11 @@ items_result_t items_try_stack_remove_from_container(
     items_container_ref_t container, const char *def_id, int64_t count, const char *reason);
 int64_t items_stack_count(items_container_ref_t container, const char *def_id);
 bool items_can_afford(items_container_ref_t container, const char *def_id, int64_t count);
+#if (defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED) || \
+    (defined(ITEMS_RUNTIME_PACKAGE_ENABLED) && ITEMS_RUNTIME_PACKAGE_ENABLED)
+items_result_t items_try_pay_cost(
+    item_cost_ref_t cost, items_payment_scope_t scope, const char *reason);
+#endif
 
 items_result_t items_try_unique_create(
     items_container_ref_t container, const char *def_id, uint32_t slot,
