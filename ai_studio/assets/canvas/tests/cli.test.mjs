@@ -121,6 +121,42 @@ test("cli create/add-image/undo/redo/history/export smoke", async (t) => {
   assert.equal(stats.errors.count, 0);
 });
 
+test("cli sets and reads an image asset status", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-asset-status-"));
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const pngPath = join(dir, "pic.png");
+  writeFileSync(pngPath, solidPng(9, 6, [12, 34, 56]));
+  const projectId = (await runInProcess(env, "create", "--title", "Asset status CLI")).project.id;
+  const elementId = (await runInProcess(env, "add-image", projectId, "--file", pngPath)).element.id;
+
+  assert.equal((await runInProcess(env, "asset-status-show", projectId, "--element", elementId)).status, null);
+  assert.match(
+    (await runInProcessFail(env, "asset-status-set", projectId, "--element", elementId, "--status", "checked")).message,
+    /promotion from untracked to checked requires gate evidence/,
+  );
+  const changed = await runInProcess(
+    env,
+    "asset-status-set",
+    projectId,
+    "--element",
+    elementId,
+    "--status",
+    "quarantine",
+  );
+  assert.equal(changed.status, "quarantine");
+  assert.equal((await runInProcess(env, "asset-status-show", projectId, "--element", elementId)).status, "quarantine");
+  assert.match(
+    (await runInProcessFail(env, "asset-status-set", projectId, "--element", elementId, "--status", "checked")).message,
+    /promotion from quarantine to checked requires gate evidence/,
+  );
+  assert.match(
+    (await runInProcessFail(env, "asset-status-set", projectId, "--element", elementId, "--status", "approved")).message,
+    /asset status must be quarantine\|checked\|accepted/,
+  );
+});
+
 test("cli stores Canvas project ownership and filters by owner game", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-owner-"));
   const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };

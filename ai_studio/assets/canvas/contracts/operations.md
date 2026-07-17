@@ -20,3 +20,14 @@ exception: it moves the whole folder into `.trash` for recovery.
 Agents use `node ai_studio/assets/canvas/cli.mjs`. Run it without arguments for
 the live command list. History navigation requires a fresh `history-list` read
 and `--expect-head <n>` on undo, redo, and jump.
+
+Image elements may carry the explicit top-level workflow field `assetStatus`:
+`quarantine`, `checked`, or `accepted`. Legacy/unstamped images have no field and
+read as `null`; generation defaults are intentionally owned by a later T0326
+increment. Status changes use the dedicated `setAssetStatus` operation (not a
+generic metadata patch), are journaled and undoable, and may move backward when
+review is revoked. The public setter may initialize `quarantine`, repeat a no-op,
+or downgrade an existing state; promotion to `checked` / `accepted` is reserved
+for later technical/style verdict operations carrying their evidence. CLI parity
+is `asset-status-show` / `asset-status-set`; HTTP parity is `GET` / `PUT
+.../elements/<id>/asset-status`.

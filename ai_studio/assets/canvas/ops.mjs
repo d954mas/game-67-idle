@@ -3,7 +3,7 @@
 export { getProject, listProjects, recordOpFailure, resolveProjectFile, resolveProjectPath, setOpsActor, updateProject, withProjectLock } from "./ops/core.mjs";
 export { createProject, deleteProject } from "./ops/project_lifecycle.mjs";
 export { parseScaleSpec, resolveExportScale } from "./ops/export_scale.mjs";
-export { addImage, addImageFromFile, addImages, addNote, addText, alignNodes, distributeNodes, moveNodes, patchElement, patchElements, patchProject, removeElement, removeElements, reorderElement, reorderNode, reorderNodes, setElementAnimation, setExportSettings, setRegions, setSlice9 } from "./ops/elements.mjs";
+export { addImage, addImageFromFile, addImages, addNote, addText, alignNodes, distributeNodes, getAssetStatus, moveNodes, patchElement, patchElements, patchProject, removeElement, removeElements, reorderElement, reorderNode, reorderNodes, setAssetStatus, setElementAnimation, setExportSettings, setRegions, setSlice9 } from "./ops/elements.mjs";
 export { assignToGroup, createGroup, deleteGroup, fitGroup, patchGroup, patchGroups, reparentGroup, scaleGroup, ungroupGroup } from "./ops/groups.mjs";
 export { animateElementFromText, createAnimCard, createRecipeCard, createStyleCard, expandRecipePrompt, extractFromElement, generateAnimFromCard, generateFromRecipe, packPreview, patchAnim, patchRecipe, patchStyle, promoteExtractedRecipe, promoteExtractedStyle } from "./ops/generation.mjs";
 export { deleteNodes, duplicateNodes, historyEntryLabel, historyFlags, jumpHistory, listHistory, opsStats, pasteNodes, readHistory, redoOp, undoOp } from "./ops/history.mjs";

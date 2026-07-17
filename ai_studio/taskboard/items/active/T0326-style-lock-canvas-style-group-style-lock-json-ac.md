@@ -54,7 +54,7 @@ starts QUARANTINED, flag visible in canvas; only accepted art reaches the game):
 
 - [x] 1. `style_lock.json` schema + canvas `style` group convention (passport,
       palette, exemplars, refs, Do/Don't) — doc + example.
-- [ ] 2. Canvas asset status flag `quarantine → checked → accepted`, visible as
+- [x] 2. Canvas asset status flag `quarantine → checked → accepted`, visible as
       a badge on canvas cards; CLI can set/read it.
 - [ ] 3. Generation paths default to quarantine; production mode stamps the
       lock id into the sidecar/origin; `--no-lock` taints origin.
@@ -85,3 +85,5 @@ starts QUARANTINED, flag visible in canvas; only accepted art reaches the game):
 - 2026-07-17: Increment 1 review hardening: the portable JSON Schema is explicitly structural while validate.mjs owns cross-field Canvas semantics; CLI validation now binds game_id to public/private workspace game paths and requires the linked art contract to resolve physically inside the game design directory. Deferred technical threshold field names to T0317 so measurement formulas and calibration evidence define the contract before v1 consumption.
 - 2026-07-17: Increment 1 complete after TDD, full 10-domain Studio verify, and clean independent re-review. Added structural v1 schema, fail-closed semantic/file validator, public/private Canvas ownership rules, example, Canvas style-group convention, and art-contract linkage. T0326 remains doing with increments 2-7 open; T0317 is next so deterministic formulas can define threshold fields before consumption.
 - 2026-07-17: Increment 1 published in draft PR #6. GitHub Actions run 29581176566 passed blocking Studio verification on Ubuntu (3m43s) and Windows (5m25s).
+- 2026-07-17: Increment 2 implementation complete: image-only assetStatus contract (quarantine, checked, accepted), journaled read/set operations, CLI and HTTP parity, history labels, and text badges in Canvas workspace/layers. Public transports may initialize quarantine, no-op, or downgrade; upward checked/accepted transitions require later gate/verdict evidence and cannot be forged. Focused Canvas suite passed 56/56, real Chrome audit covered workspace/layers and 320/768/1024/1440 widths, and independent re-review is clean. Required follow-up for increments 3-4 before promotion enforcement: every pixel-changing operation must reset/downgrade prior review state so accepted art cannot remain accepted after mutation.
+- 2026-07-17: Increment 2 publication verification complete: changed verify passed assets and work-management; full Studio verify passed all 10 domains including template-release; Taskboard, doc-reference, architecture-map, and diff checks are clean.

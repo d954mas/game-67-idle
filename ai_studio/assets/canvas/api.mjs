@@ -51,6 +51,8 @@
 //   POST   /api/canvas/projects/<id>/elements/<eid>/animate        {text}   (T0264: ONE codex TEXT/VISION call -> element.animation (the ai_studio.canvas.animation.v1 spec); authors fresh or minimally patches an existing spec; image + text; loud on a non-JSON reply / invalid spec)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/promote-recipe {}   (mint a RECIPE card BELOW the element from its ALREADY-STORED meta.extracted; NO codex call; loud without meta.extracted first)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/promote-style  {}   (mint a STYLE card RIGHT of the element from its ALREADY-STORED meta.extracted; NO codex call; loud without meta.extracted first)
+//   GET    /api/canvas/projects/<id>/elements/<eid>/asset-status
+//   PUT    /api/canvas/projects/<id>/elements/<eid>/asset-status {status} (image-only; initialize quarantine or downgrade; upward transitions require gate evidence; one entry)
 //   POST   /api/canvas/projects/<id>/nodes-move    {moves:[{nodeId,x,y}...]} (mixed element+group move)
 //   POST   /api/canvas/projects/<id>/nodes-reorder {nodeIds, direction|index} (multi-node z-order)
 //   POST   /api/canvas/projects/<id>/nodes-align   {nodeIds, align, reference?} (align to selection bbox or parent frame; one entry)
@@ -110,6 +112,7 @@ import {
   fitGroup,
   generateAnimFromCard,
   generateFromRecipe,
+  getAssetStatus,
   getProject,
   historyFlags,
   jumpHistory,
@@ -144,6 +147,7 @@ import {
   resolveProjectPath,
   scaleGroup,
   setElementAnimation,
+  setAssetStatus,
   setExportSettings,
   setRegions,
   setSlice9,
@@ -1025,6 +1029,24 @@ export function createCanvasApi(root) {
         const elementId = decodeURIComponent(parts[5]);
         await readJsonBody(req);
         sendMutation(201, await locked(id, () => promoteExtractedStyle(root, { projectId: id, elementId })));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/asset-status
+      // GET is a compact agent/page read. PUT replaces the image's review state through
+      // the same journaled operation as the CLI; no generic element-meta patch exists.
+      if (parts.length === 7 && sub === "elements" && parts[6] === "asset-status") {
+        const elementId = decodeURIComponent(parts[5]);
+        if (req.method === "GET") {
+          sendJson(res, 200, getAssetStatus(root, { projectId: id, elementId }));
+          return true;
+        }
+        if (req.method === "PUT") {
+          const body = await readJsonBody(req);
+          sendMutation(200, await locked(id, () => setAssetStatus(root, { projectId: id, elementId, status: body.status })));
+          return true;
+        }
+        sendJson(res, 405, { error: "method not allowed" });
         return true;
       }
 

@@ -21,3 +21,8 @@ unless the caller opts in, and private exports may not target the public parent
 repository. Public object references use `canvas://<project>/<kind>/<id>`;
 private references include `canvas://game/<gameId>/...` and never fall back to a
 bare-id search across private stores.
+
+`element.assetStatus`, when present on an image, is mutable workflow state rather
+than provenance. Its only valid persisted values are `quarantine`, `checked`, and
+`accepted`; absence means the legacy image has not entered the review workflow.
+Writers must use the Canvas operation/CLI instead of editing `project.json`.

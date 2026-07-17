@@ -159,6 +159,45 @@ test("canvas API supports the full project + element lifecycle", async (t) => {
   assert.equal(afterRemove.json().project.elements.length, 0);
 });
 
+test("canvas API sets and reads image asset status through the shared operation", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Asset status API" })).json().project.id;
+  const elementId = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+    name: "hero.png",
+    bytes_base64: solidPng().toString("base64"),
+  })).json().element.id;
+
+  const initial = await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`);
+  assert.equal(initial.status, 200);
+  assert.equal(initial.json().status, null);
+
+  const directForge = await invokeApi(handler, "PUT", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`, {
+    status: "checked",
+  });
+  assert.equal(directForge.status, 400);
+  assert.match(directForge.json().error, /promotion from untracked to checked requires gate evidence/);
+
+  const changed = await invokeApi(handler, "PUT", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`, {
+    status: "quarantine",
+  });
+  assert.equal(changed.status, 200);
+  assert.equal(changed.json().status, "quarantine");
+  assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`)).json().status, "quarantine");
+
+  const forged = await invokeApi(handler, "PUT", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`, {
+    status: "checked",
+  });
+  assert.equal(forged.status, 400);
+  assert.match(forged.json().error, /promotion from quarantine to checked requires gate evidence/);
+
+  const invalid = await invokeApi(handler, "PUT", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`, {
+    status: "approved",
+  });
+  assert.equal(invalid.status, 400);
+  assert.match(invalid.json().error, /asset status must be quarantine\|checked\|accepted/);
+});
+
 test("canvas API routes explicitly selected private game stores and keeps default reads public-only", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "canvas-api-private-root-"));
   const publicRoot = join(root, "public-canvas");

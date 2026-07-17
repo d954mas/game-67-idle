@@ -15,6 +15,8 @@
 //   node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
 //   node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--w n --h n] [--x n --y n] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false] [--opacity <0..1>] [--filters-json '<json|null>']   (T0232 3a: rotation = degrees CW about the box center, normalized to [0,360); flip is image-only; T0260: opacity in [0,1], stored only when != 1; T0273: filters-json = {brightness?,saturation?,contrast?,tint?:{color,strength}} non-destructive image color adjustments, image-only, whole-object replace, "null" clears — see README "Image filters"; --w/--h/--x/--y are the same finite-number patchElement fields the API PATCH route accepts)
+//   node ai_studio/assets/canvas/cli.mjs asset-status-show <id> --element <eid>
+//   node ai_studio/assets/canvas/cli.mjs asset-status-set <id> --element <eid> --status quarantine|checked|accepted
 //   node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json
 //   node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs slice9-set <id> --element <eid> [--left n --top n --right n --bottom n] [--scale n] | --clear   (T0233: 9-slice insets, SOURCE pixels; missing flags merge over the element's current slice9 (or 0s); --scale multiplies the DESTINATION corner/edge band only, default 1; --clear sends null)
@@ -110,6 +112,7 @@ import {
   fitGroup,
   generateAnimFromCard,
   generateFromRecipe,
+  getAssetStatus,
   getProject,
   jumpHistory,
   listHistory,
@@ -141,6 +144,7 @@ import {
   reparentGroup,
   scaleGroup,
   setElementAnimation,
+  setAssetStatus,
   setExportSettings,
   setOpsActor,
   setRegions,
@@ -241,7 +245,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|project-set|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|filters-bake|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-scale|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|recipe-pack-preview|recipe-pack-generate|recipe-pack-slice|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|project-set|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|asset-status-show|asset-status-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|filters-bake|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-scale|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|recipe-pack-preview|recipe-pack-generate|recipe-pack-slice|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
   list [--full] [--owner-game <gameId>] [--include-archived]   (summary by default: [{id,title,ownerGame,created,updated,elements,groups,head}]; --include-archived adds archived; --full = every project in full, today's original dump)
   create [--title <title>] [--owner-game <gameId>]     (omit --title for a random default)
   show <id>
@@ -256,6 +260,8 @@ function usage() {
   detect-regions <id> --element <eid>
   move <id> --element <eid> --x <n> --y <n>
   element-set <id> --element <eid> [--name <name>] [--visible true|false] [--content "<text>"] [--style-json <path>] [--background '#rrggbb'|none] [--w <n> --h <n>] [--x <n> --y <n>] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false] [--opacity <0..1>] [--filters-json '<json|null>']   (--content/--style-json patch a text OR note; --background is note-only)   (--w/--h/--x/--y are the same finite-number fields the API PATCH route + move accept — single-element resize/reposition from the CLI, T0254; --opacity in [0,1] stored only when != 1, T0260; --filters-json = {brightness?,saturation?,contrast?,tint?:{color,strength}} non-destructive image color adjustments, image-only, whole-object replace, "null" clears, T0273 — see README "Image filters")
+  asset-status-show <id> --element <eid>
+  asset-status-set <id> --element <eid> --status quarantine|checked|accepted   (image-only; one undo step; initializes quarantine or downgrades; upward transitions require gate evidence)
   element-remove <id> --element <eid>
   elements-set <id> --json <path>   (batched patch: [{elementId,x?,y?,w?,h?,name?,visible?,rotation?,flipH?,flipV?,opacity?,filters?}] or {patches:[...]}; one undo step)
   elements-remove <id> --elements e1,e2   (batched delete; one undo step)
@@ -524,6 +530,17 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
         fail("element-set requires --name, --visible, --content, --style-json, --background, --rotation, --flip-h, --flip-v, --opacity, --filters-json, --w, --h, --x, and/or --y");
       }
       return print(patchElement(repoRoot, id, flags.element, patch));
+    }
+    case "asset-status-show": {
+      if (!id) fail("asset-status-show requires <id>");
+      if (!flags.element || flags.element === "true") fail("asset-status-show requires --element <eid>");
+      return print(getAssetStatus(repoRoot, { projectId: id, elementId: flags.element }));
+    }
+    case "asset-status-set": {
+      if (!id) fail("asset-status-set requires <id>");
+      if (!flags.element || flags.element === "true") fail("asset-status-set requires --element <eid>");
+      if (!flags.status || flags.status === "true") fail("asset-status-set requires --status quarantine|checked|accepted");
+      return print(setAssetStatus(repoRoot, { projectId: id, elementId: flags.element, status: flags.status }));
     }
     case "element-remove": {
       if (!id) fail("element-remove requires <id>");
