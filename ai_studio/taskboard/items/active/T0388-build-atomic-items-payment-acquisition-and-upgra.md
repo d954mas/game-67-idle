@@ -36,10 +36,10 @@ atomicity.
       allocation, then commits the combined plan once.
 - [x] Missing `acquire.cost` makes generic acquisition unavailable; free
       acquisition is accepted only when authored explicitly as `items.free()`.
-- [ ] `items_try_upgrade_instance(item_entry_ref_t entry, target_level, payment, reason)`
+- [x] `items_try_upgrade_instance(item_entry_ref_t entry, target_level, payment, reason)`
       requires the next valid level in v1, obtains `cost_to_reach[target_level]`,
       pays, changes saved level, marks dirty, and emits one result atomically.
-- [ ] Explicit free and paid transitions are distinct; level 1/inapplicable is
+- [x] Explicit free and paid transitions are distinct; level 1/inapplicable is
       never treated as free. Persistent unlock state is outside this task.
 - [ ] Success/failure fixtures cover two explicit payer containers, duplicate
       resources, overflow, insufficient second resource, full/wrong-policy destination,
@@ -78,3 +78,7 @@ atomicity.
   storage/unavailable refusal equality, stable result events, and catalog-ID
   access in generated-C and runtime-package backends. Independent logic review
   accepted the slice; Items API/runtime, progression, and composition tests pass.
+- 2026-07-17: Added generic catalog level-transition queries for generated-C
+  and runtime packages plus atomic next-level unique-instance upgrades. Paid,
+  free, stale, unavailable, quarantine, and persisted-level-boundary paths have
+  exact-state/event fixtures; initial independent review findings were fixed.

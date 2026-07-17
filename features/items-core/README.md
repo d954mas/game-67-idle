@@ -60,7 +60,7 @@ The typed catalog API uses strong item IDs and opaque references:
 
 - `items_get`, `items_exists`, `items_try_get`, `items_try_get_string`
 - `items_core`
-- `items_acquire_transition`, `items_cost_count`, `items_cost_at`
+- `items_acquire_transition`, generic level transition queries, `items_cost_count`, `items_cost_at`
 - generated capability accessors when the game declares typed level fields
 - `items_has_currency`, `items_currency_cap`
 
@@ -69,6 +69,7 @@ The ownership API is:
 - persistent or ephemeral `items_try_container_create`, destroy-empty, and resize;
 - stack add/remove/count/afford operations against an explicit container ref;
 - atomic composite payment and paid/explicit-free catalog acquisition;
+- atomic paid/explicit-free next-level upgrade for unique instances;
 - unique entry create/destroy and whole/split/merge move operations;
 - persistent ID lookup plus generation-checked runtime refs.
 
@@ -89,6 +90,9 @@ equal on success. A refusal emits no event. `items.acquire` is the sole success
 event for the combined verb and records the acquired item and destination/entry
 IDs plus the same payment fingerprints and totals; explicit-free acquisition
 sets paid false and all payment fields to zero.
+`items.upgrade` follows the same single-result rule and records the stable item
+and entry identity, exact from/target levels, and payment summary. Targets must
+be exactly next-level and fit the persisted entry-level bound before payment.
 
 Games create concrete inventory, wallet, equipment, merchant, and chest
 containers. Capacity is a finite slot range; built-in serializable policy is

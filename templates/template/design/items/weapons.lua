@@ -17,5 +17,12 @@ items.define({
     items.cost(gold, 10),
     items.cost(wood, 2),
   }) },
-  levels = levels.single({}),
+  levels = levels.table({
+    [1] = {},
+    [2] = { cost_to_reach = items.costs({
+      items.cost(gold, 5),
+      items.cost(wood, 1),
+    }) },
+    [3] = { cost_to_reach = items.free() },
+  }),
 })

@@ -53,6 +53,16 @@ void test_acquire_cost_is_opaque_and_copy_out(void) {
     TEST_ASSERT_EQUAL_INT64(100, entry.count);
 }
 
+void test_generic_level_transition_api_does_not_require_capability_fields(void) {
+    item_def_ref_t sword = items_get(ITEM_GAME_IRON_SWORD);
+    TEST_ASSERT_EQUAL_UINT32(3, items_level_count(sword));
+    TEST_ASSERT_TRUE(items_level_exists(sword, 2));
+    TEST_ASSERT_FALSE(items_level_exists(sword, 4));
+    TEST_ASSERT_EQUAL(ITEM_TRANSITION_UNAVAILABLE, items_level_transition(sword, 1).kind);
+    TEST_ASSERT_EQUAL(ITEM_TRANSITION_COST, items_level_transition(sword, 2).kind);
+    TEST_ASSERT_EQUAL(ITEM_TRANSITION_FREE, items_level_transition(sword, 3).kind);
+}
+
 int main(void) {
     items_register_debug_labels();
     UNITY_BEGIN();
@@ -60,5 +70,6 @@ int main(void) {
     RUN_TEST(test_core_copy_has_only_value_fields);
     RUN_TEST(test_weapon_api_copies_levels_and_distinguishes_transitions);
     RUN_TEST(test_acquire_cost_is_opaque_and_copy_out);
+    RUN_TEST(test_generic_level_transition_api_does_not_require_capability_fields);
     return UNITY_END();
 }

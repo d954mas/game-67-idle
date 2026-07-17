@@ -1333,6 +1333,53 @@ items_result_t items_try_acquire(
     return ITEMS_RESULT_OK;
 }
 
+items_result_t items_try_upgrade_instance(
+    item_entry_ref_t entry_ref_value, uint32_t target_level,
+    items_payment_scope_t payment, const char *reason) {
+    items_reason_check(reason);
+    if (ephemeral_ref(entry_ref_value.index)) { return ITEMS_RESULT_WRONG_STORAGE; }
+    ItemsItemEntry *entry = require_entry(entry_ref_value);
+    item_def_ref_t item;
+    item_core_t core;
+    if (entry->quarantined || !lookup_item(entry->def_id, &item, &core)) {
+        return ITEMS_RESULT_NOT_FOUND;
+    }
+    if (item_is_stackable(core)) { return ITEMS_RESULT_WRONG_STORAGE; }
+    if (target_level != (uint32_t)entry->level + 1U) { return ITEMS_RESULT_STALE_LEVEL; }
+    if (target_level > ITEMS_STATE_ITEM_ENTRY_LEVEL_MAX) { return ITEMS_RESULT_NOT_FOUND; }
+    if (!items_level_exists(item, target_level)) { return ITEMS_RESULT_NOT_FOUND; }
+    item_transition_t transition = items_level_transition(item, target_level);
+    if (transition.kind == ITEM_TRANSITION_UNAVAILABLE) { return ITEMS_RESULT_NOT_FOUND; }
+
+    items_payment_plan_t payment_plan;
+    items_payment_plan_t *plan = NULL;
+    if (transition.kind == ITEM_TRANSITION_COST) {
+        items_result_t result = build_payment_plan(transition.cost, payment, &payment_plan);
+        if (result != ITEMS_RESULT_OK) { return result; }
+        plan = &payment_plan;
+    } else {
+        NT_ASSERT(transition.kind == ITEM_TRANSITION_FREE);
+    }
+
+    const int from_level = entry->level;
+    const uint32_t entry_id_value = entry->entry_id;
+    if (plan != NULL) { apply_payment_plan(plan); }
+    entry = require_entry(entry_ref_value);
+    entry->level = (int)target_level;
+    bool ok = build_indices(&items_state, true, false, NULL, 0);
+    NT_ASSERT(ok);
+    game_save_mark_dirty();
+    const bool paid = plan != NULL;
+    items_emit_upgrade(
+        (nt_hash64_t){core.id.value}, entry_id_value, from_level, (int)target_level, paid,
+        (nt_hash64_t){paid ? plan->cost_fingerprint : 0},
+        (nt_hash64_t){paid ? plan->scope_fingerprint : 0},
+        (nt_hash64_t){paid ? plan->source_fingerprint : 0},
+        paid ? plan->requirement_count : 0,
+        paid ? plan->requested_units : 0, reason);
+    return ITEMS_RESULT_OK;
+}
+
 items_result_t items_try_entry_move(
     item_entry_ref_t source_ref, items_container_ref_t destination_ref,
     int64_t count, uint32_t requested_slot, const char *reason,

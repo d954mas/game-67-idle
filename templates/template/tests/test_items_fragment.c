@@ -472,6 +472,127 @@ void test_acquire_refusals_are_atomic_and_explicit_free_is_distinct(void) {
     TEST_ASSERT_EQUAL_STRING("quest_reward:daily", items_ev_acquire_reason(event));
 }
 
+void test_upgrade_instance_is_atomic_next_level_and_distinguishes_free(void) {
+    items_container_ref_t inventory = ITEMS_CONTAINER_REF_NONE;
+    items_container_desc_t desc = {
+        .capacity = 4,
+        .policy = ITEMS_CONTAINER_POLICY_GENERIC,
+        .lifetime = ITEMS_LIFETIME_PERSISTENT,
+    };
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_container_create(desc, &inventory));
+    item_entry_ref_t sword_entry = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_unique_create(
+            inventory, "tmpl.sword", 0, "loot:test", &sword_entry));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(inventory, "tmpl.gold", 5, 1, "loot:test", NULL, NULL));
+    item_def_ref_t sword;
+    TEST_ASSERT_TRUE(items_try_get_string("tmpl.sword", &sword));
+    TEST_ASSERT_EQUAL_UINT32(3, items_level_count(sword));
+    TEST_ASSERT_EQUAL_INT(ITEM_TRANSITION_UNAVAILABLE, items_level_transition(sword, 1).kind);
+    TEST_ASSERT_EQUAL_INT(ITEM_TRANSITION_COST, items_level_transition(sword, 2).kind);
+    TEST_ASSERT_EQUAL_INT(ITEM_TRANSITION_FREE, items_level_transition(sword, 3).kind);
+    items_payment_scope_t payment = {.count = 1, .containers = {inventory}};
+
+    ItemsState before = items_state;
+    game_event_frame_reset();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INSUFFICIENT,
+        items_try_upgrade_instance(sword_entry, 2, payment, "level_cost:sword"));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    TEST_ASSERT_EQUAL_INT(1, items_entry_view(sword_entry).level);
+    int event_count = 0;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(inventory, "tmpl.wood", 1, 2, "loot:test", NULL, NULL));
+    game_event_frame_reset();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_upgrade_instance(sword_entry, 2, payment, "level_cost:sword"));
+    TEST_ASSERT_EQUAL_INT(2, items_entry_view(sword_entry).level);
+    TEST_ASSERT_EQUAL_INT64(0, items_stack_count(inventory, "tmpl.gold"));
+    TEST_ASSERT_EQUAL_INT64(0, items_stack_count(inventory, "tmpl.wood"));
+    const game_event_t *events = game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(1, event_count);
+    TEST_ASSERT_EQUAL_UINT64(items_ev_upgrade_type().value, events[0].type.value);
+    const ItemsEvUpgrade *event = (const ItemsEvUpgrade *)events[0].payload;
+    TEST_ASSERT_EQUAL_HEX64(items_core(sword).id.value, event->item.value);
+    TEST_ASSERT_EQUAL_INT64(items_entry_id(sword_entry), event->entry_id);
+    TEST_ASSERT_EQUAL_INT(1, event->from_level);
+    TEST_ASSERT_EQUAL_INT(2, event->target_level);
+    TEST_ASSERT_TRUE(event->paid);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0x28dd10f5b89b227b), event->cost_fingerprint.value);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0x01b58d0daea0d040), event->scope_fingerprint.value);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0xe695f1f4e4a15d71), event->source_fingerprint.value);
+    TEST_ASSERT_EQUAL_INT64(2, event->requirement_count);
+    TEST_ASSERT_EQUAL_INT64(6, event->applied_units);
+    TEST_ASSERT_EQUAL_STRING("level_cost:sword", items_ev_upgrade_reason(event));
+
+    before = items_state;
+    game_event_frame_reset();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_STALE_LEVEL,
+        items_try_upgrade_instance(sword_entry, 2, payment, "level_cost:sword"));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+
+    items_payment_scope_t no_payment = {0};
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_upgrade_instance(sword_entry, 3, no_payment, "level_cost:sword"));
+    TEST_ASSERT_EQUAL_INT(3, items_entry_view(sword_entry).level);
+    events = game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(1, event_count);
+    TEST_ASSERT_EQUAL_UINT64(items_ev_upgrade_type().value, events[0].type.value);
+    event = (const ItemsEvUpgrade *)events[0].payload;
+    TEST_ASSERT_EQUAL_HEX64(items_core(sword).id.value, event->item.value);
+    TEST_ASSERT_EQUAL_INT64(items_entry_id(sword_entry), event->entry_id);
+    TEST_ASSERT_EQUAL_INT(2, event->from_level);
+    TEST_ASSERT_EQUAL_INT(3, event->target_level);
+    TEST_ASSERT_FALSE(event->paid);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0), event->cost_fingerprint.value);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0), event->scope_fingerprint.value);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0), event->source_fingerprint.value);
+    TEST_ASSERT_EQUAL_INT64(0, event->requirement_count);
+    TEST_ASSERT_EQUAL_INT64(0, event->applied_units);
+    TEST_ASSERT_EQUAL_STRING("level_cost:sword", items_ev_upgrade_reason(event));
+
+    before = items_state;
+    game_event_frame_reset();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_NOT_FOUND,
+        items_try_upgrade_instance(sword_entry, 4, no_payment, "level_cost:sword"));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+
+    items_state.containers_entries[sword_entry.index].level =
+        ITEMS_STATE_ITEM_ENTRY_LEVEL_MAX;
+    before = items_state;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_NOT_FOUND,
+        items_try_upgrade_instance(
+            sword_entry, ITEMS_STATE_ITEM_ENTRY_LEVEL_MAX + 1U,
+            no_payment, "level_cost:sword"));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+
+    items_state.containers_entries[sword_entry.index].level = 1;
+    items_state.containers_entries[sword_entry.index].quarantined = true;
+    before = items_state;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_NOT_FOUND,
+        items_try_upgrade_instance(sword_entry, 2, no_payment, "level_cost:sword"));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+}
+
 void test_rebuild_rejects_reserved_persisted_counters(void) {
     (void)create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
     char error[128] = {0};
@@ -944,6 +1065,7 @@ int main(void) {
     RUN_TEST(test_atomic_payment_plans_scope_and_slots_before_one_commit);
     RUN_TEST(test_paid_acquire_plans_destination_after_projected_payment);
     RUN_TEST(test_acquire_refusals_are_atomic_and_explicit_free_is_distinct);
+    RUN_TEST(test_upgrade_instance_is_atomic_next_level_and_distinguishes_free);
     RUN_TEST(test_rebuild_rejects_reserved_persisted_counters);
     RUN_TEST(test_one_hundred_persistent_containers_round_trip);
     RUN_TEST(test_loaded_maximum_ids_and_long_definition_reseed_without_truncation);

@@ -88,6 +88,21 @@
         "reason":             { "type": "string" }
       }
     },
+    "upgrade": {
+      "fields": {
+        "item":               { "type": "hash" },
+        "entry_id":           { "type": "i64" },
+        "from_level":         { "type": "int" },
+        "target_level":       { "type": "int" },
+        "paid":               { "type": "bool" },
+        "cost_fingerprint":   { "type": "hash" },
+        "scope_fingerprint":  { "type": "hash" },
+        "source_fingerprint": { "type": "hash" },
+        "requirement_count":  { "type": "i64" },
+        "applied_units":      { "type": "i64" },
+        "reason":             { "type": "string" }
+      }
+    },
     "move": {
       "fields": {
         "def_id":          { "type": "string" },

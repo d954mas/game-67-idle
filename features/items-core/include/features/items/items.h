@@ -40,6 +40,9 @@ bool items_try_get_string(const char *def_id, item_def_ref_t *out);
 item_core_t items_core(item_def_ref_t ref);
 const char *items_def_id(item_def_ref_t ref);
 item_transition_t items_acquire_transition(item_def_ref_t ref);
+uint32_t items_level_count(item_def_ref_t ref);
+bool items_level_exists(item_def_ref_t ref, uint32_t level);
+item_transition_t items_level_transition(item_def_ref_t ref, uint32_t level);
 uint32_t items_cost_count(item_cost_ref_t cost);
 item_cost_entry_t items_cost_at(item_cost_ref_t cost, uint32_t index);
 void items_register_debug_labels(void);
@@ -115,6 +118,7 @@ typedef enum items_result_t {
     ITEMS_RESULT_ID_EXHAUSTED,
     ITEMS_RESULT_NOT_EMPTY,
     ITEMS_RESULT_LIFETIME,
+    ITEMS_RESULT_STALE_LEVEL,
 } items_result_t;
 
 typedef struct items_container_ref_t { uint32_t index; uint32_t generation; } items_container_ref_t;
@@ -235,6 +239,9 @@ items_result_t items_try_acquire(
     items_container_ref_t destination, item_def_ref_t item,
     items_payment_scope_t payment, const char *reason,
     item_entry_ref_t *out_entry);
+items_result_t items_try_upgrade_instance(
+    item_entry_ref_t entry, uint32_t target_level,
+    items_payment_scope_t payment, const char *reason);
 #endif
 
 items_result_t items_try_unique_create(

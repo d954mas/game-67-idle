@@ -508,6 +508,31 @@ const char *items_def_id(item_def_ref_t ref) {
     return catalog_item_string(ref._index, 8U);
 }
 
+uint32_t items_level_count(item_def_ref_t ref) {
+    NT_ASSERT(s_catalog != NULL && ref._index < s_item_count && "items_level_count: invalid item ref");
+    return read_u32(catalog_row(ITEMS_SECTION_ITEMS, ref._index) + 28U);
+}
+
+bool items_level_exists(item_def_ref_t ref, uint32_t level) {
+    return s_catalog != NULL && ref._index < s_item_count && level > 0U &&
+        level <= read_u32(catalog_row(ITEMS_SECTION_ITEMS, ref._index) + 28U);
+}
+
+item_transition_t items_level_transition(item_def_ref_t ref, uint32_t level) {
+    NT_ASSERT(items_level_exists(ref, level) && "items_level_transition: invalid item or level");
+    const uint8_t *item = catalog_row(ITEMS_SECTION_ITEMS, ref._index);
+    uint32_t level_index = read_u32(item + 24U) + level - 1U;
+    const uint8_t *row = catalog_row(ITEMS_SECTION_LEVELS, level_index);
+    if ((read_u32(row + 24U) & ITEMS_LEVEL_FREE) != 0U) {
+        return (item_transition_t){ITEM_TRANSITION_FREE, {0U}};
+    }
+    if (read_u32(row + 20U) == 0U) {
+        return (item_transition_t){ITEM_TRANSITION_UNAVAILABLE, {0U}};
+    }
+    return (item_transition_t){
+        ITEM_TRANSITION_COST, {ITEMS_COST_LEVEL_FLAG | (level_index + 1U)}};
+}
+
 bool items_has_currency(item_def_ref_t ref) {
     if (s_catalog == NULL || ref._index >= s_item_count) {
         return false;

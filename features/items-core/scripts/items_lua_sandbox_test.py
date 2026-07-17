@@ -153,10 +153,32 @@ class ItemsLuaSandboxTests(unittest.TestCase):
                         },
                     ],
                 }},
-                "authoring_mode": "single", "base_value": 50,
+                "authoring_mode": "table", "base_value": 50,
                 "created": "2026-07-07", "equip": {"slot": "weapon"},
                 "icon": "icons/sword", "id": "tmpl.sword", "kind": "weapon",
-                "levels": {"mode": "single", "provenance": [{}], "rows": [{}]},
+                "levels": {
+                    "mode": "table",
+                    "provenance": [
+                        {}, {"cost_to_reach": "table"}, {"cost_to_reach": "table"},
+                    ],
+                    "rows": [
+                        {},
+                        {"cost_to_reach": {
+                            "__studio_kind": "costs",
+                            "entries": [
+                                {
+                                    "__studio_kind": "cost", "count": 5,
+                                    "item": {"__studio_kind": "item_ref", "id": "tmpl.gold"},
+                                },
+                                {
+                                    "__studio_kind": "cost", "count": 1,
+                                    "item": {"__studio_kind": "item_ref", "id": "tmpl.wood"},
+                                },
+                            ],
+                        }},
+                        {"cost_to_reach": {"__studio_kind": "free"}},
+                    ],
+                },
                 "name": "Iron Sword", "stack": 1, "tags": ["melee"],
             },
             {
