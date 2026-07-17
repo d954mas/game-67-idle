@@ -1,0 +1,48 @@
+{
+  "schema": "ai_studio.asset_quality_gate.jam_corpus.v1",
+  "corpus_id": "rb-dark-rpg-vibejam1-alpha-calibration",
+  "source_tag": "rb-dark-rpg-vibejam1-2026-07-05",
+  "license": "project-internal generated asset",
+  "fixtures": [
+    {
+      "id": "known-green-spill-mill-scavenger",
+      "role": "broken",
+      "file": "jam_broken_mill_scavenger_scene.png",
+      "source_asset_id": "asset_enemy_mill_scavenger_scene",
+      "source_path": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/enemies/asset_enemy_mill_scavenger_scene.png",
+      "source_provenance": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "source_git_blob": "38590d64da8aa2133d8b01602ce02a59c18b7ead",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "width": 493,
+      "height": 529,
+      "intended_width": 493,
+      "intended_height": 529,
+      "sha256": "549D93F7645F22E3C072D4AB3CC1EC0505FD211A6A6EC2ED94FE8BFC7260EA44",
+      "expected_verdict": "fail",
+      "expected_problem_codes": [
+        "key_spill",
+        "edge_halo"
+      ]
+    },
+    {
+      "id": "accepted-neighbor-black-sun-mark",
+      "role": "clean",
+      "file": "jam_clean_black_sun_mark.png",
+      "source_asset_id": "asset_object_black_sun_mark",
+      "source_path": "games/rb-dark-rpg/assets/ui/generated/location_object_sprites_01/asset_object_black_sun_mark.png",
+      "source_provenance": "games/rb-dark-rpg/assets/ui/generated/location_object_sprites_01/provenance.md",
+      "source_git_blob": "516c8e182774bade248fbc9c4a5c4aebd05aee6e",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "acceptance": "city-style v2 accepted",
+      "width": 512,
+      "height": 512,
+      "intended_width": 512,
+      "intended_height": 512,
+      "sha256": "4E31333054E5F3B41B98A60480DBF7A458E49366C78ADFDF14563C0FE560A962",
+      "expected_verdict": "pass",
+      "expected_problem_codes": []
+    }
+  ]
+}

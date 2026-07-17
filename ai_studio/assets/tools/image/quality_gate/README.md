@@ -66,9 +66,12 @@ the evaluator input without inventing values:
 }
 ```
 
-The committed example values separate the synthetic corpus in
-`asset_quality_gate_test.py`: clean cutouts pass; key spill, non-key halo,
-isolated alpha fragments, excessive padding, wrong aspect, and opaque leftover
-backgrounds fail. They are a contract fixture, not final game calibration. The
-remaining T0317 corpus slice must measure the known jam failure plus accepted
-neighbors before a game's lock is accepted.
+The committed example values separate both the synthetic contract corpus and
+the preserved VibeJam calibration corpus in `fixtures/jam_corpus/`. The latter
+comes from the closed `rb-dark-rpg-vibejam1-2026-07-05` tag with its original
+project-internal license, provenance paths, source blob ids, and SHA-256 values
+recorded in `manifest.json`. The metric ratio limits remain identical to the
+committed example; each fixture supplies its provenance-backed intended width
+and height for the aspect check. The known green-spill failure is rejected for
+both `key_spill` and `edge_halo`, while the neighboring city-style-v2 accepted
+Black Sun prop remains clean. No formula or metric-limit relaxation was needed.

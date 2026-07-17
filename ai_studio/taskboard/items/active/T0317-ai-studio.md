@@ -8,7 +8,7 @@ priority: P1
 tags: [assets, quality, art-gate, vibejam-retro]
 created: 2026-07-05
 updated: 2026-07-17
-quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"focused alphaCutout single/batch tests cover exact output bytes, PASS/FAIL evidence, Explore quarantine, evaluator refusal, one undo, pre-mint HEAD_CONFLICT, and API/CLI lock parity; independent review clean; changed/full verify green"}]}
+quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"byte-exact tagged jam fixtures prove known spill failure plus accepted city-style-v2 clean pass; exact one-line verdict and valid bounded PNG thumbnail; focused 7/7, independent re-review clean, changed verify and final full 10-domain verify green"}]}
 ---
 
 ## What
@@ -26,9 +26,9 @@ cutout/slice-операций image tools + promote в ассеты игры (nt
 
 - [ ] Автопроверка запускается на выходе alpha_matte/alpha_dualplate/corridorkey
       и при promote ассета в games/<id>/assets/: fail при spill/halo/bbox-браке.
-- [ ] На corpus джема (location_scene_sprites_01 и соседние паки) гейт ловит
+- [x] На corpus джема (location_scene_sprites_01 и соседние паки) гейт ловит
       известный битый ассет с зелёным фоном и не флажит принятые чистые.
-- [ ] Отчёт гейта — одна строка verdict + миниатюра проблемной зоны (для быстрой
+- [x] Отчёт гейта — одна строка verdict + миниатюра проблемной зоны (для быстрой
       проверки лидом).
 
 ## Open questions
@@ -49,3 +49,6 @@ cutout/slice-операций image tools + promote в ассеты игры (nt
 - 2026-07-17: 2026-07-17: Quality: QTECH_001=pass; evidence: focused alphaDualPlate auto-gate tests prove PASS->checked, FAIL->quarantine+thumbnail, Explore quarantine, one journal/undo, pre-mint HEAD_CONFLICT, and API/CLI lock parity; independent review clean; changed/full verify green.
 - 2026-07-17: Slice 4 auto-wires the trusted technical gate into the shared alphaCutout single/batch mint path, covering matte, corridorkey, vitmatte, and birefnet. PASS/FAIL evidence is committed with the copy in one undo; Explore remains quarantine; evaluator failure or HEAD_CONFLICT occurs before the first mint.
 - 2026-07-17: Quality: QTECH_001=pass; evidence: focused alphaCutout single/batch tests cover exact output bytes, PASS/FAIL evidence, Explore quarantine, evaluator refusal, one undo, pre-mint HEAD_CONFLICT, and API/CLI lock parity; independent review clean; changed/full verify green
+- 2026-07-17: Slice 5 calibrates the committed evaluator against preserved assets from rb-dark-rpg-vibejam1-2026-07-05: the known mill-scavenger green-spill cutout fails key_spill and edge_halo with a one-line verdict plus thumbnail, while the accepted neighboring pack passes. Fixture origin, project-internal license, source paths/blob ids, dimensions, and SHA-256 are frozen in the corpus manifest. Existing formulas and thresholds already separate the corpus, so no relaxation was made.
+- 2026-07-17: Review correction complete: replaced the clean procedural placeholder with the tag-proven city-style-v2 accepted Black Sun prop, strengthened exact one-line and valid bounded-thumbnail assertions, and froze intended dimensions separately from measured image dimensions. Independent re-review found no issues. Two unrelated one-off full-verify failures (test_game_save, then items_cli detail) passed targeted reruns; the final full 10-domain verify is green.
+- 2026-07-17: Quality: QTECH_001=pass; evidence: byte-exact tagged jam fixtures prove known spill failure plus accepted city-style-v2 clean pass; exact one-line verdict and valid bounded PNG thumbnail; focused 7/7, independent re-review clean, changed verify and final full 10-domain verify green

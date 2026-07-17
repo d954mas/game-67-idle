@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import tempfile
@@ -20,6 +21,8 @@ THRESHOLDS = {
     "aspect_ratio": {"width": 1, "height": 1, "max_relative_error": 0.05},
 }
 
+JAM_CORPUS = Path(__file__).with_name("fixtures") / "jam_corpus"
+
 
 def clean_square(size: tuple[int, int] = (32, 32)) -> Image.Image:
     image = Image.new("RGBA", size, (0, 0, 0, 0))
@@ -28,6 +31,80 @@ def clean_square(size: tuple[int, int] = (32, 32)) -> Image.Image:
 
 
 class AssetQualityGateTest(unittest.TestCase):
+    def test_real_jam_corpus_rejects_known_spill_and_accepts_neighbor(self) -> None:
+        manifest = json.loads((JAM_CORPUS / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["schema"], "ai_studio.asset_quality_gate.jam_corpus.v1")
+        self.assertEqual(manifest["source_tag"], "rb-dark-rpg-vibejam1-2026-07-05")
+        self.assertEqual({fixture["role"] for fixture in manifest["fixtures"]}, {"broken", "clean"})
+        clean_fixture = next(fixture for fixture in manifest["fixtures"] if fixture["role"] == "clean")
+        self.assertEqual(clean_fixture["acceptance"], "city-style v2 accepted")
+        self.assertEqual(clean_fixture["origin"], "ai")
+
+        reports: dict[str, dict[str, object]] = {}
+        for fixture in manifest["fixtures"]:
+            source = JAM_CORPUS / fixture["file"]
+            self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest().upper(), fixture["sha256"])
+            with Image.open(source) as opened:
+                image = opened.convert("RGBA")
+            self.assertEqual(image.size, (fixture["width"], fixture["height"]))
+            thresholds = {
+                **THRESHOLDS,
+                "aspect_ratio": {
+                    "width": fixture["intended_width"],
+                    "height": fixture["intended_height"],
+                    "max_relative_error": THRESHOLDS["aspect_ratio"]["max_relative_error"],
+                },
+            }
+            report = evaluate(image, key_color=(0, 255, 0), thresholds=thresholds)
+            reports[fixture["role"]] = report
+            self.assertEqual(report["verdict"], fixture["expected_verdict"])
+            self.assertTrue(
+                set(fixture["expected_problem_codes"]).issubset(
+                    problem["code"] for problem in report["problems"]
+                )
+            )
+
+        self.assertEqual(reports["clean"]["problems"], [])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report_path = root / "report.json"
+            thumbnail = root / "problem.png"
+            broken = next(fixture for fixture in manifest["fixtures"] if fixture["role"] == "broken")
+            broken_source = JAM_CORPUS / broken["file"]
+            with Image.open(broken_source) as image:
+                thresholds = {
+                    **THRESHOLDS,
+                    "aspect_ratio": {
+                        "width": broken["intended_width"],
+                        "height": broken["intended_height"],
+                        "max_relative_error": THRESHOLDS["aspect_ratio"]["max_relative_error"],
+                    },
+                }
+            thresholds_path = root / "thresholds.json"
+            thresholds_path.write_text(json.dumps(thresholds), encoding="utf-8")
+            output = io.StringIO()
+            with redirect_stdout(output):
+                code = main([
+                    "--source", str(broken_source),
+                    "--key-color", "#00FF00",
+                    "--thresholds", str(thresholds_path),
+                    "--json-output", str(report_path),
+                    "--problem-thumbnail", str(thumbnail),
+                ])
+            self.assertEqual(code, 1)
+            output_lines = output.getvalue().splitlines()
+            self.assertEqual(len(output_lines), 1)
+            self.assertRegex(
+                output_lines[0],
+                r"^FAIL jam_broken_mill_scavenger_scene\.png: "
+                r"key_spill=[0-9.]+>0\.05, edge_halo=[0-9.]+>0\.05$",
+            )
+            self.assertTrue(thumbnail.is_file())
+            with Image.open(thumbnail) as proof:
+                self.assertEqual(proof.format, "PNG")
+                self.assertLessEqual(max(proof.size), 192)
+                self.assertLess(proof.width * proof.height, broken["width"] * broken["height"])
+
     def test_clean_cutout_passes_with_stable_bbox_and_denominators(self) -> None:
         report = evaluate(clean_square(), key_color=(255, 0, 255), thresholds=THRESHOLDS)
 
