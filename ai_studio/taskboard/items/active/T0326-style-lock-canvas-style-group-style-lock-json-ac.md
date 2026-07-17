@@ -1,13 +1,13 @@
 ---
 id: T0326
 title: "style lock: canvas style group + style_lock.json + acceptance gate in asset pipeline"
-status: backlog
+status: doing
 project: P001
 epic: E010
 priority: P1
 tags: [style-lock, assets, canvas, art-gate, vibejam-retro]
 created: 2026-07-06
-updated: 2026-07-14
+updated: 2026-07-17
 ---
 
 ## What
@@ -52,7 +52,7 @@ in discussion 2026-07-06 (industry research: tmp/style_lock_research_2026-07-06.
 Increments (lead accepted two-mode design 2026-07-06; every generated asset
 starts QUARANTINED, flag visible in canvas; only accepted art reaches the game):
 
-- [ ] 1. `style_lock.json` schema + canvas `style` group convention (passport,
+- [x] 1. `style_lock.json` schema + canvas `style` group convention (passport,
       palette, exemplars, refs, Do/Don't) — doc + example.
 - [ ] 2. Canvas asset status flag `quarantine → checked → accepted`, visible as
       a badge on canvas cards; CLI can set/read it.
@@ -81,3 +81,6 @@ starts QUARANTINED, flag visible in canvas; only accepted art reaches the game):
 - 2026-07-06: lead accepted two-mode gate; confirmed mental model: generation
   always allowed, art carries a visible quarantine flag in canvas until it
   passes checks; passing = usable in game. Decomposed into 7 increments.
+- 2026-07-17: Started increment 1 only: a schema-backed games/<id>/design/style_lock.json contract, Canvas style-group convention, and example. Existing art_contract remains the broader taste/review brief; style_lock is its operational generation/asset-gate twin and will link to it rather than create a competing taste source. Later quarantine, generation, technical gate, acceptance, promote, and library increments stay out of this slice.
+- 2026-07-17: Increment 1 review hardening: the portable JSON Schema is explicitly structural while validate.mjs owns cross-field Canvas semantics; CLI validation now binds game_id to public/private workspace game paths and requires the linked art contract to resolve physically inside the game design directory. Deferred technical threshold field names to T0317 so measurement formulas and calibration evidence define the contract before v1 consumption.
+- 2026-07-17: Increment 1 complete after TDD, full 10-domain Studio verify, and clean independent re-review. Added structural v1 schema, fail-closed semantic/file validator, public/private Canvas ownership rules, example, Canvas style-group convention, and art-contract linkage. T0326 remains doing with increments 2-7 open; T0317 is next so deterministic formulas can define threshold fields before consumption.

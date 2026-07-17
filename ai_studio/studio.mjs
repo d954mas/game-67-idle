@@ -100,6 +100,7 @@ const CHECKS = Object.freeze([
       "ai_studio/assets/manifests",
       "ai_studio/assets/previews",
       "ai_studio/assets/sources",
+      "ai_studio/assets/style_lock",
       "ai_studio/assets/tests",
       "ai_studio/assets/tools",
     ],

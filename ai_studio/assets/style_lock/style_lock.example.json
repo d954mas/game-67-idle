@@ -1,0 +1,39 @@
+{
+  "schema": "ai_studio.game.style_lock.v1",
+  "id": "example-game-style-v1",
+  "game_id": "example-game",
+  "status": "accepted",
+  "canvas_ref": "canvas://style-board/group/grp_style",
+  "art_contract_ref": "design/art/art_contract.json",
+  "prompt_preamble": "Bold readable toy-like forms, shared warm lighting, authored silhouettes, and one cohesive world-and-GUI palette.",
+  "negative_prompt": "No photorealism, thin grey UI, muddy gradients, baked labels, random letters, watermarks, or mixed icon styles.",
+  "palette": [
+    "#151B2B",
+    "#F2C14E",
+    "#F78154",
+    "#5BC0EB",
+    "#F7F4EA"
+  ],
+  "bg_rule": {
+    "mode": "chroma",
+    "key_color": "#FF00FF",
+    "description": "Flat magenta cutout plate with generous gutters; no contact shadow or semitransparent material may mix with the key color."
+  },
+  "exemplar_refs": [
+    {
+      "ref": "canvas://style-board/element/el_world",
+      "origin": "owned",
+      "domain": "world"
+    },
+    {
+      "ref": "canvas://style-board/element/el_gui",
+      "origin": "owned",
+      "domain": "gui"
+    }
+  ],
+  "asset_size": {
+    "width": 1024,
+    "height": 1024
+  },
+  "model_checkpoint": null
+}
