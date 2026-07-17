@@ -199,6 +199,8 @@ typedef struct items_entry_inspection_t {
 } items_entry_inspection_t;
 
 bool items_runtime_rebuild(char *error, int error_cap);
+struct ItemsState;
+bool items_runtime_validate_state(const struct ItemsState *state, char *error, int error_cap);
 void items_reconcile(void);
 
 items_result_t items_try_container_create(items_container_desc_t desc, items_container_ref_t *out_container);

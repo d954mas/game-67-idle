@@ -69,6 +69,7 @@ static int s_orphan_count;
 
 static const game_save_transform_t *s_transforms;
 static int s_transform_count;
+static GameSaveDocumentValidateFn s_document_validator;
 
 static bool    s_autosave_paused; /* CORRUPT_RESET/NEWER until game_save_new_game */
 static bool    s_new_game_pending;         /* Р11: deferred to the shell's next update (below) */
@@ -343,11 +344,29 @@ static cJSON *build_root(bool bump_seq, int64_t *out_wall) {
     return root;
 }
 
+static bool validate_document(const cJSON *doc, char *error, int error_cap) {
+    if (!s_document_validator) {
+        return true;
+    }
+    const cJSON *features = gsj_object_item(doc, "features");
+    if (!cJSON_IsObject(features)) {
+        gsj_set_error(error, error_cap, "save has no features");
+        return false;
+    }
+    return s_document_validator(features, error, error_cap);
+}
+
 static bool save_internal(char *error, int error_cap) {
+    const int64_t old_seq = s_save_seq;
     int64_t wall = 0;
     cJSON *root = build_root(true, &wall);
     if (!root) {
         gsj_set_error(error, error_cap, "failed to build save document");
+        return false;
+    }
+    if (!validate_document(root, error, error_cap)) {
+        s_save_seq = old_seq;
+        cJSON_Delete(root);
         return false;
     }
     char *flat = cJSON_PrintUnformatted(root);
@@ -489,7 +508,8 @@ static bool try_recover_from_backup(game_save_load_result_t *result, const char 
         bakdoc = bakdec ? cJSON_Parse(bakdec) : NULL;
         free(bakdec);
     }
-    if (!(bakdoc && cJSON_IsObject(bakdoc) && !doc_is_newer(bakdoc))) {
+    if (!(bakdoc && cJSON_IsObject(bakdoc) && !doc_is_newer(bakdoc) &&
+          validate_document(bakdoc, err, cap))) {
         if (bakdoc) {
             cJSON_Delete(bakdoc);
         }
@@ -566,15 +586,17 @@ void game_save_load(game_save_load_result_t *result) {
             s_last_save_mono = mono_now();
             return;
         }
-        /* LOADED. */
-        load_from_doc(doc, result);
-        cJSON_Delete(doc);
-        s_autosave_paused = false;
-        result->status = GAME_SAVE_LOAD_LOADED;
-        set_message(result, "loaded");
-        (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err); /* last-known-good */
-        s_last_save_mono = mono_now();
-        return;
+        if (validate_document(doc, err, (int)sizeof err)) {
+            /* LOADED. */
+            load_from_doc(doc, result);
+            cJSON_Delete(doc);
+            s_autosave_paused = false;
+            result->status = GAME_SAVE_LOAD_LOADED;
+            set_message(result, "loaded");
+            (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err); /* last-known-good */
+            s_last_save_mono = mono_now();
+            return;
+        }
     }
     if (doc) {
         cJSON_Delete(doc);
@@ -602,6 +624,22 @@ void game_save_register_fragment(const GameSaveFragment *fragment) {
         return;
     }
     s_fragments[s_fragment_count++] = fragment;
+}
+
+void game_save_set_document_validator(GameSaveDocumentValidateFn validator) {
+    s_document_validator = validator;
+}
+
+bool game_save_validate_current(char *error, int error_cap) {
+    int64_t wall = 0;
+    cJSON *root = build_root(false, &wall);
+    if (!root) {
+        gsj_set_error(error, error_cap, "failed to build validation document");
+        return false;
+    }
+    bool valid = validate_document(root, error, error_cap);
+    cJSON_Delete(root);
+    return valid;
 }
 
 /* ---- registry read-access for the DevAPI dispatch. Additive, read-only,
@@ -787,6 +825,10 @@ bool game_save_import_string(const char *text, char *error, int error_cap) {
         cJSON_Delete(doc);
         gsj_set_error(error, error_cap, "import has no features"); /* state untouched */
         return false;
+    }
+    if (!validate_document(doc, error, error_cap)) {
+        cJSON_Delete(doc);
+        return false; /* staged cross-fragment state was never published */
     }
     const int64_t old_seq = s_save_seq;
     game_save_load_result_t r;

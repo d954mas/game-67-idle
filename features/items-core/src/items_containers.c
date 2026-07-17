@@ -70,7 +70,9 @@ static bool lookup_item(const char *def_id, item_def_ref_t *out_ref, item_core_t
 
 static bool item_is_stackable(item_core_t core) { return core.stack != 1; }
 
-static bool build_indices(bool invalidate_refs, char *error, int error_cap) {
+static bool build_indices(
+    const ItemsState *state, bool publish, bool invalidate_refs,
+    char *error, int error_cap) {
     items_id_index_t containers[ITEMS_STATE_MAX_CONTAINERS];
     items_id_index_t entries[ITEMS_STATE_MAX_CONTAINERS_ENTRIES];
     uint32_t container_count = 0;
@@ -78,14 +80,14 @@ static bool build_indices(bool invalidate_refs, char *error, int error_cap) {
     uint32_t max_container_id = 0;
     uint32_t max_entry_id = 0;
 
-    if (items_state.last_container_id == ITEMS_ID_RESERVED ||
-        items_state.last_entry_id == ITEMS_ID_RESERVED) {
+    if (state->last_container_id == ITEMS_ID_RESERVED ||
+        state->last_entry_id == ITEMS_ID_RESERVED) {
         set_error(error, error_cap, "reserved persisted id counter");
         return false;
     }
 
     for (uint32_t i = 0; i < ITEMS_STATE_MAX_CONTAINERS; i++) {
-        const ItemsItemContainer *container = &items_state.containers[i];
+        const ItemsItemContainer *container = &state->containers[i];
         if (!container->used) { continue; }
         if (container->container_id == ITEMS_ID_NONE || container->container_id == ITEMS_ID_RESERVED) {
             set_error(error, error_cap, "reserved container id");
@@ -101,24 +103,24 @@ static bool build_indices(bool invalidate_refs, char *error, int error_cap) {
     }
 
     for (uint32_t i = 0; i < ITEMS_STATE_MAX_CONTAINERS_ENTRIES; i++) {
-        const ItemsItemEntry *entry = &items_state.containers_entries[i];
+        const ItemsItemEntry *entry = &state->containers_entries[i];
         if (!entry->used) { continue; }
         if (entry->entry_id == ITEMS_ID_NONE || entry->entry_id == ITEMS_ID_RESERVED) {
             set_error(error, error_cap, "reserved entry id");
             return false;
         }
         if (entry->parent_index < 0 || entry->parent_index >= ITEMS_STATE_MAX_CONTAINERS ||
-            !items_state.containers[entry->parent_index].used) {
+            !state->containers[entry->parent_index].used) {
             set_error(error, error_cap, "entry has no live container");
             return false;
         }
-        const ItemsItemContainer *container = &items_state.containers[entry->parent_index];
+        const ItemsItemContainer *container = &state->containers[entry->parent_index];
         if (entry->slot >= container->capacity || entry->count <= 0 || entry->def_id[0] == '\0') {
             set_error(error, error_cap, "invalid entry slot, count, or definition");
             return false;
         }
         for (uint32_t j = 0; j < i; j++) {
-            const ItemsItemEntry *other = &items_state.containers_entries[j];
+            const ItemsItemEntry *other = &state->containers_entries[j];
             if (other->used && other->parent_index == entry->parent_index && other->slot == entry->slot) {
                 set_error(error, error_cap, "duplicate container slot");
                 return false;
@@ -142,29 +144,39 @@ static bool build_indices(bool invalidate_refs, char *error, int error_cap) {
             return false;
         }
     }
-    if (items_state.last_container_id < max_container_id || items_state.last_entry_id < max_entry_id) {
+    if (state->last_container_id < max_container_id || state->last_entry_id < max_entry_id) {
         set_error(error, error_cap, "persisted id counter is behind live ids");
         return false;
     }
 
-    memcpy(s_container_index, containers, container_count * sizeof(containers[0]));
-    memcpy(s_entry_index, entries, entry_count * sizeof(entries[0]));
-    s_container_index_count = container_count;
-    s_entry_index_count = entry_count;
-    if (invalidate_refs) {
-        for (uint32_t i = 0; i < ITEMS_STATE_MAX_CONTAINERS; i++) {
-            s_container_generation[i] = next_generation(s_container_generation[i]);
+    if (publish) {
+        memcpy(s_container_index, containers, container_count * sizeof(containers[0]));
+        memcpy(s_entry_index, entries, entry_count * sizeof(entries[0]));
+        s_container_index_count = container_count;
+        s_entry_index_count = entry_count;
+        if (invalidate_refs) {
+            for (uint32_t i = 0; i < ITEMS_STATE_MAX_CONTAINERS; i++) {
+                s_container_generation[i] = next_generation(s_container_generation[i]);
+            }
+            for (uint32_t i = 0; i < ITEMS_STATE_MAX_CONTAINERS_ENTRIES; i++) {
+                s_entry_generation[i] = next_generation(s_entry_generation[i]);
+            }
         }
-        for (uint32_t i = 0; i < ITEMS_STATE_MAX_CONTAINERS_ENTRIES; i++) {
-            s_entry_generation[i] = next_generation(s_entry_generation[i]);
-        }
+        s_ready = true;
     }
-    s_ready = true;
     return true;
 }
 
+bool items_runtime_validate_state(const struct ItemsState *state, char *error, int error_cap) {
+    if (state == NULL) {
+        set_error(error, error_cap, "Items state is required");
+        return false;
+    }
+    return build_indices(state, false, false, error, error_cap);
+}
+
 bool items_runtime_rebuild(char *error, int error_cap) {
-    if (!build_indices(true, error, error_cap)) { return false; }
+    if (!build_indices(&items_state, true, true, error, error_cap)) { return false; }
     memset(s_ephemeral_containers, 0, sizeof(s_ephemeral_containers));
     memset(s_ephemeral_entries, 0, sizeof(s_ephemeral_entries));
     for (uint32_t i = 0; i < ITEMS_EPHEMERAL_MAX_CONTAINERS; i++) {
@@ -578,7 +590,7 @@ items_result_t items_try_container_create(items_container_desc_t desc, items_con
     container->capacity = desc.capacity;
     container->policy = (int)desc.policy;
     s_container_generation[index] = next_generation(s_container_generation[index]);
-    bool ok = build_indices(false, NULL, 0);
+    bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
     game_save_mark_dirty();
     *out_container = container_ref(index);
@@ -596,7 +608,7 @@ items_result_t items_try_container_destroy_empty(items_container_ref_t ref) {
     }
     memset(container, 0, sizeof(*container));
     s_container_generation[ref.index] = next_generation(s_container_generation[ref.index]);
-    bool ok = build_indices(false, NULL, 0);
+    bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
     game_save_mark_dirty();
     return ITEMS_RESULT_OK;
@@ -727,7 +739,7 @@ items_result_t items_try_stack_add(
     entry->level = ITEMS_STATE_ITEM_ENTRY_LEVEL_DEFAULT;
     entry->durability = ITEMS_STATE_ITEM_ENTRY_DURABILITY_DEFAULT;
     s_entry_generation[index] = next_generation(s_entry_generation[index]);
-    bool ok = build_indices(false, NULL, 0);
+    bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
     game_save_mark_dirty();
     char container_id_text[16];
@@ -758,7 +770,7 @@ items_result_t items_try_stack_remove(item_entry_ref_t entry_ref_value, int64_t 
     if (entry->count == 0) {
         memset(entry, 0, sizeof(*entry));
         s_entry_generation[entry_ref_value.index] = next_generation(s_entry_generation[entry_ref_value.index]);
-        bool ok = build_indices(false, NULL, 0);
+        bool ok = build_indices(&items_state, true, false, NULL, 0);
         NT_ASSERT(ok);
     }
     game_save_mark_dirty();
@@ -796,7 +808,7 @@ items_result_t items_try_stack_remove_from_container(
         }
     }
     NT_ASSERT(remaining == 0);
-    bool ok = build_indices(false, NULL, 0);
+    bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
     game_save_mark_dirty();
     char container_id_text[16];
@@ -863,7 +875,7 @@ items_result_t items_try_unique_create(
     entry->level = ITEMS_STATE_ITEM_ENTRY_LEVEL_DEFAULT;
     entry->durability = ITEMS_STATE_ITEM_ENTRY_DURABILITY_DEFAULT;
     s_entry_generation[index] = next_generation(s_entry_generation[index]);
-    bool ok = build_indices(false, NULL, 0);
+    bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
     game_save_mark_dirty();
     char container_id_text[16];
@@ -887,7 +899,7 @@ items_result_t items_try_entry_destroy(item_entry_ref_t entry_ref_value, const c
     uint32_t entry_id_value = entry->entry_id;
     memset(entry, 0, sizeof(*entry));
     s_entry_generation[entry_ref_value.index] = next_generation(s_entry_generation[entry_ref_value.index]);
-    bool ok = build_indices(false, NULL, 0);
+    bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
     game_save_mark_dirty();
     char container_id_text[16];
@@ -1129,7 +1141,7 @@ items_result_t items_try_entry_move(
         result_ref = entry_ref(new_index);
     }
 
-    bool ok = build_indices(false, NULL, 0);
+    bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
     game_save_mark_dirty();
     char from_text[16];

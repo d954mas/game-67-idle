@@ -36,6 +36,21 @@ static bool state_fail_buf(nt_devapi_error *err, const char *code) {
     return false;
 }
 
+static bool raw_state_write_forbidden(const GameSaveFragment *fragment, const char *sub) {
+    if (strcmp(fragment->id, "game") == 0 &&
+        (strcmp(sub, "inventory_container_id") == 0 ||
+         strcmp(sub, "wallet_container_id") == 0)) {
+        return true;
+    }
+    if (strcmp(fragment->id, "items") == 0 &&
+        (strcmp(sub, "containers") == 0 ||
+         strcmp(sub, "last_container_id") == 0 ||
+         strcmp(sub, "last_entry_id") == 0)) {
+        return true;
+    }
+    return false;
+}
+
 /* Splits "head.sub.sub" -> fragment by head + remainder sub ("" when head is the
    whole path). head_buf is the caller's local buffer. Returns NULL when the
    fragment is unknown (caller emits "unknown fragment") or the head overflows. */
@@ -188,9 +203,35 @@ static bool ep_state_set(const cJSON *params, cJSON *result_obj, nt_devapi_error
     if (!f->set_path_json) {
         return state_fail(err, "bad_params", "read-only fragment");
     }
-    if (!f->set_path_json(sub, value, s_state_err, (int)sizeof s_state_err)) {
-        return state_fail_buf(err, "bad_params");
+    if (raw_state_write_forbidden(f, sub)) {
+        return state_fail(err, "bad_params", "Items ownership state is domain-owned");
     }
+    cJSON *snapshot = f->to_json ? f->to_json() : NULL;
+    if (!snapshot || !f->from_json) {
+        cJSON_Delete(snapshot);
+        return state_fail(err, "internal", "failed to snapshot fragment");
+    }
+    if (!f->set_path_json(sub, value, s_state_err, (int)sizeof s_state_err)) {
+        char write_error[sizeof s_state_err];
+        (void)snprintf(write_error, sizeof write_error, "%s", s_state_err);
+        if (!f->from_json(snapshot, s_state_err, (int)sizeof s_state_err)) {
+            cJSON_Delete(snapshot);
+            return state_fail(err, "internal", "failed to roll back rejected state write");
+        }
+        cJSON_Delete(snapshot);
+        return state_fail(err, "bad_params", write_error);
+    }
+    if (!game_save_validate_current(s_state_err, (int)sizeof s_state_err)) {
+        char validation_error[sizeof s_state_err];
+        (void)snprintf(validation_error, sizeof validation_error, "%s", s_state_err);
+        if (!f->from_json(snapshot, s_state_err, (int)sizeof s_state_err)) {
+            cJSON_Delete(snapshot);
+            return state_fail(err, "internal", "failed to roll back rejected state write");
+        }
+        cJSON_Delete(snapshot);
+        return state_fail(err, "bad_params", validation_error);
+    }
+    cJSON_Delete(snapshot);
     game_save_mark_dirty();
     /* Echo the stored value. The fresh get_path_json result is already owned, so
        it goes straight into result_obj; only the params-owned input `value` needs
@@ -204,9 +245,8 @@ static bool ep_state_set(const cJSON *params, cJSON *result_obj, nt_devapi_error
     return true;
 }
 
-/* Per-fragment atomic patch: group values by owning fragment,
-   snapshot the fragment BEFORE applying its group, restore the whole group via
-   from_json(snapshot) on any key failure. No cross-fragment rollback. */
+/* Patch groups still report per-key results, but successful groups retain their
+   snapshots until the game-owned document invariant accepts the whole write. */
 static bool ep_state_patch(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
     (void)user;
     const cJSON *values = cJSON_GetObjectItemCaseSensitive(params, "values");
@@ -216,11 +256,12 @@ static bool ep_state_patch(const cJSON *params, cJSON *result_obj, nt_devapi_err
     cJSON *results = cJSON_AddObjectToObject(result_obj, "results");
     bool any_ok = false;
     const int n = game_save_fragment_count();
+    cJSON *snapshots[GAME_SAVE_MAX_FRAGMENTS] = {0};
+    bool group_success[GAME_SAVE_MAX_FRAGMENTS] = {0};
     for (int i = 0; i < n; i++) { /* outer loop = fragment => the group is atomic */
         const GameSaveFragment *f = game_save_fragment_at(i);
         bool group_has = false;
         bool group_ok = true;
-        cJSON *snapshot = NULL;
         for (const cJSON *m = values->child; m; m = m->next) {
             char head[64];
             const char *sub = "";
@@ -229,18 +270,23 @@ static bool ep_state_patch(const cJSON *params, cJSON *result_obj, nt_devapi_err
             }
             if (!group_has) { /* first key of the group: snapshot BEFORE any mutation */
                 group_has = true;
-                snapshot = f->to_json ? f->to_json() : NULL;
+                snapshots[i] = f->to_json ? f->to_json() : NULL;
+                if (!snapshots[i] || !f->from_json) {
+                    group_ok = false;
+                    break;
+                }
             }
-            if (sub[0] == '\0' || !f->set_path_json ||
+            if (sub[0] == '\0' || !f->set_path_json || raw_state_write_forbidden(f, sub) ||
                 !f->set_path_json(sub, m, s_state_err, (int)sizeof s_state_err)) {
                 group_ok = false; /* key failure => roll the whole group back */
                 break;
             }
         }
-        if (group_has && !group_ok && snapshot && f->from_json) {
-            (void)f->from_json(snapshot, s_state_err, (int)sizeof s_state_err); /* restore */
+        if (group_has && !group_ok && snapshots[i] && f->from_json &&
+            !f->from_json(snapshots[i], s_state_err, (int)sizeof s_state_err)) {
+            for (int j = 0; j < n; j++) { cJSON_Delete(snapshots[j]); }
+            return state_fail(err, "internal", "failed to roll back rejected state patch");
         }
-        cJSON_Delete(snapshot); /* snapshot is always freed */
         if (group_has) {        /* per-key result: the whole group takes group_ok */
             for (const cJSON *m = values->child; m; m = m->next) {
                 char head[64];
@@ -250,6 +296,7 @@ static bool ep_state_patch(const cJSON *params, cJSON *result_obj, nt_devapi_err
                 }
                 cJSON_AddBoolToObject(results, m->string, group_ok);
             }
+            group_success[i] = group_ok;
             any_ok = any_ok || group_ok;
         }
     }
@@ -258,6 +305,28 @@ static bool ep_state_patch(const cJSON *params, cJSON *result_obj, nt_devapi_err
             cJSON_AddBoolToObject(results, m->string, false);
         }
     }
+    if (any_ok && !game_save_validate_current(s_state_err, (int)sizeof s_state_err)) {
+        bool restored = true;
+        for (int i = 0; i < n; i++) {
+            const GameSaveFragment *f = game_save_fragment_at(i);
+            if (group_success[i] && snapshots[i] &&
+                !f->from_json(snapshots[i], s_state_err, (int)sizeof s_state_err)) {
+                restored = false;
+            }
+        }
+        for (const cJSON *m = values->child; m; m = m->next) {
+            if (cJSON_GetObjectItemCaseSensitive(results, m->string)) {
+                (void)cJSON_ReplaceItemInObjectCaseSensitive(
+                    results, m->string, cJSON_CreateBool(false));
+            }
+        }
+        any_ok = false;
+        if (!restored) {
+            for (int i = 0; i < n; i++) { cJSON_Delete(snapshots[i]); }
+            return state_fail(err, "internal", "failed to roll back rejected state patch");
+        }
+    }
+    for (int i = 0; i < n; i++) { cJSON_Delete(snapshots[i]); }
     if (any_ok) {
         game_save_mark_dirty();
     }

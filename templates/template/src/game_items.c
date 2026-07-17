@@ -2,8 +2,65 @@
 
 #include "features/progression/progression.h"
 #include "game_state.h"
+#include "items_state.h"
 
 #include "core/nt_assert.h"
+
+#include <stdio.h>
+
+static bool ownership_error(char *error, int error_cap, const char *message) {
+    if (error && error_cap > 0) {
+        (void)snprintf(error, (size_t)error_cap, "%s", message);
+    }
+    return false;
+}
+
+bool game_items_validate_save_document(const cJSON *features, char *error, int error_cap) {
+    const cJSON *items_json = cJSON_GetObjectItemCaseSensitive(features, "items");
+    const cJSON *game_json = cJSON_GetObjectItemCaseSensitive(features, "game");
+    if (!cJSON_IsObject(items_json) || !cJSON_IsObject(game_json)) {
+        return ownership_error(error, error_cap, "items and game fragments are required");
+    }
+
+    ItemsState staged_items;
+    GameState staged_game;
+    items_state_init_defaults(&staged_items);
+    game_state_init_defaults(&staged_game);
+    if (!items_state_from_json(&staged_items, items_json, error, error_cap) ||
+        !game_state_from_json(&staged_game, game_json, error, error_cap)) {
+        return false;
+    }
+    if (!items_runtime_validate_state(&staged_items, error, error_cap)) {
+        return false;
+    }
+    if (staged_game.inventory_container_id == ITEMS_ID_NONE ||
+        staged_game.wallet_container_id == ITEMS_ID_NONE) {
+        return ownership_error(error, error_cap, "inventory and wallet owners require container ids");
+    }
+    if (staged_game.inventory_container_id == staged_game.wallet_container_id) {
+        return ownership_error(error, error_cap, "inventory and wallet must own distinct containers");
+    }
+
+    unsigned inventory_matches = 0;
+    unsigned wallet_matches = 0;
+    unsigned persistent_count = 0;
+    for (int i = 0; i < ITEMS_STATE_MAX_CONTAINERS; i++) {
+        const ItemsItemContainer *container = &staged_items.containers[i];
+        if (!container->used) { continue; }
+        persistent_count++;
+        if (container->container_id == staged_game.inventory_container_id) {
+            inventory_matches++;
+        } else if (container->container_id == staged_game.wallet_container_id) {
+            wallet_matches++;
+        } else {
+            return ownership_error(error, error_cap, "persistent Items container is unreferenced");
+        }
+    }
+    if (persistent_count != 2 || inventory_matches != 1 || wallet_matches != 1) {
+        return ownership_error(error, error_cap, "owner references a missing Items container");
+    }
+    return true;
+}
 
 static items_container_ref_t require_container(uint32_t id) {
     items_container_ref_t result = ITEMS_CONTAINER_REF_NONE;

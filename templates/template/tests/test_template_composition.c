@@ -12,6 +12,7 @@
 
 /* clang-format off */
 #include "game_save.h"
+#include "game_storage.h"
 #include "game_state.h"
 #include "settings_state.h"
 #include "items_state.h"
@@ -23,6 +24,9 @@
 #include "game_events.h"
 #include "game_items.h"
 #include "unity.h"
+#if NT_DEVAPI_ENABLED
+#include "devapi/nt_devapi.h"
+#endif
 /* clang-format on */
 
 /* Unity is built with UNITY_EXCLUDE_FLOAT (engine deps/unity CMakeLists, cf.
@@ -48,6 +52,44 @@ static bool add_stack(
                reason, NULL, NULL) == ITEMS_RESULT_OK;
 }
 
+static cJSON *required_object(cJSON *parent, const char *key) {
+    cJSON *value = cJSON_GetObjectItemCaseSensitive(parent, key);
+    TEST_ASSERT_TRUE(cJSON_IsObject(value));
+    return value;
+}
+
+static void assert_rejected_import_preserves_state(cJSON *doc, const char *before) {
+    char err[128] = {0};
+    char *invalid = cJSON_PrintUnformatted(doc);
+    TEST_ASSERT_NOT_NULL(invalid);
+    TEST_ASSERT_FALSE(game_save_import_string(invalid, err, (int)sizeof err));
+    TEST_ASSERT_NOT_EQUAL(0, err[0]);
+    free(invalid);
+
+    char *after = game_save_export_string(err, (int)sizeof err);
+    TEST_ASSERT_NOT_NULL(after);
+    TEST_ASSERT_EQUAL_STRING(before, after);
+    free(after);
+}
+
+static char *make_dangling_owner_save(char *error, int error_cap) {
+    char *valid = game_save_export_string(error, error_cap);
+    if (!valid) { return NULL; }
+    cJSON *doc = cJSON_Parse(valid);
+    free(valid);
+    if (!doc) { return NULL; }
+    cJSON *features = cJSON_GetObjectItemCaseSensitive(doc, "features");
+    cJSON *game = cJSON_GetObjectItemCaseSensitive(features, "game");
+    if (!cJSON_IsObject(game) || !cJSON_ReplaceItemInObjectCaseSensitive(
+            game, "inventory_container_id", cJSON_CreateNumber(9999))) {
+        cJSON_Delete(doc);
+        return NULL;
+    }
+    char *invalid = cJSON_PrintUnformatted(doc);
+    cJSON_Delete(doc);
+    return invalid;
+}
+
 static void remove_slot_files(void) {
     (void)remove(PRIMARY_PATH);
     (void)remove(PRIMARY_TMP);
@@ -65,8 +107,17 @@ void setUp(void) {
     game_save__set_clocks_for_test(test_mono, test_wall);
     game_save_set_transforms(NULL, 0);
     game_save_init();
+#if NT_DEVAPI_ENABLED
+    TEST_ASSERT_EQUAL_INT(NT_OK, nt_devapi_init());
+    game_save_register_devapi();
+#endif
 }
-void tearDown(void) { remove_slot_files(); }
+void tearDown(void) {
+#if NT_DEVAPI_ENABLED
+    nt_devapi_shutdown();
+#endif
+    remove_slot_files();
+}
 
 /* 1. Locks the exact registration contract main.c depends on: order matters
    for reconcile/on_new_game fan-out and the L1(items)-before-L2(progression) rule.
@@ -132,6 +183,253 @@ void test_cross_fragment_save_load_roundtrip(void) {
     TEST_ASSERT_TRUE(fabsf(settings_master() - 0.30f) < COMPOSITION_TEST_FLOAT_EPS);
 }
 
+void test_import_rejects_dangling_owner_before_publish(void) {
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    char *before = game_save_export_string(err, (int)sizeof err);
+    TEST_ASSERT_NOT_NULL(before);
+    cJSON *doc = cJSON_Parse(before);
+    TEST_ASSERT_NOT_NULL(doc);
+    cJSON *features = required_object(doc, "features");
+    cJSON *game = required_object(features, "game");
+    TEST_ASSERT_TRUE(cJSON_ReplaceItemInObjectCaseSensitive(
+        game, "inventory_container_id", cJSON_CreateNumber(9999)));
+
+    assert_rejected_import_preserves_state(doc, before);
+    cJSON_Delete(doc);
+    free(before);
+}
+
+void test_import_rejects_unreferenced_persistent_container_before_publish(void) {
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    char *before = game_save_export_string(err, (int)sizeof err);
+    TEST_ASSERT_NOT_NULL(before);
+    cJSON *doc = cJSON_Parse(before);
+    TEST_ASSERT_NOT_NULL(doc);
+    cJSON *features = required_object(doc, "features");
+    cJSON *items = required_object(features, "items");
+    cJSON *containers = cJSON_GetObjectItemCaseSensitive(items, "containers");
+    TEST_ASSERT_TRUE(cJSON_IsArray(containers));
+    cJSON *extra = cJSON_Duplicate(cJSON_GetArrayItem(containers, 0), true);
+    TEST_ASSERT_NOT_NULL(extra);
+    TEST_ASSERT_TRUE(cJSON_ReplaceItemInObjectCaseSensitive(
+        extra, "container_id", cJSON_CreateNumber(3)));
+    TEST_ASSERT_TRUE(cJSON_ReplaceItemInObjectCaseSensitive(
+        extra, "entries", cJSON_CreateArray()));
+    TEST_ASSERT_TRUE(cJSON_AddItemToArray(containers, extra));
+    TEST_ASSERT_TRUE(cJSON_ReplaceItemInObjectCaseSensitive(
+        items, "last_container_id", cJSON_CreateNumber(3)));
+
+    assert_rejected_import_preserves_state(doc, before);
+    cJSON_Delete(doc);
+    free(before);
+}
+
+void test_import_rejects_invalid_items_graph_before_publish(void) {
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    char *before = game_save_export_string(err, (int)sizeof err);
+    TEST_ASSERT_NOT_NULL(before);
+    cJSON *doc = cJSON_Parse(before);
+    TEST_ASSERT_NOT_NULL(doc);
+    cJSON *items = required_object(required_object(doc, "features"), "items");
+    cJSON *containers = cJSON_GetObjectItemCaseSensitive(items, "containers");
+    TEST_ASSERT_EQUAL_INT(2, cJSON_GetArraySize(containers));
+    cJSON *first_entries = cJSON_GetObjectItemCaseSensitive(
+        cJSON_GetArrayItem(containers, 0), "entries");
+    cJSON *second_entries = cJSON_GetObjectItemCaseSensitive(
+        cJSON_GetArrayItem(containers, 1), "entries");
+    TEST_ASSERT_TRUE(cJSON_IsArray(first_entries));
+    TEST_ASSERT_TRUE(cJSON_IsArray(second_entries));
+    cJSON *first_id = cJSON_GetObjectItemCaseSensitive(
+        cJSON_GetArrayItem(first_entries, 0), "entry_id");
+    TEST_ASSERT_TRUE(cJSON_IsNumber(first_id));
+    TEST_ASSERT_TRUE(cJSON_ReplaceItemInObjectCaseSensitive(
+        cJSON_GetArrayItem(second_entries, 0), "entry_id",
+        cJSON_CreateNumber(first_id->valuedouble)));
+
+    char *invalid = cJSON_PrintUnformatted(doc);
+    TEST_ASSERT_NOT_NULL(invalid);
+    TEST_ASSERT_FALSE(game_save_import_string(invalid, err, (int)sizeof err));
+    TEST_ASSERT_NOT_NULL(strstr(err, "duplicate entry id"));
+    free(invalid);
+    char *after = game_save_export_string(err, (int)sizeof err);
+    TEST_ASSERT_EQUAL_STRING(before, after);
+    free(after);
+    cJSON_Delete(doc);
+    free(before);
+}
+
+void test_save_refuses_invalid_live_ownership_without_replacing_disk_state(void) {
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    const uint32_t inventory_id = game_state.inventory_container_id;
+    game_state.inventory_container_id = 9999;
+    game_save_mark_dirty();
+    TEST_ASSERT_FALSE(game_save_flush(err, (int)sizeof err));
+    TEST_ASSERT_NOT_EQUAL(0, err[0]);
+
+    game_state.inventory_container_id = inventory_id;
+    settings_state_fragment.reset();
+    items_state_fragment.reset();
+    progression_state_fragment.reset();
+    game_state_fragment.reset();
+    game_save_load_result_t result;
+    game_save_load(&result);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, result.status);
+    TEST_ASSERT_EQUAL_UINT32(inventory_id, game_state.inventory_container_id);
+    TEST_ASSERT_EQUAL_INT64(50, items_stack_count(game_wallet_container(), "tmpl.gold"));
+}
+
+void test_disk_load_rejects_invalid_primary_and_recovers_valid_backup(void) {
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_storage_write_backup("test_composition", err, (int)sizeof err));
+    char *invalid = make_dangling_owner_save(err, (int)sizeof err);
+    TEST_ASSERT_NOT_NULL(invalid);
+    TEST_ASSERT_TRUE(game_storage_write("test_composition", invalid, err, (int)sizeof err));
+    free(invalid);
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_RECOVERED_BAK, result.status);
+    TEST_ASSERT_EQUAL_UINT32(1, game_state.inventory_container_id);
+    TEST_ASSERT_EQUAL_UINT32(2, game_state.wallet_container_id);
+    TEST_ASSERT_EQUAL_INT64(50, items_stack_count(game_wallet_container(), "tmpl.gold"));
+}
+
+void test_disk_load_rejects_invalid_primary_and_backup_before_corrupt_reset(void) {
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    char *invalid = make_dangling_owner_save(err, (int)sizeof err);
+    TEST_ASSERT_NOT_NULL(invalid);
+    TEST_ASSERT_TRUE(game_storage_write("test_composition", invalid, err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_storage_write_backup("test_composition", err, (int)sizeof err));
+    free(invalid);
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_CORRUPT_RESET, result.status);
+    TEST_ASSERT_EQUAL_UINT32(0, game_state.inventory_container_id);
+    TEST_ASSERT_EQUAL_UINT32(0, game_state.wallet_container_id);
+    TEST_ASSERT_EQUAL_UINT32(0, items_state.last_container_id);
+}
+
+#if NT_DEVAPI_ENABLED
+static bool reject_nonzero_clicks(const cJSON *features, char *error, int error_cap) {
+    if (!game_items_validate_save_document(features, error, error_cap)) { return false; }
+    const cJSON *game = cJSON_GetObjectItemCaseSensitive(features, "game");
+    const cJSON *clicks = cJSON_GetObjectItemCaseSensitive(game, "test_ui_clicks");
+    if (cJSON_IsNumber(clicks) && clicks->valueint != 0) {
+        (void)snprintf(error, (size_t)error_cap, "%s", "test validator rejected clicks");
+        return false;
+    }
+    return true;
+}
+
+static cJSON *submit_devapi(const char *request) {
+    const char *response = nt_devapi_submit(request);
+    TEST_ASSERT_NOT_NULL(response);
+    cJSON *root = cJSON_Parse(response);
+    TEST_ASSERT_NOT_NULL(root);
+    return root;
+}
+
+static int s_partial_value;
+static void partial_reset(void) { s_partial_value = 0; }
+static cJSON *partial_to_json(void) {
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "value", s_partial_value);
+    return root;
+}
+static bool partial_from_json(const cJSON *json, char *error, int error_cap) {
+    const cJSON *value = cJSON_GetObjectItemCaseSensitive(json, "value");
+    if (!cJSON_IsNumber(value)) {
+        (void)snprintf(error, (size_t)error_cap, "%s", "partial value is required");
+        return false;
+    }
+    s_partial_value = value->valueint;
+    return true;
+}
+static bool partial_set_path(
+    const char *path, const cJSON *value, char *error, int error_cap) {
+    if (strcmp(path, "value") != 0 || !cJSON_IsNumber(value)) { return false; }
+    s_partial_value = value->valueint; /* deliberately partial before refusal */
+    (void)snprintf(error, (size_t)error_cap, "%s", "forced partial setter failure");
+    return false;
+}
+static const GameSaveFragment s_partial_fragment = {
+    .id = "partial",
+    .version = 1,
+    .reset = partial_reset,
+    .to_json = partial_to_json,
+    .from_json = partial_from_json,
+    .set_path_json = partial_set_path,
+};
+
+void test_devapi_refuses_raw_ownership_writes_without_mutation(void) {
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    const uint32_t inventory_id = game_state.inventory_container_id;
+    const uint32_t wallet_id = game_state.wallet_container_id;
+    cJSON *before_items = items_state_to_json(&items_state);
+
+    cJSON *set = submit_devapi(
+        "{\"method\":\"game.state.set\",\"params\":{\"path\":\"game.inventory_container_id\",\"value\":9999}}");
+    TEST_ASSERT_TRUE(cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(set, "ok")));
+    cJSON_Delete(set);
+    cJSON *patch = submit_devapi(
+        "{\"method\":\"game.state.patch\",\"params\":{\"values\":{\"game.wallet_container_id\":9999}}}");
+    cJSON *patch_results = cJSON_GetObjectItemCaseSensitive(
+        cJSON_GetObjectItemCaseSensitive(patch, "result"), "results");
+    TEST_ASSERT_TRUE(cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(
+        patch_results, "game.wallet_container_id")));
+    cJSON_Delete(patch);
+    cJSON *reset = submit_devapi(
+        "{\"method\":\"game.state.set\",\"params\":{\"path\":\"items.containers\",\"value\":[]}}");
+    TEST_ASSERT_TRUE(cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(reset, "ok")));
+    cJSON_Delete(reset);
+
+    TEST_ASSERT_EQUAL_UINT32(inventory_id, game_state.inventory_container_id);
+    TEST_ASSERT_EQUAL_UINT32(wallet_id, game_state.wallet_container_id);
+    cJSON *after_items = items_state_to_json(&items_state);
+    TEST_ASSERT_TRUE(cJSON_Compare(before_items, after_items, true));
+    cJSON_Delete(after_items);
+    cJSON_Delete(before_items);
+}
+
+void test_devapi_rolls_back_all_successful_patch_groups_when_document_rejects(void) {
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    const float master_before = settings_master();
+    game_save_set_document_validator(reject_nonzero_clicks);
+    cJSON *patch = submit_devapi(
+        "{\"method\":\"game.state.patch\",\"params\":{\"values\":{"
+        "\"settings.master_volume\":0.25,\"game.test_ui_clicks\":1}}}");
+    cJSON *results = cJSON_GetObjectItemCaseSensitive(
+        cJSON_GetObjectItemCaseSensitive(patch, "result"), "results");
+    TEST_ASSERT_TRUE(cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(
+        results, "settings.master_volume")));
+    TEST_ASSERT_TRUE(cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(
+        results, "game.test_ui_clicks")));
+    cJSON_Delete(patch);
+    TEST_ASSERT_TRUE(fabsf(settings_master() - master_before) < COMPOSITION_TEST_FLOAT_EPS);
+    TEST_ASSERT_EQUAL_INT(0, game_state.test_ui_clicks);
+    game_save_set_document_validator(game_items_validate_save_document);
+}
+
+void test_devapi_set_rolls_back_a_partially_mutating_setter(void) {
+    s_partial_value = 0;
+    game_save_register_fragment(&s_partial_fragment);
+    cJSON *response = submit_devapi(
+        "{\"method\":\"game.state.set\",\"params\":{\"path\":\"partial.value\",\"value\":7}}");
+    TEST_ASSERT_TRUE(cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(response, "ok")));
+    cJSON_Delete(response);
+    TEST_ASSERT_EQUAL_INT(0, s_partial_value);
+}
+#endif
+
 /* 4. The live T0327 hygiene mechanic: "Hold to reset progress" wipes
    items+progression back to seed while volumes survive, on the REAL
    4-fragment registry (the review's flagged live mechanic). */
@@ -163,12 +461,26 @@ int main(void) {
     game_save_register_fragment(&items_state_fragment);
     game_save_register_fragment(&progression_state_fragment);
     game_save_register_fragment(&game_state_fragment);
+    game_save_set_document_validator(game_items_validate_save_document);
 
     UNITY_BEGIN();
     RUN_TEST(test_registry_has_four_fragments_in_order);
     RUN_TEST(test_new_game_seeds_across_all_fragments);
     RUN_TEST(test_cross_fragment_save_load_roundtrip);
+    RUN_TEST(test_import_rejects_dangling_owner_before_publish);
+    RUN_TEST(test_import_rejects_unreferenced_persistent_container_before_publish);
+    RUN_TEST(test_import_rejects_invalid_items_graph_before_publish);
+    RUN_TEST(test_save_refuses_invalid_live_ownership_without_replacing_disk_state);
+    RUN_TEST(test_disk_load_rejects_invalid_primary_and_recovers_valid_backup);
+    RUN_TEST(test_disk_load_rejects_invalid_primary_and_backup_before_corrupt_reset);
+#if NT_DEVAPI_ENABLED
+    RUN_TEST(test_devapi_refuses_raw_ownership_writes_without_mutation);
+    RUN_TEST(test_devapi_rolls_back_all_successful_patch_groups_when_document_rejects);
+#endif
     RUN_TEST(test_hold_to_reset_preserves_settings);
+#if NT_DEVAPI_ENABLED
+    RUN_TEST(test_devapi_set_rolls_back_a_partially_mutating_setter);
+#endif
     const int r = UNITY_END();
 
     game_events_shutdown();

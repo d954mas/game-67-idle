@@ -609,6 +609,13 @@ if(NOT EMSCRIPTEN)
     # nt_ui_context_t; header-only include-root + NT_UI_DEBUG_TOOLS define, no
     # Clay/impl chain -- draw_ui is never called in this TU, only declared.
     target_link_libraries(test_template_composition PRIVATE cjson unity nt_hash nt_log nt_core nt_ui_interface)
+    if(GAME_DEVAPI_ENABLED)
+        target_sources(test_template_composition PRIVATE src/game_save_devapi.c)
+        target_link_libraries(test_template_composition PRIVATE nt_devapi_default nt_app_stub)
+        target_compile_definitions(test_template_composition PRIVATE NT_DEVAPI_ENABLED=1)
+    else()
+        target_compile_definitions(test_template_composition PRIVATE NT_DEVAPI_ENABLED=0)
+    endif()
     target_include_directories(test_template_composition PRIVATE
         "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src
         "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")

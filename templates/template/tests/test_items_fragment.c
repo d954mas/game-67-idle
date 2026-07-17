@@ -223,6 +223,39 @@ void test_rebuild_rejects_duplicates_and_counter_regression(void) {
     TEST_ASSERT_FALSE(items_runtime_rebuild(error, (int)sizeof(error)));
 }
 
+void test_staged_runtime_validation_rejects_graph_without_publishing_indices(void) {
+    items_container_ref_t container = ITEMS_CONTAINER_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_container_create(
+            (items_container_desc_t){
+                .capacity = 2,
+                .policy = ITEMS_CONTAINER_POLICY_GENERIC,
+                .lifetime = ITEMS_LIFETIME_PERSISTENT,
+            },
+            &container));
+    item_entry_ref_t first = ITEM_ENTRY_REF_NONE;
+    item_entry_ref_t second = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(container, "tmpl.gold", 1, 0, "loot:test", &first, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(container, "tmpl.potion", 1, 1, "loot:test", &second, NULL));
+    const uint32_t second_id = items_entry_id(second);
+
+    ItemsState staged = items_state;
+    staged.containers_entries[second.index].entry_id = items_entry_id(first);
+    char error[128] = {0};
+    TEST_ASSERT_FALSE(items_runtime_validate_state(&staged, error, (int)sizeof(error)));
+    TEST_ASSERT_NOT_NULL(strstr(error, "duplicate entry id"));
+
+    item_entry_ref_t resolved = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_TRUE(items_entry_try_from_id(second_id, &resolved));
+    TEST_ASSERT_EQUAL_UINT32(second.index, resolved.index);
+    TEST_ASSERT_EQUAL_UINT32(second.generation, resolved.generation);
+}
+
 void test_rebuild_rejects_reserved_persisted_counters(void) {
     (void)create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
     char error[128] = {0};
@@ -691,6 +724,7 @@ int main(void) {
     RUN_TEST(test_whole_split_and_merge_identity);
     RUN_TEST(test_resize_requires_all_occupied_slots_to_fit);
     RUN_TEST(test_rebuild_rejects_duplicates_and_counter_regression);
+    RUN_TEST(test_staged_runtime_validation_rejects_graph_without_publishing_indices);
     RUN_TEST(test_rebuild_rejects_reserved_persisted_counters);
     RUN_TEST(test_one_hundred_persistent_containers_round_trip);
     RUN_TEST(test_loaded_maximum_ids_and_long_definition_reseed_without_truncation);

@@ -12,6 +12,7 @@
 
 /* ---- Контракт фрагмента: весь ABI между шеллом и фичей ---- */
 typedef bool (*GameSaveMigrateFn)(cJSON *frag, char *err, int cap); /* v(i)->v(i+1) */
+typedef bool (*GameSaveDocumentValidateFn)(const cJSON *features, char *err, int cap);
 
 typedef struct GameSaveFragment {
     const char *id;                  /* ключ в features{} и C-префикс; [a-z_][a-z0-9_]* */
@@ -30,6 +31,11 @@ typedef struct GameSaveFragment {
 /* Регистрация ДО первого load; порядок = порядок reconcile/on_new_game.
    Фрагмент game регистрируется ПОСЛЕДНИМ. Указатель должен пережить рантайм. */
 void game_save_register_fragment(const GameSaveFragment *fragment);
+
+/* One game-owned cross-fragment invariant checked before a save document is
+   published and after raw DevAPI writes. NULL restores fragment-only behavior. */
+void game_save_set_document_validator(GameSaveDocumentValidateFn validator);
+bool game_save_validate_current(char *error, int error_cap);
 
 /* ---- Registry read-access for the DevAPI dispatch (registry dispatch contract).
    Read-only view of the registry filled by game_save_register_fragment. ---- */
