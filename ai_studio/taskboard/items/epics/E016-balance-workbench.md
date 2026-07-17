@@ -1,12 +1,12 @@
 ---
 id: E016
 title: Items Lua authoring and Workbench
-status: active
+status: done
 project: P001
 priority: P2
 tags: [balance, items, lua, game-design, tooling]
 created: 2026-07-10
-updated: 2026-07-16
+updated: 2026-07-17
 ---
 
 ## Goal
@@ -343,3 +343,5 @@ truth.
 - 2026-07-16: Reopened after three independent full Items reviews confirmed
   Workbench security/race, authoring integrity, and bounded-I/O defects. Fixes
   remain in E016; runtime/state findings stay in existing E019.
+- 2026-07-17: Reclosed after T0437-T0439 gap fixes merged in PR #4; all E016 acceptance criteria remain checked and node ai_studio/studio.mjs verify --full passed 10 domains on b569c4957.
+- 2026-07-17: Pre-commit privacy preflight is baseline-blocked by already-tracked T0440/T0441 plus local private-mount metadata; the scoped E016 diff introduces no private token. Follow-up stays outside this Items closeout.
