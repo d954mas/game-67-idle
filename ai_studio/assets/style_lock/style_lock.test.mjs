@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { validateStyleLock, validateStyleLockFile } from "./validate.mjs";
-import { resolveAcceptedGameStyleLock, resolveGenerationOrigin } from "./generation_origin.mjs";
+import { resolveAcceptedGameStyleLock, resolveAutomaticGameStyleLock, resolveGenerationOrigin } from "./generation_origin.mjs";
 
 const readJson = (relative) => JSON.parse(readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8"));
 const example = readJson("./style_lock.example.json");
@@ -39,6 +39,7 @@ test("generation origin distinguishes explore, locked production, and explicit n
       taint_reason: null,
     });
     assert.throws(() => resolveAcceptedGameStyleLock(root, {}), /requires a game-owned Canvas project/);
+    assert.equal(resolveAutomaticGameStyleLock(root, {}), null, "Explore has no trusted automatic thresholds");
 
     const ownedProject = { ownership: { kind: "game", gameId: example.game_id } };
     assert.throws(
@@ -57,6 +58,7 @@ test("generation origin distinguishes explore, locked production, and explicit n
       () => resolveGenerationOrigin(root, ownedProject),
       /production generation requires.*style_lock\.json.*--no-lock/i,
     );
+    assert.equal(resolveAutomaticGameStyleLock(root, ownedProject), null, "a missing lock keeps automatic output quarantined");
     assert.deepEqual(resolveGenerationOrigin(root, ownedProject, { noLock: true }), {
       schema: "ai_studio.asset.generation_origin.v1",
       source: "ai",
@@ -86,11 +88,17 @@ test("generation origin distinguishes explore, locked production, and explicit n
       lock: example,
       lockPath,
     });
+    assert.deepEqual(resolveAutomaticGameStyleLock(root, ownedProject), {
+      gameId: example.game_id,
+      lock: example,
+      lockPath,
+    });
 
     const draft = clone(example);
     draft.status = "draft";
     writeFileSync(lockPath, `${JSON.stringify(draft, null, 2)}\n`);
     assert.throws(() => resolveGenerationOrigin(root, ownedProject), /requires an accepted style lock/i);
+    assert.equal(resolveAutomaticGameStyleLock(root, ownedProject), null, "draft thresholds cannot authorize checked art");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

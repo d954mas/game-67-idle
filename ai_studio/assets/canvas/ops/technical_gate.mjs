@@ -2,9 +2,9 @@ import { performance } from "node:perf_hooks";
 import { isDeepStrictEqual } from "node:util";
 
 import { normalizeAssetStatus } from "../asset_status.mjs";
-import { resolveAcceptedGameStyleLock } from "../../style_lock/generation_origin.mjs";
+import { resolveAcceptedGameStyleLock, resolveAutomaticGameStyleLock } from "../../style_lock/generation_origin.mjs";
 import { runAssetQualityGate, thresholdsFromStyleLock } from "../../tools/image/quality_gate/api.mjs";
-import { addFile, getProject, resolveProjectFile, updateProject, withProjectLock } from "../store.mjs";
+import { addFile, getProject, imageSize, resolveProjectFile, updateProject, withProjectLock } from "../store.mjs";
 import { commitMutation, refuseIfHeadMoved } from "./core.mjs";
 
 function technicalGateImage(project, elementId) {
@@ -71,56 +71,87 @@ function validateReport(report, { thresholds, keyColor }) {
   return report;
 }
 
+async function prepareTechnicalGate(root, project, source, dependencies, defaultResolver) {
+  const resolveStyleLock = dependencies.resolveStyleLock || defaultResolver;
+  const resolved = resolveStyleLock(root, project);
+  if (!resolved) return null;
+  const runGate = dependencies.runGate || ((args) => runAssetQualityGate(root, args));
+  const { lock } = resolved;
+  const thresholds = thresholdsFromStyleLock(lock);
+  const keyColor = lock.bg_rule?.mode === "chroma" ? String(lock.bg_rule.key_color).toUpperCase() : null;
+  const gateResult = await runGate({ root, ...source, keyColor, thresholds });
+  const report = validateReport(gateResult?.report, { thresholds, keyColor });
+  if (report.verdict === "fail" && !Buffer.isBuffer(gateResult?.thumbnailBytes)) {
+    throw new Error("asset technical gate returned FAIL without a problem thumbnail");
+  }
+  if (report.verdict === "fail") imageSize(gateResult.thumbnailBytes);
+  return {
+    lock,
+    thresholds,
+    keyColor,
+    report,
+    thumbnailBytes: report.verdict === "fail" && Buffer.isBuffer(gateResult?.thumbnailBytes)
+      ? gateResult.thumbnailBytes
+      : null,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+export function applyPreparedTechnicalGate(root, projectId, element, prepared) {
+  const currentStatus = element.assetStatus == null ? null : normalizeAssetStatus(element.assetStatus);
+  const nextStatus = prepared.report.verdict === "pass" && currentStatus === "accepted"
+    ? "accepted"
+    : prepared.report.verdict === "pass" ? "checked" : "quarantine";
+  const thumbnail = prepared.thumbnailBytes
+    ? addFile(root, projectId, { bytes: prepared.thumbnailBytes, name: `${element.name || element.id}-technical-gate.png` })
+    : null;
+  const evidence = {
+    schema: prepared.report.schema,
+    version: prepared.report.version,
+    verdict: prepared.report.verdict,
+    checked_at: prepared.checkedAt,
+    style_lock_id: prepared.lock.id,
+    source_ref: element.src,
+    key_color: prepared.keyColor,
+    thresholds: prepared.thresholds,
+    metrics: prepared.report.metrics ?? null,
+    problems: Array.isArray(prepared.report.problems) ? prepared.report.problems : [],
+    problem_bbox: prepared.report.problem_bbox ?? null,
+    problem_thumbnail: thumbnail?.src ?? null,
+  };
+  return {
+    status: nextStatus,
+    element: {
+      ...element,
+      assetStatus: nextStatus,
+      meta: { ...(element.meta || {}), technical_gate: evidence },
+    },
+  };
+}
+
+export function prepareAutomaticTechnicalGate(root, project, sourceBytes, dependencies = {}) {
+  if (!Buffer.isBuffer(sourceBytes)) throw new Error("automatic asset technical gate requires sourceBytes");
+  return prepareTechnicalGate(root, project, { sourceBytes }, dependencies, resolveAutomaticGameStyleLock);
+}
+
 async function runAssetTechnicalGateImpl(root, { projectId, elementId } = {}, dependencies = {}) {
   if (!projectId) throw new Error("runAssetTechnicalGate requires projectId");
   if (!elementId) throw new Error("runAssetTechnicalGate requires elementId");
   const startedAt = performance.now();
   const before = getProject(root, projectId);
   const source = technicalGateImage(before, elementId);
-  const resolveStyleLock = dependencies.resolveStyleLock || resolveAcceptedGameStyleLock;
-  const runGate = dependencies.runGate || ((args) => runAssetQualityGate(root, args));
-  const { lock } = resolveStyleLock(root, before);
-  const thresholds = thresholdsFromStyleLock(lock);
-  const keyColor = lock.bg_rule?.mode === "chroma" ? String(lock.bg_rule.key_color).toUpperCase() : null;
   const sourcePath = resolveProjectFile(root, projectId, source.src);
-  const gateResult = await runGate({ root, sourcePath, keyColor, thresholds });
-  const report = validateReport(gateResult?.report, { thresholds, keyColor });
-  const thumbnailBytes = report.verdict === "fail" && Buffer.isBuffer(gateResult?.thumbnailBytes)
-    ? gateResult.thumbnailBytes
-    : null;
-  const checkedAt = new Date().toISOString();
+  const prepared = await prepareTechnicalGate(root, before, { sourcePath }, dependencies, resolveAcceptedGameStyleLock);
+  const report = prepared.report;
 
   return withProjectLock(root, projectId, () => {
     const current = getProject(root, projectId);
     refuseIfHeadMoved("runAssetTechnicalGate", before, current);
     const currentElement = technicalGateImage(current, elementId);
-    const currentStatus = currentElement.assetStatus == null ? null : normalizeAssetStatus(currentElement.assetStatus);
-    const nextStatus = report.verdict === "pass" && currentStatus === "accepted"
-      ? "accepted"
-      : report.verdict === "pass" ? "checked" : "quarantine";
-    const thumbnail = thumbnailBytes
-      ? addFile(root, projectId, { bytes: thumbnailBytes, name: `${currentElement.name || elementId}-technical-gate.png` })
-      : null;
-    const evidence = {
-      schema: report.schema,
-      version: report.version,
-      verdict: report.verdict,
-      checked_at: checkedAt,
-      style_lock_id: lock.id,
-      source_ref: currentElement.src,
-      key_color: keyColor,
-      thresholds,
-      metrics: report.metrics ?? null,
-      problems: Array.isArray(report.problems) ? report.problems : [],
-      problem_bbox: report.problem_bbox ?? null,
-      problem_thumbnail: thumbnail?.src ?? null,
-    };
+    const applied = applyPreparedTechnicalGate(root, projectId, currentElement, prepared);
+    const nextStatus = applied.status;
     const after = updateProject(root, projectId, {
-      elements: (current.elements || []).map((item) => item.id === elementId ? {
-        ...item,
-        assetStatus: nextStatus,
-        meta: { ...(item.meta || {}), technical_gate: evidence },
-      } : item),
+      elements: (current.elements || []).map((item) => item.id === elementId ? applied.element : item),
     });
     const project = commitMutation(root, projectId, {
       op: "runAssetTechnicalGate",

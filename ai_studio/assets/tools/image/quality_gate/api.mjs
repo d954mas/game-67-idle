@@ -23,17 +23,23 @@ export function thresholdsFromStyleLock(lock) {
   };
 }
 
-export async function runAssetQualityGate(root, { sourcePath, keyColor, thresholds } = {}) {
-  if (!sourcePath) throw new Error("runAssetQualityGate requires sourcePath");
+export async function runAssetQualityGate(root, { sourcePath, sourceBytes, keyColor, thresholds } = {}) {
+  const hasSourcePath = typeof sourcePath === "string" && sourcePath.length > 0;
+  const hasSourceBytes = Buffer.isBuffer(sourceBytes);
+  if (hasSourcePath === hasSourceBytes) {
+    throw new Error("runAssetQualityGate requires exactly one of sourcePath or sourceBytes");
+  }
   if (!thresholds || typeof thresholds !== "object") throw new Error("runAssetQualityGate requires thresholds");
   const dir = mkdtempSync(join(tmpdir(), "asset-quality-gate-"));
+  const sourceInput = hasSourcePath ? sourcePath : join(dir, "source.png");
   const thresholdsPath = join(dir, "thresholds.json");
   const reportPath = join(dir, "report.json");
   const thumbnailPath = join(dir, "problem.png");
+  if (hasSourceBytes) writeFileSync(sourceInput, sourceBytes);
   writeFileSync(thresholdsPath, `${JSON.stringify(thresholds, null, 2)}\n`, "utf8");
   const args = [
     SCRIPT,
-    "--source", sourcePath,
+    "--source", sourceInput,
     "--thresholds", thresholdsPath,
     "--json-output", reportPath,
     "--problem-thumbnail", thumbnailPath,

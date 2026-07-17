@@ -19,6 +19,7 @@ import { parseScaleSpec, resolveExportScale } from "./export_scale.mjs";
 import { commitMutation, finite, groupsOf, mimeForExt, readFontsManifest, refuseIfHeadMoved, resolveFontFileAbs, slug } from "./core.mjs";
 import { DEFAULT_EXPORT_ROW, cleanExportRows } from "./elements.mjs";
 import { elementsBBox, findGroup } from "./groups.mjs";
+import { applyPreparedTechnicalGate, prepareAutomaticTechnicalGate } from "./technical_gate.mjs";
 
 // Source-space detection, slicing, and alpha operations refuse transformed
 // elements because stored source pixels no longer align with displayed geometry.
@@ -1709,7 +1710,7 @@ export function buildDualPlateProvenance(elementIdA, elementIdB, report, srcA, s
 // row. Refusals are loud and specific: not exactly 2 ids, a non-image element, or the
 // pair gate's own "regenerate" message (misaligned/redrawn plates, ambiguous roles) —
 // travels the python worker's SystemExit path as a clean message, no traceback.
-export async function alphaDualPlate(root, { projectId, elementIds } = {}) {
+async function alphaDualPlateImpl(root, { projectId, elementIds } = {}, dependencies = {}) {
   if (!projectId) throw new Error("alphaDualPlate requires projectId");
   if (!Array.isArray(elementIds)) throw new Error("alphaDualPlate requires an elementIds array");
   const ids = elementIds.map((value) => String(value));
@@ -1728,53 +1729,70 @@ export async function alphaDualPlate(root, { projectId, elementIds } = {}) {
   if (!elementB) throw new Error(`element not found: ${idB}`);
   if (elementB.type !== "image" || !elementB.src) throw new Error(`element ${idB} is not an image`);
 
-  const { bytes, report } = await runAlphaDualPlateTool(root, projectId, elementA, elementB);
+  const runDualPlateTool = dependencies.runDualPlateTool || runAlphaDualPlateTool;
+  const prepareTechnicalGate = dependencies.prepareTechnicalGate || prepareAutomaticTechnicalGate;
+  const { bytes, report } = await runDualPlateTool(root, projectId, elementA, elementB);
+  const preparedGate = await prepareTechnicalGate(root, before, bytes);
 
-  // Re-read to avoid clobbering a concurrent edit (mirrors alphaCutout's re-read-before-write).
-  const current = getProject(root, projectId);
-  const plateA = (current.elements || []).find((item) => item.id === idA);
-  if (!plateA) throw new Error(`element not found: ${idA}`);
-  const plateB = (current.elements || []).find((item) => item.id === idB);
-  if (!plateB) throw new Error(`element not found: ${idB}`);
+  return withProjectLock(root, projectId, () => {
+    const current = getProject(root, projectId);
+    refuseIfHeadMoved("alphaDualPlate", before, current);
+    const plateA = (current.elements || []).find((item) => item.id === idA);
+    if (!plateA) throw new Error(`element not found: ${idA}`);
+    const plateB = (current.elements || []).find((item) => item.id === idB);
+    if (!plateB) throw new Error(`element not found: ${idB}`);
 
-  const { run, alphaMeta } = buildDualPlateProvenance(idA, idB, report, plateA.src, plateB.src);
+    const { run, alphaMeta } = buildDualPlateProvenance(idA, idB, report, plateA.src, plateB.src);
   // Placement: to the RIGHT of BOTH plates' union bbox (gap in canvas px, mirrors slice) —
   // never on top of a plate, so the result is immediately visible (lead complaint T0237).
-  const gap = 16;
-  const pairRight = Math.max(plateA.x + plateA.w, plateB.x + plateB.w);
-  const pairTop = Math.min(plateA.y, plateB.y);
+    const gap = 16;
+    const pairRight = Math.max(plateA.x + plateA.w, plateB.x + plateB.w);
+    const pairTop = Math.min(plateA.y, plateB.y);
   // storeAddImage mints the new element (id/type/src/x/y/w/h/source_w/h/name/meta) the
   // SAME way every other add does — no hand-rolled element shape here. Like addImage, a
   // freshly minted image never carries a groupId, so the new element lands in the root
   // scope regardless of the plates' own group membership.
-  const added = storeAddImage(root, projectId, {
-    name: `${plateA.name} alpha`,
-    bytes,
-    x: pairRight + gap,
-    y: pairTop,
-    meta: { alpha: alphaMeta },
-  });
+    const added = storeAddImage(root, projectId, {
+      name: `${plateA.name} alpha`,
+      bytes,
+      x: pairRight + gap,
+      y: pairTop,
+      meta: { alpha: alphaMeta },
+    });
 
   // Front-order hook (identical to addImage/addImages): the new element lands at the
   // FRONT of the root scope when it is already explicitly ordered; a no-op otherwise.
-  const fo = frontOrder(before, null);
-  const nextElements = (added.project.elements || []).map((element) =>
-    fo !== null && element.id === added.element.id ? { ...element, order: fo } : element,
-  );
-  const after = updateProject(root, projectId, {
-    elements: nextElements,
-    tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), run]),
-  });
+    const fo = frontOrder(before, null);
+    let resultElement = (added.project.elements || []).find((element) => element.id === added.element.id) || added.element;
+    if (fo !== null) resultElement = { ...resultElement, order: fo };
+    if (preparedGate) resultElement = applyPreparedTechnicalGate(root, projectId, resultElement, preparedGate).element;
+    const nextElements = (added.project.elements || []).map((element) =>
+      element.id === added.element.id ? resultElement : element,
+    );
+    const after = updateProject(root, projectId, {
+      elements: nextElements,
+      tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), run]),
+    });
 
-  const project = commitMutation(root, projectId, {
-    op: "alphaDualPlate",
-    args_summary: { elementIds: [idA, idB], newElementId: added.element.id },
-    before,
-    after,
-    startedAt,
+    const project = commitMutation(root, projectId, {
+      op: "alphaDualPlate",
+      args_summary: { elementIds: [idA, idB], newElementId: added.element.id },
+      before,
+      after,
+      startedAt,
+    });
+    const element = (project.elements || []).find((item) => item.id === added.element.id) || resultElement;
+    return { project, element, run };
   });
-  const element = (project.elements || []).find((item) => item.id === added.element.id) || added.element;
-  return { project, element, run };
+}
+
+export function alphaDualPlate(root, args = {}) {
+  return alphaDualPlateImpl(root, args);
+}
+
+// Test-only seam: public callers cannot inject extracted pixels or a gate verdict.
+export function __alphaDualPlateForTest(root, args = {}, dependencies = {}) {
+  return alphaDualPlateImpl(root, args, dependencies);
 }
 
 // ---- alphaDualPlateGenerate (AUTOMATIC: one element -> generated plate(s) -> cut) --------

@@ -51,3 +51,14 @@ test("Node quality-gate adapter returns PASS and fail reports, preserving only f
   assert.ok(broken.report.problems.some((problem) => problem.code === "no_transparency"));
   assert.ok(Buffer.isBuffer(broken.thumbnailBytes));
 });
+
+test("Node quality-gate adapter accepts in-memory source bytes without requiring a caller temp file", async (t) => {
+  const sourceBytes = encodePng(32, 32, (x, y) => (
+    x >= 4 && x <= 27 && y >= 4 && y <= 27 ? [180, 110, 40, 255] : [0, 0, 0, 0]
+  ), { alpha: true });
+
+  const result = await runOrSkip(t, { sourceBytes, keyColor: "#FF00FF", thresholds: THRESHOLDS });
+  if (!result) return;
+  assert.equal(result.report.verdict, "pass");
+  assert.equal(result.thumbnailBytes, null);
+});

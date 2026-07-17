@@ -269,6 +269,19 @@ test("runAssetTechnicalGate fails closed on malformed evaluator output and on a 
       fixture.name,
     );
   }
+  await assert.rejects(
+    () => __runAssetTechnicalGateForTest(
+      REPO_ROOT,
+      { projectId: project.id, elementId: image.id },
+      gateDeps(passingReport({
+        verdict: "fail",
+        problems: [{ code: "key_spill" }],
+        problem_bbox: [1, 2, 3, 4],
+      })).dependencies,
+    ),
+    /problem thumbnail/,
+    "a failed verdict without visual evidence fails closed",
+  );
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore);
 
   const { dependencies } = gateDeps(passingReport(), {

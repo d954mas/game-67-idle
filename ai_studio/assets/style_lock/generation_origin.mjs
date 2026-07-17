@@ -54,6 +54,22 @@ export function resolveAcceptedGameStyleLock(root, project) {
   return { gameId, lock, lockPath };
 }
 
+// Automatic post-processing may also run in an unowned Explore canvas or while a
+// game's style lock is still being drafted. Those cases deliberately have no trusted
+// thresholds yet, so callers keep the result quarantined instead of inventing defaults.
+// A present lock is still parsed and ownership-checked: malformed or cross-game lock
+// data fails closed rather than silently disabling the gate.
+export function resolveAutomaticGameStyleLock(root, project) {
+  const gameId = projectGameId(project, "automatic asset technical gate");
+  if (!gameId) return null;
+  const lockPath = gameStyleLockPath(root, gameId);
+  if (!lockPath) return null;
+  const lock = validateStyleLockFile(lockPath, { workspaceRoot: root });
+  if (lock.game_id !== gameId) throw new Error("automatic asset technical gate style lock game_id must match Canvas project ownership.gameId");
+  if (lock.status !== "accepted") return null;
+  return { gameId, lock, lockPath };
+}
+
 // Resolve one frozen provenance record before any paid/slow generation begins.
 // Unowned canvases are deliberate exploration workspaces. Game-owned canvases default to
 // production: they need one accepted game lock, unless the caller explicitly chooses the

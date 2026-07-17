@@ -494,10 +494,10 @@ export function createCanvasApi(root) {
       // (non-destructive); one journal entry, one undo removes the new element.
       if (parts.length === 5 && sub === "alpha-dual" && req.method === "POST") {
         const body = await readJsonBody(req);
-        sendMutation(201, await locked(id, () => alphaDualPlate(root, {
+        sendMutation(201, await alphaDualPlate(root, {
           projectId: id,
           elementIds: Array.isArray(body.elementIds) ? body.elementIds : [],
-        })));
+        }));
         return true;
       }
 

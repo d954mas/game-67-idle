@@ -1346,14 +1346,16 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
   }
 }
 
-// T0254 Tier 1 #1: the five slow codex/agy generation commands lock only their OWN
+// T0254 Tier 1 #1: slow codex/agy generation commands lock only their OWN
 // final commit internally (ops.mjs — generateFromRecipe/expandRecipePrompt/
 // extractFromElement/animateElementFromText/alphaDualPlateGenerate), so a multi-minute
 // generation never blocks other mutations on the project. Wrapping them AGAIN here would try to
 // acquire the SAME per-project lock twice in one call stack (the outer acquire would
 // never release until the inner one finishes, and the inner one waits on the outer)
 // — excluded on purpose. Every other project-scoped command is wrapped in main()
-// below so the CLI (a SEPARATE process from the server) respects the same
+// Additional exception: alpha-dual is self-locking now that its evaluator runs before one guarded final
+// mint. Non-self-locking commands are wrapped below so the CLI (a SEPARATE process from
+// the server) respects the same
 // cross-process lockfile the API adapter does.
 // recipe-pack-generate (T0332 v2) is likewise self-locking — its own generateFromRecipe pack
 // branch acquires the per-project lock ONCE PER SHEET (short, per-sheet commits), so wrapping
@@ -1368,7 +1370,7 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
 // deadlock risk here since there is no inner acquire to collide with.
 // anim-generate (T0265) is self-locking too — generateAnimFromCard acquires the per-project
 // lock ONCE internally (short commit), so wrapping it here would deadlock the same way.
-const SELF_LOCKING_COMMANDS = new Set(["recipe-generate", "recipe-pack-generate", "recipe-expand", "extract", "animate", "alpha-dual-generate", "anim-generate", "asset-status-check"]);
+const SELF_LOCKING_COMMANDS = new Set(["recipe-generate", "recipe-pack-generate", "recipe-expand", "extract", "animate", "alpha-dual", "alpha-dual-generate", "anim-generate", "asset-status-check"]);
 
 export async function main(argv, { repoRoot = DEFAULT_REPO_ROOT, print = defaultPrint } = {}) {
   const [command, ...rest] = argv;
