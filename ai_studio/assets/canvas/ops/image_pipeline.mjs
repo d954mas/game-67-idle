@@ -7,6 +7,7 @@ import { performance } from "node:perf_hooks";
 import { runPython as runToolPython } from "../../tools/image/_bridge/bridge.mjs";
 import { detectImageRegions } from "../../tools/image/regions/api.mjs";
 import { uploadImageSource } from "../../tools/image/sources/api.mjs";
+import { resolveGenerationOrigin } from "../../style_lock/generation_origin.mjs";
 import { buildBlackPlatePrompt, buildWhitePlatePrompt, generatePlate } from "../tools/dual_plate_generate.mjs";
 import { runCorridorKey } from "../../tools/video/matte/matte.mjs";
 import { resolveRepoPython, runProcess } from "../../tools/video/_lib.mjs";
@@ -1931,7 +1932,7 @@ export async function generateAndKeyDualPlate(root, projectId, lightElement, pro
 // additive `generated` flag — T0248), the prompt, the pair gate's verdict, and the T0243
 // align delta. The source element is NEVER mutated — non-destructive, exactly like the
 // manual pair op.
-export async function alphaDualPlateGenerate(root, { projectId, elementId, prompt, generator } = {}) {
+export async function alphaDualPlateGenerate(root, { projectId, elementId, prompt, generator, noLock = false } = {}) {
   if (!projectId) throw new Error("alphaDualPlateGenerate requires projectId");
   if (!elementId) throw new Error("alphaDualPlateGenerate requires elementId");
   const generate = typeof generator === "function" ? generator : generatePlate;
@@ -1941,6 +1942,7 @@ export async function alphaDualPlateGenerate(root, { projectId, elementId, promp
   const element = (before.elements || []).find((item) => item.id === elementId);
   if (!element) throw new Error(`element not found: ${elementId}`);
   if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
+  const generationOrigin = resolveGenerationOrigin(root, before, { noLock });
 
   // Step 1: flat-light-background REPORT — before any codex spend; routes, never refuses.
   const flatReport = await checkFlatBackground(root, projectId, element);
@@ -1991,7 +1993,7 @@ export async function alphaDualPlateGenerate(root, { projectId, elementId, promp
       bytes,
       x: source.x + source.w + gap,
       y: source.y,
-      meta: { alpha: alphaMeta },
+      meta: { origin: generationOrigin, alpha: alphaMeta },
     });
 
     // Front-order hook (identical to addImage/alphaDualPlate): the new element lands at the

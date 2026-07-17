@@ -1864,7 +1864,7 @@ export function animCardKeyframes(project, cardId) {
 // `generators.run`); the default runs the Track B generate->frames->matte stages
 // (tools/anim_generate.mjs). One commitMutation; one undo removes the flipbook element AND
 // reverts the card's anim.last_run together.
-export async function generateAnimFromCard(root, { projectId, groupId, generators } = {}) {
+export async function generateAnimFromCard(root, { projectId, groupId, generators, noLock = false } = {}) {
   if (!projectId) throw new Error("generateAnimFromCard requires projectId");
   if (!groupId) throw new Error("generateAnimFromCard requires groupId");
   const startedAt = performance.now();
@@ -1894,6 +1894,7 @@ export async function generateAnimFromCard(root, { projectId, groupId, generator
   }
   const keyframePaths = keyframes.map((el) => resolveProjectFile(root, projectId, el.src));
   const keyframeSrcs = keyframes.map((el) => el.src);
+  const generationOrigin = resolveGenerationOrigin(root, before, { noLock });
 
   // Generation runs OUTSIDE the journal + lock (minutes; ComfyUI is GPU-exclusive), exactly
   // like generateFromRecipe. The generator seam is injectable — the default orchestrates the
@@ -1968,7 +1969,7 @@ export async function generateAnimFromCard(root, { projectId, groupId, generator
       bytes: frame0Bytes,
       x,
       y,
-      meta: { anim_run: animRun },
+      meta: { origin: generationOrigin, anim_run: animRun },
     });
     const elementId = added.element.id;
     const frameW = added.element.w;

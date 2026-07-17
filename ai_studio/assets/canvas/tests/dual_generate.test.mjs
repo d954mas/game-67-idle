@@ -234,6 +234,15 @@ test("alphaDualPlateGenerate (happy path): ONE new element, ONE journal entry, p
   // A brand-new element, named off the source, placed to its RIGHT with a 16px gap.
   assert.notEqual(result.element.id, source.id);
   assert.equal(result.element.assetStatus, "quarantine", "dual-plate generation enters review in quarantine");
+  assert.deepEqual(result.element.meta.origin, {
+    schema: "ai_studio.asset.generation_origin.v1",
+    source: "ai",
+    mode: "explore",
+    game_id: null,
+    style_lock_id: null,
+    tainted: false,
+    taint_reason: null,
+  });
   assert.equal(result.element.name, `${source.name} alpha`);
   assert.equal(result.element.x, source.x + source.w + 16);
   assert.equal(result.element.y, source.y);
@@ -271,6 +280,37 @@ test("alphaDualPlateGenerate (happy path): ONE new element, ONE journal entry, p
   const redoneElement = redone.elements.find((el) => el.id === result.element.id);
   assert.equal(redoneElement.src, result.element.src);
   assert.equal(redoneElement.assetStatus, "quarantine");
+});
+
+test("alphaDualPlateGenerate: game-owned production refuses before checks/generation without an accepted lock; noLock stamps tainted explore origin", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Owned dual", gameId: "missing-dual-lock" });
+  const { white, black } = dualPlatePairPng();
+  const { element: source } = addImage(REPO_ROOT, project.id, { name: "wings.png", bytes: white });
+  const generator = fakeGenerator(black);
+
+  await assert.rejects(
+    () => alphaDualPlateGenerate(REPO_ROOT, { projectId: project.id, elementId: source.id, generator }),
+    /production generation requires.*style_lock.*--no-lock/s,
+  );
+  assert.equal(generator.calls.length, 0, "missing production lock refuses before the generator call");
+
+  const result = await tryGenerate(t, {
+    projectId: project.id,
+    elementId: source.id,
+    generator,
+    noLock: true,
+  });
+  if (result === undefined) return;
+  assert.deepEqual(result.element.meta.origin, {
+    schema: "ai_studio.asset.generation_origin.v1",
+    source: "ai",
+    mode: "explore",
+    game_id: "missing-dual-lock",
+    style_lock_id: null,
+    tainted: true,
+    taint_reason: "no-lock",
+  });
 });
 
 test("alphaDualPlateGenerate (non-flat element, T0248): generates the WHITE plate FIRST from the element's OWN pixels, THEN the dark plate as an edit of that white plate — no refusal", async (t) => {
@@ -418,6 +458,7 @@ test("alphaDualPlateGenerate: a gate refusal retries EXACTLY once, then a loud e
 test("alpha-dual-generate: CLI and API reject a missing element the same way (validation parity, no python)", async (t) => {
   const dir = tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Dual generate parity validation" });
+  const { element: source } = addImage(REPO_ROOT, project.id, { name: "source.png", bytes: dualPlatePairPng().white });
 
   // API: POST /alpha-dual-generate with no elementId -> the op's own "requires elementId".
   const handler = createCanvasApi(REPO_ROOT);
@@ -431,11 +472,29 @@ test("alpha-dual-generate: CLI and API reject a missing element the same way (va
   assert.equal(captured.status, 400);
   assert.match(captured.body.error, /requires elementId/);
 
+  const invalidNoLock = { status: 0, body: null };
+  const invalidRes = {
+    writeHead(status) { invalidNoLock.status = status; return this; },
+    end(payload) { invalidNoLock.body = payload ? JSON.parse(payload) : null; },
+  };
+  await handler(
+    mockReq("POST", { elementId: source.id, noLock: "true" }),
+    invalidRes,
+    new URL(`http://x/api/canvas/projects/${project.id}/alpha-dual-generate`),
+  );
+  assert.equal(invalidNoLock.status, 400);
+  assert.match(invalidNoLock.body.error, /noLock must be a boolean/);
+
   // CLI: alpha-dual-generate <id> with no --element -> the same guard, via fail().
   assert.throws(() => execFileSync("node", [CLI, "alpha-dual-generate", project.id], {
     env: { ...process.env, CANVAS_PROJECTS_ROOT: dir },
     encoding: "utf8",
   }));
+
+  assert.throws(() => execFileSync("node", [CLI, "alpha-dual-generate", project.id, "--element", "missing", "--no-lock", "false"], {
+    env: { ...process.env, CANVAS_PROJECTS_ROOT: dir },
+    encoding: "utf8",
+  }), /--no-lock does not take a value/);
 });
 
 // ---- addImageFromFile ("Add to canvas" op, T0238) ------------------------------

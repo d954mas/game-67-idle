@@ -361,6 +361,15 @@ test("generateAnimFromCard (top-level card): ONE flipbook element in the ROOT sc
   const el = result.element;
   assert.equal(el.type, "image");
   assert.equal(el.assetStatus, "quarantine", "generated flipbooks enter review in quarantine");
+  assert.deepEqual(el.meta.origin, {
+    schema: "ai_studio.asset.generation_origin.v1",
+    source: "ai",
+    mode: "explore",
+    game_id: null,
+    style_lock_id: null,
+    tainted: false,
+    taint_reason: null,
+  });
   assert.equal(el.x, card.x + card.w + 16, "placed to the RIGHT of the card frame, 16px gap");
   assert.equal(el.y, card.y);
   assert.equal(el.groupId, undefined, "top-level card -> flipbook lands in the ROOT scope, never inside the card");
@@ -413,6 +422,46 @@ test("generateAnimFromCard (top-level card): ONE flipbook element in the ROOT sc
 
   const redone = redoOp(ROOT, { projectId: project.id }).project;
   assert.ok(redone.elements.find((e) => e.id === el.id).flipbook, "redo restores the flipbook element");
+});
+
+test("generateAnimFromCard: game-owned production refuses before generation without an accepted lock; noLock stamps tainted explore origin", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Owned anim", gameId: "missing-anim-lock" });
+  const { card } = animCardWithKeyframe(project.id);
+  const gen = fakeAnimGenerator(t);
+
+  await assert.rejects(
+    () => generateAnimFromCard(ROOT, { projectId: project.id, groupId: card.id, generators: gen }),
+    /production generation requires.*style_lock.*--no-lock/s,
+  );
+  assert.equal(gen.calls.length, 0, "missing production lock refuses before the generator call");
+
+  const handler = createCanvasApi(ROOT);
+  const invalidNoLock = await invokeApi(
+    handler,
+    "POST",
+    `/api/canvas/projects/${project.id}/anim-cards/${card.id}/generate`,
+    { noLock: "true" },
+  );
+  assert.equal(invalidNoLock.status, 400);
+  assert.match(invalidNoLock.json().error, /noLock must be a boolean/);
+  assert.equal(gen.calls.length, 0, "API validation also refuses before the injected generator is called");
+
+  const result = await generateAnimFromCard(ROOT, {
+    projectId: project.id,
+    groupId: card.id,
+    generators: gen,
+    noLock: true,
+  });
+  assert.deepEqual(result.element.meta.origin, {
+    schema: "ai_studio.asset.generation_origin.v1",
+    source: "ai",
+    mode: "explore",
+    game_id: "missing-anim-lock",
+    style_lock_id: null,
+    tainted: true,
+    taint_reason: "no-lock",
+  });
 });
 
 test("generateAnimFromCard (nested card): flipbook lands in the PARENT scope, never inside the card", async (t) => {
@@ -684,6 +733,9 @@ test("CLI anim-card / anim-patch parity; anim-generate on an empty-motion card f
   // anim-generate on a card with motion but NO keyframes fails before any generation (no spawn).
   const genFail = runFail(env, "anim-generate", projectId, "--group", card.id);
   assert.match(String(genFail.stderr || genFail.message), /no keyframes/);
+
+  const valuedNoLock = runFail(env, "anim-generate", projectId, "--group", card.id, "--no-lock", "false");
+  assert.match(String(valuedNoLock.stderr || valuedNoLock.message), /--no-lock does not take a value/);
 
   const shown = run(env, "show", projectId).project;
   assert.equal(shown.groups.find((g) => g.id === card.id).anim.motion, "gentle bob");

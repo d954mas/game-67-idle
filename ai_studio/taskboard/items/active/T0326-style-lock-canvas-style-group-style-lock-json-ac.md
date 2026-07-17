@@ -56,7 +56,7 @@ starts QUARANTINED, flag visible in canvas; only accepted art reaches the game):
       palette, exemplars, refs, Do/Don't) — doc + example.
 - [x] 2. Canvas asset status flag `quarantine → checked → accepted`, visible as
       a badge on canvas cards; CLI can set/read it.
-- [ ] 3. Generation paths default to quarantine; production mode stamps the
+- [x] 3. Generation paths default to quarantine; production mode stamps the
       lock id into the sidecar/origin; `--no-lock` taints origin.
 - [ ] 4. `checked` = technical auto-gates pass (T0317: bg purity/spill, halo,
       alpha, bbox, aspect).
@@ -90,3 +90,4 @@ starts QUARANTINED, flag visible in canvas; only accepted art reaches the game):
 - 2026-07-17: Increment 3 slice A complete in TDD: recipe, pack-sheet, animation, slice, cutout, and dual-plate generation now share an internal Canvas mint path that defaults every new pixel result to `quarantine`; ordinary uploads/imports remain untracked and cannot supply review state. Production-mode lock-id origin stamping and `--no-lock` tainting remain the next slice, so increment 3 stays open.
 - 2026-07-17: Increment 3 slice B wires recipe and pack generation to frozen `meta.origin`: unowned Canvas work remains explore, game-owned production refuses before paid work without an accepted game lock, accepted runs stamp the lock id, and CLI/API no-lock bypasses are explicitly tainted. Animation and dual-plate origin wiring remains slice C, so increment 3 stays open.
 - 2026-07-17: Slice B review hardening fails closed on malformed persisted Canvas ownership before any path lookup, blocks public/private path aliases, and adds explicit owned pack refusal plus multi-sheet no-lock taint coverage. The soft-generation interpretation is intentional: production refuses by default, but the explicit tainted override always remains available; only later promotion is unoverrideable.
+- 2026-07-17: Increment 3 slice C completes the shared generation-origin contract for animation and AI dual-plate generation, including CLI/API `noLock` transport, fail-closed type validation, and refusal before generator/background-check work. Focused TDD covers unowned explore, game-owned missing-lock refusal, tainted override, and transport flags. Increment 3 is complete; increment 4 continues through T0317's checked technical-gate transition.

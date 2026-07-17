@@ -20,7 +20,7 @@
 //   POST   /api/canvas/projects/<id>/slice          {elementId, regionIds?}
 //   POST   /api/canvas/projects/<id>/alpha          {elementId, method?, regions?} | {elementIds, method?} (batch) -> NEW element(s) beside the source(s); original(s) untouched; one entry
 //   POST   /api/canvas/projects/<id>/alpha-dual     {elementIds:[a,b]}   (white+black plate pair -> new element; one entry)
-//   POST   /api/canvas/projects/<id>/alpha-dual-generate {elementId, prompt?}   (AUTOMATIC: element = light plate, generates the dark plate, gates, cuts; new element; one entry)
+//   POST   /api/canvas/projects/<id>/alpha-dual-generate {elementId, prompt?, noLock?}   (AUTOMATIC: element = light plate, generates the dark plate, gates, cuts; new element; one entry)
 //   POST   /api/canvas/projects/<id>/export         {elementIds, rows?} | {project:true}
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/export {rows}  (export settings)
 //   POST   /api/canvas/projects/<id>/groups         {name, x?,y?,w?,h?, fromElements?, parentId?}
@@ -40,7 +40,7 @@
 //   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/expand    {}   (T0239 increment 4: Expand-prompt — ONE codex TEXT call; writes recipe.expanded only, no card minted; Generate sends it when use_expanded is true, else the short prompt)
 //   POST   /api/canvas/projects/<id>/anim-cards            {name?, x?,y?,w?,h?, parentId?, memberId?}   (T0265 increment 1: mint an animation card — a group with an additive `anim` blob; keyframes are its member images. memberId = "Animate this image" promotion: fit around that image + move it in as the first keyframe, ONE entry; not combinable with x/y/w/h)
 //   PATCH  /api/canvas/projects/<id>/anim-cards/<gid>      {motion?, profile?, seed?, matte?, gen_fps?, loop?, columns?, trim?, style_ref?, accepted_ref?}   (partial anim blob update; 400 on a group with no `anim`)
-//   POST   /api/canvas/projects/<id>/anim-cards/<gid>/generate  {}   (T0265 increment 1: generate via the Track B video route — mints ONE flipbook element beside the card in its PARENT scope; one entry; 1 keyframe = plain I2V)
+//   POST   /api/canvas/projects/<id>/anim-cards/<gid>/generate  {noLock?}   (T0265 increment 1: generate via the Track B video route — mints ONE flipbook element beside the card in its PARENT scope; one entry; 1 keyframe = plain I2V)
 //   POST   /api/canvas/projects/<id>/style-cards           {name?, x?,y?,w?,h?, parentId?}   (T0239 increment 3: mint a style card — a group with an additive `style` blob: prompt + ONE ref image; no generate route, style cards never generate)
 //   PATCH  /api/canvas/projects/<id>/style-cards/<gid>     {prompt?, ref?}                    (partial style blob update; ref must be null or a member IMAGE element id — the "Make ref" gesture; 400 on a group with no `style`)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/cleanup-preview {tool, params}  (T0207: quantize|denoise LIVE preview against CURRENT pixels; writes NOTHING to the store)
@@ -513,6 +513,7 @@ export function createCanvasApi(root) {
           projectId: id,
           elementId: body.elementId,
           prompt: body.prompt,
+          noLock: body.noLock ?? false,
         }));
         return true;
       }
@@ -903,8 +904,12 @@ export function createCanvasApi(root) {
       // commit internally, like recipe generate), so a multi-minute run never blocks the project.
       if (parts.length === 7 && sub === "anim-cards" && parts[6] === "generate" && req.method === "POST") {
         const groupId = decodeURIComponent(parts[5]);
-        await readJsonBody(req);
-        sendMutation(201, await generateAnimFromCard(root, { projectId: id, groupId }));
+        const body = await readJsonBody(req);
+        sendMutation(201, await generateAnimFromCard(root, {
+          projectId: id,
+          groupId,
+          noLock: body.noLock ?? false,
+        }));
         return true;
       }
 

@@ -34,7 +34,7 @@
 //   node ai_studio/assets/canvas/cli.mjs alpha <id> --element <eid> [--method auto|matte|corridorkey|vitmatte|birefnet] [--regions r1,r2]   (cutout -> NEW element beside the source; original untouched; one undo)
 //   node ai_studio/assets/canvas/cli.mjs alpha <id> --elements e1,e2 [--method auto|matte|corridorkey|vitmatte|birefnet]   (batch; N new copies; one undo)
 //   node ai_studio/assets/canvas/cli.mjs alpha-dual <id> --elements a,b   (white+black plate pair -> new element; one undo)
-//   node ai_studio/assets/canvas/cli.mjs alpha-dual-generate <id> --element <el> [--prompt "..."]   (AUTOMATIC: element = light plate, generates the dark plate, gates, cuts; one undo)
+//   node ai_studio/assets/canvas/cli.mjs alpha-dual-generate <id> --element <el> [--prompt "..."] [--no-lock]   (AUTOMATIC: element = light plate, generates the dark plate, gates, cuts; one undo)
 //   node ai_studio/assets/canvas/cli.mjs quantize <id> --element <eid> --colors N [--dither] [--preview <out.png>]   (T0207: with --preview, writes the preview PNG + prints the report, NO journal entry; without it, applies — one undo step)
 //   node ai_studio/assets/canvas/cli.mjs denoise <id> --element <eid> --strength 1|2|3 [--preview <out.png>]   (T0207: same preview/apply split as quantize)
 //   node ai_studio/assets/canvas/cli.mjs filters-bake <id> --element <eid>   (T0274 "Apply": rasterize the element's CURRENT filters+opacity into a new source file, then clear both; one undo)
@@ -282,7 +282,7 @@ function usage() {
   alpha <id> --element <eid> [--method auto|matte|corridorkey|vitmatte|birefnet] [--regions r1,r2]   (alpha-cutout -> a NEW element beside the source (original untouched, for side-by-side A/B); auto routes, matte forces key_matte, corridorkey = neural green-screen matte for soft glow (green native, magenta via hue180 shim; regions composite the whole-frame CK result into the requested regions; ~15s GPU); vitmatte = neural THIN detail (spider-web/mesh/fur/hair) on a green/magenta key + 2nd-choice glow, its OWN GPU venv, ~1-3s, whole-element only; birefnet = SOD cutout for ANY/unknown background, NO key, shared repo venv CPU ~10-30s, whole-element only; one undo)
   alpha <id> --elements e1,e2 [--method auto|matte|corridorkey|vitmatte|birefnet]   (batch: 2+ images each cut into a NEW copy beside itself, in ONE journal entry/undo; sources untouched; no --regions with a batch; corridorkey/vitmatte/birefnet each pay their per-image cost — the batch runs sequentially)
   alpha-dual <id> --elements a,b   (white-plate + black-plate pair -> ONE new cut element; either order; plates untouched; one undo step)
-  alpha-dual-generate <id> --element <eid> [--prompt "<extra subject description>"]   (AUTOMATIC: the element's current pixels are the LIGHT plate; generates the DARK plate via codex edit, gates it (one automatic retry), cuts -> ONE new element beside the source; source untouched; one undo step)
+  alpha-dual-generate <id> --element <eid> [--prompt "<extra subject description>"] [--no-lock]   (AUTOMATIC: the element's current pixels are the LIGHT plate; generates the DARK plate via codex edit, gates it (one automatic retry), cuts -> ONE new element beside the source; source untouched; one undo step)
   quantize <id> --element <eid> --colors <2-256> [--dither] [--preview <out.png>]   (T0207: palette-quantize the element's CURRENT pixels, alpha untouched; --preview writes the result PNG to <out.png> + prints the report, NO journal entry; without --preview, commits a new file + src swap as one undo step)
   denoise <id> --element <eid> --strength <1|2|3> [--preview <out.png>]   (T0207: light median denoise, alpha NEVER filtered; same --preview/apply split as quantize)
   filters-bake <id> --element <eid>   (T0274 "Apply": rasterize the element's CURRENT filters+opacity — T0273/T0260 — into a NEW content-addressed source file, then clear both (sliders reset); loud when there is nothing to bake; one undo step)
@@ -310,7 +310,7 @@ function usage() {
   style-set <id> --group <gid> [--prompt "<text>"] [--ref <elementId>|none]   (partial style blob update; --ref must be an existing member IMAGE element id of THIS card, or none to clear — the "Make ref" gesture; the first image dropped into an empty card auto-claims the ref)
   anim-card <id> [--name <name>] [--member <eid>] [--x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]   (T0265 increment 1: mint an animation card — a group with an additive 'anim' blob; keyframes are its member IMAGE elements; omitted w/h default to a 360x280 frame. --member is the "Animate this image" promotion: fit the card around that image + move it in as the first keyframe in ONE journal entry; not combinable with --x/--y/--w/--h; no generation yet)
   anim-patch <id> --group <gid> [--motion "<text>"] [--profile draft|final] [--seed <n>|none] [--matte corridorkey|key_matte] [--gen-fps <n>|none] [--loop true|false] [--columns <n>|none] [--trim true|false] [--style <id>|none] [--accepted <eid>|none]   (partial anim blob update)
-  anim-generate <id> --group <gid>   (T0265 increment 1: generate via the Track B video route — 1 keyframe = plain I2V; mints ONE flipbook element beside the card frame in its PARENT scope; one undo step; ComfyUI/CorridorKey run for real minutes — no --dry-run; the CLI always runs the DEFAULT generator, no fake injection)
+  anim-generate <id> --group <gid> [--no-lock]   (T0265 increment 1: generate via the Track B video route — 1 keyframe = plain I2V; mints ONE flipbook element beside the card frame in its PARENT scope; one undo step; ComfyUI/CorridorKey run for real minutes — no --dry-run; the CLI always runs the DEFAULT generator, no fake injection)
   extract <id> --element <eid>   (T0239 increment 4: ONE codex VISION call, real seconds/minutes -> element.meta.extracted {prompt_full, prompt_subject, style, description}; no card minted; re-running overwrites; no fake-assistant injection from the CLI)
   animate <id> --element <eid> --text "<description>"   (T0264: ONE codex TEXT/VISION call, real seconds/minutes -> element.animation (the ai_studio.canvas.animation.v1 spec); authors fresh or minimally patches an existing spec; image (vision) + text; no fake-runner injection from the CLI)
   promote-recipe <id> --element <eid>   (mint a RECIPE card BELOW the element from its ALREADY-STORED meta.extracted; NO codex call; run extract first — loud otherwise)
@@ -776,7 +776,8 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
       // description appended to both subject-lock prompts.
       if (!id) fail("alpha-dual-generate requires <id>");
       if (!flags.element || flags.element === "true") fail("alpha-dual-generate requires --element <eid>");
-      const args = { projectId: id, elementId: flags.element };
+      if (flags["no-lock"] !== undefined && flags["no-lock"] !== true) fail("--no-lock does not take a value");
+      const args = { projectId: id, elementId: flags.element, noLock: flags["no-lock"] === true };
       if (flags.prompt && flags.prompt !== "true") args.prompt = flags.prompt;
       return print(await alphaDualPlateGenerate(repoRoot, args));
     }
@@ -1241,7 +1242,12 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
       // runs the DEFAULT generator (tools/anim_generate.mjs).
       if (!id) fail("anim-generate requires <id>");
       if (!flags.group) fail("anim-generate requires --group <gid>");
-      return print(await generateAnimFromCard(repoRoot, { projectId: id, groupId: flags.group }));
+      if (flags["no-lock"] !== undefined && flags["no-lock"] !== true) fail("--no-lock does not take a value");
+      return print(await generateAnimFromCard(repoRoot, {
+        projectId: id,
+        groupId: flags.group,
+        noLock: flags["no-lock"] === true,
+      }));
     }
     case "extract": {
       // T0239 increment 4: real codex VISION spawn — no fake-assistant injection from the
