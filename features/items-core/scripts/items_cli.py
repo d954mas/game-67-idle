@@ -15,7 +15,7 @@ import tempfile
 from typing import Any
 
 import items_lua_edit as edit_api
-import items_ops as receipt_api
+import items_receipt as receipt_api
 import items_runtime_package as package_api
 import items_snapshot as snapshot_api
 
@@ -27,6 +27,10 @@ DEFAULT_MAX_FIELDS = 256
 DEFAULT_MAX_RELATED = 1_000
 MAX_PATCH_BYTES = 64 * 1024
 MAX_BATCH_OPERATIONS = 100
+LIST_ITEM_KEYS = (
+    "id", "created", "name", "icon", "kind", "tags", "base_value", "stack",
+    "currency", "use", "equip", "authoring_mode",
+)
 SCRIPT_DIR = Path(__file__).resolve().parent
 SANDBOX = SCRIPT_DIR / "items_lua_sandbox.py"
 
@@ -60,15 +64,20 @@ def _project_paths(root_value: str, manifest_value: str) -> tuple[Path, Path]:
     return root, manifest
 
 
-def _project_file(root: Path, value: str, code: str) -> Path:
-    path = (root / value).resolve()
+def _resolved_project_file(root: Path, path: Path, code: str, display: str) -> Path:
+    root = root.resolve()
+    path = path.resolve()
     try:
         path.relative_to(root)
     except ValueError as error:
-        raise CliFailure(code, f"path must stay inside project root: {value}") from error
+        raise CliFailure(code, f"path must stay inside project root: {display}") from error
     if not path.is_file():
         raise CliFailure(code, f"file not found: {path}")
     return path
+
+
+def _project_file(root: Path, value: str, code: str) -> Path:
+    return _resolved_project_file(root, root / value, code, value)
 
 
 def _evaluate(root: Path, manifest: Path) -> dict[str, Any]:
@@ -108,12 +117,65 @@ def _model(args: argparse.Namespace) -> tuple[Path, dict[str, Any], dict[str, An
 
 def _load_json(path: Path, code: str) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        data = path.read_bytes()
+    except OSError as error:
+        raise CliFailure(code, f"cannot read {path}: {error}") from error
+    return _load_json_bytes(data, path, code)
+
+
+def _load_json_bytes(data: bytes, path: Path, code: str) -> dict[str, Any]:
+    try:
+        value = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise CliFailure(code, f"cannot read {path}: {error}") from error
     if not isinstance(value, dict):
         raise CliFailure(code, f"JSON root must be an object: {path}")
     return value
+
+
+def _capture_project_inputs(
+    root: Path, manifest_path: Path, baseline_path: Path, state_path: Path,
+) -> dict[Path, bytes]:
+    root = root.resolve()
+    manifest_path = _resolved_project_file(
+        root, manifest_path, "cli.manifest", str(manifest_path),
+    )
+    baseline_path = _resolved_project_file(
+        root, baseline_path, "cli.baseline", str(baseline_path),
+    )
+    state_path = _resolved_project_file(
+        root, state_path, "cli.state_schema", str(state_path),
+    )
+    manifest_bytes = manifest_path.read_bytes()
+    manifest = _load_json_bytes(manifest_bytes, manifest_path, "cli.manifest")
+    modules = manifest.get("modules")
+    if not isinstance(modules, list):
+        raise CliFailure("cli.manifest", "manifest modules must be a list")
+    module_paths: set[Path] = set()
+    for entry in modules:
+        value = entry.get("file") if isinstance(entry, dict) else None
+        if not isinstance(value, str) or not value:
+            raise CliFailure("cli.manifest", "manifest module requires a file")
+        module_paths.add(_project_file(root, value, "cli.manifest"))
+    captured = {manifest_path: manifest_bytes}
+    for path in sorted({*module_paths, baseline_path, state_path}, key=str):
+        captured[path] = path.read_bytes()
+    return captured
+
+
+def _evaluate_captured(
+    root: Path, manifest_path: Path, captured: dict[Path, bytes],
+    replacements: dict[Path, bytes] | None = None,
+) -> dict[str, Any]:
+    replacements = replacements or {}
+    with tempfile.TemporaryDirectory() as temporary:
+        temp_root = Path(temporary)
+        for original, data in captured.items():
+            relative = original.relative_to(root)
+            target = temp_root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(replacements.get(original, data))
+        return _evaluate(temp_root, temp_root / manifest_path.relative_to(root))
 
 
 def _validation(
@@ -151,10 +213,20 @@ def _validation_paths(
     evaluation: dict[str, Any], snapshot: dict[str, Any],
     baseline_path: Path, state_path: Path,
 ) -> dict[str, Any]:
-    receipt = receipt_api.validate_evaluation_receipt(
-        evaluation,
+    return _validation_values(
+        evaluation, snapshot,
         _load_json(baseline_path, "cli.baseline"),
         _load_json(state_path, "cli.state_schema"),
+        baseline_path,
+    )
+
+
+def _validation_values(
+    evaluation: dict[str, Any], snapshot: dict[str, Any],
+    baseline: dict[str, Any], state_schema: dict[str, Any], baseline_path: Path,
+) -> dict[str, Any]:
+    receipt = receipt_api.validate_evaluation_receipt(
+        evaluation, baseline, state_schema,
         baseline_path=baseline_path,
     )
     diagnostics = snapshot_api.query_requirements(snapshot)["results"]
@@ -176,17 +248,16 @@ def _list(snapshot: dict[str, Any], max_items: int) -> list[dict[str, Any]]:
     if len(items) > max_items:
         raise CliFailure("cli.result_limit", f"list exceeds {max_items} items; increase max-items")
     runtime = {entry["id"]: entry for entry in snapshot["runtime_export"]["items"]}
-    return [
-        {
-            "id": item["id"],
-            "kind": item["kind"],
-            "runtime": {
-                "storage": runtime[item["id"]]["storage"],
-                "level_count": runtime[item["id"]]["level_count"],
-            },
+    result = []
+    for item in items:
+        summary = {key: item[key] for key in LIST_ITEM_KEYS if key in item}
+        summary["tags"] = item.get("tags", [])
+        summary["runtime"] = {
+            "storage": runtime[item["id"]]["storage"],
+            "level_count": runtime[item["id"]]["level_count"],
         }
-        for item in items
-    ]
+        result.append(summary)
+    return result
 
 
 def _dependencies(
@@ -217,62 +288,80 @@ def _dependencies(
     return result
 
 
+def _detail(root: Path, snapshot: dict[str, Any], item_id: str) -> dict[str, Any]:
+    item = snapshot_api.query_snapshot(snapshot, item_id=item_id)
+    if len(snapshot["fields"]) > DEFAULT_MAX_FIELDS:
+        raise CliFailure("cli.result_limit", f"schema exceeds {DEFAULT_MAX_FIELDS} fields")
+    members = {
+        member
+        for row in item["item"].get("levels", [])
+        for member in row.get("values", {})
+    }
+    fields = [
+        field for field in snapshot["fields"]
+        if field.get("section") == "level_row" and field.get("member") in members
+    ]
+    source_path = _project_file(root, item["source"]["file"], "edit.source")
+    return {
+        "item": item,
+        "fields": fields,
+        "source": {
+            "item": item_id,
+            "definition": item["source"],
+            "source_hash": _source_hash(source_path.read_bytes()),
+        },
+        "dependencies": _dependencies(snapshot, item_id, DEFAULT_MAX_RELATED),
+    }
+
+
 def _copy_project_for_edit(
-    root: Path, args: argparse.Namespace, source_path: Path, edited_bytes: bytes,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    root: Path, args: argparse.Namespace, source_path: Path,
+    original_bytes: bytes, edited_bytes: bytes,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[Path, str]]:
     _, manifest_path = _project_paths(args.project_root, args.manifest)
     baseline_path = _project_file(root, args.baseline, "cli.baseline")
     state_path = _project_file(root, args.state_schema, "cli.state_schema")
-    manifest = _load_json(manifest_path, "cli.manifest")
-    modules = manifest.get("modules")
-    if not isinstance(modules, list):
-        raise CliFailure("cli.manifest", "manifest modules must be a list")
-    module_paths: set[Path] = set()
-    for entry in modules:
-        value = entry.get("file") if isinstance(entry, dict) else None
-        if not isinstance(value, str) or not value:
-            raise CliFailure("cli.manifest", "manifest module requires a file")
-        module_paths.add(_project_file(root, value, "cli.manifest"))
-    if source_path not in module_paths:
+    captured = _capture_project_inputs(root, manifest_path, baseline_path, state_path)
+    if source_path not in captured:
         raise CliFailure("edit.source", "definition source is not an allowlisted manifest module")
-
-    with tempfile.TemporaryDirectory() as temporary:
-        temp_root = Path(temporary)
-        inputs = {*module_paths, manifest_path, baseline_path, state_path}
-        for original in inputs:
-            relative = original.relative_to(root)
-            target = temp_root / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(edited_bytes if original == source_path else original.read_bytes())
-        temp_manifest = temp_root / manifest_path.relative_to(root)
-        evaluation = _evaluate(temp_root, temp_manifest)
-        snapshot = snapshot_api.build_snapshot(evaluation)
-        validation = _validation_paths(
-            evaluation, snapshot,
-            temp_root / baseline_path.relative_to(root),
-            temp_root / state_path.relative_to(root),
-        )
-        return evaluation, snapshot, validation
+    if captured[source_path] != original_bytes:
+        raise CliFailure("edit.conflict", "source changed while preparing validation; refresh and retry")
+    evaluation = _evaluate_captured(
+        root, manifest_path, captured, {source_path: edited_bytes},
+    )
+    snapshot = snapshot_api.build_snapshot(evaluation)
+    validation = _validation_values(
+        evaluation, snapshot,
+        _load_json_bytes(captured[baseline_path], baseline_path, "cli.baseline"),
+        _load_json_bytes(captured[state_path], state_path, "cli.state_schema"),
+        baseline_path,
+    )
+    return evaluation, snapshot, validation, {
+        path: _source_hash(data) for path, data in captured.items()
+    }
 
 
-def _atomic_replace_expected(path: Path, expected_hash: str, content: bytes) -> None:
-    lock_path = path.with_name(f".{path.name}.items-edit.lock")
+def _atomic_replace_project_input(
+    root: Path, path: Path, expected_hashes: dict[Path, str], content: bytes,
+) -> bool:
+    lock_path = root / ".items-writer.lock"
     try:
         lock_descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     except FileExistsError as error:
         raise CliFailure(
-            "edit.locked",
+            "writer.locked",
             f"writer lock exists: {lock_path}; stale locks are never removed automatically, "
             "confirm no writer is active before deleting it",
         ) from error
     temporary: str | None = None
     try:
         with os.fdopen(lock_descriptor, "w", encoding="utf-8") as lock_stream:
-            lock_stream.write(json.dumps({"pid": os.getpid(), "source": path.name}) + "\n")
+            lock_stream.write(json.dumps({"pid": os.getpid(), "target": str(path.relative_to(root))}) + "\n")
             lock_stream.flush()
             os.fsync(lock_stream.fileno())
-        if _source_hash(path.read_bytes()) != expected_hash:
-            raise CliFailure("edit.conflict", "source changed after preview; refresh and retry")
+        _verify_project_inputs(expected_hashes)
+        if path.read_bytes() == content:
+            return False
         file_mode = path.stat().st_mode
         descriptor, temporary = tempfile.mkstemp(
             prefix=f".{path.name}.", suffix=".tmp", dir=path.parent,
@@ -282,10 +371,10 @@ def _atomic_replace_expected(path: Path, expected_hash: str, content: bytes) -> 
             stream.flush()
             os.fsync(stream.fileno())
         os.chmod(temporary, file_mode)
-        if _source_hash(path.read_bytes()) != expected_hash:
-            raise CliFailure("edit.conflict", "source changed while applying; refresh and retry")
+        _verify_project_inputs(expected_hashes)
         os.replace(temporary, path)
         temporary = None
+        return True
     finally:
         if temporary is not None:
             try:
@@ -296,6 +385,44 @@ def _atomic_replace_expected(path: Path, expected_hash: str, content: bytes) -> 
             os.unlink(lock_path)
         except FileNotFoundError:
             pass
+
+
+def _verify_project_inputs(expected_hashes: dict[Path, str]) -> None:
+    for input_path, expected_hash in sorted(expected_hashes.items(), key=lambda entry: str(entry[0])):
+        try:
+            actual_hash = _source_hash(input_path.read_bytes())
+        except OSError as error:
+            raise CliFailure(
+                "writer.conflict", f"validation input changed or disappeared: {input_path}",
+            ) from error
+        if actual_hash != expected_hash:
+            raise CliFailure(
+                "writer.conflict", f"validation input changed: {input_path}",
+                expected=expected_hash, actual=actual_hash,
+            )
+
+
+def _seal_receipt(
+    root: Path, manifest_path: Path, args: argparse.Namespace,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    baseline_path = _project_file(root, args.baseline, "cli.baseline")
+    state_path = _project_file(root, args.state_schema, "cli.state_schema")
+    captured = _capture_project_inputs(root, manifest_path, baseline_path, state_path)
+    evaluation = _evaluate_captured(root, manifest_path, captured)
+    snapshot = snapshot_api.build_snapshot(evaluation)
+    result, encoded = receipt_api.prepare_evaluation_receipt(
+        evaluation,
+        _load_json_bytes(captured[baseline_path], baseline_path, "cli.baseline"),
+        _load_json_bytes(captured[state_path], state_path, "cli.state_schema"),
+        baseline_path=baseline_path,
+    )
+    if encoded is not None:
+        result["changed"] = _atomic_replace_project_input(
+            root, baseline_path,
+            {path: _source_hash(data) for path, data in captured.items()},
+            encoded,
+        )
+    return evaluation, snapshot, result
 
 
 def _source_line(source: str, offset: int) -> tuple[int, str]:
@@ -431,8 +558,8 @@ def _edit(
     edited = _primitive_edit(source, definition, operation)
     edited_bytes = edited.source.encode("utf-8")
     after_hash = _source_hash(edited_bytes)
-    _, after_snapshot, validation = _copy_project_for_edit(
-        root, args, source_path, edited_bytes,
+    _, after_snapshot, validation, expected_inputs = _copy_project_for_edit(
+        root, args, source_path, original_bytes, edited_bytes,
     )
     semantic_diff = snapshot_api.diff_snapshots(snapshot, after_snapshot)
     line, before_line = _source_line(source, edited.start)
@@ -440,8 +567,9 @@ def _edit(
     source_changed = edited_bytes != original_bytes
     applied = False
     if validation["ok"] and args.apply and source_changed:
-        _atomic_replace_expected(source_path, actual_hash, edited_bytes)
-        applied = True
+        applied = _atomic_replace_project_input(
+            root, source_path, expected_inputs, edited_bytes,
+        )
     if args.command in {"max-level-append", "max-level-truncate"}:
         inverse = {
             "schema": "items.cli.patch.v1",
@@ -551,15 +679,16 @@ def _batch(
 
     edited_bytes = current.encode("utf-8")
     after_hash = _source_hash(edited_bytes)
-    _, after_snapshot, validation = _copy_project_for_edit(
-        root, args, source_path, edited_bytes,
+    _, after_snapshot, validation, expected_inputs = _copy_project_for_edit(
+        root, args, source_path, original_bytes, edited_bytes,
     )
     semantic_diff = snapshot_api.diff_snapshots(snapshot, after_snapshot)
     source_changed = edited_bytes != original_bytes
     applied = False
     if validation["ok"] and args.apply and source_changed:
-        _atomic_replace_expected(source_path, actual_hash, edited_bytes)
-        applied = True
+        applied = _atomic_replace_project_input(
+            root, source_path, expected_inputs, edited_bytes,
+        )
     inverse_patch = {
         "schema": "items.cli.patch_batch.v1",
         "expected_source_hash": after_hash,
@@ -608,6 +737,9 @@ def _parser() -> argparse.ArgumentParser:
     dependencies.add_argument("--item", required=True)
     dependencies.add_argument("--max-related", type=int, default=DEFAULT_MAX_RELATED)
 
+    detail = commands.add_parser("detail")
+    detail.add_argument("--item", required=True)
+
     source = commands.add_parser("source")
     source.add_argument("--item", required=True)
     source.add_argument("--field")
@@ -631,6 +763,9 @@ def _parser() -> argparse.ArgumentParser:
     validate.add_argument("--baseline", default="content/items.lock.json")
     validate.add_argument("--state-schema", default="state/items.schema.json")
     validate.add_argument("--affected")
+    seal = commands.add_parser("seal-receipt")
+    seal.add_argument("--baseline", default="content/items.lock.json")
+    seal.add_argument("--state-schema", default="state/items.schema.json")
     build = commands.add_parser("build")
     build.add_argument("--baseline", default="content/items.lock.json")
     build.add_argument("--state-schema", default="state/items.schema.json")
@@ -669,6 +804,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = _parser().parse_args(argv)
         operation = args.command
+        if operation == "seal-receipt":
+            root, manifest = _project_paths(args.project_root, args.manifest)
+            evaluation, snapshot, result = _seal_receipt(root, manifest, args)
+            exit_code = 0 if result["ok"] else 1
+            print(json.dumps(
+                _result(operation, snapshot, result), ensure_ascii=False, sort_keys=True,
+            ))
+            return exit_code
         root, evaluation, snapshot = _model(args)
         exit_code = 0
         if operation == "list":
@@ -680,6 +823,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif operation == "dependencies":
             result = _dependencies(snapshot, args.item, args.max_related)
+        elif operation == "detail":
+            result = _detail(root, snapshot, args.item)
         elif operation == "source":
             query = snapshot_api.query_snapshot(snapshot, item_id=args.item, field=args.field)
             source_path = _project_file(root, query["source"]["file"], "edit.source")

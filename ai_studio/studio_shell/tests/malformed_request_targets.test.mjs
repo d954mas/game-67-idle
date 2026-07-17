@@ -58,14 +58,14 @@ function waitForServer(child) {
   });
 }
 
-function rawGet(port, target) {
+function rawGet(port, target, host = `127.0.0.1:${port}`) {
   return new Promise((resolveResponse, reject) => {
     const socket = createConnection({ host: "127.0.0.1", port });
     let response = "";
     socket.setEncoding("utf8");
     socket.setTimeout(5_000, () => socket.destroy(new Error(`request timed out: ${target}`)));
     socket.on("connect", () => {
-      socket.write(`GET ${target} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`);
+      socket.write(`GET ${target} HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\n\r\n`);
     });
     socket.on("data", (chunk) => {
       response += chunk;
@@ -106,6 +106,10 @@ test("malformed percent-encoded request targets return 400 without killing studi
 
   try {
     await waitForServer(child);
+
+    const hostileHost = parseResponse(await rawGet(port, "/", "evil.test"));
+    assert.equal(hostileHost.status, 403);
+    assert.equal(hostileHost.body, "forbidden");
 
     const bodies = [];
     for (const target of ["/%", "/%A", "/%C0%AF"]) {

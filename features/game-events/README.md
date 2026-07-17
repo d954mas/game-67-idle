@@ -75,6 +75,9 @@ spine described above.
 
 The headers and capabilities listed by `feature.json.provides` are public;
 template composition and private implementation files are not.
+Domain code that must fail atomically with its audit event can call
+`game_event_can_emit` immediately before mutation; the probe is read-only and
+uses the exact arena-alignment and log-capacity rules of `game_event_emit`.
 
 ## Validation
 

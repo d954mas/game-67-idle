@@ -18,6 +18,11 @@ runtime actions, DevAPI commands, fixtures, or save behavior.
 7. Run generator tests, native save/storage tests, and relevant DevAPI/runtime
    scenarios.
 
+For a nested aggregate, keep `order_by` explicit at both levels. Treat each
+`max_count` as the fixed pool budget (the nested budget is global, not
+per-parent), and keep cross-object uniqueness, ownership, and gameplay policy
+in domain actions.
+
 Runtime access should flow as:
 
 ```text

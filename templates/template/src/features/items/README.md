@@ -1,264 +1,85 @@
-# items — game corner (reference)
+# Template Items integration
 
-`src/features/items/` was the L1 `items` feature's full home through T0327;
-as of T0337 the invariant ownership core (`items.h`, `items_containers.c`,
-`items_catalog.c`, reconcile, content codegen, op-layer CLI) moved to the
-root in-place module `features/items-core/` (`../../features/items-core/`
-from here, depth-2 invariant) — see `features/items-core/README.md` for its
-WHAT and the root `features/README.md` "Categories" for the module-vs-
-feature-pointer-vs-game-code decisive rule. This folder now holds only the
-game-owned corner: `reason_tags.h` (closed, per-game reason-verb list) +
-`items_bootstrap.c`'s `items_on_new_game` (starting seed). No
-`#if FEATURE_GAME_STATE` — state is always on, items is one version. This file
-is the game-side operational reference; `features/items-core/README.md` and
-`INSTALL.md` own the reusable module contract. For agent
-workflow ("how do I..."), use the `nt-game-items` skill — this README is
-the WHAT of the game side, the skill is the HOW-TO; do not duplicate
-content between them.
+The reusable evaluator, package runtime, ownership operations, and reconcile
+logic live in `features/items-core`. This directory contains only game-owned
+policy:
 
-## What it is
+- `reason_tags.h`: closed mutation-reason verbs;
+- `src/game_items.c`: concrete player containers, owner refs, and initial grants;
+- `src/game_items_devapi.c`: development-only bounded runtime projection;
+- this integration and migration note.
 
-One catalog (item/container/currency definitions, compiled from
-`content/items.json`) + one ownership model (who has what, in which
-container) + typed ownership events (`items.txn`, `items.move`). No UI, no DevAPI commands of its
-own, no kind of gameplay logic — items NEVER executes effects, it only
-tracks and reports ownership. `use.effect_id` is a pointer for a future
-effects layer to interpret, not something items itself runs.
+## Authoring and build
 
-## Public API (`items.h`)
+The canonical catalog is `items.lua.json` plus the allowlisted modules under
+`design/items/`. Use the single semantic CLI:
 
-> **`items.h` now lives in `features/items-core/include/features/items/items.h`
-> and resolves through this game's include path (`ITEMS_CORE_INC`, ahead of
-> `src`). Do NOT
-> recreate it here — a copy in this folder would shadow the module and the
-> `G-copies` grep-gate would catch it red.**
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root templates/template list
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root templates/template validate
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root templates/template build --out-dir templates/template/build/items-catalog
+```
 
-**Catalog (const tables, always compiled):**
-- `item_core(def_id)` / `item_at(index)` / `items_def_count()` — lookups.
-- `items_with_tag(tag, out, out_cap)` — tag filter.
-- `item_is_currency(def)` — has a `currency` block.
-- `item_container_def(container_id)` — container definition lookup.
+CMake performs the same build into its generated directory, packs the resulting
+blob as `items/catalog`, and compiles the generated ABI header. Runtime startup
+binds that blob before save load/reconcile or gameplay. There is no JSON or
+generated-table fallback.
 
-**Ownership (over the generated `items` save fragment):**
-- `items_add(container_id, def_id, count, reason)` /
-  `items_remove(container_id, def_id, count, reason)` — one verb for stacks
-  AND currencies (gold is just an item with a `currency` block).
-- `items_count(container_id, def_id)` / `items_can_afford(container_id, def_id, n)`.
-- `items_move(from, to, entry_key, count, reason)` — the ONLY place ownership
-  changes container (stacks: strict remove+add re-key; uniques: field
-  re-parent). `entry_key` is a def_id for a stack, an instance_id for a
-  unique.
-- `items_instance_create(container_id, def_id, reason)` /
-  `items_instance_destroy(instance_id, reason)` — unique-instance pool
-  (equip-block items); always requires a container destination.
-- `items_purse(def_id)` — convenience for `items_count("purse", def_id)`.
+## Ownership
 
-**`reason` is mandatory on every mutation**, format `verb:subject`, verb from
-the closed, append-only list in `reason_tags.h` (debug-assert in
-non-release builds; no-op in release). Prices/costs are lists of
-`{def_id, count}` checked one at a time with `items_can_afford` — there is
-no single "price" type.
+Stack APIs reject `stack == 1`; instance APIs require it. The template creates
+its finite player inventory and currency-only wallet in `src/game_items.c`,
+stores only their persistent numeric IDs in the game fragment, and passes
+explicit runtime refs to progression and UI consumers. Reusable Items Core has
+no fixed backpack/purse or implicit payment scope. Currency and finite stack
+caps come from the bound catalog package.
 
-## State fragment (`state/items.schema.json`, `--fragment items`)
+Runtime tools use the bounded inspection API rather than serializing the whole
+Items fragment: container lists are filtered and paginated, entry reads require
+an explicit slot range, and every query carries row/byte/context budgets.
+DevAPI-enabled builds expose this as `game.items.container.list` and
+`game.items.container.inspect`; entry `count` is an exact decimal string so
+the JSON bridge never rounds i64 values. Release builds do not compile the
+adapter.
 
-Ownership is ONE flat map `owned: map<string, ItemOwned>` — NOT one map per
-container. A "container" is a runtime VIEW (filter of `owned` by the
-`.container` field) over const container definitions in the catalog, not a
-schema construct; new containers are data (add a row to `items.json`), never
-a schema change. Key convention (the one piece of "magic"):
-- **stack** (stackable/currency def): key = `"<container>/<def_id>"` — the
-  KEY is authoritative; `.container` must always match the key's prefix.
-  Built by exactly ONE helper (`build_stack_key` in `items_containers.c`) —
-  never hand-build this key elsewhere.
-- **unique instance** (equip-block def): key = instance_id
-  (`"<def_id>#<seq>"`); the `.container` FIELD is authoritative (the key does
-  not encode a container).
+Every mutation uses a bounded `verb:subject` reason from `reason_tags.h`.
+Malformed, unknown, or oversized reasons return `ITEMS_RESULT_INVALID_REASON`
+before any state change or audit event, including in release builds. Persistent
+ownership mutations also return `ITEMS_RESULT_AUDIT_UNAVAILABLE` unchanged when
+their one bounded audit event cannot fit. Normal new games are seeded in
+`src/game_items.c`; `--fresh-state` intentionally runs only the generated reset
+defaults and skips those grants. The game-owned seed plan is
+validated against the bound catalog at the startup barrier and again before
+initialization; incompatible IDs, storage routes, capacities, duplicate grants,
+or minimum amounts fail before any seed state or event is published.
 
-`version: 1`, no `migrations` section yet (skeleton only). To add v2:
-1. Bump `"version": 2` in `state/items.schema.json`.
-2. Add `"migrations": [{"to_version": 2, "fn": "items_migrate_1_to_2"}]`.
-3. Write `bool items_migrate_1_to_2(cJSON *frag, char *err, int cap)` in a
-   new `items_migrations.c`, operating on the RAW fragment JSON (level-1
-   plumbing; semantic reshaping is level-2, owned by the game's own copy).
-4. Add the new file to `CMakeLists.txt` `target_sources`.
-5. Regression anchor: `tests/fixtures/items_v1.json` must still load through
-   the full migration chain once v2 exists.
+## Release receipt and destructive changes
 
-## Quarantine (`items_reconcile`, runs after every load)
+`content/items.lock.json` records shipped field IDs, item storage, and maximum
+shipped level counts. `validate` fails when an authored change is incompatible
+with that history. After the matching save migration is implemented and the
+release candidate is verified, seal the compatible new bounds once:
 
-A record whose `def_id` is no longer in the catalog gets `quarantined: true`
-— it is NEVER deleted (deletion would be unrecoverable save corruption if
-the catalog change was temporary). Quarantined records are excluded from
-`items_count`/`items_can_afford` but keep their `.container` home and their
-`count`, and survive `to_json`/`from_json` round-trips. If the def_id
-reappears in the catalog, the next `reconcile()` un-quarantines it.
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root templates/template seal-receipt
+```
 
-**Budget cost:** quarantined records still occupy a slot in `owned`, which is
-capped by `state/items.schema.json`'s `owned.max_count` (currently 64,
-compiled into `ITEMS_STATE_MAX_OWNED`). A game with catalog content that
-churns heavily (defs removed/renamed often) can exhaust this budget on
-quarantine alone — raise `owned.max_count` in that game's copy of the schema
-if this becomes a real constraint. This is a per-game tuning knob, not
-something items works around automatically.
+The write is atomic and idempotent. Removed item IDs stay in `removed`; removed
+field IDs move from `receipt.field_ids.active` to `reserved`. Never erase
+identity history.
 
-**Capacity + UI (lead, 2026-07-07):** a quarantined record occupies its
-container-capacity slot (it lives in that container and returns there on
-restoration — no overflow case exists by construction). DELIBERATE removal of
-a shipped def belongs in a migration step (delete or convert to compensation,
-e.g. gold by `base_value`) — migrations run before reconcile, so quarantine is
-only the safety net for UNhandled catalog changes. Inventory UI guidance for
-future games (no inventory screen exists in the template): render a
-quarantined record as a greyed "?" placeholder slot, no interactions — hiding
-it would show "20/20 used, 19 visible" and read as a bug. Final call at the
-first game with an inventory UI.
+## Save migrations
 
-## Art
+The save fragment is generated from `state/items.schema.json`. A destructive
+catalog change must first raise the fragment version and add an ordered,
+idempotent migration step. Migration bodies are game code because they encode
+this game's shipped history. `items_reconcile()` then quarantines any remaining
+unknown definitions without deleting player data and restores them if the
+definition returns.
 
-`art_needs: NONE` by design in И2 — items is 100% data/tracking, it has no
-visuals of its own (`icon_asset_id` in the catalog is a logical string id,
-not an art handle). No `feature.json` needed. When a real UI consumer shows
-up (И3, e.g. `resource_panel`), THAT feature declares `art_needs` and reads
-icon handles from the game's own atlas — items itself never writes to a
-pack (see `src/features/README.md` "Ассеты (декларативная модель)" for the
-convention and its grep-gate).
+Verification:
 
-## Content workflow (catalog authoring)
-
-1. Edit `content/items.json` (+ `content/item_fields.schema.json` if adding a
-   new field/block shape). **New item def:** set `created` (ISO date,
-   `"YYYY-MM-DD"`) — required (`validate` rules `created-missing`/
-   `created-invalid`; lead-ratified 2026-07-07, git history was rejected as
-   the source of truth for this since copy-then-own resets it,
-   `games/new_game.mjs`). The future T0316 web editor will set `created`
-   automatically; hand-authored entries must set it themselves.
-2. Build codegen (run from `templates/template/`; the generator moved to the
-   `items-core` module in T0337): `py -3.12 ../../features/items-core/scripts/generate_items_catalog.py
-   --catalog content/items.json --schema content/item_fields.schema.json
-   --out-dir <dir>` — emits the compile-time const tables
-   (`items_catalog.gen.{h,c}`). Also runs a lightweight sanity net so a
-   broken catalog fails the build, not just the runtime. `created` is
-   authoring metadata only — never compiled into the tables.
-3. Run the STRICT gate before shipping (run from `templates/template/`; the
-   op-CLI moved to the `items-core` module too, and **every path must now be
-   passed explicitly** — the script's own argparse defaults are relative to
-   `features/items-core/`, not this game; see the module `INSTALL.md`):
-   `py -3.12 ../../features/items-core/scripts/items_ops.py validate --catalog
-   content/items.json --schema content/item_fields.schema.json --baseline
-   content/items.lock.json --state-schema state/items.schema.json --src-dir
-   src/features/items` — a strict superset of the generator's sanity net
-   (same source of truth, imported not re-parsed) PLUS: the `created` field,
-   the lock-file removal workflow against `content/items.lock.json` +
-   `state/items.schema.json` (below), full `<namespace>.<slug>` charset
-   check, the composite-key length hard rule
-   (`len(container) + 1 + len(def_id) <= 63`, since stack keys are
-   `"<container>/<def_id>"` under `string_max=64`), an `equip` ⇒ `stack == 1`
-   sanity check, and an advisory display_name-keying lint.
-   **L5 — `--src-dir src/features/items` now scans the display-name-keying
-   lint over ONLY this game corner** (`reason_tags.h` +
-   `items_bootstrap.c`) — the ownership core (`items_containers.c`) lives in
-   `features/items-core/src/` and is linted there instead (a standalone run
-   would pass `--src-dir ../../features/items-core/src`); this is a
-   deliberate narrowing, not a coverage regression.
-   See the `nt-game-items` skill for the full CLI reference (`list`/
-   `validate`/`schema`, `--json`). **This gate ALSO runs automatically in
-   `ctest`** (target `items_ops_validate`) — a destructive change without a
-   reaction now fails the build's test suite by itself, not only a manual
-   run you might forget to do.
-
-### Lock workflow (`content/items.lock.json`) — destructive-change guard
-
-**Lead-ratified 2026-07-07: deleting/renaming a SHIPPED def_id is destructive
-(existing saves may already reference it) and must FORCE an explicit
-developer reaction — not just log a warning.** `items.lock.json` v4 is the one
-release receipt. It has item history plus `receipt.field_ids.active` and
-`receipt.field_ids.reserved`, which keep stable schema identities across
-rename/removal:
-- `def_ids` — currently shipped ids, mapped to their frozen `storage` (`stack`
-  or `unique`) and highest shipped `level_count`.
-- `removed` — ids DELIBERATELY removed from the catalog after shipping. Keep
-  their storage/level metadata and add `fragment_version` plus an optional note.
-  A pre-v3 removal that cannot be reconstructed is explicitly
-  `storage: "unknown", level_count: null`; never guess old save semantics.
-  `fragment_version`
-  (required, integer `>= 2`) records WHICH `state/items.schema.json`
-  `version` bump + migration step actually handled the removal, and must be
-  `<= ` the CURRENT items fragment version — i.e. DELIVERED, not merely
-  declared. `note` is OPTIONAL free-text documentation; `validate` never
-  requires it.
-
-**Fresh games start empty.** `games/new_game.mjs` resets a new game's copy of
-`content/items.lock.json` to an empty baseline (`def_ids: {}`, `removed: {}`)
-right after copying the template (copy-then-own) — the TEMPLATE's own lock
-legitimately lists ITS shipped demo defs (`tmpl.gold` etc.), but a brand-new
-game has shipped NOTHING to ITS OWN players yet.
-
-**Everyday cases:**
-- **Adding a new item and shipping it — READ THIS ONE TWICE.** Once a def_id
-  has gone out in a release, you MUST add it to `def_ids` with its storage and
-  shipped level bound. The current JSON path remains manual until T0386; the
-  Lua path uses `seal-evaluation-receipt` at release time. **For JSON this is the
-  ONE manual, unenforced link in the whole chain** — nothing currently
-  catches "you forgot to append a newly-shipped id to the lock" (only the
-  REVERSE mistake, removing a locked id, is machine-enforced). Miss this step
-  and the destructive-change guard is quietly blind to that def_id until
-  someone notices. Never remove an entry from `def_ids` once it has actually
-  shipped — move it to `removed` instead (below).
-- **Editing an item that is still unreleased** (not yet in `def_ids`): free
-  to rename/remove, no guard fires — it never shipped.
-- **Restoring a previously removed def:** if a def_id in `removed` reappears
-  with compatible stored storage/level bounds, `validate` only WARNS
-  (`removed-def-restored`); incompatible restoration fails —
-  restoration is legal, `reconcile()` un-quarantines any matching saved
-  records. Move the id back to `def_ids` and drop its `removed` entry once
-  you are sure the restoration is permanent. **If a def might come back,
-  prefer a no-op/quarantine migration step over a real delete step:** dropping
-  the `removed` receipt later does NOT undo a migration step that has already
-  shipped and run — a delete step that already executed cannot be un-run by
-  editing the lock file after the fact.
-
-**Deliberately removing a shipped def_id — the forced step-by-step:**
-1. Remove the def_id from `content/items.json`.
-2. Run `validate` — it goes RED with `removed-without-reaction` (the id is
-   still in `def_ids`, missing from the catalog, and not yet in `removed`).
-   The error message spells out the next three steps.
-3. In `content/items.lock.json`: move the id from `def_ids` to `removed`, keep
-   its storage/level metadata, and add
-   `fragment_version = <current items fragment version> + 1` — or just
-   `= <current version>` if you already bumped `state/items.schema.json`'s
-   `"version"` earlier in THIS SAME release for an unrelated shape migration.
-4. Bump `state/items.schema.json`'s `"version"` to that same number, and add
-   the migration step for it (`"migrations": [{"to_version": ..., "fn":
-   "..."}]`, see "Migration skeleton" above) — a REAL step: delete or
-   convert the orphaned records (e.g. convert a currency to something else
-   by `base_value`), or an explicit no-op step recording the conscious
-   decision that `reconcile()`'s quarantine is the intended handling. The
-   generator enforces `version == len(migrations)+1`, so the version bump
-   ITSELF forces you to add the step — you cannot
-   silently skip it.
-5. Run `validate` again — green once the fragment_version in `removed`
-   matches (`<=`) the now-bumped `state/items.schema.json` version.
-
-**Batching:** many removals in one release can share the SAME
-`fragment_version` — one version bump, one migration step, covering all of
-them. Example: deleting 10 defs in one release moves all 10 ids into
-`removed` with the SAME `fragment_version` (say `3`), and ONE migration step
-(`items_migrate_2_to_3`) handles all 10 together. `validate` never requires
-distinct versions per entry.
-
-**Cross-feature note (T0327 И3, `progression`):** a currency def_id referenced
-by `content/progression.json`'s `currency_def` is not removed without a
-synchronized edit to `content/progression.json` — this lock workflow has no
-visibility into `progression`, so the removal passes this guard cleanly but
-breaks `features/progression-core/scripts/generate_progression_tracks.py`
-loudly instead (see `features/progression-core/README.md`).
-
-**Data-shape guards:** an id listed in BOTH `def_ids` and `removed`
-simultaneously is `lock-inconsistent` (fix `items.lock.json` by hand — it
-must be exactly one of "currently shipped" or "documented removal"); a
-`removed` entry with a missing/non-integer/`< 2` `fragment_version` is
-`lock-invalid`.
-
-**Exception (rare):** if a def_id in `def_ids` never actually shipped in any
-released build, you may remove it from `def_ids` directly instead of going
-through `removed` — but treat that as the exception for authoring mistakes,
-not the primary path for a real, shipped removal.
+```powershell
+cmake --build templates/template/build/native-debug --target game test_items_fragment test_progression test_template_composition
+ctest --test-dir templates/template/build/native-debug -R "items|progression|template_composition" --output-on-failure
+```

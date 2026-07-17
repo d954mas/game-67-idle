@@ -1,0 +1,225 @@
+{
+  "agent_scenario": {
+    "commands": [
+      {
+        "exit_code": 0,
+        "operation": "source",
+        "peak_process_tree_rss_bytes": 91852800,
+        "stderr_bytes": 0,
+        "stdout_bytes": 434,
+        "wall_ms": 398.77
+      },
+      {
+        "exit_code": 0,
+        "operation": "preview",
+        "peak_process_tree_rss_bytes": 91963392,
+        "stderr_bytes": 0,
+        "stdout_bytes": 1311,
+        "wall_ms": 682.127
+      },
+      {
+        "exit_code": 0,
+        "operation": "apply",
+        "peak_process_tree_rss_bytes": 93257728,
+        "stderr_bytes": 0,
+        "stdout_bytes": 1310,
+        "wall_ms": 672.043
+      },
+      {
+        "exit_code": 0,
+        "operation": "build",
+        "peak_process_tree_rss_bytes": 91979776,
+        "stderr_bytes": 0,
+        "stdout_bytes": 863,
+        "wall_ms": 386.613
+      },
+      {
+        "exit_code": 0,
+        "operation": "validate",
+        "peak_process_tree_rss_bytes": 92061696,
+        "stderr_bytes": 0,
+        "stdout_bytes": 400,
+        "wall_ms": 395.584
+      },
+      {
+        "exit_code": 0,
+        "operation": "inspect",
+        "peak_process_tree_rss_bytes": 92938240,
+        "stderr_bytes": 0,
+        "stdout_bytes": 827,
+        "wall_ms": 403.735
+      },
+      {
+        "exit_code": 1,
+        "operation": "conflict",
+        "peak_process_tree_rss_bytes": 91676672,
+        "stderr_bytes": 331,
+        "stdout_bytes": 0,
+        "wall_ms": 382.634
+      },
+      {
+        "exit_code": 0,
+        "operation": "undo",
+        "peak_process_tree_rss_bytes": 92372992,
+        "stderr_bytes": 0,
+        "stdout_bytes": 1310,
+        "wall_ms": 703.042
+      }
+    ],
+    "diagnostic_quality": {
+      "actionable_message": true,
+      "has_expected_actual": true,
+      "stable_code": true,
+      "structured_json": true
+    },
+    "name": "source-preview-apply-build-validate-inspect-conflict-undo",
+    "totals": {
+      "logical_project_file_reads": 63,
+      "peak_process_tree_rss_bytes": 93257728,
+      "stderr_context_bytes": 331,
+      "stdout_context_bytes": 6455,
+      "tool_count": 8,
+      "wall_ms": 4024.548
+    }
+  },
+  "bottlenecks": [
+    {
+      "flow": "one-edit apply",
+      "wall_ms": 672.043
+    },
+    {
+      "flow": "cold build",
+      "wall_ms": 387.518
+    },
+    {
+      "flow": "one-edit build",
+      "wall_ms": 386.613
+    },
+    {
+      "flow": "cold evaluate/validate",
+      "wall_ms": 380.741
+    },
+    {
+      "flow": "no-op build",
+      "wall_ms": 377.428
+    },
+    {
+      "flow": "warm evaluate/validate",
+      "wall_ms": 371.985
+    },
+    {
+      "flow": "runtime bind process",
+      "wall_ms": 56.574
+    }
+  ],
+  "budgets": {
+    "enforced": false,
+    "note": "No performance threshold becomes a gate without explicit acceptance.",
+    "status": "advisory"
+  },
+  "decision": {
+    "backend": "lupa.lua54",
+    "lua": "5.4",
+    "package": "lupa@2.8",
+    "runtime_format": "compact-blob-v2",
+    "status": "ratified"
+  },
+  "fixture": {
+    "blob_bytes": 616,
+    "fields": 0,
+    "items": 6,
+    "levels": 1,
+    "production_project": "templates\\template"
+  },
+  "flows": {
+    "cold_build": {
+      "changed": {
+        "blob": true,
+        "header": true,
+        "snapshot": true
+      },
+      "exit_code": 0,
+      "operation": "build",
+      "peak_process_tree_rss_bytes": 92016640,
+      "stderr_bytes": 0,
+      "stdout_bytes": 881,
+      "wall_ms": 387.518
+    },
+    "cold_evaluate_validate": {
+      "exit_code": 0,
+      "operation": "validate",
+      "peak_process_tree_rss_bytes": 91348992,
+      "stderr_bytes": 0,
+      "stdout_bytes": 249,
+      "wall_ms": 380.741
+    },
+    "noop_build": {
+      "changed": {
+        "blob": false,
+        "header": false,
+        "snapshot": false
+      },
+      "exit_code": 0,
+      "operation": "build",
+      "peak_process_tree_rss_bytes": 91664384,
+      "stderr_bytes": 0,
+      "stdout_bytes": 884,
+      "wall_ms": 377.428
+    },
+    "one_edit_apply": {
+      "exit_code": 0,
+      "operation": "apply",
+      "peak_process_tree_rss_bytes": 93257728,
+      "stderr_bytes": 0,
+      "stdout_bytes": 1310,
+      "wall_ms": 672.043
+    },
+    "one_edit_build": {
+      "exit_code": 0,
+      "operation": "build",
+      "peak_process_tree_rss_bytes": 91979776,
+      "stderr_bytes": 0,
+      "stdout_bytes": 863,
+      "wall_ms": 386.613
+    },
+    "runtime_bind": {
+      "bind_samples": 9,
+      "content_fingerprint": "6a4aec7019c9673f",
+      "exit_code": 0,
+      "operation": "runtime-bind",
+      "peak_process_tree_rss_bytes": 32768,
+      "schema": "items.runtime.bind.benchmark.v1",
+      "startup_bind_ns": 400,
+      "stderr_bytes": 0,
+      "stdout_bytes": 191,
+      "steady_owned_bytes": 616,
+      "transient_input_plus_owned_bytes": 1232,
+      "wall_ms": 56.574
+    },
+    "warm_evaluate_validate": {
+      "max_peak_process_tree_rss_bytes": 93364224,
+      "median_wall_ms": 371.985,
+      "runs": 3,
+      "samples_wall_ms": [
+        405.578,
+        371.454,
+        371.985
+      ]
+    }
+  },
+  "method": {
+    "cold": "first fresh evaluator process and empty build output; OS caches are not flushed",
+    "context": "exact captured stdout/stderr byte counts",
+    "memory": "5 ms samples of aggregate resident bytes for the command process and descendants",
+    "reads": "deterministic application-level project reads; excludes interpreter and OS reads",
+    "source_sha256": "sha256:8dfcb70b7df86186421bef6a09c5bd5167634a20a4f7eff69f64b38c8241a4b7",
+    "warm": "median of 3 later fresh evaluator processes with ordinary OS caches"
+  },
+  "platform": {
+    "machine": "AMD64",
+    "python": "3.12.4",
+    "release": "11",
+    "system": "Windows"
+  },
+  "schema": "items.pipeline.benchmark.v1"
+}

@@ -1,7 +1,7 @@
 /* game_save.c — hand-written L0 save orchestrator.
    Fragment registry + single atomic envelope document + load state machine
-   (FRESH/LOADED/RECOVERED_BAK/CORRUPT_RESET/NEWER, per-fragment, never
-   all-or-nothing) + on_new_game + dirty/debounce/MAX_INTERVAL + synchronous web
+   (FRESH/LOADED/RECOVERED_BAK/CORRUPT_RESET/NEWER, per-fragment except staged
+   versioned document migrations) + on_new_game + dirty/debounce/MAX_INTERVAL + synchronous web
    visibility-flush + export/import + empty transform seam. Single thread. */
 
 #include "game_save.h"
@@ -69,6 +69,9 @@ static int s_orphan_count;
 
 static const game_save_transform_t *s_transforms;
 static int s_transform_count;
+static const GameSaveDocumentMigrateFn *s_document_migrations;
+static int s_document_migration_count;
+static GameSaveDocumentValidateFn s_document_validator;
 
 static bool    s_autosave_paused; /* CORRUPT_RESET/NEWER until game_save_new_game */
 static bool    s_new_game_pending;         /* Р11: deferred to the shell's next update (below) */
@@ -343,11 +346,131 @@ static cJSON *build_root(bool bump_seq, int64_t *out_wall) {
     return root;
 }
 
+static bool validate_document(const cJSON *doc, char *error, int error_cap) {
+    if (!s_document_validator) {
+        return true;
+    }
+    const cJSON *features = gsj_object_item(doc, "features");
+    if (!cJSON_IsObject(features)) {
+        gsj_set_error(error, error_cap, "save has no features");
+        return false;
+    }
+    return s_document_validator(features, error, error_cap);
+}
+
+/* Duplicate -> migrate every cross-fragment version -> validate, with no live
+   publication and no mutation of caller-owned JSON until the whole document is
+   known-good. */
+static bool prepare_document_for_load(
+    const cJSON *doc, cJSON **out_doc, bool *out_migrated, char *error, int error_cap) {
+    if (out_doc) {
+        *out_doc = NULL;
+    }
+    if (out_migrated) {
+        *out_migrated = false;
+    }
+    if (!cJSON_IsObject(doc)) {
+        gsj_set_error(error, error_cap, "save is not an object");
+        return false;
+    }
+    const cJSON *version_json = gsj_object_item(doc, "save_version");
+    int version = 1; /* absent is the frozen legacy v1 envelope */
+    if (version_json) {
+        if (!cJSON_IsNumber(version_json) || version_json->valuedouble < 1.0) {
+            gsj_set_error(error, error_cap, "invalid save_version");
+            return false;
+        }
+        if (version_json->valuedouble > (double)GAME_SAVE_DOC_VERSION) {
+            gsj_set_error(error, error_cap, "save is newer than this build");
+            return false;
+        }
+        if (version_json->valuedouble != (double)(int)version_json->valuedouble) {
+            gsj_set_error(error, error_cap, "invalid save_version");
+            return false;
+        }
+        version = (int)version_json->valuedouble;
+    }
+
+    cJSON *copy = cJSON_Duplicate(doc, true);
+    if (!copy) {
+        gsj_set_error(error, error_cap, "failed to stage save document");
+        return false;
+    }
+    cJSON *features = cJSON_GetObjectItemCaseSensitive(copy, "features");
+    if (!cJSON_IsObject(features)) {
+        cJSON_Delete(copy);
+        gsj_set_error(error, error_cap, "save has no features");
+        return false;
+    }
+    const int original_version = version;
+    if (version < GAME_SAVE_DOC_VERSION && !s_document_validator) {
+        cJSON_Delete(copy);
+        gsj_set_error(error, error_cap, "document migrations require a validator");
+        return false;
+    }
+    for (; version < GAME_SAVE_DOC_VERSION; version++) {
+        const int step_index = version - 1;
+        GameSaveDocumentMigrateFn step =
+            (step_index >= 0 && step_index < s_document_migration_count && s_document_migrations)
+                ? s_document_migrations[step_index]
+                : NULL;
+        if (!step) {
+            cJSON_Delete(copy);
+            gsj_set_error(error, error_cap, "missing document migration step");
+            return false;
+        }
+        if (!step(features, error, error_cap)) {
+            cJSON_Delete(copy);
+            return false;
+        }
+    }
+    cJSON *current_version = cJSON_CreateNumber((double)GAME_SAVE_DOC_VERSION);
+    if (!current_version) {
+        cJSON_Delete(copy);
+        gsj_set_error(error, error_cap, "failed to stamp save_version");
+        return false;
+    }
+    if (version_json) {
+        if (!cJSON_ReplaceItemInObjectCaseSensitive(copy, "save_version", current_version)) {
+            cJSON_Delete(current_version);
+            cJSON_Delete(copy);
+            gsj_set_error(error, error_cap, "failed to stamp save_version");
+            return false;
+        }
+    } else {
+        if (!cJSON_AddItemToObject(copy, "save_version", current_version)) {
+            cJSON_Delete(current_version);
+            cJSON_Delete(copy);
+            gsj_set_error(error, error_cap, "failed to stamp save_version");
+            return false;
+        }
+    }
+    if (!validate_document(copy, error, error_cap)) {
+        cJSON_Delete(copy);
+        return false;
+    }
+    if (out_doc) {
+        *out_doc = copy;
+    } else {
+        cJSON_Delete(copy);
+    }
+    if (out_migrated) {
+        *out_migrated = original_version != GAME_SAVE_DOC_VERSION;
+    }
+    return true;
+}
+
 static bool save_internal(char *error, int error_cap) {
+    const int64_t old_seq = s_save_seq;
     int64_t wall = 0;
     cJSON *root = build_root(true, &wall);
     if (!root) {
         gsj_set_error(error, error_cap, "failed to build save document");
+        return false;
+    }
+    if (!validate_document(root, error, error_cap)) {
+        s_save_seq = old_seq;
+        cJSON_Delete(root);
         return false;
     }
     char *flat = cJSON_PrintUnformatted(root);
@@ -386,8 +509,7 @@ static bool doc_is_newer(const cJSON *doc) {
         return true;
     }
     const cJSON *svj = gsj_object_item(doc, "save_version");
-    const int save_version = cJSON_IsNumber(svj) ? (int)svj->valuedouble : GAME_SAVE_DOC_VERSION;
-    if (save_version > GAME_SAVE_DOC_VERSION) {
+    if (cJSON_IsNumber(svj) && svj->valuedouble > (double)GAME_SAVE_DOC_VERSION) {
         return true;
     }
     const cJSON *features = gsj_object_item(doc, "features");
@@ -483,19 +605,22 @@ static void load_from_doc(const cJSON *doc, game_save_load_result_t *result) {
 static bool try_recover_from_backup(game_save_load_result_t *result, const char *reason, char *err, int cap) {
     char *baktext = NULL;
     cJSON *bakdoc = NULL;
+    cJSON *prepared = NULL;
     if (game_storage_read_backup(GAME_SAVE_AUTOSAVE_SLOT, &baktext, err, cap)) {
         char *bakdec = transform_decode(baktext, err, cap);
         free(baktext);
         bakdoc = bakdec ? cJSON_Parse(bakdec) : NULL;
         free(bakdec);
     }
-    if (!(bakdoc && cJSON_IsObject(bakdoc) && !doc_is_newer(bakdoc))) {
+    if (!(bakdoc && cJSON_IsObject(bakdoc) && !doc_is_newer(bakdoc) &&
+          prepare_document_for_load(bakdoc, &prepared, NULL, err, cap))) {
         if (bakdoc) {
             cJSON_Delete(bakdoc);
         }
         return false;
     }
-    load_from_doc(bakdoc, result);
+    load_from_doc(prepared, result);
+    cJSON_Delete(prepared);
     cJSON_Delete(bakdoc);
     s_autosave_paused = false;
     result->status = GAME_SAVE_LOAD_RECOVERED_BAK;
@@ -566,15 +691,23 @@ void game_save_load(game_save_load_result_t *result) {
             s_last_save_mono = mono_now();
             return;
         }
-        /* LOADED. */
-        load_from_doc(doc, result);
-        cJSON_Delete(doc);
-        s_autosave_paused = false;
-        result->status = GAME_SAVE_LOAD_LOADED;
-        set_message(result, "loaded");
-        (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err); /* last-known-good */
-        s_last_save_mono = mono_now();
-        return;
+        cJSON *prepared = NULL;
+        bool migrated = false;
+        if (prepare_document_for_load(doc, &prepared, &migrated, err, (int)sizeof err)) {
+            /* LOADED. */
+            load_from_doc(prepared, result);
+            cJSON_Delete(prepared);
+            cJSON_Delete(doc);
+            s_autosave_paused = false;
+            result->status = GAME_SAVE_LOAD_LOADED;
+            set_message(result, "loaded");
+            (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err); /* last-known-good */
+            if (migrated) {
+                game_save_mark_dirty(); /* persist the current envelope version after debounce */
+            }
+            s_last_save_mono = mono_now();
+            return;
+        }
     }
     if (doc) {
         cJSON_Delete(doc);
@@ -602,6 +735,27 @@ void game_save_register_fragment(const GameSaveFragment *fragment) {
         return;
     }
     s_fragments[s_fragment_count++] = fragment;
+}
+
+void game_save_set_document_migrations(const GameSaveDocumentMigrateFn *steps, int step_count) {
+    s_document_migrations = steps;
+    s_document_migration_count = (steps && step_count > 0) ? step_count : 0;
+}
+
+void game_save_set_document_validator(GameSaveDocumentValidateFn validator) {
+    s_document_validator = validator;
+}
+
+bool game_save_validate_current(char *error, int error_cap) {
+    int64_t wall = 0;
+    cJSON *root = build_root(false, &wall);
+    if (!root) {
+        gsj_set_error(error, error_cap, "failed to build validation document");
+        return false;
+    }
+    bool valid = validate_document(root, error, error_cap);
+    cJSON_Delete(root);
+    return valid;
 }
 
 /* ---- registry read-access for the DevAPI dispatch. Additive, read-only,
@@ -788,10 +942,21 @@ bool game_save_import_string(const char *text, char *error, int error_cap) {
         gsj_set_error(error, error_cap, "import has no features"); /* state untouched */
         return false;
     }
+    cJSON *prepared = NULL;
+    if (doc_is_newer(doc)) {
+        cJSON_Delete(doc);
+        gsj_set_error(error, error_cap, "import is newer than this build");
+        return false;
+    }
+    if (!prepare_document_for_load(doc, &prepared, NULL, error, error_cap)) {
+        cJSON_Delete(doc);
+        return false; /* staged cross-fragment state was never published */
+    }
     const int64_t old_seq = s_save_seq;
     game_save_load_result_t r;
     memset(&r, 0, sizeof r);
-    load_from_doc(doc, &r);
+    load_from_doc(prepared, &r);
+    cJSON_Delete(prepared);
     cJSON_Delete(doc);
     if (s_save_seq < old_seq) {
         s_save_seq = old_seq; /* never rewind the counter on import */

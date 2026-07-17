@@ -44,8 +44,6 @@ set(GAME_PACK_DIR "${CMAKE_BINARY_DIR}/pack")
 set(GAME_ASSETS_DIR "${GAME_OUTPUT_DIR}/assets")
 set(GAME_SOURCE_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/generated")
 
-include(cmake/GameAssets.cmake)
-
 # --- game executable (the conductor + systems) ---
 add_executable(${GAME_TARGET}
     src/main.c
@@ -61,21 +59,20 @@ add_executable(${GAME_TARGET}
     src/render/capture.c
     src/systems/sys_move.c
     src/features/settings/settings_screen.c
-    "${ITEMS_CORE_SRC}/items_catalog.c"        # И2a: catalog-lookup over the codegen tables below (T0337 M1: in-place module)
-    "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.c" # И2a: const item/container tables (content codegen)
     "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c" # И3a: const progression track/curve tables (content codegen)
     src/game_format.c                                # И3b: L0 int64-abbrev formatter
     "${PLATFORM_SDK_SRC}/platform_sdk.c"             # T0339: target/sdk identity + policy capabilities
     src/features/resource_panel/resource_panel.c     # И3b: generic counter/bar widget (zero feature headers)
     src/ui/demo_hud.c                                # И3b: game composition (resource_panel over items/progression)
 )
-if(NOT EMSCRIPTEN)
-    add_dependencies(${GAME_TARGET} game_asset_packs)
-endif()
 # Game-state provisioning is always on (lead decision 2026-07-07: "a game without
 # state is impossible"); the former on/off CMake axis is gone (И2-0).
 
 include(cmake/GameCodegen.cmake)
+include(cmake/GameAssets.cmake)
+if(NOT EMSCRIPTEN)
+    add_dependencies(${GAME_TARGET} game_asset_packs)
+endif()
 
 include(cmake/GamePlatform.cmake)
 

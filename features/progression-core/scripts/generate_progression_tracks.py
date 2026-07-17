@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Generate const C progression-track tables from the progression content catalog.
 
-Content-codegen sibling of features/items-core/scripts/generate_items_catalog.py (same helpers,
-same write_if_changed/SystemExit discipline) -- this one bakes each track's
+This generator bakes each track's
 `curve` PRESET into a compile-time `int64_t cost[]` table so the runtime
 never runs float/formula math for level-ups.
 
     node ai_studio/dev_environment/python_run.mjs features/progression-core/scripts/generate_progression_tracks.py \
         --catalog content/progression.json \
-        --items content/items.json \
+        --items-snapshot build/items/items.snapshot.json \
         --state-schema state/progression.schema.json \
         --out-dir <dir>
 
@@ -118,17 +117,25 @@ def validate_state_schema(doc: Any) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Validation (lightweight generator sanity net, mirrors generate_items_catalog.py)
+# Validation (lightweight generator sanity net)
 # ---------------------------------------------------------------------------
 
 
 def index_currency_items(items_doc: dict[str, Any]) -> dict[str, bool]:
-    """def_id -> is_currency (has a `currency` block), from content/items.json."""
+    """Return def_id -> is_currency from a validated Items Snapshot."""
+    require(
+        isinstance(items_doc, dict) and items_doc.get("schema") == "items.snapshot.v1",
+        "items snapshot schema must be 'items.snapshot.v1'",
+    )
+    items = items_doc.get("items")
+    require(isinstance(items, list), "items snapshot 'items' must be an array")
     index: dict[str, bool] = {}
-    for item in items_doc.get("items", []):
+    for item in items:
+        require(isinstance(item, dict), f"items snapshot entry must be an object: {item!r}")
         item_id = item.get("id")
-        if isinstance(item_id, str) and item_id:
-            index[item_id] = item.get("currency") is not None
+        require(isinstance(item_id, str) and item_id, f"items snapshot entry has invalid id: {item_id!r}")
+        require(item_id not in index, f"items snapshot contains duplicate id {item_id!r}")
+        index[item_id] = item.get("currency") is not None
     return index
 
 
@@ -333,7 +340,11 @@ def write_if_changed(path: Path, text: str) -> bool:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog", required=True, help="Path to content/progression.json.")
-    parser.add_argument("--items", required=True, help="Path to content/items.json (currency_def cross-check).")
+    parser.add_argument(
+        "--items-snapshot",
+        required=True,
+        help="Path to items.snapshot.v1 JSON (currency_def cross-check).",
+    )
     parser.add_argument(
         "--state-schema",
         required=True,
@@ -343,7 +354,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     catalog_path = Path(args.catalog).resolve()
-    items_path = Path(args.items).resolve()
+    items_path = Path(args.items_snapshot).resolve()
     state_schema_path = Path(args.state_schema).resolve()
     out_dir = Path(args.out_dir).resolve()
 

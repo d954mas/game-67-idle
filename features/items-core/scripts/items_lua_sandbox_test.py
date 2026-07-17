@@ -10,6 +10,7 @@ import unittest
 
 SCRIPT = Path(__file__).with_name("items_lua_sandbox.py")
 FIXTURE_ROOT = Path(__file__).parents[1] / "tests" / "fixtures" / "lua_sandbox"
+TEMPLATE_ROOT = Path(__file__).parents[3] / "templates" / "template"
 SPEC = importlib.util.spec_from_file_location("items_lua_sandbox", SCRIPT)
 SANDBOX = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -102,6 +103,98 @@ class ItemsLuaSandboxTests(unittest.TestCase):
             "game.gold", "game.iron_sword", "game.levelled_sword",
         ])
         self.assertEqual(payload["items"][2]["levels"]["rows"][2]["attack"], 20)
+
+    def test_template_lua_reproduces_six_catalog_definitions_without_containers(self):
+        result = subprocess.run(
+            [
+                sys.executable, str(SCRIPT), "evaluate", "--root", str(TEMPLATE_ROOT),
+                "--manifest", str(TEMPLATE_ROOT / "items.lua.json"),
+            ],
+            text=True, capture_output=True, encoding="utf-8", timeout=10,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["kinds"], ["consumable", "currency", "material", "weapon"])
+        self.assertEqual(payload["items"], [
+            {
+                "authoring_mode": "none", "base_value": 0,
+                "created": "2026-07-07",
+                "currency": {"cap": 100, "hud": "counter"},
+                "icon": "icons/energy", "id": "tmpl.energy",
+                "kind": "currency", "name": "Energy", "stack": 0,
+            },
+            {
+                "authoring_mode": "none", "base_value": 1,
+                "created": "2026-07-07",
+                "currency": {"cap": 0, "hud": "counter"},
+                "icon": "icons/gold", "id": "tmpl.gold",
+                "kind": "currency", "name": "Gold", "stack": 0,
+            },
+            {
+                "acquire": {"cost": {"__studio_kind": "free"}},
+                "authoring_mode": "none", "base_value": 10,
+                "created": "2026-07-07", "icon": "icons/potion",
+                "id": "tmpl.potion", "kind": "consumable",
+                "name": "Healing Potion", "stack": 99, "tags": ["heal"],
+                "use": {"effect_id": "heal", "params": {"amount": 25}},
+            },
+            {
+                "acquire": {"cost": {
+                    "__studio_kind": "costs",
+                    "entries": [
+                        {
+                            "__studio_kind": "cost", "count": 10,
+                            "item": {"__studio_kind": "item_ref", "id": "tmpl.gold"},
+                        },
+                        {
+                            "__studio_kind": "cost", "count": 2,
+                            "item": {"__studio_kind": "item_ref", "id": "tmpl.wood"},
+                        },
+                    ],
+                }},
+                "authoring_mode": "table", "base_value": 50,
+                "created": "2026-07-07", "equip": {"slot": "weapon"},
+                "icon": "icons/sword", "id": "tmpl.sword", "kind": "weapon",
+                "levels": {
+                    "mode": "table",
+                    "provenance": [
+                        {}, {"cost_to_reach": "table"}, {"cost_to_reach": "table"},
+                    ],
+                    "rows": [
+                        {},
+                        {"cost_to_reach": {
+                            "__studio_kind": "costs",
+                            "entries": [
+                                {
+                                    "__studio_kind": "cost", "count": 5,
+                                    "item": {"__studio_kind": "item_ref", "id": "tmpl.gold"},
+                                },
+                                {
+                                    "__studio_kind": "cost", "count": 1,
+                                    "item": {"__studio_kind": "item_ref", "id": "tmpl.wood"},
+                                },
+                            ],
+                        }},
+                        {"cost_to_reach": {"__studio_kind": "free"}},
+                    ],
+                },
+                "name": "Iron Sword", "stack": 1, "tags": ["melee"],
+            },
+            {
+                "authoring_mode": "none", "base_value": 2,
+                "created": "2026-07-07", "icon": "icons/wood",
+                "id": "tmpl.wood", "kind": "material", "name": "Wood",
+                "stack": 999,
+            },
+            {
+                "authoring_mode": "none", "base_value": 0,
+                "created": "2026-07-07",
+                "currency": {"cap": 0, "hud": "bar"},
+                "icon": "icons/xp", "id": "tmpl.xp",
+                "kind": "currency", "name": "Experience", "stack": 0,
+            },
+        ])
 
     def test_item_definition_sources_are_honest_and_stable(self):
         result = self.evaluate({"game.items": '''-- heading
@@ -301,6 +394,13 @@ items.extend_schema({ level_row={
 
         unapproved = self.evaluate({"game.a": '-- missing below\nrequire("outside.module")'}, ["game.a"])
         self.assert_error(unapproved, "module.not_approved", "game/a.lua", 2)
+
+    def test_manifest_rejects_builtin_module_collisions_and_unknown_entries(self):
+        reserved = self.evaluate({"studio.items": "return {}"}, ["studio.items"])
+        self.assert_error(reserved, "manifest.reserved_module", "items.lua.json", 1)
+
+        unknown = self.evaluate({"game.items": "return {}"}, ["game.missing"])
+        self.assert_error(unknown, "manifest.entry", "items.lua.json", 1)
 
     def test_unsafe_globals_and_mutable_globals_are_unavailable(self):
         cases = {

@@ -298,6 +298,36 @@ void test_parse_enum_value(void) {
     cJSON_Delete(out_of_range);
 }
 
+/* ---- exact u32 numeric wire (all uint32 values fit exactly in JSON double) ---- */
+
+void test_read_u32_exact_bounds(void) {
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "id", 4294967295.0);
+    uint32_t out = 0;
+    TEST_ASSERT_TRUE(gsj_read_u32(root, "id", 0, UINT32_MAX, &out, NULL, 0));
+    TEST_ASSERT_EQUAL_UINT32(UINT32_MAX, out);
+    cJSON_Delete(root);
+}
+
+void test_parse_u32_rejects_ambiguous_values(void) {
+    uint32_t out = 7;
+    cJSON *fractional = cJSON_CreateNumber(1.5);
+    cJSON *negative = cJSON_CreateNumber(-1);
+    cJSON *overflow = cJSON_CreateNumber(4294967296.0);
+    cJSON *string = cJSON_CreateString("42");
+
+    TEST_ASSERT_FALSE(gsj_parse_u32_value(fractional, 0, UINT32_MAX, &out, NULL, 0));
+    TEST_ASSERT_FALSE(gsj_parse_u32_value(negative, 0, UINT32_MAX, &out, NULL, 0));
+    TEST_ASSERT_FALSE(gsj_parse_u32_value(overflow, 0, UINT32_MAX, &out, NULL, 0));
+    TEST_ASSERT_FALSE(gsj_parse_u32_value(string, 0, UINT32_MAX, &out, NULL, 0));
+    TEST_ASSERT_EQUAL_UINT32(7, out);
+
+    cJSON_Delete(fractional);
+    cJSON_Delete(negative);
+    cJSON_Delete(overflow);
+    cJSON_Delete(string);
+}
+
 /* ---- gsj_read_i64 / gsj_parse_i64_value: the risky corner ---- */
 
 void test_read_i64_absent_key(void) {
@@ -486,6 +516,9 @@ int main(void) {
 
     RUN_TEST(test_parse_int_value);
     RUN_TEST(test_parse_enum_value);
+
+    RUN_TEST(test_read_u32_exact_bounds);
+    RUN_TEST(test_parse_u32_rejects_ambiguous_values);
 
     RUN_TEST(test_read_i64_absent_key);
     RUN_TEST(test_read_i64_wrong_type);

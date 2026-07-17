@@ -11,40 +11,59 @@ endif()
 set(Python3_EXECUTABLE "${STUDIO_PYTHON}" CACHE FILEPATH "Studio root venv Python" FORCE)
 find_package(Python3 3.12 EXACT COMPONENTS Interpreter REQUIRED)
 
-# И2a: items CONTENT codegen (SECOND codegen, deliberately separate from the
-# game-state generator below). Compile-time const
-# tables from content/items.json, referenced by the unconditional add_executable
-# above (items_catalog.c / items_catalog.gen.c) -- must run after find_package(Python3)
-# (code-review H1/#10); textual order vs. that add_executable use does not matter to
-# CMake (OUTPUT<->SOURCES path matching is order-independent within a directory).
-set(ITEMS_CATALOG_JSON "${CMAKE_CURRENT_SOURCE_DIR}/content/items.json")
-set(ITEMS_CATALOG_FIELDS_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/content/item_fields.schema.json")
-set(ITEMS_CATALOG_GENERATOR "${ITEMS_CORE_SCRIPTS}/generate_items_catalog.py")
-set(ITEMS_CATALOG_GENERATED_HEADER "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.h")
-set(ITEMS_CATALOG_GENERATED_SOURCE "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.c")
+# Production Items export. Lua is evaluated once through the semantic CLI,
+# which owns receipt validation, Snapshot normalization, and compact-package
+# encoding. The generated files stay build-local until the pack step consumes
+# the blob.
+set(ITEMS_CATALOG_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/items.lua.json")
+file(GLOB ITEMS_CATALOG_LUA_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/design/items/*.lua")
+set(ITEMS_CATALOG_BUILD_DIR "${CMAKE_BINARY_DIR}/generated/items-catalog")
+set(ITEMS_CATALOG_SNAPSHOT "${ITEMS_CATALOG_BUILD_DIR}/items.snapshot.json")
+set(ITEMS_CATALOG_PACKAGE "${ITEMS_CATALOG_BUILD_DIR}/items.catalog")
+set(ITEMS_CATALOG_ABI_HEADER "${ITEMS_CATALOG_BUILD_DIR}/items_catalog_abi.gen.h")
+set(ITEMS_CATALOG_BUILD_SCRIPTS
+    "${ITEMS_CORE_SCRIPTS}/items_cli.py"
+    "${ITEMS_CORE_SCRIPTS}/items_lua_edit.py"
+    "${ITEMS_CORE_SCRIPTS}/items_lua_sandbox.py"
+    "${ITEMS_CORE_SCRIPTS}/items_receipt.py"
+    "${ITEMS_CORE_SCRIPTS}/items_runtime_package.py"
+    "${ITEMS_CORE_SCRIPTS}/items_snapshot.py"
+    "${ITEMS_CORE_SCRIPTS}/items_c_identifiers.py"
+    "${ITEMS_CORE_SCRIPTS}/generate_items_api_proof.py")
 add_custom_command(
     OUTPUT
-        "${ITEMS_CATALOG_GENERATED_HEADER}"
-        "${ITEMS_CATALOG_GENERATED_SOURCE}"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_SOURCE_GENERATED_DIR}"
-    COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CATALOG_GENERATOR}"
-        --catalog "${ITEMS_CATALOG_JSON}"
-        --schema "${ITEMS_CATALOG_FIELDS_SCHEMA}"
-        --out-dir "${GAME_SOURCE_GENERATED_DIR}"
+        "${ITEMS_CATALOG_SNAPSHOT}"
+        "${ITEMS_CATALOG_PACKAGE}"
+        "${ITEMS_CATALOG_ABI_HEADER}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${ITEMS_CATALOG_BUILD_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/items_cli.py"
+        --project-root "${CMAKE_CURRENT_SOURCE_DIR}"
+        build --out-dir "${ITEMS_CATALOG_BUILD_DIR}"
     DEPENDS
-        "${ITEMS_CATALOG_JSON}"
-        "${ITEMS_CATALOG_FIELDS_SCHEMA}"
-        "${ITEMS_CATALOG_GENERATOR}"
+        "${ITEMS_CATALOG_MANIFEST}"
+        ${ITEMS_CATALOG_LUA_SOURCES}
+        "${CMAKE_CURRENT_SOURCE_DIR}/content/items.lock.json"
+        "${CMAKE_CURRENT_SOURCE_DIR}/state/items.schema.json"
+        ${ITEMS_CATALOG_BUILD_SCRIPTS}
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMENT "Generating items content catalog (const C tables)"
-    VERBATIM
-)
+    COMMENT "Generating Items Snapshot and compact runtime package from Lua"
+    VERBATIM)
+add_custom_target(items_catalog_gen DEPENDS
+    "${ITEMS_CATALOG_SNAPSHOT}"
+    "${ITEMS_CATALOG_PACKAGE}"
+    "${ITEMS_CATALOG_ABI_HEADER}")
+add_dependencies(${GAME_TARGET} items_catalog_gen)
+target_sources(${GAME_TARGET} PRIVATE
+    "${ITEMS_CORE_SRC}/items_runtime_package.c"
+    "${ITEMS_CORE_SRC}/items_runtime_resource.c")
+target_include_directories(${GAME_TARGET} PRIVATE "${ITEMS_CATALOG_BUILD_DIR}")
+target_compile_definitions(${GAME_TARGET} PRIVATE ITEMS_RUNTIME_PACKAGE_ENABLED=1)
 
-# И3a: progression tracks CONTENT codegen (mirrors the items content-codegen
-# block above -- deliberately a separate content-codegen invocation, not the
-# game-state generator below). Bakes content/progression.json's curve presets
-# into compile-time const int64 cost tables; --items cross-checks currency_def
-# against the items catalog (ITEMS_CATALOG_JSON, defined just above).
+# И3a: progression tracks content codegen is separate from the game-state
+# generator below. It bakes content/progression.json's curve presets
+# into compile-time const int64 cost tables; --items-snapshot cross-checks
+# currency_def against the canonical Items Snapshot generated above.
 set(PROG_TRACKS_JSON "${CMAKE_CURRENT_SOURCE_DIR}/content/progression.json")
 set(PROG_TRACKS_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/progression.schema.json")
 set(PROG_TRACKS_GENERATOR "${PROGRESSION_CORE_SCRIPTS}/generate_progression_tracks.py")
@@ -54,10 +73,10 @@ add_custom_command(
         "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_SOURCE_GENERATED_DIR}"
     COMMAND "${Python3_EXECUTABLE}" "${PROG_TRACKS_GENERATOR}"
-        --catalog "${PROG_TRACKS_JSON}" --items "${ITEMS_CATALOG_JSON}"
+        --catalog "${PROG_TRACKS_JSON}" --items-snapshot "${ITEMS_CATALOG_SNAPSHOT}"
         --state-schema "${PROG_TRACKS_STATE_SCHEMA}"
         --out-dir "${GAME_SOURCE_GENERATED_DIR}"
-    DEPENDS "${PROG_TRACKS_JSON}" "${ITEMS_CATALOG_JSON}" "${PROG_TRACKS_STATE_SCHEMA}" "${PROG_TRACKS_GENERATOR}"
+    DEPENDS "${PROG_TRACKS_JSON}" "${ITEMS_CATALOG_SNAPSHOT}" "${PROG_TRACKS_STATE_SCHEMA}" "${PROG_TRACKS_GENERATOR}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     COMMENT "Generating progression tracks catalog (const int64 curve tables)"
     VERBATIM)
@@ -169,13 +188,13 @@ add_custom_command(
 target_sources(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_SOURCE}"          # includes game_state_fragment descriptor
     "${GAME_STATE_GENERATED_EVENTS_SOURCE}"   # typed event structs/emit/descriptors
+    src/game_items.c                           # game-owned container refs and seeding
     "${SETTINGS_STATE_GENERATED_SOURCE}"      # generated settings fragment state
     src/features/settings/settings.c          # hand-written settings logic
     "${ITEMS_STATE_GENERATED_SOURCE}"         # generated items fragment state
     "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"  # non-empty items.txn event
-    src/features/items/items_bootstrap.c       # game-owned on_new_game hook
     "${ITEMS_CORE_SRC}/items_reconcile.c"    # T0337 M1: reconcile/seq-reseed split out of items_bootstrap.c (in-place module)
-    "${ITEMS_CORE_SRC}/items_containers.c"   # И2b: ownership/containers/purse (add/remove/move/count/can_afford; T0337 M1: in-place module)
+    "${ITEMS_CORE_SRC}/items_containers.c"   # dynamic persistent/ephemeral containers, entries, and bounded inspection
     "${PROGRESSION_STATE_GENERATED_SOURCE}"        # generated progression fragment state
     "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}" # non-empty progression.levelup event
     "${PROGRESSION_CORE_SRC}/progression.c"   # queries/mutations/update over state, items, and tracks
@@ -188,7 +207,7 @@ target_compile_definitions(${GAME_TARGET} PRIVATE
     GAME_SAVE_AUTOSAVE_SLOT="autosave"
     GAME_SAVE_DEBOUNCE_MS=2000
     GAME_SAVE_MAX_INTERVAL_MS=30000
-    GAME_SAVE_DOC_VERSION=1
+    GAME_SAVE_DOC_VERSION=2
 )
 target_include_directories(${GAME_TARGET} PRIVATE "${GAME_STATE_GENERATED_DIR}")
 if(GAME_DEVAPI_ENABLED)
@@ -196,6 +215,7 @@ if(GAME_DEVAPI_ENABLED)
     # fragment registry), no longer a generated per-fragment source.
     target_sources(${GAME_TARGET} PRIVATE
         src/iteration_proof_devapi.c
+        src/game_items_devapi.c
         src/game_save_devapi.c
         "${GAME_EVENTS_SRC}/game_events_devapi.c" # event-log tail ring + game.events.tail
         "${GAME_EVENTS_SRC}/game_event_render.c") # descriptor-driven JSON renderer

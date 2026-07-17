@@ -43,6 +43,8 @@ void game_state_init_defaults(GameState *state) {
     (void)gsj_copy_text(state->test_label_text, sizeof(state->test_label_text), GAME_STATE_TEST_LABEL_TEXT_DEFAULT);
     (void)gsj_copy_text(state->test_button_text, sizeof(state->test_button_text), GAME_STATE_TEST_BUTTON_TEXT_DEFAULT);
     state->tutorial_done = GAME_STATE_TUTORIAL_DONE_DEFAULT;
+    state->inventory_container_id = GAME_STATE_INVENTORY_CONTAINER_ID_DEFAULT;
+    state->wallet_container_id = GAME_STATE_WALLET_CONTAINER_ID_DEFAULT;
 }
 
 bool game_state_validate(const GameState *state, char *error, int error_cap) {
@@ -69,6 +71,14 @@ bool game_state_validate(const GameState *state, char *error, int error_cap) {
     }
     if (state->test_button_text[0] == '\0') {
         gsj_set_error(error, error_cap, "test_button_text out of range");
+        return false;
+    }
+    if (state->inventory_container_id < GAME_STATE_INVENTORY_CONTAINER_ID_MIN || state->inventory_container_id > GAME_STATE_INVENTORY_CONTAINER_ID_MAX) {
+        gsj_set_error(error, error_cap, "inventory_container_id out of range");
+        return false;
+    }
+    if (state->wallet_container_id < GAME_STATE_WALLET_CONTAINER_ID_MIN || state->wallet_container_id > GAME_STATE_WALLET_CONTAINER_ID_MAX) {
+        gsj_set_error(error, error_cap, "wallet_container_id out of range");
         return false;
     }
     return true;
@@ -104,6 +114,8 @@ cJSON *game_state_to_json(const GameState *state) {
     cJSON_AddStringToObject(root, "test_button_text", state->test_button_text);
     cJSON *tutorial = cJSON_AddObjectToObject(root, "tutorial");
     cJSON_AddBoolToObject(tutorial, "done", state->tutorial_done);
+    cJSON_AddNumberToObject(root, "inventory_container_id", (double)state->inventory_container_id);
+    cJSON_AddNumberToObject(root, "wallet_container_id", (double)state->wallet_container_id);
     return root;
 }
 
@@ -129,6 +141,12 @@ cJSON *game_state_get_path_json(const GameState *state, const char *path, char *
     }
     if (strcmp(path, "tutorial.done") == 0) {
         return cJSON_CreateBool(state->tutorial_done);
+    }
+    if (strcmp(path, "inventory_container_id") == 0) {
+        return cJSON_CreateNumber((double)state->inventory_container_id);
+    }
+    if (strcmp(path, "wallet_container_id") == 0) {
+        return cJSON_CreateNumber((double)state->wallet_container_id);
     }
     gsj_set_error(error, error_cap, "unknown state path");
     return NULL;
@@ -170,6 +188,14 @@ bool game_state_set_path_json(GameState *state, const char *path, const cJSON *v
         state->tutorial_done = cJSON_IsTrue(value);
         return true;
     }
+    if (strcmp(path, "inventory_container_id") == 0) {
+        if (!gsj_parse_u32_value(value, GAME_STATE_INVENTORY_CONTAINER_ID_MIN, GAME_STATE_INVENTORY_CONTAINER_ID_MAX, &state->inventory_container_id, error, error_cap)) { return false; }
+        return true;
+    }
+    if (strcmp(path, "wallet_container_id") == 0) {
+        if (!gsj_parse_u32_value(value, GAME_STATE_WALLET_CONTAINER_ID_MIN, GAME_STATE_WALLET_CONTAINER_ID_MAX, &state->wallet_container_id, error, error_cap)) { return false; }
+        return true;
+    }
     gsj_set_error(error, error_cap, "unknown state path");
     return false;
 }
@@ -198,6 +224,8 @@ bool game_state_from_json(GameState *state, const cJSON *json, char *error, int 
     if (!gsj_read_string(json, "test_button_text", (&next)->test_button_text, sizeof((&next)->test_button_text), error, error_cap)) { return false; }
     const cJSON *tutorial = gsj_object_item(json, "tutorial");
     if (!gsj_read_bool(tutorial, "done", &(&next)->tutorial_done, error, error_cap)) { return false; }
+    if (!gsj_read_u32(json, "inventory_container_id", GAME_STATE_INVENTORY_CONTAINER_ID_MIN, GAME_STATE_INVENTORY_CONTAINER_ID_MAX, &(&next)->inventory_container_id, error, error_cap)) { return false; }
+    if (!gsj_read_u32(json, "wallet_container_id", GAME_STATE_WALLET_CONTAINER_ID_MIN, GAME_STATE_WALLET_CONTAINER_ID_MAX, &(&next)->wallet_container_id, error, error_cap)) { return false; }
     if (!game_state_validate(&next, error, error_cap)) { return false; }
     *state = next;
     return true;
@@ -210,15 +238,18 @@ static cJSON *frag_get_path(const char *s, char *e, int c)                 { ret
 static bool   frag_set_path(const char *s, const cJSON *v, char *e, int c) { return game_state_set_path_json(&game_state, s, v, e, c); }
 static cJSON *frag_schema(void)                                            { return game_state_schema_json(); }
 
+extern void game_on_new_game(void);
+extern void game_reconcile(void);
+
 const GameSaveFragment game_state_fragment = {
     .id            = GAME_STATE_FRAGMENT_ID,
     .version       = GAME_STATE_VERSION,
     .steps         = NULL,
     .reset         = frag_reset,
-    .on_new_game   = NULL,
+    .on_new_game   = game_on_new_game,
     .to_json       = frag_to_json,
     .from_json     = frag_from_json,
-    .reconcile     = NULL,
+    .reconcile     = game_reconcile,
     .get_path_json = frag_get_path,
     .set_path_json = frag_set_path,
     .schema_json   = frag_schema,

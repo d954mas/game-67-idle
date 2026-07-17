@@ -57,10 +57,30 @@ item_core_t items_core(item_def_ref_t ref) {
     return items_game_internal_core(ref._index);
 }
 
+const char *items_def_id(item_def_ref_t ref) {
+    NT_ASSERT(ref._index < items_game_internal_item_count() && "items_def_id: invalid item ref");
+    return items_game_internal_def_id(ref._index);
+}
+
 item_transition_t items_acquire_transition(item_def_ref_t ref) {
     NT_ASSERT(ref._index < items_game_internal_item_count() &&
               "items_acquire_transition: invalid item ref");
     return items_game_internal_acquire(ref._index);
+}
+
+uint32_t items_level_count(item_def_ref_t ref) {
+    NT_ASSERT(ref._index < items_game_internal_item_count() && "items_level_count: invalid item ref");
+    return items_game_internal_level_count(ref._index);
+}
+
+bool items_level_exists(item_def_ref_t ref, uint32_t level) {
+    return ref._index < items_game_internal_item_count() && level > 0U &&
+        level <= items_game_internal_level_count(ref._index);
+}
+
+item_transition_t items_level_transition(item_def_ref_t ref, uint32_t level) {
+    NT_ASSERT(items_level_exists(ref, level) && "items_level_transition: invalid item or level");
+    return items_game_internal_level_transition(ref._index, level);
 }
 
 uint32_t items_cost_count(item_cost_ref_t cost) {

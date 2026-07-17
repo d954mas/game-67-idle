@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import json
 import math
@@ -27,6 +28,7 @@ DEFAULT_CHART_POINTS = 200
 DEFAULT_REQUIREMENT_RESULTS = 1_000
 DEFAULT_DIFF_CHANGES = 1_000
 MAX_EXACT_INTEGER = 9_007_199_254_740_991
+UINT32_MAX = (1 << 32) - 1
 FIELD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 ITEM_ID_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 MEMBER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -35,6 +37,10 @@ PROVENANCE_BY_MODE = {
     "table": {"table"},
     "generate": {"generate", "override"},
     "columns": {"columns", "override"},
+}
+ITEM_KEYS = {
+    "id", "created", "name", "icon", "kind", "tags", "base_value", "stack",
+    "currency", "use", "equip", "authoring_mode", "levels", "acquire",
 }
 
 
@@ -85,6 +91,25 @@ def snapshot_json_bytes(snapshot: dict[str, Any]) -> bytes:
     if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
         _fail("snapshot.schema", f"expected {SNAPSHOT_SCHEMA}")
     return _json_bytes(snapshot)
+
+
+def snapshot_content_hash(snapshot: dict[str, Any]) -> str:
+    """Hash the canonical authoring payload represented by a Snapshot."""
+    if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
+        _fail("snapshot.schema", f"expected {SNAPSHOT_SCHEMA}")
+    keys = ("schema", "fields", "items", "requirements")
+    missing = [key for key in keys if key not in snapshot]
+    if missing:
+        _fail("snapshot.content_hash", f"Snapshot hash input is missing {missing[0]}")
+    return "sha256:" + hashlib.sha256(_json_bytes({key: snapshot[key] for key in keys})).hexdigest()
+
+
+def validate_snapshot_content_hash(snapshot: dict[str, Any]) -> str:
+    """Require the stored hash to match the canonical Snapshot authoring payload."""
+    expected = snapshot_content_hash(snapshot)
+    if snapshot.get("content_hash") != expected:
+        _fail("snapshot.content_hash", "Snapshot content_hash does not match its canonical payload")
+    return expected
 
 
 def _references(value: Any) -> set[str]:
@@ -231,6 +256,97 @@ def _validate_typed_rows(items: list[dict[str, Any]], fields: list[dict[str, Any
                     _fail("snapshot.field_type", f"field {member} requires i64", f"{path}.{member}")
                 if value < field["min"] or value > field["max"]:
                     _fail("snapshot.field_range", f"field {member} is outside declared range", f"{path}.{member}")
+
+
+def _validate_item_contract(items: list[dict[str, Any]]) -> None:
+    for item_index, item in enumerate(items):
+        path = f"$.items[{item_index}]"
+        unknown = sorted(set(item) - ITEM_KEYS)
+        if unknown:
+            _fail("snapshot.item_key", f"unknown item field: {unknown[0]}", f"{path}.{unknown[0]}")
+
+        created = item.get("created")
+        if created is not None:
+            try:
+                valid_created = (
+                    isinstance(created, str)
+                    and len(created) == 10
+                    and datetime.date.fromisoformat(created).isoformat() == created
+                )
+            except ValueError:
+                valid_created = False
+            if not valid_created:
+                _fail("snapshot.created", "created must be a valid YYYY-MM-DD date", f"{path}.created")
+
+        for key in ("name", "icon", "kind"):
+            value = item.get(key)
+            if value is not None and (not isinstance(value, str) or not value):
+                _fail(f"snapshot.{key}", f"{key} must be a non-empty string", f"{path}.{key}")
+
+        tags = item.get("tags")
+        if tags is not None:
+            if (
+                not isinstance(tags, list)
+                or not all(isinstance(tag, str) and MEMBER_RE.fullmatch(tag) for tag in tags)
+                or len(tags) != len(set(tags))
+                or item.get("kind") in tags
+            ):
+                _fail(
+                    "snapshot.tags",
+                    "tags must be unique lowercase traits and cannot duplicate kind",
+                    f"{path}.tags",
+                )
+
+        base_value = item.get("base_value")
+        if base_value is not None and (
+            type(base_value) is not int or abs(base_value) > MAX_EXACT_INTEGER
+        ):
+            _fail("snapshot.base_value", "base_value must be an exact integer", f"{path}.base_value")
+
+        currency = item.get("currency")
+        stack = item.get("stack")
+        if item.get("kind") == "currency" and type(stack) is int and stack == 1:
+            _fail(
+                "snapshot.currency_storage",
+                "currency items require stack storage",
+                f"{path}.stack",
+            )
+        if currency is not None:
+            if (
+                not isinstance(currency, dict)
+                or set(currency) != {"hud", "cap"}
+                or not isinstance(currency.get("hud"), str)
+                or not currency["hud"]
+                or type(currency.get("cap")) is not int
+                or currency["cap"] < 0
+                or currency["cap"] > MAX_EXACT_INTEGER
+            ):
+                _fail("snapshot.currency", "currency requires non-empty hud and integer cap >= 0", f"{path}.currency")
+            if item.get("kind") != "currency":
+                _fail("snapshot.currency_kind", "currency block requires kind='currency'", f"{path}.currency")
+
+        equip = item.get("equip")
+        if equip is not None:
+            if (
+                not isinstance(equip, dict)
+                or set(equip) != {"slot"}
+                or not isinstance(equip.get("slot"), str)
+                or not equip["slot"]
+            ):
+                _fail("snapshot.equip", "equip requires one non-empty slot", f"{path}.equip")
+            if item.get("stack") != 1:
+                _fail("snapshot.equip", "equip requires unique stack=1 storage", f"{path}.equip")
+
+        use = item.get("use")
+        if use is not None and (
+            not isinstance(use, dict)
+            or not {"effect_id"}.issubset(use)
+            or set(use) - {"effect_id", "params"}
+            or not isinstance(use.get("effect_id"), str)
+            or not use["effect_id"]
+            or ("params" in use and not isinstance(use["params"], dict))
+        ):
+            _fail("snapshot.use", "use requires effect_id and optional params object", f"{path}.use")
 
 
 def _validate_level_provenance(items: list[dict[str, Any]]) -> None:
@@ -393,8 +509,8 @@ def _runtime_export_metadata(
             _fail("snapshot.duplicate_item", f"duplicate item id: {item_id}", f"$.items[{index}].id")
         item_ids.add(item_id)
         stack = item.get("stack")
-        if type(stack) is not int or stack < 0:
-            _fail("snapshot.stack", f"item {item_id} requires integer stack >= 0", f"$.items[{index}].stack")
+        if type(stack) is not int or stack < 0 or stack > UINT32_MAX:
+            _fail("snapshot.stack", f"item {item_id} requires uint32 stack", f"$.items[{index}].stack")
         levels = item.get("levels")
         if levels is None:
             level_count = 0
@@ -451,6 +567,7 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
         seen.add(item_id)
         items.append(item)
     items.sort(key=lambda item: item["id"])
+    _validate_item_contract(items)
     _validate_typed_rows(items, fields)
     _validate_level_provenance(items)
     runtime_export = _runtime_export_metadata(items, fields)
@@ -476,15 +593,8 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     for refs in dependents.values():
         refs.sort()
 
-    content_hash = "sha256:" + hashlib.sha256(_json_bytes({
-        "schema": SNAPSHOT_SCHEMA,
-        "fields": fields,
-        "items": items,
-        "requirements": requirements,
-    })).hexdigest()
     snapshot = {
         "schema": SNAPSHOT_SCHEMA,
-        "content_hash": content_hash,
         "fields": fields,
         "items": items,
         "requirements": requirements,
@@ -492,6 +602,7 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
         "dependencies": dependencies,
         "dependents": dependents,
     }
+    snapshot["content_hash"] = snapshot_content_hash(snapshot)
     if field_sources:
         snapshot["field_sources"] = field_sources
     if requirement_sources:

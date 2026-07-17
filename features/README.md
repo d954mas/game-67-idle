@@ -123,15 +123,14 @@ possibility, not a feature.
 - `game-state/`: schema-first generated GameState, save/load contract,
   migrations, and DevAPI state adapters. It is consumed in place by
   templates/games.
-- `items-core/` (`L1`): item/container/currency catalog lookup + ownership
+- `items-core/` (`L1`): typed compact item catalog + ownership
   model (`items_add`/`items_remove`/`items_move`/`items_count`/
-  `items_can_afford`/purse/unique instances) + content codegen
-  (`generate_items_catalog.py`) + the read-only op-layer CLI (`items_ops.py`,
-  `list`/`validate`/`schema`) + `items_ops_test.py`. In-place module, same
+  `items_can_afford`/purse/unique instances) + isolated Lua evaluation,
+  normalized Snapshot, compact runtime package, and focused semantic CLI. In-place module, same
   shape as `game-state/` (`../../features/items-core/` from any
   `templates/<x>` or `games/<id>`). The consuming template/game owns its
-  content (`content/items.json` +
-  `item_fields.schema.json` + `items.lock.json`), its state schema
+  Lua manifest/modules (`items.lua.json` + `design/items/*.lua`), release
+  history (`content/items.lock.json`), its state schema
   (`state/items.schema.json`), and a small game-owned "items corner"
   (`templates/template/src/features/items/`: `reason_tags.h` + the
   `items_bootstrap.c`'s `items_on_new_game` seed — see that folder's own
@@ -176,11 +175,11 @@ The game-owned portions of items and progression remain in the template:
 
 - **items** — game corner `templates/template/src/features/items/`
   (`reason_tags.h` + `items_bootstrap.c`'s `items_on_new_game` seed, plus its
-  own `README.md`) + content `templates/template/content/items.json`,
-  `item_fields.schema.json`, `items.lock.json` + state
+  own `README.md`) + catalog `templates/template/items.lua.json` and
+  `design/items/*.lua`, `content/items.lock.json` + state
   `templates/template/state/items.schema.json` + the template's own
-  content-coupled integration tests `templates/template/tests/test_items_catalog.c`,
-  `test_items_fragment.c` (+ `templates/template/tests/fixtures/items_*.json`).
+  package-backed integration tests `templates/template/tests/test_items_fragment.c`
+  and `test_template_composition.c` (+ focused Items fixtures).
 - **progression** — no game-side C corner at all (see
   `progression-core/README.md` "No game-owned C hooks") — just content
   `templates/template/content/progression.json` + state

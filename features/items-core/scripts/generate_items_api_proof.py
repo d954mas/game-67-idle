@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 from items_c_identifiers import is_c_member_name
+from items_xxh64 import xxh64
 
 
-MASK64 = (1 << 64) - 1
 DEF_ID_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 FIELD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 SUPPORTED_C_TYPES = {"int32_t", "uint32_t", "int64_t", "uint64_t", "float", "double"}
@@ -54,66 +54,6 @@ class DiagnosticError(ValueError):
     def __init__(self, diagnostic: dict[str, Any]):
         super().__init__(diagnostic["code"])
         self.diagnostic = diagnostic
-
-
-def _rotl(value: int, count: int) -> int:
-    return ((value << count) | (value >> (64 - count))) & MASK64
-
-
-def xxh64(data: bytes, seed: int = 0) -> int:
-    """Pure exact XXH64, matching the engine's seed-0 byte contract."""
-    p1 = 11400714785074694791
-    p2 = 14029467366897019727
-    p3 = 1609587929392839161
-    p4 = 9650029242287828579
-    p5 = 2870177450012600261
-
-    def round64(acc: int, lane: int) -> int:
-        acc = (acc + lane * p2) & MASK64
-        acc = _rotl(acc, 31)
-        return (acc * p1) & MASK64
-
-    length = len(data)
-    offset = 0
-    if length >= 32:
-        v1 = (seed + p1 + p2) & MASK64
-        v2 = (seed + p2) & MASK64
-        v3 = seed & MASK64
-        v4 = (seed - p1) & MASK64
-        limit = length - 32
-        while offset <= limit:
-            v1 = round64(v1, int.from_bytes(data[offset : offset + 8], "little")); offset += 8
-            v2 = round64(v2, int.from_bytes(data[offset : offset + 8], "little")); offset += 8
-            v3 = round64(v3, int.from_bytes(data[offset : offset + 8], "little")); offset += 8
-            v4 = round64(v4, int.from_bytes(data[offset : offset + 8], "little")); offset += 8
-        result = (_rotl(v1, 1) + _rotl(v2, 7) + _rotl(v3, 12) + _rotl(v4, 18)) & MASK64
-        for value in (v1, v2, v3, v4):
-            mixed = round64(0, value)
-            result ^= mixed
-            result = (result * p1 + p4) & MASK64
-    else:
-        result = (seed + p5) & MASK64
-
-    result = (result + length) & MASK64
-    while offset + 8 <= length:
-        lane = round64(0, int.from_bytes(data[offset : offset + 8], "little"))
-        result ^= lane
-        result = (_rotl(result, 27) * p1 + p4) & MASK64
-        offset += 8
-    if offset + 4 <= length:
-        result ^= (int.from_bytes(data[offset : offset + 4], "little") * p1) & MASK64
-        result = (_rotl(result, 23) * p2 + p3) & MASK64
-        offset += 4
-    while offset < length:
-        result ^= (data[offset] * p5) & MASK64
-        result = (_rotl(result, 11) * p1) & MASK64
-        offset += 1
-    result ^= result >> 33
-    result = (result * p2) & MASK64
-    result ^= result >> 29
-    result = (result * p3) & MASK64
-    result ^= result >> 32
-    return result & MASK64
 
 
 def _source(node: Any, root: dict[str, Any]) -> tuple[str, int, int]:
@@ -616,6 +556,8 @@ def _render(snapshot: dict[str, Any]) -> tuple[str, str, str]:
         "item_core_t items_game_internal_core(uint32_t index);",
         "const char *items_game_internal_def_id(uint32_t index);",
         "item_transition_t items_game_internal_acquire(uint32_t index);",
+        "uint32_t items_game_internal_level_count(uint32_t index);",
+        "item_transition_t items_game_internal_level_transition(uint32_t index, uint32_t level);",
         "uint32_t items_game_internal_cost_span_count(void);",
         "uint32_t items_game_internal_cost_count(uint32_t opaque);",
         "item_cost_entry_t items_game_internal_cost_at(uint32_t opaque, uint32_t index);",
@@ -643,6 +585,20 @@ def _render(snapshot: dict[str, Any]) -> tuple[str, str, str]:
             acquire_transitions.append(("ITEM_TRANSITION_COST", add_cost(acquire["cost"])))
         else:
             acquire_transitions.append(("ITEM_TRANSITION_FREE", 0))
+
+    level_transitions: list[tuple[str, int]] = []
+    level_spans: list[tuple[int, int]] = []
+    for item in items:
+        offset = len(level_transitions)
+        for row in item["levels"]:
+            transition = row.get("cost_to_reach")
+            if transition is None:
+                level_transitions.append(("ITEM_TRANSITION_UNAVAILABLE", 0))
+            elif transition["kind"] == "cost":
+                level_transitions.append(("ITEM_TRANSITION_COST", add_cost(transition["cost"])))
+            else:
+                level_transitions.append(("ITEM_TRANSITION_FREE", 0))
+        level_spans.append((offset, len(level_transitions) - offset))
 
     capability_rows: dict[str, list[tuple[dict[str, Any], str, int]]] = {}
     capability_spans: dict[str, list[tuple[int, int]]] = {}
@@ -704,6 +660,15 @@ def _render(snapshot: dict[str, Any]) -> tuple[str, str, str]:
     ])
     for kind, cost in acquire_transitions:
         source.append(f"    {{ {kind}, {{ UINT32_C({cost}) }} }},")
+    source.extend(["};", "", "static const item_transition_t s_level_transitions[] = {"])
+    if level_transitions:
+        for kind, cost in level_transitions:
+            source.append(f"    {{ {kind}, {{ UINT32_C({cost}) }} }},")
+    else:
+        source.append("    { ITEM_TRANSITION_UNAVAILABLE, { UINT32_C(0) } },")
+    source.extend(["};", "", "static const generated_cost_span_t s_level_spans[] = {"])
+    for offset, count in level_spans:
+        source.append(f"    {{ UINT32_C({offset}), UINT32_C({count}) }},")
     source.extend(["};", "", "static const item_cost_entry_t s_cost_entries[] = {"])
     if cost_entries:
         for item_ref, count in cost_entries:
@@ -723,6 +688,11 @@ def _render(snapshot: dict[str, Any]) -> tuple[str, str, str]:
         "item_core_t items_game_internal_core(uint32_t index) { return s_items[index].core; }",
         "const char *items_game_internal_def_id(uint32_t index) { return s_items[index].def_id; }",
         "item_transition_t items_game_internal_acquire(uint32_t index) { return s_acquire[index]; }",
+        "uint32_t items_game_internal_level_count(uint32_t index) { return s_level_spans[index].count; }",
+        "item_transition_t items_game_internal_level_transition(uint32_t index, uint32_t level) {",
+        "    NT_ASSERT(level > 0U && level <= s_level_spans[index].count);",
+        "    return s_level_transitions[s_level_spans[index].offset + level - 1U];",
+        "}",
         "uint32_t items_game_internal_cost_span_count(void) { return ITEMS_COST_SPAN_COUNT; }",
         "uint32_t items_game_internal_cost_count(uint32_t opaque) { return s_cost_spans[opaque].count; }",
         "item_cost_entry_t items_game_internal_cost_at(uint32_t opaque, uint32_t index) {",

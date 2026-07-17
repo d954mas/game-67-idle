@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -19,9 +20,81 @@ import items_cli as CLI
 SCRIPT_DIR = Path(__file__).resolve().parent
 SCRIPT = SCRIPT_DIR / "items_cli.py"
 PROJECT = SCRIPT_DIR.parent / "tests" / "fixtures" / "items_cli"
+TEMPLATE_ROOT = SCRIPT_DIR.parents[2] / "templates" / "template"
 
 
 class ItemsCliTests(unittest.TestCase):
+    def test_lua_cli_does_not_depend_on_legacy_json_ops(self):
+        self.assertEqual(CLI.receipt_api.__name__, "items_receipt")
+
+    def test_template_lua_matches_the_shipped_release_receipt(self):
+        process = subprocess.run(
+            [sys.executable, str(SCRIPT), "--project-root", str(TEMPLATE_ROOT), "validate"],
+            text=True, capture_output=True, encoding="utf-8", timeout=20,
+        )
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertTrue(json.loads(process.stdout)["result"]["receipt"]["ok"])
+
+    def test_seal_receipt_is_the_single_idempotent_release_write_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            shutil.copytree(PROJECT, project)
+            first = self.run_project(project, "seal-receipt")
+            self.assertEqual(first.returncode, 0, first.stderr)
+            self.assertTrue(json.loads(first.stdout)["result"]["ok"])
+
+            second = self.run_project(project, "seal-receipt")
+            self.assertEqual(second.returncode, 0, second.stderr)
+            result = json.loads(second.stdout)["result"]
+            self.assertTrue(result["ok"])
+            self.assertFalse(result["changed"])
+
+    def test_seal_receipt_uses_the_shared_project_writer_lock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            shutil.copytree(PROJECT, project)
+            baseline = project / "content" / "items.lock.json"
+            original = baseline.read_bytes()
+            (project / ".items-writer.lock").write_text("active writer\n", encoding="utf-8")
+
+            sealed = self.run_project(project, "seal-receipt")
+
+            self.assertEqual(sealed.returncode, 1)
+            self.assertEqual(json.loads(sealed.stderr)["error"]["code"], "writer.locked")
+            self.assertEqual(baseline.read_bytes(), original)
+
+    def test_list_exposes_bounded_viewer_metadata_without_level_tables(self):
+        process = subprocess.run(
+            [sys.executable, str(SCRIPT), "--project-root", str(TEMPLATE_ROOT), "list"],
+            text=True, capture_output=True, encoding="utf-8", timeout=20,
+        )
+        self.assertEqual(process.returncode, 0, process.stderr)
+        items = json.loads(process.stdout)["result"]
+        energy = next(item for item in items if item["id"] == "tmpl.energy")
+        self.assertEqual(energy["name"], "Energy")
+        self.assertEqual(energy["icon"], "icons/energy")
+        self.assertEqual(energy["currency"], {"cap": 100, "hud": "counter"})
+        self.assertEqual(energy["tags"], [])
+        self.assertNotIn("levels", energy)
+        self.assertNotIn("acquire", energy)
+
+    def test_template_lua_builds_the_runtime_projection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            process = subprocess.run(
+                [
+                    sys.executable, str(SCRIPT), "--project-root", str(TEMPLATE_ROOT),
+                    "build", "--out-dir", tmp,
+                ],
+                text=True, capture_output=True, encoding="utf-8", timeout=20,
+            )
+            self.assertEqual(process.returncode, 0, process.stderr)
+            payload = json.loads(process.stdout)
+            self.assertTrue(payload["result"]["ok"])
+            inspected = CLI.package_api.inspect_package(
+                (Path(tmp) / "items.catalog").read_bytes(),
+            )
+            self.assertEqual(inspected["sections"]["items"]["count"], 6)
+
     def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(SCRIPT), "--project-root", str(PROJECT), *args],
@@ -74,6 +147,19 @@ class ItemsCliTests(unittest.TestCase):
         self.assertEqual(source["result"]["definition"]["file"], "game/items.lua")
         self.assertGreater(source["result"]["definition"]["line"], 1)
         self.assertRegex(source["result"]["source_hash"], r"^sha256:[0-9a-f]{64}$")
+
+    def test_detail_composes_one_bounded_selected_item_view(self):
+        detail = self.payload("detail", "--item", "game.levelled_sword")["result"]
+
+        self.assertEqual(detail["item"]["item"]["id"], "game.levelled_sword")
+        self.assertEqual([field["member"] for field in detail["fields"]], ["attack"])
+        self.assertEqual(detail["source"]["definition"]["file"], "game/items.lua")
+        self.assertRegex(detail["source"]["source_hash"], r"^sha256:[0-9a-f]{64}$")
+        self.assertEqual(detail["dependencies"], {
+            "item": "game.levelled_sword",
+            "inputs": ["game.gold"],
+            "dependents": [],
+        })
 
     def test_schema_and_validate_are_focused_snapshot_views(self):
         schema = self.payload("schema")
@@ -209,11 +295,11 @@ class ItemsCliTests(unittest.TestCase):
             self.assertEqual(preview_result["source_diff"]["new_value"], 17)
             self.assertTrue(preview_result["semantic_diff"]["changes"])
 
-            lock = source.with_name(f".{source.name}.items-edit.lock")
+            lock = project / ".items-writer.lock"
             lock.write_text("stale test lock\n", encoding="utf-8")
             locked = self.run_project(project, *args, "--apply")
             self.assertEqual(locked.returncode, 1)
-            self.assertEqual(json.loads(locked.stderr)["error"]["code"], "edit.locked")
+            self.assertEqual(json.loads(locked.stderr)["error"]["code"], "writer.locked")
             self.assertEqual(source.read_bytes(), original)
             lock.unlink()
 
@@ -397,6 +483,93 @@ class ItemsCliTests(unittest.TestCase):
             with mock.patch.object(Path, "stat", return_value=mock.Mock(st_size=0)):
                 with self.assertRaisesRegex(CLI.CliFailure, "patch exceeds"):
                     CLI._load_batch_patch(str(patch))
+
+    def test_project_writer_rechecks_the_complete_captured_input_set(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "items.lua"
+            companion = root / "items.lua.json"
+            target.write_bytes(b"before")
+            companion.write_bytes(b"manifest-v1")
+            expected = {
+                target: CLI._source_hash(target.read_bytes()),
+                companion: CLI._source_hash(companion.read_bytes()),
+            }
+            companion.write_bytes(b"manifest-v2")
+
+            with self.assertRaisesRegex(CLI.CliFailure, "validation input changed") as failure:
+                CLI._atomic_replace_project_input(root, target, expected, b"after")
+
+            self.assertEqual(failure.exception.error["code"], "writer.conflict")
+            self.assertEqual(target.read_bytes(), b"before")
+
+    def test_project_capture_includes_manifest_modules_receipt_and_state_schema(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            shutil.copytree(PROJECT, project)
+            captured = CLI._capture_project_inputs(
+                project,
+                project / "items.lua.json",
+                project / "content" / "items.lock.json",
+                project / "state" / "items.schema.json",
+            )
+
+            self.assertEqual(
+                {path.relative_to(project.resolve()).as_posix() for path in captured},
+                {
+                    "items.lua.json",
+                    "game/items.lua",
+                    "game/other.lua",
+                    "content/items.lock.json",
+                    "state/items.schema.json",
+                },
+            )
+
+    def test_project_capture_canonicalizes_equivalent_root_spelling(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            shutil.copytree(PROJECT, project)
+            project_alias = project / "game" / ".."
+
+            captured = CLI._capture_project_inputs(
+                project_alias,
+                project_alias / "items.lua.json",
+                project_alias / "content" / "items.lock.json",
+                project_alias / "state" / "items.schema.json",
+            )
+
+            self.assertEqual(
+                {path.relative_to(project.resolve()).as_posix() for path in captured},
+                {
+                    "items.lua.json",
+                    "game/items.lua",
+                    "game/other.lua",
+                    "content/items.lock.json",
+                    "state/items.schema.json",
+                },
+            )
+
+    def test_project_writer_uses_unique_fsynced_atomic_replacement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "items.lock.json"
+            target.write_bytes(b"before")
+            expected = {target: CLI._source_hash(target.read_bytes())}
+            real_mkstemp = tempfile.mkstemp
+
+            with (
+                mock.patch.object(CLI.tempfile, "mkstemp", wraps=real_mkstemp) as mkstemp,
+                mock.patch.object(CLI.os, "fsync", wraps=os.fsync) as fsync,
+                mock.patch.object(CLI.os, "replace", wraps=os.replace) as replace,
+            ):
+                changed = CLI._atomic_replace_project_input(root, target, expected, b"after")
+
+            self.assertTrue(changed)
+            self.assertEqual(target.read_bytes(), b"after")
+            self.assertEqual(mkstemp.call_count, 1)
+            self.assertTrue(fsync.called)
+            replace.assert_called_once()
+            self.assertFalse(list(root.glob(".*.tmp")))
 
     def test_project_context_is_required_and_manifest_cannot_escape_it(self):
         missing = subprocess.run(

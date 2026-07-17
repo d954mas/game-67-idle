@@ -24,15 +24,16 @@ const taskboardPublic = join(aiStudioRoot, "taskboard", "public");
 const assetViewerRoot = join(aiStudioRoot, "assets", "gallery");
 const assetPreviewRoot = join(aiStudioRoot, "assets", "previews");
 const port = Number.parseInt(process.argv[2] || process.env.AI_STUDIO_PORT || "8765", 10);
+const allowedHosts = [`127.0.0.1:${port}`, `localhost:${port}`];
 const handleTaskboardApi = createTaskboardApi(root);
 const handleAssetViewerApi = createAssetViewerApi(root);
 const handleArchitectureMapApi = createArchitectureMapApi(root);
 const handleCanvasApi = createCanvasApi(root);
-const handleItemsViewerApi = createItemsViewerApi(root);
+const handleItemsViewerApi = createItemsViewerApi(root, { allowedHosts });
 // Chat owns its per-launch token internally. The server only supplies the exact loopback
 // hosts for this launch; chat owns the subscription-authenticated app-server transport.
 const handleChatApi = createChatApi(root, {
-  allowedHosts: [`127.0.0.1:${port}`, `localhost:${port}`],
+  allowedHosts,
 });
 const stateDir = join(root, "tmp", "ai_studio");
 const pidFile = join(stateDir, `studio_shell_${port}.pid`);
@@ -145,6 +146,14 @@ function serveJson(res, value) {
 }
 
 const server = createServer((req, res) => {
+  if (!allowedHosts.includes(String(req.headers.host || ""))) {
+    res.writeHead(403, {
+      "content-length": "9",
+      "content-type": "text/plain; charset=utf-8",
+    });
+    res.end("forbidden");
+    return;
+  }
   let url;
   let decodedPathname;
   try {

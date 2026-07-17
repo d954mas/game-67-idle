@@ -1,11 +1,11 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "items-core",
-  "version": "1.14.0",
+  "version": "2.0.0",
   "title": "Items Core",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
-  "summary": "In-place L1 module: deterministic Lua item declarations, catalog codegen, ownership operations, and read-only tooling.",
+  "summary": "In-place L1 module: deterministic Lua item declarations, compact runtime catalog, ownership operations, and focused tooling.",
   "copy_model": "in-place",
   "layer": "L1",
   "owners": [
@@ -14,19 +14,17 @@
   "dependencies": [
     "Python 3.12",
     "Lupa 2.8 using its bundled lupa.lua54 backend (installed by the AI Studio Python environment)",
-    "templates/template/content/items.json + content/item_fields.schema.json (or a game-local items catalog)",
-    "template or game C runtime using the generated items_catalog.gen.{h,c} + the generated items save fragment (features/game-state)",
+    "a game-local items.lua.json manifest plus allowlisted Lua modules",
+    "template or game C runtime using the generated items/catalog package + generated ABI header + generated items save fragment (features/game-state)",
     "the consuming game's own src/features/items/reason_tags.h (closed reason-verb list, resolved via the game's include path)"
   ],
   "commands": {
-    "generate": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_catalog.py",
-    "list": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py list",
-    "validate": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py validate",
-    "schema": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py schema",
-    "upgrade_receipt": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py upgrade-receipt",
-    "validate_evaluation_receipt": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py validate-evaluation-receipt",
-    "seal_evaluation_receipt": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py seal-evaluation-receipt",
-    "test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops_test.py",
+    "list": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> list",
+    "detail": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> detail --item <item-id>",
+    "validate": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> validate",
+    "schema": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> schema",
+    "build": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> build --out-dir <build-dir>",
+    "seal_receipt": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> seal-receipt",
     "api_proof": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof.py --snapshot features/items-core/tests/fixtures/items_api_weapon_proof.json --out-dir <build-dir>",
     "api_proof_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof_test.py",
     "lua_evaluate": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_lua_sandbox.py evaluate --root <game-root> --manifest <game-root>/items.lua.json",
@@ -40,6 +38,7 @@
     "semantic_cli": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> <operation>",
     "semantic_cli_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli_test.py",
     "semantic_cli_benchmark": "node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/benchmark_items_cli.py --project-root <game-root> --out <result.json>",
+    "pipeline_benchmark": "node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/benchmark_items_pipeline.py --build-dir <release-build-dir> --out <result.json>",
     "runtime_package": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package.py build --snapshot <snapshot.json> --out <items.catalog> --header-out <items_catalog_abi.gen.h>",
     "runtime_package_verify": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package.py verify --snapshot <snapshot.json> --blob <items.catalog> --header <items_catalog_abi.gen.h>",
     "runtime_package_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package_test.py"
@@ -50,24 +49,25 @@
     "lua_authoring_contract": "features/items-core/docs/items_lua_single_source_concept_2026-07-10.md"
   },
   "outputs": [
-    "items_catalog.gen.h",
-    "items_catalog.gen.c",
-    "items_game.gen.h",
-    "items_game.internal.gen.h",
-    "items_game.gen.c",
-    "items_game.luau",
     "items.lua.evaluation.v1 JSON",
     "items.snapshot.v1 JSON",
     "items.snapshot.chart.v1 JSON",
     "items.snapshot.requirements.v1 JSON",
     "items.snapshot.diff.v1 JSON",
-    "items/catalog compact runtime package v1",
+    "items/catalog compact runtime package v2",
     "items_catalog_abi.gen.h"
+  ],
+  "proof_outputs": [
+    "items_game.gen.h",
+    "items_game.internal.gen.h",
+    "items_game.gen.c",
+    "items_game.luau"
   ],
   "registers": {
     "note": "Describes the EXISTING wiring in templates/template/CMakeLists.txt (target_sources/ctest) -- items-core is an in-place module (precedent features/game-state), not an install-script target. This section documents the consuming game's provisioning, it does not perform it.",
     "target_sources": [
-      "${ITEMS_CORE_SRC}/items_catalog.c",
+      "${ITEMS_CORE_SRC}/items_runtime_package.c",
+      "${ITEMS_CORE_SRC}/items_runtime_resource.c",
       "${ITEMS_CORE_SRC}/items_containers.c",
       "${ITEMS_CORE_SRC}/items_reconcile.c"
     ],
@@ -75,10 +75,8 @@
       "${ITEMS_CORE_INC}"
     ],
     "ctest_targets": [
-      "test_items_catalog",
       "test_items_fragment",
-      "items_ops_validate",
-      "items_ops_test",
+      "items_catalog_validate",
       "test_items_api_core_only",
       "test_items_api",
       "test_items_runtime_package",
@@ -86,14 +84,16 @@
     ]
   },
   "default_template": {
-    "catalog": "templates/template/content/items.json",
-    "field_schema": "templates/template/content/item_fields.schema.json",
+    "manifest": "templates/template/items.lua.json",
+    "lua_modules": "templates/template/design/items/*.lua",
     "lock": "templates/template/content/items.lock.json",
     "state_schema": "templates/template/state/items.schema.json",
-    "generated_dir": "templates/template/src/generated",
+    "generated_dir": "templates/template/<build>/generated/items-catalog",
     "game_side_sources": [
       "templates/template/src/features/items/reason_tags.h",
-      "templates/template/src/features/items/items_bootstrap.c"
+      "templates/template/src/game_items.c",
+      "templates/template/src/game_items.h",
+      "templates/template/src/game_items_devapi.c"
     ]
   }
 }

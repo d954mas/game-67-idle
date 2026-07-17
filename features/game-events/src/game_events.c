@@ -49,6 +49,15 @@ void game_events_shutdown(void) {
     s_count = 0;
 }
 
+bool game_event_can_emit(uint32_t size, size_t align) {
+    NT_ASSERT(s_phase == GAME_EVENT_PHASE_EMIT);
+    NT_ASSERT(align >= 1 && align <= _Alignof(max_align_t) && (align & (align - 1)) == 0);
+    const size_t off = (s_arena_used + (align - 1)) & ~(align - 1);
+    return off <= (size_t)GAME_EVENTS_ARENA_BYTES &&
+           (size_t)size <= (size_t)GAME_EVENTS_ARENA_BYTES - off &&
+           s_count < (uint32_t)GAME_EVENTS_LOG_CAP;
+}
+
 const void *game_event_emit(nt_hash64_t type, const void *payload, uint32_t size, size_t align) {
     /* Emitting during RECORD violates phase symmetry. */
     NT_ASSERT(s_phase == GAME_EVENT_PHASE_EMIT);
@@ -61,8 +70,7 @@ const void *game_event_emit(nt_hash64_t type, const void *payload, uint32_t size
     size_t off = (s_arena_used + (align - 1)) & ~(align - 1);
 
     /* 3. Проверка переполнения (арены ИЛИ капа лога -- оба ФИКСИРОВАНЫ, роста НЕТ). */
-    size_t need = off + (size_t)size;
-    if (need > (size_t)GAME_EVENTS_ARENA_BYTES || s_count >= (uint32_t)GAME_EVENTS_LOG_CAP) {
+    if (!game_event_can_emit(size, align)) {
 #if defined(NT_DEBUG) && !defined(GAME_EVENTS_SOFT_OVERFLOW)
         NT_ASSERT(0 && "game_events overflow: raise GAME_EVENTS_ARENA_BYTES/LOG_CAP");
 #endif

@@ -6,7 +6,7 @@ project: P001
 priority: P2
 tags: [balance, items, lua, game-design, tooling]
 created: 2026-07-10
-updated: 2026-07-14
+updated: 2026-07-16
 ---
 
 ## Goal
@@ -228,7 +228,7 @@ cross-owner transaction disappears under one canonical Lua source.
 - generated strong item hashes, collision rejection, required assert API, and
   explicit exists/try/string boundary;
 - one release-receipt proof that rejects an incompatible shipped level bound;
-- read-only Viewer source/grid/chart proof plus one shared literal and one table
+- Workbench source/grid/chart proof plus one shared literal and one table
   cell semantic edit with expected hash/diff/undo and formula refusal;
 - Windows/Linux repeat and timing evidence.
 
@@ -267,7 +267,32 @@ are excluded from the proof.
 - Treating the provisional Lua backend choice as final before full measurements.
 - Value-only remote overrides in v1.
 
+## Done when
+
+- [x] Game-owned modular Items Lua is the only current definition source and
+      evaluates through one deterministic, isolated, pinned backend.
+- [x] One normalized Snapshot owns schema, provenance, requirements, focused
+      queries, diagnostics, and release-receipt compatibility.
+- [x] Build emits the compact validated runtime catalog, generated typed API,
+      strong item hashes, and checked runtime bind/access boundary.
+- [x] The Studio Workbench reads bounded Snapshot queries and offers grid,
+      chart, source, diff, ephemeral what-if, and provenance-gated semantic edits
+      through the same CLI writer used by agents.
+- [x] Legacy Items JSON/schema/op-layer consumers and compatibility fallbacks
+      are removed in one explicit cutover.
+- [x] Windows/Linux verification and measured production/agent/runtime profiles
+      ratify pinned `lupa@2.8`/Lua 5.4 plus compact blob v2; performance budgets
+      remain advisory.
+
 ## Log
+
+- 2026-07-16: E016 completed sequentially through T0383, T0365/T0366, T0386,
+  T0316, and T0380. Final architecture has one Lua authoring source, one
+  evaluator/Snapshot, one semantic writer, and one compact runtime package;
+  Workbench and AI share bounded queries and guarded edits without a second
+  model. Full local verification and GitHub Studio verification run 29505520980
+  passed on Ubuntu and Windows. Independent container/state work remains in
+  E019 and was not pulled back into this epic.
 
 - 2026-07-14: Renamed to the actual Items-only boundary and folded the small
   T0384 requirements/result layer into Snapshot instead of keeping a separate
@@ -315,3 +340,6 @@ truth.
   became resource-only with runtime payment scope; state nests globally unique
   numeric entries/slots; generated item hashes and assert-first APIs mirror the
   atlas pattern; pack placement became a game-builder choice.
+- 2026-07-16: Reopened after three independent full Items reviews confirmed
+  Workbench security/race, authoring integrity, and bounded-I/O defects. Fixes
+  remain in E016; runtime/state findings stay in existing E019.

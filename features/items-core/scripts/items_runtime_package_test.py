@@ -48,6 +48,7 @@ def evaluation() -> dict:
         "items": [
             {
                 "id": "game.gold", "kind": "currency", "stack": 0,
+                "currency": {"hud": "counter", "cap": 100},
                 "authoring_mode": "none", "acquire": {"cost": {"__studio_kind": "free"}},
             },
             {
@@ -77,6 +78,16 @@ class ItemsRuntimePackageTests(unittest.TestCase):
     def snapshot(self) -> dict:
         return SNAPSHOT.build_snapshot(evaluation())
 
+    def test_production_package_uses_the_neutral_hash_module(self):
+        source_text = Path(PACKAGE.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("from generate_items_api_proof import", source_text)
+        self.assertEqual(PACKAGE.xxh64(b"game.gold"), 0xE662E696028B01C4)
+
+    @staticmethod
+    def rehash(snapshot: dict) -> dict:
+        snapshot["content_hash"] = SNAPSHOT.snapshot_content_hash(snapshot)
+        return snapshot
+
     @staticmethod
     def resign(package: bytearray) -> bytes:
         struct.pack_into("<Q", package, PACKAGE.CONTENT_FINGERPRINT_OFFSET, 0)
@@ -93,11 +104,11 @@ class ItemsRuntimePackageTests(unittest.TestCase):
         self.assertEqual(first, second)
 
         inspected = PACKAGE.inspect_package(first)
-        self.assertEqual(inspected["schema"], "items.runtime.package.inspect.v1")
+        self.assertEqual(inspected["schema"], "items.runtime.package.inspect.v2")
         self.assertEqual(inspected["snapshot_content_hash"], snapshot["content_hash"])
         self.assertEqual(inspected["sections"], {
             "strings": {"count": 77, "stride": 1},
-            "items": {"count": 2, "stride": 48},
+            "items": {"count": 2, "stride": 56},
             "fields": {"count": 1, "stride": 48},
             "levels": {"count": 3, "stride": 32},
             "values": {"count": 3, "stride": 24},
@@ -107,6 +118,7 @@ class ItemsRuntimePackageTests(unittest.TestCase):
             {
                 "id": "game.gold", "kind": "currency", "storage": "stack",
                 "stack": 0, "level_count": 0, "acquire_costs": [], "acquire_free": True,
+                "currency": {"cap": 100},
             },
             {
                 "id": "game.sword", "kind": "weapon", "storage": "unique",
@@ -139,6 +151,20 @@ class ItemsRuntimePackageTests(unittest.TestCase):
         ).encode("utf-8")).hexdigest()
         self.assertEqual(fixture["content_hash"], f"sha256:{digest}")
 
+    def test_rejects_stale_snapshot_content_hash_at_public_boundaries(self):
+        snapshot = self.snapshot()
+        package = PACKAGE.build_package(snapshot)
+        header = PACKAGE.render_abi_header(snapshot).encode("utf-8")
+        stale = copy.deepcopy(snapshot)
+        stale["items"][1]["levels"]["rows"][0]["attack"] = 999
+
+        with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.content_hash"):
+            PACKAGE.build_package(stale)
+        with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.content_hash"):
+            PACKAGE.render_abi_header(stale)
+        with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.content_hash"):
+            PACKAGE.verify_publication(stale, package, header)
+
     def test_rejects_corruption_collisions_and_default_budget_overflow(self):
         snapshot = self.snapshot()
         package = bytearray(PACKAGE.build_package(snapshot))
@@ -160,7 +186,12 @@ class ItemsRuntimePackageTests(unittest.TestCase):
                 invalid_cost = self.snapshot()
                 invalid_cost["items"][1]["acquire"]["cost"]["count"] = count
                 with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.cost_count"):
-                    PACKAGE.build_package(invalid_cost)
+                    PACKAGE.build_package(self.rehash(invalid_cost))
+
+        invalid_currency = self.snapshot()
+        invalid_currency["items"][0]["kind"] = "material"
+        with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.currency"):
+            PACKAGE.build_package(self.rehash(invalid_currency))
 
     def test_inspector_rejects_noncanonical_ownership_and_field_metadata(self):
         original = PACKAGE.build_package(self.snapshot())
@@ -194,7 +225,7 @@ class ItemsRuntimePackageTests(unittest.TestCase):
 
         invalid_item_flag = bytearray(original)
         gold = list(PACKAGE.ITEM.unpack_from(invalid_item_flag, item_offset))
-        gold[9] = 2
+        gold[9] = 4
         PACKAGE.ITEM.pack_into(invalid_item_flag, item_offset, *gold)
         with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.item"):
             PACKAGE.inspect_package(self.resign(invalid_item_flag))
@@ -213,7 +244,7 @@ class ItemsRuntimePackageTests(unittest.TestCase):
         del snapshot["items"][1]["acquire"]
         with mock.patch.object(PACKAGE, "_cost_values", side_effect=AssertionError("traversed rows")):
             with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.level_budget"):
-                PACKAGE.build_package(snapshot, max_levels=2)
+                PACKAGE.build_package(self.rehash(snapshot), max_levels=2)
 
         with mock.patch.object(PACKAGE, "_materialize_sections", side_effect=AssertionError("materialized")):
             with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.byte_budget"):
@@ -228,29 +259,40 @@ class ItemsRuntimePackageTests(unittest.TestCase):
         header = PACKAGE.render_abi_header(snapshot)
         changed = copy.deepcopy(snapshot)
         changed["items"][1]["levels"]["rows"][0]["attack"] = 999
-        self.assertEqual(PACKAGE.render_abi_header(changed), header)
+        self.assertEqual(PACKAGE.render_abi_header(self.rehash(changed)), header)
         added = copy.deepcopy(snapshot)
         added["items"].append({
             "id": "game.wood", "kind": "material", "stack": 99,
             "authoring_mode": "none",
         })
-        self.assertNotEqual(PACKAGE.render_abi_header(added), header)
+        self.assertNotEqual(PACKAGE.render_abi_header(self.rehash(added)), header)
         self.assertIn("ITEMS_CATALOG_SCHEMA_ABI", header)
+        self.assertIn("ITEMS_CATALOG_CAPABILITY_COUNT UINT32_C(1)", header)
         self.assertIn("ITEM_GAME_GOLD", header)
         self.assertIn("ITEM_FIELD_GAME_WEAPON_LEVEL_ATTACK", header)
         self.assertIn("ITEMS_GAME_HAS_WEAPON", header)
         self.assertIn("item_weapon_level_t", header)
         self.assertIn("items_weapon_level", header)
 
+        core_only = copy.deepcopy(snapshot)
+        core_only["fields"] = []
+        core_header = PACKAGE.render_abi_header(self.rehash(core_only))
+        self.assertIn("ITEMS_CATALOG_CAPABILITY_COUNT UINT32_C(0)", core_header)
+        self.assertIn(
+            "#if ITEMS_CATALOG_CAPABILITY_COUNT > 0U\n"
+            "static bool items_catalog_internal_is_kind",
+            core_header,
+        )
+
         keyword = copy.deepcopy(snapshot)
         keyword["fields"][0]["member"] = "int"
         with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.field_id"):
-            PACKAGE.render_abi_header(keyword)
+            PACKAGE.render_abi_header(self.rehash(keyword))
 
         full_i64 = copy.deepcopy(snapshot)
         full_i64["fields"][0]["min"] = PACKAGE.I64_MIN
         full_i64["fields"][0]["max"] = PACKAGE.I64_MAX
-        boundary_header = PACKAGE.render_abi_header(full_i64)
+        boundary_header = PACKAGE.render_abi_header(self.rehash(full_i64))
         self.assertIn("INT64_MIN", boundary_header)
         self.assertIn("INT64_MAX", boundary_header)
         self.assertNotIn("INT64_C(9223372036854775808)", boundary_header)

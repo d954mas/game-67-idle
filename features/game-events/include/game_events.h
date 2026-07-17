@@ -47,6 +47,10 @@ typedef struct {
 void game_events_init(void);      /* ОДИН malloc фиксированной арены + лога; seq=0, tick=0 */
 void game_events_shutdown(void);  /* free арены/лога */
 
+/* Read-only capacity probe for atomic domain mutations. Uses the same alignment
+   and phase contract as game_event_emit, but never increments dropped/warnings. */
+bool game_event_can_emit(uint32_t size, size_t align);
+
 /* Сырой emit: копирует `size` байт `payload` в ФИКСИРОВАННУЮ арену по выравниванию
    `align`, дописывает конверт в лог. Возвращает указатель на арену-копию
    (позиционно-независимую — str-поля обязаны быть уже инлайн-оффсетами; сырой

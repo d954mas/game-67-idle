@@ -1,170 +1,98 @@
-# Items Viewer
+# Items Workbench
 
-Read-only web surface that shows the item catalog of any registered game or
-template, including real built icon previews when available. This README is the
-current module contract.
+Studio surface for a registered template or game Items catalog. The current
+Workbench shows a compact master table plus bounded Snapshot
+detail, level/cost/provenance rows, selected-series charts, release state,
+diagnostics, dependencies, checked source locations, and built icon previews.
+Semantic preview/apply is delegated to the same T0366 CLI operations used by
+agents; the browser owns no Lua writer. The editor offers only fields whose
+Snapshot provenance matches the selected literal, curve, or override operation.
+Preview state is visibly ephemeral, Apply resubmits the reviewed patch with its
+expected source hash, and session Undo replays only the inverse patch returned
+by the CLI.
 
-## Owner and boundary
+## Boundary
 
-This module owns the catalog VIEW: the merged-registry lookup, the HTTP
-contract that turns `items_ops.py` output into one view object, and the thin
-page. It does **not** own the item data model or the op-layer — that is
-`features/items-core/scripts/items_ops.py`; write operations are not built.
-No new parser of `items.json` lives here: every catalog field comes verbatim
-from `items_ops.py list/schema --json`.
+The Viewer does not parse authored catalog data. `ops.mjs` invokes the
+single-source semantic CLI with an explicit game root:
 
-## Current boundary
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> list
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> validate
+```
 
-In scope: pick a catalog, render its items/containers/item_kinds, show lock
-status (shipped/draft/removed) and `validate` issues per item + catalog
-summary, schema-driven field rendering (no hardcoded template fields).
+`list` supplies compact master rows and `validate` supplies
+Snapshot/requirements/release-receipt diagnostics. A selected item invokes one
+bounded `detail` composition of inspect/schema/source/dependencies; one selected
+chart field invokes `chart` lazily. The Workbench adapts those
+results to HTTP without a second evaluator or browser-side Items model; it
+never reads `items.json`, the old field schema, or the legacy op-layer, and it
+does not invent a second schema for rendering.
 
-Explicitly **not** built here — do not scaffold these without a new owner
-contract:
+Concrete runtime containers are E019 state, not catalog definitions, so this
+surface does not display a catalog container table.
 
-- **Writing.** No edit forms, no `upsert`/`deprecate`. The write op-layer does
-  not exist in `items_ops.py` yet.
-- **`icon-link` write command.** `icon_asset_id -> file` binding is authored
-  directly in `content/items.json` (slash form, `icons/<name>`) and resolved
-  by reading the BUILT pack (see "Icon preview" below) — there is still no
-  write op-layer command to author that binding from the viewer itself; that
-  remains future `items_ops` work.
-- **A CLI client.** `items_ops.py` (`list` / `validate` / `schema --json`) IS
-  the agent client — parity with the web client holds by construction because
-  both read the exact same subprocess. There is no `cli.mjs` in this module.
-- **Caching.** Every `/catalog` request re-spawns the configured root-`.venv`
-  interpreter for `items_ops.py`
-  (list/schema/validate — up to 3 short spawns). Catalogs are tiny (a handful
-  of items); add an mtime cache only if this ever measurably feels slow.
+## Files
 
-## Layout
+- `ops.mjs` resolves registered catalogs, invokes the semantic CLI, projects
+  release status, and attaches built icon previews.
+- `api.mjs` exposes the focused HTTP routes.
+- `site/` renders the responsive master/detail view with bare ESM and no build
+  step.
+- `tests/` covers the Lua route, private mount visibility, receipt status,
+  invalid-source degradation, icon pack parsing, and tool failures.
 
-- `ops.mjs` — pure logic, no HTTP. Merges `listRegisteredTemplates`
-  (`assets/sources/ops.mjs`) and workspace game mounts
-  (`ai_studio/workspace/games.mjs`) into the dropdown list. Public games are
-  visible by default; private game catalogs require explicit `include-private`
-  or direct `game:<id>` selection and pass the private game preflight before
-  exposure. It then spawns `items_ops.py` (`execFile("py", ["-3.12", ...])`,
-  cwd = repo root, every path ABSOLUTE) for `list`/`schema`/`validate --json`;
-  reads `items.lock.json` directly (a separate artifact — see "Lock status"
-  below); folds everything into one catalog view object. `loadCatalogView(root,
-  folderAbs, meta)` is decoupled from the registry lookup so tests can point
-  it at a throwaway temp folder. All `node:test` coverage lives in `tests/`.
-- `api.mjs` — `createItemsViewerApi(root)`, an `async (req,res,url) => bool`
-  handler mounted by Studio Shell on `/api/items-viewer/` (mirrors
-  `assets/canvas/api.mjs`'s shape — HTTP <-> ops marshalling only, no items
-  logic). It exposes two read-only GET endpoints; response degradation and
-  error status rules are documented below.
-  - `GET /api/items-viewer/catalogs` — the dropdown list; add
-    `?include-private=true` only when private mounted games should be listed.
-  - `GET /api/items-viewer/catalog?id=<kind>:<id>` — the whole view for one
-    catalog in one fetch.
-- `site/` — one page (`items.html` + `items.js` + `items.css`), bare ESM, no
-  framework, no build step. Studio Shell also serves a short `/items` route
-  (query string preserved) that 302-redirects to
-  `/ai_studio/assets/items_viewer/site/items.html`; see
-  `ai_studio/studio_shell/server.mjs`.
-- `icon_preview.mjs` — pure, no HTTP/subprocess: parses a BUILT
-  `game.ntpack` + its `<atlas>_pageN.png` debug image + the generated
-  `game_assets.h` into `view.icons` (`{page_data_uri, page_w, page_h, regions,
-  reason?}`). See "Icon preview" below.
-- `tests/` — `node:test` suite for `ops.mjs` (`ops.test.mjs`) and
-  `icon_preview.mjs` (`icon_preview.test.mjs`). The live template
-  (`templates/template/content/items.json`, 6 items) is the committed
-  happy-path fixture for `ops.mjs`; every failure branch (malformed
-  catalog/schema/state schema, missing `content/`, exit-code branches) builds
-  a throwaway temp folder from the template's own valid schema files.
-  `icon_preview.test.mjs` uses a REAL two-atlas (`ui`+`icons`) pack captured
-  from a native-debug build, committed under `tests/fixtures/icon_pack/`
-  (`game.ntpack`, `icons_page0.png`, and a trimmed `game_assets.h.slice`).
+## HTTP
+
+- `GET /api/items-viewer/catalogs` lists registered catalogs. Private games
+  require `?include-private=true` and still pass workspace privacy checks.
+- `GET /api/items-viewer/catalog?id=<kind>:<id>` returns one complete view.
+- `GET /api/items-viewer/icon-page?catalog=<kind>:<id>` serves the bounded built
+  atlas PNG referenced by catalog metadata; catalog JSON never embeds base64.
+- `GET /api/items-viewer/item?catalog=<kind>:<id>&item=<def_id>` returns one
+  bounded `detail` result from one evaluator process.
+- `GET /api/items-viewer/chart?catalog=<kind>:<id>&item=<def_id>&field=<member>`
+  returns only the selected generated numeric series.
+- `POST /api/items-viewer/edit` accepts exactly a registered catalog, one
+  `items.cli.patch.v1`, and `apply`. `apply: false` is an ephemeral what-if;
+  `apply: true` uses the CLI's expected-hash/lock/validation/atomic-replace
+  path. Returned inverse patches are replayed through the same endpoint.
+
+A folder with no `items.lua.json` is a valid empty state. Invalid Lua or a
+Snapshot failure returns a top-level `content_error` with no JSON fallback.
+Validation incompatibility remains visible through `validate.ok: false`; a
+tool/process failure is the only server error.
+
+## Release status
+
+`items.lock.json` is a separate release receipt, not catalog authoring data.
+The Viewer reads it only to label current IDs as:
+
+- `shipped` when present in `def_ids`;
+- `removed` when present in `removed` but not `def_ids`;
+- `draft` otherwise.
+
+Removed receipt entries with no current item appear in the Removed section.
+Semantic CLI validation remains authoritative for whether the receipt is
+compatible; the Viewer does not duplicate those rules.
 
 ## Icon preview
 
-`view.icons` (added to every `loadCatalogView` result by `ops.mjs`, populated
-by `icon_preview.mjs`) reads the catalog folder's BUILT asset pack — never a
-second parser of `content/items.json`, and never a git-committed binary — to
-turn each item's `icon_asset_id` (e.g. `icons/gold`) into a pixel rect on the
-atlas builder's debug-PNG page:
+`icon_preview.mjs` asynchronously reads capped built `game.ntpack` and generated
+header inputs, then reads only the PNG header for catalog metadata. It caps file,
+asset, atlas, page, region, vertex, image-dimension, and pixel counts before
+using offsets. The focused icon-page route separately serves the capped PNG.
+The parser preserves 64-bit hashes as `BigInt` and degrades to a reason when
+build artifacts are missing. The browser decodes the shared atlas image once
+and crops every item icon from it.
 
-- Tries `build/native-debug/pack/` then `build/devapi-debug/pack/` under the
-  catalog folder for `game.ntpack` + the generated `src/generated/game_assets.h`
-  (both are build products; `game_assets.h` is GITIGNORED and only exists
-  after a native build has run at least once).
-- Parses `NtPackHeader`/`NtAssetEntry` (`nt_pack_format.h`) to find EVERY
-  `asset_type==ATLAS` entry (a template pack has two: `ui` and `icons` — the
-  first-entry-only bug this guards against is the main risk called out in the
-  build spec), then each atlas's `NtAtlasRegion`/`NtAtlasVertex`
-  (`nt_atlas_format.h`) for pixel rects. `name_hash` is a 64-bit hash — read
-  with `DataView.getBigUint64`, never `Number()`/`parseInt()` (silent
-  precision loss above 2^53).
-- Version-asserts `NtPackHeader.version`/`NtAtlasHeader.version` FIRST; a
-  format newer than this parser degrades to a `reason` string instead of
-  misreading a changed byte layout.
-- Every rect gets a 2px inner inset: the builder's debug-PNG draws a 2px
-  magenta `{255,0,255,255}` outline at each region's boundary
-  (`nt_builder_atlas.c`) — without the inset every crop would show a magenta
-  ring.
-- The debug PNG is STRAIGHT alpha (copied before the pack encoder's
-  premultiply step) — `site/items.js` crops it with a bare
-  `ctx.drawImage(...)`, no alpha division. Dividing by alpha here (treating it
-  as premultiplied) would burn semi-transparent edges; `tests/icon_preview.test.mjs`
-  pins this by asserting `page_data_uri` round-trips the source PNG bytes
-  exactly (no server-side pixel processing at all).
-- No pack built yet, or the pack exists but the debug-PNG page is missing
-  (`debug_png` off) — two DISTINCT `reason` strings, never conflated, so a
-  missing icon reads as "why", not just "?".
+The preferred long-term replacement is a native Studio adapter over the
+engine's public atlas reader; the current JS binary reader stays isolated in
+this module.
 
-`site/items.js` decodes `page_data_uri` ONCE per catalog load (before
-rendering any card) and every card's icon slot is a small `<canvas>` cropped
-from that single decoded image — `resolveIcon(view, assetId)` is the
-one-line seam that looks up `view.icons.regions[assetId]`.
+## Verify
 
-Recommended long-term replacement for `icon_preview.mjs`: a native studio tool
-over the engine's own public runtime atlas reader
-(`nt_atlas_find_region`/`nt_atlas_get_region`, `engine/atlas/nt_atlas.h`)
-instead of a hand-rolled binary format parser in JS.
-
-## Why the site can't import ops.mjs
-
-`ops.mjs` imports `node:child_process`/`node:fs` to spawn `items_ops.py` and
-read `items.lock.json` — it cannot load in a browser, and this module has no
-bundler by design. So the one
-genuinely shared piece of logic, the **issue routing rule** ("an issue
-attaches to a card IFF its `id` is present in `items[]`"), is a
-small pure function in *both* places: `ops.mjs` exports `routeIssues()` for
-`node:test` coverage of the contract; `site/items.js` re-implements the same
-~10-line partition in vanilla JS to render cards/summary/Removed section. This
-is a deliberate, tiny duplication of a trivial array partition — not a second
-data model of `items.json`.
-
-## Lock status (shipped / draft / removed)
-
-`ops.mjs` reads `<folder>/content/items.lock.json` directly as plain JSON —
-never through `items_ops.py` — and derives, per item currently in the
-catalog: `shipped` if the id is in `def_ids`, `removed` if the id is a key in
-`removed` (checked in that order — the same id in *both* is the legal-but-
-flagged `removed-def-restored` case), else `draft`. This three-state
-derivation is **viewer-only**: `items_ops.py` has no `lock --json` command.
-An agent driving `items_ops.py` directly therefore has no equivalent of this
-status map; only the web page shows it.
-
-## Content errors vs. validate degradation
-
-Two different things can go wrong with a catalog, and the response tells them
-apart:
-
-- **`content_error`** (top-level, 200) — the game's OWN `items.json` or
-  `item_fields.schema.json` is broken (malformed JSON, missing file). `list`
-  or `schema` exited 2. Whichever of the two still parsed keeps rendering
-  (they read different files, independently).
-- **`validate.available: false`** (200) — `validate` itself couldn't run
-  (broken/missing `state/items.schema.json`, or an explicit `--baseline` miss
-  — narrower than `content_error`). Items/schema can still be fully
-  fine and rendering.
-- **`validate.ok: false`** (200) — `validate` ran fine and found real issues
-  (exit 1). Not a degradation; this is the normal "catalog has problems" case,
-  surfaced as errors/warnings on the owning cards or in the Summary/Removed
-  section.
-- **500** — the only case that's an actual viewer bug: `py` could not be
-  spawned at all, or printed unparseable JSON on an otherwise-successful
-  exit.
+```powershell
+node --test ai_studio/assets/items_viewer/tests/api.test.mjs ai_studio/assets/items_viewer/tests/icon_preview.test.mjs ai_studio/assets/items_viewer/tests/ops.test.mjs ai_studio/assets/items_viewer/tests/site_model.test.mjs
+node ai_studio/studio.mjs verify --changed
+```

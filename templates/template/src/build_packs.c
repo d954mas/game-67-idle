@@ -84,8 +84,8 @@ static bool add_blob_file(NtBuilderContext *ctx, const char *path, const char *r
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        (void)fprintf(stderr, "Usage: build_game_packs <pack_dir>\n");
+    if (argc != 3) {
+        (void)fprintf(stderr, "Usage: build_game_packs <pack_dir> <items_catalog>\n");
         return 1;
     }
     const char *out_dir = argv[1];
@@ -113,6 +113,10 @@ int main(int argc, char *argv[]) {
     // the resource ID intentionally contains no codec or file extension.
     if (!add_blob_file(ctx, "assets/audio/sfx/ui_click.wav", "audio/sfx/ui_click") ||
         !add_blob_file(ctx, "assets/audio/music/demo_jingle.mp3", "audio/music/demo_jingle")) {
+        nt_builder_free_pack(ctx);
+        return 1;
+    }
+    if (!add_blob_file(ctx, argv[2], "items/catalog")) {
         nt_builder_free_pack(ctx);
         return 1;
     }

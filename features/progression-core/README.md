@@ -199,9 +199,9 @@ relocation).
 
 ## Tools (`scripts/`)
 
-- `generate_progression_tracks.py --catalog <progression.json> --items <items.json> --state-schema <progression.schema.json> --out-dir <dir>` —
+- `generate_progression_tracks.py --catalog <progression.json> --items-snapshot <items.snapshot.json> --state-schema <progression.schema.json> --out-dir <dir>` —
   emits `progression_tracks.gen.{h,c}` (compile-time const curve tables).
-  `--items` is the cross-check: every `manual`/`auto` track's `currency_def`
+  `--items-snapshot` is the cross-check: every `manual`/`auto` track's `currency_def`
   must name an existing items def with a `currency` block. `--state-schema`
   validates the authoritative game-owned `game_seed.progression` fragment,
   including its `tracks: map<string,TrackState>` and integer `string_max >= 2`.
@@ -212,9 +212,9 @@ relocation).
    `items.json`). `id` is a bare slug (`"hero"`, not `"tmpl.hero"`) — track
    ids are progression-internal, not items-namespaced.
 2. Build codegen: `node ai_studio/dev_environment/python_run.mjs features/progression-core/scripts/generate_progression_tracks.py
-   --catalog content/progression.json --items content/items.json
+   --catalog content/progression.json --items-snapshot <build>/items.snapshot.json
    --state-schema state/progression.schema.json --out-dir <dir>` —
-   emits `progression_tracks.gen.{h,c}`. `--items` is the cross-check:
+   emits `progression_tracks.gen.{h,c}`. `--items-snapshot` is the cross-check:
    `currency_def` (manual/auto tracks) must name an existing items def with
    a `currency` block.
 3. `curve.type` must be `"exp"`; `mode` one of `manual|auto|threshold`;
@@ -276,6 +276,8 @@ minor adds backward-compatible surface, and major permits breaking changes.
 Consumers pin both this version and an exact repository revision.
 Version `2.0.0` makes `--state-schema` mandatory; `1.x` generator invocations
 must add the owning game schema explicitly.
+Version `3.0.0` replaces the legacy `--items <items.json>` input with the
+canonical `--items-snapshot <items.snapshot.json>` build output.
 
 ## Extension points
 

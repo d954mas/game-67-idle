@@ -1,0 +1,64 @@
+{
+  "format": 1,
+  "save_version": 1,
+  "saved_at": 1720080000000,
+  "save_seq": 7,
+  "app": "template_composition_test",
+  "features": {
+    "items": {
+      "v": 1,
+      "owned": {
+        "tmpl.sword#12": {
+          "def_id": "tmpl.sword",
+          "container": "backpack",
+          "count": "1",
+          "level": 2,
+          "durability": 0.75,
+          "quarantined": false
+        },
+        "purse/tmpl.gold": {
+          "def_id": "tmpl.gold",
+          "container": "purse",
+          "count": "50",
+          "level": 1,
+          "durability": 1.0,
+          "quarantined": false
+        },
+        "backpack/tmpl.potion": {
+          "def_id": "tmpl.potion",
+          "container": "backpack",
+          "count": "3",
+          "level": 1,
+          "durability": 1.0,
+          "quarantined": false
+        },
+        "backpack/tmpl.wood": {
+          "def_id": "tmpl.wood",
+          "container": "backpack",
+          "count": "0",
+          "level": 1,
+          "durability": 1.0,
+          "quarantined": false
+        },
+        "backpack/removed.relic": {
+          "def_id": "removed.relic",
+          "container": "backpack",
+          "count": "2",
+          "level": 4,
+          "durability": 0.5,
+          "quarantined": false
+        }
+      }
+    },
+    "game": {
+      "v": 1,
+      "shape_index": "cube",
+      "render_mode_index": "solid_wire",
+      "camera_distance": 6,
+      "test_ui_clicks": 0,
+      "test_label_text": "Template ready",
+      "test_button_text": "Cycle",
+      "tutorial.done": false
+    }
+  }
+}

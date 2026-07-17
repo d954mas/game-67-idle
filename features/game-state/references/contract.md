@@ -21,6 +21,20 @@ Fields are keyed by stable paths. There are no numeric field ids. Keep removed
 paths in `reserved`; strings require `max_length`, and lists/maps require
 `max_count`.
 
+`u32` fields declare integer `default`, `min`, and `max` within
+`0..4294967295`. They use `uint32_t` in C and an exact JSON number on the wire;
+strings, fractions, negative values, and overflow are rejected.
+
+Schema v2 has one bounded aggregate extension: a fragment may declare one
+top-level `list<Object>` whose object type declares exactly one nested
+`list<Object>`. Both lists require `max_count` and a non-empty `order_by` over
+canonical primitive fields. The generated state uses separate fixed pools;
+the nested pool stores only an internal parent index, while JSON/DevAPI nests
+children under their parent. Every aggregate object field is required during
+parse. Deeper recursion, heap-backed state, type reuse as a map, and multiple
+aggregate roots are rejected. Removed fields remain in the owning fragment or
+type `reserved` list.
+
 The generator requires `--schema` and accepts `--fragment` as an expected-id
 check. Per fragment it emits `<id>_state.h`, `<id>_state.c`,
 `<id>_state_schema.gen.h`, and `<id>_state_events.gen.{h,c}`. The generated

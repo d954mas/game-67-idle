@@ -3,31 +3,57 @@
   "schema_version": 2,
   "fragment": "items",
   "version": 1,
-  "string_max": 64,
-  "hooks": { "on_new_game": true, "reconcile": true },
+  "string_max": 128,
+  "reserved": ["owned"],
+  "hooks": { "reconcile": true },
+  "enums": {
+    "ContainerPolicy": ["generic", "currency_only", "equipment"]
+  },
   "types": {
-    "ItemOwned": {
+    "ItemEntry": {
       "kind": "object",
+      "reserved": ["container", "container_id", "entry_key", "key"],
       "fields": {
-        "def_id":      { "type": "string", "max_length": 63 },
-        "container":   { "type": "string", "max_length": 63 },
-        "count":       { "type": "i64", "default": 1, "min": 0, "max": 9000000000000000000 },
-        "level":       { "type": "int", "default": 1, "min": 1, "max": 9999 },
-        "durability":  { "type": "float", "default": 1, "min": 0, "max": 1 },
+        "entry_id": { "type": "u32", "default": 1, "min": 1, "max": 4294967294 },
+        "slot": { "type": "u32", "default": 0, "min": 0, "max": 1023 },
+        "def_id": { "type": "string", "max_length": 127 },
+        "count": { "type": "i64", "default": 0, "min": 0, "max": 9000000000000000000 },
+        "level": { "type": "int", "default": 1, "min": 1, "max": 9999 },
+        "durability": { "type": "float", "default": 1, "min": 0, "max": 1 },
         "quarantined": { "type": "bool", "default": false }
+      }
+    },
+    "ItemContainer": {
+      "kind": "object",
+      "reserved": ["entry_keys", "id", "name"],
+      "fields": {
+        "container_id": { "type": "u32", "default": 1, "min": 1, "max": 4294967294 },
+        "capacity": { "type": "u32", "default": 0, "min": 0, "max": 1024 },
+        "policy": { "type": "enum", "enum": "ContainerPolicy", "default": "generic" },
+        "entries": {
+          "type": "list<ItemEntry>",
+          "max_count": 1024,
+          "order_by": ["slot", "entry_id"]
+        }
       }
     }
   },
   "fields": {
-    "owned": { "type": "map<string,ItemOwned>", "max_count": 64 }
+    "last_container_id": { "type": "u32", "default": 0, "min": 0, "max": 4294967294 },
+    "last_entry_id": { "type": "u32", "default": 0, "min": 0, "max": 4294967294 },
+    "containers": {
+      "type": "list<ItemContainer>",
+      "max_count": 128,
+      "order_by": ["container_id"]
+    }
   },
   "events": {
     "txn": {
       "fields": {
         "op":              { "type": "string" },
         "def_id":          { "type": "string" },
-        "container":       { "type": "string" },
-        "entry_key":       { "type": "string" },
+        "container_id":    { "type": "i64" },
+        "entry_id":        { "type": "i64" },
         "requested_delta": { "type": "i64" },
         "applied_delta":   { "type": "i64" },
         "before_count":    { "type": "i64" },
@@ -35,12 +61,54 @@
         "reason":          { "type": "string" }
       }
     },
+    "payment": {
+      "fields": {
+        "cost_fingerprint":   { "type": "hash" },
+        "scope_fingerprint":  { "type": "hash" },
+        "source_fingerprint": { "type": "hash" },
+        "requirement_count":  { "type": "i64" },
+        "scope_count":        { "type": "i64" },
+        "source_entry_count": { "type": "i64" },
+        "requested_units":    { "type": "i64" },
+        "applied_units":      { "type": "i64" },
+        "reason":             { "type": "string" }
+      }
+    },
+    "acquire": {
+      "fields": {
+        "item":               { "type": "hash" },
+        "destination_id":     { "type": "i64" },
+        "entry_id":           { "type": "i64" },
+        "paid":               { "type": "bool" },
+        "cost_fingerprint":   { "type": "hash" },
+        "scope_fingerprint":  { "type": "hash" },
+        "source_fingerprint": { "type": "hash" },
+        "requirement_count":  { "type": "i64" },
+        "applied_units":      { "type": "i64" },
+        "reason":             { "type": "string" }
+      }
+    },
+    "upgrade": {
+      "fields": {
+        "item":               { "type": "hash" },
+        "entry_id":           { "type": "i64" },
+        "from_level":         { "type": "int" },
+        "target_level":       { "type": "int" },
+        "paid":               { "type": "bool" },
+        "cost_fingerprint":   { "type": "hash" },
+        "scope_fingerprint":  { "type": "hash" },
+        "source_fingerprint": { "type": "hash" },
+        "requirement_count":  { "type": "i64" },
+        "applied_units":      { "type": "i64" },
+        "reason":             { "type": "string" }
+      }
+    },
     "move": {
       "fields": {
         "def_id":          { "type": "string" },
-        "entry_key":       { "type": "string" },
-        "from_container":  { "type": "string" },
-        "to_container":    { "type": "string" },
+        "entry_id":         { "type": "i64" },
+        "from_container_id": { "type": "i64" },
+        "to_container_id":   { "type": "i64" },
         "requested_count": { "type": "i64" },
         "moved_count":     { "type": "i64" },
         "reason":          { "type": "string" }

@@ -31,7 +31,7 @@ set(PROGRESSION_CORE_SCRIPTS "${PROGRESSION_CORE_DIR}/scripts")
 ```
 
 Content codegen (writes into the game's OWN generated dir, not the module;
-`--items` cross-checks `currency_def` against the items catalog;
+`--items-snapshot` cross-checks `currency_def` against the canonical Items Snapshot;
 `--state-schema` validates the game-owned progression fragment and supplies
 the track-id storage bound):
 
@@ -40,10 +40,10 @@ add_custom_command(
     OUTPUT "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.h" "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c"
     COMMAND "${Python3_EXECUTABLE}" "${PROGRESSION_CORE_SCRIPTS}/generate_progression_tracks.py"
         --catalog "<game>/content/progression.json"
-        --items "<game>/content/items.json"
+        --items-snapshot "<build>/generated/items-catalog/items.snapshot.json"
         --state-schema "<game>/state/progression.schema.json"
         --out-dir "${GAME_SOURCE_GENERATED_DIR}"
-    DEPENDS "<game>/content/progression.json" "<game>/content/items.json"
+    DEPENDS "<game>/content/progression.json" "<build>/generated/items-catalog/items.snapshot.json"
         "<game>/state/progression.schema.json"
         "${PROGRESSION_CORE_SCRIPTS}/generate_progression_tracks.py")
 ```
@@ -78,7 +78,7 @@ Every consumer still supplies its own:
 
 ```text
 <game>/content/progression.json           # tracks[] catalog (id/mode/currency_def/max_level/curve)
-<game>/content/items.json                 # currency_def cross-check (shared with items-core)
+<build>/generated/items-catalog/items.snapshot.json  # currency_def cross-check from items-core
 <game>/state/progression.schema.json      # tracks: map<string, {level, xp}>, NO hooks
 <game>/src/ui/...                         # composition: reading progression_level()/progression_xp_*() into UI
 ```
@@ -102,11 +102,12 @@ add_executable(test_progression
     tests/test_progression_catalog.c        # hand-written k_tracks (not .gen.c)
     "${PROGRESSION_CORE_SRC}/progression.c"
     "${PROGRESSION_STATE_GENERATED_SOURCE}" "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"
-    "${ITEMS_CORE_SRC}/items_containers.c" "${ITEMS_CORE_SRC}/items_catalog.c" "${ITEMS_CATALOG_GENERATED_SOURCE}"
+    "${ITEMS_CORE_SRC}/items_containers.c" "${ITEMS_CORE_SRC}/items_runtime_package.c"
     "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
     src/features/items/items_bootstrap.c "${ITEMS_CORE_SRC}/items_reconcile.c"
     src/game_state_json.c "${GAME_EVENTS_SRC}/game_events.c")
 target_include_directories(test_progression PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src ...)
+target_compile_definitions(test_progression PRIVATE ITEMS_RUNTIME_PACKAGE_ENABLED=1)
 ```
 
 `test_progression_curve` — golden test over the demo's REAL generated

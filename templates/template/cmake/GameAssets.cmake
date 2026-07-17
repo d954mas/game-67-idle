@@ -10,8 +10,8 @@ if(NOT EMSCRIPTEN)
     add_custom_command(
         OUTPUT "${GAME_PACK_DIR}/game.ntpack" "${CMAKE_CURRENT_SOURCE_DIR}/src/generated/game_assets.h"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_PACK_DIR}"
-        COMMAND $<TARGET_FILE:build_game_packs> "${GAME_PACK_DIR}"
-        DEPENDS build_game_packs src/build_packs.c
+        COMMAND $<TARGET_FILE:build_game_packs> "${GAME_PACK_DIR}" "${ITEMS_CATALOG_PACKAGE}"
+        DEPENDS build_game_packs src/build_packs.c "${ITEMS_CATALOG_PACKAGE}"
             assets/shaders/slug_text.vert assets/shaders/slug_text.frag
             assets/shaders/mesh_inst.vert assets/shaders/mesh_inst.frag
             assets/shaders/mesh_tex.vert assets/shaders/mesh_tex.frag

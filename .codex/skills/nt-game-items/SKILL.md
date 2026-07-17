@@ -14,8 +14,8 @@ Workflow router for the split items feature. The invariant core lives in
    validation, compatibility, and extension boundaries.
 2. Read `features/items-core/INSTALL.md` for wiring, verification, and removal.
 3. Read `features/items-core/feature.json` for the versioned machine contract.
-4. Read the consumer's `src/features/items/README.md`, then inspect its catalog,
-   lock, field schema, and state schema as relevant.
+4. Read the consumer's `src/features/items/README.md`, then inspect its Lua
+   manifest/modules, release lock, and state schema as relevant.
 
 ## Catalog workflow
 
@@ -31,6 +31,7 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> validate
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> validate --affected <item-id>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> build --out-dir <build-dir>
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> seal-receipt
 ```
 
 Use `chart` and `requirements` for bounded reports; inspect command help for
@@ -45,27 +46,18 @@ Unsupported source shapes route to direct source/agent editing.
 Use `batch --patch-file` only when every typed operation resolves to the same
 Lua file; preview and store its returned inverse batch before `--apply`.
 
-Until T0386 removes the legacy JSON catalog, use its existing op-layer only for
-that legacy path:
-
-Use the module op-layer; do not add a second catalog parser:
-
-```powershell
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py list --catalog <game>/content/items.json --json
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py validate --catalog <game>/content/items.json --schema <game>/content/item_fields.schema.json --baseline <game>/content/items.lock.json --state-schema <game>/state/items.schema.json --json
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py schema --schema <game>/content/item_fields.schema.json --json
-```
-
-Pass consumer paths explicitly. Follow the consumer README for additions,
-removals, version bumps, migrations, and lock handling. Regenerate catalog
-tables and run registered tests after catalog changes.
+There is no legacy parser or fallback catalog. Pass the consumer root
+explicitly. Follow its README for additions, removals, version bumps,
+migrations, and release-lock handling. `seal-receipt` is the only release
+history write path; run it only after the matching migration and checks pass.
 
 ## Runtime and state workflow
 
 1. Use the public ownership API; do not mutate raw items state.
 2. Keep reason tags and new-game seed in the consumer.
 3. Route save-shape and migrations through `nt-game-state-management`.
-4. Run module validation and the consumer's relevant runtime/save tests.
+4. Bind the packed `items/catalog` blob before save load/reconcile or gameplay.
+5. Run module validation and the consumer's relevant runtime/save tests.
 
 ## Routing
 

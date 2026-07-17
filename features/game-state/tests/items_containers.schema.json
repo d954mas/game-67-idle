@@ -1,0 +1,51 @@
+{
+  "schema": "items.runtime_v2",
+  "schema_version": 2,
+  "fragment": "items_v2",
+  "version": 1,
+  "string_max": 128,
+  "reserved": ["owned"],
+  "enums": {
+    "ContainerPolicy": ["generic", "currency_only", "equipment"]
+  },
+  "types": {
+    "ItemEntry": {
+      "kind": "object",
+      "reserved": ["container_id", "entry_key"],
+      "fields": {
+        "entry_id": { "type": "u32", "default": 1, "min": 1, "max": 4294967294 },
+        "slot": { "type": "u32", "default": 0, "min": 0, "max": 4294967294 },
+        "def_id": { "type": "string", "max_length": 127 },
+        "count": { "type": "i64", "default": 0, "min": 0, "max": 9000000000000000000 },
+        "level": { "type": "int", "default": 1, "min": 1, "max": 9999 },
+        "durability": { "type": "float", "default": 1, "min": 0, "max": 1 },
+        "quarantined": { "type": "bool", "default": false }
+      }
+    },
+    "ItemContainer": {
+      "kind": "object",
+      "reserved": ["entry_keys"],
+      "fields": {
+        "container_id": { "type": "u32", "default": 1, "min": 1, "max": 4294967294 },
+        "capacity": { "type": "u32", "default": 0, "min": 0, "max": 4294967294 },
+        "policy": { "type": "enum", "enum": "ContainerPolicy", "default": "generic" },
+        "persistent": { "type": "bool", "default": true },
+        "entries": {
+          "type": "list<ItemEntry>",
+          "max_count": 1024,
+          "order_by": ["slot", "entry_id"]
+        }
+      }
+    }
+  },
+  "fields": {
+    "last_container_id": { "type": "u32", "default": 0, "min": 0, "max": 4294967294 },
+    "last_entry_id": { "type": "u32", "default": 0, "min": 0, "max": 4294967294 },
+    "containers": {
+      "type": "list<ItemContainer>",
+      "max_count": 128,
+      "order_by": ["container_id"]
+    }
+  },
+  "events": {}
+}

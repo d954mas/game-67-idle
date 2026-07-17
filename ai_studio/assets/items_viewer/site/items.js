@@ -1,15 +1,29 @@
-// Items Viewer page (T0316 phase 1) — read-only. Bare ESM, no framework, no build
-// step: fetches the two /api/items-viewer/* endpoints and renders. See the module
-// README ("Why the site can't import ops.mjs") for why the tiny "issue routing" and
-// BOM-agnostic-JSON logic here is a deliberate, small duplication of ops.mjs's own
-// pure helpers rather than a shared import.
+// Items Workbench page. Bare ESM, no framework or build step.
+import { field, make } from "./dom.js";
+import { renderItemDetail } from "./item_detail.js";
+import { captureCatalogScope, captureEditScope, scopeIsCurrent, scopedUndo } from "./request_scope.js";
+
 const state = {
   catalogs: [],
   selectedId: null,
+  selectedItemId: null,
   view: null,
-  // T0316: the view.icons.page_data_uri, decoded ONCE per loadCatalog (before
-  // render()) so every card's canvas crop reads from the same already-decoded
-  // <img> instead of each card re-decoding the same base64 PNG.
+  detail: null,
+  chart: null,
+  chartField: null,
+  detailRequest: 0,
+  catalogRequest: 0,
+  issuesById: new Map(),
+  editDraft: null,
+  preview: null,
+  previewEdit: null,
+  editBusy: false,
+  editMessage: "",
+  editError: false,
+  undoStack: [],
+  // T0316: the bounded view.icons.page_url, decoded ONCE per loadCatalog (before
+  // render()) so every row's canvas crop reads from the same already-decoded
+  // <img> instead of each row re-decoding the same base64 PNG.
   iconsImage: null,
 };
 
@@ -19,43 +33,19 @@ const els = {
   topBanner: document.getElementById("topBanner"),
   summaryPanel: document.getElementById("summaryPanel"),
   removedSection: document.getElementById("removedSection"),
-  cardGrid: document.getElementById("cardGrid"),
+  itemList: document.getElementById("itemList"),
+  itemDetail: document.getElementById("itemDetail"),
 };
-
-function make(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
-// Phase-1 label rule (spec §4): item_fields.schema.json fields carry ONLY
-// {type, required} -- no labels. Humanize the key ("display_name" -> "Display name")
-// until a future ui:{} namespace ships real labels; this is the single seam to swap.
-function humanize(key) {
-  const text = String(key || "").replace(/_/g, " ");
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
-}
-
-function field(label, value) {
-  const row = make("div", "iv-field");
-  row.append(make("strong", "iv-field-label", label));
-  const box = make("span", "iv-field-value");
-  if (value instanceof Node) box.append(value);
-  else box.textContent = value === undefined || value === null || value === "" ? "—" : value;
-  row.append(box);
-  return row;
-}
 
 function setStatus(text, isError = false) {
   els.status.textContent = text;
   els.status.classList.toggle("is-error", Boolean(isError));
 }
 
-// Icons (T0316 spec §5): view.icons.regions maps an icon_asset_id ("icons/gold")
+// Icons: view.icons.regions maps an item icon id ("icons/gold")
 // straight to a pixel rect on the ALREADY-DECODED atlas debug-PNG page (decoded
 // once in loadCatalog, before render() — see state.iconsImage). No gallery
-// search, no icon-link write layer (phase 2) — this reads exactly what the
+// search and no icon-link write layer — this reads exactly what the
 // engine packed.
 function resolveIcon(view, assetId) {
   return view.icons && view.icons.regions ? view.icons.regions[assetId] : undefined;
@@ -63,7 +53,7 @@ function resolveIcon(view, assetId) {
 
 function renderIconSlot(item, view) {
   const box = make("div", "iv-icon-slot");
-  const region = resolveIcon(view, item.icon_asset_id);
+  const region = resolveIcon(view, item.icon);
   if (region && state.iconsImage) {
     const canvas = document.createElement("canvas");
     canvas.width = region.w;
@@ -79,121 +69,14 @@ function renderIconSlot(item, view) {
   }
   box.classList.add("iv-icon-missing");
   box.append(make("span", "iv-icon-glyph", "?"));
-  box.append(make("span", "iv-icon-caption", item.icon_asset_id || "no icon"));
+  box.append(make("span", "iv-icon-caption", item.icon || "no icon"));
   if (view.icons && view.icons.reason) box.title = view.icons.reason;
   return box;
 }
 
-// Per-type render rules (spec §4): object -> recurse into its own .fields; list<string>
-// -> join; i64/string/bool -> scalar; enum -> the value itself. A schema key absent
-// from the record renders as an em-dash (handled by field() above).
-function renderTypedValue(type, value, spec) {
-  if (value === undefined || value === null) return "—";
-  if (type === "object") {
-    if (spec && spec.fields) {
-      const nested = make("div", "iv-nested");
-      for (const [key, nestedSpec] of Object.entries(spec.fields)) {
-        nested.append(field(humanize(key), renderTypedValue(nestedSpec.type, value[key], nestedSpec)));
-      }
-      return nested;
-    }
-    // An object-typed field with no declared sub-fields (e.g. blocks.use.params, an
-    // open bag — item_fields.schema.json only says {"type":"object"}) -- render its
-    // own keys directly instead of the useless default String(value) ("[object
-    // Object]"), same degradation renderRawValue uses when the schema is unavailable.
-    return renderRawValue(value);
-  }
-  if (type === "list<string>") return Array.isArray(value) && value.length ? value.join(", ") : "—";
-  if (type === "bool") return value ? "true" : "false";
-  return String(value);
-}
-
-// Degradation (spec §4): schema unavailable -> iterate the record's OWN keys, no type
-// info to lean on.
-function renderRawValue(value) {
-  if (value === undefined || value === null) return "—";
-  if (Array.isArray(value)) return value.length ? value.map(String).join(", ") : "—";
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "object") {
-    const nested = make("div", "iv-nested");
-    for (const [key, v] of Object.entries(value)) nested.append(field(humanize(key), renderRawValue(v)));
-    return nested;
-  }
-  return String(value);
-}
-
-function renderBlock(blockName, blockValue, blockSpec) {
-  const box = make("div", "iv-block");
-  box.append(make("span", "iv-chip iv-chip-block", humanize(blockName)));
-  const rows = make("div", "iv-block-rows");
-  if (blockSpec && blockSpec.fields) {
-    for (const [key, spec] of Object.entries(blockSpec.fields)) {
-      rows.append(field(humanize(key), renderTypedValue(spec.type, blockValue ? blockValue[key] : undefined, spec)));
-    }
-  } else if (blockValue && typeof blockValue === "object") {
-    for (const [key, v] of Object.entries(blockValue)) rows.append(field(humanize(key), renderRawValue(v)));
-  }
-  box.append(rows);
-  return box;
-}
-
-// Chrome keys are hand-rendered at fixed positions (icon/title/subtitle/kind chip),
-// so they are excluded from the schema-iterated generic rows (spec §4). `blocks` is
-// the item_json_record's own bookkeeping array, never a displayable field.
-const CHROME_KEYS = new Set(["id", "display_name", "icon_asset_id", "kind", "blocks"]);
-const BLOCK_KEYS = new Set(["equip", "use", "currency"]);
-
-function renderCard(item, view, issues) {
-  const card = make("article", "iv-card");
-
-  const top = make("div", "iv-card-top");
-  top.append(renderIconSlot(item, view));
-  const titleBox = make("div", "iv-card-title");
-  titleBox.append(make("h3", "", item.display_name || item.id || "—"));
-  titleBox.append(make("span", "iv-card-id", item.id || "—"));
-  top.append(titleBox);
-  card.append(top);
-
-  const chips = make("div", "iv-card-chips");
-  const kindEntry = view.item_kinds.find((k) => k.id === item.kind);
-  chips.append(make("span", "iv-chip iv-chip-kind", (kindEntry && kindEntry.label) || item.kind || "—"));
-  const lockStatus = view.lock.status_by_id[item.id] || "draft";
-  chips.append(make("span", `iv-chip iv-chip-lock iv-chip-lock-${lockStatus}`, lockStatus));
-  card.append(chips);
-
-  const rows = make("div", "iv-card-rows");
-  if (view.schema && view.schema.core) {
-    for (const [key, spec] of Object.entries(view.schema.core)) {
-      if (CHROME_KEYS.has(key)) continue;
-      rows.append(field(humanize(key), renderTypedValue(spec.type, item[key], spec)));
-    }
-  } else {
-    for (const key of Object.keys(item)) {
-      if (CHROME_KEYS.has(key) || BLOCK_KEYS.has(key)) continue;
-      rows.append(field(humanize(key), renderRawValue(item[key])));
-    }
-  }
-  card.append(rows);
-
-  for (const blockName of item.blocks || []) {
-    const blockSpec = view.schema && view.schema.blocks ? view.schema.blocks[blockName] : null;
-    card.append(renderBlock(blockName, item[blockName], blockSpec));
-  }
-
-  if (issues.length) {
-    const issuesBox = make("div", "iv-card-issues");
-    for (const issue of issues) {
-      issuesBox.append(make("p", `iv-issue iv-issue-${issue.severity}`, `[${issue.rule}] ${issue.msg}`));
-    }
-    card.append(issuesBox);
-  }
-
-  return card;
-}
 
 // Tag validate.errors/warnings with a severity so the same list can be filtered once
-// for card/summary/removed placement (spec §4 "Per-item issues": red/yellow on the
-// card).
+// for item/summary/removed placement.
 function taggedIssues(view) {
   const errors = (view.validate.errors || []).map((issue) => ({ ...issue, severity: "error" }));
   const warnings = (view.validate.warnings || []).map((issue) => ({ ...issue, severity: "warning" }));
@@ -202,10 +85,10 @@ function taggedIssues(view) {
 
 // Issue routing rule (spec §4, load-bearing — mirrors ops.mjs's routeIssues(), which
 // this module cannot import: it pulls in node:child_process/node:fs and there is no
-// build step to strip that for a browser bundle). An issue attaches to a card IFF its
+// build step to strip that for a browser bundle). An issue attaches to an item IFF its
 // `id` is present in items[]; a catalog-level rule (id:null) goes to the Summary
-// panel; a rule keyed on a DELETED id (removed-without-reaction and neighbors) has no
-// card and goes to the Removed/lock section.
+// panel; a rule keyed on a deleted id has no current item and goes to the
+// Removed/lock section.
 function renderTopBanner(view) {
   els.topBanner.replaceChildren();
   els.topBanner.classList.add("is-hidden");
@@ -246,29 +129,6 @@ function renderSummary(view, catalogIssues) {
   meta.append(field("Errors", String(view.validate.errors.length)));
   meta.append(field("Warnings", String(view.validate.warnings.length)));
   root.append(meta);
-
-  const containersBox = make("div", "iv-containers");
-  containersBox.append(make("h3", "", `Containers (${view.containers.length})`));
-  if (view.containers.length) {
-    const table = make("table", "iv-table");
-    const thead = make("thead");
-    const headRow = make("tr");
-    for (const key of ["id", "capacity", "accept_policy", "hidden"]) headRow.append(make("th", "", humanize(key)));
-    thead.append(headRow);
-    table.append(thead);
-    const tbody = make("tbody");
-    for (const container of view.containers) {
-      const row = make("tr");
-      row.append(make("td", "", container.id));
-      row.append(make("td", "", container.capacity ? String(container.capacity) : "unlimited"));
-      row.append(make("td", "", container.accept_policy));
-      row.append(make("td", "", container.hidden ? "yes" : "no"));
-      tbody.append(row);
-    }
-    table.append(tbody);
-    containersBox.append(table);
-  }
-  root.append(containersBox);
 
   if (catalogIssues.length) {
     const box = make("div", "iv-catalog-issues");
@@ -313,15 +173,274 @@ function renderRemovedSection(view, homelessIssues) {
   root.append(list);
 }
 
-function renderCards(view, cardIssuesById) {
-  const root = els.cardGrid;
+function renderItemTable(view, issuesById) {
+  const root = els.itemList;
   root.replaceChildren();
   if (!view.items.length) {
     root.append(make("div", "iv-empty", view.meta.hasItems ? "No items in this catalog." : "Items not connected for this game."));
     return;
   }
+  const table = make("table", "iv-table iv-master-table");
+  const thead = make("thead", "");
+  const heading = make("tr", "");
+  for (const label of ["Item", "Kind", "Storage", "Release", "Issues"]) {
+    heading.append(make("th", "", label));
+  }
+  thead.append(heading);
+  table.append(thead);
+  const body = make("tbody", "");
   for (const item of view.items) {
-    root.append(renderCard(item, view, cardIssuesById.get(item.id) || []));
+    const row = make("tr", item.id === state.selectedItemId ? "is-selected" : "");
+    const itemCell = make("td", "");
+    const button = make("button", "iv-item-button");
+    button.type = "button";
+    button.dataset.itemId = item.id;
+    button.setAttribute("aria-label", `Inspect ${item.name || item.id} (${item.id})`);
+    button.setAttribute("aria-current", item.id === state.selectedItemId ? "true" : "false");
+    button.append(renderIconSlot(item, view));
+    const title = make("span", "iv-item-title");
+    title.append(make("strong", "", item.name || item.id));
+    title.append(make("code", "", item.id));
+    button.append(title);
+    button.addEventListener("click", () => selectItem(item.id, { focus: true }));
+    itemCell.append(button);
+    row.append(itemCell);
+    row.append(make("td", "", item.kind || "—"));
+    row.append(make("td", "", item.runtime?.storage || "—"));
+    const release = view.lock.status_by_id[item.id] || "draft";
+    const releaseCell = make("td", "");
+    releaseCell.append(make("span", `iv-chip iv-chip-lock iv-chip-lock-${release}`, release));
+    row.append(releaseCell);
+    row.append(make("td", "iv-diagnostic-count", String((issuesById.get(item.id) || []).length)));
+    body.append(row);
+  }
+  table.append(body);
+  root.append(table);
+}
+
+function detailModel(extra = {}) {
+  const summary = state.view?.items.find((item) => item.id === state.selectedItemId);
+  return {
+    summary,
+    detail: state.detail,
+    chart: state.chart,
+    chartField: state.chartField,
+    release: state.view?.lock.status_by_id[state.selectedItemId] || "draft",
+    issues: state.issuesById.get(state.selectedItemId) || [],
+    onChartField: loadSelectedChart,
+    editor: {
+      draft: state.editDraft,
+      preview: state.preview,
+      busy: state.editBusy,
+      message: state.editMessage,
+      error: state.editError,
+      undoCount: state.undoStack.length,
+      onPreview: previewEdit,
+      onApply: applyPreview,
+      onUndo: undoLastEdit,
+      onInputError: showEditInputError,
+    },
+    ...extra,
+  };
+}
+
+function focusedUrl(endpoint, values, catalogId = state.selectedId) {
+  const params = new URLSearchParams({ catalog: catalogId, ...values });
+  return `/api/items-viewer/${endpoint}?${params}`;
+}
+
+function resetEditView() {
+  state.editDraft = null;
+  state.preview = null;
+  state.previewEdit = null;
+  state.editBusy = false;
+  state.editMessage = "";
+  state.editError = false;
+}
+
+function renderCurrentDetail() {
+  renderItemDetail(els.itemDetail, detailModel());
+}
+
+function editFailureMessage(payload) {
+  const error = payload?.error;
+  if (typeof error === "string") return error;
+  if (error?.message) return `${error.code ? `${error.code}: ` : ""}${error.message}`;
+  return "Semantic edit failed.";
+}
+
+async function submitSemanticEdit(catalogId, edit, apply) {
+  const response = await fetch("/api/items-viewer/edit", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ catalog: catalogId, edit, apply }),
+  });
+  const payload = await response.json();
+  return payload.ok ? payload : { ...payload, ok: false };
+}
+
+function showEditInputError(message) {
+  state.editMessage = message;
+  state.editError = true;
+  renderCurrentDetail();
+  els.itemDetail.querySelector(".iv-action-button")?.focus();
+}
+
+async function previewEdit(edit) {
+  const scope = captureEditScope(state, edit.item);
+  if (!scopeIsCurrent(state, scope)) return;
+  state.editDraft = edit;
+  state.previewEdit = edit;
+  state.preview = null;
+  state.editBusy = true;
+  state.editMessage = "Evaluating ephemeral preview…";
+  state.editError = false;
+  renderCurrentDetail();
+  try {
+    const payload = await submitSemanticEdit(scope.catalogId, edit, false);
+    if (!scopeIsCurrent(state, scope)) return;
+    state.editBusy = false;
+    if (!payload.ok) {
+      state.editMessage = editFailureMessage(payload);
+      state.editError = true;
+    } else {
+      state.preview = payload.result;
+      state.editMessage = "Preview validated. Review the source and semantic diff before Apply.";
+      state.editError = false;
+    }
+  } catch (error) {
+    if (!scopeIsCurrent(state, scope)) return;
+    state.editBusy = false;
+    state.editMessage = `Preview request failed: ${error.message}`;
+    state.editError = true;
+  }
+  renderCurrentDetail();
+  els.itemDetail.querySelector(state.preview ? ".iv-action-primary" : ".iv-action-button")?.focus();
+}
+
+async function applyPreview() {
+  const edit = state.previewEdit;
+  if (!edit || !state.preview) return;
+  const scope = captureEditScope(state, edit.item);
+  if (!scopeIsCurrent(state, scope)) return;
+  state.editBusy = true;
+  state.editMessage = "Applying reviewed semantic patch…";
+  state.editError = false;
+  renderCurrentDetail();
+  try {
+    const payload = await submitSemanticEdit(scope.catalogId, edit, true);
+    if (!scopeIsCurrent(state, scope)) return;
+    if (!payload.ok) {
+      state.editBusy = false;
+      state.editMessage = editFailureMessage(payload);
+      state.editError = true;
+      renderCurrentDetail();
+      els.itemDetail.querySelector(".iv-action-primary")?.focus();
+      return;
+    }
+    if (payload.result.applied) state.undoStack.push(scopedUndo(scope, payload.result.inverse_patch));
+    await selectItem(edit.item, { focus: true });
+    state.editMessage = payload.result.applied ? "Patch applied and full validation passed." : "Preview matched the current source; no bytes changed.";
+    renderCurrentDetail();
+  } catch (error) {
+    if (!scopeIsCurrent(state, scope)) return;
+    state.editBusy = false;
+    state.editMessage = `Apply request failed: ${error.message}`;
+    state.editError = true;
+    renderCurrentDetail();
+  }
+}
+
+async function undoLastEdit() {
+  const undo = state.undoStack.at(-1);
+  if (!undo) return;
+  const scope = captureEditScope(state, undo.itemId);
+  if (scope.catalogId !== undo.catalogId || !scopeIsCurrent(state, scope)) return;
+  state.editBusy = true;
+  state.editMessage = "Replaying returned inverse patch…";
+  state.editError = false;
+  renderCurrentDetail();
+  try {
+    const payload = await submitSemanticEdit(undo.catalogId, undo.inverse, true);
+    if (!scopeIsCurrent(state, scope)) return;
+    if (!payload.ok) {
+      state.editBusy = false;
+      state.editMessage = editFailureMessage(payload);
+      state.editError = true;
+      renderCurrentDetail();
+      return;
+    }
+    state.undoStack.pop();
+    await selectItem(undo.inverse.item, { focus: true });
+    state.editMessage = payload.result.applied ? "Undo applied from the stored inverse patch." : "Undo required no source change.";
+    renderCurrentDetail();
+  } catch (error) {
+    if (!scopeIsCurrent(state, scope)) return;
+    state.editBusy = false;
+    state.editMessage = `Undo request failed: ${error.message}`;
+    state.editError = true;
+    renderCurrentDetail();
+  }
+}
+
+function focusSelectedItem() {
+  const selected = [...els.itemList.querySelectorAll(".iv-item-button")]
+    .find((button) => button.dataset.itemId === state.selectedItemId);
+  selected?.focus();
+}
+
+function focusSeriesSelect() {
+  els.itemDetail.querySelector(".iv-series-select")?.focus();
+}
+
+async function loadSelectedChart(field, options = {}) {
+  const request = state.detailRequest;
+  const catalogId = state.selectedId;
+  const itemId = state.selectedItemId;
+  state.chartField = field;
+  state.chart = null;
+  renderItemDetail(els.itemDetail, detailModel());
+  if (options.focus) focusSeriesSelect();
+  try {
+    const response = await fetch(focusedUrl("chart", { item: itemId, field }, catalogId), { cache: "no-store" });
+    if (!response.ok) throw new Error(`status ${response.status}`);
+    const chart = await response.json();
+    if (request !== state.detailRequest) return;
+    state.chart = chart;
+    renderItemDetail(els.itemDetail, detailModel());
+    if (options.focus) focusSeriesSelect();
+  } catch (error) {
+    if (request !== state.detailRequest) return;
+    state.chart = { content_error: { stderr: `Could not load chart: ${error.message}` } };
+    renderItemDetail(els.itemDetail, detailModel());
+    if (options.focus) focusSeriesSelect();
+  }
+}
+
+async function selectItem(itemId, options = {}) {
+  const catalogId = state.selectedId;
+  state.selectedItemId = itemId;
+  state.detail = null;
+  state.chart = null;
+  state.chartField = null;
+  resetEditView();
+  const request = ++state.detailRequest;
+  renderItemTable(state.view, state.issuesById);
+  if (options.focus) focusSelectedItem();
+  renderItemDetail(els.itemDetail, detailModel({ loading: true, message: "Loading item detail…" }));
+  try {
+    const response = await fetch(focusedUrl("item", { item: itemId }, catalogId), { cache: "no-store" });
+    if (!response.ok) throw new Error(`status ${response.status}`);
+    const detail = await response.json();
+    if (request !== state.detailRequest) return;
+    state.detail = detail;
+    state.chartField = detail.fields?.[0]?.member || null;
+    renderItemDetail(els.itemDetail, detailModel());
+    if (state.chartField && !detail.content_error) await loadSelectedChart(state.chartField);
+  } catch (error) {
+    if (request !== state.detailRequest) return;
+    state.detail = { content_error: { stderr: `Could not load item: ${error.message}` } };
+    renderItemDetail(els.itemDetail, detailModel());
   }
 }
 
@@ -332,16 +451,17 @@ function render(view) {
   const allIssues = taggedIssues(view);
   const catalogIssues = allIssues.filter((issue) => issue.id == null);
   const homelessIssues = allIssues.filter((issue) => issue.id != null && !itemIds.has(issue.id));
-  const cardIssuesById = new Map();
+  const itemIssuesById = new Map();
   for (const issue of allIssues) {
     if (issue.id == null || !itemIds.has(issue.id)) continue;
-    if (!cardIssuesById.has(issue.id)) cardIssuesById.set(issue.id, []);
-    cardIssuesById.get(issue.id).push(issue);
+    if (!itemIssuesById.has(issue.id)) itemIssuesById.set(issue.id, []);
+    itemIssuesById.get(issue.id).push(issue);
   }
 
   renderSummary(view, catalogIssues);
   renderRemovedSection(view, homelessIssues);
-  renderCards(view, cardIssuesById);
+  state.issuesById = itemIssuesById;
+  renderItemTable(view, itemIssuesById);
 }
 
 function renderDropdown() {
@@ -359,28 +479,44 @@ function renderDropdown() {
 // empty state.
 async function loadCatalog(id) {
   state.selectedId = id;
+  state.catalogRequest += 1;
+  const scope = captureCatalogScope(state);
+  state.selectedItemId = null;
+  state.detail = null;
+  state.chart = null;
+  state.chartField = null;
+  state.undoStack = [];
+  resetEditView();
+  state.detailRequest += 1;
   setStatus("Loading…");
   try {
     const response = await fetch(`/api/items-viewer/catalog?id=${encodeURIComponent(id)}`, { cache: "no-store" });
     if (!response.ok) throw new Error(`status ${response.status}`);
     const view = await response.json();
-    state.view = view;
-    // One decode for the whole page, BEFORE render() (spec §5) — every card's
+    if (!scopeIsCurrent(state, scope)) return;
+    // One decode for the whole page, BEFORE render() (spec §5) — every row's
     // canvas crop below reads from this same decoded <img>, never re-fetches.
-    state.iconsImage = null;
-    if (view.icons && view.icons.page_data_uri) {
+    let iconsImage = null;
+    if (view.icons && view.icons.page_url) {
       const img = new Image();
-      img.src = view.icons.page_data_uri;
+      img.src = view.icons.page_url;
       try {
         await img.decode();
-        state.iconsImage = img;
+        if (!scopeIsCurrent(state, scope)) return;
+        iconsImage = img;
       } catch {
-        state.iconsImage = null; // decode failure degrades to the "?" placeholder, same as a missing region
+        iconsImage = null; // decode failure degrades to the "?" placeholder, same as a missing region
       }
     }
+    if (!scopeIsCurrent(state, scope)) return;
+    state.view = view;
+    state.iconsImage = iconsImage;
     render(view);
     setStatus(`${view.items.length} item(s) in ${view.meta.title}`);
+    if (view.items.length) await selectItem(view.items[0].id);
+    else renderItemDetail(els.itemDetail, { message: "No item selected." });
   } catch (error) {
+    if (!scopeIsCurrent(state, scope)) return;
     setStatus(`Could not load catalog: ${error.message}`, true);
   }
 }

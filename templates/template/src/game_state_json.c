@@ -58,6 +58,29 @@ bool gsj_read_int_range(const cJSON *obj, const char *name, int min_value, int m
     return true;
 }
 
+bool gsj_parse_u32_value(const cJSON *item, uint32_t min_value, uint32_t max_value, uint32_t *out, char *error, int error_cap) {
+    if (!cJSON_IsNumber(item)) {
+        gsj_set_error(error, error_cap, "expected u32 number");
+        return false;
+    }
+    double number = item->valuedouble;
+    if (number < (double)min_value || number > (double)max_value ||
+        number > (double)UINT32_MAX || number != (double)(uint32_t)number) {
+        gsj_set_error(error, error_cap, "u32 value out of range");
+        return false;
+    }
+    *out = (uint32_t)number;
+    return true;
+}
+
+bool gsj_read_u32(const cJSON *obj, const char *name, uint32_t min_value, uint32_t max_value, uint32_t *out, char *error, int error_cap) {
+    const cJSON *item = gsj_object_item(obj, name);
+    if (!item) {
+        return true;
+    }
+    return gsj_parse_u32_value(item, min_value, max_value, out, error, error_cap);
+}
+
 bool gsj_read_float_range(const cJSON *obj, const char *name, float min_value, float max_value, float *out, char *error, int error_cap) {
     const cJSON *item = gsj_object_item(obj, name);
     if (!item) {

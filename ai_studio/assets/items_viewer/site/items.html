@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Items Viewer</title>
+  <title>Items Workbench</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/ai_studio/studio_shell/studio_shell.css">
   <link rel="stylesheet" href="items.css">
@@ -60,7 +60,7 @@
       <header class="items-header">
         <div>
           <p class="eyebrow">Items</p>
-          <h1>Items Viewer</h1>
+          <h1>Items Workbench</h1>
           <p id="statusLine" class="items-status">Loading catalogs...</p>
         </div>
         <div class="items-picker">
@@ -75,7 +75,10 @@
 
       <section id="removedSection" class="items-removed is-hidden" aria-label="Removed and lock issues"></section>
 
-      <section id="cardGrid" class="items-card-grid" aria-label="Items"></section>
+      <section class="items-workbench" aria-label="Items Workbench">
+        <div id="itemList" class="items-master" aria-label="Items"></div>
+        <aside id="itemDetail" class="items-detail" aria-label="Selected item detail" aria-live="polite"></aside>
+      </section>
     </main>
   </div>
 

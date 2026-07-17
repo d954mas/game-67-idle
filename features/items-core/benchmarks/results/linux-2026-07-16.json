@@ -1,0 +1,96 @@
+{
+  "build": {
+    "c_compiler": "/usr/bin/clang",
+    "generator": "Ninja",
+    "type": "Release"
+  },
+  "candidates": {
+    "blob": {
+      "compile_link_ms": 2214.293,
+      "executable_bytes": 26960,
+      "image_sections": {},
+      "link_ms": 292.23,
+      "noop_build_ms": 151.658,
+      "runtime": {
+        "access_ns_per_op": 8.644,
+        "access_runs": 1000000,
+        "candidate": "blob",
+        "checksum": 49829954,
+        "schema": "items.runtime.candidate.v1",
+        "startup_bind_ns": 165,
+        "steady_owned_bytes": 568,
+        "transient_input_plus_owned_bytes": 1136
+      },
+      "selected_code_data_section_bytes": null
+    },
+    "c_arrays": {
+      "compile_link_ms": 2092.613,
+      "executable_bytes": 18304,
+      "image_sections": {},
+      "link_ms": 1054.84,
+      "noop_build_ms": 990.11,
+      "runtime": {
+        "access_ns_per_op": 1.907,
+        "access_runs": 1000000,
+        "candidate": "c_arrays",
+        "checksum": 49829954,
+        "schema": "items.runtime.candidate.v1",
+        "startup_bind_ns": 0,
+        "steady_owned_bytes": 0,
+        "transient_input_plus_owned_bytes": 0
+      },
+      "selected_code_data_section_bytes": null
+    }
+  },
+  "decision": {
+    "default": "blob",
+    "reason": "value-only edits keep the ABI header stable and avoid relinking"
+  },
+  "fixture": {
+    "costs": 2,
+    "fields": 1,
+    "items": 2,
+    "levels": 3
+  },
+  "generation": {
+    "blob": {
+      "cold_ms": 557.52,
+      "header_stable_on_value_edit": true,
+      "noop_ms": 957.343,
+      "raw_blob_bytes": 568,
+      "relink_required_on_value_edit": false,
+      "value_edit_changed": {
+        "blob": true,
+        "header": false
+      },
+      "value_edit_ms": 503.07,
+      "zlib_blob_bytes": 267
+    },
+    "c_arrays": {
+      "cold_ms": 762.376,
+      "noop_ms": 324.748,
+      "raw_data_source_bytes": 3291,
+      "relink_required_on_value_edit": true,
+      "value_edit_changed_files": [
+        "items_game.gen.c"
+      ],
+      "value_edit_ms": 361.866,
+      "zlib_data_source_bytes": 913
+    }
+  },
+  "lookup_strategy": "linear stable-hash definition lookup, then checked dense level/value spans",
+  "pack_rebuild": {
+    "blob_requires_relink": false,
+    "c_arrays_require_relink": true,
+    "current_pack_blob_requires_repack": true,
+    "separate_pack_blob_requires_repack": true,
+    "separate_pack_game_pack_requires_rebuild": false
+  },
+  "platform": {
+    "machine": "x86_64",
+    "python": "3.12.13",
+    "release": "5.15.153.1-microsoft-standard-WSL2",
+    "system": "Linux"
+  },
+  "schema": "items.runtime.benchmark.v1"
+}

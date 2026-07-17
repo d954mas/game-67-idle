@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.metadata
 import json
 import math
 from pathlib import Path
@@ -12,6 +11,8 @@ import re
 import subprocess
 import sys
 from typing import Any
+
+import lupa as lupa_package
 
 
 SCHEMA = "items.lua.sandbox.v1"
@@ -24,6 +25,13 @@ DEFAULT_MAX_OUTPUT_ROWS = 10_000
 DEFAULT_MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 DEFAULT_MAX_MANIFEST_BYTES = 1024 * 1024
 DEFAULT_MAX_SOURCE_BYTES = 4 * 1024 * 1024
+BUILTIN_MODULE_NAMES = frozenset({
+    "studio.items",
+    "studio.levels",
+    "studio.field",
+    "studio.requirements",
+    "studio.math",
+})
 
 
 PRELUDE = r'''
@@ -1043,13 +1051,18 @@ def _load_manifest(root: Path, manifest_path: Path) -> tuple[dict[str, tuple[Pat
         rel = entry.get("file")
         if not isinstance(name, str) or not name or not isinstance(rel, str) or not rel:
             raise _failure("manifest.module", "manifest module requires name and file")
+        if name in BUILTIN_MODULE_NAMES:
+            raise _failure("manifest.reserved_module", f"module name is reserved: {name}")
         if name in modules:
             raise _failure("manifest.duplicate_module", f"duplicate module: {name}")
         path = _inside(root, rel)
         modules[name] = (path, path.relative_to(root).as_posix())
     entries = data.get("entries", [])
-    if not isinstance(entries, list) or not all(isinstance(name, str) for name in entries):
+    if not isinstance(entries, list) or not all(isinstance(name, str) and name for name in entries):
         raise _failure("manifest.entries", "manifest entries must be module names")
+    unknown_entries = sorted(set(entries) - set(modules))
+    if unknown_entries:
+        raise _failure("manifest.entry", f"entry is not an approved module: {unknown_entries[0]}")
     return modules, sorted(set(entries))
 
 
@@ -1420,7 +1433,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
     payload = {
         "schema": "items.lua.evaluation.v1",
         "backend": {
-            "package": f"lupa@{importlib.metadata.version('lupa')}",
+            "package": f"lupa@{lupa_package.__version__}",
             "module": BACKEND_MODULE,
             "implementation": runtime.lua_implementation,
             "version": ".".join(map(str, runtime.lua_version)),

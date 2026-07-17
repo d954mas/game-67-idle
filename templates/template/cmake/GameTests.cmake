@@ -68,6 +68,38 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_state_json COMMAND test_game_state_json)
 
+    set(NESTED_STATE_TEST_SCHEMA
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/items_containers.schema.json")
+    set(NESTED_STATE_TEST_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/game-state-nested-test")
+    set(NESTED_STATE_TEST_SOURCE "${NESTED_STATE_TEST_GENERATED_DIR}/items_v2_state.c")
+    add_custom_command(
+        OUTPUT
+            "${NESTED_STATE_TEST_GENERATED_DIR}/items_v2_state.h"
+            "${NESTED_STATE_TEST_SOURCE}"
+            "${NESTED_STATE_TEST_GENERATED_DIR}/items_v2_state_schema.gen.h"
+            "${NESTED_STATE_TEST_GENERATED_DIR}/items_v2_state_events.gen.h"
+            "${NESTED_STATE_TEST_GENERATED_DIR}/items_v2_state_events.gen.c"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${NESTED_STATE_TEST_GENERATED_DIR}"
+        COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
+            --schema "${NESTED_STATE_TEST_SCHEMA}"
+            --out-dir "${NESTED_STATE_TEST_GENERATED_DIR}"
+            --fragment items_v2
+        DEPENDS "${NESTED_STATE_TEST_SCHEMA}" ${GAME_STATE_GENERATOR_SOURCES}
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+        COMMENT "Generating nested game-state test fixture"
+        VERBATIM)
+    add_executable(test_game_state_nested
+        tests/test_game_state_nested.c
+        src/game_state_json.c
+        "${NESTED_STATE_TEST_SOURCE}")
+    target_link_libraries(test_game_state_nested PRIVATE cjson unity)
+    target_include_directories(test_game_state_nested PRIVATE
+        src "${NESTED_STATE_TEST_GENERATED_DIR}")
+    target_compile_definitions(test_game_state_nested PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_state_nested PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_state_nested COMMAND test_game_state_nested)
+
     add_executable(test_game_storage tests/test_game_storage.c src/game_storage.c)
     # nt_log: game_storage.c warns via nt_log_warn on a read ERROR (nt_hash/nt_core are nt_log's deps).
     target_link_libraries(test_game_storage PRIVATE unity nt_log nt_core nt_hash)
@@ -92,7 +124,7 @@ if(NOT EMSCRIPTEN)
         GAME_SAVE_AUTOSAVE_SLOT="test_slot"
         GAME_SAVE_DEBOUNCE_MS=2000
         GAME_SAVE_MAX_INTERVAL_MS=30000
-        GAME_SAVE_DOC_VERSION=1
+        GAME_SAVE_DOC_VERSION=2
         _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_game_save PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
@@ -229,18 +261,6 @@ if(NOT EMSCRIPTEN)
         "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
     target_link_libraries(check_mini_state_events PRIVATE nt_hash nt_log nt_core)  # headers only (OBJECT does not link)
     nt_set_warning_flags(check_mini_state_events)  # same -W set + -Werror toggle as the game target
-
-    # Catalog lookup over the generated const tables.
-    add_executable(test_items_catalog
-        tests/test_items_catalog.c
-        "${ITEMS_CORE_SRC}/items_catalog.c"
-        "${ITEMS_CATALOG_GENERATED_SOURCE}")
-    target_link_libraries(test_items_catalog PRIVATE unity)
-    target_include_directories(test_items_catalog PRIVATE "${ITEMS_CORE_INC}" src "${GAME_SOURCE_GENERATED_DIR}")
-    target_compile_definitions(test_items_catalog PRIVATE _CRT_SECURE_NO_WARNINGS)
-    set_target_properties(test_items_catalog PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
-    add_test(NAME test_items_catalog COMMAND test_items_catalog)
 
     # T0364 proof: the same stable Items header compiles against either a
     # core-only or weapon-specific generated API. Outputs stay build-local.
@@ -404,64 +424,56 @@ if(NOT EMSCRIPTEN)
     set_target_properties(benchmark_items_runtime_blob PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/benchmarks")
 
+    add_executable(benchmark_items_runtime_bind
+        "${ITEMS_CORE_DIR}/benchmarks/items_runtime_bind_benchmark.c"
+        "${ITEMS_CORE_SRC}/items_runtime_package.c")
+    add_dependencies(benchmark_items_runtime_bind items_catalog_gen)
+    target_link_libraries(benchmark_items_runtime_bind PRIVATE nt_hash nt_core nt_time)
+    target_include_directories(benchmark_items_runtime_bind PRIVATE
+        "${ITEMS_CORE_INC}" "${ITEMS_CATALOG_BUILD_DIR}")
+    target_compile_definitions(benchmark_items_runtime_bind PRIVATE
+        ITEMS_RUNTIME_PACKAGE_ENABLED=1 _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(benchmark_items_runtime_bind)
+    set_target_properties(benchmark_items_runtime_bind PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/benchmarks")
+
+    function(configure_items_runtime_catalog_test target_name)
+        add_dependencies(${target_name} items_catalog_gen)
+        target_sources(${target_name} PRIVATE
+            tests/items_runtime_test_catalog.c
+            "${ITEMS_CORE_SRC}/items_runtime_package.c")
+        target_include_directories(${target_name} PRIVATE
+            tests "${ITEMS_CATALOG_BUILD_DIR}")
+        target_compile_definitions(${target_name} PRIVATE
+            ITEMS_RUNTIME_PACKAGE_ENABLED=1
+            ITEMS_RUNTIME_PACKAGE_PATH="${ITEMS_CATALOG_PACKAGE}")
+    endfunction()
+
     # Items fragment round-trip links generated state/events, game-owned hooks,
-    # JSON/event plumbing, ownership core, and the generated catalog.
+    # JSON/event plumbing, ownership core, and the compact runtime catalog.
     # game_save.c is not linked; the test TU stubs game_save_mark_dirty.
     add_executable(test_items_fragment
         tests/test_items_fragment.c
         "${ITEMS_STATE_GENERATED_SOURCE}"
         "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
-        src/features/items/items_bootstrap.c
         "${ITEMS_CORE_SRC}/items_reconcile.c"
         "${ITEMS_CORE_SRC}/items_containers.c"
-        "${ITEMS_CORE_SRC}/items_catalog.c"
-        "${ITEMS_CATALOG_GENERATED_SOURCE}"
         src/game_state_json.c
-        "${GAME_EVENTS_SRC}/game_events.c")
+        "${GAME_EVENTS_SRC}/game_events.c"
+        "${ENGINE_DIR}/tests/unit/test_helpers/nt_assert_trap.c")
+    configure_items_runtime_catalog_test(test_items_fragment)
     target_link_libraries(test_items_fragment PRIVATE cjson unity nt_hash nt_log nt_core)
-    target_include_directories(test_items_fragment PRIVATE "${ITEMS_CORE_INC}" "${GAME_EVENTS_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
-    target_compile_definitions(test_items_fragment PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_include_directories(test_items_fragment PRIVATE "${ITEMS_CORE_INC}" "${GAME_EVENTS_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/tests/unit")
+    target_compile_definitions(test_items_fragment PRIVATE ITEMS_RUNTIME_TESTING=1 _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_items_fragment PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_items_fragment COMMAND test_items_fragment
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 
-    # F1 (deep-review, T0327 И2c destructive-change guard follow-up): the
-    # guard was VOLUNTARY until this line -- items_ops.py validate ran only
-    # when a human remembered to invoke it by hand. Wiring it into ctest
-    # means deleting a shipped def_id without a lock.removed reaction now
-    # turns the BUILD's test suite red automatically; the forcing chain
-    # The README Lock workflow starts at an automated gate, not a manual step.
-    # Reads only committed source (content/items.json,
-    # content/items.lock.json, state/items.schema.json) -- no generated-file
-    # dependency, so no add_dependencies needed. WORKING_DIRECTORY is the
-    # template root so the CWD-relative --catalog/--schema/--baseline/
-    # --state-schema/--src-dir arguments resolve the same way a human running
-    # the command from templates/template/ would see it.
-    # T0337 M1 (H2/R7, CRITICAL): items_ops.py's own argparse defaults are
-    # SCRIPT-relative (Path(__file__).parent.parent). After the move to
-    # features/items-core/scripts/, those defaults would resolve into a
-    # nonexistent features/items-core/content/ -- pass every path explicitly,
-    # CWD-relative to the template root (WORKING_DIRECTORY below). Principle:
-    # the module CLI takes paths ONLY from the caller (CWD/args), never from
-    # __file__. --src-dir now points at the game-side items corner only
-    # (src/features/items/) -- the display_name-keying lint no longer scans
-    # the (relocated) ownership core; see items README L5-note.
-    add_test(NAME items_ops_validate COMMAND "${Python3_EXECUTABLE}"
-        "${ITEMS_CORE_SCRIPTS}/items_ops.py" validate
-        --catalog content/items.json --schema content/item_fields.schema.json
-        --baseline content/items.lock.json --state-schema state/items.schema.json
-        --src-dir src/features/items
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-
-    # F4 (deep-review): committed proof that the lock-workflow rules
-    # themselves actually fire correctly (removed-without-reaction,
-    # removed-version-not-shipped, lock-inconsistent, the F3 malformed-lock
-    # IO error, the happy batch path) -- not just a manually re-run scratch
-    # check. unittest against temp fixtures, precedent
-    # features/game-state/scripts/generate_state_test.py.
-    add_test(NAME items_ops_test COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/items_ops_test.py"
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    # Keep the shipped Lua catalog and release receipt on the normal ctest path.
+    add_test(NAME items_catalog_validate COMMAND "${Python3_EXECUTABLE}"
+        "${ITEMS_CORE_SCRIPTS}/items_cli.py"
+        --project-root "${CMAKE_CURRENT_SOURCE_DIR}" validate)
 
     # test_progression compiles progression.c against the real generated state.
     # #includes progression_tracks.gen.h -- but does NOT link
@@ -482,12 +494,11 @@ if(NOT EMSCRIPTEN)
         "${PROGRESSION_STATE_GENERATED_SOURCE}"                  # progression_state.c
         "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"           # progression_state_events.gen.c
         "${ITEMS_CORE_SRC}/items_containers.c"                    # items runtime (progression spends/reads purse; T0337 M1: in-place module)
-        "${ITEMS_CORE_SRC}/items_catalog.c" "${ITEMS_CATALOG_GENERATED_SOURCE}"
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
-        src/features/items/items_bootstrap.c                     # items on_new_game (link completeness)
         "${ITEMS_CORE_SRC}/items_reconcile.c"                     # items reconcile (T0337 M1 split, link completeness)
         src/game_state_json.c "${GAME_EVENTS_SRC}/game_events.c")
     add_dependencies(test_progression progression_tracks_gen)   # H2: guarantees progression_tracks.gen.h before progression.c compiles
+    configure_items_runtime_catalog_test(test_progression)
     target_link_libraries(test_progression PRIVATE cjson unity nt_hash nt_log nt_core)
     target_include_directories(test_progression PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_progression PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -584,28 +595,36 @@ if(NOT EMSCRIPTEN)
     # GAME_SAVE_TESTING injects clocks & avoids nt_time (precedent test_game_save).
     add_executable(test_template_composition
         tests/test_template_composition.c
+        src/game_items.c
         src/game_save.c src/game_storage.c src/game_state_json.c "${GAME_EVENTS_SRC}/game_events.c"
         "${GAME_STATE_GENERATED_SOURCE}" "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
         "${SETTINGS_STATE_GENERATED_SOURCE}" src/features/settings/settings.c
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
-        src/features/items/items_bootstrap.c
         "${ITEMS_CORE_SRC}/items_reconcile.c" "${ITEMS_CORE_SRC}/items_containers.c"
-        "${ITEMS_CORE_SRC}/items_catalog.c" "${ITEMS_CATALOG_GENERATED_SOURCE}"
         "${PROGRESSION_STATE_GENERATED_SOURCE}" "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"
         "${PROGRESSION_CORE_SRC}/progression.c"
         "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c")   # REAL hero curve (cf. test_progression_curve)
     add_dependencies(test_template_composition progression_tracks_gen)  # progression.c #includes .gen.h
+    configure_items_runtime_catalog_test(test_template_composition)
     # nt_ui_interface (review #1 smoke-check): settings.h pulls ui/nt_ui.h for
     # nt_ui_context_t; header-only include-root + NT_UI_DEBUG_TOOLS define, no
     # Clay/impl chain -- draw_ui is never called in this TU, only declared.
     target_link_libraries(test_template_composition PRIVATE cjson unity nt_hash nt_log nt_core nt_ui_interface)
+    if(GAME_DEVAPI_ENABLED)
+        target_sources(test_template_composition PRIVATE src/game_save_devapi.c)
+        target_link_libraries(test_template_composition PRIVATE nt_devapi_default nt_app_stub)
+        target_compile_definitions(test_template_composition PRIVATE NT_DEVAPI_ENABLED=1)
+    else()
+        target_compile_definitions(test_template_composition PRIVATE NT_DEVAPI_ENABLED=0)
+    endif()
     target_include_directories(test_template_composition PRIVATE
         "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src
         "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_template_composition PRIVATE
-        GAME_SAVE_TESTING=1 GAME_STORAGE_APP_ID="template_composition_test"
+        GAME_SAVE_TESTING=1 GAME_ITEMS_TESTING=1 GAME_STORAGE_APP_ID="template_composition_test"
         GAME_SAVE_AUTOSAVE_SLOT="test_composition"
-        GAME_SAVE_DEBOUNCE_MS=2000 GAME_SAVE_MAX_INTERVAL_MS=30000 GAME_SAVE_DOC_VERSION=1
+        GAME_SAVE_DEBOUNCE_MS=2000 GAME_SAVE_MAX_INTERVAL_MS=30000 GAME_SAVE_DOC_VERSION=2
+        ITEMS_LEGACY_SAVE_V1_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/items_save_v1.json"
         _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_template_composition PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
@@ -616,12 +635,12 @@ if(NOT EMSCRIPTEN)
     # executable that can link them must carry the matching runtime at link time.
     set(GAME_NATIVE_TEST_TARGETS
         test_audio_core test_audio_resource test_audio_backend_native test_game_audio
-        test_game_state_json test_game_storage test_game_save
+        test_game_state_json test_game_state_nested test_game_storage test_game_save
         test_game_events test_game_events_overflow test_game_state_roundtrip
         test_game_events_typed test_game_event_render test_game_analytics
-        test_game_events_log_mirror test_items_catalog test_items_api_core_only
+        test_game_events_log_mirror test_items_api_core_only
         test_items_api test_items_runtime_package test_items_runtime_resource test_items_fragment test_progression test_progression_curve
-        benchmark_items_c_arrays benchmark_items_runtime_blob
+        benchmark_items_c_arrays benchmark_items_runtime_blob benchmark_items_runtime_bind
         test_game_format test_platform_sdk test_platform_lifecycle
         test_platform_sdk_events test_template_composition)
     foreach(_test_target IN LISTS GAME_NATIVE_TEST_TARGETS)

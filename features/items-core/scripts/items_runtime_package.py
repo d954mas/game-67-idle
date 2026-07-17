@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Encode a normalized Items Snapshot as the compact runtime package v1."""
+"""Encode a normalized Items Snapshot as the compact runtime package v2."""
 
 from __future__ import annotations
 
@@ -12,16 +12,21 @@ import sys
 import tempfile
 from typing import Any
 
-from generate_items_api_proof import xxh64
 from items_c_identifiers import is_c_member_name
+from items_snapshot import (
+    ITEM_KEYS as SNAPSHOT_ITEM_KEYS,
+    SnapshotFailure,
+    validate_snapshot_content_hash,
+)
+from items_xxh64 import xxh64
 
 
 SNAPSHOT_SCHEMA = "items.snapshot.v1"
-INSPECT_SCHEMA = "items.runtime.package.inspect.v1"
+INSPECT_SCHEMA = "items.runtime.package.inspect.v2"
 MAGIC = b"NTITEMS\0"
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 HEADER = struct.Struct("<8sIIIIQQ" + "III" * 6 + "32s")
-ITEM = struct.Struct("<QIIIIIIIIII")
+ITEM = struct.Struct("<QIIIIIIIIIIq")
 FIELD = struct.Struct("<QIIIIqqII")
 LEVEL = struct.Struct("<IIIIIIII")
 VALUE = struct.Struct("<IIIIq")
@@ -40,6 +45,7 @@ I64_MAX = (1 << 63) - 1
 CONTENT_FINGERPRINT_OFFSET = 32
 LEVEL_FREE = 1
 ITEM_ACQUIRE_FREE = 1
+ITEM_HAS_CURRENCY = 2
 
 
 class PackageFailure(ValueError):
@@ -72,10 +78,10 @@ def _align8(value: int) -> int:
 
 
 def _snapshot_digest(snapshot: dict[str, Any]) -> bytes:
-    content_hash = snapshot.get("content_hash")
-    if (not isinstance(content_hash, str) or not content_hash.startswith("sha256:")
-            or len(content_hash) != 71):
-        _fail("package.content_hash", "Snapshot requires sha256 content_hash")
+    try:
+        content_hash = validate_snapshot_content_hash(snapshot)
+    except SnapshotFailure as error:
+        _fail("package.content_hash", error.message)
     try:
         return bytes.fromhex(content_hash[7:])
     except ValueError:
@@ -92,9 +98,12 @@ def _schema_descriptor(fields: list[dict[str, Any]], item_ids: list[str]) -> byt
             for key in ("id", "member", "section", "type", "required_for", "min", "max", "rounding", "unit")
         })
     descriptor = {
-        "accessor_abi": 3,
+        "accessor_abi": 4,
         "format_version": FORMAT_VERSION,
-        "item_flags": {"acquire_free": ITEM_ACQUIRE_FREE},
+        "item_flags": {
+            "acquire_free": ITEM_ACQUIRE_FREE,
+            "has_currency": ITEM_HAS_CURRENCY,
+        },
         "sections": [
             {"name": name, "stride": stride}
             for name, stride in zip(SECTION_NAMES, SECTION_STRIDES)
@@ -181,6 +190,7 @@ def render_abi_header(snapshot: dict[str, Any]) -> str:
     """Render only schema/item identity ABI; balance values never enter this header."""
     if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
         _fail("package.snapshot_schema", f"expected {SNAPSHOT_SCHEMA}")
+    _snapshot_digest(snapshot)
     fields = snapshot.get("fields")
     items = snapshot.get("items")
     if not isinstance(fields, list) or not isinstance(items, list):
@@ -250,6 +260,7 @@ def render_abi_header(snapshot: dict[str, Any]) -> str:
         f"#define ITEMS_CATALOG_SCHEMA_ABI UINT64_C(0x{xxh64(_schema_descriptor(sorted_fields, item_ids)):016X})",
         f"#define ITEMS_CATALOG_ITEM_COUNT UINT32_C({len(sorted_items)})",
         f"#define ITEMS_CATALOG_FIELD_COUNT UINT32_C({len(sorted_fields)})",
+        f"#define ITEMS_CATALOG_CAPABILITY_COUNT UINT32_C({len(capability_fields)})",
         "",
     ]
     for item_id, macro, digest in item_records:
@@ -283,11 +294,13 @@ def render_abi_header(snapshot: dict[str, Any]) -> str:
         "#if defined(ITEMS_RUNTIME_PACKAGE_IMPLEMENTATION)",
         '#include "core/nt_assert.h"',
         "",
+        "#if ITEMS_CATALOG_CAPABILITY_COUNT > 0U",
         "static bool items_catalog_internal_is_kind(item_def_ref_t ref, const char *kind);",
         "static uint32_t items_catalog_internal_level_count(item_def_ref_t ref);",
         "static bool items_catalog_internal_level_exists(item_def_ref_t ref, uint32_t level);",
         "static int64_t items_catalog_internal_level_i64(item_def_ref_t ref, uint32_t level, uint32_t field_index);",
         "static item_transition_t items_catalog_internal_level_transition(item_def_ref_t ref, uint32_t level);",
+        "#endif",
         "",
         "typedef struct items_catalog_expected_field_t {",
         "    const char *id;",
@@ -395,6 +408,7 @@ def build_package(
     """Build package bytes from an already-normalized Snapshot only."""
     if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
         _fail("package.snapshot_schema", f"expected {SNAPSHOT_SCHEMA}")
+    snapshot_digest = _snapshot_digest(snapshot)
     items = snapshot.get("items")
     fields = snapshot.get("fields")
     runtime = snapshot.get("runtime_export")
@@ -480,7 +494,11 @@ def build_package(
     cost_rows: list[tuple[int, ...]] = []
     for item_index, item in enumerate(sorted_items):
         item_id = item["id"]
-        unsupported = set(item) - {"id", "kind", "stack", "authoring_mode", "levels", "acquire"}
+        # Snapshot owns the complete authoring contract. This compact runtime
+        # projection stores only facts consumed by the current typed API; the
+        # full Snapshot digest still makes every semantic metadata edit change
+        # the package content fingerprint.
+        unsupported = set(item) - SNAPSHOT_ITEM_KEYS
         if unsupported:
             _fail("package.unsupported_item_field", f"item {item_id}: {sorted(unsupported)[0]}")
         metadata = runtime_by_id[item_id]
@@ -489,6 +507,16 @@ def build_package(
         if storage_code < 0:
             _fail("package.runtime_metadata", f"item {item_id} has invalid storage")
         stack = _u32(item.get("stack"), "package.stack")
+        currency = item.get("currency")
+        currency_cap = 0
+        item_flags = 0
+        if currency is not None:
+            if (not isinstance(currency, dict) or set(currency) != {"hud", "cap"}
+                    or type(currency.get("cap")) is not int or currency["cap"] < 0
+                    or currency["cap"] > I64_MAX or item.get("kind") != "currency"):
+                _fail("package.currency", f"item {item_id} has invalid currency block")
+            currency_cap = currency["cap"]
+            item_flags |= ITEM_HAS_CURRENCY
 
         levels = item.get("levels")
         raw_rows = [] if levels is None else levels.get("rows") if isinstance(levels, dict) else None
@@ -539,7 +567,7 @@ def build_package(
         item_rows.append((
             xxh64(item_id.encode("utf-8")), string_offsets[item_id], string_offsets[item["kind"]],
             storage_code, stack, level_start, len(raw_rows), acquire_start, len(acquire_values),
-            ITEM_ACQUIRE_FREE if acquire_free else 0, 0,
+            item_flags | (ITEM_ACQUIRE_FREE if acquire_free else 0), 0, currency_cap,
         ))
 
     for count, limit, code in (
@@ -569,7 +597,7 @@ def build_package(
     section_words = [word for offset, count, stride in zip(offsets, counts, SECTION_STRIDES) for word in (offset, count, stride)]
     header = HEADER.pack(
         MAGIC, FORMAT_VERSION, HEADER.size, total_size, 0, xxh64(_schema_descriptor(sorted_fields, item_ids)), 0,
-        *section_words, _snapshot_digest(snapshot),
+        *section_words, snapshot_digest,
     )
     package = bytearray(header + body)
     fingerprint = xxh64(bytes(package))
@@ -644,10 +672,12 @@ def inspect_package(package: bytes) -> dict[str, Any]:
     for index in range(item_section["count"]):
         row = ITEM.unpack_from(package, item_section["offset"] + index * ITEM.size)
         item_id = text(row[1])
-        text(row[2])
+        kind = text(row[2])
         if (xxh64(item_id.encode("utf-8")) != row[0] or row[0] in item_hashes
                 or row[3] not in (0, 1) or (row[3] == 1) != (row[4] == 1)
-                or row[9] & ~ITEM_ACQUIRE_FREE or row[10] != 0
+                or row[9] & ~(ITEM_ACQUIRE_FREE | ITEM_HAS_CURRENCY) or row[10] != 0
+                or row[11] < 0 or (not row[9] & ITEM_HAS_CURRENCY and row[11] != 0)
+                or (row[9] & ITEM_HAS_CURRENCY and kind != "currency")
                 or (row[9] & ITEM_ACQUIRE_FREE and row[8])):
             _fail("package.item", "item row is invalid")
         item_hashes.add(row[0])
@@ -701,6 +731,7 @@ def inspect_package(package: bytes) -> dict[str, Any]:
             "stack": row[4], "level_count": level_count,
             "acquire_costs": costs[acquire_start:acquire_start + acquire_count],
             **({"acquire_free": True} if row[9] & ITEM_ACQUIRE_FREE else {}),
+            **({"currency": {"cap": row[11]}} if row[9] & ITEM_HAS_CURRENCY else {}),
         })
         for expected_level in range(1, level_count + 1):
             level_row = raw_levels[level_cursor]
