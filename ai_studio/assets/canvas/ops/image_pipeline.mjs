@@ -12,7 +12,7 @@ import { runCorridorKey } from "../../tools/video/matte/matte.mjs";
 import { resolveRepoPython, runProcess } from "../../tools/video/_lib.mjs";
 import { frontOrder, isNodeHidden, isNodeTransformed, orderedChildren } from "../tree.mjs";
 import { defaultTextStyle, resolveFontEntry, splitTextLines } from "../fonts.mjs";
-import { addFile as storeAddFile, addImage as storeAddImage, capToolRuns, getProject, imageSize, readElementBytes, resolveProjectFile, resolveProjectPath, updateProject, withProjectLock, writeProjectBytes } from "../store.mjs";
+import { addFile as storeAddFile, addGeneratedImage as storeAddImage, capToolRuns, getProject, imageSize, readElementBytes, resolveProjectFile, resolveProjectPath, updateProject, withProjectLock, writeProjectBytes } from "../store.mjs";
 import { zipStore } from "../zip.mjs";
 import { parseScaleSpec, resolveExportScale } from "./export_scale.mjs";
 import { commitMutation, finite, groupsOf, mimeForExt, readFontsManifest, refuseIfHeadMoved, resolveFontFileAbs, slug } from "./core.mjs";

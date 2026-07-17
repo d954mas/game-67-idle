@@ -36,8 +36,14 @@ function tempProjects(t) {
 test("asset status is image-only, explicit, validated, and undoable", (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Asset status" });
-  const image = addImage(REPO_ROOT, project.id, { name: "hero.png", bytes: solidPng() }).element;
+  const image = addImage(REPO_ROOT, project.id, {
+    name: "hero.png",
+    bytes: solidPng(),
+    assetStatus: "accepted",
+  }).element;
   const text = addText(REPO_ROOT, project.id, { content: "not art" }).element;
+
+  assert.equal(image.assetStatus, undefined, "ordinary imports cannot inject review state");
 
   assert.deepEqual(getAssetStatus(REPO_ROOT, { projectId: project.id, elementId: image.id }), {
     projectId: project.id,

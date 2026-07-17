@@ -11,7 +11,7 @@ import { expandPrompt, extractFromImage } from "../tools/prompt_assist.mjs";
 import { runAnimateFromText } from "../tools/animation_assist.mjs";
 import { frontOrder } from "../tree.mjs";
 import { validateAnimation } from "../animation.mjs";
-import { addFile as storeAddFile, addImage as storeAddImage, capToolRuns, getProject, resolveProjectFile, updateProject, withProjectLock } from "../store.mjs";
+import { addFile as storeAddFile, addGeneratedImage as storeAddImage, capToolRuns, getProject, resolveProjectFile, updateProject, withProjectLock } from "../store.mjs";
 import { commitMutation, finite, groupsOf, hexColor, refuseIfHeadMoved } from "./core.mjs";
 import { findGroup } from "./groups.mjs";
 

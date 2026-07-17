@@ -29,6 +29,7 @@ import {
 } from "node:fs";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { canvasLocalCacheRoot, canvasProjectsRoot } from "./config.mjs";
+import { GENERATED_ASSET_STATUS } from "./asset_status.mjs";
 import { sha256Hex } from "../../core_harness/tool_lib/hash.mjs";
 
 export const CANVAS_PROJECT_SCHEMA = "ai_studio.canvas.project.v1";
@@ -410,7 +411,7 @@ export function addFile(root, id, { bytes, name } = {}) {
   return { src: `files/${fileName}`, fileName, width, height };
 }
 
-export function addImage(root, id, { name, bytes, x = 0, y = 0, meta } = {}) {
+function addImageWithStatus(root, id, { name, bytes, x = 0, y = 0, meta } = {}, assetStatus) {
   const { src, fileName, width, height } = addFile(root, id, { bytes, name });
 
   const project = readProjectFile(root, id);
@@ -429,9 +430,22 @@ export function addImage(root, id, { name, bytes, x = 0, y = 0, meta } = {}) {
     name: String(name || fileName),
     meta: meta && typeof meta === "object" ? meta : {},
   };
+  if (assetStatus !== undefined) element.assetStatus = assetStatus;
   project.elements = [...(project.elements || []), element];
   const saved = updateProject(root, id, { elements: project.elements });
   return { project: saved, element };
+}
+
+// User imports stay untracked until a review workflow explicitly enrolls them. Internal
+// generation and image-processing operations use addGeneratedImage instead, so every new
+// pixel result enters the review pipeline in quarantine without exposing a caller-settable
+// status through the public addImage operation.
+export function addImage(root, id, args = {}) {
+  return addImageWithStatus(root, id, args, undefined);
+}
+
+export function addGeneratedImage(root, id, args = {}) {
+  return addImageWithStatus(root, id, args, GENERATED_ASSET_STATUS);
 }
 
 function findElement(project, elementId) {

@@ -2,6 +2,7 @@
 // bitmap workspace all consume this module so labels and allowed values cannot drift.
 
 export const ASSET_STATUSES = Object.freeze(["quarantine", "checked", "accepted"]);
+export const GENERATED_ASSET_STATUS = "quarantine";
 
 const BADGES = Object.freeze({
   quarantine: Object.freeze({ fill: "#d7a14a", text: "#231a08" }),

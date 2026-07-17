@@ -613,6 +613,7 @@ test("generateFromRecipe (codex, top-level card): ONE new element in the ROOT sc
 
   assert.equal(result.elements.length, 1);
   const el = result.elements[0];
+  assert.equal(el.assetStatus, "quarantine", "generated art enters review in quarantine");
   assert.equal(el.name, "Hero card codex");
   assert.equal(el.x, card.x + card.w + 16, "placed to the RIGHT of the card frame, 16px gap");
   assert.equal(el.y, card.y);

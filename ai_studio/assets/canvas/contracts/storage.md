@@ -24,5 +24,6 @@ bare-id search across private stores.
 
 `element.assetStatus`, when present on an image, is mutable workflow state rather
 than provenance. Its only valid persisted values are `quarantine`, `checked`, and
-`accepted`; absence means the legacy image has not entered the review workflow.
+`accepted`. Newly minted generated and pixel-derived images start in `quarantine`;
+absence means a legacy or user-imported image has not entered the review workflow.
 Writers must use the Canvas operation/CLI instead of editing `project.json`.

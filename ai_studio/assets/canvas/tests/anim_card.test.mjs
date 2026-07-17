@@ -360,6 +360,7 @@ test("generateAnimFromCard (top-level card): ONE flipbook element in the ROOT sc
 
   const el = result.element;
   assert.equal(el.type, "image");
+  assert.equal(el.assetStatus, "quarantine", "generated flipbooks enter review in quarantine");
   assert.equal(el.x, card.x + card.w + 16, "placed to the RIGHT of the card frame, 16px gap");
   assert.equal(el.y, card.y);
   assert.equal(el.groupId, undefined, "top-level card -> flipbook lands in the ROOT scope, never inside the card");

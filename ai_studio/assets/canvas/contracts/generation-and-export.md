@@ -3,7 +3,9 @@
 Generation uses injected/default tool seams from the operation domain and
 commits only successful immutable outputs. Engine-specific parameters and
 references are frozen into provenance; partial multi-engine outcomes are
-reported explicitly.
+reported explicitly. Every newly minted generated or pixel-derived image enters
+the asset review workflow with top-level `assetStatus: "quarantine"`; ordinary
+user imports remain untracked until a review operation enrolls them.
 
 Long generation runs happen outside the project lock. Their short final commit
 must still validate the current project/history head, import immutable output,

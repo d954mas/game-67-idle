@@ -23,11 +23,12 @@ and `--expect-head <n>` on undo, redo, and jump.
 
 Image elements may carry the explicit top-level workflow field `assetStatus`:
 `quarantine`, `checked`, or `accepted`. Legacy/unstamped images have no field and
-read as `null`; generation defaults are intentionally owned by a later T0326
-increment. Status changes use the dedicated `setAssetStatus` operation (not a
-generic metadata patch), are journaled and undoable, and may move backward when
-review is revoked. The public setter may initialize `quarantine`, repeat a no-op,
-or downgrade an existing state; promotion to `checked` / `accepted` is reserved
-for later technical/style verdict operations carrying their evidence. CLI parity
-is `asset-status-show` / `asset-status-set`; HTTP parity is `GET` / `PUT
+read as `null`. Internal generation and image-pipeline operations mint results in
+`quarantine`; ordinary `addImage` / multi-file imports do not accept a caller-set
+status and remain untracked. Status changes use the dedicated `setAssetStatus`
+operation (not a generic metadata patch), are journaled and undoable, and may move
+backward when review is revoked. The public setter may initialize `quarantine`,
+repeat a no-op, or downgrade an existing state; promotion to `checked` / `accepted`
+is reserved for later technical/style verdict operations carrying their evidence.
+CLI parity is `asset-status-show` / `asset-status-set`; HTTP parity is `GET` / `PUT
 .../elements/<id>/asset-status`.

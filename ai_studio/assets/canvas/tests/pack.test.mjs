@@ -844,6 +844,7 @@ test("generateFromRecipe pack branch (real expand_jobs.py, fake codex): mints a 
   const sheetElements = after.elements.filter((el) => el.groupId === result.run_group_id);
   assert.equal(sheetElements.length, 2);
   for (const el of sheetElements) {
+    assert.equal(el.assetStatus, "quarantine", "generated sheets enter review in quarantine");
     assert.ok(el.meta.pack, "meta.pack present");
     assert.equal(el.meta.pack.cardId, card.id);
     assert.ok(Array.isArray(el.meta.pack.cells) && el.meta.pack.cells.length === 2, "full cell manifest carried");

@@ -113,6 +113,7 @@ test("alphaCutout (auto) keys the whole element: alpha channel, transparent bg, 
 
   // The cutout is a NEW element beside the source; the source is untouched (T0336 copy semantics).
   assert.notEqual(result.element.id, elementId, "result is a NEW element, not the source");
+  assert.equal(result.element.assetStatus, "quarantine", "derived cutouts re-enter review in quarantine");
   const afterProj = getProject(REPO_ROOT, projectId);
   assert.deepEqual(afterProj.elements.find((el) => el.id === elementId), original, "source element untouched");
   assert.equal(afterProj.elements.length, 2, "one new element minted (source + copy)");
@@ -1058,6 +1059,7 @@ test("alphaDualPlate (happy pair) creates ONE new element in ONE journal entry; 
   // to the RIGHT of both plates' union bbox (gap 16) — never on top of a plate.
   assert.notEqual(result.element.id, plateWhite.id);
   assert.notEqual(result.element.id, plateBlack.id);
+  assert.equal(result.element.assetStatus, "quarantine", "dual-plate outputs enter review in quarantine");
   assert.equal(after.elements.length, 3, "2 plates + 1 new cut element");
   assert.equal(result.element.name, `${plateWhite.name} alpha`);
   assert.equal(result.element.x, Math.max(plateWhite.x + plateWhite.w, plateBlack.x + plateBlack.w) + 16);
@@ -1089,7 +1091,9 @@ test("alphaDualPlate (happy pair) creates ONE new element in ONE journal entry; 
 
   // Redo re-creates the exact same element (same id/src).
   const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
-  assert.equal(redone.elements.find((el) => el.id === result.element.id).src, result.element.src);
+  const redoneElement = redone.elements.find((el) => el.id === result.element.id);
+  assert.equal(redoneElement.src, result.element.src);
+  assert.equal(redoneElement.assetStatus, "quarantine");
 });
 
 test("alphaDualPlate refuses a misaligned pair with the pair gate's own message — no Python traceback, nothing mutated", async (t) => {

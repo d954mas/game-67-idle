@@ -233,6 +233,7 @@ test("alphaDualPlateGenerate (happy path): ONE new element, ONE journal entry, p
 
   // A brand-new element, named off the source, placed to its RIGHT with a 16px gap.
   assert.notEqual(result.element.id, source.id);
+  assert.equal(result.element.assetStatus, "quarantine", "dual-plate generation enters review in quarantine");
   assert.equal(result.element.name, `${source.name} alpha`);
   assert.equal(result.element.x, source.x + source.w + 16);
   assert.equal(result.element.y, source.y);
@@ -267,7 +268,9 @@ test("alphaDualPlateGenerate (happy path): ONE new element, ONE journal entry, p
 
   // Redo re-creates the exact same element.
   const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
-  assert.equal(redone.elements.find((el) => el.id === result.element.id).src, result.element.src);
+  const redoneElement = redone.elements.find((el) => el.id === result.element.id);
+  assert.equal(redoneElement.src, result.element.src);
+  assert.equal(redoneElement.assetStatus, "quarantine");
 });
 
 test("alphaDualPlateGenerate (non-flat element, T0248): generates the WHITE plate FIRST from the element's OWN pixels, THEN the dark plate as an edit of that white plate — no refusal", async (t) => {
