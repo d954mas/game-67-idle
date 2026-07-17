@@ -7,9 +7,10 @@ import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 
 import { doctorGame, executeGameCommand, nativeTestPlan, parseGameArgs } from "./game.mjs";
+import { findStudioRoot } from "./lib/studio_root.mjs";
 
-const studioRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const gameModuleRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const studioRoot = findStudioRoot(gameModuleRoot);
 const RELEASE_WASM = Buffer.from([
   0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
   0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
@@ -52,7 +53,7 @@ test("doctor requires the copied game-owned scaffold and exact dependency record
   t.after(() => rmSync(gameDir, { recursive: true, force: true }));
   assert.throws(() => doctorGame({ gameDir }), /missing/i);
 
-  for (const rel of ["CMakeLists.txt", "tools/game.mjs", "tools/build_web.mjs", "tools/package_web.mjs", "tools/lib/zip_store.mjs", "tools/serve_web.mjs", "release/README.md", ".github/workflows/game-verify.yml"]) {
+  for (const rel of ["CMakeLists.txt", "tools/game.mjs", "tools/build_web.mjs", "tools/package_web.mjs", "tools/lib/studio_root.mjs", "tools/lib/zip_store.mjs", "tools/serve_web.mjs", "release/README.md", ".github/workflows/game-verify.yml"]) {
     write(join(gameDir, rel), "fixture\n");
   }
   write(join(gameDir, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: "fixture", title: "Fixture", storageNamespace: "fixture" }));
@@ -135,10 +136,10 @@ test("template test bypass validates identity before the parent proof can skip t
   assert.deepEqual(calls, ["doctor"]);
 });
 
-test("copied game CLI executes doctor and final package from a real games/<id> dependency layout", (t) => {
+test("copied game CLI executes doctor and final package from a real games/private/<id> dependency layout", (t) => {
   const root = mkdtempSync(join(tmpdir(), "copied-game-cli-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const gameDir = join(root, "games", "copied-game");
+  const gameDir = join(root, "games", "private", "copied-game");
   cpSync(join(gameModuleRoot, "tools"), join(gameDir, "tools"), { recursive: true });
   cpSync(join(gameModuleRoot, ".github"), join(gameDir, ".github"), { recursive: true });
   cpSync(join(gameModuleRoot, "release"), join(gameDir, "release"), { recursive: true });

@@ -17,8 +17,18 @@ import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-import { inspectPlatformSdkArtifact } from "../../../features/platform-sdk/scripts/artifact_tools.mjs";
 import { createStoreZip, readStoreZip } from "./lib/zip_store.mjs";
+import { findStudioRoot } from "./lib/studio_root.mjs";
+
+const GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const DEFAULT_STUDIO_ROOT = findStudioRoot(GAME_DIR);
+const { inspectPlatformSdkArtifact } = await import(pathToFileURL(join(
+  DEFAULT_STUDIO_ROOT,
+  "features",
+  "platform-sdk",
+  "scripts",
+  "artifact_tools.mjs",
+)).href);
 
 const TARGETS = new Set(["itch", "poki", "yandex", "playgama"]);
 const SOURCE_EXTENSIONS = /\.(?:c|cc|cpp|cxx|h|hh|hpp|cmake|py|ts|map|pdb|obj|o)$/i;
@@ -675,7 +685,7 @@ function fileBytes(artifactDir, paths) {
   return paths.map((path) => ({ path, bytes: readFileSync(join(artifactDir, ...path.split("/"))) }));
 }
 
-export function validateWebArtifact({ artifactDir, target, studioRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url))) }) {
+export function validateWebArtifact({ artifactDir, target, studioRoot = DEFAULT_STUDIO_ROOT }) {
   const root = resolve(artifactDir);
   if (!existsSync(root) || !statSync(root).isDirectory()) throw new Error(`web artifact directory is missing: ${root}`);
   const contract = targetManifest(resolve(studioRoot), target);
@@ -813,7 +823,7 @@ function preflightVerified(tempPath, finalPath) {
 export function packageWebArtifact(options) {
   const gameDir = resolve(options.gameDir);
   const target = options.target || "itch";
-  const studioRoot = resolve(options.studioRoot || join(gameDir, "..", ".."));
+  const studioRoot = resolve(options.studioRoot || findStudioRoot(gameDir));
   const identity = validateIdentity(options.identity || readJson(join(gameDir, "game.json"), "game identity"));
   const dependencyPath = join(gameDir, "dependencies.json");
   const dependencies = validateDependencies(options.dependencies || readJson(dependencyPath, "dependencies"));
@@ -853,7 +863,7 @@ export function packageWebArtifact(options) {
   }
 }
 
-export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studioRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url))) }) {
+export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studioRoot = DEFAULT_STUDIO_ROOT }) {
   const zipBytes = readFileSync(zipPath);
   const entries = readStoreZip(zipBytes);
   const canonical = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
