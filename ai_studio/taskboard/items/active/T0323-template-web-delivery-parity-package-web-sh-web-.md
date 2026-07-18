@@ -1,7 +1,7 @@
 ---
 id: T0323
 title: "Add packaged-web browser load smoke to the template release flow"
-status: backlog
+status: doing
 project: P001
 epic: E009
 priority: P1
@@ -20,11 +20,11 @@ frame.
 
 ## Done when
 
-- [ ] One `tools/game.mjs` release command builds and packages, reopens the ZIP,
+- [x] One `tools/game.mjs` release command builds and packages, reopens the ZIP,
       serves only its contents, and launches the supported headless browser.
-- [ ] Smoke fails on page/console/resource errors, missing runtime readiness, or
+- [x] Smoke fails on page/console/resource errors, missing runtime readiness, or
       a blank/black first frame, and reports one compact diagnostic.
-- [ ] Tests cover success and each failure class without requiring WSL; Windows
+- [x] Tests cover success and each failure class without requiring WSL; Windows
       is the canonical agent entry point and Linux uses the same Node command.
 - [ ] A real template wasm-release package passes the smoke in CI.
 
@@ -34,6 +34,20 @@ frame.
 
 ## Log
 
+- 2026-07-17: Selected from the Taskboard readyQueue after T0442 reached
+  review. The slice extends the existing `tools/game.mjs verify` release path:
+  reopen the exact ZIP, serve only its entries on loopback, launch the supported
+  headless browser, and fail closed on browser/runtime/first-frame evidence.
+- 2026-07-17: TDD implementation complete. `game verify` now reopens the exact
+  package into an in-memory loopback server, launches isolated Chrome/Chromium
+  over the official CDP pipe, requires document/overlay/WASM fingerprint
+  readiness, captures page/console/resource plus socket/direct-network errors,
+  and decodes the clipped canvas PNG to reject blank/black first frames. Focused
+  owner tests pass 43/43; a real Windows itch package reached ready with matching
+  runtime/compiled fingerprint, a 1280x720 frame (luma 20..255, variance 194),
+  and no issues. Browser process-tree/profile cleanup was verified 0 before/0
+  after. Independent re-review ACCEPT; QTECH_001=pass. Final local `verify
+  --full` passed all 10 domains; the exact GitHub CI tip remains pending.
 - 2026-07-14: Removed already delivered shell/script/scenario scope. The card
   now owns only the missing packaged-artifact browser proof.
 - 2026-07-07: T0333 delivered the shared build/copy/server foundation used by

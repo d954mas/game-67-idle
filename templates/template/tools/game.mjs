@@ -12,6 +12,7 @@ import {
   validateWebArtifact,
   verifyDependencySources,
 } from "./package_web.mjs";
+import { smokePackagedWebArtifact } from "./package_web_smoke.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 
 const GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -65,6 +66,7 @@ function requiredScaffold(gameDir) {
     "tools/game.mjs",
     "tools/build_web.mjs",
     "tools/package_web.mjs",
+    "tools/package_web_smoke.mjs",
     "tools/lib/studio_root.mjs",
     "tools/lib/runtime_build.mjs",
     "tools/lib/zip_store.mjs",
@@ -202,6 +204,7 @@ export async function executeGameCommand(args, dependencies = {}) {
   const loadMetadata = dependencies.loadMetadata || gamePackageMetadata;
   const verifyDependencies = dependencies.verifyDependencies || ((metadata) => verifyDependencySources({ studioRoot: findStudioRoot(gameDir), dependencies: metadata.dependencies }));
   const packageGameOwned = dependencies.package || ((options, metadata) => packageGame(options, { gameDir }, metadata));
+  const smokePackage = dependencies.smoke || smokePackagedWebArtifact;
   const prepare = (templateProof = false) => {
     doctor({ gameDir, templateProof });
     const metadata = loadMetadata(gameDir, templateProof);
@@ -245,6 +248,7 @@ export async function executeGameCommand(args, dependencies = {}) {
     nativeTest(gameDir);
   }
   const result = packageGameOwned(args, metadata);
+  await smokePackage({ zipPath: result.zipPath, expectedTarget: args.target });
   return { message: `verify passed: ${result.zipPath}`, result };
 }
 

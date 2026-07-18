@@ -62,7 +62,7 @@ test("doctor requires the copied game-owned scaffold and exact dependency record
   t.after(() => rmSync(gameDir, { recursive: true, force: true }));
   assert.throws(() => doctorGame({ gameDir }), /missing/i);
 
-  for (const rel of ["CMakeLists.txt", "tools/game.mjs", "tools/build_web.mjs", "tools/package_web.mjs", "tools/lib/studio_root.mjs", "tools/lib/zip_store.mjs", "tools/lib/runtime_build.mjs", "tools/serve_web.mjs", "release/README.md", ".github/workflows/game-verify.yml"]) {
+  for (const rel of ["CMakeLists.txt", "tools/game.mjs", "tools/build_web.mjs", "tools/package_web.mjs", "tools/package_web_smoke.mjs", "tools/lib/studio_root.mjs", "tools/lib/zip_store.mjs", "tools/lib/runtime_build.mjs", "tools/serve_web.mjs", "release/README.md", ".github/workflows/game-verify.yml"]) {
     write(join(gameDir, rel), "fixture\n");
   }
   write(join(gameDir, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: "fixture", title: "Fixture", storageNamespace: "fixture" }));
@@ -103,8 +103,12 @@ test("verify composes doctor tests and one package without discovering workspace
     nodeTest: () => { calls.push("node"); },
     nativeTest: () => { calls.push("native"); },
     package: (options) => { calls.push(["package", options.build, options.target]); return { zipPath: "release/template-local.zip" }; },
+    smoke: ({ zipPath, expectedTarget }) => { calls.push(["smoke", zipPath, expectedTarget]); },
   });
-  assert.deepEqual(calls, ["doctor", "dependencies", "node", "native", ["package", false, "local"]]);
+  assert.deepEqual(calls, [
+    "doctor", "dependencies", "node", "native",
+    ["package", false, "local"], ["smoke", "release/template-local.zip", "local"],
+  ]);
   assert.match(result.message, /template-local\.zip/);
 });
 
@@ -121,10 +125,11 @@ test("game test and plain verify require dependency proof plus Node and native C
       nodeTest: () => calls.push("node"),
       nativeTest: () => calls.push("native"),
       package: () => { calls.push("package"); return { zipPath: "example.zip" }; },
+      smoke: () => calls.push("smoke"),
     });
     assert.deepEqual(calls, command === "test"
       ? ["dependencies", "node", "native"]
-      : ["dependencies", "node", "native", "package"]);
+      : ["dependencies", "node", "native", "package", "smoke"]);
   }
 });
 

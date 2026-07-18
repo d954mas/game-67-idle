@@ -13,6 +13,10 @@ node tools/portal_evidence.mjs --manifest release/artifacts/<artifact>.manifest.
 node tools/portal_evidence.mjs --manifest release/artifacts/<artifact>.manifest.json --local-mock-observation .ai_studio/evidence/local-mock/<observation>.json
 ```
 
+The final `verify` command also reopens that exact ZIP and runs its real browser
+load smoke from an in-memory loopback server. A supported headless
+Chrome/Chromium is required (`CHROME_PATH` can select it explicitly).
+
 `package` builds `wasm-release-<target>`, consumes the exact allowlist from the
 selected `features/platform-sdk/publish-targets/<target>.json`, writes a
 deterministic STORE ZIP, reopens it, and verifies paths/case, CRC, sizes,

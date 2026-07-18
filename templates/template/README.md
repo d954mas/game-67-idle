@@ -110,6 +110,13 @@ node tools/game.mjs package --target itch
 node tools/game.mjs verify --target itch
 ```
 
+`verify` is the release gate: after tests, build, deterministic package reopen,
+and package verification, it serves only the reopened ZIP entries on loopback
+and launches supported headless Chrome/Chromium. The command fails on page,
+console, or resource errors, missing runtime readiness/build binding, and a
+blank or black first canvas frame. Set `CHROME_PATH` when the browser is not in
+a standard Windows, Linux, or macOS location.
+
 See `release/README.md` for final ZIP, sidecar, and copied CI contracts.
 
 | preset | configure flags | port | DevAPI | notes |

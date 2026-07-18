@@ -152,6 +152,7 @@ const CHECKS = Object.freeze([
     "templates/template/tools/lib/runtime_build.test.mjs",
     "templates/template/tools/lib/studio_root.test.mjs",
     "templates/template/tools/package_web.test.mjs",
+    "templates/template/tools/package_web_smoke.test.mjs",
     "templates/template/tools/portal_evidence.test.mjs",
   ] },
   { id: "reference-template.python", pythonRoots: ["templates/template/devapi"] },
