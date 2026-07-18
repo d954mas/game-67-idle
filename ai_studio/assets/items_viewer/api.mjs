@@ -16,6 +16,7 @@ import {
   getIconPage,
   getItemChart,
   getItemDetail,
+  ItemsCliTimeoutError,
   ItemEditInputError,
   listCatalogs,
 } from "./ops.mjs";
@@ -271,6 +272,10 @@ export function createItemsViewerApi(root, options = {}) {
     } catch (error) {
       if (error instanceof RequestOverloadedError) {
         sendJson(res, 429, { error: error.message }, { "retry-after": "1" });
+        return true;
+      }
+      if (error instanceof ItemsCliTimeoutError) {
+        sendJson(res, 504, { error: error.message });
         return true;
       }
       if (error instanceof RequestInputError || error instanceof ItemEditInputError) {

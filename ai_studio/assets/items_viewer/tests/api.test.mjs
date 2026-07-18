@@ -7,6 +7,7 @@ import {
   createRequestCoordinator,
   RequestOverloadedError,
 } from "../api.mjs";
+import { ItemsCliTimeoutError } from "../ops.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../..", import.meta.url)).replace(/[\\/]$/, "");
 
@@ -140,6 +141,21 @@ test("item and chart endpoints share a bounded request queue", async () => {
   assert.equal((await queued).response.status, 200);
   assert.equal(itemCalls, 1);
   assert.equal(chartCalls, 1);
+});
+
+test("evaluator timeouts are explicit gateway timeouts", async () => {
+  const { response, json } = await request(
+    "/api/items-viewer/item?catalog=test&item=slow",
+    {
+      viewerOptions: {
+        getItemDetail: async () => {
+          throw new ItemsCliTimeoutError("items_cli.py timed out after 5ms");
+        },
+      },
+    },
+  );
+  assert.equal(response.status, 504);
+  assert.match(json.error, /timed out/);
 });
 
 test("focused item endpoint resolves only registered catalogs", async () => {

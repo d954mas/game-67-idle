@@ -60,6 +60,8 @@ surface does not display a catalog container table.
 - Expensive catalog, item, chart, icon-page, and edit operations share one
   admission queue (one active and sixteen queued by default). Duplicate reads
   coalesce; overflow is rejected with HTTP 429 and `Retry-After: 1`.
+  Semantic CLI work has a configurable 30-second deadline; timeout cleanup
+  terminates the evaluator process tree before the API returns HTTP 504.
 
 A folder with no `items.lua.json` is a valid empty state. Invalid Lua or a
 Snapshot failure returns a top-level `content_error` with no JSON fallback.

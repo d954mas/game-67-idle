@@ -14,6 +14,30 @@ import { buildIconPreview, loadIconPage } from "./icon_preview.mjs";
 // Production uses the configured Studio interpreter. `bin` is only a test seam for
 // exercising a real spawn failure.
 const MAX_BUFFER = 1024 * 1024;
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+export class ItemsCliTimeoutError extends Error {}
+
+export function killItemsProcessTree(child) {
+  if (!child || !Number.isSafeInteger(child.pid) || child.pid < 1) return Promise.resolve();
+  if (process.platform === "win32") {
+    return new Promise((resolveKill, rejectKill) => {
+      execFile(
+        "taskkill",
+        ["/PID", String(child.pid), "/T", "/F"],
+        { windowsHide: true },
+        (error) => (error ? rejectKill(error) : resolveKill()),
+      );
+    });
+  }
+  try {
+    process.kill(-child.pid, "SIGKILL");
+    return Promise.resolve();
+  } catch (error) {
+    if (error?.code === "ESRCH") return Promise.resolve();
+    return Promise.reject(error);
+  }
+}
 
 function itemsCliScriptPath(root) {
   return join(root, "features", "items-core", "scripts", "items_cli.py");
@@ -23,17 +47,57 @@ function itemsCliScriptPath(root) {
 // stderr} for ANY controlled process exit (0/1/2/...); rejects only on a genuine spawn
 // failure (interpreter missing — ENOENT), which callers turn into a loud 500
 // (spec §3 "TOOL-FAILURE — the ONLY 500").
-export function runItemsCliRaw(root, projectRoot, args, { bin } = {}) {
+export function runItemsCliRaw(root, projectRoot, args, {
+  bin,
+  execFileImpl = execFile,
+  killProcessTree = killItemsProcessTree,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+} = {}) {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) {
+    throw new TypeError("timeoutMs must be a positive integer");
+  }
   const scriptPath = itemsCliScriptPath(root);
   const python = bin || studioPythonPath(root);
   return new Promise((resolveRun, rejectRun) => {
-    execFile(python, [scriptPath, "--project-root", projectRoot, ...args], { cwd: root, maxBuffer: MAX_BUFFER }, (error, stdout, stderr) => {
-      if (error && typeof error.code !== "number") {
-        rejectRun(new Error(`items_cli.py could not be spawned (${python}): ${error.message}`));
-        return;
-      }
-      resolveRun({ code: error ? error.code : 0, stdout: stdout ?? "", stderr: stderr ?? "" });
-    });
+    let completed = false;
+    let timedOut = false;
+    let timer;
+    let child;
+    try {
+      child = execFileImpl(
+        python,
+        [scriptPath, "--project-root", projectRoot, ...args],
+        {
+          cwd: root,
+          detached: process.platform !== "win32",
+          maxBuffer: MAX_BUFFER,
+          windowsHide: true,
+        },
+        (error, stdout, stderr) => {
+          if (timedOut) return;
+          completed = true;
+          clearTimeout(timer);
+          if (error && typeof error.code !== "number") {
+            rejectRun(new Error(`items_cli.py could not be spawned (${python}): ${error.message}`));
+            return;
+          }
+          resolveRun({ code: error ? error.code : 0, stdout: stdout ?? "", stderr: stderr ?? "" });
+        },
+      );
+    } catch (error) {
+      rejectRun(new Error(`items_cli.py could not be spawned (${python}): ${error.message}`));
+      return;
+    }
+    if (completed) return;
+    timer = setTimeout(() => {
+      timedOut = true;
+      Promise.resolve()
+        .then(() => killProcessTree(child))
+        .then(
+          () => rejectRun(new ItemsCliTimeoutError(`items_cli.py timed out after ${timeoutMs}ms`)),
+          (error) => rejectRun(new Error(`items_cli.py timed out and process cleanup failed: ${error.message}`)),
+        );
+    }, timeoutMs);
   });
 }
 
