@@ -1,13 +1,13 @@
 ---
 id: T0269
 title: "New game flow: create and link a per-game canvas project"
-status: backlog
+status: doing
 project: P001
 epic: E009
 priority: P2
 tags: [games, canvas, template]
 created: 2026-07-04
-updated: 2026-07-14
+updated: 2026-07-18
 ---
 
 ## What
@@ -43,3 +43,5 @@ game workspace so agents and the lead can open it later without manual setup.
 
 - 2026-07-04: captured from a prototype setup where its game canvas was created
   manually after the game, so future game creation should do this by default.
+- 2026-07-18: Started from merged master after T0258 closeout; implementing the new-game Canvas link as an idempotent workflow slice with fixture coverage.
+- 2026-07-18: Decision: create an empty, clearly named per-game Canvas now. A fixed layout template is deferred until a concrete reusable layout contract exists; this keeps new-game creation deterministic and avoids inventing premature structure.

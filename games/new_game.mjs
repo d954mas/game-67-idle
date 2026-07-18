@@ -12,6 +12,10 @@ import { writeVscodeProjectFiles } from "../ai_studio/dev_environment/vscode_pro
 import { ensureProject, updateDoc } from "../ai_studio/taskboard/store.mjs";
 import { listGameMounts, runPrivateGamePreflight } from "../ai_studio/workspace/games.mjs";
 import { copyGitSourceTree } from "../ai_studio/workspace/copy_source_tree.mjs";
+import {
+  ensureGameCanvasProject, readGameCanvasLink, rollbackGameCanvasMutation,
+  rollbackPrivateCanvasStoreTransfer, transferPrivateCanvasStore,
+} from "./new_game_canvas.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const preflightScript = fileURLToPath(new URL("../ai_studio/workspace/games.mjs", import.meta.url));
@@ -482,6 +486,9 @@ const dependencies = {
   })),
   compatibility: `${dependencySeed.compatibility}; created from ${fromRel} at exact Studio revision ${repoRevision}`,
 };
+let previousCanvasLink = null;
+try { previousCanvasLink = existsSync(finalDir) ? readGameCanvasLink(finalDir) : null; }
+catch (error) { fail(error.message); }
 let itemsLockReset = false;
 try {
   copyGitSourceTree(repoRoot, fromDir, stagingDir);
@@ -508,6 +515,8 @@ catch (error) {
 const external = snapshotExternal(repoRoot);
 let externalWrites = [];
 let taskboardMutation = null;
+let canvasMutation = null;
+let privateCanvasTransfer = null;
 let parentHookMutation = null;
 let backupMade = false;
 let published = false;
@@ -519,6 +528,18 @@ try {
   }
   renameSync(stagingDir, finalDir);
   published = true;
+
+  if (isPrivate && backupMade) {
+    privateCanvasTransfer = transferPrivateCanvasStore(backupDir, finalDir);
+  }
+
+  canvasMutation = ensureGameCanvasProject(repoRoot, finalDir, identity, visibility, previousCanvasLink);
+  maybeFail("after-canvas");
+  registrationMessages.push(
+    `${canvasMutation.created ? "created" : "existing"} canvas project: ${canvasMutation.project.id}`,
+    `canvas ref: ${canvasMutation.ref}`,
+    `canvas browser: ${canvasMutation.browserUrl}`,
+  );
 
   if (isPrivate) {
     const mount = listGameMounts(repoRoot, { activeGameId: identity.id, skipPreflight: true, warnings: [] })
@@ -564,13 +585,24 @@ try {
     catch (rollbackError) { residuals.push(`${label}: ${rollbackError.message}`); }
   };
   rollbackPhase("taskboard", () => rollbackTaskboardMutation(taskboardMutation));
+  rollbackPhase("canvas", () => rollbackGameCanvasMutation(repoRoot, canvasMutation));
+  let preservePrivateCanvasRecovery = false;
+  try { rollbackPrivateCanvasStoreTransfer(privateCanvasTransfer); }
+  catch (rollbackError) {
+    preservePrivateCanvasRecovery = true;
+    residuals.push(`private canvas transfer: ${rollbackError.message}`);
+  }
   rollbackPhase("parent pre-commit", () => rollbackParentPrecommit(repoRoot, parentHookMutation));
-  rollbackPhase("published destination", () => {
-    if (published && existsSync(finalDir)) rmSync(finalDir, { recursive: true, force: true });
-  });
-  rollbackPhase("backup restore", () => {
-    if (backupMade && existsSync(backupDir)) renameSync(backupDir, finalDir);
-  });
+  if (!preservePrivateCanvasRecovery) {
+    rollbackPhase("published destination", () => {
+      if (published && existsSync(finalDir)) rmSync(finalDir, { recursive: true, force: true });
+    });
+    rollbackPhase("backup restore", () => {
+      if (backupMade && existsSync(backupDir)) renameSync(backupDir, finalDir);
+    });
+  } else {
+    residuals.push(`private canvas recovery preserved ${finalDir} and ${backupDir}`);
+  }
   rollbackPhase("external", () => {
     if (!externalWrites.length) externalWrites = capturePostWrites(external);
     rollbackExternalWrites(externalWrites);
@@ -595,7 +627,7 @@ if (isPrivate) {
   io.log(`new private game '${identity.id}' created from ${fromRel}/ -> ${gameRel}/`);
   io.log(`nested git repository: created`);
   io.log(`parent pre-commit privacy preflight: installed`);
-  io.log("public Studio registries, Taskboard, Canvas, and VS Code files were not updated");
+  io.log("public Studio registries, Taskboard, and VS Code files were not updated");
 } else {
   io.log(`new game '${identity.id}' created from ${fromRel}/ -> ${gameRel}/`);
 }
