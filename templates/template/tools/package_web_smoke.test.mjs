@@ -126,6 +126,29 @@ test("browser issue capture rejects remote socket and direct transport side chan
   ]);
 });
 
+test("browser issue capture ignores canceled aborts but keeps real loading failures", () => {
+  const listeners = new Map();
+  const client = { on(method, listener) { listeners.set(method, listener); } };
+  const issues = [];
+  registerBrowserIssueCapture(client, issues);
+
+  listeners.get("Network.loadingFailed")({ errorText: "net::ERR_ABORTED", canceled: true });
+  assert.deepEqual(issues, []);
+
+  listeners.get("Network.loadingFailed")({ errorText: "net::ERR_ABORTED", canceled: false });
+  listeners.get("Network.loadingFailed")({ errorText: "net::ERR_FAILED", canceled: true });
+  listeners.get("Network.loadingFailed")({
+    errorText: "net::ERR_ABORTED",
+    blockedReason: "inspector",
+    canceled: true,
+  });
+  assert.deepEqual(issues, [
+    { kind: "resource.load", text: "net::ERR_ABORTED" },
+    { kind: "resource.load", text: "net::ERR_FAILED" },
+    { kind: "resource.load", text: "inspector" },
+  ]);
+});
+
 test("PNG first-frame decoder measures rendered contrast and rejects malformed input", () => {
   assert.deepEqual(analyzePngFrame(rgbPng(2, 1, [0, 0, 0, 255, 255, 255])), {
     width: 2, height: 1, minLuma: 0, maxLuma: 255, variance: 16256.25,
