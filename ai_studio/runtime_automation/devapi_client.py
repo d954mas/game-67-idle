@@ -48,7 +48,7 @@ class DevApiClient:
     def __init__(self, port: int = DEFAULT_DEVAPI_PORT, host: str = HOST, timeout: float = 5.0):
         self.sock = socket.create_connection((host, port), timeout=timeout)
         self.sock.settimeout(timeout)
-        self.file = self.sock.makefile("rwb", buffering=0)
+        self.file = self.sock.makefile("rwb")
         self.next_request_id = 1
         self.process_id: int | None = None
         self.launch_log_path: str | None = None

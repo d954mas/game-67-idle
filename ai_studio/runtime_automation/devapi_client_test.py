@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 import socket
 import subprocess
@@ -35,6 +36,50 @@ class FakeDevApiClient(DevApiClient):
     def wait_frames(self, frames=1):
         self.calls.append(("wait_frames", frames, {}))
         return {"frame": 11}
+
+
+class DuplexResponseFile:
+    def __init__(self, response):
+        self.response = response
+        self.writes = []
+        self.closed = False
+
+    def write(self, payload):
+        self.writes.append(payload)
+        return len(payload)
+
+    def flush(self):
+        return None
+
+    def readline(self):
+        return self.response
+
+    def close(self):
+        self.closed = True
+
+
+class DevApiSocketBufferingTest(unittest.TestCase):
+    def test_large_response_uses_buffered_socket_file(self):
+        result = {"format": "png", "data": "x" * 700_000}
+        response = (json.dumps({"ok": True, "result": result}) + "\n").encode("utf-8")
+        file = DuplexResponseFile(response)
+        sock = mock.Mock()
+        sock.makefile.return_value = file
+
+        with mock.patch("devapi_client.socket.create_connection", return_value=sock):
+            client = DevApiClient(port=19001)
+            try:
+                self.assertEqual(client.result("capture.frame"), result)
+            finally:
+                client.close()
+
+        sock.makefile.assert_called_once_with("rwb")
+        self.assertEqual(
+            json.loads(file.writes[0]),
+            {"request_id": "1", "method": "capture.frame", "params": {}},
+        )
+        self.assertTrue(file.closed)
+        sock.close.assert_called_once_with()
 
 
 class EngineCapturePayloadTest(unittest.TestCase):
