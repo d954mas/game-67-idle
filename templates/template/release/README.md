@@ -10,24 +10,33 @@ node tools/game.mjs playable --target itch
 node tools/game.mjs package --target itch
 node tools/game.mjs verify --target itch
 node tools/portal_evidence.mjs --manifest release/artifacts/<artifact>.manifest.json
+node tools/portal_evidence.mjs --manifest release/artifacts/<artifact>.manifest.json --local-mock-observation .ai_studio/evidence/local-mock/<observation>.json
 ```
 
 `package` builds `wasm-release-<target>`, consumes the exact allowlist from the
 selected `features/platform-sdk/publish-targets/<target>.json`, writes a
 deterministic STORE ZIP, reopens it, and verifies paths/case, CRC, sizes,
 hashes, entrypoint, target/adapter, release metadata, required assets, and the
-exact dependency record. The compact adjacent manifest is bound to the final
-ZIP hash and every reopened entry. Outputs live in ignored
+exact dependency record. `runtime-build.json` is generated from the game and
+declared dependency source trees, embedded in every target build, and rechecked
+against the HTML bootstrap, a compiled C/WASM marker, release metadata, sidecar,
+and reopened ZIP. New packages use release/manifest v2; the verifier retains
+read compatibility with pre-fingerprint v1 packages. The
+compact adjacent manifest is bound to the final ZIP hash and every reopened entry. Outputs live in ignored
 `release/artifacts/`.
 
 `portal_evidence.mjs` does not build, repackage, upload, use credentials, or
 contact a portal. It reopens the exact final ZIP through the same package
 verifier and writes a deterministic game-owned record to
-`.ai_studio/evidence/releases/<full-zip-sha256>/portal-evidence.json`. Only the
-local SDK contract is marked `pass`; local mock, public inspector,
+`.ai_studio/evidence/releases/<full-zip-sha256>/portal-evidence.json`. The local
+SDK contract is always marked `pass`. Local mock is marked `pass` only when the
+optional game-owned browser observation has the same canonical runtime build
+source record as that ZIP and both target-specific WASM payloads carry their
+compiled witnesses; otherwise it stays `unverified`. This is source-equivalence
+plus executed-build proof, not a claim that local and portal WASM bytes are
+identical. Public inspector,
 credentialed portal smoke, and production certification remain explicitly
-`unverified` until their separate evidence is attached for that exact ZIP
-SHA-256.
+`unverified` until their separate evidence is attached for that exact ZIP.
 
 Run evidence generation with exclusive ownership of the game directory and no
 concurrent filesystem mutation. The local tool rejects traversal,

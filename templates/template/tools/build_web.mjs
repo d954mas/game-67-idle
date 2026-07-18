@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
+
+import { findStudioRoot } from "./lib/studio_root.mjs";
+import { createRuntimeBuildRecord, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 
 const PRESETS = new Set(["wasm-release", "wasm-debug", "wasm-devapi-debug"]);
 const TARGETS = new Set(["local", "itch", "poki", "yandex", "playgama"]);
@@ -39,6 +42,7 @@ function buildName(args) {
 export function createBuildPlan(options) {
   const gameDir = resolve(options.gameDir);
   const args = options.args;
+  const runtimeBuild = options.runtimeBuild ? validateRuntimeBuildRecord(options.runtimeBuild) : null;
   const platform = options.platform || process.platform;
   const inputEnv = options.env || {};
   const name = buildName(args);
@@ -70,14 +74,16 @@ export function createBuildPlan(options) {
     configureArgs.unshift("cmake");
   }
   configureArgs.push(`-DCMAKE_BUILD_TYPE=${args.preset === "wasm-release" ? "Release" : "Debug"}`, `-DGAME_PUBLISH_TARGET=${args.target}`);
+  if (runtimeBuild) configureArgs.push(`-DGAME_RUNTIME_BUILD_FINGERPRINT=${runtimeBuild.fingerprint}`);
   if (args.debugUi !== "default") configureArgs.push(`-DGAME_PLATFORM_SDK_DEBUG_UI=${args.debugUi === "on" ? "ON" : "OFF"}`);
   if (args.preset === "wasm-devapi-debug") configureArgs.push("-DGAME_DEVAPI_ENABLED=ON");
   steps.push({ kind: "run", command: configureCommand, args: configureArgs });
   steps.push({ kind: "run", command: "cmake", args: ["--build", webDir, "--target", "game"] });
   steps.push({ kind: "run", command: "cmake", args: ["--build", webDir, "--target", "platform_sdk_web_assets"] });
   steps.push({ kind: "copy", from: join(nativeDir, "bin", "assets", "game.ntpack"), to: join(webDir, "bin", "assets", "game.ntpack") });
+  if (runtimeBuild) steps.push({ kind: "write", path: join(webDir, "bin", "runtime-build.json"), value: runtimeBuild });
   return {
-    env, nativeDir, webDir, steps,
+    env, nativeDir, webDir, steps, verifyRuntimeBuild: options.verifyRuntimeBuild,
     message: `built ${name} (${args.target} -> platform-sdk); serve with: node tools/serve_web.mjs --preset ${args.preset} --target ${args.target}`,
   };
 }
@@ -85,11 +91,18 @@ export function createBuildPlan(options) {
 export function executeBuildPlan(plan, deps = {}) {
   const mkdir = deps.mkdir || ((path) => mkdirSync(path, { recursive: true }));
   const copy = deps.copy || ((from, to) => { mkdir(dirname(to)); copyFileSync(from, to); });
+  const write = deps.write || ((path, value) => {
+    mkdir(dirname(path));
+    writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+  });
   const run = deps.run || ((command, args, options) => spawnSync(command, args, { ...options, stdio: "inherit", shell: false }));
   for (const step of plan.steps) {
     if (step.kind === "mkdir") mkdir(step.path);
     else if (step.kind === "copy") copy(step.from, step.to);
-    else {
+    else if (step.kind === "write") {
+      (deps.verifyRuntimeBuild || plan.verifyRuntimeBuild)?.();
+      write(step.path, step.value);
+    } else {
       const result = run(step.command, step.args, { env: plan.env });
       if (result.error) throw result.error;
       if (result.status !== 0) throw new Error(`${step.command} exited ${result.status ?? 1}`);
@@ -102,6 +115,8 @@ export function main(argv = process.argv.slice(2), environment = process.env) {
   try {
     const gameDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
     const args = parseBuildArgs(argv);
+    const studioRoot = findStudioRoot(gameDir);
+    const runtimeBuild = createRuntimeBuildRecord({ gameDir, studioRoot });
     const emsdk = environment.EMSDK || (process.platform === "win32" && existsSync("C:/develop/emsdk") ? "C:/develop/emsdk" : "");
     const toolchain = emsdk ? join(emsdk, "upstream", "emscripten", "cmake", "Modules", "Platform", "Emscripten.cmake") : "";
     const plan = createBuildPlan({
@@ -112,6 +127,13 @@ export function main(argv = process.argv.slice(2), environment = process.env) {
       emcmakePath: resolveEmcmakePath({ ...environment, ...(emsdk ? { EMSDK: emsdk } : {}) }, process.platform),
       nativeConfigured: existsSync(join(gameDir, "build", "native-debug", "CMakeCache.txt")),
       toolchainExists: Boolean(toolchain && existsSync(toolchain)),
+      runtimeBuild,
+      verifyRuntimeBuild() {
+        const after = createRuntimeBuildRecord({ gameDir, studioRoot });
+        if (JSON.stringify(after) !== JSON.stringify(runtimeBuild)) {
+          throw new Error("runtime build inputs changed while the web artifact was building");
+        }
+      },
     });
     console.log(executeBuildPlan(plan));
     return 0;

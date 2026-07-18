@@ -30,6 +30,27 @@ const gameModuleRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const studioRoot = findStudioRoot(gameModuleRoot);
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
+function runtimeBuildRecord() {
+  const inputs = [
+    { id: "game", source: ".", files: 3, sha256: "1".repeat(64) },
+    { id: "engine", source: "external/neotolis-engine", files: 5, sha256: "2".repeat(64) },
+    { id: "feature:platform-sdk", source: "features/platform-sdk", files: 7, sha256: "3".repeat(64) },
+  ];
+  return {
+    schema: "ai_studio.runtime_build.v1",
+    fingerprint: sha256(Buffer.from(JSON.stringify(inputs))),
+    inputs,
+  };
+}
+
+function runtimeBoundWasm(record, base = RELEASE_WASM) {
+  const name = Buffer.from("runtime_build", "ascii");
+  const marker = Buffer.from(`ai_studio.runtime_build:${record.fingerprint}`, "ascii");
+  const payloadSize = 1 + name.length + marker.length;
+  assert.ok(payloadSize < 128);
+  return Buffer.concat([base, Buffer.from([0, payloadSize, name.length]), name, marker]);
+}
+
 test("standalone template ZIP helper matches the canonical Studio helper", () => {
   const canonical = readFileSync(join(studioRoot, "ai_studio", "core_harness", "tool_lib", "zip_store.mjs"));
   const distributionCopy = readFileSync(join(studioRoot, "templates", "template", "tools", "lib", "zip_store.mjs"));
@@ -75,6 +96,7 @@ function fixture(t, target = "itch") {
   const gameDir = join(root, "games", "test-game");
   const artifactDir = join(gameDir, "build", target === "local" ? "wasm-release" : `wasm-release-${target}`, "bin");
   const adapter = target === "local" || target === "itch" ? "mock" : target;
+  const runtimeBuild = runtimeBuildRecord();
   write(join(gameDir, "game.json"), `${JSON.stringify({
     schema: "ai_studio.game.v1", id: "test-game", title: "Test Game", storageNamespace: "test-game",
   }, null, 2)}\n`);
@@ -92,7 +114,7 @@ function fixture(t, target = "itch") {
   }, null, 2)}\n`);
   write(join(artifactDir, "index.html"), [
     "<!doctype html><script>",
-    `window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: '${target}', platformSdk: '${adapter}', release: true });`,
+    `window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: '${target}', platformSdk: '${adapter}', release: true, runtimeBuildFingerprint: '${runtimeBuild.fingerprint}' });`,
     "</script><script type=\"module\">import './platform-sdk.js';</script><script src=\"game.js\"></script>",
   ].join("\n"));
   write(join(artifactDir, "game.js"), [
@@ -109,8 +131,9 @@ function fixture(t, target = "itch") {
     "createWasm();",
     "",
   ].join("\n"));
-  write(join(artifactDir, "game.wasm"), RELEASE_WASM);
+  write(join(artifactDir, "game.wasm"), runtimeBoundWasm(runtimeBuild));
   write(join(artifactDir, "assets", "game.ntpack"), Buffer.from("pack"));
+  write(join(artifactDir, "runtime-build.json"), `${JSON.stringify(runtimeBuild, null, 2)}\n`);
   for (const [from, to] of [
     ["platform-sdk.js", "platform-sdk.js"],
     ["platform-sdk-core.js", "platform-sdk-core.js"],
@@ -118,7 +141,11 @@ function fixture(t, target = "itch") {
   ]) {
     cpSync(join(studioRoot, "features", "platform-sdk", "web", from), join(artifactDir, to));
   }
-  return { root, gameDir, artifactDir, target, adapter, dependencyVerifier: () => {} };
+  return {
+    root, gameDir, artifactDir, target, adapter, runtimeBuild,
+    dependencyVerifier: () => {},
+    runtimeBuildVerifier: () => runtimeBuild,
+  };
 }
 
 test("final package is deterministic and binds the reopened ZIP to exact dependency revisions", (t) => {
@@ -130,11 +157,12 @@ test("final package is deterministic and binds the reopened ZIP to exact depende
   const manifestOne = JSON.parse(readFileSync(one.manifestPath, "utf8"));
   const manifestTwo = JSON.parse(readFileSync(two.manifestPath, "utf8"));
   assert.deepEqual(manifestOne, manifestTwo);
-  assert.equal(manifestOne.schema, "ai_studio.game.artifact_manifest.v1");
+  assert.equal(manifestOne.schema, "ai_studio.game.artifact_manifest.v2");
   assert.equal(manifestOne.target, "itch");
   assert.equal(manifestOne.platformAdapter, "mock");
   assert.equal(manifestOne.dependencies.record.engine.revision, "1".repeat(40));
   assert.equal(manifestOne.dependencies.record.features[0].revision, "2".repeat(40));
+  assert.deepEqual(manifestOne.runtimeBuild, item.runtimeBuild);
   assert.match(manifestOne.artifact.sha256, /^[0-9a-f]{64}$/);
   assert.doesNotMatch(JSON.stringify(manifestOne), /game-package-|[A-Z]:\\|\/tmp\//i);
   assert.equal(Object.hasOwn(manifestOne, "timestamp"), false);
@@ -143,7 +171,62 @@ test("final package is deterministic and binds the reopened ZIP to exact depende
   const zip = readStoreZip(readFileSync(one.zipPath));
   assert.deepEqual([...zip.keys()], [...zip.keys()].toSorted());
   assert.ok(zip.has("release.json"));
+  assert.deepEqual(JSON.parse(zip.get("runtime-build.json").toString("utf8")), item.runtimeBuild);
   assert.equal(JSON.parse(zip.get("release.json").toString("utf8")).dependenciesSha256.length, 64);
+  assert.equal(JSON.parse(zip.get("release.json").toString("utf8")).runtimeBuildFingerprint, item.runtimeBuild.fingerprint);
+});
+
+test("upgraded verifier retains read compatibility with pre-fingerprint v1 packages", (t) => {
+  const item = fixture(t);
+  const current = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "current") });
+  const entries = readStoreZip(readFileSync(current.zipPath));
+  entries.delete("runtime-build.json");
+  entries.set("index.html", Buffer.from(entries.get("index.html").toString("utf8")
+    .replace(/, runtimeBuildFingerprint: '[0-9a-f]{64}'/, "")));
+  const release = JSON.parse(entries.get("release.json").toString("utf8"));
+  release.schema = "ai_studio.game.release.v1";
+  delete release.runtimeBuildFingerprint;
+  entries.set("release.json", Buffer.from(`${JSON.stringify(release, null, 2)}\n`));
+  const zipBytes = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
+  const zipPath = join(item.root, "legacy.zip");
+  const manifestPath = join(item.root, "legacy.manifest.json");
+  writeFileSync(zipPath, zipBytes);
+  const manifest = JSON.parse(readFileSync(current.manifestPath, "utf8"));
+  manifest.schema = "ai_studio.game.artifact_manifest.v1";
+  delete manifest.runtimeBuild;
+  manifest.artifact = { file: "legacy.zip", size: zipBytes.length, sha256: sha256(zipBytes) };
+  manifest.releaseMetadataSha256 = sha256(entries.get("release.json"));
+  manifest.entries = [...readStoreZip(zipBytes)].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) }));
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  assert.deepEqual(verifyWebPackage({ zipPath, manifestPath, expectedTarget: "itch", studioRoot }), manifest);
+});
+
+test("artifact and reopened ZIP fail closed when runtime build bindings drift", (t) => {
+  const htmlDrift = fixture(t);
+  const htmlPath = join(htmlDrift.artifactDir, "index.html");
+  write(htmlPath, readFileSync(htmlPath, "utf8").replace(htmlDrift.runtimeBuild.fingerprint, "0".repeat(64)));
+  assert.throws(
+    () => packageWebArtifact({ ...htmlDrift, studioRoot, outDir: join(htmlDrift.root, "html-drift") }),
+    /runtime build fingerprint/i,
+  );
+
+  const recordDrift = fixture(t);
+  write(join(recordDrift.artifactDir, "runtime-build.json"), `${JSON.stringify({
+    ...recordDrift.runtimeBuild,
+    fingerprint: "0".repeat(64),
+  }, null, 2)}\n`);
+  assert.throws(
+    () => packageWebArtifact({ ...recordDrift, studioRoot, outDir: join(recordDrift.root, "record-drift") }),
+    /runtime build fingerprint/i,
+  );
+
+  const staleWasm = fixture(t);
+  write(join(staleWasm.artifactDir, "game.wasm"), RELEASE_WASM);
+  assert.throws(
+    () => packageWebArtifact({ ...staleWasm, studioRoot, outDir: join(staleWasm.root, "stale-wasm") }),
+    /compiled runtime build fingerprint witness/i,
+  );
 });
 
 test("reopened ZIP rejects CRC corruption and sidecar target mismatch", (t) => {
@@ -242,7 +325,7 @@ test("release config requires one precise Object.freeze assignment and ignores n
   const duplicate = fixture(t);
   const duplicatePath = join(duplicate.artifactDir, "index.html");
   const duplicateHtml = readFileSync(duplicatePath, "utf8");
-  write(duplicatePath, `${duplicateHtml}\n<script>window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: 'itch', platformSdk: 'mock', release: true });</script>`);
+  write(duplicatePath, `${duplicateHtml}\n<script>window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: 'itch', platformSdk: 'mock', release: true, runtimeBuildFingerprint: '${duplicate.runtimeBuild.fingerprint}' });</script>`);
   assert.throws(() => validateWebArtifact({ ...duplicate, studioRoot }), /exactly one.*PLATFORM_SDK_CONFIG/i);
 
   const decoy = fixture(t);
@@ -269,7 +352,7 @@ test("release config requires one precise Object.freeze assignment and ignores n
 });
 
 test("release bootstrap ignores regex and non-executable script decoys and requires an attached dynamic entrypoint", (t) => {
-  const config = "window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: 'itch', platformSdk: 'mock', release: true });";
+  const config = `window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: 'itch', platformSdk: 'mock', release: true, runtimeBuildFingerprint: '${runtimeBuildRecord().fingerprint}' });`;
   for (const [label, html] of [
     ["regex config", `<script>const decoy = /window.__PLATFORM_SDK_CONFIG__=Object.freeze({target:'itch',platformSdk:'mock',release:true});/;</script><script src="game.js"></script>`],
     ["regex entrypoint", `<script>${config}</script><script>const decoy = /gameScript.src='game.js'/;</script>`],

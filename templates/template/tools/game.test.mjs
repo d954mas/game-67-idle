@@ -8,6 +8,7 @@ import test from "node:test";
 
 import { doctorGame, executeGameCommand, nativeTestPlan, parseGameArgs } from "./game.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
+import { createRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 
 const gameModuleRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const studioRoot = findStudioRoot(gameModuleRoot);
@@ -21,6 +22,14 @@ const RELEASE_WASM = Buffer.from([
   0x03, 0x72, 0x75, 0x6e, 0x00, 0x00,
   0x0a, 0x04, 0x01, 0x02, 0x00, 0x0b,
 ]);
+
+function runtimeBoundWasm(record) {
+  const name = Buffer.from("runtime_build", "ascii");
+  const marker = Buffer.from(`ai_studio.runtime_build:${record.fingerprint}`, "ascii");
+  const payloadSize = 1 + name.length + marker.length;
+  assert.ok(payloadSize < 128);
+  return Buffer.concat([RELEASE_WASM, Buffer.from([0, payloadSize, name.length]), name, marker]);
+}
 
 function write(path, value) {
   mkdirSync(dirname(path), { recursive: true });
@@ -53,7 +62,7 @@ test("doctor requires the copied game-owned scaffold and exact dependency record
   t.after(() => rmSync(gameDir, { recursive: true, force: true }));
   assert.throws(() => doctorGame({ gameDir }), /missing/i);
 
-  for (const rel of ["CMakeLists.txt", "tools/game.mjs", "tools/build_web.mjs", "tools/package_web.mjs", "tools/lib/studio_root.mjs", "tools/lib/zip_store.mjs", "tools/serve_web.mjs", "release/README.md", ".github/workflows/game-verify.yml"]) {
+  for (const rel of ["CMakeLists.txt", "tools/game.mjs", "tools/build_web.mjs", "tools/package_web.mjs", "tools/lib/studio_root.mjs", "tools/lib/zip_store.mjs", "tools/lib/runtime_build.mjs", "tools/serve_web.mjs", "release/README.md", ".github/workflows/game-verify.yml"]) {
     write(join(gameDir, rel), "fixture\n");
   }
   write(join(gameDir, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: "fixture", title: "Fixture", storageNamespace: "fixture" }));
@@ -142,7 +151,8 @@ test("copied game CLI executes doctor and final package from a real games/privat
   const gameDir = join(root, "games", "private", "copied-game");
   cpSync(join(gameModuleRoot, "tools"), join(gameDir, "tools"), { recursive: true });
   cpSync(join(gameModuleRoot, ".github"), join(gameDir, ".github"), { recursive: true });
-  cpSync(join(gameModuleRoot, "release"), join(gameDir, "release"), { recursive: true });
+  mkdirSync(join(gameDir, "release"), { recursive: true });
+  cpSync(join(gameModuleRoot, "release", "README.md"), join(gameDir, "release", "README.md"));
   cpSync(join(studioRoot, "features", "platform-sdk"), join(root, "features", "platform-sdk"), { recursive: true });
   write(join(gameDir, "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.25)\n");
 
@@ -167,8 +177,13 @@ test("copied game CLI executes doctor and final package from a real games/privat
     features: [{ id: "platform-sdk", source: "features/platform-sdk", version: "1.1.0", revision, compatibility: "tested" }],
     compatibility: "copied layout fixture",
   }, null, 2)}\n`);
+  const runtimeBuild = createRuntimeBuildRecord({
+    gameDir,
+    studioRoot: root,
+    dependencies: JSON.parse(readFileSync(join(gameDir, "dependencies.json"), "utf8")),
+  });
   const artifact = join(gameDir, "build", "wasm-release-itch", "bin");
-  write(join(artifact, "index.html"), "<!doctype html><script>window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: 'itch', platformSdk: 'mock', release: true });</script><script src='game.js'></script>\n");
+  write(join(artifact, "index.html"), `<!doctype html><script>window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: 'itch', platformSdk: 'mock', release: true, runtimeBuildFingerprint: '${runtimeBuild.fingerprint}' });</script><script src='game.js'></script>\n`);
   write(join(artifact, "game.js"), [
     "var wasmBinaryFile;",
     "function findWasmBinary() { return locateFile('game.wasm'); }",
@@ -183,8 +198,9 @@ test("copied game CLI executes doctor and final package from a real games/privat
     "createWasm();",
     "",
   ].join("\n"));
-  write(join(artifact, "game.wasm"), RELEASE_WASM);
+  write(join(artifact, "game.wasm"), runtimeBoundWasm(runtimeBuild));
   write(join(artifact, "assets", "game.ntpack"), "pack");
+  write(join(artifact, "runtime-build.json"), `${JSON.stringify(runtimeBuild, null, 2)}\n`);
   for (const [from, to] of [
     ["platform-sdk.js", "platform-sdk.js"],
     ["platform-sdk-core.js", "platform-sdk-core.js"],

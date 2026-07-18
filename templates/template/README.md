@@ -92,7 +92,10 @@ node tools/serve_web.mjs --preset wasm-release        # http://127.0.0.1:8080/
 `build_web.mjs` builds the wasm `game` target and copies the native asset pack
 flat to `bin/assets/game.ntpack` (the engine streams packs over HTTP relative to
 the page URL; the pack builder is native-only, so the pack is taken from the
-native build). `serve_web.mjs` is a self-contained static server that serves
+native build). It also hashes the game plus declared engine/feature source
+trees before the build, rechecks them before publication, and writes the same
+target-independent binding to `bin/runtime-build.json` and the HTML bootstrap.
+`serve_web.mjs` is a self-contained static server that serves
 `game.wasm` as `application/wasm` (required for emscripten's streaming compile).
 
 The copied game also owns one Node lifecycle entrypoint. `build_web.mjs` only

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   existsSync,
   linkSync,
@@ -20,6 +20,33 @@ const USAGE = [
   "  [--cdp http://127.0.0.1:9222] [--timeout-ms 30000]",
 ].join(" ");
 const jsonBytes = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8");
+const SHA256 = /^[0-9a-f]{64}$/;
+
+function exactKeys(value, keys) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    && JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
+}
+
+function validRuntimeBuildRecord(record) {
+  if (!exactKeys(record, ["schema", "fingerprint", "inputs"])
+      || record.schema !== "ai_studio.runtime_build.v1" || !Array.isArray(record.inputs)
+      || record.inputs.length < 2) return false;
+  const ids = new Set();
+  for (const input of record.inputs) {
+    if (!exactKeys(input, ["id", "source", "files", "sha256"])
+        || !/^(?:game|engine|feature:[a-z][a-z0-9-]*)$/.test(input.id || "") || ids.has(input.id)
+        || typeof input.source !== "string" || !input.source || input.source.includes("\\")
+        || (!Number.isSafeInteger(input.files) || input.files < 1) || !SHA256.test(input.sha256 || "")) return false;
+    ids.add(input.id);
+    const expectedSource = input.id === "game" ? "."
+      : input.id === "engine" ? "external/neotolis-engine" : `features/${input.id.slice("feature:".length)}`;
+    if (input.source !== expectedSource) return false;
+  }
+  if (record.inputs[0].id !== "game" || record.inputs[0].source !== "." || record.inputs[1].id !== "engine"
+      || record.inputs.slice(2).some((input, index, rows) => index > 0 && rows[index - 1].id >= input.id)) return false;
+  const fingerprint = createHash("sha256").update(JSON.stringify(record.inputs)).digest("hex");
+  return record.fingerprint === fingerprint;
+}
 
 function localHttpUrl(raw, label) {
   const url = new URL(raw);
@@ -58,6 +85,12 @@ export function assessLocalMockObservation(observation) {
       || observation?.config?.release !== true) {
     failures.push("page is not the local mock target");
   }
+  if (!validRuntimeBuildRecord(observation?.runtimeBuild)) failures.push("runtime build record is invalid");
+  else if (observation.config?.runtimeBuildFingerprint !== observation.runtimeBuild.fingerprint) {
+    failures.push("page runtime build fingerprint does not match runtime-build.json");
+  } else if (observation.compiledRuntimeBuildFingerprint !== observation.runtimeBuild.fingerprint) {
+    failures.push("executed WASM runtime build marker does not match runtime-build.json");
+  }
   if (!observation?.overlay?.present) failures.push("loading overlay is missing");
   else if (observation.overlay.display !== "none") failures.push("loading overlay is still visible");
   if (observation?.overlay?.progressPercent !== 100) failures.push("loading progress did not reach 100%");
@@ -93,6 +126,8 @@ export function createLocalMockEvidence({ observation }) {
       finalUrl: observation.finalUrl,
       readyState: observation.readyState,
       config: observation.config,
+      runtimeBuild: observation.runtimeBuild,
+      compiledRuntimeBuildFingerprint: observation.compiledRuntimeBuildFingerprint,
       overlay: observation.overlay,
       canvas: observation.canvas,
       lifecycleTranscript: observation.lifecycleTranscript,
@@ -242,6 +277,7 @@ const PAGE_OBSERVATION = `(() => {
     finalUrl: location.href,
     readyState: document.readyState,
     config: globalThis.__PLATFORM_SDK_CONFIG__ || null,
+    compiledRuntimeBuildFingerprint: globalThis.__AI_STUDIO_RUNTIME_BUILD_FINGERPRINT__ || null,
     overlay: {
       present: Boolean(overlay),
       className: overlay?.className || "",
@@ -287,6 +323,23 @@ async function closeFreshTarget({ endpoint, fetchImpl, targetId, deadline }) {
   return response.ok === true;
 }
 
+async function fetchRuntimeBuild({ pageUrl, fetchImpl, deadline }) {
+  const url = new URL("runtime-build.json", pageUrl);
+  const response = await fetchImpl(url, {
+    method: "GET",
+    redirect: "error",
+    signal: AbortSignal.timeout(remaining(deadline)),
+  });
+  if (!response?.ok) throw new Error(`runtime-build.json request failed with HTTP ${response?.status || "error"}`);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.length === 0 || bytes.length > 65536) throw new Error("runtime-build.json size is invalid");
+  let record;
+  try { record = JSON.parse(bytes.toString("utf8").replace(/^\uFEFF/, "")); }
+  catch (error) { throw new Error(`runtime-build.json is invalid JSON: ${error.message}`); }
+  if (!validRuntimeBuildRecord(record)) throw new Error("runtime-build.json record is invalid");
+  return record;
+}
+
 export async function probeLocalMockPage({
   cdpEndpoint,
   url,
@@ -299,6 +352,7 @@ export async function probeLocalMockPage({
   const operationDeadline = deadline - cleanupBudget;
   const endpoint = localHttpUrl(cdpEndpoint, "CDP endpoint");
   const pageUrl = localHttpUrl(url, "page URL");
+  const runtimeBuildBefore = await fetchRuntimeBuild({ pageUrl, fetchImpl, deadline: operationDeadline });
   let target = null;
   let client = null;
   const issues = [];
@@ -351,14 +405,20 @@ export async function probeLocalMockPage({
       const result = await client.call("Runtime.evaluate", { expression: PAGE_OBSERVATION, returnByValue: true }, operationDeadline);
       if (result.exceptionDetails) addIssue("probe.exception", result.exceptionDetails.text);
       state = result.result?.value || null;
-      const observation = { url: pageUrl.href, ...state, issues };
+      const observation = { url: pageUrl.href, ...state, runtimeBuild: runtimeBuildBefore, issues };
       if (issues.length > 0) {
         throw new Error(`local mock browser proof failed: ${issues.map((issue) => issue.text).join(" | ")}`);
       }
-      if (state?.readyState === "complete" && assessLocalMockObservation(observation).length === 0) return observation;
+      if (state?.readyState === "complete" && assessLocalMockObservation(observation).length === 0) {
+        const runtimeBuildAfter = await fetchRuntimeBuild({ pageUrl, fetchImpl, deadline: operationDeadline });
+        if (JSON.stringify(runtimeBuildAfter) !== JSON.stringify(runtimeBuildBefore)) {
+          throw new Error("runtime-build.json changed during local mock browser proof");
+        }
+        return observation;
+      }
       await new Promise((resolveWait) => setTimeout(resolveWait, Math.min(100, remaining(operationDeadline))));
     }
-    const observation = { url: pageUrl.href, ...state, issues };
+    const observation = { url: pageUrl.href, ...state, runtimeBuild: runtimeBuildBefore, issues };
     const details = issues.length > 0 ? ` (${issues.map((issue) => issue.text).join(" | ")})` : "";
     throw new Error(`local mock browser proof timed out: ${assessLocalMockObservation(observation).join("; ")}${details}`);
   } finally {

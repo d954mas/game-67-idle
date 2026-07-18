@@ -66,6 +66,7 @@ function requiredScaffold(gameDir) {
     "tools/build_web.mjs",
     "tools/package_web.mjs",
     "tools/lib/studio_root.mjs",
+    "tools/lib/runtime_build.mjs",
     "tools/lib/zip_store.mjs",
     "tools/serve_web.mjs",
     "release/README.md",

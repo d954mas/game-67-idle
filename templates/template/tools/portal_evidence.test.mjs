@@ -36,6 +36,27 @@ const RELEASE_WASM = Buffer.from([
   0x0a, 0x04, 0x01, 0x02, 0x00, 0x0b,
 ]);
 
+function runtimeBuildRecord() {
+  const inputs = [
+    { id: "game", source: ".", files: 3, sha256: "1".repeat(64) },
+    { id: "engine", source: "external/neotolis-engine", files: 5, sha256: "2".repeat(64) },
+    { id: "feature:platform-sdk", source: "features/platform-sdk", files: 7, sha256: "3".repeat(64) },
+  ];
+  return {
+    schema: "ai_studio.runtime_build.v1",
+    fingerprint: createHash("sha256").update(JSON.stringify(inputs)).digest("hex"),
+    inputs,
+  };
+}
+
+function runtimeBoundWasm(record) {
+  const name = Buffer.from("runtime_build", "ascii");
+  const marker = Buffer.from(`ai_studio.runtime_build:${record.fingerprint}`, "ascii");
+  const payloadSize = 1 + name.length + marker.length;
+  assert.ok(payloadSize < 128);
+  return Buffer.concat([RELEASE_WASM, Buffer.from([0, payloadSize, name.length]), name, marker]);
+}
+
 function write(path, value) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, value);
@@ -46,7 +67,8 @@ function fixture(t) {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const gameDir = join(root, "games", "evidence-game");
   const artifactDir = join(gameDir, "build", "wasm-release-itch", "bin");
-  write(join(artifactDir, "index.html"), "<!doctype html><script>window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: 'itch', platformSdk: 'mock', release: true });</script><script src='game.js'></script>\n");
+  const runtimeBuild = runtimeBuildRecord();
+  write(join(artifactDir, "index.html"), `<!doctype html><script>window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: 'itch', platformSdk: 'mock', release: true, runtimeBuildFingerprint: '${runtimeBuild.fingerprint}' });</script><script src='game.js'></script>\n`);
   write(join(artifactDir, "game.js"), [
     "var wasmBinaryFile;",
     "function findWasmBinary() { return locateFile('game.wasm'); }",
@@ -61,8 +83,9 @@ function fixture(t) {
     "createWasm();",
     "",
   ].join("\n"));
-  write(join(artifactDir, "game.wasm"), RELEASE_WASM);
+  write(join(artifactDir, "game.wasm"), runtimeBoundWasm(runtimeBuild));
   write(join(artifactDir, "assets", "game.ntpack"), Buffer.from("pack"));
+  write(join(artifactDir, "runtime-build.json"), `${JSON.stringify(runtimeBuild, null, 2)}\n`);
   for (const [from, to] of [
     ["platform-sdk.js", "platform-sdk.js"],
     ["platform-sdk-core.js", "platform-sdk-core.js"],
@@ -81,8 +104,36 @@ function fixture(t) {
       compatibility: "evidence fixture",
     },
     dependencyVerifier: () => {},
+    runtimeBuildVerifier: () => runtimeBuild,
   });
-  return { root, gameDir, ...packaged };
+  return { root, gameDir, runtimeBuild, ...packaged };
+}
+
+function writeLocalMockObservation(item, record = item.runtimeBuild) {
+  const path = join(item.gameDir, ".ai_studio", "evidence", "local-mock", `${record.fingerprint}.json`);
+  write(path, `${JSON.stringify({
+    schema: "ai_studio.runtime.local_mock_web_observation.v1",
+    result: "pass",
+    observation: {
+      url: "http://127.0.0.1:8092/",
+      finalUrl: "http://127.0.0.1:8092/",
+      readyState: "complete",
+      config: {
+        target: "local", platformSdk: "mock", release: true,
+        runtimeBuildFingerprint: record.fingerprint,
+      },
+      runtimeBuild: record,
+      compiledRuntimeBuildFingerprint: record.fingerprint,
+      overlay: { present: true, className: "is-hidden", display: "none", opacity: "0", progressPercent: 100 },
+      canvas: { width: 1280, height: 720 },
+      lifecycleTranscript: [
+        { kind: "progress", value: 1, source: "c-bridge" },
+        { kind: "finished", value: null, source: "c-bridge" },
+      ],
+      issues: [],
+    },
+  }, null, 2)}\n`);
+  return path;
 }
 
 function concurrentPublisher(reportPath, text) {
@@ -117,6 +168,7 @@ test("offline report binds the exact verified release and keeps five evidence le
   assert.equal(one.reportPath, join(item.gameDir, ".ai_studio", "evidence", "releases", zipSha256, "portal-evidence.json"));
   assert.deepEqual(bytesOne, bytesTwo);
   assert.equal(JSON.stringify(report).includes(secret), false);
+  assert.equal(report.schema, "ai_studio.game.portal_evidence.v2");
   assert.deepEqual(report.release.game, { id: "evidence-game", title: "Evidence Game", storageNamespace: "evidence-game" });
   assert.equal(report.release.target, "itch");
   assert.equal(report.release.platformAdapter, "mock");
@@ -146,11 +198,51 @@ test("offline report binds the exact verified release and keeps five evidence le
   assert.equal(readdirSync(dirname(item.zipPath)).filter((name) => name.endsWith(".zip")).length, zipCount);
 });
 
+test("matching game-owned local mock observation upgrades only that exact release level", (t) => {
+  const item = fixture(t);
+  const observationPath = writeLocalMockObservation(item);
+  const result = createPortalEvidence({
+    gameDir: item.gameDir,
+    manifestPath: item.manifestPath,
+    studioRoot,
+    localMockObservationPath: observationPath,
+  });
+  const report = JSON.parse(readFileSync(result.reportPath, "utf8"));
+  assert.deepEqual(report.levels.map((level) => level.status), ["pass", "pass", "unverified", "unverified", "unverified"]);
+  assert.equal(report.release.runtimeBuildFingerprint, item.runtimeBuild.fingerprint);
+  assert.equal(report.localMockObservation.sha256, createHash("sha256").update(readFileSync(observationPath)).digest("hex"));
+  assert.equal(report.localMockObservation.runtimeBuildFingerprint, item.runtimeBuild.fingerprint);
+
+  const mismatch = fixture(t);
+  const other = runtimeBuildRecord();
+  other.inputs[0] = { ...other.inputs[0], sha256: "9".repeat(64) };
+  other.fingerprint = createHash("sha256").update(JSON.stringify(other.inputs)).digest("hex");
+  const mismatchPath = writeLocalMockObservation(mismatch, other);
+  assert.throws(() => createPortalEvidence({
+    gameDir: mismatch.gameDir,
+    manifestPath: mismatch.manifestPath,
+    studioRoot,
+    localMockObservationPath: mismatchPath,
+  }), /runtime build fingerprint.*exact release/i);
+});
+
+test("local mock observation cannot change between validation and report publication", (t) => {
+  const item = fixture(t);
+  const observationPath = writeLocalMockObservation(item);
+  assert.throws(() => createPortalEvidence({
+    gameDir: item.gameDir,
+    manifestPath: item.manifestPath,
+    studioRoot,
+    localMockObservationPath: observationPath,
+    beforePublish() { writeFileSync(observationPath, "{}\n"); },
+  }), /local mock observation changed/i);
+});
+
 test("copied game-owned reporter records the exact package from a standalone games/<id> layout", (t) => {
   const item = fixture(t);
   const toolsDir = join(item.gameDir, "tools");
   mkdirSync(join(toolsDir, "lib"), { recursive: true });
-  for (const rel of ["portal_evidence.mjs", "package_web.mjs", "lib/studio_root.mjs", "lib/zip_store.mjs"]) {
+  for (const rel of ["portal_evidence.mjs", "package_web.mjs", "lib/studio_root.mjs", "lib/zip_store.mjs", "lib/runtime_build.mjs"]) {
     cpSync(join(dirname(reporterScript), ...rel.split("/")), join(toolsDir, ...rel.split("/")));
   }
   cpSync(join(studioRoot, "features", "platform-sdk"), join(item.root, "features", "platform-sdk"), { recursive: true });

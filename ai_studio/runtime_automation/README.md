@@ -29,7 +29,7 @@ node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/itera
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/iterate.py 17890 --reuse --json
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/ui_readability.py tmp/captures/screenshot.png
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/pixel_health.py tmp/captures/screenshot.png
-node ai_studio/runtime_automation/web_local_mock_probe.mjs --url http://127.0.0.1:8092/ --cdp http://127.0.0.1:9222 --out tmp/local-mock-observation.json
+node ai_studio/runtime_automation/web_local_mock_probe.mjs --url http://127.0.0.1:8092/ --cdp http://127.0.0.1:9222 --out games/<game-id>/.ai_studio/evidence/local-mock/<observation>.json
 ```
 
 ## Local mock web proof
@@ -50,10 +50,15 @@ the overlay, exposes a non-zero render canvas, stays entirely on loopback, and
 reports no errors. One absolute timeout covers target creation, WebSocket/CDP
 calls, navigation, polling, and cleanup.
 
-The deterministic output is deliberately a runtime observation, not release
-evidence: a separately supplied ZIP hash would not prove that the observed page
-came from those bytes. Portal attachment remains `unverified` until packaging
-and the local build expose a shared, mechanically checked build fingerprint.
+The probe fetches `runtime-build.json` before and after the CDP session and
+requires it to match both the page bootstrap and a fingerprint marker published
+by the executing C/WASM module. The deterministic output remains a runtime
+observation by itself; it becomes release evidence only when the game-owned
+portal reporter finds the identical mechanically generated source record and a
+compiled witness inside a verified release ZIP. Local and portal targets remain
+different payloads: this proves a common source snapshot and real execution,
+not byte equality between their target-specific WASM files. A separately
+supplied ZIP hash is never treated as that binding.
 
 ## Native source-to-runtime proof
 

@@ -73,6 +73,9 @@
 #include "items_state_events.gen.h" /* И2a: items_ev_register (typed items.txn label, R2: not empty) */
 #include "progression_state.h"            /* И3a: ProgressionState + progression_state_fragment (NOT the events header) */
 #include "progression_state_events.gen.h" /* И3a: progression_ev_register (typed progression.levelup label) */
+#ifdef NT_PLATFORM_WEB
+#include "runtime_build_marker.h"
+#endif
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -457,6 +460,9 @@ int main(int argc, char **argv) {
     if (s_fresh_state) {
         s_disable_autosave = true;
     }
+#ifdef NT_PLATFORM_WEB
+    runtime_build_marker_publish();
+#endif
     nt_engine_config_t config = {0};
     config.app_name = "Template";
     config.version = 1;

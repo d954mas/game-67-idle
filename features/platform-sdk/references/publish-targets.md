@@ -39,8 +39,15 @@ node tools/build_web.mjs --preset wasm-release --target yandex
 node tools/build_web.mjs --preset wasm-release --target playgama
 ```
 
-The script passes `-DGAME_PUBLISH_TARGET=<target>` to CMake. CMake computes the
-SDK adapter and copies only that adapter to `platform-sdk-adapter.js`.
+The script passes `-DGAME_PUBLISH_TARGET=<target>` plus a mechanically generated
+runtime source fingerprint to CMake. CMake computes the SDK adapter and copies
+only that adapter to `platform-sdk-adapter.js`; the builder writes the shared
+record to `runtime-build.json` for local and portal targets.
+The game also publishes that fingerprint from compiled WASM; packaging rejects
+a release whose executable lacks the witness. Because target policy changes the
+WASM bytes, local-mock attachment proves the same mechanically hashed source
+snapshot was compiled and executed, not that local and portal payloads are
+byte-identical.
 
 ## Validate
 
@@ -61,13 +68,14 @@ level:
 
 | Level | What it proves |
 | --- | --- |
-| `local-mock` | A separately recorded run against the local mock simulator. |
+| `local-mock` | A game-owned local mock browser run whose runtime build record matches the exact release ZIP. |
 | `local-sdk-contract` | The exact final ZIP and sidecar pass the offline package and selected-adapter contract. |
 | `public-inspector` | A public portal inspector accepted that exact ZIP SHA-256. |
 | `credentialed-portal-smoke` | An authenticated portal smoke run exercised that exact ZIP SHA-256. |
 | `production-certification` | The portal issued its production certification for that exact ZIP SHA-256. |
 
-The offline game-owned reporter records only `local-sdk-contract` as `pass`.
-It does not read credentials or make network requests; missing portal access is
-therefore an explicit `unverified` result with the next required evidence, not
-a fabricated success.
+The offline game-owned reporter always records `local-sdk-contract` as `pass`
+and can additionally attach a matching local mock observation. It does not read
+credentials or make network requests; missing portal access is therefore an
+explicit `unverified` result with the next required evidence, not a fabricated
+success.

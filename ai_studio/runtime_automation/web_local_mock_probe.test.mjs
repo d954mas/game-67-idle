@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,12 +12,30 @@ import {
   writeLocalMockEvidence,
 } from "./web_local_mock_probe.mjs";
 
+function runtimeBuildRecord() {
+  const inputs = [
+    { id: "game", source: ".", files: 3, sha256: "1".repeat(64) },
+    { id: "engine", source: "external/neotolis-engine", files: 5, sha256: "2".repeat(64) },
+  ];
+  return {
+    schema: "ai_studio.runtime_build.v1",
+    fingerprint: createHash("sha256").update(JSON.stringify(inputs)).digest("hex"),
+    inputs,
+  };
+}
+
 function passingObservation() {
+  const runtimeBuild = runtimeBuildRecord();
   return {
     url: "http://127.0.0.1:8092/",
     finalUrl: "http://127.0.0.1:8092/",
     readyState: "complete",
-    config: { target: "local", platformSdk: "mock", release: true },
+    config: {
+      target: "local", platformSdk: "mock", release: true,
+      runtimeBuildFingerprint: runtimeBuild.fingerprint,
+    },
+    runtimeBuild,
+    compiledRuntimeBuildFingerprint: runtimeBuild.fingerprint,
     overlay: {
       present: true,
       className: "is-hidden",
@@ -77,7 +96,25 @@ test("local mock observation fails closed on release mode, final URL, and transc
   ]);
 });
 
-test("local mock observation is deterministic and never claims a release binding", (t) => {
+test("local mock observation requires a canonical runtime build record matching the page bootstrap", () => {
+  const mismatch = passingObservation();
+  mismatch.config.runtimeBuildFingerprint = "0".repeat(64);
+  assert.deepEqual(assessLocalMockObservation(mismatch), [
+    "page runtime build fingerprint does not match runtime-build.json",
+  ]);
+
+  const malformed = passingObservation();
+  malformed.runtimeBuild = { ...malformed.runtimeBuild, fingerprint: "0".repeat(64) };
+  assert.deepEqual(assessLocalMockObservation(malformed), ["runtime build record is invalid"]);
+
+  const staleWasm = passingObservation();
+  staleWasm.compiledRuntimeBuildFingerprint = "0".repeat(64);
+  assert.deepEqual(assessLocalMockObservation(staleWasm), [
+    "executed WASM runtime build marker does not match runtime-build.json",
+  ]);
+});
+
+test("local mock observation is deterministic and records a target-independent build binding", (t) => {
   const root = mkdtempSync(join(tmpdir(), "local-mock-probe-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const evidence = createLocalMockEvidence({ observation: passingObservation() });
@@ -87,6 +124,7 @@ test("local mock observation is deterministic and never claims a release binding
   assert.equal(Object.hasOwn(evidence, "release"), false);
   assert.equal(Object.hasOwn(evidence, "timestamp"), false);
   assert.equal(evidence.observation.lifecycleTranscript.at(-1).kind, "finished");
+  assert.deepEqual(evidence.observation.runtimeBuild, runtimeBuildRecord());
 
   const outputPath = join(root, "local-mock-observation.json");
   writeLocalMockEvidence(outputPath, evidence);
@@ -141,6 +179,10 @@ test("raw CDP probe instruments before navigation and uses a fresh loopback targ
   }
   const fetchImpl = async (url, options) => {
     fetchCalls.push({ url: String(url), options });
+    if (String(url).endsWith("/runtime-build.json")) {
+      const bytes = Buffer.from(`${JSON.stringify(runtimeBuildRecord(), null, 2)}\n`);
+      return { ok: true, status: 200, async arrayBuffer() { return bytes; } };
+    }
     return {
       ok: true,
       async json() {
@@ -158,8 +200,10 @@ test("raw CDP probe instruments before navigation and uses a fresh loopback targ
   });
 
   assert.deepEqual(assessLocalMockObservation(observation), []);
-  assert.equal(fetchCalls[0].options.method, "PUT");
-  assert.equal(fetchCalls[0].options.redirect, "error");
+  const targetRequest = fetchCalls.find((call) => call.url.includes("/json/new?"));
+  assert.equal(targetRequest.options.method, "PUT");
+  assert.equal(targetRequest.options.redirect, "error");
+  assert.equal(fetchCalls.filter((call) => call.url.endsWith("/runtime-build.json")).length, 2);
   assert.ok(commands.findIndex((command) => command.method === "Page.addScriptToEvaluateOnNewDocument")
     < commands.findIndex((command) => command.method === "Page.navigate"));
   assert.equal(commands.some((command) => command.method === "Network.enable"), true);
@@ -179,10 +223,16 @@ test("raw CDP probe instruments before navigation and uses a fresh loopback targ
 });
 
 test("raw CDP probe rejects a remote target socket and bounds an unresponsive socket", async () => {
-  const remoteFetch = async () => ({
-    ok: true,
-    async json() { return { id: "remote", webSocketDebuggerUrl: "wss://example.com/devtools/page/fake" }; },
-  });
+  const remoteFetch = async (url) => {
+    if (String(url).endsWith("/runtime-build.json")) {
+      const bytes = Buffer.from(`${JSON.stringify(runtimeBuildRecord())}\n`);
+      return { ok: true, async arrayBuffer() { return bytes; } };
+    }
+    return {
+      ok: true,
+      async json() { return { id: "remote", webSocketDebuggerUrl: "wss://example.com/devtools/page/fake" }; },
+    };
+  };
   await assert.rejects(
     probeLocalMockPage({
       cdpEndpoint: "http://127.0.0.1:9222",
@@ -201,6 +251,10 @@ test("raw CDP probe rejects a remote target socket and bounds an unresponsive so
   }
   let closeCalls = 0;
   const localFetch = async (url) => {
+    if (String(url).endsWith("/runtime-build.json")) {
+      const bytes = Buffer.from(`${JSON.stringify(runtimeBuildRecord())}\n`);
+      return { ok: true, async arrayBuffer() { return bytes; } };
+    }
     if (String(url).includes("/json/close/")) {
       closeCalls += 1;
       return { ok: true };
@@ -254,6 +308,10 @@ test("raw CDP probe rejects a remote target socket and bounds an unresponsive so
   }
   let connectedHttpCloseCalls = 0;
   const connectedFetch = async (url) => {
+    if (String(url).endsWith("/runtime-build.json")) {
+      const bytes = Buffer.from(`${JSON.stringify(runtimeBuildRecord())}\n`);
+      return { ok: true, async arrayBuffer() { return bytes; } };
+    }
     if (String(url).includes("/json/close/")) {
       connectedHttpCloseCalls += 1;
       return { ok: false };
