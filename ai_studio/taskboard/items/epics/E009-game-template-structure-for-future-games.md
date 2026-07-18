@@ -1,12 +1,12 @@
 ---
 id: E009
 title: Game template + structure for future games
-status: active
+status: done
 project: P001
 priority: P1
 tags: [template]
 created: 2026-06-24
-updated: 2026-07-14
+updated: 2026-07-18
 ---
 
 ## Goal
@@ -36,3 +36,4 @@ features/README + feature.json, обучающие фичи-образцы в ш
   this is reusable template/workflow planning, not a concrete game project.
 - 2026-07-06: активирован; принята фичевая архитектура
   позже закреплённая в T0327.
+- 2026-07-18: Closed after both groomed remaining outcomes shipped: web delivery parity and T0269 idempotent per-game Canvas bootstrap. No active, ready, or backlog tasks remain in this epic.
