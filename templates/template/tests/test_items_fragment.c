@@ -648,6 +648,75 @@ void test_payment_invalid_scopes_are_release_visible_and_atomic(void) {
     TEST_ASSERT_EQUAL_INT(0, event_count);
 }
 
+void test_composite_transactions_reject_stale_refs_in_release(void) {
+    item_def_ref_t sword;
+    TEST_ASSERT_TRUE(items_try_get_string("tmpl.sword", &sword));
+
+    items_container_ref_t stale_destination = create_container(
+        2, ITEMS_CONTAINER_POLICY_GENERIC);
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK, items_try_container_destroy_empty(stale_destination));
+    items_container_ref_t replacement = create_container(
+        2, ITEMS_CONTAINER_POLICY_GENERIC);
+    TEST_ASSERT_EQUAL_UINT32(stale_destination.index, replacement.index);
+    TEST_ASSERT_TRUE(stale_destination.generation != replacement.generation);
+
+    item_entry_ref_t acquired = ITEM_ENTRY_REF_NONE;
+    ItemsState before = items_state;
+    game_event_frame_reset();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_NOT_FOUND,
+        items_try_acquire(
+            stale_destination, sword, (items_payment_scope_t){0},
+            "shop_buy:sword", &acquired));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+
+    items_container_ref_t bag = create_container(3, ITEMS_CONTAINER_POLICY_GENERIC);
+    item_entry_ref_t stale_entry = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_unique_create(bag, "tmpl.sword", 0, "loot:test", &stale_entry));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK, items_try_entry_destroy(stale_entry, "use:test"));
+    item_entry_ref_t replacement_entry = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_unique_create(bag, "tmpl.sword", 0, "loot:test", &replacement_entry));
+    TEST_ASSERT_EQUAL_UINT32(stale_entry.index, replacement_entry.index);
+    TEST_ASSERT_TRUE(stale_entry.generation != replacement_entry.generation);
+    before = items_state;
+    game_event_frame_reset();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_NOT_FOUND,
+        items_try_upgrade_instance(
+            stale_entry, 2, (items_payment_scope_t){0}, "level_cost:sword"));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+
+    item_entry_ref_t stale_stack = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.wood", 4, 1, "loot:test", &stale_stack, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK, items_try_stack_remove(stale_stack, 4, "use:test"));
+    item_entry_ref_t replacement_stack = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.wood", 4, 1, "loot:test", &replacement_stack, NULL));
+    TEST_ASSERT_EQUAL_UINT32(stale_stack.index, replacement_stack.index);
+    TEST_ASSERT_TRUE(stale_stack.generation != replacement_stack.generation);
+    before = items_state;
+    game_event_frame_reset();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_NOT_FOUND,
+        items_try_entry_move(
+            stale_stack, bag, 1, ITEMS_SLOT_AUTO, "split:test", NULL));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+
+    int event_count = 0;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+}
+
 #if NT_ASSERT_MODE == NT_ASSERT_FULL
 void test_payment_invalid_cost_ref_asserts(void) {
     items_container_ref_t payer = create_container(2, ITEMS_CONTAINER_POLICY_GENERIC);
@@ -1383,6 +1452,7 @@ int main(void) {
     RUN_TEST(test_acquire_refusals_are_atomic_and_explicit_free_is_distinct);
     RUN_TEST(test_upgrade_instance_is_atomic_next_level_and_distinguishes_free);
     RUN_TEST(test_payment_invalid_scopes_are_release_visible_and_atomic);
+    RUN_TEST(test_composite_transactions_reject_stale_refs_in_release);
 #if NT_ASSERT_MODE == NT_ASSERT_FULL
     RUN_TEST(test_payment_invalid_cost_ref_asserts);
 #endif

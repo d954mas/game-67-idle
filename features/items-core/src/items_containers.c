@@ -259,6 +259,19 @@ static bool try_persistent_container(
     return true;
 }
 
+static bool try_persistent_entry(
+    item_entry_ref_t ref, ItemsItemEntry **out_entry) {
+    ensure_ready();
+    if (out_entry == NULL || ephemeral_ref(ref.index) ||
+        ref.index >= ITEMS_STATE_MAX_CONTAINERS_ENTRIES || ref.generation == 0 ||
+        s_entry_generation[ref.index] != ref.generation ||
+        !items_state.containers_entries[ref.index].used) {
+        return false;
+    }
+    *out_entry = &items_state.containers_entries[ref.index];
+    return true;
+}
+
 static items_container_ref_t ephemeral_container_ref(uint32_t index) {
     return (items_container_ref_t){
         index | ITEMS_EPHEMERAL_REF_BIT,
@@ -1285,9 +1298,12 @@ items_result_t items_try_acquire(
     items_payment_scope_t payment, const char *reason,
     item_entry_ref_t *out_entry) {
     if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
-    NT_ASSERT(out_entry != NULL);
+    if (out_entry == NULL) { return ITEMS_RESULT_INVALID_ARGUMENT; }
     if (ephemeral_ref(destination_ref.index)) { return ITEMS_RESULT_WRONG_STORAGE; }
-    ItemsItemContainer *destination = require_container(destination_ref);
+    ItemsItemContainer *destination = NULL;
+    if (!try_persistent_container(destination_ref, &destination)) {
+        return ITEMS_RESULT_NOT_FOUND;
+    }
     item_core_t core = items_core(item);
     const char *def_id = items_def_id(item);
     item_transition_t transition = items_acquire_transition(item);
@@ -1402,7 +1418,8 @@ items_result_t items_try_upgrade_instance(
     items_payment_scope_t payment, const char *reason) {
     if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
     if (ephemeral_ref(entry_ref_value.index)) { return ITEMS_RESULT_WRONG_STORAGE; }
-    ItemsItemEntry *entry = require_entry(entry_ref_value);
+    ItemsItemEntry *entry = NULL;
+    if (!try_persistent_entry(entry_ref_value, &entry)) { return ITEMS_RESULT_NOT_FOUND; }
     item_def_ref_t item;
     item_core_t core;
     if (entry->quarantined || !lookup_item(entry->def_id, &item, &core)) {
@@ -1456,8 +1473,12 @@ items_result_t items_try_entry_move(
             source_ref, destination_ref, count, requested_slot, reason, out_destination);
     }
     if (ephemeral_ref(destination_ref.index)) { return ITEMS_RESULT_LIFETIME; }
-    ItemsItemEntry *source = require_entry(source_ref);
-    ItemsItemContainer *destination = require_container(destination_ref);
+    ItemsItemEntry *source = NULL;
+    ItemsItemContainer *destination = NULL;
+    if (!try_persistent_entry(source_ref, &source) ||
+        !try_persistent_container(destination_ref, &destination)) {
+        return ITEMS_RESULT_NOT_FOUND;
+    }
     if (count <= 0 || count > source->count) { return ITEMS_RESULT_INSUFFICIENT; }
     item_def_ref_t def;
     item_core_t core;
