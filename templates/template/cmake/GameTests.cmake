@@ -659,7 +659,8 @@ if(NOT EMSCRIPTEN)
         test_game_events test_game_events_overflow test_game_state_roundtrip
         test_game_events_typed test_game_event_render test_game_analytics
         test_game_events_log_mirror test_items_api_core_only
-        test_items_api test_items_runtime_package test_items_runtime_resource test_items_fragment test_progression test_progression_curve
+        test_items_api test_items_runtime_package test_items_runtime_resource
+        test_items_fragment test_items_fragment_assert_off test_progression test_progression_curve
         benchmark_items_c_arrays benchmark_items_runtime_blob benchmark_items_runtime_bind
         test_game_format test_platform_sdk test_platform_lifecycle
         test_platform_sdk_events test_template_composition)
