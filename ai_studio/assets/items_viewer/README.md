@@ -57,6 +57,9 @@ surface does not display a catalog container table.
   `items.cli.patch.v1`, and `apply`. `apply: false` is an ephemeral what-if;
   `apply: true` uses the CLI's expected-hash/lock/validation/atomic-replace
   path. Returned inverse patches are replayed through the same endpoint.
+- Expensive catalog, item, chart, icon-page, and edit operations share one
+  admission queue (one active and sixteen queued by default). Duplicate reads
+  coalesce; overflow is rejected with HTTP 429 and `Retry-After: 1`.
 
 A folder with no `items.lua.json` is a valid empty state. Invalid Lua or a
 Snapshot failure returns a top-level `content_error` with no JSON fallback.

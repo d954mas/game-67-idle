@@ -23,6 +23,7 @@ import {
 const MAX_JSON_BODY = 64 * 1024;
 
 class RequestInputError extends Error {}
+export class RequestOverloadedError extends Error {}
 
 async function readJsonBody(req) {
   const contentType = String(req.headers?.["content-type"] || "");
@@ -46,8 +47,8 @@ function boolQueryParam(value) {
   return value === "true" || value === "1" || value === "yes";
 }
 
-function sendJson(res, status, data) {
-  res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+function sendJson(res, status, data, headers = {}) {
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8", ...headers });
   res.end(JSON.stringify(data));
 }
 
@@ -77,9 +78,12 @@ function sameOriginRequest(req, allowedHosts) {
   }
 }
 
-export function createRequestCoordinator(maxConcurrent = 1) {
+export function createRequestCoordinator(maxConcurrent = 1, maxQueued = 16) {
   if (!Number.isSafeInteger(maxConcurrent) || maxConcurrent < 1) {
     throw new TypeError("maxConcurrent must be a positive integer");
+  }
+  if (!Number.isSafeInteger(maxQueued) || maxQueued < 0) {
+    throw new TypeError("maxQueued must be a non-negative integer");
   }
   const inFlight = new Map();
   const queue = [];
@@ -99,6 +103,9 @@ export function createRequestCoordinator(maxConcurrent = 1) {
   return {
     run(key, work) {
       if (inFlight.has(key)) return inFlight.get(key);
+      if (active >= maxConcurrent && queue.length >= maxQueued) {
+        return Promise.reject(new RequestOverloadedError("items workbench request queue is full"));
+      }
       const promise = new Promise((resolve, reject) => {
         queue.push({ work, resolve, reject });
         drain();
@@ -115,9 +122,16 @@ export function createRequestCoordinator(maxConcurrent = 1) {
 
 export function createItemsViewerApi(root, options = {}) {
   const allowedHosts = new Set(options.allowedHosts || []);
-  const catalogRequests = createRequestCoordinator(options.maxCatalogReads || 1);
+  const requests = createRequestCoordinator(
+    options.maxConcurrentRequests ?? options.maxCatalogReads ?? 1,
+    options.maxQueuedRequests ?? 16,
+  );
   const readCatalogView = options.getCatalogView || getCatalogView;
   const readIconPage = options.getIconPage || getIconPage;
+  const readItemDetail = options.getItemDetail || getItemDetail;
+  const readItemChart = options.getItemChart || getItemChart;
+  const writeCatalogItem = options.editCatalogItem || editCatalogItem;
+  let editRequestNumber = 0;
   return async function handleItemsViewerApi(req, res, url) {
     try {
       if (url.pathname === "/api/items-viewer/catalogs") {
@@ -143,8 +157,8 @@ export function createItemsViewerApi(root, options = {}) {
         const id = url.searchParams.get("id");
         const includePrivate = boolQueryParam(url.searchParams.get("include-private"))
           || boolQueryParam(url.searchParams.get("includePrivate"));
-        const view = await catalogRequests.run(
-          `${id}\0${includePrivate}`,
+        const view = await requests.run(
+          JSON.stringify(["catalog", id, includePrivate]),
           () => readCatalogView(root, id, { includePrivate }),
         );
         if (!view) {
@@ -168,10 +182,12 @@ export function createItemsViewerApi(root, options = {}) {
           sendJson(res, 400, { error: "catalog is required" });
           return true;
         }
-        const page = await readIconPage(root, catalogId, {
-          includePrivate: boolQueryParam(url.searchParams.get("include-private"))
-            || boolQueryParam(url.searchParams.get("includePrivate")),
-        });
+        const includePrivate = boolQueryParam(url.searchParams.get("include-private"))
+          || boolQueryParam(url.searchParams.get("includePrivate"));
+        const page = await requests.run(
+          JSON.stringify(["icon-page", catalogId, includePrivate]),
+          () => readIconPage(root, catalogId, { includePrivate }),
+        );
         if (!page) {
           sendJson(res, 404, { error: "catalog not found" });
           return true;
@@ -203,9 +219,13 @@ export function createItemsViewerApi(root, options = {}) {
         const options = {
           includePrivate: boolQueryParam(url.searchParams.get("include-private")) || boolQueryParam(url.searchParams.get("includePrivate")),
         };
-        const result = url.pathname.endsWith("/chart")
-          ? await getItemChart(root, catalogId, itemId, field, options)
-          : await getItemDetail(root, catalogId, itemId, options);
+        const isChart = url.pathname.endsWith("/chart");
+        const result = await requests.run(
+          JSON.stringify([isChart ? "chart" : "item", catalogId, itemId, field, options.includePrivate]),
+          () => (isChart
+            ? readItemChart(root, catalogId, itemId, field, options)
+            : readItemDetail(root, catalogId, itemId, options)),
+        );
         if (!result) {
           sendJson(res, 404, { error: "catalog not found" });
           return true;
@@ -232,7 +252,11 @@ export function createItemsViewerApi(root, options = {}) {
         const options = {
           includePrivate: boolQueryParam(url.searchParams.get("include-private")) || boolQueryParam(url.searchParams.get("includePrivate")),
         };
-        const result = await editCatalogItem(root, payload.catalog, payload.edit, { apply: payload.apply }, options);
+        editRequestNumber += 1;
+        const result = await requests.run(
+          JSON.stringify(["edit", editRequestNumber]),
+          () => writeCatalogItem(root, payload.catalog, payload.edit, { apply: payload.apply }, options),
+        );
         if (!result) {
           sendJson(res, 404, { error: "catalog not found" });
           return true;
@@ -245,6 +269,10 @@ export function createItemsViewerApi(root, options = {}) {
       sendJson(res, 404, { error: "not found" });
       return true;
     } catch (error) {
+      if (error instanceof RequestOverloadedError) {
+        sendJson(res, 429, { error: error.message }, { "retry-after": "1" });
+        return true;
+      }
       if (error instanceof RequestInputError || error instanceof ItemEditInputError) {
         sendJson(res, 400, { error: error.message });
         return true;
