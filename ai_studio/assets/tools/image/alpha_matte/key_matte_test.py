@@ -8,6 +8,7 @@ import numpy as np
 from PIL import Image
 
 import ai_studio.assets.tools.image.alpha_matte.key_matte as key_matte
+from ai_studio.assets.tools.image.alpha_matte.chroma_key_alpha import source_key_spill_mask
 from ai_studio.assets.tools.image.alpha_matte.key_matte import key_matte_cutout
 
 
@@ -77,6 +78,32 @@ class KeyMatteTests(unittest.TestCase):
         green_spill = visible & (array[..., 1] > array[..., 0] + 60) & (array[..., 1] > array[..., 2] + 60)
         self.assertLess(int(np.count_nonzero(green_spill)), 10)
 
+    def test_preserves_truth_backed_weak_alpha_ring_edge(self) -> None:
+        """Do not erase valid anti-aliased coverage merely because alpha is <= 12."""
+        crop, truth_alpha, _center = make_ring_on_key(64)
+        result = key_matte_cutout(crop, (0, 255, 0))
+        alpha = np.asarray(result.getchannel("A"), dtype=np.uint8)
+        weak = (alpha > 0) & (alpha <= 12)
+
+        self.assertEqual(int(np.count_nonzero(weak)), 24)
+        self.assertTrue(np.all(truth_alpha[weak] > 0))
+
+    def test_decontaminates_weak_alpha_for_noncanonical_key(self) -> None:
+        key = (220, 220, 0)
+        crop, _truth_alpha, _center = make_ring_on_key(64, key=key)
+        result = key_matte_cutout(crop, key)
+        array = np.asarray(result, dtype=np.uint8)
+        weak = (array[..., 3] > 0) & (array[..., 3] <= 12)
+        spill = source_key_spill_mask(
+            array[..., 0].astype(np.int16),
+            array[..., 1].astype(np.int16),
+            array[..., 2].astype(np.int16),
+            key,
+        )
+
+        self.assertGreater(int(np.count_nonzero(weak)), 0)
+        self.assertEqual(int(np.count_nonzero(weak & spill)), 0)
+
 
     def test_no_key_halo_on_dark_art(self) -> None:
         import numpy as np
@@ -108,17 +135,15 @@ def _image_digest(image: Image.Image) -> str:
 
 
 class KeyMatteGoldenBytesTest(unittest.TestCase):
-    """T0254 F1/F7/F10: pins key_matte_cutout's exact output bytes on three
+    """Pins key_matte_cutout's exact output bytes on three
     representative crops (opaque ring on both key colors, soft anti-aliased
     edge on magenta). Nothing upstream of this asserted transparent-pixel RGB,
-    so a finalize-hygiene change (e.g. removing the bleed+repair passes the
-    T0254 review found were fully overwritten by zero_fully_transparent_rgb)
-    could previously change output silently. If this test goes red, the
-    output changed and that needs a decision, not a silent edit."""
+    so a finalize-hygiene change could previously change output silently. If
+    this test goes red, the output changed and needs an explicit decision."""
 
     GOLDEN = {
-        "ring_on_green": "2d9f52e02a84e8ce74152fb3bc9574c03e5438ebfa6dc14ac65a563b0f5b04c3",
-        "ring_on_magenta": "3af0cf8a00d0aaf45351441fa3050e5746b81ac58e782e3803a69e0696b7aa5d",
+        "ring_on_green": "e59197906ef6c41f1dd3224bd25566ecbd6612c44709020e433659fbb7ace861",
+        "ring_on_magenta": "d56e0ef89494514b2a89cf8d5bc060f2c9142299321931cb3afbaa1a2888c643",
         "soft_square_on_magenta": "e51c1df36ceff757b0a90787d35660f9105a237383a03d3a93df641bc4cb5ca0",
     }
 
