@@ -928,6 +928,27 @@ void test_ephemeral_partial_self_move_never_duplicates_a_slot(void) {
     TEST_ASSERT_EQUAL_INT64(4, items_entry_view(split).count);
 }
 
+void test_persistent_partial_self_move_never_duplicates_a_slot(void) {
+    items_container_ref_t bag = create_container(3, ITEMS_CONTAINER_POLICY_GENERIC);
+    item_entry_ref_t source = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.wood", 10, 0, "loot:test", &source, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_SLOT_OCCUPIED,
+        items_try_entry_move(source, bag, 4, 0, "split:test", NULL));
+    TEST_ASSERT_EQUAL_INT64(10, items_entry_view(source).count);
+
+    item_entry_ref_t split = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_entry_move(source, bag, 4, ITEMS_SLOT_AUTO, "split:test", &split));
+    TEST_ASSERT_EQUAL_UINT32(0, items_entry_view(source).slot);
+    TEST_ASSERT_EQUAL_UINT32(1, items_entry_view(split).slot);
+    TEST_ASSERT_EQUAL_INT64(6, items_entry_view(source).count);
+    TEST_ASSERT_EQUAL_INT64(4, items_entry_view(split).count);
+}
+
 void test_rejected_rebuild_preserves_ephemeral_state(void) {
     items_container_ref_t first = create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
     items_container_ref_t second = create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
@@ -1348,6 +1369,7 @@ int main(void) {
     RUN_TEST(test_lifetime_boundary_rejects_persistent_to_ephemeral_and_acquires_reverse);
     RUN_TEST(test_ephemeral_move_preserves_runtime_identity);
     RUN_TEST(test_ephemeral_partial_self_move_never_duplicates_a_slot);
+    RUN_TEST(test_persistent_partial_self_move_never_duplicates_a_slot);
     RUN_TEST(test_rejected_rebuild_preserves_ephemeral_state);
     RUN_TEST(test_container_inspection_is_paginated_filterable_and_bounded);
     RUN_TEST(test_container_entry_inspection_requires_range_and_filters_in_slot_order);

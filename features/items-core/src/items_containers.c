@@ -1446,6 +1446,7 @@ items_result_t items_try_entry_move(
     if (!lookup_item(source->def_id, &def, &core) || source->quarantined) { return ITEMS_RESULT_NOT_FOUND; }
     items_result_t allowed = policy_allows(destination, def, core);
     if (allowed != ITEMS_RESULT_OK) { return allowed; }
+    bool whole = count == source->count;
 
     uint32_t target_slot = requested_slot;
     ItemsItemEntry *merge = NULL;
@@ -1462,22 +1463,26 @@ items_result_t items_try_entry_move(
         }
     }
     if (target_slot == ITEMS_SLOT_AUTO) {
-        target_slot = choose_slot(destination_ref.index, ITEMS_SLOT_AUTO, source_ref.index);
+        target_slot = choose_slot(
+            destination_ref.index, ITEMS_SLOT_AUTO, whole ? source_ref.index : UINT32_MAX);
     } else {
         if (target_slot >= destination->capacity) { return ITEMS_RESULT_CAPACITY; }
         merge = entry_at_slot(destination_ref.index, target_slot);
-        if (merge == source) { merge = NULL; }
+        if (merge == source) {
+            if (!whole) { return ITEMS_RESULT_SLOT_OCCUPIED; }
+            merge = NULL;
+        }
     }
     if (target_slot == UINT32_MAX) { return ITEMS_RESULT_CAPACITY; }
     if (merge != NULL) {
         if (!item_is_stackable(core) || strcmp(merge->def_id, source->def_id) != 0 || merge->count > limit - count) {
             return ITEMS_RESULT_SLOT_OCCUPIED;
         }
-    } else if (slot_used(destination_ref.index, target_slot, source_ref.index)) {
+    } else if (slot_used(
+                   destination_ref.index, target_slot, whole ? source_ref.index : UINT32_MAX)) {
         return ITEMS_RESULT_SLOT_OCCUPIED;
     }
 
-    bool whole = count == source->count;
     uint32_t split_index = UINT32_MAX;
     uint32_t split_id = ITEMS_ID_NONE;
     if (merge == NULL && !whole) {
