@@ -79,12 +79,23 @@ function sameOriginRequest(req, allowedHosts) {
   }
 }
 
-export function createRequestCoordinator(maxConcurrent = 1, maxQueued = 16) {
+export function createRequestCoordinator(
+  maxConcurrent = 1,
+  maxQueued = 16,
+  { reservedPrioritySlots = 0 } = {},
+) {
   if (!Number.isSafeInteger(maxConcurrent) || maxConcurrent < 1) {
     throw new TypeError("maxConcurrent must be a positive integer");
   }
   if (!Number.isSafeInteger(maxQueued) || maxQueued < 0) {
     throw new TypeError("maxQueued must be a non-negative integer");
+  }
+  if (
+    !Number.isSafeInteger(reservedPrioritySlots)
+    || reservedPrioritySlots < 0
+    || reservedPrioritySlots > maxQueued
+  ) {
+    throw new TypeError("reservedPrioritySlots must fit within maxQueued");
   }
   const inFlight = new Map();
   const queue = [];
@@ -102,13 +113,21 @@ export function createRequestCoordinator(maxConcurrent = 1, maxQueued = 16) {
   }
 
   return {
-    run(key, work) {
+    run(key, work, { priority = false } = {}) {
       if (inFlight.has(key)) return inFlight.get(key);
-      if (active >= maxConcurrent && queue.length >= maxQueued) {
+      const queueLimit = priority ? maxQueued : maxQueued - reservedPrioritySlots;
+      if (active >= maxConcurrent && queue.length >= queueLimit) {
         return Promise.reject(new RequestOverloadedError("items workbench request queue is full"));
       }
       const promise = new Promise((resolve, reject) => {
-        queue.push({ work, resolve, reject });
+        const job = { work, resolve, reject, priority };
+        if (priority) {
+          const firstNormal = queue.findIndex((queued) => !queued.priority);
+          if (firstNormal < 0) queue.push(job);
+          else queue.splice(firstNormal, 0, job);
+        } else {
+          queue.push(job);
+        }
         drain();
       });
       inFlight.set(key, promise);
@@ -123,9 +142,11 @@ export function createRequestCoordinator(maxConcurrent = 1, maxQueued = 16) {
 
 export function createItemsViewerApi(root, options = {}) {
   const allowedHosts = new Set(options.allowedHosts || []);
+  const maxQueuedRequests = options.maxQueuedRequests ?? 16;
   const requests = createRequestCoordinator(
     options.maxConcurrentRequests ?? options.maxCatalogReads ?? 1,
-    options.maxQueuedRequests ?? 16,
+    maxQueuedRequests,
+    { reservedPrioritySlots: Math.min(options.reservedEditSlots ?? 1, maxQueuedRequests) },
   );
   const readCatalogView = options.getCatalogView || getCatalogView;
   const readIconPage = options.getIconPage || getIconPage;
@@ -257,6 +278,7 @@ export function createItemsViewerApi(root, options = {}) {
         const result = await requests.run(
           JSON.stringify(["edit", editRequestNumber]),
           () => writeCatalogItem(root, payload.catalog, payload.edit, { apply: payload.apply }, options),
+          { priority: true },
         );
         if (!result) {
           sendJson(res, 404, { error: "catalog not found" });

@@ -268,6 +268,19 @@ test("runItemsCliRaw terminates the process tree before reporting a timeout", as
   assert.equal(killed, child);
 });
 
+test("runItemsCliRaw preserves timeout classification when Windows cleanup finds the child already exited", async () => {
+  const alreadyExited = new Error("taskkill: process not found");
+  alreadyExited.code = 128;
+  await assert.rejects(
+    () => runItemsCliRaw(REPO_ROOT, join(REPO_ROOT, "templates", "template"), ["list"], {
+      execFileImpl: () => ({ pid: 4242 }),
+      killProcessTree: async () => { throw alreadyExited; },
+      timeoutMs: 5,
+    }),
+    ItemsCliTimeoutError,
+  );
+});
+
 test("parseJsonOrThrow rejects invalid semantic CLI output", () => {
   assert.throws(() => parseJsonOrThrow("not json", "list"), /unparseable JSON/);
   assert.deepEqual(parseJsonOrThrow('{"ok":true}', "list"), { ok: true });

@@ -26,7 +26,7 @@ export function killItemsProcessTree(child) {
         "taskkill",
         ["/PID", String(child.pid), "/T", "/F"],
         { windowsHide: true },
-        (error) => (error ? rejectKill(error) : resolveKill()),
+        (error) => (!error || error.code === 128 ? resolveKill() : rejectKill(error)),
       );
     });
   }
@@ -95,7 +95,9 @@ export function runItemsCliRaw(root, projectRoot, args, {
         .then(() => killProcessTree(child))
         .then(
           () => rejectRun(new ItemsCliTimeoutError(`items_cli.py timed out after ${timeoutMs}ms`)),
-          (error) => rejectRun(new Error(`items_cli.py timed out and process cleanup failed: ${error.message}`)),
+          (error) => rejectRun(error?.code === 128
+            ? new ItemsCliTimeoutError(`items_cli.py timed out after ${timeoutMs}ms`)
+            : new Error(`items_cli.py timed out and process cleanup failed: ${error.message}`)),
         );
     }, timeoutMs);
   });

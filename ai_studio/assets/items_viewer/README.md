@@ -59,7 +59,9 @@ surface does not display a catalog container table.
   path. Returned inverse patches are replayed through the same endpoint.
 - Expensive catalog, item, chart, icon-page, and edit operations share one
   admission queue (one active and sixteen queued by default). Duplicate reads
-  coalesce; overflow is rejected with HTTP 429 and `Retry-After: 1`.
+  coalesce; overflow is rejected with HTTP 429 and `Retry-After: 1`. One queued
+  slot is reserved for same-origin edits, which run ahead of queued reads so a
+  read flood cannot starve preview/apply.
   Semantic CLI work has a configurable 30-second deadline; timeout cleanup
   terminates the evaluator process tree before the API returns HTTP 504.
 

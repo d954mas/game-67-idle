@@ -117,6 +117,7 @@ test("item and chart endpoints share a bounded request queue", async () => {
     allowedHosts: ["studio.local"],
     maxConcurrentRequests: 1,
     maxQueuedRequests: 1,
+    reservedEditSlots: 0,
     getItemDetail: async (_root, _catalog, item) => {
       itemCalls += 1;
       if (item === "first") await blocked;
@@ -156,6 +157,41 @@ test("evaluator timeouts are explicit gateway timeouts", async () => {
   );
   assert.equal(response.status, 504);
   assert.match(json.error, /timed out/);
+});
+
+test("same-origin edits use reserved priority when read admission is saturated", async () => {
+  let releaseFirst;
+  const blocked = new Promise((resolve) => { releaseFirst = resolve; });
+  const order = [];
+  const handler = createItemsViewerApi(REPO_ROOT, {
+    allowedHosts: ["studio.local"],
+    maxConcurrentRequests: 1,
+    maxQueuedRequests: 2,
+    getItemDetail: async (_root, _catalog, item) => {
+      order.push(item);
+      if (item === "first") await blocked;
+      return { item };
+    },
+    editCatalogItem: async () => {
+      order.push("edit");
+      return { ok: true };
+    },
+  });
+
+  const first = invoke(handler, "/api/items-viewer/item?catalog=test&item=first");
+  const queuedRead = invoke(handler, "/api/items-viewer/item?catalog=test&item=queued");
+  const refusedRead = invoke(handler, "/api/items-viewer/item?catalog=test&item=refused");
+  const edit = invoke(handler, "/api/items-viewer/edit", {
+    method: "POST",
+    body: { catalog: "test", edit: {}, apply: false },
+  });
+
+  releaseFirst();
+  assert.equal((await first).response.status, 200);
+  assert.equal((await refusedRead).response.status, 429);
+  assert.equal((await edit).response.status, 200);
+  assert.equal((await queuedRead).response.status, 200);
+  assert.deepEqual(order, ["first", "edit", "queued"]);
 });
 
 test("focused item endpoint resolves only registered catalogs", async () => {
