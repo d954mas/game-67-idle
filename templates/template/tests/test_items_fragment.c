@@ -5,6 +5,7 @@
 #include "unity.h"
 
 #include "features/items/items.h"
+#include "core/nt_assert.h"
 #include "game_events.h"
 #include "items_runtime_test_catalog.h"
 #include "items_state.h"
@@ -603,6 +604,7 @@ void test_upgrade_instance_is_atomic_next_level_and_distinguishes_free(void) {
     TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
 }
 
+#if NT_ASSERT_MODE == NT_ASSERT_FULL
 void test_payment_developer_contract_asserts(void) {
     items_container_ref_t payer = create_container(2, ITEMS_CONTAINER_POLICY_GENERIC);
     item_def_ref_t sword;
@@ -627,6 +629,7 @@ void test_payment_developer_contract_asserts(void) {
     NT_TEST_EXPECT_ASSERT(items_try_pay_cost(
         (item_cost_ref_t){UINT32_MAX}, valid, "shop_buy:sword"));
 }
+#endif
 
 void test_rebuild_rejects_reserved_persisted_counters(void) {
     (void)create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
@@ -1332,7 +1335,9 @@ int main(void) {
     RUN_TEST(test_paid_acquire_plans_destination_after_projected_payment);
     RUN_TEST(test_acquire_refusals_are_atomic_and_explicit_free_is_distinct);
     RUN_TEST(test_upgrade_instance_is_atomic_next_level_and_distinguishes_free);
+#if NT_ASSERT_MODE == NT_ASSERT_FULL
     RUN_TEST(test_payment_developer_contract_asserts);
+#endif
     RUN_TEST(test_rebuild_rejects_reserved_persisted_counters);
     RUN_TEST(test_one_hundred_persistent_containers_round_trip);
     RUN_TEST(test_loaded_maximum_ids_and_long_definition_reseed_without_truncation);

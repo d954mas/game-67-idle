@@ -1209,7 +1209,9 @@ static items_result_t build_payment_plan(
         const ItemsItemEntry *entry = &items_state.containers_entries[out_plan->rows[i].entry_index];
         const ItemsItemContainer *container = &items_state.containers[entry->parent_index];
         item_def_ref_t def;
-        NT_ASSERT(items_try_get_string(entry->def_id, &def));
+        bool found = items_try_get_string(entry->def_id, &def);
+        NT_ASSERT(found);
+        if (!found) { return ITEMS_RESULT_NOT_FOUND; }
         payment_fingerprint_u64(&out_plan->source_fingerprint, container->container_id);
         payment_fingerprint_u64(&out_plan->source_fingerprint, entry->entry_id);
         payment_fingerprint_u64(&out_plan->source_fingerprint, entry->slot);
