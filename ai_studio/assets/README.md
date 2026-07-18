@@ -17,6 +17,9 @@ Top-level groups:
   is one operation in a shared ops layer with two equal clients, the agent
   (CLI/import) and the thin browser page; `detect_regions` bridges to the image
   tools (`tools/image/{regions,sources}`) unmodified. See `canvas/README.md`.
+- `style_lock/`: game-owned operational art-direction schema, validator,
+  portable accepted-lock seed (`--from <past-game-lock>`), example, and Canvas
+  convention used by later technical/style acceptance gates.
 - `catalog/`: compact search/index operations and generated SQLite catalog
   lifecycle, split into store, source-record, query, and snapshot boundaries.
 - `sources/`: explicit global-library, template, and game source registration.

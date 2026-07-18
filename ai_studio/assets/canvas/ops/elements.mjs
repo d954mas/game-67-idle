@@ -5,6 +5,7 @@ import { alignMoves, ancestorsOf, blockReorder, distributeMoves, frontOrder, nod
 import { DEFAULT_NOTE_BACKGROUND, DEFAULT_NOTE_SIZE, defaultNoteStyle, defaultTextStyle, firstTextLine, mergeNoteStyle, mergeTextStyle, nominalTextBox } from "../fonts.mjs";
 import { validateSlice9 } from "../slice9.mjs";
 import { validateAnimation } from "../animation.mjs";
+import { normalizeAssetStatus } from "../asset_status.mjs";
 import { addImage as storeAddImage, addNote as storeAddNote, addText as storeAddText, getProject, imageSize, patchElement as storePatchElement, patchElements as storePatchElements, removeElement as storeRemoveElement, removeElements as storeRemoveElements, resolveProjectFile, updateProject } from "../store.mjs";
 import { parseScaleSpec } from "./export_scale.mjs";
 import { normalizeProjectOwnership } from "./project_lifecycle.mjs";
@@ -246,6 +247,60 @@ export function patchElement(root, projectId, elementId, patch = {}) {
     startedAt,
   });
   return { project, element: (project.elements || []).find((item) => item.id === elementId) || result.element };
+}
+
+function imageForAssetStatus(project, elementId) {
+  const element = (project.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  if (element.type !== "image") throw new Error(`element ${elementId} asset status is image-only`);
+  return element;
+}
+
+// Asset review state is a dedicated, journaled workflow field rather than a generic
+// element patch. Legacy images remain untracked (status:null) until an explicit writer
+// sets them; generation defaults arrive in T0326 increment 3.
+export function getAssetStatus(root, { projectId, elementId } = {}) {
+  if (!projectId) throw new Error("getAssetStatus requires projectId");
+  if (!elementId) throw new Error("getAssetStatus requires elementId");
+  const project = getProject(root, projectId);
+  const element = imageForAssetStatus(project, elementId);
+  const status = element.assetStatus == null ? null : normalizeAssetStatus(element.assetStatus);
+  return { projectId, elementId, status };
+}
+
+export function setAssetStatus(root, { projectId, elementId, status } = {}) {
+  if (!projectId) throw new Error("setAssetStatus requires projectId");
+  if (!elementId) throw new Error("setAssetStatus requires elementId");
+  const nextStatus = normalizeAssetStatus(status);
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const current = imageForAssetStatus(before, elementId);
+  const currentStatus = current.assetStatus == null ? null : normalizeAssetStatus(current.assetStatus);
+  if (currentStatus === nextStatus) {
+    return { project: before, element: current, status: nextStatus };
+  }
+  const rank = { quarantine: 0, checked: 1, accepted: 2 };
+  const isInitialization = currentStatus === null && nextStatus === "quarantine";
+  if (!isInitialization && (currentStatus === null || rank[nextStatus] > rank[currentStatus])) {
+    throw new Error(`asset status promotion from ${currentStatus || "untracked"} to ${nextStatus} requires gate evidence`);
+  }
+  const after = updateProject(root, projectId, {
+    elements: (before.elements || []).map((item) => (
+      item.id === elementId ? { ...item, assetStatus: nextStatus } : item
+    )),
+  });
+  const project = commitMutation(root, projectId, {
+    op: "setAssetStatus",
+    args_summary: { elementId, status: nextStatus },
+    before,
+    after,
+    startedAt,
+  });
+  return {
+    project,
+    element: (project.elements || []).find((item) => item.id === elementId),
+    status: nextStatus,
+  };
 }
 
 export function removeElement(root, projectId, elementId) {

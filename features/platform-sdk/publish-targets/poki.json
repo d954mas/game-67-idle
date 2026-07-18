@@ -7,11 +7,12 @@
     "game.js",
     "game.wasm",
     "assets/game.ntpack",
+    "runtime-build.json",
     "platform-sdk.js",
     "platform-sdk-core.js",
     "platform-sdk-adapter.js"
   ],
-  "zip_layout": "Flat upload root accepted by Poki Inspector: index.html, game.js, game.wasm, platform-sdk*.js, and assets/game.ntpack.",
+  "zip_layout": "Flat upload root accepted by Poki Inspector: index.html, game.js, game.wasm, runtime-build.json, platform-sdk*.js, and assets/game.ntpack.",
   "metadata": {
     "portal": "Poki Inspector",
     "requires_account": true,

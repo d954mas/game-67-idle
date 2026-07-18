@@ -145,7 +145,8 @@
     window.__PLATFORM_SDK_CONFIG__ = Object.freeze({
       target: '@GAME_PUBLISH_TARGET@',
       platformSdk: '@GAME_PLATFORM_SDK@',
-      release: @GAME_PLATFORM_SDK_RELEASE_JS@
+      release: @GAME_PLATFORM_SDK_RELEASE_JS@,
+      runtimeBuildFingerprint: '@GAME_RUNTIME_BUILD_FINGERPRINT@'
     });
     window.__platformSdkSetLoadingProgress(0.01);
   }());

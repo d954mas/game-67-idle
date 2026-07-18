@@ -38,6 +38,7 @@ import {
   setElementVisible,
   setGroupVisible,
 } from "./actions.js";
+import { assetStatusBadge } from "../asset_status.mjs";
 import { inlineEdit } from "./inline.js";
 import { openContextMenu } from "./context_menu.js";
 
@@ -202,6 +203,15 @@ function elementRow(element, depth) {
     badge.className = "badge";
     badge.textContent = `${regions.length}r`;
     badge.title = `${regions.length} region(s) — edit them in the inspector`;
+    row.appendChild(badge);
+  }
+
+  const assetBadge = assetStatusBadge(element);
+  if (assetBadge) {
+    const badge = document.createElement("span");
+    badge.className = `asset-status-badge ${assetBadge.status}`;
+    badge.textContent = assetBadge.label;
+    badge.title = assetBadge.title;
     row.appendChild(badge);
   }
 
@@ -391,7 +401,7 @@ function layersSignature() {
         // preview for text elements, so an edit that only changes `content` (name/visible/
         // regions unchanged) must still trigger a rebuild.
         parts.push(
-          `e:${depth}:${e.id}:${e.name || ""}:${e.visible !== false ? 1 : 0}:${(e.regions || []).length}:${e.type === "text" || e.type === "note" ? e.content || "" : ""}`,
+          `e:${depth}:${e.id}:${e.name || ""}:${e.visible !== false ? 1 : 0}:${(e.regions || []).length}:${e.assetStatus || ""}:${e.type === "text" || e.type === "note" ? e.content || "" : ""}`,
         );
       }
     }

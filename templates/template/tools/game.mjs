@@ -12,6 +12,8 @@ import {
   validateWebArtifact,
   verifyDependencySources,
 } from "./package_web.mjs";
+import { smokePackagedWebArtifact } from "./package_web_smoke.mjs";
+import { findStudioRoot } from "./lib/studio_root.mjs";
 
 const GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const PACKAGE_TARGETS = new Set(["itch", "poki", "yandex", "playgama"]);
@@ -64,6 +66,9 @@ function requiredScaffold(gameDir) {
     "tools/game.mjs",
     "tools/build_web.mjs",
     "tools/package_web.mjs",
+    "tools/package_web_smoke.mjs",
+    "tools/lib/studio_root.mjs",
+    "tools/lib/runtime_build.mjs",
     "tools/lib/zip_store.mjs",
     "tools/serve_web.mjs",
     "release/README.md",
@@ -152,7 +157,7 @@ function gitRevision(cwd, label) {
 function referenceTemplatePackageMetadata(gameDir) {
   const template = validateTemplateIdentity(readJson(join(gameDir, "template.json"), "template identity"));
   const seed = readJson(join(gameDir, "game-dependencies.json"), "template dependency seed");
-  const studioRoot = resolve(gameDir, "..", "..");
+  const studioRoot = findStudioRoot(gameDir);
   const repoRevision = gitRevision(studioRoot, "reference-template proof");
   const engineRevision = gitRevision(join(studioRoot, seed.engine?.source || ""), "reference-template engine proof");
   const dependencies = {
@@ -184,7 +189,7 @@ function packageGame(options, dependencies = {}, metadata = null) {
     gameDir,
     artifactDir: artifactDir(gameDir, options.target),
     target: options.target,
-    studioRoot: resolve(gameDir, "..", ".."),
+    studioRoot: findStudioRoot(gameDir),
     ...(options.outDir ? { outDir: resolve(gameDir, options.outDir) } : {}),
     ...proof,
     ...(metadata ? { dependencyVerifier: () => {} } : {}),
@@ -197,8 +202,9 @@ export async function executeGameCommand(args, dependencies = {}) {
   const nodeTest = dependencies.nodeTest || runNodeTests;
   const nativeTest = dependencies.nativeTest || runNativeTests;
   const loadMetadata = dependencies.loadMetadata || gamePackageMetadata;
-  const verifyDependencies = dependencies.verifyDependencies || ((metadata) => verifyDependencySources({ studioRoot: resolve(gameDir, "..", ".."), dependencies: metadata.dependencies }));
+  const verifyDependencies = dependencies.verifyDependencies || ((metadata) => verifyDependencySources({ studioRoot: findStudioRoot(gameDir), dependencies: metadata.dependencies }));
   const packageGameOwned = dependencies.package || ((options, metadata) => packageGame(options, { gameDir }, metadata));
+  const smokePackage = dependencies.smoke || smokePackagedWebArtifact;
   const prepare = (templateProof = false) => {
     doctor({ gameDir, templateProof });
     const metadata = loadMetadata(gameDir, templateProof);
@@ -228,7 +234,7 @@ export async function executeGameCommand(args, dependencies = {}) {
   if (args.command === "playable") {
     prepare(false);
     if (args.build) (dependencies.build || buildGame)(gameDir, args.target);
-    validateWebArtifact({ gameDir, artifactDir: artifactDir(gameDir, args.target), target: args.target, studioRoot: resolve(gameDir, "..", "..") });
+    validateWebArtifact({ gameDir, artifactDir: artifactDir(gameDir, args.target), target: args.target, studioRoot: findStudioRoot(gameDir) });
     return { message: `playable proof passed (${args.target})` };
   }
   if (args.command === "package") {
@@ -242,6 +248,7 @@ export async function executeGameCommand(args, dependencies = {}) {
     nativeTest(gameDir);
   }
   const result = packageGameOwned(args, metadata);
+  await smokePackage({ zipPath: result.zipPath, expectedTarget: args.target });
   return { message: `verify passed: ${result.zipPath}`, result };
 }
 

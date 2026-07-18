@@ -654,6 +654,20 @@ test("template web shell loads selected platform backend before game.js", () => 
   assert.equal(source.includes("platformSdkInternalBackend.ready()"), true);
 });
 
+test("template web runtime keeps the installed web backend for local mock", () => {
+  const debugUi = readFileSync(
+    join(HERE, "../../../templates/template/src/ui/platform_sdk_debug.c"),
+    "utf8",
+  );
+
+  assert.equal(
+    debugUi.includes(
+      "#if PLATFORM_SDK_TARGET_ID == PLATFORM_SDK_TEMPLATE_TARGET_LOCAL && !defined(__EMSCRIPTEN__)",
+    ),
+    true,
+  );
+});
+
 test("production staged artifacts exclude debug labels and unused SDK URLs", () => {
   const dir = mkdtempSync(join(tmpdir(), "platform-sdk-artifact-"));
   try {

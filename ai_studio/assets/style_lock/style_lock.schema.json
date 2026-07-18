@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-studio.local/schemas/game-style-lock-v1.json",
+  "$comment": "Structural schema only; validate.mjs additionally enforces private ref game_id equality, same Canvas project, unique exemplar element refs, and non-whitespace text.",
+  "title": "AI Studio game style lock v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "id",
+    "game_id",
+    "status",
+    "canvas_ref",
+    "art_contract_ref",
+    "prompt_preamble",
+    "negative_prompt",
+    "palette",
+    "bg_rule",
+    "exemplar_refs",
+    "asset_size",
+    "technical_gate",
+    "model_checkpoint"
+  ],
+  "properties": {
+    "schema": { "const": "ai_studio.game.style_lock.v1" },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "game_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "status": { "enum": ["draft", "accepted"] },
+    "canvas_ref": { "$ref": "#/$defs/canvasGroupRef" },
+    "art_contract_ref": { "type": "string", "pattern": "^design/(?:[A-Za-z0-9_-]+/)*art_contract\\.json$" },
+    "prompt_preamble": { "type": "string", "minLength": 1, "pattern": "\\S" },
+    "negative_prompt": { "type": "string", "minLength": 1, "pattern": "\\S" },
+    "palette": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^#[0-9A-F]{6}$" }
+    },
+    "bg_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "key_color", "description"],
+      "properties": {
+        "mode": { "enum": ["chroma", "transparent"] },
+        "key_color": { "type": ["string", "null"] },
+        "description": { "type": "string", "minLength": 1, "pattern": "\\S" }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "mode": { "const": "chroma" },
+            "key_color": { "enum": ["#FF00FF", "#00FF00"] }
+          }
+        },
+        {
+          "properties": {
+            "mode": { "const": "transparent" },
+            "key_color": { "type": "null" }
+          }
+        }
+      ]
+    },
+    "exemplar_refs": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "required": ["domain"],
+            "properties": { "domain": { "const": "world" } }
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["domain"],
+            "properties": { "domain": { "const": "gui" } }
+          }
+        }
+      ],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ref", "origin", "domain"],
+        "properties": {
+          "ref": { "$ref": "#/$defs/canvasElementRef" },
+          "origin": { "const": "owned" },
+          "domain": { "enum": ["world", "gui"] }
+        }
+      }
+    },
+    "asset_size": { "$ref": "#/$defs/size" },
+    "technical_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_spill_edge_ratio",
+        "max_halo_edge_ratio",
+        "max_alpha_noise_ratio",
+        "max_empty_margin_ratio",
+        "max_aspect_relative_error"
+      ],
+      "properties": {
+        "max_spill_edge_ratio": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "max_halo_edge_ratio": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "max_alpha_noise_ratio": { "$ref": "#/$defs/ratio" },
+        "max_empty_margin_ratio": { "$ref": "#/$defs/ratio" },
+        "max_aspect_relative_error": { "$ref": "#/$defs/ratio" }
+      }
+    },
+    "model_checkpoint": { "type": "null" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "bg_rule": {
+            "type": "object",
+            "required": ["mode"],
+            "properties": { "mode": { "const": "chroma" } }
+          }
+        },
+        "required": ["bg_rule"]
+      },
+      "then": {
+        "properties": {
+          "technical_gate": {
+            "properties": {
+              "max_spill_edge_ratio": { "type": "number" },
+              "max_halo_edge_ratio": { "type": "number" }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "technical_gate": {
+            "properties": {
+              "max_spill_edge_ratio": { "type": "null" },
+              "max_halo_edge_ratio": { "type": "null" }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "canvasGroupRef": {
+      "type": "string",
+      "pattern": "^canvas://(?:(?:game/[a-z][a-z0-9-]*/)?[A-Za-z0-9_-]+)/group/[A-Za-z0-9_-]+$"
+    },
+    "canvasElementRef": {
+      "type": "string",
+      "pattern": "^canvas://(?:(?:game/[a-z][a-z0-9-]*/)?[A-Za-z0-9_-]+)/element/[A-Za-z0-9_-]+$"
+    },
+    "ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+    "size": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 64, "maximum": 4096 },
+        "height": { "type": "integer", "minimum": 64, "maximum": 4096 }
+      }
+    }
+  }
+}

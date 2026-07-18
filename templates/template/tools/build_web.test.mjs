@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 
 import { createBuildPlan, executeBuildPlan, parseBuildArgs, resolveEmcmakePath } from "./build_web.mjs";
@@ -16,6 +17,15 @@ test("build web arguments preserve preset target and release debug validation", 
 });
 
 test("plan preserves build dirs local cache native pack web targets and final message", () => {
+  const inputs = [
+    { id: "game", source: ".", files: 1, sha256: "1".repeat(64) },
+    { id: "engine", source: "external/neotolis-engine", files: 1, sha256: "2".repeat(64) },
+  ];
+  const runtimeBuild = {
+    schema: "ai_studio.runtime_build.v1",
+    fingerprint: createHash("sha256").update(JSON.stringify(inputs)).digest("hex"),
+    inputs,
+  };
   const plan = createBuildPlan({
     gameDir: "/repo/templates/template",
     args: { preset: "wasm-devapi-debug", target: "yandex", debugUi: "on" },
@@ -23,11 +33,12 @@ test("plan preserves build dirs local cache native pack web targets and final me
     platform: "win32",
     nativeConfigured: false,
     toolchainExists: true,
+    runtimeBuild,
   });
   assert.equal(slash(plan.env.EM_CACHE), "/repo/templates/template/build/emscripten-cache");
   assert.equal(slash(plan.nativeDir), "/repo/templates/template/build/native-debug");
   assert.equal(slash(plan.webDir), "/repo/templates/template/build/wasm-devapi-debug-yandex");
-  assert.deepEqual(plan.steps.map((step) => step.kind), ["mkdir", "run", "run", "run", "run", "run", "copy"]);
+  assert.deepEqual(plan.steps.map((step) => step.kind), ["mkdir", "run", "run", "run", "run", "run", "copy", "write"]);
   const runSteps = plan.steps.filter((step) => step.kind === "run");
   assert.equal(runSteps[0].args.slice(-3).join(" "), "-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Debug");
   assert.deepEqual(runSteps.slice(1).map((step) => step.args.slice(-2).join(" ")), [
@@ -36,9 +47,13 @@ test("plan preserves build dirs local cache native pack web targets and final me
     "--target game",
     "--target platform_sdk_web_assets",
   ]);
-  assert.equal(plan.steps.at(-1).kind, "copy");
-  assert.equal(slash(plan.steps.at(-1).from), "/repo/templates/template/build/native-debug/bin/assets/game.ntpack");
-  assert.equal(slash(plan.steps.at(-1).to), "/repo/templates/template/build/wasm-devapi-debug-yandex/bin/assets/game.ntpack");
+  assert.equal(plan.steps.at(-1).kind, "write");
+  assert.equal(slash(plan.steps.at(-2).from), "/repo/templates/template/build/native-debug/bin/assets/game.ntpack");
+  assert.equal(slash(plan.steps.at(-2).to), "/repo/templates/template/build/wasm-devapi-debug-yandex/bin/assets/game.ntpack");
+  assert.equal(slash(plan.steps.at(-1).path), "/repo/templates/template/build/wasm-devapi-debug-yandex/bin/runtime-build.json");
+  assert.deepEqual(plan.steps.at(-1).value, runtimeBuild);
+  const configure = plan.steps.find((step) => step.kind === "run" && step.args.includes("-DGAME_PUBLISH_TARGET=yandex"));
+  assert.ok(configure.args.includes(`-DGAME_RUNTIME_BUILD_FINGERPRINT=${runtimeBuild.fingerprint}`));
   assert.equal(plan.message, "built wasm-devapi-debug-yandex (yandex -> platform-sdk); serve with: node tools/serve_web.mjs --preset wasm-devapi-debug --target yandex");
 });
 
@@ -50,12 +65,14 @@ test("executor uses injected filesystem and runner seams", () => {
       { kind: "mkdir", path: "a" },
       { kind: "run", command: "cmake", args: ["--build", "a"] },
       { kind: "copy", from: "a/pack", to: "b/pack" },
+      { kind: "write", path: "b/runtime-build.json", value: { fingerprint: "a" } },
     ],
     message: "done",
   };
   const result = executeBuildPlan(plan, {
     mkdir: (path) => events.push(["mkdir", path]),
     copy: (from, to) => events.push(["copy", from, to]),
+    write: (path, value) => events.push(["write", path, value.fingerprint]),
     run: (command, args, options) => { events.push(["run", command, args, options.env.EM_CACHE]); return { status: 0 }; },
   });
   assert.equal(result, "done");
@@ -63,7 +80,20 @@ test("executor uses injected filesystem and runner seams", () => {
     ["mkdir", "a"],
     ["run", "cmake", ["--build", "a"], "cache"],
     ["copy", "a/pack", "b/pack"],
+    ["write", "b/runtime-build.json", "a"],
   ]);
+});
+
+test("executor rechecks runtime inputs immediately before publishing the build record", () => {
+  const events = [];
+  assert.throws(() => executeBuildPlan({
+    env: {},
+    steps: [{ kind: "write", path: "bin/runtime-build.json", value: { fingerprint: "a" } }],
+    verifyRuntimeBuild() { events.push("verify"); throw new Error("inputs changed"); },
+  }, {
+    write: () => events.push("write"),
+  }), /inputs changed/i);
+  assert.deepEqual(events, ["verify"]);
 });
 
 test("plan covers all three presets across all five targets with exact debug flags", () => {

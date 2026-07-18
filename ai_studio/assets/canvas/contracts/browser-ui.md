@@ -11,3 +11,10 @@ journaled. Errors and long-operation progress use the existing toast layer.
 
 Canvas coordinates are Y-up. Files are rendered through confined `/files`
 routes; UI code never edits project JSON or source files directly.
+
+An image with `assetStatus` shows the same lowercase text badge in the bitmap
+workspace and the DOM layers row. Color reinforces but never replaces the label:
+amber is `quarantine`, blue is `checked`, and green is `accepted`. The badge is
+view-only chrome and never enters rendered/exported asset pixels. At low zoom it
+compacts to a one-letter text badge; below 16 screen pixels it yields to the full
+DOM layers badge instead of overlapping neighboring art.

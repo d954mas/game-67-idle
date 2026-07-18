@@ -100,6 +100,7 @@ const CHECKS = Object.freeze([
       "ai_studio/assets/manifests",
       "ai_studio/assets/previews",
       "ai_studio/assets/sources",
+      "ai_studio/assets/style_lock",
       "ai_studio/assets/tests",
       "ai_studio/assets/tools",
     ],
@@ -119,6 +120,7 @@ const CHECKS = Object.freeze([
   {
     id: "studio.runtime-automation",
     pythonRoots: ["ai_studio/runtime_automation"],
+    testFiles: ["ai_studio/runtime_automation/web_local_mock_probe.test.mjs"],
   },
   {
     id: "studio.runtime-automation.live",
@@ -147,7 +149,10 @@ const CHECKS = Object.freeze([
   { id: "reference-template", testFiles: [
     "templates/template/tools/build_web.test.mjs",
     "templates/template/tools/game.test.mjs",
+    "templates/template/tools/lib/runtime_build.test.mjs",
+    "templates/template/tools/lib/studio_root.test.mjs",
     "templates/template/tools/package_web.test.mjs",
+    "templates/template/tools/package_web_smoke.test.mjs",
     "templates/template/tools/portal_evidence.test.mjs",
   ] },
   { id: "reference-template.python", pythonRoots: ["templates/template/devapi"] },

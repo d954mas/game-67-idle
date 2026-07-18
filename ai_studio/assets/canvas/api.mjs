@@ -20,7 +20,7 @@
 //   POST   /api/canvas/projects/<id>/slice          {elementId, regionIds?}
 //   POST   /api/canvas/projects/<id>/alpha          {elementId, method?, regions?} | {elementIds, method?} (batch) -> NEW element(s) beside the source(s); original(s) untouched; one entry
 //   POST   /api/canvas/projects/<id>/alpha-dual     {elementIds:[a,b]}   (white+black plate pair -> new element; one entry)
-//   POST   /api/canvas/projects/<id>/alpha-dual-generate {elementId, prompt?}   (AUTOMATIC: element = light plate, generates the dark plate, gates, cuts; new element; one entry)
+//   POST   /api/canvas/projects/<id>/alpha-dual-generate {elementId, prompt?, noLock?}   (AUTOMATIC: element = light plate, generates the dark plate, gates, cuts; new element; one entry)
 //   POST   /api/canvas/projects/<id>/export         {elementIds, rows?} | {project:true}
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/export {rows}  (export settings)
 //   POST   /api/canvas/projects/<id>/groups         {name, x?,y?,w?,h?, fromElements?, parentId?}
@@ -40,7 +40,7 @@
 //   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/expand    {}   (T0239 increment 4: Expand-prompt — ONE codex TEXT call; writes recipe.expanded only, no card minted; Generate sends it when use_expanded is true, else the short prompt)
 //   POST   /api/canvas/projects/<id>/anim-cards            {name?, x?,y?,w?,h?, parentId?, memberId?}   (T0265 increment 1: mint an animation card — a group with an additive `anim` blob; keyframes are its member images. memberId = "Animate this image" promotion: fit around that image + move it in as the first keyframe, ONE entry; not combinable with x/y/w/h)
 //   PATCH  /api/canvas/projects/<id>/anim-cards/<gid>      {motion?, profile?, seed?, matte?, gen_fps?, loop?, columns?, trim?, style_ref?, accepted_ref?}   (partial anim blob update; 400 on a group with no `anim`)
-//   POST   /api/canvas/projects/<id>/anim-cards/<gid>/generate  {}   (T0265 increment 1: generate via the Track B video route — mints ONE flipbook element beside the card in its PARENT scope; one entry; 1 keyframe = plain I2V)
+//   POST   /api/canvas/projects/<id>/anim-cards/<gid>/generate  {noLock?}   (T0265 increment 1: generate via the Track B video route — mints ONE flipbook element beside the card in its PARENT scope; one entry; 1 keyframe = plain I2V)
 //   POST   /api/canvas/projects/<id>/style-cards           {name?, x?,y?,w?,h?, parentId?}   (T0239 increment 3: mint a style card — a group with an additive `style` blob: prompt + ONE ref image; no generate route, style cards never generate)
 //   PATCH  /api/canvas/projects/<id>/style-cards/<gid>     {prompt?, ref?}                    (partial style blob update; ref must be null or a member IMAGE element id — the "Make ref" gesture; 400 on a group with no `style`)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/cleanup-preview {tool, params}  (T0207: quantize|denoise LIVE preview against CURRENT pixels; writes NOTHING to the store)
@@ -51,6 +51,12 @@
 //   POST   /api/canvas/projects/<id>/elements/<eid>/animate        {text}   (T0264: ONE codex TEXT/VISION call -> element.animation (the ai_studio.canvas.animation.v1 spec); authors fresh or minimally patches an existing spec; image + text; loud on a non-JSON reply / invalid spec)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/promote-recipe {}   (mint a RECIPE card BELOW the element from its ALREADY-STORED meta.extracted; NO codex call; loud without meta.extracted first)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/promote-style  {}   (mint a STYLE card RIGHT of the element from its ALREADY-STORED meta.extracted; NO codex call; loud without meta.extracted first)
+//   GET    /api/canvas/projects/<id>/elements/<eid>/asset-status
+//   PUT    /api/canvas/projects/<id>/elements/<eid>/asset-status {status} (image-only; initialize quarantine or downgrade; upward transitions require gate evidence; one entry)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/asset-status-check {} (runs the trusted technical gate; PASS -> checked, FAIL -> quarantine; one entry)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/asset-style-check {} (runs trusted advisory vision compare; stores evidence without accepting)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/asset-style-decision {decision,reason} (explicit lead backstop; accept -> accepted, revise/reject -> quarantine)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/asset-promote {metadata} (accepted-only game-local Pack Manifest promotion)
 //   POST   /api/canvas/projects/<id>/nodes-move    {moves:[{nodeId,x,y}...]} (mixed element+group move)
 //   POST   /api/canvas/projects/<id>/nodes-reorder {nodeIds, direction|index} (multi-node z-order)
 //   POST   /api/canvas/projects/<id>/nodes-align   {nodeIds, align, reference?} (align to selection bbox or parent frame; one entry)
@@ -110,6 +116,7 @@ import {
   fitGroup,
   generateAnimFromCard,
   generateFromRecipe,
+  getAssetStatus,
   getProject,
   historyFlags,
   jumpHistory,
@@ -128,6 +135,7 @@ import {
   patchProject,
   patchRecipe,
   patchStyle,
+  promoteAssetToGame,
   promoteExtractedRecipe,
   promoteExtractedStyle,
   readHistory,
@@ -136,6 +144,9 @@ import {
   removeElement,
   removeElements,
   renderGroup,
+  decideAssetStyle,
+  runAssetTechnicalGate,
+  runAssetStyleVerdict,
   reorderElement,
   reorderNode,
   reorderNodes,
@@ -144,6 +155,7 @@ import {
   resolveProjectPath,
   scaleGroup,
   setElementAnimation,
+  setAssetStatus,
   setExportSettings,
   setRegions,
   setSlice9,
@@ -471,13 +483,13 @@ export function createCanvasApi(root) {
       // validates the method + surfaces every refusal.
       if (parts.length === 5 && sub === "alpha" && req.method === "POST") {
         const body = await readJsonBody(req);
-        sendMutation(200, await locked(id, () => alphaCutout(root, {
+        sendMutation(200, await alphaCutout(root, {
           projectId: id,
           elementId: body.elementId,
           elementIds: Array.isArray(body.elementIds) ? body.elementIds : undefined,
           method: body.method,
           regions: body.regions,
-        })));
+        }));
         return true;
       }
 
@@ -488,10 +500,10 @@ export function createCanvasApi(root) {
       // (non-destructive); one journal entry, one undo removes the new element.
       if (parts.length === 5 && sub === "alpha-dual" && req.method === "POST") {
         const body = await readJsonBody(req);
-        sendMutation(201, await locked(id, () => alphaDualPlate(root, {
+        sendMutation(201, await alphaDualPlate(root, {
           projectId: id,
           elementIds: Array.isArray(body.elementIds) ? body.elementIds : [],
-        })));
+        }));
         return true;
       }
 
@@ -509,6 +521,7 @@ export function createCanvasApi(root) {
           projectId: id,
           elementId: body.elementId,
           prompt: body.prompt,
+          noLock: body.noLock ?? false,
         }));
         return true;
       }
@@ -807,6 +820,7 @@ export function createCanvasApi(root) {
       // optional, pack-only — the single-image branch above ignores them, see
       // generateFromRecipe's own doc) resume an existing run / force-regenerate exactly one
       // sheet — the same body fields the inspector's Pack "Generate"/"Regenerate" buttons send.
+      // body.noLock=true explicitly bypasses a game style lock and taints the frozen origin.
       if (parts.length === 7 && sub === "recipe-cards" && parts[6] === "generate" && req.method === "POST") {
         const groupId = decodeURIComponent(parts[5]);
         const body = await readJsonBody(req);
@@ -815,6 +829,7 @@ export function createCanvasApi(root) {
           groupId,
           runGroupId: body.runGroupId,
           sheetSlug: body.sheetSlug,
+          noLock: body.noLock ?? false,
         }));
         return true;
       }
@@ -897,8 +912,12 @@ export function createCanvasApi(root) {
       // commit internally, like recipe generate), so a multi-minute run never blocks the project.
       if (parts.length === 7 && sub === "anim-cards" && parts[6] === "generate" && req.method === "POST") {
         const groupId = decodeURIComponent(parts[5]);
-        await readJsonBody(req);
-        sendMutation(201, await generateAnimFromCard(root, { projectId: id, groupId }));
+        const body = await readJsonBody(req);
+        sendMutation(201, await generateAnimFromCard(root, {
+          projectId: id,
+          groupId,
+          noLock: body.noLock ?? false,
+        }));
         return true;
       }
 
@@ -1025,6 +1044,73 @@ export function createCanvasApi(root) {
         const elementId = decodeURIComponent(parts[5]);
         await readJsonBody(req);
         sendMutation(201, await locked(id, () => promoteExtractedStyle(root, { projectId: id, elementId })));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/asset-status
+      // GET is a compact agent/page read. PUT replaces the image's review state through
+      // the same journaled operation as the CLI; no generic element-meta patch exists.
+      if (parts.length === 7 && sub === "elements" && parts[6] === "asset-status") {
+        const elementId = decodeURIComponent(parts[5]);
+        if (req.method === "GET") {
+          sendJson(res, 200, getAssetStatus(root, { projectId: id, elementId }));
+          return true;
+        }
+        if (req.method === "PUT") {
+          const body = await readJsonBody(req);
+          sendMutation(200, await locked(id, () => setAssetStatus(root, { projectId: id, elementId, status: body.status })));
+          return true;
+        }
+        sendJson(res, 405, { error: "method not allowed" });
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/asset-status-check
+      // Evidence is produced by the shared evaluator; request-body verdicts are ignored so
+      // public callers cannot forge the quarantine -> checked transition.
+      if (parts.length === 7 && sub === "elements" && parts[6] === "asset-status-check" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        await readJsonBody(req);
+        sendMutation(200, await runAssetTechnicalGate(root, { projectId: id, elementId }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/asset-style-check
+      // Request-body verdicts are ignored. The trusted vision judge produces advisory
+      // evidence, while a later explicit lead decision owns the accepted transition.
+      if (parts.length === 7 && sub === "elements" && parts[6] === "asset-style-check" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        await readJsonBody(req);
+        sendMutation(200, await runAssetStyleVerdict(root, { projectId: id, elementId }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/asset-style-decision
+      // Unlike the advisory report, decision + reason are intentionally caller-authored:
+      // this explicit lead action is the acceptance backstop and remains fully journaled.
+      if (parts.length === 7 && sub === "elements" && parts[6] === "asset-style-decision" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(200, await locked(id, () => decideAssetStyle(root, {
+          projectId: id,
+          elementId,
+          decision: body.decision,
+          reason: body.reason,
+        })));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/asset-promote
+      // This is the only Canvas -> games/<id>/assets write boundary. The operation
+      // revalidates current acceptance and publishable metadata before touching disk.
+      if (parts.length === 7 && sub === "elements" && parts[6] === "asset-promote" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendJson(res, 201, await locked(id, () => promoteAssetToGame(root, {
+          projectId: id,
+          elementId,
+          metadata: body.metadata,
+        })));
         return true;
       }
 

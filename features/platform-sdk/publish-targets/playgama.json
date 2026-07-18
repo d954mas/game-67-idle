@@ -7,12 +7,13 @@
     "game.js",
     "game.wasm",
     "assets/game.ntpack",
+    "runtime-build.json",
     "platform-sdk.js",
     "platform-sdk-core.js",
     "platform-sdk-adapter.js",
     "playgama-bridge-config.json"
   ],
-  "zip_layout": "Playgama upload root: index.html, game.js, game.wasm, platform-sdk*.js, playgama-bridge-config.json, and assets/game.ntpack.",
+  "zip_layout": "Playgama upload root: index.html, game.js, game.wasm, runtime-build.json, platform-sdk*.js, playgama-bridge-config.json, and assets/game.ntpack.",
   "metadata": {
     "portal": "Playgama",
     "requires_account": true,

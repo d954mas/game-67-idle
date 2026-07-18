@@ -121,6 +121,58 @@ test("cli create/add-image/undo/redo/history/export smoke", async (t) => {
   assert.equal(stats.errors.count, 0);
 });
 
+test("cli sets and reads an image asset status", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-asset-status-"));
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const pngPath = join(dir, "pic.png");
+  writeFileSync(pngPath, solidPng(9, 6, [12, 34, 56]));
+  const projectId = (await runInProcess(env, "create", "--title", "Asset status CLI")).project.id;
+  const elementId = (await runInProcess(env, "add-image", projectId, "--file", pngPath)).element.id;
+
+  assert.equal((await runInProcess(env, "asset-status-show", projectId, "--element", elementId)).status, null);
+  assert.match(
+    (await runInProcessFail(env, "asset-status-set", projectId, "--element", elementId, "--status", "checked")).message,
+    /promotion from untracked to checked requires gate evidence/,
+  );
+  const changed = await runInProcess(
+    env,
+    "asset-status-set",
+    projectId,
+    "--element",
+    elementId,
+    "--status",
+    "quarantine",
+  );
+  assert.equal(changed.status, "quarantine");
+  assert.equal((await runInProcess(env, "asset-status-show", projectId, "--element", elementId)).status, "quarantine");
+  assert.match(
+    (await runInProcessFail(env, "asset-status-set", projectId, "--element", elementId, "--status", "checked")).message,
+    /promotion from quarantine to checked requires gate evidence/,
+  );
+  assert.match(
+    (await runInProcessFail(env, "asset-status-check", projectId, "--element", elementId)).message,
+    /requires a game-owned Canvas project/,
+  );
+  assert.match(
+    (await runInProcessFail(env, "asset-style-check", projectId, "--element", elementId)).message,
+    /requires a game-owned Canvas project/,
+  );
+  assert.match(
+    (await runInProcessFail(env, "asset-style-decide", projectId, "--element", elementId, "--decision", "accept", "--reason", "Lead decision.")).message,
+    /requires current style-verdict evidence/,
+  );
+  assert.match(
+    runFail(env, "asset-promote", projectId, "--element", elementId).stderr,
+    /requires --metadata/,
+  );
+  assert.match(
+    (await runInProcessFail(env, "asset-status-set", projectId, "--element", elementId, "--status", "approved")).message,
+    /asset status must be quarantine\|checked\|accepted/,
+  );
+});
+
 test("cli stores Canvas project ownership and filters by owner game", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-owner-"));
   const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
@@ -456,14 +508,32 @@ test("cli nodes-duplicate / nodes-delete / nodes-paste parity (one undo each)", 
     specPath,
     JSON.stringify({
       schema: "ai_studio.canvas.nodes_spec.v1",
-      nodes: [{ kind: "element", element: { type: "image", x: 0, y: 0, w: 4, h: 4, src, name: "pasted" } }],
+      nodes: [{ kind: "element", element: {
+        type: "image",
+        x: 0,
+        y: 0,
+        w: 4,
+        h: 4,
+        src,
+        name: "pasted",
+        assetStatus: "accepted",
+        meta: {
+          origin: { retained: true },
+          technical_gate: { forged: true },
+          style_verdict: { forged: true },
+          style_decision: { forged: true },
+        },
+      } }],
     }),
   );
   const pasted = await runInProcess(env, "nodes-paste", projectId, "--spec", specPath, "--dx", "5", "--dy", "5");
   assert.equal(pasted.count, 1);
   const proj = (await runInProcess(env, "show", projectId)).project;
   assert.equal(proj.elements.length, 3);
-  assert.ok(proj.elements.some((e) => e.name === "pasted"), "hand-authored spec pasted");
+  const pastedElement = proj.elements.find((e) => e.name === "pasted");
+  assert.ok(pastedElement, "hand-authored spec pasted");
+  assert.equal(pastedElement.assetStatus, "quarantine");
+  assert.deepEqual(pastedElement.meta, { origin: { retained: true } });
 });
 
 test("cli add-images batched multi-image add parity (one undo restores all)", async (t) => {
