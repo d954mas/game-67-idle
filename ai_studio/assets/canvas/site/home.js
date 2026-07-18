@@ -5,7 +5,8 @@
 // button with a two-step in-place confirm (no browser confirm()). Renaming
 // lives only in the workspace top bar. Pure rendering/input over the shared API.
 import { api, coverUrl, el, hooks, loadProjects, rememberHomeStore, setStatus, state } from "./app.js";
-import { ALL_STORES_ID, STUDIO_STORE_ID, projectStoreId } from "./store_scope.js";
+import { filterHomeProjects, homeCreationStoreId, ownerGameOptions, projectLifecycleLabel } from "./home_filters.mjs";
+import { ALL_STORES_ID, projectStoreId } from "./store_scope.js";
 
 function formatDate(iso) {
   const date = new Date(iso);
@@ -39,12 +40,17 @@ function storeLabel(storeId) {
 }
 
 function visibleProjects() {
-  if (state.homeStoreId === ALL_STORES_ID) return state.projects;
-  return state.projects.filter((project) => projectStoreId(project) === state.homeStoreId);
+  return filterHomeProjects(state.projects, {
+    storeId: state.homeStoreId,
+    ownerGame: state.homeOwnerGame,
+  });
 }
 
 function createStoreId() {
-  return state.homeStoreId === ALL_STORES_ID ? STUDIO_STORE_ID : state.homeStoreId;
+  return homeCreationStoreId(state.projects, {
+    storeId: state.homeStoreId,
+    ownerGame: state.homeOwnerGame,
+  });
 }
 
 async function deleteProjectFromHome(project) {
@@ -71,15 +77,19 @@ function projectActions(project) {
     if (!actions.contains(event.target)) showDefault();
   }
   function onEscape(event) {
-    if (event.key === "Escape") showDefault();
+    if (event.key === "Escape") {
+      event.preventDefault();
+      showDefault(true);
+    }
   }
   function stopWatching() {
     document.removeEventListener("mousedown", onOutside, true);
     document.removeEventListener("keydown", onEscape, true);
   }
 
-  function showDefault() {
+  function showDefault(focusDelete = false) {
     stopWatching();
+    if (!focusDelete) actions.classList.remove("confirming");
     const del = document.createElement("button");
     del.type = "button";
     del.className = "card-action danger";
@@ -90,6 +100,12 @@ function projectActions(project) {
       showConfirm();
     });
     actions.replaceChildren(del);
+    if (focusDelete) {
+      setTimeout(() => {
+        del.focus();
+        actions.classList.remove("confirming");
+      }, 0);
+    }
   }
 
   function showConfirm() {
@@ -111,9 +127,11 @@ function projectActions(project) {
     cancelBtn.textContent = "Cancel";
     cancelBtn.addEventListener("click", (event) => {
       event.stopPropagation();
-      showDefault();
+      showDefault(true);
     });
+    actions.classList.add("confirming");
     actions.replaceChildren(label, confirmBtn, cancelBtn);
+    confirmBtn.focus();
     document.addEventListener("mousedown", onOutside, true);
     document.addEventListener("keydown", onEscape, true);
   }
@@ -125,8 +143,13 @@ function projectActions(project) {
 function projectCard(project) {
   const card = document.createElement("div");
   card.className = "project-card";
+  if (project.archived === true) card.classList.add("archived");
+  const openButton = document.createElement("button");
+  openButton.type = "button";
+  openButton.className = "project-card-open";
+  openButton.setAttribute("aria-label", `Open ${projectLifecycleLabel(project).toLowerCase()} project ${project.title}`);
 
-  card.appendChild(coverNode(project));
+  openButton.appendChild(coverNode(project));
 
   const body = document.createElement("div");
   body.className = "card-body";
@@ -139,15 +162,14 @@ function projectCard(project) {
   const meta = document.createElement("div");
   meta.className = "card-meta";
   const count = (project.elements || []).length;
-  meta.textContent = `${count} image${count === 1 ? "" : "s"} · ${formatDate(project.updated)}`;
   const store = state.homeStoreId === ALL_STORES_ID ? `${storeLabel(projectStoreId(project))} / ` : "";
-  meta.textContent = `${store}${count} image${count === 1 ? "" : "s"} / ${formatDate(project.updated)}`;
+  meta.textContent = `${store}${projectLifecycleLabel(project)} / ${count} image${count === 1 ? "" : "s"} / ${formatDate(project.updated)}`;
   body.appendChild(meta);
 
-  card.appendChild(body);
+  openButton.appendChild(body);
+  openButton.addEventListener("click", () => hooks.openProject(project.id, { storeId: project.storeId }));
+  card.appendChild(openButton);
   card.appendChild(projectActions(project));
-
-  card.addEventListener("click", () => hooks.openProject(project.id, { storeId: project.storeId }));
   return card;
 }
 
@@ -157,8 +179,13 @@ function projectCard(project) {
 async function createProject() {
   try {
     const storeId = createStoreId();
+    if (!storeId) {
+      setStatus(`Select a Canvas store before creating a project for ${state.homeOwnerGame}.`, true);
+      return;
+    }
     state.storeId = storeId;
-    const { project } = await api("POST", "/projects", undefined, { storeId });
+    const body = state.homeOwnerGame ? { gameId: state.homeOwnerGame } : undefined;
+    const { project } = await api("POST", "/projects", body, { storeId });
     await loadProjects();
     hooks.openProject(project.id, { storeId: project.storeId });
   } catch (error) {
@@ -167,15 +194,25 @@ async function createProject() {
 }
 
 function newProjectCard() {
-  const card = document.createElement("div");
+  const card = document.createElement("button");
+  card.type = "button";
   card.className = "project-card new-card";
   const plus = document.createElement("div");
   plus.className = "new-plus";
   plus.textContent = "+";
   const label = document.createElement("div");
   label.className = "new-label";
-  label.textContent = state.homeStoreId === ALL_STORES_ID ? "New project in AI Studio" : `New project in ${storeLabel(state.homeStoreId)}`;
+  const destinationStoreId = createStoreId();
+  label.textContent = state.homeOwnerGame
+    ? destinationStoreId
+      ? `New project for ${state.homeOwnerGame} in ${storeLabel(destinationStoreId)}`
+      : `Select a store for ${state.homeOwnerGame}`
+    : state.homeStoreId === ALL_STORES_ID
+      ? "New project in AI Studio"
+      : `New project in ${storeLabel(state.homeStoreId)}`;
   card.append(plus, label);
+  card.setAttribute("aria-label", label.textContent);
+  card.disabled = !destinationStoreId;
   card.addEventListener("click", () => createProject());
   return card;
 }
@@ -198,10 +235,30 @@ function renderStoreSelector() {
   };
 }
 
+function renderOwnerSelector() {
+  const select = el("home-owner-select");
+  if (!select) return;
+  const games = ownerGameOptions(state.projects, state.homeStoreId);
+  if (state.homeOwnerGame && !games.includes(state.homeOwnerGame)) state.homeOwnerGame = "";
+  const options = [{ value: "", label: "All owners" }, ...games.map((gameId) => ({ value: gameId, label: gameId }))];
+  select.replaceChildren(...options.map((row) => {
+    const option = document.createElement("option");
+    option.value = row.value;
+    option.textContent = row.label;
+    return option;
+  }));
+  select.value = state.homeOwnerGame;
+  select.onchange = () => {
+    state.homeOwnerGame = select.value || "";
+    render();
+  };
+}
+
 export function render() {
   const grid = el("home-grid");
   if (!grid) return;
   renderStoreSelector();
+  renderOwnerSelector();
   grid.replaceChildren();
   grid.appendChild(newProjectCard());
   for (const project of visibleProjects()) grid.appendChild(projectCard(project));
