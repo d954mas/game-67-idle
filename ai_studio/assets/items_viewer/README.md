@@ -89,7 +89,9 @@ asset, atlas, page, region, vertex, image-dimension, and pixel counts before
 using offsets. The focused icon-page route separately serves the capped PNG.
 The parser preserves 64-bit hashes as `BigInt` and degrades to a reason when
 build artifacts are missing. The browser decodes the shared atlas image once
-and crops every item icon from it.
+and crops every item icon from it into a fixed 34-by-34 backing canvas. Invalid,
+empty, or out-of-page crop rectangles are rejected before metadata reaches the
+browser, so atlas dimensions cannot amplify per-row canvas memory.
 
 The preferred long-term replacement is a native Studio adapter over the
 engine's public atlas reader; the current JS binary reader stays isolated in

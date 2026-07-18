@@ -2,6 +2,29 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { formatCost } from "../site/item_detail.js";
 import { buildEditPatch, editableFields, editableLevels, editableOperations } from "../site/semantic_editor.js";
+import { drawIconThumbnail, ICON_THUMBNAIL_SIZE } from "../site/icon_canvas.js";
+
+test("Workbench icon canvases use a fixed backing store independent of source crop size", () => {
+  const drawCalls = [];
+  const canvas = {
+    width: 0,
+    height: 0,
+    getContext: () => ({ drawImage: (...args) => drawCalls.push(args) }),
+  };
+  const documentRef = {
+    createElement: (tag) => {
+      assert.equal(tag, "canvas");
+      return canvas;
+    },
+  };
+  const image = {};
+  const result = drawIconThumbnail(documentRef, image, { x: 10, y: 20, w: 4096, h: 2048 });
+
+  assert.equal(result, canvas);
+  assert.equal(canvas.width, ICON_THUMBNAIL_SIZE);
+  assert.equal(canvas.height, ICON_THUMBNAIL_SIZE);
+  assert.deepEqual(drawCalls, [[image, 10, 20, 4096, 2048, 0, 0, ICON_THUMBNAIL_SIZE, ICON_THUMBNAIL_SIZE]]);
+});
 
 test("Workbench formats normalized free, single, and composite cost lists", () => {
   const gold = { __studio_kind: "cost", count: 100, item: { id: "game.gold" } };

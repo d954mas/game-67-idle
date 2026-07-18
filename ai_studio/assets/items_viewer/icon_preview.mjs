@@ -106,6 +106,7 @@ export function parsePackBuffer(buf) {
       totalVertices += vertexCount;
       if (totalVertices > ICON_LIMITS.maxVertexCount) return { reason: "atlas vertex count exceeds viewer cap" };
       const pageIndex = dv.getUint8(rOff + 33);
+      if (pageIndex >= pageCount) return { reason: "atlas region page index exceeds page count" };
       let minU = Infinity;
       let minV = Infinity;
       let maxU = -Infinity;
@@ -241,6 +242,34 @@ async function readPngMetadata(path) {
 // because it needs no per-pixel canvas work in the page (spec §5/§8).
 const DEBUG_OUTLINE_INSET = 2;
 
+export function computeIconCropRect(region, pageW, pageH) {
+  const coordinates = [region?.minU, region?.minV, region?.maxU, region?.maxV];
+  if (
+    !Number.isSafeInteger(pageW) || !Number.isSafeInteger(pageH) || pageW < 1 || pageH < 1
+    || coordinates.some((value) => !Number.isSafeInteger(value) || value < 0 || value > 65535)
+    || region.minU >= region.maxU || region.minV >= region.maxV
+  ) {
+    throw new Error("invalid atlas crop rectangle");
+  }
+  const x0 = Math.round((region.minU / 65535) * pageW);
+  const y0 = Math.round((region.minV / 65535) * pageH);
+  const x1 = Math.round((region.maxU / 65535) * pageW);
+  const y1 = Math.round((region.maxV / 65535) * pageH);
+  const rect = {
+    x: x0 + DEBUG_OUTLINE_INSET,
+    y: y0 + DEBUG_OUTLINE_INSET,
+    w: x1 - x0 - DEBUG_OUTLINE_INSET * 2,
+    h: y1 - y0 - DEBUG_OUTLINE_INSET * 2,
+  };
+  if (
+    rect.x < 0 || rect.y < 0 || rect.w < 1 || rect.h < 1
+    || rect.x + rect.w > pageW || rect.y + rect.h > pageH
+  ) {
+    throw new Error("invalid atlas crop rectangle");
+  }
+  return rect;
+}
+
 // The view.icons contract: bounded page metadata plus a name->rect map, or a
 // `reason` when the pack is not in a previewable state. PNG bytes are loaded
 // only by the focused icon-page route, never embedded in catalog JSON.
@@ -272,15 +301,9 @@ export async function buildIconPreview(folderAbs) {
       // THIS preview and is left out -- an honest miss (placeholder in the
       // UI), not a crash or a wrong crop.
       if (!region || region.pageIndex !== 0) continue;
-      const x0 = Math.round((region.minU / 65535) * pageW);
-      const y0 = Math.round((region.minV / 65535) * pageH);
-      const x1 = Math.round((region.maxU / 65535) * pageW);
-      const y1 = Math.round((region.maxV / 65535) * pageH);
+      const rect = computeIconCropRect(region, pageW, pageH);
       regions[path] = {
-        x: x0 + DEBUG_OUTLINE_INSET,
-        y: y0 + DEBUG_OUTLINE_INSET,
-        w: x1 - x0 - DEBUG_OUTLINE_INSET * 2,
-        h: y1 - y0 - DEBUG_OUTLINE_INSET * 2,
+        ...rect,
         page_index: region.pageIndex,
       };
     }

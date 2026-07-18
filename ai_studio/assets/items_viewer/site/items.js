@@ -1,5 +1,6 @@
 // Items Workbench page. Bare ESM, no framework or build step.
 import { field, make } from "./dom.js";
+import { drawIconThumbnail } from "./icon_canvas.js";
 import { renderItemDetail } from "./item_detail.js";
 import { captureCatalogScope, captureEditScope, scopeIsCurrent, scopedUndo } from "./request_scope.js";
 
@@ -55,17 +56,15 @@ function renderIconSlot(item, view) {
   const box = make("div", "iv-icon-slot");
   const region = resolveIcon(view, item.icon);
   if (region && state.iconsImage) {
-    const canvas = document.createElement("canvas");
-    canvas.width = region.w;
-    canvas.height = region.h;
-    const ctx = canvas.getContext("2d");
     // Straight alpha: the debug-PNG page is copied BEFORE the builder's
     // premultiply step (nt_builder_atlas.c vs nt_builder_texture.c) — a bare
     // drawImage crop is correct; dividing RGB by alpha here would burn edges
     // that were never premultiplied in the first place (spec §5/§8).
-    ctx.drawImage(state.iconsImage, region.x, region.y, region.w, region.h, 0, 0, region.w, region.h);
-    box.append(canvas);
-    return box;
+    const canvas = drawIconThumbnail(document, state.iconsImage, region);
+    if (canvas) {
+      box.append(canvas);
+      return box;
+    }
   }
   box.classList.add("iv-icon-missing");
   box.append(make("span", "iv-icon-glyph", "?"));
