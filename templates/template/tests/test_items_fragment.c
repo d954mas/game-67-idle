@@ -604,27 +604,53 @@ void test_upgrade_instance_is_atomic_next_level_and_distinguishes_free(void) {
     TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
 }
 
-#if NT_ASSERT_MODE == NT_ASSERT_FULL
-void test_payment_developer_contract_asserts(void) {
+void test_payment_invalid_scopes_are_release_visible_and_atomic(void) {
     items_container_ref_t payer = create_container(2, ITEMS_CONTAINER_POLICY_GENERIC);
     item_def_ref_t sword;
     TEST_ASSERT_TRUE(items_try_get_string("tmpl.sword", &sword));
     item_cost_ref_t cost = items_acquire_transition(sword).cost;
+    ItemsState before = items_state;
+    game_event_frame_reset();
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_try_pay_cost(cost, (items_payment_scope_t){0}, "shop_buy:sword"));
     items_payment_scope_t duplicate = {
         .count = 2,
         .containers = {payer, payer},
     };
-    NT_TEST_EXPECT_ASSERT(items_try_pay_cost(cost, duplicate, "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_try_pay_cost(cost, duplicate, "shop_buy:sword"));
 
     items_payment_scope_t oversized = {.count = ITEMS_PAYMENT_SCOPE_MAX + 1U};
-    NT_TEST_EXPECT_ASSERT(items_try_pay_cost(cost, oversized, "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_try_pay_cost(cost, oversized, "shop_buy:sword"));
 
     items_payment_scope_t invalid = {
         .count = 1,
-        .containers = {{UINT32_MAX, UINT32_MAX}},
+        .containers = {{ITEMS_STATE_MAX_CONTAINERS, UINT32_MAX}},
     };
-    NT_TEST_EXPECT_ASSERT(items_try_pay_cost(cost, invalid, "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_NOT_FOUND,
+        items_try_pay_cost(cost, invalid, "shop_buy:sword"));
 
+    items_container_ref_t temporary = create_ephemeral_container(
+        2, ITEMS_CONTAINER_POLICY_GENERIC);
+    items_payment_scope_t ephemeral = {.count = 1, .containers = {temporary}};
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_LIFETIME,
+        items_try_pay_cost(cost, ephemeral, "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    int event_count = 0;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+}
+
+#if NT_ASSERT_MODE == NT_ASSERT_FULL
+void test_payment_invalid_cost_ref_asserts(void) {
+    items_container_ref_t payer = create_container(2, ITEMS_CONTAINER_POLICY_GENERIC);
     items_payment_scope_t valid = {.count = 1, .containers = {payer}};
     NT_TEST_EXPECT_ASSERT(items_try_pay_cost(
         (item_cost_ref_t){UINT32_MAX}, valid, "shop_buy:sword"));
@@ -1356,8 +1382,9 @@ int main(void) {
     RUN_TEST(test_paid_acquire_plans_destination_after_projected_payment);
     RUN_TEST(test_acquire_refusals_are_atomic_and_explicit_free_is_distinct);
     RUN_TEST(test_upgrade_instance_is_atomic_next_level_and_distinguishes_free);
+    RUN_TEST(test_payment_invalid_scopes_are_release_visible_and_atomic);
 #if NT_ASSERT_MODE == NT_ASSERT_FULL
-    RUN_TEST(test_payment_developer_contract_asserts);
+    RUN_TEST(test_payment_invalid_cost_ref_asserts);
 #endif
     RUN_TEST(test_rebuild_rejects_reserved_persisted_counters);
     RUN_TEST(test_one_hundred_persistent_containers_round_trip);

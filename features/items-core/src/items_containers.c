@@ -246,6 +246,19 @@ static uint32_t ephemeral_index(uint32_t encoded) {
     return encoded & ~ITEMS_EPHEMERAL_REF_BIT;
 }
 
+static bool try_persistent_container(
+    items_container_ref_t ref, ItemsItemContainer **out_container) {
+    ensure_ready();
+    if (out_container == NULL || ephemeral_ref(ref.index) ||
+        ref.index >= ITEMS_STATE_MAX_CONTAINERS || ref.generation == 0 ||
+        s_container_generation[ref.index] != ref.generation ||
+        !items_state.containers[ref.index].used) {
+        return false;
+    }
+    *out_container = &items_state.containers[ref.index];
+    return true;
+}
+
 static items_container_ref_t ephemeral_container_ref(uint32_t index) {
     return (items_container_ref_t){
         index | ITEMS_EPHEMERAL_REF_BIT,
@@ -1148,20 +1161,25 @@ static items_result_t build_payment_plan(
     NT_ASSERT(out_plan != NULL);
     ensure_ready();
     memset(out_plan, 0, sizeof(*out_plan));
-    NT_ASSERT(scope.count > 0 && scope.count <= ITEMS_PAYMENT_SCOPE_MAX);
+    if (scope.count == 0 || scope.count > ITEMS_PAYMENT_SCOPE_MAX) {
+        return ITEMS_RESULT_INVALID_ARGUMENT;
+    }
     out_plan->scope_count = scope.count;
     out_plan->scope_fingerprint = payment_fingerprint_begin("items.payment.scope.v1");
     payment_fingerprint_u64(&out_plan->scope_fingerprint, scope.count);
     for (uint32_t i = 0; i < scope.count; i++) {
-        NT_ASSERT(!ephemeral_ref(scope.containers[i].index) &&
-                  "payment scope requires persistent containers");
-        ItemsItemContainer *container = require_container(scope.containers[i]);
-        payment_fingerprint_u64(&out_plan->scope_fingerprint, container->container_id);
-        for (uint32_t j = 0; j < i; j++) {
-            NT_ASSERT((scope.containers[i].index != scope.containers[j].index ||
-                       scope.containers[i].generation != scope.containers[j].generation) &&
-                      "payment scope contains a duplicate container");
+        if (ephemeral_ref(scope.containers[i].index)) { return ITEMS_RESULT_LIFETIME; }
+        ItemsItemContainer *container = NULL;
+        if (!try_persistent_container(scope.containers[i], &container)) {
+            return ITEMS_RESULT_NOT_FOUND;
         }
+        for (uint32_t j = 0; j < i; j++) {
+            if (scope.containers[i].index == scope.containers[j].index &&
+                scope.containers[i].generation == scope.containers[j].generation) {
+                return ITEMS_RESULT_INVALID_ARGUMENT;
+            }
+        }
+        payment_fingerprint_u64(&out_plan->scope_fingerprint, container->container_id);
     }
 
     out_plan->requirement_count = items_cost_count(cost);
