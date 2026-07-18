@@ -14,6 +14,12 @@ blank/broken captures.
 The contract is a project-specific taste anchor for `QART_001`. It keeps generic
 player clarity checks separate from the question "does this look right for this game?"
 
+When production asset work needs repeatable prompt/exemplar/background and
+technical-gate inputs, add the operational
+[Style lock](../../../assets/style_lock/README.md) at
+`games/<game-id>/design/style_lock.json`. It links to this art contract instead
+of duplicating its audience, fantasy, materials, camera, and UI decisions.
+
 ## Layering
 
 ```text

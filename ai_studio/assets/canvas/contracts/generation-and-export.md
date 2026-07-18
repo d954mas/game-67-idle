@@ -3,7 +3,18 @@
 Generation uses injected/default tool seams from the operation domain and
 commits only successful immutable outputs. Engine-specific parameters and
 references are frozen into provenance; partial multi-engine outcomes are
-reported explicitly.
+reported explicitly. Every newly minted generated or pixel-derived image enters
+the asset review workflow with top-level `assetStatus: "quarantine"`; ordinary
+user imports remain untracked until a review operation enrolls them.
+
+Recipe, pack, animation, and AI dual-plate generation freeze `meta.origin` before
+slow/paid work. Unowned Canvas projects record untainted `explore` origin.
+Game-owned projects default to `production`, require an accepted
+`design/style_lock.json`, and stamp its stable lock id. CLI `--no-lock` / API
+`noLock: true` is the explicit escape hatch: it generates quarantined explore
+output with `tainted: true` and `taint_reason: "no-lock"`.
+Missing/draft/invalid production locks refuse before a generator call; the
+dual-plate path also refuses before its Python background check.
 
 Long generation runs happen outside the project lock. Their short final commit
 must still validate the current project/history head, import immutable output,
@@ -24,3 +35,15 @@ groups simply are not marked as screens.
 The browser owns only save-dialog/download delivery. Naming, render order,
 filters, fonts, scale resolution, manifests, and output bytes are operation
 contracts shared with CLI/API.
+
+Export is review-neutral and may write previews anywhere the caller chooses;
+game asset promotion is a separate hard-gated operation. `asset-promote` accepts
+only game-owned, currently accepted Canvas images and writes the owning game's
+`assets/packs/canvas-promotions` Pack Manifest. Its metadata JSON must explicitly
+provide asset id/title/description/kind/tags, `origin` (`mine|ai|sourced`),
+license name/URL/kind, source page, author/vendor, provenance, credit, and all
+six rights/publish flags as `"true"|"false"`. The license decision must pass the
+release/public-binary gate; pending values and `private|unknown` license kinds
+are refused. Promotion verifies the immutable content-addressed source bytes,
+physically confines every game-pack directory, and serializes writers per game.
+There is no `--no-lock`, force, overwrite, or raw destination flag.

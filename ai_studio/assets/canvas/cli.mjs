@@ -15,6 +15,12 @@
 //   node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
 //   node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--w n --h n] [--x n --y n] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false] [--opacity <0..1>] [--filters-json '<json|null>']   (T0232 3a: rotation = degrees CW about the box center, normalized to [0,360); flip is image-only; T0260: opacity in [0,1], stored only when != 1; T0273: filters-json = {brightness?,saturation?,contrast?,tint?:{color,strength}} non-destructive image color adjustments, image-only, whole-object replace, "null" clears — see README "Image filters"; --w/--h/--x/--y are the same finite-number patchElement fields the API PATCH route accepts)
+//   node ai_studio/assets/canvas/cli.mjs asset-status-show <id> --element <eid>
+//   node ai_studio/assets/canvas/cli.mjs asset-status-set <id> --element <eid> --status quarantine|checked|accepted
+//   node ai_studio/assets/canvas/cli.mjs asset-status-check <id> --element <eid>   (trusted technical gate; PASS -> checked, FAIL -> quarantine)
+//   node ai_studio/assets/canvas/cli.mjs asset-style-check <id> --element <eid>   (trusted advisory vision verdict; status stays checked/accepted)
+//   node ai_studio/assets/canvas/cli.mjs asset-style-decide <id> --element <eid> --decision accept|revise|reject --reason "..."   (explicit lead backstop)
+//   node ai_studio/assets/canvas/cli.mjs asset-promote <id> --element <eid> --metadata promotion.json   (accepted-only game-local Pack Manifest promotion)
 //   node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json
 //   node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs slice9-set <id> --element <eid> [--left n --top n --right n --bottom n] [--scale n] | --clear   (T0233: 9-slice insets, SOURCE pixels; missing flags merge over the element's current slice9 (or 0s); --scale multiplies the DESTINATION corner/edge band only, default 1; --clear sends null)
@@ -32,7 +38,7 @@
 //   node ai_studio/assets/canvas/cli.mjs alpha <id> --element <eid> [--method auto|matte|corridorkey|vitmatte|birefnet] [--regions r1,r2]   (cutout -> NEW element beside the source; original untouched; one undo)
 //   node ai_studio/assets/canvas/cli.mjs alpha <id> --elements e1,e2 [--method auto|matte|corridorkey|vitmatte|birefnet]   (batch; N new copies; one undo)
 //   node ai_studio/assets/canvas/cli.mjs alpha-dual <id> --elements a,b   (white+black plate pair -> new element; one undo)
-//   node ai_studio/assets/canvas/cli.mjs alpha-dual-generate <id> --element <el> [--prompt "..."]   (AUTOMATIC: element = light plate, generates the dark plate, gates, cuts; one undo)
+//   node ai_studio/assets/canvas/cli.mjs alpha-dual-generate <id> --element <el> [--prompt "..."] [--no-lock]   (AUTOMATIC: element = light plate, generates the dark plate, gates, cuts; one undo)
 //   node ai_studio/assets/canvas/cli.mjs quantize <id> --element <eid> --colors N [--dither] [--preview <out.png>]   (T0207: with --preview, writes the preview PNG + prints the report, NO journal entry; without it, applies — one undo step)
 //   node ai_studio/assets/canvas/cli.mjs denoise <id> --element <eid> --strength 1|2|3 [--preview <out.png>]   (T0207: same preview/apply split as quantize)
 //   node ai_studio/assets/canvas/cli.mjs filters-bake <id> --element <eid>   (T0274 "Apply": rasterize the element's CURRENT filters+opacity into a new source file, then clear both; one undo)
@@ -52,10 +58,10 @@
 //   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs recipe-create <id> [--name X] [--x n --y n --w n --h n] [--parent <gid>|none]   (T0239 increment 1: mint a recipe card — a group with an additive `recipe` blob; no generation yet)
 //   node ai_studio/assets/canvas/cli.mjs recipe-set <id> --group g [--prompt "..."] [--engine codex|gemini|both] [--style <id>|none] [--axes-json path] [--vary axisName] [--grid RxC] [--max-jobs n] [--pack none] [--bg-key '#rrggbb'] [--n-candidates n] [--size s] [--quality q]   (--style is a style-card group id from style-create; none clears it; T0332 v2: --axes-json/--vary/--grid/--max-jobs/--pack none patch recipe.pack — pack mode, full-replace, merged with the CURRENT pack in the CLI before sending; --bg-key/--n-candidates/--size/--quality patch recipe.params — partial, merges onto the existing params)
-//   node ai_studio/assets/canvas/cli.mjs recipe-generate <id> --group g   (T0239 increment 2/3: generate — mints 1 (codex/gemini) or 2 (both, compare mode) new RAW elements beside the card, in its PARENT scope; one undo step; partial success allowed on engine=both; recipe.style_ref, when set, mixes the style card's prompt + ref image in)
+//   node ai_studio/assets/canvas/cli.mjs recipe-generate <id> --group g [--no-lock]   (game-owned production requires an accepted style lock; --no-lock creates tainted explore output)
 //   node ai_studio/assets/canvas/cli.mjs recipe-expand <id> --group g   (T0239 increment 4: Expand-prompt — ONE codex TEXT call, real seconds/minutes; writes recipe.expanded only, no card minted; Generate sends it when the card's use_expanded is true)
 //   node ai_studio/assets/canvas/cli.mjs recipe-pack-preview <id> --group g   (T0332 v2: EPHEMERAL preview — assembles a config from recipe.pack + recipe.prompt/style_ref/params and runs the REAL expand_jobs.py expander; NOT journaled, writes nothing to the blob; prints sheet count + per-sheet prompts)
-//   node ai_studio/assets/canvas/cli.mjs recipe-pack-generate <id> --group g [--run <groupId>] [--sheet <slug>]   (T0332 v2: the pack branch of generateFromRecipe — real engine spawns per the card's recipe.engine (codex, agy, or both = each job on BOTH engines at 2x the calls, sheet names suffixed codex/agy), one PER SHEET, sequential; each finished sheet mints under its own short commit; --run resumes into an existing pack run group, skipping sheets whose axes already landed; --sheet force-regenerates exactly one sheet into that group; prints per-sheet ok/failed/skipped lines + the final recipe.last_run summary)
+//   node ai_studio/assets/canvas/cli.mjs recipe-pack-generate <id> --group g [--run <groupId>] [--sheet <slug>] [--no-lock]   (pack generation shares recipe generation's production lock/origin contract)
 //   node ai_studio/assets/canvas/cli.mjs recipe-pack-slice <id> --group g [--run <groupId>]   (T0332 B3: slice every sheet of a pack run — detectRegions -> hard gate region_count===cells.length -> sliceRegions, reparented into the run group; --run selects an explicit run group (must carry pack_run for this card), omitted resolves recipe.last_run.run_group_id; real region-detector/crop_regions.py spawns, no fake seam; never throws mid-sheet — prints one name/verdict/got-expected line per sheet + the final {contract:[{sheet_element_id,verdict,region_count,cells_len,cut_ids}]} JSON)
 //   node ai_studio/assets/canvas/cli.mjs style-create <id> [--name X] [--x n --y n --w n --h n] [--parent <gid>|none]   (T0239 increment 3: mint a style card — a group with an additive `style` blob: prompt + ONE ref image; no generation, style cards never generate)
 //   node ai_studio/assets/canvas/cli.mjs style-set <id> --group g [--prompt "..."] [--ref <elementId>|none]   (partial style blob update; --ref must be a member IMAGE element id of THIS card, or none to clear — the "Make ref" gesture)
@@ -110,6 +116,7 @@ import {
   fitGroup,
   generateAnimFromCard,
   generateFromRecipe,
+  getAssetStatus,
   getProject,
   jumpHistory,
   listHistory,
@@ -127,6 +134,7 @@ import {
   patchProject,
   patchRecipe,
   patchStyle,
+  promoteAssetToGame,
   promoteExtractedRecipe,
   promoteExtractedStyle,
   readHistory,
@@ -135,12 +143,16 @@ import {
   removeElement,
   removeElements,
   renderGroup,
+  decideAssetStyle,
+  runAssetTechnicalGate,
+  runAssetStyleVerdict,
   reorderElement,
   reorderNode,
   reorderNodes,
   reparentGroup,
   scaleGroup,
   setElementAnimation,
+  setAssetStatus,
   setExportSettings,
   setOpsActor,
   setRegions,
@@ -241,7 +253,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|project-set|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|filters-bake|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-scale|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|recipe-pack-preview|recipe-pack-generate|recipe-pack-slice|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|project-set|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|asset-status-show|asset-status-set|asset-status-check|asset-style-check|asset-style-decide|asset-promote|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|filters-bake|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-scale|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|recipe-pack-preview|recipe-pack-generate|recipe-pack-slice|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
   list [--full] [--owner-game <gameId>] [--include-archived]   (summary by default: [{id,title,ownerGame,created,updated,elements,groups,head}]; --include-archived adds archived; --full = every project in full, today's original dump)
   create [--title <title>] [--owner-game <gameId>]     (omit --title for a random default)
   show <id>
@@ -256,6 +268,12 @@ function usage() {
   detect-regions <id> --element <eid>
   move <id> --element <eid> --x <n> --y <n>
   element-set <id> --element <eid> [--name <name>] [--visible true|false] [--content "<text>"] [--style-json <path>] [--background '#rrggbb'|none] [--w <n> --h <n>] [--x <n> --y <n>] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false] [--opacity <0..1>] [--filters-json '<json|null>']   (--content/--style-json patch a text OR note; --background is note-only)   (--w/--h/--x/--y are the same finite-number fields the API PATCH route + move accept — single-element resize/reposition from the CLI, T0254; --opacity in [0,1] stored only when != 1, T0260; --filters-json = {brightness?,saturation?,contrast?,tint?:{color,strength}} non-destructive image color adjustments, image-only, whole-object replace, "null" clears, T0273 — see README "Image filters")
+  asset-status-show <id> --element <eid>
+  asset-status-set <id> --element <eid> --status quarantine|checked|accepted   (image-only; one undo step; initializes quarantine or downgrades; upward transitions require gate evidence)
+  asset-status-check <id> --element <eid>   (runs the accepted style lock's deterministic technical gate; PASS -> checked, FAIL -> quarantine; report + problem thumbnail stored as evidence)
+  asset-style-check <id> --element <eid>   (vision-compares current technically-checked art with lock exemplars + Do/Don't; stores accept|revise|reject advisory evidence without minting accepted)
+  asset-style-decide <id> --element <eid> --decision accept|revise|reject --reason "..."   (explicit lead decision; accept -> accepted, revise/reject -> quarantine; current gate + advisory evidence required)
+  asset-promote <id> --element <eid> --metadata <json>   (accepted-only copy into the owning game's assets/packs/canvas-promotions with license, provenance, and integrity metadata)
   element-remove <id> --element <eid>
   elements-set <id> --json <path>   (batched patch: [{elementId,x?,y?,w?,h?,name?,visible?,rotation?,flipH?,flipV?,opacity?,filters?}] or {patches:[...]}; one undo step)
   elements-remove <id> --elements e1,e2   (batched delete; one undo step)
@@ -276,7 +294,7 @@ function usage() {
   alpha <id> --element <eid> [--method auto|matte|corridorkey|vitmatte|birefnet] [--regions r1,r2]   (alpha-cutout -> a NEW element beside the source (original untouched, for side-by-side A/B); auto routes, matte forces key_matte, corridorkey = neural green-screen matte for soft glow (green native, magenta via hue180 shim; regions composite the whole-frame CK result into the requested regions; ~15s GPU); vitmatte = neural THIN detail (spider-web/mesh/fur/hair) on a green/magenta key + 2nd-choice glow, its OWN GPU venv, ~1-3s, whole-element only; birefnet = SOD cutout for ANY/unknown background, NO key, shared repo venv CPU ~10-30s, whole-element only; one undo)
   alpha <id> --elements e1,e2 [--method auto|matte|corridorkey|vitmatte|birefnet]   (batch: 2+ images each cut into a NEW copy beside itself, in ONE journal entry/undo; sources untouched; no --regions with a batch; corridorkey/vitmatte/birefnet each pay their per-image cost — the batch runs sequentially)
   alpha-dual <id> --elements a,b   (white-plate + black-plate pair -> ONE new cut element; either order; plates untouched; one undo step)
-  alpha-dual-generate <id> --element <eid> [--prompt "<extra subject description>"]   (AUTOMATIC: the element's current pixels are the LIGHT plate; generates the DARK plate via codex edit, gates it (one automatic retry), cuts -> ONE new element beside the source; source untouched; one undo step)
+  alpha-dual-generate <id> --element <eid> [--prompt "<extra subject description>"] [--no-lock]   (AUTOMATIC: the element's current pixels are the LIGHT plate; generates the DARK plate via codex edit, gates it (one automatic retry), cuts -> ONE new element beside the source; source untouched; one undo step)
   quantize <id> --element <eid> --colors <2-256> [--dither] [--preview <out.png>]   (T0207: palette-quantize the element's CURRENT pixels, alpha untouched; --preview writes the result PNG to <out.png> + prints the report, NO journal entry; without --preview, commits a new file + src swap as one undo step)
   denoise <id> --element <eid> --strength <1|2|3> [--preview <out.png>]   (T0207: light median denoise, alpha NEVER filtered; same --preview/apply split as quantize)
   filters-bake <id> --element <eid>   (T0274 "Apply": rasterize the element's CURRENT filters+opacity — T0273/T0260 — into a NEW content-addressed source file, then clear both (sliders reset); loud when there is nothing to bake; one undo step)
@@ -295,16 +313,16 @@ function usage() {
   group-delete <id> --group <gid>
   recipe-create <id> [--name <name>] [--x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]   (T0239 increment 1: mint a recipe card — a group with an additive 'recipe' blob; omitted w/h default to a 360x280 frame; no generation yet)
   recipe-set <id> --group <gid> [--prompt "<text>"] [--engine codex|gemini|both] [--style <id>|none] [--axes-json <path>] [--vary <axisName>] [--grid <RxC>] [--max-jobs <n>] [--pack none] [--bg-key '#rrggbb'] [--n-candidates <n>] [--size <s>] [--quality <q>]   (partial recipe blob update; --style is an existing style-card group id from style-create, or none to clear; T0332 v2 pack mode — --axes-json reads {axisName:[values...]} from a file; --axes-json/--vary/--grid/--max-jobs assemble a FULL recipe.pack: the CLI reads the card's CURRENT pack (or a default template if pack mode is currently off) and merges the given flags on top before sending, since the op itself REPLACES pack wholesale, not a partial merge; --pack none clears pack mode (sets recipe.pack = null), taking priority over any axes/vary/grid/max-jobs given in the same call; --bg-key/--n-candidates/--size/--quality patch recipe.params instead — a PARTIAL patch, merged onto the existing params by the op itself)
-  recipe-generate <id> --group <gid>   (T0239 increment 2/3: generate from the card's prompt + member-image refs; engine codex|gemini|both per the card's own recipe.engine; mints 1 or 2 new RAW elements beside the card frame in its PARENT scope; one undo step; codex/agy run for real minutes — no --dry-run; when recipe.style_ref is set, the style card's prompt is appended and its ref image travels alongside the card's own refs)
+  recipe-generate <id> --group <gid> [--no-lock]   (generate from the card; game-owned production requires an accepted style lock; --no-lock creates tainted explore output)
   recipe-expand <id> --group <gid>   (T0239 increment 4: Expand-prompt — ONE codex TEXT call, real seconds/minutes; writes recipe.expanded only, no card minted; the CLI always runs the DEFAULT codex impl, no fake-assistant injection)
   recipe-pack-preview <id> --group <gid>   (T0332 v2: EPHEMERAL preview — requires recipe.pack; builds a config from recipe.pack (axes/vary/grid/max_jobs) + recipe.prompt (VERBATIM subject_template) + recipe.style_ref (style_prefix) + recipe.params (background from bg_key, candidates from n_candidates, size/quality/model) and runs the REAL expand_jobs.py expander, the ONE expander shared with the later pack-branch of recipe-generate; NOT journaled, writes nothing to the recipe blob; engine codex|gemini|both all legal (both = every sheet on BOTH engines, 2x the paid calls); prints sheet count + style_ref_image flag + per-sheet name/prompt head, plus the full {sheets,style_ref_image,jobs} JSON)
-  recipe-pack-generate <id> --group <gid> [--run <groupId>] [--sheet <slug>]   (T0332 v2: the pack branch of generateFromRecipe — requires recipe.pack; re-expands FRESH (never packPreview's stale run), resolves refs (member images + style card ref image) ONCE, then generates sheets via the card's own engine SEQUENTIALLY (codex, agy, or both — both fans every job out to the two engines at 2x the calls; sheet identity everywhere is (sheet_axes, engine), so resume skips and --sheet replaces per engine), minting each finished sheet under its OWN short commit as it lands — a crash on sheet 3 never loses sheets 1-2; the FIRST minted sheet of a fresh run creates a result-group beside the card named "<style name|no-style>/<vary> <ts>" carrying a pack_run provenance marker, later sheets land in it; recipe.last_run updates after EVERY sheet (verdict partial while running/on any failure, ok once every requested sheet lands) plus one tool_runs entry at the end; --run <groupId> resumes into that group, skipping sheets whose axes already landed (gen_batch skip-if-exists parity — a killed/timed-out run is not repaid); --sheet <slug> force-regenerates exactly one sheet, by the expander's own job name, into the same group even if already present; codex/agy run for real minutes x N sheets — no --dry-run, agents should pass a generous timeout and resume via --run on a kill; prints one "<name>: ok|failed|skipped" line per sheet, then the final recipe.last_run JSON)
+  recipe-pack-generate <id> --group <gid> [--run <groupId>] [--sheet <slug>] [--no-lock]   (T0332 v2: the pack branch of generateFromRecipe — requires recipe.pack; re-expands FRESH (never packPreview's stale run), resolves refs (member images + style card ref image) ONCE, then generates sheets via the card's own engine SEQUENTIALLY (codex, agy, or both — both fans every job out to the two engines at 2x the calls; sheet identity everywhere is (sheet_axes, engine), so resume skips and --sheet replaces per engine), minting each finished sheet under its OWN short commit as it lands — a crash on sheet 3 never loses sheets 1-2; the FIRST minted sheet of a fresh run creates a result-group beside the card named "<style name|no-style>/<vary> <ts>" carrying a pack_run provenance marker, later sheets land in it; recipe.last_run updates after EVERY sheet (verdict partial while running/on any failure, ok once every requested sheet lands) plus one tool_runs entry at the end; --run <groupId> resumes into that group, skipping sheets whose axes already landed (gen_batch skip-if-exists parity — a killed/timed-out run is not repaid); --sheet <slug> force-regenerates exactly one sheet, by the expander's own job name, into the same group even if already present; codex/agy run for real minutes x N sheets — no --dry-run, agents should pass a generous timeout and resume via --run on a kill; prints one "<name>: ok|failed|skipped" line per sheet, then the final recipe.last_run JSON)
   recipe-pack-slice <id> --group <gid> [--run <groupId>]   (T0332 B3: slice EVERY sheet of a pack run — for each sheet element (meta.pack with a cells manifest) in the run group: detectRegions, then a HARD gate region_count === cells.length (mismatch -> REJECT that sheet, others still slice); on a match, sliceRegions mints the cuts with a MINIMAL per-cut meta ({cardId, sheet_element_id, cell, axes} — the full manifest/prompt stay on the sheet, its provenance anchor) and reparents the fresh slices-group into the run group; --run <groupId> selects an explicit run group (must carry pack_run for this card), omitted resolves recipe.last_run.run_group_id; real region-detector/crop_regions.py spawns, same pipeline as plain detect-regions/slice — no fake seam; never throws mid-sheet (a detection failure lands that one sheet as MISSING); prints one "<name>: OK|REJECT|MISSING (got/expected)" line per sheet, then the final {contract:[{sheet_element_id,verdict,region_count,cells_len,cut_ids}], run_group_id} JSON)
   style-create <id> [--name <name>] [--x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]   (T0239 increment 3: mint a style card — a group with an additive 'style' blob: prompt + ONE ref image; omitted w/h default to a 360x280 frame; style cards never generate)
   style-set <id> --group <gid> [--prompt "<text>"] [--ref <elementId>|none]   (partial style blob update; --ref must be an existing member IMAGE element id of THIS card, or none to clear — the "Make ref" gesture; the first image dropped into an empty card auto-claims the ref)
   anim-card <id> [--name <name>] [--member <eid>] [--x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]   (T0265 increment 1: mint an animation card — a group with an additive 'anim' blob; keyframes are its member IMAGE elements; omitted w/h default to a 360x280 frame. --member is the "Animate this image" promotion: fit the card around that image + move it in as the first keyframe in ONE journal entry; not combinable with --x/--y/--w/--h; no generation yet)
   anim-patch <id> --group <gid> [--motion "<text>"] [--profile draft|final] [--seed <n>|none] [--matte corridorkey|key_matte] [--gen-fps <n>|none] [--loop true|false] [--columns <n>|none] [--trim true|false] [--style <id>|none] [--accepted <eid>|none]   (partial anim blob update)
-  anim-generate <id> --group <gid>   (T0265 increment 1: generate via the Track B video route — 1 keyframe = plain I2V; mints ONE flipbook element beside the card frame in its PARENT scope; one undo step; ComfyUI/CorridorKey run for real minutes — no --dry-run; the CLI always runs the DEFAULT generator, no fake injection)
+  anim-generate <id> --group <gid> [--no-lock]   (T0265 increment 1: generate via the Track B video route — 1 keyframe = plain I2V; mints ONE flipbook element beside the card frame in its PARENT scope; one undo step; ComfyUI/CorridorKey run for real minutes — no --dry-run; the CLI always runs the DEFAULT generator, no fake injection)
   extract <id> --element <eid>   (T0239 increment 4: ONE codex VISION call, real seconds/minutes -> element.meta.extracted {prompt_full, prompt_subject, style, description}; no card minted; re-running overwrites; no fake-assistant injection from the CLI)
   animate <id> --element <eid> --text "<description>"   (T0264: ONE codex TEXT/VISION call, real seconds/minutes -> element.animation (the ai_studio.canvas.animation.v1 spec); authors fresh or minimally patches an existing spec; image (vision) + text; no fake-runner injection from the CLI)
   promote-recipe <id> --element <eid>   (mint a RECIPE card BELOW the element from its ALREADY-STORED meta.extracted; NO codex call; run extract first — loud otherwise)
@@ -524,6 +542,46 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
         fail("element-set requires --name, --visible, --content, --style-json, --background, --rotation, --flip-h, --flip-v, --opacity, --filters-json, --w, --h, --x, and/or --y");
       }
       return print(patchElement(repoRoot, id, flags.element, patch));
+    }
+    case "asset-status-show": {
+      if (!id) fail("asset-status-show requires <id>");
+      if (!flags.element || flags.element === "true") fail("asset-status-show requires --element <eid>");
+      return print(getAssetStatus(repoRoot, { projectId: id, elementId: flags.element }));
+    }
+    case "asset-status-set": {
+      if (!id) fail("asset-status-set requires <id>");
+      if (!flags.element || flags.element === "true") fail("asset-status-set requires --element <eid>");
+      if (!flags.status || flags.status === "true") fail("asset-status-set requires --status quarantine|checked|accepted");
+      return print(setAssetStatus(repoRoot, { projectId: id, elementId: flags.element, status: flags.status }));
+    }
+    case "asset-status-check": {
+      if (!id) fail("asset-status-check requires <id>");
+      if (!flags.element || flags.element === "true") fail("asset-status-check requires --element <eid>");
+      return print(await runAssetTechnicalGate(repoRoot, { projectId: id, elementId: flags.element }));
+    }
+    case "asset-style-check": {
+      if (!id) fail("asset-style-check requires <id>");
+      if (!flags.element || flags.element === "true") fail("asset-style-check requires --element <eid>");
+      return print(await runAssetStyleVerdict(repoRoot, { projectId: id, elementId: flags.element }));
+    }
+    case "asset-style-decide": {
+      if (!id) fail("asset-style-decide requires <id>");
+      if (!flags.element || flags.element === "true") fail("asset-style-decide requires --element <eid>");
+      if (!flags.decision || flags.decision === "true") fail("asset-style-decide requires --decision accept|revise|reject");
+      if (!flags.reason || flags.reason === "true") fail("asset-style-decide requires --reason <text>");
+      return print(decideAssetStyle(repoRoot, {
+        projectId: id,
+        elementId: flags.element,
+        decision: flags.decision,
+        reason: flags.reason,
+      }));
+    }
+    case "asset-promote": {
+      if (!id) fail("asset-promote requires <id>");
+      if (!flags.element || flags.element === "true") fail("asset-promote requires --element <eid>");
+      if (!flags.metadata || flags.metadata === "true") fail("asset-promote requires --metadata <json>");
+      const metadata = JSON.parse(readFileSync(resolve(flags.metadata), "utf8"));
+      return print(await promoteAssetToGame(repoRoot, { projectId: id, elementId: flags.element, metadata }));
     }
     case "element-remove": {
       if (!id) fail("element-remove requires <id>");
@@ -759,7 +817,8 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
       // description appended to both subject-lock prompts.
       if (!id) fail("alpha-dual-generate requires <id>");
       if (!flags.element || flags.element === "true") fail("alpha-dual-generate requires --element <eid>");
-      const args = { projectId: id, elementId: flags.element };
+      if (flags["no-lock"] !== undefined && flags["no-lock"] !== true) fail("--no-lock does not take a value");
+      const args = { projectId: id, elementId: flags.element, noLock: flags["no-lock"] === true };
       if (flags.prompt && flags.prompt !== "true") args.prompt = flags.prompt;
       return print(await alphaDualPlateGenerate(repoRoot, args));
     }
@@ -1065,7 +1124,8 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
       // from the CLI (that is a test-only seam), so this always runs the DEFAULT engine(s).
       if (!id) fail("recipe-generate requires <id>");
       if (!flags.group) fail("recipe-generate requires --group <gid>");
-      return print(await generateFromRecipe(repoRoot, { projectId: id, groupId: flags.group }));
+      if (flags["no-lock"] !== undefined && flags["no-lock"] !== true) fail("--no-lock does not take a value");
+      return print(await generateFromRecipe(repoRoot, { projectId: id, groupId: flags.group, noLock: flags["no-lock"] === true }));
     }
     case "recipe-expand": {
       // T0239 increment 4: real codex TEXT spawn — no fake-assistant injection from the
@@ -1083,7 +1143,8 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
       // one sheet (by the expander's own job name) into that same group even if present.
       if (!id) fail("recipe-pack-generate requires <id>");
       if (!flags.group) fail("recipe-pack-generate requires --group <gid>");
-      const args = { projectId: id, groupId: flags.group };
+      if (flags["no-lock"] !== undefined && flags["no-lock"] !== true) fail("--no-lock does not take a value");
+      const args = { projectId: id, groupId: flags.group, noLock: flags["no-lock"] === true };
       if (flags.run !== undefined && flags.run !== "true") args.runGroupId = flags.run;
       if (flags.sheet !== undefined && flags.sheet !== "true") args.sheetSlug = flags.sheet;
       const result = await generateFromRecipe(repoRoot, args);
@@ -1222,7 +1283,12 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
       // runs the DEFAULT generator (tools/anim_generate.mjs).
       if (!id) fail("anim-generate requires <id>");
       if (!flags.group) fail("anim-generate requires --group <gid>");
-      return print(await generateAnimFromCard(repoRoot, { projectId: id, groupId: flags.group }));
+      if (flags["no-lock"] !== undefined && flags["no-lock"] !== true) fail("--no-lock does not take a value");
+      return print(await generateAnimFromCard(repoRoot, {
+        projectId: id,
+        groupId: flags.group,
+        noLock: flags["no-lock"] === true,
+      }));
     }
     case "extract": {
       // T0239 increment 4: real codex VISION spawn — no fake-assistant injection from the
@@ -1313,14 +1379,16 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
   }
 }
 
-// T0254 Tier 1 #1: the five slow codex/agy generation commands lock only their OWN
+// T0254 Tier 1 #1: slow codex/agy generation commands lock only their OWN
 // final commit internally (ops.mjs — generateFromRecipe/expandRecipePrompt/
 // extractFromElement/animateElementFromText/alphaDualPlateGenerate), so a multi-minute
 // generation never blocks other mutations on the project. Wrapping them AGAIN here would try to
 // acquire the SAME per-project lock twice in one call stack (the outer acquire would
 // never release until the inner one finishes, and the inner one waits on the outer)
 // — excluded on purpose. Every other project-scoped command is wrapped in main()
-// below so the CLI (a SEPARATE process from the server) respects the same
+// Additional exceptions: alpha and alpha-dual are self-locking now that their evaluators run
+// before one guarded final mint. Non-self-locking commands are wrapped below so the CLI (a SEPARATE process from
+// the server) respects the same
 // cross-process lockfile the API adapter does.
 // recipe-pack-generate (T0332 v2) is likewise self-locking — its own generateFromRecipe pack
 // branch acquires the per-project lock ONCE PER SHEET (short, per-sheet commits), so wrapping
@@ -1335,7 +1403,7 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
 // deadlock risk here since there is no inner acquire to collide with.
 // anim-generate (T0265) is self-locking too — generateAnimFromCard acquires the per-project
 // lock ONCE internally (short commit), so wrapping it here would deadlock the same way.
-const SELF_LOCKING_COMMANDS = new Set(["recipe-generate", "recipe-pack-generate", "recipe-expand", "extract", "animate", "alpha-dual-generate", "anim-generate"]);
+const SELF_LOCKING_COMMANDS = new Set(["recipe-generate", "recipe-pack-generate", "recipe-expand", "extract", "animate", "alpha", "alpha-dual", "alpha-dual-generate", "anim-generate", "asset-status-check", "asset-style-check"]);
 
 export async function main(argv, { repoRoot = DEFAULT_REPO_ROOT, print = defaultPrint } = {}) {
   const [command, ...rest] = argv;

@@ -162,6 +162,7 @@ test("sliceRegions crops detected regions into new elements with provenance; und
   // ("<element name> N" assigned at detect), links meta.parent, records
   // intrinsic source size, and sits to the right of the parent sheet.
   for (const crop of sliced.created) {
+    assert.equal(crop.assetStatus, "quarantine", "derived crops re-enter review in quarantine");
     assert.match(crop.name, / \d+$/);
     assert.equal(crop.meta.parent.elementId, element.id);
     assert.equal(crop.meta.parent.sheetSrc, element.src);

@@ -106,6 +106,7 @@ static const char *ad_reason_name(platform_sdk_ad_reason_t reason) {
     return "failed";
 }
 
+#if PLATFORM_SDK_TARGET_ID == PLATFORM_SDK_TEMPLATE_TARGET_LOCAL && !defined(__EMSCRIPTEN__)
 static void set_placement(const char *placement) {
     if (placement == NULL || placement[0] == '\0') {
         (void)snprintf(s_placement, sizeof s_placement, "default");
@@ -113,6 +114,7 @@ static void set_placement(const char *placement) {
     }
     (void)snprintf(s_placement, sizeof s_placement, "%s", placement);
 }
+#endif
 
 static void set_interstitial_result(platform_sdk_ad_result_t result) {
     (void)snprintf(s_last_result, sizeof s_last_result,
@@ -143,7 +145,7 @@ static void on_resume(void *userdata) {
     s_resume_count++;
 }
 
-#if PLATFORM_SDK_TARGET_ID == PLATFORM_SDK_TEMPLATE_TARGET_LOCAL
+#if PLATFORM_SDK_TARGET_ID == PLATFORM_SDK_TEMPLATE_TARGET_LOCAL && !defined(__EMSCRIPTEN__)
 static bool mock_backend_init(void *userdata) {
     (void)userdata;
     return true;
@@ -191,7 +193,7 @@ static platform_sdk_backend_t mock_backend(void) {
 #endif
 
 void platform_sdk_debug_init(void) {
-#if PLATFORM_SDK_TARGET_ID == PLATFORM_SDK_TEMPLATE_TARGET_LOCAL
+#if PLATFORM_SDK_TARGET_ID == PLATFORM_SDK_TEMPLATE_TARGET_LOCAL && !defined(__EMSCRIPTEN__)
     platform_sdk_backend_t backend = mock_backend();
     platform_sdk_set_backend(&backend, NULL);
 #endif

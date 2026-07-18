@@ -14,7 +14,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
@@ -613,6 +613,16 @@ test("generateFromRecipe (codex, top-level card): ONE new element in the ROOT sc
 
   assert.equal(result.elements.length, 1);
   const el = result.elements[0];
+  assert.equal(el.assetStatus, "quarantine", "generated art enters review in quarantine");
+  assert.deepEqual(el.meta.origin, {
+    schema: "ai_studio.asset.generation_origin.v1",
+    source: "ai",
+    mode: "explore",
+    game_id: null,
+    style_lock_id: null,
+    tainted: false,
+    taint_reason: null,
+  });
   assert.equal(el.name, "Hero card codex");
   assert.equal(el.x, card.x + card.w + 16, "placed to the RIGHT of the card frame, 16px gap");
   assert.equal(el.y, card.y);
@@ -662,6 +672,56 @@ test("generateFromRecipe (codex, top-level card): ONE new element in the ROOT sc
 
   const redone = redoOp(ROOT, { projectId: project.id }).project;
   assert.equal(redone.elements.find((item) => item.id === el.id).name, "Hero card codex");
+});
+
+test("generateFromRecipe requires an accepted lock for game-owned production; noLock is explicit and tainted", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Owned generation", gameId: "missing-lock-game" });
+  const card = createRecipeCard(ROOT, { projectId: project.id, name: "Hero" }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "hero" } });
+  const codex = fakeGen(solidPng());
+
+  await assert.rejects(
+    () => generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex } }),
+    /production generation requires.*style_lock\.json.*--no-lock/i,
+  );
+  assert.equal(codex.calls.length, 0, "lock refusal happens before paid generation");
+
+  const result = await generateFromRecipe(ROOT, {
+    projectId: project.id,
+    groupId: card.id,
+    generators: { codex },
+    noLock: true,
+  });
+  assert.equal(result.elements[0].meta.origin.mode, "explore");
+  assert.equal(result.elements[0].meta.origin.game_id, "missing-lock-game");
+  assert.equal(result.elements[0].meta.origin.style_lock_id, null);
+  assert.equal(result.elements[0].meta.origin.tainted, true);
+  assert.equal(result.elements[0].meta.origin.taint_reason, "no-lock");
+});
+
+test("generateFromRecipe freezes an accepted game style-lock id into production origin", async (t) => {
+  tempProjects(t);
+  const workspaceRoot = mkdtempSync(join(tmpdir(), "canvas-locked-generation-"));
+  t.after(() => rmSync(workspaceRoot, { recursive: true, force: true }));
+  const lock = JSON.parse(readFileSync(fileURLToPath(new URL("../../style_lock/style_lock.example.json", import.meta.url)), "utf8"));
+  const designDir = join(workspaceRoot, "games", lock.game_id, "design");
+  mkdirSync(join(designDir, "art"), { recursive: true });
+  writeFileSync(join(designDir, "art", "art_contract.json"), "{}\n");
+  writeFileSync(join(designDir, "style_lock.json"), `${JSON.stringify(lock, null, 2)}\n`);
+
+  const project = createProject(workspaceRoot, { title: "Locked generation", gameId: lock.game_id });
+  const card = createRecipeCard(workspaceRoot, { projectId: project.id, name: "Hero" }).group;
+  patchRecipe(workspaceRoot, { projectId: project.id, groupId: card.id, patch: { prompt: "hero" } });
+  const result = await generateFromRecipe(workspaceRoot, {
+    projectId: project.id,
+    groupId: card.id,
+    generators: { codex: fakeGen(solidPng()) },
+  });
+  assert.equal(result.elements[0].meta.origin.mode, "production");
+  assert.equal(result.elements[0].meta.origin.game_id, lock.game_id);
+  assert.equal(result.elements[0].meta.origin.style_lock_id, lock.id);
+  assert.equal(result.elements[0].meta.origin.tainted, false);
 });
 
 test("generateFromRecipe resolves refs from VISIBLE member IMAGE elements only, and passes their abs paths to the generator", async (t) => {
@@ -894,6 +954,13 @@ test("recipe-generate: CLI and API reject a non-card group the same way (validat
 
   // CLI: recipe-generate <id> --group <plain group> -> the OP's own "not a recipe card".
   await assert.rejects(runInProcess("recipe-generate", projectId, "--group", plain.id), /not a recipe card/);
+  assert.throws(
+    () => execFileSync("node", [CLI, "recipe-generate", projectId, "--group", plain.id, "--no-lock", "false"], {
+      env: { ...process.env, ...env },
+      encoding: "utf8",
+    }),
+    /--no-lock does not take a value/,
+  );
 
   // API: POST .../recipe-cards/<plain group>/generate -> 400 with the SAME op error.
   const handler = createCanvasApi(ROOT);
@@ -906,6 +973,17 @@ test("recipe-generate: CLI and API reject a non-card group the same way (validat
   const missing = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/grp_missing/generate`, {});
   assert.equal(missing.status, 404);
   assert.match(missing.json().error, /group not found/);
+
+  const card = (await runInProcess("recipe-create", projectId, "--name", "Origin validation")).group;
+  await runInProcess("recipe-set", projectId, "--group", card.id, "--prompt", "hero");
+  const badNoLock = await invokeApi(
+    handler,
+    "POST",
+    `/api/canvas/projects/${projectId}/recipe-cards/${card.id}/generate`,
+    { noLock: "true" },
+  );
+  assert.equal(badNoLock.status, 400);
+  assert.match(badNoLock.json().error, /noLock must be a boolean/);
 });
 
 // ================================================================================

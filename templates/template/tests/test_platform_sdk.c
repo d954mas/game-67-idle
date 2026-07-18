@@ -276,6 +276,21 @@ static void test_template_loading_progress_is_clamped_and_monotonic(void) {
     TEST_ASSERT_TRUE(float_close(g_backend_state.last_loading_progress, 1.0f));
 }
 
+static void test_template_loading_progress_waits_for_a_real_backend_forward(void) {
+    platform_sdk_backend_t backend = fake_backend();
+
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_game_loading_progress(0.45f));
+    TEST_ASSERT_EQUAL_INT(0, g_backend_state.loading_progress_calls);
+
+    platform_sdk_set_backend(&backend, &g_backend_state);
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_game_loading_progress(0.45f));
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.loading_progress_calls);
+    TEST_ASSERT_TRUE(float_close(g_backend_state.last_loading_progress, 0.45f));
+
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_game_loading_progress(0.45f));
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.loading_progress_calls);
+}
+
 static void test_template_gameplay_requires_first_input_and_tracks_state(void) {
     platform_sdk_backend_t backend = fake_backend();
     platform_sdk_gameplay_start_result_t start_result;
@@ -483,6 +498,7 @@ int main(void) {
     RUN_TEST(test_template_async_init_waits_for_backend_completion);
     RUN_TEST(test_template_async_init_failure_is_terminal);
     RUN_TEST(test_template_loading_progress_is_clamped_and_monotonic);
+    RUN_TEST(test_template_loading_progress_waits_for_a_real_backend_forward);
     RUN_TEST(test_template_gameplay_requires_first_input_and_tracks_state);
     RUN_TEST(test_template_ad_flow_pauses_resumes_once_and_preserves_userdata);
     RUN_TEST(test_template_rewarded_decline_does_not_grant_reward);

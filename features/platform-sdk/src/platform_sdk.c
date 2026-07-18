@@ -603,6 +603,10 @@ platform_sdk_result_t platform_sdk_game_loading_progress(float progress01) {
         return PLATFORM_SDK_RESULT_DESTROYED;
     }
 
+    if (!g_platform_sdk.has_backend || g_platform_sdk.backend.game_loading_progress == NULL) {
+        return PLATFORM_SDK_RESULT_OK;
+    }
+
     float clamped = clamp_progress(progress01);
     if (g_platform_sdk.loading_progress_sent && clamped <= g_platform_sdk.last_loading_progress) {
         return PLATFORM_SDK_RESULT_OK;
@@ -610,9 +614,7 @@ platform_sdk_result_t platform_sdk_game_loading_progress(float progress01) {
 
     g_platform_sdk.loading_progress_sent = true;
     g_platform_sdk.last_loading_progress = clamped;
-    if (g_platform_sdk.has_backend && g_platform_sdk.backend.game_loading_progress != NULL) {
-        g_platform_sdk.backend.game_loading_progress(clamped, g_platform_sdk.backend_userdata);
-    }
+    g_platform_sdk.backend.game_loading_progress(clamped, g_platform_sdk.backend_userdata);
     return PLATFORM_SDK_RESULT_OK;
 }
 

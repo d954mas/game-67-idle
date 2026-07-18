@@ -15,9 +15,11 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { verifyWebPackage } from "./package_web.mjs";
+import { findStudioRoot } from "./lib/studio_root.mjs";
+import { validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 
 const GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const USAGE = "usage: node tools/portal_evidence.mjs --manifest release/artifacts/<artifact>.manifest.json";
+const USAGE = "usage: node tools/portal_evidence.mjs --manifest release/artifacts/<artifact>.manifest.json [--local-mock-observation .ai_studio/evidence/local-mock/<observation>.json]";
 const jsonBytes = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8");
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -50,9 +52,14 @@ function readManifest(path) {
   }
 }
 
-function releaseLevels() {
+function releaseLevels(localMockObservation = null) {
   return [
-    {
+    localMockObservation ? {
+      id: "local-mock",
+      status: "pass",
+      reason: "A game-owned browser observation matched this release runtime build fingerprint.",
+      evidence: `local mock observation SHA-256 ${localMockObservation.sha256}`,
+    } : {
       id: "local-mock",
       status: "unverified",
       reason: "Package verification does not run or record a local mock simulator session.",
@@ -85,6 +92,73 @@ function releaseLevels() {
   ];
 }
 
+function exactKeys(value, keys, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([...keys].sort())) {
+    throw new Error(`${label} has unexpected fields`);
+  }
+}
+
+function localHttp(raw) {
+  try {
+    const value = new URL(raw);
+    return value.protocol === "http:" && ["127.0.0.1", "localhost", "::1", "[::1]"].includes(value.hostname.toLowerCase())
+      && !value.username && !value.password;
+  } catch { return false; }
+}
+
+function validateLocalMockObservation(value) {
+  exactKeys(value, ["schema", "result", "observation"], "local mock observation");
+  if (value.schema !== "ai_studio.runtime.local_mock_web_observation.v1" || value.result !== "pass") {
+    throw new Error("local mock observation schema/result is invalid");
+  }
+  const observation = value.observation;
+  exactKeys(observation, [
+    "url", "finalUrl", "readyState", "config", "runtimeBuild", "compiledRuntimeBuildFingerprint", "overlay", "canvas",
+    "lifecycleTranscript", "issues",
+  ], "local mock browser observation");
+  exactKeys(observation.config, ["target", "platformSdk", "release", "runtimeBuildFingerprint"], "local mock config");
+  exactKeys(observation.overlay, ["present", "className", "display", "opacity", "progressPercent"], "local mock overlay");
+  exactKeys(observation.canvas, ["width", "height"], "local mock canvas");
+  const runtimeBuild = validateRuntimeBuildRecord(observation.runtimeBuild);
+  if (!localHttp(observation.url) || !localHttp(observation.finalUrl) || observation.readyState !== "complete"
+      || observation.config.target !== "local" || observation.config.platformSdk !== "mock" || observation.config.release !== true
+      || observation.config.runtimeBuildFingerprint !== runtimeBuild.fingerprint
+      || observation.compiledRuntimeBuildFingerprint !== runtimeBuild.fingerprint
+      || observation.overlay.present !== true || observation.overlay.display !== "none" || observation.overlay.progressPercent !== 100
+      || !(observation.canvas.width > 0) || !(observation.canvas.height > 0)
+      || !Array.isArray(observation.issues) || observation.issues.length !== 0
+      || !Array.isArray(observation.lifecycleTranscript)) {
+    throw new Error("local mock browser observation failed its recorded runtime contract");
+  }
+  let finalProgress = -1;
+  let finished = -1;
+  for (let index = 0; index < observation.lifecycleTranscript.length; index += 1) {
+    const event = observation.lifecycleTranscript[index];
+    exactKeys(event, ["kind", "value", "source"], "local mock lifecycle event");
+    if (event.kind === "progress" && event.source === "c-bridge" && event.value === 1 && finalProgress < 0) finalProgress = index;
+    if (event.kind === "finished" && event.source === "c-bridge" && finished < 0) finished = index;
+  }
+  if (finalProgress < 0 || finished < finalProgress) throw new Error("local mock C lifecycle transcript is invalid");
+  return value;
+}
+
+function readLocalMockObservation(gameRoot, requestedPath) {
+  const path = resolve(requestedPath);
+  const evidenceRoot = join(gameRoot, ".ai_studio", "evidence", "local-mock");
+  assertNoSymlinks(gameRoot, path, false, "local mock observation");
+  if (dirname(path) !== evidenceRoot || !basename(path).endsWith(".json")
+      || realpathSync(dirname(path)) !== evidenceRoot || realpathSync(path) !== path) {
+    throw new Error("local mock observation must be a direct game-owned .ai_studio/evidence/local-mock JSON file");
+  }
+  const bytes = readFileSync(path);
+  let value;
+  try { value = JSON.parse(bytes.toString("utf8").replace(/^\uFEFF/, "")); }
+  catch (error) { throw new Error(`local mock observation is not valid JSON: ${error.message}`); }
+  validateLocalMockObservation(value);
+  return { path, bytes, value };
+}
+
 export function publishPortalEvidenceReport(reportPath, bytes, options = {}) {
   const parent = dirname(reportPath);
   const tempPath = join(resolve(options.tempDir || parent), `.portal-evidence-${process.pid}-${randomUUID()}.tmp`);
@@ -107,7 +181,8 @@ export function publishPortalEvidenceReport(reportPath, bytes, options = {}) {
 export function createPortalEvidence({
   gameDir = GAME_DIR,
   manifestPath,
-  studioRoot = resolve(gameDir, "..", ".."),
+  studioRoot = findStudioRoot(gameDir),
+  localMockObservationPath = "",
   beforePublish = () => {},
 }) {
   // The game owner must run this local tool with exclusive ownership of the
@@ -149,16 +224,41 @@ export function createPortalEvidence({
     throw new Error("release ZIP or sidecar changed during portal evidence verification");
   }
   const zipHash = sha256(zipBytes);
+  const localMock = localMockObservationPath ? readLocalMockObservation(gameRoot, localMockObservationPath) : null;
+  if (localMock && !manifest.runtimeBuild) {
+    throw new Error("legacy v1 releases have no runtime build witness for local mock attachment");
+  }
+  if (localMock && JSON.stringify(localMock.value.observation.runtimeBuild) !== JSON.stringify(manifest.runtimeBuild)) {
+    throw new Error("local mock runtime build fingerprint does not match this exact release");
+  }
+  if (localMock && !readFileSync(localMock.path).equals(localMock.bytes)) {
+    throw new Error("local mock observation changed during portal evidence verification");
+  }
+  const localMockSummary = localMock ? {
+    file: basename(localMock.path),
+    size: localMock.bytes.length,
+    sha256: sha256(localMock.bytes),
+    runtimeBuildFingerprint: localMock.value.observation.runtimeBuild.fingerprint,
+  } : null;
+  const validateLocalMockInput = () => {
+    if (!localMock) return;
+    assertNoSymlinks(gameRoot, localMock.path, false, "local mock observation");
+    if (realpathSync(localMock.path) !== localMock.path || !readFileSync(localMock.path).equals(localMock.bytes)) {
+      throw new Error("local mock observation changed during portal evidence verification");
+    }
+  };
   const report = {
-    schema: "ai_studio.game.portal_evidence.v1",
+    schema: manifest.runtimeBuild ? "ai_studio.game.portal_evidence.v2" : "ai_studio.game.portal_evidence.v1",
     release: {
       game: manifest.game,
       target: manifest.target,
       platformAdapter: manifest.platformAdapter,
       zip: { file: basename(zipPath), size: zipBytes.length, sha256: zipHash },
       manifest: { file: basename(requestedManifest), size: manifestBytes.length, sha256: sha256(manifestBytes) },
+      ...(manifest.runtimeBuild ? { runtimeBuildFingerprint: manifest.runtimeBuild.fingerprint } : {}),
     },
-    levels: releaseLevels(),
+    ...(localMockSummary ? { localMockObservation: localMockSummary } : {}),
+    levels: releaseLevels(localMockSummary),
   };
 
   const reportPath = join(gameRoot, ".ai_studio", "evidence", "releases", zipHash, "portal-evidence.json");
@@ -172,16 +272,31 @@ export function createPortalEvidence({
   mkdirSync(dirname(reportPath), { recursive: true });
   beforePublish({ reportPath });
   validateOutputPath();
+  validateLocalMockInput();
   publishPortalEvidenceReport(reportPath, jsonBytes(report), {
     tempDir: gameRoot,
-    beforeLink: validateOutputPath,
+    beforeLink() {
+      validateOutputPath();
+      validateLocalMockInput();
+    },
   });
   return { reportPath, report };
 }
 
 function parseArgs(argv) {
-  if (argv.length !== 2 || argv[0] !== "--manifest" || !argv[1]) throw new Error(USAGE);
-  return { manifestPath: resolve(argv[1]) };
+  const result = {};
+  if (argv.length < 2 || argv.length > 4 || argv.length % 2 !== 0) throw new Error(USAGE);
+  for (let index = 0; index < argv.length; index += 2) {
+    const flag = argv[index];
+    const value = argv[index + 1];
+    if (!value || (flag !== "--manifest" && flag !== "--local-mock-observation") || Object.hasOwn(result, flag)) throw new Error(USAGE);
+    result[flag] = resolve(value);
+  }
+  if (!result["--manifest"]) throw new Error(USAGE);
+  return {
+    manifestPath: result["--manifest"],
+    ...(result["--local-mock-observation"] ? { localMockObservationPath: result["--local-mock-observation"] } : {}),
+  };
 }
 
 export function main(argv = process.argv.slice(2)) {

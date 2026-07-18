@@ -550,6 +550,29 @@ body.layers-resizing {
   flex: none;
 }
 
+.asset-status-badge {
+  font-size: 9px;
+  line-height: 1;
+  border-radius: 3px;
+  padding: 2px 4px;
+  flex: none;
+}
+
+.asset-status-badge.quarantine {
+  color: var(--amber);
+  background: rgba(215, 161, 74, 0.16);
+}
+
+.asset-status-badge.checked {
+  color: var(--blue);
+  background: rgba(119, 167, 255, 0.16);
+}
+
+.asset-status-badge.accepted {
+  color: var(--green);
+  background: rgba(101, 189, 129, 0.16);
+}
+
 /* Card-type chip on a layers group row (T0239-3 follow-up): a recipe/style card must read
    apart from a plain group in the tree, same accents as the canvas chrome (--amber /
    --style-accent). Sits between the name and the member-count badge. */

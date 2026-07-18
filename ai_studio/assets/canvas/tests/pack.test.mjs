@@ -844,6 +844,9 @@ test("generateFromRecipe pack branch (real expand_jobs.py, fake codex): mints a 
   const sheetElements = after.elements.filter((el) => el.groupId === result.run_group_id);
   assert.equal(sheetElements.length, 2);
   for (const el of sheetElements) {
+    assert.equal(el.assetStatus, "quarantine", "generated sheets enter review in quarantine");
+    assert.equal(el.meta.origin.mode, "explore");
+    assert.equal(el.meta.origin.tainted, false);
     assert.ok(el.meta.pack, "meta.pack present");
     assert.equal(el.meta.pack.cardId, card.id);
     assert.ok(Array.isArray(el.meta.pack.cells) && el.meta.pack.cells.length === 2, "full cell manifest carried");
@@ -854,6 +857,37 @@ test("generateFromRecipe pack branch (real expand_jobs.py, fake codex): mints a 
   }
   for (const call of codex.calls) {
     assert.ok(call.refPaths.length >= 1 && call.refPaths.every((p) => p.endsWith(".png")), "the style ref image reaches EVERY sheet's generation call");
+  }
+});
+
+test("pack generation refuses unlocked game-owned production before paid work; noLock taints every sheet", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Owned pack", gameId: "missing-pack-lock" });
+  const { group: card } = createRecipeCard(REPO_ROOT, { projectId: project.id, name: "Lanterns" });
+  seedPackRecipe(project.id, card.id);
+  const codex = fakeGenSequence([solidPng(), solidPng()]);
+
+  await assert.rejects(
+    () => generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, generators: { codex } }),
+    /production generation requires.*style_lock\.json.*--no-lock/i,
+  );
+  assert.equal(codex.calls.length, 0, "lock refusal happens before pack expansion/generation");
+
+  const result = await tryGenerate(t, {
+    projectId: project.id,
+    groupId: card.id,
+    generators: { codex },
+    noLock: true,
+  });
+  if (!result) return;
+  const sheets = getProject(REPO_ROOT, project.id).elements.filter((element) => element.groupId === result.run_group_id);
+  assert.equal(sheets.length, 2);
+  for (const sheet of sheets) {
+    assert.equal(sheet.meta.origin.mode, "explore");
+    assert.equal(sheet.meta.origin.game_id, "missing-pack-lock");
+    assert.equal(sheet.meta.origin.style_lock_id, null);
+    assert.equal(sheet.meta.origin.tainted, true);
+    assert.equal(sheet.meta.origin.taint_reason, "no-lock");
   }
 });
 

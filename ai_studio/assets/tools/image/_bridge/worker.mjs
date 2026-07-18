@@ -16,6 +16,7 @@
 // CLI, a test run) still exits when its work is done; a process-exit + signal hook
 // kills every worker so nothing is orphaned (Windows has no process-group auto-kill).
 import { spawn } from "node:child_process";
+import { delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const WORKER_PY = fileURLToPath(new URL("./worker.py", import.meta.url));
@@ -71,11 +72,17 @@ class Worker {
   // ---- process lifecycle ----------------------------------------------------
 
   spawnChild() {
+    const ambientPythonPath = String(process.env.PYTHONPATH || "");
     const child = spawn(this.pythonPath, ["-u", WORKER_PY], {
       cwd: this.cwd,
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" },
+      env: {
+        ...process.env,
+        PYTHONPATH: ambientPythonPath ? `${this.cwd}${delimiter}${ambientPythonPath}` : this.cwd,
+        PYTHONUTF8: "1",
+        PYTHONIOENCODING: "utf-8",
+      },
     });
     this.child = child;
     this.buffer = "";

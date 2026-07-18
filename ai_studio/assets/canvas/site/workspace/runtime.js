@@ -89,6 +89,7 @@ import { cssFilterFor, tintedOffscreenFor } from "./image_filters.js";
 import { createRenderCulling } from "./render_culling.js";
 import { createGestureOverlay } from "./gesture_overlay.js";
 import { createViewportControls } from "./viewport_controls.js";
+import { assetStatusBadge, assetStatusChipLayout } from "../../asset_status.mjs";
 
 let canvas = null;
 let ctx = null;
@@ -476,6 +477,29 @@ function paintElement(element, vp, editEl) {
     ctx.fillStyle = "#231a08"; // dark text for contrast against the amber fill
     ctx.textBaseline = "middle";
     ctx.fillText(label, origin.x + chipPadX, origin.y - chipH / 2 - 2 + 0.5);
+    ctx.restore();
+  }
+  // Review status stays readable at any zoom and never changes exported pixels. The
+  // label carries the state in text (color is secondary), matching the layers badge.
+  const assetBadge = assetStatusBadge(element);
+  if (assetBadge) {
+    ctx.save();
+    ctx.font = "11px system-ui, 'Segoe UI', sans-serif";
+    const chip = assetStatusChipLayout(assetBadge, {
+      width: w,
+      height: h,
+      measureText: (label) => ctx.measureText(label).width,
+    });
+    if (chip) {
+      const chipX = origin.x + chip.x;
+      const chipY = origin.y + chip.y;
+      ctx.fillStyle = assetBadge.fill;
+      ctx.fillRect(chipX, chipY, chip.width, chip.height);
+      ctx.fillStyle = assetBadge.text;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(chip.label, chipX + chip.width / 2, chipY + chip.height / 2 + 0.5);
+    }
     ctx.restore();
   }
   // Ref marking (T0239 increment 3, design R1): the style card's ONE ref image gets a blue

@@ -159,6 +159,81 @@ test("canvas API supports the full project + element lifecycle", async (t) => {
   assert.equal(afterRemove.json().project.elements.length, 0);
 });
 
+test("canvas API sets and reads image asset status through the shared operation", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Asset status API" })).json().project.id;
+  const elementId = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+    name: "hero.png",
+    bytes_base64: solidPng().toString("base64"),
+  })).json().element.id;
+
+  const initial = await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`);
+  assert.equal(initial.status, 200);
+  assert.equal(initial.json().status, null);
+
+  const directForge = await invokeApi(handler, "PUT", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`, {
+    status: "checked",
+  });
+  assert.equal(directForge.status, 400);
+  assert.match(directForge.json().error, /promotion from untracked to checked requires gate evidence/);
+
+  const changed = await invokeApi(handler, "PUT", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`, {
+    status: "quarantine",
+  });
+  assert.equal(changed.status, 200);
+  assert.equal(changed.json().status, "quarantine");
+  assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`)).json().status, "quarantine");
+
+  const forged = await invokeApi(handler, "PUT", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`, {
+    status: "checked",
+  });
+  assert.equal(forged.status, 400);
+  assert.match(forged.json().error, /promotion from quarantine to checked requires gate evidence/);
+
+  const technicalCheck = await invokeApi(
+    handler,
+    "POST",
+    `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status-check`,
+    { report: { verdict: "pass" } },
+  );
+  assert.equal(technicalCheck.status, 400);
+  assert.match(technicalCheck.json().error, /requires a game-owned Canvas project/);
+
+  const styleCheck = await invokeApi(
+    handler,
+    "POST",
+    `/api/canvas/projects/${projectId}/elements/${elementId}/asset-style-check`,
+    { report: { verdict: "accept" } },
+  );
+  assert.equal(styleCheck.status, 400);
+  assert.match(styleCheck.json().error, /requires a game-owned Canvas project/);
+
+  const styleDecision = await invokeApi(
+    handler,
+    "POST",
+    `/api/canvas/projects/${projectId}/elements/${elementId}/asset-style-decision`,
+    { decision: "accept", reason: "Lead decision." },
+  );
+  assert.equal(styleDecision.status, 400);
+  assert.match(styleDecision.json().error, /requires current style-verdict evidence/);
+
+  const promotion = await invokeApi(
+    handler,
+    "POST",
+    `/api/canvas/projects/${projectId}/elements/${elementId}/asset-promote`,
+    {},
+  );
+  assert.equal(promotion.status, 400);
+  assert.match(promotion.json().error, /requires a metadata object/);
+
+  const invalid = await invokeApi(handler, "PUT", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`, {
+    status: "approved",
+  });
+  assert.equal(invalid.status, 400);
+  assert.match(invalid.json().error, /asset status must be quarantine\|checked\|accepted/);
+});
+
 test("canvas API routes explicitly selected private game stores and keeps default reads public-only", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "canvas-api-private-root-"));
   const publicRoot = join(root, "public-canvas");
@@ -913,6 +988,20 @@ test("canvas API nodes-duplicate / nodes-paste / nodes-delete parity (one entry 
     })
   ).json().element;
 
+  const seeded = getProject(ROOT, projectId);
+  updateProject(ROOT, projectId, {
+    elements: seeded.elements.map((item) => item.id === el.id ? {
+      ...item,
+      assetStatus: "accepted",
+      meta: {
+        ...(item.meta || {}),
+        technical_gate: { forged: true },
+        style_verdict: { forged: true },
+        style_decision: { forged: true },
+      },
+    } : item),
+  });
+
   // nodes-duplicate: 201, fresh id, +offset, one entry.
   const dup = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/nodes-duplicate`, {
     nodeIds: [el.id],
@@ -925,11 +1014,29 @@ test("canvas API nodes-duplicate / nodes-paste / nodes-delete parity (one entry 
   assert.notEqual(dupId, el.id);
   let project = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
   assert.equal(project.elements.length, 2);
+  const duplicated = project.elements.find((item) => item.id === dupId);
+  assert.equal(duplicated.assetStatus, "accepted", "trusted live duplicate preserves existing review state");
+  assert.deepEqual(duplicated.meta.style_decision, { forged: true });
 
   // nodes-paste: a captured spec referencing the same immutable file.
   const spec = {
     schema: "ai_studio.canvas.nodes_spec.v1",
-    nodes: [{ kind: "element", element: { type: "image", x: 0, y: 0, w: 4, h: 4, src: el.src, name: "pasted" } }],
+    nodes: [{ kind: "element", element: {
+      type: "image",
+      x: 0,
+      y: 0,
+      w: 4,
+      h: 4,
+      src: el.src,
+      name: "pasted",
+      assetStatus: "accepted",
+      meta: {
+        origin: { retained: true },
+        technical_gate: { forged: true },
+        style_verdict: { forged: true },
+        style_decision: { forged: true },
+      },
+    } }],
   };
   const pasted = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/nodes-paste`, {
     spec,
@@ -940,6 +1047,9 @@ test("canvas API nodes-duplicate / nodes-paste / nodes-delete parity (one entry 
   assert.equal(pasted.status, 201);
   project = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
   assert.equal(project.elements.length, 3);
+  const pastedElement = project.elements.find((item) => item.id === pasted.json().elementIds[0]);
+  assert.equal(pastedElement.assetStatus, "quarantine");
+  assert.deepEqual(pastedElement.meta, { origin: { retained: true } });
 
   // A bad file ref is a loud 400 (no silent fallback), no write.
   const bad = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/nodes-paste`, {

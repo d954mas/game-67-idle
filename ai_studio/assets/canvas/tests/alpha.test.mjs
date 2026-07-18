@@ -16,7 +16,9 @@ import { tmpdir } from "node:os";
 import { fileURLToPath, URL } from "node:url";
 
 import { addImage, addText, alphaCutout, alphaDualPlate, createProject, getProject, isCorridorKeyGreenKey, isCorridorKeyMagentaKey, setRegions, undoOp, redoOp } from "../ops.mjs";
-import { resolveProjectFile } from "../store.mjs";
+import { __alphaCutoutForTest, __alphaDualPlateForTest } from "../ops/image_pipeline.mjs";
+import { prepareAutomaticTechnicalGate } from "../ops/technical_gate.mjs";
+import { addFile as storeAddFile, resolveProjectFile } from "../store.mjs";
 import { createCanvasApi } from "../api.mjs";
 import { darkBgPng, dualPlatePairPng, encodePng, magentaSheetPng, slicedCropPng, softGlowPng } from "./png_fixture.mjs";
 import { decodePng } from "./png_fixture.mjs";
@@ -113,6 +115,7 @@ test("alphaCutout (auto) keys the whole element: alpha channel, transparent bg, 
 
   // The cutout is a NEW element beside the source; the source is untouched (T0336 copy semantics).
   assert.notEqual(result.element.id, elementId, "result is a NEW element, not the source");
+  assert.equal(result.element.assetStatus, "quarantine", "derived cutouts re-enter review in quarantine");
   const afterProj = getProject(REPO_ROOT, projectId);
   assert.deepEqual(afterProj.elements.find((el) => el.id === elementId), original, "source element untouched");
   assert.equal(afterProj.elements.length, 2, "one new element minted (source + copy)");
@@ -123,6 +126,7 @@ test("alphaCutout (auto) keys the whole element: alpha channel, transparent bg, 
   assert.equal(result.element.y, original.y, "copy shares the source's y");
   // meta records the run like slice provenance, and links back to the source element.
   assert.equal(result.element.meta.alpha.method, "auto");
+  assert.equal(result.element.meta.technical_gate, undefined, "Explore has no trusted thresholds and stays ungated");
   assert.equal(result.element.meta.alpha.parentSrc, original.src);
   assert.equal(result.element.meta.alpha.parentElementId, elementId);
   // auto ROUTED the hard-edged magenta sheet to key_matte (proves the router ran).
@@ -1058,6 +1062,7 @@ test("alphaDualPlate (happy pair) creates ONE new element in ONE journal entry; 
   // to the RIGHT of both plates' union bbox (gap 16) — never on top of a plate.
   assert.notEqual(result.element.id, plateWhite.id);
   assert.notEqual(result.element.id, plateBlack.id);
+  assert.equal(result.element.assetStatus, "quarantine", "dual-plate outputs enter review in quarantine");
   assert.equal(after.elements.length, 3, "2 plates + 1 new cut element");
   assert.equal(result.element.name, `${plateWhite.name} alpha`);
   assert.equal(result.element.x, Math.max(plateWhite.x + plateWhite.w, plateBlack.x + plateBlack.w) + 16);
@@ -1089,7 +1094,258 @@ test("alphaDualPlate (happy pair) creates ONE new element in ONE journal entry; 
 
   // Redo re-creates the exact same element (same id/src).
   const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
-  assert.equal(redone.elements.find((el) => el.id === result.element.id).src, result.element.src);
+  const redoneElement = redone.elements.find((el) => el.id === result.element.id);
+  assert.equal(redoneElement.src, result.element.src);
+  assert.equal(redoneElement.assetStatus, "quarantine");
+});
+
+const AUTO_GATE_LOCK = Object.freeze({
+  id: "dual-style-v1",
+  bg_rule: { mode: "chroma", key_color: "#FF00FF" },
+  asset_size: { width: 32, height: 32 },
+  technical_gate: {
+    max_spill_edge_ratio: 0.05,
+    max_halo_edge_ratio: 0.04,
+    max_alpha_noise_ratio: 0.03,
+    max_empty_margin_ratio: 0.5,
+    max_aspect_relative_error: 0.02,
+  },
+});
+const AUTO_GATE_THRESHOLDS = Object.freeze({
+  max_spill_edge_ratio: 0.05,
+  max_halo_edge_ratio: 0.04,
+  max_alpha_noise_ratio: 0.03,
+  max_empty_margin_ratio: 0.5,
+  aspect_ratio: { width: 32, height: 32, max_relative_error: 0.02 },
+});
+const AUTO_GATE_METRICS = Object.freeze({
+  size: [32, 32],
+  content_bbox: [4, 4, 24, 24],
+  visible_px: 576,
+  transparent_px: 448,
+  edge_sample_px: 96,
+  spill_edge_px: 0,
+  spill_edge_ratio: 0,
+  halo_edge_px: 0,
+  halo_edge_ratio: 0,
+  alpha_transition_sample_px: 0,
+  alpha_noise_px: 0,
+  alpha_noise_ratio: 0,
+  empty_margin_ratio: 0.25,
+  aspect_relative_error: 0,
+});
+
+function preparedAutoGate(verdict, thumbnailBytes = null) {
+  const failed = verdict === "fail";
+  return {
+    lock: AUTO_GATE_LOCK,
+    thresholds: structuredClone(AUTO_GATE_THRESHOLDS),
+    keyColor: "#FF00FF",
+    checkedAt: "2026-07-17T00:00:00.000Z",
+    thumbnailBytes,
+    report: {
+      schema: "game.asset_technical_gate",
+      version: 1,
+      verdict,
+      key_color: "#FF00FF",
+      thresholds: structuredClone(AUTO_GATE_THRESHOLDS),
+      metrics: structuredClone(AUTO_GATE_METRICS),
+      problems: failed ? [{ code: "key_spill" }] : [],
+      problem_bbox: failed ? [1, 2, 3, 4] : null,
+    },
+  };
+}
+
+function fakeDualPlateTool(bytes) {
+  return async () => ({
+    bytes,
+    report: { light_plate: "a", dark_plate: "b", pair_gate: { verdict: "pass" }, visible_pixels: 576 },
+  });
+}
+
+test("alphaDualPlate auto-gate keeps PASS/FAIL evidence in the same journal entry and Explore skips evaluation", async (t) => {
+  tempProjects(t);
+  const { white, black } = dualPlatePairPng();
+  const outputBytes = encodePng(32, 32, (x, y) => (
+    x >= 4 && x <= 27 && y >= 4 && y <= 27 ? [180, 110, 40, 255] : [0, 0, 0, 0]
+  ), { alpha: true });
+
+  for (const fixture of [
+    { verdict: "pass", status: "checked", thumbnailBytes: null },
+    { verdict: "fail", status: "quarantine", thumbnailBytes: darkBgPng() },
+  ]) {
+    const project = createProject(REPO_ROOT, { title: `Dual auto ${fixture.verdict}` });
+    const plateA = addImage(REPO_ROOT, project.id, { name: "white.png", bytes: white }).element;
+    const plateB = addImage(REPO_ROOT, project.id, { name: "black.png", bytes: black }).element;
+    const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
+    let preparedBytes = null;
+    const result = await __alphaDualPlateForTest(REPO_ROOT, {
+      projectId: project.id,
+      elementIds: [plateA.id, plateB.id],
+    }, {
+      runDualPlateTool: fakeDualPlateTool(outputBytes),
+      prepareTechnicalGate(root, currentProject, sourceBytes) {
+        return prepareAutomaticTechnicalGate(root, currentProject, sourceBytes, {
+          resolveStyleLock() {
+            return { gameId: "dual-game", lock: AUTO_GATE_LOCK };
+          },
+          async runGate(args) {
+            preparedBytes = args.sourceBytes;
+            const prepared = preparedAutoGate(fixture.verdict, fixture.thumbnailBytes);
+            return { report: prepared.report, thumbnailBytes: prepared.thumbnailBytes };
+          },
+        });
+      },
+    });
+
+    assert.deepEqual(preparedBytes, outputBytes, "the extracted bytes are evaluated before mint");
+    assert.equal(result.element.assetStatus, fixture.status);
+    assert.equal(result.element.meta.technical_gate.verdict, fixture.verdict);
+    assert.equal(result.element.meta.technical_gate.source_ref, result.element.src);
+    assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "mint + evidence are one gesture");
+    if (fixture.verdict === "fail") assert.match(result.element.meta.technical_gate.problem_thumbnail, /^files\//);
+    else assert.equal(result.element.meta.technical_gate.problem_thumbnail, null);
+    assert.equal(undoOp(REPO_ROOT, { projectId: project.id }).project.elements.length, 2, "one undo removes the gated output");
+  }
+
+  const explore = createProject(REPO_ROOT, { title: "Dual explore" });
+  const exploreA = addImage(REPO_ROOT, explore.id, { name: "white.png", bytes: white }).element;
+  const exploreB = addImage(REPO_ROOT, explore.id, { name: "black.png", bytes: black }).element;
+  const exploreResult = await __alphaDualPlateForTest(REPO_ROOT, {
+    projectId: explore.id,
+    elementIds: [exploreA.id, exploreB.id],
+  }, { runDualPlateTool: fakeDualPlateTool(outputBytes) });
+  assert.equal(exploreResult.element.assetStatus, "quarantine");
+  assert.equal(exploreResult.element.meta.technical_gate, undefined);
+});
+
+test("alphaDualPlate refuses a stale automatic gate before minting the output", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Dual stale" });
+  const { white, black } = dualPlatePairPng();
+  const plateA = addImage(REPO_ROOT, project.id, { name: "white.png", bytes: white }).element;
+  const plateB = addImage(REPO_ROOT, project.id, { name: "black.png", bytes: black }).element;
+  const beforeCount = getProject(REPO_ROOT, project.id).elements.length;
+
+  await assert.rejects(
+    () => __alphaDualPlateForTest(REPO_ROOT, {
+      projectId: project.id,
+      elementIds: [plateA.id, plateB.id],
+    }, {
+      runDualPlateTool: fakeDualPlateTool(white),
+      async prepareTechnicalGate() {
+        addImage(REPO_ROOT, project.id, { name: "concurrent.png", bytes: black });
+        return preparedAutoGate("pass");
+      },
+    }),
+    (error) => error?.code === "HEAD_CONFLICT",
+  );
+  const after = getProject(REPO_ROOT, project.id);
+  assert.equal(after.elements.length, beforeCount + 1, "only the concurrent element was minted");
+  assert.equal(after.elements.some((element) => element.name === `${plateA.name} alpha`), false, "no stale output was orphaned");
+});
+
+test("alphaCutout auto-gate applies PASS/FAIL to matte/corridorkey copies in the same undoable commit", async (t) => {
+  tempProjects(t);
+  const runKeyer = async (root, projectId, _element, chosen) => ({
+    newSrc: storeAddFile(root, projectId, { name: `${chosen}.png`, bytes: softGlowPng() }).src,
+    report: { method: chosen, key_color: [255, 0, 255], region_count: 0 },
+  });
+  for (const fixture of [
+    { method: "matte", verdict: "pass", status: "checked" },
+    { method: "corridorkey", verdict: "fail", status: "quarantine" },
+  ]) {
+    const project = createProject(REPO_ROOT, { title: `Cutout ${fixture.method} ${fixture.verdict}` });
+    const source = addImage(REPO_ROOT, project.id, { name: "source.png", bytes: magentaSheetPng() }).element;
+    const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
+    const result = await __alphaCutoutForTest(REPO_ROOT, {
+      projectId: project.id,
+      elementId: source.id,
+      method: fixture.method,
+    }, {
+      runKeyer,
+      async prepareTechnicalGate(_root, _project, sourceBytes) {
+        assert.deepEqual(sourceBytes, softGlowPng(), "the keyer's exact output bytes are gated before mint");
+        return preparedAutoGate(fixture.verdict, fixture.verdict === "fail" ? darkBgPng() : null);
+      },
+    });
+
+    assert.equal(result.element.assetStatus, fixture.status);
+    assert.equal(result.element.meta.alpha.method, fixture.method);
+    assert.equal(result.element.meta.technical_gate.verdict, fixture.verdict);
+    assert.equal(result.element.meta.technical_gate.source_ref, result.element.src);
+    assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1);
+    assert.equal(undoOp(REPO_ROOT, { projectId: project.id }).project.elements.length, 1);
+  }
+});
+
+test("alphaCutout batch freezes each gate result in one journal entry and refuses stale results before mint", async (t) => {
+  tempProjects(t);
+  const runKeyer = async (root, projectId, _element, chosen) => ({
+    newSrc: storeAddFile(root, projectId, { name: `${chosen}.png`, bytes: softGlowPng() }).src,
+    report: { method: chosen, key_color: [255, 0, 255], region_count: 0 },
+  });
+  const project = createProject(REPO_ROOT, { title: "Cutout batch gate" });
+  const first = addImage(REPO_ROOT, project.id, { name: "first.png", bytes: magentaSheetPng() }).element;
+  const second = addImage(REPO_ROOT, project.id, { name: "second.png", bytes: magentaSheetPng() }).element;
+  const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
+  let gateIndex = 0;
+  const result = await __alphaCutoutForTest(REPO_ROOT, {
+    projectId: project.id,
+    elementIds: [first.id, second.id],
+    method: "corridorkey",
+  }, {
+    runKeyer,
+    async prepareTechnicalGate() {
+      const verdict = gateIndex++ === 0 ? "pass" : "fail";
+      return preparedAutoGate(verdict, verdict === "fail" ? darkBgPng() : null);
+    },
+  });
+  assert.deepEqual(result.elements.map((element) => element.assetStatus).sort(), ["checked", "quarantine"]);
+  assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1);
+  assert.equal(undoOp(REPO_ROOT, { projectId: project.id }).project.elements.length, 2);
+
+  const refused = createProject(REPO_ROOT, { title: "Cutout batch gate refusal" });
+  const refusedA = addImage(REPO_ROOT, refused.id, { name: "a.png", bytes: magentaSheetPng() }).element;
+  const refusedB = addImage(REPO_ROOT, refused.id, { name: "b.png", bytes: magentaSheetPng() }).element;
+  const refusedSeq = getProject(REPO_ROOT, refused.id).history_seq;
+  let refusedGateIndex = 0;
+  await assert.rejects(
+    () => __alphaCutoutForTest(REPO_ROOT, {
+      projectId: refused.id,
+      elementIds: [refusedA.id, refusedB.id],
+      method: "matte",
+    }, {
+      runKeyer,
+      async prepareTechnicalGate() {
+        if (refusedGateIndex++ === 1) throw new Error("gate unavailable");
+        return preparedAutoGate("pass");
+      },
+    }),
+    /gate unavailable/,
+  );
+  assert.equal(getProject(REPO_ROOT, refused.id).history_seq, refusedSeq, "gate refusal creates no journal entry");
+  assert.equal(getProject(REPO_ROOT, refused.id).elements.length, 2, "gate refusal mints no batch copies");
+
+  const stale = createProject(REPO_ROOT, { title: "Cutout stale gate" });
+  const staleSource = addImage(REPO_ROOT, stale.id, { name: "source.png", bytes: magentaSheetPng() }).element;
+  await assert.rejects(
+    () => __alphaCutoutForTest(REPO_ROOT, {
+      projectId: stale.id,
+      elementId: staleSource.id,
+      method: "corridorkey",
+    }, {
+      runKeyer,
+      async prepareTechnicalGate() {
+        addImage(REPO_ROOT, stale.id, { name: "concurrent.png", bytes: darkBgPng() });
+        return preparedAutoGate("pass");
+      },
+    }),
+    (error) => error?.code === "HEAD_CONFLICT",
+  );
+  const staleAfter = getProject(REPO_ROOT, stale.id);
+  assert.equal(staleAfter.elements.length, 2, "only source + concurrent edit remain");
+  assert.equal(staleAfter.elements.some((element) => element.meta?.alpha), false, "stale cutout was not minted");
 });
 
 test("alphaDualPlate refuses a misaligned pair with the pair gate's own message — no Python traceback, nothing mutated", async (t) => {

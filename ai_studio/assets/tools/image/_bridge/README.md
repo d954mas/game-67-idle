@@ -12,7 +12,9 @@ duplicated:
   by `worker.mjs`) that pays the interpreter-startup + `numpy`/`scipy`/`PIL` import
   floor (~165-278ms) ONCE at boot, then runs each tool script's `__main__` in-process
   (`runpy`) so the second and later detect/slice/render/export calls are near-instant.
-  Pure transport: same argv/argparse main, so tool behavior + parity are unchanged.
+  The worker prepends the workspace root to `PYTHONPATH`, matching
+  `dev_environment/python_run.mjs`, so package imports behave identically. Pure
+  transport: same argv/argparse main, so tool behavior + parity are unchanged.
 - **tmp-path confinement** — `safeResolve`, `ensureInsideTmp`, `sessionDirForPath`
   keep tool files under `tmp/ai_studio/assets/<namespace>/` (default namespace
   `raster2d`, kept stable for the frozen viewer's public URLs).

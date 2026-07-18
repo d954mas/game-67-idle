@@ -17,13 +17,25 @@ import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-import { inspectPlatformSdkArtifact } from "../../../features/platform-sdk/scripts/artifact_tools.mjs";
 import { createStoreZip, readStoreZip } from "./lib/zip_store.mjs";
+import { findStudioRoot } from "./lib/studio_root.mjs";
+import { createRuntimeBuildRecord, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
+
+const GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const DEFAULT_STUDIO_ROOT = findStudioRoot(GAME_DIR);
+const { inspectPlatformSdkArtifact } = await import(pathToFileURL(join(
+  DEFAULT_STUDIO_ROOT,
+  "features",
+  "platform-sdk",
+  "scripts",
+  "artifact_tools.mjs",
+)).href);
 
 const TARGETS = new Set(["itch", "poki", "yandex", "playgama"]);
 const SOURCE_EXTENSIONS = /\.(?:c|cc|cpp|cxx|h|hh|hpp|cmake|py|ts|map|pdb|obj|o)$/i;
 const DEVAPI_MARKERS = ["window.__devapi", "--devapi", "wasm-devapi", "GAME_DEVAPI_ENABLED"];
 const REVISION = /^[0-9a-f]{40}$/;
+const SHA256 = /^[0-9a-f]{64}$/;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const WASM_MAGIC = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
 const WASM_FORBIDDEN_MARKERS = ["nt_devapi", "__devapi", "debug_test", "sourceMappingURL", ".debug_"];
@@ -563,7 +575,7 @@ function validateGameLoader(input, label = "game.js") {
   }
 }
 
-function parseReleaseConfig(html) {
+function parseReleaseConfig(html, requireRuntimeBuild = true) {
   const marker = "window.__PLATFORM_SDK_CONFIG__";
   const withoutComments = html.replace(/<!--[\s\S]*?-->/g, "");
   const configs = [];
@@ -594,14 +606,33 @@ function parseReleaseConfig(html) {
       const suffixOffset = middleOffset + middle.length + 1;
       const suffix = [",", "release", ":"];
       const release = tokens[suffixOffset + suffix.length];
-      const endOffset = suffixOffset + suffix.length + 1;
+      const fingerprintOffset = suffixOffset + suffix.length + 1;
+      if (!requireRuntimeBuild && tokenValuesAt(tokens, fingerprintOffset, ["}", ")", ";"])) {
+        if (target?.type !== "string" || !tokenValuesAt(tokens, middleOffset, middle)
+            || adapter?.type !== "string" || !tokenValuesAt(tokens, suffixOffset, suffix)
+            || !["true", "false"].includes(release?.value)) {
+          throw new Error(`release HTML has an invalid executable ${marker} assignment`);
+        }
+        configs.push({ target: target.value, platformAdapter: adapter.value, release: release.value === "true" });
+        continue;
+      }
+      const fingerprintPrefix = [",", "runtimeBuildFingerprint", ":"];
+      const fingerprint = tokens[fingerprintOffset + fingerprintPrefix.length];
+      const endOffset = fingerprintOffset + fingerprintPrefix.length + 1;
       if (target?.type !== "string" || !tokenValuesAt(tokens, middleOffset, middle)
           || adapter?.type !== "string" || !tokenValuesAt(tokens, suffixOffset, suffix)
           || !["true", "false"].includes(release?.value)
+          || !tokenValuesAt(tokens, fingerprintOffset, fingerprintPrefix)
+          || fingerprint?.type !== "string" || !SHA256.test(fingerprint.value)
           || !tokenValuesAt(tokens, endOffset, ["}", ")", ";"])) {
         throw new Error(`release HTML has an invalid executable ${marker} assignment`);
       }
-      configs.push({ target: target.value, platformAdapter: adapter.value, release: release.value === "true" });
+      configs.push({
+        target: target.value,
+        platformAdapter: adapter.value,
+        release: release.value === "true",
+        runtimeBuildFingerprint: fingerprint.value,
+      });
     }
   }
   if (configs.length !== 1) throw new Error(`release HTML must contain exactly one executable inline ${marker} assignment`);
@@ -662,6 +693,16 @@ export function validateWasmRelease(input) {
   return true;
 }
 
+export function validateRuntimeBuildWitness(input, runtimeBuild) {
+  const record = validateRuntimeBuildRecord(runtimeBuild);
+  const marker = Buffer.from(`ai_studio.runtime_build:${record.fingerprint}`, "ascii");
+  const bytes = Buffer.isBuffer(input) ? input : Buffer.from(input);
+  if (bytes.indexOf(marker) < 0) {
+    throw new Error("release WASM does not contain the compiled runtime build fingerprint witness");
+  }
+  return true;
+}
+
 function expectedPlatformBytes(studioRoot, adapter) {
   const web = join(studioRoot, "features", "platform-sdk", "web");
   return new Map([
@@ -675,7 +716,7 @@ function fileBytes(artifactDir, paths) {
   return paths.map((path) => ({ path, bytes: readFileSync(join(artifactDir, ...path.split("/"))) }));
 }
 
-export function validateWebArtifact({ artifactDir, target, studioRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url))) }) {
+export function validateWebArtifact({ artifactDir, target, studioRoot = DEFAULT_STUDIO_ROOT }) {
   const root = resolve(artifactDir);
   if (!existsSync(root) || !statSync(root).isDirectory()) throw new Error(`web artifact directory is missing: ${root}`);
   const contract = targetManifest(resolve(studioRoot), target);
@@ -684,15 +725,21 @@ export function validateWebArtifact({ artifactDir, target, studioRoot = resolve(
 
   const html = readFileSync(join(root, "index.html"), "utf8");
   const config = parseReleaseConfig(html);
+  const runtimeBuild = validateRuntimeBuildRecord(readJson(join(root, "runtime-build.json"), "runtime build record"));
   if (config.target !== target) throw new Error(`release target mismatch: expected ${target}, found ${config.target || "missing"}`);
   if (config.platformAdapter !== contract.platform_sdk) {
     throw new Error(`release adapter mismatch: expected ${contract.platform_sdk}, found ${config.platformAdapter || "missing"}`);
   }
   if (!config.release) throw new Error("release metadata is missing release=true");
+  if (config.runtimeBuildFingerprint !== runtimeBuild.fingerprint) {
+    throw new Error("release HTML runtime build fingerprint does not match runtime-build.json");
+  }
   if (readFileSync(join(root, "game.wasm")).length === 0 || readFileSync(join(root, "assets", "game.ntpack")).length === 0) {
     throw new Error("required game payload is empty");
   }
-  validateWasmRelease(readFileSync(join(root, "game.wasm")));
+  const wasmBytes = readFileSync(join(root, "game.wasm"));
+  validateWasmRelease(wasmBytes);
+  validateRuntimeBuildWitness(wasmBytes, runtimeBuild);
   validateGameLoader(readFileSync(join(root, "game.js")));
   for (const [path, expected] of expectedPlatformBytes(studioRoot, contract.platform_sdk)) {
     if (!readFileSync(join(root, path)).equals(expected)) {
@@ -714,7 +761,7 @@ export function validateWebArtifact({ artifactDir, target, studioRoot = resolve(
       throw new Error("Playgama placeholder configuration must be replaced before packaging");
     }
   }
-  return { artifactDir: root, contract, files: fileBytes(root, contract.required_files) };
+  return { artifactDir: root, contract, runtimeBuild, files: fileBytes(root, contract.required_files) };
 }
 
 function compactDependencies(dependencies, bytes) {
@@ -724,22 +771,23 @@ function compactDependencies(dependencies, bytes) {
   };
 }
 
-function releaseMetadata(identity, dependenciesHash, target, adapter, proof = "game") {
+function releaseMetadata(identity, dependenciesHash, target, adapter, runtimeBuildFingerprint, proof = "game") {
   return {
-    schema: "ai_studio.game.release.v1",
+    schema: "ai_studio.game.release.v2",
     game: { id: identity.id, title: identity.title, storageNamespace: identity.storageNamespace },
     target,
     platformAdapter: adapter,
     entrypoint: "index.html",
     dependenciesSha256: dependenciesHash,
+    runtimeBuildFingerprint,
     build: { preset: "wasm-release", devapi: false, debug: false },
     proof,
   };
 }
 
-function manifestFromZip({ zipBytes, zipPath, entries, release, dependencies }) {
+function manifestFromZip({ zipBytes, zipPath, entries, release, dependencies, runtimeBuild }) {
   return {
-    schema: "ai_studio.game.artifact_manifest.v1",
+    schema: "ai_studio.game.artifact_manifest.v2",
     game: release.game,
     target: release.target,
     platformAdapter: release.platformAdapter,
@@ -747,22 +795,29 @@ function manifestFromZip({ zipBytes, zipPath, entries, release, dependencies }) 
     entrypoint: release.entrypoint,
     releaseMetadataSha256: sha256(entries.get("release.json")),
     dependencies,
+    runtimeBuild,
     entries: [...entries].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) })),
   };
 }
 
-function validateReopenedPayload(entries, target, studioRoot) {
+function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuild = true) {
   const contract = targetManifest(studioRoot, target);
   const actual = [...entries.keys()];
-  const expected = [...contract.required_files, "release.json"].sort();
+  const required = requireRuntimeBuild
+    ? contract.required_files : contract.required_files.filter((path) => path !== "runtime-build.json");
+  const expected = [...required, "release.json"].sort();
   if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error("reopened ZIP exact allowlist mismatch");
   const html = entries.get("index.html")?.toString("utf8") || "";
-  const config = parseReleaseConfig(html);
-  if (config.target !== target || config.platformAdapter !== contract.platform_sdk || !config.release) {
+  const config = parseReleaseConfig(html, requireRuntimeBuild);
+  const runtimeBuild = requireRuntimeBuild
+    ? validateRuntimeBuildRecord(JSON.parse(entries.get("runtime-build.json")?.toString("utf8") || "null")) : null;
+  if (config.target !== target || config.platformAdapter !== contract.platform_sdk || !config.release
+      || (requireRuntimeBuild && config.runtimeBuildFingerprint !== runtimeBuild.fingerprint)) {
     throw new Error("reopened ZIP target/adapter/release mismatch");
   }
   if (!entries.get("game.wasm")?.length || !entries.get("assets/game.ntpack")?.length) throw new Error("reopened ZIP required payload is empty");
   validateWasmRelease(entries.get("game.wasm"));
+  if (requireRuntimeBuild) validateRuntimeBuildWitness(entries.get("game.wasm"), runtimeBuild);
   validateGameLoader(entries.get("game.js"), "reopened ZIP game.js");
   for (const [path, expected] of expectedPlatformBytes(studioRoot, contract.platform_sdk)) {
     if (!entries.get(path)?.equals(expected)) {
@@ -813,7 +868,7 @@ function preflightVerified(tempPath, finalPath) {
 export function packageWebArtifact(options) {
   const gameDir = resolve(options.gameDir);
   const target = options.target || "itch";
-  const studioRoot = resolve(options.studioRoot || join(gameDir, "..", ".."));
+  const studioRoot = resolve(options.studioRoot || findStudioRoot(gameDir));
   const identity = validateIdentity(options.identity || readJson(join(gameDir, "game.json"), "game identity"));
   const dependencyPath = join(gameDir, "dependencies.json");
   const dependencies = validateDependencies(options.dependencies || readJson(dependencyPath, "dependencies"));
@@ -821,8 +876,21 @@ export function packageWebArtifact(options) {
   (options.dependencyVerifier || verifyDependencySources)({ studioRoot, dependencies, ...(options.git ? { git: options.git } : {}) });
   const dependencyBytes = jsonBytes(dependencies);
   const validated = validateWebArtifact({ artifactDir: options.artifactDir, target, studioRoot });
+  const expectedRuntimeBuild = (options.runtimeBuildVerifier || createRuntimeBuildRecord)({
+    gameDir, studioRoot, dependencies,
+  });
+  if (JSON.stringify(validated.runtimeBuild) !== JSON.stringify(expectedRuntimeBuild)) {
+    throw new Error("artifact runtime build fingerprint does not match current game/dependency inputs");
+  }
   const compact = compactDependencies(dependencies, dependencyBytes);
-  const release = releaseMetadata(identity, compact.sha256, target, validated.contract.platform_sdk, options.proof || "game");
+  const release = releaseMetadata(
+    identity,
+    compact.sha256,
+    target,
+    validated.contract.platform_sdk,
+    validated.runtimeBuild.fingerprint,
+    options.proof || "game",
+  );
   const entries = [...validated.files, { path: "release.json", bytes: jsonBytes(release) }];
   const zipBytes = createStoreZip(entries);
   const outDir = resolve(options.outDir || join(gameDir, "release", "artifacts"));
@@ -839,7 +907,10 @@ export function packageWebArtifact(options) {
   try {
     writeFileSync(tempZip, zipBytes);
     const reopened = readStoreZip(readFileSync(tempZip));
-    const manifest = manifestFromZip({ zipBytes: readFileSync(tempZip), zipPath: tempZip, entries: reopened, release, dependencies: compact });
+    const manifest = manifestFromZip({
+      zipBytes: readFileSync(tempZip), zipPath: tempZip, entries: reopened, release,
+      dependencies: compact, runtimeBuild: validated.runtimeBuild,
+    });
     writeFileSync(tempManifest, jsonBytes(manifest));
     verifyWebPackage({ zipPath: tempZip, manifestPath: tempManifest, expectedTarget: target, studioRoot });
     const publisher = options.publisher || publishVerified;
@@ -853,14 +924,19 @@ export function packageWebArtifact(options) {
   }
 }
 
-export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studioRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url))) }) {
+export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studioRoot = DEFAULT_STUDIO_ROOT }) {
   const zipBytes = readFileSync(zipPath);
   const entries = readStoreZip(zipBytes);
   const canonical = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
   if (!canonical.equals(zipBytes)) throw new Error("artifact is not a byte-canonical ZIP after reopen");
   const manifest = readJson(manifestPath, "artifact manifest");
-  exactKeys(manifest, ["schema", "game", "target", "platformAdapter", "artifact", "entrypoint", "releaseMetadataSha256", "dependencies", "entries"], "artifact manifest");
-  if (manifest.schema !== "ai_studio.game.artifact_manifest.v1") throw new Error("artifact manifest schema mismatch");
+  const runtimeBuildRequired = manifest.schema === "ai_studio.game.artifact_manifest.v2";
+  if (!runtimeBuildRequired && manifest.schema !== "ai_studio.game.artifact_manifest.v1") {
+    throw new Error("artifact manifest schema mismatch");
+  }
+  exactKeys(manifest, runtimeBuildRequired
+    ? ["schema", "game", "target", "platformAdapter", "artifact", "entrypoint", "releaseMetadataSha256", "dependencies", "runtimeBuild", "entries"]
+    : ["schema", "game", "target", "platformAdapter", "artifact", "entrypoint", "releaseMetadataSha256", "dependencies", "entries"], "artifact manifest");
   validateManifestGame(manifest.game, "artifact manifest game");
   exactKeys(manifest.artifact, ["file", "size", "sha256"], "artifact manifest ZIP");
   exactKeys(manifest.dependencies, ["sha256", "record"], "artifact manifest dependencies");
@@ -872,21 +948,28 @@ export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studio
   const releaseBytes = entries.get("release.json");
   if (!releaseBytes) throw new Error("release metadata is missing from ZIP");
   const release = JSON.parse(releaseBytes.toString("utf8"));
-  exactKeys(release, ["schema", "game", "target", "platformAdapter", "entrypoint", "dependenciesSha256", "build", "proof"], "ZIP release metadata");
+  exactKeys(release, runtimeBuildRequired
+    ? ["schema", "game", "target", "platformAdapter", "entrypoint", "dependenciesSha256", "runtimeBuildFingerprint", "build", "proof"]
+    : ["schema", "game", "target", "platformAdapter", "entrypoint", "dependenciesSha256", "build", "proof"], "ZIP release metadata");
   validateManifestGame(release.game, "ZIP release game");
   exactKeys(release.build, ["preset", "devapi", "debug"], "ZIP release build");
-  if (release.schema !== "ai_studio.game.release.v1" || release.target !== manifest.target
+  if (release.schema !== `ai_studio.game.release.${runtimeBuildRequired ? "v2" : "v1"}` || release.target !== manifest.target
       || release.platformAdapter !== manifest.platformAdapter || release.entrypoint !== "index.html"
       || release.dependenciesSha256 !== manifest.dependencies.sha256 || release.build?.preset !== "wasm-release"
+      || (runtimeBuildRequired && release.runtimeBuildFingerprint !== manifest.runtimeBuild?.fingerprint)
       || release.build?.devapi !== false || release.build?.debug !== false
       || !["game", "reference-template"].includes(release.proof)
       || JSON.stringify(release.game) !== JSON.stringify(manifest.game)
       || manifest.entrypoint !== release.entrypoint) throw new Error("ZIP release metadata mismatch");
   if (manifest.releaseMetadataSha256 !== sha256(releaseBytes)) throw new Error("release metadata hash mismatch");
   const dependencies = validateDependencies(manifest.dependencies?.record);
+  const runtimeBuild = runtimeBuildRequired ? validateRuntimeBuildRecord(manifest.runtimeBuild) : null;
   requirePlatformSdkDependency(dependencies);
   if (manifest.dependencies.sha256 !== sha256(jsonBytes(dependencies))) throw new Error("dependency record hash mismatch");
-  validateReopenedPayload(entries, manifest.target, resolve(studioRoot));
+  if (runtimeBuildRequired && !entries.get("runtime-build.json")?.equals(jsonBytes(runtimeBuild))) {
+    throw new Error("runtime build record mismatch");
+  }
+  validateReopenedPayload(entries, manifest.target, resolve(studioRoot), runtimeBuildRequired);
   const rows = [...entries].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) }));
   if (JSON.stringify(manifest.entries) !== JSON.stringify(rows)) throw new Error("artifact entry hash/size/path manifest mismatch");
   if (!entries.has("index.html") || !entries.has(release.entrypoint)) throw new Error("artifact entrypoint is missing");

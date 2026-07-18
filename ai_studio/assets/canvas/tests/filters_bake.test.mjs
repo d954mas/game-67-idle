@@ -32,7 +32,7 @@ import {
   renderGroup,
   undoOp,
 } from "../ops.mjs";
-import { resolveProjectFile } from "../store.mjs";
+import { resolveProjectFile, updateProject } from "../store.mjs";
 import { createCanvasApi } from "../api.mjs";
 import { decodePng, encodePng, solidPng } from "./png_fixture.mjs";
 
@@ -242,6 +242,23 @@ function setupBakeElement(root, rgba, { filters, opacity } = {}) {
   return { projectId: project.id, elementId: element.id, original, seqBeforeBake };
 }
 
+function seedAcceptedReview(root, projectId, elementIds) {
+  const ids = new Set(elementIds);
+  const project = getProject(root, projectId);
+  updateProject(root, projectId, {
+    elements: project.elements.map((element) => ids.has(element.id) ? {
+      ...element,
+      assetStatus: "accepted",
+      meta: {
+        ...(element.meta || {}),
+        technical_gate: { source_ref: element.src },
+        style_verdict: { source_ref: element.src },
+        style_decision: { decision: "accept", source_ref: element.src },
+      },
+    } : element),
+  });
+}
+
 test(
   "bakeFilters writes a new src: canonical filters baked + alpha multiplied by opacity; filters/opacity cleared; ONE journal entry",
   async (t) => {
@@ -250,6 +267,7 @@ test(
     const filters = { brightness: 1.2, saturation: 0.4, contrast: 1.3, tint: { color: "#0000ff", strength: 0.4 } };
     const opacity = 0.5; // 200 * 0.5 = 100 exactly — no rounding-mode ambiguity between JS/Python
     const { projectId, elementId, original, seqBeforeBake } = setupBakeElement(REPO_ROOT, RGBA, { filters, opacity });
+    seedAcceptedReview(REPO_ROOT, projectId, [elementId]);
 
     let result;
     try {
@@ -273,6 +291,10 @@ test(
     // Sliders reset — filters/opacity cleared to absent (the whole point of "Apply").
     assert.equal("filters" in result.element, false, "filters cleared after bake");
     assert.equal("opacity" in result.element, false, "opacity cleared after bake");
+    assert.equal(result.element.assetStatus, "quarantine", "new baked pixels re-enter review");
+    assert.equal(result.element.meta.technical_gate, undefined);
+    assert.equal(result.element.meta.style_verdict, undefined);
+    assert.equal(result.element.meta.style_decision, undefined);
 
     // Provenance: meta.filters_bake records what was actually burned in + how to undo.
     assert.deepEqual(result.element.meta.filters_bake.baked.filters, filters);
@@ -345,6 +367,7 @@ test("bakeFilters batch (elementIds) bakes 2 images in ONE journal entry; one un
   const { element: e2 } = addImage(REPO_ROOT, project.id, { name: "b.png", bytes: solidPng(10, 10, [60, 200, 60]) });
   patchElement(REPO_ROOT, project.id, e1.id, { filters: { brightness: 1.2 } });
   patchElement(REPO_ROOT, project.id, e2.id, { opacity: 0.6 });
+  seedAcceptedReview(REPO_ROOT, project.id, [e1.id, e2.id]);
   const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
   const originals = getProject(REPO_ROOT, project.id).elements.map((el) => ({ ...el }));
 
@@ -369,6 +392,10 @@ test("bakeFilters batch (elementIds) bakes 2 images in ONE journal entry; one un
     assert.notEqual(element.src, original.src, `element ${element.id} swapped to a new baked file`);
     assert.equal("filters" in element, false);
     assert.equal("opacity" in element, false);
+    assert.equal(element.assetStatus, "quarantine");
+    assert.equal(element.meta.technical_gate, undefined);
+    assert.equal(element.meta.style_verdict, undefined);
+    assert.equal(element.meta.style_decision, undefined);
   }
 
   // ONE undo restores BOTH elements byte-exact (src + filters + opacity), in one step.
