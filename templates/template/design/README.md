@@ -15,6 +15,8 @@ This folder is the game-owned design source of truth.
 
 - `concept.md` - first-pass hook, audience, pillars, and no-go list.
 - `gdd.md` - current game design document for implementation.
+- `canvas.md` - dedicated Canvas project reference and local browser deep link,
+  written by `games/new_game.mjs`.
 - `items/` - modular Items Lua catalog being parity-verified for the E016
   single-source cutover; `../../items.lua.json` is its evaluator manifest.
 - `knowledge/` - private game knowledge base: accepted reference lessons,

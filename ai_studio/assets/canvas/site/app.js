@@ -35,6 +35,7 @@ export const state = {
   project: null,
   storeId: "studio",
   homeStoreId: ALL_STORES_ID,
+  homeOwnerGame: "",
   selectedIds: new Set(),
   selectedGroupId: null,
   // Figma nested-selection scope: the group the user has "entered" (double-click drills
@@ -506,7 +507,7 @@ export function setProjectParam(id, storeId = state.storeId) {
 }
 
 export async function loadProjects() {
-  const data = await api("GET", "/projects?includePrivate=1", undefined, { storeId: null });
+  const data = await api("GET", "/projects?includePrivate=1&include-archived=true", undefined, { storeId: null });
   state.stores = Array.isArray(data.stores) ? data.stores : [];
   state.projects = Array.isArray(data.projects) ? data.projects : [];
   const storeIds = new Set(state.stores.map((store) => store.storeId));

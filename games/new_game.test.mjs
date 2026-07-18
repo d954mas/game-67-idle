@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { main, parseArgs, resolveVisibility, usageText, validateRequestedIdentity } from "./new_game.mjs";
+import { rollbackPrivateCanvasStoreTransfer } from "./new_game_canvas.mjs";
 
 function write(root, rel, text) {
   const path = join(root, rel);
@@ -16,7 +17,11 @@ function write(root, rel, text) {
 function buildFixtureRepo() {
   const root = mkdtempSync(join(tmpdir(), "new-game-fixture-"));
   const template = "templates/template";
-  write(root, ".gitignore", "games/private/\n");
+  write(root, ".gitignore", "games/private/\nai_studio/assets/canvas/projects/\n");
+  write(root, "ai_studio/studio.config.json", JSON.stringify({
+    schema: "ai_studio.studio_config.v1",
+    canvasProjectsRoot: "ai_studio/assets/canvas/projects",
+  }));
   write(root, `${template}/template.json`, JSON.stringify({
     schema: "ai_studio.template.v1", id: "template", title: "Template", storageNamespace: "template",
   }));
@@ -102,6 +107,28 @@ function create(root, id, visibility, extra = []) {
   return result.stdout;
 }
 
+function readCanvasLink(gameDir) {
+  const text = readFileSync(join(gameDir, "design", "canvas.md"), "utf8");
+  const value = (name) => new RegExp(`^${name}:\\s*(\\S+)\\s*$`, "m").exec(text)?.[1] || "";
+  return { text, ref: value("canvas_ref"), browserUrl: value("browser_url") };
+}
+
+function canvasProjectId(ref) {
+  return ref.split("/").filter(Boolean).at(-1);
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function activeCanvasProjectIds(root) {
+  const projectsRoot = join(root, "ai_studio", "assets", "canvas", "projects");
+  if (!existsSync(projectsRoot)) return [];
+  return readdirSync(projectsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+    .map((entry) => entry.name);
+}
+
 test("argument contract keeps explicit visibility and strict identities", () => {
   assert.equal(resolveVisibility(parseArgs(["--id", "demo"])), "public");
   assert.equal(resolveVisibility(parseArgs(["--id", "demo", "--private"])), "private");
@@ -125,6 +152,15 @@ test("public creation is discovered from its folder and updates public integrati
   const tasks = JSON.parse(readFileSync(join(root, ".vscode", "tasks.json"), "utf8"));
   assert.equal(tasks.tasks.some((task) => task.label === "Game: test-game: build native debug"), true);
   assert.equal(existsSync(join(root, "ai_studio", "taskboard", "items", "projects", "P001.md")), true);
+  const canvas = readCanvasLink(game);
+  const canvasId = canvasProjectId(canvas.ref);
+  assert.match(canvas.ref, /^canvas:\/\/test-game-canvas-[0-9a-f]{6}$/);
+  assert.equal(canvas.browserUrl, `http://127.0.0.1:8765/canvas?project=${canvasId}&store=studio`);
+  assert.match(output, new RegExp(`canvas ref: ${escapeRegExp(canvas.ref)}`));
+  assert.match(output, new RegExp(`canvas browser: ${escapeRegExp(canvas.browserUrl)}`));
+  const canvasProject = JSON.parse(readFileSync(join(root, "ai_studio", "assets", "canvas", "projects", canvasId, "project.json"), "utf8"));
+  assert.equal(canvasProject.title, "test-game Canvas");
+  assert.deepEqual(canvasProject.ownership, { kind: "game", gameId: "test-game" });
 });
 
 test("private creation uses games/private, installs parent preflight, and stays invisible to parent git", (t) => {
@@ -140,6 +176,14 @@ test("private creation uses games/private, installs parent preflight, and stays 
   assert.equal(execFileSync("git", ["status", "--short", "--untracked-files=all"], { cwd: root, encoding: "utf8" }).trim(), "");
   assert.equal(existsSync(join(root, ".vscode", "tasks.json")), false);
   assert.equal(existsSync(join(root, "ai_studio", "taskboard", "items", "projects", "P001.md")), false);
+
+  const canvas = readCanvasLink(game);
+  const canvasId = canvasProjectId(canvas.ref);
+  assert.match(canvas.ref, /^canvas:\/\/game\/secret-game\/secret-title-secret-game-canvas-[0-9a-f]{6}$/);
+  assert.equal(canvas.browserUrl, `http://127.0.0.1:8765/canvas?project=${canvasId}&store=game%3Asecret-game`);
+  const canvasProject = JSON.parse(readFileSync(join(game, ".ai_studio", "canvas", "projects", canvasId, "project.json"), "utf8"));
+  assert.equal(canvasProject.title, "Secret Title [secret-game] Canvas");
+  assert.deepEqual(canvasProject.ownership, { kind: "game", gameId: "secret-game" });
 
   write(root, "README.md", "Secret Title\n");
   execFileSync("git", ["add", "README.md"], { cwd: root });
@@ -169,6 +213,126 @@ test("public failure after Taskboard mutation restores game, VS Code, and Taskbo
   assert.equal(existsSync(join(root, "games", "rollback-game")), false);
   assert.equal(existsSync(join(root, ".vscode", "tasks.json")), false);
   assert.equal(existsSync(join(root, "ai_studio", "taskboard", "items", "projects", "P001.md")), false);
+  assert.deepEqual(activeCanvasProjectIds(root), []);
+});
+
+test("replace reuses the linked Canvas project instead of creating a duplicate", (t) => {
+  const root = tempRepo(t);
+  create(root, "repeat-game", "public", ["--title", "Repeat Game"]);
+  const game = join(root, "games", "repeat-game");
+  const before = readCanvasLink(game);
+  writeFileSync(join(game, "design", "canvas.md"), before.text.replace(before.ref, `${before.ref} — Repeat board`), "utf8");
+
+  const output = create(root, "repeat-game", "public", ["--title", "Renamed Game", "--replace"]);
+  const after = readCanvasLink(game);
+
+  assert.equal(after.ref, before.ref);
+  assert.deepEqual(activeCanvasProjectIds(root), [canvasProjectId(before.ref)]);
+  assert.match(output, /existing canvas project:/);
+  const project = JSON.parse(readFileSync(join(root, "ai_studio", "assets", "canvas", "projects", canvasProjectId(before.ref), "project.json"), "utf8"));
+  assert.equal(project.title, "Renamed Game [repeat-game] Canvas");
+});
+
+test("a Canvas link write failure compensates the newly created public project", (t) => {
+  const root = tempRepo(t);
+  write(root, "templates/template/design/canvas.md/block.txt", "blocks the canvas.md file\n");
+  execFileSync("git", ["add", "templates/template/design/canvas.md/block.txt"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "blocked canvas link fixture"], { cwd: root, stdio: "ignore" });
+
+  const result = invokeNewGame(["--root", root, "--id", "blocked-link", "--visibility", "public"]);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /EISDIR|illegal operation on a directory/);
+  assert.equal(existsSync(join(root, "games", "blocked-link")), false);
+  assert.deepEqual(activeCanvasProjectIds(root), []);
+});
+
+test("a replace link write failure restores the reused Canvas title", (t) => {
+  const root = tempRepo(t);
+  create(root, "rename-rollback", "public", ["--title", "Original Title"]);
+  const game = join(root, "games", "rename-rollback");
+  const before = readCanvasLink(game);
+  const projectPath = join(root, "ai_studio", "assets", "canvas", "projects", canvasProjectId(before.ref), "project.json");
+  write(root, "templates/template/design/canvas.md/block.txt", "blocks the canvas.md file\n");
+  execFileSync("git", ["add", "templates/template/design/canvas.md/block.txt"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "blocked replace canvas link fixture"], { cwd: root, stdio: "ignore" });
+
+  const result = invokeNewGame([
+    "--root", root, "--id", "rename-rollback", "--visibility", "public",
+    "--title", "New Title", "--replace",
+  ]);
+
+  assert.equal(result.status, 1);
+  assert.equal(readCanvasLink(game).ref, before.ref);
+  assert.equal(JSON.parse(readFileSync(projectPath, "utf8")).title, "Original Title [rename-rollback] Canvas");
+});
+
+test("a linked Canvas ref from another store is rejected without replacing the game", (t) => {
+  const root = tempRepo(t);
+  create(root, "wrong-store", "public");
+  const game = join(root, "games", "wrong-store");
+  const before = readCanvasLink(game);
+  write(root, "games/wrong-store/keep.txt", "keep\n");
+  writeFileSync(
+    join(game, "design", "canvas.md"),
+    before.text.replace(before.ref, `canvas://game/wrong-store/${canvasProjectId(before.ref)}`),
+    "utf8",
+  );
+
+  const result = invokeNewGame(["--root", root, "--id", "wrong-store", "--visibility", "public", "--replace"]);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /invalid project id|does not belong to studio/);
+  assert.equal(readFileSync(join(game, "keep.txt"), "utf8"), "keep\n");
+  assert.deepEqual(activeCanvasProjectIds(root), [canvasProjectId(before.ref)]);
+});
+
+test("private replace preserves and reuses the linked game-local Canvas project", (t) => {
+  const root = tempRepo(t);
+  create(root, "repeat-secret", "private", ["--title", "Repeat Secret"]);
+  const game = join(root, "games", "private", "repeat-secret");
+  const before = readCanvasLink(game);
+  const projectId = canvasProjectId(before.ref);
+  write(root, `games/private/repeat-secret/.ai_studio/canvas/projects/${projectId}/files/keep.txt`, "keep\n");
+
+  const output = create(root, "repeat-secret", "private", ["--title", "Repeat Secret", "--replace"]);
+  const after = readCanvasLink(game);
+
+  assert.equal(after.ref, before.ref);
+  assert.equal(readFileSync(join(game, ".ai_studio", "canvas", "projects", projectId, "files", "keep.txt"), "utf8"), "keep\n");
+  assert.match(output, /existing canvas project:/);
+});
+
+test("private replace rollback restores the previous game-local Canvas store", (t) => {
+  const root = tempRepo(t);
+  create(root, "stable-secret", "private", ["--title", "Stable Secret"]);
+  const game = join(root, "games", "private", "stable-secret");
+  const before = readCanvasLink(game);
+  const projectId = canvasProjectId(before.ref);
+  write(root, "games/private/stable-secret/keep.txt", "game\n");
+  write(root, `games/private/stable-secret/.ai_studio/canvas/projects/${projectId}/files/keep.txt`, "canvas\n");
+
+  const result = invokeNewGame(
+    ["--root", root, "--id", "stable-secret", "--visibility", "private", "--title", "Stable Secret", "--replace"],
+    { NODE_ENV: "test", AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "private-preflight" },
+  );
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /injected test failure at private-preflight/);
+  assert.equal(readFileSync(join(game, "keep.txt"), "utf8"), "game\n");
+  assert.equal(readFileSync(join(game, ".ai_studio", "canvas", "projects", projectId, "files", "keep.txt"), "utf8"), "canvas\n");
+});
+
+test("private Canvas transfer rollback never deletes an unexpected source or target", (t) => {
+  const root = tempRepo(t);
+  const source = join(root, "backup", "projects");
+  const target = join(root, "published", "projects");
+  write(root, "backup/projects/source.txt", "source\n");
+  write(root, "published/projects/target.txt", "target\n");
+
+  assert.throws(() => rollbackPrivateCanvasStoreTransfer({ source, target }), /rollback target already exists/);
+  assert.equal(readFileSync(join(source, "source.txt"), "utf8"), "source\n");
+  assert.equal(readFileSync(join(target, "target.txt"), "utf8"), "target\n");
 });
 
 test("replace rollback restores the previous game directory", (t) => {
