@@ -1,7 +1,7 @@
 ---
 id: E016
 title: Items Lua authoring and Workbench
-status: active
+status: done
 project: P001
 priority: P2
 tags: [balance, items, lua, game-design, tooling]
@@ -345,3 +345,4 @@ truth.
   remain in E016; runtime/state findings stay in existing E019.
 - 2026-07-18: Items Lua authoring and Workbench was delivered in merged PR #4 (b569c4957); all epic acceptance criteria are checked, no active E016 task remains, and subsequent combined verification stayed green.
 - 2026-07-18: Reopened after post-merge review found Workbench evaluator fan-out and icon backing-store resource exhaustion paths; fixes continue the existing authoring/Workbench plan.
+- 2026-07-18: T0445 closed after bounded admission, evaluator timeout cleanup, fixed icon backing memory, targeted review, full verify, and green Ubuntu/Windows CI in PR #31.
