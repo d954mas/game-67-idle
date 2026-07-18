@@ -177,9 +177,10 @@ def decontaminate_source_key_spill_numpy(
     key: RGB,
     aggressive_visible_decontaminate: bool,
     radius: int = 6,
+    min_visible_alpha: int = 12,
 ) -> None:
     alpha = array[..., 3]
-    visible = alpha > 12
+    visible = alpha > min_visible_alpha
     red = array[..., 0].astype(np.int16)
     green = array[..., 1].astype(np.int16)
     blue = array[..., 2].astype(np.int16)
@@ -214,6 +215,7 @@ def decontaminate_source_key_spill_image(
     key: RGB,
     require_transparent_touch: bool = True,
     radius: int = 6,
+    min_visible_alpha: int = 12,
 ) -> None:
     array = np.array(image.convert("RGBA"), dtype=np.uint8)
     decontaminate_source_key_spill_numpy(
@@ -221,6 +223,7 @@ def decontaminate_source_key_spill_image(
         key=key,
         aggressive_visible_decontaminate=not require_transparent_touch,
         radius=radius,
+        min_visible_alpha=min_visible_alpha,
     )
     image.paste(Image.fromarray(array))
 
