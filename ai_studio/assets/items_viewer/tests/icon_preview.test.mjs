@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   buildIconPreview,
+  computeIconCropRect,
   ICON_LIMITS,
   loadIconPage,
   parseIconRegionNames,
@@ -131,6 +132,21 @@ test("icon preview rejects oversized files, section counts, and image dimensions
   const pngHeader = Buffer.from(readFileSync(join(FIXTURE_DIR, "icons_page0.png")).subarray(0, 24));
   pngHeader.writeUInt32BE(ICON_LIMITS.maxImageDimension + 1, 16);
   assert.throws(() => readPngDims(pngHeader), /dimensions exceed/);
+});
+
+test("icon crop metadata rejects empty or out-of-bounds atlas rectangles", () => {
+  assert.deepEqual(
+    computeIconCropRect({ minU: 0, minV: 0, maxU: 65535, maxV: 65535 }, 64, 32),
+    { x: 2, y: 2, w: 60, h: 28 },
+  );
+  assert.throws(
+    () => computeIconCropRect({ minU: 10, minV: 10, maxU: 10, maxV: 20 }, 64, 32),
+    /invalid atlas crop rectangle/,
+  );
+  assert.throws(
+    () => computeIconCropRect({ minU: 60000, minV: 10, maxU: 1000, maxV: 20 }, 64, 32),
+    /invalid atlas crop rectangle/,
+  );
 });
 
 test("parseIconRegionNames: BigInt hashes, icons/* only, ui/* filtered out of the SAME header text", () => {
