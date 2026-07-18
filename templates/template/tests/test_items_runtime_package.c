@@ -19,6 +19,12 @@ static uint32_t read_le32(const uint8_t *src) {
            ((uint32_t)src[2] << 16U) | ((uint32_t)src[3] << 24U);
 }
 
+static void write_le32(uint8_t *dst, uint32_t value) {
+    for (uint32_t index = 0; index < 4U; ++index) {
+        dst[index] = (uint8_t)(value >> (index * 8U));
+    }
+}
+
 static void write_le64(uint8_t *dst, uint64_t value) {
     for (uint32_t index = 0; index < 8U; ++index) {
         dst[index] = (uint8_t)(value >> (index * 8U));
@@ -166,6 +172,36 @@ void test_resigned_identity_utf8_range_and_size_corruption_are_rejected(void) {
     free(copy);
 }
 
+void test_cost_spans_reject_unique_resources_and_i64_overflow(void) {
+    items_catalog_bind_error_t error = ITEMS_CATALOG_BIND_OK;
+    uint8_t *copy = (uint8_t *)malloc(s_fixture_size);
+    TEST_ASSERT_NOT_NULL(copy);
+    const uint32_t item_section = read_le32(s_fixture + 52U);
+    const uint32_t level_section = read_le32(s_fixture + 76U);
+    const uint32_t cost_section = read_le32(s_fixture + 100U);
+
+    memcpy(copy, s_fixture, s_fixture_size);
+    write_le32(copy + cost_section, 1U);
+    resign(copy, s_fixture_size);
+    TEST_ASSERT_FALSE(items_catalog_try_bind(copy, s_fixture_size, &error));
+    TEST_ASSERT_EQUAL(ITEMS_CATALOG_BIND_BAD_LAYOUT, error);
+    TEST_ASSERT_FALSE(items_catalog_is_bound());
+
+    memcpy(copy, s_fixture, s_fixture_size);
+    const uint32_t sword_item = item_section + 56U;
+    const uint32_t sword_level_2 = level_section + 32U;
+    write_le32(copy + sword_item + 36U, 2U);
+    write_le32(copy + sword_level_2 + 16U, 2U);
+    write_le32(copy + sword_level_2 + 20U, 0U);
+    write_le64(copy + cost_section + 8U, INT64_MAX);
+    write_le64(copy + cost_section + 16U + 8U, 1U);
+    resign(copy, s_fixture_size);
+    TEST_ASSERT_FALSE(items_catalog_try_bind(copy, s_fixture_size, &error));
+    TEST_ASSERT_EQUAL(ITEMS_CATALOG_BIND_BAD_LAYOUT, error);
+    TEST_ASSERT_FALSE(items_catalog_is_bound());
+    free(copy);
+}
+
 void test_bound_catalog_exposes_typed_base_api(void) {
     items_catalog_bind_error_t error = ITEMS_CATALOG_BIND_BAD_HEADER;
     TEST_ASSERT_TRUE(items_catalog_try_bind(s_fixture, s_fixture_size, &error));
@@ -238,6 +274,7 @@ int main(void) {
     RUN_TEST(test_bind_copies_valid_package_and_forbids_rebind);
     RUN_TEST(test_failure_never_publishes_catalog);
     RUN_TEST(test_resigned_identity_utf8_range_and_size_corruption_are_rejected);
+    RUN_TEST(test_cost_spans_reject_unique_resources_and_i64_overflow);
     RUN_TEST(test_bound_catalog_exposes_typed_base_api);
     RUN_TEST(test_bound_catalog_exposes_typed_weapon_levels);
     int result = UNITY_END();

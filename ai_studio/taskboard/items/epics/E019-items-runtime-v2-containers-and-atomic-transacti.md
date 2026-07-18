@@ -6,7 +6,7 @@ project: P001
 priority: P2
 tags: [items, runtime, state, containers]
 created: 2026-07-14
-updated: 2026-07-17
+updated: 2026-07-18
 ---
 
 ## Goal
@@ -46,3 +46,6 @@ Items Lua authoring and Workbench vertical.
   passes all 10 domains; GitHub Actions 29567771839 passes on Ubuntu and Windows;
   independent reviews converged to ACCEPT.
 - 2026-07-17: Runtime v2 complete via T0390-T0392; full verify and cross-platform CI pass.
+- 2026-07-18: Reopened after post-merge code review found production assert-off
+  and transaction correctness defects; fixes continue the existing runtime plan.
+- 2026-07-18: Post-merge hardening completed via T0444: assert-off fingerprints, slot uniqueness, scope/ref validation, and runtime cost semantics are regression-covered; local full verify and GitHub Actions 29634453607 pass.

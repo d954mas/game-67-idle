@@ -5,6 +5,7 @@
 #include "unity.h"
 
 #include "features/items/items.h"
+#include "core/nt_assert.h"
 #include "game_events.h"
 #include "items_runtime_test_catalog.h"
 #include "items_state.h"
@@ -603,30 +604,127 @@ void test_upgrade_instance_is_atomic_next_level_and_distinguishes_free(void) {
     TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
 }
 
-void test_payment_developer_contract_asserts(void) {
+void test_payment_invalid_scopes_are_release_visible_and_atomic(void) {
     items_container_ref_t payer = create_container(2, ITEMS_CONTAINER_POLICY_GENERIC);
     item_def_ref_t sword;
     TEST_ASSERT_TRUE(items_try_get_string("tmpl.sword", &sword));
     item_cost_ref_t cost = items_acquire_transition(sword).cost;
+    ItemsState before = items_state;
+    game_event_frame_reset();
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_try_pay_cost(cost, (items_payment_scope_t){0}, "shop_buy:sword"));
     items_payment_scope_t duplicate = {
         .count = 2,
         .containers = {payer, payer},
     };
-    NT_TEST_EXPECT_ASSERT(items_try_pay_cost(cost, duplicate, "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_try_pay_cost(cost, duplicate, "shop_buy:sword"));
 
     items_payment_scope_t oversized = {.count = ITEMS_PAYMENT_SCOPE_MAX + 1U};
-    NT_TEST_EXPECT_ASSERT(items_try_pay_cost(cost, oversized, "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_try_pay_cost(cost, oversized, "shop_buy:sword"));
 
     items_payment_scope_t invalid = {
         .count = 1,
-        .containers = {{UINT32_MAX, UINT32_MAX}},
+        .containers = {{ITEMS_STATE_MAX_CONTAINERS, UINT32_MAX}},
     };
-    NT_TEST_EXPECT_ASSERT(items_try_pay_cost(cost, invalid, "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_NOT_FOUND,
+        items_try_pay_cost(cost, invalid, "shop_buy:sword"));
 
+    items_container_ref_t temporary = create_ephemeral_container(
+        2, ITEMS_CONTAINER_POLICY_GENERIC);
+    items_payment_scope_t ephemeral = {.count = 1, .containers = {temporary}};
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_LIFETIME,
+        items_try_pay_cost(cost, ephemeral, "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    int event_count = 0;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+}
+
+void test_composite_transactions_reject_stale_refs_in_release(void) {
+    item_def_ref_t sword;
+    TEST_ASSERT_TRUE(items_try_get_string("tmpl.sword", &sword));
+
+    items_container_ref_t stale_destination = create_container(
+        2, ITEMS_CONTAINER_POLICY_GENERIC);
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK, items_try_container_destroy_empty(stale_destination));
+    items_container_ref_t replacement = create_container(
+        2, ITEMS_CONTAINER_POLICY_GENERIC);
+    TEST_ASSERT_EQUAL_UINT32(stale_destination.index, replacement.index);
+    TEST_ASSERT_TRUE(stale_destination.generation != replacement.generation);
+
+    item_entry_ref_t acquired = ITEM_ENTRY_REF_NONE;
+    ItemsState before = items_state;
+    game_event_frame_reset();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_NOT_FOUND,
+        items_try_acquire(
+            stale_destination, sword, (items_payment_scope_t){0},
+            "shop_buy:sword", &acquired));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+
+    items_container_ref_t bag = create_container(3, ITEMS_CONTAINER_POLICY_GENERIC);
+    item_entry_ref_t stale_entry = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_unique_create(bag, "tmpl.sword", 0, "loot:test", &stale_entry));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK, items_try_entry_destroy(stale_entry, "use:test"));
+    item_entry_ref_t replacement_entry = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_unique_create(bag, "tmpl.sword", 0, "loot:test", &replacement_entry));
+    TEST_ASSERT_EQUAL_UINT32(stale_entry.index, replacement_entry.index);
+    TEST_ASSERT_TRUE(stale_entry.generation != replacement_entry.generation);
+    before = items_state;
+    game_event_frame_reset();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_NOT_FOUND,
+        items_try_upgrade_instance(
+            stale_entry, 2, (items_payment_scope_t){0}, "level_cost:sword"));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+
+    item_entry_ref_t stale_stack = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.wood", 4, 1, "loot:test", &stale_stack, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK, items_try_stack_remove(stale_stack, 4, "use:test"));
+    item_entry_ref_t replacement_stack = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.wood", 4, 1, "loot:test", &replacement_stack, NULL));
+    TEST_ASSERT_EQUAL_UINT32(stale_stack.index, replacement_stack.index);
+    TEST_ASSERT_TRUE(stale_stack.generation != replacement_stack.generation);
+    before = items_state;
+    game_event_frame_reset();
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_NOT_FOUND,
+        items_try_entry_move(
+            stale_stack, bag, 1, ITEMS_SLOT_AUTO, "split:test", NULL));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+
+    int event_count = 0;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+}
+
+#if NT_ASSERT_MODE == NT_ASSERT_FULL
+void test_payment_invalid_cost_ref_asserts(void) {
+    items_container_ref_t payer = create_container(2, ITEMS_CONTAINER_POLICY_GENERIC);
     items_payment_scope_t valid = {.count = 1, .containers = {payer}};
     NT_TEST_EXPECT_ASSERT(items_try_pay_cost(
         (item_cost_ref_t){UINT32_MAX}, valid, "shop_buy:sword"));
 }
+#endif
 
 void test_rebuild_rejects_reserved_persisted_counters(void) {
     (void)create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
@@ -919,6 +1017,27 @@ void test_ephemeral_partial_self_move_never_duplicates_a_slot(void) {
     TEST_ASSERT_EQUAL_INT(
         ITEMS_RESULT_OK,
         items_try_entry_move(source, chest, 4, ITEMS_SLOT_AUTO, "split:test", &split));
+    TEST_ASSERT_EQUAL_UINT32(0, items_entry_view(source).slot);
+    TEST_ASSERT_EQUAL_UINT32(1, items_entry_view(split).slot);
+    TEST_ASSERT_EQUAL_INT64(6, items_entry_view(source).count);
+    TEST_ASSERT_EQUAL_INT64(4, items_entry_view(split).count);
+}
+
+void test_persistent_partial_self_move_never_duplicates_a_slot(void) {
+    items_container_ref_t bag = create_container(3, ITEMS_CONTAINER_POLICY_GENERIC);
+    item_entry_ref_t source = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.wood", 10, 0, "loot:test", &source, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_SLOT_OCCUPIED,
+        items_try_entry_move(source, bag, 4, 0, "split:test", NULL));
+    TEST_ASSERT_EQUAL_INT64(10, items_entry_view(source).count);
+
+    item_entry_ref_t split = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_entry_move(source, bag, 4, ITEMS_SLOT_AUTO, "split:test", &split));
     TEST_ASSERT_EQUAL_UINT32(0, items_entry_view(source).slot);
     TEST_ASSERT_EQUAL_UINT32(1, items_entry_view(split).slot);
     TEST_ASSERT_EQUAL_INT64(6, items_entry_view(source).count);
@@ -1332,7 +1451,11 @@ int main(void) {
     RUN_TEST(test_paid_acquire_plans_destination_after_projected_payment);
     RUN_TEST(test_acquire_refusals_are_atomic_and_explicit_free_is_distinct);
     RUN_TEST(test_upgrade_instance_is_atomic_next_level_and_distinguishes_free);
-    RUN_TEST(test_payment_developer_contract_asserts);
+    RUN_TEST(test_payment_invalid_scopes_are_release_visible_and_atomic);
+    RUN_TEST(test_composite_transactions_reject_stale_refs_in_release);
+#if NT_ASSERT_MODE == NT_ASSERT_FULL
+    RUN_TEST(test_payment_invalid_cost_ref_asserts);
+#endif
     RUN_TEST(test_rebuild_rejects_reserved_persisted_counters);
     RUN_TEST(test_one_hundred_persistent_containers_round_trip);
     RUN_TEST(test_loaded_maximum_ids_and_long_definition_reseed_without_truncation);
@@ -1343,6 +1466,7 @@ int main(void) {
     RUN_TEST(test_lifetime_boundary_rejects_persistent_to_ephemeral_and_acquires_reverse);
     RUN_TEST(test_ephemeral_move_preserves_runtime_identity);
     RUN_TEST(test_ephemeral_partial_self_move_never_duplicates_a_slot);
+    RUN_TEST(test_persistent_partial_self_move_never_duplicates_a_slot);
     RUN_TEST(test_rejected_rebuild_preserves_ephemeral_state);
     RUN_TEST(test_container_inspection_is_paginated_filterable_and_bounded);
     RUN_TEST(test_container_entry_inspection_requires_range_and_filters_in_slot_order);

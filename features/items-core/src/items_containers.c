@@ -246,6 +246,32 @@ static uint32_t ephemeral_index(uint32_t encoded) {
     return encoded & ~ITEMS_EPHEMERAL_REF_BIT;
 }
 
+static bool try_persistent_container(
+    items_container_ref_t ref, ItemsItemContainer **out_container) {
+    ensure_ready();
+    if (out_container == NULL || ephemeral_ref(ref.index) ||
+        ref.index >= ITEMS_STATE_MAX_CONTAINERS || ref.generation == 0 ||
+        s_container_generation[ref.index] != ref.generation ||
+        !items_state.containers[ref.index].used) {
+        return false;
+    }
+    *out_container = &items_state.containers[ref.index];
+    return true;
+}
+
+static bool try_persistent_entry(
+    item_entry_ref_t ref, ItemsItemEntry **out_entry) {
+    ensure_ready();
+    if (out_entry == NULL || ephemeral_ref(ref.index) ||
+        ref.index >= ITEMS_STATE_MAX_CONTAINERS_ENTRIES || ref.generation == 0 ||
+        s_entry_generation[ref.index] != ref.generation ||
+        !items_state.containers_entries[ref.index].used) {
+        return false;
+    }
+    *out_entry = &items_state.containers_entries[ref.index];
+    return true;
+}
+
 static items_container_ref_t ephemeral_container_ref(uint32_t index) {
     return (items_container_ref_t){
         index | ITEMS_EPHEMERAL_REF_BIT,
@@ -1148,20 +1174,25 @@ static items_result_t build_payment_plan(
     NT_ASSERT(out_plan != NULL);
     ensure_ready();
     memset(out_plan, 0, sizeof(*out_plan));
-    NT_ASSERT(scope.count > 0 && scope.count <= ITEMS_PAYMENT_SCOPE_MAX);
+    if (scope.count == 0 || scope.count > ITEMS_PAYMENT_SCOPE_MAX) {
+        return ITEMS_RESULT_INVALID_ARGUMENT;
+    }
     out_plan->scope_count = scope.count;
     out_plan->scope_fingerprint = payment_fingerprint_begin("items.payment.scope.v1");
     payment_fingerprint_u64(&out_plan->scope_fingerprint, scope.count);
     for (uint32_t i = 0; i < scope.count; i++) {
-        NT_ASSERT(!ephemeral_ref(scope.containers[i].index) &&
-                  "payment scope requires persistent containers");
-        ItemsItemContainer *container = require_container(scope.containers[i]);
-        payment_fingerprint_u64(&out_plan->scope_fingerprint, container->container_id);
-        for (uint32_t j = 0; j < i; j++) {
-            NT_ASSERT((scope.containers[i].index != scope.containers[j].index ||
-                       scope.containers[i].generation != scope.containers[j].generation) &&
-                      "payment scope contains a duplicate container");
+        if (ephemeral_ref(scope.containers[i].index)) { return ITEMS_RESULT_LIFETIME; }
+        ItemsItemContainer *container = NULL;
+        if (!try_persistent_container(scope.containers[i], &container)) {
+            return ITEMS_RESULT_NOT_FOUND;
         }
+        for (uint32_t j = 0; j < i; j++) {
+            if (scope.containers[i].index == scope.containers[j].index &&
+                scope.containers[i].generation == scope.containers[j].generation) {
+                return ITEMS_RESULT_INVALID_ARGUMENT;
+            }
+        }
+        payment_fingerprint_u64(&out_plan->scope_fingerprint, container->container_id);
     }
 
     out_plan->requirement_count = items_cost_count(cost);
@@ -1209,7 +1240,9 @@ static items_result_t build_payment_plan(
         const ItemsItemEntry *entry = &items_state.containers_entries[out_plan->rows[i].entry_index];
         const ItemsItemContainer *container = &items_state.containers[entry->parent_index];
         item_def_ref_t def;
-        NT_ASSERT(items_try_get_string(entry->def_id, &def));
+        bool found = items_try_get_string(entry->def_id, &def);
+        NT_ASSERT(found);
+        if (!found) { return ITEMS_RESULT_NOT_FOUND; }
         payment_fingerprint_u64(&out_plan->source_fingerprint, container->container_id);
         payment_fingerprint_u64(&out_plan->source_fingerprint, entry->entry_id);
         payment_fingerprint_u64(&out_plan->source_fingerprint, entry->slot);
@@ -1265,9 +1298,12 @@ items_result_t items_try_acquire(
     items_payment_scope_t payment, const char *reason,
     item_entry_ref_t *out_entry) {
     if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
-    NT_ASSERT(out_entry != NULL);
+    if (out_entry == NULL) { return ITEMS_RESULT_INVALID_ARGUMENT; }
     if (ephemeral_ref(destination_ref.index)) { return ITEMS_RESULT_WRONG_STORAGE; }
-    ItemsItemContainer *destination = require_container(destination_ref);
+    ItemsItemContainer *destination = NULL;
+    if (!try_persistent_container(destination_ref, &destination)) {
+        return ITEMS_RESULT_NOT_FOUND;
+    }
     item_core_t core = items_core(item);
     const char *def_id = items_def_id(item);
     item_transition_t transition = items_acquire_transition(item);
@@ -1382,7 +1418,8 @@ items_result_t items_try_upgrade_instance(
     items_payment_scope_t payment, const char *reason) {
     if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
     if (ephemeral_ref(entry_ref_value.index)) { return ITEMS_RESULT_WRONG_STORAGE; }
-    ItemsItemEntry *entry = require_entry(entry_ref_value);
+    ItemsItemEntry *entry = NULL;
+    if (!try_persistent_entry(entry_ref_value, &entry)) { return ITEMS_RESULT_NOT_FOUND; }
     item_def_ref_t item;
     item_core_t core;
     if (entry->quarantined || !lookup_item(entry->def_id, &item, &core)) {
@@ -1436,14 +1473,19 @@ items_result_t items_try_entry_move(
             source_ref, destination_ref, count, requested_slot, reason, out_destination);
     }
     if (ephemeral_ref(destination_ref.index)) { return ITEMS_RESULT_LIFETIME; }
-    ItemsItemEntry *source = require_entry(source_ref);
-    ItemsItemContainer *destination = require_container(destination_ref);
+    ItemsItemEntry *source = NULL;
+    ItemsItemContainer *destination = NULL;
+    if (!try_persistent_entry(source_ref, &source) ||
+        !try_persistent_container(destination_ref, &destination)) {
+        return ITEMS_RESULT_NOT_FOUND;
+    }
     if (count <= 0 || count > source->count) { return ITEMS_RESULT_INSUFFICIENT; }
     item_def_ref_t def;
     item_core_t core;
     if (!lookup_item(source->def_id, &def, &core) || source->quarantined) { return ITEMS_RESULT_NOT_FOUND; }
     items_result_t allowed = policy_allows(destination, def, core);
     if (allowed != ITEMS_RESULT_OK) { return allowed; }
+    bool whole = count == source->count;
 
     uint32_t target_slot = requested_slot;
     ItemsItemEntry *merge = NULL;
@@ -1460,22 +1502,26 @@ items_result_t items_try_entry_move(
         }
     }
     if (target_slot == ITEMS_SLOT_AUTO) {
-        target_slot = choose_slot(destination_ref.index, ITEMS_SLOT_AUTO, source_ref.index);
+        target_slot = choose_slot(
+            destination_ref.index, ITEMS_SLOT_AUTO, whole ? source_ref.index : UINT32_MAX);
     } else {
         if (target_slot >= destination->capacity) { return ITEMS_RESULT_CAPACITY; }
         merge = entry_at_slot(destination_ref.index, target_slot);
-        if (merge == source) { merge = NULL; }
+        if (merge == source) {
+            if (!whole) { return ITEMS_RESULT_SLOT_OCCUPIED; }
+            merge = NULL;
+        }
     }
     if (target_slot == UINT32_MAX) { return ITEMS_RESULT_CAPACITY; }
     if (merge != NULL) {
         if (!item_is_stackable(core) || strcmp(merge->def_id, source->def_id) != 0 || merge->count > limit - count) {
             return ITEMS_RESULT_SLOT_OCCUPIED;
         }
-    } else if (slot_used(destination_ref.index, target_slot, source_ref.index)) {
+    } else if (slot_used(
+                   destination_ref.index, target_slot, whole ? source_ref.index : UINT32_MAX)) {
         return ITEMS_RESULT_SLOT_OCCUPIED;
     }
 
-    bool whole = count == source->count;
     uint32_t split_index = UINT32_MAX;
     uint32_t split_id = ITEMS_ID_NONE;
     if (merge == NULL && !whole) {

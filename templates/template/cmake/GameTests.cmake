@@ -470,6 +470,26 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_items_fragment COMMAND test_items_fragment
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 
+    # The final production profile may compile assertions out entirely. Keep the
+    # complete ownership suite on that exact code path so runtime work never
+    # depends on side effects or validation hidden inside NT_ASSERT.
+    add_executable(test_items_fragment_assert_off
+        tests/test_items_fragment.c
+        "${ITEMS_STATE_GENERATED_SOURCE}"
+        "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
+        "${ITEMS_CORE_SRC}/items_reconcile.c"
+        "${ITEMS_CORE_SRC}/items_containers.c"
+        src/game_state_json.c
+        "${GAME_EVENTS_SRC}/game_events.c")
+    configure_items_runtime_catalog_test(test_items_fragment_assert_off)
+    target_link_libraries(test_items_fragment_assert_off PRIVATE cjson unity nt_hash nt_log nt_core)
+    target_include_directories(test_items_fragment_assert_off PRIVATE "${ITEMS_CORE_INC}" "${GAME_EVENTS_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/tests/unit")
+    target_compile_definitions(test_items_fragment_assert_off PRIVATE ITEMS_RUNTIME_TESTING=1 NT_ASSERT_MODE=0 _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_items_fragment_assert_off PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_items_fragment_assert_off COMMAND test_items_fragment_assert_off
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+
     # Keep the shipped Lua catalog and release receipt on the normal ctest path.
     add_test(NAME items_catalog_validate COMMAND "${Python3_EXECUTABLE}"
         "${ITEMS_CORE_SCRIPTS}/items_cli.py"
@@ -639,7 +659,8 @@ if(NOT EMSCRIPTEN)
         test_game_events test_game_events_overflow test_game_state_roundtrip
         test_game_events_typed test_game_event_render test_game_analytics
         test_game_events_log_mirror test_items_api_core_only
-        test_items_api test_items_runtime_package test_items_runtime_resource test_items_fragment test_progression test_progression_curve
+        test_items_api test_items_runtime_package test_items_runtime_resource
+        test_items_fragment test_items_fragment_assert_off test_progression test_progression_curve
         benchmark_items_c_arrays benchmark_items_runtime_blob benchmark_items_runtime_bind
         test_game_format test_platform_sdk test_platform_lifecycle
         test_platform_sdk_events test_template_composition)
