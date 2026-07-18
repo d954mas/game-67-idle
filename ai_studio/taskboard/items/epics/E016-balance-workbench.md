@@ -1,12 +1,12 @@
 ---
 id: E016
 title: Items Lua authoring and Workbench
-status: active
+status: done
 project: P001
 priority: P2
 tags: [balance, items, lua, game-design, tooling]
 created: 2026-07-10
-updated: 2026-07-16
+updated: 2026-07-18
 ---
 
 ## Goal
@@ -343,3 +343,4 @@ truth.
 - 2026-07-16: Reopened after three independent full Items reviews confirmed
   Workbench security/race, authoring integrity, and bounded-I/O defects. Fixes
   remain in E016; runtime/state findings stay in existing E019.
+- 2026-07-18: Items Lua authoring and Workbench was delivered in merged PR #4 (b569c4957); all epic acceptance criteria are checked, no active E016 task remains, and subsequent combined verification stayed green.

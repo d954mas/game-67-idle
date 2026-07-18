@@ -281,7 +281,10 @@ export function registerBrowserIssueCapture(client, issues) {
     if (resource?.status >= 400) addIssue(issues, "resource.http", `${resource.status} ${resource.url}`);
     if (remoteNetworkUrl(resource?.url)) addIssue(issues, "resource.remote", resource?.url);
   });
-  client.on("Network.loadingFailed", ({ errorText, blockedReason }) => addIssue(issues, "resource.load", blockedReason || errorText));
+  client.on("Network.loadingFailed", ({ errorText, blockedReason, canceled }) => {
+    if (canceled && !blockedReason && errorText === "net::ERR_ABORTED") return;
+    addIssue(issues, "resource.load", blockedReason || errorText);
+  });
   client.on("Network.requestWillBeSent", ({ request }) => {
     if (remoteNetworkUrl(request?.url)) addIssue(issues, "resource.remote", request?.url);
   });
