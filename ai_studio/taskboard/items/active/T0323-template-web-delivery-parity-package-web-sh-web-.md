@@ -48,6 +48,11 @@ frame.
   and no issues. Browser process-tree/profile cleanup was verified 0 before/0
   after. Independent re-review ACCEPT; QTECH_001=pass. Final local `verify
   --full` passed all 10 domains; the exact GitHub CI tip remains pending.
+- 2026-07-17: First PR #24 CI attempt passed Ubuntu in 3m48s; Windows
+  reached the browser-smoke-enabled template-release gate but failed an older
+  T0442 fake-socket cleanup timing assertion. The bounded cleanup reservation
+  was fixed in T0442, stress-tested 20/20, independently reviewed ACCEPT, and
+  full local verify returned to 10/10. Exact-tip CI rerun remains pending.
 - 2026-07-14: Removed already delivered shell/script/scenario scope. The card
   now owns only the missing packaged-artifact browser proof.
 - 2026-07-07: T0333 delivered the shared build/copy/server foundation used by

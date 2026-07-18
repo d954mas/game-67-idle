@@ -348,7 +348,7 @@ export async function probeLocalMockPage({
   WebSocketClass = globalThis.WebSocket,
 }) {
   const deadline = Date.now() + timeoutMs;
-  const cleanupBudget = Math.min(500, Math.max(10, Math.floor(timeoutMs / 5)));
+  const cleanupBudget = Math.min(500, Math.max(50, Math.floor(timeoutMs / 2)));
   const operationDeadline = deadline - cleanupBudget;
   const endpoint = localHttpUrl(cdpEndpoint, "CDP endpoint");
   const pageUrl = localHttpUrl(url, "page URL");
