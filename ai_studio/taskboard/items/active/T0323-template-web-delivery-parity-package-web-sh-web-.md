@@ -1,13 +1,14 @@
 ---
 id: T0323
 title: "Add packaged-web browser load smoke to the template release flow"
-status: doing
+status: review
 project: P001
 epic: E009
 priority: P1
 tags: [template, web, release, smoke]
 created: 2026-07-06
-updated: 2026-07-14
+updated: 2026-07-17
+quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"Independent review ACCEPT; packaged-browser focused tests 18/18; full focused owner set 43/43; real Windows Chrome package ready with matching runtime fingerprint and rendered frame; Studio verify --full passed all 10 domains; PR #24 exact implementation tip CI passed Ubuntu and Windows."}]}
 ---
 
 ## What
@@ -26,7 +27,7 @@ frame.
       a blank/black first frame, and reports one compact diagnostic.
 - [x] Tests cover success and each failure class without requiring WSL; Windows
       is the canonical agent entry point and Linux uses the same Node command.
-- [ ] A real template wasm-release package passes the smoke in CI.
+- [x] A real template wasm-release package passes the smoke in CI.
 
 ## Open questions
 
@@ -53,6 +54,9 @@ frame.
   T0442 fake-socket cleanup timing assertion. The bounded cleanup reservation
   was fixed in T0442, stress-tested 20/20, independently reviewed ACCEPT, and
   full local verify returned to 10/10. Exact-tip CI rerun remains pending.
+- 2026-07-17: PR #24 exact implementation tip `9bf4e694c` passed the
+  browser-smoke-enabled full GitHub Actions matrix: Ubuntu 4m30s and Windows
+  5m30s (run 29624784705). All done criteria are now met; moved to review.
 - 2026-07-14: Removed already delivered shell/script/scenario scope. The card
   now owns only the missing packaged-artifact browser proof.
 - 2026-07-07: T0333 delivered the shared build/copy/server foundation used by
