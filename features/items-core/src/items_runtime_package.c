@@ -132,6 +132,26 @@ static bool zero_padding(const uint8_t *bytes, uint32_t start, uint32_t end) {
     return true;
 }
 
+static bool valid_cost_span(
+    const uint8_t *bytes, const items_section_t *items,
+    const items_section_t *costs, uint32_t start, uint32_t count) {
+    int64_t total = 0;
+    for (uint32_t index = 0; index < count; ++index) {
+        const uint8_t *row = bytes + costs->offset + (start + index) * costs->stride;
+        int64_t units = read_i64(row + 8U);
+        if (units <= 0 || total > INT64_MAX - units) { return false; }
+        total += units;
+        uint32_t item_index = read_u32(row);
+        const uint8_t *item = bytes + items->offset + item_index * items->stride;
+        if (read_u32(item + 20U) == 1U) { return false; }
+        for (uint32_t prior = 0; prior < index; ++prior) {
+            const uint8_t *prior_row = bytes + costs->offset + (start + prior) * costs->stride;
+            if (read_u32(prior_row) == item_index) { return false; }
+        }
+    }
+    return true;
+}
+
 static items_catalog_bind_error_t validate_package(
     uint8_t *bytes, uint32_t size, uint32_t *out_item_count,
     uint64_t *out_schema_abi, uint64_t *out_content_fingerprint,
@@ -285,6 +305,9 @@ static items_catalog_bind_error_t validate_package(
                 || (read_u32(item + 16U) == 0U && level_count != 0U)) {
             return ITEMS_CATALOG_BIND_BAD_LAYOUT;
         }
+        if (!valid_cost_span(bytes, items, costs, cost_cursor, acquire_count)) {
+            return ITEMS_CATALOG_BIND_BAD_LAYOUT;
+        }
         cost_cursor += acquire_count;
         for (uint32_t expected_level = 1U; expected_level <= level_count; ++expected_level) {
             const uint8_t *level = bytes + levels->offset + level_cursor * levels->stride;
@@ -292,6 +315,9 @@ static items_catalog_bind_error_t validate_package(
             uint32_t cost_count = read_u32(level + 20U);
             if (read_u32(level) != item_index || read_u32(level + 4U) != expected_level
                     || read_u32(level + 8U) != value_cursor || read_u32(level + 16U) != cost_cursor) {
+                return ITEMS_CATALOG_BIND_BAD_LAYOUT;
+            }
+            if (!valid_cost_span(bytes, items, costs, cost_cursor, cost_count)) {
                 return ITEMS_CATALOG_BIND_BAD_LAYOUT;
             }
             uint32_t previous_field = 0U;
