@@ -69,17 +69,37 @@ fact events cover non-levelup mutations: `progression.xp_added`,
 ## Curve = baked int64 table (zero float in C)
 
 A consuming game's `content/progression.json` authors ONE curve preset per
-track — this module's codegen supports ONLY `curve.type: "exp"`
-(`{base, growth_num, growth_den}`); any other type is a loud generator
-`SystemExit` (`table`/`linear`/`poly` are a deliberate LEAN cut, not silently
-ignored — add them with their own identity test when a real game needs
-them). `scripts/generate_progression_tracks.py` bakes `cost[L] = floor(base
-* (growth_num/growth_den)**L)` via pure integer arithmetic (`(base *
-growth_num**L) // growth_den**L` — FLOOR by construction, no float-rounding
-risk) into a `static const int64_t COST_<TRACK>[]` table at build time. The
-runtime (`progression.c`) only ever reads `def->cost[level]` — there is no
-formula interpreter in C. The template's `tests/test_progression_curve.c`
-golden-asserts its demo track's baked values (`50, 75, 112, 168, ...`).
+track — this module's codegen supports exactly two `curve.type` values,
+`"exp"` and `"table"`; any other type is a loud generator `SystemExit`
+(`linear`/`poly` remain a deliberate LEAN cut, not silently ignored — add
+them with their own identity test when a real game needs them). Both bake
+into the SAME shape, a `static const int64_t COST_<TRACK>[]` table at build
+time — the runtime (`progression.c`) only ever reads `def->cost[level]`,
+there is no formula interpreter and no curve-type branch in C.
+
+- **`"exp"`** — `{base, growth_num, growth_den}`. `scripts/generate_progression_tracks.py`
+  bakes `cost[L] = floor(base * (growth_num/growth_den)**L)` via pure integer
+  arithmetic (`(base * growth_num**L) // growth_den**L` — FLOOR by
+  construction, no float-rounding risk). `base`/`growth_num`/`growth_den`
+  must each be a positive integer (`>= 1`) — a `base` of 0 would bake a
+  free-at-every-level curve. The template's `tests/test_progression_curve.c`
+  golden-asserts its demo track's baked values (`50, 75, 112, 168, ...`).
+- **`"table"`** — `{values: [...]}`, a verbatim hand-authored per-level cost
+  list (e.g. a balance-team-authored 25-entry cost sheet) for a game whose
+  curve does not fit a closed formula. `len(values)` must equal the track's
+  `max_level` — `max_level` stays the single source of truth for "how many
+  levels this track has" (same field the save-schema level cap and the
+  generated `cost_count` already key off), the table just has to agree with
+  it; a length mismatch is a loud generator `SystemExit`. Each value must be
+  a non-negative int64 (`0 <= value <= INT64_MAX`) — non-negative, not
+  merely positive like `"exp"`'s `base`, since an authored list may
+  legitimately include an explicit free level; that is a data/authoring
+  choice for a reviewed table, not the same failure mode as a degenerate
+  all-zero formula. Values are copied through unchanged — no rounding, no
+  reordering. See `scripts/generate_progression_tracks_test.py`'s
+  `test_table_curve_bakes_values_verbatim` for the identity/golden test and
+  its `test_table_curve_rejects_*` cases for the validation-failure
+  contract.
 
 `on_level_up` (authored per-level currency/xp-cascade rewards) is a real
 RUNTIME feature (`progression_emit_t`, `apply_on_level_up`, cascade
@@ -217,9 +237,10 @@ relocation).
    emits `progression_tracks.gen.{h,c}`. `--items-snapshot` is the cross-check:
    `currency_def` (manual/auto tracks) must name an existing items def with
    a `currency` block.
-3. `curve.type` must be `"exp"`; `mode` one of `manual|auto|threshold`;
-   `max_level` in `[1, 9999]`; `on_level_up` must be ABSENT from the JSON
-   (see above) — the generator rejects it loudly, not silently.
+3. `curve.type` must be `"exp"` or `"table"` (see "Curve = baked int64
+   table" above); `mode` one of `manual|auto|threshold`; `max_level` in
+   `[1, 9999]`; `on_level_up` must be ABSENT from the JSON (see above) — the
+   generator rejects it loudly, not silently.
 
 ## Cross-dependency note (see also `features/items-core/README.md`)
 
@@ -278,6 +299,9 @@ Version `2.0.0` makes `--state-schema` mandatory; `1.x` generator invocations
 must add the owning game schema explicitly.
 Version `3.0.0` replaces the legacy `--items <items.json>` input with the
 canonical `--items-snapshot <items.snapshot.json>` build output.
+Version `3.1.0` adds `curve.type: "table"` (verbatim hand-authored per-level
+costs) alongside the existing `"exp"` formula curve — backward-compatible,
+existing `"exp"` catalogs generate byte-identical output.
 
 ## Extension points
 

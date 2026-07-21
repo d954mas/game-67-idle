@@ -33,6 +33,24 @@ def progression_catalog(track_id: str) -> dict:
     }
 
 
+def progression_catalog_table(track_id: str, values: list, *, max_level: int | None = None) -> dict:
+    """Like progression_catalog(), but with a curve.type 'table' entry. max_level
+    defaults to len(values) (the golden/happy-path case); a caller that wants a
+    mismatch passes an explicit max_level != len(values)."""
+    return {
+        "namespace": "test",
+        "tracks": [
+            {
+                "id": track_id,
+                "mode": "manual",
+                "currency_def": "coin",
+                "max_level": max_level if max_level is not None else len(values),
+                "curve": {"type": "table", "values": values},
+            }
+        ],
+    }
+
+
 def progression_schema(*, string_max: object = 64) -> dict:
     return {
         "schema": "game_seed.progression",
@@ -62,6 +80,7 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         self,
         *,
         track_id: str = "hero",
+        catalog: dict | None = None,
         schema: dict | None = None,
         include_state_schema: bool = True,
     ) -> tuple[list[str], Path, tempfile.TemporaryDirectory[str], Path]:
@@ -72,7 +91,9 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         out = game / "build" / "generated"
         content.mkdir(parents=True)
         state.mkdir(parents=True)
-        (content / "progression.json").write_text(json.dumps(progression_catalog(track_id)), encoding="utf-8")
+        (content / "progression.json").write_text(
+            json.dumps(catalog if catalog is not None else progression_catalog(track_id)), encoding="utf-8"
+        )
         snapshot = game / "build" / "items" / "items.snapshot.json"
         snapshot.parent.mkdir(parents=True)
         snapshot.write_text(json.dumps(items_snapshot()), encoding="utf-8")
@@ -159,6 +180,50 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         header = generator.render_header(0, "content/bad*/name\nprogression.json")
         self.assertIn("from content/bad* /name\\nprogression.json", header)
         self.assertEqual(header.count("*/"), 2)  # provenance comment + include-guard footer only
+
+    # -- curve.type "table" (hand-authored verbatim per-level costs) ----------
+
+    def test_table_curve_bakes_values_verbatim(self) -> None:
+        """Golden case: a hand-authored `curve.type: "table"` track bakes its
+        `values` VERBATIM into the generated COST_<TRACK>[] array -- no floor,
+        no rounding, no reordering (contrast with "exp", which computes)."""
+        values = [10, 0, 25, 999999999999, 1]
+        catalog = progression_catalog_table("hero", values)
+        args, out, temp, _game = self.generator_args(catalog=catalog)
+        self.addCleanup(temp.cleanup)
+        self.assertEqual(run_direct(args), 0)
+
+        source = (out / "progression_tracks.gen.c").read_text(encoding="utf-8")
+        expected_array = "static const int64_t COST_HERO[] = {\n" + "".join(
+            f"    {value}LL,\n" for value in values
+        ) + "};"
+        self.assertIn(expected_array, source)
+        self.assertIn(".max_level = 5,", source)
+        self.assertIn(".cost_count = 5,", source)
+
+    def test_table_curve_rejects_values_length_mismatch(self) -> None:
+        catalog = progression_catalog_table("hero", [1, 2], max_level=3)
+        args, _out, temp, _game = self.generator_args(catalog=catalog)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(
+            SystemExit, r"has 2 values but max_level is 3 -- values length must equal max_level"
+        ):
+            generator.main(args)
+
+    def test_table_curve_rejects_negative_value(self) -> None:
+        catalog = progression_catalog_table("hero", [5, -1, 3])
+        args, _out, temp, _game = self.generator_args(catalog=catalog)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(SystemExit, r"curve\.values\[1\] must be a non-negative int64"):
+            generator.main(args)
+
+    def test_unknown_curve_type_still_rejected(self) -> None:
+        catalog = progression_catalog_table("hero", [1, 2])
+        catalog["tracks"][0]["curve"] = {"type": "linear", "values": [1, 2]}
+        args, _out, temp, _game = self.generator_args(catalog=catalog)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(SystemExit, r"supported: 'exp', 'table'"):
+            generator.main(args)
 
 
 if __name__ == "__main__":

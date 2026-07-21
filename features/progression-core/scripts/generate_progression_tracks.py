@@ -15,8 +15,10 @@ Emits <out-dir>/progression_tracks.gen.h + progression_tracks.gen.c. Idempotent
 (write_if_changed); table order == document order (round-trip determinism).
 
 Deliberate LEAN constraints ratified by the lead:
-- порез B: curve.type поддержан РОВНО один -- "exp". Любой другой тип -- SystemExit
-  громко (linear/table/poly отвергаются, а не тихо игнорятся).
+- порез B: curve.type поддержаны РОВНО два -- "exp" (formula: {base, growth_num,
+  growth_den}) и "table" (verbatim hand-authored per-level costs: {values: [...]},
+  len(values) must equal the track's max_level). Любой другой тип -- SystemExit
+  громко (linear/poly отвергаются, а не тихо игнорятся).
 - порез A: `on_level_up` в JSON -- SystemExit громко (codegen его НЕ печёт; наличие
   в JSON -- ошибка авторства, не тихый no-op). Каждый испечённый трек ВСЕГДА несёт
   `.on_level_up = NULL, .on_level_up_count = 0`.
@@ -211,24 +213,56 @@ def validate_catalog(doc: dict[str, Any], currency_items: dict[str, bool], max_t
         require(isinstance(curve, dict), f"track {track_id!r} missing 'curve' object")
         curve_type = curve.get("type")
         require(
-            curve_type == "exp",
-            f"unknown curve type {curve_type!r} for track {track_id!r} (only 'exp' supported in И3)",
+            curve_type in ("exp", "table"),
+            f"unknown curve type {curve_type!r} for track {track_id!r} (supported: 'exp', 'table')",
         )
-        for key in ("base", "growth_num", "growth_den"):
-            value = curve.get(key)
-            # L-fix (deep-review #6): base was allowed to be 0, which bakes
-            # cost[L]==0 for every level -- an auto-track with a free (0-cost)
-            # curve levels to its cap in one progression_update() call, for
-            # free, every frame it is below max_level. base must be >= 1, same
-            # as growth_num/growth_den (a curve with a real, positive floor).
+        if curve_type == "exp":
+            for key in ("base", "growth_num", "growth_den"):
+                value = curve.get(key)
+                # L-fix (deep-review #6): base was allowed to be 0, which bakes
+                # cost[L]==0 for every level -- an auto-track with a free (0-cost)
+                # curve levels to its cap in one progression_update() call, for
+                # free, every frame it is below max_level. base must be >= 1, same
+                # as growth_num/growth_den (a curve with a real, positive floor).
+                require(
+                    isinstance(value, int) and not isinstance(value, bool) and value >= 1,
+                    f"track {track_id!r} curve.{key} must be a positive integer (>=1), got {value!r}",
+                )
+        else:  # curve_type == "table"
+            # Verbatim hand-authored per-level costs. `values` length is tied to
+            # the track's declared `max_level` (already validated above as the
+            # authoritative bound elsewhere -- the save-schema level cap, the
+            # generated cost_count) rather than the other way around: max_level
+            # stays the single source of truth for "how many levels this track
+            # has", table curves just have to agree with it.
+            values = curve.get("values")
             require(
-                isinstance(value, int) and not isinstance(value, bool) and value >= 1,
-                f"track {track_id!r} curve.{key} must be a positive integer (>=1), got {value!r}",
+                isinstance(values, list),
+                f"track {track_id!r} curve.type 'table' requires a 'values' array",
             )
+            require(
+                len(values) == max_level,
+                f"track {track_id!r} curve.type 'table' has {len(values)} values but max_level is "
+                f"{max_level} -- values length must equal max_level",
+            )
+            for level, value in enumerate(values):
+                # Non-negative, not just positive like exp's `base`: a hand-
+                # authored table is allowed to declare an explicit free level
+                # (cost 0) -- that is an authoring choice for a verbatim list,
+                # not a degenerate formula floor (exp's >=1 floor guards against
+                # an auto-track curve that is free at EVERY level; a table's
+                # per-level values are reviewed as data, not generated as a
+                # formula, so a single free entry is not the same failure mode).
+                require(
+                    isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= INT64_MAX,
+                    f"track {track_id!r} curve.values[{level}] must be a non-negative int64 (<= {INT64_MAX}), "
+                    f"got {value!r}",
+                )
 
 
 # ---------------------------------------------------------------------------
-# Curve baking: floor, pure-int arithmetic, int64 overflow -> SystemExit.
+# Curve baking: "exp" is floor/pure-int arithmetic with int64 overflow ->
+# SystemExit; "table" is a verbatim copy of already-validated values.
 # ---------------------------------------------------------------------------
 
 
@@ -246,6 +280,12 @@ def bake_exp_cost(track_id: str, base: int, growth_num: int, growth_den: int, ma
             )
         costs.append(value)
     return costs
+
+
+def bake_table_cost(values: list[int]) -> list[int]:
+    """Table curve: values are baked VERBATIM (validate_catalog already checked
+    length == max_level and 0 <= value <= INT64_MAX) -- no formula, no rounding."""
+    return [int(value) for value in values]
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +335,10 @@ def render_source(doc: dict[str, Any], catalog_provenance: str) -> str:
         sym = c_ident(track_id)
         curve = track["curve"]
         max_level = track["max_level"]
-        costs = bake_exp_cost(track_id, curve["base"], curve["growth_num"], curve["growth_den"], max_level)
+        if curve["type"] == "exp":
+            costs = bake_exp_cost(track_id, curve["base"], curve["growth_num"], curve["growth_den"], max_level)
+        else:  # "table"
+            costs = bake_table_cost(curve["values"])
         cost_sym = f"COST_{sym}"
         lines.append(f"static const int64_t {cost_sym}[] = {{")
         for value in costs:
