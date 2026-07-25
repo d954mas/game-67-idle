@@ -37,6 +37,9 @@ set(PLATFORM_SDK_WEB         "${PLATFORM_SDK_DIR}/web")
 set(GAME_EVENTS_DIR          "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-events")
 set(GAME_EVENTS_INC          "${GAME_EVENTS_DIR}/include")
 set(GAME_EVENTS_SRC          "${GAME_EVENTS_DIR}/src")
+set(SCENES_CORE_DIR          "${CMAKE_CURRENT_SOURCE_DIR}/../../features/scenes-core")
+set(SCENES_CORE_INC          "${SCENES_CORE_DIR}/include")
+set(SCENES_CORE_SRC          "${SCENES_CORE_DIR}/src")
 
 set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
@@ -47,6 +50,8 @@ set(GAME_SOURCE_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/generated")
 # --- game executable (the conductor + systems) ---
 add_executable(${GAME_TARGET}
     src/main.c
+    "${SCENES_CORE_SRC}/scene_manager.c"
+    src/game_scenes.c
     src/platform_lifecycle.c
     "${GAME_EVENTS_SRC}/game_events.c" # E1
     src/game_log.c               # E4.B: built-in "log" event type (unconditional leaf)
@@ -64,7 +69,22 @@ add_executable(${GAME_TARGET}
     "${PLATFORM_SDK_SRC}/platform_sdk.c"             # T0339: target/sdk identity + policy capabilities
     src/features/resource_panel/resource_panel.c     # И3b: generic counter/bar widget (zero feature headers)
     src/ui/demo_hud.c                                # И3b: game composition (resource_panel over items/progression)
+    # scene-scaffold:sources
 )
+target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}")
+target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_SCENES_CORE=1)
+if(GAME_DEBUG_SCENES_ENABLED)
+    target_compile_definitions(${GAME_TARGET} PRIVATE
+        GAME_DEBUG_SCENES_ENABLED=1)
+else()
+    target_compile_definitions(${GAME_TARGET} PRIVATE
+        GAME_DEBUG_SCENES_ENABLED=0)
+endif()
+if(GAME_DEVAPI_ENABLED)
+    target_sources(${GAME_TARGET} PRIVATE
+        "${SCENES_CORE_SRC}/scene_manager_devapi.c")
+endif()
+# scene-scaffold:debug-sources
 # Game-state provisioning is always on (lead decision 2026-07-07: "a game without
 # state is impossible"); the former on/off CMake axis is gone (И2-0).
 

@@ -1,6 +1,7 @@
 #include "features/game_features.h"
 #include "systems/sys_move.h"
 #include "features/settings/settings.h"
+#include "game_scenes.h"
 #if defined(__EMSCRIPTEN__)
 #include "features/platform_sdk/platform_sdk_web.h"
 #endif
@@ -48,10 +49,16 @@ void game_features_update(World *w, float dt) {
     } else {
         s_settings_was_open = settings_open_now;
     }
-    sys_move(w, dt); /* мировая симуляция шаблона; здесь же фичи эмитят события */
-    demo_hud_update(dt); /* И3b: demo idle-доход ПЕРЕД авто-покупкой того же кадра */
-    progression_update(); /* И3a: auto/threshold tick (T5 HARD-капы внутри) */
-    /* TODO(feature-migration): <id>_update(w, dt) по строке на фичу */
+    (void)w;
+    (void)dt;
+}
+
+void game_features_update_root(World *w, float dt) {
+    if (game_scenes_can_process_game_input()) {
+        sys_move(w, dt);
+    }
+    demo_hud_update(dt);
+    progression_update();
 }
 
 /* Event consumers reset cursors when game_events_tick changes. The fixed
@@ -78,9 +85,11 @@ void game_features_draw_ui(World *w) {
     /* UI-слой фич: агрегатор владеет ui_runtime-кадром; каждая фича получает
        ctx и рисует свой слой ОДНОЙ строкой, порядок вызовов = z-order. */
     if (ui_runtime_begin(g_nt_app.dt)) {
-        demo_hud_draw_ui(ui_runtime_ctx());    /* И3b: resource_panel (HUD, снизу) */
-        settings_draw_ui(ui_runtime_ctx(), w); /* settings overlay (сверху) */
-        platform_sdk_debug_draw_ui(ui_runtime_ctx());
+        game_scenes_build_ui(ui_runtime_ctx());
+        if (game_scenes_can_process_game_input()) {
+            platform_sdk_debug_draw_ui(ui_runtime_ctx());
+        }
+        game_scenes_build_input_gate(ui_runtime_ctx());
         ui_runtime_end();
     }
 }

@@ -8,7 +8,8 @@
   "kind": "ui-screen",
   "layer": "L2",
   "provides": [
-    "settings_draw_ui",
+    "settings_draw_launcher",
+    "settings_draw_panel",
     "settings_open",
     "settings_close",
     "settings_is_open",

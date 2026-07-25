@@ -1,0 +1,64 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "scenes-core",
+  "version": "0.3.0",
+  "title": "Scenes Core",
+  "status": "reusable",
+  "kind": "gameplay-infrastructure",
+  "summary": "In-place L1 singleton scene manager with lifecycle, preload, modal history, immutable route arguments, strict DevAPI automation, and an agent scaffold.",
+  "copy_model": "in-place",
+  "layer": "L1",
+  "owners": [
+    "features/scenes-core"
+  ],
+  "dependencies": [
+    "Neotolis public resource, input, app, graphics, and nt_ui APIs through a game-owned host adapter"
+  ],
+  "commands": {
+    "test_core": "ctest --test-dir templates/template/build/devapi-debug -R ^test_scenes_core_ --output-on-failure",
+    "test_scaffold": "node --test features/scenes-core/tests/test_scaffold_scene.mjs",
+    "test_devapi_schema": "node --test features/scenes-core/tests/test_scene_devapi_schema.mjs",
+    "test_consumers": "node --test features/scenes-core/tests/test_consumer_scene_contracts.mjs",
+    "scaffold": "node features/scenes-core/scripts/scaffold_scene.mjs --project <game-root> --id <scene-id> [--kind screen|modal] [--debug] [--apply]",
+    "validate_contracts": "node features/validate_contracts.mjs",
+    "validate_contract_tests": "node --test features/validate_contracts.test.mjs"
+  },
+  "provides": [
+    "fixed-capacity scene catalog and immutable-argument history",
+    "scene-owned lifecycle, preload, modal, input, UI, and transition orchestration",
+    "strict game.scene DevAPI adapter and agent scene scaffold"
+  ],
+  "manuals": {
+    "install": "features/scenes-core/INSTALL.md",
+    "specification": "features/scenes-core/SCENE-MANAGER-SPEC.md",
+    "implementation_plan": "features/scenes-core/IMPLEMENTATION-PLAN.md",
+    "review": "features/scenes-core/PLAN-REVIEW.md"
+  },
+  "registers": {
+    "target_sources": [
+      "${SCENES_CORE_SRC}/scene_manager.c",
+      "${SCENES_CORE_SRC}/scene_manager_devapi.c (DevAPI builds only)"
+    ],
+    "include_dirs": [
+      "${SCENES_CORE_INC}"
+    ],
+    "ctest_targets": [
+      "test_scenes_core_catalog",
+      "test_scenes_core_lifecycle",
+      "test_scenes_core_navigation",
+      "test_scenes_core_ordering",
+      "test_scenes_core_presentation",
+      "test_scenes_core_deadlines",
+      "test_scenes_core_reentrancy",
+      "test_scenes_core_devapi",
+      "scenes_core_devapi_runtime_schema",
+      "test_scenes_core_devapi_disabled",
+      "test_scenes_core_web_smoke",
+      "scenes_core_consumer_contract",
+      "scenes_core_tooling_contract"
+    ]
+  },
+  "default_template": {
+    "status": "Wired through templates/template/src/game_scenes.c with root and settings scenes."
+  }
+}

@@ -155,6 +155,11 @@ possibility, not a feature.
   settings and lifecycle composition. Its contract version records the public
   API; compatibility still requires the owning validation commands. Reference:
   `audio-core/README.md` + `audio-core/INSTALL.md`.
+- `scenes-core/` (`L1`, `0.3.0`): reusable singleton scene history,
+  scene-owned lifecycle/preload, modal/input/UI policy, strict
+  `game.scene.*` automation, and an agent scaffold. The default template owns
+  its root/settings catalog. Reference: `scenes-core/README.md`, `scenes-core/INSTALL.md`, and
+  `scenes-core/IMPLEMENTATION-PLAN.md`.
 
 ## Features (reference implementations live in the template)
 

@@ -1,4 +1,5 @@
 #include "features/settings/settings.h"
+#include "game_scenes.h"
 
 #include "game_save.h" /* Р11 hold-to-reset: game_save_request_new_game (L0 shell) */
 
@@ -19,32 +20,33 @@
 
 #define RESET_HOLD_SECONDS 1.5F
 
-static bool s_open;
 static float s_master = 0.8F, s_music = 0.7F, s_sfx = 0.9F;
 
-void settings_open(void)  { s_open = true; }
-void settings_close(void) { s_open = false; }
-bool settings_is_open(void) { return s_open; }
+void settings_open(void)  { (void)game_scenes_show_settings(); }
+void settings_close(void) { (void)game_scenes_close_settings(); }
+bool settings_is_open(void) {
+    return game_scenes_is_presented(GAME_SCENE_SETTINGS);
+}
 
 // Label + slider stacked; the slider mutates *value in place (engine owns the drag).
 // `commit` (nullable) persists a changed value through the settings feature-API,
 // which clamps and marks the save dirty.
 static void volume_row(nt_ui_context_t *ctx, const char *name, const char *id, float *value,
-                       void (*commit)(float)) {
+                       void (*commit)(float), bool interactive) {
     char buf[48];
     (void)snprintf(buf, sizeof buf, "%s   %d%%", name, (int)(*value * 100.0F + 0.5F));
     const float before = *value;
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}, .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = 4}}) {
         nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), buf, &g_theme.label);
         (void)nt_ui_slider_float(ctx, NT_UI_DATA_LAYER(LAYER_IMG), LAYER_TEXT, nt_ui_id(id), NULL, value, 0.0F, 1.0F, 0.0F, &g_theme.slider,
-                                 &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(380), CLAY_SIZING_FIXED(30)}}}, true);
+                                 &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(380), CLAY_SIZING_FIXED(30)}}}, interactive);
     }
     if (*value != before && commit) {
         commit(*value); // persist (clamps + marks dirty inside the setter)
     }
 }
 
-void settings_draw_ui(nt_ui_context_t *ctx, World *w) {
+void settings_draw_launcher(nt_ui_context_t *ctx, bool interactive) {
     // Root: full screen; gear button parked top-right.
     CLAY({.id = CLAY_ID("settings_root"),
           .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childAlignment = {CLAY_ALIGN_X_RIGHT, CLAY_ALIGN_Y_TOP}}}) {
@@ -52,18 +54,16 @@ void settings_draw_ui(nt_ui_context_t *ctx, World *w) {
             const uint32_t gear_id = nt_ui_id("settings/gear/button");
             nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), gear_id, &g_theme.button,
                                &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
-                               true, NULL);
+                               interactive, NULL);
             nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Settings", &g_theme.button_label);
-            if (nt_ui_button_end(ctx)) {
-                s_open = !s_open;
+            if (nt_ui_button_end(ctx) && interactive) {
+                settings_open();
             }
         }
     }
+}
 
-    if (!s_open) {
-        return;
-    }
-
+void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
     // Centered floating panel with slice9 art background.
     nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(LAYER_BG), &g_theme.panel_region, &g_theme.panel_img,
                       &(Clay_ElementDeclaration){
@@ -81,9 +81,9 @@ void settings_draw_ui(nt_ui_context_t *ctx, World *w) {
     s_master = settings_master();
     s_music = settings_music();
     s_sfx = settings_sfx();
-    volume_row(ctx, "Master", "settings/master", &s_master, settings_set_master);
-    volume_row(ctx, "Music", "settings/music", &s_music, settings_set_music);
-    volume_row(ctx, "SFX", "settings/sfx", &s_sfx, settings_set_sfx);
+    volume_row(ctx, "Master", "settings/master", &s_master, settings_set_master, interactive);
+    volume_row(ctx, "Music", "settings/music", &s_music, settings_set_music, interactive);
+    volume_row(ctx, "SFX", "settings/sfx", &s_sfx, settings_set_sfx, interactive);
 
     // Action row: hold-to-reset (long press) + close.
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}, .layoutDirection = CLAY_LEFT_TO_RIGHT, .childGap = 12, .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
@@ -92,7 +92,7 @@ void settings_draw_ui(nt_ui_context_t *ctx, World *w) {
             const nt_ui_events_cfg_t hold = {.long_press_secs = RESET_HOLD_SECONDS, .double_click = false};
             nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), reset_id, &g_theme.button_danger,
                                &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
-                               true, &hold);
+                               interactive, &hold);
             const nt_ui_events_t re = nt_ui_query_events(ctx, reset_id);
             char rlabel[48];
             if (re.hold_progress > 0.0F && re.hold_progress < 1.0F) {
@@ -102,7 +102,7 @@ void settings_draw_ui(nt_ui_context_t *ctx, World *w) {
             }
             nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), rlabel, &g_theme.label);
             (void)nt_ui_button_end(ctx);
-            if (re.long_pressed) {
+            if (interactive && re.long_pressed) {
                 // New game IN SESSION (Р11): player position is game-composition state,
                 // not a save fragment -- safe to reset synchronously right here (plain
                 // field writes, no event emission / file I/O). Save-fragment reset (gold,
@@ -114,7 +114,7 @@ void settings_draw_ui(nt_ui_context_t *ctx, World *w) {
                 w->player_z = 0.0F;
                 w->player_yaw = 0.0F;
                 game_save_request_new_game("settings");
-                s_open = false;
+                settings_close();
             }
         }
 
@@ -122,10 +122,10 @@ void settings_draw_ui(nt_ui_context_t *ctx, World *w) {
             const uint32_t close_id = nt_ui_id("settings/close/button");
             nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), close_id, &g_theme.button,
                                &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
-                               true, NULL);
+                               interactive, NULL);
             nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Close", &g_theme.button_label);
-            if (nt_ui_button_end(ctx)) {
-                s_open = false;
+            if (nt_ui_button_end(ctx) && interactive) {
+                settings_close();
             }
         }
     }

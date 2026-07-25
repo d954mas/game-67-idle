@@ -12,7 +12,8 @@
    Игра добавляет потребителя ОДНОЙ строкой в react- или record-список. */
 
 void game_features_init(World *w);
-void game_features_update(World *w, float dt); /* фаза ЭМИССИИ (системы/фичи эмитят) */
+void game_features_update(World *w, float dt);
+void game_features_update_root(World *w, float dt);
 void game_features_react(World *w);            /* реакторы-потребители (могут каскадить) */
 void game_features_record(World *w);           /* чистые рекордеры (аналитика/лог/DevAPI) */
 void game_features_draw_world(World *w);        /* 3D-слой фич; пока прямой шелл */

@@ -1,10 +1,97 @@
 # --- native C unit tests (Unity + CTest); introduced in A1, extended in A2/A3 ---
 if(NOT EMSCRIPTEN)
     enable_testing()
+    set(SCENES_CORE_TESTS "${SCENES_CORE_DIR}/tests")
     set(AUDIO_CORE_TESTS "${AUDIO_CORE_DIR}/tests")
     add_library(audio_unity STATIC "${ENGINE_DIR}/deps/unity/src/unity.c")
     target_include_directories(audio_unity PUBLIC "${ENGINE_DIR}/deps/unity/src")
     target_compile_definitions(audio_unity PRIVATE _CRT_SECURE_NO_WARNINGS)
+
+    add_executable(test_scenes_core_catalog
+        "${SCENES_CORE_TESTS}/test_scene_manager_catalog.c"
+        "${SCENES_CORE_SRC}/scene_manager.c")
+    target_link_libraries(test_scenes_core_catalog PRIVATE unity)
+    target_include_directories(test_scenes_core_catalog PRIVATE "${SCENES_CORE_INC}")
+    target_compile_definitions(test_scenes_core_catalog PRIVATE _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_scenes_core_catalog)
+    set_target_properties(test_scenes_core_catalog PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_scenes_core_catalog COMMAND test_scenes_core_catalog)
+
+    foreach(_scenes_core_suite IN ITEMS
+            lifecycle navigation ordering presentation)
+        add_executable(test_scenes_core_${_scenes_core_suite}
+            "${SCENES_CORE_TESTS}/test_scene_manager_${_scenes_core_suite}.c"
+            "${SCENES_CORE_SRC}/scene_manager.c")
+        target_link_libraries(test_scenes_core_${_scenes_core_suite} PRIVATE unity)
+        target_include_directories(test_scenes_core_${_scenes_core_suite}
+            PRIVATE "${SCENES_CORE_INC}")
+        target_compile_definitions(test_scenes_core_${_scenes_core_suite}
+            PRIVATE _CRT_SECURE_NO_WARNINGS)
+        nt_set_warning_flags(test_scenes_core_${_scenes_core_suite})
+        set_target_properties(test_scenes_core_${_scenes_core_suite} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+        add_test(NAME test_scenes_core_${_scenes_core_suite}
+            COMMAND test_scenes_core_${_scenes_core_suite})
+    endforeach()
+
+    add_executable(test_scenes_core_deadlines
+        "${SCENES_CORE_TESTS}/test_scene_manager_deadlines.c")
+    target_link_libraries(test_scenes_core_deadlines PRIVATE unity)
+    target_include_directories(test_scenes_core_deadlines PRIVATE
+        "${SCENES_CORE_INC}")
+    target_compile_definitions(test_scenes_core_deadlines PRIVATE
+        SCENE_MANAGER_LOAD_DEADLINE_STEPS=1
+        SCENE_MANAGER_TRANSITION_DEADLINE_STEPS=1
+        _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_scenes_core_deadlines)
+    set_target_properties(test_scenes_core_deadlines PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_scenes_core_deadlines
+        COMMAND test_scenes_core_deadlines)
+
+    add_executable(test_scenes_core_reentrancy
+        "${SCENES_CORE_TESTS}/test_scene_manager_reentrancy.c")
+    target_link_libraries(test_scenes_core_reentrancy PRIVATE unity)
+    target_include_directories(test_scenes_core_reentrancy PRIVATE
+        "${SCENES_CORE_INC}")
+    target_compile_definitions(test_scenes_core_reentrancy PRIVATE
+        _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_scenes_core_reentrancy)
+    set_target_properties(test_scenes_core_reentrancy PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_scenes_core_reentrancy
+        COMMAND test_scenes_core_reentrancy)
+
+    if(GAME_DEVAPI_ENABLED)
+        add_executable(test_scenes_core_devapi
+            "${SCENES_CORE_TESTS}/test_scene_manager_devapi.c"
+            "${SCENES_CORE_SRC}/scene_manager.c"
+            "${SCENES_CORE_SRC}/scene_manager_devapi.c")
+        target_link_libraries(test_scenes_core_devapi PRIVATE
+            unity cjson nt_devapi_default nt_app_stub)
+        target_include_directories(test_scenes_core_devapi PRIVATE
+            "${SCENES_CORE_INC}")
+        target_compile_definitions(test_scenes_core_devapi PRIVATE
+            NT_DEVAPI_ENABLED=1 _CRT_SECURE_NO_WARNINGS)
+        nt_set_warning_flags(test_scenes_core_devapi)
+        set_target_properties(test_scenes_core_devapi PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+        add_test(NAME test_scenes_core_devapi COMMAND test_scenes_core_devapi)
+    endif()
+
+    add_executable(test_scenes_core_devapi_disabled
+        "${SCENES_CORE_TESTS}/test_scene_manager_devapi_disabled.c"
+        "${SCENES_CORE_SRC}/scene_manager_devapi.c")
+    target_include_directories(test_scenes_core_devapi_disabled PRIVATE
+        "${SCENES_CORE_INC}" "${SCENES_CORE_SRC}")
+    target_compile_definitions(test_scenes_core_devapi_disabled PRIVATE
+        NT_DEVAPI_ENABLED=0 _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_scenes_core_devapi_disabled)
+    set_target_properties(test_scenes_core_devapi_disabled PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_scenes_core_devapi_disabled
+        COMMAND test_scenes_core_devapi_disabled)
 
     add_executable(test_audio_core
         "${AUDIO_CORE_TESTS}/test_audio.c"
@@ -603,8 +690,28 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_platform_sdk_events PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_platform_sdk_events COMMAND test_platform_sdk_events)
 
-    find_program(Node_EXECUTABLE node)
+    find_program(Node_EXECUTABLE node REQUIRED)
     if(Node_EXECUTABLE)
+        add_test(NAME scenes_core_consumer_contract
+            COMMAND "${Node_EXECUTABLE}" --test
+                features/scenes-core/tests/test_consumer_scene_contracts.mjs
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+        add_test(NAME scenes_core_tooling_contract
+            COMMAND "${Node_EXECUTABLE}" --test
+                features/scenes-core/tests/test_scaffold_scene.mjs
+                features/scenes-core/tests/test_scene_devapi_schema.mjs
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+        set_tests_properties(scenes_core_tooling_contract PROPERTIES
+            ENVIRONMENT "SCENE_TEST_CC=${CMAKE_C_COMPILER}")
+        if(GAME_DEVAPI_ENABLED)
+            add_test(NAME scenes_core_devapi_runtime_schema
+                COMMAND "${Node_EXECUTABLE}" --test
+                    features/scenes-core/tests/test_scene_devapi_runtime_schema.mjs
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+            set_tests_properties(scenes_core_devapi_runtime_schema PROPERTIES
+                ENVIRONMENT
+                    "SCENE_DEVAPI_SCHEMA_FIXTURE=$<TARGET_FILE:test_scenes_core_devapi>")
+        endif()
         add_test(NAME platform_sdk_node_test
             COMMAND "${Node_EXECUTABLE}" --test features/platform-sdk/tests/platform_sdk.test.mjs
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
@@ -663,8 +770,46 @@ if(NOT EMSCRIPTEN)
         test_items_fragment test_items_fragment_assert_off test_progression test_progression_curve
         benchmark_items_c_arrays benchmark_items_runtime_blob benchmark_items_runtime_bind
         test_game_format test_platform_sdk test_platform_lifecycle
-        test_platform_sdk_events test_template_composition)
+        test_platform_sdk_events test_template_composition
+        test_scenes_core_catalog test_scenes_core_lifecycle
+        test_scenes_core_navigation test_scenes_core_ordering
+        test_scenes_core_presentation test_scenes_core_deadlines
+        test_scenes_core_reentrancy test_scenes_core_devapi_disabled)
+    if(GAME_DEVAPI_ENABLED)
+        list(APPEND GAME_NATIVE_TEST_TARGETS test_scenes_core_devapi)
+    endif()
     foreach(_test_target IN LISTS GAME_NATIVE_TEST_TARGETS)
         nt_set_sanitizer_flags(${_test_target})
     endforeach()
+endif()
+
+if(EMSCRIPTEN)
+    enable_testing()
+    add_executable(test_scenes_core_web_smoke
+        "${SCENES_CORE_DIR}/tests/test_scene_manager_web_smoke.c"
+        "${SCENES_CORE_SRC}/scene_manager.c")
+    target_include_directories(test_scenes_core_web_smoke PRIVATE
+        "${SCENES_CORE_INC}")
+    target_compile_definitions(test_scenes_core_web_smoke PRIVATE
+        _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_scenes_core_web_smoke)
+    set_target_properties(test_scenes_core_web_smoke PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_scenes_core_web_smoke
+        COMMAND test_scenes_core_web_smoke)
+
+    find_program(SCENES_Node_EXECUTABLE node REQUIRED)
+    if(SCENES_Node_EXECUTABLE)
+        add_test(NAME scenes_core_consumer_contract
+            COMMAND "${SCENES_Node_EXECUTABLE}" --test
+                features/scenes-core/tests/test_consumer_scene_contracts.mjs
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+        add_test(NAME scenes_core_tooling_contract
+            COMMAND "${SCENES_Node_EXECUTABLE}" --test
+                features/scenes-core/tests/test_scaffold_scene.mjs
+                features/scenes-core/tests/test_scene_devapi_schema.mjs
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+        set_tests_properties(scenes_core_tooling_contract PROPERTIES
+            ENVIRONMENT "SCENE_TEST_CC=${CMAKE_C_COMPILER}")
+    endif()
 endif()

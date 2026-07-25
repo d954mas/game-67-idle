@@ -69,6 +69,8 @@
 #include "game_state_events.gen.h" /* E2: game_ev_register (typed event labels) */
 #include "platform_lifecycle.h"
 #include "settings_state.h"        /* A6: SettingsState + settings_state_fragment (NOT the events header) */
+#include "game_scenes.h"
+#include "features/scenes/scene_manager_devapi.h"
 #include "items_state.h"           /* И2a: ItemsState + items_state_fragment (NOT the events header) */
 #include "items_state_events.gen.h" /* И2a: items_ev_register (typed items.txn label, R2: not empty) */
 #include "progression_state.h"            /* И3a: ProgressionState + progression_state_fragment (NOT the events header) */
@@ -99,6 +101,7 @@ static World s_world;
 static char s_capture_path[260];
 static bool s_capture;
 static bool s_open_settings_on_start;
+static uint64_t s_scene_frame_index;
 static bool s_fresh_state;
 static bool s_disable_autosave;
 static int s_window_width = 1280;
@@ -181,6 +184,15 @@ static bool devapi_start(void) {
     fprintf(stderr, "DevAPI listening on 127.0.0.1:%u\n", (unsigned)s_devapi_port);
 #endif
     nt_devapi_register_default();
+    if (!scene_manager_register_devapi(game_scenes_manager())) {
+        fprintf(stderr, "failed to register scene DevAPI\n");
+#ifndef NT_PLATFORM_WEB
+        nt_devapi_net_stop();
+#endif
+        nt_devapi_shutdown();
+        s_devapi_running = false;
+        return false;
+    }
     game_iteration_proof_register_devapi();
     game_items_register_devapi();
     game_save_register_devapi();
@@ -324,6 +336,7 @@ static void game_runtime_try_start(void) {
        feature that can query Items run only after this point. */
     game_runtime_load_state();
     game_features_init(&s_world);
+    game_scenes_init(&s_world);
     platform_lifecycle_init();
     s_game_runtime_initialized = true;
 
@@ -347,6 +360,7 @@ static void game_runtime_update(void) {
     /* Apply deferred new-game requests before feature updates and rendering. */
     (void)game_save_apply_pending_new_game();
 
+    game_scenes_update(g_nt_app.dt);
     game_features_update(&s_world, g_nt_app.dt);
     game_events_react_begin();
     do {
@@ -370,17 +384,23 @@ static void frame(void) {
         game_audio_on_user_gesture();
     }
 #ifndef NT_PLATFORM_WEB
-    if (nt_window_should_close() || nt_input_key_is_pressed(NT_KEY_ESCAPE)) {
+    const bool escape_pressed = nt_input_key_is_pressed(NT_KEY_ESCAPE);
+    if (nt_window_should_close() ||
+        (escape_pressed && !game_scenes_handle_escape())) {
         nt_app_quit();
     }
 #endif
     nt_resource_step();
     nt_material_step();
     game_runtime_try_start();
+    if (s_game_runtime_ready) {
+        game_scenes_step(++s_scene_frame_index, g_nt_app.dt);
+    }
     const bool playable_shell_ready =
         s_game_runtime_ready && render_mesh_ready(&s_world) && ui_runtime_ready();
     (void)platform_sdk_game_loading_progress(initial_pack_loading_progress());
-    platform_lifecycle_update(playable_shell_ready, !settings_is_open());
+    platform_lifecycle_update(
+        playable_shell_ready, game_scenes_can_process_game_input());
     game_runtime_update();
 
     nt_gfx_begin_frame();
@@ -399,9 +419,11 @@ static void frame(void) {
 
     // render systems read the world
     nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.50F, 0.75F, 0.96F, 1.0F}, .clear_depth = 1.0F});
-    // draw_world stays a direct shell call until render systems become features.
-    render_mesh_draw(&s_world, s_frame_ubo);
-    hud_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
+    if (game_scenes_should_render_world()) {
+        // draw_world stays a direct shell call until render systems become features.
+        render_mesh_draw(&s_world, s_frame_ubo);
+        hud_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
+    }
     // UI-слой фич: агрегатор владеет ui_runtime-кадром и рисует settings (z-order).
     if (s_game_runtime_ready) {
         game_features_draw_ui(&s_world);
@@ -600,6 +622,8 @@ int main(int argc, char **argv) {
 #ifndef NT_PLATFORM_WEB
     devapi_shutdown_runtime();
     if (s_game_runtime_initialized) {
+        game_scenes_shutdown();
+        nt_resource_step();
         game_features_shutdown(&s_world);
         platform_lifecycle_shutdown();
     }

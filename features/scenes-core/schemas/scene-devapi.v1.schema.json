@@ -1,0 +1,356 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ai-studio://features/scenes-core/scene-devapi.v1.schema.json",
+  "title": "game.scene DevAPI v1",
+  "description": "Actual Neotolis request/response envelopes and strict scene handler payloads.",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/successEnvelope" },
+    { "$ref": "#/$defs/errorEnvelope" }
+  ],
+  "$defs": {
+    "requestId": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "number" }
+      ]
+    },
+    "sceneId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 127,
+      "pattern": "^[a-z_][a-z0-9._-]*$"
+    },
+    "emptyParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 0
+    },
+    "sceneParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scene"],
+      "properties": {
+        "scene": { "$ref": "#/$defs/sceneId" }
+      }
+    },
+    "backParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count"],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 128
+        }
+      }
+    },
+    "operationParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId"],
+      "properties": {
+        "operationId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "required": ["method"],
+      "additionalProperties": true,
+      "properties": {
+        "request_id": { "$ref": "#/$defs/requestId" },
+        "method": {
+          "enum": [
+            "game.scene.list",
+            "game.scene.status",
+            "game.scene.operation_status",
+            "game.scene.preload",
+            "game.scene.show",
+            "game.scene.replace",
+            "game.scene.reload",
+            "game.scene.back",
+            "game.scene.back_to",
+            "game.scene.close_modals"
+          ]
+        },
+        "params": { "type": "object" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "enum": [
+                  "game.scene.list",
+                  "game.scene.status",
+                  "game.scene.reload",
+                  "game.scene.close_modals"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "params": { "$ref": "#/$defs/emptyParams" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "enum": [
+                  "game.scene.preload",
+                  "game.scene.show",
+                  "game.scene.replace",
+                  "game.scene.back_to"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": { "$ref": "#/$defs/sceneParams" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": { "const": "game.scene.back" }
+            }
+          },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": { "$ref": "#/$defs/backParams" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": { "const": "game.scene.operation_status" }
+            }
+          },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": { "$ref": "#/$defs/operationParams" }
+            }
+          }
+        }
+      ]
+    },
+    "sceneListEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "debugOnly", "argsSize", "residency"],
+      "properties": {
+        "id": { "$ref": "#/$defs/sceneId" },
+        "kind": { "enum": ["screen", "modal"] },
+        "debugOnly": { "type": "boolean" },
+        "argsSize": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        },
+        "residency": { "enum": ["unloaded", "loading", "ready"] }
+      }
+    },
+    "historyEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "argsSize"],
+      "properties": {
+        "id": { "$ref": "#/$defs/sceneId" },
+        "argsSize": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        }
+      }
+    },
+    "listResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenes"],
+      "properties": {
+        "scenes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sceneListEntry" }
+        }
+      }
+    },
+    "statusResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["history", "inputGated", "top"],
+      "properties": {
+        "history": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/historyEntry" }
+        },
+        "inputGated": { "type": "boolean" },
+        "top": {
+          "oneOf": [
+            { "$ref": "#/$defs/sceneId" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "navigationResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["result", "operationId"],
+          "properties": {
+            "result": { "const": "accepted" },
+            "operationId": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["result", "blockingOperationId"],
+          "properties": {
+            "result": { "const": "busy" },
+            "blockingOperationId": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["result"],
+          "properties": {
+            "result": { "const": "already_top" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["result"],
+          "properties": {
+            "result": { "const": "not_top" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["result"],
+          "properties": {
+            "result": { "const": "root_protected" }
+          }
+        }
+      ]
+    },
+    "preloadResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result"],
+      "properties": {
+        "result": {
+          "enum": [
+            "scheduled",
+            "already_scheduled",
+            "already_loading",
+            "already_ready"
+          ]
+        }
+      }
+    },
+    "operationStatusResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId", "kind", "state", "scene"],
+      "properties": {
+        "operationId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "enum": [
+            "start",
+            "show",
+            "replace",
+            "reload",
+            "back",
+            "back_to",
+            "close_modals"
+          ]
+        },
+        "state": { "enum": ["pending", "active", "completed"] },
+        "scene": {
+          "oneOf": [
+            { "$ref": "#/$defs/sceneId" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "successEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "result"],
+      "properties": {
+        "request_id": { "$ref": "#/$defs/requestId" },
+        "ok": { "const": true },
+        "result": {
+          "oneOf": [
+            { "$ref": "#/$defs/listResult" },
+            { "$ref": "#/$defs/statusResult" },
+            { "$ref": "#/$defs/navigationResult" },
+            { "$ref": "#/$defs/preloadResult" },
+            { "$ref": "#/$defs/operationStatusResult" }
+          ]
+        }
+      }
+    },
+    "errorEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "error"],
+      "properties": {
+        "request_id": { "$ref": "#/$defs/requestId" },
+        "ok": { "const": false },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "message"],
+          "properties": {
+            "code": {
+              "enum": [
+                "bad_params",
+                "unknown_method",
+                "scene_not_found",
+                "typed_endpoint_required",
+                "bad_operation",
+                "back_target_not_found",
+                "operation_not_found",
+                "internal"
+              ]
+            },
+            "message": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    }
+  }
+}
