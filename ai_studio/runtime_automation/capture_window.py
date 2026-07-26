@@ -69,6 +69,85 @@ class BITMAPINFO(ctypes.Structure):
     _fields_ = [("bmiHeader", BITMAPINFOHEADER), ("bmiColors", wintypes.DWORD * 3)]
 
 
+# ctypes defaults undeclared Win32 calls to 32-bit ``int`` arguments/results.
+# That truncates GDI handles on 64-bit Python and can produce either ERROR_INVALID_HANDLE
+# or a successful all-black BitBlt. Declare every handle-bearing call used below.
+user32.EnumWindows.argtypes = [EnumWindowsProc, wintypes.LPARAM]
+user32.EnumWindows.restype = wintypes.BOOL
+user32.GetWindowThreadProcessId.argtypes = [
+    wintypes.HWND,
+    ctypes.POINTER(wintypes.DWORD),
+]
+user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+user32.IsWindowVisible.argtypes = [wintypes.HWND]
+user32.IsWindowVisible.restype = wintypes.BOOL
+user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(RECT)]
+user32.GetWindowRect.restype = wintypes.BOOL
+user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+user32.ShowWindow.restype = wintypes.BOOL
+user32.SetWindowPos.argtypes = [
+    wintypes.HWND,
+    wintypes.HWND,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    wintypes.UINT,
+]
+user32.SetWindowPos.restype = wintypes.BOOL
+user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+user32.SetForegroundWindow.restype = wintypes.BOOL
+user32.GetDC.argtypes = [wintypes.HWND]
+user32.GetDC.restype = wintypes.HDC
+user32.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
+user32.ReleaseDC.restype = ctypes.c_int
+
+dwmapi.DwmGetWindowAttribute.argtypes = [
+    wintypes.HWND,
+    wintypes.DWORD,
+    wintypes.LPVOID,
+    wintypes.DWORD,
+]
+dwmapi.DwmGetWindowAttribute.restype = ctypes.c_long
+
+gdi32.CreateCompatibleDC.argtypes = [wintypes.HDC]
+gdi32.CreateCompatibleDC.restype = wintypes.HDC
+gdi32.CreateCompatibleBitmap.argtypes = [
+    wintypes.HDC,
+    ctypes.c_int,
+    ctypes.c_int,
+]
+gdi32.CreateCompatibleBitmap.restype = wintypes.HBITMAP
+gdi32.SelectObject.argtypes = [wintypes.HDC, wintypes.HGDIOBJ]
+gdi32.SelectObject.restype = wintypes.HGDIOBJ
+gdi32.BitBlt.argtypes = [
+    wintypes.HDC,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    wintypes.HDC,
+    ctypes.c_int,
+    ctypes.c_int,
+    wintypes.DWORD,
+]
+gdi32.BitBlt.restype = wintypes.BOOL
+gdi32.GetDIBits.argtypes = [
+    wintypes.HDC,
+    wintypes.HBITMAP,
+    wintypes.UINT,
+    wintypes.UINT,
+    wintypes.LPVOID,
+    ctypes.POINTER(BITMAPINFO),
+    wintypes.UINT,
+]
+gdi32.GetDIBits.restype = ctypes.c_int
+gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
+gdi32.DeleteObject.restype = wintypes.BOOL
+gdi32.DeleteDC.argtypes = [wintypes.HDC]
+gdi32.DeleteDC.restype = wintypes.BOOL
+
+
 def raise_last_error(action: str) -> None:
     err = ctypes.get_last_error()
     raise RuntimeError(f"{action} failed with Win32 error {err}")

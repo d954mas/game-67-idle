@@ -58,28 +58,106 @@ class DuplexResponseFile:
         self.closed = True
 
 
+class SequencedResponseFile(DuplexResponseFile):
+    def __init__(self, responses):
+        super().__init__(b"")
+        self.responses = iter(responses)
+
+    def readline(self):
+        return next(self.responses, b"")
+
+
 class DevApiSocketBufferingTest(unittest.TestCase):
     def test_large_response_uses_buffered_socket_file(self):
         result = {"format": "png", "data": "x" * 700_000}
         response = (json.dumps({"ok": True, "result": result}) + "\n").encode("utf-8")
         file = DuplexResponseFile(response)
         sock = mock.Mock()
-        sock.makefile.return_value = file
-
-        with mock.patch("devapi_client.socket.create_connection", return_value=sock):
+        with mock.patch("devapi_client.socket.create_connection", return_value=sock), \
+             mock.patch("devapi_client.ChunkedSocketFile", return_value=file):
             client = DevApiClient(port=19001)
             try:
                 self.assertEqual(client.result("capture.frame"), result)
             finally:
                 client.close()
 
-        sock.makefile.assert_called_once_with("rwb")
         self.assertEqual(
             json.loads(file.writes[0]),
             {"request_id": "1", "method": "capture.frame", "params": {}},
         )
         self.assertTrue(file.closed)
         sock.close.assert_called_once_with()
+
+    def test_capture_frame_and_step_matches_reversed_responses_by_id(self):
+        capture = {"format": "png", "data": "x" * 700_000}
+        responses = [
+            (json.dumps({"request_id": "2", "ok": True, "result": {"tick": 2}}) + "\n").encode("utf-8"),
+            (json.dumps({"request_id": "1", "ok": True, "result": capture}) + "\n").encode("utf-8"),
+        ]
+        file = SequencedResponseFile(responses)
+        sock = mock.Mock()
+        with mock.patch("devapi_client.socket.create_connection", return_value=sock), \
+             mock.patch("devapi_client.ChunkedSocketFile", return_value=file):
+            client = DevApiClient(port=19001)
+            try:
+                capture_result, step_result = client.capture_frame_and_step(2)
+            finally:
+                client.close()
+
+        self.assertEqual(capture_result, capture)
+        self.assertEqual(step_result, {"tick": 2})
+        self.assertEqual(client.next_request_id, 3)
+        self.assertEqual(len(file.writes), 1)
+        payloads = [json.loads(line) for line in file.writes[0].decode("utf-8").splitlines()]
+        self.assertEqual(
+            payloads,
+            [
+                {"request_id": "1", "method": "capture.frame", "params": {}},
+                {"request_id": "2", "method": "time.step", "params": {"count": 2}},
+            ],
+        )
+
+    def test_capture_frame_and_step_rejects_duplicate_response_ids(self):
+        response = (json.dumps({"request_id": "1", "ok": True, "result": {}}) + "\n").encode("utf-8")
+        file = SequencedResponseFile([response, response])
+        sock = mock.Mock()
+        with mock.patch("devapi_client.socket.create_connection", return_value=sock), \
+             mock.patch("devapi_client.ChunkedSocketFile", return_value=file):
+            client = DevApiClient(port=19001)
+            try:
+                with self.assertRaisesRegex(DevApiError, "duplicate response id"):
+                    client.capture_frame_and_step(1)
+            finally:
+                client.close()
+
+    def test_capture_frame_and_step_rejects_unexpected_response_ids(self):
+        responses = [
+            (json.dumps({"request_id": "1", "ok": True, "result": {}}) + "\n").encode("utf-8"),
+            (json.dumps({"request_id": "9", "ok": True, "result": {}}) + "\n").encode("utf-8"),
+        ]
+        file = SequencedResponseFile(responses)
+        sock = mock.Mock()
+        with mock.patch("devapi_client.socket.create_connection", return_value=sock), \
+             mock.patch("devapi_client.ChunkedSocketFile", return_value=file):
+            client = DevApiClient(port=19001)
+            try:
+                with self.assertRaisesRegex(DevApiError, "unexpected response id"):
+                    client.capture_frame_and_step(1)
+            finally:
+                client.close()
+
+    def test_capture_frame_and_step_rejects_empty_second_response(self):
+        response = (json.dumps({"request_id": "1", "ok": True, "result": {}}) + "\n").encode("utf-8")
+        file = SequencedResponseFile([response, b""])
+        sock = mock.Mock()
+        with mock.patch("devapi_client.socket.create_connection", return_value=sock), \
+             mock.patch("devapi_client.ChunkedSocketFile", return_value=file):
+            client = DevApiClient(port=19001)
+            try:
+                with self.assertRaisesRegex(DevApiError, "empty response"):
+                    client.capture_frame_and_step(1)
+            finally:
+                client.close()
 
 
 class EngineCapturePayloadTest(unittest.TestCase):

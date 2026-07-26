@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ai_studio.capture.safe_area_policy.v1",
+  "title": "Safe Area Policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "id", "version", "status", "normalized_dimensions",
+    "source_record_hashes", "required_variants", "missing_variants",
+    "derived_safe_mask_sha256", "policy_hash"
+  ],
+  "properties": {
+    "schema": {"const": "ai_studio.capture.safe_area_policy.v1"},
+    "id": {"type": "string", "minLength": 1},
+    "version": {"const": 1},
+    "status": {"enum": ["official", "measured", "incomplete"]},
+    "normalized_dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": {"type": "integer", "minimum": 0, "maximum": 7680},
+        "height": {"type": "integer", "minimum": 0, "maximum": 7680}
+      }
+    },
+    "source_record_hashes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    },
+    "required_variants": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/variant"}
+    },
+    "missing_variants": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/variant"}
+    },
+    "derived_safe_mask_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "policy_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform", "surface", "ui_variant_id",
+        "caption_variant_id", "direction"
+      ],
+      "properties": {
+        "platform": {"type": "string", "minLength": 1},
+        "surface": {"type": "string", "minLength": 1},
+        "ui_variant_id": {"type": "string", "minLength": 1},
+        "caption_variant_id": {"type": "string", "minLength": 1},
+        "direction": {"enum": ["LTR", "RTL"]}
+      }
+    }
+  }
+}

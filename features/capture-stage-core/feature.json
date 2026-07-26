@@ -1,0 +1,36 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "capture-stage-core",
+  "version": "0.3.0",
+  "title": "Capture Stage Core",
+  "status": "specified",
+  "kind": "development-infrastructure",
+  "summary": "Planned dev-only L1 runtime registry and lifecycle contract for seeded, controllable game capture stages.",
+  "copy_model": "in-place",
+  "layer": "L1",
+  "owners": [
+    "features/capture-stage-core"
+  ],
+  "dependencies": [
+    "Neotolis public app time and DevAPI registration APIs"
+  ],
+  "commands": {
+    "validate_feature_contracts": "node features/validate_contracts.mjs"
+  },
+  "provides": [
+    "specified game-owned capture stage registry",
+    "specified typed control and action discovery contract",
+    "specified seeded preparation, readiness, activation, teardown, and semantic status contract",
+    "specified bounded precompiled real-time tick-plan execution contract"
+  ],
+  "manuals": {
+    "install": "features/capture-stage-core/INSTALL.md",
+    "specification": "ai_studio/runtime_automation/CAPTURE-PIPELINE-SPEC.md",
+    "implementation_plan": "ai_studio/runtime_automation/CAPTURE-PIPELINE-IMPLEMENTATION-PLAN.md",
+    "comparison": "ai_studio/runtime_automation/CAPTURE-PIPELINE-COMPARATIVE-ANALYSIS.md",
+    "review": "ai_studio/runtime_automation/CAPTURE-PIPELINE-REVIEW.md"
+  },
+  "default_template": {
+    "status": "Approved specification; implementation is gated by the Runtime Automation plan and backend proofs."
+  }
+}

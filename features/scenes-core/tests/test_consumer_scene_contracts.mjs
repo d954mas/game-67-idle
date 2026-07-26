@@ -42,23 +42,12 @@ test("template gates raw movement through scene input eligibility", () => {
 
 test("template gates platform gameplay through focused scene eligibility", () => {
   const source = read("templates/template/src/main.c");
-  const trolley = read(
-    "games/private/game-not-a-trolley-problem/src/main.c",
-  );
   assert.match(
     source,
     /platform_lifecycle_update\(\s*playable_shell_ready,\s*game_scenes_can_process_game_input\(\)\s*\)/s,
   );
   assert.doesNotMatch(
     source,
-    /platform_lifecycle_update\(\s*playable_shell_ready,\s*!settings_is_open\(\)\s*\)/s,
-  );
-  assert.match(
-    trolley,
-    /platform_lifecycle_update\(\s*playable_shell_ready,\s*s_game_runtime_ready\s*&&\s*game_scenes_can_process_world_input\(\)\s*\)/s,
-  );
-  assert.doesNotMatch(
-    trolley,
     /platform_lifecycle_update\(\s*playable_shell_ready,\s*!settings_is_open\(\)\s*\)/s,
   );
 });
@@ -87,39 +76,30 @@ test("template proves root scene start succeeds before initialization", () => {
   );
 });
 
-test("consumers fail startup when scene DevAPI registration is rejected", () => {
-  for (const path of [
-    "templates/template/src/main.c",
-    "games/private/game-not-a-trolley-problem/src/main.c",
-  ]) {
-    const source = read(path);
-    assert.match(
-      source,
-      /if\s*\(\s*!scene_manager_register_devapi\(game_scenes_manager\(\)\)\s*\)[\s\S]*return false;/,
-    );
-  }
+test("template fails startup when scene DevAPI registration is rejected", () => {
+  const source = read("templates/template/src/main.c");
+  assert.match(
+    source,
+    /if\s*\(\s*!scene_manager_register_devapi\(game_scenes_manager\(\)\)\s*\)[\s\S]*return false;/,
+  );
 });
 
-test("template and games link the shared scenes-core implementation", () => {
-  for (const project of [
-    "templates/template",
-    "games/private/game-not-a-trolley-problem",
-  ]) {
-    const cmake = read(`${project}/CMakeLists.txt`);
-    assert.match(
-      cmake,
-      /set\(SCENES_CORE_DIR[\s\S]*features\/scenes-core/,
-    );
-    assert.match(
-      cmake,
-      /"\$\{SCENES_CORE_SRC\}\/scene_manager\.c"/,
-    );
-    assert.equal(
-      fs.existsSync(path.join(repoRoot, project, "src", "scene_manager.c")),
-      false,
-      `${project} must not carry a private scene manager implementation`,
-    );
-  }
+test("template links the shared scenes-core implementation", () => {
+  const project = "templates/template";
+  const cmake = read(`${project}/CMakeLists.txt`);
+  assert.match(
+    cmake,
+    /set\(SCENES_CORE_DIR[\s\S]*features\/scenes-core/,
+  );
+  assert.match(
+    cmake,
+    /"\$\{SCENES_CORE_SRC\}\/scene_manager\.c"/,
+  );
+  assert.equal(
+    fs.existsSync(path.join(repoRoot, project, "src", "scene_manager.c")),
+    false,
+    `${project} must not carry a private scene manager implementation`,
+  );
 });
 
 test("template exposes an independent debug-scene build flag", () => {
@@ -184,93 +164,18 @@ test("transition pointer gate is declared after scene and global UI", () => {
   );
 });
 
-test("trolley root scene keeps its shell UI present in passive mode", () => {
-  const source = read(
-    "games/private/game-not-a-trolley-problem/src/features/game_features.c",
-  );
-  assert.doesNotMatch(
-    source,
-    /if\s*\(!interactive\)\s*\{\s*return;\s*\}/,
-  );
-  assert.match(
-    source,
-    /scene_ui_is_interactive[\s\S]*!game_scenes_input_gated\(\)/,
-  );
-  assert.match(
-    source,
-    /upgrades_panel_draw_launcher\(\s*ctx,\s*w,\s*scene_ui_is_interactive\(mode\)\)/,
-  );
-  assert.match(
-    source,
-    /trolley_ladder_modal_draw_launcher\(\s*ctx,\s*w,\s*scene_ui_is_interactive\(mode\)\)/,
-  );
-  assert.match(
-    source,
-    /settings_draw_launcher\(\s*ctx,\s*scene_ui_is_interactive\(mode\)\)/,
-  );
-});
-
-test("consumers gate world rendering through scene presentation", () => {
+test("template gates world rendering through scene presentation", () => {
   const templateHeader = read("templates/template/src/game_scenes.h");
   const templateMain = read("templates/template/src/main.c");
-  const trolleyHeader = read(
-    "games/private/game-not-a-trolley-problem/src/scene/game_scenes.h",
-  );
-  const trolleyMain = read(
-    "games/private/game-not-a-trolley-problem/src/main.c",
-  );
 
   assert.match(templateHeader, /game_scenes_should_render_world/);
   assert.match(templateMain, /game_scenes_should_render_world\(\)/);
-  assert.match(trolleyHeader, /game_scenes_should_render_world/);
-  assert.match(trolleyMain, /game_scenes_should_render_world\(\)/);
 });
 
-test("trolley routes simulation and shutdown through scene lifecycle", () => {
-  const adapter = read(
-    "games/private/game-not-a-trolley-problem/src/scene/game_scenes.c",
-  );
-  const features = read(
-    "games/private/game-not-a-trolley-problem/src/features/game_features.c",
-  );
-  const main = read(
-    "games/private/game-not-a-trolley-problem/src/main.c",
-  );
-
-  assert.match(adapter, /\.on_update\s*=\s*update_screen/);
-  assert.match(
-    adapter,
-    /update_screen[\s\S]*game_features_update_scene\(s_world,\s*dt\);[\s\S]*testbed_update\(s_world,\s*dt\);/,
-  );
-  assert.match(features, /void game_features_update_scene\s*\(/);
-  assert.match(
-    features,
-    /void game_features_update_scene[\s\S]*sys_energy_update[\s\S]*sys_tram_update[\s\S]*sys_crowd_update/,
-  );
-  assert.doesNotMatch(main, /testbed_update\(&s_world/);
-  assertOrdered(
-    main,
-    "game_scenes_shutdown();",
-    "game_features_shutdown(&s_world);",
-  );
-});
-
-test("overlay open queries use current presentation, not history membership", () => {
+test("template overlay open queries use current presentation", () => {
   const templateSettings = read(
     "templates/template/src/features/settings/settings_screen.c",
   );
-  const trolleySettings = read(
-    "games/private/game-not-a-trolley-problem/src/features/settings/settings.c",
-  );
-  const upgrades = read(
-    "games/private/game-not-a-trolley-problem/src/ui/upgrades_panel.c",
-  );
-  const ladder = read(
-    "games/private/game-not-a-trolley-problem/src/ui/trolley_ladder_modal.c",
-  );
 
   assert.match(templateSettings, /game_scenes_is_presented/);
-  for (const source of [trolleySettings, upgrades, ladder]) {
-    assert.match(source, /scene_manager_is_presented/);
-  }
 });

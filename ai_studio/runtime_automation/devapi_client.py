@@ -11,6 +11,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 import atexit
 from contextlib import contextmanager
@@ -32,6 +33,7 @@ CAPTURE_WINDOW_SCRIPT = os.path.join(RUNTIME_AUTOMATION_DIR, "capture_window.py"
 RECORD_SCREEN_SCRIPT = os.path.join(RUNTIME_AUTOMATION_DIR, "record_screen_ffmpeg.ps1")
 ACTIVE_RECORDINGS: list["DevApiRecording"] = []
 LAUNCH_LOG_DIR = os.path.join(ROOT, "tmp", "ai_studio", "runtime_automation", "logs")
+DEVAPI_RECV_CHUNK_BYTES = 256 * 1024
 
 
 class DevApiError(RuntimeError):
@@ -44,13 +46,58 @@ class DevApiRequest:
     params: dict[str, Any] | None = None
 
 
+class ChunkedSocketFile:
+    """Minimal line transport with large recv chunks for framebuffer payloads."""
+
+    def __init__(self, sock: socket.socket):
+        self.sock = sock
+        self.buffer = bytearray()
+        self.closed = False
+
+    def write(self, payload: bytes) -> int:
+        if self.closed:
+            raise ValueError("I/O operation on closed DevAPI stream")
+        self.sock.sendall(payload)
+        return len(payload)
+
+    def flush(self) -> None:
+        return None
+
+    def readline(self) -> bytes:
+        if self.closed:
+            raise ValueError("I/O operation on closed DevAPI stream")
+        while True:
+            newline = self.buffer.find(b"\n")
+            if newline >= 0:
+                line = bytes(self.buffer[: newline + 1])
+                del self.buffer[: newline + 1]
+                return line
+            chunk = self.sock.recv(DEVAPI_RECV_CHUNK_BYTES)
+            if not chunk:
+                line = bytes(self.buffer)
+                self.buffer.clear()
+                return line
+            self.buffer.extend(chunk)
+
+    def close(self) -> None:
+        self.closed = True
+        self.buffer.clear()
+
+
 class DevApiClient:
     def __init__(self, port: int = DEFAULT_DEVAPI_PORT, host: str = HOST, timeout: float = 5.0):
+        self.port = port
+        self.host = host
         self.sock = socket.create_connection((host, port), timeout=timeout)
         self.sock.settimeout(timeout)
-        self.file = self.sock.makefile("rwb")
+        # Framebuffer responses are multi-megabyte base64 lines at portrait
+        # supersample sizes. Explicit recv chunking avoids makefile.readline's
+        # small internal reads and stays inside the engine send timeout.
+        self.file = ChunkedSocketFile(self.sock)
         self.next_request_id = 1
+        self._exchange_lock = threading.RLock()
         self.process_id: int | None = None
+        self.process: subprocess.Popen | None = None
         self.launch_log_path: str | None = None
 
     def __enter__(self) -> "DevApiClient":
@@ -60,10 +107,11 @@ class DevApiClient:
         self.close()
 
     def close(self) -> None:
-        try:
-            self.file.close()
-        finally:
-            self.sock.close()
+        with self._exchange_lock:
+            try:
+                self.file.close()
+            finally:
+                self.sock.close()
 
     def launch_log_tail(self, lines: int = 160) -> str:
         return format_launch_log_tail(self.launch_log_path, lines=lines)
@@ -72,24 +120,32 @@ class DevApiClient:
         print_launch_log_tail(self.launch_log_path, lines=lines)
 
     def raw(self, payload: Any) -> Any:
-        self.file.write((json.dumps(payload, separators=(",", ":")) + "\n").encode("utf-8"))
-        self.file.flush()
+        with self._exchange_lock:
+            self.file.write((json.dumps(payload, separators=(",", ":")) + "\n").encode("utf-8"))
+            self.file.flush()
+            return self._read_response("DevAPI")
+
+    def _read_response(self, context: str) -> Any:
         line = self.file.readline().decode("utf-8", "replace").strip()
         if not line:
-            raise DevApiError("empty response from DevAPI")
-        return json.loads(line)
+            raise DevApiError(f"empty response from {context}")
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise DevApiError(f"malformed JSON response from {context}: {exc.msg}") from exc
 
     def request(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        request = {
-            "request_id": str(self.next_request_id),
-            "method": method,
-            "params": params or {},
-        }
-        self.next_request_id += 1
-        response = self.raw(request)
-        if not isinstance(response, dict):
-            raise DevApiError(f"expected object response for {method}, got {type(response).__name__}")
-        return response
+        with self._exchange_lock:
+            request = {
+                "request_id": str(self.next_request_id),
+                "method": method,
+                "params": params or {},
+            }
+            self.next_request_id += 1
+            response = self.raw(request)
+            if not isinstance(response, dict):
+                raise DevApiError(f"expected object response for {method}, got {type(response).__name__}")
+            return response
 
     def result(self, method: str, params: dict[str, Any] | None = None) -> Any:
         response = self.request(method, params)
@@ -98,23 +154,84 @@ class DevApiClient:
         return response.get("result")
 
     def batch(self, requests: Iterable[DevApiRequest | tuple[str, dict[str, Any] | None]]) -> list[dict[str, Any]]:
-        payload = []
-        for item in requests:
-            if isinstance(item, DevApiRequest):
-                method = item.method
-                params = item.params
-            else:
-                method, params = item
-            payload.append({
-                "request_id": str(self.next_request_id),
-                "method": method,
-                "params": params or {},
-            })
-            self.next_request_id += 1
-        response = self.raw(payload)
-        if not isinstance(response, list):
-            raise DevApiError(f"expected batch response, got {type(response).__name__}")
-        return response
+        with self._exchange_lock:
+            payload = []
+            for item in requests:
+                if isinstance(item, DevApiRequest):
+                    method = item.method
+                    params = item.params
+                else:
+                    method, params = item
+                payload.append({
+                    "request_id": str(self.next_request_id),
+                    "method": method,
+                    "params": params or {},
+                })
+                self.next_request_id += 1
+            response = self.raw(payload)
+            if not isinstance(response, list):
+                raise DevApiError(f"expected batch response, got {type(response).__name__}")
+            return response
+
+    def capture_frame_and_step(self, step_count: int) -> tuple[Any, Any]:
+        """Capture the current framebuffer and then advance manual time atomically.
+
+        ``capture.frame`` is deferred until a frame is presented. Sending its
+        paired ``time.step`` in the same flush prevents manual-idle deadlocks.
+        The server may emit the two responses in either order.
+        """
+        if isinstance(step_count, bool) or not isinstance(step_count, int) or step_count <= 0:
+            raise ValueError("step_count must be a positive integer")
+
+        with self._exchange_lock:
+            capture_id = str(self.next_request_id)
+            step_id = str(self.next_request_id + 1)
+            self.next_request_id += 2
+            payload = (
+                json.dumps(
+                    {"request_id": capture_id, "method": "capture.frame", "params": {}},
+                    separators=(",", ":"),
+                )
+                + "\n"
+                + json.dumps(
+                    {"request_id": step_id, "method": "time.step", "params": {"count": step_count}},
+                    separators=(",", ":"),
+                )
+                + "\n"
+            ).encode("utf-8")
+            self.file.write(payload)
+            self.file.flush()
+
+            expected_ids = {capture_id, step_id}
+            responses: dict[str, dict[str, Any]] = {}
+            for _ in range(2):
+                response = self._read_response("capture.frame/time.step exchange")
+                if not isinstance(response, dict):
+                    raise DevApiError(
+                        "expected object response during capture.frame/time.step exchange, "
+                        f"got {type(response).__name__}"
+                    )
+                response_id = response.get("request_id")
+                if not isinstance(response_id, str) or response_id not in expected_ids:
+                    raise DevApiError(f"unexpected response id during capture.frame/time.step exchange: {response_id!r}")
+                if response_id in responses:
+                    raise DevApiError(f"duplicate response id during capture.frame/time.step exchange: {response_id}")
+                responses[response_id] = response
+
+            missing_ids = expected_ids.difference(responses)
+            if missing_ids:
+                raise DevApiError(
+                    "missing response ids during capture.frame/time.step exchange: "
+                    + ", ".join(sorted(missing_ids))
+                )
+
+            capture_response = responses[capture_id]
+            step_response = responses[step_id]
+            if capture_response.get("ok") is not True:
+                raise DevApiError(f"capture.frame failed: {capture_response.get('error', capture_response)}")
+            if step_response.get("ok") is not True:
+                raise DevApiError(f"time.step failed: {step_response.get('error', step_response)}")
+            return capture_response.get("result"), step_response.get("result")
 
     def batch_results(self, requests: Iterable[DevApiRequest | tuple[str, dict[str, Any] | None]]) -> list[Any]:
         responses = self.batch(requests)
@@ -676,6 +793,7 @@ def running_game(
     fresh_state: bool = True,
     autosave_enabled: bool = False,
     window_size: str | None = None,
+    extra_args: list[str] | None = None,
 ):
     # No explicit port: pick a fresh ephemeral port (see resolve_launch_port) so
     # concurrent launches never collide on the fixed default. Everything below
@@ -696,6 +814,8 @@ def running_game(
         if not os.path.exists(exe):
             raise DevApiError(f"build native debug first: {exe}")
         args = [exe, "--devapi", str(port)]
+        if extra_args:
+            args.extend(extra_args)
         if window_size:
             args.extend(["--window-size", window_size])
         if fresh_state:
@@ -720,6 +840,7 @@ def running_game(
             raise
         if client is not None:
             client.process_id = proc.pid
+            client.process = proc
             client.launch_log_path = launch_log_path
     if client is None:
         detail = format_launch_log_tail(launch_log_path, lines=120)

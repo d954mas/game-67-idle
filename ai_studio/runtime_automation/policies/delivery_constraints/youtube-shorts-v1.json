@@ -1,0 +1,27 @@
+{
+  "schema": "ai_studio.capture.delivery_constraint.v1",
+  "id": "youtube-shorts-v1",
+  "version": 1,
+  "platform": "youtube",
+  "surface": "shorts",
+  "status": "official",
+  "source": {
+    "url": "https://support.google.com/youtube/answer/1722171?hl=en",
+    "reviewed_at": "2026-07-26"
+  },
+  "constraints": {
+    "containers": ["mp4"],
+    "aspect_ratios": ["9:16"],
+    "video_codecs": ["h264"],
+    "audio_codecs": ["aac-lc"],
+    "sample_rates": [48000],
+    "max_width": 1080,
+    "max_height": 1920,
+    "max_fps": 60,
+    "max_duration_seconds": 180,
+    "notes": [
+      "YouTube recommends MP4, H.264 High Profile, progressive 4:2:0, AAC-LC stereo at 48 kHz, native frame rate, and BT.709 for SDR.",
+      "The Shorts help source separately caps uploaded Shorts at 1080p and describes vertical videos up to three minutes."
+    ]
+  }
+}

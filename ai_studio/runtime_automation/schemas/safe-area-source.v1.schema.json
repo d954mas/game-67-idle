@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ai_studio.capture.safe_area_source.v1",
+  "title": "Safe Area Source v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "platform", "surface", "placement_class", "ui_variant_id",
+    "caption_variant_id", "direction", "locale", "source", "surface_version",
+    "caption_bound", "original_dimensions", "normalized_dimensions",
+    "normalized_transform", "geometry"
+  ],
+  "properties": {
+    "schema": {"const": "ai_studio.capture.safe_area_source.v1"},
+    "source_record_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "platform": {"type": "string", "minLength": 1},
+    "surface": {"type": "string", "minLength": 1},
+    "placement_class": {
+      "enum": ["organic_standard", "paid_ad", "measured_organic"]
+    },
+    "ui_variant_id": {"type": "string", "minLength": 1},
+    "caption_variant_id": {"type": "string", "minLength": 1},
+    "direction": {"enum": ["LTR", "RTL"]},
+    "locale": {"type": "string", "minLength": 2, "maxLength": 32},
+    "surface_version": {"type": "string", "minLength": 1},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url", "retrieved_at", "reviewed_at", "origin",
+        "acquisition_method", "authority", "license", "license_review",
+        "redistribution", "sha256"
+      ],
+      "properties": {
+        "url": {"type": "string", "format": "uri"},
+        "retrieved_at": {"type": "string", "format": "date"},
+        "reviewed_at": {"type": "string", "format": "date"},
+        "origin": {"type": "string", "minLength": 1},
+        "acquisition_method": {"type": "string", "minLength": 1},
+        "authority": {
+          "enum": ["platform_official", "first_party_measurement", "third_party"]
+        },
+        "license": {"type": "string", "minLength": 1},
+        "license_review": {"enum": ["reviewed", "unverified", "rejected"]},
+        "redistribution": {"enum": ["allowed", "external-only", "forbidden"]},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "caption_bound": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "max_visible_lines", "obstruction_geometry_sha256"],
+      "properties": {
+        "state": {"type": "string", "minLength": 1},
+        "max_visible_lines": {"type": "integer", "minimum": 0, "maximum": 32},
+        "obstruction_geometry_sha256": {
+          "type": "string", "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "original_dimensions": {"$ref": "#/$defs/dimensions"},
+    "normalized_dimensions": {"$ref": "#/$defs/dimensions"},
+    "normalized_transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scale_x", "scale_y", "offset_x", "offset_y"],
+      "properties": {
+        "scale_x": {"type": "number"},
+        "scale_y": {"type": "number"},
+        "offset_x": {"type": "number"},
+        "offset_y": {"type": "number"}
+      }
+    },
+    "geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["polarity", "kind", "rectangles"],
+      "properties": {
+        "polarity": {"const": "unsafe"},
+        "kind": {"const": "rectangles"},
+        "rectangles": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {"type": "number", "minimum": 0, "maximum": 1},
+              {"type": "number", "minimum": 0, "maximum": 1},
+              {"type": "number", "minimum": 0, "maximum": 1},
+              {"type": "number", "minimum": 0, "maximum": 1}
+            ],
+            "items": false,
+            "minItems": 4,
+            "maxItems": 4
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": {"type": "integer", "minimum": 1, "maximum": 7680},
+        "height": {"type": "integer", "minimum": 1, "maximum": 7680}
+      }
+    }
+  }
+}

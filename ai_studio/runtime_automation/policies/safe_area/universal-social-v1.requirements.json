@@ -1,0 +1,16 @@
+{
+  "schema": "ai_studio.capture.safe_area_requirements.v1",
+  "id": "universal-social-v1",
+  "version": 1,
+  "target_id": "vertical-social-1080p60",
+  "required_variants": [
+    {"platform": "tiktok", "surface": "feed", "ui_variant_id": "playback-default-visible.v1", "caption_variant_id": "collapsed-standard-max.v1", "direction": "LTR"},
+    {"platform": "tiktok", "surface": "feed", "ui_variant_id": "playback-default-visible.v1", "caption_variant_id": "collapsed-standard-max.v1", "direction": "RTL"},
+    {"platform": "youtube", "surface": "shorts", "ui_variant_id": "playback-default-visible.v1", "caption_variant_id": "collapsed-standard-max.v1", "direction": "LTR"},
+    {"platform": "youtube", "surface": "shorts", "ui_variant_id": "playback-default-visible.v1", "caption_variant_id": "collapsed-standard-max.v1", "direction": "RTL"},
+    {"platform": "instagram", "surface": "reels", "ui_variant_id": "playback-default-visible.v1", "caption_variant_id": "collapsed-standard-max.v1", "direction": "LTR"},
+    {"platform": "instagram", "surface": "reels", "ui_variant_id": "playback-default-visible.v1", "caption_variant_id": "collapsed-standard-max.v1", "direction": "RTL"},
+    {"platform": "facebook", "surface": "reels", "ui_variant_id": "playback-default-visible.v1", "caption_variant_id": "collapsed-standard-max.v1", "direction": "LTR"},
+    {"platform": "facebook", "surface": "reels", "ui_variant_id": "playback-default-visible.v1", "caption_variant_id": "collapsed-standard-max.v1", "direction": "RTL"}
+  ]
+}

@@ -32,6 +32,105 @@ node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/pixel
 node ai_studio/runtime_automation/web_local_mock_probe.mjs --url http://127.0.0.1:8092/ --cdp http://127.0.0.1:9222 --out games/<game-id>/.ai_studio/evidence/local-mock/<observation>.json
 ```
 
+## Capture pipeline WP0 foundation
+
+The reviewed recorder implementation has started with backend-neutral WP0
+contracts:
+
+- `capture_contracts.py`: strict versioned schemas, canonical JSON/hash,
+  stable error families, and recording/encode transitions;
+- `capture_safe_area.py`: conservative normalized unsafe masks and reproducible
+  common-safe policy derivation, provenance eligibility, and half-open
+  per-tick critical-region evidence;
+- `capture_delivery.py`: one media descriptor checked independently against
+  a strict rational-FPS schema and versioned platform constraint sets;
+- `capture_media_fixture.py`: controlled FFmpeg MKV with changing frame
+  pattern/counter, 48 kHz tone, paired flash/impulse markers, `ffprobe`
+  structure/timestamp validation, streaming video analysis, and decoded
+  signature/count/PTS content-sync validation;
+- `schemas/` and `policies/`: immutable contract, target, universal social
+  matrix, and source-dated delivery policy data.
+
+`vertical-social-1080p60` is available as contract data, but
+`universal-social-v1` deliberately remains `incomplete` until all eight
+TikTok/Shorts/Instagram/Facebook LTR/RTL standard-organic safe-area source
+records have eligible provenance and geometry. Paid-ad masks cannot silently
+satisfy that gate. No public recorder CLI or backend is claimed by WP0.
+
+## Deterministic portrait capture scenarios
+
+This is an exploratory prototype and is not conforming to the reviewed pipeline
+contract yet. The reviewed design, independent criticism, and comparison are:
+
+- [`CAPTURE-PIPELINE-SPEC.md`](CAPTURE-PIPELINE-SPEC.md);
+- [`CAPTURE-PIPELINE-IMPLEMENTATION-PLAN.md`](CAPTURE-PIPELINE-IMPLEMENTATION-PLAN.md);
+- [`CAPTURE-PIPELINE-REVIEW.md`](CAPTURE-PIPELINE-REVIEW.md);
+- [`CAPTURE-PIPELINE-COMPARATIVE-ANALYSIS.md`](CAPTURE-PIPELINE-COMPARATIVE-ANALYSIS.md);
+- [`CAPTURE-PIPELINE-WP1-SPIKE-REPORT.md`](CAPTURE-PIPELINE-WP1-SPIKE-REPORT.md);
+- [`CAPTURE-PIPELINE-RECORDER-BENCHMARK.md`](CAPTURE-PIPELINE-RECORDER-BENCHMARK.md);
+- [`CAPTURE-PIPELINE-WP1-EVIDENCE.json`](CAPTURE-PIPELINE-WP1-EVIDENCE.json);
+- [`CAPTURE-PIPELINE-WP1B-PROCESS-LOOPBACK-REPORT.md`](CAPTURE-PIPELINE-WP1B-PROCESS-LOOPBACK-REPORT.md);
+- [`CAPTURE-PIPELINE-WP1B-PROCESS-LOOPBACK-EVIDENCE.json`](CAPTURE-PIPELINE-WP1B-PROCESS-LOOPBACK-EVIDENCE.json);
+- [`CAPTURE-PIPELINE-WP1-CLEANUP-INCIDENT.md`](CAPTURE-PIPELINE-WP1-CLEANUP-INCIDENT.md).
+
+In particular, the prototype does not apply arbitrary declared step rates and
+its paired capture/step operation does not identify the intended tick when more
+than one simulation step separates output samples.
+
+`capture_scenario.py` is a deprecated exploratory recorder for game-owned custom
+scenes, not the reusable V1 recorder and not valid acceptance evidence. Its
+paired multi-step capture path has a known wrong-tick defect. Keep using it only
+to reproduce or migrate prototype behavior until the implementation plan
+retires it. Do not add stage-, content-, or reel-specific branches to it.
+
+The WP1b Windows process-loopback feasibility helper lives under
+`capture/native/windows_process_loopback/`. It has proved 48 kHz stereo
+process-tree routing, 71.21 dB isolation from a concurrent foreign audio
+process, and real game-process audio activity during a three-transition UI
+scenario. It remains private spike code: the
+original combined FFmpeg A/V attempt regressed from the successful benchmark's
+exact-HWND input to desktop-region capture and selected a non-game surface. The
+corrected exact-HWND path uses canonical `0x` serialization for auditability
+(FFmpeg also accepts decimal HWND values), passes topology (`720x1280`, `30/1`,
+145 frames over 4.91 s), and contains active game audio. The current automation
+run still returns nearly black exact-HWND OpenGL pixels for an unverified
+reason, so the preflight pixel gate rejects the source before recording. The
+adapter also has no streaming clock/sync proof, so no production backend or
+`audio=game` CLI is enabled.
+
+```powershell
+$game = "games/private/<private-game-id>"
+$exe = "$game/build/devapi-debug/bin/game.exe"
+$scenario = "$game/devapi/capture_scenarios/showcase_motion.v1.json"
+$out = "$game/tmp/captures/custom-capture-scenes/showcase-motion"
+
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/capture_scenario.py validate $scenario
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/capture_scenario.py --exe $exe list
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/capture_scenario.py --exe $exe describe demo.presentation
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/capture_scenario.py --exe $exe run $scenario --out $out --visible-contract "$game/devapi/visible_frame_contract.v1.json"
+```
+
+Every `run` starts a fresh process on an ephemeral loopback port. It probes and,
+on Windows, resizes the real native framebuffer before loading the target scene.
+The source framebuffer must be portrait and at least the requested output size;
+the encoder may downscale but never crops or upscales it. Simulation then runs in
+manual time with the manifest's exact integer ticks-per-output-frame cadence.
+
+Each successful run is an immutable timestamped directory containing normalized
+manifest and live descriptor snapshots, PNG frames, `video.mp4`,
+`contact_sheet.jpg`, event-boundary evidence, diagnostics, executable identity,
+`provenance.json`, and a terminal `handoff.json`. The handoff is written last;
+the presence of an abandoned `.staging` directory is a failed run, never a
+candidate. Compare the stable identities of two successful fresh runs with:
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/capture_scenario.py compare <run-a> <run-b>
+```
+
+Capture outputs belong under the game's ignored `tmp/` tree. A devlog project
+chooses and copies an accepted candidate explicitly; the recorder never edits a
+reel, Studio project, or delivery asset.
+
 ## Local mock web proof
 
 `web_local_mock_probe.mjs` connects to an isolated Chromium/Chrome page through

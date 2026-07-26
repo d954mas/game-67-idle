@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ai_studio.capture.delivery_constraint.v1",
+  "title": "Platform Delivery Constraint v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "id", "version", "platform", "surface", "status",
+    "source", "constraints"
+  ],
+  "properties": {
+    "schema": {"const": "ai_studio.capture.delivery_constraint.v1"},
+    "id": {"type": "string", "minLength": 1},
+    "version": {"const": 1},
+    "platform": {"type": "string", "minLength": 1},
+    "surface": {"type": "string", "minLength": 1},
+    "status": {"enum": ["official", "official_partial"]},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "reviewed_at"],
+      "properties": {
+        "url": {"type": "string", "format": "uri"},
+        "reviewed_at": {"type": "string", "format": "date"}
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "containers", "aspect_ratios", "video_codecs", "audio_codecs",
+        "sample_rates", "notes"
+      ],
+      "properties": {
+        "containers": {
+          "type": "array", "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "aspect_ratios": {
+          "type": "array", "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[0-9]+:[0-9]+$"}
+        },
+        "video_codecs": {
+          "type": "array", "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "audio_codecs": {
+          "type": "array", "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "sample_rates": {
+          "type": "array", "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 8000, "maximum": 192000}
+        },
+        "min_width": {"type": "integer", "minimum": 1},
+        "min_height": {"type": "integer", "minimum": 1},
+        "max_width": {"type": "integer", "minimum": 1},
+        "max_height": {"type": "integer", "minimum": 1},
+        "min_fps": {"type": "number", "exclusiveMinimum": 0},
+        "max_fps": {"type": "number", "exclusiveMinimum": 0},
+        "max_duration_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "max_bytes": {"type": "integer", "minimum": 1},
+        "notes": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

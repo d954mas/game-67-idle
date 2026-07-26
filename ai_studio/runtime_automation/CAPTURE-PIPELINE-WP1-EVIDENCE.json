@@ -1,0 +1,201 @@
+{
+  "schema": "ai_studio.capture_backend_spike_evidence",
+  "version": 1,
+  "measuredDate": "2026-07-26",
+  "redacted": true,
+  "privateConsumerEvidence": "local-only; paths, window identity, stage identity, and actions omitted",
+  "tools": {
+    "ffmpeg": {
+      "version": "N-122685-g9bfa1635ae-20260209",
+      "sha256": "36ff7e535a857fb636520cbab828695c36bf369f7d4ed59c9d3fa6a15cef7505"
+    },
+    "obs": {
+      "version": "30.1.2",
+      "webSocketVersion": "5.4.2",
+      "rpcVersion": 1,
+      "sha256": "ea487a3cd6b81e6c31604f4dcc260fab2b6d16f45ae17f21b55ebbbc45d69acc"
+    }
+  },
+  "commands": {
+    "ffmpegGraceful": "ffmpeg -f gdigrab -framerate 30 -draw_mouse 0 -i hwnd=<resolved-hwnd> -an -c:v libx264 -pix_fmt yuv420p -f matroska <staging.mkv>; stop via stdin q",
+    "ffmpegForced": "same exact-HWND input and Matroska output; terminate owned FFmpeg process without stdin q",
+    "obs": "authenticated obs-websocket RPC; mute global desktop/mic; set 640x360 30/1; create exact-window source; start/status/stop; decode and inspect output"
+  },
+  "artifacts": {
+    "ffmpegGraceful": {
+      "sha256": "f74de9bbe2c734365c9dac61413b380b30601ec085339198bcc036467f83fd43",
+      "ffprobe": {
+        "container": "matroska,webm",
+        "durationSeconds": 2.266,
+        "sizeBytes": 19107,
+        "video": {
+          "codec": "h264",
+          "width": 640,
+          "height": 360,
+          "averageFrameRate": "30/1",
+          "decodedFrames": 67
+        }
+      },
+      "fullDecode": "pass",
+      "pixelHealth": {
+        "status": "pass",
+        "uniqueColors": 2899,
+        "buckets": 58,
+        "lumaRange": 128.3,
+        "lumaStandardDeviation": 21.0
+      }
+    },
+    "ffmpegForced": {
+      "sha256": "7af2816f0477659d95a1a0a284ec34341dcba20b2bfcf0c1e09b05ce62c54d0e",
+      "sizeBytes": 584,
+      "ffprobe": "fail:end_of_file",
+      "recoverable": false
+    },
+    "obsGraceful": {
+      "sha256": "86e0190e3d042def08a3d8e47e671304ba190fbf1e6869faaeef3a2f7e01dc22e",
+      "ffprobe": {
+        "container": "matroska,webm",
+        "durationSeconds": 8.133,
+        "sizeBytes": 24653,
+        "video": {
+          "codec": "h264",
+          "width": 640,
+          "height": 360,
+          "averageFrameRate": "30/1",
+          "decodedFrames": 242
+        },
+        "audio": {
+          "codec": "aac",
+          "sampleRate": 48000,
+          "channels": 2,
+          "decodedFrames": 375,
+          "meanVolumeDb": -91.0,
+          "maxVolumeDb": -91.0
+        }
+      },
+      "fullDecode": "pass",
+      "pixelHealth": "fail:uniform_black",
+      "audioActivity": "fail:digital_silence",
+      "obsReportedSkippedFrames": 0
+    },
+    "obsLog": {
+      "sha256": "826857c74b2f20ce9377e74e59b915ddd8def99163d15b90d3305e05d67bf3ad",
+      "committed": false,
+      "reason": "contains private consumer runtime identity"
+    },
+    "obsGlobalConfig": {
+      "sha256": "a7412dafc5443649ec9b48561e8a4169081a6438ed629d611a4a0f3394fbe49e",
+      "committed": false,
+      "reason": "contains an ephemeral credential"
+    }
+  },
+  "followupMeasurements": {
+    "benchmarkReport": "CAPTURE-PIPELINE-RECORDER-BENCHMARK.md",
+    "controlledFixture": {
+      "rawEvidenceSha256": "4e56066f96184cd5d7f9b117d98a50d43dd730a2a2c17326b3405aa6e01b3a33",
+      "rawEvidenceCommitted": false,
+      "ffmpeg": {
+        "outputSha256": "af7b20d458a13f7480a65162c9090e0364da40ef0aebb568bfa5995970c9e876",
+        "meanWholeGpuPercent": 0.5,
+        "meanEncoderPercent": 0.91,
+        "pixelHealth": "pass",
+        "applicationAudio": "unavailable",
+        "gracefulStop": "pass"
+      },
+      "obsWindowCapture": {
+        "outputSha256": "0b5d7b7c76e974eac3b9ea1d45b19b3659d383d22c3101402d8cd77aa39cffba",
+        "meanWholeGpuPercent": 9.68,
+        "meanEncoderPercent": 2.0,
+        "pixelHealth": "pass_after_startup_preroll",
+        "audioMeanVolumeDb": -37.9,
+        "audioMaxVolumeDb": -13.3,
+        "renderLagPercent": 0.2,
+        "encodeLagPercent": 0.2,
+        "gracefulStop": "pass"
+      }
+    },
+    "nativeGame": {
+      "rawEvidenceSha256": "d20ac5ecf2b9f5814f36619e2cf0c47d1f695ba9cd74c71d14a16efbe4ac1e4b",
+      "rawEvidenceCommitted": false,
+      "baseline": {
+        "frameP95Ms": 4.68,
+        "frameP99Ms": 7.3,
+        "fpsLow1Percent": 137.1
+      },
+      "ffmpeg": {
+        "outputSha256": "6c3b35b3ffa614341830148c400aff4da9a2413c59445f3695ed11586e812ced",
+        "meanWholeGpuPercent": 0.5,
+        "meanEncoderPercent": 0.91,
+        "frameP95Ms": 7.78,
+        "frameP99Ms": 8.71,
+        "fpsLow1Percent": 114.7,
+        "pixelHealth": "pass",
+        "applicationAudio": "unavailable",
+        "gracefulStop": "pass"
+      },
+      "obsWindowCapture": {
+        "outputSha256": "bf7f66f1c46e03e452c5f2035f447440b65762369f03a62d30fd1d11d6447cbc",
+        "meanWholeGpuPercent": 12.91,
+        "meanEncoderPercent": 1.91,
+        "frameP95Ms": 9.33,
+        "frameP99Ms": 12.16,
+        "fpsLow1Percent": 82.3,
+        "pixelHealth": "pass_after_startup_preroll",
+        "audioMeanVolumeDb": -51.8,
+        "audioMaxVolumeDb": -7.4,
+        "outputDecode": "pass",
+        "processExit": "fail:0xc0000005_during_wasapi_shutdown"
+      }
+    }
+  },
+  "normalizedCapabilityReports": {
+    "ffmpeg": {
+      "toolDiscovery": "pass",
+      "exactWindowVideo": "pass",
+      "desktopRegionVideo": "fail:access_denied_and_dpi_boundary",
+      "gracefulStop": "pass",
+      "forcedInterruptionRecovery": "fail",
+      "applicationAudio": "unavailable",
+      "fullWp1Gate": "fail"
+    },
+    "obs": {
+      "toolDiscovery": "pass",
+      "authenticatedControlPlane": "pass",
+      "managedIsolationContract": "fail:incomplete",
+      "gameCaptureVideo": "fail:black_pixels",
+      "windowCaptureVideo": "pass_after_startup_preroll",
+      "gracefulContainerTopology": "partial:controlled_pass_game_shutdown_crash",
+      "applicationAudio": "pass:window_capture_process_loopback",
+      "audioActivity": "pass:controlled_and_real_game",
+      "restartReadiness": "fail",
+      "forcedInterruptionRecovery": "not_measured",
+      "performanceGate": "fail:materially_more_gpu_and_frame_time_than_ffmpeg",
+      "fullWp1Gate": "fail"
+    }
+  },
+  "obsIsolationChecks": {
+    "portableCopy": "pass",
+    "unmanagedUserProfileMutation": "not_observed",
+    "globalCrossProcessLock": "not_implemented",
+    "randomLoopbackPort": "fail:fixed_44550",
+    "loopbackOnlyBind": "fail:all_ipv4_interfaces",
+    "authentication": "pass",
+    "credentialAbsentFromCommandLine": "pass",
+    "credentialAbsentFromCommittedEvidence": "pass",
+    "pidExecutableConfigRootOwnershipVerification": "partial",
+    "jobObjectCleanup": "not_implemented",
+    "orphanClassification": "not_implemented",
+    "firewallCleanup": "pass:remaining_zero",
+    "firewallCleanupEvidenceSha256": "d85f5e59b520a4eef10dc0997d80f2b45c38b340c3a8a78400e2cfde59e05d12",
+    "cleanupIncident": "CAPTURE-PIPELINE-WP1-CLEANUP-INCIDENT.md",
+    "status": "fail"
+  },
+  "decision": {
+    "wp1Attempt": "measurements_complete_cleanup_verified",
+    "wp1Gate": "failed",
+    "selectedBackend": null,
+    "wp2Wp3Blocked": true,
+    "nextCandidate": "ffmpeg_exact_hwnd_plus_windows_application_loopback_helper",
+    "obsDisposition": "manual_compatibility_candidate_retest_current_stable"
+  }
+}

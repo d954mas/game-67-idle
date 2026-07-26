@@ -1,0 +1,12 @@
+{
+  "schema": "ai_studio.capture.target.v1",
+  "id": "vertical-social-1080p60",
+  "version": 1,
+  "width": 1080,
+  "height": 1920,
+  "fps": {"numerator": 60, "denominator": 1},
+  "framing": "portrait",
+  "capture_profile": "realtime-av-h264-aac-v1",
+  "safe_area_policy": "universal-social-v1",
+  "delivery_preset": "social-mp4-v1"
+}
