@@ -67,11 +67,21 @@ function validateManifest(root, id, base) {
       throw new Error(`${label}: README Compatibility must define PATCH, MINOR, and MAJOR rules`);
     }
   }
+  const defaultStatus = base.startsWith("features/") ? "reusable" : "template-local";
+  const allowedStatuses = base.startsWith("features/")
+    ? new Set(["reusable", "specified"])
+    : new Set(["template-local"]);
+  const status = manifest.status ?? defaultStatus;
+  if (typeof status !== "string" || !allowedStatuses.has(status)) {
+    throw new Error(
+      `${label}: status must be one of ${[...allowedStatuses].join(", ")}`,
+    );
+  }
   return {
     id,
     version: manifest.version,
     source: base,
-    status: manifest.status || "reusable",
+    status,
   };
 }
 

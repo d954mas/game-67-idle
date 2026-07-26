@@ -56,7 +56,7 @@ sequence:
 | Identity/staging contract | stale creation-time identity rejected; final path is untouched on timeout/failure and promoted only after validation |
 | Bounded media lifecycle | basename-filtered private spike, shared A/V cancellation, bounded FFmpeg/FFprobe, Job/process-group cleanup; executable identity/atomic assignment not production-qualified |
 | Ownership/cleanup | only spawned helper/fixture/game processes were controlled; no survivors after probes |
-| Unit contract | 31 focused tests and all 154 Runtime Automation tests pass |
+| Unit contract | 31 focused tests and all 155 Runtime Automation tests pass |
 
 This proves that a Studio-owned process-tree audio primitive is a feasible lean
 alternative to OBS's application-audio component on this Windows host. It also answers the earlier

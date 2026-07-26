@@ -543,7 +543,9 @@ def convert_ppm_to_png(ppm_path: str, png_path: str) -> None:
     write_png_rgb(png_path, width, height, rgb)
 
 
-def run_powershell_script(script: str, args: list[str]) -> str:
+def run_powershell_script(
+    script: str, args: list[str], *, timeout_seconds: float = 15.0
+) -> str:
     try:
         completed = subprocess.run(
             ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, *args],
@@ -551,10 +553,19 @@ def run_powershell_script(script: str, args: list[str]) -> str:
             check=True,
             capture_output=True,
             text=True,
+            timeout=timeout_seconds,
         )
     except subprocess.CalledProcessError as exc:
         detail = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
         raise DevApiError(f"{os.path.basename(script)} failed: {detail.strip()}") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise DevApiError(
+            f"{os.path.basename(script)} timed out after {timeout_seconds:.1f}s"
+        ) from exc
+    except OSError as exc:
+        raise DevApiError(
+            f"{os.path.basename(script)} could not launch: {exc}"
+        ) from exc
     return completed.stdout.strip()
 
 
@@ -595,6 +606,7 @@ def run_capture_screenshot(output: str = "tmp/captures/screenshot.png", x: int =
     run_powershell_script(
         CAPTURE_SCREEN_SCRIPT,
         args,
+        timeout_seconds=timeout_seconds,
     )
     return path
 
@@ -626,6 +638,7 @@ def run_record_gameplay(
             "-Height",
             str(height),
         ],
+        timeout_seconds=max(15.0, seconds + 10.0),
     )
     return resolve_output_path(output)
 

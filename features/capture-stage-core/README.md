@@ -94,8 +94,9 @@ and root-cause classification before any Neotolis issue or PR.
 The existing recorder and private-game capture catalog are an exploratory
 prototype. They are evidence for the contract, not the public surface of this
 feature. WP0 is complete. The current WP1 attempt measured the available OBS
-and FFmpeg paths, but neither passed the full video/audio/recovery exit gate, so
-WP1 remains open and general backend work remains blocked. The failure is
+and FFmpeg paths, but post-commit review reopened the WP0 contract-freeze gate
+and neither backend passed the full video/audio/recovery exit gate. WP1 remains
+open and general backend work remains blocked. The failures are
 recorded in the Runtime Automation WP1 report; it does not establish an engine
 defect. The optional offline frame backend has additional engine
 presentation/readback gates.

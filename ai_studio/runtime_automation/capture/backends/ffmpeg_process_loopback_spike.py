@@ -151,7 +151,7 @@ def run_owned_command(
     popen_factory: Callable = subprocess.Popen,
     _allow_test_executable: bool = False,
 ) -> dict:
-    """Run one allowlisted no-child media process with an absolute deadline."""
+    """Run one basename-filtered private-spike process with an absolute deadline."""
     if (
         isinstance(deadline_monotonic, bool)
         or not isinstance(deadline_monotonic, (int, float))

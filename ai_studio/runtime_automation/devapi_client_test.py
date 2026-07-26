@@ -62,6 +62,18 @@ class CaptureScreenshotProcessTest(unittest.TestCase):
             with self.assertRaisesRegex(DevApiError, "could not launch"):
                 run_capture_screenshot()
 
+    def test_powershell_fallback_uses_same_timeout(self):
+        with mock.patch("devapi_client.os.name", "nt"), mock.patch(
+            "devapi_client.os.path.exists", return_value=False
+        ), mock.patch(
+            "devapi_client.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(["powershell"], 4.0),
+        ) as runner:
+            with self.assertRaisesRegex(DevApiError, "timed out after 4.0s"):
+                run_capture_screenshot(timeout_seconds=4.0)
+
+        self.assertEqual(runner.call_args.kwargs["timeout"], 4.0)
+
 
 class DuplexResponseFile:
     def __init__(self, response):

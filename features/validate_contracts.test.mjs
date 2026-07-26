@@ -138,6 +138,21 @@ test("specified-only features stay out of runtime dependency seeds", (t) => {
   assert.ok(result.rootFeatures.includes("planned-core"));
 });
 
+test("feature status is a closed enum", (t) => {
+  const root = fixture(t);
+  write(root, "features/game-state/feature.json", {
+    schema: "ai_studio.feature.v1",
+    id: "game-state",
+    version: "1.0.0",
+    status: "reuseable",
+    manuals: { install: "features/game-state/INSTALL.md" },
+  });
+  assert.throws(
+    () => validateFeatureContracts(root),
+    /game-state.*status must be one of reusable, specified/i,
+  );
+});
+
 test("root feature inventory rejects immediate child directories without metadata", (t) => {
   const root = fixture(t);
   write(root, "features/new-core/README.md", "# new-core\n");

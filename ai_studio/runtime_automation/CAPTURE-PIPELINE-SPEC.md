@@ -1,7 +1,8 @@
 # Universal Game Capture Pipeline Specification
 
-Status: APPROVED V1 PRODUCT AND ARCHITECTURE SPECIFICATION. Implementation has
-not started; backend-specific proof gates are defined in sections 16 and 19.
+Status: APPROVED V1 PRODUCT AND ARCHITECTURE SPECIFICATION. WP0 implementation
+exists, but post-commit review reopened its contract-freeze gate; no production
+backend is selected. Proof gates are defined in sections 16 and 19.
 
 Target consumers:
 
