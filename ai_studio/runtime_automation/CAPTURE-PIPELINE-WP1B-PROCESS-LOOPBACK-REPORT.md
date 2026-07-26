@@ -29,10 +29,11 @@ actions; no game behavior is hard-coded in the Studio helper.
 
 All helper, FFmpeg, mux, frame-decode, and FFprobe processes now have bounded
 deadlines. Audio and video share cancellation across the complete UI-action
-block. The launcher rejects every executable except the known no-child FFmpeg
-and process-loopback binaries before `Popen`; Windows then adds a kill-on-close
-Job Object and POSIX a process group as defense in depth. Timeout, cancellation,
-and injected post-launch-exception tests prove bounded cleanup.
+block. The private spike applies a basename filter before `Popen`; this is not
+an executable identity allowlist. Windows then adds a kill-on-close Job Object
+and POSIX a process group. Timeout, cancellation, and injected
+post-launch-exception tests prove bounded cleanup for the measured paths, but
+canonical executable identity and atomic create-in-job remain production gates.
 
 The implementation follows Microsoft's API documentation and activation
 sequence:
@@ -53,9 +54,9 @@ sequence:
 | Real game format/activity | 235,680 frames of 48 kHz stereo PCM16 over 4.91 s, mean -41.0 dB, peak -7.4 dB |
 | Timeline diagnostics | zero data discontinuities, timestamp errors, and QPC gaps in controlled and real-game runs |
 | Identity/staging contract | stale creation-time identity rejected; final path is untouched on timeout/failure and promoted only after validation |
-| Bounded media lifecycle | no-child executable allowlist, shared A/V cancellation, bounded FFmpeg/FFprobe, Job/process-group cleanup |
+| Bounded media lifecycle | basename-filtered private spike, shared A/V cancellation, bounded FFmpeg/FFprobe, Job/process-group cleanup; executable identity/atomic assignment not production-qualified |
 | Ownership/cleanup | only spawned helper/fixture/game processes were controlled; no survivors after probes |
-| Unit contract | 30 focused tests and all 150 Runtime Automation tests pass |
+| Unit contract | 31 focused tests and all 154 Runtime Automation tests pass |
 
 This proves that a Studio-owned process-tree audio primitive is a feasible lean
 alternative to OBS's application-audio component on this Windows host. It also answers the earlier

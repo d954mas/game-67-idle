@@ -3,8 +3,9 @@
 Status: FINAL 0.3.0 IMPLEMENTATION AND MIGRATION VERIFIED 2026-07-25
 
 Implementation note: seven focused native core targets plus DevAPI, WebAssembly,
-tooling, and consumer-contract suites are the permanent verification surface.
-The trolley game additionally owns a real host-lifecycle executable.
+tooling, and the public template consumer-contract suite are the permanent
+tracked verification surface. The selected private consumer additionally owns
+its real host-lifecycle executable and tests without leaking its identity here.
 
 Contract:
 [`SCENE-MANAGER-SPEC.md`](SCENE-MANAGER-SPEC.md)

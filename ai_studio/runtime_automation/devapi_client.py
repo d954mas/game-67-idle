@@ -558,7 +558,7 @@ def run_powershell_script(script: str, args: list[str]) -> str:
     return completed.stdout.strip()
 
 
-def run_capture_screenshot(output: str = "tmp/captures/screenshot.png", x: int = 0, y: int = 0, width: int = 0, height: int = 0, process_id: int | None = None) -> str:
+def run_capture_screenshot(output: str = "tmp/captures/screenshot.png", x: int = 0, y: int = 0, width: int = 0, height: int = 0, process_id: int | None = None, timeout_seconds: float = 15.0) -> str:
     path = resolve_output_path(output)
     if os.name == "nt" and os.path.exists(CAPTURE_WINDOW_SCRIPT):
         args = [sys.executable, CAPTURE_WINDOW_SCRIPT, "--output", path]
@@ -567,10 +567,26 @@ def run_capture_screenshot(output: str = "tmp/captures/screenshot.png", x: int =
         else:
             args.extend(["--x", str(x), "--y", str(y), "--width", str(width), "--height", str(height)])
         try:
-            subprocess.run(args, cwd=ROOT, check=True, capture_output=True, text=True)
+            subprocess.run(
+                args,
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
         except subprocess.CalledProcessError as exc:
             detail = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
             raise DevApiError(f"{os.path.basename(CAPTURE_WINDOW_SCRIPT)} failed: {detail.strip()}") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise DevApiError(
+                f"{os.path.basename(CAPTURE_WINDOW_SCRIPT)} timed out "
+                f"after {timeout_seconds:.1f}s"
+            ) from exc
+        except OSError as exc:
+            raise DevApiError(
+                f"{os.path.basename(CAPTURE_WINDOW_SCRIPT)} could not launch: {exc}"
+            ) from exc
         return path
 
     args = ["-Output", output, "-X", str(x), "-Y", str(y), "-Width", str(width), "-Height", str(height)]

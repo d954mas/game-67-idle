@@ -801,13 +801,17 @@ Evidence ownership is explicit:
   22;
 - `test_consumer_scene_contracts.mjs`: allocation-free core, raw-input/render
   gates, pointer-gate ordering, debug composition, resource-step barriers, and
-  template/trolley ownership for items 1, 10-12, 19-20, 23, and 25;
+  public template ownership for items 1, 10-12, 19-20, and 23;
 - `test_scaffold_scene.mjs`: item 24, including generated-code compilation and
   transactional rollback;
-- `test_scene_manager_web_smoke` and the trolley
-  `test_game_scenes_host`: item 25.
+- `test_scene_manager_web_smoke`: the public template half of item 25. The
+  selected real second consumer owns and runs its host-lifecycle suite in its
+  private repository; concrete private identity and paths never enter this
+  public contract.
 
-There are no acceptance requirements left without an owning automated check.
+Every public acceptance requirement has an owning automated check. Item 25 is
+complete only when the selected private consumer's host-lifecycle suite also
+passes; the public repository does not claim or duplicate that private result.
 
 ## 15. Locked decisions
 

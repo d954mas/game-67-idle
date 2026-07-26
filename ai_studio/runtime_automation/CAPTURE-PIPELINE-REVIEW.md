@@ -2,9 +2,43 @@
 
 Date: 2026-07-26.
 
-Verdict: **CONVERGED GO for WP0, WP1, and the approved implementation plan**.
-General backend work remains evidence-gated by WP1. No reusable recorder or
-runtime module is implemented yet.
+Verdict: **NO-GO after implementation review of commit `45cfbe504`**.
+The earlier design convergence remains useful, but executable WP0 contracts
+are not frozen and no production backend is selected.
+
+## 0. Post-commit implementation review
+
+Four independent read-only reviews of `45cfbe504` reopened the gate. Immediate
+findings fixed after that commit are:
+
+- completed-process cleanup no longer acts on a raw/recycled PID and the
+  private spike no longer invokes `taskkill` through `PATH`;
+- the spec-only `capture-stage-core` entry is absent from template runtime
+  dependency seeds;
+- screenshot subprocesses have a bounded deadline and normalized failures;
+- the deprecated scenario runner emits `prototype-rejected` and
+  `captureBeforeStep:false`, never a ready exact-tick handoff;
+- public scenes-core evidence no longer names or depends on a private consumer.
+
+The remaining blockers are deliberately not papered over:
+
+1. delivery pass/fail contracts do not yet type every claimed codec, color,
+   GOP/rate-control, SAR, and audio-layout requirement;
+2. recording jobs do not freeze the full resolved transitive dependency graph;
+3. measured safe-area provenance lacks enforced app/UI version, device class,
+   and locale scope;
+4. promoted-master contracts lack mandatory per-stream PTS/gap/drift,
+   drop/duplicate, full-decode, and content-sync evidence;
+5. critical-region proof is not yet bound to per-tick geometry plus stage
+   evidence;
+6. media fixture validation still needs strict non-overlapping PTS/cadence and
+   measured marker timestamps;
+7. equivalent unreduced rational FPS values can receive different identities;
+8. executable identity and atomic Windows create-in-job are not proved for the
+   private FFmpeg/process-loopback spike.
+
+Until those contracts and tests land, WP0 is implemented but **gate-open**, and
+WP2/WP3 must remain blocked.
 
 Reviewed artifacts:
 

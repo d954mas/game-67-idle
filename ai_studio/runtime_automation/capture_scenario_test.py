@@ -1,7 +1,14 @@
 import math
 import unittest
 
-from capture_scenario import CaptureScenarioError, expand_schedule, parse_scenario, validate_against_describe
+from capture_scenario import (
+    PROTOTYPE_CAPTURE_TIMING,
+    PROTOTYPE_HANDOFF_STATUS,
+    CaptureScenarioError,
+    expand_schedule,
+    parse_scenario,
+    validate_against_describe,
+)
 
 
 def manifest():
@@ -29,6 +36,10 @@ def describe():
 
 
 class CaptureScenarioModelTest(unittest.TestCase):
+    def test_deprecated_runner_cannot_publish_ready_exact_contract(self):
+        self.assertEqual(PROTOTYPE_CAPTURE_TIMING, "after-first-step-of-batch")
+        self.assertEqual(PROTOTYPE_HANDOFF_STATUS, "prototype-rejected")
+
     def test_smoothstep_expansion_has_exact_endpoints(self):
         scenario = parse_scenario(manifest())
         schedule = expand_schedule(scenario)

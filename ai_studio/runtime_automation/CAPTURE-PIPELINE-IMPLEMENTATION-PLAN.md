@@ -1,13 +1,15 @@
 # Game Capture Pipeline Implementation Plan
 
-Status: approved implementation plan. WP0 is complete. WP1 measurements,
-cleanup, and the WP1b process-loopback routing/isolation spike are complete,
-but no combined adapter passed the exit gate. WP2/WP3 backend implementation
-remains blocked.
+Status: approved implementation plan; WP0 implementation exists but its gate
+was reopened by the post-commit contract review. WP1 measurements, cleanup, and
+the WP1b process-loopback routing/isolation spike are complete, but no combined
+adapter passed the exit gate. WP2/WP3 backend implementation remains blocked.
 
 Implementation progress (2026-07-26): WP0 contract/safe-area/media-fixture
-foundation is implemented, verified, and independently reviewed `GO`. The
-universal social policy remains truthfully incomplete until eligible
+foundation is implemented and tested, but post-commit review returned `NO-GO`
+and reopened the freeze gate. Remaining blockers are recorded in
+[`CAPTURE-PIPELINE-REVIEW.md`](CAPTURE-PIPELINE-REVIEW.md). The universal social
+policy remains truthfully incomplete until eligible
 standard-organic geometry exists for its eight required LTR/RTL variants. WP1
 ran on the interactive desktop. FFmpeg proved healthy exact-HWND video with
 lower measured GPU/headroom cost and graceful stop, but failed

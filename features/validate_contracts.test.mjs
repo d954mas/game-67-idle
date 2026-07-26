@@ -122,6 +122,22 @@ test("inventory discovers new manifests instead of silently relying on a fixed l
   assert.throws(() => validateFeatureContracts(root), /missing reusable feature 'new-core'/i);
 });
 
+test("specified-only features stay out of runtime dependency seeds", (t) => {
+  const root = fixture(t);
+  write(root, "features/planned-core/feature.json", {
+    schema: "ai_studio.feature.v1",
+    id: "planned-core",
+    version: "1.0.0",
+    status: "specified",
+    manuals: { install: "features/planned-core/INSTALL.md" },
+  });
+  write(root, "features/planned-core/README.md", `# planned-core\n\n${ROUTER}\n`);
+  write(root, "features/planned-core/INSTALL.md", "# Install\n");
+
+  const result = validateFeatureContracts(root);
+  assert.ok(result.rootFeatures.includes("planned-core"));
+});
+
 test("root feature inventory rejects immediate child directories without metadata", (t) => {
   const root = fixture(t);
   write(root, "features/new-core/README.md", "# new-core\n");

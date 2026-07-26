@@ -67,7 +67,12 @@ function validateManifest(root, id, base) {
       throw new Error(`${label}: README Compatibility must define PATCH, MINOR, and MAJOR rules`);
     }
   }
-  return { id, version: manifest.version, source: base };
+  return {
+    id,
+    version: manifest.version,
+    source: base,
+    status: manifest.status || "reusable",
+  };
 }
 
 function discoverFeatureDirectories(root, rel, { declaredOnly = false } = {}) {
@@ -99,7 +104,8 @@ function validateSeed(root, rootContracts) {
     if (declared.has(entry.id)) throw new Error(`${rel}: duplicate feature '${entry.id}'`);
     declared.set(entry.id, entry);
   }
-  for (const contract of rootContracts) {
+  const runtimeContracts = rootContracts.filter(({ status }) => status === "reusable");
+  for (const contract of runtimeContracts) {
     const entry = declared.get(contract.id);
     if (!entry) throw new Error(`${rel}: missing reusable feature '${contract.id}'`);
     if (entry.source !== contract.source) throw new Error(`${contract.id}: seed source must be '${contract.source}'`);
@@ -108,7 +114,7 @@ function validateSeed(root, rootContracts) {
     }
     if (!String(entry.compatibility || "").trim()) throw new Error(`${contract.id}: seed compatibility must not be empty`);
   }
-  const rootIds = new Set(rootContracts.map(({ id }) => id));
+  const rootIds = new Set(runtimeContracts.map(({ id }) => id));
   const extras = [...declared.keys()].filter((id) => !rootIds.has(id));
   if (extras.length) throw new Error(`${rel}: unknown reusable features: ${extras.join(", ")}`);
   return seed;

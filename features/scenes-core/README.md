@@ -1,7 +1,8 @@
 # Scenes Core
 
-Status: production-ready for bounded game-shell routing, implemented in the
-default template and the trolley game.
+Status: production-ready for bounded game-shell routing in the default
+template; reuse evidence additionally requires the selected private consumer's
+own host-lifecycle suite.
 
 ## Purpose
 

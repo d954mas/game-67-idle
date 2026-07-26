@@ -23,6 +23,8 @@ from native_window import resize_and_park_client
 SCHEMA = "ai_studio.capture_scenario"
 VERSION = 1
 API_VERSION = 1
+PROTOTYPE_CAPTURE_TIMING = "after-first-step-of-batch"
+PROTOTYPE_HANDOFF_STATUS = "prototype-rejected"
 TOP_KEYS = {"schema", "version", "api_version", "game", "scene", "viewport", "clock", "events", "ramps", "evidence"}
 
 
@@ -355,9 +357,13 @@ def run_scenario(scenario: Scenario, executable: Path, output_root: Path,
         executable_record = {"path": str(executable), "sha256": sha256_file(executable)}
         write_json(staging / "executable.json", executable_record)
         if visible_contract is not None:
-            shutil.copy2(visible_contract, staging / "visible_frame_contract.v1.json")
+            visible_record = json.loads(visible_contract.read_text(encoding="utf-8"))
+            visible_record["captureBeforeStep"] = False
+            visible_record["captureTiming"] = PROTOTYPE_CAPTURE_TIMING
+            write_json(staging / "visible_frame_contract.v1.json", visible_record)
         else:
-            write_json(staging / "visible_frame_contract.v1.json", {"apiVersion": 1, "captureBeforeStep": True,
+            write_json(staging / "visible_frame_contract.v1.json", {"apiVersion": 1, "captureBeforeStep": False,
+                       "captureTiming": PROTOTYPE_CAPTURE_TIMING,
                        "gameId": scenario.game, "probeAction": "marker.toggle", "probeScene": "contract.visible_frame_probe",
                        "scheduledEventFrame": 1, "visibleFrameOffset": 0, "visiblePngFrame": 1})
 
@@ -434,7 +440,10 @@ def run_scenario(scenario: Scenario, executable: Path, output_root: Path,
                "diagnosticsPath": "diagnostics.json", "executableSha256": executable_record["sha256"],
                "gameId": scenario.game, "manifestSha256": manifest_hash, "provenancePath": "provenance.json",
                "provenanceSha256": provenance_hash, "sceneContractVersion": scenario.contract_version,
-               "sceneId": scenario.scene_id, "schema": "ai_studio.capture_handoff", "status": "ready", "version": 1,
+               "sceneId": scenario.scene_id, "schema": "ai_studio.capture_handoff",
+               "status": PROTOTYPE_HANDOFF_STATUS,
+               "nonAcceptanceReason": "deferred capture.frame resolves after the first step of a batched manual advance",
+               "version": 1,
                "video": {"durationFrames": scenario.duration_frames, "fps": scenario.output_fps,
                          "height": scenario.output_height, "path": "video.mp4", "sha256": video_hash,
                          "width": scenario.output_width}}

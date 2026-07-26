@@ -6,7 +6,11 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from ai_studio.runtime_automation.capture.backends import (
+    ffmpeg_process_loopback_spike as spike_module,
+)
 from ai_studio.runtime_automation.capture.backends.ffmpeg_process_loopback_spike import (
     FfmpegProcessLoopbackSpikeError,
     build_mux_command,
@@ -18,6 +22,21 @@ from ai_studio.runtime_automation.capture.backends.ffmpeg_process_loopback_spike
 
 
 class FfmpegOwnedProcessTest(unittest.TestCase):
+    def test_completed_process_never_uses_pid_based_cleanup(self):
+        process = mock.Mock()
+        process.pid = 4242
+        process.poll.return_value = 0
+        windows_job = mock.Mock()
+
+        with mock.patch.object(spike_module.os, "name", "nt"):
+            spike_module._terminate_owned_tree(
+                process, force=True, windows_job=windows_job
+            )
+
+        windows_job.close.assert_called_once_with()
+        process.kill.assert_not_called()
+        process.terminate.assert_not_called()
+
     def test_timeout_terminates_owned_process(self):
         result = run_owned_command(
             [sys.executable, "-c", "import time; time.sleep(10)"],
@@ -110,9 +129,9 @@ class FfmpegOwnedProcessTest(unittest.TestCase):
         with self.assertRaises(OSError):
             os.kill(holder["pid"], 0)
 
-    def test_rejects_non_allowlisted_executable_before_launch(self):
+    def test_rejects_nonaccepted_executable_basename_before_launch(self):
         with self.assertRaisesRegex(
-            FfmpegProcessLoopbackSpikeError, "not allowlisted"
+            FfmpegProcessLoopbackSpikeError, "not accepted"
         ):
             run_owned_command(
                 [sys.executable, "-c", "print('not launched')"],

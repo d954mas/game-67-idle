@@ -118,6 +118,8 @@ def _terminate_owned_tree(
     windows_job: _WindowsKillJob | None,
 ) -> None:
     if os.name != "nt":
+        if process.poll() is not None:
+            return
         try:
             os.killpg(
                 os.getpgid(process.pid),
@@ -126,28 +128,21 @@ def _terminate_owned_tree(
         except (ProcessLookupError, PermissionError):
             pass
         return
-    taskkill_succeeded = False
-    try:
-        taskkill = subprocess.run(
-            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-            check=False,
-            capture_output=True,
-            text=True,
-            shell=False,
-            timeout=5.0,
-        )
-        taskkill_succeeded = taskkill.returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
-        pass
-    if not taskkill_succeeded and process.poll() is None:
+    if windows_job is not None:
+        windows_job.close()
+        if process.poll() is not None:
+            return
         try:
             process.kill() if force else process.terminate()
         except OSError:
             pass
-    if windows_job is not None:
-        windows_job.close()
-
-
+        return
+    if process.poll() is not None:
+        return
+    try:
+        process.kill() if force else process.terminate()
+    except OSError:
+        pass
 def run_owned_command(
     command: Sequence[str],
     *,
@@ -166,16 +161,16 @@ def run_owned_command(
             "deadline_monotonic must be a finite number"
         )
     executable_name = Path(command[0]).name.lower() if command else ""
-    allowed_executables = {
+    allowed_basenames = {
         "ffmpeg",
         "ffmpeg.exe",
         "windows_process_loopback",
         "windows_process_loopback.exe",
     }
-    if executable_name not in allowed_executables and not _allow_test_executable:
+    if executable_name not in allowed_basenames and not _allow_test_executable:
         raise FfmpegProcessLoopbackSpikeError(
-            f"BACKEND_UNAVAILABLE: owned executable {executable_name!r} "
-            "is not allowlisted"
+            f"BACKEND_UNAVAILABLE: executable basename {executable_name!r} "
+            "is not accepted by the private spike filter"
         )
     popen_options = {
         "stdout": subprocess.PIPE,

@@ -14,7 +14,7 @@ Exact local identity:
 - display name created by the spike:
   `NT Capture OBS Spike Block 20260726`;
 - application:
-  `C:\tmp\nt-capture-obs-spike-20260726\bin\64bit\obs64.exe`;
+  `<temporary-obs-root>\bin\64bit\obs64.exe`;
 - intended rule: inbound, block, all profiles;
 - cleanup scope: every firewall rule whose application filter resolves to that
   exact executable, including any Windows-generated allow rule;
@@ -36,7 +36,7 @@ its ephemeral password was replaced before the cleanup verification.
 The lead ran the administrator cleanup helper. Its dated result recorded:
 
 - exact application:
-  `C:\tmp\nt-capture-obs-spike-20260726\bin\64bit\obs64.exe`;
+  `<temporary-obs-root>\bin\64bit\obs64.exe`;
 - rules removed: `1`;
 - rules remaining: `0`;
 - cleanup evidence SHA-256:

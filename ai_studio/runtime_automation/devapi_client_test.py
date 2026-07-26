@@ -15,6 +15,7 @@ from devapi_client import (
     connect_existing,
     pick_free_port,
     resolve_launch_port,
+    run_capture_screenshot,
     write_engine_capture_payload_png,
 )
 
@@ -36,6 +37,30 @@ class FakeDevApiClient(DevApiClient):
     def wait_frames(self, frames=1):
         self.calls.append(("wait_frames", frames, {}))
         return {"frame": 11}
+
+
+class CaptureScreenshotProcessTest(unittest.TestCase):
+    def test_window_capture_has_bounded_timeout(self):
+        with mock.patch("devapi_client.os.name", "nt"), mock.patch(
+            "devapi_client.os.path.exists", return_value=True
+        ), mock.patch(
+            "devapi_client.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(["capture"], 3.0),
+        ) as runner:
+            with self.assertRaisesRegex(DevApiError, "timed out after 3.0s"):
+                run_capture_screenshot(timeout_seconds=3.0)
+
+        self.assertEqual(runner.call_args.kwargs["timeout"], 3.0)
+
+    def test_window_capture_launch_error_is_normalized(self):
+        with mock.patch("devapi_client.os.name", "nt"), mock.patch(
+            "devapi_client.os.path.exists", return_value=True
+        ), mock.patch(
+            "devapi_client.subprocess.run",
+            side_effect=OSError("launch denied"),
+        ):
+            with self.assertRaisesRegex(DevApiError, "could not launch"):
+                run_capture_screenshot()
 
 
 class DuplexResponseFile:
