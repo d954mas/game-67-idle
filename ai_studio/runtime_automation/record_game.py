@@ -15,11 +15,12 @@ import sys
 import tempfile
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from ctypes import wintypes
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
 
 
 RUNTIME_ROOT = Path(__file__).resolve().parent
@@ -947,6 +948,20 @@ def _obs_log_summary(portable_root: Path) -> dict:
     }
 
 
+def _record_audio_with_driver(
+    capture_audio: Callable[[], dict],
+    recording_driver: Callable[[], None] | None,
+) -> dict:
+    if recording_driver is None:
+        return capture_audio()
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        audio_future = executor.submit(capture_audio)
+        driver_future = executor.submit(recording_driver)
+        audio_result = audio_future.result()
+        driver_future.result()
+        return audio_result
+
+
 def record_take(
     *,
     pid: int,
@@ -956,6 +971,7 @@ def record_take(
     duration_seconds: float,
     countdown: int,
     obs_override: Path | None = None,
+    recording_driver: Callable[[], None] | None = None,
 ) -> dict:
     if os.name != "nt":
         raise RuntimeError("OBS game recording currently supports Windows only")
@@ -1081,12 +1097,15 @@ def record_take(
             f"REC | {duration_seconds:g} seconds",
             flush=True,
         )
-        audio_capture = capture_process_audio(
-            audio_helper,
-            pid=pid,
-            expected_creation_time_100ns=query_process_creation_time_100ns(pid),
-            output=audio_path,
-            duration_seconds=duration_seconds,
+        audio_capture = _record_audio_with_driver(
+            lambda: capture_process_audio(
+                audio_helper,
+                pid=pid,
+                expected_creation_time_100ns=query_process_creation_time_100ns(pid),
+                output=audio_path,
+                duration_seconds=duration_seconds,
+            ),
+            recording_driver,
         )
         obs_exit_code = _stop_obs(obs_process)
         obs_process = None
@@ -1194,6 +1213,7 @@ def record_take(
                 "source": "windows-process-loopback",
                 "sampleFrames": audio_capture["sampleFrames"],
             },
+            "recordingDriver": recording_driver is not None,
             "obs": {
                 "exitCode": obs_exit_code,
                 "isolatedPortableProfile": True,

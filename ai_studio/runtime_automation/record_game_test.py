@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import threading
 import unittest
 from contextlib import redirect_stderr
 from io import StringIO
@@ -21,6 +22,7 @@ from ai_studio.runtime_automation.record_game import (
     window_descriptor,
     _prepare_outputs,
     _publish_take,
+    _record_audio_with_driver,
     _scene_collection,
 )
 
@@ -192,6 +194,36 @@ class CliTest(unittest.TestCase):
         )
 
         self.assertEqual(command, ["game.exe", "--window-size", "720x1280"])
+
+
+class RecordingDriverTest(unittest.TestCase):
+    def test_optional_driver_runs_while_process_audio_is_active(self) -> None:
+        audio_started = threading.Event()
+        driver_completed = threading.Event()
+
+        def capture_audio() -> dict:
+            audio_started.set()
+            self.assertTrue(driver_completed.wait(timeout=1))
+            return {"sampleFrames": 48000}
+
+        def drive_scenario() -> None:
+            self.assertTrue(audio_started.wait(timeout=1))
+            driver_completed.set()
+
+        result = _record_audio_with_driver(capture_audio, drive_scenario)
+
+        self.assertEqual(result, {"sampleFrames": 48000})
+
+    def test_absent_driver_keeps_the_existing_synchronous_path(self) -> None:
+        calls = []
+
+        result = _record_audio_with_driver(
+            lambda: calls.append("audio") or {"sampleFrames": 1},
+            None,
+        )
+
+        self.assertEqual(calls, ["audio"])
+        self.assertEqual(result["sampleFrames"], 1)
 
 
 if __name__ == "__main__":
