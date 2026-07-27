@@ -38,8 +38,8 @@ node ai_studio/runtime_automation/web_local_mock_probe.mjs --url http://127.0.0.
 the requested aspect ratio (or attaches to a running PID), records the visible
 game-window rectangle plus audio from that game process, and produces:
 
-- `master.mkv`: H.264 video with lossless FLAC audio;
-- `edit.mp4`: the same video with AAC audio for editors;
+- `master.mkv`: validated H.264/AAC editing master;
+- `edit.mp4`: the same H.264/AAC take in an editor-friendly MP4 container;
 - `capture.json`: small technical summary.
 
 Record a vertical take for TikTok, Shorts, and Reels:
@@ -62,22 +62,26 @@ node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/recor
 ```
 
 Presets are `social` (`1080x1920`, default), `landscape` (`1920x1080`), and
-`square` (`1080x1080`); `--size WIDTHxHEIGHT` and `--fps` override them. The
-command uses FFmpeg with hardware capture/encoding to keep overhead below an
-OBS composition. The game-audio helper is built automatically once when CMake
-is available.
+`square` (`1080x1080`); `--size WIDTHxHEIGHT` overrides them. Presets record at
+30 fps to preserve game smoothness; pass `--fps 60` only when that extra frame
+rate is worth the additional GPU cost.
 
-Keep the game visible and unobstructed when the recorder reports `REC`; anything
-drawn over that rectangle can enter the take. V1 captures display 0; move an
-already running game to the primary display before attaching by PID. Capture
-from a remote, locked, or non-interactive Windows desktop is intentionally
-rejected because Windows does not expose usable rendered frames there.
+The command uses one recording path: OBS Window Capture (BitBlt) with NVIDIA
+NVENC plus Windows process-loopback audio for that game process. The process-loopback
+piece avoids OBS 30.1.2's intermittent silent application-audio source while
+still excluding desktop and microphone sound. The command creates a disposable
+portable OBS profile from hardlinks, disables preview, OBS audio sources,
+WebSocket, and updater access, then removes that profile after the take. It
+never reads or changes the user's normal OBS scenes or settings.
 
-Audio and video launch through one host-side start barrier, and
-`capture.json` records their launcher delta. Arbitrary gameplay has no automatic
-flash/impulse marker, so the file truthfully labels content-level sync as
-unmeasured; a frame-critical take should include an obvious visual/audio cue
-that can be checked in the editor.
+Realtime capture is capped at a lightweight working resolution. After `REC`
+finishes, FFmpeg trims the hidden two-second source warmup and uses NVENC to
+produce the exact requested master size and duration; `edit.mp4` is then a
+lossless container remux. Keep the game window open and not minimized. The
+recorder rejects black OBS starts before `REC` and retries the same isolated
+source up to three times. It validates decoded frame count, dimensions, FPS, a
+non-black content frame, the 48 kHz stereo audio track, and records measured
+audio activity and OBS render-lag diagnostics in `capture.json`.
 
 The larger capture specifications, policy data, benchmarks, and deterministic
 scenario prototype remain engineering references. They do not gate making a

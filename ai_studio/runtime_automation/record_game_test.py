@@ -9,14 +9,19 @@ from unittest.mock import patch
 
 from ai_studio.runtime_automation.record_game import (
     CapturePaths,
-    build_launch_command,
-    build_ddagrab_video_command,
+    CaptureSettings,
     build_edit_command,
+    build_launch_command,
+    build_master_command,
+    build_obs_launch_command,
+    build_window_capture_settings,
     parse_args,
     resolve_capture_settings,
-    validate_start_delta,
+    resolve_obs_capture_settings,
+    window_descriptor,
     _prepare_outputs,
     _publish_take,
+    _scene_collection,
 )
 
 
@@ -25,7 +30,7 @@ class CaptureSettingsTest(unittest.TestCase):
         settings = resolve_capture_settings("social", None, None)
 
         self.assertEqual((settings.width, settings.height), (1080, 1920))
-        self.assertEqual(settings.fps, 60)
+        self.assertEqual(settings.fps, 30)
 
     def test_explicit_size_and_fps_override_the_preset(self) -> None:
         settings = resolve_capture_settings("landscape", "2560x1440", 30)
@@ -37,6 +42,52 @@ class CaptureSettingsTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "WIDTHxHEIGHT"):
             resolve_capture_settings("social", "1080", None)
 
+    def test_social_capture_is_lightweight_but_keeps_delivery_aspect(self) -> None:
+        capture = resolve_obs_capture_settings(
+            resolve_capture_settings("social", None, None)
+        )
+
+        self.assertEqual((capture.width, capture.height), (720, 1280))
+        self.assertEqual(capture.fps, 30)
+
+
+class ObsContractTest(unittest.TestCase):
+    def test_obs_starts_in_isolated_portable_mode_without_preview(self) -> None:
+        command = build_obs_launch_command(Path("portable/bin/64bit/obs64.exe"))
+
+        self.assertEqual(Path(command[0]), Path("portable/bin/64bit/obs64.exe"))
+        self.assertIn("--portable", command)
+        self.assertIn("--multi", command)
+        self.assertIn("--minimize-to-tray", command)
+        self.assertIn("--startrecording", command)
+
+    def test_window_capture_targets_exact_window_with_bitblt(self) -> None:
+        descriptor = window_descriptor(
+            title="Example Game",
+            class_name="GLFW30",
+            executable_name="game.exe",
+        )
+        settings = build_window_capture_settings(descriptor)
+
+        self.assertEqual(
+            settings["window"],
+            "Example Game:GLFW30:game.exe",
+        )
+        self.assertEqual(settings["method"], 1)
+        self.assertFalse(settings["cursor"])
+        self.assertFalse(settings["capture_audio"])
+
+    def test_scene_collection_wires_the_bitblt_window_source(self) -> None:
+        collection = _scene_collection(
+            "Title:GLFW30:game.exe",
+            CaptureSettings(720, 1280, 30),
+        )
+
+        source = next(
+            item for item in collection["sources"] if item["name"] == "Game"
+        )
+        self.assertEqual(source["id"], "window_capture")
+        self.assertEqual(source["settings"]["method"], 1)
 
 class OutputTest(unittest.TestCase):
     def test_capture_paths_are_predictable(self) -> None:
@@ -81,44 +132,43 @@ class OutputTest(unittest.TestCase):
                 "ai_studio.runtime_automation.record_game.os.replace",
                 side_effect=flaky_replace,
             ), self.assertRaisesRegex(RuntimeError, "publish"):
-                _publish_take(paths, staging, keep_parts=False)
+                _publish_take(paths, staging)
 
             self.assertFalse(paths.master.exists())
             self.assertFalse(paths.edit.exists())
             self.assertFalse(paths.metadata.exists())
 
-    def test_edit_export_copies_video_and_encodes_aac_audio(self) -> None:
+    def test_master_export_trims_upscales_and_uses_nvenc(self) -> None:
+        command = build_master_command(
+            Path("ffmpeg.exe"),
+            Path("obs-source.mkv"),
+            Path("game.wav"),
+            Path("master.mkv"),
+            start_seconds=2,
+            duration_seconds=5,
+            width=1080,
+            height=1920,
+            fps=30,
+        )
+
+        self.assertEqual(command[command.index("-ss") + 1], "2.000")
+        self.assertEqual(command[command.index("-t") + 1], "5.000")
+        self.assertEqual(command[command.index("-c:v") + 1], "h264_nvenc")
+        self.assertEqual(command[command.index("-c:a") + 1], "aac")
+        self.assertIn("game.wav", command)
+        self.assertIn("1:a:0", command)
+        self.assertIn("scale=1080:1920", command[command.index("-vf") + 1])
+        self.assertEqual(command[-1], "master.mkv")
+
+    def test_edit_export_is_a_lossless_container_remux(self) -> None:
         command = build_edit_command(
             Path("ffmpeg.exe"),
             Path("master.mkv"),
             Path("edit.mp4"),
         )
 
-        self.assertIn("-c:v", command)
-        self.assertEqual(command[command.index("-c:v") + 1], "copy")
-        self.assertIn("-c:a", command)
-        self.assertEqual(command[command.index("-c:a") + 1], "aac")
+        self.assertEqual(command.count("copy"), 2)
         self.assertEqual(command[-1], "edit.mp4")
-
-    def test_capture_uses_desktop_duplication_for_the_window_region(self) -> None:
-        command = build_ddagrab_video_command(
-            Path("ffmpeg.exe"),
-            x=100,
-            y=50,
-            source_width=1280,
-            source_height=720,
-            output=Path("video.mkv"),
-            duration_seconds=10,
-            fps=60,
-            width=1080,
-            height=1920,
-        )
-
-        source = command[command.index("-i") + 1]
-        self.assertIn("ddagrab=", source)
-        self.assertIn("offset_x=100", source)
-        self.assertIn("offset_y=50", source)
-        self.assertIn("video_size=1280x720", source)
 
 
 class CliTest(unittest.TestCase):
@@ -128,6 +178,8 @@ class CliTest(unittest.TestCase):
         self.assertEqual(args.preset, "social")
         self.assertEqual(args.seconds, 30)
         self.assertEqual(args.countdown, 3)
+        self.assertIsNone(args.obs)
+        self.assertFalse(hasattr(args, "helper"))
 
     def test_pid_and_exe_are_mutually_exclusive(self) -> None:
         with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
@@ -139,14 +191,7 @@ class CliTest(unittest.TestCase):
             resolve_capture_settings("social", None, None),
         )
 
-        self.assertEqual(
-            command,
-            ["game.exe", "--window-size", "720x1280"],
-        )
-
-    def test_capture_start_barrier_rejects_a_large_launcher_gap(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "start gap"):
-            validate_start_delta(1_000_000_000, 1_050_000_000)
+        self.assertEqual(command, ["game.exe", "--window-size", "720x1280"])
 
 
 if __name__ == "__main__":
