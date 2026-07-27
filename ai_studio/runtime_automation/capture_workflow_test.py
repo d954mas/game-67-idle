@@ -12,6 +12,7 @@ from capture_workflow import (
     play_scenario_realtime,
     prepare_scenario,
     publish_take,
+    reset_scenario_for_recording,
 )
 
 
@@ -221,6 +222,38 @@ class ScenarioPlaybackTest(unittest.TestCase):
         self.assertIn("game.capture_scene.trigger_action", described)
         self.assertEqual(result["ready"], True)
         self.assertIn(("time.step", {"count": 3}), game.calls)
+        self.assertEqual(
+            game.calls[-1], ("time.set_mode", {"mode": "run"})
+        )
+
+    def test_recording_reset_reestablishes_seeded_tick_zero_at_rec(self):
+        scenario = parse_scenario(scenario_document())
+
+        class FakeGame:
+            def __init__(self):
+                self.calls = []
+
+            def result(self, method, params=None):
+                self.calls.append((method, params))
+                if method == "game.capture_scene.status":
+                    return {"ready": True, "tick": 3}
+                return {}
+
+        game = FakeGame()
+        result = reset_scenario_for_recording(game, scenario)
+
+        self.assertEqual(
+            game.calls[0], ("time.set_mode", {"mode": "manual"})
+        )
+        self.assertIn(
+            (
+                "game.capture_scene.reset",
+                {"scene": "showcase", "seed": 7},
+            ),
+            game.calls,
+        )
+        self.assertIn(("time.step", {"count": 3}), game.calls)
+        self.assertTrue(result["ready"])
 
     def test_events_are_applied_before_each_fixed_time_step(self):
         scenario = parse_scenario(scenario_document())

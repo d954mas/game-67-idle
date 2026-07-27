@@ -368,6 +368,25 @@ def prepare_scenario(game: Any, scenario: Scenario) -> dict[str, Any]:
         raise CaptureWorkflowError(
             f"capture scene failed warmup contract: {status}"
         )
+    game.result("time.set_mode", {"mode": "run"})
+    return status
+
+
+def reset_scenario_for_recording(
+    game: Any, scenario: Scenario
+) -> dict[str, Any]:
+    game.result("time.set_mode", {"mode": "manual"})
+    game.result(
+        "game.capture_scene.reset",
+        {"scene": scenario.scene_id, "seed": scenario.seed},
+    )
+    if scenario.warmup_ticks:
+        game.result("time.step", {"count": scenario.warmup_ticks})
+    status = game.result("game.capture_scene.status")
+    if status.get("ready") is not True or status.get("tick") != scenario.warmup_ticks:
+        raise CaptureWorkflowError(
+            f"capture scene failed REC reset contract: {status}"
+        )
     return status
 
 
@@ -486,7 +505,9 @@ def run_capture(
     ) as game:
         if shot is not None:
             prepare_scenario(game, shot.scenario)
-            driver = lambda: play_scenario_realtime(game, shot.scenario)
+            def driver() -> None:
+                reset_scenario_for_recording(game, shot.scenario)
+                play_scenario_realtime(game, shot.scenario)
         else:
             driver = (lambda: live_driver(game)) if live_driver is not None else None
         recorder_result = record_take(
