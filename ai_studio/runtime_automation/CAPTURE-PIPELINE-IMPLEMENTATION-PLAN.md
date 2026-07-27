@@ -1,4 +1,11 @@
-# Game Capture Pipeline Implementation Plan
+# Historical Game Capture Pipeline Implementation Plan
+
+> **Superseded on 2026-07-27.** This document records the pre-`3cce0ba65`
+> exploration and is not an active status source or implementation plan.
+> The normative two-command workflow and current status live in
+> [`CAPTURE-PIPELINE-SPEC.md`](CAPTURE-PIPELINE-SPEC.md). In particular, the
+> jobs, queues, backend selection, backend-neutral kernel, and offline-render
+> packages below must not be returned to the supported product surface.
 
 Status: approved implementation plan; WP0 implementation exists but its gate
 was reopened by the post-commit contract review. WP1 measurements, cleanup, and

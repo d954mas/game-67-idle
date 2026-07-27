@@ -1,4 +1,11 @@
-# Game Capture Pipeline Review and Critique
+# Historical Game Capture Pipeline Review and Critique
+
+> **Superseded on 2026-07-27.** This review describes the foundation before
+> the OBS recorder shipped in `3cce0ba65`; its `NO-GO`, "no backend selected",
+> and WP gate language is historical. Current normative status is maintained
+> only in [`CAPTURE-PIPELINE-SPEC.md`](CAPTURE-PIPELINE-SPEC.md). The measured
+> spike findings remain useful evidence, but they do not reopen FFmpeg-versus-
+> OBS selection or authorize jobs/queues/backend-selection work.
 
 Date: 2026-07-26.
 
