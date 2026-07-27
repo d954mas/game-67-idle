@@ -19,6 +19,29 @@ the reviewed AI Studio module.
 - `references/visual-qa-checklist.md`: only when the task asks for visible
   runtime evidence; quality acceptance rules live in `ai_studio/quality/`.
 
+## Game Video Capture
+
+For routine game video, start in the game root and use only:
+
+```text
+capture live
+capture shot <id>
+```
+
+Read the game-owned `capture/catalog.json` before choosing an id. `live` runs
+the catalog's approved continuous presentation without a deterministic event
+timeline. `shot` resets and host-paces the referenced deterministic scenario
+while the existing OBS recorder observes real game pixels and process audio.
+
+Treat every completed take as a draft first. A shot becomes a true master only
+when recorder validation, scenario completion, and the applicable universal
+safe-area gate all pass. An incomplete safe-area policy is guidance only and
+must keep the take in `draft/`.
+
+Run the game's documented local audiovisual E2E after capture workflow changes.
+Use `record_game.py` directly only when maintaining or diagnosing the recorder;
+do not add a backend selector, job, queue, or alternate routine capture path.
+
 ## Default Workflow
 
 1. Check `ai_studio/runtime_automation/README.md` for module ownership and

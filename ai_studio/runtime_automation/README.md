@@ -32,9 +32,28 @@ node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/pixel
 node ai_studio/runtime_automation/web_local_mock_probe.mjs --url http://127.0.0.1:8092/ --cdp http://127.0.0.1:9222 --out games/<game-id>/.ai_studio/evidence/local-mock/<observation>.json
 ```
 
-## Quick game recording
+## Agent-ready game recording
 
-`record_game.py` is the normal personal workflow. It launches a Studio game in
+Games with an approved `capture/catalog.json` expose exactly:
+
+```text
+capture live
+capture shot <id>
+```
+
+Run them from the game root. `live` opens the catalog's approved continuous
+presentation. `shot` resolves an approved id, resets its game-owned DevAPI
+scenario exactly at REC, and host-paces its fixed ticks. Both commands invoke
+the same isolated OBS recorder below, publish a draft first, and report why a
+true master was or was not promoted. The current universal-social matrix is
+incomplete, so social takes truthfully remain drafts.
+
+The game catalog also documents its reproducible local audiovisual E2E. Agents
+must run that E2E after workflow, scene, audio, or recorder integration changes.
+
+## Recorder maintenance and direct diagnostics
+
+`record_game.py` is the fixed low-level recording path. It launches a Studio game in
 the requested aspect ratio (or attaches to a running PID), records the visible
 game-window rectangle plus audio from that game process, and produces:
 
@@ -72,20 +91,23 @@ piece avoids OBS 30.1.2's intermittent silent application-audio source while
 still excluding desktop and microphone sound. The command creates a disposable
 portable OBS profile from hardlinks, disables preview, OBS audio sources,
 WebSocket, and updater access, then removes that profile after the take. It
-never reads or changes the user's normal OBS scenes or settings.
+marks first-run setup complete so the auto-configuration wizard cannot appear,
+and never reads or changes the user's normal OBS scenes or settings.
 
 Realtime capture is capped at a lightweight working resolution. After `REC`
-finishes, FFmpeg trims the hidden two-second source warmup and uses NVENC to
+finishes, FFmpeg trims the hidden source-attachment preflight and uses NVENC to
 produce the exact requested master size and duration; `edit.mp4` is then a
 lossless container remux. Keep the game window open and not minimized. The
-recorder rejects black OBS starts before `REC` and retries the same isolated
-source up to three times. It validates decoded frame count, dimensions, FPS, a
+recorder samples the live source for up to four seconds and rejects black OBS
+starts before `REC`. The public workflow makes one clean take retry after a
+fully unhealthy source or incomplete OBS container. It validates decoded frame
+count, dimensions, FPS, a
 non-black content frame, the 48 kHz stereo audio track, and records measured
 audio activity and OBS render-lag diagnostics in `capture.json`.
 
 The larger capture specifications, policy data, benchmarks, and deterministic
-scenario prototype remain engineering references. They do not gate making a
-normal take with `record_game.py`.
+scenario prototype remain engineering references. They do not create another
+routine recording surface.
 
 ## Local mock web proof
 

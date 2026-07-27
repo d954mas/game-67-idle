@@ -17,8 +17,10 @@ capture live
 capture shot <id>
 ```
 
-`capture live` records normal play after a countdown. `capture shot <id>`
-launches one approved, game-owned deterministic scenario and records it.
+`capture live` records the catalog's approved continuous game presentation
+after a countdown, without running a deterministic event timeline.
+`capture shot <id>` launches one approved, game-owned deterministic scenario
+and records it.
 Repository-local launch shims may be needed to put `capture` on a shell path;
 they do not add commands or expose recorder internals.
 
@@ -45,6 +47,7 @@ Runtime Automation owns:
 Each game owns:
 
 - `capture/catalog.json`, the compact approved shot catalog;
+- the approved shot reused as the untimed live presentation;
 - the referenced deterministic scenario documents;
 - the game DevAPI scene commands used by those scenarios;
 - semantic shot purpose, duration, framing, and critical-content regions.
@@ -76,14 +79,15 @@ outside the game, mismatched duration, and missing scenarios are hard errors.
 
 `capture live`:
 
-1. resolves the game's normal DevAPI capture executable;
-2. launches a fresh game or attaches only when explicitly configured by the
-   game shim;
-3. starts the unchanged OBS recorder after its normal countdown;
-4. records game-window pixels and game-process audio;
-5. validates the decoded video, pixel health, audio stream, audio activity, and
+1. resolves the game's DevAPI capture executable and approved live scene shot;
+2. launches a fresh, non-persistent game session;
+3. loads the approved scene and its frame-zero presentation values, then lets
+   game time run without resetting or playing its deterministic timeline;
+4. starts the unchanged OBS recorder after its normal countdown;
+5. records game-window pixels and game-process audio;
+6. validates the decoded video, pixel health, audio stream, audio activity, and
    OBS diagnostics;
-6. publishes a draft take.
+7. publishes a draft take.
 
 Live play cannot provide complete critical-content geometry, so its universal
 safe-area result is `guidance_only`. A live take is never automatically called
@@ -189,21 +193,20 @@ not a committed binary fixture.
 
 ## Current implementation status
 
-| Capability | Status at `3cce0ba65` |
+| Capability | Current status |
 | --- | --- |
 | Isolated OBS window recording | implemented |
 | Game-process loopback audio | implemented |
 | Video/audio/pixel validation | implemented |
-| `capture live` orchestration | pending this workflow change |
-| `capture shot <id>` orchestration | pending this workflow change |
-| Game-owned approved catalog | pending this workflow change |
-| Universal safe-area gate | requirements implemented; source matrix incomplete |
-| Draft/master product separation | pending this workflow change |
-| Reproducible local audiovisual E2E | pending this workflow change |
+| `capture live` orchestration | implemented and recorded locally |
+| `capture shot <id>` orchestration | implemented and recorded locally |
+| Game-owned approved catalog | implemented |
+| Universal safe-area gate | implemented; source matrix truthfully incomplete |
+| Draft/master product separation | implemented |
+| Reproducible local audiovisual E2E | implemented and passing locally |
 
-The implementation updates this table when those pending items land. Historical
-spike reports remain evidence for why the fixed OBS path was selected; they do
-not reopen backend selection.
+Historical spike reports remain evidence for why the fixed OBS path was
+selected; they do not reopen backend selection.
 
 ## Non-goals
 
