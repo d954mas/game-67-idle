@@ -6,9 +6,11 @@ from pathlib import Path
 from capture_scenario import parse_scenario
 from capture_workflow import (
     CaptureWorkflowError,
+    build_parser,
     evaluate_shot_safe_area,
     load_catalog,
     play_scenario_realtime,
+    prepare_scenario,
     publish_take,
 )
 
@@ -155,6 +157,71 @@ class SafeAreaTest(unittest.TestCase):
 
 
 class ScenarioPlaybackTest(unittest.TestCase):
+    def test_prepare_discovers_describes_loads_and_warms_the_game_scene(self):
+        scenario = parse_scenario(scenario_document())
+
+        class FakeGame:
+            def __init__(self):
+                self.calls = []
+
+            def endpoint_methods(self):
+                return {
+                    f"game.capture_scene.{name}"
+                    for name in (
+                        "list",
+                        "describe",
+                        "load",
+                        "set_parameter",
+                        "trigger_action",
+                        "status",
+                    )
+                }
+
+            def result(self, method, params=None):
+                self.calls.append((method, params))
+                if method == "command.describe":
+                    return {"method": params["method"]}
+                if method == "game.capture_scene.list":
+                    return {
+                        "apiVersion": 1,
+                        "gameId": "example-game",
+                        "scenes": [{"id": "showcase"}],
+                    }
+                if method == "game.capture_scene.describe":
+                    return {
+                        "apiVersion": 1,
+                        "gameId": "example-game",
+                        "scene": {
+                            "id": "showcase",
+                            "contractVersion": 1,
+                            "parameters": [
+                                {
+                                    "id": "population",
+                                    "type": "float",
+                                    "minimum": 0,
+                                    "maximum": 1000,
+                                }
+                            ],
+                            "actions": [{"id": "wave"}],
+                        },
+                    }
+                if method == "game.capture_scene.status":
+                    return {"ready": True, "tick": 3}
+                return {}
+
+        game = FakeGame()
+        result = prepare_scenario(game, scenario)
+
+        described = [
+            params["method"]
+            for method, params in game.calls
+            if method == "command.describe"
+        ]
+        self.assertIn("game.capture_scene.load", described)
+        self.assertIn("game.capture_scene.trigger_action", described)
+        self.assertEqual(result["ready"], True)
+        self.assertIn(("time.step", {"count": 3}), game.calls)
+
     def test_events_are_applied_before_each_fixed_time_step(self):
         scenario = parse_scenario(scenario_document())
 
@@ -250,6 +317,18 @@ class PublicationTest(unittest.TestCase):
             self.assertEqual(result["classification"], "master")
             self.assertTrue((root / "take" / "draft" / "recording.mkv").is_file())
             self.assertTrue((root / "take" / "master" / "recording.mkv").is_file())
+
+
+class CliSurfaceTest(unittest.TestCase):
+    def test_public_surface_is_only_live_and_shot_id(self):
+        parser = build_parser()
+
+        live = parser.parse_args(["--game-root", "game", "live"])
+        shot = parser.parse_args(["--game-root", "game", "shot", "showcase"])
+
+        self.assertEqual(live.command, "live")
+        self.assertEqual(shot.command, "shot")
+        self.assertEqual(shot.shot_id, "showcase")
 
 
 if __name__ == "__main__":

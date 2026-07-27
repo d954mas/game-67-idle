@@ -3,16 +3,32 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
+import sys
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from capture_safe_area import UnsafeMask, evaluate_critical_regions
-from capture_scenario import Scenario, expand_schedule, parse_scenario
+from capture_scenario import (
+    Scenario,
+    expand_schedule,
+    parse_scenario,
+    validate_against_describe,
+)
+from devapi_client import DevApiError, running_game
+from record_game import (
+    _extract_health_frame,
+    _require_tool,
+    record_take,
+    resolve_capture_settings,
+    resolve_obs_capture_settings,
+)
 
 
 CATALOG_SCHEMA = "ai_studio.game_capture_catalog"
@@ -301,6 +317,60 @@ def play_scenario_realtime(
     }
 
 
+def prepare_scenario(game: Any, scenario: Scenario) -> dict[str, Any]:
+    required = {
+        f"game.capture_scene.{name}"
+        for name in (
+            "list",
+            "describe",
+            "load",
+            "set_parameter",
+            "trigger_action",
+            "status",
+        )
+    }
+    methods = game.endpoint_methods()
+    missing = sorted(required - methods)
+    if missing:
+        raise CaptureWorkflowError(
+            f"game capture-scene endpoint is missing: {missing[0]}"
+        )
+    for method in sorted(required):
+        game.result("command.describe", {"method": method})
+    listing = game.result("game.capture_scene.list")
+    if (
+        listing.get("apiVersion") != 1
+        or listing.get("gameId") != scenario.game
+    ):
+        raise CaptureWorkflowError("game capture-scene identity mismatch")
+    scene_ids = [
+        item.get("id")
+        for item in listing.get("scenes", [])
+        if isinstance(item, Mapping)
+    ]
+    if scenario.scene_id not in scene_ids:
+        raise CaptureWorkflowError(
+            f"scenario scene is not registered: {scenario.scene_id}"
+        )
+    describe = game.result(
+        "game.capture_scene.describe", {"scene": scenario.scene_id}
+    )
+    validate_against_describe(scenario, describe)
+    game.result("time.set_mode", {"mode": "manual"})
+    game.result(
+        "game.capture_scene.load",
+        {"scene": scenario.scene_id, "seed": scenario.seed},
+    )
+    if scenario.warmup_ticks:
+        game.result("time.step", {"count": scenario.warmup_ticks})
+    status = game.result("game.capture_scene.status")
+    if status.get("ready") is not True or status.get("tick") != scenario.warmup_ticks:
+        raise CaptureWorkflowError(
+            f"capture scene failed warmup contract: {status}"
+        )
+    return status
+
+
 def publish_take(
     recorder_root: Path,
     take_root: Path,
@@ -340,6 +410,10 @@ def publish_take(
         **recorder_metadata,
         "workflow": dict(workflow),
         "classification": classification,
+        "artifacts": {
+            "draft": "draft",
+            "master": "master" if eligible else None,
+        },
     }
     draft.mkdir(parents=True)
     for name in ("recording.mkv", "edit.mp4", "representative-frame.png"):
@@ -356,3 +430,163 @@ def publish_take(
         "master": str(master) if eligible else None,
         "manifest": manifest,
     }
+
+
+def _take_root(game_root: Path, label: str) -> Path:
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    return (
+        game_root
+        / "tmp"
+        / "captures"
+        / label
+        / f"{stamp}-{uuid.uuid4().hex[:8]}"
+    )
+
+
+def run_capture(
+    game_root: Path,
+    command: str,
+    shot_id: str | None = None,
+) -> dict[str, Any]:
+    catalog = load_catalog(game_root)
+    if not catalog.executable.is_file():
+        raise CaptureWorkflowError(
+            f"build the DevAPI capture executable first: {catalog.executable}"
+        )
+    if command == "shot":
+        if shot_id is None:
+            raise CaptureWorkflowError("shot id is required")
+        shot = catalog.shot(shot_id)
+        preset = shot.preset
+        duration = shot.duration_seconds
+        fps = shot.scenario.output_fps
+        label = shot.id
+    elif command == "live":
+        shot = None
+        preset = catalog.live["preset"]
+        duration = float(catalog.live["duration_seconds"])
+        fps = None
+        label = "live"
+    else:
+        raise CaptureWorkflowError(f"unsupported capture command: {command}")
+
+    settings = resolve_capture_settings(preset, None, fps)
+    window = resolve_obs_capture_settings(settings)
+    take_root = _take_root(catalog.game_root, label)
+    recorder_root = take_root / ".recorder"
+    with running_game(
+        exe=str(catalog.executable),
+        cwd=str(catalog.game_root),
+        fresh_state=shot is not None,
+        autosave_enabled=shot is None,
+        window_size=f"{window.width}x{window.height}",
+    ) as game:
+        if shot is not None:
+            prepare_scenario(game, shot.scenario)
+            driver = lambda: play_scenario_realtime(game, shot.scenario)
+        else:
+            driver = None
+        recorder_result = record_take(
+            pid=game.process_id,
+            executable_name=catalog.executable.name,
+            output_root=recorder_root,
+            settings=settings,
+            duration_seconds=duration,
+            countdown=3,
+            recording_driver=driver,
+        )
+
+    representative_frame = recorder_root / "representative-frame.png"
+    _extract_health_frame(
+        _require_tool("ffmpeg"),
+        recorder_root / "master.mkv",
+        representative_frame,
+        min(duration / 2, 2.0),
+    )
+    if shot is None:
+        safe_area = {
+            "policy": catalog.safe_area.get("id"),
+            "policyStatus": catalog.safe_area.get("policy_status"),
+            "geometryStatus": "not_measured",
+            "status": "guidance_only",
+            "masterEligible": False,
+        }
+        scenario_status = "not_applicable"
+        workflow_shot = None
+    else:
+        safe_area = evaluate_shot_safe_area(
+            catalog.safe_area,
+            shot.critical_regions,
+            shot.scenario,
+        )
+        scenario_status = "completed"
+        workflow_shot = {
+            "id": shot.id,
+            "purpose": shot.purpose,
+            "durationSeconds": shot.duration_seconds,
+            "angle": shot.angle,
+            "scenario": str(shot.scenario_path.relative_to(catalog.game_root)),
+            "scene": shot.scenario.scene_id,
+            "seed": shot.scenario.seed,
+        }
+    published = publish_take(
+        recorder_root,
+        take_root,
+        representative_frame=representative_frame,
+        workflow={
+            "schema": "ai_studio.capture_workflow_result",
+            "version": 1,
+            "game": catalog.game,
+            "mode": command,
+            "shot": workflow_shot,
+            "scenarioStatus": scenario_status,
+            "safeArea": safe_area,
+            "recorderStatus": recorder_result.get("status"),
+        },
+    )
+    try:
+        recorder_root.rmdir()
+    except OSError:
+        pass
+    return published
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="capture",
+        description="Record live play or one approved deterministic game shot.",
+    )
+    parser.add_argument("--game-root", type=Path, required=True)
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("live", help="record normal play")
+    shot = commands.add_parser("shot", help="record an approved deterministic shot")
+    shot.add_argument("shot_id")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        result = run_capture(
+            args.game_root,
+            args.command,
+            getattr(args, "shot_id", None),
+        )
+    except (CaptureWorkflowError, DevApiError, OSError, RuntimeError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    print(f"Capture: {result['classification']}")
+    print(f"Draft:   {result['draft']}")
+    if result["master"]:
+        print(f"Master:  {result['master']}")
+    else:
+        safe = result["manifest"]["workflow"]["safeArea"]
+        print(
+            "Master:  not promoted "
+            f"(safe area: {safe['status']}, policy: {safe['policyStatus']})"
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
