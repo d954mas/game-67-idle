@@ -447,6 +447,9 @@ def run_capture(
     game_root: Path,
     command: str,
     shot_id: str | None = None,
+    *,
+    live_driver: Callable[[Any], None] | None = None,
+    countdown: int = 3,
 ) -> dict[str, Any]:
     catalog = load_catalog(game_root)
     if not catalog.executable.is_file():
@@ -485,14 +488,14 @@ def run_capture(
             prepare_scenario(game, shot.scenario)
             driver = lambda: play_scenario_realtime(game, shot.scenario)
         else:
-            driver = None
+            driver = (lambda: live_driver(game)) if live_driver is not None else None
         recorder_result = record_take(
             pid=game.process_id,
             executable_name=catalog.executable.name,
             output_root=recorder_root,
             settings=settings,
             duration_seconds=duration,
-            countdown=3,
+            countdown=countdown,
             recording_driver=driver,
         )
 
