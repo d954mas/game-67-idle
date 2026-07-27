@@ -6,6 +6,7 @@ import unittest
 from contextlib import redirect_stderr
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from ai_studio.runtime_automation.record_game import (
@@ -21,9 +22,12 @@ from ai_studio.runtime_automation.record_game import (
     resolve_obs_capture_settings,
     window_descriptor,
     _prepare_outputs,
+    _preflight_obs_source,
     _publish_take,
     _record_audio_with_driver,
+    _extract_health_frame,
     _scene_collection,
+    _write_obs_configuration,
 )
 
 
@@ -54,6 +58,46 @@ class CaptureSettingsTest(unittest.TestCase):
 
 
 class ObsContractTest(unittest.TestCase):
+    def test_obs_source_gets_time_to_attach_before_restart(self) -> None:
+        healthy = {"uniqueColors": 500}
+        with patch(
+            "ai_studio.runtime_automation.record_game._extract_health_frame",
+            side_effect=[RuntimeError("black"), healthy],
+        ) as extract, patch(
+            "ai_studio.runtime_automation.record_game.time.sleep"
+        ) as sleep:
+            result = _preflight_obs_source(
+                Path("ffmpeg.exe"),
+                Path("recording.mkv"),
+                Path("health.png"),
+            )
+
+        self.assertEqual(result, healthy)
+        self.assertEqual(
+            [call.args[3] for call in extract.call_args_list],
+            [1.0, 2.5],
+        )
+        self.assertEqual(
+            [call.args[0] for call in sleep.call_args_list],
+            [1.0, 1.5],
+        )
+
+    def test_portable_profile_skips_the_first_run_wizard(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            portable_root = Path(directory)
+            _write_obs_configuration(
+                portable_root,
+                descriptor="Title:GLFW30:game.exe",
+                settings=CaptureSettings(720, 1280, 30),
+                recording_directory=portable_root / "recordings",
+            )
+            global_ini = (
+                portable_root / "config" / "obs-studio" / "global.ini"
+            ).read_text(encoding="utf-8")
+
+        self.assertIn("FirstRun=true", global_ini)
+        self.assertIn("LastVersion=503382018", global_ini)
+
     def test_obs_starts_in_isolated_portable_mode_without_preview(self) -> None:
         command = build_obs_launch_command(Path("portable/bin/64bit/obs64.exe"))
 
@@ -92,6 +136,31 @@ class ObsContractTest(unittest.TestCase):
         self.assertEqual(source["settings"]["method"], 2)
 
 class OutputTest(unittest.TestCase):
+    def test_recording_health_accepts_a_high_range_pale_game_frame(self) -> None:
+        health = SimpleNamespace(
+            unique_colors=500,
+            unique_buckets=40,
+            luma_range=250.0,
+            luma_stdev=9.5,
+        )
+        with patch(
+            "ai_studio.runtime_automation.record_game._run_media"
+        ), patch(
+            "ai_studio.runtime_automation.record_game.assert_pixel_health",
+            return_value=health,
+        ) as check:
+            _extract_health_frame(
+                Path("ffmpeg.exe"),
+                Path("take.mkv"),
+                Path("frame.png"),
+                0.5,
+            )
+
+        check.assert_called_once_with(
+            "frame.png",
+            min_luma_stdev=8.0,
+        )
+
     def test_capture_paths_are_predictable(self) -> None:
         root = Path("takes") / "tram-01"
         paths = CapturePaths.from_root(root)

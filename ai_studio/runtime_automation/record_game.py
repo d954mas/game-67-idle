@@ -76,7 +76,6 @@ PRESETS = {
     "square": CaptureSettings(1080, 1080, 30),
 }
 OBS_DEFAULT = Path(r"C:\Program Files\obs-studio\bin\64bit\obs64.exe")
-OBS_SOURCE_PREROLL_SECONDS = 2.0
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -668,7 +667,8 @@ ConfirmOnExit=false
 HotkeyFocusType=NeverDisableHotkeys
 BrowserHWAccel=false
 YtDockCleanupDone=true
-FirstRun=false
+FirstRun=true
+LastVersion=503382018
 
 [Video]
 Renderer=Direct3D 11
@@ -886,13 +886,37 @@ def _extract_health_frame(
         ],
         timeout_seconds=20,
     )
-    health = assert_pixel_health(str(output))
+    health = assert_pixel_health(str(output), min_luma_stdev=8.0)
     return {
         "uniqueColors": health.unique_colors,
         "uniqueBuckets": health.unique_buckets,
         "lumaRange": round(health.luma_range, 3),
         "lumaStdev": round(health.luma_stdev, 3),
     }
+
+
+def _preflight_obs_source(
+    ffmpeg: Path,
+    recording: Path,
+    output: Path,
+) -> dict:
+    previous_seek = 0.0
+    rejection: RuntimeError | None = None
+    for seek_seconds in (1.0, 2.5, 4.0):
+        time.sleep(seek_seconds - previous_seek)
+        previous_seek = seek_seconds
+        try:
+            return _extract_health_frame(
+                ffmpeg,
+                recording,
+                output,
+                seek_seconds,
+            )
+        except RuntimeError as exc:
+            rejection = exc
+    if rejection is None:
+        raise RuntimeError("OBS source preflight did not run")
+    raise rejection
 
 
 def _audio_levels(ffmpeg: Path, master: Path) -> dict:
@@ -1054,13 +1078,11 @@ def record_take(
                     "Checking live OBS pixels before REC...",
                     flush=True,
                 )
-                time.sleep(OBS_SOURCE_PREROLL_SECONDS)
                 try:
-                    preflight_health = _extract_health_frame(
+                    preflight_health = _preflight_obs_source(
                         ffmpeg,
                         recorded,
                         health_frame,
-                        seek_seconds=1.0,
                     )
                 except RuntimeError as exc:
                     rejection = str(exc)
