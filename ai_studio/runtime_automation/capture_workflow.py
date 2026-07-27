@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from capture_safe_area import UnsafeMask, evaluate_critical_regions
 from capture_scenario import (
     Scenario,
     expand_schedule,
@@ -234,50 +233,41 @@ def evaluate_shot_safe_area(
     critical_regions: list[Mapping[str, Any]] | tuple[Mapping[str, Any], ...],
     scenario: Scenario,
 ) -> dict[str, Any]:
-    dimensions = policy.get("normalized_dimensions")
-    if not isinstance(dimensions, Mapping):
-        raise CaptureWorkflowError("safe-area dimensions are missing")
-    width = dimensions.get("width")
-    height = dimensions.get("height")
-    rectangles = policy.get("guide_unsafe_rectangles")
-    if (
-        not isinstance(width, int)
-        or not isinstance(height, int)
-        or not isinstance(rectangles, list)
-    ):
+    unsafe = policy.get("guide_unsafe_rectangles")
+    if not isinstance(unsafe, list):
         raise CaptureWorkflowError("safe-area guide is invalid")
-    mask = UnsafeMask.from_normalized_rectangles(width, height, rectangles)
-    timed_regions = [
-        {
-            "id": _text(region.get("id"), "critical region id"),
-            "start_tick": 0,
-            "end_tick_exclusive": scenario.duration_frames,
-            "rectangle": region.get("rectangle"),
-        }
-        for region in critical_regions
-    ]
-    geometry = evaluate_critical_regions(
-        mask,
-        timed_regions,
-        measured_ticks=range(scenario.duration_frames),
-    )
+    violations = []
+    for region in critical_regions:
+        region_id = _text(region.get("id"), "critical region id")
+        rectangle = region.get("rectangle")
+        if not isinstance(rectangle, list) or len(rectangle) != 4:
+            raise CaptureWorkflowError(f"critical region {region_id} is invalid")
+        if any(
+            rectangle[0] < blocked[2]
+            and rectangle[2] > blocked[0]
+            and rectangle[1] < blocked[3]
+            and rectangle[3] > blocked[1]
+            for blocked in unsafe
+        ):
+            violations.append(region_id)
+    geometry_status = "fail" if violations else "pass"
     policy_status = policy.get("policy_status")
-    if geometry["status"] == "fail":
+    if geometry_status == "fail":
         status = "fail"
-    elif (
-        policy_status in READY_SAFE_AREA_STATUSES
-        and geometry["status"] == "pass"
-    ):
+    elif policy_status in READY_SAFE_AREA_STATUSES:
         status = "pass"
     else:
         status = "guidance_only"
     return {
         "policy": policy.get("id"),
         "policyStatus": policy_status,
-        "geometryStatus": geometry["status"],
+        "geometryStatus": geometry_status,
         "status": status,
         "masterEligible": status == "pass",
-        "criticalRegions": geometry,
+        "criticalRegions": {
+            "status": geometry_status,
+            "violations": violations,
+        },
     }
 
 
