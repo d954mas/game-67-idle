@@ -127,13 +127,16 @@ def load_catalog(game_root: Path) -> CaptureCatalog:
     live = _object(
         root.get("live"),
         "catalog.live",
-        {"purpose", "duration_seconds", "angle", "preset"},
+        {"purpose", "duration_seconds", "angle", "preset", "scene_shot"},
     )
     _text(live.get("purpose"), "catalog.live.purpose")
     _duration(live.get("duration_seconds"), "catalog.live.duration_seconds")
     _text(live.get("angle"), "catalog.live.angle")
     if live.get("preset") not in {"social", "landscape", "square"}:
         raise CaptureWorkflowError("catalog.live.preset is invalid")
+    live_scene_shot = _text(
+        live.get("scene_shot"), "catalog.live.scene_shot"
+    )
     safe_area = _object(
         root.get("safe_area"),
         "catalog.safe_area",
@@ -211,6 +214,10 @@ def load_catalog(game_root: Path) -> CaptureCatalog:
                 scenario=scenario,
                 critical_regions=tuple(dict(region) for region in regions),
             )
+        )
+    if live_scene_shot not in ids:
+        raise CaptureWorkflowError(
+            "catalog.live.scene_shot must reference an approved shot"
         )
     return CaptureCatalog(
         game_root=game_root,
@@ -372,6 +379,25 @@ def prepare_scenario(game: Any, scenario: Scenario) -> dict[str, Any]:
     return status
 
 
+def prepare_live(game: Any, scenario: Scenario) -> dict[str, Any]:
+    status = prepare_scenario(game, scenario)
+    game.result("time.set_mode", {"mode": "manual"})
+    for event in expand_schedule(scenario).get(0, []):
+        if "set" not in event:
+            continue
+        setting = event["set"]
+        game.result(
+            "game.capture_scene.set_parameter",
+            {
+                "scene": scenario.scene_id,
+                "parameter": setting["parameter"],
+                "value": setting["value"],
+            },
+        )
+    game.result("time.set_mode", {"mode": "run"})
+    return status
+
+
 def reset_scenario_for_recording(
     game: Any, scenario: Scenario
 ) -> dict[str, Any]:
@@ -462,6 +488,36 @@ def _take_root(game_root: Path, label: str) -> Path:
     )
 
 
+def game_launch_isolation(command: str) -> tuple[bool, bool]:
+    if command not in {"live", "shot"}:
+        raise CaptureWorkflowError(f"unsupported capture command: {command}")
+    return True, False
+
+
+def record_with_transient_retry(
+    output_root: Path,
+    record: Callable[[Path], dict[str, Any]],
+) -> tuple[Path, dict[str, Any]]:
+    for attempt in (1, 2):
+        attempt_root = (
+            output_root
+            if attempt == 1
+            else output_root.with_name(f"{output_root.name}-retry-{attempt}")
+        )
+        try:
+            return attempt_root, record(attempt_root)
+        except RuntimeError as exc:
+            transient = (
+                "incomplete ffprobe metadata" in str(exc)
+                or "OBS window source stayed unhealthy" in str(exc)
+            )
+            if attempt == 1 and transient:
+                print("OBS take was transiently unhealthy; retrying once...", flush=True)
+                continue
+            raise
+    raise CaptureWorkflowError("capture retry did not run")
+
+
 def run_capture(
     game_root: Path,
     command: str,
@@ -485,9 +541,10 @@ def run_capture(
         label = shot.id
     elif command == "live":
         shot = None
+        live_scene_shot = catalog.shot(catalog.live["scene_shot"])
         preset = catalog.live["preset"]
         duration = float(catalog.live["duration_seconds"])
-        fps = None
+        fps = live_scene_shot.scenario.output_fps
         label = "live"
     else:
         raise CaptureWorkflowError(f"unsupported capture command: {command}")
@@ -496,11 +553,12 @@ def run_capture(
     window = resolve_obs_capture_settings(settings)
     take_root = _take_root(catalog.game_root, label)
     recorder_root = take_root / ".recorder"
+    fresh_state, autosave_enabled = game_launch_isolation(command)
     with running_game(
         exe=str(catalog.executable),
         cwd=str(catalog.game_root),
-        fresh_state=shot is not None,
-        autosave_enabled=shot is None,
+        fresh_state=fresh_state,
+        autosave_enabled=autosave_enabled,
         window_size=f"{window.width}x{window.height}",
     ) as game:
         if shot is not None:
@@ -509,15 +567,19 @@ def run_capture(
                 reset_scenario_for_recording(game, shot.scenario)
                 play_scenario_realtime(game, shot.scenario)
         else:
+            prepare_live(game, live_scene_shot.scenario)
             driver = (lambda: live_driver(game)) if live_driver is not None else None
-        recorder_result = record_take(
-            pid=game.process_id,
-            executable_name=catalog.executable.name,
-            output_root=recorder_root,
-            settings=settings,
-            duration_seconds=duration,
-            countdown=countdown,
-            recording_driver=driver,
+        recorder_root, recorder_result = record_with_transient_retry(
+            recorder_root,
+            lambda attempt_root: record_take(
+                pid=game.process_id,
+                executable_name=catalog.executable.name,
+                output_root=attempt_root,
+                settings=settings,
+                duration_seconds=duration,
+                countdown=countdown,
+                recording_driver=driver,
+            ),
         )
 
     representative_frame = recorder_root / "representative-frame.png"

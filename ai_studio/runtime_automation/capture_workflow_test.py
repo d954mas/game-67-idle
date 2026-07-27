@@ -8,10 +8,13 @@ from capture_workflow import (
     CaptureWorkflowError,
     build_parser,
     evaluate_shot_safe_area,
+    game_launch_isolation,
     load_catalog,
     play_scenario_realtime,
+    prepare_live,
     prepare_scenario,
     publish_take,
+    record_with_transient_retry,
     reset_scenario_for_recording,
 )
 
@@ -67,6 +70,7 @@ def catalog_document(*, policy_status="incomplete"):
             "duration_seconds": 30,
             "angle": "Player-controlled camera",
             "preset": "landscape",
+            "scene_shot": "showcase",
         },
         "safe_area": {
             "id": "universal-social-v1",
@@ -94,6 +98,45 @@ def catalog_document(*, policy_status="incomplete"):
 
 
 class CatalogTest(unittest.TestCase):
+    def test_incomplete_obs_container_gets_one_clean_local_retry(self):
+        roots = []
+
+        def record(root):
+            roots.append(root)
+            if len(roots) == 1:
+                raise RuntimeError(
+                    "AV_VALIDATION_FAILED: incomplete ffprobe metadata: 'duration'"
+                )
+            return {"status": "captured"}
+
+        root, result = record_with_transient_retry(Path("take/.recorder"), record)
+
+        self.assertEqual(root, Path("take/.recorder-retry-2"))
+        self.assertEqual(result["status"], "captured")
+        self.assertEqual(
+            roots,
+            [Path("take/.recorder"), Path("take/.recorder-retry-2")],
+        )
+
+    def test_unhealthy_obs_source_gets_one_clean_local_retry(self):
+        calls = 0
+
+        def record(root):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise RuntimeError("OBS window source stayed unhealthy: black")
+            return {"status": "captured"}
+
+        root, result = record_with_transient_retry(Path("take/.recorder"), record)
+
+        self.assertEqual(root, Path("take/.recorder-retry-2"))
+        self.assertEqual(result["status"], "captured")
+
+    def test_live_and_shot_use_a_fresh_non_persistent_recording_session(self):
+        self.assertEqual(game_launch_isolation("live"), (True, False))
+        self.assertEqual(game_launch_isolation("shot"), (True, False))
+
     def test_load_catalog_resolves_approved_shot_and_checks_duration(self):
         with tempfile.TemporaryDirectory() as directory:
             game_root = Path(directory)
@@ -158,6 +201,80 @@ class SafeAreaTest(unittest.TestCase):
 
 
 class ScenarioPlaybackTest(unittest.TestCase):
+    def test_live_preflight_loads_approved_scene_without_running_its_timeline(self):
+        scenario = parse_scenario(scenario_document())
+
+        class FakeGame:
+            def __init__(self):
+                self.calls = []
+
+            def endpoint_methods(self):
+                return {
+                    f"game.capture_scene.{name}"
+                    for name in (
+                        "list",
+                        "describe",
+                        "load",
+                        "set_parameter",
+                        "trigger_action",
+                        "status",
+                    )
+                }
+
+            def result(self, method, params=None):
+                self.calls.append((method, params))
+                if method == "command.describe":
+                    return {"method": params["method"]}
+                if method == "game.capture_scene.list":
+                    return {
+                        "apiVersion": 1,
+                        "gameId": "example-game",
+                        "scenes": [{"id": "showcase"}],
+                    }
+                if method == "game.capture_scene.describe":
+                    return {
+                        "apiVersion": 1,
+                        "gameId": "example-game",
+                        "scene": {
+                            "id": "showcase",
+                            "contractVersion": 1,
+                            "parameters": [
+                                {
+                                    "id": "population",
+                                    "type": "float",
+                                    "minimum": 0,
+                                    "maximum": 1000,
+                                }
+                            ],
+                            "actions": [{"id": "wave"}],
+                        },
+                    }
+                if method == "game.capture_scene.status":
+                    return {"ready": True, "tick": 3}
+                return {}
+
+        game = FakeGame()
+        prepare_live(game, scenario)
+
+        self.assertIn(
+            (
+                "game.capture_scene.set_parameter",
+                {
+                    "scene": "showcase",
+                    "parameter": "population",
+                    "value": 100,
+                },
+            ),
+            game.calls,
+        )
+        self.assertNotIn(
+            (
+                "game.capture_scene.trigger_action",
+                {"scene": "showcase", "action": "wave", "arguments": {}},
+            ),
+            game.calls,
+        )
+
     def test_prepare_discovers_describes_loads_and_warms_the_game_scene(self):
         scenario = parse_scenario(scenario_document())
 
