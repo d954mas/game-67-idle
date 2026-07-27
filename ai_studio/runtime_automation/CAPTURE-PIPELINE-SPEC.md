@@ -26,7 +26,7 @@ There is no user-facing backend selector, recording job, queue, render command,
 target fan-out, stage editor, or backend doctor. The existing
 `record_game.py` implementation remains the single recording path:
 
-- isolated portable OBS Window Capture (BitBlt);
+- isolated portable OBS Window Capture (Windows Graphics Capture);
 - NVIDIA NVENC;
 - Windows process-loopback audio for the selected game process;
 - validated H.264/AAC media;

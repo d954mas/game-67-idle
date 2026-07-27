@@ -267,7 +267,7 @@ def build_window_capture_settings(descriptor: str) -> dict:
     return {
         "window": descriptor,
         "priority": 0,
-        "method": 1,
+        "method": 2,
         "cursor": False,
         "client_area": True,
         "compatibility": False,
@@ -1183,7 +1183,7 @@ def record_take(
         audio_levels = _audio_levels(ffmpeg, staging.edit)
         result = {
             "status": "captured",
-            "backend": "obs-window-capture-bitblt",
+            "backend": "obs-window-capture-wgc",
             "pid": pid,
             "durationSeconds": duration_seconds,
             "sourceTrimSeconds": round(content_start_offset, 3),

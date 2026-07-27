@@ -66,7 +66,7 @@ Presets are `social` (`1080x1920`, default), `landscape` (`1920x1080`), and
 30 fps to preserve game smoothness; pass `--fps 60` only when that extra frame
 rate is worth the additional GPU cost.
 
-The command uses one recording path: OBS Window Capture (BitBlt) with NVIDIA
+The command uses one recording path: OBS Window Capture (Windows Graphics Capture) with NVIDIA
 NVENC plus Windows process-loopback audio for that game process. The process-loopback
 piece avoids OBS 30.1.2's intermittent silent application-audio source while
 still excluding desktop and microphone sound. The command creates a disposable

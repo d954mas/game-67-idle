@@ -63,7 +63,7 @@ class ObsContractTest(unittest.TestCase):
         self.assertIn("--minimize-to-tray", command)
         self.assertIn("--startrecording", command)
 
-    def test_window_capture_targets_exact_window_with_bitblt(self) -> None:
+    def test_window_capture_targets_exact_window_with_wgc(self) -> None:
         descriptor = window_descriptor(
             title="Example Game",
             class_name="GLFW30",
@@ -75,11 +75,11 @@ class ObsContractTest(unittest.TestCase):
             settings["window"],
             "Example Game:GLFW30:game.exe",
         )
-        self.assertEqual(settings["method"], 1)
+        self.assertEqual(settings["method"], 2)
         self.assertFalse(settings["cursor"])
         self.assertFalse(settings["capture_audio"])
 
-    def test_scene_collection_wires_the_bitblt_window_source(self) -> None:
+    def test_scene_collection_wires_the_wgc_window_source(self) -> None:
         collection = _scene_collection(
             "Title:GLFW30:game.exe",
             CaptureSettings(720, 1280, 30),
@@ -89,7 +89,7 @@ class ObsContractTest(unittest.TestCase):
             item for item in collection["sources"] if item["name"] == "Game"
         )
         self.assertEqual(source["id"], "window_capture")
-        self.assertEqual(source["settings"]["method"], 1)
+        self.assertEqual(source["settings"]["method"], 2)
 
 class OutputTest(unittest.TestCase):
     def test_capture_paths_are_predictable(self) -> None:
