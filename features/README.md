@@ -160,16 +160,6 @@ possibility, not a feature.
   `game.scene.*` automation, and an agent scaffold. The default template owns
   its root/settings catalog. Reference: `scenes-core/README.md`, `scenes-core/INSTALL.md`, and
   `scenes-core/IMPLEMENTATION-PLAN.md`.
-- `capture-stage-core/` (`L1`, `0.3.0`, specified): planned dev-only runtime
-  registry and lifecycle contract for seeded, controllable game capture
-  stages. Games own content, cameras, shots, and framing; Studio Runtime
-  Automation owns real-time recording, optional deterministic render jobs,
-  master takes, exports, comparison, and encoding. It remains separate from
-  `scenes-core`. Reference:
-  `capture-stage-core/README.md` and
-  `../ai_studio/runtime_automation/CAPTURE-PIPELINE-SPEC.md` plus
-  `../ai_studio/runtime_automation/CAPTURE-PIPELINE-IMPLEMENTATION-PLAN.md`.
-
 ## Features (reference implementations live in the template)
 
 `settings` and `resource_panel` do NOT have a library copy under `features/`.
