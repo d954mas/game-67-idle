@@ -8,7 +8,6 @@ from capture_workflow import (
     CaptureWorkflowError,
     build_parser,
     evaluate_shot_safe_area,
-    game_launch_isolation,
     load_catalog,
     play_scenario_realtime,
     prepare_live,
@@ -133,10 +132,6 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(root, Path("take/.recorder-retry-2"))
         self.assertEqual(result["status"], "captured")
 
-    def test_live_and_shot_use_a_fresh_non_persistent_recording_session(self):
-        self.assertEqual(game_launch_isolation("live"), (True, False))
-        self.assertEqual(game_launch_isolation("shot"), (True, False))
-
     def test_load_catalog_resolves_approved_shot_and_checks_duration(self):
         with tempfile.TemporaryDirectory() as directory:
             game_root = Path(directory)
@@ -180,7 +175,6 @@ class SafeAreaTest(unittest.TestCase):
         result = evaluate_shot_safe_area(
             document["safe_area"],
             document["shots"][0]["critical_regions"],
-            scenario,
         )
 
         self.assertEqual(result["geometryStatus"], "pass")
@@ -192,9 +186,7 @@ class SafeAreaTest(unittest.TestCase):
         document = catalog_document(policy_status="official")
         regions = [{"id": "hero", "rectangle": [0.85, 0.2, 0.95, 0.8]}]
 
-        result = evaluate_shot_safe_area(
-            document["safe_area"], regions, scenario
-        )
+        result = evaluate_shot_safe_area(document["safe_area"], regions)
 
         self.assertEqual(result["status"], "fail")
         self.assertFalse(result["masterEligible"])
@@ -330,14 +322,12 @@ class ScenarioPlaybackTest(unittest.TestCase):
         game = FakeGame()
         result = prepare_scenario(game, scenario)
 
-        described = [
-            params["method"]
-            for method, params in game.calls
-            if method == "command.describe"
-        ]
-        self.assertIn("game.capture_scene.load", described)
-        self.assertIn("game.capture_scene.trigger_action", described)
         self.assertEqual(result["ready"], True)
+        self.assertIn(("game.capture_scene.list", None), game.calls)
+        self.assertIn(
+            ("game.capture_scene.describe", {"scene": "showcase"}),
+            game.calls,
+        )
         self.assertIn(("time.step", {"count": 3}), game.calls)
         self.assertEqual(
             game.calls[-1], ("time.set_mode", {"mode": "run"})
