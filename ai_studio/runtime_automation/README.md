@@ -105,10 +105,6 @@ count, dimensions, FPS, a
 non-black content frame, the 48 kHz stereo audio track, and records measured
 audio activity and OBS render-lag diagnostics in `capture.json`.
 
-The larger capture specifications, policy data, benchmarks, and deterministic
-scenario prototype remain engineering references. They do not create another
-routine recording surface.
-
 ## Local mock web proof
 
 `web_local_mock_probe.mjs` connects to an isolated Chromium/Chrome page through
