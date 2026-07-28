@@ -19,6 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 from ctypes import wintypes
 from dataclasses import dataclass
 from datetime import datetime
+from fractions import Fraction
 from pathlib import Path
 from typing import Callable, Sequence
 
@@ -28,9 +29,6 @@ REPO_ROOT = RUNTIME_ROOT.parents[1]
 if str(RUNTIME_ROOT) not in sys.path:
     sys.path.insert(0, str(RUNTIME_ROOT))
 
-from capture.backends.ffmpeg_process_loopback_spike import (  # noqa: E402
-    inspect_master,
-)
 from capture.backends.windows_process_loopback import (  # noqa: E402
     capture_process_audio,
     query_process_creation_time_100ns,
@@ -76,6 +74,102 @@ PRESETS = {
     "square": CaptureSettings(1080, 1080, 30),
 }
 OBS_DEFAULT = Path(r"C:\Program Files\obs-studio\bin\64bit\obs64.exe")
+
+
+def inspect_master(
+    ffprobe: Path,
+    output: Path,
+    *,
+    runner: Callable = subprocess.run,
+    expected_width: int | None = None,
+    expected_height: int | None = None,
+    expected_fps: int | None = None,
+    expected_duration_seconds: float | None = None,
+    minimum_frame_ratio: float = 0.90,
+    duration_tolerance_seconds: float = 0.25,
+    expected_video_codec: str = "h264",
+    expected_audio_codec: str = "flac",
+    timeout_seconds: float = 15.0,
+) -> dict:
+    command = [
+        str(ffprobe), "-v", "error", "-count_frames", "-show_entries",
+        "stream=codec_type,codec_name,width,height,avg_frame_rate,"
+        "sample_rate,channels,nb_read_frames:format=duration,size",
+        "-of", "json", str(output),
+    ]
+    try:
+        completed = runner(
+            command, check=False, capture_output=True, text=True, shell=False,
+            timeout=timeout_seconds,
+        )
+    except (OSError, subprocess.TimeoutExpired, UnicodeDecodeError) as exc:
+        raise RuntimeError(f"ffprobe failed: {exc}") from exc
+    if completed.returncode:
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise RuntimeError(f"ffprobe exited {completed.returncode}: {detail}")
+    try:
+        probe = json.loads(completed.stdout)
+        streams = probe["streams"]
+        video_streams = [item for item in streams if item.get("codec_type") == "video"]
+        audio_streams = [item for item in streams if item.get("codec_type") == "audio"]
+        if len(video_streams) != 1 or len(audio_streams) != 1:
+            raise RuntimeError("recording must contain one video and one audio stream")
+        video, audio = video_streams[0], audio_streams[0]
+        duration = float(probe["format"]["duration"])
+        size = int(probe["format"]["size"])
+        width, height = int(video["width"]), int(video["height"])
+        fps = Fraction(video["avg_frame_rate"])
+        frames = int(video["nb_read_frames"])
+        sample_rate, channels = int(audio["sample_rate"]), int(audio["channels"])
+    except RuntimeError:
+        raise
+    except (KeyError, TypeError, ValueError, ZeroDivisionError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"incomplete ffprobe metadata: {exc}") from exc
+
+    if not math.isfinite(duration) or min(duration, size, width, height, frames) <= 0:
+        raise RuntimeError("recording has invalid duration, size, dimensions, or frame count")
+    if sample_rate != 48_000 or channels != 2:
+        raise RuntimeError("recording audio must be 48 kHz stereo")
+    if video.get("codec_name") != expected_video_codec:
+        raise RuntimeError(f"unexpected video codec: {video.get('codec_name')!r}")
+    if audio.get("codec_name") != expected_audio_codec:
+        raise RuntimeError(f"unexpected audio codec: {audio.get('codec_name')!r}")
+    if expected_width is not None and width != expected_width:
+        raise RuntimeError(f"video width {width} != {expected_width}")
+    if expected_height is not None and height != expected_height:
+        raise RuntimeError(f"video height {height} != {expected_height}")
+    if expected_fps is not None and fps != expected_fps:
+        raise RuntimeError(f"average frame rate {fps} != {expected_fps}")
+    if (
+        expected_duration_seconds is not None
+        and abs(duration - expected_duration_seconds) > duration_tolerance_seconds
+    ):
+        raise RuntimeError(
+            f"duration {duration:.3f}s differs from {expected_duration_seconds:.3f}s"
+        )
+    if expected_fps is not None and expected_duration_seconds is not None:
+        minimum_frames = int(expected_fps * expected_duration_seconds * minimum_frame_ratio)
+        if frames < minimum_frames:
+            raise RuntimeError(f"video decoded {frames} frames; expected at least {minimum_frames}")
+
+    return {
+        "status": "valid",
+        "path": str(output),
+        "durationSeconds": duration,
+        "bytes": size,
+        "video": {
+            "codec": video["codec_name"],
+            "width": width,
+            "height": height,
+            "averageFrameRate": str(fps),
+            "decodedFrames": frames,
+        },
+        "audio": {
+            "codec": audio["codec_name"],
+            "sampleRate": sample_rate,
+            "channels": channels,
+        },
+    }
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:

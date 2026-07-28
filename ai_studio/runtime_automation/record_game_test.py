@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -17,6 +19,7 @@ from ai_studio.runtime_automation.record_game import (
     build_master_command,
     build_obs_launch_command,
     build_window_capture_settings,
+    inspect_master,
     parse_args,
     resolve_capture_settings,
     resolve_obs_capture_settings,
@@ -29,6 +32,58 @@ from ai_studio.runtime_automation.record_game import (
     _scene_collection,
     _write_obs_configuration,
 )
+
+
+class MediaInspectionTest(unittest.TestCase):
+    def _runner(self, streams):
+        probe = {
+            "streams": streams,
+            "format": {"duration": "5.0", "size": "1000"},
+        }
+        return lambda command, **kwargs: subprocess.CompletedProcess(
+            command, 0, json.dumps(probe), ""
+        )
+
+    def test_accepts_expected_video_and_audio(self) -> None:
+        streams = [
+            {
+                "codec_type": "video", "codec_name": "h264",
+                "width": 1080, "height": 1920, "avg_frame_rate": "30/1",
+                "nb_read_frames": "150",
+            },
+            {
+                "codec_type": "audio", "codec_name": "aac",
+                "sample_rate": "48000", "channels": 2,
+            },
+        ]
+
+        result = inspect_master(
+            Path("ffprobe.exe"),
+            Path("master.mkv"),
+            runner=self._runner(streams),
+            expected_width=1080,
+            expected_height=1920,
+            expected_fps=30,
+            expected_duration_seconds=5,
+            expected_audio_codec="aac",
+        )
+
+        self.assertEqual(result["video"]["decodedFrames"], 150)
+        self.assertEqual(result["audio"]["sampleRate"], 48_000)
+
+    def test_rejects_missing_audio(self) -> None:
+        streams = [{
+            "codec_type": "video", "codec_name": "h264",
+            "width": 1080, "height": 1920, "avg_frame_rate": "30/1",
+            "nb_read_frames": "150",
+        }]
+
+        with self.assertRaisesRegex(RuntimeError, "one video and one audio"):
+            inspect_master(
+                Path("ffprobe.exe"),
+                Path("master.mkv"),
+                runner=self._runner(streams),
+            )
 
 
 class CaptureSettingsTest(unittest.TestCase):
