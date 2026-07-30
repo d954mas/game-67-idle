@@ -103,16 +103,10 @@ void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
             nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), rlabel, &g_theme.label);
             (void)nt_ui_button_end(ctx);
             if (interactive && re.long_pressed) {
-                // New game IN SESSION (Р11): player position is game-composition state,
-                // not a save fragment -- safe to reset synchronously right here (plain
-                // field writes, no event emission / file I/O). Save-fragment reset (gold,
-                // items, progression tracks) is a REQUEST, applied by the shell at the
-                // start of the next frame's update (game_save.c: game_save_apply_pending_
-                // new_game) -- see that function's comment for why it is deferred.
+                // New Game is one composition-level transition. The UI records
+                // intent only; main applies persistent and transient resets together
+                // at the nearest safe frame boundary.
                 // "settings" is skipped: volumes are not this button's business.
-                w->player_x = 0.0F;
-                w->player_z = 0.0F;
-                w->player_yaw = 0.0F;
                 game_save_request_new_game("settings");
                 settings_close();
             }

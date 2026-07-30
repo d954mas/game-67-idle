@@ -89,6 +89,22 @@ test("runtime build hashing rejects symbolic links", (t) => {
 
 });
 
+test("runtime build rejects compiled in-place features missing from dependencies", (t) => {
+  const item = fixture(t);
+  write(
+    join(item.gameDir, "CMakeLists.txt"),
+    "set(SCENES_CORE_DIR \"${GAME_REPO_ROOT}/features/scenes-core\")\n",
+  );
+  write(
+    join(item.studioRoot, "features", "scenes-core", "src", "scene.c"),
+    "void scene(void) {}\n",
+  );
+  assert.throws(
+    () => createRuntimeBuildRecord(item),
+    /features\/scenes-core is compiled but not declared/,
+  );
+});
+
 test("runtime build validation rejects malformed and non-canonical records", (t) => {
   const clean = fixture(t);
   const record = createRuntimeBuildRecord(clean);

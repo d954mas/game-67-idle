@@ -223,7 +223,6 @@ function transformIdentityOwnedFiles(gameDir, template, identity) {
       `GAME_STORAGE_APP_ID="${identity.storageNamespace}-${suffix}-test"`,
       1,
     ]),
-    ["src/game_save.c", `GAME_STORAGE_APP_ID "${template.storageNamespace}"`, `GAME_STORAGE_APP_ID "${identity.storageNamespace}"`, 1],
     ["tests/web_persistence_check.py", `STORAGE_KEY = "${template.storageNamespace}/save/autosave"`, `STORAGE_KEY = "${identity.storageNamespace}/save/autosave"`, 1],
     ["cmake/GameOptions.cmake", `set(GAME_TITLE "${template.title}" CACHE STRING "Game window title base")`, `set(GAME_TITLE "${identity.title}" CACHE STRING "Game window title base")`, 1],
     ["src/main.c", `config.app_name = "${template.title}"`, `config.app_name = "${identity.title}"`, 1],

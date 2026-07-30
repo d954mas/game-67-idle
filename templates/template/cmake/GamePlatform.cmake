@@ -1,4 +1,4 @@
-set(AUDIO_CORE_DIR    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/audio-core")
+set(AUDIO_CORE_DIR    "${GAME_REPO_ROOT}/features/audio-core")
 set(AUDIO_CORE_INC    "${AUDIO_CORE_DIR}/include")
 set(AUDIO_CORE_SRC    "${AUDIO_CORE_DIR}/src")
 set(AUDIO_CORE_WEB    "${AUDIO_CORE_DIR}/web")
@@ -221,7 +221,7 @@ if(GAME_DEVAPI_ENABLED AND NOT EMSCRIPTEN)
                 "${CMAKE_CURRENT_SOURCE_DIR}/devapi/smoke_bot.py"
                 "--exe" "$<TARGET_FILE:${GAME_TARGET}>"
             DEPENDS ${GAME_TARGET}
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+            WORKING_DIRECTORY "${GAME_REPO_ROOT}"
             COMMENT "Running template DevAPI smoke bot"
             VERBATIM
         )
@@ -232,7 +232,7 @@ if(GAME_DEVAPI_ENABLED AND NOT EMSCRIPTEN)
                 "${CMAKE_CURRENT_SOURCE_DIR}/devapi/responsive_viewports.py"
                 "--exe" "$<TARGET_FILE:${GAME_TARGET}>"
             DEPENDS ${GAME_TARGET}
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+            WORKING_DIRECTORY "${GAME_REPO_ROOT}"
             COMMENT "Capturing QCLR_002 responsive viewport evidence"
             VERBATIM
         )

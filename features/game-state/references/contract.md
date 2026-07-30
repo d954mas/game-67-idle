@@ -40,7 +40,7 @@ check. Per fragment it emits `<id>_state.h`, `<id>_state.c`,
 `<id>_state_schema.gen.h`, and `<id>_state_events.gen.{h,c}`. The generated
 source owns `<id>_state` and `<id>_state_fragment`. Do not hand-edit generated
 files. DevAPI dispatch is the hand-written, registry-based
-`src/game_save_devapi.c`, not generated output.
+`features/game-state/src/game_save_devapi.c`, not generated output.
 
 ## Save Envelope And Registry
 
@@ -78,21 +78,36 @@ unreadable/corrupt saves. Web saves use `GAME_STORAGE_APP_ID`-scoped
 `localStorage`, report persistence availability, and do not have a native
 backup file.
 
+`game_storage.c` owns only the public platform-neutral contract. Native file
+I/O lives in `game_storage_backend_native.c`; browser policy lives in
+`game_storage_backend_web.c`; direct DOM/localStorage calls live only in
+`game_storage_web.c`. Consumers compile exactly one backend.
+
 Load distinguishes absence from failure:
 
 - absent save: reset all fragments, run new-game hooks, save, and report
   `FRESH`;
 - valid save: load fragments independently and report `LOADED`;
 - invalid primary with valid backup: recover and report `RECOVERED_BAK`;
-- read/parse failure: quarantine, reset, and report `CORRUPT_RESET` without
-  silently treating the save as absent;
+- read/parse failure with a verified quarantine copy: reset and report
+  `CORRUPT_RESET` without silently treating the save as absent;
+- read/parse failure when quarantine cannot be verified: report `BLOCKED`,
+  preserve both the disk slot and current live fragments, perform no writes,
+  and pause autosave;
 - newer envelope or known-fragment version: report `NEWER`, perform no writes,
-  and pause autosave.
+  preserve current live fragments, and pause autosave.
 
 An absent fragment resets independently. A fragment parse or migration failure
 resets only that fragment and is recorded in the load result. Orphans survive
 load/save. Public transform/export/import behavior is defined by the installed
 `game_save.h` and `game_storage.h`.
+
+UI code requests New Game but never mutates fragments or transient world state
+directly. The game composition drains the request before update and after UI
+render, then resets game-owned transient state when
+`game_save_apply_pending_new_game()` reports success. The second boundary keeps
+a request made during draw from being followed by a page-hide flush of the old
+state.
 
 ## DevAPI
 
@@ -117,6 +132,12 @@ accept no `key` or `doc` parameter. `reset` applies new-game semantics.
 `game.state.schema` returns each normalized schema with ordered `fields` arrays;
 the compatibility alias `document` equals `fragment`. Handler error codes are
 limited to `bad_params` and `internal`; detail belongs in the error message.
+
+The optional change callback is registered with
+`game_save_register_devapi(callback, user)` and receives
+`(change, fragment_id, user)`. Successful `set` and each successful fragment
+group in `patch` emit `EDIT` with the owning fragment id after validation.
+Load and reset emit `REPLACE` with a null fragment id.
 
 ## Dirty State, Migrations, And Actions
 

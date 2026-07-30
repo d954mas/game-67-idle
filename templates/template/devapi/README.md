@@ -44,7 +44,7 @@ The bot:
 5. verifies the stable `settings/gear` UI id is visible;
 6. toggles the engine render gate with `render.set_enabled`;
 7. captures a PNG proof image;
-8. reads `game.state.schema` and `game.state.get` from the installed
+8. reads `game.state.schema` and `game.state.get` from the in-place
    `game-state` feature;
 9. reads the DevAPI-only `game.iteration.proof` leaf-C/generated-schema fixture
    pair used by the shared trustworthy iteration helper.

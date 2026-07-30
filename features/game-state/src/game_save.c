@@ -1,6 +1,6 @@
 /* game_save.c — hand-written L0 save orchestrator.
    Fragment registry + single atomic envelope document + load state machine
-   (FRESH/LOADED/RECOVERED_BAK/CORRUPT_RESET/NEWER, per-fragment except staged
+   (FRESH/LOADED/RECOVERED_BAK/CORRUPT_RESET/NEWER/BLOCKED, per-fragment except staged
    versioned document migrations) + on_new_game + dirty/debounce/MAX_INTERVAL + synchronous web
    visibility-flush + export/import + empty transform seam. Single thread. */
 
@@ -8,6 +8,9 @@
 
 #include "game_state_json.h"
 #include "game_storage.h"
+#if !defined(GAME_SAVE_TESTING)
+#include "game_save_platform.h"
+#endif
 
 #include "log/nt_log.h" /* nt_log_warn on the read-error path (bot/obs-visible, lead 2026-07-07) */
 
@@ -15,18 +18,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-/* Platform clocks: the game target links nt_time (native) / emscripten (web);
-   the ctest build sets GAME_SAVE_TESTING and injects both clocks, so it must not
-   reference either symbol. Keep the platform includes out of the test build. */
-#if !defined(GAME_SAVE_TESTING)
-#  if defined(__EMSCRIPTEN__)
-#    include <emscripten.h>
-#  else
-#    include <time.h>
-#    include "time/nt_time.h"
-#  endif
-#endif
 
 /* CMake supplies these for the game/test targets; guarded defaults keep the file
    self-contained. */
@@ -43,7 +34,7 @@
 #define GAME_SAVE_DOC_VERSION 1
 #endif
 #ifndef GAME_STORAGE_APP_ID
-#define GAME_STORAGE_APP_ID "template"
+#define GAME_STORAGE_APP_ID "game"
 #endif
 
 /* Internal constants. */
@@ -73,8 +64,8 @@ static const GameSaveDocumentMigrateFn *s_document_migrations;
 static int s_document_migration_count;
 static GameSaveDocumentValidateFn s_document_validator;
 
-static bool    s_autosave_paused; /* CORRUPT_RESET/NEWER until game_save_new_game */
-static bool    s_new_game_pending;         /* Р11: deferred to the shell's next update (below) */
+static bool    s_autosave_paused; /* CORRUPT_RESET/NEWER/BLOCKED until game_save_new_game */
+static bool    s_new_game_pending;         /* Р11: deferred to a safe shell frame boundary */
 static char    s_new_game_skip_id[32];     /* fragment id to leave untouched, or "" for none */
 static bool    s_dirty;
 static bool    s_unpersisted;
@@ -91,15 +82,9 @@ static int64_t (*s_wall_clock)(void);
 #if defined(GAME_SAVE_TESTING)
 static int64_t default_mono_ms(void) { return 0; }
 static int64_t default_wall_ms(void) { return 0; }
-#elif defined(__EMSCRIPTEN__)
-static int64_t default_mono_ms(void) { return (int64_t)emscripten_get_now(); }
-/* clang-format off */
-EM_JS(double, game_save_web_now_ms, (void), { return Date.now(); })
-/* clang-format on */
-static int64_t default_wall_ms(void) { return (int64_t)game_save_web_now_ms(); }
 #else
-static int64_t default_mono_ms(void) { return (int64_t)(nt_time_now() * 1000.0); }
-static int64_t default_wall_ms(void) { return (int64_t)time(NULL) * 1000; }
+static int64_t default_mono_ms(void) { return game_save_platform_mono_ms(); }
+static int64_t default_wall_ms(void) { return game_save_platform_wall_ms(); }
 #endif
 
 static int64_t mono_now(void) { return s_mono_clock ? s_mono_clock() : 0; }
@@ -301,6 +286,24 @@ static void reconcile_all(void) {
     }
 }
 
+bool game_save_reconcile_from(const char *id) {
+    if (!id) {
+        return false;
+    }
+    for (int i = 0; i < s_fragment_count; ++i) {
+        if (strcmp(s_fragments[i]->id, id) != 0) {
+            continue;
+        }
+        for (int j = i; j < s_fragment_count; ++j) {
+            if (s_fragments[j]->reconcile) {
+                s_fragments[j]->reconcile();
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 /* ---- envelope build + save ---- */
 
 static cJSON *build_root(bool bump_seq, int64_t *out_wall) {
@@ -358,6 +361,39 @@ static bool validate_document(const cJSON *doc, char *error, int error_cap) {
     return s_document_validator(features, error, error_cap);
 }
 
+static bool validate_envelope_header(const cJSON *doc, char *error, int error_cap) {
+    const cJSON *format = gsj_object_item(doc, "format");
+    if (!cJSON_IsNumber(format) || format->valuedouble != (double)GAME_SAVE_FORMAT) {
+        gsj_set_error(error, error_cap, "invalid save format");
+        return false;
+    }
+    const cJSON *app = gsj_object_item(doc, "app");
+    if (!cJSON_IsString(app) || strcmp(app->valuestring, GAME_STORAGE_APP_ID) != 0) {
+        gsj_set_error(error, error_cap, "save belongs to another app");
+        return false;
+    }
+    const cJSON *build = gsj_object_item(doc, "build");
+    const cJSON *save_version = gsj_object_item(doc, "save_version");
+    const bool legacy_without_build =
+        !build && (!save_version ||
+                   (cJSON_IsNumber(save_version) &&
+                    save_version->valuedouble < (double)GAME_SAVE_DOC_VERSION));
+    if (!legacy_without_build && !cJSON_IsString(build)) {
+        gsj_set_error(error, error_cap, "invalid build metadata");
+        return false;
+    }
+    if (!gsj_object_item(doc, "saved_at") || !gsj_object_item(doc, "save_seq")) {
+        gsj_set_error(error, error_cap, "save metadata is incomplete");
+        return false;
+    }
+    int64_t metadata = 0;
+    if (!gsj_read_i64(doc, "saved_at", 0, INT64_MAX, &metadata, error, error_cap) ||
+        !gsj_read_i64(doc, "save_seq", 0, INT64_MAX, &metadata, error, error_cap)) {
+        return false;
+    }
+    return true;
+}
+
 /* Duplicate -> migrate every cross-fragment version -> validate, with no live
    publication and no mutation of caller-owned JSON until the whole document is
    known-good. */
@@ -371,6 +407,9 @@ static bool prepare_document_for_load(
     }
     if (!cJSON_IsObject(doc)) {
         gsj_set_error(error, error_cap, "save is not an object");
+        return false;
+    }
+    if (!validate_envelope_header(doc, error, error_cap)) {
         return false;
     }
     const cJSON *version_json = gsj_object_item(doc, "save_version");
@@ -492,9 +531,7 @@ static bool save_internal(char *error, int error_cap) {
         s_last_saved_at = wall;
         s_unpersisted = false;
     } else {
-#if defined(__EMSCRIPTEN__)
-        s_unpersisted = true; /* quota / Safari-private -> SAVE_UNPERSISTED */
-#endif
+        s_unpersisted = true;
         /* dirty stays set: retry on the next tick. */
     }
     return ok;
@@ -625,8 +662,12 @@ static bool try_recover_from_backup(game_save_load_result_t *result, const char 
     s_autosave_paused = false;
     result->status = GAME_SAVE_LOAD_RECOVERED_BAK;
     set_message(result, reason);
-    (void)save_internal(err, cap);
-    (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, cap);
+    game_save_mark_dirty();
+    /* The existing .bak is the only known durable good copy until primary is
+       rewritten successfully. Never refresh it from a still-corrupt primary. */
+    if (save_internal(err, cap)) {
+        (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, cap);
+    }
     s_last_save_mono = mono_now();
     return true;
 }
@@ -639,14 +680,24 @@ void game_save_load(game_save_load_result_t *result) {
     memset(result, 0, sizeof *result);
     result->status = GAME_SAVE_LOAD_FRESH;
 
-    free_orphans();
-
     char err[128];
     err[0] = '\0';
 
     char *text = NULL;
     game_storage_read_status_t rst = GAME_STORAGE_READ_ABSENT;
     if (!game_storage_read(GAME_SAVE_AUTOSAVE_SLOT, &text, &rst, err, (int)sizeof err)) {
+        if (rst == GAME_STORAGE_READ_ERROR_PRESERVED) {
+            /* The primary still contains the only known copy. Preserve all live
+               state and refuse every automatic write until the player explicitly
+               starts a New Game or repairs/imports the save. */
+            s_autosave_paused = true;
+            result->status = GAME_SAVE_LOAD_BLOCKED;
+            set_message(result, "save unreadable; primary preserved; quarantine unavailable");
+            nt_log_warn(
+                "game_save: autosave read failed without quarantine; live state preserved, writes blocked");
+            s_last_save_mono = mono_now();
+            return;
+        }
         if (rst == GAME_STORAGE_READ_ERROR) {
             /* Primary EXISTS but could not be READ (not "no save"): storage already
                copied the raw bytes to quarantine. Try the .bak FIRST via the same
@@ -658,6 +709,7 @@ void game_save_load(game_save_load_result_t *result) {
             if (try_recover_from_backup(result, "primary unreadable; recovered from backup", err, (int)sizeof err)) {
                 return;
             }
+            free_orphans();
             reset_all();
             s_autosave_paused = true;
             result->status = GAME_SAVE_LOAD_CORRUPT_RESET;
@@ -667,9 +719,11 @@ void game_save_load(game_save_load_result_t *result) {
             return;
         }
         /* No save -> FRESH: reset + on_new_game + save. */
+        free_orphans();
         reset_all();
         on_new_game_all();
         s_autosave_paused = false;
+        game_save_mark_dirty();
         (void)save_internal(err, (int)sizeof err);
         result->status = GAME_SAVE_LOAD_FRESH;
         set_message(result, "no save found; new game");
@@ -720,7 +774,17 @@ void game_save_load(game_save_load_result_t *result) {
 
     /* CORRUPT_RESET: quarantine + reset only. No on_new_game, no save — the shell
        waits for the player's explicit new_game (Р10). Autosave paused. */
-    (void)game_storage_quarantine(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err);
+    if (!game_storage_quarantine(
+            GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err)) {
+        s_autosave_paused = true;
+        result->status = GAME_SAVE_LOAD_BLOCKED;
+        set_message(result, "corrupt save preserved; quarantine unavailable");
+        nt_log_warn(
+            "game_save: corrupt autosave could not be quarantined; live state preserved, writes blocked");
+        s_last_save_mono = mono_now();
+        return;
+    }
+    free_orphans();
     reset_all();
     s_autosave_paused = true;
     result->status = GAME_SAVE_LOAD_CORRUPT_RESET;
@@ -824,7 +888,7 @@ static bool new_game_except(const char *skip_id, char *error, int error_cap) {
     reset_all_except(skip_id);
     on_new_game_all_except(skip_id);
     s_autosave_paused = false; /* resume autosave (Р10) */
-    s_dirty = false;
+    game_save_mark_dirty();
     const bool ok = save_internal(error, error_cap);
     s_last_save_mono = mono_now();
     return ok;
@@ -838,16 +902,16 @@ bool game_save_new_game(char *error, int error_cap) {
    phase, which runs AFTER this frame's game_events phase already flipped back to EMIT
    (main.c: game_event_frame_reset() before game_features_draw_ui) -- so emitting
    items.txn from on_new_game here would not trip the phase debug-assert. It is still
-   deferred one frame on purpose: new_game_except() does synchronous file I/O
+   deferred out of the live render pass: new_game_except() does synchronous file I/O
    (save_internal), and running that -- plus the items.txn emit it triggers via
    items_on_new_game -- INSIDE the live GPU render pass (between nt_gfx_begin_pass/
    nt_gfx_end_pass, which draw_ui runs within) is an anti-pattern the rest of this
    codebase avoids on principle (autosave itself is deliberately anchored right after
    the RECORD phase, never inside render). Recording the request here and applying it
-   at the very start of the NEXT frame's update (game_save_apply_pending_new_game,
-   called from main.c before game_features_update) keeps the reset on the same
-   well-tested "emit during update" path as everything else, with zero risk of stalling
-   a frame already mid-render. skip_fragment_id NULLABLE -- see reset_all_except. */
+   at the nearest safe shell boundary (game_save_apply_pending_new_game, called
+   before update and after the render pass) keeps one atomic composition transition
+   without performing storage I/O inside UI construction. skip_fragment_id NULLABLE
+   -- see reset_all_except. */
 void game_save_request_new_game(const char *skip_fragment_id) {
     s_new_game_pending = true;
     if (skip_fragment_id) {
@@ -857,7 +921,7 @@ void game_save_request_new_game(const char *skip_fragment_id) {
     }
 }
 
-/* Shell-only (main.c, start of frame, before game_features_update): applies a pending
+/* Shell-only (main.c, at a safe pre-update or post-render boundary): applies a pending
    request from game_save_request_new_game, if any. Returns true iff it applied one (so
    game-composition state game_save does not own, e.g. player world position, can be
    reset by the caller in the same beat); false is a plain no-op. */
@@ -874,7 +938,10 @@ bool game_save_apply_pending_new_game(void) {
 
 bool game_save_flush(char *error, int error_cap) {
     if (s_autosave_paused) {
-        return true; /* NEWER/CORRUPT before new_game: nothing may be persisted */
+        gsj_set_error(
+            error, error_cap,
+            "save is read-only until New Game or a successful repair/import");
+        return false; /* NEWER/CORRUPT/BLOCKED: reporting success would be data loss */
     }
     return save_internal(error, error_cap);
 }
@@ -972,30 +1039,6 @@ void game_save_set_transforms(const game_save_transform_t *chain, int count) {
     s_transforms = chain;
     s_transform_count = (count > 0) ? count : 0;
 }
-
-/* ---- web visibility flush. rAF freezes on a hidden tab, so
-   the flush must be a synchronous force-save fired straight from the event. ---- */
-#if defined(__EMSCRIPTEN__)
-EMSCRIPTEN_KEEPALIVE void game_save_web_flush(void) {
-    char err[128];
-    err[0] = '\0';
-    (void)game_save_flush(err, (int)sizeof err);
-}
-/* clang-format off */
-EM_JS(void, game_save_web_install, (void), {
-    var flush = function() {
-        if (Module['_game_save_web_flush']) { Module['_game_save_web_flush'](); }
-    };
-    document.addEventListener('visibilitychange', function() {
-        if (document.visibilityState === 'hidden') { flush(); }
-    });
-    window.addEventListener('pagehide', flush);
-})
-/* clang-format on */
-void game_save_install_web_flush(void) { game_save_web_install(); }
-#else
-void game_save_install_web_flush(void) {}
-#endif
 
 #ifdef GAME_SAVE_TESTING
 void game_save__set_clocks_for_test(int64_t (*mono)(void), int64_t (*wall)(void)) {

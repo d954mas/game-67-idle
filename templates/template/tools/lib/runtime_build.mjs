@@ -84,6 +84,24 @@ function readDependencies(gameDir) {
   return value;
 }
 
+function referencedFeatureSources(gameDir) {
+  const cmakeFiles = [join(gameDir, "CMakeLists.txt")];
+  const cmakeDir = join(gameDir, "cmake");
+  if (existsSync(cmakeDir)) {
+    for (const name of readdirSync(cmakeDir).sort()) {
+      if (name.endsWith(".cmake")) cmakeFiles.push(join(cmakeDir, name));
+    }
+  }
+  const sources = new Set();
+  const pattern = /\$\{GAME_REPO_ROOT\}\/(features\/[a-z][a-z0-9-]*)/g;
+  for (const path of cmakeFiles) {
+    if (!existsSync(path)) continue;
+    const text = readFileSync(path, "utf8");
+    for (const match of text.matchAll(pattern)) sources.add(match[1]);
+  }
+  return sources;
+}
+
 export function validateRuntimeBuildRecord(record) {
   exactKeys(record, ["schema", "fingerprint", "inputs"], "runtime build record");
   if (record.schema !== SCHEMA || !Array.isArray(record.inputs) || record.inputs.length < 2) {
@@ -133,6 +151,14 @@ export function createRuntimeBuildRecord({ gameDir, studioRoot, dependencies = r
     ...hashTree(confinedRoot(root, engineSource, "engine dependency"), DEPENDENCY_IGNORED_ROOTS),
   });
   if (!Array.isArray(dependencies?.features)) throw new Error("runtime build feature dependencies are invalid");
+  const declaredFeatureSources = new Set(
+    dependencies.features.map((feature) => feature?.source),
+  );
+  for (const source of referencedFeatureSources(gameRoot)) {
+    if (!declaredFeatureSources.has(source)) {
+      throw new Error(`runtime feature ${source} is compiled but not declared`);
+    }
+  }
   const features = dependencies.features.map((feature) => {
     if (!/^[a-z][a-z0-9-]*$/.test(feature?.id || "")) throw new Error("runtime build feature id is invalid");
     const source = safeSource(feature.source, `feature ${feature.id}`);

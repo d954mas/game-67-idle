@@ -1,6 +1,7 @@
 #ifndef GAME_FEATURES_H
 #define GAME_FEATURES_H
 
+#include "game_input.h"
 #include "world/world.h"
 
 /* L0 агрегатор фич шаблона. СЕМЬ фазовых функций,
@@ -13,11 +14,13 @@
 
 void game_features_init(World *w);
 void game_features_update(World *w, float dt);
-void game_features_update_root(World *w, float dt);
+void game_features_update_root(
+    World *w, float dt, const game_input_frame_t *input);
 void game_features_react(World *w);            /* реакторы-потребители (могут каскадить) */
 void game_features_record(World *w);           /* чистые рекордеры (аналитика/лог/DevAPI) */
 void game_features_draw_world(World *w);        /* 3D-слой фич; пока прямой шелл */
-void game_features_draw_ui(World *w);           /* UI-слой фич, z-order */
+void game_features_draw_ui(
+    World *w, const game_input_frame_t *input);  /* UI-слой фич, z-order */
 void game_features_shutdown(World *w);
 
 #endif /* GAME_FEATURES_H */

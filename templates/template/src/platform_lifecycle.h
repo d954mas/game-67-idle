@@ -4,8 +4,8 @@
 #include <stdbool.h>
 
 void platform_lifecycle_init(void);
-/* Returns true only for a fresh keyboard/pointer gesture this frame. */
-bool platform_lifecycle_after_input_poll(void);
+/* Records the single input adapter's per-frame gesture edge. */
+bool platform_lifecycle_on_input(bool input_seen);
 void platform_lifecycle_mark_gameplay_input(void);
 void platform_lifecycle_update(bool playable_shell_ready, bool gameplay_allowed);
 void platform_lifecycle_after_frame_present(bool playable_shell_ready);

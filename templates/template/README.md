@@ -22,12 +22,12 @@ Layout (decomposition the template teaches by example — no god-file):
                                capture.{c,h}      screenshot/capture support.
       ui/                    hud.{c,h}, ui_runtime.{c,h} (per-feature draw_ui frame),
                              theme.{c,h}, demo_hud.{c,h} (resource_panel composition).
-      game_{save,storage,state_json,events,event_render,log,analytics,format}.*
-                             L0 shell: fragment registry/orchestration, JSON save/load,
-                             typed events, formatting. `game_{save,events}_devapi.c` build
-                             only under `GAME_DEVAPI_ENABLED`.
+      game_{events,event_render,log,analytics,format}.*
+                             Game-owned L0 event/observability/format helpers.
+                             Save/storage/JSON and `game.state.*` DevAPI are consumed
+                             in place from `features/game-state`.
       build_packs.c          pack builder -> game.ntpack + generated asset-id header.
-      game_audio.*           seed infra (music/SFX buses); not yet compiled into the game target.
+      game_audio.*           game audio composition over `features/audio-core`.
     devapi/                  game-local Python bots and runtime smoke scenarios.
     assets/shaders/          common/ + slug_text + sprite + mesh_inst + mesh_tex.
     state/                   the 4 fragment schemas (codegen source): settings/items/
@@ -50,15 +50,18 @@ counter + xp bar via `resource_panel`/`demo_hud`) over two sample cubes;
 feature-based architecture; native + 3 web presets green; test base 16 (→17
 with this spec). The E009 arc is code-complete.
 
-Debug builds enable the engine DevAPI path by default (`GAME_DEVAPI_ENABLED=ON`):
+DevAPI is opt-in (`GAME_DEVAPI_ENABLED=ON`) and belongs in a separate build
+directory:
 `--devapi <port>` starts the engine TCP transport and exposes engine-owned
 `endpoints`, `command.describe`, `frame/time`, `input`, `ui`, `obs`, and
-`capture.*` groups. The installed `game-state` feature also registers
+`capture.*` groups. The in-place `game-state` module also registers
 `game.state.schema`, `game.state.get`, `game.state.set`, `game.state.patch`,
-`game.state.save`, `game.state.load`, and `game.state.reset` from generated
-sources when `GAME_DEVAPI_ENABLED` is on. Release
+`game.state.save`, `game.state.load`, and `game.state.reset` through the
+hand-written registry dispatcher in `features/game-state` when
+`GAME_DEVAPI_ENABLED` is on. Release
 builds default DevAPI off, so those command registrations do not ship.
-Game-specific commands belong under `src/devapi/` when a copied game needs them.
+Game-specific commands belong in root `src/*_devapi.c` modules when a copied
+game needs them; top-level `devapi/` is reserved for Python bots and scenarios.
 
 Feature flags:
 

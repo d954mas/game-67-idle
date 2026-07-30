@@ -44,6 +44,27 @@ static int64_t g_mono_ms;
 static int64_t g_wall_ms;
 static int64_t test_mono(void) { return g_mono_ms; }
 static int64_t test_wall(void) { return g_wall_ms; }
+#if NT_DEVAPI_ENABLED
+static int s_devapi_change_count;
+static game_save_devapi_change_t s_last_devapi_change;
+static const char *s_last_devapi_fragment;
+static const char *s_devapi_fragments[8];
+static void record_devapi_change(
+    game_save_devapi_change_t change,
+    const char *fragment_id, void *user) {
+    (void)user;
+    if (change == GAME_SAVE_DEVAPI_EDIT && fragment_id) {
+        (void)game_save_reconcile_from(fragment_id);
+    }
+    s_devapi_change_count++;
+    s_last_devapi_change = change;
+    s_last_devapi_fragment = fragment_id;
+    if (s_devapi_change_count <= (int)(sizeof s_devapi_fragments /
+                                       sizeof s_devapi_fragments[0])) {
+        s_devapi_fragments[s_devapi_change_count - 1] = fragment_id;
+    }
+}
+#endif
 
 static bool add_stack(
     items_container_ref_t container, const char *def_id,
@@ -154,7 +175,9 @@ void setUp(void) {
     game_save_init();
 #if NT_DEVAPI_ENABLED
     TEST_ASSERT_EQUAL_INT(NT_OK, nt_devapi_init());
-    game_save_register_devapi();
+    s_devapi_change_count = 0;
+    memset(s_devapi_fragments, 0, sizeof s_devapi_fragments);
+    game_save_register_devapi(record_devapi_change, NULL);
 #endif
 }
 void tearDown(void) {
@@ -503,6 +526,7 @@ static const GameSaveFragment s_partial_fragment = {
 void test_devapi_refuses_raw_ownership_writes_without_mutation(void) {
     char err[128] = {0};
     TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    const int callback_count_before = s_devapi_change_count;
     const uint32_t inventory_id = game_state.inventory_container_id;
     const uint32_t wallet_id = game_state.wallet_container_id;
     cJSON *before_items = items_state_to_json(&items_state);
@@ -525,6 +549,7 @@ void test_devapi_refuses_raw_ownership_writes_without_mutation(void) {
 
     TEST_ASSERT_EQUAL_UINT32(inventory_id, game_state.inventory_container_id);
     TEST_ASSERT_EQUAL_UINT32(wallet_id, game_state.wallet_container_id);
+    TEST_ASSERT_EQUAL_INT(callback_count_before, s_devapi_change_count);
     cJSON *after_items = items_state_to_json(&items_state);
     TEST_ASSERT_TRUE(cJSON_Compare(before_items, after_items, true));
     cJSON_Delete(after_items);
@@ -535,6 +560,7 @@ void test_devapi_rolls_back_all_successful_patch_groups_when_document_rejects(vo
     char err[128] = {0};
     TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
     const float master_before = settings_master();
+    const int callback_count_before = s_devapi_change_count;
     game_save_set_document_validator(reject_nonzero_clicks);
     cJSON *patch = submit_devapi(
         "{\"method\":\"game.state.patch\",\"params\":{\"values\":{"
@@ -548,17 +574,108 @@ void test_devapi_rolls_back_all_successful_patch_groups_when_document_rejects(vo
     cJSON_Delete(patch);
     TEST_ASSERT_TRUE(fabsf(settings_master() - master_before) < COMPOSITION_TEST_FLOAT_EPS);
     TEST_ASSERT_EQUAL_INT(0, game_state.test_ui_clicks);
+    TEST_ASSERT_EQUAL_INT(callback_count_before, s_devapi_change_count);
     game_save_set_document_validator(game_items_validate_save_document);
 }
 
 void test_devapi_set_rolls_back_a_partially_mutating_setter(void) {
     s_partial_value = 0;
     game_save_register_fragment(&s_partial_fragment);
+    const int callback_count_before = s_devapi_change_count;
     cJSON *response = submit_devapi(
         "{\"method\":\"game.state.set\",\"params\":{\"path\":\"partial.value\",\"value\":7}}");
     TEST_ASSERT_TRUE(cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(response, "ok")));
     cJSON_Delete(response);
     TEST_ASSERT_EQUAL_INT(0, s_partial_value);
+    TEST_ASSERT_EQUAL_INT(callback_count_before, s_devapi_change_count);
+}
+
+void test_devapi_reports_edit_and_replace_lifecycle(void) {
+    cJSON *set = submit_devapi(
+        "{\"method\":\"game.state.set\",\"params\":{"
+        "\"path\":\"settings.master_volume\",\"value\":0.25}}");
+    TEST_ASSERT_TRUE(cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(set, "ok")));
+    cJSON_Delete(set);
+    TEST_ASSERT_EQUAL_INT(1, s_devapi_change_count);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_DEVAPI_EDIT, s_last_devapi_change);
+    TEST_ASSERT_EQUAL_STRING("settings", s_last_devapi_fragment);
+
+    cJSON *reset = submit_devapi(
+        "{\"method\":\"game.state.reset\",\"params\":{}}");
+    TEST_ASSERT_TRUE(cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(reset, "ok")));
+    cJSON_Delete(reset);
+    TEST_ASSERT_EQUAL_INT(2, s_devapi_change_count);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_DEVAPI_REPLACE, s_last_devapi_change);
+    TEST_ASSERT_NULL(s_last_devapi_fragment);
+}
+
+void test_devapi_patch_reports_each_changed_fragment_after_commit(void) {
+    cJSON *patch = submit_devapi(
+        "{\"method\":\"game.state.patch\",\"params\":{\"values\":{"
+        "\"game.tutorial.done\":true,\"settings.master_volume\":0.25}}}");
+
+    TEST_ASSERT_TRUE(cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(patch, "ok")));
+    cJSON_Delete(patch);
+    TEST_ASSERT_EQUAL_INT(2, s_devapi_change_count);
+    TEST_ASSERT_EQUAL_STRING("settings", s_devapi_fragments[0]);
+    TEST_ASSERT_EQUAL_STRING("game", s_devapi_fragments[1]);
+    TEST_ASSERT_TRUE(game_state.tutorial_done);
+    TEST_ASSERT_TRUE(fabsf(settings_master() - 0.25f) <
+                     COMPOSITION_TEST_FLOAT_EPS);
+}
+
+void test_devapi_items_edit_rebuilds_runtime_indices(void) {
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    cJSON *items = items_state_to_json(&items_state);
+    cJSON *containers = cJSON_DetachItemFromObjectCaseSensitive(items, "containers");
+    TEST_ASSERT_NOT_NULL(containers);
+    TEST_ASSERT_EQUAL_INT(2, cJSON_GetArraySize(containers));
+    cJSON *wallet = cJSON_DetachItemFromArray(containers, 1);
+    TEST_ASSERT_NOT_NULL(wallet);
+    TEST_ASSERT_TRUE(cJSON_InsertItemInArray(containers, 0, wallet));
+
+    cJSON *request = cJSON_CreateObject();
+    cJSON_AddStringToObject(request, "method", "game.state.set");
+    cJSON *params = cJSON_AddObjectToObject(request, "params");
+    cJSON_AddStringToObject(params, "path", "items.containers");
+    cJSON_AddItemToObject(params, "value", containers);
+    char *request_text = cJSON_PrintUnformatted(request);
+    TEST_ASSERT_NOT_NULL(request_text);
+
+    cJSON *response = submit_devapi(request_text);
+
+    TEST_ASSERT_TRUE(cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(response, "ok")));
+    const items_container_ref_t live_wallet = game_wallet_container();
+    TEST_ASSERT_EQUAL_UINT32(
+        game_state.wallet_container_id, items_container_id(live_wallet));
+    TEST_ASSERT_EQUAL_INT64(50, items_stack_count(live_wallet, "tmpl.gold"));
+    cJSON_Delete(response);
+    free(request_text);
+    cJSON_Delete(request);
+    cJSON_Delete(items);
+}
+
+void test_devapi_corrupt_load_rebuilds_valid_live_owner_state(void) {
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    (void)remove(BAK_PATH);
+    (void)remove(BAK_TMP);
+    TEST_ASSERT_TRUE(game_storage_write(
+        "test_composition", "{broken", err, (int)sizeof err));
+    s_devapi_change_count = 0;
+
+    cJSON *load = submit_devapi(
+        "{\"method\":\"game.state.load\",\"params\":{}}");
+
+    TEST_ASSERT_TRUE(cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(load, "ok")));
+    cJSON_Delete(load);
+    TEST_ASSERT_EQUAL_UINT32(1U, game_state.inventory_container_id);
+    TEST_ASSERT_EQUAL_UINT32(2U, game_state.wallet_container_id);
+    TEST_ASSERT_EQUAL_INT64(
+        50, items_stack_count(game_wallet_container(), "tmpl.gold"));
+    TEST_ASSERT_EQUAL_INT(1, s_devapi_change_count);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_DEVAPI_REPLACE, s_last_devapi_change);
 }
 #endif
 
@@ -775,6 +892,10 @@ int main(void) {
     RUN_TEST(test_legacy_owner_conflict_rejects_frozen_fixture_exactly_unchanged);
 #if NT_DEVAPI_ENABLED
     RUN_TEST(test_devapi_set_rolls_back_a_partially_mutating_setter);
+    RUN_TEST(test_devapi_reports_edit_and_replace_lifecycle);
+    RUN_TEST(test_devapi_patch_reports_each_changed_fragment_after_commit);
+    RUN_TEST(test_devapi_items_edit_rebuilds_runtime_indices);
+    RUN_TEST(test_devapi_corrupt_load_rebuilds_valid_live_owner_state);
 #endif
     const int r = UNITY_END();
 

@@ -117,7 +117,7 @@ bool ui_runtime_ready(void) {
     return s_atlas_bound && s_font_bound && si != NULL && si->ready && ti != NULL && ti->ready;
 }
 
-bool ui_runtime_begin(float dt) {
+bool ui_runtime_begin(float dt, const game_input_frame_t *input) {
     if (!ui_runtime_ready()) {
         return false;
     }
@@ -149,13 +149,38 @@ bool ui_runtime_begin(float dt) {
 
     nt_font_step();
     nt_mem_scratch_reset();
-    // Feed ALL pointer slots: a DevAPI-injected click lands in the first FREE
-    // slot, which is not 0 when a real mouse already holds slot 0.
+    // Feed ALL pointer slots in raw device coordinates: a DevAPI-injected
+    // click lands in the first FREE slot, which is not 0 when a real mouse
+    // already holds slot 0. The context viewport performs the one canonical
+    // device->logical conversion for both real and DevAPI input.
     nt_pointer_t pointers[NT_INPUT_MAX_POINTERS];
     for (uint32_t i = 0; i < NT_INPUT_MAX_POINTERS; ++i) {
-        pointers[i] = nt_ui_scale_apply_pointer(&s_scale, g_nt_input.pointers[i]);
+        const game_pointer_input_t *source = &input->pointers[i];
+        nt_pointer_t pointer;
+        memset(&pointer, 0, sizeof pointer);
+        pointer.id = source->id;
+        pointer.x = source->x;
+        pointer.y = source->y;
+        pointer.dx = source->dx;
+        pointer.dy = source->dy;
+        pointer.wheel_dx = source->wheel_x;
+        pointer.wheel_dy = source->wheel_y;
+        pointer.pressure = source->pressure;
+        pointer.type = source->kind;
+        pointer.active = source->active;
+        pointer.buttons[NT_BUTTON_LEFT].is_down = source->left_down;
+        pointer.buttons[NT_BUTTON_LEFT].is_pressed = source->left_pressed;
+        pointer.buttons[NT_BUTTON_LEFT].is_released = source->left_released;
+        pointer.buttons[NT_BUTTON_RIGHT].is_down = source->right_down;
+        pointer.buttons[NT_BUTTON_RIGHT].is_pressed = source->right_pressed;
+        pointer.buttons[NT_BUTTON_RIGHT].is_released = source->right_released;
+        pointer.buttons[NT_BUTTON_MIDDLE].is_down = source->middle_down;
+        pointer.buttons[NT_BUTTON_MIDDLE].is_pressed = source->middle_pressed;
+        pointer.buttons[NT_BUTTON_MIDDLE].is_released = source->middle_released;
+        pointers[i] = pointer;
     }
     nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, pointers, NT_INPUT_MAX_POINTERS);
+    nt_ui_set_viewport(s_ctx, nt_ui_viewport_from_scale(&s_scale));
     return true;
 }
 

@@ -84,8 +84,8 @@ static bool add_blob_file(NtBuilderContext *ctx, const char *path, const char *r
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        (void)fprintf(stderr, "Usage: build_game_packs <pack_dir> <items_catalog>\n");
+    if (argc != 4) {
+        (void)fprintf(stderr, "Usage: build_game_packs <pack_dir> <items_catalog> <font_source>\n");
         return 1;
     }
     const char *out_dir = argv[1];
@@ -106,7 +106,7 @@ int main(int argc, char *argv[]) {
     // text shell
     nt_builder_add_shader(ctx, "assets/shaders/slug_text.vert", NT_BUILD_SHADER_VERTEX);
     nt_builder_add_shader(ctx, "assets/shaders/slug_text.frag", NT_BUILD_SHADER_FRAGMENT);
-    nt_builder_add_font(ctx, "../../external/neotolis-engine/assets/fonts/LilitaOne-RussianChineseKo.ttf",
+    nt_builder_add_font(ctx, argv[3],
                         &(nt_font_opts_t){.charset = NT_CHARSET_ASCII, .resource_name = "game/font"});
 
     // Audio stays an opaque game-owned blob. The runtime chooses the decoder;

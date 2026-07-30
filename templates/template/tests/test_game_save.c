@@ -166,6 +166,12 @@ static bool validate_document_fragments(const cJSON *features, char *err, int ca
            gsj_read_int_range(extra, "mark", 0, 1000000, &staged_mark, err, cap);
 }
 
+static bool reject_document_for_test(const cJSON *features, char *err, int cap) {
+    (void)features;
+    gsj_set_error(err, cap, "injected document validation failure");
+    return false;
+}
+
 /* ---- identity-ish transform (case toggle: involutive, never emits NUL) ---- */
 static char *xf_toggle_case(const char *in, char *err, int cap) {
     (void)err;
@@ -275,6 +281,11 @@ static bool first_corrupt_name(char *name, size_t cap) {
 static void cleanup_all(void) {
     (void)remove(PRIMARY_PATH);
     (void)remove(PRIMARY_TMP);
+#ifdef _WIN32
+    (void)_rmdir(PRIMARY_TMP);
+#else
+    (void)rmdir(PRIMARY_TMP);
+#endif
     (void)remove(BAK_PATH);
     (void)remove(BAK_TMP);
     (void)sweep_corrupt(true);
@@ -406,6 +417,88 @@ void test_new_game_runs_on_new_game(void) {
     TEST_ASSERT_TRUE(file_present(PRIMARY_PATH));
 }
 
+void test_failed_new_game_save_retries_on_tick(void) {
+    char err[128] = {0};
+    game_save_set_document_validator(reject_document_for_test);
+
+    TEST_ASSERT_FALSE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_FALSE(file_present(PRIMARY_PATH));
+
+    game_save_set_document_validator(validate_document_fragments);
+    g_mono_ms += GAME_SAVE_DEBOUNCE_MS;
+    game_save_tick();
+
+    TEST_ASSERT_TRUE(file_present(PRIMARY_PATH));
+    TEST_ASSERT_EQUAL_INT(100, s_frag_coins);
+}
+
+void test_failed_fresh_seed_retries_on_tick(void) {
+    game_save_set_document_validator(reject_document_for_test);
+    game_save_load_result_t result;
+
+    game_save_load(&result);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_FRESH, result.status);
+    TEST_ASSERT_FALSE(file_present(PRIMARY_PATH));
+
+    game_save_set_document_validator(validate_document_fragments);
+    g_mono_ms += GAME_SAVE_DEBOUNCE_MS;
+    game_save_tick();
+
+    TEST_ASSERT_TRUE(file_present(PRIMARY_PATH));
+    TEST_ASSERT_EQUAL_INT(100, s_frag_coins);
+}
+
+void test_import_rejects_non_numeric_format(void) {
+    const char *invalid =
+        "{\"format\":\"1\",\"save_version\":2,\"saved_at\":1,\"save_seq\":1,"
+        "\"app\":\"" GAME_STORAGE_APP_ID "\",\"build\":\"0\","
+        "\"features\":{\"game\":{\"v\":1,\"coins\":7,\"name\":\"ok\"},"
+        "\"extra\":{\"v\":1,\"mark\":8}}}";
+    char err[128] = {0};
+    s_frag_coins = 11;
+
+    TEST_ASSERT_FALSE(game_save_import_string(invalid, err, (int)sizeof err));
+    TEST_ASSERT_EQUAL_INT(11, s_frag_coins);
+}
+
+void test_import_rejects_foreign_app(void) {
+    const char *invalid =
+        "{\"format\":1,\"save_version\":2,\"saved_at\":1,\"save_seq\":1,"
+        "\"app\":\"another-game\",\"build\":\"0\","
+        "\"features\":{\"game\":{\"v\":1,\"coins\":7,\"name\":\"ok\"},"
+        "\"extra\":{\"v\":1,\"mark\":8}}}";
+    char err[128] = {0};
+    s_frag_coins = 11;
+
+    TEST_ASSERT_FALSE(game_save_import_string(invalid, err, (int)sizeof err));
+    TEST_ASSERT_EQUAL_INT(11, s_frag_coins);
+}
+
+void test_import_rejects_invalid_metadata_types(void) {
+    const char *invalid =
+        "{\"format\":1,\"save_version\":2,\"saved_at\":\"yesterday\",\"save_seq\":1,"
+        "\"app\":\"" GAME_STORAGE_APP_ID "\",\"build\":\"0\","
+        "\"features\":{\"game\":{\"v\":1,\"coins\":7,\"name\":\"ok\"},"
+        "\"extra\":{\"v\":1,\"mark\":8}}}";
+    char err[128] = {0};
+    s_frag_coins = 11;
+
+    TEST_ASSERT_FALSE(game_save_import_string(invalid, err, (int)sizeof err));
+    TEST_ASSERT_EQUAL_INT(11, s_frag_coins);
+}
+
+void test_import_rejects_missing_metadata(void) {
+    const char *invalid =
+        "{\"format\":1,\"save_version\":2,\"app\":\"" GAME_STORAGE_APP_ID "\","
+        "\"features\":{\"game\":{\"v\":1,\"coins\":7,\"name\":\"ok\"},"
+        "\"extra\":{\"v\":1,\"mark\":8}}}";
+    char err[128] = {0};
+    s_frag_coins = 11;
+
+    TEST_ASSERT_FALSE(game_save_import_string(invalid, err, (int)sizeof err));
+    TEST_ASSERT_EQUAL_INT(11, s_frag_coins);
+}
+
 /* 4. CORRUPT_RESET: no double on_new_game, quarantine, paused until new_game. */
 void test_corrupt_reset_no_on_new_game_then_new_game(void) {
     write_raw(PRIMARY_PATH, "THIS-IS-NOT-JSON");
@@ -468,6 +561,36 @@ void test_recovered_bak_then_next_boot_loaded(void) {
     game_save_load(&r2);
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, r2.status);
     TEST_ASSERT_EQUAL_INT(42, s_frag_coins);
+}
+
+/* A failed primary rewrite during recovery must not refresh the only valid
+   backup from the still-corrupt primary. Dirty state remains retryable. */
+void test_recovered_bak_failed_rewrite_preserves_backup(void) {
+    char err[128] = {0};
+    s_frag_coins = 42;
+    TEST_ASSERT_TRUE(game_save_flush(err, (int)sizeof err));
+    make_backup_of_primary();
+    char *backup_before = read_raw(BAK_PATH);
+    TEST_ASSERT_NOT_NULL(backup_before);
+
+    write_raw(PRIMARY_PATH, "CORRUPT-PRIMARY");
+#ifdef _WIN32
+    TEST_ASSERT_EQUAL_INT(0, _mkdir(PRIMARY_TMP));
+#else
+    TEST_ASSERT_EQUAL_INT(0, mkdir(PRIMARY_TMP, 0777));
+#endif
+    s_frag_coins = 0;
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_RECOVERED_BAK, result.status);
+    TEST_ASSERT_EQUAL_INT(42, s_frag_coins);
+    char *backup_after = read_raw(BAK_PATH);
+    TEST_ASSERT_NOT_NULL(backup_after);
+    TEST_ASSERT_EQUAL_STRING(backup_before, backup_after);
+    free(backup_after);
+    free(backup_before);
 }
 
 /* 6. NEWER (versions only): zero bytes written, export still readable. */
@@ -631,6 +754,7 @@ void test_bad_fragment_isolation(void) {
     game_save_set_document_validator(NULL); /* current-version fragment-local contract */
     const char *doc =
         "{\"format\":1,\"save_version\":2,\"saved_at\":1,\"save_seq\":1,\"app\":\"" GAME_STORAGE_APP_ID "\","
+        "\"build\":\"0\","
         "\"features\":{\"game\":{\"v\":1,\"coins\":2000000000},"  /* out of range -> from_json fails */
         "\"extra\":{\"v\":1,\"mark\":7}}}";
     write_raw(PRIMARY_PATH, doc);
@@ -962,8 +1086,15 @@ int main(void) {
     RUN_TEST(test_envelope_round_trip);
     RUN_TEST(test_fresh_runs_on_new_game);
     RUN_TEST(test_new_game_runs_on_new_game);
+    RUN_TEST(test_failed_new_game_save_retries_on_tick);
+    RUN_TEST(test_failed_fresh_seed_retries_on_tick);
+    RUN_TEST(test_import_rejects_non_numeric_format);
+    RUN_TEST(test_import_rejects_foreign_app);
+    RUN_TEST(test_import_rejects_invalid_metadata_types);
+    RUN_TEST(test_import_rejects_missing_metadata);
     RUN_TEST(test_corrupt_reset_no_on_new_game_then_new_game);
     RUN_TEST(test_recovered_bak_then_next_boot_loaded);
+    RUN_TEST(test_recovered_bak_failed_rewrite_preserves_backup);
     RUN_TEST(test_newer_is_read_only);
     RUN_TEST(test_orphan_round_trip);
     RUN_TEST(test_save_seq_monotonic);

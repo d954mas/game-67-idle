@@ -21,6 +21,15 @@
    engine reads after the handler returns (err->message must outlive the call).
    Ported 1:1 from the transitional devapi — already universal, no fragment name. */
 static char s_state_err[256];
+static game_save_devapi_change_fn s_on_change;
+static void *s_on_change_user;
+
+static void notify_change(
+    game_save_devapi_change_t change, const char *fragment_id) {
+    if (s_on_change) {
+        s_on_change(change, fragment_id, s_on_change_user);
+    }
+}
 
 static bool state_fail(nt_devapi_error *err, const char *code, const char *message) {
     (void)snprintf(s_state_err, sizeof(s_state_err), "%s", message);
@@ -33,21 +42,6 @@ static bool state_fail(nt_devapi_error *err, const char *code, const char *messa
 static bool state_fail_buf(nt_devapi_error *err, const char *code) {
     err->code = code;
     err->message = s_state_err;
-    return false;
-}
-
-static bool raw_state_write_forbidden(const GameSaveFragment *fragment, const char *sub) {
-    if (strcmp(fragment->id, "game") == 0 &&
-        (strcmp(sub, "inventory_container_id") == 0 ||
-         strcmp(sub, "wallet_container_id") == 0)) {
-        return true;
-    }
-    if (strcmp(fragment->id, "items") == 0 &&
-        (strcmp(sub, "containers") == 0 ||
-         strcmp(sub, "last_container_id") == 0 ||
-         strcmp(sub, "last_entry_id") == 0)) {
-        return true;
-    }
     return false;
 }
 
@@ -122,6 +116,8 @@ static const char *load_status_string(game_save_load_status_t status) {
             return "corrupt_reset";
         case GAME_SAVE_LOAD_NEWER:
             return "newer";
+        case GAME_SAVE_LOAD_BLOCKED:
+            return "blocked";
     }
     return "unknown";
 }
@@ -203,9 +199,6 @@ static bool ep_state_set(const cJSON *params, cJSON *result_obj, nt_devapi_error
     if (!f->set_path_json) {
         return state_fail(err, "bad_params", "read-only fragment");
     }
-    if (raw_state_write_forbidden(f, sub)) {
-        return state_fail(err, "bad_params", "Items ownership state is domain-owned");
-    }
     cJSON *snapshot = f->to_json ? f->to_json() : NULL;
     if (!snapshot || !f->from_json) {
         cJSON_Delete(snapshot);
@@ -242,6 +235,7 @@ static bool ep_state_set(const cJSON *params, cJSON *result_obj, nt_devapi_error
     }
     cJSON_AddItemToObject(result_obj, "path", cJSON_CreateString(path->valuestring));
     cJSON_AddItemToObject(result_obj, "value", echo);
+    notify_change(GAME_SAVE_DEVAPI_EDIT, f->id);
     return true;
 }
 
@@ -276,7 +270,7 @@ static bool ep_state_patch(const cJSON *params, cJSON *result_obj, nt_devapi_err
                     break;
                 }
             }
-            if (sub[0] == '\0' || !f->set_path_json || raw_state_write_forbidden(f, sub) ||
+            if (sub[0] == '\0' || !f->set_path_json ||
                 !f->set_path_json(sub, m, s_state_err, (int)sizeof s_state_err)) {
                 group_ok = false; /* key failure => roll the whole group back */
                 break;
@@ -329,6 +323,13 @@ static bool ep_state_patch(const cJSON *params, cJSON *result_obj, nt_devapi_err
     for (int i = 0; i < n; i++) { cJSON_Delete(snapshots[i]); }
     if (any_ok) {
         game_save_mark_dirty();
+        for (int i = 0; i < n; ++i) {
+            if (group_success[i]) {
+                notify_change(
+                    GAME_SAVE_DEVAPI_EDIT,
+                    game_save_fragment_at(i)->id);
+            }
+        }
     }
     return true; /* patch never fails the channel; result is per-key */
 }
@@ -348,12 +349,23 @@ static bool ep_state_load(const cJSON *params, cJSON *result_obj, nt_devapi_erro
     (void)user;
     game_save_load_result_t result;
     game_save_load(&result);
+    if (result.status == GAME_SAVE_LOAD_CORRUPT_RESET) {
+        /* Match the normal startup lifecycle: corrupt load reset neutral
+           fragments only, so create valid owner state before notifying the
+           game that live dependencies may be rebound. A failed durable write
+           remains dirty and retries through the normal autosave path. */
+        (void)game_save_new_game(s_state_err, (int)sizeof s_state_err);
+    }
     cJSON *value = build_aggregate();
     if (!value) {
         return state_fail(err, "internal", "failed to build state aggregate");
     }
     cJSON_AddItemToObject(result_obj, "status", cJSON_CreateString(load_status_string(result.status)));
     cJSON_AddItemToObject(result_obj, "value", value);
+    if (result.status != GAME_SAVE_LOAD_NEWER &&
+        result.status != GAME_SAVE_LOAD_BLOCKED) {
+        notify_change(GAME_SAVE_DEVAPI_REPLACE, NULL);
+    }
     return true;
 }
 
@@ -365,10 +377,14 @@ static bool ep_state_reset(const cJSON *params, cJSON *result_obj, nt_devapi_err
         return state_fail_buf(err, "internal");
     }
     cJSON_AddBoolToObject(result_obj, "reset", true);
+    notify_change(GAME_SAVE_DEVAPI_REPLACE, NULL);
     return true;
 }
 
-void game_save_register_devapi(void) {
+void game_save_register_devapi(
+    game_save_devapi_change_fn on_change, void *user) {
+    s_on_change = on_change;
+    s_on_change_user = user;
     static const nt_devapi_command_desc descs[] = {
         {"game.state.schema", "game", "Return per-fragment state schemas.", "none", "{<fragment>: schema}", "immediate", "none"},
         {"game.state.get", "game", "Get state by path (\"\"=all fragments).", "path", "path, value", "immediate", "none"},

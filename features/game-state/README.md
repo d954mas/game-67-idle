@@ -2,9 +2,9 @@
 
 Reusable schema-first game-state feature pack.
 
-This is the first feature pack under `features/` and should be treated as the
-example shape for future reusable features: a small README, optional metadata,
-copyable scripts, references, and explicit integration boundaries.
+The generator and the byte-invariant persistence runtime are owned here and
+compiled in place by templates and games. Consumers own only their schemas,
+migrations, domain hooks, and composition.
 
 ## Purpose
 
@@ -26,6 +26,21 @@ features/game-state/
   README.md
   INSTALL.md
   feature.json
+  include/
+    game_save.h
+    game_state_json.h
+    game_storage.h
+  src/
+    game_save.c
+    game_save_devapi.c
+    game_save_platform_native.c
+    game_save_platform_web.c
+    game_state_json.c
+    game_storage.c
+    game_storage_backend.h
+    game_storage_backend_native.c
+    game_storage_backend_web.c
+    game_storage_web.c
   references/
     contract.md
     workflow.md
@@ -46,20 +61,20 @@ features/game-state/
 
 ## Integration Model
 
-There is no general feature installer yet. This feature's correct use is:
+There is no general feature installer. Consumers use this module in place:
 
-1. Keep the reusable generator and references here.
-2. Keep an installed copy in each template or game that wants state:
-   `state/`, `state/migrations/`, `src/game_storage.*`, and CMake/runtime
-   wiring.
+1. Compile the reusable runtime from `features/game-state/src/` and expose
+   `features/game-state/include/` without copying those files.
+2. Keep consumer-owned `state/*.schema.json`, `state/migrations/`, fragment
+   registration, domain hooks, and save configuration in the template/game.
 3. Generate each fragment's `<id>_state*` files from its local schema into the
    build directory, or
    into a checked-in generated folder if that project explicitly chooses to
    version generated C.
-4. Let that template or game own its local schema and migrations.
+4. Define a unique `GAME_STORAGE_APP_ID` in every consumer.
 
-The default template has this feature installed and enabled by default. New games
-created from that template inherit the installed copy.
+The default template consumes this module in place. New games inherit only its
+CMake wiring and keep using the same root runtime.
 
 For exact install, enable/disable, verification, and uninstall steps, read
 `features/game-state/INSTALL.md`.
@@ -71,8 +86,10 @@ Default template integration uses:
 - migrations: `templates/template/state/migrations/`;
 - always compiled (the `FEATURE_GAME_STATE` on/off flag was removed
   2026-07-07 — a game without state is impossible);
-- DevAPI registrations from the hand-written `src/game_save_devapi.c` registry
-  dispatch (`game_save_register_devapi()`) only when `GAME_DEVAPI_ENABLED` is
+- DevAPI registrations from the hand-written
+  `features/game-state/src/game_save_devapi.c` registry
+  dispatch (`game_save_register_devapi(on_change, user)`) only when
+  `GAME_DEVAPI_ENABLED` is
   also on;
 - semantic runtime commands and domain actions in the game or template source.
 
@@ -123,6 +140,9 @@ node ai_studio/dev_environment/python_run.mjs features/game-state/benchmarks/ben
 - Runtime feature code always compiles. DevAPI registration is gated by
   `GAME_DEVAPI_ENABLED`; release builds must not compile or register those
   commands.
+- `game_save.c` and `game_storage.c` are platform-neutral policy. Exactly one
+  save/storage backend is selected by the consumer; Emscripten and DOM access
+  stay in the web adapters.
 - Generated state stores and serializes data. Gameplay rules belong in domain
   actions owned by the game or template.
 - Schema v2 supports one deliberately narrow depth-two `list<Object>`
@@ -134,8 +154,8 @@ node ai_studio/dev_environment/python_run.mjs features/game-state/benchmarks/ben
   targeted tests. Bots and gameplay checks should prefer semantic actions.
 - Runtime proof collection belongs to `ai_studio/runtime_automation/`.
 - Quality acceptance belongs to `ai_studio/quality/`.
-- DevAPI command registration belongs to the installed feature copy, and release
-  builds must keep DevAPI disabled.
+- DevAPI dispatch is compiled from this module only when the consumer enables
+  `GAME_DEVAPI_ENABLED`; release builds must keep it disabled.
 
 ## Feature-Pack Example Rules
 
@@ -151,6 +171,11 @@ Use this folder as the minimum bar for future feature packs:
 
 Generated `GameState` files, fragment descriptors, and commands declared in
 `feature.json` are public. Generator internals are not.
+
+Version 3 changes the DevAPI change callback to
+`(change, fragment_id, user)`. `fragment_id` is set for `EDIT` and is `NULL`
+for full-state `REPLACE`, allowing the game session to reconcile only the
+affected domain.
 
 ## Validation
 

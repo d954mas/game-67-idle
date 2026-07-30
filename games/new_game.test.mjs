@@ -36,12 +36,32 @@ function buildFixtureRepo() {
     receipt: { schema: "items.release_receipt.v2", field_ids: { active: ["game.weapon.level.attack"], reserved: [] } },
     def_ids: { "tmpl.shipped": { storage: "stack", level_count: 0 } }, removed: {},
   }));
-  write(root, `${template}/CMakeLists.txt`, "cmake_minimum_required(VERSION 3.20)\ninclude(cmake/GamePlatform.cmake)\n");
-  write(root, `${template}/cmake/GameOptions.cmake`, "set(GAME_TITLE \"Template\" CACHE STRING \"Game window title base\")\n");
+  write(root, `${template}/CMakeLists.txt`, [
+    "cmake_minimum_required(VERSION 3.20)",
+    "include(cmake/GameOptions.cmake)",
+    "set(ENGINE_DIR \"${GAME_REPO_ROOT}/external/neotolis-engine\")",
+    "include(cmake/GamePlatform.cmake)",
+    "",
+  ].join("\n"));
+  write(root, `${template}/cmake/GameOptions.cmake`, [
+    "if(NOT GAME_REPO_ROOT)",
+    "  set(GAME_REPO_ROOT \"${CMAKE_CURRENT_SOURCE_DIR}/../..\")",
+    "  if(NOT EXISTS \"${GAME_REPO_ROOT}/external/neotolis-engine\")",
+    "    set(GAME_REPO_ROOT \"${CMAKE_CURRENT_SOURCE_DIR}/../../..\")",
+    "  endif()",
+    "endif()",
+    "set(GAME_TITLE \"Template\" CACHE STRING \"Game window title base\")",
+    "",
+  ].join("\n"));
   write(root, `${template}/cmake/GamePlatform.cmake`, "target_compile_definitions(${GAME_TARGET} PRIVATE GAME_STORAGE_APP_ID=\"template\")\n");
   write(root, `${template}/cmake/GameTests.cmake`, ["storage", "save", "analytics", "composition"].map((suffix) => `target_compile_definitions(test_${suffix} PRIVATE GAME_STORAGE_APP_ID=\"template_${suffix}_test\")`).join("\n") + "\n");
-  write(root, `${template}/src/game_save.c`, "#define GAME_STORAGE_APP_ID \"template\"\n");
+  write(root, `${template}/cmake/GameAssets.cmake`, [
+    "set(GAME_FONT_SOURCE \"${GAME_REPO_ROOT}/external/neotolis-engine/assets/fonts/LilitaOne.ttf\")",
+    "COMMAND build_game_packs \"${GAME_PACK_DIR}\" \"${ITEMS_CATALOG_PACKAGE}\" \"${GAME_FONT_SOURCE}\"",
+    "",
+  ].join("\n"));
   write(root, `${template}/src/main.c`, "config.app_name = \"Template\";\n#define GAME_WINDOW_TITLE \"Template\"\n");
+  write(root, `${template}/src/build_packs.c`, "nt_builder_add_font(ctx, argv[3], &font_options);\n");
   write(root, `${template}/tests/web_persistence_check.py`, "STORAGE_KEY = \"template/save/autosave\"\n");
   write(root, `${template}/assets/readme.txt`, "asset\n");
   write(root, `${template}/.gitignore`, "build/\nsrc/generated/\n.ai_studio/evidence/\n");
@@ -176,6 +196,16 @@ test("private creation uses games/private, installs parent preflight, and stays 
   assert.equal(execFileSync("git", ["status", "--short", "--untracked-files=all"], { cwd: root, encoding: "utf8" }).trim(), "");
   assert.equal(existsSync(join(root, ".vscode", "tasks.json")), false);
   assert.equal(existsSync(join(root, "ai_studio", "taskboard", "items", "projects", "P001.md")), false);
+  const options = readFileSync(join(game, "cmake", "GameOptions.cmake"), "utf8");
+  const cmake = readFileSync(join(game, "CMakeLists.txt"), "utf8");
+  const assetsCmake = readFileSync(join(game, "cmake", "GameAssets.cmake"), "utf8");
+  const packBuilder = readFileSync(join(game, "src", "build_packs.c"), "utf8");
+  assert.match(options, /CMAKE_CURRENT_SOURCE_DIR}\/\.\.\/\.\.\/\.\./);
+  assert.match(cmake, /GAME_REPO_ROOT}\/external\/neotolis-engine/);
+  assert.match(assetsCmake, /GAME_REPO_ROOT}\/external\/neotolis-engine\/assets\/fonts/);
+  assert.match(assetsCmake, /"\$\{GAME_FONT_SOURCE\}"/);
+  assert.match(packBuilder, /nt_builder_add_font\(ctx,\s*argv\[3\]/);
+  assert.doesNotMatch(packBuilder, /\.\.\/\.\.\/external\/neotolis-engine/);
 
   const canvas = readCanvasLink(game);
   const canvasId = canvasProjectId(canvas.ref);

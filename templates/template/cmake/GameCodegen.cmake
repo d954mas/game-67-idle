@@ -1,9 +1,9 @@
 # Python executes on the build host; Emscripten makes target WIN32 false even
 # when CMake itself runs on Windows.
 if(CMAKE_HOST_WIN32)
-    set(STUDIO_PYTHON "${CMAKE_CURRENT_SOURCE_DIR}/../../.venv/Scripts/python.exe")
+    set(STUDIO_PYTHON "${GAME_REPO_ROOT}/.venv/Scripts/python.exe")
 else()
-    set(STUDIO_PYTHON "${CMAKE_CURRENT_SOURCE_DIR}/../../.venv/bin/python")
+    set(STUDIO_PYTHON "${GAME_REPO_ROOT}/.venv/bin/python")
 endif()
 if(NOT EXISTS "${STUDIO_PYTHON}")
     message(FATAL_ERROR "Studio Python is missing at ${STUDIO_PYTHON}; run node ai_studio/dev_environment/python_setup.mjs")
@@ -82,16 +82,16 @@ add_custom_command(
     VERBATIM)
 
 set(GAME_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/game_state.schema.json")
-set(GAME_STATE_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/generate_state.py")
+set(GAME_STATE_GENERATOR "${GAME_REPO_ROOT}/features/game-state/scripts/generate_state.py")
 set(GAME_STATE_GENERATOR_SOURCES
     "${GAME_STATE_GENERATOR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/state_codegen/__init__.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/state_codegen/naming.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/state_codegen/schema.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/state_codegen/model.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/state_codegen/render_state.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/state_codegen/render_events.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/state_codegen/output.py")
+    "${GAME_REPO_ROOT}/features/game-state/scripts/state_codegen/__init__.py"
+    "${GAME_REPO_ROOT}/features/game-state/scripts/state_codegen/naming.py"
+    "${GAME_REPO_ROOT}/features/game-state/scripts/state_codegen/schema.py"
+    "${GAME_REPO_ROOT}/features/game-state/scripts/state_codegen/model.py"
+    "${GAME_REPO_ROOT}/features/game-state/scripts/state_codegen/render_state.py"
+    "${GAME_REPO_ROOT}/features/game-state/scripts/state_codegen/render_events.py"
+    "${GAME_REPO_ROOT}/features/game-state/scripts/state_codegen/output.py")
 set(GAME_STATE_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/game-state")
 set(GAME_STATE_GENERATED_HEADER "${GAME_STATE_GENERATED_DIR}/game_state.h")
 set(GAME_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state.c")
@@ -113,7 +113,7 @@ add_custom_command(
     DEPENDS
         "${GAME_STATE_SCHEMA}"
         ${GAME_STATE_GENERATOR_SOURCES}
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    WORKING_DIRECTORY "${GAME_REPO_ROOT}"
     COMMENT "Generating installed game-state feature sources"
     VERBATIM
 )
@@ -137,7 +137,7 @@ add_custom_command(
         --out-dir "${GAME_STATE_GENERATED_DIR}"
         --fragment settings
     DEPENDS "${SETTINGS_STATE_SCHEMA}" ${GAME_STATE_GENERATOR_SOURCES}
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    WORKING_DIRECTORY "${GAME_REPO_ROOT}"
     COMMENT "Generating installed settings-state fragment sources"
     VERBATIM
 )
@@ -159,7 +159,7 @@ add_custom_command(
         --out-dir "${GAME_STATE_GENERATED_DIR}"
         --fragment items
     DEPENDS "${ITEMS_STATE_SCHEMA}" ${GAME_STATE_GENERATOR_SOURCES}
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    WORKING_DIRECTORY "${GAME_REPO_ROOT}"
     COMMENT "Generating installed items-state fragment sources"
     VERBATIM
 )
@@ -181,10 +181,20 @@ add_custom_command(
         --out-dir "${GAME_STATE_GENERATED_DIR}"
         --fragment progression
     DEPENDS "${PROGRESSION_STATE_SCHEMA}" ${GAME_STATE_GENERATOR_SOURCES}
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    WORKING_DIRECTORY "${GAME_REPO_ROOT}"
     COMMENT "Generating installed progression-state fragment sources"
     VERBATIM
 )
+if(EMSCRIPTEN)
+    set(GAME_SAVE_PLATFORM_SOURCES
+        "${GAME_STATE_SRC}/game_save_platform_web.c"
+        "${GAME_STATE_SRC}/game_storage_backend_web.c"
+        "${GAME_STATE_SRC}/game_storage_web.c")
+else()
+    set(GAME_SAVE_PLATFORM_SOURCES
+        "${GAME_STATE_SRC}/game_save_platform_native.c"
+        "${GAME_STATE_SRC}/game_storage_backend_native.c")
+endif()
 target_sources(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_SOURCE}"          # includes game_state_fragment descriptor
     "${GAME_STATE_GENERATED_EVENTS_SOURCE}"   # typed event structs/emit/descriptors
@@ -198,9 +208,10 @@ target_sources(${GAME_TARGET} PRIVATE
     "${PROGRESSION_STATE_GENERATED_SOURCE}"        # generated progression fragment state
     "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}" # non-empty progression.levelup event
     "${PROGRESSION_CORE_SRC}/progression.c"   # queries/mutations/update over state, items, and tracks
-    src/game_state_json.c
-    src/game_storage.c
-    src/game_save.c
+    "${GAME_STATE_SRC}/game_state_json.c"
+    "${GAME_STATE_SRC}/game_storage.c"
+    "${GAME_STATE_SRC}/game_save.c"
+    ${GAME_SAVE_PLATFORM_SOURCES}
 )
 target_link_libraries(${GAME_TARGET} PRIVATE cjson)
 target_compile_definitions(${GAME_TARGET} PRIVATE
@@ -209,14 +220,14 @@ target_compile_definitions(${GAME_TARGET} PRIVATE
     GAME_SAVE_MAX_INTERVAL_MS=30000
     GAME_SAVE_DOC_VERSION=2
 )
-target_include_directories(${GAME_TARGET} PRIVATE "${GAME_STATE_GENERATED_DIR}")
+target_include_directories(${GAME_TARGET} PRIVATE "${GAME_STATE_INC}" "${GAME_STATE_GENERATED_DIR}")
 if(GAME_DEVAPI_ENABLED)
     # The DevAPI dispatch is a hand-written shell TU (universal over the
     # fragment registry), no longer a generated per-fragment source.
     target_sources(${GAME_TARGET} PRIVATE
         src/iteration_proof_devapi.c
         src/game_items_devapi.c
-        src/game_save_devapi.c
+        "${GAME_STATE_SRC}/game_save_devapi.c"
         "${GAME_EVENTS_SRC}/game_events_devapi.c" # event-log tail ring + game.events.tail
         "${GAME_EVENTS_SRC}/game_event_render.c") # descriptor-driven JSON renderer
 endif()

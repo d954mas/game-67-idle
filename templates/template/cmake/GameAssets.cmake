@@ -1,5 +1,7 @@
 # --- asset pack builder (runs at build time -> game.ntpack + asset-id header) ---
 if(NOT EMSCRIPTEN)
+    set(GAME_FONT_SOURCE
+        "${GAME_REPO_ROOT}/external/neotolis-engine/assets/fonts/LilitaOne-RussianChineseKo.ttf")
     add_executable(build_game_packs src/build_packs.c)
     target_link_libraries(build_game_packs PRIVATE nt_builder nt_log)
     target_compile_definitions(build_game_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -10,8 +12,9 @@ if(NOT EMSCRIPTEN)
     add_custom_command(
         OUTPUT "${GAME_PACK_DIR}/game.ntpack" "${CMAKE_CURRENT_SOURCE_DIR}/src/generated/game_assets.h"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_PACK_DIR}"
-        COMMAND $<TARGET_FILE:build_game_packs> "${GAME_PACK_DIR}" "${ITEMS_CATALOG_PACKAGE}"
-        DEPENDS build_game_packs src/build_packs.c "${ITEMS_CATALOG_PACKAGE}"
+        COMMAND $<TARGET_FILE:build_game_packs>
+            "${GAME_PACK_DIR}" "${ITEMS_CATALOG_PACKAGE}" "${GAME_FONT_SOURCE}"
+        DEPENDS build_game_packs src/build_packs.c "${ITEMS_CATALOG_PACKAGE}" "${GAME_FONT_SOURCE}"
             assets/shaders/slug_text.vert assets/shaders/slug_text.frag
             assets/shaders/mesh_inst.vert assets/shaders/mesh_inst.frag
             assets/shaders/mesh_tex.vert assets/shaders/mesh_tex.frag

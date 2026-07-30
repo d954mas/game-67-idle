@@ -23,13 +23,17 @@ bool game_storage_write(const char *slot, const char *text, char *error, int err
 typedef enum {
     GAME_STORAGE_READ_OK = 0,      /* *out держит байты (return true) */
     GAME_STORAGE_READ_ABSENT = 1,  /* слота нет (return false) */
-    GAME_STORAGE_READ_ERROR = 2,   /* слот есть, но чтение упало; оригинал скопирован в карантин (return false) */
+    GAME_STORAGE_READ_ERROR = 2,   /* чтение упало; проверенная quarantine-копия существует (return false) */
+    GAME_STORAGE_READ_ERROR_PRESERVED = 3, /* чтение упало; primary сохранён, но quarantine-копии нет (return false) */
 } game_storage_read_status_t;
 
 /* Чтение primary. *out — malloc'нутая NUL-строка (владелец вызывающий, free()).
-   status (nullable) различает ABSENT и ERROR (см. enum выше). При ERROR сырьё
-   уже best-effort скопировано в карантин ТОЙ ЖЕ .corrupt-конвенции (native: файл
-   build/saves/<slot>.corrupt-<ts>; web: ключ "<key>.corrupt" прямо в JS).
+   status (nullable) различает ABSENT, ERROR и ERROR_PRESERVED (см. enum выше).
+   ERROR означает, что сырьё проверенно скопировано в карантин ТОЙ ЖЕ
+   .corrupt-конвенции (native: файл build/saves/<slot>.corrupt-<ts>; web: ключ
+   "<key>.corrupt" прямо в JS). ERROR_PRESERVED означает, что primary не изменён,
+   но безопасную quarantine-копию создать не удалось; вызывающий не должен писать
+   в слот до явного решения пользователя.
    false: ABSENT или ERROR; true: OK. */
 bool game_storage_read(const char *slot, char **out, game_storage_read_status_t *status, char *error, int error_cap);
 

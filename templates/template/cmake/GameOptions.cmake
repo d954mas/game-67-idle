@@ -1,6 +1,19 @@
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+# Studio repo root. Public games and templates sit at depth 2 (games/<id>,
+# templates/template); private games sit at depth 3 (games/private/<id>).
+# Detect by the engine checkout so the template can be copied verbatim.
+if(NOT GAME_REPO_ROOT)
+    set(GAME_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+    if(NOT EXISTS "${GAME_REPO_ROOT}/external/neotolis-engine")
+        set(GAME_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../..")
+    endif()
+endif()
+if(NOT EXISTS "${GAME_REPO_ROOT}/external/neotolis-engine")
+    message(FATAL_ERROR "Cannot locate the studio repo root (external/neotolis-engine) above ${CMAKE_CURRENT_SOURCE_DIR}")
+endif()
+
 # Two-build convention: the human build (native-debug, VS Code) has no DevAPI;
 # agents configure their own dir (build/devapi-debug) with -DGAME_DEVAPI_ENABLED=ON
 # and get a distinct window title so both can run side by side.

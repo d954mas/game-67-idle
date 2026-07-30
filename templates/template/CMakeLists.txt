@@ -3,9 +3,8 @@ project(game LANGUAGES C)
 
 include(cmake/GameOptions.cmake)
 
-# Shared engine (one copy, referenced not copied). Templates and games live one
-# folder below the repo groups, so the engine is two levels up.
-set(ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../external/neotolis-engine")
+# Shared engine (one copy, referenced not copied).
+set(ENGINE_DIR "${GAME_REPO_ROOT}/external/neotolis-engine")
 add_subdirectory("${ENGINE_DIR}" "${CMAKE_BINARY_DIR}/_engine")
 if(NOT EMSCRIPTEN AND NOT TARGET nt_builder)
     add_subdirectory("${ENGINE_DIR}/tools/builder" "${CMAKE_BINARY_DIR}/_builder")
@@ -18,28 +17,29 @@ if(NOT EMSCRIPTEN AND NOT TARGET nt_builder)
     endforeach()
 endif()
 
-# T0337: in-place modules (precedent features/game-state). Depth-2 invariant:
-# ../../ == repo root for BOTH templates/template and games/<id>, so these paths
-# survive games/new_game.mjs verbatim (like ENGINE_DIR :80 / GAME_STATE_GENERATOR :210).
-set(ITEMS_CORE_DIR        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/items-core")
+# T0337: in-place modules (precedent features/game-state).
+set(ITEMS_CORE_DIR        "${GAME_REPO_ROOT}/features/items-core")
 set(ITEMS_CORE_INC        "${ITEMS_CORE_DIR}/include")
 set(ITEMS_CORE_SRC        "${ITEMS_CORE_DIR}/src")
 set(ITEMS_CORE_SCRIPTS    "${ITEMS_CORE_DIR}/scripts")
 # T0337 M2: progression-core (L2 -> items-core L1, §2.4). Same depth-2 invariant as above.
-set(PROGRESSION_CORE_DIR     "${CMAKE_CURRENT_SOURCE_DIR}/../../features/progression-core")
+set(PROGRESSION_CORE_DIR     "${GAME_REPO_ROOT}/features/progression-core")
 set(PROGRESSION_CORE_INC     "${PROGRESSION_CORE_DIR}/include")
 set(PROGRESSION_CORE_SRC     "${PROGRESSION_CORE_DIR}/src")
 set(PROGRESSION_CORE_SCRIPTS "${PROGRESSION_CORE_DIR}/scripts")
-set(PLATFORM_SDK_DIR         "${CMAKE_CURRENT_SOURCE_DIR}/../../features/platform-sdk")
+set(PLATFORM_SDK_DIR         "${GAME_REPO_ROOT}/features/platform-sdk")
 set(PLATFORM_SDK_INC         "${PLATFORM_SDK_DIR}/include")
 set(PLATFORM_SDK_SRC         "${PLATFORM_SDK_DIR}/src")
 set(PLATFORM_SDK_WEB         "${PLATFORM_SDK_DIR}/web")
-set(GAME_EVENTS_DIR          "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-events")
+set(GAME_EVENTS_DIR          "${GAME_REPO_ROOT}/features/game-events")
 set(GAME_EVENTS_INC          "${GAME_EVENTS_DIR}/include")
 set(GAME_EVENTS_SRC          "${GAME_EVENTS_DIR}/src")
-set(SCENES_CORE_DIR          "${CMAKE_CURRENT_SOURCE_DIR}/../../features/scenes-core")
+set(SCENES_CORE_DIR          "${GAME_REPO_ROOT}/features/scenes-core")
 set(SCENES_CORE_INC          "${SCENES_CORE_DIR}/include")
 set(SCENES_CORE_SRC          "${SCENES_CORE_DIR}/src")
+set(GAME_STATE_DIR           "${GAME_REPO_ROOT}/features/game-state")
+set(GAME_STATE_INC           "${GAME_STATE_DIR}/include")
+set(GAME_STATE_SRC           "${GAME_STATE_DIR}/src")
 
 set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
@@ -50,6 +50,7 @@ set(GAME_SOURCE_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/generated")
 # --- game executable (the conductor + systems) ---
 add_executable(${GAME_TARGET}
     src/main.c
+    src/game_input.c
     "${SCENES_CORE_SRC}/scene_manager.c"
     src/game_scenes.c
     src/platform_lifecycle.c

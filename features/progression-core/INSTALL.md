@@ -104,8 +104,8 @@ add_executable(test_progression
     "${PROGRESSION_STATE_GENERATED_SOURCE}" "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"
     "${ITEMS_CORE_SRC}/items_containers.c" "${ITEMS_CORE_SRC}/items_runtime_package.c"
     "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
-    src/features/items/items_bootstrap.c "${ITEMS_CORE_SRC}/items_reconcile.c"
-    src/game_state_json.c "${GAME_EVENTS_SRC}/game_events.c")
+    "${ITEMS_CORE_SRC}/items_reconcile.c"
+    "${GAME_STATE_SRC}/game_state_json.c" "${GAME_EVENTS_SRC}/game_events.c")
 target_include_directories(test_progression PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src ...)
 target_compile_definitions(test_progression PRIVATE ITEMS_RUNTIME_PACKAGE_ENABLED=1)
 ```

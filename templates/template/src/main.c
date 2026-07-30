@@ -46,6 +46,7 @@
 #include "features/platform_sdk/platform_sdk_events.h"
 #include "features/settings/settings.h"
 #include "game_audio.h"
+#include "game_input.h"
 #include "game_events.h"
 #if GAME_EVENTS_LOG_MIRROR
 #include "game_events_log_mirror.h"
@@ -98,6 +99,7 @@ static nt_resource_t s_mesh_vs, s_mesh_fs, s_cube;
 static nt_resource_t s_tex_vs, s_tex_fs, s_uv_texture;
 static nt_resource_t s_items_catalog_resource;
 static World s_world;
+static game_input_frame_t s_input;
 static char s_capture_path[260];
 static bool s_capture;
 static bool s_open_settings_on_start;
@@ -160,6 +162,15 @@ static bool parse_devapi_port(const char *raw, uint16_t *out) {
     return true;
 }
 
+static void game_runtime_on_devapi_state_change(
+    game_save_devapi_change_t change,
+    const char *fragment_id, void *user) {
+    (void)user;
+    if (change == GAME_SAVE_DEVAPI_EDIT && fragment_id) {
+        (void)game_save_reconcile_from(fragment_id);
+    }
+}
+
 static bool devapi_start(void) {
     if (!s_devapi_requested) {
         return true;
@@ -195,7 +206,7 @@ static bool devapi_start(void) {
     }
     game_iteration_proof_register_devapi();
     game_items_register_devapi();
-    game_save_register_devapi();
+    game_save_register_devapi(game_runtime_on_devapi_state_change, NULL);
     game_events_register_devapi(); // E3: game.events.tail (+ enables the recorder)
 #ifdef NT_DEVAPI_GROUP_UI
     nt_devapi_ui_register_context("hud", ui_runtime_ctx());
@@ -282,6 +293,28 @@ static void game_runtime_fail(const char *message, int detail) {
     nt_app_quit();
 }
 
+static void game_runtime_reset_fragments_without_grants(void) {
+    const int fragment_count = game_save_fragment_count();
+    for (int i = 0; i < fragment_count; ++i) {
+        const GameSaveFragment *fragment = game_save_fragment_at(i);
+        if (fragment != NULL && fragment->reset != NULL) {
+            fragment->reset();
+        }
+    }
+    game_items_create_defaults(false);
+}
+
+static bool game_runtime_apply_pending_new_game(void) {
+    if (!game_save_apply_pending_new_game()) {
+        return false;
+    }
+    s_world.time_seconds = 0.0F;
+    s_world.player_x = 0.0F;
+    s_world.player_z = 0.0F;
+    s_world.player_yaw = 0.0F;
+    return true;
+}
+
 static void game_runtime_load_state(void) {
     if (!s_fresh_state) {
         game_save_load_result_t load_result;
@@ -291,17 +324,18 @@ static void game_runtime_load_state(void) {
                the single on_new_game call on the corrupt-save path. */
             char save_err[128];
             (void)game_save_new_game(save_err, (int)sizeof save_err);
+        } else if (load_result.status == GAME_SAVE_LOAD_NEWER ||
+                   load_result.status == GAME_SAVE_LOAD_BLOCKED) {
+            /* The disk slot remains untouched/read-only. Build a valid unsaved
+               runtime state so owner references never point at zeroed storage. */
+            game_runtime_reset_fragments_without_grants();
         }
         return;
     }
 
     /* --fresh-state skips load and grants, but still creates required game-owned
        containers so every runtime consumer has valid explicit ownership. */
-    settings_state_fragment.reset();
-    items_state_fragment.reset();
-    progression_state_fragment.reset();
-    game_state_fragment.reset();
-    game_items_create_defaults(false);
+    game_runtime_reset_fragments_without_grants();
 }
 
 static void game_runtime_try_start(void) {
@@ -335,6 +369,13 @@ static void game_runtime_try_start(void) {
     /* Catalog binding is the startup barrier: save reconciliation and every
        feature that can query Items run only after this point. */
     game_runtime_load_state();
+#ifdef NT_PLATFORM_WEB
+    /* Do not expose pagehide/visibility flush until live fragments contain
+       the loaded save. Fresh-state runs are intentionally non-persistent. */
+    if (!s_fresh_state) {
+        game_save_install_web_flush();
+    }
+#endif
     game_features_init(&s_world);
     game_scenes_init(&s_world);
     platform_lifecycle_init();
@@ -358,9 +399,9 @@ static void game_runtime_update(void) {
 
     s_world.time_seconds += g_nt_app.dt;
     /* Apply deferred new-game requests before feature updates and rendering. */
-    (void)game_save_apply_pending_new_game();
+    (void)game_runtime_apply_pending_new_game();
 
-    game_scenes_update(g_nt_app.dt);
+    game_scenes_update(g_nt_app.dt, &s_input);
     game_features_update(&s_world, g_nt_app.dt);
     game_events_react_begin();
     do {
@@ -380,13 +421,13 @@ static void frame(void) {
     nt_window_poll();
     devapi_update_frame();
     nt_input_poll();
-    if (platform_lifecycle_after_input_poll()) {
+    game_input_capture(&s_input);
+    if (platform_lifecycle_on_input(s_input.any_gesture)) {
         game_audio_on_user_gesture();
     }
 #ifndef NT_PLATFORM_WEB
-    const bool escape_pressed = nt_input_key_is_pressed(NT_KEY_ESCAPE);
     if (nt_window_should_close() ||
-        (escape_pressed && !game_scenes_handle_escape())) {
+        (s_input.escape_pressed && !game_scenes_handle_escape())) {
         nt_app_quit();
     }
 #endif
@@ -426,7 +467,7 @@ static void frame(void) {
     }
     // UI-слой фич: агрегатор владеет ui_runtime-кадром и рисует settings (z-order).
     if (s_game_runtime_ready) {
-        game_features_draw_ui(&s_world);
+        game_features_draw_ui(&s_world, &s_input);
     }
     nt_gfx_end_pass();
 
@@ -440,6 +481,9 @@ static void frame(void) {
     }
 
     nt_gfx_end_frame();
+    /* UI may request New Game during draw. Drain it before pagehide can flush
+       the previous state; this callback is still one synchronous frame. */
+    (void)game_runtime_apply_pending_new_game();
     nt_window_swap_buffers();
     platform_lifecycle_after_frame_present(playable_shell_ready);
     devapi_sample_metrics(frame_begin);
@@ -563,9 +607,6 @@ int main(int argc, char **argv) {
     game_save_register_fragment(&game_state_fragment);     /* `game` last (most dependent) */
     game_items_configure_save();
     game_save_init();
-#ifdef NT_PLATFORM_WEB
-    game_save_install_web_flush();
-#endif
 
     s_pack_id = nt_hash32_str("game");
     nt_resource_mount(s_pack_id, 100);

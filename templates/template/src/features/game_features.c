@@ -53,9 +53,10 @@ void game_features_update(World *w, float dt) {
     (void)dt;
 }
 
-void game_features_update_root(World *w, float dt) {
+void game_features_update_root(
+    World *w, float dt, const game_input_frame_t *input) {
     if (game_scenes_can_process_game_input()) {
-        sys_move(w, dt);
+        sys_move(w, dt, input);
     }
     demo_hud_update(dt);
     progression_update();
@@ -81,10 +82,11 @@ void game_features_record(World *w) {
 }
 
 void game_features_draw_world(World *w) { (void)w; /* TODO: add feature render systems. */ }
-void game_features_draw_ui(World *w) {
+void game_features_draw_ui(
+    World *w, const game_input_frame_t *input) {
     /* UI-слой фич: агрегатор владеет ui_runtime-кадром; каждая фича получает
        ctx и рисует свой слой ОДНОЙ строкой, порядок вызовов = z-order. */
-    if (ui_runtime_begin(g_nt_app.dt)) {
+    if (ui_runtime_begin(g_nt_app.dt, input)) {
         game_scenes_build_ui(ui_runtime_ctx());
         if (game_scenes_can_process_game_input()) {
             platform_sdk_debug_draw_ui(ui_runtime_ctx());

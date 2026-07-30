@@ -45,10 +45,10 @@ Tiers:
    LINKED-shared tier; **feature-pointer** (copy-then-own, e.g. `settings`/
    `resource_panel`) is the copy-then-own tier below. A game copies a
    feature-pointer when it needs one; good feature-pointers are promoted back.
-3. **Template** (minimal) — thin `main.c` conductor + `world` + the basic shell as
-   its OWN files (settings, audio, save, UI gear/panel, font, coloured+textured mesh,
-   pack builder) so a new game runs immediately; copying the template brings them, and
-   the game then customizes them. The shell lives in the template, not `features/`.
+3. **Template** (minimal) — thin `main.c` conductor + `world` + game-owned
+   composition files (settings UI, audio composition, UI gear/panel, render shell,
+   pack builder). Persistence/storage and other in-place modules remain shared under
+   `features/`; the copied game owns only their wiring and policy.
 4. **Game-only** — a game's own systems, logic, pulled assets, tasks, design.
 
 Trade-off (named honestly, per research): copy-then-customize IS "clone-and-own",
@@ -108,8 +108,9 @@ The template is NOT a bare seed: a new game opens to a working shell and builds 
     only flat-coloured ones.
   Ready to draw library glb: pull → pack → render (skill `nt-asset-workflow`). A small
   CC0 textured glb is sourced into `assets/meshes/` as the textured example.
-- **State + saves**: base game state (`state/` schema + codegen) and
-  `src/game_storage.*` (save/load, autosave).
+- **State + saves**: game-owned schemas/migrations under `state/`, generated
+  fragments in the build tree, and the in-place `features/game-state` runtime
+  (save/load, autosave, native/web adapters).
 - **Audio**: `src/game_audio.*` (music/SFX buses).
 - **Startup UX**: the template opens to a **live resource-panel HUD** (gold
   counter + xp bar, via `resource_panel`/`demo_hud`) over two sample cubes, with a
@@ -187,18 +188,12 @@ modules from day one so a copied game keeps them apart:
         ui_runtime.{c,h}          per-feature draw_ui frame (ctx + z-order calls)
         theme.{c,h}               shared UI theme
         demo_hud.{c,h}            resource_panel composition (idle-income demo)
-      game_{save,storage,state_json,events,event_render,log,analytics,format}.*
-                               L0 SHELL: fragment registry/orchestration, JSON
-                               save/load, typed events, formatting.
-      game_save_devapi.c      hand-written universal `game.state` DevAPI dispatch
-                              over the fragment registry (A5); registered by
-                              `game_save_register_devapi()`, built only under
-                              `GAME_DEVAPI_ENABLED`. Engine-owned DevAPI groups
-                              (ui.*, input.*, frame/time, obs, capture.*) are
-                              wired from the engine, NOT duplicated here
+      game_{events,event_render,log,analytics,format}.*
+                               Game-owned L0 event/observability/format helpers.
+                               Save/storage/JSON orchestration is consumed in
+                               place from `features/game-state`.
       build_packs.c           pack builder (font + shaders + white + textured sample)
-      game_audio.*            seed infra (music/SFX buses); not yet compiled into
-                              the game target
+      game_audio.*            game audio composition over `features/audio-core`
     devapi/
       smoke_bot.py            game-local Python runtime bot: launch via DevAPI,
                               discover commands, click a stable UI id, capture
@@ -212,15 +207,17 @@ modules from day one so a copied game keeps them apart:
     items.lua.json            canonical Items Lua evaluator manifest
     design/items/             modular Items Lua declarations
 
-Outside `src/`, two in-place modules carry the L1/L2 learning-feature runtime
+Outside `src/`, shared in-place modules carry the reusable runtime
 (one shared copy, linked in-place, NOT copy-then-own): `features/items-core/`
-(ownership, catalog, reconcile) and `features/progression-core/` (curve,
-level-ups); see `features/README.md` §"Categories: module vs feature-pointer
-vs game code".
+(ownership, catalog, reconcile), `features/progression-core/` (curve,
+level-ups), and `features/game-state/` (fragment registry, native/web storage,
+universal `game.state` DevAPI dispatch). See `features/README.md`
+§"Categories: module vs feature-pointer vs game code".
 
 Engine-owned pieces stay engine-side (public API): `nt_mesh_renderer`,
 `nt_text_renderer`, `nt_devapi`, `cjson`, ECS comps, `nt_resource`. Seed infra
-files (`game_storage.*`, `game_audio.*`, `state/`) stay as-is. A new game adds a
+files (`game_audio.*`, `state/`) stay game-side; persistence/storage implementation
+stays in-place under `features/game-state`. A new game adds a
 system by dropping `systems/sys_<thing>.{c,h}` and registering it in `main`; do
 not grow one large file.
 

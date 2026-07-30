@@ -237,6 +237,18 @@ void test_write_rejects_path_traversal(void) {
     }
 }
 
+void test_all_slot_operations_reject_unsafe_names(void) {
+    char err[128] = {0};
+    char *out = NULL;
+
+    TEST_ASSERT_FALSE(game_storage_exists("../bad"));
+    TEST_ASSERT_FALSE(game_storage_write_backup("../bad", err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(strlen(err) > 0);
+    TEST_ASSERT_FALSE(game_storage_read_backup("../bad", &out, err, (int)sizeof(err)));
+    TEST_ASSERT_NULL(out);
+    TEST_ASSERT_FALSE(game_storage_quarantine("../bad", err, (int)sizeof(err)));
+}
+
 /* ---- crash scenario 1: a stale/garbage <slot>.json.tmp left behind by
    a crash between "write tmp" and "replace" must stay invisible to read(). ---- */
 
@@ -446,9 +458,10 @@ void test_quarantine_twice_same_slot(void) {
 
 /* read() must tell ABSENT ("no save yet" -> caller starts fresh) apart from ERROR
    ("save present but unreadable" -> caller quarantines, never overwrites as fresh).
-   A DIRECTORY at the primary path makes fopen()/fread() fail non-ENOENT -> ERROR
-   (lead 2026-07-07). A directory has no bytes, so best-effort quarantine copies
-   nothing (the byte-identical quarantine is proven in test_game_save's oversize case). */
+   A DIRECTORY at the primary path makes fopen()/fread() fail non-ENOENT. Because
+   no verified byte copy can be made, the backend reports ERROR_PRESERVED and the
+   caller must not overwrite it (the verified-copy path is covered by the
+   oversize case in test_game_save). */
 void test_read_status_absent_vs_error(void) {
     char err[128] = {0};
     char *out = NULL;
@@ -468,15 +481,16 @@ void test_read_status_absent_vs_error(void) {
     TEST_ASSERT_EQUAL_STRING("OK-BYTES", out);
     free(out);
 
-    /* present but a DIRECTORY at the slot path -> ERROR (not ABSENT, not OK) */
+    /* present but uncopyable -> ERROR_PRESERVED (not ABSENT, not safe ERROR) */
     (void)remove("build/saves/read_error_dir.json");
     test_make_dir("build/saves");
     test_make_dir("build/saves/read_error_dir.json");
+    TEST_ASSERT_FALSE(game_storage_exists("read_error_dir"));
     out = NULL;
     st = GAME_STORAGE_READ_ABSENT;
     TEST_ASSERT_FALSE(game_storage_read("read_error_dir", &out, &st, err, (int)sizeof(err)));
     TEST_ASSERT_NULL(out);
-    TEST_ASSERT_EQUAL_INT(GAME_STORAGE_READ_ERROR, st);
+    TEST_ASSERT_EQUAL_INT(GAME_STORAGE_READ_ERROR_PRESERVED, st);
 }
 
 /* ---- probe (native path is trivially true; the real check is web-only) ---- */
@@ -495,6 +509,7 @@ int main(void) {
     RUN_TEST(test_write_rejects_unsafe_slot);
     RUN_TEST(test_write_rejects_uppercase_slot);
     RUN_TEST(test_write_rejects_path_traversal);
+    RUN_TEST(test_all_slot_operations_reject_unsafe_names);
 
     RUN_TEST(test_atomicity_stale_tmp_is_invisible_to_read);
     RUN_TEST(test_stale_tmp_with_absent_primary_recovers);

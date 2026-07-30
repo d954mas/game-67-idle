@@ -1,12 +1,13 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "game-state",
-  "version": "1.1.0",
+  "version": "3.1.0",
   "title": "Game State",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
   "summary": "Schema-first generated game state with JSON save/load and DevAPI adapters.",
-  "copy_model": "manual-copy",
+  "copy_model": "in-place",
+  "layer": "L0",
   "owners": [
     "features/game-state"
   ],
@@ -14,7 +15,14 @@
     "Python 3.12",
     "templates/template/state/game_state.schema.json or a game-local state schema",
     "template or game C runtime using generated GameState files",
-    "Neotolis engine public APIs for runtime and DevAPI integration"
+    "Neotolis engine targets nt_time and nt_log; DevAPI targets when enabled"
+  ],
+  "provides": [
+    "GameSaveFragment registry and save lifecycle",
+    "game_storage slot persistence API",
+    "game_state_json validation helpers",
+    "schema-first C state generation",
+    "optional game.state.* DevAPI dispatch"
   ],
   "flags": {
     "devapi": "GAME_DEVAPI_ENABLED",
@@ -41,15 +49,22 @@
     "schema": "templates/template/state/game_state.schema.json",
     "generated_dir": "templates/template/build/<config>/generated/game-state",
     "runtime_sources": [
-      "templates/template/src/game_state_json.c",
-      "templates/template/src/game_state_json.h",
-      "templates/template/src/game_storage.c",
-      "templates/template/src/game_storage.h",
-      "templates/template/src/game_save.c",
-      "templates/template/src/game_save.h",
-      "templates/template/src/game_save_devapi.c",
-      "templates/template/src/features/settings/settings.c",
-      "templates/template/src/features/settings/settings.h"
-    ]
+      "features/game-state/src/game_state_json.c",
+      "features/game-state/src/game_storage.c",
+      "features/game-state/src/game_save.c",
+      "features/game-state/src/game_save_devapi.c"
+    ],
+    "platform_sources": {
+      "native": [
+        "features/game-state/src/game_save_platform_native.c",
+        "features/game-state/src/game_storage_backend_native.c"
+      ],
+      "web": [
+        "features/game-state/src/game_save_platform_web.c",
+        "features/game-state/src/game_storage_backend_web.c",
+        "features/game-state/src/game_storage_web.c"
+      ]
+    },
+    "runtime_include": "features/game-state/include"
   }
 }

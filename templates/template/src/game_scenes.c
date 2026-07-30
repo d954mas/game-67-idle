@@ -17,6 +17,7 @@ static scene_manager_t s_manager;
 static game_scene_instance_t s_root;
 static game_scene_instance_t s_settings;
 static bool s_initialized;
+static const game_input_frame_t *s_frame_input;
 
 static scene_load_result_t scene_load_step(void *instance) {
     (void)instance;
@@ -25,7 +26,7 @@ static scene_load_result_t scene_load_step(void *instance) {
 
 static void root_update(void *instance, float dt) {
     game_scene_instance_t *scene = instance;
-    game_features_update_root(scene->world, dt);
+    game_features_update_root(scene->world, dt, s_frame_input);
 }
 
 static void root_ui(void *instance, void *ui_context, scene_ui_mode_t mode) {
@@ -93,9 +94,11 @@ void game_scenes_step(uint64_t frame_index, float dt) {
     }
 }
 
-void game_scenes_update(float dt) {
+void game_scenes_update(float dt, const game_input_frame_t *input) {
     if (s_initialized) {
+        s_frame_input = input;
         scene_manager_update(&s_manager, dt);
+        s_frame_input = NULL;
     }
 }
 

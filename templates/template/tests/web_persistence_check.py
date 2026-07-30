@@ -88,14 +88,6 @@ STATE_VALUE = 424242
 
 # ---- prerequisite discovery -------------------------------------------------
 
-def find_emscripten_toolchain_file():
-    emsdk = os.environ.get("EMSDK")
-    if not emsdk:
-        return None
-    path = os.path.join(emsdk, "upstream", "emscripten", "cmake", "Modules", "Platform", "Emscripten.cmake")
-    return path if os.path.isfile(path) else None
-
-
 def find_chrome(explicit):
     candidates = [
         explicit,
@@ -302,32 +294,23 @@ def ensure_web_pack(wasm_bin_dir):
 
 
 def build_wasm_devapi(build_dir="build/wasm-devapi-debug"):
-    """Canonical wasm-devapi build helper (shared with web_devapi_check.py).
-
-    Debug+DevAPI -> preset wasm-devapi-debug -> its OWN build/engine dir, so it
-    never clobbers the clean human build/engine/wasm-release (Release+DevAPI
-    likewise resolves to its own preset name, wasm-devapi-release, so no
-    combination can collide). Debug wasm links thanks to the shared sanitizer
-    flags on the game target. Returns the bin dir with the pack copied in."""
-    toolchain = find_emscripten_toolchain_file()
-    if not toolchain:
-        raise Skip("EMSDK env var not set or Emscripten.cmake toolchain file not found")
-    abs_build_dir = os.path.join(TEMPLATE_DIR, build_dir)
-    configure = [
-        "cmake", "-S", TEMPLATE_DIR, "-B", abs_build_dir, "-G", "Ninja",
-        f"-DCMAKE_TOOLCHAIN_FILE={toolchain}",
-        "-DCMAKE_BUILD_TYPE=Debug",   # preset wasm-devapi-debug (own engine dir; no clobber)
-        "-DGAME_DEVAPI_ENABLED=ON",
+    """Build through the one runtime-fingerprinted web owner."""
+    canonical = os.path.normpath("build/wasm-devapi-debug")
+    if os.path.normpath(build_dir) != canonical:
+        raise CheckFailure(
+            "custom web build directories are unsupported; use build/wasm-devapi-debug"
+        )
+    abs_build_dir = os.path.join(TEMPLATE_DIR, canonical)
+    build = [
+        "node", os.path.join(TEMPLATE_DIR, "tools", "build_web.mjs"),
+        "--preset", "wasm-devapi-debug", "--target", "local",
     ]
-    print("+ " + " ".join(configure))
-    r = subprocess.run(configure, cwd=TEMPLATE_DIR)
-    if r.returncode != 0:
-        raise CheckFailure(f"cmake configure failed (exit {r.returncode})")
-    build = ["cmake", "--build", abs_build_dir, "--target", "game"]
     print("+ " + " ".join(build))
     r = subprocess.run(build, cwd=TEMPLATE_DIR)
     if r.returncode != 0:
-        raise CheckFailure(f"wasm build failed (exit {r.returncode}) -- see build log above")
+        raise CheckFailure(
+            f"canonical wasm build failed (exit {r.returncode}) -- see build log above"
+        )
     bin_dir = os.path.join(abs_build_dir, "bin")
     if not os.path.isfile(os.path.join(bin_dir, "game.js")):
         raise CheckFailure(f"build reported success but no game.js under {bin_dir}")
@@ -350,8 +333,8 @@ def launch_chrome(chrome_path, url, cdp_port, user_data_dir):
         f"--remote-debugging-port={cdp_port}",
         f"--user-data-dir={user_data_dir}",
         "--no-first-run", "--no-default-browser-check",
-        "--disable-gpu",
-        "--use-gl=swiftshader",
+        "--use-angle=swiftshader",
+        "--enable-unsafe-swiftshader",
         url,
     ]
     print("+ " + " ".join(args))
@@ -390,6 +373,88 @@ def quit_chrome(chrome_proc, cdp=None, timeout=10.0):
     except subprocess.TimeoutExpired:
         chrome_proc.kill()
         chrome_proc.wait(timeout=timeout)
+
+
+def navigate_document(cdp, url, timeout=20.0):
+    """Navigate and prove a new document committed before inspecting globals."""
+    before = cdp.eval_js("performance.timeOrigin")
+    cdp.call("Page.navigate", {"url": url})
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        state = cdp.eval_js(
+            "({href: window.location.href, timeOrigin: performance.timeOrigin})"
+        )
+        if (
+            isinstance(state, dict)
+            and state.get("href") == url
+            and state.get("timeOrigin") != before
+        ):
+            return
+        time.sleep(0.05)
+    raise CheckFailure(f"navigation did not commit a new document: {url}")
+
+
+def verify_failure_paths(cdp, game_url):
+    """Exercise the real EM_JS adapter, not the native backend mock."""
+    probe_url = game_url.rsplit("/", 1)[0] + "/__lsprobe__"
+    corrupt_key = STORAGE_KEY + ".corrupt"
+
+    # Parse failure: quarantine must be a verified byte-identical copy. Normal
+    # startup then creates a fresh valid primary through the authoritative
+    # corrupt-reset -> New Game flow.
+    malformed = "not-json:verified-quarantine"
+    navigate_document(cdp, probe_url + "?stage=quarantine")
+    cdp.eval_js(
+        f"window.localStorage.setItem({json.dumps(STORAGE_KEY)},"
+        f"{json.dumps(malformed)});"
+        f"window.localStorage.removeItem({json.dumps(corrupt_key)});1"
+    )
+    navigate_document(cdp, game_url + "?check=quarantine")
+    cdp.wait_for_devapi()
+    quarantined = cdp.eval_js(
+        f"window.localStorage.getItem({json.dumps(corrupt_key)})")
+    replacement = cdp.eval_js(
+        f"window.localStorage.getItem({json.dumps(STORAGE_KEY)})")
+    if quarantined != malformed or replacement in (None, malformed):
+        raise CheckFailure(
+            "malformed web primary was not quarantined and replaced safely"
+        )
+
+    # Quarantine write failure: inject before the game document is created.
+    # The load must become BLOCKED, preserve the only primary, and perform no
+    # fallback write that automation could mistake for a successful repair.
+    blocked_primary = "not-json:quarantine-write-blocked"
+    navigate_document(cdp, probe_url + "?stage=blocked")
+    cdp.eval_js(
+        f"window.localStorage.setItem({json.dumps(STORAGE_KEY)},"
+        f"{json.dumps(blocked_primary)});"
+        f"window.localStorage.removeItem({json.dumps(corrupt_key)});1"
+    )
+    quota_rows = cdp.eval_js(
+        "(() => { let i = 0;"
+        "for (let size = 512 * 1024; size >= 1; size >>= 1) {"
+        "const chunk = 'x'.repeat(size); for (;;) { try {"
+        "localStorage.setItem('__quota__/' + i++, chunk);"
+        "} catch (error) { break; } } } return i; })()"
+    )
+    if not isinstance(quota_rows, int) or quota_rows < 1:
+        raise CheckFailure("could not fill localStorage quota for failure test")
+    navigate_document(cdp, game_url + "?check=blocked")
+    cdp.wait_for_devapi()
+    load_resp = cdp.devapi_submit("game.state.load", {})
+    load_status = load_resp.get("result", {}).get("status")
+    preserved = cdp.eval_js(
+        f"window.localStorage.getItem({json.dumps(STORAGE_KEY)})")
+    false_copy = cdp.eval_js(
+        f"window.localStorage.getItem({json.dumps(corrupt_key)})")
+    if not load_resp.get("ok") or load_status != "blocked":
+        raise CheckFailure(
+            f"quarantine failure did not report blocked: {load_resp}"
+        )
+    if preserved != blocked_primary or false_copy is not None:
+        raise CheckFailure(
+            "blocked web load mutated primary or created an unverified quarantine"
+        )
 
 
 # ---- main flow ---------------------------------------------------------------
@@ -463,7 +528,11 @@ def run(build_dir, chrome_path, http_port, cdp_port, keep_profile):
                   f"game read path / boot overwrite bug, not browser persistence)")
             return 1
 
-        print(f"PASS: {STATE_PATH}=={got_value} survived a full Chrome quit+restart under the same profile dir.")
+        verify_failure_paths(cdp, url)
+        print(
+            f"PASS: {STATE_PATH}=={got_value} survived restart; real web "
+            "quarantine and BLOCKED failure paths also passed."
+        )
         return 0
     finally:
         if cdp:

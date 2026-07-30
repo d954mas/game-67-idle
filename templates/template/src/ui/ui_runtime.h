@@ -1,6 +1,7 @@
 #ifndef GAME_UI_RUNTIME_H
 #define GAME_UI_RUNTIME_H
 
+#include "game_input.h"
 #include "font/nt_font.h"
 #include "material/nt_material.h"
 #include "resource/nt_resource.h"
@@ -12,12 +13,12 @@
 // game systems only build widgets. main.c drives: init -> begin/build/end per
 // frame -> teardown. Reuses main's text material + font (one glyph atlas).
 //
-//   if (ui_runtime_begin(dt)) { game_scenes_build_ui(ui_runtime_ctx()); ui_runtime_end(); }
+//   if (ui_runtime_begin(dt, input)) { game_scenes_build_ui(ui_runtime_ctx()); ui_runtime_end(); }
 void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t font_resource);
 
 // Binds atlas/font when ready, sets the UI projection, opens the nt_ui frame.
 // Returns false (skip widget build) until the atlas + font + materials are ready.
-bool ui_runtime_begin(float dt);
+bool ui_runtime_begin(float dt, const game_input_frame_t *input);
 bool ui_runtime_ready(void);
 
 // Closes the frame, walks the tree, flushes the sprite + text renderers.

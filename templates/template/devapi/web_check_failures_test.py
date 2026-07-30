@@ -39,11 +39,10 @@ class WebCheckFailureTest(unittest.TestCase):
                 self.assertEqual(code, 2)
                 self.assertIn("SKIP", output)
 
-    def test_failed_wasm_configure_is_a_product_failure(self):
+    def test_failed_canonical_wasm_build_is_a_product_failure(self):
         completed = MagicMock(returncode=7)
-        with patch.object(persistence, "find_emscripten_toolchain_file", return_value="toolchain.cmake"), \
-                patch.object(persistence.subprocess, "run", return_value=completed), \
-                self.assertRaisesRegex(persistence.CheckFailure, "cmake configure failed"):
+        with patch.object(persistence.subprocess, "run", return_value=completed), \
+                self.assertRaisesRegex(persistence.CheckFailure, "canonical wasm build failed"):
             persistence.build_wasm_devapi()
 
     def test_missing_devapi_html_is_a_product_failure(self):

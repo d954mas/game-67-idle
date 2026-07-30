@@ -1,28 +1,9 @@
 #include "platform_lifecycle.h"
 
 #include "features/platform_sdk/platform_sdk.h"
-#include "input/nt_input.h"
 
 static bool s_platform_lifecycle_initialized;
 static bool s_gameplay_input_seen;
-
-static bool has_pointer_input_edge(void) {
-    for (int i = 0; i < NT_INPUT_MAX_POINTERS; ++i) {
-        const nt_pointer_t *pointer = &g_nt_input.pointers[i];
-        if (!pointer->active) {
-            continue;
-        }
-        if (pointer->wheel_dx != 0.0F || pointer->wheel_dy != 0.0F) {
-            return true;
-        }
-        for (int button = 0; button < NT_BUTTON_MAX; ++button) {
-            if (pointer->buttons[button].is_pressed) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
 
 void platform_lifecycle_init(void) {
     s_platform_lifecycle_initialized = true;
@@ -30,11 +11,10 @@ void platform_lifecycle_init(void) {
     (void)platform_sdk_init();
 }
 
-bool platform_lifecycle_after_input_poll(void) {
+bool platform_lifecycle_on_input(bool input_seen) {
     if (!s_platform_lifecycle_initialized) {
         return false;
     }
-    const bool input_seen = nt_input_any_key_pressed() || has_pointer_input_edge();
     if (input_seen) {
         platform_lifecycle_mark_gameplay_input();
     }

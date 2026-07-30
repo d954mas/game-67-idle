@@ -2,6 +2,7 @@
 #define GAME_SCENES_H
 
 #include "features/scenes/scene_manager.h"
+#include "game_input.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -14,7 +15,7 @@ typedef struct nt_ui_context nt_ui_context_t;
 
 void game_scenes_init(World *world);
 void game_scenes_step(uint64_t frame_index, float dt);
-void game_scenes_update(float dt);
+void game_scenes_update(float dt, const game_input_frame_t *input);
 void game_scenes_build_ui(nt_ui_context_t *ui_context);
 void game_scenes_build_input_gate(nt_ui_context_t *ui_context);
 void game_scenes_shutdown(void);

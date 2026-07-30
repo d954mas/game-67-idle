@@ -19,17 +19,18 @@ dumps a whole game into one file. Keep them.
   `nt_app_run(frame)` -> teardown. `frame()` only CALLS subsystems in order
   (input -> game-system updates -> render systems). No gameplay rules in `main.c`.
 - **One system per file.** A system (`systems/sys_*.c`, `render/*.c`, `ui/*.c`,
-  `scene/*.c`, `devapi/*.c`) has a single responsibility. Add a feature by adding a
+  `scene/*.c`, root `*_devapi.c`) has a single responsibility. Add a feature by adding a
   file + registering it in `frame()`, NEVER by growing an existing file.
 - **The World is the source of truth.** Systems read/write the `World`
   (`world/world.{c,h}`): entity handles + per-system SoA state. Systems do not own
   entities and do not call into each other's internals -- they go through the World.
-- **Game-owned C DevAPI commands live in `src/devapi/`**. Engine-owned groups (`ui.*`,
+- **Game-owned C DevAPI commands live as root `src/*_devapi.c` modules**. Engine-owned groups (`ui.*`,
   input/time/frame, obs, capture) stay wired through `nt_devapi`; do not duplicate
   them in the template. The HUD/UI tree lives in `ui/`, render + material
   setup in `render/` -- never inline in `main.c`.
-  The installed `game-state` feature owns generated `game.state.*` DevAPI
-  commands. They compile only under `GAME_DEVAPI_ENABLED`.
+  The in-place `game-state` module owns the hand-written registry dispatcher for
+  `game.state.*`; generated fragment code only supplies typed state/schema
+  operations. The dispatcher compiles only under `GAME_DEVAPI_ENABLED`.
   Add separate semantic commands only for game-specific actions and dev-editable
   fields.
 

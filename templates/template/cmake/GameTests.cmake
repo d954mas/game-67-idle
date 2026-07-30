@@ -1,6 +1,7 @@
 # --- native C unit tests (Unity + CTest); introduced in A1, extended in A2/A3 ---
 if(NOT EMSCRIPTEN)
     enable_testing()
+    include_directories("${GAME_STATE_INC}")
     set(SCENES_CORE_TESTS "${SCENES_CORE_DIR}/tests")
     set(AUDIO_CORE_TESTS "${AUDIO_CORE_DIR}/tests")
     add_library(audio_unity STATIC "${ENGINE_DIR}/deps/unity/src/unity.c")
@@ -145,9 +146,9 @@ if(NOT EMSCRIPTEN)
     find_program(AUDIO_NODE_EXECUTABLE node REQUIRED)
     add_test(NAME test_audio_web_library
         COMMAND "${AUDIO_NODE_EXECUTABLE}" --test "${AUDIO_CORE_TESTS}/test_audio_web_library.mjs"
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+        WORKING_DIRECTORY "${GAME_REPO_ROOT}")
 
-    add_executable(test_game_state_json tests/test_game_state_json.c src/game_state_json.c)
+    add_executable(test_game_state_json tests/test_game_state_json.c "${GAME_STATE_SRC}/game_state_json.c")
     target_link_libraries(test_game_state_json PRIVATE cjson unity)
     target_include_directories(test_game_state_json PRIVATE src)
     target_compile_definitions(test_game_state_json PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -156,7 +157,7 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_game_state_json COMMAND test_game_state_json)
 
     set(NESTED_STATE_TEST_SCHEMA
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/items_containers.schema.json")
+        "${GAME_REPO_ROOT}/features/game-state/tests/items_containers.schema.json")
     set(NESTED_STATE_TEST_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/game-state-nested-test")
     set(NESTED_STATE_TEST_SOURCE "${NESTED_STATE_TEST_GENERATED_DIR}/items_v2_state.c")
     add_custom_command(
@@ -172,12 +173,12 @@ if(NOT EMSCRIPTEN)
             --out-dir "${NESTED_STATE_TEST_GENERATED_DIR}"
             --fragment items_v2
         DEPENDS "${NESTED_STATE_TEST_SCHEMA}" ${GAME_STATE_GENERATOR_SOURCES}
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+        WORKING_DIRECTORY "${GAME_REPO_ROOT}"
         COMMENT "Generating nested game-state test fixture"
         VERBATIM)
     add_executable(test_game_state_nested
         tests/test_game_state_nested.c
-        src/game_state_json.c
+        "${GAME_STATE_SRC}/game_state_json.c"
         "${NESTED_STATE_TEST_SOURCE}")
     target_link_libraries(test_game_state_nested PRIVATE cjson unity)
     target_include_directories(test_game_state_nested PRIVATE
@@ -187,8 +188,11 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_state_nested COMMAND test_game_state_nested)
 
-    add_executable(test_game_storage tests/test_game_storage.c src/game_storage.c)
-    # nt_log: game_storage.c warns via nt_log_warn on a read ERROR (nt_hash/nt_core are nt_log's deps).
+    add_executable(test_game_storage
+        tests/test_game_storage.c
+        "${GAME_STATE_SRC}/game_storage.c"
+        "${GAME_STATE_SRC}/game_storage_backend_native.c")
+    # Native backend warns via nt_log_warn on a read ERROR.
     target_link_libraries(test_game_storage PRIVATE unity nt_log nt_core nt_hash)
     target_include_directories(test_game_storage PRIVATE src)
     target_compile_definitions(test_game_storage PRIVATE
@@ -199,10 +203,44 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_game_storage COMMAND test_game_storage
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
 
+    add_executable(test_game_storage_web_backend
+        "${GAME_STATE_DIR}/tests/test_game_storage_backend_web.c"
+        "${GAME_STATE_SRC}/game_storage.c"
+        "${GAME_STATE_SRC}/game_storage_backend_web.c")
+    target_link_libraries(test_game_storage_web_backend PRIVATE
+        unity nt_log nt_core nt_hash)
+    target_include_directories(test_game_storage_web_backend PRIVATE
+        "${GAME_STATE_INC}" "${GAME_STATE_SRC}")
+    target_compile_definitions(test_game_storage_web_backend PRIVATE
+        GAME_STORAGE_APP_ID="web_storage_test" _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_storage_web_backend PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_storage_web_backend
+        COMMAND test_game_storage_web_backend)
+
+    add_executable(test_game_save_blocked
+        "${GAME_STATE_DIR}/tests/test_game_save_blocked.c"
+        "${GAME_STATE_SRC}/game_save.c"
+        "${GAME_STATE_SRC}/game_state_json.c")
+    target_link_libraries(test_game_save_blocked PRIVATE
+        cjson unity nt_log nt_core nt_hash)
+    target_include_directories(test_game_save_blocked PRIVATE
+        "${GAME_STATE_INC}" "${GAME_STATE_SRC}")
+    target_compile_definitions(test_game_save_blocked PRIVATE
+        GAME_SAVE_TESTING=1
+        GAME_STORAGE_APP_ID="blocked_save_test"
+        GAME_SAVE_AUTOSAVE_SLOT="test_slot"
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_save_blocked PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_save_blocked COMMAND test_game_save_blocked)
+
     add_executable(test_game_save
         tests/test_game_save.c
-        src/game_save.c src/game_storage.c src/game_state_json.c)
-    # nt_log: game_save.c/game_storage.c warn via nt_log_warn on the read-error path.
+        "${GAME_STATE_SRC}/game_save.c" "${GAME_STATE_SRC}/game_storage.c"
+        "${GAME_STATE_SRC}/game_storage_backend_native.c"
+        "${GAME_STATE_SRC}/game_state_json.c")
+    # game_save/native storage backend warn via nt_log_warn on read errors.
     target_link_libraries(test_game_save PRIVATE cjson unity nt_log nt_core nt_hash)
     target_include_directories(test_game_save PRIVATE src)
     target_compile_definitions(test_game_save PRIVATE
@@ -253,7 +291,7 @@ if(NOT EMSCRIPTEN)
     # prerequisite. GAME_STATE_GENERATED_* is always defined (state is always on).
     add_executable(test_game_state_roundtrip
         tests/test_game_state_roundtrip.c
-        "${GAME_STATE_GENERATED_SOURCE}" src/game_state_json.c)
+        "${GAME_STATE_GENERATED_SOURCE}" "${GAME_STATE_SRC}/game_state_json.c")
     target_link_libraries(test_game_state_roundtrip PRIVATE cjson unity)
     target_include_directories(test_game_state_roundtrip PRIVATE src "${GAME_STATE_GENERATED_DIR}")
     target_compile_definitions(test_game_state_roundtrip PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -267,13 +305,13 @@ if(NOT EMSCRIPTEN)
     # This double-serves as a compile check of the golden.
     add_executable(test_game_events_typed
         tests/test_game_events_typed.c
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"
+        "${GAME_REPO_ROOT}/features/game-state/tests/golden/mini/mini_state_events.gen.c"
         "${GAME_EVENTS_SRC}/game_events.c")
     target_link_libraries(test_game_events_typed PRIVATE unity nt_hash nt_log nt_core)
     target_include_directories(test_game_events_typed PRIVATE
         "${GAME_EVENTS_INC}"
         src
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+        "${GAME_REPO_ROOT}/features/game-state/tests/golden/mini")
     target_compile_definitions(test_game_events_typed PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_game_events_typed PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
@@ -286,11 +324,11 @@ if(NOT EMSCRIPTEN)
     add_executable(test_game_event_render
         tests/test_game_event_render.c
         "${GAME_EVENTS_SRC}/game_event_render.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"
+        "${GAME_REPO_ROOT}/features/game-state/tests/golden/mini/mini_state_events.gen.c"
         "${GAME_EVENTS_SRC}/game_events.c")
     target_link_libraries(test_game_event_render PRIVATE unity cjson nt_hash nt_log nt_core)
     target_include_directories(test_game_event_render PRIVATE
-        "${GAME_EVENTS_INC}" src "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+        "${GAME_EVENTS_INC}" src "${GAME_REPO_ROOT}/features/game-state/tests/golden/mini")
     target_compile_definitions(test_game_event_render PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_game_event_render PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
@@ -304,11 +342,11 @@ if(NOT EMSCRIPTEN)
         "${GAME_EVENTS_SRC}/game_analytics.c"
         "${GAME_EVENTS_SRC}/game_event_render.c" # E3 renderer (reused)
         src/game_log.c            # case #7 game_log_emit
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"
+        "${GAME_REPO_ROOT}/features/game-state/tests/golden/mini/mini_state_events.gen.c"
         "${GAME_EVENTS_SRC}/game_events.c")
     target_link_libraries(test_game_analytics PRIVATE unity cjson nt_hash nt_log nt_core)
     target_include_directories(test_game_analytics PRIVATE
-        "${GAME_EVENTS_INC}" src "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+        "${GAME_EVENTS_INC}" src "${GAME_REPO_ROOT}/features/game-state/tests/golden/mini")
     target_compile_definitions(test_game_analytics PRIVATE
         FEATURE_GAME_ANALYTICS=1 GAME_ANALYTICS_TESTING=1
         GAME_ANALYTICS_BUF_BYTES=256u        # small buffer -> threshold/drop are cheap
@@ -323,11 +361,11 @@ if(NOT EMSCRIPTEN)
         tests/test_game_events_log_mirror.c
         "${GAME_EVENTS_SRC}/game_events_log_mirror.c"
         "${GAME_EVENTS_SRC}/game_event_render.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"
+        "${GAME_REPO_ROOT}/features/game-state/tests/golden/mini/mini_state_events.gen.c"
         "${GAME_EVENTS_SRC}/game_events.c")
     target_link_libraries(test_game_events_log_mirror PRIVATE unity cjson nt_hash nt_log nt_core)
     target_include_directories(test_game_events_log_mirror PRIVATE
-        "${GAME_EVENTS_INC}" src "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+        "${GAME_EVENTS_INC}" src "${GAME_REPO_ROOT}/features/game-state/tests/golden/mini")
     target_compile_definitions(test_game_events_log_mirror PRIVATE
         GAME_EVENTS_LOG_MIRROR=1
         _CRT_SECURE_NO_WARNINGS)
@@ -341,11 +379,11 @@ if(NOT EMSCRIPTEN)
     # -W set + -Werror as the game target, WITHOUT Unity (compile-only, no link) so
     # -Wconversion is not fighting the test framework's macros.
     add_library(check_mini_state_events OBJECT
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c")
+        "${GAME_REPO_ROOT}/features/game-state/tests/golden/mini/mini_state_events.gen.c")
     target_include_directories(check_mini_state_events PRIVATE
         "${GAME_EVENTS_INC}"
         src
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+        "${GAME_REPO_ROOT}/features/game-state/tests/golden/mini")
     target_link_libraries(check_mini_state_events PRIVATE nt_hash nt_log nt_core)  # headers only (OBJECT does not link)
     nt_set_warning_flags(check_mini_state_events)  # same -W set + -Werror toggle as the game target
 
@@ -545,7 +583,7 @@ if(NOT EMSCRIPTEN)
         "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
         "${ITEMS_CORE_SRC}/items_reconcile.c"
         "${ITEMS_CORE_SRC}/items_containers.c"
-        src/game_state_json.c
+        "${GAME_STATE_SRC}/game_state_json.c"
         "${GAME_EVENTS_SRC}/game_events.c"
         "${ENGINE_DIR}/tests/unit/test_helpers/nt_assert_trap.c")
     configure_items_runtime_catalog_test(test_items_fragment)
@@ -566,7 +604,7 @@ if(NOT EMSCRIPTEN)
         "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
         "${ITEMS_CORE_SRC}/items_reconcile.c"
         "${ITEMS_CORE_SRC}/items_containers.c"
-        src/game_state_json.c
+        "${GAME_STATE_SRC}/game_state_json.c"
         "${GAME_EVENTS_SRC}/game_events.c")
     configure_items_runtime_catalog_test(test_items_fragment_assert_off)
     target_link_libraries(test_items_fragment_assert_off PRIVATE cjson unity nt_hash nt_log nt_core)
@@ -603,7 +641,7 @@ if(NOT EMSCRIPTEN)
         "${ITEMS_CORE_SRC}/items_containers.c"                    # items runtime (progression spends/reads purse; T0337 M1: in-place module)
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
         "${ITEMS_CORE_SRC}/items_reconcile.c"                     # items reconcile (T0337 M1 split, link completeness)
-        src/game_state_json.c "${GAME_EVENTS_SRC}/game_events.c")
+        "${GAME_STATE_SRC}/game_state_json.c" "${GAME_EVENTS_SRC}/game_events.c")
     add_dependencies(test_progression progression_tracks_gen)   # H2: guarantees progression_tracks.gen.h before progression.c compiles
     configure_items_runtime_catalog_test(test_progression)
     target_link_libraries(test_progression PRIVATE cjson unity nt_hash nt_log nt_core)
@@ -653,11 +691,23 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_platform_sdk PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_platform_sdk COMMAND test_platform_sdk)
 
+    add_executable(test_game_input
+        tests/test_game_input.c
+        src/game_input.c)
+    target_link_libraries(test_game_input PRIVATE unity nt_input_stub)
+    target_include_directories(test_game_input PRIVATE src)
+    target_compile_definitions(test_game_input PRIVATE
+        _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_game_input)
+    set_target_properties(test_game_input PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_input COMMAND test_game_input)
+
     add_executable(test_platform_lifecycle
         tests/test_platform_lifecycle.c
         src/platform_lifecycle.c
         "${PLATFORM_SDK_SRC}/platform_sdk.c")
-    target_link_libraries(test_platform_lifecycle PRIVATE unity nt_input_stub)
+    target_link_libraries(test_platform_lifecycle PRIVATE unity)
     target_include_directories(test_platform_lifecycle PRIVATE src "${PLATFORM_SDK_INC}")
     target_compile_definitions(test_platform_lifecycle PRIVATE
         PLATFORM_SDK_TARGET_ID=${GAME_PLATFORM_TARGET_ID}
@@ -695,26 +745,26 @@ if(NOT EMSCRIPTEN)
         add_test(NAME scenes_core_consumer_contract
             COMMAND "${Node_EXECUTABLE}" --test
                 features/scenes-core/tests/test_consumer_scene_contracts.mjs
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+            WORKING_DIRECTORY "${GAME_REPO_ROOT}")
         add_test(NAME scenes_core_tooling_contract
             COMMAND "${Node_EXECUTABLE}" --test
                 features/scenes-core/tests/test_scaffold_scene.mjs
                 features/scenes-core/tests/test_scene_devapi_schema.mjs
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+            WORKING_DIRECTORY "${GAME_REPO_ROOT}")
         set_tests_properties(scenes_core_tooling_contract PROPERTIES
             ENVIRONMENT "SCENE_TEST_CC=${CMAKE_C_COMPILER}")
         if(GAME_DEVAPI_ENABLED)
             add_test(NAME scenes_core_devapi_runtime_schema
                 COMMAND "${Node_EXECUTABLE}" --test
                     features/scenes-core/tests/test_scene_devapi_runtime_schema.mjs
-                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+                WORKING_DIRECTORY "${GAME_REPO_ROOT}")
             set_tests_properties(scenes_core_devapi_runtime_schema PROPERTIES
                 ENVIRONMENT
                     "SCENE_DEVAPI_SCHEMA_FIXTURE=$<TARGET_FILE:test_scenes_core_devapi>")
         endif()
         add_test(NAME platform_sdk_node_test
             COMMAND "${Node_EXECUTABLE}" --test features/platform-sdk/tests/platform_sdk.test.mjs
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+            WORKING_DIRECTORY "${GAME_REPO_ROOT}")
     endif()
 
     # T0327 tail: 4-fragment composition test -- lifts settings/items/progression/game
@@ -723,7 +773,9 @@ if(NOT EMSCRIPTEN)
     add_executable(test_template_composition
         tests/test_template_composition.c
         src/game_items.c
-        src/game_save.c src/game_storage.c src/game_state_json.c "${GAME_EVENTS_SRC}/game_events.c"
+        "${GAME_STATE_SRC}/game_save.c" "${GAME_STATE_SRC}/game_storage.c"
+        "${GAME_STATE_SRC}/game_storage_backend_native.c"
+        "${GAME_STATE_SRC}/game_state_json.c" "${GAME_EVENTS_SRC}/game_events.c"
         "${GAME_STATE_GENERATED_SOURCE}" "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
         "${SETTINGS_STATE_GENERATED_SOURCE}" src/features/settings/settings.c
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
@@ -738,7 +790,7 @@ if(NOT EMSCRIPTEN)
     # Clay/impl chain -- draw_ui is never called in this TU, only declared.
     target_link_libraries(test_template_composition PRIVATE cjson unity nt_hash nt_log nt_core nt_ui_interface)
     if(GAME_DEVAPI_ENABLED)
-        target_sources(test_template_composition PRIVATE src/game_save_devapi.c)
+        target_sources(test_template_composition PRIVATE "${GAME_STATE_SRC}/game_save_devapi.c")
         target_link_libraries(test_template_composition PRIVATE nt_devapi_default nt_app_stub)
         target_compile_definitions(test_template_composition PRIVATE NT_DEVAPI_ENABLED=1)
     else()
@@ -803,12 +855,12 @@ if(EMSCRIPTEN)
         add_test(NAME scenes_core_consumer_contract
             COMMAND "${SCENES_Node_EXECUTABLE}" --test
                 features/scenes-core/tests/test_consumer_scene_contracts.mjs
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+            WORKING_DIRECTORY "${GAME_REPO_ROOT}")
         add_test(NAME scenes_core_tooling_contract
             COMMAND "${SCENES_Node_EXECUTABLE}" --test
                 features/scenes-core/tests/test_scaffold_scene.mjs
                 features/scenes-core/tests/test_scene_devapi_schema.mjs
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+            WORKING_DIRECTORY "${GAME_REPO_ROOT}")
         set_tests_properties(scenes_core_tooling_contract PROPERTIES
             ENVIRONMENT "SCENE_TEST_CC=${CMAKE_C_COMPILER}")
     endif()
