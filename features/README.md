@@ -53,9 +53,9 @@ Three categories of code live in or are pointed at from this folder:
 
 - **In-place module** (`features/<id>-core/`, `features/game-state/`) — one
   copy of the source lives here; every consuming template/game compiles it
-  IN-PLACE against its own generated headers and content (relative path
-  `../../features/<id>-core/`, depth-2 invariant: both `templates/<x>` and
-  `games/<id>` sit exactly two levels below the repo root). Shared; edits are
+  IN-PLACE against its own generated headers and content. Consumers first
+  resolve `GAME_REPO_ROOT`, then use `${GAME_REPO_ROOT}/features/<id>-core`;
+  this works for templates, public games, and `games/private/<id>`. Shared; edits are
   under test discipline (every consumer's tests must stay green).
 - **Feature-pointer** (`templates/template/src/features/<id>/`, single copy,
   copy-then-own) — the template IS the single source of truth; a new game
@@ -127,8 +127,8 @@ possibility, not a feature.
   model (`items_add`/`items_remove`/`items_move`/`items_count`/
   `items_can_afford`/purse/unique instances) + isolated Lua evaluation,
   normalized Snapshot, compact runtime package, and focused semantic CLI. In-place module, same
-  shape as `game-state/` (`../../features/items-core/` from any
-  `templates/<x>` or `games/<id>`). The consuming template/game owns its
+  shape as `game-state/` (`${GAME_REPO_ROOT}/features/items-core`). The
+  consuming template/game owns its
   Lua manifest/modules (`items.lua.json` + `design/items/*.lua`), release
   history (`content/items.lock.json`), its state schema
   (`state/items.schema.json`), and a small game-owned "items corner"
@@ -138,7 +138,7 @@ possibility, not a feature.
 - `progression-core/` (`L2`, depends on `items-core`): level/xp tracks
   (manual/auto/threshold modes), T5 tick caps, lazy allocation, plus curve
   codegen (`generate_progression_tracks.py`). In-place module, consumed the
-  same way via `../../features/progression-core/`. Unlike items, progression
+  same way via `${GAME_REPO_ROOT}/features/progression-core`. Unlike items, progression
   has no game-owned C corner. The consuming template/game owns its content
   (`content/progression.json`), its state schema
   (`state/progression.schema.json`), and its own composition (e.g. the
@@ -149,7 +149,7 @@ possibility, not a feature.
   (`game.events.tail`), and the local `game_analytics` NDJSON writer. Higher
   features emit through this pack; analytics subscribes to it. Reference:
   `game-events/README.md` + `game-events/INSTALL.md`.
-- `audio-core/` (`L1`, `1.0.0`): versioned fixed-pool playback contract with
+- `audio-core/` (`L1`, `1.0.1`): versioned fixed-pool playback contract with
   generation-safe clip/voice handles, native miniaudio and browser WebAudio
   backends. Games own cue/music catalogs, source assets, codec-neutral BLOB IDs,
   settings and lifecycle composition. Its contract version records the public

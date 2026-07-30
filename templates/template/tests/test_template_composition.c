@@ -38,6 +38,7 @@
 #define PRIMARY_TMP "build/saves/test_composition.json.tmp"
 #define BAK_PATH "build/saves/test_composition.bak"
 #define BAK_TMP "build/saves/test_composition.bak.tmp"
+#define CORRUPT_PATH "build/saves/test_composition.corrupt"
 
 /* ---- injected clocks (GAME_SAVE_TESTING) ---- */
 static int64_t g_mono_ms;
@@ -161,6 +162,9 @@ static void remove_slot_files(void) {
     (void)remove(PRIMARY_TMP);
     (void)remove(BAK_PATH);
     (void)remove(BAK_TMP);
+    (void)remove(CORRUPT_PATH);
+    (void)remove(CORRUPT_PATH "-1");
+    (void)remove(CORRUPT_PATH "-2");
 }
 
 /* Fresh deterministic slot every test; distinct slot name (not "test_slot")
@@ -204,7 +208,7 @@ void test_registry_has_four_fragments_in_order(void) {
    the single thing the T0327 review flagged as untested. */
 void test_new_game_seeds_across_all_fragments(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
 
     TEST_ASSERT_EQUAL_INT64(50, items_stack_count(game_wallet_container(), "tmpl.gold"));
     TEST_ASSERT_EQUAL_INT64(1, items_stack_count(game_inventory_container(), "tmpl.potion"));
@@ -307,7 +311,7 @@ void test_seed_refuses_partial_audit_batch_before_initialization(void) {
    the disk path is exercised by cases 2 and 4 (new_game / apply). */
 void test_cross_fragment_save_load_roundtrip(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err)); /* baseline: 50 gold */
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted); /* baseline: 50 gold */
 
     TEST_ASSERT_TRUE(add_stack(game_wallet_container(), "tmpl.gold", 25, "cheat:rt"));
     const int64_t need = progression_xp_needed("hero"); /* curve-agnostic (T5 curve edits safe) */
@@ -340,7 +344,7 @@ void test_cross_fragment_save_load_roundtrip(void) {
 
 void test_import_rejects_dangling_owner_before_publish(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     char *before = game_save_export_string(err, (int)sizeof err);
     TEST_ASSERT_NOT_NULL(before);
     cJSON *doc = cJSON_Parse(before);
@@ -357,7 +361,7 @@ void test_import_rejects_dangling_owner_before_publish(void) {
 
 void test_import_rejects_unreferenced_persistent_container_before_publish(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     char *before = game_save_export_string(err, (int)sizeof err);
     TEST_ASSERT_NOT_NULL(before);
     cJSON *doc = cJSON_Parse(before);
@@ -383,7 +387,7 @@ void test_import_rejects_unreferenced_persistent_container_before_publish(void) 
 
 void test_import_rejects_invalid_items_graph_before_publish(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     char *before = game_save_export_string(err, (int)sizeof err);
     TEST_ASSERT_NOT_NULL(before);
     cJSON *doc = cJSON_Parse(before);
@@ -418,7 +422,7 @@ void test_import_rejects_invalid_items_graph_before_publish(void) {
 
 void test_save_refuses_invalid_live_ownership_without_replacing_disk_state(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     const uint32_t inventory_id = game_state.inventory_container_id;
     game_state.inventory_container_id = 9999;
     game_save_mark_dirty();
@@ -439,7 +443,7 @@ void test_save_refuses_invalid_live_ownership_without_replacing_disk_state(void)
 
 void test_disk_load_rejects_invalid_primary_and_recovers_valid_backup(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     TEST_ASSERT_TRUE(game_storage_write_backup("test_composition", err, (int)sizeof err));
     char *invalid = make_dangling_owner_save(err, (int)sizeof err);
     TEST_ASSERT_NOT_NULL(invalid);
@@ -456,7 +460,7 @@ void test_disk_load_rejects_invalid_primary_and_recovers_valid_backup(void) {
 
 void test_disk_load_rejects_invalid_primary_and_backup_before_corrupt_reset(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     char *invalid = make_dangling_owner_save(err, (int)sizeof err);
     TEST_ASSERT_NOT_NULL(invalid);
     TEST_ASSERT_TRUE(game_storage_write("test_composition", invalid, err, (int)sizeof err));
@@ -525,7 +529,7 @@ static const GameSaveFragment s_partial_fragment = {
 
 void test_devapi_refuses_raw_ownership_writes_without_mutation(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     const int callback_count_before = s_devapi_change_count;
     const uint32_t inventory_id = game_state.inventory_container_id;
     const uint32_t wallet_id = game_state.wallet_container_id;
@@ -558,7 +562,7 @@ void test_devapi_refuses_raw_ownership_writes_without_mutation(void) {
 
 void test_devapi_rolls_back_all_successful_patch_groups_when_document_rejects(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     const float master_before = settings_master();
     const int callback_count_before = s_devapi_change_count;
     game_save_set_document_validator(reject_nonzero_clicks);
@@ -626,7 +630,7 @@ void test_devapi_patch_reports_each_changed_fragment_after_commit(void) {
 
 void test_devapi_items_edit_rebuilds_runtime_indices(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     cJSON *items = items_state_to_json(&items_state);
     cJSON *containers = cJSON_DetachItemFromObjectCaseSensitive(items, "containers");
     TEST_ASSERT_NOT_NULL(containers);
@@ -658,7 +662,7 @@ void test_devapi_items_edit_rebuilds_runtime_indices(void) {
 
 void test_devapi_corrupt_load_rebuilds_valid_live_owner_state(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     (void)remove(BAK_PATH);
     (void)remove(BAK_TMP);
     TEST_ASSERT_TRUE(game_storage_write(
@@ -684,13 +688,13 @@ void test_devapi_corrupt_load_rebuilds_valid_live_owner_state(void) {
    4-fragment registry (the review's flagged live mechanic). */
 void test_hold_to_reset_preserves_settings(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     settings_set_master(0.30f);
     TEST_ASSERT_TRUE(add_stack(game_wallet_container(), "tmpl.gold", 999, "cheat:test"));
     progression_set_level("hero", 3, "test:prologue"); /* deterministic, no xp economics */
 
     game_save_request_new_game("settings");
-    TEST_ASSERT_TRUE(game_save_apply_pending_new_game());
+    TEST_ASSERT_TRUE(game_save_apply_pending_new_game().state_changed);
 
     TEST_ASSERT_TRUE(fabsf(settings_master() - 0.30f) < COMPOSITION_TEST_FLOAT_EPS); /* skipped fragment survived (crown invariant) */
     TEST_ASSERT_EQUAL_INT64(50, items_stack_count(game_wallet_container(), "tmpl.gold"));

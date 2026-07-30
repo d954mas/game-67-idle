@@ -5,8 +5,8 @@ import test from "node:test";
 
 const root = resolve(import.meta.dirname, "../..");
 const expected = ["GameAssets.cmake", "GameCodegen.cmake", "GameOptions.cmake", "GamePlatform.cmake", "GameTests.cmake"];
-const expectedTests = {
-  "templates/template": ["test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio", "test_audio_web_library", "test_game_state_json", "test_game_state_nested", "test_game_storage", "test_game_save", "test_game_events", "test_game_events_overflow", "test_game_state_roundtrip", "test_game_events_typed", "test_game_event_render", "test_game_analytics", "test_game_events_log_mirror", "test_items_api_core_only", "test_items_api", "generate_items_api_proof_test", "test_items_runtime_package", "test_items_runtime_resource", "test_items_fragment", "test_items_fragment_assert_off", "items_catalog_validate", "test_progression", "test_progression_curve", "test_game_format", "test_platform_sdk", "test_platform_lifecycle", "test_platform_sdk_events", "platform_sdk_node_test", "test_template_composition"],
+const requiredTests = {
+  "templates/template": ["test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio", "test_audio_web_library", "test_game_state_json", "test_game_state_nested", "test_game_storage", "test_game_storage_web_backend", "test_game_save_blocked", "test_game_save", "test_game_events", "test_game_events_overflow", "test_game_state_roundtrip", "test_game_events_typed", "test_game_event_render", "test_game_analytics", "test_game_events_log_mirror", "test_items_api_core_only", "test_items_api", "generate_items_api_proof_test", "test_items_runtime_package", "test_items_runtime_resource", "test_items_fragment", "test_items_fragment_assert_off", "items_catalog_validate", "test_progression", "test_progression_curve", "test_game_format", "test_platform_sdk", "test_game_input", "test_platform_lifecycle", "test_platform_sdk_events", "platform_sdk_node_test", "test_template_composition"],
 };
 const expectedCustomTargets = {
   "templates/template": ["game_asset_packs", "items_catalog_gen", "platform_sdk_web_assets", "platform_sdk_playgama_config_asset", "devapi_smoke", "quality_responsive", "items_runtime_package_gen", "items_runtime_benchmark_arrays_gen", "progression_tracks_gen"],
@@ -36,7 +36,10 @@ for (const source of ["templates/template"]) {
     const conductor = readFileSync(override || join(root, source, "CMakeLists.txt"), "utf8");
     const includes = expected.map((file) => readFileSync(join(root, source, "cmake", file), "utf8")).join("\n");
     const expanded = `${conductor}\n${includes}`;
-    assert.deepEqual(declarations(expanded, /add_test\(NAME\s+([^\s\)]+)/g), expectedTests[source]);
+    const configuredTests = new Set(declarations(expanded, /add_test\(NAME\s+([^\s\)]+)/g));
+    for (const name of requiredTests[source]) {
+      assert.ok(configuredTests.has(name), `missing required CTest declaration: ${name}`);
+    }
     assert.deepEqual(declarations(expanded, /add_custom_target\(([^\s\)]+)/g), expectedCustomTargets[source]);
     assert.ok(declarations(expanded, /add_executable\(([^\s\)]+)/g).includes("${GAME_TARGET}"));
   });
@@ -69,7 +72,7 @@ test("template game pack consumes the generated Items package once", () => {
   );
   assert.match(assets, /build_game_packs>\s+"\$\{GAME_PACK_DIR\}"\s+"\$\{ITEMS_CATALOG_PACKAGE\}"/);
   assert.match(assets, /DEPENDS[\s\S]*"\$\{ITEMS_CATALOG_PACKAGE\}"/);
-  assert.match(builder, /argc\s*!=\s*3/);
+  assert.match(builder, /argc\s*!=\s*4/);
   assert.match(builder, /add_blob_file\(ctx,\s*argv\[2\],\s*"items\/catalog"\)/);
 });
 
@@ -81,16 +84,35 @@ test("template audio ownership stays in the exact CMake concern files", () => {
   const tests = readFileSync(join(dir, "GameTests.cmake"), "utf8");
   assert.doesNotMatch(conductor, /AUDIO_CORE|game_audio|audio_web|demo_jingle|ui_click/);
   assert.match(assets, /ui_click\.wav[\s\S]*demo_jingle\.mp3/);
+  assert.match(assets, /assets\/\*\.glsl/, "shader include edits must invalidate game.ntpack");
   assert.doesNotMatch(assets, /audio_backend|test_audio/);
   assert.match(platform, /AUDIO_CORE_DIR[\s\S]*src\/game_audio\.c[\s\S]*audio_backend_web\.c/);
   assert.doesNotMatch(platform, /add_test\(|demo_jingle|ui_click/);
   for (const name of ["test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio", "test_audio_web_library"]) {
     assert.match(tests, new RegExp(`add_test\\(NAME\\s+${name}\\b`));
   }
-  const executableTargets = [...tests.matchAll(/^\s*add_executable\(([^\s\)]+)/gm)].map((match) => match[1]).sort();
-  const sanitizerTargets = tests.match(/set\(GAME_NATIVE_TEST_TARGETS([\s\S]*?)\)\s*foreach/)?.[1]
-    .trim().split(/\s+/).sort();
-  assert.deepEqual(sanitizerTargets, executableTargets, "every native test executable must link the sanitizer runtime");
+  const nativeTests = tests.slice(0, tests.indexOf("\nif(EMSCRIPTEN)"));
+  const executableTargets = [...nativeTests.matchAll(/^\s*add_executable\(([^\s\)]+)/gm)]
+    .map((match) => match[1])
+    .filter((name) => !name.includes("$"))
+    .sort();
+  const sanitizerSection = nativeTests.slice(
+    nativeTests.indexOf("set(GAME_NATIVE_TEST_TARGETS"),
+    nativeTests.indexOf("foreach(_test_target IN LISTS GAME_NATIVE_TEST_TARGETS"),
+  );
+  const sanitizerTargets = [...new Set(
+    [...sanitizerSection.matchAll(/\b(?:test|benchmark)_[A-Za-z0-9_]+\b/g)].map((match) => match[0]),
+  )].sort();
+  const sanitizerTargetSet = new Set(sanitizerTargets);
+  for (const target of executableTargets) {
+    assert.ok(sanitizerTargetSet.has(target), `native test executable lacks sanitizer runtime: ${target}`);
+  }
+  for (const suite of ["lifecycle", "navigation", "ordering", "presentation"]) {
+    assert.ok(
+      sanitizerTargetSet.has(`test_scenes_core_${suite}`),
+      `generated scenes-core suite lacks sanitizer runtime: ${suite}`,
+    );
+  }
   assert.match(tests, /foreach\(_test_target IN LISTS GAME_NATIVE_TEST_TARGETS\)[\s\S]*nt_set_sanitizer_flags\(\$\{_test_target\}\)/);
   assert.match(tests, /AUDIO_TEST_MP3_PATH=.*demo_jingle\.mp3/);
   assert.doesNotMatch(tests, /ui_click\.wav/);

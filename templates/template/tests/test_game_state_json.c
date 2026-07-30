@@ -328,6 +328,30 @@ void test_parse_u32_rejects_ambiguous_values(void) {
     cJSON_Delete(string);
 }
 
+void test_numeric_parsers_reject_nonfinite_before_cast(void) {
+    const double nonfinite[] = {NAN, INFINITY, -INFINITY};
+    for (size_t i = 0; i < sizeof(nonfinite) / sizeof(nonfinite[0]); i++) {
+        cJSON *value = cJSON_CreateNumber(nonfinite[i]);
+        int integer = 17;
+        uint32_t u32 = 17;
+        float real = 17.0f;
+        int64_t i64 = 17;
+        TEST_ASSERT_FALSE(gsj_parse_int_value(value, 0, 100, &integer, NULL, 0));
+        TEST_ASSERT_FALSE(gsj_parse_u32_value(value, 0, 100, &u32, NULL, 0));
+        TEST_ASSERT_FALSE(gsj_parse_enum_value(value, kEnumNames, kEnumCount, &integer, NULL, 0));
+        TEST_ASSERT_FALSE(gsj_parse_i64_value(value, 0, 100, &i64, NULL, 0));
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddItemToObject(root, "real", cJSON_Duplicate(value, true));
+        TEST_ASSERT_FALSE(gsj_read_float_range(root, "real", 0.0f, 100.0f, &real, NULL, 0));
+        TEST_ASSERT_EQUAL_INT(17, integer);
+        TEST_ASSERT_EQUAL_UINT32(17, u32);
+        TEST_ASSERT_EQUAL_INT64(17, i64);
+        TEST_ASSERT_TRUE(fabsf(real - 17.0f) < GSJ_TEST_EPS);
+        cJSON_Delete(root);
+        cJSON_Delete(value);
+    }
+}
+
 /* ---- gsj_read_i64 / gsj_parse_i64_value: the risky corner ---- */
 
 void test_read_i64_absent_key(void) {
@@ -377,6 +401,18 @@ void test_read_i64_number_above_2_53_rejected(void) {
     TEST_ASSERT_FALSE(gsj_read_i64(root, "c", INT64_MIN, INT64_MAX, &out, err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(strlen(err) > 0);
     cJSON_Delete(root);
+}
+
+void test_read_i64_number_at_2_53_rejected(void) {
+    const double ambiguous[] = {9007199254740992.0, -9007199254740992.0};
+    for (size_t i = 0; i < sizeof(ambiguous) / sizeof(ambiguous[0]); i++) {
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddNumberToObject(root, "c", ambiguous[i]);
+        int64_t out = 77;
+        TEST_ASSERT_FALSE(gsj_read_i64(root, "c", INT64_MIN, INT64_MAX, &out, NULL, 0));
+        TEST_ASSERT_EQUAL_INT64(77, out);
+        cJSON_Delete(root);
+    }
 }
 
 void test_read_i64_small_number_accepted(void) {
@@ -519,12 +555,14 @@ int main(void) {
 
     RUN_TEST(test_read_u32_exact_bounds);
     RUN_TEST(test_parse_u32_rejects_ambiguous_values);
+    RUN_TEST(test_numeric_parsers_reject_nonfinite_before_cast);
 
     RUN_TEST(test_read_i64_absent_key);
     RUN_TEST(test_read_i64_wrong_type);
     RUN_TEST(test_read_i64_string_round_trip);
     RUN_TEST(test_read_i64_negative_string_round_trip);
     RUN_TEST(test_read_i64_number_above_2_53_rejected);
+    RUN_TEST(test_read_i64_number_at_2_53_rejected);
     RUN_TEST(test_read_i64_small_number_accepted);
     RUN_TEST(test_read_i64_out_of_custom_range);
     RUN_TEST(test_read_i64_invalid_string_trailing_garbage);

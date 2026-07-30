@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -13,6 +14,7 @@ import {
   verifyDependencySources,
 } from "./package_web.mjs";
 import { smokePackagedWebArtifact } from "./package_web_smoke.mjs";
+import { createRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 
 const GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -181,15 +183,36 @@ function gamePackageMetadata(gameDir, templateProof) {
   return { dependencies: validateDependencies(readJson(join(gameDir, "dependencies.json"), "dependencies")), proof: "game" };
 }
 
-function packageGame(options, dependencies = {}, metadata = null) {
+async function auditGameReleaseAssets({ gameDir, artifactDir: releaseArtifactDir, studioRoot, dependencies }) {
+  const modulePath = join(studioRoot, "ai_studio", "assets", "manifests", "game_release.mjs");
+  const { assertGameReleaseAssets } = await import(pathToFileURL(modulePath).href);
+  const result = assertGameReleaseAssets(gameDir);
+  const runtimeBuild = createRuntimeBuildRecord({ gameDir, studioRoot, dependencies });
+  const assetPack = readFileSync(join(releaseArtifactDir, "assets", "game.ntpack"));
+  return {
+    schema: "ai_studio.game_release_asset_audit.v1",
+    ok: true,
+    packed: result.packed,
+    runtimeFingerprint: runtimeBuild.fingerprint,
+    assetPackSha256: createHash("sha256").update(assetPack).digest("hex"),
+  };
+}
+
+export async function packageGame(options, dependencies = {}, metadata = null) {
   const gameDir = resolve(dependencies.gameDir || GAME_DIR);
   if (options.build) (dependencies.build || buildGame)(gameDir, options.target);
   const proof = metadata || gamePackageMetadata(gameDir, options.templateProof);
+  const studioRoot = findStudioRoot(gameDir);
+  const releaseArtifactDir = artifactDir(gameDir, options.target);
+  const assetAuditProof = await (dependencies.assetAudit || auditGameReleaseAssets)({
+    gameDir, artifactDir: releaseArtifactDir, studioRoot, dependencies: proof.dependencies,
+  });
   return packageWebArtifact({
     gameDir,
-    artifactDir: artifactDir(gameDir, options.target),
+    artifactDir: releaseArtifactDir,
     target: options.target,
-    studioRoot: findStudioRoot(gameDir),
+    studioRoot,
+    assetAuditProof,
     ...(options.outDir ? { outDir: resolve(gameDir, options.outDir) } : {}),
     ...proof,
     ...(metadata ? { dependencyVerifier: () => {} } : {}),
@@ -203,7 +226,9 @@ export async function executeGameCommand(args, dependencies = {}) {
   const nativeTest = dependencies.nativeTest || runNativeTests;
   const loadMetadata = dependencies.loadMetadata || gamePackageMetadata;
   const verifyDependencies = dependencies.verifyDependencies || ((metadata) => verifyDependencySources({ studioRoot: findStudioRoot(gameDir), dependencies: metadata.dependencies }));
-  const packageGameOwned = dependencies.package || ((options, metadata) => packageGame(options, { gameDir }, metadata));
+  const packageGameOwned = dependencies.package || ((options, metadata) => packageGame(
+    options, { gameDir, assetAudit: dependencies.assetAudit }, metadata,
+  ));
   const smokePackage = dependencies.smoke || smokePackagedWebArtifact;
   const prepare = (templateProof = false) => {
     doctor({ gameDir, templateProof });
@@ -239,7 +264,7 @@ export async function executeGameCommand(args, dependencies = {}) {
   }
   if (args.command === "package") {
     const metadata = prepare(args.templateProof);
-    const result = packageGameOwned(args, metadata);
+    const result = await packageGameOwned(args, metadata);
     return { message: `package passed: ${result.zipPath}`, result };
   }
   const metadata = prepare(args.templateProof);
@@ -247,7 +272,7 @@ export async function executeGameCommand(args, dependencies = {}) {
     nodeTest(gameDir);
     nativeTest(gameDir);
   }
-  const result = packageGameOwned(args, metadata);
+  const result = await packageGameOwned(args, metadata);
   await smokePackage({ zipPath: result.zipPath, expectedTarget: args.target });
   return { message: `verify passed: ${result.zipPath}`, result };
 }

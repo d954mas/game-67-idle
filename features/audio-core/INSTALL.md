@@ -1,8 +1,8 @@
 # Audio Core Install
 
-This is an in-place module. A consumer at `templates/<id>` or `games/<id>`
-references `${CMAKE_CURRENT_SOURCE_DIR}/../../features/audio-core` and records
-the exact `feature.json.version` it validated.
+This is an in-place module. Resolve `GAME_REPO_ROOT` once, then reference
+`${GAME_REPO_ROOT}/features/audio-core`; this is valid for templates, public
+games, and `games/private/<id>`. Record the exact `feature.json.version` validated.
 
 ## CMake wiring
 

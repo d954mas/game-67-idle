@@ -14,6 +14,8 @@
   "dependencies": [
     "Python 3.12",
     "Lupa 2.8 using its bundled lupa.lua54 backend (installed by the AI Studio Python environment)",
+    "game-events",
+    "game-state",
     "a game-local items.lua.json manifest plus allowlisted Lua modules",
     "template or game C runtime using the generated items/catalog package + generated ABI header + generated items save fragment (features/game-state)",
     "the consuming game's own src/features/items/reason_tags.h (closed reason-verb list, resolved via the game's include path)"
@@ -72,7 +74,9 @@
       "${ITEMS_CORE_SRC}/items_reconcile.c"
     ],
     "include_dirs": [
-      "${ITEMS_CORE_INC}"
+      "${ITEMS_CORE_INC}",
+      "${GAME_EVENTS_INC}",
+      "${GAME_STATE_INC}"
     ],
     "ctest_targets": [
       "test_items_fragment",

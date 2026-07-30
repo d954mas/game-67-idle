@@ -1,10 +1,10 @@
 # Items Core Install
 
-Items Core is an in-place module. Templates and games live two levels below
-the repository root and reference the same source directory:
+Items Core is an in-place module. Resolve `GAME_REPO_ROOT` once so templates,
+public games, and `games/private/<id>` reference the same source directory:
 
 ```cmake
-set(ITEMS_CORE_DIR     "${CMAKE_CURRENT_SOURCE_DIR}/../../features/items-core")
+set(ITEMS_CORE_DIR     "${GAME_REPO_ROOT}/features/items-core")
 set(ITEMS_CORE_INC     "${ITEMS_CORE_DIR}/include")
 set(ITEMS_CORE_SRC     "${ITEMS_CORE_DIR}/src")
 set(ITEMS_CORE_SCRIPTS "${ITEMS_CORE_DIR}/scripts")
@@ -77,10 +77,15 @@ target_sources(${GAME_TARGET} PRIVATE
 target_include_directories(${GAME_TARGET} PRIVATE
     "${ITEMS_CATALOG_BUILD_DIR}"
     "${ITEMS_CORE_INC}"
+    "${GAME_EVENTS_INC}"
+    "${GAME_STATE_INC}"
     src)
 target_compile_definitions(${GAME_TARGET} PRIVATE
     ITEMS_RUNTIME_PACKAGE_ENABLED=1)
 ```
+
+`items_containers.c` emits through `game-events` and marks `game-state` dirty,
+so both modules and their include directories are required runtime dependencies.
 
 After mounting/loading the selected pack, request `items/catalog` as
 `NT_ASSET_BLOB`. Once ready, call `items_catalog_try_bind_resource()`. Only a

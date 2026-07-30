@@ -187,6 +187,13 @@ class StateCodegenTests(unittest.TestCase):
         self.assertIn('cJSON_AddNumberToObject(root, "last_id", (double)state->last_id);', text)
         self.assertNotIn('gsj_add_i64(root, "last_id"', text)
 
+    def test_schema_owns_devapi_write_permissions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            text = generate_and_join(TEMPLATE_SCHEMA, Path(tmp) / "generated", "game_state", "game")
+        self.assertIn('\\"devapi_writable\\":false', text)
+        self.assertIn('strcmp(path, "inventory_container_id") == 0', text)
+        self.assertIn('state path is read-only', text)
+
     def test_items_nested_aggregate_uses_separate_bounded_pools(self):
         with tempfile.TemporaryDirectory() as tmp:
             text = generate_and_join(
@@ -399,6 +406,12 @@ class StateCodegenTests(unittest.TestCase):
         for spec in bad_specs:
             with self.subTest(spec=spec), self.assertRaises(SystemExit):
                 self._write_and_load(self._base(fields={"id": spec}))
+
+    def test_reject_nonboolean_devapi_writable(self):
+        with self.assertRaisesRegex(SystemExit, "devapi_writable"):
+            self._write_and_load(self._base(fields={
+                "total": {"type": "i64", "default": 0, "min": 0, "max": 9, "devapi_writable": "yes"},
+            }))
 
     def test_reject_nested_aggregate_without_canonical_order(self):
         schema = json.loads(ITEMS_CONTAINERS_SCHEMA.read_text(encoding="utf-8"))

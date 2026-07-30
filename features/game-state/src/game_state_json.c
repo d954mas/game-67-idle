@@ -1,13 +1,14 @@
 #include "game_state_json.h"
 
 #include <errno.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 /* i64 round-trip must not read a magnitude above this without a string
    (double loses integer precision above 2^53). */
-#define GSJ_I64_MAX_SAFE_DOUBLE 9007199254740992.0
+#define GSJ_I64_MAX_SAFE_DOUBLE 9007199254740991.0
 
 void gsj_set_error(char *error, int error_cap, const char *message) {
     if (error && error_cap > 0) {
@@ -49,8 +50,9 @@ bool gsj_read_int_range(const cJSON *obj, const char *name, int min_value, int m
         gsj_set_error(error, error_cap, "expected number");
         return false;
     }
-    double number = item->valuedouble;
-    if (number < (double)min_value || number > (double)max_value || number != (double)(int)number) {
+    const double number = item->valuedouble;
+    if (!isfinite(number) || number < (double)min_value || number > (double)max_value ||
+        number != trunc(number)) {
         gsj_set_error(error, error_cap, "number out of range");
         return false;
     }
@@ -63,9 +65,9 @@ bool gsj_parse_u32_value(const cJSON *item, uint32_t min_value, uint32_t max_val
         gsj_set_error(error, error_cap, "expected u32 number");
         return false;
     }
-    double number = item->valuedouble;
-    if (number < (double)min_value || number > (double)max_value ||
-        number > (double)UINT32_MAX || number != (double)(uint32_t)number) {
+    const double number = item->valuedouble;
+    if (!isfinite(number) || number < (double)min_value || number > (double)max_value ||
+        number > (double)UINT32_MAX || number != trunc(number)) {
         gsj_set_error(error, error_cap, "u32 value out of range");
         return false;
     }
@@ -90,12 +92,12 @@ bool gsj_read_float_range(const cJSON *obj, const char *name, float min_value, f
         gsj_set_error(error, error_cap, "expected number");
         return false;
     }
-    float value = (float)item->valuedouble;
-    if (value < min_value || value > max_value) {
+    const double number = item->valuedouble;
+    if (!isfinite(number) || number < (double)min_value || number > (double)max_value) {
         gsj_set_error(error, error_cap, "number out of range");
         return false;
     }
-    *out = value;
+    *out = (float)number;
     return true;
 }
 
@@ -132,9 +134,10 @@ bool gsj_read_enum(const cJSON *obj, const char *name, const char *const *names,
     if (cJSON_IsString(item)) {
         value = gsj_enum_index(item->valuestring, names, count);
     } else if (cJSON_IsNumber(item)) {
-        double number = item->valuedouble;
-        if (number != (double)(int)number) {
-            gsj_set_error(error, error_cap, "enum value must be an integer");
+        const double number = item->valuedouble;
+        if (!isfinite(number) || number < 0.0 || number >= (double)count ||
+            number != trunc(number)) {
+            gsj_set_error(error, error_cap, "enum value out of range");
             return false;
         }
         value = (int)number;
@@ -155,8 +158,9 @@ bool gsj_parse_int_value(const cJSON *item, int min_value, int max_value, int *o
         gsj_set_error(error, error_cap, "expected integer");
         return false;
     }
-    double number = item->valuedouble;
-    if (number < (double)min_value || number > (double)max_value || number != (double)(int)number) {
+    const double number = item->valuedouble;
+    if (!isfinite(number) || number < (double)min_value || number > (double)max_value ||
+        number != trunc(number)) {
         gsj_set_error(error, error_cap, "integer value out of range");
         return false;
     }
@@ -169,9 +173,10 @@ bool gsj_parse_enum_value(const cJSON *item, const char *const *names, int count
     if (cJSON_IsString(item)) {
         value = gsj_enum_index(item->valuestring, names, count);
     } else if (cJSON_IsNumber(item)) {
-        double number = item->valuedouble;
-        if (number != (double)(int)number) {
-            gsj_set_error(error, error_cap, "enum value must be an integer");
+        const double number = item->valuedouble;
+        if (!isfinite(number) || number < 0.0 || number >= (double)count ||
+            number != trunc(number)) {
+            gsj_set_error(error, error_cap, "enum value out of range");
             return false;
         }
         value = (int)number;
@@ -208,11 +213,11 @@ bool gsj_parse_i64_value(const cJSON *item, int64_t min_value, int64_t max_value
         }
         value = (int64_t)parsed;
     } else if (cJSON_IsNumber(item)) {
-        double number = item->valuedouble;
-        double magnitude = number < 0.0 ? -number : number;
+        const double number = item->valuedouble;
         /* Bound-check BEFORE casting to int64_t: casting an out-of-range
            double to int64_t is undefined behaviour. */
-        if (magnitude > GSJ_I64_MAX_SAFE_DOUBLE) {
+        if (!isfinite(number) || number < -GSJ_I64_MAX_SAFE_DOUBLE ||
+            number > GSJ_I64_MAX_SAFE_DOUBLE || number != trunc(number)) {
             gsj_set_error(error, error_cap, "i64 must be sent as string");
             return false;
         }

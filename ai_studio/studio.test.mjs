@@ -147,6 +147,35 @@ test("features domain keeps the strict Linux audio runner as release-only proof"
   assert.equal(changed.classification, "not-applicable");
 });
 
+test("features owner runs a real isolated native configure build and CTest lane", async () => {
+  const calls = [];
+  const result = await runOwnedDomain({ id: "features", checks: ["features.native"] }, {
+    runCommand: async (command, args) => {
+      calls.push([command, ...args]);
+      return { status: 0, tail: "" };
+    },
+  });
+  assert.equal(result.status, 0);
+  assert.equal(calls.length, 3);
+  assert.ok(calls[0].includes("templates/template/build/feature-verify"));
+  assert.deepEqual(calls[1].slice(0, 3), ["cmake", "--build", "templates/template/build/feature-verify"]);
+  assert.deepEqual(calls[2].slice(0, 3), ["ctest", "--test-dir", "templates/template/build/feature-verify"]);
+});
+
+test("full verification leaves native build ownership to template-release", async () => {
+  const calls = [];
+  const result = await runOwnedDomain({ id: "features", checks: ["features.native"] }, {
+    includeRelease: true,
+    verificationMode: "full",
+    runCommand: async (command, args) => {
+      calls.push([command, ...args]);
+      return { status: 0, tail: "" };
+    },
+  });
+  assert.equal(result.classification, "not-applicable");
+  assert.deepEqual(calls, []);
+});
+
 test("an owner domain batches its Node tests into one process", async () => {
   const root = mkdtempSync(join(tmpdir(), "studio-domain-batch-"));
   const files = [
@@ -184,6 +213,27 @@ test("asset Python unittests share one interpreter while dot-named files stay ex
   assert.equal(calls[0].filter((arg) => arg.endsWith("_test.py")).length, 21);
   assert.ok(calls[0].includes("ai_studio/assets/tools/image/quality_gate/asset_quality_gate_test.py"));
   assert.equal(calls.slice(1).every((command) => command.at(-1).endsWith(".test.py")), true);
+});
+
+test("assets owner executes the fail-closed tracked binary integrity guard", async () => {
+  const root = mkdtempSync(join(tmpdir(), "studio-assets-guard-"));
+  try {
+    const calls = [];
+    const result = await runOwnedDomain({ id: "assets", checks: ["studio.assets"] }, {
+      root,
+      runCommand: async (command, args) => {
+        calls.push([command, ...args]);
+        return { status: 0, tail: "" };
+      },
+    });
+    assert.equal(result.status, 0);
+    assert.deepEqual(calls, [[
+      "node",
+      "ai_studio/assets/licenses/restricted_assets_guard.mjs",
+    ]]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("owner Node and Python test lanes overlap before explicit validation commands", async () => {

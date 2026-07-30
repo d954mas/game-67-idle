@@ -2,11 +2,9 @@
 
 In-place module (precedent `features/game-state`, `features/items-core`) — no
 copy step. A consuming template/game references this module's source and
-scripts from its own `CMakeLists.txt` by the depth-2-invariant relative path
-`${CMAKE_CURRENT_SOURCE_DIR}/../../features/progression-core`, which resolves
-to the same repo-root module whether the caller is `templates/template` or
-`games/<id>` (both live exactly two levels below the repo root, same as
-`ENGINE_DIR`/`GAME_STATE_GENERATOR`/`ITEMS_CORE_DIR`).
+scripts from its own `CMakeLists.txt` via
+`${GAME_REPO_ROOT}/features/progression-core`, which works for templates,
+public games, and `games/private/<id>`.
 
 ## Dependency: items-core (L2 -> L1)
 
@@ -24,7 +22,7 @@ Define the module path variables once (near `ENGINE_DIR`/`ITEMS_CORE_*`,
 before the game's `add_executable`):
 
 ```cmake
-set(PROGRESSION_CORE_DIR     "${CMAKE_CURRENT_SOURCE_DIR}/../../features/progression-core")
+set(PROGRESSION_CORE_DIR     "${GAME_REPO_ROOT}/features/progression-core")
 set(PROGRESSION_CORE_INC     "${PROGRESSION_CORE_DIR}/include")
 set(PROGRESSION_CORE_SRC     "${PROGRESSION_CORE_DIR}/src")
 set(PROGRESSION_CORE_SCRIPTS "${PROGRESSION_CORE_DIR}/scripts")
@@ -65,8 +63,13 @@ longer exists after this module extraction):
 ```cmake
 target_include_directories(${GAME_TARGET} PRIVATE
     "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}"
+    "${GAME_EVENTS_INC}" "${GAME_STATE_INC}"
     src ...)
 ```
+
+The runtime also includes generated game-state/event headers, calls
+`game_save_mark_dirty`, and logs through `nt_log`; install `game-state` and
+`game-events` and link the engine logging target used by the host.
 
 ## No game-owned C hooks
 

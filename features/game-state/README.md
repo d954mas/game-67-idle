@@ -172,6 +172,10 @@ Use this folder as the minimum bar for future feature packs:
 Generated `GameState` files, fragment descriptors, and commands declared in
 `feature.json` are public. Generator internals are not.
 
+Version 4 makes New Game transitions explicit: `game_save_new_game()` and
+`game_save_apply_pending_new_game()` return `{ state_changed, persisted }`, so
+callers always rebind live state when persistence is temporarily unavailable.
+
 Version 3 changes the DevAPI change callback to
 `(change, fragment_id, user)`. `fragment_id` is set for `EDIT` and is `NULL`
 for full-state `REPLACE`, allowing the game session to reconcile only the

@@ -6,6 +6,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 static const char *const k_mode_names[MINI_STATE_MODE_COUNT] = {
     "off",

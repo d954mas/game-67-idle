@@ -1,3 +1,15 @@
+# Every source asset is a conservative pack dependency. The builder remains
+# the content owner; this list only guarantees that an asset edit invalidates
+# game.ntpack instead of shipping stale bytes.
+file(GLOB_RECURSE GAME_PACK_SOURCE_ASSETS CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/*.frag"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/*.glb"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/*.glsl"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/*.png"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/*.vert"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav")
+
 # --- asset pack builder (runs at build time -> game.ntpack + asset-id header) ---
 if(NOT EMSCRIPTEN)
     set(GAME_FONT_SOURCE
@@ -14,15 +26,8 @@ if(NOT EMSCRIPTEN)
         COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_PACK_DIR}"
         COMMAND $<TARGET_FILE:build_game_packs>
             "${GAME_PACK_DIR}" "${ITEMS_CATALOG_PACKAGE}" "${GAME_FONT_SOURCE}"
-        DEPENDS build_game_packs src/build_packs.c "${ITEMS_CATALOG_PACKAGE}" "${GAME_FONT_SOURCE}"
-            assets/shaders/slug_text.vert assets/shaders/slug_text.frag
-            assets/shaders/mesh_inst.vert assets/shaders/mesh_inst.frag
-            assets/shaders/mesh_tex.vert assets/shaders/mesh_tex.frag
-            assets/shaders/sprite.vert assets/shaders/sprite.frag
-            assets/ui/panel.png assets/ui/button.png
-            assets/ui/slider_track.png assets/ui/slider_fill.png assets/ui/slider_thumb.png
-            assets/icons/gold.png assets/icons/xp.png assets/icons/energy.png
-            assets/icons/potion.png assets/icons/sword.png assets/icons/wood.png
+        DEPENDS build_game_packs src/build_packs.c "${ITEMS_CATALOG_PACKAGE}"
+            "${GAME_FONT_SOURCE}" ${GAME_PACK_SOURCE_ASSETS}
             assets/audio/sfx/ui_click.wav assets/audio/music/demo_jingle.mp3
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         COMMENT "Building game asset pack"

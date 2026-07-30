@@ -234,12 +234,18 @@ int main(int argc, char *argv[]) {
     icons_opts.gen_mipmaps = false;
     NtAtlasBuild *icons_atlas = nt_atlas_begin(ctx, "icons", &icons_opts);
     static const char *icon_names[] = {"gold","xp","energy","potion","sword","wood"};
+    static const char *icon_paths[] = {
+        "assets/icons/gold.png",
+        "assets/icons/xp.png",
+        "assets/icons/energy.png",
+        "assets/icons/potion.png",
+        "assets/icons/sword.png",
+        "assets/icons/wood.png",
+    };
     for (int i = 0; i < 6; ++i) {
         nt_atlas_sprite_opts_t o = nt_atlas_sprite_opts_defaults();
         o.name = icon_names[i];
-        char path[128];
-        (void)snprintf(path, sizeof path, "assets/icons/%s.png", icon_names[i]);
-        nt_atlas_add(icons_atlas, path, &o);
+        nt_atlas_add(icons_atlas, icon_paths[i], &o);
     }
     (void)nt_atlas_commit(icons_atlas);
 

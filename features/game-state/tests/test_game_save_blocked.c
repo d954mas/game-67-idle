@@ -176,7 +176,7 @@ static void test_explicit_new_game_unblocks_and_persists(void) {
     game_save_load(&result);
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_BLOCKED, result.status);
 
-    TEST_ASSERT_TRUE(game_save_new_game(NULL, 0));
+    TEST_ASSERT_TRUE(game_save_new_game(NULL, 0).persisted);
 
     TEST_ASSERT_EQUAL_INT(1, s_reset_calls);
     TEST_ASSERT_EQUAL_INT(1, s_new_game_calls);

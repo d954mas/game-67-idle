@@ -461,6 +461,12 @@ extern const GameSaveFragment {self.ns.frag};
         macro = f"{self.ns.macro}{c_macro(prefix + field['path'])}"
         typ = field["type"]
         head = [f'    if (strcmp({compare_var}, "{path}") == 0) {{']
+        if not field.get("devapi_writable", True):
+            return head + [
+                '        gsj_set_error(error, error_cap, "state path is read-only");',
+                "        return false;",
+                "    }",
+            ]
         if typ == "enum":
             names_table, count_macro = self.enum_table(field)
             body = [
@@ -487,8 +493,9 @@ extern const GameSaveFragment {self.ns.frag};
         elif typ == "float":
             body = [
                 "        if (!cJSON_IsNumber(value)) { gsj_set_error(error, error_cap, \"expected number\"); return false; }",
-                "        float parsed = (float)value->valuedouble;",
-                f"        if (parsed < {macro}_MIN || parsed > {macro}_MAX) {{ gsj_set_error(error, error_cap, \"number out of range\"); return false; }}",
+                "        double number = value->valuedouble;",
+                f"        if (!isfinite(number) || number < (double){macro}_MIN || number > (double){macro}_MAX) {{ gsj_set_error(error, error_cap, \"number out of range\"); return false; }}",
+                "        float parsed = (float)number;",
                 f"        {state_expr}->{ident} = parsed;",
                 "        return true;",
             ]
@@ -1144,6 +1151,14 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
         for field in self.list_fields(schema):
             path = field["path"]
             ident = c_ident(path)
+            if not field.get("devapi_writable", True):
+                lines.extend([
+                    f'    if (strcmp(path, "{path}") == 0) {{',
+                    '        gsj_set_error(error, error_cap, "state path is read-only");',
+                    "        return false;",
+                    "    }",
+                ])
+                continue
             lines.extend([
                 f'    if (strcmp(path, "{path}") == 0) {{',
                 f"        return set_{ident}_from_json(state, value, error, error_cap);",
@@ -1156,6 +1171,14 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
             assert type_name is not None
             fname = self.object_type_func_name(type_name)
             prefix_len = len(path) + 1
+            if not field.get("devapi_writable", True):
+                lines.extend([
+                    f'    if (strcmp(path, "{path}") == 0 || strncmp(path, "{path}.", {prefix_len}) == 0) {{',
+                    '        gsj_set_error(error, error_cap, "state path is read-only");',
+                    "        return false;",
+                    "    }",
+                ])
+                continue
             lines.extend([
                 f'    if (strcmp(path, "{path}") == 0) {{',
                 f"        return set_{ident}_from_json(state, value, error, error_cap);",
@@ -1182,6 +1205,14 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
         if (aggregate := self.aggregate_field(schema)):
             path = aggregate["path"]
             ident = c_ident(path)
+            if not aggregate.get("devapi_writable", True):
+                lines.extend([
+                    f'    if (strcmp(path, "{path}") == 0) {{',
+                    '        gsj_set_error(error, error_cap, "state path is read-only");',
+                    "        return false;",
+                    "    }",
+                ])
+                return "\n".join(lines)
             lines.extend([
                 f'    if (strcmp(path, "{path}") == 0) {{',
                 f"        return set_{ident}_from_json(state, value, error, error_cap);",
@@ -1335,6 +1366,7 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
 
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 {self.render_enum_tables(schema)}
 

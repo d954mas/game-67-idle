@@ -10,7 +10,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const SCHEMA = "ai_studio.runtime_build.v1";
 const SHA256 = /^[0-9a-f]{64}$/;
-const GAME_IGNORED_ROOTS = new Set([".ai_studio", ".git", ".mypy_cache", ".pytest_cache", "__pycache__", "build", "design", "node_modules", "release", "tests"]);
+const GAME_IGNORED_ROOTS = new Set([".ai_studio", ".git", ".mypy_cache", ".pytest_cache", "__pycache__", "build", "capture", "design", "node_modules", "release", "tests", "tmp"]);
 const DEPENDENCY_IGNORED_ROOTS = new Set([".git", ".mypy_cache", ".pytest_cache", "__pycache__", "build", "node_modules", "out", "tests"]);
 const IGNORED_ANYWHERE = new Set([".mypy_cache", ".pytest_cache", "__pycache__"]);
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -44,7 +44,7 @@ function confinedRoot(studioRoot, source, label) {
   return actual;
 }
 
-function hashTree(root, ignoredRoots) {
+function hashTree(root, ignoredRoots, extraRoots = []) {
   const realRoot = realpathSync(resolve(root));
   const rows = [];
   function visit(dir, prefix = "") {
@@ -68,6 +68,10 @@ function hashTree(root, ignoredRoots) {
     }
   }
   visit(realRoot);
+  for (const relRoot of extraRoots) {
+    const path = join(realRoot, ...relRoot.split("/"));
+    if (existsSync(path)) visit(path, relRoot);
+  }
   const digest = createHash("sha256");
   for (const row of rows) digest.update(row.path).update("\0").update(String(row.size)).update("\0").update(row.sha256).update("\n");
   return { files: rows.length, sha256: digest.digest("hex") };
@@ -85,19 +89,25 @@ function readDependencies(gameDir) {
 }
 
 function referencedFeatureSources(gameDir) {
-  const cmakeFiles = [join(gameDir, "CMakeLists.txt")];
-  const cmakeDir = join(gameDir, "cmake");
-  if (existsSync(cmakeDir)) {
-    for (const name of readdirSync(cmakeDir).sort()) {
-      if (name.endsWith(".cmake")) cmakeFiles.push(join(cmakeDir, name));
+  const cmakeFiles = [];
+  function visit(dir, topLevel = false) {
+    for (const name of readdirSync(dir).sort()) {
+      if (topLevel && GAME_IGNORED_ROOTS.has(name)) continue;
+      const path = join(dir, name);
+      const info = lstatSync(path);
+      if (info.isDirectory()) visit(path);
+      else if (info.isFile() && (name === "CMakeLists.txt" || name.endsWith(".cmake"))) cmakeFiles.push(path);
     }
   }
+  visit(gameDir, true);
   const sources = new Set();
-  const pattern = /\$\{GAME_REPO_ROOT\}\/(features\/[a-z][a-z0-9-]*)/g;
+  const pattern = /\$\{(?:GAME_REPO_ROOT|STUDIO_ROOT)\}\/features\/([a-z][a-z0-9-]*)/g;
   for (const path of cmakeFiles) {
-    if (!existsSync(path)) continue;
-    const text = readFileSync(path, "utf8");
-    for (const match of text.matchAll(pattern)) sources.add(match[1]);
+    const text = readFileSync(path, "utf8").replace(/#.*$/gm, "");
+    if (/\$\{(?:GAME_REPO_ROOT|STUDIO_ROOT)\}\/features\/\s*\$\{/.test(text)) {
+      throw new Error("runtime feature paths must use a literal feature id in CMake");
+    }
+    for (const match of text.matchAll(pattern)) sources.add(`features/${match[1]}`);
   }
   return sources;
 }
@@ -139,7 +149,7 @@ export function validateRuntimeBuildRecord(record) {
 export function createRuntimeBuildRecord({ gameDir, studioRoot, dependencies = readDependencies(gameDir) }) {
   const gameRoot = realpathSync(resolve(gameDir));
   const root = realpathSync(resolve(studioRoot));
-  const game = hashTree(gameRoot, GAME_IGNORED_ROOTS);
+  const game = hashTree(gameRoot, GAME_IGNORED_ROOTS, ["design/items"]);
   const engineSource = safeSource(dependencies?.engine?.source, "engine dependency");
   if (engineSource !== "external/neotolis-engine") {
     throw new Error("engine dependency source must be exactly external/neotolis-engine");
@@ -154,9 +164,15 @@ export function createRuntimeBuildRecord({ gameDir, studioRoot, dependencies = r
   const declaredFeatureSources = new Set(
     dependencies.features.map((feature) => feature?.source),
   );
-  for (const source of referencedFeatureSources(gameRoot)) {
+  const compiledFeatureSources = referencedFeatureSources(gameRoot);
+  for (const source of compiledFeatureSources) {
     if (!declaredFeatureSources.has(source)) {
       throw new Error(`runtime feature ${source} is compiled but not declared`);
+    }
+  }
+  for (const source of declaredFeatureSources) {
+    if (!compiledFeatureSources.has(source)) {
+      throw new Error(`runtime feature ${source} is declared but not compiled through the canonical CMake boundary`);
     }
   }
   const features = dependencies.features.map((feature) => {

@@ -7,6 +7,12 @@
   "status": "template-local",
   "kind": "ui-screen",
   "layer": "L2",
+  "dependencies": [
+    "game-state generated settings fragment",
+    "game-owned scene catalog",
+    "engine nt_ui",
+    "template UI theme"
+  ],
   "provides": [
     "settings_draw_launcher",
     "settings_draw_panel",

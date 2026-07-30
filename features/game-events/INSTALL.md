@@ -1,6 +1,7 @@
 # Game Events Install
 
-The default template consumes this feature in-place from `../../features/game-events`.
+The default template consumes this feature in-place from
+`${GAME_REPO_ROOT}/features/game-events`.
 New games copied from the template inherit that wiring.
 
 ## Install
@@ -8,7 +9,7 @@ New games copied from the template inherit that wiring.
 Add module variables near the other in-place feature packs:
 
 ```cmake
-set(GAME_EVENTS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-events")
+set(GAME_EVENTS_DIR "${GAME_REPO_ROOT}/features/game-events")
 set(GAME_EVENTS_INC "${GAME_EVENTS_DIR}/include")
 set(GAME_EVENTS_SRC "${GAME_EVENTS_DIR}/src")
 ```

@@ -156,10 +156,19 @@ test("copied game CLI executes doctor and final package from a real games/privat
   const gameDir = join(root, "games", "private", "copied-game");
   cpSync(join(gameModuleRoot, "tools"), join(gameDir, "tools"), { recursive: true });
   cpSync(join(gameModuleRoot, ".github"), join(gameDir, ".github"), { recursive: true });
+  cpSync(join(studioRoot, "ai_studio", "assets"), join(root, "ai_studio", "assets"), { recursive: true });
   mkdirSync(join(gameDir, "release"), { recursive: true });
   cpSync(join(gameModuleRoot, "release", "README.md"), join(gameDir, "release", "README.md"));
   cpSync(join(studioRoot, "features", "platform-sdk"), join(root, "features", "platform-sdk"), { recursive: true });
-  write(join(gameDir, "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.25)\n");
+  write(join(gameDir, "CMakeLists.txt"), [
+    "cmake_minimum_required(VERSION 3.25)",
+    "add_subdirectory(\"${STUDIO_ROOT}/features/platform-sdk\" platform-sdk)",
+    "",
+  ].join("\n"));
+  write(join(gameDir, "assets", "release_inputs.json"), JSON.stringify({
+    schema: "ai_studio.game_release_assets.v1", inputs: [],
+  }));
+  write(join(gameDir, "src", "build_packs.c"), "/* copied release fixture has no binary asset inputs */\n");
 
   const engineRoot = join(root, "external", "neotolis-engine");
   write(join(engineRoot, "engine", "core", "nt_core.h"), [
@@ -171,7 +180,13 @@ test("copied game CLI executes doctor and final package from a real games/privat
   git(engineRoot, ["add", "."]);
   git(engineRoot, ["-c", "user.email=tests@example.invalid", "-c", "user.name=Tests", "commit", "-qm", "engine fixture"]);
   const engineRevision = git(engineRoot, ["rev-parse", "HEAD"]);
-  git(root, ["add", "features/platform-sdk", "external/neotolis-engine"]);
+  git(root, [
+    "add",
+    "features/platform-sdk",
+    "external/neotolis-engine",
+    "games/private/copied-game/assets/release_inputs.json",
+    "games/private/copied-game/src/build_packs.c",
+  ]);
   git(root, ["-c", "user.email=tests@example.invalid", "-c", "user.name=Tests", "commit", "-qm", "dependency fixture"]);
   const revision = git(root, ["rev-parse", "HEAD"]);
 

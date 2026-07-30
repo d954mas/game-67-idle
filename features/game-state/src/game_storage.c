@@ -3,6 +3,7 @@
 #include "game_storage_backend.h"
 
 #include <stdio.h>
+#include <string.h>
 
 static void set_error(char *error, int error_cap, const char *message) {
     if (error != NULL && error_cap > 0) {
@@ -40,6 +41,10 @@ bool game_storage_write(
     }
     if (text == NULL) {
         set_error(error, error_cap, "storage text is required");
+        return false;
+    }
+    if (strlen(text) > (size_t)GAME_STORAGE_MAX_BYTES) {
+        set_error(error, error_cap, "storage text is too large");
         return false;
     }
     return game_storage_backend_write(slot, text, error, error_cap);

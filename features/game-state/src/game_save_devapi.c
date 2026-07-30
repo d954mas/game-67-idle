@@ -373,10 +373,10 @@ static bool ep_state_reset(const cJSON *params, cJSON *result_obj, nt_devapi_err
     (void)params;
     (void)user;
     /* Р10: reset all fragments + on_new_game (starting content) + save + resume autosave. */
-    if (!game_save_new_game(s_state_err, (int)sizeof s_state_err)) {
-        return state_fail_buf(err, "internal");
-    }
+    const game_save_transition_result_t transition =
+        game_save_new_game(s_state_err, (int)sizeof s_state_err);
     cJSON_AddBoolToObject(result_obj, "reset", true);
+    cJSON_AddBoolToObject(result_obj, "saved", transition.persisted);
     notify_change(GAME_SAVE_DEVAPI_REPLACE, NULL);
     return true;
 }

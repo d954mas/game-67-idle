@@ -346,6 +346,8 @@ def validate_field_shape(
     typ = field.get("type")
     if not isinstance(path, str) or not path:
         raise SystemExit("field path must be a non-empty string")
+    if "devapi_writable" in field and not isinstance(field["devapi_writable"], bool):
+        raise SystemExit(f"{path} devapi_writable must be a boolean")
     if typ in SCALAR_TYPES:
         if typ == "enum" and field.get("enum") not in enums:
             raise SystemExit(f"{path} references unknown enum")

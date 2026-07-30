@@ -7,24 +7,31 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 #ifdef _WIN32
 #include <direct.h>
+#include <io.h>
 #include <windows.h>
 #else
+#include <fcntl.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 #define GAME_STORAGE_PATH_MAX 512
-#define GAME_STORAGE_MAX_BYTES (1024 * 1024)
-#define GAME_STORAGE_QUARANTINE_MAX_ATTEMPTS 1000
+#define GAME_STORAGE_QUARANTINE_MAX_FILES 3
+
+#ifndef GAME_STORAGE_APP_ID
+#error "GAME_STORAGE_APP_ID must be defined via CMake"
+#endif
 
 typedef struct game_storage_native_paths_t {
+    char directory[GAME_STORAGE_PATH_MAX];
     char primary[GAME_STORAGE_PATH_MAX];
     char primary_tmp[GAME_STORAGE_PATH_MAX];
     char backup[GAME_STORAGE_PATH_MAX];
     char backup_tmp[GAME_STORAGE_PATH_MAX];
+    char quarantine_base[GAME_STORAGE_PATH_MAX];
 } game_storage_native_paths_t;
 
 static void set_error(char *error, int error_cap, const char *message) {
@@ -46,6 +53,76 @@ static bool is_safe_segment(const char *value) {
         if (!safe) {
             return false;
         }
+    }
+    return true;
+}
+
+static bool is_absolute_path(const char *path) {
+    if (path == NULL || path[0] == '\0') {
+        return false;
+    }
+#ifdef _WIN32
+    if (path[0] == '\\' && path[1] == '\\') {
+        return true;
+    }
+    const bool has_drive =
+        (path[0] >= 'A' && path[0] <= 'Z') ||
+        (path[0] >= 'a' && path[0] <= 'z');
+    return has_drive && path[1] == ':' &&
+           (path[2] == '/' || path[2] == '\\');
+#else
+    return path[0] == '/';
+#endif
+}
+
+static bool resolve_storage_root(
+    char *out, size_t out_cap, char *error, int error_cap) {
+#ifdef GAME_STORAGE_NATIVE_ROOT
+    const char *override_root = GAME_STORAGE_NATIVE_ROOT;
+#else
+    const char *override_root = getenv("GAME_STORAGE_ROOT");
+#endif
+    if (override_root != NULL && is_absolute_path(override_root)) {
+        if (snprintf(out, out_cap, "%s", override_root) >= (int)out_cap) {
+            set_error(error, error_cap, "native storage root is too long");
+            return false;
+        }
+        return true;
+    }
+
+    const char *root = NULL;
+#ifdef _WIN32
+    root = getenv("LOCALAPPDATA");
+    if (root == NULL || !is_absolute_path(root)) {
+        static char temp_path[GAME_STORAGE_PATH_MAX];
+        const DWORD length = GetTempPathA((DWORD)sizeof temp_path, temp_path);
+        if (length == 0 || length >= sizeof temp_path) {
+            set_error(error, error_cap, "failed to resolve native storage root");
+            return false;
+        }
+        root = temp_path;
+    }
+#else
+    root = getenv("XDG_STATE_HOME");
+    char home_state[GAME_STORAGE_PATH_MAX];
+    if (root == NULL || !is_absolute_path(root)) {
+        const char *home = getenv("HOME");
+        if (home != NULL && is_absolute_path(home)) {
+            if (snprintf(home_state, sizeof home_state, "%s/.local/state", home) >=
+                (int)sizeof home_state) {
+                set_error(error, error_cap, "native storage root is too long");
+                return false;
+            }
+            root = home_state;
+        } else {
+            root = "/tmp";
+        }
+    }
+#endif
+    if (snprintf(out, out_cap, "%s/neotolis/%s/saves", root,
+                 GAME_STORAGE_APP_ID) >= (int)out_cap) {
+        set_error(error, error_cap, "native storage root is too long");
+        return false;
     }
     return true;
 }
@@ -81,7 +158,11 @@ static bool ensure_parent_dirs(
         const char saved = *p;
         *p = '\0';
         if (!make_dir_if_needed(temp)) {
-            set_error(error, error_cap, "failed to create storage directory");
+            if (error != NULL && error_cap > 0) {
+                (void)snprintf(
+                    error, (size_t)error_cap,
+                    "failed to create storage directory: %s", temp);
+            }
             return false;
         }
         *p = saved;
@@ -96,6 +177,43 @@ static bool replace_file(const char *temporary, const char *primary) {
                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
 #else
     return rename(temporary, primary) == 0;
+#endif
+}
+
+static bool sync_parent_directory(const char *path) {
+#ifdef _WIN32
+    (void)path;
+    /* MoveFileEx(...WRITE_THROUGH) is the durable replacement primitive. */
+    return true;
+#else
+    char directory[GAME_STORAGE_PATH_MAX];
+    if (snprintf(directory, sizeof directory, "%s", path) >=
+        (int)sizeof directory) {
+        return false;
+    }
+    char *separator = strrchr(directory, '/');
+    if (separator == NULL || separator == directory) {
+        return false;
+    }
+    *separator = '\0';
+    const int descriptor = open(directory, O_RDONLY);
+    if (descriptor < 0) {
+        return false;
+    }
+    const int result = fsync(descriptor);
+    (void)close(descriptor);
+    return result == 0;
+#endif
+}
+
+static bool flush_file_to_disk(FILE *file) {
+    if (fflush(file) != 0) {
+        return false;
+    }
+#ifdef _WIN32
+    return _commit(_fileno(file)) == 0;
+#else
+    return fsync(fileno(file)) == 0;
 #endif
 }
 
@@ -142,6 +260,9 @@ static bool write_file_atomic(
     }
     const size_t length = strlen(text);
     bool ok = fwrite(text, 1, length, file) == length;
+    if (ok) {
+        ok = flush_file_to_disk(file);
+    }
     ok = fclose(file) == 0 && ok;
     if (!ok) {
         (void)remove(temporary);
@@ -151,6 +272,10 @@ static bool write_file_atomic(
     if (!replace_file(temporary, primary)) {
         (void)remove(temporary);
         set_error(error, error_cap, "failed to replace storage file");
+        return false;
+    }
+    if (!sync_parent_directory(primary)) {
+        set_error(error, error_cap, "failed to sync storage directory");
         return false;
     }
     return true;
@@ -181,7 +306,7 @@ static bool read_file_bytes(
         return false;
     }
     const long size = ftell(file);
-    if (size < 0 || size > GAME_STORAGE_MAX_BYTES) {
+    if (size < 0 || (unsigned long)size > (unsigned long)GAME_STORAGE_MAX_BYTES) {
         (void)fclose(file);
         set_error(error, error_cap, "storage file is too large");
         return false;
@@ -212,19 +337,6 @@ static bool read_file_bytes(
     return true;
 }
 
-static int64_t unix_ms_now(void) {
-#ifdef _WIN32
-    FILETIME file_time;
-    GetSystemTimeAsFileTime(&file_time);
-    ULARGE_INTEGER ticks;
-    ticks.LowPart = file_time.dwLowDateTime;
-    ticks.HighPart = file_time.dwHighDateTime;
-    return (int64_t)((ticks.QuadPart - 116444736000000000ULL) / 10000ULL);
-#else
-    return (int64_t)time(NULL) * 1000;
-#endif
-}
-
 static bool resolve_native_paths(
     const char *slot, game_storage_native_paths_t *paths,
     char *error, int error_cap) {
@@ -232,14 +344,27 @@ static bool resolve_native_paths(
         set_error(error, error_cap, "storage slot must be a simple name");
         return false;
     }
-    if (snprintf(paths->primary, sizeof paths->primary,
-                 "build/saves/%s.json", slot) >= (int)sizeof paths->primary ||
+    if (!is_safe_segment(GAME_STORAGE_APP_ID)) {
+        set_error(error, error_cap, "GAME_STORAGE_APP_ID must be a simple name");
+        return false;
+    }
+    char root[GAME_STORAGE_PATH_MAX];
+    if (!resolve_storage_root(root, sizeof root, error, error_cap) ||
+        snprintf(paths->directory, sizeof paths->directory, "%s", root) >=
+            (int)sizeof paths->directory ||
+        snprintf(paths->primary, sizeof paths->primary,
+                 "%s/%s.json", paths->directory, slot) >=
+            (int)sizeof paths->primary ||
         snprintf(paths->primary_tmp, sizeof paths->primary_tmp,
                  "%s.tmp", paths->primary) >= (int)sizeof paths->primary_tmp ||
         snprintf(paths->backup, sizeof paths->backup,
-                 "build/saves/%s.bak", slot) >= (int)sizeof paths->backup ||
+                 "%s/%s.bak", paths->directory, slot) >=
+            (int)sizeof paths->backup ||
         snprintf(paths->backup_tmp, sizeof paths->backup_tmp,
-                 "%s.tmp", paths->backup) >= (int)sizeof paths->backup_tmp) {
+                 "%s.tmp", paths->backup) >= (int)sizeof paths->backup_tmp ||
+        snprintf(paths->quarantine_base, sizeof paths->quarantine_base,
+                 "%s/%s.corrupt", paths->directory, slot) >=
+            (int)sizeof paths->quarantine_base) {
         set_error(error, error_cap, "resolved storage path is too long");
         return false;
     }
@@ -247,20 +372,15 @@ static bool resolve_native_paths(
 }
 
 static bool resolve_quarantine_path(
-    const char *slot, char *out, size_t out_cap,
+    const game_storage_native_paths_t *paths, char *out, size_t out_cap,
     char *error, int error_cap) {
-    const int64_t timestamp = unix_ms_now();
-    for (int attempt = 0;
-         attempt < GAME_STORAGE_QUARANTINE_MAX_ATTEMPTS;
-         ++attempt) {
+    for (int attempt = 0; attempt < GAME_STORAGE_QUARANTINE_MAX_FILES; ++attempt) {
         const int written =
             attempt == 0
                 ? snprintf(
-                      out, out_cap, "build/saves/%s.corrupt-%lld",
-                      slot, (long long)timestamp)
+                      out, out_cap, "%s", paths->quarantine_base)
                 : snprintf(
-                      out, out_cap, "build/saves/%s.corrupt-%lld-%d",
-                      slot, (long long)timestamp, attempt);
+                      out, out_cap, "%s-%d", paths->quarantine_base, attempt);
         if (written < 0 || written >= (int)out_cap) {
             set_error(error, error_cap, "resolved quarantine path is too long");
             return false;
@@ -270,7 +390,7 @@ static bool resolve_quarantine_path(
         }
     }
     set_error(
-        error, error_cap, "too many quarantine collisions for this slot");
+        error, error_cap, "quarantine retention limit reached for this slot");
     return false;
 }
 
@@ -285,7 +405,7 @@ static bool quarantine_unreadable_copy(const char *slot) {
     }
     char quarantine_path[GAME_STORAGE_PATH_MAX];
     if (!resolve_quarantine_path(
-            slot, quarantine_path, sizeof quarantine_path, NULL, 0)) {
+            &paths, quarantine_path, sizeof quarantine_path, NULL, 0)) {
         (void)fclose(source);
         return false;
     }
@@ -305,11 +425,16 @@ static bool quarantine_unreadable_copy(const char *slot) {
     }
     const bool source_ok = ferror(source) == 0;
     (void)fclose(source);
-    const bool destination_stream_ok = ferror(destination) == 0;
+    const bool destination_stream_ok =
+        ferror(destination) == 0 && flush_file_to_disk(destination);
     const bool destination_closed = fclose(destination) == 0;
     const bool destination_ok =
         destination_stream_ok && destination_closed;
     if (failed || !source_ok || !destination_ok) {
+        (void)remove(quarantine_path);
+        return false;
+    }
+    if (!sync_parent_directory(quarantine_path)) {
         (void)remove(quarantine_path);
         return false;
     }
@@ -318,6 +443,10 @@ static bool quarantine_unreadable_copy(const char *slot) {
 
 bool game_storage_backend_write(
     const char *slot, const char *text, char *error, int error_cap) {
+    if (text == NULL || strlen(text) > (size_t)GAME_STORAGE_MAX_BYTES) {
+        set_error(error, error_cap, "storage text is too large");
+        return false;
+    }
     game_storage_native_paths_t paths;
     return resolve_native_paths(slot, &paths, error, error_cap) &&
            write_file_atomic(
@@ -395,12 +524,16 @@ bool game_storage_backend_quarantine(
     }
     char quarantine_path[GAME_STORAGE_PATH_MAX];
     if (!resolve_quarantine_path(
-            slot, quarantine_path, sizeof quarantine_path,
+            &paths, quarantine_path, sizeof quarantine_path,
             error, error_cap)) {
         return false;
     }
     if (rename(paths.primary, quarantine_path) != 0) {
         set_error(error, error_cap, "failed to quarantine storage file");
+        return false;
+    }
+    if (!sync_parent_directory(paths.primary)) {
+        set_error(error, error_cap, "failed to sync storage directory");
         return false;
     }
     return true;

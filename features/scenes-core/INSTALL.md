@@ -4,16 +4,16 @@
 
 ## In-place wiring
 
-A consumer under `templates/<id>` or `games/<id>` will compile:
+A consumer resolves `GAME_REPO_ROOT`, then compiles:
 
 ```text
-../../features/scenes-core/src/scene_manager.c
+${GAME_REPO_ROOT}/features/scenes-core/src/scene_manager.c
 ```
 
 and add this include directory before game-local feature paths:
 
 ```text
-../../features/scenes-core/include
+${GAME_REPO_ROOT}/features/scenes-core/include
 ```
 
 The game owns `game_scenes.c/.h`, its static descriptors/instances, frame
@@ -22,6 +22,8 @@ No files are copied from the module into the game.
 
 For DevAPI builds, also compile `src/scene_manager_devapi.c`, include
 `features/scenes/scene_manager_devapi.h`, and register the initialized manager.
+Link the engine DevAPI host (`nt_devapi_default` plus the platform transport);
+it provides `devapi/nt_devapi.h` and cJSON used by the optional adapter.
 Treat a `false` registration result as startup failure; it means the command
 registry rejected at least one method and may contain methods registered before
 the failure. Call `nt_devapi_shutdown()` and do not reuse the partial registry.

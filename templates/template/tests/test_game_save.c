@@ -199,7 +199,7 @@ static const game_save_transform_t k_xf = {.id = "case", .encode = xf_toggle_cas
 /* ---- file helpers ---- */
 static int sweep_corrupt(bool do_delete) {
     int count = 0;
-    const char *prefix = "test_slot.corrupt-";
+    const char *prefix = "test_slot.corrupt";
     const size_t prefix_len = strlen(prefix);
 #ifdef _WIN32
     struct _finddata_t fd;
@@ -239,9 +239,9 @@ static int sweep_corrupt(bool do_delete) {
     return count;
 }
 
-/* First build/saves/test_slot.corrupt-* bare filename; true when one exists. */
+/* First build/saves/test_slot.corrupt[-N] bare filename; true when one exists. */
 static bool first_corrupt_name(char *name, size_t cap) {
-    const char *prefix = "test_slot.corrupt-";
+    const char *prefix = "test_slot.corrupt";
     const size_t prefix_len = strlen(prefix);
 #ifdef _WIN32
     struct _finddata_t fd;
@@ -412,7 +412,7 @@ void test_fresh_runs_on_new_game(void) {
 void test_new_game_runs_on_new_game(void) {
     char err[128] = {0};
     s_frag_coins = 999; /* arbitrary corrupt in-memory state */
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     TEST_ASSERT_EQUAL_INT(100, s_frag_coins);
     TEST_ASSERT_TRUE(file_present(PRIMARY_PATH));
 }
@@ -421,7 +421,10 @@ void test_failed_new_game_save_retries_on_tick(void) {
     char err[128] = {0};
     game_save_set_document_validator(reject_document_for_test);
 
-    TEST_ASSERT_FALSE(game_save_new_game(err, (int)sizeof err));
+    const game_save_transition_result_t transition =
+        game_save_new_game(err, (int)sizeof err);
+    TEST_ASSERT_TRUE(transition.state_changed);
+    TEST_ASSERT_FALSE(transition.persisted);
     TEST_ASSERT_FALSE(file_present(PRIMARY_PATH));
 
     game_save_set_document_validator(validate_document_fragments);
@@ -518,7 +521,7 @@ void test_corrupt_reset_no_on_new_game_then_new_game(void) {
     TEST_ASSERT_FALSE(file_present(PRIMARY_PATH));
 
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     TEST_ASSERT_EQUAL_INT(100, s_frag_coins);
     TEST_ASSERT_TRUE(file_present(PRIMARY_PATH));
 
@@ -713,7 +716,7 @@ void test_export_import_round_trip(void) {
     char *exp = game_save_export_string(err, (int)sizeof err);
     TEST_ASSERT_NOT_NULL(exp);
 
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err)); /* coins -> 100 */
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted); /* coins -> 100 */
     TEST_ASSERT_EQUAL_INT(100, s_frag_coins);
 
     TEST_ASSERT_TRUE(game_save_import_string(exp, err, (int)sizeof err));
@@ -723,6 +726,21 @@ void test_export_import_round_trip(void) {
 
     TEST_ASSERT_FALSE(game_save_import_string("not json at all", err, (int)sizeof err));
     TEST_ASSERT_EQUAL_INT(321, s_frag_coins); /* untouched */
+}
+
+void test_import_rejects_bad_fragment_without_publishing_neighbours(void) {
+    const char *bad_import =
+        "{\"format\":1,\"save_version\":2,\"saved_at\":1,\"save_seq\":9,\"app\":\"" GAME_STORAGE_APP_ID "\","
+        "\"build\":\"0\",\"features\":{\"game\":{\"v\":1,\"coins\":2000000000},"
+        "\"extra\":{\"v\":1,\"mark\":7}}}";
+    char err[128] = {0};
+    s_frag_coins = 321;
+    s_extra_mark = 99;
+
+    TEST_ASSERT_FALSE(game_save_import_string(bad_import, err, (int)sizeof err));
+    TEST_ASSERT_NOT_EQUAL(0, err[0]);
+    TEST_ASSERT_EQUAL_INT(321, s_frag_coins);
+    TEST_ASSERT_EQUAL_INT(99, s_extra_mark);
 }
 
 /* 12. transform seam: default flat '{'; identity transform -> "NTSV1:" + reload. */
@@ -804,7 +822,7 @@ void test_orphan_read_access(void) {
 
     /* new_game clears retained orphans */
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     TEST_ASSERT_EQUAL_INT(0, game_save_orphan_count());
     TEST_ASSERT_NULL(game_save_orphan_at(0, &id));
 }
@@ -865,7 +883,7 @@ void test_read_error_quarantines_and_corrupt_resets(void) {
     /* explicit new_game (the single on_new_game on this path): primary overwritten
        with a fresh, parseable default, autosave resumed. */
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     TEST_ASSERT_EQUAL_INT(100, s_frag_coins); /* NOW on_new_game ran */
     cJSON *doc = parse_primary();
     const cJSON *game =
@@ -880,6 +898,32 @@ void test_read_error_quarantines_and_corrupt_resets(void) {
     g_mono_ms += (int64_t)GAME_SAVE_DEBOUNCE_MS;
     game_save_tick();
     TEST_ASSERT_TRUE(primary_save_seq() > before);
+}
+
+void test_read_error_never_reuses_an_old_quarantine_copy(void) {
+    write_raw("build/saves/test_slot.corrupt", "OLD-PRIMARY");
+    const size_t big = (size_t)(1024 * 1024) + 64u;
+    char *payload = (char *)malloc(big + 1u);
+    TEST_ASSERT_NOT_NULL(payload);
+    memset(payload, 'N', big);
+    payload[big] = '\0';
+    write_raw(PRIMARY_PATH, payload);
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_CORRUPT_RESET, result.status);
+    TEST_ASSERT_EQUAL_INT(2, sweep_corrupt(false));
+    char *old_copy = read_raw("build/saves/test_slot.corrupt");
+    TEST_ASSERT_NOT_NULL(old_copy);
+    TEST_ASSERT_EQUAL_STRING("OLD-PRIMARY", old_copy);
+    free(old_copy);
+    char *new_copy = read_raw("build/saves/test_slot.corrupt-1");
+    TEST_ASSERT_NOT_NULL(new_copy);
+    TEST_ASSERT_EQUAL_INT((int)big, (int)strlen(new_copy));
+    TEST_ASSERT_EQUAL_INT(0, memcmp(new_copy, payload, big));
+    free(new_copy);
+    free(payload);
 }
 
 /* 16. Native read ERROR on primary + VALID .bak -> RECOVERED_BAK via the existing
@@ -973,14 +1017,14 @@ void test_read_error_bad_backup_corrupt_resets(void) {
    analogue: "extra" here) and force-saves immediately -- the skipped fragment's
    in-memory state and its serialized value on disk are both untouched. */
 void test_pending_new_game_skips_one_fragment(void) {
-    TEST_ASSERT_FALSE(game_save_apply_pending_new_game()); /* nothing requested yet */
+    TEST_ASSERT_FALSE(game_save_apply_pending_new_game().state_changed); /* nothing requested yet */
 
     s_frag_coins = 5;   /* "game" fragment: will be reset -> on_new_game'd (coins=100) */
     s_extra_mark = 77;  /* "extra" fragment: SKIPPED, must survive untouched */
     game_save_mark_dirty();
 
     game_save_request_new_game("extra");
-    TEST_ASSERT_TRUE(game_save_apply_pending_new_game());
+    TEST_ASSERT_TRUE(game_save_apply_pending_new_game().state_changed);
 
     TEST_ASSERT_EQUAL_INT(100, s_frag_coins); /* reset -> on_new_game ran */
     TEST_ASSERT_EQUAL_INT(77, s_extra_mark);  /* skipped fragment untouched in memory */
@@ -996,7 +1040,18 @@ void test_pending_new_game_skips_one_fragment(void) {
     cJSON_Delete(doc);
 
     /* nothing pending anymore -> a second apply is a clean no-op */
-    TEST_ASSERT_FALSE(game_save_apply_pending_new_game());
+    TEST_ASSERT_FALSE(game_save_apply_pending_new_game().state_changed);
+}
+
+void test_pending_new_game_reports_live_transition_when_save_fails(void) {
+    game_save_set_document_validator(reject_document_for_test);
+    s_frag_coins = 5;
+    game_save_request_new_game(NULL);
+
+    const game_save_transition_result_t transition = game_save_apply_pending_new_game();
+    TEST_ASSERT_TRUE(transition.state_changed);
+    TEST_ASSERT_FALSE(transition.persisted);
+    TEST_ASSERT_EQUAL_INT(100, s_frag_coins);
 }
 
 /* 19. A versioned document migration updates multiple owner fragments from one
@@ -1078,6 +1133,19 @@ void test_document_migration_rejects_second_owner_parse_before_publish(void) {
     TEST_ASSERT_EQUAL_INT(22, s_extra_mark);
 }
 
+void test_import_rejects_oversized_text_before_decode(void) {
+    char *oversized = (char *)malloc((size_t)GAME_STORAGE_MAX_BYTES + 2U);
+    TEST_ASSERT_NOT_NULL(oversized);
+    memset(oversized, 'x', (size_t)GAME_STORAGE_MAX_BYTES + 1U);
+    oversized[GAME_STORAGE_MAX_BYTES + 1U] = '\0';
+    char err[128] = {0};
+
+    TEST_ASSERT_FALSE(game_save_import_string(oversized, err, (int)sizeof err));
+    TEST_ASSERT_EQUAL_STRING("import exceeds storage size limit", err);
+
+    free(oversized);
+}
+
 int main(void) {
     game_save_register_fragment(&s_extra_fragment);
     game_save_register_fragment(&s_fake_fragment); /* `game` registered last */
@@ -1101,16 +1169,20 @@ int main(void) {
     RUN_TEST(test_debounce_boundary);
     RUN_TEST(test_flush_is_synchronous);
     RUN_TEST(test_export_import_round_trip);
+    RUN_TEST(test_import_rejects_bad_fragment_without_publishing_neighbours);
     RUN_TEST(test_transform_seam);
     RUN_TEST(test_bad_fragment_isolation);
     RUN_TEST(test_orphan_read_access);
     RUN_TEST(test_read_error_quarantines_and_corrupt_resets);
+    RUN_TEST(test_read_error_never_reuses_an_old_quarantine_copy);
     RUN_TEST(test_read_error_recovers_from_backup);
     RUN_TEST(test_read_error_bad_backup_corrupt_resets);
     RUN_TEST(test_pending_new_game_skips_one_fragment);
+    RUN_TEST(test_pending_new_game_reports_live_transition_when_save_fails);
     RUN_TEST(test_document_migration_publishes_owner_pair_together);
     RUN_TEST(test_document_migration_failure_keeps_input_and_live_state_exact);
     RUN_TEST(test_document_migration_rejects_missing_step_without_publish);
     RUN_TEST(test_document_migration_rejects_second_owner_parse_before_publish);
+    RUN_TEST(test_import_rejects_oversized_text_before_decode);
     return UNITY_END();
 }

@@ -305,8 +305,12 @@ static void game_runtime_reset_fragments_without_grants(void) {
 }
 
 static bool game_runtime_apply_pending_new_game(void) {
-    if (!game_save_apply_pending_new_game()) {
+    const game_save_transition_result_t transition = game_save_apply_pending_new_game();
+    if (!transition.state_changed) {
         return false;
+    }
+    if (!transition.persisted) {
+        fprintf(stderr, "new game started, but save will be retried\n");
     }
     s_world.time_seconds = 0.0F;
     s_world.player_x = 0.0F;

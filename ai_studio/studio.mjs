@@ -66,6 +66,14 @@ const NATIVE_COMMANDS = [
   ["cmake", "--build", "templates/template/build/native-debug"],
   ["ctest", "--test-dir", "templates/template/build/native-debug", "--output-on-failure"],
 ];
+const FEATURE_NATIVE_COMMANDS = [
+  [
+    "cmake", "-S", "templates/template", "-B", "templates/template/build/feature-verify", "-G", "Ninja",
+    "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Debug",
+  ],
+  ["cmake", "--build", "templates/template/build/feature-verify"],
+  ["ctest", "--test-dir", "templates/template/build/feature-verify", "--output-on-failure"],
+];
 const WEB_COMMANDS = [
   ["node", "templates/template/tools/build_web.mjs", "--preset", "wasm-release", "--target", "itch", "--no-debug-ui"],
   ["node", "-e", "const fs=require('node:fs'); for (const p of ['templates/template/build/wasm-release-itch/bin/game.js','templates/template/build/wasm-release-itch/bin/game.wasm','templates/template/build/wasm-release-itch/bin/assets/game.ntpack']) if (!fs.existsSync(p)) throw new Error('missing artifact '+p)"],
@@ -104,6 +112,7 @@ const CHECKS = Object.freeze([
       "ai_studio/assets/tests",
       "ai_studio/assets/tools",
     ],
+    commands: [["node", "ai_studio/assets/licenses/restricted_assets_guard.mjs"]],
   },
   { id: "studio.assets.python", pythonRoots: ["ai_studio/assets/tools"], batchPythonUnittest: true },
   {
@@ -138,14 +147,40 @@ const CHECKS = Object.freeze([
   { id: "features.contracts", testFiles: ["features/validate_contracts.test.mjs"], commands: [["node", "features/validate_contracts.mjs"]] },
   { id: "features.audio.web", testFiles: ["features/audio-core/tests/test_audio_web_library.mjs"] },
   {
+    id: "features.native",
+    commands: FEATURE_NATIVE_COMMANDS,
+    changedOnly: true,
+    nativeRoots: [
+      "features/audio-core/tests",
+      "features/game-state/tests",
+      "features/items-core/tests",
+      "features/progression-core/tests",
+      "features/scenes-core/tests",
+    ],
+  },
+  {
     id: "features.audio.linux",
     commandsByPlatform: { linux: [["bash", "features/audio-core/tests/run_linux.sh"]] },
     releaseOnly: true,
   },
   { id: "features.platform-sdk", testFiles: ["features/platform-sdk/tests/platform_sdk.test.mjs"] },
-  { id: "features.game-state", pythonRoots: ["features/game-state"] },
+  {
+    id: "features.game-state",
+    pythonRoots: ["features/game-state"],
+    nativeRoots: ["features/game-state/tests"],
+  },
   { id: "features.items-core", pythonRoots: ["features/items-core"] },
   { id: "features.progression-core", pythonRoots: ["features/progression-core"] },
+  {
+    id: "features.scenes-core",
+    testFiles: [
+      "features/scenes-core/tests/test_consumer_scene_contracts.mjs",
+      "features/scenes-core/tests/test_scaffold_scene.mjs",
+      "features/scenes-core/tests/test_scene_devapi_schema.mjs",
+      "features/scenes-core/tests/test_scene_devapi_runtime_schema.mjs",
+    ],
+    nativeRoots: ["features/scenes-core/tests"],
+  },
   { id: "reference-template", testFiles: [
     "templates/template/tools/build_web.test.mjs",
     "templates/template/tools/game.test.mjs",
@@ -167,7 +202,7 @@ const DOMAINS = Object.freeze([
   { id: "work-management", checks: ["studio.taskboard"] },
   { id: "design", checks: [] },
   { id: "runtime", checks: ["studio.runtime-automation", "studio.runtime-automation.live"] },
-  { id: "features", checks: ["features.contracts", "features.audio.web", "features.audio.linux", "features.platform-sdk", "features.game-state", "features.items-core", "features.progression-core"] },
+  { id: "features", checks: ["features.contracts", "features.audio.web", "features.native", "features.audio.linux", "features.platform-sdk", "features.game-state", "features.items-core", "features.progression-core", "features.scenes-core"] },
   { id: "template-release", checks: ["reference-template", "reference-template.python", "reference-template.native", "reference-template.web"] },
 ]);
 
@@ -354,14 +389,16 @@ export async function runOwnedDomain(domain, options = {}) {
   const root = resolve(options.root || ROOT);
   const platform = options.platform || process.platform;
   const includeRelease = options.includeRelease === true;
+  const verificationMode = options.verificationMode || (includeRelease ? "domain" : "changed");
   const checks = [];
   for (const id of domain.checks) {
     const check = CHECKS.find((entry) => entry.id === id);
     if (!check) return { status: 2, setupError: true, stderr: `unknown check ${id} in ${domain.id}` };
     if (!check.releaseOnly || includeRelease) checks.push(check);
   }
+  const selectedChecks = checks.filter((check) => !(check.changedOnly && verificationMode === "full"));
 
-  for (const check of checks) {
+  for (const check of selectedChecks) {
     if (!check.requiresEmsdk) continue;
     const emsdk = process.env.EMSDK || "";
     const toolchain = emsdk ? resolve(emsdk, "upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake") : "";
@@ -370,14 +407,14 @@ export async function runOwnedDomain(domain, options = {}) {
     }
   }
 
-  const nodeTests = [...new Set(checks.flatMap((check) => nodeTestsForCheck(root, check)))];
+  const nodeTests = [...new Set(selectedChecks.flatMap((check) => nodeTestsForCheck(root, check)))];
   const nodeSteps = [];
   const pythonSteps = [];
   const commandSteps = [];
   if (nodeTests.length) {
     nodeSteps.push({ owner: domain.id, command: process.execPath, args: ["--test", `--test-concurrency=${NODE_TEST_CONCURRENCY}`, ...nodeTests] });
   }
-  for (const check of checks) {
+  for (const check of selectedChecks) {
     const pythonTests = pythonTestsForCheck(root, check);
     for (const [command, ...args] of pythonCommands(pythonTests, { batchUnittest: check.batchPythonUnittest })) {
       pythonSteps.push({ owner: check.id, command, args });
@@ -434,7 +471,11 @@ export async function verifyStudio(options = {}, dependencies = {}) {
   if (mode === "domain" && !FULL_IDS.includes(options.domain)) throw new Error(`unknown verification domain: ${options.domain || "<missing>"}`);
   const results = new Array(ids.length);
   let cursor = 0;
-  const run = dependencies.runDomain || ((entry) => runOwnedDomain(entry, { root, includeRelease: mode !== "changed" }));
+  const run = dependencies.runDomain || ((entry) => runOwnedDomain(entry, {
+    root,
+    includeRelease: mode !== "changed",
+    verificationMode: mode,
+  }));
   const runNext = async () => {
     while (cursor < ids.length) {
       const index = cursor++;

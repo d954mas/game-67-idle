@@ -6,6 +6,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 static const char *const k_shape_names[GAME_STATE_SHAPE_COUNT] = {
     "cube",
@@ -164,8 +165,9 @@ bool game_state_set_path_json(GameState *state, const char *path, const cJSON *v
     }
     if (strcmp(path, "camera_distance") == 0) {
         if (!cJSON_IsNumber(value)) { gsj_set_error(error, error_cap, "expected number"); return false; }
-        float parsed = (float)value->valuedouble;
-        if (parsed < GAME_STATE_CAMERA_DISTANCE_MIN || parsed > GAME_STATE_CAMERA_DISTANCE_MAX) { gsj_set_error(error, error_cap, "number out of range"); return false; }
+        double number = value->valuedouble;
+        if (!isfinite(number) || number < (double)GAME_STATE_CAMERA_DISTANCE_MIN || number > (double)GAME_STATE_CAMERA_DISTANCE_MAX) { gsj_set_error(error, error_cap, "number out of range"); return false; }
+        float parsed = (float)number;
         state->camera_distance = parsed;
         return true;
     }
@@ -189,12 +191,12 @@ bool game_state_set_path_json(GameState *state, const char *path, const cJSON *v
         return true;
     }
     if (strcmp(path, "inventory_container_id") == 0) {
-        if (!gsj_parse_u32_value(value, GAME_STATE_INVENTORY_CONTAINER_ID_MIN, GAME_STATE_INVENTORY_CONTAINER_ID_MAX, &state->inventory_container_id, error, error_cap)) { return false; }
-        return true;
+        gsj_set_error(error, error_cap, "state path is read-only");
+        return false;
     }
     if (strcmp(path, "wallet_container_id") == 0) {
-        if (!gsj_parse_u32_value(value, GAME_STATE_WALLET_CONTAINER_ID_MIN, GAME_STATE_WALLET_CONTAINER_ID_MAX, &state->wallet_container_id, error, error_cap)) { return false; }
-        return true;
+        gsj_set_error(error, error_cap, "state path is read-only");
+        return false;
     }
     gsj_set_error(error, error_cap, "unknown state path");
     return false;

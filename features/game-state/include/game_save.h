@@ -107,8 +107,15 @@ void game_save_init(void);
    публикации любого затронутого фрагмента. Заполняет *result. */
 void game_save_load(game_save_load_result_t *result);
 
+/* A state transition and its durable write are separate facts: a failed storage
+   write must not make callers skip rebinding the live game state. */
+typedef struct {
+    bool state_changed;
+    bool persisted;
+} game_save_transition_result_t;
+
 /* Явная новая игра: reset всех -> on_new_game всех -> save -> возобновляет автосейв (Р10). */
-bool game_save_new_game(char *error, int error_cap);
+game_save_transition_result_t game_save_new_game(char *error, int error_cap);
 
 /* Р11 «Hold to reset progress» (T0327 hygiene): фича (settings_screen) зовёт ИЗ draw_ui,
    не немедленно -- шелл применяет на ближайшей безопасной границе кадра (см.
@@ -118,10 +125,11 @@ bool game_save_new_game(char *error, int error_cap);
 void game_save_request_new_game(const char *skip_fragment_id);
 
 /* Шелл-only: применяет отложенный запрос (reset+on_new_game всех КРОМЕ skip -> force-save),
-   если есть; иначе no-op. Возвращает true, если применил -- сигнал вызывающему (main.c)
-   сбросить то, что game_save не знает (позицию игрока и т.п.) в том же кадре. Шелл
+   если есть; иначе no-op. state_changed сигнализирует вызывающему (main.c) сбросить
+   то, что game_save не знает (позицию игрока и т.п.) в том же кадре, независимо от
+   persisted. Шелл
    вызывает до update и ещё раз после render, чтобы запрос из UI не пережил pagehide. */
-bool game_save_apply_pending_new_game(void);
+game_save_transition_result_t game_save_apply_pending_new_game(void);
 
 /* Synchronous force-save bypassing debounce (visibility flush). Returns false
    with an error while NEWER/CORRUPT/BLOCKED keeps persistence read-only. */

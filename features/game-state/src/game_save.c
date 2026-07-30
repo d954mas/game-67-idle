@@ -14,6 +14,8 @@
 
 #include "log/nt_log.h" /* nt_log_warn on the read-error path (bot/obs-visible, lead 2026-07-07) */
 
+#include <limits.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -121,7 +123,12 @@ static bool is_registered(const char *id) {
 static int read_frag_version(const cJSON *frag) {
     const cJSON *vj = gsj_object_item(frag, "v");
     if (cJSON_IsNumber(vj)) {
-        return (int)vj->valuedouble;
+        const double version = vj->valuedouble;
+        if (isfinite(version) && version >= 1.0 && version <= (double)INT_MAX &&
+            version == trunc(version)) {
+            return (int)version;
+        }
+        return INT_MAX; /* invalid version is never safe to load as an old save */
     }
     return 1; /* absent -> v1 */
 }
@@ -164,6 +171,25 @@ static void capture_orphans(const cJSON *features) {
         s_orphan_count++;
         fprintf(stderr, "game_save: retaining orphan fragment '%s' (no registered handler)\n", key);
     }
+}
+
+/* A small JSON snapshot is enough to restore the opaque fragment registry when
+   an import proves invalid during fragment parsing.  It intentionally contains
+   only unknown keys so capture_orphans() can restore its own ownership. */
+static cJSON *snapshot_orphans(void) {
+    cJSON *snapshot = cJSON_CreateObject();
+    if (!snapshot) {
+        return NULL;
+    }
+    for (int i = 0; i < s_orphan_count; i++) {
+        cJSON *copy = cJSON_Duplicate(s_orphans[i].subtree, true);
+        if (!copy || !cJSON_AddItemToObject(snapshot, s_orphans[i].id, copy)) {
+            cJSON_Delete(copy);
+            cJSON_Delete(snapshot);
+            return NULL;
+        }
+    }
+    return snapshot;
 }
 
 /* ---- transform seam. Default chain empty -> flat '{' JSON. ---- */
@@ -306,45 +332,68 @@ bool game_save_reconcile_from(const char *id) {
 
 /* ---- envelope build + save ---- */
 
-static cJSON *build_root(bool bump_seq, int64_t *out_wall) {
+/* Builds a complete snapshot without changing live persistence metadata. A save
+   publishes its next sequence only after the encoded document reaches storage. */
+static cJSON *build_root(bool bump_seq, int64_t *out_wall, int64_t *out_seq) {
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         return NULL;
     }
     const int64_t wall = wall_now();
-    const int64_t seq = bump_seq ? ++s_save_seq : s_save_seq;
-    cJSON_AddNumberToObject(root, "format", (double)GAME_SAVE_FORMAT);
-    cJSON_AddNumberToObject(root, "save_version", (double)GAME_SAVE_DOC_VERSION);
-    cJSON_AddNumberToObject(root, "saved_at", (double)wall);
-    cJSON_AddNumberToObject(root, "save_seq", (double)seq);
-    cJSON_AddStringToObject(root, "app", GAME_STORAGE_APP_ID);
-    cJSON_AddStringToObject(root, "build", GAME_SAVE_BUILD);
+    if (bump_seq && s_save_seq == INT64_MAX) {
+        cJSON_Delete(root);
+        return NULL;
+    }
+    const int64_t seq = bump_seq ? s_save_seq + 1 : s_save_seq;
+    if (!cJSON_AddNumberToObject(root, "format", (double)GAME_SAVE_FORMAT) ||
+        !cJSON_AddNumberToObject(root, "save_version", (double)GAME_SAVE_DOC_VERSION) ||
+        !cJSON_AddNumberToObject(root, "saved_at", (double)wall) ||
+        !cJSON_AddNumberToObject(root, "save_seq", (double)seq) ||
+        !cJSON_AddStringToObject(root, "app", GAME_STORAGE_APP_ID) ||
+        !cJSON_AddStringToObject(root, "build", GAME_SAVE_BUILD)) {
+        cJSON_Delete(root);
+        return NULL;
+    }
 
     cJSON *features = cJSON_CreateObject();
     if (!features) {
         cJSON_Delete(root);
         return NULL;
     }
-    cJSON_AddItemToObject(root, "features", features);
+    if (!cJSON_AddItemToObject(root, "features", features)) {
+        cJSON_Delete(features);
+        cJSON_Delete(root);
+        return NULL;
+    }
 
     for (int i = 0; i < s_fragment_count; i++) {
         const GameSaveFragment *frag = s_fragments[i];
         cJSON *payload = frag->to_json ? frag->to_json() : NULL;
         if (!payload) {
-            payload = cJSON_CreateObject();
+            cJSON_Delete(root);
+            return NULL;
         }
-        cJSON_AddNumberToObject(payload, "v", (double)frag->version); /* shell stamps "v" */
-        cJSON_AddItemToObject(features, frag->id, payload);
+        if (!cJSON_AddNumberToObject(payload, "v", (double)frag->version) ||
+            !cJSON_AddItemToObject(features, frag->id, payload)) {
+            cJSON_Delete(payload);
+            cJSON_Delete(root);
+            return NULL;
+        }
     }
     /* retained orphans, verbatim, AFTER registered fragments */
     for (int i = 0; i < s_orphan_count; i++) {
         cJSON *dup = cJSON_Duplicate(s_orphans[i].subtree, true);
-        if (dup) {
-            cJSON_AddItemToObject(features, s_orphans[i].id, dup);
+        if (!dup || !cJSON_AddItemToObject(features, s_orphans[i].id, dup)) {
+            cJSON_Delete(dup);
+            cJSON_Delete(root);
+            return NULL;
         }
     }
     if (out_wall) {
         *out_wall = wall;
+    }
+    if (out_seq) {
+        *out_seq = seq;
     }
     return root;
 }
@@ -415,19 +464,26 @@ static bool prepare_document_for_load(
     const cJSON *version_json = gsj_object_item(doc, "save_version");
     int version = 1; /* absent is the frozen legacy v1 envelope */
     if (version_json) {
-        if (!cJSON_IsNumber(version_json) || version_json->valuedouble < 1.0) {
+        if (!cJSON_IsNumber(version_json)) {
             gsj_set_error(error, error_cap, "invalid save_version");
             return false;
         }
-        if (version_json->valuedouble > (double)GAME_SAVE_DOC_VERSION) {
+        const double version_number = version_json->valuedouble;
+        if (!isfinite(version_number) || version_number < 1.0 ||
+            version_number > (double)GAME_SAVE_DOC_VERSION ||
+            version_number != trunc(version_number)) {
+            if (isfinite(version_number) && version_number > (double)GAME_SAVE_DOC_VERSION) {
+                gsj_set_error(error, error_cap, "save is newer than this build");
+            } else {
+                gsj_set_error(error, error_cap, "invalid save_version");
+            }
+            return false;
+        }
+        if (version_number > (double)INT_MAX) {
             gsj_set_error(error, error_cap, "save is newer than this build");
             return false;
         }
-        if (version_json->valuedouble != (double)(int)version_json->valuedouble) {
-            gsj_set_error(error, error_cap, "invalid save_version");
-            return false;
-        }
-        version = (int)version_json->valuedouble;
+        version = (int)version_number;
     }
 
     cJSON *copy = cJSON_Duplicate(doc, true);
@@ -500,15 +556,14 @@ static bool prepare_document_for_load(
 }
 
 static bool save_internal(char *error, int error_cap) {
-    const int64_t old_seq = s_save_seq;
     int64_t wall = 0;
-    cJSON *root = build_root(true, &wall);
+    int64_t seq = 0;
+    cJSON *root = build_root(true, &wall, &seq);
     if (!root) {
         gsj_set_error(error, error_cap, "failed to build save document");
         return false;
     }
     if (!validate_document(root, error, error_cap)) {
-        s_save_seq = old_seq;
         cJSON_Delete(root);
         return false;
     }
@@ -526,6 +581,7 @@ static bool save_internal(char *error, int error_cap) {
     const bool ok = game_storage_write(GAME_SAVE_AUTOSAVE_SLOT, encoded, error, error_cap);
     free(encoded);
     if (ok) {
+        s_save_seq = seq;
         s_dirty = false;
         s_last_save_mono = mono_now();
         s_last_saved_at = wall;
@@ -541,8 +597,8 @@ static bool save_internal(char *error, int error_cap) {
 
 static bool doc_is_newer(const cJSON *doc) {
     const cJSON *fj = gsj_object_item(doc, "format");
-    const int format = cJSON_IsNumber(fj) ? (int)fj->valuedouble : GAME_SAVE_FORMAT;
-    if (format > GAME_SAVE_FORMAT) {
+    if (cJSON_IsNumber(fj) && isfinite(fj->valuedouble) &&
+        fj->valuedouble > (double)GAME_SAVE_FORMAT) {
         return true;
     }
     const cJSON *svj = gsj_object_item(doc, "save_version");
@@ -812,7 +868,7 @@ void game_save_set_document_validator(GameSaveDocumentValidateFn validator) {
 
 bool game_save_validate_current(char *error, int error_cap) {
     int64_t wall = 0;
-    cJSON *root = build_root(false, &wall);
+    cJSON *root = build_root(false, &wall, NULL);
     if (!root) {
         gsj_set_error(error, error_cap, "failed to build validation document");
         return false;
@@ -883,18 +939,19 @@ void game_save_init(void) {
     }
 }
 
-static bool new_game_except(const char *skip_id, char *error, int error_cap) {
+static game_save_transition_result_t new_game_except(
+    const char *skip_id, char *error, int error_cap) {
     free_orphans();
     reset_all_except(skip_id);
     on_new_game_all_except(skip_id);
     s_autosave_paused = false; /* resume autosave (Р10) */
     game_save_mark_dirty();
-    const bool ok = save_internal(error, error_cap);
+    const bool persisted = save_internal(error, error_cap);
     s_last_save_mono = mono_now();
-    return ok;
+    return (game_save_transition_result_t){.state_changed = true, .persisted = persisted};
 }
 
-bool game_save_new_game(char *error, int error_cap) {
+game_save_transition_result_t game_save_new_game(char *error, int error_cap) {
     return new_game_except(NULL, error, error_cap);
 }
 
@@ -925,15 +982,15 @@ void game_save_request_new_game(const char *skip_fragment_id) {
    request from game_save_request_new_game, if any. Returns true iff it applied one (so
    game-composition state game_save does not own, e.g. player world position, can be
    reset by the caller in the same beat); false is a plain no-op. */
-bool game_save_apply_pending_new_game(void) {
+game_save_transition_result_t game_save_apply_pending_new_game(void) {
     if (!s_new_game_pending) {
-        return false;
+        return (game_save_transition_result_t){0};
     }
     s_new_game_pending = false;
     char err[128];
     err[0] = '\0';
-    (void)new_game_except(s_new_game_skip_id[0] ? s_new_game_skip_id : NULL, err, (int)sizeof err);
-    return true;
+    return new_game_except(
+        s_new_game_skip_id[0] ? s_new_game_skip_id : NULL, err, (int)sizeof err);
 }
 
 bool game_save_flush(char *error, int error_cap) {
@@ -972,7 +1029,7 @@ bool game_save_is_unpersisted(void) { return s_unpersisted; }
 
 char *game_save_export_string(char *error, int error_cap) {
     int64_t wall = 0;
-    cJSON *root = build_root(false, &wall); /* snapshot; do not bump the persistent seq */
+    cJSON *root = build_root(false, &wall, NULL); /* snapshot; do not bump the persistent seq */
     if (!root) {
         gsj_set_error(error, error_cap, "failed to build export document");
         return NULL;
@@ -991,6 +1048,10 @@ char *game_save_export_string(char *error, int error_cap) {
 bool game_save_import_string(const char *text, char *error, int error_cap) {
     if (!text) {
         gsj_set_error(error, error_cap, "import text is required");
+        return false;
+    }
+    if (strlen(text) > GAME_STORAGE_MAX_BYTES) {
+        gsj_set_error(error, error_cap, "import exceeds storage size limit");
         return false;
     }
     char *decoded = transform_decode(text, error, error_cap);
@@ -1019,12 +1080,78 @@ bool game_save_import_string(const char *text, char *error, int error_cap) {
         cJSON_Delete(doc);
         return false; /* staged cross-fragment state was never published */
     }
+    /* Fragment descriptors intentionally hide their storage. Snapshot every
+       fragment before publication so an invalid import cannot leave a mixture
+       of imported neighbours and reset defaults. Normal disk load remains
+       fault-isolated; this stronger transaction is specific to explicit import. */
+    cJSON *snapshots[GAME_SAVE_MAX_FRAGMENTS] = {0};
+    cJSON *old_orphans = snapshot_orphans();
+    if (!old_orphans) {
+        cJSON_Delete(prepared);
+        cJSON_Delete(doc);
+        gsj_set_error(error, error_cap, "failed to stage current orphan state");
+        return false;
+    }
+    for (int i = 0; i < s_fragment_count; i++) {
+        const GameSaveFragment *fragment = s_fragments[i];
+        snapshots[i] = fragment->to_json ? fragment->to_json() : NULL;
+        if (!snapshots[i]) {
+            for (int j = 0; j < i; j++) {
+                cJSON_Delete(snapshots[j]);
+            }
+            cJSON_Delete(old_orphans);
+            cJSON_Delete(prepared);
+            cJSON_Delete(doc);
+            gsj_set_error(error, error_cap, "failed to stage current state");
+            return false;
+        }
+    }
     const int64_t old_seq = s_save_seq;
+    const int64_t old_saved_at = s_last_saved_at;
+    const bool old_autosave_paused = s_autosave_paused;
+    const bool old_dirty = s_dirty;
+    const bool old_unpersisted = s_unpersisted;
+    const int64_t old_dirty_at = s_dirty_at;
+    const int64_t old_last_save_mono = s_last_save_mono;
     game_save_load_result_t r;
     memset(&r, 0, sizeof r);
     load_from_doc(prepared, &r);
     cJSON_Delete(prepared);
     cJSON_Delete(doc);
+    if (r.reset_fragment_count > 0) {
+        bool restored = true;
+        for (int i = 0; i < s_fragment_count; i++) {
+            const GameSaveFragment *fragment = s_fragments[i];
+            char restore_error[128] = {0};
+            if (!fragment->from_json ||
+                !fragment->from_json(snapshots[i], restore_error, (int)sizeof restore_error)) {
+                restored = false;
+            }
+        }
+        capture_orphans(old_orphans);
+        cJSON_Delete(old_orphans);
+        for (int i = 0; i < s_fragment_count; i++) {
+            cJSON_Delete(snapshots[i]);
+        }
+        s_save_seq = old_seq;
+        s_last_saved_at = old_saved_at;
+        s_autosave_paused = old_autosave_paused;
+        s_dirty = old_dirty;
+        s_unpersisted = old_unpersisted;
+        s_dirty_at = old_dirty_at;
+        s_last_save_mono = old_last_save_mono;
+        if (restored) {
+            reconcile_all();
+            gsj_set_error(error, error_cap, "import has an invalid fragment");
+        } else {
+            gsj_set_error(error, error_cap, "failed to restore state after rejected import");
+        }
+        return false;
+    }
+    cJSON_Delete(old_orphans);
+    for (int i = 0; i < s_fragment_count; i++) {
+        cJSON_Delete(snapshots[i]);
+    }
     if (s_save_seq < old_seq) {
         s_save_seq = old_seq; /* never rewind the counter on import */
     }

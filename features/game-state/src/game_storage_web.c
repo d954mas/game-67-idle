@@ -26,7 +26,8 @@ EM_JS(int, game_storage_web_save, (const char *key_ptr, const char *text_ptr), {
     }
 })
 
-EM_JS(char *, game_storage_web_load, (const char *key_ptr, int *status_ptr), {
+EM_JS(char *, game_storage_web_load,
+      (const char *key_ptr, size_t max_bytes, int *status_ptr), {
     var ptr = 0;
     var key = null;
     var data = null;
@@ -47,7 +48,13 @@ EM_JS(char *, game_storage_web_load, (const char *key_ptr, int *status_ptr), {
             if (status_ptr) { HEAP32[status_ptr >> 2] = 1; }
             return 0;
         }
-        var size = lengthBytesUTF8(data) + 1;
+        var dataBytes = lengthBytesUTF8(data);
+        if (dataBytes > max_bytes) {
+            var copied = quarantineCopy(key, data);
+            if (status_ptr) { HEAP32[status_ptr >> 2] = copied ? 2 : 3; }
+            return 0;
+        }
+        var size = dataBytes + 1;
         ptr = _malloc(size);
         if (!ptr) {
             var copied = quarantineCopy(key, data);

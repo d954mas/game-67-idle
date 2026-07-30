@@ -150,6 +150,12 @@ export function findSupportedBrowser(options = {}) {
   return found;
 }
 
+export function browserSandboxArgs(env = process.env) {
+  return env.AI_STUDIO_CHROME_NO_SANDBOX === "1"
+    ? ["--no-sandbox", "--disable-gpu-sandbox"]
+    : [];
+}
+
 export class CdpClient {
   constructor(socket) {
     this.socket = socket;
@@ -473,8 +479,7 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
       "--disable-background-networking",
       "--disable-component-update",
       "--disable-sync",
-      "--no-sandbox",
-      "--disable-gpu-sandbox",
+      ...browserSandboxArgs(),
       "--use-angle=swiftshader",
       "--metrics-recording-only",
       "--mute-audio",

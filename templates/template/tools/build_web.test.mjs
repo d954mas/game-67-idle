@@ -114,7 +114,10 @@ test("plan covers all three presets across all five targets with exact debug fla
       const configure = plan.steps.find((step) => step.kind === "run" && step.args.includes("-G"));
       assert.ok(configure.args.includes(`-DCMAKE_BUILD_TYPE=${preset === "wasm-release" ? "Release" : "Debug"}`));
       assert.ok(configure.args.includes(`-DGAME_PUBLISH_TARGET=${target}`));
-      assert.equal(configure.args.includes("-DGAME_DEVAPI_ENABLED=ON"), preset === "wasm-devapi-debug");
+      assert.ok(configure.args.includes("-DGAME_AUDIO_BROWSER_SMOKE=OFF"));
+      assert.ok(configure.args.includes(`-DGAME_ANALYTICS_ENABLED=${preset === "wasm-devapi-debug" ? "ON" : "OFF"}`));
+      assert.ok(configure.args.includes(`-DGAME_EVENTS_LOG_MIRROR=${preset === "wasm-release" ? "OFF" : "ON"}`));
+      assert.ok(configure.args.includes(`-DGAME_DEVAPI_ENABLED=${preset === "wasm-devapi-debug" ? "ON" : "OFF"}`));
       assert.ok(configure.args.includes(`-DGAME_PLATFORM_SDK_DEBUG_UI=${preset === "wasm-release" ? "OFF" : "ON"}`));
     }
   }

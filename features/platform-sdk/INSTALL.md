@@ -1,7 +1,7 @@
 # platform-sdk Install
 
 This feature is installed in-place by the template. It is not copied into
-`templates/template/src/features`; CMake references `../../features/platform-sdk`
+`templates/template/src/features`; CMake references `${GAME_REPO_ROOT}/features/platform-sdk`
 the same way it references `items-core` and `progression-core`.
 
 ## Install
@@ -11,7 +11,7 @@ A consuming template or game should wire this as an L1 feature:
 1. Add module paths near the other in-place modules:
 
    ```cmake
-   set(PLATFORM_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../features/platform-sdk")
+   set(PLATFORM_SDK_DIR "${GAME_REPO_ROOT}/features/platform-sdk")
    set(PLATFORM_SDK_INC "${PLATFORM_SDK_DIR}/include")
    set(PLATFORM_SDK_SRC "${PLATFORM_SDK_DIR}/src")
    set(PLATFORM_SDK_WEB "${PLATFORM_SDK_DIR}/web")

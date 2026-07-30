@@ -236,7 +236,11 @@ export function boolText(value, fallback = "unknown") {
   return fallback;
 }
 
-export function validateLicenseRecord(record = {}, { forPublicBinary = false, forRelease = false } = {}) {
+export function validateLicenseRecord(record = {}, {
+  forPublicBinary = false,
+  forDistribution = false,
+  forRelease = false,
+} = {}) {
   const issues = [];
   const warnings = [];
   const decision = decideLicense(record);
@@ -269,6 +273,15 @@ export function validateLicenseRecord(record = {}, { forPublicBinary = false, fo
     warnings.push("notice-required asset needs author/vendor or credit_text plus license_url/license_file before release");
   }
   if (forRelease) issues.push(...warnings);
+  if (forDistribution) {
+    if (decision.licenseKind === "unknown") issues.push("distributed asset requires a known license or custom license evidence");
+    if (decision.redistributionAllowed !== true) issues.push("distributed asset requires redistribution_allowed=true");
+    if (decision.commercialUse !== true) issues.push("distributed game asset requires commercial_use=true");
+    if (decision.modificationAllowed !== true) issues.push("packed asset requires modification_allowed=true");
+    if (decision.licenseKind === "custom" && !hasLicenseEvidence(record)) {
+      issues.push("custom distributed license needs license_url or license_file");
+    }
+  }
   if (forPublicBinary && !decision.publishable) {
     issues.push("asset binary is not publishable in a public git repo");
   }

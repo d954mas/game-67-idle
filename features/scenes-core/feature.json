@@ -12,7 +12,8 @@
     "features/scenes-core"
   ],
   "dependencies": [
-    "Neotolis public resource, input, app, graphics, and nt_ui APIs through a game-owned host adapter"
+    "Neotolis public resource, input, app, graphics, and nt_ui APIs through a game-owned host adapter",
+    "optional DevAPI adapter: nt_devapi_default, platform transport, and engine cJSON"
   ],
   "commands": {
     "test_core": "ctest --test-dir templates/template/build/devapi-debug -R ^test_scenes_core_ --output-on-failure",

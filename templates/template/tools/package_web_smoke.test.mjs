@@ -10,6 +10,7 @@ import { crc32, createStoreZip } from "./lib/zip_store.mjs";
 import {
   analyzePngFrame,
   assessPackagedWebObservation,
+  browserSandboxArgs,
   CdpClient,
   findSupportedBrowser,
   PipeTransport,
@@ -69,6 +70,14 @@ test("browser discovery accepts an explicit Windows Chrome path without WSL", (t
   const chromePath = join(root, "chrome.exe");
   writeFileSync(chromePath, "fixture");
   assert.equal(findSupportedBrowser({ env: { CHROME_PATH: chromePath }, platform: "win32" }), chromePath);
+});
+
+test("browser sandbox bypass requires an explicit constrained-environment opt-in", () => {
+  assert.deepEqual(browserSandboxArgs({}), []);
+  assert.deepEqual(
+    browserSandboxArgs({ AI_STUDIO_CHROME_NO_SANDBOX: "1" }),
+    ["--no-sandbox", "--disable-gpu-sandbox"],
+  );
 });
 
 test("CDP pipe routes flattened session commands events and deadlines", async () => {

@@ -2,6 +2,14 @@
 #define GAME_STORAGE_H
 
 #include <stdbool.h>
+#include <stddef.h>
+
+/* A save slot is a bounded text document on every platform.  Keep this
+   public so callers and both adapters share one limit instead of relying on
+   backend-specific quota or allocation behavior. */
+#ifndef GAME_STORAGE_MAX_BYTES
+#define GAME_STORAGE_MAX_BYTES (1024U * 1024U)
+#endif
 
 /* L0 байтовый бэкенд слота: native atomic-файл / web localStorage за одной
    сигнатурой. slot = логическое имя ([a-z0-9_-]+, проверяется). Значения —
@@ -9,9 +17,10 @@
    APP_ID = compile define GAME_STORAGE_APP_ID (неймспейс общего web-origin itch).
    Один тред. */
 
-/* Атомарная запись слота.
-   native: build/saves/<slot>.json.tmp (WRITE_THROUGH) -> replace_file(tmp->primary);
-           primary никогда не отсутствует и не рвётся.
+/* Durable-атомарная запись слота.
+   native: <OS-data>/neotolis/<APP_ID>/saves/<slot>.json.tmp -> synced replace;
+           GAME_STORAGE_ROOT может задать абсолютный конечный каталог для теста.
+           temp-файл и POSIX parent directory синхронизируются до success.
    web:    localStorage["<APP_ID>/save/<slot>"] = text в try/catch;
            false = квота/Safari-private (наверх как SAVE_UNPERSISTED). */
 bool game_storage_write(const char *slot, const char *text, char *error, int error_cap);
@@ -29,9 +38,9 @@ typedef enum {
 
 /* Чтение primary. *out — malloc'нутая NUL-строка (владелец вызывающий, free()).
    status (nullable) различает ABSENT, ERROR и ERROR_PRESERVED (см. enum выше).
-   ERROR означает, что сырьё проверенно скопировано в карантин ТОЙ ЖЕ
-   .corrupt-конвенции (native: файл build/saves/<slot>.corrupt-<ts>; web: ключ
-   "<key>.corrupt" прямо в JS). ERROR_PRESERVED означает, что primary не изменён,
+   ERROR означает, что сырьё проверенно скопировано в стабильный карантин ТОЙ ЖЕ
+   .corrupt-конвенции (native: файл <slot>.corrupt; web: ключ "<key>.corrupt").
+   ERROR_PRESERVED означает, что primary не изменён,
    но безопасную quarantine-копию создать не удалось; вызывающий не должен писать
    в слот до явного решения пользователя.
    false: ABSENT или ERROR; true: OK. */
@@ -50,7 +59,8 @@ bool game_storage_read_backup(const char *slot, char **out, char *error, int err
 
 /* Откладывает битый primary для форензики/ручной починки (Р10, восстанавливает
    .corrupt для ручной починки сейва).
-   native: rename primary -> <slot>.corrupt-<unix_ms>. web: copy value -> "<key>.corrupt". */
+   native: rename primary в bounded set <slot>.corrupt[-N] (максимум 3);
+   web: replace единственной bounded-копии "<key>.corrupt". */
 bool game_storage_quarantine(const char *slot, char *error, int error_cap);
 
 /* Стартовый пробник персистентности.

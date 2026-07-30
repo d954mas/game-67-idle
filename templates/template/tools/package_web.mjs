@@ -34,11 +34,26 @@ const { inspectPlatformSdkArtifact } = await import(pathToFileURL(join(
 const TARGETS = new Set(["itch", "poki", "yandex", "playgama"]);
 const SOURCE_EXTENSIONS = /\.(?:c|cc|cpp|cxx|h|hh|hpp|cmake|py|ts|map|pdb|obj|o)$/i;
 const DEVAPI_MARKERS = ["window.__devapi", "--devapi", "wasm-devapi", "GAME_DEVAPI_ENABLED"];
+const AUDIO_SMOKE_MARKERS = [
+  "game_audio_play_cue",
+  "game_audio_play_music",
+  "game_audio_stop_music",
+  "game_audio_set_enabled",
+  "game_audio_set_paused",
+];
+const RELEASE_FORBIDDEN_TEXT_MARKERS = [...DEVAPI_MARKERS, ...AUDIO_SMOKE_MARKERS];
 const REVISION = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const WASM_MAGIC = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
-const WASM_FORBIDDEN_MARKERS = ["nt_devapi", "__devapi", "debug_test", "sourceMappingURL", ".debug_"];
+const WASM_FORBIDDEN_MARKERS = [
+  "nt_devapi",
+  "__devapi",
+  "debug_test",
+  "sourceMappingURL",
+  ".debug_",
+  ...AUDIO_SMOKE_MARKERS,
+];
 
 const slash = (value) => String(value || "").replaceAll("\\", "/");
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -751,8 +766,8 @@ export function validateWebArtifact({ artifactDir, target, studioRoot = DEFAULT_
 
   for (const path of actual.filter((entry) => /\.(?:html|js|json)$/i.test(entry))) {
     const text = readFileSync(join(root, ...path.split("/")), "utf8");
-    const marker = DEVAPI_MARKERS.find((value) => text.includes(value));
-    if (marker) throw new Error(`DevAPI payload is forbidden in final artifact: ${path} (${marker})`);
+    const marker = RELEASE_FORBIDDEN_TEXT_MARKERS.find((value) => text.includes(value));
+    if (marker) throw new Error(`development-only payload is forbidden in final artifact: ${path} (${marker})`);
   }
   if (target === "playgama") {
     const configPath = join(root, "playgama-bridge-config.json");
@@ -824,7 +839,7 @@ function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuil
       throw new Error(path === "platform-sdk-adapter.js" ? "reopened ZIP platform adapter mismatch" : `reopened ZIP platform source mismatch for ${path}`);
     }
   }
-  const forbidden = [...new Set([...(contract.sdk_policy?.forbidden_markers || []), ...DEVAPI_MARKERS])];
+  const forbidden = [...new Set([...(contract.sdk_policy?.forbidden_markers || []), ...RELEASE_FORBIDDEN_TEXT_MARKERS])];
   for (const [path, bytes] of entries) {
     if (!/\.(?:html|js|json)$/i.test(path)) continue;
     const text = bytes.toString("utf8");
@@ -881,6 +896,16 @@ export function packageWebArtifact(options) {
   });
   if (JSON.stringify(validated.runtimeBuild) !== JSON.stringify(expectedRuntimeBuild)) {
     throw new Error("artifact runtime build fingerprint does not match current game/dependency inputs");
+  }
+  const assetAuditProof = options.assetAuditProof;
+  const assetPack = validated.files.find(({ path }) => path === "assets/game.ntpack")?.bytes;
+  if (assetAuditProof?.schema !== "ai_studio.game_release_asset_audit.v1"
+      || assetAuditProof.ok !== true
+      || assetAuditProof.runtimeFingerprint !== expectedRuntimeBuild.fingerprint
+      || !/^[0-9a-f]{64}$/.test(assetAuditProof.assetPackSha256 || "")
+      || !assetPack
+      || assetAuditProof.assetPackSha256 !== sha256(assetPack)) {
+    throw new Error("package requires a successful asset audit for the current runtime fingerprint");
   }
   const compact = compactDependencies(dependencies, dependencyBytes);
   const release = releaseMetadata(

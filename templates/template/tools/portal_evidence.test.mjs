@@ -97,6 +97,12 @@ function fixture(t) {
     target: "itch",
     studioRoot,
     identity: { schema: "ai_studio.game.v1", id: "evidence-game", title: "Evidence Game", storageNamespace: "evidence-game" },
+    assetAuditProof: {
+      schema: "ai_studio.game_release_asset_audit.v1",
+      ok: true,
+      runtimeFingerprint: runtimeBuild.fingerprint,
+      assetPackSha256: createHash("sha256").update(Buffer.from("pack")).digest("hex"),
+    },
     dependencies: {
       schema: "ai_studio.game.dependencies.v2",
       engine: { source: "external/neotolis-engine", version: "0.1.0", revision: "1".repeat(40), compatibility: "tested" },

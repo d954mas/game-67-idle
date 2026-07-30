@@ -4,6 +4,7 @@
 #include "log/nt_log.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #ifndef GAME_STORAGE_APP_ID
 #error "GAME_STORAGE_APP_ID must be defined via CMake"
@@ -55,6 +56,10 @@ bool game_storage_backend_write(
     if (!resolve_key(slot, key, sizeof key, error, error_cap)) {
         return false;
     }
+    if (strlen(text) > (size_t)GAME_STORAGE_MAX_BYTES) {
+        set_error(error, error_cap, "storage text is too large");
+        return false;
+    }
     if (!game_storage_web_save(key, text)) {
         set_error(error, error_cap, "failed to write browser storage");
         return false;
@@ -70,7 +75,8 @@ bool game_storage_backend_read(
         return false;
     }
     int web_status = GAME_STORAGE_READ_ERROR;
-    char *data = game_storage_web_load(key, &web_status);
+    char *data = game_storage_web_load(
+        key, (size_t)GAME_STORAGE_MAX_BYTES, &web_status);
     if (data != NULL) {
         *out = data;
         if (status != NULL) {

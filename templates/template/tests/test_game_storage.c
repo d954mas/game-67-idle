@@ -11,6 +11,7 @@
 #ifdef _WIN32
 #include <direct.h>
 #include <io.h>
+#include <windows.h>
 #else
 #include <dirent.h>
 #include <sys/stat.h>
@@ -30,9 +31,37 @@ static const char *const kAllTestSlots[] = {
     "write_read", "missing_slot", "atomic_slot", "bak_slot", "bak_missing",
     "quarantine_slot", "quarantine_missing", "quarantine_twice_slot",
     "empty_slot", "player1_game", "clean_write_slot", "stale_tmp_no_primary",
-    "bak_overwrite_slot",
+    "bak_overwrite_slot", "oversize_slot",
 };
 #define GS_TEST_SLOT_COUNT (sizeof(kAllTestSlots) / sizeof(kAllTestSlots[0]))
+
+/* The production backend never derives storage from the working directory.
+   Tests intentionally override its final app-scoped directory so existing raw
+   crash fixtures remain local to the build tree. */
+static void init_test_storage_root(void) {
+    static bool initialized = false;
+    if (initialized) {
+        return;
+    }
+    char current[512];
+#ifdef _WIN32
+    TEST_ASSERT_TRUE(GetCurrentDirectoryA((DWORD)sizeof current, current) > 0);
+#else
+    TEST_ASSERT_NOT_NULL(getcwd(current, sizeof current));
+#endif
+    char root[512];
+    (void)snprintf(root, sizeof root, "%s/build/saves", current);
+#ifdef _WIN32
+    TEST_ASSERT_EQUAL_INT(0, _putenv_s("GAME_STORAGE_ROOT", root));
+    char resolved_root[512];
+    TEST_ASSERT_TRUE(GetEnvironmentVariableA(
+        "GAME_STORAGE_ROOT", resolved_root, (DWORD)sizeof resolved_root) > 0);
+    TEST_ASSERT_EQUAL_STRING(root, resolved_root);
+#else
+    TEST_ASSERT_EQUAL_INT(0, setenv("GAME_STORAGE_ROOT", root, 1));
+#endif
+    initialized = true;
+}
 
 /* Counts (and optionally deletes) build/saves/ entries starting with prefix.
    Used to assert quarantine leaves exactly one/two <slot>.corrupt-<ts>[-n]
@@ -103,7 +132,7 @@ static void cleanup_slot(const char *slot) {
     (void)remove(path);
 
     char corrupt_prefix[512];
-    (void)snprintf(corrupt_prefix, sizeof(corrupt_prefix), "%s.corrupt-", slot);
+    (void)snprintf(corrupt_prefix, sizeof(corrupt_prefix), "%s.corrupt", slot);
     (void)sweep_files_with_prefix("build/saves", corrupt_prefix, true, NULL, 0);
 }
 
@@ -143,7 +172,7 @@ static void cleanup_read_error_dir(void) {
 #else
     (void)rmdir("build/saves/read_error_dir.json");
 #endif
-    (void)sweep_files_with_prefix("build/saves", "read_error_dir.corrupt-", true, NULL, 0);
+    (void)sweep_files_with_prefix("build/saves", "read_error_dir.corrupt", true, NULL, 0);
 }
 
 static void cleanup_all_test_files(void) {
@@ -165,7 +194,10 @@ static void write_raw_file(const char *path, const char *content) {
     TEST_ASSERT_EQUAL_INT(0, fclose(file));
 }
 
-void setUp(void) { cleanup_all_test_files(); }
+void setUp(void) {
+    init_test_storage_root();
+    cleanup_all_test_files();
+}
 void tearDown(void) { cleanup_all_test_files(); }
 
 /* ---- write / read / exists round trip ---- */
@@ -174,7 +206,8 @@ void test_write_read_round_trip_and_exists(void) {
     char err[128] = {0};
     TEST_ASSERT_FALSE(game_storage_exists("write_read"));
 
-    TEST_ASSERT_TRUE(game_storage_write("write_read", "{\"a\":1}", err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_write(
+        "write_read", "{\"a\":1}", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(game_storage_exists("write_read"));
 
     char *out = NULL;
@@ -194,6 +227,20 @@ void test_write_read_empty_text(void) {
     TEST_ASSERT_NOT_NULL(out);
     TEST_ASSERT_EQUAL_STRING("", out);
     free(out);
+}
+
+void test_write_rejects_oversize_text_before_native_backend(void) {
+    char err[128] = {0};
+    char *oversize = malloc((size_t)GAME_STORAGE_MAX_BYTES + 2U);
+    TEST_ASSERT_NOT_NULL(oversize);
+    memset(oversize, 'x', (size_t)GAME_STORAGE_MAX_BYTES + 1U);
+    oversize[GAME_STORAGE_MAX_BYTES + 1U] = '\0';
+
+    TEST_ASSERT_FALSE(game_storage_write(
+        "oversize_slot", oversize, err, (int)sizeof err));
+    TEST_ASSERT_FALSE(game_storage_exists("oversize_slot"));
+    TEST_ASSERT_TRUE(err[0] != '\0');
+    free(oversize);
 }
 
 void test_read_missing_slot_fails(void) {
@@ -417,7 +464,7 @@ void test_quarantine_moves_primary_and_leaves_exactly_one_corrupt_file(void) {
     TEST_ASSERT_NULL(out);
 
     char corrupt_name[256] = {0};
-    TEST_ASSERT_EQUAL_INT(1, sweep_files_with_prefix("build/saves", "quarantine_slot.corrupt-", false,
+    TEST_ASSERT_EQUAL_INT(1, sweep_files_with_prefix("build/saves", "quarantine_slot.corrupt", false,
                                                       corrupt_name, sizeof(corrupt_name)));
 
     char corrupt_path[512];
@@ -436,7 +483,7 @@ void test_quarantine_without_primary_fails(void) {
     TEST_ASSERT_FALSE(game_storage_exists("quarantine_missing"));
     TEST_ASSERT_FALSE(game_storage_quarantine("quarantine_missing", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(strlen(err) > 0);
-    TEST_ASSERT_EQUAL_INT(0, sweep_files_with_prefix("build/saves", "quarantine_missing.corrupt-", false, NULL, 0));
+    TEST_ASSERT_EQUAL_INT(0, sweep_files_with_prefix("build/saves", "quarantine_missing.corrupt", false, NULL, 0));
 }
 
 /* Deep-review item 1 (real defect, now fixed): two quarantines of the SAME
@@ -448,12 +495,12 @@ void test_quarantine_twice_same_slot(void) {
     char err[128] = {0};
     TEST_ASSERT_TRUE(game_storage_write("quarantine_twice_slot", "FIRST-BAD", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(game_storage_quarantine("quarantine_twice_slot", err, (int)sizeof(err)));
-    TEST_ASSERT_EQUAL_INT(1, sweep_files_with_prefix("build/saves", "quarantine_twice_slot.corrupt-", false, NULL, 0));
+    TEST_ASSERT_EQUAL_INT(1, sweep_files_with_prefix("build/saves", "quarantine_twice_slot.corrupt", false, NULL, 0));
 
     TEST_ASSERT_TRUE(game_storage_write("quarantine_twice_slot", "SECOND-BAD", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(game_storage_quarantine("quarantine_twice_slot", err, (int)sizeof(err)));
 
-    TEST_ASSERT_EQUAL_INT(2, sweep_files_with_prefix("build/saves", "quarantine_twice_slot.corrupt-", false, NULL, 0));
+    TEST_ASSERT_EQUAL_INT(2, sweep_files_with_prefix("build/saves", "quarantine_twice_slot.corrupt", false, NULL, 0));
 }
 
 /* read() must tell ABSENT ("no save yet" -> caller starts fresh) apart from ERROR
@@ -505,6 +552,7 @@ int main(void) {
 
     RUN_TEST(test_write_read_round_trip_and_exists);
     RUN_TEST(test_write_read_empty_text);
+    RUN_TEST(test_write_rejects_oversize_text_before_native_backend);
     RUN_TEST(test_read_missing_slot_fails);
     RUN_TEST(test_write_rejects_unsafe_slot);
     RUN_TEST(test_write_rejects_uppercase_slot);

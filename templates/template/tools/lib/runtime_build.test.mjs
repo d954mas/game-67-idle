@@ -42,7 +42,11 @@ function fixture(t) {
     }],
     compatibility: "fixture",
   };
-  write(join(gameDir, "CMakeLists.txt"), "project(test_game)\n");
+  write(join(gameDir, "CMakeLists.txt"), [
+    "project(test_game)",
+    "set(PLATFORM_SDK_DIR \"${GAME_REPO_ROOT}/features/platform-sdk\")",
+    "",
+  ].join("\n"));
   write(join(gameDir, "src", "main.c"), "int main(void) { return 0; }\n");
   write(join(gameDir, "dependencies.json"), `${JSON.stringify(dependencies, null, 2)}\n`);
   write(join(studioRoot, "external", "neotolis-engine", "engine", "core.c"), "void engine(void) {}\n");
@@ -62,10 +66,18 @@ test("runtime build record deterministically binds game and dependency source tr
   assert.deepEqual(one.inputs.map((input) => input.id), ["game", "engine", "feature:platform-sdk"]);
 
   write(join(item.gameDir, "build", "wasm-release", "bin", "game.wasm"), "ignored build output");
+  write(join(item.gameDir, "capture", "catalog.json"), "ignored capture tooling state");
   write(join(item.gameDir, "release", "artifacts", "old.zip"), "ignored release output");
+  write(join(item.gameDir, "tmp", "captures", "draft.png"), "ignored transient capture output");
   write(join(item.gameDir, "README.md"), "ignored documentation\n");
   write(join(item.gameDir, "tools", "runtime.test.mjs"), "ignored test\n");
   assert.deepEqual(createRuntimeBuildRecord(item), one);
+
+  write(join(item.gameDir, "design", "reference", "mood.png"), "ignored design reference");
+  assert.deepEqual(createRuntimeBuildRecord(item), one);
+  write(join(item.gameDir, "design", "items", "balance.lua"), "return { cost = 2 }\n");
+  assert.notEqual(createRuntimeBuildRecord(item).fingerprint, one.fingerprint);
+  rmSync(join(item.gameDir, "design", "items"), { recursive: true, force: true });
 
   write(join(item.gameDir, "src", "build", "runtime.c"), "void nested_runtime(void) {}\n");
   assert.notEqual(createRuntimeBuildRecord(item).fingerprint, one.fingerprint);
@@ -103,6 +115,26 @@ test("runtime build rejects compiled in-place features missing from dependencies
     () => createRuntimeBuildRecord(item),
     /features\/scenes-core is compiled but not declared/,
   );
+});
+
+test("runtime build rejects declared features missing from canonical CMake wiring", (t) => {
+  const item = fixture(t);
+  write(join(item.gameDir, "CMakeLists.txt"), "project(test_game)\n");
+  assert.throws(
+    () => createRuntimeBuildRecord(item),
+    /features\/platform-sdk is declared but not compiled/,
+  );
+});
+
+test("runtime build scans nested CMake feature references and rejects dynamic ids", (t) => {
+  const item = fixture(t);
+  write(join(item.gameDir, "cmake", "nested", "Feature.cmake"),
+    "set(HIDDEN \"${GAME_REPO_ROOT}/features/scenes-core\")\n");
+  write(join(item.studioRoot, "features", "scenes-core", "src", "scene.c"), "void scene(void) {}\n");
+  assert.throws(() => createRuntimeBuildRecord(item), /scenes-core is compiled but not declared/);
+  write(join(item.gameDir, "cmake", "nested", "Feature.cmake"),
+    "set(HIDDEN \"${GAME_REPO_ROOT}/features/${FEATURE_ID}\")\n");
+  assert.throws(() => createRuntimeBuildRecord(item), /literal feature id/);
 });
 
 test("runtime build validation rejects malformed and non-canonical records", (t) => {

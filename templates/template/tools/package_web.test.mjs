@@ -143,10 +143,46 @@ function fixture(t, target = "itch") {
   }
   return {
     root, gameDir, artifactDir, target, adapter, runtimeBuild,
+    assetAuditProof: {
+      schema: "ai_studio.game_release_asset_audit.v1",
+      ok: true,
+      runtimeFingerprint: runtimeBuild.fingerprint,
+      assetPackSha256: sha256(Buffer.from("pack")),
+    },
     dependencyVerifier: () => {},
     runtimeBuildVerifier: () => runtimeBuild,
   };
 }
+
+test("package rejects a missing or stale asset audit before creating output", (t) => {
+  const item = fixture(t);
+  const outDir = join(item.root, "rejected");
+  assert.throws(
+    () => packageWebArtifact({ ...item, assetAuditProof: undefined, studioRoot, outDir }),
+    /successful asset audit/,
+  );
+  assert.equal(existsSync(outDir), false);
+  assert.throws(
+    () => packageWebArtifact({
+      ...item,
+      assetAuditProof: { ...item.assetAuditProof, runtimeFingerprint: "0".repeat(64) },
+      studioRoot,
+      outDir,
+    }),
+    /successful asset audit/,
+  );
+  assert.equal(existsSync(outDir), false);
+  assert.throws(
+    () => packageWebArtifact({
+      ...item,
+      assetAuditProof: { ...item.assetAuditProof, assetPackSha256: "0".repeat(64) },
+      studioRoot,
+      outDir,
+    }),
+    /successful asset audit/,
+  );
+  assert.equal(existsSync(outDir), false);
+});
 
 test("final package is deterministic and binds the reopened ZIP to exact dependency revisions", (t) => {
   const item = fixture(t);
@@ -291,7 +327,11 @@ test("artifact validation fails closed on missing, case-drifted, unexpected, sou
     ["devapi", (item) => {
       const path = join(item.artifactDir, "game.js");
       write(path, `${readFileSync(path, "utf8")}\nwindow.__devapi = {};\n`);
-    }, /DevAPI/i],
+    }, /development-only|DevAPI/i],
+    ["audio browser smoke", (item) => {
+      const path = join(item.artifactDir, "game.js");
+      write(path, `${readFileSync(path, "utf8")}\n_game_audio_play_cue();\n`);
+    }, /development-only|audio/i],
   ];
   for (const [name, mutate, expected] of cases) {
     const item = fixture(t);
@@ -490,6 +530,7 @@ test("release WASM rejects invalid structure, debug custom sections, and DevAPI 
     ["invalid section structure", Buffer.from([0, 97, 115, 109, 1, 0, 0, 0, 1, 1, 0xff]), /invalid WebAssembly structure|WASM/i],
     ["debug name", wasmCustomSection("name", "symbols"), /debug|custom section|name/i],
     ["DevAPI symbol", wasmCustomSection("metadata", "nt_devapi_command"), /DevAPI|debug marker/i],
+    ["audio browser-smoke symbol", wasmCustomSection("metadata", "game_audio_play_cue"), /audio|forbidden/i],
   ]) {
     const item = fixture(t);
     write(join(item.artifactDir, "game.wasm"), bytes);

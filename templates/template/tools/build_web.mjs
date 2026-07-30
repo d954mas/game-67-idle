@@ -74,9 +74,12 @@ export function createBuildPlan(options) {
     configureArgs.unshift("cmake");
   }
   configureArgs.push(`-DCMAKE_BUILD_TYPE=${args.preset === "wasm-release" ? "Release" : "Debug"}`, `-DGAME_PUBLISH_TARGET=${args.target}`);
+  configureArgs.push("-DGAME_AUDIO_BROWSER_SMOKE=OFF");
+  configureArgs.push(`-DGAME_ANALYTICS_ENABLED=${args.preset === "wasm-devapi-debug" ? "ON" : "OFF"}`);
+  configureArgs.push(`-DGAME_EVENTS_LOG_MIRROR=${args.preset === "wasm-release" ? "OFF" : "ON"}`);
   if (runtimeBuild) configureArgs.push(`-DGAME_RUNTIME_BUILD_FINGERPRINT=${runtimeBuild.fingerprint}`);
-  if (args.debugUi !== "default") configureArgs.push(`-DGAME_PLATFORM_SDK_DEBUG_UI=${args.debugUi === "on" ? "ON" : "OFF"}`);
-  if (args.preset === "wasm-devapi-debug") configureArgs.push("-DGAME_DEVAPI_ENABLED=ON");
+  configureArgs.push(`-DGAME_PLATFORM_SDK_DEBUG_UI=${args.debugUi === "on" ? "ON" : "OFF"}`);
+  configureArgs.push(`-DGAME_DEVAPI_ENABLED=${args.preset === "wasm-devapi-debug" ? "ON" : "OFF"}`);
   steps.push({ kind: "run", command: configureCommand, args: configureArgs });
   steps.push({ kind: "run", command: "cmake", args: ["--build", webDir, "--target", "game"] });
   steps.push({ kind: "run", command: "cmake", args: ["--build", webDir, "--target", "platform_sdk_web_assets"] });

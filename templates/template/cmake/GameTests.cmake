@@ -19,10 +19,15 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_scenes_core_catalog COMMAND test_scenes_core_catalog)
 
-    foreach(_scenes_core_suite IN ITEMS
-            lifecycle navigation ordering presentation)
+    foreach(_scenes_core_source IN ITEMS
+            test_scene_manager_lifecycle.c
+            test_scene_manager_navigation.c
+            test_scene_manager_ordering.c
+            test_scene_manager_presentation.c)
+        string(REGEX REPLACE "^test_scene_manager_(.+)\\.c$" "\\1"
+            _scenes_core_suite "${_scenes_core_source}")
         add_executable(test_scenes_core_${_scenes_core_suite}
-            "${SCENES_CORE_TESTS}/test_scene_manager_${_scenes_core_suite}.c"
+            "${SCENES_CORE_TESTS}/${_scenes_core_source}"
             "${SCENES_CORE_SRC}/scene_manager.c")
         target_link_libraries(test_scenes_core_${_scenes_core_suite} PRIVATE unity)
         target_include_directories(test_scenes_core_${_scenes_core_suite}
@@ -196,7 +201,9 @@ if(NOT EMSCRIPTEN)
     target_link_libraries(test_game_storage PRIVATE unity nt_log nt_core nt_hash)
     target_include_directories(test_game_storage PRIVATE src)
     target_compile_definitions(test_game_storage PRIVATE
-        GAME_STORAGE_APP_ID="template_storage_test" _CRT_SECURE_NO_WARNINGS)
+        GAME_STORAGE_APP_ID="template_storage_test"
+        GAME_STORAGE_NATIVE_ROOT="${CMAKE_BINARY_DIR}/tests/build/saves"
+        _CRT_SECURE_NO_WARNINGS)
     # MoveFileExA (native quarantine/atomic-replace) is in kernel32, linked by default.
     set_target_properties(test_game_storage PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
@@ -246,6 +253,7 @@ if(NOT EMSCRIPTEN)
     target_compile_definitions(test_game_save PRIVATE
         GAME_SAVE_TESTING=1
         GAME_STORAGE_APP_ID="template_save_test"
+        GAME_STORAGE_NATIVE_ROOT="${CMAKE_BINARY_DIR}/tests/build/saves"
         GAME_SAVE_AUTOSAVE_SLOT="test_slot"
         GAME_SAVE_DEBOUNCE_MS=2000
         GAME_SAVE_MAX_INTERVAL_MS=30000
@@ -801,6 +809,7 @@ if(NOT EMSCRIPTEN)
         "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_template_composition PRIVATE
         GAME_SAVE_TESTING=1 GAME_ITEMS_TESTING=1 GAME_STORAGE_APP_ID="template_composition_test"
+        GAME_STORAGE_NATIVE_ROOT="${CMAKE_BINARY_DIR}/tests/build/saves"
         GAME_SAVE_AUTOSAVE_SLOT="test_composition"
         GAME_SAVE_DEBOUNCE_MS=2000 GAME_SAVE_MAX_INTERVAL_MS=30000 GAME_SAVE_DOC_VERSION=2
         ITEMS_LEGACY_SAVE_V1_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/items_save_v1.json"
@@ -814,14 +823,15 @@ if(NOT EMSCRIPTEN)
     # executable that can link them must carry the matching runtime at link time.
     set(GAME_NATIVE_TEST_TARGETS
         test_audio_core test_audio_resource test_audio_backend_native test_game_audio
-        test_game_state_json test_game_state_nested test_game_storage test_game_save
+        test_game_state_json test_game_state_nested test_game_storage
+        test_game_storage_web_backend test_game_save_blocked test_game_save
         test_game_events test_game_events_overflow test_game_state_roundtrip
         test_game_events_typed test_game_event_render test_game_analytics
         test_game_events_log_mirror test_items_api_core_only
         test_items_api test_items_runtime_package test_items_runtime_resource
         test_items_fragment test_items_fragment_assert_off test_progression test_progression_curve
         benchmark_items_c_arrays benchmark_items_runtime_blob benchmark_items_runtime_bind
-        test_game_format test_platform_sdk test_platform_lifecycle
+        test_game_format test_platform_sdk test_game_input test_platform_lifecycle
         test_platform_sdk_events test_template_composition
         test_scenes_core_catalog test_scenes_core_lifecycle
         test_scenes_core_navigation test_scenes_core_ordering

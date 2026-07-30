@@ -10,6 +10,9 @@
   "layer": "L2",
   "dependencies": [
     "items-core",
+    "game-events",
+    "game-state",
+    "Neotolis nt_log",
     "Python 3.12",
     "templates/template/content/progression.json + the game-local items.snapshot.v1 build output (currency_def cross-check)",
     "template or game C runtime using the generated progression_tracks.gen.{h,c} + the generated progression save fragment (features/game-state)"
@@ -34,7 +37,9 @@
     ],
     "include_dirs": [
       "${PROGRESSION_CORE_INC}",
-      "${ITEMS_CORE_INC}"
+      "${ITEMS_CORE_INC}",
+      "${GAME_EVENTS_INC}",
+      "${GAME_STATE_INC}"
     ],
     "ctest_targets": [
       "test_progression",

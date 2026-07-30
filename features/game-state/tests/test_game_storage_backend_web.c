@@ -61,8 +61,14 @@ int game_storage_web_save(const char *key, const char *text) {
     return 1;
 }
 
-char *game_storage_web_load(const char *key, int *status) {
+char *game_storage_web_load(const char *key, size_t max_bytes, int *status) {
     (void)snprintf(s_last_key, sizeof s_last_key, "%s", key);
+    if (s_primary_exists && strlen(s_primary) > max_bytes) {
+        if (status != NULL) {
+            *status = GAME_STORAGE_READ_ERROR;
+        }
+        return NULL;
+    }
     if (status != NULL) {
         *status = s_load_status;
     }
@@ -116,6 +122,20 @@ void test_web_backend_reports_write_and_probe_failures(void) {
     TEST_ASSERT_FALSE(game_storage_probe(error, (int)sizeof error));
     TEST_ASSERT_EQUAL_STRING("web_storage_test/__probe", s_last_key);
     TEST_ASSERT_TRUE(error[0] != '\0');
+}
+
+void test_web_backend_rejects_oversize_write_before_adapter(void) {
+    char error[128] = {0};
+    char *oversize = malloc((size_t)GAME_STORAGE_MAX_BYTES + 2U);
+    TEST_ASSERT_NOT_NULL(oversize);
+    memset(oversize, 'x', (size_t)GAME_STORAGE_MAX_BYTES + 1U);
+    oversize[GAME_STORAGE_MAX_BYTES + 1U] = '\0';
+
+    TEST_ASSERT_FALSE(game_storage_write(
+        "autosave", oversize, error, (int)sizeof error));
+    TEST_ASSERT_FALSE(s_primary_exists);
+    TEST_ASSERT_TRUE(error[0] != '\0');
+    free(oversize);
 }
 
 void test_web_backend_distinguishes_absent_and_error(void) {
@@ -197,6 +217,7 @@ int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_web_backend_scopes_keys_and_round_trips);
     RUN_TEST(test_web_backend_reports_write_and_probe_failures);
+    RUN_TEST(test_web_backend_rejects_oversize_write_before_adapter);
     RUN_TEST(test_web_backend_distinguishes_absent_and_error);
     RUN_TEST(test_web_backend_quarantines_before_delete);
     RUN_TEST(test_web_backend_keeps_primary_when_quarantine_copy_fails);

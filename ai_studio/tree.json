@@ -132,6 +132,18 @@
                 "contract": "features/progression-core/feature.json",
                 "verifyDomain": "features",
                 "coverage": "subtree"
+              },
+              {
+                "id": "feature-scenes-core",
+                "title": "Scenes core",
+                "kind": "module",
+                "path": "features/scenes-core",
+                "owner": "Scenes Feature Owner",
+                "description": "Reusable scene lifecycle, navigation, presentation, and automation capability.",
+                "entry": "features/scenes-core/README.md",
+                "contract": "features/scenes-core/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
               }
             ]
           },

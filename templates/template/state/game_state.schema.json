@@ -18,8 +18,8 @@
     "test_label_text": { "type": "string", "default": "Template ready", "max_length": 63 },
     "test_button_text": { "type": "string", "default": "Cycle", "max_length": 63 },
     "tutorial.done": { "type": "bool", "default": false },
-    "inventory_container_id": { "type": "u32", "default": 0, "min": 0, "max": 4294967294 },
-    "wallet_container_id": { "type": "u32", "default": 0, "min": 0, "max": 4294967294 }
+    "inventory_container_id": { "type": "u32", "default": 0, "min": 0, "max": 4294967294, "devapi_writable": false },
+    "wallet_container_id": { "type": "u32", "default": 0, "min": 0, "max": 4294967294, "devapi_writable": false }
   },
   "events": {
     "shape_changed": {
