@@ -33,6 +33,15 @@ the catalog's approved continuous presentation without a deterministic event
 timeline. `shot` resets and host-paces the referenced deterministic scenario
 while the existing OBS recorder observes real game pixels and process audio.
 
+On managed Windows hosts, run these OBS-backed commands through the approved
+interactive host execution path on the first attempt. In Codex, invoke the
+game-owned capture command with `sandbox_permissions: "require_escalated"` so
+OBS inherits the active console user's desktop token. Do not probe video capture
+inside the managed command sandbox first: its isolated account can share the
+console session while lacking the active user's per-user `CaptureService`, which
+causes OBS WGC `CreateForWindow (0x80070424)` and uniform black frames. Keep the
+canonical WGC backend; rerun the unchanged command in the correct host context.
+
 Treat every completed take as a draft first. A shot becomes a true master only
 when recorder validation, scenario completion, and the applicable universal
 safe-area gate all pass. An incomplete safe-area policy is guidance only and

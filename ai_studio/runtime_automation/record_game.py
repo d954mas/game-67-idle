@@ -1066,6 +1066,38 @@ def _obs_log_summary(portable_root: Path) -> dict:
     }
 
 
+def _obs_wgc_service_failure(portable_root: Path) -> str | None:
+    logs = sorted(
+        (portable_root / "config" / "obs-studio" / "logs").glob("*.txt"),
+        key=lambda path: path.stat().st_mtime_ns,
+    )
+    if not logs:
+        return None
+    text = logs[-1].read_text(encoding="utf-8-sig", errors="replace")
+    if re.search(
+        r"CreateForWindow\s+\(0x80070424\)",
+        text,
+        flags=re.IGNORECASE,
+    ) is None:
+        return None
+    return (
+        "OBS Windows Graphics Capture could not start "
+        "(CreateForWindow 0x80070424 / ERROR_SERVICE_DOES_NOT_EXIST). "
+        "The required per-user Windows capture service is unavailable. On a "
+        "managed host, run capture through the approved interactive host "
+        "execution path as the active console user. If it is already running "
+        "there, inspect CaptureService availability instead of retrying OBS."
+    )
+
+
+def _stop_obs_and_detect_service_failure(
+    process: subprocess.Popen,
+    portable_root: Path,
+) -> str | None:
+    _stop_obs(process)
+    return _obs_wgc_service_failure(portable_root)
+
+
 def _record_audio_with_driver(
     capture_audio: Callable[[], dict],
     recording_driver: Callable[[], None] | None,
@@ -1152,10 +1184,20 @@ def record_take(
                 cwd=str(portable_obs.parent),
                 shell=False,
             )
-            recorded = _wait_for_recording_file(
-                recording_directory,
-                obs_process,
-            )
+            try:
+                recorded = _wait_for_recording_file(
+                    recording_directory,
+                    obs_process,
+                )
+            except RuntimeError as exc:
+                service_failure = _stop_obs_and_detect_service_failure(
+                    obs_process,
+                    portable_root,
+                )
+                obs_process = None
+                if service_failure is not None:
+                    raise RuntimeError(service_failure) from exc
+                raise
             recording_detected_at = time.monotonic()
             current_hwnd = _wait_for_stable_window(
                 pid,
@@ -1182,11 +1224,16 @@ def record_take(
                     rejection = str(exc)
             if rejection is None:
                 break
-            _stop_obs(obs_process)
+            service_failure = _stop_obs_and_detect_service_failure(
+                obs_process,
+                portable_root,
+            )
             obs_process = None
             health_frame.unlink(missing_ok=True)
             for obsolete in recording_directory.glob("*.mkv"):
                 obsolete.unlink(missing_ok=True)
+            if service_failure is not None:
+                raise RuntimeError(service_failure)
             if attempt == 3:
                 raise RuntimeError(
                     f"OBS window source stayed unhealthy: {rejection}"

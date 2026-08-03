@@ -51,6 +51,20 @@ incomplete, so social takes truthfully remain drafts.
 The game catalog also documents its reproducible local audiovisual E2E. Agents
 must run that E2E after workflow, scene, audio, or recorder integration changes.
 
+### Windows host-execution boundary
+
+OBS-backed capture depends on the active Windows console user's per-user
+`CaptureService`. On a managed host, launch `capture live` and `capture shot`
+through the approved interactive host execution broker on the first attempt. In
+Codex this means running the game-owned capture command with
+`sandbox_permissions: "require_escalated"`. A process started as an isolated
+sandbox account can be in the same console session yet still fail WGC with
+`CreateForWindow (0x80070424)` and encode uniform black frames. That error is a
+Windows capture-service failure; on a managed host, first keep the canonical WGC
+backend and rerun the unchanged command as the active interactive user instead
+of cycling OBS or adding an alternate backend. If the command already has that
+identity, inspect the user's `CaptureService` availability.
+
 ## Recorder maintenance and direct diagnostics
 
 `record_game.py` is the fixed low-level recording path. It launches a Studio game in
@@ -100,8 +114,11 @@ produce the exact requested master size and duration; `edit.mp4` is then a
 lossless container remux. Keep the game window open and not minimized. The
 recorder samples the live source for up to four seconds and rejects black OBS
 starts before `REC`. The public workflow makes one clean take retry after a
-fully unhealthy source or incomplete OBS container. It validates decoded frame
-count, dimensions, FPS, a
+transiently unhealthy source or incomplete OBS container. A logged WGC
+`CreateForWindow (0x80070424)` is classified as capture-service unavailability
+and stops immediately with active-user/CaptureService guidance instead of
+cycling OBS.
+The recorder validates decoded frame count, dimensions, FPS, a
 non-black content frame, the 48 kHz stereo audio track, and records measured
 audio activity and OBS render-lag diagnostics in `capture.json`.
 

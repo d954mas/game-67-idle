@@ -29,7 +29,9 @@ from ai_studio.runtime_automation.record_game import (
     _publish_take,
     _record_audio_with_driver,
     _extract_health_frame,
+    _obs_wgc_service_failure,
     _scene_collection,
+    _stop_obs_and_detect_service_failure,
     _write_obs_configuration,
 )
 
@@ -136,6 +138,62 @@ class ObsContractTest(unittest.TestCase):
             [call.args[0] for call in sleep.call_args_list],
             [1.0, 1.5],
         )
+
+    def test_wgc_missing_service_reports_required_host_context(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            portable_root = Path(directory)
+            logs = portable_root / "config" / "obs-studio" / "logs"
+            logs.mkdir(parents=True)
+            (logs / "obs.txt").write_text(
+                "[window-capture: 'Other'] CreateForWindow (0x80004005)\n"
+                "[window-capture: 'Game'] CreateForWindow (0x80070424)",
+                encoding="utf-8",
+            )
+
+            failure = _obs_wgc_service_failure(portable_root)
+
+        self.assertIsNotNone(failure)
+        self.assertIn("active console user", failure)
+        self.assertIn("CaptureService availability", failure)
+
+    def test_missing_obs_log_does_not_invent_a_host_context_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            failure = _obs_wgc_service_failure(Path(directory))
+
+        self.assertIsNone(failure)
+
+    def test_other_wgc_errors_do_not_claim_a_service_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            portable_root = Path(directory)
+            logs = portable_root / "config" / "obs-studio" / "logs"
+            logs.mkdir(parents=True)
+            (logs / "obs.txt").write_text(
+                "[window-capture: 'Game'] CreateForWindow (0x80004005)",
+                encoding="utf-8",
+            )
+
+            failure = _obs_wgc_service_failure(portable_root)
+
+        self.assertIsNone(failure)
+
+    def test_obs_is_stopped_before_service_failure_log_is_classified(self) -> None:
+        events: list[str] = []
+        with patch(
+            "ai_studio.runtime_automation.record_game._stop_obs",
+            side_effect=lambda _process: events.append("stop"),
+        ), patch(
+            "ai_studio.runtime_automation.record_game._obs_wgc_service_failure",
+            side_effect=(
+                lambda _root: events.append("inspect") or "service failure"
+            ),
+        ):
+            failure = _stop_obs_and_detect_service_failure(
+                SimpleNamespace(),
+                Path("portable"),
+            )
+
+        self.assertEqual(failure, "service failure")
+        self.assertEqual(events, ["stop", "inspect"])
 
     def test_portable_profile_skips_the_first_run_wizard(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
