@@ -721,7 +721,7 @@ class Table:
             "LOC_MAX_ARGS", "LOC_NUMBER_BUF", "LOC_GENERATED_MAX_ARGS",
             "LOC_PLURAL_CAT_COUNT", "LOC_PLURAL_RULE_COUNT",
             "loc_init", "loc_by_key", "loc_set_lang", "loc_lang", "loc_raw",
-            "loc_get", "loc_format", "loc_bind_table", "loc_group_i64",
+            "loc_get", "loc_format", "loc_bind_table", "loc_group_i64", "loc_number",
             "loc_set_lang_index", "loc_lang_index", "loc_lang_count", "loc_lang_code",
             "loc_lang_from_code", "loc_fallback_log_count", "loc_plural_category",
         }
@@ -773,6 +773,15 @@ def render_header(table: Table) -> str:
     lines.append(f"#define LOC_GENERATED_MAX_ARGS {widest}")
     lines.append(
         '_Static_assert(LOC_GENERATED_MAX_ARGS <= LOC_MAX_ARGS, "corpus needs more arguments than loc.h allows");'
+    )
+    lines.append("")
+    lines.append("/* A plural row is one slot per CLDR category, emitted below in the order of")
+    lines.append("   loc_plural_cat_t. Adding a category to that enum without adding it to")
+    lines.append("   PLURAL_CATS here would leave every row a slot short and the runtime would")
+    lines.append("   index past the end of it -- silently, on a value no test happens to pick. */")
+    lines.append(
+        f"_Static_assert(LOC_PLURAL_CAT_COUNT == {len(PLURAL_CATS)}, "
+        '"loc.py emits a different number of plural slots than loc_plural_cat_t declares");'
     )
     lines.append("")
     lines.append("/* Every key. The enumerator IS the table index. */")

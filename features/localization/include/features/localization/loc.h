@@ -173,6 +173,14 @@ int loc_lang_from_code(const char *code);
  * digit is, and an empty string only when even the bare digits do not fit. */
 const char *loc_group_i64(int64_t value, char *out, size_t cap);
 
+/* The same number, as LocStr straight from the per-frame arena. Use this at a
+ * call site that hands the result to a text widget -- a caller-owned buffer
+ * would have to be unwrapped with loc_raw(), and loc_raw() on every number on
+ * screen is exactly the noise that stops the gate from meaning anything.
+ * Prefer loc_group_i64 when the digits go into a buffer the caller keeps.
+ * Valid until the next arena reset, like loc_format(). */
+LocStr loc_number(int64_t value);
+
 /* Total deduplicated fallback events this session (one per key, at most). */
 int loc_fallback_log_count(void);
 

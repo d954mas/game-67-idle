@@ -48,7 +48,10 @@ void loc_set_lang_index(int lang) {
     s_lang = lang;
 }
 
-int loc_lang_index(void) { return s_lang; }
+int loc_lang_index(void) {
+    NT_ASSERT(s_table != NULL && "loc_lang_index: call loc_init() first");
+    return s_lang;
+}
 
 int loc_lang_count(void) {
     NT_ASSERT(s_table != NULL && "loc_lang_count: call loc_init() first");
@@ -94,26 +97,58 @@ int loc_fallback_log_count(void) { return s_fallback_log_count; }
 
 // #region fallback logging
 /* One bit per key: the UI rebuilds every frame, so an undeduplicated warning
-   would emit sixty lines a second for one missing translation. */
-static void log_fallback(int key_index, int from_lang) {
+   would emit sixty lines a second for one missing translation. The bit is
+   shared by both degradations below -- the contract is "at most one line per
+   key", not "one line per kind of hole". */
+static bool claim_fallback_slot(int key_index) {
     if (!s_table || !s_table->fallback_logged) {
-        return;
+        return false;
     }
     const size_t byte = (size_t)key_index / 8u;
     if (byte >= s_table->fallback_logged_bytes) {
-        return;
+        return false;
     }
     const uint8_t bit = (uint8_t)(1u << ((unsigned)key_index % 8u));
     if (s_table->fallback_logged[byte] & bit) {
-        return;
+        return false;
     }
     s_table->fallback_logged[byte] |= bit;
     s_fallback_log_count += 1;
+    return true;
+}
+
+/* The key carries no text in the active language. */
+static void log_lang_fallback(int key_index, int from_lang) {
+    if (!claim_fallback_slot(key_index)) {
+        return;
+    }
 #ifndef NDEBUG
     NT_LOG_WARN("no '%s' for %s (using %s)", s_table->langs[from_lang].code,
                 s_table->strings[key_index].key, s_table->langs[s_table->fallback_lang].code);
 #else
     (void)from_lang;
+#endif
+}
+
+/* The key carries text in this language, but not in the plural form the count
+   selected -- so the player is reading a grammatically wrong sentence, which is
+   exactly the kind of bug that survives a playthrough unnoticed. Generated data
+   never reaches here (the generator requires every form its language's rule can
+   select); a hand-written table can. */
+static void log_form_fallback(int key_index, int lang, loc_plural_cat_t want) {
+#ifndef NDEBUG
+    static const char *const k_cat_names[LOC_PLURAL_CAT_COUNT] = {"zero", "one", "two",
+                                                                  "few",  "many", "other"};
+#endif
+    if (!claim_fallback_slot(key_index)) {
+        return;
+    }
+#ifndef NDEBUG
+    NT_LOG_WARN("no '%s' form of %s in %s (using another form of the same key)",
+                k_cat_names[want], s_table->strings[key_index].key, s_table->langs[lang].code);
+#else
+    (void)lang;
+    (void)want;
 #endif
 }
 // #endregion
@@ -251,7 +286,12 @@ loc_plural_cat_t loc_plural_category(loc_plural_rule_t rule, int64_t count) {
     return LOC_PLURAL_OTHER;
 }
 
-static const char *form_for(const loc_string_def_t *def, int lang, loc_plural_cat_t cat) {
+/* `degraded` (optional) reports "this row had text, but not the form asked
+   for" -- the one silent-wrong-word path in this file, so the callers turn it
+   into a warning rather than letting it pass. It stays FALSE when the row is
+   empty outright: that is a missing translation, which is logged separately. */
+static const char *form_for(const loc_string_def_t *def, int lang, loc_plural_cat_t cat,
+                            bool *degraded) {
     if (!def->is_plural) {
         return def->forms[lang];
     }
@@ -268,6 +308,9 @@ static const char *form_for(const loc_string_def_t *def, int lang, loc_plural_ca
     text = def->forms[row + (size_t)LOC_PLURAL_OTHER];
     for (size_t i = 0; !text && i < (size_t)LOC_PLURAL_CAT_COUNT; ++i) {
         text = def->forms[row + i];
+    }
+    if (text && degraded) {
+        *degraded = true;
     }
     return text;
 }
@@ -321,6 +364,16 @@ const char *loc_group_i64(int64_t value, char *out, size_t cap) {
     return out;
 }
 
+LocStr loc_number(int64_t value) {
+    NT_ASSERT(s_table != NULL && "loc_number: call loc_init() first");
+    char buf[LOC_NUMBER_BUF];
+    render_grouped(buf, sizeof buf, value, &s_table->langs[s_lang]);
+    const size_t len = strlen(buf);
+    char *out = (char *)nt_mem_scratch_alloc(len + 1u, 1u);
+    memcpy(out, buf, len + 1u);
+    return loc_raw(out);
+}
+
 static const char *render_arg(const loc_arg_t *arg, const loc_lang_def_t *lang, char *scratch, size_t cap) {
     switch (arg->kind) {
     case LOC_ARG_STR:
@@ -362,8 +415,14 @@ static size_t expand(const char *tpl, const char *const *values, const size_t *l
             }
             const char *q = p + 1;
             int index = 0;
+            /* Bounded on purpose: `{99999999999}` is out of range whatever it
+               parses to, and must not overflow the accumulator on its way to
+               being rejected. Past the cap the value stops moving and stays
+               out of range. */
             while (*q >= '0' && *q <= '9') {
-                index = index * 10 + (*q - '0');
+                if (index <= LOC_MAX_ARGS) {
+                    index = index * 10 + (*q - '0');
+                }
                 ++q;
             }
             if (q > p + 1 && *q == '}' && index < arg_count) {
@@ -397,10 +456,12 @@ LocStr loc_get(int key_index) {
     NT_ASSERT(s_table != NULL && "loc_get: call loc_init() first");
     NT_ASSERT(key_index >= 0 && key_index < s_table->string_count && "loc_get: key index out of range");
     const loc_string_def_t *def = &s_table->strings[key_index];
-    const char *text = form_for(def, s_lang, LOC_PLURAL_OTHER);
+    /* A zero-argument key cannot be plural (a plural key needs its count), so
+       there is no form to degrade to and nothing to report. */
+    const char *text = form_for(def, s_lang, LOC_PLURAL_OTHER, NULL);
     if (!text) {
-        log_fallback(key_index, s_lang);
-        text = form_for(def, s_table->fallback_lang, LOC_PLURAL_OTHER);
+        log_lang_fallback(key_index, s_lang);
+        text = form_for(def, s_table->fallback_lang, LOC_PLURAL_OTHER, NULL);
     }
     /* The bare key is the emergency case: the generator guarantees the fallback
        language is complete, so reaching it means the table was hand-edited. */
@@ -432,9 +493,10 @@ LocStr loc_format(int key_index, int plural_arg, const loc_arg_t *args, int arg_
     if (def->is_plural && !fractional) {
         cat = loc_plural_category(s_table->langs[lang].plural_rule, plural_value);
     }
-    const char *tpl = form_for(def, lang, cat);
+    bool degraded = false;
+    const char *tpl = form_for(def, lang, cat, &degraded);
     if (!tpl) {
-        log_fallback(key_index, lang);
+        log_lang_fallback(key_index, lang);
         lang = s_table->fallback_lang;
         cat = LOC_PLURAL_OTHER;
         if (def->is_plural && !fractional) {
@@ -442,7 +504,11 @@ LocStr loc_format(int key_index, int plural_arg, const loc_arg_t *args, int arg_
                form must be reselected under the language actually used. */
             cat = loc_plural_category(s_table->langs[lang].plural_rule, plural_value);
         }
-        tpl = form_for(def, lang, cat);
+        degraded = false;
+        tpl = form_for(def, lang, cat, &degraded);
+    }
+    if (degraded) {
+        log_form_fallback(key_index, lang, cat);
     }
     if (!tpl) {
         return loc_raw(def->key);
