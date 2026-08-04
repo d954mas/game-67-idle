@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ai-studio.local/features/localization/strings.schema.json",
+  "title": "Localization string table",
+  "description": "Source of truth for every player-visible string in a game. One entry per key with every language beside it. loc.py validates every document against THIS FILE first (shape: types, enums, patterns, caps), then applies the checks a document grammar cannot express: placeholder parity across languages, arg declaration/use parity, the plural categories each language's rule can actually select, fallback completeness, and C identifier collisions. The two passes are disjoint on purpose; loc_test.py's test_schema_matches_generator pins the few values that appear in both.",
+  "type": "object",
+  "required": ["languages", "fallback", "strings"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "languages": {
+      "description": "Every language the table carries. Key order fixes the generated LocLang enum order, so it is append-only in practice.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["group_separator", "group_min_digits"],
+        "additionalProperties": false,
+        "properties": {
+          "group_separator": {
+            "description": "Inserted every three digits by the int:group arg type. Russian uses a space, English a comma. Digit grouping is language data, not game code.",
+            "type": "string",
+            "maxLength": 4
+          },
+          "group_min_digits": {
+            "description": "Grouping applies only once the integer part has at least this many digits. Russian typography groups from five, English from four.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 18
+          },
+          "plural_rule": {
+            "description": "Override the CLDR rule the generator derives from the language code. Required only for a language the generator does not know.",
+            "type": "string",
+            "enum": ["other_only", "one_other", "french", "slavic", "polish", "czech"]
+          }
+        }
+      }
+    },
+    "fallback": {
+      "description": "The authoring language. Must be a key of `languages`, must carry text for every key, and is what shows when the active language has none.",
+      "type": "string"
+    },
+    "strings": {
+      "description": "key -> entry. The first key segment is the surface the player sees the string on.",
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$" },
+      "additionalProperties": { "$ref": "#/definitions/entry" }
+    }
+  },
+  "definitions": {
+    "entry": {
+      "type": "object",
+      "properties": {
+        "args": {
+          "description": "Declared explicitly, never inferred from the placeholder name. Every declared arg must be used by at least one form; every placeholder must be declared. Argument order fixes the generated C parameter order, so it is not reorderable without touching call sites.",
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+          "additionalProperties": {
+            "type": "string",
+            "enum": ["int", "int:group", "float:1", "float:2", "float:g", "str"]
+          },
+          "maxProperties": 8
+        },
+        "plural_on": {
+          "description": "Names the declared argument that selects the plural form. When present, every language's value is an object of CLDR categories instead of a string. Bound to a float type, every language must carry exactly `other` -- a fractional value always selects `other`.",
+          "type": "string"
+        },
+        "note": {
+          "description": "Free-text authoring note. Never rendered, never generated.",
+          "type": "string"
+        }
+      },
+      "patternProperties": {
+        "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$": {
+          "oneOf": [
+            { "$ref": "#/definitions/text" },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": false,
+              "properties": {
+                "zero": { "$ref": "#/definitions/text" },
+                "one": { "$ref": "#/definitions/text" },
+                "two": { "$ref": "#/definitions/text" },
+                "few": { "$ref": "#/definitions/text" },
+                "many": { "$ref": "#/definitions/text" },
+                "other": { "$ref": "#/definitions/text" }
+              }
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "text": {
+      "description": "Player-visible text. `{name}` interpolates a declared argument; `{{` and `}}` are literal braces; `%` is literal everywhere. Newline and tab are the only control characters allowed.",
+      "type": "string"
+    }
+  }
+}

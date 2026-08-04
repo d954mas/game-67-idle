@@ -1,0 +1,56 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "localization",
+  "version": "1.0.0",
+  "title": "Localization",
+  "status": "reusable",
+  "kind": "gameplay-infrastructure",
+  "summary": "In-place L1 module: data-owned string table (content/loc/strings.json) compiled to typed C accessors, CLDR plurals, language-owned digit grouping, fallback chain active -> fallback -> key, formatted strings allocated from the engine's per-frame scratch arena. Knows nothing about any game's key vocabulary.",
+  "copy_model": "in-place",
+  "layer": "L1",
+  "dependencies": [
+    "Neotolis nt_mem_scratch (per-frame arena)",
+    "Neotolis nt_log",
+    "Python 3.12 + jsonschema (studio venv)",
+    "a game-owned content/loc/strings.json; loc.py validates it against schema/strings.schema.json (shape) and then applies the checks a grammar cannot express",
+    "a game C runtime compiling the generated loc_strings.gen.{h,c}"
+  ],
+  "owners": [
+    "features/localization"
+  ],
+  "commands": {
+    "generate": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc.py generate --strings <game>/content/loc/strings.json --out-dir <generated-dir>",
+    "index": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc.py generate --index-only --strings <game>/content/loc/strings.json --out-dir <tmp-dir>",
+    "test": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc_test.py"
+  },
+  "manuals": {
+    "install": "features/localization/INSTALL.md"
+  },
+  "outputs": [
+    "loc_strings.gen.h",
+    "loc_strings.gen.c",
+    "loc_keys.gen.json"
+  ],
+  "registers": {
+    "note": "Describes the wiring a consuming game performs in its own CMakeLists/GameCodegen.cmake -- localization is an in-place module (precedent features/progression-core), not an install-script target. This section documents the provisioning, it does not perform it.",
+    "target_sources": [
+      "${LOCALIZATION_SRC}/loc.c",
+      "${GAME_SOURCE_GENERATED_DIR}/loc_strings.gen.c"
+    ],
+    "include_dirs": [
+      "${LOCALIZATION_INC}"
+    ],
+    "ctest_targets": [
+      "test_loc",
+      "test_loc_e2e",
+      "loc_generator_test"
+    ]
+  },
+  "default_template": {
+    "strings": "content/loc/strings.json",
+    "generated_dir": "src/generated",
+    "game_side_sources": [
+      "src/ui/loc_widgets.c"
+    ]
+  }
+}
