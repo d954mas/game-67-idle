@@ -119,42 +119,136 @@ static void log_fallback(int key_index, int from_lang) {
 // #endregion
 
 // #region plural selection
-static loc_plural_cat_t plural_select(loc_plural_rule_t rule, int64_t value) {
-    /* Negative counts are nonsense in copy, but must not index out of the row. */
-    const uint64_t n = (value < 0) ? (uint64_t)(-(value + 1)) + 1u : (uint64_t)value;
-    const uint64_t mod10 = n % 10u;
-    const uint64_t mod100 = n % 100u;
+static bool in_range(uint64_t v, uint64_t lo, uint64_t hi) { return v >= lo && v <= hi; }
+
+/* Transcribed one-for-one from the Defold i18n table (see loc.h). Every
+ * partition here is verified against its Python twin by test_loc_e2e, which
+ * walks the generated (rule, n) -> category array -- so an edit to one half
+ * that the other does not get is a red test, not a wrong word on screen.
+ *
+ * No `default:`: -Wswitch is the only thing that makes adding a rule to the
+ * enum without adding it here a compile error. */
+loc_plural_cat_t loc_plural_category(loc_plural_rule_t rule, int64_t count) {
+    /* Negative counts are nonsense in copy, but must not index out of the row.
+       (-(v+1))+1 avoids the UB of negating INT64_MIN. */
+    const uint64_t n = (count < 0) ? (uint64_t)(-(count + 1)) + 1u : (uint64_t)count;
+    const uint64_t n10 = n % 10u;
+    const uint64_t n100 = n % 100u;
+
     switch (rule) {
     case LOC_PLURAL_RULE_ONE_OTHER:
         return (n == 1u) ? LOC_PLURAL_ONE : LOC_PLURAL_OTHER;
-    case LOC_PLURAL_RULE_FRENCH:
+
+    case LOC_PLURAL_RULE_ONE_ZERO_OTHER:
+    case LOC_PLURAL_RULE_TACHELHIT:
         return (n <= 1u) ? LOC_PLURAL_ONE : LOC_PLURAL_OTHER;
-    case LOC_PLURAL_RULE_SLAVIC:
-        if (mod10 == 1u && mod100 != 11u) {
-            return LOC_PLURAL_ONE;
-        }
-        if (mod10 >= 2u && mod10 <= 4u && (mod100 < 12u || mod100 > 14u)) {
-            return LOC_PLURAL_FEW;
-        }
-        return LOC_PLURAL_MANY;
-    case LOC_PLURAL_RULE_POLISH:
-        if (n == 1u) {
-            return LOC_PLURAL_ONE;
-        }
-        if (mod10 >= 2u && mod10 <= 4u && (mod100 < 12u || mod100 > 14u)) {
-            return LOC_PLURAL_FEW;
-        }
-        return LOC_PLURAL_MANY;
-    case LOC_PLURAL_RULE_CZECH:
-        if (n == 1u) {
-            return LOC_PLURAL_ONE;
-        }
-        return (n >= 2u && n <= 4u) ? LOC_PLURAL_FEW : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_ARABIC:
+        if (n == 0u) { return LOC_PLURAL_ZERO; }
+        if (n == 1u) { return LOC_PLURAL_ONE; }
+        if (n == 2u) { return LOC_PLURAL_TWO; }
+        if (in_range(n100, 3u, 10u)) { return LOC_PLURAL_FEW; }
+        return in_range(n100, 11u, 99u) ? LOC_PLURAL_MANY : LOC_PLURAL_OTHER;
+
     case LOC_PLURAL_RULE_OTHER_ONLY:
-    case LOC_PLURAL_RULE_COUNT:
-    default:
         return LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_SLAVIC:
+        if (n10 == 1u && n100 != 11u) { return LOC_PLURAL_ONE; }
+        if (in_range(n10, 2u, 4u) && !in_range(n100, 12u, 14u)) { return LOC_PLURAL_FEW; }
+        if (n10 == 0u || in_range(n10, 5u, 9u) || in_range(n100, 11u, 14u)) { return LOC_PLURAL_MANY; }
+        return LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_BRETON:
+        if (n10 == 1u && n100 != 11u && n100 != 71u && n100 != 91u) { return LOC_PLURAL_ONE; }
+        if (n10 == 2u && n100 != 12u && n100 != 72u && n100 != 92u) { return LOC_PLURAL_TWO; }
+        if ((n10 == 3u || n10 == 4u || n10 == 9u) && !in_range(n100, 10u, 19u) &&
+            !in_range(n100, 70u, 79u) && !in_range(n100, 90u, 99u)) {
+            return LOC_PLURAL_FEW;
+        }
+        return (n != 0u && n % 1000000u == 0u) ? LOC_PLURAL_MANY : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_CZECH:
+        if (n == 1u) { return LOC_PLURAL_ONE; }
+        return in_range(n, 2u, 4u) ? LOC_PLURAL_FEW : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_WELSH:
+        if (n == 0u) { return LOC_PLURAL_ZERO; }
+        if (n == 1u) { return LOC_PLURAL_ONE; }
+        if (n == 2u) { return LOC_PLURAL_TWO; }
+        if (n == 3u) { return LOC_PLURAL_FEW; }
+        return (n == 6u) ? LOC_PLURAL_MANY : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_FRENCH:
+        return (n < 2u) ? LOC_PLURAL_ONE : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_IRISH:
+        if (n == 1u) { return LOC_PLURAL_ONE; }
+        if (n == 2u) { return LOC_PLURAL_TWO; }
+        if (in_range(n, 3u, 6u)) { return LOC_PLURAL_FEW; }
+        return in_range(n, 7u, 10u) ? LOC_PLURAL_MANY : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_GAELIC:
+        if (n == 1u || n == 11u) { return LOC_PLURAL_ONE; }
+        if (n == 2u || n == 12u) { return LOC_PLURAL_TWO; }
+        return (in_range(n, 3u, 10u) || in_range(n, 13u, 19u)) ? LOC_PLURAL_FEW : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_MANX:
+        return (n10 == 1u || n10 == 2u || n % 20u == 0u) ? LOC_PLURAL_ONE : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_ONE_TWO_OTHER:
+        if (n == 1u) { return LOC_PLURAL_ONE; }
+        return (n == 2u) ? LOC_PLURAL_TWO : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_ZERO_ONE_OTHER:
+    case LOC_PLURAL_RULE_LANGI:
+        /* Langi differs only on fractions in the reference (0 < n < 2), which
+           cannot reach this function. */
+        if (n == 0u) { return LOC_PLURAL_ZERO; }
+        return (n == 1u) ? LOC_PLURAL_ONE : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_LITHUANIAN:
+        if (in_range(n100, 11u, 19u)) { return LOC_PLURAL_OTHER; }
+        if (n10 == 1u) { return LOC_PLURAL_ONE; }
+        return in_range(n10, 2u, 9u) ? LOC_PLURAL_FEW : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_LATVIAN:
+        if (n == 0u) { return LOC_PLURAL_ZERO; }
+        return (n10 == 1u && n100 != 11u) ? LOC_PLURAL_ONE : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_MACEDONIAN:
+        return (n10 == 1u && n != 11u) ? LOC_PLURAL_ONE : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_ROMANIAN:
+        if (n == 1u) { return LOC_PLURAL_ONE; }
+        return (n == 0u || in_range(n100, 1u, 19u)) ? LOC_PLURAL_FEW : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_MALTESE:
+        if (n == 1u) { return LOC_PLURAL_ONE; }
+        if (n == 0u || in_range(n100, 2u, 10u)) { return LOC_PLURAL_FEW; }
+        return in_range(n100, 11u, 19u) ? LOC_PLURAL_MANY : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_POLISH:
+        if (n == 1u) { return LOC_PLURAL_ONE; }
+        if (in_range(n10, 2u, 4u) && !in_range(n100, 12u, 14u)) { return LOC_PLURAL_FEW; }
+        if (n10 == 0u || n10 == 1u || in_range(n10, 5u, 9u) || in_range(n100, 12u, 14u)) {
+            return LOC_PLURAL_MANY;
+        }
+        return LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_SLOVENIAN:
+        if (n100 == 1u) { return LOC_PLURAL_ONE; }
+        if (n100 == 2u) { return LOC_PLURAL_TWO; }
+        return (n100 == 3u || n100 == 4u) ? LOC_PLURAL_FEW : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_TAMAZIGHT:
+        return (n <= 1u || in_range(n, 11u, 99u)) ? LOC_PLURAL_ONE : LOC_PLURAL_OTHER;
+
+    case LOC_PLURAL_RULE_COUNT:
+        break;
     }
+    NT_ASSERT(false && "loc_plural_category: unknown plural rule");
+    return LOC_PLURAL_OTHER;
 }
 
 static const char *form_for(const loc_string_def_t *def, int lang, loc_plural_cat_t cat) {
@@ -336,7 +430,7 @@ LocStr loc_format(int key_index, int plural_arg, const loc_arg_t *args, int arg_
     int lang = s_lang;
     loc_plural_cat_t cat = LOC_PLURAL_OTHER;
     if (def->is_plural && !fractional) {
-        cat = plural_select(s_table->langs[lang].plural_rule, plural_value);
+        cat = loc_plural_category(s_table->langs[lang].plural_rule, plural_value);
     }
     const char *tpl = form_for(def, lang, cat);
     if (!tpl) {
@@ -346,7 +440,7 @@ LocStr loc_format(int key_index, int plural_arg, const loc_arg_t *args, int arg_
         if (def->is_plural && !fractional) {
             /* Categories are per language: ru's rule and en's disagree, so the
                form must be reselected under the language actually used. */
-            cat = plural_select(s_table->langs[lang].plural_rule, plural_value);
+            cat = loc_plural_category(s_table->langs[lang].plural_rule, plural_value);
         }
         tpl = form_for(def, lang, cat);
     }

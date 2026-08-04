@@ -8,8 +8,8 @@ games, and `games/private/<id>`.
 
 ## Dependencies
 
-The engine only: `nt_mem_scratch` (formatted strings) and `nt_log` (the
-fallback warning). No feature edges — in particular, digit grouping comes from
+The engine only: `nt_mem_scratch` (formatted strings), `nt_log` (the fallback
+warning), and `nt_core` (`NT_ASSERT` — the contracts in `loc.h` are asserts). No feature edges — in particular, digit grouping comes from
 the language block in the data, never from a game-side number formatter.
 
 ## CMake wiring
@@ -55,8 +55,7 @@ target_include_directories(${GAME_TARGET} PRIVATE "${LOCALIZATION_INC}")
 ```
 
 `${GAME_SOURCE_GENERATED_DIR}` must already be on the include path (it is, for
-the other generators). Link `nt_mem_scratch` and `nt_log` — most games already
-do.
+the other generators). Link `nt_mem_scratch`, `nt_log`, and `nt_core` — most games already do.
 
 ## Startup
 

@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "localization",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "title": "Localization",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -11,6 +11,7 @@
   "dependencies": [
     "Neotolis nt_mem_scratch (per-frame arena)",
     "Neotolis nt_log",
+    "Neotolis nt_core (NT_ASSERT: the contracts in loc.h are asserts)",
     "Python 3.12 + jsonschema (studio venv)",
     "a game-owned content/loc/strings.json; loc.py validates it against schema/strings.schema.json (shape) and then applies the checks a grammar cannot express",
     "a game C runtime compiling the generated loc_strings.gen.{h,c}"
@@ -21,7 +22,8 @@
   "commands": {
     "generate": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc.py generate --strings <game>/content/loc/strings.json --out-dir <generated-dir>",
     "index": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc.py generate --index-only --strings <game>/content/loc/strings.json --out-dir <tmp-dir>",
-    "test": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc_test.py"
+    "test": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc_test.py",
+    "plural-cases": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc.py plural-cases --out-dir <test-generated-dir>"
   },
   "manuals": {
     "install": "features/localization/INSTALL.md"
@@ -29,10 +31,11 @@
   "outputs": [
     "loc_strings.gen.h",
     "loc_strings.gen.c",
-    "loc_keys.gen.json"
+    "loc_keys.gen.json",
+    "loc_plural_cases.gen.{h,c} (test-only cross-check)"
   ],
   "registers": {
-    "note": "Describes the wiring a consuming game performs in its own CMakeLists/GameCodegen.cmake -- localization is an in-place module (precedent features/progression-core), not an install-script target. This section documents the provisioning, it does not perform it.",
+    "note": "Describes the wiring a consuming game performs in its own CMakeLists/GameCodegen.cmake -- localization is an in-place module (precedent features/progression-core), not an install-script target. This section documents the provisioning, it does not perform it. The consuming game additionally owns tests/test_loc.c (the runtime contract suite) and src/ui/loc_widgets.c; only the two targets listed here are built purely from module sources.",
     "target_sources": [
       "${LOCALIZATION_SRC}/loc.c",
       "${GAME_SOURCE_GENERATED_DIR}/loc_strings.gen.c"
@@ -41,7 +44,6 @@
       "${LOCALIZATION_INC}"
     ],
     "ctest_targets": [
-      "test_loc",
       "test_loc_e2e",
       "loc_generator_test"
     ]

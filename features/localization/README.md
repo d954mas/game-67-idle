@@ -61,7 +61,7 @@ game's number formatter.
       "args": { "n": "int:group" },
       "plural_on": "n",
       "ru": { "one": "нужна {n} монета", "few": "нужно {n} монеты",
-              "many": "нужно {n} монет", "other": "нужно {n} монеты" },
+              "many": "нужно {n} монет" },
       "en": { "one": "need {n} coin", "other": "need {n} coins" }
     }
   }
@@ -92,25 +92,46 @@ format string ever originates at a call site.
 
 ### Plurals
 
-`plural_on` names the argument that selects the form — explicit, like the
-types. Each language's required CLDR category set comes from its rule, which
-the generator derives from the language code (or from an explicit
-`"plural_rule"` in the language block for a code it does not know). The set
-must match exactly: a missing form is an error, and so is an unreachable extra
-one.
+`plural_on` names the numeric argument that selects the form — explicit, like
+the types. Each language's required category set comes from its rule, which the
+generator derives from the language code (or from an explicit `"plural_rule"`
+in the language block for a code it does not know). The set must match exactly:
+a missing form is an error, and so is an unreachable extra one.
 
-| rule | languages | required categories |
+The table is **24 partitions over 172 locales, ported verbatim from the
+studio's Defold i18n project** — a rule set already shipped in a released game,
+including where it takes an older, simpler CLDR snapshot than cldr-latest
+(French has no `many` at 10⁶; Portuguese and Hebrew are plain one/other).
+Matching that reference is the point: it is the spec, not an approximation.
+
+The required categories are **derived**, not written down: each rule is
+evaluated over the integers and the categories it can actually return become
+the required set. So "which forms must exist" cannot disagree with the
+arithmetic that picks them. Some rules therefore have no `other` at all —
+Russian and Polish select one/few/many for every integer.
+
+| rule | locales | required categories |
 |---|---|---|
-| `other_only` | ja zh ko th vi id ms … | `other` |
-| `one_other` | en de es it nl pt sv … | `one` `other` |
-| `french` | fr hy | `one` `other` |
-| `slavic` | ru uk be hr sr bs | `one` `few` `many` `other` |
-| `polish` | pl | `one` `few` `many` `other` |
+| `one_other` | en de es it nl pt sv he ca ta … (89) | `one` `other` |
+| `other_only` | ja zh ko th vi id tr hu fa ka … (31) | `other` |
+| `slavic` | ru uk be hr sr bs sh | `one` `few` `many` |
+| `polish` | pl | `one` `few` `many` |
 | `czech` | cs sk | `one` `few` `other` |
+| `french` | fr ff kab | `one` `other` |
+| `arabic` | ar | `zero` `one` `two` `few` `many` `other` |
+| `slovenian` | sl | `one` `two` `few` `other` |
+| … 16 more | br cy ga gd gv ksh lag lt lv mk ro mt shi tzm iu-family hi-family | see `PLURAL_RULES` in `loc.py` |
 
-A fractional value always selects `other` (CLDR), so a `plural_on` bound to a
-float type must declare exactly `other` in every language — anything else would
-be copy nobody can reach.
+`loc.c` carries the same 24 partitions again, in C. Neither half is trusted:
+`loc.py plural-cases` emits every (rule, n) → category pair from the Python
+table as a C array, and `test_loc_e2e` walks all 10 152 of them through the
+compiled `loc_plural_category()`. Editing one half without the other is a red
+test, not a wrong word on screen.
+
+**One deliberate divergence from the reference.** It selects on the raw number,
+so French 1.5 is `one`. Here a fractional value always takes `other`, so a
+`plural_on` bound to a float type must declare exactly `other` in every
+language, and the rules only ever see integers.
 
 ## The generated C
 

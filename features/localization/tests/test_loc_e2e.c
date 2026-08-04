@@ -1,8 +1,10 @@
 #include "unity.h"
 
+#include "loc_plural_cases.gen.h"
 #include "loc_strings.gen.h"
 #include "memory/nt_mem_scratch.h"
 
+#include <stdio.h>
 #include <string.h>
 
 /* End-to-end: e2e_strings.json -> loc.py -> THIS compiles against the real
@@ -126,7 +128,38 @@ void test_int64_extremes_survive_grouping(void) {
     TEST_ASSERT_EQUAL_STRING("-9 223 372 036 854 775 808", loc_group_i64(INT64_MIN, buf, sizeof buf));
 }
 
-/* --- plurals: PLURAL_RULE_CATS against plural_select() ------------------ */
+/* --- the two halves of the plural table, compared ----------------------- */
+
+void test_every_plural_rule_matches_the_generator(void) {
+    /* loc.py carries the 24 partitions in Python, loc.c carries them again in
+       C. Neither is trusted: this walks every (rule, n) pair the Python table
+       declares -- 24 rules x 423 values -- through the compiled selector. An
+       edit to one half that the other did not get dies here. */
+    TEST_ASSERT_EQUAL_INT(24 * 423, k_loc_plural_case_count);
+    for (int i = 0; i < k_loc_plural_case_count; ++i) {
+        const loc_plural_case_t *c = &k_loc_plural_cases[i];
+        if (loc_plural_category(c->rule, c->n) != c->expected) {
+            char message[128];
+            (void)snprintf(message, sizeof message, "rule %d, n=%lld: expected cat %d, got %d",
+                           (int)c->rule, (long long)c->n, (int)c->expected,
+                           (int)loc_plural_category(c->rule, c->n));
+            TEST_FAIL_MESSAGE(message);
+        }
+    }
+}
+
+void test_every_rule_is_reachable_from_the_case_table(void) {
+    /* A rule added to the enum but not to loc.py would otherwise be untested. */
+    bool seen[LOC_PLURAL_RULE_COUNT] = {false};
+    for (int i = 0; i < k_loc_plural_case_count; ++i) {
+        seen[k_loc_plural_cases[i].rule] = true;
+    }
+    for (int rule = 0; rule < LOC_PLURAL_RULE_COUNT; ++rule) {
+        TEST_ASSERT_TRUE_MESSAGE(seen[rule], "a plural rule has no generated cases");
+    }
+}
+
+/* --- plurals through the generated accessors ---------------------------- */
 
 static const char *steps(int64_t n) { return loc_e2e_counted(n).s; }
 
@@ -229,6 +262,8 @@ int main(void) {
     RUN_TEST(test_loc_group_i64_follows_the_active_language);
     RUN_TEST(test_loc_group_i64_drops_separators_before_digits);
     RUN_TEST(test_int64_extremes_survive_grouping);
+    RUN_TEST(test_every_plural_rule_matches_the_generator);
+    RUN_TEST(test_every_rule_is_reachable_from_the_case_table);
     RUN_TEST(test_slavic_rule_selects_one_few_many);
     RUN_TEST(test_one_other_rule);
     RUN_TEST(test_other_only_rule);

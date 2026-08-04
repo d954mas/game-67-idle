@@ -51,16 +51,39 @@ typedef enum loc_plural_cat {
     LOC_PLURAL_CAT_COUNT
 } loc_plural_cat_t;
 
-/* Which CLDR rule selects a category. The generator maps a language code (or
- * an explicit `plural_rule` in the data) onto one of these; the arithmetic
- * lives here so adding a language never edits C. */
+/* Which rule selects a category. The generator maps a language code (or an
+ * explicit `plural_rule` in the data) onto one of these, so adding a LANGUAGE
+ * never edits C; adding a RULE does.
+ *
+ * Ported verbatim from the studio's Defold i18n table (24 partitions, 172
+ * locales) -- the reference implementation already shipped in a released game,
+ * including where it takes an older, simpler CLDR snapshot than cldr-latest.
+ * Order matches PLURAL_RULES in loc.py and is append-only. */
 typedef enum loc_plural_rule {
-    LOC_PLURAL_RULE_OTHER_ONLY = 0, /* ja zh ko th vi id ms */
-    LOC_PLURAL_RULE_ONE_OTHER,      /* en de es it nl pt sv da no fi el he hu tr */
-    LOC_PLURAL_RULE_FRENCH,         /* fr hy: `one` covers 0 and 1 */
-    LOC_PLURAL_RULE_SLAVIC,         /* ru uk be hr sr bs */
-    LOC_PLURAL_RULE_POLISH,         /* pl */
-    LOC_PLURAL_RULE_CZECH,          /* cs sk */
+    LOC_PLURAL_RULE_ONE_OTHER = 0,    /* en de es it nl pt sv da no fi el he ca et eu ta … */
+    LOC_PLURAL_RULE_ONE_ZERO_OTHER,   /* hi fil am ln mg tl wa …: `one` covers 0 and 1 */
+    LOC_PLURAL_RULE_ARABIC,           /* ar: the only rule using every category */
+    LOC_PLURAL_RULE_OTHER_ONLY,       /* ja zh ko th vi id ms tr hu fa az ka … */
+    LOC_PLURAL_RULE_SLAVIC,           /* ru uk be hr sr bs sh: one/few/many, never `other` */
+    LOC_PLURAL_RULE_BRETON,           /* br */
+    LOC_PLURAL_RULE_CZECH,            /* cs sk */
+    LOC_PLURAL_RULE_WELSH,            /* cy */
+    LOC_PLURAL_RULE_FRENCH,           /* fr ff kab: `one` covers 0 and 1 */
+    LOC_PLURAL_RULE_IRISH,            /* ga */
+    LOC_PLURAL_RULE_GAELIC,           /* gd */
+    LOC_PLURAL_RULE_MANX,             /* gv */
+    LOC_PLURAL_RULE_ONE_TWO_OTHER,    /* iu kw naq se sma … */
+    LOC_PLURAL_RULE_ZERO_ONE_OTHER,   /* ksh */
+    LOC_PLURAL_RULE_LANGI,            /* lag */
+    LOC_PLURAL_RULE_LITHUANIAN,       /* lt */
+    LOC_PLURAL_RULE_LATVIAN,          /* lv */
+    LOC_PLURAL_RULE_MACEDONIAN,       /* mk */
+    LOC_PLURAL_RULE_ROMANIAN,         /* ro mo */
+    LOC_PLURAL_RULE_MALTESE,          /* mt */
+    LOC_PLURAL_RULE_POLISH,           /* pl: one/few/many, never `other` */
+    LOC_PLURAL_RULE_TACHELHIT,        /* shi */
+    LOC_PLURAL_RULE_SLOVENIAN,        /* sl */
+    LOC_PLURAL_RULE_TAMAZIGHT,        /* tzm */
     LOC_PLURAL_RULE_COUNT
 } loc_plural_rule_t;
 
@@ -152,6 +175,13 @@ const char *loc_group_i64(int64_t value, char *out, size_t cap);
 
 /* Total deduplicated fallback events this session (one per key, at most). */
 int loc_fallback_log_count(void);
+
+/* The category a rule selects for `count`. Public so the generator's
+ * cross-check can walk every (rule, n) pair the Python table declares against
+ * this implementation -- the two halves are verified equal, not assumed.
+ * Negative counts use their magnitude; a fractional value never reaches here
+ * (loc_format takes `other` for it). */
+loc_plural_cat_t loc_plural_category(loc_plural_rule_t rule, int64_t count);
 
 /* Explicit escape hatch: text that is deliberately not localized. */
 static inline LocStr loc_raw(const char *s) {

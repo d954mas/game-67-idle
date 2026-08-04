@@ -2,20 +2,31 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://ai-studio.local/features/localization/strings.schema.json",
   "title": "Localization string table",
-  "description": "Source of truth for every player-visible string in a game. One entry per key with every language beside it. loc.py validates every document against THIS FILE first (shape: types, enums, patterns, caps), then applies the checks a document grammar cannot express: placeholder parity across languages, arg declaration/use parity, the plural categories each language's rule can actually select, fallback completeness, and C identifier collisions. The two passes are disjoint on purpose; loc_test.py's test_schema_matches_generator pins the few values that appear in both.",
+  "description": "Source of truth for every player-visible string in a game. One entry per key with every language beside it. loc.py validates every document against THIS FILE first (shape: types, enums, patterns, caps), then applies the checks a document grammar cannot express: placeholder parity across languages, arg declaration/use parity, the plural categories each language's rule can actually select, fallback completeness, and C identifier collisions. loc_test.py's SchemaIsLoadBearing pins every value that appears on both sides, so the two cannot drift apart.",
   "type": "object",
-  "required": ["languages", "fallback", "strings"],
+  "required": [
+    "languages",
+    "fallback",
+    "strings"
+  ],
   "additionalProperties": false,
   "properties": {
-    "$schema": { "type": "string" },
+    "$schema": {
+      "type": "string"
+    },
     "languages": {
       "description": "Every language the table carries. Key order fixes the generated LocLang enum order, so it is append-only in practice.",
       "type": "object",
       "minProperties": 1,
-      "propertyNames": { "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$" },
+      "propertyNames": {
+        "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+      },
       "additionalProperties": {
         "type": "object",
-        "required": ["group_separator", "group_min_digits"],
+        "required": [
+          "group_separator",
+          "group_min_digits"
+        ],
         "additionalProperties": false,
         "properties": {
           "group_separator": {
@@ -32,7 +43,32 @@
           "plural_rule": {
             "description": "Override the CLDR rule the generator derives from the language code. Required only for a language the generator does not know.",
             "type": "string",
-            "enum": ["other_only", "one_other", "french", "slavic", "polish", "czech"]
+            "enum": [
+              "arabic",
+              "breton",
+              "czech",
+              "french",
+              "gaelic",
+              "irish",
+              "langi",
+              "latvian",
+              "lithuanian",
+              "macedonian",
+              "maltese",
+              "manx",
+              "one_other",
+              "one_two_other",
+              "one_zero_other",
+              "other_only",
+              "polish",
+              "romanian",
+              "slavic",
+              "slovenian",
+              "tachelhit",
+              "tamazight",
+              "welsh",
+              "zero_one_other"
+            ]
           }
         }
       }
@@ -44,8 +80,12 @@
     "strings": {
       "description": "key -> entry. The first key segment is the surface the player sees the string on.",
       "type": "object",
-      "propertyNames": { "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$" },
-      "additionalProperties": { "$ref": "#/definitions/entry" }
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/entry"
+      }
     }
   },
   "definitions": {
@@ -55,10 +95,19 @@
         "args": {
           "description": "Declared explicitly, never inferred from the placeholder name. Every declared arg must be used by at least one form; every placeholder must be declared. Argument order fixes the generated C parameter order, so it is not reorderable without touching call sites.",
           "type": "object",
-          "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
           "additionalProperties": {
             "type": "string",
-            "enum": ["int", "int:group", "float:1", "float:2", "float:g", "str"]
+            "enum": [
+              "int",
+              "int:group",
+              "float:1",
+              "float:2",
+              "float:g",
+              "str"
+            ]
           },
           "maxProperties": 8
         },
@@ -74,18 +123,32 @@
       "patternProperties": {
         "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$": {
           "oneOf": [
-            { "$ref": "#/definitions/text" },
+            {
+              "$ref": "#/definitions/text"
+            },
             {
               "type": "object",
               "minProperties": 1,
               "additionalProperties": false,
               "properties": {
-                "zero": { "$ref": "#/definitions/text" },
-                "one": { "$ref": "#/definitions/text" },
-                "two": { "$ref": "#/definitions/text" },
-                "few": { "$ref": "#/definitions/text" },
-                "many": { "$ref": "#/definitions/text" },
-                "other": { "$ref": "#/definitions/text" }
+                "zero": {
+                  "$ref": "#/definitions/text"
+                },
+                "one": {
+                  "$ref": "#/definitions/text"
+                },
+                "two": {
+                  "$ref": "#/definitions/text"
+                },
+                "few": {
+                  "$ref": "#/definitions/text"
+                },
+                "many": {
+                  "$ref": "#/definitions/text"
+                },
+                "other": {
+                  "$ref": "#/definitions/text"
+                }
               }
             }
           ]

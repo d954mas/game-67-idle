@@ -31,56 +31,267 @@ LANG_RE = re.compile(r"^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$")
 # CLDR category order == loc_plural_cat_t slot order in loc.h.
 PLURAL_CATS = ("zero", "one", "two", "few", "many", "other")
 
-# Exactly the categories loc.c's plural_select() can return for this rule --
-# no more, no less. A missing form is an error because the runtime would have
-# nothing to render; an extra one is an error because it would be copy nobody
-# can reach and nobody notices is dead.
+# ---------------------------------------------------------------------------
+# Plural rules, ported verbatim from the lead's Defold project
+# (C:/projects/defold-localization/localization/i18n/plural.lua) -- the
+# reference implementation this studio already ships in a released game. Its
+# 24 partitions and its locale lists are carried over unchanged, including
+# where it takes an older, simpler CLDR snapshot than cldr-latest (French has
+# no `many` at 10^6; Portuguese and Hebrew are plain one/other). Matching the
+# reference is the point: it is the spec, not an approximation of one.
 #
-# Note what that means for the Slavic rules: they have NO `other`. Russian
-# selects one/few/many for every integer, and a fractional value cannot occur
-# here (a float `plural_on` is required to declare exactly `other`, checked
-# below). Requiring `other` for Russian -- the first cut did -- mandated a form
-# the runtime never selects, which is the very thing the extra-form rule
-# forbids everywhere else.
+# ONE deliberate divergence. The reference selects on the raw number, so
+# French 1.5 is `one`. Here a fractional value always takes `other` (ratified:
+# a `plural_on` bound to a float must declare exactly `other`), so these
+# functions only ever see integers. Every isInteger guard below is therefore a
+# no-op that is kept for diffability against the reference.
 #
-# This table is the Python half of ONE rule whose other half is
-# plural_select() in loc.c. features/localization/tests/ walks every rule
-# through the generated code so the halves cannot drift apart silently.
+# `plural_select()` in loc.c is the C half of these. It is not trusted to
+# agree: `loc.py plural-cases` emits every (rule, n) -> category pair from THIS
+# table as a C array, and test_loc_e2e walks it through the compiled
+# loc_plural_category(). The halves are machine-checked, not eyeballed.
+# ---------------------------------------------------------------------------
+
+
+def _one_other(n: int) -> str:
+    return "one" if n == 1 else "other"
+
+
+def _one_zero_other(n: int) -> str:
+    return "one" if n in (0, 1) else "other"
+
+
+def _arabic(n: int) -> str:
+    n100 = n % 100
+    if n == 0:
+        return "zero"
+    if n == 1:
+        return "one"
+    if n == 2:
+        return "two"
+    if 3 <= n100 <= 10:
+        return "few"
+    if 11 <= n100 <= 99:
+        return "many"
+    return "other"
+
+
+def _other_only(n: int) -> str:
+    return "other"
+
+
+def _slavic(n: int) -> str:
+    n10, n100 = n % 10, n % 100
+    if n10 == 1 and n100 != 11:
+        return "one"
+    if 2 <= n10 <= 4 and not 12 <= n100 <= 14:
+        return "few"
+    if n10 == 0 or 5 <= n10 <= 9 or 11 <= n100 <= 14:
+        return "many"
+    return "other"
+
+
+def _breton(n: int) -> str:
+    n10, n100 = n % 10, n % 100
+    if n10 == 1 and n100 not in (11, 71, 91):
+        return "one"
+    if n10 == 2 and n100 not in (12, 72, 92):
+        return "two"
+    if n10 in (3, 4, 9) and not (10 <= n100 <= 19 or 70 <= n100 <= 79 or 90 <= n100 <= 99):
+        return "few"
+    if n != 0 and n % 1000000 == 0:
+        return "many"
+    return "other"
+
+
+def _czech(n: int) -> str:
+    if n == 1:
+        return "one"
+    return "few" if n in (2, 3, 4) else "other"
+
+
+def _welsh(n: int) -> str:
+    return {0: "zero", 1: "one", 2: "two", 3: "few", 6: "many"}.get(n, "other")
+
+
+def _french(n: int) -> str:
+    return "one" if 0 <= n < 2 else "other"
+
+
+def _irish(n: int) -> str:
+    if n == 1:
+        return "one"
+    if n == 2:
+        return "two"
+    if 3 <= n <= 6:
+        return "few"
+    return "many" if 7 <= n <= 10 else "other"
+
+
+def _gaelic(n: int) -> str:
+    if n in (1, 11):
+        return "one"
+    if n in (2, 12):
+        return "two"
+    return "few" if (3 <= n <= 10 or 13 <= n <= 19) else "other"
+
+
+def _manx(n: int) -> str:
+    n10 = n % 10
+    return "one" if (n10 in (1, 2) or n % 20 == 0) else "other"
+
+
+def _one_two_other(n: int) -> str:
+    if n == 1:
+        return "one"
+    return "two" if n == 2 else "other"
+
+
+def _zero_one_other(n: int) -> str:
+    if n == 0:
+        return "zero"
+    return "one" if n == 1 else "other"
+
+
+def _langi(n: int) -> str:
+    if n == 0:
+        return "zero"
+    return "one" if 0 < n < 2 else "other"
+
+
+def _lithuanian(n: int) -> str:
+    if 11 <= n % 100 <= 19:
+        return "other"
+    n10 = n % 10
+    if n10 == 1:
+        return "one"
+    return "few" if 2 <= n10 <= 9 else "other"
+
+
+def _latvian(n: int) -> str:
+    if n == 0:
+        return "zero"
+    return "one" if (n % 10 == 1 and n % 100 != 11) else "other"
+
+
+def _macedonian(n: int) -> str:
+    return "one" if (n % 10 == 1 and n != 11) else "other"
+
+
+def _romanian(n: int) -> str:
+    if n == 1:
+        return "one"
+    return "few" if (n == 0 or (n != 1 and 1 <= n % 100 <= 19)) else "other"
+
+
+def _maltese(n: int) -> str:
+    if n == 1:
+        return "one"
+    n100 = n % 100
+    if n == 0 or 2 <= n100 <= 10:
+        return "few"
+    return "many" if 11 <= n100 <= 19 else "other"
+
+
+def _polish(n: int) -> str:
+    if n == 1:
+        return "one"
+    n10, n100 = n % 10, n % 100
+    if 2 <= n10 <= 4 and not 12 <= n100 <= 14:
+        return "few"
+    if n10 in (0, 1) or 5 <= n10 <= 9 or 12 <= n100 <= 14:
+        return "many"
+    return "other"
+
+
+def _tachelhit(n: int) -> str:
+    return "one" if n in (0, 1) else "other"
+
+
+def _slovenian(n: int) -> str:
+    n100 = n % 100
+    if n100 == 1:
+        return "one"
+    if n100 == 2:
+        return "two"
+    return "few" if n100 in (3, 4) else "other"
+
+
+def _tamazight(n: int) -> str:
+    return "one" if (n == 0 or n == 1 or 11 <= n <= 99) else "other"
+
+
+# rule name -> (selector, C enumerator, locales). Order fixes the generated
+# enum, so it is append-only.
+PLURAL_RULES: dict[str, tuple[Any, str, tuple[str, ...]]] = {
+    "one_other": (_one_other, "LOC_PLURAL_RULE_ONE_OTHER", (
+        "af", "asa", "bem", "bez", "bg", "bn", "brx", "ca", "cgg", "chr", "da", "de", "dv", "ee",
+        "el", "en", "eo", "es", "et", "eu", "fi", "fo", "fur", "fy", "gl", "gsw", "gu", "ha", "haw",
+        "he", "is", "it", "jmc", "kaj", "kcg", "kk", "kl", "ksb", "ku", "lb", "lg", "mas", "ml",
+        "mn", "mr", "nah", "nb", "nd", "ne", "nl", "nn", "no", "nr", "ny", "nyn", "om", "or", "pa",
+        "pap", "ps", "pt", "rm", "rof", "rwk", "saq", "seh", "sn", "so", "sq", "ss", "ssy", "st",
+        "sv", "sw", "syr", "ta", "te", "teo", "tig", "tk", "tn", "ts", "ur", "ve", "vun", "wae",
+        "xh", "xog", "zu",
+    )),
+    "one_zero_other": (_one_zero_other, "LOC_PLURAL_RULE_ONE_ZERO_OTHER", (
+        "ak", "am", "bh", "fil", "guw", "hi", "ln", "mg", "nso", "ti", "tl", "wa",
+    )),
+    "arabic": (_arabic, "LOC_PLURAL_RULE_ARABIC", ("ar",)),
+    "other_only": (_other_only, "LOC_PLURAL_RULE_OTHER_ONLY", (
+        "az", "bm", "bo", "dz", "fa", "hu", "id", "ig", "ii", "ja", "jv", "ka", "kde", "kea", "km",
+        "kn", "ko", "lo", "ms", "my", "root", "sah", "ses", "sg", "th", "to", "tr", "vi", "wo",
+        "yo", "zh",
+    )),
+    "slavic": (_slavic, "LOC_PLURAL_RULE_SLAVIC", ("be", "bs", "hr", "ru", "sh", "sr", "uk")),
+    "breton": (_breton, "LOC_PLURAL_RULE_BRETON", ("br",)),
+    "czech": (_czech, "LOC_PLURAL_RULE_CZECH", ("cs", "cz", "sk")),
+    "welsh": (_welsh, "LOC_PLURAL_RULE_WELSH", ("cy",)),
+    "french": (_french, "LOC_PLURAL_RULE_FRENCH", ("ff", "fr", "kab")),
+    "irish": (_irish, "LOC_PLURAL_RULE_IRISH", ("ga",)),
+    "gaelic": (_gaelic, "LOC_PLURAL_RULE_GAELIC", ("gd",)),
+    "manx": (_manx, "LOC_PLURAL_RULE_MANX", ("gv",)),
+    "one_two_other": (_one_two_other, "LOC_PLURAL_RULE_ONE_TWO_OTHER", (
+        "iu", "kw", "naq", "se", "sma", "smi", "smj", "smn", "sms",
+    )),
+    "zero_one_other": (_zero_one_other, "LOC_PLURAL_RULE_ZERO_ONE_OTHER", ("ksh",)),
+    "langi": (_langi, "LOC_PLURAL_RULE_LANGI", ("lag",)),
+    "lithuanian": (_lithuanian, "LOC_PLURAL_RULE_LITHUANIAN", ("lt",)),
+    "latvian": (_latvian, "LOC_PLURAL_RULE_LATVIAN", ("lv",)),
+    "macedonian": (_macedonian, "LOC_PLURAL_RULE_MACEDONIAN", ("mk",)),
+    "romanian": (_romanian, "LOC_PLURAL_RULE_ROMANIAN", ("mo", "ro")),
+    "maltese": (_maltese, "LOC_PLURAL_RULE_MALTESE", ("mt",)),
+    "polish": (_polish, "LOC_PLURAL_RULE_POLISH", ("pl",)),
+    "tachelhit": (_tachelhit, "LOC_PLURAL_RULE_TACHELHIT", ("shi",)),
+    "slovenian": (_slovenian, "LOC_PLURAL_RULE_SLOVENIAN", ("sl",)),
+    "tamazight": (_tamazight, "LOC_PLURAL_RULE_TAMAZIGHT", ("tzm",)),
+}
+
+# Every n a rule is exercised over, for deriving its category set and for the
+# generated cross-check. 0..399 walks four full periods of every n%100 and n%20
+# window the table uses; the sparse tail catches a rule that is accidentally
+# periodic in 1000, and the millions reach Breton's `many`.
+PLURAL_PROBE = tuple(range(0, 400)) + (
+    999, 1000, 1001, 1011, 1012, 1021, 1100, 1111, 1112, 2000, 2001, 2011, 2022,
+    10**6, 10**6 + 1, 2 * 10**6, 3 * 10**6,
+)
+
+# DERIVED, never hand-written: exactly the categories a rule can return over
+# the integers. A missing form is an error because the runtime would have
+# nothing to render; an extra one is an error because it is copy nothing can
+# reach. Deriving it means "which forms are required" can no longer disagree
+# with the arithmetic that selects them.
 PLURAL_RULE_CATS: dict[str, tuple[str, ...]] = {
-    "other_only": ("other",),
-    "one_other": ("one", "other"),
-    "french": ("one", "other"),
-    "slavic": ("one", "few", "many"),
-    "polish": ("one", "few", "many"),
-    "czech": ("one", "few", "other"),
+    name: tuple(cat for cat in PLURAL_CATS if any(fn(n) == cat for n in PLURAL_PROBE))
+    for name, (fn, _enum, _locales) in PLURAL_RULES.items()
 }
 
-PLURAL_RULE_ENUM = {
-    "other_only": "LOC_PLURAL_RULE_OTHER_ONLY",
-    "one_other": "LOC_PLURAL_RULE_ONE_OTHER",
-    "french": "LOC_PLURAL_RULE_FRENCH",
-    "slavic": "LOC_PLURAL_RULE_SLAVIC",
-    "polish": "LOC_PLURAL_RULE_POLISH",
-    "czech": "LOC_PLURAL_RULE_CZECH",
-}
+PLURAL_RULE_ENUM = {name: enum for name, (_fn, enum, _locales) in PLURAL_RULES.items()}
 
-# Base language code -> CLDR rule. A code that is not here needs an explicit
+# Base language code -> rule. A code that is not here needs an explicit
 # `plural_rule` in its language block; the generator never guesses.
-LANG_PLURAL_RULE: dict[str, str] = {}
-for _code in ("ja", "zh", "ko", "th", "vi", "id", "ms", "my", "km", "lo"):
-    LANG_PLURAL_RULE[_code] = "other_only"
-for _code in (
-    "en", "de", "es", "it", "nl", "pt", "sv", "da", "nb", "no", "fi", "el",
-    "he", "hu", "tr", "ca", "et", "eu", "af", "bg", "sw", "ur", "fa", "az", "ka",
-):
-    LANG_PLURAL_RULE[_code] = "one_other"
-for _code in ("fr", "hy"):
-    LANG_PLURAL_RULE[_code] = "french"
-for _code in ("ru", "uk", "be", "hr", "sr", "bs"):
-    LANG_PLURAL_RULE[_code] = "slavic"
-LANG_PLURAL_RULE["pl"] = "polish"
-LANG_PLURAL_RULE["cs"] = "czech"
-LANG_PLURAL_RULE["sk"] = "czech"
+LANG_PLURAL_RULE: dict[str, str] = {
+    code: name for name, (_fn, _enum, locales) in PLURAL_RULES.items() for code in locales
+}
 
 ARG_TYPES: dict[str, tuple[str, str]] = {
     # json type -> (generated C parameter type, loc_arg_kind_t)
@@ -209,6 +420,13 @@ def c_string(value: str) -> str:
             out.append("\\n")
         elif char == "\t":
             out.append("\\t")
+        elif char == "?":
+            # `??!` and friends are trigraphs: -Wtrigraphs is an error under the
+            # project's -Werror, and on a toolchain that still honours them the
+            # text is silently rewritten instead. Ordinary copy contains "??!".
+            out.append("\\?")
+        elif char < " " or char == "\x7f":
+            out.append(f"\\{ord(char):03o}")
         else:
             out.append(char)
     return '"' + "".join(out) + '"'
@@ -228,7 +446,8 @@ def c_comment(value: str) -> str:
             out.append(f"\\u{ord(char):04x}")
         else:
             out.append(char)
-    return "".join(out).replace("*/", "* /")
+    # Both directions: `*/` ends the comment early, `/*` is -Wcomment under -Werror.
+    return "".join(out).replace("*/", "* /").replace("/*", "/ *")
 
 
 def mangle(key: str) -> str:
@@ -318,6 +537,16 @@ class Entry:
                 isinstance(self.plural_on, str) and self.plural_on in self.arg_types,
                 f"key {key!r} plural_on {self.plural_on!r} is not a declared argument "
                 f"(declared: {self.arg_order})",
+            )
+            # The runtime selects a category from a NUMBER. Bound to anything
+            # else it takes `other` for every value -- which for a rule that has
+            # no `other` (slavic, polish) silently renders one fixed form
+            # forever, while the generator demands the full set the rule can
+            # select. The two halves cancel out into wrong copy with no warning.
+            require(
+                self.arg_types[self.plural_on] != "str",
+                f"key {key!r} plural_on {self.plural_on!r} is a 'str'; a plural form is selected "
+                "by a number, so plural_on must name an int, int:group, or float argument",
             )
         self.is_plural = self.plural_on is not None
         self.plural_is_float = self.is_plural and self.arg_types[self.plural_on] in FLOAT_ARG_TYPES
@@ -463,11 +692,47 @@ class Table:
             )
             seen[entry.ident] = entry.key
 
+        # A key does not only collide with other keys: it also lands in the same
+        # namespace as loc.h and this generator's own output. `lang.ru` -> the
+        # enumerator LOC_LANG_RU, which the language block already defines --
+        # and a language-picker screen is exactly where someone writes it.
+        reserved = self.reserved_names()
+        for entry in self.entries:
+            for produced, kind in (
+                (f"LOC_{entry.ident.upper()}", "enumerator"),
+                (f"LOC0_{entry.ident.upper()}", "enumerator"),
+                (f"loc_{entry.ident}", "function"),
+            ):
+                require(
+                    produced not in reserved,
+                    f"key {entry.key!r} would emit the {kind} {produced!r}, which the runtime or "
+                    "the generated table already defines -- rename the key",
+                )
+
         self.source = source
         self.warnings: list[str] = []
         for entry in self.entries:
             for code in entry.missing_langs(self.langs):
                 self.warnings.append(f"no {code!r} translation for {entry.key!r} (falls back to {fallback!r})")
+
+    def reserved_names(self) -> set[str]:
+        names = {
+            "LOC_KEY_COUNT", "LOC_LANG_COUNT", "LOC0_COUNT", "LOC_FALLBACK_LANG",
+            "LOC_MAX_ARGS", "LOC_NUMBER_BUF", "LOC_GENERATED_MAX_ARGS",
+            "LOC_PLURAL_CAT_COUNT", "LOC_PLURAL_RULE_COUNT",
+            "loc_init", "loc_by_key", "loc_set_lang", "loc_lang", "loc_raw",
+            "loc_get", "loc_format", "loc_bind_table", "loc_group_i64",
+            "loc_set_lang_index", "loc_lang_index", "loc_lang_count", "loc_lang_code",
+            "loc_lang_from_code", "loc_fallback_log_count", "loc_plural_category",
+        }
+        names |= {f"LOC_PLURAL_{cat.upper()}" for cat in PLURAL_CATS}
+        names |= set(PLURAL_RULE_ENUM.values())
+        names |= {
+            "LOC_ARG_INT", "LOC_ARG_INT_GROUP", "LOC_ARG_FLOAT1", "LOC_ARG_FLOAT2",
+            "LOC_ARG_FLOAT_G", "LOC_ARG_STR",
+        }
+        names |= {f"LOC_LANG_{lang.code.upper().replace('-', '_')}" for lang in self.langs}
+        return names
 
     @property
     def key0(self) -> list[Entry]:
@@ -660,6 +925,74 @@ def render_source(table: Table) -> str:
     return "\n".join(lines)
 
 
+def render_plural_cases() -> str:
+    """Every (rule, n) -> category pair the Python table declares, as a C array.
+
+    This is the whole defence against the two halves drifting: loc.c's
+    loc_plural_category() is a hand transcription of the same 24 partitions,
+    and test_loc_e2e walks this array through the compiled function. Neither
+    half is trusted; they are compared."""
+    cat_enum = {
+        "zero": "LOC_PLURAL_ZERO",
+        "one": "LOC_PLURAL_ONE",
+        "two": "LOC_PLURAL_TWO",
+        "few": "LOC_PLURAL_FEW",
+        "many": "LOC_PLURAL_MANY",
+        "other": "LOC_PLURAL_OTHER",
+    }
+    lines = [
+        "/* Generated by features/localization/scripts/loc.py plural-cases.",
+        "   Do not edit by hand. */",
+        "",
+        '#include "loc_plural_cases.gen.h"',
+        "",
+        "const loc_plural_case_t k_loc_plural_cases[] = {",
+    ]
+    count = 0
+    for name, (fn, enum, _locales) in PLURAL_RULES.items():
+        lines.append(f"    /* {name} */")
+        for probe in PLURAL_PROBE:
+            lines.append(f"    {{ {enum}, {probe}LL, {cat_enum[fn(probe)]} }},")
+            count += 1
+        # Negative magnitudes take the same partition as their absolute value.
+        for probe in (1, 2, 5, 11, 21, 101):
+            lines.append(f"    {{ {enum}, -{probe}LL, {cat_enum[fn(probe)]} }},")
+            count += 1
+    lines.append("};")
+    lines.append("")
+    lines.append(f"const int k_loc_plural_case_count = {count};")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_plural_cases_header() -> str:
+    return "\n".join(
+        [
+            "#ifndef LOC_PLURAL_CASES_GEN_H",
+            "#define LOC_PLURAL_CASES_GEN_H",
+            "",
+            "/* Generated by features/localization/scripts/loc.py plural-cases.",
+            "   Do not edit by hand. */",
+            "",
+            "#include <stdint.h>",
+            "",
+            '#include "features/localization/loc.h"',
+            "",
+            "typedef struct loc_plural_case {",
+            "    loc_plural_rule_t rule;",
+            "    int64_t n;",
+            "    loc_plural_cat_t expected;",
+            "} loc_plural_case_t;",
+            "",
+            "extern const loc_plural_case_t k_loc_plural_cases[];",
+            "extern const int k_loc_plural_case_count;",
+            "",
+            "#endif /* LOC_PLURAL_CASES_GEN_H */",
+            "",
+        ]
+    )
+
+
 def render_index(table: Table) -> str:
     keys: list[dict[str, Any]] = []
     key0_ids = {entry.key: index for index, entry in enumerate(table.key0)}
@@ -705,8 +1038,8 @@ def validate_against_schema(doc: Any) -> None:
     document grammar. The semantic pass below owns what a grammar cannot say
     (placeholder parity, per-language plural sets, fallback completeness,
     identifier collisions). Split that way the two do not overlap, so neither
-    can quietly contradict the other; test_schema_matches_generator pins the
-    handful of values that appear in both."""
+    can quietly contradict the other; loc_test.py's SchemaIsLoadBearing pins
+    every value that appears in both."""
     try:
         import jsonschema
     except ImportError as exc:  # pragma: no cover - the studio venv ships it
@@ -759,6 +1092,20 @@ def cmd_generate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_plural_cases(args: argparse.Namespace) -> int:
+    out_dir = Path(args.out_dir).resolve()
+    changed: list[Path] = []
+    for name, text in (
+        ("loc_plural_cases.gen.h", render_plural_cases_header()),
+        ("loc_plural_cases.gen.c", render_plural_cases()),
+    ):
+        if write_if_changed(out_dir / name, text):
+            changed.append(out_dir / name)
+    if changed:
+        print(f"loc plural-cases: wrote {', '.join(str(path) for path in changed)}", file=sys.stderr)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="loc.py", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -777,6 +1124,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Provenance string baked into the generated comments (defaults to the file name).",
     )
     generate.set_defaults(func=cmd_generate)
+
+    cases = sub.add_parser(
+        "plural-cases",
+        help="Emit every (rule, n) -> category pair as C, for the runtime cross-check.",
+    )
+    cases.add_argument("--out-dir", required=True, help="Directory for loc_plural_cases.gen.{h,c}.")
+    cases.set_defaults(func=cmd_plural_cases)
 
     args = parser.parse_args(argv)
     return int(args.func(args))
