@@ -40,6 +40,11 @@
             "minimum": 1,
             "maximum": 18
           },
+          "alphabet": {
+            "description": "Every letter this language can write, whether or not the corpus uses it today. Optional. The generated font charset is otherwise exactly the characters the corpus happens to contain, which is correct but brittle: loc_raw() can hand a widget a formatted string carrying any byte, and that byte would render as a blank box. Declaring the alphabet costs a few glyphs in the atlas and removes the class. Case closure is automatic -- declare one case.",
+            "type": "string",
+            "maxLength": 512
+          },
           "plural_rule": {
             "description": "Override the CLDR rule the generator derives from the language code. Required only for a language the generator does not know.",
             "type": "string",

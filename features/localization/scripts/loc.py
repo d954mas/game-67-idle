@@ -464,8 +464,14 @@ class Lang:
         self.code = code
         require(bool(LANG_RE.match(code)), f"language code {code!r} must look like 'ru' or 'pt-BR'")
         require(isinstance(block, dict), f"language {code!r} must be an object")
-        unknown = set(block) - {"group_separator", "group_min_digits", "plural_rule"}
+        unknown = set(block) - {"group_separator", "group_min_digits", "plural_rule", "alphabet"}
         require(not unknown, f"language {code!r} has unknown field(s) {sorted(unknown)}")
+        alphabet = block.get("alphabet", "")
+        require(
+            isinstance(alphabet, str),
+            f"language {code!r} alphabet must be a string, got {alphabet!r}",
+        )
+        self.alphabet = alphabet
         separator = block.get("group_separator")
         require(
             isinstance(separator, str) and len(separator) <= 4,
@@ -1054,24 +1060,48 @@ def render_index(table: Table) -> str:
 
 def corpus_codepoints(table: Table) -> list[int]:
     """Every distinct codepoint the runtime can hand to a text widget, ASCII
-    excluded.
+    excluded. Four sources, and the last two exist because the first two were
+    not enough:
 
-    That is entry.forms (every language, every plural form) PLUS the language
-    block's own number-formatting marks. The marks are easy to forget because
-    they are metadata rather than copy, but `loc_group_i64` memcpy's
-    group_separator straight into drawn text -- so a language declaring U+00A0
-    (the typographically correct Russian thousands separator, and a natural
-    "fix" for the plain space in use today) would tofu every price on screen
-    with no build error and no failing test. Review 2026-08-05 found this hole
-    in the completeness argument."""
+    1. entry.forms -- every language, every plural form. The copy itself.
+
+    2. The language block's number-formatting MARKS. Easy to forget because
+       they are metadata rather than copy, but `loc_group_i64` memcpy's
+       group_separator straight into drawn text. A language declaring U+00A0
+       (the typographically correct Russian thousands separator, and the
+       obvious "fix" for the plain space in use today) would otherwise tofu
+       every price on screen with no build error and no failing test.
+
+    3. CASE CLOSURE. If a character is in the corpus, so is its other case.
+       Costs nothing, needs no table, and kills a whole failure class: the ru
+       copy is authored already-uppercase (ЗАКРЫТЬ, НАСТРОЙКИ), so any style
+       flag or `toupper` pass over corpus text would emit Ё, Ш, Ю -- none of
+       which the corpus contains in that case.
+
+    4. The language's declared `alphabet`, if it has one. This is the part that
+       is NOT derived, and it is deliberate. The charset is otherwise exactly
+       the characters the corpus happens to contain today, which makes the
+       atlas correct-by-construction but brittle against the one hole the
+       architecture cannot close: `loc_raw()`, where a formatted string can
+       carry any byte. Declaring the alphabet costs a few glyphs and removes
+       the class. A language that declares nothing degrades to 1-3, which is
+       safe, not silent."""
     seen: set[int] = set()
     for entry in table.entries:
         for forms in entry.forms.values():
             for text in forms.values():
                 seen.update(ord(ch) for ch in text)
     for lang in table.langs:
-        for mark in (lang.group_separator,):
-            seen.update(ord(ch) for ch in (mark or ""))
+        for text in (lang.group_separator or "", lang.alphabet or ""):
+            seen.update(ord(ch) for ch in text)
+    # Case closure last, so it also covers the alphabet and the separators.
+    for cp in list(seen):
+        ch = chr(cp)
+        for other in (ch.upper(), ch.lower()):
+            # A one-character upper()/lower() can return MORE than one
+            # character (German ß -> SS). Every codepoint of the result is
+            # renderable text, so take them all.
+            seen.update(ord(c) for c in other)
     return sorted(cp for cp in seen if cp > 0x7F)
 
 
