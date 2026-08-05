@@ -404,7 +404,13 @@ LocStr loc_number(int64_t value) {
  * foreign convention, `1,` misreads as a different value. */
 static void apply_decimal_separator(char *text, size_t cap, const loc_lang_def_t *lang) {
     const char *sep = lang->decimal_separator;
-    if (sep == NULL || (sep[0] == '.' && sep[1] == '\0')) {
+    /* EMPTY is rejected here, not just NULL and ".". An empty separator makes
+       sep_len 0, the fit check passes trivially, and the memmove below shifts
+       the tail LEFT over the dot -- 1.5 renders as 15, a different number. That
+       is worse than the truncation the fit check exists to prevent. The schema
+       (minLength 1) and loc.py keep it out of the data; a hand-built table, of
+       which the tests are full, can still reach it. Review 2026-08-06. */
+    if (sep == NULL || sep[0] == '\0' || (sep[0] == '.' && sep[1] == '\0')) {
         return;
     }
     char *dot = strchr(text, '.');

@@ -1236,6 +1236,17 @@ def _cmap_format4(data: bytes, base: int) -> set[int]:
     starts = ends + seg_count * 2 + 2  # +2 skips reservedPad
     deltas = starts + seg_count * 2
     range_offsets = deltas + seg_count * 2
+    # Bounded like format 12, and for the same reason -- which the 2026-08-05
+    # commit claimed to have done for "every field" when it had only done it
+    # for format 12 (review 2026-08-06). The values here are uint16, so no
+    # single range can explode; the COUNT can. `_u16` raises on a short read,
+    # but the `range_offset == 0` branch below reads nothing, so a segment
+    # table that runs past the file iterates in silence: 32767 segments of
+    # 0..0xFFFF is 2.1e9 pure-Python steps, and the gate hangs for hours
+    # instead of failing legibly.
+    if range_offsets + seg_count * 2 > len(data):
+        raise ValueError(
+            f"cmap format 4: {seg_count} segments run past the end of the file")
     mapped: set[int] = set()
     for seg in range(seg_count):
         end = _u16(data, ends + seg * 2)
@@ -1425,7 +1436,14 @@ def cmd_fonts(args: argparse.Namespace) -> int:
     the packed fonts is their own glyph coverage: the charset this game shipped
     by hand carried the comment "NO U+2192 arrow: Rubik lacks it"."""
     table = load_table(Path(args.strings).resolve())
-    wanted = corpus_codepoints(table)
+    # The PACK's charset is NT_CHARSET_ASCII + LOC_CHARSET_NON_ASCII
+    # (src/build_packs.c), so checking only the generated non-ASCII half left
+    # the other half of what is actually packed unchecked -- a font missing a
+    # printable ASCII glyph passed here and then died in the builder under the
+    # anonymous "codepoint not in font" assert, which is the illegible failure
+    # this command exists to replace (review 2026-08-06). U+20..U+7E is what
+    # NT_CHARSET_ASCII covers.
+    wanted = list(range(0x20, 0x7F)) + corpus_codepoints(table)
     failures: list[str] = []
     for spec in args.font:
         label, sep, raw_path = spec.partition("=")
@@ -1440,7 +1458,7 @@ def cmd_fonts(args: argparse.Namespace) -> int:
         if missing:
             shown = ", ".join(f"U+{cp:04X} '{chr(cp)}'" for cp in missing[:12])
             more = f" (+{len(missing) - 12} more)" if len(missing) > 12 else ""
-            failures.append(f"{label} ({path.name}) lacks {len(missing)} corpus codepoint(s): {shown}{more}")
+            failures.append(f"{label} ({path.name}) lacks {len(missing)} packed codepoint(s): {shown}{more}")
     if failures:
         print("loc fonts: a packed font cannot render the corpus", file=sys.stderr)
         for line in failures:
@@ -1452,7 +1470,8 @@ def cmd_fonts(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    print(f"loc fonts: ok ({len(args.font)} font(s) cover all {len(wanted)} non-ASCII corpus codepoints)")
+    print(f"loc fonts: ok ({len(args.font)} font(s) cover all {len(wanted)} packed codepoints: "
+          f"95 printable ASCII + {len(wanted) - 95} from the corpus)")
     return 0
 
 
