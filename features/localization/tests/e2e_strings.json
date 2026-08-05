@@ -2,6 +2,7 @@
   "languages": {
     "ru": {
       "group_separator": " ",
+      "decimal_separator": ",",
       "group_min_digits": 5
     },
     "en": {

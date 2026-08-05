@@ -372,6 +372,16 @@ const char *loc_group_i64(int64_t value, char *out, size_t cap) {
     return out;
 }
 
+const char *loc_decimal_separator(void) {
+    NT_ASSERT(s_table != NULL && "loc_decimal_separator: call loc_init() first");
+    const char *sep = s_table->langs[s_lang].decimal_separator;
+    /* The generator always emits one, but a hand-built table (the tests do
+       this) may not. Returning NULL would push the check onto every caller,
+       and the caller is a formatter that would then have its own idea of the
+       default -- which is the duplication this function exists to remove. */
+    return (sep != NULL) ? sep : ".";
+}
+
 LocStr loc_number(int64_t value) {
     NT_ASSERT(s_table != NULL && "loc_number: call loc_init() first");
     char buf[LOC_NUMBER_BUF];
@@ -380,6 +390,35 @@ LocStr loc_number(int64_t value) {
     char *out = (char *)nt_mem_scratch_alloc(len + 1u, 1u);
     memcpy(out, buf, len + 1u);
     return loc_raw(out);
+}
+
+/* The C library writes '.' whatever the language is, because this module never
+ * touches setlocale -- that is process-global state, and a text module has no
+ * business changing how the whole program parses numbers. So the mark is
+ * substituted afterwards, in place.
+ *
+ * `snprintf` emits at most ONE '.', so this is a single splice, not a scan-and-
+ * replace loop. A separator longer than one byte (a comma is one, but nothing
+ * requires it) shifts the tail right; if the result would not fit, the ORIGINAL
+ * text is left alone. Wrong mark beats a truncated number: `1.2` misreads as a
+ * foreign convention, `1,` misreads as a different value. */
+static void apply_decimal_separator(char *text, size_t cap, const loc_lang_def_t *lang) {
+    const char *sep = lang->decimal_separator;
+    if (sep == NULL || (sep[0] == '.' && sep[1] == '\0')) {
+        return;
+    }
+    char *dot = strchr(text, '.');
+    if (dot == NULL) {
+        return;
+    }
+    const size_t len = strlen(text);
+    const size_t sep_len = strlen(sep);
+    const size_t tail = len - (size_t)(dot - text) - 1u; /* bytes after the '.' */
+    if (len - 1u + sep_len + 1u > cap) {
+        return;
+    }
+    memmove(dot + sep_len, dot + 1, tail + 1u); /* +1 carries the NUL */
+    memcpy(dot, sep, sep_len);
 }
 
 static const char *render_arg(const loc_arg_t *arg, const loc_lang_def_t *lang, char *scratch, size_t cap) {
@@ -394,13 +433,16 @@ static const char *render_arg(const loc_arg_t *arg, const loc_lang_def_t *lang, 
         return scratch;
     case LOC_ARG_FLOAT1:
         (void)snprintf(scratch, cap, "%.1f", arg->f);
+        apply_decimal_separator(scratch, cap, lang);
         return scratch;
     case LOC_ARG_FLOAT2:
         (void)snprintf(scratch, cap, "%.2f", arg->f);
+        apply_decimal_separator(scratch, cap, lang);
         return scratch;
     case LOC_ARG_FLOAT_G:
     default:
         (void)snprintf(scratch, cap, "%g", arg->f);
+        apply_decimal_separator(scratch, cap, lang);
         return scratch;
     }
 }

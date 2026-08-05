@@ -44,7 +44,7 @@ game's number formatter.
 ```json
 {
   "languages": {
-    "ru": { "group_separator": " ", "group_min_digits": 5 },
+    "ru": { "group_separator": " ", "group_min_digits": 5, "decimal_separator": "," },
     "en": { "group_separator": ",", "group_min_digits": 4 }
   },
   "fallback": "ru",
@@ -76,13 +76,29 @@ Declared explicitly, never inferred from the placeholder name.
 |---|---|---|
 | `int` | `int64_t` | plain digits |
 | `int:group` | `int64_t` | digit grouping from the **language block** |
-| `float:1`, `float:2` | `float` | fixed decimals |
-| `float:g` | `float` | shortest round-trip (`%g`) |
+| `float:1`, `float:2` | `float` | fixed decimals, mark from the **language block** |
+| `float:g` | `float` | shortest round-trip (`%g`), same mark |
 | `str` | `LocStr` | verbatim |
 
-Digit grouping is language data because it *is* language data: Russian groups
-from five digits with a space, English from four with a comma. A game-side
-number formatter cannot be both.
+Both number marks are language data because they *are* language data: Russian
+groups from five digits with a space and separates with a comma, English groups
+from four with a comma and separates with a dot. A game-side number formatter
+cannot be both.
+
+`decimal_separator` is optional and defaults to `"."`, so a corpus written
+before it existed renders exactly as it did. It may not equal
+`group_separator` — `1,234` would have two readings — and may not contain a
+digit. Both are checked at generate time.
+
+The substitution happens after `snprintf`, never through `setlocale`:
+`setlocale` is process-global, and a text module has no business changing how
+the whole program parses numbers.
+
+**A formatter outside this module** — an abbreviated `1,2m`, say — should not
+gain a dependency on localization for one character. The ladder (when to
+abbreviate, how many digits, which suffixes) is game design and reads the same
+in every language; only the mark is language data. So such a formatter takes
+the mark as a parameter, and the call site reads `loc_decimal_separator()`.
 
 ### Escaping
 

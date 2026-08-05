@@ -464,7 +464,10 @@ class Lang:
         self.code = code
         require(bool(LANG_RE.match(code)), f"language code {code!r} must look like 'ru' or 'pt-BR'")
         require(isinstance(block, dict), f"language {code!r} must be an object")
-        unknown = set(block) - {"group_separator", "group_min_digits", "plural_rule", "alphabet"}
+        unknown = set(block) - {
+            "group_separator", "group_min_digits", "decimal_separator",
+            "plural_rule", "alphabet",
+        }
         require(not unknown, f"language {code!r} has unknown field(s) {sorted(unknown)}")
         alphabet = block.get("alphabet", "")
         require(
@@ -478,6 +481,25 @@ class Lang:
             f"language {code!r} group_separator must be a string of at most 4 bytes, got {separator!r}",
         )
         self.group_separator = separator
+        # Optional, and defaulted rather than required: adding it to `required`
+        # would invalidate every strings.json already in a game, and "." is what
+        # those corpora already render.
+        decimal = block.get("decimal_separator", ".")
+        require(
+            isinstance(decimal, str) and 1 <= len(decimal.encode("utf-8")) <= 4,
+            f"language {code!r} decimal_separator must be a string of 1..4 bytes, got {decimal!r}",
+        )
+        require(
+            not any(ch.isdigit() for ch in decimal),
+            f"language {code!r} decimal_separator {decimal!r} contains a digit, "
+            f"which would make the number unreadable",
+        )
+        require(
+            not (separator and decimal == separator),
+            f"language {code!r} uses {decimal!r} as BOTH the group and the decimal "
+            f"separator, so 1{decimal}234 has two readings",
+        )
+        self.decimal_separator = decimal
         min_digits = block.get("group_min_digits")
         require(
             isinstance(min_digits, int) and not isinstance(min_digits, bool) and 1 <= min_digits <= 18,
@@ -848,6 +870,7 @@ def render_source(table: Table) -> str:
     for lang in table.langs:
         lines.append(
             f"    {{ {c_string(lang.code)}, {c_string(lang.group_separator)}, "
+            f"{c_string(lang.decimal_separator)}, "
             f"{lang.group_min_digits}, {PLURAL_RULE_ENUM[lang.plural_rule]} }},"
         )
     lines.append("};")
@@ -1065,12 +1088,14 @@ def corpus_codepoints(table: Table) -> list[int]:
 
     1. entry.forms -- every language, every plural form. The copy itself.
 
-    2. The language block's number-formatting MARKS. Easy to forget because
-       they are metadata rather than copy, but `loc_group_i64` memcpy's
-       group_separator straight into drawn text. A language declaring U+00A0
-       (the typographically correct Russian thousands separator, and the
-       obvious "fix" for the plain space in use today) would otherwise tofu
-       every price on screen with no build error and no failing test.
+    2. The language block's number-formatting MARKS -- group_separator AND
+       decimal_separator. Easy to forget because they are metadata rather than
+       copy, but `loc_group_i64` memcpy's group_separator straight into drawn
+       text and every `float:*` argument splices in decimal_separator. A
+       language declaring U+00A0 (the typographically correct Russian thousands
+       separator, and the obvious "fix" for the plain space in use today) would
+       otherwise tofu every price on screen with no build error and no failing
+       test.
 
     3. CASE CLOSURE. If a character is in the corpus, so is its other case.
        Costs nothing, needs no table, and kills a whole failure class: the ru
@@ -1092,7 +1117,8 @@ def corpus_codepoints(table: Table) -> list[int]:
             for text in forms.values():
                 seen.update(ord(ch) for ch in text)
     for lang in table.langs:
-        for text in (lang.group_separator or "", lang.alphabet or ""):
+        for text in (lang.group_separator or "", lang.decimal_separator or "",
+                     lang.alphabet or ""):
             seen.update(ord(ch) for ch in text)
     # Case closure last, so it also covers the alphabet and the separators.
     for cp in list(seen):

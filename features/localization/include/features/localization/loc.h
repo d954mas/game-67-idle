@@ -88,9 +88,10 @@ typedef enum loc_plural_rule {
 } loc_plural_rule_t;
 
 typedef struct loc_lang_def {
-    const char *code;            /* "ru" */
-    const char *group_separator; /* inserted every 3 digits by `int:group` */
-    int group_min_digits;        /* grouping starts once the integer part is this long */
+    const char *code;              /* "ru" */
+    const char *group_separator;   /* inserted every 3 digits by `int:group` */
+    const char *decimal_separator; /* replaces the C locale's '.' in every float:* arg */
+    int group_min_digits;          /* grouping starts once the integer part is this long */
     loc_plural_rule_t plural_rule;
 } loc_lang_def_t;
 
@@ -172,6 +173,15 @@ int loc_lang_from_code(const char *code);
  * losing the grouping (never a digit): the separators are dropped before any
  * digit is, and an empty string only when even the bare digits do not fit. */
 const char *loc_group_i64(int64_t value, char *out, size_t cap);
+
+/* The ACTIVE language's decimal mark, for a formatter that lives OUTSIDE this
+ * module. Every `float:*` argument already applies it, so a key never needs
+ * this -- it exists for game-side number formatting (an abbreviated `1.2m`),
+ * which is game design and must not gain a dependency on localization. Such a
+ * formatter takes the mark as a PARAMETER and the call site reads it here.
+ * Never NULL; "." until a language says otherwise. Points into the static
+ * table, so it outlives any frame. */
+const char *loc_decimal_separator(void);
 
 /* The same number, as LocStr straight from the per-frame arena. Use this at a
  * call site that hands the result to a text widget -- a caller-owned buffer

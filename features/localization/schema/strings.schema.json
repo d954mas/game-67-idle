@@ -40,6 +40,12 @@
             "minimum": 1,
             "maximum": 18
           },
+          "decimal_separator": {
+            "description": "The mark between the integer and fractional part, applied to every float:* argument. Defaults to '.' so existing corpora render exactly as before -- optional rather than required for that reason alone. Russian writes a comma. May not equal group_separator (1,234 would have two readings) and may not contain a digit. This is the same argument as group_separator: the decimal mark is language data, not game code.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4
+          },
           "alphabet": {
             "description": "Every letter this language can write, whether or not the corpus uses it today. Optional. The generated font charset is otherwise exactly the characters the corpus happens to contain, which is correct but brittle: loc_raw() can hand a widget a formatted string carrying any byte, and that byte would render as a blank box. Declaring the alphabet costs a few glyphs in the atlas and removes the class. Case closure is automatic -- declare one case.",
             "type": "string",

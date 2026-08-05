@@ -86,7 +86,7 @@ void test_widest_key_renders_every_slot(void) {
 /* --- argument types ----------------------------------------------------- */
 
 void test_number_types_render_per_language(void) {
-    TEST_ASSERT_EQUAL_STRING("1500000|1 500 000|2.5|2.50|0.125",
+    TEST_ASSERT_EQUAL_STRING("1500000|1 500 000|2,5|2,50|0,125",
                              loc_e2e_numbers(1500000, 1500000, 2.5F, 2.5F, 0.125F).s);
     loc_set_lang(LOC_LANG_EN);
     TEST_ASSERT_EQUAL_STRING("1500000|1,500,000|2.5|2.50|0.125",
@@ -95,9 +95,36 @@ void test_number_types_render_per_language(void) {
 
 void test_grouping_threshold_comes_from_the_language_block(void) {
     /* ru groups from five digits, en from four -- same number, same key. */
-    TEST_ASSERT_EQUAL_STRING("1000|1000|0.0|0.00|0", loc_e2e_numbers(1000, 1000, 0.0F, 0.0F, 0.0F).s);
+    TEST_ASSERT_EQUAL_STRING("1000|1000|0,0|0,00|0", loc_e2e_numbers(1000, 1000, 0.0F, 0.0F, 0.0F).s);
     loc_set_lang(LOC_LANG_EN);
     TEST_ASSERT_EQUAL_STRING("1000|1,000|0.0|0.00|0", loc_e2e_numbers(1000, 1000, 0.0F, 0.0F, 0.0F).s);
+}
+
+/* The decimal MARK is the same argument as digit grouping, and was hardcoded to
+   the C locale until 2026-08-05: every float:* argument printed '.' in every
+   language, so the FALLBACK and authoring language rendered wrong. ru declares a
+   comma here; en declares nothing and gets the default.
+
+   The `int:group` column proves the two marks stay independent -- ru's group
+   separator is a space, so `1 500 000` and `2,5` sit in the same string above
+   without either rule reaching into the other. */
+void test_decimal_mark_is_language_data(void) {
+    TEST_ASSERT_EQUAL_STRING("0|0|0,1|0,10|0,1", loc_e2e_numbers(0, 0, 0.1F, 0.1F, 0.1F).s);
+    /* A negative value: the mark lands after the digits, not near the sign. */
+    TEST_ASSERT_EQUAL_STRING("0|0|-2,5|-2,50|-2,5", loc_e2e_numbers(0, 0, -2.5F, -2.5F, -2.5F).s);
+    /* float:g on a whole number emits NO fractional part, so no mark appears
+       from nowhere -- the substitution is on a '.' that exists, not an insert. */
+    TEST_ASSERT_EQUAL_STRING("0|0|3,0|3,00|3", loc_e2e_numbers(0, 0, 3.0F, 3.0F, 3.0F).s);
+    loc_set_lang(LOC_LANG_EN);
+    TEST_ASSERT_EQUAL_STRING("0|0|0.1|0.10|0.1", loc_e2e_numbers(0, 0, 0.1F, 0.1F, 0.1F).s);
+}
+
+void test_loc_decimal_separator_exposes_the_mark_to_game_code(void) {
+    /* A game-side formatter (an abbreviated `1,2m`) must not depend on this
+       module, so it takes the mark as a parameter and reads it here. */
+    TEST_ASSERT_EQUAL_STRING(",", loc_decimal_separator());
+    loc_set_lang(LOC_LANG_EN);
+    TEST_ASSERT_EQUAL_STRING(".", loc_decimal_separator()); /* undeclared -> default */
 }
 
 void test_loc_group_i64_follows_the_active_language(void) {
@@ -238,8 +265,8 @@ void test_french_rule_covers_zero_with_one(void) {
 }
 
 void test_float_plural_always_takes_other(void) {
-    TEST_ASSERT_EQUAL_STRING("1.5 метра", loc_e2e_fractional(1.5F).s);
-    TEST_ASSERT_EQUAL_STRING("1.0 метра", loc_e2e_fractional(1.0F).s);
+    TEST_ASSERT_EQUAL_STRING("1,5 метра", loc_e2e_fractional(1.5F).s);
+    TEST_ASSERT_EQUAL_STRING("1,0 метра", loc_e2e_fractional(1.0F).s);
     loc_set_lang(LOC_LANG_EN);
     TEST_ASSERT_EQUAL_STRING("1.0 metres", loc_e2e_fractional(1.0F).s);
 }
@@ -285,6 +312,8 @@ int main(void) {
     RUN_TEST(test_widest_key_renders_every_slot);
     RUN_TEST(test_number_types_render_per_language);
     RUN_TEST(test_grouping_threshold_comes_from_the_language_block);
+    RUN_TEST(test_decimal_mark_is_language_data);
+    RUN_TEST(test_loc_decimal_separator_exposes_the_mark_to_game_code);
     RUN_TEST(test_loc_group_i64_follows_the_active_language);
     RUN_TEST(test_loc_group_i64_drops_separators_before_digits);
     RUN_TEST(test_int64_extremes_survive_grouping);
