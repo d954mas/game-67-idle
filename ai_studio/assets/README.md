@@ -13,6 +13,9 @@ Top-level groups:
   `alpha_matte`, `alpha_dualplate`, `route`, over a shared `_bridge`), used by
   agents and the canvas module. Older source-sheet, crop, and review tools stay
   in place until replaced stage by stage.
+  Blender scene work routes through `tools/blender/`, whose feedback loop keeps
+  technical integrity, art-direction fidelity, completion, and evidence
+  freshness as separate fail-closed gates.
 - `canvas/`: multi-image canvas projects (Figma/Recraft-like). Every capability
   is one operation in a shared ops layer with two equal clients, the agent
   (CLI/import) and the thin browser page; `detect_regions` bridges to the image

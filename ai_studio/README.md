@@ -92,6 +92,9 @@ Load only the route that matches the current task:
   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open`.
 - Asset browsing and review:
   `http://127.0.0.1:8765/asset_viewer/`.
+- Blender modeling, lookdev, scene auditing, and review-ready feedback loop:
+  `ai_studio/assets/tools/blender/README.md` and the
+  `nt-blender-production` skill.
 - Multi-image canvas, region detect/slice, and composite export:
   `http://127.0.0.1:8765/canvas`.
 - Architecture map validation report:

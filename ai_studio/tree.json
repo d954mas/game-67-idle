@@ -407,7 +407,20 @@
             "description": "Asset preparation and media workflow tools.",
             "entry": "ai_studio/assets/tools/README.md",
             "verifyDomain": "assets",
-            "coverage": "subtree"
+            "coverage": "subtree",
+            "children": [
+              {
+                "id": "blender-production",
+                "title": "Blender production",
+                "kind": "module",
+                "path": "ai_studio/assets/tools/blender",
+                "owner": "3D Asset Pipeline Owner",
+                "description": "Fail-closed Blender workflow separating topology, art-direction, evidence freshness, independent review, and completion gates.",
+                "entry": "ai_studio/assets/tools/blender/README.md",
+                "verifyDomain": "assets",
+                "coverage": "subtree"
+              }
+            ]
           },
           {
             "id": "canvas",

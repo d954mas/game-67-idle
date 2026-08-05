@@ -33,6 +33,9 @@ model, or checking a texture. They are not a separate top-level asset group.
   its own asset loading/build pipeline.
 - `textures/`: standalone material texture checks, including 2x2 repeat preview
   generation and seam metrics.
+- `blender/`: fail-closed Blender modeling/lookdev workflow with evaluated-mesh
+  topology audits, reference/style mismatch review, fresh-hash evidence packets,
+  independent verification, and completion gates before rollout or handoff.
 
 The older `source_sheets/`, `crop/`, `cutout/`, and `review_atlas/` folders
 remain in place until each step is moved into `image/` with tests and callers

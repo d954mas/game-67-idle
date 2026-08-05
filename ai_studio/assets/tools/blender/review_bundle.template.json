@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "profile": "lookdev",
+  "scene": {
+    "path": "REPLACE.blend",
+    "sha256": "REPLACE_WITH_64_HEX_CHARACTERS"
+  },
+  "reference_lock": {
+    "spec_path": "REPLACE_SPEC.md",
+    "approved_references": ["REPLACE_APPROVED_REFERENCE.png"],
+    "success_criteria": ["REPLACE_WITH_OBSERVABLE_DONE_CONDITION"],
+    "camera": {"name": "CAM_Master"}
+  },
+  "technical": {
+    "status": "block",
+    "scene_sha256": "REPLACE_WITH_64_HEX_CHARACTERS",
+    "checks": []
+  },
+  "art_direction": {
+    "status": "block",
+    "scene_sha256": "REPLACE_WITH_64_HEX_CHARACTERS",
+    "checks": [],
+    "mismatches": []
+  },
+  "evidence": {
+    "scene_sha256": "REPLACE_WITH_64_HEX_CHARACTERS",
+    "renders": []
+  },
+  "independent_review": {
+    "required": true,
+    "status": "block",
+    "reviewers": [],
+    "findings": []
+  },
+  "open_findings": []
+}
