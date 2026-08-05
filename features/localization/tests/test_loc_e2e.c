@@ -30,8 +30,8 @@ void tearDown(void) { nt_mem_scratch_shutdown(); }
 /* --- the table the generator built ------------------------------------- */
 
 void test_generated_enums_match_the_corpus(void) {
-    TEST_ASSERT_EQUAL_INT(6, LOC_LANG_COUNT);
-    TEST_ASSERT_EQUAL_INT(10, LOC_KEY_COUNT);
+    TEST_ASSERT_EQUAL_INT(7, LOC_LANG_COUNT); /* ru en ja pl cs fr + ar */
+    TEST_ASSERT_EQUAL_INT(11, LOC_KEY_COUNT);
     /* Only the keys with no arguments are addressable as data. */
     TEST_ASSERT_EQUAL_INT(3, LOC0_COUNT);
     TEST_ASSERT_EQUAL_INT(LOC_LANG_RU, LOC_FALLBACK_LANG);
@@ -174,6 +174,32 @@ void test_slavic_rule_selects_one_few_many(void) {
     TEST_ASSERT_EQUAL_STRING("0 шагов", steps(0));
 }
 
+/* The zero and two slots. Slots 0 and 2 of every plural row this generator has
+   ever emitted, and until this test NOTHING READ THEM: the fixture's six
+   languages between them use only one/few/many/other, and no game corpus has a
+   plural key at all.
+   The 10152-case cross-check proves Python and C agree on which CATEGORY a
+   number selects. It says nothing about whether the runtime can then render the
+   slot it selected -- a row-offset error in form_for() would leave that check
+   green and every Arabic or Welsh string wrong.
+   Markers, not prose: the assertion is about WHICH SLOT was read. */
+void test_arabic_rule_reads_every_slot_including_zero_and_two(void) {
+    loc_set_lang(LOC_LANG_AR);
+    TEST_ASSERT_EQUAL_STRING("ar-zero 0", loc_e2e_every_category(0).s);
+    TEST_ASSERT_EQUAL_STRING("ar-one 1", loc_e2e_every_category(1).s);
+    TEST_ASSERT_EQUAL_STRING("ar-two 2", loc_e2e_every_category(2).s);
+    TEST_ASSERT_EQUAL_STRING("ar-few 3", loc_e2e_every_category(3).s);
+    TEST_ASSERT_EQUAL_STRING("ar-few 10", loc_e2e_every_category(10).s);
+    TEST_ASSERT_EQUAL_STRING("ar-many 11", loc_e2e_every_category(11).s);
+    TEST_ASSERT_EQUAL_STRING("ar-many 99", loc_e2e_every_category(99).s);
+    TEST_ASSERT_EQUAL_STRING("ar-other 100", loc_e2e_every_category(100).s);
+    /* Same key, a rule that uses neither slot -- proves the row is indexed by
+       category and not by position-within-the-forms-this-language-declares. */
+    loc_set_lang(LOC_LANG_RU);
+    TEST_ASSERT_EQUAL_STRING("ru-one 1", loc_e2e_every_category(1).s);
+    TEST_ASSERT_EQUAL_STRING("ru-many 11", loc_e2e_every_category(11).s);
+}
+
 void test_one_other_rule(void) {
     loc_set_lang(LOC_LANG_EN);
     TEST_ASSERT_EQUAL_STRING("1 step", steps(1));
@@ -265,6 +291,7 @@ int main(void) {
     RUN_TEST(test_every_plural_rule_matches_the_generator);
     RUN_TEST(test_every_rule_is_reachable_from_the_case_table);
     RUN_TEST(test_slavic_rule_selects_one_few_many);
+    RUN_TEST(test_arabic_rule_reads_every_slot_including_zero_and_two);
     RUN_TEST(test_one_other_rule);
     RUN_TEST(test_other_only_rule);
     RUN_TEST(test_polish_rule);

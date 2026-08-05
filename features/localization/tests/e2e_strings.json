@@ -1,11 +1,33 @@
 {
   "languages": {
-    "ru": { "group_separator": " ", "group_min_digits": 5 },
-    "en": { "group_separator": ",", "group_min_digits": 4 },
-    "ja": { "group_separator": ",", "group_min_digits": 4 },
-    "pl": { "group_separator": " ", "group_min_digits": 5 },
-    "cs": { "group_separator": " ", "group_min_digits": 5 },
-    "fr": { "group_separator": " ", "group_min_digits": 5 }
+    "ru": {
+      "group_separator": " ",
+      "group_min_digits": 5
+    },
+    "en": {
+      "group_separator": ",",
+      "group_min_digits": 4
+    },
+    "ja": {
+      "group_separator": ",",
+      "group_min_digits": 4
+    },
+    "pl": {
+      "group_separator": " ",
+      "group_min_digits": 5
+    },
+    "cs": {
+      "group_separator": " ",
+      "group_min_digits": 5
+    },
+    "fr": {
+      "group_separator": " ",
+      "group_min_digits": 5
+    },
+    "ar": {
+      "group_separator": ",",
+      "group_min_digits": 4
+    }
   },
   "fallback": "ru",
   "strings": {
@@ -16,7 +38,8 @@
       "ja": "閉じる",
       "pl": "ZAMKNIJ",
       "cs": "ZAVRIT",
-      "fr": "FERMER"
+      "fr": "FERMER",
+      "ar": "CLOSE"
     },
     "e2e.braces_bare": {
       "note": "Escapes must already be resolved at build time -- nothing unescapes a zero-arg key.",
@@ -25,47 +48,72 @@
       "ja": "100% {{完了}}",
       "pl": "100% {{gotowe}}",
       "cs": "100% {{hotovo}}",
-      "fr": "100% {{fini}}"
+      "fr": "100% {{fini}}",
+      "ar": "100% {{done}}"
     },
     "e2e.braces_arg": {
       "note": "Escapes in a template are resolved by the runtime while it expands.",
-      "args": { "what": "str" },
+      "args": {
+        "what": "str"
+      },
       "ru": "100% {{{what}}}",
       "en": "100% {{{what}}}",
       "ja": "100% {{{what}}}",
       "pl": "100% {{{what}}}",
       "cs": "100% {{{what}}}",
-      "fr": "100% {{{what}}}"
+      "fr": "100% {{{what}}}",
+      "ar": "100% {{{what}}}"
     },
     "e2e.reordered": {
       "note": "Argument order differs per language; slots are indices, not positions.",
-      "args": { "first": "str", "second": "str" },
+      "args": {
+        "first": "str",
+        "second": "str"
+      },
       "ru": "{second} затем {first}",
       "en": "{first} then {second}",
       "ja": "{first} と {second}",
       "pl": "{second} potem {first}",
       "cs": "{second} pak {first}",
-      "fr": "{second} puis {first}"
+      "fr": "{second} puis {first}",
+      "ar": "{first} then {second}"
     },
     "e2e.numbers": {
       "note": "Every arg type in one key, including grouping from the language block.",
-      "args": { "n": "int", "grouped": "int:group", "one_dp": "float:1", "two_dp": "float:2", "shortest": "float:g" },
+      "args": {
+        "n": "int",
+        "grouped": "int:group",
+        "one_dp": "float:1",
+        "two_dp": "float:2",
+        "shortest": "float:g"
+      },
       "ru": "{n}|{grouped}|{one_dp}|{two_dp}|{shortest}",
       "en": "{n}|{grouped}|{one_dp}|{two_dp}|{shortest}",
       "ja": "{n}|{grouped}|{one_dp}|{two_dp}|{shortest}",
       "pl": "{n}|{grouped}|{one_dp}|{two_dp}|{shortest}",
       "cs": "{n}|{grouped}|{one_dp}|{two_dp}|{shortest}",
-      "fr": "{n}|{grouped}|{one_dp}|{two_dp}|{shortest}"
+      "fr": "{n}|{grouped}|{one_dp}|{two_dp}|{shortest}",
+      "ar": "{n}|{grouped}|{one_dp}|{two_dp}|{shortest}"
     },
     "e2e.widest": {
       "note": "LOC_MAX_ARGS arguments in one key -- the _Static_assert's upper edge.",
-      "args": { "a": "int", "b": "int", "c": "int", "d": "int", "e": "int", "f": "int", "g": "int", "h": "int" },
+      "args": {
+        "a": "int",
+        "b": "int",
+        "c": "int",
+        "d": "int",
+        "e": "int",
+        "f": "int",
+        "g": "int",
+        "h": "int"
+      },
       "ru": "{a}{b}{c}{d}{e}{f}{g}{h}",
       "en": "{a}{b}{c}{d}{e}{f}{g}{h}",
       "ja": "{a}{b}{c}{d}{e}{f}{g}{h}",
       "pl": "{a}{b}{c}{d}{e}{f}{g}{h}",
       "cs": "{a}{b}{c}{d}{e}{f}{g}{h}",
-      "fr": "{a}{b}{c}{d}{e}{f}{g}{h}"
+      "fr": "{a}{b}{c}{d}{e}{f}{g}{h}",
+      "ar": "{a}{b}{c}{d}{e}{f}{g}{h}"
     },
     "e2e.hole": {
       "note": "Only the fallback language carries this one.",
@@ -73,35 +121,127 @@
     },
     "e2e.counted": {
       "note": "One plural key per rule family -- this is what pins PLURAL_RULE_CATS against plural_select().",
-      "args": { "n": "int" },
+      "args": {
+        "n": "int"
+      },
       "plural_on": "n",
-      "ru": { "one": "{n} шаг", "few": "{n} шага", "many": "{n} шагов" },
-      "en": { "one": "{n} step", "other": "{n} steps" },
-      "ja": { "other": "{n} 歩" },
-      "pl": { "one": "{n} krok", "few": "{n} kroki", "many": "{n} krokow" },
-      "cs": { "one": "{n} krok", "few": "{n} kroky", "other": "{n} kroku" },
-      "fr": { "one": "{n} pas", "other": "{n} pas x" }
+      "ru": {
+        "one": "{n} шаг",
+        "few": "{n} шага",
+        "many": "{n} шагов"
+      },
+      "en": {
+        "one": "{n} step",
+        "other": "{n} steps"
+      },
+      "ja": {
+        "other": "{n} 歩"
+      },
+      "pl": {
+        "one": "{n} krok",
+        "few": "{n} kroki",
+        "many": "{n} krokow"
+      },
+      "cs": {
+        "one": "{n} krok",
+        "few": "{n} kroky",
+        "other": "{n} kroku"
+      },
+      "fr": {
+        "one": "{n} pas",
+        "other": "{n} pas x"
+      },
+      "ar": {
+        "zero": "ar-zero {n}",
+        "one": "ar-one {n}",
+        "two": "ar-two {n}",
+        "few": "ar-few {n}",
+        "many": "ar-many {n}",
+        "other": "ar-other {n}"
+      }
     },
     "e2e.fractional": {
       "note": "A float plural_on always selects `other`, so `other` is all it may declare.",
-      "args": { "n": "float:1" },
+      "args": {
+        "n": "float:1"
+      },
       "plural_on": "n",
-      "ru": { "other": "{n} метра" },
-      "en": { "other": "{n} metres" },
-      "ja": { "other": "{n} メートル" },
-      "pl": { "other": "{n} metra" },
-      "cs": { "other": "{n} metru" },
-      "fr": { "other": "{n} metres" }
+      "ru": {
+        "other": "{n} метра"
+      },
+      "en": {
+        "other": "{n} metres"
+      },
+      "ja": {
+        "other": "{n} メートル"
+      },
+      "pl": {
+        "other": "{n} metra"
+      },
+      "cs": {
+        "other": "{n} metru"
+      },
+      "fr": {
+        "other": "{n} metres"
+      },
+      "ar": {
+        "other": "{n} metres"
+      }
     },
     "e2e.nested_outer": {
       "note": "Nesting: the inner key arrives as a `str` argument, never by concatenation.",
-      "args": { "inner": "str", "n": "int" },
+      "args": {
+        "inner": "str",
+        "n": "int"
+      },
       "ru": "Нужно {inner} Ур {n}",
       "en": "Requires {inner} Lv {n}",
       "ja": "{inner} レベル {n} が必要",
       "pl": "Wymaga {inner} Poz {n}",
       "cs": "Vyzaduje {inner} Ur {n}",
-      "fr": "Requiert {inner} Niv {n}"
+      "fr": "Requiert {inner} Niv {n}",
+      "ar": "Requires {inner} Lv {n}"
+    },
+    "e2e.every_category": {
+      "note": "Arabic is the only rule using every CLDR category, so this is the only key that reads the zero and two slots -- which nothing else in this fixture, and nothing in any game corpus so far, has ever done. The forms are markers, not prose: the assertion is about WHICH SLOT was read, and real text would make it about the translation instead.",
+      "args": {
+        "n": "int"
+      },
+      "plural_on": "n",
+      "ru": {
+        "one": "ru-one {n}",
+        "few": "ru-few {n}",
+        "many": "ru-many {n}"
+      },
+      "en": {
+        "one": "en-one {n}",
+        "other": "en-other {n}"
+      },
+      "ja": {
+        "other": "ja-other {n}"
+      },
+      "pl": {
+        "one": "pl-one {n}",
+        "few": "pl-few {n}",
+        "many": "pl-many {n}"
+      },
+      "cs": {
+        "one": "cs-one {n}",
+        "few": "cs-few {n}",
+        "other": "cs-other {n}"
+      },
+      "fr": {
+        "one": "fr-one {n}",
+        "other": "fr-other {n}"
+      },
+      "ar": {
+        "zero": "ar-zero {n}",
+        "one": "ar-one {n}",
+        "two": "ar-two {n}",
+        "few": "ar-few {n}",
+        "many": "ar-many {n}",
+        "other": "ar-other {n}"
+      }
     }
   }
 }
