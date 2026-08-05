@@ -1053,22 +1053,32 @@ def render_index(table: Table) -> str:
 
 
 def corpus_codepoints(table: Table) -> list[int]:
-    """Every distinct codepoint any string in the table can render, ASCII
-    excluded. Reads entry.forms (every language, every plural form) because
-    that IS the set the runtime can hand to a text widget -- keys, argument
-    names and language metadata are never drawn."""
+    """Every distinct codepoint the runtime can hand to a text widget, ASCII
+    excluded.
+
+    That is entry.forms (every language, every plural form) PLUS the language
+    block's own number-formatting marks. The marks are easy to forget because
+    they are metadata rather than copy, but `loc_group_i64` memcpy's
+    group_separator straight into drawn text -- so a language declaring U+00A0
+    (the typographically correct Russian thousands separator, and a natural
+    "fix" for the plain space in use today) would tofu every price on screen
+    with no build error and no failing test. Review 2026-08-05 found this hole
+    in the completeness argument."""
     seen: set[int] = set()
     for entry in table.entries:
         for forms in entry.forms.values():
             for text in forms.values():
                 seen.update(ord(ch) for ch in text)
+    for lang in table.langs:
+        for mark in (lang.group_separator,):
+            seen.update(ord(ch) for ch in (mark or ""))
     return sorted(cp for cp in seen if cp > 0x7F)
 
 
 def render_charset_header(table: Table) -> str:
     codepoints = corpus_codepoints(table)
     for cp in codepoints:
-        # \u escapes below are universal character names, not hex escapes, so
+        # The escapes below are universal character names, not hex escapes, so
         # they never swallow a following digit. C forbids a UCN below U+00A0
         # (outside $ @ `), and 0x80-0x9F are C1 controls that cannot appear in
         # display copy anyway -- refuse rather than emit something that will not
@@ -1077,6 +1087,11 @@ def render_charset_header(table: Table) -> str:
             raise LocError(
                 f"{table.source}: U+{cp:04X} is a C1 control character and cannot be "
                 "written as a universal character name; remove it from the corpus"
+            )
+        if 0xD800 <= cp <= 0xDFFF:
+            raise LocError(
+                f"{table.source}: U+{cp:04X} is a lone surrogate, not a character; "
+                "the corpus JSON is malformed"
             )
     lines: list[str] = []
     lines.append("#ifndef LOC_CHARSET_GEN_H")
@@ -1102,7 +1117,17 @@ def render_charset_header(table: Table) -> str:
     for index, cp in enumerate(codepoints):
         char = chr(cp)
         terminator = "" if index == len(codepoints) - 1 else " \\"
-        lines.append(f'    "\\u{cp:04x}" /* {char} */{terminator}')
+        # \u takes EXACTLY four hex digits, \U exactly eight. Formatting an
+        # astral codepoint with "04x" (a MINIMUM width) produced five digits,
+        # and C read the first four plus a stray character: "ὠ0" compiles
+        # clean under -Wall -Wextra -Wpedantic and stores U+1F60 followed by
+        # '0'. The requested glyph silently leaves the atlas and an unrelated
+        # one takes its place -- exactly the silent-loss failure this generator
+        # exists to prevent. Found in review 2026-08-05; reachable as soon as a
+        # CJK language lands, since LilitaOne-RussianChineseKo already covers
+        # 507 codepoints above the BMP.
+        escape = f"\\u{cp:04x}" if cp <= 0xFFFF else f"\\U{cp:08x}"
+        lines.append(f'    "{escape}" /* {char} */{terminator}')
     lines.append("")
     lines.append(f"#define LOC_CHARSET_NON_ASCII_COUNT {len(codepoints)}")
     lines.append("")
