@@ -776,13 +776,22 @@ def render_header(table: Table) -> str:
     )
     lines.append("")
     lines.append("/* A plural row is one slot per CLDR category, emitted below in the order of")
-    lines.append("   loc_plural_cat_t. Adding a category to that enum without adding it to")
-    lines.append("   PLURAL_CATS here would leave every row a slot short and the runtime would")
-    lines.append("   index past the end of it -- silently, on a value no test happens to pick. */")
+    lines.append("   PLURAL_CATS and read back as forms[row + (int)cat]. So BOTH the count and")
+    lines.append("   the ORDER are load-bearing, and both are pinned here:")
+    lines.append("     - a category in loc_plural_cat_t but not in PLURAL_CATS leaves every row a")
+    lines.append("       slot short and the runtime indexes past the end of it;")
+    lines.append("     - a REORDER rotates every row instead, which the (rule, n) cross-check")
+    lines.append("       cannot catch because it matches categories by NAME. Every plural key")
+    lines.append("       would render the wrong grammatical form with the whole suite green. */")
     lines.append(
         f"_Static_assert(LOC_PLURAL_CAT_COUNT == {len(PLURAL_CATS)}, "
         '"loc.py emits a different number of plural slots than loc_plural_cat_t declares");'
     )
+    for index, cat in enumerate(PLURAL_CATS):
+        lines.append(
+            f"_Static_assert(LOC_PLURAL_{cat.upper()} == {index}, "
+            f'"loc.py writes the {cat} form at slot {index}; loc_plural_cat_t disagrees");'
+        )
     lines.append("")
     lines.append("/* Every key. The enumerator IS the table index. */")
     lines.append("typedef enum LocKey {")

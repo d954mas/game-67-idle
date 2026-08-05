@@ -137,8 +137,16 @@ static void log_lang_fallback(int key_index, int from_lang) {
    select); a hand-written table can. */
 static void log_form_fallback(int key_index, int lang, loc_plural_cat_t want) {
 #ifndef NDEBUG
-    static const char *const k_cat_names[LOC_PLURAL_CAT_COUNT] = {"zero", "one", "two",
-                                                                  "few",  "many", "other"};
+    /* Designated, not positional: this is the third place the category order
+       appears (loc.h's enum, loc.py's PLURAL_CATS, here), and the other two are
+       pinned against each other by _Static_asserts in the generated header.
+       Indexing by the enumerator makes this one immune to a reorder instead of
+       being a fourth thing to remember. */
+    static const char *const k_cat_names[LOC_PLURAL_CAT_COUNT] = {
+        [LOC_PLURAL_ZERO] = "zero",  [LOC_PLURAL_ONE] = "one",
+        [LOC_PLURAL_TWO] = "two",    [LOC_PLURAL_FEW] = "few",
+        [LOC_PLURAL_MANY] = "many",  [LOC_PLURAL_OTHER] = "other",
+    };
 #endif
     if (!claim_fallback_slot(key_index)) {
         return;
