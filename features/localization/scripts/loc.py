@@ -1182,12 +1182,26 @@ def render_charset_header(table: Table) -> str:
 # assertion in engine code with no way to tell the four packed fonts apart.
 
 
+# A short slice is NOT zero. `data[off:off + 2]` past the end returns b"" and
+# `int.from_bytes(b"")` is 0, so a truncated font used to read as a font full of
+# zeroes -- offsets of 0, counts of 0, an empty charset, green. Reading off the
+# end is the bug; raising is the whole point (review 2026-08-05).
+def _read(data: bytes, off: int, size: int) -> int:
+    if off < 0 or off + size > len(data):
+        # ValueError, not LocError: the readers know the offset, not the file.
+        # font_codepoints adds the path and turns it into a LocError.
+        raise ValueError(
+            f"truncated font: wanted {size} bytes at offset {off}, "
+            f"file is {len(data)} bytes")
+    return int.from_bytes(data[off:off + size], "big")
+
+
 def _u16(data: bytes, off: int) -> int:
-    return int.from_bytes(data[off:off + 2], "big")
+    return _read(data, off, 2)
 
 
 def _u32(data: bytes, off: int) -> int:
-    return int.from_bytes(data[off:off + 4], "big")
+    return _read(data, off, 4)
 
 
 def _cmap_format4(data: bytes, base: int) -> set[int]:
@@ -1221,12 +1235,22 @@ def _cmap_format4(data: bytes, base: int) -> set[int]:
 
 def _cmap_format12(data: bytes, base: int) -> set[int]:
     group_count = _u32(data, base + 12)
+    # `range(start, end + 1)` on unvalidated uint32s materialises up to four
+    # billion ints, so a corrupt font killed the BUILD on memory instead of
+    # failing legibly (review 2026-08-05). Every field is bounded first.
+    if base + 16 + group_count * 12 > len(data):
+        raise ValueError(
+            f"cmap format 12: {group_count} groups run past the end of the file")
     mapped: set[int] = set()
     for i in range(group_count):
         off = base + 16 + i * 12
         start = _u32(data, off)
         end = _u32(data, off + 4)
         start_glyph = _u32(data, off + 8)
+        if end > 0x10FFFF or start > 0x10FFFF:
+            raise ValueError(
+                f"cmap format 12: group {i} covers U+{start:X}..U+{end:X}, "
+                f"outside Unicode")
         if start_glyph == 0:
             start += 1  # codepoint mapping to glyph 0 is .notdef, i.e. absent
         if start <= end:
@@ -1236,6 +1260,13 @@ def _cmap_format12(data: bytes, base: int) -> set[int]:
 
 def font_codepoints(path: Path) -> set[int]:
     """The set of codepoints `path` maps to a real (non-.notdef) glyph."""
+    try:
+        return _font_codepoints(path)
+    except ValueError as exc:
+        raise LocError(f"{path}: {exc}") from None
+
+
+def _font_codepoints(path: Path) -> set[int]:
     data = path.read_bytes()
     if len(data) < 12:
         raise LocError(f"{path}: not a font file (too short)")
@@ -1250,29 +1281,33 @@ def font_codepoints(path: Path) -> set[int]:
             break
     if cmap_off is None:
         raise LocError(f"{path}: no cmap table")
-    # Prefer a full-Unicode subtable; fall back to the BMP one. Both are
-    # authoritative for the codepoints they cover, so unioning is not needed --
-    # but a font that only ships (0,3) must still be read.
-    best: tuple[int, int] | None = None  # (rank, subtable offset)
+    # Subtable choice MIRRORS stb_truetype, deliberately and exactly. This check
+    # exists to prove the packer can render the charset, so reading a table the
+    # packer never consults is the one failure it must not have. See
+    # `stbtt_InitFont_internal` in deps/stb/stb_truetype.h:
+    #
+    #   - accept (platform 3, encoding 1) and (3, 10); accept platform 0 with
+    #     ANY encoding (stb does not check it: "all the encodingIDs are
+    #     unicode");
+    #   - no early exit, so the LAST accepted record wins;
+    #   - no preference for full-Unicode over BMP -- purely positional.
+    #
+    # Until review 2026-08-05 this ranked the candidates and took the FIRST of
+    # the best rank. Inert on the four fonts in the pack (their subtables agree),
+    # which is exactly why it had to be fixed before a fifth font arrives.
+    sub: int | None = None
     for i in range(_u16(data, cmap_off + 2)):
         rec = cmap_off + 4 + i * 8
         platform = _u16(data, rec)
         encoding = _u16(data, rec + 2)
-        sub = cmap_off + _u32(data, rec + 4)
-        rank = {
-            (3, 10): 3,
-            (0, 4): 3,
-            (0, 6): 3,
-            (3, 1): 2,
-            (0, 3): 2,
-            (0, 1): 1,
-            (0, 0): 1,
-        }.get((platform, encoding), 0)
-        if rank and (best is None or rank > best[0]):
-            best = (rank, sub)
-    if best is None:
-        raise LocError(f"{path}: cmap has no Unicode subtable")
-    sub = best[1]
+        if platform == 3 and encoding in (1, 10):
+            sub = cmap_off + _u32(data, rec + 4)
+        elif platform == 0:
+            sub = cmap_off + _u32(data, rec + 4)
+    if sub is None:
+        # stb returns 0 from stbtt_InitFont here, i.e. the packer would reject
+        # this font too.
+        raise LocError(f"{path}: cmap has no subtable stb_truetype understands")
     fmt = _u16(data, sub)
     if fmt == 4:
         return _cmap_format4(data, sub)
