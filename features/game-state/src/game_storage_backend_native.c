@@ -217,7 +217,6 @@ static long last_crt_error(void) {
     return (long)errno;
 }
 
-#ifdef _WIN32
 /* T0055, CONFIRMED 2026-08-06 (run 41 of 400): MoveFileExA returned
    ERROR_ACCESS_DENIED replacing a plain file it had replaced successfully on the
    40 runs before it, with byte-identical inputs. A permanent condition -- ACL,
@@ -225,31 +224,37 @@ static long last_crt_error(void) {
    refusal comes from OUTSIDE this process: on Windows another process holding a
    handle without FILE_SHARE_DELETE, or a destination in delete-pending state,
    makes the move fail rather than wait. An on-access virus scanner opening the
-   temp file we just closed is the textbook producer of exactly that window;
-   which process it is does not change the fix, because the condition clears by
-   itself within milliseconds.
+   temp file we just closed is the textbook producer of exactly that window; it
+   clears by itself within milliseconds.
 
-   Measured on this box: a held DESTINATION yields code 5, a held SOURCE yields
-   code 32. Both are retried; both have a test.
+   Measured on this box: a held DESTINATION yields code 5, a held SOURCE 32.
 
-   Retrying a PERMANENT failure would be a lie dressed as robustness, so the
-   guards are explicit: only the two codes that mean "someone else is holding
-   it", and never when the destination is a directory or read-only -- both of
-   which also produce code 5 and never clear. Without that guard
-   test_replace_failure_preserves_primary would sleep the entire budget to reach
-   the verdict it reaches in one syscall today. */
+   WHETHER TO WAIT IT OUT IS THE CALLER'S TO DECIDE, and the two callers differ
+   (лид, 2026-08-06: "load синхронный конечно, запись асинхронный, с бекапом и
+   ретраями"):
 
-/* Milliseconds to wait BEFORE each retry. The first two are 0 on purpose: the
-   observed window is sub-millisecond, and a yield costs nothing. The rest are
-   multiples of the ~15.6ms default timer tick, because Sleep(1) does not sleep
-   1ms -- it sleeps a whole tick, so a 1/2/4/8 ramp is four indistinguishable
-   15ms waits pretending to be precision. (The engine raises the timer
-   resolution via timeBeginPeriod, but storage is linked into tools and tests
-   that never initialise it, so the budget must not depend on that.) Worst case
-   ~110ms of blocking -- and this runs on the frame thread, which is why it is
-   this short: a failed autosave is retried again by game_save_tick a debounce
-   later without blocking anything. */
-static const DWORD kStorageRetryBackoffMs[] = {0, 0, 15, 30, 60};
+   - `game_save_tick` runs INSIDE the frame update. It may not wait, and it does
+     not need to: a refusal there is not a loss, because the state stays dirty
+     and the tick tries again a debounce later. A retry short enough not to be
+     felt (microseconds) is shorter than the window it would absorb
+     (milliseconds) anyway, so on that path it would be decoration.
+   - load, new game, recovery from .bak, quarantine and an explicit flush are
+     synchronous calls with no frame to lose. They wait, because the cost of not
+     waiting is a player continuing the session on a primary that was never
+     rewritten.
+
+   So `may_wait` travels from the public entry point down to the rename. */
+
+#ifdef _WIN32
+/* Milliseconds to wait BEFORE each retry, for callers that may wait. The first
+   two are 0 on purpose: the window is often sub-millisecond and a yield costs
+   nothing. The rest are multiples of the ~15.6ms default timer tick, because
+   Sleep(1) does not sleep 1ms -- it sleeps a whole tick, so a 1/2/4/8 ramp is
+   four indistinguishable waits pretending to be precision. (The engine raises
+   the timer resolution via timeBeginPeriod, but storage is linked into tools
+   and tests that never initialise it, so this must not depend on that.)
+   ~465ms worst case, all of it at startup where nothing is watching. */
+static const DWORD kStorageRetryBackoffMs[] = {0, 0, 15, 30, 60, 120, 240};
 #define STORAGE_RETRY_STEPS \
     ((int)(sizeof kStorageRetryBackoffMs / sizeof kStorageRetryBackoffMs[0]))
 
@@ -257,9 +262,10 @@ static bool refusal_can_clear(DWORD code) {
     return code == ERROR_ACCESS_DENIED || code == ERROR_SHARING_VIOLATION;
 }
 
-/* Conditions that produce the SAME codes and never clear. One probe, both
-   attributes: a directory in the way, or a read-only destination (a save
-   restored by a backup tool or pinned by a cloud-sync client). */
+/* Conditions that produce the SAME codes and never clear, in one probe: a
+   directory in the way, or a read-only destination (a save restored by a backup
+   tool, or pinned by a cloud-sync client). Waiting those out is a lie dressed
+   as robustness. */
 static bool destination_refuses_permanently(const char *path) {
     const DWORD attributes = GetFileAttributesA(path);
     if (attributes == INVALID_FILE_ATTRIBUTES) {
@@ -267,66 +273,41 @@ static bool destination_refuses_permanently(const char *path) {
     }
     return (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_READONLY)) != 0;
 }
-
-/* true = caller should try again; this function has already waited. */
-static bool wait_before_retry(DWORD code, int attempt, const char *destination) {
-    if (attempt >= STORAGE_RETRY_STEPS || !refusal_can_clear(code) ||
-        destination_refuses_permanently(destination)) {
-        return false;
-    }
-    Sleep(kStorageRetryBackoffMs[attempt]);
-    return true;
-}
-
-/* The only evidence that the transient refusal is real and self-clearing. If
-   this line never appears in the wild, the retry is dead code and should be
-   deleted. Throttled: an always-on scanner would otherwise print it on every
-   autosave. */
-static void note_refusal_absorbed(const char *what, const char *path, int refusals) {
-    static long s_recoveries;
-    ++s_recoveries;
-    if (s_recoveries == 1 || (s_recoveries % 100) == 0) {
-        nt_log_warn(
-            "game_storage: %s of '%s' was refused %d time(s) and then succeeded "
-            "(%ld such recoveries so far); another process was holding the path",
-            what, path, refusals, s_recoveries);
-    }
-}
 #endif
 
-/* Every rename in this file goes through here. The first version of the T0055
-   fix guarded only the replace, and 150 verification runs promptly caught the
-   SAME refusal on the quarantine rename, which had its own bare rename() and
-   did not even report a code. One door is not a fix. */
-static bool move_file(const char *from, const char *to, bool replace_existing) {
+/* Every rename in this file goes through here. The first attempt at T0055
+   guarded only the replace, and 150 verification runs promptly caught the SAME
+   refusal on the quarantine rename, which had its own bare rename() and did not
+   even report a code. One door is not a fix. */
+static bool move_file(
+    const char *from, const char *to, bool replace_existing, bool may_wait) {
 #ifdef _WIN32
     const DWORD flags =
         MOVEFILE_WRITE_THROUGH | (replace_existing ? MOVEFILE_REPLACE_EXISTING : 0u);
     for (int attempt = 0;; ++attempt) {
         if (MoveFileExA(from, to, flags) != 0) {
-            if (attempt > 0) {
-                note_refusal_absorbed(replace_existing ? "replace" : "move", to, attempt);
-            }
             return true;
         }
         const DWORD code = GetLastError();
-        if (!wait_before_retry(code, attempt, to)) {
+        if (!may_wait || attempt >= STORAGE_RETRY_STEPS ||
+            !refusal_can_clear(code) || destination_refuses_permanently(to)) {
             SetLastError(code); /* the guards clobber it; the caller reports it */
             return false;
         }
+        Sleep(kStorageRetryBackoffMs[attempt]);
     }
 #else
-    /* POSIX rename() is atomic and has no equivalent refusal -- no evidence of
-       the T0055 failure here, so no retry here either. It replaces
+    /* POSIX rename() is atomic and has no equivalent refusal. It replaces
        unconditionally; the quarantine caller passes a path it has just proven
        free, so the flag is not needed to get the same behaviour. */
     (void)replace_existing;
+    (void)may_wait;
     return rename(from, to) == 0;
 #endif
 }
 
-static bool replace_file(const char *temporary, const char *primary) {
-    return move_file(temporary, primary, true);
+static bool replace_file(const char *temporary, const char *primary, bool may_wait) {
+    return move_file(temporary, primary, true, may_wait);
 }
 
 static bool sync_parent_directory(const char *path) {
@@ -409,7 +390,7 @@ static bool readable_regular_file_exists(const char *path) {
 
 static bool write_file_atomic(
     const char *temporary, const char *primary, const char *text,
-    char *error, int error_cap) {
+    char *error, int error_cap, bool may_wait) {
     if (!ensure_parent_dirs(primary, error, error_cap)) {
         return false;
     }
@@ -439,7 +420,7 @@ static bool write_file_atomic(
         set_error_crt(error, error_cap, "failed to write storage temp file", code);
         return false;
     }
-    if (!replace_file(temporary, primary)) {
+    if (!replace_file(temporary, primary, may_wait)) {
         const long code = last_os_error(); /* see above: before remove() */
         (void)remove(temporary);
         set_error_os(error, error_cap, "failed to replace storage file", code);
@@ -613,7 +594,7 @@ static bool quarantine_unreadable_copy(const char *slot) {
 }
 
 bool game_storage_backend_write(
-    const char *slot, const char *text, char *error, int error_cap) {
+    const char *slot, const char *text, char *error, int error_cap, bool may_wait) {
     if (text == NULL || strlen(text) > (size_t)GAME_STORAGE_MAX_BYTES) {
         set_error(error, error_cap, "storage text is too large");
         return false;
@@ -621,7 +602,7 @@ bool game_storage_backend_write(
     game_storage_native_paths_t paths;
     return resolve_native_paths(slot, &paths, error, error_cap) &&
            write_file_atomic(
-               paths.primary_tmp, paths.primary, text, error, error_cap);
+               paths.primary_tmp, paths.primary, text, error, error_cap, may_wait);
 }
 
 bool game_storage_backend_read(
@@ -670,8 +651,10 @@ bool game_storage_backend_write_backup(
     if (!read_file_bytes(paths.primary, &data, NULL, error, error_cap)) {
         return false;
     }
+    /* .bak is written once per session, right after a successful load -- a
+       synchronous moment with no frame to lose, so it may wait. */
     const bool ok = write_file_atomic(
-        paths.backup_tmp, paths.backup, data, error, error_cap);
+        paths.backup_tmp, paths.backup, data, error, error_cap, true);
     free(data);
     return ok;
 }
@@ -702,7 +685,8 @@ bool game_storage_backend_quarantine(
     /* Was a bare rename() with a codeless message -- which is precisely how the
        T0055 verification run caught this path and could say nothing about it
        beyond "false". */
-    if (!move_file(paths.primary, quarantine_path, false)) {
+    /* Quarantine happens during load, never in a frame: it may wait. */
+    if (!move_file(paths.primary, quarantine_path, false, true)) {
         set_error_os(error, error_cap, "failed to quarantine storage file", last_os_error());
         return false;
     }

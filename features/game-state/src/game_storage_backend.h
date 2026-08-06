@@ -3,8 +3,12 @@
 
 #include "game_storage.h"
 
+/* may_wait: the caller is NOT on the frame thread and a refused rename may be
+   waited out. See game_storage_write_blocking in game_storage.h for why the
+   split is by caller rather than by slot. Backends that cannot block (web)
+   ignore it. */
 bool game_storage_backend_write(
-    const char *slot, const char *text, char *error, int error_cap);
+    const char *slot, const char *text, char *error, int error_cap, bool may_wait);
 bool game_storage_backend_read(
     const char *slot, char **out, game_storage_read_status_t *status,
     char *error, int error_cap);

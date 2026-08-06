@@ -579,7 +579,14 @@ static bool failure_is_new(const char *reason) {
     return true;
 }
 
-static bool save_internal(char *error, int error_cap) {
+/* may_wait travels to the storage write. Only game_save_tick passes false: it
+   is the one caller inside the frame, and a refused write there is not a loss
+   -- the state stays dirty and the next tick retries. Every other caller is a
+   synchronous moment (load, new game, recovery, explicit flush) with no frame
+   to lose, and would rather wait ~0.5s than leave the primary unwritten.
+   лид 2026-08-06: "load синхронный конечно, запись асинхронный, с бекапом и
+   ретраями". */
+static bool save_internal(char *error, int error_cap, bool may_wait) {
     /* Every failure exits through one place. The bookkeeping below used to live
        in an `else` after the storage write, which four earlier failure returns
        -- build, validate, serialize, encode -- walked straight past: they left
@@ -613,7 +620,11 @@ static bool save_internal(char *error, int error_cap) {
     if (!encoded) {
         goto done;
     }
-    ok = game_storage_write(GAME_SAVE_AUTOSAVE_SLOT, encoded, reason, (int)sizeof reason);
+    ok = may_wait
+             ? game_storage_write_blocking(GAME_SAVE_AUTOSAVE_SLOT, encoded, reason,
+                                           (int)sizeof reason)
+             : game_storage_write(GAME_SAVE_AUTOSAVE_SLOT, encoded, reason,
+                                  (int)sizeof reason);
 
 done:
     cJSON_Delete(root);
@@ -788,7 +799,7 @@ static bool try_recover_from_backup(game_save_load_result_t *result, const char 
     game_save_mark_dirty();
     /* The existing .bak is the only known durable good copy until primary is
        rewritten successfully. Never refresh it from a still-corrupt primary. */
-    if (save_internal(err, cap)) {
+    if (save_internal(err, cap, true)) {
         (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, cap);
     }
     s_last_save_mono = mono_now();
@@ -847,7 +858,7 @@ void game_save_load(game_save_load_result_t *result) {
         on_new_game_all();
         s_autosave_paused = false;
         game_save_mark_dirty();
-        (void)save_internal(err, (int)sizeof err);
+        (void)save_internal(err, (int)sizeof err, true); /* load path: synchronous */
         result->status = GAME_SAVE_LOAD_FRESH;
         set_message(result, "no save found; new game");
         s_last_save_mono = mono_now();
@@ -1014,7 +1025,7 @@ static game_save_transition_result_t new_game_except(
     on_new_game_all_except(skip_id);
     s_autosave_paused = false; /* resume autosave (Р10) */
     game_save_mark_dirty();
-    const bool persisted = save_internal(error, error_cap);
+    const bool persisted = save_internal(error, error_cap, true);
     s_last_save_mono = mono_now();
     return (game_save_transition_result_t){.state_changed = true, .persisted = persisted};
 }
@@ -1068,7 +1079,7 @@ bool game_save_flush(char *error, int error_cap) {
             "save is read-only until New Game or a successful repair/import");
         return false; /* NEWER/CORRUPT/BLOCKED: reporting success would be data loss */
     }
-    return save_internal(error, error_cap);
+    return save_internal(error, error_cap, true);
 }
 
 void game_save_tick(void) {
@@ -1080,7 +1091,9 @@ void game_save_tick(void) {
         (now - s_last_save_mono >= (int64_t)GAME_SAVE_MAX_INTERVAL_MS)) {
         char err[128];
         err[0] = '\0';
-        (void)save_internal(err, (int)sizeof err);
+        /* false: this is the ONE caller inside the frame. A refused write here
+           is not a loss -- the state stays dirty and the next tick retries. */
+        (void)save_internal(err, (int)sizeof err, false);
     }
 }
 

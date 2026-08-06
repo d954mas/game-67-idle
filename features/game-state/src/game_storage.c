@@ -34,7 +34,9 @@ static bool validate_slot(const char *slot, char *error, int error_cap) {
     return false;
 }
 
-bool game_storage_write(
+/* The two public writes differ ONLY in whether the caller may be made to wait;
+   every validation rule is shared, so it lives here once. */
+static bool validate_write(
     const char *slot, const char *text, char *error, int error_cap) {
     if (!validate_slot(slot, error, error_cap)) {
         return false;
@@ -47,7 +49,19 @@ bool game_storage_write(
         set_error(error, error_cap, "storage text is too large");
         return false;
     }
-    return game_storage_backend_write(slot, text, error, error_cap);
+    return true;
+}
+
+bool game_storage_write(
+    const char *slot, const char *text, char *error, int error_cap) {
+    return validate_write(slot, text, error, error_cap) &&
+           game_storage_backend_write(slot, text, error, error_cap, false);
+}
+
+bool game_storage_write_blocking(
+    const char *slot, const char *text, char *error, int error_cap) {
+    return validate_write(slot, text, error, error_cap) &&
+           game_storage_backend_write(slot, text, error, error_cap, true);
 }
 
 bool game_storage_read(

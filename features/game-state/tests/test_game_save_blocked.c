@@ -35,6 +35,15 @@ bool game_storage_write(
     return true;
 }
 
+/* The blocking variant differs only in whether a refused rename may be waited
+   out, which a stub has nothing to refuse -- so it is the same write. Both
+   exist because the real storage has two callers with different rights to
+   block: see game_storage_write_blocking in game_storage.h. */
+bool game_storage_write_blocking(
+    const char *slot, const char *text, char *error, int error_cap) {
+    return game_storage_write(slot, text, error, error_cap);
+}
+
 bool game_storage_read(
     const char *slot, char **out, game_storage_read_status_t *status,
     char *error, int error_cap) {

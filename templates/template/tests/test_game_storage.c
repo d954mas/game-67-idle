@@ -206,7 +206,7 @@ void test_write_read_round_trip_and_exists(void) {
     char err[128] = {0};
     TEST_ASSERT_FALSE(game_storage_exists("write_read"));
 
-    TEST_ASSERT_TRUE(game_storage_write(
+    TEST_ASSERT_TRUE(game_storage_write_blocking(
         "write_read", "{\"a\":1}", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(game_storage_exists("write_read"));
 
@@ -219,7 +219,7 @@ void test_write_read_round_trip_and_exists(void) {
 
 void test_write_read_empty_text(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_storage_write("empty_slot", "", err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("empty_slot", "", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(game_storage_exists("empty_slot"));
 
     char *out = NULL;
@@ -301,7 +301,7 @@ void test_all_slot_operations_reject_unsafe_names(void) {
 
 void test_atomicity_stale_tmp_is_invisible_to_read(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_storage_write("atomic_slot", "GOOD-PRIMARY", err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("atomic_slot", "GOOD-PRIMARY", err, (int)sizeof(err)));
 
     /* Simulate a crash: a leftover .tmp file sits next to a perfectly good primary. */
     write_raw_file("build/saves/atomic_slot.json.tmp", "GARBAGE-TMP-LEFTOVER");
@@ -321,7 +321,7 @@ void test_atomicity_stale_tmp_is_invisible_to_read(void) {
     TEST_ASSERT_EQUAL_STRING("GARBAGE-TMP-LEFTOVER", buf);
 
     /* A stale tmp must not block a later legitimate write+replace either. */
-    TEST_ASSERT_TRUE(game_storage_write("atomic_slot", "SECOND-GOOD", err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("atomic_slot", "SECOND-GOOD", err, (int)sizeof(err)));
     out = NULL;
     TEST_ASSERT_TRUE(game_storage_read("atomic_slot", &out, NULL, err, (int)sizeof(err)));
     TEST_ASSERT_EQUAL_STRING("SECOND-GOOD", out);
@@ -341,7 +341,7 @@ void test_stale_tmp_with_absent_primary_recovers(void) {
     TEST_ASSERT_FALSE(game_storage_read("stale_tmp_no_primary", &out, NULL, err, (int)sizeof(err)));
     TEST_ASSERT_NULL(out);
 
-    TEST_ASSERT_TRUE(game_storage_write("stale_tmp_no_primary", "RECOVERED-GOOD", err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("stale_tmp_no_primary", "RECOVERED-GOOD", err, (int)sizeof(err)));
     out = NULL;
     TEST_ASSERT_TRUE(game_storage_read("stale_tmp_no_primary", &out, NULL, err, (int)sizeof(err)));
     TEST_ASSERT_EQUAL_STRING("RECOVERED-GOOD", out);
@@ -354,7 +354,7 @@ void test_stale_tmp_with_absent_primary_recovers(void) {
    should survive a successful write. */
 void test_no_leftover_tmp_after_clean_write(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_storage_write("clean_write_slot", "{\"a\":1}", err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("clean_write_slot", "{\"a\":1}", err, (int)sizeof(err)));
     FILE *tmp_file = fopen("build/saves/clean_write_slot.json.tmp", "rb");
     TEST_ASSERT_NULL(tmp_file);
 }
@@ -395,7 +395,7 @@ void test_replace_failure_preserves_primary(void) {
 
 void test_backup_fallback_survives_corrupted_primary(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_storage_write("bak_slot", "GOOD-V1", err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("bak_slot", "GOOD-V1", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(game_storage_write_backup("bak_slot", err, (int)sizeof(err)));
 
     /* Simulate corruption: overwrite primary directly with non-JSON bytes. */
@@ -427,7 +427,7 @@ void test_write_backup_noop_when_primary_missing(void) {
    write_backup) must not block a fresh one. */
 void test_write_backup_overwrites_existing_bak(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_storage_write("bak_overwrite_slot", "V1", err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("bak_overwrite_slot", "V1", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(game_storage_write_backup("bak_overwrite_slot", err, (int)sizeof(err)));
 
     char *bak_out = NULL;
@@ -435,7 +435,7 @@ void test_write_backup_overwrites_existing_bak(void) {
     TEST_ASSERT_EQUAL_STRING("V1", bak_out);
     free(bak_out);
 
-    TEST_ASSERT_TRUE(game_storage_write("bak_overwrite_slot", "V2", err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("bak_overwrite_slot", "V2", err, (int)sizeof(err)));
 
     write_raw_file("build/saves/bak_overwrite_slot.bak.tmp", "GARBAGE-BAK-TMP-LEFTOVER");
 
@@ -453,7 +453,7 @@ void test_write_backup_overwrites_existing_bak(void) {
 
 void test_quarantine_moves_primary_and_leaves_exactly_one_corrupt_file(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_storage_write("quarantine_slot", "TO-BE-QUARANTINED", err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("quarantine_slot", "TO-BE-QUARANTINED", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(game_storage_exists("quarantine_slot"));
 
     TEST_ASSERT_TRUE(game_storage_quarantine("quarantine_slot", err, (int)sizeof(err)));
@@ -493,11 +493,11 @@ void test_quarantine_without_primary_fails(void) {
    their own file. */
 void test_quarantine_twice_same_slot(void) {
     char err[128] = {0};
-    TEST_ASSERT_TRUE(game_storage_write("quarantine_twice_slot", "FIRST-BAD", err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("quarantine_twice_slot", "FIRST-BAD", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(game_storage_quarantine("quarantine_twice_slot", err, (int)sizeof(err)));
     TEST_ASSERT_EQUAL_INT(1, sweep_files_with_prefix("build/saves", "quarantine_twice_slot.corrupt", false, NULL, 0));
 
-    TEST_ASSERT_TRUE(game_storage_write("quarantine_twice_slot", "SECOND-BAD", err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("quarantine_twice_slot", "SECOND-BAD", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(game_storage_quarantine("quarantine_twice_slot", err, (int)sizeof(err)));
 
     TEST_ASSERT_EQUAL_INT(2, sweep_files_with_prefix("build/saves", "quarantine_twice_slot.corrupt", false, NULL, 0));
@@ -520,7 +520,7 @@ void test_read_status_absent_vs_error(void) {
     TEST_ASSERT_EQUAL_INT(GAME_STORAGE_READ_ABSENT, st);
 
     /* present + readable -> OK */
-    TEST_ASSERT_TRUE(game_storage_write("read_error_dir", "OK-BYTES", err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("read_error_dir", "OK-BYTES", err, (int)sizeof(err)));
     out = NULL;
     st = GAME_STORAGE_READ_ERROR;
     TEST_ASSERT_TRUE(game_storage_read("read_error_dir", &out, &st, err, (int)sizeof(err)));

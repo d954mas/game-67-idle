@@ -447,7 +447,7 @@ void test_disk_load_rejects_invalid_primary_and_recovers_valid_backup(void) {
     TEST_ASSERT_TRUE(game_storage_write_backup("test_composition", err, (int)sizeof err));
     char *invalid = make_dangling_owner_save(err, (int)sizeof err);
     TEST_ASSERT_NOT_NULL(invalid);
-    TEST_ASSERT_TRUE(game_storage_write("test_composition", invalid, err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("test_composition", invalid, err, (int)sizeof err));
     free(invalid);
 
     game_save_load_result_t result;
@@ -463,7 +463,7 @@ void test_disk_load_rejects_invalid_primary_and_backup_before_corrupt_reset(void
     TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     char *invalid = make_dangling_owner_save(err, (int)sizeof err);
     TEST_ASSERT_NOT_NULL(invalid);
-    TEST_ASSERT_TRUE(game_storage_write("test_composition", invalid, err, (int)sizeof err));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("test_composition", invalid, err, (int)sizeof err));
     TEST_ASSERT_TRUE(game_storage_write_backup("test_composition", err, (int)sizeof err));
     free(invalid);
 
@@ -665,7 +665,7 @@ void test_devapi_corrupt_load_rebuilds_valid_live_owner_state(void) {
     TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
     (void)remove(BAK_PATH);
     (void)remove(BAK_TMP);
-    TEST_ASSERT_TRUE(game_storage_write(
+    TEST_ASSERT_TRUE(game_storage_write_blocking(
         "test_composition", "{broken", err, (int)sizeof err));
     s_devapi_change_count = 0;
 

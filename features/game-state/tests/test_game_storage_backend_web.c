@@ -98,7 +98,7 @@ int game_storage_web_probe(const char *key) {
 
 void test_web_backend_scopes_keys_and_round_trips(void) {
     char error[128] = {0};
-    TEST_ASSERT_TRUE(game_storage_write("autosave", "payload", error, (int)sizeof error));
+    TEST_ASSERT_TRUE(game_storage_write_blocking("autosave", "payload", error, (int)sizeof error));
     TEST_ASSERT_EQUAL_STRING("web_storage_test/save/autosave", s_last_key);
     TEST_ASSERT_TRUE(game_storage_exists("autosave"));
 

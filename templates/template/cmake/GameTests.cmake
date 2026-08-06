@@ -210,6 +210,27 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_game_storage COMMAND test_game_storage
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
 
+    # T0055: the contract between the two write modes lives beside the FEATURE,
+    # not in a game's test file -- it is game_storage being tested, not the game.
+    # Its own storage root: these tests deliberately hold handles on their slots,
+    # and nothing else should be writing into the same directory while they do.
+    add_executable(test_game_storage_write_modes
+        "${GAME_STATE_DIR}/tests/test_game_storage_write_modes.c"
+        "${GAME_STATE_SRC}/game_storage.c"
+        "${GAME_STATE_SRC}/game_storage_backend_native.c")
+    target_link_libraries(test_game_storage_write_modes PRIVATE
+        unity nt_log nt_core nt_hash)
+    target_include_directories(test_game_storage_write_modes PRIVATE
+        "${GAME_STATE_INC}" "${GAME_STATE_SRC}")
+    target_compile_definitions(test_game_storage_write_modes PRIVATE
+        GAME_STORAGE_APP_ID="storage_write_modes_test"
+        GAME_STORAGE_NATIVE_ROOT="${CMAKE_BINARY_DIR}/tests/build/write_modes"
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_storage_write_modes PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_storage_write_modes
+        COMMAND test_game_storage_write_modes)
+
     add_executable(test_game_storage_web_backend
         "${GAME_STATE_DIR}/tests/test_game_storage_backend_web.c"
         "${GAME_STATE_SRC}/game_storage.c"

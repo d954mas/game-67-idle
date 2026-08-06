@@ -51,7 +51,12 @@ static bool resolve_key(
 }
 
 bool game_storage_backend_write(
-    const char *slot, const char *text, char *error, int error_cap) {
+    const char *slot, const char *text, char *error, int error_cap, bool may_wait) {
+    /* Ignored here, deliberately. localStorage is synchronous and the failures
+       it reports -- quota exhausted, private mode -- do not clear by waiting,
+       so there is nothing to wait FOR. The browser main thread could not block
+       for it anyway. See game_storage_write_blocking in game_storage.h. */
+    (void)may_wait;
     char key[GAME_STORAGE_KEY_MAX];
     if (!resolve_key(slot, key, sizeof key, error, error_cap)) {
         return false;
