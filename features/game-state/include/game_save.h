@@ -140,8 +140,9 @@ bool game_save_flush(char *error, int error_cap);
    (CORRUPT_RESET/NEWER/BLOCKED до new_game). */
 void game_save_tick(void);
 
-/* Пометка «есть несохранённое». dirty_at = момент ПЕРВОЙ пометки после чистого
-  . Зовут мутаторы фич/UI. */
+/* Пометка «есть несохранённое». dirty_at = момент ПЕРВОЙ пометки после чистого;
+   ПРОВАЛИВШЕЕСЯ сохранение тоже сдвигает его на себя, иначе ретрай шёл бы
+   каждый кадр. Зовут мутаторы фич/UI. */
 void game_save_mark_dirty(void);
 
 /* Wall-clock ms сохранённого saved_at (оффлайн-Δt для идла; кламп отрицательных —

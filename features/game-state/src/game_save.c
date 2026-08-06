@@ -71,8 +71,14 @@ static bool    s_new_game_pending;         /* Р11: deferred to a safe shell fra
 static char    s_new_game_skip_id[32];     /* fragment id to leave untouched, or "" for none */
 static bool    s_dirty;
 static bool    s_unpersisted;
-static int64_t s_dirty_at;        /* mono ms of the first mark after clean */
-static int64_t s_last_save_mono;  /* mono ms of the last successful save */
+/* Both of these are autosave RATE GATES, not history. game_save_tick is their
+   only reader, and a failed save charges itself to both so the retry lands one
+   debounce later instead of on the next frame. `s_last_save_mono` in particular
+   was never "the last successful save" even before that -- every load path
+   stamps it too, including the ones that save nothing. The durable "when was
+   the data last written" answer is s_last_saved_at, in wall time. */
+static int64_t s_dirty_at;        /* mono ms of the first mark after clean, or of the last failed attempt */
+static int64_t s_last_save_mono;  /* mono ms of the last save ATTEMPT or load */
 static int64_t s_last_saved_at;   /* wall ms stamped into the last save/load */
 static int64_t s_save_seq;        /* monotonic counter, restored from the loaded envelope */
 
@@ -555,40 +561,101 @@ static bool prepare_document_for_load(
     return true;
 }
 
+/* The reason of the LAST failure that was logged. Not `s_unpersisted`: that flag
+   is also raised by a failed storage probe at init (the Safari-private case), so
+   keying the log off it would silence the first REAL failure on exactly the
+   platform where failures are expected, and would announce a "recovery" from a
+   failure that never happened. Keyed on the text so that a failure which CHANGES
+   cause -- transient refusal today, disk full tomorrow -- gets reported again
+   instead of hiding behind the first one. */
+#define GAME_SAVE_REASON_MAX 192
+static char s_logged_failure[GAME_SAVE_REASON_MAX];
+
+static bool failure_is_new(const char *reason) {
+    if (strcmp(s_logged_failure, reason) == 0) {
+        return false;
+    }
+    (void)snprintf(s_logged_failure, sizeof s_logged_failure, "%s", reason);
+    return true;
+}
+
 static bool save_internal(char *error, int error_cap) {
+    /* Every failure exits through one place. The bookkeeping below used to live
+       in an `else` after the storage write, which four earlier failure returns
+       -- build, validate, serialize, encode -- walked straight past: they left
+       both tick clocks untouched, so a save rejected by the document validator
+       re-entered this function EVERY FRAME, rebuilding and re-serialising the
+       whole document 60 times a second, and never set the flag or said a word.
+       T0055 named that pathology and then fixed it for one of the five paths. */
+    char reason[GAME_SAVE_REASON_MAX];
+    reason[0] = '\0';
+    cJSON *root = NULL;
+    char *flat = NULL;
+    char *encoded = NULL;
     int64_t wall = 0;
     int64_t seq = 0;
-    cJSON *root = build_root(true, &wall, &seq);
+    bool ok = false;
+
+    root = build_root(true, &wall, &seq);
     if (!root) {
-        gsj_set_error(error, error_cap, "failed to build save document");
-        return false;
+        gsj_set_error(reason, (int)sizeof reason, "failed to build save document");
+        goto done;
     }
-    if (!validate_document(root, error, error_cap)) {
-        cJSON_Delete(root);
-        return false;
+    if (!validate_document(root, reason, (int)sizeof reason)) {
+        goto done;
     }
-    char *flat = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
+    flat = cJSON_PrintUnformatted(root);
     if (!flat) {
-        gsj_set_error(error, error_cap, "failed to serialize save document");
-        return false;
+        gsj_set_error(reason, (int)sizeof reason, "failed to serialize save document");
+        goto done;
     }
-    char *encoded = transform_encode(flat, error, error_cap);
-    free(flat);
+    encoded = transform_encode(flat, reason, (int)sizeof reason);
     if (!encoded) {
-        return false;
+        goto done;
     }
-    const bool ok = game_storage_write(GAME_SAVE_AUTOSAVE_SLOT, encoded, error, error_cap);
+    ok = game_storage_write(GAME_SAVE_AUTOSAVE_SLOT, encoded, reason, (int)sizeof reason);
+
+done:
+    cJSON_Delete(root);
+    free(flat);
     free(encoded);
+
     if (ok) {
+        if (s_logged_failure[0] != '\0') {
+            nt_log_warn("game_save: save recovered after an earlier failure (%s)",
+                        s_logged_failure);
+            s_logged_failure[0] = '\0';
+        }
         s_save_seq = seq;
         s_dirty = false;
         s_last_save_mono = mono_now();
         s_last_saved_at = wall;
         s_unpersisted = false;
     } else {
+        /* T0055. A failed save used to set a flag and vanish: both tick call
+           sites do `(void)save_internal(err, ...)`, so the reason was built and
+           dropped, and a player whose saves stopped landing had nothing to
+           report. */
+        if (failure_is_new(reason)) {
+            nt_log_warn("game_save: save failed (%s); data kept in memory, will retry",
+                        reason[0] != '\0' ? reason : "no reason reported");
+        }
         s_unpersisted = true;
-        /* dirty stays set: retry on the next tick. */
+        /* Dirty even if it was clean: game_save_flush is legal on a clean state,
+           and without this a failed flush would latch s_unpersisted with nothing
+           left to clear it -- the tick returns early while !s_dirty. */
+        s_dirty = true;
+        /* Retry on the next tick, but NOT on the next frame. Both tick
+           conditions are timestamp-based and neither advanced on failure, so a
+           persistently failing save was attempted 60 times a second -- each one
+           now also blocking inside the storage retry. Charging the attempt to
+           both clocks makes the next try land one debounce later. */
+        const int64_t attempted_at = mono_now();
+        s_dirty_at = attempted_at;
+        s_last_save_mono = attempted_at;
+    }
+    if (error != NULL && error_cap > 0 && !ok) {
+        (void)snprintf(error, (size_t)error_cap, "%s", reason);
     }
     return ok;
 }
@@ -931,6 +998,7 @@ void game_save_init(void) {
     s_last_save_mono = 0;
     s_last_saved_at = 0;
     s_save_seq = 0;
+    s_logged_failure[0] = '\0';
 
     char err[128];
     err[0] = '\0';
