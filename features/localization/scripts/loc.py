@@ -465,7 +465,7 @@ class Lang:
         require(bool(LANG_RE.match(code)), f"language code {code!r} must look like 'ru' or 'pt-BR'")
         require(isinstance(block, dict), f"language {code!r} must be an object")
         unknown = set(block) - {
-            "group_separator", "group_min_digits", "decimal_separator",
+            "note", "group_separator", "group_min_digits", "decimal_separator",
             "plural_rule", "alphabet",
         }
         require(not unknown, f"language {code!r} has unknown field(s) {sorted(unknown)}")

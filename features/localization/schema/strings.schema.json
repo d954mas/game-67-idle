@@ -29,8 +29,12 @@
         ],
         "additionalProperties": false,
         "properties": {
+          "note": {
+            "description": "Free-text authoring note on the LANGUAGE block, same affordance string entries have. Never rendered, never generated. A number-formatting mark is exactly the kind of field whose EMPTY value is a decision rather than an omission, and the next reader needs to be told which.",
+            "type": "string"
+          },
           "group_separator": {
-            "description": "Inserted every three digits by the int:group arg type. Russian uses a space, English a comma. Digit grouping is language data, not game code.",
+            "description": "Inserted every three digits by the int:group arg type, and by loc_group_i64/loc_number. EMPTY disables grouping for that language, which is a legitimate choice and not an omission -- say so in `note`. Russian uses a space. English in this studio uses NOTHING: a comma there reads as one-point-zero to a Russian speaker, since a comma is exactly the decimal mark ru uses. Digit grouping is language data, not game code.",
             "type": "string",
             "maxLength": 4
           },
