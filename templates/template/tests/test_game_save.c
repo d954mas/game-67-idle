@@ -596,28 +596,33 @@ void test_recovered_bak_failed_rewrite_preserves_backup(void) {
     free(backup_before);
 }
 
-/* 6. NEWER (versions only): zero bytes written, export still readable. */
-void test_newer_is_read_only(void) {
-    const char *newer =
-        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":5,\"app\":\"" GAME_STORAGE_APP_ID "\","
-        "\"features\":{\"game\":{\"v\":2,\"coins\":77,\"name\":\"future\"}}}";
-    write_raw(PRIMARY_PATH, newer);
-    char *before = read_raw(PRIMARY_PATH);
+/* 6. NEWER: the file this build cannot read is kept as a backup and a normal
+   save takes over the normal name (T0058, лид 2026-08-06: "если сейф плохой,
+   битый, из новой версии, его надо сохранить как бекап, и делать мой новый").
+
+   This used to assert that not one byte of the newer file changed, which was
+   true and beside the point: keeping it in place meant autosave stayed paused
+   with nothing able to unpause it, so the session played on top of it was
+   discarded on exit and nobody was told. */
+void test_a_newer_save_is_set_aside_and_a_normal_save_takes_over(void) {
+    char err[128] = {0};
+    (void)sweep_corrupt(true);
+    write_raw(PRIMARY_PATH,
+              "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":5,\"app\":\""
+              GAME_STORAGE_APP_ID "\",\"features\":{\"game\":{\"v\":2,\"coins\":77,\"name\":\"future\"}}}");
 
     game_save_load_result_t r;
     game_save_load(&r);
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_NEWER, r.status);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(1, sweep_corrupt(false),
+                                  "the newer save was not kept as a backup");
+    TEST_ASSERT_TRUE(file_present(PRIMARY_PATH));
 
-    char *after = read_raw(PRIMARY_PATH);
-    TEST_ASSERT_EQUAL_STRING(before, after); /* not one byte changed */
-    free(before);
-    free(after);
-
-    char err[128] = {0};
     char *exp = game_save_export_string(err, (int)sizeof err);
     TEST_ASSERT_NOT_NULL(exp);
     TEST_ASSERT_EQUAL_INT('{', exp[0]);
     free(exp);
+    (void)sweep_corrupt(true);
 }
 
 /* 7. Orphan round trip: unknown feature key retained through save. */
@@ -1163,7 +1168,7 @@ int main(void) {
     RUN_TEST(test_corrupt_reset_no_on_new_game_then_new_game);
     RUN_TEST(test_recovered_bak_then_next_boot_loaded);
     RUN_TEST(test_recovered_bak_failed_rewrite_preserves_backup);
-    RUN_TEST(test_newer_is_read_only);
+    RUN_TEST(test_a_newer_save_is_set_aside_and_a_normal_save_takes_over);
     RUN_TEST(test_orphan_round_trip);
     RUN_TEST(test_save_seq_monotonic);
     RUN_TEST(test_debounce_boundary);

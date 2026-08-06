@@ -165,34 +165,36 @@ void setUp(void) {
 
 void tearDown(void) {}
 
-/* The primary cannot be read AND could not be copied aside, so its bytes are the
-   only copy there is: never write it again. That much was already true. What was
-   NOT true is what happened next -- autosave paused with nothing in the product
-   able to unpause it, so the player kept playing a session that was thrown away
-   on exit and nobody was ever told (T0058, лид: "Игрок вообще не должен ничего
-   этого видеть и знать"). The session now continues in a slot beside it. */
-static void test_unreadable_primary_is_left_alone_and_the_session_continues_beside_it(void) {
+/* The rule (T0058, лид 2026-08-06): a save this build cannot use -- corrupt, or
+   written by a newer build -- goes to quarantine, and a normal new save starts
+   under the normal name. One file, one name.
+
+   These three cover the case where the move itself is REFUSED, which is the only
+   remaining reason not to write: the bytes are still in the slot and writing
+   would destroy them. It used to stop there for good, with a note in a header
+   saying the player could start a New Game. Now the tick keeps trying the move,
+   and whatever is holding the file lets go on its own. */
+static void test_unreadable_and_immovable_save_holds_writes_instead_of_stopping(void) {
     s_read_status = GAME_STORAGE_READ_ERROR_PRESERVED;
     game_save_load_result_t result;
 
     game_save_load(&result);
 
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_BLOCKED, result.status);
-    TEST_ASSERT_EQUAL_INT_MESSAGE(0, s_primary_writes, "the unreadable primary was written");
-    TEST_ASSERT_EQUAL_INT_MESSAGE(1, s_side_writes, "the session was not persisted anywhere");
-    TEST_ASSERT_EQUAL_INT(0, s_quarantine_calls); /* storage already tried and failed */
-    TEST_ASSERT_EQUAL_INT(7, s_live_value);       /* a real, playable new game */
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, s_write_calls, "wrote over bytes it could not move");
+    TEST_ASSERT_EQUAL_INT(7, s_live_value); /* a real, playable session meanwhile */
 
-    /* and autosave is LIVE, which is the entire point */
+    /* The move is retried from the tick -- nobody is asked to do anything. */
+    s_quarantine_allowed = true;
     game_save_mark_dirty();
-    TEST_ASSERT_TRUE(game_save_flush(NULL, 0));
-    TEST_ASSERT_EQUAL_INT(2, s_side_writes);
-    TEST_ASSERT_EQUAL_INT(0, s_primary_writes);
+    game_save_tick();
+    TEST_ASSERT_EQUAL_INT_MESSAGE(2, s_quarantine_calls,
+                                  "the move was tried once at load and never retried");
+    TEST_ASSERT_TRUE_MESSAGE(game_save_flush(NULL, 0), "saving did not resume");
+    TEST_ASSERT_EQUAL_INT(1, s_primary_writes);
 }
 
-/* Same rule from the other direction: the file parsed as garbage and could not
-   be quarantined either, so a repair tool may still want those bytes. */
-static void test_unquarantinable_corrupt_primary_is_left_alone(void) {
+static void test_corrupt_and_immovable_save_holds_writes_too(void) {
     s_read_status = GAME_STORAGE_READ_OK;
     s_read_text = "not-json";
     s_live_value = 52;
@@ -201,32 +203,34 @@ static void test_unquarantinable_corrupt_primary_is_left_alone(void) {
     game_save_load(&result);
 
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_BLOCKED, result.status);
-    TEST_ASSERT_EQUAL_INT(1, s_quarantine_calls); /* tried, refused */
-    TEST_ASSERT_EQUAL_INT_MESSAGE(0, s_primary_writes, "the corrupt primary was written");
-    TEST_ASSERT_EQUAL_INT_MESSAGE(1, s_side_writes, "the session was not persisted anywhere");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, s_write_calls, "wrote over bytes it could not move");
+    TEST_ASSERT_TRUE_MESSAGE(s_quarantine_calls > 0, "never tried to move the file aside");
 }
 
-/* New Game after a blocked load still works -- and still keeps its hands off
-   the primary, because nothing about it made the primary safe to overwrite. */
-static void test_new_game_after_a_blocked_load_stays_on_the_side_slot(void) {
+/* An explicit New Game does not make those bytes safe to overwrite, so it must
+   not become a way around the hold. */
+static void test_new_game_does_not_overwrite_a_file_that_could_not_be_moved(void) {
     s_read_status = GAME_STORAGE_READ_ERROR_PRESERVED;
     game_save_load_result_t result;
     game_save_load(&result);
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_BLOCKED, result.status);
-    const int side_after_load = s_side_writes;
 
-    TEST_ASSERT_TRUE(game_save_new_game(NULL, 0).persisted);
-
-    TEST_ASSERT_EQUAL_INT(7, s_live_value);
-    TEST_ASSERT_EQUAL_INT(side_after_load + 1, s_side_writes);
+    TEST_ASSERT_FALSE(game_save_new_game(NULL, 0).persisted);
     TEST_ASSERT_EQUAL_INT(0, s_primary_writes);
+
+    /* ...and once the file frees up, the same session persists normally. */
+    s_quarantine_allowed = true;
+    game_save_tick();
+    TEST_ASSERT_TRUE(game_save_flush(NULL, 0));
+    TEST_ASSERT_EQUAL_INT(1, s_primary_writes);
+    TEST_ASSERT_EQUAL_INT(7, s_live_value);
 }
 
 int main(void) {
     game_save_register_fragment(&s_fragment);
     UNITY_BEGIN();
-    RUN_TEST(test_unreadable_primary_is_left_alone_and_the_session_continues_beside_it);
-    RUN_TEST(test_unquarantinable_corrupt_primary_is_left_alone);
-    RUN_TEST(test_new_game_after_a_blocked_load_stays_on_the_side_slot);
+    RUN_TEST(test_unreadable_and_immovable_save_holds_writes_instead_of_stopping);
+    RUN_TEST(test_corrupt_and_immovable_save_holds_writes_too);
+    RUN_TEST(test_new_game_does_not_overwrite_a_file_that_could_not_be_moved);
     return UNITY_END();
 }

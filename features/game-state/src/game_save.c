@@ -23,22 +23,21 @@
 
 /* CMake supplies these for the game/test targets; guarded defaults keep the file
    self-contained. */
-/* Where this session writes when the primary slot must not be touched (T0058,
-   лид 2026-08-06: "Игрок вообще не должен ничего этого видеть и знать. Мы должны
-   гарантировать максимум что можем").
-   Two load outcomes used to end with autosave paused FOREVER and nothing to
-   unpause it: a save newer than this build, and a primary that could be neither
-   read nor copied aside. The player got a game that silently never saved, and
-   the only documented way out was an action nobody would ever know to take.
-   Overwriting the primary is not an option in either case -- it holds data this
-   build cannot understand, or data it could not even read -- so the session goes
-   somewhere else and the primary is left exactly as it was. Roll the newer build
-   back on and its save is still sitting there, untouched. */
+/* T0058, лид 2026-08-06: "Игрок вообще не должен ничего этого видеть и знать.
+   Мы должны гарантировать максимум что можем" -- and then, on the shape of it:
+   "если сейф плохой, битый, из новой версии, его надо сохранить как бекап, и
+   делать мой новый".
+
+   ONE slot, one name. Two load outcomes used to end with autosave paused for
+   good and nothing in the product able to unpause it -- a save newer than this
+   build, and a primary that could not be parsed -- so the player kept playing a
+   session that was thrown away on exit. The rule now is the same one the corrupt
+   path already used: put the unusable file in quarantine, then start a normal
+   save under the normal name. Nothing has to work out WHICH file is the save,
+   because there is only ever one. */
 #ifndef GAME_SAVE_AUTOSAVE_SLOT
 #define GAME_SAVE_AUTOSAVE_SLOT "autosave"
 #endif
-/* Same slot vocabulary ([a-z0-9_-]+), so it is a real slot on both backends. */
-#define GAME_SAVE_SIDE_SLOT GAME_SAVE_AUTOSAVE_SLOT "-side"
 #ifndef GAME_SAVE_DEBOUNCE_MS
 #define GAME_SAVE_DEBOUNCE_MS 2000
 #endif
@@ -79,12 +78,14 @@ static const GameSaveDocumentMigrateFn *s_document_migrations;
 static int s_document_migration_count;
 static GameSaveDocumentValidateFn s_document_validator;
 
-/* Where THIS session writes. The primary unless load found something there it
-   must not overwrite -- see GAME_SAVE_SIDE_SLOT. Reads of the primary are
-   spelled out literally, because "what did we find on disk" and "where do we
-   write now" stopped being the same question. */
-static const char *s_slot = GAME_SAVE_AUTOSAVE_SLOT;
-static bool    s_autosave_paused; /* CORRUPT_RESET until the shell's new_game */
+static bool    s_autosave_paused; /* CORRUPT_RESET until the shell's new_game;
+                                     also while a file we could not move aside is
+                                     still sitting in the slot (s_quarantine_owed) */
+/* The slot holds bytes we could neither use nor move out of the way. Writing
+   would destroy them, so the tick keeps trying the move instead -- an antivirus
+   or a sync client holding the file lets go on its own, and then the save
+   resumes with nobody having been asked to do anything. */
+static bool    s_quarantine_owed;
 static bool    s_new_game_pending;         /* Р11: deferred to a safe shell frame boundary */
 static char    s_new_game_skip_id[32];     /* fragment id to leave untouched, or "" for none */
 static bool    s_dirty;
@@ -647,9 +648,9 @@ static bool save_internal(char *error, int error_cap, bool may_wait) {
         goto done;
     }
     ok = may_wait
-             ? game_storage_write_blocking(s_slot, encoded, reason,
+             ? game_storage_write_blocking(GAME_SAVE_AUTOSAVE_SLOT, encoded, reason,
                                            (int)sizeof reason)
-             : game_storage_write(s_slot, encoded, reason,
+             : game_storage_write(GAME_SAVE_AUTOSAVE_SLOT, encoded, reason,
                                   (int)sizeof reason);
 
 done:
@@ -805,7 +806,7 @@ static bool try_recover_from_backup(game_save_load_result_t *result, const char 
     char *baktext = NULL;
     cJSON *bakdoc = NULL;
     cJSON *prepared = NULL;
-    if (game_storage_read_backup(s_slot, &baktext, err, cap)) {
+    if (game_storage_read_backup(GAME_SAVE_AUTOSAVE_SLOT, &baktext, err, cap)) {
         char *bakdec = transform_decode(baktext, err, cap);
         free(baktext);
         bakdoc = bakdec ? cJSON_Parse(bakdec) : NULL;
@@ -828,59 +829,62 @@ static bool try_recover_from_backup(game_save_load_result_t *result, const char 
     /* The existing .bak is the only known durable good copy until primary is
        rewritten successfully. Never refresh it from a still-corrupt primary. */
     if (save_internal(err, cap, true)) {
-        (void)game_storage_write_backup(s_slot, err, cap);
+        (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, cap);
     }
     s_last_save_mono = mono_now();
     return true;
 }
 
-/* The primary holds something this build must not overwrite. Move THIS session
-   to the side slot, load whatever is already there, and keep autosaving. The
-   primary is not read again and never written -- put the newer build back and
-   its save is exactly where it left it.
+/* The slot holds something this build cannot use. Move it into quarantine --
+   the same .corrupt convention a corrupt save already used, and the same place a
+   repair tool would look -- then start a normal game and save it under the
+   normal name. One file, one name, nothing downstream has to choose.
 
-   This replaces "pause autosave until the player does something", which is a
-   promise the player was never told about and would not know how to keep. */
-static void continue_on_side_slot(
-    game_save_load_result_t *result, game_save_load_status_t status, const char *message) {
-    s_slot = GAME_SAVE_SIDE_SLOT;
-    s_autosave_paused = false;
+   If the move is REFUSED, the bytes stay where they are and writing is off
+   until it succeeds: whatever is holding the file (a scanner, a sync client)
+   lets go by itself, and game_save_tick retries. Nobody is asked to do anything
+   either way, which is the whole point -- this used to stop for good. */
+static void set_aside_and_start_new(
+    game_save_load_result_t *result, game_save_load_status_t status,
+    const char *why, const char *message) {
+    char err[128];
+    err[0] = '\0';
     result->status = status;
     set_message(result, message);
 
-    char err[128];
-    err[0] = '\0';
-    char *text = NULL;
-    game_storage_read_status_t rst = GAME_STORAGE_READ_ABSENT;
-    if (game_storage_read(s_slot, &text, &rst, err, (int)sizeof err)) {
-        char *decoded = transform_decode(text, err, (int)sizeof err);
-        free(text);
-        cJSON *doc = decoded ? cJSON_Parse(decoded) : NULL;
-        free(decoded);
-        cJSON *prepared = NULL;
-        bool migrated = false;
-        if (doc && cJSON_IsObject(doc) && !doc_is_newer(doc) &&
-            prepare_document_for_load(doc, &prepared, &migrated, err, (int)sizeof err)) {
-            load_from_doc(prepared, result);
-            cJSON_Delete(prepared);
-            cJSON_Delete(doc);
-            /* The status stays the one the caller chose: the interesting fact is
-               still WHY we are on the side slot, not that this part worked. */
-            s_last_save_mono = mono_now();
-            return;
-        }
-        cJSON_Delete(doc);
-        /* A side slot we cannot read is not worth protecting -- it only ever
-           held sessions this build wrote. Start over on it. */
-    } else {
-        free(text);
-    }
     free_orphans();
     reset_all();
+
+    if (!game_storage_quarantine(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err)) {
+        /* Not writable and not movable: keep the bytes, keep trying. */
+        s_quarantine_owed = true;
+        s_autosave_paused = true;
+        on_new_game_all(); /* a playable session; it persists once the file frees up */
+        nt_log_warn("game_save: %s but could not be moved aside (%s); retrying, writes held", why, err);
+        s_last_save_mono = mono_now();
+        return;
+    }
+    s_quarantine_owed = false;
+    s_autosave_paused = false;
     on_new_game_all();
     game_save_mark_dirty();
     (void)save_internal(err, (int)sizeof err, true); /* load path: synchronous */
+    nt_log_warn("game_save: %s; moved to quarantine, new save started", why);
     s_last_save_mono = mono_now();
+}
+
+/* Retried from the tick until the file lets go. Only then may anything be
+   written, because until then the slot still holds the only copy. */
+static void retry_owed_quarantine(void) {
+    char err[128];
+    err[0] = '\0';
+    if (!game_storage_quarantine(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err)) {
+        return;
+    }
+    s_quarantine_owed = false;
+    s_autosave_paused = false;
+    game_save_mark_dirty();
+    nt_log_warn("game_save: the unusable save could finally be moved aside; saving resumed");
 }
 
 void game_save_load(game_save_load_result_t *result) {
@@ -901,11 +905,9 @@ void game_save_load(game_save_load_result_t *result) {
             /* The primary holds the only known copy and could not even be copied
                aside, so it stays untouched. The session goes to the side slot
                rather than nowhere: this used to block every write for good. */
-            nt_log_warn(
-                "game_save: autosave read failed and could not be quarantined; primary untouched, session on '%s'",
-                GAME_SAVE_SIDE_SLOT);
-            continue_on_side_slot(result, GAME_SAVE_LOAD_BLOCKED,
-                                  "save unreadable and unquarantinable; primary untouched; session on the side slot");
+            set_aside_and_start_new(
+                result, GAME_SAVE_LOAD_BLOCKED, "the save could not be read",
+                "save unreadable; set aside; new save started");
             return;
         }
         if (rst == GAME_STORAGE_READ_ERROR) {
@@ -954,11 +956,9 @@ void game_save_load(game_save_load_result_t *result) {
                slot. Before T0058 this paused autosave with nothing to unpause
                it: the whole session vanished on exit and nobody was told. */
             cJSON_Delete(doc);
-            nt_log_warn(
-                "game_save: primary is newer than this build; left untouched, session on '%s'",
-                GAME_SAVE_SIDE_SLOT);
-            continue_on_side_slot(result, GAME_SAVE_LOAD_NEWER,
-                                  "save is newer than this build; untouched; session on the side slot");
+            set_aside_and_start_new(
+                result, GAME_SAVE_LOAD_NEWER, "the save is newer than this build",
+                "save is newer than this build; set aside; new save started");
             return;
         }
         cJSON *prepared = NULL;
@@ -971,7 +971,7 @@ void game_save_load(game_save_load_result_t *result) {
             s_autosave_paused = false;
             result->status = GAME_SAVE_LOAD_LOADED;
             set_message(result, "loaded");
-            (void)game_storage_write_backup(s_slot, err, (int)sizeof err); /* last-known-good */
+            (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err); /* last-known-good */
             if (migrated) {
                 game_save_mark_dirty(); /* persist the current envelope version after debounce */
             }
@@ -990,19 +990,19 @@ void game_save_load(game_save_load_result_t *result) {
 
     /* CORRUPT_RESET: quarantine + reset only. No on_new_game, no save — the shell
        waits for the player's explicit new_game (Р10). Autosave paused. */
+    /* Corrupt primary, no usable backup. Same rule, and the status stays
+       CORRUPT_RESET because the shell has always applied its own New Game on
+       it; set_aside_and_start_new only takes over when the move is refused. */
     if (!game_storage_quarantine(
             GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err)) {
-        /* Corrupt AND immovable: the bytes may still be worth something to a
-           repair tool, so they stay put and the session goes beside them. */
-        nt_log_warn(
-            "game_save: corrupt autosave could not be quarantined; primary untouched, session on '%s'",
-            GAME_SAVE_SIDE_SLOT);
-        continue_on_side_slot(result, GAME_SAVE_LOAD_BLOCKED,
-                              "corrupt save could not be quarantined; primary untouched; session on the side slot");
+        set_aside_and_start_new(
+            result, GAME_SAVE_LOAD_BLOCKED, "the save is corrupt",
+            "corrupt save could not be moved aside; retrying, writes held");
         return;
     }
     free_orphans();
     reset_all();
+    s_quarantine_owed = false;
     s_autosave_paused = true;
     result->status = GAME_SAVE_LOAD_CORRUPT_RESET;
     set_message(result, "primary and backup corrupt; quarantined, awaiting new game");
@@ -1084,7 +1084,7 @@ void game_save_init(void) {
         s_wall_clock = default_wall_ms;
     }
     s_dirty = false;
-    s_slot = GAME_SAVE_AUTOSAVE_SLOT; /* every session starts by trusting the primary */
+    s_quarantine_owed = false;
     s_autosave_paused = false;
     s_unpersisted = false;
     s_new_game_pending = false;
@@ -1108,9 +1108,24 @@ static game_save_transition_result_t new_game_except(
     free_orphans();
     reset_all_except(skip_id);
     on_new_game_all_except(skip_id);
-    s_autosave_paused = false; /* resume autosave (Р10) */
+    /* A New Game is not a licence to overwrite bytes we could not move out of
+       the way: the slot still holds the only copy of a save this build could
+       not read. Try the move again -- and if it is still refused, stay held.
+       Without this, "start over" quietly became the way around the hold. */
+    if (s_quarantine_owed) {
+        retry_owed_quarantine();
+    }
+    if (!s_quarantine_owed) {
+        s_autosave_paused = false; /* resume autosave (Р10) */
+    }
     game_save_mark_dirty();
-    const bool persisted = save_internal(error, error_cap, may_wait);
+    /* Held: the write would land on the file we could not move. Say so rather
+       than reporting a save that did not happen. */
+    const bool persisted =
+        s_quarantine_owed ? (gsj_set_error(error, error_cap,
+                                           "save is held: the previous file could not be moved aside"),
+                             false)
+                          : save_internal(error, error_cap, may_wait);
     if (persisted) {
         s_last_save_mono = mono_now();
     }
@@ -1180,6 +1195,9 @@ bool game_save_flush(char *error, int error_cap) {
 }
 
 void game_save_tick(void) {
+    if (s_quarantine_owed) {
+        retry_owed_quarantine();
+    }
     if (s_autosave_paused || !s_dirty) {
         return;
     }
