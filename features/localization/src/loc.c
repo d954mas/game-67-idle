@@ -26,6 +26,7 @@
 static const loc_table_t *s_table;
 static int s_lang;
 static int s_fallback_log_count;
+static int s_seen_count;
 
 // #region table binding
 void loc_bind_table(const loc_table_t *table) {
@@ -39,6 +40,10 @@ void loc_bind_table(const loc_table_t *table) {
     s_lang = table->fallback_lang;
     if (table->fallback_logged && table->fallback_logged_bytes > 0) {
         memset(table->fallback_logged, 0, table->fallback_logged_bytes);
+    }
+    s_seen_count = 0;
+    if (table->seen && table->seen_bytes > 0) {
+        memset(table->seen, 0, table->seen_bytes);
     }
 }
 
@@ -115,6 +120,26 @@ static bool claim_fallback_slot(int key_index) {
     s_table->fallback_logged[byte] |= bit;
     s_fallback_log_count += 1;
     return true;
+}
+
+/* Marks a key as resolved for display. One byte-write per lookup on a table the
+   generated TU already owns -- see loc_key_was_seen in loc.h for why coverage is
+   worth that. Deliberately NOT conditional on NDEBUG: a capture run that only
+   works in a debug build proves coverage of a build nobody ships. */
+static void mark_seen(int key_index) {
+    if (!s_table || !s_table->seen) {
+        return;
+    }
+    const size_t byte = (size_t)key_index / 8u;
+    if (byte >= s_table->seen_bytes) {
+        return;
+    }
+    const uint8_t bit = (uint8_t)(1u << ((unsigned)key_index % 8u));
+    if (s_table->seen[byte] & bit) {
+        return;
+    }
+    s_table->seen[byte] |= bit;
+    s_seen_count += 1;
 }
 
 /* The key carries no text in the active language. */
@@ -511,6 +536,7 @@ static size_t expand(const char *tpl, const char *const *values, const size_t *l
 LocStr loc_get(int key_index) {
     NT_ASSERT(s_table != NULL && "loc_get: call loc_init() first");
     NT_ASSERT(key_index >= 0 && key_index < s_table->string_count && "loc_get: key index out of range");
+    mark_seen(key_index);
     const loc_string_def_t *def = &s_table->strings[key_index];
     /* A zero-argument key cannot be plural (a plural key needs its count), so
        there is no form to degrade to and nothing to report. */
@@ -524,12 +550,33 @@ LocStr loc_get(int key_index) {
     return loc_raw(text ? text : def->key);
 }
 
+bool loc_key_was_seen(int key_index) {
+    if (!s_table || !s_table->seen || key_index < 0) {
+        return false;
+    }
+    const size_t byte = (size_t)key_index / 8u;
+    if (byte >= s_table->seen_bytes) {
+        return false;
+    }
+    return (s_table->seen[byte] & (uint8_t)(1u << ((unsigned)key_index % 8u))) != 0;
+}
+
+int loc_seen_count(void) { return s_seen_count; }
+
+void loc_seen_reset(void) {
+    if (s_table && s_table->seen) {
+        memset(s_table->seen, 0, s_table->seen_bytes);
+    }
+    s_seen_count = 0;
+}
+
 LocStr loc_format(int key_index, int plural_arg, const loc_arg_t *args, int arg_count) {
     NT_ASSERT(s_table != NULL && "loc_format: call loc_init() first");
     NT_ASSERT(key_index >= 0 && key_index < s_table->string_count && "loc_format: key index out of range");
     NT_ASSERT(arg_count >= 0 && arg_count <= LOC_MAX_ARGS && "loc_format: argument count out of range");
     NT_ASSERT((arg_count == 0 || args != NULL) && "loc_format: NULL args with a non-zero arg_count");
     NT_ASSERT(plural_arg >= -1 && plural_arg < arg_count && "loc_format: plural argument index out of range");
+    mark_seen(key_index);
     const loc_string_def_t *def = &s_table->strings[key_index];
 
     int64_t plural_value = 0;

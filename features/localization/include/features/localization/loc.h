@@ -114,6 +114,13 @@ typedef struct loc_table {
      * generated TU so this module allocates nothing of its own. */
     uint8_t *fallback_logged;
     size_t fallback_logged_bytes;
+    /* One bit per key, set the first time that key is RESOLVED for display.
+     * Same ownership. Costs 20 bytes and one byte-write per lookup, and it is
+     * the only way to answer the question every localization gate leaves open:
+     * not "is this string wired correctly" but "has a human ever had the chance
+     * to read it". A key no surface reaches is a finding about the game. */
+    uint8_t *seen;
+    size_t seen_bytes;
 } loc_table_t;
 
 /* Argument kinds mirror the `args` types in strings.json. */
@@ -182,6 +189,26 @@ const char *loc_group_i64(int64_t value, char *out, size_t cap);
  * Never NULL; "." until a language says otherwise. Points into the static
  * table, so it outlives any frame. */
 const char *loc_decimal_separator(void);
+
+/* ---- reading coverage --------------------------------------------------
+ * Every gate in this module answers "is the text WIRED correctly": a lost
+ * string fails to compile, a missing form fails the generator, a glyph with no
+ * coverage fails the pack build. None of them answers "has anyone ever had the
+ * chance to READ it", and a string nobody can reach is a defect in the game
+ * whatever its translation says.
+ *
+ * loc_get/loc_format mark a key the first time they resolve it, so a capture
+ * run that visits every surface leaves behind an exact list of what was shown
+ * and what was not. Language-independent on purpose: the key is what a surface
+ * reaches for, and the point is coverage, not which words came back. */
+bool loc_key_was_seen(int key_index);
+
+/* How many distinct keys have been resolved since the last reset. */
+int loc_seen_count(void);
+
+/* Forget everything seen so far -- call at the start of a capture run so the
+ * count describes that run and not the startup frames before it. */
+void loc_seen_reset(void);
 
 /* The same number, as LocStr straight from the per-frame arena. Use this at a
  * call site that hands the result to a text widget -- a caller-owned buffer
