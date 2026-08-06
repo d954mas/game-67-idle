@@ -75,12 +75,30 @@ static bool is_absolute_path(const char *path) {
 #endif
 }
 
+/* Set by --save-root. Highest precedence: an explicit launch argument beats a
+   compile-time define and an environment variable, because it is the one a
+   human typed on purpose. */
+static char s_root_override[GAME_STORAGE_PATH_MAX];
+
+void game_storage_set_root(const char *absolute_path) {
+    if (absolute_path == NULL || absolute_path[0] == '\0') {
+        s_root_override[0] = '\0';
+        return;
+    }
+    (void)snprintf(s_root_override, sizeof s_root_override, "%s", absolute_path);
+}
+
 static bool resolve_storage_root(
     char *out, size_t out_cap, char *error, int error_cap) {
+    const char *override_root = s_root_override[0] ? s_root_override : NULL;
 #ifdef GAME_STORAGE_NATIVE_ROOT
-    const char *override_root = GAME_STORAGE_NATIVE_ROOT;
+    if (override_root == NULL) {
+        override_root = GAME_STORAGE_NATIVE_ROOT;
+    }
 #else
-    const char *override_root = getenv("GAME_STORAGE_ROOT");
+    if (override_root == NULL) {
+        override_root = getenv("GAME_STORAGE_ROOT");
+    }
 #endif
     if (override_root != NULL && is_absolute_path(override_root)) {
         if (snprintf(out, out_cap, "%s", override_root) >= (int)out_cap) {

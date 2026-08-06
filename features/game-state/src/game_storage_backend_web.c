@@ -50,6 +50,10 @@ static bool resolve_key(
     return true;
 }
 
+/* No filesystem on web: the slot IS a localStorage key. Accepted and ignored so
+   the launch flag means the same thing on every platform -- nothing. */
+void game_storage_set_root(const char *absolute_path) { (void)absolute_path; }
+
 bool game_storage_backend_write(
     const char *slot, const char *text, char *error, int error_cap, bool may_wait) {
     /* Ignored here, deliberately. localStorage is synchronous and the failures

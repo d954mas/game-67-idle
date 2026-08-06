@@ -90,4 +90,16 @@ bool game_storage_quarantine(const char *slot, char *error, int error_cap);
    false если браузер не сохраняет. */
 bool game_storage_probe(char *error, int error_cap);
 
+/* Куда класть сейвы. Задаётся ФЛАГОМ запуска (`--save-root <path>`), а не
+   переменной окружения: у игры уже есть флаги, и невидимый канал через
+   окружение — не то место, где должен решаться путь к данным игрока.
+
+   Абсолютный путь; NULL/пустая строка снимают override. Зовётся до первого
+   чтения или записи (main.c разбирает аргументы до game_save_load).
+
+   Приоритет: этот вызов -> GAME_STORAGE_NATIVE_ROOT (компайл-тайм, только у
+   тестовых целей) -> GAME_STORAGE_ROOT (окружение, для инструментов) ->
+   штатное место ОС. web игнорирует: там ключи localStorage. */
+void game_storage_set_root(const char *absolute_path);
+
 #endif /* GAME_STORAGE_H */
