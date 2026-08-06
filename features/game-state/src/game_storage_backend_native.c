@@ -170,8 +170,32 @@ static bool ensure_parent_dirs(
     return true;
 }
 
+/* `<message> (os error N)`. Every failure path below used to produce a sentence
+   with no CODE in it -- "failed to replace storage file" and nothing else --
+   which is how a real intermittent write failure survived being seen twice and
+   diagnosed zero times (T0055). A flag without a reason is not a report. */
+static void set_error_os(char *error, int error_cap, const char *message, long code) {
+    if (error == NULL || error_cap <= 0) {
+        return;
+    }
+    (void)snprintf(error, (size_t)error_cap, "%s (os error %ld)", message, code);
+}
+
+static long last_os_error(void) {
+#ifdef _WIN32
+    return (long)GetLastError();
+#else
+    return (long)errno;
+#endif
+}
+
 static bool replace_file(const char *temporary, const char *primary) {
 #ifdef _WIN32
+    /* NOTE, unproven as of 2026-08-06: MoveFileEx fails outright if ANY process
+       holds either path open -- an antivirus scanning the temp file we just
+       closed is the usual one on Windows, and there is no retry here. That is
+       the leading suspect for T0055, and the error code now travels far enough
+       to confirm or kill it. */
     return MoveFileExA(
                temporary, primary,
                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
@@ -255,7 +279,7 @@ static bool write_file_atomic(
     }
     FILE *file = fopen(temporary, "wb");
     if (file == NULL) {
-        set_error(error, error_cap, "failed to open storage temp file for write");
+        set_error_os(error, error_cap, "failed to open storage temp file for write", last_os_error());
         return false;
     }
     const size_t length = strlen(text);
@@ -266,16 +290,16 @@ static bool write_file_atomic(
     ok = fclose(file) == 0 && ok;
     if (!ok) {
         (void)remove(temporary);
-        set_error(error, error_cap, "failed to write storage temp file");
+        set_error_os(error, error_cap, "failed to write storage temp file", last_os_error());
         return false;
     }
     if (!replace_file(temporary, primary)) {
         (void)remove(temporary);
-        set_error(error, error_cap, "failed to replace storage file");
+        set_error_os(error, error_cap, "failed to replace storage file", last_os_error());
         return false;
     }
     if (!sync_parent_directory(primary)) {
-        set_error(error, error_cap, "failed to sync storage directory");
+        set_error_os(error, error_cap, "failed to sync storage directory", last_os_error());
         return false;
     }
     return true;
@@ -533,7 +557,7 @@ bool game_storage_backend_quarantine(
         return false;
     }
     if (!sync_parent_directory(paths.primary)) {
-        set_error(error, error_cap, "failed to sync storage directory");
+        set_error_os(error, error_cap, "failed to sync storage directory", last_os_error());
         return false;
     }
     return true;
