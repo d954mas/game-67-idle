@@ -597,10 +597,10 @@ void test_recovered_bak_failed_rewrite_preserves_backup(void) {
 }
 
 /* 6. NEWER: the file this build cannot read is kept as a backup and a normal
-   save takes over the normal name (T0058, "если сейф плохой,
+   save takes over the normal name ("если сейф плохой,
    битый, из новой версии, его надо сохранить как бекап, и делать мой новый").
 
-   This used to assert that not one byte of the newer file changed, which was
+   Asserting that not one byte of the newer file changed would be
    true and beside the point: keeping it in place meant autosave stayed paused
    with nothing able to unpause it, so the session played on top of it was
    discarded on exit and nobody was told. */

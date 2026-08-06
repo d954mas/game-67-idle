@@ -329,11 +329,9 @@ static void game_runtime_load_state(void) {
             char save_err[128];
             (void)game_save_new_game(save_err, (int)sizeof save_err);
         }
-        /* NEWER and BLOCKED used to reset the fragments here as well. Since
-           T0058 those loads leave a real session in memory -- read back from the
-           side slot, or freshly created and already written there -- so redoing
-           the reset would gut it and the next autosave would persist the gutted
-           version. The primary stays untouched either way. */
+        /* Deliberately NOT reached for NEWER or BLOCKED: those loads leave a
+           real session in memory, so redoing the reset would gut it and the
+           next autosave would persist the gutted version. */
         return;
     }
 
@@ -525,7 +523,7 @@ int main(int argc, char **argv) {
     }
     // --fresh-state implies --disable-autosave (no opt-out flag exists, none is added):
     // otherwise the 2s debounce would silently overwrite a REAL save on disk with the
-    // throwaway fresh session a few seconds later (T0327 hygiene; automation already
+    // throwaway fresh session a few seconds later (automation already
     // always passes both, ai_studio/runtime_automation/devapi_client.py running_game()).
     if (s_fresh_state) {
         s_disable_autosave = true;

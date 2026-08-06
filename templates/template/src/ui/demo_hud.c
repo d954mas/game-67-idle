@@ -31,7 +31,7 @@ static int64_t get_hero_level(void *ud) {
 /* Демо idle-доход xp: float-аккумулятор в game glue -> флаш в i64 (паттерн Р1;
    ДРОБНОЕ производство копит в glue, НЕ в count). Кормит purse tmpl.xp;
    progression auto-трек hero авто-покупает уровни -> живой count-up + levelup
-   для глаза лида (см. README "Demo idle-income + autosave churn" -- И3a/И3b
+   для глаза (см. README "Demo idle-income + autosave churn" -- И3a/И3b
    cross-note). Ноль (или отрицательный) DEMO_XP_PER_SEC -> статичный бар,
    гейты §8 всё равно проходят по рендеру. */
 #define DEMO_XP_PER_SEC 8.0F

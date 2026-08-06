@@ -41,7 +41,7 @@ void hud_draw(nt_material_t text_material, nt_resource_t font_resource, nt_font_
 
     const float white[4] = {1.0F, 1.0F, 1.0F, 1.0F};
     const float cyan[4] = {0.35F, 0.82F, 1.0F, 1.0F};
-    /* M-fix (deep-review, И3b): this title used to sit top-left (h-50) --
+    /* This title must not sit top-left (h-50) --
        the same corner И3b's resource_panel (src/features/resource_panel) now
        occupies with the demo gold/hero HUD, so the two overlapped ("Gold 50"
        read through "TEMPLATE"'s letters). Grouped both demo/placeholder

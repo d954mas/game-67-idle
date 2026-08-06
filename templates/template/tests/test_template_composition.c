@@ -205,7 +205,7 @@ void test_registry_has_four_fragments_in_order(void) {
 
 /* 2. Proves the orchestrator's on_new_game fan-out composes the documented
    starting state (50 gold + 1 potion + empty hero track + default volumes) --
-   the single thing the T0327 review flagged as untested. */
+   the single thing no other test covers. */
 void test_new_game_seeds_across_all_fragments(void) {
     char err[128] = {0};
     TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
@@ -683,7 +683,7 @@ void test_devapi_corrupt_load_rebuilds_valid_live_owner_state(void) {
 }
 #endif
 
-/* 4. The live T0327 hygiene mechanic: "Hold to reset progress" wipes
+/* 4. The live "Hold to reset progress" mechanic: it wipes
    items+progression back to seed while volumes survive, on the REAL
    4-fragment registry (the review's flagged live mechanic). */
 void test_hold_to_reset_preserves_settings(void) {

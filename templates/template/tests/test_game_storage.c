@@ -64,7 +64,7 @@ static void init_test_storage_root(void) {
 }
 
 /* Counts (and optionally deletes) build/saves/ entries starting with prefix.
-   Used to assert quarantine leaves exactly one/two <slot>.corrupt-<ts>[-n]
+   Asserting quarantine leaves exactly one/two <slot>.corrupt-<ts>[-n]
    file(s) -- the timestamp (and now collision) suffix is not known ahead of
    time, so this has to enumerate the directory rather than probe a fixed
    path. When first_match_name is non-NULL, the FIRST match's bare filename
@@ -183,7 +183,7 @@ static void cleanup_all_test_files(void) {
     cleanup_read_error_dir();
 }
 
-/* Writes raw bytes directly to a path, bypassing game_storage_write -- used to
+/* Writes raw bytes directly to a path, bypassing game_storage_write -- to
    simulate crash leftovers / corruption that the storage layer itself must
    survive (it never produces these states on its own). */
 static void write_raw_file(const char *path, const char *content) {
@@ -487,7 +487,7 @@ void test_quarantine_without_primary_fails(void) {
 }
 
 /* Deep-review item 1 (real defect, now fixed): two quarantines of the SAME
-   slot inside one clock tick used to collide on the same "<slot>.corrupt-
+   slot inside one clock tick would collide on the same "<slot>.corrupt-
    <unix_ms>" name -- POSIX rename() silently clobbered the first .corrupt
    (forensics lost), Windows failed outright. Both quarantines must now keep
    their own file. */

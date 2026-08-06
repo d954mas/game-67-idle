@@ -441,7 +441,7 @@ static void apply_decimal_separator(char *text, size_t cap, const loc_lang_def_t
        the tail LEFT over the dot -- 1.5 renders as 15, a different number. That
        is worse than the truncation the fit check exists to prevent. The schema
        (minLength 1) and loc.py keep it out of the data; a hand-built table, of
-       which the tests are full, can still reach it. Review 2026-08-06. */
+       which the tests are full, can still reach it. */
     if (sep == NULL || sep[0] == '\0' || (sep[0] == '.' && sep[1] == '\0')) {
         return;
     }

@@ -17,7 +17,7 @@
  *
  * These tests live beside the FEATURE rather than in a game, because that is
  * what they test. They were written in a game's test file first and moved here
- * (лид,); the template's copy of the storage tests never had them at
+ * the template's copy of the storage tests never had them at
  * all, which is exactly the gap this placement closes.
  *
  * System headers before Unity to avoid the noreturn / __declspec conflict on
@@ -167,7 +167,7 @@ static DWORD WINAPI release_held(LPVOID unused) {
 }
 
 /* THE point of the blocking mode. Without it this is a write that simply fails,
-   1 run in 30, which is how T0055 was filed. */
+   1 run in 30. */
 void test_blocking_write_waits_out_a_lock_that_clears(void) {
     char err[128] = {0};
     char primary[512];
@@ -263,7 +263,7 @@ void test_a_held_temp_file_is_refused_with_its_own_code(void) {
    one that cannot: a directory in the way produces the same win32 error 5 and
    will produce it forever.
  *
- * This assertion used to live on a NON-blocking write, where it was trivially
+ * This assertion is meaningless on a NON-blocking write, where it is trivially
  * satisfied and proved nothing -- the caller-split silently emptied it. Here it
  * is on the only mode that could get it wrong. */
 void test_blocking_write_does_not_wait_out_a_permanent_refusal(void) {

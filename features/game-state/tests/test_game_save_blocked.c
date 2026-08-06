@@ -171,7 +171,7 @@ void tearDown(void) {}
 
    These three cover the case where the move itself is REFUSED, which is the only
    remaining reason not to write: the bytes are still in the slot and writing
-   would destroy them. It used to stop there for good, with a note in a header
+   would destroy them. Stopping there for good, with a note in a header
    saying the player could start a New Game. Now the tick keeps trying the move,
    and whatever is holding the file lets go on its own. */
 static void test_unreadable_and_immovable_save_holds_writes_instead_of_stopping(void) {

@@ -101,7 +101,7 @@ void test_grouping_threshold_comes_from_the_language_block(void) {
 }
 
 /* The decimal MARK is the same argument as digit grouping, and was hardcoded to
-   the C locale until 2026-08-05: every float:* argument printed '.' in every
+   the C locale: every float:* argument would print '.' in every
    language, so the FALLBACK and authoring language rendered wrong. ru declares a
    comma here; en declares nothing and gets the default.
 
