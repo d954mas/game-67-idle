@@ -83,6 +83,9 @@ explicitly asks for it.
   goes through the asset pipeline (source-first, then raster generation).
 - Every committed asset must have license, provenance, integrity, and `origin`.
 - Paid or non-redistributable binaries never enter git.
+- Heavy authoring workfiles that are not themselves shipping game assets live
+  under the synchronized `<YandexDisk>/gamedev/games/<game-id>/` workspace;
+  game repositories keep their scripts, provenance, manifests and hashes.
 
 ## Source Comments
 

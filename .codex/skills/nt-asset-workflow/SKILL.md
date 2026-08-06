@@ -49,6 +49,10 @@ decisions.
 ## Hard Rules
 
 - Do not load game code from the global library path. Games use local copies.
+- Heavy authoring workfiles that are not shipping game assets live under the
+  synchronized `<YandexDisk>/gamedev/games/<game-id>/` workspace. Follow
+  `ai_studio/assets/external_game_workfiles.md` and commit a logical-path/hash
+  manifest in the game repository.
 - Do not commit paid, unknown-license, or non-redistributable binaries.
 - Every accepted asset needs license, provenance, `origin`, and searchable
   metadata.

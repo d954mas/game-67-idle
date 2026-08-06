@@ -48,5 +48,13 @@ choice is only used at creation time because the template is copied.
 Reusable feature packs can be copied from `features/`, but after copying the
 game owns and may customize its local feature code, assets, and state.
 
+Heavy authoring files that are not themselves runtime/build assets live in the
+synchronized external workspace at
+`<YandexDisk>/gamedev/games/<game-id>/`. Keep generators, manifests,
+provenance and hashes in the game repository; promote only the reviewed files
+actually consumed by the game into its asset root. The complete classification
+and manifest contract is in
+`ai_studio/assets/external_game_workfiles.md`.
+
 `.vscode/tasks.json` and `.vscode/launch.json` are generated from scanned public
 game and template folders. Private games need explicit workspace activation.
