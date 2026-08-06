@@ -597,7 +597,7 @@ void test_recovered_bak_failed_rewrite_preserves_backup(void) {
 }
 
 /* 6. NEWER: the file this build cannot read is kept as a backup and a normal
-   save takes over the normal name (T0058, лид 2026-08-06: "если сейф плохой,
+   save takes over the normal name (T0058, "если сейф плохой,
    битый, из новой версии, его надо сохранить как бекап, и делать мой новый").
 
    This used to assert that not one byte of the newer file changed, which was
@@ -838,7 +838,7 @@ void test_orphan_read_access(void) {
    save, primary UNTOUCHED -- and reports CORRUPT_RESET; the shell's explicit new_game
    then overwrites the primary. An oversize primary (> GAME_STORAGE_MAX_BYTES) is a
    readable-bytes read error, so the quarantine copy is byte-identical -- the malloc-
-   load-failure data-loss guard (lead 2026-07-07). */
+   load-failure data-loss guard. */
 void test_read_error_quarantines_and_corrupt_resets(void) {
     const size_t big = (size_t)(1024 * 1024) + 64u; /* > GAME_STORAGE_MAX_BYTES (1 MiB) -> read error */
     char *payload = (char *)malloc(big + 1u);
@@ -932,7 +932,7 @@ void test_read_error_never_reuses_an_old_quarantine_copy(void) {
 }
 
 /* 16. Native read ERROR on primary + VALID .bak -> RECOVERED_BAK via the existing
-   backup flow (лид 2026-07-07: try .bak before CORRUPT_RESET). The unreadable primary
+   backup flow (try.bak before CORRUPT_RESET). The unreadable primary
    is still quarantined (byte-identical) by the storage layer before recovery. */
 void test_read_error_recovers_from_backup(void) {
     char err[128] = {0};
@@ -1016,7 +1016,7 @@ void test_read_error_bad_backup_corrupt_resets(void) {
     free(payload);
 }
 
-/* 18. Р11 «Hold to reset progress» (T0327 hygiene): game_save_apply_pending_new_game
+/* 18. Р11 «Hold to reset progress»: game_save_apply_pending_new_game
    is a no-op until a game_save_request_new_game() call is pending; once applied, it
    resets+on_new_game's every fragment EXCEPT the skipped one (settings/volumes
    analogue: "extra" here) and force-saves immediately -- the skipped fragment's

@@ -64,7 +64,7 @@ static const GameSaveFragment *route_path(const char *path, char *head_buf, size
 /* { <frag.id>: frag->to_json(), ... [, "orphans": {<id>: subtree, ...}] } over registered
    fragments; NO "v" (read view, not a save — ). Retained orphan blobs ride in
    a SEPARATE "orphans" section, appended after the live fragments and omitted entirely when
-   there are none (Q1, lead 2026-07-07) — a healthy response stays byte-identical to before.
+   there are none (Q1) — a healthy response stays byte-identical to before.
    Key-collision note: a registered fragment whose id were literally "orphans" would shadow
    this section, but "orphans" is reserved here for the orphan set (fragment ids are payload
    keys, not "orphans"). Ownership: s_orphans is owned by game_save, so only cJSON_Duplicate

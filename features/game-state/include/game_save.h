@@ -117,7 +117,7 @@ typedef struct {
 /* Явная новая игра: reset всех -> on_new_game всех -> save -> возобновляет автосейв (Р10). */
 game_save_transition_result_t game_save_new_game(char *error, int error_cap);
 
-/* Р11 «Hold to reset progress» (T0327 hygiene): фича (settings_screen) зовёт ИЗ draw_ui,
+/* Р11 «Hold to reset progress»: фича (settings_screen) зовёт ИЗ draw_ui,
    не немедленно -- шелл применяет на ближайшей безопасной границе кадра (см.
    game_save_apply_pending_new_game). skip_fragment_id NULLABLE -- id ОДНОГО фрагмента, который НЕ трогать (settings/
    громкости: "не их кнопка"); NULL = как game_save_new_game, без исключений. Повторный

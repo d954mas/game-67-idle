@@ -191,7 +191,7 @@ static bool ensure_parent_dirs(
 /* `<message> (os error N)`. Every failure path below used to produce a sentence
    with no CODE in it -- "failed to replace storage file" and nothing else --
    which is how a real intermittent write failure survived being seen twice and
-   diagnosed zero times (T0055). A flag without a reason is not a report. */
+   diagnosed zero times. A flag without a reason is not a report. */
 /* The channel is part of the report, not decoration: on Windows `5` is
    ERROR_ACCESS_DENIED in one namespace and EIO in the other, `32` is
    ERROR_SHARING_VIOLATION or EPIPE. A bare "os error 5" tells the next reader

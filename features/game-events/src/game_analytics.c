@@ -58,10 +58,10 @@
 #endif
 #ifndef GAME_ANALYTICS_MAX_BYTES /* session byte cap (native file); 0 = uncapped. Runaway
                                     guard only -- sized to never trip on a legit session
-                                    (lead 2026-07-07). */
+. */
 #define GAME_ANALYTICS_MAX_BYTES (256u * 1024u * 1024u)
 #endif
-#ifndef GAME_ANALYTICS_WEB_RING_BYTES /* in-memory ring (web); ~7k events/MB (lead 2026-07-07) */
+#ifndef GAME_ANALYTICS_WEB_RING_BYTES /* in-memory ring (web); ~7k events/MB */
 #define GAME_ANALYTICS_WEB_RING_BYTES (1024u * 1024u)
 #endif
 #ifndef GAME_ANALYTICS_DESC_REG_CAP

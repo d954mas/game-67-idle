@@ -12,7 +12,7 @@
 #include "game_save_platform.h"
 #endif
 
-#include "log/nt_log.h" /* nt_log_warn on the read-error path (bot/obs-visible, lead 2026-07-07) */
+#include "log/nt_log.h"
 
 #include <limits.h>
 #include <math.h>
@@ -23,18 +23,9 @@
 
 /* CMake supplies these for the game/test targets; guarded defaults keep the file
    self-contained. */
-/* T0058, лид 2026-08-06: "Игрок вообще не должен ничего этого видеть и знать.
-   Мы должны гарантировать максимум что можем" -- and then, on the shape of it:
-   "если сейф плохой, битый, из новой версии, его надо сохранить как бекап, и
-   делать мой новый".
-
-   ONE slot, one name. Two load outcomes used to end with autosave paused for
-   good and nothing in the product able to unpause it -- a save newer than this
-   build, and a primary that could not be parsed -- so the player kept playing a
-   session that was thrown away on exit. The rule now is the same one the corrupt
-   path already used: put the unusable file in quarantine, then start a normal
-   save under the normal name. Nothing has to work out WHICH file is the save,
-   because there is only ever one. */
+/* One slot, one name: an unusable save goes to quarantine and a normal save
+   takes the normal name, so nothing downstream has to work out WHICH file is
+   the save. No load outcome may end in a state only the player could clear. */
 #ifndef GAME_SAVE_AUTOSAVE_SLOT
 #define GAME_SAVE_AUTOSAVE_SLOT "autosave"
 #endif
@@ -81,21 +72,17 @@ static GameSaveDocumentValidateFn s_document_validator;
 static bool    s_autosave_paused; /* CORRUPT_RESET until the shell's new_game;
                                      also while a file we could not move aside is
                                      still sitting in the slot (s_quarantine_owed) */
-/* The slot holds bytes we could neither use nor move out of the way. Writing
-   would destroy them, so the tick keeps trying the move instead -- an antivirus
-   or a sync client holding the file lets go on its own, and then the save
-   resumes with nobody having been asked to do anything. */
+/* The slot holds bytes we could neither use nor move aside. Writing would
+   destroy them, so the tick retries the move instead until whatever holds the
+   file lets go. */
 static bool    s_quarantine_owed;
 static bool    s_new_game_pending;         /* Р11: deferred to a safe shell frame boundary */
 static char    s_new_game_skip_id[32];     /* fragment id to leave untouched, or "" for none */
 static bool    s_dirty;
 static bool    s_unpersisted;
-/* Both of these are autosave RATE GATES, not history. game_save_tick is their
-   only reader, and a failed save charges itself to both so the retry lands one
-   debounce later instead of on the next frame. `s_last_save_mono` in particular
-   was never "the last successful save" even before that -- every load path
-   stamps it too, including the ones that save nothing. The durable "when was
-   the data last written" answer is s_last_saved_at, in wall time. */
+/* Autosave RATE GATES, not history: a failed save charges itself to both so the
+   retry lands one debounce later instead of on the next frame. Every load path
+   stamps them too. "When was the data last written" is s_last_saved_at. */
 static int64_t s_dirty_at;        /* mono ms of the first mark after clean, or of the last failed attempt */
 static int64_t s_last_save_mono;  /* mono ms of the last save ATTEMPT or load */
 static int64_t s_last_saved_at;   /* wall ms stamped into the last save/load */
@@ -302,8 +289,8 @@ static char *transform_decode(const char *raw, char *error, int error_cap) {
 
 /* ---- fragment fan-out ---- */
 
-/* skip_id NULLABLE: id of the ONE fragment to leave untouched (Р11 «Hold to reset
-   progress» -- settings/volumes are not this button's business, T0327 hygiene). */
+/* skip_id NULLABLE: id of the ONE fragment to leave untouched, so "hold to reset
+   progress" does not take settings and volumes with it. */
 static void reset_all_except(const char *skip_id) {
     for (int i = 0; i < s_fragment_count; i++) {
         if (skip_id && strcmp(s_fragments[i]->id, skip_id) == 0) {
@@ -580,21 +567,16 @@ static bool prepare_document_for_load(
     return true;
 }
 
-/* The reason of the LAST failure that was logged. Not `s_unpersisted`: that flag
-   is also raised by a failed storage probe at init (the Safari-private case), so
-   keying the log off it would silence the first REAL failure on exactly the
-   platform where failures are expected, and would announce a "recovery" from a
-   failure that never happened. Keyed on the text so that a failure which CHANGES
-   cause -- transient refusal today, disk full tomorrow -- gets reported again
-   instead of hiding behind the first one. */
+/* The reason of the LAST failure logged. Deliberately not keyed on
+   `s_unpersisted`: a failed storage probe at init raises that too, which would
+   silence the first real failure on the very platform where failures are
+   expected. Keyed on the TEXT so a failure that changes cause is reported
+   again instead of hiding behind the first one. */
 #define GAME_SAVE_REASON_MAX 192
 static char s_logged_failure[GAME_SAVE_REASON_MAX];
-/* Separate from the text because "" is a REAL reason: transform_encode can
-   return NULL without filling one. Keying "have we logged?" off the string alone
-   made the empty reason compare equal to the never-logged initial state, so the
-   very failure that reports nothing about itself was also the one that never got
-   logged -- and, having stored nothing, never produced the "recovered" notice
-   either. */
+/* Separate from the text because "" is a REAL reason -- transform_encode can
+   return NULL without filling one, and it must not compare equal to the
+   never-logged initial state. */
 static bool s_failure_logged;
 
 static bool failure_is_new(const char *reason) {
@@ -606,21 +588,15 @@ static bool failure_is_new(const char *reason) {
     return true;
 }
 
-/* may_wait travels to the storage write. Only game_save_tick passes false: it
-   is the one caller inside the frame, and a refused write there is not a loss
-   -- the state stays dirty and the next tick retries. Every other caller is a
-   synchronous moment (load, new game, recovery, explicit flush) with no frame
-   to lose, and would rather wait ~0.5s than leave the primary unwritten.
-   лид 2026-08-06: "load синхронный конечно, запись асинхронный, с бекапом и
-   ретраями". */
+/* may_wait travels to the storage write, and only game_save_tick passes false:
+   it is the one caller inside the frame, where a refused write is not a loss.
+   Every other caller is a synchronous moment with no frame to lose and would
+   rather wait ~0.5s than leave the primary unwritten. */
 static bool save_internal(char *error, int error_cap, bool may_wait) {
-    /* Every failure exits through one place. The bookkeeping below used to live
-       in an `else` after the storage write, which four earlier failure returns
-       -- build, validate, serialize, encode -- walked straight past: they left
-       both tick clocks untouched, so a save rejected by the document validator
-       re-entered this function EVERY FRAME, rebuilding and re-serialising the
-       whole document 60 times a second, and never set the flag or said a word.
-       T0055 named that pathology and then fixed it for one of the five paths. */
+    /* EVERY failure must exit through the one place below. A failure that skips
+       the clock bookkeeping re-enters this function on the next frame, so a
+       save the validator rejects rebuilds the whole document 60 times a
+       second. */
     char reason[GAME_SAVE_REASON_MAX];
     reason[0] = '\0';
     cJSON *root = NULL;
@@ -672,10 +648,8 @@ done:
         s_last_saved_at = wall;
         s_unpersisted = false;
     } else {
-        /* T0055. A failed save used to set a flag and vanish: both tick call
-           sites do `(void)save_internal(err, ...)`, so the reason was built and
-           dropped, and a player whose saves stopped landing had nothing to
-           report. */
+        /* Both tick call sites discard the return value, so this log is the only
+           place the reason survives. A flag without a reason is not a report. */
         if (failure_is_new(reason)) {
             nt_log_warn("game_save: save failed (%s); data kept in memory, will retry",
                         reason[0] != '\0' ? reason : "no reason reported");
@@ -685,11 +659,8 @@ done:
            and without this a failed flush would latch s_unpersisted with nothing
            left to clear it -- the tick returns early while !s_dirty. */
         s_dirty = true;
-        /* Retry on the next tick, but NOT on the next frame. Both tick
-           conditions are timestamp-based and neither advanced on failure, so a
-           persistently failing save was attempted 60 times a second -- each one
-           now also blocking inside the storage retry. Charging the attempt to
-           both clocks makes the next try land one debounce later. */
+        /* Charge the attempt to BOTH clocks: they are the only thing standing
+           between a persistently failing save and 60 retries a second. */
         const int64_t attempted_at = mono_now();
         s_dirty_at = attempted_at;
         s_last_save_mono = attempted_at;
@@ -795,13 +766,10 @@ static void load_from_doc(const cJSON *doc, game_save_load_result_t *result) {
     reconcile_all();
 }
 
-/* Shared .bak recovery (RECOVERED_BAK): read + decode + parse + validate the backup;
-   on success load it, rewrite the primary, THEN refresh the .bak (order matters: the
-   primary is currently bad — backing it up first would clobber the live .bak with
-   garbage), set RECOVERED_BAK + `reason`, return true. Returns false with
-   `result` untouched when there is no usable backup. Reused by BOTH the classic
-   unparseable-primary path AND the native read-ERROR path (лид 2026-07-07). Web
-   read_backup is always false, so web just falls through (no .bak there). */
+/* Rewrite the primary from the backup, THEN refresh the backup -- never the
+   other way round: the primary is bad right now, so backing it up first would
+   clobber the live .bak with garbage. Returns false with `result` untouched
+   when there is no usable backup, which is always the case on web. */
 static bool try_recover_from_backup(game_save_load_result_t *result, const char *reason, char *err, int cap) {
     char *baktext = NULL;
     cJSON *bakdoc = NULL;
@@ -835,15 +803,10 @@ static bool try_recover_from_backup(game_save_load_result_t *result, const char 
     return true;
 }
 
-/* The slot holds something this build cannot use. Move it into quarantine --
-   the same .corrupt convention a corrupt save already used, and the same place a
-   repair tool would look -- then start a normal game and save it under the
-   normal name. One file, one name, nothing downstream has to choose.
-
-   If the move is REFUSED, the bytes stay where they are and writing is off
-   until it succeeds: whatever is holding the file (a scanner, a sync client)
-   lets go by itself, and game_save_tick retries. Nobody is asked to do anything
-   either way, which is the whole point -- this used to stop for good. */
+/* Move a slot this build cannot use into quarantine, then start a normal game
+   under the normal name. If the move is REFUSED the bytes stay put and writing
+   is off until it succeeds -- game_save_tick keeps retrying, so neither branch
+   waits on the player. */
 static void set_aside_and_start_new(
     game_save_load_result_t *result, game_save_load_status_t status,
     const char *why, const char *message) {
@@ -902,22 +865,18 @@ void game_save_load(game_save_load_result_t *result) {
     game_storage_read_status_t rst = GAME_STORAGE_READ_ABSENT;
     if (!game_storage_read(GAME_SAVE_AUTOSAVE_SLOT, &text, &rst, err, (int)sizeof err)) {
         if (rst == GAME_STORAGE_READ_ERROR_PRESERVED) {
-            /* The primary holds the only known copy and could not even be copied
-               aside, so it stays untouched. The session goes to the side slot
-               rather than nowhere: this used to block every write for good. */
+            /* The primary holds the only known copy and could not even be
+               copied aside, so it stays untouched until the move succeeds. */
             set_aside_and_start_new(
                 result, GAME_SAVE_LOAD_BLOCKED, "the save could not be read",
                 "save unreadable; set aside; new save started");
             return;
         }
         if (rst == GAME_STORAGE_READ_ERROR) {
-            /* Primary EXISTS but could not be READ (not "no save"): storage already
-               copied the raw bytes to quarantine. Try the .bak FIRST via the same
-               RECOVERED_BAK flow as a corrupt primary (native only; web read_backup is
-               false). Only if there is no usable backup fall through to the classic
-               corrupt-reset body (reset + autosave paused, NO on_new_game/save, primary
-               untouched — the shell's single new_game overwrites it). Never silently
-               reborn as FRESH (the malloc-load-failure data-loss bug). лид 2026-07-07. */
+            /* Primary EXISTS but could not be READ, which is not "no save":
+               storage already copied the bytes to quarantine, so try the backup
+               first and fall through to corrupt-reset only if there is none.
+               Must never be reborn as FRESH -- that silently discards a save. */
             if (try_recover_from_backup(result, "primary unreadable; recovered from backup", err, (int)sizeof err)) {
                 return;
             }
@@ -949,12 +908,9 @@ void game_save_load(game_save_load_result_t *result) {
 
     if (doc && cJSON_IsObject(doc)) {
         if (doc_is_newer(doc)) {
-            /* A save from a build ahead of this one. Loading it is not safe and
-               overwriting it would destroy the player's real progress -- the
-               usual cause is a rolled-back build, and the newer one may come
-               back tomorrow. Leave it exactly as it is and play on the side
-               slot. Before T0058 this paused autosave with nothing to unpause
-               it: the whole session vanished on exit and nobody was told. */
+            /* A save from a build ahead of this one: loading it is unsafe and
+               overwriting it would destroy real progress, since the usual cause
+               is a rolled-back build that may come back tomorrow. */
             cJSON_Delete(doc);
             set_aside_and_start_new(
                 result, GAME_SAVE_LOAD_NEWER, "the save is newer than this build",
@@ -1108,15 +1064,13 @@ static game_save_transition_result_t new_game_except(
     free_orphans();
     reset_all_except(skip_id);
     on_new_game_all_except(skip_id);
-    /* A New Game is not a licence to overwrite bytes we could not move out of
-       the way: the slot still holds the only copy of a save this build could
-       not read. Try the move again -- and if it is still refused, stay held.
-       Without this, "start over" quietly became the way around the hold. */
+    /* A New Game is not a licence to overwrite bytes we could not move aside:
+       retry the move, and stay held if it is still refused. */
     if (s_quarantine_owed) {
         retry_owed_quarantine();
     }
     if (!s_quarantine_owed) {
-        s_autosave_paused = false; /* resume autosave (Р10) */
+        s_autosave_paused = false;
     }
     game_save_mark_dirty();
     /* Held: the write would land on the file we could not move. Say so rather
@@ -1129,9 +1083,9 @@ static game_save_transition_result_t new_game_except(
     if (persisted) {
         s_last_save_mono = mono_now();
     }
-    /* On failure save_internal already charged BOTH clocks, and overwriting
-       s_last_save_mono here unconditionally is what used to hide that: it reset
-       the max-interval clock as if the write had landed. */
+    /* Stamped only when persisted: save_internal already charged both clocks on
+       failure, and stamping here anyway would reset the max-interval clock as
+       if the write had landed. */
     return (game_save_transition_result_t){.state_changed = true, .persisted = persisted};
 }
 
@@ -1141,20 +1095,11 @@ game_save_transition_result_t game_save_new_game(char *error, int error_cap) {
     return new_game_except(NULL, error, error_cap, true);
 }
 
-/* Р11 «Hold to reset progress» (T0327 hygiene): a feature calls this from ITS draw_ui
-   phase, which runs AFTER this frame's game_events phase already flipped back to EMIT
-   (main.c: game_event_frame_reset() before game_features_draw_ui) -- so emitting
-   items.txn from on_new_game here would not trip the phase debug-assert. It is still
-   deferred out of the live render pass: new_game_except() does synchronous file I/O
-   (save_internal), and running that -- plus the items.txn emit it triggers via
-   items_on_new_game -- INSIDE the live GPU render pass (between nt_gfx_begin_pass/
-   nt_gfx_end_pass, which draw_ui runs within) is an anti-pattern the rest of this
-   codebase avoids on principle (autosave itself is deliberately anchored right after
-   the RECORD phase, never inside render). Recording the request here and applying it
-   at the nearest safe shell boundary (game_save_apply_pending_new_game, called
-   before update and after the render pass) keeps one atomic composition transition
-   without performing storage I/O inside UI construction. skip_fragment_id NULLABLE
-   -- see reset_all_except. */
+/* Records the request instead of performing it: the caller is a feature's
+   draw_ui, which runs inside the live GPU render pass, and new_game_except does
+   synchronous file I/O. The shell applies it at the next safe boundary, so the
+   composition transition stays atomic and storage I/O stays out of UI
+   construction. skip_fragment_id NULLABLE -- see reset_all_except. */
 void game_save_request_new_game(const char *skip_fragment_id) {
     s_new_game_pending = true;
     if (skip_fragment_id) {
@@ -1164,10 +1109,9 @@ void game_save_request_new_game(const char *skip_fragment_id) {
     }
 }
 
-/* Shell-only (main.c, at a safe pre-update or post-render boundary): applies a pending
-   request from game_save_request_new_game, if any. Returns true iff it applied one (so
-   game-composition state game_save does not own, e.g. player world position, can be
-   reset by the caller in the same beat); false is a plain no-op. */
+/* Shell-only, at a safe pre-update or post-render boundary. state_changed tells
+   the caller to reset the game-composition state game_save does not own, such
+   as player world position, in the same beat. */
 game_save_transition_result_t game_save_apply_pending_new_game(void) {
     if (!s_new_game_pending) {
         return (game_save_transition_result_t){0};
@@ -1175,11 +1119,8 @@ game_save_transition_result_t game_save_apply_pending_new_game(void) {
     s_new_game_pending = false;
     char err[128];
     err[0] = '\0';
-    /* false: both shell call sites are INSIDE the frame -- before feature update,
-       and again between end-frame and the buffer swap. The header used to claim
-       no blocking write reaches a frame in a release build; this path was the
-       counter-example. A refused write here is not a loss: the state stays dirty
-       and the tick retries (лид: "нельзя стопать игру, у меня есть ретрай"). */
+    /* may_wait false: both shell call sites are INSIDE the frame. A refused
+       write here is not a loss -- the state stays dirty and the tick retries. */
     return new_game_except(
         s_new_game_skip_id[0] ? s_new_game_skip_id : NULL, err, (int)sizeof err, false);
 }

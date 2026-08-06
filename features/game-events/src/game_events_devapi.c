@@ -146,7 +146,7 @@ static bool ep_events_tail(const cJSON *params, cJSON *result_obj, nt_devapi_err
     if (!events) {
         return state_fail(err, "internal", "failed to build events array");
     }
-    /* Offset cursor (amended 2026-07-07): since_seq is an INCLUSIVE lower bound (seq >=
+    /* Offset cursor (amended): since_seq is an INCLUSIVE lower bound (seq >=
        since) and next_seq = last_returned_seq + 1 (the next offset to request); empty ->
        echo since. This delivers the 0-based first event (seq 0) under the default cursor
        (`seq > since` would silently drop it) with no dup and no loss. */

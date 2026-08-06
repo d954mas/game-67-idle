@@ -1,4 +1,4 @@
-/* The contract between game_storage's TWO write modes (T0055).
+/* The contract between game_storage's TWO write modes.
  *
  * `game_storage_write` is called by game_save_tick, from inside the frame: it
  * must never wait, because the game may not drop frames for a save. A refused
@@ -17,7 +17,7 @@
  *
  * These tests live beside the FEATURE rather than in a game, because that is
  * what they test. They were written in a game's test file first and moved here
- * (лид, 2026-08-06); the template's copy of the storage tests never had them at
+ * (лид,); the template's copy of the storage tests never had them at
  * all, which is exactly the gap this placement closes.
  *
  * System headers before Unity to avoid the noreturn / __declspec conflict on

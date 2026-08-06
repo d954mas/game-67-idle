@@ -84,6 +84,29 @@ explicitly asks for it.
 - Every committed asset must have license, provenance, integrity, and `origin`.
 - Paid or non-redistributable binaries never enter git.
 
+## Source Comments
+
+The engine's rule (`external/neotolis-engine/AGENTS.md`, "Code style") applies to
+every line of code in this repository, not only to the engine.
+
+**A comment explains WHY, and only what the reader cannot derive from the code.**
+Identifiers say what the code does.
+
+Never write in source: task ids (`T0058`), dates, commit SHAs, PR or issue
+numbers, quotes from the lead or any conversation, `(review fix)` / `Phase N` /
+`CHUNK` / `hygiene` tags, test-name pins, or a narrative of what the code used to
+do before a change. All of that belongs to the commit message and the taskboard
+card, which is where a reader who needs history should be sent.
+
+Do write: an invariant, an ownership or phase-order constraint, a unit or range,
+or a short note on a non-obvious choice.
+
+Length: one line preferred, two or three normal. A longer block is allowed only
+when it carries a real system invariant that cannot be compressed without losing
+it — never to narrate a change. If a block needs more than that to be understood,
+the knowledge belongs in `games/<game-id>/design/knowledge/` or the owning
+`ai_studio/` module, and the comment should point there.
+
 ## Context Routing
 
 - Workflow and commands: `ai_studio/README.md`.

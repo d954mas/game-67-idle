@@ -14,7 +14,7 @@ static int s_quarantine_calls;
 static int s_write_calls;
 /* Which slot a write landed in is the whole contract now: when the primary
    holds something this build must not overwrite, the session moves beside it
-   and the primary must never be touched again (T0058). A stub that ignored the
+   and the primary must never be touched again. A stub that ignored the
    slot could not tell those two apart. */
 static int s_primary_writes;
 static int s_side_writes;
@@ -165,7 +165,7 @@ void setUp(void) {
 
 void tearDown(void) {}
 
-/* The rule (T0058, лид 2026-08-06): a save this build cannot use -- corrupt, or
+/* The rule: a save this build cannot use -- corrupt, or
    written by a newer build -- goes to quarantine, and a normal new save starts
    under the normal name. One file, one name.
 
