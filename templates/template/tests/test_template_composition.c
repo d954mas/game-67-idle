@@ -1,4 +1,4 @@
-/* T0327 tail: the ONE integration test that lifts all 4 REAL fragments
+/* The ONE integration test that lifts all 4 REAL fragments
    (settings/items/progression/game) through the REAL game_save registry --
    the existing per-fragment tests (test_items_fragment, test_progression*,
    test_game_save's FAKE fragment) never assemble the composed registry.

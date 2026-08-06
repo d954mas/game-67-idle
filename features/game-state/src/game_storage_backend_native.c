@@ -188,14 +188,10 @@ static bool ensure_parent_dirs(
     return true;
 }
 
-/* `<message> (os error N)`. Every failure path below used to produce a sentence
-   with no CODE in it -- "failed to replace storage file" and nothing else --
-   which is how a real intermittent write failure survived being seen twice and
-   diagnosed zero times. A flag without a reason is not a report. */
-/* The channel is part of the report, not decoration: on Windows `5` is
-   ERROR_ACCESS_DENIED in one namespace and EIO in the other, `32` is
-   ERROR_SHARING_VIOLATION or EPIPE. A bare "os error 5" tells the next reader
-   the number and hides which table to look it up in. */
+/* `<message> (<channel> N)`. A flag without a reason is not a report, and the
+   CHANNEL is part of the reason: on Windows `5` is ERROR_ACCESS_DENIED in one
+   namespace and EIO in the other, `32` is ERROR_SHARING_VIOLATION or EPIPE. A
+   bare "os error 5" hides which table to look it up in. */
 #ifdef _WIN32
 #define STORAGE_OS_CHANNEL "win32 error"
 #else
@@ -219,10 +215,9 @@ static void set_error_crt(char *error, int error_cap, const char *message, long 
 }
 
 /* Two error channels, because they carry different truths: the Win32 API calls
-   (MoveFileEx) report through GetLastError, while the C stream calls (fopen,
-   fwrite, fclose) report through errno. Reading the wrong one prints a stale or
-   unrelated code, which is the failure mode T0055 was already suffering from
-   one level up. On POSIX both are errno. */
+   (MoveFileEx) report through GetLastError, the C stream calls (fopen, fwrite,
+   fclose) through errno. Reading the wrong one prints a stale or unrelated
+   code. On POSIX both are errno. */
 static long last_os_error(void) {
 #ifdef _WIN32
     return (long)GetLastError();
@@ -235,33 +230,18 @@ static long last_crt_error(void) {
     return (long)errno;
 }
 
-/* T0055, CONFIRMED 2026-08-06 (run 41 of 400): MoveFileExA returned
-   ERROR_ACCESS_DENIED replacing a plain file it had replaced successfully on the
-   40 runs before it, with byte-identical inputs. A permanent condition -- ACL,
-   read-only attribute, a directory in the way -- cannot fail 1 run in 30, so the
-   refusal comes from OUTSIDE this process: on Windows another process holding a
-   handle without FILE_SHARE_DELETE, or a destination in delete-pending state,
-   makes the move fail rather than wait. An on-access virus scanner opening the
-   temp file we just closed is the textbook producer of exactly that window; it
-   clears by itself within milliseconds.
+/* On Windows a rename REFUSES rather than waits when another process holds
+   either path without FILE_SHARE_DELETE -- an on-access virus scanner opening
+   the temp file we just closed is the textbook producer, and it clears itself
+   within milliseconds. Measured here: a held DESTINATION yields code 5, a held
+   SOURCE 32.
 
-   Measured on this box: a held DESTINATION yields code 5, a held SOURCE 32.
-
-   WHETHER TO WAIT IT OUT IS THE CALLER'S TO DECIDE, and the two callers differ
-   (лид, 2026-08-06: "load синхронный конечно, запись асинхронный, с бекапом и
-   ретраями"):
-
-   - `game_save_tick` runs INSIDE the frame update. It may not wait, and it does
-     not need to: a refusal there is not a loss, because the state stays dirty
-     and the tick tries again a debounce later. A retry short enough not to be
-     felt (microseconds) is shorter than the window it would absorb
-     (milliseconds) anyway, so on that path it would be decoration.
-   - load, new game, recovery from .bak, quarantine and an explicit flush are
-     synchronous calls with no frame to lose. They wait, because the cost of not
-     waiting is a player continuing the session on a primary that was never
-     rewritten.
-
-   So `may_wait` travels from the public entry point down to the rename. */
+   Whether to wait it out belongs to the CALLER, which is why `may_wait`
+   travels from the public entry point down to the rename: game_save_tick runs
+   inside the frame and must not wait (its refusal is not a loss -- the state
+   stays dirty and the tick retries), while load, new game, recovery,
+   quarantine and flush have no frame to lose and would rather wait than let a
+   session continue on a primary that was never rewritten. */
 
 #ifdef _WIN32
 /* Milliseconds to wait BEFORE each retry, for callers that may wait. The first
@@ -301,10 +281,9 @@ static bool destination_refuses_permanently(const char *path) {
 }
 #endif
 
-/* Every rename in this file goes through here. The first attempt at T0055
-   guarded only the replace, and 150 verification runs promptly caught the SAME
-   refusal on the quarantine rename, which had its own bare rename() and did not
-   even report a code. One door is not a fix. */
+/* EVERY rename in this file goes through here. Guarding only the replace
+   leaves the quarantine rename open to the same refusal, and one door is not a
+   fix. */
 static bool move_file(
     const char *from, const char *to, bool replace_existing, bool may_wait) {
 #ifdef _WIN32
@@ -424,8 +403,8 @@ static bool write_file_atomic(
        refuses the move. It has never been observed -- the three captures were
        all on a rename -- so it is deliberately NOT retried; guessing at
        failures nobody has seen is how the retry above would turn into
-       decoration. If it ever fires, the message below now names it and carries
-       the errno, which is exactly what made T0055 solvable. */
+       decoration. If it ever fires, the message below names it and carries the
+       errno. */
     FILE *file = fopen(temporary, "wb");
     if (file == NULL) {
         set_error_crt(error, error_cap, "failed to open storage temp file for write", last_crt_error());
@@ -708,9 +687,6 @@ bool game_storage_backend_quarantine(
             error, error_cap)) {
         return false;
     }
-    /* Was a bare rename() with a codeless message -- which is precisely how the
-       T0055 verification run caught this path and could say nothing about it
-       beyond "false". */
     /* Quarantine happens during load, never in a frame: it may wait. */
     if (!move_file(paths.primary, quarantine_path, false, true)) {
         set_error_os(error, error_cap, "failed to quarantine storage file", last_os_error());
