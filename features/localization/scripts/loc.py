@@ -752,7 +752,16 @@ class Table:
             "loc_get", "loc_format", "loc_bind_table", "loc_group_i64", "loc_number",
             "loc_set_lang_index", "loc_lang_index", "loc_lang_count", "loc_lang_code",
             "loc_lang_from_code", "loc_fallback_log_count", "loc_plural_category",
+            "loc_decimal_separator",
+            "loc_key_was_seen", "loc_seen_count", "loc_seen_reset",
         }
+        # This list drifted the moment the runtime grew loc_key_was_seen and
+        # friends: a key named `key_was_seen` would have emitted a colliding
+        # loc_key_was_seen and the collision check would have waved it through.
+        # The header is the truth, so read it -- the literal set above stays as
+        # the floor (macros and enumerators are not declarations) and for the
+        # case where this script is run from a vendored copy without one.
+        names |= self._runtime_names_from_header()
         names |= {f"LOC_PLURAL_{cat.upper()}" for cat in PLURAL_CATS}
         names |= set(PLURAL_RULE_ENUM.values())
         names |= {
@@ -761,6 +770,16 @@ class Table:
         }
         names |= {f"LOC_LANG_{lang.code.upper().replace('-', '_')}" for lang in self.langs}
         return names
+
+    @staticmethod
+    def _runtime_names_from_header() -> set[str]:
+        header = Path(__file__).resolve().parent.parent / "include" / "features" / "localization" / "loc.h"
+        try:
+            text = header.read_text(encoding="utf-8")
+        except OSError:
+            return set()
+        # Anything the header spells out: functions, macros, enumerators, types.
+        return set(re.findall(r"\b(?:LOC0?_[A-Z0-9_]+|loc_[a-z0-9_]+)\b", text))
 
     @property
     def key0(self) -> list[Entry]:

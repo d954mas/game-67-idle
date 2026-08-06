@@ -276,6 +276,14 @@ static const DWORD kStorageRetryBackoffMs[] = {0, 0, 15, 30, 60, 120, 240};
 #define STORAGE_RETRY_STEPS \
     ((int)(sizeof kStorageRetryBackoffMs / sizeof kStorageRetryBackoffMs[0]))
 
+/* A whitelist with no negative test, deliberately. Every producer of a rename
+   failure OUTSIDE {5, 32} is unreachable through the public surface by
+   construction: slot names are validated, the temp source is proven to exist by
+   the fclose above it, and the quarantine destination is proven free before the
+   move. Widening this to `return true` therefore changes no observable
+   behaviour that a test could catch -- it would only make some novel refusal
+   code cost a synchronous caller ~465ms before failing anyway. Do not add a
+   synthetic producer to "cover" it; add a test the day a real code shows up. */
 static bool refusal_can_clear(DWORD code) {
     return code == ERROR_ACCESS_DENIED || code == ERROR_SHARING_VIOLATION;
 }

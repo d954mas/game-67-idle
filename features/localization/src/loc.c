@@ -41,10 +41,17 @@ void loc_bind_table(const loc_table_t *table) {
     if (table->fallback_logged && table->fallback_logged_bytes > 0) {
         memset(table->fallback_logged, 0, table->fallback_logged_bytes);
     }
+    /* Every loc_table_t is generated (loc.py), so a coverage bitset that is
+       missing or too short is a generator bug, not a caller's choice -- and it
+       is the kind that lies QUIETLY: mark_seen bails on an out-of-range byte,
+       so the keys past the end read back as "no surface ever showed this" for a
+       string that is on screen every frame. That is exactly the claim the
+       corpus report makes about the game, so it has to be load-bearing. */
+    NT_ASSERT(table->seen != NULL && "loc_bind_table: table carries no coverage bitset");
+    NT_ASSERT(table->seen_bytes >= ((size_t)table->string_count + 7u) / 8u &&
+              "loc_bind_table: coverage bitset is too small for the key count");
     s_seen_count = 0;
-    if (table->seen && table->seen_bytes > 0) {
-        memset(table->seen, 0, table->seen_bytes);
-    }
+    memset(table->seen, 0, table->seen_bytes);
 }
 
 void loc_set_lang_index(int lang) {

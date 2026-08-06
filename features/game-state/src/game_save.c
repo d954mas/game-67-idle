@@ -570,12 +570,20 @@ static bool prepare_document_for_load(
    instead of hiding behind the first one. */
 #define GAME_SAVE_REASON_MAX 192
 static char s_logged_failure[GAME_SAVE_REASON_MAX];
+/* Separate from the text because "" is a REAL reason: transform_encode can
+   return NULL without filling one. Keying "have we logged?" off the string alone
+   made the empty reason compare equal to the never-logged initial state, so the
+   very failure that reports nothing about itself was also the one that never got
+   logged -- and, having stored nothing, never produced the "recovered" notice
+   either. */
+static bool s_failure_logged;
 
 static bool failure_is_new(const char *reason) {
-    if (strcmp(s_logged_failure, reason) == 0) {
+    if (s_failure_logged && strcmp(s_logged_failure, reason) == 0) {
         return false;
     }
     (void)snprintf(s_logged_failure, sizeof s_logged_failure, "%s", reason);
+    s_failure_logged = true;
     return true;
 }
 
@@ -632,10 +640,12 @@ done:
     free(encoded);
 
     if (ok) {
-        if (s_logged_failure[0] != '\0') {
+        if (s_failure_logged) {
             nt_log_warn("game_save: save recovered after an earlier failure (%s)",
-                        s_logged_failure);
+                        s_logged_failure[0] != '\0' ? s_logged_failure
+                                                    : "no reason reported");
             s_logged_failure[0] = '\0';
+            s_failure_logged = false;
         }
         s_save_seq = seq;
         s_dirty = false;
@@ -1010,6 +1020,7 @@ void game_save_init(void) {
     s_last_saved_at = 0;
     s_save_seq = 0;
     s_logged_failure[0] = '\0';
+    s_failure_logged = false;
 
     char err[128];
     err[0] = '\0';
@@ -1019,19 +1030,26 @@ void game_save_init(void) {
 }
 
 static game_save_transition_result_t new_game_except(
-    const char *skip_id, char *error, int error_cap) {
+    const char *skip_id, char *error, int error_cap, bool may_wait) {
     free_orphans();
     reset_all_except(skip_id);
     on_new_game_all_except(skip_id);
     s_autosave_paused = false; /* resume autosave (Р10) */
     game_save_mark_dirty();
-    const bool persisted = save_internal(error, error_cap, true);
-    s_last_save_mono = mono_now();
+    const bool persisted = save_internal(error, error_cap, may_wait);
+    if (persisted) {
+        s_last_save_mono = mono_now();
+    }
+    /* On failure save_internal already charged BOTH clocks, and overwriting
+       s_last_save_mono here unconditionally is what used to hide that: it reset
+       the max-interval clock as if the write had landed. */
     return (game_save_transition_result_t){.state_changed = true, .persisted = persisted};
 }
 
 game_save_transition_result_t game_save_new_game(char *error, int error_cap) {
-    return new_game_except(NULL, error, error_cap);
+    /* Direct API: a synchronous moment with no frame to lose -- the corrupt-save
+       path at startup and the dev endpoints. */
+    return new_game_except(NULL, error, error_cap, true);
 }
 
 /* Р11 «Hold to reset progress» (T0327 hygiene): a feature calls this from ITS draw_ui
@@ -1068,8 +1086,13 @@ game_save_transition_result_t game_save_apply_pending_new_game(void) {
     s_new_game_pending = false;
     char err[128];
     err[0] = '\0';
+    /* false: both shell call sites are INSIDE the frame -- before feature update,
+       and again between end-frame and the buffer swap. The header used to claim
+       no blocking write reaches a frame in a release build; this path was the
+       counter-example. A refused write here is not a loss: the state stays dirty
+       and the tick retries (лид: "нельзя стопать игру, у меня есть ретрай"). */
     return new_game_except(
-        s_new_game_skip_id[0] ? s_new_game_skip_id : NULL, err, (int)sizeof err);
+        s_new_game_skip_id[0] ? s_new_game_skip_id : NULL, err, (int)sizeof err, false);
 }
 
 bool game_save_flush(char *error, int error_cap) {

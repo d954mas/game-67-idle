@@ -30,6 +30,8 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <unistd.h> /* rmdir */
 #endif
 
 /* clang-format off */
@@ -89,13 +91,22 @@ static void cleanup_all(void) {
 void setUp(void) { cleanup_all(); }
 void tearDown(void) { cleanup_all(); }
 
+#ifdef _WIN32
+/* Only the Windows refusal scenarios plant files by hand. Defined inside the
+   guard so a POSIX build does not carry an unused static function. */
 static void write_raw(const char *path, const char *content) {
     FILE *file = fopen(path, "wb");
     TEST_ASSERT_NOT_NULL(file);
+    /* Судить после закрытия: Unity's assertions longjmp out of the function, so
+       one firing between fopen and fclose strands the handle -- and every later
+       test then fails on its own precondition instead of the real defect. */
     const size_t length = strlen(content);
-    TEST_ASSERT_EQUAL_UINT(length, fwrite(content, 1, length, file));
-    TEST_ASSERT_EQUAL_INT(0, fclose(file));
+    const size_t written = fwrite(content, 1, length, file);
+    const int closed = fclose(file);
+    TEST_ASSERT_EQUAL_UINT(length, written);
+    TEST_ASSERT_EQUAL_INT(0, closed);
 }
+#endif
 
 static void assert_slot_reads(const char *slot, const char *expected) {
     char err[128] = {0};
@@ -207,7 +218,10 @@ void test_non_blocking_write_is_refused_fast_and_keeps_the_primary(void) {
     (void)CloseHandle(held);
 
     TEST_ASSERT_FALSE(wrote);
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(err, "win32 error 5"), err);
+    /* With the closing paren: the backend renders "... (win32 error N)", and
+       without it this also passes on error 5x -- 50, 55, 59 are all real codes
+       with nothing to do with a held destination. */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(err, "win32 error 5)"), err);
     TEST_ASSERT_TRUE_MESSAGE(elapsed < NO_WAITING_MS,
                              "a refused non-blocking write waited");
 
@@ -238,7 +252,7 @@ void test_a_held_temp_file_is_refused_with_its_own_code(void) {
     (void)CloseHandle(held);
 
     TEST_ASSERT_FALSE(wrote);
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(err, "win32 error 32"), err);
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(err, "win32 error 32)"), err);
     TEST_ASSERT_TRUE_MESSAGE(elapsed < NO_WAITING_MS,
                              "a refused non-blocking write waited");
 

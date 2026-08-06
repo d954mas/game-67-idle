@@ -300,6 +300,81 @@ void test_nested_inner_string_survives_the_outer_allocation(void) {
     TEST_ASSERT_EQUAL_STRING("Нужно ЗАКРЫТЬ Ур 1", outer);
 }
 
+/* --- coverage ----------------------------------------------------------- */
+
+/* The corpus report's whole claim about a game -- "no surface ever showed this
+   string" -- rests on this bitset, and it shipped with nothing exercising it.
+   A silently broken mark_seen would not fail any gate; it would just quietly
+   report every key as dead, and a reader would go looking for the missing
+   surface instead of the missing bit. */
+
+void test_a_key_is_unseen_until_something_resolves_it(void) {
+    TEST_ASSERT_FALSE(loc_key_was_seen(LOC_E2E_PLAIN));
+    TEST_ASSERT_EQUAL_INT(0, loc_seen_count());
+
+    (void)loc_e2e_plain();
+
+    TEST_ASSERT_TRUE(loc_key_was_seen(LOC_E2E_PLAIN));
+    TEST_ASSERT_EQUAL_INT(1, loc_seen_count());
+}
+
+/* Both lookup entry points mark, and each key is counted once however often it
+   is read -- the UI resolves the same string every frame. */
+void test_formatted_keys_mark_too_and_the_count_is_per_key(void) {
+    (void)loc_e2e_nested_outer(loc_e2e_plain(), 3); /* loc_format + loc_get */
+    TEST_ASSERT_TRUE(loc_key_was_seen(LOC_E2E_NESTED_OUTER));
+    TEST_ASSERT_TRUE(loc_key_was_seen(LOC_E2E_PLAIN));
+    TEST_ASSERT_EQUAL_INT(2, loc_seen_count());
+
+    for (int i = 0; i < 60; ++i) {
+        (void)loc_e2e_plain();
+    }
+    TEST_ASSERT_EQUAL_INT(2, loc_seen_count());
+}
+
+/* The LAST key matters on its own: the bitset is (count + 7) / 8 bytes, so an
+   off-by-one in the byte bound loses exactly the tail and nothing else. */
+void test_the_last_key_in_the_table_is_reachable(void) {
+    const int last = LOC_KEY_COUNT - 1;
+    TEST_ASSERT_FALSE(loc_key_was_seen(last));
+    (void)loc_get(last);
+    TEST_ASSERT_TRUE(loc_key_was_seen(last));
+}
+
+/* Out of range is a question, not a crash: the report walks indices it got from
+   a JSON index file that can be older than the binary. */
+void test_an_index_outside_the_table_is_simply_unseen(void) {
+    TEST_ASSERT_FALSE(loc_key_was_seen(-1));
+    TEST_ASSERT_FALSE(loc_key_was_seen(LOC_KEY_COUNT));
+    TEST_ASSERT_FALSE(loc_key_was_seen(LOC_KEY_COUNT * 8 + 1));
+}
+
+/* A capture run resets before it walks, so a string read during startup does
+   not count as "the walk reached it". */
+void test_reset_forgets_everything_including_the_count(void) {
+    (void)loc_e2e_plain();
+    (void)loc_e2e_braces_bare();
+    TEST_ASSERT_EQUAL_INT(2, loc_seen_count());
+
+    loc_seen_reset();
+
+    TEST_ASSERT_EQUAL_INT(0, loc_seen_count());
+    TEST_ASSERT_FALSE(loc_key_was_seen(LOC_E2E_PLAIN));
+    TEST_ASSERT_FALSE(loc_key_was_seen(LOC_E2E_BRACES_BARE));
+
+    (void)loc_e2e_plain();
+    TEST_ASSERT_EQUAL_INT(1, loc_seen_count());
+}
+
+/* Coverage is about the KEY, not the language: a key read in one language and
+   then switched is still one key that was shown. */
+void test_switching_language_does_not_reopen_a_seen_key(void) {
+    (void)loc_e2e_plain();
+    loc_set_lang(LOC_LANG_EN);
+    (void)loc_e2e_plain();
+    TEST_ASSERT_EQUAL_INT(1, loc_seen_count());
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_generated_enums_match_the_corpus);
@@ -330,5 +405,11 @@ int main(void) {
     RUN_TEST(test_missing_language_falls_back_to_the_authoring_one);
     RUN_TEST(test_a_localized_string_nests_inside_another);
     RUN_TEST(test_nested_inner_string_survives_the_outer_allocation);
+    RUN_TEST(test_a_key_is_unseen_until_something_resolves_it);
+    RUN_TEST(test_formatted_keys_mark_too_and_the_count_is_per_key);
+    RUN_TEST(test_the_last_key_in_the_table_is_reachable);
+    RUN_TEST(test_an_index_outside_the_table_is_simply_unseen);
+    RUN_TEST(test_reset_forgets_everything_including_the_count);
+    RUN_TEST(test_switching_language_does_not_reopen_a_seen_key);
     return UNITY_END();
 }
