@@ -149,8 +149,24 @@ void game_save_mark_dirty(void);
    задача игры). 0 если ещё не грузили/сохраняли. */
 int64_t game_save_last_saved_at(void);
 
-/* Персистентность недоступна (web квота/private): игра может показать тост. */
+/* ПОСЛЕДНЯЯ ПОПЫТКА записи провалилась (web квота/private, отказ ОС, документ не
+   прошёл валидатор). Это НЕ полный ответ на вопрос «пишется ли прогресс»: в
+   паузе автосейва (CORRUPT_RESET/NEWER/BLOCKED) флаг чист, а не пишется ничего.
+   Для UI спрашивай game_save_persistence(). */
 bool game_save_is_unpersisted(void);
+
+/* Доходит ли прогресс игрока до диска — ОДИН вопрос, один ответ.
+   Два независимых внутренних состояния (провал записи и пауза автосейва) читались
+   по отдельности, а публичным был только первый, поэтому в паузе игра сообщала бы
+   «всё хорошо», отказывая при этом в КАЖДОЙ записи. T0058. */
+typedef enum {
+    GAME_SAVE_PERSISTENCE_OK = 0,       /* запись доходит */
+    GAME_SAVE_PERSISTENCE_RETRYING = 1, /* попытка провалилась; данные в памяти, тик повторит */
+    GAME_SAVE_PERSISTENCE_PAUSED = 2,   /* записи запрещены до New Game / починки: сейв новее
+                                           билда, битый primary или нечитаемый слот */
+} game_save_persistence_t;
+
+game_save_persistence_t game_save_persistence(void);
 
 /* Экспорт/импорт строкой (Р12) — тем же transform-путём; валидация конверта. */
 char *game_save_export_string(char *error, int error_cap);   /* malloc, free вызывающим */

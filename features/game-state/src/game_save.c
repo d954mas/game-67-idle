@@ -1131,6 +1131,15 @@ int64_t game_save_last_saved_at(void) { return s_last_saved_at; }
 
 bool game_save_is_unpersisted(void) { return s_unpersisted; }
 
+/* PAUSED outranks RETRYING: a paused save refuses every write outright, so
+   "we will retry" would be the wrong thing to tell anyone. */
+game_save_persistence_t game_save_persistence(void) {
+    if (s_autosave_paused) {
+        return GAME_SAVE_PERSISTENCE_PAUSED;
+    }
+    return s_unpersisted ? GAME_SAVE_PERSISTENCE_RETRYING : GAME_SAVE_PERSISTENCE_OK;
+}
+
 char *game_save_export_string(char *error, int error_cap) {
     int64_t wall = 0;
     cJSON *root = build_root(false, &wall, NULL); /* snapshot; do not bump the persistent seq */
