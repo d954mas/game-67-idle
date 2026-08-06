@@ -328,12 +328,12 @@ static void game_runtime_load_state(void) {
                the single on_new_game call on the corrupt-save path. */
             char save_err[128];
             (void)game_save_new_game(save_err, (int)sizeof save_err);
-        } else if (load_result.status == GAME_SAVE_LOAD_NEWER ||
-                   load_result.status == GAME_SAVE_LOAD_BLOCKED) {
-            /* The disk slot remains untouched/read-only. Build a valid unsaved
-               runtime state so owner references never point at zeroed storage. */
-            game_runtime_reset_fragments_without_grants();
         }
+        /* NEWER and BLOCKED used to reset the fragments here as well. Since
+           T0058 those loads leave a real session in memory -- read back from the
+           side slot, or freshly created and already written there -- so redoing
+           the reset would gut it and the next autosave would persist the gutted
+           version. The primary stays untouched either way. */
         return;
     }
 

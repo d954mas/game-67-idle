@@ -12,6 +12,15 @@ static const char *s_read_text;
 static bool s_quarantine_allowed;
 static int s_quarantine_calls;
 static int s_write_calls;
+/* Which slot a write landed in is the whole contract now: when the primary
+   holds something this build must not overwrite, the session moves beside it
+   and the primary must never be touched again (T0058). A stub that ignored the
+   slot could not tell those two apart. */
+static int s_primary_writes;
+static int s_side_writes;
+static bool is_side_slot(const char *slot) {
+    return slot != NULL && strstr(slot, "-side") != NULL;
+}
 static int s_live_value;
 static int s_reset_calls;
 static int s_new_game_calls;
@@ -27,11 +36,15 @@ static char *copy_text(const char *text) {
 
 bool game_storage_write(
     const char *slot, const char *text, char *error, int error_cap) {
-    (void)slot;
     (void)text;
     (void)error;
     (void)error_cap;
     ++s_write_calls;
+    if (is_side_slot(slot)) {
+        ++s_side_writes;
+    } else {
+        ++s_primary_writes;
+    }
     return true;
 }
 
@@ -47,13 +60,17 @@ bool game_storage_write_blocking(
 bool game_storage_read(
     const char *slot, char **out, game_storage_read_status_t *status,
     char *error, int error_cap) {
-    (void)slot;
     (void)error;
     (void)error_cap;
+    /* The side slot is a different file: empty unless a previous session of
+       this build wrote one. Scripting it from the primary's status would have
+       made every test read its own corrupt bytes twice. */
+    const game_storage_read_status_t st =
+        is_side_slot(slot) ? GAME_STORAGE_READ_ABSENT : s_read_status;
     if (status != NULL) {
-        *status = s_read_status;
+        *status = st;
     }
-    if (s_read_status != GAME_STORAGE_READ_OK) {
+    if (st != GAME_STORAGE_READ_OK) {
         return false;
     }
     *out = copy_text(s_read_text);
@@ -138,6 +155,8 @@ void setUp(void) {
     s_quarantine_allowed = false;
     s_quarantine_calls = 0;
     s_write_calls = 0;
+    s_primary_writes = 0;
+    s_side_writes = 0;
     s_live_value = 41;
     s_reset_calls = 0;
     s_new_game_calls = 0;
@@ -146,25 +165,34 @@ void setUp(void) {
 
 void tearDown(void) {}
 
-static void test_unreadable_unquarantined_primary_blocks_without_mutation(void) {
+/* The primary cannot be read AND could not be copied aside, so its bytes are the
+   only copy there is: never write it again. That much was already true. What was
+   NOT true is what happened next -- autosave paused with nothing in the product
+   able to unpause it, so the player kept playing a session that was thrown away
+   on exit and nobody was ever told (T0058, лид: "Игрок вообще не должен ничего
+   этого видеть и знать"). The session now continues in a slot beside it. */
+static void test_unreadable_primary_is_left_alone_and_the_session_continues_beside_it(void) {
     s_read_status = GAME_STORAGE_READ_ERROR_PRESERVED;
     game_save_load_result_t result;
 
     game_save_load(&result);
 
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_BLOCKED, result.status);
-    TEST_ASSERT_EQUAL_INT(41, s_live_value);
-    TEST_ASSERT_EQUAL_INT(0, s_reset_calls);
-    TEST_ASSERT_EQUAL_INT(0, s_new_game_calls);
-    TEST_ASSERT_EQUAL_INT(0, s_quarantine_calls);
-    TEST_ASSERT_EQUAL_INT(0, s_write_calls);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, s_primary_writes, "the unreadable primary was written");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(1, s_side_writes, "the session was not persisted anywhere");
+    TEST_ASSERT_EQUAL_INT(0, s_quarantine_calls); /* storage already tried and failed */
+    TEST_ASSERT_EQUAL_INT(7, s_live_value);       /* a real, playable new game */
 
+    /* and autosave is LIVE, which is the entire point */
     game_save_mark_dirty();
-    TEST_ASSERT_FALSE(game_save_flush(NULL, 0));
-    TEST_ASSERT_EQUAL_INT(0, s_write_calls);
+    TEST_ASSERT_TRUE(game_save_flush(NULL, 0));
+    TEST_ASSERT_EQUAL_INT(2, s_side_writes);
+    TEST_ASSERT_EQUAL_INT(0, s_primary_writes);
 }
 
-static void test_parse_failure_blocks_when_quarantine_cannot_be_verified(void) {
+/* Same rule from the other direction: the file parsed as garbage and could not
+   be quarantined either, so a repair tool may still want those bytes. */
+static void test_unquarantinable_corrupt_primary_is_left_alone(void) {
     s_read_status = GAME_STORAGE_READ_OK;
     s_read_text = "not-json";
     s_live_value = 52;
@@ -173,31 +201,32 @@ static void test_parse_failure_blocks_when_quarantine_cannot_be_verified(void) {
     game_save_load(&result);
 
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_BLOCKED, result.status);
-    TEST_ASSERT_EQUAL_INT(52, s_live_value);
-    TEST_ASSERT_EQUAL_INT(0, s_reset_calls);
-    TEST_ASSERT_EQUAL_INT(1, s_quarantine_calls);
-    TEST_ASSERT_EQUAL_INT(0, s_write_calls);
+    TEST_ASSERT_EQUAL_INT(1, s_quarantine_calls); /* tried, refused */
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, s_primary_writes, "the corrupt primary was written");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(1, s_side_writes, "the session was not persisted anywhere");
 }
 
-static void test_explicit_new_game_unblocks_and_persists(void) {
+/* New Game after a blocked load still works -- and still keeps its hands off
+   the primary, because nothing about it made the primary safe to overwrite. */
+static void test_new_game_after_a_blocked_load_stays_on_the_side_slot(void) {
     s_read_status = GAME_STORAGE_READ_ERROR_PRESERVED;
     game_save_load_result_t result;
     game_save_load(&result);
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_BLOCKED, result.status);
+    const int side_after_load = s_side_writes;
 
     TEST_ASSERT_TRUE(game_save_new_game(NULL, 0).persisted);
 
-    TEST_ASSERT_EQUAL_INT(1, s_reset_calls);
-    TEST_ASSERT_EQUAL_INT(1, s_new_game_calls);
     TEST_ASSERT_EQUAL_INT(7, s_live_value);
-    TEST_ASSERT_EQUAL_INT(1, s_write_calls);
+    TEST_ASSERT_EQUAL_INT(side_after_load + 1, s_side_writes);
+    TEST_ASSERT_EQUAL_INT(0, s_primary_writes);
 }
 
 int main(void) {
     game_save_register_fragment(&s_fragment);
     UNITY_BEGIN();
-    RUN_TEST(test_unreadable_unquarantined_primary_blocks_without_mutation);
-    RUN_TEST(test_parse_failure_blocks_when_quarantine_cannot_be_verified);
-    RUN_TEST(test_explicit_new_game_unblocks_and_persists);
+    RUN_TEST(test_unreadable_primary_is_left_alone_and_the_session_continues_beside_it);
+    RUN_TEST(test_unquarantinable_corrupt_primary_is_left_alone);
+    RUN_TEST(test_new_game_after_a_blocked_load_stays_on_the_side_slot);
     return UNITY_END();
 }
