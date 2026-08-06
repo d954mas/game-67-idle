@@ -25,6 +25,10 @@
 #include "game_events.h"
 #include "game_items.h"
 #include "unity.h"
+
+#ifndef GAME_STORAGE_NATIVE_ROOT
+#error "GAME_STORAGE_NATIVE_ROOT must be defined via CMake: the fixtures below must address the SAME directory the storage backend resolves, or a run from the wrong working directory half-works"
+#endif
 #if NT_DEVAPI_ENABLED
 #include "devapi/nt_devapi.h"
 #endif
@@ -34,11 +38,11 @@
    test_items_fragment.c) -- no TEST_ASSERT_EQUAL_FLOAT; compare with fabsf + epsilon. */
 #define COMPOSITION_TEST_FLOAT_EPS 0.0001f
 
-#define PRIMARY_PATH "build/saves/test_composition.json"
-#define PRIMARY_TMP "build/saves/test_composition.json.tmp"
-#define BAK_PATH "build/saves/test_composition.bak"
-#define BAK_TMP "build/saves/test_composition.bak.tmp"
-#define CORRUPT_PATH "build/saves/test_composition.corrupt"
+#define PRIMARY_PATH GAME_STORAGE_NATIVE_ROOT "/test_composition.json"
+#define PRIMARY_TMP GAME_STORAGE_NATIVE_ROOT "/test_composition.json.tmp"
+#define BAK_PATH GAME_STORAGE_NATIVE_ROOT "/test_composition.bak"
+#define BAK_TMP GAME_STORAGE_NATIVE_ROOT "/test_composition.bak.tmp"
+#define CORRUPT_PATH GAME_STORAGE_NATIVE_ROOT "/test_composition.corrupt"
 
 /* ---- injected clocks (GAME_SAVE_TESTING) ---- */
 static int64_t g_mono_ms;

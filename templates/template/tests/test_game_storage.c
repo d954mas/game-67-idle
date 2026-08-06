@@ -21,6 +21,10 @@
 /* clang-format off */
 #include "game_storage.h"
 #include "unity.h"
+
+#ifndef GAME_STORAGE_NATIVE_ROOT
+#error "GAME_STORAGE_NATIVE_ROOT must be defined via CMake: the fixtures below must address the SAME directory the storage backend resolves, or a run from the wrong working directory half-works"
+#endif
 /* clang-format on */
 
 /* Every slot name any test in this file touches. setUp/tearDown sweep exactly
@@ -35,35 +39,13 @@ static const char *const kAllTestSlots[] = {
 };
 #define GS_TEST_SLOT_COUNT (sizeof(kAllTestSlots) / sizeof(kAllTestSlots[0]))
 
-/* The production backend never derives storage from the working directory.
-   Tests intentionally override its final app-scoped directory so existing raw
-   crash fixtures remain local to the build tree. */
-static void init_test_storage_root(void) {
-    static bool initialized = false;
-    if (initialized) {
-        return;
-    }
-    char current[512];
-#ifdef _WIN32
-    TEST_ASSERT_TRUE(GetCurrentDirectoryA((DWORD)sizeof current, current) > 0);
-#else
-    TEST_ASSERT_NOT_NULL(getcwd(current, sizeof current));
-#endif
-    char root[512];
-    (void)snprintf(root, sizeof root, "%s/build/saves", current);
-#ifdef _WIN32
-    TEST_ASSERT_EQUAL_INT(0, _putenv_s("GAME_STORAGE_ROOT", root));
-    char resolved_root[512];
-    TEST_ASSERT_TRUE(GetEnvironmentVariableA(
-        "GAME_STORAGE_ROOT", resolved_root, (DWORD)sizeof resolved_root) > 0);
-    TEST_ASSERT_EQUAL_STRING(root, resolved_root);
-#else
-    TEST_ASSERT_EQUAL_INT(0, setenv("GAME_STORAGE_ROOT", root, 1));
-#endif
-    initialized = true;
-}
+/* No GAME_STORAGE_ROOT override here. This target defines the compile-time
+   GAME_STORAGE_NATIVE_ROOT, which outranks the environment variable outright,
+   so setting one would be a value nothing reads -- and deriving it from the
+   working directory is exactly how a run from the wrong directory half-works:
+   the test cleaning one directory while the backend writes to another. */
 
-/* Counts (and optionally deletes) build/saves/ entries starting with prefix.
+/* Counts (and optionally deletes) storage-root entries starting with prefix.
    Asserting quarantine leaves exactly one/two <slot>.corrupt-<ts>[-n]
    file(s) -- the timestamp (and now collision) suffix is not known ahead of
    time, so this has to enumerate the directory rather than probe a fixed
@@ -122,18 +104,18 @@ static int sweep_files_with_prefix(const char *dir, const char *prefix, bool do_
 
 static void cleanup_slot(const char *slot) {
     char path[512];
-    (void)snprintf(path, sizeof(path), "build/saves/%s.json", slot);
+    (void)snprintf(path, sizeof(path), GAME_STORAGE_NATIVE_ROOT "/%s.json", slot);
     (void)remove(path);
-    (void)snprintf(path, sizeof(path), "build/saves/%s.json.tmp", slot);
+    (void)snprintf(path, sizeof(path), GAME_STORAGE_NATIVE_ROOT "/%s.json.tmp", slot);
     (void)remove(path);
-    (void)snprintf(path, sizeof(path), "build/saves/%s.bak", slot);
+    (void)snprintf(path, sizeof(path), GAME_STORAGE_NATIVE_ROOT "/%s.bak", slot);
     (void)remove(path);
-    (void)snprintf(path, sizeof(path), "build/saves/%s.bak.tmp", slot);
+    (void)snprintf(path, sizeof(path), GAME_STORAGE_NATIVE_ROOT "/%s.bak.tmp", slot);
     (void)remove(path);
 
     char corrupt_prefix[512];
     (void)snprintf(corrupt_prefix, sizeof(corrupt_prefix), "%s.corrupt", slot);
-    (void)sweep_files_with_prefix("build/saves", corrupt_prefix, true, NULL, 0);
+    (void)sweep_files_with_prefix(GAME_STORAGE_NATIVE_ROOT, corrupt_prefix, true, NULL, 0);
 }
 
 static void test_make_dir(const char *path) {
@@ -153,12 +135,12 @@ static void test_make_dir(const char *path) {
    per-slot cleanup above only ever remove()s plain files, so this needs its
    own teardown. */
 static void cleanup_replace_fail_dir(void) {
-    (void)remove("build/saves/replace_fail_slot.json/marker.txt");
-    (void)remove("build/saves/replace_fail_slot.json.tmp");
+    (void)remove(GAME_STORAGE_NATIVE_ROOT "/replace_fail_slot.json/marker.txt");
+    (void)remove(GAME_STORAGE_NATIVE_ROOT "/replace_fail_slot.json.tmp");
 #ifdef _WIN32
-    (void)_rmdir("build/saves/replace_fail_slot.json");
+    (void)_rmdir(GAME_STORAGE_NATIVE_ROOT "/replace_fail_slot.json");
 #else
-    (void)rmdir("build/saves/replace_fail_slot.json");
+    (void)rmdir(GAME_STORAGE_NATIVE_ROOT "/replace_fail_slot.json");
 #endif
 }
 
@@ -166,13 +148,13 @@ static void cleanup_replace_fail_dir(void) {
    force read() past ENOENT into the ERROR class; like replace_fail this needs its
    own teardown (the plain-file sweep never rmdir()s). */
 static void cleanup_read_error_dir(void) {
-    (void)remove("build/saves/read_error_dir.json"); /* if a plain file leaked */
+    (void)remove(GAME_STORAGE_NATIVE_ROOT "/read_error_dir.json"); /* if a plain file leaked */
 #ifdef _WIN32
-    (void)_rmdir("build/saves/read_error_dir.json");
+    (void)_rmdir(GAME_STORAGE_NATIVE_ROOT "/read_error_dir.json");
 #else
-    (void)rmdir("build/saves/read_error_dir.json");
+    (void)rmdir(GAME_STORAGE_NATIVE_ROOT "/read_error_dir.json");
 #endif
-    (void)sweep_files_with_prefix("build/saves", "read_error_dir.corrupt", true, NULL, 0);
+    (void)sweep_files_with_prefix(GAME_STORAGE_NATIVE_ROOT, "read_error_dir.corrupt", true, NULL, 0);
 }
 
 static void cleanup_all_test_files(void) {
@@ -194,10 +176,7 @@ static void write_raw_file(const char *path, const char *content) {
     TEST_ASSERT_EQUAL_INT(0, fclose(file));
 }
 
-void setUp(void) {
-    init_test_storage_root();
-    cleanup_all_test_files();
-}
+void setUp(void) { cleanup_all_test_files(); }
 void tearDown(void) { cleanup_all_test_files(); }
 
 /* ---- write / read / exists round trip ---- */
@@ -270,7 +249,7 @@ void test_write_rejects_uppercase_slot(void) {
 /* Deep-review item 4: path-syntax characters must never reach a path/key
    builder. is_safe_segment's charset check runs BEFORE any snprintf, so a
    rejected slot can, by construction, never produce a path outside
-   build/saves/ -- this test pins that down against regression for write(). */
+   the storage root -- this test pins that down against regression for write(). */
 static const char *const kUnsafeTraversalSlots[] = {
     "..", ".", "a/b", "a\\b", "/abs", "C:\\x", "",
 };
@@ -304,7 +283,7 @@ void test_atomicity_stale_tmp_is_invisible_to_read(void) {
     TEST_ASSERT_TRUE(game_storage_write_blocking("atomic_slot", "GOOD-PRIMARY", err, (int)sizeof(err)));
 
     /* Simulate a crash: a leftover .tmp file sits next to a perfectly good primary. */
-    write_raw_file("build/saves/atomic_slot.json.tmp", "GARBAGE-TMP-LEFTOVER");
+    write_raw_file(GAME_STORAGE_NATIVE_ROOT "/atomic_slot.json.tmp", "GARBAGE-TMP-LEFTOVER");
 
     char *out = NULL;
     TEST_ASSERT_TRUE(game_storage_read("atomic_slot", &out, NULL, err, (int)sizeof(err)));
@@ -312,7 +291,7 @@ void test_atomicity_stale_tmp_is_invisible_to_read(void) {
     free(out);
 
     /* read() must not have touched the stale tmp file. */
-    FILE *tmp_file = fopen("build/saves/atomic_slot.json.tmp", "rb");
+    FILE *tmp_file = fopen(GAME_STORAGE_NATIVE_ROOT "/atomic_slot.json.tmp", "rb");
     TEST_ASSERT_NOT_NULL(tmp_file);
     char buf[64] = {0};
     size_t n = fread(buf, 1, sizeof(buf) - 1, tmp_file);
@@ -334,7 +313,7 @@ void test_atomicity_stale_tmp_is_invisible_to_read(void) {
    write must still produce a valid primary. */
 void test_stale_tmp_with_absent_primary_recovers(void) {
     char err[128] = {0};
-    write_raw_file("build/saves/stale_tmp_no_primary.json.tmp", "PARTIAL-WRITE-FROM-CRASHED-SESSION");
+    write_raw_file(GAME_STORAGE_NATIVE_ROOT "/stale_tmp_no_primary.json.tmp", "PARTIAL-WRITE-FROM-CRASHED-SESSION");
 
     TEST_ASSERT_FALSE(game_storage_exists("stale_tmp_no_primary"));
     char *out = NULL;
@@ -355,7 +334,7 @@ void test_stale_tmp_with_absent_primary_recovers(void) {
 void test_no_leftover_tmp_after_clean_write(void) {
     char err[128] = {0};
     TEST_ASSERT_TRUE(game_storage_write_blocking("clean_write_slot", "{\"a\":1}", err, (int)sizeof(err)));
-    FILE *tmp_file = fopen("build/saves/clean_write_slot.json.tmp", "rb");
+    FILE *tmp_file = fopen(GAME_STORAGE_NATIVE_ROOT "/clean_write_slot.json.tmp", "rb");
     TEST_ASSERT_NULL(tmp_file);
 }
 
@@ -368,15 +347,15 @@ void test_no_leftover_tmp_after_clean_write(void) {
    needing to simulate disk-full or ACL errors. */
 void test_replace_failure_preserves_primary(void) {
     char err[128] = {0};
-    test_make_dir("build/saves");
-    test_make_dir("build/saves/replace_fail_slot.json");
-    write_raw_file("build/saves/replace_fail_slot.json/marker.txt", "SENTINEL-UNCHANGED");
+    test_make_dir(GAME_STORAGE_NATIVE_ROOT);
+    test_make_dir(GAME_STORAGE_NATIVE_ROOT "/replace_fail_slot.json");
+    write_raw_file(GAME_STORAGE_NATIVE_ROOT "/replace_fail_slot.json/marker.txt", "SENTINEL-UNCHANGED");
 
     TEST_ASSERT_FALSE(game_storage_write("replace_fail_slot", "NEW-CONTENT-SHOULD-NOT-LAND", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(strlen(err) > 0);
 
     /* target untouched: the marker inside the directory is exactly as written */
-    FILE *marker_file = fopen("build/saves/replace_fail_slot.json/marker.txt", "rb");
+    FILE *marker_file = fopen(GAME_STORAGE_NATIVE_ROOT "/replace_fail_slot.json/marker.txt", "rb");
     TEST_ASSERT_NOT_NULL(marker_file);
     char buf[64] = {0};
     size_t n = fread(buf, 1, sizeof(buf) - 1, marker_file);
@@ -385,7 +364,7 @@ void test_replace_failure_preserves_primary(void) {
     TEST_ASSERT_EQUAL_STRING("SENTINEL-UNCHANGED", buf);
 
     /* no leaked .tmp scratch file */
-    FILE *tmp_file = fopen("build/saves/replace_fail_slot.json.tmp", "rb");
+    FILE *tmp_file = fopen(GAME_STORAGE_NATIVE_ROOT "/replace_fail_slot.json.tmp", "rb");
     TEST_ASSERT_NULL(tmp_file);
 }
 
@@ -399,7 +378,7 @@ void test_backup_fallback_survives_corrupted_primary(void) {
     TEST_ASSERT_TRUE(game_storage_write_backup("bak_slot", err, (int)sizeof(err)));
 
     /* Simulate corruption: overwrite primary directly with non-JSON bytes. */
-    write_raw_file("build/saves/bak_slot.json", "CORRUPT-NOT-JSON");
+    write_raw_file(GAME_STORAGE_NATIVE_ROOT "/bak_slot.json", "CORRUPT-NOT-JSON");
 
     char *primary_out = NULL;
     TEST_ASSERT_TRUE(game_storage_read("bak_slot", &primary_out, NULL, err, (int)sizeof(err)));
@@ -437,7 +416,7 @@ void test_write_backup_overwrites_existing_bak(void) {
 
     TEST_ASSERT_TRUE(game_storage_write_blocking("bak_overwrite_slot", "V2", err, (int)sizeof(err)));
 
-    write_raw_file("build/saves/bak_overwrite_slot.bak.tmp", "GARBAGE-BAK-TMP-LEFTOVER");
+    write_raw_file(GAME_STORAGE_NATIVE_ROOT "/bak_overwrite_slot.bak.tmp", "GARBAGE-BAK-TMP-LEFTOVER");
 
     TEST_ASSERT_TRUE(game_storage_write_backup("bak_overwrite_slot", err, (int)sizeof(err)));
 
@@ -464,11 +443,11 @@ void test_quarantine_moves_primary_and_leaves_exactly_one_corrupt_file(void) {
     TEST_ASSERT_NULL(out);
 
     char corrupt_name[256] = {0};
-    TEST_ASSERT_EQUAL_INT(1, sweep_files_with_prefix("build/saves", "quarantine_slot.corrupt", false,
+    TEST_ASSERT_EQUAL_INT(1, sweep_files_with_prefix(GAME_STORAGE_NATIVE_ROOT, "quarantine_slot.corrupt", false,
                                                       corrupt_name, sizeof(corrupt_name)));
 
     char corrupt_path[512];
-    (void)snprintf(corrupt_path, sizeof(corrupt_path), "build/saves/%s", corrupt_name);
+    (void)snprintf(corrupt_path, sizeof(corrupt_path), GAME_STORAGE_NATIVE_ROOT "/%s", corrupt_name);
     FILE *corrupt_file = fopen(corrupt_path, "rb");
     TEST_ASSERT_NOT_NULL(corrupt_file);
     char buf[64] = {0};
@@ -483,7 +462,7 @@ void test_quarantine_without_primary_fails(void) {
     TEST_ASSERT_FALSE(game_storage_exists("quarantine_missing"));
     TEST_ASSERT_FALSE(game_storage_quarantine("quarantine_missing", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(strlen(err) > 0);
-    TEST_ASSERT_EQUAL_INT(0, sweep_files_with_prefix("build/saves", "quarantine_missing.corrupt", false, NULL, 0));
+    TEST_ASSERT_EQUAL_INT(0, sweep_files_with_prefix(GAME_STORAGE_NATIVE_ROOT, "quarantine_missing.corrupt", false, NULL, 0));
 }
 
 /* Deep-review item 1 (real defect, now fixed): two quarantines of the SAME
@@ -495,12 +474,12 @@ void test_quarantine_twice_same_slot(void) {
     char err[128] = {0};
     TEST_ASSERT_TRUE(game_storage_write_blocking("quarantine_twice_slot", "FIRST-BAD", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(game_storage_quarantine("quarantine_twice_slot", err, (int)sizeof(err)));
-    TEST_ASSERT_EQUAL_INT(1, sweep_files_with_prefix("build/saves", "quarantine_twice_slot.corrupt", false, NULL, 0));
+    TEST_ASSERT_EQUAL_INT(1, sweep_files_with_prefix(GAME_STORAGE_NATIVE_ROOT, "quarantine_twice_slot.corrupt", false, NULL, 0));
 
     TEST_ASSERT_TRUE(game_storage_write_blocking("quarantine_twice_slot", "SECOND-BAD", err, (int)sizeof(err)));
     TEST_ASSERT_TRUE(game_storage_quarantine("quarantine_twice_slot", err, (int)sizeof(err)));
 
-    TEST_ASSERT_EQUAL_INT(2, sweep_files_with_prefix("build/saves", "quarantine_twice_slot.corrupt", false, NULL, 0));
+    TEST_ASSERT_EQUAL_INT(2, sweep_files_with_prefix(GAME_STORAGE_NATIVE_ROOT, "quarantine_twice_slot.corrupt", false, NULL, 0));
 }
 
 /* read() must tell ABSENT ("no save yet" -> caller starts fresh) apart from ERROR
@@ -529,9 +508,9 @@ void test_read_status_absent_vs_error(void) {
     free(out);
 
     /* present but uncopyable -> ERROR_PRESERVED (not ABSENT, not safe ERROR) */
-    (void)remove("build/saves/read_error_dir.json");
-    test_make_dir("build/saves");
-    test_make_dir("build/saves/read_error_dir.json");
+    (void)remove(GAME_STORAGE_NATIVE_ROOT "/read_error_dir.json");
+    test_make_dir(GAME_STORAGE_NATIVE_ROOT);
+    test_make_dir(GAME_STORAGE_NATIVE_ROOT "/read_error_dir.json");
     TEST_ASSERT_FALSE(game_storage_exists("read_error_dir"));
     out = NULL;
     st = GAME_STORAGE_READ_ABSENT;

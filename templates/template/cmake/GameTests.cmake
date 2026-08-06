@@ -202,7 +202,7 @@ if(NOT EMSCRIPTEN)
     target_include_directories(test_game_storage PRIVATE src)
     target_compile_definitions(test_game_storage PRIVATE
         GAME_STORAGE_APP_ID="template_storage_test"
-        GAME_STORAGE_NATIVE_ROOT="${CMAKE_BINARY_DIR}/tests/build/saves"
+        GAME_STORAGE_NATIVE_ROOT="${CMAKE_BINARY_DIR}/tests/build/storage"
         _CRT_SECURE_NO_WARNINGS)
     # MoveFileExA (native quarantine/atomic-replace) is in kernel32, linked by default.
     set_target_properties(test_game_storage PROPERTIES
@@ -274,7 +274,7 @@ if(NOT EMSCRIPTEN)
     target_compile_definitions(test_game_save PRIVATE
         GAME_SAVE_TESTING=1
         GAME_STORAGE_APP_ID="template_save_test"
-        GAME_STORAGE_NATIVE_ROOT="${CMAKE_BINARY_DIR}/tests/build/saves"
+        GAME_STORAGE_NATIVE_ROOT="${CMAKE_BINARY_DIR}/tests/build/save"
         GAME_SAVE_AUTOSAVE_SLOT="test_slot"
         GAME_SAVE_DEBOUNCE_MS=2000
         GAME_SAVE_MAX_INTERVAL_MS=30000
@@ -830,7 +830,7 @@ if(NOT EMSCRIPTEN)
         "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_template_composition PRIVATE
         GAME_SAVE_TESTING=1 GAME_ITEMS_TESTING=1 GAME_STORAGE_APP_ID="template_composition_test"
-        GAME_STORAGE_NATIVE_ROOT="${CMAKE_BINARY_DIR}/tests/build/saves"
+        GAME_STORAGE_NATIVE_ROOT="${CMAKE_BINARY_DIR}/tests/build/composition"
         GAME_SAVE_AUTOSAVE_SLOT="test_composition"
         GAME_SAVE_DEBOUNCE_MS=2000 GAME_SAVE_MAX_INTERVAL_MS=30000 GAME_SAVE_DOC_VERSION=2
         ITEMS_LEGACY_SAVE_V1_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/items_save_v1.json"

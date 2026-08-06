@@ -24,12 +24,16 @@
 #include "game_storage.h"
 #include "cJSON.h"
 #include "unity.h"
+
+#ifndef GAME_STORAGE_NATIVE_ROOT
+#error "GAME_STORAGE_NATIVE_ROOT must be defined via CMake: the fixtures below must address the SAME directory the storage backend resolves, or a run from the wrong working directory half-works"
+#endif
 /* clang-format on */
 
-#define PRIMARY_PATH "build/saves/test_slot.json"
-#define PRIMARY_TMP "build/saves/test_slot.json.tmp"
-#define BAK_PATH "build/saves/test_slot.bak"
-#define BAK_TMP "build/saves/test_slot.bak.tmp"
+#define PRIMARY_PATH GAME_STORAGE_NATIVE_ROOT "/test_slot.json"
+#define PRIMARY_TMP GAME_STORAGE_NATIVE_ROOT "/test_slot.json.tmp"
+#define BAK_PATH GAME_STORAGE_NATIVE_ROOT "/test_slot.bak"
+#define BAK_TMP GAME_STORAGE_NATIVE_ROOT "/test_slot.bak.tmp"
 
 /* ---- injected clocks ---- */
 static int64_t g_mono_ms;
@@ -203,7 +207,7 @@ static int sweep_corrupt(bool do_delete) {
     const size_t prefix_len = strlen(prefix);
 #ifdef _WIN32
     struct _finddata_t fd;
-    intptr_t h = _findfirst("build/saves/*", &fd);
+    intptr_t h = _findfirst(GAME_STORAGE_NATIVE_ROOT "/*", &fd);
     if (h == -1) {
         return 0;
     }
@@ -212,14 +216,14 @@ static int sweep_corrupt(bool do_delete) {
             count++;
             if (do_delete) {
                 char p[512];
-                (void)snprintf(p, sizeof p, "build/saves/%s", fd.name);
+                (void)snprintf(p, sizeof p, GAME_STORAGE_NATIVE_ROOT "/%s", fd.name);
                 (void)remove(p);
             }
         }
     } while (_findnext(h, &fd) == 0);
     _findclose(h);
 #else
-    DIR *d = opendir("build/saves");
+    DIR *d = opendir(GAME_STORAGE_NATIVE_ROOT);
     if (!d) {
         return 0;
     }
@@ -229,7 +233,7 @@ static int sweep_corrupt(bool do_delete) {
             count++;
             if (do_delete) {
                 char p[512];
-                (void)snprintf(p, sizeof p, "build/saves/%s", e->d_name);
+                (void)snprintf(p, sizeof p, GAME_STORAGE_NATIVE_ROOT "/%s", e->d_name);
                 (void)remove(p);
             }
         }
@@ -239,13 +243,13 @@ static int sweep_corrupt(bool do_delete) {
     return count;
 }
 
-/* First build/saves/test_slot.corrupt[-N] bare filename; true when one exists. */
+/* First <root>/test_slot.corrupt[-N] bare filename; true when one exists. */
 static bool first_corrupt_name(char *name, size_t cap) {
     const char *prefix = "test_slot.corrupt";
     const size_t prefix_len = strlen(prefix);
 #ifdef _WIN32
     struct _finddata_t fd;
-    intptr_t h = _findfirst("build/saves/*", &fd);
+    intptr_t h = _findfirst(GAME_STORAGE_NATIVE_ROOT "/*", &fd);
     if (h == -1) {
         return false;
     }
@@ -260,7 +264,7 @@ static bool first_corrupt_name(char *name, size_t cap) {
     _findclose(h);
     return found;
 #else
-    DIR *d = opendir("build/saves");
+    DIR *d = opendir(GAME_STORAGE_NATIVE_ROOT);
     if (!d) {
         return false;
     }
@@ -859,7 +863,7 @@ void test_read_error_quarantines_and_corrupt_resets(void) {
     char name[256] = {0};
     TEST_ASSERT_TRUE(first_corrupt_name(name, sizeof name));
     char qpath[512];
-    (void)snprintf(qpath, sizeof qpath, "build/saves/%s", name);
+    (void)snprintf(qpath, sizeof qpath, GAME_STORAGE_NATIVE_ROOT "/%s", name);
     char *q = read_raw(qpath);
     TEST_ASSERT_NOT_NULL(q);
     TEST_ASSERT_EQUAL_INT((int)big, (int)strlen(q));
@@ -906,7 +910,7 @@ void test_read_error_quarantines_and_corrupt_resets(void) {
 }
 
 void test_read_error_never_reuses_an_old_quarantine_copy(void) {
-    write_raw("build/saves/test_slot.corrupt", "OLD-PRIMARY");
+    write_raw(GAME_STORAGE_NATIVE_ROOT "/test_slot.corrupt", "OLD-PRIMARY");
     const size_t big = (size_t)(1024 * 1024) + 64u;
     char *payload = (char *)malloc(big + 1u);
     TEST_ASSERT_NOT_NULL(payload);
@@ -919,11 +923,11 @@ void test_read_error_never_reuses_an_old_quarantine_copy(void) {
 
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_CORRUPT_RESET, result.status);
     TEST_ASSERT_EQUAL_INT(2, sweep_corrupt(false));
-    char *old_copy = read_raw("build/saves/test_slot.corrupt");
+    char *old_copy = read_raw(GAME_STORAGE_NATIVE_ROOT "/test_slot.corrupt");
     TEST_ASSERT_NOT_NULL(old_copy);
     TEST_ASSERT_EQUAL_STRING("OLD-PRIMARY", old_copy);
     free(old_copy);
-    char *new_copy = read_raw("build/saves/test_slot.corrupt-1");
+    char *new_copy = read_raw(GAME_STORAGE_NATIVE_ROOT "/test_slot.corrupt-1");
     TEST_ASSERT_NOT_NULL(new_copy);
     TEST_ASSERT_EQUAL_INT((int)big, (int)strlen(new_copy));
     TEST_ASSERT_EQUAL_INT(0, memcmp(new_copy, payload, big));
@@ -959,7 +963,7 @@ void test_read_error_recovers_from_backup(void) {
     char name[256] = {0};
     TEST_ASSERT_TRUE(first_corrupt_name(name, sizeof name));
     char qpath[512];
-    (void)snprintf(qpath, sizeof qpath, "build/saves/%s", name);
+    (void)snprintf(qpath, sizeof qpath, GAME_STORAGE_NATIVE_ROOT "/%s", name);
     char *q = read_raw(qpath);
     TEST_ASSERT_NOT_NULL(q);
     TEST_ASSERT_EQUAL_INT((int)big, (int)strlen(q));
