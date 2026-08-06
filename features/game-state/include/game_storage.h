@@ -22,7 +22,11 @@
            GAME_STORAGE_ROOT может задать абсолютный конечный каталог для теста.
            temp-файл и POSIX parent directory синхронизируются до success.
    web:    localStorage["<APP_ID>/save/<slot>"] = text в try/catch;
-           false = квота/Safari-private (наверх как SAVE_UNPERSISTED). */
+           false = квота/Safari-private (наверх как SAVE_UNPERSISTED).
+
+   `error` называет причину в форме «сообщение (канал значение)» на обеих
+   платформах: для web это единственное, что отличает QuotaExceededError
+   (место кончилось) от SecurityError (хранилище закрыто на всю сессию). */
 bool game_storage_write(const char *slot, const char *text, char *error, int error_cap);
 
 /* То же самое, но вызывающему МОЖНО ждать.

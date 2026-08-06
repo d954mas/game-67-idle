@@ -18,6 +18,31 @@ static void set_error(char *error, int error_cap, const char *message) {
     }
 }
 
+/* Same `message (channel value)` shape as the native backend, so one reading
+   habit covers both platforms. */
+static void set_error_reason(
+    char *error, int error_cap, const char *message, const char *reason,
+    const char *note) {
+    if (error == NULL || error_cap <= 0) {
+        return;
+    }
+    char parenthetical[GAME_STORAGE_WEB_REASON_MAX + 4];
+    if (reason != NULL && reason[0] != '\0') {
+        (void)snprintf(parenthetical, sizeof parenthetical, " (%s)", reason);
+    } else {
+        parenthetical[0] = '\0';
+    }
+    /* The reason stays with the clause it explains, not trailing off the end. */
+    (void)snprintf(
+        error, (size_t)error_cap, "%s%s%s%s", message, parenthetical,
+        note != NULL ? "; " : "", note != NULL ? note : "");
+}
+
+/* Log lines have no empty-reason branch to fall back to. */
+static const char *reason_or_unknown(const char *reason) {
+    return (reason != NULL && reason[0] != '\0') ? reason : "no reason reported";
+}
+
 static bool is_safe_segment(const char *value) {
     if (value == NULL || value[0] == '\0') {
         return false;
@@ -69,8 +94,10 @@ bool game_storage_backend_write(
         set_error(error, error_cap, "storage text is too large");
         return false;
     }
-    if (!game_storage_web_save(key, text)) {
-        set_error(error, error_cap, "failed to write browser storage");
+    char reason[GAME_STORAGE_WEB_REASON_MAX] = {0};
+    if (!game_storage_web_save(key, text, reason, (int)sizeof reason)) {
+        set_error_reason(
+            error, error_cap, "failed to write browser storage", reason, NULL);
         return false;
     }
     return true;
@@ -84,8 +111,10 @@ bool game_storage_backend_read(
         return false;
     }
     int web_status = GAME_STORAGE_READ_ERROR;
+    char reason[GAME_STORAGE_WEB_REASON_MAX] = {0};
     char *data = game_storage_web_load(
-        key, (size_t)GAME_STORAGE_MAX_BYTES, &web_status);
+        key, (size_t)GAME_STORAGE_MAX_BYTES, &web_status, reason,
+        (int)sizeof reason);
     if (data != NULL) {
         *out = data;
         if (status != NULL) {
@@ -108,15 +137,19 @@ bool game_storage_backend_read(
         *status = read_status;
     }
     if (read_status == GAME_STORAGE_READ_ERROR) {
-        set_error(error, error_cap, "failed to read browser storage; quarantine copy verified");
+        set_error_reason(
+            error, error_cap, "failed to read browser storage", reason,
+            "quarantine copy verified");
         nt_log_warn(
-            "game_storage: read slot '%s' failed; quarantine copy verified (web)",
-            slot);
+            "game_storage: read slot '%s' failed (%s); quarantine copy verified (web)",
+            slot, reason_or_unknown(reason));
     } else {
-        set_error(error, error_cap, "failed to read browser storage; primary preserved without quarantine");
+        set_error_reason(
+            error, error_cap, "failed to read browser storage", reason,
+            "primary preserved without quarantine");
         nt_log_warn(
-            "game_storage: read slot '%s' failed; primary preserved, quarantine unavailable (web)",
-            slot);
+            "game_storage: read slot '%s' failed (%s); primary preserved, quarantine unavailable (web)",
+            slot, reason_or_unknown(reason));
     }
     return false;
 }
@@ -147,8 +180,13 @@ bool game_storage_backend_quarantine(
     if (!resolve_key(slot, key, sizeof key, error, error_cap)) {
         return false;
     }
-    if (!game_storage_web_quarantine(key)) {
-        set_error(error, error_cap, "failed to create verified quarantine copy");
+    /* A quarantine that cannot be made holds every write, so its reason is what
+       says whether that hold can ever clear. */
+    char reason[GAME_STORAGE_WEB_REASON_MAX] = {0};
+    if (!game_storage_web_quarantine(key, reason, (int)sizeof reason)) {
+        set_error_reason(
+            error, error_cap, "failed to create verified quarantine copy",
+            reason, NULL);
         return false;
     }
     return true;
@@ -161,8 +199,10 @@ bool game_storage_backend_probe(char *error, int error_cap) {
         set_error(error, error_cap, "resolved probe key is too long");
         return false;
     }
-    if (!game_storage_web_probe(key)) {
-        set_error(error, error_cap, "browser storage is not persistent");
+    char reason[GAME_STORAGE_WEB_REASON_MAX] = {0};
+    if (!game_storage_web_probe(key, reason, (int)sizeof reason)) {
+        set_error_reason(
+            error, error_cap, "browser storage is not persistent", reason, NULL);
         return false;
     }
     return true;
