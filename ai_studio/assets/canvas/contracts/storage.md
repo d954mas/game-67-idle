@@ -12,9 +12,16 @@ roots belong in ignored `ai_studio/studio.config.local.json`, whose fields
 override the tracked file. `CANVAS_PROJECTS_ROOT` remains the explicit test and
 one-off override. The default repo-local projects directory is ignored.
 
-Shared Canvas storage remains external in normal workstation configuration.
-Project ownership is metadata (`ownership.kind=game`, `gameId`), not a game-side
-copy of project data.
+All Canvas storage remains external in normal workstation configuration,
+including both public Studio projects and public/private game-qualified
+projects. Canvas folders, `project.json`, content-addressed `files/`, exports,
+and journals must never be committed to a Studio, template, public-game, or
+private-game git repository. On the primary workstation the external backing
+store is the Yandex Disk Canvas root configured in ignored
+`ai_studio/studio.config.local.json`; game-qualified stores may be mounted back
+into their ignored game-local store path with a directory junction. Project
+ownership is metadata (`ownership.kind=game`, `gameId`), not a committed
+game-side copy of project data.
 
 Private game stores are explicit mounts. They are excluded from aggregate reads
 unless the caller opts in, and private exports may not target the public parent
