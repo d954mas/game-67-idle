@@ -49,6 +49,8 @@ const ROUTES = Object.freeze({
       search: ["node", "ai_studio/assets/catalog/search.mjs"],
       intake: ["node", "ai_studio/assets/intake/stage.mjs"],
       canvas: ["node", "ai_studio/assets/canvas/cli.mjs"],
+      meshy: ["node", "ai_studio/assets/tools/model/meshy/cli.mjs"],
+      hunyuan3d: ["node", "ai_studio/assets/tools/model/hunyuan3d/cli.mjs"],
     },
   },
 });

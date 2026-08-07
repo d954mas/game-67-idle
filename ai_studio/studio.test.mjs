@@ -31,6 +31,8 @@ test("describe exposes stable owner routes without a Studio game proxy", () => {
   assert.deepEqual(result.routes.canvas.cli, ["node", "ai_studio/assets/canvas/cli.mjs"]);
   assert.equal(result.routes.taskboard.surface, "/taskboard/");
   assert.equal(result.routes.assets.surface, "/asset_viewer/");
+  assert.deepEqual(result.routes.assets.tools.meshy, ["node", "ai_studio/assets/tools/model/meshy/cli.mjs"]);
+  assert.deepEqual(result.routes.assets.tools.hunyuan3d, ["node", "ai_studio/assets/tools/model/hunyuan3d/cli.mjs"]);
   assert.deepEqual(result.routes.game.commands.find((entry) => entry.id === "doctor").route, ["node", "<game-root>/tools/game.mjs", "doctor"]);
   assert.deepEqual(result.exitSemantics, { pass: 0, failed: 1, blockedOrSetup: 2 });
 });

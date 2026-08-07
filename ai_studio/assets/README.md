@@ -30,10 +30,19 @@ Top-level groups:
 - `intake/`: stage, accept, and reject operations for candidate assets.
 - `licenses/`: publishability policy and the fail-closed repository guard.
 - `previews/`: preview cache preparation and project-owned preview resources.
+Budget-gated 3D generation through Meshy lives under
+`tools/model/meshy/`. It creates local candidates and provenance only; accepted
+models still enter through intake/catalog ownership.
+Free local single-image, multiview, and texture generation through Hunyuan3D
+2.0 lives under `tools/model/hunyuan3d/`. Model weights remain outside the
+repository, source images never leave the machine, and generated GLB candidates
+still require review and asset intake.
 Raster generation is handled by the `nt-asset-image-generation` skill after
-source-first search fails. This module does not own shared generation job
-scaffolds, prompt contracts, or prompt records. If a game needs durable
-generation context, keep it with that game's design/assets metadata.
+source-first search fails. This module does not own shared raster-generation
+job scaffolds, prompt contracts, or prompt records. If a game needs durable
+generation context, keep it with that game's design/assets metadata. The Meshy
+client is the narrow 3D-provider exception and keeps only local task recovery
+and spend provenance under `tmp/`.
 
 Asset sources are explicit. Global libraries are registered in
 `sources/libraries.json`; templates and games resolve through

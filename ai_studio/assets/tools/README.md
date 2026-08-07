@@ -23,6 +23,11 @@ model, or checking a texture. They are not a separate top-level asset group.
   module: source images in `tmp`, region JSON, sliced images, review sheets, and
   ZIP/PNG exports.
 - `conversion/`: format conversion helpers such as OBJ/MTL to GLB.
+- `model/`: 3D-model preparation and provider integrations. The Meshy client
+  under `model/meshy/` is dry-run-first, credit-gated, resumable, and writes
+  generated GLB candidates only under `tmp/`. The local Hunyuan3D adapter under
+  `model/hunyuan3d/` is plan-first, supports loopback single-image plus offline
+  multiview/texture modes, and records GLB provenance.
 - `source_sheets/`: generated UI/icon/sprite source sheet normalization and
   intake audits before cropping.
 - `crop/`: source-sheet split planning and, later, manual crop-boundary editing.

@@ -3,5 +3,8 @@
   "canvasProjectsRoot": "ai_studio/assets/canvas/projects",
   "canvasLocalCacheRoot": "tmp/ai_studio/canvas_cache",
   "canvasHistoryDepth": 200,
+  "meshyWorkRoot": "tmp/ai_studio/assets/meshy",
+  "meshyCreditReserve": 20,
+  "hunyuan3dWorkRoot": "tmp/ai_studio/assets/hunyuan3d",
   "pythonPath": ".venv"
 }

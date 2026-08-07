@@ -21,6 +21,29 @@ Only source from free/public sources or generate when the library has no fit.
 Store newly accepted models through the asset intake/catalog owners so future games can reuse
 them.
 
+## Meshy Generation
+
+Use the Studio Meshy client only when the lead explicitly asks for a generated
+3D model in the current request and source-first search found no practical fit:
+
+```powershell
+node ai_studio/assets/tools/model/meshy/cli.mjs plan text-preview --prompt "<need>"
+node ai_studio/assets/tools/model/meshy/cli.mjs balance
+```
+
+Planning and balance checks are free. Review the plan with the lead before any
+paid run. A paid request requires `--execute`, exact `--confirm-credits`, and a
+caller-approved `--max-credits`; never infer that approval from a general asset
+task. Prefer the `draft` profile first, inspect the untextured mesh, and refine
+only the accepted preview. When a strong reference exists, prefer image-to-3D
+`draft`/`game` over repeated text attempts. Never launch multiple candidate
+tasks speculatively.
+
+The client requests only GLB, downloads it immediately, deduplicates identical
+requests, and resumes recorded task ids after interruption. Outputs remain in
+`tmp/ai_studio/assets/meshy/` with provenance until reviewed. See
+`ai_studio/assets/tools/model/meshy/README.md` for profiles and the paid gate.
+
 ## Conversion
 
 Prefer vendor-shipped `.glb` when available. Convert OBJ/MTL/FBX only when the
