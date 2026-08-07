@@ -170,7 +170,7 @@ function warn(options, message) {
   else console.warn(`warning: ${message}`);
 }
 
-function scanChildren(root, relParent, kind, visibility, options) {
+function scanChildren(root, relParent, kind, visibility, options, unusable) {
   const parent = join(root, relParent);
   if (!existsSync(parent)) return [];
   const mounts = [];
@@ -187,7 +187,17 @@ function scanChildren(root, relParent, kind, visibility, options) {
       warn(options, `${relRoot}: missing ${kind}.json; skipping incomplete folder`);
       continue;
     }
-    mounts.push(resolveMount(root, relRoot, kind, visibility));
+    // One malformed folder must not take the workspace down with it: an
+    // unrelated broken game would otherwise break every command that only
+    // needed to enumerate the healthy ones. The failure is not lost -- it is
+    // warned here and rethrown by the caller if it IS the requested target.
+    try {
+      mounts.push(resolveMount(root, relRoot, kind, visibility));
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      unusable.push({ root: relRoot, name: entry.name, kind, message });
+      warn(options, `${message}; skipping unusable ${kind} folder`);
+    }
   }
   return mounts;
 }
@@ -223,14 +233,25 @@ function privateMountSelected(mount, options) {
     || (options.activeStoreId && comparable(options.activeStoreId) === comparable(mount.storeId));
 }
 
+/* A folder the scan had to skip stays silent only while nobody asks for it.
+   The moment a caller names that exact folder, its own error is the answer. */
+function assertRequestedTargetUsable(unusable, options) {
+  const wanted = comparable(options.activeGameId || "");
+  if (!wanted) return;
+  const broken = unusable.find((entry) => comparable(entry.name) === wanted);
+  if (broken) throw new Error(broken.message);
+}
+
 export function listWorkspaceMounts(root, options = {}) {
+  const unusable = Array.isArray(options.unusable) ? options.unusable : [];
   const mounts = [
-    ...scanChildren(root, "games", "game", "public", options),
-    ...scanChildren(root, "templates", "template", "public", options),
+    ...scanChildren(root, "games", "game", "public", options, unusable),
+    ...scanChildren(root, "templates", "template", "public", options, unusable),
   ];
   if (options.includePrivate === true || options.activeGameId || options.activeStoreId) {
-    mounts.push(...scanChildren(root, "games/private", "game", "private", options).filter((mount) => privateMountSelected(mount, options)));
+    mounts.push(...scanChildren(root, "games/private", "game", "private", options, unusable).filter((mount) => privateMountSelected(mount, options)));
   }
+  assertRequestedTargetUsable(unusable, options);
   assertUniqueResolved(mounts);
   const kinds = options.kinds ? new Set(options.kinds) : null;
   return mounts

@@ -127,3 +127,40 @@ test("dependency records require exact engine and feature SemVer", (t) => {
     }],
   }), /version.*exact SemVer/i);
 });
+
+test("a malformed folder is skipped with a warning instead of failing the scan", (t) => {
+  const root = fixture(t);
+  identity(root, "games/good-game", "game", "good-game", "Good", "good-game");
+  identity(root, "games/mismatched", "game", "other-id", "Other", "other-id");
+  const warnings = [];
+  const mounts = listWorkspaceMounts(root, { warnings });
+  assert.deepEqual(mounts.map((mount) => mount.id), ["good-game"]);
+  assert.match(warnings[0], /mismatched.*basename must match/i);
+});
+
+test("a private game broken beside the requested one does not hide it", (t) => {
+  const root = fixture(t);
+  identity(root, "games/private/wanted-game", "game", "wanted-game", "Wanted", "wanted-game");
+  identity(root, "games/private/wanted-game-perf", "game", "wanted-game", "Perf copy", "wanted-game-perf");
+  const warnings = [];
+  const [mount] = listWorkspaceMounts(root, { activeGameId: "wanted-game", warnings });
+  assert.equal(mount.root, "games/private/wanted-game");
+  assert.match(warnings[0], /wanted-game-perf.*basename must match/i);
+});
+
+test("asking for a broken folder by name still fails loudly", (t) => {
+  const root = fixture(t);
+  identity(root, "games/private/broken-game", "game", "different-id", "Broken", "different-id");
+  assert.throws(
+    () => listWorkspaceMounts(root, { activeGameId: "broken-game", warnings: [] }),
+    /basename must match identity id/i,
+  );
+});
+
+test("callers can read back exactly which folders were unusable", (t) => {
+  const root = fixture(t);
+  identity(root, "games/mismatched", "game", "other-id", "Other", "other-id");
+  const unusable = [];
+  listWorkspaceMounts(root, { warnings: [], unusable });
+  assert.deepEqual(unusable.map((entry) => entry.root), ["games/mismatched"]);
+});
