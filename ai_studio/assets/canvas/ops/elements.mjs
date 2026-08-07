@@ -61,7 +61,7 @@ export function addImages(root, projectId, { images } = {}) {
     const bytes = Buffer.isBuffer(image.bytes) ? image.bytes : Buffer.from(image.bytes || []);
     if (!bytes.length) throw new Error(`image ${index} (${image.name || "unnamed"}) has empty bytes`);
     imageSize(bytes); // throws on an unsupported/corrupt header
-    return { name: image.name, bytes, x: image.x, y: image.y };
+    return { name: image.name, bytes, x: image.x, y: image.y, meta: image.meta };
   });
   const added = [];
   for (const image of prepared) added.push(storeAddImage(root, projectId, image).element.id);

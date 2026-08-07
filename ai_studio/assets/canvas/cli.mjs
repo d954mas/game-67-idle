@@ -8,8 +8,8 @@
 //   node ai_studio/assets/canvas/cli.mjs show <id>
 //   node ai_studio/assets/canvas/cli.mjs rename <id> --title "New title"
 //   node ai_studio/assets/canvas/cli.mjs delete <id>
-//   node ai_studio/assets/canvas/cli.mjs add-image <id> --file path.png
-//   node ai_studio/assets/canvas/cli.mjs add-images <id> --files a.png,b.png   (batched; one undo)
+//   node ai_studio/assets/canvas/cli.mjs add-image <id> --file path.png [--meta-json provenance.json]
+//   node ai_studio/assets/canvas/cli.mjs add-images <id> --files a.png,b.png [--meta-json provenance.json]   (batched; one undo)
 //   node ai_studio/assets/canvas/cli.mjs add-text <id> [--x n --y n] [--content "..."] [--style-json path] [--group gid]
 //   node ai_studio/assets/canvas/cli.mjs add-note <id> [--x n --y n] [--w n --h n] [--content "..."] [--style-json path] [--background '#rrggbb'|none] [--group gid]   (T0268: sticky-note annotation; fixed clipped box; excluded from renders)
 //   node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
@@ -222,6 +222,25 @@ function parseBool(flag, value) {
   return undefined; // unreachable: fail() exits the process
 }
 
+// Provenance travels WITH the image, not in a note beside it: an element that
+// carries {origin, tool, prompt, refs, license} still answers "where is this
+// from" after the surrounding canvas has been rearranged. Undefined when the
+// flag is absent, so an ordinary import stays untouched.
+function readMetaFlag(flags, command) {
+  const path = flags["meta-json"];
+  if (!path || path === "true") return undefined;
+  let value;
+  try {
+    value = JSON.parse(readFileSync(resolve(path), "utf8"));
+  } catch (error) {
+    fail(`${command} --meta-json: ${error && error.message ? error.message : error}`);
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    fail(`${command} --meta-json must contain a JSON object`);
+  }
+  return value;
+}
+
 // A single ad-hoc export row from inline flags (--scale is the trigger). Returns
 // undefined when no --scale is given, so `export` then honors each element's stored
 // rows and `export-set` demands an explicit source. (T0229: --suffix is gone — export
@@ -260,8 +279,8 @@ function usage() {
   rename <id> --title <title>
   project-set <id> [--title <title>] [--owner-game <gameId|none>] [--archived true|false]
   delete <id>
-  add-image <id> --file <path>
-  add-images <id> --files a.png,b.png   (batched multi-image add; one undo step)
+  add-image <id> --file <path> [--meta-json <path>]   (--meta-json = provenance object stored on the element: {origin, tool, prompt, refs, license})
+  add-images <id> --files a.png,b.png [--meta-json <path>]   (batched multi-image add; one undo step; one --meta-json is stored on every image of the batch)
   add-image-from-file <id> --src <files/hash.png> [--name <name>] [--x <n> --y <n>]   (mint an element from an EXISTING project file; no re-upload, no duplicate bytes)
   add-text <id> [--x <n> --y <n>] [--content "<text>"] [--style-json <path>] [--group <gid>]
   add-note <id> [--x <n> --y <n>] [--w <n> --h <n>] [--content "<text>"] [--style-json <path>] [--background '#rrggbb'|none] [--group <gid>]   (T0268: sticky-note annotation — plain text, fixed box + browser wrap/clip, background fill; excluded from renderGroup/exportProject)
@@ -418,7 +437,8 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
       if (!flags.file) fail("add-image requires --file <path>");
       const filePath = resolve(flags.file);
       const bytes = readFileSync(filePath);
-      return print(addImage(repoRoot, id, { name: basename(filePath), bytes }));
+      const meta = readMetaFlag(flags, "add-image");
+      return print(addImage(repoRoot, id, { name: basename(filePath), bytes, ...(meta ? { meta } : {}) }));
     }
     case "add-images": {
       // Batched multi-image add (one journal entry; one undo restores all) — the CLI
@@ -426,9 +446,12 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
       if (!id) fail("add-images requires <id>");
       if (!flags.files || flags.files === "true") fail("add-images requires --files a.png,b.png");
       const paths = String(flags.files).split(",").map((value) => value.trim()).filter(Boolean);
+      // One --meta-json covers the whole batch: a batch IS one generation run, and
+      // its provenance is the same sentence for every image in it.
+      const meta = readMetaFlag(flags, "add-images");
       const images = paths.map((p) => {
         const filePath = resolve(p);
-        return { name: basename(filePath), bytes: readFileSync(filePath) };
+        return { name: basename(filePath), bytes: readFileSync(filePath), ...(meta ? { meta } : {}) };
       });
       return print(addImages(repoRoot, id, { images }));
     }

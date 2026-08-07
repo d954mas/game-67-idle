@@ -763,3 +763,27 @@ test("cli element-set --w/--h/--x/--y: single-element resize/reposition lands an
   const undone = (await runInProcess(env, "show", projectId)).project.elements[0];
   assert.deepEqual({ w: undone.w, h: undone.h, x: undone.x, y: undone.y }, { w: 8, h: 6, x: 0, y: 0 });
 });
+
+test("cli add-image and add-images store provenance meta on the element", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-meta-"));
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const projectId = (await runInProcess(env, "create", "--title", "Meta")).project.id;
+  const a = join(dir, "a.png");
+  const b = join(dir, "b.png");
+  writeFileSync(a, solidPng(4, 4, [255, 0, 0, 255]));
+  writeFileSync(b, solidPng(4, 4, [0, 255, 0, 255]));
+  const metaPath = join(dir, "meta.json");
+  const meta = { origin: "ai", tool: "codex imagegen", prompt: "one icon", license: "project-owned" };
+  writeFileSync(metaPath, JSON.stringify(meta), "utf8");
+
+  const single = await runInProcess(env, "add-image", projectId, "--file", a, "--meta-json", metaPath);
+  assert.deepEqual(single.element.meta, meta);
+
+  const batch = await runInProcess(env, "add-images", projectId, "--files", `${a},${b}`, "--meta-json", metaPath);
+  assert.equal(batch.elements.length, 2);
+  for (const element of batch.elements) assert.deepEqual(element.meta, meta);
+
+  const plain = await runInProcess(env, "add-image", projectId, "--file", a);
+  assert.deepEqual(plain.element.meta, {});
+});
