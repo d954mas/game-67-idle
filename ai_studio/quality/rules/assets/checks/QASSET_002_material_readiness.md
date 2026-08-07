@@ -38,6 +38,18 @@ player-facing output.
   data is present and not accidentally flat;
 - intentionally flat materials are accepted by the task or lead.
 
+For lookdev or final-direction materials, a node graph or swatch is not enough.
+Inspect a fitted neutral-light surface view, a colored oblique view, the target
+camera and a reduced gameplay-size frame. The evidence must show both intended
+surface response and calm texture scale; a material that disappears at the
+target camera or turns into high-frequency noise remains blocked.
+
+Judge the target and reduced frames independently from the close-up. Also
+compare front and side faces under the same material family: lighting may shape
+them, but one face cannot read as finished plaster while another becomes dirty,
+unrelated mottling. A close-up pass never overrides target-camera disappearance
+or inconsistent surface identity across the asset.
+
 ## Evidence
 
 Source material record, material/texture files, UV/material metadata, manifest
@@ -51,3 +63,5 @@ screenshot, or lead/task note accepting an intentionally flat material.
 - Texture files exist but are not referenced by the prepared/game-use-ready asset.
 - Conversion/prep claims success but material assignment is missing.
 - A flat material is claimed intentional without task or lead acceptance.
+- Shader nodes or numeric parameters exist, but no rendered surface proves that
+  their effect is visible and correctly scaled.

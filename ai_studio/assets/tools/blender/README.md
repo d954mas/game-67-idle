@@ -110,6 +110,31 @@ overlaps cannot be approved safely from AABBs alone. Resolve that check with a
 three-quarter depth/wireframe/internal proof and a written list of allowed
 overlaps. Never turn a broad overlap detector into an automatic pass.
 
+### Component interfaces and architectural joinery
+
+Topology alone cannot prove that separately valid meshes form a credible
+building. Every component-first architectural packet must also declare and
+verify its interfaces:
+
+- use separate `contact` and `clearance` contracts; a positive gap is not a
+  universal success condition;
+- tag legal cross-component mates explicitly and keep undeclared intersections
+  blocking;
+- verify structural/load-path chains such as threshold -> jamb -> impost ->
+  archivolt and console -> slab -> post -> rail;
+- sample the final visible opening and backing, not an earlier proxy hidden
+  behind the component under review;
+- bound repeated-element pitch and require intentional end conditions such as
+  rail returns or lower rails;
+- test profile seating around curved openings with distance/ray/BVH samples;
+- treat coplanar/tangent faces as suspect until an evaluated-mesh check and a
+  depth or section view resolve them.
+
+Blender's mesh validation, BMesh adjacency, ray casting and BVH overlap checks
+support these rules, but cannot decide whether a door reads as a door or a
+balcony is architecturally plausible. Those remain evidence-backed visual
+review claims.
+
 For Boolean architecture:
 
 - prefer one watertight profile cutter over tangent rectangle-plus-ellipse
@@ -128,6 +153,8 @@ contain:
 
 - frontal clay;
 - frontal color;
+- colored three-quarter whenever glass, transparency, clearcoat, anisotropy,
+  layered shading, or another angle-dependent material is under review;
 - three-quarter depth/intersection check;
 - complete approved master frame;
 - grayscale value check;
@@ -136,6 +163,41 @@ contain:
 
 Add wireframe/internal views for handoff or whenever modifiers, roofs, nested
 openings, or intersections are risky. Include a scale figure for architecture.
+
+Component evidence must be fitted to evaluated component bounds rather than
+reusing a whole-assembly camera. Require, at minimum, component `clay_front`,
+`color_front`, `depth_three_quarter`, `wireframe`, and `silhouette` views. Check
+that the silhouette has useful occupancy and nonzero frame margins. A tiny
+component somewhere inside a valid image is not review evidence.
+
+Clay does not validate materials. If a defect appears only under an oblique
+view, the exact colored oblique role must also appear in the contact sheet and
+blind comparison. Review transparent/transmissive surfaces for opaque-wedge,
+world/black-void, sorting-split and detached-edge artifacts; a plausible shader
+parameter is not evidence that the rendered result is plausible.
+
+### Material-response evidence
+
+Shader nodes, material slots, swatches and parameter ranges prove construction,
+not visible material quality. When a lookdev task claims finished plaster,
+stone, brick, wood, metal, glass or roofing, require all of:
+
+- a fitted neutral-light surface view where macro color, roughness and relief
+  response can actually be seen;
+- a colored oblique view for angle-dependent response and edge separation;
+- the approved master frame and reduced gameplay-size frame to reject both
+  accidental flatness and high-frequency noise;
+- a dedicated material reviewer who explicitly judges surface visibility,
+  family separation and texture scale against the reference contract.
+
+A material lane cannot pass because named shader nodes exist. If the claimed
+surface reads as a uniform color at the target camera and flat output was not
+explicitly approved, keep art and material readiness blocked.
+
+Do not infer a hole from one isolated view. A background-colored edge can be an
+object silhouette, while a dark patch can be a recess, missing backing, or
+lighting. Resolve the claim with at least two of: assembly color/ID context,
+three-quarter depth, section/ray evidence, or explicit backing-hit results.
 
 Hash the `.blend` after saving. Every render manifest and audit report must
 carry that same hash. Any later scene save makes the prior evidence stale.
@@ -171,6 +233,14 @@ An approved palette does not approve architecture. A clean topology report does
 not approve style. A close-up does not approve the master frame. Do not average
 these gates into one vague score.
 
+For named-reference lookdev and handoff, the bundle must also carry one complete
+reference-comparison matrix. Each standard dimension needs the criterion taken
+from the approved spec, an observed reference fact, an observed candidate fact,
+the exact render roles used, and a hashed spec citation. Missing dimensions or
+unpaired observations fail closed. Known user rejections remain separate named
+records and require exact-candidate closure evidence; a later generic PASS does
+not erase them.
+
 ## Stage 5 — Independent Verification
 
 Builder self-review runs every loop. Add independent read-only reviewers when:
@@ -189,6 +259,12 @@ Use at least:
 Keep reviewer context independent enough to challenge the builder. Reviewers
 return evidence, severity, and `pass/block/review`, not only taste commentary.
 The lead integrates disagreements and reruns gates after fixes.
+
+Store each independent lane as a separate immutable JSON artifact bound to the
+exact scene hash and the hashes of the images it actually inspected. The
+certificate step may aggregate those artifacts, but must never author a verdict,
+invent reviewer identities, or replace missing reports with hard-coded PASS
+rows. Distinct required lanes need distinct reviewer identities.
 
 If independent agents are unavailable, perform a fresh-context review pass and
 record that reduced independence explicitly.
@@ -211,6 +287,10 @@ Profiles:
 The gate fails closed when references are missing, technical/art checks are not
 `pass`, evidence hashes differ, required renders are absent, independent review
 is missing, or a critical/high finding remains open.
+
+Baseline or reserve promotion is a post-gate operation. The branch ledger must
+receive a passing gate result for that exact scene hash; status text or a
+selection rationale is not sufficient authority.
 
 ## Done And Stop Rules
 
@@ -237,6 +317,35 @@ bevel policies, and a dormer visually overlaid on the roof.
 `blender_scene_audit.py` reproduces that failure and returns `block`. Keep this
 scene report as a regression example; never weaken the gates merely to make the
 old artifact pass.
+
+## Incident Regression — City Square M02 v004 r15
+
+M02 v004 r15 had assigned material families and Noise/Bump nodes, but the Pale
+Ochre facade still read as a uniform fill in the master frame. A roof-focused
+review packet omitted a fitted facade material view and a dedicated material
+review lane, so `QART_001` and `QASSET_002` were incorrectly reported as pass.
+
+Keep the M02 v004 gate regression: it must require explicit material-surface
+and material-scale art checks, fitted facade and colored-oblique renders, a
+distinct material reviewer with named claims, and evidence-bearing quality
+records. Technical shader construction cannot substitute for visual proof.
+
+## Incident Regression — City Square M02 v004 r16
+
+M02 v004 r16 passed topology and three independent report lanes, but the lead
+still found two visible failures: the side roof read as disconnected planes and
+the plaster/stone response disappeared in the approved master frame. The full-
+depth roof had preserved a shallow front-only ridge position, leaving one rear
+plane visually dominant from three-quarter views. The material reviewer judged
+close-up construction without separately proving master, 640-pixel and
+front-versus-side consistency.
+
+Keep this regression fail-closed. A completed architectural roof needs dedicated
+left/right colored side evidence and explicit reviewer claims for continuous
+side planes plus intact eave/ridge read. Finished facade materials need fitted,
+oblique, master-crop and 640-crop evidence, with explicit claims for target-
+camera visibility and front/side consistency. A close-up PASS cannot override a
+flat target frame, and a watertight roof cannot override a broken silhouette.
 
 ## Validation
 

@@ -14,6 +14,15 @@ When a named reference drives gameplay, UI, economy, balance, or final art:
 - create or update the durable deconstruction in the game design folder;
 - include source matrix, observation ledger, borrow/avoid/copy-risk,
   current-build mismatch, and next native screenshot/scenario proof;
+- translate the durable deconstruction into a complete comparison matrix for
+  composition/camera, silhouette/mass, architecture genealogy,
+  scale/proportions, rhythm/exceptions, materials/palette/surface, lighting,
+  detail hierarchy, originality/copy-risk, and completion/scope;
+- record paired observed facts for the reference and current candidate, with
+  exact evidence roles and hashed spec citations; do not replace comparison
+  with a score or feature checklist;
+- keep every lead rejection as a named regression until an exact later
+  candidate closes it with native evidence;
 - do not claim "grounded in refs" unless you can cite at least three labeled
   facts and one current-build mismatch from the durable doc.
 
