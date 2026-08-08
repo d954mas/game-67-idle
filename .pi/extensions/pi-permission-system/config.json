@@ -1,0 +1,58 @@
+{
+  "permission": {
+    "write": "allow",
+    "edit": "allow",
+
+    "bash": {
+      "cd games/*": "allow",
+      "cd ai_studio/*": "allow",
+
+      "node ai_studio/studio.mjs describe*": "allow",
+      "node ai_studio/studio.mjs verify*": "allow",
+      "node ai_studio/architecture_map/validate_map.mjs*": "allow",
+
+      "node ai_studio/taskboard/cli.mjs context*": "allow",
+      "node ai_studio/taskboard/cli.mjs list*": "allow",
+      "node ai_studio/taskboard/cli.mjs show*": "allow",
+      "node ai_studio/taskboard/cli.mjs status*": "allow",
+      "node ai_studio/taskboard/cli.mjs help*": "allow",
+      "node ai_studio/taskboard/cli.mjs validate*": "allow",
+      "node ai_studio/taskboard/cli.mjs new*": "allow",
+      "node ai_studio/taskboard/cli.mjs set*": "allow",
+      "node ai_studio/taskboard/cli.mjs archive*": "ask",
+
+      "cmake -S *": "allow",
+      "cmake --build *": "allow",
+      "cmake --preset *": "allow",
+      "ctest *": "allow",
+      "ninja*": "allow",
+
+      "node tools/game.mjs *": "allow",
+      "node tools/build_web.mjs *": "allow",
+      "node tools/serve_web.mjs *": "allow",
+      "node games/*/tools/*": "allow",
+      "node ai_studio/dev_environment/python_run.mjs *": "allow",
+      "node ../../../ai_studio/dev_environment/python_run.mjs *": "allow",
+
+      "node --test*": "allow",
+      "node *.test.mjs": "allow",
+
+      "git add *": "allow",
+      "git commit -m *": "allow",
+      "git commit --file*": "allow",
+      "git restore --staged *": "allow",
+      "git stash list": "allow",
+
+      "mkdir *": "allow",
+      "touch *": "allow"
+    },
+
+    "skill": {
+      "*": "ask",
+      "grilling": "allow",
+      "research": "allow",
+      "tdd": "allow",
+      "code-review": "allow"
+    }
+  }
+}
