@@ -231,6 +231,38 @@ test("privacy preflight compares only the changed Git view of a parent binary", 
   assert.equal(result.ok, true);
 });
 
+test("privacy preflight ignores a moved submodule pointer", (t) => {
+  const root = fixture(t);
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
+  game(root, "games/private/secret-game", "secret-game", "Secret Title", true);
+
+  // A gitlink is not a file: neither the worktree nor the index holds bytes to
+  // read at that path, so a scanner that treats it as one can never let a
+  // dependency pin move.
+  const dependency = join(root, "external", "dep");
+  mkdirSync(dependency, { recursive: true });
+  execFileSync("git", ["init"], { cwd: dependency, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: dependency });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: dependency });
+  writeFileSync(join(dependency, "engine.txt"), "first\n", "utf8");
+  execFileSync("git", ["add", "engine.txt"], { cwd: dependency });
+  execFileSync("git", ["commit", "-m", "pinned"], { cwd: dependency, stdio: "ignore" });
+
+  execFileSync("git", ["add", ".gitignore", "README.md", "external/dep"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "parent fixture"], { cwd: root, stdio: "ignore" });
+
+  writeFileSync(join(dependency, "engine.txt"), "second\n", "utf8");
+  execFileSync("git", ["commit", "-am", "moved"], { cwd: dependency, stdio: "ignore" });
+  assert.equal(runPrivateGamePreflight(root).ok, true, "unstaged pointer move stays committable");
+
+  execFileSync("git", ["add", "external/dep"], { cwd: root });
+  assert.equal(runPrivateGamePreflight(root).ok, true, "staged pointer move stays committable");
+});
+
 test("preflight CLI reports a tracked token leak", (t) => {
   const root = fixture(t);
   execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });

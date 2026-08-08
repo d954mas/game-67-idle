@@ -264,9 +264,12 @@ function worktreeBinaryView(root, path) {
 function changedTrackedPaths(root, spawnGit) {
   const paths = { worktree: new Set(), index: new Set() };
   const errors = [];
+  // Submodules are excluded because a gitlink names a commit, not bytes: there
+  // is nothing at that path for either scanner to read, and a changed pointer
+  // would otherwise report as an unscannable file and block the commit.
   const commands = [
-    ["worktree", ["diff", "--name-only", "-z", "--diff-filter=ACMR", "--", "."]],
-    ["index", ["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR", "--", "."]],
+    ["worktree", ["diff", "--name-only", "-z", "--diff-filter=ACMR", "--ignore-submodules=all", "--", "."]],
+    ["index", ["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR", "--ignore-submodules=all", "--", "."]],
   ];
   for (const [source, args] of commands) {
     const result = git(root, args, spawnGit);
