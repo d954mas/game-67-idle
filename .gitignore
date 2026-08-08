@@ -31,6 +31,10 @@ ai_studio/studio.config.local.json
 # Private games are nested repositories or junctions under this ignored root.
 games/private/
 
+# Subagent missions and transcripts are local run state, and they quote whatever
+# the run was about — private game ids included.
+.pi-subagents/
+
 # Closed Taskboard bodies are cold history. Pending Markdown stays local until
 # an explicit ZIP seal; sealed ZIP batches remain trackable.
 ai_studio/taskboard/items/archive/pending/
