@@ -86,6 +86,14 @@ explicitly asks for it.
 - Heavy authoring workfiles that are not themselves shipping game assets live
   under the synchronized `<YandexDisk>/gamedev/games/<game-id>/` workspace;
   game repositories keep their scripts, provenance, manifests and hashes.
+- Only the lead creates Taskboard items. An agent does not run
+  `cli.mjs new project|epic|task` and does not write a new item file by hand, in
+  any store. What belongs on the board is the lead's decision about what the
+  project is doing; an agent that adds its own cards is making that decision
+  instead of asking. Propose the work in the reply, name it, and wait.
+  Two things stay allowed: updating an item the lead owns — status, log, closure
+  evidence, quality — which is how work gets reported, and creating items inside
+  `/to-spec` or `/to-tickets`, where the lead invoking the skill IS the request.
 
 ## Source Comments
 

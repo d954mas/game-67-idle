@@ -17,7 +17,7 @@
       "node ai_studio/taskboard/cli.mjs status*": "allow",
       "node ai_studio/taskboard/cli.mjs help*": "allow",
       "node ai_studio/taskboard/cli.mjs validate*": "allow",
-      "node ai_studio/taskboard/cli.mjs new*": "allow",
+      "node ai_studio/taskboard/cli.mjs new*": "ask",
       "node ai_studio/taskboard/cli.mjs set*": "allow",
       "node ai_studio/taskboard/cli.mjs archive*": "ask",
 

@@ -3,6 +3,11 @@
 Source of truth for current work. Detailed protocol:
 `ai_studio/taskboard/task-store-reference.md`.
 
+**Creating items is the lead's, in every store.** `new project`, `new epic` and
+`new task` are lead-only commands; an agent proposes work in its reply and waits.
+`set` is the agent's half of the board — status, log, closure evidence, quality —
+and is how finished work gets reported. The invariant is in `AGENTS.md`.
+
 - Projects: `ai_studio/taskboard/items/projects/`; epics:
   `ai_studio/taskboard/items/epics/`; active tasks:
   `ai_studio/taskboard/items/active/`.

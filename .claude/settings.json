@@ -1,5 +1,12 @@
 {
   "$comment": "Passive profiling uses the native hook_record_fast.exe on Windows; non-Windows hooks are a no-op. Pre+PostToolUse record start/result so `status` derives each command's duration_ms (the native hot path keeps overhead ~1-2ms/call); successful read-only plumbing/search commands are skipped. Records append per-session to tmp/session_profiles/sessions/ for `node ai_studio/core_harness/profiling/status.mjs`. Mirror config for Codex: .codex/hooks.json.",
+  "permissions": {
+    "$comment": "Creating Taskboard items is the lead's call (AGENTS.md, Hard Invariants). Ask rather than deny, so /to-spec and /to-tickets still work -- there the lead invoking the skill is the request.",
+    "ask": [
+      "Bash(node ai_studio/taskboard/cli.mjs new:*)",
+      "Bash(node ai_studio/taskboard/cli.mjs archive:*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
