@@ -471,7 +471,8 @@ def _validate_track_contract(tracks: list[dict[str, Any]]) -> None:
             if mode == "auto":
                 paid = quantity_amounts(row.get(transition))
                 for item_id, amount in granted.items():
-                    if item_id in paid and amount >= paid[item_id]:
+                    # A free level pays nothing, so ANY grant covers it.
+                    if amount >= paid.get(item_id, 0):
                         _fail(
                             "snapshot.track_self_paying",
                             f"an auto track cannot grant back its own price: {item_id}",

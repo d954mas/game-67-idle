@@ -420,6 +420,18 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         self.assertIn(".fractional = NULL,", source)
         self.assertIn(".value_count = 0u,", source)
 
+    def test_rejects_a_column_only_some_track_kinds_own(self) -> None:
+        """Every track carries every column, so a track that does not own one reads a
+        zero indistinguishable from a real value. Refused until ownership exists."""
+        snapshot = items_snapshot(
+            fields=[field("up.rate", "rate", "i64", required_for=["upgrade"])],
+            tracks=[track("a", kind="upgrade"), track("b", kind="milestone")],
+        )
+        args, _out, temp, _game = self.generator_args(snapshot=snapshot)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(SystemExit, "per-track column ownership does not exist"):
+            generator.main(args)
+
     def test_rejects_a_column_that_is_neither_exact_nor_fractional(self) -> None:
         snapshot = items_snapshot(
             fields=[field("up.label", "label", "string", required_for=["upgrade"])]

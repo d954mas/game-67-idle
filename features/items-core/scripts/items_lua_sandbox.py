@@ -979,7 +979,9 @@ return function(raise_internal)
         for _, row in ipairs(track.levels.rows) do
           local granted, paid = cost_amounts(row.grants), cost_amounts(row.cost_to_reach)
           for item_id, amount in raw_pairs(granted) do
-            if paid[item_id] ~= nil and amount >= paid[item_id] then
+            -- A free level pays nothing, so ANY grant covers it: an absent price is
+            -- zero, not an exemption.
+            if amount >= (paid[item_id] or 0) then
               return raise_internal(
                 "track.self_paying",
                 "an auto track cannot grant back its own price: " .. item_id,

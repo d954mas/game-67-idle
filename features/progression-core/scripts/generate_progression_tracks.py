@@ -139,6 +139,18 @@ def track_columns(snapshot: dict[str, Any], tracks: list[dict[str, Any]]) -> lis
         field for field in fields
         if isinstance(field, dict) and any(kind in field.get("required_for", []) for kind in kinds)
     ]
+    # One dictionary serves every track, and a track carries a zero in the slots it
+    # does not own -- indistinguishable from a real zero. Per-track ownership is not
+    # implemented, so a column that only SOME track kinds require is refused here
+    # rather than answered wrongly at runtime.
+    for column in columns:
+        missing = sorted(kinds - set(column.get("required_for", [])))
+        require(
+            not missing,
+            f"column {column.get('member')!r} is required by some track kinds but not by "
+            f"{', '.join(missing)}; a track that does not own a column would read it as a "
+            "plain zero, and per-track column ownership does not exist",
+        )
     members: set[str] = set()
     for column in columns:
         member = column.get("member")
