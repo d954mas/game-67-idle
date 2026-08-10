@@ -10,7 +10,6 @@
 #include "features/items/items.h"
 #include "game_events.h"
 #include "items_state.h"
-#include "items_runtime_test_catalog.h"
 #include "progression_state.h"
 #include "progression_state_events.gen.h"
 
@@ -401,9 +400,6 @@ void test_lazy_allocation_no_gratuitous_records(void) {
 }
 
 int main(void) {
-    if (!items_runtime_test_catalog_bind()) {
-        return 1;
-    }
     game_events_init();
     UNITY_BEGIN();
     RUN_TEST(test_cost_lookup_and_xp_needed);
@@ -421,6 +417,5 @@ int main(void) {
     RUN_TEST(test_lazy_allocation_no_gratuitous_records);
     int result = UNITY_END();
     game_events_shutdown();
-    items_catalog_shutdown();
     return result;
 }

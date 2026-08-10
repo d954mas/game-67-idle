@@ -105,12 +105,11 @@ add_executable(test_progression
     tests/test_progression_catalog.c        # hand-written k_tracks (not .gen.c)
     "${PROGRESSION_CORE_SRC}/progression.c"
     "${PROGRESSION_STATE_GENERATED_SOURCE}" "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"
-    "${ITEMS_CORE_SRC}/items_containers.c" "${ITEMS_CORE_SRC}/items_runtime_package.c"
+    "${ITEMS_CORE_SRC}/items_containers.c" "${ITEMS_CORE_SRC}/items_api.c" "${ITEMS_CATALOG_SOURCE}"
     "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
     "${ITEMS_CORE_SRC}/items_reconcile.c"
     "${GAME_STATE_SRC}/game_state_json.c" "${GAME_EVENTS_SRC}/game_events.c")
-target_include_directories(test_progression PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src ...)
-target_compile_definitions(test_progression PRIVATE ITEMS_RUNTIME_PACKAGE_ENABLED=1)
+target_include_directories(test_progression PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" "${ITEMS_CATALOG_BUILD_DIR}" src ...)
 ```
 
 `test_progression_curve` — golden test over the demo's REAL generated

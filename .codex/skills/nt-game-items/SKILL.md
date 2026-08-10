@@ -56,7 +56,7 @@ history write path; run it only after the matching migration and checks pass.
 1. Use the public ownership API; do not mutate raw items state.
 2. Keep reason tags and new-game seed in the consumer.
 3. Route save-shape and migrations through `nt-game-state-management`.
-4. Bind the packed `items/catalog` blob before save load/reconcile or gameplay.
+4. The generated catalog is compiled in; there is no bind step to sequence.
 5. Run module validation and the consumer's relevant runtime/save tests.
 
 ## Routing

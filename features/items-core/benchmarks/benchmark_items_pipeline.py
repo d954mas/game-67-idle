@@ -29,7 +29,7 @@ BENCHMARK_SOURCES = {
     "benchmark": Path(__file__).resolve(),
     "cli": CLI,
     "evaluator": ROOT / "features" / "items-core" / "scripts" / "items_lua_sandbox.py",
-    "runtime_bind": ROOT / "features" / "items-core" / "benchmarks" / "items_runtime_bind_benchmark.c",
+    "catalog": ROOT / "features" / "items-core" / "scripts" / "items_c_catalog.py",
 }
 LOGICAL_READS = {
     "source": 4,
@@ -230,11 +230,10 @@ def conflict_quality(stderr: bytes) -> dict[str, bool]:
 
 def ratify_backend(
     snapshot: dict[str, Any], build: dict[str, Any], noop: dict[str, Any],
-    runtime: dict[str, Any], *, lupa_version: str,
+    *, lupa_version: str,
 ) -> dict[str, str]:
     evaluator = snapshot.get("evaluator", {})
     changed = noop.get("result", {}).get("changed", {})
-    runtime_result = runtime.get("result", {})
     proven = (
         evaluator.get("module") == "lupa.lua54"
         and evaluator.get("version") == "5.4"
@@ -242,17 +241,14 @@ def ratify_backend(
         and lupa_version == "2.8"
         and build.get("exit_code") == 0 and build.get("result", {}).get("ok") is True
         and noop.get("exit_code") == 0 and noop.get("result", {}).get("ok") is True
-        and changed == {"snapshot": False, "blob": False, "header": False}
-        and runtime.get("exit_code") == 0
-        and runtime_result.get("bind_samples", 0) > 0
-        and runtime_result.get("steady_owned_bytes", 0) > 0
+        and bool(changed) and not any(changed.values())
     )
     return {
         "status": "ratified" if proven else "unresolved",
         "backend": "lupa.lua54",
         "lua": "5.4",
         "package": f"lupa@{lupa_version}",
-        "runtime_format": "compact-blob-v2",
+        "runtime_format": "c-arrays",
     }
 
 
@@ -321,17 +317,6 @@ def _edit_args(patch: dict[str, Any], *, apply: bool = False) -> list[str]:
         arguments.append("--apply")
     return arguments
 
-
-def _runtime_executable(build_dir: Path) -> Path:
-    suffix = ".exe" if os.name == "nt" else ""
-    candidates = [
-        build_dir / "benchmarks" / f"benchmark_items_runtime_bind{suffix}",
-        build_dir / "benchmarks" / "Release" / f"benchmark_items_runtime_bind{suffix}",
-    ]
-    executable = next((path for path in candidates if path.is_file()), None)
-    if executable is None:
-        raise RuntimeError("runtime bind benchmark executable was not produced")
-    return executable
 
 
 def _agent_totals(commands: list[dict[str, Any]]) -> dict[str, int | float]:
@@ -455,21 +440,10 @@ def benchmark(project: Path, edit_project: Path, build_dir: Path, *, warm_runs: 
             raise RuntimeError("returned inverse patch did not restore the temporary source")
         agent.append(_public_measurement(undo, "undo"))
 
-        native_prepare = measure_command([
-            "cmake", "--build", str(build_dir), "--target", "benchmark_items_runtime_bind",
-            "--config", "Release",
-        ])
-        if native_prepare["exit_code"] != 0:
-            message = native_prepare["stderr"].decode("utf-8", errors="replace")
-            raise RuntimeError(f"runtime benchmark build failed: {message}")
-        runtime = measure_command([str(_runtime_executable(build_dir)), str(output_dir / "items.catalog")])
-        runtime_payload = _require_success(runtime, "runtime bind")
-
         build_evidence = {"exit_code": cold_build["exit_code"], "result": cold_build_payload["result"]}
         noop_evidence = {"exit_code": noop_build["exit_code"], "result": noop_build_payload["result"]}
-        runtime_evidence = {"exit_code": runtime["exit_code"], "result": runtime_payload}
         backend = ratify_backend(
-            snapshot, build_evidence, noop_evidence, runtime_evidence,
+            snapshot, build_evidence, noop_evidence,
             lupa_version=importlib.metadata.version("lupa"),
         )
 
@@ -494,10 +468,6 @@ def benchmark(project: Path, edit_project: Path, build_dir: Path, *, warm_runs: 
             },
             "one_edit_apply": next(command for command in agent if command["operation"] == "apply"),
             "one_edit_build": next(command for command in agent if command["operation"] == "build"),
-            "runtime_bind": {
-                **_public_measurement(runtime, "runtime-bind"),
-                **runtime_payload,
-            },
         }
         bottleneck_candidates = {
             "cold evaluate/validate": flows["cold_evaluate_validate"]["wall_ms"],
@@ -506,9 +476,8 @@ def benchmark(project: Path, edit_project: Path, build_dir: Path, *, warm_runs: 
             "no-op build": flows["noop_build"]["wall_ms"],
             "one-edit apply": flows["one_edit_apply"]["wall_ms"],
             "one-edit build": flows["one_edit_build"]["wall_ms"],
-            "runtime bind process": flows["runtime_bind"]["wall_ms"],
         }
-        blob_bytes = (output_dir / "items.catalog").stat().st_size
+        catalog_bytes = (output_dir / "items_catalog.gen.c").stat().st_size
 
     try:
         project_label = str(project.relative_to(ROOT))
@@ -524,7 +493,7 @@ def benchmark(project: Path, edit_project: Path, build_dir: Path, *, warm_runs: 
             "production_project": project_label,
             "items": len(snapshot["items"]), "fields": len(snapshot["fields"]),
             "levels": sum(len(item.get("levels", {}).get("rows", [])) for item in snapshot["items"]),
-            "blob_bytes": blob_bytes,
+            "catalog_source_bytes": catalog_bytes,
         },
         "flows": flows,
         "agent_scenario": {

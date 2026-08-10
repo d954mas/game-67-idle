@@ -1,8 +1,10 @@
 # Items Lua single-source concept — reviewed architecture
 
-Status: accepted architecture, implemented through the E016/T0386 cutover.
-This document records the design rationale; current commands and wiring live in
-the module README and INSTALL manual.
+Status: accepted architecture. The authoring half is current. The runtime
+artifact it describes is not: the compact binary asset was retired and the
+catalog now compiles into the game as typed C. See
+`items_typed_catalog_contract.md` for what the build actually produces, and the
+module README and INSTALL manual for commands and wiring.
 
 ## 1. Product goal
 

@@ -91,10 +91,8 @@ class ItemsCliTests(unittest.TestCase):
             self.assertEqual(process.returncode, 0, process.stderr)
             payload = json.loads(process.stdout)
             self.assertTrue(payload["result"]["ok"])
-            inspected = CLI.package_api.inspect_package(
-                (Path(tmp) / "items.catalog").read_bytes(),
-            )
-            self.assertEqual(inspected["sections"]["items"]["count"], 6)
+            header = (Path(tmp) / "items_catalog.gen.h").read_text(encoding="utf-8")
+            self.assertIn("#define ITEMS_CATALOG_ITEM_COUNT UINT32_C(6)", header)
 
     def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -234,23 +232,18 @@ class ItemsCliTests(unittest.TestCase):
         self.assertEqual(requirements["result"]["schema"], "items.snapshot.requirements.v1")
         self.assertEqual(requirements["result"]["results"], [])
 
-    def test_build_validates_then_writes_snapshot_blob_and_stable_header(self):
-        artifacts = (
-            "items.snapshot.json", "items.catalog", "items_catalog_abi.gen.h",
-            "items_catalog.gen.h", "items_catalog.internal.gen.h",
-            "items_catalog.gen.c", "items_catalog.luau",
-        )
+    def test_build_validates_then_writes_snapshot_and_stable_catalog(self):
         with tempfile.TemporaryDirectory() as tmp:
             first = self.payload("build", "--out-dir", tmp)
             self.assertTrue(first["result"]["ok"])
             self.assertTrue(all(first["result"]["changed"].values()))
             root = Path(tmp)
-            for name in artifacts:
+            for name in ("items.snapshot.json", *CATALOG_OUTPUT_NAMES):
                 self.assertTrue((root / name).is_file(), name)
 
             second = self.payload("build", "--out-dir", tmp)
             self.assertEqual(
-                {"snapshot", "blob", "header", *CATALOG_OUTPUT_NAMES},
+                {"snapshot", *CATALOG_OUTPUT_NAMES},
                 set(second["result"]["changed"]),
             )
             self.assertFalse(any(second["result"]["changed"].values()))

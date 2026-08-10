@@ -1,7 +1,5 @@
 #include "features/items/items.h"
 
-#if defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED
-
 #include "items_catalog.internal.gen.h"
 
 #include "core/nt_assert.h"
@@ -97,10 +95,6 @@ item_cost_entry_t items_cost_at(item_cost_ref_t cost, uint32_t index) {
     return items_catalog_internal_cost_at(cost._opaque, index);
 }
 
-/* The catalog is compiled in, so there is nothing to bind and never a moment
-   where it is absent. */
-bool items_catalog_is_bound(void) { return true; }
-
 uint32_t items_catalog_item_count(void) { return items_catalog_internal_item_count(); }
 
 uint64_t items_catalog_schema_abi(void) { return ITEMS_CATALOG_SCHEMA_ABI; }
@@ -124,5 +118,3 @@ void items_register_debug_labels(void) {
         nt_hash_register_label64((nt_hash64_t){id.value}, items_catalog_internal_def_id(index));
     }
 }
-
-#endif

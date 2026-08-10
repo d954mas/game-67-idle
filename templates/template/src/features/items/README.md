@@ -20,10 +20,9 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root templates/template build --out-dir templates/template/build/items-catalog
 ```
 
-CMake performs the same build into its generated directory, packs the resulting
-blob as `items/catalog`, and compiles the generated ABI header. Runtime startup
-binds that blob before save load/reconcile or gameplay. There is no JSON or
-generated-table fallback.
+CMake performs the same build into its generated directory and compiles the
+resulting `items_catalog.gen.c` into the game. The catalog needs no startup
+step. There is no JSON, blob, or fallback path.
 
 ## Ownership
 

@@ -6,10 +6,10 @@ import test from "node:test";
 const root = resolve(import.meta.dirname, "../..");
 const expected = ["GameAssets.cmake", "GameCodegen.cmake", "GameOptions.cmake", "GamePlatform.cmake", "GameTests.cmake"];
 const requiredTests = {
-  "templates/template": ["test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio", "test_audio_web_library", "test_game_state_json", "test_game_state_nested", "test_game_storage", "test_game_storage_web_backend", "test_game_save_blocked", "test_game_save", "test_game_events", "test_game_events_overflow", "test_game_state_roundtrip", "test_game_events_typed", "test_game_event_render", "test_game_analytics", "test_game_events_log_mirror", "test_items_api_core_only", "test_items_api", "items_c_catalog_test", "test_items_runtime_package", "test_items_runtime_resource", "test_items_fragment", "test_items_fragment_assert_off", "items_catalog_validate", "test_progression", "test_progression_curve", "test_game_format", "test_platform_sdk", "test_game_input", "test_platform_lifecycle", "test_platform_sdk_events", "platform_sdk_node_test", "test_template_composition"],
+  "templates/template": ["test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio", "test_audio_web_library", "test_game_state_json", "test_game_state_nested", "test_game_storage", "test_game_storage_web_backend", "test_game_save_blocked", "test_game_save", "test_game_events", "test_game_events_overflow", "test_game_state_roundtrip", "test_game_events_typed", "test_game_event_render", "test_game_analytics", "test_game_events_log_mirror", "test_items_api_core_only", "test_items_api", "items_c_catalog_test", "test_items_fragment", "test_items_fragment_assert_off", "items_catalog_validate", "test_progression", "test_progression_curve", "test_game_format", "test_platform_sdk", "test_game_input", "test_platform_lifecycle", "test_platform_sdk_events", "platform_sdk_node_test", "test_template_composition"],
 };
 const expectedCustomTargets = {
-  "templates/template": ["game_asset_packs", "items_catalog_gen", "platform_sdk_web_assets", "platform_sdk_playgama_config_asset", "devapi_smoke", "quality_responsive", "items_runtime_package_gen", "items_runtime_benchmark_arrays_gen", "progression_tracks_gen"],
+  "templates/template": ["game_asset_packs", "items_catalog_gen", "platform_sdk_web_assets", "platform_sdk_playgama_config_asset", "devapi_smoke", "quality_responsive", "progression_tracks_gen"],
 };
 
 function declarations(text, expression) {
@@ -53,27 +53,23 @@ test("codegen selects Studio Python by host platform for Emscripten builds", () 
   }
 });
 
-test("template production Items package is generated from the semantic Lua route", () => {
+test("template production Items catalog is generated from the semantic Lua route", () => {
   const text = readFileSync(join(root, "templates", "template", "cmake", "GameCodegen.cmake"), "utf8");
   assert.match(text, /add_custom_target\(items_catalog_gen\b/);
   assert.match(text, /items_cli\.py[\s\S]*--project-root[\s\S]*build[\s\S]*--out-dir/);
   assert.match(text, /items\.lua\.json/);
   assert.match(text, /design\/items\/\*\.lua/);
-  assert.match(text, /items\.snapshot\.json[\s\S]*items\.catalog[\s\S]*items_catalog_abi\.gen\.h/);
+  assert.match(text, /items\.snapshot\.json[\s\S]*items_catalog\.gen\.c/);
 });
 
-test("template game pack consumes the generated Items package once", () => {
-  const conductor = readFileSync(join(root, "templates", "template", "CMakeLists.txt"), "utf8");
+test("template game compiles the generated Items catalog and packs no catalog blob", () => {
+  const codegen = readFileSync(join(root, "templates", "template", "cmake", "GameCodegen.cmake"), "utf8");
   const assets = readFileSync(join(root, "templates", "template", "cmake", "GameAssets.cmake"), "utf8");
   const builder = readFileSync(join(root, "templates", "template", "src", "build_packs.c"), "utf8");
-  assert.ok(
-    conductor.indexOf("include(cmake/GameCodegen.cmake)") < conductor.indexOf("include(cmake/GameAssets.cmake)"),
-    "codegen must publish the package path before GameAssets consumes it",
-  );
-  assert.match(assets, /build_game_packs>\s+"\$\{GAME_PACK_DIR\}"\s+"\$\{ITEMS_CATALOG_PACKAGE\}"/);
-  assert.match(assets, /DEPENDS[\s\S]*"\$\{ITEMS_CATALOG_PACKAGE\}"/);
-  assert.match(builder, /argc\s*!=\s*4/);
-  assert.match(builder, /add_blob_file\(ctx,\s*argv\[2\],\s*"items\/catalog"\)/);
+  assert.match(codegen, /target_sources\(\$\{GAME_TARGET\} PRIVATE[\s\S]*items_api\.c[\s\S]*ITEMS_CATALOG_SOURCE/);
+  assert.match(assets, /build_game_packs>\s+"\$\{GAME_PACK_DIR\}"\s+"\$\{GAME_FONT_SOURCE\}"/);
+  assert.match(builder, /argc\s*!=\s*3/);
+  assert.doesNotMatch(builder, /items\/catalog/);
 });
 
 test("template audio ownership stays in the exact CMake concern files", () => {

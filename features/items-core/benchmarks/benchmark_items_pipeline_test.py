@@ -13,7 +13,7 @@ import unittest
 import benchmark_items_pipeline as BENCHMARK
 
 
-RESULT = Path(__file__).resolve().parent / "results" / "windows-pipeline-2026-07-16.json"
+RESULT = Path(__file__).resolve().parent / "results" / "windows-pipeline-2026-08-10.json"
 
 
 class ItemsPipelineBenchmarkTests(unittest.TestCase):
@@ -37,18 +37,18 @@ class ItemsPipelineBenchmarkTests(unittest.TestCase):
         build = {"exit_code": 0, "result": {"ok": True}}
         noop = {
             "exit_code": 0,
-            "result": {"ok": True, "changed": {"snapshot": False, "blob": False, "header": False}},
+            "result": {"ok": True, "changed": {"snapshot": False, "items_catalog.gen.c": False}},
         }
-        runtime = {"exit_code": 0, "result": {"bind_samples": 9, "steady_owned_bytes": 568}}
-        decision = BENCHMARK.ratify_backend(snapshot, build, noop, runtime, lupa_version="2.8")
+        decision = BENCHMARK.ratify_backend(snapshot, build, noop, lupa_version="2.8")
         self.assertEqual(decision["status"], "ratified")
         self.assertEqual(decision["backend"], "lupa.lua54")
         self.assertEqual(decision["package"], "lupa@2.8")
-        self.assertEqual(decision["runtime_format"], "compact-blob-v2")
+        self.assertEqual(decision["runtime_format"], "c-arrays")
 
-        runtime["result"]["bind_samples"] = 0
+        # A no-op rebuild that still rewrites an artifact is not a settled pipeline.
+        noop["result"]["changed"]["items_catalog.gen.c"] = True
         self.assertEqual(
-            BENCHMARK.ratify_backend(snapshot, build, noop, runtime, lupa_version="2.8")["status"],
+            BENCHMARK.ratify_backend(snapshot, build, noop, lupa_version="2.8")["status"],
             "unresolved",
         )
 

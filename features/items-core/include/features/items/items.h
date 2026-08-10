@@ -5,9 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* ---- Typed catalog API (generated-C proof or runtime package) ---- */
-#if (defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED) || \
-    (defined(ITEMS_RUNTIME_PACKAGE_ENABLED) && ITEMS_RUNTIME_PACKAGE_ENABLED)
+/* ---- Typed catalog API over the generated C catalog ---- */
 typedef struct item_id_t { uint64_t value; } item_id_t;
 typedef struct item_def_ref_t { uint32_t _index; } item_def_ref_t;
 typedef struct item_cost_ref_t { uint32_t _opaque; } item_cost_ref_t;
@@ -47,48 +45,14 @@ uint32_t items_cost_count(item_cost_ref_t cost);
 item_cost_entry_t items_cost_at(item_cost_ref_t cost, uint32_t index);
 void items_register_debug_labels(void);
 
-/* Catalog identity and currency policy; both backends answer these. */
-bool items_catalog_is_bound(void);
+/* Catalog identity, compiled in with the data it describes. */
 uint32_t items_catalog_item_count(void);
 uint64_t items_catalog_schema_abi(void);
 uint64_t items_catalog_content_fingerprint(void);
 bool items_has_currency(item_def_ref_t ref);
 int64_t items_currency_cap(item_def_ref_t ref);
-#endif
 
-#if defined(ITEMS_RUNTIME_PACKAGE_ENABLED) && ITEMS_RUNTIME_PACKAGE_ENABLED
-#include "items_catalog_abi.gen.h"
-
-#ifndef ITEMS_RUNTIME_PACKAGE_MAX_BYTES
-#define ITEMS_RUNTIME_PACKAGE_MAX_BYTES (UINT32_C(64) * UINT32_C(1024) * UINT32_C(1024))
-#endif
-
-typedef enum items_catalog_bind_error_t {
-    ITEMS_CATALOG_BIND_OK = 0,
-    ITEMS_CATALOG_BIND_BAD_HEADER,
-    ITEMS_CATALOG_BIND_BAD_MAGIC,
-    ITEMS_CATALOG_BIND_BAD_VERSION,
-    ITEMS_CATALOG_BIND_ABI_MISMATCH,
-    ITEMS_CATALOG_BIND_CONTENT_MISMATCH,
-    ITEMS_CATALOG_BIND_BAD_LAYOUT,
-    ITEMS_CATALOG_BIND_NO_MEMORY,
-    ITEMS_CATALOG_BIND_ALREADY_BOUND,
-    ITEMS_CATALOG_BIND_RESOURCE_MISSING,
-    ITEMS_CATALOG_BIND_RESOURCE_NOT_READY,
-    ITEMS_CATALOG_BIND_RESOURCE_WRONG_TYPE,
-} items_catalog_bind_error_t;
-
-bool items_catalog_try_bind(
-    const uint8_t *bytes, uint32_t byte_count,
-    items_catalog_bind_error_t *out_error);
-bool items_catalog_try_bind_resource(
-    uint64_t asset_id, items_catalog_bind_error_t *out_error);
-void items_catalog_shutdown(void);
-#endif
-
-#if defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED
 #include "items_catalog.gen.h"
-#endif
 
 /* ---- Runtime containers and owned entries ---- */
 
@@ -239,8 +203,6 @@ items_result_t items_try_stack_remove_from_container(
     items_container_ref_t container, const char *def_id, int64_t count, const char *reason);
 int64_t items_stack_count(items_container_ref_t container, const char *def_id);
 bool items_can_afford(items_container_ref_t container, const char *def_id, int64_t count);
-#if (defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED) || \
-    (defined(ITEMS_RUNTIME_PACKAGE_ENABLED) && ITEMS_RUNTIME_PACKAGE_ENABLED)
 items_result_t items_try_pay_cost(
     item_cost_ref_t cost, items_payment_scope_t scope, const char *reason);
 items_result_t items_try_acquire(
@@ -250,7 +212,6 @@ items_result_t items_try_acquire(
 items_result_t items_try_upgrade_instance(
     item_entry_ref_t entry, uint32_t target_level,
     items_payment_scope_t payment, const char *reason);
-#endif
 
 #if defined(ITEMS_RUNTIME_TESTING) && ITEMS_RUNTIME_TESTING
 void items_test_fail_next_commit(void);

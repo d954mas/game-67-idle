@@ -7,7 +7,6 @@
 #include "features/items/items.h"
 #include "core/nt_assert.h"
 #include "game_events.h"
-#include "items_runtime_test_catalog.h"
 #include "items_state.h"
 #include "items_state_events.gen.h"
 #include "test_helpers/nt_assert_trap.h"
@@ -1434,7 +1433,6 @@ void test_full_audit_log_refuses_split_move_before_id_or_ref_changes(void) {
 }
 
 int main(void) {
-    if (!items_runtime_test_catalog_bind()) { return 1; }
     game_events_init();
     UNITY_BEGIN();
     RUN_TEST(test_empty_nested_state_round_trip);
@@ -1480,6 +1478,5 @@ int main(void) {
     RUN_TEST(test_full_audit_log_refuses_split_move_before_id_or_ref_changes);
     int result = UNITY_END();
     game_events_shutdown();
-    items_catalog_shutdown();
     return result;
 }

@@ -30,21 +30,22 @@ migrations remain game code.
 
 ## Build-local catalog
 
-Generate Snapshot, package, and ABI header through the semantic CLI:
+Generate the Snapshot and the typed C catalog through the semantic CLI:
 
 ```cmake
 set(ITEMS_CATALOG_BUILD_DIR "${CMAKE_BINARY_DIR}/generated/items-catalog")
 set(ITEMS_CATALOG_SNAPSHOT "${ITEMS_CATALOG_BUILD_DIR}/items.snapshot.json")
-set(ITEMS_CATALOG_PACKAGE "${ITEMS_CATALOG_BUILD_DIR}/items.catalog")
-set(ITEMS_CATALOG_ABI_HEADER "${ITEMS_CATALOG_BUILD_DIR}/items_catalog_abi.gen.h")
+set(ITEMS_CATALOG_SOURCE "${ITEMS_CATALOG_BUILD_DIR}/items_catalog.gen.c")
 
 file(GLOB ITEMS_CATALOG_LUA_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/design/items/*.lua")
 add_custom_command(
     OUTPUT
         "${ITEMS_CATALOG_SNAPSHOT}"
-        "${ITEMS_CATALOG_PACKAGE}"
-        "${ITEMS_CATALOG_ABI_HEADER}"
+        "${ITEMS_CATALOG_SOURCE}"
+        "${ITEMS_CATALOG_BUILD_DIR}/items_catalog.gen.h"
+        "${ITEMS_CATALOG_BUILD_DIR}/items_catalog.internal.gen.h"
+        "${ITEMS_CATALOG_BUILD_DIR}/items_catalog.luau"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${ITEMS_CATALOG_BUILD_DIR}"
     COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/items_cli.py"
         --project-root "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -57,20 +58,19 @@ add_custom_command(
     VERBATIM)
 add_custom_target(items_catalog_gen DEPENDS
     "${ITEMS_CATALOG_SNAPSHOT}"
-    "${ITEMS_CATALOG_PACKAGE}"
-    "${ITEMS_CATALOG_ABI_HEADER}")
+    "${ITEMS_CATALOG_SOURCE}")
 ```
 
-Pack `${ITEMS_CATALOG_PACKAGE}` as the blob asset `items/catalog`. Do not copy
-the Snapshot or header into source control.
+Nothing generated here is packed or committed: the catalog is compiled into the
+game like any other source.
 
 ## Runtime wiring
 
 ```cmake
 add_dependencies(${GAME_TARGET} items_catalog_gen)
 target_sources(${GAME_TARGET} PRIVATE
-    "${ITEMS_CORE_SRC}/items_runtime_package.c"
-    "${ITEMS_CORE_SRC}/items_runtime_resource.c"
+    "${ITEMS_CORE_SRC}/items_api.c"
+    "${ITEMS_CATALOG_SOURCE}"
     "${ITEMS_CORE_SRC}/items_containers.c"
     "${ITEMS_CORE_SRC}/items_reconcile.c"
     src/game_items.c)
@@ -80,18 +80,16 @@ target_include_directories(${GAME_TARGET} PRIVATE
     "${GAME_EVENTS_INC}"
     "${GAME_STATE_INC}"
     src)
-target_compile_definitions(${GAME_TARGET} PRIVATE
-    ITEMS_RUNTIME_PACKAGE_ENABLED=1)
 ```
 
 `items_containers.c` emits through `game-events` and marks `game-state` dirty,
 so both modules and their include directories are required runtime dependencies.
 
-After mounting/loading the selected pack, request `items/catalog` as
-`NT_ASSET_BLOB`. Once ready, call `items_catalog_try_bind_resource()`. Only a
-successful bind may be followed by save load/reconcile, feature initialization,
-gameplay, DevAPI state commands, or autosave. Call `items_catalog_shutdown()`
-before `nt_resource_shutdown()`.
+`features/items/items.h` includes the generated `items_catalog.gen.h`, so every
+target that compiles a translation unit reaching that header needs
+`${ITEMS_CATALOG_BUILD_DIR}` on its include path and a dependency on
+`items_catalog_gen`. There is no startup step: the catalog answers from the
+first instruction.
 
 When DevAPI is enabled, compile the game-owned `src/game_items_devapi.c` and
 register it after `nt_devapi_register_default()`. It exposes bounded
@@ -100,10 +98,8 @@ Do not compile or register this adapter when DevAPI is disabled.
 
 ## Tests and release receipt
 
-Use the production Lua catalog in ownership and composition tests. A small test
-loader may read `${ITEMS_CATALOG_PACKAGE}` and call `items_catalog_try_bind()`;
-compile those targets with the same ABI header and
-`ITEMS_RUNTIME_PACKAGE_ENABLED=1`.
+Use the production Lua catalog in ownership and composition tests: link
+`items_api.c` plus `${ITEMS_CATALOG_SOURCE}` exactly as the game target does.
 
 Keep committed catalog validation on ctest:
 
@@ -124,8 +120,8 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli_test.py
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package_test.py
-cmake --build templates/template/build/native-debug --target game test_items_runtime_package test_items_runtime_resource test_items_fragment
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_c_catalog_test.py
+cmake --build templates/template/build/native-debug --target game test_items_api test_items_fragment
 ctest --test-dir templates/template/build/native-debug -R "items|progression|template_composition" --output-on-failure
 ```
 

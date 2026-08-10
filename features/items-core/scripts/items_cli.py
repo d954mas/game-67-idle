@@ -17,7 +17,6 @@ from typing import Any
 import items_c_catalog as catalog_api
 import items_lua_edit as edit_api
 import items_receipt as receipt_api
-import items_runtime_package as package_api
 import items_snapshot as snapshot_api
 
 
@@ -869,23 +868,20 @@ def main(argv: list[str] | None = None) -> int:
             if not validation["ok"]:
                 result = {
                     **validation,
-                    "changed": {"snapshot": False, "blob": False, "header": False},
+                    "changed": {
+                        name: False
+                        for name in ("snapshot", *catalog_api.OUTPUT_NAMES)
+                    },
                 }
                 exit_code = 1
             else:
                 out_dir = Path(args.out_dir).resolve()
                 snapshot_path = out_dir / "items.snapshot.json"
-                blob_path = out_dir / "items.catalog"
-                header_path = out_dir / "items_catalog_abi.gen.h"
-                package = package_api.build_package(snapshot)
-                header = package_api.render_abi_header(snapshot).encode("utf-8")
-                inspected = package_api.inspect_package(package)
+                model = catalog_api.normalize(snapshot)
                 changed = {
-                    "snapshot": package_api.write_if_different(
+                    "snapshot": catalog_api.write_if_different(
                         snapshot_path, snapshot_api.snapshot_json_bytes(snapshot) + b"\n",
                     ),
-                    "blob": package_api.write_if_different(blob_path, package),
-                    "header": package_api.write_if_different(header_path, header),
                     **catalog_api.generate(snapshot, out_dir),
                 }
                 result = {
@@ -893,12 +889,10 @@ def main(argv: list[str] | None = None) -> int:
                     "changed": changed,
                     "outputs": {
                         "snapshot": str(snapshot_path),
-                        "blob": str(blob_path),
-                        "header": str(header_path),
                         **{name: str(out_dir / name) for name in catalog_api.OUTPUT_NAMES},
                     },
-                    "content_fingerprint": inspected["content_fingerprint"],
-                    "schema_abi_fingerprint": inspected["schema_abi_fingerprint"],
+                    "content_fingerprint": f"{model['content_fingerprint']:016x}",
+                    "schema_abi_fingerprint": f"{model['schema_abi']:016x}",
                 }
         print(json.dumps(_result(operation, snapshot, result), ensure_ascii=False, sort_keys=True))
         return exit_code
@@ -912,8 +906,6 @@ def main(argv: list[str] | None = None) -> int:
         message = str(error)
         code, _, detail_message = message.partition(": ")
         detail = {"code": code, "message": detail_message or message}
-    except package_api.PackageFailure as error:
-        detail = {"code": "cli.package", "message": str(error)}
     except edit_api.EditFailure as error:
         message = str(error)
         code, _, detail_message = message.partition(": ")

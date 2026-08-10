@@ -473,132 +473,14 @@ if(NOT EMSCRIPTEN)
     add_test(NAME items_c_catalog_test
         COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/items_c_catalog_test.py")
 
-    # T0365 native proof: bind the exact Python-generated compact package.
-    set(ITEMS_RUNTIME_PACKAGE_DIR "${CMAKE_BINARY_DIR}/generated/items-runtime")
-    set(ITEMS_RUNTIME_PACKAGE_BLOB "${ITEMS_RUNTIME_PACKAGE_DIR}/items.catalog")
-    set(ITEMS_RUNTIME_PACKAGE_HEADER "${ITEMS_RUNTIME_PACKAGE_DIR}/items_catalog_abi.gen.h")
-    set(ITEMS_RUNTIME_PACKAGE_SNAPSHOT "${ITEMS_CORE_DIR}/tests/fixtures/items_runtime_snapshot_v1.json")
-    add_custom_command(
-        OUTPUT "${ITEMS_RUNTIME_PACKAGE_BLOB}" "${ITEMS_RUNTIME_PACKAGE_HEADER}"
-        COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/items_runtime_package.py" build
-            --snapshot "${ITEMS_RUNTIME_PACKAGE_SNAPSHOT}"
-            --out "${ITEMS_RUNTIME_PACKAGE_BLOB}"
-            --header-out "${ITEMS_RUNTIME_PACKAGE_HEADER}"
-        DEPENDS
-            "${ITEMS_CORE_SCRIPTS}/items_runtime_package.py"
-            "${ITEMS_CORE_SCRIPTS}/items_c_identifiers.py"
-            "${ITEMS_RUNTIME_PACKAGE_SNAPSHOT}"
-        COMMENT "Generating compact Items runtime package proof"
-        VERBATIM)
-    add_custom_target(items_runtime_package_gen DEPENDS
-        "${ITEMS_RUNTIME_PACKAGE_BLOB}" "${ITEMS_RUNTIME_PACKAGE_HEADER}")
-    add_executable(test_items_runtime_package
-        tests/test_items_runtime_package.c
-        "${ITEMS_CORE_SRC}/items_runtime_package.c")
-    add_dependencies(test_items_runtime_package items_runtime_package_gen)
-    target_link_libraries(test_items_runtime_package PRIVATE unity nt_hash nt_core)
-    target_include_directories(test_items_runtime_package PRIVATE
-        "${ITEMS_CORE_INC}" "${ITEMS_RUNTIME_PACKAGE_DIR}")
-    target_compile_definitions(test_items_runtime_package PRIVATE
-        ITEMS_RUNTIME_PACKAGE_ENABLED=1
-        ITEMS_RUNTIME_PACKAGE_PATH="${ITEMS_RUNTIME_PACKAGE_BLOB}"
-        _CRT_SECURE_NO_WARNINGS)
-    nt_set_warning_flags(test_items_runtime_package)
-    set_target_properties(test_items_runtime_package PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
-    add_test(NAME test_items_runtime_package COMMAND test_items_runtime_package)
-
-    add_executable(test_items_runtime_resource
-        tests/test_items_runtime_resource.c
-        "${ITEMS_CORE_SRC}/items_runtime_package.c"
-        "${ITEMS_CORE_SRC}/items_runtime_resource.c")
-    add_dependencies(test_items_runtime_resource items_runtime_package_gen)
-    target_link_libraries(test_items_runtime_resource PRIVATE unity nt_hash nt_core)
-    target_include_directories(test_items_runtime_resource PRIVATE
-        "${ITEMS_CORE_INC}" "${ITEMS_RUNTIME_PACKAGE_DIR}" "${ENGINE_DIR}/engine")
-    target_compile_definitions(test_items_runtime_resource PRIVATE
-        ITEMS_RUNTIME_PACKAGE_ENABLED=1
-        ITEMS_RUNTIME_PACKAGE_PATH="${ITEMS_RUNTIME_PACKAGE_BLOB}"
-        NT_INTROSPECT_ENABLED=0
-        _CRT_SECURE_NO_WARNINGS)
-    nt_set_warning_flags(test_items_runtime_resource)
-    set_target_properties(test_items_runtime_resource PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
-    add_test(NAME test_items_runtime_resource COMMAND test_items_runtime_resource)
-
-    # Both benchmark candidates share one public API and now one fixture: the
-    # array candidate compiles the same Snapshot the blob candidate binds.
-    set(ITEMS_RUNTIME_BENCHMARK_DIR "${CMAKE_BINARY_DIR}/generated/items-runtime-benchmark")
-    add_custom_command(
-        OUTPUT
-            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.gen.h"
-            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.internal.gen.h"
-            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.gen.c"
-            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.luau"
-        COMMAND "${Python3_EXECUTABLE}" "${ITEMS_C_CATALOG_SCRIPT}"
-            --snapshot "${ITEMS_RUNTIME_PACKAGE_SNAPSHOT}"
-            --out-dir "${ITEMS_RUNTIME_BENCHMARK_DIR}"
-        DEPENDS ${ITEMS_C_CATALOG_SCRIPT_SOURCES} "${ITEMS_RUNTIME_PACKAGE_SNAPSHOT}"
-        COMMENT "Generating C-array Items runtime benchmark candidate"
-        VERBATIM)
-    add_custom_target(items_runtime_benchmark_arrays_gen DEPENDS
-        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.gen.h"
-        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.internal.gen.h"
-        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.gen.c"
-        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.luau")
-
-    add_executable(benchmark_items_c_arrays
-        "${ITEMS_CORE_DIR}/benchmarks/items_runtime_candidate.c"
-        "${ITEMS_CORE_SRC}/items_api.c"
-        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.gen.c")
-    add_dependencies(benchmark_items_c_arrays items_runtime_benchmark_arrays_gen)
-    target_link_libraries(benchmark_items_c_arrays PRIVATE nt_hash nt_core nt_time)
-    target_include_directories(benchmark_items_c_arrays PRIVATE
-        "${ITEMS_CORE_INC}" "${ITEMS_RUNTIME_BENCHMARK_DIR}")
-    target_compile_definitions(benchmark_items_c_arrays PRIVATE
-        ITEMS_GAME_API_ENABLED=1 ITEMS_BENCHMARK_RUNTIME=0 _CRT_SECURE_NO_WARNINGS)
-    nt_set_warning_flags(benchmark_items_c_arrays)
-    set_target_properties(benchmark_items_c_arrays PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/benchmarks")
-
-    add_executable(benchmark_items_runtime_blob
-        "${ITEMS_CORE_DIR}/benchmarks/items_runtime_candidate.c"
-        "${ITEMS_CORE_SRC}/items_runtime_package.c")
-    add_dependencies(benchmark_items_runtime_blob items_runtime_package_gen)
-    target_link_libraries(benchmark_items_runtime_blob PRIVATE nt_hash nt_core nt_time)
-    target_include_directories(benchmark_items_runtime_blob PRIVATE
-        "${ITEMS_CORE_INC}" "${ITEMS_RUNTIME_PACKAGE_DIR}")
-    target_compile_definitions(benchmark_items_runtime_blob PRIVATE
-        ITEMS_RUNTIME_PACKAGE_ENABLED=1 ITEMS_BENCHMARK_RUNTIME=1
-        ITEMS_RUNTIME_PACKAGE_PATH="${ITEMS_RUNTIME_PACKAGE_BLOB}"
-        _CRT_SECURE_NO_WARNINGS)
-    nt_set_warning_flags(benchmark_items_runtime_blob)
-    set_target_properties(benchmark_items_runtime_blob PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/benchmarks")
-
-    add_executable(benchmark_items_runtime_bind
-        "${ITEMS_CORE_DIR}/benchmarks/items_runtime_bind_benchmark.c"
-        "${ITEMS_CORE_SRC}/items_runtime_package.c")
-    add_dependencies(benchmark_items_runtime_bind items_catalog_gen)
-    target_link_libraries(benchmark_items_runtime_bind PRIVATE nt_hash nt_core nt_time)
-    target_include_directories(benchmark_items_runtime_bind PRIVATE
-        "${ITEMS_CORE_INC}" "${ITEMS_CATALOG_BUILD_DIR}")
-    target_compile_definitions(benchmark_items_runtime_bind PRIVATE
-        ITEMS_RUNTIME_PACKAGE_ENABLED=1 _CRT_SECURE_NO_WARNINGS)
-    nt_set_warning_flags(benchmark_items_runtime_bind)
-    set_target_properties(benchmark_items_runtime_bind PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/benchmarks")
-
+    # Ownership tests link the same generated catalog the game compiles.
     function(configure_items_runtime_catalog_test target_name)
         add_dependencies(${target_name} items_catalog_gen)
         target_sources(${target_name} PRIVATE
-            tests/items_runtime_test_catalog.c
-            "${ITEMS_CORE_SRC}/items_runtime_package.c")
+            "${ITEMS_CORE_SRC}/items_api.c"
+            "${ITEMS_CATALOG_SOURCE}")
         target_include_directories(${target_name} PRIVATE
             tests "${ITEMS_CATALOG_BUILD_DIR}")
-        target_compile_definitions(${target_name} PRIVATE
-            ITEMS_RUNTIME_PACKAGE_ENABLED=1
-            ITEMS_RUNTIME_PACKAGE_PATH="${ITEMS_CATALOG_PACKAGE}")
     endfunction()
 
     # Items fragment round-trip links generated state/events, game-owned hooks,
@@ -684,10 +566,12 @@ if(NOT EMSCRIPTEN)
     add_executable(test_progression_curve
         tests/test_progression_curve.c
         "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c")
+    add_dependencies(test_progression_curve items_catalog_gen)
     target_link_libraries(test_progression_curve PRIVATE unity)
     # Both module include roots are required because progression.h includes
-    # features/items/items.h; keep both on this target.
-    target_include_directories(test_progression_curve PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" src "${GAME_SOURCE_GENERATED_DIR}")
+    # features/items/items.h, which in turn includes the generated catalog
+    # header; keep all three on this target.
+    target_include_directories(test_progression_curve PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" src "${GAME_SOURCE_GENERATED_DIR}" "${ITEMS_CATALOG_BUILD_DIR}")
     target_compile_definitions(test_progression_curve PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_progression_curve PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_progression_curve COMMAND test_progression_curve)
@@ -890,9 +774,8 @@ if(NOT EMSCRIPTEN)
         test_game_events test_game_events_overflow test_game_state_roundtrip
         test_game_events_typed test_game_event_render test_game_analytics
         test_game_events_log_mirror test_items_api_core_only
-        test_items_api test_items_runtime_package test_items_runtime_resource
+        test_items_api
         test_items_fragment test_items_fragment_assert_off test_progression test_progression_curve
-        benchmark_items_c_arrays benchmark_items_runtime_blob benchmark_items_runtime_bind
         test_game_format test_loc_e2e test_platform_sdk test_game_input test_platform_lifecycle
         test_platform_sdk_events test_template_composition
         test_scenes_core_catalog test_scenes_core_lifecycle

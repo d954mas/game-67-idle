@@ -12,31 +12,25 @@ set(Python3_EXECUTABLE "${STUDIO_PYTHON}" CACHE FILEPATH "Studio root venv Pytho
 find_package(Python3 3.12 EXACT COMPONENTS Interpreter REQUIRED)
 
 # Production Items export. Lua is evaluated once through the semantic CLI,
-# which owns receipt validation, Snapshot normalization, and compact-package
-# encoding. The generated files stay build-local until the pack step consumes
-# the blob.
+# which owns receipt validation, Snapshot normalization, and C catalog
+# generation. The generated files stay build-local and compile into the game.
 set(ITEMS_CATALOG_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/items.lua.json")
 file(GLOB ITEMS_CATALOG_LUA_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/design/items/*.lua")
 set(ITEMS_CATALOG_BUILD_DIR "${CMAKE_BINARY_DIR}/generated/items-catalog")
 set(ITEMS_CATALOG_SNAPSHOT "${ITEMS_CATALOG_BUILD_DIR}/items.snapshot.json")
-set(ITEMS_CATALOG_PACKAGE "${ITEMS_CATALOG_BUILD_DIR}/items.catalog")
-set(ITEMS_CATALOG_ABI_HEADER "${ITEMS_CATALOG_BUILD_DIR}/items_catalog_abi.gen.h")
 set(ITEMS_CATALOG_SOURCE "${ITEMS_CATALOG_BUILD_DIR}/items_catalog.gen.c")
 set(ITEMS_CATALOG_BUILD_SCRIPTS
     "${ITEMS_CORE_SCRIPTS}/items_cli.py"
     "${ITEMS_CORE_SCRIPTS}/items_lua_edit.py"
     "${ITEMS_CORE_SCRIPTS}/items_lua_sandbox.py"
     "${ITEMS_CORE_SCRIPTS}/items_receipt.py"
-    "${ITEMS_CORE_SCRIPTS}/items_runtime_package.py"
     "${ITEMS_CORE_SCRIPTS}/items_snapshot.py"
     "${ITEMS_CORE_SCRIPTS}/items_c_identifiers.py"
     "${ITEMS_CORE_SCRIPTS}/items_c_catalog.py")
 add_custom_command(
     OUTPUT
         "${ITEMS_CATALOG_SNAPSHOT}"
-        "${ITEMS_CATALOG_PACKAGE}"
-        "${ITEMS_CATALOG_ABI_HEADER}"
         "${ITEMS_CATALOG_SOURCE}"
         "${ITEMS_CATALOG_BUILD_DIR}/items_catalog.gen.h"
         "${ITEMS_CATALOG_BUILD_DIR}/items_catalog.internal.gen.h"
@@ -52,19 +46,16 @@ add_custom_command(
         "${CMAKE_CURRENT_SOURCE_DIR}/state/items.schema.json"
         ${ITEMS_CATALOG_BUILD_SCRIPTS}
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMENT "Generating Items Snapshot and compact runtime package from Lua"
+    COMMENT "Generating Items Snapshot and typed C catalog from Lua"
     VERBATIM)
 add_custom_target(items_catalog_gen DEPENDS
     "${ITEMS_CATALOG_SNAPSHOT}"
-    "${ITEMS_CATALOG_PACKAGE}"
-    "${ITEMS_CATALOG_ABI_HEADER}"
     "${ITEMS_CATALOG_SOURCE}")
 add_dependencies(${GAME_TARGET} items_catalog_gen)
 target_sources(${GAME_TARGET} PRIVATE
-    "${ITEMS_CORE_SRC}/items_runtime_package.c"
-    "${ITEMS_CORE_SRC}/items_runtime_resource.c")
+    "${ITEMS_CORE_SRC}/items_api.c"
+    "${ITEMS_CATALOG_SOURCE}")
 target_include_directories(${GAME_TARGET} PRIVATE "${ITEMS_CATALOG_BUILD_DIR}")
-target_compile_definitions(${GAME_TARGET} PRIVATE ITEMS_RUNTIME_PACKAGE_ENABLED=1)
 
 # И3a: progression tracks content codegen is separate from the game-state
 # generator below. It bakes content/progression.json's curve presets

@@ -30,8 +30,8 @@ if(NOT EMSCRIPTEN)
         OUTPUT "${GAME_PACK_DIR}/game.ntpack" "${CMAKE_CURRENT_SOURCE_DIR}/src/generated/game_assets.h"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_PACK_DIR}"
         COMMAND $<TARGET_FILE:build_game_packs>
-            "${GAME_PACK_DIR}" "${ITEMS_CATALOG_PACKAGE}" "${GAME_FONT_SOURCE}"
-        DEPENDS build_game_packs src/build_packs.c "${ITEMS_CATALOG_PACKAGE}"
+            "${GAME_PACK_DIR}" "${GAME_FONT_SOURCE}"
+        DEPENDS build_game_packs src/build_packs.c
             "${GAME_FONT_SOURCE}" ${GAME_PACK_SOURCE_ASSETS}
             assets/audio/sfx/ui_click.wav assets/audio/music/demo_jingle.mp3
             # The font atlas is subset to the corpus, so a string edit must

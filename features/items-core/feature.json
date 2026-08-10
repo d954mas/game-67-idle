@@ -5,7 +5,7 @@
   "title": "Items Core",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
-  "summary": "In-place L1 module: deterministic Lua item declarations, compact runtime catalog, ownership operations, and focused tooling.",
+  "summary": "In-place L1 module: deterministic Lua item declarations, a generated typed C catalog, ownership operations, and focused tooling.",
   "copy_model": "in-place",
   "layer": "L1",
   "owners": [
@@ -17,7 +17,7 @@
     "game-events",
     "game-state",
     "a game-local items.lua.json manifest plus allowlisted Lua modules",
-    "template or game C runtime using the generated items/catalog package + generated ABI header + generated items save fragment (features/game-state)",
+    "template or game C runtime compiling the generated items catalog + generated items save fragment (features/game-state)",
     "the consuming game's own src/features/items/reason_tags.h (closed reason-verb list, resolved via the game's include path)"
   ],
   "commands": {
@@ -40,10 +40,7 @@
     "semantic_cli": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> <operation>",
     "semantic_cli_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli_test.py",
     "semantic_cli_benchmark": "node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/benchmark_items_cli.py --project-root <game-root> --out <result.json>",
-    "pipeline_benchmark": "node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/benchmark_items_pipeline.py --build-dir <release-build-dir> --out <result.json>",
-    "runtime_package": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package.py build --snapshot <snapshot.json> --out <items.catalog> --header-out <items_catalog_abi.gen.h>",
-    "runtime_package_verify": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package.py verify --snapshot <snapshot.json> --blob <items.catalog> --header <items_catalog_abi.gen.h>",
-    "runtime_package_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package_test.py"
+    "pipeline_benchmark": "node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/benchmark_items_pipeline.py --build-dir <release-build-dir> --out <result.json>"
   },
   "manuals": {
     "install": "features/items-core/INSTALL.md",
@@ -55,9 +52,7 @@
     "items.snapshot.v1 JSON",
     "items.snapshot.chart.v1 JSON",
     "items.snapshot.requirements.v1 JSON",
-    "items.snapshot.diff.v1 JSON",
-    "items/catalog compact runtime package v2",
-    "items_catalog_abi.gen.h"
+    "items.snapshot.diff.v1 JSON"
   ],
   "catalog_outputs": [
     "items_catalog.gen.h",
@@ -68,8 +63,8 @@
   "registers": {
     "note": "Describes the EXISTING wiring in templates/template/CMakeLists.txt (target_sources/ctest) -- items-core is an in-place module (precedent features/game-state), not an install-script target. This section documents the consuming game's provisioning, it does not perform it.",
     "target_sources": [
-      "${ITEMS_CORE_SRC}/items_runtime_package.c",
-      "${ITEMS_CORE_SRC}/items_runtime_resource.c",
+      "${ITEMS_CORE_SRC}/items_api.c",
+      "${ITEMS_CATALOG_SOURCE}",
       "${ITEMS_CORE_SRC}/items_containers.c",
       "${ITEMS_CORE_SRC}/items_reconcile.c"
     ],
@@ -83,7 +78,6 @@
       "items_catalog_validate",
       "test_items_api_core_only",
       "test_items_api",
-      "test_items_runtime_package",
       "items_c_catalog_test"
     ]
   },

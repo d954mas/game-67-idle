@@ -66,7 +66,7 @@ static int compare_id_index(const void *lhs_ptr, const void *rhs_ptr) {
 static bool lookup_item(const char *def_id, item_def_ref_t *out_ref, item_core_t *out_core) {
     item_def_ref_t ref;
     if (def_id == NULL || def_id[0] == '\0' || strlen(def_id) >= ITEMS_STATE_STRING_MAX ||
-        !items_catalog_is_bound() || !items_try_get_string(def_id, &ref)) {
+        !items_try_get_string(def_id, &ref)) {
         return false;
     }
     if (out_ref != NULL) { *out_ref = ref; }

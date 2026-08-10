@@ -14,6 +14,6 @@ void items_reconcile(void) {
         ItemsItemEntry *entry = &items_state.containers_entries[i];
         if (!entry->used) { continue; }
         item_def_ref_t def;
-        entry->quarantined = !items_catalog_is_bound() || !items_try_get_string(entry->def_id, &def);
+        entry->quarantined = !items_try_get_string(entry->def_id, &def);
     }
 }

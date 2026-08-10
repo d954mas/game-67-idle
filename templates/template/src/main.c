@@ -98,7 +98,6 @@ static nt_font_t s_font;
 static nt_resource_t s_text_vs, s_text_fs, s_font_resource;
 static nt_resource_t s_mesh_vs, s_mesh_fs, s_cube;
 static nt_resource_t s_tex_vs, s_tex_fs, s_uv_texture;
-static nt_resource_t s_items_catalog_resource;
 static World s_world;
 static game_input_frame_t s_input;
 static char s_capture_path[260];
@@ -348,29 +347,21 @@ static void game_runtime_try_start(void) {
 
     const nt_pack_state_t pack_state = nt_resource_pack_state(s_pack_id);
     if (pack_state == NT_PACK_STATE_FAILED) {
-        game_runtime_fail("items catalog pack failed to load", (int)pack_state);
+        game_runtime_fail("game asset pack failed to load", (int)pack_state);
         return;
     }
-    if (!nt_resource_is_ready(s_items_catalog_resource)) {
-        if (pack_state == NT_PACK_STATE_READY) {
-            game_runtime_fail("items/catalog is missing or not a ready blob", (int)pack_state);
-        }
+    if (pack_state != NT_PACK_STATE_READY) {
         return;
     }
 
-    items_catalog_bind_error_t bind_error = ITEMS_CATALOG_BIND_OK;
-    if (!items_catalog_try_bind_resource(rid("items/catalog").value, &bind_error)) {
-        game_runtime_fail("items catalog bind failed", (int)bind_error);
-        return;
-    }
     char seed_error[128] = {0};
     if (!game_items_validate_default_seed(seed_error, (int)sizeof seed_error)) {
         game_runtime_fail(seed_error[0] ? seed_error : "items seed contract is incompatible", 0);
         return;
     }
 
-    /* Catalog binding is the startup barrier: save reconciliation and every
-       feature that can query Items run only after this point. */
+    /* A ready pack is the startup barrier: save reconciliation and every
+       feature that reads content run only after this point. */
     game_runtime_load_state();
     /* The persisted language reaches the string table only here: both load
        paths above leave settings_state populated, and every accessor before
@@ -620,7 +611,6 @@ int main(int argc, char **argv) {
     nt_resource_mount(s_pack_id, 100);
     nt_resource_load_auto(s_pack_id, GAME_ASSET_PACK_PATH);
     nt_resource_set_activate_time_budget(0);
-    s_items_catalog_resource = nt_resource_request(rid("items/catalog"), NT_ASSET_BLOB);
 
     s_text_vs = nt_resource_request(rid("assets/shaders/slug_text.vert"), NT_ASSET_SHADER_CODE);
     s_text_fs = nt_resource_request(rid("assets/shaders/slug_text.frag"), NT_ASSET_SHADER_CODE);
@@ -687,7 +677,6 @@ int main(int argc, char **argv) {
     nt_font_shutdown();
     nt_material_destroy(s_text_material);
     nt_material_shutdown();
-    items_catalog_shutdown();
     nt_resource_shutdown();
     nt_fs_shutdown();
     nt_http_shutdown();
