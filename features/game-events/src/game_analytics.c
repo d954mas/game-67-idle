@@ -48,7 +48,7 @@
 
 /* ---- config (#define with defaults; overridable per-game / by the ctest) ---- */
 #ifndef GAME_ANALYTICS_LINE_MAX /* cap of one rendered line (== E3 tail entry) */
-#define GAME_ANALYTICS_LINE_MAX 512
+#define GAME_ANALYTICS_LINE_MAX GAME_EVENT_RENDER_LINE_MAX
 #endif
 #ifndef GAME_ANALYTICS_BUF_BYTES /* accumulating line buffer */
 #define GAME_ANALYTICS_BUF_BYTES (16u * 1024u)

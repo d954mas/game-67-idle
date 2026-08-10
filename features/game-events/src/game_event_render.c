@@ -7,6 +7,7 @@
 #include <string.h> /* memcpy, memchr, strlen */
 
 #include "cJSON.h"
+#include "core/nt_assert.h"  /* NT_ASSERT on the line budget */
 #include "hash/nt_hash.h"    /* nt_hash64_label */
 
 /* Read of `width` bytes at `off` is legal only if the whole word fits in `size`.
@@ -174,19 +175,34 @@ static void render_add_records(cJSON *root, const game_event_record_t *r, const 
     }
 }
 
+static cJSON *render_build(const game_event_t *e, const game_event_desc_t *desc, const char *tname) {
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        return NULL;
+    }
+    cJSON_AddNumberToObject(root, "seq", (double)e->seq);
+    cJSON_AddNumberToObject(root, "tick", (double)e->tick);
+    cJSON_AddStringToObject(root, "type", tname);
+    if (!desc) {
+        cJSON_AddNumberToObject(root, "size", (double)e->size);
+        cJSON_AddBoolToObject(root, "unknown", true);
+        render_add_hex(root, (const uint8_t *)e->payload, e->size);
+        return root;
+    }
+    const uint8_t *base = (const uint8_t *)e->payload;
+    for (int i = 0; i < desc->field_count; ++i) {
+        render_add_field(root, &desc->fields[i], base, e->size);
+    }
+    for (int i = 0; i < desc->record_count; ++i) {
+        render_add_records(root, &desc->records[i], base, e->size);
+    }
+    return root;
+}
+
 int game_event_render(const game_event_t *e, const game_event_desc_t *desc, char *out, int cap) {
     if (!out || cap <= 0) {
         return 0;
     }
-
-    cJSON *root = cJSON_CreateObject();
-    if (!root) {
-        (void)snprintf(out, (size_t)cap, "{}");
-        return (cap > 2) ? 2 : (cap - 1);
-    }
-
-    cJSON_AddNumberToObject(root, "seq", (double)e->seq);
-    cJSON_AddNumberToObject(root, "tick", (double)e->tick);
 
     char hexn[19];
     const char *tname = desc ? desc->name : nt_hash64_label(e->type);
@@ -194,53 +210,27 @@ int game_event_render(const game_event_t *e, const game_event_desc_t *desc, char
         (void)snprintf(hexn, sizeof hexn, "0x%016" PRIx64, e->type.value);
         tname = hexn;
     }
-    cJSON_AddStringToObject(root, "type", tname);
 
-    if (!desc) {
-        cJSON_AddNumberToObject(root, "size", (double)e->size);
-        cJSON_AddBoolToObject(root, "unknown", true);
-        render_add_hex(root, (const uint8_t *)e->payload, e->size);
-    } else {
-        const uint8_t *base = (const uint8_t *)e->payload;
-        for (int i = 0; i < desc->field_count; ++i) {
-            render_add_field(root, &desc->fields[i], base, e->size);
-        }
-        for (int i = 0; i < desc->record_count; ++i) {
-            render_add_records(root, &desc->records[i], base, e->size);
-        }
+    cJSON *root = render_build(e, desc, tname);
+    if (!root) {
+        (void)snprintf(out, (size_t)cap, "{}");
+        return (cap > 2) ? 2 : (cap - 1);
     }
 
-    int written = 0;
     char *s = cJSON_PrintUnformatted(root);
     const int len = s ? (int)strlen(s) : -1;
+    /* A line that does not fit is a budget bug, not a runtime condition: the caller's
+       buffer must be GAME_EVENT_RENDER_LINE_MAX, which covers the largest event the
+       emit path will accept. There is no degraded line to fall back to -- a marker
+       nobody can parse the payment out of is worse than a stop. */
+    NT_ASSERT(s && len < cap && "event render exceeds the line budget");
+    int written = 0;
     if (s && len < cap) {
         memcpy(out, s, (size_t)len + 1u);
         written = len;
     } else {
-        /* Truncated fallback: a fresh { seq, tick, type, truncated:true } is guaranteed
-           valid JSON (the ring/handler re-parses every slot, so it must parse). */
-        cJSON *t = cJSON_CreateObject();
-        char *ts = NULL;
-        int tlen = -1;
-        if (t) {
-            cJSON_AddNumberToObject(t, "seq", (double)e->seq);
-            cJSON_AddNumberToObject(t, "tick", (double)e->tick);
-            cJSON_AddStringToObject(t, "type", tname);
-            cJSON_AddBoolToObject(t, "truncated", true);
-            ts = cJSON_PrintUnformatted(t);
-            tlen = ts ? (int)strlen(ts) : -1;
-        }
-        if (ts && tlen < cap) {
-            memcpy(out, ts, (size_t)tlen + 1u);
-            written = tlen;
-        } else {
-            (void)snprintf(out, (size_t)cap, "{}");
-            written = (cap > 2) ? 2 : (cap - 1);
-        }
-        if (ts) {
-            cJSON_free(ts);
-        }
-        cJSON_Delete(t);
+        (void)snprintf(out, (size_t)cap, "{}");
+        written = (cap > 2) ? 2 : (cap - 1);
     }
     if (s) {
         cJSON_free(s);

@@ -27,8 +27,8 @@
 #ifndef GAME_EVENTS_TAIL_RING_CAP /* design section 4: N=256 */
 #define GAME_EVENTS_TAIL_RING_CAP 256
 #endif
-#ifndef GAME_EVENTS_TAIL_ENTRY_MAX /* design section 4: <=512B with slice-marker */
-#define GAME_EVENTS_TAIL_ENTRY_MAX 512
+#ifndef GAME_EVENTS_TAIL_ENTRY_MAX
+#define GAME_EVENTS_TAIL_ENTRY_MAX GAME_EVENT_RENDER_LINE_MAX
 #endif
 #ifndef GAME_EVENTS_DESC_REG_CAP /* max registered descriptors */
 #define GAME_EVENTS_DESC_REG_CAP 64

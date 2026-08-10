@@ -9,6 +9,14 @@
 #define GAME_EVENT_RENDER_HEX_MAX 48
 #endif
 
+/* The line budget every consumer of game_event_render must give it. Sized against
+   GAME_EVENT_EMIT_MAX rather than against today's longest event: a repeated section
+   makes the rendered length content-driven, so a budget tuned to one schema would be
+   a landmine for the next. Not fitting is an assert, so this number has to hold. */
+#ifndef GAME_EVENT_RENDER_LINE_MAX
+#define GAME_EVENT_RENDER_LINE_MAX 4096
+#endif
+
 /* Renders ONE event to a compact JSON object string in out[0..cap) (NUL-terminated).
    desc==NULL => unregistered/raw event: { seq, tick, type, size, unknown:true, hex }.
    Positional-independent: string/bytes read via payload-relative offsets from the
@@ -23,9 +31,10 @@
    Type name: desc->name if desc, else nt_hash64_label(e->type) if non-NULL, else
    "0x%016<PRIx64>" hex. hash-FIELD values: nt_hash64_label else hex. bytes fields:
    { "size":N, "hex":"..." } (DevAPI shows size+hex; hex truncated to fit).
-   If the full render would exceed cap, emits a valid minimal
-   { seq, tick, type, truncated:true } instead (the ring's <=512B slice-marker).
-   ALWAYS writes well-formed JSON. Returns the written length (< cap). */
+   `cap` must be GAME_EVENT_RENDER_LINE_MAX. A render that does not fit asserts:
+   there is no degraded line, because a marker nobody can read the payment out of
+   is worse than a stop, and an event too big to render is one the emit path
+   should have refused. Returns the written length (< cap). */
 int game_event_render(const game_event_t *e, const game_event_desc_t *desc, char *out, int cap);
 
 #endif /* GAME_EVENT_RENDER_H */

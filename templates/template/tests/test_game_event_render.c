@@ -138,9 +138,9 @@ static void test_unknown_render(void) {
     cJSON_Delete(root);
 }
 
-/* 4. truncation: long string overflows the cap; small cap forces the fallback. Both stay
-   valid JSON; the fallback carries truncated:true. */
-static void test_truncation(void) {
+/* 4. a field far longer than any other still renders in full: the line budget is what
+   makes that true, and it is the same budget every consumer must pass in. */
+static void test_long_field_still_renders_whole(void) {
     char big[600];
     memset(big, 'a', sizeof big - 1u);
     big[sizeof big - 1u] = '\0';
@@ -150,20 +150,16 @@ static void test_truncation(void) {
     const game_event_t *log = game_event_log(&n);
     TEST_ASSERT_EQUAL_INT(1, n);
 
-    char buf[512];
+    /* The budget is what makes a long field renderable, so the line arrives whole.
+       A buffer smaller than GAME_EVENT_RENDER_LINE_MAX is a caller bug and aborts;
+       there is no degraded line left to assert on. */
+    char buf[GAME_EVENT_RENDER_LINE_MAX];
     (void)game_event_render(&log[0], &mini_ev_cell_spawned_desc, buf, (int)sizeof buf);
     cJSON *root = cJSON_Parse(buf);
-    TEST_ASSERT_NOT_NULL(root); /* valid JSON even when the full render overflowed */
-    TEST_ASSERT_TRUE(cJSON_IsTrue(cJSON_GetObjectItem(root, "truncated")));
+    TEST_ASSERT_NOT_NULL(root);
+    TEST_ASSERT_NULL(cJSON_GetObjectItem(root, "truncated"));
+    TEST_ASSERT_EQUAL_STRING(big, cJSON_GetObjectItem(root, "label")->valuestring);
     cJSON_Delete(root);
-
-    /* small cap forces the minimal fallback cheaply */
-    char small[64];
-    (void)game_event_render(&log[0], &mini_ev_cell_spawned_desc, small, (int)sizeof small);
-    cJSON *r2 = cJSON_Parse(small);
-    TEST_ASSERT_NOT_NULL(r2);
-    TEST_ASSERT_TRUE(cJSON_IsTrue(cJSON_GetObjectItem(r2, "truncated")));
-    cJSON_Delete(r2);
 }
 
 /* 6. bounds/robustness: a descriptor claiming fields past e->size (cell_spawned desc over a
@@ -257,7 +253,7 @@ int main(void) {
     RUN_TEST(test_rich_typed_render);
     RUN_TEST(test_scalar_only);
     RUN_TEST(test_unknown_render);
-    RUN_TEST(test_truncation);
+    RUN_TEST(test_long_field_still_renders_whole);
     RUN_TEST(test_bounds_robustness);
     RUN_TEST(test_repeated_render);
     RUN_TEST(test_repeated_render_empty);
