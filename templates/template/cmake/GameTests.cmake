@@ -770,6 +770,7 @@ if(NOT EMSCRIPTEN)
     set(GAME_NATIVE_TEST_TARGETS
         test_audio_core test_audio_resource test_audio_backend_native test_game_audio
         test_game_state_json test_game_state_nested test_game_storage
+        test_game_storage_write_modes
         test_game_storage_web_backend test_game_save_blocked test_game_save
         test_game_events test_game_events_overflow test_game_state_roundtrip
         test_game_events_typed test_game_event_render test_game_analytics
