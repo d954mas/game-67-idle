@@ -75,9 +75,13 @@ spine described above.
 
 The headers and capabilities listed by `feature.json.provides` are public;
 template composition and private implementation files are not.
-Domain code that must fail atomically with its audit event can call
-`game_event_can_emit` immediately before mutation; the probe is read-only and
-uses the exact arena-alignment and log-capacity rules of `game_event_emit`.
+There is no capacity probe: in a healthy frame the arena and the log always
+have room, so domain code emits without asking. A frame that runs out is a
+developer error -- a runaway cascade or a game that genuinely needs bigger
+caps -- and it asserts in development, telling you which one to raise. Release
+drops the event and counts it, because the log is telemetry and the state is
+the truth; refusing a mutation to protect a telemetry line would trade the
+player's action for a diagnostic.
 
 ## Validation
 
@@ -89,6 +93,9 @@ Run the `ctest` command from `feature.json`, then
 `feature.json.version` is exact SemVer. Patch preserves the public contract,
 minor adds backward-compatible surface, and major permits breaking changes.
 Consumers pin both this version and an exact repository revision.
+
+2.0.0 removes the `game_event_can_emit` capacity probe. Callers that used it to
+refuse a mutation now perform the mutation and emit.
 
 ## Extension points
 

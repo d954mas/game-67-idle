@@ -710,37 +710,6 @@ static int64_t stack_limit(item_def_ref_t ref, item_core_t core) {
     return limit;
 }
 
-static bool audit_txn_available(const char *op, const char *def_id, const char *reason) {
-    const size_t size = sizeof(ItemsEvTxn) + strlen(op) + 1U + strlen(def_id) + 1U +
-                        strlen(reason) + 1U;
-    return size <= UINT32_MAX &&
-           game_event_can_emit((uint32_t)size, _Alignof(ItemsEvTxn));
-}
-
-static bool audit_payment_available(const char *reason) {
-    const size_t size = sizeof(ItemsEvPayment) + strlen(reason) + 1U;
-    return size <= UINT32_MAX &&
-           game_event_can_emit((uint32_t)size, _Alignof(ItemsEvPayment));
-}
-
-static bool audit_acquire_available(const char *reason) {
-    const size_t size = sizeof(ItemsEvAcquire) + strlen(reason) + 1U;
-    return size <= UINT32_MAX &&
-           game_event_can_emit((uint32_t)size, _Alignof(ItemsEvAcquire));
-}
-
-static bool audit_upgrade_available(const char *reason) {
-    const size_t size = sizeof(ItemsEvUpgrade) + strlen(reason) + 1U;
-    return size <= UINT32_MAX &&
-           game_event_can_emit((uint32_t)size, _Alignof(ItemsEvUpgrade));
-}
-
-static bool audit_move_available(const char *def_id, const char *reason) {
-    const size_t size = sizeof(ItemsEvMove) + strlen(def_id) + 1U + strlen(reason) + 1U;
-    return size <= UINT32_MAX &&
-           game_event_can_emit((uint32_t)size, _Alignof(ItemsEvMove));
-}
-
 items_result_t items_try_stack_add(
     items_container_ref_t container_ref_value, const char *def_id, int64_t count,
     uint32_t requested_slot, const char *reason, item_entry_ref_t *out_entry, int64_t *out_applied) {
@@ -762,7 +731,6 @@ items_result_t items_try_stack_add(
     if (entry != NULL && (requested_slot != ITEMS_SLOT_AUTO || entry->count < limit)) {
         int64_t applied = count > limit - entry->count ? limit - entry->count : count;
         if (applied <= 0) { return ITEMS_RESULT_CAPACITY; }
-        if (!audit_txn_available("add", def_id, reason)) { return ITEMS_RESULT_AUDIT_UNAVAILABLE; }
         int64_t before = entry->count;
         entry->count += applied;
         if (entry->quarantined) { entry->quarantined = false; }
@@ -783,7 +751,6 @@ items_result_t items_try_stack_add(
     int64_t applied = count > limit ? limit : count;
     if (applied <= 0) { return ITEMS_RESULT_CAPACITY; }
     if (items_state.last_entry_id >= ITEMS_ID_RESERVED - 1U) { return ITEMS_RESULT_ID_EXHAUSTED; }
-    if (!audit_txn_available("add", def_id, reason)) { return ITEMS_RESULT_AUDIT_UNAVAILABLE; }
     uint32_t id = 0;
     bool allocated = allocate_id(&items_state.last_entry_id, &id);
     NT_ASSERT(allocated);
@@ -824,7 +791,6 @@ items_result_t items_try_stack_remove(item_entry_ref_t entry_ref_value, int64_t 
     uint32_t entry_id_value = entry->entry_id;
     char def_id[ITEMS_STATE_STRING_MAX];
     (void)snprintf(def_id, sizeof(def_id), "%s", entry->def_id);
-    if (!audit_txn_available("remove", def_id, reason)) { return ITEMS_RESULT_AUDIT_UNAVAILABLE; }
     entry->count -= count;
     if (entry->count == 0) {
         memset(entry, 0, sizeof(*entry));
@@ -850,7 +816,6 @@ items_result_t items_try_stack_remove_from_container(
     if (!lookup_item(def_id, NULL, &core) || !item_is_stackable(core)) { return ITEMS_RESULT_WRONG_STORAGE; }
     int64_t before = items_stack_count(container_ref_value, def_id);
     if (count <= 0 || before < count) { return ITEMS_RESULT_INSUFFICIENT; }
-    if (!audit_txn_available("remove", def_id, reason)) { return ITEMS_RESULT_AUDIT_UNAVAILABLE; }
 
     int64_t remaining = count;
     for (uint32_t slot = 0; slot < container->capacity && remaining > 0; slot++) {
@@ -919,7 +884,6 @@ items_result_t items_try_unique_create(
     uint32_t index = free_entry_index();
     if (index == UINT32_MAX) { return ITEMS_RESULT_POOL_EXHAUSTED; }
     if (items_state.last_entry_id >= ITEMS_ID_RESERVED - 1U) { return ITEMS_RESULT_ID_EXHAUSTED; }
-    if (!audit_txn_available("create", def_id, reason)) { return ITEMS_RESULT_AUDIT_UNAVAILABLE; }
     uint32_t id = 0;
     bool allocated = allocate_id(&items_state.last_entry_id, &id);
     NT_ASSERT(allocated);
@@ -955,7 +919,6 @@ items_result_t items_try_entry_destroy(item_entry_ref_t entry_ref_value, const c
     (void)snprintf(def_id, sizeof(def_id), "%s", entry->def_id);
     uint32_t container_id_value = items_state.containers[entry->parent_index].container_id;
     uint32_t entry_id_value = entry->entry_id;
-    if (!audit_txn_available("destroy", def_id, reason)) { return ITEMS_RESULT_AUDIT_UNAVAILABLE; }
     memset(entry, 0, sizeof(*entry));
     s_entry_generation[entry_ref_value.index] = next_generation(s_entry_generation[entry_ref_value.index]);
     bool ok = build_indices(&items_state, true, false, NULL, 0);
@@ -1315,7 +1278,6 @@ static int64_t payment_applied_units(const items_payment_plan_t *plan) {
 static items_result_t commit_payment_plan(
     const items_payment_plan_t *plan, const char *reason) {
     if (!transaction_commit_allowed()) { return ITEMS_RESULT_COMMIT_FAILED; }
-    if (!audit_payment_available(reason)) { return ITEMS_RESULT_AUDIT_UNAVAILABLE; }
     /* A plan that owes nothing still belongs in the audit stream, but it must
        not dirty a save it did not change. */
     if (plan->row_count > 0) {
@@ -1480,7 +1442,6 @@ items_result_t items_try_acquire(
     }
 
     if (!transaction_commit_allowed()) { return ITEMS_RESULT_COMMIT_FAILED; }
-    if (!audit_acquire_available(reason)) { return ITEMS_RESULT_AUDIT_UNAVAILABLE; }
     if (plan != NULL) { apply_payment_plan(plan); }
     ItemsItemEntry *acquired;
     if (merge != NULL) {
@@ -1551,7 +1512,6 @@ items_result_t items_try_upgrade_instance(
     const int from_level = entry->level;
     const uint32_t entry_id_value = entry->entry_id;
     if (!transaction_commit_allowed()) { return ITEMS_RESULT_COMMIT_FAILED; }
-    if (!audit_upgrade_available(reason)) { return ITEMS_RESULT_AUDIT_UNAVAILABLE; }
     if (plan != NULL) { apply_payment_plan(plan); }
     entry = require_entry(entry_ref_value);
     entry->level = (int)target_level;
@@ -1644,7 +1604,6 @@ items_result_t items_try_entry_move(
     uint32_t source_entry_id = source->entry_id;
     char def_id[ITEMS_STATE_STRING_MAX];
     (void)snprintf(def_id, sizeof(def_id), "%s", source->def_id);
-    if (!audit_move_available(def_id, reason)) { return ITEMS_RESULT_AUDIT_UNAVAILABLE; }
 
     if (merge != NULL) {
         merge->count += count;

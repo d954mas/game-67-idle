@@ -104,7 +104,10 @@ little-endian 64-bit fields. `requirement_count`, `scope_count`, and
 `source_entry_count` describe the bounded plan; `requested_units` is the
 overflow-checked sum of the declared requirements and `applied_units` is
 counted off the committed plan rows, so the two are equal on success by
-agreement rather than by construction. A refusal emits no event. `items.acquire` is the sole success
+agreement rather than by construction. A refusal emits no event. A committed
+mutation always emits its record without first asking whether the frame's event
+log has room; running out of room is a developer error that game-events asserts
+on, not a runtime condition ownership degrades around. `items.acquire` is the sole success
 event for the combined verb and records the acquired item and destination/entry
 IDs plus the same payment fingerprints and totals; explicit-free acquisition
 sets paid false and all payment fields to zero.
@@ -193,6 +196,9 @@ The feature manifest uses exact SemVer. PATCH releases preserve behavior and
 wire/API contracts, MINOR releases add backward-compatible surface, and MAJOR
 releases may remove or change public commands, APIs, or catalog contracts.
 Consumers pin both the version and repository revision.
+
+4.0.0 removes `ITEMS_RESULT_AUDIT_UNAVAILABLE` along with the audit-capacity
+pre-checks behind it; mutations commit and emit.
 
 3.1.0 adds `items_try_pay_stacks`, an atomic multi-item payment whose
 requirements are authored outside the baked catalog.
