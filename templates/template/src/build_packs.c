@@ -168,7 +168,7 @@ int main(int argc, char *argv[]) {
 
     nt_atlas_opts_t atlas_opts = nt_atlas_opts_defaults();
     atlas_opts.shape = NT_ATLAS_SHAPE_RECT;
-    atlas_opts.allow_transform = false;
+    atlas_opts.allowed_transforms = NT_ATLAS_TRANSFORMS_IDENTITY;
     atlas_opts.pixels_per_unit = 1.0F;
     atlas_opts.padding = 2;
     atlas_opts.margin = 2;
@@ -213,12 +213,12 @@ int main(int argc, char *argv[]) {
 
     // Item icons: SECOND atlas (ui is first). Explicit region names = the
     // authored "icons/<name>" contract half. debug_png=true emits the page PNG
-    // the studio items-viewer previews from. allow_transform=false keeps every
+    // the studio items-viewer previews from. Identity-only transforms keep every
     // region an axis-aligned rect so a preview crop is a simple rectangle.
     // Opts mirror the ui atlas (build_packs.c:104-117) for parity.
     nt_atlas_opts_t icons_opts = nt_atlas_opts_defaults();
     icons_opts.shape = NT_ATLAS_SHAPE_RECT;
-    icons_opts.allow_transform = false;   // -> region.transform == 0, simple rect
+    icons_opts.allowed_transforms = NT_ATLAS_TRANSFORMS_IDENTITY; // -> region.transform == 0, simple rect
     icons_opts.pixels_per_unit = 1.0F;    // parity with ui atlas
     icons_opts.padding = 2;
     icons_opts.margin = 2;
