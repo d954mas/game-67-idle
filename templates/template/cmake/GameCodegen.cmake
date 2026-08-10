@@ -81,6 +81,31 @@ add_custom_command(
     COMMENT "Generating progression tracks catalog (const int64 curve tables)"
     VERBATIM)
 
+# Every player-visible string is data (content/loc/strings.json) compiled to
+# typed accessors. loc_charset.gen.h is an output too: the packed font charset
+# follows the corpus, so a translation cannot introduce a glyph the atlas lacks.
+set(LOC_STRINGS_JSON "${CMAKE_CURRENT_SOURCE_DIR}/content/loc/strings.json")
+set(LOC_GENERATOR "${LOCALIZATION_SCRIPTS}/loc.py")
+add_custom_command(
+    OUTPUT
+        "${GAME_SOURCE_GENERATED_DIR}/loc_strings.gen.h"
+        "${GAME_SOURCE_GENERATED_DIR}/loc_strings.gen.c"
+        "${GAME_SOURCE_GENERATED_DIR}/loc_keys.gen.json"
+        "${GAME_SOURCE_GENERATED_DIR}/loc_charset.gen.h"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_SOURCE_GENERATED_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" "${LOC_GENERATOR}" generate
+        --strings "${LOC_STRINGS_JSON}"
+        --out-dir "${GAME_SOURCE_GENERATED_DIR}"
+        --source-label "content/loc/strings.json"
+    DEPENDS "${LOC_STRINGS_JSON}" "${LOC_GENERATOR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Generating localization string table"
+    VERBATIM)
+target_sources(${GAME_TARGET} PRIVATE
+    "${LOCALIZATION_SRC}/loc.c"
+    "${GAME_SOURCE_GENERATED_DIR}/loc_strings.gen.c")
+target_include_directories(${GAME_TARGET} PRIVATE "${LOCALIZATION_INC}")
+
 set(GAME_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/game_state.schema.json")
 set(GAME_STATE_GENERATOR "${GAME_REPO_ROOT}/features/game-state/scripts/generate_state.py")
 set(GAME_STATE_GENERATOR_SOURCES

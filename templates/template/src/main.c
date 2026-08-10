@@ -42,6 +42,7 @@
 
 #include "features/game_features.h"
 #include "features/items/items.h"
+#include "loc_strings.gen.h"
 #include "features/platform_sdk/platform_sdk.h"
 #include "features/platform_sdk/platform_sdk_events.h"
 #include "features/settings/settings.h"
@@ -371,6 +372,10 @@ static void game_runtime_try_start(void) {
     /* Catalog binding is the startup barrier: save reconciliation and every
        feature that can query Items run only after this point. */
     game_runtime_load_state();
+    /* The persisted language reaches the string table only here: both load
+       paths above leave settings_state populated, and every accessor before
+       this point renders the corpus fallback. */
+    settings_apply_language();
 #ifdef NT_PLATFORM_WEB
     /* Do not expose pagehide/visibility flush until live fragments contain
        the loaded save. Fresh-state runs are intentionally non-persistent. */
@@ -599,6 +604,7 @@ int main(int argc, char **argv) {
     nt_resource_set_activator(NT_ASSET_MESH, nt_gfx_activate_mesh, nt_gfx_deactivate_mesh);
     nt_resource_set_activator(NT_ASSET_TEXTURE, nt_gfx_activate_texture, nt_gfx_deactivate_texture); // mesh texture + UI atlas page
     nt_mem_scratch_init((size_t)512U * 1024U); // per-frame arena nt_ui builds element data from
+    loc_init(); // after the scratch arena: formatted strings allocate from it
 
     nt_font_init(&(nt_font_desc_t){.max_fonts = 2});
     nt_material_init(&(nt_material_desc_t){.max_materials = 8});

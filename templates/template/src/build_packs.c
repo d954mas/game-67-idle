@@ -6,6 +6,8 @@
 #define NT_BUILD_MAX_ASSETS 4096
 #include "nt_builder.h"
 
+#include "generated/loc_charset.gen.h" /* LOC_CHARSET_NON_ASCII, generated from the corpus */
+
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -106,8 +108,15 @@ int main(int argc, char *argv[]) {
     // text shell
     nt_builder_add_shader(ctx, "assets/shaders/slug_text.vert", NT_BUILD_SHADER_VERTEX);
     nt_builder_add_shader(ctx, "assets/shaders/slug_text.frag", NT_BUILD_SHADER_FRAGMENT);
+    // The charset FOLLOWS THE CORPUS: content/loc/strings.json generates
+    // loc_charset.gen.h and this pack build depends on it, so editing a string
+    // repacks the atlas. A hand-kept alphabet lets a new translation introduce a
+    // character nobody added here and ship as a blank box with every gate green.
+    // ASCII stays unconditional -- numbers and debug text never pass through the
+    // corpus.
     nt_builder_add_font(ctx, argv[3],
-                        &(nt_font_opts_t){.charset = NT_CHARSET_ASCII, .resource_name = "game/font"});
+                        &(nt_font_opts_t){.charset = NT_CHARSET_ASCII LOC_CHARSET_NON_ASCII,
+                                          .resource_name = "game/font"});
 
     // Audio stays an opaque game-owned blob. The runtime chooses the decoder;
     // the resource ID intentionally contains no codec or file extension.

@@ -40,6 +40,10 @@ set(SCENES_CORE_SRC          "${SCENES_CORE_DIR}/src")
 set(GAME_STATE_DIR           "${GAME_REPO_ROOT}/features/game-state")
 set(GAME_STATE_INC           "${GAME_STATE_DIR}/include")
 set(GAME_STATE_SRC           "${GAME_STATE_DIR}/src")
+set(LOCALIZATION_DIR         "${GAME_REPO_ROOT}/features/localization")
+set(LOCALIZATION_INC         "${LOCALIZATION_DIR}/include")
+set(LOCALIZATION_SRC         "${LOCALIZATION_DIR}/src")
+set(LOCALIZATION_SCRIPTS     "${LOCALIZATION_DIR}/scripts")
 
 set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
@@ -70,6 +74,7 @@ add_executable(${GAME_TARGET}
     "${PLATFORM_SDK_SRC}/platform_sdk.c"             # T0339: target/sdk identity + policy capabilities
     src/features/resource_panel/resource_panel.c     # И3b: generic counter/bar widget (zero feature headers)
     src/ui/demo_hud.c                                # И3b: game composition (resource_panel over items/progression)
+    src/ui/loc_widgets.c                             # the ONLY caller of the raw text entry points
     # scene-scaffold:sources
 )
 target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}")

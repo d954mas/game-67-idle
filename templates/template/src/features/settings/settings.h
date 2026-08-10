@@ -31,4 +31,11 @@ void settings_set_master(float value);
 void settings_set_music(float value);
 void settings_set_sfx(float value);
 
+/* Язык интерфейса как индекс SettingsStateLanguage (порядок = enum в
+   state/settings.schema.json). settings_apply_language() зовёт игра сразу после
+   загрузки сейва: до неё активен fallback таблицы. */
+int settings_language(void);
+void settings_set_language(int language);
+void settings_apply_language(void);
+
 #endif /* FEATURES_SETTINGS_H */

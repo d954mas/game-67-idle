@@ -4,9 +4,12 @@
 
 #include "app/nt_app.h" /* g_nt_app.dt */
 #include "clay.h"
+#include "ui/loc_widgets.h"
 #include "ui/nt_ui_image.h"
 #include "ui/nt_ui_label.h"
 #include "ui/theme.h" /* g_theme */
+
+#include "loc_strings.gen.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -141,7 +144,7 @@ static Clay_Color rp_lerp_color(Clay_Color a, Clay_Color b, float t) {
 /* Local panel helper (ui-kit has no built-in
    text shadow). `slot` is a plain int differentiator (Clay id collision guard
    across calls in one frame) -- distinct from rp_slot_t/RESOURCE_PANEL_MAX_SLOTS. */
-static void rp_shadowed_label(nt_ui_context_t *ctx, int slot, const char *text, const nt_ui_label_style_t *style) {
+static void rp_shadowed_label(nt_ui_context_t *ctx, int slot, LocStr text, const nt_ui_label_style_t *style) {
     nt_ui_label_style_t shadow = *style;
     shadow.color = (Clay_Color){8.0F, 5.0F, 3.0F, 142.0F};
 
@@ -152,9 +155,9 @@ static void rp_shadowed_label(nt_ui_context_t *ctx, int slot, const char *text, 
                            .attachPoints = {.element = CLAY_ATTACH_POINT_LEFT_TOP, .parent = CLAY_ATTACH_POINT_LEFT_TOP},
                            .offset = {1.0F, 1.0F}},
               .layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0)}}}) {
-            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT_SHADOW), text, &shadow);
+            loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT_SHADOW), text, &shadow);
         }
-        nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), text, style);
+        loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), text, style);
     }
 }
 
@@ -219,7 +222,8 @@ static void rp_step_slot(rp_slot_t *slot, const resource_panel_entry_t *entry, f
 
 static void rp_draw_counter(nt_ui_context_t *ctx, const resource_panel_entry_t *entry, rp_slot_t *slot, int index) {
     char value_buf[24];
-    (void)game_format_i64_abbrev((int64_t)llround(slot->displayed), value_buf, sizeof value_buf);
+    (void)game_format_i64_abbrev((int64_t)llround(slot->displayed), loc_decimal_separator(), value_buf,
+                                 sizeof value_buf);
 
     Clay_Color accent_tint = slot->accent_gain ? RP_COLOR_GAIN : RP_COLOR_SPEND;
     nt_ui_label_style_t value_style = g_theme.label;
@@ -241,12 +245,14 @@ static void rp_draw_counter(nt_ui_context_t *ctx, const resource_panel_entry_t *
                      .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}},
           .userData = NT_UI_CLAY_DATA(LAYER_BG)}) {
         rp_draw_icon_or_fallback(ctx, entry);
-        if (entry->label != NULL) {
-            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), entry->label, &g_theme.label);
+        if (entry->label.s != NULL) {
+            loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), entry->label, &g_theme.label);
         }
         CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(RP_VALUE_CELL_W), CLAY_SIZING_FIXED(RP_ROW_H)},
                           .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
-            nt_ui_label(ctx, NT_UI_DATA_XFORM(LAYER_TEXT, &punch, 1.0F), value_buf, &value_style);
+            /* Число -- это вся строка целиком, вокруг него нет текста, значит нет
+               и ключа: сама лестница уже отформатирована под язык. */
+            loc_label(ctx, NT_UI_DATA_XFORM(LAYER_TEXT, &punch, 1.0F), loc_raw(value_buf), &value_style);
         }
     }
 
@@ -263,7 +269,8 @@ static void rp_draw_bar(nt_ui_context_t *ctx, const resource_panel_entry_t *entr
     int64_t level_val = has_level ? entry->level(entry->ud) : 0;
 
     char value_buf[24];
-    (void)game_format_i64_abbrev((int64_t)llround(slot->displayed), value_buf, sizeof value_buf);
+    (void)game_format_i64_abbrev((int64_t)llround(slot->displayed), loc_decimal_separator(), value_buf,
+                                 sizeof value_buf);
     Clay_Color accent_tint = slot->accent_gain ? RP_COLOR_GAIN : RP_COLOR_SPEND;
 
     CLAY({.layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(RP_ROW_H)},
@@ -277,21 +284,16 @@ static void rp_draw_bar(nt_ui_context_t *ctx, const resource_panel_entry_t *entr
                без заливки. */
             nt_ui_label_style_t style = g_theme.label;
             style.color = rp_lerp_color(g_theme.label.color, accent_tint, slot->accent);
-            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), value_buf, &style);
+            loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw(value_buf), &style);
         } else {
-            char caption[64];
+            LocStr caption;
             if (max_val > 0) {
                 char max_buf[24];
-                (void)game_format_i64_abbrev(max_val, max_buf, sizeof max_buf);
-                if (has_level) {
-                    (void)snprintf(caption, sizeof caption, "Lv %lld  %s/%s", (long long)level_val, value_buf, max_buf);
-                } else {
-                    (void)snprintf(caption, sizeof caption, "%s/%s", value_buf, max_buf);
-                }
-            } else if (has_level) {
-                (void)snprintf(caption, sizeof caption, "Lv %lld  MAX", (long long)level_val);
+                (void)game_format_i64_abbrev(max_val, loc_decimal_separator(), max_buf, sizeof max_buf);
+                caption = has_level ? loc_resource_panel_level_progress(level_val, loc_raw(value_buf), loc_raw(max_buf))
+                                    : loc_resource_panel_progress(loc_raw(value_buf), loc_raw(max_buf));
             } else {
-                (void)snprintf(caption, sizeof caption, "MAX");
+                caption = has_level ? loc_resource_panel_level_maxed(level_val) : loc_resource_panel_maxed();
             }
 
             /* displayed используется для fill (плавно ползёт), logical -- для diff/акцента. */

@@ -12,9 +12,12 @@ static const uint64_t GAME_FORMAT_THRESHOLDS[] = {
 };
 #define GAME_FORMAT_TIER_COUNT 7
 
-char *game_format_i64_abbrev(int64_t v, char *out, size_t cap) {
+char *game_format_i64_abbrev(int64_t v, const char *decimal_mark, char *out, size_t cap) {
     if (out == NULL || cap == 0) {
         return out;
+    }
+    if (decimal_mark == NULL) {
+        decimal_mark = ".";
     }
 
     bool negative = v < 0;
@@ -41,7 +44,7 @@ char *game_format_i64_abbrev(int64_t v, char *out, size_t cap) {
     uint64_t whole = mag / threshold;
     uint64_t remainder = mag % threshold;
     uint64_t frac = (remainder * 10ULL) / threshold; /* one significant fractional digit, floor */
-    (void)snprintf(out, cap, "%s%llu.%llu%s", negative ? "-" : "", (unsigned long long)whole, (unsigned long long)frac,
-                   GAME_FORMAT_SUFFIXES[tier]);
+    (void)snprintf(out, cap, "%s%llu%s%llu%s", negative ? "-" : "", (unsigned long long)whole, decimal_mark,
+                   (unsigned long long)frac, GAME_FORMAT_SUFFIXES[tier]);
     return out;
 }

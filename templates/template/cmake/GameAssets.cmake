@@ -14,7 +14,12 @@ file(GLOB_RECURSE GAME_PACK_SOURCE_ASSETS CONFIGURE_DEPENDS
 if(NOT EMSCRIPTEN)
     set(GAME_FONT_SOURCE
         "${GAME_REPO_ROOT}/external/neotolis-engine/assets/fonts/LilitaOne-RussianChineseKo.ttf")
-    add_executable(build_game_packs src/build_packs.c)
+    # The generated charset header is a SOURCE, not just a dependency of the
+    # pack command below: that is what orders the loc codegen ahead of
+    # compiling build_packs.c, which includes it.
+    add_executable(build_game_packs src/build_packs.c
+        "${GAME_SOURCE_GENERATED_DIR}/loc_charset.gen.h")
+    target_include_directories(build_game_packs PRIVATE src)
     target_link_libraries(build_game_packs PRIVATE nt_builder nt_log)
     target_compile_definitions(build_game_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_options(build_game_packs PRIVATE -U_DLL)
@@ -29,6 +34,11 @@ if(NOT EMSCRIPTEN)
         DEPENDS build_game_packs src/build_packs.c "${ITEMS_CATALOG_PACKAGE}"
             "${GAME_FONT_SOURCE}" ${GAME_PACK_SOURCE_ASSETS}
             assets/audio/sfx/ui_click.wav assets/audio/music/demo_jingle.mp3
+            # The font atlas is subset to the corpus, so a string edit must
+            # invalidate the pack. Without this line a new character regenerates
+            # the header, the atlas is NOT repacked, and the glyph ships as a
+            # blank box with every gate green.
+            "${GAME_SOURCE_GENERATED_DIR}/loc_charset.gen.h"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         COMMENT "Building game asset pack"
         VERBATIM

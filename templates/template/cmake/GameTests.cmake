@@ -703,6 +703,44 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_format PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_format COMMAND test_game_format)
 
+    # Localization is proven at the seam, not on either side of it: loc_test.py
+    # checks what the generator writes, and test_loc_e2e runs that same
+    # generator over the module's fixture corpus, compiles the result, and calls
+    # it -- so a Python/C disagreement about the interpolation grammar or the
+    # plural category sets is a red test instead of a wrong string on screen.
+    add_test(NAME loc_generator_test
+        COMMAND "${Python3_EXECUTABLE}" "${LOCALIZATION_SCRIPTS}/loc_test.py")
+
+    set(LOC_E2E_DIR "${CMAKE_BINARY_DIR}/generated/loc-e2e")
+    set(LOC_E2E_STRINGS "${LOCALIZATION_DIR}/tests/e2e_strings.json")
+    add_custom_command(
+        OUTPUT "${LOC_E2E_DIR}/loc_strings.gen.h" "${LOC_E2E_DIR}/loc_strings.gen.c"
+               "${LOC_E2E_DIR}/loc_keys.gen.json" "${LOC_E2E_DIR}/loc_charset.gen.h"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LOC_E2E_DIR}"
+        COMMAND "${Python3_EXECUTABLE}" "${LOC_GENERATOR}" generate
+            --strings "${LOC_E2E_STRINGS}" --out-dir "${LOC_E2E_DIR}"
+        DEPENDS "${LOC_E2E_STRINGS}" "${LOC_GENERATOR}"
+        COMMENT "Generating localization e2e fixture table"
+        VERBATIM)
+    add_custom_command(
+        OUTPUT "${LOC_E2E_DIR}/loc_plural_cases.gen.h" "${LOC_E2E_DIR}/loc_plural_cases.gen.c"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LOC_E2E_DIR}"
+        COMMAND "${Python3_EXECUTABLE}" "${LOC_GENERATOR}" plural-cases --out-dir "${LOC_E2E_DIR}"
+        DEPENDS "${LOC_GENERATOR}"
+        COMMENT "Generating localization plural cross-check cases"
+        VERBATIM)
+    add_executable(test_loc_e2e
+        "${LOCALIZATION_DIR}/tests/test_loc_e2e.c"
+        "${LOC_E2E_DIR}/loc_strings.gen.c"
+        "${LOC_E2E_DIR}/loc_plural_cases.gen.c"
+        "${LOCALIZATION_SRC}/loc.c")
+    target_link_libraries(test_loc_e2e PRIVATE unity nt_mem_scratch nt_log nt_core)
+    target_include_directories(test_loc_e2e PRIVATE
+        "${LOCALIZATION_INC}" "${LOC_E2E_DIR}" "${ENGINE_DIR}/engine")
+    target_compile_definitions(test_loc_e2e PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_loc_e2e PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_loc_e2e COMMAND test_loc_e2e)
+
     add_executable(test_platform_sdk
         tests/test_platform_sdk.c
         "${PLATFORM_SDK_SRC}/platform_sdk.c")
@@ -811,13 +849,17 @@ if(NOT EMSCRIPTEN)
         "${ITEMS_CORE_SRC}/items_reconcile.c" "${ITEMS_CORE_SRC}/items_containers.c"
         "${PROGRESSION_STATE_GENERATED_SOURCE}" "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"
         "${PROGRESSION_CORE_SRC}/progression.c"
-        "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c")   # REAL hero curve (cf. test_progression_curve)
+        "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c"   # REAL hero curve (cf. test_progression_curve)
+        # settings.c binds the persisted language to the string table, so the
+        # composition links the real module and the real corpus.
+        "${LOCALIZATION_SRC}/loc.c"
+        "${GAME_SOURCE_GENERATED_DIR}/loc_strings.gen.c")
     add_dependencies(test_template_composition progression_tracks_gen)  # progression.c #includes .gen.h
     configure_items_runtime_catalog_test(test_template_composition)
     # nt_ui_interface (review #1 smoke-check): settings.h pulls ui/nt_ui.h for
     # nt_ui_context_t; header-only include-root + NT_UI_DEBUG_TOOLS define, no
     # Clay/impl chain -- draw_ui is never called in this TU, only declared.
-    target_link_libraries(test_template_composition PRIVATE cjson unity nt_hash nt_log nt_core nt_ui_interface)
+    target_link_libraries(test_template_composition PRIVATE cjson unity nt_hash nt_log nt_core nt_ui_interface nt_mem_scratch)
     if(GAME_DEVAPI_ENABLED)
         target_sources(test_template_composition PRIVATE "${GAME_STATE_SRC}/game_save_devapi.c")
         target_link_libraries(test_template_composition PRIVATE nt_devapi_default nt_app_stub)
@@ -827,6 +869,7 @@ if(NOT EMSCRIPTEN)
     endif()
     target_include_directories(test_template_composition PRIVATE
         "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src
+        "${LOCALIZATION_INC}"
         "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_template_composition PRIVATE
         GAME_SAVE_TESTING=1 GAME_ITEMS_TESTING=1 GAME_STORAGE_APP_ID="template_composition_test"
@@ -852,7 +895,7 @@ if(NOT EMSCRIPTEN)
         test_items_api test_items_runtime_package test_items_runtime_resource
         test_items_fragment test_items_fragment_assert_off test_progression test_progression_curve
         benchmark_items_c_arrays benchmark_items_runtime_blob benchmark_items_runtime_bind
-        test_game_format test_platform_sdk test_game_input test_platform_lifecycle
+        test_game_format test_loc_e2e test_platform_sdk test_game_input test_platform_lifecycle
         test_platform_sdk_events test_template_composition
         test_scenes_core_catalog test_scenes_core_lifecycle
         test_scenes_core_navigation test_scenes_core_ordering

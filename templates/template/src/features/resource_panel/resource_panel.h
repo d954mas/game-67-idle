@@ -8,6 +8,9 @@
    int64 везде; count-up-интерполяция (float) — ВНУТРИ, не в логике значений. */
 #include "atlas/nt_atlas.h" /* nt_atlas_region_ref_t (движок, НЕ фича) */
 #include "ui/nt_ui.h"       /* nt_ui_context_t (движок, НЕ фича) */
+
+#include "features/localization/loc.h" /* LocStr (L1-модуль, НЕ src/features/<x>) */
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -18,7 +21,7 @@ typedef enum resource_panel_kind_t {
 
 typedef struct resource_panel_entry_t {
     const char *id;                    /* СТАБИЛЬНЫЙ id: ключ diff/count-up + anchor-lookup */
-    const char *label;                 /* имя ресурса ("Gold"/"Hero") */
+    LocStr label;                      /* имя ресурса; ключ разрешает КОМПОЗИЦИЯ, виджет не знает словаря */
     resource_panel_kind_t kind;
     const nt_atlas_region_ref_t *icon; /* ОПЦ. хендл арта от игры; NULL -> graceful фолбэк (rect/без иконки) */
     void *ud;                          /* прозрачный, в каждый геттер */

@@ -32,6 +32,7 @@
     "loc_strings.gen.h",
     "loc_strings.gen.c",
     "loc_keys.gen.json",
+    "loc_charset.gen.h (LOC_CHARSET_NON_ASCII: the font charset the consumer's pack builder prepends NT_CHARSET_ASCII to)",
     "loc_plural_cases.gen.{h,c} (test-only cross-check)"
   ],
   "registers": {

@@ -34,6 +34,7 @@ add_custom_command(
         "${GAME_SOURCE_GENERATED_DIR}/loc_strings.gen.h"
         "${GAME_SOURCE_GENERATED_DIR}/loc_strings.gen.c"
         "${GAME_SOURCE_GENERATED_DIR}/loc_keys.gen.json"
+        "${GAME_SOURCE_GENERATED_DIR}/loc_charset.gen.h"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_SOURCE_GENERATED_DIR}"
     COMMAND "${Python3_EXECUTABLE}" "${LOC_GENERATOR}" generate
         --strings "${LOC_STRINGS_JSON}"
@@ -56,6 +57,36 @@ target_include_directories(${GAME_TARGET} PRIVATE "${LOCALIZATION_INC}")
 
 `${GAME_SOURCE_GENERATED_DIR}` must already be on the include path (it is, for
 the other generators). Link `nt_mem_scratch`, `nt_log`, and `nt_core` — most games already do.
+
+## The font charset follows the corpus
+
+`loc_charset.gen.h` is the fourth output and it is not optional: it carries
+`LOC_CHARSET_NON_ASCII`, every non-ASCII codepoint the corpus can render. The
+pack builder prepends `NT_CHARSET_ASCII` — digits and debug text never pass
+through the corpus — and packs the union:
+
+```c
+#include "generated/loc_charset.gen.h"
+
+nt_builder_add_font(ctx, font_path,
+                    &(nt_font_opts_t){.charset = NT_CHARSET_ASCII LOC_CHARSET_NON_ASCII,
+                                      .resource_name = "game/font"});
+```
+
+Two CMake edges make that hold. The header is a SOURCE of the pack-builder
+executable, which orders the codegen ahead of compiling it; and it is a DEPENDS
+of the pack command, so editing a string repacks the atlas. Without the second
+edge a new character regenerates the header, the atlas is NOT repacked, and the
+glyph ships as a blank box with every gate green.
+
+```cmake
+add_executable(build_game_packs src/build_packs.c
+    "${GAME_SOURCE_GENERATED_DIR}/loc_charset.gen.h")
+target_include_directories(build_game_packs PRIVATE src)
+```
+
+The packed font must actually carry the glyphs: `loc.py fonts` reports per-font
+coverage and names the font and the codepoint it lacks.
 
 ## Startup
 

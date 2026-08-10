@@ -13,8 +13,15 @@ void tearDown(void) {}
 
 static void check(int64_t v, const char *expected) {
     char buf[32];
-    char *out = game_format_i64_abbrev(v, buf, sizeof buf);
+    char *out = game_format_i64_abbrev(v, ".", buf, sizeof buf);
     TEST_ASSERT_EQUAL_PTR(buf, out);
+    TEST_ASSERT_EQUAL_STRING(expected, buf);
+}
+
+/* Десятичный знак -- языковая данность, приходит параметром. */
+static void check_mark(int64_t v, const char *mark, const char *expected) {
+    char buf[32];
+    (void)game_format_i64_abbrev(v, mark, buf, sizeof buf);
     TEST_ASSERT_EQUAL_STRING(expected, buf);
 }
 
@@ -47,11 +54,19 @@ void test_int64_extremes_no_ub(void) {
     check(INT64_MIN, "-9.2Qi");
 }
 
+void test_decimal_mark_is_a_parameter(void) {
+    check_mark(1500, ",", "1,5K");
+    check_mark(-2500, ",", "-2,5K");
+    check_mark(1500, NULL, "1.5K"); /* NULL -> точка, вызывающему не нужен фолбэк */
+    check_mark(999, ",", "999");    /* дробной части нет -- знак не появляется */
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_small_values_exact);
     RUN_TEST(test_kilo_tier);
     RUN_TEST(test_higher_tiers);
     RUN_TEST(test_int64_extremes_no_ub);
+    RUN_TEST(test_decimal_mark_is_a_parameter);
     return UNITY_END();
 }

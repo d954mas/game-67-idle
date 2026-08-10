@@ -11,6 +11,8 @@
 
 #include "app/nt_app.h" /* dt для idle-аккумулятора */
 
+#include "loc_strings.gen.h"
+
 static int64_t get_gold(void *ud) {
     (void)ud;
     return items_stack_count(game_wallet_container(), "tmpl.gold");
@@ -50,8 +52,8 @@ void demo_hud_update(float dt) {
 
 void demo_hud_draw_ui(nt_ui_context_t *ctx) {
     const resource_panel_entry_t entries[] = {
-        {.id = "gold", .label = "Gold", .kind = RESOURCE_PANEL_COUNTER, .value = get_gold},
-        {.id = "hero", .label = "Hero", .kind = RESOURCE_PANEL_BAR, .value = get_hero_xp, .max = get_hero_needed, .level = get_hero_level},
+        {.id = "gold", .label = loc_resources_gold(), .kind = RESOURCE_PANEL_COUNTER, .value = get_gold},
+        {.id = "hero", .label = loc_resources_hero(), .kind = RESOURCE_PANEL_BAR, .value = get_hero_xp, .max = get_hero_needed, .level = get_hero_level},
     };
     resource_panel_ui(ctx, entries, 2);
 }

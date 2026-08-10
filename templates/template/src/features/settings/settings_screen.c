@@ -1,16 +1,18 @@
 #include "features/settings/settings.h"
 #include "game_scenes.h"
+#include "settings_state.h" /* generated: SettingsStateLanguage */
 
 #include "game_save.h" /* Р11 hold-to-reset: game_save_request_new_game (L0 shell) */
 
 #include "clay.h"
+#include "ui/loc_widgets.h"
 #include "ui/nt_ui_button.h"
 #include "ui/nt_ui_label.h"
 #include "ui/nt_ui_panel.h"
 #include "ui/nt_ui_slider.h"
 #include "ui/theme.h"
 
-#include <stdio.h>
+#include "loc_strings.gen.h"
 
 // Walker batches RECTs/IMAGEs first, then TEXT, within each Clay zIndex — so a
 // lower layer draws behind: panel bg (BG) < widget art (IMG) < labels (TEXT).
@@ -31,18 +33,47 @@ bool settings_is_open(void) {
 // Label + slider stacked; the slider mutates *value in place (engine owns the drag).
 // `commit` (nullable) persists a changed value through the settings feature-API,
 // which clamps and marks the save dirty.
-static void volume_row(nt_ui_context_t *ctx, const char *name, const char *id, float *value,
+// `name` is the row's own key: nesting one localized string inside another is a
+// `str` argument fed by loc_by_key, never a concatenation.
+static void volume_row(nt_ui_context_t *ctx, LocKey0 name, const char *id, float *value,
                        void (*commit)(float), bool interactive) {
-    char buf[48];
-    (void)snprintf(buf, sizeof buf, "%s   %d%%", name, (int)(*value * 100.0F + 0.5F));
+    const LocStr row = loc_settings_volume_row(loc_by_key(name), (int64_t)(*value * 100.0F + 0.5F));
     const float before = *value;
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}, .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = 4}}) {
-        nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), buf, &g_theme.label);
+        loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), row, &g_theme.label);
+        // The slider's own label is NULL here, so no text reaches the engine
+        // through an unwrapped entry point.
         (void)nt_ui_slider_float(ctx, NT_UI_DATA_LAYER(LAYER_IMG), LAYER_TEXT, nt_ui_id(id), NULL, value, 0.0F, 1.0F, 0.0F, &g_theme.slider,
                                  &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(380), CLAY_SIZING_FIXED(30)}}}, interactive);
     }
     if (*value != before && commit) {
         commit(*value); // persist (clamps + marks dirty inside the setter)
+    }
+}
+
+/* Endonyms indexed by SettingsStateLanguage: a language names itself the same
+   way whatever the UI is set to, so the picker never renames what it offers. */
+static const LocKey0 LANGUAGE_NAMES[] = {LOC0_SETTINGS_LANG_EN, LOC0_SETTINGS_LANG_RU};
+_Static_assert((int)(sizeof LANGUAGE_NAMES / sizeof LANGUAGE_NAMES[0]) == SETTINGS_STATE_LANGUAGE_COUNT,
+               "a language in state/settings.schema.json has no endonym key");
+
+// One button cycling the languages: label + the CURRENT language in its own
+// name. The switch is immediate -- every accessor reads the active language on
+// the next call, so the next frame is already translated.
+static void language_row(nt_ui_context_t *ctx, bool interactive) {
+    const int current = settings_language();
+    CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}, .layoutDirection = CLAY_LEFT_TO_RIGHT, .childGap = 12, .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
+        loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_settings_language(), &g_theme.label);
+        CLAY({.id = CLAY_ID("settings/language"), .layout = {.sizing = {CLAY_SIZING_FIXED(160), CLAY_SIZING_FIXED(40)}}}) {
+            const uint32_t language_id = nt_ui_id("settings/language/button");
+            nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), language_id, &g_theme.button,
+                               &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
+                               interactive, NULL);
+            loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_by_key(LANGUAGE_NAMES[current]), &g_theme.button_label);
+            if (nt_ui_button_end(ctx) && interactive) {
+                settings_set_language((current + 1) % SETTINGS_STATE_LANGUAGE_COUNT);
+            }
+        }
     }
 }
 
@@ -55,7 +86,7 @@ void settings_draw_launcher(nt_ui_context_t *ctx, bool interactive) {
             nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), gear_id, &g_theme.button,
                                &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
                                interactive, NULL);
-            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Settings", &g_theme.button_label);
+            loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_settings_open(), &g_theme.button_label);
             if (nt_ui_button_end(ctx) && interactive) {
                 settings_open();
             }
@@ -73,7 +104,7 @@ void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
                                      .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                      .childGap = 16,
                                      .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
-    nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "SETTINGS", &g_theme.title);
+    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_settings_title(), &g_theme.title);
 
     // Authority is the persisted settings state: reseed the slider backing-floats
     // from the feature each frame the panel is open; the commit callback is the
@@ -81,9 +112,10 @@ void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
     s_master = settings_master();
     s_music = settings_music();
     s_sfx = settings_sfx();
-    volume_row(ctx, "Master", "settings/master", &s_master, settings_set_master, interactive);
-    volume_row(ctx, "Music", "settings/music", &s_music, settings_set_music, interactive);
-    volume_row(ctx, "SFX", "settings/sfx", &s_sfx, settings_set_sfx, interactive);
+    volume_row(ctx, LOC0_SETTINGS_MASTER, "settings/master", &s_master, settings_set_master, interactive);
+    volume_row(ctx, LOC0_SETTINGS_MUSIC, "settings/music", &s_music, settings_set_music, interactive);
+    volume_row(ctx, LOC0_SETTINGS_SFX, "settings/sfx", &s_sfx, settings_set_sfx, interactive);
+    language_row(ctx, interactive);
 
     // Action row: hold-to-reset (long press) + close.
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}, .layoutDirection = CLAY_LEFT_TO_RIGHT, .childGap = 12, .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
@@ -94,13 +126,10 @@ void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
                                &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
                                interactive, &hold);
             const nt_ui_events_t re = nt_ui_query_events(ctx, reset_id);
-            char rlabel[48];
-            if (re.hold_progress > 0.0F && re.hold_progress < 1.0F) {
-                (void)snprintf(rlabel, sizeof rlabel, "Hold to reset progress  %d%%", (int)(re.hold_progress * 100.0F));
-            } else {
-                (void)snprintf(rlabel, sizeof rlabel, "Hold to reset progress");
-            }
-            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), rlabel, &g_theme.label);
+            const bool holding = re.hold_progress > 0.0F && re.hold_progress < 1.0F;
+            const LocStr rlabel = holding ? loc_settings_reset_holding((int64_t)(re.hold_progress * 100.0F))
+                                          : loc_settings_reset();
+            loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), rlabel, &g_theme.label);
             (void)nt_ui_button_end(ctx);
             if (interactive && re.long_pressed) {
                 // New Game is one composition-level transition. The UI records
@@ -117,7 +146,7 @@ void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
             nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), close_id, &g_theme.button,
                                &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
                                interactive, NULL);
-            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Close", &g_theme.button_label);
+            loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_settings_close(), &g_theme.button_label);
             if (nt_ui_button_end(ctx) && interactive) {
                 settings_close();
             }

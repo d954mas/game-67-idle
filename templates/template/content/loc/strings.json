@@ -1,0 +1,73 @@
+{
+  "$schema": "../../../../features/localization/schema/strings.schema.json",
+  "languages": {
+    "en": {
+      "note": "group_separator is EMPTY by studio convention: a comma there reads as one-point-zero to a Russian speaker, because a comma is exactly the decimal mark ru uses.",
+      "group_separator": "",
+      "group_min_digits": 4
+    },
+    "ru": {
+      "group_separator": " ",
+      "group_min_digits": 5,
+      "decimal_separator": ",",
+      "alphabet": "абвгдежзийклмнопрстуфхцчшщъыьэюяё"
+    }
+  },
+  "fallback": "en",
+  "strings": {
+    "hud.title": { "en": "TEMPLATE", "ru": "ШАБЛОН" },
+    "hud.hint": {
+      "en": "empty scene - gear (top-right) opens settings",
+      "ru": "пустая сцена - шестерёнка справа вверху открывает настройки"
+    },
+
+    "resources.gold": { "en": "Gold", "ru": "Золото" },
+    "resources.hero": { "en": "Hero", "ru": "Герой" },
+
+    "resource_panel.progress": {
+      "args": { "value": "str", "max": "str" },
+      "en": "{value}/{max}",
+      "ru": "{value}/{max}"
+    },
+    "resource_panel.level_progress": {
+      "args": { "level": "int", "value": "str", "max": "str" },
+      "en": "Lv {level}  {value}/{max}",
+      "ru": "Ур {level}  {value}/{max}"
+    },
+    "resource_panel.level_maxed": {
+      "args": { "level": "int" },
+      "en": "Lv {level}  MAX",
+      "ru": "Ур {level}  МАКС"
+    },
+    "resource_panel.maxed": { "en": "MAX", "ru": "МАКС" },
+
+    "settings.open": { "en": "Settings", "ru": "Настройки" },
+    "settings.title": { "en": "SETTINGS", "ru": "НАСТРОЙКИ" },
+    "settings.master": { "en": "Master", "ru": "Общая" },
+    "settings.music": { "en": "Music", "ru": "Музыка" },
+    "settings.sfx": { "en": "SFX", "ru": "Звуки" },
+    "settings.volume_row": {
+      "args": { "name": "str", "percent": "int" },
+      "en": "{name}   {percent}%",
+      "ru": "{name}   {percent}%"
+    },
+    "settings.reset": {
+      "en": "Hold to reset progress",
+      "ru": "Держите для сброса"
+    },
+    "settings.reset_holding": {
+      "args": { "percent": "int" },
+      "en": "Hold to reset progress  {percent}%",
+      "ru": "Держите для сброса  {percent}%"
+    },
+    "settings.close": { "en": "Close", "ru": "Закрыть" },
+
+    "settings.language": { "en": "Language", "ru": "Язык" },
+    "settings.lang_en": {
+      "note": "An endonym: a language names itself the same way in every UI language.",
+      "en": "English",
+      "ru": "English"
+    },
+    "settings.lang_ru": { "en": "Русский", "ru": "Русский" }
+  }
+}

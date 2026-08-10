@@ -1,9 +1,9 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "resource_panel",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "title": "Resource Panel",
-  "summary": "Generic counter/bar HUD widget driven by game-supplied entries + getters; zero items/progression coupling.",
+  "summary": "Generic counter/bar HUD widget driven by game-supplied entries + getters; zero items/progression coupling. Labels and captions are LocStr, so a translation reaches the panel without the widget knowing a key vocabulary.",
   "status": "template-local",
   "kind": "ui-widget",
   "layer": "L2",

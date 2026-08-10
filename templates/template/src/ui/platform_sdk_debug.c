@@ -30,6 +30,7 @@ void platform_sdk_debug_shutdown(void) {
 #else
 
 #include "clay.h"
+#include "ui/loc_widgets.h"
 #include "ui/nt_ui_button.h"
 #include "ui/nt_ui_label.h"
 #include "ui/nt_ui_modal.h"
@@ -226,7 +227,7 @@ static bool button(nt_ui_context_t *ctx, const char *id, const char *label, floa
                                .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                                           .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
                            enabled, NULL);
-        nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), label, &g_theme.button_label);
+        loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw(label), &g_theme.button_label);
         clicked = nt_ui_button_end(ctx);
     }
     return clicked;
@@ -284,17 +285,17 @@ static void draw_debug_panel(nt_ui_context_t *ctx) {
                                      .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                      .childGap = 10,
                                      .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
-    nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "PLATFORM SDK", &g_theme.title);
+    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw("PLATFORM SDK"), &g_theme.title);
     (void)snprintf(line, sizeof line, "target=%s sdk=%s status=%s",
                    platform_sdk_target_name(), platform_sdk_current_name(), sdk_result_name(platform_sdk_status() == PLATFORM_SDK_BOOT_READY ? PLATFORM_SDK_RESULT_OK : PLATFORM_SDK_RESULT_NOT_READY));
-    nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), line, &g_theme.hint);
+    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw(line), &g_theme.hint);
     (void)snprintf(line, sizeof line, "caps links=%d ads=%d rewarded=%d storage=%d",
                    caps.external_links_allowed ? 1 : 0, caps.ads_supported ? 1 : 0,
                    caps.rewarded_supported ? 1 : 0, caps.storage_supported ? 1 : 0);
-    nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), line, &g_theme.hint);
+    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw(line), &g_theme.hint);
     (void)snprintf(line, sizeof line, "pause=%d resume=%d", s_pause_count, s_resume_count);
-    nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), line, &g_theme.hint);
-    nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), s_last_result, &g_theme.hint);
+    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw(line), &g_theme.hint);
+    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw(s_last_result), &g_theme.hint);
 
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
                      .layoutDirection = CLAY_LEFT_TO_RIGHT,
@@ -333,20 +334,21 @@ static void draw_mock_modal(nt_ui_context_t *ctx) {
                                      .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                      .childGap = 16,
                                      .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_TOP}}});
-    nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT),
-                s_flow == MOCK_AD_FLOW_REWARDED ? "MOCK REWARDED AD" : "MOCK INTERSTITIAL AD",
-                &g_theme.title);
+    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT),
+              loc_raw(s_flow == MOCK_AD_FLOW_REWARDED ? "MOCK REWARDED AD" : "MOCK INTERSTITIAL AD"),
+              &g_theme.title);
 
     char line[96];
     (void)snprintf(line, sizeof line, "placement: %s", s_placement);
-    nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), line, &g_theme.label);
+    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw(line), &g_theme.label);
 
     if (s_flow == MOCK_AD_FLOW_INTERSTITIAL) {
         if (button(ctx, "platform_sdk/mock_ad/close_interstitial", "Close interstitial", 220.0F, true)) {
             complete_interstitial(PLATFORM_SDK_AD_REASON_COMPLETED, true);
         }
     } else if (s_flow == MOCK_AD_FLOW_REWARDED) {
-        nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Reward is granted only by explicit success.", &g_theme.hint);
+        loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw("Reward is granted only by explicit success."),
+                  &g_theme.hint);
         CLAY({.layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0)},
                          .layoutDirection = CLAY_LEFT_TO_RIGHT,
                          .childGap = 10}}) {

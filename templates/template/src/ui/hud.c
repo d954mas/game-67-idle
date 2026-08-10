@@ -3,15 +3,18 @@
 #include "math/nt_math.h"
 #include "render/nt_render_defs.h"
 #include "renderers/nt_text_renderer.h"
+#include "ui/loc_widgets.h"
 #include "window/nt_window.h"
+
+#include "loc_strings.gen.h"
 
 #include <string.h>
 
-static void hud_text(const char *text, float x, float y, float size, const float color[4]) {
+static void hud_text(LocStr text, float x, float y, float size, const float color[4]) {
     float model[16];
     glm_mat4_identity((vec4 *)model);
     glm_translate((vec4 *)model, (vec3){x, y, 0.0F});
-    nt_text_renderer_draw(text, model, size, color, 0.0F, 0.0F);
+    loc_text_draw(text, model, size, color, 0.0F, 0.0F);
 }
 
 void hud_draw(nt_material_t text_material, nt_resource_t font_resource, nt_font_t font, nt_buffer_t frame_ubo) {
@@ -49,7 +52,7 @@ void hud_draw(nt_material_t text_material, nt_resource_t font_resource, nt_font_
        estate. This is game-owned demo scaffolding (not a feature); the
        generic resource_panel widget keeps its own fixed top-left placement
        unchanged -- no game-specific offset was hardcoded into the widget. */
-    hud_text("TEMPLATE", 30.0F, 80.0F, 30.0F, white);
-    hud_text("empty scene - gear (top-right) opens settings", 30.0F, 40.0F, 18.0F, cyan);
+    hud_text(loc_hud_title(), 30.0F, 80.0F, 30.0F, white);
+    hud_text(loc_hud_hint(), 30.0F, 40.0F, 18.0F, cyan);
     nt_text_renderer_flush();
 }

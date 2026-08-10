@@ -4,9 +4,13 @@
   "fragment": "settings",
   "version": 1,
   "string_max": 32,
+  "enums": {
+    "Language": ["en", "ru"]
+  },
   "fields": {
     "master_volume": { "type": "float", "default": 0.8, "min": 0, "max": 1 },
     "music_volume":  { "type": "float", "default": 0.7, "min": 0, "max": 1 },
-    "sfx_volume":    { "type": "float", "default": 0.9, "min": 0, "max": 1 }
+    "sfx_volume":    { "type": "float", "default": 0.9, "min": 0, "max": 1 },
+    "language":      { "type": "enum", "enum": "Language", "default": "en" }
   }
 }
