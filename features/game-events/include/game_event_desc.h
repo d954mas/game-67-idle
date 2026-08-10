@@ -39,6 +39,11 @@ typedef struct {
    payload base as its origin (a STRING member holds a payload-relative offset exactly
    like a top-level one), so a walker shifts the member offset and leaves the value
    alone. Records carry scalars and strings only -- never another repeated section. */
+/* Retaining an event is a blind memcpy of the payload, and a record may be aligned
+   more strictly than the event struct that carries it -- so the destination must be
+   aligned for the STRONGEST member, not for the event struct. Copy into storage of
+   max_align_t alignment (malloc'd memory already is); an _Alignas(EventStruct) buffer
+   is not enough and the misread only shows up on strict targets. */
 typedef struct {
     const char               *name;
     uint32_t                  offset;       /* offsetof the uint32 payload-relative array offset */

@@ -275,6 +275,14 @@ header a consumer includes is `items_catalog.gen.h`, catalog identity and
 currency queries answer without a bind step, and the `api_proof*` commands are
 replaced by `c_catalog*`.
 
+Version `6.1.0` closes three authoring holes the review found: negative zero is
+refused (it equals zero in every range check and in the diff, but bakes a
+different byte and a different hash), `levels.values` demands one kind per
+column the way `levels.linear` already did, and a requirement check may capture
+`studio.math` -- with raw arithmetic banned repo-wide it could otherwise compute
+nothing, and was told it had captured a mutable upvalue. A fractional field bound
+to an item kind now fails with a message that names the field and the kind.
+
 Version `6.0.0` puts track ids under the lock ratchet: the release receipt gains
 `track_ids: {active, reserved}` beside `field_ids`, and the baseline schema_version
 moves to 5. A track id is the key of its save record, so dropping or renaming one

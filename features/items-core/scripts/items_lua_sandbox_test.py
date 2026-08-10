@@ -755,6 +755,19 @@ items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=1,
         }, ["game.literal"])
         self.assert_error(unsafe_literal, "formula.math", "game/literal.lua", 4)
 
+        # Negative zero compares equal to zero in every range check and in the diff,
+        # but bakes a different byte and a different hash: unreviewable by design.
+        negative_zero = self.evaluate({"game.negzero": '''local items = require("studio.items")
+local levels = require("studio.levels")
+local math = require("studio.math")
+local field = require("studio.field")
+items.extend_schema({ level_row = { rate = field.f64({ id="game.sword.level.rate", required_for = { "sword" } }) } })
+items.define({ id="game.sword", kind="sword", stack=1, levels=levels.generate({ max_level=1,
+  rate=function(level, m) return m.mul(0.0, m.tofloat(m.sub(0, 5))) end,
+}) })'''
+        }, ["game.negzero"])
+        self.assert_error(negative_zero, "formula.math", "game/negzero.lua", 7)
+
         unsafe_override = self.evaluate({"game.override": '''local items = require("studio.items")
 local levels = require("studio.levels")
 items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=1,
@@ -789,6 +802,34 @@ items.define({ id="game.sword", stack=1,
 })'''
         }, ["game.generated"])
         self.assert_error(level_one_transition, "levels.level_one_transition", "game/generated.lua", 4)
+
+    def test_a_requirement_check_can_do_arithmetic(self):
+        """Raw arithmetic is banned repo-wide, so a check that cannot capture
+        studio.math cannot compute anything -- and used to be told it had captured a
+        mutable upvalue, which is not what happened."""
+        checked = self.evaluate({"game.reqmath": '''local items = require("studio.items")
+local field = require("studio.field")
+local math = require("studio.math")
+local requirements = require("studio.requirements")
+local attack = field.i64({ id="game.weapon.level.attack", required_for={"weapon"}, min=0, max=100, unit="damage", rounding="exact", label_key="item.attack" })
+items.extend_schema({ level_row={ attack=attack } })
+items.define({ id="game.sword", kind="weapon", stack=1, levels=require("studio.levels").single({ attack=15 }) })
+local sword = items.ref("game.sword")
+requirements.define({
+  id="game.weapon.headroom", severity="warning",
+  check=function(q, result)
+    local actual = q.level(sword, attack, 1)
+    local budget = math.sub(100, actual)
+    return result(budget >= 50, { headroom=50 }, { value=budget })
+  end,
+})'''
+        }, ["game.reqmath"])
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        payload = json.loads(checked.stdout)
+        requirement = payload["requirements"][0]
+        self.assertEqual(requirement["id"], "game.weapon.headroom")
+        self.assertEqual(requirement["status"], "pass")
+        self.assertEqual(requirement["evidence"]["actual"], {"value": 85})
 
     def test_named_requirements_record_query_dependencies_and_reviewed_waivers(self):
         checked = self.evaluate({"game.requirements": '''local items = require("studio.items")

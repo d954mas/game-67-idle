@@ -144,7 +144,10 @@ this module writes itself are part of its contract: the tick charges
 
 - `progression_set_level(track, level, reason)` — clamps to `[0,
   max_level]`, leaves xp untouched. For a prologue ("start this hero at
-  level 5").
+  level 5"). On a `threshold` track that is not the whole story: the xp it
+  leaves in place is still spendable, so the next `progression_update()` buys
+  back every level that xp covers. Lowering a threshold track means
+  `progression_reset` (level AND xp) or accepting the walk-back.
 - `progression_reset(track, reason)` — level=0 AND internal xp=0 (only
   `threshold` meaningfully has xp; `manual`/`auto` xp is the ignored
   default). Does NOT touch the payment scope — a full currency prestige is game

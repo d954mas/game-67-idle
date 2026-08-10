@@ -420,7 +420,9 @@ static void resolve_track(const progression_track_def_t *def) {
         level = st->level;
         iterations += 1;
     }
-    if (iterations == PROGRESSION_MAX_LEVELUPS_PER_TRACK) {
+    /* The cap and a finished track both stop the loop; only the first dropped
+       anything, and a track that maxes out on its last allowed step did not. */
+    if (iterations == PROGRESSION_MAX_LEVELUPS_PER_TRACK && level < def->max_level) {
         nt_log_warn("progression: per-track levelup cap at '%s' (dropped rest this frame)", def->id);
     }
     if (iterations > 0) {

@@ -79,6 +79,22 @@ class ItemsCCatalogTests(unittest.TestCase):
         self.assertIn("ITEM_TRANSITION_FREE", source)
         self.assertIn("ITEM_TRANSITION_COST", source)
 
+    def test_a_fractional_field_bound_to_an_item_kind_says_so(self):
+        """One registry serves item kinds and track kinds, so required_for can name the
+        wrong space. The error has to name the field and the kind, or the author reads
+        an ABI complaint about a column they meant for a track."""
+        _, snapshot = self.fixture("items_api_weapon_proof.json")
+        field = next(f for f in snapshot["fields"] if f["id"] == "game.weapon.level.attack")
+        field["type"] = "f64"
+        field.pop("rounding", None)
+        with self.assertRaises(CatalogFailure) as raised:
+            normalize(reseal(snapshot))
+        message = str(raised.exception)
+        self.assertIn("game.weapon.level.attack", message)
+        self.assertIn("f64", message)
+        self.assertIn("weapon", message)
+        self.assertIn("exact integers", message)
+
     def test_generated_indices_follow_sorted_item_ids(self):
         _, snapshot = self.fixture("items_api_weapon_proof.json")
         model = normalize(snapshot)

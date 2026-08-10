@@ -351,6 +351,12 @@ return function(raise_internal)
         or value == raw_math.huge or value == -raw_math.huge then
       return fail("formula.math", "expected a finite float")
     end
+    -- Negative zero equals zero everywhere a range is checked and everywhere a diff
+    -- compares, but it is a different byte in the baked table and a different hash.
+    -- A value nobody can see and nobody can review has no business being authored.
+    if value == 0.0 and 1.0 / value < 0.0 then
+      return fail("formula.math", "negative zero is not a value")
+    end
     return value
   end
   local function checked_number(value)
@@ -426,6 +432,11 @@ return function(raise_internal)
     end
     if value == items or value == studio_math then
       formula_safe_upvalues[proxy] = true
+    end
+    -- Raw arithmetic is banned everywhere, so without this a requirement check can do
+    -- no arithmetic at all -- and would say "mutable upvalue" about a frozen module.
+    if value == studio_math then
+      requirement_safe_upvalues[proxy] = true
     end
     setmetatable(proxy, {
       __index = target,
@@ -804,12 +815,28 @@ return function(raise_internal)
               active_formula_source = nil
             elseif column.mode == "values" then
               local values = copy(column.values)
+              -- One column is one kind, exactly as levels.linear demands of start and
+              -- step: a column mixing 1 and 2.5 has no type the generator can bake.
+              local column_kind = nil
               for level, value in raw_pairs(values) do
                 if raw_math.type(level) ~= "integer" or level < 1 or level > max_level then
                   return fail_at(
                     "levels.column_range", "column value level is outside max_level",
                     column, source_metadata[spec]
                   )
+                end
+                if raw_type(value) == "number" then
+                  active_formula_source = column_source
+                  value = checked_number(value)
+                  active_formula_source = nil
+                  local kind = raw_math.type(value)
+                  if column_kind ~= nil and kind ~= column_kind then
+                    return fail_at(
+                      "levels.column_contract", "one column is one kind: mixing exact and fractional values",
+                      column, source_metadata[spec]
+                    )
+                  end
+                  column_kind = kind
                 end
                 rows[level][name] = copy(value)
               end

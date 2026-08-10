@@ -216,9 +216,19 @@ def normalize(
     for index, field in enumerate(catalog_fields):
         member = field.get("member")
         unit = field.get("unit")
-        if (not is_c_member_name(member) or not isinstance(unit, str) or not unit
-                or field.get("type") != "i64" or field.get("rounding") != "exact"):
-            _fail("catalog.field", "field ABI metadata is invalid")
+        # One registry serves item kinds and track kinds, so required_for can name the
+        # wrong space by accident. Say which field and which name, or the author is
+        # left reading an ABI complaint about a column they meant for a track.
+        if field.get("type") != "i64" or field.get("rounding") != "exact":
+            named = sorted(set(field["required_for"]) & item_kinds)
+            _fail(
+                "catalog.field",
+                f"field {field.get('id')!r} is {field.get('type')}, but required_for names "
+                f"the item kind {', '.join(named)}; the item catalog carries exact integers "
+                "only -- name a track kind instead, or declare the field exact",
+            )
+        if not is_c_member_name(member) or not isinstance(unit, str) or not unit:
+            _fail("catalog.field", f"field {field.get('id')!r} has invalid ABI metadata")
         if member in field_by_member:
             _fail("catalog.field", f"field member collision: {member}")
         minimum = _i64(field.get("min"), "catalog.field_range")
