@@ -127,7 +127,9 @@ class ItemsLuaSandboxTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
-        self.assertEqual(payload["kinds"], ["consumable", "currency", "material", "weapon"])
+        # "hero" is the demo TRACK's kind: one registry serves both declaration
+        # spaces, so a kind here is not proof of an item.
+        self.assertEqual(payload["kinds"], ["consumable", "currency", "hero", "material", "weapon"])
         self.assertEqual(payload["items"], [
             {
                 "authoring_mode": "none", "base_value": 0,

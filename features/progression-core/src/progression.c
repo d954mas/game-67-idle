@@ -10,6 +10,7 @@
 #include "log/nt_log.h" /* nt_log_warn on the per-frame level-up cap */
 
 #include <assert.h>
+#include <inttypes.h> /* PRId64 in the refused-grant warning */
 #include <stdio.h>
 #include <string.h>
 
@@ -183,15 +184,18 @@ static int clamped_level(const progression_track_def_t *def, int level) {
     return level > def->max_level ? def->max_level : level;
 }
 
+/* Asking a column for the type it does not hold is a programming error, and
+   NT_ASSERT traps in release too -- so there is no soft answer to fall back on
+   and none is offered. An unresolved track still reads as zero, like every other
+   read here. */
 int64_t progression_valuei_at(progression_track_ref_t track, progression_value_t value, int level) {
     const progression_track_def_t *def = progression_track_def(track);
-    if (def == NULL || def->exact == NULL || value >= def->value_count) {
+    if (def == NULL || def->value_count == 0u) {
         return 0;
     }
+    NT_ASSERT(value < def->value_count && "column index outside the track's dictionary");
     NT_ASSERT(k_progression_value_exact[value] && "exact read of a fractional column");
-    if (!k_progression_value_exact[value]) {
-        return 0;
-    }
+    NT_ASSERT(def->exact != NULL && "exact column with no exact table");
     return def->exact[(uint32_t)clamped_level(def, level) * def->value_count + value];
 }
 
@@ -201,13 +205,12 @@ int64_t progression_valuei(progression_track_ref_t track, progression_value_t va
 
 double progression_valuef_at(progression_track_ref_t track, progression_value_t value, int level) {
     const progression_track_def_t *def = progression_track_def(track);
-    if (def == NULL || def->fractional == NULL || value >= def->value_count) {
+    if (def == NULL || def->value_count == 0u) {
         return 0.0;
     }
+    NT_ASSERT(value < def->value_count && "column index outside the track's dictionary");
     NT_ASSERT(!k_progression_value_exact[value] && "fractional read of an exact column");
-    if (k_progression_value_exact[value]) {
-        return 0.0;
-    }
+    NT_ASSERT(def->fractional != NULL && "fractional column with no fractional table");
     return def->fractional[(uint32_t)clamped_level(def, level) * def->value_count + value];
 }
 
@@ -238,27 +241,41 @@ static void emit_levelup(
 }
 
 /* Grants land in the first container of the payment scope: a level hands items
-   back into the purse it charged. */
-static void apply_grants(const progression_step_t *step, const char *reason) {
+   back into the purse it charged. A refused grant is lost value, so it is loud:
+   the level and its event are already committed and cannot be taken back. */
+static void apply_grants(const progression_track_def_t *def, const progression_step_t *step,
+                         const char *reason) {
     if (s_scope.count == 0) {
+        if (step->grant_count > 0) {
+            nt_log_warn("progression: %s granted nothing -- no payment scope is bound", def->id);
+        }
         return;
     }
     for (int i = 0; i < step->grant_count; ++i) {
-        (void)items_try_stack_add(
+        const items_result_t result = items_try_stack_add(
             s_scope.containers[0], step->grants[i].def_id, step->grants[i].amount,
             ITEMS_SLOT_AUTO, reason, NULL, NULL);
+        if (result != ITEMS_RESULT_OK) {
+            nt_log_warn("progression: %s granted %" PRId64 " %s but the container refused it (%d)",
+                        def->id, step->grants[i].amount, step->grants[i].def_id, (int)result);
+        }
     }
 }
 
 /* Checking, then allocating, then paying is the whole point of the order: paying
-   first would burn the purse whenever the tracks map is full. */
+   first would burn the purse whenever the tracks map is full. The check does not
+   cover everything the payment rejects -- the reason verb is items' to judge and
+   is only judged on the commit -- so a slot this call created is handed back
+   rather than left behind as a record for a level nobody received. */
 static bool buy_step(
     const progression_track_def_t *def, const progression_step_t *step, const char *reason,
     ProgressionTrackState **out_state) {
     const char *def_ids[ITEMS_PAYMENT_MAX_REQUIREMENTS];
     int64_t counts[ITEMS_PAYMENT_MAX_REQUIREMENTS];
     if (step->cost_count > (int)ITEMS_PAYMENT_MAX_REQUIREMENTS) {
-        return false; /* the catalog gate bounds this; defensive */
+        nt_log_warn("progression: %s prices a level in %d items, over the payment cap of %u",
+                    def->id, step->cost_count, (unsigned)ITEMS_PAYMENT_MAX_REQUIREMENTS);
+        return false;
     }
     for (int i = 0; i < step->cost_count; ++i) {
         def_ids[i] = step->cost[i].def_id;
@@ -268,12 +285,17 @@ static bool buy_step(
     if (items_can_pay_stacks(s_scope, def_ids, counts, count) != ITEMS_RESULT_OK) {
         return false;
     }
+    const bool fresh = find_track(def->id) == NULL;
     ProgressionTrackState *st = find_or_alloc_track(def->id);
     if (st == NULL) {
         return false; /* budget exhausted -- purse untouched */
     }
     if (items_try_pay_stacks(s_scope, def_ids, counts, count, reason) != ITEMS_RESULT_OK) {
-        return false; /* state moved between the check and the payment */
+        if (fresh) {
+            st->used = false;
+            st->key[0] = '\0';
+        }
+        return false;
     }
     *out_state = st;
     return true;
@@ -297,7 +319,7 @@ bool progression_level_up(progression_track_ref_t track, const char *reason) {
     int old_level = st->level;
     st->level += 1;
     emit_levelup(def, reason, old_level, st->level, step, 0);
-    apply_grants(step, "loot:levelup");
+    apply_grants(def, step, "loot:levelup");
     game_save_mark_dirty();
     return true;
 }
@@ -394,7 +416,7 @@ static void resolve_track(const progression_track_def_t *def) {
             st->level += 1;
             emit_levelup(def, "level_cost:threshold", old_level, st->level, step, xp_before);
         }
-        apply_grants(step, "loot:levelup");
+        apply_grants(def, step, "loot:levelup");
         level = st->level;
         iterations += 1;
     }

@@ -31,7 +31,14 @@ from pathlib import Path
 from typing import Any
 
 INT64_MAX = 2**63 - 1
-SCHEMA_LEVEL_MAX = 9999
+
+# Names the generated header defines itself; a column claiming one would redefine it.
+RESERVED_VALUE_IDENTS = {"COUNT"}
+
+# Mirrors ITEMS_PAYMENT_MAX_REQUIREMENTS in features/items-core (a C macro this
+# script cannot include). A longer price bakes fine and then refuses to pay, so
+# the build is where it must be caught.
+ITEMS_PAYMENT_MAX_REQUIREMENTS = 16
 
 MODE_ENUM = {
     "manual": "PROGRESSION_MODE_MANUAL",
@@ -76,8 +83,12 @@ def load_json(path: Path) -> Any:
         return json.load(handle)
 
 
-def validate_state_schema(doc: Any) -> int:
-    """Return the largest track id length the owning save schema accepts."""
+def validate_state_schema(doc: Any) -> tuple[int, int, int]:
+    """Return the storage bounds the owning save schema imposes.
+
+    (max track id bytes, max track count, max level). Every one of them silently
+    truncates or drops on save if the catalog exceeds it, so all three are read
+    from the game-owned schema rather than duplicated here."""
     prefix = "progression state schema validation"
 
     def schema_require(condition: bool, message: str) -> None:
@@ -102,7 +113,18 @@ def validate_state_schema(doc: Any) -> int:
         isinstance(tracks, dict) and tracks.get("type") == "map<string,TrackState>",
         "fields.tracks must have type 'map<string,TrackState>'",
     )
-    return string_max - 1
+    max_count = tracks.get("max_count")
+    schema_require(
+        isinstance(max_count, int) and not isinstance(max_count, bool) and max_count >= 1,
+        "fields.tracks.max_count must be an integer >= 1",
+    )
+    level = track_state.get("fields", {}).get("level") if isinstance(track_state.get("fields"), dict) else None
+    level_max = level.get("max") if isinstance(level, dict) else None
+    schema_require(
+        isinstance(level_max, int) and not isinstance(level_max, bool) and level_max >= 1,
+        "TrackState.level must declare an integer max >= 1",
+    )
+    return string_max - 1, max_count, level_max
 
 
 def track_columns(snapshot: dict[str, Any], tracks: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -128,11 +150,27 @@ def track_columns(snapshot: dict[str, Any], tracks: list[dict[str, Any]]) -> lis
             column.get("type") in ("i64", "f64"),
             f"progression column {member} must be i64 or f64",
         )
+        require(
+            c_ident(member) not in RESERVED_VALUE_IDENTS,
+            f"progression column {member!r} would redefine PROGRESSION_VALUE_{c_ident(member)}",
+        )
         members.add(member)
     return sorted(columns, key=lambda column: column["id"])
 
 
-def validate_tracks(tracks: list[dict[str, Any]], max_track_id_len: int) -> None:
+def validate_tracks(
+    tracks: list[dict[str, Any]], max_track_id_len: int, max_track_count: int, max_level_cap: int,
+) -> None:
+    require(
+        len(tracks) > 0,
+        "the snapshot declares no tracks; a catalog with none would emit a zero-length "
+        "k_tracks[], which is not valid C",
+    )
+    require(
+        len(tracks) <= max_track_count,
+        f"the catalog has {len(tracks)} tracks but the save schema stores at most "
+        f"{max_track_count}; the tracks past that would silently never persist",
+    )
     seen_symbols: dict[str, str] = {}
     for track in tracks:
         track_id = track["id"]
@@ -155,10 +193,18 @@ def validate_tracks(tracks: list[dict[str, Any]], max_track_id_len: int) -> None
 
         max_level = len(track["levels"]["rows"]) - 1
         require(
-            1 <= max_level <= SCHEMA_LEVEL_MAX,
+            1 <= max_level <= max_level_cap,
             f"track {track_id!r} reaches level {max_level}; the save schema caps 'level' at "
-            f"{SCHEMA_LEVEL_MAX}, and a higher one would silently clamp on save",
+            f"{max_level_cap}, and a higher one would silently clamp on save",
         )
+        for index, row in enumerate(track["levels"]["rows"][1:]):
+            entries = quantity_entries(row.get("cost_to_reach"))
+            require(
+                len(entries) <= ITEMS_PAYMENT_MAX_REQUIREMENTS,
+                f"track {track_id!r} prices level {index + 1} in {len(entries)} items; a payment "
+                f"carries at most {ITEMS_PAYMENT_MAX_REQUIREMENTS}, so the level would be "
+                "unbuyable at runtime",
+            )
 
 
 def quantity_entries(value: Any) -> list[tuple[str, int]]:
@@ -197,7 +243,7 @@ def render_header(columns: list[dict[str, Any]], track_count: int, provenance: s
         )
     lines.extend([
         "",
-        "/* Which read a column answers; the mismatched one asserts and returns zero. */",
+        "/* Which read a column answers; the mismatched one traps in every build. */",
         "extern const bool k_progression_value_exact[];",
         "",
         "extern const progression_track_def_t k_tracks[];",
@@ -335,8 +381,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         tracks = snapshot.get("tracks")
         require(isinstance(tracks, list), "snapshot 'tracks' must be an array")
-        max_track_id_len = validate_state_schema(load_json(state_schema_path))
-        validate_tracks(tracks, max_track_id_len)
+        max_track_id_len, max_track_count, max_level_cap = validate_state_schema(
+            load_json(state_schema_path))
+        validate_tracks(tracks, max_track_id_len, max_track_count, max_level_cap)
         columns = track_columns(snapshot, tracks)
 
         provenance = "the Items Snapshot tracks section"

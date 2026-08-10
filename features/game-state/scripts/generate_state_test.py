@@ -595,7 +595,10 @@ class StateCodegenTests(unittest.TestCase):
             text,
         )
         self.assertIn("const uint32_t cost_align = (uint32_t)_Alignof(MiniEvPaidCost);", text)
-        self.assertIn("off = (off + cost_align - 1u) & ~(cost_align - 1u);", text)
+        # The gap before the array is zeroed, not skipped: the whole payload is
+        # copied into the log, so a skipped byte makes two identical emits differ.
+        self.assertIn("memset(u.bytes + off, 0, cost_pad);", text)
+        self.assertIn("off += cost_pad;", text)
         # a record stronger-aligned than the event struct must widen the emit alignment
         self.assertIn(
             "((_Alignof(MiniEvPaid) > _Alignof(MiniEvPaidCost)) "

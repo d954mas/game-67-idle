@@ -187,14 +187,19 @@ class EventRenderer:
     def render_record_packing(self, evt: str, record: dict[str, Any], emit_fn: str) -> list[str]:
         """Reserve the record array at its own alignment, then fill records one by one,
         appending each record's strings after the array. Strings keep the payload base
-        as their origin, so the array stays a flat POD run."""
+        as their origin, so the array stays a flat POD run.
+
+        The alignment gap is zeroed rather than skipped: the whole payload is copied
+        into the log, so a skipped byte would make two identical emits differ."""
         name = record["name"]
         wire = self.record_struct_c_name(evt, name)
         lines: list[str] = [
             "",
             f"    const uint32_t {name}_n = ({name} != NULL) ? {name}_count : 0u;",
             f"    const uint32_t {name}_align = (uint32_t)_Alignof({wire});",
-            f"    off = (off + {name}_align - 1u) & ~({name}_align - 1u);",
+            f"    const uint32_t {name}_pad = (uint32_t)(((off + {name}_align - 1u) & ~({name}_align - 1u)) - off);",
+            f"    memset(u.bytes + off, 0, {name}_pad);",
+            f"    off += {name}_pad;",
         ]
         lines.extend(self.render_record_overflow_guard(
             emit_fn, f"(size_t)off + ((size_t){name}_n * sizeof({wire})) > sizeof(u.bytes)"

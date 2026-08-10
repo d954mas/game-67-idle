@@ -127,7 +127,9 @@ const void *mini_emit_paid(int32_t count, const char *reason, const MiniEvPaidCo
 
     const uint32_t cost_n = (cost != NULL) ? cost_count : 0u;
     const uint32_t cost_align = (uint32_t)_Alignof(MiniEvPaidCost);
-    off = (off + cost_align - 1u) & ~(cost_align - 1u);
+    const uint32_t cost_pad = (uint32_t)(((off + cost_align - 1u) & ~(cost_align - 1u)) - off);
+    memset(u.bytes + off, 0, cost_pad);
+    off += cost_pad;
     if ((size_t)off + ((size_t)cost_n * sizeof(MiniEvPaidCost)) > sizeof(u.bytes)) {
         NT_ASSERT(0 && "mini_emit_paid payload exceeds GAME_EVENT_EMIT_MAX");
         nt_log_warn("mini_emit_paid: payload exceeds GAME_EVENT_EMIT_MAX (%u B) -> dropped", (unsigned)GAME_EVENT_EMIT_MAX);

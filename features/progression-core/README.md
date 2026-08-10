@@ -135,9 +135,10 @@ pull in items' closed verb list (`features/items/reason_tags.h` is
 game-owned and items-internal, not something progression should reach into).
 A spend forwards `reason` straight into items, where the FULL items verb-check
 already runs — the verb vocabulary lives in exactly one place. The two reasons
-this module writes itself are part of its contract: a level's own spend is
-`level_cost:<track_id>` and a level's grant is `loot:levelup`, so every consumer
-must have both verbs in its `reason_tags.h` (see INSTALL.md).
+this module writes itself are part of its contract: the tick charges
+`level_cost:auto` / `level_cost:threshold`, and a level's grant lands under
+`loot:levelup`, so every consumer must have both verbs in its `reason_tags.h`
+(see INSTALL.md).
 
 ## `set_level` vs `reset` — different primitives
 

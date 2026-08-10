@@ -447,10 +447,16 @@ void test_columns_answer_the_read_their_type_declares(void) {
     TEST_ASSERT_TRUE(progression_valuef_at(s_mixed, 1u, 0) == 1.0);
     TEST_ASSERT_TRUE(progression_valuef_at(s_mixed, 1u, 2) == 1.5);
 
-    /* A level past the cap reads the cap rather than walking off the table. */
+    /* A level past the cap reads the cap rather than walking off the table. A
+       level is player state and can legitimately be anything; a column index is
+       a compile-time name, so an unknown one is a caller bug and traps instead
+       of answering. That is why there is no read-a-column-nobody-declared case
+       here: the only outcome it has is the abort. */
     TEST_ASSERT_EQUAL_INT64(9, progression_valuei_at(s_mixed, 0u, 99));
-    /* A column nobody declared reads as nothing. */
-    TEST_ASSERT_EQUAL_INT64(0, progression_valuei(s_mixed, 7u));
+
+    /* An unresolved track still reads as zero -- every other read here does. */
+    TEST_ASSERT_EQUAL_INT64(0, progression_valuei(PROGRESSION_TRACK_REF_NONE, 0u));
+    TEST_ASSERT_TRUE(progression_valuef(PROGRESSION_TRACK_REF_NONE, 1u) == 0.0);
 }
 
 /* ---- a price in more than one resource ---- */

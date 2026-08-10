@@ -71,8 +71,10 @@ uint32_t progression_cost_count(progression_track_ref_t track);
 progression_amount_t progression_cost_at(progression_track_ref_t track, uint32_t index);
 int64_t progression_xp_cost(progression_track_ref_t track);
 
-/* A column read. The type is the column's, not the call's, so asking for the
-   wrong one is a debug assert and a zero -- both take one progression_value_t. */
+/* A column read. The type is the column's, not the call's, and both calls take
+   one progression_value_t, so a mismatch cannot be caught at compile time. It is
+   caught by an assert that traps in EVERY build, because reading a fractional
+   column as an integer is a bug in the caller, not a runtime condition. */
 int64_t progression_valuei(progression_track_ref_t track, progression_value_t value);
 int64_t progression_valuei_at(progression_track_ref_t track, progression_value_t value, int level);
 double progression_valuef(progression_track_ref_t track, progression_value_t value);

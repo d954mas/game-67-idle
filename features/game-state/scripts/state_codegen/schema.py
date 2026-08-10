@@ -212,12 +212,20 @@ def load_event_records(
                     f"unknown repeated member type {mtype!r} for {evt_name}.repeated.{name}.{mname}"
                 )
             members.append({"name": mname, "type": mtype, "doc": mspec.get("doc")})
+        # The emit body declares its locals in the same scope as the parameters, so
+        # a field named like one of them redeclares it rather than shadowing it.
         synthesized = [
             name,
             f"{name}_count",
             f"{name}_at",
             f"{name}_record",
             f"{name}_record_fields",
+            f"{name}_n",
+            f"{name}_align",
+            f"{name}_pad",
+            f"{name}_base",
+            f"{name}_i",
+            f"{name}_rec",
             *(f"{name}_{member['name']}" for member in members if member["type"] == "string"),
         ]
         for label in synthesized:
@@ -233,8 +241,12 @@ def load_event_records(
 
 def validate_event_struct_names(events: dict[str, dict[str, Any]]) -> None:
     """An event and a repeated section share one Pascal struct namespace: event
-    `cell_spawned` and event `cell` + section `spawned` both want <Ns>EvCellSpawned."""
+    `cell_spawned` and event `cell` + section `spawned` both want <Ns>EvCellSpawned.
+    The lowercase descriptor tables share a namespace the same way, and that one
+    spans events: `<ns>_ev_paid_cost_record_fields` is reachable both from event
+    `paid` + section `cost` and from an event literally named `paid_cost_record`."""
     owners: dict[str, str] = {}
+    tables: dict[str, str] = {}
 
     def claim(key: str, origin: str) -> None:
         if key in owners:
@@ -243,13 +255,23 @@ def validate_event_struct_names(events: dict[str, dict[str, Any]]) -> None:
             )
         owners[key] = origin
 
+    def claim_table(key: str, origin: str) -> None:
+        if key in tables:
+            raise SystemExit(
+                f"{origin} and {tables[key]} collide on the generated descriptor table {key}"
+            )
+        tables[key] = origin
+
     for evt_name, spec in events.items():
         claim(pascal(evt_name), f"event {evt_name}")
+        claim_table(f"{evt_name}_fields", f"event {evt_name}")
+        claim_table(f"{evt_name}_records", f"event {evt_name}")
         for record in spec["repeated"]:
             key = pascal(evt_name) + pascal(record["name"])
             origin = f"event {evt_name} repeated {record['name']}"
             claim(key, origin)
             claim(f"{key}In", origin)  # the emit-side input struct shares the namespace
+            claim_table(f"{evt_name}_{record['name']}_record_fields", origin)
 
 
 def load_schema(schema_path: Path) -> dict[str, Any]:

@@ -18,17 +18,22 @@ never mentions progression (grep-gated, G-rev).
 
 ## Contract: two reason verbs
 
-The module writes two reasons of its own into items, so a consumer's
-game-owned `src/features/items/reason_tags.h` must accept both or every
-level-up fails the items verb check:
+A manual level-up spends under the reason its CALLER passed, forwarded
+untouched. The module writes two reasons of its own, and a consumer's
+game-owned `src/features/items/reason_tags.h` must accept both or the tick and
+the grants fail the items verb check:
 
-- `level_cost:<track_id>` — the level's own spend (`manual` on call, `auto` on
-  tick).
+- `level_cost:auto` and `level_cost:threshold` — what `progression_update()`
+  charges when it buys a level on its own. The subject is the mode, not the
+  track: the tick is one actor, and the track id is already in the event.
 - `loot:levelup` — the items a reached level grants back. It is a GRANT, not a
   spend; the verb reads that way on purpose.
 
-Both are already in the closed verb list every consumer starts from; the
-requirement is only that a game which prunes that list keeps them.
+Both verbs are in the closed list every consumer starts from; the requirement
+is only that a game which prunes that list keeps them. Note the asymmetry: an
+invalid caller-supplied reason is rejected by items on the commit, AFTER the
+affordability check passed, so `progression_level_up` returns false having
+charged nothing.
 
 ## CMake wiring
 

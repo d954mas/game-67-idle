@@ -82,13 +82,20 @@ def items_snapshot(
     }
 
 
-def progression_schema(*, string_max: object = 64) -> dict:
+def progression_schema(
+    *, string_max: object = 64, max_count: object = 32, level_max: object = 9999,
+) -> dict:
+    """The shape of a real game-owned fragment: every storage bound the generator
+    must respect is declared here, not duplicated in the generator."""
     return {
         "schema": "game_seed.progression",
         "fragment": "progression",
         "string_max": string_max,
-        "types": {"TrackState": {"kind": "object", "fields": {}}},
-        "fields": {"tracks": {"type": "map<string,TrackState>", "max_count": 32}},
+        "types": {"TrackState": {"kind": "object", "fields": {
+            "level": {"type": "int", "default": 0, "min": 0, "max": level_max},
+            "xp": {"type": "i64", "default": 0, "min": 0, "max": 9000000000000000000},
+        }}},
+        "fields": {"tracks": {"type": "map<string,TrackState>", "max_count": max_count}},
     }
 
 
@@ -164,6 +171,8 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
             {**progression_schema(), "string_max": 1},
             {**progression_schema(), "fields": {"tracks": {"type": "array"}}},
             {**progression_schema(), "types": {"TrackState": {"kind": "scalar"}}},
+            progression_schema(max_count=0),
+            progression_schema(level_max="lots"),
         ]
         for document in invalid_documents:
             with self.subTest(document=document):
@@ -202,6 +211,60 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "both sanitize to the C identifier"):
             generator.main(args)
 
+    def test_rejects_a_catalog_with_no_tracks(self) -> None:
+        """A zero-length k_tracks[] is not valid C, and sizeof over it is worse."""
+        args, _out, temp, _game = self.generator_args(snapshot=items_snapshot(tracks=[]))
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(SystemExit, "declares no tracks"):
+            generator.main(args)
+
+    def test_rejects_more_tracks_than_the_save_can_hold(self) -> None:
+        tracks = [track(f"t{index}") for index in range(3)]
+        args, _out, temp, _game = self.generator_args(
+            snapshot=items_snapshot(tracks=tracks), schema=progression_schema(max_count=2)
+        )
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(SystemExit, "stores at most 2"):
+            generator.main(args)
+
+    def test_level_cap_comes_from_the_state_schema(self) -> None:
+        rows = [{}] + [{"cost_to_reach": cost("coin", 1)} for _ in range(3)]
+        args, _out, temp, _game = self.generator_args(
+            snapshot=items_snapshot(tracks=[track(rows=rows)]),
+            schema=progression_schema(level_max=2),
+        )
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(SystemExit, "caps 'level' at 2"):
+            generator.main(args)
+
+    def test_rejects_a_price_longer_than_one_payment(self) -> None:
+        """A 17-item price bakes fine and then refuses to pay, so it dies here."""
+        wide = costs(*[(f"item{index}", 1) for index in range(17)])
+        args, _out, temp, _game = self.generator_args(snapshot=items_snapshot(tracks=[track(rows=[
+            {}, {"cost_to_reach": wide},
+        ])]))
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(SystemExit, "prices level 1 in 17 items"):
+            generator.main(args)
+
+    def test_rejects_a_column_that_would_redefine_the_header_s_own_macro(self) -> None:
+        args, _out, temp, _game = self.generator_args(snapshot=items_snapshot(
+            fields=[field("up.count", "count", "i64", required_for=["upgrade"])]))
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(SystemExit, "would redefine PROGRESSION_VALUE_COUNT"):
+            generator.main(args)
+
+    def test_two_tracks_render_two_independent_tables(self) -> None:
+        source = self.generate(items_snapshot(tracks=[
+            track("alpha", rows=[{}, {"cost_to_reach": cost("coin", 7)}]),
+            track("beta", rows=[{}, {"cost_to_reach": cost("coin", 9)}]),
+        ]))
+        self.assertIn("COST_ALPHA_0[] = {", source)
+        self.assertIn("COST_BETA_0[] = {", source)
+        self.assertIn(".steps = STEPS_ALPHA,", source)
+        self.assertIn(".steps = STEPS_BETA,", source)
+        self.assertLess(source.index('.id = "alpha",'), source.index('.id = "beta",'))
+
     def test_rejects_a_track_with_no_reachable_level(self) -> None:
         args, _out, temp, _game = self.generator_args(
             snapshot=items_snapshot(tracks=[track(rows=[{}])])
@@ -219,6 +282,9 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         self.assertIn(".max_level = 2,", source)
         self.assertIn("{ COST_HERO_0, 1, 0LL, NULL, 0 },", source)
         self.assertIn("{ COST_HERO_1, 1, 0LL, NULL, 0 },", source)
+        steps = source.split('STEPS_HERO[] = {')[1].split('};')[0]
+        # exactly max_level entries: a trailing row would price a level nothing reaches
+        self.assertEqual(steps.count('{ COST_HERO'), 2)
         self.assertIn("static const progression_amount_t COST_HERO_0[] = {\n    { \"coin\", 50LL },\n};", source)
 
     # -- price and grants ----------------------------------------------------
