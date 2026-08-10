@@ -275,6 +275,13 @@ header a consumer includes is `items_catalog.gen.h`, catalog identity and
 currency queries answer without a bind step, and the `api_proof*` commands are
 replaced by `c_catalog*`.
 
+Version `5.2.0` teaches `diff_snapshots` about tracks. A price edit moves
+`content_hash`, and the diff -- which walked items and requirements only -- used to
+report no changes for it. Diff entries for tracks carry a `track` key beside the
+existing `item` and `requirement` ones. The self-paying gate for `auto` tracks also
+treats an absent price as zero, so a free level granting the same resource is
+refused where it used to pass.
+
 ## Extension points
 
 Extend through game-owned Lua fields/modules, reason tags, seed logic, save

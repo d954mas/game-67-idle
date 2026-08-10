@@ -192,6 +192,13 @@ Run the `test` command from `feature.json`, then
 minor adds backward-compatible surface, and major permits breaking changes.
 Consumers pin both this version and an exact repository revision.
 
+Version `4.2.0` zeroes the alignment gap a repeated section leaves before its record
+array. The gap ships inside the payload, so skipping it let two identical emits copy
+different bytes into the log. Generated sources change; regenerate. The schema
+validator also claims the names the emit body uses as locals and the descriptor
+tables it emits, so a field or event named like one of them is rejected instead of
+producing C that does not compile.
+
 ## Extension points
 
 Extend through game-owned schemas, migrations, hooks, and DevAPI adapters;

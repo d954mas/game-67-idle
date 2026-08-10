@@ -105,6 +105,13 @@ descriptor that leaves the two new members out keeps its old meaning (no records
 but must spell them, since `-Wextra -Werror` rejects a partial initializer.
 `game_event_field_t` is unchanged, so field tables were not touched.
 
+Version `3.0.0` removes the render fallback. `game_event_render` no longer emits a
+`{ seq, tick, type, truncated:true }` marker when the line will not fit: a repeated
+section makes the rendered length content-driven, and a marker carrying none of the
+payment is worse than a stop. Every caller must pass a buffer of
+`GAME_EVENT_RENDER_LINE_MAX`; a render that still does not fit asserts. A consumer
+that sized its own 512-byte line must adopt the shared budget.
+
 ## Extension points
 
 Add descriptors, optional sinks, and guarded adapters through documented

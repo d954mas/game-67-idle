@@ -309,6 +309,16 @@ now `items_can_pay_stacks` over the step's own list. Cascades
 module writes — `level_cost:<track_id>` and `loot:levelup` — are part of the
 contract a consumer's `reason_tags.h` must satisfy.
 
+Version `6.0.0` makes two soft answers hard. A column read of the wrong type used to
+promise an assert and a zero; `NT_ASSERT` traps in every build, so the zero was
+unreachable and the promise was false -- the reads now say plainly that a mismatch is
+a caller bug. And the generator, which read `string_max` from the owning save schema
+and hardcoded the rest, now takes the track count and the level cap from that same
+document, refuses an empty catalog, refuses a column that would redefine
+`PROGRESSION_VALUE_COUNT`, refuses a column only some track kinds own, and refuses a
+price longer than one payment. A catalog that built under `5.x` can be rejected here;
+every rejection names what to change.
+
 ## Extension points
 
 Extend through game-owned catalogs, generated curves, state fragments, and
