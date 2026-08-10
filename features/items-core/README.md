@@ -83,16 +83,22 @@ Both payment entries plan the whole cost against a scope of up to
 requirement leaves every other one untouched. `items_try_pay_cost` takes a baked
 catalog cost; `items_try_pay_stacks` takes up to
 `ITEMS_PAYMENT_MAX_REQUIREMENTS` `def_id`/count pairs authored outside the
-catalog. A caller-built list carries stack resources only, at most one entry per
-item, and non-negative counts; a count of zero is a free position that is
-dropped, and a list left with nothing to pay succeeds having taken nothing while
-still recording the payment with zero requirements.
-Everything the catalog path asserts, the list path answers with a result code.
+catalog -- a bound the catalog path does not share, since a baked cost is
+limited only by the generator's global cost budget. A caller-built list carries
+stack resources only, at most one requirement per item, and non-negative counts;
+a count of zero is a free position that is dropped, and a list left with nothing
+to pay succeeds having taken nothing while still recording the payment with zero
+requirements. A valid scope is required either way, so a caller that owes
+nothing still names where it would have paid from. Everything the catalog path
+asserts, the list path answers with a result code.
 
 `items.payment` is the single success record for a composite payment. Stable
 `cost_fingerprint`, `scope_fingerprint`, and `source_fingerprint` fields identify
-the normalized item-ID/count requirements, ordered persistent container IDs,
-and ordered container-ID/entry-ID/slot/item-ID/applied-count plan. They use
+the ordered item-ID/count requirements, ordered persistent container IDs,
+and ordered container-ID/entry-ID/slot/item-ID/applied-count plan. Requirement
+order is the order the cost declares them in, so the same price declared in a
+different order is a different fingerprint; `requirement_count == 0` is what
+marks a payment that owed nothing. They use
 FNV-1a over the named `items.payment.*.v1` domain followed by canonical
 little-endian 64-bit fields. `requirement_count`, `scope_count`, and
 `source_entry_count` describe the bounded plan; `requested_units` and

@@ -209,7 +209,8 @@ items_result_t items_try_pay_cost(
 /* Pays a caller-built cost in one commit: either every requirement is taken or
    nothing is. Stack resources only, at most one requirement per item, and a
    count of zero is a free position that is dropped -- a list left with nothing
-   to pay owes nothing and succeeds. */
+   to pay owes nothing and succeeds, though the scope must be valid either way.
+   The audit fingerprints follow the order the requirements are given in. */
 items_result_t items_try_pay_stacks(
     items_payment_scope_t scope, const char *const *def_ids,
     const int64_t *counts, uint32_t count, const char *reason);

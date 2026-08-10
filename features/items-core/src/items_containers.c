@@ -1308,10 +1308,14 @@ static items_result_t commit_payment_plan(
     const items_payment_plan_t *plan, const char *reason) {
     if (!transaction_commit_allowed()) { return ITEMS_RESULT_COMMIT_FAILED; }
     if (!audit_payment_available(reason)) { return ITEMS_RESULT_AUDIT_UNAVAILABLE; }
-    apply_payment_plan(plan);
-    bool ok = build_indices(&items_state, true, false, NULL, 0);
-    NT_ASSERT(ok);
-    game_save_mark_dirty();
+    /* A plan that owes nothing still belongs in the audit stream, but it must
+       not dirty a save it did not change. */
+    if (plan->row_count > 0) {
+        apply_payment_plan(plan);
+        bool ok = build_indices(&items_state, true, false, NULL, 0);
+        NT_ASSERT(ok);
+        game_save_mark_dirty();
+    }
     items_emit_payment(
         (nt_hash64_t){plan->cost_fingerprint}, (nt_hash64_t){plan->scope_fingerprint},
         (nt_hash64_t){plan->source_fingerprint}, plan->requirement_count,
@@ -1338,11 +1342,12 @@ static items_result_t normalize_stack_requirements(
     if (count > 0 && (def_ids == NULL || counts == NULL)) { return ITEMS_RESULT_INVALID_ARGUMENT; }
     item_id_t resolved[ITEMS_PAYMENT_MAX_REQUIREMENTS] = {0};
     for (uint32_t i = 0; i < count; i++) {
+        /* A hole in the caller's array is a caller defect, not a missing item. */
+        if (def_ids[i] == NULL) { return ITEMS_RESULT_INVALID_ARGUMENT; }
         item_core_t core;
         if (!lookup_item(def_ids[i], NULL, &core)) { return ITEMS_RESULT_NOT_FOUND; }
         if (!item_is_stackable(core)) { return ITEMS_RESULT_WRONG_STORAGE; }
         if (counts[i] < 0) { return ITEMS_RESULT_INVALID_ARGUMENT; }
-        /* Compared by resolved id, so two spellings of one item still collide. */
         for (uint32_t prior = 0; prior < i; prior++) {
             if (resolved[prior].value == core.id.value) { return ITEMS_RESULT_INVALID_ARGUMENT; }
         }
