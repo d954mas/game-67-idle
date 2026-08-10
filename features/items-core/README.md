@@ -202,6 +202,12 @@ wire/API contracts, MINOR releases add backward-compatible surface, and MAJOR
 releases may remove or change public commands, APIs, or catalog contracts.
 Consumers pin both the version and repository revision.
 
+4.2.0 gives `items.payment` the composition it never carried: `cost[]` records
+naming each charged resource, its amount, and what the whole scope held before.
+`ITEMS_PAYMENT_MAX_REQUIREMENTS` now bounds a baked catalog cost too, not only an
+author-built list, so every payment can be audited whole; a longer price is
+rejected with `ITEMS_RESULT_INVALID_ARGUMENT` instead of silently under-reported.
+
 4.1.0 adds `items_can_pay_stacks`, the non-committing answer to the same
 question `items_try_pay_stacks` answers.
 

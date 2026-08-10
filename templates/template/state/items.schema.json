@@ -72,6 +72,13 @@
         "requested_units":    { "type": "i64" },
         "applied_units":      { "type": "i64" },
         "reason":             { "type": "string" }
+      },
+      "repeated": {
+        "cost": {
+          "def_id": { "type": "string" },
+          "amount": { "type": "i64" },
+          "before": { "type": "i64" }
+        }
       }
     },
     "acquire": {

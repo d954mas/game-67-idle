@@ -55,18 +55,8 @@ void setUp(void) {
 }
 void tearDown(void) {}
 
-static bool levelup_event_exists(
-    const char *track,
-    const char *mode,
-    const char *cause,
-    const char *reason,
-    int64_t old_level,
-    int64_t new_level,
-    const char *cost_def_id,
-    int64_t cost_amount,
-    int64_t resource_before,
-    int64_t resource_after,
-    int64_t cascade_depth) {
+static const ProgressionEvLevelup *find_levelup(
+    const char *track, const char *reason, int64_t old_level, int64_t new_level) {
     int n = 0;
     const game_event_t *log = game_event_log(&n);
     nt_hash64_t levelup_type = progression_ev_levelup_type();
@@ -76,19 +66,49 @@ static bool levelup_event_exists(
         }
         const ProgressionEvLevelup *e = (const ProgressionEvLevelup *)log[i].payload;
         if (strcmp(progression_ev_levelup_track(e), track) == 0 &&
-            strcmp(progression_ev_levelup_mode(e), mode) == 0 &&
-            strcmp(progression_ev_levelup_cause(e), cause) == 0 &&
             strcmp(progression_ev_levelup_reason(e), reason) == 0 &&
-            e->old_level == old_level && e->new_level == new_level &&
-            strcmp(progression_ev_levelup_cost_def_id(e), cost_def_id) == 0 &&
-            e->cost_amount == cost_amount &&
-            e->resource_before == resource_before &&
-            e->resource_after == resource_after &&
-            e->cascade_depth == cascade_depth) {
-            return true;
+            e->old_level == old_level && e->new_level == new_level) {
+            return e;
         }
     }
-    return false;
+    return NULL;
+}
+
+/* An item-paid levelup carries the price in cost[] and leaves the xp pair at zero. */
+static bool levelup_paid_event_exists(
+    const char *track,
+    const char *mode,
+    const char *cause,
+    const char *reason,
+    int64_t old_level,
+    int64_t new_level,
+    const char *def_id,
+    int64_t amount,
+    int64_t before) {
+    const ProgressionEvLevelup *e = find_levelup(track, reason, old_level, new_level);
+    return e != NULL &&
+           strcmp(progression_ev_levelup_mode(e), mode) == 0 &&
+           strcmp(progression_ev_levelup_cause(e), cause) == 0 &&
+           e->xp_cost == 0 && e->xp_before == 0 &&
+           progression_ev_levelup_cost_count(e) == 1u &&
+           strcmp(progression_ev_levelup_cost_def_id(e, 0), def_id) == 0 &&
+           progression_ev_levelup_cost_at(e, 0)->amount == amount &&
+           progression_ev_levelup_cost_at(e, 0)->before == before;
+}
+
+/* A threshold levelup spends its own accumulator, so it names no item at all. */
+static bool levelup_threshold_event_exists(
+    const char *track,
+    const char *reason,
+    int64_t old_level,
+    int64_t new_level,
+    int64_t xp_cost,
+    int64_t xp_before) {
+    const ProgressionEvLevelup *e = find_levelup(track, reason, old_level, new_level);
+    return e != NULL &&
+           strcmp(progression_ev_levelup_mode(e), "threshold") == 0 &&
+           e->xp_cost == xp_cost && e->xp_before == xp_before &&
+           progression_ev_levelup_cost_count(e) == 0u;
 }
 
 static bool xp_added_event_exists(const char *track, const char *reason, int64_t delta, int64_t before_xp, int64_t after_xp) {
@@ -197,8 +217,8 @@ void test_manual_level_up_spends_purse(void) {
     TEST_ASSERT_TRUE(progression_level_up("man", "level_cost:test"));
     TEST_ASSERT_EQUAL_INT(1, progression_level("man"));
     TEST_ASSERT_EQUAL_INT64(15, resource_count("tmpl.gold")); /* 25 - cost[0]=10 */
-    TEST_ASSERT_TRUE(levelup_event_exists(
-        "man", "manual", "manual", "level_cost:test", 0, 1, "tmpl.gold", 10, 25, 15, 0));
+    TEST_ASSERT_TRUE(levelup_paid_event_exists(
+        "man", "manual", "manual", "level_cost:test", 0, 1, "tmpl.gold", 10, 25));
 
     /* cost[1]=20 > remaining 15 -> insufficient, level_up rejects, level stays put. */
     TEST_ASSERT_FALSE(progression_level_up("man", "level_cost:test"));
@@ -258,6 +278,9 @@ void test_threshold_tick_buys_from_internal_xp(void) {
        cost[2]=10 > 5, stops. */
     TEST_ASSERT_EQUAL_INT(2, progression_level("thr"));
     TEST_ASSERT_EQUAL_INT64(5, progression_xp_current("thr")); /* internal accumulator, not purse */
+    /* The price is xp, so it rides xp_cost/xp_before and cost[] stays empty. */
+    TEST_ASSERT_TRUE(levelup_threshold_event_exists("thr", "level_cost:threshold", 0, 1, 10, 25));
+    TEST_ASSERT_TRUE(levelup_threshold_event_exists("thr", "level_cost:threshold", 1, 2, 10, 15));
 }
 
 /* ---- set_level (Р6: prologue) ---- */
@@ -313,17 +336,17 @@ void test_levelup_events_include_context_for_auto_and_manual(void) {
     TEST_ASSERT_TRUE(resource_add("tmpl.xp", 12, "cheat:test"));
     progression_update(); /* auto1: 0->1->2 (two levelups) */
 
-    TEST_ASSERT_TRUE(levelup_event_exists(
-        "auto1", "auto", "auto", "level_cost:auto", 0, 1, "tmpl.xp", 5, 12, 7, 0));
-    TEST_ASSERT_TRUE(levelup_event_exists(
-        "auto1", "auto", "auto", "level_cost:auto", 1, 2, "tmpl.xp", 5, 7, 2, 0));
+    TEST_ASSERT_TRUE(levelup_paid_event_exists(
+        "auto1", "auto", "auto", "level_cost:auto", 0, 1, "tmpl.xp", 5, 12));
+    TEST_ASSERT_TRUE(levelup_paid_event_exists(
+        "auto1", "auto", "auto", "level_cost:auto", 1, 2, "tmpl.xp", 5, 7));
 
     /* Manual level_up is also a fact event now; analytics should not infer it from items.txn. */
     game_event_frame_reset();
     TEST_ASSERT_TRUE(resource_add("tmpl.gold", 25, "cheat:test"));
     TEST_ASSERT_TRUE(progression_level_up("man", "level_cost:test"));
-    TEST_ASSERT_TRUE(levelup_event_exists(
-        "man", "manual", "manual", "level_cost:test", 0, 1, "tmpl.gold", 10, 25, 15, 0));
+    TEST_ASSERT_TRUE(levelup_paid_event_exists(
+        "man", "manual", "manual", "level_cost:test", 0, 1, "tmpl.gold", 10, 25));
 }
 
 /* ---- T5 HARD caps (G6 -- anti-hang, критично) ---- */

@@ -61,10 +61,12 @@ not exist — items code never mentions progression (grep-gated, G-rev). See
   auto-levels while the accumulator covers `cost(level)`.
 
 Successful `manual`, `auto`, and `threshold` level changes emit
-`progression.levelup` with `track`, `mode`, `cause`, `reason`, `old_level`,
-`new_level`, cost/resource before-after fields, and `cascade_depth`. Additional
-fact events cover non-levelup mutations: `progression.xp_added`,
-`progression.level_set`, and `progression.reset`.
+`progression.levelup` with `track`, `mode`, `cause`, `reason`, `old_level`, and
+`new_level`, plus the price in the form the mode actually pays in: `manual`/`auto`
+fill `cost[]` (`def_id`, `amount`, `before`) and leave `xp_cost`/`xp_before` zero,
+`threshold` does the reverse — its accumulator is not an item, and there is only
+ever one of it. Additional fact events cover non-levelup mutations:
+`progression.xp_added`, `progression.level_set`, and `progression.reset`.
 
 ## Curve = baked int64 table (zero float in C)
 
@@ -302,6 +304,11 @@ canonical `--items-snapshot <items.snapshot.json>` build output.
 Version `3.1.0` adds `curve.type: "table"` (verbatim hand-authored per-level
 costs) alongside the existing `"exp"` formula curve — backward-compatible,
 existing `"exp"` catalogs generate byte-identical output.
+Version `4.0.0` reshapes `progression.levelup`: the price rides `cost[]`
+(`def_id`/`amount`/`before`) for item-paid modes and `xp_cost`/`xp_before` for
+`threshold`. The five scalars it replaces — `cost_def_id`, `cost_amount`,
+`resource_before`, `resource_after`, `cascade_depth` — are gone. A consumer
+reading the old fields must move to the accessors.
 
 ## Extension points
 

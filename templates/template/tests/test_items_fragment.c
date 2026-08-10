@@ -329,6 +329,15 @@ void test_atomic_payment_plans_scope_and_slots_before_one_commit(void) {
     TEST_ASSERT_EQUAL_INT64(12, payment->requested_units);
     TEST_ASSERT_EQUAL_INT64(12, payment->applied_units);
     TEST_ASSERT_EQUAL_STRING("shop_buy:sword", items_ev_payment_reason(payment));
+    /* The composition the fingerprints alone cannot show: which resources were
+       charged, how much of each, and what the whole scope held beforehand. */
+    TEST_ASSERT_EQUAL_UINT32(2u, items_ev_payment_cost_count(payment));
+    TEST_ASSERT_EQUAL_STRING("tmpl.gold", items_ev_payment_cost_def_id(payment, 0));
+    TEST_ASSERT_EQUAL_INT64(10, items_ev_payment_cost_at(payment, 0)->amount);
+    TEST_ASSERT_EQUAL_INT64(17, items_ev_payment_cost_at(payment, 0)->before); /* 6+6 and 5 across the scope */
+    TEST_ASSERT_EQUAL_STRING("tmpl.wood", items_ev_payment_cost_def_id(payment, 1));
+    TEST_ASSERT_EQUAL_INT64(2, items_ev_payment_cost_at(payment, 1)->amount);
+    TEST_ASSERT_EQUAL_INT64(2, items_ev_payment_cost_at(payment, 1)->before);
 }
 
 typedef struct sword_payment_fixture_t {
@@ -391,6 +400,15 @@ void test_pay_stacks_audits_exactly_like_the_baked_cost(void) {
     TEST_ASSERT_EQUAL_INT64(12, payment->requested_units);
     TEST_ASSERT_EQUAL_INT64(12, payment->applied_units);
     TEST_ASSERT_EQUAL_STRING("shop_buy:sword", items_ev_payment_reason(payment));
+    /* The composition the fingerprints alone cannot show: which resources were
+       charged, how much of each, and what the whole scope held beforehand. */
+    TEST_ASSERT_EQUAL_UINT32(2u, items_ev_payment_cost_count(payment));
+    TEST_ASSERT_EQUAL_STRING("tmpl.gold", items_ev_payment_cost_def_id(payment, 0));
+    TEST_ASSERT_EQUAL_INT64(10, items_ev_payment_cost_at(payment, 0)->amount);
+    TEST_ASSERT_EQUAL_INT64(17, items_ev_payment_cost_at(payment, 0)->before); /* 6+6 and 5 across the scope */
+    TEST_ASSERT_EQUAL_STRING("tmpl.wood", items_ev_payment_cost_def_id(payment, 1));
+    TEST_ASSERT_EQUAL_INT64(2, items_ev_payment_cost_at(payment, 1)->amount);
+    TEST_ASSERT_EQUAL_INT64(2, items_ev_payment_cost_at(payment, 1)->before);
 }
 
 void test_pay_stacks_takes_nothing_when_a_later_requirement_is_short(void) {

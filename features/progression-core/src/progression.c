@@ -57,28 +57,34 @@ static const char *mode_name(progression_mode_t mode) {
     return "unknown";
 }
 
-static void emit_levelup(
+/* Item-paid modes name one catalog resource today; the event already carries a
+   list, so a multi-item price will need no event change. */
+static void emit_levelup_paid(
     const progression_track_def_t *def,
     const char *cause,
     const char *reason,
     int64_t old_level,
     int64_t new_level,
     int64_t cost,
-    int64_t resource_before,
-    int64_t resource_after,
-    int depth) {
+    int64_t before) {
+    const ProgressionEvLevelupCostIn spent = {
+        def->currency_def != NULL ? def->currency_def : "", cost, before};
     progression_emit_levelup(
-        def->id,
-        mode_name(def->mode),
-        cause,
-        reason,
-        old_level,
-        new_level,
-        def->currency_def != NULL ? def->currency_def : "",
-        cost,
-        resource_before,
-        resource_after,
-        depth);
+        def->id, mode_name(def->mode), cause, reason, old_level, new_level, 0, 0, &spent, 1);
+}
+
+/* A threshold track spends its own accumulator -- one number, never an item --
+   so its item list is empty by construction. */
+static void emit_levelup_threshold(
+    const progression_track_def_t *def,
+    const char *reason,
+    int64_t old_level,
+    int64_t new_level,
+    int64_t xp_cost,
+    int64_t xp_before) {
+    progression_emit_levelup(
+        def->id, mode_name(def->mode), "threshold", reason, old_level, new_level,
+        xp_cost, xp_before, NULL, 0);
 }
 
 static ProgressionTrackState *find_track(const char *id) {
@@ -239,7 +245,7 @@ bool progression_level_up(const char *track, const char *reason) {
         return false; /* defensive: items-side verb-check/purse mismatch; level not bumped */
     }
     st->level += 1;
-    emit_levelup(def, "manual", reason, old_level, st->level, cost, resource_before, resource_count(def->currency_def), 0);
+    emit_levelup_paid(def, "manual", reason, old_level, st->level, cost, resource_before);
     apply_on_level_up(def, 0); /* Cut A: shipped/demo on_level_up is always empty -> no-op */
     game_save_mark_dirty();
     return true;
@@ -362,14 +368,14 @@ static void resolve_track(const progression_track_def_t *def, int depth) {
             int old_level = st->level;
             st->level += 1;
             level = st->level;
-            emit_levelup(def, "auto", "level_cost:auto", old_level, st->level, cost, resource_before, resource_count(def->currency_def), depth);
+            emit_levelup_paid(def, "auto", "level_cost:auto", old_level, st->level, cost, resource_before);
         } else {
-            int64_t resource_before = st->xp;
+            int64_t xp_before = st->xp;
             st->xp -= cost;
             int old_level = st->level;
             st->level += 1;
             level = st->level;
-            emit_levelup(def, "threshold", "level_cost:threshold", old_level, st->level, cost, resource_before, st->xp, depth);
+            emit_levelup_threshold(def, "level_cost:threshold", old_level, st->level, cost, xp_before);
         }
         apply_on_level_up(def, depth);                            /* каскад внутрь той же глубины-проверки */
         iters += 1;

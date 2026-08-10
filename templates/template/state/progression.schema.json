@@ -25,11 +25,15 @@
         "reason":          { "type": "string" },
         "old_level":       { "type": "i64" },
         "new_level":       { "type": "i64" },
-        "cost_def_id":     { "type": "string" },
-        "cost_amount":     { "type": "i64" },
-        "resource_before": { "type": "i64" },
-        "resource_after":  { "type": "i64" },
-        "cascade_depth":   { "type": "i64" }
+        "xp_cost":         { "type": "i64" },
+        "xp_before":       { "type": "i64" }
+      },
+      "repeated": {
+        "cost": {
+          "def_id": { "type": "string" },
+          "amount": { "type": "i64" },
+          "before": { "type": "i64" }
+        }
       }
     },
     "xp_added": {

@@ -1080,8 +1080,18 @@ typedef struct items_payment_plan_row_t {
     int64_t count;
 } items_payment_plan_row_t;
 
+/* What the price NAMED, kept alongside what the plan takes: the audit says which
+   resources were charged and what the scope held before, which the source rows
+   (grouped by entry, not by resource) cannot answer. */
+typedef struct items_payment_cost_row_t {
+    item_id_t item;
+    int64_t count;
+    int64_t before;
+} items_payment_cost_row_t;
+
 typedef struct items_payment_plan_t {
     items_payment_plan_row_t rows[ITEMS_STATE_MAX_CONTAINERS_ENTRIES];
+    items_payment_cost_row_t costs[ITEMS_PAYMENT_MAX_REQUIREMENTS];
     uint32_t row_count;
     uint32_t requirement_count;
     uint32_t scope_count;
@@ -1164,6 +1174,20 @@ static item_cost_entry_t entry_list_requirement_at(const void *ctx, uint32_t ind
     return ((const items_requirement_list_t *)ctx)->entries[index];
 }
 
+/* The balance the payment draws FROM, read before any row is applied -- the whole
+   scope, not just the entries the plan happens to reach. */
+static int64_t scope_stack_total(items_payment_scope_t scope, item_id_t item) {
+    int64_t total = 0;
+    for (uint32_t i = 0; i < scope.count; i++) {
+        const ItemsItemContainer *container = require_container(scope.containers[i]);
+        for (uint32_t slot = 0; slot < container->capacity; slot++) {
+            const ItemsItemEntry *entry = entry_at_slot(scope.containers[i].index, slot);
+            if (entry != NULL && entry_matches_item(entry, item)) { total += entry->count; }
+        }
+    }
+    return total;
+}
+
 static items_result_t build_payment_plan(
     items_requirement_source_t requirements, items_payment_scope_t scope,
     items_payment_plan_t *out_plan) {
@@ -1192,6 +1216,11 @@ static items_result_t build_payment_plan(
     }
 
     out_plan->requirement_count = requirements.count(requirements.ctx);
+    /* One cap for both entry points: the author-built list already declared it, and
+       a price naming more resources than this could not be audited whole. */
+    if (out_plan->requirement_count > ITEMS_PAYMENT_MAX_REQUIREMENTS) {
+        return ITEMS_RESULT_INVALID_ARGUMENT;
+    }
     out_plan->cost_fingerprint = payment_fingerprint_begin("items.payment.cost.v1");
     payment_fingerprint_u64(&out_plan->cost_fingerprint, out_plan->requirement_count);
     for (uint32_t requirement = 0; requirement < out_plan->requirement_count; requirement++) {
@@ -1209,6 +1238,8 @@ static items_result_t build_payment_plan(
         }
         payment_fingerprint_u64(&out_plan->cost_fingerprint, required.item.value);
         payment_fingerprint_u64(&out_plan->cost_fingerprint, (uint64_t)required.count);
+        out_plan->costs[requirement] = (items_payment_cost_row_t){
+            required.item, required.count, scope_stack_total(scope, required.item)};
     }
 
     for (uint32_t requirement = 0; requirement < out_plan->requirement_count; requirement++) {
@@ -1289,10 +1320,18 @@ static items_result_t commit_payment_plan(
     const int64_t applied = payment_applied_units(plan);
     NT_ASSERT(applied == plan->requested_units &&
               "committed payment removed a different total than it charged");
+    ItemsEvPaymentCostIn cost[ITEMS_PAYMENT_MAX_REQUIREMENTS];
+    for (uint32_t i = 0; i < plan->requirement_count; i++) {
+        cost[i] = (ItemsEvPaymentCostIn){
+            items_def_id(items_get(plan->costs[i].item)),
+            plan->costs[i].count,
+            plan->costs[i].before};
+    }
     items_emit_payment(
         (nt_hash64_t){plan->cost_fingerprint}, (nt_hash64_t){plan->scope_fingerprint},
         (nt_hash64_t){plan->source_fingerprint}, plan->requirement_count,
-        plan->scope_count, plan->row_count, plan->requested_units, applied, reason);
+        plan->scope_count, plan->row_count, plan->requested_units, applied, reason,
+        cost, plan->requirement_count);
     return ITEMS_RESULT_OK;
 }
 
