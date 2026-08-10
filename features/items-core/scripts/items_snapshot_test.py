@@ -730,6 +730,33 @@ class ItemsSnapshotTests(unittest.TestCase):
                 level_from=1, level_to=1,
             )
 
+    def test_diff_reports_a_track_edit(self):
+        """Tracks are inside content_hash, so a price edit moves it. A diff that
+        answered "nothing changed" for a moved hash is worse than no diff."""
+        def priced_row(count):
+            return {"cost_to_reach": {
+                "__studio_kind": "cost", "count": count,
+                "item": {"__studio_kind": "item_ref", "id": "game.gold"}}}
+
+        priced = track(mode="manual", rows=[{}, priced_row(50)])
+        before = SNAPSHOT.build_snapshot(evaluation(self.base_items(), tracks=[priced]))
+        raised = track(mode="manual", rows=[{}, priced_row(75)])
+        after = SNAPSHOT.build_snapshot(evaluation(self.base_items(), tracks=[raised]))
+
+        self.assertNotEqual(before["content_hash"], after["content_hash"])
+        self.assertEqual(SNAPSHOT.diff_snapshots(before, after)["changes"], [{
+            "op": "replace",
+            "track": "rank",
+            "path": "/levels/rows/1/cost_to_reach/count",
+            "before": 50,
+            "after": 75,
+        }])
+
+        dropped = SNAPSHOT.build_snapshot(evaluation(self.base_items(), tracks=[]))
+        removals = SNAPSHOT.diff_snapshots(before, dropped)["changes"]
+        self.assertEqual([change["op"] for change in removals], ["remove"])
+        self.assertEqual(removals[0]["track"], "rank")
+
     def test_diff_reports_only_semantic_changes_in_stable_order(self):
         before = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
         changed_items = self.base_items()

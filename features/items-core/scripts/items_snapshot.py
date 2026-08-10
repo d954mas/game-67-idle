@@ -1095,6 +1095,25 @@ def _diff_items(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
+def _diff_tracks(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Tracks are inside content_hash, so a balance edit moves it. Without this the
+    diff answers "nothing changed" for a hash that did."""
+    tracks = snapshot.get("tracks")
+    if tracks is None:
+        return {}
+    if not isinstance(tracks, list):
+        _fail("diff.tracks", "snapshot tracks must be a list", "$.tracks")
+    result: dict[str, dict[str, Any]] = {}
+    for index, track in enumerate(tracks):
+        if not isinstance(track, dict) or not isinstance(track.get("id"), str) or not track["id"]:
+            _fail("diff.track", "snapshot track requires an id", f"$.tracks[{index}]")
+        normalized = _canonical(track, f"$.tracks[{index}]")
+        if normalized["id"] in result:
+            _fail("diff.track", f"duplicate track id: {normalized['id']}", f"$.tracks[{index}].id")
+        result[normalized["id"]] = normalized
+    return result
+
+
 def _diff_requirements(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     items = snapshot.get("items")
     if not isinstance(items, list):
@@ -1193,6 +1212,8 @@ def diff_snapshots(
         _fail("diff.max_changes", "max_changes must be positive")
     before_items = _diff_items(before)
     after_items = _diff_items(after)
+    before_tracks = _diff_tracks(before)
+    after_tracks = _diff_tracks(after)
     before_requirements = _diff_requirements(before)
     after_requirements = _diff_requirements(after)
     changes: list[dict[str, Any]] = []
@@ -1210,6 +1231,22 @@ def diff_snapshots(
         else:
             _diff_value(
                 before_items[item_id], after_items[item_id], identity={"item": item_id},
+                path="", changes=changes, max_changes=max_changes,
+            )
+    for track_id in sorted(set(before_tracks) | set(after_tracks)):
+        if track_id not in after_tracks:
+            _record(changes, {
+                "op": "remove", "track": track_id, "path": "",
+                "before": before_tracks[track_id],
+            }, max_changes)
+        elif track_id not in before_tracks:
+            _record(changes, {
+                "op": "add", "track": track_id, "path": "",
+                "after": after_tracks[track_id],
+            }, max_changes)
+        else:
+            _diff_value(
+                before_tracks[track_id], after_tracks[track_id], identity={"track": track_id},
                 path="", changes=changes, max_changes=max_changes,
             )
     for requirement_id in sorted(set(before_requirements) | set(after_requirements)):
