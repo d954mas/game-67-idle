@@ -101,9 +101,10 @@ different order is a different fingerprint; `requirement_count == 0` is what
 marks a payment that owed nothing. They use
 FNV-1a over the named `items.payment.*.v1` domain followed by canonical
 little-endian 64-bit fields. `requirement_count`, `scope_count`, and
-`source_entry_count` describe the bounded plan; `requested_units` and
-`applied_units` are the overflow-checked sums of all resource counts and are
-equal on success. A refusal emits no event. `items.acquire` is the sole success
+`source_entry_count` describe the bounded plan; `requested_units` is the
+overflow-checked sum of the declared requirements and `applied_units` is
+counted off the committed plan rows, so the two are equal on success by
+agreement rather than by construction. A refusal emits no event. `items.acquire` is the sole success
 event for the combined verb and records the acquired item and destination/entry
 IDs plus the same payment fingerprints and totals; explicit-free acquisition
 sets paid false and all payment fields to zero.

@@ -1304,6 +1304,14 @@ static void apply_payment_plan(const items_payment_plan_t *plan) {
     }
 }
 
+/* Counted off the plan rows rather than reused from the requirement total, so
+   the audit record carries an independent witness of what was actually taken. */
+static int64_t payment_applied_units(const items_payment_plan_t *plan) {
+    int64_t applied = 0;
+    for (uint32_t i = 0; i < plan->row_count; i++) { applied += plan->rows[i].count; }
+    return applied;
+}
+
 static items_result_t commit_payment_plan(
     const items_payment_plan_t *plan, const char *reason) {
     if (!transaction_commit_allowed()) { return ITEMS_RESULT_COMMIT_FAILED; }
@@ -1316,10 +1324,13 @@ static items_result_t commit_payment_plan(
         NT_ASSERT(ok);
         game_save_mark_dirty();
     }
+    const int64_t applied = payment_applied_units(plan);
+    NT_ASSERT(applied == plan->requested_units &&
+              "committed payment removed a different total than it charged");
     items_emit_payment(
         (nt_hash64_t){plan->cost_fingerprint}, (nt_hash64_t){plan->scope_fingerprint},
         (nt_hash64_t){plan->source_fingerprint}, plan->requirement_count,
-        plan->scope_count, plan->row_count, plan->requested_units, plan->requested_units, reason);
+        plan->scope_count, plan->row_count, plan->requested_units, applied, reason);
     return ITEMS_RESULT_OK;
 }
 
