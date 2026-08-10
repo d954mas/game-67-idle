@@ -30,7 +30,10 @@ typedef struct progression_step_t {
 } progression_step_t;
 
 /* The column dictionary is generated per game: progression_tracks.gen.h defines
-   PROGRESSION_VALUE_<COLUMN> indices and PROGRESSION_VALUE_COUNT. */
+   PROGRESSION_VALUE_<COLUMN> indices and PROGRESSION_VALUE_COUNT. It is one
+   dictionary for the whole game, but a column belongs only to the track kinds
+   that declare it, so a track's row carries a slot for every column and a value
+   in the ones it owns. */
 typedef uint32_t progression_value_t;
 
 typedef struct progression_track_def_t {
@@ -40,7 +43,11 @@ typedef struct progression_track_def_t {
     const progression_step_t *steps;   /* max_level entries */
     const int64_t *exact;              /* [max_level + 1][value_count], or NULL */
     const double *fractional;          /* [max_level + 1][value_count], or NULL */
-    uint32_t value_count;
+    uint32_t value_count;              /* the dictionary's width: one row's stride */
+    /* One bit per column this track's kind declares. The unowned slots hold a
+       zero indistinguishable from an authored one, so reading one is a caller
+       bug and traps instead of answering it. */
+    uint64_t owned_values;
 } progression_track_def_t;
 
 /* Resolved once; a string lookup is a linear scan over the whole catalog. */
@@ -74,7 +81,8 @@ int64_t progression_xp_cost(progression_track_ref_t track);
 /* A column read. The type is the column's, not the call's, and both calls take
    one progression_value_t, so a mismatch cannot be caught at compile time. It is
    caught by an assert that traps in EVERY build, because reading a fractional
-   column as an integer is a bug in the caller, not a runtime condition. */
+   column as an integer is a bug in the caller, not a runtime condition. Reading a
+   column the track's kind does not declare traps for the same reason. */
 int64_t progression_valuei(progression_track_ref_t track, progression_value_t value);
 int64_t progression_valuei_at(progression_track_ref_t track, progression_value_t value, int level);
 double progression_valuef(progression_track_ref_t track, progression_value_t value);

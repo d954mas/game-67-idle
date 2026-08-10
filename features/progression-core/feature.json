@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "progression-core",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "title": "Progression Core",
   "status": "reusable",
   "kind": "gameplay-infrastructure",

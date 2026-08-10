@@ -420,16 +420,80 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         self.assertIn(".fractional = NULL,", source)
         self.assertIn(".value_count = 0u,", source)
 
-    def test_rejects_a_column_only_some_track_kinds_own(self) -> None:
-        """Every track carries every column, so a track that does not own one reads a
-        zero indistinguishable from a real value. Refused until ownership exists."""
+    def test_a_column_belongs_to_the_kinds_that_declare_it(self) -> None:
+        """Two kinds with different column sets: the dictionary is the union, and each
+        track's mask says which slots it actually answers for."""
+        snapshot = items_snapshot(
+            fields=[
+                field("up.rate", "rate", "i64", required_for=["upgrade"]),
+                field("ms.reward", "reward", "i64", required_for=["milestone"]),
+            ],
+            tracks=[
+                track("a", kind="upgrade", rows=[
+                    {"rate": 0}, {"rate": 3, "cost_to_reach": cost("coin", 50)},
+                ]),
+                track("b", kind="milestone", rows=[
+                    {"reward": 0}, {"reward": 9, "cost_to_reach": cost("coin", 50)},
+                ]),
+            ],
+        )
+        args, out, temp, _game = self.generator_args(snapshot=snapshot)
+        self.addCleanup(temp.cleanup)
+        self.assertEqual(run_direct(args), 0)
+        source = (out / "progression_tracks.gen.c").read_text(encoding="utf-8")
+        self.assertIn(".owned_values = (UINT64_C(1) << PROGRESSION_VALUE_RATE),", source)
+        self.assertIn(".owned_values = (UINT64_C(1) << PROGRESSION_VALUE_REWARD),", source)
+        # The unowned slot is still a slot: one stride reads both tracks' rows.
+        self.assertIn("static const int64_t EXACT_A[] = {\n    0LL, 0LL,\n    0LL, 3LL,\n};", source)
+        self.assertIn("static const int64_t EXACT_B[] = {\n    0LL, 0LL,\n    9LL, 0LL,\n};", source)
+
+    def test_a_track_owning_every_column_ors_the_whole_mask(self) -> None:
+        snapshot = items_snapshot(
+            fields=[
+                field("up.cap", "cap", "i64", required_for=["upgrade"]),
+                field("up.rate", "rate", "f64", required_for=["upgrade"]),
+            ],
+            tracks=[track(rows=[
+                {"cap": 0, "rate": 0.0},
+                {"cap": 7, "rate": 1.5, "cost_to_reach": cost("coin", 50)},
+            ])],
+        )
+        source = self.generate(snapshot)
+        self.assertIn(
+            ".owned_values = (UINT64_C(1) << PROGRESSION_VALUE_CAP) | "
+            "(UINT64_C(1) << PROGRESSION_VALUE_RATE),",
+            source,
+        )
+
+    def test_a_track_kind_with_no_columns_owns_nothing(self) -> None:
+        """A threshold track priced only in xp declares no column, and says so rather
+        than pointing at the dictionary's first slot."""
         snapshot = items_snapshot(
             fields=[field("up.rate", "rate", "i64", required_for=["upgrade"])],
-            tracks=[track("a", kind="upgrade"), track("b", kind="milestone")],
+            tracks=[
+                track("a", kind="upgrade", rows=[
+                    {"rate": 0}, {"rate": 3, "cost_to_reach": cost("coin", 50)},
+                ]),
+                track("b", kind="rank", mode="threshold", rows=[{}, {"xp_to_reach": 100}]),
+            ],
+        )
+        source = self.generate(snapshot)
+        self.assertIn(".owned_values = 0u,", source)
+
+    def test_rejects_more_columns_than_the_ownership_mask_holds(self) -> None:
+        snapshot = items_snapshot(
+            fields=[
+                field(f"up.c{index}", f"c{index}", "i64", required_for=["upgrade"])
+                for index in range(65)
+            ],
+            tracks=[track(rows=[
+                {f"c{index}": 0 for index in range(65)},
+                {**{f"c{index}": 1 for index in range(65)}, "cost_to_reach": cost("coin", 50)},
+            ])],
         )
         args, _out, temp, _game = self.generator_args(snapshot=snapshot)
         self.addCleanup(temp.cleanup)
-        with self.assertRaisesRegex(SystemExit, "per-track column ownership does not exist"):
+        with self.assertRaisesRegex(SystemExit, "at most 64 progression columns"):
             generator.main(args)
 
     def test_rejects_a_column_that_is_neither_exact_nor_fractional(self) -> None:

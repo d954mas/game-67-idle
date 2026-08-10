@@ -12,7 +12,7 @@
     { "id": "items-core", "source": "features/items-core", "version": "6.1.0", "compatibility": "validated by the template build and test suite" },
     { "id": "localization", "source": "features/localization", "version": "1.1.0", "compatibility": "validated by the template build and test suite" },
     { "id": "platform-sdk", "source": "features/platform-sdk", "version": "1.1.0", "compatibility": "validated by the template build and test suite" },
-    { "id": "progression-core", "source": "features/progression-core", "version": "6.0.0", "compatibility": "validated by the template build and test suite" },
+    { "id": "progression-core", "source": "features/progression-core", "version": "6.1.0", "compatibility": "validated by the template build and test suite" },
     { "id": "scenes-core", "source": "features/scenes-core", "version": "0.3.0", "compatibility": "validated by the template scene-manager CTests, scaffold/consumer tests, and native/web builds" }
   ],
   "compatibility": "seed for exact game-owned dependency records created from this template"

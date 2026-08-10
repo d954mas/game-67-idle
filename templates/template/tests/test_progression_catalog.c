@@ -108,6 +108,7 @@ const progression_track_def_t k_tracks[] = {
         .exact = EXACT_MIXED,
         .fractional = FRACTIONAL_MIXED,
         .value_count = 2u,
+        .owned_values = (UINT64_C(1) << 0u) | (UINT64_C(1) << 1u),
     },
 };
 

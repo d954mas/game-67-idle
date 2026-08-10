@@ -177,6 +177,10 @@ int64_t progression_xp_cost(progression_track_ref_t track) {
     return step ? step->xp_cost : 0;
 }
 
+static bool track_owns_value(const progression_track_def_t *def, progression_value_t value) {
+    return value < 64u && (def->owned_values & (UINT64_C(1) << value)) != 0u;
+}
+
 static int clamped_level(const progression_track_def_t *def, int level) {
     if (level < 0) {
         return 0;
@@ -194,6 +198,7 @@ int64_t progression_valuei_at(progression_track_ref_t track, progression_value_t
         return 0;
     }
     NT_ASSERT(value < def->value_count && "column index outside the track's dictionary");
+    NT_ASSERT(track_owns_value(def, value) && "column read on a track whose kind does not declare it");
     NT_ASSERT(k_progression_value_exact[value] && "exact read of a fractional column");
     NT_ASSERT(def->exact != NULL && "exact column with no exact table");
     return def->exact[(uint32_t)clamped_level(def, level) * def->value_count + value];
@@ -209,6 +214,7 @@ double progression_valuef_at(progression_track_ref_t track, progression_value_t 
         return 0.0;
     }
     NT_ASSERT(value < def->value_count && "column index outside the track's dictionary");
+    NT_ASSERT(track_owns_value(def, value) && "column read on a track whose kind does not declare it");
     NT_ASSERT(!k_progression_value_exact[value] && "fractional read of an exact column");
     NT_ASSERT(def->fractional != NULL && "fractional column with no fractional table");
     return def->fractional[(uint32_t)clamped_level(def, level) * def->value_count + value];

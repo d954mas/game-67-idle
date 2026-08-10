@@ -83,6 +83,14 @@ Two level bases meet here and are converted once, in the generator. Authoring is
 contribution. The runtime is 0-based: `steps[L]` is the step that leaves level
 L, so `max_level == len(rows) - 1`.
 
+The column dictionary is one per game — `PROGRESSION_VALUE_<COLUMN>` is a single
+index space — but a column belongs to the track kinds that declare it through
+`required_for`, so kinds with different column sets coexist. A row is the full
+dictionary wide, and the slots a track does not own hold a zero indistinguishable
+from an authored one; `owned_values` is what tells them apart, and a read of an
+unowned column traps rather than answering that zero. The mask is 64 bits, which
+is also the cap on how many columns a game may declare.
+
 Each step carries exactly one price, decided by the track's mode. `manual` and
 `auto` fill `cost[]` -- a list of `{def_id, amount}`, so a level priced in coins
 and wood is one step, not a special case. `threshold` fills `xp_cost`, a single
@@ -321,6 +329,15 @@ document, refuses an empty catalog, refuses a column that would redefine
 `PROGRESSION_VALUE_COUNT`, refuses a column only some track kinds own, and refuses a
 price longer than one payment. A catalog that built under `5.x` can be rejected here;
 every rejection names what to change.
+
+Version `6.1.0` gives a column an owner. One dictionary still serves the whole game,
+but `required_for` now decides which track kinds carry a column instead of having to
+name every one of them: a board of upgrade tracks with one contribution each, a ladder
+with three, and a rank track with none are one catalog. What used to be refused at
+build time is answered at read time — `progression_track_def_t.owned_values` carries a
+bit per declared column, and reading one a track's kind does not declare traps instead
+of returning the zero its row slot holds. Catalogs that generated under `6.0.0`
+generate the same tables plus the mask.
 
 ## Extension points
 
