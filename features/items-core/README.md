@@ -44,15 +44,15 @@ src/items_reconcile.c                quarantine and unique-sequence reseed
 scripts/items_lua_sandbox.py         isolated evaluator
 scripts/items_snapshot.py            normalized model and focused queries
 scripts/items_runtime_package.py     package/header builder and verifier
+scripts/items_c_catalog.py           typed C catalog generator
 scripts/items_cli.py                 single AI/UI/build authoring surface
 scripts/items_receipt.py             release-history validation and sealing
-scripts/items_xxh64.py               neutral hash primitive for package/proof tools
+scripts/items_xxh64.py               neutral hash primitive for catalog tools
 ```
 
-`feature.json.outputs` lists only production artifacts.
-`feature.json.proof_outputs`, `generate_items_api_proof.py`, and `items_api.c`
-remain bounded proof fixtures for schema-derived capability APIs. Production
-runtime data comes only from the compact package.
+`feature.json.outputs` lists the Snapshot family; `feature.json.catalog_outputs`
+lists the generated C catalog that `items_api.c` implements the base API over.
+See `docs/items_typed_catalog_contract.md`.
 
 ## Public surface
 
@@ -175,6 +175,11 @@ The feature manifest uses exact SemVer. PATCH releases preserve behavior and
 wire/API contracts, MINOR releases add backward-compatible surface, and MAJOR
 releases may remove or change public commands, APIs, or package contracts.
 Consumers pin both the version and repository revision.
+
+3.0.0 makes the generated C catalog the production runtime data path. The typed
+header a consumer includes is `items_catalog.gen.h`, catalog identity and
+currency queries answer without a bind step, and the `api_proof*` commands are
+replaced by `c_catalog*`.
 
 ## Extension points
 

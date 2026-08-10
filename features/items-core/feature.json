@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "items-core",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "title": "Items Core",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -27,8 +27,8 @@
     "schema": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> schema",
     "build": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> build --out-dir <build-dir>",
     "seal_receipt": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> seal-receipt",
-    "api_proof": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof.py --snapshot features/items-core/tests/fixtures/items_api_weapon_proof.json --out-dir <build-dir>",
-    "api_proof_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof_test.py",
+    "c_catalog": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_c_catalog.py --snapshot <snapshot.json> --out-dir <build-dir>",
+    "c_catalog_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_c_catalog_test.py",
     "lua_evaluate": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_lua_sandbox.py evaluate --root <game-root> --manifest <game-root>/items.lua.json",
     "lua_sandbox_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_lua_sandbox_test.py",
     "snapshot_build": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py build --evaluation <evaluation.json> --out <snapshot.json>",
@@ -47,7 +47,7 @@
   },
   "manuals": {
     "install": "features/items-core/INSTALL.md",
-    "typed_api_proof": "features/items-core/docs/items_lua_schema_api_contract_2026-07-10.md",
+    "typed_catalog_contract": "features/items-core/docs/items_typed_catalog_contract.md",
     "lua_authoring_contract": "features/items-core/docs/items_lua_single_source_concept_2026-07-10.md"
   },
   "outputs": [
@@ -59,11 +59,11 @@
     "items/catalog compact runtime package v2",
     "items_catalog_abi.gen.h"
   ],
-  "proof_outputs": [
-    "items_game.gen.h",
-    "items_game.internal.gen.h",
-    "items_game.gen.c",
-    "items_game.luau"
+  "catalog_outputs": [
+    "items_catalog.gen.h",
+    "items_catalog.internal.gen.h",
+    "items_catalog.gen.c",
+    "items_catalog.luau"
   ],
   "registers": {
     "note": "Describes the EXISTING wiring in templates/template/CMakeLists.txt (target_sources/ctest) -- items-core is an in-place module (precedent features/game-state), not an install-script target. This section documents the consuming game's provisioning, it does not perform it.",
@@ -84,7 +84,7 @@
       "test_items_api_core_only",
       "test_items_api",
       "test_items_runtime_package",
-      "generate_items_api_proof_test"
+      "items_c_catalog_test"
     ]
   },
   "default_template": {

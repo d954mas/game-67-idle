@@ -22,6 +22,7 @@ set(ITEMS_CATALOG_BUILD_DIR "${CMAKE_BINARY_DIR}/generated/items-catalog")
 set(ITEMS_CATALOG_SNAPSHOT "${ITEMS_CATALOG_BUILD_DIR}/items.snapshot.json")
 set(ITEMS_CATALOG_PACKAGE "${ITEMS_CATALOG_BUILD_DIR}/items.catalog")
 set(ITEMS_CATALOG_ABI_HEADER "${ITEMS_CATALOG_BUILD_DIR}/items_catalog_abi.gen.h")
+set(ITEMS_CATALOG_SOURCE "${ITEMS_CATALOG_BUILD_DIR}/items_catalog.gen.c")
 set(ITEMS_CATALOG_BUILD_SCRIPTS
     "${ITEMS_CORE_SCRIPTS}/items_cli.py"
     "${ITEMS_CORE_SCRIPTS}/items_lua_edit.py"
@@ -30,12 +31,16 @@ set(ITEMS_CATALOG_BUILD_SCRIPTS
     "${ITEMS_CORE_SCRIPTS}/items_runtime_package.py"
     "${ITEMS_CORE_SCRIPTS}/items_snapshot.py"
     "${ITEMS_CORE_SCRIPTS}/items_c_identifiers.py"
-    "${ITEMS_CORE_SCRIPTS}/generate_items_api_proof.py")
+    "${ITEMS_CORE_SCRIPTS}/items_c_catalog.py")
 add_custom_command(
     OUTPUT
         "${ITEMS_CATALOG_SNAPSHOT}"
         "${ITEMS_CATALOG_PACKAGE}"
         "${ITEMS_CATALOG_ABI_HEADER}"
+        "${ITEMS_CATALOG_SOURCE}"
+        "${ITEMS_CATALOG_BUILD_DIR}/items_catalog.gen.h"
+        "${ITEMS_CATALOG_BUILD_DIR}/items_catalog.internal.gen.h"
+        "${ITEMS_CATALOG_BUILD_DIR}/items_catalog.luau"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${ITEMS_CATALOG_BUILD_DIR}"
     COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/items_cli.py"
         --project-root "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -52,7 +57,8 @@ add_custom_command(
 add_custom_target(items_catalog_gen DEPENDS
     "${ITEMS_CATALOG_SNAPSHOT}"
     "${ITEMS_CATALOG_PACKAGE}"
-    "${ITEMS_CATALOG_ABI_HEADER}")
+    "${ITEMS_CATALOG_ABI_HEADER}"
+    "${ITEMS_CATALOG_SOURCE}")
 add_dependencies(${GAME_TARGET} items_catalog_gen)
 target_sources(${GAME_TARGET} PRIVATE
     "${ITEMS_CORE_SRC}/items_runtime_package.c"

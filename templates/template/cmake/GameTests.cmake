@@ -416,10 +416,14 @@ if(NOT EMSCRIPTEN)
     target_link_libraries(check_mini_state_events PRIVATE nt_hash nt_log nt_core)  # headers only (OBJECT does not link)
     nt_set_warning_flags(check_mini_state_events)  # same -W set + -Werror toggle as the game target
 
-    # T0364 proof: the same stable Items header compiles against either a
-    # core-only or weapon-specific generated API. Outputs stay build-local.
-    set(ITEMS_API_PROOF_SCRIPT "${ITEMS_CORE_SCRIPTS}/generate_items_api_proof.py")
-    set(ITEMS_C_IDENTIFIERS "${ITEMS_CORE_SCRIPTS}/items_c_identifiers.py")
+    # The same stable Items header compiles against either a core-only or a
+    # weapon-specific generated catalog. Outputs stay build-local.
+    set(ITEMS_C_CATALOG_SCRIPT "${ITEMS_CORE_SCRIPTS}/items_c_catalog.py")
+    set(ITEMS_C_CATALOG_SCRIPT_SOURCES
+        "${ITEMS_C_CATALOG_SCRIPT}"
+        "${ITEMS_CORE_SCRIPTS}/items_c_identifiers.py"
+        "${ITEMS_CORE_SCRIPTS}/items_snapshot.py"
+        "${ITEMS_CORE_SCRIPTS}/items_xxh64.py")
     set(ITEMS_API_PROOF_FIXTURES "${ITEMS_CORE_DIR}/tests/fixtures")
     set(ITEMS_API_CORE_ONLY_DIR "${CMAKE_BINARY_DIR}/generated/items-api-core-only")
     set(ITEMS_API_WEAPON_DIR "${CMAKE_BINARY_DIR}/generated/items-api-weapon")
@@ -433,21 +437,21 @@ if(NOT EMSCRIPTEN)
         endif()
         add_custom_command(
             OUTPUT
-                "${_out_dir}/items_game.gen.h"
-                "${_out_dir}/items_game.internal.gen.h"
-                "${_out_dir}/items_game.gen.c"
-                "${_out_dir}/items_game.luau"
-            COMMAND "${Python3_EXECUTABLE}" "${ITEMS_API_PROOF_SCRIPT}"
+                "${_out_dir}/items_catalog.gen.h"
+                "${_out_dir}/items_catalog.internal.gen.h"
+                "${_out_dir}/items_catalog.gen.c"
+                "${_out_dir}/items_catalog.luau"
+            COMMAND "${Python3_EXECUTABLE}" "${ITEMS_C_CATALOG_SCRIPT}"
                 --snapshot "${_snapshot}" --out-dir "${_out_dir}"
-            DEPENDS "${ITEMS_API_PROOF_SCRIPT}" "${ITEMS_C_IDENTIFIERS}" "${_snapshot}"
-            COMMENT "Generating ${_variant} Items API proof"
+            DEPENDS ${ITEMS_C_CATALOG_SCRIPT_SOURCES} "${_snapshot}"
+            COMMENT "Generating ${_variant} Items C catalog"
             VERBATIM)
     endforeach()
 
     add_executable(test_items_api_core_only
         tests/test_items_api_core_only.c
         "${ITEMS_CORE_SRC}/items_api.c"
-        "${ITEMS_API_CORE_ONLY_DIR}/items_game.gen.c")
+        "${ITEMS_API_CORE_ONLY_DIR}/items_catalog.gen.c")
     target_link_libraries(test_items_api_core_only PRIVATE unity nt_hash nt_core)
     target_include_directories(test_items_api_core_only PRIVATE "${ITEMS_CORE_INC}" "${ITEMS_API_CORE_ONLY_DIR}")
     target_compile_definitions(test_items_api_core_only PRIVATE ITEMS_GAME_API_ENABLED=1 _CRT_SECURE_NO_WARNINGS)
@@ -458,7 +462,7 @@ if(NOT EMSCRIPTEN)
     add_executable(test_items_api
         tests/test_items_api.c
         "${ITEMS_CORE_SRC}/items_api.c"
-        "${ITEMS_API_WEAPON_DIR}/items_game.gen.c")
+        "${ITEMS_API_WEAPON_DIR}/items_catalog.gen.c")
     target_link_libraries(test_items_api PRIVATE unity nt_hash nt_core)
     target_include_directories(test_items_api PRIVATE "${ITEMS_CORE_INC}" "${ITEMS_API_WEAPON_DIR}")
     target_compile_definitions(test_items_api PRIVATE ITEMS_GAME_API_ENABLED=1 _CRT_SECURE_NO_WARNINGS)
@@ -466,8 +470,8 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_items_api PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_items_api COMMAND test_items_api)
 
-    add_test(NAME generate_items_api_proof_test
-        COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/generate_items_api_proof_test.py")
+    add_test(NAME items_c_catalog_test
+        COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/items_c_catalog_test.py")
 
     # T0365 native proof: bind the exact Python-generated compact package.
     set(ITEMS_RUNTIME_PACKAGE_DIR "${CMAKE_BINARY_DIR}/generated/items-runtime")
@@ -482,8 +486,7 @@ if(NOT EMSCRIPTEN)
             --header-out "${ITEMS_RUNTIME_PACKAGE_HEADER}"
         DEPENDS
             "${ITEMS_CORE_SCRIPTS}/items_runtime_package.py"
-            "${ITEMS_CORE_SCRIPTS}/generate_items_api_proof.py"
-            "${ITEMS_C_IDENTIFIERS}"
+            "${ITEMS_CORE_SCRIPTS}/items_c_identifiers.py"
             "${ITEMS_RUNTIME_PACKAGE_SNAPSHOT}"
         COMMENT "Generating compact Items runtime package proof"
         VERBATIM)
@@ -523,36 +526,31 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_items_runtime_resource COMMAND test_items_runtime_resource)
 
-    # T0365 benchmark candidates share one public API and equivalent two-item
-    # data; only their storage/bind path differs.
+    # Both benchmark candidates share one public API and now one fixture: the
+    # array candidate compiles the same Snapshot the blob candidate binds.
     set(ITEMS_RUNTIME_BENCHMARK_DIR "${CMAKE_BINARY_DIR}/generated/items-runtime-benchmark")
-    set(ITEMS_RUNTIME_BENCHMARK_FIXTURE
-        "${ITEMS_CORE_DIR}/tests/fixtures/items_runtime_benchmark_arrays.json")
     add_custom_command(
         OUTPUT
-            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.gen.h"
-            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.internal.gen.h"
-            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.gen.c"
-            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.luau"
-        COMMAND "${Python3_EXECUTABLE}" "${ITEMS_API_PROOF_SCRIPT}"
-            --snapshot "${ITEMS_RUNTIME_BENCHMARK_FIXTURE}"
+            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.gen.h"
+            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.internal.gen.h"
+            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.gen.c"
+            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.luau"
+        COMMAND "${Python3_EXECUTABLE}" "${ITEMS_C_CATALOG_SCRIPT}"
+            --snapshot "${ITEMS_RUNTIME_PACKAGE_SNAPSHOT}"
             --out-dir "${ITEMS_RUNTIME_BENCHMARK_DIR}"
-        DEPENDS
-            "${ITEMS_API_PROOF_SCRIPT}"
-            "${ITEMS_C_IDENTIFIERS}"
-            "${ITEMS_RUNTIME_BENCHMARK_FIXTURE}"
+        DEPENDS ${ITEMS_C_CATALOG_SCRIPT_SOURCES} "${ITEMS_RUNTIME_PACKAGE_SNAPSHOT}"
         COMMENT "Generating C-array Items runtime benchmark candidate"
         VERBATIM)
     add_custom_target(items_runtime_benchmark_arrays_gen DEPENDS
-        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.gen.h"
-        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.internal.gen.h"
-        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.gen.c"
-        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.luau")
+        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.gen.h"
+        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.internal.gen.h"
+        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.gen.c"
+        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.luau")
 
     add_executable(benchmark_items_c_arrays
         "${ITEMS_CORE_DIR}/benchmarks/items_runtime_candidate.c"
         "${ITEMS_CORE_SRC}/items_api.c"
-        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.gen.c")
+        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_catalog.gen.c")
     add_dependencies(benchmark_items_c_arrays items_runtime_benchmark_arrays_gen)
     target_link_libraries(benchmark_items_c_arrays PRIVATE nt_hash nt_core nt_time)
     target_include_directories(benchmark_items_c_arrays PRIVATE

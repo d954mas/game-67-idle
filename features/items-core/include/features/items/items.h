@@ -46,6 +46,14 @@ item_transition_t items_level_transition(item_def_ref_t ref, uint32_t level);
 uint32_t items_cost_count(item_cost_ref_t cost);
 item_cost_entry_t items_cost_at(item_cost_ref_t cost, uint32_t index);
 void items_register_debug_labels(void);
+
+/* Catalog identity and currency policy; both backends answer these. */
+bool items_catalog_is_bound(void);
+uint32_t items_catalog_item_count(void);
+uint64_t items_catalog_schema_abi(void);
+uint64_t items_catalog_content_fingerprint(void);
+bool items_has_currency(item_def_ref_t ref);
+int64_t items_currency_cap(item_def_ref_t ref);
 #endif
 
 #if defined(ITEMS_RUNTIME_PACKAGE_ENABLED) && ITEMS_RUNTIME_PACKAGE_ENABLED
@@ -76,16 +84,10 @@ bool items_catalog_try_bind(
 bool items_catalog_try_bind_resource(
     uint64_t asset_id, items_catalog_bind_error_t *out_error);
 void items_catalog_shutdown(void);
-bool items_catalog_is_bound(void);
-uint32_t items_catalog_item_count(void);
-uint64_t items_catalog_schema_abi(void);
-uint64_t items_catalog_content_fingerprint(void);
-bool items_has_currency(item_def_ref_t ref);
-int64_t items_currency_cap(item_def_ref_t ref);
 #endif
 
 #if defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED
-#include "items_game.gen.h"
+#include "items_catalog.gen.h"
 #endif
 
 /* ---- Runtime containers and owned entries ---- */

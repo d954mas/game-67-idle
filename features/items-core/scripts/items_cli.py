@@ -14,6 +14,7 @@ import sys
 import tempfile
 from typing import Any
 
+import items_c_catalog as catalog_api
 import items_lua_edit as edit_api
 import items_receipt as receipt_api
 import items_runtime_package as package_api
@@ -885,6 +886,7 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                     "blob": package_api.write_if_different(blob_path, package),
                     "header": package_api.write_if_different(header_path, header),
+                    **catalog_api.generate(snapshot, out_dir),
                 }
                 result = {
                     **validation,
@@ -893,6 +895,7 @@ def main(argv: list[str] | None = None) -> int:
                         "snapshot": str(snapshot_path),
                         "blob": str(blob_path),
                         "header": str(header_path),
+                        **{name: str(out_dir / name) for name in catalog_api.OUTPUT_NAMES},
                     },
                     "content_fingerprint": inspected["content_fingerprint"],
                     "schema_abi_fingerprint": inspected["schema_abi_fingerprint"],
@@ -905,6 +908,10 @@ def main(argv: list[str] | None = None) -> int:
         detail = {"code": error.code, "message": error.message, "path": error.path}
     except receipt_api.OpsError as error:
         detail = {"code": "cli.receipt", "message": str(error)}
+    except catalog_api.CatalogFailure as error:
+        message = str(error)
+        code, _, detail_message = message.partition(": ")
+        detail = {"code": code, "message": detail_message or message}
     except package_api.PackageFailure as error:
         detail = {"code": "cli.package", "message": str(error)}
     except edit_api.EditFailure as error:

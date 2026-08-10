@@ -2,7 +2,7 @@
 
 #if defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED
 
-#include "items_game.internal.gen.h"
+#include "items_catalog.internal.gen.h"
 
 #include "core/nt_assert.h"
 #include "hash/nt_hash.h"
@@ -14,9 +14,9 @@ bool items_try_get(item_id_t id, item_def_ref_t *out) {
     if (out == NULL) {
         return false;
     }
-    const uint32_t count = items_game_internal_item_count();
+    const uint32_t count = items_catalog_internal_item_count();
     for (uint32_t index = 0; index < count; ++index) {
-        if (items_game_internal_item_id(index).value == id.value) {
+        if (items_catalog_internal_item_id(index).value == id.value) {
             out->_index = index;
             return true;
         }
@@ -45,7 +45,7 @@ bool items_try_get_string(const char *def_id, item_def_ref_t *out) {
     if (!items_try_get(id, &ref)) {
         return false;
     }
-    if (strcmp(items_game_internal_def_id(ref._index), def_id) != 0) {
+    if (strcmp(items_catalog_internal_def_id(ref._index), def_id) != 0) {
         return false;
     }
     *out = ref;
@@ -53,55 +53,75 @@ bool items_try_get_string(const char *def_id, item_def_ref_t *out) {
 }
 
 item_core_t items_core(item_def_ref_t ref) {
-    NT_ASSERT(ref._index < items_game_internal_item_count() && "items_core: invalid item ref");
-    return items_game_internal_core(ref._index);
+    NT_ASSERT(ref._index < items_catalog_internal_item_count() && "items_core: invalid item ref");
+    return items_catalog_internal_core(ref._index);
 }
 
 const char *items_def_id(item_def_ref_t ref) {
-    NT_ASSERT(ref._index < items_game_internal_item_count() && "items_def_id: invalid item ref");
-    return items_game_internal_def_id(ref._index);
+    NT_ASSERT(ref._index < items_catalog_internal_item_count() && "items_def_id: invalid item ref");
+    return items_catalog_internal_def_id(ref._index);
 }
 
 item_transition_t items_acquire_transition(item_def_ref_t ref) {
-    NT_ASSERT(ref._index < items_game_internal_item_count() &&
+    NT_ASSERT(ref._index < items_catalog_internal_item_count() &&
               "items_acquire_transition: invalid item ref");
-    return items_game_internal_acquire(ref._index);
+    return items_catalog_internal_acquire(ref._index);
 }
 
 uint32_t items_level_count(item_def_ref_t ref) {
-    NT_ASSERT(ref._index < items_game_internal_item_count() && "items_level_count: invalid item ref");
-    return items_game_internal_level_count(ref._index);
+    NT_ASSERT(ref._index < items_catalog_internal_item_count() && "items_level_count: invalid item ref");
+    return items_catalog_internal_level_count(ref._index);
 }
 
 bool items_level_exists(item_def_ref_t ref, uint32_t level) {
-    return ref._index < items_game_internal_item_count() && level > 0U &&
-        level <= items_game_internal_level_count(ref._index);
+    return ref._index < items_catalog_internal_item_count() && level > 0U &&
+        level <= items_catalog_internal_level_count(ref._index);
 }
 
 item_transition_t items_level_transition(item_def_ref_t ref, uint32_t level) {
     NT_ASSERT(items_level_exists(ref, level) && "items_level_transition: invalid item or level");
-    return items_game_internal_level_transition(ref._index, level);
+    return items_catalog_internal_level_transition(ref._index, level);
 }
 
 uint32_t items_cost_count(item_cost_ref_t cost) {
-    NT_ASSERT(cost._opaque > 0U && cost._opaque < items_game_internal_cost_span_count() &&
+    NT_ASSERT(cost._opaque > 0U && cost._opaque < items_catalog_internal_cost_span_count() &&
               "items_cost_count: invalid cost ref");
-    return items_game_internal_cost_count(cost._opaque);
+    return items_catalog_internal_cost_count(cost._opaque);
 }
 
 item_cost_entry_t items_cost_at(item_cost_ref_t cost, uint32_t index) {
-    NT_ASSERT(cost._opaque > 0U && cost._opaque < items_game_internal_cost_span_count() &&
+    NT_ASSERT(cost._opaque > 0U && cost._opaque < items_catalog_internal_cost_span_count() &&
               "items_cost_at: invalid cost ref");
-    NT_ASSERT(index < items_game_internal_cost_count(cost._opaque) &&
+    NT_ASSERT(index < items_catalog_internal_cost_count(cost._opaque) &&
               "items_cost_at: index out of range");
-    return items_game_internal_cost_at(cost._opaque, index);
+    return items_catalog_internal_cost_at(cost._opaque, index);
+}
+
+/* The catalog is compiled in, so there is nothing to bind and never a moment
+   where it is absent. */
+bool items_catalog_is_bound(void) { return true; }
+
+uint32_t items_catalog_item_count(void) { return items_catalog_internal_item_count(); }
+
+uint64_t items_catalog_schema_abi(void) { return ITEMS_CATALOG_SCHEMA_ABI; }
+
+uint64_t items_catalog_content_fingerprint(void) { return ITEMS_CATALOG_CONTENT_FINGERPRINT; }
+
+bool items_has_currency(item_def_ref_t ref) {
+    return ref._index < items_catalog_internal_item_count() &&
+        items_catalog_internal_has_currency(ref._index);
+}
+
+int64_t items_currency_cap(item_def_ref_t ref) {
+    NT_ASSERT(items_has_currency(ref) && "items_currency_cap: item has no currency block");
+    return items_catalog_internal_currency_cap(ref._index);
 }
 
 void items_register_debug_labels(void) {
-    const uint32_t count = items_game_internal_item_count();
+    const uint32_t count = items_catalog_internal_item_count();
     for (uint32_t index = 0; index < count; ++index) {
-        const item_id_t id = items_game_internal_item_id(index);
-        nt_hash_register_label64((nt_hash64_t){id.value}, items_game_internal_def_id(index));
+        const item_id_t id = items_catalog_internal_item_id(index);
+        nt_hash_register_label64((nt_hash64_t){id.value}, items_catalog_internal_def_id(index));
     }
 }
 

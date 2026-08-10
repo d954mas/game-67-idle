@@ -1,0 +1,7 @@
+{
+  "schema": "items.lua.sandbox.v1",
+  "modules": [
+    { "name": "proof.core", "file": "items_api_core_proof.lua" }
+  ],
+  "entries": ["proof.core"]
+}

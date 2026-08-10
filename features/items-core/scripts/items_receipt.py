@@ -13,7 +13,7 @@ DEF_ID_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 FIELD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 RECEIPT_SCHEMA_VERSION = 4
 RECEIPT_SCHEMA = "items.release_receipt.v2"
-ITEMS_CORE_VERSION = "2.0.0"
+ITEMS_CORE_VERSION = "3.0.0"
 
 Issue = dict
 

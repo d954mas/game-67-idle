@@ -21,6 +21,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 SCRIPT = SCRIPT_DIR / "items_cli.py"
 PROJECT = SCRIPT_DIR.parent / "tests" / "fixtures" / "items_cli"
 TEMPLATE_ROOT = SCRIPT_DIR.parents[2] / "templates" / "template"
+CATALOG_OUTPUT_NAMES = CLI.catalog_api.OUTPUT_NAMES
 
 
 class ItemsCliTests(unittest.TestCase):
@@ -234,21 +235,25 @@ class ItemsCliTests(unittest.TestCase):
         self.assertEqual(requirements["result"]["results"], [])
 
     def test_build_validates_then_writes_snapshot_blob_and_stable_header(self):
+        artifacts = (
+            "items.snapshot.json", "items.catalog", "items_catalog_abi.gen.h",
+            "items_catalog.gen.h", "items_catalog.internal.gen.h",
+            "items_catalog.gen.c", "items_catalog.luau",
+        )
         with tempfile.TemporaryDirectory() as tmp:
             first = self.payload("build", "--out-dir", tmp)
             self.assertTrue(first["result"]["ok"])
-            self.assertEqual(first["result"]["changed"], {
-                "snapshot": True, "blob": True, "header": True,
-            })
+            self.assertTrue(all(first["result"]["changed"].values()))
             root = Path(tmp)
-            self.assertTrue((root / "items.snapshot.json").is_file())
-            self.assertTrue((root / "items.catalog").is_file())
-            self.assertTrue((root / "items_catalog_abi.gen.h").is_file())
+            for name in artifacts:
+                self.assertTrue((root / name).is_file(), name)
 
             second = self.payload("build", "--out-dir", tmp)
-            self.assertEqual(second["result"]["changed"], {
-                "snapshot": False, "blob": False, "header": False,
-            })
+            self.assertEqual(
+                {"snapshot", "blob", "header", *CATALOG_OUTPUT_NAMES},
+                set(second["result"]["changed"]),
+            )
+            self.assertFalse(any(second["result"]["changed"].values()))
 
     def test_build_refuses_receipt_failure_before_writing_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:
