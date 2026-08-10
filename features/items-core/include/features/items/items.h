@@ -213,6 +213,12 @@ items_result_t items_try_pay_cost(
 items_result_t items_try_pay_stacks(
     items_payment_scope_t scope, const char *const *def_ids,
     const int64_t *counts, uint32_t count, const char *reason);
+/* Answers what items_try_pay_stacks would answer for the same list and scope,
+   without taking anything or recording anything. For callers that must allocate
+   their own budget before spending: check, allocate, then pay. */
+items_result_t items_can_pay_stacks(
+    items_payment_scope_t scope, const char *const *def_ids,
+    const int64_t *counts, uint32_t count);
 items_result_t items_try_acquire(
     items_container_ref_t destination, item_def_ref_t item,
     items_payment_scope_t payment, const char *reason,

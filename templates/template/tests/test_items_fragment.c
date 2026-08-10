@@ -537,6 +537,88 @@ void test_pay_stacks_owing_nothing_succeeds_without_taking_anything(void) {
     TEST_ASSERT_EQUAL_INT(marks_before + 1, s_save_dirty_marks);
 }
 
+/* Whatever the check answers, the payment must answer the same on unchanged
+   state -- that agreement is what lets a caller allocate its own budget between
+   the two calls. */
+void test_can_pay_stacks_agrees_with_the_payment_and_changes_nothing(void) {
+    sword_payment_fixture_t fixture = create_sword_payment_fixture();
+    items_payment_scope_t scope = {.count = 2, .containers = {fixture.first, fixture.second}};
+    const char *const requirements[] = {"tmpl.gold", "tmpl.wood"};
+    const int64_t affordable[] = {10, 2};
+    const int64_t beyond[] = {10, 3};
+    ItemsState before = items_state;
+    const int marks_before = s_save_dirty_marks;
+    game_event_frame_reset();
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INSUFFICIENT,
+        items_can_pay_stacks(scope, requirements, beyond, 2));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK, items_can_pay_stacks(scope, requirements, affordable, 2));
+    /* Answering twice must not consume anything the second answer relies on. */
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK, items_can_pay_stacks(scope, requirements, affordable, 2));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK, items_can_pay_stacks(scope, NULL, NULL, 0));
+
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    TEST_ASSERT_EQUAL_INT(marks_before, s_save_dirty_marks);
+    int event_count = 0;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INSUFFICIENT,
+        items_try_pay_stacks(scope, requirements, beyond, 2, "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_pay_stacks(scope, requirements, affordable, 2, "shop_buy:sword"));
+    /* Spent: what the check now answers has to follow the state. */
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INSUFFICIENT,
+        items_can_pay_stacks(scope, requirements, affordable, 2));
+}
+
+void test_can_pay_stacks_rejects_the_same_lists_as_the_payment(void) {
+    sword_payment_fixture_t fixture = create_sword_payment_fixture();
+    items_payment_scope_t scope = {.count = 2, .containers = {fixture.first, fixture.second}};
+    const int64_t one[] = {1};
+    const int64_t pair[] = {1, 1};
+    ItemsState before = items_state;
+    game_event_frame_reset();
+
+    const char *const unknown[] = {"tmpl.absent"};
+    const char *const unique[] = {"tmpl.sword"};
+    const char *const duplicated[] = {"tmpl.gold", "tmpl.gold"};
+    const char *const hole[] = {"tmpl.gold", NULL};
+    const char *const gold[] = {"tmpl.gold"};
+    const int64_t negative[] = {-1};
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_NOT_FOUND, items_can_pay_stacks(scope, unknown, one, 1));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_WRONG_STORAGE, items_can_pay_stacks(scope, unique, one, 1));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT, items_can_pay_stacks(scope, duplicated, pair, 2));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT, items_can_pay_stacks(scope, hole, pair, 2));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT, items_can_pay_stacks(scope, gold, negative, 1));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_can_pay_stacks((items_payment_scope_t){0}, gold, one, 1));
+
+    items_container_ref_t temporary = create_ephemeral_container(
+        2, ITEMS_CONTAINER_POLICY_GENERIC);
+    items_payment_scope_t ephemeral = {.count = 1, .containers = {temporary}};
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_LIFETIME, items_can_pay_stacks(ephemeral, gold, one, 1));
+
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    int event_count = 0;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+}
+
 /* The bound guards a fixed-size buffer, so it has to answer before any element
    is read; unknown ids make that order observable. */
 void test_pay_stacks_bound_answers_before_the_list_is_read(void) {
@@ -1678,6 +1760,8 @@ int main(void) {
     RUN_TEST(test_pay_stacks_takes_nothing_when_a_later_requirement_is_short);
     RUN_TEST(test_pay_stacks_rejects_malformed_requirements_in_release);
     RUN_TEST(test_pay_stacks_owing_nothing_succeeds_without_taking_anything);
+    RUN_TEST(test_can_pay_stacks_agrees_with_the_payment_and_changes_nothing);
+    RUN_TEST(test_can_pay_stacks_rejects_the_same_lists_as_the_payment);
     RUN_TEST(test_pay_stacks_bound_answers_before_the_list_is_read);
     RUN_TEST(test_pay_stacks_refuses_faulty_scopes_and_checks_the_reason_first);
     RUN_TEST(test_pay_stacks_refuses_a_failed_commit_without_taking_anything);

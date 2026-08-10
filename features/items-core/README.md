@@ -92,6 +92,11 @@ requirements. A valid scope is required either way, so a caller that owes
 nothing still names where it would have paid from. Everything the catalog path
 asserts, the list path answers with a result code.
 
+`items_can_pay_stacks` answers the same question without taking or recording
+anything, for callers that must reserve their own budget before spending:
+check, allocate, then pay. Both go through one planner and only the payment has
+a commit tail, so the two can disagree only if the state moved between them.
+
 `items.payment` is the single success record for a composite payment. Stable
 `cost_fingerprint`, `scope_fingerprint`, and `source_fingerprint` fields identify
 the ordered item-ID/count requirements, ordered persistent container IDs,
@@ -196,6 +201,9 @@ The feature manifest uses exact SemVer. PATCH releases preserve behavior and
 wire/API contracts, MINOR releases add backward-compatible surface, and MAJOR
 releases may remove or change public commands, APIs, or catalog contracts.
 Consumers pin both the version and repository revision.
+
+4.1.0 adds `items_can_pay_stacks`, the non-committing answer to the same
+question `items_try_pay_stacks` answers.
 
 4.0.0 removes `ITEMS_RESULT_AUDIT_UNAVAILABLE` along with the audit-capacity
 pre-checks behind it; mutations commit and emit.

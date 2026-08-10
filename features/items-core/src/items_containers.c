@@ -1337,19 +1337,35 @@ static items_result_t normalize_stack_requirements(
     return ITEMS_RESULT_OK;
 }
 
+static items_result_t plan_stack_payment(
+    items_payment_scope_t scope, const char *const *def_ids, const int64_t *counts,
+    uint32_t count, items_payment_plan_t *out_plan) {
+    items_requirement_list_t list;
+    items_result_t normalized = normalize_stack_requirements(def_ids, counts, count, &list);
+    if (normalized != ITEMS_RESULT_OK) { return normalized; }
+    return build_payment_plan(
+        (items_requirement_source_t){&list, entry_list_requirement_count, entry_list_requirement_at},
+        scope, out_plan);
+}
+
 items_result_t items_try_pay_stacks(
     items_payment_scope_t scope, const char *const *def_ids, const int64_t *counts,
     uint32_t count, const char *reason) {
     if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
-    items_requirement_list_t list;
-    items_result_t normalized = normalize_stack_requirements(def_ids, counts, count, &list);
-    if (normalized != ITEMS_RESULT_OK) { return normalized; }
     items_payment_plan_t plan;
-    items_result_t result = build_payment_plan(
-        (items_requirement_source_t){&list, entry_list_requirement_count, entry_list_requirement_at},
-        scope, &plan);
+    items_result_t result = plan_stack_payment(scope, def_ids, counts, count, &plan);
     if (result != ITEMS_RESULT_OK) { return result; }
     return commit_payment_plan(&plan, reason);
+}
+
+/* Planning is the whole answer -- only the commit tail mutates -- so the check
+   and the payment cannot disagree about affordability unless the state moved
+   between them. No reason: nothing changes, so there is nothing to audit. */
+items_result_t items_can_pay_stacks(
+    items_payment_scope_t scope, const char *const *def_ids, const int64_t *counts,
+    uint32_t count) {
+    items_payment_plan_t plan;
+    return plan_stack_payment(scope, def_ids, counts, count, &plan);
 }
 
 static int64_t payment_planned_count(
