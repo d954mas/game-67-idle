@@ -1,6 +1,6 @@
 {
   "schema": "game_seed.items_lock",
-  "schema_version": 4,
+  "schema_version": 5,
   "comment": "Release compatibility history. def_ids maps currently shipped IDs to frozen storage/level bounds; removed records deliberate removals and their migration reaction. See src/features/items/README.md 'Lock workflow'.",
   "receipt": {
     "schema": "items.release_receipt.v2",
@@ -14,6 +14,12 @@
     },
     "field_ids": {
       "active": [],
+      "reserved": []
+    },
+    "track_ids": {
+      "active": [
+        "hero"
+      ],
       "reserved": []
     }
   },

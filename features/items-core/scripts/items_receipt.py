@@ -11,7 +11,8 @@ from typing import Any
 MIN_REMOVED_FRAGMENT_VERSION = 2
 DEF_ID_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 FIELD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
-RECEIPT_SCHEMA_VERSION = 4
+TRACK_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$")
+RECEIPT_SCHEMA_VERSION = 5
 RECEIPT_SCHEMA = "items.release_receipt.v2"
 ITEMS_CORE_VERSION = "3.0.0"
 
@@ -30,7 +31,8 @@ def validate_baseline_shape(baseline: dict[str, Any], path: Path) -> None:
     schema_version = baseline.get("schema_version")
     if schema_version != RECEIPT_SCHEMA_VERSION:
         raise OpsError(
-            f"lock baseline 'schema_version' must be 4, got {schema_version!r} ({path})"
+            f"lock baseline 'schema_version' must be {RECEIPT_SCHEMA_VERSION}, "
+            f"got {schema_version!r} ({path})"
         )
     def_ids = baseline.get("def_ids")
     if not isinstance(def_ids, dict):
@@ -49,7 +51,7 @@ def validate_baseline_shape(baseline: dict[str, Any], path: Path) -> None:
         )
     required = {
         "schema", "items_core_version", "lua_evaluation_schema",
-        "snapshot_schema", "state_schema", "field_ids",
+        "snapshot_schema", "state_schema", "field_ids", "track_ids",
     }
     if set(receipt) != required:
         raise OpsError(f"lock baseline 'receipt' keys are invalid ({path})")
@@ -67,26 +69,27 @@ def validate_baseline_shape(baseline: dict[str, Any], path: Path) -> None:
         or type(state.get("version")) is not int
     ):
         raise OpsError(f"lock baseline receipt state_schema is invalid ({path})")
-    field_ids = receipt.get("field_ids")
-    if not isinstance(field_ids, dict) or set(field_ids) != {"active", "reserved"}:
-        raise OpsError(
-            f"lock baseline receipt field_ids must have active/reserved lists ({path})"
-        )
-    active, reserved = field_ids.get("active"), field_ids.get("reserved")
-    if (
-        not isinstance(active, list)
-        or not isinstance(reserved, list)
-        or not all(
-            isinstance(field_id, str) and FIELD_ID_RE.fullmatch(field_id)
-            for field_id in [*active, *reserved]
-        )
-        or len(active) != len(set(active))
-        or len(reserved) != len(set(reserved))
-        or set(active) & set(reserved)
-    ):
-        raise OpsError(
-            f"lock baseline receipt field_ids must be unique disjoint strings ({path})"
-        )
+    for key, pattern in (("field_ids", FIELD_ID_RE), ("track_ids", TRACK_ID_RE)):
+        section = receipt.get(key)
+        if not isinstance(section, dict) or set(section) != {"active", "reserved"}:
+            raise OpsError(
+                f"lock baseline receipt {key} must have active/reserved lists ({path})"
+            )
+        active, reserved = section.get("active"), section.get("reserved")
+        if (
+            not isinstance(active, list)
+            or not isinstance(reserved, list)
+            or not all(
+                isinstance(value, str) and pattern.fullmatch(value)
+                for value in [*active, *reserved]
+            )
+            or len(active) != len(set(active))
+            or len(reserved) != len(set(reserved))
+            or set(active) & set(reserved)
+        ):
+            raise OpsError(
+                f"lock baseline receipt {key} must be unique disjoint strings ({path})"
+            )
     for item_id, metadata in def_ids.items():
         if (
             not isinstance(item_id, str)
@@ -121,7 +124,7 @@ def validate_baseline_shape(baseline: dict[str, Any], path: Path) -> None:
 
 def _evaluation_receipt_view(
     evaluation: dict[str, Any],
-) -> tuple[set[str], dict[str, dict[str, Any]]]:
+) -> tuple[set[str], set[str], dict[str, dict[str, Any]]]:
     if not isinstance(evaluation, dict) or evaluation.get("schema") != "items.lua.evaluation.v1":
         raise OpsError("evaluation must be an items.lua.evaluation.v1 object")
     raw_fields = evaluation.get("fields")
@@ -163,15 +166,27 @@ def _evaluation_receipt_view(
         if storage == "stack" and level_count != 0:
             raise OpsError(f"evaluation stack item {item_id!r} cannot have levels")
         items[item_id] = {"storage": storage, "level_count": level_count}
-    return set(field_ids), items
+
+    # A track id is the key of its save record, so renaming one forgets every
+    # player's earned levels -- the same destructive edit the def_id ratchet
+    # already refuses to let through unnoticed.
+    track_ids: list[str] = []
+    for track in evaluation.get("tracks") or []:
+        track_id = track.get("id") if isinstance(track, dict) else None
+        if not isinstance(track_id, str) or TRACK_ID_RE.fullmatch(track_id) is None:
+            raise OpsError("evaluation tracks require non-empty string ids")
+        track_ids.append(track_id)
+    if len(track_ids) != len(set(track_ids)):
+        raise OpsError("evaluation track ids must be unique")
+    return set(field_ids), set(track_ids), items
 
 
 def _evaluation_receipt_checks(
     evaluation: dict[str, Any],
     baseline: dict[str, Any],
     state_schema: dict[str, Any],
-) -> tuple[list[Issue], list[Issue], set[str], dict[str, dict[str, Any]]]:
-    field_ids, items = _evaluation_receipt_view(evaluation)
+) -> tuple[list[Issue], list[Issue], set[str], set[str], dict[str, dict[str, Any]]]:
+    field_ids, track_ids, items = _evaluation_receipt_view(evaluation)
     state_version = state_schema.get("version")
     if (
         not isinstance(state_schema.get("schema"), str)
@@ -188,6 +203,9 @@ def _evaluation_receipt_checks(
     frozen_state = receipt["state_schema"]
     active_fields = set(receipt["field_ids"]["active"])
     reserved_fields = set(receipt["field_ids"]["reserved"])
+    reserved_tracks = set(receipt["track_ids"]["reserved"])
+    active_tracks = set(receipt["track_ids"]["active"])
+    reserved_tracks = set(receipt["track_ids"]["reserved"])
     if receipt["lua_evaluation_schema"] != evaluation["schema"]:
         errors.append(issue(
             "receipt-evaluation-schema",
@@ -217,6 +235,20 @@ def _evaluation_receipt_checks(
             "reserved-field-reused",
             f"reserved field_id {field_id!r} cannot be reused; restore it explicitly in the receipt or choose a new id",
             id=field_id,
+        ))
+    for track_id in sorted(active_tracks - track_ids):
+        errors.append(issue(
+            "track-removed-without-reaction",
+            f"shipped track_id {track_id!r} is absent; every player's levels for it are "
+            "forgotten -- move it from track_ids.active to reserved explicitly",
+            id=track_id,
+        ))
+    for track_id in sorted(reserved_tracks & track_ids):
+        errors.append(issue(
+            "reserved-track-reused",
+            f"reserved track_id {track_id!r} cannot be reused; a stale save record would "
+            "restore levels for a track that is not the one it named",
+            id=track_id,
         ))
 
     locked = baseline["def_ids"]
@@ -290,7 +322,7 @@ def _evaluation_receipt_checks(
                 f"removed def_id {item_id!r} is active again; move it back to def_ids if restoration is permanent",
                 id=item_id,
             ))
-    return errors, warnings, field_ids, items
+    return errors, warnings, field_ids, track_ids, items
 
 
 def validate_evaluation_receipt(
@@ -301,7 +333,7 @@ def validate_evaluation_receipt(
     baseline_path: Path,
 ) -> dict[str, Any]:
     validate_baseline_shape(baseline, baseline_path)
-    errors, warnings, _, _ = _evaluation_receipt_checks(
+    errors, warnings, _, _, _ = _evaluation_receipt_checks(
         evaluation, baseline, state_schema,
     )
     return {"ok": not errors, "errors": errors, "warnings": warnings}
@@ -315,7 +347,7 @@ def prepare_evaluation_receipt(
     baseline_path: Path,
 ) -> tuple[dict[str, Any], bytes | None]:
     validate_baseline_shape(baseline, baseline_path)
-    errors, warnings, field_ids, items = _evaluation_receipt_checks(
+    errors, warnings, field_ids, track_ids, items = _evaluation_receipt_checks(
         evaluation, baseline, state_schema,
     )
     if errors:
@@ -327,6 +359,7 @@ def prepare_evaluation_receipt(
     sealed = json.loads(json.dumps(baseline))
     receipt = sealed["receipt"]
     reserved_fields = set(receipt["field_ids"]["reserved"])
+    reserved_tracks = set(receipt["track_ids"]["reserved"])
     receipt["items_core_version"] = ITEMS_CORE_VERSION
     receipt["lua_evaluation_schema"] = evaluation["schema"]
     receipt["snapshot_schema"] = "items.snapshot.v1"
@@ -338,6 +371,10 @@ def prepare_evaluation_receipt(
     receipt["field_ids"] = {
         "active": sorted(field_ids - reserved_fields),
         "reserved": sorted(reserved_fields),
+    }
+    receipt["track_ids"] = {
+        "active": sorted(track_ids - reserved_tracks),
+        "reserved": sorted(reserved_tracks),
     }
     removed_ids = set(sealed["removed"])
     sealed["def_ids"] = {

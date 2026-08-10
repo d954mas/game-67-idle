@@ -1,6 +1,6 @@
 {
   "schema": "game.items_lock",
-  "schema_version": 4,
+  "schema_version": 5,
   "receipt": {
     "schema": "items.release_receipt.v2",
     "items_core_version": "1.14.0",
@@ -16,6 +16,10 @@
         "game.hauler.level.haul_mul",
         "game.weapon.level.attack"
       ],
+      "reserved": []
+    },
+    "track_ids": {
+      "active": [],
       "reserved": []
     }
   },

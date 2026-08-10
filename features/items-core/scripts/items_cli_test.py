@@ -250,6 +250,32 @@ class ItemsCliTests(unittest.TestCase):
             )
             self.assertFalse(any(second["result"]["changed"].values()))
 
+    def test_a_shipped_track_id_cannot_vanish_unnoticed(self):
+        """A track id is the key of its save record, so dropping one forgets every
+        player's levels for it -- the same destructive edit the def_id ratchet
+        already refuses to let through."""
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            shutil.copytree(PROJECT, project)
+            lock_path = project / "content" / "items.lock.json"
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            lock["receipt"]["track_ids"]["active"] = ["retired"]
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+
+            result = self.run_project(project, "validate")
+            self.assertEqual(result.returncode, 1)
+            receipt = json.loads(result.stdout)["result"]["receipt"]
+            self.assertFalse(receipt["ok"])
+            self.assertEqual(
+                [error["rule"] for error in receipt["errors"]],
+                ["track-removed-without-reaction"],
+            )
+
+            # Reserving it is the explicit reaction, and then the id stays retired.
+            lock["receipt"]["track_ids"] = {"active": [], "reserved": ["retired"]}
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            self.assertEqual(self.run_project(project, "validate").returncode, 0)
+
     def test_build_refuses_receipt_failure_before_writing_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

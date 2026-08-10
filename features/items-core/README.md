@@ -275,6 +275,13 @@ header a consumer includes is `items_catalog.gen.h`, catalog identity and
 currency queries answer without a bind step, and the `api_proof*` commands are
 replaced by `c_catalog*`.
 
+Version `6.0.0` puts track ids under the lock ratchet: the release receipt gains
+`track_ids: {active, reserved}` beside `field_ids`, and the baseline schema_version
+moves to 5. A track id is the key of its save record, so dropping or renaming one
+forgets every player's levels for it; that now fails `validate` until the id is
+moved to `reserved` on purpose, and a reserved id cannot come back. Existing locks
+must be resealed (`items_cli seal-receipt`).
+
 Version `5.2.0` teaches `diff_snapshots` about tracks. A price edit moves
 `content_hash`, and the diff -- which walked items and requirements only -- used to
 report no changes for it. Diff entries for tracks carry a `track` key beside the
