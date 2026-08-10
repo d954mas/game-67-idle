@@ -43,7 +43,7 @@ ITEM_KEYS = {
     "currency", "use", "equip", "authoring_mode", "levels", "acquire",
 }
 TRACK_KEYS = {"id", "kind", "mode", "authoring_mode", "levels"}
-TRACK_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+TRACK_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$")
 TRACK_MODES = {"manual", "auto", "threshold"}
 # One advance per mode, and the row member that carries it.
 TRACK_TRANSITION = {"manual": "cost_to_reach", "auto": "cost_to_reach", "threshold": "xp_to_reach"}
@@ -259,7 +259,7 @@ def _validate_typed_rows(
             path = f"$.{section}[{entry_index}].levels.rows[{row_index}]"
             if not isinstance(row, dict):
                 _fail("snapshot.level_row", "level row must be an object", path)
-            unknown = sorted(set(row) - known_members - {transition})
+            unknown = sorted(set(row) - known_members - {transition, "grants"})
             if unknown:
                 _fail("snapshot.unknown_field", f"unknown level field: {unknown[0]}", f"{path}.{unknown[0]}")
             for field in fields:
@@ -402,6 +402,26 @@ def _validate_level_provenance(entries: list[dict[str, Any]], section: str = "it
                 _fail("snapshot.provenance", f"provenance is inconsistent with {mode} mode", row_path)
 
 
+def quantity_amounts(value: Any) -> dict[str, int]:
+    """A normalized cost/grant list keyed by item id, whatever handle wrote it."""
+    if not isinstance(value, dict) or value.get("__studio_kind") == "free":
+        return {}
+    entries = [value] if value.get("__studio_kind") == "cost" else value.get("entries")
+    if not isinstance(entries, list):
+        _fail("snapshot.quantity", "a quantity must be a cost, a cost list, or free")
+    amounts: dict[str, int] = {}
+    for entry in entries:
+        item = entry.get("item") if isinstance(entry, dict) else None
+        item_id = item.get("id") if isinstance(item, dict) else None
+        count = entry.get("count") if isinstance(entry, dict) else None
+        if not isinstance(item_id, str) or type(count) is not int or count <= 0:
+            _fail("snapshot.quantity", "each quantity entry needs an item and a positive count")
+        if item_id in amounts:
+            _fail("snapshot.quantity", f"quantity names {item_id} twice")
+        amounts[item_id] = count
+    return amounts
+
+
 def _validate_track_contract(tracks: list[dict[str, Any]]) -> None:
     seen: set[str] = set()
     for index, track in enumerate(tracks):
@@ -410,9 +430,10 @@ def _validate_track_contract(tracks: list[dict[str, Any]]) -> None:
         if unknown:
             _fail("snapshot.track_key", f"unknown track field: {unknown[0]}", f"{path}.{unknown[0]}")
         track_id = track.get("id")
-        # A bare slug: track ids are progression-internal and never catalog-namespaced.
+        # A track id is the key of its save record, so only the charset is checked:
+        # renaming one silently forgets every player's earned levels.
         if not isinstance(track_id, str) or TRACK_ID_RE.fullmatch(track_id) is None:
-            _fail("snapshot.track_id", "track requires a lowercase slug id", f"{path}.id")
+            _fail("snapshot.track_id", "track id must be lowercase dot-separated segments", f"{path}.id")
         if track_id in seen:
             _fail("snapshot.duplicate_track", f"duplicate track id: {track_id}", f"{path}.id")
         seen.add(track_id)
@@ -440,6 +461,22 @@ def _validate_track_contract(tracks: list[dict[str, Any]]) -> None:
                 value = row[transition]
                 if type(value) is not int or value <= 0 or value > MAX_EXACT_INTEGER:
                     _fail("snapshot.track_transition", "xp_to_reach must be a positive exact integer", f"{row_path}.{transition}")
+            granted = quantity_amounts(row.get("grants"))
+            if row_index == 0 and granted:
+                _fail("snapshot.track_grants", "the first row is never reached, so it grants nothing", f"{row_path}.grants")
+            if "grants" in row and not granted:
+                _fail("snapshot.track_grants", "an empty grant is an absent grants member", f"{row_path}.grants")
+            # An auto track buys levels on its own: handing back at least what the
+            # level charged of the same resource is an unbounded loop, not a reward.
+            if mode == "auto":
+                paid = quantity_amounts(row.get(transition))
+                for item_id, amount in granted.items():
+                    if item_id in paid and amount >= paid[item_id]:
+                        _fail(
+                            "snapshot.track_self_paying",
+                            f"an auto track cannot grant back its own price: {item_id}",
+                            f"{row_path}.grants",
+                        )
 
 
 def _normalize_tracks(

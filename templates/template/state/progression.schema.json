@@ -21,7 +21,6 @@
       "fields": {
         "track":           { "type": "string" },
         "mode":            { "type": "string" },
-        "cause":           { "type": "string" },
         "reason":          { "type": "string" },
         "old_level":       { "type": "i64" },
         "new_level":       { "type": "i64" },

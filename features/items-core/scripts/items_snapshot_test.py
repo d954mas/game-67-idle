@@ -920,7 +920,8 @@ class ItemsSnapshotTests(unittest.TestCase):
         self.assert_track_failure([track(rows=[{"payout": 1.0}])], "snapshot.track_levels")
 
     def test_track_identity_is_a_slug_and_unique(self):
-        self.assert_track_failure([track(track_id="game.rank")], "snapshot.track_id")
+        self.assert_track_failure([track(track_id="Rank")], "snapshot.track_id")
+        self.assert_track_failure([track(track_id="rank.")], "snapshot.track_id")
         self.assert_track_failure([track(), track()], "snapshot.duplicate_track")
 
     def test_track_reference_must_resolve_to_a_declared_item(self):

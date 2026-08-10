@@ -25,6 +25,9 @@ void game_save_mark_dirty(void) {}
 
 static items_container_ref_t s_resources = ITEMS_CONTAINER_REF_NONE;
 
+/* Resolved once per reset: every call below takes the handle, never the id. */
+static progression_track_ref_t s_man, s_auto1, s_thr, s_runaway, s_mixed;
+
 static void reset_test_state(void) {
     char error[128] = {0};
     items_state_fragment.reset();
@@ -37,7 +40,13 @@ static void reset_test_state(void) {
     TEST_ASSERT_EQUAL_INT(
         ITEMS_RESULT_OK, items_try_container_create(desc, &s_resources));
     progression_state_fragment.reset();
-    progression_bind_resource_container(s_resources);
+    items_payment_scope_t scope = {.count = 1, .containers = {s_resources}};
+    progression_bind_payment_scope(scope);
+    s_man = progression_track("man");
+    s_auto1 = progression_track("auto1");
+    s_thr = progression_track("thr");
+    s_runaway = progression_track("runaway");
+    s_mixed = progression_track("mixed");
 }
 
 static bool resource_add(const char *def_id, int64_t count, const char *reason) {
@@ -78,7 +87,6 @@ static const ProgressionEvLevelup *find_levelup(
 static bool levelup_paid_event_exists(
     const char *track,
     const char *mode,
-    const char *cause,
     const char *reason,
     int64_t old_level,
     int64_t new_level,
@@ -88,7 +96,6 @@ static bool levelup_paid_event_exists(
     const ProgressionEvLevelup *e = find_levelup(track, reason, old_level, new_level);
     return e != NULL &&
            strcmp(progression_ev_levelup_mode(e), mode) == 0 &&
-           strcmp(progression_ev_levelup_cause(e), cause) == 0 &&
            e->xp_cost == 0 && e->xp_before == 0 &&
            progression_ev_levelup_cost_count(e) == 1u &&
            strcmp(progression_ev_levelup_cost_def_id(e, 0), def_id) == 0 &&
@@ -173,38 +180,55 @@ static bool reset_event_exists(const char *track, const char *reason, int64_t ol
     return false;
 }
 
-/* ---- cost-lookup / xp_needed ---- */
+/* ---- the price of the next level ---- */
 
-void test_cost_lookup_and_xp_needed(void) {
+void test_cost_of_the_next_level_follows_the_current_one(void) {
     reset_test_state();
 
-    const progression_track_def_t *man = progression_track_def("man");
+    const progression_track_def_t *man = progression_track_def(s_man);
     TEST_ASSERT_NOT_NULL(man);
-    TEST_ASSERT_EQUAL_INT64(10, man->cost[0]);
-    TEST_ASSERT_EQUAL_INT64(20, man->cost[1]);
-    TEST_ASSERT_EQUAL_INT64(30, man->cost[2]);
+    TEST_ASSERT_EQUAL_INT64(10, man->steps[0].cost[0].amount);
+    TEST_ASSERT_EQUAL_INT64(20, man->steps[1].cost[0].amount);
+    TEST_ASSERT_EQUAL_INT64(30, man->steps[2].cost[0].amount);
 
-    TEST_ASSERT_EQUAL_INT64(10, progression_xp_needed("man")); /* level 0 -> cost[0] */
-    progression_set_level("man", 3, "admin:test");             /* clamp to max */
-    TEST_ASSERT_EQUAL_INT64(0, progression_xp_needed("man"));  /* at max -> 0 */
+    TEST_ASSERT_EQUAL_UINT32(1u, progression_cost_count(s_man));
+    TEST_ASSERT_EQUAL_STRING("tmpl.gold", progression_cost_at(s_man, 0).def_id);
+    TEST_ASSERT_EQUAL_INT64(10, progression_cost_at(s_man, 0).amount);
+
+    progression_set_level(s_man, 3, "admin:test"); /* clamp to max */
+    /* At the cap there is no next level, so there is no price to name. */
+    TEST_ASSERT_EQUAL_UINT32(0u, progression_cost_count(s_man));
+    TEST_ASSERT_NULL(progression_cost_at(s_man, 0).def_id);
+}
+
+/* An unresolved handle answers like an absent record instead of crashing. */
+void test_unknown_track_reads_as_empty(void) {
+    reset_test_state();
+
+    progression_track_ref_t missing = progression_track("no_such_track");
+    TEST_ASSERT_FALSE(progression_track_valid(missing));
+    TEST_ASSERT_NULL(progression_track_def(missing));
+    TEST_ASSERT_EQUAL_INT(0, progression_level(missing));
+    TEST_ASSERT_EQUAL_UINT32(0u, progression_cost_count(missing));
+    TEST_ASSERT_FALSE(progression_level_up(missing, "level_cost:test"));
 }
 
 /* int64-край (§5.8): a struct literal with a near-int64-max cost round-trips
    without truncation -- a pure C-level sanity check independent of the test
    catalog above (this def is NOT registered in k_tracks). */
 void test_int64_cost_no_truncation(void) {
-    static const int64_t huge_cost[] = {9000000000000000000LL};
+    static const progression_amount_t huge_cost[] = {{"tmpl.gold", 9000000000000000000LL}};
+    static const progression_step_t huge_steps[] = {{huge_cost, 1, 0, NULL, 0}};
     progression_track_def_t huge_def = {
         .id = "huge",
         .mode = PROGRESSION_MODE_MANUAL,
-        .currency_def = "tmpl.gold",
         .max_level = 1,
-        .cost = huge_cost,
-        .cost_count = 1,
-        .on_level_up = NULL,
-        .on_level_up_count = 0,
+        .steps = huge_steps,
+        .exact = NULL,
+        .fractional = NULL,
+        .value_count = 0u,
     };
-    TEST_ASSERT_EQUAL_INT64(9000000000000000000LL, huge_def.cost[0]);
+    TEST_ASSERT_EQUAL_INT64(9000000000000000000LL, huge_def.steps[0].cost[0].amount);
 }
 
 /* ---- manual mode ---- */
@@ -214,15 +238,15 @@ void test_manual_level_up_spends_purse(void) {
 
     TEST_ASSERT_TRUE(resource_add("tmpl.gold", 25, "cheat:test"));
 
-    TEST_ASSERT_TRUE(progression_level_up("man", "level_cost:test"));
-    TEST_ASSERT_EQUAL_INT(1, progression_level("man"));
+    TEST_ASSERT_TRUE(progression_level_up(s_man, "level_cost:test"));
+    TEST_ASSERT_EQUAL_INT(1, progression_level(s_man));
     TEST_ASSERT_EQUAL_INT64(15, resource_count("tmpl.gold")); /* 25 - cost[0]=10 */
     TEST_ASSERT_TRUE(levelup_paid_event_exists(
-        "man", "manual", "manual", "level_cost:test", 0, 1, "tmpl.gold", 10, 25));
+        "man", "manual", "level_cost:test", 0, 1, "tmpl.gold", 10, 25));
 
     /* cost[1]=20 > remaining 15 -> insufficient, level_up rejects, level stays put. */
-    TEST_ASSERT_FALSE(progression_level_up("man", "level_cost:test"));
-    TEST_ASSERT_EQUAL_INT(1, progression_level("man"));
+    TEST_ASSERT_FALSE(progression_level_up(s_man, "level_cost:test"));
+    TEST_ASSERT_EQUAL_INT(1, progression_level(s_man));
     TEST_ASSERT_EQUAL_INT64(15, resource_count("tmpl.gold")); /* untouched by the rejected call */
 }
 
@@ -245,9 +269,9 @@ void test_manual_level_up_budget_exhausted_leaves_purse_untouched(void) {
     }
 
     TEST_ASSERT_TRUE(resource_add("tmpl.gold", 25, "cheat:test"));
-    TEST_ASSERT_FALSE(progression_level_up("man", "level_cost:test")); /* budget exhausted -- must fail closed */
+    TEST_ASSERT_FALSE(progression_level_up(s_man, "level_cost:test")); /* budget exhausted -- must fail closed */
     TEST_ASSERT_EQUAL_INT64(25, resource_count("tmpl.gold"));          /* resource container untouched */
-    TEST_ASSERT_EQUAL_INT(0, progression_level("man"));                /* never got a record -- lazy default reads 0 */
+    TEST_ASSERT_EQUAL_INT(0, progression_level(s_man));                /* never got a record -- lazy default reads 0 */
 }
 
 /* ---- auto mode (tick) ---- */
@@ -260,9 +284,10 @@ void test_auto_tick_buys_while_affordable(void) {
 
     /* auto1 cost {5,5,5,5,5}: 12 -> buys level0 (7 left) -> buys level1 (2 left) ->
        cost[2]=5 > 2, stops. */
-    TEST_ASSERT_EQUAL_INT(2, progression_level("auto1"));
+    TEST_ASSERT_EQUAL_INT(2, progression_level(s_auto1));
     TEST_ASSERT_EQUAL_INT64(2, resource_count("tmpl.xp"));
-    TEST_ASSERT_EQUAL_INT64(2, progression_xp_current("auto1")); /* == purse for auto mode */
+    /* An item-paid track has no accumulator of its own; its balance is the purse. */
+    TEST_ASSERT_EQUAL_INT64(0, progression_xp_current(s_auto1));
 }
 
 /* ---- threshold mode (tick) ---- */
@@ -270,14 +295,14 @@ void test_auto_tick_buys_while_affordable(void) {
 void test_threshold_tick_buys_from_internal_xp(void) {
     reset_test_state();
 
-    progression_add_xp("thr", 25, "loot:test");
+    progression_add_xp(s_thr, 25, "loot:test");
     TEST_ASSERT_TRUE(xp_added_event_exists("thr", "loot:test", 25, 0, 25));
     progression_update();
 
     /* thr cost {10,10,10,10,10}: 25 -> buys level0 (15 left) -> buys level1 (5 left) ->
        cost[2]=10 > 5, stops. */
-    TEST_ASSERT_EQUAL_INT(2, progression_level("thr"));
-    TEST_ASSERT_EQUAL_INT64(5, progression_xp_current("thr")); /* internal accumulator, not purse */
+    TEST_ASSERT_EQUAL_INT(2, progression_level(s_thr));
+    TEST_ASSERT_EQUAL_INT64(5, progression_xp_current(s_thr)); /* internal accumulator, not purse */
     /* The price is xp, so it rides xp_cost/xp_before and cost[] stays empty. */
     TEST_ASSERT_TRUE(levelup_threshold_event_exists("thr", "level_cost:threshold", 0, 1, 10, 25));
     TEST_ASSERT_TRUE(levelup_threshold_event_exists("thr", "level_cost:threshold", 1, 2, 10, 15));
@@ -288,18 +313,18 @@ void test_threshold_tick_buys_from_internal_xp(void) {
 void test_set_level_clamps_and_leaves_xp_untouched(void) {
     reset_test_state();
 
-    progression_set_level("man", 3, "admin:prologue");
-    TEST_ASSERT_EQUAL_INT(3, progression_level("man")); /* == max_level */
+    progression_set_level(s_man, 3, "admin:prologue");
+    TEST_ASSERT_EQUAL_INT(3, progression_level(s_man)); /* == max_level */
     TEST_ASSERT_TRUE(level_set_event_exists("man", "admin:prologue", 3, 0, 3));
 
     game_event_frame_reset();
-    progression_set_level("man", 99, "admin:prologue"); /* clamp above max */
-    TEST_ASSERT_EQUAL_INT(3, progression_level("man"));
+    progression_set_level(s_man, 99, "admin:prologue"); /* clamp above max */
+    TEST_ASSERT_EQUAL_INT(3, progression_level(s_man));
     TEST_ASSERT_TRUE(level_set_event_exists("man", "admin:prologue", 99, 3, 3));
 
     game_event_frame_reset();
-    progression_set_level("man", 1, "admin:prologue"); /* lowered (e.g. a weakened hero) */
-    TEST_ASSERT_EQUAL_INT(1, progression_level("man"));
+    progression_set_level(s_man, 1, "admin:prologue"); /* lowered (e.g. a weakened hero) */
+    TEST_ASSERT_EQUAL_INT(1, progression_level(s_man));
     TEST_ASSERT_TRUE(level_set_event_exists("man", "admin:prologue", 1, 3, 1));
 }
 
@@ -308,13 +333,13 @@ void test_set_level_clamps_and_leaves_xp_untouched(void) {
 void test_reset_zeroes_level_and_internal_xp(void) {
     reset_test_state();
 
-    progression_add_xp("thr", 25, "loot:test");
+    progression_add_xp(s_thr, 25, "loot:test");
     progression_update();
-    TEST_ASSERT_EQUAL_INT(2, progression_level("thr")); /* precondition, see threshold test above */
+    TEST_ASSERT_EQUAL_INT(2, progression_level(s_thr)); /* precondition, see threshold test above */
 
-    progression_reset("thr", "admin:prestige");
-    TEST_ASSERT_EQUAL_INT(0, progression_level("thr"));
-    TEST_ASSERT_EQUAL_INT64(0, progression_xp_current("thr"));
+    progression_reset(s_thr, "admin:prestige");
+    TEST_ASSERT_EQUAL_INT(0, progression_level(s_thr));
+    TEST_ASSERT_EQUAL_INT64(0, progression_xp_current(s_thr));
     TEST_ASSERT_TRUE(reset_event_exists("thr", "admin:prestige", 2, 5));
 
     /* L-fix (deep-review #4): reset FREES the slot (used=false), not just
@@ -337,16 +362,16 @@ void test_levelup_events_include_context_for_auto_and_manual(void) {
     progression_update(); /* auto1: 0->1->2 (two levelups) */
 
     TEST_ASSERT_TRUE(levelup_paid_event_exists(
-        "auto1", "auto", "auto", "level_cost:auto", 0, 1, "tmpl.xp", 5, 12));
+        "auto1", "auto", "level_cost:auto", 0, 1, "tmpl.xp", 5, 12));
     TEST_ASSERT_TRUE(levelup_paid_event_exists(
-        "auto1", "auto", "auto", "level_cost:auto", 1, 2, "tmpl.xp", 5, 7));
+        "auto1", "auto", "level_cost:auto", 1, 2, "tmpl.xp", 5, 7));
 
     /* Manual level_up is also a fact event now; analytics should not infer it from items.txn. */
     game_event_frame_reset();
     TEST_ASSERT_TRUE(resource_add("tmpl.gold", 25, "cheat:test"));
-    TEST_ASSERT_TRUE(progression_level_up("man", "level_cost:test"));
+    TEST_ASSERT_TRUE(progression_level_up(s_man, "level_cost:test"));
     TEST_ASSERT_TRUE(levelup_paid_event_exists(
-        "man", "manual", "manual", "level_cost:test", 0, 1, "tmpl.gold", 10, 25));
+        "man", "manual", "level_cost:test", 0, 1, "tmpl.gold", 10, 25));
 }
 
 /* ---- T5 HARD caps (G6 -- anti-hang, критично) ---- */
@@ -357,18 +382,7 @@ void test_t5_per_track_cap_self_refund_terminates(void) {
     TEST_ASSERT_TRUE(resource_add("tmpl.xp", 100, "cheat:test"));
     progression_update(); /* MUST return -- proves the per-track cap, not a hang */
 
-    TEST_ASSERT_EQUAL_INT(64, progression_level("runaway")); /* ровно кап, не 100, не ∞ */
-}
-
-void test_t5_cascade_depth_cap_terminates(void) {
-    reset_test_state();
-
-    progression_add_xp("casc_a", 5, "loot:test");
-    progression_update(); /* MUST return -- proves the cascade depth cap, not a hang */
-
-    int total = progression_level("casc_a") + progression_level("casc_b");
-    TEST_ASSERT_TRUE(total > 0);    /* the cascade did fire at least once */
-    TEST_ASSERT_TRUE(total < 1000); /* и это КОНЕЧНОЕ число -- ограничено depth-капом, не max_level (20 каждый) */
+    TEST_ASSERT_EQUAL_INT(64, progression_level(s_runaway)); /* exactly the cap: not 100, not forever */
 }
 
 /* ---- round-trip byte-stable (G4) ---- */
@@ -404,7 +418,7 @@ void test_round_trip_byte_stable(void) {
 void test_lazy_allocation_no_gratuitous_records(void) {
     reset_test_state();
 
-    TEST_ASSERT_EQUAL_INT(0, progression_level("hero-absent")); /* unknown track -> 0, not a crash */
+    TEST_ASSERT_EQUAL_INT(0, progression_level(s_man)); /* no record yet -> 0, not a crash */
 
     cJSON *json_empty = progression_state_to_json(&progression_state);
     const cJSON *tracks_empty = cJSON_GetObjectItemCaseSensitive(json_empty, "tracks");
@@ -422,10 +436,50 @@ void test_lazy_allocation_no_gratuitous_records(void) {
     cJSON_Delete(json_after);
 }
 
+/* ---- columns ---- */
+
+void test_columns_answer_the_read_their_type_declares(void) {
+    reset_test_state();
+
+    TEST_ASSERT_EQUAL_INT64(0, progression_valuei(s_mixed, 0u));   /* level 0 contributes nothing */
+    TEST_ASSERT_EQUAL_INT64(4, progression_valuei_at(s_mixed, 0u, 1));
+    TEST_ASSERT_EQUAL_INT64(9, progression_valuei_at(s_mixed, 0u, 2));
+    TEST_ASSERT_TRUE(progression_valuef_at(s_mixed, 1u, 0) == 1.0);
+    TEST_ASSERT_TRUE(progression_valuef_at(s_mixed, 1u, 2) == 1.5);
+
+    /* A level past the cap reads the cap rather than walking off the table. */
+    TEST_ASSERT_EQUAL_INT64(9, progression_valuei_at(s_mixed, 0u, 99));
+    /* A column nobody declared reads as nothing. */
+    TEST_ASSERT_EQUAL_INT64(0, progression_valuei(s_mixed, 7u));
+}
+
+/* ---- a price in more than one resource ---- */
+
+void test_multi_resource_level_up_is_all_or_nothing(void) {
+    reset_test_state();
+
+    /* Enough gold, not enough wood: the level must not be granted and neither
+       resource may move. */
+    TEST_ASSERT_TRUE(resource_add("tmpl.gold", 5, "cheat:test"));
+    TEST_ASSERT_TRUE(resource_add("tmpl.wood", 1, "cheat:test"));
+    TEST_ASSERT_FALSE(progression_level_up(s_mixed, "level_cost:test"));
+    TEST_ASSERT_EQUAL_INT(0, progression_level(s_mixed));
+    TEST_ASSERT_EQUAL_INT64(5, resource_count("tmpl.gold"));
+    TEST_ASSERT_EQUAL_INT64(1, resource_count("tmpl.wood"));
+
+    TEST_ASSERT_TRUE(resource_add("tmpl.wood", 1, "cheat:test"));
+    TEST_ASSERT_TRUE(progression_level_up(s_mixed, "level_cost:test"));
+    TEST_ASSERT_EQUAL_INT(1, progression_level(s_mixed));
+    TEST_ASSERT_EQUAL_INT64(4, resource_count("tmpl.gold"));
+    TEST_ASSERT_EQUAL_INT64(0, resource_count("tmpl.wood"));
+    TEST_ASSERT_EQUAL_UINT32(2u, progression_cost_count(s_mixed));
+}
+
 int main(void) {
     game_events_init();
     UNITY_BEGIN();
-    RUN_TEST(test_cost_lookup_and_xp_needed);
+    RUN_TEST(test_cost_of_the_next_level_follows_the_current_one);
+    RUN_TEST(test_unknown_track_reads_as_empty);
     RUN_TEST(test_int64_cost_no_truncation);
     RUN_TEST(test_manual_level_up_spends_purse);
     RUN_TEST(test_manual_level_up_budget_exhausted_leaves_purse_untouched);
@@ -435,9 +489,10 @@ int main(void) {
     RUN_TEST(test_reset_zeroes_level_and_internal_xp);
     RUN_TEST(test_levelup_events_include_context_for_auto_and_manual);
     RUN_TEST(test_t5_per_track_cap_self_refund_terminates);
-    RUN_TEST(test_t5_cascade_depth_cap_terminates);
     RUN_TEST(test_round_trip_byte_stable);
     RUN_TEST(test_lazy_allocation_no_gratuitous_records);
+    RUN_TEST(test_columns_answer_the_read_their_type_declares);
+    RUN_TEST(test_multi_resource_level_up_is_all_or_nothing);
     int result = UNITY_END();
     game_events_shutdown();
     return result;

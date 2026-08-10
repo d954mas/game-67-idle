@@ -12,10 +12,9 @@ below).
 
 ## What it is
 
-Named "tracks" (level + xp progress meters) declared as DATA in a game's
-`content/progression.json`, compiled to a const table by
-`scripts/generate_progression_tracks.py` (`progression_tracks.gen.{h,c}`),
-mirroring items' content-catalog codegen. Runtime state (level, internal xp)
+Named "tracks" (level + xp progress meters) authored in a game's Lua beside its
+items and compiled to const tables by `scripts/generate_progression_tracks.py`
+(`progression_tracks.gen.{h,c}`) out of the Items Snapshot's `tracks` section. Runtime state (level, internal xp)
 is one flat save fragment (`state/progression.schema.json`, `--fragment
 progression`, game-owned) — a `tracks: map<string, TrackState>` keyed by
 `track_id`, exactly like items' `owned` map. The content generator requires
@@ -33,7 +32,7 @@ features/progression-core/
   src/
     progression.c                 modes/T5-caps/lazy allocation/tick
   scripts/
-    generate_progression_tracks.py   content codegen (content/progression.json -> const int64 curve tables)
+    generate_progression_tracks.py   codegen (Snapshot tracks section -> const baked tables)
   feature.json
   README.md   (this file)
   INSTALL.md
@@ -50,80 +49,58 @@ not exist — items code never mentions progression (grep-gated, G-rev). See
 
 ## Three modes (one axis: `mode` in the catalog)
 
-- **`manual`** — xp lives in purse (`currency_def`); `progression_level_up(track,
-  reason)` spends `cost(level)` from purse on call. Does NOT tick. Successful
-  calls emit `progression.levelup` with `mode: "manual"` and resource before/after
-  context so analytics does not infer levelups from item transactions.
-- **`auto`** — xp lives in purse; `progression_update()` (the frame tick)
-  auto-buys levels while purse can afford it.
-- **`threshold`** — xp is an internal accumulator
-  (`progression_add_xp(track, n, reason)`); `progression_update()`
-  auto-levels while the accumulator covers `cost(level)`.
+- **`manual`** — priced in items; `progression_level_up(track, reason)` pays the
+  step from the bound scope on call. Does NOT tick.
+- **`auto`** — priced in items; `progression_update()` (the frame tick) buys
+  levels while the scope can afford them.
+- **`threshold`** — priced in the track's own accumulator
+  (`progression_add_xp(track, n, reason)`); `progression_update()` auto-levels
+  while the accumulator covers the step.
+
+Every payment is atomic and ordered: check, then allocate the track's save
+record, then pay. Paying first would burn the purse whenever the tracks map is
+full — a level nobody received, for currency nobody can get back.
 
 Successful `manual`, `auto`, and `threshold` level changes emit
-`progression.levelup` with `track`, `mode`, `cause`, `reason`, `old_level`, and
+`progression.levelup` with `track`, `mode`, `reason`, `old_level`, and
 `new_level`, plus the price in the form the mode actually pays in: `manual`/`auto`
 fill `cost[]` (`def_id`, `amount`, `before`) and leave `xp_cost`/`xp_before` zero,
 `threshold` does the reverse — its accumulator is not an item, and there is only
 ever one of it. Additional fact events cover non-levelup mutations:
 `progression.xp_added`, `progression.level_set`, and `progression.reset`.
 
-## Curve = baked int64 table (zero float in C)
+## Where the numbers come from
 
-A consuming game's `content/progression.json` authors ONE curve preset per
-track — this module's codegen supports exactly two `curve.type` values,
-`"exp"` and `"table"`; any other type is a loud generator `SystemExit`
-(`linear`/`poly` remain a deliberate LEAN cut, not silently ignored — add
-them with their own identity test when a real game needs them). Both bake
-into the SAME shape, a `static const int64_t COST_<TRACK>[]` table at build
-time — the runtime (`progression.c`) only ever reads `def->cost[level]`,
-there is no formula interpreter and no curve-type branch in C.
+Tracks are authored in the same Lua as items, in the neighbouring `studio.tracks`
+space (`features/items-core/README.md`), and reach this module through the
+`tracks` section of the Items Snapshot. `scripts/generate_progression_tracks.py`
+bakes each track into const tables: `progression_step_t steps[]` (one per level
+the track can reach), an exact column table, a fractional one, or neither.
 
-- **`"exp"`** — `{base, growth_num, growth_den}`. `scripts/generate_progression_tracks.py`
-  bakes `cost[L] = floor(base * (growth_num/growth_den)**L)` via pure integer
-  arithmetic (`(base * growth_num**L) // growth_den**L` — FLOOR by
-  construction, no float-rounding risk). `base`/`growth_num`/`growth_den`
-  must each be a positive integer (`>= 1`) — a `base` of 0 would bake a
-  free-at-every-level curve. The template's `tests/test_progression_curve.c`
-  golden-asserts its demo track's baked values (`50, 75, 112, 168, ...`).
-- **`"table"`** — `{values: [...]}`, a verbatim hand-authored per-level cost
-  list (e.g. a balance-team-authored 25-entry cost sheet) for a game whose
-  curve does not fit a closed formula. `len(values)` must equal the track's
-  `max_level` — `max_level` stays the single source of truth for "how many
-  levels this track has" (same field the save-schema level cap and the
-  generated `cost_count` already key off), the table just has to agree with
-  it; a length mismatch is a loud generator `SystemExit`. Each value must be
-  a non-negative int64 (`0 <= value <= INT64_MAX`) — non-negative, not
-  merely positive like `"exp"`'s `base`, since an authored list may
-  legitimately include an explicit free level; that is a data/authoring
-  choice for a reviewed table, not the same failure mode as a degenerate
-  all-zero formula. Values are copied through unchanged — no rounding, no
-  reordering. See `scripts/generate_progression_tracks_test.py`'s
-  `test_table_curve_bakes_values_verbatim` for the identity/golden test and
-  its `test_table_curve_rejects_*` cases for the validation-failure
-  contract.
+Two level bases meet here and are converted once, in the generator. Authoring is
+1-based: row 1 is the un-upgraded state and carries the track's zero
+contribution. The runtime is 0-based: `steps[L]` is the step that leaves level
+L, so `max_level == len(rows) - 1`.
 
-`on_level_up` (authored per-level currency/xp-cascade rewards) is a real
-RUNTIME feature (`progression_emit_t`, `apply_on_level_up`, cascade
-resolution with a depth cap) but the codegen does NOT bake it (LEAN cut) —
-every generated track carries `.on_level_up = NULL, .on_level_up_count = 0`;
-declaring `on_level_up` in `content/progression.json` is a generator
-`SystemExit`. The runtime path is exercised ONLY by a hand-written test
-catalog (`tests/test_progression_catalog.c` in the template) until a real
-game needs authored cascades — bring the generator branch back with its own
-test at that point.
+Each step carries exactly one price, decided by the track's mode. `manual` and
+`auto` fill `cost[]` -- a list of `{def_id, amount}`, so a level priced in coins
+and wood is one step, not a special case. `threshold` fills `xp_cost`, a single
+number, because a track's own accumulator is not an item and there is only ever
+one of it.
 
-## HARD caps on the tick (T5 — not optional)
+A step may also `grant` items on being reached. The runtime pays and grants
+through the bound payment scope; grants land in its first container, so a level
+hands items back into the purse it charged.
 
-`progression_update()` resolves every auto/threshold track through
-`resolve_track()`. Two ways a single frame could hang without a cap: (1) a
-self-refunding `auto` track whose `on_level_up` gives back >= its own cost
-(infinite `while`); (2) a track-to-track xp cascade (`on_level_up.to_track`)
-that feeds back on itself (`A -> B -> A -> ...`). Both are closed by hard
-caps (`PROGRESSION_MAX_LEVELUPS_PER_TRACK = 64` per track per frame,
-`PROGRESSION_MAX_CASCADE_DEPTH = 8` recursion depth) — hitting either logs
-`nt_log_warn` and drops the rest of that track's levels for the frame; the
-frame always returns.
+## The tick gives the frame back
+
+`progression_update()` resolves every auto/threshold track. An auto track buys
+levels on its own, so a level that hands back at least what it charged of the
+same resource would never stop buying -- that shape is rejected at authoring
+time, in the evaluator and again at the Snapshot boundary. The runtime keeps
+`PROGRESSION_MAX_LEVELUPS_PER_TRACK = 64` as the backstop against a
+nearly-self-paying curve: hitting it logs `nt_log_warn` and drops the rest of
+that track's levels for the frame. The frame always returns.
 
 ## Lazy allocation
 
@@ -135,6 +112,19 @@ mutation (`level_up`/`add_xp`/`set_level`, or the first level-up inside
 empty `threshold` track does NOT create a record. This keeps a fresh save's
 `tracks` map empty, matching items' "no gratuitous ownership record"
 discipline.
+
+## Three laws worth keeping
+
+- **A track stores only its own contribution; the base lives where the thing it
+  affects lives.** Population in a live game is touched by six nodes; a base per
+  node would be the same number written six times, wrong five of them.
+- **Row 1 carries the zero contribution.** The authoring form makes you write
+  that row, so say what it means: it is the un-upgraded state, not level one of
+  the effect. Left unsaid, authors put the base there and every reader adds it
+  twice.
+- **`progression_set_level` does not run grants.** A jump from 0 to 5 skips five
+  levels' worth of them. DevAPI and tests move levels through exactly this call,
+  so a grant is not something a save can be nudged into.
 
 ## reason contract (lighter than items)
 
@@ -165,8 +155,8 @@ ratified use case.
 
 `tracks: map<string, TrackState { level: int, xp: i64 }>` — the SAME flat-map
 shape as items' `owned`, no per-mode branching in the schema. `level` is
-capped at schema max 9999 (`content/progression.json`'s `max_level` must
-stay `<= 9999`, enforced by the generator — a higher cap would silently
+capped at schema max 9999 (a track's authored row count must stay within it,
+enforced by the generator — a higher cap would silently
 clamp on save instead of failing the build). `xp` is meaningful ONLY for
 `threshold` tracks; `manual`/`auto` tracks carry the ignored default 0 (xp
 lives in purse for those two modes — an L2->L1 read, not schema state).
@@ -221,28 +211,20 @@ relocation).
 
 ## Tools (`scripts/`)
 
-- `generate_progression_tracks.py --catalog <progression.json> --items-snapshot <items.snapshot.json> --state-schema <progression.schema.json> --out-dir <dir>` —
-  emits `progression_tracks.gen.{h,c}` (compile-time const curve tables).
-  `--items-snapshot` is the cross-check: every `manual`/`auto` track's `currency_def`
-  must name an existing items def with a `currency` block. `--state-schema`
-  validates the authoritative game-owned `game_seed.progression` fragment,
-  including its `tracks: map<string,TrackState>` and integer `string_max >= 2`.
+- `generate_progression_tracks.py --snapshot <items.snapshot.json> --state-schema <progression.schema.json> --out-dir <dir>` —
+  emits `progression_tracks.gen.{h,c}`. `--snapshot` is the catalog: its `tracks`
+  section is what the game authored in Lua. `--state-schema` validates the
+  authoritative game-owned `game_seed.progression` fragment and derives the
+  maximum track-id length from `string_max - 1`.
 
-## Consumer authoring (content workflow)
+## Consumer authoring
 
-1. Edit `content/progression.json` (`namespace` + `tracks[]`; form mirrors
-   `items.json`). `id` is a bare slug (`"hero"`, not `"tmpl.hero"`) — track
-   ids are progression-internal, not items-namespaced.
-2. Build codegen: `node ai_studio/dev_environment/python_run.mjs features/progression-core/scripts/generate_progression_tracks.py
-   --catalog content/progression.json --items-snapshot <build>/items.snapshot.json
-   --state-schema state/progression.schema.json --out-dir <dir>` —
-   emits `progression_tracks.gen.{h,c}`. `--items-snapshot` is the cross-check:
-   `currency_def` (manual/auto tracks) must name an existing items def with
-   a `currency` block.
-3. `curve.type` must be `"exp"` or `"table"` (see "Curve = baked int64
-   table" above); `mode` one of `manual|auto|threshold`; `max_level` in
-   `[1, 9999]`; `on_level_up` must be ABSENT from the JSON (see above) — the
-   generator rejects it loudly, not silently.
+1. Declare tracks in the game's Lua through `studio.tracks`, in a module listed
+   by `items.lua.json`. A track id is the key of its save record: renaming one
+   silently forgets every player's earned levels.
+2. Build the Items catalog; the Snapshot carries the tracks section with it.
+3. Run the generator above (the consuming build already wires this as a codegen
+   step).
 
 ## Cross-dependency note (see also `features/items-core/README.md`)
 
@@ -304,6 +286,19 @@ canonical `--items-snapshot <items.snapshot.json>` build output.
 Version `3.1.0` adds `curve.type: "table"` (verbatim hand-authored per-level
 costs) alongside the existing `"exp"` formula curve — backward-compatible,
 existing `"exp"` catalogs generate byte-identical output.
+Version `5.0.0` moves authoring into the shared Lua evaluator and the API onto
+handles. Tracks are declared with `studio.tracks` and read from the Snapshot's
+`tracks` section; `content/progression.json` and the `--catalog` flag are gone.
+Every call takes a `progression_track_ref_t` from `progression_track(id)` instead
+of a string. A step's price is a list of items or a single xp threshold, a step
+may grant items, and a track may carry exact and fractional columns read through
+`progression_valuei`/`progression_valuef`. `progression_xp_needed` and
+`progression_can_level_up` are removed: the first answered with one number a
+list-priced level cannot have, and the second was built on it — affordability is
+now `items_can_pay_stacks` over the step's own list. Cascades
+(`progression_emit_t.to_track`, the recursion, its depth cap, and the
+`cascade_depth` event field) are removed with them.
+
 Version `4.0.0` reshapes `progression.levelup`: the price rides `cost[]`
 (`def_id`/`amount`/`before`) for item-paid modes and `xp_cost`/`xp_before` for
 `threshold`. The five scalars it replaces — `cost_def_id`, `cost_amount`,

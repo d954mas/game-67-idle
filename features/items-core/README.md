@@ -33,13 +33,17 @@ cost primitives without change. A track is not a kind of item: it has no
 storage, no acquisition, and its own generator downstream. What they share is
 the way a levelled thing is authored and checked.
 
-A track declares `id` (a bare slug, never catalog-namespaced), `kind` (which
+A track declares `id` (the key of its save record, so only its charset is
+checked -- renaming one forgets every player's earned levels), `kind` (which
 binds its columns through the same `required_for` registry items use), `mode`,
 and `levels`. Row 1 is the un-upgraded state and carries the track's zero
 contribution; the levels it can reach are the rows above it. Exactly one advance
 is representable per mode: `manual`/`auto` carry `cost_to_reach` (a price in
 items), `threshold` carries `xp_to_reach` (the track's own accumulator). Naming
-the other one fails at authoring time.
+the other one fails at authoring time. A row may also `grant` items on being
+reached, written with the same quantity primitive a price is; an `auto` track
+that grants back at least what a level charged of the same resource is rejected,
+because that shape never stops buying.
 
 The Snapshot grows a `tracks` section beside `items`, part of the content hash.
 The generated C item catalog ignores it, and ignores any field no item kind
@@ -117,10 +121,10 @@ require a game-owned `verb:subject` reason and emit typed `items.txn`, `items.pa
 Both payment entries plan the whole cost against a scope of up to
 `ITEMS_PAYMENT_SCOPE_MAX` containers and then commit once, so a shortfall on any
 requirement leaves every other one untouched. `items_try_pay_cost` takes a baked
-catalog cost; `items_try_pay_stacks` takes up to
-`ITEMS_PAYMENT_MAX_REQUIREMENTS` `def_id`/count pairs authored outside the
-catalog -- a bound the catalog path does not share, since a baked cost is
-limited only by the generator's global cost budget. A caller-built list carries
+catalog cost; `items_try_pay_stacks` takes
+`def_id`/count pairs authored outside the catalog. Both paths are bounded by
+`ITEMS_PAYMENT_MAX_REQUIREMENTS`, so every payment's composition fits its audit
+record whole. A caller-built list carries
 stack resources only, at most one requirement per item, and non-negative counts;
 a count of zero is a free position that is dropped, and a list left with nothing
 to pay succeeds having taken nothing while still recording the payment with zero
@@ -237,6 +241,12 @@ The feature manifest uses exact SemVer. PATCH releases preserve behavior and
 wire/API contracts, MINOR releases add backward-compatible surface, and MAJOR
 releases may remove or change public commands, APIs, or catalog contracts.
 Consumers pin both the version and repository revision.
+
+5.1.0 lets a track row `grant` items on being reached, written with the same
+quantity primitive a price is, and accepts a dot-separated track id: a track id
+is the key of its save record, and renaming one forgets earned levels. An `auto`
+track that grants back at least what a level charged of the same resource is
+rejected -- that shape never stops buying.
 
 5.0.0 renames the authoring manifest schema to `studio.lua.sandbox.v1` and adds
 the `studio.tracks` declaration space, the `tracks` Snapshot section, and

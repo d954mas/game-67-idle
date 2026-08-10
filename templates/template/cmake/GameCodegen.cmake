@@ -60,8 +60,9 @@ target_include_directories(${GAME_TARGET} PRIVATE "${ITEMS_CATALOG_BUILD_DIR}")
 # И3a: progression tracks content codegen is separate from the game-state
 # generator below. It bakes content/progression.json's curve presets
 # into compile-time const int64 cost tables; --items-snapshot cross-checks
-# currency_def against the canonical Items Snapshot generated above.
-set(PROG_TRACKS_JSON "${CMAKE_CURRENT_SOURCE_DIR}/content/progression.json")
+# Progression tracks are authored in the same Lua as items and reach this
+# generator through the Snapshot's tracks section; it bakes their per-level
+# prices, grants, and column values into compile-time const tables.
 set(PROG_TRACKS_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/progression.schema.json")
 set(PROG_TRACKS_GENERATOR "${PROGRESSION_CORE_SCRIPTS}/generate_progression_tracks.py")
 add_custom_command(
@@ -70,12 +71,12 @@ add_custom_command(
         "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_SOURCE_GENERATED_DIR}"
     COMMAND "${Python3_EXECUTABLE}" "${PROG_TRACKS_GENERATOR}"
-        --catalog "${PROG_TRACKS_JSON}" --items-snapshot "${ITEMS_CATALOG_SNAPSHOT}"
+        --snapshot "${ITEMS_CATALOG_SNAPSHOT}"
         --state-schema "${PROG_TRACKS_STATE_SCHEMA}"
         --out-dir "${GAME_SOURCE_GENERATED_DIR}"
-    DEPENDS "${PROG_TRACKS_JSON}" "${ITEMS_CATALOG_SNAPSHOT}" "${PROG_TRACKS_STATE_SCHEMA}" "${PROG_TRACKS_GENERATOR}"
+    DEPENDS "${ITEMS_CATALOG_SNAPSHOT}" "${PROG_TRACKS_STATE_SCHEMA}" "${PROG_TRACKS_GENERATOR}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMENT "Generating progression tracks catalog (const int64 curve tables)"
+    COMMENT "Generating progression tracks catalog (const baked tables)"
     VERBATIM)
 
 # Every player-visible string is data (content/loc/strings.json) compiled to

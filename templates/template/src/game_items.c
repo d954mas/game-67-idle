@@ -15,6 +15,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* A track pays across a scope; this game's whole purse is one container. */
+static void bind_progression_scope(items_container_ref_t wallet) {
+    items_payment_scope_t scope = {.count = 1, .containers = {wallet}};
+    progression_bind_payment_scope(scope);
+}
+
 #define LEGACY_ITEMS_MAX_RECORDS 64
 #define LEGACY_ITEMS_STRING_MAX 64
 
@@ -512,7 +518,7 @@ static bool game_items_try_create_defaults_from_plan(
 
     game_state.inventory_container_id = items_container_id(inventory);
     game_state.wallet_container_id = items_container_id(wallet);
-    progression_bind_resource_container(wallet);
+    bind_progression_scope(wallet);
 
     if (grant_starting_items) {
         for (size_t i = 0; i < plan->grant_count; i++) {
@@ -536,7 +542,7 @@ rollback:
     if (game_before.wallet_container_id != ITEMS_ID_NONE) {
         (void)items_container_try_from_id(game_before.wallet_container_id, &restored_wallet);
     }
-    progression_bind_resource_container(restored_wallet);
+    bind_progression_scope(restored_wallet);
     return seed_error(error, error_cap, "seed initialization failed atomically");
 }
 
@@ -562,5 +568,5 @@ void game_on_new_game(void) {
 void game_reconcile(void) {
     items_container_ref_t wallet = game_wallet_container();
     (void)game_inventory_container();
-    progression_bind_resource_container(wallet);
+    bind_progression_scope(wallet);
 }

@@ -723,7 +723,7 @@ return function(raise_internal)
 
     -- One expansion for items and tracks: only the per-row transition differs
     -- (an item price in resources, a track's own xp threshold).
-    local function expand_levels(definition, transition, forbidden, normalize_transition, after_handle)
+    local function expand_levels(definition, transition, forbidden, normalize_transition, grants_allowed, after_handle)
       local spec = definition.levels
       definition.authoring_mode = "none"
       if spec ~= nil then
@@ -884,6 +884,18 @@ return function(raise_internal)
           if row[transition] ~= nil then
             row[transition] = normalize_transition(row[transition], definition.__studio_source)
           end
+          -- What reaching this level hands back, written with the same quantity
+          -- primitive a price is written with. Nothing to hand back is no member.
+          if row.grants ~= nil then
+            if not grants_allowed then
+              return fail_at("levels.grants", "only a track can grant on reaching a level", spec, definition.__studio_source)
+            end
+            local granted = normalize_cost(row.grants, definition.__studio_source)
+            if granted.__studio_kind == "free" then
+              return fail_at("levels.grants", "an empty grant is an absent grants member", spec, definition.__studio_source)
+            end
+            row.grants = granted
+          end
         end
         definition.authoring_mode = spec.mode
         definition.levels = { mode = spec.mode, provenance = provenance, rows = rows }
@@ -891,7 +903,7 @@ return function(raise_internal)
     end
 
     for _, definition in ipairs(declarations) do
-      expand_levels(definition, "cost_to_reach", "xp_to_reach", normalize_cost, function(spec)
+      expand_levels(definition, "cost_to_reach", "xp_to_reach", normalize_cost, false, function(spec)
         if definition.stack ~= 1 then
           return fail_at("levels.unique_required", "levelled items must use stack=1", spec, definition.__studio_source)
         end
@@ -899,6 +911,18 @@ return function(raise_internal)
       if raw_type(definition.acquire) == "table" and definition.acquire.cost ~= nil then
         definition.acquire.cost = normalize_cost(definition.acquire.cost, definition.__studio_source)
       end
+    end
+
+    -- A normalized quantity list, keyed by item, whatever handle wrote it.
+    local function cost_amounts(value)
+      local amounts = {}
+      if raw_type(value) ~= "table" or value.__studio_kind == "free" then return amounts end
+      if value.__studio_kind == "cost" then
+        amounts[value.item.id] = value.count
+      else
+        for _, entry in ipairs(value.entries) do amounts[entry.item.id] = entry.count end
+      end
+      return amounts
     end
 
     local function normalize_xp_threshold(value, fallback)
@@ -917,10 +941,14 @@ return function(raise_internal)
     for _, track in ipairs(track_declarations) do
       local source = track.__studio_source
       local id = track.id
-      -- A bare slug, not an item id: track ids are progression-internal and never
-      -- namespaced against the catalog.
-      if raw_type(id) ~= "string" or raw_string_match(id, "^[a-z][a-z0-9_]*$") == nil then
-        return raise_internal("track.id", "track id must be a lowercase slug", source.file, source.line)
+      -- A track id is the key of its save record, so the charset is the only thing
+      -- checked here: renaming one silently forgets every player's earned levels.
+      if raw_type(id) ~= "string"
+          or raw_string_match(id, "^[a-z][a-z0-9_]*[a-z0-9_.]*$") == nil
+          or raw_string_match(id, "%.%.") ~= nil
+          or raw_string_match(id, "%.$") ~= nil
+          or raw_string_match(id, "%.[^a-z]") ~= nil then
+        return raise_internal("track.id", "track id must be lowercase dot-separated segments", source.file, source.line)
       end
       if registered_tracks[id] then
         return raise_internal("track.duplicate_id", "duplicate track id: " .. id, source.file, source.line)
@@ -941,9 +969,25 @@ return function(raise_internal)
       -- Exactly one advance is representable per mode: an item price, or the
       -- track's own xp, never both and never the other one's.
       if mode == "threshold" then
-        expand_levels(track, "xp_to_reach", "cost_to_reach", normalize_xp_threshold, nil)
+        expand_levels(track, "xp_to_reach", "cost_to_reach", normalize_xp_threshold, true, nil)
       else
-        expand_levels(track, "cost_to_reach", "xp_to_reach", normalize_cost, nil)
+        expand_levels(track, "cost_to_reach", "xp_to_reach", normalize_cost, true, nil)
+      end
+      -- An auto track buys levels on its own, so a level that hands back at least
+      -- what it charged of the same resource never stops buying.
+      if mode == "auto" then
+        for _, row in ipairs(track.levels.rows) do
+          local granted, paid = cost_amounts(row.grants), cost_amounts(row.cost_to_reach)
+          for item_id, amount in raw_pairs(granted) do
+            if paid[item_id] ~= nil and amount >= paid[item_id] then
+              return raise_internal(
+                "track.self_paying",
+                "an auto track cannot grant back its own price: " .. item_id,
+                source.file, source.line
+              )
+            end
+          end
+        end
       end
       -- Row 1 is the un-upgraded state, so a track that can never advance is a
       -- declaration with nothing in it.

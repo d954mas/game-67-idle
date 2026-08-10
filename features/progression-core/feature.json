@@ -1,11 +1,11 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "progression-core",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "title": "Progression Core",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
-  "summary": "In-place L2 module: manual/auto/threshold leveling tracks, baked int64 curve codegen (zero float in C), T5 tick hard-caps (per-track levelup cap + cascade-depth cap); reads/spends currency through items-core's purse API.",
+  "summary": "In-place L2 module: manual/auto/threshold leveling tracks authored in the shared studio.tracks Lua space, baked per-level prices, grants and columns, a per-frame level-up cap; pays atomically across an items-core payment scope.",
   "copy_model": "in-place",
   "layer": "L2",
   "dependencies": [
@@ -14,14 +14,14 @@
     "game-state",
     "Neotolis nt_log",
     "Python 3.12",
-    "templates/template/content/progression.json + the game-local items.snapshot.v1 build output (currency_def cross-check)",
+    "the game-local items.snapshot.v1 build output (its tracks section is the catalog)",
     "template or game C runtime using the generated progression_tracks.gen.{h,c} + the generated progression save fragment (features/game-state)"
   ],
   "owners": [
     "features/progression-core"
   ],
   "commands": {
-    "generate": "node ai_studio/dev_environment/python_run.mjs features/progression-core/scripts/generate_progression_tracks.py --catalog <game>/content/progression.json --items-snapshot <build>/items.snapshot.json --state-schema <game>/state/progression.schema.json --out-dir <generated-dir>"
+    "generate": "node ai_studio/dev_environment/python_run.mjs features/progression-core/scripts/generate_progression_tracks.py --snapshot <build>/items.snapshot.json --state-schema <game>/state/progression.schema.json --out-dir <generated-dir>"
   },
   "manuals": {
     "install": "features/progression-core/INSTALL.md"
@@ -47,8 +47,8 @@
     ]
   },
   "default_template": {
-    "catalog": "templates/template/content/progression.json",
-    "items_snapshot_crosscheck": "<build>/generated/items-catalog/items.snapshot.json",
+    "tracks": "templates/template/design/items/tracks.lua",
+    "snapshot": "<build>/generated/items-catalog/items.snapshot.json",
     "state_schema": "templates/template/state/progression.schema.json",
     "generated_dir": "templates/template/src/generated",
     "game_side_sources": []

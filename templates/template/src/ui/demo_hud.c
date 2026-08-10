@@ -17,17 +17,29 @@ static int64_t get_gold(void *ud) {
     (void)ud;
     return items_stack_count(game_wallet_container(), "tmpl.gold");
 }
+/* Resolved on first use: the panel polls these every frame, and a string lookup
+   is a linear scan of the whole track catalog. */
+static progression_track_ref_t hero_track(void) {
+    static progression_track_ref_t hero = PROGRESSION_TRACK_REF_NONE;
+    if (!progression_track_valid(hero)) {
+        hero = progression_track("hero");
+    }
+    return hero;
+}
 static int64_t get_hero_xp(void *ud) {
     (void)ud;
-    return progression_xp_current("hero");
+    return items_stack_count(game_wallet_container(), "tmpl.xp");
 }
 static int64_t get_hero_needed(void *ud) {
     (void)ud;
-    return progression_xp_needed("hero");
+    /* The demo hero is priced in one resource, so the bar tracks the first entry. */
+    return progression_cost_count(hero_track()) > 0
+               ? progression_cost_at(hero_track(), 0).amount
+               : 0;
 }
 static int64_t get_hero_level(void *ud) {
     (void)ud;
-    return progression_level("hero");
+    return progression_level(hero_track());
 }
 
 /* Демо idle-доход xp: float-аккумулятор в game glue -> флаш в i64 (паттерн Р1;

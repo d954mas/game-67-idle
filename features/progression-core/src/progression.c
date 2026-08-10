@@ -1,36 +1,41 @@
 #include "features/progression/progression.h"
 
-#include "progression_tracks.gen.h" /* codegen: extern k_tracks/k_tracks_count */
+#include "progression_tracks.gen.h" /* codegen: k_tracks/k_tracks_count/k_progression_value_exact */
 
 #include "progression_state.h"             /* generated: ProgressionState + progression_state instance */
 #include "progression_state_events.gen.h"  /* generated: progression_emit_levelup */
 
-#include "core/nt_assert.h" /* NT_ASSERT (L2: catch track-id truncation loudly in debug, precedent items_containers.c) */
-#include "game_save.h"       /* game_save_mark_dirty */
-#include "log/nt_log.h"      /* nt_log_warn (T5 drop-with-warn) */
+#include "core/nt_assert.h"
+#include "game_save.h"  /* game_save_mark_dirty */
+#include "log/nt_log.h" /* nt_log_warn on the per-frame level-up cap */
 
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
-static items_container_ref_t s_resource_container = ITEMS_CONTAINER_REF_NONE;
+/* The scope a track pays from. Its first container also receives grants: a level
+   hands items back into the same purse it charged. */
+static items_payment_scope_t s_scope;
 
-void progression_bind_resource_container(items_container_ref_t container) {
-    if (container.generation != 0) {
-        s_resource_container = container;
-    } else {
-        s_resource_container = ITEMS_CONTAINER_REF_NONE;
+void progression_bind_payment_scope(items_payment_scope_t scope) {
+    s_scope = scope;
+}
+
+items_payment_scope_t progression_payment_scope(void) {
+    return s_scope;
+}
+
+/* The balance a price is measured against: the whole scope, not one container. */
+static int64_t scope_count(const char *def_id) {
+    int64_t total = 0;
+    for (uint32_t i = 0; i < s_scope.count; ++i) {
+        total += items_stack_count(s_scope.containers[i], def_id);
     }
+    return total;
 }
 
-static int64_t resource_count(const char *def_id) {
-    return items_stack_count(s_resource_container, def_id);
-}
-
-/* reason contract (lightweight; not the items verb list -- progression does not
-   тянет чужой internal-хедер reason_tags.h). Формат "verb:subject"; debug-only,
-   no-op в release. Спенды в purse передают reason В items_remove/add, где
-   срабатывает ПОЛНЫЙ items-verb-чек -- verb-список валют не дублируется здесь. */
+/* Format "verb:subject"; debug-only. A spend forwards reason into items, where the
+   full verb check runs, so the currency vocabulary is not duplicated here. */
 static inline void progression_reason_check(const char *reason) {
 #ifndef NDEBUG
     assert(reason != NULL);
@@ -41,10 +46,6 @@ static inline void progression_reason_check(const char *reason) {
 #endif
 }
 
-/* Скан состояния напрямую (как items_containers.c -- генераторные find/alloc
-   внутри progression_state.c статичны, недостижимы отсюда). find_track для
-   ЧТЕНИЯ (никогда не аллоцирует); find_or_alloc_track вызывается ТОЛЬКО перед
-   lazy allocation: reads and empty ticks do not create orphan records. */
 static const char *mode_name(progression_mode_t mode) {
     switch (mode) {
     case PROGRESSION_MODE_MANUAL:
@@ -57,40 +58,28 @@ static const char *mode_name(progression_mode_t mode) {
     return "unknown";
 }
 
-/* Item-paid modes name one catalog resource today; the event already carries a
-   list, so a multi-item price will need no event change. */
-static void emit_levelup_paid(
-    const progression_track_def_t *def,
-    const char *cause,
-    const char *reason,
-    int64_t old_level,
-    int64_t new_level,
-    int64_t cost,
-    int64_t before) {
-    const ProgressionEvLevelupCostIn spent = {
-        def->currency_def != NULL ? def->currency_def : "", cost, before};
-    progression_emit_levelup(
-        def->id, mode_name(def->mode), cause, reason, old_level, new_level, 0, 0, &spent, 1);
+bool progression_track_valid(progression_track_ref_t track) {
+    return track.index >= 0 && track.index < k_tracks_count;
 }
 
-/* A threshold track spends its own accumulator -- one number, never an item --
-   so its item list is empty by construction. */
-static void emit_levelup_threshold(
-    const progression_track_def_t *def,
-    const char *reason,
-    int64_t old_level,
-    int64_t new_level,
-    int64_t xp_cost,
-    int64_t xp_before) {
-    progression_emit_levelup(
-        def->id, mode_name(def->mode), "threshold", reason, old_level, new_level,
-        xp_cost, xp_before, NULL, 0);
-}
-
-static ProgressionTrackState *find_track(const char *id) {
-    if (id == NULL) {
-        return NULL;
+progression_track_ref_t progression_track(const char *id) {
+    if (id != NULL) {
+        for (int i = 0; i < k_tracks_count; ++i) {
+            if (strcmp(k_tracks[i].id, id) == 0) {
+                return (progression_track_ref_t){i};
+            }
+        }
     }
+    return PROGRESSION_TRACK_REF_NONE;
+}
+
+const progression_track_def_t *progression_track_def(progression_track_ref_t track) {
+    return progression_track_valid(track) ? &k_tracks[track.index] : NULL;
+}
+
+/* Reads never allocate: a track with no save record is level 0 / xp 0, so a fresh
+   save keeps an empty tracks map and an idle tick creates nothing. */
+static ProgressionTrackState *find_track(const char *id) {
     for (int i = 0; i < PROGRESSION_STATE_MAX_TRACKS; ++i) {
         if (progression_state.tracks[i].used && strcmp(progression_state.tracks[i].key, id) == 0) {
             return &progression_state.tracks[i];
@@ -99,16 +88,8 @@ static ProgressionTrackState *find_track(const char *id) {
     return NULL;
 }
 
-/* M-fix (deep-review): build the key into a validated local buffer FIRST --
-   precedent items_containers.c:36-40 build_stack_key. A track_id that would
-   truncate against PROGRESSION_STATE_STRING_MAX must be REJECTED, never
-   silently written half-formed: a truncated key means find_track(full_id)
-   can never match it again, so every subsequent mutation call would burn a
-   FRESH slot instead of finding the existing one.
-   In practice generate_progression_tracks.py now rejects an over-length
-   track id at codegen time (loud reject), so this only ever fires for a
-   hand-authored id (e.g. a test catalog) -- kept as defense-in-depth,
-   mirroring items' own belt-and-suspenders posture. */
+/* The key is built into a validated buffer first: a truncated key can never be
+   found again, so every later mutation would burn a fresh slot instead. */
 static ProgressionTrackState *find_or_alloc_track(const char *id) {
     ProgressionTrackState *existing = find_track(id);
     if (existing != NULL) {
@@ -118,7 +99,7 @@ static ProgressionTrackState *find_or_alloc_track(const char *id) {
     int n = snprintf(key, sizeof key, "%s", id);
     NT_ASSERT(n >= 0 && (size_t)n < sizeof key);
     if (n < 0 || (size_t)n >= sizeof key) {
-        return NULL; /* truncated key -- reject, never silently corrupt */
+        return NULL;
     }
     for (int i = 0; i < PROGRESSION_STATE_MAX_TRACKS; ++i) {
         if (!progression_state.tracks[i].used) {
@@ -130,143 +111,213 @@ static ProgressionTrackState *find_or_alloc_track(const char *id) {
             return slot;
         }
     }
-    return NULL; /* PROGRESSION_STATE_MAX_TRACKS (32) budget exhausted */
+    return NULL; /* PROGRESSION_STATE_MAX_TRACKS budget exhausted */
 }
 
-#define PROGRESSION_MAX_LEVELUPS_PER_TRACK 64 /* T5: per-track per-frame while-кап (self-refund) */
-#define PROGRESSION_MAX_CASCADE_DEPTH 8       /* T5: xp-to-track cascade recursion depth cap */
+/* Anti-hang: an auto track whose grants nearly cover its own price still has to
+   give the frame back. The catalog gate rejects grants that fully cover it. */
+#define PROGRESSION_MAX_LEVELUPS_PER_TRACK 64
 
-/* Forward declaration: progression_level_up() (manual mutation, below) and
-   resolve_track() and tick updates both run the same on_level_up-emission
-   path -- defined once, near progression_update() at the bottom of this file. */
-static void apply_on_level_up(const progression_track_def_t *def, int depth);
+static const progression_step_t *step_at(const progression_track_def_t *def, int level) {
+    assert(level >= 0 && level < def->max_level);
+    return &def->steps[level];
+}
 
-const progression_track_def_t *progression_track_def(const char *track) {
-    if (track == NULL) {
-        return NULL;
+/* ---- Reads ---- */
+
+int progression_level(progression_track_ref_t track) {
+    const progression_track_def_t *def = progression_track_def(track);
+    if (def == NULL) {
+        return 0;
     }
-    for (int i = 0; i < k_tracks_count; ++i) {
-        if (strcmp(k_tracks[i].id, track) == 0) {
-            return &k_tracks[i];
-        }
-    }
-    return NULL;
-}
-
-/* L-fix (deep-review #5): index through cost_count, not just max_level.
-   cost_count is documented as "== max_level" in progression.h, but that
-   invariant was never actually CHECKED at runtime -- a malformed catalog
-   (codegen bug, or a hand-authored test catalog whose cost[] array is
-   shorter than its declared max_level) would silently read past the array.
-   Debug-assert both the invariant and the bound; release keeps the bound
-   check only (defensive, cheap) since assert() is compiled out under NDEBUG. */
-static int64_t track_cost_at(const progression_track_def_t *def, int level) {
-    assert(def->cost_count == def->max_level);
-    assert(level >= 0 && level < def->cost_count);
-    return def->cost[level];
-}
-
-/* ---- Запросы (чистые чтения) ---- */
-
-int progression_level(const char *track) {
-    const ProgressionTrackState *st = find_track(track);
+    const ProgressionTrackState *st = find_track(def->id);
     return st ? st->level : 0;
 }
 
-int progression_max_level(const char *track) {
+int progression_max_level(progression_track_ref_t track) {
     const progression_track_def_t *def = progression_track_def(track);
     return def ? def->max_level : 0;
 }
 
-int64_t progression_xp_current(const char *track) {
+/* Only a threshold track accumulates xp; an item-paid track spends the purse. */
+int64_t progression_xp_current(progression_track_ref_t track) {
     const progression_track_def_t *def = progression_track_def(track);
-    if (def == NULL) {
+    if (def == NULL || def->mode != PROGRESSION_MODE_THRESHOLD) {
         return 0;
     }
-    if (def->mode == PROGRESSION_MODE_MANUAL || def->mode == PROGRESSION_MODE_AUTO) {
-        return resource_count(def->currency_def);
-    }
-    const ProgressionTrackState *st = find_track(track);
+    const ProgressionTrackState *st = find_track(def->id);
     return st ? st->xp : 0;
 }
 
-int64_t progression_xp_needed(const char *track) {
+static const progression_step_t *current_step(progression_track_ref_t track) {
     const progression_track_def_t *def = progression_track_def(track);
     if (def == NULL) {
-        return 0;
+        return NULL;
     }
     int level = progression_level(track);
-    if (level >= def->max_level) {
-        return 0;
-    }
-    return track_cost_at(def, level);
+    return level < def->max_level ? step_at(def, level) : NULL;
 }
 
-bool progression_can_level_up(const char *track) {
+uint32_t progression_cost_count(progression_track_ref_t track) {
+    const progression_step_t *step = current_step(track);
+    return step ? (uint32_t)step->cost_count : 0u;
+}
+
+progression_amount_t progression_cost_at(progression_track_ref_t track, uint32_t index) {
+    const progression_step_t *step = current_step(track);
+    if (step == NULL || index >= (uint32_t)step->cost_count) {
+        return (progression_amount_t){NULL, 0};
+    }
+    return step->cost[index];
+}
+
+int64_t progression_xp_cost(progression_track_ref_t track) {
+    const progression_step_t *step = current_step(track);
+    return step ? step->xp_cost : 0;
+}
+
+static int clamped_level(const progression_track_def_t *def, int level) {
+    if (level < 0) {
+        return 0;
+    }
+    return level > def->max_level ? def->max_level : level;
+}
+
+int64_t progression_valuei_at(progression_track_ref_t track, progression_value_t value, int level) {
     const progression_track_def_t *def = progression_track_def(track);
-    if (def == NULL) {
-        return false;
+    if (def == NULL || def->exact == NULL || value >= def->value_count) {
+        return 0;
     }
-    if (progression_level(track) >= def->max_level) {
-        return false;
+    NT_ASSERT(k_progression_value_exact[value] && "exact read of a fractional column");
+    if (!k_progression_value_exact[value]) {
+        return 0;
     }
-    return progression_xp_current(track) >= progression_xp_needed(track);
+    return def->exact[(uint32_t)clamped_level(def, level) * def->value_count + value];
+}
+
+int64_t progression_valuei(progression_track_ref_t track, progression_value_t value) {
+    return progression_valuei_at(track, value, progression_level(track));
+}
+
+double progression_valuef_at(progression_track_ref_t track, progression_value_t value, int level) {
+    const progression_track_def_t *def = progression_track_def(track);
+    if (def == NULL || def->fractional == NULL || value >= def->value_count) {
+        return 0.0;
+    }
+    NT_ASSERT(!k_progression_value_exact[value] && "fractional read of an exact column");
+    if (k_progression_value_exact[value]) {
+        return 0.0;
+    }
+    return def->fractional[(uint32_t)clamped_level(def, level) * def->value_count + value];
+}
+
+double progression_valuef(progression_track_ref_t track, progression_value_t value) {
+    return progression_valuef_at(track, value, progression_level(track));
 }
 
 /* ---- Mutations (reason required) ---- */
 
-bool progression_level_up(const char *track, const char *reason) {
+static void emit_levelup(
+    const progression_track_def_t *def, const char *reason, int old_level, int new_level,
+    const progression_step_t *step, int64_t xp_before) {
+    ProgressionEvLevelupCostIn charged[ITEMS_PAYMENT_MAX_REQUIREMENTS];
+    int count = step->cost_count < (int)ITEMS_PAYMENT_MAX_REQUIREMENTS
+                    ? step->cost_count
+                    : (int)ITEMS_PAYMENT_MAX_REQUIREMENTS;
+    for (int i = 0; i < count; ++i) {
+        /* Read after the spend, so add back what this step just took. */
+        charged[i] = (ProgressionEvLevelupCostIn){
+            step->cost[i].def_id,
+            step->cost[i].amount,
+            scope_count(step->cost[i].def_id) + step->cost[i].amount,
+        };
+    }
+    progression_emit_levelup(
+        def->id, mode_name(def->mode), reason, old_level, new_level,
+        step->xp_cost, xp_before, charged, (uint32_t)count);
+}
+
+/* Grants land in the first container of the payment scope: a level hands items
+   back into the purse it charged. */
+static void apply_grants(const progression_step_t *step, const char *reason) {
+    if (s_scope.count == 0) {
+        return;
+    }
+    for (int i = 0; i < step->grant_count; ++i) {
+        (void)items_try_stack_add(
+            s_scope.containers[0], step->grants[i].def_id, step->grants[i].amount,
+            ITEMS_SLOT_AUTO, reason, NULL, NULL);
+    }
+}
+
+/* Checking, then allocating, then paying is the whole point of the order: paying
+   first would burn the purse whenever the tracks map is full. */
+static bool buy_step(
+    const progression_track_def_t *def, const progression_step_t *step, const char *reason,
+    ProgressionTrackState **out_state) {
+    const char *def_ids[ITEMS_PAYMENT_MAX_REQUIREMENTS];
+    int64_t counts[ITEMS_PAYMENT_MAX_REQUIREMENTS];
+    if (step->cost_count > (int)ITEMS_PAYMENT_MAX_REQUIREMENTS) {
+        return false; /* the catalog gate bounds this; defensive */
+    }
+    for (int i = 0; i < step->cost_count; ++i) {
+        def_ids[i] = step->cost[i].def_id;
+        counts[i] = step->cost[i].amount;
+    }
+    const uint32_t count = (uint32_t)step->cost_count;
+    if (items_can_pay_stacks(s_scope, def_ids, counts, count) != ITEMS_RESULT_OK) {
+        return false;
+    }
+    ProgressionTrackState *st = find_or_alloc_track(def->id);
+    if (st == NULL) {
+        return false; /* budget exhausted -- purse untouched */
+    }
+    if (items_try_pay_stacks(s_scope, def_ids, counts, count, reason) != ITEMS_RESULT_OK) {
+        return false; /* state moved between the check and the payment */
+    }
+    *out_state = st;
+    return true;
+}
+
+bool progression_level_up(progression_track_ref_t track, const char *reason) {
     progression_reason_check(reason);
     const progression_track_def_t *def = progression_track_def(track);
     if (def == NULL || def->mode != PROGRESSION_MODE_MANUAL) {
-        return false; /* auto/threshold are moved by progression_update(), not this call */
+        return false; /* auto/threshold are moved by progression_update() */
     }
     int level = progression_level(track);
     if (level >= def->max_level) {
         return false;
     }
-    int64_t cost = track_cost_at(def, level);
-    if (resource_count(def->currency_def) < cost) {
+    const progression_step_t *step = step_at(def, level);
+    ProgressionTrackState *st = NULL;
+    if (!buy_step(def, step, reason, &st)) {
         return false;
     }
-    /* H-fix (deep-review #1, data-loss): allocate BEFORE spending -- mirrors
-       resolve_track's already-correct tick-path order. The old order (spend
-       first, alloc second) meant a saturated tracks-map (32/32 used) would
-       silently BURN the player's currency with the level never recorded and
-       no way to recover it. Budget exhaustion must fail closed with the
-       purse untouched. */
-    ProgressionTrackState *st = find_or_alloc_track(def->id);
-    if (st == NULL) {
-        return false; /* PROGRESSION_STATE_MAX_TRACKS budget exhausted -- purse untouched */
-    }
     int old_level = st->level;
-    int64_t resource_before = resource_count(def->currency_def);
-    if (items_try_stack_remove_from_container(s_resource_container, def->currency_def, cost, reason) != ITEMS_RESULT_OK) {
-        return false; /* defensive: items-side verb-check/purse mismatch; level not bumped */
-    }
     st->level += 1;
-    emit_levelup_paid(def, "manual", reason, old_level, st->level, cost, resource_before);
-    apply_on_level_up(def, 0); /* Cut A: shipped/demo on_level_up is always empty -> no-op */
+    emit_levelup(def, reason, old_level, st->level, step, 0);
+    apply_grants(step, "loot:levelup");
     game_save_mark_dirty();
     return true;
 }
 
-void progression_add_xp(const char *track, int64_t n, const char *reason) {
+void progression_add_xp(progression_track_ref_t track, int64_t n, const char *reason) {
     progression_reason_check(reason);
     if (n <= 0) {
         return;
     }
     const progression_track_def_t *def = progression_track_def(track);
     if (def == NULL || def->mode != PROGRESSION_MODE_THRESHOLD) {
-        return; /* #17: xp fed into a non-threshold track (stray cascade) is a silent no-op */
+        return; /* xp fed into an item-paid track is a silent no-op */
     }
     ProgressionTrackState *st = find_or_alloc_track(def->id);
     if (st == NULL) {
-        return; /* PROGRESSION_STATE_MAX_TRACKS budget exhausted (defensive) */
+        return;
     }
     int64_t before = st->xp;
     if (n > PROGRESSION_STATE_TRACK_STATE_XP_MAX - before) {
-        st->xp = PROGRESSION_STATE_TRACK_STATE_XP_MAX; /* overflow guard, clamp to schema max */
+        st->xp = PROGRESSION_STATE_TRACK_STATE_XP_MAX; /* clamp to the schema max */
     } else {
         st->xp = before + n;
     }
@@ -274,141 +325,89 @@ void progression_add_xp(const char *track, int64_t n, const char *reason) {
     game_save_mark_dirty();
 }
 
-void progression_set_level(const char *track, int level, const char *reason) {
+void progression_set_level(progression_track_ref_t track, int level, const char *reason) {
     progression_reason_check(reason);
     const progression_track_def_t *def = progression_track_def(track);
     if (def == NULL) {
         return;
     }
-    int clamped = level;
-    if (clamped < 0) {
-        clamped = 0;
-    } else if (clamped > def->max_level) {
-        clamped = def->max_level;
-    }
     ProgressionTrackState *st = find_or_alloc_track(def->id);
     if (st == NULL) {
-        return; /* PROGRESSION_STATE_MAX_TRACKS budget exhausted (defensive) */
+        return;
     }
     int old_level = st->level;
-    st->level = clamped; /* xp untouched: set_level differs from prestige reset. */
+    st->level = clamped_level(def, level); /* xp untouched: set_level is not a reset */
     progression_emit_level_set(def->id, reason, level, old_level, st->level);
     game_save_mark_dirty();
 }
 
-void progression_reset(const char *track, const char *reason) {
+void progression_reset(progression_track_ref_t track, const char *reason) {
     progression_reason_check(reason);
-    ProgressionTrackState *st = find_track(track);
-    if (st == NULL) {
-        return; /* no record -- already at the reset state, no-op */
-    }
-    int old_level = st->level;
-    int64_t old_xp = st->xp;
-    /* L-fix (deep-review #4): free the slot entirely (used=false), not just
-       zero level/xp in place -- precedent items remove_raw at count<=0
-       (items_containers.c:156-158). A record parked at level=0/xp=0 is
-       indistinguishable in EFFECT from no record (lazy-default reads both as
-       0) but needlessly holds a tracks-map slot forever after a
-       prestige reset. */
-    memset(st, 0, sizeof(*st)); /* used=false -> slot freed; reset does NOT touch purse (#15) */
-    progression_emit_reset(track, reason, old_level, old_xp);
-    game_save_mark_dirty();
-}
-
-/* ---- Тик: auto/threshold авто-лвлапы, T5 HARD-капы, эмит progression.levelup ---- */
-
-static void resolve_track(const progression_track_def_t *def, int depth) {
+    const progression_track_def_t *def = progression_track_def(track);
     if (def == NULL) {
         return;
     }
+    ProgressionTrackState *st = find_track(def->id);
+    if (st == NULL) {
+        return; /* no record -- already at the reset state */
+    }
+    int old_level = st->level;
+    int64_t old_xp = st->xp;
+    /* Free the slot outright: a record parked at 0/0 reads the same as no record
+       but holds a tracks-map slot forever. The purse is not touched. */
+    memset(st, 0, sizeof(*st));
+    progression_emit_reset(def->id, reason, old_level, old_xp);
+    game_save_mark_dirty();
+}
+
+/* ---- Tick ---- */
+
+static void resolve_track(const progression_track_def_t *def) {
     if (def->mode == PROGRESSION_MODE_MANUAL) {
         return; /* manual is moved by progression_level_up(), never the tick */
     }
-    if (depth > PROGRESSION_MAX_CASCADE_DEPTH) {
-        nt_log_warn("progression: cascade depth cap at '%s' (dropped)", def->id);
-        return; /* T5: A->B->A xp-cascade depth cap */
-    }
-    /* #6: ЛЕНИВО. Не аллоцируем запись на входе (иначе кадр 1 создаёт нулевые
-       записи всех auto/threshold-треков -> нарушит инвариант "свежая игра =
-       пустые треки". Читаем уровень через find_track (NULL -> 0); alloc ТОЛЬКО
-       перед реальным лвлапом. */
     ProgressionTrackState *st = find_track(def->id);
     int level = st ? st->level : 0;
-    int iters = 0;
-    while (iters < PROGRESSION_MAX_LEVELUPS_PER_TRACK) {
-        if (level >= def->max_level) {
-            break;
-        }
-        int64_t cost = track_cost_at(def, level);
+    int iterations = 0;
+    while (iterations < PROGRESSION_MAX_LEVELUPS_PER_TRACK && level < def->max_level) {
+        const progression_step_t *step = step_at(def, level);
+        int64_t xp_before = 0;
+        int old_level = 0;
         if (def->mode == PROGRESSION_MODE_AUTO) {
-            if (resource_count(def->currency_def) < cost) {
-                break; /* purse empty -> records not created for nothing */
-            }
-        } else { /* THRESHOLD */
-            if ((st ? st->xp : 0) < cost) {
+            if (!buy_step(def, step, "level_cost:auto", &st)) {
                 break;
             }
-        }
-        if (st == NULL) {
-            st = find_or_alloc_track(def->id); /* lazy alloc: only right before a REAL level-up */
-            if (st == NULL) {
-                break; /* PROGRESSION_STATE_MAX_TRACKS budget exhausted */
-            }
-        }
-        if (def->mode == PROGRESSION_MODE_AUTO) {
-            /* L-fix (deep-review #3): check the return value -- the manual
-               path already does (progression_level_up above); this was the
-               one asymmetric spot that granted a "free" level on an
-               items-side rejection instead of treating it as a hard stop. */
-            int64_t resource_before = resource_count(def->currency_def);
-            if (items_try_stack_remove_from_container(s_resource_container, def->currency_def, cost, "level_cost:auto") != ITEMS_RESULT_OK) {
-                nt_log_warn("progression: resource removal failed for '%s' despite affordability check", def->id);
-                break; /* do not grant a level the player didn't pay for */
-            }
-            int old_level = st->level;
+            old_level = st->level;
             st->level += 1;
-            level = st->level;
-            emit_levelup_paid(def, "auto", "level_cost:auto", old_level, st->level, cost, resource_before);
+            emit_levelup(def, "level_cost:auto", old_level, st->level, step, 0);
         } else {
-            int64_t xp_before = st->xp;
-            st->xp -= cost;
-            int old_level = st->level;
+            if ((st ? st->xp : 0) < step->xp_cost) {
+                break;
+            }
+            st = find_or_alloc_track(def->id); /* only right before a real level-up */
+            if (st == NULL) {
+                break;
+            }
+            xp_before = st->xp;
+            st->xp -= step->xp_cost;
+            old_level = st->level;
             st->level += 1;
-            level = st->level;
-            emit_levelup_threshold(def, "level_cost:threshold", old_level, st->level, cost, xp_before);
+            emit_levelup(def, "level_cost:threshold", old_level, st->level, step, xp_before);
         }
-        apply_on_level_up(def, depth);                            /* каскад внутрь той же глубины-проверки */
-        iters += 1;
+        apply_grants(step, "loot:levelup");
+        level = st->level;
+        iterations += 1;
     }
-    if (iters == PROGRESSION_MAX_LEVELUPS_PER_TRACK) {
+    if (iterations == PROGRESSION_MAX_LEVELUPS_PER_TRACK) {
         nt_log_warn("progression: per-track levelup cap at '%s' (dropped rest this frame)", def->id);
     }
-    if (iters > 0) {
+    if (iterations > 0) {
         game_save_mark_dirty();
-    }
-}
-
-/* Cut A: shipped/demo on_level_up is ALWAYS empty (codegen emits NULL,0) -> this
-   loop is a no-op in the template. The runtime path stays alive, covered ONLY by
-   the hand-written test catalog (tests/test_progression_catalog.c). */
-static void apply_on_level_up(const progression_track_def_t *def, int depth) {
-    for (int i = 0; i < def->on_level_up_count; ++i) {
-        const progression_emit_t *e = &def->on_level_up[i];
-        if (e->def_id != NULL) {
-            (void)items_try_stack_add(
-                s_resource_container, e->def_id, e->amount,
-                ITEMS_SLOT_AUTO, "loot:levelup", NULL, NULL);
-        }
-        if (e->to_track != NULL) {
-            progression_add_xp(e->to_track, e->amount, "convert:cascade");
-            resolve_track(progression_track_def(e->to_track), depth + 1);
-            /* #17: if to_track is not threshold, add_xp above is a silent no-op. */
-        }
     }
 }
 
 void progression_update(void) {
     for (int i = 0; i < k_tracks_count; ++i) {
-        resolve_track(&k_tracks[i], 0);
+        resolve_track(&k_tracks[i]);
     }
 }
