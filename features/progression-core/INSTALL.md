@@ -9,12 +9,26 @@ public games, and `games/private/<id>`.
 ## Dependency: items-core (L2 -> L1)
 
 `progression.h` includes `features/items/items.h` (the L2->L1 edge) and
-`progression.c` reads/spends purse through
-`items_purse`/`items_add`/`items_remove`. **Every consumer that installs
-`progression-core` must also install `items-core`** and add
-`ITEMS_CORE_INC` to its include path (see `features/items-core/INSTALL.md`).
-The reverse edge does not exist — items code never mentions progression
-(grep-gated, G-rev).
+`progression.c` prices, pays, and grants through
+`items_can_pay_stacks`/`items_try_pay_stacks`/`items_try_stack_add`/
+`items_stack_count`. **Every consumer that installs `progression-core` must
+also install `items-core`** and add `ITEMS_CORE_INC` to its include path (see
+`features/items-core/INSTALL.md`). The reverse edge does not exist — items code
+never mentions progression (grep-gated, G-rev).
+
+## Contract: two reason verbs
+
+The module writes two reasons of its own into items, so a consumer's
+game-owned `src/features/items/reason_tags.h` must accept both or every
+level-up fails the items verb check:
+
+- `level_cost:<track_id>` — the level's own spend (`manual` on call, `auto` on
+  tick).
+- `loot:levelup` — the items a reached level grants back. It is a GRANT, not a
+  spend; the verb reads that way on purpose.
+
+Both are already in the closed verb list every consumer starts from; the
+requirement is only that a game which prunes that list keeps them.
 
 ## CMake wiring
 
@@ -28,20 +42,20 @@ set(PROGRESSION_CORE_SRC     "${PROGRESSION_CORE_DIR}/src")
 set(PROGRESSION_CORE_SCRIPTS "${PROGRESSION_CORE_DIR}/scripts")
 ```
 
-Content codegen (writes into the game's OWN generated dir, not the module;
-`--items-snapshot` cross-checks `currency_def` against the canonical Items Snapshot;
-`--state-schema` validates the game-owned progression fragment and supplies
-the track-id storage bound):
+Content codegen (writes into the game's OWN generated dir, not the module).
+`--snapshot` is the catalog: tracks are authored in the game's Lua beside its
+items and ride the Items Snapshot's `tracks` section, so this step must depend
+on the snapshot the items codegen produces. `--state-schema` validates the
+game-owned progression fragment and supplies the track-id storage bound:
 
 ```cmake
 add_custom_command(
     OUTPUT "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.h" "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c"
     COMMAND "${Python3_EXECUTABLE}" "${PROGRESSION_CORE_SCRIPTS}/generate_progression_tracks.py"
-        --catalog "<game>/content/progression.json"
-        --items-snapshot "<build>/generated/items-catalog/items.snapshot.json"
+        --snapshot "<build>/generated/items-catalog/items.snapshot.json"
         --state-schema "<game>/state/progression.schema.json"
         --out-dir "${GAME_SOURCE_GENERATED_DIR}"
-    DEPENDS "<game>/content/progression.json" "<build>/generated/items-catalog/items.snapshot.json"
+    DEPENDS "<build>/generated/items-catalog/items.snapshot.json"
         "<game>/state/progression.schema.json"
         "${PROGRESSION_CORE_SCRIPTS}/generate_progression_tracks.py")
 ```
@@ -80,10 +94,11 @@ no `reason_tags.h`-equivalent, no `bootstrap.c`-equivalent seed function).
 Every consumer still supplies its own:
 
 ```text
-<game>/content/progression.json           # tracks[] catalog (id/mode/currency_def/max_level/curve)
-<build>/generated/items-catalog/items.snapshot.json  # currency_def cross-check from items-core
+<game>/design/items/*.lua                 # studio.tracks declarations, listed by the game's items.lua.json
+<build>/generated/items-catalog/items.snapshot.json  # the catalog, tracks section included
 <game>/state/progression.schema.json      # tracks: map<string, {level, xp}>, NO hooks
-<game>/src/ui/...                         # composition: reading progression_level()/progression_xp_*() into UI
+<game>/src/features/items/reason_tags.h   # must accept level_cost and loot (see the contract above)
+<game>/src/ui/...                         # composition: reading progression_level()/progression_value*() into UI
 ```
 
 The progression save fragment itself (`progression_state.*`, generated)

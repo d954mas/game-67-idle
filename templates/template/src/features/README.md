@@ -19,7 +19,7 @@
   C-уголка (нет посева, нет своих верб) — весь код уехал в корневой in-place
   модуль `features/progression-core/` (см.
   `features/progression-core/README.md`). Игровая сторона прогрессии — чистые
-  конфиги (`content/progression.json`, `state/progression.schema.json`) +
+  данные (`design/items/tracks.lua`, `state/progression.schema.json`) +
   демо-композиция `src/ui/demo_hud.c`.
 
 ## Что такое фича

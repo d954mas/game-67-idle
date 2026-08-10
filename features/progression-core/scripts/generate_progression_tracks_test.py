@@ -18,36 +18,67 @@ import generate_progression_tracks as generator
 SCRIPT = Path(__file__).with_name("generate_progression_tracks.py")
 
 
-def progression_catalog(track_id: str) -> dict:
+def cost(item_id: str, count: int) -> dict:
     return {
-        "namespace": "test",
-        "tracks": [
-            {
-                "id": track_id,
-                "mode": "manual",
-                "currency_def": "coin",
-                "max_level": 1,
-                "curve": {"type": "exp", "base": 1, "growth_num": 1, "growth_den": 1},
-            }
-        ],
+        "__studio_kind": "cost",
+        "count": count,
+        "item": {"__studio_kind": "item_ref", "id": item_id},
     }
 
 
-def progression_catalog_table(track_id: str, values: list, *, max_level: int | None = None) -> dict:
-    """Like progression_catalog(), but with a curve.type 'table' entry. max_level
-    defaults to len(values) (the golden/happy-path case); a caller that wants a
-    mismatch passes an explicit max_level != len(values)."""
+def costs(*entries: tuple[str, int]) -> dict:
     return {
-        "namespace": "test",
-        "tracks": [
-            {
-                "id": track_id,
-                "mode": "manual",
-                "currency_def": "coin",
-                "max_level": max_level if max_level is not None else len(values),
-                "curve": {"type": "table", "values": values},
-            }
-        ],
+        "__studio_kind": "costs",
+        "entries": [cost(item_id, count) for item_id, count in entries],
+    }
+
+
+def track(
+    track_id: str = "hero",
+    *,
+    mode: str = "manual",
+    kind: str = "upgrade",
+    rows: list[dict] | None = None,
+) -> dict:
+    """A snapshot track. Row 0 is the un-upgraded state, so a default track has
+    two reachable levels."""
+    return {
+        "id": track_id,
+        "kind": kind,
+        "mode": mode,
+        "authoring_mode": "table",
+        "levels": {
+            "mode": "table",
+            "rows": rows if rows is not None else [
+                {},
+                {"cost_to_reach": cost("coin", 50)},
+                {"cost_to_reach": cost("coin", 75)},
+            ],
+        },
+    }
+
+
+def field(field_id: str, member: str, field_type: str, *, required_for: list[str]) -> dict:
+    return {
+        "id": field_id,
+        "member": member,
+        "type": field_type,
+        "section": "level_row",
+        "required_for": required_for,
+    }
+
+
+def items_snapshot(
+    *,
+    schema: str = "items.snapshot.v1",
+    tracks: list[dict] | None = None,
+    fields: list[dict] | None = None,
+) -> dict:
+    return {
+        "schema": schema,
+        "fields": fields if fields is not None else [],
+        "items": [{"id": "coin", "kind": "currency", "currency": {}}],
+        "tracks": tracks if tracks is not None else [track()],
     }
 
 
@@ -61,15 +92,6 @@ def progression_schema(*, string_max: object = 64) -> dict:
     }
 
 
-def items_snapshot(*, schema: str = "items.snapshot.v1") -> dict:
-    return {
-        "schema": schema,
-        "items": [
-            {"id": "coin", "kind": "currency", "currency": {}},
-        ],
-    }
-
-
 def run_direct(args: list[str]) -> int:
     with contextlib.redirect_stderr(io.StringIO()):
         return generator.main(args)
@@ -79,51 +101,58 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
     def generator_args(
         self,
         *,
-        track_id: str = "hero",
-        catalog: dict | None = None,
+        snapshot: dict | None = None,
         schema: dict | None = None,
         include_state_schema: bool = True,
     ) -> tuple[list[str], Path, tempfile.TemporaryDirectory[str], Path]:
         temp = tempfile.TemporaryDirectory()
         game = Path(temp.name) / "games" / "fixture"
-        content = game / "content"
         state = game / "state"
         out = game / "build" / "generated"
-        content.mkdir(parents=True)
         state.mkdir(parents=True)
-        (content / "progression.json").write_text(
-            json.dumps(catalog if catalog is not None else progression_catalog(track_id)), encoding="utf-8"
+        snapshot_path = game / "build" / "items" / "items.snapshot.json"
+        snapshot_path.parent.mkdir(parents=True)
+        snapshot_path.write_text(
+            json.dumps(snapshot if snapshot is not None else items_snapshot()), encoding="utf-8"
         )
-        snapshot = game / "build" / "items" / "items.snapshot.json"
-        snapshot.parent.mkdir(parents=True)
-        snapshot.write_text(json.dumps(items_snapshot()), encoding="utf-8")
         (state / "progression.schema.json").write_text(
             json.dumps(schema if schema is not None else progression_schema()), encoding="utf-8"
         )
-        args = [
-            "--catalog",
-            str(content / "progression.json"),
-            "--items-snapshot",
-            str(snapshot),
-            "--out-dir",
-            str(out),
-        ]
+        args = ["--snapshot", str(snapshot_path), "--out-dir", str(out)]
         if include_state_schema:
             args.extend(["--state-schema", str(state / "progression.schema.json")])
         return args, out, temp, game
 
-    def test_rejects_non_snapshot_items_input(self) -> None:
-        args, _out, temp, game = self.generator_args()
+    def generate(self, snapshot: dict, *, schema: dict | None = None) -> str:
+        args, out, temp, _game = self.generator_args(snapshot=snapshot, schema=schema)
         self.addCleanup(temp.cleanup)
-        snapshot = game / "build" / "items" / "items.snapshot.json"
-        snapshot.write_text(json.dumps(items_snapshot(schema="legacy.items.json")), encoding="utf-8")
-        with self.assertRaisesRegex(SystemExit, "items snapshot schema"):
+        self.assertEqual(run_direct(args), 0)
+        return (out / "progression_tracks.gen.c").read_text(encoding="utf-8")
+
+    # -- input identity ------------------------------------------------------
+
+    def test_rejects_non_snapshot_items_input(self) -> None:
+        args, _out, temp, _game = self.generator_args(
+            snapshot=items_snapshot(schema="legacy.items.json")
+        )
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(SystemExit, "snapshot schema must be 'items.snapshot.v1'"):
+            generator.main(args)
+
+    def test_rejects_snapshot_without_a_tracks_section(self) -> None:
+        snapshot = items_snapshot()
+        del snapshot["tracks"]
+        args, _out, temp, _game = self.generator_args(snapshot=snapshot)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(SystemExit, "snapshot 'tracks' must be an array"):
             generator.main(args)
 
     def test_state_schema_argument_is_required(self) -> None:
         args, _out, temp, game = self.generator_args(include_state_schema=False)
         self.addCleanup(temp.cleanup)
-        result = subprocess.run([sys.executable, str(SCRIPT), *args], cwd=game, capture_output=True, text=True, check=False)
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), *args], cwd=game, capture_output=True, text=True, check=False
+        )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("--state-schema", result.stderr)
 
@@ -144,86 +173,214 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
                     generator.main(args)
 
     def test_track_id_boundary_comes_from_state_schema(self) -> None:
-        accepted, _out, accepted_temp, _game = self.generator_args(track_id="abc", schema=progression_schema(string_max=4))
+        schema = progression_schema(string_max=4)
+        accepted, _out, accepted_temp, _game = self.generator_args(
+            snapshot=items_snapshot(tracks=[track("abc")]), schema=schema
+        )
         self.addCleanup(accepted_temp.cleanup)
         self.assertEqual(run_direct(accepted), 0)
 
-        rejected, _out, rejected_temp, _game = self.generator_args(track_id="abcd", schema=progression_schema(string_max=4))
+        rejected, _out, rejected_temp, _game = self.generator_args(
+            snapshot=items_snapshot(tracks=[track("abcd")]), schema=schema
+        )
         self.addCleanup(rejected_temp.cleanup)
         with self.assertRaisesRegex(SystemExit, "state schema string_max=4"):
             generator.main(rejected)
 
-        multibyte_ok, _out, multibyte_ok_temp, _game = self.generator_args(
-            track_id="éé", schema=progression_schema(string_max=5)
+        multibyte_bad, _out, multibyte_temp, _game = self.generator_args(
+            snapshot=items_snapshot(tracks=[track("ééé")]), schema=progression_schema(string_max=5)
         )
-        self.addCleanup(multibyte_ok_temp.cleanup)
-        self.assertEqual(run_direct(multibyte_ok), 0)
-
-        multibyte_bad, _out, multibyte_bad_temp, _game = self.generator_args(
-            track_id="ééé", schema=progression_schema(string_max=5)
-        )
-        self.addCleanup(multibyte_bad_temp.cleanup)
+        self.addCleanup(multibyte_temp.cleanup)
         with self.assertRaisesRegex(SystemExit, "6 UTF-8 bytes"):
             generator.main(multibyte_bad)
 
-    def test_generated_provenance_uses_game_relative_content_path(self) -> None:
+    def test_rejects_ids_colliding_on_one_c_identifier(self) -> None:
+        args, _out, temp, _game = self.generator_args(
+            snapshot=items_snapshot(tracks=[track("a.b"), track("a_b")])
+        )
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(SystemExit, "both sanitize to the C identifier"):
+            generator.main(args)
+
+    def test_rejects_a_track_with_no_reachable_level(self) -> None:
+        args, _out, temp, _game = self.generator_args(
+            snapshot=items_snapshot(tracks=[track(rows=[{}])])
+        )
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(SystemExit, "reaches level 0"):
+            generator.main(args)
+
+    # -- level base conversion -----------------------------------------------
+
+    def test_row_one_is_the_first_step_not_a_level(self) -> None:
+        """The Snapshot is 1-based (row 0 is the un-upgraded state), the runtime is
+        0-based (steps[L] leaves level L). Three rows are two steps."""
+        source = self.generate(items_snapshot())
+        self.assertIn(".max_level = 2,", source)
+        self.assertIn("{ COST_HERO_0, 1, 0LL, NULL, 0 },", source)
+        self.assertIn("{ COST_HERO_1, 1, 0LL, NULL, 0 },", source)
+        self.assertIn("static const progression_amount_t COST_HERO_0[] = {\n    { \"coin\", 50LL },\n};", source)
+
+    # -- price and grants ----------------------------------------------------
+
+    def test_multi_item_price_bakes_in_declared_order(self) -> None:
+        source = self.generate(items_snapshot(tracks=[track(rows=[
+            {},
+            {"cost_to_reach": costs(("wood", 3), ("coin", 50))},
+        ])]))
+        self.assertIn(
+            'static const progression_amount_t COST_HERO_0[] = {\n'
+            '    { "wood", 3LL },\n'
+            '    { "coin", 50LL },\n};',
+            source,
+        )
+        self.assertIn("{ COST_HERO_0, 2, 0LL, NULL, 0 },", source)
+
+    def test_free_step_bakes_a_null_price(self) -> None:
+        source = self.generate(items_snapshot(tracks=[track(rows=[
+            {},
+            {"cost_to_reach": {"__studio_kind": "free"}},
+        ])]))
+        self.assertIn("{ NULL, 0, 0LL, NULL, 0 },", source)
+
+    def test_threshold_track_bakes_xp_instead_of_a_price(self) -> None:
+        source = self.generate(items_snapshot(tracks=[track(mode="threshold", rows=[
+            {},
+            {"xp_to_reach": 120},
+        ])]))
+        self.assertIn(".mode = PROGRESSION_MODE_THRESHOLD,", source)
+        self.assertIn("{ NULL, 0, 120LL, NULL, 0 },", source)
+
+    def test_grants_bake_beside_the_price(self) -> None:
+        source = self.generate(items_snapshot(tracks=[track(rows=[
+            {},
+            {"cost_to_reach": cost("coin", 10), "grants": costs(("gem", 1), ("wood", 2))},
+        ])]))
+        self.assertIn(
+            'static const progression_amount_t GRANTS_HERO_0[] = {\n'
+            '    { "gem", 1LL },\n'
+            '    { "wood", 2LL },\n};',
+            source,
+        )
+        self.assertIn("{ COST_HERO_0, 1, 0LL, GRANTS_HERO_0, 2 },", source)
+
+    def test_rejects_a_non_positive_amount(self) -> None:
+        args, _out, temp, _game = self.generator_args(snapshot=items_snapshot(tracks=[track(rows=[
+            {},
+            {"cost_to_reach": cost("coin", 0)},
+        ])]))
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(SystemExit, "quantity amount must be a positive int64"):
+            generator.main(args)
+
+    # -- columns -------------------------------------------------------------
+
+    def test_only_fields_a_track_kind_requires_become_columns(self) -> None:
+        """A field no track kind requires belongs to the item catalog; the two
+        dictionaries are disjoint by construction, not by convention."""
+        snapshot = items_snapshot(fields=[
+            field("gear.damage", "damage", "i64", required_for=["weapon"]),
+            field("up.rate", "rate", "i64", required_for=["upgrade"]),
+        ])
+        args, out, temp, _game = self.generator_args(snapshot=snapshot)
+        self.addCleanup(temp.cleanup)
+        self.assertEqual(run_direct(args), 0)
+        header = (out / "progression_tracks.gen.h").read_text(encoding="utf-8")
+        self.assertIn("#define PROGRESSION_VALUE_COUNT 1", header)
+        self.assertIn("#define PROGRESSION_VALUE_RATE ((progression_value_t)0u)", header)
+        self.assertNotIn("PROGRESSION_VALUE_DAMAGE", header)
+
+    def test_column_index_follows_field_id_order(self) -> None:
+        snapshot = items_snapshot(fields=[
+            field("up.rate", "rate", "i64", required_for=["upgrade"]),
+            field("up.cap", "cap", "i64", required_for=["upgrade"]),
+        ])
+        args, out, temp, _game = self.generator_args(snapshot=snapshot)
+        self.addCleanup(temp.cleanup)
+        self.assertEqual(run_direct(args), 0)
+        header = (out / "progression_tracks.gen.h").read_text(encoding="utf-8")
+        self.assertIn("#define PROGRESSION_VALUE_CAP ((progression_value_t)0u)", header)
+        self.assertIn("#define PROGRESSION_VALUE_RATE ((progression_value_t)1u)", header)
+
+    def test_exact_and_fractional_columns_split_into_two_tables(self) -> None:
+        snapshot = items_snapshot(
+            fields=[
+                field("up.cap", "cap", "i64", required_for=["upgrade"]),
+                field("up.rate", "rate", "f64", required_for=["upgrade"]),
+            ],
+            tracks=[track(rows=[
+                {"cap": 0, "rate": 0.0},
+                {"cap": 7, "rate": 1.5, "cost_to_reach": cost("coin", 50)},
+            ])],
+        )
+        args, out, temp, _game = self.generator_args(snapshot=snapshot)
+        self.addCleanup(temp.cleanup)
+        self.assertEqual(run_direct(args), 0)
+        header = (out / "progression_tracks.gen.h").read_text(encoding="utf-8")
+        source = (out / "progression_tracks.gen.c").read_text(encoding="utf-8")
+        self.assertIn("#define PROGRESSION_VALUE_COUNT 2", header)
+        # Both tables carry every column so one index reads both; the read that
+        # does not answer for a column is the assert, not a second index space.
+        self.assertIn("const bool k_progression_value_exact[] = {\n    true,\n    false,\n};", source)
+        self.assertIn("static const int64_t EXACT_HERO[] = {\n    0LL, 0LL,\n    7LL, 0LL,\n};", source)
+        self.assertIn("static const double FRACTIONAL_HERO[] = {\n    0.0, 0.0,\n    0.0, 1.5,\n};", source)
+        self.assertIn(".exact = EXACT_HERO,", source)
+        self.assertIn(".fractional = FRACTIONAL_HERO,", source)
+        self.assertIn(".value_count = 2u,", source)
+
+    def test_fractional_literal_reads_back_exactly(self) -> None:
+        """The value is computed once on the build machine; the literal must
+        round-trip or the runtime silently reads a different number."""
+        value = 0.1 + 0.2
+        snapshot = items_snapshot(
+            fields=[field("up.rate", "rate", "f64", required_for=["upgrade"])],
+            tracks=[track(rows=[{"rate": 0.0}, {"rate": value, "cost_to_reach": cost("coin", 1)}])],
+        )
+        source = self.generate(snapshot)
+        literal = source.split("FRACTIONAL_HERO[] = {")[1].split("};")[0].strip().split("\n")[1].strip(" ,")
+        self.assertEqual(float(literal), value)
+
+    def test_a_catalog_without_columns_still_compiles(self) -> None:
+        """A zero-length array is invalid C, so the empty dictionary emits a
+        one-element table nothing indexes."""
+        args, out, temp, _game = self.generator_args()
+        self.addCleanup(temp.cleanup)
+        self.assertEqual(run_direct(args), 0)
+        header = (out / "progression_tracks.gen.h").read_text(encoding="utf-8")
+        source = (out / "progression_tracks.gen.c").read_text(encoding="utf-8")
+        self.assertIn("#define PROGRESSION_VALUE_COUNT 0", header)
+        self.assertIn("const bool k_progression_value_exact[1] = { false };", source)
+        self.assertIn(".exact = NULL,", source)
+        self.assertIn(".fractional = NULL,", source)
+        self.assertIn(".value_count = 0u,", source)
+
+    def test_rejects_a_column_that_is_neither_exact_nor_fractional(self) -> None:
+        snapshot = items_snapshot(
+            fields=[field("up.label", "label", "string", required_for=["upgrade"])]
+        )
+        args, _out, temp, _game = self.generator_args(snapshot=snapshot)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaisesRegex(SystemExit, "must be i64 or f64"):
+            generator.main(args)
+
+    # -- output --------------------------------------------------------------
+
+    def test_generated_output_carries_no_build_machine_path(self) -> None:
         args, out, temp, _game = self.generator_args()
         self.addCleanup(temp.cleanup)
         self.assertEqual(run_direct(args), 0)
         for name in ("progression_tracks.gen.h", "progression_tracks.gen.c"):
             generated = (out / name).read_text(encoding="utf-8")
-            self.assertIn("from content/progression.json", generated)
-            self.assertNotIn("templates/template/content/progression.json", generated)
+            self.assertIn("from the Items Snapshot tracks section", generated)
             self.assertNotIn(temp.name.replace("\\", "/"), generated.replace("\\", "/"))
 
-    def test_generated_provenance_cannot_terminate_or_split_the_c_comment(self) -> None:
-        header = generator.render_header(0, "content/bad*/name\nprogression.json")
-        self.assertIn("from content/bad* /name\\nprogression.json", header)
-        self.assertEqual(header.count("*/"), 2)  # provenance comment + include-guard footer only
-
-    # -- curve.type "table" (hand-authored verbatim per-level costs) ----------
-
-    def test_table_curve_bakes_values_verbatim(self) -> None:
-        """Golden case: a hand-authored `curve.type: "table"` track bakes its
-        `values` VERBATIM into the generated COST_<TRACK>[] array -- no floor,
-        no rounding, no reordering (contrast with "exp", which computes)."""
-        values = [10, 0, 25, 999999999999, 1]
-        catalog = progression_catalog_table("hero", values)
-        args, out, temp, _game = self.generator_args(catalog=catalog)
+    def test_rerun_over_unchanged_input_rewrites_nothing(self) -> None:
+        args, out, temp, _game = self.generator_args()
         self.addCleanup(temp.cleanup)
         self.assertEqual(run_direct(args), 0)
-
-        source = (out / "progression_tracks.gen.c").read_text(encoding="utf-8")
-        expected_array = "static const int64_t COST_HERO[] = {\n" + "".join(
-            f"    {value}LL,\n" for value in values
-        ) + "};"
-        self.assertIn(expected_array, source)
-        self.assertIn(".max_level = 5,", source)
-        self.assertIn(".cost_count = 5,", source)
-
-    def test_table_curve_rejects_values_length_mismatch(self) -> None:
-        catalog = progression_catalog_table("hero", [1, 2], max_level=3)
-        args, _out, temp, _game = self.generator_args(catalog=catalog)
-        self.addCleanup(temp.cleanup)
-        with self.assertRaisesRegex(
-            SystemExit, r"has 2 values but max_level is 3 -- values length must equal max_level"
-        ):
-            generator.main(args)
-
-    def test_table_curve_rejects_negative_value(self) -> None:
-        catalog = progression_catalog_table("hero", [5, -1, 3])
-        args, _out, temp, _game = self.generator_args(catalog=catalog)
-        self.addCleanup(temp.cleanup)
-        with self.assertRaisesRegex(SystemExit, r"curve\.values\[1\] must be a non-negative int64"):
-            generator.main(args)
-
-    def test_unknown_curve_type_still_rejected(self) -> None:
-        catalog = progression_catalog_table("hero", [1, 2])
-        catalog["tracks"][0]["curve"] = {"type": "linear", "values": [1, 2]}
-        args, _out, temp, _game = self.generator_args(catalog=catalog)
-        self.addCleanup(temp.cleanup)
-        with self.assertRaisesRegex(SystemExit, r"supported: 'exp', 'table'"):
-            generator.main(args)
+        stamps = {p.name: p.stat().st_mtime_ns for p in out.iterdir()}
+        self.assertEqual(run_direct(args), 0)
+        self.assertEqual({p.name: p.stat().st_mtime_ns for p in out.iterdir()}, stamps)
 
 
 if __name__ == "__main__":

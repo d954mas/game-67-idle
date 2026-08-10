@@ -32,7 +32,7 @@ Layout (decomposition the template teaches by example — no god-file):
     assets/shaders/          common/ + slug_text + sprite + mesh_inst + mesh_tex.
     state/                   the 4 fragment schemas (codegen source): settings/items/
                              progression/game.
-    content/                 progression.json + items.lock.json (release history).
+    content/                 items.lock.json (release history) + loc strings.
     items.lua.json           canonical Items Lua evaluator manifest.
     design/                  game-owned concept, GDD, private knowledge base, and
                              modular Items Lua plus structured design data.

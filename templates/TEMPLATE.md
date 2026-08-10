@@ -203,7 +203,7 @@ modules from day one so a copied game keeps them apart:
                               plus ui.tree bounds for responsive-layout review
     state/                    the 4 fragment schemas (codegen source): settings/
                               items/progression/game
-    content/                  progression.json + items.lock.json (Items release history)
+    content/                  items.lock.json (Items release history) + loc strings
     items.lua.json            canonical Items Lua evaluator manifest
     design/items/             modular Items Lua declarations
 

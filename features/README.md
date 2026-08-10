@@ -139,8 +139,8 @@ possibility, not a feature.
   (manual/auto/threshold modes), T5 tick caps, lazy allocation, plus curve
   codegen (`generate_progression_tracks.py`). In-place module, consumed the
   same way via `${GAME_REPO_ROOT}/features/progression-core`. Unlike items, progression
-  has no game-owned C corner. The consuming template/game owns its content
-  (`content/progression.json`), its state schema
+  has no game-owned C corner. The consuming template/game owns its track
+  declarations (`studio.tracks` in its items Lua), its state schema
   (`state/progression.schema.json`), and its own composition (e.g. the
   template's `src/ui/demo_hud.c` idle-income binding). Reference:
   `progression-core/README.md` + `progression-core/INSTALL.md`.
@@ -185,8 +185,8 @@ The game-owned portions of items and progression remain in the template:
   package-backed integration tests `templates/template/tests/test_items_fragment.c`
   and `test_template_composition.c` (+ focused Items fixtures).
 - **progression** — no game-side C corner at all (see
-  `progression-core/README.md` "No game-owned C hooks") — just content
-  `templates/template/content/progression.json` + state
+  `progression-core/README.md` "No game-owned C hooks") — just the track
+  declarations in `templates/template/design/items/tracks.lua` + state
   `templates/template/state/progression.schema.json` + the demo composition
   `templates/template/src/ui/demo_hud.c` + the template's own content-coupled
   integration tests `templates/template/tests/test_progression.c`,

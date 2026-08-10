@@ -40,10 +40,11 @@ features/progression-core/
 
 ## Layer
 
-L2 — depends on `features/items-core` (L1) for purse reads/spends
-(`progression.h` includes `features/items/items.h`, the ONE allowed feature
-edge — `manual`/`auto` modes read and spend player currency through items'
-public API: `items_purse`/`items_add`/`items_remove`). The reverse edge does
+L2 — depends on `features/items-core` (L1) for the payment scope it spends and
+grants through (`progression.h` includes `features/items/items.h`, the ONE
+allowed feature edge — `manual`/`auto` modes price a level in items and move
+them through items' public API: `items_can_pay_stacks`/`items_try_pay_stacks`/
+`items_try_stack_add`/`items_stack_count`). The reverse edge does
 not exist — items code never mentions progression (grep-gated, G-rev). See
 `features/items-core/README.md` for the L1 module this depends on.
 
@@ -58,8 +59,8 @@ not exist — items code never mentions progression (grep-gated, G-rev). See
   while the accumulator covers the step.
 
 Every payment is atomic and ordered: check, then allocate the track's save
-record, then pay. Paying first would burn the purse whenever the tracks map is
-full — a level nobody received, for currency nobody can get back.
+record, then pay. Paying first would burn the resources whenever the tracks map
+is full — a level nobody received, for currency nobody can get back.
 
 Successful `manual`, `auto`, and `threshold` level changes emit
 `progression.levelup` with `track`, `mode`, `reason`, `old_level`, and
@@ -88,9 +89,9 @@ and wood is one step, not a special case. `threshold` fills `xp_cost`, a single
 number, because a track's own accumulator is not an item and there is only ever
 one of it.
 
-A step may also `grant` items on being reached. The runtime pays and grants
+A step may also grant items on being reached. The runtime pays and grants
 through the bound payment scope; grants land in its first container, so a level
-hands items back into the purse it charged.
+hands items back into the containers it charged.
 
 ## The tick gives the frame back
 
@@ -108,7 +109,7 @@ A track with no save record reads as level 0 / xp 0
 (`progression_level`/`progression_xp_current` on an absent record are 0,
 never a crash). A record is allocated ONLY right before the first real
 mutation (`level_up`/`add_xp`/`set_level`, or the first level-up inside
-`progression_update()`) — a tick over an empty-purse `auto` track or an
+`progression_update()`) — a tick over an `auto` track nobody can afford or an
 empty `threshold` track does NOT create a record. This keeps a fresh save's
 `tracks` map empty, matching items' "no gratuitous ownership record"
 discipline.
@@ -132,9 +133,11 @@ Every mutation takes `reason` (`verb:subject`), asserted in debug builds
 (`progression_reason_check`, no-op in release) — but progression does NOT
 pull in items' closed verb list (`features/items/reason_tags.h` is
 game-owned and items-internal, not something progression should reach into).
-A spend into purse forwards `reason` straight to `items_remove`/`items_add`,
-where the FULL items verb-check already runs — the verb vocabulary lives in
-exactly one place.
+A spend forwards `reason` straight into items, where the FULL items verb-check
+already runs — the verb vocabulary lives in exactly one place. The two reasons
+this module writes itself are part of its contract: a level's own spend is
+`level_cost:<track_id>` and a level's grant is `loot:levelup`, so every consumer
+must have both verbs in its `reason_tags.h` (see INSTALL.md).
 
 ## `set_level` vs `reset` — different primitives
 
@@ -143,10 +146,10 @@ exactly one place.
   level 5").
 - `progression_reset(track, reason)` — level=0 AND internal xp=0 (only
   `threshold` meaningfully has xp; `manual`/`auto` xp is the ignored
-  default). Does NOT touch purse — a full currency prestige is game
-  composition (`progression_reset` + a separate `items_remove`), not
-  something progression does on its own (progression never owns purse
-  balances, only reads/spends them).
+  default). Does NOT touch the payment scope — a full currency prestige is game
+  composition (`progression_reset` + the game's own items call), not
+  something progression does on its own (progression never owns the containers,
+  only reads and spends them).
 
 There is no `level_down` — cut deliberately; `set_level`/`reset` cover every
 ratified use case.
@@ -158,19 +161,20 @@ shape as items' `owned`, no per-mode branching in the schema. `level` is
 capped at schema max 9999 (a track's authored row count must stay within it,
 enforced by the generator — a higher cap would silently
 clamp on save instead of failing the build). `xp` is meaningful ONLY for
-`threshold` tracks; `manual`/`auto` tracks carry the ignored default 0 (xp
-lives in purse for those two modes — an L2->L1 read, not schema state).
+`threshold` tracks; `manual`/`auto` tracks carry the ignored default 0 (what
+those two spend is an item, counted in the payment scope — an L2->L1 read, not
+schema state).
 
 **No hooks** (`on_new_game`/`reconcile` both absent) — see "No game-owned C
-hooks" below. An orphaned track record (its `track_id` removed from
-`content/progression.json`) is harmless by construction —
+hooks" below. An orphaned track record (its `track_id` no longer declared in the
+game's Lua) is harmless by construction —
 `progression_update()` only ever iterates the CATALOG's tracks, never scans
 `tracks` for orphans — so no reconcile/quarantine pass is needed (contrast
 with items, where an orphaned owned-record represents lost player value and
 must be quarantined, not ignored).
 
-**`created`/lock-file: deliberately absent for `content/progression.json`**
-(unlike `items.json`/`items.lock.json`). An orphaned items def_id means a
+**`created`/lock-file: deliberately absent for track declarations** (unlike
+`items.json`/`items.lock.json`). An orphaned items def_id means a
 LOST count in the save (destructive, needs a guard); an orphaned track_id is
 inert (ignored by `progression_update()`, per the paragraph above) — so
 there is no destructive-removal case to guard against. Cost of this
@@ -228,25 +232,23 @@ relocation).
 
 ## Cross-dependency note (see also `features/items-core/README.md`)
 
-`currency_def` in `content/progression.json` names a live items def_id.
-items' own destructive-removal guard (`items.lock.json`) does not know
-about progression — removing a currency that a track still references will
-pass the items guard cleanly but break progression codegen loudly
-(`SystemExit`: currency_def not found / not a currency). Keep
-`content/progression.json` in sync when retiring a currency def; see the
-advisory note in the game's own items-corner README def-removal section.
+A track's price and grants name items by reference, and both spaces are
+evaluated together: a step that names a retired def_id fails in the evaluator,
+before any snapshot exists, so there is no way to ship a track priced in
+something nobody can hold. Retiring a def is therefore a two-space edit — see
+the advisory note in the game's own items-corner README def-removal section.
 
 ## Demo idle-income + autosave churn (template-specific, informational only)
 
-The template's demo binding (`src/ui/demo_hud.c`) feeds a small idle xp
-income (`DEMO_XP_PER_SEC`, default 8/s) into items purse `tmpl.xp` every
+The template's demo binding (`src/ui/demo_hud.c`) feeds a small idle income
+(`DEMO_XP_PER_SEC`, default 8/s) of the `tmpl.xp` item into the wallet every
 frame so the demo `hero` auto-track visibly counts up and levels on its
-own — the whole point of routing xp through `items_purse` is to make the
-L2->L1 include a REAL, exercised path, not a latent one. This is TEMPLATE
-game composition, not part of this module — a lead/game that wants a
-perfectly silent template can zero `DEMO_XP_PER_SEC` in `demo_hud.c`; `hero`
-then sits static at level 0/`cost[0]` and this module's own tests still
-pass (they gate curve/tick correctness, never the exact idle number).
+own — the whole point of pricing it in a real item is to make the L2->L1 edge
+an exercised path, not a latent one. This is TEMPLATE game composition, not
+part of this module — a lead/game that wants a perfectly silent template can
+zero `DEMO_XP_PER_SEC` in `demo_hud.c`; `hero` then sits static at level 0 and
+this module's own tests still pass (they gate curve/tick correctness, never the
+exact idle number).
 
 ## Backdoor (documented, not built)
 
@@ -261,8 +263,8 @@ it is a documented possibility, not a feature.
 
 ## Purpose
 
-Provide reusable progression tracks, bounded tick behavior, and deterministic
-integer curve generation over the items-core purse boundary.
+Provide reusable progression tracks, bounded tick behavior, and curves baked at
+build time over the items-core payment boundary.
 
 ## Public surface
 
@@ -286,6 +288,11 @@ canonical `--items-snapshot <items.snapshot.json>` build output.
 Version `3.1.0` adds `curve.type: "table"` (verbatim hand-authored per-level
 costs) alongside the existing `"exp"` formula curve — backward-compatible,
 existing `"exp"` catalogs generate byte-identical output.
+Version `4.0.0` reshapes `progression.levelup`: the price rides `cost[]`
+(`def_id`/`amount`/`before`) for item-paid modes and `xp_cost`/`xp_before` for
+`threshold`. The five scalars it replaces — `cost_def_id`, `cost_amount`,
+`resource_before`, `resource_after`, `cascade_depth` — are gone. A consumer
+reading the old fields must move to the accessors.
 Version `5.0.0` moves authoring into the shared Lua evaluator and the API onto
 handles. Tracks are declared with `studio.tracks` and read from the Snapshot's
 `tracks` section; `content/progression.json` and the `--catalog` flag are gone.
@@ -297,13 +304,9 @@ may grant items, and a track may carry exact and fractional columns read through
 list-priced level cannot have, and the second was built on it — affordability is
 now `items_can_pay_stacks` over the step's own list. Cascades
 (`progression_emit_t.to_track`, the recursion, its depth cap, and the
-`cascade_depth` event field) are removed with them.
-
-Version `4.0.0` reshapes `progression.levelup`: the price rides `cost[]`
-(`def_id`/`amount`/`before`) for item-paid modes and `xp_cost`/`xp_before` for
-`threshold`. The five scalars it replaces — `cost_def_id`, `cost_amount`,
-`resource_before`, `resource_after`, `cascade_depth` — are gone. A consumer
-reading the old fields must move to the accessors.
+`cascade_depth` event field) are removed with them. The two reason verbs the
+module writes — `level_cost:<track_id>` and `loot:levelup` — are part of the
+contract a consumer's `reason_tags.h` must satisfy.
 
 ## Extension points
 

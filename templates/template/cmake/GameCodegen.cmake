@@ -57,9 +57,6 @@ target_sources(${GAME_TARGET} PRIVATE
     "${ITEMS_CATALOG_SOURCE}")
 target_include_directories(${GAME_TARGET} PRIVATE "${ITEMS_CATALOG_BUILD_DIR}")
 
-# И3a: progression tracks content codegen is separate from the game-state
-# generator below. It bakes content/progression.json's curve presets
-# into compile-time const int64 cost tables; --items-snapshot cross-checks
 # Progression tracks are authored in the same Lua as items and reach this
 # generator through the Snapshot's tracks section; it bakes their per-level
 # prices, grants, and column values into compile-time const tables.
