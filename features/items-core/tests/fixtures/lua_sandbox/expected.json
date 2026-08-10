@@ -5,8 +5,8 @@
     "package": "lupa@2.8",
     "version": "5.4"
   },
-  "fields": [],
   "field_sources": {},
+  "fields": [],
   "items": [
     {
       "authoring_mode": "none",
@@ -19,7 +19,10 @@
         "cost": {
           "__studio_kind": "cost",
           "count": 100,
-          "item": { "__studio_kind": "item_ref", "id": "game.gold" }
+          "item": {
+            "__studio_kind": "item_ref",
+            "id": "game.gold"
+          }
         }
       },
       "authoring_mode": "single",
@@ -27,8 +30,16 @@
       "kind": "weapon",
       "levels": {
         "mode": "single",
-        "provenance": [{ "attack": "single" }],
-        "rows": [{ "attack": 15 }]
+        "provenance": [
+          {
+            "attack": "single"
+          }
+        ],
+        "rows": [
+          {
+            "attack": 15
+          }
+        ]
       },
       "stack": 1
     },
@@ -39,46 +50,188 @@
       "levels": {
         "mode": "table",
         "provenance": [
-          { "attack": "table" },
-          { "attack": "table", "cost_to_reach": "table" },
-          { "attack": "table", "cost_to_reach": "table" }
+          {
+            "attack": "table"
+          },
+          {
+            "attack": "table",
+            "cost_to_reach": "table"
+          },
+          {
+            "attack": "table",
+            "cost_to_reach": "table"
+          }
         ],
         "rows": [
-          { "attack": 10 },
+          {
+            "attack": 10
+          },
           {
             "attack": 15,
             "cost_to_reach": {
               "__studio_kind": "cost",
               "count": 100,
-              "item": { "__studio_kind": "item_ref", "id": "game.gold" }
+              "item": {
+                "__studio_kind": "item_ref",
+                "id": "game.gold"
+              }
             }
           },
-          { "attack": 20, "cost_to_reach": { "__studio_kind": "free" } }
+          {
+            "attack": 20,
+            "cost_to_reach": {
+              "__studio_kind": "free"
+            }
+          }
         ]
       },
       "stack": 1
     }
   ],
-  "kinds": ["currency", "weapon"],
+  "kinds": [
+    "currency",
+    "hauler",
+    "rank",
+    "weapon"
+  ],
   "requirement_sources": {},
   "requirements": [],
   "schema": "items.lua.evaluation.v1",
   "sources": {
     "game.gold": {
-      "column": 1, "end_column": 15, "end_line": 3,
-      "file": "game/items/currencies.lua", "kind": "definition", "line": 3,
+      "column": 1,
+      "end_column": 15,
+      "end_line": 3,
+      "file": "game/items/currencies.lua",
+      "kind": "definition",
+      "line": 3,
       "snippet": "items.define({"
     },
     "game.iron_sword": {
-      "column": 1, "end_column": 15, "end_line": 4,
-      "file": "game/items/weapons.lua", "kind": "definition", "line": 4,
+      "column": 1,
+      "end_column": 15,
+      "end_line": 4,
+      "file": "game/items/weapons.lua",
+      "kind": "definition",
+      "line": 4,
       "snippet": "items.define({"
     },
     "game.levelled_sword": {
-      "column": 1, "end_column": 15, "end_line": 12,
-      "file": "game/items/weapons.lua", "kind": "definition", "line": 12,
+      "column": 1,
+      "end_column": 15,
+      "end_line": 12,
+      "file": "game/items/weapons.lua",
+      "kind": "definition",
+      "line": 12,
       "snippet": "items.define({"
     }
   },
+  "track_sources": {
+    "hauler": {
+      "column": 1,
+      "end_column": 16,
+      "end_line": 7,
+      "file": "game/tracks.lua",
+      "kind": "track",
+      "line": 7,
+      "snippet": "tracks.define({"
+    },
+    "rank": {
+      "column": 1,
+      "end_column": 16,
+      "end_line": 18,
+      "file": "game/tracks.lua",
+      "kind": "track",
+      "line": 18,
+      "snippet": "tracks.define({"
+    }
+  },
+  "tracks": [
+    {
+      "authoring_mode": "table",
+      "id": "hauler",
+      "kind": "hauler",
+      "levels": {
+        "mode": "table",
+        "provenance": [
+          {
+            "capacity": "table",
+            "speed_mul": "table"
+          },
+          {
+            "capacity": "table",
+            "cost_to_reach": "table",
+            "speed_mul": "table"
+          },
+          {
+            "capacity": "table",
+            "cost_to_reach": "table",
+            "speed_mul": "table"
+          }
+        ],
+        "rows": [
+          {
+            "capacity": 0,
+            "speed_mul": 0.0
+          },
+          {
+            "capacity": 2,
+            "cost_to_reach": {
+              "__studio_kind": "cost",
+              "count": 10,
+              "item": {
+                "__studio_kind": "item_ref",
+                "id": "game.gold"
+              }
+            },
+            "speed_mul": 0.25
+          },
+          {
+            "capacity": 5,
+            "cost_to_reach": {
+              "__studio_kind": "free"
+            },
+            "speed_mul": 0.75
+          }
+        ]
+      },
+      "mode": "auto"
+    },
+    {
+      "authoring_mode": "generate",
+      "id": "rank",
+      "kind": "rank",
+      "levels": {
+        "mode": "generate",
+        "provenance": [
+          {
+            "payout": "generate"
+          },
+          {
+            "payout": "generate",
+            "xp_to_reach": "generate"
+          },
+          {
+            "payout": "generate",
+            "xp_to_reach": "generate"
+          }
+        ],
+        "rows": [
+          {
+            "payout": 1.0
+          },
+          {
+            "payout": 1.5,
+            "xp_to_reach": 50
+          },
+          {
+            "payout": 2.25,
+            "xp_to_reach": 100
+          }
+        ]
+      },
+      "mode": "threshold"
+    }
+  ],
   "waiver_sources": {}
 }

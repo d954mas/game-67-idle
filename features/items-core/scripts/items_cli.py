@@ -851,7 +851,10 @@ def main(argv: list[str] | None = None) -> int:
                 raise CliFailure("cli.result_limit", f"schema exceeds {DEFAULT_MAX_FIELDS} fields")
             result = {
                 "fields": snapshot["fields"],
-                "kinds": sorted({item["kind"] for item in snapshot["items"]}),
+                "kinds": sorted(
+                    {item["kind"] for item in snapshot["items"]}
+                    | {track["kind"] for track in snapshot["tracks"]}
+                ),
             }
         elif operation == "validate":
             result = _validation(root, evaluation, snapshot, args)

@@ -1,8 +1,22 @@
 {
-  "schema": "items.lua.sandbox.v1",
+  "schema": "studio.lua.sandbox.v1",
   "modules": [
-    { "name": "game.items.weapons", "file": "game/items/weapons.lua" },
-    { "name": "game.items.currencies", "file": "game/items/currencies.lua" }
+    {
+      "name": "game.items.weapons",
+      "file": "game/items/weapons.lua"
+    },
+    {
+      "name": "game.items.currencies",
+      "file": "game/items/currencies.lua"
+    },
+    {
+      "name": "game.tracks",
+      "file": "game/tracks.lua"
+    }
   ],
-  "entries": ["game.items.weapons", "game.items.currencies"]
+  "entries": [
+    "game.items.weapons",
+    "game.items.currencies",
+    "game.tracks"
+  ]
 }

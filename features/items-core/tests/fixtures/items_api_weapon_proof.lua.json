@@ -1,5 +1,5 @@
 {
-  "schema": "items.lua.sandbox.v1",
+  "schema": "studio.lua.sandbox.v1",
   "modules": [
     { "name": "proof.weapon", "file": "items_api_weapon_proof.lua" }
   ],

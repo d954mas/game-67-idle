@@ -38,7 +38,7 @@ class ItemsLuaSandboxTests(unittest.TestCase):
                 manifest_modules.append({"name": name, "file": rel.as_posix()})
             manifest = root / "items.lua.json"
             manifest.write_text(json.dumps({
-                "schema": "items.lua.sandbox.v1",
+                "schema": "studio.lua.sandbox.v1",
                 "modules": manifest_modules,
                 "entries": entries,
             }), encoding="utf-8")
@@ -91,7 +91,8 @@ class ItemsLuaSandboxTests(unittest.TestCase):
             for entry in json.loads((FIXTURE_ROOT / "items.lua.json").read_text(encoding="utf-8"))["modules"]
         }
         first = self.evaluate_fixture()
-        second = self.evaluate(dict(reversed(list(modules.items()))), ["game.items.currencies", "game.items.weapons"])
+        second = self.evaluate(
+            dict(reversed(list(modules.items()))), list(reversed(list(modules))))
 
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertEqual(second.returncode, 0, second.stderr)
@@ -103,6 +104,17 @@ class ItemsLuaSandboxTests(unittest.TestCase):
             "game.gold", "game.iron_sword", "game.levelled_sword",
         ])
         self.assertEqual(payload["items"][2]["levels"]["rows"][2]["attack"], 20)
+        # Tracks ride the same evaluator: sorted by id, levels expanded the same way,
+        # and each mode carrying only the advance it can pay.
+        self.assertEqual([track["id"] for track in payload["tracks"]], ["hauler", "rank"])
+        hauler, rank = payload["tracks"]
+        self.assertEqual(hauler["levels"]["rows"][1]["cost_to_reach"]["count"], 10)
+        self.assertNotIn("cost_to_reach", hauler["levels"]["rows"][0])
+        self.assertEqual(rank["levels"]["rows"][2]["xp_to_reach"], 100)
+        self.assertNotIn("xp_to_reach", rank["levels"]["rows"][0])
+        # A float column is exact where the arithmetic is exact; 1.5 ** 2 is.
+        self.assertEqual([row["payout"] for row in rank["levels"]["rows"]], [1.0, 1.5, 2.25])
+        self.assertEqual(payload["kinds"], ["currency", "hauler", "rank", "weapon"])
 
     def test_template_lua_reproduces_six_catalog_definitions_without_containers(self):
         result = subprocess.run(

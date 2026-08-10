@@ -24,6 +24,42 @@ items.lua.json + design/items/*.lua
   -> save load/reconcile and gameplay
 ```
 
+## Two declaration spaces, one evaluator
+
+The manifest is `studio.lua.sandbox.v1` because the evaluator is not the item
+model. `studio.items` declares items; `studio.tracks` declares progression
+tracks, and both reuse `studio.levels`, `studio.field`, `studio.math`, and the
+cost primitives without change. A track is not a kind of item: it has no
+storage, no acquisition, and its own generator downstream. What they share is
+the way a levelled thing is authored and checked.
+
+A track declares `id` (a bare slug, never catalog-namespaced), `kind` (which
+binds its columns through the same `required_for` registry items use), `mode`,
+and `levels`. Row 1 is the un-upgraded state and carries the track's zero
+contribution; the levels it can reach are the rows above it. Exactly one advance
+is representable per mode: `manual`/`auto` carry `cost_to_reach` (a price in
+items), `threshold` carries `xp_to_reach` (the track's own accumulator). Naming
+the other one fails at authoring time.
+
+The Snapshot grows a `tracks` section beside `items`, part of the content hash.
+The generated C item catalog ignores it, and ignores any field no item kind
+requires — those columns belong to the neighbouring space and have their own
+generator.
+
+## Exact and fractional columns
+
+`field.i64` declares an exact column and must declare `rounding: "exact"`.
+`field.f64` declares a fractional one and must not declare a rounding policy at
+all: the value is computed once on the build machine and baked with round-trip
+precision, so there is no runtime rounding to have a policy about.
+
+`studio.math` follows the column: `add`/`sub`/`mul`/`min`/`max` take two
+operands of the same kind and return that kind, `idiv` is exact-only, `div` and
+`pow` are fractional-only, and `tofloat` is the one place a value stops being
+exact. Mixed operands are an authoring slip, not a promotion. Every fractional
+result is checked finite, so an overflow to infinity or a negative base under a
+fractional exponent fails at build time instead of baking a nonsense literal.
+
 The evaluator, Snapshot, and generated C are build-local. Nothing ships in the
 asset pack and there is no bind step, so the catalog is available from the
 first instruction. There is no JSON catalog, field-schema JSON, runtime blob,
@@ -201,6 +237,13 @@ The feature manifest uses exact SemVer. PATCH releases preserve behavior and
 wire/API contracts, MINOR releases add backward-compatible surface, and MAJOR
 releases may remove or change public commands, APIs, or catalog contracts.
 Consumers pin both the version and repository revision.
+
+5.0.0 renames the authoring manifest schema to `studio.lua.sandbox.v1` and adds
+the `studio.tracks` declaration space, the `tracks` Snapshot section, and
+`field.f64` fractional columns. Every consumer edits the `schema` line of its
+own `items.lua.json`; every Snapshot content hash moves, because `tracks` joined
+the hashed authoring payload. The item C catalog, `items.snapshot.v1`, and the
+runtime ABI are unchanged.
 
 4.2.0 gives `items.payment` the composition it never carried: `cost[]` records
 naming each charged resource, its amount, and what the whole scope held before.

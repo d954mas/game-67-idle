@@ -15,7 +15,7 @@ from typing import Any
 import lupa as lupa_package
 
 
-SCHEMA = "items.lua.sandbox.v1"
+SCHEMA = "studio.lua.sandbox.v1"
 BACKEND_MODULE = "lupa.lua54"
 DEFAULT_TIMEOUT_MS = 2_000
 DEFAULT_MEMORY_BYTES = 16 * 1024 * 1024
@@ -30,6 +30,7 @@ BUILTIN_MODULE_NAMES = frozenset({
     "studio.levels",
     "studio.field",
     "studio.requirements",
+    "studio.tracks",
     "studio.math",
 })
 
@@ -41,6 +42,7 @@ return function(raise_internal)
   local raw_pairs, raw_type = pairs, type
   local raw_string_match, raw_string_sub = string.match, string.sub
   local declarations = {}
+  local track_declarations = {}
   local schema_extensions = {}
   local requirement_declarations, waiver_declarations = {}, {}
   local frozen_targets = {}
@@ -184,13 +186,28 @@ return function(raise_internal)
   end
 
   local field = {}
-  function field.i64(options)
+  local function field_of(type_name, options)
     if raw_type(options) ~= "table" then
-      return fail("schema.field_contract", "field.i64 requires a table")
+      return fail("schema.field_contract", "field." .. type_name .. " requires a table")
     end
     local descriptor = copy(options)
-    descriptor.__studio_field_type = "i64"
+    descriptor.__studio_field_type = type_name
     return tagged("field", descriptor, source_at(3))
+  end
+  function field.i64(options) return field_of("i64", options) end
+  function field.f64(options) return field_of("f64", options) end
+
+  -- Tracks are a neighbouring declaration space, not a kind of item: they reuse the
+  -- level/field/cost machinery and nothing of the item model.
+  local tracks = {}
+  function tracks.define(definition)
+    if evaluation_finalizing then
+      return fail("evaluation.phase", "track definitions are closed before formula evaluation")
+    end
+    local copied = copy(definition)
+    copied.__studio_source = source_at(3)
+    copied.__studio_source.kind = "track"
+    track_declarations[#track_declarations + 1] = copied
   end
 
   local requirements = {}
@@ -329,29 +346,67 @@ return function(raise_internal)
     end
     return value
   end
+  local function checked_float(value)
+    if raw_math.type(value) ~= "float" or value ~= value
+        or value == raw_math.huge or value == -raw_math.huge then
+      return fail("formula.math", "expected a finite float")
+    end
+    return value
+  end
+  local function checked_number(value)
+    if raw_math.type(value) == "integer" then return checked(value) end
+    return checked_float(value)
+  end
+  -- Mixed kinds are an authoring slip, not a promotion: a value is exact or it is
+  -- not, and studio.math.tofloat is where that changes.
+  local function checked_pair(a, b)
+    if raw_math.type(a) ~= raw_math.type(b) then
+      return fail("formula.math", "arithmetic operands must be the same kind")
+    end
+    if raw_math.type(a) == "integer" then return checked(a), checked(b), true end
+    return checked_float(a), checked_float(b), false
+  end
   local studio_math = {}
   function studio_math.add(a, b)
-    a, b = checked(a), checked(b)
-    if (b > 0 and a > MAX_EXACT - b) or (b < 0 and a < -MAX_EXACT - b) then
+    local x, y, exact = checked_pair(a, b)
+    if not exact then return checked_float(x + y) end
+    if (y > 0 and x > MAX_EXACT - y) or (y < 0 and x < -MAX_EXACT - y) then
       return fail("formula.math", "addition overflow")
     end
-    return a + b
+    return x + y
   end
-  function studio_math.sub(a, b) return studio_math.add(a, -checked(b)) end
+  function studio_math.sub(a, b)
+    local x, y, exact = checked_pair(a, b)
+    if not exact then return checked_float(x - y) end
+    return studio_math.add(x, -y)
+  end
   function studio_math.mul(a, b)
-    a, b = checked(a), checked(b)
-    if a ~= 0 and b ~= 0 and raw_math.abs(a) > MAX_EXACT // raw_math.abs(b) then
+    local x, y, exact = checked_pair(a, b)
+    if not exact then return checked_float(x * y) end
+    if x ~= 0 and y ~= 0 and raw_math.abs(x) > MAX_EXACT // raw_math.abs(y) then
       return fail("formula.math", "multiplication overflow")
     end
-    return a * b
+    return x * y
   end
   function studio_math.idiv(a, b)
     a, b = checked(a), checked(b)
     if b == 0 then return fail("formula.math", "division by zero") end
     return a // b
   end
-  function studio_math.min(a, b) a, b = checked(a), checked(b); if a < b then return a else return b end end
-  function studio_math.max(a, b) a, b = checked(a), checked(b); if a > b then return a else return b end end
+  function studio_math.div(a, b)
+    local x, y = checked_float(a), checked_float(b)
+    if y == 0.0 then return fail("formula.math", "division by zero") end
+    return checked_float(x / y)
+  end
+  -- Float-only, and the result is checked: an overflow to infinity or a negative
+  -- base under a fractional exponent fails here instead of baking a nonsense literal.
+  function studio_math.pow(a, b)
+    local x, y = checked_float(a), checked_float(b)
+    return checked_float(x ^ y)
+  end
+  function studio_math.tofloat(value) return checked_float(checked(value) + 0.0) end
+  function studio_math.min(a, b) local x, y = checked_pair(a, b); if x < y then return x else return y end end
+  function studio_math.max(a, b) local x, y = checked_pair(a, b); if x > y then return x else return y end end
 
   freeze = function(value, seen)
     if raw_type(value) ~= "table" then return value end
@@ -666,16 +721,16 @@ return function(raise_internal)
       return { __studio_kind = "costs", entries = normalized }
     end
 
-    for _, definition in ipairs(declarations) do
+    -- One expansion for items and tracks: only the per-row transition differs
+    -- (an item price in resources, a track's own xp threshold).
+    local function expand_levels(definition, transition, forbidden, normalize_transition, after_handle)
       local spec = definition.levels
       definition.authoring_mode = "none"
       if spec ~= nil then
         if raw_type(spec) ~= "table" or spec.__studio_kind ~= "levels" or source_metadata[spec] == nil then
           return fail_at("levels.invalid_handle", "levels must come from studio.levels", spec, definition.__studio_source)
         end
-        if definition.stack ~= 1 then
-          return fail_at("levels.unique_required", "levelled items must use stack=1", spec, definition.__studio_source)
-        end
+        if after_handle ~= nil then after_handle(spec) end
         local rows = {}
         if spec.mode == "generate" or spec.mode == "columns" then
           if raw_math.type(spec.max_level) ~= "integer"
@@ -733,11 +788,18 @@ return function(raise_internal)
             end
             if column.mode == "linear" then
               active_formula_source = column_source
-              local start, step = checked(column.start), checked(column.step)
-              for index = 1, max_level do
-                rows[index][name] = studio_math.add(
-                  start, studio_math.mul(index - 1, step)
+              local start, step = checked_number(column.start), checked_number(column.step)
+              if raw_math.type(start) ~= raw_math.type(step) then
+                return fail_at(
+                  "levels.column_contract", "linear start and step must be the same kind",
+                  column, source_metadata[spec]
                 )
+              end
+              local fractional = raw_math.type(start) == "float"
+              for index = 1, max_level do
+                local steps = index - 1
+                if fractional then steps = studio_math.tofloat(steps) end
+                rows[index][name] = studio_math.add(start, studio_math.mul(steps, step))
               end
               active_formula_source = nil
             elseif column.mode == "values" then
@@ -804,26 +866,89 @@ return function(raise_internal)
           end
           active_formula_source = source_metadata[spec]
           for name, value in raw_pairs(row) do
-            if raw_type(value) == "number" and raw_math.type(value) == "integer" then
-              row[name] = checked(value)
-            end
+            if raw_type(value) == "number" then row[name] = checked_number(value) end
           end
           active_formula_source = nil
-          if index == 1 and row.cost_to_reach ~= nil then
-            return fail_at("levels.level_one_transition", "level 1 cannot have cost_to_reach", spec, definition.__studio_source)
+          if row[forbidden] ~= nil then
+            return fail_at(
+              "levels.wrong_transition", "this declaration advances through " .. transition .. ", not " .. forbidden,
+              spec, definition.__studio_source
+            )
           end
-          if index >= 2 and row.cost_to_reach == nil then
-            return fail_at("levels.transition_required", "level 2+ requires paid or explicit free cost_to_reach", spec, definition.__studio_source)
+          if index == 1 and row[transition] ~= nil then
+            return fail_at("levels.level_one_transition", "level 1 cannot have " .. transition, spec, definition.__studio_source)
           end
-          if row.cost_to_reach ~= nil then
-            row.cost_to_reach = normalize_cost(row.cost_to_reach, definition.__studio_source)
+          if index >= 2 and row[transition] == nil then
+            return fail_at("levels.transition_required", "level 2+ requires an explicit " .. transition, spec, definition.__studio_source)
+          end
+          if row[transition] ~= nil then
+            row[transition] = normalize_transition(row[transition], definition.__studio_source)
           end
         end
         definition.authoring_mode = spec.mode
         definition.levels = { mode = spec.mode, provenance = provenance, rows = rows }
       end
+    end
+
+    for _, definition in ipairs(declarations) do
+      expand_levels(definition, "cost_to_reach", "xp_to_reach", normalize_cost, function(spec)
+        if definition.stack ~= 1 then
+          return fail_at("levels.unique_required", "levelled items must use stack=1", spec, definition.__studio_source)
+        end
+      end)
       if raw_type(definition.acquire) == "table" and definition.acquire.cost ~= nil then
         definition.acquire.cost = normalize_cost(definition.acquire.cost, definition.__studio_source)
+      end
+    end
+
+    local function normalize_xp_threshold(value, fallback)
+      if raw_math.type(value) ~= "integer" or value <= 0 or value > MAX_EXACT then
+        return fail_at("track.xp_threshold", "xp_to_reach must be a positive exact integer", value, fallback)
+      end
+      return value
+    end
+
+    table.sort(track_declarations, function(a, b)
+      local a_id = raw_type(a.id) == "string" and a.id or ""
+      local b_id = raw_type(b.id) == "string" and b.id or ""
+      return a_id < b_id
+    end)
+    local registered_tracks = {}
+    for _, track in ipairs(track_declarations) do
+      local source = track.__studio_source
+      local id = track.id
+      -- A bare slug, not an item id: track ids are progression-internal and never
+      -- namespaced against the catalog.
+      if raw_type(id) ~= "string" or raw_string_match(id, "^[a-z][a-z0-9_]*$") == nil then
+        return raise_internal("track.id", "track id must be a lowercase slug", source.file, source.line)
+      end
+      if registered_tracks[id] then
+        return raise_internal("track.duplicate_id", "duplicate track id: " .. id, source.file, source.line)
+      end
+      registered_tracks[id] = true
+      local mode = track.mode
+      if mode ~= "manual" and mode ~= "auto" and mode ~= "threshold" then
+        return raise_internal("track.mode", "track mode must be manual, auto, or threshold", source.file, source.line)
+      end
+      if raw_type(track.kind) ~= "string" or track.kind == "" then
+        return raise_internal("track.kind", "track requires a non-empty kind", source.file, source.line)
+      end
+      registered_kinds[track.kind] = true
+      if track.levels == nil then
+        return raise_internal("track.levels_required", "track requires levels", source.file, source.line)
+      end
+      resolve_refs(track, nil, source)
+      -- Exactly one advance is representable per mode: an item price, or the
+      -- track's own xp, never both and never the other one's.
+      if mode == "threshold" then
+        expand_levels(track, "xp_to_reach", "cost_to_reach", normalize_xp_threshold, nil)
+      else
+        expand_levels(track, "cost_to_reach", "xp_to_reach", normalize_cost, nil)
+      end
+      -- Row 1 is the un-upgraded state, so a track that can never advance is a
+      -- declaration with nothing in it.
+      if #track.levels.rows < 2 then
+        return raise_internal("track.max_level", "track requires at least one level above the first row", source.file, source.line)
       end
     end
 
@@ -973,6 +1098,7 @@ return function(raise_internal)
       kinds = kinds,
       requirements = requirement_results,
       requirement_sources = requirement_sources,
+      tracks = track_declarations,
       waiver_sources = waiver_sources,
     }
   end
@@ -986,7 +1112,7 @@ return function(raise_internal)
     })
   end
 
-  return items, levels, field, requirements, math_view, finalize, freeze, setup_limits,
+  return items, levels, field, requirements, tracks, math_view, finalize, freeze, setup_limits,
     safe_assert, safe_error, lock_string_surface
 end
 '''
@@ -1115,10 +1241,11 @@ def _normalize_lua_failure(
 
 def _output_rows(
     items: list[dict[str, Any]], fields: list[dict[str, Any]], requirements: list[dict[str, Any]],
+    tracks: list[dict[str, Any]],
 ) -> int:
-    rows = len(items) + len(fields) + len(requirements)
-    for item in items:
-        levels = item.get("levels")
+    rows = len(items) + len(fields) + len(requirements) + len(tracks)
+    for levelled in (*items, *tracks):
+        levels = levelled.get("levels")
         if isinstance(levels, dict) and isinstance(levels.get("rows"), list):
             rows += len(levels["rows"])
     return rows
@@ -1201,7 +1328,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         attribute_filter=lambda _obj, _name, _setting: (_ for _ in ()).throw(AttributeError("access denied")),
     )
     (
-        items, levels, field, requirements, studio_math, finalize, freeze, setup_limits,
+        items, levels, field, requirements, tracks, studio_math, finalize, freeze, setup_limits,
         safe_assert, safe_error, lock_string_surface,
     ) = runtime.execute(
         PRELUDE, name="@studio/sandbox.lua", mode="t",
@@ -1211,6 +1338,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         "studio.levels": freeze(levels),
         "studio.field": freeze(field),
         "studio.requirements": freeze(requirements),
+        "studio.tracks": freeze(tracks),
         "studio.math": studio_math,
     }
     setup_limits(
@@ -1365,6 +1493,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
     kinds = normalized.get("kinds")
     requirement_results = normalized.get("requirements")
     requirement_sources = normalized.get("requirement_sources")
+    tracks = normalized.get("tracks")
     waiver_sources = normalized.get("waiver_sources")
     if not isinstance(normalized_items, list):
         normalized_items = [] if normalized_items == {} else normalized_items
@@ -1380,11 +1509,14 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         for requirement_result in requirement_results:
             if isinstance(requirement_result, dict) and requirement_result.get("dependencies") == {}:
                 requirement_result["dependencies"] = []
+    if not isinstance(tracks, list):
+        tracks = [] if tracks == {} else tracks
     if not isinstance(requirement_sources, dict):
         requirement_sources = {} if requirement_sources == [] else requirement_sources
     if not isinstance(waiver_sources, dict):
         waiver_sources = {} if waiver_sources == [] else waiver_sources
     sources: dict[str, dict[str, Any]] = {}
+    track_sources: dict[str, dict[str, Any]] = {}
 
     def source_span(source: dict[str, Any]) -> dict[str, Any]:
         file, line = source.get("file"), source.get("line")
@@ -1407,6 +1539,12 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
             item_id = item.get("id")
             if isinstance(item_id, str) and isinstance(source, dict):
                 sources[item_id] = source_span(source)
+    for track in tracks if isinstance(tracks, list) else []:
+        if isinstance(track, dict):
+            source = track.pop("__studio_source", None)
+            track_id = track.get("id")
+            if isinstance(track_id, str) and isinstance(source, dict):
+                track_sources[track_id] = source_span(source)
     if isinstance(field_sources, dict):
         enriched_field_sources = {}
         for field_id, source in field_sources.items():
@@ -1425,7 +1563,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
             for requirement_id, source in waiver_sources.items()
         }
     max_rows = int(request.get("maxOutputRows", DEFAULT_MAX_OUTPUT_ROWS))
-    if _output_rows(normalized_items, fields, requirement_results) > max_rows:
+    if _output_rows(normalized_items, fields, requirement_results, tracks) > max_rows:
         raise _failure(
             "output.row_limit", f"output exceeds {max_rows} rows",
             file=fallback, path="$.items",
@@ -1444,8 +1582,10 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         "kinds": kinds,
         "requirements": requirement_results,
         "requirement_sources": requirement_sources,
-        "waiver_sources": waiver_sources,
         "sources": sources,
+        "track_sources": track_sources,
+        "tracks": tracks,
+        "waiver_sources": waiver_sources,
     }
     max_bytes = int(request.get("maxOutputBytes", DEFAULT_MAX_OUTPUT_BYTES))
     encoded_size = len(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))

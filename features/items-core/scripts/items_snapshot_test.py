@@ -31,8 +31,43 @@ def attack_field():
     }
 
 
-def evaluation(items, fields=None):
+def payout_field():
+    return {
+        "id": "game.track.level.payout",
+        "member": "payout",
+        "section": "level_row",
+        "type": "f64",
+        "required_for": ["rank"],
+        "min": 0.0,
+        "max": 1000.0,
+        "unit": "x",
+        "label_key": "track.payout",
+    }
+
+
+def track(mode="auto", rows=None, provenance=None, kind="rank", track_id="rank"):
+    transition = "xp_to_reach" if mode == "threshold" else "cost_to_reach"
+    paid = (
+        50 if mode == "threshold"
+        else {"__studio_kind": "cost", "count": 50,
+              "item": {"__studio_kind": "item_ref", "id": "game.gold"}}
+    )
+    rows = rows if rows is not None else [
+        {"payout": 1.0},
+        {"payout": 1.5, transition: paid},
+    ]
+    provenance = provenance if provenance is not None else [
+        {key: "table" for key in row} for row in rows
+    ]
+    return {
+        "id": track_id, "kind": kind, "mode": mode, "authoring_mode": "table",
+        "levels": {"mode": "table", "provenance": provenance, "rows": rows},
+    }
+
+
+def evaluation(items, fields=None, tracks=None):
     fields = [attack_field()] if fields is None else fields
+    tracks = [] if tracks is None else tracks
     source_lines = {
         item_id: index + 3
         for index, item_id in enumerate(sorted(item["id"] for item in items))
@@ -54,6 +89,19 @@ def evaluation(items, fields=None):
             for index, field in enumerate(fields)
         },
         "items": items,
+        "tracks": tracks,
+        "track_sources": {
+            entry["id"]: {
+                "file": "game/tracks.lua",
+                "line": index + 7,
+                "column": 1,
+                "end_line": index + 7,
+                "end_column": 16,
+                "kind": "track",
+                "snippet": "tracks.define({",
+            }
+            for index, entry in enumerate(tracks)
+        },
         "requirements": [],
         "requirement_sources": {},
         "waiver_sources": {},
@@ -831,6 +879,74 @@ class ItemsSnapshotTests(unittest.TestCase):
         payload = json.loads(result.stderr)
         self.assertEqual(payload["schema"], "items.snapshot.error.v1")
         self.assertEqual(payload["error"]["code"], "cli.arguments")
+
+    # ------------------------------------------------------------------ tracks
+
+    def build_tracks(self, tracks, fields=None):
+        fields = [attack_field(), payout_field()] if fields is None else fields
+        return SNAPSHOT.build_snapshot(evaluation(self.base_items(), fields, tracks))
+
+    def assert_track_failure(self, tracks, code, fields=None):
+        with self.assertRaises(SNAPSHOT.SnapshotFailure) as raised:
+            self.build_tracks(tracks, fields)
+        self.assertEqual(raised.exception.code, code)
+
+    def test_tracks_are_sorted_typed_and_hashed_with_the_rest(self):
+        snapshot = self.build_tracks([track(track_id="rank"), track(track_id="hauler")])
+        self.assertEqual([entry["id"] for entry in snapshot["tracks"]], ["hauler", "rank"])
+        self.assertEqual(sorted(snapshot["track_sources"]), ["hauler", "rank"])
+        # The section is part of the authoring payload, so a track edit moves the hash.
+        moved = copy.deepcopy(snapshot)
+        moved["tracks"][0]["levels"]["rows"][1]["payout"] = 2.0
+        self.assertNotEqual(
+            SNAPSHOT.snapshot_content_hash(moved), snapshot["content_hash"])
+
+    def test_track_mode_decides_which_advance_is_representable(self):
+        threshold = track(mode="threshold")
+        self.assertEqual(
+            self.build_tracks([threshold])["tracks"][0]["levels"]["rows"][1]["xp_to_reach"], 50)
+        # A cost on a threshold track reads as an unknown level field, not a price.
+        wrong = track(mode="threshold", rows=[
+            {"payout": 1.0},
+            {"payout": 1.5, "cost_to_reach": {"__studio_kind": "free"}},
+        ])
+        self.assert_track_failure([wrong], "snapshot.track_transition")
+
+    def test_track_first_row_carries_no_advance_and_cannot_stand_alone(self):
+        self.assert_track_failure([track(rows=[
+            {"payout": 1.0, "cost_to_reach": {"__studio_kind": "free"}},
+            {"payout": 1.5, "cost_to_reach": {"__studio_kind": "free"}},
+        ])], "snapshot.track_transition")
+        self.assert_track_failure([track(rows=[{"payout": 1.0}])], "snapshot.track_levels")
+
+    def test_track_identity_is_a_slug_and_unique(self):
+        self.assert_track_failure([track(track_id="game.rank")], "snapshot.track_id")
+        self.assert_track_failure([track(), track()], "snapshot.duplicate_track")
+
+    def test_track_reference_must_resolve_to_a_declared_item(self):
+        missing = track(rows=[
+            {"payout": 1.0},
+            {"payout": 1.5, "cost_to_reach": {
+                "__studio_kind": "cost", "count": 1,
+                "item": {"__studio_kind": "item_ref", "id": "game.ghost"}}},
+        ])
+        self.assert_track_failure([missing], "snapshot.unknown_reference")
+
+    def test_fractional_columns_carry_floats_and_declare_no_rounding(self):
+        exact = payout_field() | {"rounding": "exact"}
+        self.assert_track_failure([track()], "snapshot.field_rounding",
+                                  fields=[attack_field(), exact])
+        integral = track(rows=[
+            {"payout": 1},
+            {"payout": 2, "cost_to_reach": {"__studio_kind": "free"}},
+        ])
+        # An integer in a fractional column is an authoring slip, not a promotion.
+        self.assert_track_failure([integral], "snapshot.field_type")
+        out_of_range = track(rows=[
+            {"payout": 1.0},
+            {"payout": 4000.0, "cost_to_reach": {"__studio_kind": "free"}},
+        ])
+        self.assert_track_failure([out_of_range], "snapshot.field_range")
 
 
 if __name__ == "__main__":

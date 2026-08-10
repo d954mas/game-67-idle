@@ -1,5 +1,5 @@
 {
-  "schema": "items.lua.sandbox.v1",
+  "schema": "studio.lua.sandbox.v1",
   "modules": [
     { "name": "template.items.currencies", "file": "design/items/currencies.lua" },
     { "name": "template.items.consumables", "file": "design/items/consumables.lua" },

@@ -58,7 +58,7 @@ function writeNeutralWorkspace(root) {
 
 function writeLuaFixture(dir, ids = ["fx.a", "fx.b"]) {
   writeJson(join(dir, "items.lua.json"), {
-    schema: "items.lua.sandbox.v1",
+    schema: "studio.lua.sandbox.v1",
     modules: [{ name: "fixture.items", file: "design/items/catalog.lua" }],
     entries: ["fixture.items"],
   });

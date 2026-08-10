@@ -162,8 +162,10 @@ class ItemsCliTests(unittest.TestCase):
 
     def test_schema_and_validate_are_focused_snapshot_views(self):
         schema = self.payload("schema")
-        self.assertEqual(schema["result"]["kinds"], ["currency", "weapon"])
+        # A track kind and its fractional column sit in the same registries as items.
+        self.assertEqual(schema["result"]["kinds"], ["currency", "hauler", "weapon"])
         self.assertEqual([field["id"] for field in schema["result"]["fields"]], [
+            "game.hauler.level.haul_mul",
             "game.weapon.level.attack",
         ])
 
@@ -518,6 +520,7 @@ class ItemsCliTests(unittest.TestCase):
                     "items.lua.json",
                     "game/items.lua",
                     "game/other.lua",
+                    "game/tracks.lua",
                     "content/items.lock.json",
                     "state/items.schema.json",
                 },
@@ -542,6 +545,7 @@ class ItemsCliTests(unittest.TestCase):
                     "items.lua.json",
                     "game/items.lua",
                     "game/other.lua",
+                    "game/tracks.lua",
                     "content/items.lock.json",
                     "state/items.schema.json",
                 },

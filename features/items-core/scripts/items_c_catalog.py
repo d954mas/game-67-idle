@@ -194,10 +194,26 @@ def normalize(
         item_hashes[digest] = item_id
         digests.append(digest)
 
+    for field in sorted_fields:
+        required_for = field.get("required_for")
+        if not isinstance(required_for, list) or not all(
+            isinstance(capability, str) and capability for capability in required_for
+        ):
+            _fail("catalog.field", "field required_for must contain capability names")
+
+    # A field no item kind requires belongs to a neighbouring declaration space --
+    # progression tracks, whose columns have their own generator and may be
+    # fractional. The item catalog neither projects it nor constrains its type.
+    item_kinds = {item.get("kind") for item in sorted_items}
+    catalog_fields = [
+        field for field in sorted_fields
+        if any(capability in item_kinds for capability in field["required_for"])
+    ]
+
     field_records: list[dict[str, Any]] = []
     field_by_member: dict[str, int] = {}
     field_macros: set[str] = set()
-    for index, field in enumerate(sorted_fields):
+    for index, field in enumerate(catalog_fields):
         member = field.get("member")
         unit = field.get("unit")
         if (not is_c_member_name(member) or not isinstance(unit, str) or not unit
@@ -221,13 +237,10 @@ def normalize(
 
     capabilities: dict[str, list[int]] = {}
     capability_names: set[str] = set()
-    for index, field in enumerate(sorted_fields):
-        required_for = field.get("required_for")
-        if not isinstance(required_for, list) or not all(
-            isinstance(capability, str) and capability for capability in required_for
-        ):
-            _fail("catalog.field", "field required_for must contain capability names")
-        for capability in required_for:
+    for index, field in enumerate(catalog_fields):
+        for capability in field["required_for"]:
+            if capability not in item_kinds:
+                continue
             capability_name = _c_name(capability).lower()
             if not capability_name:
                 _fail("catalog.field", "capability name cannot be empty")

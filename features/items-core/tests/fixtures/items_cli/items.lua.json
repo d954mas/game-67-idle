@@ -1,8 +1,22 @@
 {
-  "schema": "items.lua.sandbox.v1",
+  "schema": "studio.lua.sandbox.v1",
   "modules": [
-    { "name": "game.items", "file": "game/items.lua" },
-    { "name": "game.other", "file": "game/other.lua" }
+    {
+      "name": "game.items",
+      "file": "game/items.lua"
+    },
+    {
+      "name": "game.other",
+      "file": "game/other.lua"
+    },
+    {
+      "name": "game.tracks",
+      "file": "game/tracks.lua"
+    }
   ],
-  "entries": ["game.items", "game.other"]
+  "entries": [
+    "game.items",
+    "game.other",
+    "game.tracks"
+  ]
 }
