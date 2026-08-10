@@ -39,7 +39,9 @@ void settings_set_language(int language) {
     if (language < 0 || language >= SETTINGS_STATE_LANGUAGE_COUNT) {
         return;
     }
-    settings_state.language = (SettingsStateLanguage)language;
+    /* The generated field is int; the enum's underlying type is unsigned under
+       some toolchains, so routing through it would change signedness. */
+    settings_state.language = language;
     settings_apply_language();
     game_save_mark_dirty();
 }
