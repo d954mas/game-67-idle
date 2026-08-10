@@ -67,7 +67,8 @@ The ownership API is:
 
 - persistent or ephemeral `items_try_container_create`, destroy-empty, and resize;
 - stack add/remove/count/afford operations against an explicit container ref;
-- atomic composite payment and paid/explicit-free catalog acquisition;
+- atomic composite payment, from a baked catalog cost or a caller-built list,
+  and paid/explicit-free catalog acquisition;
 - atomic paid/explicit-free next-level upgrade for unique instances;
 - unique entry create/destroy and whole/split/merge move operations;
 - persistent ID lookup plus generation-checked runtime refs.
@@ -76,6 +77,17 @@ The ownership API is:
 per-container cap. Currency caps are also enforced by ownership. Mutations
 require a game-owned `verb:subject` reason and emit typed `items.txn`, `items.payment`, or
 `items.move` events.
+
+Both payment entries plan the whole cost against a scope of up to
+`ITEMS_PAYMENT_SCOPE_MAX` containers and then commit once, so a shortfall on any
+requirement leaves every other one untouched. `items_try_pay_cost` takes a baked
+catalog cost; `items_try_pay_stacks` takes up to
+`ITEMS_PAYMENT_MAX_REQUIREMENTS` `def_id`/count pairs authored outside the
+catalog. A caller-built list carries stack resources only, at most one entry per
+item, and non-negative counts; a count of zero is a free position that is
+dropped, and a list left with nothing to pay succeeds having taken nothing while
+still recording the payment with zero requirements.
+Everything the catalog path asserts, the list path answers with a result code.
 
 `items.payment` is the single success record for a composite payment. Stable
 `cost_fingerprint`, `scope_fingerprint`, and `source_fingerprint` fields identify
@@ -174,6 +186,9 @@ The feature manifest uses exact SemVer. PATCH releases preserve behavior and
 wire/API contracts, MINOR releases add backward-compatible surface, and MAJOR
 releases may remove or change public commands, APIs, or catalog contracts.
 Consumers pin both the version and repository revision.
+
+3.1.0 adds `items_try_pay_stacks`, an atomic multi-item payment whose
+requirements are authored outside the baked catalog.
 
 3.0.0 makes the generated C catalog the production runtime data path. The typed
 header a consumer includes is `items_catalog.gen.h`, catalog identity and

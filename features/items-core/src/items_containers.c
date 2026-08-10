@@ -1169,8 +1169,41 @@ static bool transaction_commit_allowed(void) {
     return true;
 }
 
+typedef struct items_requirement_list_t {
+    uint32_t count;
+    item_cost_entry_t entries[ITEMS_PAYMENT_MAX_REQUIREMENTS];
+} items_requirement_list_t;
+
+/* Requirements reach the planner through this indirection so a baked catalog
+   cost and a caller-built list plan and commit through the same code. Each
+   adapter owns the preconditions of its own data. */
+typedef struct items_requirement_source_t {
+    const void *ctx;
+    uint32_t (*count)(const void *ctx);
+    item_cost_entry_t (*at)(const void *ctx, uint32_t index);
+} items_requirement_source_t;
+
+static uint32_t cost_ref_requirement_count(const void *ctx) {
+    uint32_t count = items_cost_count(*(const item_cost_ref_t *)ctx);
+    NT_ASSERT(count > 0);
+    return count;
+}
+
+static item_cost_entry_t cost_ref_requirement_at(const void *ctx, uint32_t index) {
+    return items_cost_at(*(const item_cost_ref_t *)ctx, index);
+}
+
+static uint32_t entry_list_requirement_count(const void *ctx) {
+    return ((const items_requirement_list_t *)ctx)->count;
+}
+
+static item_cost_entry_t entry_list_requirement_at(const void *ctx, uint32_t index) {
+    return ((const items_requirement_list_t *)ctx)->entries[index];
+}
+
 static items_result_t build_payment_plan(
-    item_cost_ref_t cost, items_payment_scope_t scope, items_payment_plan_t *out_plan) {
+    items_requirement_source_t requirements, items_payment_scope_t scope,
+    items_payment_plan_t *out_plan) {
     NT_ASSERT(out_plan != NULL);
     ensure_ready();
     memset(out_plan, 0, sizeof(*out_plan));
@@ -1195,12 +1228,11 @@ static items_result_t build_payment_plan(
         payment_fingerprint_u64(&out_plan->scope_fingerprint, container->container_id);
     }
 
-    out_plan->requirement_count = items_cost_count(cost);
+    out_plan->requirement_count = requirements.count(requirements.ctx);
     out_plan->cost_fingerprint = payment_fingerprint_begin("items.payment.cost.v1");
-    NT_ASSERT(out_plan->requirement_count > 0);
     payment_fingerprint_u64(&out_plan->cost_fingerprint, out_plan->requirement_count);
     for (uint32_t requirement = 0; requirement < out_plan->requirement_count; requirement++) {
-        item_cost_entry_t required = items_cost_at(cost, requirement);
+        item_cost_entry_t required = requirements.at(requirements.ctx, requirement);
         NT_ASSERT(required.count > 0 && "runtime cost contains a non-positive requirement");
         NT_ASSERT(out_plan->requested_units <= INT64_MAX - required.count &&
                   "runtime payment cost total overflows i64");
@@ -1209,7 +1241,7 @@ static items_result_t build_payment_plan(
         NT_ASSERT(item_is_stackable(items_core(required_ref)) &&
                   "runtime payment cost must contain only stack resources");
         for (uint32_t prior = 0; prior < requirement; prior++) {
-            NT_ASSERT(items_cost_at(cost, prior).item.value != required.item.value &&
+            NT_ASSERT(requirements.at(requirements.ctx, prior).item.value != required.item.value &&
                       "runtime cost contains duplicate requirements");
         }
         payment_fingerprint_u64(&out_plan->cost_fingerprint, required.item.value);
@@ -1217,7 +1249,7 @@ static items_result_t build_payment_plan(
     }
 
     for (uint32_t requirement = 0; requirement < out_plan->requirement_count; requirement++) {
-        item_cost_entry_t required = items_cost_at(cost, requirement);
+        item_cost_entry_t required = requirements.at(requirements.ctx, requirement);
         int64_t remaining = required.count;
         for (uint32_t source = 0; source < scope.count && remaining > 0; source++) {
             ItemsItemContainer *container = require_container(scope.containers[source]);
@@ -1252,6 +1284,13 @@ static items_result_t build_payment_plan(
     return ITEMS_RESULT_OK;
 }
 
+static items_result_t build_cost_payment_plan(
+    item_cost_ref_t cost, items_payment_scope_t scope, items_payment_plan_t *out_plan) {
+    return build_payment_plan(
+        (items_requirement_source_t){&cost, cost_ref_requirement_count, cost_ref_requirement_at},
+        scope, out_plan);
+}
+
 static void apply_payment_plan(const items_payment_plan_t *plan) {
     for (uint32_t i = 0; i < plan->row_count; i++) {
         ItemsItemEntry *entry = &items_state.containers_entries[plan->rows[i].entry_index];
@@ -1265,23 +1304,74 @@ static void apply_payment_plan(const items_payment_plan_t *plan) {
     }
 }
 
-items_result_t items_try_pay_cost(
-    item_cost_ref_t cost, items_payment_scope_t scope, const char *reason) {
-    if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
-    items_payment_plan_t plan;
-    items_result_t result = build_payment_plan(cost, scope, &plan);
-    if (result != ITEMS_RESULT_OK) { return result; }
+static items_result_t commit_payment_plan(
+    const items_payment_plan_t *plan, const char *reason) {
     if (!transaction_commit_allowed()) { return ITEMS_RESULT_COMMIT_FAILED; }
     if (!audit_payment_available(reason)) { return ITEMS_RESULT_AUDIT_UNAVAILABLE; }
-    apply_payment_plan(&plan);
+    apply_payment_plan(plan);
     bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
     game_save_mark_dirty();
     items_emit_payment(
-        (nt_hash64_t){plan.cost_fingerprint}, (nt_hash64_t){plan.scope_fingerprint},
-        (nt_hash64_t){plan.source_fingerprint}, plan.requirement_count,
-        plan.scope_count, plan.row_count, plan.requested_units, plan.requested_units, reason);
+        (nt_hash64_t){plan->cost_fingerprint}, (nt_hash64_t){plan->scope_fingerprint},
+        (nt_hash64_t){plan->source_fingerprint}, plan->requirement_count,
+        plan->scope_count, plan->row_count, plan->requested_units, plan->requested_units, reason);
     return ITEMS_RESULT_OK;
+}
+
+items_result_t items_try_pay_cost(
+    item_cost_ref_t cost, items_payment_scope_t scope, const char *reason) {
+    if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
+    items_payment_plan_t plan;
+    items_result_t result = build_cost_payment_plan(cost, scope, &plan);
+    if (result != ITEMS_RESULT_OK) { return result; }
+    return commit_payment_plan(&plan, reason);
+}
+
+/* The planner asserts its preconditions because a baked catalog cost cannot
+   violate them; an author-built list can, so every one of them is answered here
+   with a result code before the plan is built. */
+static items_result_t normalize_stack_requirements(
+    const char *const *def_ids, const int64_t *counts, uint32_t count,
+    items_requirement_list_t *out_list) {
+    if (count > ITEMS_PAYMENT_MAX_REQUIREMENTS) { return ITEMS_RESULT_INVALID_ARGUMENT; }
+    if (count > 0 && (def_ids == NULL || counts == NULL)) { return ITEMS_RESULT_INVALID_ARGUMENT; }
+    item_id_t resolved[ITEMS_PAYMENT_MAX_REQUIREMENTS] = {0};
+    for (uint32_t i = 0; i < count; i++) {
+        item_core_t core;
+        if (!lookup_item(def_ids[i], NULL, &core)) { return ITEMS_RESULT_NOT_FOUND; }
+        if (!item_is_stackable(core)) { return ITEMS_RESULT_WRONG_STORAGE; }
+        if (counts[i] < 0) { return ITEMS_RESULT_INVALID_ARGUMENT; }
+        /* Compared by resolved id, so two spellings of one item still collide. */
+        for (uint32_t prior = 0; prior < i; prior++) {
+            if (resolved[prior].value == core.id.value) { return ITEMS_RESULT_INVALID_ARGUMENT; }
+        }
+        resolved[i] = core.id;
+    }
+    memset(out_list, 0, sizeof(*out_list));
+    int64_t total = 0;
+    for (uint32_t i = 0; i < count; i++) {
+        if (counts[i] == 0) { continue; }
+        if (total > INT64_MAX - counts[i]) { return ITEMS_RESULT_INVALID_ARGUMENT; }
+        total += counts[i];
+        out_list->entries[out_list->count++] = (item_cost_entry_t){resolved[i], counts[i]};
+    }
+    return ITEMS_RESULT_OK;
+}
+
+items_result_t items_try_pay_stacks(
+    items_payment_scope_t scope, const char *const *def_ids, const int64_t *counts,
+    uint32_t count, const char *reason) {
+    if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
+    items_requirement_list_t list;
+    items_result_t normalized = normalize_stack_requirements(def_ids, counts, count, &list);
+    if (normalized != ITEMS_RESULT_OK) { return normalized; }
+    items_payment_plan_t plan;
+    items_result_t result = build_payment_plan(
+        (items_requirement_source_t){&list, entry_list_requirement_count, entry_list_requirement_at},
+        scope, &plan);
+    if (result != ITEMS_RESULT_OK) { return result; }
+    return commit_payment_plan(&plan, reason);
 }
 
 static int64_t payment_planned_count(
@@ -1312,7 +1402,7 @@ items_result_t items_try_acquire(
     items_payment_plan_t payment_plan;
     items_payment_plan_t *plan = NULL;
     if (transition.kind == ITEM_TRANSITION_COST) {
-        items_result_t result = build_payment_plan(transition.cost, payment, &payment_plan);
+        items_result_t result = build_cost_payment_plan(transition.cost, payment, &payment_plan);
         if (result != ITEMS_RESULT_OK) { return result; }
         plan = &payment_plan;
     } else {
@@ -1435,7 +1525,7 @@ items_result_t items_try_upgrade_instance(
     items_payment_plan_t payment_plan;
     items_payment_plan_t *plan = NULL;
     if (transition.kind == ITEM_TRANSITION_COST) {
-        items_result_t result = build_payment_plan(transition.cost, payment, &payment_plan);
+        items_result_t result = build_cost_payment_plan(transition.cost, payment, &payment_plan);
         if (result != ITEMS_RESULT_OK) { return result; }
         plan = &payment_plan;
     } else {

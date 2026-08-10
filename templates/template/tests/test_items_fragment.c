@@ -329,6 +329,191 @@ void test_atomic_payment_plans_scope_and_slots_before_one_commit(void) {
     TEST_ASSERT_EQUAL_STRING("shop_buy:sword", items_ev_payment_reason(payment));
 }
 
+typedef struct sword_payment_fixture_t {
+    items_container_ref_t first;
+    items_container_ref_t second;
+} sword_payment_fixture_t;
+
+/* Rebuilds the exact holdings the baked-cost test above pays from, so a
+   string-built payment of the same requirements must reproduce its audit
+   fingerprints byte for byte. */
+static sword_payment_fixture_t create_sword_payment_fixture(void) {
+    sword_payment_fixture_t fixture = {ITEMS_CONTAINER_REF_NONE, ITEMS_CONTAINER_REF_NONE};
+    items_container_desc_t desc = {
+        .capacity = 4,
+        .policy = ITEMS_CONTAINER_POLICY_GENERIC,
+        .lifetime = ITEMS_LIFETIME_PERSISTENT,
+    };
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_container_create(desc, &fixture.first));
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_container_create(desc, &fixture.second));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(fixture.first, "tmpl.gold", 6, 3, "loot:test", NULL, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(fixture.first, "tmpl.gold", 6, 1, "loot:test", NULL, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(fixture.second, "tmpl.gold", 5, 0, "loot:test", NULL, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(fixture.second, "tmpl.wood", 2, 2, "loot:test", NULL, NULL));
+    return fixture;
+}
+
+void test_pay_stacks_audits_exactly_like_the_baked_cost(void) {
+    sword_payment_fixture_t fixture = create_sword_payment_fixture();
+    items_payment_scope_t scope = {.count = 2, .containers = {fixture.first, fixture.second}};
+    const char *const requirements[] = {"tmpl.gold", "tmpl.wood"};
+    const int64_t counts[] = {10, 2};
+    game_event_frame_reset();
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_pay_stacks(scope, requirements, counts, 2, "shop_buy:sword"));
+
+    TEST_ASSERT_EQUAL_INT64(2, items_stack_count(fixture.first, "tmpl.gold"));
+    TEST_ASSERT_EQUAL_INT64(5, items_stack_count(fixture.second, "tmpl.gold"));
+    TEST_ASSERT_EQUAL_INT64(0, items_stack_count(fixture.second, "tmpl.wood"));
+    int event_count = 0;
+    const game_event_t *events = game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(1, event_count);
+    TEST_ASSERT_EQUAL_UINT64(items_ev_payment_type().value, events[0].type.value);
+    const ItemsEvPayment *payment = (const ItemsEvPayment *)events[0].payload;
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0x5be1d477269e01d7), payment->cost_fingerprint.value);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0x767ccc7cb862dee1), payment->scope_fingerprint.value);
+    TEST_ASSERT_EQUAL_HEX64(UINT64_C(0xb1c03818518b2d77), payment->source_fingerprint.value);
+    TEST_ASSERT_EQUAL_INT64(2, payment->requirement_count);
+    TEST_ASSERT_EQUAL_INT64(2, payment->scope_count);
+    TEST_ASSERT_EQUAL_INT64(3, payment->source_entry_count);
+    TEST_ASSERT_EQUAL_INT64(12, payment->requested_units);
+    TEST_ASSERT_EQUAL_INT64(12, payment->applied_units);
+    TEST_ASSERT_EQUAL_STRING("shop_buy:sword", items_ev_payment_reason(payment));
+}
+
+void test_pay_stacks_takes_nothing_when_a_later_requirement_is_short(void) {
+    sword_payment_fixture_t fixture = create_sword_payment_fixture();
+    items_payment_scope_t scope = {.count = 2, .containers = {fixture.first, fixture.second}};
+    const char *const requirements[] = {"tmpl.gold", "tmpl.wood"};
+    const int64_t counts[] = {10, 3};
+    ItemsState before = items_state;
+    game_event_frame_reset();
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INSUFFICIENT,
+        items_try_pay_stacks(scope, requirements, counts, 2, "shop_buy:sword"));
+
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    TEST_ASSERT_EQUAL_INT64(12, items_stack_count(fixture.first, "tmpl.gold"));
+    int event_count = 0;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+}
+
+void test_pay_stacks_rejects_malformed_requirements_in_release(void) {
+    sword_payment_fixture_t fixture = create_sword_payment_fixture();
+    items_payment_scope_t scope = {.count = 2, .containers = {fixture.first, fixture.second}};
+    const char *const gold[] = {"tmpl.gold"};
+    const int64_t one[] = {1};
+    ItemsState before = items_state;
+    game_event_frame_reset();
+
+    const char *oversized[ITEMS_PAYMENT_MAX_REQUIREMENTS + 1U];
+    int64_t oversized_counts[ITEMS_PAYMENT_MAX_REQUIREMENTS + 1U];
+    for (uint32_t i = 0; i < ITEMS_PAYMENT_MAX_REQUIREMENTS + 1U; i++) {
+        oversized[i] = "tmpl.gold";
+        oversized_counts[i] = 1;
+    }
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_try_pay_stacks(
+            scope, oversized, oversized_counts, ITEMS_PAYMENT_MAX_REQUIREMENTS + 1U,
+            "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_try_pay_stacks(scope, NULL, one, 1, "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_try_pay_stacks(scope, gold, NULL, 1, "shop_buy:sword"));
+
+    const char *const unknown[] = {"tmpl.absent"};
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_NOT_FOUND,
+        items_try_pay_stacks(scope, unknown, one, 1, "shop_buy:sword"));
+
+    const char *const unique[] = {"tmpl.sword"};
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_WRONG_STORAGE,
+        items_try_pay_stacks(scope, unique, one, 1, "shop_buy:sword"));
+
+    const int64_t negative[] = {-1};
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_try_pay_stacks(scope, gold, negative, 1, "shop_buy:sword"));
+
+    const char *const duplicated[] = {"tmpl.gold", "tmpl.gold"};
+    const int64_t pair[] = {1, 1};
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_try_pay_stacks(scope, duplicated, pair, 2, "shop_buy:sword"));
+
+    /* A dropped free position still counts as a repeat of its item. */
+    const int64_t free_then_paid[] = {0, 1};
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_try_pay_stacks(scope, duplicated, free_then_paid, 2, "shop_buy:sword"));
+
+    const char *const two[] = {"tmpl.gold", "tmpl.wood"};
+    const int64_t overflowing[] = {INT64_MAX, 1};
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_try_pay_stacks(scope, two, overflowing, 2, "shop_buy:sword"));
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_ARGUMENT,
+        items_try_pay_stacks((items_payment_scope_t){0}, gold, one, 1, "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_INVALID_REASON,
+        items_try_pay_stacks(scope, gold, one, 1, "steal:sword"));
+
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    int event_count = 0;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+}
+
+void test_pay_stacks_owing_nothing_succeeds_without_taking_anything(void) {
+    sword_payment_fixture_t fixture = create_sword_payment_fixture();
+    items_payment_scope_t scope = {.count = 2, .containers = {fixture.first, fixture.second}};
+    ItemsState before = items_state;
+    game_event_frame_reset();
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK, items_try_pay_stacks(scope, NULL, NULL, 0, "level_cost:free"));
+    const char *const requirements[] = {"tmpl.gold", "tmpl.wood"};
+    const int64_t free_positions[] = {0, 0};
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_pay_stacks(scope, requirements, free_positions, 2, "level_cost:free"));
+
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof(before));
+    int event_count = 0;
+    const game_event_t *events = game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(2, event_count);
+    const ItemsEvPayment *payment = (const ItemsEvPayment *)events[1].payload;
+    TEST_ASSERT_EQUAL_INT64(0, payment->requirement_count);
+    TEST_ASSERT_EQUAL_INT64(2, payment->scope_count);
+    TEST_ASSERT_EQUAL_INT64(0, payment->source_entry_count);
+    TEST_ASSERT_EQUAL_INT64(0, payment->requested_units);
+
+    const int64_t partly_free[] = {0, 2};
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_pay_stacks(scope, requirements, partly_free, 2, "level_cost:free"));
+    TEST_ASSERT_EQUAL_INT64(12, items_stack_count(fixture.first, "tmpl.gold"));
+    TEST_ASSERT_EQUAL_INT64(0, items_stack_count(fixture.second, "tmpl.wood"));
+}
+
 void test_paid_acquire_plans_destination_after_projected_payment(void) {
     items_container_ref_t destination = ITEMS_CONTAINER_REF_NONE;
     items_container_desc_t desc = {
@@ -1446,6 +1631,10 @@ int main(void) {
     RUN_TEST(test_rebuild_rejects_duplicates_and_counter_regression);
     RUN_TEST(test_staged_runtime_validation_rejects_graph_without_publishing_indices);
     RUN_TEST(test_atomic_payment_plans_scope_and_slots_before_one_commit);
+    RUN_TEST(test_pay_stacks_audits_exactly_like_the_baked_cost);
+    RUN_TEST(test_pay_stacks_takes_nothing_when_a_later_requirement_is_short);
+    RUN_TEST(test_pay_stacks_rejects_malformed_requirements_in_release);
+    RUN_TEST(test_pay_stacks_owing_nothing_succeeds_without_taking_anything);
     RUN_TEST(test_paid_acquire_plans_destination_after_projected_payment);
     RUN_TEST(test_acquire_refusals_are_atomic_and_explicit_free_is_distinct);
     RUN_TEST(test_upgrade_instance_is_atomic_next_level_and_distinguishes_free);

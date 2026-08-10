@@ -60,6 +60,7 @@ int64_t items_currency_cap(item_def_ref_t ref);
 #define ITEMS_ID_RESERVED UINT32_MAX
 #define ITEMS_SLOT_AUTO UINT32_MAX
 #define ITEMS_PAYMENT_SCOPE_MAX UINT32_C(8)
+#define ITEMS_PAYMENT_MAX_REQUIREMENTS UINT32_C(16)
 
 typedef enum items_container_policy_t {
     ITEMS_CONTAINER_POLICY_GENERIC = 0,
@@ -205,6 +206,13 @@ int64_t items_stack_count(items_container_ref_t container, const char *def_id);
 bool items_can_afford(items_container_ref_t container, const char *def_id, int64_t count);
 items_result_t items_try_pay_cost(
     item_cost_ref_t cost, items_payment_scope_t scope, const char *reason);
+/* Pays a caller-built cost in one commit: either every requirement is taken or
+   nothing is. Stack resources only, at most one requirement per item, and a
+   count of zero is a free position that is dropped -- a list left with nothing
+   to pay owes nothing and succeeds. */
+items_result_t items_try_pay_stacks(
+    items_payment_scope_t scope, const char *const *def_ids,
+    const int64_t *counts, uint32_t count, const char *reason);
 items_result_t items_try_acquire(
     items_container_ref_t destination, item_def_ref_t item,
     items_payment_scope_t payment, const char *reason,
