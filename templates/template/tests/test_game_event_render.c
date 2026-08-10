@@ -181,6 +181,75 @@ static void test_bounds_robustness(void) {
     cJSON_Delete(root);
 }
 
+/* 7. repeated section: one JSON array of objects, in emit order, alongside the scalars. */
+static void test_repeated_render(void) {
+    const MiniEvPaidCostIn cost[2] = {
+        {"tmpl.coin", 50, 120},
+        {"tmpl.wood", 3, 8},
+    };
+    (void)mini_emit_paid(2, "buy", cost, 2);
+
+    int n = 0;
+    const game_event_t *log = game_event_log(&n);
+    TEST_ASSERT_EQUAL_INT(1, n);
+
+    char buf[512];
+    const int len = game_event_render(&log[0], &mini_ev_paid_desc, buf, (int)sizeof buf);
+    TEST_ASSERT_TRUE(len > 0 && len < (int)sizeof buf);
+
+    cJSON *root = cJSON_Parse(buf);
+    TEST_ASSERT_NOT_NULL(root);
+    TEST_ASSERT_EQUAL_STRING("buy", cJSON_GetObjectItem(root, "reason")->valuestring);
+
+    const cJSON *arr = cJSON_GetObjectItem(root, "cost");
+    TEST_ASSERT_TRUE(cJSON_IsArray(arr));
+    TEST_ASSERT_EQUAL_INT(2, cJSON_GetArraySize(arr));
+
+    const cJSON *first = cJSON_GetArrayItem(arr, 0);
+    TEST_ASSERT_EQUAL_STRING("tmpl.coin", cJSON_GetObjectItem(first, "def_id")->valuestring);
+    TEST_ASSERT_EQUAL_STRING("50", cJSON_GetObjectItem(first, "amount")->valuestring); /* i64 renders as string */
+    TEST_ASSERT_EQUAL_STRING("120", cJSON_GetObjectItem(first, "before")->valuestring);
+
+    const cJSON *second = cJSON_GetArrayItem(arr, 1);
+    TEST_ASSERT_EQUAL_STRING("tmpl.wood", cJSON_GetObjectItem(second, "def_id")->valuestring);
+    TEST_ASSERT_EQUAL_STRING("3", cJSON_GetObjectItem(second, "amount")->valuestring);
+    cJSON_Delete(root);
+}
+
+/* 8. an empty list renders as an empty array, not a missing key. */
+static void test_repeated_render_empty(void) {
+    (void)mini_emit_paid(0, "free", NULL, 0);
+
+    int n = 0;
+    const game_event_t *log = game_event_log(&n);
+    TEST_ASSERT_EQUAL_INT(1, n);
+
+    char buf[512];
+    (void)game_event_render(&log[0], &mini_ev_paid_desc, buf, (int)sizeof buf);
+    cJSON *root = cJSON_Parse(buf);
+    TEST_ASSERT_NOT_NULL(root);
+
+    const cJSON *arr = cJSON_GetObjectItem(root, "cost");
+    TEST_ASSERT_TRUE(cJSON_IsArray(arr));
+    TEST_ASSERT_EQUAL_INT(0, cJSON_GetArraySize(arr));
+    cJSON_Delete(root);
+}
+
+/* 9. a repeated descriptor over a SMALLER foreign payload: the count read from those bytes
+   is arbitrary, so the walk must clamp to whole records that fit and never over-read. */
+static void test_repeated_bounds_robustness(void) {
+    (void)mini_emit_ticked(9);
+    int n = 0;
+    const game_event_t *log = game_event_log(&n);
+    TEST_ASSERT_EQUAL_INT(1, n);
+
+    char buf[512];
+    (void)game_event_render(&log[0], &mini_ev_paid_desc, buf, (int)sizeof buf);
+    cJSON *root = cJSON_Parse(buf);
+    TEST_ASSERT_NOT_NULL(root);
+    cJSON_Delete(root);
+}
+
 int main(void) {
     nt_hash_init(&(nt_hash_desc_t){0}); /* once: type-hash accessors + labels need hash init */
 
@@ -190,6 +259,9 @@ int main(void) {
     RUN_TEST(test_unknown_render);
     RUN_TEST(test_truncation);
     RUN_TEST(test_bounds_robustness);
+    RUN_TEST(test_repeated_render);
+    RUN_TEST(test_repeated_render_empty);
+    RUN_TEST(test_repeated_bounds_robustness);
     const int result = UNITY_END();
 
     nt_hash_shutdown();

@@ -52,6 +52,8 @@ const game_event_desc_t game_ev_shape_changed_desc = {
     (uint32_t)sizeof(GameEvShapeChanged),
     game_ev_shape_changed_fields,
     (int)(sizeof(game_ev_shape_changed_fields) / sizeof(game_ev_shape_changed_fields[0])),
+    NULL,
+    0,
 };
 
 /* ---- fragment event table ---- */

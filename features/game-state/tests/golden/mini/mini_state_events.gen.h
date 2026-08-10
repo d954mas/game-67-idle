@@ -48,6 +48,45 @@ const void *mini_emit_ticked(int32_t count);
 
 extern const game_event_desc_t mini_ev_ticked_desc;
 
+/* ---- mini.paid ---- */
+typedef struct MiniEvPaidCost {
+    uint32_t def_id; /* byte offset -> inline NUL string (read via accessor) */
+    int64_t amount;
+    int64_t before;
+} MiniEvPaidCost;
+
+typedef struct MiniEvPaidCostIn {
+    const char *def_id;
+    int64_t amount;
+    int64_t before;
+} MiniEvPaidCostIn;
+
+typedef struct MiniEvPaid {
+    int32_t count;
+    uint32_t reason; /* byte offset -> inline NUL string (read via accessor) */
+    uint32_t cost; /* byte offset -> inline record array (read via accessor) */
+    uint32_t cost_count; /* number of inline records */
+} MiniEvPaid;
+
+nt_hash64_t mini_ev_paid_type(void); /* nt_hash64_str("mini.paid"), cached */
+
+const void *mini_emit_paid(int32_t count, const char *reason, const MiniEvPaidCostIn *cost, uint32_t cost_count);
+
+static inline const char *mini_ev_paid_reason(const MiniEvPaid *e) {
+    return (const char *)e + e->reason;
+}
+static inline uint32_t mini_ev_paid_cost_count(const MiniEvPaid *e) {
+    return e->cost_count;
+}
+static inline const MiniEvPaidCost *mini_ev_paid_cost_at(const MiniEvPaid *e, uint32_t i) {
+    return (const MiniEvPaidCost *)((const uint8_t *)e + e->cost) + i;
+}
+static inline const char *mini_ev_paid_cost_def_id(const MiniEvPaid *e, uint32_t i) {
+    return (const char *)e + mini_ev_paid_cost_at(e, i)->def_id;
+}
+
+extern const game_event_desc_t mini_ev_paid_desc;
+
 /* ---- fragment event table + label registration ---- */
 extern const game_event_desc_t *const mini_ev_descs[];
 extern const int mini_ev_desc_count;

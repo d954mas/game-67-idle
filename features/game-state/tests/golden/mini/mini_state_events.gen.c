@@ -13,6 +13,10 @@ _Static_assert(_Alignof(MiniEvCellSpawned) <= _Alignof(max_align_t),
                "MiniEvCellSpawned over-aligned for game_event_emit");
 _Static_assert(_Alignof(MiniEvTicked) <= _Alignof(max_align_t),
                "MiniEvTicked over-aligned for game_event_emit");
+_Static_assert(_Alignof(MiniEvPaid) <= _Alignof(max_align_t),
+               "MiniEvPaid over-aligned for game_event_emit");
+_Static_assert(_Alignof(MiniEvPaidCost) <= _Alignof(max_align_t),
+               "MiniEvPaidCost over-aligned for game_event_emit");
 
 /* ---- mini.cell_spawned ---- */
 nt_hash64_t mini_ev_cell_spawned_type(void) {
@@ -64,6 +68,8 @@ const game_event_desc_t mini_ev_cell_spawned_desc = {
     (uint32_t)sizeof(MiniEvCellSpawned),
     mini_ev_cell_spawned_fields,
     (int)(sizeof(mini_ev_cell_spawned_fields) / sizeof(mini_ev_cell_spawned_fields[0])),
+    NULL,
+    0,
 };
 
 /* ---- mini.ticked ---- */
@@ -88,16 +94,100 @@ const game_event_desc_t mini_ev_ticked_desc = {
     (uint32_t)sizeof(MiniEvTicked),
     mini_ev_ticked_fields,
     (int)(sizeof(mini_ev_ticked_fields) / sizeof(mini_ev_ticked_fields[0])),
+    NULL,
+    0,
+};
+
+/* ---- mini.paid ---- */
+nt_hash64_t mini_ev_paid_type(void) {
+    static nt_hash64_t h;
+    if (!h.value) { h = nt_hash64_str("mini.paid"); }
+    return h;
+}
+
+const void *mini_emit_paid(int32_t count, const char *reason, const MiniEvPaidCostIn *cost, uint32_t cost_count) {
+    union {
+        MiniEvPaid ev;
+        uint8_t bytes[GAME_EVENT_EMIT_MAX];
+    } u;
+    memset(&u, 0, sizeof(u.ev)); /* deterministic struct padding; strings written below */
+    u.ev.count = count;
+
+    uint32_t off = (uint32_t)sizeof(u.ev);
+    const char *reason_s = reason ? reason : "";
+    size_t reason_n = strlen(reason_s) + 1u; /* incl. NUL */
+    if ((size_t)off + reason_n > sizeof(u.bytes)) {
+        NT_ASSERT(0 && "mini_emit_paid payload exceeds GAME_EVENT_EMIT_MAX");
+        nt_log_warn("mini_emit_paid: payload exceeds GAME_EVENT_EMIT_MAX (%u B) -> dropped", (unsigned)GAME_EVENT_EMIT_MAX);
+        return NULL; /* release: warned drop (no dropped-counter -- E1's counter is private/frozen) */
+    }
+    u.ev.reason = off;
+    memcpy(u.bytes + off, reason_s, reason_n);
+    off += (uint32_t)reason_n;
+
+    const uint32_t cost_n = (cost != NULL) ? cost_count : 0u;
+    const uint32_t cost_align = (uint32_t)_Alignof(MiniEvPaidCost);
+    off = (off + cost_align - 1u) & ~(cost_align - 1u);
+    if ((size_t)off + ((size_t)cost_n * sizeof(MiniEvPaidCost)) > sizeof(u.bytes)) {
+        NT_ASSERT(0 && "mini_emit_paid payload exceeds GAME_EVENT_EMIT_MAX");
+        nt_log_warn("mini_emit_paid: payload exceeds GAME_EVENT_EMIT_MAX (%u B) -> dropped", (unsigned)GAME_EVENT_EMIT_MAX);
+        return NULL;
+    }
+    u.ev.cost = off;
+    u.ev.cost_count = cost_n;
+    const uint32_t cost_base = off;
+    off += (uint32_t)((size_t)cost_n * sizeof(MiniEvPaidCost));
+    for (uint32_t cost_i = 0; cost_i < cost_n; ++cost_i) {
+        MiniEvPaidCost cost_rec;
+        memset(&cost_rec, 0, sizeof cost_rec);
+        cost_rec.amount = cost[cost_i].amount;
+        cost_rec.before = cost[cost_i].before;
+        const char *cost_def_id_s = cost[cost_i].def_id ? cost[cost_i].def_id : "";
+        size_t cost_def_id_n = strlen(cost_def_id_s) + 1u; /* incl. NUL */
+        if ((size_t)off + cost_def_id_n > sizeof(u.bytes)) {
+            NT_ASSERT(0 && "mini_emit_paid payload exceeds GAME_EVENT_EMIT_MAX");
+            nt_log_warn("mini_emit_paid: payload exceeds GAME_EVENT_EMIT_MAX (%u B) -> dropped", (unsigned)GAME_EVENT_EMIT_MAX);
+            return NULL;
+        }
+        cost_rec.def_id = off;
+        memcpy(u.bytes + off, cost_def_id_s, cost_def_id_n);
+        off += (uint32_t)cost_def_id_n;
+        memcpy(u.bytes + cost_base + ((size_t)cost_i * sizeof(MiniEvPaidCost)), &cost_rec, sizeof cost_rec);
+    }
+    return game_event_emit(mini_ev_paid_type(), &u, off, ((_Alignof(MiniEvPaid) > _Alignof(MiniEvPaidCost)) ? _Alignof(MiniEvPaid) : _Alignof(MiniEvPaidCost)));
+}
+
+static const game_event_field_t mini_ev_paid_cost_record_fields[] = {
+    { "def_id", GAME_EVENT_FT_STRING, (uint32_t)offsetof(MiniEvPaidCost, def_id), 0u },
+    { "amount", GAME_EVENT_FT_I64, (uint32_t)offsetof(MiniEvPaidCost, amount), 0u },
+    { "before", GAME_EVENT_FT_I64, (uint32_t)offsetof(MiniEvPaidCost, before), 0u },
+};
+static const game_event_record_t mini_ev_paid_records[] = {
+    { "cost", (uint32_t)offsetof(MiniEvPaid, cost), (uint32_t)offsetof(MiniEvPaid, cost_count), (uint32_t)sizeof(MiniEvPaidCost), mini_ev_paid_cost_record_fields, (int)(sizeof(mini_ev_paid_cost_record_fields) / sizeof(mini_ev_paid_cost_record_fields[0])) },
+};
+static const game_event_field_t mini_ev_paid_fields[] = {
+    { "count", GAME_EVENT_FT_INT, (uint32_t)offsetof(MiniEvPaid, count), 0u },
+    { "reason", GAME_EVENT_FT_STRING, (uint32_t)offsetof(MiniEvPaid, reason), 0u },
+};
+const game_event_desc_t mini_ev_paid_desc = {
+    "mini.paid",
+    (uint32_t)sizeof(MiniEvPaid),
+    mini_ev_paid_fields,
+    (int)(sizeof(mini_ev_paid_fields) / sizeof(mini_ev_paid_fields[0])),
+    mini_ev_paid_records,
+    (int)(sizeof(mini_ev_paid_records) / sizeof(mini_ev_paid_records[0])),
 };
 
 /* ---- fragment event table ---- */
 const game_event_desc_t *const mini_ev_descs[] = {
     &mini_ev_cell_spawned_desc,
     &mini_ev_ticked_desc,
+    &mini_ev_paid_desc,
 };
-const int mini_ev_desc_count = 2;
+const int mini_ev_desc_count = 3;
 
 void mini_ev_register(void) {
     game_event_register_type_name(mini_ev_cell_spawned_type(), "mini.cell_spawned");
     game_event_register_type_name(mini_ev_ticked_type(), "mini.ticked");
+    game_event_register_type_name(mini_ev_paid_type(), "mini.paid");
 }

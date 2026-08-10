@@ -33,11 +33,28 @@ typedef struct {
     uint32_t                len_offset; /* BYTES: offsetof of the paired uint32 length; else 0 */
 } game_event_field_t;
 
+/* A repeated section: N fixed-size records packed inline after the payload struct.
+   `offset`/`count_offset` locate the uint32 pair inside the struct; member offsets in
+   `fields` are relative to ONE RECORD, but a member's own stored value keeps the
+   payload base as its origin (a STRING member holds a payload-relative offset exactly
+   like a top-level one), so a walker shifts the member offset and leaves the value
+   alone. Records carry scalars and strings only -- never another repeated section. */
 typedef struct {
-    const char               *name;         /* "<fragment>.<event>" */
-    uint32_t                  payload_size; /* sizeof the payload struct */
+    const char               *name;
+    uint32_t                  offset;       /* offsetof the uint32 payload-relative array offset */
+    uint32_t                  count_offset; /* offsetof the paired uint32 record count */
+    uint32_t                  size;         /* sizeof one record */
     const game_event_field_t *fields;
     int                       field_count;
+} game_event_record_t;
+
+typedef struct {
+    const char                *name;         /* "<fragment>.<event>" */
+    uint32_t                   payload_size; /* sizeof the payload struct */
+    const game_event_field_t  *fields;
+    int                        field_count;
+    const game_event_record_t *records;
+    int                        record_count;
 } game_event_desc_t;
 
 #endif /* GAME_EVENT_DESC_H */

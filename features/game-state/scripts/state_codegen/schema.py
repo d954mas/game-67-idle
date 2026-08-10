@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .naming import c_ident
+from .naming import c_ident, pascal
 
 INT64_MIN = -(2**63)
 INT64_MAX = 2**63 - 1
@@ -21,6 +21,9 @@ EVENT_RESERVED_NAMES = {"descs", "desc_count", "register"}
 EVENT_FIELD_C_TYPE = {"bool": "bool", "int": "int32_t", "i64": "int64_t", "float": "double", "string": "uint32_t", "hash": "nt_hash64_t", "bytes": "uint32_t"}
 EVENT_FIELD_FT_ENUM = {"bool": "GAME_EVENT_FT_BOOL", "int": "GAME_EVENT_FT_INT", "i64": "GAME_EVENT_FT_I64", "float": "GAME_EVENT_FT_FLOAT", "string": "GAME_EVENT_FT_STRING", "hash": "GAME_EVENT_FT_HASH", "bytes": "GAME_EVENT_FT_BYTES"}
 EVENT_FIELD_EMIT_ARG = {"bool": "bool", "int": "int32_t", "i64": "int64_t", "float": "double", "hash": "nt_hash64_t"}
+# A repeated record is a fixed-size POD: `bytes` would need its own length member per
+# record with nothing asking for it, so records carry scalars and strings only.
+EVENT_RECORD_FIELD_TYPES = EVENT_FIELD_TYPES - {"bytes"}
 
 def map_type_name(type_text: str) -> str | None:
     match = re.fullmatch(r"map<string,([A-Za-z_][A-Za-z0-9_]*)>", type_text)
@@ -97,7 +100,7 @@ def load_events(events_raw: Any) -> dict[str, dict[str, Any]]:
         seen_event_idents[evt_ident] = evt_name
         if not isinstance(evt_spec, dict):
             raise SystemExit(f"event {evt_name} spec must be an object")
-        extra = set(evt_spec.keys()) - {"fields", "doc"}
+        extra = set(evt_spec.keys()) - {"fields", "repeated", "doc"}
         if extra:
             raise SystemExit(f"event {evt_name} has unsupported keys {sorted(extra)}")
         fields_raw = evt_spec.get("fields", {})
@@ -143,8 +146,110 @@ def load_events(events_raw: Any) -> dict[str, dict[str, Any]]:
                 raise SystemExit(
                     f"bytes field {field['name']} synthesizes {len_name} which collides with a declared field"
                 )
-        events[evt_name] = {"fields": fields}
+        events[evt_name] = {
+            "fields": fields,
+            "repeated": load_event_records(evt_name, evt_spec, fields, seen_field_idents),
+        }
+    validate_event_struct_names(events)
     return events
+
+
+def load_event_records(
+    evt_name: str,
+    evt_spec: dict[str, Any],
+    fields: list[dict[str, Any]],
+    field_idents: dict[str, str],
+) -> list[dict[str, Any]]:
+    """Parse+validate one event's `repeated` sections (name -> member map).
+    Every symbol a section synthesizes -- the struct pair, the count member, the
+    at/count accessors, the descriptor table, and one accessor per string member --
+    is claimed here, so a clash surfaces as a readable SystemExit instead of a
+    duplicate C definition."""
+    records_raw = evt_spec.get("repeated", {})
+    if not isinstance(records_raw, dict):
+        raise SystemExit(f"event {evt_name}.repeated must be a map of name -> spec")
+    claimed: dict[str, str] = dict(field_idents)
+    for field in fields:
+        if field["type"] == "bytes":
+            claimed[c_ident(f"{field['name']}_len")] = f"{field['name']}_len"
+    records: list[dict[str, Any]] = []
+    for name, members_raw in records_raw.items():
+        if not isinstance(name, str) or not EVENT_NAME_RE.fullmatch(name):
+            raise SystemExit(f"event {evt_name} repeated name {name!r} must match [a-z][a-z0-9_]*")
+        if name in EVENT_RESERVED_FIELDS:
+            raise SystemExit(f"event {evt_name} repeated {name} is reserved (envelope/accessor)")
+        if name in EVENT_SYMBOL_RESERVED_FIELDS:
+            raise SystemExit(
+                f"event {evt_name} repeated {name} is reserved: its accessor would redefine the "
+                f"generated per-event descriptor/fields symbols"
+            )
+        if not isinstance(members_raw, dict) or not members_raw:
+            raise SystemExit(f"event {evt_name}.repeated.{name} must be a non-empty map of member -> spec")
+        members: list[dict[str, Any]] = []
+        seen_member_idents: dict[str, str] = {}
+        for mname, mspec in members_raw.items():
+            if not isinstance(mname, str) or not EVENT_NAME_RE.fullmatch(mname):
+                raise SystemExit(
+                    f"event {evt_name}.repeated.{name} member name {mname!r} must match [a-z][a-z0-9_]*"
+                )
+            mident = c_ident(mname)
+            if mident in seen_member_idents:
+                raise SystemExit(
+                    f"event {evt_name}.repeated.{name} members {seen_member_idents[mident]} and {mname} "
+                    f"collide on C identifier {mident}"
+                )
+            seen_member_idents[mident] = mname
+            if not isinstance(mspec, dict):
+                raise SystemExit(f"event {evt_name}.repeated.{name}.{mname} spec must be an object")
+            mextra = set(mspec.keys()) - {"type", "doc"}
+            if mextra:
+                raise SystemExit(
+                    f"event {evt_name}.repeated.{name}.{mname} has unsupported keys {sorted(mextra)}"
+                )
+            mtype = mspec.get("type")
+            if mtype not in EVENT_RECORD_FIELD_TYPES:
+                raise SystemExit(
+                    f"unknown repeated member type {mtype!r} for {evt_name}.repeated.{name}.{mname}"
+                )
+            members.append({"name": mname, "type": mtype, "doc": mspec.get("doc")})
+        synthesized = [
+            name,
+            f"{name}_count",
+            f"{name}_at",
+            f"{name}_record",
+            f"{name}_record_fields",
+            *(f"{name}_{member['name']}" for member in members if member["type"] == "string"),
+        ]
+        for label in synthesized:
+            ident = c_ident(label)
+            if ident in claimed:
+                raise SystemExit(
+                    f"event {evt_name} repeated {name} generates {label} which collides with {claimed[ident]}"
+                )
+            claimed[ident] = label
+        records.append({"name": name, "fields": members})
+    return records
+
+
+def validate_event_struct_names(events: dict[str, dict[str, Any]]) -> None:
+    """An event and a repeated section share one Pascal struct namespace: event
+    `cell_spawned` and event `cell` + section `spawned` both want <Ns>EvCellSpawned."""
+    owners: dict[str, str] = {}
+
+    def claim(key: str, origin: str) -> None:
+        if key in owners:
+            raise SystemExit(
+                f"{origin} and {owners[key]} collide on the generated struct name Ev{key}"
+            )
+        owners[key] = origin
+
+    for evt_name, spec in events.items():
+        claim(pascal(evt_name), f"event {evt_name}")
+        for record in spec["repeated"]:
+            key = pascal(evt_name) + pascal(record["name"])
+            origin = f"event {evt_name} repeated {record['name']}"
+            claim(key, origin)
+            claim(f"{key}In", origin)  # the emit-side input struct shares the namespace
 
 
 def load_schema(schema_path: Path) -> dict[str, Any]:

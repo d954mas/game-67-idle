@@ -134,6 +134,46 @@ static void render_add_field(cJSON *root, const game_event_field_t *f, const uin
     }
 }
 
+/* One repeated section as an array of objects. Member offsets are record-relative, so
+   each is shifted onto the record's base; the member's stored value stays
+   payload-relative and render_add_field reads it unchanged. A count that overruns the
+   payload is clamped to whole records that fit -- corruption truncates, never reads out
+   of bounds. */
+static void render_add_records(cJSON *root, const game_event_record_t *r, const uint8_t *base, uint32_t size) {
+    if (r->size == 0u || !render_in_bounds(r->offset, 4u, size) || !render_in_bounds(r->count_offset, 4u, size)) {
+        return;
+    }
+    uint32_t array_off = 0;
+    uint32_t count = 0;
+    memcpy(&array_off, base + r->offset, sizeof array_off);
+    memcpy(&count, base + r->count_offset, sizeof count);
+    if (array_off > size) {
+        return;
+    }
+    cJSON *arr = cJSON_AddArrayToObject(root, r->name);
+    if (!arr) {
+        return;
+    }
+    const uint32_t capacity = (size - array_off) / r->size;
+    if (count > capacity) {
+        count = capacity;
+    }
+    for (uint32_t i = 0; i < count; ++i) {
+        cJSON *entry = cJSON_CreateObject();
+        if (!entry) {
+            return;
+        }
+        const uint32_t record_off = array_off + (i * r->size);
+        for (int f = 0; f < r->field_count; ++f) {
+            game_event_field_t member = r->fields[f];
+            member.offset += record_off;
+            member.len_offset += record_off;
+            render_add_field(entry, &member, base, size);
+        }
+        cJSON_AddItemToArray(arr, entry);
+    }
+}
+
 int game_event_render(const game_event_t *e, const game_event_desc_t *desc, char *out, int cap) {
     if (!out || cap <= 0) {
         return 0;
@@ -164,6 +204,9 @@ int game_event_render(const game_event_t *e, const game_event_desc_t *desc, char
         const uint8_t *base = (const uint8_t *)e->payload;
         for (int i = 0; i < desc->field_count; ++i) {
             render_add_field(root, &desc->fields[i], base, e->size);
+        }
+        for (int i = 0; i < desc->record_count; ++i) {
+            render_add_records(root, &desc->records[i], base, e->size);
         }
     }
 

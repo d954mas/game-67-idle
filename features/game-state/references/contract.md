@@ -35,6 +35,15 @@ parse. Deeper recursion, heap-backed state, type reuse as a map, and multiple
 aggregate roots are rejected. Removed fields remain in the owning fragment or
 type `reserved` list.
 
+An event declares `fields` (scalars plus `string`/`bytes`) and, when one value
+repeats, `repeated`: a map of section name to member map. A section becomes a
+fixed-size record struct, a caller-facing `...In` input struct, a `<name>` /
+`<name>_count` pair on the payload, `<evt>_<name>_count` / `<name>_at`
+accessors, and a `game_event_record_t` entry the renderer walks. Records carry
+scalars and strings only; a member's string keeps the payload base as its
+offset origin, so retaining an event by blind `memcpy` still reads. An empty
+list is the legal zero-value case, not an error.
+
 The generator requires `--schema` and accepts `--fragment` as an expected-id
 check. Per fragment it emits `<id>_state.h`, `<id>_state.c`,
 `<id>_state_schema.gen.h`, and `<id>_state_events.gen.{h,c}`. The generated

@@ -214,11 +214,15 @@ const game_event_desc_t platform_sdk_ev_platform_ready_desc = {
     (uint32_t)sizeof(platform_sdk_ev_platform_ready_t),
     platform_sdk_platform_ready_fields,
     PLATFORM_SDK_EVENT_FIELD_COUNT(platform_sdk_platform_ready_fields),
+    NULL,
+    0,
 };
 
 const game_event_desc_t platform_sdk_ev_game_loading_finished_desc = {
     "game.loading_finished",
     0u,
+    NULL,
+    0,
     NULL,
     0,
 };
@@ -228,11 +232,15 @@ const game_event_desc_t platform_sdk_ev_gameplay_start_desc = {
     0u,
     NULL,
     0,
+    NULL,
+    0,
 };
 
 const game_event_desc_t platform_sdk_ev_gameplay_stop_desc = {
     "gameplay.stop",
     0u,
+    NULL,
+    0,
     NULL,
     0,
 };
@@ -242,6 +250,8 @@ const game_event_desc_t platform_sdk_ev_interstitial_request_desc = {
     (uint32_t)sizeof(platform_sdk_ev_placement_t),
     platform_sdk_placement_fields,
     PLATFORM_SDK_EVENT_FIELD_COUNT(platform_sdk_placement_fields),
+    NULL,
+    0,
 };
 
 const game_event_desc_t platform_sdk_ev_interstitial_result_desc = {
@@ -249,6 +259,8 @@ const game_event_desc_t platform_sdk_ev_interstitial_result_desc = {
     (uint32_t)sizeof(platform_sdk_ev_interstitial_result_t),
     platform_sdk_interstitial_result_fields,
     PLATFORM_SDK_EVENT_FIELD_COUNT(platform_sdk_interstitial_result_fields),
+    NULL,
+    0,
 };
 
 const game_event_desc_t platform_sdk_ev_rewarded_request_desc = {
@@ -256,6 +268,8 @@ const game_event_desc_t platform_sdk_ev_rewarded_request_desc = {
     (uint32_t)sizeof(platform_sdk_ev_placement_t),
     platform_sdk_placement_fields,
     PLATFORM_SDK_EVENT_FIELD_COUNT(platform_sdk_placement_fields),
+    NULL,
+    0,
 };
 
 const game_event_desc_t platform_sdk_ev_rewarded_result_desc = {
@@ -263,6 +277,8 @@ const game_event_desc_t platform_sdk_ev_rewarded_result_desc = {
     (uint32_t)sizeof(platform_sdk_ev_rewarded_result_t),
     platform_sdk_rewarded_result_fields,
     PLATFORM_SDK_EVENT_FIELD_COUNT(platform_sdk_rewarded_result_fields),
+    NULL,
+    0,
 };
 
 const game_event_desc_t *const platform_sdk_ev_descs[] = {

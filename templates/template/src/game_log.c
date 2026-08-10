@@ -49,6 +49,8 @@ const game_event_desc_t game_log_desc = {
     (uint32_t)sizeof(GameLog),
     game_log_fields,
     (int)(sizeof(game_log_fields) / sizeof(game_log_fields[0])),
+    NULL,
+    0,
 };
 
 const game_event_desc_t *const game_log_descs[] = {

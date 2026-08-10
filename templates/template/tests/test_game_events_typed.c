@@ -93,7 +93,82 @@ static void test_descriptor(void) {
     TEST_ASSERT_EQUAL_UINT32((uint32_t)offsetof(MiniEvCellSpawned, blob), f[5].offset);
     TEST_ASSERT_EQUAL_UINT32((uint32_t)offsetof(MiniEvCellSpawned, blob_len), f[5].len_offset);
 
-    TEST_ASSERT_EQUAL_INT(2, mini_ev_desc_count);
+    TEST_ASSERT_EQUAL_INT(3, mini_ev_desc_count);
+
+    TEST_ASSERT_EQUAL_INT(1, mini_ev_paid_desc.record_count);
+    const game_event_record_t *r = &mini_ev_paid_desc.records[0];
+    TEST_ASSERT_EQUAL_STRING("cost", r->name);
+    TEST_ASSERT_EQUAL_UINT32((uint32_t)offsetof(MiniEvPaid, cost), r->offset);
+    TEST_ASSERT_EQUAL_UINT32((uint32_t)offsetof(MiniEvPaid, cost_count), r->count_offset);
+    TEST_ASSERT_EQUAL_UINT32((uint32_t)sizeof(MiniEvPaidCost), r->size);
+    TEST_ASSERT_EQUAL_INT(3, r->field_count);
+    /* Member offsets are record-relative: a walker shifts them onto each record. */
+    TEST_ASSERT_EQUAL_UINT32((uint32_t)offsetof(MiniEvPaidCost, def_id), r->fields[0].offset);
+    TEST_ASSERT_EQUAL_INT(GAME_EVENT_FT_STRING, r->fields[0].type);
+    TEST_ASSERT_EQUAL_INT(0, mini_ev_ticked_desc.record_count);
+}
+
+/* 7. repeated records: the array lands aligned past the struct's own inline string, each
+   record's string keeps the PAYLOAD base as its origin, and accessors read both back. */
+static void test_repeated_records(void) {
+    const MiniEvPaidCostIn cost[2] = {
+        {"tmpl.coin", 50, 120},
+        {"tmpl.wood", 3, 8},
+    };
+    const void *p = mini_emit_paid(2, "buy", cost, 2);
+    TEST_ASSERT_NOT_NULL(p);
+
+    int n = 0;
+    const game_event_t *log = game_event_log(&n);
+    TEST_ASSERT_EQUAL_INT(1, n);
+
+    const MiniEvPaid *ev = (const MiniEvPaid *)log[0].payload;
+    TEST_ASSERT_EQUAL_INT32(2, ev->count);
+    TEST_ASSERT_EQUAL_STRING("buy", mini_ev_paid_reason(ev));
+    TEST_ASSERT_EQUAL_UINT32(2u, mini_ev_paid_cost_count(ev));
+    TEST_ASSERT_EQUAL_UINT32(0u, ev->cost % (uint32_t)_Alignof(MiniEvPaidCost));
+
+    TEST_ASSERT_EQUAL_STRING("tmpl.coin", mini_ev_paid_cost_def_id(ev, 0));
+    TEST_ASSERT_EQUAL_INT64(50, mini_ev_paid_cost_at(ev, 0)->amount);
+    TEST_ASSERT_EQUAL_INT64(120, mini_ev_paid_cost_at(ev, 0)->before);
+    TEST_ASSERT_EQUAL_STRING("tmpl.wood", mini_ev_paid_cost_def_id(ev, 1));
+    TEST_ASSERT_EQUAL_INT64(3, mini_ev_paid_cost_at(ev, 1)->amount);
+    TEST_ASSERT_EQUAL_INT64(8, mini_ev_paid_cost_at(ev, 1)->before);
+}
+
+/* 8. an empty list is the normal zero-price case, not an error; a NULL array with a
+   non-zero count is caller error and must degrade to empty, never read the pointer. */
+static void test_repeated_empty(void) {
+    (void)mini_emit_paid(0, NULL, NULL, 7);
+
+    int n = 0;
+    const game_event_t *log = game_event_log(&n);
+    TEST_ASSERT_EQUAL_INT(1, n);
+
+    const MiniEvPaid *ev = (const MiniEvPaid *)log[0].payload;
+    TEST_ASSERT_EQUAL_UINT32(0u, mini_ev_paid_cost_count(ev));
+    TEST_ASSERT_EQUAL_STRING("", mini_ev_paid_reason(ev));
+}
+
+/* 9. retain out of the arena: record strings are payload-relative, so a blind memcpy of
+   the whole event keeps the array and its strings readable in the copy. */
+static void test_repeated_retain(void) {
+    const MiniEvPaidCostIn cost[1] = {{"tmpl.coin", 9, 10}};
+    (void)mini_emit_paid(1, "up", cost, 1);
+
+    int n = 0;
+    const game_event_t *log = game_event_log(&n);
+    TEST_ASSERT_EQUAL_INT(1, n);
+
+    union {
+        MiniEvPaid ev;
+        uint8_t bytes[GAME_EVENT_EMIT_MAX];
+    } keep;
+    memcpy(&keep, log[0].payload, log[0].size);
+
+    TEST_ASSERT_EQUAL_UINT32(1u, mini_ev_paid_cost_count(&keep.ev));
+    TEST_ASSERT_EQUAL_STRING("tmpl.coin", mini_ev_paid_cost_def_id(&keep.ev, 0));
+    TEST_ASSERT_EQUAL_INT64(9, mini_ev_paid_cost_at(&keep.ev, 0)->amount);
 }
 
 /* 5. empty string / zero-length bytes: accessor yields "", blob_len == 0. */
@@ -138,6 +213,9 @@ int main(void) {
     RUN_TEST(test_descriptor);
     RUN_TEST(test_empty_string_and_bytes);
     RUN_TEST(test_event_order);
+    RUN_TEST(test_repeated_records);
+    RUN_TEST(test_repeated_empty);
+    RUN_TEST(test_repeated_retain);
     const int result = UNITY_END();
 
     nt_hash_shutdown();

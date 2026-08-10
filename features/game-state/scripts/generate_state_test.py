@@ -516,6 +516,104 @@ class StateCodegenTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, r"cell_spawned\.x has unsupported keys"):
             self._write_and_load(self._base(events={"cell_spawned": {"fields": {"x": {"type": "int", "min": 0}}}}))
 
+    # ------------------------------------------------ repeated sections (records)
+
+    @staticmethod
+    def _repeated(members=None, **section):
+        return {"paid": {"fields": {"x": {"type": "int"}},
+                         "repeated": section or {"cost": members or {"amount": {"type": "i64"}}}}}
+
+    def test_reject_repeated_bad_charset(self):
+        for bad in ("Cost", "a.b", "1x"):
+            with self.assertRaisesRegex(SystemExit, r"repeated name .* must match"):
+                self._write_and_load(self._base(events=self._repeated(**{bad: {"amount": {"type": "i64"}}})))
+
+    def test_reject_repeated_reserved_envelope(self):
+        for bad in ("type", "seq", "tick"):
+            with self.assertRaisesRegex(SystemExit, r"repeated .* is reserved \(envelope/accessor\)"):
+                self._write_and_load(self._base(events=self._repeated(**{bad: {"amount": {"type": "i64"}}})))
+
+    def test_reject_repeated_reserved_symbol(self):
+        for bad in ("desc", "fields"):
+            with self.assertRaisesRegex(SystemExit, r"repeated .* redefine the generated per-event"):
+                self._write_and_load(self._base(events=self._repeated(**{bad: {"amount": {"type": "i64"}}})))
+
+    def test_reject_repeated_empty_member_map(self):
+        # A zero-member record would emit an empty C struct, not a diagnosable error.
+        with self.assertRaisesRegex(SystemExit, r"repeated\.cost must be a non-empty map"):
+            self._write_and_load(self._base(events=self._repeated(cost={})))
+
+    def test_reject_repeated_bytes_member(self):
+        with self.assertRaisesRegex(SystemExit, r"unknown repeated member type 'bytes'"):
+            self._write_and_load(self._base(events=self._repeated({"blob": {"type": "bytes"}})))
+
+    def test_reject_repeated_member_c_ident_collision(self):
+        with self.assertRaisesRegex(SystemExit, r"repeated\.cost members .* collide on C identifier"):
+            self._write_and_load(self._base(events=self._repeated({
+                "a_b": {"type": "i64"},
+                "a__b": {"type": "i64"},
+            })))
+
+    def test_reject_repeated_member_spec_extra_key(self):
+        with self.assertRaisesRegex(SystemExit, r"repeated\.cost\.amount has unsupported keys"):
+            self._write_and_load(self._base(events=self._repeated({"amount": {"type": "i64", "min": 0}})))
+
+    def test_reject_repeated_collides_with_declared_field(self):
+        # 'cost' the section and 'cost_count' the field both want one C member.
+        with self.assertRaisesRegex(SystemExit, r"repeated cost generates cost_count which collides"):
+            self._write_and_load(self._base(events={"paid": {
+                "fields": {"cost_count": {"type": "int"}},
+                "repeated": {"cost": {"amount": {"type": "i64"}}},
+            }}))
+
+    def test_reject_repeated_accessor_collides_with_declared_field(self):
+        # A string member synthesizes <section>_<member> next to the field accessors.
+        with self.assertRaisesRegex(SystemExit, r"repeated cost generates cost_def_id which collides"):
+            self._write_and_load(self._base(events={"paid": {
+                "fields": {"cost_def_id": {"type": "string"}},
+                "repeated": {"cost": {"def_id": {"type": "string"}}},
+            }}))
+
+    def test_reject_repeated_struct_name_collides_with_event(self):
+        with self.assertRaisesRegex(SystemExit, r"collide on the generated struct name EvPaidCost"):
+            self._write_and_load(self._base(events={
+                "paid_cost": {"fields": {"x": {"type": "int"}}},
+                "paid": {"fields": {"x": {"type": "int"}}, "repeated": {"cost": {"amount": {"type": "i64"}}}},
+            }))
+
+    def test_repeated_generates_records_and_accessors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            text = generate_and_join(MINI_SCHEMA, Path(tmp) / "rep", "mini_state", "mini")
+        # wire record + caller-facing input record + the count member on the event
+        self.assertIn("typedef struct MiniEvPaidCost {", text)
+        self.assertIn("typedef struct MiniEvPaidCostIn {", text)
+        self.assertIn("    uint32_t cost_count; /* number of inline records */", text)
+        # emit takes the array by pointer+count, records are packed at their own alignment
+        self.assertIn(
+            "const void *mini_emit_paid(int32_t count, const char *reason, "
+            "const MiniEvPaidCostIn *cost, uint32_t cost_count);",
+            text,
+        )
+        self.assertIn("const uint32_t cost_align = (uint32_t)_Alignof(MiniEvPaidCost);", text)
+        self.assertIn("off = (off + cost_align - 1u) & ~(cost_align - 1u);", text)
+        # a record stronger-aligned than the event struct must widen the emit alignment
+        self.assertIn(
+            "((_Alignof(MiniEvPaid) > _Alignof(MiniEvPaidCost)) "
+            "? _Alignof(MiniEvPaid) : _Alignof(MiniEvPaidCost))",
+            text,
+        )
+        self.assertIn("static inline const MiniEvPaidCost *mini_ev_paid_cost_at(const MiniEvPaid *e, uint32_t i)", text)
+        self.assertIn("static inline const char *mini_ev_paid_cost_def_id(const MiniEvPaid *e, uint32_t i)", text)
+        # descriptor: records are their own family, the scalar field table is untouched
+        self.assertIn("static const game_event_record_t mini_ev_paid_records[] = {", text)
+        self.assertIn('{ "cost", (uint32_t)offsetof(MiniEvPaid, cost), (uint32_t)offsetof(MiniEvPaid, cost_count)', text)
+
+    def test_event_without_repeated_declares_no_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            text = generate_and_join(MINI_SCHEMA, Path(tmp) / "norep", "mini_state", "mini")
+        self.assertNotIn("mini_ev_ticked_records", text)
+        self.assertIn("static const game_event_field_t mini_ev_ticked_fields[]", text)
+
 
 if __name__ == "__main__":
     unittest.main()

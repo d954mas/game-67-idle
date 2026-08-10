@@ -33,7 +33,9 @@ features/game-events/
 ## What It Owns
 
 - Fixed per-frame event log and payload arena.
-- Descriptor contract for generated or hand-written typed event payloads.
+- Descriptor contract for generated or hand-written typed event payloads,
+  including repeated sections (N fixed-size records packed inline after the
+  payload struct, walked through `game_event_record_t`).
 - Generic descriptor-driven JSON rendering.
 - Optional `nt_log` mirror for ordinary local/debug builds (`[ev] ...`).
 - DevAPI tail recorder and `game.events.tail` command in DevAPI builds.
@@ -96,6 +98,12 @@ Consumers pin both this version and an exact repository revision.
 
 2.0.0 removes the `game_event_can_emit` capacity probe. Callers that used it to
 refuse a mutation now perform the mutation and emit.
+
+2.1.0 adds repeated sections: `game_event_record_t` plus `records`/`record_count`
+on `game_event_desc_t`, rendered as a JSON array of objects. A hand-written
+descriptor that leaves the two new members out keeps its old meaning (no records)
+but must spell them, since `-Wextra -Werror` rejects a partial initializer.
+`game_event_field_t` is unchanged, so field tables were not touched.
 
 ## Extension points
 
