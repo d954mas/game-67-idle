@@ -242,7 +242,7 @@ Debug builds log the first fallback per key:
 session — the UI rebuilds every frame, so an undeduplicated warning would emit
 sixty lines a second. `loc_fallback_log_count()` exposes the count for tests.
 
-## Validation
+## Generator validation
 
 `loc.py generate` fails on:
 
@@ -277,3 +277,39 @@ Three places, not one:
 3. `node tools/state_lock.mjs --update` to re-seal.
 
 Plus the font atlas: the packed charset must cover the new script.
+
+## Purpose
+
+Provide the reusable data-owned string table: every player-visible string
+declared in `content/loc/strings.json` and compiled to typed C accessors with
+CLDR plurals, language-owned number typography, and a fallback chain that never
+paints a raw key on screen.
+
+## Public surface
+
+`include/features/localization/loc.h`, the generated outputs listed in
+`feature.json.outputs`, and the generator commands in `feature.json` are public.
+`src/loc.c` internals are not, and neither is any game's key vocabulary or its
+`content/loc/strings.json`.
+
+## Validation
+
+Run the ctest targets named in `feature.json.registers.ctest_targets`
+(`test_loc_e2e`, `loc_generator_test`), then
+`node features/validate_contracts.mjs`.
+
+## Compatibility
+
+`feature.json.version` is exact SemVer. Patch preserves the public contract,
+minor adds backward-compatible surface, and major permits breaking changes.
+Consumers pin both this version and an exact repository revision.
+Version `1.1.0` replaced six hand-rolled plural rules with the reference table's
+24 partitions over 172 locales; a corpus in a language whose rule moved
+(`az fa hu ka tr`) must re-declare its forms.
+
+## Extension points
+
+A game extends through data only: new keys, new languages (see *Adding a
+language*), and an explicit `plural_rule` for a language code the generator does
+not know. A new argument type, a new return-storage policy, or a change to the
+fallback chain is a module change and belongs here, not in a game's tree.
