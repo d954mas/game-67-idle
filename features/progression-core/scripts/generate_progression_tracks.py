@@ -294,6 +294,21 @@ def render_source(
     members = [column["member"] for column in columns]
     exact_members = [column["member"] for column in columns if column["type"] == "i64"]
 
+    def owned_members(track: dict[str, Any]) -> list[str]:
+        return [
+            column["member"] for column in columns
+            if track["kind"] in column["required_for"]
+        ]
+
+    # A track carries a table only for the column TYPES it owns. Reading a column it
+    # does not own already asserts, so the other table would be a full dictionary row
+    # of zeros per level, on every track, paid for in the binary.
+    def owns_exact(track: dict[str, Any]) -> bool:
+        return any(member in exact_members for member in owned_members(track))
+
+    def owns_fractional(track: dict[str, Any]) -> bool:
+        return any(member not in exact_members for member in owned_members(track))
+
     for track in tracks:
         symbol = c_ident(track["id"])
         rows = track["levels"]["rows"]
@@ -319,7 +334,7 @@ def render_source(
                 f"    {{ {cost_sym}, {len(cost)}, {xp_cost}LL, {grant_sym}, {len(grants)} }},"
             )
         lines.append("};")
-        if exact_members:
+        if owns_exact(track):
             lines.append(f"static const int64_t EXACT_{symbol}[] = {{")
             for row in rows:
                 values = ", ".join(
@@ -328,7 +343,7 @@ def render_source(
                 )
                 lines.append(f"    {values},")
             lines.append("};")
-        if len(exact_members) != len(members):
+        if owns_fractional(track):
             lines.append(f"static const double FRACTIONAL_{symbol}[] = {{")
             for row in rows:
                 values = ", ".join(
@@ -343,8 +358,8 @@ def render_source(
     for track in tracks:
         symbol = c_ident(track["id"])
         max_level = len(track["levels"]["rows"]) - 1
-        exact = f"EXACT_{symbol}" if exact_members else "NULL"
-        fractional = f"FRACTIONAL_{symbol}" if len(exact_members) != len(members) else "NULL"
+        exact = f"EXACT_{symbol}" if owns_exact(track) else "NULL"
+        fractional = f"FRACTIONAL_{symbol}" if owns_fractional(track) else "NULL"
         owned = [
             f"(UINT64_C(1) << PROGRESSION_VALUE_{c_ident(column['member'])})"
             for column in columns
