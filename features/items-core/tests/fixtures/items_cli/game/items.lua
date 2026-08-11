@@ -4,7 +4,7 @@ local levels = require("studio.levels")
 
 items.extend_schema({ level_row = {
   attack = field.i64({
-    id = "game.weapon.level.attack", required_for = { "weapon" },
+    id = "game.weapon.level.attack", required_for_items = { "weapon" },
     min = 0, max = 1000000, unit = "damage", rounding = "exact",
     label_key = "item.attack",
     ui = { format = "integer", description_key = "item.attack.description" },

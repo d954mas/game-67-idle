@@ -22,7 +22,7 @@ def attack_field():
         "member": "attack",
         "section": "level_row",
         "type": "i64",
-        "required_for": ["weapon"],
+        "required_for_items": ["weapon"],
         "min": 0,
         "max": 1_000_000,
         "unit": "damage",
@@ -37,7 +37,7 @@ def payout_field():
         "member": "payout",
         "section": "level_row",
         "type": "f64",
-        "required_for": ["rank"],
+        "required_for_tracks": ["rank"],
         "min": 0.0,
         "max": 1000.0,
         "unit": "x",
@@ -959,6 +959,34 @@ class ItemsSnapshotTests(unittest.TestCase):
                 "item": {"__studio_kind": "item_ref", "id": "game.ghost"}}},
         ])
         self.assert_track_failure([missing], "snapshot.unknown_reference")
+
+    def test_a_field_names_kinds_of_one_space_and_only_kinds_that_exist(self):
+        """The two spaces keep their own kind namespaces, so a name is looked up in
+        the space its key names -- and a name nothing declares is a typo."""
+        self.assert_track_failure(
+            [track()], "snapshot.required_for_kind",
+            fields=[attack_field(), payout_field() | {"required_for_tracks": ["ranks"]}],
+        )
+        # The item kind spelled into the track key stays unknown to the track space.
+        self.assert_track_failure(
+            [track()], "snapshot.required_for_kind",
+            fields=[attack_field(), payout_field() | {"required_for_tracks": ["weapon"]}],
+        )
+        homeless = attack_field()
+        del homeless["required_for_items"]
+        self.assert_track_failure([track()], "snapshot.required_for",
+                                  fields=[homeless, payout_field()])
+
+    def test_one_name_in_both_spaces_is_two_kinds(self):
+        """A track kind named after an item kind requires nothing of that item, and
+        the item's column is not a row the track has to carry."""
+        snapshot = self.build_tracks(
+            [track(kind="weapon", track_id="weapon")],
+            fields=[attack_field(), payout_field() | {"required_for_tracks": ["weapon"]}],
+        )
+        self.assertEqual(snapshot["tracks"][0]["levels"]["rows"][0], {"payout": 1.0})
+        sword = next(item for item in snapshot["items"] if item["id"] == "game.sword")
+        self.assertEqual(sword["levels"]["rows"][0], {"attack": 10})
 
     def test_fractional_columns_carry_floats_and_declare_no_rounding(self):
         exact = payout_field() | {"rounding": "exact"}

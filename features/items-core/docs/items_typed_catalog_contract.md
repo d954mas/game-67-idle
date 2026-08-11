@@ -34,7 +34,7 @@ use stable namespaced identities:
 ```lua
 attack = field.i64({
   id = "game.weapon.level.attack",
-  required_for = { "weapon" },
+  required_for_items = { "weapon" },
   min = 0,
   max = 1000000,
   unit = "damage",
@@ -48,7 +48,13 @@ attack = field.i64({
 The field identity is `game.weapon.level.attack`; `attack` is only its generated
 C member. Each field owns its capability, numeric range, unit, rounding,
 localization key, formatting hints, evolution metadata, and source span. Fields
-are `i64` and `exact`; there is no floating-point level value.
+in this catalog are `i64` and `exact`; there is no floating-point level value.
+
+`required_for_items` names item kinds, `required_for_tracks` names track kinds,
+and a field carrying only the latter is a progression column this catalog never
+sees. A field must name at least one kind, and a kind it names must be declared
+in that field's own space: the same name in both spaces is two kinds and binds
+nothing across them.
 
 A core-only catalog has no game fields, so its generated header has no `weapon`
 or `attack` symbol. That is the proof an optional game schema cannot leak into

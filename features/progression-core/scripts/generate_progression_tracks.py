@@ -38,6 +38,10 @@ RESERVED_VALUE_IDENTS = {"COUNT"}
 # Width of progression_track_def_t.owned_values, the per-track column ownership mask.
 OWNED_VALUE_BITS = 64
 
+# The Snapshot key naming the track kinds a field is a column for. Items name their
+# kinds in a key of their own, so one name in both spaces binds nothing across them.
+TRACK_REQUIRED_FOR = "required_for_tracks"
+
 # Mirrors ITEMS_PAYMENT_MAX_REQUIREMENTS in features/items-core (a C macro this
 # script cannot include). A longer price bakes fine and then refuses to pay, so
 # the build is where it must be caught.
@@ -130,20 +134,16 @@ def validate_state_schema(doc: Any) -> tuple[int, int, int]:
     return string_max - 1, max_count, level_max
 
 
-def track_columns(snapshot: dict[str, Any], tracks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The column dictionary: fields at least one track kind requires, in id order.
+def track_columns(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    """The column dictionary: fields required for track kinds, in id order.
 
-    A field only item kinds require belongs to the item catalog and is not a
+    A field required only for item kinds belongs to the item catalog and is not a
     progression column, exactly as a track column is absent from that catalog."""
-    kinds = {track["kind"] for track in tracks}
     fields = snapshot.get("fields")
     require(isinstance(fields, list), "snapshot 'fields' must be an array")
-    # A field no TRACK kind requires is not a progression column at all -- it belongs to
-    # the item catalog, which filters the same snapshot by item kind. Dropped in silence
-    # on purpose: the two spaces share one field list and each takes only its own.
     columns = [
         field for field in fields
-        if isinstance(field, dict) and any(kind in field.get("required_for", []) for kind in kinds)
+        if isinstance(field, dict) and field.get(TRACK_REQUIRED_FOR)
     ]
     # One dictionary serves every track and one row carries a slot per column, so the
     # mask that says who owns what has a fixed width.
@@ -297,7 +297,7 @@ def render_source(
     def owned_members(track: dict[str, Any]) -> list[str]:
         return [
             column["member"] for column in columns
-            if track["kind"] in column["required_for"]
+            if track["kind"] in column[TRACK_REQUIRED_FOR]
         ]
 
     # A track carries a table only for the column TYPES it owns. Reading a column it
@@ -363,7 +363,7 @@ def render_source(
         owned = [
             f"(UINT64_C(1) << PROGRESSION_VALUE_{c_ident(column['member'])})"
             for column in columns
-            if track["kind"] in column["required_for"]
+            if track["kind"] in column[TRACK_REQUIRED_FOR]
         ]
         lines.extend([
             "    {",
@@ -420,7 +420,7 @@ def main(argv: list[str] | None = None) -> int:
         max_track_id_len, max_track_count, max_level_cap = validate_state_schema(
             load_json(state_schema_path))
         validate_tracks(tracks, max_track_id_len, max_track_count, max_level_cap)
-        columns = track_columns(snapshot, tracks)
+        columns = track_columns(snapshot)
 
         provenance = "the Items Snapshot tracks section"
         header_text = render_header(columns, len(tracks), provenance)

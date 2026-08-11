@@ -5,7 +5,7 @@ local tracks = require("studio.tracks")
 
 items.extend_schema({ level_row = {
   haul_mul = field.f64({
-    id = "game.hauler.level.haul_mul", required_for = { "hauler" },
+    id = "game.hauler.level.haul_mul", required_for_tracks = { "hauler" },
     min = 0.0, max = 10.0, unit = "x", label_key = "track.haul_mul",
   }),
 }})

@@ -58,14 +58,23 @@ def track(
     }
 
 
-def field(field_id: str, member: str, field_type: str, *, required_for: list[str]) -> dict:
-    return {
+def field(
+    field_id: str, member: str, field_type: str, *,
+    required_for_tracks: list[str] | None = None,
+    required_for_items: list[str] | None = None,
+) -> dict:
+    """A snapshot field. It is a progression column only while it names track kinds."""
+    entry = {
         "id": field_id,
         "member": member,
         "type": field_type,
         "section": "level_row",
-        "required_for": required_for,
     }
+    if required_for_tracks is not None:
+        entry["required_for_tracks"] = required_for_tracks
+    if required_for_items is not None:
+        entry["required_for_items"] = required_for_items
+    return entry
 
 
 def items_snapshot(
@@ -249,7 +258,7 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
 
     def test_rejects_a_column_that_would_redefine_the_header_s_own_macro(self) -> None:
         args, _out, temp, _game = self.generator_args(snapshot=items_snapshot(
-            fields=[field("up.count", "count", "i64", required_for=["upgrade"])]))
+            fields=[field("up.count", "count", "i64", required_for_tracks=["upgrade"])]))
         self.addCleanup(temp.cleanup)
         with self.assertRaisesRegex(SystemExit, "would redefine PROGRESSION_VALUE_COUNT"):
             generator.main(args)
@@ -345,8 +354,8 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         """A field no track kind requires belongs to the item catalog; the two
         dictionaries are disjoint by construction, not by convention."""
         snapshot = items_snapshot(fields=[
-            field("gear.damage", "damage", "i64", required_for=["weapon"]),
-            field("up.rate", "rate", "i64", required_for=["upgrade"]),
+            field("gear.damage", "damage", "i64", required_for_items=["weapon"]),
+            field("up.rate", "rate", "i64", required_for_tracks=["upgrade"]),
         ])
         args, out, temp, _game = self.generator_args(snapshot=snapshot)
         self.addCleanup(temp.cleanup)
@@ -356,10 +365,24 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         self.assertIn("#define PROGRESSION_VALUE_RATE ((progression_value_t)0u)", header)
         self.assertNotIn("PROGRESSION_VALUE_DAMAGE", header)
 
+    def test_an_item_kind_named_after_a_track_kind_carries_nothing_over(self) -> None:
+        """The two spaces name their kinds independently, so an item column named
+        after this track's kind is still an item column."""
+        snapshot = items_snapshot(fields=[
+            field("gear.rate", "gear_rate", "i64", required_for_items=["upgrade"]),
+            field("up.rate", "rate", "i64", required_for_tracks=["upgrade"]),
+        ])
+        args, out, temp, _game = self.generator_args(snapshot=snapshot)
+        self.addCleanup(temp.cleanup)
+        self.assertEqual(run_direct(args), 0)
+        header = (out / "progression_tracks.gen.h").read_text(encoding="utf-8")
+        self.assertIn("#define PROGRESSION_VALUE_COUNT 1", header)
+        self.assertNotIn("PROGRESSION_VALUE_GEAR_RATE", header)
+
     def test_column_index_follows_field_id_order(self) -> None:
         snapshot = items_snapshot(fields=[
-            field("up.rate", "rate", "i64", required_for=["upgrade"]),
-            field("up.cap", "cap", "i64", required_for=["upgrade"]),
+            field("up.rate", "rate", "i64", required_for_tracks=["upgrade"]),
+            field("up.cap", "cap", "i64", required_for_tracks=["upgrade"]),
         ])
         args, out, temp, _game = self.generator_args(snapshot=snapshot)
         self.addCleanup(temp.cleanup)
@@ -371,8 +394,8 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
     def test_exact_and_fractional_columns_split_into_two_tables(self) -> None:
         snapshot = items_snapshot(
             fields=[
-                field("up.cap", "cap", "i64", required_for=["upgrade"]),
-                field("up.rate", "rate", "f64", required_for=["upgrade"]),
+                field("up.cap", "cap", "i64", required_for_tracks=["upgrade"]),
+                field("up.rate", "rate", "f64", required_for_tracks=["upgrade"]),
             ],
             tracks=[track(rows=[
                 {"cap": 0, "rate": 0.0},
@@ -399,7 +422,7 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         round-trip or the runtime silently reads a different number."""
         value = 0.1 + 0.2
         snapshot = items_snapshot(
-            fields=[field("up.rate", "rate", "f64", required_for=["upgrade"])],
+            fields=[field("up.rate", "rate", "f64", required_for_tracks=["upgrade"])],
             tracks=[track(rows=[{"rate": 0.0}, {"rate": value, "cost_to_reach": cost("coin", 1)}])],
         )
         source = self.generate(snapshot)
@@ -425,8 +448,8 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         track's mask says which slots it actually answers for."""
         snapshot = items_snapshot(
             fields=[
-                field("up.rate", "rate", "i64", required_for=["upgrade"]),
-                field("ms.reward", "reward", "i64", required_for=["milestone"]),
+                field("up.rate", "rate", "i64", required_for_tracks=["upgrade"]),
+                field("ms.reward", "reward", "i64", required_for_tracks=["milestone"]),
             ],
             tracks=[
                 track("a", kind="upgrade", rows=[
@@ -450,8 +473,8 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
     def test_a_track_owning_every_column_ors_the_whole_mask(self) -> None:
         snapshot = items_snapshot(
             fields=[
-                field("up.cap", "cap", "i64", required_for=["upgrade"]),
-                field("up.rate", "rate", "f64", required_for=["upgrade"]),
+                field("up.cap", "cap", "i64", required_for_tracks=["upgrade"]),
+                field("up.rate", "rate", "f64", required_for_tracks=["upgrade"]),
             ],
             tracks=[track(rows=[
                 {"cap": 0, "rate": 0.0},
@@ -469,7 +492,7 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         """A threshold track priced only in xp declares no column, and says so rather
         than pointing at the dictionary's first slot."""
         snapshot = items_snapshot(
-            fields=[field("up.rate", "rate", "i64", required_for=["upgrade"])],
+            fields=[field("up.rate", "rate", "i64", required_for_tracks=["upgrade"])],
             tracks=[
                 track("a", kind="upgrade", rows=[
                     {"rate": 0}, {"rate": 3, "cost_to_reach": cost("coin", 50)},
@@ -483,7 +506,7 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
     def test_rejects_more_columns_than_the_ownership_mask_holds(self) -> None:
         snapshot = items_snapshot(
             fields=[
-                field(f"up.c{index}", f"c{index}", "i64", required_for=["upgrade"])
+                field(f"up.c{index}", f"c{index}", "i64", required_for_tracks=["upgrade"])
                 for index in range(65)
             ],
             tracks=[track(rows=[
@@ -498,7 +521,7 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
 
     def test_rejects_a_column_that_is_neither_exact_nor_fractional(self) -> None:
         snapshot = items_snapshot(
-            fields=[field("up.label", "label", "string", required_for=["upgrade"])]
+            fields=[field("up.label", "label", "string", required_for_tracks=["upgrade"])]
         )
         args, _out, temp, _game = self.generator_args(snapshot=snapshot)
         self.addCleanup(temp.cleanup)

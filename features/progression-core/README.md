@@ -85,7 +85,9 @@ L, so `max_level == len(rows) - 1`.
 
 The column dictionary is one per game — `PROGRESSION_VALUE_<COLUMN>` is a single
 index space — but a column belongs to the track kinds that declare it through
-`required_for`, so kinds with different column sets coexist. A row is the full
+`required_for_tracks`, so kinds with different column sets coexist. A field that
+names only item kinds is an item column and never enters the dictionary, whatever
+its name; the two spaces name their kinds independently. A row is the full
 dictionary wide, and the slots a track does not own hold a zero indistinguishable
 from an authored one; `owned_values` is what tells them apart, and a read of an
 unowned column traps rather than answering that zero. The mask is 64 bits, which
@@ -338,6 +340,13 @@ build time is answered at read time — `progression_track_def_t.owned_values` c
 bit per declared column, and reading one a track's kind does not declare traps instead
 of returning the zero its row slot holds. Catalogs that generated under `6.0.0`
 generate the same tables plus the mask.
+
+Version `7.0.0` splits the kind namespaces. A column names the track kinds it belongs
+to in `required_for_tracks`; `required_for`, which named item kinds and track kinds in
+one list, is gone. A track kind and an item kind may now share a name and stay
+unrelated, and a name no track declares is refused where it is written instead of
+producing a column no row is required to carry. A `6.x` catalog regenerates
+byte-identical once its fields name the key.
 
 ## Extension points
 

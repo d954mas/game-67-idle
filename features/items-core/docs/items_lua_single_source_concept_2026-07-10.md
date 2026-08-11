@@ -117,7 +117,7 @@ items.extend_schema({
   level_row = {
     attack = field.i64({
       id = "game.weapon.level.attack",
-      required_for = { "weapon" },
+      required_for_items = { "weapon" },
       min = 0,
       max = 1000000,
       label_key = "item.attack",

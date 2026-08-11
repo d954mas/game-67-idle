@@ -43,6 +43,10 @@ ITEM_KEYS = {
     "currency", "use", "equip", "authoring_mode", "levels", "acquire",
 }
 TRACK_KEYS = {"id", "kind", "mode", "authoring_mode", "levels"}
+# Items and tracks are neighbouring declaration spaces with their own kind
+# namespaces; a field names the kinds of one space per key.
+REQUIRED_FOR_KEYS = ("required_for_items", "required_for_tracks")
+ITEM_REQUIRED_FOR, TRACK_REQUIRED_FOR = REQUIRED_FOR_KEYS
 TRACK_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$")
 TRACK_MODES = {"manual", "auto", "threshold"}
 # One advance per mode, and the row member that carries it.
@@ -171,7 +175,6 @@ def _normalize_fields(evaluation: dict[str, Any]) -> tuple[list[dict[str, Any]],
         field_id = field.get("id")
         member = field.get("member")
         section = field.get("section")
-        required_for = field.get("required_for")
         minimum, maximum = field.get("min"), field.get("max")
         if not isinstance(field_id, str) or FIELD_ID_RE.fullmatch(field_id) is None:
             _fail("snapshot.field_id", "field requires a stable dotted lowercase id", f"{path}.id")
@@ -192,10 +195,16 @@ def _normalize_fields(evaluation: dict[str, Any]) -> tuple[list[dict[str, Any]],
         field_type = field.get("type")
         if field_type not in FIELD_TYPES:
             _fail("snapshot.field_type", "typed Snapshot supports i64 and f64 fields", f"{path}.type")
-        if (not isinstance(required_for, list) or not required_for
-                or not all(isinstance(kind, str) and MEMBER_RE.fullmatch(kind) for kind in required_for)
-                or len(required_for) != len(set(required_for))):
-            _fail("snapshot.required_for", "required_for must be a unique non-empty kind list", f"{path}.required_for")
+        for key in REQUIRED_FOR_KEYS:
+            if key not in field:
+                continue
+            required_for = field[key]
+            if (not isinstance(required_for, list) or not required_for
+                    or not all(isinstance(kind, str) and MEMBER_RE.fullmatch(kind) for kind in required_for)
+                    or len(required_for) != len(set(required_for))):
+                _fail("snapshot.required_for", f"{key} must be a unique non-empty kind list", f"{path}.{key}")
+        if not any(field.get(key) for key in REQUIRED_FOR_KEYS):
+            _fail("snapshot.required_for", "a field must name at least one item kind or track kind", path)
         if field_type == "i64":
             if (type(minimum) is not int or type(maximum) is not int
                     or minimum < -MAX_EXACT_INTEGER or maximum > MAX_EXACT_INTEGER or minimum > maximum):
@@ -232,11 +241,11 @@ def _normalize_fields(evaluation: dict[str, Any]) -> tuple[list[dict[str, Any]],
 
 def _validate_typed_rows(
     entries: list[dict[str, Any]], fields: list[dict[str, Any]], section: str,
-    transition_of: Any,
+    transition_of: Any, required_for: str,
 ) -> None:
     known_members = {field["member"] for field in fields}
     for entry_index, entry in enumerate(entries):
-        required_fields = [field for field in fields if entry.get("kind") in field["required_for"]]
+        required_fields = [field for field in fields if entry.get("kind") in field.get(required_for, [])]
         levels = entry.get("levels")
         if levels is None:
             if required_fields:
@@ -264,7 +273,7 @@ def _validate_typed_rows(
                 _fail("snapshot.unknown_field", f"unknown level field: {unknown[0]}", f"{path}.{unknown[0]}")
             for field in fields:
                 member = field["member"]
-                required = entry.get("kind") in field["required_for"]
+                required = entry.get("kind") in field.get(required_for, [])
                 if required and member not in row:
                     _fail("snapshot.required_field", f"missing required field: {member}", f"{path}.{member}")
                 if member not in row:
@@ -277,6 +286,36 @@ def _validate_typed_rows(
                     _fail("snapshot.field_type", f"field {member} requires {field['type']}", f"{path}.{member}")
                 if value < field["min"] or value > field["max"]:
                     _fail("snapshot.field_range", f"field {member} is outside declared range", f"{path}.{member}")
+
+
+def kind_spaces(snapshot: dict[str, Any]) -> dict[str, list[str]]:
+    """The kinds each declaration space carries, which is the only count of them.
+
+    The same name in both spaces is two kinds and binds nothing between them."""
+    def kinds(section: str) -> list[str]:
+        entries = snapshot.get(section, [])
+        if not isinstance(entries, list):
+            return []
+        return sorted({
+            entry["kind"] for entry in entries
+            if isinstance(entry, dict) and isinstance(entry.get("kind"), str)
+        })
+
+    return {"item_kinds": kinds("items"), "track_kinds": kinds("tracks")}
+
+
+def _validate_required_kinds(snapshot: dict[str, Any]) -> None:
+    declared = kind_spaces(snapshot)
+    for index, field in enumerate(snapshot["fields"]):
+        for key, space in zip(REQUIRED_FOR_KEYS, ("item", "track")):
+            for kind in field.get(key, []):
+                if kind not in declared[f"{space}_kinds"]:
+                    _fail(
+                        "snapshot.required_for_kind",
+                        f"field {field['id']} requires the {space} kind {kind}, "
+                        f"which no {space} declares",
+                        f"$.fields[{index}].{key}",
+                    )
 
 
 def _validate_item_contract(items: list[dict[str, Any]]) -> None:
@@ -493,7 +532,9 @@ def _normalize_tracks(
     ]
     tracks.sort(key=lambda track: track.get("id", ""))
     _validate_track_contract(tracks)
-    _validate_typed_rows(tracks, fields, "tracks", lambda track: TRACK_TRANSITION[track["mode"]])
+    _validate_typed_rows(
+        tracks, fields, "tracks", lambda track: TRACK_TRANSITION[track["mode"]], TRACK_REQUIRED_FOR,
+    )
     _validate_level_provenance(tracks, "tracks")
     for index, track in enumerate(tracks):
         unknown = sorted(_references(track) - item_ids)
@@ -686,6 +727,11 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw_items, list):
         _fail("snapshot.items", "evaluation items must be a list", "$.items")
     fields, field_sources = _normalize_fields(evaluation)
+    # Before any row is judged against a column: a field that names a kind nobody
+    # declares is a typo, and reporting the row it fails to fit hides that.
+    _validate_required_kinds({
+        "fields": fields, "items": raw_items, "tracks": evaluation.get("tracks", []),
+    })
 
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -703,7 +749,7 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
         items.append(item)
     items.sort(key=lambda item: item["id"])
     _validate_item_contract(items)
-    _validate_typed_rows(items, fields, "items", lambda item: "cost_to_reach")
+    _validate_typed_rows(items, fields, "items", lambda item: "cost_to_reach", ITEM_REQUIRED_FOR)
     _validate_level_provenance(items)
     runtime_export = _runtime_export_metadata(items, fields)
     tracks, track_sources = _normalize_tracks(evaluation, fields, seen)
@@ -882,8 +928,8 @@ def query_snapshot(
             if isinstance(candidate, dict)
             and candidate.get("section") == "level_row"
             and candidate.get("member") == field
-            and isinstance(candidate.get("required_for"), list)
-            and item.get("kind") in candidate["required_for"]
+            and isinstance(candidate.get(ITEM_REQUIRED_FOR), list)
+            and item.get("kind") in candidate[ITEM_REQUIRED_FOR]
         ]
         if len(matching_fields) != 1:
             _fail("query.field_schema", f"expected one applicable schema for field: {field}", "$.fields")

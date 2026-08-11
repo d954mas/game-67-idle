@@ -480,7 +480,10 @@ return function(raise_internal)
 
     local fields, field_sources, registered_field_ids, registered_members = {}, {}, {}, {}
     local registered_field_by_id = {}
-    local registered_kinds, candidates = {}, {}
+    -- Items and tracks are neighbouring declaration spaces with their own kind
+    -- namespaces: the same name in both is two kinds, and a field binds to one.
+    local item_kinds, track_kinds = {}, {}
+    local candidates = {}
     for _, extension in ipairs(schema_extensions) do
       local extension_source = extension.__studio_source
       for section, members in raw_pairs(extension) do
@@ -581,32 +584,41 @@ return function(raise_internal)
         end
       end
       registered_field_by_id[field_id] = normalized
-      local required_for = normalized.required_for
-      if required_for ~= nil then
-        if raw_type(required_for) ~= "table" then
-          return fail_at(
-            "schema.required_for", "required_for must be a contiguous kind list",
-            descriptor, candidate.fallback
-          )
-        end
-        local count, max_index = 0, 0
-        for index, kind in raw_pairs(required_for) do
-          if raw_math.type(index) ~= "integer" or index < 1
-              or raw_type(kind) ~= "string" or kind == "" then
+      if normalized.required_for ~= nil then
+        return fail_at(
+          "schema.required_for",
+          "a field is required by item kinds or by track kinds: name them in "
+            .. "required_for_items or required_for_tracks",
+          descriptor, candidate.fallback
+        )
+      end
+      for _, space in ipairs({ "required_for_items", "required_for_tracks" }) do
+        local required_for = normalized[space]
+        if required_for ~= nil then
+          if raw_type(required_for) ~= "table" then
             return fail_at(
-              "schema.required_for", "required_for must be a contiguous kind list",
+              "schema.required_for", space .. " must be a contiguous kind list",
               descriptor, candidate.fallback
             )
           end
-          count = count + 1
-          if index > max_index then max_index = index end
-          registered_kinds[kind] = true
-        end
-        if count ~= max_index then
-          return fail_at(
-            "schema.required_for", "required_for must be a contiguous kind list",
-            descriptor, candidate.fallback
-          )
+          local count, max_index = 0, 0
+          for index, kind in raw_pairs(required_for) do
+            if raw_math.type(index) ~= "integer" or index < 1
+                or raw_type(kind) ~= "string" or kind == "" then
+              return fail_at(
+                "schema.required_for", space .. " must be a contiguous kind list",
+                descriptor, candidate.fallback
+              )
+            end
+            count = count + 1
+            if index > max_index then max_index = index end
+          end
+          if count == 0 or count ~= max_index then
+            return fail_at(
+              "schema.required_for", space .. " must be a non-empty contiguous kind list",
+              descriptor, candidate.fallback
+            )
+          end
         end
       end
       fields[#fields + 1] = normalized
@@ -627,7 +639,7 @@ return function(raise_internal)
         registered[id] = definition
       end
       if raw_type(definition.kind) == "string" and definition.kind ~= "" then
-        registered_kinds[definition.kind] = true
+        item_kinds[definition.kind] = true
       end
     end
     table.sort(declarations, function(a, b) return a.id < b.id end)
@@ -988,7 +1000,7 @@ return function(raise_internal)
       if raw_type(track.kind) ~= "string" or track.kind == "" then
         return raise_internal("track.kind", "track requires a non-empty kind", source.file, source.line)
       end
-      registered_kinds[track.kind] = true
+      track_kinds[track.kind] = true
       if track.levels == nil then
         return raise_internal("track.levels_required", "track requires levels", source.file, source.line)
       end
@@ -1022,6 +1034,36 @@ return function(raise_internal)
       -- declaration with nothing in it.
       if #track.levels.rows < 2 then
         return raise_internal("track.max_level", "track requires at least one level above the first row", source.file, source.line)
+      end
+    end
+
+    -- A kind exists because a declaration carries it, so a name nothing declares is a
+    -- typo: without this it would quietly bind a column to no row at all. Both
+    -- registries are complete only here, which is why a field is checked this late.
+    for _, normalized in ipairs(fields) do
+      local source = field_sources[normalized.id]
+      local declared = 0
+      for _, space in ipairs({ "required_for_items", "required_for_tracks" }) do
+        local declares, noun = item_kinds, "item"
+        if space == "required_for_tracks" then declares, noun = track_kinds, "track" end
+        for _, kind in ipairs(normalized[space] or {}) do
+          declared = declared + 1
+          if declares[kind] == nil then
+            return raise_internal(
+              "schema.required_for_kind",
+              "field " .. normalized.id .. " requires the " .. noun .. " kind " .. kind
+                .. ", which no " .. noun .. " declares",
+              source.file, source.line
+            )
+          end
+        end
+      end
+      if declared == 0 then
+        return raise_internal(
+          "schema.required_for",
+          "field " .. normalized.id .. " must name at least one item kind or track kind",
+          source.file, source.line
+        )
       end
     end
 
@@ -1161,16 +1203,19 @@ return function(raise_internal)
         return fail_at("waiver.unknown", "waiver names unknown requirement: " .. waiver_id, nil, waiver_sources[waiver_id])
       end
     end
-    local kinds = {}
-    for kind, _ in raw_pairs(registered_kinds) do kinds[#kinds + 1] = kind end
-    table.sort(kinds)
+    local declared_item_kinds, declared_track_kinds = {}, {}
+    for kind, _ in raw_pairs(item_kinds) do declared_item_kinds[#declared_item_kinds + 1] = kind end
+    for kind, _ in raw_pairs(track_kinds) do declared_track_kinds[#declared_track_kinds + 1] = kind end
+    table.sort(declared_item_kinds)
+    table.sort(declared_track_kinds)
     return {
       fields = fields,
       field_sources = field_sources,
+      item_kinds = declared_item_kinds,
       items = declarations,
-      kinds = kinds,
       requirements = requirement_results,
       requirement_sources = requirement_sources,
+      track_kinds = declared_track_kinds,
       tracks = track_declarations,
       waiver_sources = waiver_sources,
     }
@@ -1563,7 +1608,8 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
     normalized_items = normalized.get("items")
     fields = normalized.get("fields")
     field_sources = normalized.get("field_sources")
-    kinds = normalized.get("kinds")
+    item_kinds = normalized.get("item_kinds")
+    track_kinds = normalized.get("track_kinds")
     requirement_results = normalized.get("requirements")
     requirement_sources = normalized.get("requirement_sources")
     tracks = normalized.get("tracks")
@@ -1574,8 +1620,10 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         fields = [] if fields == {} else fields
     if not isinstance(field_sources, dict):
         field_sources = {} if field_sources == [] else field_sources
-    if not isinstance(kinds, list):
-        kinds = [] if kinds == {} else kinds
+    if not isinstance(item_kinds, list):
+        item_kinds = [] if item_kinds == {} else item_kinds
+    if not isinstance(track_kinds, list):
+        track_kinds = [] if track_kinds == {} else track_kinds
     if not isinstance(requirement_results, list):
         requirement_results = [] if requirement_results == {} else requirement_results
     if isinstance(requirement_results, list):
@@ -1651,11 +1699,12 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         },
         "fields": fields,
         "field_sources": field_sources,
+        "item_kinds": item_kinds,
         "items": normalized_items,
-        "kinds": kinds,
         "requirements": requirement_results,
         "requirement_sources": requirement_sources,
         "sources": sources,
+        "track_kinds": track_kinds,
         "track_sources": track_sources,
         "tracks": tracks,
         "waiver_sources": waiver_sources,

@@ -14,6 +14,8 @@ from typing import Any
 from items_c_identifiers import is_c_member_name
 from items_snapshot import (
     ITEM_KEYS as SNAPSHOT_ITEM_KEYS,
+    ITEM_REQUIRED_FOR,
+    TRACK_REQUIRED_FOR,
     SnapshotFailure,
     validate_snapshot_content_hash,
 )
@@ -92,7 +94,10 @@ def _schema_descriptor(fields: list[dict[str, Any]], item_ids: list[str]) -> byt
         "fields": [
             {
                 key: field.get(key)
-                for key in ("id", "member", "section", "type", "required_for", "min", "max", "rounding", "unit")
+                for key in (
+                    "id", "member", "section", "type", "required_for_items",
+                    "min", "max", "rounding", "unit",
+                )
             }
             for field in fields
         ],
@@ -195,20 +200,16 @@ def normalize(
         digests.append(digest)
 
     for field in sorted_fields:
-        required_for = field.get("required_for")
+        required_for = field.get(ITEM_REQUIRED_FOR, [])
         if not isinstance(required_for, list) or not all(
             isinstance(capability, str) and capability for capability in required_for
         ):
-            _fail("catalog.field", "field required_for must contain capability names")
+            _fail("catalog.field", f"field {ITEM_REQUIRED_FOR} must contain capability names")
 
-    # A field no item kind requires belongs to a neighbouring declaration space --
+    # A field that names no item kind belongs to a neighbouring declaration space --
     # progression tracks, whose columns have their own generator and may be
     # fractional. The item catalog neither projects it nor constrains its type.
-    item_kinds = {item.get("kind") for item in sorted_items}
-    catalog_fields = [
-        field for field in sorted_fields
-        if any(capability in item_kinds for capability in field["required_for"])
-    ]
+    catalog_fields = [field for field in sorted_fields if field.get(ITEM_REQUIRED_FOR)]
 
     field_records: list[dict[str, Any]] = []
     field_by_member: dict[str, int] = {}
@@ -216,16 +217,15 @@ def normalize(
     for index, field in enumerate(catalog_fields):
         member = field.get("member")
         unit = field.get("unit")
-        # One registry serves item kinds and track kinds, so required_for can name the
-        # wrong space by accident. Say which field and which name, or the author is
-        # left reading an ABI complaint about a column they meant for a track.
+        # Say which field and which kind, or the author is left reading an ABI
+        # complaint about a column they meant for a track.
         if field.get("type") != "i64" or field.get("rounding") != "exact":
-            named = sorted(set(field["required_for"]) & item_kinds)
+            named = ", ".join(sorted(field[ITEM_REQUIRED_FOR]))
             _fail(
                 "catalog.field",
-                f"field {field.get('id')!r} is {field.get('type')}, but required_for names "
-                f"the item kind {', '.join(named)}; the item catalog carries exact integers "
-                "only -- name a track kind instead, or declare the field exact",
+                f"field {field.get('id')!r} is {field.get('type')}, but it is required for "
+                f"the item kind {named}; the item catalog carries exact integers only -- "
+                f"move it to {TRACK_REQUIRED_FOR}, or declare the field exact",
             )
         if not is_c_member_name(member) or not isinstance(unit, str) or not unit:
             _fail("catalog.field", f"field {field.get('id')!r} has invalid ABI metadata")
@@ -248,9 +248,7 @@ def normalize(
     capabilities: dict[str, list[int]] = {}
     capability_names: set[str] = set()
     for index, field in enumerate(catalog_fields):
-        for capability in field["required_for"]:
-            if capability not in item_kinds:
-                continue
+        for capability in field[ITEM_REQUIRED_FOR]:
             capability_name = _c_name(capability).lower()
             if not capability_name:
                 _fail("catalog.field", "capability name cannot be empty")

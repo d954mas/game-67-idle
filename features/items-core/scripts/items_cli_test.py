@@ -162,8 +162,10 @@ class ItemsCliTests(unittest.TestCase):
 
     def test_schema_and_validate_are_focused_snapshot_views(self):
         schema = self.payload("schema")
-        # A track kind and its fractional column sit in the same registries as items.
-        self.assertEqual(schema["result"]["kinds"], ["currency", "hauler", "weapon"])
+        # A track kind is reported as a track kind: the fractional column beside it
+        # belongs to the track space and to nothing in the item space.
+        self.assertEqual(schema["result"]["item_kinds"], ["currency", "weapon"])
+        self.assertEqual(schema["result"]["track_kinds"], ["hauler"])
         self.assertEqual([field["id"] for field in schema["result"]["fields"]], [
             "game.hauler.level.haul_mul",
             "game.weapon.level.attack",

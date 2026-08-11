@@ -35,7 +35,9 @@ the way a levelled thing is authored and checked.
 
 A track declares `id` (the key of its save record, so only its charset is
 checked -- renaming one forgets every player's earned levels), `kind` (which
-binds its columns through the same `required_for` registry items use), `mode`,
+binds its columns through the fields that name it in `required_for_tracks`;
+item kinds are a separate namespace, so one name in both spaces is two kinds
+and binds nothing across them), `mode`,
 and `levels`. Row 1 is the un-upgraded state and carries the track's zero
 contribution; the levels it can reach are the rows above it. Exactly one advance
 is representable per mode: `manual`/`auto` carry `cost_to_reach` (a price in
@@ -46,9 +48,11 @@ that grants back at least what a level charged of the same resource is rejected,
 because that shape never stops buying.
 
 The Snapshot grows a `tracks` section beside `items`, part of the content hash.
-The generated C item catalog ignores it, and ignores any field no item kind
-requires — those columns belong to the neighbouring space and have their own
-generator.
+The generated C item catalog ignores it, and ignores any field with no
+`required_for_items` — those columns belong to the neighbouring space and have
+their own generator. A field must name at least one kind, and a kind it names
+must be declared in that field's space, or the build refuses it at the line that
+wrote it.
 
 ## Exact and fractional columns
 
@@ -274,6 +278,16 @@ requirements are authored outside the baked catalog.
 header a consumer includes is `items_catalog.gen.h`, catalog identity and
 currency queries answer without a bind step, and the `api_proof*` commands are
 replaced by `c_catalog*`.
+
+Version `7.0.0` splits the kind namespaces. A field names item kinds in
+`required_for_items` and track kinds in `required_for_tracks`; `required_for`,
+which held both in one list, is refused. The evaluation payload reports
+`item_kinds` and `track_kinds` instead of one `kinds`, and `items_cli schema`
+answers with the same two. A field must name at least one kind, and a kind it
+names must be declared in that field's own space -- the typo that used to bind a
+column to nothing now fails at the line that wrote it. One name in both spaces is
+two kinds and binds nothing across them. Existing authoring must name the key it
+meant; nothing else in the Snapshot moves.
 
 Version `6.1.0` closes three authoring holes the review found: negative zero is
 refused (it equals zero in every range check and in the diff, but bakes a

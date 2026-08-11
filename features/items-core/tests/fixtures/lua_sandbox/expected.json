@@ -7,6 +7,10 @@
   },
   "field_sources": {},
   "fields": [],
+  "item_kinds": [
+    "currency",
+    "weapon"
+  ],
   "items": [
     {
       "authoring_mode": "none",
@@ -88,12 +92,6 @@
       "stack": 1
     }
   ],
-  "kinds": [
-    "currency",
-    "hauler",
-    "rank",
-    "weapon"
-  ],
   "requirement_sources": {},
   "requirements": [],
   "schema": "items.lua.evaluation.v1",
@@ -126,6 +124,10 @@
       "snippet": "items.define({"
     }
   },
+  "track_kinds": [
+    "hauler",
+    "rank"
+  ],
   "track_sources": {
     "hauler": {
       "column": 1,
