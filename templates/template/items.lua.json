@@ -2,6 +2,10 @@
   "schema": "studio.lua.sandbox.v1",
   "modules": [
     {
+      "name": "template.items.kinds",
+      "file": "design/items/kinds.lua"
+    },
+    {
       "name": "template.items.currencies",
       "file": "design/items/currencies.lua"
     },

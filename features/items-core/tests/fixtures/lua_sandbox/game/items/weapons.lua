@@ -1,9 +1,10 @@
 local items = require("studio.items")
+local kinds = require("game.kinds")
 local levels = require("studio.levels")
 
 items.define({
   id = "game.iron_sword",
-  kind = "weapon",
+  kind = kinds.weapon,
   stack = 1,
   levels = levels.single({ attack = 15 }),
   acquire = { cost = items.cost(items.ref("game.gold"), 100) },
@@ -11,7 +12,7 @@ items.define({
 
 items.define({
   id = "game.levelled_sword",
-  kind = "weapon",
+  kind = kinds.weapon,
   stack = 1,
   levels = levels.table({
     [1] = { attack = 10 },

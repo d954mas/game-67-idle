@@ -114,8 +114,10 @@ class ItemsLuaSandboxTests(unittest.TestCase):
         self.assertNotIn("xp_to_reach", rank["levels"]["rows"][0])
         # A float column is exact where the arithmetic is exact; 1.5 ** 2 is.
         self.assertEqual([row["payout"] for row in rank["levels"]["rows"]], [1.0, 1.5, 2.25])
-        self.assertEqual(payload["item_kinds"], ["currency", "weapon"])
-        self.assertEqual(payload["track_kinds"], ["hauler", "rank"])
+        self.assertEqual(payload["kinds"], {
+            "items": [{"id": "currency"}, {"id": "weapon"}],
+            "tracks": [{"id": "hauler"}, {"id": "rank"}],
+        })
 
     def test_template_lua_reproduces_six_catalog_definitions_without_containers(self):
         result = subprocess.run(
@@ -129,8 +131,12 @@ class ItemsLuaSandboxTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         # "hero" is the demo TRACK's kind, and it is nowhere near the item kinds.
-        self.assertEqual(payload["item_kinds"], ["consumable", "currency", "material", "weapon"])
-        self.assertEqual(payload["track_kinds"], ["hero"])
+        self.assertEqual(payload["kinds"], {
+            "items": [
+                {"id": "consumable"}, {"id": "currency"}, {"id": "material"}, {"id": "weapon"},
+            ],
+            "tracks": [{"id": "hero"}],
+        })
         self.assertEqual(payload["items"], [
             {
                 "authoring_mode": "none", "base_value": 0,
@@ -214,7 +220,7 @@ class ItemsLuaSandboxTests(unittest.TestCase):
     def test_item_definition_sources_are_honest_and_stable(self):
         result = self.evaluate({"game.items": '''-- heading
 local items = require("studio.items")
-items.define({ id="game.gold", kind="currency", stack=0 })
+items.define({ id="game.gold", kind=items.kind({ id="currency" }), stack=0 })
 '''}, ["game.items"])
 
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -225,9 +231,9 @@ items.define({ id="game.gold", kind="currency", stack=0 })
                 "line": 3,
                 "column": 1,
                 "end_line": 3,
-                "end_column": 59,
+                "end_column": 78,
                 "kind": "definition",
-                "snippet": 'items.define({ id="game.gold", kind="currency", stack=0 })',
+                "snippet": 'items.define({ id="game.gold", kind=items.kind({ id="currency" }), stack=0 })',
             },
         })
 
@@ -243,11 +249,11 @@ items.define({ id="game.gold", kind="currency", stack=0 })
         forward = self.evaluate({
             "game.a_weapon": '''local items = require("studio.items")
 items.define({
-  id="game.sword", kind="weapon", stack=1,
+  id="game.sword", kind=items.kind({ id="weapon" }), stack=1,
   acquire={ cost=items.cost(items.ref("game.gold"), 10) },
 })''',
             "game.z_currency": '''local items = require("studio.items")
-items.define({ id="game.gold", kind="currency", stack=0 })''',
+items.define({ id="game.gold", kind=items.kind({ id="currency" }), stack=0 })''',
         }, ["game.a_weapon", "game.z_currency"])
         self.assertEqual(forward.returncode, 0, forward.stderr)
         ref = json.loads(forward.stdout)["items"][1]["acquire"]["cost"]["item"]
@@ -256,8 +262,8 @@ items.define({ id="game.gold", kind="currency", stack=0 })''',
         hidden = self.evaluate({
             "game.items": '''local items = require("studio.items")
 local gold = items.ref("game.gold")
-items.define({ id="game.sword", kind="weapon", stack=1, leaked_source=gold.__studio_source })
-items.define({ id="game.gold", kind="currency", stack=0 })''',
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1, leaked_source=gold.__studio_source })
+items.define({ id="game.gold", kind=items.kind({ id="currency" }), stack=0 })''',
         }, ["game.items"])
         self.assertEqual(hidden.returncode, 0, hidden.stderr)
         sword = json.loads(hidden.stdout)["items"][1]
@@ -266,7 +272,7 @@ items.define({ id="game.gold", kind="currency", stack=0 })''',
         missing = self.evaluate({
             "game.weapon": '''local items = require("studio.items")
 items.define({
-  id="game.sword", kind="weapon", stack=1,
+  id="game.sword", kind=items.kind({ id="weapon" }), stack=1,
   acquire={ cost=items.cost(items.ref("game.missing"), 10) },
 })''',
         }, ["game.weapon"])
@@ -275,22 +281,26 @@ items.define({
 
         duplicate = self.evaluate({
             "game.items": '''local items = require("studio.items")
-items.define({ id="game.same", kind="currency", stack=0 })
-items.define({ id="game.same", kind="material", stack=9 })''',
+items.define({ id="game.same", kind=items.kind({ id="currency" }), stack=0 })
+items.define({ id="game.same", kind=items.kind({ id="material" }), stack=9 })''',
         }, ["game.items"])
         self.assert_error(duplicate, "definition.duplicate_id", "game/items.lua", 3)
 
     def test_schema_and_kinds_register_before_definitions_independent_of_module_order(self):
         modules = {
+            "game.kinds": '''local items = require("studio.items")
+return { weapon = items.kind({ id="weapon" }) }''',
             "game.a_items": '''local items = require("studio.items")
+local kinds = require("game.kinds")
 local levels = require("studio.levels")
-items.define({ id="game.sword", kind="weapon", stack=1,
+items.define({ id="game.sword", kind=kinds.weapon, stack=1,
   levels=levels.single({ attack=15 }),
 })''',
             "game.z_schema": '''local field = require("studio.field")
 local items = require("studio.items")
+local kinds = require("game.kinds")
 local options = {
-  id="game.weapon.level.attack", required_for_items={"weapon"}, min=0, max=100,
+  id="game.weapon.level.attack", required_for={ kinds.weapon }, min=0, max=100,
   unit="damage", rounding="exact", label_key="item.attack",
 }
 local extension = { level_row={ attack=field.i64(options) } }
@@ -298,22 +308,23 @@ items.extend_schema(extension)
 options.id = "game.changed"
 extension.level_row.attack = nil''',
         }
-        first = self.evaluate(modules, ["game.a_items", "game.z_schema"])
+        entries = ["game.a_items", "game.z_schema"]
+        first = self.evaluate(modules, entries)
         second = self.evaluate(
             dict(reversed(list(modules.items()))),
-            ["game.z_schema", "game.a_items"],
+            list(reversed(entries)),
         )
 
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertEqual(first.stdout, second.stdout)
         payload = json.loads(first.stdout)
-        self.assertEqual(payload["item_kinds"], ["weapon"])
+        self.assertEqual(payload["kinds"], {"items": [{"id": "weapon"}], "tracks": []})
         self.assertEqual(payload["field_sources"]["game.weapon.level.attack"], {
             "file": "game/z_schema.lua",
-            "line": 7,
+            "line": 8,
             "column": 1,
-            "end_line": 7,
+            "end_line": 8,
             "end_column": 62,
             "kind": "field",
             "snippet": "local extension = { level_row={ attack=field.i64(options) } }",
@@ -331,45 +342,47 @@ extension.level_row.attack = nil''',
             "unit": "damage",
         }])
 
-    def test_a_field_binds_to_one_kind_space_and_a_name_nothing_declares_fails(self):
-        """The two spaces have their own kind namespaces: a name is resolved in the
-        space its key names, and a name nobody declares is a typo, not a silent
-        column that is required nowhere."""
+    def test_a_kind_is_declared_once_and_reaches_a_declaration_only_by_handle(self):
+        """A kind is an identity, not a spelling. A misspelling is a nil handle at the
+        line that wrote it, which no space can mistake for one of its own kinds."""
         typo = self.evaluate({"game.schema": '''local field = require("studio.field")
 local items = require("studio.items")
 local levels = require("studio.levels")
 local tracks = require("studio.tracks")
+local upgrade = tracks.kind({ id="upgrade" })
 items.extend_schema({ level_row={ rate=field.f64({
-  id="game.upgrade.level.rate", required_for_tracks={"upgrad"}, min=0.0, max=10.0,
+  id="game.upgrade.level.rate", required_for={ upgrad }, min=0.0, max=10.0,
   unit="x", label_key="upgrade.rate",
 }) } })
-tracks.define({ id="t.node", kind="upgrade", mode="threshold", levels=levels.table({
+tracks.define({ id="t.node", kind=upgrade, mode="threshold", levels=levels.table({
   [1]={ rate=0.0 }, [2]={ rate=1.0, xp_to_reach=10 },
 }) })'''
         }, ["game.schema"])
-        self.assert_error(typo, "schema.required_for_kind", "game/schema.lua", 5)
-        message = json.loads(typo.stderr)["error"]["message"]
-        self.assertIn("game.upgrade.level.rate", message)
-        self.assertIn("track kind upgrad", message)
+        self.assert_error(typo, "sandbox.forbidden_global", "game/schema.lua", 7)
+        self.assertIn("upgrad", json.loads(typo.stderr)["error"]["message"])
 
-        # An item kind is not in scope for a track column, however loudly it is spelled.
-        wrong_space = self.evaluate({"game.schema": '''local field = require("studio.field")
+        # A name is never resolved, so nothing can be named into a space at all.
+        by_name = self.evaluate({"game.schema": '''local field = require("studio.field")
 local items = require("studio.items")
 items.extend_schema({ level_row={ rate=field.f64({
-  id="game.weapon.level.rate", required_for_tracks={"weapon"}, min=0.0, max=10.0,
+  id="game.weapon.level.rate", required_for={ "weapon" }, min=0.0, max=10.0,
   unit="x", label_key="weapon.rate",
 }) } })
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1 })'''
+        }, ["game.schema"])
+        self.assert_error(by_name, "schema.required_for", "game/schema.lua", 3)
+
+        named_item = self.evaluate({"game.schema": '''local items = require("studio.items")
 items.define({ id="game.sword", kind="weapon", stack=1 })'''
         }, ["game.schema"])
-        self.assert_error(wrong_space, "schema.required_for_kind", "game/schema.lua", 3)
+        self.assert_error(named_item, "definition.kind", "game/schema.lua", 2)
 
-        legacy = self.evaluate({"game.schema": '''local field = require("studio.field")
-local items = require("studio.items")
-items.extend_schema({ level_row={ attack=field.i64({
-  id="game.weapon.level.attack", required_for={"weapon"},
-}) } })'''
+        duplicate = self.evaluate({"game.schema": '''local items = require("studio.items")
+local first = items.kind({ id="weapon" })
+local second = items.kind({ id="weapon" })
+items.define({ id="game.sword", kind=first, stack=1, tags={ second.id } })'''
         }, ["game.schema"])
-        self.assert_error(legacy, "schema.required_for", "game/schema.lua", 3)
+        self.assert_error(duplicate, "kind.duplicate_id", "game/schema.lua", 3)
 
     def test_an_item_kind_and_a_track_kind_may_share_a_name_and_stay_unrelated(self):
         """One name in two spaces is two kinds. The item column stays off the track's
@@ -378,26 +391,28 @@ items.extend_schema({ level_row={ attack=field.i64({
 local items = require("studio.items")
 local levels = require("studio.levels")
 local tracks = require("studio.tracks")
+local weapon_item = items.kind({ id="weapon" })
+local weapon_track = tracks.kind({ id="weapon" })
 items.extend_schema({ level_row={
   attack=field.i64({
-    id="game.weapon.level.attack", required_for_items={"weapon"}, min=0, max=100,
+    id="game.weapon.level.attack", required_for={ weapon_item }, min=0, max=100,
     unit="damage", rounding="exact", label_key="item.attack",
   }),
   rate=field.f64({
-    id="game.weapon.level.rate", required_for_tracks={"weapon"}, min=0.0, max=10.0,
+    id="game.weapon.level.rate", required_for={ weapon_track }, min=0.0, max=10.0,
     unit="x", label_key="weapon.rate",
   }),
 } })
-items.define({ id="game.sword", kind="weapon", stack=1, levels=levels.single({ attack=15 }) })
-tracks.define({ id="t.weapon", kind="weapon", mode="threshold", levels=levels.table({
+items.define({ id="game.sword", kind=weapon_item, stack=1, levels=levels.single({ attack=15 }) })
+tracks.define({ id="t.weapon", kind=weapon_track, mode="threshold", levels=levels.table({
   [1]={ rate=0.0 }, [2]={ rate=1.0, xp_to_reach=10 },
 }) })'''
         }, ["game.schema"])
 
         self.assertEqual(shared.returncode, 0, shared.stderr)
         payload = json.loads(shared.stdout)
-        self.assertEqual(payload["item_kinds"], ["weapon"])
-        self.assertEqual(payload["track_kinds"], ["weapon"])
+        self.assertEqual(
+            payload["kinds"], {"items": [{"id": "weapon"}], "tracks": [{"id": "weapon"}]})
         self.assertEqual(payload["items"][0]["levels"]["rows"], [{"attack": 15}])
         self.assertEqual(
             [row.get("rate") for row in payload["tracks"][0]["levels"]["rows"]], [0.0, 1.0],
@@ -413,28 +428,30 @@ items.extend_schema({ level_row={ attack={
 
         duplicate = self.evaluate({"game.schema": '''local field = require("studio.field")
 local items = require("studio.items")
-items.extend_schema({ level_row={ attack=field.i64({ id="game.weapon.level.attack" }) } })
-items.extend_schema({ level_row={ damage=field.i64({ id="game.weapon.level.attack" }) } })'''
+local weapon = items.kind({ id="weapon" })
+items.extend_schema({ level_row={ attack=field.i64({ id="game.weapon.level.attack", required_for={ weapon } }) } })
+items.extend_schema({ level_row={ damage=field.i64({ id="game.weapon.level.attack", required_for={ weapon } }) } })'''
         }, ["game.schema"])
-        self.assert_error(duplicate, "schema.duplicate_field_id", "game/schema.lua", 4)
+        self.assert_error(duplicate, "schema.duplicate_field_id", "game/schema.lua", 5)
 
         duplicate_member = self.evaluate({"game.schema": '''local field = require("studio.field")
 local items = require("studio.items")
-items.extend_schema({ level_row={ attack=field.i64({ id="game.weapon.level.attack" }) } })
-items.extend_schema({ level_row={ attack=field.i64({ id="game.weapon.level.damage" }) } })'''
+local weapon = items.kind({ id="weapon" })
+items.extend_schema({ level_row={ attack=field.i64({ id="game.weapon.level.attack", required_for={ weapon } }) } })
+items.extend_schema({ level_row={ attack=field.i64({ id="game.weapon.level.damage", required_for={ weapon } }) } })'''
         }, ["game.schema"])
-        self.assert_error(duplicate_member, "schema.duplicate_member", "game/schema.lua", 4)
+        self.assert_error(duplicate_member, "schema.duplicate_member", "game/schema.lua", 5)
 
         sealed = self.evaluate({"game.schema": '''local field = require("studio.field")
 local items = require("studio.items")
-items.extend_schema({ level_row={ attack=field.i64({ id="items.level.attack" }) } })'''
+items.extend_schema({ level_row={ attack=field.i64({ id="items.level.attack", required_for={ items.kind({ id="weapon" }) } }) } })'''
         }, ["game.schema"])
         self.assert_error(sealed, "schema.sealed_field_id", "game/schema.lua", 3)
 
         reserved = self.evaluate({"game.schema": '''local field = require("studio.field")
 local items = require("studio.items")
 items.extend_schema({ level_row={ attack=field.i64({
-  id="game.weapon.level.attack", type="string",
+  id="game.weapon.level.attack", type="string", required_for={ items.kind({ id="weapon" }) },
 }) } })'''
         }, ["game.schema"])
         self.assert_error(reserved, "schema.reserved_key", "game/schema.lua", 3)
@@ -447,28 +464,30 @@ items.extend_schema({ level_row={ attack=field.i64({
             with self.subTest(invalid_id=invalid_id):
                 invalid = self.evaluate({"game.schema": f'''local field = require("studio.field")
 local items = require("studio.items")
-items.extend_schema({{ level_row={{ attack=field.i64({{ id="{invalid_id}" }}) }} }})'''
+items.extend_schema({{ level_row={{ attack=field.i64({{ id="{invalid_id}", required_for={{ items.kind({{ id="weapon" }}) }} }}) }} }})'''
                 }, ["game.schema"])
                 self.assert_error(invalid, "schema.field_id", "game/schema.lua", 3)
 
     def test_schema_conflicts_and_output_budget_are_deterministic(self):
         conflict = '''local field = require("studio.field")
 local items = require("studio.items")
+local weapon = items.kind({ id="weapon" })
 items.extend_schema({ level_row={
-  damage=field.i64({ id="game.weapon.level.same" }),
-  attack=field.i64({ id="game.weapon.level.same" }),
+  damage=field.i64({ id="game.weapon.level.same", required_for={ weapon } }),
+  attack=field.i64({ id="game.weapon.level.same", required_for={ weapon } }),
 } })'''
         results = [self.evaluate({"game.schema": conflict}, ["game.schema"]) for _ in range(3)]
         for result in results:
-            self.assert_error(result, "schema.duplicate_field_id", "game/schema.lua", 4)
+            self.assert_error(result, "schema.duplicate_field_id", "game/schema.lua", 5)
 
         budget = self.evaluate({"game.schema": '''local field = require("studio.field")
 local items = require("studio.items")
+local weapon = items.kind({ id="weapon" })
 items.extend_schema({ level_row={
-  attack=field.i64({ id="game.weapon.level.attack", required_for_items={"weapon"} }),
-  defense=field.i64({ id="game.weapon.level.defense", required_for_items={"weapon"} }),
+  attack=field.i64({ id="game.weapon.level.attack", required_for={ weapon } }),
+  defense=field.i64({ id="game.weapon.level.defense", required_for={ weapon } }),
 } })
-items.define({ id="game.sword", kind="weapon", stack=1 })'''
+items.define({ id="game.sword", kind=weapon, stack=1 })'''
         }, ["game.schema"], "--max-output-rows", "1")
         self.assert_error(budget, "output.row_limit", "game/schema.lua", 1)
 
@@ -532,7 +551,7 @@ items.define({ id="game.sword", kind="weapon", stack=1 })'''
     def test_declarations_are_copied_and_approved_inputs_are_read_only(self):
         copied = self.evaluate({"game.items": '''
 local items = require("studio.items")
-local definition = { id="game.gold", kind="currency", nested={ value=1 } }
+local definition = { id="game.gold", kind=items.kind({ id="currency" }), nested={ value=1 } }
 items.define(definition)
 definition.id = "game.changed"
 definition.nested.value = 2
@@ -835,12 +854,13 @@ items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=1,
 local levels = require("studio.levels")
 local math = require("studio.math")
 local field = require("studio.field")
-items.extend_schema({ level_row = { rate = field.f64({ id="game.sword.level.rate", required_for_items = { "sword" } }) } })
-items.define({ id="game.sword", kind="sword", stack=1, levels=levels.generate({ max_level=1,
+local sword = items.kind({ id="sword" })
+items.extend_schema({ level_row = { rate = field.f64({ id="game.sword.level.rate", required_for = { sword } }) } })
+items.define({ id="game.sword", kind=sword, stack=1, levels=levels.generate({ max_level=1,
   rate=function(level, m) return m.mul(0.0, m.tofloat(m.sub(0, 5))) end,
 }) })'''
         }, ["game.negzero"])
-        self.assert_error(negative_zero, "formula.math", "game/negzero.lua", 7)
+        self.assert_error(negative_zero, "formula.math", "game/negzero.lua", 8)
 
         unsafe_override = self.evaluate({"game.override": '''local items = require("studio.items")
 local levels = require("studio.levels")
@@ -885,9 +905,10 @@ items.define({ id="game.sword", stack=1,
 local field = require("studio.field")
 local math = require("studio.math")
 local requirements = require("studio.requirements")
-local attack = field.i64({ id="game.weapon.level.attack", required_for_items={"weapon"}, min=0, max=100, unit="damage", rounding="exact", label_key="item.attack" })
+local weapon = items.kind({ id="weapon" })
+local attack = field.i64({ id="game.weapon.level.attack", required_for={ weapon }, min=0, max=100, unit="damage", rounding="exact", label_key="item.attack" })
 items.extend_schema({ level_row={ attack=attack } })
-items.define({ id="game.sword", kind="weapon", stack=1, levels=require("studio.levels").single({ attack=15 }) })
+items.define({ id="game.sword", kind=weapon, stack=1, levels=require("studio.levels").single({ attack=15 }) })
 local sword = items.ref("game.sword")
 requirements.define({
   id="game.weapon.headroom", severity="warning",
@@ -909,9 +930,10 @@ requirements.define({
         checked = self.evaluate({"game.requirements": '''local items = require("studio.items")
 local field = require("studio.field")
 local requirements = require("studio.requirements")
-local attack = field.i64({ id="game.weapon.level.attack", required_for_items={"weapon"}, min=0, max=100, unit="damage", rounding="exact", label_key="item.attack" })
+local weapon = items.kind({ id="weapon" })
+local attack = field.i64({ id="game.weapon.level.attack", required_for={ weapon }, min=0, max=100, unit="damage", rounding="exact", label_key="item.attack" })
 items.extend_schema({ level_row={ attack=attack } })
-items.define({ id="game.sword", kind="weapon", stack=1, levels=require("studio.levels").single({ attack=15 }) })
+items.define({ id="game.sword", kind=weapon, stack=1, levels=require("studio.levels").single({ attack=15 }) })
 local sword = items.ref("game.sword")
 requirements.define({
   id="game.weapon.attack_floor", severity="warning",

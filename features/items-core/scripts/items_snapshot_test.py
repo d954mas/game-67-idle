@@ -65,9 +65,18 @@ def track(mode="auto", rows=None, provenance=None, kind="rank", track_id="rank")
     }
 
 
-def evaluation(items, fields=None, tracks=None):
+def declared_kinds(items, tracks):
+    """What a real evaluator emits: every kind a declaration carries, per space."""
+    return {
+        "items": [{"id": kind} for kind in sorted({item["kind"] for item in items})],
+        "tracks": [{"id": kind} for kind in sorted({track["kind"] for track in tracks})],
+    }
+
+
+def evaluation(items, fields=None, tracks=None, kinds=None):
     fields = [attack_field()] if fields is None else fields
     tracks = [] if tracks is None else tracks
+    kinds = declared_kinds(items, tracks) if kinds is None else kinds
     source_lines = {
         item_id: index + 3
         for index, item_id in enumerate(sorted(item["id"] for item in items))
@@ -89,6 +98,7 @@ def evaluation(items, fields=None, tracks=None):
             for index, field in enumerate(fields)
         },
         "items": items,
+        "kinds": kinds,
         "tracks": tracks,
         "track_sources": {
             entry["id"]: {
@@ -959,6 +969,34 @@ class ItemsSnapshotTests(unittest.TestCase):
                 "item": {"__studio_kind": "item_ref", "id": "game.ghost"}}},
         ])
         self.assert_track_failure([missing], "snapshot.unknown_reference")
+
+    def test_the_kinds_section_is_the_declaration_and_part_of_the_hash(self):
+        """A kind is declared, not inferred from the rows that happen to use it, so
+        its metadata is authoring payload like any other."""
+        labelled = evaluation(
+            self.base_items(), fields=[attack_field(), payout_field()], tracks=[track()],
+            kinds={
+                "items": [{"id": "currency"}, {"id": "weapon", "label_key": "kind.weapon"}],
+                "tracks": [{"id": "rank"}],
+            },
+        )
+        snapshot = SNAPSHOT.build_snapshot(labelled)
+        self.assertEqual(snapshot["kinds"]["items"][1]["label_key"], "kind.weapon")
+        relabelled = copy.deepcopy(snapshot)
+        relabelled["kinds"]["items"][1]["label_key"] = "kind.blade"
+        self.assertNotEqual(
+            SNAPSHOT.snapshot_content_hash(relabelled), snapshot["content_hash"])
+
+        for broken, code in (
+            ({"items": [{"id": "Weapon"}], "tracks": []}, "snapshot.kind_id"),
+            ({"items": [{"id": "weapon"}, {"id": "weapon"}], "tracks": []}, "snapshot.duplicate_kind"),
+            ({"items": [{"id": "weapon", "icon": "x"}], "tracks": []}, "snapshot.kind_key"),
+            ({"items": [{"id": "weapon", "label_key": ""}], "tracks": []}, "snapshot.kind_label_key"),
+            ({"items": []}, "snapshot.kinds"),
+        ):
+            with self.assertRaises(SNAPSHOT.SnapshotFailure) as raised:
+                SNAPSHOT.build_snapshot(evaluation(self.base_items(), kinds=broken))
+            self.assertEqual(raised.exception.code, code)
 
     def test_a_field_names_kinds_of_one_space_and_only_kinds_that_exist(self):
         """The two spaces keep their own kind namespaces, so a name is looked up in

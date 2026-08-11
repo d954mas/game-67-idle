@@ -162,10 +162,12 @@ class ItemsCliTests(unittest.TestCase):
 
     def test_schema_and_validate_are_focused_snapshot_views(self):
         schema = self.payload("schema")
-        # A track kind is reported as a track kind: the fractional column beside it
-        # belongs to the track space and to nothing in the item space.
-        self.assertEqual(schema["result"]["item_kinds"], ["currency", "weapon"])
-        self.assertEqual(schema["result"]["track_kinds"], ["hauler"])
+        # Kinds are reported as the two spaces that declare them; the fractional
+        # column beside the track kind belongs to nothing in the item space.
+        self.assertEqual(schema["result"]["kinds"], {
+            "items": [{"id": "currency"}, {"id": "weapon", "label_key": "kind.weapon"}],
+            "tracks": [{"id": "hauler"}],
+        })
         self.assertEqual([field["id"] for field in schema["result"]["fields"]], [
             "game.hauler.level.haul_mul",
             "game.weapon.level.attack",
@@ -546,6 +548,7 @@ class ItemsCliTests(unittest.TestCase):
                 {path.relative_to(project.resolve()).as_posix() for path in captured},
                 {
                     "items.lua.json",
+                    "game/kinds.lua",
                     "game/items.lua",
                     "game/other.lua",
                     "game/tracks.lua",
@@ -571,6 +574,7 @@ class ItemsCliTests(unittest.TestCase):
                 {path.relative_to(project.resolve()).as_posix() for path in captured},
                 {
                     "items.lua.json",
+                    "game/kinds.lua",
                     "game/items.lua",
                     "game/other.lua",
                     "game/tracks.lua",

@@ -7,10 +7,6 @@
   },
   "field_sources": {},
   "fields": [],
-  "item_kinds": [
-    "currency",
-    "weapon"
-  ],
   "items": [
     {
       "authoring_mode": "none",
@@ -92,6 +88,24 @@
       "stack": 1
     }
   ],
+  "kinds": {
+    "items": [
+      {
+        "id": "currency"
+      },
+      {
+        "id": "weapon"
+      }
+    ],
+    "tracks": [
+      {
+        "id": "hauler"
+      },
+      {
+        "id": "rank"
+      }
+    ]
+  },
   "requirement_sources": {},
   "requirements": [],
   "schema": "items.lua.evaluation.v1",
@@ -99,52 +113,48 @@
     "game.gold": {
       "column": 1,
       "end_column": 15,
-      "end_line": 3,
+      "end_line": 4,
       "file": "game/items/currencies.lua",
       "kind": "definition",
-      "line": 3,
+      "line": 4,
       "snippet": "items.define({"
     },
     "game.iron_sword": {
       "column": 1,
       "end_column": 15,
-      "end_line": 4,
+      "end_line": 5,
       "file": "game/items/weapons.lua",
       "kind": "definition",
-      "line": 4,
+      "line": 5,
       "snippet": "items.define({"
     },
     "game.levelled_sword": {
       "column": 1,
       "end_column": 15,
-      "end_line": 12,
+      "end_line": 13,
       "file": "game/items/weapons.lua",
       "kind": "definition",
-      "line": 12,
+      "line": 13,
       "snippet": "items.define({"
     }
   },
-  "track_kinds": [
-    "hauler",
-    "rank"
-  ],
   "track_sources": {
     "hauler": {
       "column": 1,
       "end_column": 16,
-      "end_line": 7,
+      "end_line": 8,
       "file": "game/tracks.lua",
       "kind": "track",
-      "line": 7,
+      "line": 8,
       "snippet": "tracks.define({"
     },
     "rank": {
       "column": 1,
       "end_column": 16,
-      "end_line": 18,
+      "end_line": 19,
       "file": "game/tracks.lua",
       "kind": "track",
-      "line": 18,
+      "line": 19,
       "snippet": "tracks.define({"
     }
   },

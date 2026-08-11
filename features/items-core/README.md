@@ -33,11 +33,16 @@ cost primitives without change. A track is not a kind of item: it has no
 storage, no acquisition, and its own generator downstream. What they share is
 the way a levelled thing is authored and checked.
 
+A kind is declared once, through the space that owns it -- `items.kind` or
+`tracks.kind` -- and every declaration that names one takes the handle it
+returned. Nothing resolves a kind by name, so a misspelling is a nil handle at
+the line that wrote it rather than a kind nobody declared, and one id declared in
+both spaces is two unrelated kinds. A kind carries `id` and an optional
+`label_key`; the Snapshot's `kinds` section holds both, per space, and is part of
+the content hash.
+
 A track declares `id` (the key of its save record, so only its charset is
-checked -- renaming one forgets every player's earned levels), `kind` (which
-binds its columns through the fields that name it in `required_for_tracks`;
-item kinds are a separate namespace, so one name in both spaces is two kinds
-and binds nothing across them), `mode`,
+checked -- renaming one forgets every player's earned levels), `kind`, `mode`,
 and `levels`. Row 1 is the un-upgraded state and carries the track's zero
 contribution; the levels it can reach are the rows above it. Exactly one advance
 is representable per mode: `manual`/`auto` carry `cost_to_reach` (a price in
@@ -50,9 +55,9 @@ because that shape never stops buying.
 The Snapshot grows a `tracks` section beside `items`, part of the content hash.
 The generated C item catalog ignores it, and ignores any field with no
 `required_for_items` — those columns belong to the neighbouring space and have
-their own generator. A field must name at least one kind, and a kind it names
-must be declared in that field's space, or the build refuses it at the line that
-wrote it.
+their own generator. A field is required for at least one kind; the wire format
+keeps the two spaces apart in `required_for_items` and `required_for_tracks`,
+which the evaluator fills from the handles the author wrote.
 
 ## Exact and fractional columns
 
@@ -279,15 +284,16 @@ header a consumer includes is `items_catalog.gen.h`, catalog identity and
 currency queries answer without a bind step, and the `api_proof*` commands are
 replaced by `c_catalog*`.
 
-Version `7.0.0` splits the kind namespaces. A field names item kinds in
-`required_for_items` and track kinds in `required_for_tracks`; `required_for`,
-which held both in one list, is refused. The evaluation payload reports
-`item_kinds` and `track_kinds` instead of one `kinds`, and `items_cli schema`
-answers with the same two. A field must name at least one kind, and a kind it
-names must be declared in that field's own space -- the typo that used to bind a
-column to nothing now fails at the line that wrote it. One name in both spaces is
-two kinds and binds nothing across them. Existing authoring must name the key it
-meant; nothing else in the Snapshot moves.
+Version `7.0.0` makes a kind a declaration instead of a spelling. `items.kind`
+and `tracks.kind` declare one -- once per space, with an `id` and an optional
+`label_key` -- and return the handle every `kind =` and every `required_for`
+entry must be given. A string in either place is refused, so a misspelled kind is
+a nil handle at the line that wrote it and cannot become a second kind, and an id
+declared in both spaces is two unrelated kinds. The Snapshot gains a `kinds`
+section (per space, part of the content hash) and a field's spaces are kept apart
+on the wire as `required_for_items` and `required_for_tracks`; the item catalog,
+the progression generator, and `items_cli schema` each read only what is theirs.
+Existing authoring declares its kinds and passes handles; nothing else moves.
 
 Version `6.1.0` closes three authoring holes the review found: negative zero is
 refused (it equals zero in every range check and in the diff, but bakes a

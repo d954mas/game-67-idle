@@ -2,6 +2,10 @@
   "schema": "studio.lua.sandbox.v1",
   "modules": [
     {
+      "name": "game.kinds",
+      "file": "game/kinds.lua"
+    },
+    {
       "name": "game.items.weapons",
       "file": "game/items/weapons.lua"
     },

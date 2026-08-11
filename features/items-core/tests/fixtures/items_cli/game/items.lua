@@ -1,10 +1,11 @@
 local field = require("studio.field")
 local items = require("studio.items")
 local levels = require("studio.levels")
+local kinds = require("game.kinds")
 
 items.extend_schema({ level_row = {
   attack = field.i64({
-    id = "game.weapon.level.attack", required_for_items = { "weapon" },
+    id = "game.weapon.level.attack", required_for = { kinds.weapon },
     min = 0, max = 1000000, unit = "damage", rounding = "exact",
     label_key = "item.attack",
     ui = { format = "integer", description_key = "item.attack.description" },
@@ -15,17 +16,17 @@ items.extend_schema({ level_row = {
 local gold = items.ref("game.gold")
 
 items.define({
-  id = "game.gold", kind = "currency", stack = 0,
+  id = "game.gold", kind = kinds.currency, stack = 0,
 })
 
 items.define({
-  id = "game.iron_sword", kind = "weapon", stack = 1,
+  id = "game.iron_sword", kind = kinds.weapon, stack = 1,
   levels = levels.single({ attack = 15 }),
   acquire = { cost = items.cost(gold, 100) },
 })
 
 items.define({
-  id = "game.levelled_sword", kind = "weapon", stack = 1,
+  id = "game.levelled_sword", kind = kinds.weapon, stack = 1,
   levels = levels.table({
     [1] = { attack = 10 },
     [2] = { attack = 15, cost_to_reach = items.cost(gold, 100) },
@@ -34,7 +35,7 @@ items.define({
 })
 
 items.define({
-  id = "game.curve_sword", kind = "weapon", stack = 1,
+  id = "game.curve_sword", kind = kinds.weapon, stack = 1,
   levels = levels.columns({
     max_level = 3,
     attack = levels.linear({ start = 10, step = 5 }),
@@ -46,7 +47,7 @@ items.define({
 })
 
 items.define({
-  id = "game.generated_sword", kind = "weapon", stack = 1,
+  id = "game.generated_sword", kind = kinds.weapon, stack = 1,
   levels = levels.generate({
     max_level = 3,
     attack = function(level) return level end,

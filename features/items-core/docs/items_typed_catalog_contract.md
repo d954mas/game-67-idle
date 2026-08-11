@@ -32,9 +32,11 @@ sandbox and requires the committed Snapshot to match byte for byte.
 use stable namespaced identities:
 
 ```lua
+local weapon = items.kind({ id = "weapon", label_key = "kind.weapon" })
+
 attack = field.i64({
   id = "game.weapon.level.attack",
-  required_for_items = { "weapon" },
+  required_for = { weapon },
   min = 0,
   max = 1000000,
   unit = "damage",
@@ -50,11 +52,12 @@ C member. Each field owns its capability, numeric range, unit, rounding,
 localization key, formatting hints, evolution metadata, and source span. Fields
 in this catalog are `i64` and `exact`; there is no floating-point level value.
 
+A kind is declared once, by the space that owns it, and reaches a field only as
+the handle `items.kind`/`tracks.kind` returned -- there is no name to resolve and
+no name to misspell. On the wire the evaluator keeps the spaces apart:
 `required_for_items` names item kinds, `required_for_tracks` names track kinds,
 and a field carrying only the latter is a progression column this catalog never
-sees. A field must name at least one kind, and a kind it names must be declared
-in that field's own space: the same name in both spaces is two kinds and binds
-nothing across them.
+sees. One id declared in both spaces is two kinds and binds nothing across them.
 
 A core-only catalog has no game fields, so its generated header has no `weapon`
 or `attack` symbol. That is the proof an optional game schema cannot leak into

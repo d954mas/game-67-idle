@@ -1,4 +1,5 @@
 local items = require("studio.items")
+local kinds = require("template.items.kinds")
 local levels = require("studio.levels")
 local gold = items.ref("tmpl.gold")
 local wood = items.ref("tmpl.wood")
@@ -8,7 +9,7 @@ items.define({
   created = "2026-07-07",
   name = "Iron Sword",
   icon = "icons/sword",
-  kind = "weapon",
+  kind = kinds.weapon,
   tags = { "melee" },
   base_value = 50,
   stack = 1,

@@ -43,8 +43,10 @@ ITEM_KEYS = {
     "currency", "use", "equip", "authoring_mode", "levels", "acquire",
 }
 TRACK_KEYS = {"id", "kind", "mode", "authoring_mode", "levels"}
-# Items and tracks are neighbouring declaration spaces with their own kind
-# namespaces; a field names the kinds of one space per key.
+# Items and tracks are neighbouring declaration spaces, each with its own kinds;
+# a field names the kinds of one space per key, and one name in both is two kinds.
+KIND_SPACES = ("items", "tracks")
+KIND_KEYS = {"id", "label_key"}
 REQUIRED_FOR_KEYS = ("required_for_items", "required_for_tracks")
 ITEM_REQUIRED_FOR, TRACK_REQUIRED_FOR = REQUIRED_FOR_KEYS
 TRACK_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$")
@@ -107,7 +109,7 @@ def snapshot_content_hash(snapshot: dict[str, Any]) -> str:
     """Hash the canonical authoring payload represented by a Snapshot."""
     if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
         _fail("snapshot.schema", f"expected {SNAPSHOT_SCHEMA}")
-    keys = ("schema", "fields", "items", "tracks", "requirements")
+    keys = ("schema", "fields", "kinds", "items", "tracks", "requirements")
     missing = [key for key in keys if key not in snapshot]
     if missing:
         _fail("snapshot.content_hash", f"Snapshot hash input is missing {missing[0]}")
@@ -288,34 +290,72 @@ def _validate_typed_rows(
                     _fail("snapshot.field_range", f"field {member} is outside declared range", f"{path}.{member}")
 
 
-def kind_spaces(snapshot: dict[str, Any]) -> dict[str, list[str]]:
-    """The kinds each declaration space carries, which is the only count of them.
+def _normalize_kinds(evaluation: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    raw_kinds = evaluation.get("kinds")
+    if not isinstance(raw_kinds, dict) or set(raw_kinds) != set(KIND_SPACES):
+        _fail("snapshot.kinds", "kinds must declare the item and the track space", "$.kinds")
+    kinds: dict[str, list[dict[str, Any]]] = {}
+    for space in KIND_SPACES:
+        declared = raw_kinds[space]
+        if not isinstance(declared, list):
+            _fail("snapshot.kinds", f"{space} kinds must be a list", f"$.kinds.{space}")
+        entries: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for index, raw_kind in enumerate(declared):
+            path = f"$.kinds.{space}[{index}]"
+            if not isinstance(raw_kind, dict):
+                _fail("snapshot.kind", "a kind must be an object", path)
+            kind = _canonical(raw_kind, path)
+            unknown = sorted(set(kind) - KIND_KEYS)
+            if unknown:
+                _fail("snapshot.kind_key", f"unknown kind field: {unknown[0]}", f"{path}.{unknown[0]}")
+            kind_id = kind.get("id")
+            if not isinstance(kind_id, str) or MEMBER_RE.fullmatch(kind_id) is None:
+                _fail("snapshot.kind_id", "kind id must be a lowercase identifier", f"{path}.id")
+            if kind_id in seen:
+                _fail("snapshot.duplicate_kind", f"duplicate {space} kind: {kind_id}", f"{path}.id")
+            if "label_key" in kind and (not isinstance(kind["label_key"], str) or not kind["label_key"]):
+                _fail("snapshot.kind_label_key", "kind label_key must be a non-empty string", f"{path}.label_key")
+            seen.add(kind_id)
+            entries.append(kind)
+        entries.sort(key=lambda kind: kind["id"])
+        kinds[space] = entries
+    return kinds
 
-    The same name in both spaces is two kinds and binds nothing between them."""
-    def kinds(section: str) -> list[str]:
-        entries = snapshot.get(section, [])
-        if not isinstance(entries, list):
-            return []
-        return sorted({
-            entry["kind"] for entry in entries
-            if isinstance(entry, dict) and isinstance(entry.get("kind"), str)
-        })
 
-    return {"item_kinds": kinds("items"), "track_kinds": kinds("tracks")}
+def kind_ids(kinds: dict[str, list[dict[str, Any]]]) -> dict[str, set[str]]:
+    """The declared kind names per space -- the only place kinds are counted."""
+    return {space: {kind["id"] for kind in kinds[space]} for space in KIND_SPACES}
 
 
-def _validate_required_kinds(snapshot: dict[str, Any]) -> None:
-    declared = kind_spaces(snapshot)
-    for index, field in enumerate(snapshot["fields"]):
-        for key, space in zip(REQUIRED_FOR_KEYS, ("item", "track")):
+def _validate_kind_membership(
+    kinds: dict[str, list[dict[str, Any]]], fields: list[dict[str, Any]],
+    items: list[Any], tracks: list[Any],
+) -> None:
+    """Every kind named anywhere is a kind its own space declares."""
+    declared = kind_ids(kinds)
+    for index, field in enumerate(fields):
+        for key, space in zip(REQUIRED_FOR_KEYS, KIND_SPACES):
             for kind in field.get(key, []):
-                if kind not in declared[f"{space}_kinds"]:
+                if kind not in declared[space]:
                     _fail(
                         "snapshot.required_for_kind",
-                        f"field {field['id']} requires the {space} kind {kind}, "
-                        f"which no {space} declares",
+                        f"field {field['id']} is required for the {space[:-1]} kind "
+                        f"{kind}, which is not declared",
                         f"$.fields[{index}].{key}",
                     )
+    for space, entries in (("items", items), ("tracks", tracks)):
+        for index, entry in enumerate(entries):
+            kind = entry.get("kind") if isinstance(entry, dict) else None
+            # An item may carry no kind; a track without one fails its own contract.
+            if kind is None and space == "items":
+                continue
+            if kind not in declared[space]:
+                _fail(
+                    "snapshot.undeclared_kind",
+                    f"{space[:-1]} kind {kind!r} is not declared",
+                    f"$.{space}[{index}].kind",
+                )
 
 
 def _validate_item_contract(items: list[dict[str, Any]]) -> None:
@@ -727,11 +767,13 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw_items, list):
         _fail("snapshot.items", "evaluation items must be a list", "$.items")
     fields, field_sources = _normalize_fields(evaluation)
-    # Before any row is judged against a column: a field that names a kind nobody
-    # declares is a typo, and reporting the row it fails to fit hides that.
-    _validate_required_kinds({
-        "fields": fields, "items": raw_items, "tracks": evaluation.get("tracks", []),
-    })
+    kinds = _normalize_kinds(evaluation)
+    # Before any row is judged against a column: a kind nobody declared is a typo,
+    # and reporting the row a column fails to fit hides that.
+    raw_tracks = evaluation.get("tracks", [])
+    _validate_kind_membership(
+        kinds, fields, raw_items, raw_tracks if isinstance(raw_tracks, list) else [],
+    )
 
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -778,6 +820,7 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     snapshot = {
         "schema": SNAPSHOT_SCHEMA,
         "fields": fields,
+        "kinds": kinds,
         "items": items,
         "tracks": tracks,
         "requirements": requirements,

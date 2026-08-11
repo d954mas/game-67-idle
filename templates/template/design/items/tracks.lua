@@ -1,4 +1,5 @@
 local items = require("studio.items")
+local kinds = require("template.items.kinds")
 local levels = require("studio.levels")
 local tracks = require("studio.tracks")
 
@@ -8,7 +9,7 @@ local xp = items.ref("tmpl.xp")
 -- twenty levels the demo hero can reach are the rows above it.
 tracks.define({
   id = "hero",
-  kind = "hero",
+  kind = kinds.hero,
   mode = "auto",
   levels = levels.generate({
     max_level = 21,

@@ -1,12 +1,13 @@
 local items = require("studio.items")
 local levels = require("studio.levels")
 local tracks = require("studio.tracks")
+local kinds = require("game.kinds")
 local gold = items.ref("game.gold")
 
 -- Row 1 is the un-upgraded state and carries the track's zero contribution.
 tracks.define({
   id = "hauler",
-  kind = "hauler",
+  kind = kinds.hauler,
   mode = "auto",
   levels = levels.table({
     [1] = { capacity = 0, speed_mul = 0.0 },
@@ -17,7 +18,7 @@ tracks.define({
 
 tracks.define({
   id = "rank",
-  kind = "rank",
+  kind = kinds.rank,
   mode = "threshold",
   levels = levels.generate({
     max_level = 3,

@@ -341,12 +341,13 @@ bit per declared column, and reading one a track's kind does not declare traps i
 of returning the zero its row slot holds. Catalogs that generated under `6.0.0`
 generate the same tables plus the mask.
 
-Version `7.0.0` splits the kind namespaces. A column names the track kinds it belongs
-to in `required_for_tracks`; `required_for`, which named item kinds and track kinds in
-one list, is gone. A track kind and an item kind may now share a name and stay
-unrelated, and a name no track declares is refused where it is written instead of
-producing a column no row is required to carry. A `6.x` catalog regenerates
-byte-identical once its fields name the key.
+Version `7.0.0` splits the kind namespaces. A kind is declared once through the space
+that owns it -- `tracks.kind` here, `items.kind` next door -- and a column takes the
+handle it returned rather than a name; the Snapshot carries the track kinds a column
+belongs to in `required_for_tracks`, which is what this generator reads. A track kind
+and an item kind may share an id and stay unrelated, and a misspelling is a nil handle
+at the line that wrote it instead of a column no row is required to carry. A `6.x`
+catalog regenerates byte-identical once its kinds are declared.
 
 ## Extension points
 

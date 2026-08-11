@@ -113,11 +113,13 @@ rows:
 local field = require("studio.field")
 local items = require("studio.items")
 
+local weapon = items.kind({ id = "weapon" })
+
 items.extend_schema({
   level_row = {
     attack = field.i64({
       id = "game.weapon.level.attack",
-      required_for_items = { "weapon" },
+      required_for = { weapon },
       min = 0,
       max = 1000000,
       label_key = "item.attack",
@@ -139,7 +141,9 @@ The `items.*` field namespace is sealed for built-in core semantics. Game or
 feature extensions use an owning namespace such as `game.weapon.*` and cannot
 redeclare a sealed field.
 
-`kind` is the primary presentation/capability category. Tags contain orthogonal
+`kind` is the primary presentation/capability category. Every kind is declared
+once in `design/items/kinds.lua` through the space that owns it (`items.kind` or
+`tracks.kind`) and reaches a declaration only as the handle it returned. Tags contain orthogonal
 traits such as `melee` or `flammable`, not another copy of `weapon`.
 
 ## 5. Item declarations
@@ -147,13 +151,14 @@ traits such as `melee` or `flammable`, not another copy of `weapon`.
 ```lua
 -- design/items/materials.lua
 local items = require("studio.items")
+local kinds = require("game.kinds")
 
 items.define({
   id = "game.wood",
   created = "2026-07-10",
   name = "Wood",
   icon = "icons/wood",
-  kind = "material",
+  kind = kinds.material,
   stack = 999,
 })
 ```
@@ -161,13 +166,14 @@ items.define({
 ```lua
 -- design/items/currencies.lua
 local items = require("studio.items")
+local kinds = require("game.kinds")
 
 items.define({
   id = "game.gold",
   created = "2026-07-10",
   name = "Gold",
   icon = "icons/gold",
-  kind = "currency",
+  kind = kinds.currency,
   stack = 0,
 
   currency = {
@@ -187,6 +193,7 @@ A fixed weapon still uses the same level-row schema as an upgradeable weapon:
 ```lua
 -- design/items/weapons.lua
 local items = require("studio.items")
+local kinds = require("game.kinds")
 local levels = require("studio.levels")
 
 local gold = items.ref("game.gold")
@@ -196,7 +203,7 @@ items.define({
   created = "2026-07-10",
   name = "Iron Sword",
   icon = "icons/iron_sword",
-  kind = "weapon",
+  kind = kinds.weapon,
   tags = { "melee" },
   stack = 1,
 
@@ -229,7 +236,7 @@ items.define({
   created = "2026-07-10",
   name = "Iron Sword",
   icon = "icons/iron_sword",
-  kind = "weapon",
+  kind = kinds.weapon,
   tags = { "melee" },
   stack = 1,
   equip = { slot = "weapon" },
