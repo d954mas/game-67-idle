@@ -66,7 +66,7 @@ function ensurePrivateGameMount(root, gameId = "secret-game") {
   execFileSync("git", ["init"], { cwd: gameRoot, encoding: "utf8" });
   writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
   writeFileSync(join(gameRoot, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: gameId, title: gameId, storageNamespace: gameId }), "utf8");
-  writeFileSync(join(gameRoot, "dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }), "utf8");
+  writeFileSync(join(gameRoot, "dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.v3", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }), "utf8");
   mkdirSync(join(gameRoot, ".ai_studio", "canvas", "projects"), { recursive: true });
   return {
     gameId,

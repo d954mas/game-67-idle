@@ -15,7 +15,7 @@ function writeGameCatalog(root, id, local = false) {
   const gameRoot = local ? join(root, "games", "private", id) : join(root, "games", id);
   writeJson(join(gameRoot, "game.json"), { schema: "ai_studio.game.v1", id, title: id, storageNamespace: id });
   writeJson(join(gameRoot, "dependencies.json"), {
-    schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test",
+    schema: "ai_studio.game.dependencies.v3", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test",
   });
 }
 

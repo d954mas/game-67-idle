@@ -163,9 +163,9 @@ function referenceTemplatePackageMetadata(gameDir) {
   const repoRevision = gitRevision(studioRoot, "reference-template proof");
   const engineRevision = gitRevision(join(studioRoot, seed.engine?.source || ""), "reference-template engine proof");
   const dependencies = {
-    schema: "ai_studio.game.dependencies.v2",
+    schema: "ai_studio.game.dependencies.v3",
     engine: { ...seed.engine, revision: engineRevision },
-    features: (seed.features || []).map((feature) => ({ ...feature, revision: repoRevision })),
+    features: (seed.features || []).map((feature) => ({ ...feature })),
     compatibility: `${seed.compatibility}; reference-template proof at exact Studio revision ${repoRevision}`,
   };
   validateDependencies(dependencies);

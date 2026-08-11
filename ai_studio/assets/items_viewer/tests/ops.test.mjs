@@ -39,7 +39,7 @@ function writeGameIdentity(root, gameId, privateGame = false) {
     schema: "ai_studio.game.v1", id: gameId, title: gameId, storageNamespace: gameId,
   });
   writeJson(join(root, rel, "dependencies.json"), {
-    schema: "ai_studio.game.dependencies.v2",
+    schema: "ai_studio.game.dependencies.v3",
     engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" },
     features: [],
     compatibility: "test",

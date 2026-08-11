@@ -87,16 +87,20 @@ function validateManifestGame(game, label) {
   return game;
 }
 
+/* A feature is identified by its declared version, which its own feature.json has to
+   match. The engine also carries a revision: it is a submodule, so the gitlink is the
+   authoritative record and a version alone cannot name the commit. */
 function validateDependencyRow(row, label, feature = false) {
-  exactKeys(row, feature ? ["id", "source", "version", "revision", "compatibility"] : ["source", "version", "revision", "compatibility"], label);
+  exactKeys(row, feature ? ["id", "source", "version", "compatibility"] : ["source", "version", "revision", "compatibility"], label);
   if (feature && !/^[a-z][a-z0-9-]*$/.test(row.id || "")) throw new Error(`${label} id is invalid`);
-  if (!String(row.source || "").trim() || !SEMVER.test(row.version || "") || !REVISION.test(row.revision || "")
-      || !String(row.compatibility || "").trim()) throw new Error(`${label} version/revision record is invalid`);
+  if (!String(row.source || "").trim() || !SEMVER.test(row.version || "")
+      || !String(row.compatibility || "").trim()) throw new Error(`${label} version record is invalid`);
+  if (!feature && !REVISION.test(row.revision || "")) throw new Error(`${label} revision is invalid`);
 }
 
 export function validateDependencies(dependencies) {
   exactKeys(dependencies, ["schema", "engine", "features", "compatibility"], "dependencies");
-  if (dependencies.schema !== "ai_studio.game.dependencies.v2" || !Array.isArray(dependencies.features)
+  if (dependencies.schema !== "ai_studio.game.dependencies.v3" || !Array.isArray(dependencies.features)
       || !String(dependencies.compatibility || "").trim()) throw new Error("dependencies record is invalid");
   validateDependencyRow(dependencies.engine, "engine dependency");
   const ids = new Set();
@@ -177,7 +181,6 @@ export function verifyDependencySources({ studioRoot, dependencies, git = defaul
     const metadata = readJson(join(featureRoot, "feature.json"), `feature ${feature.id} metadata`);
     if (metadata.id !== feature.id) throw new Error(`feature dependency id mismatch: expected ${feature.id}, found ${metadata.id || "missing"}`);
     if (metadata.version !== feature.version) throw new Error(`feature ${feature.id} version mismatch: expected ${feature.version}, found ${metadata.version || "missing"}`);
-    if (feature.revision !== studioRevision) throw new Error(`feature ${feature.id} revision mismatch: expected ${feature.revision}, found ${studioRevision}`);
     if (gitText(git, root, ["status", "--porcelain=v1", "--untracked-files=all", "--", feature.source], `feature ${feature.id} cleanliness is unavailable`)) {
       throw new Error(`feature ${feature.id} dependency source is dirty`);
     }

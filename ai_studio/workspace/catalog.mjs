@@ -12,12 +12,12 @@ import { basename, dirname, join } from "node:path";
 
 export const GAME_IDENTITY_SCHEMA = "ai_studio.game.v1";
 export const TEMPLATE_IDENTITY_SCHEMA = "ai_studio.template.v1";
-export const GAME_DEPENDENCIES_SCHEMA = "ai_studio.game.dependencies.v2";
+export const GAME_DEPENDENCIES_SCHEMA = "ai_studio.game.dependencies.v3";
 
 const IDENTITY_KEYS = new Set(["schema", "id", "title", "storageNamespace", "aliases"]);
 const DEPENDENCY_KEYS = new Set(["schema", "engine", "features", "compatibility"]);
 const ENGINE_KEYS = new Set(["source", "version", "revision", "compatibility"]);
-const FEATURE_KEYS = new Set(["id", "source", "version", "revision", "compatibility"]);
+const FEATURE_KEYS = new Set(["id", "source", "version", "compatibility"]);
 const EXACT_SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 function slash(value) {
@@ -88,11 +88,10 @@ function validateGameDependenciesValue(value, rel) {
     const id = normalizeId(feature.id, `${rel}.features[${index}].id`);
     if (featureIds.has(id)) throw new Error(`${rel}: duplicate feature '${id}'`);
     featureIds.add(id);
-    for (const key of ["source", "revision", "compatibility"]) {
+    for (const key of ["source", "compatibility"]) {
       if (!String(feature[key] || "").trim()) throw new Error(`${rel}.features[${index}].${key} must not be empty`);
     }
     if (!EXACT_SEMVER.test(String(feature.version || ""))) throw new Error(`${rel}.features[${index}].version must be exact SemVer x.y.z`);
-    if (!/^[0-9a-f]{40,64}$/i.test(feature.revision)) throw new Error(`${rel}.features[${index}].revision must be an exact Git revision`);
   }
   if (!String(value.compatibility || "").trim()) throw new Error(`${rel}.compatibility must not be empty`);
   return value;

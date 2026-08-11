@@ -101,14 +101,14 @@ function fixture(t, target = "itch") {
     schema: "ai_studio.game.v1", id: "test-game", title: "Test Game", storageNamespace: "test-game",
   }, null, 2)}\n`);
   write(join(gameDir, "dependencies.json"), `${JSON.stringify({
-    schema: "ai_studio.game.dependencies.v2",
+    schema: "ai_studio.game.dependencies.v3",
     engine: {
       source: "external/neotolis-engine", version: "0.1.0",
       revision: "1".repeat(40), compatibility: "tested",
     },
     features: [{
       id: "platform-sdk", source: "features/platform-sdk", version: "1.1.0",
-      revision: "2".repeat(40), compatibility: "tested",
+      compatibility: "tested",
     }],
     compatibility: "tested game checkout",
   }, null, 2)}\n`);
@@ -197,7 +197,6 @@ test("final package is deterministic and binds the reopened ZIP to exact depende
   assert.equal(manifestOne.target, "itch");
   assert.equal(manifestOne.platformAdapter, "mock");
   assert.equal(manifestOne.dependencies.record.engine.revision, "1".repeat(40));
-  assert.equal(manifestOne.dependencies.record.features[0].revision, "2".repeat(40));
   assert.deepEqual(manifestOne.runtimeBuild, item.runtimeBuild);
   assert.match(manifestOne.artifact.sha256, /^[0-9a-f]{64}$/);
   assert.doesNotMatch(JSON.stringify(manifestOne), /game-package-|[A-Z]:\\|\/tmp\//i);
@@ -727,9 +726,9 @@ test("dependency proof confines exact owners and checks metadata revisions and r
   const engineRevision = "1".repeat(40);
   const studioRevision = "2".repeat(40);
   const dependencies = {
-    schema: "ai_studio.game.dependencies.v2",
+    schema: "ai_studio.game.dependencies.v3",
     engine: { source: "external/neotolis-engine", version: "0.1.0", revision: engineRevision, compatibility: "tested" },
-    features: [{ id: "platform-sdk", source: "features/platform-sdk", version: "1.1.0", revision: studioRevision, compatibility: "tested" }],
+    features: [{ id: "platform-sdk", source: "features/platform-sdk", version: "1.1.0", compatibility: "tested" }],
     compatibility: "tested",
   };
   let dirty = "";

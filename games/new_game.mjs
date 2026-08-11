@@ -474,14 +474,14 @@ const nonce = `${process.pid}-${randomUUID()}`;
 const stagingDir = join(gamesDir, `.${args.id}.new-${nonce}`);
 const backupDir = join(gamesDir, `.${args.id}.backup-${nonce}`);
 const dependencies = {
-  schema: "ai_studio.game.dependencies.v2",
+  schema: "ai_studio.game.dependencies.v3",
   engine: {
     source: dependencySeed.engine.source, version: dependencySeed.engine.version,
     revision: engineRevision, compatibility: dependencySeed.engine.compatibility,
   },
   features: dependencySeed.features.map((feature) => ({
     id: feature.id, source: feature.source, version: feature.version,
-    revision: repoRevision, compatibility: feature.compatibility,
+    compatibility: feature.compatibility,
   })),
   compatibility: `${dependencySeed.compatibility}; created from ${fromRel} at exact Studio revision ${repoRevision}`,
 };

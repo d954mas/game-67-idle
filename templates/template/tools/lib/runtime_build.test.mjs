@@ -26,7 +26,7 @@ function fixture(t) {
   t.after(() => rmSync(studioRoot, { recursive: true, force: true }));
   const gameDir = join(studioRoot, "games", "test-game");
   const dependencies = {
-    schema: "ai_studio.game.dependencies.v2",
+    schema: "ai_studio.game.dependencies.v3",
     engine: {
       source: "external/neotolis-engine",
       version: "0.1.0",
@@ -37,7 +37,6 @@ function fixture(t) {
       id: "platform-sdk",
       source: "features/platform-sdk",
       version: "1.1.0",
-      revision: "2".repeat(40),
       compatibility: "tested",
     }],
     compatibility: "fixture",

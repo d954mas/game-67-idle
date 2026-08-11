@@ -18,7 +18,7 @@ function identity(root, rel, kind, id, title = id, storageNamespace = id, aliase
   });
   if (kind === "game") {
     writeJson(root, `${rel}/dependencies.json`, {
-      schema: "ai_studio.game.dependencies.v2",
+      schema: "ai_studio.game.dependencies.v3",
       engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" },
       features: [], compatibility: "test",
     });
@@ -123,7 +123,7 @@ test("dependency records require exact engine and feature SemVer", (t) => {
   }), /engine\.version.*exact SemVer/i);
   assert.throws(() => writeGameDependencies(root, "stable-game", {
     engine, compatibility: "tested", features: [{
-      id: "game-state", source: "features/game-state", revision: engine.revision, compatibility: "tested",
+      id: "game-state", source: "features/game-state", compatibility: "tested",
     }],
   }), /version.*exact SemVer/i);
 });

@@ -25,7 +25,7 @@ function makePlayable(root, rel) {
   const kind = rel.startsWith("games/") ? "game" : "template";
   writeJson(join(root, rel, `${kind}.json`), { schema: `ai_studio.${kind}.v1`, id, title: id, storageNamespace: id });
   if (kind === "game") writeJson(join(root, rel, "dependencies.json"), {
-    schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test",
+    schema: "ai_studio.game.dependencies.v3", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test",
   });
 }
 

@@ -67,7 +67,7 @@ test("doctor requires the copied game-owned scaffold and exact dependency record
   }
   write(join(gameDir, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: "fixture", title: "Fixture", storageNamespace: "fixture" }));
   write(join(gameDir, "dependencies.json"), JSON.stringify({
-    schema: "ai_studio.game.dependencies.v2",
+    schema: "ai_studio.game.dependencies.v3",
     engine: { source: "external/neotolis-engine", version: "0.1.0", revision: "1".repeat(40), compatibility: "tested" },
     features: [], compatibility: "tested",
   }));
@@ -192,9 +192,9 @@ test("copied game CLI executes doctor and final package from a real games/privat
 
   write(join(gameDir, "game.json"), `${JSON.stringify({ schema: "ai_studio.game.v1", id: "copied-game", title: "Copied Game", storageNamespace: "copied-game" }, null, 2)}\n`);
   write(join(gameDir, "dependencies.json"), `${JSON.stringify({
-    schema: "ai_studio.game.dependencies.v2",
+    schema: "ai_studio.game.dependencies.v3",
     engine: { source: "external/neotolis-engine", version: "0.1.0", revision: engineRevision, compatibility: "tested" },
-    features: [{ id: "platform-sdk", source: "features/platform-sdk", version: "1.1.0", revision, compatibility: "tested" }],
+    features: [{ id: "platform-sdk", source: "features/platform-sdk", version: "1.1.0", compatibility: "tested" }],
     compatibility: "copied layout fixture",
   }, null, 2)}\n`);
   const runtimeBuild = createRuntimeBuildRecord({
