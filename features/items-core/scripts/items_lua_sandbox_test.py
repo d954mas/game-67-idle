@@ -238,12 +238,12 @@ items.define({ id="game.gold", kind=items.kind({ id="currency" }), stack=0 })
         })
 
         unicode_separator = self.evaluate({
-            "game.unicode": 'local items=require("studio.items")\nlocal text="a\u2028b"\nitems.define({ id="game.unicode" })',
+            "game.unicode": 'local items=require("studio.items")\nlocal text="a\u2028b"\nitems.define({ id="game.unicode", kind=items.kind({ id="rune" }) })',
         }, ["game.unicode"])
         self.assertEqual(unicode_separator.returncode, 0, unicode_separator.stderr)
         unicode_source = json.loads(unicode_separator.stdout)["sources"]["game.unicode"]
         self.assertEqual(unicode_source["line"], 3)
-        self.assertEqual(unicode_source["snippet"], 'items.define({ id="game.unicode" })')
+        self.assertEqual(unicode_source["snippet"], 'items.define({ id="game.unicode", kind=items.kind({ id="rune" }) })')
 
     def test_refs_resolve_after_registration_and_fail_at_ref_source(self):
         forward = self.evaluate({
@@ -617,15 +617,15 @@ for index = 1, 100000 do values[index] = { index, index, index } end
 
         rows = self.evaluate({"game.rows": '''
 local items = require("studio.items")
-items.define({ id="game.a" })
-items.define({ id="game.b" })
-items.define({ id="game.c" })
+items.define({ id="game.a", kind=items.kind({ id="thing" }) })
+items.define({ id="game.b", kind=items.kind({ id="other" }) })
+items.define({ id="game.c", kind=items.kind({ id="third" }) })
 '''}, ["game.rows"], "--max-output-rows", "2")
         self.assert_error(rows, "output.row_limit", "game/rows.lua", 1)
 
         output_bytes = self.evaluate({"game.bytes": '''
 local items = require("studio.items")
-items.define({ id="game.a", description="abcdefghijklmnopqrstuvwxyz" })
+items.define({ id="game.a", kind=items.kind({ id="thing" }), description="abcdefghijklmnopqrstuvwxyz" })
 '''}, ["game.bytes"], "--max-output-bytes", "100")
         self.assert_error(output_bytes, "output.byte_limit", "game/bytes.lua", 1)
 
@@ -636,7 +636,7 @@ items.define({ id="game.a", description="abcdefghijklmnopqrstuvwxyz" })
 
     def test_public_cli_forwards_all_budget_arguments(self):
         result = self.evaluate(
-            {"game.small": 'local items=require("studio.items"); items.define({id="game.small"})'},
+            {"game.small": 'local items=require("studio.items"); items.define({id="game.small", kind=items.kind({id="small"})})'},
             ["game.small"],
             "--timeout-ms", "1000",
             "--memory-bytes", "1048576",
@@ -673,10 +673,11 @@ items.define({ id="game.a", description="abcdefghijklmnopqrstuvwxyz" })
         generated = self.evaluate({"game.generated": '''
 local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.gold", stack=0 })
+items.define({ id="game.gold", kind=items.kind({ id="currency" }), stack=0 })
 local gold = items.ref("game.gold")
 items.define({
   id="game.sword",
+  kind=items.kind({ id="weapon" }),
   stack=1,
   levels=levels.generate({
     max_level=3,
@@ -711,7 +712,7 @@ items.define({
 local items = require("studio.items")
 local levels = require("studio.levels")
 local mutable = 5
-items.define({ id="game.sword", levels=levels.generate({
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), levels=levels.generate({
   max_level=2, attack=function(level, calc) return calc.mul(level, mutable) end,
 }) })
 '''}, ["game.captured"])
@@ -720,7 +721,7 @@ items.define({ id="game.sword", levels=levels.generate({
         environment = self.evaluate({"game.environment": '''
 local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.sword", levels=levels.generate({
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), levels=levels.generate({
   max_level=2, attack=function(level, calc) return require("studio.math").mul(level, 5) end,
 }) })
 '''}, ["game.environment"])
@@ -728,9 +729,9 @@ items.define({ id="game.sword", levels=levels.generate({
 
         reassigned = self.evaluate({"game.reassigned": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.gold", stack=0 })
+items.define({ id="game.gold", kind=items.kind({ id="currency" }), stack=0 })
 local gold = items.ref("game.gold")
-items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=2,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1, levels=levels.generate({ max_level=2,
   attack=function(level) return level end,
   cost_to_reach=function(level)
     if level == 1 then return nil end
@@ -744,9 +745,9 @@ items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=2,
 
         late_definition = self.evaluate({"game.late": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=1,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1, levels=levels.generate({ max_level=1,
   attack=function(level)
-    items.define({ id="game.late" })
+    items.define({ id="game.late", kind=items.kind({ id="late" }) })
     return level
   end,
 }) })'''
@@ -755,8 +756,8 @@ items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=1,
 
         forged_ref = self.evaluate({"game.forged": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.gold", stack=0 })
-items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=2,
+items.define({ id="game.gold", kind=items.kind({ id="currency" }), stack=0 })
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1, levels=levels.generate({ max_level=2,
   attack=function(level) return level end,
   cost_to_reach=function(level)
     if level == 1 then return nil end
@@ -769,9 +770,9 @@ items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=2,
     def test_mixed_level_columns_materialize_with_bounds_and_overrides(self):
         mixed = self.evaluate({"game.mixed": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.gold", stack=0 })
+items.define({ id="game.gold", kind=items.kind({ id="currency" }), stack=0 })
 local gold = items.ref("game.gold")
-items.define({ id="game.sword", stack=1, levels=levels.columns({
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1, levels=levels.columns({
   max_level=3,
   attack=levels.linear({ start=10, step=5 }),
   cost_to_reach=levels.values({
@@ -799,7 +800,7 @@ items.define({ id="game.sword", stack=1, levels=levels.columns({
 
         missing_max = self.evaluate({"game.mixed": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.sword", stack=1, levels=levels.columns({
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1, levels=levels.columns({
   attack=levels.linear({ start=10, step=5 }),
 }) })'''
         }, ["game.mixed"])
@@ -807,7 +808,7 @@ items.define({ id="game.sword", stack=1, levels=levels.columns({
 
         empty = self.evaluate({"game.mixed": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.sword", stack=1,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1,
   levels=levels.columns({ max_level=1 }),
 })'''
         }, ["game.mixed"])
@@ -815,7 +816,7 @@ items.define({ id="game.sword", stack=1,
 
         forged = self.evaluate({"game.mixed": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.sword", stack=1, levels=levels.columns({ max_level=1,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1, levels=levels.columns({ max_level=1,
   attack={ __studio_kind="level_column", mode="linear", start=10, step=5 },
 }) })'''
         }, ["game.mixed"])
@@ -823,7 +824,7 @@ items.define({ id="game.sword", stack=1, levels=levels.columns({ max_level=1,
 
         out_of_range = self.evaluate({"game.mixed": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.sword", stack=1, levels=levels.columns({ max_level=1,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1, levels=levels.columns({ max_level=1,
   attack=levels.values({ [2]=10 }),
 }) })'''
         }, ["game.mixed"])
@@ -834,7 +835,7 @@ items.define({ id="game.sword", stack=1, levels=levels.columns({ max_level=1,
 
         unchecked = self.evaluate({"game.unchecked": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=1,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1, levels=levels.generate({ max_level=1,
   attack=function(level) return level * 9007199254740991 end,
 }) })'''
         }, ["game.unchecked"])
@@ -842,7 +843,7 @@ items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=1,
 
         unsafe_literal = self.evaluate({"game.literal": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=1,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1, levels=levels.generate({ max_level=1,
   attack=function() return 9007199254740992 end,
 }) })'''
         }, ["game.literal"])
@@ -864,7 +865,7 @@ items.define({ id="game.sword", kind=sword, stack=1, levels=levels.generate({ ma
 
         unsafe_override = self.evaluate({"game.override": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=1,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1, levels=levels.generate({ max_level=1,
   attack=function(level) return level end,
   overrides={ [1]={ attack=9007199254740992 } },
 }) })'''
@@ -874,13 +875,13 @@ items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=1,
         harmless = self.evaluate({"game.text": '''
 local items = require("studio.items")
 -- Documentation may say 2 ^ 3.
-items.define({ id="game.note", description="2 ^ 3" })
+items.define({ id="game.note", kind=items.kind({ id="note" }), description="2 ^ 3" })
 '''}, ["game.text"])
         self.assertEqual(harmless.returncode, 0, harmless.stderr)
 
         missing_transition = self.evaluate({"game.generated": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.sword", stack=1,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1,
   levels=levels.generate({ max_level=2, attack=function(level) return level end }),
 })'''
         }, ["game.generated"])
@@ -888,7 +889,7 @@ items.define({ id="game.sword", stack=1,
 
         level_one_transition = self.evaluate({"game.generated": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.sword", stack=1,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1,
   levels=levels.generate({ max_level=2,
     attack=function(level) return level end,
     cost_to_reach=function() return items.free() end,
@@ -997,7 +998,7 @@ requirements.waive({ requirement="game.bad..id", reason="reason", reviewed_by="l
     def test_level_tables_and_composite_costs_are_normalized(self):
         gap = self.evaluate({"game.items": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.sword", stack=1,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1,
   levels=levels.table({ [1]={ attack=1 }, [3]={ attack=3, cost_to_reach=items.free() } }),
 })
 '''}, ["game.items"])
@@ -1005,7 +1006,7 @@ items.define({ id="game.sword", stack=1,
 
         missing_transition = self.evaluate({"game.items": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.sword", stack=1,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1,
   levels=levels.table({ [1]={ attack=1 }, [2]={ attack=2 } }),
 })
 '''}, ["game.items"])
@@ -1013,7 +1014,7 @@ items.define({ id="game.sword", stack=1,
 
         level_one_cost = self.evaluate({"game.items": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.sword", stack=1,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1,
   levels=levels.single({ attack=1, cost_to_reach=items.free() }),
 })
 '''}, ["game.items"])
@@ -1021,24 +1022,24 @@ items.define({ id="game.sword", stack=1,
 
         stack_levels = self.evaluate({"game.items": '''local items = require("studio.items")
 local levels = require("studio.levels")
-items.define({ id="game.wood", stack=99,
+items.define({ id="game.wood", kind=items.kind({ id="material" }), stack=99,
   levels=levels.single({ value=1 }),
 })
 '''}, ["game.items"])
         self.assert_error(stack_levels, "levels.unique_required", "game/items.lua", 4)
 
         raw_levels = self.evaluate({"game.items": '''local items = require("studio.items")
-items.define({ id="game.wood", stack=99,
+items.define({ id="game.wood", kind=items.kind({ id="material" }), stack=99,
   levels={ __studio_kind="levels", mode="table", rows={ [1]={ value=1 } } },
 })
 '''}, ["game.items"])
         self.assert_error(raw_levels, "levels.invalid_handle", "game/items.lua", 2)
 
         normalized = self.evaluate({"game.items": '''local items = require("studio.items")
-items.define({ id="game.gold", stack=0 })
-items.define({ id="game.wood", stack=99 })
+items.define({ id="game.gold", kind=items.kind({ id="currency" }), stack=0 })
+items.define({ id="game.wood", kind=items.kind({ id="material" }), stack=99 })
 local gold, wood = items.ref("game.gold"), items.ref("game.wood")
-items.define({ id="game.sword", stack=1, acquire={ cost=items.costs({
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1, acquire={ cost=items.costs({
   items.cost(wood, 2), items.cost(gold, 5), items.cost(gold, 7),
 }) } })
 '''}, ["game.items"])
@@ -1050,35 +1051,35 @@ items.define({ id="game.sword", stack=1, acquire={ cost=items.costs({
         ])
 
         unique_cost = self.evaluate({"game.items": '''local items = require("studio.items")
-items.define({ id="game.unique", stack=1 })
+items.define({ id="game.unique", kind=items.kind({ id="unique" }), stack=1 })
 local unique = items.ref("game.unique")
-items.define({ id="game.sword", stack=1,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1,
   acquire={ cost=items.cost(unique, 1) },
 })
 '''}, ["game.items"])
         self.assert_error(unique_cost, "cost.stackable_required", "game/items.lua", 5)
 
         missing_stack = self.evaluate({"game.items": '''local items = require("studio.items")
-items.define({ id="game.bad_resource" })
+items.define({ id="game.bad_resource", kind=items.kind({ id="resource" }) })
 local resource = items.ref("game.bad_resource")
-items.define({ id="game.sword", stack=1,
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1,
   acquire={ cost=items.cost(resource, 1) },
 })
 '''}, ["game.items"])
         self.assert_error(missing_stack, "cost.stackable_required", "game/items.lua", 5)
 
         forged_ref = self.evaluate({"game.items": '''local items = require("studio.items")
-items.define({ id="game.gold", stack=0 })
-items.define({ id="game.sword", stack=1,
+items.define({ id="game.gold", kind=items.kind({ id="currency" }), stack=0 })
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1,
   acquire={ cost=items.cost({ __studio_kind="item_ref", id="game.gold" }, 1) },
 })
 '''}, ["game.items"])
         self.assert_error(forged_ref, "reference.invalid_handle", "game/items.lua", 3)
 
         overflow = self.evaluate({"game.items": '''local items = require("studio.items")
-items.define({ id="game.gold", stack=0 })
+items.define({ id="game.gold", kind=items.kind({ id="currency" }), stack=0 })
 local gold = items.ref("game.gold")
-items.define({ id="game.sword", stack=1, acquire={ cost=items.costs({
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1, acquire={ cost=items.costs({
   items.cost(gold, 9007199254740991), items.cost(gold, 1),
 }) } })
 '''}, ["game.items"])
@@ -1087,7 +1088,7 @@ items.define({ id="game.sword", stack=1, acquire={ cost=items.costs({
     def test_non_finite_output_and_non_string_errors_are_stable(self):
         non_finite = self.evaluate({"game.number": '''
 local items = require("studio.items")
-items.define({ id="game.number", value=1e309 })
+items.define({ id="game.number", kind=items.kind({ id="number" }), value=1e309 })
 '''}, ["game.number"])
         self.assert_error(non_finite, "output.non_finite", "game/number.lua", 1)
 

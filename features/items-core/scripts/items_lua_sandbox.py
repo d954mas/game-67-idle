@@ -695,18 +695,15 @@ return function(raise_internal)
         end
         registered[id] = definition
       end
-      -- An item may carry no kind at all: it is then an item nothing is required of.
       local kind = definition.kind
-      if kind ~= nil then
-        if raw_type(kind) ~= "table" or authentic_kinds[kind] ~= "items" then
-          local source = definition.__studio_source
-          return raise_internal(
-            "definition.kind", "an item kind must come from items.kind",
-            source.file, source.line
-          )
-        end
-        definition.kind = kind.id
+      if raw_type(kind) ~= "table" or authentic_kinds[kind] ~= "items" then
+        local source = definition.__studio_source
+        return raise_internal(
+          "definition.kind", "an item requires a kind from items.kind",
+          source.file, source.line
+        )
       end
+      definition.kind = kind.id
     end
     table.sort(declarations, function(a, b) return a.id < b.id end)
 

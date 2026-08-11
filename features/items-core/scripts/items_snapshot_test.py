@@ -297,6 +297,9 @@ class ItemsSnapshotTests(unittest.TestCase):
             ("snapshot.item_key", lambda doc: doc["items"][0].update({"display_name": "Gold"})),
             ("snapshot.created", lambda doc: doc["items"][0].update({"created": "2026-02-30"})),
             ("snapshot.name", lambda doc: doc["items"][0].update({"name": ""})),
+            # A kind is what binds a column to rows and what the C catalog groups by,
+            # so an item without one has no place in any layer downstream.
+            ("snapshot.kind", lambda doc: doc["items"][0].pop("kind")),
             ("snapshot.tags", lambda doc: doc["items"][1].update({"tags": ["weapon"]})),
             ("snapshot.base_value", lambda doc: doc["items"][0].update({"base_value": True})),
             ("snapshot.base_value", lambda doc: doc["items"][0].update({"base_value": 9_007_199_254_740_992})),

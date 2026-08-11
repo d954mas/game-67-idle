@@ -345,17 +345,14 @@ def _validate_kind_membership(
                         f"$.fields[{index}].{key}",
                     )
     for space, entries in (("items", items), ("tracks", tracks)):
+        code = "snapshot.kind" if space == "items" else "snapshot.track_kind"
         for index, entry in enumerate(entries):
             kind = entry.get("kind") if isinstance(entry, dict) else None
-            # An item may carry no kind; a track without one fails its own contract.
-            if kind is None and space == "items":
-                continue
+            path = f"$.{space}[{index}].kind"
+            if not isinstance(kind, str) or not kind:
+                _fail(code, f"{space[:-1]} requires a kind", path)
             if kind not in declared[space]:
-                _fail(
-                    "snapshot.undeclared_kind",
-                    f"{space[:-1]} kind {kind!r} is not declared",
-                    f"$.{space}[{index}].kind",
-                )
+                _fail("snapshot.undeclared_kind", f"{space[:-1]} kind {kind} is not declared", path)
 
 
 def _validate_item_contract(items: list[dict[str, Any]]) -> None:
@@ -378,7 +375,11 @@ def _validate_item_contract(items: list[dict[str, Any]]) -> None:
             if not valid_created:
                 _fail("snapshot.created", "created must be a valid YYYY-MM-DD date", f"{path}.created")
 
-        for key in ("name", "icon", "kind"):
+        # An item's kind is what binds a column to its rows and what the generated
+        # catalog groups by, so an item without one is an item no layer can place.
+        if not isinstance(item.get("kind"), str) or not item["kind"]:
+            _fail("snapshot.kind", "item requires a kind", f"{path}.kind")
+        for key in ("name", "icon"):
             value = item.get(key)
             if value is not None and (not isinstance(value, str) or not value):
                 _fail(f"snapshot.{key}", f"{key} must be a non-empty string", f"{path}.{key}")
