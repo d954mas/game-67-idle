@@ -1046,6 +1046,27 @@ class ItemsSnapshotTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, "snapshot.undeclared_kind")
         self.assertEqual(raised.exception.path, "$.items[1].kind")
 
+        # A kind of the neighbouring space is not a kind of this one, so an item
+        # carrying a track kind's name is an item of a kind nothing declared.
+        crossed = evaluation(
+            self.base_items(), tracks=[track()],
+            fields=[attack_field(), payout_field()],
+            kinds={"items": [{"id": "currency"}, {"id": "weapon"}], "tracks": [{"id": "rank"}]},
+        )
+        crossed["items"][1]["kind"] = "rank"
+        with self.assertRaises(SNAPSHOT.SnapshotFailure) as raised:
+            SNAPSHOT.build_snapshot(crossed)
+        self.assertEqual(raised.exception.code, "snapshot.undeclared_kind")
+
+        crossed_track = evaluation(
+            self.base_items(), tracks=[track(kind="weapon")],
+            fields=[attack_field(), payout_field()],
+            kinds={"items": [{"id": "currency"}, {"id": "weapon"}], "tracks": [{"id": "rank"}]},
+        )
+        with self.assertRaises(SNAPSHOT.SnapshotFailure) as raised:
+            SNAPSHOT.build_snapshot(crossed_track)
+        self.assertEqual(raised.exception.code, "snapshot.undeclared_kind")
+
         # A shape error stays local: it is not preempted by the kind check.
         malformed = evaluation(self.base_items())
         malformed["items"][0] = "not an object"

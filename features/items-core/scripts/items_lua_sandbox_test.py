@@ -355,21 +355,52 @@ extension.level_row.attack = nil''',
     def test_a_kind_is_declared_once_and_reaches_a_declaration_only_by_handle(self):
         """A kind is an identity, not a spelling. A misspelling is a nil handle at the
         line that wrote it, which no space can mistake for one of its own kinds."""
+        # The shape a real catalog misspells in: kinds arrive from a shared module,
+        # so a wrong name is a nil member of that table rather than a global.
         typo = self.evaluate({"game.schema": '''local field = require("studio.field")
 local items = require("studio.items")
+local tracks = require("studio.tracks")
+local kinds = { upgrade = tracks.kind({ id="upgrade" }) }
+items.extend_schema({ level_row={ rate=field.f64({
+  id="game.upgrade.level.rate", required_for={ kinds.upgrad }, min=0.0, max=10.0,
+  unit="x", label_key="upgrade.rate",
+}) } })'''
+        }, ["game.schema"])
+        self.assert_error(typo, "schema.required_for", "game/schema.lua", 5)
+        self.assertIn("at least one kind", json.loads(typo.stderr)["error"]["message"])
+
+        # A handle is of one space. The other space cannot accept it, whatever it is
+        # called, which is what makes one id in both spaces two unrelated kinds.
+        crossed_item = self.evaluate({"game.schema": '''local items = require("studio.items")
+local tracks = require("studio.tracks")
+local hero = tracks.kind({ id="hero" })
+items.define({ id="game.gold", kind=hero, stack=0 })'''
+        }, ["game.schema"])
+        self.assert_error(crossed_item, "definition.kind", "game/schema.lua", 4)
+
+        crossed_track = self.evaluate({"game.schema": '''local items = require("studio.items")
 local levels = require("studio.levels")
 local tracks = require("studio.tracks")
-local upgrade = tracks.kind({ id="upgrade" })
-items.extend_schema({ level_row={ rate=field.f64({
-  id="game.upgrade.level.rate", required_for={ upgrad }, min=0.0, max=10.0,
-  unit="x", label_key="upgrade.rate",
-}) } })
-tracks.define({ id="t.node", kind=upgrade, mode="threshold", levels=levels.table({
-  [1]={ rate=0.0 }, [2]={ rate=1.0, xp_to_reach=10 },
+local weapon = items.kind({ id="weapon" })
+tracks.define({ id="t.w", kind=weapon, mode="threshold", levels=levels.table({
+  [1]={}, [2]={ xp_to_reach=1 },
 }) })'''
         }, ["game.schema"])
-        self.assert_error(typo, "sandbox.forbidden_global", "game/schema.lua", 7)
-        self.assertIn("upgrad", json.loads(typo.stderr)["error"]["message"])
+        self.assert_error(crossed_track, "track.kind", "game/schema.lua", 5)
+
+        # A table that merely looks like a handle carries no space at all.
+        forged_kind = self.evaluate({"game.schema": '''local items = require("studio.items")
+items.define({ id="game.gold", kind={ id="currency" }, stack=0 })'''
+        }, ["game.schema"])
+        self.assert_error(forged_kind, "definition.kind", "game/schema.lua", 2)
+
+        forged_column = self.evaluate({"game.schema": '''local field = require("studio.field")
+local items = require("studio.items")
+items.extend_schema({ level_row={ rate=field.f64({
+  id="game.weapon.level.rate", required_for={ { id="weapon" } },
+}) } })'''
+        }, ["game.schema"])
+        self.assert_error(forged_column, "schema.required_for", "game/schema.lua", 3)
 
         # A name is never resolved, so nothing can be named into a space at all.
         by_name = self.evaluate({"game.schema": '''local field = require("studio.field")
@@ -422,6 +453,53 @@ items.define({ id="game.sword", kind=first, stack=1, tags={ second.id } })'''
         }, ["game.schema"])
         self.assert_error(duplicate, "kind.duplicate_id", "game/schema.lua", 3)
 
+    def test_a_kind_declaration_is_checked_where_it_is_written(self):
+        """The Snapshot has equivalents for all of this, but it has no line to point
+        at. A kind is authored here, so it is answered here."""
+        cases = [
+            ("kind.id", 'items.kind({ id="Weapon" })'),
+            ("kind.id", 'items.kind({ id="game.weapon" })'),
+            ("kind.label_key", 'items.kind({ id="weapon", label_key="" })'),
+            ("kind.contract", 'items.kind("weapon")'),
+        ]
+        for code, declaration in cases:
+            with self.subTest(declaration=declaration):
+                result = self.evaluate({"game.schema": f'''local items = require("studio.items")
+{declaration}'''}, ["game.schema"])
+                self.assert_error(result, code, "game/schema.lua", 2)
+
+        # Kinds close with the rest of the declarations: a formula runs after every
+        # space is fixed, so one cannot grow a kind while rows are being produced.
+        late = self.evaluate({"game.schema": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1,
+  levels=levels.generate({ max_level=1, attack=function(level)
+    items.kind({ id="late" })
+    return level
+  end }),
+})'''
+        }, ["game.schema"])
+        self.assert_error(late, "evaluation.phase", "game/schema.lua", 5)
+
+        # A column names its kinds once each, and names at least one.
+        twice = self.evaluate({"game.schema": '''local field = require("studio.field")
+local items = require("studio.items")
+local weapon = items.kind({ id="weapon" })
+items.extend_schema({ level_row={ a=field.i64({
+  id="game.weapon.level.a", required_for={ weapon, weapon },
+}) } })'''
+        }, ["game.schema"])
+        self.assert_error(twice, "schema.required_for", "game/schema.lua", 4)
+        self.assertIn("same kind twice", json.loads(twice.stderr)["error"]["message"])
+
+        empty = self.evaluate({"game.schema": '''local field = require("studio.field")
+local items = require("studio.items")
+items.extend_schema({ level_row={ a=field.i64({
+  id="game.weapon.level.a", required_for={},
+}) } })'''
+        }, ["game.schema"])
+        self.assert_error(empty, "schema.required_for", "game/schema.lua", 3)
+
     def test_an_item_kind_and_a_track_kind_may_share_a_name_and_stay_unrelated(self):
         """One name in two spaces is two kinds. The item column stays off the track's
         rows, and the track column stays off the item's."""
@@ -442,6 +520,7 @@ items.extend_schema({ level_row={
   }),
 } })
 items.define({ id="game.sword", kind=weapon_item, stack=1, levels=levels.single({ attack=15 }) })
+items.define({ id="game.axe", kind=weapon_item, stack=1, levels=levels.single({ attack=20 }) })
 tracks.define({ id="t.weapon", kind=weapon_track, mode="threshold", levels=levels.table({
   [1]={ rate=0.0 }, [2]={ rate=1.0, xp_to_reach=10 },
 }) })'''
@@ -451,7 +530,19 @@ tracks.define({ id="t.weapon", kind=weapon_track, mode="threshold", levels=level
         payload = json.loads(shared.stdout)
         self.assertEqual(
             payload["kinds"], {"items": [{"id": "weapon"}], "tracks": [{"id": "weapon"}]})
-        self.assertEqual(payload["items"][0]["levels"]["rows"], [{"attack": 15}])
+        # One authored list, two keys on the wire: this is what keeps each generator
+        # reading only its own space.
+        self.assertEqual(
+            {field["id"]: (field.get("required_for_items"), field.get("required_for_tracks"))
+             for field in payload["fields"]},
+            {
+                "game.weapon.level.attack": (["weapon"], None),
+                "game.weapon.level.rate": (None, ["weapon"]),
+            },
+        )
+        # One kind serves every item that declares it.
+        self.assertEqual([item["kind"] for item in payload["items"]], ["weapon", "weapon"])
+        self.assertEqual(payload["items"][1]["levels"]["rows"], [{"attack": 15}])
         self.assertEqual(
             [row.get("rate") for row in payload["tracks"][0]["levels"]["rows"]], [0.0, 1.0],
         )
