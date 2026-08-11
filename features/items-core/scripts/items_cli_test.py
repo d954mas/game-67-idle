@@ -50,6 +50,15 @@ class ItemsCliTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertFalse(result["changed"])
 
+            # The receipt records which items-core sealed it. Read from the module's
+            # manifest, because a second copy of a version stops tracking the first
+            # and the receipt becomes a false record of what shipped.
+            manifest = json.loads(
+                (SCRIPT_DIR.parent / "feature.json").read_text(encoding="utf-8"))
+            sealed = json.loads(
+                (project / "content" / "items.lock.json").read_text(encoding="utf-8"))
+            self.assertEqual(sealed["receipt"]["items_core_version"], manifest["version"])
+
     def test_seal_receipt_uses_the_shared_project_writer_lock(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp) / "project"

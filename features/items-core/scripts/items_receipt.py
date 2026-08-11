@@ -14,7 +14,7 @@ FIELD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 TRACK_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$")
 RECEIPT_SCHEMA_VERSION = 5
 RECEIPT_SCHEMA = "items.release_receipt.v2"
-ITEMS_CORE_VERSION = "3.0.0"
+FEATURE_MANIFEST = Path(__file__).resolve().parents[1] / "feature.json"
 
 Issue = dict
 
@@ -25,6 +25,22 @@ def issue(rule: str, msg: str, *, id: str | None = None, field: str | None = Non
 
 class OpsError(Exception):
     """Usage or I/O problem reported as CLI exit code 2."""
+
+
+def items_core_version() -> str:
+    """The version the receipt records as having sealed it.
+
+    Read from the module's own manifest rather than restated here: a second copy
+    stops tracking the first, and a receipt is where that becomes a false record
+    of what shipped."""
+    try:
+        manifest = json.loads(FEATURE_MANIFEST.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise OpsError(f"cannot read the items-core manifest ({FEATURE_MANIFEST}): {error}") from error
+    version = manifest.get("version")
+    if not isinstance(version, str) or not version:
+        raise OpsError(f"items-core manifest declares no version ({FEATURE_MANIFEST})")
+    return version
 
 
 def validate_baseline_shape(baseline: dict[str, Any], path: Path) -> None:
@@ -360,7 +376,7 @@ def prepare_evaluation_receipt(
     receipt = sealed["receipt"]
     reserved_fields = set(receipt["field_ids"]["reserved"])
     reserved_tracks = set(receipt["track_ids"]["reserved"])
-    receipt["items_core_version"] = ITEMS_CORE_VERSION
+    receipt["items_core_version"] = items_core_version()
     receipt["lua_evaluation_schema"] = evaluation["schema"]
     receipt["snapshot_schema"] = "items.snapshot.v1"
     receipt["state_schema"] = {
