@@ -183,11 +183,17 @@ return function(raise_internal)
     if label_key ~= nil and (raw_type(label_key) ~= "string" or label_key == "") then
       return fail("kind.label_key", "kind label_key must be a non-empty string")
     end
+    -- Sorted, because raw_pairs order is a hash order: the first unknown key it
+    -- happens to yield would name a different one from run to run.
+    local unknown = {}
     for key, _ in raw_pairs(options) do
       if key ~= "id" and key ~= "label_key" then
-        local named = raw_type(key) == "string" and key or "a non-string key"
-        return fail("kind.contract", "a kind declares id and label_key, not " .. named)
+        unknown[#unknown + 1] = raw_type(key) == "string" and key or "a non-string key"
       end
+    end
+    if #unknown > 0 then
+      table.sort(unknown)
+      return fail("kind.contract", "a kind declares id and label_key, not " .. unknown[1])
     end
     registered_kind_ids[space][id] = true
     local declaration = { id = id, label_key = label_key }
@@ -603,7 +609,12 @@ return function(raise_internal)
           descriptor, candidate.fallback
         )
       end
-      for _, reserved in ipairs({ "member", "section", "type" }) do
+      -- The per-space lists are what this evaluator writes from the handles the
+      -- author passed. An author who writes one directly is naming a kind by string,
+      -- which is the one thing a handle exists to prevent.
+      for _, reserved in ipairs({
+        "member", "section", "type", "required_for_items", "required_for_tracks",
+      }) do
         if descriptor[reserved] ~= nil then
           return fail_at(
             "schema.reserved_key", "field descriptor cannot set reserved key: " .. reserved,
@@ -685,19 +696,23 @@ return function(raise_internal)
     local registered = {}
     for _, definition in ipairs(declarations) do
       local id = definition.id
-      if raw_type(id) == "string" then
-        if registered[id] then
-          local source = definition.__studio_source
-          return raise_internal(
-            "definition.duplicate_id", "duplicate item id: " .. id,
-            source.file, source.line
-          )
-        end
-        registered[id] = definition
+      local source = definition.__studio_source
+      -- The id orders the declarations below and keys every reference to them, so a
+      -- definition without one is answered here rather than inside a sort.
+      if raw_type(id) ~= "string" or id == "" then
+        return raise_internal(
+          "definition.id", "an item requires a non-empty id", source.file, source.line
+        )
       end
+      if registered[id] then
+        return raise_internal(
+          "definition.duplicate_id", "duplicate item id: " .. id,
+          source.file, source.line
+        )
+      end
+      registered[id] = definition
       local kind = definition.kind
       if raw_type(kind) ~= "table" or authentic_kinds[kind] ~= "items" then
-        local source = definition.__studio_source
         return raise_internal(
           "definition.kind", "an item requires a kind from items.kind",
           source.file, source.line
@@ -1379,9 +1394,11 @@ def _normalize_lua_failure(
     message = str(error)
     match = re.search(r'(?:^|\n)(?:\[string "@)?@?([^"\n:]+\.lua)"?]?:([0-9]+):', message)
     file = match.group(1).strip() if match else fallback_file
-    if allowed_files is not None and file not in allowed_files:
-        file = fallback_file
     line = int(match.group(2)) if match else 1
+    # A line only belongs to the file it was measured in. Falling back to another
+    # file has to drop it, or the error points at a line the author never wrote.
+    if allowed_files is not None and file not in allowed_files:
+        file, line = fallback_file, 1
     if type(error).__name__ == "LuaMemoryError" or "not enough memory" in message.lower():
         return _failure("sandbox.memory_limit", "Lua memory limit exceeded", file=file, line=line, path=path)
     return _failure("lua.execution", message.splitlines()[0], file=file, line=line, path=path)

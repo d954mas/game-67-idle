@@ -286,6 +286,16 @@ items.define({ id="game.same", kind=items.kind({ id="material" }), stack=9 })'''
         }, ["game.items"])
         self.assert_error(duplicate, "definition.duplicate_id", "game/items.lua", 3)
 
+        # The id orders the declarations and keys every reference to them, so its
+        # absence is answered at the definition, not inside a sort.
+        anonymous = self.evaluate({
+            "game.items": '''local items = require("studio.items")
+local currency = items.kind({ id="currency" })
+items.define({ kind=currency, stack=0 })
+items.define({ id="game.gold", kind=currency, stack=0 })''',
+        }, ["game.items"])
+        self.assert_error(anonymous, "definition.id", "game/items.lua", 3)
+
     def test_schema_and_kinds_register_before_definitions_independent_of_module_order(self):
         modules = {
             "game.kinds": '''local items = require("studio.items")
@@ -376,6 +386,34 @@ items.define({ id="game.sword", kind=items.kind({ id="weapon" }), stack=1 })'''
 items.define({ id="game.sword", kind="weapon", stack=1 })'''
         }, ["game.schema"])
         self.assert_error(named_item, "definition.kind", "game/schema.lua", 2)
+
+        # The per-space lists are this evaluator's output. Writing one directly is
+        # naming a kind by string past the handle that exists to prevent it.
+        for reserved in ("required_for_items", "required_for_tracks"):
+            with self.subTest(reserved=reserved):
+                smuggled = self.evaluate({"game.schema": f'''local field = require("studio.field")
+local items = require("studio.items")
+local weapon = items.kind({{ id="weapon" }})
+items.extend_schema({{ level_row={{ rate=field.f64({{
+  id="game.weapon.level.rate", required_for={{ weapon }}, {reserved}={{ "weapon" }},
+  min=0.0, max=10.0, unit="x", label_key="weapon.rate",
+}}) }} }})
+items.define({{ id="game.sword", kind=weapon, stack=1 }})'''
+                }, ["game.schema"])
+                self.assert_error(smuggled, "schema.reserved_key", "game/schema.lua", 4)
+                self.assertIn(reserved, json.loads(smuggled.stderr)["error"]["message"])
+
+        # raw_pairs yields in hash order, which differs per process: the reported key
+        # has to be chosen, not whichever one came first.
+        messages = set()
+        for _ in range(4):
+            unknown = self.evaluate({"game.schema": '''local items = require("studio.items")
+items.kind({ id="weapon", zzz=1, mmm=2, aaa=3, bbb=4, ccc=5 })'''
+            }, ["game.schema"])
+            self.assert_error(unknown, "kind.contract", "game/schema.lua", 2)
+            messages.add(json.loads(unknown.stderr)["error"]["message"])
+        self.assertEqual(len(messages), 1, messages)
+        self.assertIn("not aaa", messages.pop())
 
         duplicate = self.evaluate({"game.schema": '''local items = require("studio.items")
 local first = items.kind({ id="weapon" })
@@ -1094,6 +1132,16 @@ items.define({ id="game.number", kind=items.kind({ id="number" }), value=1e309 }
 
         bad_error = self.evaluate({"game.error": "error({ secret=1 })"}, ["game.error"])
         self.assert_error(bad_error, "sandbox.error_contract", "game/error.lua", 1)
+
+        # A line is only true of the file it was measured in. When the failure comes
+        # from a file the author does not own, the line cannot be carried over to one
+        # they do -- it would point at a line they never wrote.
+        internal = SANDBOX._normalize_lua_failure(
+            RuntimeError('studio/sandbox.lua:642: attempt to index a string value'),
+            "game/items.lua", "$.modules.game.items", {"game/items.lua"},
+        )
+        self.assertEqual(internal.error["file"], "game/items.lua")
+        self.assertEqual(internal.error["line"], 1)
 
 
 if __name__ == "__main__":
