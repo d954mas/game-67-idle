@@ -9,10 +9,13 @@
 #define GAME_EVENT_RENDER_HEX_MAX 48
 #endif
 
-/* The line budget every consumer of game_event_render must give it. Sized against
-   GAME_EVENT_EMIT_MAX rather than against today's longest event: a repeated section
-   makes the rendered length content-driven, so a budget tuned to one schema would be
-   a landmine for the next. Not fitting is an assert, so this number has to hold. */
+/* The line budget every consumer of game_event_render must give it. It cannot be
+   derived from GAME_EVENT_EMIT_MAX: a rendering is always LONGER than its payload --
+   the envelope adds seq/tick/type, every field adds its name, and cJSON escapes one
+   control byte to six characters -- and a budget that covered the worst case would be
+   6x this, which the devapi tail multiplies by its 256 slots. So the budget is what
+   the callers can afford, passing an undersized buffer is the caller bug this asserts
+   on, and content that outgrows a full-size buffer degrades to a marked line. */
 #ifndef GAME_EVENT_RENDER_LINE_MAX
 #define GAME_EVENT_RENDER_LINE_MAX 4096
 #endif

@@ -15,6 +15,7 @@
     "Python 3.12",
     "templates/template/state/game_state.schema.json or a game-local state schema",
     "template or game C runtime using generated GameState files",
+    "features/game-events >= 2.1.0 for schemas declaring repeated sections: the emitters this generates use its six-member descriptor and record type",
     "Neotolis engine targets nt_time and nt_log; DevAPI targets when enabled"
   ],
   "provides": [

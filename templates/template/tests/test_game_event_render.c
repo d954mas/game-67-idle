@@ -47,7 +47,7 @@ static void test_rich_typed_render(void) {
     const game_event_t *log = game_event_log(&n);
     TEST_ASSERT_EQUAL_INT(1, n);
 
-    char buf[512];
+    char buf[GAME_EVENT_RENDER_LINE_MAX];
     const int len = game_event_render(&log[0], &mini_ev_cell_spawned_desc, buf, (int)sizeof buf);
     TEST_ASSERT_TRUE(len > 0 && len < (int)sizeof buf);
 
@@ -96,7 +96,7 @@ static void test_scalar_only(void) {
     const game_event_t *log = game_event_log(&n);
     TEST_ASSERT_EQUAL_INT(1, n);
 
-    char buf[512];
+    char buf[GAME_EVENT_RENDER_LINE_MAX];
     (void)game_event_render(&log[0], &mini_ev_ticked_desc, buf, (int)sizeof buf);
     cJSON *root = cJSON_Parse(buf);
     TEST_ASSERT_NOT_NULL(root);
@@ -121,7 +121,7 @@ static void test_unknown_render(void) {
     const game_event_t *log = game_event_log(&n);
     TEST_ASSERT_EQUAL_INT(1, n);
 
-    char buf[512];
+    char buf[GAME_EVENT_RENDER_LINE_MAX];
     (void)game_event_render(&log[0], NULL, buf, (int)sizeof buf);
     cJSON *root = cJSON_Parse(buf);
     TEST_ASSERT_NOT_NULL(root);
@@ -150,9 +150,7 @@ static void test_long_field_still_renders_whole(void) {
     const game_event_t *log = game_event_log(&n);
     TEST_ASSERT_EQUAL_INT(1, n);
 
-    /* The budget is what makes a long field renderable, so the line arrives whole.
-       A buffer smaller than GAME_EVENT_RENDER_LINE_MAX is a caller bug and aborts;
-       there is no degraded line left to assert on. */
+    /* The budget is what makes a long field renderable, so the line arrives whole. */
     char buf[GAME_EVENT_RENDER_LINE_MAX];
     (void)game_event_render(&log[0], &mini_ev_cell_spawned_desc, buf, (int)sizeof buf);
     cJSON *root = cJSON_Parse(buf);
@@ -170,7 +168,7 @@ static void test_bounds_robustness(void) {
     const game_event_t *log = game_event_log(&n);
     TEST_ASSERT_EQUAL_INT(1, n);
 
-    char buf[512];
+    char buf[GAME_EVENT_RENDER_LINE_MAX];
     (void)game_event_render(&log[0], &mini_ev_cell_spawned_desc, buf, (int)sizeof buf);
     cJSON *root = cJSON_Parse(buf);
     TEST_ASSERT_NOT_NULL(root); /* out-of-range fields skipped, no over-read */
@@ -189,7 +187,7 @@ static void test_repeated_render(void) {
     const game_event_t *log = game_event_log(&n);
     TEST_ASSERT_EQUAL_INT(1, n);
 
-    char buf[512];
+    char buf[GAME_EVENT_RENDER_LINE_MAX];
     const int len = game_event_render(&log[0], &mini_ev_paid_desc, buf, (int)sizeof buf);
     TEST_ASSERT_TRUE(len > 0 && len < (int)sizeof buf);
 
@@ -220,7 +218,7 @@ static void test_repeated_render_empty(void) {
     const game_event_t *log = game_event_log(&n);
     TEST_ASSERT_EQUAL_INT(1, n);
 
-    char buf[512];
+    char buf[GAME_EVENT_RENDER_LINE_MAX];
     (void)game_event_render(&log[0], &mini_ev_paid_desc, buf, (int)sizeof buf);
     cJSON *root = cJSON_Parse(buf);
     TEST_ASSERT_NOT_NULL(root);
@@ -239,10 +237,32 @@ static void test_repeated_bounds_robustness(void) {
     const game_event_t *log = game_event_log(&n);
     TEST_ASSERT_EQUAL_INT(1, n);
 
-    char buf[512];
+    char buf[GAME_EVENT_RENDER_LINE_MAX];
     (void)game_event_render(&log[0], &mini_ev_paid_desc, buf, (int)sizeof buf);
     cJSON *root = cJSON_Parse(buf);
     TEST_ASSERT_NOT_NULL(root);
+    cJSON_Delete(root);
+}
+
+/* A payload the budget cannot render -- escaping alone can sextuple it -- must not take
+   the process down with it. The line degrades to one that still names the event. */
+static void test_a_rendering_too_long_for_the_budget_degrades_to_a_named_line(void) {
+    char big[GAME_EVENT_EMIT_MAX - 64u];
+    memset(big, 1, sizeof big - 1u); /* every byte escapes to six characters */
+    big[sizeof big - 1u] = 0;
+    (void)mini_emit_cell_spawned(1, 1.0, nt_hash64_str("Rare"), false, big, NULL, 0);
+
+    int n = 0;
+    const game_event_t *log = game_event_log(&n);
+    TEST_ASSERT_EQUAL_INT(1, n);
+
+    char buf[GAME_EVENT_RENDER_LINE_MAX];
+    const int len = game_event_render(&log[0], &mini_ev_cell_spawned_desc, buf, (int)sizeof buf);
+    TEST_ASSERT_TRUE(len > 0 && len < (int)sizeof buf);
+    cJSON *root = cJSON_Parse(buf);
+    TEST_ASSERT_NOT_NULL_MESSAGE(root, buf); /* still parseable */
+    TEST_ASSERT_TRUE(cJSON_IsTrue(cJSON_GetObjectItem(root, "truncated")));
+    TEST_ASSERT_EQUAL_STRING("mini.cell_spawned", cJSON_GetObjectItem(root, "type")->valuestring);
     cJSON_Delete(root);
 }
 
@@ -254,6 +274,7 @@ int main(void) {
     RUN_TEST(test_scalar_only);
     RUN_TEST(test_unknown_render);
     RUN_TEST(test_long_field_still_renders_whole);
+    RUN_TEST(test_a_rendering_too_long_for_the_budget_degrades_to_a_named_line);
     RUN_TEST(test_bounds_robustness);
     RUN_TEST(test_repeated_render);
     RUN_TEST(test_repeated_render_empty);

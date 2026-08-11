@@ -217,20 +217,23 @@ int game_event_render(const game_event_t *e, const game_event_desc_t *desc, char
         return (cap > 2) ? 2 : (cap - 1);
     }
 
+    /* An undersized buffer is a caller bug and stops here. Content that outgrows a
+       full-size buffer is not: a rendering can be six times its payload once cJSON
+       escapes it, and no budget the callers can afford covers that. The line that
+       replaces it names the event, so a reader knows what went missing rather than
+       silently reading a shorter log. */
+    NT_ASSERT(cap >= GAME_EVENT_RENDER_LINE_MAX && "event render needs the full line budget");
     char *s = cJSON_PrintUnformatted(root);
     const int len = s ? (int)strlen(s) : -1;
-    /* A line that does not fit is a budget bug, not a runtime condition: the caller's
-       buffer must be GAME_EVENT_RENDER_LINE_MAX, which covers the largest event the
-       emit path will accept. There is no degraded line to fall back to -- a marker
-       nobody can parse the payment out of is worse than a stop. */
-    NT_ASSERT(s && len < cap && "event render exceeds the line budget");
     int written = 0;
     if (s && len < cap) {
         memcpy(out, s, (size_t)len + 1u);
         written = len;
     } else {
-        (void)snprintf(out, (size_t)cap, "{}");
-        written = (cap > 2) ? 2 : (cap - 1);
+        written = snprintf(out, (size_t)cap,
+                           "{\"seq\":%" PRIu64 ",\"tick\":%u,\"type\":\"%s\",\"truncated\":true}",
+                           e->seq, e->tick, tname);
+        if (written < 0 || written >= cap) { written = cap - 1; }
     }
     if (s) {
         cJSON_free(s);

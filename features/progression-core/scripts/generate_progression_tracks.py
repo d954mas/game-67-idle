@@ -138,12 +138,15 @@ def track_columns(snapshot: dict[str, Any], tracks: list[dict[str, Any]]) -> lis
     kinds = {track["kind"] for track in tracks}
     fields = snapshot.get("fields")
     require(isinstance(fields, list), "snapshot 'fields' must be an array")
+    # A field no TRACK kind requires is not a progression column at all -- it belongs to
+    # the item catalog, which filters the same snapshot by item kind. Dropped in silence
+    # on purpose: the two spaces share one field list and each takes only its own.
     columns = [
         field for field in fields
         if isinstance(field, dict) and any(kind in field.get("required_for", []) for kind in kinds)
     ]
-    # One dictionary serves every track and one row carries a slot per column, so a
-    # column no track kind declares is a slot every track pays for and nobody reads.
+    # One dictionary serves every track and one row carries a slot per column, so the
+    # mask that says who owns what has a fixed width.
     require(
         len(columns) <= OWNED_VALUE_BITS,
         f"a game may declare at most {OWNED_VALUE_BITS} progression columns "

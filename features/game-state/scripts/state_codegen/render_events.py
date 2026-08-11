@@ -201,8 +201,11 @@ class EventRenderer:
             f"    memset(u.bytes + off, 0, {name}_pad);",
             f"    off += {name}_pad;",
         ]
+        # Division, not multiplication: the count is the caller's uint32, and on a
+        # 32-bit target the product wraps and walks the guard straight past itself.
         lines.extend(self.render_record_overflow_guard(
-            emit_fn, f"(size_t)off + ((size_t){name}_n * sizeof({wire})) > sizeof(u.bytes)"
+            emit_fn,
+            f"(size_t){name}_n > (sizeof(u.bytes) - (size_t)off) / sizeof({wire})",
         ))
         lines.extend([
             f"    u.ev.{name} = off;",

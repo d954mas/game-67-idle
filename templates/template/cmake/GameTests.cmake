@@ -593,6 +593,17 @@ if(NOT EMSCRIPTEN)
     add_test(NAME loc_generator_test
         COMMAND "${Python3_EXECUTABLE}" "${LOCALIZATION_SCRIPTS}/loc_test.py")
 
+    # The atlas repacks when the corpus changes, but a repack cannot invent a glyph the
+    # TTF does not have: without this a new translation ships as boxes with every other
+    # gate green. The template packs exactly one font, argv[2] of build_packs.c.
+    if(NOT EMSCRIPTEN)
+        add_test(NAME loc_font_charset_check
+            COMMAND "${Python3_EXECUTABLE}" "${LOCALIZATION_SCRIPTS}/loc.py" fonts
+                --strings "${CMAKE_CURRENT_SOURCE_DIR}/content/loc/strings.json"
+                --font "game=${GAME_FONT_SOURCE}"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    endif()
+
     set(LOC_E2E_DIR "${CMAKE_BINARY_DIR}/generated/loc-e2e")
     set(LOC_E2E_STRINGS "${LOCALIZATION_DIR}/tests/e2e_strings.json")
     add_custom_command(
