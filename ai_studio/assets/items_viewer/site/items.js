@@ -114,6 +114,29 @@ function badgeText(validate) {
   return validate.ok ? "validate OK" : "validate FAILED";
 }
 
+// The kinds a catalog DECLARES, per space. A kind with no item yet is shown
+// unused rather than hidden, which is the difference between reading the
+// declaration and counting the rows.
+function renderKinds(root, kinds) {
+  const spaces = [["Item kinds", kinds?.items || []], ["Track kinds", kinds?.tracks || []]];
+  for (const [title, declared] of spaces) {
+    if (!declared.length) continue;
+    const box = make("div", "iv-kinds");
+    box.append(make("h3", "", `${title} (${declared.length})`));
+    const row = make("div", "iv-kind-row");
+    for (const kind of declared) {
+      const unused = kind.item_count === 0;
+      const chip = make("span", `iv-chip iv-chip-kind${unused ? " iv-chip-unused" : ""}`, kind.label);
+      chip.title = kind.item_count === null
+        ? kind.id
+        : `${kind.id} — ${kind.item_count} item${kind.item_count === 1 ? "" : "s"}`;
+      row.append(chip);
+    }
+    box.append(row);
+    root.append(box);
+  }
+}
+
 function renderSummary(view, catalogIssues) {
   const root = els.summaryPanel;
   root.replaceChildren();
@@ -128,6 +151,8 @@ function renderSummary(view, catalogIssues) {
   meta.append(field("Errors", String(view.validate.errors.length)));
   meta.append(field("Warnings", String(view.validate.warnings.length)));
   root.append(meta);
+
+  renderKinds(root, view.kinds);
 
   if (catalogIssues.length) {
     const box = make("div", "iv-catalog-issues");

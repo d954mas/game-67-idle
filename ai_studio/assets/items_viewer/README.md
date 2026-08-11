@@ -19,10 +19,14 @@ single-source semantic CLI with an explicit game root:
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> list
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> validate
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> schema
 ```
 
-`list` supplies compact master rows and `validate` supplies
-Snapshot/requirements/release-receipt diagnostics. A selected item invokes one
+`list` supplies compact master rows, `validate` supplies
+Snapshot/requirements/release-receipt diagnostics, and `schema` supplies the
+kinds each declaration space declares. The Workbench reads that declaration
+rather than collecting the kinds its rows happen to carry: a kind declared and
+not used yet is shown, unused, and its authored `label_key` is what labels it. A selected item invokes one
 bounded `detail` composition of inspect/schema/source/dependencies; one selected
 chart field invokes `chart` lazily. The Workbench adapts those
 results to HTTP without a second evaluator or browser-side Items model; it

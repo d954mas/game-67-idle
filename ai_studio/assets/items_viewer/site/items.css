@@ -372,6 +372,12 @@ h3 { font-size: 13px; line-height: 1.25; text-transform: uppercase; color: var(-
 }
 
 .iv-chip-kind { border-color: var(--studio-blue); color: #cfe0ff; }
+/* Declared and carried by nothing yet: still a kind, dimmed so the eye can tell. */
+.iv-chip-unused { opacity: 0.55; border-style: dashed; }
+
+.iv-kinds { margin-top: 10px; }
+.iv-kinds h3 { margin: 0 0 6px; font-size: 12px; opacity: 0.75; }
+.iv-kind-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .iv-chip-lock-shipped { border-color: var(--studio-teal); color: #baf3e6; }
 .iv-chip-lock-draft { border-color: var(--studio-amber); color: #ffe3bd; }
 .iv-chip-lock-removed { border-color: var(--studio-red); color: #ffd0d0; }

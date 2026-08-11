@@ -67,13 +67,17 @@ function writeLuaFixture(dir, ids = ["fx.a", "fx.b"]) {
   created = "2026-07-08",
   name = ${JSON.stringify(id)},
   icon = ${JSON.stringify(`icons/${id}`)},
-  kind = "material",
+  kind = material,
   base_value = 1,
   stack = 10,
 })`).join("\n\n");
   const luaPath = join(dir, "design", "items", "catalog.lua");
   mkdirSync(dirname(luaPath), { recursive: true });
-  writeFileSync(luaPath, `local items = require("studio.items")\n\n${definitions}\n`, "utf8");
+  writeFileSync(
+    luaPath,
+    `local items = require("studio.items")\n\nlocal material = items.kind({ id = "material" })\n\n${definitions}\n`,
+    "utf8",
+  );
   const statePath = join(dir, "state", "items.schema.json");
   mkdirSync(dirname(statePath), { recursive: true });
   writeFileSync(statePath, STATE_SCHEMA, "utf8");
@@ -126,7 +130,12 @@ test("live template view exposes Snapshot fields, receipt status, and no catalog
   assert.equal(view.items.length, 6);
   assert.equal(Object.hasOwn(view, "containers"), false);
   assert.equal(Object.hasOwn(view, "schema"), false);
-  assert.deepEqual(view.item_kinds.map((entry) => entry.id), ["consumable", "currency", "material", "weapon"]);
+  // The catalog's own declaration, not a count of the rows: "hero" is a declared
+  // TRACK kind with no item anywhere, and it is still reported.
+  assert.deepEqual(view.kinds.items.map((entry) => entry.id), ["consumable", "currency", "material", "weapon"]);
+  assert.deepEqual(view.kinds.tracks.map((entry) => entry.id), ["hero"]);
+  assert.deepEqual(
+    view.kinds.items.map((entry) => entry.item_count), [1, 3, 1, 1]);
   assert.equal(view.validate.available, true);
   assert.equal(view.validate.ok, true);
   assert.deepEqual(view.validate.errors, []);

@@ -121,6 +121,13 @@ async function runList(root, projectRoot) {
   throw new Error(`items_cli.py list exited ${code} unexpectedly: ${stderr.trim()}`);
 }
 
+async function runSchema(root, projectRoot) {
+  const { code, stdout, stderr } = await runItemsCliRaw(root, projectRoot, ["schema"]);
+  if (code === 0) return { ok: true, data: parseJsonOrThrow(stdout, "schema").result };
+  if (code === 1) return { ok: false, source: "schema", stderr: stderr.trim() };
+  throw new Error(`items_cli.py schema exited ${code} unexpectedly: ${stderr.trim()}`);
+}
+
 function issue(entry) {
   return {
     ...entry,
@@ -326,10 +333,22 @@ function label(value) {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
-function itemKinds(items) {
-  return [...new Set(items.map((item) => item.kind).filter(Boolean))]
-    .sort()
-    .map((id) => ({ id, label: label(id) }));
+// The catalog declares its kinds; it does not leave them to be inferred from the
+// rows that happen to use one. A kind declared and not used yet is a kind, and its
+// label belongs to localization, so the declared key travels instead of a guess.
+function declaredKinds(schema, items) {
+  const used = new Map();
+  for (const item of items) used.set(item.kind, (used.get(item.kind) || 0) + 1);
+  const space = (declared, count) => declared.map((kind) => ({
+    id: kind.id,
+    label: kind.label_key || label(kind.id),
+    label_key: kind.label_key || null,
+    item_count: count ? used.get(kind.id) || 0 : null,
+  }));
+  return {
+    items: space(schema?.kinds?.items || [], true),
+    tracks: space(schema?.kinds?.tracks || [], false),
+  };
 }
 
 // Build the full view for one catalog from an ABSOLUTE folder path (a registered
@@ -347,7 +366,7 @@ export async function loadCatalogView(root, folderAbs, meta) {
       meta: viewMeta,
       namespace: null,
       items: [],
-      item_kinds: [],
+      kinds: { items: [], tracks: [] },
       lock: { status_by_id: {}, removed: {} },
       validate: { available: false, ok: null, errors: [], warnings: [], reason: "items.lua.json not found for this catalog" },
       // Icon preview is independent of the catalog source (it reads the build
@@ -358,9 +377,10 @@ export async function loadCatalogView(root, folderAbs, meta) {
   }
 
   const lockPath = join(folderAbs, "content", "items.lock.json");
-  const [listResult, validateResult] = await Promise.all([
+  const [listResult, validateResult, schemaResult] = await Promise.all([
     runList(root, folderAbs),
     runValidate(root, folderAbs),
+    runSchema(root, folderAbs),
   ]);
 
   const contentError = !listResult.ok ? { source: listResult.source, stderr: listResult.stderr } : null;
@@ -371,7 +391,7 @@ export async function loadCatalogView(root, folderAbs, meta) {
     meta: viewMeta,
     namespace: itemNamespace(items),
     items,
-    item_kinds: itemKinds(items),
+    kinds: declaredKinds(schemaResult.ok ? schemaResult.data : null, items),
     lock: { status_by_id: buildStatusById(items, lockRaw), removed: lockRaw ? lockRaw.removed : {} },
     validate: validateResult,
     // Pixel crops for the catalog's icon values, read
