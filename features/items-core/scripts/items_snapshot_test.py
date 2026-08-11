@@ -1021,6 +1021,38 @@ class ItemsSnapshotTests(unittest.TestCase):
             {"op": "add", "kind": "tracks.hero", "path": "", "after": {"id": "hero"}},
         ])
 
+    def test_a_field_carries_only_keys_the_contract_names(self):
+        """A key nothing reads still rides into the content hash, and a stale
+        `required_for` reads as a binding that binds nothing."""
+        for stray in ("required_for", "requiredfor_items", "notes"):
+            with self.subTest(stray=stray):
+                doc = evaluation(self.base_items())
+                doc["fields"][0][stray] = ["weapon"]
+                with self.assertRaises(SNAPSHOT.SnapshotFailure) as raised:
+                    SNAPSHOT.build_snapshot(doc)
+                self.assertEqual(raised.exception.code, "snapshot.field_key")
+                self.assertEqual(raised.exception.path, f"$.fields[0].{stray}")
+
+    def test_an_undeclared_kind_is_reported_against_the_built_entry(self):
+        """The pointer has to resolve in the Snapshot the caller holds, so the check
+        runs on the sorted section rather than on authoring order."""
+        items = self.base_items()
+        items[0]["id"], items[1]["id"] = "game.zzz", "game.aaa"
+        items[1]["acquire"]["cost"]["item"]["id"] = "game.zzz"
+        items[0]["kind"] = "ghost"
+        doc = evaluation(items, kinds={"items": [{"id": "weapon"}], "tracks": []})
+        with self.assertRaises(SNAPSHOT.SnapshotFailure) as raised:
+            SNAPSHOT.build_snapshot(doc)
+        self.assertEqual(raised.exception.code, "snapshot.undeclared_kind")
+        self.assertEqual(raised.exception.path, "$.items[1].kind")
+
+        # A shape error stays local: it is not preempted by the kind check.
+        malformed = evaluation(self.base_items())
+        malformed["items"][0] = "not an object"
+        with self.assertRaises(SNAPSHOT.SnapshotFailure) as raised:
+            SNAPSHOT.build_snapshot(malformed)
+        self.assertEqual(raised.exception.code, "snapshot.item")
+
     def test_a_field_names_kinds_of_one_space_and_only_kinds_that_exist(self):
         """The two spaces keep their own kind namespaces, so a name is looked up in
         the space its key names -- and a name nothing declares is a typo."""

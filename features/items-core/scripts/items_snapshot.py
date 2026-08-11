@@ -47,6 +47,10 @@ TRACK_KEYS = {"id", "kind", "mode", "authoring_mode", "levels"}
 # a field names the kinds of one space per key, and one name in both is two kinds.
 KIND_SPACES = ("items", "tracks")
 KIND_KEYS = {"id", "label_key"}
+FIELD_KEYS = {
+    "id", "member", "section", "type", "min", "max", "unit", "label_key", "rounding",
+    "required_for_items", "required_for_tracks", "ui", "evolution",
+}
 REQUIRED_FOR_KEYS = ("required_for_items", "required_for_tracks")
 ITEM_REQUIRED_FOR, TRACK_REQUIRED_FOR = REQUIRED_FOR_KEYS
 TRACK_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$")
@@ -174,6 +178,11 @@ def _normalize_fields(evaluation: dict[str, Any]) -> tuple[list[dict[str, Any]],
         if not isinstance(raw_field, dict):
             _fail("snapshot.field", "field must be an object", path)
         field = _canonical(raw_field, path)
+        # Closed, like items, tracks and kinds: a key nothing reads still rides into
+        # the content hash, and a stale one reads as a binding that no longer binds.
+        unknown = sorted(set(field) - FIELD_KEYS)
+        if unknown:
+            _fail("snapshot.field_key", f"unknown field key: {unknown[0]}", f"{path}.{unknown[0]}")
         field_id = field.get("id")
         member = field.get("member")
         section = field.get("section")
@@ -323,17 +332,16 @@ def _normalize_kinds(evaluation: dict[str, Any]) -> dict[str, list[dict[str, Any
     return kinds
 
 
-def kind_ids(kinds: dict[str, list[dict[str, Any]]]) -> dict[str, set[str]]:
-    """The declared kind names per space -- the only place kinds are counted."""
+def _kind_ids(kinds: dict[str, list[dict[str, Any]]]) -> dict[str, set[str]]:
+    """The declared kind names per space, read from the section that declares them."""
     return {space: {kind["id"] for kind in kinds[space]} for space in KIND_SPACES}
 
 
-def _validate_kind_membership(
+def _validate_required_kinds(
     kinds: dict[str, list[dict[str, Any]]], fields: list[dict[str, Any]],
-    items: list[Any], tracks: list[Any],
 ) -> None:
-    """Every kind named anywhere is a kind its own space declares."""
-    declared = kind_ids(kinds)
+    """Every kind a column names is a kind its own space declares."""
+    declared = _kind_ids(kinds)
     for index, field in enumerate(fields):
         for key, space in zip(REQUIRED_FOR_KEYS, KIND_SPACES):
             for kind in field.get(key, []):
@@ -344,15 +352,21 @@ def _validate_kind_membership(
                         f"{kind}, which is not declared",
                         f"$.fields[{index}].{key}",
                     )
-    for space, entries in (("items", items), ("tracks", tracks)):
-        code = "snapshot.kind" if space == "items" else "snapshot.track_kind"
-        for index, entry in enumerate(entries):
-            kind = entry.get("kind") if isinstance(entry, dict) else None
-            path = f"$.{space}[{index}].kind"
-            if not isinstance(kind, str) or not kind:
-                _fail(code, f"{space[:-1]} requires a kind", path)
-            if kind not in declared[space]:
-                _fail("snapshot.undeclared_kind", f"{space[:-1]} kind {kind} is not declared", path)
+
+
+def _validate_declared_kinds(
+    kinds: dict[str, list[dict[str, Any]]], entries: list[dict[str, Any]], space: str,
+) -> None:
+    """Runs on the sorted, shape-checked section, so the pointer it reports is the
+    one the built Snapshot answers to."""
+    declared = _kind_ids(kinds)[space]
+    for index, entry in enumerate(entries):
+        if entry["kind"] not in declared:
+            _fail(
+                "snapshot.undeclared_kind",
+                f"{space[:-1]} kind {entry['kind']} is not declared",
+                f"$.{space}[{index}].kind",
+            )
 
 
 def _validate_item_contract(items: list[dict[str, Any]]) -> None:
@@ -562,6 +576,7 @@ def _validate_track_contract(tracks: list[dict[str, Any]]) -> None:
 
 def _normalize_tracks(
     evaluation: dict[str, Any], fields: list[dict[str, Any]], item_ids: set[str],
+    kinds: dict[str, list[dict[str, Any]]],
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
     raw_tracks = evaluation.get("tracks", [])
     if not isinstance(raw_tracks, list):
@@ -573,6 +588,7 @@ def _normalize_tracks(
     ]
     tracks.sort(key=lambda track: track.get("id", ""))
     _validate_track_contract(tracks)
+    _validate_declared_kinds(kinds, tracks, "tracks")
     _validate_typed_rows(
         tracks, fields, "tracks", lambda track: TRACK_TRANSITION[track["mode"]], TRACK_REQUIRED_FOR,
     )
@@ -769,12 +785,9 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
         _fail("snapshot.items", "evaluation items must be a list", "$.items")
     fields, field_sources = _normalize_fields(evaluation)
     kinds = _normalize_kinds(evaluation)
-    # Before any row is judged against a column: a kind nobody declared is a typo,
-    # and reporting the row a column fails to fit hides that.
-    raw_tracks = evaluation.get("tracks", [])
-    _validate_kind_membership(
-        kinds, fields, raw_items, raw_tracks if isinstance(raw_tracks, list) else [],
-    )
+    # Before any row is judged against a column: a column bound to a kind nobody
+    # declared is a typo, and reporting the row it fails to fit hides that.
+    _validate_required_kinds(kinds, fields)
 
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -792,10 +805,11 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
         items.append(item)
     items.sort(key=lambda item: item["id"])
     _validate_item_contract(items)
+    _validate_declared_kinds(kinds, items, "items")
     _validate_typed_rows(items, fields, "items", lambda item: "cost_to_reach", ITEM_REQUIRED_FOR)
     _validate_level_provenance(items)
     runtime_export = _runtime_export_metadata(items, fields)
-    tracks, track_sources = _normalize_tracks(evaluation, fields, seen)
+    tracks, track_sources = _normalize_tracks(evaluation, fields, seen, kinds)
     requirements, requirement_sources, waiver_sources = _normalize_requirements(evaluation, seen)
 
     dependencies: dict[str, list[str]] = {}

@@ -114,6 +114,28 @@ class ItemsCCatalogTests(unittest.TestCase):
         self.assertEqual(before["schema_abi"], after["schema_abi"])
         self.assertNotEqual(before["content_fingerprint"], after["content_fingerprint"])
 
+    def test_a_track_column_is_outside_this_catalogs_abi(self):
+        """The ABI covers the surface this catalog generates. A progression column
+        generates nothing here, so retuning one is not an item-catalog ABI break."""
+        _, snapshot = self.fixture("items_api_weapon_proof.json")
+        before = normalize(snapshot)
+
+        column = {
+            "id": "game.hauler.level.haul_mul", "member": "haul_mul",
+            "section": "level_row", "type": "f64", "required_for_tracks": ["hauler"],
+            "min": 0.0, "max": 10.0, "unit": "x", "label_key": "track.haul_mul",
+        }
+        with_column = copy.deepcopy(snapshot)
+        with_column["fields"].append(column)
+        with_column["kinds"]["tracks"].append({"id": "hauler"})
+        with_column["runtime_export"]["field_ids"] = sorted(
+            field["id"] for field in with_column["fields"])
+        self.assertEqual(before["schema_abi"], normalize(reseal(with_column))["schema_abi"])
+
+        retuned = copy.deepcopy(with_column)
+        retuned["fields"][-1]["max"] = 99.0
+        self.assertEqual(before["schema_abi"], normalize(reseal(retuned))["schema_abi"])
+
     def test_luau_stub_documents_capability_rows(self):
         _, snapshot = self.fixture("items_api_weapon_proof.json")
         luau = render(normalize(snapshot))["items_catalog.luau"]

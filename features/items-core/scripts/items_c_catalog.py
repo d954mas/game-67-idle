@@ -353,7 +353,9 @@ def normalize(
     if len(cost_entries) > max_costs:
         _fail("catalog.cost_budget", f"count {len(cost_entries)} exceeds {max_costs}")
 
-    descriptor = _schema_descriptor(sorted_fields, item_ids)
+    # The ABI covers the surface this catalog generates. A track column generates
+    # nothing here, so retuning one is not an item-catalog ABI break.
+    descriptor = _schema_descriptor(catalog_fields, item_ids)
     return {
         "items": item_records,
         "fields": field_records,
