@@ -764,8 +764,10 @@ class ItemsSnapshotTests(unittest.TestCase):
 
         dropped = SNAPSHOT.build_snapshot(evaluation(self.base_items(), tracks=[]))
         removals = SNAPSHOT.diff_snapshots(before, dropped)["changes"]
-        self.assertEqual([change["op"] for change in removals], ["remove"])
-        self.assertEqual(removals[0]["track"], "rank")
+        # The last track of a kind leaves, and so does the kind it was declared with.
+        self.assertEqual([change["op"] for change in removals], ["remove", "remove"])
+        self.assertEqual(removals[0]["kind"], "tracks.rank")
+        self.assertEqual(removals[1]["track"], "rank")
 
     def test_diff_reports_only_semantic_changes_in_stable_order(self):
         before = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
@@ -997,6 +999,24 @@ class ItemsSnapshotTests(unittest.TestCase):
             with self.assertRaises(SNAPSHOT.SnapshotFailure) as raised:
                 SNAPSHOT.build_snapshot(evaluation(self.base_items(), kinds=broken))
             self.assertEqual(raised.exception.code, code)
+
+    def test_diff_reports_a_kind_edit(self):
+        """A kind edit moves content_hash, so the diff has to have something to say
+        about it -- and the space is part of the identity it says it about."""
+        before = self.build_tracks([track()])
+        after = copy.deepcopy(before)
+        after["kinds"]["items"][1]["label_key"] = "kind.blade"
+        after["kinds"]["tracks"].append({"id": "hero"})
+        after["content_hash"] = SNAPSHOT.snapshot_content_hash(after)
+
+        changes = SNAPSHOT.diff_snapshots(before, after)["changes"]
+        self.assertEqual(changes, [
+            {
+                "op": "add", "kind": "items.weapon", "path": "/label_key",
+                "after": "kind.blade",
+            },
+            {"op": "add", "kind": "tracks.hero", "path": "", "after": {"id": "hero"}},
+        ])
 
     def test_a_field_names_kinds_of_one_space_and_only_kinds_that_exist(self):
         """The two spaces keep their own kind namespaces, so a name is looked up in

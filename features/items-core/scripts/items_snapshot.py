@@ -1203,6 +1203,31 @@ def _diff_tracks(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
+def _diff_kinds(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Kinds are inside content_hash too, and one id may exist in both spaces, so the
+    space is part of the identity a change is reported against."""
+    kinds = snapshot.get("kinds")
+    if kinds is None:
+        return {}
+    if not isinstance(kinds, dict):
+        _fail("diff.kinds", "snapshot kinds must be an object", "$.kinds")
+    result: dict[str, dict[str, Any]] = {}
+    for space in KIND_SPACES:
+        declared = kinds.get(space, [])
+        if not isinstance(declared, list):
+            _fail("diff.kinds", f"snapshot {space} kinds must be a list", f"$.kinds.{space}")
+        for index, kind in enumerate(declared):
+            path = f"$.kinds.{space}[{index}]"
+            if not isinstance(kind, dict) or not isinstance(kind.get("id"), str) or not kind["id"]:
+                _fail("diff.kind", "snapshot kind requires an id", path)
+            normalized = _canonical(kind, path)
+            identity = f"{space}.{normalized['id']}"
+            if identity in result:
+                _fail("diff.kind", f"duplicate {space} kind: {normalized['id']}", f"{path}.id")
+            result[identity] = normalized
+    return result
+
+
 def _diff_requirements(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     items = snapshot.get("items")
     if not isinstance(items, list):
@@ -1305,7 +1330,25 @@ def diff_snapshots(
     after_tracks = _diff_tracks(after)
     before_requirements = _diff_requirements(before)
     after_requirements = _diff_requirements(after)
+    before_kinds = _diff_kinds(before)
+    after_kinds = _diff_kinds(after)
     changes: list[dict[str, Any]] = []
+    for kind_id in sorted(set(before_kinds) | set(after_kinds)):
+        if kind_id not in after_kinds:
+            _record(changes, {
+                "op": "remove", "kind": kind_id, "path": "",
+                "before": before_kinds[kind_id],
+            }, max_changes)
+        elif kind_id not in before_kinds:
+            _record(changes, {
+                "op": "add", "kind": kind_id, "path": "",
+                "after": after_kinds[kind_id],
+            }, max_changes)
+        else:
+            _diff_value(
+                before_kinds[kind_id], after_kinds[kind_id], identity={"kind": kind_id},
+                path="", changes=changes, max_changes=max_changes,
+            )
     for item_id in sorted(set(before_items) | set(after_items)):
         if item_id not in after_items:
             _record(changes, {
