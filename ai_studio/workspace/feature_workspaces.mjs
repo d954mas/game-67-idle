@@ -11,6 +11,7 @@ import {
   renameSync,
   rmSync,
   rmdirSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
@@ -98,8 +99,8 @@ export function defaultWorkspaceBase(studioRoot) {
 export function parseCommandLine(argv) {
   const args = [...argv];
   const command = args.shift();
-  const commands = new Set(["new", "list", "check", "recover", "reallocate-ports", "remove"]);
-  if (!commands.has(command)) throw new Error("command must be new, list, check, recover, reallocate-ports, or remove");
+  const commands = new Set(["new", "list", "check", "prepare-python", "recover", "reallocate-ports", "remove"]);
+  if (!commands.has(command)) throw new Error("command must be new, list, check, prepare-python, recover, reallocate-ports, or remove");
   const options = {};
   if (command !== "new" && command !== "list" && args[0] && !args[0].startsWith("--")) {
     options.name = normalizeWorkspaceName(args.shift());
@@ -455,11 +456,11 @@ function sourcePythonBootstrap(studioRoot) {
   const executable = fields.get("executable");
   const home = fields.get("home");
   const candidates = [
-    executable,
     home && join(home, process.platform === "win32" ? "python.exe" : "python3"),
     home && process.platform !== "win32" && join(home, "python"),
+    executable,
   ].filter(Boolean).map((candidate) => resolve(candidate));
-  const basePython = candidates.find((candidate) => existsSync(candidate) && lstatSync(candidate).isFile());
+  const basePython = candidates.find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
   if (!basePython) throw new Error(`source Studio Python base executable is unavailable: ${configPath}`);
   return { basePython: realpathSync(basePython) };
 }
@@ -469,14 +470,8 @@ function pythonCommandError(error) {
   return lines.findLast((line) => line.startsWith("Error:")) || lines.at(-1) || "unknown Python setup failure";
 }
 
-function inspectWorkspacePython(sourceStudioRoot, studioWorktree) {
-  let bootstrap;
-  try {
-    bootstrap = sourcePythonBootstrap(sourceStudioRoot);
-  } catch (error) {
-    return { required: true, state: "invalid", error: error.message };
-  }
-  if (!bootstrap) return { required: false, state: "not-configured" };
+function inspectWorkspacePython(contract, studioWorktree) {
+  if (!contract?.required) return { required: false, state: "not-configured" };
   const venvRoot = join(studioWorktree, ".venv");
   const interpreter = join(venvRoot, process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
   if (!existsSync(join(venvRoot, "pyvenv.cfg")) || !existsSync(interpreter)) {
@@ -508,7 +503,7 @@ function prepareWorkspacePython(sourceStudioRoot, studioWorktree) {
     maxBuffer: 64 * 1024 * 1024,
     stdio: ["ignore", "pipe", "pipe"],
   });
-  const status = inspectWorkspacePython(sourceStudioRoot, studioWorktree);
+  const status = inspectWorkspacePython({ required: true }, studioWorktree);
   if (status.state !== "ready") throw new Error(status.error || "workspace Python setup did not validate");
   return status;
 }
@@ -786,7 +781,8 @@ function cleanReproducibleIgnored(root, protectedRoots = []) {
   if (unknown.length) throw new Error(`unknown ignored data would be removed: ${unknown.slice(0, 3).join(", ")}`);
   for (const path of removable) {
     if (!existsSync(path)) continue;
-    assertNoLinksRecursively(path);
+    if (basename(path) === ".venv") assertPhysicalDirectory(path, "generated .venv");
+    else assertNoLinksRecursively(path);
     rmSync(path, { recursive: true, force: true });
   }
 }
@@ -913,7 +909,15 @@ export async function checkFeatureWorkspace({ base, name }) {
   } catch (error) {
     problems.push(error.message);
   }
-  const python = inspectWorkspacePython(record.sourceStudioRoot, authority.studioWorktree);
+  let pythonContract = record.python;
+  if (typeof pythonContract?.required !== "boolean") {
+    const venvRoot = join(authority.studioWorktree, ".venv");
+    let sourceConfigured = false;
+    try { sourceConfigured = Boolean(sourcePythonBootstrap(record.sourceStudioRoot)); }
+    catch { sourceConfigured = true; }
+    pythonContract = { required: sourceConfigured || existsSync(join(venvRoot, "pyvenv.cfg")) };
+  }
+  const python = inspectWorkspacePython(pythonContract, authority.studioWorktree);
   if (python.required && python.state !== "ready") problems.push(python.error || "Python environment is invalid");
   let integrationTip = null;
   let divergence = null;
@@ -955,6 +959,30 @@ export async function checkFeatureWorkspace({ base, name }) {
     },
     registryLock: lockDiagnostics(authority.base),
   };
+}
+
+export async function prepareFeatureWorkspacePython({ base, name }) {
+  const authority = loadWorkspaceAuthority(base, name);
+  if (authority.removed) throw new Error(`workspace '${authority.name}' was removed`);
+  assertOwnedPaths(authority);
+  const releaseLock = await acquireRegistryLock(authority.base);
+  try {
+    const record = readJson(authority.paths.active, `active workspace ${authority.name}`);
+    assertManifestMatchesRecord(authority, record);
+    if (record.state !== "ready") throw new Error("Python can be prepared only for a ready workspace");
+    let python = inspectWorkspacePython({ required: true }, authority.studioWorktree);
+    if (python.state !== "ready") python = prepareWorkspacePython(record.sourceStudioRoot, authority.studioWorktree);
+    record.python = python;
+    record.completedSteps = [...new Set([...(record.completedSteps || []), "python-prepared"])];
+    const manifest = readJson(authority.manifestPath, `workspace manifest ${authority.name}`);
+    manifest.python = python;
+    manifest.completedSteps = record.completedSteps;
+    atomicWriteJson(authority.paths.active, record);
+    atomicWriteJson(authority.manifestPath, manifest);
+    return { name: authority.name, state: record.state, python };
+  } finally {
+    releaseLock();
+  }
 }
 
 export async function reallocateWorkspacePorts({ base, name, devapiPort, webPort, failAt }) {
@@ -1141,6 +1169,10 @@ function printHuman(command, result) {
     console.log(`${result.name}: DevAPI ${result.ports.devapi}; web ${result.ports.web}`);
     return;
   }
+  if (command === "prepare-python") {
+    console.log(`${result.name}: Python ${result.python.state}`);
+    return;
+  }
   console.log(`${result.name}: ${result.state}`);
   if (result.unmergedBranch) console.log(`Warning: branch ${result.gameBranch} is not merged and was preserved.`);
 }
@@ -1153,6 +1185,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (parsed.command === "new") result = await createFeatureWorkspace({ ...parsed.options, root, base });
   else if (parsed.command === "list") result = await listFeatureWorkspaces({ base });
   else if (parsed.command === "check") result = await checkFeatureWorkspace({ base, name: parsed.options.name });
+  else if (parsed.command === "prepare-python") result = await prepareFeatureWorkspacePython({ base, name: parsed.options.name });
   else if (parsed.command === "recover") result = await recoverFeatureWorkspace({ base, name: parsed.options.name });
   else if (parsed.command === "reallocate-ports") result = await reallocateWorkspacePorts({ ...parsed.options, base });
   else result = await removeFeatureWorkspace({ base, name: parsed.options.name });

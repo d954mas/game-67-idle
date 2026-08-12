@@ -57,6 +57,7 @@ reported as `not-configured` and workspace creation continues.
 node ai_studio/workspace/feature_workspaces.mjs new --game <game-id> --task T0001 --name <feature>
 node ai_studio/workspace/feature_workspaces.mjs list
 node ai_studio/workspace/feature_workspaces.mjs check <feature>
+node ai_studio/workspace/feature_workspaces.mjs prepare-python <feature>
 node ai_studio/workspace/feature_workspaces.mjs reallocate-ports <feature>
 node ai_studio/workspace/feature_workspaces.mjs recover <feature>
 node ai_studio/workspace/feature_workspaces.mjs remove <feature>

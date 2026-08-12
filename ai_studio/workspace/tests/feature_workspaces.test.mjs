@@ -15,6 +15,7 @@ import {
   normalizeWorkspaceName,
   parseCommandLine,
   listFeatureWorkspaces,
+  prepareFeatureWorkspacePython,
   reallocateWorkspacePorts,
   recoverFeatureWorkspace,
   removeFeatureWorkspace,
@@ -75,8 +76,9 @@ function pairFixture({ withPython = false } = {}) {
   write(studioRoot, ".gitmodules", '[submodule "external/neotolis-engine"]\n\tpath = external/neotolis-engine\n\turl = https://invalid.example/engine.git\n');
   write(studioRoot, "studio.txt", "studio\n");
   if (withPython) {
-    write(studioRoot, "ai_studio/dev_environment/python_setup.mjs", `import { mkdirSync, writeFileSync } from "node:fs";\nimport { join } from "node:path";\nconst root = process.cwd();\nmkdirSync(join(root, ".venv", "Scripts"), { recursive: true });\nwriteFileSync(join(root, ".venv", "pyvenv.cfg"), "home = fixture\\n", "utf8");\nwriteFileSync(join(root, ".venv", "Scripts", "python.exe"), "fixture\\n", "utf8");\n`);
-    write(studioRoot, "ai_studio/dev_environment/python_check.mjs", `import { existsSync } from "node:fs";\nimport { join } from "node:path";\nconst root = process.cwd();\nconst ready = existsSync(join(root, ".venv", "pyvenv.cfg")) && existsSync(join(root, ".venv", "Scripts", "python.exe"));\nconsole.log(JSON.stringify({ python: "3.12.4", prefix_ok: ready }));\nprocess.exitCode = ready ? 0 : 1;\n`);
+    const interpreterParts = process.platform === "win32" ? [".venv", "Scripts", "python.exe"] : [".venv", "bin", "python"];
+    write(studioRoot, "ai_studio/dev_environment/python_setup.mjs", `import { mkdirSync, writeFileSync } from "node:fs";\nimport { dirname, join } from "node:path";\nconst root = process.cwd();\nconst python = join(root, ...${JSON.stringify(interpreterParts)});\nmkdirSync(dirname(python), { recursive: true });\nwriteFileSync(join(root, ".venv", "pyvenv.cfg"), "home = fixture\\n", "utf8");\nwriteFileSync(python, "fixture\\n", "utf8");\n`);
+    write(studioRoot, "ai_studio/dev_environment/python_check.mjs", `import { existsSync } from "node:fs";\nimport { join } from "node:path";\nconst root = process.cwd();\nconst ready = existsSync(join(root, ".venv", "pyvenv.cfg")) && existsSync(join(root, ...${JSON.stringify(interpreterParts)}));\nconsole.log(JSON.stringify({ python: "3.12.4", prefix_ok: ready }));\nprocess.exitCode = ready ? 0 : 1;\n`);
   }
   git(studioRoot, "add", ".");
   git(studioRoot, "update-index", "--add", "--cacheinfo", `160000,${engineCommit},external/neotolis-engine`);
@@ -138,6 +140,13 @@ test("CLI accepts explicit replacement ports", () => {
   const parsed = parseCommandLine(["reallocate-ports", "feature", "--devapi-port", "18001", "--web-port", "5301"]);
   assert.equal(parsed.options.devapiPort, 18001);
   assert.equal(parsed.options.webPort, 5301);
+});
+
+test("CLI accepts Python preparation for an existing workspace", () => {
+  const parsed = parseCommandLine(["prepare-python", "feature", "--json"]);
+  assert.equal(parsed.command, "prepare-python");
+  assert.equal(parsed.options.name, "feature");
+  assert.equal(parsed.options.json, true);
 });
 
 test("default workspace base is a sibling of the Studio checkout", () => {
@@ -249,11 +258,22 @@ test("creation prepares and check validates an isolated Studio Python environmen
   });
 
   const workspaceVenv = join(created.studioWorktree, ".venv");
+  const workspacePython = join(workspaceVenv, process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
   assert.equal(created.python.state, "ready");
-  assert.equal(existsSync(join(workspaceVenv, "Scripts", "python.exe")), true);
+  assert.equal(existsSync(workspacePython), true);
   assert.notEqual(realpathSync(workspaceVenv), realpathSync(join(fixture.studioRoot, ".venv")));
   assert.equal((await checkFeatureWorkspace({ base: fixture.base, name: "python-ready" })).python.state, "ready");
 
+  const activePath = join(fixture.base, ".feature-workspaces/active/python-ready.json");
+  const manifestPath = join(fixture.base, "python-ready/workspace.json");
+  for (const path of [activePath, manifestPath]) {
+    const value = JSON.parse(readFileSync(path, "utf8"));
+    delete value.python;
+    writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  }
+  assert.equal((await prepareFeatureWorkspacePython({ base: fixture.base, name: "python-ready" })).python.state, "ready");
+
+  rmSync(join(fixture.studioRoot, ".venv"), { recursive: true, force: true });
   rmSync(join(workspaceVenv, "pyvenv.cfg"));
   const broken = await checkFeatureWorkspace({ base: fixture.base, name: "python-ready" });
   assert.equal(broken.ok, false);
@@ -434,8 +454,13 @@ test("removal refuses dirty work and preserves the game branch", async (t) => {
   rmSync(dirtyPath);
   write(created.gameWorktree, "build/ignored.txt", "reproducible\n");
   write(created.studioWorktree, ".vite/cache.bin", "reproducible\n");
+  const linkedTarget = join(fixture.fixtureRoot, "venv-link-target");
+  mkdirSync(linkedTarget);
+  write(linkedTarget, "keep.txt", "keep\n");
+  symlinkSync(linkedTarget, join(created.studioWorktree, ".venv", "linked-tool"), process.platform === "win32" ? "junction" : "dir");
   const removed = await removeFeatureWorkspace({ base: fixture.base, name: "remove-me" });
   assert.equal(removed.state, "removed");
+  assert.equal(readFileSync(join(linkedTarget, "keep.txt"), "utf8"), "keep\n");
   assert.equal(git(fixture.gameRoot, "show-ref", "--verify", `refs/heads/${created.gameBranch}`).length > 0, true);
   const checked = await checkFeatureWorkspace({ base: fixture.base, name: "remove-me" });
   assert.equal(checked.removed, true);
