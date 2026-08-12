@@ -57,6 +57,8 @@ function pairFixture() {
   git(engineRoot, "config", "user.name", "Fixture");
   git(engineRoot, "config", "user.email", "fixture@example.invalid");
   write(engineRoot, "engine.txt", "engine\n");
+  write(engineRoot, ".gitattributes", "missing.bin filter=lfs diff=lfs merge=lfs -text\n");
+  write(engineRoot, "missing.bin", "version https://git-lfs.github.com/spec/v1\noid sha256:0000000000000000000000000000000000000000000000000000000000000000\nsize 1\n");
   git(engineRoot, "add", ".");
   git(engineRoot, "commit", "-m", "engine base");
   write(engineRoot, "engine-next.txt", "engine gitlink\n");
@@ -76,7 +78,9 @@ function pairFixture() {
   git(studioRoot, "update-index", "--add", "--cacheinfo", `160000,${engineCommit},external/neotolis-engine`);
   git(studioRoot, "commit", "-m", "studio");
   mkdirSync(join(studioRoot, "external"), { recursive: true });
-  execFileSync("git", ["clone", "--quiet", engineRoot, join(studioRoot, "external/neotolis-engine")]);
+  execFileSync("git", ["clone", "--quiet", engineRoot, join(studioRoot, "external/neotolis-engine")], {
+    env: { ...process.env, GIT_LFS_SKIP_SMUDGE: "1" },
+  });
 
   const gameRoot = join(studioRoot, "games/private/fixture-game");
   mkdirSync(gameRoot, { recursive: true });

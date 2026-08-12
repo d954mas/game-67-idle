@@ -561,7 +561,7 @@ export async function createFeatureWorkspace(input) {
       "submodule", "update", "--init", "--checkout", "--no-fetch",
       "--reference", sourceEngineRoot,
       "--", "external/neotolis-engine",
-    ]);
+    ], { env: { ...process.env, GIT_LFS_SKIP_SMUDGE: "1" } });
     updateTransaction(manifestPath, paths.active, manifest, "engine-initialized");
     injectCrash(input, "after-engine");
     mkdirSync(join(studioWorktree, "games", "private"), { recursive: true });
