@@ -444,6 +444,75 @@ function validateCreatedWorkspace(studioWorktree, gameId, taskId, { requireEligi
   if (task.id !== taskId) throw new Error(`workspace task ${taskId} is missing`);
 }
 
+function sourcePythonBootstrap(studioRoot) {
+  const configPath = join(studioRoot, ".venv", "pyvenv.cfg");
+  if (!existsSync(configPath)) return null;
+  const fields = new Map(readFileSync(configPath, "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.split(/\s*=\s*/, 2))
+    .filter((parts) => parts.length === 2)
+    .map(([key, value]) => [key.trim().toLowerCase(), value.trim()]));
+  const executable = fields.get("executable");
+  const home = fields.get("home");
+  const candidates = [
+    executable,
+    home && join(home, process.platform === "win32" ? "python.exe" : "python3"),
+    home && process.platform !== "win32" && join(home, "python"),
+  ].filter(Boolean).map((candidate) => resolve(candidate));
+  const basePython = candidates.find((candidate) => existsSync(candidate) && lstatSync(candidate).isFile());
+  if (!basePython) throw new Error(`source Studio Python base executable is unavailable: ${configPath}`);
+  return { basePython: realpathSync(basePython) };
+}
+
+function pythonCommandError(error) {
+  const lines = `${error?.stderr || ""}\n${error?.message || ""}`.trim().split(/\r?\n/).filter(Boolean);
+  return lines.findLast((line) => line.startsWith("Error:")) || lines.at(-1) || "unknown Python setup failure";
+}
+
+function inspectWorkspacePython(sourceStudioRoot, studioWorktree) {
+  let bootstrap;
+  try {
+    bootstrap = sourcePythonBootstrap(sourceStudioRoot);
+  } catch (error) {
+    return { required: true, state: "invalid", error: error.message };
+  }
+  if (!bootstrap) return { required: false, state: "not-configured" };
+  const venvRoot = join(studioWorktree, ".venv");
+  const interpreter = join(venvRoot, process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
+  if (!existsSync(join(venvRoot, "pyvenv.cfg")) || !existsSync(interpreter)) {
+    return { required: true, state: "missing", error: `Python environment is missing at ${venvRoot}` };
+  }
+  try {
+    const output = execFileSync(process.execPath, ["ai_studio/dev_environment/python_check.mjs"], {
+      cwd: studioWorktree,
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    const details = output ? JSON.parse(output.split(/\r?\n/).at(-1)) : {};
+    return { required: true, state: "ready", details };
+  } catch (error) {
+    return { required: true, state: "invalid", error: pythonCommandError(error) };
+  }
+}
+
+function prepareWorkspacePython(sourceStudioRoot, studioWorktree) {
+  const bootstrap = sourcePythonBootstrap(sourceStudioRoot);
+  if (!bootstrap) return { required: false, state: "not-configured" };
+  execFileSync(process.execPath, [
+    "ai_studio/dev_environment/python_setup.mjs",
+    "--base-python", bootstrap.basePython,
+  ], {
+    cwd: studioWorktree,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const status = inspectWorkspacePython(sourceStudioRoot, studioWorktree);
+  if (status.state !== "ready") throw new Error(status.error || "workspace Python setup did not validate");
+  return status;
+}
+
 function rollbackCreate(manifest, manifestPath, activePath) {
   const errors = [];
   if (existsSync(manifest.gameWorktree)) {
@@ -555,6 +624,12 @@ export async function createFeatureWorkspace(input) {
     git(studioRoot, ["worktree", "add", "--detach", studioWorktree, studio.commit]);
     updateTransaction(manifestPath, paths.active, manifest, "studio-worktree-added");
     injectCrash(input, "after-studio-worktree");
+    try {
+      manifest.python = prepareWorkspacePython(studioRoot, studioWorktree);
+    } catch (error) {
+      throw new Error(`workspace Python setup failed: ${pythonCommandError(error)}`);
+    }
+    updateTransaction(manifestPath, paths.active, manifest, "python-prepared");
     git(studioWorktree, [
       "-c", "protocol.file.allow=always",
       "-c", `submodule.external/neotolis-engine.url=${sourceEngineRoot.replace(/\\/g, "/")}`,
@@ -692,7 +767,7 @@ function ignoredPaths(root) {
 }
 
 function cleanReproducibleIgnored(root, protectedRoots = []) {
-  const allowed = new Set(["build", "tmp", "out", ".cache", ".vite"]);
+  const allowed = new Set(["build", "tmp", "out", ".cache", ".vite", ".venv"]);
   const removable = new Set();
   const unknown = [];
   for (const ignored of ignoredPaths(root)) {
@@ -796,6 +871,7 @@ export async function listFeatureWorkspaces({ base }) {
         ...row,
         ok: checked.ok,
         dirty: { studio: checked.studio?.dirty, game: checked.game?.dirty },
+        python: checked.python,
         divergence: checked.game?.divergence,
         ignored: checked.ignored,
         registrations: { studio: checked.studio?.registered, game: checked.game?.registered },
@@ -837,6 +913,8 @@ export async function checkFeatureWorkspace({ base, name }) {
   } catch (error) {
     problems.push(error.message);
   }
+  const python = inspectWorkspacePython(record.sourceStudioRoot, authority.studioWorktree);
+  if (python.required && python.state !== "ready") problems.push(python.error || "Python environment is invalid");
   let integrationTip = null;
   let divergence = null;
   try {
@@ -869,6 +947,7 @@ export async function checkFeatureWorkspace({ base, name }) {
       divergence,
     },
     engine: { commit: engine.commit, dirty: engine.dirty },
+    python,
     ignored: {
       studio: ignoredPaths(authority.studioWorktree).length,
       game: ignoredPaths(gameWorktree).length,

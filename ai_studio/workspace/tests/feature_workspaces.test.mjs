@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { hostname, tmpdir } from "node:os";
 import { createServer } from "node:net";
@@ -49,7 +49,7 @@ function repoFixture() {
   return root;
 }
 
-function pairFixture() {
+function pairFixture({ withPython = false } = {}) {
   const fixtureRoot = mkdtempSync(join(tmpdir(), "feature-workspace-create-"));
   const engineRoot = join(fixtureRoot, "engine-source");
   mkdirSync(engineRoot);
@@ -71,9 +71,13 @@ function pairFixture() {
   git(studioRoot, "init", "-b", "main");
   git(studioRoot, "config", "user.name", "Fixture");
   git(studioRoot, "config", "user.email", "fixture@example.invalid");
-  write(studioRoot, ".gitignore", "games/private/\n.vite/\n");
+  write(studioRoot, ".gitignore", "games/private/\n.vite/\n.venv/\n");
   write(studioRoot, ".gitmodules", '[submodule "external/neotolis-engine"]\n\tpath = external/neotolis-engine\n\turl = https://invalid.example/engine.git\n');
   write(studioRoot, "studio.txt", "studio\n");
+  if (withPython) {
+    write(studioRoot, "ai_studio/dev_environment/python_setup.mjs", `import { mkdirSync, writeFileSync } from "node:fs";\nimport { join } from "node:path";\nconst root = process.cwd();\nmkdirSync(join(root, ".venv", "Scripts"), { recursive: true });\nwriteFileSync(join(root, ".venv", "pyvenv.cfg"), "home = fixture\\n", "utf8");\nwriteFileSync(join(root, ".venv", "Scripts", "python.exe"), "fixture\\n", "utf8");\n`);
+    write(studioRoot, "ai_studio/dev_environment/python_check.mjs", `import { existsSync } from "node:fs";\nimport { join } from "node:path";\nconst root = process.cwd();\nconst ready = existsSync(join(root, ".venv", "pyvenv.cfg")) && existsSync(join(root, ".venv", "Scripts", "python.exe"));\nconsole.log(JSON.stringify({ python: "3.12.4", prefix_ok: ready }));\nprocess.exitCode = ready ? 0 : 1;\n`);
+  }
   git(studioRoot, "add", ".");
   git(studioRoot, "update-index", "--add", "--cacheinfo", `160000,${engineCommit},external/neotolis-engine`);
   git(studioRoot, "commit", "-m", "studio");
@@ -81,6 +85,9 @@ function pairFixture() {
   execFileSync("git", ["clone", "--quiet", engineRoot, join(studioRoot, "external/neotolis-engine")], {
     env: { ...process.env, GIT_LFS_SKIP_SMUDGE: "1" },
   });
+  if (withPython) {
+    write(studioRoot, ".venv/pyvenv.cfg", `home = fixture\nexecutable = ${process.execPath}\n`);
+  }
 
   const gameRoot = join(studioRoot, "games/private/fixture-game");
   mkdirSync(gameRoot, { recursive: true });
@@ -227,6 +234,31 @@ test("creation makes detached Studio and branched game worktrees at committed he
   assert.equal(git(fixture.gameRoot, "config", "--local", "--list"), gameConfig);
   assert.throws(() => git(result.studioWorktree, "show", "HEAD:dirty-studio.txt"));
   assert.throws(() => git(result.gameWorktree, "show", "HEAD:dirty-game.txt"));
+});
+
+test("creation prepares and check validates an isolated Studio Python environment", async (t) => {
+  const fixture = pairFixture({ withPython: true });
+  t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
+
+  const created = await createFeatureWorkspace({
+    root: fixture.studioRoot,
+    base: fixture.base,
+    game: "fixture-game",
+    task: "T0001",
+    name: "python-ready",
+  });
+
+  const workspaceVenv = join(created.studioWorktree, ".venv");
+  assert.equal(created.python.state, "ready");
+  assert.equal(existsSync(join(workspaceVenv, "Scripts", "python.exe")), true);
+  assert.notEqual(realpathSync(workspaceVenv), realpathSync(join(fixture.studioRoot, ".venv")));
+  assert.equal((await checkFeatureWorkspace({ base: fixture.base, name: "python-ready" })).python.state, "ready");
+
+  rmSync(join(workspaceVenv, "pyvenv.cfg"));
+  const broken = await checkFeatureWorkspace({ base: fixture.base, name: "python-ready" });
+  assert.equal(broken.ok, false);
+  assert.equal(broken.python.state, "missing");
+  assert.match(broken.problems.join("\n"), /Python environment/i);
 });
 
 test("creation checks out a locally available engine object unreachable from its branch", async (t) => {
@@ -391,7 +423,7 @@ test("creation rejects an overlapping explicit port pair", async (t) => {
 });
 
 test("removal refuses dirty work and preserves the game branch", async (t) => {
-  const fixture = pairFixture();
+  const fixture = pairFixture({ withPython: true });
   t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
   const created = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0001", name: "remove-me" });
   const dirtyPath = join(created.gameWorktree, "dirty.txt");
