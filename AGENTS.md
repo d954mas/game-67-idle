@@ -64,6 +64,12 @@ design facts live under `games/<game-id>/design/`. Use
 If there is no active game, do not start game implementation unless the lead
 explicitly asks for it.
 
+Parallel feature agents for a private game use
+`ai_studio/workspace/feature_workspaces.mjs`; see
+`ai_studio/workspace/README.md#parallel-feature-workspaces`. Do not make manual
+Studio or game copies. A feature workspace starts from committed Studio/game
+heads; source working-tree changes are intentionally not transferred.
+
 ## Hard Invariants
 
 - Engine boundary: use `external/neotolis-engine` public APIs before custom code.

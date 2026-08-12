@@ -35,8 +35,8 @@ public surface, internals, and validation path.
 - `architecture_map/`: live architecture map renderer and validation report for
   unmapped files.
 - `assets/`: reviewed asset-facing modules, starting with Asset Viewer.
-- `workspace/`: local/private workspace mounts and privacy preflight for nested
-  game repositories under `games/<id>`.
+- `workspace/`: local/private workspace mounts, privacy preflight, and paired
+  Studio/game worktrees for parallel feature agents.
 - `runtime_automation/`: reviewed local DevAPI, capture, screenshot health, and
   UI readability proof helpers.
 - `core_harness/`: reviewed core routing and agent harness docs.
