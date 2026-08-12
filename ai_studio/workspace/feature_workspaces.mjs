@@ -558,7 +558,9 @@ export async function createFeatureWorkspace(input) {
     git(studioWorktree, [
       "-c", "protocol.file.allow=always",
       "-c", `submodule.external/neotolis-engine.url=${sourceEngineRoot.replace(/\\/g, "/")}`,
-      "submodule", "update", "--init", "--checkout", "--no-fetch", "--", "external/neotolis-engine",
+      "submodule", "update", "--init", "--checkout", "--no-fetch",
+      "--reference", sourceEngineRoot,
+      "--", "external/neotolis-engine",
     ]);
     updateTransaction(manifestPath, paths.active, manifest, "engine-initialized");
     injectCrash(input, "after-engine");

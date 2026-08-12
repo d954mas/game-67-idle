@@ -58,7 +58,10 @@ function pairFixture() {
   git(engineRoot, "config", "user.email", "fixture@example.invalid");
   write(engineRoot, "engine.txt", "engine\n");
   git(engineRoot, "add", ".");
-  git(engineRoot, "commit", "-m", "engine");
+  git(engineRoot, "commit", "-m", "engine base");
+  write(engineRoot, "engine-next.txt", "engine gitlink\n");
+  git(engineRoot, "add", ".");
+  git(engineRoot, "commit", "-m", "engine gitlink");
   const engineCommit = git(engineRoot, "rev-parse", "HEAD");
 
   const studioRoot = join(fixtureRoot, "studio");
@@ -220,6 +223,15 @@ test("creation makes detached Studio and branched game worktrees at committed he
   assert.equal(git(fixture.gameRoot, "config", "--local", "--list"), gameConfig);
   assert.throws(() => git(result.studioWorktree, "show", "HEAD:dirty-studio.txt"));
   assert.throws(() => git(result.gameWorktree, "show", "HEAD:dirty-game.txt"));
+});
+
+test("creation checks out a locally available engine object unreachable from its branch", async (t) => {
+  const fixture = pairFixture();
+  t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
+  git(fixture.engineRoot, "reset", "--hard", "HEAD^");
+  assert.equal(git(fixture.engineRoot, "cat-file", "-t", fixture.engineCommit), "commit");
+  const created = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0001", name: "unreachable-engine" });
+  assert.equal(git(join(created.studioWorktree, "external/neotolis-engine"), "rev-parse", "HEAD"), fixture.engineCommit);
 });
 
 test("creation refuses a second live assignment for the same game task", async (t) => {
