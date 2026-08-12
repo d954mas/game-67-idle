@@ -240,6 +240,25 @@ class DevApiClient:
                 raise DevApiError(f"batch request failed: {response.get('error', response)}")
         return [response.get("result") for response in responses]
 
+    def fast_forward(self, frames: int, chunk: int = 2000) -> None:
+        """Advance MANUAL-mode sim time in bounded time.step chunks.
+
+        time.step's reply is deferred until every requested step ran, so one
+        giant count would outlive the flat request timeout by construction.
+        The chunk is sized from "the sim is fast" (~0.2 ms/tick -> ~0.4 s per
+        chunk): a chunk that still hits the timeout means the tick degraded by
+        an order of magnitude, and that SHOULD fail loudly, not be waited out.
+        """
+        if isinstance(frames, bool) or not isinstance(frames, int) or frames < 0:
+            raise ValueError("frames must be a non-negative integer")
+        if isinstance(chunk, bool) or not isinstance(chunk, int) or chunk <= 0:
+            raise ValueError("chunk must be a positive integer")
+        remaining = frames
+        while remaining > 0:
+            step = min(remaining, chunk)
+            self.result("time.step", {"count": step})
+            remaining -= step
+
     def wait_frames(self, frames: int = 1) -> dict[str, Any]:
         if frames <= 0:
             return self.result("frame.current")

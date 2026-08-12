@@ -125,19 +125,18 @@ else()
     endforeach()
 endif()
 
-# E4: GAME_ANALYTICS_ENABLED gates the local analytics writer. A -D override wins (a cache
-# entry -> DEFINED -> persists between configures); otherwise the default = GAME_DEVAPI_ENABLED
-# as a PLAIN variable (recomputed EVERY configure, so flipping GAME_DEVAPI_ENABLED in a live
-# tree updates it -- a CACHE...FORCE default would go stale). NOT CACHE on the default path.
+# E4: GAME_ANALYTICS_ENABLED gates the local analytics writer. OPT-IN only
+# (-D override wins): it renders and writes an NDJSON line for EVERY event
+# from inside the sim tick — telemetry sessions ask for it explicitly,
+# automation farms never need it.
 if(NOT DEFINED GAME_ANALYTICS_ENABLED)
-    set(GAME_ANALYTICS_ENABLED ${GAME_DEVAPI_ENABLED})
+    set(GAME_ANALYTICS_ENABLED OFF)
 endif()
+# Raw full-stream mirror is OPT-IN only: it prints EVERY event every tick
+# (synchronous stdout inside the sim tick), which floods automated runs and
+# taxes the tick. A game that wants a console voice adds a curated shortlog.
 if(NOT DEFINED GAME_EVENTS_LOG_MIRROR)
-    if(CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(GAME_EVENTS_LOG_MIRROR OFF)
-    else()
-        set(GAME_EVENTS_LOG_MIRROR ON)
-    endif()
+    set(GAME_EVENTS_LOG_MIRROR OFF)
 endif()
 if(CMAKE_BUILD_TYPE STREQUAL "Release" AND
         (GAME_ANALYTICS_ENABLED OR GAME_EVENTS_LOG_MIRROR))
