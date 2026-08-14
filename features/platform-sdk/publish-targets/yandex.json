@@ -12,6 +12,9 @@
     "platform-sdk-core.js",
     "platform-sdk-adapter.js"
   ],
+  "optional_files": [
+    "assets/music.ntpack"
+  ],
   "zip_layout": "Yandex archive root: index.html, game.js, game.wasm, runtime-build.json, platform-sdk*.js, and assets/game.ntpack. Portal-provided /sdk.js is not bundled.",
   "metadata": {
     "portal": "Yandex Games",

@@ -12,6 +12,9 @@
     "platform-sdk-core.js",
     "platform-sdk-adapter.js"
   ],
+  "optional_files": [
+    "assets/music.ntpack"
+  ],
   "zip_layout": "Flat upload root accepted by Poki Inspector: index.html, game.js, game.wasm, runtime-build.json, platform-sdk*.js, and assets/game.ntpack.",
   "metadata": {
     "portal": "Poki Inspector",

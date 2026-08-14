@@ -13,6 +13,9 @@
     "platform-sdk-adapter.js",
     "playgama-bridge-config.json"
   ],
+  "optional_files": [
+    "assets/music.ntpack"
+  ],
   "zip_layout": "Playgama upload root: index.html, game.js, game.wasm, runtime-build.json, platform-sdk*.js, playgama-bridge-config.json, and assets/game.ntpack.",
   "metadata": {
     "portal": "Playgama",
