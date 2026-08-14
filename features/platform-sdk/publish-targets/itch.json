@@ -13,7 +13,9 @@
     "platform-sdk-adapter.js"
   ],
   "optional_files": [
-    "assets/music.ntpack"
+    "assets/music.ntpack",
+    "loading-title.webp",
+    "loading-tram.webp"
   ],
   "zip_layout": "Flat web root: index.html, game.js, game.wasm, runtime-build.json, platform-sdk*.js, and assets/game.ntpack at assets/game.ntpack.",
   "metadata": {

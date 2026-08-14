@@ -14,7 +14,9 @@
     "playgama-bridge-config.json"
   ],
   "optional_files": [
-    "assets/music.ntpack"
+    "assets/music.ntpack",
+    "loading-title.webp",
+    "loading-tram.webp"
   ],
   "zip_layout": "Playgama upload root: index.html, game.js, game.wasm, runtime-build.json, platform-sdk*.js, playgama-bridge-config.json, and assets/game.ntpack.",
   "metadata": {
