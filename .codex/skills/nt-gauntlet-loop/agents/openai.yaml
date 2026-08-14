@@ -1,0 +1,4 @@
+interface:
+  display_name: "NT Gauntlet Loop"
+  short_description: "Subagent game-quality gauntlet loop"
+  default_prompt: "Use $nt-gauntlet-loop to improve the trolley game's first five minutes with independent builders and harsh visual critics until it reaches the reference bar."
