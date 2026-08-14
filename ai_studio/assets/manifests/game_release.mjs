@@ -161,7 +161,15 @@ export function auditGameReleaseAssets(gameDir, options = {}) {
       issues.push(`${path}: packed input resolves outside the game root`);
       continue;
     }
-    if (!tracked.has(path)) issues.push(`${path}: packed input is not tracked`);
+    // Restricted inputs are gitignored by design (paid/non-redistributable
+    // sources never enter git); their integrity contract is the committed
+    // reconstruction record (source sha + transform) checked below instead
+    // of git tracking.
+    const restricted = path.startsWith("assets/restricted/");
+    if (!restricted && !tracked.has(path)) issues.push(`${path}: packed input is not tracked`);
+    if (restricted && !(record && String(record.transform || "").trim() && String(record.source_file_sha256 || "").trim())) {
+      issues.push(`${path}: restricted input requires a reconstruction record with transform and source_file_sha256`);
+    }
     if (!record) {
       issues.push(`${path}: missing asset metadata`);
       continue;
