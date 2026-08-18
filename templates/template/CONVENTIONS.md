@@ -58,3 +58,7 @@ dumps a whole game into one file. Keep them.
   then pack from the game-local asset copy. Generate only what you can't source.
 - All on-screen text uses the engine text renderer + a real font -- never
   hand-drawn pixel/shape text.
+- Heavy authoring workfiles that are not shipping assets stay OUT of the game
+  repo: offload them to the synchronized workspace with a manifest, per
+  `ai_studio/assets/external_game_workfiles.md`. Iteration output of art tools
+  defaults to `tmp/` (gitignored), never to `design/`.
