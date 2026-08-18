@@ -144,7 +144,7 @@ bool ui_runtime_begin(float dt, const game_input_frame_t *input) {
     u.resolution[1] = fb_h;
     u.near_far[0] = -1.0F;
     u.near_far[1] = 1.0F;
-    nt_gfx_update_buffer(s_ui_ubo, &u, sizeof u);
+    nt_gfx_update_buffer(s_ui_ubo, 0, &u, sizeof u);
     nt_gfx_bind_uniform_buffer(s_ui_ubo, 0);
 
     nt_font_step();

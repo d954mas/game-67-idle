@@ -132,7 +132,7 @@ void render_mesh_draw(World *w, nt_buffer_t frame_ubo) {
     u.resolution[1] = (float)g_nt_window.fb_height;
     u.near_far[0] = 0.1F;
     u.near_far[1] = 100.0F;
-    nt_gfx_update_buffer(frame_ubo, &u, sizeof(u));
+    nt_gfx_update_buffer(frame_ubo, 0, &u, sizeof(u));
     nt_gfx_bind_uniform_buffer(frame_ubo, 0);
 
     // set the player transform from the World, then draw

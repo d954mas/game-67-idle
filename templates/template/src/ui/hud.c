@@ -35,7 +35,7 @@ void hud_draw(nt_material_t text_material, nt_resource_t font_resource, nt_font_
     memcpy(u.view, view, 64);
     memcpy(u.proj, proj, 64);
     u.camera_pos[2] = 1.0F;
-    nt_gfx_update_buffer(frame_ubo, &u, sizeof(u));
+    nt_gfx_update_buffer(frame_ubo, 0, &u, sizeof(u));
     nt_gfx_bind_uniform_buffer(frame_ubo, 0);
 
     nt_font_step();
