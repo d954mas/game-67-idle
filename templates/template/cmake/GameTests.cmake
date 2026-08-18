@@ -663,6 +663,17 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_input COMMAND test_game_input)
 
+    add_executable(test_game_asset_paths
+        tests/test_game_asset_paths.c
+        src/game_asset_paths.c)
+    target_link_libraries(test_game_asset_paths PRIVATE unity)
+    target_include_directories(test_game_asset_paths PRIVATE src)
+    target_compile_definitions(test_game_asset_paths PRIVATE _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_game_asset_paths)
+    set_target_properties(test_game_asset_paths PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_asset_paths COMMAND test_game_asset_paths)
+
     add_executable(test_platform_lifecycle
         tests/test_platform_lifecycle.c
         src/platform_lifecycle.c

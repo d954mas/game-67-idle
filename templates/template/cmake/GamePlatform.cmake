@@ -168,15 +168,12 @@ endif()
 if(WIN32 AND NOT EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE winmm)
 endif()
-# On web the engine streams packs over HTTP relative to the page URL, so the
-# path must be RELATIVE and the pack ships as a plain file next to index.html
-# (tools/build_web.mjs copies it from the native build). Native keeps the
-# absolute bin/assets path.
-if(EMSCRIPTEN)
-    set(GAME_PACK_RUNTIME_PATH "assets/game.ntpack")
-else()
-    set(GAME_PACK_RUNTIME_PATH "${GAME_ASSETS_DIR}/game.ntpack")
-endif()
+# Packs are addressed RELATIVE to the shipped layout, never to a build-machine
+# directory: on web the engine streams them over HTTP relative to the page URL
+# (tools/build_web.mjs puts them next to index.html), on native
+# game_asset_paths resolves them against the executable's own folder, which is
+# how bin/assets and an unpacked player install are both laid out.
+set(GAME_PACK_RUNTIME_PATH "assets/game.ntpack")
 target_compile_definitions(${GAME_TARGET} PRIVATE
     GAME_ASSET_PACK_PATH="${GAME_PACK_RUNTIME_PATH}"
     PLATFORM_SDK_TARGET_ID=${GAME_PLATFORM_TARGET_ID}

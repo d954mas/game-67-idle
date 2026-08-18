@@ -69,6 +69,7 @@
 #include "game_state.h"
 #include "game_items.h"
 #include "game_state_events.gen.h" /* E2: game_ev_register (typed event labels) */
+#include "game_asset_paths.h"
 #include "platform_lifecycle.h"
 #include "settings_state.h"        /* A6: SettingsState + settings_state_fragment (NOT the events header) */
 #include "game_scenes.h"
@@ -609,7 +610,12 @@ int main(int argc, char **argv) {
 
     s_pack_id = nt_hash32_str("game");
     nt_resource_mount(s_pack_id, 100);
-    nt_resource_load_auto(s_pack_id, GAME_ASSET_PACK_PATH);
+    char pack_path[GAME_ASSET_PATH_MAX];
+    if (!game_asset_paths_resolve(GAME_ASSET_PACK_PATH, pack_path, sizeof pack_path)) {
+        fprintf(stderr, "game asset pack path does not fit\n");
+        return 1;
+    }
+    nt_resource_load_auto(s_pack_id, pack_path);
     nt_resource_set_activate_time_budget(0);
 
     s_text_vs = nt_resource_request(rid("assets/shaders/slug_text.vert"), NT_ASSET_SHADER_CODE);
