@@ -4,7 +4,6 @@ The reusable evaluator, package runtime, ownership operations, and reconcile
 logic live in `features/items-core`. This directory contains only game-owned
 policy:
 
-- `reason_tags.h`: closed mutation-reason verbs;
 - `src/game_items.c`: concrete player containers, owner refs, and initial grants;
 - `src/game_items_devapi.c`: development-only bounded runtime projection;
 - this integration and migration note.
@@ -41,7 +40,8 @@ DevAPI-enabled builds expose this as `game.items.container.list` and
 the JSON bridge never rounds i64 values. Release builds do not compile the
 adapter.
 
-Every mutation uses a bounded `verb:subject` reason from `reason_tags.h`.
+Every mutation uses a bounded `verb:subject` reason; the closed verb list
+lives in items-core (`features/items/reason_tags.h`).
 Malformed, unknown, or oversized reasons return `ITEMS_RESULT_INVALID_REASON`
 before any state change or audit event, including in release builds. Persistent
 ownership mutations also return `ITEMS_RESULT_AUDIT_UNAVAILABLE` unchanged when

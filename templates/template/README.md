@@ -13,7 +13,7 @@ Layout (decomposition the template teaches by example — no god-file):
                              aggregator (init/update/react/record/draw_world/draw_ui/
                              shutdown; call order = z-order):
                                settings/        gear panel, sliders, close, long-press reset.
-                               items/           game-local reason_tags.h + on_new_game seed
+                               items/           on_new_game seed (reason verbs live in items-core)
                                                 (ownership core lives in features/items-core/).
                                resource_panel/  HUD widget: gold counter + xp bar.
       systems/sys_move.c     game systems, one file each, over World.

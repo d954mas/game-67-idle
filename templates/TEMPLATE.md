@@ -173,7 +173,7 @@ modules from day one so a copied game keeps them apart:
                                  record/draw_world/draw_ui/shutdown; list = z-order)
         settings/                 feature-pointer: gear panel, sliders, close,
                                  long-press reset (public API: settings.h)
-        items/                    game-local reason_tags.h + on_new_game seed; the
+        items/                    on_new_game seed (reason verbs in items-core); the
                                  ownership core is the in-place module
                                  features/items-core/ (L1)
         resource_panel/           feature-pointer: HUD widget, gold counter + xp

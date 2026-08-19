@@ -12,7 +12,8 @@
   уехало в корневой in-place модуль `features/items-core/` (потребляется по
   `../../features/items-core/`, спеллинг include `features/items/items.h`
   сохранён через include-path — см. `features/items-core/README.md`); здесь
-  остаётся ТОЛЬКО игровая сторона: `reason_tags.h` (закрытый список верб) +
+  остаётся ТОЛЬКО игровая сторона (закрытый список верб `reason_tags.h`
+  теперь в items-core) +
   `items_bootstrap.c` (только `items_on_new_game` — посев). См.
   `items/README.md` за HOW этой игры (content/lock/миграция-скелет).
 - `progression/` — ПАПКА УДАЛЕНА ЦЕЛИКОМ. У прогрессии нет игрового

@@ -17,7 +17,6 @@ set(ITEMS_CORE_SCRIPTS "${ITEMS_CORE_DIR}/scripts")
 <game>/design/items/*.lua
 <game>/content/items.lock.json
 <game>/state/items.schema.json
-<game>/src/features/items/reason_tags.h
 <game>/src/game_items.c
 <game>/src/game_items.h
 <game>/src/game_items_devapi.c
