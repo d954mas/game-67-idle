@@ -53,6 +53,50 @@ function fixture(t, overrides = {}) {
   };
 }
 
+// A restricted input is gitignored by design, so on a fresh clone (CI) the
+// file cannot exist; the committed reconstruction record is its contract.
+function restrictedFixture(t, overrides = {}, { presentFile = false } = {}) {
+  const root = mkdtempSync(join(tmpdir(), "game-release-restricted-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const bytes = Buffer.from("restricted-bytes");
+  const path = "assets/restricted/audio/music/loop.mp3";
+  write(join(root, "assets", "release_inputs.json"), `${JSON.stringify({
+    schema: "ai_studio.game_release_assets.v1",
+    inputs: [path],
+  })}\n`);
+  if (presentFile) write(join(root, ...path.split("/")), bytes);
+  write(join(root, "src", "build_packs.c"), `nt_atlas_add(atlas, "${path}", &options);\n`);
+  const record = {
+    asset_id: "fixture__loop__restricted",
+    source_resource: "restricted/audio/music/loop.mp3",
+    origin: "sourced",
+    license: "Vendor-Commercial-Game-Use",
+    license_url: "https://example.test/license",
+    license_kind: "vendor",
+    publish: "false",
+    redistribution_allowed: "true",
+    commercial_use: "true",
+    modification_allowed: "true",
+    provenance: "fixture restricted source",
+    source_file_sha256: createHash("sha256").update("source").digest("hex"),
+    transform: "ffmpeg -i <source_file> loop.mp3",
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    bytes: bytes.length,
+    ...overrides,
+  };
+  write(join(root, "assets", "packs", "fixture", "assets.jsonl"), `${JSON.stringify(record)}\n`);
+  return {
+    root,
+    path,
+    record,
+    tracked: [
+      "assets/release_inputs.json",
+      "assets/packs/fixture/assets.jsonl",
+      "src/build_packs.c",
+    ],
+  };
+}
+
 test("game release asset audit validates packed tracked bytes and metadata", (t) => {
   const item = fixture(t);
   assert.deepEqual(packedAssetPaths(item.root), [item.path]);
@@ -95,6 +139,24 @@ test("game release asset audit fails on missing records stale hashes and release
   assert.match(
     auditGameReleaseAssets(forbidden.root, { trackedPaths: forbidden.tracked }).issues.join("\n"),
     /redistribution|not publishable|license/i,
+  );
+});
+
+test("a restricted input missing from a fresh clone audits by its reconstruction record", (t) => {
+  const clean = restrictedFixture(t);
+  assert.deepEqual(auditGameReleaseAssets(clean.root, { trackedPaths: clean.tracked }), {
+    ok: true, packed: 1, issues: [],
+  });
+  const bare = restrictedFixture(t, { transform: "", source_file_sha256: "" });
+  assert.match(
+    auditGameReleaseAssets(bare.root, { trackedPaths: bare.tracked }).issues.join("\n"),
+    /reconstruction record/,
+  );
+  // Where the file does exist, the content checks still bind it to the record.
+  const stale = restrictedFixture(t, { sha256: "0".repeat(64) }, { presentFile: true });
+  assert.match(
+    auditGameReleaseAssets(stale.root, { trackedPaths: stale.tracked }).issues.join("\n"),
+    /sha256 mismatch/,
   );
 });
 

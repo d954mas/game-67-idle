@@ -146,26 +146,31 @@ export function auditGameReleaseAssets(gameDir, options = {}) {
   for (const path of packed) {
     const record = records.get(path);
     const absolute = join(root, ...path.split("/"));
-    if (!existsSync(absolute)) {
-      issues.push(`${path}: packed input is missing`);
-      continue;
-    }
-    const stat = lstatSync(absolute);
-    if (stat.isSymbolicLink() || !stat.isFile()) {
-      issues.push(`${path}: packed input must be a regular non-symlink file`);
-      continue;
-    }
-    const resolvedInput = realpathSync(absolute);
-    const confined = relative(realRoot, resolvedInput);
-    if (isAbsolute(confined) || confined === ".." || confined.startsWith(`..\\`) || confined.startsWith("../")) {
-      issues.push(`${path}: packed input resolves outside the game root`);
-      continue;
-    }
     // Restricted inputs are gitignored by design (paid/non-redistributable
     // sources never enter git); their integrity contract is the committed
     // reconstruction record (source sha + transform) checked below instead
-    // of git tracking.
+    // of git tracking. On a fresh clone (CI) the file itself cannot exist, so
+    // its presence and content checks apply only where it does; the record
+    // and license checks always apply.
     const restricted = path.startsWith("assets/restricted/");
+    const present = existsSync(absolute);
+    if (!present && !restricted) {
+      issues.push(`${path}: packed input is missing`);
+      continue;
+    }
+    if (present) {
+      const stat = lstatSync(absolute);
+      if (stat.isSymbolicLink() || !stat.isFile()) {
+        issues.push(`${path}: packed input must be a regular non-symlink file`);
+        continue;
+      }
+      const resolvedInput = realpathSync(absolute);
+      const confined = relative(realRoot, resolvedInput);
+      if (isAbsolute(confined) || confined === ".." || confined.startsWith(`..\\`) || confined.startsWith("../")) {
+        issues.push(`${path}: packed input resolves outside the game root`);
+        continue;
+      }
+    }
     if (!restricted && !tracked.has(path)) issues.push(`${path}: packed input is not tracked`);
     if (restricted && !(record && String(record.transform || "").trim() && String(record.source_file_sha256 || "").trim())) {
       issues.push(`${path}: restricted input requires a reconstruction record with transform and source_file_sha256`);
@@ -187,12 +192,17 @@ export function auditGameReleaseAssets(gameDir, options = {}) {
     }
     const license = validateLicenseRecord(record, { forDistribution: true, forRelease: true });
     if (!license.ok) issues.push(`${path}: ${license.issues.join("; ")}`);
-    const bytes = readFileSync(absolute);
     const recordedSha256 = String(record.sha256 || "").toLowerCase();
     if (!/^[0-9a-f]{64}$/.test(recordedSha256)) issues.push(`${path}: missing or malformed sha256`);
-    else if (sha256(bytes) !== recordedSha256) issues.push(`${path}: sha256 mismatch`);
-    if (!Number.isSafeInteger(Number(record.bytes)) || Number(record.bytes) !== bytes.length) {
-      issues.push(`${path}: byte size mismatch`);
+    if (!Number.isSafeInteger(Number(record.bytes))) issues.push(`${path}: missing or malformed byte size`);
+    if (present) {
+      const bytes = readFileSync(absolute);
+      if (/^[0-9a-f]{64}$/.test(recordedSha256) && sha256(bytes) !== recordedSha256) {
+        issues.push(`${path}: sha256 mismatch`);
+      }
+      if (Number.isSafeInteger(Number(record.bytes)) && Number(record.bytes) !== bytes.length) {
+        issues.push(`${path}: byte size mismatch`);
+      }
     }
   }
   for (const path of records.keys()) {
