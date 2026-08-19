@@ -1,7 +1,8 @@
 name: Game-owned verification scaffold
 
 # Copied with the game. In a standalone game repository it reconstructs the
-# pinned Studio layout and mounts this checkout under games/<game-id>.
+# Studio layout at its current head and mounts this checkout under
+# games/<game-id>; feature compatibility is the version contract's job.
 on:
   pull_request:
   push:
@@ -33,16 +34,18 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
-      - name: Resolve exact game and Studio revisions
+      - name: Resolve game identity
         id: identity
         shell: bash
         run: |
-          node -e "const fs=require('node:fs'); const g=require('./.game-metadata/game.json'); const d=require('./.game-metadata/dependencies.json'); const revisions=[...new Set(d.features.map(x=>x.revision))]; if(!/^[a-z][a-z0-9-]*$/.test(g.id)||revisions.length!==1||!/^[0-9a-f]{40}$/.test(revisions[0])) throw Error('invalid game identity or Studio dependency revisions'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'game_id='+g.id+'\nstudio_revision='+revisions[0]+'\ngame_path=workspace/games/'+g.id+'\n');"
-      - name: Checkout exact Studio dependency root
+          node -e "const fs=require('node:fs'); const g=require('./.game-metadata/game.json'); const d=require('./.game-metadata/dependencies.json'); if(!/^[a-z][a-z0-9-]*$/.test(g.id)||d.schema!=='ai_studio.game.dependencies.v3') throw Error('invalid game identity or dependency record'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'game_id='+g.id+'\ngame_path=workspace/games/'+g.id+'\n');"
+      # Features are pinned by declared version, not by a Studio commit; verify
+      # enforces that the checked-out Studio head still matches every declared
+      # version, so a drifted head fails loudly instead of building silently.
+      - name: Checkout Studio dependency root
         uses: actions/checkout@v7
         with:
           repository: ${{ env.STUDIO_REPOSITORY }}
-          ref: ${{ steps.identity.outputs.studio_revision }}
           path: workspace
           submodules: recursive
           fetch-depth: 0
