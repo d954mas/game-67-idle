@@ -236,10 +236,14 @@ test("copied game CLI executes doctor and final package from a real games/privat
   assert.equal(readdirSync(join(gameDir, "release", "artifacts")).filter((name) => /\.(?:zip|manifest\.json)$/.test(name)).length, 2);
 });
 
-test("copied CI restores the exact Studio revision and mounts the standalone game under games/<id>", () => {
+test("copied CI restores the Studio layout and mounts the standalone game under games/<id>", () => {
   const workflow = readFileSync(join(gameModuleRoot, ".github", "workflows", "game-verify.yml"), "utf8");
   assert.match(workflow, /STUDIO_REPOSITORY: 'd954mas\/game-67-idle'/);
-  assert.match(workflow, /studio_revision=.*revisions\[0\]/);
+  // Schema v3 pins features by declared version, so the checkout takes the
+  // Studio default branch: no ref line, and no revision derived from features.
+  assert.doesNotMatch(workflow, /studio_revision/);
+  assert.doesNotMatch(workflow, /ref: \$\{\{ steps\.identity/);
+  assert.match(workflow, /d\.schema!=='ai_studio\.game\.dependencies\.v3'/);
   assert.match(workflow, /repository: \$\{\{ env\.STUDIO_REPOSITORY \}\}/);
   assert.match(workflow, /path: \$\{\{ steps\.identity\.outputs\.game_path \}\}/);
   assert.match(workflow, /working-directory: \$\{\{ steps\.identity\.outputs\.game_path \}\}[\s\S]*node tools\/game\.mjs verify --target itch/);
