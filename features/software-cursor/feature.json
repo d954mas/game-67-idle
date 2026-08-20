@@ -1,0 +1,76 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "software-cursor",
+  "version": "0.1.0",
+  "title": "Software Cursor",
+  "status": "reusable",
+  "kind": "presentation",
+  "summary": "In-place themed software cursor with pointer and finger samples, smooth follow, press feedback, native cursor coordination, and game-owned visual overrides.",
+  "copy_model": "in-place",
+  "layer": "L1",
+  "owners": [
+    "features/software-cursor"
+  ],
+  "dependencies": [
+    "consumer pointer input snapshot",
+    "consumer sprite or UI renderer",
+    "neotolis-engine issue 335 for portable native cursor visibility"
+  ],
+  "commands": {
+    "ctest": "ctest --test-dir games/<game-id>/build/<preset> -R test_software_cursor --output-on-failure"
+  },
+  "provides": [
+    "software_cursor_t runtime state",
+    "software_cursor_set_intent semantic cursor selection",
+    "software_cursor_presentation renderer-neutral output",
+    "pointer and finger sample themes"
+  ],
+  "flags": {
+    "feature": "FEATURE_SOFTWARE_CURSOR=1 in consuming game/template targets"
+  },
+  "manuals": {
+    "install": "features/software-cursor/INSTALL.md"
+  },
+  "registers": {
+    "target_sources": [
+      "${SOFTWARE_CURSOR_SRC}/software_cursor.c",
+      "${SOFTWARE_CURSOR_SRC}/software_cursor_samples.c"
+    ],
+    "include_dirs": [
+      "${SOFTWARE_CURSOR_INC}"
+    ],
+    "runtime_hooks": [
+      "init",
+      "update",
+      "draw-last",
+      "shutdown"
+    ],
+    "ctest_targets": [
+      "test_software_cursor"
+    ]
+  },
+  "assets_tag": "feature=software-cursor",
+  "art_needs": [
+    {
+      "slot": "pointer_idle",
+      "kind": "atlas-region",
+      "hint": "Visible casual-game pointer with a precise top-left hotspot."
+    },
+    {
+      "slot": "pointer_pressed",
+      "kind": "atlas-region",
+      "hint": "Optional pressed pointer; may reuse idle because the feature supplies squash."
+    },
+    {
+      "slot": "finger_open",
+      "kind": "atlas-region",
+      "hint": "Open touch hand for hover and travel."
+    },
+    {
+      "slot": "finger_pressed",
+      "kind": "atlas-region",
+      "hint": "Closed touch hand for tap and drag."
+    }
+  ]
+}
+

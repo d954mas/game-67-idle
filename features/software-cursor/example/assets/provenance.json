@@ -1,0 +1,41 @@
+{
+  "schema": "ai_studio.asset-provenance.v1",
+  "assets": [
+    {
+      "file": "kenney_pointer_c_shaded_cc0.png",
+      "bytes": 1082,
+      "sha256": "D2ED5B9E2FE37B9F07A26F6BC77E0B5B52A24838A63757E0A2DAEDD64F7EA724",
+      "origin": "sourced",
+      "author": "Kenney",
+      "license": "CC0-1.0",
+      "source_page": "https://kenney.nl/assets/cursor-pack",
+      "source_archive": "https://kenney.nl/media/pages/assets/cursor-pack/461b29df18-1717599281/kenney_cursor-pack.zip",
+      "source_archive_sha256": "BAA87634F3CFD294B0C83E70222053AAB2F56D19F78ECA4067B9B38A555269CC",
+      "source_file": "PNG/Outline/Double/pointer_c_shaded.png"
+    },
+    {
+      "file": "touch_hand_open.png",
+      "bytes": 596,
+      "sha256": "1288AFAC684B4D5CEE486FDD61D27237E720B210D1071DDFE750C37D0AE5A8E8",
+      "origin": "sourced",
+      "author": "Kenney",
+      "license": "CC0-1.0",
+      "source_page": "https://kenney.nl/assets/input-prompts",
+      "source_archive": "kenney_input-prompts_1.5.zip",
+      "source_archive_sha256": "AC2FCF599080B0F3BA2D174C9474DB6DF1A0E96FF0662580E2DA79A122AB78A1",
+      "source_file": "Touch/Double/touch_hand_open.png"
+    },
+    {
+      "file": "touch_hand_closed.png",
+      "bytes": 455,
+      "sha256": "B70A088702EE7E603C25555F9495688E57FCC6A6246076D2D35B647AB380D770",
+      "origin": "sourced",
+      "author": "Kenney",
+      "license": "CC0-1.0",
+      "source_page": "https://kenney.nl/assets/input-prompts",
+      "source_archive": "kenney_input-prompts_1.5.zip",
+      "source_archive_sha256": "AC2FCF599080B0F3BA2D174C9474DB6DF1A0E96FF0662580E2DA79A122AB78A1",
+      "source_file": "Touch/Double/touch_hand_closed.png"
+    }
+  ]
+}
