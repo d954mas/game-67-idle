@@ -28,6 +28,7 @@ from ai_studio.runtime_automation.record_game import (
     _preflight_obs_source,
     _publish_take,
     _record_audio_with_driver,
+    _settle_game_capture,
     _extract_health_frame,
     _obs_wgc_service_failure,
     _scene_collection,
@@ -51,7 +52,7 @@ class MediaInspectionTest(unittest.TestCase):
             {
                 "codec_type": "video", "codec_name": "h264",
                 "width": 1080, "height": 1920, "avg_frame_rate": "30/1",
-                "nb_read_frames": "150",
+                "nb_read_packets": "150",
             },
             {
                 "codec_type": "audio", "codec_name": "aac",
@@ -77,7 +78,7 @@ class MediaInspectionTest(unittest.TestCase):
         streams = [{
             "codec_type": "video", "codec_name": "h264",
             "width": 1080, "height": 1920, "avg_frame_rate": "30/1",
-            "nb_read_frames": "150",
+            "nb_read_packets": "150",
         }]
 
         with self.assertRaisesRegex(RuntimeError, "one video and one audio"):
@@ -105,16 +106,29 @@ class CaptureSettingsTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "WIDTHxHEIGHT"):
             resolve_capture_settings("social", "1080", None)
 
-    def test_social_capture_is_lightweight_but_keeps_delivery_aspect(self) -> None:
+    def test_obs_capture_keeps_full_delivery_resolution(self) -> None:
         capture = resolve_obs_capture_settings(
             resolve_capture_settings("social", None, None)
         )
 
-        self.assertEqual((capture.width, capture.height), (720, 1280))
+        self.assertEqual((capture.width, capture.height), (1080, 1920))
         self.assertEqual(capture.fps, 30)
 
 
 class ObsContractTest(unittest.TestCase):
+    def test_hidden_capture_settles_with_the_game_in_background(self) -> None:
+        events: list[object] = []
+
+        _settle_game_capture(
+            123,
+            hide_game_window=True,
+            bring_window_forward=lambda hwnd: events.append(("restore", hwnd)),
+            background_window=lambda hwnd: events.append(("background", hwnd)),
+            sleep=lambda seconds: events.append(("sleep", seconds)),
+        )
+
+        self.assertEqual(events, [("background", 123), ("sleep", 5.0)])
+
     def test_obs_source_gets_time_to_attach_before_restart(self) -> None:
         healthy = {"uniqueColors": 500}
         with patch(
@@ -247,6 +261,7 @@ class ObsContractTest(unittest.TestCase):
         )
         self.assertEqual(source["id"], "window_capture")
         self.assertEqual(source["settings"]["method"], 2)
+        self.assertEqual(source["settings"]["window"], "Title:GLFW30:game.exe")
 
 class OutputTest(unittest.TestCase):
     def test_recording_health_accepts_a_high_range_pale_game_frame(self) -> None:

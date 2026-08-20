@@ -34,8 +34,10 @@ BI_RGB = 0
 DIB_RGB_COLORS = 0
 HWND_TOPMOST = wintypes.HWND(-1)
 HWND_NOTOPMOST = wintypes.HWND(-2)
+HWND_BOTTOM = wintypes.HWND(1)
 SWP_NOSIZE = 0x0001
 SWP_NOMOVE = 0x0002
+SWP_NOACTIVATE = 0x0010
 SWP_SHOWWINDOW = 0x0040
 DWMWA_EXTENDED_FRAME_BOUNDS = 9
 
@@ -97,6 +99,8 @@ user32.SetWindowPos.argtypes = [
 user32.SetWindowPos.restype = wintypes.BOOL
 user32.SetForegroundWindow.argtypes = [wintypes.HWND]
 user32.SetForegroundWindow.restype = wintypes.BOOL
+user32.EnableWindow.argtypes = [wintypes.HWND, wintypes.BOOL]
+user32.EnableWindow.restype = wintypes.BOOL
 user32.GetDC.argtypes = [wintypes.HWND]
 user32.GetDC.restype = wintypes.HDC
 user32.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
@@ -188,6 +192,24 @@ def bring_window_forward(hwnd: int) -> RECT:
     if rect.right <= rect.left or rect.bottom <= rect.top:
         raise RuntimeError("target window has an empty rectangle")
     return rect
+
+
+def background_window(hwnd: int) -> None:
+    user32.EnableWindow(hwnd, False)
+    if not user32.SetWindowPos(
+        hwnd,
+        HWND_BOTTOM,
+        0,
+        0,
+        0,
+        0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
+    ):
+        raise_last_error("SetWindowPos")
+
+
+def restore_window_interaction(hwnd: int) -> None:
+    user32.EnableWindow(hwnd, True)
 
 
 def release_topmost(hwnd: int) -> None:

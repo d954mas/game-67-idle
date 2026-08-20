@@ -92,9 +92,9 @@ def inspect_master(
     timeout_seconds: float = 15.0,
 ) -> dict:
     command = [
-        str(ffprobe), "-v", "error", "-count_frames", "-show_entries",
+        str(ffprobe), "-v", "error", "-count_packets", "-show_entries",
         "stream=codec_type,codec_name,width,height,avg_frame_rate,"
-        "sample_rate,channels,nb_read_frames:format=duration,size",
+        "sample_rate,channels,nb_read_packets:format=duration,size",
         "-of", "json", str(output),
     ]
     try:
@@ -119,7 +119,7 @@ def inspect_master(
         size = int(probe["format"]["size"])
         width, height = int(video["width"]), int(video["height"])
         fps = Fraction(video["avg_frame_rate"])
-        frames = int(video["nb_read_frames"])
+        frames = int(video["nb_read_packets"])
         sample_rate, channels = int(audio["sample_rate"]), int(audio["channels"])
     except RuntimeError:
         raise
@@ -239,15 +239,7 @@ def resolve_capture_settings(
 
 
 def resolve_obs_capture_settings(settings: CaptureSettings) -> CaptureSettings:
-    max_pixels = 720 * 1280
-    scale = min(
-        1.0,
-        1280 / max(settings.width, settings.height),
-        math.sqrt(max_pixels / (settings.width * settings.height)),
-    )
-    width = max(2, round(settings.width * scale / 2) * 2)
-    height = max(2, round(settings.height * scale / 2) * 2)
-    return CaptureSettings(width, height, settings.fps)
+    return CaptureSettings(settings.width, settings.height, settings.fps)
 
 
 def build_master_command(
@@ -1013,6 +1005,21 @@ def _preflight_obs_source(
     raise rejection
 
 
+def _settle_game_capture(
+    hwnd: int,
+    *,
+    hide_game_window: bool,
+    bring_window_forward: Callable[[int], object],
+    background_window: Callable[[int], None],
+    sleep: Callable[[float], None] = time.sleep,
+) -> None:
+    if hide_game_window:
+        background_window(hwnd)
+    else:
+        bring_window_forward(hwnd)
+    sleep(5.0)
+
+
 def _audio_levels(ffmpeg: Path, master: Path) -> dict:
     completed = subprocess.run(
         [
@@ -1122,6 +1129,7 @@ def record_take(
     countdown: int,
     obs_override: Path | None = None,
     recording_driver: Callable[[], None] | None = None,
+    hide_game_window: bool = False,
 ) -> dict:
     if os.name != "nt":
         raise RuntimeError("OBS game recording currently supports Windows only")
@@ -1132,7 +1140,12 @@ def record_take(
     if countdown < 0:
         raise ValueError("countdown cannot be negative")
 
-    from capture_window import bring_window_forward, release_topmost
+    from capture_window import (
+        background_window,
+        bring_window_forward,
+        release_topmost,
+        restore_window_interaction,
+    )
 
     paths = CapturePaths.from_root(output_root.resolve())
     _prepare_outputs(paths)
@@ -1156,7 +1169,10 @@ def record_take(
     audio_path = paths.root / ".game.partial.wav"
     audio_path.unlink(missing_ok=True)
     recording_directory.mkdir(exist_ok=False)
-    bring_window_forward(hwnd)
+    if hide_game_window:
+        background_window(hwnd)
+    else:
+        bring_window_forward(hwnd)
     try:
         portable_obs = _mirror_obs_install(_obs_install_root(obs), session_root)
         portable_root = portable_obs.parents[2]
@@ -1209,7 +1225,10 @@ def record_take(
                 hwnd = current_hwnd
                 rejection = "game window changed during OBS startup"
             else:
-                bring_window_forward(hwnd)
+                if hide_game_window:
+                    background_window(hwnd)
+                else:
+                    bring_window_forward(hwnd)
                 print(
                     "Checking live OBS pixels before REC...",
                     flush=True,
@@ -1255,6 +1274,12 @@ def record_take(
             print(f"OBS source rejected ({rejection}); restarting...", flush=True)
         if recorded is None or preflight_health is None:
             raise RuntimeError("OBS source preflight did not complete")
+        _settle_game_capture(
+            hwnd,
+            hide_game_window=hide_game_window,
+            bring_window_forward=bring_window_forward,
+            background_window=background_window,
+        )
         content_start_offset = time.monotonic() - recording_detected_at
         print(
             f"REC | {duration_seconds:g} seconds",
@@ -1397,6 +1422,7 @@ def record_take(
                 _stop_obs(obs_process)
             except (OSError, RuntimeError):
                 _stop_process(obs_process)
+        restore_window_interaction(hwnd)
         release_topmost(hwnd)
         health_frame.unlink(missing_ok=True)
         audio_path.unlink(missing_ok=True)
