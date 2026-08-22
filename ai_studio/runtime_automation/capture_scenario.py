@@ -105,10 +105,15 @@ def parse_scenario(document: Any) -> Scenario:
     output_height = _integer(viewport["output_height"], "viewport.output_height", 64, 8192)
     minimum_width = _integer(viewport["min_framebuffer_width"], "viewport.min_framebuffer_width", output_width, 8192)
     minimum_height = _integer(viewport["min_framebuffer_height"], "viewport.min_framebuffer_height", output_height, 8192)
-    if viewport["orientation"] != "vertical" or viewport["prefer_supersample"] is not True:
-        raise CaptureScenarioError("v1 requires vertical output with prefer_supersample=true")
-    if output_height <= output_width or minimum_height <= minimum_width:
-        raise CaptureScenarioError("viewport must be portrait")
+    orientation = viewport["orientation"]
+    if orientation not in {"vertical", "horizontal"} or viewport["prefer_supersample"] is not True:
+        raise CaptureScenarioError(
+            "v1 requires vertical or horizontal output with prefer_supersample=true")
+    if orientation == "vertical":
+        if output_height <= output_width or minimum_height <= minimum_width:
+            raise CaptureScenarioError("vertical viewport must be portrait")
+    elif output_width <= output_height or minimum_width <= minimum_height:
+        raise CaptureScenarioError("horizontal viewport must be landscape")
 
     fixed_tick_hz = _integer(clock["fixed_tick_hz"], "clock.fixed_tick_hz", 1, 1000)
     output_fps = _integer(clock["output_fps"], "clock.output_fps", 1, 240)

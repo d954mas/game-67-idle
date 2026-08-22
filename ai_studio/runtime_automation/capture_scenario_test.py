@@ -41,6 +41,17 @@ class CaptureScenarioModelTest(unittest.TestCase):
         self.assertEqual(schedule[3][0]["set"]["value"], 2.0)
         frame_one_set = next(event["set"] for event in schedule[1] if "set" in event)
         self.assertTrue(math.isclose(frame_one_set["value"], 1.2592592592592593))
+    def test_horizontal_landscape_viewport_is_supported(self):
+        value = manifest()
+        value["viewport"] = {
+            "orientation": "horizontal",
+            "output_width": 1920, "output_height": 1080,
+            "min_framebuffer_width": 1920, "min_framebuffer_height": 1080,
+            "prefer_supersample": True,
+        }
+
+        scenario = parse_scenario(value)
+        self.assertEqual((scenario.output_width, scenario.output_height), (1920, 1080))
 
     def test_unknown_key_is_rejected_at_nested_level(self):
         value = manifest()
