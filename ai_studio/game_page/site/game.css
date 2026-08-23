@@ -16,3 +16,44 @@
 .game-page .game-error {
   color: #e07b7b;
 }
+
+.game-page .pack-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.game-page .pack-chip {
+  border: 1px solid var(--line, #2c3440);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--muted, #9aa4b2);
+}
+
+.game-page .pack-table-wrap {
+  overflow-x: auto;
+}
+
+.game-page .pack-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.game-page .pack-table th,
+.game-page .pack-table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line, #2c3440);
+  white-space: nowrap;
+}
+
+.game-page .pack-table td:nth-child(2) {
+  white-space: normal;
+  word-break: break-all;
+}
+
+.game-page .pack-row-dup {
+  opacity: 0.55;
+}

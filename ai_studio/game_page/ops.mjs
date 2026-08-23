@@ -2,10 +2,11 @@
 // The page never mutates game data; every section links into the owning tool.
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { gzipSync } from "node:zlib";
-import { extname, join } from "node:path";
+import { basename, extname, join, normalize, resolve, sep } from "node:path";
 
 import { listGameMounts } from "../workspace/games.mjs";
 import { listProjects } from "../taskboard/store.mjs";
+import { parseNameHeader, parseNtpack } from "./ntpack.mjs";
 
 const DESIGN_DOC_CANDIDATES = [
   { rel: "design/README.md", label: "Design home" },
@@ -195,6 +196,57 @@ export function getGameBuilds(root, gameId) {
     configs,
     release: releaseArtifacts(gameRoot),
   };
+}
+
+function confinedGamePath(root, mount, relPath) {
+  const gameRoot = resolve(join(root, mount.root));
+  const full = resolve(gameRoot, normalize(String(relPath || "")));
+  if (full !== gameRoot && !full.startsWith(gameRoot + sep)) return null;
+  return full;
+}
+
+// Parsed dumps are cached by identity so a page reload does not re-gzip a
+// multi-megabyte pack; a rebuilt pack (new mtime/size) is re-parsed.
+const packDumpCache = new Map();
+
+export function getPackDump(root, gameId, relPath) {
+  const mount = resolveGameMount(root, gameId);
+  if (!mount) return null;
+  const full = confinedGamePath(root, mount, relPath);
+  if (!full || extname(full).toLowerCase() !== ".ntpack" || !existsSync(full)) return null;
+  const stats = statSync(full);
+  const cacheKey = `${full}\0${Math.round(stats.mtimeMs)}\0${stats.size}`;
+  if (packDumpCache.has(cacheKey)) return packDumpCache.get(cacheKey);
+
+  const stem = basename(full, ".ntpack");
+  const nameHeaderPath = join(root, mount.root, "src", "generated", `${stem}.h`);
+  let names = new Map();
+  if (existsSync(nameHeaderPath)) names = parseNameHeader(readFileSync(nameHeaderPath, "utf8"));
+  let parsed;
+  try {
+    parsed = parseNtpack(readFileSync(full), { names });
+  } catch (error) {
+    return {
+      schema: "ai_studio.game_page.pack.v1",
+      game: { id: mount.gameId, root: mount.root },
+      pack: { rel: String(relPath), bytes: stats.size, mtimeMs: Math.round(stats.mtimeMs) },
+      error: error?.message || String(error),
+    };
+  }
+  const dump = {
+    schema: "ai_studio.game_page.pack.v1",
+    game: { id: mount.gameId, root: mount.root },
+    pack: {
+      rel: String(relPath),
+      bytes: stats.size,
+      mtimeMs: Math.round(stats.mtimeMs),
+      namesFrom: existsSync(nameHeaderPath) ? `src/generated/${stem}.h` : "",
+    },
+    ...parsed,
+  };
+  packDumpCache.set(cacheKey, dump);
+  if (packDumpCache.size > 32) packDumpCache.delete(packDumpCache.keys().next().value);
+  return dump;
 }
 
 export function getGameOverview(root, gameId) {

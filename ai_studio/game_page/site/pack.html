@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pack — AI Studio</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/ai_studio/studio_shell/studio_shell.css">
+  <link rel="stylesheet" href="/ai_studio/studio_shell/home.css">
+  <link rel="stylesheet" href="/ai_studio/game_page/site/game.css">
+</head>
+<body>
+  <div class="studio-shell">
+    <aside class="studio-sidebar" aria-label="AI Studio navigation">
+      <div class="studio-sidebar-brand">
+        <span class="studio-brand-mark">AI</span>
+        <div class="studio-brand-copy">
+          <strong>AI Studio</strong>
+          <span>game pipeline</span>
+        </div>
+        <button class="studio-sidebar-toggle" type="button" data-studio-sidebar-toggle aria-label="Toggle sidebar" aria-expanded="true">‹</button>
+      </div>
+      <nav class="studio-side-nav" aria-label="Primary">
+        <p class="studio-nav-section">Workspace</p>
+        <a class="studio-nav-item" href="/">
+          <span class="studio-nav-icon">S</span>
+          <span class="studio-nav-label">Studio Home</span>
+        </a>
+      </nav>
+    </aside>
+
+    <main class="studio-content home-content game-page">
+      <header class="content-header">
+        <div>
+          <p class="eyebrow">Pack inspector</p>
+          <h2 id="packTitle">…</h2>
+          <p class="game-subtitle" id="packSubtitle"></p>
+        </div>
+      </header>
+
+      <section class="workspace-panel">
+        <div class="panel-head">
+          <h3>Summary</h3>
+          <p id="packSummaryNote"></p>
+        </div>
+        <div id="packSummary" class="pack-summary"></div>
+      </section>
+
+      <section class="workspace-panel">
+        <div class="panel-head">
+          <h3>Entries</h3>
+          <p>Raw and gzip-estimated sizes; duplicates share bytes with their original.</p>
+        </div>
+        <div class="pack-table-wrap">
+          <table class="pack-table" id="packTable">
+            <thead>
+              <tr><th>#</th><th>Name</th><th>Type</th><th>Size</th><th>gz</th><th>Note</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/ai_studio/game_page/site/pack.js"></script>
+  <script src="/ai_studio/studio_shell/studio_shell.js"></script>
+</body>
+</html>

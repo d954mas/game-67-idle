@@ -3,7 +3,8 @@
 //   GET /api/game-page/games              -- all games, private included
 //   GET /api/game-page/overview?game=<id> -- one game's overview header data
 //   GET /api/game-page/builds?game=<id>   -- build configs, packs, release artifacts
-import { getGameBuilds, getGameOverview, listGames } from "./ops.mjs";
+//   GET /api/game-page/pack?game=<id>&path=<rel> -- parsed ntpack contents
+import { getGameBuilds, getGameOverview, getPackDump, listGames } from "./ops.mjs";
 
 function serveJson(res, status, value) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -26,6 +27,12 @@ export function createGamePageApi(root) {
         const builds = getGameBuilds(root, url.searchParams.get("game") || "");
         if (!builds) serveJson(res, 404, { error: "unknown game" });
         else serveJson(res, 200, builds);
+        return true;
+      }
+      if (url.pathname === "/api/game-page/pack") {
+        const dump = getPackDump(root, url.searchParams.get("game") || "", url.searchParams.get("path") || "");
+        if (!dump) serveJson(res, 404, { error: "unknown game or pack" });
+        else serveJson(res, 200, dump);
         return true;
       }
       if (url.pathname === "/api/game-page/overview") {

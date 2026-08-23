@@ -128,6 +128,9 @@ function staticPath(pathname) {
   if (/^\/game\/[^/]+\/?$/.test(pathname)) {
     return join(aiStudioRoot, "game_page", "site", "game.html");
   }
+  if (/^\/game\/[^/]+\/pack\/?$/.test(pathname)) {
+    return join(aiStudioRoot, "game_page", "site", "pack.html");
+  }
   // Read-only file access inside one game's root, e.g. design docs linked from
   // the game page. The game id segment picks the mount; the rest is confined
   // to that game's folder by safeResolve.
