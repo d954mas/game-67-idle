@@ -300,6 +300,15 @@
     }
   }
 
+  // The opened entry lives in the URL (?open=N) so an exact entry can be
+  // bookmarked or pasted into chat.
+  function syncOpenParam(index) {
+    const url = new URL(location.href);
+    if (index == null) url.searchParams.delete("open");
+    else url.searchParams.set("open", String(index));
+    history.replaceState(null, "", url.pathname + url.search);
+  }
+
   function attachPreviewToggle(tr, entry) {
     tr.classList.add("pack-row-clickable");
     let detailRow = null;
@@ -307,8 +316,10 @@
       if (detailRow) {
         detailRow.remove();
         detailRow = null;
+        syncOpenParam(null);
         return;
       }
+      syncOpenParam(entry.index);
       detailRow = document.createElement("tr");
       const td = document.createElement("td");
       td.colSpan = 6;

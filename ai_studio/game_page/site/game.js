@@ -129,10 +129,16 @@
     const configs = builds.configs || [];
     const workingDebug = configs.find((config) => !SERVICE_CONFIG.test(config.name) && /debug/i.test(config.name))
       || configs.find((config) => !SERVICE_CONFIG.test(config.name));
-    if (workingDebug) {
-      body.append(buildConfigRow(workingDebug));
-      const metric = configKeyMetric(workingDebug);
-      if (metric) dashboardCard("debug", `${workingDebug.name}`, metric.replace(/^exe |^web gz /, ""), "#sectionBuilds");
+    // A clean web config (e.g. wasm-release) carries the web size — it stays
+    // beside the working debug build.
+    const workingWeb = configs.find((config) => !SERVICE_CONFIG.test(config.name) && config.web && config !== workingDebug);
+    const primary = [workingDebug, workingWeb].filter(Boolean);
+    for (const config of primary) {
+      body.append(buildConfigRow(config));
+      const metric = configKeyMetric(config);
+      if (metric) {
+        dashboardCard(config.web ? "web" : "debug", config.name, metric.replace(/^exe |^web gz /, ""), "#sectionBuilds");
+      }
     }
 
     const release = builds.release || [];
@@ -146,7 +152,7 @@
       dashboardCard(`release:${target}`, target, formatBytes(artifact.bytes), "#sectionBuilds");
     }
 
-    const rest = configs.filter((config) => config !== workingDebug);
+    const rest = configs.filter((config) => !primary.includes(config));
     const history = release.filter((artifact) => ![...latestByTarget.values()].includes(artifact));
     if (rest.length || history.length) {
       body.append(collapsedBlock(
@@ -292,14 +298,13 @@
     if (!savesResponse.ok) throw new Error(`saves request failed: ${savesResponse.status}`);
     const payload = await savesResponse.json();
     body.textContent = "";
-    (payload.slots || []).forEach((slot, index) => {
+    // The freshest real save opens by default — seeing the save IS the section.
+    const autoOpen = (payload.slots || []).find((slot) => !slot.slot.endsWith(".bak")) || null;
+    for (const slot of payload.slots || []) {
       const wrap = saveSlotRow(payload, slot);
       body.append(wrap);
-      // The freshest real save opens by default — seeing the save IS the section.
-      if (index === 0 && !slot.slot.endsWith(".bak")) {
-        wrap.querySelector(".save-content").open = true;
-      }
-    });
+      if (slot === autoOpen) wrap.querySelector(".save-content").open = true;
+    }
     if (!(payload.slots || []).length) {
       body.append(placeholder(payload.savesRoot
         ? `No saves found in ${payload.savesRoot}.`
