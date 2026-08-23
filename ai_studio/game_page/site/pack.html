@@ -20,19 +20,13 @@
         </div>
         <button class="studio-sidebar-toggle" type="button" data-studio-sidebar-toggle aria-label="Toggle sidebar" aria-expanded="true">‹</button>
       </div>
-      <nav class="studio-side-nav" aria-label="Primary">
-        <p class="studio-nav-section">Workspace</p>
-        <a class="studio-nav-item" href="/">
-          <span class="studio-nav-icon">S</span>
-          <span class="studio-nav-label">Studio Home</span>
-        </a>
-      </nav>
+      <nav class="studio-side-nav" aria-label="Primary"></nav>
     </aside>
 
     <main class="studio-content home-content game-page">
       <header class="content-header">
         <div>
-          <p class="eyebrow">Pack inspector</p>
+          <p class="eyebrow"><a id="packBack" href="/">← back to game</a></p>
           <h2 id="packTitle">…</h2>
           <p class="game-subtitle" id="packSubtitle"></p>
         </div>
@@ -63,7 +57,7 @@
     </main>
   </div>
 
-  <script src="/ai_studio/game_page/site/pack.js"></script>
   <script src="/ai_studio/studio_shell/studio_shell.js"></script>
+  <script src="/ai_studio/game_page/site/pack.js"></script>
 </body>
 </html>

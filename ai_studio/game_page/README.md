@@ -17,11 +17,21 @@ mutates game data and never launches builds or games.
 
 ## Routes (served by Studio Shell)
 
-- `/game/<game-id>` — the page.
+- `/game/<game-id>` — the page; `/game/<game-id>/pack?path=<rel>` — the pack
+  inspector.
 - `/game-file/<game-id>/<relative-path>` — read-only file access confined to
-  that game's root (design docs, previews).
-- `/api/game-page/games` — all games, private included; the home page list.
-- `/api/game-page/overview?game=<id>` — one game's header data.
+  that game's root; executable types download instead of rendering.
+- `/api/game-page/*` — the full JSON contract is the route list at the top of
+  `api.mjs`.
+
+## Layout contract
+
+The page reads template conventions, all collected in `GAME_LAYOUT` at the
+top of `ops.mjs`: `design/*.md`, `build/<config>/` (packs and `bin/`
+payload), `release/artifacts/*.manifest.json`, `src/generated/<pack>.h`
+(asset names from nt_builder), `state/*.schema.json`, and capture takes under
+`tmp/captures/`. A game that diverges from a convention shows an honest empty
+section — there is no per-game configuration.
 
 ## Boundary
 

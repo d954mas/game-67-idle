@@ -1,13 +1,14 @@
 // Game Page HTTP API adapter. Studio Shell mounts this on /api/game-page/.
-// Marshals HTTP <-> ops.mjs only; no game logic lives here.
+// Marshals HTTP <-> ops.mjs only; no game logic lives here. The route list
+// below is the complete public contract of this module.
 //   GET /api/game-page/games              -- all games, private included
 //   GET /api/game-page/overview?game=<id> -- one game's overview header data
 //   GET /api/game-page/builds?game=<id>   -- build configs, packs, release artifacts
-//   GET /api/game-page/pack?game=<id>&path=<rel> -- parsed ntpack contents
+//   GET /api/game-page/state?game=<id>    -- state schema files
+//   GET /api/game-page/captures?game=<id> -- capture takes, newest first
+//   GET /api/game-page/pack?game&path     -- parsed ntpack contents
 //   GET /api/game-page/pack-entry?game&path&index -- one entry's typed detail
 //   GET /api/game-page/pack-entry-data?game&path&index -- one entry's raw bytes
-//   GET /api/game-page/state?game=<id>    -- state schema files
-//   GET /api/game-page/captures?game=<id> -- capture sessions, newest first
 import {
   getGameBuilds,
   getGameCaptures,
@@ -24,6 +25,22 @@ function serveJson(res, status, value) {
   res.end(JSON.stringify(value));
 }
 
+// game-keyed JSON endpoints; a null from ops means the game (or pack/entry)
+// does not exist.
+const GAME_ROUTES = {
+  overview: (root, url) => getGameOverview(root, url.searchParams.get("game") || ""),
+  builds: (root, url) => getGameBuilds(root, url.searchParams.get("game") || ""),
+  state: (root, url) => getGameStateSchemas(root, url.searchParams.get("game") || ""),
+  captures: (root, url) => getGameCaptures(root, url.searchParams.get("game") || ""),
+  pack: (root, url) => getPackDump(root, url.searchParams.get("game") || "", url.searchParams.get("path") || ""),
+  "pack-entry": (root, url) => getPackEntryDetail(
+    root,
+    url.searchParams.get("game") || "",
+    url.searchParams.get("path") || "",
+    url.searchParams.get("index") || "-1",
+  ),
+};
+
 export function createGamePageApi(root) {
   return function handleGamePageApi(req, res, url) {
     if (!url.pathname.startsWith("/api/game-page/")) return false;
@@ -31,35 +48,13 @@ export function createGamePageApi(root) {
       serveJson(res, 405, { error: "method not allowed" });
       return true;
     }
+    const route = url.pathname.slice("/api/game-page/".length);
     try {
-      if (url.pathname === "/api/game-page/games") {
+      if (route === "games") {
         serveJson(res, 200, listGames(root));
         return true;
       }
-      if (url.pathname === "/api/game-page/builds") {
-        const builds = getGameBuilds(root, url.searchParams.get("game") || "");
-        if (!builds) serveJson(res, 404, { error: "unknown game" });
-        else serveJson(res, 200, builds);
-        return true;
-      }
-      if (url.pathname === "/api/game-page/pack") {
-        const dump = getPackDump(root, url.searchParams.get("game") || "", url.searchParams.get("path") || "");
-        if (!dump) serveJson(res, 404, { error: "unknown game or pack" });
-        else serveJson(res, 200, dump);
-        return true;
-      }
-      if (url.pathname === "/api/game-page/pack-entry") {
-        const detail = getPackEntryDetail(
-          root,
-          url.searchParams.get("game") || "",
-          url.searchParams.get("path") || "",
-          url.searchParams.get("index") || "-1",
-        );
-        if (!detail) serveJson(res, 404, { error: "unknown game, pack, or entry" });
-        else serveJson(res, 200, detail);
-        return true;
-      }
-      if (url.pathname === "/api/game-page/pack-entry-data") {
+      if (route === "pack-entry-data") {
         const data = getPackEntryData(
           root,
           url.searchParams.get("game") || "",
@@ -77,25 +72,14 @@ export function createGamePageApi(root) {
         }
         return true;
       }
-      if (url.pathname === "/api/game-page/state") {
-        const state = getGameStateSchemas(root, url.searchParams.get("game") || "");
-        if (!state) serveJson(res, 404, { error: "unknown game" });
-        else serveJson(res, 200, state);
+      const handler = GAME_ROUTES[route];
+      if (!handler) {
+        serveJson(res, 404, { error: "unknown game-page endpoint" });
         return true;
       }
-      if (url.pathname === "/api/game-page/captures") {
-        const captures = getGameCaptures(root, url.searchParams.get("game") || "");
-        if (!captures) serveJson(res, 404, { error: "unknown game" });
-        else serveJson(res, 200, captures);
-        return true;
-      }
-      if (url.pathname === "/api/game-page/overview") {
-        const overview = getGameOverview(root, url.searchParams.get("game") || "");
-        if (!overview) serveJson(res, 404, { error: "unknown game" });
-        else serveJson(res, 200, overview);
-        return true;
-      }
-      serveJson(res, 404, { error: "unknown game-page endpoint" });
+      const value = handler(root, url);
+      if (!value) serveJson(res, 404, { error: "unknown game, pack, or entry" });
+      else serveJson(res, 200, value);
     } catch (error) {
       serveJson(res, 500, { error: error?.message || String(error) });
     }

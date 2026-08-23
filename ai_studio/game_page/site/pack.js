@@ -1,17 +1,14 @@
-// Pack inspector client: /game/<id>/pack?path=<rel> renders one parsed ntpack.
+// Pack inspector client: /game/<id>/pack?path=<rel> renders one parsed
+// ntpack. Server-side ntpack.mjs owns all format knowledge; this file only
+// renders what /api/game-page/pack* returns, plus client-side texture
+// decoding for previews.
 (function () {
   const match = /^\/game\/([^/]+)\/pack\/?$/.exec(decodeURIComponent(location.pathname));
   const gameId = match ? match[1] : "";
   const packPath = new URLSearchParams(location.search).get("path") || "";
+  const { formatBytes } = window.studioShell;
 
   const byId = (id) => document.getElementById(id);
-
-  function formatBytes(bytes) {
-    if (bytes == null) return "";
-    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${bytes} B`;
-  }
 
   function fail(message) {
     byId("packTitle").textContent = "Pack unavailable";
@@ -24,6 +21,8 @@
     return td;
   }
 
+  // Payload starts after the 28-byte texture asset header; all field values
+  // come from the server's detail.texture, never re-parsed here.
   const TEXTURE_HEADER_SIZE = 28;
   let basisModulePromise = null;
   let loadedDump = null;
@@ -76,6 +75,8 @@
     return canvas;
   }
 
+  // Channel order mirrors the engine's nt_texture pixel format enum
+  // (1=RGBA8, 2=RGB8, 3=RG8, 4=R8).
   function rawToRgba(bytes, width, height, format) {
     const channels = { 1: 4, 2: 3, 3: 2, 4: 1 }[format];
     if (!channels) return null;
@@ -110,23 +111,20 @@
     return rgba;
   }
 
-  async function textureCanvas(index) {
+  async function textureCanvas(index, texture) {
     if (textureCanvasCache.has(index)) return textureCanvasCache.get(index);
-    const bytes = await fetchEntryBytes(index);
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    if (bytes.length < TEXTURE_HEADER_SIZE || view.getUint32(0, true) !== 0x58455454) {
-      throw new Error("entry does not carry a texture header");
+    if (!texture) {
+      const detail = await fetchEntryDetail(index);
+      texture = detail.texture;
+      if (!texture) throw new Error("entry does not carry a texture header");
     }
-    const format = view.getUint16(6, true);
-    const width = view.getUint32(8, true);
-    const height = view.getUint32(12, true);
-    const compression = view.getUint8(18);
+    const bytes = await fetchEntryBytes(index);
     const payload = bytes.subarray(TEXTURE_HEADER_SIZE);
     let canvas;
-    if (compression === 0) {
-      const rgba = rawToRgba(payload, width, height, format);
+    if (texture.compression === 0) {
+      const rgba = rawToRgba(payload, texture.width, texture.height, texture.format);
       if (!rgba) throw new Error("raw pixel data is truncated");
-      canvas = drawRgba(width, height, rgba);
+      canvas = drawRgba(texture.width, texture.height, rgba);
     } else {
       const module = await loadBasisModule();
       const file = new module.BasisFile(payload);
@@ -155,8 +153,8 @@
   }
 
   async function renderTexturePreview(container, index, detail) {
-    const canvas = await textureCanvas(index);
     const info = detail.texture;
+    const canvas = await textureCanvas(index, info);
     container.append(
       previewNote(`${info.width}×${info.height} · format ${info.format} · mips ${info.mipCount} · ${info.compression ? "BASIS" : "RAW"}`),
       canvas,
@@ -179,7 +177,7 @@
         container.append(previewNote(`page ${pageIndex}: texture ${page.resourceId} is not in this pack`));
         continue;
       }
-      const base = await textureCanvas(pageEntry.index);
+      const base = await textureCanvas(pageEntry.index, null);
       const canvas = document.createElement("canvas");
       canvas.width = base.width;
       canvas.height = base.height;
@@ -323,31 +321,24 @@
     });
   }
 
-  function render(dump) {
-    loadedDump = dump;
-    byId("packTitle").textContent = dump.pack.rel;
-    const gzTotal = (dump.entries || []).reduce((sum, entry) => sum + (entry.gzBytes || 0), 0);
-    byId("packSubtitle").textContent =
-      `${dump.game.id} · ${formatBytes(dump.pack.bytes)} (gz ~${formatBytes(gzTotal)}) · ` +
-      `${dump.header ? dump.header.assetCount : 0} assets · pack v${dump.header ? dump.header.version : "?"}`;
-    if (dump.error) return fail(dump.error);
-    byId("packSummaryNote").textContent = dump.pack.namesFrom
-      ? `Names resolved from ${dump.pack.namesFrom}.`
-      : "No generated name header found; names shown as hashes.";
+  // #region Table with type filter (summary chips), name search, size sort.
+  const view = { type: "", query: "", sortBySize: false };
 
-    const summaryBox = byId("packSummary");
-    summaryBox.textContent = "";
-    for (const [type, row] of Object.entries(dump.summary || {})) {
-      const chip = document.createElement("span");
-      chip.className = "pack-chip";
-      const dup = row.dupCount ? ` +${row.dupCount} dup` : "";
-      chip.textContent = `${type}: ${row.count} (${formatBytes(row.bytes)}${dup})`;
-      summaryBox.append(chip);
+  function visibleEntries() {
+    let entries = loadedDump.entries || [];
+    if (view.type) entries = entries.filter((entry) => entry.typeName === view.type);
+    if (view.query) {
+      const query = view.query.toLowerCase();
+      entries = entries.filter((entry) => entry.name.toLowerCase().includes(query));
     }
+    if (view.sortBySize) entries = [...entries].sort((a, b) => b.size - a.size);
+    return entries;
+  }
 
+  function renderTable() {
     const tbody = byId("packTable").querySelector("tbody");
     tbody.textContent = "";
-    for (const entry of dump.entries || []) {
+    for (const entry of visibleEntries()) {
       const tr = document.createElement("tr");
       const notes = [];
       if (entry.dupOfIndex != null) notes.push(`dup of #${entry.dupOfIndex}`);
@@ -364,10 +355,80 @@
       attachPreviewToggle(tr, entry);
       tbody.append(tr);
     }
+  }
+
+  function renderSummaryChips() {
+    const summaryBox = byId("packSummary");
+    summaryBox.textContent = "";
+    const chip = (label, type) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "pack-chip";
+      if (view.type === type) button.classList.add("is-active");
+      button.textContent = label;
+      button.addEventListener("click", () => {
+        view.type = view.type === type ? "" : type;
+        renderSummaryChips();
+        renderTable();
+      });
+      return button;
+    };
+    for (const [type, row] of Object.entries(loadedDump.summary || {})) {
+      const dup = row.dupCount ? ` +${row.dupCount} dup` : "";
+      summaryBox.append(chip(`${type}: ${row.count} (${formatBytes(row.bytes)}${dup})`, type));
+    }
+    const sort = document.createElement("button");
+    sort.type = "button";
+    sort.className = "pack-chip";
+    if (view.sortBySize) sort.classList.add("is-active");
+    sort.textContent = "сортировать по размеру";
+    sort.addEventListener("click", () => {
+      view.sortBySize = !view.sortBySize;
+      renderSummaryChips();
+      renderTable();
+    });
+    summaryBox.append(sort);
+
+    const search = document.createElement("input");
+    search.type = "search";
+    search.className = "pack-search";
+    search.placeholder = "поиск по имени…";
+    search.value = view.query;
+    search.addEventListener("input", () => {
+      view.query = search.value.trim();
+      renderTable();
+    });
+    summaryBox.append(search);
+  }
+  // #endregion
+
+  function render(dump) {
+    loadedDump = dump;
+    byId("packTitle").textContent = dump.pack.rel;
+    const gzTotal = (dump.entries || []).reduce((sum, entry) => sum + (entry.gzBytes || 0), 0);
+    byId("packSubtitle").textContent =
+      `${dump.game.id} · ${formatBytes(dump.pack.bytes)} (gz ~${formatBytes(gzTotal)}) · ` +
+      `${dump.header ? dump.header.assetCount : 0} assets · pack v${dump.header ? dump.header.version : "?"}`
+      + (dump.truncated ? " · FILE TRUNCATED" : "");
+    if (dump.error) return fail(dump.error);
+    byId("packSummaryNote").textContent = dump.pack.namesFrom
+      ? `Names resolved from ${dump.pack.namesFrom}. Chips filter by type.`
+      : "No generated name header found; names shown as hashes.";
+
+    const back = byId("packBack");
+    if (back) back.href = `/game/${encodeURIComponent(gameId)}`;
+
+    renderSummaryChips();
+    renderTable();
+
     const openIndex = new URLSearchParams(location.search).get("open");
-    if (openIndex != null && tbody.children[openIndex]) {
-      tbody.children[openIndex].click();
-      tbody.children[openIndex].scrollIntoView({ block: "start" });
+    if (openIndex != null) {
+      const tbody = byId("packTable").querySelector("tbody");
+      const row = [...tbody.children].find((tr) => tr.firstChild.textContent === String(openIndex));
+      if (row) {
+        row.click();
+        row.scrollIntoView({ block: "start" });
+      }
     }
   }
 

@@ -20,33 +20,7 @@
         </div>
         <button class="studio-sidebar-toggle" type="button" data-studio-sidebar-toggle aria-label="Toggle sidebar" aria-expanded="true">‹</button>
       </div>
-      <nav class="studio-side-nav" aria-label="Primary">
-        <p class="studio-nav-section">Workspace</p>
-        <a class="studio-nav-item" href="/">
-          <span class="studio-nav-icon">S</span>
-          <span class="studio-nav-label">Studio Home</span>
-        </a>
-        <a class="studio-nav-item" href="/architecture_map/">
-          <span class="studio-nav-icon map">M</span>
-          <span class="studio-nav-label">Architecture Map</span>
-        </a>
-        <a class="studio-nav-item" href="/taskboard/">
-          <span class="studio-nav-icon tasks">T</span>
-          <span class="studio-nav-label">Taskboard</span>
-        </a>
-        <a class="studio-nav-item" href="/asset_viewer/">
-          <span class="studio-nav-icon assets">A</span>
-          <span class="studio-nav-label">Asset Viewer</span>
-        </a>
-        <a class="studio-nav-item" href="/canvas">
-          <span class="studio-nav-icon prep">C</span>
-          <span class="studio-nav-label">Canvas</span>
-        </a>
-        <a class="studio-nav-item" href="/quality/">
-          <span class="studio-nav-icon quality">Q</span>
-          <span class="studio-nav-label">Quality Checks</span>
-        </a>
-      </nav>
+      <nav class="studio-side-nav" aria-label="Primary"></nav>
     </aside>
 
     <main class="studio-content home-content game-page">
@@ -56,7 +30,16 @@
           <h2 id="gameTitle">…</h2>
           <p class="game-subtitle"><span id="gameId"></span> <span id="gameVisibility" class="type-pill state"></span> <span id="gameVersion"></span></p>
         </div>
+        <nav class="game-section-nav" aria-label="Sections">
+          <a href="#sectionBuilds">Builds</a>
+          <a href="#sectionBalance">Balance</a>
+          <a href="#sectionCanvases">Canvases</a>
+          <a href="#sectionState">State</a>
+          <a href="#sectionCaptures">Captures</a>
+        </nav>
       </header>
+
+      <div class="game-dashboard" id="gameDashboard"></div>
 
       <section class="workspace-panel" aria-labelledby="overviewTitle">
         <div class="panel-head">
@@ -67,7 +50,7 @@
       </section>
 
       <section class="workspace-panel" id="sectionBuilds">
-        <div class="panel-head"><h3>Builds</h3><p>Build configs, artifacts, packs.</p></div>
+        <div class="panel-head"><h3>Builds</h3><p>Working debug size and shipped releases.</p></div>
         <div class="surface-list" id="buildsBody"><p class="game-placeholder">Loading…</p></div>
       </section>
 
@@ -93,7 +76,7 @@
     </main>
   </div>
 
-  <script src="/ai_studio/game_page/site/game.js"></script>
   <script src="/ai_studio/studio_shell/studio_shell.js"></script>
+  <script src="/ai_studio/game_page/site/game.js"></script>
 </body>
 </html>

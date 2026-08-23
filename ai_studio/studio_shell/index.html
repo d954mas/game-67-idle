@@ -20,34 +20,7 @@
         <button class="studio-sidebar-toggle" type="button" data-studio-sidebar-toggle aria-label="Toggle sidebar" aria-expanded="true">‹</button>
       </div>
 
-      <nav class="studio-side-nav" aria-label="Primary">
-        <p class="studio-nav-section">Workspace</p>
-        <a class="studio-nav-item is-active" href="/">
-          <span class="studio-nav-icon">S</span>
-          <span class="studio-nav-label">Studio Home</span>
-        </a>
-        <a class="studio-nav-item" href="/architecture_map/">
-          <span class="studio-nav-icon map">M</span>
-          <span class="studio-nav-label">Architecture Map</span>
-        </a>
-        <a class="studio-nav-item" href="/taskboard/">
-          <span class="studio-nav-icon tasks">T</span>
-          <span class="studio-nav-label">Taskboard</span>
-        </a>
-        <a class="studio-nav-item" href="/asset_viewer/">
-          <span class="studio-nav-icon assets">A</span>
-          <span class="studio-nav-label">Asset Viewer</span>
-        </a>
-        <a class="studio-nav-item" href="/canvas">
-          <span class="studio-nav-icon prep">C</span>
-          <span class="studio-nav-label">Canvas</span>
-        </a>
-        <a class="studio-nav-item" href="/quality/">
-          <span class="studio-nav-icon quality">Q</span>
-          <span class="studio-nav-label">Quality Checks</span>
-        </a>
-
-      </nav>
+      <nav class="studio-side-nav" aria-label="Primary"></nav>
     </aside>
 
     <main class="studio-content home-content">
@@ -168,6 +141,7 @@
     </main>
   </div>
 
+  <script src="/ai_studio/studio_shell/studio_shell.js"></script>
   <script>
     const setText = (id, value) => {
       const node = document.getElementById(id);
@@ -209,24 +183,13 @@
         const payload = await readJson("/api/game-page/games");
         list.textContent = "";
         for (const game of payload.games || []) {
-          const row = document.createElement("article");
-          row.className = "surface-row";
-          const pill = document.createElement("span");
-          pill.className = "type-pill state";
-          pill.textContent = game.visibility === "private" ? "Private" : "Game";
-          const main = document.createElement("div");
-          main.className = "surface-main";
-          const h4 = document.createElement("h4");
-          h4.textContent = game.title;
-          const p = document.createElement("p");
-          p.textContent = game.root;
-          main.append(h4, p);
-          const link = document.createElement("a");
-          link.className = "open-link";
-          link.href = "/game/" + encodeURIComponent(game.id);
-          link.textContent = "Open";
-          row.append(pill, main, link);
-          list.append(row);
+          list.append(window.studioShell.linkRow(
+            game.visibility === "private" ? "Private" : "Game",
+            game.title,
+            game.root,
+            "/game/" + encodeURIComponent(game.id),
+            "Open",
+          ));
         }
         if (!list.childElementCount) {
           list.innerHTML = '<p class="games-empty">No games registered.</p>';
@@ -239,6 +202,5 @@
     loadStatus();
     loadGames();
   </script>
-  <script src="/ai_studio/studio_shell/studio_shell.js"></script>
 </body>
 </html>

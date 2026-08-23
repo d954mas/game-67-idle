@@ -87,11 +87,27 @@ test("getGameOverview reports identity, design docs, and studio taskboard projec
   const overview = getGameOverview(root, "alpha-game");
   assert.equal(overview.game.version, "1.2.3");
   assert.equal(overview.game.visibility, "public");
+  assert.equal(overview.game.storeId, "game:alpha-game");
   assert.deepEqual(overview.designDocs.map((doc) => doc.rel), ["design/gdd.md"]);
   assert.deepEqual(overview.taskboardProjects.map(({ id, status, store }) => ({ id, status, store })), [
     { id: "P001", status: "active", store: "studio" },
   ]);
-  assert.match(overview.links.assetViewer, /source=game%3Aalpha-game/);
+});
+
+test("designDocs lists every design markdown with README and gdd first", (t) => {
+  const root = fixture(t);
+  const designDir = join(root, "games/alpha-game/design");
+  mkdirSync(designDir, { recursive: true });
+  for (const name of ["zeta_notes.md", "gdd.md", "README.md", "canvas.md", "data.json"]) {
+    writeFileSync(join(designDir, name), "#\n", "utf8");
+  }
+  const overview = getGameOverview(root, "alpha-game");
+  assert.deepEqual(overview.designDocs.map((doc) => doc.rel), [
+    "design/README.md",
+    "design/gdd.md",
+    "design/canvas.md",
+    "design/zeta_notes.md",
+  ]);
 });
 
 test("getGameBuilds reports pack-bearing configs, web gz sizes, and release manifests", (t) => {
@@ -172,11 +188,33 @@ test("getGameStateSchemas lists schema files and getGameCaptures sorts sessions 
   utimesSync(join(gameRoot, "tmp/captures/shot-a/20260820T000000Z-aa/draft/edit.mp4"), past, past);
 
   const captures = getGameCaptures(root, "alpha-game");
-  assert.deepEqual(captures.sessions.map((session) => session.shot), ["shot-b", "shot-a"]);
+  assert.deepEqual(captures.sessions.map((session) => session.label), [
+    "shot-b · 20260822T000000Z-bb · master",
+    "shot-a · 20260820T000000Z-aa · draft",
+  ]);
   assert.equal(captures.sessions[1].previewRel, "tmp/captures/shot-a/20260820T000000Z-aa/draft/representative-frame.png");
   assert.equal(captures.sessions[1].videoRel, "tmp/captures/shot-a/20260820T000000Z-aa/draft/edit.mp4");
   assert.equal(captures.sessions[0].videoRel, "tmp/captures/shot-b/20260822T000000Z-bb/master/recording.mkv");
   assert.equal(getGameCaptures(root, "missing"), null);
+
+  // Flat ad-hoc recordings (one level, media only) are takes too.
+  write("tmp/captures/adhoc-run/frame.png", "png");
+  const flat = getGameCaptures(root, "alpha-game");
+  assert.ok(flat.sessions.some((session) => session.label === "adhoc-run"));
+});
+
+test("getGameBuilds dedupes the same pack staged in two folders", (t) => {
+  const root = fixture(t);
+  const gameRoot = join(root, "games/alpha-game");
+  const write = (rel, content) => {
+    mkdirSync(dirname(join(gameRoot, rel)), { recursive: true });
+    writeFileSync(join(gameRoot, rel), content);
+  };
+  write("build/native-debug/bin/game.exe", Buffer.alloc(100, 1));
+  write("build/native-debug/bin/assets/game.ntpack", Buffer.alloc(4096, 2));
+  write("build/native-debug/pack/game.ntpack", Buffer.alloc(4096, 2));
+  const config = getGameBuilds(root, "alpha-game").configs[0];
+  assert.equal(config.packs.length, 1, "one pack staged twice must report once");
 });
 
 test("getGameOverview returns null for unknown games", (t) => {
