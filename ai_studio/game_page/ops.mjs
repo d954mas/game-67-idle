@@ -6,7 +6,7 @@ import { basename, extname, join, normalize, resolve, sep } from "node:path";
 
 import { listGameMounts } from "../workspace/games.mjs";
 import { listProjects } from "../taskboard/store.mjs";
-import { parseNameHeader, parseNtpack } from "./ntpack.mjs";
+import { entryDetail, parseNameHeader, parseNtpack } from "./ntpack.mjs";
 
 const DESIGN_DOC_CANDIDATES = [
   { rel: "design/README.md", label: "Design home" },
@@ -247,6 +247,48 @@ export function getPackDump(root, gameId, relPath) {
   packDumpCache.set(cacheKey, dump);
   if (packDumpCache.size > 32) packDumpCache.delete(packDumpCache.keys().next().value);
   return dump;
+}
+
+function packContext(root, gameId, relPath) {
+  const mount = resolveGameMount(root, gameId);
+  if (!mount) return null;
+  const full = confinedGamePath(root, mount, relPath);
+  if (!full || extname(full).toLowerCase() !== ".ntpack" || !existsSync(full)) return null;
+  const stem = basename(full, ".ntpack");
+  const nameHeaderPath = join(root, mount.root, "src", "generated", `${stem}.h`);
+  const names = existsSync(nameHeaderPath) ? parseNameHeader(readFileSync(nameHeaderPath, "utf8")) : new Map();
+  return { mount, full, names };
+}
+
+function packEntry(context, index) {
+  const buffer = readFileSync(context.full);
+  const parsed = parseNtpack(buffer, { names: context.names, gzip: false });
+  const entry = parsed.entries[Number(index)];
+  return entry ? { buffer, entry } : null;
+}
+
+export function getPackEntryDetail(root, gameId, relPath, index) {
+  const context = packContext(root, gameId, relPath);
+  if (!context) return null;
+  const found = packEntry(context, index);
+  if (!found) return null;
+  const detail = entryDetail(found.buffer, found.entry, context.names);
+  return {
+    schema: "ai_studio.game_page.pack_entry.v1",
+    entry: found.entry,
+    ...detail,
+  };
+}
+
+export function getPackEntryData(root, gameId, relPath, index) {
+  const context = packContext(root, gameId, relPath);
+  if (!context) return null;
+  const found = packEntry(context, index);
+  if (!found || !found.entry.inBounds) return null;
+  return {
+    entry: found.entry,
+    bytes: found.buffer.subarray(found.entry.offset, found.entry.offset + found.entry.size),
+  };
 }
 
 export function getGameOverview(root, gameId) {

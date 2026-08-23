@@ -58,6 +58,7 @@ const mime = {
   ".gltf": "model/gltf+json; charset=utf-8",
   ".hdr": "image/vnd.radiance",
   ".ttf": "font/ttf",
+  ".wasm": "application/wasm",
 };
 
 function safeResolve(base, relativePath) {

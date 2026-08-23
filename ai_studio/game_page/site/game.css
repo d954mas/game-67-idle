@@ -57,3 +57,45 @@
 .game-page .pack-row-dup {
   opacity: 0.55;
 }
+
+.game-page .pack-row-clickable {
+  cursor: pointer;
+}
+
+.game-page .pack-preview {
+  padding: 10px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.game-page .pack-preview-canvas {
+  max-width: 100%;
+  image-rendering: pixelated;
+  background:
+    repeating-conic-gradient(#2a2f3a 0% 25%, #232833 0% 50%) 0 0 / 16px 16px;
+  border: 1px solid var(--line, #2c3440);
+}
+
+.game-page .pack-font-charset {
+  margin: 0;
+  font-size: 15px;
+  word-break: break-all;
+  max-width: 900px;
+}
+
+.game-page .pack-glyph-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 900px;
+}
+
+.game-page .pack-glyph {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line, #2c3440);
+  color: #dfe6f2;
+  background: #1a1e27;
+}
