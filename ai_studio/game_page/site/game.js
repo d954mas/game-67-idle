@@ -60,37 +60,93 @@
     return `/game/${encodeURIComponent(gameId)}/pack?path=${encodeURIComponent(path)}`;
   }
 
+  // Working configs stay expanded; agent/automation configs (devapi, capture,
+  // testbed, profiling) collapse into a details block. Name convention only —
+  // nothing game-specific.
+  const SERVICE_CONFIG = /devapi|capture|testbed|profile/i;
+
+  function configKeyMetric(config) {
+    if (config.web) {
+      const gz = (config.binFiles || []).reduce((sum, row) => sum + (row.gzBytes || 0), 0);
+      return gz ? `web gz ${formatBytes(gz)}` : "";
+    }
+    const exe = (config.binFiles || [])
+      .filter((row) => row.rel.endsWith(".exe") && !row.rel.includes("build_game_packs"))
+      .sort((a, b) => b.bytes - a.bytes)[0];
+    return exe ? `exe ${formatBytes(exe.bytes)}` : "";
+  }
+
+  function buildConfigRow(gameId, config) {
+    const files = [...(config.packs || []), ...(config.binFiles || [])];
+    const description = files
+      .map((row) => {
+        const gz = row.gzBytes != null ? ` (gz ${formatBytes(row.gzBytes)})` : "";
+        return `${row.rel} — ${formatBytes(row.bytes)}${gz}`;
+      })
+      .join(" · ");
+    const firstPack = (config.packs || [])[0];
+    const metric = configKeyMetric(config);
+    return linkRow(
+      config.web ? "Web" : "Native",
+      metric ? `${config.name} — ${metric}` : config.name,
+      `${formatDate(config.freshnessMs)} · ${description}`,
+      firstPack ? packHref(gameId, config.name, firstPack.rel) : "",
+      "Packs",
+    );
+  }
+
+  function releaseRow(artifact) {
+    const missing = artifact.present ? "" : " · file missing";
+    return linkRow(
+      "Release",
+      `${artifact.target || "release"} — ${formatBytes(artifact.bytes)}`,
+      `${artifact.file || artifact.manifest} · ${formatDate(artifact.mtimeMs)}${missing}`,
+      "",
+      "",
+    );
+  }
+
+  function collapsedBlock(label, rows) {
+    const details = document.createElement("details");
+    details.className = "game-collapsed";
+    const summary = document.createElement("summary");
+    summary.textContent = label;
+    details.append(summary, ...rows);
+    return details;
+  }
+
   function renderBuilds(gameId, builds) {
     const body = byId("buildsBody");
     body.textContent = "";
-    for (const config of builds.configs || []) {
-      const files = [...(config.packs || []), ...(config.binFiles || [])];
-      const description = files
-        .map((row) => {
-          const gz = row.gzBytes != null ? ` (gz ${formatBytes(row.gzBytes)})` : "";
-          return `${row.rel} — ${formatBytes(row.bytes)}${gz}`;
-        })
-        .join(" · ");
-      const firstPack = (config.packs || [])[0];
-      const row = linkRow(
-        config.web ? "Web" : "Native",
-        config.name,
-        `${formatDate(config.freshnessMs)} · ${description}`,
-        firstPack ? packHref(gameId, config.name, firstPack.rel) : "",
-        "Packs",
-      );
-      body.append(row);
+    const configs = builds.configs || [];
+    const primary = configs.filter((config) => !SERVICE_CONFIG.test(config.name));
+    const service = configs.filter((config) => SERVICE_CONFIG.test(config.name));
+    // No clean web config yet: surface the freshest service web build beside
+    // the primary ones so the web size stays one glance away.
+    const freshestWeb = !primary.some((config) => config.web) && service.find((config) => config.web);
+    for (const config of [...primary, ...(freshestWeb ? [freshestWeb] : [])]) {
+      body.append(buildConfigRow(gameId, config));
     }
-    for (const artifact of builds.release || []) {
-      const missing = artifact.present ? "" : " · file missing";
-      body.append(linkRow(
-        "Release",
-        artifact.file || artifact.manifest,
-        `${artifact.target} · ${formatBytes(artifact.bytes)} · ${formatDate(artifact.mtimeMs)}${missing}`,
-        "",
-        "",
+    const collapsedConfigs = service.filter((config) => config !== freshestWeb);
+    if (collapsedConfigs.length) {
+      body.append(collapsedBlock(
+        `Служебные конфиги (${collapsedConfigs.length})`,
+        collapsedConfigs.map((config) => buildConfigRow(gameId, config)),
       ));
     }
+
+    const release = builds.release || [];
+    const latestByTarget = new Map();
+    for (const artifact of release) {
+      const target = artifact.target || "release";
+      if (!latestByTarget.has(target)) latestByTarget.set(target, artifact);
+    }
+    for (const artifact of latestByTarget.values()) body.append(releaseRow(artifact));
+    const history = release.filter((artifact) => ![...latestByTarget.values()].includes(artifact));
+    if (history.length) {
+      body.append(collapsedBlock(`История релизов (${history.length})`, history.map(releaseRow)));
+    }
+
     if (!body.childElementCount) {
       body.innerHTML = '<p class="game-placeholder">No build configs or release artifacts found.</p>';
     }
