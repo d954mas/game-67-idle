@@ -191,6 +191,7 @@
   font-family: ui-monospace, Consolas, monospace;
   color: var(--muted, #9aa4b2);
   padding: 1px 0;
+  overflow-wrap: anywhere;
 }
 
 .game-page .save-key {
