@@ -92,6 +92,13 @@ test("game page routes serve the games list, page html, and confined game files"
 
     const unknownGameFile = await fetch(`${base}/game-file/definitely-not-a-game/game.json`);
     assert.equal(unknownGameFile.status, 404);
+
+    // Executable types from inside a game folder must download, not render on
+    // the studio origin.
+    const htmlProbe = await fetch(`${base}/game-file/${encodeURIComponent(gameId)}/web/index.html.in`).then(async (r) => r.status === 404
+      ? null
+      : r.headers.get("content-type"));
+    if (htmlProbe != null) assert.equal(htmlProbe, "application/octet-stream");
   } finally {
     if (child.exitCode === null && child.signalCode === null) {
       const exited = new Promise((resolveExit) => child.once("exit", resolveExit));

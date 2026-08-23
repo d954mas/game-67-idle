@@ -40,6 +40,10 @@
     return row;
   }
 
+  function gameFileHref(gameId, rel) {
+    return `/game-file/${encodeURIComponent(gameId)}/${String(rel).split("/").map(encodeURIComponent).join("/")}`;
+  }
+
   function formatBytes(bytes) {
     if (bytes == null) return "";
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -155,7 +159,7 @@
         "Schema",
         schema.rel.replace("state/", ""),
         `${formatBytes(schema.bytes)} · ${formatDate(schema.mtimeMs)}`,
-        `/game-file/${encodeURIComponent(gameId)}/${schema.rel}`,
+        gameFileHref(gameId, schema.rel),
         "View",
       ));
     }
@@ -177,7 +181,7 @@
         const img = document.createElement("img");
         img.className = "capture-thumb";
         img.loading = "lazy";
-        img.src = `/game-file/${encodeURIComponent(gameId)}/${session.previewRel}`;
+        img.src = gameFileHref(gameId, session.previewRel);
         row.append(img);
       } else {
         const pill = document.createElement("span");
@@ -196,7 +200,7 @@
       if (session.videoRel) {
         const link = document.createElement("a");
         link.className = "open-link";
-        link.href = `/game-file/${encodeURIComponent(gameId)}/${session.videoRel}`;
+        link.href = gameFileHref(gameId, session.videoRel);
         link.textContent = "Video";
         row.append(link);
       }
@@ -229,7 +233,7 @@
     const links = byId("overviewLinks");
     links.textContent = "";
     for (const doc of overview.designDocs || []) {
-      links.append(linkRow("Docs", doc.label, doc.rel, `/game-file/${encodeURIComponent(game.id)}/${doc.rel}`, "View"));
+      links.append(linkRow("Docs", doc.label, doc.rel, gameFileHref(game.id, doc.rel), "View"));
     }
     for (const project of overview.taskboardProjects || []) {
       links.append(linkRow("Tasks", `${project.id} ${project.title}`, `Taskboard project (${project.status}, ${project.store})`, overview.links?.taskboard, "Open"));

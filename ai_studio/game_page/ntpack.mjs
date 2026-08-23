@@ -43,6 +43,7 @@ export function textureInfo(view, offset, size) {
     height: view.getUint32(offset + 12, true),
     mipCount: view.getUint16(offset + 16, true),
     compression: view.getUint8(offset + 18),
+    unsupported: view.getUint16(offset + 4, true) !== 3 || undefined,
   };
 }
 
@@ -79,9 +80,11 @@ export function atlasInfo(view, offset, size, names = new Map()) {
     indexOffset: view.getUint32(offset + 20, true),
     totalIndexCount: view.getUint32(offset + 24, true),
   };
+  if (header.version !== 7) return { ...header, unsupported: true, pages: [], regions: [], vertices: [] };
   const pages = [];
   let cursor = offset + ATLAS_HEADER_SIZE;
   for (let page = 0; page < header.pageCount; page += 1) {
+    if (cursor + 8 > offset + size) break;
     const id = hashHex(view.getBigUint64(cursor, true));
     pages.push({ resourceId: id, name: names.get(id) || "" });
     cursor += 8;
@@ -135,8 +138,12 @@ function decodeGlyphContours(view, base, end) {
     if (cursor + 2 > end) break;
     const pointCount = view.getUint16(cursor, true);
     cursor += 2;
+    // NT_FONT_MAX_POINTS_PER_CONTOUR guards against a corrupt count walking
+    // past the buffer.
+    if (pointCount > 4096) break;
     const maskBytes = (Math.ceil(pointCount / 8) + 1) & ~1;
     const maskAt = cursor;
+    if (maskAt + maskBytes > end) break;
     cursor += maskBytes;
     const points = [];
     let x = 0;
@@ -182,6 +189,7 @@ export function fontInfo(view, offset, size, options = {}) {
     descent: view.getInt16(offset + 12, true),
     lineGap: view.getInt16(offset + 14, true),
   };
+  if (header.version !== 5) return { ...header, unsupported: true, glyphs: [], charset: "" };
   const end = offset + size;
   const glyphs = [];
   const withContours = options.contours !== false;
@@ -266,9 +274,6 @@ export function parseNtpack(buffer, options = {}) {
       metaOffset: view.getUint32(at + 20, true),
       inBounds,
     };
-    if (options.gzip !== false && inBounds && size > 0) {
-      entry.gzBytes = gzipSync(bytes.subarray(offset, offset + size)).length;
-    }
     entries.push(entry);
   }
   const byLocation = new Map();
@@ -276,6 +281,27 @@ export function parseNtpack(buffer, options = {}) {
     const key = `${entry.offset}:${entry.size}`;
     if (byLocation.has(key)) entry.dupOfIndex = byLocation.get(key);
     else byLocation.set(key, entry.index);
+  }
+  // gzip AFTER dedup, once per unique location, with a total budget: a crafted
+  // pack whose entries all alias the whole file must not hang the server.
+  if (options.gzip !== false) {
+    const gzByLocation = new Map();
+    let budget = 256 * 1024 * 1024;
+    for (const entry of entries) {
+      if (!entry.inBounds || entry.size === 0) continue;
+      const key = `${entry.offset}:${entry.size}`;
+      if (!gzByLocation.has(key)) {
+        if (entry.size > budget) {
+          gzByLocation.set(key, null);
+          continue;
+        }
+        budget -= entry.size;
+        gzByLocation.set(key, gzipSync(bytes.subarray(entry.offset, entry.offset + entry.size)).length);
+      }
+      const gz = gzByLocation.get(key);
+      if (gz != null) entry.gzBytes = gz;
+      else entry.gzSkipped = true;
+    }
   }
   const summary = {};
   for (const entry of entries) {
@@ -285,5 +311,11 @@ export function parseNtpack(buffer, options = {}) {
     if (entry.dupOfIndex == null) row.bytes += entry.size;
     else row.dupCount += 1;
   }
-  return { header, entries, summary, fileBytes: bytes.length };
+  return {
+    header,
+    entries,
+    summary,
+    fileBytes: bytes.length,
+    truncated: header.totalSize !== bytes.length,
+  };
 }

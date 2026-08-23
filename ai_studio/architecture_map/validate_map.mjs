@@ -67,6 +67,9 @@ function privateMountScanExclusions(repoRoot) {
       { cause: error },
     );
   }
+  // The message stays generic on purpose: naming the broken folder would leak
+  // a private game name through the public validation error surface. The
+  // details live in `node ai_studio/workspace/games.mjs list --include-private`.
   if (unusable.some((entry) => normalizeMapPath(entry.root).startsWith("games/private/"))) {
     throw new Error(
       "architecture map private game discovery failed; validate games/private identity manifests before architecture validation",

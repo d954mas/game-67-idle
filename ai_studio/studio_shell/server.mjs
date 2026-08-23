@@ -16,7 +16,7 @@ import { createCanvasApi } from "../assets/canvas/api.mjs";
 import { createItemsViewerApi } from "../assets/items_viewer/api.mjs";
 import { createChatApi } from "../assets/canvas/chat/api.mjs";
 import { createGamePageApi } from "../game_page/api.mjs";
-import { resolveGameMount } from "../game_page/ops.mjs";
+import { confinedGamePath, resolveGameMount } from "../game_page/ops.mjs";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
 
 const repoGuess = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -142,7 +142,9 @@ function staticPath(pathname) {
   if (gameFile) {
     const mount = resolveGameMount(root, gameFile[1]);
     if (!mount) return null;
-    return safeResolve(join(root, mount.root), gameFile[2]);
+    // confinedGamePath also resolves through junctions so a link inside the
+    // game folder cannot serve files from outside the repository.
+    return confinedGamePath(root, mount, gameFile[2]);
   }
 
   if (pathname.startsWith("/ai_studio/")) {
@@ -152,6 +154,15 @@ function staticPath(pathname) {
   return null;
 }
 
+// Game folders hold arbitrary third-party files. Serving their HTML/JS/SVG
+// with executable content types on the studio origin would hand them the
+// studio's APIs, so /game-file/ downloads those instead of rendering them.
+const gameFileSafeMime = new Set([
+  ".md", ".json", ".txt", ".csv", ".log",
+  ".png", ".jpg", ".jpeg", ".webp", ".gif",
+  ".mp4", ".webm", ".mkv",
+]);
+
 function serveStatic(req, res, decodedPathname) {
   const full = staticPath(decodedPathname);
   if (!full || !existsSync(full) || !statSync(full).isFile()) {
@@ -159,7 +170,13 @@ function serveStatic(req, res, decodedPathname) {
     res.end("not found");
     return;
   }
-  res.writeHead(200, { "content-type": mime[extname(full)] || "application/octet-stream" });
+  const extension = extname(full).toLowerCase();
+  const headers = { "content-type": mime[extension] || "application/octet-stream" };
+  if (decodedPathname.startsWith("/game-file/") && !gameFileSafeMime.has(extension)) {
+    headers["content-type"] = "application/octet-stream";
+    headers["content-disposition"] = "attachment";
+  }
+  res.writeHead(200, headers);
   createReadStream(full).pipe(res);
 }
 

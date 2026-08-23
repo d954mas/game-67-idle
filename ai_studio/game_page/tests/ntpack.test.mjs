@@ -84,6 +84,32 @@ test("parseNtpack rejects wrong magic and wrong version", () => {
   assert.throws(() => parseNtpack(pack), /unsupported pack version 9/);
 });
 
+test("malformed counts stay inside the buffer instead of throwing", () => {
+  const atlasBytes = syntheticAtlas();
+  new DataView(atlasBytes.buffer).setUint16(8, 65535, true);
+  const atlas = atlasInfo(new DataView(atlasBytes.buffer), 0, atlasBytes.length, new Map());
+  assert.ok(atlas.pages.length < 65535, "page walk must stop at the buffer edge");
+
+  const fontBytes = syntheticFont();
+  new DataView(fontBytes.buffer).setUint16(50, 65535, true);
+  const font = fontInfo(new DataView(fontBytes.buffer), 0, fontBytes.length);
+  assert.deepEqual(font.glyphs[0].contours, [], "corrupt point count must yield no contours, not a crash");
+});
+
+test("duplicate entries share one gzip measurement and truncation is reported", () => {
+  const pack = buildPack([
+    { id: 0x1n, type: 4, data: new Uint8Array(64).fill(9) },
+    { id: 0x2n, type: 4, aliasOf: 0 },
+  ]);
+  const dump = parseNtpack(pack);
+  assert.equal(dump.truncated, false);
+  assert.equal(dump.entries[0].gzBytes, dump.entries[1].gzBytes);
+
+  const short = pack.slice(0, pack.length - 4);
+  new DataView(short.buffer).setUint16(10, 1, true);
+  assert.equal(parseNtpack(short).truncated, true);
+});
+
 test("parseNameHeader maps generated hash defines to asset paths", () => {
   const names = parseNameHeader([
     "#define ASSET_TEX ((nt_hash64_t){0x4B6889C73ADCB47AULL}) /* assets/tex.png */",

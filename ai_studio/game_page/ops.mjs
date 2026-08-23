@@ -1,6 +1,6 @@
 // Game Page ops: read-only aggregation of one game's studio-visible state.
 // The page never mutates game data; every section links into the owning tool.
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { basename, extname, join, normalize, resolve, sep } from "node:path";
 
@@ -34,10 +34,27 @@ export function listGames(root) {
   return { schema: "ai_studio.game_page.games.v1", games, warnings };
 }
 
+// The workspace scan parses every identity manifest; one page load fires
+// dozens of /game-file requests, so mounts are cached for a short TTL.
+const mountCache = { at: 0, root: "", mounts: null };
+const MOUNT_CACHE_TTL_MS = 2000;
+
+function cachedGameMounts(root) {
+  const now = Date.now();
+  if (mountCache.mounts && mountCache.root === root && now - mountCache.at < MOUNT_CACHE_TTL_MS) {
+    return mountCache.mounts;
+  }
+  const mounts = listGameMounts(root, { includePrivate: true, warnings: [] });
+  mountCache.at = now;
+  mountCache.root = root;
+  mountCache.mounts = mounts;
+  return mounts;
+}
+
 export function resolveGameMount(root, gameId) {
   const wanted = comparable(gameId);
   if (!wanted) return null;
-  const mounts = listGameMounts(root, { includePrivate: true, warnings: [] });
+  const mounts = cachedGameMounts(root);
   return mounts.find((mount) =>
     [mount.gameId, mount.storageNamespace, mount.storeId, ...(mount.aliases || [])]
       .some((alias) => comparable(alias) === wanted)) || null;
@@ -92,9 +109,19 @@ const BIN_EXTENSIONS = new Set([".exe", ".wasm", ".js", ".html", ".data"]);
 // rebuilt artifact is re-measured and an unchanged one is free.
 const gzSizeCache = new Map();
 
+// A file can vanish between readdir and stat (active capture writes); a
+// missing row is skipped, never a 500 for the whole section.
 function fileRow(base, rel) {
-  const stats = statSync(join(base, rel));
-  return { rel, bytes: stats.size, mtimeMs: Math.round(stats.mtimeMs) };
+  try {
+    const stats = statSync(join(base, rel));
+    return { rel, bytes: stats.size, mtimeMs: Math.round(stats.mtimeMs) };
+  } catch {
+    return null;
+  }
+}
+
+function newestMtime(rows) {
+  return rows.reduce((max, row) => Math.max(max, row.mtimeMs), 0);
 }
 
 function safeDirs(path) {
@@ -121,6 +148,7 @@ function gzSize(path, row) {
     } catch {
       gzSizeCache.set(key, null);
     }
+    if (gzSizeCache.size > 256) gzSizeCache.delete(gzSizeCache.keys().next().value);
   }
   return gzSizeCache.get(key);
 }
@@ -131,22 +159,23 @@ function buildConfig(gameRoot, name) {
   for (const packDir of ["bin/assets", "pack"]) {
     for (const entry of safeFiles(join(configRoot, packDir))) {
       if (extname(entry.name).toLowerCase() !== ".ntpack") continue;
-      packs.push(fileRow(configRoot, `${packDir}/${entry.name}`));
+      const row = fileRow(configRoot, `${packDir}/${entry.name}`);
+      if (row) packs.push(row);
     }
   }
   const binFiles = safeFiles(join(configRoot, "bin"))
     .filter((entry) => BIN_EXTENSIONS.has(extname(entry.name).toLowerCase()))
-    .map((entry) => fileRow(configRoot, `bin/${entry.name}`));
+    .map((entry) => fileRow(configRoot, `bin/${entry.name}`))
+    .filter(Boolean);
   if (!packs.length && !binFiles.length) return null;
   const web = binFiles.some((row) => row.rel.endsWith(".wasm"));
   if (web) {
     for (const row of binFiles) row.gzBytes = gzSize(join(configRoot, row.rel), row);
   }
-  const rows = [...packs, ...binFiles];
   return {
     name,
     web,
-    freshnessMs: Math.max(...rows.map((row) => row.mtimeMs)),
+    freshnessMs: newestMtime([...packs, ...binFiles]),
     packs,
     binFiles,
   };
@@ -198,30 +227,49 @@ export function getGameBuilds(root, gameId) {
   };
 }
 
-function confinedGamePath(root, mount, relPath) {
+// Prefix check plus realpath: a junction inside the game folder (heavy
+// workfiles live on synced drives in this studio) must not leak files from
+// outside the repository.
+export function confinedGamePath(root, mount, relPath) {
   const gameRoot = resolve(join(root, mount.root));
   const full = resolve(gameRoot, normalize(String(relPath || "")));
   if (full !== gameRoot && !full.startsWith(gameRoot + sep)) return null;
-  return full;
+  try {
+    const realFull = realpathSync.native(full);
+    const realRoot = realpathSync.native(gameRoot);
+    if (realFull !== realRoot && !realFull.startsWith(realRoot + sep)) return null;
+    return realFull;
+  } catch {
+    return null;
+  }
 }
 
 // Parsed dumps are cached by identity so a page reload does not re-gzip a
 // multi-megabyte pack; a rebuilt pack (new mtime/size) is re-parsed.
 const packDumpCache = new Map();
 
+// The generated name header participates in the cache key: regenerating it
+// with an unchanged pack must refresh the shown names.
+function packCacheKey(context) {
+  let nameStamp = "";
+  try {
+    const stats = statSync(context.nameHeaderPath);
+    nameStamp = `${Math.round(stats.mtimeMs)}:${stats.size}`;
+  } catch {
+    nameStamp = "none";
+  }
+  const stats = statSync(context.full);
+  return `${context.full}\0${Math.round(stats.mtimeMs)}\0${stats.size}\0${nameStamp}`;
+}
+
 export function getPackDump(root, gameId, relPath) {
-  const mount = resolveGameMount(root, gameId);
-  if (!mount) return null;
-  const full = confinedGamePath(root, mount, relPath);
-  if (!full || extname(full).toLowerCase() !== ".ntpack" || !existsSync(full)) return null;
-  const stats = statSync(full);
-  const cacheKey = `${full}\0${Math.round(stats.mtimeMs)}\0${stats.size}`;
+  const context = packContext(root, gameId, relPath);
+  if (!context) return null;
+  const stats = statSync(context.full);
+  const cacheKey = packCacheKey(context);
   if (packDumpCache.has(cacheKey)) return packDumpCache.get(cacheKey);
 
-  const stem = basename(full, ".ntpack");
-  const nameHeaderPath = join(root, mount.root, "src", "generated", `${stem}.h`);
-  let names = new Map();
-  if (existsSync(nameHeaderPath)) names = parseNameHeader(readFileSync(nameHeaderPath, "utf8"));
+  const { mount, full, names } = context;
   let parsed;
   try {
     parsed = parseNtpack(readFileSync(full), { names });
@@ -240,7 +288,7 @@ export function getPackDump(root, gameId, relPath) {
       rel: String(relPath),
       bytes: stats.size,
       mtimeMs: Math.round(stats.mtimeMs),
-      namesFrom: existsSync(nameHeaderPath) ? `src/generated/${stem}.h` : "",
+      namesFrom: existsSync(context.nameHeaderPath) ? context.namesFromRel : "",
     },
     ...parsed,
   };
@@ -257,12 +305,21 @@ function packContext(root, gameId, relPath) {
   const stem = basename(full, ".ntpack");
   const nameHeaderPath = join(root, mount.root, "src", "generated", `${stem}.h`);
   const names = existsSync(nameHeaderPath) ? parseNameHeader(readFileSync(nameHeaderPath, "utf8")) : new Map();
-  return { mount, full, names };
+  return { mount, full, names, nameHeaderPath, namesFromRel: `src/generated/${stem}.h` };
 }
 
+// Per-entry requests reuse one parsed copy of the pack instead of re-reading
+// and re-parsing a multi-megabyte file on every clicked row.
+const parsedPackCache = new Map();
+
 function packEntry(context, index) {
-  const buffer = readFileSync(context.full);
-  const parsed = parseNtpack(buffer, { names: context.names, gzip: false });
+  const cacheKey = packCacheKey(context);
+  if (!parsedPackCache.has(cacheKey)) {
+    const buffer = readFileSync(context.full);
+    parsedPackCache.set(cacheKey, { buffer, parsed: parseNtpack(buffer, { names: context.names, gzip: false }) });
+    if (parsedPackCache.size > 4) parsedPackCache.delete(parsedPackCache.keys().next().value);
+  }
+  const { buffer, parsed } = parsedPackCache.get(cacheKey);
   const entry = parsed.entries[Number(index)];
   return entry ? { buffer, entry } : null;
 }
@@ -276,7 +333,7 @@ export function getPackEntryDetail(root, gameId, relPath, index) {
   return {
     schema: "ai_studio.game_page.pack_entry.v1",
     entry: found.entry,
-    ...detail,
+    ...(detail || { kind: "invalid" }),
   };
 }
 
@@ -298,6 +355,7 @@ export function getGameStateSchemas(root, gameId) {
   const schemas = safeFiles(stateRoot)
     .filter((entry) => entry.name.endsWith(".schema.json"))
     .map((entry) => fileRow(join(root, mount.root), `state/${entry.name}`))
+    .filter(Boolean)
     .sort((a, b) => a.rel.localeCompare(b.rel));
   return { schema: "ai_studio.game_page.state.v1", game: { id: mount.gameId }, schemas };
 }
@@ -317,7 +375,8 @@ export function getGameCaptures(root, gameId) {
       for (const stage of safeDirs(join(capturesRoot, shot.name, session.name))) {
         const stageRel = `tmp/captures/${shot.name}/${session.name}/${stage.name}`;
         const files = safeFiles(join(gameRoot, stageRel))
-          .map((entry) => fileRow(gameRoot, `${stageRel}/${entry.name}`));
+          .map((entry) => fileRow(gameRoot, `${stageRel}/${entry.name}`))
+          .filter(Boolean);
         if (!files.length) continue;
         const named = (name) => files.find((file) => file.rel.endsWith(`/${name}`));
         rows.push({
@@ -325,11 +384,11 @@ export function getGameCaptures(root, gameId) {
           session: session.name,
           stage: stage.name,
           rel: stageRel,
-          mtimeMs: Math.max(...files.map((file) => file.mtimeMs)),
+          mtimeMs: newestMtime(files),
           bytes: files.reduce((sum, file) => sum + file.bytes, 0),
+          fileCount: files.length,
           previewRel: named("representative-frame.png")?.rel || "",
           videoRel: (named("edit.mp4") || named("recording.mkv"))?.rel || "",
-          files,
         });
       }
     }
