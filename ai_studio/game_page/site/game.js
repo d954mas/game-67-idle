@@ -115,25 +115,16 @@
     return details;
   }
 
+  // The section answers exactly three questions: how big is the working debug
+  // build, and how big are the assembled PC/itch releases. Everything else is
+  // one collapsed list.
   function renderBuilds(gameId, builds) {
     const body = byId("buildsBody");
     body.textContent = "";
     const configs = builds.configs || [];
-    const primary = configs.filter((config) => !SERVICE_CONFIG.test(config.name));
-    const service = configs.filter((config) => SERVICE_CONFIG.test(config.name));
-    // No clean web config yet: surface the freshest service web build beside
-    // the primary ones so the web size stays one glance away.
-    const freshestWeb = !primary.some((config) => config.web) && service.find((config) => config.web);
-    for (const config of [...primary, ...(freshestWeb ? [freshestWeb] : [])]) {
-      body.append(buildConfigRow(gameId, config));
-    }
-    const collapsedConfigs = service.filter((config) => config !== freshestWeb);
-    if (collapsedConfigs.length) {
-      body.append(collapsedBlock(
-        `Служебные конфиги (${collapsedConfigs.length})`,
-        collapsedConfigs.map((config) => buildConfigRow(gameId, config)),
-      ));
-    }
+    const workingDebug = configs.find((config) => !SERVICE_CONFIG.test(config.name) && /debug/i.test(config.name))
+      || configs.find((config) => !SERVICE_CONFIG.test(config.name));
+    if (workingDebug) body.append(buildConfigRow(gameId, workingDebug));
 
     const release = builds.release || [];
     const latestByTarget = new Map();
@@ -142,9 +133,14 @@
       if (!latestByTarget.has(target)) latestByTarget.set(target, artifact);
     }
     for (const artifact of latestByTarget.values()) body.append(releaseRow(artifact));
+
+    const rest = configs.filter((config) => config !== workingDebug);
     const history = release.filter((artifact) => ![...latestByTarget.values()].includes(artifact));
-    if (history.length) {
-      body.append(collapsedBlock(`История релизов (${history.length})`, history.map(releaseRow)));
+    if (rest.length || history.length) {
+      body.append(collapsedBlock(
+        `Все конфиги (${rest.length}) и история релизов (${history.length})`,
+        [...rest.map((config) => buildConfigRow(gameId, config)), ...history.map(releaseRow)],
+      ));
     }
 
     if (!body.childElementCount) {
