@@ -77,6 +77,12 @@ test("game page routes serve the games list, page html, and confined game files"
     const missingOverview = await fetch(`${base}/api/game-page/overview?game=definitely-not-a-game`);
     assert.equal(missingOverview.status, 404);
 
+    const buildsResponse = await fetch(`${base}/api/game-page/builds?game=${encodeURIComponent(gameId)}`);
+    assert.equal(buildsResponse.status, 200);
+    const builds = await buildsResponse.json();
+    assert.equal(builds.schema, "ai_studio.game_page.builds.v1");
+    assert.ok(Array.isArray(builds.configs) && Array.isArray(builds.release));
+
     const identityResponse = await fetch(`${base}/game-file/${encodeURIComponent(gameId)}/game.json`);
     assert.equal(identityResponse.status, 200);
     assert.equal((await identityResponse.json()).id, gameId);

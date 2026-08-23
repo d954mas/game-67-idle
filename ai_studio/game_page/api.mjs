@@ -2,7 +2,8 @@
 // Marshals HTTP <-> ops.mjs only; no game logic lives here.
 //   GET /api/game-page/games              -- all games, private included
 //   GET /api/game-page/overview?game=<id> -- one game's overview header data
-import { getGameOverview, listGames } from "./ops.mjs";
+//   GET /api/game-page/builds?game=<id>   -- build configs, packs, release artifacts
+import { getGameBuilds, getGameOverview, listGames } from "./ops.mjs";
 
 function serveJson(res, status, value) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -19,6 +20,12 @@ export function createGamePageApi(root) {
     try {
       if (url.pathname === "/api/game-page/games") {
         serveJson(res, 200, listGames(root));
+        return true;
+      }
+      if (url.pathname === "/api/game-page/builds") {
+        const builds = getGameBuilds(root, url.searchParams.get("game") || "");
+        if (!builds) serveJson(res, 404, { error: "unknown game" });
+        else serveJson(res, 200, builds);
         return true;
       }
       if (url.pathname === "/api/game-page/overview") {

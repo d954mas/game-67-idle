@@ -40,6 +40,64 @@
     return row;
   }
 
+  function formatBytes(bytes) {
+    if (bytes == null) return "";
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${bytes} B`;
+  }
+
+  function formatDate(ms) {
+    return ms ? new Date(ms).toISOString().slice(0, 16).replace("T", " ") : "";
+  }
+
+  function packHref(gameId, configName, rel) {
+    const path = `build/${configName}/${rel}`;
+    return `/game/${encodeURIComponent(gameId)}/pack?path=${encodeURIComponent(path)}`;
+  }
+
+  function renderBuilds(gameId, builds) {
+    const body = byId("buildsBody");
+    body.textContent = "";
+    for (const config of builds.configs || []) {
+      const files = [...(config.packs || []), ...(config.binFiles || [])];
+      const description = files
+        .map((row) => {
+          const gz = row.gzBytes != null ? ` (gz ${formatBytes(row.gzBytes)})` : "";
+          return `${row.rel} — ${formatBytes(row.bytes)}${gz}`;
+        })
+        .join(" · ");
+      const firstPack = (config.packs || [])[0];
+      const row = linkRow(
+        config.web ? "Web" : "Native",
+        config.name,
+        `${formatDate(config.freshnessMs)} · ${description}`,
+        firstPack ? packHref(gameId, config.name, firstPack.rel) : "",
+        "Packs",
+      );
+      body.append(row);
+    }
+    for (const artifact of builds.release || []) {
+      const missing = artifact.present ? "" : " · file missing";
+      body.append(linkRow(
+        "Release",
+        artifact.file || artifact.manifest,
+        `${artifact.target} · ${formatBytes(artifact.bytes)} · ${formatDate(artifact.mtimeMs)}${missing}`,
+        "",
+        "",
+      ));
+    }
+    if (!body.childElementCount) {
+      body.innerHTML = '<p class="game-placeholder">No build configs or release artifacts found.</p>';
+    }
+  }
+
+  async function loadBuilds(gameId) {
+    const response = await fetch(`/api/game-page/builds?game=${encodeURIComponent(gameId)}`, { cache: "no-store" });
+    if (!response.ok) throw new Error(`builds request failed: ${response.status}`);
+    renderBuilds(gameId, await response.json());
+  }
+
   async function load() {
     if (!gameId) return fail("No game id in the URL.");
     const response = await fetch(`/api/game-page/overview?game=${encodeURIComponent(gameId)}`, { cache: "no-store" });
@@ -65,6 +123,8 @@
     if (!links.childElementCount) {
       links.innerHTML = `<p class="game-placeholder">Nothing to show yet.</p>`;
     }
+
+    await loadBuilds(game.id);
   }
 
   load().catch((error) => fail(error?.message || String(error)));
