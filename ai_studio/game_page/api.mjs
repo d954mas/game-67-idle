@@ -5,6 +5,8 @@
 //   GET /api/game-page/overview?game=<id> -- one game's overview header data
 //   GET /api/game-page/builds?game=<id>   -- build configs, packs, release artifacts
 //   GET /api/game-page/state?game=<id>    -- state schema files
+//   GET /api/game-page/saves?game=<id>    -- native save slots with envelope meta
+//   GET /api/game-page/save?game&slot     -- one save slot's parsed content
 //   GET /api/game-page/captures?game=<id> -- capture takes, newest first
 //   GET /api/game-page/pack?game&path     -- parsed ntpack contents
 //   GET /api/game-page/pack-entry?game&path&index -- one entry's typed detail
@@ -13,6 +15,8 @@ import {
   getGameBuilds,
   getGameCaptures,
   getGameOverview,
+  getGameSaveContent,
+  getGameSaves,
   getGameStateSchemas,
   getPackDump,
   getPackEntryData,
@@ -31,6 +35,8 @@ const GAME_ROUTES = {
   overview: (root, url) => getGameOverview(root, url.searchParams.get("game") || ""),
   builds: (root, url) => getGameBuilds(root, url.searchParams.get("game") || ""),
   state: (root, url) => getGameStateSchemas(root, url.searchParams.get("game") || ""),
+  saves: (root, url) => getGameSaves(root, url.searchParams.get("game") || ""),
+  save: (root, url) => getGameSaveContent(root, url.searchParams.get("game") || "", url.searchParams.get("slot") || ""),
   captures: (root, url) => getGameCaptures(root, url.searchParams.get("game") || ""),
   pack: (root, url) => getPackDump(root, url.searchParams.get("game") || "", url.searchParams.get("path") || ""),
   "pack-entry": (root, url) => getPackEntryDetail(

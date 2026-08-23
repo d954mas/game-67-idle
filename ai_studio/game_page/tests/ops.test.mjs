@@ -8,6 +8,8 @@ import {
   getGameBuilds,
   getGameCaptures,
   getGameOverview,
+  getGameSaveContent,
+  getGameSaves,
   getGameStateSchemas,
   listGames,
   resolveGameMount,
@@ -215,6 +217,30 @@ test("getGameBuilds dedupes the same pack staged in two folders", (t) => {
   write("build/native-debug/pack/game.ntpack", Buffer.alloc(4096, 2));
   const config = getGameBuilds(root, "alpha-game").configs[0];
   assert.equal(config.packs.length, 1, "one pack staged twice must report once");
+});
+
+test("getGameSaves lists slots with envelope meta and save content stays confined", (t) => {
+  const root = fixture(t);
+  const storageRoot = join(root, "fake-localappdata", "neotolis");
+  const savesDir = join(storageRoot, "alpha-game", "saves");
+  mkdirSync(savesDir, { recursive: true });
+  writeFileSync(join(savesDir, "autosave.json"), JSON.stringify({
+    format: 1, save_version: 3, saved_at: 1787249441000, save_seq: 349,
+    app: "alpha-game", features: { settings: { language: "ru" } },
+  }), "utf8");
+  writeFileSync(join(savesDir, "autosave.bak"), "{broken", "utf8");
+  writeFileSync(join(savesDir, "notes.txt"), "not a slot", "utf8");
+
+  const saves = getGameSaves(root, "alpha-game", { storageRoot });
+  assert.deepEqual(saves.slots.map((slot) => slot.slot).sort(), ["autosave.bak", "autosave.json"]);
+  const main = saves.slots.find((slot) => slot.slot === "autosave.json");
+  assert.deepEqual(main.meta, { saveVersion: 3, savedAt: 1787249441000, saveSeq: 349, app: "alpha-game" });
+  assert.equal(saves.slots.find((slot) => slot.slot === "autosave.bak").malformed, true);
+
+  const content = getGameSaveContent(root, "alpha-game", "autosave.json", { storageRoot });
+  assert.equal(content.content.features.settings.language, "ru");
+  assert.equal(getGameSaveContent(root, "alpha-game", "../autosave.json", { storageRoot }), null);
+  assert.equal(getGameSaveContent(root, "alpha-game", "notes.txt", { storageRoot }), null);
 });
 
 test("getGameOverview returns null for unknown games", (t) => {

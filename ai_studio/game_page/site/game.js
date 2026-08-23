@@ -213,23 +213,117 @@
     if (!body.childElementCount) body.append(placeholder("No canvas projects for this game."));
   }
 
-  async function loadState() {
-    const response = await fetch(`/api/game-page/state?game=${encodeURIComponent(gameId)}`, { cache: "no-store" });
-    if (!response.ok) throw new Error(`state request failed: ${response.status}`);
-    const payload = await response.json();
-    const body = byId("stateBody");
-    body.textContent = "";
-    for (const schema of payload.schemas || []) {
-      body.append(linkRow(
-        "Schema",
-        schema.rel.split("/").pop(),
-        `${formatBytes(schema.bytes)} · ${formatDate(schema.mtimeMs)}`,
-        gameFileHref(schema.rel),
-        "View",
-      ));
+  // #region Save — the parsed player save, rendered as a collapsible tree.
+  function jsonTree(key, value, depth) {
+    if (value === null || typeof value !== "object") {
+      const line = document.createElement("div");
+      line.className = "save-line";
+      const keyEl = document.createElement("span");
+      keyEl.className = "save-key";
+      keyEl.textContent = key;
+      line.append(keyEl, document.createTextNode(` ${JSON.stringify(value)}`));
+      return line;
     }
-    if (!body.childElementCount) body.append(placeholder("No state schemas found."));
+    const isArray = Array.isArray(value);
+    const entries = isArray ? value.map((item, at) => [String(at), item]) : Object.entries(value);
+    const details = document.createElement("details");
+    details.className = "save-node";
+    if (depth < 2) details.open = true;
+    const summary = document.createElement("summary");
+    summary.textContent = `${key} ${isArray ? `[${entries.length}]` : `{${entries.length}}`}`;
+    details.append(summary);
+    for (const [childKey, childValue] of entries) {
+      details.append(jsonTree(childKey, childValue, depth + 1));
+    }
+    return details;
   }
+
+  function saveSlotRow(payload, slot) {
+    const row = document.createElement("article");
+    row.className = "surface-row save-slot";
+    const pill = document.createElement("span");
+    pill.className = "type-pill state";
+    pill.textContent = slot.slot.endsWith(".bak") ? "Backup" : "Save";
+    const main = document.createElement("div");
+    main.className = "surface-main";
+    const h4 = document.createElement("h4");
+    const meta = slot.meta || {};
+    const seq = meta.saveSeq != null ? ` — seq ${meta.saveSeq}, v${meta.saveVersion}` : (slot.malformed ? " — malformed" : "");
+    h4.textContent = `${slot.slot}${seq}`;
+    const p = document.createElement("p");
+    const savedAt = meta.savedAt ? ` · saved ${formatDate(meta.savedAt)}` : "";
+    p.textContent = `${formatBytes(slot.bytes)} · ${formatDate(slot.mtimeMs)}${savedAt}`;
+    main.append(h4, p);
+    row.append(pill, main);
+
+    const details = collapsedBlock("содержимое", []);
+    details.classList.add("save-content");
+    details.addEventListener("toggle", async () => {
+      if (!details.open || details.childElementCount > 1) return;
+      details.append(placeholder("Loading save…"));
+      try {
+        const response = await fetch(
+          `/api/game-page/save?game=${encodeURIComponent(gameId)}&slot=${encodeURIComponent(slot.slot)}`,
+          { cache: "no-store" },
+        );
+        if (!response.ok) throw new Error(`save request failed: ${response.status}`);
+        const save = await response.json();
+        details.querySelector(".game-placeholder")?.remove();
+        if (save.error) details.append(placeholder(save.error, true));
+        else details.append(jsonTree(slot.slot, save.content, 0));
+      } catch (error) {
+        details.querySelector(".game-placeholder")?.remove();
+        details.append(placeholder(String(error?.message || error), true));
+      }
+    });
+
+    const wrap = document.createElement("div");
+    wrap.className = "save-slot-wrap";
+    wrap.append(row, details);
+    return wrap;
+  }
+
+  async function loadSave() {
+    const body = byId("saveBody");
+    const [savesResponse, stateResponse] = await Promise.all([
+      fetch(`/api/game-page/saves?game=${encodeURIComponent(gameId)}`, { cache: "no-store" }),
+      fetch(`/api/game-page/state?game=${encodeURIComponent(gameId)}`, { cache: "no-store" }),
+    ]);
+    if (!savesResponse.ok) throw new Error(`saves request failed: ${savesResponse.status}`);
+    const payload = await savesResponse.json();
+    body.textContent = "";
+    (payload.slots || []).forEach((slot, index) => {
+      const wrap = saveSlotRow(payload, slot);
+      body.append(wrap);
+      // The freshest real save opens by default — seeing the save IS the section.
+      if (index === 0 && !slot.slot.endsWith(".bak")) {
+        wrap.querySelector(".save-content").open = true;
+      }
+    });
+    if (!(payload.slots || []).length) {
+      body.append(placeholder(payload.savesRoot
+        ? `No saves found in ${payload.savesRoot}.`
+        : "No native save location available."));
+    } else {
+      const fresh = payload.slots[0];
+      dashboardCard("save", "last save", formatDate(fresh.meta?.savedAt || fresh.mtimeMs).slice(0, 10) || "—", "#sectionState");
+    }
+
+    if (stateResponse.ok) {
+      const state = await stateResponse.json();
+      const schemas = state.schemas || [];
+      if (schemas.length) {
+        body.append(collapsedBlock(`Схемы состояния (${schemas.length})`, schemas.map((schema) => linkRow(
+          "Schema",
+          schema.rel.split("/").pop(),
+          `${formatBytes(schema.bytes)} · ${formatDate(schema.mtimeMs)}`,
+          gameFileHref(schema.rel),
+          "View",
+        ))));
+      }
+    }
+  }
+  // #endregion
 
   async function loadCaptures() {
     const response = await fetch(`/api/game-page/captures?game=${encodeURIComponent(gameId)}`, { cache: "no-store" });
@@ -305,7 +399,7 @@
     await Promise.all([
       loadBuilds().catch((error) => sectionError("buildsBody", String(error?.message || error))),
       loadCanvases(game).catch((error) => sectionError("canvasesBody", String(error?.message || error))),
-      loadState().catch((error) => sectionError("stateBody", String(error?.message || error))),
+      loadSave().catch((error) => sectionError("saveBody", String(error?.message || error))),
       loadCaptures().catch((error) => sectionError("capturesBody", String(error?.message || error))),
     ]);
   }

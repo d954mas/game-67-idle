@@ -166,6 +166,37 @@
   padding: 8px 4px;
 }
 
+.game-page .save-slot-wrap {
+  width: 100%;
+}
+
+.game-page .save-content {
+  margin: 0 0 6px 46px;
+}
+
+.game-page .save-node {
+  margin-left: 16px;
+  font-size: 13px;
+}
+
+.game-page .save-node > summary {
+  cursor: pointer;
+  color: #cdd7f5;
+  padding: 2px 0;
+}
+
+.game-page .save-line {
+  margin-left: 34px;
+  font-size: 13px;
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--muted, #9aa4b2);
+  padding: 1px 0;
+}
+
+.game-page .save-key {
+  color: #9ecb8f;
+}
+
 .game-page .game-embed {
   width: 100%;
   height: 860px;

@@ -380,6 +380,77 @@ export function getPackEntryData(root, gameId, relPath, index) {
   };
 }
 
+// Native saves live outside the repo, in the engine's per-user storage root:
+// <LOCALAPPDATA>/neotolis/<app-id>/saves (game_storage_backend_native.c). The
+// app id matches the game id for template-derived games. A game launched with
+// --save-root writes elsewhere and simply is not visible here.
+function defaultSavesRoot(gameId, options = {}) {
+  if (options.storageRoot) return join(options.storageRoot, gameId, "saves");
+  const localAppData = process.env.LOCALAPPDATA;
+  if (!localAppData) return null;
+  return join(localAppData, "neotolis", gameId, "saves");
+}
+
+const SAVE_SLOT_NAME = /^[\w.-]+\.(json|bak)$/;
+
+export function getGameSaves(root, gameId, options = {}) {
+  const mount = resolveGameMount(root, gameId);
+  if (!mount) return null;
+  const savesRoot = defaultSavesRoot(mount.gameId, options);
+  const slots = [];
+  if (savesRoot) {
+    for (const entry of safeFiles(savesRoot)) {
+      if (!SAVE_SLOT_NAME.test(entry.name)) continue;
+      const row = fileRow(savesRoot, entry.name);
+      if (!row) continue;
+      const slot = { slot: entry.name, bytes: row.bytes, mtimeMs: row.mtimeMs };
+      try {
+        const parsed = JSON.parse(readFileSync(join(savesRoot, entry.name), "utf8"));
+        slot.meta = {
+          saveVersion: parsed.save_version ?? null,
+          savedAt: Number(parsed.saved_at) || 0,
+          saveSeq: parsed.save_seq ?? null,
+          app: String(parsed.app || ""),
+        };
+      } catch {
+        slot.malformed = true;
+      }
+      slots.push(slot);
+    }
+  }
+  slots.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return {
+    schema: "ai_studio.game_page.saves.v1",
+    game: { id: mount.gameId },
+    savesRoot: savesRoot || "",
+    slots,
+  };
+}
+
+export function getGameSaveContent(root, gameId, slot, options = {}) {
+  const mount = resolveGameMount(root, gameId);
+  if (!mount) return null;
+  const name = String(slot || "");
+  if (!SAVE_SLOT_NAME.test(name)) return null;
+  const savesRoot = defaultSavesRoot(mount.gameId, options);
+  if (!savesRoot || !existsSync(join(savesRoot, name))) return null;
+  try {
+    return {
+      schema: "ai_studio.game_page.save.v1",
+      game: { id: mount.gameId },
+      slot: name,
+      content: JSON.parse(readFileSync(join(savesRoot, name), "utf8")),
+    };
+  } catch (error) {
+    return {
+      schema: "ai_studio.game_page.save.v1",
+      game: { id: mount.gameId },
+      slot: name,
+      error: error?.message || String(error),
+    };
+  }
+}
+
 export function getGameStateSchemas(root, gameId) {
   const mount = resolveGameMount(root, gameId);
   if (!mount) return null;
