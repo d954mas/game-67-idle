@@ -6,6 +6,12 @@
     const toggle = document.querySelector("[data-studio-sidebar-toggle]");
     if (!shell || !toggle) return;
 
+    // ?embed=1: the page is hosted inside another studio surface (an iframe),
+    // which already owns navigation — hide this page's sidebar chrome.
+    if (new URLSearchParams(location.search).has("embed")) {
+      shell.classList.add("is-embedded");
+    }
+
     const apply = (collapsed) => {
       shell.classList.toggle("is-collapsed", collapsed);
       toggle.setAttribute("aria-expanded", String(!collapsed));

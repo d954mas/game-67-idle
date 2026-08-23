@@ -188,7 +188,9 @@ export function createItemsViewerApi(root, options = {}) {
           return true;
         }
         if (view.icons?.page_available) {
-          view.icons.page_url = `/api/items-viewer/icon-page?catalog=${encodeURIComponent(id)}`;
+          // Propagate the caller's private-scope flag so the icon fetch can
+          // resolve the same catalog the view itself came from.
+          view.icons.page_url = `/api/items-viewer/icon-page?catalog=${encodeURIComponent(id)}${includePrivate ? "&include-private=1" : ""}`;
         }
         sendJson(res, 200, view);
         return true;

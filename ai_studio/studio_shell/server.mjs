@@ -59,6 +59,9 @@ const mime = {
   ".hdr": "image/vnd.radiance",
   ".ttf": "font/ttf",
   ".wasm": "application/wasm",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".mkv": "video/x-matroska",
 };
 
 function safeResolve(base, relativePath) {

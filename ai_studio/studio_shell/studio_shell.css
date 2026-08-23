@@ -248,3 +248,12 @@ body {
     justify-content: stretch;
   }
 }
+
+/* Embedded surfaces (?embed=1) are framed by a host page that owns navigation. */
+.studio-shell.is-embedded {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.studio-shell.is-embedded .studio-sidebar {
+  display: none;
+}

@@ -126,6 +126,7 @@
     const loadPromise = (async () => {
       const queryParams = new URLSearchParams({
         sourceId: OPTS.sourceId,
+        "include-private": "1",
         offset: String(append ? DATA.length : 0),
         limit: String(RENDER_STEP),
         q,
@@ -154,9 +155,11 @@
     }
   }
 
+  // The browser gallery is the lead's local surface: private game sources are
+  // shown by default, so every request carries the private-scope flag.
   function selectedSourceBody(source) {
-    if (source && source.custom) return { type: "game", path: source.path };
-    return { sourceId: selectedSourceId };
+    if (source && source.custom) return { type: "game", path: source.path, includePrivate: true };
+    return { sourceId: selectedSourceId, includePrivate: true };
   }
 
   function updateSourceQuery(sourceId) {
@@ -389,7 +392,7 @@
     if (asset.model) return asset.model;
     if (!DYNAMIC || !OPTS.sourceId) return "";
     if (!modelLoads.has(asset.id)) {
-      modelLoads.set(asset.id, readJson(`/api/asset-viewer/model?sourceId=${encodeURIComponent(OPTS.sourceId)}&id=${encodeURIComponent(asset.id)}`)
+      modelLoads.set(asset.id, readJson(`/api/asset-viewer/model?sourceId=${encodeURIComponent(OPTS.sourceId)}&id=${encodeURIComponent(asset.id)}&include-private=1`)
         .then((payload) => {
           asset.model = payload.model || "";
           return asset.model;
@@ -718,7 +721,7 @@
   async function initDynamic() {
     ROOT.innerHTML = '<header><h1>Asset Viewer</h1><span class="source-status">Loading sources...</span></header><div class="empty-state">Loading asset sources.</div>';
     try {
-      const payload = await readJson("/api/asset-viewer/sources");
+      const payload = await readJson("/api/asset-viewer/sources?include-private=1");
       sources = payload.sources || [];
       const requested = new URL(location.href).searchParams.get("source");
       const source = sources.find((item) => item.id === requested && item.available) || sources.find((item) => item.available);

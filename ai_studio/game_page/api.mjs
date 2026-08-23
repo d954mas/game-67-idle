@@ -6,7 +6,18 @@
 //   GET /api/game-page/pack?game=<id>&path=<rel> -- parsed ntpack contents
 //   GET /api/game-page/pack-entry?game&path&index -- one entry's typed detail
 //   GET /api/game-page/pack-entry-data?game&path&index -- one entry's raw bytes
-import { getGameBuilds, getGameOverview, getPackDump, getPackEntryData, getPackEntryDetail, listGames } from "./ops.mjs";
+//   GET /api/game-page/state?game=<id>    -- state schema files
+//   GET /api/game-page/captures?game=<id> -- capture sessions, newest first
+import {
+  getGameBuilds,
+  getGameCaptures,
+  getGameOverview,
+  getGameStateSchemas,
+  getPackDump,
+  getPackEntryData,
+  getPackEntryDetail,
+  listGames,
+} from "./ops.mjs";
 
 function serveJson(res, status, value) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -64,6 +75,18 @@ export function createGamePageApi(root) {
           });
           res.end(Buffer.from(data.bytes));
         }
+        return true;
+      }
+      if (url.pathname === "/api/game-page/state") {
+        const state = getGameStateSchemas(root, url.searchParams.get("game") || "");
+        if (!state) serveJson(res, 404, { error: "unknown game" });
+        else serveJson(res, 200, state);
+        return true;
+      }
+      if (url.pathname === "/api/game-page/captures") {
+        const captures = getGameCaptures(root, url.searchParams.get("game") || "");
+        if (!captures) serveJson(res, 404, { error: "unknown game" });
+        else serveJson(res, 200, captures);
         return true;
       }
       if (url.pathname === "/api/game-page/overview") {

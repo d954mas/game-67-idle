@@ -291,6 +291,58 @@ export function getPackEntryData(root, gameId, relPath, index) {
   };
 }
 
+export function getGameStateSchemas(root, gameId) {
+  const mount = resolveGameMount(root, gameId);
+  if (!mount) return null;
+  const stateRoot = join(root, mount.root, "state");
+  const schemas = safeFiles(stateRoot)
+    .filter((entry) => entry.name.endsWith(".schema.json"))
+    .map((entry) => fileRow(join(root, mount.root), `state/${entry.name}`))
+    .sort((a, b) => a.rel.localeCompare(b.rel));
+  return { schema: "ai_studio.game_page.state.v1", game: { id: mount.gameId }, schemas };
+}
+
+const CAPTURE_SESSION_LIMIT = 100;
+
+// Capture outputs land under tmp/captures/<shot>/<session>/<stage>/; one row
+// per recorded stage, newest first, so the lead can find a shot by date.
+export function getGameCaptures(root, gameId) {
+  const mount = resolveGameMount(root, gameId);
+  if (!mount) return null;
+  const gameRoot = join(root, mount.root);
+  const capturesRoot = join(gameRoot, "tmp", "captures");
+  const rows = [];
+  for (const shot of safeDirs(capturesRoot)) {
+    for (const session of safeDirs(join(capturesRoot, shot.name))) {
+      for (const stage of safeDirs(join(capturesRoot, shot.name, session.name))) {
+        const stageRel = `tmp/captures/${shot.name}/${session.name}/${stage.name}`;
+        const files = safeFiles(join(gameRoot, stageRel))
+          .map((entry) => fileRow(gameRoot, `${stageRel}/${entry.name}`));
+        if (!files.length) continue;
+        const named = (name) => files.find((file) => file.rel.endsWith(`/${name}`));
+        rows.push({
+          shot: shot.name,
+          session: session.name,
+          stage: stage.name,
+          rel: stageRel,
+          mtimeMs: Math.max(...files.map((file) => file.mtimeMs)),
+          bytes: files.reduce((sum, file) => sum + file.bytes, 0),
+          previewRel: named("representative-frame.png")?.rel || "",
+          videoRel: (named("edit.mp4") || named("recording.mkv"))?.rel || "",
+          files,
+        });
+      }
+    }
+  }
+  rows.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return {
+    schema: "ai_studio.game_page.captures.v1",
+    game: { id: mount.gameId },
+    truncated: rows.length > CAPTURE_SESSION_LIMIT,
+    sessions: rows.slice(0, CAPTURE_SESSION_LIMIT),
+  };
+}
+
 export function getGameOverview(root, gameId) {
   const mount = resolveGameMount(root, gameId);
   if (!mount) return null;
@@ -315,7 +367,7 @@ export function getGameOverview(root, gameId) {
     taskboardProjects: taskboardProjects(root, mount),
     links: {
       taskboard: "/taskboard/",
-      assetViewer: `/asset_viewer/?sourceId=${encodeURIComponent(mount.storeId)}&include-private=1`,
+      assetViewer: `/asset_viewer/?source=${encodeURIComponent(mount.storeId)}`,
     },
   };
 }

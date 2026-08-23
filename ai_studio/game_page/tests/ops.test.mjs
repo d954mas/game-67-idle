@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { getGameBuilds, getGameOverview, listGames, resolveGameMount } from "../ops.mjs";
+import {
+  getGameBuilds,
+  getGameCaptures,
+  getGameOverview,
+  getGameStateSchemas,
+  listGames,
+  resolveGameMount,
+} from "../ops.mjs";
 
 function writeJson(root, rel, value) {
   const path = join(root, rel);
@@ -84,7 +91,7 @@ test("getGameOverview reports identity, design docs, and studio taskboard projec
   assert.deepEqual(overview.taskboardProjects.map(({ id, status, store }) => ({ id, status, store })), [
     { id: "P001", status: "active", store: "studio" },
   ]);
-  assert.match(overview.links.assetViewer, /sourceId=game%3Aalpha-game/);
+  assert.match(overview.links.assetViewer, /source=game%3Aalpha-game/);
 });
 
 test("getGameBuilds reports pack-bearing configs, web gz sizes, and release manifests", (t) => {
@@ -138,6 +145,38 @@ test("getGameBuilds returns null for unknown games and empty lists without folde
   const builds = getGameBuilds(root, "beta-game");
   assert.deepEqual(builds.configs, []);
   assert.deepEqual(builds.release, []);
+});
+
+test("getGameStateSchemas lists schema files and getGameCaptures sorts sessions by date", (t) => {
+  const root = fixture(t);
+  const gameRoot = join(root, "games/alpha-game");
+  const write = (rel, content) => {
+    mkdirSync(dirname(join(gameRoot, rel)), { recursive: true });
+    writeFileSync(join(gameRoot, rel), content);
+  };
+  write("state/game_state.schema.json", "{}");
+  write("state/boss.schema.json", "{}");
+  write("state/not-a-schema.json", "{}");
+
+  const state = getGameStateSchemas(root, "alpha-game");
+  assert.deepEqual(state.schemas.map((schema) => schema.rel), [
+    "state/boss.schema.json",
+    "state/game_state.schema.json",
+  ]);
+
+  write("tmp/captures/shot-a/20260820T000000Z-aa/draft/representative-frame.png", "png");
+  write("tmp/captures/shot-a/20260820T000000Z-aa/draft/edit.mp4", "mp4");
+  write("tmp/captures/shot-b/20260822T000000Z-bb/master/recording.mkv", "mkv");
+  const past = new Date("2026-08-01T00:00:00Z");
+  utimesSync(join(gameRoot, "tmp/captures/shot-a/20260820T000000Z-aa/draft/representative-frame.png"), past, past);
+  utimesSync(join(gameRoot, "tmp/captures/shot-a/20260820T000000Z-aa/draft/edit.mp4"), past, past);
+
+  const captures = getGameCaptures(root, "alpha-game");
+  assert.deepEqual(captures.sessions.map((session) => session.shot), ["shot-b", "shot-a"]);
+  assert.equal(captures.sessions[1].previewRel, "tmp/captures/shot-a/20260820T000000Z-aa/draft/representative-frame.png");
+  assert.equal(captures.sessions[1].videoRel, "tmp/captures/shot-a/20260820T000000Z-aa/draft/edit.mp4");
+  assert.equal(captures.sessions[0].videoRel, "tmp/captures/shot-b/20260822T000000Z-bb/master/recording.mkv");
+  assert.equal(getGameCaptures(root, "missing"), null);
 });
 
 test("getGameOverview returns null for unknown games", (t) => {

@@ -268,8 +268,10 @@ function detailModel(extra = {}) {
   };
 }
 
+// The browser surface is the lead's local workbench: private game catalogs are
+// always in scope here, so every request carries the include-private flag.
 function focusedUrl(endpoint, values, catalogId = state.selectedId) {
-  const params = new URLSearchParams({ catalog: catalogId, ...values });
+  const params = new URLSearchParams({ catalog: catalogId, "include-private": "1", ...values });
   return `/api/items-viewer/${endpoint}?${params}`;
 }
 
@@ -294,7 +296,7 @@ function editFailureMessage(payload) {
 }
 
 async function submitSemanticEdit(catalogId, edit, apply) {
-  const response = await fetch("/api/items-viewer/edit", {
+  const response = await fetch("/api/items-viewer/edit?include-private=1", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ catalog: catalogId, edit, apply }),
@@ -514,7 +516,7 @@ async function loadCatalog(id) {
   state.detailRequest += 1;
   setStatus("Loading…");
   try {
-    const response = await fetch(`/api/items-viewer/catalog?id=${encodeURIComponent(id)}`, { cache: "no-store" });
+    const response = await fetch(`/api/items-viewer/catalog?id=${encodeURIComponent(id)}&include-private=1`, { cache: "no-store" });
     if (!response.ok) throw new Error(`status ${response.status}`);
     const view = await response.json();
     if (!scopeIsCurrent(state, scope)) return;
@@ -547,7 +549,7 @@ async function loadCatalog(id) {
 
 async function loadCatalogs() {
   try {
-    const response = await fetch("/api/items-viewer/catalogs", { cache: "no-store" });
+    const response = await fetch("/api/items-viewer/catalogs?include-private=1", { cache: "no-store" });
     if (!response.ok) throw new Error(`status ${response.status}`);
     const data = await response.json();
     state.catalogs = data.catalogs || [];
@@ -556,7 +558,10 @@ async function loadCatalogs() {
       setStatus("No catalogs registered.", true);
       return;
     }
-    const preferred = state.catalogs.find((catalog) => catalog.hasItems) || state.catalogs[0];
+    const requested = new URLSearchParams(location.search).get("catalog");
+    const preferred = state.catalogs.find((catalog) => catalog.id === requested)
+      || state.catalogs.find((catalog) => catalog.hasItems)
+      || state.catalogs[0];
     els.select.value = preferred.id;
     await loadCatalog(preferred.id);
   } catch (error) {
