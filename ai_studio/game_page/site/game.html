@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Game — AI Studio</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/ai_studio/studio_shell/studio_shell.css">
+  <link rel="stylesheet" href="/ai_studio/studio_shell/home.css">
+  <link rel="stylesheet" href="/ai_studio/game_page/site/game.css">
+</head>
+<body>
+  <div class="studio-shell">
+    <aside class="studio-sidebar" aria-label="AI Studio navigation">
+      <div class="studio-sidebar-brand">
+        <span class="studio-brand-mark">AI</span>
+        <div class="studio-brand-copy">
+          <strong>AI Studio</strong>
+          <span>game pipeline</span>
+        </div>
+        <button class="studio-sidebar-toggle" type="button" data-studio-sidebar-toggle aria-label="Toggle sidebar" aria-expanded="true">‹</button>
+      </div>
+      <nav class="studio-side-nav" aria-label="Primary">
+        <p class="studio-nav-section">Workspace</p>
+        <a class="studio-nav-item" href="/">
+          <span class="studio-nav-icon">S</span>
+          <span class="studio-nav-label">Studio Home</span>
+        </a>
+        <a class="studio-nav-item" href="/architecture_map/">
+          <span class="studio-nav-icon map">M</span>
+          <span class="studio-nav-label">Architecture Map</span>
+        </a>
+        <a class="studio-nav-item" href="/taskboard/">
+          <span class="studio-nav-icon tasks">T</span>
+          <span class="studio-nav-label">Taskboard</span>
+        </a>
+        <a class="studio-nav-item" href="/asset_viewer/">
+          <span class="studio-nav-icon assets">A</span>
+          <span class="studio-nav-label">Asset Viewer</span>
+        </a>
+        <a class="studio-nav-item" href="/canvas">
+          <span class="studio-nav-icon prep">C</span>
+          <span class="studio-nav-label">Canvas</span>
+        </a>
+        <a class="studio-nav-item" href="/quality/">
+          <span class="studio-nav-icon quality">Q</span>
+          <span class="studio-nav-label">Quality Checks</span>
+        </a>
+      </nav>
+    </aside>
+
+    <main class="studio-content home-content game-page">
+      <header class="content-header">
+        <div>
+          <p class="eyebrow">Game</p>
+          <h2 id="gameTitle">…</h2>
+          <p class="game-subtitle"><span id="gameId"></span> <span id="gameVisibility" class="type-pill state"></span> <span id="gameVersion"></span></p>
+        </div>
+      </header>
+
+      <section class="workspace-panel" aria-labelledby="overviewTitle">
+        <div class="panel-head">
+          <h3 id="overviewTitle">Overview</h3>
+          <p id="gameRoot"></p>
+        </div>
+        <div class="surface-list" id="overviewLinks"></div>
+      </section>
+
+      <section class="workspace-panel" id="sectionBuilds">
+        <div class="panel-head"><h3>Builds</h3><p>Build configs, artifacts, packs.</p></div>
+        <div class="surface-list" id="buildsBody"><p class="game-placeholder">Coming next slice.</p></div>
+      </section>
+
+      <section class="workspace-panel" id="sectionBalance">
+        <div class="panel-head"><h3>Balance</h3><p>Items Workbench for this game.</p></div>
+        <div class="surface-list" id="balanceBody"><p class="game-placeholder">Coming next slice.</p></div>
+      </section>
+
+      <section class="workspace-panel" id="sectionCanvases">
+        <div class="panel-head"><h3>Canvases</h3><p>Canvas projects owned by this game.</p></div>
+        <div class="surface-list" id="canvasesBody"><p class="game-placeholder">Coming next slice.</p></div>
+      </section>
+
+      <section class="workspace-panel" id="sectionState">
+        <div class="panel-head"><h3>State schemas</h3><p>Schema-first game state.</p></div>
+        <div class="surface-list" id="stateBody"><p class="game-placeholder">Coming next slice.</p></div>
+      </section>
+
+      <section class="workspace-panel" id="sectionCaptures">
+        <div class="panel-head"><h3>Captures</h3><p>Screenshots and recordings, newest first.</p></div>
+        <div class="surface-list" id="capturesBody"><p class="game-placeholder">Coming next slice.</p></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/ai_studio/game_page/site/game.js"></script>
+  <script src="/ai_studio/studio_shell/studio_shell.js"></script>
+</body>
+</html>

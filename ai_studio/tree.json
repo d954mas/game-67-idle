@@ -110,6 +110,18 @@
                 "coverage": "subtree"
               },
               {
+                "id": "feature-localization",
+                "title": "Localization",
+                "kind": "module",
+                "path": "features/localization",
+                "owner": "Localization Feature Owner",
+                "description": "Data-only localization capability shared across games.",
+                "entry": "features/localization/README.md",
+                "contract": "features/localization/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
                 "id": "feature-platform-sdk",
                 "title": "Platform SDK",
                 "kind": "module",
@@ -142,6 +154,18 @@
                 "description": "Reusable scene lifecycle, navigation, presentation, and automation capability.",
                 "entry": "features/scenes-core/README.md",
                 "contract": "features/scenes-core/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
+                "id": "feature-software-cursor",
+                "title": "Software cursor",
+                "kind": "module",
+                "path": "features/software-cursor",
+                "owner": "Input Feature Owner",
+                "description": "Software-rendered cursor capability for capture-safe input presentation.",
+                "entry": "features/software-cursor/README.md",
+                "contract": "features/software-cursor/feature.json",
                 "verifyDomain": "features",
                 "coverage": "subtree"
               }
@@ -180,6 +204,18 @@
         "description": "The local Studio surface and its canonical Windows launcher.",
         "entry": "ai_studio/studio_shell/start_site_windows.ps1",
         "contract": "ai_studio/studio_shell/README.md",
+        "verifyDomain": "shell",
+        "coverage": "subtree"
+      },
+      {
+        "id": "game-page",
+        "title": "Game page",
+        "kind": "module",
+        "path": "ai_studio/game_page",
+        "owner": "Shell Owner",
+        "description": "Read-only per-game Studio surface: overview, builds, packs, balance, canvases, captures.",
+        "entry": "ai_studio/game_page/README.md",
+        "contract": "ai_studio/game_page/README.md",
         "verifyDomain": "shell",
         "coverage": "subtree"
       },

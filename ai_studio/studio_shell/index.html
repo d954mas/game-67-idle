@@ -64,6 +64,16 @@
         </div>
       </header>
 
+      <section class="workspace-panel" aria-labelledby="gamesTitle">
+        <div class="panel-head">
+          <h3 id="gamesTitle">Games</h3>
+          <p>Open a game to see its builds, packs, balance, canvases, and captures.</p>
+        </div>
+        <div class="surface-list" id="gamesList">
+          <p class="games-empty">Loading games…</p>
+        </div>
+      </section>
+
       <section class="workspace-panel" aria-labelledby="toolsTitle">
         <div class="panel-head">
           <h3 id="toolsTitle">Surfaces</h3>
@@ -192,7 +202,42 @@
       }
     }
 
+    async function loadGames() {
+      const list = document.getElementById("gamesList");
+      if (!list) return;
+      try {
+        const payload = await readJson("/api/game-page/games");
+        list.textContent = "";
+        for (const game of payload.games || []) {
+          const row = document.createElement("article");
+          row.className = "surface-row";
+          const pill = document.createElement("span");
+          pill.className = "type-pill state";
+          pill.textContent = game.visibility === "private" ? "Private" : "Game";
+          const main = document.createElement("div");
+          main.className = "surface-main";
+          const h4 = document.createElement("h4");
+          h4.textContent = game.title;
+          const p = document.createElement("p");
+          p.textContent = game.root;
+          main.append(h4, p);
+          const link = document.createElement("a");
+          link.className = "open-link";
+          link.href = "/game/" + encodeURIComponent(game.id);
+          link.textContent = "Open";
+          row.append(pill, main, link);
+          list.append(row);
+        }
+        if (!list.childElementCount) {
+          list.innerHTML = '<p class="games-empty">No games registered.</p>';
+        }
+      } catch {
+        list.innerHTML = '<p class="games-empty">Games list offline.</p>';
+      }
+    }
+
     loadStatus();
+    loadGames();
   </script>
   <script src="/ai_studio/studio_shell/studio_shell.js"></script>
 </body>

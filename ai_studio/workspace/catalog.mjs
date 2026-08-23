@@ -14,7 +14,9 @@ export const GAME_IDENTITY_SCHEMA = "ai_studio.game.v1";
 export const TEMPLATE_IDENTITY_SCHEMA = "ai_studio.template.v1";
 export const GAME_DEPENDENCIES_SCHEMA = "ai_studio.game.dependencies.v3";
 
-const IDENTITY_KEYS = new Set(["schema", "id", "title", "storageNamespace", "aliases"]);
+// "version" is the game's own release version, read by game packaging tools;
+// the catalog tolerates it but does not interpret it.
+const IDENTITY_KEYS = new Set(["schema", "id", "title", "storageNamespace", "aliases", "version"]);
 const DEPENDENCY_KEYS = new Set(["schema", "engine", "features", "compatibility"]);
 const ENGINE_KEYS = new Set(["source", "version", "revision", "compatibility"]);
 const FEATURE_KEYS = new Set(["id", "source", "version", "compatibility"]);

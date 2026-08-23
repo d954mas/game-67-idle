@@ -53,18 +53,29 @@ function excludedByPrefix(rel, prefixes = []) {
   return prefixes.some((prefix) => posix === prefix || posix.startsWith(`${prefix}/`));
 }
 
+// Fail closed: a private game folder the catalog cannot resolve must block
+// validation instead of being silently skipped, or its files would leak into
+// the public unmapped report.
 function privateMountScanExclusions(repoRoot) {
+  const unusable = [];
+  let mounts;
   try {
-    return ["games/private", ...listGameMounts(repoRoot, { includePrivate: true, skipPreflight: true })
-      .filter((mount) => mount.visibility !== "public")
-      .map((mount) => normalizeMapPath(mount.root))
-      .filter(Boolean)];
+    mounts = listGameMounts(repoRoot, { includePrivate: true, skipPreflight: true, unusable, warnings: [] });
   } catch (error) {
     throw new Error(
       "architecture map private game discovery failed; validate games/private identity manifests before architecture validation",
       { cause: error },
     );
   }
+  if (unusable.some((entry) => normalizeMapPath(entry.root).startsWith("games/private/"))) {
+    throw new Error(
+      "architecture map private game discovery failed; validate games/private identity manifests before architecture validation",
+    );
+  }
+  return ["games/private", ...mounts
+    .filter((mount) => mount.visibility !== "public")
+    .map((mount) => normalizeMapPath(mount.root))
+    .filter(Boolean)];
 }
 
 function normalizeScanRoot(scanRoot) {

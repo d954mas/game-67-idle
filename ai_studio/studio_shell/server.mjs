@@ -15,6 +15,8 @@ import { createArchitectureMapApi } from "../architecture_map/api.mjs";
 import { createCanvasApi } from "../assets/canvas/api.mjs";
 import { createItemsViewerApi } from "../assets/items_viewer/api.mjs";
 import { createChatApi } from "../assets/canvas/chat/api.mjs";
+import { createGamePageApi } from "../game_page/api.mjs";
+import { resolveGameMount } from "../game_page/ops.mjs";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
 
 const repoGuess = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -30,6 +32,7 @@ const handleAssetViewerApi = createAssetViewerApi(root);
 const handleArchitectureMapApi = createArchitectureMapApi(root);
 const handleCanvasApi = createCanvasApi(root);
 const handleItemsViewerApi = createItemsViewerApi(root, { allowedHosts });
+const handleGamePageApi = createGamePageApi(root);
 // Chat owns its per-launch token internally. The server only supplies the exact loopback
 // hosts for this launch; chat owns the subscription-authenticated app-server transport.
 const handleChatApi = createChatApi(root, {
@@ -122,6 +125,19 @@ function staticPath(pathname) {
     return safeResolve(join(aiStudioRoot, "quality"), pathname.slice("/quality/".length));
   }
 
+  if (/^\/game\/[^/]+\/?$/.test(pathname)) {
+    return join(aiStudioRoot, "game_page", "site", "game.html");
+  }
+  // Read-only file access inside one game's root, e.g. design docs linked from
+  // the game page. The game id segment picks the mount; the rest is confined
+  // to that game's folder by safeResolve.
+  const gameFile = /^\/game-file\/([^/]+)\/(.+)$/.exec(pathname);
+  if (gameFile) {
+    const mount = resolveGameMount(root, gameFile[1]);
+    if (!mount) return null;
+    return safeResolve(join(root, mount.root), gameFile[2]);
+  }
+
   if (pathname.startsWith("/ai_studio/")) {
     return safeResolve(root, pathname.slice(1));
   }
@@ -194,6 +210,10 @@ const server = createServer((req, res) => {
     }
     if (url.pathname.startsWith("/api/items-viewer/")) {
       handleItemsViewerApi(req, res, url);
+      return;
+    }
+    if (url.pathname.startsWith("/api/game-page/")) {
+      handleGamePageApi(req, res, url);
       return;
     }
     if (url.pathname.startsWith("/api/chat/")) {

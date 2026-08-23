@@ -1,0 +1,18 @@
+.game-page .game-subtitle {
+  margin: 4px 0 0;
+  color: var(--muted, #9aa4b2);
+  font-size: 13px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.game-page .game-placeholder {
+  margin: 0;
+  color: var(--muted, #9aa4b2);
+  font-size: 13px;
+}
+
+.game-page .game-error {
+  color: #e07b7b;
+}
