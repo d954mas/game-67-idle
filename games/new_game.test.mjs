@@ -32,7 +32,7 @@ function buildFixtureRepo() {
     compatibility: "tested template seed",
   }));
   write(root, `${template}/content/items.lock.json`, JSON.stringify({
-    schema: "game_seed.items_lock", schema_version: 4,
+    schema: "game_seed.items_lock", schema_version: 5,
     receipt: { schema: "items.release_receipt.v2", field_ids: { active: ["game.weapon.level.attack"], reserved: [] } },
     def_ids: { "tmpl.shipped": { storage: "stack", level_count: 0 } }, removed: {},
   }));
