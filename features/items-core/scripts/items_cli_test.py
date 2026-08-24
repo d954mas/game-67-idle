@@ -131,6 +131,16 @@ class ItemsCliTests(unittest.TestCase):
         self.assertEqual(bounded.returncode, 1)
         self.assertEqual(json.loads(bounded.stderr)["error"]["code"], "cli.result_limit")
 
+    def test_tracks_returns_the_bounded_progression_model(self):
+        payload = self.payload("tracks")
+        self.assertEqual(payload["operation"], "tracks")
+        self.assertEqual([track["id"] for track in payload["result"]], ["hauler"])
+
+        invalid_bound = self.run_cli("tracks", "--max-tracks", "0")
+        self.assertEqual(invalid_bound.returncode, 1)
+        self.assertEqual(
+            json.loads(invalid_bound.stderr)["error"]["code"], "cli.max_tracks")
+
     def test_inspect_dependencies_and_source_reuse_snapshot_queries(self):
         inspected = self.payload(
             "inspect", "--item", "game.levelled_sword",

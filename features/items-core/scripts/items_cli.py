@@ -23,6 +23,7 @@ import items_snapshot as snapshot_api
 RESULT_SCHEMA = "items.cli.result.v1"
 ERROR_SCHEMA = "items.cli.error.v1"
 DEFAULT_MAX_ITEMS = 1_000
+DEFAULT_MAX_TRACKS = 1_000
 DEFAULT_MAX_FIELDS = 256
 DEFAULT_MAX_RELATED = 1_000
 MAX_PATCH_BYTES = 64 * 1024
@@ -258,6 +259,21 @@ def _list(snapshot: dict[str, Any], max_items: int) -> list[dict[str, Any]]:
         }
         result.append(summary)
     return result
+
+
+def _tracks(snapshot: dict[str, Any], max_tracks: int) -> list[dict[str, Any]]:
+    if max_tracks < 1 or max_tracks > DEFAULT_MAX_TRACKS:
+        raise CliFailure(
+            "cli.max_tracks",
+            f"max-tracks must be between 1 and {DEFAULT_MAX_TRACKS}",
+        )
+    tracks = snapshot["tracks"]
+    if len(tracks) > max_tracks:
+        raise CliFailure(
+            "cli.result_limit",
+            f"tracks exceeds {max_tracks} tracks; increase max-tracks",
+        )
+    return tracks
 
 
 def _dependencies(
@@ -726,6 +742,8 @@ def _parser() -> argparse.ArgumentParser:
 
     list_command = commands.add_parser("list")
     list_command.add_argument("--max-items", type=int, default=DEFAULT_MAX_ITEMS)
+    tracks_command = commands.add_parser("tracks")
+    tracks_command.add_argument("--max-tracks", type=int, default=DEFAULT_MAX_TRACKS)
 
     inspect = commands.add_parser("inspect")
     inspect.add_argument("--item", required=True)
@@ -816,6 +834,8 @@ def main(argv: list[str] | None = None) -> int:
         exit_code = 0
         if operation == "list":
             result = _list(snapshot, args.max_items)
+        elif operation == "tracks":
+            result = _tracks(snapshot, args.max_tracks)
         elif operation == "inspect":
             result = snapshot_api.query_snapshot(
                 snapshot, item_id=args.item, field=args.field,
