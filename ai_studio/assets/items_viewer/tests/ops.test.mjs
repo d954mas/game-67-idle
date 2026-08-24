@@ -128,6 +128,8 @@ test("live template view exposes Snapshot fields, receipt status, and no catalog
   assert.equal(view.meta.hasItems, true);
   assert.equal(view.namespace, "tmpl");
   assert.equal(view.items.length, 6);
+  assert.deepEqual(view.tracks.map((track) => track.id), ["hero"]);
+  assert.equal(view.tracks[0].levels.rows.length, 21);
   assert.equal(Object.hasOwn(view, "containers"), false);
   assert.equal(Object.hasOwn(view, "schema"), false);
   // The catalog's own declaration, not a count of the rows: "hero" is a declared
@@ -213,6 +215,7 @@ test("missing Items manifest is an honest empty state", async (t) => {
   const dir = tempDir(t);
   const view = await loadCatalogView(REPO_ROOT, dir, { id: "x:y", kind: "game", title: "Y", folder: "x/y" });
   assert.equal(view.meta.hasItems, false);
+  assert.deepEqual(view.tracks, []);
   assert.deepEqual(view.items, []);
   assert.equal(Object.hasOwn(view, "schema"), false);
   assert.match(view.validate.reason, /items\.lua\.json/);

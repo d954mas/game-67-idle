@@ -121,6 +121,13 @@ async function runList(root, projectRoot) {
   throw new Error(`items_cli.py list exited ${code} unexpectedly: ${stderr.trim()}`);
 }
 
+async function runTracks(root, projectRoot) {
+  const { code, stdout, stderr } = await runItemsCliRaw(root, projectRoot, ["tracks"]);
+  if (code === 0) return { ok: true, data: parseJsonOrThrow(stdout, "tracks").result };
+  if (code === 1) return { ok: false, source: "tracks", stderr: stderr.trim() };
+  throw new Error(`items_cli.py tracks exited ${code} unexpectedly: ${stderr.trim()}`);
+}
+
 async function runSchema(root, projectRoot) {
   const { code, stdout, stderr } = await runItemsCliRaw(root, projectRoot, ["schema"]);
   if (code === 0) return { ok: true, data: parseJsonOrThrow(stdout, "schema").result };
@@ -366,6 +373,7 @@ export async function loadCatalogView(root, folderAbs, meta) {
       meta: viewMeta,
       namespace: null,
       items: [],
+      tracks: [],
       kinds: { items: [], tracks: [] },
       lock: { status_by_id: {}, removed: {} },
       validate: { available: false, ok: null, errors: [], warnings: [], reason: "items.lua.json not found for this catalog" },
@@ -377,8 +385,9 @@ export async function loadCatalogView(root, folderAbs, meta) {
   }
 
   const lockPath = join(folderAbs, "content", "items.lock.json");
-  const [listResult, validateResult, schemaResult] = await Promise.all([
+  const [listResult, tracksResult, validateResult, schemaResult] = await Promise.all([
     runList(root, folderAbs),
+    runTracks(root, folderAbs),
     runValidate(root, folderAbs),
     runSchema(root, folderAbs),
   ]);
@@ -391,6 +400,7 @@ export async function loadCatalogView(root, folderAbs, meta) {
     meta: viewMeta,
     namespace: itemNamespace(items),
     items,
+    tracks: tracksResult.ok ? tracksResult.data : [],
     kinds: declaredKinds(schemaResult.ok ? schemaResult.data : null, items),
     lock: { status_by_id: buildStatusById(items, lockRaw), removed: lockRaw ? lockRaw.removed : {} },
     validate: validateResult,

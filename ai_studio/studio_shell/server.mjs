@@ -87,6 +87,7 @@ function itemsViewerRedirectLocation(pathname, search) {
 
 function staticPath(pathname) {
   if (pathname === "/" || pathname === "/index.html") return join(aiStudioRoot, "studio_shell", "index.html");
+  if (pathname === "/games" || pathname === "/games/") return join(aiStudioRoot, "studio_shell", "index.html");
   if (pathname === "/home.css") return join(aiStudioRoot, "studio_shell", "home.css");
   if (pathname === "/studio_shell.css") return join(aiStudioRoot, "studio_shell", "studio_shell.css");
   if (pathname === "/studio_shell.js") return join(aiStudioRoot, "studio_shell", "studio_shell.js");

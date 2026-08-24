@@ -5,6 +5,7 @@
   // and this script fills it, so navigation cannot drift between surfaces.
   const NAV_ITEMS = [
     { href: "/", icon: "S", iconClass: "", label: "Studio Home" },
+    { href: "/games/", icon: "G", iconClass: "games", label: "Games" },
     { href: "/architecture_map/", icon: "M", iconClass: "map", label: "Architecture Map" },
     { href: "/taskboard/", icon: "T", iconClass: "tasks", label: "Taskboard" },
     { href: "/asset_viewer/", icon: "A", iconClass: "assets", label: "Asset Viewer" },
@@ -21,9 +22,14 @@
     for (const item of NAV_ITEMS) {
       const link = document.createElement("a");
       link.className = "studio-nav-item";
-      const active = item.href === "/" ? location.pathname === "/" : location.pathname.startsWith(item.href);
+      const active = item.href === "/"
+        ? location.pathname === "/"
+        : item.href === "/games/"
+          ? location.pathname.startsWith("/games") || location.pathname.startsWith("/game/")
+          : location.pathname.startsWith(item.href);
       if (active) link.classList.add("is-active");
       link.href = item.href;
+      link.setAttribute("aria-label", item.label);
       const icon = document.createElement("span");
       icon.className = `studio-nav-icon ${item.iconClass}`.trim();
       icon.textContent = item.icon;

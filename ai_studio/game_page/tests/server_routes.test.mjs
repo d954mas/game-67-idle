@@ -63,6 +63,10 @@ test("game page routes serve the games list, page html, and confined game files"
     assert.equal(games.schema, "ai_studio.game_page.games.v1");
     assert.ok(Array.isArray(games.games) && games.games.length > 0, "repo must expose at least one game");
 
+    const pickerResponse = await fetch(`${base}/games/`);
+    assert.equal(pickerResponse.status, 200);
+    assert.match(await pickerResponse.text(), /id="gamesList"/);
+
     const gameId = games.games[0].id;
     const pageResponse = await fetch(`${base}/game/${encodeURIComponent(gameId)}`);
     assert.equal(pageResponse.status, 200);

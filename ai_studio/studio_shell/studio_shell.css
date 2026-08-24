@@ -172,6 +172,7 @@ body {
 }
 
 .studio-nav-icon.map { background: var(--studio-blue); color: #07111f; }
+.studio-nav-icon.games { background: #22c55e; color: #04140a; }
 .studio-nav-icon.tasks { background: var(--studio-teal); color: #061412; }
 .studio-nav-icon.assets { background: var(--studio-amber); color: #180e03; }
 .studio-nav-icon.prep { background: #14b8a6; color: #041413; }

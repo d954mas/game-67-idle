@@ -52,6 +52,7 @@
 
 .game-page .game-section-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   font-size: 13px;
@@ -198,12 +199,373 @@
   color: #9ecb8f;
 }
 
-.game-page .game-embed {
-  width: 100%;
-  height: 860px;
+.game-page .economy-body {
+  display: grid;
+  gap: 16px;
+}
+
+.game-page .economy-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-block: 1px solid var(--line, #2c3440);
+}
+
+.game-page .economy-metric {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border-right: 1px solid var(--line, #2c3440);
+}
+
+.game-page .economy-metric:last-child {
+  border-right: 0;
+}
+
+.game-page .economy-metric strong {
+  font-size: 18px;
+}
+
+.game-page .economy-metric span {
+  color: var(--muted, #9aa4b2);
+  font-size: 12px;
+}
+
+.game-page .economy-block {
+  min-width: 0;
+}
+
+.game-page .economy-block-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.game-page .economy-block-head h3 {
+  margin: 0;
+}
+
+.game-page .economy-block-head a {
+  color: #9bb4e9;
+  font-size: 12px;
+}
+
+.game-page .economy-search {
+  width: min(240px, 45%);
+  border: 1px solid var(--line, #2c3440);
+  border-radius: 6px;
+  padding: 6px 9px;
+  background: #151922;
+  color: inherit;
+  font: inherit;
+}
+
+.game-page .economy-profile {
+  margin-bottom: 12px;
+  padding: 14px;
   border: 1px solid var(--line, #2c3440);
   border-radius: 8px;
-  background: #10131a;
+  background: #151922;
+}
+
+.game-page .economy-profile h4 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.game-page .economy-profile > p {
+  margin: 3px 0 12px;
+  color: var(--muted, #9aa4b2);
+  font-size: 13px;
+}
+
+.game-page .economy-level-control {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #11151d;
+}
+
+.game-page .economy-level-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.game-page .economy-level-head label {
+  font-weight: 600;
+}
+
+.game-page .economy-level-readout {
+  color: #dfe6f2;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-page .economy-level-slider {
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  accent-color: #60a5fa;
+  cursor: pointer;
+}
+
+.game-page .economy-series-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.game-page .economy-series-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line, #2c3440);
+  border-radius: 6px;
+  background: #11151d;
+}
+
+.game-page .economy-series-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.game-page .economy-series-current {
+  color: #f3f6fb;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.game-page .economy-series-plot {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.game-page .economy-series-scale {
+  display: flex;
+  min-width: 54px;
+  height: 90px;
+  flex-direction: column;
+  justify-content: space-between;
+  color: var(--muted, #9aa4b2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.game-page .economy-series-plot svg {
+  display: block;
+  width: 100%;
+  height: 90px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.game-page .economy-chart-grid {
+  stroke: #2c3440;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.game-page .economy-series-cursor {
+  stroke: #dfe6f2;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.game-page .economy-series-marker {
+  stroke: #11151d;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.game-page .economy-mini-axis {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 2px 0 62px;
+  color: var(--muted, #9aa4b2);
+  font-size: 12px;
+}
+
+.game-page .economy-level-table-section {
+  margin-top: 16px;
+}
+
+.game-page .economy-level-table-section h5 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.game-page .economy-level-values {
+  max-height: 300px;
+}
+
+.game-page .economy-level-values .economy-table {
+  min-width: 560px;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-page .economy-level-values th,
+.game-page .economy-level-values td {
+  white-space: nowrap;
+}
+
+.game-page .economy-level-values th:first-child,
+.game-page .economy-level-values td:first-child {
+  position: sticky;
+  left: 0;
+}
+
+.game-page .economy-level-values th:first-child {
+  z-index: 3;
+}
+
+.game-page .economy-level-values td:first-child {
+  z-index: 2;
+  background: #151922;
+}
+
+.game-page .economy-level-values tr.is-selected td:first-child {
+  background: #1c2638;
+}
+
+.game-page .economy-level-button {
+  appearance: none;
+  min-width: 32px;
+  margin: -3px -5px;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #9bb4e9;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.game-page .economy-level-button:hover {
+  color: #dfe6f2;
+}
+
+.game-page .economy-level-button:focus-visible {
+  outline: 2px solid #7aa2f7;
+  outline-offset: 2px;
+}
+
+.game-page .economy-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--line, #2c3440);
+  border-radius: 6px;
+}
+
+.game-page .economy-tracks {
+  max-height: 520px;
+}
+
+.game-page .economy-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.game-page .economy-table th,
+.game-page .economy-table td {
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line, #2c3440);
+  text-align: left;
+  vertical-align: top;
+}
+
+.game-page .economy-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #1a1f29;
+  color: var(--muted, #9aa4b2);
+  font-weight: 600;
+}
+
+.game-page .economy-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.game-page .economy-table td:first-child {
+  color: #dfe6f2;
+  font-weight: 600;
+}
+
+.game-page .economy-table tr.is-selected td {
+  background: #1c2638;
+}
+
+.game-page .economy-track-button {
+  appearance: none;
+  margin: -3px -5px;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.game-page .economy-track-button:hover {
+  color: #9bb4e9;
+}
+
+.game-page .economy-track-button:focus-visible {
+  outline: 2px solid #7aa2f7;
+  outline-offset: 2px;
+}
+
+.game-page .economy-workbench {
+  justify-self: start;
+}
+
+@media (max-width: 720px) {
+  .game-page .economy-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .game-page .economy-metric:nth-child(2) {
+    border-right: 0;
+  }
+
+  .game-page .economy-metric:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--line, #2c3440);
+  }
+
+  .game-page .economy-block-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .game-page .economy-search {
+    width: 100%;
+  }
+
+  .game-page .economy-profile {
+    padding: 10px;
+  }
+
+  .game-page .economy-series-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .game-page .capture-thumb {
