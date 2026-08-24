@@ -1,5 +1,10 @@
 const POKI_SDK_URL = "https://game-cdn.poki.com/scripts/v2/poki-sdk.js";
 
+// An adblocker can leave PokiSDK.init() pending forever while it waits for ad
+// scripts; the game must never hang on that promise, so past this deadline the
+// adapter degrades to no-ops (Poki requires adblocked players to be playable).
+const POKI_INIT_TIMEOUT_MS = 10000;
+
 export function createPokiPlatformAdapter({ host }) {
   let sdkReady = null;
   let destroyed = false;
@@ -30,18 +35,35 @@ export function createPokiPlatformAdapter({ host }) {
     });
   }
 
-  function ready() {
+  // Resolves whether the SDK is usable. The ADAPTER stays operational either
+  // way: a missing/blocked/hung SDK only turns its calls into no-ops.
+  function sdkAvailable() {
     if (!sdkReady) {
-      sdkReady = loadScript()
+      const init = loadScript()
         .then((sdk) => (sdk && typeof sdk.init === "function" ? sdk.init().then(() => sdk) : null))
         .then(Boolean)
         .catch(() => false);
+      sdkReady = new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(false), POKI_INIT_TIMEOUT_MS);
+        init.then((ok) => {
+          clearTimeout(timer);
+          resolve(ok);
+        });
+      });
     }
     return sdkReady;
   }
 
+  // Host init gate: adapter readiness, not SDK readiness. Reporting the SDK
+  // outcome here would put platform_sdk into BOOT_FAILED under an adblocker
+  // and game_loading_finished would refuse forever — the loading overlay
+  // would never lift for adblocked players.
+  function ready() {
+    return sdkAvailable().then(() => true);
+  }
+
   async function withSdk(callback) {
-    const ok = await ready();
+    const ok = await sdkAvailable();
     const sdk = windowRef().PokiSDK;
     if (!ok || !sdk || destroyed) return null;
     return callback(sdk);
@@ -58,7 +80,7 @@ export function createPokiPlatformAdapter({ host }) {
     if (loadingProgressFlush) return loadingProgressFlush;
 
     loadingProgressFlush = (async () => {
-      const ok = await ready();
+      const ok = await sdkAvailable();
       const sdk = windowRef().PokiSDK;
       if (!ok || !sdk || destroyed) {
         lastSentLoadingProgress = lastLoadingProgress;
