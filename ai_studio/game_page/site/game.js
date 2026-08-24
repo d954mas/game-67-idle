@@ -188,6 +188,10 @@
     }).format(value);
   }
 
+  function economyExactInteger(value) {
+    return new Intl.NumberFormat("en").format(BigInt(value));
+  }
+
   function costEntries(value) {
     if (value?.__studio_kind === "cost") return [value];
     if (value?.__studio_kind === "costs") return value.entries || [];
@@ -508,13 +512,14 @@
     setLevel(Math.ceil(rows.length / 2));
   }
 
-  function renderEconomy(game, catalog, model) {
+  function renderEconomy(game, catalog, model, save) {
     const body = byId("economyBody");
     body.textContent = "";
     const items = catalog.items || [];
     const currencies = items.filter((item) => item.kind === "currency");
     const tracks = catalog.tracks || [];
     const itemsById = new Map(items.map((item) => [item.id, item]));
+    const balances = save ? model.currencyBalances(save) : new Map();
     const trackKinds = new Set(tracks.map((track) => track.kind));
     const validation = catalog.validate?.available
       ? (catalog.validate.ok ? "Valid" : `${catalog.validate.errors.length} errors`)
@@ -535,10 +540,13 @@
     saveLink.href = "#sectionState";
     saveLink.textContent = "Player holdings → Save";
     const currencySection = economySection("Currencies", saveLink);
-    const currenciesTable = economyTable(["Currency", "Start", "Cap", "HUD"]);
+    const currenciesTable = economyTable(["Currency", "Player balance", "Start", "Cap", "HUD"]);
     for (const currency of currencies) {
       const row = currenciesTable.body.insertRow();
       row.insertCell().textContent = currency.name || economyLabel(currency.id);
+      const balance = row.insertCell();
+      balance.className = "economy-player-balance";
+      balance.textContent = economyExactInteger(balances.get(currency.id) ?? "0");
       row.insertCell().textContent = economyNumber(currency.base_value || 0);
       row.insertCell().textContent = currency.currency?.cap
         ? economyNumber(currency.currency.cap)
@@ -606,16 +614,31 @@
   }
 
   async function loadEconomy(game) {
-    const response = await fetch(
-      `/api/items-viewer/catalog?id=${encodeURIComponent(game.storeId)}&include-private=1`,
-      { cache: "no-store" },
-    );
-    if (!response.ok) throw new Error(`economy request failed: ${response.status}`);
-    const [catalog, model] = await Promise.all([
-      response.json(),
+    const [response, savesResponse, model] = await Promise.all([
+      fetch(
+        `/api/items-viewer/catalog?id=${encodeURIComponent(game.storeId)}&include-private=1`,
+        { cache: "no-store" },
+      ),
+      fetch(`/api/game-page/saves?game=${encodeURIComponent(game.id)}`, { cache: "no-store" }),
       import("./economy_model.mjs"),
     ]);
-    renderEconomy(game, catalog, model);
+    if (!response.ok) throw new Error(`economy request failed: ${response.status}`);
+    if (!savesResponse.ok) throw new Error(`saves request failed: ${savesResponse.status}`);
+    const [catalog, saves] = await Promise.all([
+      response.json(),
+      savesResponse.json(),
+    ]);
+    const slot = (saves.slots || []).find((entry) => !entry.slot.endsWith(".bak"));
+    let save = null;
+    if (slot) {
+      const saveResponse = await fetch(
+        `/api/game-page/save?game=${encodeURIComponent(game.id)}&slot=${encodeURIComponent(slot.slot)}`,
+        { cache: "no-store" },
+      );
+      if (!saveResponse.ok) throw new Error(`save request failed: ${saveResponse.status}`);
+      save = await saveResponse.json();
+    }
+    renderEconomy(game, catalog, model, save?.content || null);
     if (location.hash === "#sectionEconomy") byId("sectionEconomy").scrollIntoView();
   }
   // #endregion

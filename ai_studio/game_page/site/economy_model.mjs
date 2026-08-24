@@ -11,6 +11,15 @@ function costEntries(value) {
   return [];
 }
 
+export function currencyBalances(save) {
+  const walletId = save.features.game.wallet_container_id;
+  const wallet = save.features.items.containers
+    .find((container) => container.container_id === walletId);
+  return new Map(wallet.entries
+    .filter((entry) => !entry.quarantined)
+    .map((entry) => [entry.def_id, entry.count]));
+}
+
 export function progressionSeries(track, items) {
   const rows = track.levels?.rows || [];
   const itemsById = new Map(items.map((item) => [item.id, item]));

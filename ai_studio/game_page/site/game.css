@@ -506,6 +506,12 @@
   font-weight: 600;
 }
 
+.game-page .economy-table .economy-player-balance {
+  color: #9ecb8f;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .game-page .economy-table tr.is-selected td {
   background: #1c2638;
 }

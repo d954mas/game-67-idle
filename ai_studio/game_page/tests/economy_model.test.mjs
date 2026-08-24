@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  currencyBalances,
   normalizeSeries,
   progressionRows,
   progressionSeries,
@@ -21,6 +22,28 @@ function coinCost(count) {
     item: { id: coins.id },
   };
 }
+
+test("currencyBalances reads exact counts from the active wallet", () => {
+  const save = {
+    features: {
+      game: { wallet_container_id: 2 },
+      items: {
+        containers: [
+          { container_id: 1, entries: [] },
+          {
+            container_id: 2,
+            entries: [
+              { def_id: "game.coins", count: "4100", quarantined: false },
+              { def_id: "game.bad", count: "9", quarantined: true },
+            ],
+          },
+        ],
+      },
+    },
+  };
+
+  assert.deepEqual([...currencyBalances(save)], [["game.coins", "4100"]]);
+});
 
 test("progressionSeries exposes costs and numeric effects across every level", () => {
   const track = {
