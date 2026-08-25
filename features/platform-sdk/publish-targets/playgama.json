@@ -15,6 +15,7 @@
   ],
   "optional_files": [
     "assets/music.ntpack",
+    "assets/theme_candy.ntpack",
     "loading-title.webp",
     "loading-tram.webp"
   ],
