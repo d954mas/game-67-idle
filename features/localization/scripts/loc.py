@@ -1471,18 +1471,29 @@ def cmd_fonts(args: argparse.Namespace) -> int:
     # anonymous "codepoint not in font" assert, which is the illegible failure
     # this command exists to replace (review 2026-08-06). U+20..U+7E is what
     # NT_CHARSET_ASCII covers.
-    wanted = list(range(0x20, 0x7F)) + corpus_codepoints(table)
+    ascii_wanted = list(range(0x20, 0x7F))
+    non_ascii_wanted = corpus_codepoints(table)
+    wanted = ascii_wanted + non_ascii_wanted
+    # A game may split the pack across faces (a display face without Cyrillic +
+    # an i18n fallback); the scope names the half of the pack that font bakes.
+    scoped = {"all": wanted, "ascii": ascii_wanted, "non-ascii": non_ascii_wanted}
     failures: list[str] = []
     for spec in args.font:
         label, sep, raw_path = spec.partition("=")
         if not sep:
             label, raw_path = Path(spec).name, spec
+        raw_path, sep, scope = raw_path.rpartition("=")
+        if not sep:
+            raw_path, scope = scope, "all"
+        if scope not in scoped:
+            failures.append(f"{label}: unknown charset scope '{scope}' (all, ascii, non-ascii)")
+            continue
         path = Path(raw_path).resolve()
         if not path.exists():
             failures.append(f"{label}: no such font file: {path}")
             continue
         covered = font_codepoints(path)
-        missing = [cp for cp in wanted if cp not in covered]
+        missing = [cp for cp in scoped[scope] if cp not in covered]
         if missing:
             shown = ", ".join(f"U+{cp:04X} '{chr(cp)}'" for cp in missing[:12])
             more = f" (+{len(missing) - 12} more)" if len(missing) > 12 else ""
@@ -1545,8 +1556,9 @@ def main(argv: list[str] | None = None) -> int:
         "--font",
         action="append",
         required=True,
-        metavar="LABEL=PATH",
-        help="A packed font, named as the game names it (e.g. body=assets/fonts/Rubik-Regular.ttf). Repeatable.",
+        metavar="LABEL=PATH[=SCOPE]",
+        help="A packed font, named as the game names it (e.g. body=assets/fonts/Rubik-Regular.ttf). "
+        "SCOPE limits the coverage this font must provide: all (default), ascii, non-ascii. Repeatable.",
     )
     fonts.set_defaults(func=cmd_fonts)
 
