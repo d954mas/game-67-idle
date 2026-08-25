@@ -24,6 +24,7 @@ typedef struct audio_voice_slot_t {
     uint32_t clip_generation;
     uint64_t serial;
     bool occupied;
+    bool loop;
 } audio_voice_slot_t;
 
 static audio_clip_slot_t s_clips[AUDIO_MAX_CLIPS];
@@ -209,11 +210,12 @@ audio_voice_t audio_play(audio_clip_t clip, audio_bus_t bus, float gain, bool lo
     if (voice_index == AUDIO_MAX_VOICES) {
         uint64_t oldest = UINT64_MAX;
         for (uint32_t i = 0; i < AUDIO_MAX_VOICES; ++i) {
-            if (s_voices[i].serial < oldest) {
+            if (!s_voices[i].loop && s_voices[i].serial < oldest) {
                 oldest = s_voices[i].serial;
                 voice_index = i;
             }
         }
+        if (voice_index == AUDIO_MAX_VOICES) return AUDIO_VOICE_INVALID;
         release_voice(voice_index);
     }
     uint32_t backend = audio_core_backend_voice_play(clip_entry->backend, (uint32_t)bus, finite_gain(gain), loop);
@@ -224,6 +226,7 @@ audio_voice_t audio_play(audio_clip_t clip, audio_bus_t bus, float gain, bool lo
     voice->clip_index = clip_index;
     voice->clip_generation = clip_entry->generation;
     voice->serial = ++s_voice_serial;
+    voice->loop = loop;
     return (audio_voice_t){handle_pack(voice_index, voice->generation)};
 }
 

@@ -206,6 +206,42 @@ void test_full_voice_pool_evicts_oldest_voice_without_growing(void) {
     }
 }
 
+void test_full_voice_pool_preserves_looping_voice_and_evicts_oldest_non_looping(void) {
+    audio_clip_t clip = make_ready_clip(ASSET_READY);
+    unlock_audio();
+    audio_voice_t music = audio_play(clip, AUDIO_BUS_MUSIC, 1.0f, true);
+    TEST_ASSERT_TRUE(audio_voice_is_playing(music));
+
+    audio_voice_t effects[AUDIO_MAX_VOICES - 1];
+    for (uint32_t i = 0; i < AUDIO_MAX_VOICES - 1; ++i) {
+        effects[i] = audio_play(clip, AUDIO_BUS_SFX, 1.0f, false);
+        TEST_ASSERT_TRUE(audio_voice_is_playing(effects[i]));
+    }
+
+    audio_voice_t newest = audio_play(clip, AUDIO_BUS_SFX, 1.0f, false);
+    TEST_ASSERT_TRUE(audio_voice_is_playing(newest));
+    TEST_ASSERT_TRUE(audio_voice_is_playing(music));
+    TEST_ASSERT_FALSE(audio_voice_is_playing(effects[0]));
+    TEST_ASSERT_EQUAL_UINT32(1, fake_audio_backend_voice_stop_count());
+}
+
+void test_full_voice_pool_rejects_new_voice_when_every_voice_is_looping(void) {
+    audio_clip_t clip = make_ready_clip(ASSET_READY);
+    unlock_audio();
+    audio_voice_t voices[AUDIO_MAX_VOICES];
+    for (uint32_t i = 0; i < AUDIO_MAX_VOICES; ++i) {
+        voices[i] = audio_play(clip, AUDIO_BUS_MUSIC, 1.0f, true);
+        TEST_ASSERT_TRUE(audio_voice_is_playing(voices[i]));
+    }
+
+    audio_voice_t rejected = audio_play(clip, AUDIO_BUS_SFX, 1.0f, false);
+    TEST_ASSERT_TRUE(voice_equal(AUDIO_VOICE_INVALID, rejected));
+    TEST_ASSERT_EQUAL_UINT32(0, fake_audio_backend_voice_stop_count());
+    for (uint32_t i = 0; i < AUDIO_MAX_VOICES; ++i) {
+        TEST_ASSERT_TRUE(audio_voice_is_playing(voices[i]));
+    }
+}
+
 void test_loading_failed_and_stale_clips_refuse_play(void) {
     unlock_audio();
     fake_audio_add_ready_blob(ASSET_READY);
@@ -270,6 +306,8 @@ int main(void) {
     RUN_TEST(test_update_reconciles_an_async_backend_unlock_rejection);
     RUN_TEST(test_finished_voice_is_cleaned_and_reused_with_new_generation);
     RUN_TEST(test_full_voice_pool_evicts_oldest_voice_without_growing);
+    RUN_TEST(test_full_voice_pool_preserves_looping_voice_and_evicts_oldest_non_looping);
+    RUN_TEST(test_full_voice_pool_rejects_new_voice_when_every_voice_is_looping);
     RUN_TEST(test_loading_failed_and_stale_clips_refuse_play);
     RUN_TEST(test_shutdown_stops_voices_and_destroys_all_backend_clips);
     RUN_TEST(test_handles_from_a_previous_runtime_lifecycle_never_alias);
