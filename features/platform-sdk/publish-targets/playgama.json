@@ -15,6 +15,11 @@
   ],
   "optional_files": [
     "assets/music.ntpack",
+    "assets/theme_candy.ntpack",
+    "assets/theme_dino.ntpack",
+    "assets/theme_toy.ntpack",
+    "assets/theme_robot.ntpack",
+    "assets/theme_alien.ntpack",
     "loading-title.webp",
     "loading-tram.webp"
   ],
