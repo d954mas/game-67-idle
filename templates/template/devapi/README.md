@@ -9,6 +9,21 @@ smoke tests, and scenario scripts here.
   plain window title. No automation surface — the lead plays this one by hand.
 - `build/devapi-debug` — the AGENT build: configure with `-DGAME_DEVAPI_ENABLED=ON`;
   window title gets an ` [AI]` suffix so both windows are distinguishable side by side.
+  **Configure it with Ninja and clang**, the way the gate build is configured:
+
+  ```
+  cmake -S . -B build/devapi-debug -G Ninja \
+    -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+    -DCMAKE_BUILD_TYPE=Debug -DGAME_DEVAPI_ENABLED=ON
+  ```
+
+  The Visual Studio generator cannot build this tree: MSVC rejects the engine's
+  `/Wextra` and dies on `nt_crc32`. The failure is quiet in the worst way — the
+  directory keeps whatever `game.exe` was linked last, so a bot run against it
+  measures a build nobody made. If a before/after pair comes back suspiciously
+  identical, check the binary's timestamp before trusting the numbers.
+  A directory already configured with the wrong generator has to be deleted and
+  configured again; CMake will not switch one in place.
 - The preset name encodes the split on purpose: engine libs land in
   `build/engine/<preset>`, so one shared preset would let the two builds
   overwrite each other's `nt_input` (with/without inject symbols).
