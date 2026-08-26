@@ -63,6 +63,7 @@
 #include "render/capture.h"
 #include "render/render_mesh.h"
 #include "ui/hud.h"
+#include "ui/focus_prompt_ui.h"
 #include "ui/ui_runtime.h"
 #include "world/world.h"
 #include "game_save.h"
@@ -421,6 +422,7 @@ static void frame(void) {
     devapi_update_frame();
     nt_input_poll();
     game_input_capture(&s_input);
+    focus_prompt_ui_update(&s_input);
     if (platform_lifecycle_on_input(s_input.any_gesture)) {
         game_audio_on_user_gesture();
     }

@@ -43,7 +43,13 @@ static bool focus_required(void) {
 #endif
 }
 
-void focus_prompt_ui_update(bool pointer_down) {
+void focus_prompt_ui_update(const game_input_frame_t *input) {
+    bool pointer_down = false;
+    if (input != NULL) {
+        for (int i = 0; i < GAME_INPUT_POINTER_CAPACITY; ++i) {
+            pointer_down = pointer_down || input->pointers[i].left_down;
+        }
+    }
     s_gate = focus_prompt_gate_next(s_gate, focus_required(), pointer_down);
 }
 

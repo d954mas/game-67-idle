@@ -40,6 +40,21 @@ test("template gates snapshotted movement through scene and focus eligibility", 
   );
 });
 
+test("template samples focus before scene updates even when root is paused", () => {
+  const source = read("templates/template/src/main.c");
+  const frame = sliceFromRequired(source, "game_input_capture(&s_input);");
+  assertOrdered(
+    frame,
+    "game_input_capture(&s_input);",
+    "focus_prompt_ui_update(&s_input);",
+  );
+  assertOrdered(
+    frame,
+    "focus_prompt_ui_update(&s_input);",
+    "game_runtime_update();",
+  );
+});
+
 test("template gates platform gameplay through focused scene eligibility", () => {
   const source = read("templates/template/src/main.c");
   assert.match(

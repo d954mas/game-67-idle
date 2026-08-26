@@ -56,13 +56,6 @@ void game_features_update(World *w, float dt) {
 
 void game_features_update_root(
     World *w, float dt, const game_input_frame_t *input) {
-    bool pointer_down = false;
-    if (input != NULL) {
-        for (int i = 0; i < GAME_INPUT_POINTER_CAPACITY; ++i) {
-            pointer_down = pointer_down || input->pointers[i].left_down;
-        }
-    }
-    focus_prompt_ui_update(pointer_down);
     if (game_scenes_can_process_game_input() && !focus_prompt_ui_visible()) {
         sys_move(w, dt, input);
     }
