@@ -83,7 +83,7 @@ void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t 
         .fs = s_sprite_fs,
         .textures = {{.name = "u_texture", .resource = s_atlas_tex}},
         .texture_count = 1,
-        .blend_mode = NT_BLEND_MODE_ALPHA,
+        .blend = nt_blend_alpha(),
         .depth_test = false,
         .depth_write = false,
         .cull_mode = NT_CULL_NONE,
