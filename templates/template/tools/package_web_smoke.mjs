@@ -324,9 +324,13 @@ const PAGE_STATE = `(() => {
   const overlayHidden = !overlay || getComputedStyle(overlay).display === "none";
   const compiled = globalThis.__AI_STUDIO_RUNTIME_BUILD_FINGERPRINT__ || null;
   const configured = globalThis.__PLATFORM_SDK_CONFIG__?.runtimeBuildFingerprint || null;
+  const focusContract = typeof globalThis.__gameCanvasHasFocus === "function"
+    && typeof globalThis.__gameHasFinePointer === "function"
+    && !document.getElementById("focus-hint");
   return {
     finalUrl: location.href,
-    ready: document.readyState === "complete" && overlayHidden && Boolean(compiled) && compiled === configured,
+    ready: document.readyState === "complete" && overlayHidden && Boolean(compiled)
+      && compiled === configured && focusContract,
     runtimeBuildFingerprint: configured,
     compiledRuntimeBuildFingerprint: compiled,
     canvas: { x: rect?.x || 0, y: rect?.y || 0, width: rect?.width || 0, height: rect?.height || 0 }

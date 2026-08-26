@@ -651,6 +651,15 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_platform_sdk PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_platform_sdk COMMAND test_platform_sdk)
 
+    add_executable(test_focus_prompt tests/test_focus_prompt.c)
+    target_link_libraries(test_focus_prompt PRIVATE unity)
+    target_include_directories(test_focus_prompt PRIVATE src)
+    target_compile_definitions(test_focus_prompt PRIVATE _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_focus_prompt)
+    set_target_properties(test_focus_prompt PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_focus_prompt COMMAND test_focus_prompt)
+
     add_executable(test_game_input
         tests/test_game_input.c
         src/game_input.c)

@@ -7,6 +7,7 @@
 #endif
 #include "features/progression/progression.h" /* И3a: progression_update() tick (auto/threshold level-ups) */
 #include "ui/demo_hud.h" /* И3b: demo composition (resource_panel over items/progression) */
+#include "ui/focus_prompt_ui.h"
 #include "ui/platform_sdk_debug.h"
 #include "ui/ui_runtime.h"
 #include "game_audio.h"
@@ -55,7 +56,14 @@ void game_features_update(World *w, float dt) {
 
 void game_features_update_root(
     World *w, float dt, const game_input_frame_t *input) {
-    if (game_scenes_can_process_game_input()) {
+    bool pointer_down = false;
+    if (input != NULL) {
+        for (int i = 0; i < GAME_INPUT_POINTER_CAPACITY; ++i) {
+            pointer_down = pointer_down || input->pointers[i].left_down;
+        }
+    }
+    focus_prompt_ui_update(pointer_down);
+    if (game_scenes_can_process_game_input() && !focus_prompt_ui_visible()) {
         sys_move(w, dt, input);
     }
     demo_hud_update(dt);
@@ -92,6 +100,7 @@ void game_features_draw_ui(
             platform_sdk_debug_draw_ui(ui_runtime_ctx());
         }
         game_scenes_build_input_gate(ui_runtime_ctx());
+        focus_prompt_ui_build(ui_runtime_ctx());
         ui_runtime_end();
     }
 }

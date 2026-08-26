@@ -15,6 +15,10 @@
   },
   "fallback": "en",
   "strings": {
+    "focus.click_to_continue": {
+      "en": "CLICK TO CONTINUE",
+      "ru": "КЛИКНИ, ЧТОБЫ ИГРАТЬ"
+    },
     "hud.title": { "en": "TEMPLATE", "ru": "ШАБЛОН" },
     "hud.hint": {
       "en": "empty scene - gear (top-right) opens settings",

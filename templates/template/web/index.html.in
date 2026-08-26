@@ -140,6 +140,22 @@
           }, 220);
         });
       });
+      focusCanvas();
+    };
+
+    // Presentation stays in the game UI; the shell only exposes browser state.
+    function focusCanvas() {
+      var canvas = document.getElementById('canvas');
+      if (canvas) canvas.focus({ preventScroll: true });
+    }
+
+    window.__gameCanvasHasFocus = function () {
+      var canvas = document.getElementById('canvas');
+      return !!canvas && document.hasFocus() && document.activeElement === canvas;
+    };
+
+    window.__gameHasFinePointer = function () {
+      return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     };
 
     window.__PLATFORM_SDK_CONFIG__ = Object.freeze({

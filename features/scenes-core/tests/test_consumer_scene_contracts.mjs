@@ -32,11 +32,11 @@ function sliceFromRequired(source, marker) {
   return source.slice(markerIndex);
 }
 
-test("template gates snapshotted movement through scene input eligibility", () => {
+test("template gates snapshotted movement through scene and focus eligibility", () => {
   const source = read("templates/template/src/features/game_features.c");
   assert.match(
     source,
-    /if\s*\(game_scenes_can_process_game_input\(\)\)\s*\{\s*sys_move\(w,\s*dt,\s*input\);\s*\}/s,
+    /if\s*\(game_scenes_can_process_game_input\(\)\s*&&\s*!focus_prompt_ui_visible\(\)\)\s*\{\s*sys_move\(w,\s*dt,\s*input\);\s*\}/s,
   );
 });
 

@@ -63,6 +63,7 @@ add_executable(${GAME_TARGET}
     src/game_log.c               # E4.B: built-in "log" event type (unconditional leaf)
     src/features/game_features.c # E1
     src/ui/hud.c
+    src/ui/focus_prompt_ui.c
     src/ui/platform_sdk_debug.c
     src/ui/ui_runtime.c
     src/ui/theme.c
