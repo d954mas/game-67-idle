@@ -663,6 +663,14 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_input COMMAND test_game_input)
 
+    add_executable(test_ui_scale_policy tests/test_ui_scale_policy.c)
+    target_include_directories(test_ui_scale_policy PRIVATE src)
+    target_compile_definitions(test_ui_scale_policy PRIVATE _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_ui_scale_policy)
+    set_target_properties(test_ui_scale_policy PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_ui_scale_policy COMMAND test_ui_scale_policy)
+
     add_executable(test_game_asset_paths
         tests/test_game_asset_paths.c
         src/game_asset_paths.c)
@@ -799,7 +807,7 @@ if(NOT EMSCRIPTEN)
         test_game_events_log_mirror test_items_api_core_only
         test_items_api
         test_items_fragment test_items_fragment_assert_off test_progression test_progression_curve
-        test_game_format test_loc_e2e test_platform_sdk test_game_input test_platform_lifecycle
+        test_game_format test_loc_e2e test_platform_sdk test_game_input test_ui_scale_policy test_platform_lifecycle
         test_platform_sdk_events test_template_composition
         test_scenes_core_catalog test_scenes_core_lifecycle
         test_scenes_core_navigation test_scenes_core_ordering

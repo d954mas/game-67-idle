@@ -19,13 +19,10 @@
 
 #include "generated/game_assets.h"
 #include "ui/theme.h"
+#include "ui/ui_scale_policy.h"
 
 #include <string.h>
 
-// UI reference resolution; EXPAND keeps widgets a constant logical size and grows
-// the canvas to fill the window (so the panel stays centered at any aspect).
-#define UI_REF_W 1280.0F
-#define UI_REF_H 720.0F
 // Headroom for the default 1024-element UI (Clay arena dominates); a game that
 // builds a denser UI can raise this. Static storage — cost is negligible.
 #define UI_ARENA_SIZE ((size_t)8U * 1024U * 1024U) // 8MB: fits max_elements=4096 + state_slots=1024 (jam-proven scale)
@@ -130,7 +127,13 @@ bool ui_runtime_begin(float dt, const game_input_frame_t *input) {
 
     const float fb_w = (float)(g_nt_window.fb_width > 0 ? g_nt_window.fb_width : 1280);
     const float fb_h = (float)(g_nt_window.fb_height > 0 ? g_nt_window.fb_height : 720);
-    nt_ui_scale_desc_t sd = {.ref_w = UI_REF_W, .ref_h = UI_REF_H, .mode = NT_UI_SCALE_EXPAND};
+    const ui_scale_reference_t ref =
+        ui_scale_reference_for_framebuffer(fb_w, fb_h, g_nt_window.dpr);
+    nt_ui_scale_desc_t sd = {
+        .ref_w = ref.width,
+        .ref_h = ref.height,
+        .mode = NT_UI_SCALE_EXPAND,
+    };
     s_scale = nt_ui_compute_scale(&sd, fb_w, fb_h);
 
     nt_frame_uniforms_t u;

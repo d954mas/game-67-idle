@@ -42,8 +42,8 @@ void theme_init(nt_resource_t atlas) {
     s.states[NT_UI_SLIDER_IDLE].thumb = nt_atlas_ref(atlas, ASSET_ATLAS_REGION_UI_SLIDER_THUMB.value);
     g_theme.slider = s;
 
-    g_theme.title = (nt_ui_label_style_t){.font_id = 0, .font_size = 30.0F, .color = {255.0F, 255.0F, 255.0F, 255.0F}};
-    g_theme.label = (nt_ui_label_style_t){.font_id = 0, .font_size = 20.0F, .color = {236.0F, 240.0F, 248.0F, 255.0F}};
-    g_theme.button_label = (nt_ui_label_style_t){.font_id = 0, .font_size = 20.0F, .color = {22.0F, 34.0F, 64.0F, 255.0F}};
-    g_theme.hint = (nt_ui_label_style_t){.font_id = 0, .font_size = 16.0F, .color = {206.0F, 212.0F, 224.0F, 255.0F}};
+    g_theme.title = (nt_ui_label_style_t){.font_id = 0, .font_size = 30.0F, .color = {255.0F, 255.0F, 255.0F, 255.0F}, .weight = 0.03F};
+    g_theme.label = (nt_ui_label_style_t){.font_id = 0, .font_size = 20.0F, .color = {236.0F, 240.0F, 248.0F, 255.0F}, .weight = 0.03F};
+    g_theme.button_label = (nt_ui_label_style_t){.font_id = 0, .font_size = 20.0F, .color = {22.0F, 34.0F, 64.0F, 255.0F}, .weight = 0.03F};
+    g_theme.hint = (nt_ui_label_style_t){.font_id = 0, .font_size = 16.0F, .color = {206.0F, 212.0F, 224.0F, 255.0F}, .weight = 0.03F};
 }
