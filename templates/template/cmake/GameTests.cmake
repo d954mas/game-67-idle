@@ -122,6 +122,19 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_audio_resource PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_audio_resource COMMAND test_audio_resource)
 
+    set(TEMPLATE_AUDIO_CUE_MP3 "${CMAKE_BINARY_DIR}/tests/fixtures/ui_click.mp3")
+    add_executable(write_audio_test_fixture
+        tests/fixtures/audio/write_ui_click_mp3.c)
+    target_compile_definitions(write_audio_test_fixture PRIVATE _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(write_audio_test_fixture)
+    add_custom_command(
+        OUTPUT "${TEMPLATE_AUDIO_CUE_MP3}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/tests/fixtures"
+        COMMAND $<TARGET_FILE:write_audio_test_fixture> "${TEMPLATE_AUDIO_CUE_MP3}"
+        DEPENDS write_audio_test_fixture tests/fixtures/audio/write_ui_click_mp3.c
+        VERBATIM)
+    add_custom_target(template_audio_test_fixture DEPENDS "${TEMPLATE_AUDIO_CUE_MP3}")
+
     add_executable(test_audio_backend_native
         "${AUDIO_CORE_TESTS}/test_audio_backend_native.c"
         "${AUDIO_CORE_SRC}/audio_backend_miniaudio.c"
@@ -131,7 +144,10 @@ if(NOT EMSCRIPTEN)
     target_compile_definitions(test_audio_backend_native PRIVATE
         AUDIO_MINIAUDIO_TEST_NO_DEVICE=1
         AUDIO_TEST_MP3_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/music/demo_jingle.mp3"
+        AUDIO_TEST_CUE_WAV_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/sfx/ui_click.wav"
+        AUDIO_TEST_CUE_MP3_PATH="${TEMPLATE_AUDIO_CUE_MP3}"
         _CRT_SECURE_NO_WARNINGS)
+    add_dependencies(test_audio_backend_native template_audio_test_fixture)
     audio_core_link_native_systems(test_audio_backend_native)
     nt_set_warning_flags(test_audio_backend_native)
     set_target_properties(test_audio_backend_native PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
