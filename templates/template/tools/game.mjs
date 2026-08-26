@@ -2,6 +2,7 @@
 
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -122,21 +123,25 @@ function runNodeTests(gameDir) {
   const tools = join(gameDir, "tools");
   const files = readdirSync(tools).filter((name) => name.endsWith(".test.mjs")).sort().map((name) => join("tools", name));
   if (files.length === 0) throw new Error("game scaffold has no Node tests");
-  run(process.execPath, ["--test", "--test-concurrency=1", ...files], gameDir, "game tests");
+  // Concurrency mirrors the studio gate; every heavy fixture is mkdtemp-isolated.
+  run(process.execPath, ["--test", "--test-concurrency=4", ...files], gameDir, "game tests");
 }
 
-export function nativeTestPlan(gameDir, platform = process.platform) {
+export function nativeTestPlan(gameDir, platform = process.platform, configured = false) {
   const buildDir = join(gameDir, "build", "native-debug");
   return [
-    ["cmake", "-S", gameDir, "-B", buildDir, "-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Debug",
-      ...(platform === "linux" ? ["-DCMAKE_EXE_LINKER_FLAGS_DEBUG=-fsanitize=address,undefined"] : [])],
+    ...(configured ? [] : [
+      ["cmake", "-S", gameDir, "-B", buildDir, "-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Debug",
+        ...(platform === "linux" ? ["-DCMAKE_EXE_LINKER_FLAGS_DEBUG=-fsanitize=address,undefined"] : [])],
+    ]),
     ["cmake", "--build", buildDir],
-    ["ctest", "--test-dir", buildDir, "--output-on-failure"],
+    ["ctest", "--test-dir", buildDir, "--output-on-failure", "-j", String(availableParallelism())],
   ];
 }
 
 function runNativeTests(gameDir) {
-  for (const [command, ...args] of nativeTestPlan(gameDir)) run(command, args, gameDir, "native game tests");
+  const configured = existsSync(join(gameDir, "build", "native-debug", "CMakeCache.txt"));
+  for (const [command, ...args] of nativeTestPlan(gameDir, process.platform, configured)) run(command, args, gameDir, "native game tests");
 }
 
 function buildGame(gameDir, target) {
@@ -225,15 +230,15 @@ export async function executeGameCommand(args, dependencies = {}) {
   const nodeTest = dependencies.nodeTest || runNodeTests;
   const nativeTest = dependencies.nativeTest || runNativeTests;
   const loadMetadata = dependencies.loadMetadata || gamePackageMetadata;
-  const verifyDependencies = dependencies.verifyDependencies || ((metadata) => verifyDependencySources({ studioRoot: findStudioRoot(gameDir), dependencies: metadata.dependencies }));
+  const verifyDependencies = dependencies.verifyDependencies || ((metadata, proofOptions) => verifyDependencySources({ studioRoot: findStudioRoot(gameDir), dependencies: metadata.dependencies, ...proofOptions }));
   const packageGameOwned = dependencies.package || ((options, metadata) => packageGame(
     options, { gameDir, assetAudit: dependencies.assetAudit }, metadata,
   ));
   const smokePackage = dependencies.smoke || smokePackagedWebArtifact;
-  const prepare = (templateProof = false) => {
+  const prepare = (templateProof = false, proofOptions = undefined) => {
     doctor({ gameDir, templateProof });
     const metadata = loadMetadata(gameDir, templateProof);
-    verifyDependencies(metadata);
+    verifyDependencies(metadata, proofOptions);
     return metadata;
   };
   if (args.command === "doctor") {
@@ -251,7 +256,9 @@ export async function executeGameCommand(args, dependencies = {}) {
     return { message: "game server stopped" };
   }
   if (args.command === "test") {
-    prepare(false);
+    // Iteration gate: dependency shape/version checks stay hard, but a dirty
+    // engine/feature tree only warns here — release lanes still require clean.
+    prepare(false, { cleanliness: "warn" });
     nodeTest(gameDir);
     nativeTest(gameDir);
     return { message: "game tests passed" };

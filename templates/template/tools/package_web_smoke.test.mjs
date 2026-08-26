@@ -252,10 +252,12 @@ test("smoke reopens the ZIP and serves only its entries", async (t) => {
 
   const invalidBrowser = join(root, "not-a-browser.txt");
   writeFileSync(invalidBrowser, "not executable");
-  const profileNames = () => readdirSync(tmpdir()).filter((name) => name.startsWith("ai-studio-package-smoke-")).sort();
+  // Scoped profile root: enumerating the global tmpdir races concurrent smoke runs.
+  const profileRoot = mkdtempSync(join(root, "smoke-profiles-"));
+  const profileNames = () => readdirSync(profileRoot).filter((name) => name.startsWith("ai-studio-package-smoke-")).sort();
   const beforeProfiles = profileNames();
   await assert.rejects(
-    smokePackagedWebArtifact({ zipPath, expectedTarget: "itch", chromePath: invalidBrowser, timeoutMs: 1000 }),
+    smokePackagedWebArtifact({ zipPath, expectedTarget: "itch", chromePath: invalidBrowser, timeoutMs: 1000, profileRoot }),
     /spawn|EACCES|EFTYPE|UNKNOWN/i,
   );
   assert.deepEqual(profileNames(), beforeProfiles);

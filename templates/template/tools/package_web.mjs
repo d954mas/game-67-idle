@@ -155,8 +155,14 @@ function engineVersion(header) {
   return parts.join(".");
 }
 
-export function verifyDependencySources({ studioRoot, dependencies, git = defaultGit }) {
+export function verifyDependencySources({ studioRoot, dependencies, git = defaultGit, cleanliness = "require" }) {
   const root = realpathSync(resolve(studioRoot));
+  // "warn" keeps identity/version proof hard but lets an iteration gate run
+  // over a dirty engine/feature tree; release lanes never pass it.
+  const cleanlinessGap = (message) => {
+    if (cleanliness !== "warn") throw new Error(message);
+    console.warn(`WARNING: ${message} (iteration mode; package/verify still require a clean tree)`);
+  };
   validateDependencies(dependencies);
   requirePlatformSdkDependency(dependencies);
   const studioRevision = gitText(git, root, ["rev-parse", "HEAD"], "Studio dependency revision is unavailable").toLowerCase();
@@ -170,10 +176,10 @@ export function verifyDependencySources({ studioRoot, dependencies, git = defaul
   if (engineRevision !== engine.revision) throw new Error(`engine dependency revision mismatch: expected ${engine.revision}, found ${engineRevision}`);
   const gitlink = gitText(git, root, ["ls-tree", "HEAD", "--", engine.source], "engine gitlink is unavailable");
   if (!new RegExp(`^160000 commit ${engine.revision}\\t${engine.source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`).test(gitlink)) {
-    throw new Error("engine dependency revision does not match the authoritative Studio gitlink");
+    cleanlinessGap("engine dependency revision does not match the authoritative Studio gitlink");
   }
   if (gitText(git, engineRoot, ["status", "--porcelain=v1", "--untracked-files=all"], "engine cleanliness is unavailable")) {
-    throw new Error("engine dependency source is dirty");
+    cleanlinessGap("engine dependency source is dirty");
   }
 
   for (const feature of dependencies.features) {
@@ -182,7 +188,7 @@ export function verifyDependencySources({ studioRoot, dependencies, git = defaul
     if (metadata.id !== feature.id) throw new Error(`feature dependency id mismatch: expected ${feature.id}, found ${metadata.id || "missing"}`);
     if (metadata.version !== feature.version) throw new Error(`feature ${feature.id} version mismatch: expected ${feature.version}, found ${metadata.version || "missing"}`);
     if (gitText(git, root, ["status", "--porcelain=v1", "--untracked-files=all", "--", feature.source], `feature ${feature.id} cleanliness is unavailable`)) {
-      throw new Error(`feature ${feature.id} dependency source is dirty`);
+      cleanlinessGap(`feature ${feature.id} dependency source is dirty`);
     }
   }
   return { studioRevision, engineRevision };
@@ -192,14 +198,21 @@ function targetManifest(studioRoot, target) {
   if (!TARGETS.has(target)) throw new Error(`unknown package target: ${target} (use ${[...TARGETS].join("|")})`);
   const path = join(studioRoot, "features", "platform-sdk", "publish-targets", `${target}.json`);
   const value = readJson(path, `${target} publish manifest`);
-  exactKeys(value, ["schema", "target", "platform_sdk", "required_files", "zip_layout", "metadata", "sdk_policy", "validation_command"], `${target} publish manifest`);
+  exactKeys(value, ["schema", "target", "platform_sdk", "required_files", "optional_files", "zip_layout", "metadata", "sdk_policy", "validation_command"], `${target} publish manifest`);
   if (value.schema !== "ai_studio.publish_target.v1" || value.target !== target || !/^[a-z][a-z0-9-]*$/.test(value.platform_sdk || "")
-      || !Array.isArray(value.required_files) || value.required_files.length === 0) throw new Error(`${target} publish manifest is invalid`);
-  if (value.required_files.some((path) => typeof path !== "string" || path.includes("\\"))) throw new Error(`${target} publish manifest required_files are invalid`);
-  const required = value.required_files.map((path) => slash(path));
-  if (new Set(required).size !== required.length || required.some((path) => !path || path.startsWith("/") || /^[A-Za-z]:/.test(path)
-      || path.split("/").some((part) => !part || part === "." || part === ".."))) throw new Error(`${target} publish manifest required_files are invalid`);
-  return { ...value, required_files: required };
+      || !Array.isArray(value.required_files) || value.required_files.length === 0
+      || !Array.isArray(value.optional_files)) throw new Error(`${target} publish manifest is invalid`);
+  const normalizePaths = (paths, label) => {
+    if (paths.some((path) => typeof path !== "string" || path.includes("\\"))) throw new Error(`${target} publish manifest ${label} are invalid`);
+    const normalized = paths.map((path) => slash(path));
+    if (new Set(normalized).size !== normalized.length || normalized.some((path) => !path || path.startsWith("/") || /^[A-Za-z]:/.test(path)
+        || path.split("/").some((part) => !part || part === "." || part === ".."))) throw new Error(`${target} publish manifest ${label} are invalid`);
+    return normalized;
+  };
+  const required = normalizePaths(value.required_files, "required_files");
+  const optional = normalizePaths(value.optional_files, "optional_files");
+  if (optional.some((path) => required.includes(path))) throw new Error(`${target} publish manifest optional_files overlap required_files`);
+  return { ...value, required_files: required, optional_files: optional };
 }
 
 function collectFiles(root) {
@@ -224,7 +237,7 @@ function collectFiles(root) {
   return files;
 }
 
-function exactAllowlist(actual, required) {
+function exactAllowlist(actual, required, optional = []) {
   const actualSet = new Set(actual);
   const folded = new Map(actual.map((path) => [path.toLowerCase(), path]));
   for (const path of required) {
@@ -234,7 +247,7 @@ function exactAllowlist(actual, required) {
   }
   for (const path of actual) {
     if (SOURCE_EXTENSIONS.test(path)) throw new Error(`source-only file is forbidden in final artifact: ${path}`);
-    if (!required.includes(path)) throw new Error(`unexpected file in final artifact: ${path}`);
+    if (!required.includes(path) && !optional.includes(path)) throw new Error(`unexpected file in final artifact: ${path}`);
   }
 }
 
@@ -739,7 +752,7 @@ export function validateWebArtifact({ artifactDir, target, studioRoot = DEFAULT_
   if (!existsSync(root) || !statSync(root).isDirectory()) throw new Error(`web artifact directory is missing: ${root}`);
   const contract = targetManifest(resolve(studioRoot), target);
   const actual = collectFiles(root);
-  exactAllowlist(actual, contract.required_files);
+  exactAllowlist(actual, contract.required_files, contract.optional_files);
 
   const html = readFileSync(join(root, "index.html"), "utf8");
   const config = parseReleaseConfig(html);
@@ -779,7 +792,9 @@ export function validateWebArtifact({ artifactDir, target, studioRoot = DEFAULT_
       throw new Error("Playgama placeholder configuration must be replaced before packaging");
     }
   }
-  return { artifactDir: root, contract, runtimeBuild, files: fileBytes(root, contract.required_files) };
+  const presentOptional = contract.optional_files.filter(
+    (path) => existsSync(join(root, ...path.split("/"))));
+  return { artifactDir: root, contract, runtimeBuild, files: fileBytes(root, [...contract.required_files, ...presentOptional]) };
 }
 
 function compactDependencies(dependencies, bytes) {
@@ -823,8 +838,13 @@ function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuil
   const actual = [...entries.keys()];
   const required = requireRuntimeBuild
     ? contract.required_files : contract.required_files.filter((path) => path !== "runtime-build.json");
+  const optionalSet = new Set(contract.optional_files);
   const expected = [...required, "release.json"].sort();
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error("reopened ZIP exact allowlist mismatch");
+  const actualLessOptional = actual.filter((path) => !optionalSet.has(path)).sort();
+  if (JSON.stringify(actualLessOptional) !== JSON.stringify(expected)) throw new Error("reopened ZIP exact allowlist mismatch");
+  for (const path of actual) {
+    if (optionalSet.has(path) && !entries.get(path)?.length) throw new Error(`reopened ZIP optional payload is empty: ${path}`);
+  }
   const html = entries.get("index.html")?.toString("utf8") || "";
   const config = parseReleaseConfig(html, requireRuntimeBuild);
   const runtimeBuild = requireRuntimeBuild

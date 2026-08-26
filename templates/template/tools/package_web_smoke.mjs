@@ -454,7 +454,7 @@ export function analyzePngFrame(bytes) {
   return { width, height, minLuma, maxLuma, variance: Math.max(0, sumSquares / pixels - mean * mean) };
 }
 
-async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chromePath, timeoutMs = 60000 }) {
+async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chromePath, timeoutMs = 60000, profileRoot = tmpdir() }) {
   const deadline = Date.now() + timeoutMs;
   const browser = findSupportedBrowser({ chromePath });
   let profileDir = "";
@@ -465,7 +465,7 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
   let operationError = null;
   const issues = [];
   try {
-    profileDir = mkdtempSync(join(tmpdir(), "ai-studio-package-smoke-"));
+    profileDir = mkdtempSync(join(profileRoot, "ai-studio-package-smoke-"));
     child = spawn(browser, [
       "--headless=new",
       "--remote-debugging-pipe",
@@ -576,6 +576,7 @@ export async function smokePackagedWebArtifact({
   chromePath,
   timeoutMs = 60000,
   probe = defaultBrowserProbe,
+  profileRoot = tmpdir(),
 }) {
   const packagePath = resolve(zipPath);
   const entries = readStoreZip(readFileSync(packagePath));
@@ -594,6 +595,7 @@ export async function smokePackagedWebArtifact({
       expectedRuntimeBuildFingerprint: release.runtimeBuildFingerprint,
       chromePath,
       timeoutMs,
+      profileRoot,
     });
     const failures = assessPackagedWebObservation(observation, release.runtimeBuildFingerprint);
     if (failures.length > 0) throw new Error(`packaged web smoke failed: ${failures.join("; ")}`);

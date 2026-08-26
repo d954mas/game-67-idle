@@ -5,3 +5,4 @@ release/artifacts/
 .ai_studio/evidence/*
 !.ai_studio/evidence/.gitignore
 !.ai_studio/evidence/README.md
+*.o

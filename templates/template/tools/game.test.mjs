@@ -88,6 +88,10 @@ test("native game test plan configures, builds, and runs CTest without a clean r
   assert.equal(windows[0].some((arg) => arg.includes("sanitize")), false);
   assert.deepEqual(windows[1].slice(0, 2), ["cmake", "--build"]);
   assert.ok(windows[2].includes("--output-on-failure"));
+  assert.ok(windows[2].includes("-j"));
+  const configured = nativeTestPlan(gameDir, "win32", true);
+  assert.deepEqual(configured.map((command) => command[0]), ["cmake", "ctest"]);
+  assert.deepEqual(configured[0].slice(0, 2), ["cmake", "--build"]);
   assert.ok(nativeTestPlan("/repo/games/example", "linux")[0].includes("-DCMAKE_EXE_LINKER_FLAGS_DEBUG=-fsanitize=address,undefined"));
 });
 
@@ -121,14 +125,14 @@ test("game test and plain verify require dependency proof plus Node and native C
       gameDir: "/repo/games/example",
       doctor: () => ({ gameId: "example" }),
       loadMetadata: () => ({ dependencies: {}, proof: "game" }),
-      verifyDependencies: () => calls.push("dependencies"),
+      verifyDependencies: (metadata, opts) => calls.push(opts?.cleanliness === "warn" ? "dependencies:warn" : "dependencies"),
       nodeTest: () => calls.push("node"),
       nativeTest: () => calls.push("native"),
       package: () => { calls.push("package"); return { zipPath: "example.zip" }; },
       smoke: () => calls.push("smoke"),
     });
     assert.deepEqual(calls, command === "test"
-      ? ["dependencies", "node", "native"]
+      ? ["dependencies:warn", "node", "native"]
       : ["dependencies", "node", "native", "package", "smoke"]);
   }
 });
@@ -156,7 +160,10 @@ test("copied game CLI executes doctor and final package from a real games/privat
   const gameDir = join(root, "games", "private", "copied-game");
   cpSync(join(gameModuleRoot, "tools"), join(gameDir, "tools"), { recursive: true });
   cpSync(join(gameModuleRoot, ".github"), join(gameDir, ".github"), { recursive: true });
-  cpSync(join(studioRoot, "ai_studio", "assets"), join(root, "ai_studio", "assets"), { recursive: true });
+  // The package audit loads only assets/manifests + its licenses import;
+  // copying the whole 6 GB assets tree here is what made this test cost ~34s.
+  cpSync(join(studioRoot, "ai_studio", "assets", "manifests"), join(root, "ai_studio", "assets", "manifests"), { recursive: true });
+  cpSync(join(studioRoot, "ai_studio", "assets", "licenses"), join(root, "ai_studio", "assets", "licenses"), { recursive: true });
   mkdirSync(join(gameDir, "release"), { recursive: true });
   cpSync(join(gameModuleRoot, "release", "README.md"), join(gameDir, "release", "README.md"));
   cpSync(join(studioRoot, "features", "platform-sdk"), join(root, "features", "platform-sdk"), { recursive: true });
