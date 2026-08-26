@@ -1059,8 +1059,7 @@ void game_save_init(void) {
     }
 }
 
-static game_save_transition_result_t new_game_except(
-    const char *skip_id, char *error, int error_cap, bool may_wait) {
+static void begin_new_game_except(const char *skip_id) {
     free_orphans();
     reset_all_except(skip_id);
     on_new_game_all_except(skip_id);
@@ -1073,6 +1072,11 @@ static game_save_transition_result_t new_game_except(
         s_autosave_paused = false;
     }
     game_save_mark_dirty();
+}
+
+static game_save_transition_result_t new_game_except(
+    const char *skip_id, char *error, int error_cap, bool may_wait) {
+    begin_new_game_except(skip_id);
     /* Held: the write would land on the file we could not move. Say so rather
        than reporting a save that did not happen. */
     const bool persisted =
@@ -1093,6 +1097,10 @@ game_save_transition_result_t game_save_new_game(char *error, int error_cap) {
     /* Direct API: a synchronous moment with no frame to lose -- the corrupt-save
        path at startup and the dev endpoints. */
     return new_game_except(NULL, error, error_cap, true);
+}
+
+void game_save_begin_new_game_transition(void) {
+    begin_new_game_except(NULL);
 }
 
 /* Records the request instead of performing it: the caller is a feature's
