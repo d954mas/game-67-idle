@@ -209,6 +209,8 @@ class StateCodegenTests(unittest.TestCase):
         self.assertIn("int parent_index;", text)
         self.assertIn("compare_containers", text)
         self.assertIn("compare_containers_entries", text)
+        self.assertIn("ItemsV2State *next = (ItemsV2State *)malloc(sizeof *next);", text)
+        self.assertNotIn("ItemsV2State next", text)
         self.assertIn('cJSON_AddItemToObject(json, "entries"', text)
         self.assertIn('\\"reserved\\":[\\"owned\\"]', text)
         self.assertIn('\\"reserved\\":[\\"container_id\\",\\"entry_key\\"]', text)

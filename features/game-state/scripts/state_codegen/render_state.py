@@ -1231,13 +1231,14 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
                 lines.append(f'    const cJSON *{parent} = gsj_object_item(json, "{group}");')
             source = parent if group else "json"
             if field["type"] in SCALAR_TYPES:
-                lines.extend(self.render_read_scalar(field, source, "(&next)", key))
+                scalar_lines = self.render_read_scalar(field, source, "next", key)
+                lines.extend(line.replace("return false;", "free(next); return false;") for line in scalar_lines)
             elif is_list_type(field["type"]) or is_map_type(field["type"]) or object_list_type_name(field["type"]):
                 item_var = c_ident(f"{field['path']}_json")
                 lines.extend([
                     f'    const cJSON *{item_var} = gsj_object_item({source}, "{key}");',
-                    f"    if ({item_var} && !set_{c_ident(field['path'])}_from_json(&next, {item_var}, error, error_cap)) {{",
-                    "        return false;",
+                    f"    if ({item_var} && !set_{c_ident(field['path'])}_from_json(next, {item_var}, error, error_cap)) {{",
+                    "        free(next); return false;",
                     "    }",
                 ])
         return "\n".join(lines)
@@ -1427,23 +1428,28 @@ bool {self.ns.fn}set_path_json({self.ns.type} *state, const char *path, const cJ
 
 bool {self.ns.fn}patch_json({self.ns.type} *state, const cJSON *values, char *error, int error_cap) {{
     if (!cJSON_IsObject(values)) {{ gsj_set_error(error, error_cap, "values must be an object"); return false; }}
-    {self.ns.type} next = *state;
+    {self.ns.type} *next = ({self.ns.type} *)malloc(sizeof *next);
+    if (!next) {{ gsj_set_error(error, error_cap, "failed to allocate staged state"); return false; }}
+    *next = *state;
     const cJSON *item = NULL;
     cJSON_ArrayForEach(item, values) {{
-        if (!item->string || !{self.ns.fn}set_path_json(&next, item->string, item, error, error_cap)) {{ return false; }}
+        if (!item->string || !{self.ns.fn}set_path_json(next, item->string, item, error, error_cap)) {{ free(next); return false; }}
     }}
-    if (!{self.ns.fn}validate(&next, error, error_cap)) {{ return false; }}
-    *state = next;
+    if (!{self.ns.fn}validate(next, error, error_cap)) {{ free(next); return false; }}
+    *state = *next;
+    free(next);
     return true;
 }}
 
 bool {self.ns.fn}from_json({self.ns.type} *state, const cJSON *json, char *error, int error_cap) {{
     if (!cJSON_IsObject(json)) {{ gsj_set_error(error, error_cap, "state json must be object"); return false; }}
-    {self.ns.type} next;
-    {self.ns.fn}init_defaults(&next);
+    {self.ns.type} *next = ({self.ns.type} *)malloc(sizeof *next);
+    if (!next) {{ gsj_set_error(error, error_cap, "failed to allocate staged state"); return false; }}
+    {self.ns.fn}init_defaults(next);
 {self.render_from_json(schema)}
-    if (!{self.ns.fn}validate(&next, error, error_cap)) {{ return false; }}
-    *state = next;
+    if (!{self.ns.fn}validate(next, error, error_cap)) {{ free(next); return false; }}
+    *state = *next;
+    free(next);
     return true;
 }}
 

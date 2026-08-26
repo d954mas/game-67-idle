@@ -311,33 +311,38 @@ bool mini_state_set_path_json(MiniState *state, const char *path, const cJSON *v
 
 bool mini_state_patch_json(MiniState *state, const cJSON *values, char *error, int error_cap) {
     if (!cJSON_IsObject(values)) { gsj_set_error(error, error_cap, "values must be an object"); return false; }
-    MiniState next = *state;
+    MiniState *next = (MiniState *)malloc(sizeof *next);
+    if (!next) { gsj_set_error(error, error_cap, "failed to allocate staged state"); return false; }
+    *next = *state;
     const cJSON *item = NULL;
     cJSON_ArrayForEach(item, values) {
-        if (!item->string || !mini_state_set_path_json(&next, item->string, item, error, error_cap)) { return false; }
+        if (!item->string || !mini_state_set_path_json(next, item->string, item, error, error_cap)) { free(next); return false; }
     }
-    if (!mini_state_validate(&next, error, error_cap)) { return false; }
-    *state = next;
+    if (!mini_state_validate(next, error, error_cap)) { free(next); return false; }
+    *state = *next;
+    free(next);
     return true;
 }
 
 bool mini_state_from_json(MiniState *state, const cJSON *json, char *error, int error_cap) {
     if (!cJSON_IsObject(json)) { gsj_set_error(error, error_cap, "state json must be object"); return false; }
-    MiniState next;
-    mini_state_init_defaults(&next);
-    if (!gsj_read_enum(json, "mode_index", k_mode_names, MINI_STATE_MODE_COUNT, &(&next)->mode_index, error, error_cap)) { return false; }
-    if (!gsj_read_string(json, "label", (&next)->label, sizeof((&next)->label), error, error_cap)) { return false; }
-    if (!gsj_read_i64(json, "total", MINI_STATE_TOTAL_MIN, MINI_STATE_TOTAL_MAX, &(&next)->total, error, error_cap)) { return false; }
+    MiniState *next = (MiniState *)malloc(sizeof *next);
+    if (!next) { gsj_set_error(error, error_cap, "failed to allocate staged state"); return false; }
+    mini_state_init_defaults(next);
+    if (!gsj_read_enum(json, "mode_index", k_mode_names, MINI_STATE_MODE_COUNT, &next->mode_index, error, error_cap)) { free(next); return false; }
+    if (!gsj_read_string(json, "label", next->label, sizeof(next->label), error, error_cap)) { free(next); return false; }
+    if (!gsj_read_i64(json, "total", MINI_STATE_TOTAL_MIN, MINI_STATE_TOTAL_MAX, &next->total, error, error_cap)) { free(next); return false; }
     const cJSON *cells_json = gsj_object_item(json, "cells");
-    if (cells_json && !set_cells_from_json(&next, cells_json, error, error_cap)) {
-        return false;
+    if (cells_json && !set_cells_from_json(next, cells_json, error, error_cap)) {
+        free(next); return false;
     }
     const cJSON *order_json = gsj_object_item(json, "order");
-    if (order_json && !set_order_from_json(&next, order_json, error, error_cap)) {
-        return false;
+    if (order_json && !set_order_from_json(next, order_json, error, error_cap)) {
+        free(next); return false;
     }
-    if (!mini_state_validate(&next, error, error_cap)) { return false; }
-    *state = next;
+    if (!mini_state_validate(next, error, error_cap)) { free(next); return false; }
+    *state = *next;
+    free(next);
     return true;
 }
 

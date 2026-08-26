@@ -204,32 +204,37 @@ bool game_state_set_path_json(GameState *state, const char *path, const cJSON *v
 
 bool game_state_patch_json(GameState *state, const cJSON *values, char *error, int error_cap) {
     if (!cJSON_IsObject(values)) { gsj_set_error(error, error_cap, "values must be an object"); return false; }
-    GameState next = *state;
+    GameState *next = (GameState *)malloc(sizeof *next);
+    if (!next) { gsj_set_error(error, error_cap, "failed to allocate staged state"); return false; }
+    *next = *state;
     const cJSON *item = NULL;
     cJSON_ArrayForEach(item, values) {
-        if (!item->string || !game_state_set_path_json(&next, item->string, item, error, error_cap)) { return false; }
+        if (!item->string || !game_state_set_path_json(next, item->string, item, error, error_cap)) { free(next); return false; }
     }
-    if (!game_state_validate(&next, error, error_cap)) { return false; }
-    *state = next;
+    if (!game_state_validate(next, error, error_cap)) { free(next); return false; }
+    *state = *next;
+    free(next);
     return true;
 }
 
 bool game_state_from_json(GameState *state, const cJSON *json, char *error, int error_cap) {
     if (!cJSON_IsObject(json)) { gsj_set_error(error, error_cap, "state json must be object"); return false; }
-    GameState next;
-    game_state_init_defaults(&next);
-    if (!gsj_read_enum(json, "shape_index", k_shape_names, GAME_STATE_SHAPE_COUNT, &(&next)->shape_index, error, error_cap)) { return false; }
-    if (!gsj_read_enum(json, "render_mode_index", k_render_mode_names, GAME_STATE_RENDER_MODE_COUNT, &(&next)->render_mode_index, error, error_cap)) { return false; }
-    if (!gsj_read_float_range(json, "camera_distance", GAME_STATE_CAMERA_DISTANCE_MIN, GAME_STATE_CAMERA_DISTANCE_MAX, &(&next)->camera_distance, error, error_cap)) { return false; }
-    if (!gsj_read_int_range(json, "test_ui_clicks", GAME_STATE_TEST_UI_CLICKS_MIN, GAME_STATE_TEST_UI_CLICKS_MAX, &(&next)->test_ui_clicks, error, error_cap)) { return false; }
-    if (!gsj_read_string(json, "test_label_text", (&next)->test_label_text, sizeof((&next)->test_label_text), error, error_cap)) { return false; }
-    if (!gsj_read_string(json, "test_button_text", (&next)->test_button_text, sizeof((&next)->test_button_text), error, error_cap)) { return false; }
+    GameState *next = (GameState *)malloc(sizeof *next);
+    if (!next) { gsj_set_error(error, error_cap, "failed to allocate staged state"); return false; }
+    game_state_init_defaults(next);
+    if (!gsj_read_enum(json, "shape_index", k_shape_names, GAME_STATE_SHAPE_COUNT, &next->shape_index, error, error_cap)) { free(next); return false; }
+    if (!gsj_read_enum(json, "render_mode_index", k_render_mode_names, GAME_STATE_RENDER_MODE_COUNT, &next->render_mode_index, error, error_cap)) { free(next); return false; }
+    if (!gsj_read_float_range(json, "camera_distance", GAME_STATE_CAMERA_DISTANCE_MIN, GAME_STATE_CAMERA_DISTANCE_MAX, &next->camera_distance, error, error_cap)) { free(next); return false; }
+    if (!gsj_read_int_range(json, "test_ui_clicks", GAME_STATE_TEST_UI_CLICKS_MIN, GAME_STATE_TEST_UI_CLICKS_MAX, &next->test_ui_clicks, error, error_cap)) { free(next); return false; }
+    if (!gsj_read_string(json, "test_label_text", next->test_label_text, sizeof(next->test_label_text), error, error_cap)) { free(next); return false; }
+    if (!gsj_read_string(json, "test_button_text", next->test_button_text, sizeof(next->test_button_text), error, error_cap)) { free(next); return false; }
     const cJSON *tutorial = gsj_object_item(json, "tutorial");
-    if (!gsj_read_bool(tutorial, "done", &(&next)->tutorial_done, error, error_cap)) { return false; }
-    if (!gsj_read_u32(json, "inventory_container_id", GAME_STATE_INVENTORY_CONTAINER_ID_MIN, GAME_STATE_INVENTORY_CONTAINER_ID_MAX, &(&next)->inventory_container_id, error, error_cap)) { return false; }
-    if (!gsj_read_u32(json, "wallet_container_id", GAME_STATE_WALLET_CONTAINER_ID_MIN, GAME_STATE_WALLET_CONTAINER_ID_MAX, &(&next)->wallet_container_id, error, error_cap)) { return false; }
-    if (!game_state_validate(&next, error, error_cap)) { return false; }
-    *state = next;
+    if (!gsj_read_bool(tutorial, "done", &next->tutorial_done, error, error_cap)) { free(next); return false; }
+    if (!gsj_read_u32(json, "inventory_container_id", GAME_STATE_INVENTORY_CONTAINER_ID_MIN, GAME_STATE_INVENTORY_CONTAINER_ID_MAX, &next->inventory_container_id, error, error_cap)) { free(next); return false; }
+    if (!gsj_read_u32(json, "wallet_container_id", GAME_STATE_WALLET_CONTAINER_ID_MIN, GAME_STATE_WALLET_CONTAINER_ID_MAX, &next->wallet_container_id, error, error_cap)) { free(next); return false; }
+    if (!game_state_validate(next, error, error_cap)) { free(next); return false; }
+    *state = *next;
+    free(next);
     return true;
 }
 
