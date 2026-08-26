@@ -15,11 +15,13 @@
   ],
   "optional_files": [
     "assets/music.ntpack",
+    "assets/cosmetics.ntpack",
     "assets/theme_candy.ntpack",
     "assets/theme_dino.ntpack",
     "assets/theme_toy.ntpack",
     "assets/theme_robot.ntpack",
     "assets/theme_alien.ntpack",
+    "assets/ui/loading_slime.png",
     "loading-title.webp",
     "loading-tram.webp"
   ],
