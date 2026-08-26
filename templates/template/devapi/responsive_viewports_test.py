@@ -53,6 +53,10 @@ class ResponsiveViewportsTest(unittest.TestCase):
         self.assertTrue(viewports)
         self.assertTrue(all(viewport.orientation == "landscape" for viewport in viewports))
 
+    def test_default_viewports_include_small_16x9_landscape(self):
+        actual = {(viewport.name, viewport.width, viewport.height) for viewport in rv.DEFAULT_VIEWPORTS}
+        self.assertIn(("small_16x9_landscape", 480, 270), actual)
+
     def test_make_contact_sheet_writes_combined_png(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

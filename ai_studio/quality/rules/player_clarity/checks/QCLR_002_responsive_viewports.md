@@ -32,6 +32,7 @@ If virtual controls affect layout or safe space, also use
 
 - 4:3 layout is usable in landscape and portrait;
 - 16:9 layout is usable in landscape and portrait;
+- small 16:9 landscape is usable at 480x270 when landscape is supported;
 - tall-phone 19.5:9 layout is usable in landscape and portrait;
 - important HUD, text, state, feedback, or danger are not cropped or pushed off-screen;
 - player-facing actions are not hidden, overlapped, or misplaced.
@@ -44,8 +45,9 @@ area, or global responsive behavior changed.
 ## Evidence
 
 Screenshot or runtime UI bounds for the affected supported targets. Full-matrix
-evidence means 4:3, 16:9, and tall-phone 19.5:9 in landscape and portrait,
-unless the project explicitly does not support one of them.
+evidence means 4:3, 16:9, small 480x270 landscape, and tall-phone 19.5:9 in
+landscape and portrait, unless the project explicitly does not support one of
+them.
 
 ## Not Enough
 

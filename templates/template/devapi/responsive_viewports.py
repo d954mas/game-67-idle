@@ -48,6 +48,7 @@ DEFAULT_VIEWPORTS = [
     ViewportCase("4x3_landscape", 640, 480),
     ViewportCase("4x3_portrait", 480, 640),
     ViewportCase("16x9_landscape", 640, 360),
+    ViewportCase("small_16x9_landscape", 480, 270),
     ViewportCase("16x9_portrait", 360, 640),
     ViewportCase("phone_19_5x9_portrait", 390, 844),
     ViewportCase("phone_19_5x9_landscape", 844, 390),

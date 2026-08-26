@@ -33,6 +33,11 @@ If control layout depends on viewport or orientation, also use
 - controls are large enough to understand and tap;
 - controls do not cover important gameplay, HUD, state, feedback, or danger;
 - control labels/icons match the visible action;
+- first-use guidance shows one input modality at a time: keycaps for keyboard,
+  a pointer or mouse for mouse input, and a finger or joystick for touch;
+- observed input takes precedence over viewport density when choosing the cue;
+- a drag or joystick hint demonstrates direction or motion instead of looking
+  like a static decoration;
 - portrait and landscape control layouts are usable when both are supported;
 - the player can understand how to control the game on touch devices.
 
