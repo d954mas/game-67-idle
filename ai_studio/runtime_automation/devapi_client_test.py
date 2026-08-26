@@ -218,6 +218,12 @@ class EngineCapturePayloadTest(unittest.TestCase):
         client = FakeDevApiClient()
         self.assertEqual(client.click_ui("settings/gear", observe="game.state"), {"state": "ok"})
 
+    def test_key_tap_releases_the_key_it_pressed(self):
+        client = FakeDevApiClient()
+        client.key_tap("space", hold_frames=3)
+        params = [params for (_, method, params) in client.calls if method == "input.key"]
+        self.assertEqual(params, [{"key": "space", "hold": 3}])
+
     def test_player_gated_disables_then_reenables_player_input(self):
         client = FakeDevApiClient()
         with client.player_gated():

@@ -319,7 +319,10 @@ class DevApiClient:
         return methods
 
     def key_tap(self, key: str, hold_frames: int = 1, wait_frames: int = 1, observe: str | None = "frame.current") -> Any:
-        return self.step("input.key", {"key": key, "mode": "tap", "hold_frames": hold_frames}, wait_frames=wait_frames, observe=observe)
+        # A tap is "hold": the engine releases the key that many frames later. Omitting it
+        # schedules a bare key-down that nothing ever releases, so the key stays latched for
+        # the rest of the session and every later step runs with it held.
+        return self.step("input.key", {"key": key, "hold": hold_frames}, wait_frames=wait_frames, observe=observe)
 
     def click_ui(self, element_id: str, button: str = "left", wait_frames: int = 1, observe: str | None = "frame.current") -> Any:
         return self.step("ui.click", {"id": element_id, "button": button}, wait_frames=wait_frames, observe=observe)
