@@ -108,6 +108,25 @@ Owner-local repository license documents are declared in inventory
 commit it is also a normal tracked path. Evidence paths must remain inside the
 repository and exist. Local paths never belong in `license_url`.
 
+## Game release inputs
+
+Games declare binary release inputs in `assets/release_inputs.json` with schema
+`ai_studio.game_release_assets.v1`. `inputs` remains the required pack-builder
+list: it must agree exactly with explicit binary literals consumed by
+`src/build_packs.c`.
+
+`standalone_inputs` is an optional, additive list for tracked binary assets
+that ship outside an `.ntpack`, such as a web loading image. It uses the same
+unique safe `assets/...` path rules, metadata, license, provenance, hash, byte
+size, regular-file, root-confinement, and Git-tracking checks as `inputs`.
+Standalone paths cannot overlap `inputs` and are included in stale-metadata
+checks. They must also be a literal source of a bounded local web staging call
+in `cmake/GamePlatform.cmake`: either `configure_file(... COPYONLY)` or
+`${CMAKE_COMMAND} -E copy_if_different`. A declaration without this consumer
+fails the release audit.
+
+Omitting `standalone_inputs` preserves the existing v1 contract and audit API.
+
 ## Current Use
 
 `../catalog/` automatically uses Pack Manifest for folder-backed sources

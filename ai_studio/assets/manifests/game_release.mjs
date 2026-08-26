@@ -30,6 +30,60 @@ export function packedAssetPaths(gameDir) {
   return [...inputs].sort();
 }
 
+export function standaloneAssetPaths(gameDir) {
+  const contractPath = join(resolve(gameDir), "assets", "release_inputs.json");
+  if (!existsSync(contractPath)) throw new Error("game release asset input contract is missing");
+  const contract = JSON.parse(readFileSync(contractPath, "utf8").replace(/^\uFEFF/, ""));
+  if (contract.schema !== "ai_studio.game_release_assets.v1" || !Array.isArray(contract.inputs)) {
+    throw new Error("game release asset input contract is invalid");
+  }
+  if (contract.standalone_inputs === undefined) return [];
+  if (!Array.isArray(contract.standalone_inputs)) {
+    throw new Error("game release standalone inputs must be an array");
+  }
+  const inputs = contract.standalone_inputs.map(slash);
+  if (new Set(inputs).size !== inputs.length || inputs.some((path) => (
+    !isSafeAssetPath(path) || !PACKED_EXTENSIONS.test(path)
+  ))) {
+    throw new Error("game release standalone inputs must be unique safe binary asset paths");
+  }
+  const packed = new Set(contract.inputs.map(slash));
+  if (inputs.some((path) => packed.has(path))) {
+    throw new Error("game release standalone inputs must not overlap packed inputs");
+  }
+  return [...inputs].sort();
+}
+
+function stagedAssetPath(token, variables) {
+  const variable = String(token).trim().match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/);
+  const value = slash(variable ? variables.get(variable[1]) || "" : token);
+  const match = value.match(/(?:^|\/)(assets\/[A-Za-z0-9_./-]+\.(?:glb|mp3|png|wav))$/i);
+  return match && isSafeAssetPath(match[1]) ? match[1] : "";
+}
+
+export function webStagedAssetPaths(gameDir) {
+  const sourcePath = join(resolve(gameDir), "cmake", "GamePlatform.cmake");
+  if (!existsSync(sourcePath)) throw new Error("game web staging source is missing");
+  const source = readFileSync(sourcePath, "utf8").replace(/#.*$/gm, "");
+  const variables = new Map();
+  for (const match of source.matchAll(/^\s*set\(\s*([A-Za-z_][A-Za-z0-9_]*)\s+"([^"]+)"\s*\)\s*$/gm)) {
+    const path = stagedAssetPath(match[2], variables);
+    if (path) variables.set(match[1], path);
+  }
+  const staged = new Set();
+  const calls = [
+    /configure_file\s*\(\s*"([^"]+)"\s+"[^"]+"\s+COPYONLY\s*\)/gi,
+    /COMMAND\s+\$\{CMAKE_COMMAND\}\s+-E\s+copy_if_different\s+"([^"]+)"\s+"[^"]+"/gi,
+  ];
+  for (const expression of calls) {
+    for (const match of source.matchAll(expression)) {
+      const path = stagedAssetPath(match[1], variables);
+      if (path) staged.add(path);
+    }
+  }
+  return [...staged].sort();
+}
+
 export function builderAssetPaths(gameDir) {
   const root = resolve(gameDir);
   const sourcePath = join(root, "src", "build_packs.c");
@@ -123,6 +177,10 @@ export function auditGameReleaseAssets(gameDir, options = {}) {
   const root = resolve(gameDir);
   const realRoot = realpathSync(root);
   const packed = options.packedPaths || packedAssetPaths(root);
+  const standalone = options.standalonePaths || standaloneAssetPaths(root);
+  const staged = standalone.length === 0
+    ? []
+    : (options.stagedPaths || webStagedAssetPaths(root));
   const builderInputs = options.builderPaths
     ? [...new Set(options.builderPaths.map(slash))].sort()
     : builderAssetPaths(root);
@@ -135,15 +193,20 @@ export function auditGameReleaseAssets(gameDir, options = {}) {
     issues.push("assets/release_inputs.json: release input contract is not tracked");
   }
   const packedSet = new Set(packed);
+  const releaseSet = new Set([...packed, ...standalone]);
   const builderSet = new Set(builderInputs);
+  const stagedSet = new Set(staged);
   for (const path of builderInputs) {
     if (!packedSet.has(path)) issues.push(`${path}: pack builder input is missing from release input contract`);
   }
   for (const path of packed) {
     if (!builderSet.has(path)) issues.push(`${path}: release input is not consumed by the pack builder`);
   }
+  for (const path of standalone) {
+    if (!stagedSet.has(path)) issues.push(`${path}: standalone input is not staged by the local web build`);
+  }
   for (const path of duplicates) issues.push(`${path}: duplicate asset metadata`);
-  for (const path of packed) {
+  for (const path of releaseSet) {
     const record = records.get(path);
     const absolute = join(root, ...path.split("/"));
     // Restricted inputs are gitignored by design (paid/non-redistributable
@@ -206,7 +269,7 @@ export function auditGameReleaseAssets(gameDir, options = {}) {
     }
   }
   for (const path of records.keys()) {
-    if (!packedSet.has(path)) issues.push(`${path}: stale asset metadata is not a release input`);
+    if (!releaseSet.has(path)) issues.push(`${path}: stale asset metadata is not a release input`);
   }
   return { ok: issues.length === 0, packed: packed.length, issues };
 }

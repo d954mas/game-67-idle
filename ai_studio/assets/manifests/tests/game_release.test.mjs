@@ -5,7 +5,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { auditGameReleaseAssets, builderAssetPaths, packedAssetPaths } from "../game_release.mjs";
+import {
+  auditGameReleaseAssets,
+  builderAssetPaths,
+  packedAssetPaths,
+  standaloneAssetPaths,
+  webStagedAssetPaths,
+} from "../game_release.mjs";
 
 function write(path, value) {
   mkdirSync(dirname(path), { recursive: true });
@@ -49,6 +55,40 @@ function fixture(t, overrides = {}) {
       "assets/packs/fixture/assets.jsonl",
       "src/build_packs.c",
       path,
+    ],
+  };
+}
+
+function standaloneFixture(t) {
+  const item = fixture(t);
+  const standalonePath = "assets/ui/loading_slime.png";
+  const standaloneBytes = Buffer.from("loading-slime-bytes");
+  write(join(item.root, "assets", "release_inputs.json"), JSON.stringify({
+    schema: "ai_studio.game_release_assets.v1",
+    inputs: [item.path],
+    standalone_inputs: [standalonePath],
+  }) + "\n");
+  write(join(item.root, ...standalonePath.split("/")), standaloneBytes);
+  const dollar = "$";
+  write(join(item.root, "cmake", "GamePlatform.cmake"),
+    "set(GAME_LOADING_SLIME_SOURCE \"" + dollar + "{CMAKE_CURRENT_SOURCE_DIR}/assets/ui/loading_slime.png\")\n"
+    + "set(GAME_LOADING_SLIME_OUTPUT \"" + dollar + "{GAME_OUTPUT_DIR}/assets/ui/loading_slime.png\")\n"
+    + "configure_file(\"" + dollar + "{GAME_LOADING_SLIME_SOURCE}\" \"" + dollar + "{GAME_LOADING_SLIME_OUTPUT}\" COPYONLY)\n");
+  write(join(item.root, "assets", "packs", "loading", "assets.jsonl"), JSON.stringify({
+    ...item.record,
+    asset_id: "fixture__loading_slime__cc0-1-0",
+    source_resource: "ui/loading_slime.png",
+    sha256: createHash("sha256").update(standaloneBytes).digest("hex"),
+    bytes: standaloneBytes.length,
+  }) + "\n");
+  return {
+    ...item,
+    standalonePath,
+    tracked: [
+      ...item.tracked,
+      standalonePath,
+      "assets/packs/loading/assets.jsonl",
+      "cmake/GamePlatform.cmake",
     ],
   };
 }
@@ -123,6 +163,46 @@ test("game release asset audit requires exact agreement with pack builder inputs
     auditGameReleaseAssets(contractOnly.root, { trackedPaths: contractOnly.tracked }).issues.join("\n"),
     /release input is not consumed by the pack builder/,
   );
+});
+
+test("game release asset audit accepts standalone inputs only when CMake stages them", (t) => {
+  const item = standaloneFixture(t);
+  assert.deepEqual(standaloneAssetPaths(item.root), [item.standalonePath]);
+  assert.deepEqual(webStagedAssetPaths(item.root), [item.standalonePath]);
+  assert.deepEqual(auditGameReleaseAssets(item.root, { trackedPaths: item.tracked }), {
+    ok: true, packed: 1, issues: [],
+  });
+
+  write(join(item.root, "cmake", "GamePlatform.cmake"), "# no staged binary assets\n");
+  assert.match(
+    auditGameReleaseAssets(item.root, { trackedPaths: item.tracked }).issues.join("\n"),
+    /standalone input is not staged by the local web build/,
+  );
+});
+
+test("standalone release inputs reject unsafe duplicate and packed paths", (t) => {
+  const item = fixture(t);
+  const contractPath = join(item.root, "assets", "release_inputs.json");
+  write(contractPath, JSON.stringify({
+    schema: "ai_studio.game_release_assets.v1",
+    inputs: [item.path],
+    standalone_inputs: ["assets/../escape.png"],
+  }));
+  assert.throws(() => standaloneAssetPaths(item.root), /unique safe binary asset paths/);
+
+  write(contractPath, JSON.stringify({
+    schema: "ai_studio.game_release_assets.v1",
+    inputs: [item.path],
+    standalone_inputs: ["assets/ui/other.png", "assets/ui/other.png"],
+  }));
+  assert.throws(() => standaloneAssetPaths(item.root), /unique safe binary asset paths/);
+
+  write(contractPath, JSON.stringify({
+    schema: "ai_studio.game_release_assets.v1",
+    inputs: [item.path],
+    standalone_inputs: [item.path],
+  }));
+  assert.throws(() => standaloneAssetPaths(item.root), /must not overlap packed inputs/);
 });
 
 test("game release asset audit fails on missing records stale hashes and release-forbidden licenses", (t) => {
