@@ -517,15 +517,22 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
     const navigation = await client.call("Page.navigate", { url: localUrl(url, "package page URL").href }, deadline);
     if (navigation.errorText) addIssue(issues, "resource.load", navigation.errorText);
     let state = null;
-    while (Date.now() < deadline) {
-      const evaluated = await client.call("Runtime.evaluate", { expression: PAGE_STATE, returnByValue: true }, deadline);
+    // half the budget waits for readiness, half is reserved for the evidence
+    // capture, so a game that never comes up is still diagnosed as not ready
+    // instead of exhausting the deadline and reporting a bare timeout
+    const readinessDeadline = Math.min(deadline, Date.now() + Math.floor(timeoutMs / 2));
+    while (Date.now() < readinessDeadline) {
+      const evaluated = await client.call("Runtime.evaluate", { expression: PAGE_STATE, returnByValue: true }, readinessDeadline);
       state = evaluated.result?.value || null;
-      if (issues.length > 0) break;
+      // a recorded issue still fails the smoke, but it must not end the wait: a
+      // platform SDK degrades on a deadline of its own, so abandoning readiness
+      // at the first failed request reports "not ready" for a game that does
+      // come up seconds later
       if (state?.ready && state.compiledRuntimeBuildFingerprint === expectedRuntimeBuildFingerprint
           && state.canvas?.width > 0 && state.canvas?.height > 0) break;
-      await new Promise((resolveWait) => setTimeout(resolveWait, Math.min(100, remaining(deadline))));
+      await new Promise((resolveWait) => setTimeout(resolveWait, Math.min(100, remaining(readinessDeadline))));
     }
-    if (state?.ready && issues.length === 0) {
+    if (state?.ready) {
       await client.call("Runtime.evaluate", {
         expression: "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
         awaitPromise: true,
