@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <stdint.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -19,6 +20,17 @@ static const uint8_t k_invalid[] = {0x00, 0x01, 0x02, 0x03};
 #ifndef AUDIO_TEST_MP3_PATH
 #error "AUDIO_TEST_MP3_PATH must name the committed MP3 fixture"
 #endif
+#ifndef AUDIO_TEST_CUE_WAV_PATH
+#error "AUDIO_TEST_CUE_WAV_PATH must name the mastered cue the shipped MP3 is encoded from"
+#endif
+#ifndef AUDIO_TEST_CUE_MP3_PATH
+#error "AUDIO_TEST_CUE_MP3_PATH must name the shipped MP3 of that same cue"
+#endif
+
+/* The backend's fixed decode target. */
+#define AUDIO_TEST_CHANNELS 2u
+#define AUDIO_TEST_RATE 48000u
+#define AUDIO_TEST_MS(ms) ((uint64_t)(AUDIO_TEST_RATE * (ms) / 1000u))
 
 static uint8_t *read_fixture(const char *path, uint32_t *size) {
     FILE *file = fopen(path, "rb");
@@ -180,6 +192,88 @@ void test_pcm_size_calculation_rejects_uint64_overflow(void) {
     TEST_ASSERT_EQUAL_UINT64(0, bytes);
 }
 
+typedef struct decoded_cue_t {
+    uint32_t clip;
+    uint64_t frames;
+    const float *samples;
+} decoded_cue_t;
+
+static decoded_cue_t decode_cue(const char *path) {
+    uint32_t size = 0;
+    uint8_t *bytes = read_fixture(path, &size);
+    TEST_ASSERT_NOT_NULL(bytes);
+    decoded_cue_t cue = {0};
+    cue.clip = audio_core_backend_decode_begin(bytes, size);
+    free(bytes);
+    TEST_ASSERT_EQUAL_UINT32(1, audio_core_backend_decode_state(cue.clip));
+    cue.frames = audio_miniaudio_test_clip_frames(cue.clip);
+    cue.samples = audio_miniaudio_test_clip_pcm(cue.clip);
+    TEST_ASSERT_NOT_NULL(cue.samples);
+    TEST_ASSERT_TRUE(cue.frames > 0);
+    return cue;
+}
+
+static float cue_peak(const decoded_cue_t *cue) {
+    float peak = 0.0f;
+    for (uint64_t i = 0; i < cue->frames * AUDIO_TEST_CHANNELS; ++i) {
+        const float magnitude = fabsf(cue->samples[i]);
+        if (magnitude > peak) peak = magnitude;
+    }
+    return peak;
+}
+
+static uint64_t cue_onset_frame(const decoded_cue_t *cue) {
+    const float threshold = cue_peak(cue) * 0.15f;
+    for (uint64_t frame = 0; frame < cue->frames; ++frame) {
+        if (fabsf(cue->samples[frame * AUDIO_TEST_CHANNELS]) > threshold) return frame;
+    }
+    return cue->frames;
+}
+
+static double cue_rms(const decoded_cue_t *cue, uint64_t frames) {
+    if (frames > cue->frames) frames = cue->frames;
+    double sum = 0.0;
+    for (uint64_t frame = 0; frame < frames; ++frame) {
+        const double value = (double)cue->samples[frame * AUDIO_TEST_CHANNELS];
+        sum += value * value;
+    }
+    return sqrt(sum / (double)(frames == 0 ? 1 : frames));
+}
+
+/* An MP3 declares its encoder delay in its own Xing/LAME header, and the
+   decoder trims it from there. A cue encoded without that header decodes with
+   the encoder's silence in front of it and fires a frame late, so these two
+   compare the shipped cue against the PCM master it was encoded from. */
+void test_shipped_cue_starts_where_its_master_starts(void) {
+    decoded_cue_t master = decode_cue(AUDIO_TEST_CUE_WAV_PATH);
+    decoded_cue_t shipped = decode_cue(AUDIO_TEST_CUE_MP3_PATH);
+    const uint64_t master_onset = cue_onset_frame(&master);
+    const uint64_t shipped_onset = cue_onset_frame(&shipped);
+    const uint64_t drift = master_onset > shipped_onset
+        ? master_onset - shipped_onset
+        : shipped_onset - master_onset;
+    TEST_ASSERT_TRUE_MESSAGE(drift <= AUDIO_TEST_MS(1),
+        "the shipped cue does not start on the master's sample");
+    const uint64_t length_drift = master.frames > shipped.frames
+        ? master.frames - shipped.frames
+        : shipped.frames - master.frames;
+    TEST_ASSERT_TRUE(length_drift <= AUDIO_TEST_MS(1));
+    audio_core_backend_clip_destroy(master.clip);
+    audio_core_backend_clip_destroy(shipped.clip);
+}
+
+void test_shipped_cue_attack_window_carries_the_transient(void) {
+    decoded_cue_t master = decode_cue(AUDIO_TEST_CUE_WAV_PATH);
+    decoded_cue_t shipped = decode_cue(AUDIO_TEST_CUE_MP3_PATH);
+    const double master_attack = cue_rms(&master, AUDIO_TEST_MS(35));
+    const double shipped_attack = cue_rms(&shipped, AUDIO_TEST_MS(35));
+    TEST_ASSERT_TRUE(master_attack > 0.0);
+    TEST_ASSERT_TRUE_MESSAGE(shipped_attack >= master_attack * 0.8,
+        "the attack window is encoder padding, not the cue");
+    audio_core_backend_clip_destroy(master.clip);
+    audio_core_backend_clip_destroy(shipped.clip);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_wav_decode_is_synchronous_and_reports_ready);
@@ -194,5 +288,7 @@ int main(void) {
     RUN_TEST(test_total_budget_is_released_when_a_clip_is_destroyed);
     RUN_TEST(test_shutdown_releases_the_total_decoded_budget);
     RUN_TEST(test_pcm_size_calculation_rejects_uint64_overflow);
+    RUN_TEST(test_shipped_cue_starts_where_its_master_starts);
+    RUN_TEST(test_shipped_cue_attack_window_carries_the_transient);
     return UNITY_END();
 }

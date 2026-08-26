@@ -351,4 +351,12 @@ uint64_t audio_miniaudio_test_decoded_bytes(void) { return s_decoded_pcm_bytes; 
 bool audio_miniaudio_test_pcm_size(uint64_t frames, uint64_t *bytes) {
     return decoded_pcm_size(frames, bytes);
 }
+uint64_t audio_miniaudio_test_clip_frames(uint32_t clip) {
+    if (clip == 0 || clip > AUDIO_NATIVE_CLIPS || !s_clips[clip - 1u].used) return 0;
+    return s_clips[clip - 1u].frames;
+}
+const float *audio_miniaudio_test_clip_pcm(uint32_t clip) {
+    if (clip == 0 || clip > AUDIO_NATIVE_CLIPS || !s_clips[clip - 1u].used) return NULL;
+    return (const float *)s_clips[clip - 1u].pcm;
+}
 #endif

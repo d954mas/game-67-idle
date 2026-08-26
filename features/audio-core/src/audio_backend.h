@@ -33,6 +33,8 @@ uint64_t audio_miniaudio_test_total_limit(void);
 void audio_miniaudio_test_set_decoded_limits(uint64_t per_clip_bytes, uint64_t total_bytes);
 uint64_t audio_miniaudio_test_decoded_bytes(void);
 bool audio_miniaudio_test_pcm_size(uint64_t frames, uint64_t *bytes);
+uint64_t audio_miniaudio_test_clip_frames(uint32_t clip);
+const float *audio_miniaudio_test_clip_pcm(uint32_t clip);
 #endif
 
 #endif

@@ -31,6 +31,10 @@ local copy cannot shadow the shared public header.
 ## Game-owned integration
 
 1. Add audio files to the game's asset tree with license/provenance metadata.
+   Encode MP3 with its Xing/LAME header (`ffmpeg -write_xing 1`): both backends
+   read the encoder delay from that header and trim it. A file encoded without
+   one carries about 25 ms of encoder silence that nothing can remove, and the
+   cue fires late.
 2. Add each file to `build_packs.c` as `NT_ASSET_BLOB` under a codec-neutral ID.
 3. Add source files to the pack target's `DEPENDS` list.
 4. Regenerate the game's asset hashes before compiling code that uses them.
