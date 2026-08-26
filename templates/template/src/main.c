@@ -627,7 +627,7 @@ int main(int argc, char **argv) {
     s_text_material = nt_material_create(&(nt_material_create_desc_t){
         .vs = s_text_vs,
         .fs = s_text_fs,
-        .blend_mode = NT_BLEND_MODE_ALPHA,
+        .blend = nt_blend_alpha(),
         .depth_test = false,
         .depth_write = false,
         .cull_mode = NT_CULL_NONE,
