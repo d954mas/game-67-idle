@@ -75,3 +75,14 @@ chrome-cdp-profile/
 web_browser_console.txt
 web_browser_shot.png
 web_launch.txt
+
+# The repository root is not a workspace. Screenshots, exports and run logs
+# that land here are a tool mid-task, not repository content, and a stray one
+# is far easier to ignore than to remove from history later.
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+/*.log
+output/
+.codex-remote-attachments/
