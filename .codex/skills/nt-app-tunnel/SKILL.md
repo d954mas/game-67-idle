@@ -1,12 +1,19 @@
 ---
 name: nt-app-tunnel
-description: "Use when the lead wants to view, test, pick, or play a local AI Studio surface, asset viewer export, static page, or wasm game build from a phone or another device by exposing a self-contained directory through a temporary public cloudflared quick tunnel. Public and unauthenticated while running; never serve secrets or private sources."
+description: "Use only when the lead explicitly asks to start, create, or expose a public tunnel. Serves a self-contained local directory through a temporary unauthenticated Cloudflare quick tunnel; never infer tunnel authorization from requests to run, view, test, pick, or play locally."
 ---
 
 # NT App Tunnel
 
 Serve a local directory and expose it on a public URL so the lead can open it on
 a phone or another device.
+
+## Invocation Boundary
+
+Invoke this skill only when the lead explicitly requests a tunnel or public URL.
+Requests such as "run", "launch", "open", "show", "test", "play", or "open on
+PC" authorize only a local launch. They do not authorize a tunnel, upload, or
+public exposure.
 
 ## Run
 
