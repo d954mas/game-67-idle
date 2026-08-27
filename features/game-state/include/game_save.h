@@ -117,6 +117,13 @@ typedef struct {
 /* Явная новая игра: reset всех -> on_new_game всех -> save -> возобновляет автосейв (Р10). */
 game_save_transition_result_t game_save_new_game(char *error, int error_cap);
 
+/* Composition transition: reset + seed every fragment in memory and mark the
+   new envelope dirty, but do not write it yet. The caller completes all
+   cross-fragment mutations and then calls game_save_flush(), so storage sees
+   either the previous envelope or the complete replacement, never reset
+   defaults between them. */
+void game_save_begin_new_game_transition(void);
+
 /* Р11 «Hold to reset progress»: фича (settings_screen) зовёт ИЗ draw_ui,
    не немедленно -- шелл применяет на ближайшей безопасной границе кадра (см.
    game_save_apply_pending_new_game). skip_fragment_id NULLABLE -- id ОДНОГО фрагмента, который НЕ трогать (settings/
