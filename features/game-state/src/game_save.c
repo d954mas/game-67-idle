@@ -68,6 +68,9 @@ static int s_transform_count;
 static const GameSaveDocumentMigrateFn *s_document_migrations;
 static int s_document_migration_count;
 static GameSaveDocumentValidateFn s_document_validator;
+static GameSaveLiveValidateFn s_live_validator;
+static char *s_hot_snapshot;
+static size_t s_hot_snapshot_capacity;
 
 static bool    s_autosave_paused; /* CORRUPT_RESET until the shell's new_game;
                                      also while a file we could not move aside is
@@ -588,6 +591,91 @@ static bool failure_is_new(const char *reason) {
     return true;
 }
 
+static bool hot_snapshot_available(void) {
+    if (s_hot_snapshot == NULL || s_hot_snapshot_capacity == 0U ||
+        s_live_validator == NULL || s_transform_count != 0 || s_orphan_count != 0) {
+        return false;
+    }
+    for (int i = 0; i < s_fragment_count; i++) {
+        if (s_fragments[i]->write_snapshot == NULL) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool write_hot_snapshot(game_save_writer_t *writer, int64_t wall, int64_t seq) {
+    if (!game_save_writer_begin_object(writer) ||
+        !game_save_writer_key(writer, "format") || !game_save_writer_number(writer, (double)GAME_SAVE_FORMAT) ||
+        !game_save_writer_key(writer, "save_version") || !game_save_writer_number(writer, (double)GAME_SAVE_DOC_VERSION) ||
+        !game_save_writer_key(writer, "saved_at") || !game_save_writer_number(writer, (double)wall) ||
+        !game_save_writer_key(writer, "save_seq") || !game_save_writer_number(writer, (double)seq) ||
+        !game_save_writer_key(writer, "app") || !game_save_writer_string(writer, GAME_STORAGE_APP_ID) ||
+        !game_save_writer_key(writer, "build") || !game_save_writer_string(writer, GAME_SAVE_BUILD) ||
+        !game_save_writer_key(writer, "features") || !game_save_writer_begin_object(writer)) {
+        return false;
+    }
+    for (int i = 0; i < s_fragment_count; i++) {
+        const GameSaveFragment *fragment = s_fragments[i];
+        if (!game_save_writer_key(writer, fragment->id) || !game_save_writer_begin_object(writer) ||
+            !fragment->write_snapshot(writer) || !game_save_writer_key(writer, "v") ||
+            !game_save_writer_number(writer, (double)fragment->version) ||
+            !game_save_writer_end_object(writer)) {
+            return false;
+        }
+    }
+    return game_save_writer_end_object(writer) && game_save_writer_end_object(writer) &&
+           game_save_writer_complete(writer);
+}
+
+static bool save_hot_snapshot(char *error, int error_cap) {
+    char reason[GAME_SAVE_REASON_MAX] = {0};
+    bool ok = false;
+    int64_t wall = 0;
+    int64_t seq = 0;
+    if (s_save_seq == INT64_MAX) {
+        gsj_set_error(reason, (int)sizeof reason, "save sequence exhausted");
+    } else if (!s_live_validator(reason, (int)sizeof reason)) {
+    } else {
+        game_save_writer_t writer;
+        wall = wall_now();
+        seq = s_save_seq + 1;
+        game_save_writer_init(&writer, s_hot_snapshot, s_hot_snapshot_capacity);
+        if (!write_hot_snapshot(&writer, wall, seq)) {
+            gsj_set_error(reason, (int)sizeof reason, "save snapshot exceeds hot snapshot capacity");
+        } else {
+            ok = game_storage_write(GAME_SAVE_AUTOSAVE_SLOT, game_save_writer_data(&writer),
+                                    reason, (int)sizeof reason);
+        }
+    }
+    if (ok) {
+        if (s_failure_logged) {
+            nt_log_warn("game_save: save recovered after an earlier failure (%s)",
+                        s_logged_failure[0] != '\0' ? s_logged_failure : "no reason reported");
+            s_logged_failure[0] = '\0';
+            s_failure_logged = false;
+        }
+        s_save_seq = seq;
+        s_dirty = false;
+        s_last_save_mono = mono_now();
+        s_last_saved_at = wall;
+        s_unpersisted = false;
+    } else {
+        if (failure_is_new(reason)) {
+            nt_log_warn("game_save: save failed (%s); data kept in memory, will retry",
+                        reason[0] != '\0' ? reason : "no reason reported");
+        }
+        s_unpersisted = true;
+        s_dirty = true;
+        s_dirty_at = mono_now();
+        s_last_save_mono = s_dirty_at;
+    }
+    if (!ok && error != NULL && error_cap > 0) {
+        (void)snprintf(error, (size_t)error_cap, "%s", reason);
+    }
+    return ok;
+}
+
 /* may_wait travels to the storage write, and only game_save_tick passes false:
    it is the one caller inside the frame, where a refused write is not a loss.
    Every other caller is a synchronous moment with no frame to lose and would
@@ -983,6 +1071,15 @@ void game_save_set_document_validator(GameSaveDocumentValidateFn validator) {
     s_document_validator = validator;
 }
 
+void game_save_set_live_validator(GameSaveLiveValidateFn validator) {
+    s_live_validator = validator;
+}
+
+void game_save_set_hot_snapshot_buffer(char *buffer, size_t capacity) {
+    s_hot_snapshot = buffer;
+    s_hot_snapshot_capacity = (buffer != NULL) ? capacity : 0U;
+}
+
 bool game_save_validate_current(char *error, int error_cap) {
     int64_t wall = 0;
     cJSON *root = build_root(false, &wall, NULL);
@@ -1157,7 +1254,9 @@ void game_save_tick(void) {
         err[0] = '\0';
         /* false: this is the ONE caller inside the frame. A refused write here
            is not a loss -- the state stays dirty and the next tick retries. */
-        (void)save_internal(err, (int)sizeof err, false);
+        (void)(hot_snapshot_available()
+                   ? save_hot_snapshot(err, (int)sizeof err)
+                   : save_internal(err, (int)sizeof err, false));
     }
 }
 

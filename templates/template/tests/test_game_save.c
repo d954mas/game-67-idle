@@ -40,6 +40,13 @@ static int64_t g_mono_ms;
 static int64_t g_wall_ms;
 static int64_t test_mono(void) { return g_mono_ms; }
 static int64_t test_wall(void) { return g_wall_ms; }
+static unsigned s_hot_cjson_allocations;
+static void *counted_hot_cjson_malloc(size_t size) {
+    (void)size;
+    s_hot_cjson_allocations++;
+    return NULL;
+}
+static void counted_hot_cjson_free(void *ptr) { (void)ptr; }
 
 /* ---- fake `game` fragment {int coins; char name[32];} ---- */
 static int s_frag_coins;
@@ -69,6 +76,12 @@ static void fake_reset(void) {
     s_frag_name[0] = '\0';
 }
 static void fake_on_new_game(void) { s_frag_coins = 100; }
+static bool fake_write_snapshot(game_save_writer_t *writer) {
+    return game_save_writer_key(writer, "coins") &&
+           game_save_writer_number(writer, (double)s_frag_coins) &&
+           game_save_writer_key(writer, "name") &&
+           game_save_writer_string(writer, s_frag_name);
+}
 
 static const GameSaveFragment s_fake_fragment = {
     .id = "game",
@@ -82,6 +95,7 @@ static const GameSaveFragment s_fake_fragment = {
     .get_path_json = NULL,
     .set_path_json = NULL,
     .schema_json = NULL,
+    .write_snapshot = fake_write_snapshot,
 };
 
 /* ---- second fragment {int mark;} to prove per-fragment isolation ---- */
@@ -104,6 +118,10 @@ static bool extra_from_json(const cJSON *json, char *err, int cap) {
     return true;
 }
 static void extra_reset(void) { s_extra_mark = 0; }
+static bool extra_write_snapshot(game_save_writer_t *writer) {
+    return game_save_writer_key(writer, "mark") &&
+           game_save_writer_number(writer, (double)s_extra_mark);
+}
 static const GameSaveFragment s_extra_fragment = {
     .id = "extra",
     .version = 1,
@@ -116,6 +134,7 @@ static const GameSaveFragment s_extra_fragment = {
     .get_path_json = NULL,
     .set_path_json = NULL,
     .schema_json = NULL,
+    .write_snapshot = extra_write_snapshot,
 };
 
 /* ---- document v1 -> v2 migration test seam ---- */
@@ -355,6 +374,15 @@ static void make_backup_of_primary(void) {
     TEST_ASSERT_TRUE(game_storage_write_backup("test_slot", err, (int)sizeof err));
 }
 
+static bool validate_live_fragments(char *error, int error_cap) {
+    if (s_frag_coins < 0 || s_frag_coins > 1000000000 ||
+        s_extra_mark < 0 || s_extra_mark > 1000000) {
+        gsj_set_error(error, error_cap, "fake fragment state is invalid");
+        return false;
+    }
+    return true;
+}
+
 void setUp(void) {
     cleanup_all();
     s_frag_coins = 0;
@@ -367,9 +395,60 @@ void setUp(void) {
     game_save_set_transforms(NULL, 0);
     game_save_set_document_migrations(s_document_migrations, 1);
     game_save_set_document_validator(validate_document_fragments);
+    game_save_set_live_validator(validate_live_fragments);
+    game_save_set_hot_snapshot_buffer(NULL, 0U);
     game_save_init();
 }
 void tearDown(void) { cleanup_all(); }
+
+void test_absent_hot_buffer_uses_legacy_save_path(void) {
+    cJSON_Hooks hooks = { counted_hot_cjson_malloc, counted_hot_cjson_free };
+    s_hot_cjson_allocations = 0;
+    game_save_mark_dirty();
+    g_mono_ms += GAME_SAVE_DEBOUNCE_MS;
+    cJSON_InitHooks(&hooks);
+    game_save_tick();
+    cJSON_InitHooks(NULL);
+    TEST_ASSERT_TRUE(s_hot_cjson_allocations > 0U);
+    TEST_ASSERT_TRUE(game_save_is_unpersisted());
+}
+
+void test_configured_hot_buffer_uses_no_cjson_allocation(void) {
+    static char snapshot[512];
+    cJSON_Hooks hooks = { counted_hot_cjson_malloc, counted_hot_cjson_free };
+    game_save_set_hot_snapshot_buffer(snapshot, sizeof snapshot);
+    game_save_mark_dirty();
+    g_mono_ms += GAME_SAVE_DEBOUNCE_MS;
+    s_hot_cjson_allocations = 0;
+    cJSON_InitHooks(&hooks);
+    game_save_tick();
+    cJSON_InitHooks(NULL);
+    TEST_ASSERT_EQUAL_UINT(0U, s_hot_cjson_allocations);
+    TEST_ASSERT_FALSE(game_save_is_unpersisted());
+}
+
+void test_undersized_hot_buffer_keeps_last_complete_save(void) {
+    char error[128] = {0};
+    TEST_ASSERT_TRUE(game_save_flush(error, (int)sizeof error));
+    char *before = read_raw(PRIMARY_PATH);
+    TEST_ASSERT_NOT_NULL(before);
+    char snapshot[16];
+    cJSON_Hooks hooks = { counted_hot_cjson_malloc, counted_hot_cjson_free };
+    game_save_set_hot_snapshot_buffer(snapshot, sizeof snapshot);
+    s_frag_coins = 999;
+    game_save_mark_dirty();
+    g_mono_ms += GAME_SAVE_DEBOUNCE_MS;
+    s_hot_cjson_allocations = 0;
+    cJSON_InitHooks(&hooks);
+    game_save_tick();
+    cJSON_InitHooks(NULL);
+    char *after = read_raw(PRIMARY_PATH);
+    TEST_ASSERT_EQUAL_UINT(0U, s_hot_cjson_allocations);
+    TEST_ASSERT_TRUE(game_save_is_unpersisted());
+    TEST_ASSERT_EQUAL_STRING(before, after);
+    free(after);
+    free(before);
+}
 
 /* 1. Envelope round trip. */
 void test_envelope_round_trip(void) {
@@ -1160,6 +1239,9 @@ int main(void) {
     game_save_register_fragment(&s_fake_fragment); /* `game` registered last */
 
     UNITY_BEGIN();
+    RUN_TEST(test_absent_hot_buffer_uses_legacy_save_path);
+    RUN_TEST(test_configured_hot_buffer_uses_no_cjson_allocation);
+    RUN_TEST(test_undersized_hot_buffer_keeps_last_complete_save);
     RUN_TEST(test_envelope_round_trip);
     RUN_TEST(test_fresh_runs_on_new_game);
     RUN_TEST(test_new_game_runs_on_new_game);

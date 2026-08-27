@@ -48,6 +48,14 @@ static int64_t g_mono_ms;
 static int64_t g_wall_ms;
 static int64_t test_mono(void) { return g_mono_ms; }
 static int64_t test_wall(void) { return g_wall_ms; }
+static char s_hot_snapshot[GAME_STORAGE_MAX_BYTES + 1U];
+static unsigned s_hot_cjson_allocations;
+static void *counted_hot_cjson_malloc(size_t size) {
+    (void)size;
+    s_hot_cjson_allocations++;
+    return NULL;
+}
+static void counted_hot_cjson_free(void *ptr) { (void)ptr; }
 #if NT_DEVAPI_ENABLED
 static int s_devapi_change_count;
 static game_save_devapi_change_t s_last_devapi_change;
@@ -179,6 +187,7 @@ void setUp(void) {
     g_wall_ms = 1720080000000LL;
     game_save__set_clocks_for_test(test_mono, test_wall);
     game_save_set_transforms(NULL, 0);
+    game_save_set_hot_snapshot_buffer(s_hot_snapshot, sizeof s_hot_snapshot);
     game_save_init();
 #if NT_DEVAPI_ENABLED
     TEST_ASSERT_EQUAL_INT(NT_OK, nt_devapi_init());
@@ -413,6 +422,21 @@ void test_save_refuses_invalid_live_ownership_without_replacing_disk_state(void)
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, result.status);
     TEST_ASSERT_EQUAL_UINT32(inventory_id, game_state.inventory_container_id);
     TEST_ASSERT_EQUAL_INT64(50, items_stack_count(game_wallet_container(), "tmpl.gold"));
+}
+
+void test_configured_hot_buffer_autosaves_without_cjson_allocation(void) {
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
+    game_state.tutorial_done = true;
+    game_save_mark_dirty();
+    g_mono_ms += GAME_SAVE_DEBOUNCE_MS;
+    cJSON_Hooks hooks = { counted_hot_cjson_malloc, counted_hot_cjson_free };
+    s_hot_cjson_allocations = 0;
+    cJSON_InitHooks(&hooks);
+    game_save_tick();
+    cJSON_InitHooks(NULL);
+    TEST_ASSERT_EQUAL_UINT(0U, s_hot_cjson_allocations);
+    TEST_ASSERT_FALSE(game_save_is_unpersisted());
 }
 
 void test_disk_load_rejects_invalid_primary_and_recovers_valid_backup(void) {
@@ -845,6 +869,7 @@ int main(void) {
     game_items_configure_save();
 
     UNITY_BEGIN();
+    RUN_TEST(test_configured_hot_buffer_autosaves_without_cjson_allocation);
     RUN_TEST(test_registry_has_four_fragments_in_order);
     RUN_TEST(test_new_game_seeds_across_all_fragments);
     RUN_TEST(test_incompatible_seed_plans_refuse_partial_initialization);

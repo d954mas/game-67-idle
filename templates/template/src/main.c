@@ -67,6 +67,7 @@
 #include "ui/ui_runtime.h"
 #include "world/world.h"
 #include "game_save.h"
+#include "game_storage.h"
 #include "game_state.h"
 #include "game_items.h"
 #include "game_state_events.gen.h" /* E2: game_ev_register (typed event labels) */
@@ -102,6 +103,8 @@ static nt_resource_t s_mesh_vs, s_mesh_fs, s_cube;
 static nt_resource_t s_tex_vs, s_tex_fs, s_uv_texture;
 static World s_world;
 static game_input_frame_t s_input;
+/* The template admits every schema-valid save; production games use a measured bound. */
+static char s_save_snapshot[GAME_STORAGE_MAX_BYTES + 1U];
 static char s_capture_path[260];
 static bool s_capture;
 static bool s_open_settings_on_start;
@@ -608,6 +611,7 @@ int main(int argc, char **argv) {
     game_save_register_fragment(&progression_state_fragment); /* L2 depends on items: register after items */
     game_save_register_fragment(&game_state_fragment);     /* `game` last (most dependent) */
     game_items_configure_save();
+    game_save_set_hot_snapshot_buffer(s_save_snapshot, sizeof s_save_snapshot);
     game_save_init();
 
     s_pack_id = nt_hash32_str("game");

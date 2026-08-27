@@ -199,6 +199,21 @@ validator also claims the names the emit body uses as locals and the descriptor
 tables it emits, so a field or event named like one of them is rejected instead of
 producing C that does not compile.
 
+Version `4.3.0` adds a nullable fragment snapshot writer. Generated fragments
+can serialize their payload into a caller-owned bounded buffer without cJSON;
+legacy JSON serialization remains the compatibility path for load, import,
+export, migrations, and DevAPI.
+
+The hot lane is opt-in. Before `game_save_init`, a consumer supplies one static
+buffer with `game_save_set_hot_snapshot_buffer(buffer, sizeof buffer)` and an
+allocation-free whole-state validator with `game_save_set_live_validator()`.
+Every registered fragment must provide `write_snapshot`; generated fragments
+do so automatically. The buffer must remain valid for the game runtime. Storage
+writes are synchronous, so it is never published while the writer is still
+filling it. Without those hooks, or when transforms/orphans are present, the
+save shell uses its legacy JSON path rather than claiming an allocation-free
+tick.
+
 ## Extension points
 
 Extend through game-owned schemas, migrations, hooks, and DevAPI adapters;

@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "game-state",
-  "version": "4.2.0",
+  "version": "4.3.0",
   "title": "Game State",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -21,6 +21,7 @@
   "provides": [
     "GameSaveFragment registry and save lifecycle",
     "game_storage slot persistence API",
+    "bounded caller-owned allocation-free snapshot writer",
     "game_state_json validation helpers",
     "schema-first C state generation",
     "optional game.state.* DevAPI dispatch"
@@ -51,6 +52,7 @@
     "generated_dir": "templates/template/build/<config>/generated/game-state",
     "runtime_sources": [
       "features/game-state/src/game_state_json.c",
+      "features/game-state/src/game_save_writer.c",
       "features/game-state/src/game_storage.c",
       "features/game-state/src/game_save.c",
       "features/game-state/src/game_save_devapi.c"

@@ -6,6 +6,8 @@
 #include "game_events.h"
 #include "items_state.h"
 #include "items_state_events.gen.h"
+#include "progression_state.h"
+#include "settings_state.h"
 
 #include "core/nt_assert.h"
 
@@ -334,6 +336,39 @@ void game_items_configure_save(void) {
     };
     game_save_set_document_migrations(migrations, 1);
     game_save_set_document_validator(game_items_validate_save_document);
+    game_save_set_live_validator(game_items_validate_live_save);
+}
+
+bool game_items_validate_live_save(char *error, int error_cap) {
+    if (!settings_state_validate(&settings_state, error, error_cap) ||
+        !items_state_validate(&items_state, error, error_cap) ||
+        !progression_state_validate(&progression_state, error, error_cap) ||
+        !game_state_validate(&game_state, error, error_cap) ||
+        !items_runtime_validate_state(&items_state, error, error_cap)) {
+        return false;
+    }
+    if (game_state.inventory_container_id == ITEMS_ID_NONE ||
+        game_state.wallet_container_id == ITEMS_ID_NONE) {
+        return ownership_error(error, error_cap, "inventory and wallet owners require container ids");
+    }
+    if (game_state.inventory_container_id == game_state.wallet_container_id) {
+        return ownership_error(error, error_cap, "inventory and wallet must own distinct containers");
+    }
+    unsigned inventory_matches = 0;
+    unsigned wallet_matches = 0;
+    unsigned persistent_count = 0;
+    for (int i = 0; i < ITEMS_STATE_MAX_CONTAINERS; i++) {
+        const ItemsItemContainer *container = &items_state.containers[i];
+        if (!container->used) { continue; }
+        persistent_count++;
+        if (container->container_id == game_state.inventory_container_id) { inventory_matches++; }
+        else if (container->container_id == game_state.wallet_container_id) { wallet_matches++; }
+        else { return ownership_error(error, error_cap, "persistent Items container is unreferenced"); }
+    }
+    if (persistent_count != 2 || inventory_matches != 1 || wallet_matches != 1) {
+        return ownership_error(error, error_cap, "persistent Items owner references are invalid");
+    }
+    return true;
 }
 
 bool game_items_validate_save_document(const cJSON *features, char *error, int error_cap) {

@@ -323,6 +323,7 @@ void   {self.ns.fn}init_defaults({self.ns.type} *state);
 bool   {self.ns.fn}validate(const {self.ns.type} *state, char *error, int error_cap);
 cJSON *{self.ns.fn}schema_json(void);
 cJSON *{self.ns.fn}to_json(const {self.ns.type} *state);
+bool   {self.ns.fn}write_snapshot(const {self.ns.type} *state, game_save_writer_t *writer);
 cJSON *{self.ns.fn}get_path_json(const {self.ns.type} *state, const char *path, char *error, int error_cap);
 bool   {self.ns.fn}set_path_json({self.ns.type} *state, const char *path, const cJSON *value, char *error, int error_cap);
 bool   {self.ns.fn}patch_json({self.ns.type} *state, const cJSON *values, char *error, int error_cap);
@@ -1018,6 +1019,146 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
         return "\n".join(lines)
 
 
+    def render_writer_add_scalar(self, field: dict[str, Any], state_expr: str, key: str) -> list[str]:
+        ident = c_ident(field["path"])
+        typ = field["type"]
+        prefix = f'    if (!game_save_writer_key(writer, "{key}") || '
+        if typ == "enum":
+            alias = self.enum_alias(field)
+            ename = c_ident(field["enum"])
+            if alias:
+                return [
+                    prefix + f'!game_save_writer_number(writer, {state_expr}->{ident})) {{ return false; }}',
+                    f'    if (!game_save_writer_key(writer, "{alias}") || !game_save_writer_string(writer, {self.ns.fn}{ename}_name({state_expr}->{ident}))) {{ return false; }}',
+                ]
+            return [prefix + f'!game_save_writer_string(writer, {self.ns.fn}{ename}_name({state_expr}->{ident}))) {{ return false; }}']
+        if typ in {"int", "u32", "float"}:
+            return [prefix + f'!game_save_writer_number(writer, (double){state_expr}->{ident})) {{ return false; }}']
+        if typ == "i64":
+            return [
+                f'    char {ident}_text[21];',
+                prefix + f'!game_save_writer_string(writer, gsj_i64_to_string({state_expr}->{ident}, {ident}_text, (int)sizeof {ident}_text))) {{ return false; }}',
+            ]
+        if typ == "bool":
+            return [prefix + f'!game_save_writer_bool(writer, {state_expr}->{ident})) {{ return false; }}']
+        if typ == "string":
+            return [prefix + f'!game_save_writer_string(writer, {state_expr}->{ident})) {{ return false; }}']
+        if typ == "string?":
+            return [
+                f'    if (!game_save_writer_key(writer, "{key}")) {{ return false; }}',
+                f'    if ({state_expr}->has_{ident} ? !game_save_writer_string(writer, {state_expr}->{ident}) : !game_save_writer_null(writer)) {{ return false; }}',
+            ]
+        raise AssertionError(typ)
+
+
+    def render_snapshot_helpers(self, schema: dict[str, Any]) -> str:
+        blocks: list[str] = []
+        aggregate_info = self.aggregate_info(schema)
+        aggregate_types = set()
+        if aggregate_info:
+            _, root_type, _, nested_type = aggregate_info
+            aggregate_types = {root_type, nested_type}
+        for type_name, type_def in self.schema_types(schema).items():
+            if type_name in aggregate_types:
+                continue
+            fname = self.object_type_func_name(type_name)
+            cname = self.object_type_c_name(type_name)
+            lines = [f"static bool {fname}_write_snapshot(const {cname} *obj, game_save_writer_t *writer) {{"]
+            for field in self.scalar_type_fields(type_def["fields"]):
+                lines.extend(self.render_writer_add_scalar(field, "obj", field["path"]))
+            lines.extend(["    return game_save_writer_ok(writer);", "}"])
+            blocks.append("\n".join(lines))
+        for field in self.map_fields(schema):
+            ident = c_ident(field["path"])
+            fname = self.object_type_func_name(map_type_name(field["type"]) or "")
+            max_macro = self.collection_macro(field["path"])
+            blocks.append(f"""static bool {ident}_write_snapshot(const {self.ns.type} *state, game_save_writer_t *writer) {{
+    if (!game_save_writer_begin_object(writer)) {{ return false; }}
+    for (int i = 0; i < {max_macro}; i++) {{
+        if (state->{ident}[i].used && (!game_save_writer_key(writer, state->{ident}[i].key) || !{fname}_write_snapshot(&state->{ident}[i], writer))) {{ return false; }}
+    }}
+    return game_save_writer_end_object(writer);
+}}""")
+        for field in self.list_fields(schema):
+            ident = c_ident(field["path"])
+            blocks.append(f"""static bool {ident}_write_snapshot(const {self.ns.type} *state, game_save_writer_t *writer) {{
+    if (!game_save_writer_begin_array(writer)) {{ return false; }}
+    for (int i = 0; i < state->{ident}_count; i++) {{ if (!game_save_writer_string(writer, state->{ident}[i])) {{ return false; }} }}
+    return game_save_writer_end_array(writer);
+}}""")
+        if aggregate_info:
+            aggregate, root_type, nested, nested_type = aggregate_info
+            aggregate_ident = c_ident(aggregate["path"])
+            nested_ident = c_ident(f"{aggregate['path']}.{nested['path']}")
+            root_cname = self.object_type_c_name(root_type)
+            nested_cname = self.object_type_c_name(nested_type)
+            root_max = self.collection_macro(aggregate["path"])
+            nested_max = self.collection_macro(f"{aggregate['path']}.{nested['path']}")
+            root_fields = self.scalar_type_fields(self.schema_types(schema)[root_type]["fields"])
+            nested_fields = self.scalar_type_fields(self.schema_types(schema)[nested_type]["fields"])
+            nested_object = [f"static bool {nested_ident}_write_object(const {nested_cname} *obj, game_save_writer_t *writer) {{"]
+            for item in nested_fields: nested_object.extend(self.render_writer_add_scalar(item, "obj", item["path"]))
+            nested_object.extend(["    return game_save_writer_ok(writer);", "}"])
+            blocks.append("\n".join(nested_object))
+            blocks.append(f"""/* Snapshot serialization is single-threaded and non-reentrant; avoid a large per-call stack array. */
+static const {nested_cname} *s_{nested_ident}_snapshot_ordered[{nested_max}];
+
+static bool {nested_ident}_write_snapshot(const {self.ns.type} *state, int parent_index, game_save_writer_t *writer) {{
+    const {nested_cname} **ordered = s_{nested_ident}_snapshot_ordered; int count = 0;
+    for (int i = 0; i < {nested_max}; i++) {{
+        if (!state->{nested_ident}[i].used || state->{nested_ident}[i].parent_index != parent_index) {{ continue; }}
+        ordered[count++] = &state->{nested_ident}[i];
+    }}
+    qsort(ordered, (size_t)count, sizeof(ordered[0]), {f"compare_{nested_ident}"});
+    if (!game_save_writer_begin_array(writer)) {{ return false; }}
+    for (int i = 0; i < count; i++) {{ if (!game_save_writer_begin_object(writer) || !{nested_ident}_write_object(ordered[i], writer) || !game_save_writer_end_object(writer)) {{ return false; }} }}
+    return game_save_writer_end_array(writer);
+}}""")
+            root_object = [f"static bool {aggregate_ident}_write_object(const {self.ns.type} *state, const {root_cname} *obj, game_save_writer_t *writer) {{"]
+            for item in root_fields: root_object.extend(self.render_writer_add_scalar(item, "obj", item["path"]))
+            root_object.extend([f'    if (!game_save_writer_key(writer, "{nested["path"]}") || !{nested_ident}_write_snapshot(state, (int)(obj - state->{aggregate_ident}), writer)) {{ return false; }}', "    return game_save_writer_ok(writer);", "}"])
+            blocks.append("\n".join(root_object))
+            blocks.append(f"""static const {root_cname} *s_{aggregate_ident}_snapshot_ordered[{root_max}];
+
+static bool {aggregate_ident}_write_snapshot(const {self.ns.type} *state, game_save_writer_t *writer) {{
+    const {root_cname} **ordered = s_{aggregate_ident}_snapshot_ordered; int count = 0;
+    for (int i = 0; i < {root_max}; i++) {{ if (state->{aggregate_ident}[i].used) {{ ordered[count++] = &state->{aggregate_ident}[i]; }} }}
+    qsort(ordered, (size_t)count, sizeof(ordered[0]), compare_{aggregate_ident});
+    if (!game_save_writer_begin_array(writer)) {{ return false; }}
+    for (int i = 0; i < count; i++) {{ if (!game_save_writer_begin_object(writer) || !{aggregate_ident}_write_object(state, ordered[i], writer) || !game_save_writer_end_object(writer)) {{ return false; }} }}
+    return game_save_writer_end_array(writer);
+}}""")
+        return "\n\n".join(blocks)
+
+
+    def render_write_snapshot(self, schema: dict[str, Any]) -> str:
+        lines = [f"bool {self.ns.fn}write_snapshot(const {self.ns.type} *state, game_save_writer_t *writer) {{", "    if (!state || !writer) { return false; }"]
+        emitted_groups: set[str] = set()
+        for field in schema["fields"]:
+            parent, key, group = self.parent_var_for(field["path"])
+            if group:
+                if group in emitted_groups:
+                    continue
+                emitted_groups.add(group)
+                lines.append(f'    if (!game_save_writer_key(writer, "{group}") || !game_save_writer_begin_object(writer)) {{ return false; }}')
+                for grouped_field in schema["fields"]:
+                    _, grouped_key, grouped_name = self.parent_var_for(grouped_field["path"])
+                    if grouped_name != group:
+                        continue
+                    if grouped_field["type"] in SCALAR_TYPES:
+                        lines.extend(self.render_writer_add_scalar(grouped_field, "state", grouped_key))
+                    else:
+                        lines.append(f'    if (!game_save_writer_key(writer, "{grouped_key}") || !{c_ident(grouped_field["path"])}_write_snapshot(state, writer)) {{ return false; }}')
+                lines.append("    if (!game_save_writer_end_object(writer)) { return false; }")
+                continue
+            if field["type"] in SCALAR_TYPES:
+                lines.extend(self.render_writer_add_scalar(field, "state", key))
+            else:
+                lines.append(f'    if (!game_save_writer_key(writer, "{key}") || !{c_ident(field["path"])}_write_snapshot(state, writer)) {{ return false; }}')
+        lines.append("    return game_save_writer_ok(writer);\n}")
+        return "\n".join(lines)
+
+
     def render_defaults(self, schema: dict[str, Any]) -> str:
         lines: list[str] = []
         for field in self.scalar_fields(schema):
@@ -1276,6 +1417,7 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
         wrappers = (
             f"static void   frag_reset(void)                                             {{ {self.ns.fn}init_defaults(&{self.ns.inst}); }}\n"
             f"static cJSON *frag_to_json(void)                                           {{ return {self.ns.fn}to_json(&{self.ns.inst}); }}\n"
+            f"static bool   frag_write_snapshot(game_save_writer_t *w)                   {{ return {self.ns.fn}write_snapshot(&{self.ns.inst}, w); }}\n"
             f"static bool   frag_from_json(const cJSON *j, char *e, int c)               {{ return {self.ns.fn}from_json(&{self.ns.inst}, j, e, c); }}\n"
             f"static cJSON *frag_get_path(const char *s, char *e, int c)                 {{ return {self.ns.fn}get_path_json(&{self.ns.inst}, s, e, c); }}\n"
             f"static bool   frag_set_path(const char *s, const cJSON *v, char *e, int c) {{ return {self.ns.fn}set_path_json(&{self.ns.inst}, s, v, e, c); }}\n"
@@ -1295,6 +1437,7 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
             f"    .get_path_json = frag_get_path,\n"
             f"    .set_path_json = frag_set_path,\n"
             f"    .schema_json   = frag_schema,\n"
+            f"    .write_snapshot = frag_write_snapshot,\n"
             f"}};"
         )
 
@@ -1377,6 +1520,8 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
 
 {self.render_collection_helpers(schema)}
 
+{self.render_snapshot_helpers(schema)}
+
 void {self.ns.fn}init_defaults({self.ns.type} *state) {{
     memset(state, 0, sizeof(*state));
 {self.render_defaults(schema)}
@@ -1411,6 +1556,8 @@ cJSON *{self.ns.fn}to_json(const {self.ns.type} *state) {{
 {self.render_to_json(schema)}
     return root;
 }}
+
+{self.render_write_snapshot(schema)}
 
 cJSON *{self.ns.fn}get_path_json(const {self.ns.type} *state, const char *path, char *error, int error_cap) {{
     if (!path || path[0] == '\\0') {{ return {self.ns.fn}to_json(state); }}

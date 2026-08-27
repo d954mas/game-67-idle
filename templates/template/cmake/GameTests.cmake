@@ -265,6 +265,7 @@ if(NOT EMSCRIPTEN)
     add_executable(test_game_save_blocked
         "${GAME_STATE_DIR}/tests/test_game_save_blocked.c"
         "${GAME_STATE_SRC}/game_save.c"
+        "${GAME_STATE_SRC}/game_save_writer.c"
         "${GAME_STATE_SRC}/game_state_json.c")
     target_link_libraries(test_game_save_blocked PRIVATE
         cjson unity nt_log nt_core nt_hash)
@@ -281,7 +282,7 @@ if(NOT EMSCRIPTEN)
 
     add_executable(test_game_save
         tests/test_game_save.c
-        "${GAME_STATE_SRC}/game_save.c" "${GAME_STATE_SRC}/game_storage.c"
+        "${GAME_STATE_SRC}/game_save.c" "${GAME_STATE_SRC}/game_save_writer.c" "${GAME_STATE_SRC}/game_storage.c"
         "${GAME_STATE_SRC}/game_storage_backend_native.c"
         "${GAME_STATE_SRC}/game_state_json.c")
     # game_save/native storage backend warn via nt_log_warn on read errors.
@@ -769,7 +770,7 @@ if(NOT EMSCRIPTEN)
     add_executable(test_template_composition
         tests/test_template_composition.c
         src/game_items.c
-        "${GAME_STATE_SRC}/game_save.c" "${GAME_STATE_SRC}/game_storage.c"
+        "${GAME_STATE_SRC}/game_save.c" "${GAME_STATE_SRC}/game_save_writer.c" "${GAME_STATE_SRC}/game_storage.c"
         "${GAME_STATE_SRC}/game_storage_backend_native.c"
         "${GAME_STATE_SRC}/game_state_json.c" "${GAME_EVENTS_SRC}/game_events.c"
         "${GAME_STATE_GENERATED_SOURCE}" "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
@@ -834,6 +835,7 @@ if(NOT EMSCRIPTEN)
         list(APPEND GAME_NATIVE_TEST_TARGETS test_scenes_core_devapi)
     endif()
     foreach(_test_target IN LISTS GAME_NATIVE_TEST_TARGETS)
+        target_sources(${_test_target} PRIVATE "${GAME_STATE_SRC}/game_save_writer.c")
         nt_set_sanitizer_flags(${_test_target})
     endforeach()
 endif()

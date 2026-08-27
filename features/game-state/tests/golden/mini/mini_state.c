@@ -160,6 +160,27 @@ static bool set_order_from_json(MiniState *state, const cJSON *json, char *error
 }
 
 
+static bool cell_write_snapshot(const MiniCell *obj, game_save_writer_t *writer) {
+    if (!game_save_writer_key(writer, "def_id") || !game_save_writer_string(writer, obj->def_id)) { return false; }
+    char count_text[21];
+    if (!game_save_writer_key(writer, "count") || !game_save_writer_string(writer, gsj_i64_to_string(obj->count, count_text, (int)sizeof count_text))) { return false; }
+    return game_save_writer_ok(writer);
+}
+
+static bool cells_write_snapshot(const MiniState *state, game_save_writer_t *writer) {
+    if (!game_save_writer_begin_object(writer)) { return false; }
+    for (int i = 0; i < MINI_STATE_MAX_CELLS; i++) {
+        if (state->cells[i].used && (!game_save_writer_key(writer, state->cells[i].key) || !cell_write_snapshot(&state->cells[i], writer))) { return false; }
+    }
+    return game_save_writer_end_object(writer);
+}
+
+static bool order_write_snapshot(const MiniState *state, game_save_writer_t *writer) {
+    if (!game_save_writer_begin_array(writer)) { return false; }
+    for (int i = 0; i < state->order_count; i++) { if (!game_save_writer_string(writer, state->order[i])) { return false; } }
+    return game_save_writer_end_array(writer);
+}
+
 void mini_state_init_defaults(MiniState *state) {
     memset(state, 0, sizeof(*state));
     state->mode_index = MINI_STATE_MODE_INDEX_DEFAULT;
@@ -226,6 +247,18 @@ cJSON *mini_state_to_json(const MiniState *state) {
     cJSON_AddItemToObject(root, "cells", cells_to_json(state));
     cJSON_AddItemToObject(root, "order", order_to_json(state));
     return root;
+}
+
+bool mini_state_write_snapshot(const MiniState *state, game_save_writer_t *writer) {
+    if (!state || !writer) { return false; }
+    if (!game_save_writer_key(writer, "mode_index") || !game_save_writer_number(writer, state->mode_index)) { return false; }
+    if (!game_save_writer_key(writer, "mode") || !game_save_writer_string(writer, mini_state_mode_name(state->mode_index))) { return false; }
+    if (!game_save_writer_key(writer, "label") || !game_save_writer_string(writer, state->label)) { return false; }
+    char total_text[21];
+    if (!game_save_writer_key(writer, "total") || !game_save_writer_string(writer, gsj_i64_to_string(state->total, total_text, (int)sizeof total_text))) { return false; }
+    if (!game_save_writer_key(writer, "cells") || !cells_write_snapshot(state, writer)) { return false; }
+    if (!game_save_writer_key(writer, "order") || !order_write_snapshot(state, writer)) { return false; }
+    return game_save_writer_ok(writer);
 }
 
 cJSON *mini_state_get_path_json(const MiniState *state, const char *path, char *error, int error_cap) {
@@ -348,6 +381,7 @@ bool mini_state_from_json(MiniState *state, const cJSON *json, char *error, int 
 
 static void   frag_reset(void)                                             { mini_state_init_defaults(&mini_state); }
 static cJSON *frag_to_json(void)                                           { return mini_state_to_json(&mini_state); }
+static bool   frag_write_snapshot(game_save_writer_t *w)                   { return mini_state_write_snapshot(&mini_state, w); }
 static bool   frag_from_json(const cJSON *j, char *e, int c)               { return mini_state_from_json(&mini_state, j, e, c); }
 static cJSON *frag_get_path(const char *s, char *e, int c)                 { return mini_state_get_path_json(&mini_state, s, e, c); }
 static bool   frag_set_path(const char *s, const cJSON *v, char *e, int c) { return mini_state_set_path_json(&mini_state, s, v, e, c); }
@@ -365,4 +399,5 @@ const GameSaveFragment mini_state_fragment = {
     .get_path_json = frag_get_path,
     .set_path_json = frag_set_path,
     .schema_json   = frag_schema,
+    .write_snapshot = frag_write_snapshot,
 };

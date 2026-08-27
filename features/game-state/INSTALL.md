@@ -19,6 +19,7 @@ Compile the runtime together with the consumer's generated fragments:
 ```cmake
 target_sources(game PRIVATE
     "${GAME_STATE_SRC}/game_state_json.c"
+    "${GAME_STATE_SRC}/game_save_writer.c"
     "${GAME_STATE_SRC}/game_storage.c"
     "${GAME_STATE_SRC}/game_save.c")
 target_include_directories(game PRIVATE
@@ -26,6 +27,31 @@ target_include_directories(game PRIVATE
     "${GAME_STATE_GENERATED_DIR}")
 target_link_libraries(game PRIVATE cjson nt_time nt_log)
 ```
+
+To enable the allocation-free autosave tick, own the fixed storage budget in
+the consumer and configure it before `game_save_init()`:
+
+```c
+static char s_save_snapshot[64U * 1024U];
+
+game_save_set_hot_snapshot_buffer(s_save_snapshot, sizeof s_save_snapshot);
+game_save_set_live_validator(game_validate_live_save);
+game_save_init();
+```
+
+The buffer must outlive the runtime. A synchronous storage write consumes it
+only after the complete snapshot has been produced. Consumers that do not
+configure a buffer retain the legacy JSON autosave path.
+
+The live validator must check every registered fragment without allocation,
+and every fragment must provide `write_snapshot`; generated fragments do so
+automatically. Registered transforms or retained orphan fragments deliberately
+select the legacy JSON path because the bounded writer cannot reproduce those
+compatibility transforms byte-for-byte.
+
+The default template deliberately uses `GAME_STORAGE_MAX_BYTES + 1U`: its
+reference schema accepts every storage-valid Items state. A production game
+should instead set a measured, fixture-proven bound for its own schema.
 
 Select exactly one save platform adapter. Web storage adds its isolated
 localStorage adapter:

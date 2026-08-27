@@ -225,6 +225,40 @@ class StateCodegenTests(unittest.TestCase):
                 read_outputs(root / "b", "items_v2_state"),
             )
 
+    def test_snapshot_writer_keeps_noncontiguous_group_payload_together(self):
+        schema = {
+            "schema": "groups.state",
+            "schema_version": 2,
+            "fragment": "groups",
+            "version": 1,
+            "string_max": 32,
+            "enums": {},
+            "types": {},
+            "fields": {
+                "a.x": {"type": "int", "default": 1, "min": 0, "max": 9},
+                "b": {"type": "int", "default": 2, "min": 0, "max": 9},
+                "a.y": {"type": "int", "default": 3, "min": 0, "max": 9},
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            schema_path = Path(tmp) / "groups.schema.json"
+            schema_path.write_text(json.dumps(schema), encoding="utf-8")
+            text = generate_and_join(schema_path, Path(tmp) / "generated", "groups_state", "groups")
+
+        writer = text[text.index("bool groups_state_write_snapshot"):]
+        self.assertEqual(writer.count('game_save_writer_key(writer, "a")'), 1)
+        self.assertLess(writer.index('game_save_writer_key(writer, "x")'), writer.index('game_save_writer_key(writer, "y")'))
+        self.assertLess(writer.index('game_save_writer_key(writer, "y")'), writer.index('game_save_writer_key(writer, "b")'))
+
+    def test_snapshot_writer_covers_maps_lists_and_nested_aggregate_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            mini = generate_and_join(MINI_SCHEMA, Path(tmp) / "mini", "mini_state", "mini")
+            aggregate = generate_and_join(ITEMS_CONTAINERS_SCHEMA, Path(tmp) / "items", "items_v2_state", "items_v2")
+        self.assertIn("cells_write_snapshot", mini)
+        self.assertIn("order_write_snapshot", mini)
+        self.assertIn("qsort(ordered", aggregate)
+        self.assertIn("containers_entries_write_snapshot", aggregate)
+
     # ------------------------------------------------------------------ golden
 
     def _assert_golden(self, schema_path: Path, prefix: str, fragment: str, golden_sub: str):

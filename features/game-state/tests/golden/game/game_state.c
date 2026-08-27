@@ -35,6 +35,8 @@ GameState game_state;   /* fragment instance (ownership lives here) */
 
 
 
+
+
 void game_state_init_defaults(GameState *state) {
     memset(state, 0, sizeof(*state));
     state->shape_index = GAME_STATE_SHAPE_INDEX_DEFAULT;
@@ -118,6 +120,24 @@ cJSON *game_state_to_json(const GameState *state) {
     cJSON_AddNumberToObject(root, "inventory_container_id", (double)state->inventory_container_id);
     cJSON_AddNumberToObject(root, "wallet_container_id", (double)state->wallet_container_id);
     return root;
+}
+
+bool game_state_write_snapshot(const GameState *state, game_save_writer_t *writer) {
+    if (!state || !writer) { return false; }
+    if (!game_save_writer_key(writer, "shape_index") || !game_save_writer_number(writer, state->shape_index)) { return false; }
+    if (!game_save_writer_key(writer, "shape") || !game_save_writer_string(writer, game_state_shape_name(state->shape_index))) { return false; }
+    if (!game_save_writer_key(writer, "render_mode_index") || !game_save_writer_number(writer, state->render_mode_index)) { return false; }
+    if (!game_save_writer_key(writer, "render_mode") || !game_save_writer_string(writer, game_state_render_mode_name(state->render_mode_index))) { return false; }
+    if (!game_save_writer_key(writer, "camera_distance") || !game_save_writer_number(writer, (double)state->camera_distance)) { return false; }
+    if (!game_save_writer_key(writer, "test_ui_clicks") || !game_save_writer_number(writer, (double)state->test_ui_clicks)) { return false; }
+    if (!game_save_writer_key(writer, "test_label_text") || !game_save_writer_string(writer, state->test_label_text)) { return false; }
+    if (!game_save_writer_key(writer, "test_button_text") || !game_save_writer_string(writer, state->test_button_text)) { return false; }
+    if (!game_save_writer_key(writer, "tutorial") || !game_save_writer_begin_object(writer)) { return false; }
+    if (!game_save_writer_key(writer, "done") || !game_save_writer_bool(writer, state->tutorial_done)) { return false; }
+    if (!game_save_writer_end_object(writer)) { return false; }
+    if (!game_save_writer_key(writer, "inventory_container_id") || !game_save_writer_number(writer, (double)state->inventory_container_id)) { return false; }
+    if (!game_save_writer_key(writer, "wallet_container_id") || !game_save_writer_number(writer, (double)state->wallet_container_id)) { return false; }
+    return game_save_writer_ok(writer);
 }
 
 cJSON *game_state_get_path_json(const GameState *state, const char *path, char *error, int error_cap) {
@@ -240,6 +260,7 @@ bool game_state_from_json(GameState *state, const cJSON *json, char *error, int 
 
 static void   frag_reset(void)                                             { game_state_init_defaults(&game_state); }
 static cJSON *frag_to_json(void)                                           { return game_state_to_json(&game_state); }
+static bool   frag_write_snapshot(game_save_writer_t *w)                   { return game_state_write_snapshot(&game_state, w); }
 static bool   frag_from_json(const cJSON *j, char *e, int c)               { return game_state_from_json(&game_state, j, e, c); }
 static cJSON *frag_get_path(const char *s, char *e, int c)                 { return game_state_get_path_json(&game_state, s, e, c); }
 static bool   frag_set_path(const char *s, const cJSON *v, char *e, int c) { return game_state_set_path_json(&game_state, s, v, e, c); }
@@ -260,4 +281,5 @@ const GameSaveFragment game_state_fragment = {
     .get_path_json = frag_get_path,
     .set_path_json = frag_set_path,
     .schema_json   = frag_schema,
+    .write_snapshot = frag_write_snapshot,
 };

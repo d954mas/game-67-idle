@@ -73,6 +73,7 @@ void   game_state_init_defaults(GameState *state);
 bool   game_state_validate(const GameState *state, char *error, int error_cap);
 cJSON *game_state_schema_json(void);
 cJSON *game_state_to_json(const GameState *state);
+bool   game_state_write_snapshot(const GameState *state, game_save_writer_t *writer);
 cJSON *game_state_get_path_json(const GameState *state, const char *path, char *error, int error_cap);
 bool   game_state_set_path_json(GameState *state, const char *path, const cJSON *value, char *error, int error_cap);
 bool   game_state_patch_json(GameState *state, const cJSON *values, char *error, int error_cap);

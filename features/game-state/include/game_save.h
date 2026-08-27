@@ -2,9 +2,11 @@
 #define GAME_SAVE_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "cJSON.h"
+#include "game_save_writer.h"
 
 #ifndef GAME_SAVE_MAX_FRAGMENTS
 #define GAME_SAVE_MAX_FRAGMENTS 32
@@ -27,6 +29,7 @@ typedef struct GameSaveFragment {
     cJSON*(*get_path_json)(const char *sub, char *err, int cap);       /* NULLABLE: DevAPI read (A5) */
     bool  (*set_path_json)(const char *sub, const cJSON *v, char *err, int cap); /* NULLABLE: DevAPI write (A5) */
     cJSON*(*schema_json)(void);      /* NULLABLE */
+    bool  (*write_snapshot)(game_save_writer_t *writer); /* nullable hot-tick payload writer */
 } GameSaveFragment;
 
 /* Регистрация ДО первого load; порядок = порядок reconcile/on_new_game.
@@ -42,6 +45,11 @@ void game_save_set_document_migrations(const GameSaveDocumentMigrateFn *steps, i
 /* One game-owned cross-fragment invariant checked before a save document is
    published and after raw DevAPI writes. NULL restores fragment-only behavior. */
 void game_save_set_document_validator(GameSaveDocumentValidateFn validator);
+typedef bool (*GameSaveLiveValidateFn)(char *err, int cap);
+void game_save_set_live_validator(GameSaveLiveValidateFn validator);
+/* Caller-owned storage for the allocation-free tick path. Configure before
+   game_save_init and keep it alive for the runtime; writes are synchronous. */
+void game_save_set_hot_snapshot_buffer(char *buffer, size_t capacity);
 bool game_save_validate_current(char *error, int error_cap);
 
 /* ---- Registry read-access for the DevAPI dispatch (registry dispatch contract).
