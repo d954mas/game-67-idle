@@ -204,6 +204,9 @@ can serialize their payload into a caller-owned bounded buffer without cJSON;
 legacy JSON serialization remains the compatibility path for load, import,
 export, migrations, and DevAPI.
 
+Version `4.3.1` preserves the JavaScript storage imports when Emscripten links
+the runtime with full LTO. The public API is unchanged.
+
 The hot lane is opt-in. Before `game_save_init`, a consumer supplies one static
 buffer with `game_save_set_hot_snapshot_buffer(buffer, sizeof buffer)` and an
 allocation-free whole-state validator with `game_save_set_live_validator()`.
