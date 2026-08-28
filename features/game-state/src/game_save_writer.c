@@ -1,9 +1,9 @@
 #include "game_save_writer.h"
 
 #include <limits.h>
-#include <float.h>
 #include <locale.h>
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -75,9 +75,74 @@ static void writer_force_json_decimal(char *number) {
     }
 }
 
-static bool writer_compare_double(double a, double b) {
-    const double max_value = fabs(a) > fabs(b) ? fabs(a) : fabs(b);
-    return fabs(a - b) <= max_value * DBL_EPSILON;
+typedef struct {
+    uint64_t significand;
+    int exponent;
+    bool negative;
+} writer_decimal_t;
+
+static bool writer_parse_decimal(const char *text, writer_decimal_t *out) {
+    const char *cursor = text;
+    writer_decimal_t value = {0};
+    bool decimal = false;
+    bool digit = false;
+    if (*cursor == '-' || *cursor == '+') {
+        value.negative = *cursor == '-';
+        ++cursor;
+    }
+    for (; *cursor != '\0' && *cursor != 'e' && *cursor != 'E'; ++cursor) {
+        if (*cursor == '.') {
+            if (decimal) return false;
+            decimal = true;
+            continue;
+        }
+        if (*cursor < '0' || *cursor > '9') return false;
+        digit = true;
+        value.significand = value.significand * 10U + (uint64_t)(*cursor - '0');
+        if (decimal) --value.exponent;
+    }
+    if (!digit) return false;
+    if (*cursor == 'e' || *cursor == 'E') {
+        bool exponent_negative = false;
+        int explicit_exponent = 0;
+        ++cursor;
+        if (*cursor == '-' || *cursor == '+') {
+            exponent_negative = *cursor == '-';
+            ++cursor;
+        }
+        if (*cursor == '\0') return false;
+        for (; *cursor != '\0'; ++cursor) {
+            if (*cursor < '0' || *cursor > '9') return false;
+            explicit_exponent = explicit_exponent * 10 + (*cursor - '0');
+        }
+        value.exponent += exponent_negative ? -explicit_exponent : explicit_exponent;
+    }
+    *out = value;
+    return true;
+}
+
+static bool writer_decimal_within_epsilon(const char *shorter, const char *precise) {
+    writer_decimal_t a;
+    writer_decimal_t b;
+    if (!writer_parse_decimal(shorter, &a) || !writer_parse_decimal(precise, &b) ||
+        a.negative != b.negative) {
+        return false;
+    }
+    while (a.exponent > b.exponent) {
+        if (a.significand > UINT64_MAX / 10U) return false;
+        a.significand *= 10U;
+        --a.exponent;
+    }
+    while (b.exponent > a.exponent) {
+        if (b.significand > UINT64_MAX / 10U) return false;
+        b.significand *= 10U;
+        --b.exponent;
+    }
+    const uint64_t difference = a.significand > b.significand
+                                    ? a.significand - b.significand
+                                    : b.significand - a.significand;
+    const uint64_t magnitude = a.significand > b.significand ? a.significand : b.significand;
+    return difference <= magnitude / UINT64_C(4503599627370496);
 }
 
 void game_save_writer_init(game_save_writer_t *writer, char *data, size_t capacity) {
@@ -142,11 +207,17 @@ bool game_save_writer_number(game_save_writer_t *writer, double value) {
                           value <= (double)INT_MIN ? INT_MIN : (int)value;
     if (value == (double)value_int) written = snprintf(number, sizeof number, "%d", value_int);
     else {
-        double round_trip = 0.0;
+        char precise[26] = {0};
         written = snprintf(number, sizeof number, "%1.15g", value);
-        if (written > 0 && (sscanf(number, "%lg", &round_trip) != 1 ||
-                            !writer_compare_double(round_trip, value))) {
-            written = snprintf(number, sizeof number, "%1.17g", value);
+        const int precise_written = snprintf(precise, sizeof precise, "%1.17g", value);
+        if (written > 0 && (size_t)written < sizeof number &&
+            precise_written > 0 && (size_t)precise_written < sizeof precise) {
+            writer_force_json_decimal(number);
+            writer_force_json_decimal(precise);
+            if (!writer_decimal_within_epsilon(number, precise)) {
+                memcpy(number, precise, (size_t)precise_written + 1U);
+                written = precise_written;
+            }
         }
     }
     writer_force_json_decimal(number);

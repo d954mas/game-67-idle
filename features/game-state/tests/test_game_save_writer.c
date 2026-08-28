@@ -5,6 +5,7 @@
 
 #include <float.h>
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -77,6 +78,30 @@ void test_writer_matches_cjson_edge_numbers_and_utf8(void) {
     TEST_ASSERT_EQUAL_STRING(expected, text);
     cJSON_free(expected);
     cJSON_Delete(root);
+}
+
+void test_writer_matches_cjson_for_double_bit_patterns(void) {
+    uint64_t bits = UINT64_C(0x243f6a8885a308d3);
+    for (unsigned i = 0; i < 20000U; ++i) {
+        bits = bits * UINT64_C(6364136223846793005) + UINT64_C(1442695040888963407);
+        double value;
+        memcpy(&value, &bits, sizeof value);
+
+        cJSON *number = cJSON_CreateNumber(value);
+        TEST_ASSERT_NOT_NULL(number);
+        char *expected = cJSON_PrintUnformatted(number);
+        TEST_ASSERT_NOT_NULL(expected);
+
+        char actual[32];
+        game_save_writer_t writer;
+        game_save_writer_init(&writer, actual, sizeof actual);
+        TEST_ASSERT_TRUE(game_save_writer_number(&writer, value));
+        TEST_ASSERT_TRUE(game_save_writer_complete(&writer));
+        TEST_ASSERT_EQUAL_STRING(expected, actual);
+
+        cJSON_free(expected);
+        cJSON_Delete(number);
+    }
 }
 
 void test_writer_rejects_overflow_without_writing_partial_value(void) {
@@ -205,6 +230,7 @@ int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_writer_matches_cjson_order_escaping_and_numbers);
     RUN_TEST(test_writer_matches_cjson_edge_numbers_and_utf8);
+    RUN_TEST(test_writer_matches_cjson_for_double_bit_patterns);
     RUN_TEST(test_writer_rejects_overflow_without_writing_partial_value);
     RUN_TEST(test_writer_accepts_exact_capacity_and_fails_closed_at_depth_limit);
     RUN_TEST(test_writer_rejects_invalid_json_scope_transitions);

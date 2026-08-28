@@ -23,6 +23,12 @@ TEST_COMMANDS = (
         sys.executable,
         "-m",
         "unittest",
+        str(ROOT / "features/game-state/tests/test_game_save_writer_size_contract.py"),
+    ),
+    (
+        sys.executable,
+        "-m",
+        "unittest",
         str(ROOT / "features/game-state/benchmarks/benchmark_codegen_test.py"),
     ),
 )
