@@ -201,7 +201,7 @@ test("copied game CLI executes doctor and final package from a real games/privat
   write(join(gameDir, "dependencies.json"), `${JSON.stringify({
     schema: "ai_studio.game.dependencies.v3",
     engine: { source: "external/neotolis-engine", version: "0.1.0", revision: engineRevision, compatibility: "tested" },
-    features: [{ id: "platform-sdk", source: "features/platform-sdk", version: "1.1.0", compatibility: "tested" }],
+    features: [{ id: "platform-sdk", source: "features/platform-sdk", version: "1.2.0", compatibility: "tested" }],
     compatibility: "copied layout fixture",
   }, null, 2)}\n`);
   const runtimeBuild = createRuntimeBuildRecord({

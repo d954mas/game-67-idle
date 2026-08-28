@@ -77,9 +77,10 @@ A consuming template or game should wire this as an L1 feature:
    one recorder/subscriber. Do not call it from gameplay verbs or UI code.
 
 10. For web builds, keep the loading screen as template-owned HTML over the
-    canvas. Import `platform-sdk.js` before appending `game.js`, expose only the
-    internal progress/hide hooks used by `platform_sdk_web.c`, and let the C
-    lifecycle call hide only after the first playable frame has been presented.
+    canvas. Staged builds import `platform-sdk.js` before appending `game.js`;
+    release packaging may embed the selected modules at the start of `game.js`.
+    Expose only the internal progress/hide hooks used by `platform_sdk_web.c`,
+    and let the C lifecycle hide only after the first playable frame.
 
 11. If the template/game wants the built-in debug controls, compile the
     template-local C/Clay UI module (`src/ui/platform_sdk_debug.c`) and pass
@@ -126,6 +127,10 @@ platform-sdk.js          # internal web backend bootstrap for C bridge
 platform-sdk-core.js
 platform-sdk-adapter.js   # selected adapter only
 ```
+
+The release packer verifies those canonical staged bytes, embeds them before
+the Emscripten loader in `game.js`, and omits the three standalone module files
+from the final upload ZIP.
 
 The debug/test panel is C UI in the game/template binary. It is not copied as a
 web JavaScript file.

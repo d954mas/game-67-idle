@@ -195,9 +195,10 @@ The game-owned portions of items and progression remain in the template:
   builds. Targets are `local`, `itch`, `poki`, `yandex`, and `playgama`; SDK
   adapters are `mock`, `poki`, `yandex`, and `playgama`. `local` and `itch`
   both use `mock` because `mock` is an SDK adapter, not a target, and itch has
-  no mandatory runtime game SDK. Web builds copy only the selected adapter into
-  `platform-sdk-adapter.js`; the pack also owns target manifest inspection and
-  local NDJSON scorecards.
+  no mandatory runtime game SDK. Web builds stage only the selected adapter as
+  `platform-sdk-adapter.js`; release packaging embeds the selected SDK modules
+  into `game.js`. The pack also owns target manifest inspection and local NDJSON
+  scorecards.
 
 ### Ownership model
 

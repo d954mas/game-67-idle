@@ -12,6 +12,13 @@
     "platform-sdk-core.js",
     "platform-sdk-adapter.js"
   ],
+  "packaged_required_files": [
+    "index.html",
+    "game.js",
+    "game.wasm",
+    "assets/game.ntpack",
+    "runtime-build.json"
+  ],
   "optional_files": [
     "assets/music.ntpack",
     "assets/cosmetics.ntpack",
@@ -24,7 +31,7 @@
     "loading-title.webp",
     "loading-tram.webp"
   ],
-  "zip_layout": "Flat upload root accepted by Poki Inspector: index.html, game.js, game.wasm, runtime-build.json, platform-sdk*.js, and assets/game.ntpack.",
+  "zip_layout": "Flat upload root accepted by Poki Inspector: index.html, bundled game.js, game.wasm, runtime-build.json, and assets/game.ntpack.",
   "metadata": {
     "portal": "Poki Inspector",
     "requires_account": true,
@@ -35,7 +42,7 @@
   "sdk_policy": {
     "adapter": "poki",
     "sdk_url": "https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
-    "load_policy": "platform-sdk-adapter.js loads the SDK during selected web backend init; no HTML injection.",
+    "load_policy": "The selected adapter is embedded into game.js and loads the SDK during web backend init; no HTML injection.",
     "ads": "commercialBreak for interstitial, rewardedBreak for rewarded opt-in",
     "debug_ui": "forbidden in release artifact",
     "forbidden_markers": [

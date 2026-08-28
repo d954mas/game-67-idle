@@ -54,6 +54,11 @@ const WASM_FORBIDDEN_MARKERS = [
   ".debug_",
   ...AUDIO_SMOKE_MARKERS,
 ];
+const PLATFORM_MODULE_PATHS = [
+  "platform-sdk.js",
+  "platform-sdk-core.js",
+  "platform-sdk-adapter.js",
+];
 
 const slash = (value) => String(value || "").replaceAll("\\", "/");
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -198,9 +203,10 @@ function targetManifest(studioRoot, target) {
   if (!TARGETS.has(target)) throw new Error(`unknown package target: ${target} (use ${[...TARGETS].join("|")})`);
   const path = join(studioRoot, "features", "platform-sdk", "publish-targets", `${target}.json`);
   const value = readJson(path, `${target} publish manifest`);
-  exactKeys(value, ["schema", "target", "platform_sdk", "required_files", "optional_files", "zip_layout", "metadata", "sdk_policy", "validation_command"], `${target} publish manifest`);
+  exactKeys(value, ["schema", "target", "platform_sdk", "required_files", "packaged_required_files", "optional_files", "zip_layout", "metadata", "sdk_policy", "validation_command"], `${target} publish manifest`);
   if (value.schema !== "ai_studio.publish_target.v1" || value.target !== target || !/^[a-z][a-z0-9-]*$/.test(value.platform_sdk || "")
       || !Array.isArray(value.required_files) || value.required_files.length === 0
+      || !Array.isArray(value.packaged_required_files) || value.packaged_required_files.length === 0
       || !Array.isArray(value.optional_files)) throw new Error(`${target} publish manifest is invalid`);
   const normalizePaths = (paths, label) => {
     if (paths.some((path) => typeof path !== "string" || path.includes("\\"))) throw new Error(`${target} publish manifest ${label} are invalid`);
@@ -210,9 +216,13 @@ function targetManifest(studioRoot, target) {
     return normalized;
   };
   const required = normalizePaths(value.required_files, "required_files");
+  const packagedRequired = normalizePaths(value.packaged_required_files, "packaged_required_files");
   const optional = normalizePaths(value.optional_files, "optional_files");
   if (optional.some((path) => required.includes(path))) throw new Error(`${target} publish manifest optional_files overlap required_files`);
-  return { ...value, required_files: required, optional_files: optional };
+  if (optional.some((path) => packagedRequired.includes(path))) {
+    throw new Error(`${target} publish manifest optional_files overlap packaged_required_files`);
+  }
+  return { ...value, required_files: required, packaged_required_files: packagedRequired, optional_files: optional };
 }
 
 function collectFiles(root) {
@@ -743,6 +753,83 @@ function expectedPlatformBytes(studioRoot, adapter) {
   ]);
 }
 
+function classicPlatformModule(input, label) {
+  const output = [];
+  const expectedImports = label === "platform-sdk.js" ? new Set([
+    'import { createPlatformSdkWebBackend } from "./platform-sdk-core.js";',
+    'import { createPlatformSdkAdapter } from "./platform-sdk-adapter.js";',
+  ]) : new Set();
+  for (const line of String(input).split(/\r?\n/)) {
+    if (/^\s*import\s/.test(line)) {
+      if (!expectedImports.delete(line.trim())) throw new Error(`unsupported ES module import in ${label}`);
+      continue;
+    }
+    const classic = line.replace(
+      /^(\s*)export\s+((?:async\s+)?function|const|let|var|class)\b/,
+      "$1$2",
+    );
+    if (/^\s*(?:import|export)\b/.test(classic)) {
+      throw new Error(`unsupported ES module syntax in ${label}`);
+    }
+    output.push(classic);
+  }
+  if (expectedImports.size !== 0) throw new Error(`required ES module import is missing from ${label}`);
+  return output.join("\n").trimEnd();
+}
+
+function platformBundlePrefix(studioRoot, adapter) {
+  const sources = expectedPlatformBytes(studioRoot, adapter);
+  const ordered = [
+    ["platform-sdk-core.js", sources.get("platform-sdk-core.js")],
+    ["platform-sdk-adapter.js", sources.get("platform-sdk-adapter.js")],
+    ["platform-sdk.js", sources.get("platform-sdk.js")],
+  ];
+  const body = ordered.map(([path, bytes]) => classicPlatformModule(bytes.toString("utf8"), path)).join("\n\n");
+  return Buffer.from(`(function () {\n${body}\n}());\n`, "utf8");
+}
+
+export function bundlePlatformIntoGame(loader, studioRoot, adapter) {
+  return Buffer.concat([platformBundlePrefix(studioRoot, adapter), Buffer.from(loader)]);
+}
+
+function bundledReleaseHtml(input) {
+  let replacements = 0;
+  const html = String(input).replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi, (whole, rawAttributes, body) => {
+    const attributes = scriptAttributes(rawAttributes);
+    const type = String(attributes.get("type") || "").trim().toLowerCase();
+    if (type !== "module" || !/^\s*import\s+["']\.\/platform-sdk\.js["'];?/m.test(body)) return whole;
+    const bundledBody = body.replace(/^\s*import\s+["']\.\/platform-sdk\.js["'];?\s*$/gm, () => {
+      replacements += 1;
+      return "";
+    });
+    return whole.replace(body, bundledBody);
+  });
+  if (replacements > 1) throw new Error("release HTML has multiple platform SDK module bootstraps");
+  if (replacements === 0) parseReleaseConfig(String(input));
+  const executableHtml = html.replace(/<!--[\s\S]*?-->/g, "");
+  if (/platform-sdk(?:-core|-adapter)?\.js/i.test(executableHtml)) {
+    throw new Error("release HTML contains an unsupported platform SDK bootstrap");
+  }
+  return Buffer.from(html, "utf8");
+}
+
+function packagedWebFiles(files, studioRoot, adapter) {
+  return files
+    .filter(({ path }) => !PLATFORM_MODULE_PATHS.includes(path))
+    .map(({ path, bytes }) => {
+      if (path === "game.js") return { path, bytes: bundlePlatformIntoGame(bytes, studioRoot, adapter) };
+      if (path === "index.html") return { path, bytes: bundledReleaseHtml(bytes.toString("utf8")) };
+      return { path, bytes };
+    });
+}
+
+function validateBundledPlatform(input, studioRoot, adapter, label) {
+  const expected = platformBundlePrefix(studioRoot, adapter);
+  const actual = Buffer.isBuffer(input) ? input : Buffer.from(input || "");
+  if (actual.subarray(0, expected.length).equals(expected)) return;
+  throw new Error(`${label} does not embed the selected platform SDK source`);
+}
+
 function fileBytes(artifactDir, paths) {
   return paths.map((path) => ({ path, bytes: readFileSync(join(artifactDir, ...path.split("/"))) }));
 }
@@ -837,7 +924,8 @@ function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuil
   const contract = targetManifest(studioRoot, target);
   const actual = [...entries.keys()];
   const required = requireRuntimeBuild
-    ? contract.required_files : contract.required_files.filter((path) => path !== "runtime-build.json");
+    ? contract.packaged_required_files
+    : contract.required_files.filter((path) => path !== "runtime-build.json");
   const optionalSet = new Set(contract.optional_files);
   const expected = [...required, "release.json"].sort();
   const actualLessOptional = actual.filter((path) => !optionalSet.has(path)).sort();
@@ -857,9 +945,14 @@ function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuil
   validateWasmRelease(entries.get("game.wasm"));
   if (requireRuntimeBuild) validateRuntimeBuildWitness(entries.get("game.wasm"), runtimeBuild);
   validateGameLoader(entries.get("game.js"), "reopened ZIP game.js");
-  for (const [path, expected] of expectedPlatformBytes(studioRoot, contract.platform_sdk)) {
-    if (!entries.get(path)?.equals(expected)) {
-      throw new Error(path === "platform-sdk-adapter.js" ? "reopened ZIP platform adapter mismatch" : `reopened ZIP platform source mismatch for ${path}`);
+  if (requireRuntimeBuild) {
+    validateBundledPlatform(entries.get("game.js"), studioRoot, contract.platform_sdk, "reopened ZIP game.js");
+  } else {
+    for (const [path, expected] of expectedPlatformBytes(studioRoot, contract.platform_sdk)) {
+      if (!entries.get(path)?.equals(expected)) {
+        throw new Error(path === "platform-sdk-adapter.js"
+          ? "reopened ZIP platform adapter mismatch" : `reopened ZIP platform source mismatch for ${path}`);
+      }
     }
   }
   const forbidden = [...new Set([...(contract.sdk_policy?.forbidden_markers || []), ...RELEASE_FORBIDDEN_TEXT_MARKERS])];
@@ -939,7 +1032,8 @@ export function packageWebArtifact(options) {
     validated.runtimeBuild.fingerprint,
     options.proof || "game",
   );
-  const entries = [...validated.files, { path: "release.json", bytes: jsonBytes(release) }];
+  const releaseFiles = packagedWebFiles(validated.files, studioRoot, validated.contract.platform_sdk);
+  const entries = [...releaseFiles, { path: "release.json", bytes: jsonBytes(release) }];
   const zipBytes = createStoreZip(entries);
   const outDir = resolve(options.outDir || join(gameDir, "release", "artifacts"));
   mkdirSync(outDir, { recursive: true });

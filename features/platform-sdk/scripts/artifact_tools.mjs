@@ -13,6 +13,45 @@ export const REAL_SDK_MARKERS = Object.freeze({
 });
 
 export const DEBUG_MARKERS = Object.freeze(["Show interstitial ad", "Show rewarded ad", "debug_test"]);
+const STAGED_WEB_MODULES = Object.freeze([
+  "platform-sdk.js",
+  "platform-sdk-core.js",
+  "platform-sdk-adapter.js",
+]);
+
+function classicPlatformModule(input, label) {
+  const output = [];
+  const expectedImports = label === "platform-sdk.js" ? new Set([
+    'import { createPlatformSdkWebBackend } from "./platform-sdk-core.js";',
+    'import { createPlatformSdkAdapter } from "./platform-sdk-adapter.js";',
+  ]) : new Set();
+  for (const line of String(input).split(/\r?\n/)) {
+    if (/^\s*import\s/.test(line)) {
+      if (!expectedImports.delete(line.trim())) throw new Error(`unsupported ES module import in ${label}`);
+      continue;
+    }
+    const classic = line.replace(
+      /^(\s*)export\s+((?:async\s+)?function|const|let|var|class)\b/,
+      "$1$2",
+    );
+    if (/^\s*(?:import|export)\b/.test(classic)) throw new Error(`unsupported ES module syntax in ${label}`);
+    output.push(classic);
+  }
+  if (expectedImports.size !== 0) throw new Error(`required ES module import is missing from ${label}`);
+  return output.join("\n").trimEnd();
+}
+
+export function platformSdkBundlePrefix(sdk) {
+  const sources = [
+    ["platform-sdk-core.js", join(WEB_DIR, "platform-sdk-core.js")],
+    ["platform-sdk-adapter.js", join(WEB_DIR, "adapters", `${sdk}.js`)],
+    ["platform-sdk.js", join(WEB_DIR, "platform-sdk.js")],
+  ];
+  const body = sources.map(([label, path]) => (
+    classicPlatformModule(readFileSync(path, "utf8"), label)
+  )).join("\n\n");
+  return Buffer.from(`(function () {\n${body}\n}());\n`, "utf8");
+}
 
 export function sdkForTarget(target) {
   if (target === "local" || target === "itch") return "mock";
@@ -69,9 +108,34 @@ export function inspectPlatformSdkArtifact({ target, artifactDir, production = t
       violations.push({ file: manifestPath, marker: target, reason: "missing-manifest" });
     } else {
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-      for (const rel of manifest.required_files || []) {
+      const stagedModuleCount = STAGED_WEB_MODULES.filter((rel) => existsSync(join(artifactDir, rel))).length;
+      const staged = stagedModuleCount === STAGED_WEB_MODULES.length;
+      if (stagedModuleCount !== 0 && !staged) {
+        violations.push({
+          file: artifactDir,
+          marker: STAGED_WEB_MODULES.join(","),
+          reason: "partial-platform-sdk-layout",
+        });
+      }
+      const required = staged ? manifest.required_files : manifest.packaged_required_files;
+      if (!Array.isArray(required)) {
+        violations.push({ file: manifestPath, marker: "packaged_required_files", reason: "invalid-manifest" });
+      }
+      for (const rel of required || []) {
         if (!existsSync(join(artifactDir, rel))) {
           violations.push({ file: join(artifactDir, rel), marker: rel, reason: "missing-required-file" });
+        }
+      }
+      const gamePath = join(artifactDir, "game.js");
+      const gameSource = existsSync(gamePath) ? readFileSync(gamePath) : Buffer.alloc(0);
+      const expected = platformSdkBundlePrefix(sdk);
+      const hasBundledSdk = gameSource.subarray(0, expected.length).equals(expected);
+      if (staged && hasBundledSdk) {
+        violations.push({ file: gamePath, marker: sdk, reason: "hybrid-platform-sdk-layout" });
+      }
+      if (!staged) {
+        if (!hasBundledSdk) {
+          violations.push({ file: gamePath, marker: sdk, reason: "invalid-selected-sdk-bundle" });
         }
       }
     }

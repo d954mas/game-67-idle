@@ -12,6 +12,13 @@
     "platform-sdk-core.js",
     "platform-sdk-adapter.js"
   ],
+  "packaged_required_files": [
+    "index.html",
+    "game.js",
+    "game.wasm",
+    "assets/game.ntpack",
+    "runtime-build.json"
+  ],
   "optional_files": [
     "assets/music.ntpack",
     "assets/cosmetics.ntpack",
@@ -24,7 +31,7 @@
     "loading-title.webp",
     "loading-tram.webp"
   ],
-  "zip_layout": "Yandex archive root: index.html, game.js, game.wasm, runtime-build.json, platform-sdk*.js, and assets/game.ntpack. Portal-provided /sdk.js is not bundled.",
+  "zip_layout": "Yandex archive root: index.html, bundled game.js, game.wasm, runtime-build.json, and assets/game.ntpack. Portal-provided /sdk.js is not bundled.",
   "metadata": {
     "portal": "Yandex Games",
     "requires_account": true,
@@ -35,7 +42,7 @@
   "sdk_policy": {
     "adapter": "yandex",
     "sdk_url": "/sdk.js",
-    "load_policy": "platform-sdk-adapter.js loads /sdk.js during selected web backend init; no template HTML injection.",
+    "load_policy": "The selected adapter is embedded into game.js and loads /sdk.js during web backend init; no template HTML injection.",
     "ads": "showFullscreenAdv for interstitial, showRewardedVideo for rewarded",
     "storage": "player data through wrapper only",
     "debug_ui": "forbidden in release artifact",

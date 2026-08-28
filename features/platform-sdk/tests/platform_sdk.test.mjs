@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -26,6 +26,31 @@ const TargetPlatform = Object.freeze({
   YANDEX: "yandex",
   PLAYGAMA: "playgama",
 });
+
+function packagedPlatformPrefix(adapter) {
+  const modules = [
+    ["platform-sdk-core.js", readFileSync(join(HERE, "../web/platform-sdk-core.js"), "utf8")],
+    ["platform-sdk-adapter.js", readFileSync(join(HERE, `../web/adapters/${adapter}.js`), "utf8")],
+    ["platform-sdk.js", readFileSync(join(HERE, "../web/platform-sdk.js"), "utf8")],
+  ];
+  const body = modules.map(([label, source]) => {
+    const expectedImports = label === "platform-sdk.js" ? new Set([
+      'import { createPlatformSdkWebBackend } from "./platform-sdk-core.js";',
+      'import { createPlatformSdkAdapter } from "./platform-sdk-adapter.js";',
+    ]) : new Set();
+    const lines = [];
+    for (const line of source.split(/\r?\n/)) {
+      if (/^\s*import\s/.test(line)) {
+        assert.equal(expectedImports.delete(line.trim()), true, label);
+        continue;
+      }
+      lines.push(line.replace(/^(\s*)export\s+((?:async\s+)?function|const|let|var|class)\b/, "$1$2"));
+    }
+    assert.equal(expectedImports.size, 0, label);
+    return lines.join("\n").trimEnd();
+  }).join("\n\n");
+  return `(function () {\n${body}\n}());\n`;
+}
 
 class FakeElement {
   constructor(tagName) {
@@ -684,6 +709,76 @@ test("production staged artifacts exclude debug labels and unused SDK URLs", () 
     });
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("publish manifests distinguish staged modules from single-JS release packages", () => {
+  for (const target of [TargetPlatform.ITCH, TargetPlatform.POKI, TargetPlatform.YANDEX, TargetPlatform.PLAYGAMA]) {
+    const manifest = JSON.parse(readFileSync(join(HERE, `../publish-targets/${target}.json`), "utf8"));
+    assert.equal(manifest.required_files.includes("platform-sdk.js"), true, target);
+    assert.equal(manifest.packaged_required_files.includes("game.js"), true, target);
+    assert.equal(manifest.packaged_required_files.some((path) => path.startsWith("platform-sdk")), false, target);
+  }
+});
+
+test("artifact inspection accepts a package with the exact bundled Poki backend", () => {
+  const dir = mkdtempSync(join(tmpdir(), "platform-sdk-packaged-"));
+  try {
+    const manifest = JSON.parse(readFileSync(join(HERE, "../publish-targets/poki.json"), "utf8"));
+    for (const path of manifest.packaged_required_files) {
+      const full = join(dir, path);
+      mkdirSync(dirname(full), { recursive: true });
+      writeFileSync(full, path === "game.js"
+        ? `${packagedPlatformPrefix("poki")}var wasmBinaryFile = 'game.wasm';\n`
+        : "fixture");
+    }
+    assert.deepEqual(inspectPlatformSdkArtifact({
+      target: TargetPlatform.POKI,
+      artifactDir: dir,
+      production: true,
+      requireFiles: true,
+    }), { ok: true, violations: [] });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("artifact inspection rejects marker-only and partial platform SDK layouts", () => {
+  for (const [label, mutate] of [
+    ["marker-only bundle", () => {}],
+    ["partial staged modules", (dir) => writeFileSync(join(dir, "platform-sdk.js"), "fixture")],
+    ["bundled loader with staged modules", (dir) => {
+      writeFileSync(join(dir, "game.js"), `${packagedPlatformPrefix("poki")}var wasmBinaryFile = 'game.wasm';\n`);
+      for (const [from, to] of [
+        ["../web/platform-sdk.js", "platform-sdk.js"],
+        ["../web/platform-sdk-core.js", "platform-sdk-core.js"],
+        ["../web/adapters/poki.js", "platform-sdk-adapter.js"],
+      ]) {
+        writeFileSync(join(dir, to), readFileSync(join(HERE, from)));
+      }
+    }],
+  ]) {
+    const dir = mkdtempSync(join(tmpdir(), "platform-sdk-invalid-package-"));
+    try {
+      const manifest = JSON.parse(readFileSync(join(HERE, "../publish-targets/poki.json"), "utf8"));
+      for (const path of manifest.packaged_required_files) {
+        const full = join(dir, path);
+        mkdirSync(dirname(full), { recursive: true });
+        writeFileSync(full, path === "game.js"
+          ? "https://game-cdn.poki.com/scripts/v2/poki-sdk.js PokiSDK"
+          : "fixture");
+      }
+      mutate(dir);
+      const result = inspectPlatformSdkArtifact({
+        target: TargetPlatform.POKI,
+        artifactDir: dir,
+        production: true,
+        requireFiles: true,
+      });
+      assert.equal(result.ok, false, label);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });
 

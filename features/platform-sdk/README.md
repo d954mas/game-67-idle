@@ -58,8 +58,9 @@ features/platform-sdk/
 
 The template consumes this as an in-place L1 module: C code owns target/SDK
 identity, policy capabilities, lifecycle state, gameplay/input guards, ad-flow
-callbacks, and pause/resume listener dispatch. Web builds copy only the selected
-JavaScript backend adapter into the artifact as `platform-sdk-adapter.js`.
+callbacks, and pause/resume listener dispatch. Web builds stage only the selected
+JavaScript backend adapter as `platform-sdk-adapter.js`; release packaging embeds
+the staged SDK modules into `game.js` so the upload has one local JavaScript file.
 The template's debug/test controls are C/Clay UI in
 `templates/template/src/ui/platform_sdk_debug.c`; they are not staged as a web
 JavaScript artifact.

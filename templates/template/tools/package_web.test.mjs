@@ -16,7 +16,9 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 
+import * as packageWeb from "./package_web.mjs";
 import {
   packageWebArtifact,
   validateWebArtifact,
@@ -211,10 +213,71 @@ test("final package is deterministic and binds the reopened ZIP to exact depende
   assert.equal(JSON.parse(zip.get("release.json").toString("utf8")).runtimeBuildFingerprint, item.runtimeBuild.fingerprint);
 });
 
+test("Poki release embeds the selected platform backend into game.js", (t) => {
+  const item = fixture(t, "poki");
+  const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
+  const zip = readStoreZip(readFileSync(result.zipPath));
+
+  assert.equal(zip.has("platform-sdk.js"), false);
+  assert.equal(zip.has("platform-sdk-core.js"), false);
+  assert.equal(zip.has("platform-sdk-adapter.js"), false);
+
+  const gameJs = zip.get("game.js").toString("utf8");
+  const sdkOffset = gameJs.indexOf("https://game-cdn.poki.com/scripts/v2/poki-sdk.js");
+  const loaderOffset = gameJs.indexOf("WebAssembly.instantiateStreaming");
+  assert.notEqual(sdkOffset, -1);
+  assert.ok(loaderOffset > sdkOffset);
+  assert.doesNotMatch(gameJs, /^\s*(?:import|export)\b/m);
+});
+
+test("bundled platform backend executes before the game loader for every adapter", () => {
+  for (const adapter of ["mock", "poki", "yandex", "playgama"]) {
+    const source = packageWeb.bundlePlatformIntoGame(
+      Buffer.from("globalThis.__gameSawPlatformBackend = !!globalThis.__platformSdkInternalBackend;\n"),
+      studioRoot,
+      adapter,
+    ).toString("utf8");
+    const context = { clearTimeout, console, globalThis: null, Promise, setTimeout };
+    context.globalThis = context;
+    runInNewContext(source, context);
+    assert.equal(context.__gameSawPlatformBackend, true, adapter);
+  }
+});
+
+test("reopened Poki package rejects a substituted embedded adapter", (t) => {
+  const item = fixture(t, "poki");
+  const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
+  const entries = readStoreZip(readFileSync(result.zipPath));
+  entries.set("game.js", Buffer.from(entries.get("game.js").toString("utf8").replace(
+    "https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
+    "https://cdn.example/substituted-sdk.js",
+  )));
+  const zipBytes = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
+  writeFileSync(result.zipPath, zipBytes);
+  const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));
+  manifest.artifact.size = zipBytes.length;
+  manifest.artifact.sha256 = sha256(zipBytes);
+  manifest.entries = [...entries].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) }));
+  writeFileSync(result.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  assert.throws(
+    () => verifyWebPackage({
+      zipPath: result.zipPath,
+      manifestPath: result.manifestPath,
+      expectedTarget: "poki",
+      studioRoot,
+    }),
+    /selected platform SDK source/i,
+  );
+});
+
 test("upgraded verifier retains read compatibility with pre-fingerprint v1 packages", (t) => {
   const item = fixture(t);
   const current = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "current") });
   const entries = readStoreZip(readFileSync(current.zipPath));
+  for (const path of ["game.js", "index.html", "platform-sdk.js", "platform-sdk-core.js", "platform-sdk-adapter.js"]) {
+    entries.set(path, readFileSync(join(item.artifactDir, path)));
+  }
   entries.delete("runtime-build.json");
   entries.set("index.html", Buffer.from(entries.get("index.html").toString("utf8")
     .replace(/, runtimeBuildFingerprint: '[0-9a-f]{64}'/, "")));
@@ -413,6 +476,32 @@ test("release bootstrap ignores regex and non-executable script decoys and requi
     "<script>const gameScript = document.createElement('script'); gameScript.src = 'game.js'; document.body.appendChild(gameScript);</script>",
   ].join("\n"));
   assert.doesNotThrow(() => validateWebArtifact({ ...attached, studioRoot }));
+});
+
+test("release bundling rejects duplicate and unsupported platform SDK bootstraps", (t) => {
+  for (const [label, mutate] of [
+    ["duplicate import", (html) => html.replace(
+      "import './platform-sdk.js';",
+      "import './platform-sdk.js';\n  import './platform-sdk.js';",
+    )],
+    ["external module", (html) => html.replace(
+      "<script type=\"module\">",
+      "<script type=\"module\" src=\"platform-sdk.js\">",
+    )],
+    ["dynamic import", (html) => html.replace(
+      "import './platform-sdk.js';",
+      "import('./platform-sdk.js');",
+    )],
+  ]) {
+    const item = fixture(t);
+    const htmlPath = join(item.artifactDir, "index.html");
+    write(htmlPath, mutate(readFileSync(htmlPath, "utf8")));
+    assert.throws(
+      () => packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, label.replaceAll(" ", "-")) }),
+      /platform SDK.*bootstrap|platform-sdk\.js/i,
+      label,
+    );
+  }
 });
 
 test("game.js must be an executable Emscripten-like loader before packaging and after ZIP reopen", (t) => {
