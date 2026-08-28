@@ -160,6 +160,10 @@ possibility, not a feature.
   `game.scene.*` automation, and an agent scaffold. The default template owns
   its root/settings catalog. Reference: `scenes-core/README.md`, `scenes-core/INSTALL.md`, and
   `scenes-core/IMPLEMENTATION-PLAN.md`.
+- `post-aa-example/` (`specified`): copy-and-adapt reference for native output,
+  FXAA, and DPR-aware SSAA in a game's existing world composite. It is not
+  linked by the template or any shipping game.
+
 ## Features (reference implementations live in the template)
 
 `settings` and `resource_panel` do NOT have a library copy under `features/`.

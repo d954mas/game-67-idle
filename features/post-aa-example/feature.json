@@ -1,0 +1,30 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "post-aa-example",
+  "version": "0.1.0",
+  "title": "Post AA Example",
+  "status": "specified",
+  "kind": "presentation",
+  "summary": "Copy-and-adapt reference for native output, FXAA, and DPR-aware SSAA folded into an existing world composite.",
+  "copy_model": "copy-then-own",
+  "layer": "L0",
+  "owners": [
+    "features/post-aa-example"
+  ],
+  "dependencies": [
+    "consumer-owned world render target",
+    "consumer-owned fullscreen composite pass",
+    "WebGL2 or equivalent GLSL textureSize support"
+  ],
+  "commands": {
+    "test_policy": "powershell -NoProfile -ExecutionPolicy Bypass -File features/post-aa-example/tests/run_test.ps1"
+  },
+  "provides": [
+    "reference native, FXAA, and SSAA mode policy",
+    "reference FXAA shader function",
+    "reference four-tap SSAA downsample function"
+  ],
+  "manuals": {
+    "install": "features/post-aa-example/INSTALL.md"
+  }
+}
