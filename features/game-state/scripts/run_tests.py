@@ -17,6 +17,12 @@ TEST_COMMANDS = (
         sys.executable,
         "-m",
         "unittest",
+        str(ROOT / "features/game-state/tests/test_game_storage_web_lto.py"),
+    ),
+    (
+        sys.executable,
+        "-m",
+        "unittest",
         str(ROOT / "features/game-state/benchmarks/benchmark_codegen_test.py"),
     ),
 )
