@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "game-state",
-  "version": "4.3.0",
+  "version": "4.3.1",
   "title": "Game State",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
