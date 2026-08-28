@@ -12,7 +12,9 @@ Turn one ambitious game-quality goal into parallel builder loops with independen
 1. Read the repository instructions and the relevant game sources.
 2. Restate the goal in one sentence.
 3. Select the strongest concrete references available: shipped games, supplied images or video, accepted project targets, and current runtime captures.
-4. Capture the current result before changing it.
+4. Reuse a current matched capture when one exists. Capture a new baseline only
+   when player-visible output is in scope and existing evidence is stale or
+   incomparable.
 5. Define success as an observable comparison, not “looks good for AI.”
 
 Do not start from a vague quality claim when no artifact can be inspected. Obtain or create comparable evidence first.
@@ -51,7 +53,8 @@ Keep coupled work with one builder. Do not split merely to increase agent count.
 
 For every part:
 
-1. Let the builder produce the strongest version it can and capture the actual result.
+1. Let the builder produce the strongest version it can. Require a new capture
+   only for player-visible changes; internal work returns targeted checks.
 2. Spawn a separate fresh critic with read-only responsibility. Do not give it the builder’s rationale or self-review.
 3. Give the critic the reference and current result under matched conditions. For visual work, require side-by-side inspection at the same viewport, camera, state, and scale. Use neutral labels when practical.
 4. Require the critic to return:
@@ -59,7 +62,9 @@ For every part:
    - the largest visible or experiential gap;
    - concrete evidence, not taste-only language;
    - the next smallest change most likely to close the gap.
-5. If the project result loses, send the finding to the builder, recapture the result, and ask a fresh critic to judge the new evidence.
+5. If the project result loses, send the finding to the builder. Recapture only
+   when the next change affects the judged pixels or interaction, then ask a
+   fresh critic to judge the new evidence.
 6. Continue until the project result matches or beats the reference for that part, the user stops the run, or a genuine blocker requires the user.
 
 A builder cannot approve its own work. Tests cannot substitute for seeing player-facing output. A critic cannot pass work it did not inspect.
@@ -68,7 +73,9 @@ A builder cannot approve its own work. Tests cannot substitute for seeing player
 
 After independently improved parts land, inspect the whole experience. Use one fresh integration critic to find inconsistencies, regressions, and seams between individually strong parts. Fix those without redesigning accepted work.
 
-Run the game’s real checks and replay the target experience. Compare the final result with the baseline and references.
+Run the game’s fast gate and the targeted checks for changed subsystems. Replay
+and capture the target experience only for player-visible work. Run the full
+release gate once at a release boundary or when the user requests it.
 
 ## Stop honestly
 
