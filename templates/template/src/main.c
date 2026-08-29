@@ -45,6 +45,9 @@
 #include "loc_strings.gen.h"
 #include "features/platform_sdk/platform_sdk.h"
 #include "features/platform_sdk/platform_sdk_events.h"
+#if defined(__EMSCRIPTEN__)
+#include "features/platform_sdk/platform_sdk_web.h"
+#endif
 #include "features/settings/settings.h"
 #include "game_audio.h"
 #include "game_input.h"
@@ -126,11 +129,29 @@ static uint16_t s_devapi_port = NT_DEVAPI_DEFAULT_PORT;
 
 static nt_hash64_t rid(const char *s) { return nt_hash64_str(s); }
 
+#if defined(__EMSCRIPTEN__)
+/* clang-format off */
+EM_JS(double, game_expected_pack_bytes, (void), {
+    var bytes = globalThis.__gameAssetBytes && globalThis.__gameAssetBytes.pack;
+    return bytes > 0 ? bytes : 0;
+})
+/* clang-format on */
+#endif
+
 static float initial_pack_loading_progress(void) {
     uint32_t received = 0u;
     uint32_t total = 0u;
     const nt_pack_state_t state = nt_resource_pack_state(s_pack_id);
     nt_resource_pack_progress(s_pack_id, &received, &total);
+#if defined(__EMSCRIPTEN__)
+    /* A CDN that compresses on the fly sends no Content-Length, so the engine's
+       total stays 0 while the bytes it counts are already decompressed. The
+       build wrote the real size into the shell; the header is only a fallback. */
+    const uint32_t expected = (uint32_t)game_expected_pack_bytes();
+    if (expected > 0u) {
+        total = expected;
+    }
+#endif
     return platform_lifecycle_loading_progress_from_pack(received, total, state == NT_PACK_STATE_READY);
 }
 
@@ -613,6 +634,13 @@ int main(int argc, char **argv) {
     game_items_configure_save();
     game_save_set_hot_snapshot_buffer(s_save_snapshot, sizeof s_save_snapshot);
     game_save_init();
+
+    /* The loading bar is the pack download: the backend must be able to carry
+       progress before the pack starts, not after it is ready. SDK init still
+       waits for the runtime; installing a backend only wires the callbacks. */
+#if defined(__EMSCRIPTEN__)
+    platform_sdk_install_web_backend();
+#endif
 
     s_pack_id = nt_hash32_str("game");
     nt_resource_mount(s_pack_id, 100);

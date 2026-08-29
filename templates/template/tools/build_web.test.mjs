@@ -38,18 +38,19 @@ test("plan preserves build dirs local cache native pack web targets and final me
   assert.equal(slash(plan.env.EM_CACHE), "/repo/templates/template/build/emscripten-cache");
   assert.equal(slash(plan.nativeDir), "/repo/templates/template/build/native-debug");
   assert.equal(slash(plan.webDir), "/repo/templates/template/build/wasm-devapi-debug-yandex");
-  assert.deepEqual(plan.steps.map((step) => step.kind), ["mkdir", "run", "run", "run", "run", "run", "copy", "write"]);
+  assert.deepEqual(plan.steps.map((step) => step.kind), ["mkdir", "run", "run", "run", "run", "run", "copy", "run", "write"]);
   const runSteps = plan.steps.filter((step) => step.kind === "run");
   assert.equal(runSteps[0].args.slice(-3).join(" "), "-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Debug");
-  assert.deepEqual(runSteps.slice(1).map((step) => step.args.slice(-2).join(" ")), [
+  assert.deepEqual(runSteps.slice(1, -1).map((step) => step.args.slice(-2).join(" ")), [
     "--target game_asset_packs",
     "-DGAME_PLATFORM_SDK_DEBUG_UI=ON -DGAME_DEVAPI_ENABLED=ON",
     "--target game",
     "--target platform_sdk_web_assets",
   ]);
   assert.equal(plan.steps.at(-1).kind, "write");
-  assert.equal(slash(plan.steps.at(-2).from), "/repo/templates/template/build/native-debug/bin/assets/game.ntpack");
-  assert.equal(slash(plan.steps.at(-2).to), "/repo/templates/template/build/wasm-devapi-debug-yandex/bin/assets/game.ntpack");
+  const packCopy = plan.steps.find((step) => step.kind === "copy" && String(step.to).endsWith("game.ntpack"));
+  assert.equal(slash(packCopy.from), "/repo/templates/template/build/native-debug/bin/assets/game.ntpack");
+  assert.equal(slash(packCopy.to), "/repo/templates/template/build/wasm-devapi-debug-yandex/bin/assets/game.ntpack");
   assert.equal(slash(plan.steps.at(-1).path), "/repo/templates/template/build/wasm-devapi-debug-yandex/bin/runtime-build.json");
   assert.deepEqual(plan.steps.at(-1).value, runtimeBuild);
   const configure = plan.steps.find((step) => step.kind === "run" && step.args.includes("-DGAME_PUBLISH_TARGET=yandex"));

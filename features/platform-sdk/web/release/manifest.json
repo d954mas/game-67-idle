@@ -9,28 +9,28 @@
   },
   "adapters": {
     "mock": {
-      "sourceSha256": "50346b4bb58e8db80f837fccc93579f930595c15b6f597f4cfabe88b1220b82f",
-      "bundleSha256": "9d7b6afd5d97243f9a344854658afed805aa14f2e7d1b17d5003e57adbd487c7",
-      "sourceBytes": 2935,
-      "bundleBytes": 1643
+      "sourceSha256": "013791cead8c9fc9cf08a7cc2b5251e5ba134c18a0ae5614c23172354f801f6b",
+      "bundleSha256": "5f480f50d3bf5b9cf2fb67de725f6d9d23fea64993a394c18e513e8078cace4c",
+      "sourceBytes": 3084,
+      "bundleBytes": 1645
     },
     "poki": {
-      "sourceSha256": "da6a88db4d7736a415a436f3e2978808f7ec5c530953c49f20cc0be08c7ec035",
-      "bundleSha256": "e7fe4cd703cab47da1d0a4851dfe730a60da282bacf3b034ec6da785cd7be13c",
-      "sourceBytes": 6926,
-      "bundleBytes": 2965
+      "sourceSha256": "071fc663538bb6bcf50413d9527caeea85eb4a38c8afab6de67d10abd01c9365",
+      "bundleSha256": "cf5fbe534141affe71af320b90a13a1a4fd47594bccb05a27461aa36fd816977",
+      "sourceBytes": 7075,
+      "bundleBytes": 2967
     },
     "yandex": {
-      "sourceSha256": "91db9f3b10fb6687087523312b2f22ebc158456e5aabc3c1566b3d9e18248cc4",
-      "bundleSha256": "eec2aeae595c748d1991e791c9e2c07a779c5172cd3d6e55d42e6d0b7c51e3da",
-      "sourceBytes": 6333,
-      "bundleBytes": 3242
+      "sourceSha256": "9d16c2a0fd593f6b03a5aafb7c0e1f08e0190f6df40aa692461e72c9a5aedd08",
+      "bundleSha256": "36512322b8bfedc5fdcbea2809adf856d115a6d4f927525b2ba12614fddba5cf",
+      "sourceBytes": 6482,
+      "bundleBytes": 3244
     },
     "playgama": {
-      "sourceSha256": "864a71f875f12f273cd32a930b60b81f4b4b3ec0679f689c3a3dd6a4e757ca78",
-      "bundleSha256": "bdbc256e301abbc31f17fcc3e48ab2af1b7807e61a49dbb6c04039dba7b473ce",
-      "sourceBytes": 7298,
-      "bundleBytes": 3635
+      "sourceSha256": "cb8653eacc3aaf79f7108421d14d42e76ebcd710c3cb2ad278ec2a225c010542",
+      "bundleSha256": "ee4898b2e710b1f5e44e9987a259148e8f0b55c449152f17c74c91d754aaa017",
+      "sourceBytes": 7447,
+      "bundleBytes": 3637
     }
   }
 }

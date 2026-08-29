@@ -30,9 +30,6 @@
 static bool s_settings_was_open;
 
 void game_features_init(World *w) {
-#if defined(__EMSCRIPTEN__)
-    platform_sdk_install_web_backend();
-#endif
     platform_sdk_debug_init();
     (void)game_audio_init();
     s_settings_was_open = settings_is_open();

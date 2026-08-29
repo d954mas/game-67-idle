@@ -180,9 +180,9 @@ static void test_gameplay_intent_starts_and_menu_stops_gameplay(void) {
 
 static void test_loading_progress_mapping_handles_unknown_total(void) {
     TEST_ASSERT_TRUE(float_close(platform_lifecycle_loading_progress_from_pack(0u, 0u, false), 0.45f));
-    TEST_ASSERT_TRUE(float_close(platform_lifecycle_loading_progress_from_pack(25u, 100u, false), 0.5875f));
-    TEST_ASSERT_TRUE(float_close(platform_lifecycle_loading_progress_from_pack(125u, 100u, false), 1.0f));
-    TEST_ASSERT_TRUE(float_close(platform_lifecycle_loading_progress_from_pack(0u, 0u, true), 1.0f));
+    TEST_ASSERT_TRUE(float_close(platform_lifecycle_loading_progress_from_pack(25u, 100u, false), 0.5625f));
+    TEST_ASSERT_TRUE(float_close(platform_lifecycle_loading_progress_from_pack(125u, 100u, false), 0.90f));
+    TEST_ASSERT_TRUE(float_close(platform_lifecycle_loading_progress_from_pack(0u, 0u, true), 0.90f));
 }
 
 int main(void) {

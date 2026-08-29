@@ -101,7 +101,18 @@
     var label = document.getElementById('loading-label');
     var percent = document.getElementById('loading-percent');
     var bar = document.getElementById('loading-bar');
+    // `progress` is what the player sees; it eases toward `target`, which is
+    // the last measured value. Loading reports arrive in coarse steps, and a
+    // bar that jumps and then freezes reads as a hung game.
     var progress = 0;
+    var target = 0;
+    var easing = false;
+    // Hosts without a frame clock (headless contract checks) still have to be
+    // able to run the shell: fall back to a timer, then to a direct call.
+    var raf = window.requestAnimationFrame ||
+      (typeof setTimeout === 'function'
+        ? function (callback) { return setTimeout(callback, 16); }
+        : function (callback) { callback(); });
     var lastWhole = -1;
     var hidden = false;
 
@@ -122,18 +133,34 @@
       if (label && whole >= 100) label.textContent = 'Finalizing';
     }
 
+    function ease() {
+      var delta = target - progress;
+      if (delta <= 0.001) {
+        progress = target;
+        easing = false;
+        render();
+        return;
+      }
+      progress += Math.max(delta * 0.16, 0.002);
+      if (progress > target) progress = target;
+      render();
+      raf(ease);
+    }
+
     window.__platformSdkSetLoadingProgress = function (value) {
       if (hidden) return;
-      progress = Math.max(progress, clamp(value));
-      render();
+      target = Math.max(target, clamp(value));
+      if (easing) return;
+      easing = true;
+      raf(ease);
     };
 
     window.__platformSdkHideLoadingOverlay = function () {
       if (hidden) return;
       hidden = true;
       progress = 1;
+      target = 1;
       render();
-      var raf = window.requestAnimationFrame || function (callback) { return setTimeout(callback, 16); };
       raf(function () {
         raf(function () {
           if (!overlay) return;
@@ -170,9 +197,71 @@
     window.__platformSdkSetLoadingProgress(0.01);
   }());
 
+  // Filled in by the build with the DECOMPRESSED byte sizes. A CDN that
+  // compresses on the fly sends no Content-Length (or the compressed one), while
+  // the stream a page reads is already decompressed, so the header cannot size
+  // the download. Zero means "unknown": fall back to Content-Length.
+  window.__gameAssetBytes = { wasm: 0, pack: 0 };
+
   var Module = {
     canvas: document.getElementById('canvas'),
     @GAME_DEVAPI_MODULE_ARGS@
+    // The wasm download is the longest stretch of a cold start. Emscripten's
+    // own fetch reports nothing, so the bar would sit still for seconds; this
+    // takes the stream over only to count bytes into the shell's first band.
+    instantiateWasm: function (imports, successCallback) {
+      var BAND_START = 0.02;
+      var BAND_END = 0.40;
+
+      function report(received, total) {
+        var ratio = received / total;
+        if (!(ratio > 0)) return;
+        if (ratio > 1) ratio = 1;
+        window.__platformSdkSetLoadingProgress(BAND_START + ratio * (BAND_END - BAND_START));
+      }
+
+      // Counting happens inside the body stream so the response stays
+      // streamable: instantiateStreaming still compiles while bytes arrive.
+      function countBytes(response) {
+        var total = window.__gameAssetBytes.wasm || Number(response.headers.get('content-length')) || 0;
+        if (!total || !response.body || typeof ReadableStream !== 'function') return response;
+        var reader = response.body.getReader();
+        var received = 0;
+        var counted = new ReadableStream({
+          pull: function (controller) {
+            return reader.read().then(function (chunk) {
+              if (chunk.done) { controller.close(); return; }
+              received += chunk.value.byteLength;
+              report(received, total);
+              controller.enqueue(chunk.value);
+            });
+          },
+          cancel: function (reason) { return reader.cancel(reason); }
+        });
+        return new Response(counted, { headers: { 'content-type': 'application/wasm' } });
+      }
+
+      function instantiate(response) {
+        if (typeof WebAssembly.instantiateStreaming === 'function') {
+          return WebAssembly.instantiateStreaming(response, imports);
+        }
+        return response.arrayBuffer().then(function (bytes) {
+          return WebAssembly.instantiate(bytes, imports);
+        });
+      }
+
+      fetch('game.wasm', { credentials: 'same-origin' }).then(function (response) {
+        if (!response.ok) throw new Error('game.wasm http ' + response.status);
+        return instantiate(countBytes(response));
+      }).then(function (result) {
+        window.__platformSdkSetLoadingProgress(BAND_END);
+        successCallback(result.instance, result.module);
+      }).catch(function (error) {
+        console.error(error);
+        window.__showRuntimeFatal();
+      });
+      return {}; // asynchronous instantiation: exports arrive through successCallback
+    },
     onRuntimeInitialized: function () {
       window.__platformSdkSetLoadingProgress(0.45);
     },

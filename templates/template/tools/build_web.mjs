@@ -83,6 +83,15 @@ export function createBuildPlan(options) {
   steps.push({ kind: "run", command: configureCommand, args: configureArgs });
   steps.push({ kind: "run", command: "cmake", args: ["--build", webDir, "--target", "game"] });
   steps.push({ kind: "run", command: "cmake", args: ["--build", webDir, "--target", "platform_sdk_web_assets"] });
+  steps.push({ kind: "copy", from: join(nativeDir, "bin", "assets", "game.ntpack"), to: join(webDir, "bin", "assets", "game.ntpack") });
+  // Download sizes reach the shell before minification and only once the packs
+  // are staged: they exist nowhere but on disk, and no CDN header can replace
+  // them once the transfer is compressed.
+  steps.push({
+    kind: "run",
+    command: process.execPath,
+    args: [join(gameDir, "tools", "inject_asset_bytes.mjs"), "--artifact", join(webDir, "bin")],
+  });
   if (args.preset === "wasm-release") {
     steps.push({
       kind: "run",
@@ -90,7 +99,6 @@ export function createBuildPlan(options) {
       args: [join(gameDir, "tools", "minify_web_release.mjs"), "--artifact", join(webDir, "bin")],
     });
   }
-  steps.push({ kind: "copy", from: join(nativeDir, "bin", "assets", "game.ntpack"), to: join(webDir, "bin", "assets", "game.ntpack") });
   if (runtimeBuild) steps.push({ kind: "write", path: join(webDir, "bin", "runtime-build.json"), value: runtimeBuild });
   return {
     env, nativeDir, webDir, steps, verifyRuntimeBuild: options.verifyRuntimeBuild,

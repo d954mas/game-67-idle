@@ -50,9 +50,11 @@ void platform_lifecycle_after_frame_present(bool playable_shell_ready) {
     }
 }
 
+// The pack download owns 0.45..0.90; the tail belongs to asset activation and
+// the first presented frame, which only after_frame_present can confirm.
 float platform_lifecycle_loading_progress_from_pack(unsigned int received, unsigned int total, bool pack_ready) {
     if (pack_ready) {
-        return 1.0f;
+        return 0.90f;
     }
     if (total == 0u) {
         return 0.45f;
@@ -63,7 +65,7 @@ float platform_lifecycle_loading_progress_from_pack(unsigned int received, unsig
     } else if (pack_progress > 1.0f) {
         pack_progress = 1.0f;
     }
-    return 0.45f + (pack_progress * 0.55f);
+    return 0.45f + (pack_progress * 0.45f);
 }
 
 void platform_lifecycle_shutdown(void) {
