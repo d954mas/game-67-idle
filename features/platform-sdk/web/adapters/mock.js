@@ -1,4 +1,4 @@
-export function createMockPlatformAdapter({ emitVisibilityChange, host, target }) {
+export function createMockPlatformAdapter({ emitVisibilityChange = () => {}, host, target }) {
   const document = host && host.document;
   const isLocal = target === "local";
   let destroyed = false;
@@ -78,11 +78,13 @@ export function createMockPlatformAdapter({ emitVisibilityChange, host, target }
     gameplayStart() {},
     gameplayStop() {},
     getLocale,
+    hideBanner() {},
     loadData,
     measure,
     measureTrace,
     ready,
     saveData,
+    showBanner: unsupportedInterstitial,
     showInterstitial,
     showRewarded,
   };

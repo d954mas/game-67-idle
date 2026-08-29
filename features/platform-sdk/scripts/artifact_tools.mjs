@@ -15,14 +15,12 @@ export const REAL_SDK_MARKERS = Object.freeze({
 export const DEBUG_MARKERS = Object.freeze(["Show interstitial ad", "Show rewarded ad", "debug_test"]);
 const STAGED_WEB_MODULES = Object.freeze([
   "platform-sdk.js",
-  "platform-sdk-core.js",
   "platform-sdk-adapter.js",
 ]);
 
 function classicPlatformModule(input, label) {
   const output = [];
   const expectedImports = label === "platform-sdk.js" ? new Set([
-    'import { createPlatformSdkWebBackend } from "./platform-sdk-core.js";',
     'import { createPlatformSdkAdapter } from "./platform-sdk-adapter.js";',
   ]) : new Set();
   for (const line of String(input).split(/\r?\n/)) {
@@ -43,7 +41,6 @@ function classicPlatformModule(input, label) {
 
 export function platformSdkBundlePrefix(sdk) {
   const sources = [
-    ["platform-sdk-core.js", join(WEB_DIR, "platform-sdk-core.js")],
     ["platform-sdk-adapter.js", join(WEB_DIR, "adapters", `${sdk}.js`)],
     ["platform-sdk.js", join(WEB_DIR, "platform-sdk.js")],
   ];
@@ -70,8 +67,8 @@ export function stagePlatformSdkWebAssets({ target, outDir, debugUi = false }) {
   const resolvedOut = resolve(outDir);
   mkdirSync(resolvedOut, { recursive: true });
   copyFile(join(WEB_DIR, "platform-sdk.js"), join(resolvedOut, "platform-sdk.js"));
-  copyFile(join(WEB_DIR, "platform-sdk-core.js"), join(resolvedOut, "platform-sdk-core.js"));
   copyFile(join(WEB_DIR, "adapters", `${sdk}.js`), join(resolvedOut, "platform-sdk-adapter.js"));
+  rmSync(join(resolvedOut, "platform-sdk-core.js"), { force: true });
   if (target === "playgama") {
     copyFile(
       join(WEB_DIR, "portal", "playgama-bridge-config.json"),

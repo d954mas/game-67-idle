@@ -56,7 +56,6 @@ const WASM_FORBIDDEN_MARKERS = [
 ];
 const PLATFORM_MODULE_PATHS = [
   "platform-sdk.js",
-  "platform-sdk-core.js",
   "platform-sdk-adapter.js",
 ];
 
@@ -748,7 +747,6 @@ function expectedPlatformBytes(studioRoot, adapter) {
   const web = join(studioRoot, "features", "platform-sdk", "web");
   return new Map([
     ["platform-sdk.js", readFileSync(join(web, "platform-sdk.js"))],
-    ["platform-sdk-core.js", readFileSync(join(web, "platform-sdk-core.js"))],
     ["platform-sdk-adapter.js", readFileSync(join(web, "adapters", `${adapter}.js`))],
   ]);
 }
@@ -756,7 +754,6 @@ function expectedPlatformBytes(studioRoot, adapter) {
 function classicPlatformModule(input, label) {
   const output = [];
   const expectedImports = label === "platform-sdk.js" ? new Set([
-    'import { createPlatformSdkWebBackend } from "./platform-sdk-core.js";',
     'import { createPlatformSdkAdapter } from "./platform-sdk-adapter.js";',
   ]) : new Set();
   for (const line of String(input).split(/\r?\n/)) {
@@ -780,7 +777,6 @@ function classicPlatformModule(input, label) {
 function platformBundlePrefix(studioRoot, adapter) {
   const sources = expectedPlatformBytes(studioRoot, adapter);
   const ordered = [
-    ["platform-sdk-core.js", sources.get("platform-sdk-core.js")],
     ["platform-sdk-adapter.js", sources.get("platform-sdk-adapter.js")],
     ["platform-sdk.js", sources.get("platform-sdk.js")],
   ];

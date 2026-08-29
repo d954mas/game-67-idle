@@ -138,7 +138,6 @@ function fixture(t, target = "itch") {
   write(join(artifactDir, "runtime-build.json"), `${JSON.stringify(runtimeBuild, null, 2)}\n`);
   for (const [from, to] of [
     ["platform-sdk.js", "platform-sdk.js"],
-    ["platform-sdk-core.js", "platform-sdk-core.js"],
     [`adapters/${adapter}.js`, "platform-sdk-adapter.js"],
   ]) {
     cpSync(join(studioRoot, "features", "platform-sdk", "web", from), join(artifactDir, to));
@@ -275,7 +274,7 @@ test("upgraded verifier retains read compatibility with pre-fingerprint v1 packa
   const item = fixture(t);
   const current = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "current") });
   const entries = readStoreZip(readFileSync(current.zipPath));
-  for (const path of ["game.js", "index.html", "platform-sdk.js", "platform-sdk-core.js", "platform-sdk-adapter.js"]) {
+  for (const path of ["game.js", "index.html", "platform-sdk.js", "platform-sdk-adapter.js"]) {
     entries.set(path, readFileSync(join(item.artifactDir, path)));
   }
   entries.delete("runtime-build.json");
@@ -415,8 +414,8 @@ test("target and adapter must match both release metadata and selected platform 
   assert.throws(() => validateWebArtifact({ ...adapterMismatch, studioRoot }), /adapter mismatch/i);
 });
 
-test("platform wrapper and core bytes must match the exact verified feature source", (t) => {
-  for (const file of ["platform-sdk.js", "platform-sdk-core.js"]) {
+test("platform wrapper bytes must match the exact verified feature source", (t) => {
+  for (const file of ["platform-sdk.js"]) {
     const item = fixture(t);
     write(join(item.artifactDir, file), "// substituted release wrapper\n");
     assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /platform.*mismatch/i, file);

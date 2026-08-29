@@ -96,10 +96,9 @@ if(EMSCRIPTEN)
     file(MAKE_DIRECTORY "${GAME_OUTPUT_DIR}")
     configure_file("${PLATFORM_SDK_WEB}/platform-sdk.js"
                    "${GAME_OUTPUT_DIR}/platform-sdk.js" COPYONLY)
-    configure_file("${PLATFORM_SDK_WEB}/platform-sdk-core.js"
-                   "${GAME_OUTPUT_DIR}/platform-sdk-core.js" COPYONLY)
     configure_file("${PLATFORM_SDK_WEB}/adapters/${GAME_PLATFORM_SDK}.js"
                    "${GAME_OUTPUT_DIR}/platform-sdk-adapter.js" COPYONLY)
+    file(REMOVE "${GAME_OUTPUT_DIR}/platform-sdk-core.js")
     file(REMOVE "${GAME_OUTPUT_DIR}/platform-sdk-debug-ui.js")
     if(GAME_PUBLISH_TARGET STREQUAL "playgama")
         configure_file("${PLATFORM_SDK_WEB}/portal/playgama-bridge-config.json"
@@ -113,13 +112,11 @@ if(EMSCRIPTEN)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${PLATFORM_SDK_WEB}/platform-sdk.js" "${GAME_OUTPUT_DIR}/platform-sdk.js"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${PLATFORM_SDK_WEB}/platform-sdk-core.js" "${GAME_OUTPUT_DIR}/platform-sdk-core.js"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${PLATFORM_SDK_WEB}/adapters/${GAME_PLATFORM_SDK}.js" "${GAME_OUTPUT_DIR}/platform-sdk-adapter.js"
+        COMMAND ${CMAKE_COMMAND} -E rm -f "${GAME_OUTPUT_DIR}/platform-sdk-core.js"
         COMMAND ${CMAKE_COMMAND} -E rm -f "${GAME_OUTPUT_DIR}/platform-sdk-debug-ui.js"
         DEPENDS
             "${PLATFORM_SDK_WEB}/platform-sdk.js"
-            "${PLATFORM_SDK_WEB}/platform-sdk-core.js"
             "${PLATFORM_SDK_WEB}/adapters/${GAME_PLATFORM_SDK}.js"
         COMMENT "Staging platform-sdk web backend assets (${GAME_PUBLISH_TARGET} -> ${GAME_PLATFORM_SDK})"
         VERBATIM)

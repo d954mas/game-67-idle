@@ -88,7 +88,6 @@ function fixture(t) {
   write(join(artifactDir, "runtime-build.json"), `${JSON.stringify(runtimeBuild, null, 2)}\n`);
   for (const [from, to] of [
     ["platform-sdk.js", "platform-sdk.js"],
-    ["platform-sdk-core.js", "platform-sdk-core.js"],
     ["adapters/mock.js", "platform-sdk-adapter.js"],
   ]) cpSync(join(studioRoot, "features", "platform-sdk", "web", from), join(artifactDir, to));
   const packaged = packageWebArtifact({

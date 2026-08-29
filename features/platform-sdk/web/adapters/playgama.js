@@ -156,9 +156,14 @@ export function createPlaygamaPlatformAdapter({ host }) {
     gameplayStart,
     gameplayStop,
     getLocale,
+    hideBanner() {},
     loadData,
+    measure() {},
     ready,
     saveData,
+    showBanner() {
+      return { supported: false, shown: false, reason: "unsupported" };
+    },
     showInterstitial,
     showRewarded,
   };

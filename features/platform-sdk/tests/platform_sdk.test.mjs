@@ -5,7 +5,6 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { createPlatformSdkWebBackend } from "../web/platform-sdk-core.js";
 import { createMockPlatformAdapter } from "../web/adapters/mock.js";
 import { createPlaygamaPlatformAdapter } from "../web/adapters/playgama.js";
 import { createPokiPlatformAdapter } from "../web/adapters/poki.js";
@@ -26,16 +25,31 @@ const TargetPlatform = Object.freeze({
   YANDEX: "yandex",
   PLAYGAMA: "playgama",
 });
+const PLATFORM_BACKEND_METHODS = Object.freeze([
+  "destroy",
+  "gameLoadingProgress",
+  "gameLoadingFinished",
+  "gameReady",
+  "gameplayStart",
+  "gameplayStop",
+  "getLocale",
+  "hideBanner",
+  "loadData",
+  "measure",
+  "ready",
+  "saveData",
+  "showBanner",
+  "showInterstitial",
+  "showRewarded",
+]);
 
 function packagedPlatformPrefix(adapter) {
   const modules = [
-    ["platform-sdk-core.js", readFileSync(join(HERE, "../web/platform-sdk-core.js"), "utf8")],
     ["platform-sdk-adapter.js", readFileSync(join(HERE, `../web/adapters/${adapter}.js`), "utf8")],
     ["platform-sdk.js", readFileSync(join(HERE, "../web/platform-sdk.js"), "utf8")],
   ];
   const body = modules.map(([label, source]) => {
     const expectedImports = label === "platform-sdk.js" ? new Set([
-      'import { createPlatformSdkWebBackend } from "./platform-sdk-core.js";',
       'import { createPlatformSdkAdapter } from "./platform-sdk-adapter.js";',
     ]) : new Set();
     const lines = [];
@@ -160,11 +174,7 @@ function createHost(target = TargetPlatform.LOCAL) {
 
 function createMockBackend(target) {
   const host = createHost(target);
-  const backend = createPlatformSdkWebBackend({
-    adapterFactory: createMockPlatformAdapter,
-    config: { target },
-    host,
-  });
+  const backend = createMockPlatformAdapter({ host, target });
   return { backend, host };
 }
 
@@ -174,6 +184,25 @@ test("build tooling maps publish targets to exactly one platform SDK adapter", (
   assert.equal(sdkForTarget(TargetPlatform.POKI), "poki");
   assert.equal(sdkForTarget(TargetPlatform.YANDEX), "yandex");
   assert.equal(sdkForTarget(TargetPlatform.PLAYGAMA), "playgama");
+});
+
+test("every platform adapter owns the complete backend method contract", () => {
+  for (const [target, factory] of [
+    [TargetPlatform.LOCAL, createMockPlatformAdapter],
+    [TargetPlatform.POKI, createPokiPlatformAdapter],
+    [TargetPlatform.YANDEX, createYandexPlatformAdapter],
+    [TargetPlatform.PLAYGAMA, createPlaygamaPlatformAdapter],
+  ]) {
+    const adapter = factory({
+      emitVisibilityChange() {},
+      host: createHost(target),
+      target,
+    });
+    for (const method of PLATFORM_BACKEND_METHODS) {
+      assert.equal(typeof adapter[method], "function", `${target}.${method}`);
+    }
+    adapter.destroy();
+  }
 });
 
 test("template CMake isolates web presets by publish target", () => {
@@ -203,101 +232,6 @@ test("web builds use a checkout-local Emscripten cache by default", () => {
   assert.equal(plan.env.EM_CACHE, join(gameDir, "build", "emscripten-cache"));
 });
 
-test("web backend exposes only thin adapter methods and lifecycle calls stay direct", async () => {
-  const host = createHost(TargetPlatform.LOCAL);
-  const calls = [];
-  const backend = createPlatformSdkWebBackend({
-    adapterFactory: () => ({
-      ready() {
-        calls.push("ready");
-        return true;
-      },
-      gameLoadingFinished() {
-        calls.push("gameLoadingFinished");
-      },
-      gameReady() {
-        calls.push("gameReady");
-      },
-    }),
-    config: { target: TargetPlatform.LOCAL, platformSdk: "mock" },
-    host,
-  });
-
-  assert.equal(Object.hasOwn(backend, "whenReady"), false);
-  assert.equal(Object.hasOwn(backend, "onPause"), false);
-  assert.equal(Object.hasOwn(backend, "onResume"), false);
-  assert.equal(Object.hasOwn(backend, "getRuntimeState"), false);
-
-  assert.equal(await backend.ready(), true);
-  assert.equal(await backend.ready(), true);
-  await backend.gameLoadingFinished();
-  await backend.gameLoadingFinished();
-  await backend.gameReady();
-  await backend.gameReady();
-
-  assert.deepEqual(calls, ["ready", "gameLoadingFinished", "gameLoadingFinished", "gameReady", "gameReady"]);
-  assert.equal(Object.hasOwn(backend, "track"), false);
-  assert.equal(Object.hasOwn(host, "__platformSdkEvents"), false);
-});
-
-test("web backend reports selected SDK readiness without owning boot policy", async () => {
-  const host = createHost(TargetPlatform.POKI);
-  const calls = [];
-  const backend = createPlatformSdkWebBackend({
-    adapterFactory: () => ({
-      ready() {
-        calls.push("ready");
-        return false;
-      },
-    }),
-    config: { target: TargetPlatform.POKI, platformSdk: "poki" },
-    host,
-  });
-
-  assert.equal(await backend.ready(), false);
-  assert.equal(await backend.ready(), false);
-  assert.deepEqual(calls, ["ready"]);
-  assert.equal(Object.hasOwn(host, "__platformSdkEvents"), false);
-});
-
-test("web backend forwards loading progress without analytics events", async () => {
-  const host = createHost(TargetPlatform.POKI);
-  const progress = [];
-  const backend = createPlatformSdkWebBackend({
-    adapterFactory: () => ({
-      gameLoadingProgress(value) {
-        progress.push(value);
-      },
-    }),
-    config: { target: TargetPlatform.POKI, platformSdk: "poki" },
-    host,
-  });
-
-  await backend.gameLoadingProgress(0.35);
-
-  assert.deepEqual(progress, [0.35]);
-  assert.equal(Object.hasOwn(host, "__platformSdkEvents"), false);
-});
-
-test("web backend forwards one stable measure triple without creating an event bus", async () => {
-  const host = createHost(TargetPlatform.POKI);
-  const measures = [];
-  const backend = createPlatformSdkWebBackend({
-    adapterFactory: () => ({
-      measure(category, what, action) {
-        measures.push([category, what, action]);
-      },
-    }),
-    config: { target: TargetPlatform.POKI, platformSdk: "poki" },
-    host,
-  });
-
-  await backend.measure("recipe", "moon-bloom", "discovered");
-
-  assert.deepEqual(measures, [["recipe", "moon-bloom", "discovered"]]);
-  assert.equal(Object.hasOwn(host, "__platformSdkEvents"), false);
-});
-
 test("mock adapter records deterministic measure trace", async () => {
   const host = createHost(TargetPlatform.LOCAL);
   const adapter = createMockPlatformAdapter({ host, target: TargetPlatform.LOCAL });
@@ -325,6 +259,68 @@ test("poki adapter calls the official measure category what action contract", as
   assert.deepEqual(measures, [["collection", "3", "complete"]]);
 });
 
+test("poki adapter preloads a pending SDK without blocking backend readiness", async () => {
+  const host = createHost(TargetPlatform.POKI);
+  let releaseInit;
+  const pendingInit = new Promise((resolve) => {
+    releaseInit = resolve;
+  });
+  host.PokiSDK = { init: () => pendingInit };
+  const adapter = createPokiPlatformAdapter({ host });
+
+  const ready = adapter.ready();
+  try {
+    assert.equal(ready, true);
+    assert.equal(adapter.gameLoadingProgress(0.25), undefined);
+  } finally {
+    releaseInit();
+    await Promise.resolve(ready);
+    adapter.destroy();
+  }
+});
+
+test("poki rewarded reports not-ready when the external SDK is unavailable", async () => {
+  const host = createHost(TargetPlatform.POKI);
+  const adapter = createPokiPlatformAdapter({ host });
+
+  const resultPromise = adapter.showRewarded("double_reward");
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(host.document.head.children.length, 1);
+  host.document.head.children[0].onerror();
+
+  assert.deepEqual(await resultPromise, {
+    supported: false,
+    shown: false,
+    rewarded: false,
+    reason: "not_ready",
+  });
+  adapter.destroy();
+});
+
+test("poki rewarded reports not-ready when the loaded SDK lacks rewardedBreak", async () => {
+  const host = createHost(TargetPlatform.POKI);
+  host.PokiSDK = { init: () => Promise.resolve() };
+  const adapter = createPokiPlatformAdapter({ host });
+
+  assert.deepEqual(await adapter.showRewarded("double_reward"), {
+    supported: false,
+    shown: false,
+    rewarded: false,
+    reason: "not_ready",
+  });
+  adapter.destroy();
+});
+
+test("web loading-progress bridge stays synchronous and allocation-free", () => {
+  const source = readFileSync(join(HERE, "../src/platform_sdk_web.c"), "utf8");
+  const begin = source.indexOf("EM_JS(void, platform_sdk_web_backend_game_loading_progress");
+  const end = source.indexOf("EM_JS(void, platform_sdk_web_backend_game_loading_finished", begin);
+  assert.notEqual(begin, -1);
+  assert.notEqual(end, -1);
+  assert.equal(source.slice(begin, end).includes("Promise.resolve"), false);
+});
+
 test("poki adapter coalesces loading progress queued before SDK init completes", async () => {
   const host = createHost(TargetPlatform.POKI);
   const progress = [];
@@ -344,12 +340,13 @@ test("poki adapter coalesces loading progress queued before SDK init completes",
   const p1 = adapter.gameLoadingProgress(0.10);
   const p2 = adapter.gameLoadingProgress(0.45);
   const p3 = adapter.gameLoadingProgress(1.0);
+  assert.deepEqual([p1, p2, p3], [undefined, undefined, undefined]);
   assert.deepEqual(progress, []);
 
   await Promise.resolve();
   await Promise.resolve();
   resolveInit();
-  await Promise.all([p1, p2, p3]);
+  await adapter.gameLoadingFinished();
   assert.deepEqual(progress, [1]);
 
   await adapter.gameLoadingProgress(0.75);
@@ -517,37 +514,6 @@ test("playgama adapter uses documented bridge lifecycle and gameplay messages", 
   ]);
 });
 
-test("web backend delegates gameplay calls without owning input state or guards", async () => {
-  const host = createHost(TargetPlatform.LOCAL);
-  let starts = 0;
-  let stops = 0;
-  const backend = createPlatformSdkWebBackend({
-    adapterFactory: () => ({
-      gameplayStart() {
-        starts += 1;
-      },
-      gameplayStop() {
-        stops += 1;
-      },
-    }),
-    config: { target: TargetPlatform.LOCAL, platformSdk: "mock" },
-    host,
-  });
-
-  assert.equal(Object.hasOwn(backend, "hasInput"), false);
-  assert.equal(Object.hasOwn(backend, "hasGameplayStarted"), false);
-  assert.equal(Object.hasOwn(backend, "markInput"), false);
-
-  await backend.gameplayStart({ source: "test" });
-  await backend.gameplayStart({ source: "duplicate" });
-  assert.equal(starts, 2);
-  assert.equal(host.warnings.length, 0);
-
-  await backend.gameplayStop({ source: "test" });
-  assert.equal(stops, 1);
-  assert.equal(Object.hasOwn(host, "__platformSdkEvents"), false);
-});
-
 test("local JS mock is a method provider and does not render fake ad UI", async () => {
   const { backend, host } = createMockBackend(TargetPlatform.LOCAL);
 
@@ -582,44 +548,14 @@ test("itch mock ad behavior is production-safe unsupported no-op", async () => {
   assert.equal(host.document.body.children.length, 0);
 });
 
-test("thin web backend can forward callbacks only when an adapter provides them", async () => {
-  const host = createHost(TargetPlatform.LOCAL);
-  let visibilityChanges = 0;
-  const backend = createPlatformSdkWebBackend({
-    adapterFactory: ({ emitVisibilityChange }) => ({
-      destroy() {},
-      ready() {
-        emitVisibilityChange(true);
-        return true;
-      },
-    }),
-    config: { target: TargetPlatform.LOCAL, platformSdk: "mock" },
-    host,
-    callbacks: {
-      onVisibilityChange(hidden) {
-        assert.equal(hidden, true);
-        visibilityChanges += 1;
-      },
-    },
-  });
-
-  await backend.ready();
-  backend.destroy();
-  await backend.ready();
-  assert.equal(visibilityChanges, 1);
-});
-
 test("local mock visibility listener is removed on destroy", () => {
   const host = createHost(TargetPlatform.LOCAL);
   let visibilityChanges = 0;
-  const backend = createPlatformSdkWebBackend({
-    adapterFactory: createMockPlatformAdapter,
-    config: { target: TargetPlatform.LOCAL, platformSdk: "mock" },
+  const backend = createMockPlatformAdapter({
+    target: TargetPlatform.LOCAL,
     host,
-    callbacks: {
-      onVisibilityChange() {
-        visibilityChanges += 1;
-      },
+    emitVisibilityChange() {
+      visibilityChanges += 1;
     },
   });
 
@@ -643,7 +579,6 @@ test("storage and destroy do not emit platform SDK analytics events", async () =
 
 test("web runtime does not expose game-facing platform SDK globals", () => {
   const source = readFileSync(join(HERE, "../web/platform-sdk.js"), "utf8");
-  const core = readFileSync(join(HERE, "../web/platform-sdk-core.js"), "utf8");
   const mock = readFileSync(join(HERE, "../web/adapters/mock.js"), "utf8");
   const poki = readFileSync(join(HERE, "../web/adapters/poki.js"), "utf8");
 
@@ -652,17 +587,10 @@ test("web runtime does not expose game-facing platform SDK globals", () => {
   assert.equal(source.includes("__platformSdkWebBackend"), false);
   assert.equal(source.includes("platform-sdk-web-backend-ready"), false);
   assert.equal(source.includes("CustomEvent"), false);
-  assert.equal(core.includes("TargetPlatform"), false);
-  assert.equal(core.includes("PlatformSdkId"), false);
-  assert.equal(core.includes("TARGET_TO_SDK"), false);
-  assert.equal(core.includes("resolvePlatformSdk"), false);
-  assert.equal(core.includes("pauseCallbacks"), false);
-  assert.equal(core.includes("resumeCallbacks"), false);
-  assert.equal(core.includes("gameplayActive"), false);
+  assert.equal(existsSync(join(HERE, "../web/platform-sdk-core.js")), false);
   assert.equal(mock.includes("createOverlay"), false);
   assert.equal(mock.includes("platformSdkOverlay"), false);
   assert.equal(poki.includes("gameplayActive"), false);
-  assert.equal(poki.includes("sdk.gameLoadingProgress({ percentageDone"), true);
 });
 
 test("template web shell loads selected platform backend before game.js", () => {
@@ -676,7 +604,7 @@ test("template web shell loads selected platform backend before game.js", () => 
   assert.equal(shell.includes("__platformSdkSetLoadingProgress"), true);
   assert.equal(shell.includes("__platformSdkHideLoadingOverlay"), true);
   assert.equal(shell.includes("statusEl.style.display = 'none'"), false);
-  assert.equal(source.includes("platformSdkInternalBackend.ready()"), true);
+  assert.equal(source.includes("Promise.resolve(platformSdkInternalBackend.ready())"), true);
 });
 
 test("template web runtime keeps the installed web backend for local mock", () => {
@@ -707,6 +635,18 @@ test("production staged artifacts exclude debug labels and unused SDK URLs", () 
       ok: true,
       violations: [],
     });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("staged web SDK uses only composition and selected adapter modules", () => {
+  const dir = mkdtempSync(join(tmpdir(), "platform-sdk-two-modules-"));
+  try {
+    stagePlatformSdkWebAssets({ target: TargetPlatform.POKI, outDir: dir });
+    assert.equal(existsSync(join(dir, "platform-sdk.js")), true);
+    assert.equal(existsSync(join(dir, "platform-sdk-adapter.js")), true);
+    assert.equal(existsSync(join(dir, "platform-sdk-core.js")), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -751,7 +691,6 @@ test("artifact inspection rejects marker-only and partial platform SDK layouts",
       writeFileSync(join(dir, "game.js"), `${packagedPlatformPrefix("poki")}var wasmBinaryFile = 'game.wasm';\n`);
       for (const [from, to] of [
         ["../web/platform-sdk.js", "platform-sdk.js"],
-        ["../web/platform-sdk-core.js", "platform-sdk-core.js"],
         ["../web/adapters/poki.js", "platform-sdk-adapter.js"],
       ]) {
         writeFileSync(join(dir, to), readFileSync(join(HERE, from)));

@@ -44,7 +44,7 @@ EM_JS(void, platform_sdk_web_backend_game_loading_progress, (double progress01),
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.gameLoadingProgress !== "function") return;
     try {
-        Promise.resolve(backend.gameLoadingProgress(progress)).catch(function () {});
+        backend.gameLoadingProgress(progress);
     } catch (e) {}
 })
 

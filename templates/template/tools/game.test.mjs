@@ -230,7 +230,6 @@ test("copied game CLI executes doctor and final package from a real games/privat
   write(join(artifact, "runtime-build.json"), `${JSON.stringify(runtimeBuild, null, 2)}\n`);
   for (const [from, to] of [
     ["platform-sdk.js", "platform-sdk.js"],
-    ["platform-sdk-core.js", "platform-sdk-core.js"],
     ["adapters/mock.js", "platform-sdk-adapter.js"],
   ]) cpSync(join(root, "features", "platform-sdk", "web", from), join(artifact, to));
 

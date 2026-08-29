@@ -124,12 +124,11 @@ The CMake web step copies:
 
 ```text
 platform-sdk.js          # internal web backend bootstrap for C bridge
-platform-sdk-core.js
 platform-sdk-adapter.js   # selected adapter only
 ```
 
 The release packer verifies those canonical staged bytes, embeds them before
-the Emscripten loader in `game.js`, and omits the three standalone module files
+the Emscripten loader in `game.js`, and omits the two standalone module files
 from the final upload ZIP.
 
 The debug/test panel is C UI in the game/template binary. It is not copied as a

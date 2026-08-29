@@ -37,7 +37,6 @@ features/platform-sdk/
   src/platform_sdk.c
   web/
     platform-sdk.js
-    platform-sdk-core.js
     adapters/
       mock.js
       poki.js

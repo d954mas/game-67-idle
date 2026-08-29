@@ -7,10 +7,10 @@ const POKI_INIT_TIMEOUT_MS = 10000;
 
 export function createPokiPlatformAdapter({ host }) {
   let sdkReady = null;
+  let sdkInstance = null;
   let destroyed = false;
   let lastLoadingProgress = 0;
   let lastSentLoadingProgress = -1;
-  let loadingProgressFlush = null;
 
   function windowRef() {
     return (host && host.window) || host || globalThis;
@@ -41,14 +41,17 @@ export function createPokiPlatformAdapter({ host }) {
     if (!sdkReady) {
       const init = loadScript()
         .then((sdk) => (sdk && typeof sdk.init === "function" ? sdk.init().then(() => sdk) : null))
-        .then(Boolean)
-        .catch(() => false);
+        .catch(() => null);
       sdkReady = new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(false), POKI_INIT_TIMEOUT_MS);
-        init.then((ok) => {
+        const timer = setTimeout(() => resolve(null), POKI_INIT_TIMEOUT_MS);
+        init.then((sdk) => {
           clearTimeout(timer);
-          resolve(ok);
+          resolve(sdk);
         });
+      }).then((sdk) => {
+        sdkInstance = destroyed ? null : sdk;
+        flushLoadingProgress();
+        return sdkInstance;
       });
     }
     return sdkReady;
@@ -59,13 +62,13 @@ export function createPokiPlatformAdapter({ host }) {
   // and game_loading_finished would refuse forever — the loading overlay
   // would never lift for adblocked players.
   function ready() {
-    return sdkAvailable().then(() => true);
+    void sdkAvailable();
+    return true;
   }
 
   async function withSdk(callback) {
-    const ok = await sdkAvailable();
-    const sdk = windowRef().PokiSDK;
-    if (!ok || !sdk || destroyed) return null;
+    const sdk = await sdkAvailable();
+    if (!sdk || destroyed) return null;
     return callback(sdk);
   }
 
@@ -73,32 +76,20 @@ export function createPokiPlatformAdapter({ host }) {
     await withSdk((sdk) => sdk.gameLoadingFinished && sdk.gameLoadingFinished());
   }
 
-  async function gameLoadingProgress(progress01) {
+  function flushLoadingProgress() {
+    if (!sdkInstance || destroyed || lastLoadingProgress <= lastSentLoadingProgress) return;
+    lastSentLoadingProgress = lastLoadingProgress;
+    if (typeof sdkInstance.gameLoadingProgress === "function") {
+      sdkInstance.gameLoadingProgress({ percentageDone: lastLoadingProgress });
+    }
+  }
+
+  function gameLoadingProgress(progress01) {
     const progress = Math.max(0, Math.min(1, Number(progress01) || 0));
     if (progress < lastLoadingProgress) return;
     lastLoadingProgress = progress;
-    if (loadingProgressFlush) return loadingProgressFlush;
-
-    loadingProgressFlush = (async () => {
-      const ok = await sdkAvailable();
-      const sdk = windowRef().PokiSDK;
-      if (!ok || !sdk || destroyed) {
-        lastSentLoadingProgress = lastLoadingProgress;
-        return;
-      }
-      if (lastLoadingProgress <= lastSentLoadingProgress) return;
-      const progressToSend = lastLoadingProgress;
-      lastSentLoadingProgress = progressToSend;
-      if (typeof sdk.gameLoadingProgress === "function") {
-        sdk.gameLoadingProgress({ percentageDone: progressToSend });
-      }
-    })().finally(() => {
-      loadingProgressFlush = null;
-      if (lastLoadingProgress > lastSentLoadingProgress) {
-        void gameLoadingProgress(lastLoadingProgress);
-      }
-    });
-    return loadingProgressFlush;
+    void sdkAvailable();
+    flushLoadingProgress();
   }
 
   async function gameReady() {
@@ -134,9 +125,12 @@ export function createPokiPlatformAdapter({ host }) {
   async function showRewarded() {
     try {
       const rewarded = await withSdk((sdk) => {
-        if (typeof sdk.rewardedBreak !== "function") return false;
+        if (typeof sdk.rewardedBreak !== "function") return null;
         return sdk.rewardedBreak();
       });
+      if (rewarded === null) {
+        return { supported: false, shown: false, rewarded: false, reason: "not_ready" };
+      }
       return { supported: true, shown: Boolean(rewarded), rewarded: Boolean(rewarded), ...(rewarded ? {} : { reason: "skipped" }) };
     } catch {
       return { supported: true, shown: false, rewarded: false, reason: "failed" };
@@ -155,6 +149,9 @@ export function createPokiPlatformAdapter({ host }) {
     getLocale() {
       return (host && host.navigator && host.navigator.language) || null;
     },
+    hideBanner() {
+      return Promise.resolve();
+    },
     loadData() {
       return Promise.resolve(null);
     },
@@ -162,6 +159,9 @@ export function createPokiPlatformAdapter({ host }) {
     ready,
     saveData() {
       return Promise.resolve();
+    },
+    showBanner() {
+      return { supported: false, shown: false, reason: "unsupported" };
     },
     showInterstitial,
     showRewarded,

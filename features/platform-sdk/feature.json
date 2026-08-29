@@ -46,7 +46,6 @@
   },
   "outputs": [
     "platform-sdk.js",
-    "platform-sdk-core.js",
     "platform-sdk-adapter.js"
   ],
   "registers": {
@@ -60,7 +59,6 @@
     ],
     "web_outputs": [
       "platform-sdk.js",
-      "platform-sdk-core.js",
       "platform-sdk-adapter.js"
     ],
     "template_debug_ui": "templates/template/src/ui/platform_sdk_debug.c (C/Clay, debug builds only)",

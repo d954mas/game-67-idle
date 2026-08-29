@@ -9,7 +9,6 @@
     "assets/game.ntpack",
     "runtime-build.json",
     "platform-sdk.js",
-    "platform-sdk-core.js",
     "platform-sdk-adapter.js",
     "playgama-bridge-config.json"
   ],
