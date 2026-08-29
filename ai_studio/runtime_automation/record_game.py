@@ -1125,31 +1125,59 @@ def _run_media(command: list[str], timeout_seconds: float) -> subprocess.Complet
     return completed
 
 
-def _parse_content_marker(value: str) -> float:
-    try:
-        marker = float(value.strip())
-    except ValueError as exc:
-        raise RuntimeError("could not measure the OBS media marker") from exc
-    if not math.isfinite(marker) or marker < 0:
-        raise RuntimeError("could not measure the OBS media marker")
-    return marker
-
-
-def _measure_content_marker(ffprobe: Path, recording: Path) -> float:
-    completed = _run_media(
-        [
-            str(ffprobe),
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=nw=1:nk=1",
-            str(recording),
-        ],
-        timeout_seconds=10.0,
+def _sync_qualification(fps: int) -> str:
+    return (
+        "measured OBS video packet PTS cut with process-loopback audio "
+        f"start; tolerance {1 / fps:.6f}s (one output frame)"
     )
-    return _parse_content_marker(completed.stdout)
+
+
+def _parse_content_marker(value: str, fps: int) -> float:
+    packets: list[float] = []
+    for line in value.splitlines():
+        try:
+            pts = float(line.strip())
+        except ValueError:
+            continue
+        if math.isfinite(pts) and pts >= 0:
+            packets.append(pts)
+    if not packets:
+        raise RuntimeError("could not measure the OBS media marker")
+    return max(packets) + 1 / fps
+
+
+def _measure_content_marker(
+    ffprobe: Path,
+    recording: Path,
+    fps: int,
+    *,
+    retries: int = 20,
+    sleep: Callable[[float], None] = time.sleep,
+) -> float:
+    last_error: RuntimeError | None = None
+    command = [
+        str(ffprobe),
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "packet=pts_time",
+        "-of",
+        "csv=p=0",
+        str(recording),
+    ]
+    for attempt in range(retries):
+        try:
+            return _parse_content_marker(
+                _run_media(command, timeout_seconds=5.0).stdout,
+                fps,
+            )
+        except RuntimeError as exc:
+            last_error = exc
+            if attempt + 1 < retries:
+                sleep(0.1)
+    raise RuntimeError("could not measure the OBS media marker") from last_error
 
 
 def _parse_freezedetect_log(
@@ -1622,7 +1650,7 @@ def record_take(
             nonlocal content_start_offset, capture_started_at
             if recording_prepare is not None:
                 recording_prepare()
-            content_start_offset = _measure_content_marker(ffprobe, recorded)
+            content_start_offset = _measure_content_marker(ffprobe, recorded, settings.fps)
             capture_started_at = time.monotonic()
             print(f"REC | {duration_seconds:g} seconds", flush=True)
 
@@ -1737,17 +1765,14 @@ def record_take(
             "durationSeconds": duration_seconds,
             "sourceTrimSeconds": round(content_start_offset, 6),
             "sourceTrim": {
-                "method": "ffprobe-format-duration",
+                "method": "ffprobe-latest-video-packet",
                 "seconds": round(content_start_offset, 6),
                 "toleranceSeconds": round(1 / settings.fps, 6),
             },
             "width": settings.width,
             "height": settings.height,
             "fps": settings.fps,
-            "syncQualification": (
-                "host-aligned OBS video trim plus process-loopback audio start; "
-                "content-marker offset unmeasured"
-            ),
+            "syncQualification": _sync_qualification(settings.fps),
             "master": str(paths.master),
             "edit": str(paths.edit),
             "inspection": {

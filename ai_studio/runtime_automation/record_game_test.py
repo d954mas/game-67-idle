@@ -38,6 +38,8 @@ from ai_studio.runtime_automation.record_game import (
     _obs_wgc_service_failure,
     _parse_freezedetect_log,
     _parse_content_marker,
+    _measure_content_marker,
+    _sync_qualification,
     _scene_collection,
     _stop_obs,
     _stop_obs_and_detect_service_failure,
@@ -556,10 +558,37 @@ class OutputTest(unittest.TestCase):
         self.assertEqual(result["maxFreezeSeconds"], 5.0)
         self.assertEqual(result["freezeCount"], 2)
 
-    def test_content_marker_uses_media_duration_and_rejects_missing_value(self) -> None:
-        self.assertEqual(_parse_content_marker("11.533\n"), 11.533)
+    def test_content_marker_uses_the_next_frame_after_the_latest_packet(self) -> None:
+        self.assertAlmostEqual(
+            _parse_content_marker("N/A\n11.500\n11.533\n", 30),
+            11.533 + 1 / 30,
+        )
         with self.assertRaisesRegex(RuntimeError, "marker"):
-            _parse_content_marker("N/A\n")
+            _parse_content_marker("N/A\n", 30)
+
+    def test_content_marker_retries_packet_probe_then_fails_bounded(self) -> None:
+        successful = subprocess.CompletedProcess(["ffprobe"], 0, "2.000\n", "")
+        with patch(
+            "ai_studio.runtime_automation.record_game._run_media",
+            side_effect=[RuntimeError("not ready"), successful],
+        ), patch("ai_studio.runtime_automation.record_game.time.sleep") as sleep:
+            marker = _measure_content_marker(
+                Path("ffprobe.exe"), Path("recording.mkv"), 30, retries=2
+            )
+
+        self.assertAlmostEqual(marker, 2 + 1 / 30)
+        sleep.assert_not_called()
+        with self.assertRaisesRegex(RuntimeError, "marker"):
+            _measure_content_marker(
+                Path("ffprobe.exe"), Path("recording.mkv"), 30, retries=1
+            )
+
+    def test_sync_qualification_reports_measured_packet_pts_tolerance(self) -> None:
+        qualification = _sync_qualification(30)
+
+        self.assertIn("measured OBS video packet PTS", qualification)
+        self.assertIn("0.033333s", qualification)
+        self.assertNotIn("unmeasured", qualification)
 
     def test_freeze_log_counts_an_unclosed_still_until_media_end(self) -> None:
         result = _parse_freezedetect_log(
