@@ -1,10 +1,12 @@
 const PLAYGAMA_BRIDGE_URL = "https://bridge.playgama.com/v1/stable/playgama-bridge.js";
+const AD_TIMEOUT_MS = 120000;
 
 export function createPlaygamaPlatformAdapter({ host }) {
   let bridgeReady = null;
   let bridge = null;
   let destroyed = false;
   let hasStartedGameplay = false;
+  const pendingAds = new Set();
 
   function windowRef() {
     return (host && host.window) || host || globalThis;
@@ -12,6 +14,47 @@ export function createPlaygamaPlatformAdapter({ host }) {
 
   function documentRef() {
     return (host && host.document) || (windowRef() && windowRef().document);
+  }
+
+  function adOperation(start, failedResult) {
+    return new Promise((resolve) => {
+      let cleanup = null;
+      let settled = false;
+      const root = windowRef();
+      const cancel = () => settle(failedResult);
+      const timer = (root.setTimeout || setTimeout)(cancel, AD_TIMEOUT_MS);
+
+      function setCleanup(next) {
+        cleanup = next;
+        if (settled && cleanup) {
+          try {
+            cleanup();
+          } catch {}
+          cleanup = null;
+        }
+      }
+
+      function settle(result) {
+        if (settled) return;
+        settled = true;
+        pendingAds.delete(cancel);
+        (root.clearTimeout || clearTimeout)(timer);
+        if (cleanup) {
+          try {
+            cleanup();
+          } catch {}
+          cleanup = null;
+        }
+        resolve(result);
+      }
+
+      pendingAds.add(cancel);
+      try {
+        start(settle, setCleanup);
+      } catch {
+        settle(failedResult);
+      }
+    });
   }
 
   function loadScript() {
@@ -52,7 +95,8 @@ export function createPlaygamaPlatformAdapter({ host }) {
   }
 
   async function ready() {
-    return Boolean(await initBridge());
+    if (destroyed) return false;
+    return Boolean(await initBridge()) && !destroyed;
   }
 
   async function gameReady() {
@@ -81,47 +125,47 @@ export function createPlaygamaPlatformAdapter({ host }) {
     if (!(await ready()) || !bridge.advertisement || !bridge.advertisement.isInterstitialSupported) {
       return { supported: false, shown: false, reason: "not_ready" };
     }
-    return new Promise((resolve) => {
-      let settled = false;
+    const failed = { supported: true, shown: false, reason: "failed" };
+    return adOperation((settle, setCleanup) => {
       const name = eventName("INTERSTITIAL_STATE_CHANGED", "interstitial_state_changed");
       const handler = (state) => {
-        if (settled) return;
-        if (state === "closed" || state === "failed") {
-          settled = true;
-          if (typeof bridge.advertisement.off === "function") bridge.advertisement.off(name, handler);
-          resolve({ supported: true, shown: state === "closed", ...(state === "closed" ? {} : { reason: "failed" }) });
-        }
+        if (state === "closed") settle({ supported: true, shown: true });
+        else if (state === "failed") settle(failed);
       };
       bridge.advertisement.on(name, handler);
+      setCleanup(() => {
+        if (typeof bridge.advertisement.off === "function") bridge.advertisement.off(name, handler);
+      });
       bridge.advertisement.showInterstitial(placement || undefined);
-    });
+    }, failed);
   }
 
   async function showRewarded(placement) {
     if (!(await ready()) || !bridge.advertisement || !bridge.advertisement.isRewardedSupported) {
       return { supported: false, shown: false, rewarded: false, reason: "not_ready" };
     }
-    return new Promise((resolve) => {
+    const failed = { supported: true, shown: false, rewarded: false, reason: "failed" };
+    return adOperation((settle, setCleanup) => {
       let rewarded = false;
-      let settled = false;
       const name = eventName("REWARDED_STATE_CHANGED", "rewarded_state_changed");
       const handler = (state) => {
-        if (settled) return;
         if (state === "rewarded") rewarded = true;
-        if (state === "closed" || state === "failed") {
-          settled = true;
-          if (typeof bridge.advertisement.off === "function") bridge.advertisement.off(name, handler);
-          resolve({
-            supported: true,
-            shown: state === "closed",
-            rewarded,
-            ...(rewarded ? {} : { reason: state === "failed" ? "failed" : "skipped" }),
-          });
+        if (state === "closed") {
+          settle(rewarded
+            ? { supported: true, shown: true, rewarded: true }
+            : { supported: true, shown: true, rewarded: false, reason: "skipped" });
+        } else if (state === "failed") {
+          settle(rewarded
+            ? { supported: true, shown: false, rewarded: true }
+            : failed);
         }
       };
       bridge.advertisement.on(name, handler);
+      setCleanup(() => {
+        if (typeof bridge.advertisement.off === "function") bridge.advertisement.off(name, handler);
+      });
       bridge.advertisement.showRewarded(placement || undefined);
-    });
+    }, failed);
   }
 
   async function loadData(key) {
@@ -149,6 +193,7 @@ export function createPlaygamaPlatformAdapter({ host }) {
   return {
     destroy() {
       destroyed = true;
+      for (const cancel of pendingAds) cancel();
     },
     gameLoadingProgress() {},
     gameLoadingFinished() {},

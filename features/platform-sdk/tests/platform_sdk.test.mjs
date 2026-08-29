@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { runInNewContext } from "node:vm";
 
 import { createMockPlatformAdapter } from "../web/adapters/mock.js";
 import { createPlaygamaPlatformAdapter } from "../web/adapters/playgama.js";
@@ -178,6 +179,10 @@ function createMockBackend(target) {
   return { backend, host };
 }
 
+async function flushMicrotasks() {
+  for (let i = 0; i < 8; i += 1) await Promise.resolve();
+}
+
 test("build tooling maps publish targets to exactly one platform SDK adapter", () => {
   assert.equal(sdkForTarget(TargetPlatform.LOCAL), "mock");
   assert.equal(sdkForTarget(TargetPlatform.ITCH), "mock");
@@ -186,7 +191,7 @@ test("build tooling maps publish targets to exactly one platform SDK adapter", (
   assert.equal(sdkForTarget(TargetPlatform.PLAYGAMA), "playgama");
 });
 
-test("every platform adapter owns the complete backend method contract", () => {
+test("every platform adapter owns exactly the complete backend method contract", () => {
   for (const [target, factory] of [
     [TargetPlatform.LOCAL, createMockPlatformAdapter],
     [TargetPlatform.POKI, createPokiPlatformAdapter],
@@ -201,6 +206,7 @@ test("every platform adapter owns the complete backend method contract", () => {
     for (const method of PLATFORM_BACKEND_METHODS) {
       assert.equal(typeof adapter[method], "function", `${target}.${method}`);
     }
+    assert.deepEqual(Object.keys(adapter).sort(), [...PLATFORM_BACKEND_METHODS].sort(), target);
     adapter.destroy();
   }
 });
@@ -230,19 +236,6 @@ test("web builds use a checkout-local Emscripten cache by default", () => {
   assert.match(cmake, /RULE_LAUNCH_COMPILE "\$\{_game_emcache_launcher\}"/);
   assert.match(cmake, /RULE_LAUNCH_LINK "\$\{_game_emcache_launcher\}"/);
   assert.equal(plan.env.EM_CACHE, join(gameDir, "build", "emscripten-cache"));
-});
-
-test("mock adapter records deterministic measure trace", async () => {
-  const host = createHost(TargetPlatform.LOCAL);
-  const adapter = createMockPlatformAdapter({ host, target: TargetPlatform.LOCAL });
-
-  await adapter.measure("round", "1", "start");
-  await adapter.measure("round", "1", "complete");
-
-  assert.deepEqual(adapter.measureTrace(), [
-    ["round", "1", "start"],
-    ["round", "1", "complete"],
-  ]);
 });
 
 test("poki adapter calls the official measure category what action contract", async () => {
@@ -375,6 +368,226 @@ test("poki adapter reuses one payload object across loading progress updates", a
   assert.equal(payloads.length, 3);
   assert.equal(new Set(payloads).size, 1);
   assert.equal(payloads[0].percentageDone, 0.75);
+});
+
+test("poki progress throw does not poison SDK readiness or loading completion", async () => {
+  const host = createHost(TargetPlatform.POKI);
+  let loadingFinished = 0;
+  host.PokiSDK = {
+    init() {
+      return Promise.resolve();
+    },
+    gameLoadingProgress() {
+      throw new Error("progress failed");
+    },
+    gameLoadingFinished() {
+      loadingFinished += 1;
+    },
+  };
+  const adapter = createPokiPlatformAdapter({ host });
+
+  adapter.gameLoadingProgress(0.5);
+  await assert.doesNotReject(adapter.gameLoadingFinished());
+
+  assert.equal(loadingFinished, 1);
+  adapter.destroy();
+});
+
+test("hung platform ads settle with a bounded failed result", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const failed = { supported: true, shown: false, reason: "failed" };
+  const cases = [
+    ["poki", () => {
+      const host = createHost(TargetPlatform.POKI);
+      host.PokiSDK = {
+        init() {
+          return Promise.resolve();
+        },
+        commercialBreak() {
+          return new Promise(() => {});
+        },
+      };
+      return createPokiPlatformAdapter({ host });
+    }],
+    ["yandex", () => {
+      const host = createHost(TargetPlatform.YANDEX);
+      host.YaGames = {
+        init() {
+          return Promise.resolve({
+            adv: {
+              showFullscreenAdv() {},
+            },
+          });
+        },
+      };
+      return createYandexPlatformAdapter({ host });
+    }],
+    ["playgama", () => {
+      const host = createHost(TargetPlatform.PLAYGAMA);
+      host.bridge = {
+        initialize() {
+          return Promise.resolve();
+        },
+        platform: {},
+        advertisement: {
+          isInterstitialSupported: true,
+          on() {},
+          showInterstitial() {},
+        },
+      };
+      return createPlaygamaPlatformAdapter({ host });
+    }],
+  ];
+
+  for (const [name, createAdapter] of cases) {
+    const adapter = createAdapter();
+    let outcome;
+    void adapter.showInterstitial("level_break").then((result) => {
+      outcome = result;
+    });
+
+    await flushMicrotasks();
+    t.mock.timers.runAll();
+    await flushMicrotasks();
+
+    assert.deepEqual(outcome, failed, name);
+    adapter.destroy();
+  }
+});
+
+test("playgama destroy blocks new bridge calls and settles an active ad", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let showCalls = 0;
+  let removedListeners = 0;
+  const handlers = new Map();
+  const host = createHost(TargetPlatform.PLAYGAMA);
+  host.bridge = {
+    initialize() {
+      return Promise.resolve();
+    },
+    platform: {
+      sendMessage() {},
+    },
+    advertisement: {
+      isInterstitialSupported: true,
+      on(name, handler) {
+        handlers.set(name, handler);
+      },
+      off(name, handler) {
+        if (handlers.get(name) === handler) handlers.delete(name);
+        removedListeners += 1;
+      },
+      showInterstitial() {
+        showCalls += 1;
+      },
+    },
+  };
+
+  const adapter = createPlaygamaPlatformAdapter({ host });
+  await adapter.ready();
+  adapter.destroy();
+  let afterDestroy;
+  void adapter.showInterstitial("level_break").then((result) => {
+    afterDestroy = result;
+  });
+  await flushMicrotasks();
+  t.mock.timers.runAll();
+  await flushMicrotasks();
+
+  assert.equal(showCalls, 0);
+  assert.deepEqual(afterDestroy, { supported: false, shown: false, reason: "not_ready" });
+
+  const activeAdapter = createPlaygamaPlatformAdapter({ host });
+  let activeResult;
+  void activeAdapter.showInterstitial("level_break").then((result) => {
+    activeResult = result;
+  });
+  await flushMicrotasks();
+  assert.equal(showCalls, 1);
+  activeAdapter.destroy();
+  t.mock.timers.runAll();
+  await flushMicrotasks();
+
+  assert.ok(activeResult);
+  assert.equal(activeResult.shown, false);
+  assert.equal(handlers.size, 0);
+  assert.equal(removedListeners, 1);
+});
+
+test("playgama keeps an earned reward when a late failure event arrives", async () => {
+  const handlers = new Map();
+  const host = createHost(TargetPlatform.PLAYGAMA);
+  host.bridge = {
+    initialize() {
+      return Promise.resolve();
+    },
+    platform: {},
+    advertisement: {
+      isRewardedSupported: true,
+      on(name, handler) {
+        handlers.set(name, handler);
+      },
+      off(name) {
+        handlers.delete(name);
+      },
+      showRewarded() {},
+    },
+  };
+  const adapter = createPlaygamaPlatformAdapter({ host });
+
+  const result = adapter.showRewarded("double_reward");
+  await flushMicrotasks();
+  const handler = handlers.get("rewarded_state_changed");
+  assert.equal(typeof handler, "function");
+  handler("rewarded");
+  handler("failed");
+
+  assert.deepEqual(await result, { supported: true, shown: false, rewarded: true });
+  adapter.destroy();
+});
+
+test("Yandex and Playgama synchronous SDK throws resolve failed ad results", async () => {
+  const yandexHost = createHost(TargetPlatform.YANDEX);
+  yandexHost.YaGames = {
+    init() {
+      return Promise.resolve({
+        adv: {
+          showFullscreenAdv() {
+            throw new Error("fullscreen failed");
+          },
+        },
+      });
+    },
+  };
+  const yandex = createYandexPlatformAdapter({ host: yandexHost });
+  assert.deepEqual(await yandex.showInterstitial("level_break"), {
+    supported: true,
+    shown: false,
+    reason: "failed",
+  });
+  yandex.destroy();
+
+  const playgamaHost = createHost(TargetPlatform.PLAYGAMA);
+  playgamaHost.bridge = {
+    initialize() {
+      return Promise.resolve();
+    },
+    platform: {},
+    advertisement: {
+      isInterstitialSupported: true,
+      on() {
+        throw new Error("listener failed");
+      },
+      showInterstitial() {},
+    },
+  };
+  const playgama = createPlaygamaPlatformAdapter({ host: playgamaHost });
+  assert.deepEqual(await playgama.showInterstitial("level_break"), {
+    supported: true,
+    shown: false,
+    reason: "failed",
+  });
+  playgama.destroy();
 });
 
 test("yandex adapter uses documented loading, gameplay, and ad callbacks", async () => {
@@ -628,6 +841,66 @@ test("template web shell loads selected platform backend before game.js", () => 
   assert.equal(shell.includes("__platformSdkHideLoadingOverlay"), true);
   assert.equal(shell.includes("statusEl.style.display = 'none'"), false);
   assert.equal(source.includes("Promise.resolve(platformSdkInternalBackend.ready())"), true);
+});
+
+test("loading shell does not rewrite DOM for progress inside the same whole percent", () => {
+  const shell = readFileSync(join(HERE, "../../../templates/template/web/index.html.in"), "utf8");
+  const start = shell.indexOf("(function () {");
+  const end = shell.indexOf("window.__PLATFORM_SDK_CONFIG__", start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+
+  const writes = [];
+  function element(id) {
+    const value = { classList: { add() {} }, style: {} };
+    value.style = new Proxy({}, {
+      set(target, property, next) {
+        writes.push(`${id}.style.${String(property)}=${next}`);
+        target[property] = next;
+        return true;
+      },
+    });
+    Object.defineProperty(value, "textContent", {
+      get() {
+        return "";
+      },
+      set(next) {
+        writes.push(`${id}.textContent=${next}`);
+      },
+    });
+    return value;
+  }
+  const elements = new Map([
+    ["loading-overlay", element("loading-overlay")],
+    ["loading-label", element("loading-label")],
+    ["loading-percent", element("loading-percent")],
+    ["loading-bar", element("loading-bar")],
+    ["canvas", { focus() {} }],
+  ]);
+  const window = {
+    matchMedia() {
+      return { matches: false };
+    },
+  };
+  runInNewContext(`${shell.slice(start, end)}\n}());`, {
+    document: {
+      activeElement: null,
+      getElementById(id) {
+        return elements.get(id) || null;
+      },
+      hasFocus() {
+        return true;
+      },
+    },
+    window,
+  });
+
+  writes.length = 0;
+  window.__platformSdkSetLoadingProgress(0.101);
+  writes.length = 0;
+  window.__platformSdkSetLoadingProgress(0.109);
+
+  assert.deepEqual(writes, []);
 });
 
 test("template web runtime keeps the installed web backend for local mock", () => {

@@ -1,4 +1,5 @@
 const YANDEX_SDK_URL = "/sdk.js";
+const AD_TIMEOUT_MS = 120000;
 
 export function createYandexPlatformAdapter({ host, sdkUrl = YANDEX_SDK_URL }) {
   let sdkReady = null;
@@ -12,6 +13,27 @@ export function createYandexPlatformAdapter({ host, sdkUrl = YANDEX_SDK_URL }) {
 
   function documentRef() {
     return (host && host.document) || (windowRef() && windowRef().document);
+  }
+
+  function adOperation(start, failedResult) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const root = windowRef();
+      const timer = (root.setTimeout || setTimeout)(() => settle(failedResult), AD_TIMEOUT_MS);
+
+      function settle(result) {
+        if (settled) return;
+        settled = true;
+        (root.clearTimeout || clearTimeout)(timer);
+        resolve(result);
+      }
+
+      try {
+        start(settle);
+      } catch {
+        settle(failedResult);
+      }
+    });
   }
 
   function loadScript() {
@@ -75,19 +97,22 @@ export function createYandexPlatformAdapter({ host, sdkUrl = YANDEX_SDK_URL }) {
       return { supported: false, shown: false, reason: "not_ready" };
     }
 
-    return new Promise((resolve) => {
+    const failed = { supported: true, shown: false, reason: "failed" };
+    return adOperation((settle) => {
       ysdk.adv.showFullscreenAdv({
         callbacks: {
           onClose: (wasShown) => {
-            resolve({ supported: true, shown: Boolean(wasShown), ...(wasShown ? {} : { reason: "skipped" }) });
+            settle(wasShown
+              ? { supported: true, shown: true }
+              : { supported: true, shown: false, reason: "skipped" });
           },
           onError: () => {
-            resolve({ supported: true, shown: false, reason: "failed" });
+            settle(failed);
           },
           onOpen: () => {},
         },
       });
-    });
+    }, failed);
   }
 
   async function showRewarded() {
@@ -97,19 +122,21 @@ export function createYandexPlatformAdapter({ host, sdkUrl = YANDEX_SDK_URL }) {
     }
 
     let rewarded = false;
-    return new Promise((resolve) => {
+    const failed = { supported: true, shown: false, rewarded: false, reason: "failed" };
+    return adOperation((settle) => {
       ysdk.adv.showRewardedVideo({
         callbacks: {
           onClose: (wasShown) => {
-            resolve({
-              supported: true,
-              shown: Boolean(wasShown),
-              rewarded,
-              ...(rewarded ? {} : { reason: wasShown ? "skipped" : "failed" }),
-            });
+            if (rewarded) {
+              settle({ supported: true, shown: Boolean(wasShown), rewarded: true });
+            } else if (wasShown) {
+              settle({ supported: true, shown: true, rewarded: false, reason: "skipped" });
+            } else {
+              settle(failed);
+            }
           },
           onError: () => {
-            resolve({ supported: true, shown: false, rewarded: false, reason: "failed" });
+            settle(failed);
           },
           onOpen: () => {},
           onRewarded: () => {
@@ -117,7 +144,7 @@ export function createYandexPlatformAdapter({ host, sdkUrl = YANDEX_SDK_URL }) {
           },
         },
       });
-    });
+    }, failed);
   }
 
   async function loadData(key) {

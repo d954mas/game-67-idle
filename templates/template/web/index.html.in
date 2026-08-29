@@ -102,6 +102,7 @@
     var percent = document.getElementById('loading-percent');
     var bar = document.getElementById('loading-bar');
     var progress = 0;
+    var lastWhole = -1;
     var hidden = false;
 
     function clamp(value) {
@@ -114,6 +115,8 @@
 
     function render() {
       var whole = Math.floor(progress * 100);
+      if (whole === lastWhole) return;
+      lastWhole = whole;
       if (bar) bar.style.width = whole + '%';
       if (percent) percent.textContent = whole + '%';
       if (label && whole >= 100) label.textContent = 'Finalizing';

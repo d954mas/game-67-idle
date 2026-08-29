@@ -1,4 +1,5 @@
 const POKI_SDK_URL = "https://game-cdn.poki.com/scripts/v2/poki-sdk.js";
+const AD_TIMEOUT_MS = 120000;
 
 // An adblocker can leave PokiSDK.init() pending forever while it waits for ad
 // scripts; the game must never hang on that promise, so past this deadline the
@@ -19,6 +20,23 @@ export function createPokiPlatformAdapter({ host }) {
 
   function documentRef() {
     return (host && host.document) || (windowRef() && windowRef().document);
+  }
+
+  function withAdDeadline(operation, failedResult) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const root = windowRef();
+      const timer = (root.setTimeout || setTimeout)(() => settle(failedResult), AD_TIMEOUT_MS);
+
+      function settle(result) {
+        if (settled) return;
+        settled = true;
+        (root.clearTimeout || clearTimeout)(timer);
+        resolve(result);
+      }
+
+      operation.then(settle, () => settle(failedResult));
+    });
   }
 
   function loadScript() {
@@ -82,7 +100,9 @@ export function createPokiPlatformAdapter({ host }) {
     lastSentLoadingProgress = lastLoadingProgress;
     if (typeof sdkInstance.gameLoadingProgress === "function") {
       loadingProgressPayload.percentageDone = lastLoadingProgress;
-      sdkInstance.gameLoadingProgress(loadingProgressPayload);
+      try {
+        sdkInstance.gameLoadingProgress(loadingProgressPayload);
+      } catch {}
     }
   }
 
@@ -113,33 +133,29 @@ export function createPokiPlatformAdapter({ host }) {
   }
 
   async function showInterstitial() {
-    try {
-      const shown = await withSdk((sdk) => {
-        if (typeof sdk.commercialBreak !== "function") return false;
-        return sdk.commercialBreak().then(() => true);
-      });
-      return shown ? { supported: true, shown: true } : { supported: false, shown: false, reason: "not_ready" };
-    } catch {
-      return { supported: true, shown: false, reason: "failed" };
-    }
+    const failed = { supported: true, shown: false, reason: "failed" };
+    const shown = await withAdDeadline(withSdk((sdk) => {
+      if (typeof sdk.commercialBreak !== "function") return null;
+      return sdk.commercialBreak().then(() => true);
+    }), failed);
+    if (shown === failed) return failed;
+    return shown ? { supported: true, shown: true } : { supported: false, shown: false, reason: "not_ready" };
   }
 
   async function showRewarded() {
-    try {
-      const rewarded = await withSdk((sdk) => {
-        if (typeof sdk.rewardedBreak !== "function") return null;
-        return sdk.rewardedBreak();
-      });
-      if (rewarded === null) {
-        return { supported: false, shown: false, rewarded: false, reason: "not_ready" };
-      }
-      if (!rewarded) {
-        return { supported: true, shown: false, rewarded: false, reason: "skipped" };
-      }
-      return { supported: true, shown: true, rewarded: true };
-    } catch {
-      return { supported: true, shown: false, rewarded: false, reason: "failed" };
+    const failed = { supported: true, shown: false, rewarded: false, reason: "failed" };
+    const rewarded = await withAdDeadline(withSdk((sdk) => {
+      if (typeof sdk.rewardedBreak !== "function") return null;
+      return sdk.rewardedBreak();
+    }), failed);
+    if (rewarded === failed) return failed;
+    if (rewarded === null) {
+      return { supported: false, shown: false, rewarded: false, reason: "not_ready" };
     }
+    if (!rewarded) {
+      return { supported: true, shown: false, rewarded: false, reason: "skipped" };
+    }
+    return { supported: true, shown: true, rewarded: true };
   }
 
   return {

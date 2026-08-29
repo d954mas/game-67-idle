@@ -2,7 +2,6 @@ export function createMockPlatformAdapter({ emitVisibilityChange = () => {}, hos
   const document = host && host.document;
   const isLocal = target === "local";
   let destroyed = false;
-  const measures = [];
 
   const onVisibilityChange = () => {
     if (destroyed || !document) return;
@@ -55,14 +54,6 @@ export function createMockPlatformAdapter({ emitVisibilityChange = () => {}, hos
     return (host && host.navigator && host.navigator.language) || null;
   }
 
-  function measure(category, what, action) {
-    if (!destroyed) measures.push([String(category), String(what), String(action)]);
-  }
-
-  function measureTrace() {
-    return measures.map((triple) => [...triple]);
-  }
-
   function destroy() {
     destroyed = true;
     if (document && typeof document.removeEventListener === "function") {
@@ -80,8 +71,7 @@ export function createMockPlatformAdapter({ emitVisibilityChange = () => {}, hos
     getLocale,
     hideBanner() {},
     loadData,
-    measure,
-    measureTrace,
+    measure() {},
     ready,
     saveData,
     showBanner: unsupportedInterstitial,
