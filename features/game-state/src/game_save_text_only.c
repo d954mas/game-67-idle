@@ -96,6 +96,19 @@ void gsj_set_error(char *error, int error_cap, const char *message) {
     set_error(error, error_cap, message);
 }
 
+bool gsj_copy_text(char *dst, size_t dst_cap, const char *src) {
+    if (dst == NULL || dst_cap == 0U || src == NULL) {
+        return false;
+    }
+    const size_t size = strlen(src);
+    if (size >= dst_cap) {
+        dst[0] = '\0';
+        return false;
+    }
+    memcpy(dst, src, size + 1U);
+    return true;
+}
+
 static void set_result_message(game_save_load_result_t *result, const char *message) {
     (void)snprintf(result->message, sizeof result->message, "%s", message);
 }

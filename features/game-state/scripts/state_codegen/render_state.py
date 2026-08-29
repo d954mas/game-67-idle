@@ -325,15 +325,17 @@ extern {self.ns.type} {self.ns.inst};
 
 void   {self.ns.fn}init_defaults({self.ns.type} *state);
 bool   {self.ns.fn}validate(const {self.ns.type} *state, char *error, int error_cap);
+{f"bool   {self.ns.fn}write_text(const {self.ns.type} *state, game_save_text_writer_t *writer);" if self.supports_text_codec(schema) else ""}
+{f"bool   {self.ns.fn}from_text({self.ns.type} *state, const char *text, size_t size, char *error, int error_cap);" if self.supports_text_codec(schema) else ""}
+#if !defined(GAME_SAVE_TEXT_ONLY)
 cJSON *{self.ns.fn}schema_json(void);
 cJSON *{self.ns.fn}to_json(const {self.ns.type} *state);
 bool   {self.ns.fn}write_snapshot(const {self.ns.type} *state, game_save_writer_t *writer);
-{f"bool   {self.ns.fn}write_text(const {self.ns.type} *state, game_save_text_writer_t *writer);" if self.supports_text_codec(schema) else ""}
-{f"bool   {self.ns.fn}from_text({self.ns.type} *state, const char *text, size_t size, char *error, int error_cap);" if self.supports_text_codec(schema) else ""}
 cJSON *{self.ns.fn}get_path_json(const {self.ns.type} *state, const char *path, char *error, int error_cap);
 bool   {self.ns.fn}set_path_json({self.ns.type} *state, const char *path, const cJSON *value, char *error, int error_cap);
 bool   {self.ns.fn}patch_json({self.ns.type} *state, const cJSON *values, char *error, int error_cap);
 bool   {self.ns.fn}from_json({self.ns.type} *state, const cJSON *json, char *error, int error_cap);
+#endif
 
 /* Generated descriptor — replaces the hand-written fragment adapter. */
 extern const GameSaveFragment {self.ns.frag};
@@ -1704,11 +1706,13 @@ static bool {aggregate_ident}_write_snapshot(const {self.ns.type} *state, game_s
 
 {self.ns.type} {self.ns.inst};   /* fragment instance (ownership lives here) */
 
+#if !defined(GAME_SAVE_TEXT_ONLY)
 {self.render_object_helpers(schema)}
 
 {self.render_collection_helpers(schema)}
 
 {self.render_snapshot_helpers(schema)}
+#endif
 
 void {self.ns.fn}init_defaults({self.ns.type} *state) {{
     memset(state, 0, sizeof(*state));
@@ -1721,6 +1725,11 @@ bool {self.ns.fn}validate(const {self.ns.type} *state, char *error, int error_ca
     return true;
 }}
 
+{self.render_write_text(schema)}
+
+{self.render_from_text(schema)}
+
+#if !defined(GAME_SAVE_TEXT_ONLY)
 cJSON *{self.ns.fn}schema_json(void) {{
     const char *chunks[] = {self.ns.macro}SCHEMA_JSON_CHUNKS;
     size_t len = 0;
@@ -1746,10 +1755,6 @@ cJSON *{self.ns.fn}to_json(const {self.ns.type} *state) {{
 }}
 
 {self.render_write_snapshot(schema)}
-
-{self.render_write_text(schema)}
-
-{self.render_from_text(schema)}
 
 cJSON *{self.ns.fn}get_path_json(const {self.ns.type} *state, const char *path, char *error, int error_cap) {{
     if (!path || path[0] == '\\0') {{ return {self.ns.fn}to_json(state); }}
@@ -1791,6 +1796,7 @@ bool {self.ns.fn}from_json({self.ns.type} *state, const cJSON *json, char *error
     free(next);
     return true;
 }}
+#endif
 
 {self.render_fragment_descriptor(schema)}
 """

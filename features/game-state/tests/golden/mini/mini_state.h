@@ -56,15 +56,17 @@ const char *mini_state_mode_name(int value);
 
 void   mini_state_init_defaults(MiniState *state);
 bool   mini_state_validate(const MiniState *state, char *error, int error_cap);
+
+
+#if !defined(GAME_SAVE_TEXT_ONLY)
 cJSON *mini_state_schema_json(void);
 cJSON *mini_state_to_json(const MiniState *state);
 bool   mini_state_write_snapshot(const MiniState *state, game_save_writer_t *writer);
-
-
 cJSON *mini_state_get_path_json(const MiniState *state, const char *path, char *error, int error_cap);
 bool   mini_state_set_path_json(MiniState *state, const char *path, const cJSON *value, char *error, int error_cap);
 bool   mini_state_patch_json(MiniState *state, const cJSON *values, char *error, int error_cap);
 bool   mini_state_from_json(MiniState *state, const cJSON *json, char *error, int error_cap);
+#endif
 
 /* Generated descriptor — replaces the hand-written fragment adapter. */
 extern const GameSaveFragment mini_state_fragment;

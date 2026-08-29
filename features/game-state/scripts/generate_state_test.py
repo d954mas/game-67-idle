@@ -305,6 +305,35 @@ class StateCodegenTests(unittest.TestCase):
         self.assertIn(".write_text     = NULL", mini)
         self.assertIn(".from_text      = NULL", mini)
 
+    def test_text_only_build_preprocesses_out_legacy_json_and_snapshot_code(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            generate(TEMPLATE_SCHEMA, root, "game")
+            outputs = read_outputs(root, "game_state")
+
+        header = outputs["game_state.h"]
+        source = outputs["game_state.c"]
+        self.assertIn(
+            "#if !defined(GAME_SAVE_TEXT_ONLY)\n"
+            "cJSON *game_state_schema_json(void);",
+            header,
+        )
+        self.assertIn(
+            "#if !defined(GAME_SAVE_TEXT_ONLY)\n"
+            "cJSON *game_state_schema_json(void) {",
+            source,
+        )
+        self.assertIn(
+            "bool game_state_from_json(GameState *state, const cJSON *json, char *error, int error_cap) {",
+            source,
+        )
+        legacy_end = source.index("\n#endif\n\n", source.index("cJSON *game_state_schema_json"))
+        self.assertLess(
+            source.index("bool game_state_from_json", source.index("cJSON *game_state_schema_json")),
+            legacy_end,
+        )
+        self.assertLess(source.index("bool game_state_write_text"), source.index("cJSON *game_state_schema_json"))
+
     # ------------------------------------------------------------------ golden
 
     def _assert_golden(self, schema_path: Path, prefix: str, fragment: str, golden_sub: str):
