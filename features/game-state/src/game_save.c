@@ -747,9 +747,8 @@ static bool failure_is_new(const char *reason) {
     return true;
 }
 
-static bool hot_snapshot_available(void) {
-    if (s_hot_snapshot == NULL || s_hot_snapshot_capacity == 0U ||
-        s_live_validator == NULL || s_transform_count != 0 || s_orphan_count != 0) {
+static bool text_snapshot_available(void) {
+    if (s_live_validator == NULL || s_transform_count != 0 || s_orphan_count != 0) {
         return false;
     }
     for (int i = 0; i < s_fragment_count; i++) {
@@ -758,6 +757,11 @@ static bool hot_snapshot_available(void) {
         }
     }
     return true;
+}
+
+static bool hot_snapshot_available(void) {
+    return s_hot_snapshot != NULL && s_hot_snapshot_capacity > 0U &&
+           text_snapshot_available();
 }
 
 static bool write_hot_snapshot(game_save_text_writer_t *writer, int64_t wall, int64_t seq) {
@@ -780,7 +784,7 @@ static bool write_hot_snapshot(game_save_text_writer_t *writer, int64_t wall, in
     return game_save_text_writer_ok(writer);
 }
 
-static bool save_hot_snapshot(char *error, int error_cap) {
+static bool save_hot_snapshot(char *error, int error_cap, bool may_wait) {
     char reason[GAME_SAVE_REASON_MAX] = {0};
     bool ok = false;
     int64_t wall = 0;
@@ -796,8 +800,13 @@ static bool save_hot_snapshot(char *error, int error_cap) {
         if (!write_hot_snapshot(&writer, wall, seq)) {
             gsj_set_error(reason, (int)sizeof reason, "save snapshot exceeds hot snapshot capacity");
         } else {
-            ok = game_storage_write(GAME_SAVE_AUTOSAVE_SLOT, game_save_text_writer_data(&writer),
-                                    reason, (int)sizeof reason);
+            ok = may_wait
+                     ? game_storage_write_blocking(
+                           GAME_SAVE_AUTOSAVE_SLOT, game_save_text_writer_data(&writer),
+                           reason, (int)sizeof reason)
+                     : game_storage_write(
+                           GAME_SAVE_AUTOSAVE_SLOT, game_save_text_writer_data(&writer),
+                           reason, (int)sizeof reason);
         }
     }
     if (ok) {
@@ -833,6 +842,9 @@ static bool save_hot_snapshot(char *error, int error_cap) {
    Every other caller is a synchronous moment with no frame to lose and would
    rather wait ~0.5s than leave the primary unwritten. */
 static bool save_internal(char *error, int error_cap, bool may_wait) {
+    if (hot_snapshot_available()) {
+        return save_hot_snapshot(error, error_cap, may_wait);
+    }
     /* EVERY failure must exit through the one place below. A failure that skips
        the clock bookkeeping re-enters this function on the next frame, so a
        save the validator rejects rebuilds the whole document 60 times a
@@ -1407,7 +1419,7 @@ void game_save_tick(void) {
         /* false: this is the ONE caller inside the frame. A refused write here
            is not a loss -- the state stays dirty and the next tick retries. */
         (void)(hot_snapshot_available()
-                   ? save_hot_snapshot(err, (int)sizeof err)
+                   ? save_hot_snapshot(err, (int)sizeof err, false)
                    : save_internal(err, (int)sizeof err, false));
     }
 }
@@ -1433,6 +1445,26 @@ game_save_persistence_t game_save_persistence(void) {
 }
 
 char *game_save_export_string(char *error, int error_cap) {
+    if (text_snapshot_available()) {
+        char validation_error[GAME_SAVE_REASON_MAX] = {0};
+        if (!s_live_validator(validation_error, (int)sizeof validation_error)) {
+            gsj_set_error(error, error_cap, validation_error);
+            return NULL;
+        }
+        char *text = (char *)malloc((size_t)GAME_STORAGE_MAX_BYTES + 1U);
+        if (text == NULL) {
+            gsj_set_error(error, error_cap, "failed to allocate export document");
+            return NULL;
+        }
+        game_save_text_writer_t writer;
+        game_save_text_writer_init(&writer, text, (size_t)GAME_STORAGE_MAX_BYTES + 1U);
+        if (!write_hot_snapshot(&writer, wall_now(), s_save_seq)) {
+            free(text);
+            gsj_set_error(error, error_cap, "export exceeds storage size limit");
+            return NULL;
+        }
+        return text;
+    }
     int64_t wall = 0;
     cJSON *root = build_root(false, &wall, NULL); /* snapshot; do not bump the persistent seq */
     if (!root) {
