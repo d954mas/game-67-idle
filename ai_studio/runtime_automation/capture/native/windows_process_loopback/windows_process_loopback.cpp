@@ -50,6 +50,8 @@ struct Options {
     std::uint64_t expected_creation_time_100ns = 0;
     DWORD duration_ms = 0;
     std::wstring output;
+    std::wstring ready_event;
+    std::wstring start_event;
     bool include_tree = false;
 };
 
@@ -120,6 +122,8 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options,
     bool saw_creation_time = false;
     bool saw_output = false;
     bool saw_duration = false;
+    bool saw_ready_event = false;
+    bool saw_start_event = false;
     for (int index = 1; index < argc; ++index) {
         const std::wstring_view argument(argv[index]);
         if (argument == L"--include-tree") {
@@ -133,7 +137,8 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options,
         if (argument == L"--pid" ||
             argument == L"--expected-creation-time-100ns" ||
             argument == L"--output" ||
-            argument == L"--duration-ms") {
+            argument == L"--duration-ms" || argument == L"--ready-event" ||
+            argument == L"--start-event") {
             if (++index >= argc) {
                 *error = "missing value after command-line option";
                 return false;
@@ -170,13 +175,27 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options,
                 }
                 options->duration_ms = static_cast<DWORD>(duration);
                 saw_duration = true;
-            } else {
+            } else if (argument == L"--output") {
                 if (saw_output || argv[index][0] == L'\0') {
                     *error = "--output must be provided exactly once";
                     return false;
                 }
                 options->output = argv[index];
                 saw_output = true;
+            } else if (argument == L"--ready-event") {
+                if (saw_ready_event || argv[index][0] == L'\0') {
+                    *error = "--ready-event must be provided at most once";
+                    return false;
+                }
+                options->ready_event = argv[index];
+                saw_ready_event = true;
+            } else {
+                if (saw_start_event || argv[index][0] == L'\0') {
+                    *error = "--start-event must be provided at most once";
+                    return false;
+                }
+                options->start_event = argv[index];
+                saw_start_event = true;
             }
             continue;
         }
@@ -184,7 +203,7 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options,
         return false;
     }
     if (!saw_pid || !saw_creation_time || !saw_output || !saw_duration ||
-        !options->include_tree) {
+        !options->include_tree || saw_ready_event != saw_start_event) {
         *error =
             "required: --pid PID --expected-creation-time-100ns TICKS "
             "--include-tree --output FILE --duration-ms MS";
@@ -406,9 +425,26 @@ struct CaptureDiagnostics {
     }
 };
 
+bool WriteSilenceFrames(WaveFile* output, std::uint64_t frames,
+                        const WAVEFORMATEX& format, std::string* error) {
+    constexpr std::uint64_t kChunkFrames = 4096;
+    std::vector<BYTE> silence(kChunkFrames * format.nBlockAlign, 0);
+    while (frames > 0) {
+        const DWORD chunk_frames = static_cast<DWORD>(std::min(
+            frames, kChunkFrames));
+        if (!output->WriteSamples(
+                silence.data(), chunk_frames * format.nBlockAlign, error)) {
+            return false;
+        }
+        frames -= chunk_frames;
+    }
+    return true;
+}
+
 HRESULT DrainAudio(IAudioCaptureClient* capture_client,
                    const WAVEFORMATEX& format, WaveFile* output,
                    std::uint64_t* sample_frames,
+                   std::uint64_t maximum_sample_frames,
                    CaptureDiagnostics* diagnostics,
                    std::string* output_error) {
     UINT32 packet_frames = 0;
@@ -471,12 +507,19 @@ HRESULT DrainAudio(IAudioCaptureClient* capture_client,
             diagnostics->has_previous_timeline = false;
             diagnostics->has_previous_device_position = false;
         }
-        const DWORD bytes = packet_frames * format.nBlockAlign;
-        bool write_ok = false;
-        if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) != 0 || data == nullptr) {
+        const std::uint64_t remaining_frames =
+            maximum_sample_frames > *sample_frames
+                ? maximum_sample_frames - *sample_frames
+                : 0;
+        const UINT32 write_frames = static_cast<UINT32>(std::min(
+            static_cast<std::uint64_t>(packet_frames), remaining_frames));
+        const DWORD bytes = write_frames * format.nBlockAlign;
+        bool write_ok = true;
+        if (write_frames > 0 &&
+            ((flags & AUDCLNT_BUFFERFLAGS_SILENT) != 0 || data == nullptr)) {
             std::vector<BYTE> silence(bytes, 0);
             write_ok = output->WriteSamples(silence.data(), bytes, output_error);
-        } else {
+        } else if (write_frames > 0) {
             write_ok = output->WriteSamples(data, bytes, output_error);
         }
         const HRESULT release_result =
@@ -487,7 +530,7 @@ HRESULT DrainAudio(IAudioCaptureClient* capture_client,
         if (FAILED(release_result)) {
             return release_result;
         }
-        *sample_frames += packet_frames;
+        *sample_frames += write_frames;
         result = capture_client->GetNextPacketSize(&packet_frames);
     }
     return result;
@@ -604,6 +647,48 @@ int Run(const Options& options) {
         return 7;
     }
 
+    if (!options.ready_event.empty()) {
+        const HANDLE raw_ready_event = OpenEventW(
+            EVENT_MODIFY_STATE, FALSE, options.ready_event.c_str());
+        const HANDLE raw_start_event = OpenEventW(
+            SYNCHRONIZE, FALSE, options.start_event.c_str());
+        if (raw_ready_event == nullptr || raw_start_event == nullptr) {
+            if (raw_ready_event != nullptr) {
+                CloseHandle(raw_ready_event);
+            }
+            if (raw_start_event != nullptr) {
+                CloseHandle(raw_start_event);
+            }
+            std::cerr << "capture start handshake event open failed: "
+                      << Win32Message(GetLastError()) << '\n';
+            return 5;
+        }
+        const std::unique_ptr<void, decltype(&CloseHandle)> ready_event(
+            raw_ready_event, &CloseHandle);
+        const std::unique_ptr<void, decltype(&CloseHandle)> start_event(
+            raw_start_event, &CloseHandle);
+        if (!SetEvent(ready_event.get())) {
+            std::cerr << "capture ready event signal failed: "
+                      << Win32Message(GetLastError()) << '\n';
+            return 5;
+        }
+        const HANDLE wait_handles[] = {start_event.get(), process.get()};
+        const DWORD wait_result = WaitForMultipleObjects(
+            2, wait_handles, FALSE, 30'000);
+        if (wait_result == WAIT_OBJECT_0 + 1) {
+            std::cerr << "target process exited before capture start\n";
+            return 3;
+        }
+        if (wait_result != WAIT_OBJECT_0) {
+            std::cerr << "capture start handshake failed: "
+                      << Win32Message(wait_result == WAIT_TIMEOUT
+                                          ? ERROR_TIMEOUT
+                                          : GetLastError())
+                      << '\n';
+            return 5;
+        }
+    }
+
     result = audio_client->Start();
     if (FAILED(result)) {
         std::cerr << "audio capture start failed: " << HResultHex(result)
@@ -612,6 +697,8 @@ int Run(const Options& options) {
     }
 
     const ULONGLONG started = GetTickCount64();
+    const std::uint64_t expected_sample_frames =
+        static_cast<std::uint64_t>(options.duration_ms) * 48;
     std::uint64_t sample_frames = 0;
     CaptureDiagnostics diagnostics;
     while (true) {
@@ -651,7 +738,8 @@ int Run(const Options& options) {
             return 6;
         }
         result = DrainAudio(capture_client.Get(), format, &output,
-                            &sample_frames, &diagnostics, &output_error);
+                            &sample_frames, expected_sample_frames,
+                            &diagnostics, &output_error);
         if (FAILED(result)) {
             std::cerr << "audio sample drain failed: " << HResultHex(result);
             if (!output_error.empty()) {
@@ -670,7 +758,8 @@ int Run(const Options& options) {
         return 6;
     }
     result = DrainAudio(capture_client.Get(), format, &output,
-                        &sample_frames, &diagnostics, &output_error);
+                        &sample_frames, expected_sample_frames,
+                        &diagnostics, &output_error);
     if (FAILED(result)) {
         std::cerr << "final audio sample drain failed: " << HResultHex(result);
         if (!output_error.empty()) {
@@ -679,6 +768,13 @@ int Run(const Options& options) {
         std::cerr << '\n';
         return 6;
     }
+    if (sample_frames < expected_sample_frames &&
+        !WriteSilenceFrames(&output, expected_sample_frames - sample_frames,
+                            format, &output_error)) {
+        std::cerr << "WAV silence padding failed: " << output_error << '\n';
+        return 7;
+    }
+    sample_frames = expected_sample_frames;
     if (!output.Finalize(&output_error)) {
         std::cerr << "WAV finalization failed: " << output_error << '\n';
         return 7;

@@ -106,6 +106,8 @@ def build_capture_command(
     expected_creation_time_100ns: int,
     output: Path,
     duration_seconds: float,
+    ready_event_name: str | None = None,
+    start_event_name: str | None = None,
 ) -> list[str]:
     if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
         raise ProcessLoopbackError("pid must be a positive integer")
@@ -118,8 +120,10 @@ def build_capture_command(
             "expected_creation_time_100ns must be a positive integer"
         )
     duration_ms = _duration_milliseconds(duration_seconds)
+    if (ready_event_name is None) != (start_event_name is None):
+        raise ProcessLoopbackError("ready and start event names must be paired")
 
-    return [
+    command = [
         str(helper),
         "--pid",
         str(pid),
@@ -131,6 +135,16 @@ def build_capture_command(
         "--duration-ms",
         str(duration_ms),
     ]
+    if ready_event_name is not None and start_event_name is not None:
+        command.extend(
+            [
+                "--ready-event",
+                ready_event_name,
+                "--start-event",
+                start_event_name,
+            ]
+        )
+    return command
 
 
 def _helper_report(stdout: str) -> dict:
@@ -156,8 +170,14 @@ def _qualify_helper_report(
     duration_ms: int,
     wav: dict,
 ) -> None:
+    expected_sample_frames = duration_ms * 48
+    if wav["sampleFrames"] != expected_sample_frames:
+        raise ProcessLoopbackError(
+            "AUDIO_TRACK_UNQUALIFIED: "
+            f"sampleFrames={wav['sampleFrames']}, expected {expected_sample_frames}"
+        )
     expected_data_bytes = (
-        wav["sampleFrames"] * wav["channels"] * wav["sampleWidthBytes"]
+        expected_sample_frames * wav["channels"] * wav["sampleWidthBytes"]
     )
     required = {
         "schema": "ai_studio.windows_process_loopback",
@@ -174,7 +194,7 @@ def _qualify_helper_report(
         "timestampErrors": 0,
         "positionGaps": 0,
         "devicePositionRegressions": 0,
-        "sampleFrames": wav["sampleFrames"],
+        "sampleFrames": expected_sample_frames,
     }
     mismatches = [
         f"{key}={report.get(key)!r}, expected {expected!r}"
@@ -245,6 +265,8 @@ def capture_process_audio(
     expected_creation_time_100ns: int,
     output: Path,
     duration_seconds: float,
+    ready_event_name: str | None = None,
+    start_event_name: str | None = None,
     runner: Callable = subprocess.run,
 ) -> dict:
     duration_ms = _duration_milliseconds(duration_seconds)
@@ -261,6 +283,8 @@ def capture_process_audio(
         expected_creation_time_100ns=expected_creation_time_100ns,
         output=staging,
         duration_seconds=duration_ms / 1000,
+        ready_event_name=ready_event_name,
+        start_event_name=start_event_name,
     )
     try:
         try:

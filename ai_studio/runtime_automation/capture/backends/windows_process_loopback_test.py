@@ -37,6 +37,22 @@ class WindowsProcessLoopbackCommandTest(unittest.TestCase):
             ],
         )
 
+    def test_builds_ready_and_start_event_handshake(self):
+        command = build_capture_command(
+            Path("helper.exe"),
+            pid=42,
+            expected_creation_time_100ns=123456,
+            output=Path("capture.wav"),
+            duration_seconds=1,
+            ready_event_name="Local\\ready",
+            start_event_name="Local\\start",
+        )
+
+        self.assertEqual(
+            command[-4:],
+            ["--ready-event", "Local\\ready", "--start-event", "Local\\start"],
+        )
+
     def test_rejects_invalid_pid_before_launch(self):
         with self.assertRaisesRegex(ProcessLoopbackError, "positive integer"):
             build_capture_command(
@@ -126,6 +142,39 @@ class WindowsProcessLoopbackCaptureTest(unittest.TestCase):
             self.assertEqual(result["channels"], 2)
             self.assertEqual(result["sampleFrames"], 480)
             self.assertEqual(result["helperReport"]["status"], "ok")
+
+    def test_rejects_a_wav_shorter_than_the_requested_wall_interval(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "capture.wav"
+
+            def fake_runner(command, **kwargs):
+                staging = Path(command[command.index("--output") + 1])
+                with wave.open(str(staging), "wb") as wav:
+                    wav.setnchannels(2)
+                    wav.setsampwidth(2)
+                    wav.setframerate(48_000)
+                    wav.writeframes(b"\x00\x00\x00\x00" * 479)
+                report = (
+                    '{"schema":"ai_studio.windows_process_loopback","version":2,'
+                    '"status":"ok","pid":42,'
+                    '"targetCreationTime100ns":123456,'
+                    '"durationMs":10,"sampleRate":48000,"channels":2,'
+                    '"bitsPerSample":16,"dataBytes":1916,'
+                    '"discontinuities":0,"timestampErrors":0,"positionGaps":0,'
+                    '"devicePositionRegressions":0,"qpcDriftPpm":0.0,'
+                    '"sampleFrames":479}\n'
+                )
+                return subprocess.CompletedProcess(command, 0, report, "")
+
+            with self.assertRaisesRegex(ProcessLoopbackError, "sampleFrames"):
+                capture_process_audio(
+                    Path("helper.exe"),
+                    pid=42,
+                    expected_creation_time_100ns=123456,
+                    output=output,
+                    duration_seconds=0.01,
+                    runner=fake_runner,
+                )
 
     def test_zero_exit_without_valid_wav_is_a_missing_track(self):
         with tempfile.TemporaryDirectory() as temporary:
