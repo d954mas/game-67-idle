@@ -15,6 +15,7 @@
 #include "log/nt_log.h"
 
 #include <limits.h>
+#include <float.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -146,6 +147,161 @@ static int read_frag_version(const cJSON *frag) {
         return INT_MAX; /* invalid version is never safe to load as an old save */
     }
     return 1; /* absent -> v1 */
+}
+
+static char *dup_slice(const char *text, size_t size) {
+    char *copy = (char *)malloc(size + 1U);
+    if (copy != NULL) {
+        memcpy(copy, text, size);
+        copy[size] = '\0';
+    }
+    return copy;
+}
+
+static cJSON *text_record_value(
+    const game_save_text_record_t *record, char *error, int error_cap) {
+    if (record->value_size >= 2U && record->value[0] == '"') {
+        char *value = (char *)malloc(record->value_size + 1U);
+        if (value == NULL) {
+            gsj_set_error(error, error_cap, "failed to allocate save string");
+            return NULL;
+        }
+        const bool valid = game_save_text_record_string(
+            record, value, record->value_size + 1U, error, (size_t)error_cap);
+        cJSON *json = valid ? cJSON_CreateString(value) : NULL;
+        free(value);
+        return json;
+    }
+    if (game_save_text_record_is_null(record)) {
+        return cJSON_CreateNull();
+    }
+    bool boolean = false;
+    if (game_save_text_record_bool(record, &boolean, NULL, 0U)) {
+        return cJSON_CreateBool(boolean);
+    }
+    double number = 0.0;
+    if (game_save_text_record_number(
+            record, -DBL_MAX, DBL_MAX, &number, error, (size_t)error_cap)) {
+        return cJSON_CreateNumber(number);
+    }
+    return NULL;
+}
+
+static bool add_text_record(
+    cJSON *object, const game_save_text_record_t *record,
+    bool nested_path, char *error, int error_cap) {
+    const char *part = record->key;
+    const char *end = record->key + record->key_size;
+    cJSON *owner = object;
+    while (part < end) {
+        const char *separator = nested_path ? memchr(part, '.', (size_t)(end - part)) : NULL;
+        const char *part_end = separator != NULL ? separator : end;
+        if (part == part_end) {
+            gsj_set_error(error, error_cap, "save field path is invalid");
+            return false;
+        }
+        char *key = dup_slice(part, (size_t)(part_end - part));
+        if (key == NULL) {
+            gsj_set_error(error, error_cap, "failed to allocate save field");
+            return false;
+        }
+        cJSON *existing = cJSON_GetObjectItemCaseSensitive(owner, key);
+        if (separator != NULL) {
+            if (existing == NULL) {
+                existing = cJSON_CreateObject();
+                if (existing == NULL || !cJSON_AddItemToObject(owner, key, existing)) {
+                    cJSON_Delete(existing);
+                    free(key);
+                    gsj_set_error(error, error_cap, "failed to build save field path");
+                    return false;
+                }
+            } else if (!cJSON_IsObject(existing)) {
+                free(key);
+                gsj_set_error(error, error_cap, "save field path conflicts with a value");
+                return false;
+            }
+            owner = existing;
+            part = separator + 1;
+            free(key);
+            continue;
+        }
+        if (existing != NULL) {
+            free(key);
+            gsj_set_error(error, error_cap, "duplicate save field");
+            return false;
+        }
+        cJSON *value = text_record_value(record, error, error_cap);
+        if (value == NULL || !cJSON_AddItemToObject(owner, key, value)) {
+            cJSON_Delete(value);
+            free(key);
+            if (error == NULL || error_cap <= 0 || error[0] == '\0') {
+                gsj_set_error(error, error_cap, "invalid save value");
+            }
+            return false;
+        }
+        free(key);
+        return true;
+    }
+    return false;
+}
+
+static cJSON *parse_save_document(const char *text, char *error, int error_cap) {
+    if (text == NULL || strncmp(text, "NTGS 1", 6U) != 0) {
+        return text != NULL ? cJSON_Parse(text) : NULL;
+    }
+    cJSON *root = cJSON_CreateObject();
+    cJSON *features = cJSON_CreateObject();
+    if (root == NULL || features == NULL ||
+        !cJSON_AddItemToObject(root, "features", features)) {
+        cJSON_Delete(features);
+        cJSON_Delete(root);
+        gsj_set_error(error, error_cap, "failed to stage text save");
+        return NULL;
+    }
+
+    game_save_text_reader_t reader;
+    game_save_text_record_t record;
+    cJSON *fragment = NULL;
+    game_save_text_reader_init(&reader, text, strlen(text));
+    for (;;) {
+        const game_save_text_result_t result = game_save_text_reader_next(
+            &reader, &record, error, error_cap > 0 ? (size_t)error_cap : 0U);
+        if (result == GAME_SAVE_TEXT_DONE) {
+            return root;
+        }
+        if (result == GAME_SAVE_TEXT_ERROR) {
+            cJSON_Delete(root);
+            return NULL;
+        }
+        if (result == GAME_SAVE_TEXT_RECORD_FRAGMENT) {
+            char *id = dup_slice(record.key, record.key_size);
+            fragment = cJSON_CreateObject();
+            if (id == NULL || fragment == NULL ||
+                cJSON_GetObjectItemCaseSensitive(features, id) != NULL ||
+                !cJSON_AddNumberToObject(fragment, "v", (double)record.version) ||
+                !cJSON_AddItemToObject(features, id, fragment)) {
+                free(id);
+                cJSON_Delete(fragment);
+                cJSON_Delete(root);
+                gsj_set_error(error, error_cap, "duplicate or invalid save fragment");
+                return NULL;
+            }
+            free(id);
+            continue;
+        }
+        if (result == GAME_SAVE_TEXT_RECORD_FIELD && fragment == NULL) {
+            cJSON_Delete(root);
+            gsj_set_error(error, error_cap, "save field has no fragment");
+            return NULL;
+        }
+        cJSON *owner = result == GAME_SAVE_TEXT_RECORD_META ? root : fragment;
+        if (!add_text_record(
+                owner, &record, result == GAME_SAVE_TEXT_RECORD_FIELD,
+                error, error_cap)) {
+            cJSON_Delete(root);
+            return NULL;
+        }
+    }
 }
 
 /* ---- orphan retention ---- */
@@ -597,35 +753,31 @@ static bool hot_snapshot_available(void) {
         return false;
     }
     for (int i = 0; i < s_fragment_count; i++) {
-        if (s_fragments[i]->write_snapshot == NULL) {
+        if (s_fragments[i]->write_text == NULL) {
             return false;
         }
     }
     return true;
 }
 
-static bool write_hot_snapshot(game_save_writer_t *writer, int64_t wall, int64_t seq) {
-    if (!game_save_writer_begin_object(writer) ||
-        !game_save_writer_key(writer, "format") || !game_save_writer_number(writer, (double)GAME_SAVE_FORMAT) ||
-        !game_save_writer_key(writer, "save_version") || !game_save_writer_number(writer, (double)GAME_SAVE_DOC_VERSION) ||
-        !game_save_writer_key(writer, "saved_at") || !game_save_writer_number(writer, (double)wall) ||
-        !game_save_writer_key(writer, "save_seq") || !game_save_writer_number(writer, (double)seq) ||
-        !game_save_writer_key(writer, "app") || !game_save_writer_string(writer, GAME_STORAGE_APP_ID) ||
-        !game_save_writer_key(writer, "build") || !game_save_writer_string(writer, GAME_SAVE_BUILD) ||
-        !game_save_writer_key(writer, "features") || !game_save_writer_begin_object(writer)) {
+static bool write_hot_snapshot(game_save_text_writer_t *writer, int64_t wall, int64_t seq) {
+    if (!game_save_text_write_preamble(writer) ||
+        !game_save_text_write_i64(writer, "format", GAME_SAVE_FORMAT) ||
+        !game_save_text_write_i64(writer, "save_version", GAME_SAVE_DOC_VERSION) ||
+        !game_save_text_write_i64(writer, "saved_at", wall) ||
+        !game_save_text_write_i64(writer, "save_seq", seq) ||
+        !game_save_text_write_string(writer, "app", GAME_STORAGE_APP_ID) ||
+        !game_save_text_write_string(writer, "build", GAME_SAVE_BUILD)) {
         return false;
     }
     for (int i = 0; i < s_fragment_count; i++) {
         const GameSaveFragment *fragment = s_fragments[i];
-        if (!game_save_writer_key(writer, fragment->id) || !game_save_writer_begin_object(writer) ||
-            !fragment->write_snapshot(writer) || !game_save_writer_key(writer, "v") ||
-            !game_save_writer_number(writer, (double)fragment->version) ||
-            !game_save_writer_end_object(writer)) {
+        if (!game_save_text_begin_fragment(writer, fragment->id, fragment->version) ||
+            !fragment->write_text(writer)) {
             return false;
         }
     }
-    return game_save_writer_end_object(writer) && game_save_writer_end_object(writer) &&
-           game_save_writer_complete(writer);
+    return game_save_text_writer_ok(writer);
 }
 
 static bool save_hot_snapshot(char *error, int error_cap) {
@@ -637,14 +789,14 @@ static bool save_hot_snapshot(char *error, int error_cap) {
         gsj_set_error(reason, (int)sizeof reason, "save sequence exhausted");
     } else if (!s_live_validator(reason, (int)sizeof reason)) {
     } else {
-        game_save_writer_t writer;
+        game_save_text_writer_t writer;
         wall = wall_now();
         seq = s_save_seq + 1;
-        game_save_writer_init(&writer, s_hot_snapshot, s_hot_snapshot_capacity);
+        game_save_text_writer_init(&writer, s_hot_snapshot, s_hot_snapshot_capacity);
         if (!write_hot_snapshot(&writer, wall, seq)) {
             gsj_set_error(reason, (int)sizeof reason, "save snapshot exceeds hot snapshot capacity");
         } else {
-            ok = game_storage_write(GAME_SAVE_AUTOSAVE_SLOT, game_save_writer_data(&writer),
+            ok = game_storage_write(GAME_SAVE_AUTOSAVE_SLOT, game_save_text_writer_data(&writer),
                                     reason, (int)sizeof reason);
         }
     }
@@ -865,7 +1017,7 @@ static bool try_recover_from_backup(game_save_load_result_t *result, const char 
     if (game_storage_read_backup(GAME_SAVE_AUTOSAVE_SLOT, &baktext, err, cap)) {
         char *bakdec = transform_decode(baktext, err, cap);
         free(baktext);
-        bakdoc = bakdec ? cJSON_Parse(bakdec) : NULL;
+        bakdoc = bakdec ? parse_save_document(bakdec, err, cap) : NULL;
         free(bakdec);
     }
     if (!(bakdoc && cJSON_IsObject(bakdoc) && !doc_is_newer(bakdoc) &&
@@ -991,7 +1143,7 @@ void game_save_load(game_save_load_result_t *result) {
     }
     char *decoded = transform_decode(text, err, (int)sizeof err);
     free(text);
-    cJSON *doc = decoded ? cJSON_Parse(decoded) : NULL;
+    cJSON *doc = decoded ? parse_save_document(decoded, err, (int)sizeof err) : NULL;
     free(decoded);
 
     if (doc && cJSON_IsObject(doc)) {
@@ -1311,7 +1463,7 @@ bool game_save_import_string(const char *text, char *error, int error_cap) {
     if (!decoded) {
         return false;
     }
-    cJSON *doc = cJSON_Parse(decoded);
+    cJSON *doc = parse_save_document(decoded, error, error_cap);
     free(decoded);
     if (!doc || !cJSON_IsObject(doc)) {
         cJSON_Delete(doc);
