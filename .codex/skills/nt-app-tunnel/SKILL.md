@@ -1,6 +1,6 @@
 ---
 name: nt-app-tunnel
-description: "Use only when the lead explicitly asks to start, create, or expose a public tunnel. Serves a self-contained local directory through a temporary unauthenticated Cloudflare quick tunnel; never infer tunnel authorization from requests to run, view, test, pick, or play locally."
+description: "Use only when the lead explicitly asks to create, start, or expose a public tunnel or temporary public URL for a specific local preview, build, or static directory. Trigger on an explicit tunnel/public-URL request; do not trigger on phone, mobile, device, build, run, view, test, pick, or play requests by themselves."
 ---
 
 # NT App Tunnel
