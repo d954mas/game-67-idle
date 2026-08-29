@@ -19,6 +19,32 @@ The feature provides:
 - save/load envelope and migration guidance;
 - review rules for state changes, fixtures, and runtime proof.
 
+## Readable save format
+
+Release saves are UTF-8 text. They may be edited while the game is closed:
+
+```text
+NTGS 1
+format=1
+save_version=2
+saved_at=1788012345678
+save_seq=42
+app="sample-game"
+build="0"
+
+[settings 1]
+master_volume=0.8
+muted=false
+
+[game 4]
+coins=1250
+tutorial_done=true
+```
+
+Blank lines and lines beginning with `#` are ignored. Unknown fields are
+preserved by legacy import paths or ignored by tolerant fragment readers;
+duplicate known fields and invalid typed values are rejected.
+
 ## Contents
 
 ```text
