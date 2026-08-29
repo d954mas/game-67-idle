@@ -42,9 +42,11 @@ Run one command from a game root:
 ```
 
 `live` opens a normal controllable game and writes one MP4. `shot` launches a
-fresh unsaved game, prepares its scenario before REC, then runs a fixed timeline
-while recording. Both print the final `tmp/captures/<take-id>/edit.mp4` path.
-There is no montage, retiming, x4 mode, or preroll in the result.
+fresh unsaved game, then applies the catalog setup and event schedule. REC
+playback is realtime at 1×. Both print the final `tmp/captures/<take-id>/edit.mp4`
+path. The fresh state, setup, and event schedule are deterministic; rendering,
+OBS encoding, and the MP4 are not byte- or frame-identical between takes. There
+is no montage, retiming, x4 mode, or preroll in the result.
 
 Each game owns `capture/catalog.json`:
 
@@ -65,8 +67,9 @@ Each game owns `capture/catalog.json`:
 }
 ```
 
-`fps` is the MP4 frame rate; `ticks_per_frame` sets the normal 1× game tick
-rate to `fps * ticks_per_frame` before REC. During REC the game runs normally;
+`fps` is the MP4 frame rate; `ticks_per_frame` selects the simulation rate
+in Hz: `fps * ticks_per_frame` before REC. It is not an exact tick count for
+each encoded frame. During REC the game runs normally;
 `events` are scheduled at their output-frame wall times and `frame` is an
 output-frame index. `setup` and `warmup_ticks` run before REC. A shot can
 override `preset`, `size`, `fps`, `ticks_per_frame`, or `max_freeze_seconds`

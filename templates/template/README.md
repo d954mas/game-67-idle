@@ -7,7 +7,7 @@ Record gameplay from any copied game:
 .\capture.cmd shot idle
 ```
 
-The command prints the final MP4 path. `live` keeps normal saves and autosave. `shot` starts fresh and runs a repeatable fixed-step timeline from `capture/catalog.json` at 1x speed. OBS encoding and live rendering are not byte-identical between takes.
+The command prints the final MP4 path. `live` keeps normal saves and autosave. `shot` starts from fresh state and applies the deterministic catalog setup and event schedule during realtime 1× playback. OBS encoding, rendering, and the MP4 are not byte- or frame-identical between takes.
 
 The minimal runnable game every new game is copied from. Spec + reuse model:
 `../TEMPLATE.md`.

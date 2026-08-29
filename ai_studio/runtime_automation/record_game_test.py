@@ -37,6 +37,7 @@ from ai_studio.runtime_automation.record_game import (
     _content_start_offset_after_prepare,
     _obs_wgc_service_failure,
     _parse_freezedetect_log,
+    _parse_content_marker,
     _scene_collection,
     _stop_obs,
     _stop_obs_and_detect_service_failure,
@@ -554,6 +555,11 @@ class OutputTest(unittest.TestCase):
 
         self.assertEqual(result["maxFreezeSeconds"], 5.0)
         self.assertEqual(result["freezeCount"], 2)
+
+    def test_content_marker_uses_media_duration_and_rejects_missing_value(self) -> None:
+        self.assertEqual(_parse_content_marker("11.533\n"), 11.533)
+        with self.assertRaisesRegex(RuntimeError, "marker"):
+            _parse_content_marker("N/A\n")
 
     def test_freeze_log_counts_an_unclosed_still_until_media_end(self) -> None:
         result = _parse_freezedetect_log(

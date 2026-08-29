@@ -1125,6 +1125,33 @@ def _run_media(command: list[str], timeout_seconds: float) -> subprocess.Complet
     return completed
 
 
+def _parse_content_marker(value: str) -> float:
+    try:
+        marker = float(value.strip())
+    except ValueError as exc:
+        raise RuntimeError("could not measure the OBS media marker") from exc
+    if not math.isfinite(marker) or marker < 0:
+        raise RuntimeError("could not measure the OBS media marker")
+    return marker
+
+
+def _measure_content_marker(ffprobe: Path, recording: Path) -> float:
+    completed = _run_media(
+        [
+            str(ffprobe),
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=nw=1:nk=1",
+            str(recording),
+        ],
+        timeout_seconds=10.0,
+    )
+    return _parse_content_marker(completed.stdout)
+
+
 def _parse_freezedetect_log(
     log: str,
     *,
@@ -1593,10 +1620,9 @@ def record_take(
 
         def begin_content() -> None:
             nonlocal content_start_offset, capture_started_at
-            content_start_offset = _content_start_offset_after_prepare(
-                recording_detected_at,
-                recording_prepare,
-            )
+            if recording_prepare is not None:
+                recording_prepare()
+            content_start_offset = _measure_content_marker(ffprobe, recorded)
             capture_started_at = time.monotonic()
             print(f"REC | {duration_seconds:g} seconds", flush=True)
 
@@ -1709,7 +1735,12 @@ def record_take(
             "backend": "obs-window-capture-wgc",
             "pid": pid,
             "durationSeconds": duration_seconds,
-            "sourceTrimSeconds": round(content_start_offset, 3),
+            "sourceTrimSeconds": round(content_start_offset, 6),
+            "sourceTrim": {
+                "method": "ffprobe-format-duration",
+                "seconds": round(content_start_offset, 6),
+                "toleranceSeconds": round(1 / settings.fps, 6),
+            },
             "width": settings.width,
             "height": settings.height,
             "fps": settings.fps,

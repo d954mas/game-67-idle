@@ -283,6 +283,8 @@ def run(args: argparse.Namespace) -> dict:
     game_root = args.game.resolve()
     catalog = load_catalog(game_root)
     shot = resolve_shot(catalog, args.shot_id) if args.mode == "shot" else None
+    if shot is not None and args.seconds is not None:
+        raise ValueError("catalog owns shot duration; remove --seconds")
     settings, ticks_per_frame = _capture_options(catalog.get("defaults", {}), shot, args)
     if shot is not None:
         duration_seconds = _positive_seconds(shot["seconds"], "shot seconds")

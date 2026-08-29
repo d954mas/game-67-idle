@@ -324,6 +324,18 @@ class CaptureGameAdoptionTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "growth, shop"):
                 run(parse_args([str(root), "shot"]))
 
+    def test_shot_rejects_seconds_override_before_a_game_is_launched(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            capture = root / "capture"
+            capture.mkdir()
+            (capture / "catalog.json").write_text(
+                json.dumps({"version": 1, "shots": {"intro": {"seconds": 2, "events": []}}}),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "catalog owns shot duration"):
+                run(parse_args([str(root), "shot", "intro", "--seconds", "4"]))
     def test_catalog_rejects_bad_events_before_a_game_is_launched(self) -> None:
         with self.assertRaisesRegex(ValueError, "catalog shot intro event 0 method"):
             validate_catalog(
