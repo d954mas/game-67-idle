@@ -209,6 +209,7 @@ void game_save_set_transforms(const game_save_transform_t *chain, int count);
 /* Тест-шов: инжектит ОБА часа — монотонные (debounce/MAX_INTERVAL) и
    wall-clock (saved_at). Объявлено только под GAME_SAVE_TESTING. */
 void game_save__set_clocks_for_test(int64_t (*mono)(void), int64_t (*wall)(void));
+cJSON *game_save__parse_document_for_test(const char *text, char *error, int error_cap);
 #endif
 
 #endif /* GAME_SAVE_H */
