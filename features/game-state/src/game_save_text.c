@@ -25,6 +25,18 @@ static bool valid_key(const char *key) {
     return true;
 }
 
+static bool valid_fragment_id_slice(const char *start, const char *end) {
+    if (start == end || !((*start >= 'a' && *start <= 'z') || *start == '_')) {
+        return false;
+    }
+    for (const char *at = start + 1; at < end; at++) {
+        if (!((*at >= 'a' && *at <= 'z') || (*at >= '0' && *at <= '9') || *at == '_')) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool writer_reserve(game_save_text_writer_t *writer, size_t size) {
     if (writer == NULL || writer->failed || writer->data == NULL ||
         size > SIZE_MAX - writer->used || writer->used + size >= writer->capacity) {
@@ -102,8 +114,8 @@ bool game_save_text_write_preamble(game_save_text_writer_t *writer) {
 
 bool game_save_text_begin_fragment(game_save_text_writer_t *writer, const char *id, int version) {
     char line[96];
-    if (writer == NULL || !writer->preamble_written || !valid_key(id) ||
-        strchr(id, '.') != NULL || strchr(id, '[') != NULL || strchr(id, ']') != NULL ||
+    if (writer == NULL || !writer->preamble_written || id == NULL ||
+        !valid_fragment_id_slice(id, id + strlen(id)) ||
         version < 1) {
         if (writer != NULL) {
             writer->failed = true;
@@ -216,6 +228,16 @@ void game_save_text_reader_init(game_save_text_reader_t *reader, const char *dat
     }
 }
 
+void game_save_text_fragment_reader_init(
+    game_save_text_reader_t *reader, const char *data, size_t size, uint32_t first_line) {
+    game_save_text_reader_init(reader, data, size);
+    if (reader != NULL) {
+        reader->line = first_line;
+        reader->preamble_read = true;
+        reader->in_fragment = true;
+    }
+}
+
 static bool next_line(
     game_save_text_reader_t *reader, const char **out_start, const char **out_end,
     uint32_t *out_line) {
@@ -325,7 +347,7 @@ game_save_text_result_t game_save_text_reader_next(
                 version_start++;
             }
             int version = 0;
-            if (!valid_key_slice(body_start, space) || version_start == space ||
+            if (!valid_fragment_id_slice(body_start, space) || version_start == space ||
                 !parse_positive_int(version_start, body_end, &version)) {
                 reader->failed = true;
                 set_error(error, error_capacity, line, "invalid fragment header");

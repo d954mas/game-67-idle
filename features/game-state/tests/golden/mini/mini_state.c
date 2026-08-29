@@ -261,6 +261,10 @@ bool mini_state_write_snapshot(const MiniState *state, game_save_writer_t *write
     return game_save_writer_ok(writer);
 }
 
+
+
+
+
 cJSON *mini_state_get_path_json(const MiniState *state, const char *path, char *error, int error_cap) {
     if (!path || path[0] == '\0') { return mini_state_to_json(state); }
     if (strcmp(path, "mode_index") == 0) {
@@ -400,4 +404,6 @@ const GameSaveFragment mini_state_fragment = {
     .set_path_json = frag_set_path,
     .schema_json   = frag_schema,
     .write_snapshot = frag_write_snapshot,
+    .write_text     = NULL,
+    .from_text      = NULL,
 };

@@ -20,6 +20,7 @@ Compile the runtime together with the consumer's generated fragments:
 target_sources(game PRIVATE
     "${GAME_STATE_SRC}/game_state_json.c"
     "${GAME_STATE_SRC}/game_save_writer.c"
+    "${GAME_STATE_SRC}/game_save_text.c"
     "${GAME_STATE_SRC}/game_storage.c"
     "${GAME_STATE_SRC}/game_save.c")
 target_include_directories(game PRIVATE
@@ -48,6 +49,11 @@ and every fragment must provide `write_snapshot`; generated fragments do so
 automatically. Registered transforms or retained orphan fragments deliberately
 select the legacy JSON path because the bounded writer cannot reproduce those
 compatibility transforms byte-for-byte.
+
+Scalar-only generated fragments also expose `write_text` and `from_text`.
+These callbacks use the editable `NTGS 1` format and allocate no heap memory.
+Fragments with containers keep the callbacks null until their text mapping is
+defined explicitly.
 
 The default template deliberately uses `GAME_STORAGE_MAX_BYTES + 1U`: its
 reference schema accepts every storage-valid Items state. A production game

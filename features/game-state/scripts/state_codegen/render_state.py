@@ -119,6 +119,10 @@ class StateRenderer:
         return [f for f in schema["fields"] if f["type"] in SCALAR_TYPES]
 
 
+    def supports_text_codec(self, schema: dict[str, Any]) -> bool:
+        return all(field["type"] in SCALAR_TYPES for field in schema["fields"])
+
+
     def scalar_type_fields(self, fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return [f for f in fields if f["type"] in SCALAR_TYPES]
 
@@ -324,6 +328,8 @@ bool   {self.ns.fn}validate(const {self.ns.type} *state, char *error, int error_
 cJSON *{self.ns.fn}schema_json(void);
 cJSON *{self.ns.fn}to_json(const {self.ns.type} *state);
 bool   {self.ns.fn}write_snapshot(const {self.ns.type} *state, game_save_writer_t *writer);
+{f"bool   {self.ns.fn}write_text(const {self.ns.type} *state, game_save_text_writer_t *writer);" if self.supports_text_codec(schema) else ""}
+{f"bool   {self.ns.fn}from_text({self.ns.type} *state, const char *text, size_t size, char *error, int error_cap);" if self.supports_text_codec(schema) else ""}
 cJSON *{self.ns.fn}get_path_json(const {self.ns.type} *state, const char *path, char *error, int error_cap);
 bool   {self.ns.fn}set_path_json({self.ns.type} *state, const char *path, const cJSON *value, char *error, int error_cap);
 bool   {self.ns.fn}patch_json({self.ns.type} *state, const cJSON *values, char *error, int error_cap);
@@ -1159,6 +1165,143 @@ static bool {aggregate_ident}_write_snapshot(const {self.ns.type} *state, game_s
         return "\n".join(lines)
 
 
+    def render_text_write_scalar(self, field: dict[str, Any]) -> str:
+        path = field["path"]
+        ident = c_ident(path)
+        typ = field["type"]
+        if typ == "enum":
+            ename = c_ident(field["enum"])
+            call = f'game_save_text_write_string(writer, "{path}", {self.ns.fn}{ename}_name(state->{ident}))'
+        elif typ in {"int", "u32"}:
+            call = f'game_save_text_write_i64(writer, "{path}", (int64_t)state->{ident})'
+        elif typ == "i64":
+            call = f'game_save_text_write_i64(writer, "{path}", state->{ident})'
+        elif typ == "float":
+            call = f'game_save_text_write_number(writer, "{path}", (double)state->{ident})'
+        elif typ == "bool":
+            call = f'game_save_text_write_bool(writer, "{path}", state->{ident})'
+        elif typ == "string":
+            call = f'game_save_text_write_string(writer, "{path}", state->{ident})'
+        elif typ == "string?":
+            call = (
+                f'(state->has_{ident} ? game_save_text_write_string(writer, "{path}", state->{ident}) '
+                f': game_save_text_write_null(writer, "{path}"))'
+            )
+        else:
+            raise AssertionError(typ)
+        return f"    if (!{call}) {{ return false; }}"
+
+
+    def render_write_text(self, schema: dict[str, Any]) -> str:
+        if not self.supports_text_codec(schema):
+            return ""
+        lines = [
+            f"bool {self.ns.fn}write_text(const {self.ns.type} *state, game_save_text_writer_t *writer) {{",
+            "    if (!state || !writer) { return false; }",
+        ]
+        lines.extend(self.render_text_write_scalar(field) for field in self.scalar_fields(schema))
+        lines.extend(["    return game_save_text_writer_ok(writer);", "}"])
+        return "\n".join(lines)
+
+
+    def render_text_read_scalar(self, field: dict[str, Any], field_index: int) -> list[str]:
+        path = field["path"]
+        ident = c_ident(path)
+        macro = f"{self.ns.macro}{c_macro(path)}"
+        typ = field["type"]
+        lines = [
+            f'        if (game_save_text_record_key_is(&record, "{path}")) {{',
+            f'            if (seen[{field_index}]) {{ gsj_set_error(error, error_cap, "duplicate field"); return false; }}',
+            f"            seen[{field_index}] = true;",
+        ]
+        if typ == "enum":
+            names, count = self.enum_table(field)
+            lines.extend([
+                f"            char value[{self.ns.macro}STRING_MAX];",
+                "            if (!game_save_text_record_string(&record, value, sizeof value, error, (size_t)error_cap)) { return false; }",
+                "            bool matched = false;",
+                f"            for (int i = 0; i < {count}; i++) {{",
+                f"                if (strcmp(value, {names}[i]) == 0) {{ next.{ident} = i; matched = true; break; }}",
+                "            }",
+                "            if (!matched) { gsj_set_error(error, error_cap, \"enum value out of range\"); return false; }",
+            ])
+        elif typ == "int":
+            lines.extend([
+                "            int64_t value = 0;",
+                f"            if (!game_save_text_record_i64(&record, {macro}_MIN, {macro}_MAX, &value, error, (size_t)error_cap)) {{ return false; }}",
+                f"            next.{ident} = (int)value;",
+            ])
+        elif typ == "u32":
+            lines.extend([
+                "            int64_t value = 0;",
+                f"            if (!game_save_text_record_i64(&record, (int64_t){macro}_MIN, (int64_t){macro}_MAX, &value, error, (size_t)error_cap)) {{ return false; }}",
+                f"            next.{ident} = (uint32_t)value;",
+            ])
+        elif typ == "i64":
+            lines.append(
+                f"            if (!game_save_text_record_i64(&record, {macro}_MIN, {macro}_MAX, &next.{ident}, error, (size_t)error_cap)) {{ return false; }}"
+            )
+        elif typ == "float":
+            lines.extend([
+                "            double value = 0.0;",
+                f"            if (!game_save_text_record_number(&record, (double){macro}_MIN, (double){macro}_MAX, &value, error, (size_t)error_cap)) {{ return false; }}",
+                f"            next.{ident} = (float)value;",
+            ])
+        elif typ == "bool":
+            lines.append(
+                f"            if (!game_save_text_record_bool(&record, &next.{ident}, error, (size_t)error_cap)) {{ return false; }}"
+            )
+        elif typ == "string":
+            lines.append(
+                f"            if (!game_save_text_record_string(&record, next.{ident}, sizeof next.{ident}, error, (size_t)error_cap)) {{ return false; }}"
+            )
+        elif typ == "string?":
+            lines.extend([
+                "            if (game_save_text_record_is_null(&record)) {",
+                f"                next.has_{ident} = false; next.{ident}[0] = '\\0';",
+                f"            }} else if (game_save_text_record_string(&record, next.{ident}, sizeof next.{ident}, error, (size_t)error_cap)) {{",
+                f"                next.has_{ident} = true;",
+                "            } else { return false; }",
+            ])
+        else:
+            raise AssertionError(typ)
+        lines.extend(["            continue;", "        }"])
+        return lines
+
+
+    def render_from_text(self, schema: dict[str, Any]) -> str:
+        if not self.supports_text_codec(schema):
+            return ""
+        lines = [
+            f"bool {self.ns.fn}from_text({self.ns.type} *state, const char *text, size_t size, char *error, int error_cap) {{",
+            "    if (!state || !text) { gsj_set_error(error, error_cap, \"text state is null\"); return false; }",
+            f"    {self.ns.type} next;",
+            f"    {self.ns.fn}init_defaults(&next);",
+            f"    bool seen[{len(self.scalar_fields(schema))}] = {{0}};" if self.scalar_fields(schema) else "",
+            "    const size_t error_size = error_cap > 0 ? (size_t)error_cap : 0U;",
+            "    game_save_text_reader_t reader;",
+            "    game_save_text_fragment_reader_init(&reader, text, size, 1U);",
+            "    for (;;) {",
+            "        game_save_text_record_t record;",
+            "        game_save_text_result_t result = game_save_text_reader_next(&reader, &record, error, error_size);",
+            "        if (result == GAME_SAVE_TEXT_DONE) { break; }",
+            "        if (result == GAME_SAVE_TEXT_ERROR) { return false; }",
+        ]
+        for field_index, field in enumerate(self.scalar_fields(schema)):
+            lines.extend(
+                line.replace("(size_t)error_cap", "error_size")
+                for line in self.render_text_read_scalar(field, field_index)
+            )
+        lines.extend([
+            "    }",
+            f"    if (!{self.ns.fn}validate(&next, error, error_cap)) {{ return false; }}",
+            "    *state = next;",
+            "    return true;",
+            "}",
+        ])
+        return "\n".join(lines)
+
+
     def render_defaults(self, schema: dict[str, Any]) -> str:
         lines: list[str] = []
         for field in self.scalar_fields(schema):
@@ -1414,6 +1557,17 @@ static bool {aggregate_ident}_write_snapshot(const {self.ns.type} *state, game_s
             pre.append(f"extern void {self.ns.ident}_reconcile(void);")
             reconcile = f"{self.ns.ident}_reconcile"
 
+        text_wrappers = ""
+        text_write_field = "NULL"
+        text_read_field = "NULL"
+        if self.supports_text_codec(schema):
+            text_wrappers = (
+                f"\nstatic bool   frag_write_text(game_save_text_writer_t *w)                 {{ return {self.ns.fn}write_text(&{self.ns.inst}, w); }}\n"
+                f"static bool   frag_from_text(const char *t, size_t n, char *e, int c)       {{ return {self.ns.fn}from_text(&{self.ns.inst}, t, n, e, c); }}"
+            )
+            text_write_field = "frag_write_text"
+            text_read_field = "frag_from_text"
+
         wrappers = (
             f"static void   frag_reset(void)                                             {{ {self.ns.fn}init_defaults(&{self.ns.inst}); }}\n"
             f"static cJSON *frag_to_json(void)                                           {{ return {self.ns.fn}to_json(&{self.ns.inst}); }}\n"
@@ -1422,6 +1576,7 @@ static bool {aggregate_ident}_write_snapshot(const {self.ns.type} *state, game_s
             f"static cJSON *frag_get_path(const char *s, char *e, int c)                 {{ return {self.ns.fn}get_path_json(&{self.ns.inst}, s, e, c); }}\n"
             f"static bool   frag_set_path(const char *s, const cJSON *v, char *e, int c) {{ return {self.ns.fn}set_path_json(&{self.ns.inst}, s, v, e, c); }}\n"
             f"static cJSON *frag_schema(void)                                            {{ return {self.ns.fn}schema_json(); }}"
+            f"{text_wrappers}"
         )
 
         descriptor = (
@@ -1438,6 +1593,8 @@ static bool {aggregate_ident}_write_snapshot(const {self.ns.type} *state, game_s
             f"    .set_path_json = frag_set_path,\n"
             f"    .schema_json   = frag_schema,\n"
             f"    .write_snapshot = frag_write_snapshot,\n"
+            f"    .write_text     = {text_write_field},\n"
+            f"    .from_text      = {text_read_field},\n"
             f"}};"
         )
 
@@ -1558,6 +1715,10 @@ cJSON *{self.ns.fn}to_json(const {self.ns.type} *state) {{
 }}
 
 {self.render_write_snapshot(schema)}
+
+{self.render_write_text(schema)}
+
+{self.render_from_text(schema)}
 
 cJSON *{self.ns.fn}get_path_json(const {self.ns.type} *state, const char *path, char *error, int error_cap) {{
     if (!path || path[0] == '\\0') {{ return {self.ns.fn}to_json(state); }}

@@ -114,6 +114,43 @@ def run_generated_snapshot_regression() -> int:
         return subprocess.run((str(executable),), cwd=ROOT, check=False).returncode
 
 
+def run_generated_text_codec_regression() -> int:
+    """Compile and round-trip a generated scalar fragment through the text codec."""
+    with tempfile.TemporaryDirectory() as tmp:
+        generated = Path(tmp) / "generated"
+        generate = (
+            sys.executable,
+            str(SCRIPT_DIR / "generate_state.py"),
+            "--schema", str(ROOT / "features/game-state/tests/scalar_state.schema.json"),
+            "--out-dir", str(generated),
+            "--fragment", "scalar",
+        )
+        if subprocess.run(generate, cwd=ROOT, check=False).returncode != 0:
+            return 1
+        executable = Path(tmp) / "test_generated_text_codec.exe"
+        command = (
+            "clang",
+            "-std=c17",
+            "-D_CRT_SECURE_NO_WARNINGS",
+            "-I", str(generated),
+            "-I", str(ROOT / "features/game-state/include"),
+            "-I", str(ROOT / "external/neotolis-engine/deps/cjson"),
+            "-I", str(ROOT / "external/neotolis-engine/deps/unity/src"),
+            str(ROOT / "features/game-state/tests/test_generated_text_codec.c"),
+            str(generated / "scalar_state.c"),
+            str(ROOT / "features/game-state/src/game_save_text.c"),
+            str(ROOT / "features/game-state/src/game_save_writer.c"),
+            str(ROOT / "features/game-state/src/game_state_json.c"),
+            str(ROOT / "external/neotolis-engine/deps/cjson/cJSON.c"),
+            str(ROOT / "external/neotolis-engine/deps/unity/src/unity.c"),
+            "-o", str(executable),
+        )
+        result = subprocess.run(command, cwd=ROOT, check=False)
+        if result.returncode != 0:
+            return result.returncode
+        return subprocess.run((str(executable),), cwd=ROOT, check=False).returncode
+
+
 def main() -> int:
     failed = False
     for command in TEST_COMMANDS:
@@ -122,6 +159,7 @@ def main() -> int:
     failed = run_writer_test() != 0 or failed
     failed = run_text_codec_test() != 0 or failed
     failed = run_generated_snapshot_regression() != 0 or failed
+    failed = run_generated_text_codec_regression() != 0 or failed
     return 1 if failed else 0
 
 
