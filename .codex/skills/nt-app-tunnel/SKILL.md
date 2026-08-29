@@ -1,6 +1,6 @@
 ---
 name: nt-app-tunnel
-description: "Use only when the lead explicitly asks to create, start, or expose a public tunnel or temporary public URL for a specific local preview, build, or static directory. Trigger on an explicit tunnel/public-URL request; do not trigger on phone, mobile, device, build, run, view, test, pick, or play requests by themselves."
+description: "Manually selected workflow for exposing a specific local preview, build, or static directory through a temporary public URL. Public exposure is never automatic: explain that the URL is public and unauthenticated, then ask for confirmation immediately before launch."
 ---
 
 # NT App Tunnel
@@ -14,6 +14,10 @@ Invoke this skill only when the lead explicitly requests a tunnel or public URL.
 Requests such as "run", "launch", "open", "show", "test", "play", or "open on
 PC" authorize only a local launch. They do not authorize a tunnel, upload, or
 public exposure.
+
+Before running the tunnel command, explain that the URL will be public and
+unauthenticated and ask the lead for explicit confirmation. Do not treat skill
+selection or an earlier general request as launch confirmation.
 
 ## Run
 
