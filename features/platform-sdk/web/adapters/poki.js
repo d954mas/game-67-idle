@@ -11,6 +11,7 @@ export function createPokiPlatformAdapter({ host }) {
   let destroyed = false;
   let lastLoadingProgress = 0;
   let lastSentLoadingProgress = -1;
+  const loadingProgressPayload = { percentageDone: 0 };
 
   function windowRef() {
     return (host && host.window) || host || globalThis;
@@ -80,7 +81,8 @@ export function createPokiPlatformAdapter({ host }) {
     if (!sdkInstance || destroyed || lastLoadingProgress <= lastSentLoadingProgress) return;
     lastSentLoadingProgress = lastLoadingProgress;
     if (typeof sdkInstance.gameLoadingProgress === "function") {
-      sdkInstance.gameLoadingProgress({ percentageDone: lastLoadingProgress });
+      loadingProgressPayload.percentageDone = lastLoadingProgress;
+      sdkInstance.gameLoadingProgress(loadingProgressPayload);
     }
   }
 
@@ -131,7 +133,10 @@ export function createPokiPlatformAdapter({ host }) {
       if (rewarded === null) {
         return { supported: false, shown: false, rewarded: false, reason: "not_ready" };
       }
-      return { supported: true, shown: Boolean(rewarded), rewarded: Boolean(rewarded), ...(rewarded ? {} : { reason: "skipped" }) };
+      if (!rewarded) {
+        return { supported: true, shown: false, rewarded: false, reason: "skipped" };
+      }
+      return { supported: true, shown: true, rewarded: true };
     } catch {
       return { supported: true, shown: false, rewarded: false, reason: "failed" };
     }

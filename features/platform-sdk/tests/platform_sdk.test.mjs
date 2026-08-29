@@ -354,6 +354,29 @@ test("poki adapter coalesces loading progress queued before SDK init completes",
   assert.deepEqual(progress, [1]);
 });
 
+test("poki adapter reuses one payload object across loading progress updates", async () => {
+  const host = createHost(TargetPlatform.POKI);
+  const payloads = [];
+  host.PokiSDK = {
+    init() {
+      return Promise.resolve();
+    },
+    gameLoadingProgress(payload) {
+      payloads.push(payload);
+    },
+  };
+  const adapter = createPokiPlatformAdapter({ host });
+
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+  adapter.gameLoadingProgress(0.25);
+  adapter.gameLoadingProgress(0.75);
+
+  assert.equal(payloads.length, 3);
+  assert.equal(new Set(payloads).size, 1);
+  assert.equal(payloads[0].percentageDone, 0.75);
+});
+
 test("yandex adapter uses documented loading, gameplay, and ad callbacks", async () => {
   const host = createHost(TargetPlatform.YANDEX);
   const calls = [];
