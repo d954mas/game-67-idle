@@ -1577,4 +1577,8 @@ void game_save__set_clocks_for_test(int64_t (*mono)(void), int64_t (*wall)(void)
     s_mono_clock = mono;
     s_wall_clock = wall;
 }
+
+cJSON *game_save__parse_document_for_test(const char *text, char *error, int error_cap) {
+    return parse_save_document(text, error, error_cap);
+}
 #endif
