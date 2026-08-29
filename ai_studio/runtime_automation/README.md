@@ -32,25 +32,45 @@ node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/pixel
 node ai_studio/runtime_automation/web_local_mock_probe.mjs --url http://127.0.0.1:8092/ --cdp http://127.0.0.1:9222 --out games/<game-id>/.ai_studio/evidence/local-mock/<observation>.json
 ```
 
-## Agent-ready game recording
+## Gameplay recording
 
-Games with an approved `capture/catalog.json` expose exactly:
+Run one command from a game root:
 
-```text
-capture live
-capture shot <id>
+```powershell
+.\capture.cmd live
+.\capture.cmd shot intro
 ```
 
-Run them from the game root. `live` opens the catalog's approved continuous
-presentation. `shot` resolves an approved id, resets its game-owned DevAPI
-scenario exactly at REC, and host-paces its fixed ticks. Both commands invoke
-the same isolated OBS recorder below, publish a draft first, and report why a
-true master was or was not promoted. The current universal-social matrix is
-incomplete, so social takes truthfully remain drafts.
+`live` opens a normal controllable game and writes one MP4. `shot` launches a
+fresh unsaved game, prepares its scenario before REC, then runs a fixed timeline
+while recording. Both print the final `tmp/captures/<take-id>/edit.mp4` path.
+There is no montage, retiming, x4 mode, or preroll in the result.
 
-The game catalog also documents its reproducible local audiovisual E2E. Agents
-must run that E2E after workflow, scene, audio, or recorder integration changes.
+Each game owns `capture/catalog.json`:
 
+```json
+{
+  "version": 1,
+  "executable": "build/devapi-debug/bin/game.exe",
+  "defaults": {"size": "1920x1080", "fps": 30, "ticks_per_frame": 2},
+  "live": {"seconds": 15},
+  "shots": {
+    "intro": {
+      "seconds": 3,
+      "warmup_ticks": 2,
+      "setup": [{"method": "game.scene.stage_intro"}],
+      "events": [{"frame": 30, "method": "input.key", "params": {"key": "W"}}]
+    }
+  }
+}
+```
+
+`fps` is the MP4 frame rate; `ticks_per_frame` sets the normal 1× game tick
+rate to `fps * ticks_per_frame` before REC. During REC the game runs normally;
+`events` are scheduled at their output-frame wall times and `frame` is an
+output-frame index. `setup` and `warmup_ticks` run before REC. A shot can
+override `preset`, `size`, `fps`, `ticks_per_frame`, or `max_freeze_seconds`
+(default `2.0`) from defaults. Its `seconds * fps` must be a whole number.
 ### Windows host-execution boundary
 
 OBS-backed capture depends on the active Windows console user's per-user
@@ -65,62 +85,12 @@ backend and rerun the unchanged command as the active interactive user instead
 of cycling OBS or adding an alternate backend. If the command already has that
 identity, inspect the user's `CaptureService` availability.
 
-## Recorder maintenance and direct diagnostics
+## Recorder maintenance
 
-`record_game.py` is the fixed low-level recording path. It launches a Studio game in
-the requested aspect ratio (or attaches to a running PID), records the visible
-game-window rectangle plus audio from that game process, and produces:
-
-- `master.mkv`: validated H.264/AAC editing master;
-- `edit.mp4`: the same H.264/AAC take in an editor-friendly MP4 container;
-- `capture.json`: small technical summary.
-
-Record a vertical take for TikTok, Shorts, and Reels:
-
-```powershell
-node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/record_game.py `
-  --exe games/<game-id>/build/devapi-debug/bin/game.exe `
-  --preset social `
-  --seconds 30
-```
-
-Attach to an already running game:
-
-```powershell
-node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/record_game.py `
-  --pid <game-pid> `
-  --preset landscape `
-  --seconds 60 `
-  --out tmp/captures/my-take
-```
-
-Presets are `social` (`1080x1920`, default), `landscape` (`1920x1080`), and
-`square` (`1080x1080`); `--size WIDTHxHEIGHT` overrides them. Presets record at
-30 fps to preserve game smoothness; pass `--fps 60` only when that extra frame
-rate is worth the additional GPU cost.
-
-The command uses one recording path: OBS Window Capture (Windows Graphics Capture) with NVIDIA
-NVENC plus Windows process-loopback audio for that game process. The process-loopback
-piece avoids OBS 30.1.2's intermittent silent application-audio source while
-still excluding desktop and microphone sound. The command creates a disposable
-portable OBS profile from hardlinks, disables preview, OBS audio sources,
-WebSocket, and updater access, then removes that profile after the take. It
-marks first-run setup complete so the auto-configuration wizard cannot appear,
-and never reads or changes the user's normal OBS scenes or settings.
-
-Realtime capture is capped at a lightweight working resolution. After `REC`
-finishes, FFmpeg trims the hidden source-attachment preflight and uses NVENC to
-produce the exact requested master size and duration; `edit.mp4` is then a
-lossless container remux. Keep the game window open and not minimized. The
-recorder samples the live source for up to four seconds and rejects black OBS
-starts before `REC`. The public workflow makes one clean take retry after a
-transiently unhealthy source or incomplete OBS container. A logged WGC
-`CreateForWindow (0x80070424)` is classified as capture-service unavailability
-and stops immediately with active-user/CaptureService guidance instead of
-cycling OBS.
-The recorder validates decoded frame count, dimensions, FPS, a
-non-black content frame, the 48 kHz stereo audio track, and records measured
-audio activity and OBS render-lag diagnostics in `capture.json`.
+`record_game.py` is the shared OBS backend used by `capture.cmd`. It validates
+frame count, dimensions, FPS, video health, audio format, and writes technical
+metadata beside the final MP4. Normal game work uses only `capture.cmd`; do not
+build per-video record or montage scripts.
 
 ## Local mock web proof
 

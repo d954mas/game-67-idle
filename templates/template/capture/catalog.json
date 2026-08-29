@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "executable": "build/devapi-debug/bin/game.exe",
+  "defaults": {
+    "preset": "landscape",
+    "size": "1920x1080",
+    "fps": 30,
+    "ticks_per_frame": 2
+  },
+  "live": {
+    "seconds": 15
+  },
+  "shots": {
+    "idle": {
+      "seconds": 3,
+      "warmup_ticks": 2,
+      "events": [
+        {
+          "frame": 0,
+          "method": "input.key",
+          "params": {
+            "key": "D",
+            "hold": 180
+          }
+        }
+      ]
+    }
+  }
+}

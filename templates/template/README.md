@@ -1,5 +1,14 @@
 # Template (game starter)
 
+Record gameplay from any copied game:
+
+```powershell
+.\capture.cmd live
+.\capture.cmd shot idle
+```
+
+The command prints the final MP4 path. `live` keeps normal saves and autosave. `shot` starts fresh and runs a repeatable fixed-step timeline from `capture/catalog.json` at 1x speed. OBS encoding and live rendering are not byte-identical between takes.
+
 The minimal runnable game every new game is copied from. Spec + reuse model:
 `../TEMPLATE.md`.
 

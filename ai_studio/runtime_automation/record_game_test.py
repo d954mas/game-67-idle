@@ -15,6 +15,7 @@ from ai_studio.runtime_automation.record_game import (
     CapturePaths,
     CaptureSettings,
     build_edit_command,
+    build_freezedetect_command,
     build_launch_command,
     build_master_command,
     build_obs_launch_command,
@@ -28,12 +29,21 @@ from ai_studio.runtime_automation.record_game import (
     _preflight_obs_source,
     _publish_take,
     _record_audio_with_driver,
+    _show_window_for_obs,
     _settle_game_capture,
     _extract_health_frame,
+    _extract_preflight_frame,
+    _assert_final_temporal_health,
+    _content_start_offset_after_prepare,
     _obs_wgc_service_failure,
+    _parse_freezedetect_log,
     _scene_collection,
+    _stop_obs,
     _stop_obs_and_detect_service_failure,
+    _wait_for_finalized_recording,
     _write_obs_configuration,
+    _should_tag_window,
+    _tag_window_title,
 )
 
 
@@ -127,13 +137,29 @@ class ObsContractTest(unittest.TestCase):
             sleep=lambda seconds: events.append(("sleep", seconds)),
         )
 
-        self.assertEqual(events, [("background", 123), ("sleep", 5.0)])
+        self.assertEqual(events, [("background", 123), ("sleep", 0.25)])
 
-    def test_obs_source_gets_time_to_attach_before_restart(self) -> None:
+    def test_hidden_capture_stays_foreground_until_preflight_has_passed(self) -> None:
+        events: list[object] = []
+        _show_window_for_obs(123, lambda hwnd: events.append(("bring", hwnd)))
+        _settle_game_capture(
+            123,
+            hide_game_window=True,
+            bring_window_forward=lambda hwnd: events.append(("restore", hwnd)),
+            background_window=lambda hwnd: events.append(("background", hwnd)),
+            sleep=lambda seconds: events.append(("sleep", seconds)),
+        )
+
+        self.assertEqual(
+            events,
+            [("bring", 123), ("background", 123), ("sleep", 0.25)],
+        )
+
+    def test_obs_source_uses_one_bounded_readiness_probe_per_restart(self) -> None:
         healthy = {"uniqueColors": 500}
         with patch(
-            "ai_studio.runtime_automation.record_game._extract_health_frame",
-            side_effect=[RuntimeError("black"), healthy],
+            "ai_studio.runtime_automation.record_game._extract_preflight_frame",
+            side_effect=[RuntimeError("black"), RuntimeError("black"), healthy],
         ) as extract, patch(
             "ai_studio.runtime_automation.record_game.time.sleep"
         ) as sleep:
@@ -146,12 +172,48 @@ class ObsContractTest(unittest.TestCase):
         self.assertEqual(result, healthy)
         self.assertEqual(
             [call.args[3] for call in extract.call_args_list],
-            [1.0, 2.5],
+            [1.0, 2.5, 4.0],
         )
-        self.assertEqual(
-            [call.args[0] for call in sleep.call_args_list],
-            [1.0, 1.5],
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [1.0, 1.5, 1.5])
+
+    def test_unique_window_suffix_is_restorable_and_uses_the_pid(self) -> None:
+        changed: list[tuple[int, str]] = []
+
+        original = _tag_window_title(
+            123,
+            456,
+            read_title=lambda hwnd: "Planet Eater",
+            write_title=lambda hwnd, title: changed.append((hwnd, title)),
         )
+
+        self.assertEqual(original, "Planet Eater")
+        self.assertEqual(changed, [(123, "Planet Eater [capture-456]")])
+
+    def test_unique_window_keeps_its_original_title(self) -> None:
+        should_tag = _should_tag_window(
+            123,
+            title="Template",
+            class_name="GLFW30",
+            visible_windows=lambda: [123],
+            identity_for_window=lambda hwnd: ("Template", "GLFW30"),
+        )
+
+        self.assertFalse(should_tag)
+
+    def test_duplicate_window_gets_a_unique_title_suffix(self) -> None:
+        identities = {
+            123: ("Template", "GLFW30"),
+            456: ("Template", "GLFW30"),
+        }
+        should_tag = _should_tag_window(
+            123,
+            title="Template",
+            class_name="GLFW30",
+            visible_windows=lambda: [123, 456],
+            identity_for_window=lambda hwnd: identities[hwnd],
+        )
+
+        self.assertTrue(should_tag)
 
     def test_wgc_missing_service_reports_required_host_context(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -194,7 +256,7 @@ class ObsContractTest(unittest.TestCase):
         events: list[str] = []
         with patch(
             "ai_studio.runtime_automation.record_game._stop_obs",
-            side_effect=lambda _process: events.append("stop"),
+            side_effect=lambda *_args, **_kwargs: events.append("stop"),
         ), patch(
             "ai_studio.runtime_automation.record_game._obs_wgc_service_failure",
             side_effect=(
@@ -224,6 +286,8 @@ class ObsContractTest(unittest.TestCase):
 
         self.assertIn("FirstRun=true", global_ini)
         self.assertIn("LastVersion=503382018", global_ini)
+        self.assertIn("SysTrayEnabled=false", global_ini)
+        self.assertIn("SysTrayWhenStarted=false", global_ini)
 
     def test_obs_starts_in_isolated_portable_mode_without_preview(self) -> None:
         command = build_obs_launch_command(Path("portable/bin/64bit/obs64.exe"))
@@ -231,8 +295,53 @@ class ObsContractTest(unittest.TestCase):
         self.assertEqual(Path(command[0]), Path("portable/bin/64bit/obs64.exe"))
         self.assertIn("--portable", command)
         self.assertIn("--multi", command)
-        self.assertIn("--minimize-to-tray", command)
+        self.assertNotIn("--minimize-to-tray", command)
         self.assertIn("--startrecording", command)
+
+    def test_normal_shutdown_exits_after_a_short_close(self) -> None:
+        process = SimpleNamespace(
+            poll=lambda: None,
+            pid=42,
+            returncode=0,
+            wait=lambda timeout: 0,
+        )
+        with patch(
+            "ai_studio.runtime_automation.record_game._request_obs_close",
+            return_value=1,
+        ), patch(
+            "ai_studio.runtime_automation.record_game._stop_process"
+        ) as stop:
+            result = _stop_obs(process, timeout_seconds=2.0, force=True)
+
+        self.assertEqual(result, 0)
+        stop.assert_not_called()
+
+    def test_isolated_shutdown_forces_a_stuck_obs_after_short_close(self) -> None:
+        process = SimpleNamespace(
+            poll=lambda: None,
+            pid=42,
+            returncode=9,
+            wait=lambda timeout: (_ for _ in ()).throw(subprocess.TimeoutExpired("obs", timeout)),
+        )
+        with patch(
+            "ai_studio.runtime_automation.record_game._request_obs_close",
+            return_value=1,
+        ), patch(
+            "ai_studio.runtime_automation.record_game._stop_process"
+        ) as stop:
+            result = _stop_obs(process, timeout_seconds=2.0, force=True)
+
+        self.assertEqual(result, 9)
+        stop.assert_called_once_with(process)
+
+    def test_finalized_recording_rejects_a_missing_or_empty_mkv(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing.mkv"
+            with self.assertRaisesRegex(RuntimeError, "not finalized"):
+                _wait_for_finalized_recording(missing, timeout_seconds=0.0, sleep=lambda _seconds: None)
+            missing.write_bytes(b"")
+            with self.assertRaisesRegex(RuntimeError, "not finalized"):
+                _wait_for_finalized_recording(missing, timeout_seconds=0.0, sleep=lambda _seconds: None)
 
     def test_window_capture_targets_exact_window_with_wgc(self) -> None:
         descriptor = window_descriptor(
@@ -288,6 +397,61 @@ class OutputTest(unittest.TestCase):
             "frame.png",
             min_luma_stdev=8.0,
         )
+
+    def test_preflight_accepts_a_simple_light_game_frame(self) -> None:
+        health = SimpleNamespace(
+            unique_colors=3,
+            unique_buckets=1,
+            luma_range=0.0,
+            luma_stdev=0.0,
+            luma_mean=255.0,
+            luma_max=255.0,
+        )
+        with patch("ai_studio.runtime_automation.record_game._run_media"), patch(
+            "ai_studio.runtime_automation.record_game.analyze_png",
+            return_value=health,
+        ):
+            result = _extract_preflight_frame(
+                Path("ffmpeg.exe"),
+                Path("take.mkv"),
+                Path("frame.png"),
+                1.0,
+            )
+
+        self.assertEqual(result["uniqueColors"], 3)
+        self.assertEqual(result["lumaMean"], 255.0)
+
+    def test_preflight_rejects_a_near_black_wgc_frame(self) -> None:
+        health = SimpleNamespace(
+            unique_colors=1,
+            unique_buckets=1,
+            luma_range=0.0,
+            luma_stdev=0.0,
+            luma_mean=2.0,
+            luma_max=2.0,
+        )
+        with patch("ai_studio.runtime_automation.record_game._run_media"), patch(
+            "ai_studio.runtime_automation.record_game.analyze_png",
+            return_value=health,
+        ), self.assertRaisesRegex(RuntimeError, "near-black"):
+            _extract_preflight_frame(
+                Path("ffmpeg.exe"),
+                Path("take.mkv"),
+                Path("frame.png"),
+                1.0,
+            )
+
+    def test_final_health_keeps_the_strict_pixel_contract(self) -> None:
+        with patch("ai_studio.runtime_automation.record_game._run_media"), patch(
+            "ai_studio.runtime_automation.record_game.assert_pixel_health",
+            side_effect=RuntimeError("strict final health"),
+        ), self.assertRaisesRegex(RuntimeError, "strict final health"):
+            _extract_health_frame(
+                Path("ffmpeg.exe"),
+                Path("edit.mp4"),
+                Path("frame.png"),
+                1.0,
+            )
 
     def test_capture_paths_are_predictable(self) -> None:
         root = Path("takes") / "tram-01"
@@ -350,13 +514,20 @@ class OutputTest(unittest.TestCase):
             fps=30,
         )
 
-        self.assertEqual(command[command.index("-ss") + 1], "2.000")
+        self.assertNotIn("-ss", command)
         self.assertEqual(command[command.index("-t") + 1], "5.000")
         self.assertEqual(command[command.index("-c:v") + 1], "h264_nvenc")
         self.assertEqual(command[command.index("-c:a") + 1], "aac")
         self.assertIn("game.wav", command)
         self.assertIn("1:a:0", command)
-        self.assertIn("scale=1080:1920", command[command.index("-vf") + 1])
+        video_filter = command[command.index("-vf") + 1]
+        audio_filter = command[command.index("-af") + 1]
+        self.assertIn("trim=start=2.000", video_filter)
+        self.assertIn("setpts=PTS-STARTPTS", video_filter)
+        self.assertIn("scale=1080:1920", video_filter)
+        self.assertIn("apad=whole_dur=5.000", audio_filter)
+        self.assertIn("atrim=duration=5.000", audio_filter)
+        self.assertIn("asetpts=PTS-STARTPTS", audio_filter)
         self.assertEqual(command[-1], "master.mkv")
 
     def test_edit_export_is_a_lossless_container_remux(self) -> None:
@@ -368,6 +539,48 @@ class OutputTest(unittest.TestCase):
 
         self.assertEqual(command.count("copy"), 2)
         self.assertEqual(command[-1], "edit.mp4")
+
+    def test_freeze_command_has_a_small_motion_noise_threshold(self) -> None:
+        command = build_freezedetect_command(Path("ffmpeg.exe"), Path("edit.mp4"))
+
+        self.assertIn("freezedetect=n=0.0001:d=0.100", command)
+        self.assertEqual(command[-2:], ["null", "-"])
+
+    def test_freeze_log_reports_the_longest_confirmed_still_period(self) -> None:
+        result = _parse_freezedetect_log(
+            "freeze_start: 1.2\nfreeze_duration: 0.067\n"
+            "freeze_start: 3.5\nfreeze_duration: 5.000\n"
+        )
+
+        self.assertEqual(result["maxFreezeSeconds"], 5.0)
+        self.assertEqual(result["freezeCount"], 2)
+
+    def test_freeze_log_counts_an_unclosed_still_until_media_end(self) -> None:
+        result = _parse_freezedetect_log(
+            "freeze_start: 3.5\n",
+            media_duration_seconds=8.0,
+        )
+
+        self.assertEqual(result["maxFreezeSeconds"], 4.5)
+        self.assertEqual(result["freezeCount"], 1)
+
+    def test_temporal_gate_rejects_a_freeze_above_its_limit(self) -> None:
+        completed = subprocess.CompletedProcess(
+            ["ffmpeg"],
+            0,
+            "",
+            "freeze_start: 1.2\nfreeze_duration: 1.500\n",
+        )
+        with patch(
+            "ai_studio.runtime_automation.record_game._run_media",
+            return_value=completed,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "1.500s"):
+                _assert_final_temporal_health(
+                    Path("ffmpeg.exe"),
+                    Path("edit.mp4"),
+                    0.5,
+                )
 
 
 class CliTest(unittest.TestCase):
@@ -394,6 +607,44 @@ class CliTest(unittest.TestCase):
 
 
 class RecordingDriverTest(unittest.TestCase):
+    def test_prepare_finishes_before_the_content_offset_is_measured(self) -> None:
+        events: list[str] = []
+
+        offset = _content_start_offset_after_prepare(
+            10.0,
+            lambda: events.append("prepare"),
+            monotonic=lambda: events.append("measure") or 12.5,
+        )
+
+        self.assertEqual(events, ["prepare", "measure"])
+        self.assertEqual(offset, 2.5)
+
+    def test_audio_warmup_completes_before_the_timeline_starts(self) -> None:
+        helper_ready = threading.Event()
+        capture_started = threading.Event()
+        events: list[str] = []
+
+        def capture_audio() -> dict:
+            events.append("audio-launch")
+            helper_ready.set()
+            self.assertTrue(capture_started.wait(timeout=1))
+            events.append("audio-capture")
+            return {"sampleFrames": 48000}
+
+        result = _record_audio_with_driver(
+            capture_audio,
+            lambda: events.append("timeline"),
+            wait_audio_ready=lambda: helper_ready.wait(timeout=1) and events.append("ready"),
+            before_driver=lambda: events.append("prepare"),
+            start_audio=lambda: events.append("start") or capture_started.set(),
+        )
+
+        self.assertEqual(result, {"sampleFrames": 48000})
+        self.assertLess(events.index("audio-launch"), events.index("ready"))
+        self.assertLess(events.index("ready"), events.index("prepare"))
+        self.assertLess(events.index("prepare"), events.index("start"))
+        self.assertLess(events.index("start"), events.index("timeline"))
+
     def test_optional_driver_runs_while_process_audio_is_active(self) -> None:
         audio_started = threading.Event()
         driver_completed = threading.Event()

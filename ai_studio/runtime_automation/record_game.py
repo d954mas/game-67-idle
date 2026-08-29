@@ -33,7 +33,7 @@ from capture.backends.windows_process_loopback import (  # noqa: E402
     capture_process_audio,
     query_process_creation_time_100ns,
 )
-from pixel_health import assert_pixel_health  # noqa: E402
+from pixel_health import analyze_png, assert_pixel_health  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -260,8 +260,6 @@ def build_master_command(
         "-loglevel",
         "error",
         "-y",
-        "-ss",
-        f"{start_seconds:.3f}",
         "-i",
         str(source),
         "-i",
@@ -273,7 +271,15 @@ def build_master_command(
         "-map",
         "1:a:0",
         "-vf",
-        f"fps={fps},scale={width}:{height}:flags=lanczos",
+        (
+            f"trim=start={start_seconds:.3f},setpts=PTS-STARTPTS,"
+            f"fps={fps},scale={width}:{height}:flags=lanczos"
+        ),
+        "-af",
+        (
+            f"apad=whole_dur={duration_seconds:.3f},"
+            f"atrim=duration={duration_seconds:.3f},asetpts=PTS-STARTPTS"
+        ),
         "-c:v",
         "h264_nvenc",
         "-preset",
@@ -325,6 +331,23 @@ def build_edit_command(
     ]
 
 
+def build_freezedetect_command(ffmpeg: Path, video: Path) -> list[str]:
+    return [
+        str(ffmpeg),
+        "-hide_banner",
+        "-loglevel",
+        "info",
+        "-i",
+        str(video),
+        "-an",
+        "-vf",
+        "freezedetect=n=0.0001:d=0.100",
+        "-f",
+        "null",
+        "-",
+    ]
+
+
 def build_obs_launch_command(obs_executable: Path) -> list[str]:
     return [
         str(obs_executable),
@@ -332,7 +355,6 @@ def build_obs_launch_command(obs_executable: Path) -> list[str]:
         "--multi",
         "--disable-updater",
         "--disable-shutdown-check",
-        "--minimize-to-tray",
         "--startrecording",
     ]
 
@@ -492,7 +514,7 @@ def _wait_for_stable_window(
     ) from last_error
 
 
-def _window_identity(hwnd: int, executable_name: str) -> tuple[str, str, str]:
+def _window_title(hwnd: int) -> str:
     if os.name != "nt":
         raise RuntimeError("OBS game recording currently supports Windows only")
     user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -504,24 +526,97 @@ def _window_identity(hwnd: int, executable_name: str) -> tuple[str, str, str]:
         ctypes.c_int,
     ]
     user32.GetWindowTextW.restype = ctypes.c_int
+    title_buffer = ctypes.create_unicode_buffer(
+        max(512, user32.GetWindowTextLengthW(hwnd) + 1)
+    )
+    user32.GetWindowTextW(hwnd, title_buffer, len(title_buffer))
+    if not title_buffer.value:
+        raise RuntimeError("the game window has no title")
+    return title_buffer.value
+
+
+def _window_title_and_class(hwnd: int) -> tuple[str, str]:
+    if os.name != "nt":
+        raise RuntimeError("OBS game recording currently supports Windows only")
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
     user32.GetClassNameW.argtypes = [
         wintypes.HWND,
         wintypes.LPWSTR,
         ctypes.c_int,
     ]
     user32.GetClassNameW.restype = ctypes.c_int
-
-    title_buffer = ctypes.create_unicode_buffer(
-        max(512, user32.GetWindowTextLengthW(hwnd) + 1)
-    )
     class_buffer = ctypes.create_unicode_buffer(256)
-    user32.GetWindowTextW(hwnd, title_buffer, len(title_buffer))
     if not user32.GetClassNameW(hwnd, class_buffer, len(class_buffer)):
         raise RuntimeError("could not resolve the game window class")
-    title = title_buffer.value
-    if not title:
-        raise RuntimeError("the game window has no title")
-    return title, class_buffer.value, executable_name
+    return _window_title(hwnd), class_buffer.value
+
+
+def _visible_top_level_windows() -> list[int]:
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    enum_proc = ctypes.WINFUNCTYPE(
+        wintypes.BOOL,
+        wintypes.HWND,
+        wintypes.LPARAM,
+    )
+    user32.EnumWindows.argtypes = [enum_proc, wintypes.LPARAM]
+    user32.EnumWindows.restype = wintypes.BOOL
+    user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    user32.IsWindowVisible.restype = wintypes.BOOL
+    windows: list[int] = []
+
+    @enum_proc
+    def callback(candidate: int, _param: int) -> bool:
+        if user32.IsWindowVisible(candidate):
+            windows.append(candidate)
+        return True
+
+    if not user32.EnumWindows(callback, 0):
+        raise RuntimeError("could not enumerate visible windows")
+    return windows
+
+
+def _should_tag_window(
+    hwnd: int,
+    *,
+    title: str,
+    class_name: str,
+    visible_windows: Callable[[], Sequence[int]] = _visible_top_level_windows,
+    identity_for_window: Callable[[int], tuple[str, str]] = _window_title_and_class,
+) -> bool:
+    for candidate in visible_windows():
+        if candidate == hwnd:
+            continue
+        try:
+            if identity_for_window(candidate) == (title, class_name):
+                return True
+        except RuntimeError:
+            continue
+    return False
+
+
+def _set_window_title(hwnd: int, title: str) -> None:
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.SetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPCWSTR]
+    user32.SetWindowTextW.restype = wintypes.BOOL
+    if not user32.SetWindowTextW(hwnd, title):
+        raise RuntimeError("could not set the game window title")
+
+
+def _tag_window_title(
+    hwnd: int,
+    pid: int,
+    *,
+    read_title: Callable[[int], str] = _window_title,
+    write_title: Callable[[int, str], None] = _set_window_title,
+) -> str:
+    original_title = read_title(hwnd)
+    write_title(hwnd, f"{original_title} [capture-{pid}]")
+    return original_title
+
+
+def _window_identity(hwnd: int, executable_name: str) -> tuple[str, str, str]:
+    title, class_name = _window_title_and_class(hwnd)
+    return title, class_name, executable_name
 
 
 def _resolve_obs_executable(override: Path | None) -> Path:
@@ -544,6 +639,54 @@ def _resolve_obs_executable(override: Path | None) -> Path:
     )
 
 
+class _AudioStartGate:
+    def __init__(self) -> None:
+        if os.name != "nt":
+            raise RuntimeError("process audio capture currently supports Windows only")
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateEventW.argtypes = [
+            wintypes.LPVOID,
+            wintypes.BOOL,
+            wintypes.BOOL,
+            wintypes.LPCWSTR,
+        ]
+        kernel32.CreateEventW.restype = wintypes.HANDLE
+        kernel32.SetEvent.argtypes = [wintypes.HANDLE]
+        kernel32.SetEvent.restype = wintypes.BOOL
+        kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        kernel32.WaitForSingleObject.restype = wintypes.DWORD
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        token = uuid.uuid4().hex
+        self.ready_event_name = f"Local\\ai-studio-audio-ready-{token}"
+        self.start_event_name = f"Local\\ai-studio-audio-start-{token}"
+        self._kernel32 = kernel32
+        self._ready = kernel32.CreateEventW(None, True, False, self.ready_event_name)
+        self._start = kernel32.CreateEventW(None, True, False, self.start_event_name)
+        if not self._ready or not self._start:
+            self.close()
+            raise RuntimeError("could not create process-audio start events")
+
+    def wait_ready(self, timeout_seconds: float = 25.0) -> None:
+        result = self._kernel32.WaitForSingleObject(
+            self._ready,
+            round(timeout_seconds * 1000),
+        )
+        if result != 0:
+            raise RuntimeError("process-audio helper did not become ready")
+
+    def start(self) -> None:
+        if not self._kernel32.SetEvent(self._start):
+            raise RuntimeError("could not start process-audio capture")
+
+    def close(self) -> None:
+        for handle_name in ("_ready", "_start"):
+            handle = getattr(self, handle_name, None)
+            if handle:
+                self._kernel32.CloseHandle(handle)
+                setattr(self, handle_name, None)
+
+
 def _default_audio_helper() -> Path:
     return (
         REPO_ROOT
@@ -557,10 +700,13 @@ def _default_audio_helper() -> Path:
 
 def _ensure_audio_helper() -> Path:
     helper = _default_audio_helper().resolve()
-    if helper.is_file():
+    source = RUNTIME_ROOT / "capture" / "native" / "windows_process_loopback"
+    source_file = source / "windows_process_loopback.cpp"
+    if helper.is_file() and source_file.is_file() and (
+        helper.stat().st_mtime_ns >= source_file.stat().st_mtime_ns
+    ):
         return helper
     cmake = shutil.which("cmake")
-    source = RUNTIME_ROOT / "capture" / "native" / "windows_process_loopback"
     build = REPO_ROOT / "tmp" / "capture" / "windows-process-loopback-build"
     if not cmake or not (source / "CMakeLists.txt").is_file():
         raise RuntimeError(
@@ -763,8 +909,8 @@ Renderer=Direct3D 11
 PreviewEnabled=false
 PreviewProgramMode=false
 SnappingEnabled=false
-SysTrayEnabled=true
-SysTrayWhenStarted=true
+SysTrayEnabled=false
+SysTrayWhenStarted=false
 SaveProjectors=false
 ShowTransitions=false
 ShowListboxToolbars=false
@@ -848,6 +994,27 @@ RecRB=false
     )
 
 
+def _wait_for_finalized_recording(
+    recording: Path,
+    *,
+    timeout_seconds: float = 2.0,
+    monotonic: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> None:
+    deadline = monotonic() + timeout_seconds
+    previous_size = -1
+    while monotonic() <= deadline:
+        try:
+            size = recording.stat().st_size
+        except OSError:
+            size = 0
+        if size > 0 and size == previous_size:
+            return
+        previous_size = size
+        sleep(0.1)
+    raise RuntimeError("OBS recording file was not finalized after shutdown")
+
+
 def _wait_for_recording_file(
     recording_directory: Path,
     process: subprocess.Popen,
@@ -906,17 +1073,26 @@ def _request_obs_close(pid: int) -> int:
     return posted
 
 
-def _stop_obs(process: subprocess.Popen, timeout_seconds: float = 20.0) -> int:
+def _stop_obs(
+    process: subprocess.Popen,
+    timeout_seconds: float = 3.0,
+    *,
+    force: bool = False,
+) -> int:
     if process.poll() is not None:
         return int(process.returncode)
     if _request_obs_close(process.pid) == 0:
-        _stop_process(process)
-        return int(process.returncode)
+        if force:
+            _stop_process(process)
+            return int(process.returncode)
+        raise RuntimeError("OBS has no closable window for a safe recording stop")
     try:
         return process.wait(timeout=timeout_seconds)
-    except subprocess.TimeoutExpired:
-        _stop_process(process)
-        return int(process.returncode)
+    except subprocess.TimeoutExpired as exc:
+        if force:
+            _stop_process(process)
+            return int(process.returncode)
+        raise RuntimeError("OBS did not stop after a safe recording close") from exc
 
 
 def _safe_remove_session(session_root: Path) -> None:
@@ -949,12 +1125,71 @@ def _run_media(command: list[str], timeout_seconds: float) -> subprocess.Complet
     return completed
 
 
-def _extract_health_frame(
+def _parse_freezedetect_log(
+    log: str,
+    *,
+    media_duration_seconds: float | None = None,
+) -> dict:
+    durations: list[float] = []
+    active_start: float | None = None
+    for event, value in re.findall(
+        r"freeze_(start|duration):\s*([0-9]+(?:\.[0-9]+)?)",
+        log,
+    ):
+        if event == "start":
+            active_start = float(value)
+        else:
+            durations.append(float(value))
+            active_start = None
+    if active_start is not None and media_duration_seconds is not None:
+        durations.append(max(0.0, media_duration_seconds - active_start))
+    return {
+        "freezeCount": len(durations),
+        "maxFreezeSeconds": max(durations, default=0.0),
+    }
+
+
+def _assert_final_temporal_health(
     ffmpeg: Path,
-    master: Path,
+    video: Path,
+    max_freeze_seconds: float,
+    *,
+    media_duration_seconds: float | None = None,
+) -> dict:
+    completed = _run_media(
+        build_freezedetect_command(ffmpeg, video),
+        timeout_seconds=30.0,
+    )
+    health = _parse_freezedetect_log(
+        f"{completed.stdout or ''}\n{completed.stderr or ''}",
+        media_duration_seconds=media_duration_seconds,
+    )
+    if health["maxFreezeSeconds"] > max_freeze_seconds:
+        raise RuntimeError(
+            "final video contains a freeze of "
+            f"{health['maxFreezeSeconds']:.3f}s, exceeding "
+            f"{max_freeze_seconds:.3f}s"
+        )
+    return {"maxAllowedFreezeSeconds": max_freeze_seconds, **health}
+
+
+def _content_start_offset_after_prepare(
+    recording_detected_at: float,
+    recording_prepare: Callable[[], None] | None,
+    *,
+    monotonic: Callable[[], float] = time.monotonic,
+) -> float:
+    if recording_prepare is not None:
+        recording_prepare()
+    return monotonic() - recording_detected_at
+
+
+def _extract_frame(
+    ffmpeg: Path,
+    video: Path,
     output: Path,
     seek_seconds: float,
-) -> dict:
+) -> None:
     _run_media(
         [
             str(ffmpeg),
@@ -965,13 +1200,41 @@ def _extract_health_frame(
             "-ss",
             f"{seek_seconds:.3f}",
             "-i",
-            str(master),
+            str(video),
             "-frames:v",
             "1",
             str(output),
         ],
         timeout_seconds=20,
     )
+
+
+def _extract_preflight_frame(
+    ffmpeg: Path,
+    video: Path,
+    output: Path,
+    seek_seconds: float,
+) -> dict:
+    _extract_frame(ffmpeg, video, output, seek_seconds)
+    health = analyze_png(str(output))
+    if health.luma_max < 8.0:
+        raise RuntimeError("OBS source preflight produced a near-black frame")
+    return {
+        "uniqueColors": health.unique_colors,
+        "uniqueBuckets": health.unique_buckets,
+        "lumaMean": round(health.luma_mean, 3),
+        "lumaRange": round(health.luma_range, 3),
+        "lumaStdev": round(health.luma_stdev, 3),
+    }
+
+
+def _extract_health_frame(
+    ffmpeg: Path,
+    video: Path,
+    output: Path,
+    seek_seconds: float,
+) -> dict:
+    _extract_frame(ffmpeg, video, output, seek_seconds)
     health = assert_pixel_health(str(output), min_luma_stdev=8.0)
     return {
         "uniqueColors": health.unique_colors,
@@ -992,17 +1255,19 @@ def _preflight_obs_source(
         time.sleep(seek_seconds - previous_seek)
         previous_seek = seek_seconds
         try:
-            return _extract_health_frame(
-                ffmpeg,
-                recording,
-                output,
-                seek_seconds,
-            )
+            return _extract_preflight_frame(ffmpeg, recording, output, seek_seconds)
         except RuntimeError as exc:
             rejection = exc
     if rejection is None:
         raise RuntimeError("OBS source preflight did not run")
     raise rejection
+
+
+def _show_window_for_obs(
+    hwnd: int,
+    bring_window_forward: Callable[[int], object],
+) -> None:
+    bring_window_forward(hwnd)
 
 
 def _settle_game_capture(
@@ -1017,7 +1282,7 @@ def _settle_game_capture(
         background_window(hwnd)
     else:
         bring_window_forward(hwnd)
-    sleep(5.0)
+    sleep(0.25)
 
 
 def _audio_levels(ffmpeg: Path, master: Path) -> dict:
@@ -1101,22 +1366,47 @@ def _stop_obs_and_detect_service_failure(
     process: subprocess.Popen,
     portable_root: Path,
 ) -> str | None:
-    _stop_obs(process)
+    _stop_obs(process, force=True)
     return _obs_wgc_service_failure(portable_root)
 
 
 def _record_audio_with_driver(
     capture_audio: Callable[[], dict],
     recording_driver: Callable[[], None] | None,
+    *,
+    wait_audio_ready: Callable[[], None] | None = None,
+    before_driver: Callable[[], None] | None = None,
+    start_audio: Callable[[], None] | None = None,
 ) -> dict:
-    if recording_driver is None:
+    if (
+        recording_driver is None
+        and wait_audio_ready is None
+        and before_driver is None
+        and start_audio is None
+    ):
         return capture_audio()
     with ThreadPoolExecutor(max_workers=2) as executor:
         audio_future = executor.submit(capture_audio)
-        driver_future = executor.submit(recording_driver)
-        audio_result = audio_future.result()
-        driver_future.result()
-        return audio_result
+        try:
+            if wait_audio_ready is not None:
+                wait_audio_ready()
+            if before_driver is not None:
+                before_driver()
+            if start_audio is not None:
+                start_audio()
+            driver_future = (
+                executor.submit(recording_driver)
+                if recording_driver is not None
+                else None
+            )
+            audio_result = audio_future.result()
+            if driver_future is not None:
+                driver_future.result()
+            return audio_result
+        except Exception:
+            if start_audio is not None:
+                start_audio()
+            raise
 
 
 def record_take(
@@ -1128,8 +1418,10 @@ def record_take(
     duration_seconds: float,
     countdown: int,
     obs_override: Path | None = None,
+    recording_prepare: Callable[[], None] | None = None,
     recording_driver: Callable[[], None] | None = None,
     hide_game_window: bool = False,
+    max_freeze_seconds: float | None = None,
 ) -> dict:
     if os.name != "nt":
         raise RuntimeError("OBS game recording currently supports Windows only")
@@ -1139,6 +1431,9 @@ def record_take(
         raise ValueError("seconds must be positive")
     if countdown < 0:
         raise ValueError("countdown cannot be negative")
+    if max_freeze_seconds is not None and max_freeze_seconds < 0:
+        raise ValueError("max_freeze_seconds cannot be negative")
+    started_at = time.monotonic()
 
     from capture_window import (
         background_window,
@@ -1156,24 +1451,27 @@ def record_take(
     audio_helper = _ensure_audio_helper()
     obs_settings = resolve_obs_capture_settings(settings)
     hwnd = _wait_for_stable_window(pid)
-    title, class_name, executable_name = _window_identity(hwnd, executable_name)
-    descriptor = window_descriptor(
-        title=title,
-        class_name=class_name,
-        executable_name=executable_name,
-    )
     session_root = _portable_session_root()
     obs_process: subprocess.Popen | None = None
     recording_directory = paths.root / ".obs-recording"
     health_frame = paths.root / ".obs-health.png"
     audio_path = paths.root / ".game.partial.wav"
+    tagged_window: int | None = None
+    original_window_title: str | None = None
     audio_path.unlink(missing_ok=True)
     recording_directory.mkdir(exist_ok=False)
-    if hide_game_window:
-        background_window(hwnd)
-    else:
-        bring_window_forward(hwnd)
     try:
+        title, class_name, executable_name = _window_identity(hwnd, executable_name)
+        if _should_tag_window(hwnd, title=title, class_name=class_name):
+            original_window_title = _tag_window_title(hwnd, pid)
+            tagged_window = hwnd
+            title, class_name, executable_name = _window_identity(hwnd, executable_name)
+        descriptor = window_descriptor(
+            title=title,
+            class_name=class_name,
+            executable_name=executable_name,
+        )
+        _show_window_for_obs(hwnd, bring_window_forward)
         portable_obs = _mirror_obs_install(_obs_install_root(obs), session_root)
         portable_root = portable_obs.parents[2]
         _write_obs_configuration(
@@ -1222,13 +1520,22 @@ def record_take(
             )
             rejection: str | None = None
             if current_hwnd != hwnd:
+                if tagged_window is not None and original_window_title is not None:
+                    _set_window_title(tagged_window, original_window_title)
                 hwnd = current_hwnd
+                title, class_name, executable_name = _window_identity(
+                    hwnd,
+                    executable_name,
+                )
+                if _should_tag_window(hwnd, title=title, class_name=class_name):
+                    original_window_title = _tag_window_title(hwnd, pid)
+                    tagged_window = hwnd
+                else:
+                    original_window_title = None
+                    tagged_window = None
                 rejection = "game window changed during OBS startup"
             else:
-                if hide_game_window:
-                    background_window(hwnd)
-                else:
-                    bring_window_forward(hwnd)
+                _show_window_for_obs(hwnd, bring_window_forward)
                 print(
                     "Checking live OBS pixels before REC...",
                     flush=True,
@@ -1280,23 +1587,42 @@ def record_take(
             bring_window_forward=bring_window_forward,
             background_window=background_window,
         )
-        content_start_offset = time.monotonic() - recording_detected_at
-        print(
-            f"REC | {duration_seconds:g} seconds",
-            flush=True,
-        )
-        audio_capture = _record_audio_with_driver(
-            lambda: capture_process_audio(
-                audio_helper,
-                pid=pid,
-                expected_creation_time_100ns=query_process_creation_time_100ns(pid),
-                output=audio_path,
-                duration_seconds=duration_seconds,
-            ),
-            recording_driver,
-        )
-        obs_exit_code = _stop_obs(obs_process)
+        audio_gate = _AudioStartGate()
+        content_start_offset = 0.0
+        capture_started_at = 0.0
+
+        def begin_content() -> None:
+            nonlocal content_start_offset, capture_started_at
+            content_start_offset = _content_start_offset_after_prepare(
+                recording_detected_at,
+                recording_prepare,
+            )
+            capture_started_at = time.monotonic()
+            print(f"REC | {duration_seconds:g} seconds", flush=True)
+
+        try:
+            audio_capture = _record_audio_with_driver(
+                lambda: capture_process_audio(
+                    audio_helper,
+                    pid=pid,
+                    expected_creation_time_100ns=query_process_creation_time_100ns(pid),
+                    output=audio_path,
+                    duration_seconds=duration_seconds,
+                    ready_event_name=audio_gate.ready_event_name,
+                    start_event_name=audio_gate.start_event_name,
+                ),
+                recording_driver,
+                wait_audio_ready=audio_gate.wait_ready,
+                before_driver=begin_content,
+                start_audio=audio_gate.start,
+            )
+        finally:
+            audio_gate.close()
+        obs_exit_code = _stop_obs(obs_process, timeout_seconds=2.0, force=True)
         obs_process = None
+        _wait_for_finalized_recording(recorded)
+        capture_finished_at = time.monotonic()
+        export_started_at = capture_finished_at
         if not recorded.is_file() or recorded.stat().st_size <= 0:
             raise RuntimeError("OBS stopped without a usable recording file")
         minimum_master_duration = duration_seconds + content_start_offset
@@ -1362,6 +1688,14 @@ def record_take(
                 "editor MP4 contains fewer frames than the requested take"
             )
         edit["video"]["nominalFrameRate"] = f"{settings.fps}/1"
+        temporal_health = None
+        if max_freeze_seconds is not None:
+            temporal_health = _assert_final_temporal_health(
+                ffmpeg,
+                staging.edit,
+                max_freeze_seconds,
+                media_duration_seconds=edit["durationSeconds"],
+            )
         pixel_health = _extract_health_frame(
             ffmpeg,
             staging.edit,
@@ -1369,6 +1703,7 @@ def record_take(
             min(duration_seconds / 2, 2.0),
         )
         audio_levels = _audio_levels(ffmpeg, staging.edit)
+        completed_at = time.monotonic()
         result = {
             "status": "captured",
             "backend": "obs-window-capture-wgc",
@@ -1396,12 +1731,21 @@ def record_take(
             },
             "pixelHealth": pixel_health,
             "preflightPixelHealth": preflight_health,
+            "temporalHealth": temporal_health,
             "audio": audio_levels,
             "audioCapture": {
                 "source": "windows-process-loopback",
                 "sampleFrames": audio_capture["sampleFrames"],
             },
             "recordingDriver": recording_driver is not None,
+            "recordingPrepare": recording_prepare is not None,
+            "phaseTimingSeconds": {
+                "startup": round(recording_detected_at - started_at, 3),
+                "preflight": round(capture_started_at - recording_detected_at, 3),
+                "capture": round(capture_finished_at - capture_started_at, 3),
+                "export": round(completed_at - export_started_at, 3),
+                "total": round(completed_at - started_at, 3),
+            },
             "obs": {
                 "exitCode": obs_exit_code,
                 "isolatedPortableProfile": True,
@@ -1419,9 +1763,14 @@ def record_take(
     finally:
         if obs_process is not None:
             try:
-                _stop_obs(obs_process)
+                _stop_obs(obs_process, force=True)
             except (OSError, RuntimeError):
                 _stop_process(obs_process)
+        if tagged_window is not None and original_window_title is not None:
+            try:
+                _set_window_title(tagged_window, original_window_title)
+            except RuntimeError:
+                pass
         restore_window_interaction(hwnd)
         release_topmost(hwnd)
         health_frame.unlink(missing_ok=True)
