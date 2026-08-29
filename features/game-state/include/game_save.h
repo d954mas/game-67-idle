@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "cJSON.h"
+#include "game_save_text.h"
 #include "game_save_writer.h"
 
 #ifndef GAME_SAVE_MAX_FRAGMENTS
@@ -30,6 +31,8 @@ typedef struct GameSaveFragment {
     bool  (*set_path_json)(const char *sub, const cJSON *v, char *err, int cap); /* NULLABLE: DevAPI write (A5) */
     cJSON*(*schema_json)(void);      /* NULLABLE */
     bool  (*write_snapshot)(game_save_writer_t *writer); /* nullable hot-tick payload writer */
+    bool  (*write_text)(game_save_text_writer_t *writer); /* nullable readable release payload */
+    bool  (*from_text)(const char *text, size_t size, char *err, int cap); /* nullable */
 } GameSaveFragment;
 
 /* Регистрация ДО первого load; порядок = порядок reconcile/on_new_game.

@@ -140,6 +140,113 @@ bool game_state_write_snapshot(const GameState *state, game_save_writer_t *write
     return game_save_writer_ok(writer);
 }
 
+bool game_state_write_text(const GameState *state, game_save_text_writer_t *writer) {
+    if (!state || !writer) { return false; }
+    if (!game_save_text_write_string(writer, "shape_index", game_state_shape_name(state->shape_index))) { return false; }
+    if (!game_save_text_write_string(writer, "render_mode_index", game_state_render_mode_name(state->render_mode_index))) { return false; }
+    if (!game_save_text_write_number(writer, "camera_distance", (double)state->camera_distance)) { return false; }
+    if (!game_save_text_write_i64(writer, "test_ui_clicks", (int64_t)state->test_ui_clicks)) { return false; }
+    if (!game_save_text_write_string(writer, "test_label_text", state->test_label_text)) { return false; }
+    if (!game_save_text_write_string(writer, "test_button_text", state->test_button_text)) { return false; }
+    if (!game_save_text_write_bool(writer, "tutorial.done", state->tutorial_done)) { return false; }
+    if (!game_save_text_write_i64(writer, "inventory_container_id", (int64_t)state->inventory_container_id)) { return false; }
+    if (!game_save_text_write_i64(writer, "wallet_container_id", (int64_t)state->wallet_container_id)) { return false; }
+    return game_save_text_writer_ok(writer);
+}
+
+bool game_state_from_text(GameState *state, const char *text, size_t size, char *error, int error_cap) {
+    if (!state || !text) { gsj_set_error(error, error_cap, "text state is null"); return false; }
+    GameState next;
+    game_state_init_defaults(&next);
+    bool seen[9] = {0};
+    const size_t error_size = error_cap > 0 ? (size_t)error_cap : 0U;
+    game_save_text_reader_t reader;
+    game_save_text_fragment_reader_init(&reader, text, size, 1U);
+    for (;;) {
+        game_save_text_record_t record;
+        game_save_text_result_t result = game_save_text_reader_next(&reader, &record, error, error_size);
+        if (result == GAME_SAVE_TEXT_DONE) { break; }
+        if (result == GAME_SAVE_TEXT_ERROR) { return false; }
+        if (game_save_text_record_key_is(&record, "shape_index")) {
+            if (seen[0]) { gsj_set_error(error, error_cap, "duplicate field"); return false; }
+            seen[0] = true;
+            char value[GAME_STATE_STRING_MAX];
+            if (!game_save_text_record_string(&record, value, sizeof value, error, error_size)) { return false; }
+            bool matched = false;
+            for (int i = 0; i < GAME_STATE_SHAPE_COUNT; i++) {
+                if (strcmp(value, k_shape_names[i]) == 0) { next.shape_index = i; matched = true; break; }
+            }
+            if (!matched) { gsj_set_error(error, error_cap, "enum value out of range"); return false; }
+            continue;
+        }
+        if (game_save_text_record_key_is(&record, "render_mode_index")) {
+            if (seen[1]) { gsj_set_error(error, error_cap, "duplicate field"); return false; }
+            seen[1] = true;
+            char value[GAME_STATE_STRING_MAX];
+            if (!game_save_text_record_string(&record, value, sizeof value, error, error_size)) { return false; }
+            bool matched = false;
+            for (int i = 0; i < GAME_STATE_RENDER_MODE_COUNT; i++) {
+                if (strcmp(value, k_render_mode_names[i]) == 0) { next.render_mode_index = i; matched = true; break; }
+            }
+            if (!matched) { gsj_set_error(error, error_cap, "enum value out of range"); return false; }
+            continue;
+        }
+        if (game_save_text_record_key_is(&record, "camera_distance")) {
+            if (seen[2]) { gsj_set_error(error, error_cap, "duplicate field"); return false; }
+            seen[2] = true;
+            double value = 0.0;
+            if (!game_save_text_record_number(&record, (double)GAME_STATE_CAMERA_DISTANCE_MIN, (double)GAME_STATE_CAMERA_DISTANCE_MAX, &value, error, error_size)) { return false; }
+            next.camera_distance = (float)value;
+            continue;
+        }
+        if (game_save_text_record_key_is(&record, "test_ui_clicks")) {
+            if (seen[3]) { gsj_set_error(error, error_cap, "duplicate field"); return false; }
+            seen[3] = true;
+            int64_t value = 0;
+            if (!game_save_text_record_i64(&record, GAME_STATE_TEST_UI_CLICKS_MIN, GAME_STATE_TEST_UI_CLICKS_MAX, &value, error, error_size)) { return false; }
+            next.test_ui_clicks = (int)value;
+            continue;
+        }
+        if (game_save_text_record_key_is(&record, "test_label_text")) {
+            if (seen[4]) { gsj_set_error(error, error_cap, "duplicate field"); return false; }
+            seen[4] = true;
+            if (!game_save_text_record_string(&record, next.test_label_text, sizeof next.test_label_text, error, error_size)) { return false; }
+            continue;
+        }
+        if (game_save_text_record_key_is(&record, "test_button_text")) {
+            if (seen[5]) { gsj_set_error(error, error_cap, "duplicate field"); return false; }
+            seen[5] = true;
+            if (!game_save_text_record_string(&record, next.test_button_text, sizeof next.test_button_text, error, error_size)) { return false; }
+            continue;
+        }
+        if (game_save_text_record_key_is(&record, "tutorial.done")) {
+            if (seen[6]) { gsj_set_error(error, error_cap, "duplicate field"); return false; }
+            seen[6] = true;
+            if (!game_save_text_record_bool(&record, &next.tutorial_done, error, error_size)) { return false; }
+            continue;
+        }
+        if (game_save_text_record_key_is(&record, "inventory_container_id")) {
+            if (seen[7]) { gsj_set_error(error, error_cap, "duplicate field"); return false; }
+            seen[7] = true;
+            int64_t value = 0;
+            if (!game_save_text_record_i64(&record, (int64_t)GAME_STATE_INVENTORY_CONTAINER_ID_MIN, (int64_t)GAME_STATE_INVENTORY_CONTAINER_ID_MAX, &value, error, error_size)) { return false; }
+            next.inventory_container_id = (uint32_t)value;
+            continue;
+        }
+        if (game_save_text_record_key_is(&record, "wallet_container_id")) {
+            if (seen[8]) { gsj_set_error(error, error_cap, "duplicate field"); return false; }
+            seen[8] = true;
+            int64_t value = 0;
+            if (!game_save_text_record_i64(&record, (int64_t)GAME_STATE_WALLET_CONTAINER_ID_MIN, (int64_t)GAME_STATE_WALLET_CONTAINER_ID_MAX, &value, error, error_size)) { return false; }
+            next.wallet_container_id = (uint32_t)value;
+            continue;
+        }
+    }
+    if (!game_state_validate(&next, error, error_cap)) { return false; }
+    *state = next;
+    return true;
+}
+
 cJSON *game_state_get_path_json(const GameState *state, const char *path, char *error, int error_cap) {
     if (!path || path[0] == '\0') { return game_state_to_json(state); }
     if (strcmp(path, "shape_index") == 0) {
@@ -265,6 +372,8 @@ static bool   frag_from_json(const cJSON *j, char *e, int c)               { ret
 static cJSON *frag_get_path(const char *s, char *e, int c)                 { return game_state_get_path_json(&game_state, s, e, c); }
 static bool   frag_set_path(const char *s, const cJSON *v, char *e, int c) { return game_state_set_path_json(&game_state, s, v, e, c); }
 static cJSON *frag_schema(void)                                            { return game_state_schema_json(); }
+static bool   frag_write_text(game_save_text_writer_t *w)                 { return game_state_write_text(&game_state, w); }
+static bool   frag_from_text(const char *t, size_t n, char *e, int c)       { return game_state_from_text(&game_state, t, n, e, c); }
 
 extern void game_on_new_game(void);
 extern void game_reconcile(void);
@@ -282,4 +391,6 @@ const GameSaveFragment game_state_fragment = {
     .set_path_json = frag_set_path,
     .schema_json   = frag_schema,
     .write_snapshot = frag_write_snapshot,
+    .write_text     = frag_write_text,
+    .from_text      = frag_from_text,
 };

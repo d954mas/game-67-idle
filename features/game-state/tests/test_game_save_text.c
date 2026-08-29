@@ -116,11 +116,43 @@ void test_writer_fails_closed_without_partial_line(void) {
     TEST_ASSERT_EQUAL_STRING("NTGS 1\n", text);
 }
 
+void test_fragment_reader_parses_a_section_body_without_document_preamble(void) {
+    static const char text[] = "active=true\ncount=7\n";
+    game_save_text_reader_t reader;
+    game_save_text_record_t record;
+    char error[128];
+    game_save_text_fragment_reader_init(&reader, text, sizeof text - 1U, 12U);
+
+    TEST_ASSERT_EQUAL(GAME_SAVE_TEXT_RECORD_FIELD,
+                      game_save_text_reader_next(&reader, &record, error, sizeof error));
+    TEST_ASSERT_EQUAL_UINT(12U, record.line);
+    TEST_ASSERT_TRUE(game_save_text_record_key_is(&record, "active"));
+    TEST_ASSERT_EQUAL(GAME_SAVE_TEXT_RECORD_FIELD,
+                      game_save_text_reader_next(&reader, &record, error, sizeof error));
+    TEST_ASSERT_EQUAL_UINT(13U, record.line);
+    TEST_ASSERT_TRUE(game_save_text_record_key_is(&record, "count"));
+    TEST_ASSERT_EQUAL(GAME_SAVE_TEXT_DONE,
+                      game_save_text_reader_next(&reader, &record, error, sizeof error));
+}
+
+void test_reader_rejects_noncanonical_fragment_id(void) {
+    static const char text[] = "NTGS 1\n[Bad.fragment 1]\nvalue=1\n";
+    game_save_text_reader_t reader;
+    game_save_text_record_t record;
+    char error[128];
+    game_save_text_reader_init(&reader, text, sizeof text - 1U);
+    TEST_ASSERT_EQUAL(GAME_SAVE_TEXT_ERROR,
+                      game_save_text_reader_next(&reader, &record, error, sizeof error));
+    TEST_ASSERT_EQUAL_STRING("line 2: invalid fragment header", error);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_writer_produces_readable_versioned_document);
     RUN_TEST(test_reader_parses_comments_fragments_and_typed_values);
     RUN_TEST(test_reader_rejects_invalid_preamble_and_unterminated_string);
     RUN_TEST(test_writer_fails_closed_without_partial_line);
+    RUN_TEST(test_fragment_reader_parses_a_section_body_without_document_preamble);
+    RUN_TEST(test_reader_rejects_noncanonical_fragment_id);
     return UNITY_END();
 }

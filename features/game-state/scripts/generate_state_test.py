@@ -259,6 +259,52 @@ class StateCodegenTests(unittest.TestCase):
         self.assertIn("qsort(ordered", aggregate)
         self.assertIn("containers_entries_write_snapshot", aggregate)
 
+    def test_text_codec_generated_for_scalar_fragments_only(self):
+        schema = {
+            "schema": "scalar.state",
+            "schema_version": 2,
+            "fragment": "scalar",
+            "version": 1,
+            "string_max": 32,
+            "enums": {"Mode": ["off", "on"]},
+            "types": {},
+            "fields": {
+                "active": {"type": "bool", "default": False},
+                "count": {"type": "int", "default": 0, "min": -9, "max": 9},
+                "coins": {"type": "u32", "default": 0, "min": 0, "max": 99},
+                "total": {"type": "i64", "default": 0, "min": -999, "max": 999},
+                "rate": {"type": "float", "default": 0.5, "min": 0, "max": 1},
+                "mode_index": {"type": "enum", "enum": "Mode", "default": "off"},
+                "name": {"type": "string", "default": "slime", "max_length": 31},
+                "note": {"type": "string?", "default": None, "max_length": 31},
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            schema_path = root / "scalar.schema.json"
+            schema_path.write_text(json.dumps(schema), encoding="utf-8")
+            generate(schema_path, root / "generated", "scalar")
+            outputs = read_outputs(root / "generated", "scalar_state")
+
+        header = outputs["scalar_state.h"]
+        source = outputs["scalar_state.c"]
+        self.assertIn("scalar_state_write_text", header)
+        self.assertIn("scalar_state_from_text", header)
+        self.assertIn('game_save_text_write_bool(writer, "active"', source)
+        self.assertIn('game_save_text_write_i64(writer, "total"', source)
+        self.assertIn('game_save_text_write_number(writer, "rate"', source)
+        self.assertIn('game_save_text_write_string(writer, "mode_index"', source)
+        self.assertIn("game_save_text_record_i64", source)
+        self.assertIn("game_save_text_record_number", source)
+        self.assertIn("game_save_text_record_string", source)
+        self.assertIn(".write_text     = frag_write_text", source)
+        self.assertIn(".from_text      = frag_from_text", source)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            mini = generate_and_join(MINI_SCHEMA, Path(tmp) / "mini", "mini_state", "mini")
+        self.assertIn(".write_text     = NULL", mini)
+        self.assertIn(".from_text      = NULL", mini)
+
     # ------------------------------------------------------------------ golden
 
     def _assert_golden(self, schema_path: Path, prefix: str, fragment: str, golden_sub: str):

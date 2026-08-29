@@ -53,6 +53,8 @@ typedef struct {
 } game_save_text_reader_t;
 
 void game_save_text_reader_init(game_save_text_reader_t *reader, const char *data, size_t size);
+void game_save_text_fragment_reader_init(
+    game_save_text_reader_t *reader, const char *data, size_t size, uint32_t first_line);
 game_save_text_result_t game_save_text_reader_next(
     game_save_text_reader_t *reader, game_save_text_record_t *record,
     char *error, size_t error_capacity);

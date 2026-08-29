@@ -230,6 +230,7 @@ target_sources(${GAME_TARGET} PRIVATE
     "${PROGRESSION_CORE_SRC}/progression.c"   # queries/mutations/update over state, items, and tracks
     "${GAME_STATE_SRC}/game_state_json.c"
     "${GAME_STATE_SRC}/game_save_writer.c"
+    "${GAME_STATE_SRC}/game_save_text.c"
     "${GAME_STATE_SRC}/game_storage.c"
     "${GAME_STATE_SRC}/game_save.c"
     ${GAME_SAVE_PLATFORM_SOURCES}

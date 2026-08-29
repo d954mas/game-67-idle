@@ -28,6 +28,7 @@ features/game-state/
   feature.json
   include/
     game_save.h
+    game_save_text.h
     game_state_json.h
     game_storage.h
   src/
@@ -35,6 +36,7 @@ features/game-state/
     game_save_devapi.c
     game_save_platform_native.c
     game_save_platform_web.c
+    game_save_text.c
     game_state_json.c
     game_storage.c
     game_storage_backend.h
@@ -206,6 +208,10 @@ export, migrations, and DevAPI.
 
 Version `4.3.1` preserves the JavaScript storage imports when Emscripten links
 the runtime with full LTO. The public API is unchanged.
+
+Version `4.4.0` adds allocation-free readers and writers for the readable
+`NTGS 1` save format. Scalar-only generated fragments expose text callbacks;
+JSON remains available for legacy import, migrations, and DevAPI.
 
 The hot lane is opt-in. Before `game_save_init`, a consumer supplies one static
 buffer with `game_save_set_hot_snapshot_buffer(buffer, sizeof buffer)` and an
