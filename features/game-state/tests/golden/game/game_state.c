@@ -366,14 +366,17 @@ bool game_state_from_json(GameState *state, const cJSON *json, char *error, int 
 }
 
 static void   frag_reset(void)                                             { game_state_init_defaults(&game_state); }
+
+static bool   frag_write_text(game_save_text_writer_t *w)                 { return game_state_write_text(&game_state, w); }
+static bool   frag_from_text(const char *t, size_t n, char *e, int c)       { return game_state_from_text(&game_state, t, n, e, c); }
+#if !defined(GAME_SAVE_TEXT_ONLY)
 static cJSON *frag_to_json(void)                                           { return game_state_to_json(&game_state); }
 static bool   frag_write_snapshot(game_save_writer_t *w)                   { return game_state_write_snapshot(&game_state, w); }
 static bool   frag_from_json(const cJSON *j, char *e, int c)               { return game_state_from_json(&game_state, j, e, c); }
 static cJSON *frag_get_path(const char *s, char *e, int c)                 { return game_state_get_path_json(&game_state, s, e, c); }
 static bool   frag_set_path(const char *s, const cJSON *v, char *e, int c) { return game_state_set_path_json(&game_state, s, v, e, c); }
 static cJSON *frag_schema(void)                                            { return game_state_schema_json(); }
-static bool   frag_write_text(game_save_text_writer_t *w)                 { return game_state_write_text(&game_state, w); }
-static bool   frag_from_text(const char *t, size_t n, char *e, int c)       { return game_state_from_text(&game_state, t, n, e, c); }
+#endif
 
 extern void game_on_new_game(void);
 extern void game_reconcile(void);
@@ -384,13 +387,25 @@ const GameSaveFragment game_state_fragment = {
     .steps         = NULL,
     .reset         = frag_reset,
     .on_new_game   = game_on_new_game,
+#if defined(GAME_SAVE_TEXT_ONLY)
+    .to_json       = NULL,
+    .from_json     = NULL,
+#else
     .to_json       = frag_to_json,
     .from_json     = frag_from_json,
+#endif
     .reconcile     = game_reconcile,
+#if defined(GAME_SAVE_TEXT_ONLY)
+    .get_path_json = NULL,
+    .set_path_json = NULL,
+    .schema_json   = NULL,
+    .write_snapshot = NULL,
+#else
     .get_path_json = frag_get_path,
     .set_path_json = frag_set_path,
     .schema_json   = frag_schema,
     .write_snapshot = frag_write_snapshot,
+#endif
     .write_text     = frag_write_text,
     .from_text      = frag_from_text,
 };

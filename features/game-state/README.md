@@ -239,6 +239,13 @@ Version `4.4.0` adds allocation-free readers and writers for the readable
 `NTGS 1` save format. Scalar-only generated fragments expose text callbacks;
 JSON remains available for legacy import, migrations, and DevAPI.
 
+Version `4.5.0` adds an opt-in `GAME_SAVE_TEXT_ONLY` release shell. It reads and
+writes NTGS directly, rejects legacy JSON, omits document/fragment migrations,
+and lets release LTO discard the JSON persistence path. Changing
+`GAME_STORAGE_APP_ID` at the same time intentionally starts every player with a
+fresh namespace. Enable it only when every reachable save is current NTGS or a
+save reset is approved.
+
 The hot lane is opt-in. Before `game_save_init`, a consumer supplies one static
 buffer with `game_save_set_hot_snapshot_buffer(buffer, sizeof buffer)` and an
 allocation-free whole-state validator with `game_save_set_live_validator()`.

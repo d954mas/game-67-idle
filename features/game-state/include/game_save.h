@@ -5,7 +5,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#if defined(GAME_SAVE_TEXT_ONLY)
+typedef struct cJSON cJSON;
+#else
 #include "cJSON.h"
+#endif
 #include "game_save_text.h"
 #include "game_save_writer.h"
 

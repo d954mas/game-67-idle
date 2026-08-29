@@ -38,6 +38,8 @@ typedef struct {
     size_t key_size;
     const char *value;
     size_t value_size;
+    size_t source_offset;
+    size_t next_offset;
     uint32_t line;
     int version;
 } game_save_text_record_t;

@@ -1537,15 +1537,16 @@ static bool {aggregate_ident}_write_snapshot(const {self.ns.type} *state, game_s
         migrations = schema["migrations"]
         hooks = schema["hooks"]
         pre: list[str] = []
+        legacy_pre: list[str] = []
 
         steps_field = "NULL"
         if migrations:
             for entry in migrations:
-                pre.append(f'extern bool {entry["fn"]}(cJSON *frag, char *err, int cap);')
-            pre.append(f"static const GameSaveMigrateFn {self.ns.inst}_migration_steps[] = {{")
+                legacy_pre.append(f'extern bool {entry["fn"]}(cJSON *frag, char *err, int cap);')
+            legacy_pre.append(f"static const GameSaveMigrateFn {self.ns.inst}_migration_steps[] = {{")
             for entry in migrations:
-                pre.append(f'    {entry["fn"]},')
-            pre.append("};")
+                legacy_pre.append(f'    {entry["fn"]},')
+            legacy_pre.append("};")
             steps_field = f"{self.ns.inst}_migration_steps"
 
         on_new_game = "NULL"
@@ -1570,35 +1571,65 @@ static bool {aggregate_ident}_write_snapshot(const {self.ns.type} *state, game_s
 
         wrappers = (
             f"static void   frag_reset(void)                                             {{ {self.ns.fn}init_defaults(&{self.ns.inst}); }}\n"
+            f"{text_wrappers}\n"
+            f"#if !defined(GAME_SAVE_TEXT_ONLY)\n"
             f"static cJSON *frag_to_json(void)                                           {{ return {self.ns.fn}to_json(&{self.ns.inst}); }}\n"
             f"static bool   frag_write_snapshot(game_save_writer_t *w)                   {{ return {self.ns.fn}write_snapshot(&{self.ns.inst}, w); }}\n"
             f"static bool   frag_from_json(const cJSON *j, char *e, int c)               {{ return {self.ns.fn}from_json(&{self.ns.inst}, j, e, c); }}\n"
             f"static cJSON *frag_get_path(const char *s, char *e, int c)                 {{ return {self.ns.fn}get_path_json(&{self.ns.inst}, s, e, c); }}\n"
             f"static bool   frag_set_path(const char *s, const cJSON *v, char *e, int c) {{ return {self.ns.fn}set_path_json(&{self.ns.inst}, s, v, e, c); }}\n"
-            f"static cJSON *frag_schema(void)                                            {{ return {self.ns.fn}schema_json(); }}"
-            f"{text_wrappers}"
+            f"static cJSON *frag_schema(void)                                            {{ return {self.ns.fn}schema_json(); }}\n"
+            f"#endif"
         )
+
+        descriptor_steps = f"    .steps         = {steps_field},\n"
+        if migrations:
+            descriptor_steps = (
+                f"#if defined(GAME_SAVE_TEXT_ONLY)\n"
+                f"    .steps         = NULL,\n"
+                f"#else\n"
+                f"    .steps         = {steps_field},\n"
+                f"#endif\n"
+            )
 
         descriptor = (
             f"const GameSaveFragment {self.ns.frag} = {{\n"
             f"    .id            = {self.ns.macro}FRAGMENT_ID,\n"
             f"    .version       = {self.ns.macro}VERSION,\n"
-            f"    .steps         = {steps_field},\n"
+            f"{descriptor_steps}"
             f"    .reset         = frag_reset,\n"
             f"    .on_new_game   = {on_new_game},\n"
+            f"#if defined(GAME_SAVE_TEXT_ONLY)\n"
+            f"    .to_json       = NULL,\n"
+            f"    .from_json     = NULL,\n"
+            f"#else\n"
             f"    .to_json       = frag_to_json,\n"
             f"    .from_json     = frag_from_json,\n"
+            f"#endif\n"
             f"    .reconcile     = {reconcile},\n"
+            f"#if defined(GAME_SAVE_TEXT_ONLY)\n"
+            f"    .get_path_json = NULL,\n"
+            f"    .set_path_json = NULL,\n"
+            f"    .schema_json   = NULL,\n"
+            f"    .write_snapshot = NULL,\n"
+            f"#else\n"
             f"    .get_path_json = frag_get_path,\n"
             f"    .set_path_json = frag_set_path,\n"
             f"    .schema_json   = frag_schema,\n"
             f"    .write_snapshot = frag_write_snapshot,\n"
+            f"#endif\n"
             f"    .write_text     = {text_write_field},\n"
             f"    .from_text      = {text_read_field},\n"
             f"}};"
         )
 
         parts = [wrappers]
+        if legacy_pre:
+            parts.append(
+                "#if !defined(GAME_SAVE_TEXT_ONLY)\n" +
+                "\n".join(legacy_pre) +
+                "\n#endif"
+            )
         if pre:
             parts.append("\n".join(pre))
         parts.append(descriptor)

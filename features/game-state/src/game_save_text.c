@@ -326,6 +326,8 @@ game_save_text_result_t game_save_text_reader_next(
     const char *end = NULL;
     uint32_t line = 0;
     while (next_line(reader, &start, &end, &line)) {
+        const size_t source_offset = (size_t)(start - reader->data);
+        const size_t next_offset = reader->offset;
         trim(&start, &end);
         if (start == end || *start == '#') {
             continue;
@@ -355,6 +357,8 @@ game_save_text_result_t game_save_text_reader_next(
             }
             record->key = body_start;
             record->key_size = (size_t)(space - body_start);
+            record->source_offset = source_offset;
+            record->next_offset = next_offset;
             record->line = line;
             record->version = version;
             reader->in_fragment = true;
@@ -384,6 +388,8 @@ game_save_text_result_t game_save_text_reader_next(
         record->key_size = (size_t)(key_end - key_start);
         record->value = value_start;
         record->value_size = (size_t)(value_end - value_start);
+        record->source_offset = source_offset;
+        record->next_offset = next_offset;
         record->line = line;
         return reader->in_fragment ? GAME_SAVE_TEXT_RECORD_FIELD : GAME_SAVE_TEXT_RECORD_META;
     }
