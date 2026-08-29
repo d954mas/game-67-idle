@@ -45,10 +45,11 @@ void game_save_register_fragment(const GameSaveFragment *fragment);
    mutation. Load/import run both on a deep copy before publishing state. */
 void game_save_set_document_migrations(const GameSaveDocumentMigrateFn *steps, int step_count);
 
-/* One game-owned cross-fragment invariant checked before a save document is
-   published and after raw DevAPI writes. NULL restores fragment-only behavior. */
+/* One game-owned staged-document invariant for legacy JSON import, migrations,
+   retained orphans, and raw DevAPI writes. NULL restores fragment-only behavior. */
 void game_save_set_document_validator(GameSaveDocumentValidateFn validator);
 typedef bool (*GameSaveLiveValidateFn)(char *err, int cap);
+/* Validates the current registered fragments before allocation-free NTGS saves. */
 void game_save_set_live_validator(GameSaveLiveValidateFn validator);
 /* Caller-owned storage for the allocation-free tick path. Configure before
    game_save_init and keep it alive for the runtime; writes are synchronous. */

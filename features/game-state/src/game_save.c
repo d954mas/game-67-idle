@@ -160,6 +160,7 @@ static char *dup_slice(const char *text, size_t size) {
 
 static cJSON *text_record_value(
     const game_save_text_record_t *record, char *error, int error_cap) {
+    const size_t error_size = error_cap > 0 ? (size_t)error_cap : 0U;
     if (record->value_size >= 2U && record->value[0] == '"') {
         char *value = (char *)malloc(record->value_size + 1U);
         if (value == NULL) {
@@ -167,7 +168,7 @@ static cJSON *text_record_value(
             return NULL;
         }
         const bool valid = game_save_text_record_string(
-            record, value, record->value_size + 1U, error, (size_t)error_cap);
+            record, value, record->value_size + 1U, error, error_size);
         cJSON *json = valid ? cJSON_CreateString(value) : NULL;
         free(value);
         return json;
@@ -181,7 +182,7 @@ static cJSON *text_record_value(
     }
     double number = 0.0;
     if (game_save_text_record_number(
-            record, -DBL_MAX, DBL_MAX, &number, error, (size_t)error_cap)) {
+            record, -DBL_MAX, DBL_MAX, &number, error, error_size)) {
         return cJSON_CreateNumber(number);
     }
     return NULL;
@@ -1155,6 +1156,8 @@ void game_save_load(game_save_load_result_t *result) {
     }
     char *decoded = transform_decode(text, err, (int)sizeof err);
     free(text);
+    const bool legacy_plain_json = s_transform_count == 0 && decoded != NULL &&
+                                   strncmp(decoded, "NTGS 1", 6U) != 0;
     cJSON *doc = decoded ? parse_save_document(decoded, err, (int)sizeof err) : NULL;
     free(decoded);
 
@@ -1180,7 +1183,7 @@ void game_save_load(game_save_load_result_t *result) {
             result->status = GAME_SAVE_LOAD_LOADED;
             set_message(result, "loaded");
             (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err); /* last-known-good */
-            if (migrated) {
+            if (migrated || legacy_plain_json) {
                 game_save_mark_dirty(); /* persist the current envelope version after debounce */
             }
             s_last_save_mono = mono_now();

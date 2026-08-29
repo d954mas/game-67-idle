@@ -45,7 +45,7 @@ only after the complete snapshot has been produced. Consumers that do not
 configure a buffer retain the legacy JSON autosave path.
 
 The live validator must check every registered fragment without allocation,
-and every fragment must provide `write_snapshot`; generated fragments do so
+and every fragment must provide `write_text`; scalar generated fragments do so
 automatically. Registered transforms or retained orphan fragments deliberately
 select the legacy JSON path because the bounded writer cannot reproduce those
 compatibility transforms byte-for-byte.
