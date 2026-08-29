@@ -216,7 +216,7 @@ JSON remains available for legacy import, migrations, and DevAPI.
 The hot lane is opt-in. Before `game_save_init`, a consumer supplies one static
 buffer with `game_save_set_hot_snapshot_buffer(buffer, sizeof buffer)` and an
 allocation-free whole-state validator with `game_save_set_live_validator()`.
-Every registered fragment must provide `write_snapshot`; generated fragments
+Every registered fragment must provide `write_text`; scalar generated fragments
 do so automatically. The buffer must remain valid for the game runtime. Storage
 writes are synchronous, so it is never published while the writer is still
 filling it. Without those hooks, or when transforms/orphans are present, the
