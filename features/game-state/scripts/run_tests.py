@@ -57,6 +57,27 @@ def run_writer_test() -> int:
         return subprocess.run((str(executable),), cwd=ROOT, check=False).returncode
 
 
+def run_text_codec_test() -> int:
+    """Compile the human-editable save codec contract in isolation."""
+    with tempfile.TemporaryDirectory() as tmp:
+        executable = Path(tmp) / "test_game_save_text.exe"
+        command = (
+            "clang",
+            "-std=c17",
+            "-D_CRT_SECURE_NO_WARNINGS",
+            "-I", str(ROOT / "features/game-state/include"),
+            "-I", str(ROOT / "external/neotolis-engine/deps/unity/src"),
+            str(ROOT / "features/game-state/tests/test_game_save_text.c"),
+            str(ROOT / "features/game-state/src/game_save_text.c"),
+            str(ROOT / "external/neotolis-engine/deps/unity/src/unity.c"),
+            "-o", str(executable),
+        )
+        result = subprocess.run(command, cwd=ROOT, check=False)
+        if result.returncode != 0:
+            return result.returncode
+        return subprocess.run((str(executable),), cwd=ROOT, check=False).returncode
+
+
 def run_generated_snapshot_regression() -> int:
     """Compile a schema-bounded aggregate snapshot without a consumer build tree."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -99,6 +120,7 @@ def main() -> int:
         result = subprocess.run(command, cwd=ROOT, check=False)
         failed = failed or result.returncode != 0
     failed = run_writer_test() != 0 or failed
+    failed = run_text_codec_test() != 0 or failed
     failed = run_generated_snapshot_regression() != 0 or failed
     return 1 if failed else 0
 
