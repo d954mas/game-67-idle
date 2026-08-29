@@ -21,7 +21,9 @@ Chrome/Chromium is required (`CHROME_PATH` can select it explicitly).
 selected `features/platform-sdk/publish-targets/<target>.json`, writes a
 deterministic STORE ZIP, reopens it, and verifies paths/case, CRC, sizes,
 hashes, entrypoint, target/adapter, release metadata, required assets, and the
-exact dependency record. `runtime-build.json` is generated from the game and
+exact dependency record. Release builds minify generated HTML, inline
+CSS/JavaScript, and the selected SDK bundle; Emscripten already optimizes WASM
+and Closure-minifies its loader. `runtime-build.json` is generated from the game and
 declared dependency source trees, embedded in every target build, and rechecked
 against the HTML bootstrap, a compiled C/WASM marker, release metadata, sidecar,
 and reopened ZIP. New packages use release/manifest v2; the verifier retains

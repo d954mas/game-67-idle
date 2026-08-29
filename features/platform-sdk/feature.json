@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "platform-sdk",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "title": "Platform SDK",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -19,6 +19,7 @@
   ],
   "commands": {
     "test": "node --test features/platform-sdk/tests/platform_sdk.test.mjs",
+    "generate_release_bundles": "node features/platform-sdk/scripts/generate_release_bundles.mjs",
     "scorecard": "node features/platform-sdk/scripts/scorecard.mjs --input <events.ndjson> --pretty",
     "inspect": "node features/platform-sdk/scripts/artifact_tools.mjs inspect --target <target> --artifact <artifact-dir>"
   },
@@ -46,7 +47,8 @@
   },
   "outputs": [
     "platform-sdk.js",
-    "platform-sdk-adapter.js"
+    "platform-sdk-adapter.js",
+    "web/release/<adapter>.min.js"
   ],
   "registers": {
     "note": "Describes the template's existing in-place wiring; this feature is selected by CMake GAME_PUBLISH_TARGET.",

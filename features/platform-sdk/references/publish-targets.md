@@ -43,7 +43,8 @@ node tools/build_web.mjs --preset wasm-release --target playgama
 The script passes `-DGAME_PUBLISH_TARGET=<target>` plus a mechanically generated
 runtime source fingerprint to CMake. CMake computes the SDK adapter and stages
 only that adapter as `platform-sdk-adapter.js`; release packaging embeds the
-two local SDK modules into `game.js` and removes their standalone files. The
+source-hash-bound minified SDK bundle into `game.js`, removes the standalone
+modules, and minifies generated HTML with its inline CSS/JavaScript. The
 builder writes the shared record to `runtime-build.json` for local and portal
 targets.
 The game also publishes that fingerprint from compiled WASM; packaging rejects

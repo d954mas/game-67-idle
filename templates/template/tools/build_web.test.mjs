@@ -159,3 +159,29 @@ test("Linux resolves absolute emcmake from EMSDK while EMCMAKE remains injectabl
   assert.equal(configure.command, "/opt/emsdk/upstream/emscripten/emcmake");
   assert.equal(configure.args.some((arg) => arg.startsWith("-DCMAKE_TOOLCHAIN_FILE=")), false);
 });
+
+test("release build minifies the staged web shell but debug builds do not", () => {
+  const base = {
+    gameDir: "/repo/templates/template",
+    env: { EMSDK: "/opt/emsdk" },
+    platform: "linux",
+    toolchainExists: true,
+    nativeConfigured: true,
+  };
+  const release = createBuildPlan({
+    ...base,
+    args: { preset: "wasm-release", target: "poki", debugUi: "off" },
+  });
+  const minify = release.steps.find((step) => step.kind === "run"
+    && step.args && step.args.some((arg) => String(arg).endsWith("minify_web_release.mjs")));
+  assert.ok(minify);
+  assert.equal(minify.command, process.execPath);
+  assert.ok(minify.args.some((arg) => slash(String(arg)) === "/repo/templates/template/build/wasm-release-poki/bin"));
+
+  const debug = createBuildPlan({
+    ...base,
+    args: { preset: "wasm-debug", target: "poki", debugUi: "off" },
+  });
+  assert.equal(debug.steps.some((step) => step.kind === "run"
+    && step.args && step.args.some((arg) => String(arg).endsWith("minify_web_release.mjs"))), false);
+});

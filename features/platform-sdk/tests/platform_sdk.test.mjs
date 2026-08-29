@@ -12,6 +12,7 @@ import { createPokiPlatformAdapter } from "../web/adapters/poki.js";
 import { createYandexPlatformAdapter } from "../web/adapters/yandex.js";
 import {
   inspectPlatformSdkArtifact,
+  platformSdkBundlePrefix,
   sdkForTarget,
   stagePlatformSdkWebAssets,
 } from "../scripts/artifact_tools.mjs";
@@ -948,6 +949,25 @@ test("staged web SDK uses only composition and selected adapter modules", () => 
   }
 });
 
+test("release SDK bundles are minified without changing adapter startup", () => {
+  for (const adapter of ["mock", "poki", "yandex", "playgama"]) {
+    const source = Buffer.from(packagedPlatformPrefix(adapter));
+    const release = platformSdkBundlePrefix(adapter);
+    assert.ok(release.length < source.length * 0.75, adapter);
+    assert.ok(release.toString("utf8").split("\n").length <= 2, adapter);
+
+    const context = { clearTimeout, console, globalThis: null, Promise, setTimeout };
+    context.globalThis = context;
+    runInNewContext(`${release}globalThis.__releaseBundleReady = !!globalThis.__platformSdkInternalBackend;`, context);
+    assert.equal(context.__releaseBundleReady, true, adapter);
+    assert.deepEqual(
+      Object.keys(context.__platformSdkInternalBackend).sort(),
+      [...PLATFORM_BACKEND_METHODS].sort(),
+      adapter,
+    );
+  }
+});
+
 test("publish manifests distinguish staged modules from single-JS release packages", () => {
   for (const target of [TargetPlatform.ITCH, TargetPlatform.POKI, TargetPlatform.YANDEX, TargetPlatform.PLAYGAMA]) {
     const manifest = JSON.parse(readFileSync(join(HERE, `../publish-targets/${target}.json`), "utf8"));
@@ -965,7 +985,7 @@ test("artifact inspection accepts a package with the exact bundled Poki backend"
       const full = join(dir, path);
       mkdirSync(dirname(full), { recursive: true });
       writeFileSync(full, path === "game.js"
-        ? `${packagedPlatformPrefix("poki")}var wasmBinaryFile = 'game.wasm';\n`
+        ? `${platformSdkBundlePrefix("poki")}var wasmBinaryFile = 'game.wasm';\n`
         : "fixture");
     }
     assert.deepEqual(inspectPlatformSdkArtifact({
@@ -984,7 +1004,7 @@ test("artifact inspection rejects marker-only and partial platform SDK layouts",
     ["marker-only bundle", () => {}],
     ["partial staged modules", (dir) => writeFileSync(join(dir, "platform-sdk.js"), "fixture")],
     ["bundled loader with staged modules", (dir) => {
-      writeFileSync(join(dir, "game.js"), `${packagedPlatformPrefix("poki")}var wasmBinaryFile = 'game.wasm';\n`);
+      writeFileSync(join(dir, "game.js"), `${platformSdkBundlePrefix("poki")}var wasmBinaryFile = 'game.wasm';\n`);
       for (const [from, to] of [
         ["../web/platform-sdk.js", "platform-sdk.js"],
         ["../web/adapters/poki.js", "platform-sdk-adapter.js"],

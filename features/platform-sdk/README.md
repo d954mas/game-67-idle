@@ -42,8 +42,12 @@ features/platform-sdk/
       poki.js
       yandex.js
       playgama.js
+    release/
+      manifest.json
+      <adapter>.min.js
   scripts/
     artifact_tools.mjs
+    generate_release_bundles.mjs
     scorecard.mjs
   publish-targets/
     itch.json
@@ -59,7 +63,9 @@ The template consumes this as an in-place L1 module: C code owns target/SDK
 identity, policy capabilities, lifecycle state, gameplay/input guards, ad-flow
 callbacks, and pause/resume listener dispatch. Web builds stage only the selected
 JavaScript backend adapter as `platform-sdk-adapter.js`; release packaging embeds
-the staged SDK modules into `game.js` so the upload has one local JavaScript file.
+the source-hash-bound minified SDK bundle into `game.js` so the upload has one
+local JavaScript file. Editable sources stay readable; release bundles are
+regenerated with the Terser version shipped by Emscripten.
 The template's debug/test controls are C/Clay UI in
 `templates/template/src/ui/platform_sdk_debug.c`; they are not staged as a web
 JavaScript artifact.
@@ -104,6 +110,7 @@ JavaScript artifact.
 
 ```powershell
 node --test features/platform-sdk/tests/platform_sdk.test.mjs
+node features/platform-sdk/scripts/generate_release_bundles.mjs
 node features/platform-sdk/scripts/scorecard.mjs --input features/platform-sdk/tests/fixtures/scorecard-sample.ndjson --pretty
 node features/platform-sdk/scripts/artifact_tools.mjs inspect --target itch --artifact templates/template/build/wasm-release-itch/bin
 ```

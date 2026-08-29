@@ -1,0 +1,36 @@
+{
+  "schema": "ai_studio.platform_sdk.release_bundles.v1",
+  "minifier": {
+    "name": "terser",
+    "version": "5.39.0",
+    "ecma": 2020,
+    "compressPasses": 2,
+    "mangle": true
+  },
+  "adapters": {
+    "mock": {
+      "sourceSha256": "50346b4bb58e8db80f837fccc93579f930595c15b6f597f4cfabe88b1220b82f",
+      "bundleSha256": "9d7b6afd5d97243f9a344854658afed805aa14f2e7d1b17d5003e57adbd487c7",
+      "sourceBytes": 2935,
+      "bundleBytes": 1643
+    },
+    "poki": {
+      "sourceSha256": "da6a88db4d7736a415a436f3e2978808f7ec5c530953c49f20cc0be08c7ec035",
+      "bundleSha256": "e7fe4cd703cab47da1d0a4851dfe730a60da282bacf3b034ec6da785cd7be13c",
+      "sourceBytes": 6926,
+      "bundleBytes": 2965
+    },
+    "yandex": {
+      "sourceSha256": "91db9f3b10fb6687087523312b2f22ebc158456e5aabc3c1566b3d9e18248cc4",
+      "bundleSha256": "eec2aeae595c748d1991e791c9e2c07a779c5172cd3d6e55d42e6d0b7c51e3da",
+      "sourceBytes": 6333,
+      "bundleBytes": 3242
+    },
+    "playgama": {
+      "sourceSha256": "864a71f875f12f273cd32a930b60b81f4b4b3ec0679f689c3a3dd6a4e757ca78",
+      "bundleSha256": "bdbc256e301abbc31f17fcc3e48ab2af1b7807e61a49dbb6c04039dba7b473ce",
+      "sourceBytes": 7298,
+      "bundleBytes": 3635
+    }
+  }
+}

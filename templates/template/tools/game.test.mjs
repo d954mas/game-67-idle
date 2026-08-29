@@ -62,7 +62,7 @@ test("doctor requires the copied game-owned scaffold and exact dependency record
   t.after(() => rmSync(gameDir, { recursive: true, force: true }));
   assert.throws(() => doctorGame({ gameDir }), /missing/i);
 
-  for (const rel of ["CMakeLists.txt", "tools/game.mjs", "tools/build_web.mjs", "tools/package_web.mjs", "tools/package_web_smoke.mjs", "tools/lib/studio_root.mjs", "tools/lib/zip_store.mjs", "tools/lib/runtime_build.mjs", "tools/serve_web.mjs", "release/README.md", ".github/workflows/game-verify.yml"]) {
+  for (const rel of ["CMakeLists.txt", "tools/game.mjs", "tools/build_web.mjs", "tools/package_web.mjs", "tools/package_web_smoke.mjs", "tools/minify_web_release.mjs", "tools/lib/studio_root.mjs", "tools/lib/zip_store.mjs", "tools/lib/runtime_build.mjs", "tools/serve_web.mjs", "release/README.md", ".github/workflows/game-verify.yml"]) {
     write(join(gameDir, rel), "fixture\n");
   }
   write(join(gameDir, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: "fixture", title: "Fixture", storageNamespace: "fixture" }));
@@ -201,7 +201,7 @@ test("copied game CLI executes doctor and final package from a real games/privat
   write(join(gameDir, "dependencies.json"), `${JSON.stringify({
     schema: "ai_studio.game.dependencies.v3",
     engine: { source: "external/neotolis-engine", version: "0.1.0", revision: engineRevision, compatibility: "tested" },
-    features: [{ id: "platform-sdk", source: "features/platform-sdk", version: "1.2.0", compatibility: "tested" }],
+    features: [{ id: "platform-sdk", source: "features/platform-sdk", version: "1.2.1", compatibility: "tested" }],
     compatibility: "copied layout fixture",
   }, null, 2)}\n`);
   const runtimeBuild = createRuntimeBuildRecord({

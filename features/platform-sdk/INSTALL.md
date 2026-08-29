@@ -127,9 +127,12 @@ platform-sdk.js          # internal web backend bootstrap for C bridge
 platform-sdk-adapter.js   # selected adapter only
 ```
 
-The release packer verifies those canonical staged bytes, embeds them before
-the Emscripten loader in `game.js`, and omits the two standalone module files
-from the final upload ZIP.
+The release packer verifies those canonical staged bytes and the generated
+bundle's source/output hashes, embeds the selected minified bundle before the
+Emscripten loader in `game.js`, and omits the two standalone module files from
+the final upload ZIP. Release builds also minify generated HTML, inline CSS,
+and inline JavaScript with `html-minifier-terser` from Emscripten. Debug builds
+stay readable.
 
 The debug/test panel is C UI in the game/template binary. It is not copied as a
 web JavaScript file.

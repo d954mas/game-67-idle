@@ -229,6 +229,19 @@ test("Poki release embeds the selected platform backend into game.js", (t) => {
   assert.doesNotMatch(gameJs, /^\s*(?:import|export)\b/m);
 });
 
+test("release packaging accepts a minified platform SDK module bootstrap", (t) => {
+  const item = fixture(t, "poki");
+  const htmlPath = join(item.artifactDir, "index.html");
+  writeFileSync(htmlPath, readFileSync(htmlPath, "utf8").replace(
+    "import './platform-sdk.js';",
+    'import"./platform-sdk.js";',
+  ));
+
+  const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
+  const html = readStoreZip(readFileSync(result.zipPath)).get("index.html").toString("utf8");
+  assert.equal(html.includes("platform-sdk.js"), false);
+});
+
 test("bundled platform backend executes before the game loader for every adapter", () => {
   for (const adapter of ["mock", "poki", "yandex", "playgama"]) {
     const source = packageWeb.bundlePlatformIntoGame(

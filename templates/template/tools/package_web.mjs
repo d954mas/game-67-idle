@@ -781,7 +781,16 @@ function platformBundlePrefix(studioRoot, adapter) {
     ["platform-sdk.js", sources.get("platform-sdk.js")],
   ];
   const body = ordered.map(([path, bytes]) => classicPlatformModule(bytes.toString("utf8"), path)).join("\n\n");
-  return Buffer.from(`(function () {\n${body}\n}());\n`, "utf8");
+  const source = Buffer.from(`(function () {\n${body}\n}());\n`, "utf8");
+  const releaseDir = join(studioRoot, "features", "platform-sdk", "web", "release");
+  const manifest = readJson(join(releaseDir, "manifest.json"), "platform SDK release bundle manifest");
+  const record = manifest.schema === "ai_studio.platform_sdk.release_bundles.v1"
+    ? manifest.adapters && manifest.adapters[adapter]
+    : null;
+  if (!record || record.sourceSha256 !== sha256(source)) throw new Error(`stale release SDK bundle source: ${adapter}`);
+  const bundle = readFileSync(join(releaseDir, `${adapter}.min.js`));
+  if (record.bundleSha256 !== sha256(bundle)) throw new Error(`invalid release SDK bundle bytes: ${adapter}`);
+  return bundle;
 }
 
 export function bundlePlatformIntoGame(loader, studioRoot, adapter) {
@@ -793,8 +802,8 @@ function bundledReleaseHtml(input) {
   const html = String(input).replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi, (whole, rawAttributes, body) => {
     const attributes = scriptAttributes(rawAttributes);
     const type = String(attributes.get("type") || "").trim().toLowerCase();
-    if (type !== "module" || !/^\s*import\s+["']\.\/platform-sdk\.js["'];?/m.test(body)) return whole;
-    const bundledBody = body.replace(/^\s*import\s+["']\.\/platform-sdk\.js["'];?\s*$/gm, () => {
+    if (type !== "module" || !/^\s*import\s*["']\.\/platform-sdk\.js["'];?/m.test(body)) return whole;
+    const bundledBody = body.replace(/^\s*import\s*["']\.\/platform-sdk\.js["'];?\s*$/gm, () => {
       replacements += 1;
       return "";
     });

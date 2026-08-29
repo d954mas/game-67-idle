@@ -1,10 +1,12 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const WEB_DIR = join(ROOT, "web");
+const RELEASE_DIR = join(WEB_DIR, "release");
 
 export const REAL_SDK_MARKERS = Object.freeze({
   poki: ["https://game-cdn.poki.com/scripts/v2/poki-sdk.js", "PokiSDK"],
@@ -39,7 +41,7 @@ function classicPlatformModule(input, label) {
   return output.join("\n").trimEnd();
 }
 
-export function platformSdkBundlePrefix(sdk) {
+export function platformSdkSourceBundle(sdk) {
   const sources = [
     ["platform-sdk-adapter.js", join(WEB_DIR, "adapters", `${sdk}.js`)],
     ["platform-sdk.js", join(WEB_DIR, "platform-sdk.js")],
@@ -48,6 +50,23 @@ export function platformSdkBundlePrefix(sdk) {
     classicPlatformModule(readFileSync(path, "utf8"), label)
   )).join("\n\n");
   return Buffer.from(`(function () {\n${body}\n}());\n`, "utf8");
+}
+
+function sha256(bytes) {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+export function platformSdkBundlePrefix(sdk) {
+  const manifest = JSON.parse(readFileSync(join(RELEASE_DIR, "manifest.json"), "utf8"));
+  const record = manifest && manifest.schema === "ai_studio.platform_sdk.release_bundles.v1"
+    ? manifest.adapters && manifest.adapters[sdk]
+    : null;
+  if (!record) throw new Error(`missing release SDK bundle manifest entry: ${sdk}`);
+  const source = platformSdkSourceBundle(sdk);
+  if (record.sourceSha256 !== sha256(source)) throw new Error(`stale release SDK bundle source: ${sdk}`);
+  const bundle = readFileSync(join(RELEASE_DIR, `${sdk}.min.js`));
+  if (record.bundleSha256 !== sha256(bundle)) throw new Error(`invalid release SDK bundle bytes: ${sdk}`);
+  return bundle;
 }
 
 export function sdkForTarget(target) {
