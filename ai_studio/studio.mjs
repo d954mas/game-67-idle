@@ -126,6 +126,7 @@ const CHECKS = Object.freeze([
     ],
   },
   { id: "studio.skills.python", pythonRoots: [".codex/skills"] },
+  { id: "studio.game-page", testRoots: ["ai_studio/game_page"] },
   { id: "studio.dev-environment", testRoots: ["ai_studio/dev_environment"] },
   { id: "studio.quality", testRoots: ["ai_studio/quality"] },
   {
@@ -158,6 +159,7 @@ const CHECKS = Object.freeze([
       "features/items-core/tests",
       "features/progression-core/tests",
       "features/scenes-core/tests",
+      "features/test-goldens/tests",
     ],
   },
   {
@@ -170,6 +172,17 @@ const CHECKS = Object.freeze([
     id: "features.game-state",
     pythonRoots: ["features/game-state"],
     nativeRoots: ["features/game-state/tests"],
+  },
+  {
+    id: "features.localization",
+    pythonRoots: ["features/localization/scripts"],
+    nativeRoots: ["features/localization/tests"],
+  },
+  { id: "features.software-cursor", nativeRoots: ["features/software-cursor/tests"] },
+  {
+    id: "features.test-goldens",
+    testFiles: ["features/test-goldens/lib/test_goldens.test.mjs"],
+    nativeRoots: ["features/test-goldens/tests"],
   },
   { id: "features.items-core", pythonRoots: ["features/items-core"] },
   { id: "features.progression-core", pythonRoots: ["features/progression-core"] },
@@ -189,6 +202,7 @@ const CHECKS = Object.freeze([
     "templates/template/tools/lib/runtime_build.test.mjs",
     "templates/template/tools/lib/studio_root.test.mjs",
     "templates/template/tools/package_web.test.mjs",
+    "templates/template/tools/minify_web_release.test.mjs",
     "templates/template/tools/package_web_smoke.test.mjs",
     "templates/template/tools/portal_evidence.test.mjs",
   ] },

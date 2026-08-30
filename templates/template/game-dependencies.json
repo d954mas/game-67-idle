@@ -14,7 +14,8 @@
     { "id": "platform-sdk", "source": "features/platform-sdk", "version": "1.2.1", "compatibility": "validated by the template build and test suite" },
     { "id": "progression-core", "source": "features/progression-core", "version": "8.0.0", "compatibility": "validated by the template build and test suite" },
     { "id": "scenes-core", "source": "features/scenes-core", "version": "0.3.0", "compatibility": "validated by the template scene-manager CTests, scaffold/consumer tests, and native/web builds" },
-    { "id": "software-cursor", "source": "features/software-cursor", "version": "0.1.0", "compatibility": "validated by the focused software-cursor contract test" }
+    { "id": "software-cursor", "source": "features/software-cursor", "version": "0.1.0", "compatibility": "validated by the focused software-cursor contract test" },
+    { "id": "test-goldens", "source": "features/test-goldens", "version": "1.0.0", "compatibility": "validated by the template test-goldens CTest and the Node golden library tests" }
   ],
   "compatibility": "seed for exact game-owned dependency records created from this template"
 }

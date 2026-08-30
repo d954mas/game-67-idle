@@ -160,6 +160,12 @@ possibility, not a feature.
   `game.scene.*` automation, and an agent scaffold. The default template owns
   its root/settings catalog. Reference: `scenes-core/README.md`, `scenes-core/INSTALL.md`, and
   `scenes-core/IMPLEMENTATION-PLAN.md`.
+- `test-goldens/` (`L0`, `1.0.0`): record-or-compare value banks for tests. A
+  watched number -- a layout digest, a balance total, a budget size -- lives in
+  a text bank beside the test and is re-recorded with one command, so an
+  intended design change costs a diff instead of hand-edited test source.
+  Reference: `test-goldens/README.md` + `test-goldens/INSTALL.md`.
+
 ## Features (reference implementations live in the template)
 
 `settings` and `resource_panel` do NOT have a library copy under `features/`.
