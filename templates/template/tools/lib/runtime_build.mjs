@@ -88,6 +88,11 @@ function readDependencies(gameDir) {
   return value;
 }
 
+// The record covers what ships. Test registration reaches into features that
+// the game never links -- a golden bank, a feature's own suite -- so a mention
+// there is not a runtime dependency and must not be declared as one.
+const TEST_ONLY_CMAKE = new Set(["GameTests.cmake"]);
+
 function referencedFeatureSources(gameDir) {
   const cmakeFiles = [];
   function visit(dir, topLevel = false) {
@@ -96,7 +101,8 @@ function referencedFeatureSources(gameDir) {
       const path = join(dir, name);
       const info = lstatSync(path);
       if (info.isDirectory()) visit(path);
-      else if (info.isFile() && (name === "CMakeLists.txt" || name.endsWith(".cmake"))) cmakeFiles.push(path);
+      else if (info.isFile() && (name === "CMakeLists.txt" || name.endsWith(".cmake"))
+        && !TEST_ONLY_CMAKE.has(name)) cmakeFiles.push(path);
     }
   }
   visit(gameDir, true);

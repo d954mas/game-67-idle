@@ -116,6 +116,21 @@ test("runtime build rejects compiled in-place features missing from dependencies
   );
 });
 
+test("runtime build ignores features reached only by test registration", (t) => {
+  const item = fixture(t);
+  write(
+    join(item.gameDir, "cmake", "GameTests.cmake"),
+    "set(TEST_GOLDENS_DIR \"${GAME_REPO_ROOT}/features/test-goldens\")\n",
+  );
+  write(
+    join(item.studioRoot, "features", "test-goldens", "src", "test_goldens.c"),
+    "void golden(void) {}\n",
+  );
+  // A test-only helper is not shipped, so declaring it would put recording
+  // machinery in the release record.
+  assert.doesNotThrow(() => createRuntimeBuildRecord(item));
+});
+
 test("runtime build rejects declared features missing from canonical CMake wiring", (t) => {
   const item = fixture(t);
   write(join(item.gameDir, "CMakeLists.txt"), "project(test_game)\n");
