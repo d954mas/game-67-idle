@@ -101,6 +101,52 @@ heads; source working-tree changes are intentionally not transferred.
   evidence, quality — which is how work gets reported, and creating items inside
   `/to-spec` or `/to-tickets`, where the lead invoking the skill IS the request.
 
+## Game Test Policy
+
+A tool is judged by its contract; a game is judged by how it plays, and its
+numbers are design knobs that move on every iteration. Test the two differently.
+
+In game code, cover what breaks silently: saves and migrations, state schema,
+economy and progression math, item catalogs, packaging, platform SDK, analytics
+contracts.
+
+Never pin a design knob. Balance constants, spawn counts, world-layout digests,
+render-target sizes, HUD offsets and player-facing copy are inputs to iteration;
+asserting their exact value turns every design change into test repair. Assert
+the invariant instead: a range, an ordering, monotonicity, non-emptiness, no NaN.
+
+Where an exact value must still be watched for accidental drift, keep it as a
+golden that one command re-records (`features/test-goldens`), never as a
+hand-edited constant.
+
+Gameplay feel, render output and UI layout are proven by a run and a screenshot,
+not by a unit test.
+
+Every test declares a tier, and the CTest label is the only record of it -- no
+runner, lane or reader keeps a second list:
+
+- `core` (the default): silent-failure logic. Runs on every edit and stays fast.
+- `slow`: correct but expensive -- heavy fixtures, simulations, packaging.
+- `taste`: pins player-facing output and moves with design; runs before release.
+
+`node tools/game.mjs test` runs `core`; `--tier slow|taste` and `--all` widen it,
+and a game's release lane runs everything.
+
+Removing a knob-pinning test is maintenance, not lost coverage. Propose the list;
+the lead approves it.
+
+## Transcript Cost
+
+Every tool result is re-read by the model on every later request, so output
+volume, not command count, is what makes iteration slow.
+
+Read the range you need instead of the whole file; search with a glob and a
+limit instead of walking a tree; patch through the harness edit tool instead of
+shell-escaped strings; keep binaries out of the transcript. When a result comes
+back truncated, narrow the query rather than re-running it wider.
+
+`profiling/iteration_report.mjs` reports what this costs per week.
+
 ## Source Comments
 
 The engine's rule (`external/neotolis-engine/AGENTS.md`, "Code style") applies to
