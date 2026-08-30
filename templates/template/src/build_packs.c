@@ -139,7 +139,7 @@ int main(int argc, char *argv[]) {
         {"uv0", "TEXCOORD_0", NT_STREAM_FLOAT32, 2, false},
     };
     nt_builder_add_mesh(ctx, "assets/meshes/cube.glb",
-                        &(nt_mesh_opts_t){.layout = mesh_layout, .stream_count = 2, .tangent_mode = NT_TANGENT_NONE});
+                        &(nt_mesh_opts_t){.layout = mesh_layout, .stream_count = 2, .tangent_mode = NT_TANGENT_AUTO});
 
     // UV-grid texture for the textured mesh path. Source-first search did not find
     // a better CC0 surface texture for the starter template, so the template ships

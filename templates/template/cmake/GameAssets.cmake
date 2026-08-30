@@ -20,7 +20,7 @@ if(NOT EMSCRIPTEN)
     add_executable(build_game_packs src/build_packs.c
         "${GAME_SOURCE_GENERATED_DIR}/loc_charset.gen.h")
     target_include_directories(build_game_packs PRIVATE src)
-    target_link_libraries(build_game_packs PRIVATE nt_builder nt_log)
+    target_link_libraries(build_game_packs PRIVATE nt_builder nt_log nt_meshwire)
     target_compile_definitions(build_game_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_options(build_game_packs PRIVATE -U_DLL)
     nt_set_sanitizer_flags(build_game_packs)

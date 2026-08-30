@@ -44,7 +44,7 @@ target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core nt_app nt_input nt_window nt_gfx nt_text_renderer nt_font
     nt_resource nt_material nt_shared nt_render nt_hash nt_fs nt_log nt_math nt_time
     nt_mesh_renderer nt_entity nt_transform_comp nt_mesh_comp nt_material_comp nt_drawable_comp
-    nt_ui nt_sprite_renderer nt_atlas nt_mem_scratch nt_clipboard nt_basisu_transcoder_stub
+    nt_ui nt_sprite_renderer nt_atlas nt_mem_scratch nt_clipboard nt_basisu_transcoder_stub nt_meshwire
 )
 if(EMSCRIPTEN)
     target_sources(${GAME_TARGET} PRIVATE
