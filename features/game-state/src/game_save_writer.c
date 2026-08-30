@@ -5,6 +5,7 @@
 #include <locale.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static bool writer_put(game_save_writer_t *writer, const char *text, size_t size) {
@@ -143,9 +144,12 @@ bool game_save_writer_number(game_save_writer_t *writer, double value) {
         const int precise_written = snprintf(precise, sizeof precise, "%1.17g", value);
         if (written > 0 && (size_t)written < sizeof number &&
             precise_written > 0 && (size_t)precise_written < sizeof precise) {
-            const int parsed = sscanf(number, "%lg", &recovered);
+            // strtod, not sscanf: the scanf family drags a second formatting
+            // engine into every build that links the writer.
+            char *parsed_end = NULL;
+            recovered = strtod(number, &parsed_end);
             const double magnitude = fabs(recovered) > fabs(value) ? fabs(recovered) : fabs(value);
-            if (parsed != 1 || fabs(recovered - value) > magnitude * DBL_EPSILON) {
+            if (parsed_end == number || fabs(recovered - value) > magnitude * DBL_EPSILON) {
                 memcpy(number, precise, (size_t)precise_written + 1U);
                 written = precise_written;
             }
