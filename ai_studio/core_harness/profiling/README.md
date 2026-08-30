@@ -31,6 +31,30 @@ local JSONL workflow that cannot answer an important repeated question.
 
 ## Commands
 
+Review a week of work across every session:
+
+```powershell
+node ai_studio/core_harness/profiling/iteration_report.mjs --since 7d
+node ai_studio/core_harness/profiling/iteration_report.mjs --since 14d --json
+```
+
+`iteration_report.mjs` answers what one session cannot: whether iteration is
+getting cheaper, and which category is paying. It reads Claude transcripts and
+Codex rollouts whose working directory is this repository, and reports per
+harness the call count, measured command time, output volume, failure share,
+median turn length and tools per turn; then the same by category, the noisiest
+commands by output, and test-versus-source lines written in the window.
+
+Output volume sits next to time on purpose: every tool result is re-read on each
+later request, so a command that dumps a tree is charged again on every turn
+that follows it. Truncated Codex output is reported as produced-and-cut tokens
+rather than dropped, because that generation was paid for.
+
+Parallel `functions.exec` batches keep one shared timing and one shared output.
+The report classifies such a batch only when every nested command agrees, and
+labels it `mixed batch` otherwise; nested commands appear in a counts-only list
+because their shared bytes cannot be attributed honestly.
+
 Review the active session:
 
 ```powershell

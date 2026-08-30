@@ -55,16 +55,18 @@ function parseArguments(raw) {
   try { return JSON.parse(String(raw || "{}")); } catch { return {}; }
 }
 
-function embeddedCommands(input) {
+export function embeddedCommands(input) {
   const source = String(input || "");
   const commands = [];
-  for (const quoted of source.matchAll(/["']?command["']?\s*:\s*("(?:\\.|[^"\\])*")/gs)) {
+  // The exec wrapper spells the shell string `command` or `cmd` depending on the
+  // tool it calls; missing the second spelling hides most work behind the batch.
+  for (const quoted of source.matchAll(/["']?(?:command|cmd)["']?\s*:\s*("(?:\\.|[^"\\])*")/gs)) {
     try { commands.push(JSON.parse(quoted[1])); } catch { /* try other forms */ }
   }
-  for (const single of source.matchAll(/["']?command["']?\s*:\s*'((?:\\.|[^'\\])*)'/gs)) {
+  for (const single of source.matchAll(/["']?(?:command|cmd)["']?\s*:\s*'((?:\\.|[^'\\])*)'/gs)) {
     commands.push(single[1].replace(/\\'/g, "'").replace(/\\\\/g, "\\"));
   }
-  for (const template of source.matchAll(/["']?command["']?\s*:\s*`([^`$]*)`/gs)) commands.push(template[1]);
+  for (const template of source.matchAll(/["']?(?:command|cmd)["']?\s*:\s*`([^`$]*)`/gs)) commands.push(template[1]);
   return commands.filter((command) => String(command).trim());
 }
 
@@ -86,7 +88,7 @@ function commandFor(payload) {
   return name;
 }
 
-function categoryFor(command, tool) {
+export function categoryFor(command, tool) {
   const text = `${command} ${tool}`.toLowerCase();
   if (/spawn_agent|followup_task|send_message|wait_agent/.test(text)) return "delegation";
   if (/node --test|pytest|unittest|\bverify\b|\btest\b/.test(text)) return "validation";
@@ -98,7 +100,12 @@ function categoryFor(command, tool) {
 
 function outputMetrics(text) {
   if (!text) return {};
-  return { output_chars: text.length, output_lines: text.split(/\r?\n/).length };
+  // The host reports what it cut; those tokens were produced and paid for even
+  // though the model never saw them, so they belong in the cost, not the loss.
+  const truncated = text.match(/original token count:\s*(\d+)/i);
+  const metrics = { output_chars: text.length, output_lines: text.split(/\r?\n/).length };
+  if (truncated) metrics.output_truncated_tokens = Number(truncated[1]);
+  return metrics;
 }
 
 function failedOutput(text, command = "") {
@@ -218,6 +225,7 @@ export function parseCodexTranscript(file) {
       }
       continue;
     }
+    const nested = tool === "exec" ? embeddedCommands(start.payload.input) : [];
     const record = {
       ts: endTs, phase: "session", category: categoryFor(command, tool),
       intent: `auto:${tool}`, result: failed ? "fail" : "pass",
@@ -227,6 +235,10 @@ export function parseCodexTranscript(file) {
       __start_ts: start.ts,
       ...outputMetrics(text),
     };
+    // A parallel batch hides several commands behind one timing and one output.
+    // Keep the nested list so a report can classify the batch without pretending
+    // the shared bytes belong to any single command inside it.
+    if (nested.length > 1) record.nested_commands = nested.slice(0, 20).map((entry) => String(entry).slice(0, 200));
     if (tool === "spawn_agent") record.subagent_type = String(parseArguments(start.payload.arguments).task_name || "agent");
     if (Number.isFinite(durationMs) && durationMs >= 0) {
       record.duration_ms = durationMs;
