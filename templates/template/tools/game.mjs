@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -22,7 +22,10 @@ const GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const PACKAGE_TARGETS = new Set(["itch", "poki", "yandex", "playgama"]);
 const BUILD_TARGETS = new Set(["local", ...PACKAGE_TARGETS]);
 const COMMANDS = new Set(["doctor", "build", "run", "test", "playable", "package", "verify"]);
-const USAGE = "usage: node tools/game.mjs <doctor|build|run|test|playable|package|verify> [--target local|itch|poki|yandex|playgama] [--no-build] [--out <dir>] [--template-proof] [--skip-tests]";
+// The tier vocabulary is shared with cmake/GameTests.cmake; CTest labels carry it.
+export const TEST_TIERS = ["core", "slow", "taste"];
+export const TEST_TIER_DEFAULT = "core";
+const USAGE = "usage: node tools/game.mjs <doctor|build|run|test|playable|package|verify> [--target local|itch|poki|yandex|playgama] [--no-build] [--out <dir>] [--template-proof] [--skip-tests] [test: --tier core|slow|taste | --all | --only <test>] [--update-goldens]";
 
 function readJson(path, label) {
   let value;
@@ -42,6 +45,10 @@ export function parseGameArgs(argv) {
     templateProof: false,
     skipTests: false,
     outDir: "",
+    only: [],
+    tier: "",
+    all: false,
+    updateGoldens: false,
   };
   for (let index = 1; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -50,7 +57,19 @@ export function parseGameArgs(argv) {
     else if (arg === "--template-proof") args.templateProof = true;
     else if (arg === "--skip-tests") args.skipTests = true;
     else if (arg === "--out") args.outDir = argv[++index] || "";
+    else if (arg === "--only") args.only.push(argv[++index] || "");
+    else if (arg === "--tier") args.tier = argv[++index] || "";
+    else if (arg === "--all") args.all = true;
+    else if (arg === "--update-goldens") args.updateGoldens = true;
     else throw new Error(`unknown option: ${arg}\n${USAGE}`);
+  }
+  if (args.only.some((name) => !/^[A-Za-z0-9_.-]+$/.test(name))) throw new Error(`--only takes CTest names\n${USAGE}`);
+  if ((args.only.length > 0 || args.updateGoldens || args.tier || args.all) && command !== "test") {
+    throw new Error(`--only, --tier, --all and --update-goldens are valid only for test\n${USAGE}`);
+  }
+  if (args.tier && !TEST_TIERS.includes(args.tier)) throw new Error(`unknown test tier: ${args.tier}\n${USAGE}`);
+  if ((args.tier ? 1 : 0) + (args.all ? 1 : 0) + (args.only.length > 0 ? 1 : 0) > 1) {
+    throw new Error(`--tier, --all and --only cannot be combined\n${USAGE}`);
   }
   if (!BUILD_TARGETS.has(args.target) || (["package", "verify"].includes(command) && !PACKAGE_TARGETS.has(args.target))) {
     throw new Error(`unknown target for ${command}: ${args.target}`);
@@ -114,8 +133,8 @@ export function doctorGame({ gameDir = GAME_DIR, templateProof = false } = {}) {
   return { gameId: identity.id, kind: "game" };
 }
 
-function run(command, args, cwd, label) {
-  const result = spawnSync(command, args, { cwd, shell: false, stdio: "inherit", env: process.env });
+function run(command, args, cwd, label, env = process.env) {
+  const result = spawnSync(command, args, { cwd, shell: false, stdio: "inherit", env });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${label} exited ${result.status ?? 1}`);
 }
@@ -128,21 +147,100 @@ function runNodeTests(gameDir) {
   run(process.execPath, ["--test", "--test-concurrency=4", ...files], gameDir, "game tests");
 }
 
-export function nativeTestPlan(gameDir, platform = process.platform, configured = false) {
+// CTest labels are the only record of which tier a test belongs to, so the
+// runner reads them back instead of keeping a second list that drifts.
+export function ctestCatalogue(buildDir, spawn = spawnSync) {
+  const result = spawn("ctest", ["--test-dir", buildDir, "--show-only=json-v1"], {
+    encoding: "utf8", shell: false, stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`CTest discovery exited ${result.status ?? 1}`);
+  const catalogue = JSON.parse(result.stdout).tests.map((entry) => {
+    const labels = (entry.properties || []).find((property) => property.name === "LABELS");
+    const command = Array.isArray(entry.command) ? entry.command[0] || "" : "";
+    const executable = command.replace(/\\/g, "/").split("/").pop() || "";
+    return {
+      name: entry.name,
+      tier: labels ? String([].concat(labels.value)[0] || "") : "",
+      // A native test runs its own executable; a Node or Python contract runs an
+      // interpreter and owns no build target.
+      target: executable.replace(/\.exe$/i, "") === entry.name ? entry.name : "",
+    };
+  });
+  return catalogue;
+}
+
+// A test with no tier would belong to no tier and quietly stop running. The
+// check lives after the build, where CMake has regenerated the labels.
+export function assertTiersLabelled(catalogue) {
+  const unlabelled = catalogue.filter((entry) => !entry.tier);
+  if (unlabelled.length > 0) {
+    throw new Error(`tests without a tier label: ${unlabelled.map((entry) => entry.name).join(", ")}`);
+  }
+  return catalogue;
+}
+
+// A tier selects tests; the targets those tests need are what gets built. The
+// game target is always built so a failing test can be reproduced by playing.
+export function selectTests(catalogue, selection = {}) {
+  const mode = selection.mode || "tier";
+  const selected = mode === "all" ? catalogue
+    : mode === "only" ? catalogue.filter((entry) => selection.names.includes(entry.name))
+    : catalogue.filter((entry) => entry.tier === (selection.tier || TEST_TIER_DEFAULT));
+  if (mode === "only") {
+    const missing = selection.names.filter((name) => !catalogue.some((entry) => entry.name === name));
+    if (missing.length > 0) throw new Error(`unknown test name: ${missing.join(", ")}`);
+  }
+  return {
+    names: selected.map((entry) => entry.name),
+    // Running everything builds everything: a narrowed target list would leave
+    // out fixture and tool targets that no test names directly.
+    targets: mode === "all" ? [] : ["game", ...new Set(selected.map((entry) => entry.target).filter(Boolean))],
+  };
+}
+
+export function nativeTestPlan(gameDir, platform = process.platform, configured = false, selection = {}) {
   const buildDir = join(gameDir, "build", "native-debug");
+  const mode = selection.mode || "tier";
+  const targets = selection.targets || [];
   return [
     ...(configured ? [] : [
       ["cmake", "-S", gameDir, "-B", buildDir, "-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Debug",
         ...(platform === "linux" ? ["-DCMAKE_EXE_LINKER_FLAGS_DEBUG=-fsanitize=address,undefined"] : [])],
     ]),
-    ["cmake", "--build", buildDir],
-    ["ctest", "--test-dir", buildDir, "--output-on-failure", "-j", String(availableParallelism())],
+    ["cmake", "--build", buildDir, ...(targets.length > 0 ? ["--target", ...targets] : [])],
+    ["ctest", "--test-dir", buildDir, "--output-on-failure", "-j", String(availableParallelism()),
+      ...(mode === "all" ? []
+        : mode === "only" ? ["-R", `^(${selection.names.join("|")})$`]
+        : ["-L", `^${selection.tier || TEST_TIER_DEFAULT}$`]),
+    ],
   ];
 }
 
-function runNativeTests(gameDir) {
-  const configured = existsSync(join(gameDir, "build", "native-debug", "CMakeCache.txt"));
-  for (const [command, ...args] of nativeTestPlan(gameDir, process.platform, configured)) run(command, args, gameDir, "native game tests");
+// Golden banks are addressed absolutely because CTest gives each test its own
+// working directory; recording is opt-in so a normal run can never rewrite one.
+export function goldenEnvironment(gameDir, updateGoldens, env = process.env) {
+  const next = { ...env, GAME_GOLDENS_DIR: join(gameDir, "tests", "goldens") };
+  if (updateGoldens) next.GAME_UPDATE_GOLDENS = "1";
+  else delete next.GAME_UPDATE_GOLDENS;
+  return next;
+}
+
+function runNativeTests(gameDir, options = {}) {
+  const buildDir = join(gameDir, "build", "native-debug");
+  const configured = existsSync(join(buildDir, "CMakeCache.txt"));
+  const env = goldenEnvironment(gameDir, options.updateGoldens === true);
+  mkdirSync(env.GAME_GOLDENS_DIR, { recursive: true });
+  const selection = { ...options.selection };
+  // An unconfigured tree has no CTest catalogue yet, so the first run builds
+  // everything and filters by label; later runs build only what they will run.
+  if (configured) Object.assign(selection, selectTests(ctestCatalogue(buildDir), selection));
+  for (const [command, ...args] of nativeTestPlan(gameDir, process.platform, configured, selection)) {
+    run(command, args, gameDir, "native game tests", env);
+    // CMake regenerates during the build step, so the labels are only settled
+    // once it has run.
+    if (command === "cmake" && args[0] === "--build") assertTiersLabelled(ctestCatalogue(buildDir));
+  }
 }
 
 function buildGame(gameDir, target) {
@@ -261,8 +359,12 @@ export async function executeGameCommand(args, dependencies = {}) {
     // engine/feature tree only warns here — release lanes still require clean.
     prepare(false, { cleanliness: "warn" });
     nodeTest(gameDir);
-    nativeTest(gameDir);
-    return { message: "game tests passed" };
+    const only = args.only || [];
+    const selection = args.all ? { mode: "all" }
+      : only.length > 0 ? { mode: "only", names: only }
+      : { mode: "tier", tier: args.tier || TEST_TIER_DEFAULT };
+    nativeTest(gameDir, { selection, updateGoldens: args.updateGoldens });
+    return { message: args.updateGoldens ? "goldens recorded" : "game tests passed" };
   }
   if (args.command === "playable") {
     prepare(false);
@@ -278,7 +380,7 @@ export async function executeGameCommand(args, dependencies = {}) {
   const metadata = prepare(args.templateProof);
   if (!args.skipTests) {
     nodeTest(gameDir);
-    nativeTest(gameDir);
+    nativeTest(gameDir, { selection: { mode: "all" } });
   }
   const result = await packageGameOwned(args, metadata);
   await smokePackage({ zipPath: result.zipPath, expectedTarget: args.target });

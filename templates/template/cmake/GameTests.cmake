@@ -1,6 +1,111 @@
-# --- native C unit tests (Unity + CTest); introduced in A1, extended in A2/A3 ---
+# --- native C unit tests (Unity + CTest) ---
+
+# The tier vocabulary is fixed for every game so a runner, a CI lane and a
+# reader mean the same thing by it. An unknown tier is a configure error rather
+# than a test that silently never runs.
+set(GAME_TEST_TIERS core slow taste)
+
+function(game_test_tier_label out tier name)
+    if(NOT tier)
+        set(tier core)
+    endif()
+    if(NOT tier IN_LIST GAME_TEST_TIERS)
+        message(FATAL_ERROR "${name}: unknown test tier '${tier}', expected one of: ${GAME_TEST_TIERS}")
+    endif()
+    set(${out} "${tier}" PARENT_SCOPE)
+endfunction()
+
+# One native test: an executable in build/tests, registered with CTest under its
+# own name. Everything a test cannot choose -- output directory, CRT define,
+# sanitizer flags, the add_test line -- lives here; everything it can choose
+# stays an argument. A new plain test is three lines, and nothing outside this
+# call has to learn about it.
+#
+# WARNINGS is opt-in because not every test source compiles clean under the
+# engine's -W set with -Werror, and turning it on for all of them is a separate
+# decision from removing the boilerplate.
+#
+# TIER is the test's place in the loop, and it is a CTest label so that nothing
+# outside the test has to keep a list:
+#   core  (default) silent-failure logic, runs on every edit, stays fast;
+#   slow            correct but expensive -- heavy fixtures, sims, packaging;
+#   taste           pins player-facing output, moves with design, runs before
+#                   release.
+function(game_add_c_test name)
+    cmake_parse_arguments(T "WARNINGS" "UNITY;WORKDIR;TIER"
+        "SOURCES;LIBS;INCLUDES;DEFINES;OPTIONS" ${ARGN})
+    if(NOT T_UNITY)
+        set(T_UNITY unity)
+    endif()
+    game_test_tier_label(T_TIER "${T_TIER}" "${name}")
+    add_executable(${name} ${T_SOURCES})
+    target_link_libraries(${name} PRIVATE ${T_UNITY} ${T_LIBS})
+    if(T_INCLUDES)
+        target_include_directories(${name} PRIVATE ${T_INCLUDES})
+    endif()
+    target_compile_definitions(${name} PRIVATE ${T_DEFINES} _CRT_SECURE_NO_WARNINGS)
+    if(T_OPTIONS)
+        target_compile_options(${name} PRIVATE ${T_OPTIONS})
+    endif()
+    if(T_WARNINGS)
+        nt_set_warning_flags(${name})
+    endif()
+    nt_set_sanitizer_flags(${name})
+    set_target_properties(${name} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    if(T_WORKDIR)
+        add_test(NAME ${name} COMMAND ${name} WORKING_DIRECTORY "${T_WORKDIR}")
+    else()
+        add_test(NAME ${name} COMMAND ${name})
+    endif()
+    set_tests_properties(${name} PROPERTIES LABELS "${T_TIER}")
+endfunction()
+
+# Every plain logic test in tests/plain: one file, no build-system edit. A test
+# lands here when it needs nothing but Unity, the game's headers and the golden
+# bank; anything that must link a subsystem gets its own game_add_c_test call
+# above, where the reader can see what it pulls in.
+function(game_add_plain_c_tests)
+    file(GLOB _plain_tests CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/plain/test_*.c")
+    foreach(_plain_test IN LISTS _plain_tests)
+        get_filename_component(_plain_name "${_plain_test}" NAME_WE)
+        game_add_c_test(${_plain_name}
+            SOURCES "${_plain_test}" "${TEST_GOLDENS_SRC}/test_goldens.c"
+            INCLUDES src "${TEST_GOLDENS_INC}"
+            WORKDIR "${CMAKE_BINARY_DIR}/tests"
+            WARNINGS)
+    endforeach()
+endfunction()
+
+# One Node contract test over a script path, run from the studio root so a test
+# may reach both the game and the feature it exercises.
+function(game_add_node_test name)
+    cmake_parse_arguments(N "" "TIER" "SCRIPTS" ${ARGN})
+    game_test_tier_label(N_TIER "${N_TIER}" "${name}")
+    if(NOT N_SCRIPTS)
+        set(N_SCRIPTS ${N_UNPARSED_ARGUMENTS})
+    endif()
+    find_program(GAME_TEST_NODE_EXECUTABLE node REQUIRED)
+    add_test(NAME ${name}
+        COMMAND "${GAME_TEST_NODE_EXECUTABLE}" --test ${N_SCRIPTS}
+        WORKING_DIRECTORY "${GAME_REPO_ROOT}")
+    set_tests_properties(${name} PROPERTIES LABELS "${N_TIER}")
+endfunction()
+
 if(NOT EMSCRIPTEN)
     enable_testing()
+
+    set(TEST_GOLDENS_DIR "${GAME_REPO_ROOT}/features/test-goldens")
+    set(TEST_GOLDENS_INC "${TEST_GOLDENS_DIR}/include")
+    set(TEST_GOLDENS_SRC "${TEST_GOLDENS_DIR}/src")
+
+    game_add_c_test(test_test_goldens
+        SOURCES "${TEST_GOLDENS_DIR}/tests/test_test_goldens.c" "${TEST_GOLDENS_SRC}/test_goldens.c"
+        INCLUDES "${TEST_GOLDENS_INC}"
+        WORKDIR "${CMAKE_BINARY_DIR}/tests"
+        WARNINGS)
+
+    game_add_plain_c_tests()
     include_directories("${GAME_STATE_INC}")
     set(SCENES_CORE_TESTS "${SCENES_CORE_DIR}/tests")
     set(AUDIO_CORE_TESTS "${AUDIO_CORE_DIR}/tests")
@@ -18,6 +123,7 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_scenes_core_catalog PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_scenes_core_catalog COMMAND test_scenes_core_catalog)
+    set_tests_properties(test_scenes_core_catalog PROPERTIES LABELS "core")
 
     foreach(_scenes_core_source IN ITEMS
             test_scene_manager_lifecycle.c
@@ -39,6 +145,7 @@ if(NOT EMSCRIPTEN)
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
         add_test(NAME test_scenes_core_${_scenes_core_suite}
             COMMAND test_scenes_core_${_scenes_core_suite})
+        set_tests_properties(test_scenes_core_${_scenes_core_suite} PROPERTIES LABELS "core")
     endforeach()
 
     add_executable(test_scenes_core_deadlines
@@ -55,6 +162,7 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_scenes_core_deadlines
         COMMAND test_scenes_core_deadlines)
+    set_tests_properties(test_scenes_core_deadlines PROPERTIES LABELS "core")
 
     add_executable(test_scenes_core_reentrancy
         "${SCENES_CORE_TESTS}/test_scene_manager_reentrancy.c")
@@ -68,6 +176,7 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_scenes_core_reentrancy
         COMMAND test_scenes_core_reentrancy)
+    set_tests_properties(test_scenes_core_reentrancy PROPERTIES LABELS "core")
 
     if(GAME_DEVAPI_ENABLED)
         add_executable(test_scenes_core_devapi
@@ -84,6 +193,7 @@ if(NOT EMSCRIPTEN)
         set_target_properties(test_scenes_core_devapi PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
         add_test(NAME test_scenes_core_devapi COMMAND test_scenes_core_devapi)
+        set_tests_properties(test_scenes_core_devapi PROPERTIES LABELS "core")
     endif()
 
     add_executable(test_scenes_core_devapi_disabled
@@ -98,6 +208,7 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_scenes_core_devapi_disabled
         COMMAND test_scenes_core_devapi_disabled)
+    set_tests_properties(test_scenes_core_devapi_disabled PROPERTIES LABELS "core")
 
     add_executable(test_audio_core
         "${AUDIO_CORE_TESTS}/test_audio.c"
@@ -111,6 +222,7 @@ if(NOT EMSCRIPTEN)
     nt_set_warning_flags(test_audio_core)
     set_target_properties(test_audio_core PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_audio_core COMMAND test_audio_core)
+    set_tests_properties(test_audio_core PROPERTIES LABELS "core")
 
     add_executable(test_audio_resource
         "${AUDIO_CORE_TESTS}/test_audio_resource.c"
@@ -121,6 +233,7 @@ if(NOT EMSCRIPTEN)
     nt_set_warning_flags(test_audio_resource)
     set_target_properties(test_audio_resource PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_audio_resource COMMAND test_audio_resource)
+    set_tests_properties(test_audio_resource PROPERTIES LABELS "core")
 
     set(TEMPLATE_AUDIO_CUE_MP3 "${CMAKE_BINARY_DIR}/tests/fixtures/ui_click.mp3")
     add_executable(write_audio_test_fixture
@@ -152,6 +265,7 @@ if(NOT EMSCRIPTEN)
     nt_set_warning_flags(test_audio_backend_native)
     set_target_properties(test_audio_backend_native PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_audio_backend_native COMMAND test_audio_backend_native)
+    set_tests_properties(test_audio_backend_native PROPERTIES LABELS "core")
 
     add_executable(test_game_audio tests/test_game_audio.c src/game_audio.c)
     target_link_libraries(test_game_audio PRIVATE audio_unity nt_ui_interface nt_shared nt_log)
@@ -163,11 +277,13 @@ if(NOT EMSCRIPTEN)
     nt_set_warning_flags(test_game_audio)
     set_target_properties(test_game_audio PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_audio COMMAND test_game_audio)
+    set_tests_properties(test_game_audio PROPERTIES LABELS "core")
 
     find_program(AUDIO_NODE_EXECUTABLE node REQUIRED)
     add_test(NAME test_audio_web_library
         COMMAND "${AUDIO_NODE_EXECUTABLE}" --test "${AUDIO_CORE_TESTS}/test_audio_web_library.mjs"
         WORKING_DIRECTORY "${GAME_REPO_ROOT}")
+    set_tests_properties(test_audio_web_library PROPERTIES LABELS "core")
 
     add_executable(test_game_state_json tests/test_game_state_json.c "${GAME_STATE_SRC}/game_state_json.c")
     target_link_libraries(test_game_state_json PRIVATE cjson unity)
@@ -176,6 +292,7 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_state_json PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_state_json COMMAND test_game_state_json)
+    set_tests_properties(test_game_state_json PROPERTIES LABELS "core")
 
     set(NESTED_STATE_TEST_SCHEMA
         "${GAME_REPO_ROOT}/features/game-state/tests/items_containers.schema.json")
@@ -208,6 +325,62 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_state_nested PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_state_nested COMMAND test_game_state_nested)
+    set_tests_properties(test_game_state_nested PROPERTIES LABELS "core")
+
+    # Feature-owned suites. A feature ships its tests, but only a consumer can
+    # build them, and the template is the reference consumer -- so they run here
+    # instead of living in whichever game happened to wire them up.
+    set(SCALAR_STATE_TEST_SCHEMA "${GAME_STATE_DIR}/tests/scalar_state.schema.json")
+    set(SCALAR_STATE_TEST_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/game-state-scalar-test")
+    set(SCALAR_STATE_TEST_SOURCE "${SCALAR_STATE_TEST_GENERATED_DIR}/scalar_state.c")
+    add_custom_command(
+        OUTPUT
+            "${SCALAR_STATE_TEST_GENERATED_DIR}/scalar_state.h"
+            "${SCALAR_STATE_TEST_SOURCE}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${SCALAR_STATE_TEST_GENERATED_DIR}"
+        COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
+            --schema "${SCALAR_STATE_TEST_SCHEMA}"
+            --out-dir "${SCALAR_STATE_TEST_GENERATED_DIR}"
+            --fragment scalar
+        DEPENDS "${SCALAR_STATE_TEST_SCHEMA}" ${GAME_STATE_GENERATOR_SOURCES}
+        WORKING_DIRECTORY "${GAME_REPO_ROOT}"
+        COMMENT "Generating scalar game-state test fixture"
+        VERBATIM)
+
+    game_add_c_test(test_game_save_text
+        SOURCES "${GAME_STATE_DIR}/tests/test_game_save_text.c" "${GAME_STATE_SRC}/game_save_text.c"
+        INCLUDES "${GAME_STATE_INC}" "${GAME_STATE_SRC}")
+
+    game_add_c_test(test_game_save_writer
+        SOURCES "${GAME_STATE_DIR}/tests/test_game_save_writer.c"
+                "${GAME_STATE_SRC}/game_save_writer.c" "${GAME_STATE_SRC}/game_save_text.c"
+        LIBS cjson
+        INCLUDES "${GAME_STATE_INC}" "${GAME_STATE_SRC}")
+
+    game_add_c_test(test_generated_snapshot_over512
+        SOURCES "${GAME_STATE_DIR}/tests/test_generated_snapshot_over512.c"
+                "${GAME_STATE_SRC}/game_save_writer.c" "${GAME_STATE_SRC}/game_save_text.c"
+                "${GAME_STATE_SRC}/game_state_json.c" "${NESTED_STATE_TEST_SOURCE}"
+        LIBS cjson
+        INCLUDES "${GAME_STATE_INC}" "${GAME_STATE_SRC}" "${NESTED_STATE_TEST_GENERATED_DIR}")
+
+    game_add_c_test(test_generated_text_codec
+        SOURCES "${GAME_STATE_DIR}/tests/test_generated_text_codec.c"
+                "${GAME_STATE_SRC}/game_save_text.c" "${GAME_STATE_SRC}/game_state_json.c"
+                "${GAME_STATE_SRC}/game_save_writer.c" "${SCALAR_STATE_TEST_SOURCE}"
+        LIBS cjson
+        UNITY audio_unity
+        OPTIONS -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE
+        INCLUDES "${GAME_STATE_INC}" "${GAME_STATE_SRC}" "${SCALAR_STATE_TEST_GENERATED_DIR}")
+
+    set(SOFTWARE_CURSOR_DIR "${GAME_REPO_ROOT}/features/software-cursor")
+    game_add_c_test(test_software_cursor
+        SOURCES "${SOFTWARE_CURSOR_DIR}/tests/test_software_cursor.c"
+                "${SOFTWARE_CURSOR_DIR}/src/software_cursor.c"
+                "${SOFTWARE_CURSOR_DIR}/src/software_cursor_samples.c"
+        INCLUDES "${SOFTWARE_CURSOR_DIR}/include"
+        UNITY audio_unity
+        OPTIONS -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
 
     add_executable(test_game_storage
         tests/test_game_storage.c
@@ -225,6 +398,7 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_storage COMMAND test_game_storage
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    set_tests_properties(test_game_storage PROPERTIES LABELS "core")
 
     # T0055: the contract between the two write modes lives beside the FEATURE,
     # not in a game's test file -- it is game_storage being tested, not the game.
@@ -246,6 +420,7 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_storage_write_modes
         COMMAND test_game_storage_write_modes)
+    set_tests_properties(test_game_storage_write_modes PROPERTIES LABELS "core")
 
     add_executable(test_game_storage_web_backend
         "${GAME_STATE_DIR}/tests/test_game_storage_backend_web.c"
@@ -261,6 +436,7 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_storage_web_backend
         COMMAND test_game_storage_web_backend)
+    set_tests_properties(test_game_storage_web_backend PROPERTIES LABELS "core")
 
     add_executable(test_game_save_blocked
         "${GAME_STATE_DIR}/tests/test_game_save_blocked.c"
@@ -279,6 +455,7 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_save_blocked PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_save_blocked COMMAND test_game_save_blocked)
+    set_tests_properties(test_game_save_blocked PROPERTIES LABELS "core")
 
     add_executable(test_game_save
         tests/test_game_save.c
@@ -301,6 +478,7 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_save COMMAND test_game_save
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    set_tests_properties(test_game_save PROPERTIES LABELS "core")
 
     # (1) основной: позитив + death-тесты переполнения/фазы (NT_ASSERT ФИРИТ)
     add_executable(test_game_events tests/test_game_events.c "${GAME_EVENTS_SRC}/game_events.c"
@@ -314,6 +492,7 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_events PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_events COMMAND test_game_events)
+    set_tests_properties(test_game_events PROPERTIES LABELS "core")
 
     # (2) overflow-drop: тот же файл + GAME_EVENTS_SOFT_OVERFLOW=1 -> emit ДРОПАЕТ
     # (не assert'ит) в debug-ctest, проверяет release-семантику (тест #10). Не
@@ -329,6 +508,7 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_events_overflow PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_events_overflow COMMAND test_game_events_overflow)
+    set_tests_properties(test_game_events_overflow PROPERTIES LABELS "core")
 
     # A4: round-trip gate for the generated fragment state layer. Links the
     # generated game_state.c (data + static wrappers, no game_save_* calls) so
@@ -344,6 +524,7 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_state_roundtrip PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_state_roundtrip COMMAND test_game_state_roundtrip)
+    set_tests_properties(test_game_state_roundtrip PROPERTIES LABELS "core")
 
     # E2: typed event layer round-trip over the COMMITTED golden mini events + frozen
     # E1 transport (no build-time generation). Unconditional -- the golden is a
@@ -362,6 +543,7 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_events_typed PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_events_typed COMMAND test_game_events_typed)
+    set_tests_properties(test_game_events_typed PROPERTIES LABELS "core")
 
     # E3: descriptor-driven renderer over the COMMITTED golden mini events + frozen E1
     # transport. Native, no devapi (renderer is pure). Unconditional (golden is committed).
@@ -379,6 +561,7 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_event_render PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_event_render COMMAND test_game_event_render)
+    set_tests_properties(test_game_event_render PROPERTIES LABELS "core")
 
     # E4: analytics writer over the COMMITTED golden mini events + the built-in log type +
     # frozen E1 transport. Native, sink + clock injected (GAME_ANALYTICS_TESTING). Links
@@ -402,6 +585,7 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_analytics PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_analytics COMMAND test_game_analytics)
+    set_tests_properties(test_game_analytics PROPERTIES LABELS "core")
 
     add_executable(test_game_events_log_mirror
         tests/test_game_events_log_mirror.c
@@ -418,6 +602,7 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_events_log_mirror PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_events_log_mirror COMMAND test_game_events_log_mirror)
+    set_tests_properties(test_game_events_log_mirror PROPERTIES LABELS "core")
 
     # E2 (M3): warning-gated compile check of the richest generated branches
     # (i64/f64/hash/bool/bytes+len, union staging, offset arithmetic) live ONLY in
@@ -475,6 +660,7 @@ if(NOT EMSCRIPTEN)
     nt_set_warning_flags(test_items_api_core_only)
     set_target_properties(test_items_api_core_only PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_items_api_core_only COMMAND test_items_api_core_only)
+    set_tests_properties(test_items_api_core_only PROPERTIES LABELS "core")
 
     add_executable(test_items_api
         tests/test_items_api.c
@@ -486,9 +672,11 @@ if(NOT EMSCRIPTEN)
     nt_set_warning_flags(test_items_api)
     set_target_properties(test_items_api PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_items_api COMMAND test_items_api)
+    set_tests_properties(test_items_api PROPERTIES LABELS "core")
 
     add_test(NAME items_c_catalog_test
         COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/items_c_catalog_test.py")
+    set_tests_properties(items_c_catalog_test PROPERTIES LABELS "core")
 
     # Ownership tests link the same generated catalog the game compiles.
     function(configure_items_runtime_catalog_test target_name)
@@ -520,6 +708,7 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_items_fragment COMMAND test_items_fragment
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+    set_tests_properties(test_items_fragment PROPERTIES LABELS "core")
 
     # The final production profile may compile assertions out entirely. Keep the
     # complete ownership suite on that exact code path so runtime work never
@@ -540,11 +729,13 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_items_fragment_assert_off COMMAND test_items_fragment_assert_off
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+    set_tests_properties(test_items_fragment_assert_off PROPERTIES LABELS "core")
 
     # Keep the shipped Lua catalog and release receipt on the normal ctest path.
     add_test(NAME items_catalog_validate COMMAND "${Python3_EXECUTABLE}"
         "${ITEMS_CORE_SCRIPTS}/items_cli.py"
         --project-root "${CMAKE_CURRENT_SOURCE_DIR}" validate)
+    set_tests_properties(items_catalog_validate PROPERTIES LABELS "core")
 
     # test_progression compiles progression.c against the real generated state.
     # #includes progression_tracks.gen.h -- but does NOT link
@@ -575,6 +766,7 @@ if(NOT EMSCRIPTEN)
     target_compile_definitions(test_progression PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_progression PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_progression COMMAND test_progression WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+    set_tests_properties(test_progression PROPERTIES LABELS "core")
 
     # GOLDEN: links the demo progression_tracks.gen.c.
     # The custom-command output provides the dependency edge; this is the
@@ -592,6 +784,7 @@ if(NOT EMSCRIPTEN)
     target_compile_definitions(test_progression_curve PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_progression_curve PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_progression_curve COMMAND test_progression_curve)
+    set_tests_properties(test_progression_curve PROPERTIES LABELS "core")
 
     # L0 int64-abbreviation formatter: pure, no generated-file/state
     # dependency, so a plain two-file test target (precedent test_game_state_json).
@@ -601,6 +794,7 @@ if(NOT EMSCRIPTEN)
     target_compile_definitions(test_game_format PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_game_format PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_format COMMAND test_game_format)
+    set_tests_properties(test_game_format PROPERTIES LABELS "core")
 
     # Localization is proven at the seam, not on either side of it: loc_test.py
     # checks what the generator writes, and test_loc_e2e runs that same
@@ -609,6 +803,7 @@ if(NOT EMSCRIPTEN)
     # plural category sets is a red test instead of a wrong string on screen.
     add_test(NAME loc_generator_test
         COMMAND "${Python3_EXECUTABLE}" "${LOCALIZATION_SCRIPTS}/loc_test.py")
+    set_tests_properties(loc_generator_test PROPERTIES LABELS "core")
 
     # The atlas repacks when the corpus changes, but a repack cannot invent a glyph the
     # TTF does not have: without this a new translation ships as boxes with every other
@@ -619,6 +814,7 @@ if(NOT EMSCRIPTEN)
                 --strings "${CMAKE_CURRENT_SOURCE_DIR}/content/loc/strings.json"
                 --font "game=${GAME_FONT_SOURCE}"
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+        set_tests_properties(loc_font_charset_check PROPERTIES LABELS "core")
     endif()
 
     set(LOC_E2E_DIR "${CMAKE_BINARY_DIR}/generated/loc-e2e")
@@ -650,6 +846,7 @@ if(NOT EMSCRIPTEN)
     target_compile_definitions(test_loc_e2e PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_loc_e2e PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_loc_e2e COMMAND test_loc_e2e)
+    set_tests_properties(test_loc_e2e PROPERTIES LABELS "core")
 
     add_executable(test_platform_sdk
         tests/test_platform_sdk.c
@@ -667,6 +864,7 @@ if(NOT EMSCRIPTEN)
         _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_platform_sdk PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_platform_sdk COMMAND test_platform_sdk)
+    set_tests_properties(test_platform_sdk PROPERTIES LABELS "core")
 
     add_executable(test_focus_prompt tests/test_focus_prompt.c)
     target_link_libraries(test_focus_prompt PRIVATE unity)
@@ -676,6 +874,7 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_focus_prompt PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_focus_prompt COMMAND test_focus_prompt)
+    set_tests_properties(test_focus_prompt PROPERTIES LABELS "core")
 
     add_executable(test_game_input
         tests/test_game_input.c
@@ -688,6 +887,7 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_input PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_input COMMAND test_game_input)
+    set_tests_properties(test_game_input PROPERTIES LABELS "core")
 
     add_executable(test_game_asset_paths
         tests/test_game_asset_paths.c
@@ -699,6 +899,7 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_asset_paths PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_asset_paths COMMAND test_game_asset_paths)
+    set_tests_properties(test_game_asset_paths PROPERTIES LABELS "core")
 
     add_executable(test_platform_lifecycle
         tests/test_platform_lifecycle.c
@@ -717,6 +918,7 @@ if(NOT EMSCRIPTEN)
         _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_platform_lifecycle PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_platform_lifecycle COMMAND test_platform_lifecycle)
+    set_tests_properties(test_platform_lifecycle PROPERTIES LABELS "core")
 
     add_executable(test_platform_sdk_events
         tests/test_platform_sdk_events.c
@@ -736,6 +938,7 @@ if(NOT EMSCRIPTEN)
         _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_platform_sdk_events PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_platform_sdk_events COMMAND test_platform_sdk_events)
+    set_tests_properties(test_platform_sdk_events PROPERTIES LABELS "core")
 
     find_program(Node_EXECUTABLE node REQUIRED)
     if(Node_EXECUTABLE)
@@ -743,11 +946,13 @@ if(NOT EMSCRIPTEN)
             COMMAND "${Node_EXECUTABLE}" --test
                 features/scenes-core/tests/test_consumer_scene_contracts.mjs
             WORKING_DIRECTORY "${GAME_REPO_ROOT}")
+        set_tests_properties(scenes_core_consumer_contract PROPERTIES LABELS "core")
         add_test(NAME scenes_core_tooling_contract
             COMMAND "${Node_EXECUTABLE}" --test
                 features/scenes-core/tests/test_scaffold_scene.mjs
                 features/scenes-core/tests/test_scene_devapi_schema.mjs
             WORKING_DIRECTORY "${GAME_REPO_ROOT}")
+        set_tests_properties(scenes_core_tooling_contract PROPERTIES LABELS "core")
         set_tests_properties(scenes_core_tooling_contract PROPERTIES
             ENVIRONMENT "SCENE_TEST_CC=${CMAKE_C_COMPILER}")
         if(GAME_DEVAPI_ENABLED)
@@ -755,6 +960,7 @@ if(NOT EMSCRIPTEN)
                 COMMAND "${Node_EXECUTABLE}" --test
                     features/scenes-core/tests/test_scene_devapi_runtime_schema.mjs
                 WORKING_DIRECTORY "${GAME_REPO_ROOT}")
+            set_tests_properties(scenes_core_devapi_runtime_schema PROPERTIES LABELS "core")
             set_tests_properties(scenes_core_devapi_runtime_schema PROPERTIES
                 ENVIRONMENT
                     "SCENE_DEVAPI_SCHEMA_FIXTURE=$<TARGET_FILE:test_scenes_core_devapi>")
@@ -762,6 +968,7 @@ if(NOT EMSCRIPTEN)
         add_test(NAME platform_sdk_node_test
             COMMAND "${Node_EXECUTABLE}" --test features/platform-sdk/tests/platform_sdk.test.mjs
             WORKING_DIRECTORY "${GAME_REPO_ROOT}")
+        set_tests_properties(platform_sdk_node_test PROPERTIES LABELS "core")
     endif()
 
     # T0327 tail: 4-fragment composition test -- lifts settings/items/progression/game
@@ -812,6 +1019,7 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_template_composition COMMAND test_template_composition
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    set_tests_properties(test_template_composition PROPERTIES LABELS "core")
 
     # Engine static libraries are sanitizer-instrumented in Debug. Every test
     # executable that can link them must carry the matching runtime at link time.
@@ -835,7 +1043,9 @@ if(NOT EMSCRIPTEN)
         list(APPEND GAME_NATIVE_TEST_TARGETS test_scenes_core_devapi)
     endif()
     foreach(_test_target IN LISTS GAME_NATIVE_TEST_TARGETS)
-        target_sources(${_test_target} PRIVATE "${GAME_STATE_SRC}/game_save_writer.c")
+        target_sources(${_test_target} PRIVATE
+            "${GAME_STATE_SRC}/game_save_writer.c"
+            "${GAME_STATE_SRC}/game_save_text.c")
         nt_set_sanitizer_flags(${_test_target})
     endforeach()
 endif()
@@ -854,6 +1064,7 @@ if(EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_scenes_core_web_smoke
         COMMAND test_scenes_core_web_smoke)
+    set_tests_properties(test_scenes_core_web_smoke PROPERTIES LABELS "core")
 
     find_program(SCENES_Node_EXECUTABLE node REQUIRED)
     if(SCENES_Node_EXECUTABLE)
@@ -861,11 +1072,13 @@ if(EMSCRIPTEN)
             COMMAND "${SCENES_Node_EXECUTABLE}" --test
                 features/scenes-core/tests/test_consumer_scene_contracts.mjs
             WORKING_DIRECTORY "${GAME_REPO_ROOT}")
+        set_tests_properties(scenes_core_consumer_contract PROPERTIES LABELS "core")
         add_test(NAME scenes_core_tooling_contract
             COMMAND "${SCENES_Node_EXECUTABLE}" --test
                 features/scenes-core/tests/test_scaffold_scene.mjs
                 features/scenes-core/tests/test_scene_devapi_schema.mjs
             WORKING_DIRECTORY "${GAME_REPO_ROOT}")
+        set_tests_properties(scenes_core_tooling_contract PROPERTIES LABELS "core")
         set_tests_properties(scenes_core_tooling_contract PROPERTIES
             ENVIRONMENT "SCENE_TEST_CC=${CMAKE_C_COMPILER}")
     endif()

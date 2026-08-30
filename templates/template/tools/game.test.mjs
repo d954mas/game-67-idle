@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { doctorGame, executeGameCommand, nativeTestPlan, parseGameArgs } from "./game.mjs";
+import { doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, selectTests } from "./game.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { createRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 
@@ -47,7 +47,15 @@ function git(cwd, args) {
 test("game CLI exposes game-owned lifecycle commands with fail-closed arguments", () => {
   assert.deepEqual(parseGameArgs(["verify", "--target", "poki", "--no-build", "--template-proof", "--skip-tests"]), {
     command: "verify", target: "poki", build: false, templateProof: true, skipTests: true, outDir: "",
+    only: [], tier: "", all: false, updateGoldens: false,
   });
+  assert.deepEqual(parseGameArgs(["test", "--only", "test_game_save", "--update-goldens"]).only, ["test_game_save"]);
+  assert.equal(parseGameArgs(["test", "--update-goldens"]).updateGoldens, true);
+  assert.throws(() => parseGameArgs(["verify", "--update-goldens"]), /only for test/i);
+  assert.equal(parseGameArgs(["test", "--tier", "taste"]).tier, "taste");
+  assert.throws(() => parseGameArgs(["test", "--tier", "nope"]), /unknown test tier/);
+  assert.throws(() => parseGameArgs(["test", "--all", "--tier", "core"]), /cannot be combined/);
+  assert.throws(() => parseGameArgs(["test", "--only", "a b; rm -rf /"]), /CTest names/i);
   for (const command of ["doctor", "build", "run", "test", "playable", "package", "verify"]) {
     assert.equal(parseGameArgs([command]).command, command);
   }
@@ -93,6 +101,41 @@ test("native game test plan configures, builds, and runs CTest without a clean r
   assert.deepEqual(configured.map((command) => command[0]), ["cmake", "ctest"]);
   assert.deepEqual(configured[0].slice(0, 2), ["cmake", "--build"]);
   assert.ok(nativeTestPlan("/repo/games/example", "linux")[0].includes("-DCMAKE_EXE_LINKER_FLAGS_DEBUG=-fsanitize=address,undefined"));
+  const focused = nativeTestPlan(gameDir, "win32", true, {
+    mode: "only", names: ["test_game_save", "test_game_input"], targets: ["game", "test_game_save", "test_game_input"],
+  });
+  assert.deepEqual(focused[0], ["cmake", "--build", join(gameDir, "build", "native-debug"),
+    "--target", "game", "test_game_save", "test_game_input"]);
+  assert.deepEqual(focused[1].slice(-2), ["-R", "^(test_game_save|test_game_input)$"]);
+  const tiered = nativeTestPlan(gameDir, "win32", true, { mode: "tier", tier: "taste", targets: ["game", "test_planet_layout"] });
+  assert.deepEqual(tiered[0].slice(-3), ["--target", "game", "test_planet_layout"]);
+  assert.deepEqual(tiered[1].slice(-2), ["-L", "^taste$"]);
+  // Without a tier every test runs, so nothing narrows the build either.
+  assert.deepEqual(nativeTestPlan(gameDir, "win32", true, { mode: "all" })[0].slice(-1),
+    [join(gameDir, "build", "native-debug")]);
+});
+
+test("a tier selects its tests and only the targets they need", () => {
+  const catalogue = [
+    { name: "test_logic", tier: "core", target: "test_logic" },
+    { name: "test_slow_sim", tier: "slow", target: "test_slow_sim" },
+    { name: "layout_contract", tier: "taste", target: "" },
+  ];
+  assert.deepEqual(selectTests(catalogue, { mode: "tier", tier: "core" }),
+    { names: ["test_logic"], targets: ["game", "test_logic"] });
+  assert.deepEqual(selectTests(catalogue, { mode: "tier", tier: "taste" }),
+    { names: ["layout_contract"], targets: ["game"] });
+  assert.equal(selectTests(catalogue, { mode: "all" }).names.length, 3);
+  assert.throws(() => selectTests(catalogue, { mode: "only", names: ["nope"] }), /unknown test name/);
+});
+
+test("golden banks are addressed absolutely and recorded only on request", () => {
+  const gameDir = "C:\\repo\\games\\example";
+  const compare = goldenEnvironment(gameDir, false, { GAME_UPDATE_GOLDENS: "1", PATH: "keep" });
+  assert.equal(compare.GAME_GOLDENS_DIR, join(gameDir, "tests", "goldens"));
+  assert.equal(compare.GAME_UPDATE_GOLDENS, undefined);
+  assert.equal(compare.PATH, "keep");
+  assert.equal(goldenEnvironment(gameDir, true, {}).GAME_UPDATE_GOLDENS, "1");
 });
 
 test("verify composes doctor tests and one package without discovering workspace games", async () => {

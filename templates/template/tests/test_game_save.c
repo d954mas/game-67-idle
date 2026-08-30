@@ -20,6 +20,7 @@
 
 /* clang-format off */
 #include "game_save.h"
+#include "game_save_text.h"
 #include "game_state_json.h"
 #include "game_storage.h"
 #include "cJSON.h"
@@ -83,6 +84,13 @@ static bool fake_write_snapshot(game_save_writer_t *writer) {
            game_save_writer_string(writer, s_frag_name);
 }
 
+// The hot tick writes text, not cJSON: a fragment that only offers
+// write_snapshot pushes every save back onto the allocating path.
+static bool fake_write_text(game_save_text_writer_t *writer) {
+    return game_save_text_write_i64(writer, "coins", (int64_t)s_frag_coins) &&
+           game_save_text_write_string(writer, "name", s_frag_name);
+}
+
 static const GameSaveFragment s_fake_fragment = {
     .id = "game",
     .version = 1,
@@ -96,6 +104,7 @@ static const GameSaveFragment s_fake_fragment = {
     .set_path_json = NULL,
     .schema_json = NULL,
     .write_snapshot = fake_write_snapshot,
+    .write_text = fake_write_text,
 };
 
 /* ---- second fragment {int mark;} to prove per-fragment isolation ---- */
@@ -122,6 +131,10 @@ static bool extra_write_snapshot(game_save_writer_t *writer) {
     return game_save_writer_key(writer, "mark") &&
            game_save_writer_number(writer, (double)s_extra_mark);
 }
+static bool extra_write_text(game_save_text_writer_t *writer) {
+    return game_save_text_write_i64(writer, "mark", (int64_t)s_extra_mark);
+}
+
 static const GameSaveFragment s_extra_fragment = {
     .id = "extra",
     .version = 1,
@@ -135,6 +148,7 @@ static const GameSaveFragment s_extra_fragment = {
     .set_path_json = NULL,
     .schema_json = NULL,
     .write_snapshot = extra_write_snapshot,
+    .write_text = extra_write_text,
 };
 
 /* ---- document v1 -> v2 migration test seam ---- */
@@ -703,7 +717,9 @@ void test_a_newer_save_is_set_aside_and_a_normal_save_takes_over(void) {
 
     char *exp = game_save_export_string(err, (int)sizeof err);
     TEST_ASSERT_NOT_NULL(exp);
-    TEST_ASSERT_EQUAL_INT('{', exp[0]);
+    // Every fragment here carries a text codec, so the export is the readable
+    // save format rather than a JSON document.
+    TEST_ASSERT_EQUAL_INT(0, strncmp(exp, "NTGS 1", 6));
     free(exp);
     (void)sweep_corrupt(true);
 }
