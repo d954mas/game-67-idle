@@ -137,13 +137,26 @@ the lead approves it.
 
 ## Transcript Cost
 
-Every tool result is re-read by the model on every later request, so output
-volume, not command count, is what makes iteration slow.
+Every tool result is re-read on every later request, so output volume is a
+recurring charge, not a one-off. A host caps what the model sees, not what a
+command produces: in one measured week 59M Codex tokens were generated and cut
+before anyone read them.
 
-Read the range you need instead of the whole file; search with a glob and a
-limit instead of walking a tree; patch through the harness edit tool instead of
-shell-escaped strings; keep binaries out of the transcript. When a result comes
-back truncated, narrow the query rather than re-running it wider.
+The bytes come from the shell, not from studio commands -- of 196 MB in that
+week, taskboard, `game.mjs`, devapi and the rest of the studio produced 21 MB
+together. Three habits carry the remainder:
+
+- Do not walk a tree by naming it. `rg --files tmp` lists 70k files even though
+  `tmp/` is ignored, because an explicit path overrides ignore rules. Search
+  with a glob and a limit, or list with `git ls-files <dir> | head -50`.
+- Read the range, not the file. Ten lines answer most questions that a
+  whole-file dump is charged for.
+- Build through `tools/game.mjs`, which keeps compiler chatter out of the
+  transcript. Raw `cmake --build` put 30 MB into it in that same week.
+
+Keep binaries out of the transcript, patch through the harness edit tool rather
+than shell-escaped strings, and when a result comes back truncated, narrow the
+query instead of re-running it wider.
 
 `profiling/iteration_report.mjs` reports what this costs per week.
 
