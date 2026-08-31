@@ -7,13 +7,18 @@
 *.png  binary
 *.jpg  binary
 *.jpeg binary
+*.webp binary
 *.gif  binary
 *.ico  binary
+*.hdr  binary
+*.exe  binary
 *.ttf  binary
 *.otf  binary
 *.woff binary
 *.woff2 binary
 *.ntpack binary
+*.basis binary
+*.ktx2 binary
 *.glb  binary
 *.gltf binary
 *.wasm binary
@@ -21,6 +26,12 @@
 *.ogg  binary
 *.wav  binary
 *.mp3  binary
+
+# cmd.exe reads a batch file by bytes: with LF endings a label or a multi-line
+# block can be misparsed, so these keep CRLF everywhere. The template's copy is
+# what every new game starts from.
+*.bat text eol=crlf
+*.cmd text eol=crlf
 
 # Preserve pinned third-party bytes exactly; upstream miniaudio.h contains a
 # few intentional trailing spaces covered by its recorded SHA-256.
