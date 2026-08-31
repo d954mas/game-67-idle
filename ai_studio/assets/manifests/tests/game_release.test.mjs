@@ -281,6 +281,30 @@ test("game release asset contract rejects path escapes and audit rejects duplica
   );
 });
 
+test("game release asset audit keeps provenance for assets a game does not ship", (t) => {
+  const dormant = fixture(t);
+  write(join(dormant.root, "assets", "dormant.png"), Buffer.from("dormant"));
+  const dormantRecord = {
+    ...dormant.record, asset_id: "fixture__dormant__cc0-1-0", source_resource: "dormant.png",
+    sha256: createHash("sha256").update("dormant").digest("hex"), bytes: 7, shipping: false,
+  };
+  write(
+    join(dormant.root, "assets", "packs", "fixture", "assets.jsonl"),
+    [JSON.stringify(dormant.record), JSON.stringify(dormantRecord), ""].join("\n"),
+  );
+  const tracked = [...dormant.tracked, "assets/dormant.png"];
+  assert.equal(auditGameReleaseAssets(dormant.root, { trackedPaths: tracked }).ok, true);
+
+  // The flag cannot be used both ways: a shipped asset may not claim to be dormant.
+  assert.match(
+    auditGameReleaseAssets(dormant.root, {
+      trackedPaths: tracked,
+      packedPaths: [dormant.path, "assets/dormant.png"],
+    }).issues.join(" "),
+    /shipping:false but the asset is a release input/,
+  );
+});
+
 test("game release asset audit rejects non-regular inputs and malformed source paths", (t) => {
   const nonRegular = fixture(t);
   rmSync(join(nonRegular.root, ...nonRegular.path.split("/")));

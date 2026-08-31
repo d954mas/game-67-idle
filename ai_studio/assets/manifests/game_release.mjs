@@ -268,7 +268,18 @@ export function auditGameReleaseAssets(gameDir, options = {}) {
       }
     }
   }
-  for (const path of records.keys()) {
+  for (const [path, record] of records) {
+    // A game keeps assets it does not ship: superseded revisions, review pulls,
+    // art waiting on the feature that will use it. Those declare shipping:false
+    // and keep their provenance; anything else with a record must be shipped,
+    // and a record cannot claim both.
+    const dormant = record.shipping === false || String(record.shipping || "").trim() === "false";
+    if (dormant) {
+      if (releaseSet.has(path)) {
+        issues.push(`${path}: record says shipping:false but the asset is a release input`);
+      }
+      continue;
+    }
     if (!releaseSet.has(path)) issues.push(`${path}: stale asset metadata is not a release input`);
   }
   return { ok: issues.length === 0, packed: packed.length, issues };
