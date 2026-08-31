@@ -52,6 +52,18 @@ REQUIRED_METHODS = {
 }
 
 
+# What every bot launched from an agent shell has to pass. Such a window never
+# becomes the foreground one, so with vsync on the game presents at ~166 ms a
+# frame and a run that should take seconds takes minutes.
+AGENT_SHELL_ARGS = ["--no-vsync"]
+
+# Add this when the bot will PHOTOGRAPH the game: it puts the loop in lockstep
+# before its first frame, so the run's clock -- and with it every animation
+# phase a screenshot lands on -- is a property of the build rather than of how
+# long a pack took to load. A bot that only reads state does not need it.
+CAPTURE_ARGS = [*AGENT_SHELL_ARGS, "--time-manual"]
+
+
 def exe_name() -> str:
     return "game.exe" if os.name == "nt" else "game"
 
@@ -210,17 +222,32 @@ def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]
     state_before = validate_game_state(game.result("game.state.get", {"path": ""}))
     events_tail = validate_events_tail(game.result("game.events.tail", {}))
     iteration_proof = validate_iteration_proof(game.result("game.iteration.proof", {}))
+    # The gate is checked by its EFFECT, not by the flag it sets. A game whose
+    # frame() draws without asking nt_app_render_enabled() accepts the command,
+    # reports enabled:false, and keeps drawing -- and then every bot that fast-
+    # forwards stays slow for no visible reason. Draw calls are the evidence.
     render_before = game.result("render.info")
+    if not render_before.get("draw_calls"):
+        raise DevApiError(
+            f"nothing was drawn before the gate was touched, so the check below "
+            f"cannot mean anything: {render_before}")
     game.result("render.set_enabled", {"enabled": False})
     game.wait_frames(2)
     render_disabled = game.result("render.info")
     if render_disabled.get("enabled") is not False:
         raise DevApiError(f"render.set_enabled(false) did not take effect: {render_disabled}")
+    if render_disabled.get("draw_calls"):
+        raise DevApiError(
+            f"the render gate is accepted but ignored: {render_disabled['draw_calls']} draw "
+            f"calls with rendering off. frame() must skip its draw pass when "
+            f"nt_app_render_enabled() is false -- see devapi/README.md")
     game.result("render.set_enabled", {"enabled": True})
     game.wait_frames(2)
     render_enabled = game.result("render.info")
     if render_enabled.get("enabled") is not True:
         raise DevApiError(f"render.set_enabled(true) did not take effect: {render_enabled}")
+    if not render_enabled.get("draw_calls"):
+        raise DevApiError(f"drawing did not resume after the gate was restored: {render_enabled}")
 
     screenshot = game.capture_screenshot(str(out_dir / "first_screen.png"), wait_frames=2, audit=audit)
     summary = {
@@ -275,6 +302,7 @@ def main(argv: list[str] | None = None) -> int:
             fresh_state=True,
             autosave_enabled=False,
             window_size=args.window_size,
+            extra_args=list(AGENT_SHELL_ARGS),
         ) as game:
             summary = run_smoke(game, args.out, audit=not args.no_audit)
     except DevApiError as exc:

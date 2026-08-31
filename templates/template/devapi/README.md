@@ -35,6 +35,93 @@ Game scripts import that client, then add semantic game actions here. Do not
 move reusable Python helpers into the skill bundle, and do not duplicate engine
 commands in this folder.
 
+## Driving the game from a bot
+
+A bot is not a player. It advances a run far faster than anyone plays, it does
+not look at most of what it renders, and when it does look it has to see the
+same thing twice. Three switches make that possible; a game that drops them
+gets bots that are slow, or worse, bots that appear to work and prove nothing.
+
+### `--no-vsync` — always, from an agent shell
+
+A window launched from an agent shell never becomes the foreground one, and with
+vsync on it presents at roughly **166 ms a frame**. A run that should take
+seconds takes minutes. `smoke_bot.AGENT_SHELL_ARGS` carries this; pass it from
+every bot you add.
+
+### `render.set_enabled` — while advancing, not while looking
+
+Drawing is the larger half of a fast-forward tick. Measured in one game: **2.26
+ms/tick down to 0.45** with the gate off, because the world draw, the UI pass
+and the present all disappear.
+
+```python
+with game.rendering_off():
+    while stats["cleared"] < target:
+        game.fast_forward(300, chunk=300)
+        stats = game.result("game.planet.stats")
+game.fast_forward(4, chunk=4)   # let the drawn frames catch up before shooting
+```
+
+The gate is `nt_app_render_enabled()`, and `frame()` in `src/main.c` honours it
+around the draw pass. **Keep that.** A game that draws unconditionally accepts
+the devapi command and ignores it, which is the worst kind of broken: the bot
+reports success and the run stays slow.
+
+Two consequences to know:
+
+- The UI is immediate mode, so **no widget exists while rendering is off**.
+  Anything that clicks or photographs must turn it back on and let a frame pass.
+- Smoothed presentation state does not advance either, so give the game a few
+  drawn frames before a capture.
+
+### `--time-manual` — whenever the bot photographs
+
+A screenshot is a photograph of an animation phase, and the phase follows the
+run's clock. Taking manual time over the devapi is **always too late**: real
+frames run while the transport comes up, and they advance the world by a dt
+nobody chose. `--time-manual` puts the loop in lockstep before its first frame,
+so every tick is one the bot asked for. Use `smoke_bot.CAPTURE_ARGS`.
+
+That alone is not enough. Anything the bot waits on — a pack landing, a scene
+arriving — takes a variable number of steps, and those steps are on the clock.
+Count them and top up to a fixed total:
+
+```python
+spent = 0
+def advance():
+    global spent
+    spent += 2
+    game.fast_forward(2, chunk=2)
+enter_scene(game, ..., advance=advance)
+game.fast_forward(ENTRY_STEPS - spent)     # fixed total, whatever the I/O did
+```
+
+### What "the same thing twice" is worth
+
+With the clock pinned, one game's capture reproduces **byte for byte**. Without
+it, two runs of the same binary differed across **95%** of the frame — a number
+worth knowing, because a capture that noisy cannot prove a render change is
+safe, and it cannot serve an art review either.
+
+The noise floor once the clock agrees is about **0.007%** of pixels at a channel
+delta of 3: driver jitter. Compare with a tolerance, or by hash if the platform
+is stable.
+
+### Proving a render change did not move a pixel
+
+Take the shot, change the code, take it again, compare. To build the old code,
+do not create a worktree: a game nested under `games/` resolves the engine
+above itself and manual Studio copies are not allowed. Swap the files in place
+instead.
+
+```
+git checkout <ref> -- src/render CMakeLists.txt
+cmake --build build/devapi-debug --target game
+<capture>
+git checkout HEAD -- src/render CMakeLists.txt
+```
+
 ## Smoke Bot
 
 Run after building a native Debug template:

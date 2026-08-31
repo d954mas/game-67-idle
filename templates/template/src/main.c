@@ -122,6 +122,12 @@ static bool s_game_runtime_ready;
 static bool s_game_runtime_failed;
 
 #if NT_DEVAPI_ENABLED
+#if NT_DEVAPI_ENABLED
+/* Bot-only switches. A bot drives this game far faster than a player does, and
+   these three are what make that possible; devapi/README.md explains each. */
+static bool s_no_vsync;
+static bool s_time_manual;
+#endif
 static bool s_devapi_requested;
 static bool s_devapi_running;
 static uint16_t s_devapi_port = NT_DEVAPI_DEFAULT_PORT;
@@ -483,6 +489,14 @@ static void frame(void) {
         ui_runtime_restore_gpu();
     }
 
+    // The engine's draw-pass gate (devapi render.set_enabled). A bot advancing a
+    // run to a world state pays for frames nobody looks at, and the drawing is
+    // the larger half of such a tick. The frame still begins, ends and presents
+    // with the gate off, so the GL context and the devapi loop are untouched.
+    // The UI is immediate mode: while the gate is off no widget exists to be
+    // hit, so anything that clicks or photographs must turn rendering back on
+    // and let a frame pass.
+    if (nt_app_render_enabled()) {
     // render systems read the world
     nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.50F, 0.75F, 0.96F, 1.0F}, .clear_depth = 1.0F});
     if (game_scenes_should_render_world()) {
@@ -495,6 +509,7 @@ static void frame(void) {
         game_features_draw_ui(&s_world, &s_input);
     }
     nt_gfx_end_pass();
+    }
 
     // --capture: after a few frames (resources loaded + rendered), grab + quit.
     if (s_game_runtime_ready) {
@@ -531,6 +546,20 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--disable-autosave") == 0) {
             s_disable_autosave = true; /* keep loading, but never autosave */
 #if NT_DEVAPI_ENABLED
+        } else if (strcmp(argv[i], "--no-vsync") == 0) {
+            /* A window launched from an agent shell never becomes the
+               foreground one, so with vsync on it presents at ~166 ms a frame
+               and every bot crawls. Also: vsync pins each frame sample to the
+               refresh interval, hiding the renderer cost a perf run compares. */
+            s_no_vsync = true;
+        } else if (strcmp(argv[i], "--time-manual") == 0) {
+            /* Lockstep from frame zero. A bot that photographs the game needs
+               the run's clock to be a property of the build, not of how long a
+               pack took to load: taking manual time over the devapi is always
+               too late, because real frames have already advanced the world by
+               a dt nobody chose, and a screenshot is a photograph of the
+               animation phase that clock landed on. */
+            s_time_manual = true;
         } else if (strcmp(argv[i], "--devapi") == 0 && i + 1 < argc) {
             s_devapi_requested = true;
             if (!parse_devapi_port(argv[++i], &s_devapi_port)) {
@@ -568,6 +597,11 @@ int main(int argc, char **argv) {
     g_nt_window.width = (uint32_t)s_window_width;
     g_nt_window.height = (uint32_t)s_window_height;
     nt_window_init();
+#if NT_DEVAPI_ENABLED
+    if (s_no_vsync) {
+        nt_window_set_vsync(NT_VSYNC_OFF);
+    }
+#endif
     nt_input_init();
 
     nt_gfx_desc_t gfx_desc = nt_gfx_desc_defaults();
@@ -696,6 +730,11 @@ int main(int argc, char **argv) {
     ui_runtime_init(s_text_material, s_font, s_font_resource);
 
     g_nt_app.target_dt = 1.0F / 60.0F;
+#if NT_DEVAPI_ENABLED
+    if (s_time_manual) {
+        nt_app_set_mode(NT_APP_MODE_MANUAL);
+    }
+#endif
     nt_app_run(frame);
 
 #ifndef NT_PLATFORM_WEB
