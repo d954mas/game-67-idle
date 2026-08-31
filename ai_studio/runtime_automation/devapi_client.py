@@ -240,6 +240,25 @@ class DevApiClient:
                 raise DevApiError(f"batch request failed: {response.get('error', response)}")
         return [response.get("result") for response in responses]
 
+    @contextmanager
+    def rendering_off(self):
+        """Advance the game without drawing frames nobody will look at.
+
+        Drawing is the larger half of a fast-forward tick -- in Planet Eater it
+        takes 2.26 ms/tick down to 0.45 -- and a bot driving a run to a world
+        state has no use for the pixels on the way. The game must honour the
+        gate: the engine exposes nt_app_render_enabled(), and a game that draws
+        unconditionally in its own frame() will simply ignore this.
+
+        The UI is immediate mode, so no widget exists while the gate is off:
+        leave the block before clicking anything or taking a capture.
+        """
+        self.result("render.set_enabled", {"enabled": False})
+        try:
+            yield self
+        finally:
+            self.result("render.set_enabled", {"enabled": True})
+
     def fast_forward(self, frames: int, chunk: int = 2000) -> None:
         """Advance MANUAL-mode sim time in bounded time.step chunks.
 
