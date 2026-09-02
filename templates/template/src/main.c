@@ -64,6 +64,7 @@
 #include "game_analytics.h" /* E4: local analytics NDJSON writer */
 #endif
 #include "render/capture.h"
+#include "render/shader_programs.h"
 #include "render/render_mesh.h"
 #include "ui/hud.h"
 #include "ui/focus_prompt_ui.h"
@@ -464,6 +465,7 @@ static void frame(void) {
 #endif
     nt_resource_step();
     nt_material_step();
+    shader_programs_update();
     game_runtime_try_start();
     if (s_game_runtime_ready) {
         game_scenes_step(++s_scene_frame_index, g_nt_app.dt);
@@ -690,9 +692,7 @@ int main(int argc, char **argv) {
     s_text_fs = nt_resource_request(rid("assets/shaders/slug_text.frag"), NT_ASSET_SHADER_CODE);
     s_font_resource = nt_resource_request(rid("game/font"), NT_ASSET_FONT);
 
-    s_text_material = nt_material_create(&(nt_material_create_desc_t){
-        .vs = s_text_vs,
-        .fs = s_text_fs,
+    s_text_material = shader_program_material(s_text_vs, s_text_fs, &(nt_material_create_desc_t){
         .blend = nt_blend_alpha(),
         .depth_test = false,
         .depth_write = false,
@@ -755,6 +755,7 @@ int main(int argc, char **argv) {
     nt_font_destroy(s_font);
     nt_font_shutdown();
     nt_material_destroy(s_text_material);
+    shader_programs_shutdown();
     nt_material_shutdown();
     nt_resource_shutdown();
     nt_fs_shutdown();

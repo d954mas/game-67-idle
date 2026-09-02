@@ -1,4 +1,5 @@
 #include "render/render_mesh.h"
+#include "render/shader_programs.h"
 
 #include "app/nt_app.h"
 #include "drawable_comp/nt_drawable_comp.h"
@@ -30,11 +31,9 @@ void render_mesh_init(nt_resource_t mesh_vs, nt_resource_t mesh_fs, nt_resource_
     nt_mesh_comp_init(&(nt_mesh_comp_desc_t){.capacity = 128});
     nt_material_comp_init(&(nt_material_comp_desc_t){.capacity = 128});
     nt_drawable_comp_init(&(nt_drawable_comp_desc_t){.capacity = 128});
-    nt_mesh_renderer_init(&(nt_mesh_renderer_desc_t){.max_instances = 256, .max_pipelines = 16});
+    nt_mesh_renderer_init(&(nt_mesh_renderer_desc_t){.max_instances = 256, .max_pipelines = 16, .max_mesh_layouts = 4});
 
-    s_material = nt_material_create(&(nt_material_create_desc_t){
-        .vs = mesh_vs,
-        .fs = mesh_fs,
+    s_material = shader_program_material(mesh_vs, mesh_fs, &(nt_material_create_desc_t){
         .attr_map = {{.stream_name = "position", .location = 0}},
         .attr_map_count = 1,
         .depth_test = true,
@@ -46,9 +45,7 @@ void render_mesh_init(nt_resource_t mesh_vs, nt_resource_t mesh_fs, nt_resource_
 
     // Textured material: position + uv0 streams, samples u_texture; per-instance
     // colour still multiplies (white = texture verbatim).
-    s_material_tex = nt_material_create(&(nt_material_create_desc_t){
-        .vs = tex_vs,
-        .fs = tex_fs,
+    s_material_tex = shader_program_material(tex_vs, tex_fs, &(nt_material_create_desc_t){
         .attr_map = {{.stream_name = "position", .location = 0}, {.stream_name = "uv0", .location = 1}},
         .attr_map_count = 2,
         .textures = {{.name = "u_texture", .resource = texture}},
@@ -97,14 +94,11 @@ void render_mesh_restore_gpu(void) {
 }
 
 bool render_mesh_ready(const World *w) {
-    const nt_material_info_t *info = nt_material_get_info(s_material);
-    return w != NULL && w->player_spawned && info != NULL && info->ready && nt_resource_is_ready(s_cube_mesh);
+    return w != NULL && w->player_spawned && material_program_ready(s_material) && nt_resource_is_ready(s_cube_mesh);
 }
 
 void render_mesh_draw(World *w, nt_buffer_t frame_ubo) {
-    const nt_material_info_t *info = nt_material_get_info(s_material);
-    const nt_material_info_t *info_tex = nt_material_get_info(s_material_tex);
-    if (!info || !info->ready || !w->player_spawned || !nt_resource_is_ready(s_cube_mesh)) {
+    if (!material_program_ready(s_material) || !w->player_spawned || !nt_resource_is_ready(s_cube_mesh)) {
         return;
     }
 
@@ -154,15 +148,15 @@ void render_mesh_draw(World *w, nt_buffer_t frame_ubo) {
     *nt_mesh_comp_handle(w->player_entity) = (nt_mesh_t){.id = mesh_id};
     items[count].sort_key = nt_sort_key_opaque(s_material.id, mesh_id);
     items[count].entity = w->player_entity.id;
-    items[count].batch_key = nt_batch_key(s_material.id, mesh_id);
+    items[count].batch_key = nt_mesh_renderer_batch_key(s_material, (nt_mesh_t){.id = mesh_id});
     count += 1;
 
     // textured prop (once its material + mesh are ready)
-    if (w->prop_spawned && info_tex && info_tex->ready) {
+    if (w->prop_spawned && material_program_ready(s_material_tex)) {
         *nt_mesh_comp_handle(w->prop_entity) = (nt_mesh_t){.id = mesh_id};
         items[count].sort_key = nt_sort_key_opaque(s_material_tex.id, mesh_id);
         items[count].entity = w->prop_entity.id;
-        items[count].batch_key = nt_batch_key(s_material_tex.id, mesh_id);
+        items[count].batch_key = nt_mesh_renderer_batch_key(s_material_tex, (nt_mesh_t){.id = mesh_id});
         count += 1;
     }
 

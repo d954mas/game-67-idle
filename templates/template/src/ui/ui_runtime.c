@@ -7,6 +7,7 @@
 #include "hash/nt_hash.h"
 #include "input/nt_input.h"
 #include "material/nt_material.h"
+#include "render/shader_programs.h"
 #include "math/nt_math.h"
 #include "memory/nt_mem_scratch.h"
 #include "nt_pack_format.h"
@@ -78,9 +79,7 @@ void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t 
     s_atlas = nt_resource_request(ASSET_ATLAS_UI, NT_ASSET_ATLAS);
     s_atlas_tex = nt_resource_request(ASSET_TEXTURE_UI_TEX0, NT_ASSET_TEXTURE);
 
-    s_sprite_material = nt_material_create(&(nt_material_create_desc_t){
-        .vs = s_sprite_vs,
-        .fs = s_sprite_fs,
+    s_sprite_material = shader_program_material(s_sprite_vs, s_sprite_fs, &(nt_material_create_desc_t){
         .textures = {{.name = "u_texture", .resource = s_atlas_tex}},
         .texture_count = 1,
         .blend = nt_blend_alpha(),
@@ -112,19 +111,12 @@ static void resolve_runtime_bindings(void) {
 
 bool ui_runtime_ready(void) {
     resolve_runtime_bindings();
-    const nt_material_info_t *si = nt_material_get_info(s_sprite_material);
-    const nt_material_info_t *ti = nt_material_get_info(s_text_material);
-    return s_atlas_bound && s_font_bound && si != NULL && si->ready && ti != NULL && ti->ready;
+    return s_atlas_bound && s_font_bound && material_program_ready(s_sprite_material) &&
+           material_program_ready(s_text_material);
 }
 
 bool ui_runtime_begin(float dt, const game_input_frame_t *input) {
     if (!ui_runtime_ready()) {
-        return false;
-    }
-
-    const nt_material_info_t *si = nt_material_get_info(s_sprite_material);
-    const nt_material_info_t *ti = nt_material_get_info(s_text_material);
-    if (!s_atlas_bound || !s_font_bound || !si || !si->ready || !ti || !ti->ready) {
         return false;
     }
 

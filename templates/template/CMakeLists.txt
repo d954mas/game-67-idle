@@ -68,6 +68,7 @@ add_executable(${GAME_TARGET}
     src/ui/ui_runtime.c
     src/ui/theme.c
     src/render/render_mesh.c
+    src/render/shader_programs.c
     src/render/capture.c
     src/systems/sys_move.c
     src/features/settings/settings_screen.c
