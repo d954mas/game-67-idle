@@ -21,7 +21,7 @@ class FakeGame:
         if method == "command.describe":
             return {"method": params["method"], "params_shape": "{}", "result_shape": "{}"}
         if method == "render.info":
-            return {"enabled": self.render_enabled}
+            return {"enabled": self.render_enabled, "draw_calls": 1 if self.render_enabled else 0}
         if method == "render.set_enabled":
             self.render_enabled = bool(params["enabled"])
             return {"enabled": self.render_enabled}

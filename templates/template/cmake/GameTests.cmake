@@ -876,6 +876,11 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_focus_prompt COMMAND test_focus_prompt)
     set_tests_properties(test_focus_prompt PROPERTIES LABELS "core")
 
+    game_add_c_test(test_ui_scale
+        SOURCES "${UI_KIT_DIR}/tests/test_ui_scale.c" "${UI_KIT_SRC}/ui_tokens.c"
+        INCLUDES "${UI_KIT_INC}"
+        WARNINGS)
+
     add_executable(test_game_input
         tests/test_game_input.c
         src/game_input.c)

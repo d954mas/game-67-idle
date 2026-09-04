@@ -32,10 +32,17 @@ const char *__lsan_default_suppressions(void) { return "leak:extensionSupportedG
 
 #define HEADER_DIR "src/generated"
 
-// Kenney CC0 slice9 corners (px): panel 100x100/10px, button 384x128/16px, bars 8px.
-#define PANEL_BORDER 10
-#define BUTTON_BORDER 16
-#define BAR_BORDER 8
+// Source-pixel cut lines fully contain each rounded corner before any center stretch.
+// The kit ships at UI_KIT_EXPORT_SCALE times its design units (tools/gen_ui_kit.py),
+// so every slice9 border is that many source pixels wide.
+#define UI_KIT_EXPORT_SCALE 4
+#define PANEL_BORDER (14 * UI_KIT_EXPORT_SCALE)
+#define BUTTON_BORDER_X (16 * UI_KIT_EXPORT_SCALE)
+#define BUTTON_BORDER_TOP (16 * UI_KIT_EXPORT_SCALE)
+#define BUTTON_BORDER_BOTTOM (22 * UI_KIT_EXPORT_SCALE)
+#define TILE_BORDER (14 * UI_KIT_EXPORT_SCALE)
+#define BAR_BORDER (11 * UI_KIT_EXPORT_SCALE)
+#define BAR_BORDER_SM 11 // the design-size copies the engine slider draws 1:1
 
 static char s_path_buf[512];
 static const char *pack_path(const char *dir, const char *name) {
@@ -166,25 +173,28 @@ int main(int argc, char *argv[]) {
     nt_builder_add_texture_raw(ctx, uv_pixels, UV_TEX, UV_TEX, "assets/textures/uv_grid", &uv_opts);
 
     // UI shell: the sprite shader (UI rects/images) + a slice9 GUI atlas. The atlas
-    // holds a 1x1 white pixel (UI rect fill / nt_ui white region) and the Kenney CC0
-    // panel/button/slider art the settings panel renders with. nt_ui draws from this.
+    // holds a 1x1 white pixel (UI rect fill / nt_ui white region) and the generated
+    // design-system kit every screen renders with. nt_ui draws from this.
     nt_builder_add_shader(ctx, "assets/shaders/sprite.vert", NT_BUILD_SHADER_VERTEX);
     nt_builder_add_shader(ctx, "assets/shaders/sprite.frag", NT_BUILD_SHADER_FRAGMENT);
 
     nt_atlas_opts_t atlas_opts = nt_atlas_opts_defaults();
     atlas_opts.shape = NT_ATLAS_SHAPE_RECT;
     atlas_opts.allowed_transforms = NT_ATLAS_TRANSFORMS_IDENTITY;
-    atlas_opts.pixels_per_unit = 1.0F;
-    atlas_opts.padding = 2;
-    atlas_opts.margin = 2;
-    atlas_opts.extrude = 1;
+    atlas_opts.pixels_per_unit = 1.0F; // nt_ui asserts PPU=1 for a UI atlas
+    // Mip-safe gutters: the kit ships above its on-screen size, so the sampler
+    // walks down the mip chain and a 2 px gutter would bleed neighbours into a
+    // region by the third level.
+    atlas_opts.padding = 8;
+    atlas_opts.margin = 8;
+    atlas_opts.extrude = 2;
     atlas_opts.premultiplied = true;
     atlas_opts.compress = NULL;
     atlas_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     atlas_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     atlas_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
     atlas_opts.wrap_v = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
-    atlas_opts.gen_mipmaps = false;
+    atlas_opts.gen_mipmaps = true; // UI art is drawn below native size: without mips it aliases
     NtAtlasBuild *ui_atlas = nt_atlas_begin(ctx, "ui", &atlas_opts);
 
     // 1x1 white pixel: UI rect fill + nt_ui's required white region.
@@ -198,10 +208,19 @@ int main(int argc, char *argv[]) {
     panel_opts.slice9_left = panel_opts.slice9_right = panel_opts.slice9_top = panel_opts.slice9_bottom = PANEL_BORDER;
     nt_atlas_add(ui_atlas, "assets/ui/panel.png", &panel_opts);
 
+    // The button's bottom border is taller than the other three: it has to
+    // contain the lift ledge as well as the corner radius.
     nt_atlas_sprite_opts_t button_opts = nt_atlas_sprite_opts_defaults();
     button_opts.name = "button";
-    button_opts.slice9_left = button_opts.slice9_right = button_opts.slice9_top = button_opts.slice9_bottom = BUTTON_BORDER;
+    button_opts.slice9_left = button_opts.slice9_right = BUTTON_BORDER_X;
+    button_opts.slice9_top = BUTTON_BORDER_TOP;
+    button_opts.slice9_bottom = BUTTON_BORDER_BOTTOM;
     nt_atlas_add(ui_atlas, "assets/ui/button.png", &button_opts);
+
+    nt_atlas_sprite_opts_t tile_opts = nt_atlas_sprite_opts_defaults();
+    tile_opts.name = "tile";
+    tile_opts.slice9_left = tile_opts.slice9_right = tile_opts.slice9_top = tile_opts.slice9_bottom = TILE_BORDER;
+    nt_atlas_add(ui_atlas, "assets/ui/tile.png", &tile_opts);
 
     nt_atlas_sprite_opts_t bar_opts = nt_atlas_sprite_opts_defaults();
     bar_opts.slice9_left = bar_opts.slice9_right = bar_opts.slice9_top = bar_opts.slice9_bottom = BAR_BORDER;
@@ -210,9 +229,23 @@ int main(int argc, char *argv[]) {
     bar_opts.name = "slider_fill";
     nt_atlas_add(ui_atlas, "assets/ui/slider_fill.png", &bar_opts);
 
+    // Design-size pair for the engine slider, whose baked borders are drawn 1:1
+    // (neotolis-engine#349); a game's own meters use the 4x pair above.
+    nt_atlas_sprite_opts_t bar_sm_opts = nt_atlas_sprite_opts_defaults();
+    bar_sm_opts.slice9_left = bar_sm_opts.slice9_right = bar_sm_opts.slice9_top =
+        bar_sm_opts.slice9_bottom = BAR_BORDER_SM;
+    bar_sm_opts.name = "slider_track_sm";
+    nt_atlas_add(ui_atlas, "assets/ui/slider_track_sm.png", &bar_sm_opts);
+    bar_sm_opts.name = "slider_fill_sm";
+    nt_atlas_add(ui_atlas, "assets/ui/slider_fill_sm.png", &bar_sm_opts);
+
     nt_atlas_sprite_opts_t thumb_opts = nt_atlas_sprite_opts_defaults();
     thumb_opts.name = "slider_thumb"; // circle: no slice9
     nt_atlas_add(ui_atlas, "assets/ui/slider_thumb.png", &thumb_opts);
+
+    nt_atlas_sprite_opts_t play_opts = nt_atlas_sprite_opts_defaults();
+    play_opts.name = "icon_play"; // flat glyph, no slice9
+    nt_atlas_add(ui_atlas, "assets/ui/icon_play.png", &play_opts);
 
     (void)nt_atlas_commit(ui_atlas);
 

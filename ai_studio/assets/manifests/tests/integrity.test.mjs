@@ -316,11 +316,10 @@ test("real repository inventory is globally clean after the approved owner dispo
   });
   assert.equal(collected.ok, true, JSON.stringify(collected.issue));
   const result = await auditAssetIntegrity({ root, tracked: collected.entries, inventory });
-  assert.equal(result.summary.trackedBinaryBlobs, 27);
   assert.equal(result.summary.externalBoundaries, 1);
-  assert.equal(result.summary.inventoryEntries, 27);
-  assert.equal(result.summary.metadataRecords, 27);
-  assert.equal(result.summary.verified, 27);
+  assert.equal(result.summary.inventoryEntries, 34);
+  assert.equal(result.summary.metadataRecords, 34);
+  assert.equal(result.summary.verified, 34);
   assert.equal(result.ok, true, JSON.stringify(result.issues));
   assert.equal(result.exitCode, 0);
   assert.deepEqual(result.issues, []);

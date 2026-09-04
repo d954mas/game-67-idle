@@ -20,6 +20,64 @@ function comparable(value) {
   return process.platform === "win32" ? text.toLowerCase() : text;
 }
 
+export const SHARED_BINARIES_MANIFEST = "ai_studio/workspace/shared_private_binaries.json";
+const SHARED_BINARIES_SCHEMA = "ai_studio.workspace.shared_private_binaries.v1";
+const WAIVER_FIELDS = ["path", "game_id", "private_path", "sha256", "reason", "approved_by", "approved_on"];
+
+function waiverKey(path, gameId, privatePath, digest) {
+  return [slash(path), gameId, slash(privatePath), String(digest || "").toLowerCase()].join("\0");
+}
+
+// A waiver is not "this path may match anything private": it names the exact
+// bytes, at both ends, that one shared source produced. Swap different content
+// into the path and the digest stops matching, so the waiver cannot be
+// inherited silently -- which is the only reason an exception list is safe to
+// have at all.
+export function readSharedBinaryWaivers(root, { readFile = readFileSync } = {}) {
+  const rel = SHARED_BINARIES_MANIFEST;
+  const absolute = join(resolve(root), rel);
+  if (!existsSync(absolute)) return { waivers: [], errors: [] };
+  let document = null;
+  try {
+    document = JSON.parse(readFile(absolute, "utf8"));
+  } catch (error) {
+    return { waivers: [], errors: [{ path: rel, reason: `invalid JSON (${error.message})` }] };
+  }
+  if (document?.schema !== SHARED_BINARIES_SCHEMA) {
+    return { waivers: [], errors: [{ path: rel, reason: `expected schema ${SHARED_BINARIES_SCHEMA}` }] };
+  }
+  if (!Array.isArray(document.entries)) {
+    return { waivers: [], errors: [{ path: rel, reason: "entries must be an array" }] };
+  }
+  const errors = [];
+  const waivers = [];
+  const seen = new Set();
+  document.entries.forEach((entry, index) => {
+    const at = `${rel}#entries[${index}]`;
+    const missing = WAIVER_FIELDS.filter((field) => !String(entry?.[field] || "").trim());
+    if (missing.length) {
+      errors.push({ path: at, reason: `shared-binary waiver is missing ${missing.join(", ")}` });
+      return;
+    }
+    if (!/^[0-9a-f]{64}$/i.test(entry.sha256)) {
+      errors.push({ path: at, reason: "shared-binary waiver sha256 must be a full hex digest" });
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.approved_on)) {
+      errors.push({ path: at, reason: "shared-binary waiver approved_on must be YYYY-MM-DD" });
+      return;
+    }
+    const key = waiverKey(entry.path, entry.game_id, entry.private_path, entry.sha256);
+    if (seen.has(key)) {
+      errors.push({ path: at, reason: "shared-binary waiver is a duplicate" });
+      return;
+    }
+    seen.add(key);
+    waivers.push({ ...entry, key });
+  });
+  return { waivers, errors };
+}
+
 function formatPreflightError(result) {
   return `private game preflight failed:\n${result.violations.map((item) => `- ${item.path}: ${item.reason}`).join("\n")}`;
 }
@@ -94,6 +152,11 @@ export function auditPrivateGamePreflight(mounts, state = {}) {
 
   const tokens = privateLeakTokens(privateMounts);
   for (const file of trackedTextFiles) {
+    // The shared-binary manifest is the one tracked file whose JOB is to name a
+    // private game: a waiver that could not say which game it covers would waive
+    // nothing checkable. It lives in ai_studio/, not in a template, so the id
+    // never rides along into a game created from one.
+    if (slash(file.path || "") === SHARED_BINARIES_MANIFEST) continue;
     const text = String(file.text || "");
     for (const [token, meta] of tokens) {
       if (!text.includes(token)) continue;
@@ -104,16 +167,39 @@ export function auditPrivateGamePreflight(mounts, state = {}) {
       break;
     }
   }
+  for (const file of state.sharedBinaryErrors || []) {
+    violations.push({
+      path: slash(file.path || ""),
+      reason: file.reason || "shared-binary waiver is invalid",
+    });
+  }
   for (const file of binaryScanErrors) {
     violations.push({
       path: slash(file.path || ""),
       reason: `tracked binary privacy scan failed (${file.reason || "unreadable"})`,
     });
   }
+  const waivers = new Map((state.sharedBinaryWaivers || []).map((entry) => [entry.key, entry]));
+  const usedWaivers = new Set();
   for (const leak of binaryLeaks) {
+    const key = waiverKey(leak.path, leak.gameId, leak.privatePath, leak.digest);
+    if (waivers.has(key)) {
+      usedWaivers.add(key);
+      continue;
+    }
     violations.push({
       path: slash(leak.path || ""),
       reason: `tracked binary is byte-identical to private binary ${leak.gameId}:${slash(leak.privatePath || "")}`,
+    });
+  }
+  // A waiver that matches nothing has outlived its reason. Reporting it is what
+  // keeps the list from growing quietly: an entry survives only while the
+  // sharing it describes is still real.
+  for (const [key, entry] of waivers) {
+    if (usedWaivers.has(key)) continue;
+    violations.push({
+      path: `${SHARED_BINARIES_MANIFEST}: ${slash(entry.path)}`,
+      reason: `shared-binary waiver matches no tracked binary (stale entry for ${entry.game_id}:${slash(entry.private_path)})`,
     });
   }
   return { ok: violations.length === 0, violations };
@@ -370,6 +456,7 @@ function trackedBinaryLeaks(root, mounts, spawnGit) {
         path: view.path,
         gameId: privateView.gameId,
         privatePath: privateView.path,
+        digest: view.digest,
       });
     }
   }
@@ -386,7 +473,10 @@ export function runPrivateGamePreflight(root, options = {}) {
   const tracked = trackedTextFiles(repoRoot, privateLeakTokens(mounts), spawnGit);
   const nested = nestedGitRoots(repoRoot, mounts, spawnGit);
   const binaries = trackedBinaryLeaks(repoRoot, mounts, spawnGit);
+  const shared = readSharedBinaryWaivers(repoRoot);
   return auditPrivateGamePreflight(mounts, {
+    sharedBinaryWaivers: shared.waivers,
+    sharedBinaryErrors: shared.errors,
     nestedGitRoots: nested.roots,
     nestedGitErrors: nested.errors,
     trackedTextFiles: tracked.files,

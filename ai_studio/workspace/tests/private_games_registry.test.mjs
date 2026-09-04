@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
-import { auditPrivateGamePreflight, listGameMounts, runPrivateGamePreflight } from "../games.mjs";
+import {
+  SHARED_BINARIES_MANIFEST,
+  auditPrivateGamePreflight,
+  listGameMounts,
+  readSharedBinaryWaivers,
+  runPrivateGamePreflight,
+} from "../games.mjs";
 
 function writeJson(root, rel, value) {
   const path = join(root, rel);
@@ -274,4 +281,111 @@ test("preflight CLI reports a tracked token leak", (t) => {
   const result = spawnSync(process.execPath, [script, "preflight", "--root", root, "--json"], { encoding: "utf8" });
   assert.equal(result.status, 1);
   assert.equal(JSON.parse(result.stdout).ok, false);
+});
+
+// A shared-binary waiver is the ONE way a byte-identical pair is allowed
+// through, so the tests below are the ones that matter most: an exception list
+// nobody can grow silently is safe, and one that can be is worse than no gate.
+
+function waiverDoc(entries) {
+  return { schema: "ai_studio.workspace.shared_private_binaries.v1", entries };
+}
+
+function sharedFixture(t) {
+  const root = fixture(t);
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
+  game(root, "games/private/secret-game", "secret-game", "Secret Title", true);
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "parent fixture"], { cwd: root, stdio: "ignore" });
+
+  const privateRoot = join(root, "games/private/secret-game");
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: privateRoot });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: privateRoot });
+  const bytes = Buffer.from([0x09, 0x08, 0x07, 0x06]);
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  const privateAsset = join(privateRoot, "assets", "kit.dat");
+  mkdirSync(dirname(privateAsset), { recursive: true });
+  writeFileSync(privateAsset, bytes);
+  execFileSync("git", ["add", "assets/kit.dat"], { cwd: privateRoot });
+  execFileSync("git", ["commit", "-m", "private asset"], { cwd: privateRoot, stdio: "ignore" });
+
+  const shared = join(root, "assets", "kit.dat");
+  mkdirSync(dirname(shared), { recursive: true });
+  writeFileSync(shared, bytes);
+  execFileSync("git", ["add", "assets/kit.dat"], { cwd: root });
+
+  const entry = {
+    path: "assets/kit.dat",
+    game_id: "secret-game",
+    private_path: "assets/kit.dat",
+    sha256: digest,
+    reason: "shared default theme drawn from one token sheet",
+    approved_by: "lead",
+    approved_on: "2026-09-04",
+  };
+  return { root, entry, bytes, digest };
+}
+
+test("a shared-binary waiver clears exactly the pair it names", (t) => {
+  const { root, entry } = sharedFixture(t);
+  assert.equal(runPrivateGamePreflight(root).ok, false);
+  writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc([entry]));
+  execFileSync("git", ["add", SHARED_BINARIES_MANIFEST], { cwd: root });
+  assert.equal(runPrivateGamePreflight(root).ok, true);
+});
+
+test("a waiver stops applying when the bytes it names change", (t) => {
+  const { root, entry } = sharedFixture(t);
+  writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc([entry]));
+  execFileSync("git", ["add", SHARED_BINARIES_MANIFEST], { cwd: root });
+  assert.equal(runPrivateGamePreflight(root).ok, true);
+
+  // Different content behind the same two paths must NOT inherit the approval.
+  const swapped = Buffer.from([0x11, 0x22, 0x33, 0x44]);
+  writeFileSync(join(root, "assets", "kit.dat"), swapped);
+  writeFileSync(join(root, "games/private/secret-game/assets/kit.dat"), swapped);
+  execFileSync("git", ["add", "assets/kit.dat"], { cwd: root });
+  const result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /byte-identical.*private binary/i);
+});
+
+test("a waiver that matches nothing is reported as stale", (t) => {
+  const { root, entry } = sharedFixture(t);
+  const stale = { ...entry, path: "assets/gone.dat", private_path: "assets/gone.dat" };
+  writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc([entry, stale]));
+  execFileSync("git", ["add", SHARED_BINARIES_MANIFEST], { cwd: root });
+  const result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /waiver matches no tracked binary/);
+});
+
+test("an incomplete waiver is rejected instead of silently widening the gate", (t) => {
+  const { root, entry } = sharedFixture(t);
+  for (const field of ["reason", "approved_by", "approved_on"]) {
+    const partial = { ...entry };
+    delete partial[field];
+    writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc([partial]));
+    execFileSync("git", ["add", SHARED_BINARIES_MANIFEST], { cwd: root });
+    const result = runPrivateGamePreflight(root);
+    assert.equal(result.ok, false, `missing ${field} was accepted`);
+    assert.match(result.violations.map((item) => item.reason).join("\n"), new RegExp(`missing ${field}`));
+  }
+});
+
+test("readSharedBinaryWaivers rejects a malformed manifest rather than ignoring it", (t) => {
+  const root = fixture(t);
+  mkdirSync(dirname(join(root, SHARED_BINARIES_MANIFEST)), { recursive: true });
+  writeFileSync(join(root, SHARED_BINARIES_MANIFEST), "{", "utf8");
+  const broken = readSharedBinaryWaivers(root);
+  assert.equal(broken.waivers.length, 0);
+  assert.match(broken.errors.map((item) => item.reason).join("\n"), /invalid JSON/);
+
+  writeJson(root, SHARED_BINARIES_MANIFEST, { schema: "something.else", entries: [] });
+  const wrongSchema = readSharedBinaryWaivers(root);
+  assert.match(wrongSchema.errors.map((item) => item.reason).join("\n"), /expected schema/);
 });

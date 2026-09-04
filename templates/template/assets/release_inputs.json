@@ -11,9 +11,13 @@
     "assets/icons/xp.png",
     "assets/meshes/cube.glb",
     "assets/ui/button.png",
+    "assets/ui/icon_play.png",
     "assets/ui/panel.png",
     "assets/ui/slider_fill.png",
+    "assets/ui/slider_fill_sm.png",
     "assets/ui/slider_thumb.png",
-    "assets/ui/slider_track.png"
+    "assets/ui/slider_track.png",
+    "assets/ui/slider_track_sm.png",
+    "assets/ui/tile.png"
   ]
 }

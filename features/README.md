@@ -165,6 +165,16 @@ possibility, not a feature.
   `game.scene.*` automation, and an agent scaffold. The default template owns
   its root/settings catalog. Reference: `scenes-core/README.md`, `scenes-core/INSTALL.md`, and
   `scenes-core/IMPLEMENTATION-PLAN.md`.
+- `ui-kit/` (`L1`, `1.0.0`): the studio interface system. Owns the canvas rule
+  (short edge with a density floor and a cap, so a phone is not handed a
+  quarter-size UI), the CSS-pixel unit for type and touch targets, the token
+  sheet and the slice9 art generator that reads it, the theme, and the widget
+  layer every screen composes. Tokens are the seam: `ui_tokens_studio_default()`
+  is the look a new prototype wears, and a game with its own face passes its own
+  `ui_tokens_t` and regenerates its art from the matching sheet. The consumer
+  keeps what only it can know: its pack builder, its generated asset ids, and
+  the one file that binds them (`src/ui/theme.c`). Reference:
+  `ui-kit/README.md` + `ui-kit/INSTALL.md`.
 - `test-goldens/` (`L0`, `1.0.0`): record-or-compare value banks for tests. A
   watched number -- a layout digest, a balance total, a budget size -- lives in
   a text bank beside the test and is re-recorded with one command, so an

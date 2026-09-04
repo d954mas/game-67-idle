@@ -19,12 +19,14 @@
 #include "window/nt_window.h"
 
 #include "generated/game_assets.h"
+#include "features/ui_kit/ui_metrics.h"
 #include "ui/theme.h"
 
 #include <string.h>
 
-// UI reference resolution; EXPAND keeps widgets a constant logical size and grows
-// the canvas to fill the window (so the panel stays centered at any aspect).
+// UI reference resolution. The canvas is scaled off the SHORT edge
+// (ui_scale_policy.h), so the two numbers are one number in either orientation;
+// they are only the honest answer a caller gets before the first frame.
 #define UI_REF_W 1280.0F
 #define UI_REF_H 720.0F
 // Headroom for the default 1024-element UI (Clay arena dominates); a game that
@@ -122,8 +124,19 @@ bool ui_runtime_begin(float dt, const game_input_frame_t *input) {
 
     const float fb_w = (float)(g_nt_window.fb_width > 0 ? g_nt_window.fb_width : 1280);
     const float fb_h = (float)(g_nt_window.fb_height > 0 ? g_nt_window.fb_height : 720);
-    nt_ui_scale_desc_t sd = {.ref_w = UI_REF_W, .ref_h = UI_REF_H, .mode = NT_UI_SCALE_EXPAND};
-    s_scale = nt_ui_compute_scale(&sd, fb_w, fb_h);
+    // The ui-kit feature owns the canvas rule and the frame every metric is
+    // read from; this only hands it the framebuffer it is about to draw into.
+    const UiScaleFit fit = ui_frame_begin(fb_w, fb_h, g_nt_window.dpr);
+    s_scale = (nt_ui_scale_t){
+        .logical_w = fit.logical_w,
+        .logical_h = fit.logical_h,
+        .scale_x = fit.scale,
+        .scale_y = fit.scale,
+        .offset_x = 0.0F,
+        .offset_y = 0.0F,
+        .fb_w = fb_w,
+        .fb_h = fb_h,
+    };
 
     nt_frame_uniforms_t u;
     memset(&u, 0, sizeof u);

@@ -4,6 +4,7 @@
 #include "ui/loc_widgets.h"
 #include "ui/nt_ui_panel.h"
 #include "ui/theme.h"
+#include "features/ui_kit/ui_metrics.h"
 
 #include "loc_strings.gen.h"
 
@@ -70,22 +71,23 @@ void focus_prompt_ui_build(nt_ui_context_t *ctx) {
         nt_ui_block_pointer(ctx, nt_ui_id("focus_prompt/scrim"), NULL);
     }
 
+    const ui_metrics_t m = ui_metrics();
     nt_ui_panel_begin(
-        ctx, NT_UI_DATA_LAYER(FOCUS_PROMPT_BG_LAYER), &g_theme.panel_region,
-        &g_theme.panel_img,
+        ctx, NT_UI_DATA_LAYER(FOCUS_PROMPT_BG_LAYER), &g_ui_theme.art.panel,
+        &g_ui_theme.plate_img,
         &(Clay_ElementDeclaration){
             .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
                          .zIndex = FOCUS_PROMPT_CARD_Z,
                          .attachPoints = {
                              .element = CLAY_ATTACH_POINT_CENTER_CENTER,
                              .parent = CLAY_ATTACH_POINT_CENTER_CENTER}},
-            .layout = {.sizing = {CLAY_SIZING_FIT(280.0F, 380.0F),
-                                  CLAY_SIZING_FIXED(116.0F)},
-                       .padding = CLAY_PADDING_ALL(22),
+            .layout = {.sizing = {CLAY_SIZING_FIT(.min = m.panel_w * 0.7F,
+                                                  .max = m.panel_w),
+                                  CLAY_SIZING_FIT(.min = m.hit * 2.0F)},
+                       .padding = CLAY_PADDING_ALL((uint16_t)m.pad),
                        .childAlignment = {CLAY_ALIGN_X_CENTER,
                                           CLAY_ALIGN_Y_CENTER}}});
-    nt_ui_label_style_t label = g_theme.title;
-    label.font_size = 25.0F;
+    nt_ui_label_style_t label = ui_text(&g_ui_theme.heading);
     label.align = CLAY_TEXT_ALIGN_CENTER;
     loc_label(ctx, NT_UI_DATA_LAYER(FOCUS_PROMPT_TEXT_LAYER),
               loc_focus_click_to_continue(), &label);

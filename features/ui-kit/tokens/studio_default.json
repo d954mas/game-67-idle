@@ -1,0 +1,66 @@
+{
+  "schema": "ai_studio.ui_kit.tokens.v1",
+  "id": "studio_default",
+  "title": "Studio Default",
+  "description": "The look a new prototype wears before anyone repaints it. Read by tools/gen_ui_kit.py to draw the art and mirrored by src/ui_tokens.c for the runtime styles.",
+  "colors": {
+    "shell": "#3E3299",
+    "panel": "#6B5CE7",
+    "inset": "#5546C4",
+    "inset_rim": "#4335A8",
+    "scrim": "#16103C8C",
+    "tile": "#EFF0FA",
+    "tile_dim": "#CFD3EA",
+    "tile_rim": "#A6ABC9",
+    "ink": "#2A2550",
+    "ink_soft": "#6B6F8C",
+    "on_panel": "#FFFFFF",
+    "on_panel_soft": "#CFC8FF",
+    "coin": "#FFC94D",
+    "go": "#35C46F",
+    "info": "#4A7BF7",
+    "danger": "#FF6B6B",
+    "off": "#8B90AB"
+  },
+  "type": {
+    "display": 32,
+    "title": 24,
+    "body": 20,
+    "num": 21,
+    "badge": 16,
+    "row": 18,
+    "row_sub": 14
+  },
+  "geometry": {
+    "rim": 3,
+    "lift": 5,
+    "gap": 12,
+    "pad": 20,
+    "hit": 44,
+    "panel_min_w": 260,
+    "panel_max_w": 560
+  },
+  "canvas": {
+    "ref_short": 720,
+    "short_edge_max": 480
+  },
+  "art": {
+    "export_scale": 4,
+    "supersample": 4,
+    "deep_step": 0.72,
+    "center": 2,
+    "radius": {
+      "panel": 14,
+      "button": 16,
+      "tile": 12,
+      "bar": 11
+    },
+    "slice9": {
+      "panel": [14, 14, 14, 14],
+      "button": [16, 16, 16, 22],
+      "tile": [14, 14, 14, 14],
+      "slider_track": [11, 11, 11, 11],
+      "slider_fill": [11, 11, 11, 11]
+    }
+  }
+}

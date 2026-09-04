@@ -59,6 +59,7 @@
 #if NT_DEVAPI_ENABLED
 #include "game_events_devapi.h" /* E3: game.events.tail (tail ring + recorder) */
 #include "iteration_proof_devapi.h"
+#include "platform_sdk_devapi.h"
 #endif
 #if FEATURE_GAME_ANALYTICS
 #include "game_analytics.h" /* E4: local analytics NDJSON writer */
@@ -271,6 +272,7 @@ static bool devapi_start(void) {
     }
     game_iteration_proof_register_devapi();
     game_items_register_devapi();
+    game_platform_sdk_register_devapi();
     game_save_register_devapi(game_runtime_on_devapi_state_change, NULL);
     game_events_register_devapi(); // E3: game.events.tail (+ enables the recorder)
 #ifdef NT_DEVAPI_GROUP_UI

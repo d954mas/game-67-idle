@@ -12,6 +12,15 @@ void loc_label(nt_ui_context_t *ctx, const nt_ui_element_data_t *data, LocStr te
     nt_ui_label(ctx, data, text_of(text), style);
 }
 
+void loc_kit_label(nt_ui_context_t *ctx, LocStr text, const nt_ui_label_style_t *style) {
+    ui_kit_label(ctx, text_of(text), style);
+}
+
+void loc_kit_label_shadowed(nt_ui_context_t *ctx, const char *id, int slot, LocStr text,
+                            const nt_ui_label_style_t *style) {
+    ui_kit_label_shadowed(ctx, id, slot, text_of(text), style);
+}
+
 void loc_text_draw(LocStr text, const float model[16], float size, const float color[4],
                    float letter_tracking, float line_leading) {
     nt_text_renderer_draw(text_of(text), model, size, color, letter_tracking, line_leading);

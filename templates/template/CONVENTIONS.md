@@ -12,6 +12,18 @@ dumps a whole game into one file. Keep them.
   fit -- and say why. (A text-drawn "UI" is a hack; the nt_ui widgets are the way.)
 - Styles/theme (colours, button/slider/panel styles) live in their OWN file
   (e.g. `ui/theme.{c,h}`), separate from the logic that uses them.
+- **A screen never states its own sizes.** `ui/theme.h` holds the styles,
+  `ui/ui_metrics.h` the ramp, `ui/ui_kit.h` the widgets; a screen composes those.
+  The tokens all three follow are `design/references/ui_kit/styles.css`, and
+  `tools/gen_ui_kit.py` draws the slice9 art from the same file.
+- **Type and touch targets are CSS pixels; plates are a share of the canvas.**
+  A CSS pixel is the only unit that is the same physical size on a phone and on
+  a monitor, so a readability floor or a 44 px touch target is stated in CSS px
+  and converted (`ui_css`, `ui_text`). A panel width in CSS px overflows a
+  phone; type sized as a share of the canvas is unreadable in a hand.
+- **Nothing the player did not ask for sits on the player's screen.** A
+  developer probe reports through DevAPI (`game.platform_sdk.state` is the
+  pattern) and, if it must be drawn at all, only behind an explicit build flag.
 
 ## Decomposition
 

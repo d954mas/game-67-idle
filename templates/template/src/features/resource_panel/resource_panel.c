@@ -7,7 +7,7 @@
 #include "ui/loc_widgets.h"
 #include "ui/nt_ui_image.h"
 #include "ui/nt_ui_label.h"
-#include "ui/theme.h" /* g_theme */
+#include "ui/theme.h" /* g_ui_theme */
 
 #include "loc_strings.gen.h"
 
@@ -34,29 +34,48 @@
    Negating through uint64_t is well-defined for every int64_t input. */
 static int64_t rp_i64_abs(int64_t v) { return v < 0 ? (int64_t)(0ULL - (uint64_t)v) : v; }
 
-#define LAYER_BG 0
-#define LAYER_FILL 1
-#define LAYER_IMG 2
-#define LAYER_TEXT_SHADOW 3
-#define LAYER_TEXT 4
+/* Layer order is the kit's, not this widget's: two surfaces sorting on two
+   different scales cannot be stacked predictably. */
+#define LAYER_BG UI_LAYER_BG
+#define LAYER_FILL UI_LAYER_FILL
+#define LAYER_IMG UI_LAYER_IMG
+#define LAYER_TEXT_SHADOW UI_LAYER_TEXT_SHADOW
+#define LAYER_TEXT UI_LAYER_TEXT
 
-#define RP_ROW_H 40.0F
-#define RP_ICON_SIZE 24.0F
-#define RP_VALUE_CELL_W 90.0F
-#define RP_BAR_W 200.0F
-#define RP_BAR_H 24.0F
-#define RP_BAR_INSET 3.0F
-#define RP_PANEL_X 12.0F
-#define RP_PANEL_Y 12.0F
+/* CSS pixels: the panel has to be the same physical size in a hand and on a
+   monitor, so every number here is converted for the frame (rp_* accessors). */
+#define RP_ROW_H_CSS 40.0F
+#define RP_ICON_SIZE_CSS 24.0F
+#define RP_VALUE_CELL_W_CSS 90.0F
+#define RP_BAR_W_CSS 200.0F
+#define RP_BAR_H_CSS 24.0F
+#define RP_PANEL_X_CSS 12.0F
+#define RP_PANEL_Y_CSS 12.0F
+
+static float rp_row_h(void) { return ui_css(RP_ROW_H_CSS); }
+static float rp_icon_size(void) { return ui_css(RP_ICON_SIZE_CSS); }
+static float rp_value_cell_w(void) { return ui_css(RP_VALUE_CELL_W_CSS); }
+static float rp_bar_w(void) { return ui_css(RP_BAR_W_CSS); }
+static float rp_bar_h(void) { return ui_css(RP_BAR_H_CSS); }
+static float rp_panel_x(void) { return ui_css(RP_PANEL_X_CSS); }
+static float rp_panel_y(void) { return ui_css(RP_PANEL_Y_CSS); }
 
 #define RP_EASE_TAU 0.12F     /* count-up ease-out time constant */
 #define RP_ACCENT_SECS 0.35F  /* accent decay window */
 #define RP_SNAP_ABS 1000LL    /* counter snap-ref floor when max is absent, #10 */
 
+/* The image widget tints in packed 0xAABBGGRR; the panel's own accent maths is
+   in Clay's 0..255 float colour. */
+static uint32_t rp_pack_color(Clay_Color c) {
+    const uint32_t r = (uint32_t)(c.r + 0.5F) & 0xFFU;
+    const uint32_t g = (uint32_t)(c.g + 0.5F) & 0xFFU;
+    const uint32_t b = (uint32_t)(c.b + 0.5F) & 0xFFU;
+    const uint32_t a = (uint32_t)(c.a + 0.5F) & 0xFFU;
+    return (a << 24) | (b << 16) | (g << 8) | r;
+}
+
 static const Clay_Color RP_COLOR_ICON_FALLBACK = {70.0F, 70.0F, 78.0F, 220.0F};
-static const Clay_Color RP_COLOR_TRACK_BG = {18.0F, 13.0F, 9.0F, 218.0F};
-static const Clay_Color RP_COLOR_TRACK_BORDER = {105.0F, 76.0F, 43.0F, 182.0F};
-static const Clay_Color RP_COLOR_FILL = {120.0F, 170.0F, 230.0F, 255.0F};
+static const Clay_Color RP_COLOR_FILL = {74.0F, 123.0F, 247.0F, 255.0F}; /* --ui-info */
 static const Clay_Color RP_COLOR_GAIN = {120.0F, 220.0F, 120.0F, 255.0F};  /* gain accent */
 static const Clay_Color RP_COLOR_SPEND = {225.0F, 95.0F, 95.0F, 255.0F};   /* акцент spend */
 
@@ -141,26 +160,6 @@ static Clay_Color rp_lerp_color(Clay_Color a, Clay_Color b, float t) {
     };
 }
 
-/* Local panel helper (ui-kit has no built-in
-   text shadow). `slot` is a plain int differentiator (Clay id collision guard
-   across calls in one frame) -- distinct from rp_slot_t/RESOURCE_PANEL_MAX_SLOTS. */
-static void rp_shadowed_label(nt_ui_context_t *ctx, int slot, LocStr text, const nt_ui_label_style_t *style) {
-    nt_ui_label_style_t shadow = *style;
-    shadow.color = (Clay_Color){8.0F, 5.0F, 3.0F, 142.0F};
-
-    CLAY({.id = CLAY_IDI("resource_panel/shadowed_label", slot),
-          .layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0)}}}) {
-        CLAY({.id = CLAY_IDI("resource_panel/shadowed_label_shadow", slot),
-              .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
-                           .attachPoints = {.element = CLAY_ATTACH_POINT_LEFT_TOP, .parent = CLAY_ATTACH_POINT_LEFT_TOP},
-                           .offset = {1.0F, 1.0F}},
-              .layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0)}}}) {
-            loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT_SHADOW), text, &shadow);
-        }
-        loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), text, style);
-    }
-}
-
 /* Graceful no-art: icon==NULL -> flat rect placeholder, never
    requires an atlas. icon!=NULL -> nt_ui_image with a MUTABLE copy (resolve
    mutates the ref; entry->icon is game-owned and const from here). */
@@ -169,9 +168,9 @@ static void rp_draw_icon_or_fallback(nt_ui_context_t *ctx, const resource_panel_
         nt_atlas_region_ref_t region_copy = *entry->icon;
         nt_ui_image_style_t style = nt_ui_image_style_defaults();
         nt_ui_image(ctx, NT_UI_DATA_LAYER(LAYER_IMG), &region_copy, &style,
-                    &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(RP_ICON_SIZE), CLAY_SIZING_FIXED(RP_ICON_SIZE)}}});
+                    &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(rp_icon_size()), CLAY_SIZING_FIXED(rp_icon_size())}}});
     } else {
-        CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(RP_ICON_SIZE), CLAY_SIZING_FIXED(RP_ICON_SIZE)}},
+        CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(rp_icon_size()), CLAY_SIZING_FIXED(rp_icon_size())}},
               .backgroundColor = RP_COLOR_ICON_FALLBACK,
               .cornerRadius = CLAY_CORNER_RADIUS(4),
               .userData = NT_UI_CLAY_DATA(LAYER_IMG)}) {}
@@ -226,8 +225,8 @@ static void rp_draw_counter(nt_ui_context_t *ctx, const resource_panel_entry_t *
                                  sizeof value_buf);
 
     Clay_Color accent_tint = slot->accent_gain ? RP_COLOR_GAIN : RP_COLOR_SPEND;
-    nt_ui_label_style_t value_style = g_theme.label;
-    value_style.color = rp_lerp_color(g_theme.label.color, accent_tint, slot->accent);
+    nt_ui_label_style_t value_style = ui_text(&g_ui_theme.label);
+    value_style.color = rp_lerp_color(g_ui_theme.label.color, accent_tint, slot->accent);
 
     /* #14 punch: FIXED cell so the row never reflows; the glyph itself scales
        via a RENDER-TIME transform (no layout effect, nt_ui.h contract) --
@@ -239,16 +238,16 @@ static void rp_draw_counter(nt_ui_context_t *ctx, const resource_panel_entry_t *
     punch.scale_y = scale;
 
     CLAY({.id = rp_clay_id(entry->id, ""),
-          .layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(RP_ROW_H)},
+          .layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(rp_row_h())},
                      .layoutDirection = CLAY_LEFT_TO_RIGHT,
                      .childGap = 8,
                      .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}},
           .userData = NT_UI_CLAY_DATA(LAYER_BG)}) {
         rp_draw_icon_or_fallback(ctx, entry);
         if (entry->label.s != NULL) {
-            loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), entry->label, &g_theme.label);
+            loc_kit_label(ctx, entry->label, &g_ui_theme.label);
         }
-        CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(RP_VALUE_CELL_W), CLAY_SIZING_FIXED(RP_ROW_H)},
+        CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(rp_value_cell_w()), CLAY_SIZING_FIXED(rp_row_h())},
                           .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
             /* Число -- это вся строка целиком, вокруг него нет текста, значит нет
                и ключа: сама лестница уже отформатирована под язык. */
@@ -256,8 +255,8 @@ static void rp_draw_counter(nt_ui_context_t *ctx, const resource_panel_entry_t *
         }
     }
 
-    slot->anchor_x = RP_PANEL_X + RP_ICON_SIZE * 0.5F;
-    slot->anchor_y = RP_PANEL_Y + (float)index * RP_ROW_H + RP_ROW_H * 0.5F;
+    slot->anchor_x = rp_panel_x() + rp_icon_size() * 0.5F;
+    slot->anchor_y = rp_panel_y() + (float)index * rp_row_h() + rp_row_h() * 0.5F;
     slot->drawn = true;
 }
 
@@ -273,7 +272,7 @@ static void rp_draw_bar(nt_ui_context_t *ctx, const resource_panel_entry_t *entr
                                  sizeof value_buf);
     Clay_Color accent_tint = slot->accent_gain ? RP_COLOR_GAIN : RP_COLOR_SPEND;
 
-    CLAY({.layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(RP_ROW_H)},
+    CLAY({.layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(rp_row_h())},
                       .layoutDirection = CLAY_LEFT_TO_RIGHT,
                       .childGap = 8,
                       .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
@@ -282,8 +281,8 @@ static void rp_draw_bar(nt_ui_context_t *ctx, const resource_panel_entry_t *entr
         if (!has_max) {
             /* NULL contract: bar без знаменателя -> счётчик-с-меткой,
                без заливки. */
-            nt_ui_label_style_t style = g_theme.label;
-            style.color = rp_lerp_color(g_theme.label.color, accent_tint, slot->accent);
+            nt_ui_label_style_t style = ui_text(&g_ui_theme.label);
+            style.color = rp_lerp_color(g_ui_theme.label.color, accent_tint, slot->accent);
             loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw(value_buf), &style);
         } else {
             LocStr caption;
@@ -300,29 +299,17 @@ static void rp_draw_bar(nt_ui_context_t *ctx, const resource_panel_entry_t *entr
             float ratio = max_val > 0 ? clampf((float)(slot->displayed / (double)max_val), 0.0F, 1.0F) : 1.0F;
 
             CLAY({.id = rp_clay_id(entry->id, "/bar"),
-                  .layout = {.sizing = {CLAY_SIZING_FIXED(RP_BAR_W), CLAY_SIZING_FIXED(RP_BAR_H)},
-                             .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}},
-                  .backgroundColor = RP_COLOR_TRACK_BG,
-                  .cornerRadius = CLAY_CORNER_RADIUS(4),
-                  .border = {.color = RP_COLOR_TRACK_BORDER, .width = {1, 1, 1, 1, 0}},
-                  .userData = NT_UI_CLAY_DATA(LAYER_BG)}) {
-                float fill_w = (RP_BAR_W - RP_BAR_INSET * 2.0F) * ratio;
-                if (fill_w > 1.0F) {
-                    CLAY({.floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
-                                        .attachPoints = {.element = CLAY_ATTACH_POINT_LEFT_CENTER, .parent = CLAY_ATTACH_POINT_LEFT_CENTER},
-                                        .offset = {RP_BAR_INSET, 0.0F}},
-                          .layout = {.sizing = {CLAY_SIZING_FIXED(fill_w), CLAY_SIZING_FIXED(RP_BAR_H - RP_BAR_INSET * 2.0F)}},
-                          .backgroundColor = rp_lerp_color(RP_COLOR_FILL, accent_tint, slot->accent),
-                          .cornerRadius = CLAY_CORNER_RADIUS(2),
-                          .userData = NT_UI_CLAY_DATA(LAYER_FILL)}) {}
-                }
-                rp_shadowed_label(ctx, index, caption, &g_theme.label);
+                  .layout = {.sizing = {CLAY_SIZING_FIXED(rp_bar_w()), CLAY_SIZING_FIXED(rp_bar_h())},
+                             .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}) {
+                ui_kit_meter(ctx, rp_bar_w(), rp_bar_h(), ratio,
+                             rp_pack_color(rp_lerp_color(RP_COLOR_FILL, accent_tint, slot->accent)));
+                loc_kit_label_shadowed(ctx, "resource_panel/caption", index, caption, &g_ui_theme.label);
             }
         }
     }
 
-    slot->anchor_x = RP_PANEL_X + RP_BAR_W * 0.5F;
-    slot->anchor_y = RP_PANEL_Y + (float)index * RP_ROW_H + RP_ROW_H * 0.5F;
+    slot->anchor_x = rp_panel_x() + rp_bar_w() * 0.5F;
+    slot->anchor_y = rp_panel_y() + (float)index * rp_row_h() + rp_row_h() * 0.5F;
     slot->drawn = true;
 }
 
@@ -347,7 +334,7 @@ void resource_panel_ui(nt_ui_context_t *ctx, const resource_panel_entry_t *entri
              (which isn't Clay-floated at all). */
           .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
                        .attachPoints = {.element = CLAY_ATTACH_POINT_LEFT_TOP, .parent = CLAY_ATTACH_POINT_LEFT_TOP},
-                       .offset = {RP_PANEL_X, RP_PANEL_Y},
+                       .offset = {rp_panel_x(), rp_panel_y()},
                        .zIndex = -1},
           .layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0)}, .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = 6}}) {
         for (int i = 0; i < count; ++i) {

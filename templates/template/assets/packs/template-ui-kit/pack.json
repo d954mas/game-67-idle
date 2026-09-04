@@ -1,9 +1,9 @@
 {
-  "pack": "kenney-ui-pack",
-  "title": "Kenney UI Pack",
-  "source": "kenney",
+  "pack": "template-ui-kit",
+  "title": "Template Generated UI Kit",
+  "source": "ai-studio",
   "kind": "ui",
-  "origin": "sourced",
+  "origin": "mine",
   "license": "CC0-1.0",
   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
   "license_kind": "cc",
@@ -13,13 +13,15 @@
   "redistribution_allowed": "true",
   "commercial_use": "true",
   "modification_allowed": "true",
-  "source_page": "https://kenney.nl/assets/ui-pack",
-  "author_vendor": "Kenney",
+  "source_page": "templates/template/tools/gen_ui_kit.py",
+  "author_vendor": "AI Studio",
+  "restricted": false,
   "tags": [
     "template",
     "starter",
     "ui",
-    "slice9"
+    "slice9",
+    "generated"
   ],
   "genre": [
     "template"
@@ -27,5 +29,5 @@
   "style": [
     "clean"
   ],
-  "description": "CC0 starter UI sprites used by the template settings panel and controls."
+  "description": "Antialiased slice9 and glyph art drawn at 4x from the --ui-* design tokens by tools/gen_ui_kit.py, then downsampled with LANCZOS; no third-party source."
 }

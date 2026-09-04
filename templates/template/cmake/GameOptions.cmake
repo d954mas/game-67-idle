@@ -185,11 +185,11 @@ elseif(GAME_PUBLISH_TARGET STREQUAL "playgama")
     set(GAME_PLATFORM_STORAGE_SUPPORTED 1)
 endif()
 if(NOT DEFINED GAME_PLATFORM_SDK_DEBUG_UI)
-    if(CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(GAME_PLATFORM_SDK_DEBUG_UI OFF)
-    else()
-        set(GAME_PLATFORM_SDK_DEBUG_UI ON)
-    endif()
+    # OFF in every build a player can see, debug included: the probe panel is a
+    # developer instrument that covers the game behind it, and DevAPI
+    # (game.platform_sdk.state) already reports the same state without taking
+    # the screen. Turn it on deliberately with -DGAME_PLATFORM_SDK_DEBUG_UI=ON.
+    set(GAME_PLATFORM_SDK_DEBUG_UI OFF)
 endif()
 if(CMAKE_BUILD_TYPE STREQUAL "Release" AND GAME_PLATFORM_SDK_DEBUG_UI)
     message(FATAL_ERROR "GAME_PLATFORM_SDK_DEBUG_UI must be OFF for Release artifacts.")

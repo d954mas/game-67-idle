@@ -24,6 +24,9 @@ bool ui_runtime_ready(void);
 // Closes the frame, walks the tree, flushes the sprite + text renderers.
 void ui_runtime_end(void);
 
+// Sizes come from the ui-kit feature, not from here: ui_runtime_begin opens the
+// frame (ui_frame_begin) and every screen reads ui_metrics().
+
 void ui_runtime_restore_gpu(void);
 void ui_runtime_shutdown(void);
 nt_ui_context_t *ui_runtime_ctx(void);

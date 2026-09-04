@@ -31,19 +31,13 @@ void platform_sdk_debug_shutdown(void) {
 
 #include "clay.h"
 #include "ui/loc_widgets.h"
-#include "ui/nt_ui_button.h"
-#include "ui/nt_ui_label.h"
 #include "ui/nt_ui_modal.h"
-#include "ui/nt_ui_panel.h"
 #include "ui/theme.h"
+#include "ui/loc_widgets.h"
 
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-
-#define LAYER_BG 0
-#define LAYER_IMG 1
-#define LAYER_TEXT 2
 
 typedef enum mock_ad_flow_t {
     MOCK_AD_FLOW_NONE = 0,
@@ -218,17 +212,16 @@ void platform_sdk_debug_shutdown(void) {
 }
 
 #if PLATFORM_SDK_DEBUG_SURFACE_ENABLED
-static bool button(nt_ui_context_t *ctx, const char *id, const char *label, float width, bool enabled) {
+static bool button(nt_ui_context_t *ctx, const char *id, const char *label, bool enabled) {
+    const ui_metrics_t m = ui_metrics();
     bool clicked = false;
-    CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(width), CLAY_SIZING_FIXED(46)},
+    // Diagnostic buttons share the plate's width rather than sizing to their
+    // own text: the labels are developer sentences, not player copy.
+    CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(&m)},
                      .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}) {
-        nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), nt_ui_id(id), &g_theme.button,
-                           &(Clay_ElementDeclaration){
-                               .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
-                                          .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
-                           enabled, NULL);
-        loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw(label), &g_theme.button_label);
-        clicked = nt_ui_button_end(ctx);
+        ui_kit_button_begin(ctx, nt_ui_id(id), &g_ui_theme.button, enabled, NULL);
+        loc_kit_label(ctx, loc_raw(label), &g_ui_theme.row_title);
+        clicked = ui_kit_button_end(ctx);
     }
     return clicked;
 }
@@ -274,46 +267,46 @@ static void draw_debug_panel(nt_ui_context_t *ctx) {
     platform_sdk_capabilities_t caps = platform_sdk_capabilities();
     char line[160];
 
-    nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(LAYER_BG), &g_theme.panel_region, &g_theme.panel_img,
-                      &(Clay_ElementDeclaration){
-                          .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
-                                       .attachPoints = {.element = CLAY_ATTACH_POINT_RIGHT_BOTTOM,
-                                                        .parent = CLAY_ATTACH_POINT_RIGHT_BOTTOM},
-                                       .offset = {-16.0F, -16.0F}},
-                          .layout = {.sizing = {CLAY_SIZING_FIXED(440), CLAY_SIZING_FIT(0)},
-                                     .padding = CLAY_PADDING_ALL(16),
-                                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                                     .childGap = 10,
-                                     .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
-    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw("PLATFORM SDK"), &g_theme.title);
+    const ui_metrics_t m = ui_metrics();
+    ui_kit_panel_begin(ctx, &(Clay_ElementDeclaration){
+                                .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
+                                             .attachPoints = {.element = CLAY_ATTACH_POINT_RIGHT_BOTTOM,
+                                                              .parent = CLAY_ATTACH_POINT_RIGHT_BOTTOM},
+                                             .offset = {-(m.margin + m.safe_r), -(m.margin + m.safe_b)}},
+                                .layout = {.sizing = {CLAY_SIZING_FIXED(m.panel_w), CLAY_SIZING_FIT(0)},
+                                           .padding = CLAY_PADDING_ALL((uint16_t)m.pad),
+                                           .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                           .childGap = (uint16_t)m.gap,
+                                           .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
+    loc_kit_label(ctx, loc_raw("PLATFORM SDK"), &g_ui_theme.heading);
     (void)snprintf(line, sizeof line, "target=%s sdk=%s status=%s",
                    platform_sdk_target_name(), platform_sdk_current_name(), sdk_result_name(platform_sdk_status() == PLATFORM_SDK_BOOT_READY ? PLATFORM_SDK_RESULT_OK : PLATFORM_SDK_RESULT_NOT_READY));
-    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw(line), &g_theme.hint);
+    loc_kit_label(ctx, loc_raw(line), &g_ui_theme.hint);
     (void)snprintf(line, sizeof line, "caps links=%d ads=%d rewarded=%d storage=%d",
                    caps.external_links_allowed ? 1 : 0, caps.ads_supported ? 1 : 0,
                    caps.rewarded_supported ? 1 : 0, caps.storage_supported ? 1 : 0);
-    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw(line), &g_theme.hint);
+    loc_kit_label(ctx, loc_raw(line), &g_ui_theme.hint);
     (void)snprintf(line, sizeof line, "pause=%d resume=%d", s_pause_count, s_resume_count);
-    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw(line), &g_theme.hint);
-    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw(s_last_result), &g_theme.hint);
+    loc_kit_label(ctx, loc_raw(line), &g_ui_theme.hint);
+    loc_kit_label(ctx, loc_raw(s_last_result), &g_ui_theme.hint);
 
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
                      .layoutDirection = CLAY_LEFT_TO_RIGHT,
                      .childGap = 10}}) {
-        if (button(ctx, "platform_sdk/debug/interstitial", "Show interstitial ad", 200.0F, s_flow == MOCK_AD_FLOW_NONE)) {
+        if (button(ctx, "platform_sdk/debug/interstitial", "Show interstitial ad", s_flow == MOCK_AD_FLOW_NONE)) {
             platform_sdk_result_t result = platform_sdk_show_interstitial("debug_test", on_debug_interstitial_done, NULL);
             if (result != PLATFORM_SDK_RESULT_OK) {
                 set_request_result("interstitial", result);
             }
         }
-        if (button(ctx, "platform_sdk/debug/rewarded", "Show rewarded ad", 190.0F, s_flow == MOCK_AD_FLOW_NONE)) {
+        if (button(ctx, "platform_sdk/debug/rewarded", "Show rewarded ad", s_flow == MOCK_AD_FLOW_NONE)) {
             platform_sdk_result_t result = platform_sdk_show_rewarded("debug_test", on_debug_rewarded_done, NULL);
             if (result != PLATFORM_SDK_RESULT_OK) {
                 set_request_result("rewarded", result);
             }
         }
     }
-    nt_ui_panel_end(ctx);
+    ui_kit_panel_end(ctx);
 }
 #endif
 
@@ -327,47 +320,45 @@ static void draw_mock_modal(nt_ui_context_t *ctx) {
         return;
     }
 
-    nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(LAYER_BG), &g_theme.panel_region, &g_theme.panel_img,
-                      &(Clay_ElementDeclaration){
-                          .layout = {.sizing = {CLAY_SIZING_FIXED(520), CLAY_SIZING_FIT(0)},
-                                     .padding = CLAY_PADDING_ALL(24),
-                                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                                     .childGap = 16,
-                                     .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_TOP}}});
-    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT),
-              loc_raw(s_flow == MOCK_AD_FLOW_REWARDED ? "MOCK REWARDED AD" : "MOCK INTERSTITIAL AD"),
-              &g_theme.title);
+    const ui_metrics_t m = ui_metrics();
+    ui_kit_panel_begin(ctx, &(Clay_ElementDeclaration){
+                                .layout = {.sizing = {CLAY_SIZING_FIXED(m.panel_w), CLAY_SIZING_FIT(0)},
+                                           .padding = CLAY_PADDING_ALL((uint16_t)m.pad),
+                                           .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                           .childGap = (uint16_t)m.gap,
+                                           .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_TOP}}});
+    loc_kit_label(ctx, loc_raw(s_flow == MOCK_AD_FLOW_REWARDED ? "MOCK REWARDED AD" : "MOCK INTERSTITIAL AD"),
+                 &g_ui_theme.title);
 
     char line[96];
     (void)snprintf(line, sizeof line, "placement: %s", s_placement);
-    loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw(line), &g_theme.label);
+    loc_kit_label(ctx, loc_raw(line), &g_ui_theme.label);
 
     if (s_flow == MOCK_AD_FLOW_INTERSTITIAL) {
-        if (button(ctx, "platform_sdk/mock_ad/close_interstitial", "Close interstitial", 220.0F, true)) {
+        if (button(ctx, "platform_sdk/mock_ad/close_interstitial", "Close interstitial", true)) {
             complete_interstitial(PLATFORM_SDK_AD_REASON_COMPLETED, true);
         }
     } else if (s_flow == MOCK_AD_FLOW_REWARDED) {
-        loc_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), loc_raw("Reward is granted only by explicit success."),
-                  &g_theme.hint);
+        loc_kit_label(ctx, loc_raw("Reward is granted only by explicit success."), &g_ui_theme.hint);
         CLAY({.layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0)},
                          .layoutDirection = CLAY_LEFT_TO_RIGHT,
                          .childGap = 10}}) {
-            if (button(ctx, "platform_sdk/mock_ad/reward_success", "Grant reward", 140.0F, true)) {
+            if (button(ctx, "platform_sdk/mock_ad/reward_success", "Grant reward", true)) {
                 complete_rewarded(PLATFORM_SDK_AD_REASON_COMPLETED, true, true);
             }
-            if (button(ctx, "platform_sdk/mock_ad/reward_skip", "Skip/close", 120.0F, true)) {
+            if (button(ctx, "platform_sdk/mock_ad/reward_skip", "Skip/close", true)) {
                 complete_rewarded(PLATFORM_SDK_AD_REASON_SKIPPED, true, false);
             }
-            if (button(ctx, "platform_sdk/mock_ad/reward_decline", "Decline", 110.0F, true)) {
+            if (button(ctx, "platform_sdk/mock_ad/reward_decline", "Decline", true)) {
                 complete_rewarded(PLATFORM_SDK_AD_REASON_DECLINED, false, false);
             }
-            if (button(ctx, "platform_sdk/mock_ad/reward_fail", "Fail ad", 100.0F, true)) {
+            if (button(ctx, "platform_sdk/mock_ad/reward_fail", "Fail ad", true)) {
                 complete_rewarded(PLATFORM_SDK_AD_REASON_FAILED, false, false);
             }
         }
     }
 
-    nt_ui_panel_end(ctx);
+    ui_kit_panel_end(ctx);
     nt_ui_modal_end(ctx);
 #else
     (void)ctx;

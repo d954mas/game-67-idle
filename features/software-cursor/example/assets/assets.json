@@ -1,0 +1,60 @@
+{
+  "schema": "ai_studio.asset_records.v1",
+  "scope": "features:software-cursor-example",
+  "assets": [
+    {
+      "asset_id": "software-cursor-pointer-c-shaded",
+      "path": "features/software-cursor/example/assets/kenney_pointer_c_shaded_cc0.png",
+      "classification": "product-asset",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "license_kind": "cc",
+      "publish": "true",
+      "redistribution_allowed": "true",
+      "commercial_use": "true",
+      "modification_allowed": "true",
+      "author_vendor": "Kenney",
+      "origin": "sourced",
+      "provenance": "Kenney Cursor Pack (CC0), pointer_c_shaded.png from PNG/Outline/Double, unchanged; sample theme for software_cursor_sample_pointer_theme()",
+      "source_page": "https://kenney.nl/assets/cursor-pack",
+      "sha256": "a82fa59099ae3eaccd08a807c66ace6c98f5fd120bb3be95b853e58f1081d150",
+      "bytes": 1066
+    },
+    {
+      "asset_id": "software-cursor-touch-hand-open",
+      "path": "features/software-cursor/example/assets/touch_hand_open.png",
+      "classification": "product-asset",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "license_kind": "cc",
+      "publish": "true",
+      "redistribution_allowed": "true",
+      "commercial_use": "true",
+      "modification_allowed": "true",
+      "author_vendor": "Kenney",
+      "origin": "sourced",
+      "provenance": "Kenney Input Prompts pack (CC0), Touch/Double/touch_hand_open.png, unchanged; sample theme for software_cursor_sample_finger_theme()",
+      "source_page": "https://kenney.nl/assets/input-prompts",
+      "sha256": "1288afac684b4d5cee486fdd61d27237e720b210d1071ddfe750c37d0ae5a8e8",
+      "bytes": 596
+    },
+    {
+      "asset_id": "software-cursor-touch-hand-closed",
+      "path": "features/software-cursor/example/assets/touch_hand_closed.png",
+      "classification": "product-asset",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "license_kind": "cc",
+      "publish": "true",
+      "redistribution_allowed": "true",
+      "commercial_use": "true",
+      "modification_allowed": "true",
+      "author_vendor": "Kenney",
+      "origin": "sourced",
+      "provenance": "Kenney Input Prompts pack (CC0), Touch/Double/touch_hand_closed.png, unchanged; sample theme for software_cursor_sample_finger_theme()",
+      "source_page": "https://kenney.nl/assets/input-prompts",
+      "sha256": "b70a088702ee7e603c25555f9495688e57fcc6a6246076d2d35b647ab380d770",
+      "bytes": 455
+    }
+  ]
+}

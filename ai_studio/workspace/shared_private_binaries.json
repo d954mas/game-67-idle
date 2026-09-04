@@ -1,0 +1,93 @@
+{
+  "schema": "ai_studio.workspace.shared_private_binaries.v1",
+  "purpose": "Binaries that are deliberately identical in a public path and in a private game, because one shared source produced both. Every other byte-identical pair is a leak and stays blocked.",
+  "rules": [
+    "An entry waives exactly one (path, game_id, private_path, sha256) quadruple. Change the bytes at either end and the waiver stops applying, so a silent content swap cannot inherit it.",
+    "Reason must say what shared source produced both files. 'Same licence' is not a reason: the gate is about private content leaving a private game, not about licensing.",
+    "approved_by and approved_on record the lead decision that made the sharing intentional.",
+    "An entry that matches nothing is stale and fails the audit: a waiver outlives its reason otherwise."
+  ],
+  "entries": [
+    {
+      "path": "templates/template/assets/ui/button.png",
+      "game_id": "planet-eater",
+      "private_path": "assets/ui/button.png",
+      "sha256": "b4e825053df8e20c66f06185812d60bd6e9d8a4889c009e62fc8144cce820afa",
+      "reason": "Studio default theme: features/ui-kit draws this file from tokens/studio_default.json, and both the template and the studio reference game render the default sheet, so identical bytes are the point rather than a copy.",
+      "approved_by": "lead",
+      "approved_on": "2026-09-04"
+    },
+    {
+      "path": "templates/template/assets/ui/icon_play.png",
+      "game_id": "planet-eater",
+      "private_path": "assets/ui/icon_play.png",
+      "sha256": "b125fcf81d0dce72af61af79b55425de65bcbf92647dc8fe8b429f69edc4256c",
+      "reason": "Studio default theme: features/ui-kit draws this file from tokens/studio_default.json, and both the template and the studio reference game render the default sheet, so identical bytes are the point rather than a copy.",
+      "approved_by": "lead",
+      "approved_on": "2026-09-04"
+    },
+    {
+      "path": "templates/template/assets/ui/panel.png",
+      "game_id": "planet-eater",
+      "private_path": "assets/ui/panel.png",
+      "sha256": "2c63160bc69881f4112152d037f9d18ac74b1fda8fc2d9930505fb74b746edfe",
+      "reason": "Studio default theme: features/ui-kit draws this file from tokens/studio_default.json, and both the template and the studio reference game render the default sheet, so identical bytes are the point rather than a copy.",
+      "approved_by": "lead",
+      "approved_on": "2026-09-04"
+    },
+    {
+      "path": "templates/template/assets/ui/slider_fill.png",
+      "game_id": "planet-eater",
+      "private_path": "assets/ui/slider_fill.png",
+      "sha256": "018a2eb3f6b0010e6ade837140d25bbf2f95ca311b2354a9d685ac2e57529d6a",
+      "reason": "Studio default theme: features/ui-kit draws this file from tokens/studio_default.json, and both the template and the studio reference game render the default sheet, so identical bytes are the point rather than a copy.",
+      "approved_by": "lead",
+      "approved_on": "2026-09-04"
+    },
+    {
+      "path": "templates/template/assets/ui/slider_fill_sm.png",
+      "game_id": "planet-eater",
+      "private_path": "assets/ui/slider_fill_sm.png",
+      "sha256": "821b69afc2ae6ac5b1afec89fa429f2620daf93a64a096c2ba56926e4ce792f4",
+      "reason": "Studio default theme: features/ui-kit draws this file from tokens/studio_default.json, and both the template and the studio reference game render the default sheet, so identical bytes are the point rather than a copy.",
+      "approved_by": "lead",
+      "approved_on": "2026-09-04"
+    },
+    {
+      "path": "templates/template/assets/ui/slider_thumb.png",
+      "game_id": "planet-eater",
+      "private_path": "assets/ui/slider_thumb.png",
+      "sha256": "aff2d8d40b221c5993499e1739ee20f251b89fb44197dbe6f2df7d814e4906db",
+      "reason": "Studio default theme: features/ui-kit draws this file from tokens/studio_default.json, and both the template and the studio reference game render the default sheet, so identical bytes are the point rather than a copy.",
+      "approved_by": "lead",
+      "approved_on": "2026-09-04"
+    },
+    {
+      "path": "templates/template/assets/ui/slider_track.png",
+      "game_id": "planet-eater",
+      "private_path": "assets/ui/slider_track.png",
+      "sha256": "4c481a1c78990d7c82bce2659878bafc3259f4fd25a2af7f6ac35c726dc541d0",
+      "reason": "Studio default theme: features/ui-kit draws this file from tokens/studio_default.json, and both the template and the studio reference game render the default sheet, so identical bytes are the point rather than a copy.",
+      "approved_by": "lead",
+      "approved_on": "2026-09-04"
+    },
+    {
+      "path": "templates/template/assets/ui/slider_track_sm.png",
+      "game_id": "planet-eater",
+      "private_path": "assets/ui/slider_track_sm.png",
+      "sha256": "924f12e6b95177dc866eda6ea13d0d9f5cd6ad6b7781207b01752774db782417",
+      "reason": "Studio default theme: features/ui-kit draws this file from tokens/studio_default.json, and both the template and the studio reference game render the default sheet, so identical bytes are the point rather than a copy.",
+      "approved_by": "lead",
+      "approved_on": "2026-09-04"
+    },
+    {
+      "path": "templates/template/assets/ui/tile.png",
+      "game_id": "planet-eater",
+      "private_path": "assets/ui/tile.png",
+      "sha256": "ad4e7d5175de7f03d3e2907a5096907392309e2b5f8d0b0d6b1aa8f03ded531b",
+      "reason": "Studio default theme: features/ui-kit draws this file from tokens/studio_default.json, and both the template and the studio reference game render the default sheet, so identical bytes are the point rather than a copy.",
+      "approved_by": "lead",
+      "approved_on": "2026-09-04"
+    }
+  ]
+}

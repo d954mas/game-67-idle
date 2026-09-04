@@ -33,7 +33,7 @@
       "type": "pack-manifest",
       "root": "templates/template/assets",
       "packs": [
-        "kenney-ui-pack"
+        "template-ui-kit"
       ],
       "scope": "template:ui"
     },
@@ -56,14 +56,14 @@
       "type": "records-json",
       "path": "ai_studio/core_harness/profiling/hook_record_fast.asset.json",
       "scope": "ai-studio:profiling-hook"
+    },
+    {
+      "type": "records-json",
+      "path": "features/software-cursor/example/assets/assets.json",
+      "scope": "features:software-cursor-example"
     }
   ],
   "entries": [
-    {
-      "path": "ai_studio/assets/previews/studio_env.hdr",
-      "classification": "generated-procedural-output",
-      "metadata_scope": "ai-studio:preview-hdr"
-    },
     {
       "path": "ai_studio/assets/canvas/site/fonts/Bitter/Bitter-Bold.ttf",
       "classification": "font",
@@ -118,6 +118,11 @@
       "path": "ai_studio/assets/items_viewer/tests/fixtures/icon_pack/icons_page0.png",
       "classification": "test-fixture",
       "metadata_scope": "ai-studio:items-viewer-fixtures"
+    },
+    {
+      "path": "ai_studio/assets/previews/studio_env.hdr",
+      "classification": "generated-procedural-output",
+      "metadata_scope": "ai-studio:preview-hdr"
     },
     {
       "path": "ai_studio/core_harness/profiling/hook_record_fast.exe",
@@ -175,7 +180,17 @@
       "metadata_scope": "template:ui"
     },
     {
+      "path": "templates/template/assets/ui/icon_play.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:ui"
+    },
+    {
       "path": "templates/template/assets/ui/panel.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:ui"
+    },
+    {
+      "path": "templates/template/assets/ui/slider_fill_sm.png",
       "classification": "product-asset",
       "metadata_scope": "template:ui"
     },
@@ -190,9 +205,34 @@
       "metadata_scope": "template:ui"
     },
     {
+      "path": "templates/template/assets/ui/slider_track_sm.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:ui"
+    },
+    {
       "path": "templates/template/assets/ui/slider_track.png",
       "classification": "product-asset",
       "metadata_scope": "template:ui"
+    },
+    {
+      "path": "templates/template/assets/ui/tile.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:ui"
+    },
+    {
+      "path": "features/software-cursor/example/assets/kenney_pointer_c_shaded_cc0.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:software-cursor-example"
+    },
+    {
+      "path": "features/software-cursor/example/assets/touch_hand_open.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:software-cursor-example"
+    },
+    {
+      "path": "features/software-cursor/example/assets/touch_hand_closed.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:software-cursor-example"
     }
   ],
   "boundaries": [

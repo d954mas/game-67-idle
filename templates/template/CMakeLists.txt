@@ -40,6 +40,11 @@ set(SCENES_CORE_SRC          "${SCENES_CORE_DIR}/src")
 set(GAME_STATE_DIR           "${GAME_REPO_ROOT}/features/game-state")
 set(GAME_STATE_INC           "${GAME_STATE_DIR}/include")
 set(GAME_STATE_SRC           "${GAME_STATE_DIR}/src")
+set(UI_KIT_DIR               "${GAME_REPO_ROOT}/features/ui-kit")
+set(UI_KIT_INC               "${UI_KIT_DIR}/include")
+set(UI_KIT_SRC               "${UI_KIT_DIR}/src")
+set(UI_KIT_TOKENS            "${UI_KIT_DIR}/tokens")
+set(UI_KIT_TOOLS             "${UI_KIT_DIR}/tools")
 set(LOCALIZATION_DIR         "${GAME_REPO_ROOT}/features/localization")
 set(LOCALIZATION_INC         "${LOCALIZATION_DIR}/include")
 set(LOCALIZATION_SRC         "${LOCALIZATION_DIR}/src")
@@ -66,7 +71,12 @@ add_executable(${GAME_TARGET}
     src/ui/focus_prompt_ui.c
     src/ui/platform_sdk_debug.c
     src/ui/ui_runtime.c
-    src/ui/theme.c
+    src/ui/theme.c                                   # binds THIS game's atlas to the ui-kit feature
+    "${UI_KIT_SRC}/ui_tokens.c"
+    "${UI_KIT_SRC}/ui_theme.c"
+    "${UI_KIT_SRC}/ui_metrics.c"
+    "${UI_KIT_SRC}/ui_kit.c"
+    "${UI_KIT_SRC}/ui_safe_area.c"
     src/render/render_mesh.c
     src/render/shader_programs.c
     src/render/capture.c
@@ -80,8 +90,8 @@ add_executable(${GAME_TARGET}
     src/ui/loc_widgets.c                             # the ONLY caller of the raw text entry points
     # scene-scaffold:sources
 )
-target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}")
-target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_SCENES_CORE=1)
+target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}" "${UI_KIT_INC}")
+target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_SCENES_CORE=1 FEATURE_UI_KIT=1)
 if(GAME_DEBUG_SCENES_ENABLED)
     target_compile_definitions(${GAME_TARGET} PRIVATE
         GAME_DEBUG_SCENES_ENABLED=1)
