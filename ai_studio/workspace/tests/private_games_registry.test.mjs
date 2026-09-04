@@ -338,6 +338,67 @@ test("a shared-binary waiver clears exactly the pair it names", (t) => {
   assert.equal(runPrivateGamePreflight(root).ok, true);
 });
 
+test("a committed shared-binary waiver remains valid in a clean parent repo", (t) => {
+  const { root, entry } = sharedFixture(t);
+  writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc([entry]));
+  execFileSync("git", ["add", SHARED_BINARIES_MANIFEST], { cwd: root });
+  execFileSync("git", ["commit", "-m", "shared asset"], { cwd: root, stdio: "ignore" });
+
+  assert.equal(runPrivateGamePreflight(root).ok, true);
+});
+
+test("a committed waiver becomes stale when its tracked public bytes change", (t) => {
+  const { root, entry } = sharedFixture(t);
+  writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc([entry]));
+  execFileSync("git", ["add", SHARED_BINARIES_MANIFEST], { cwd: root });
+  execFileSync("git", ["commit", "-m", "shared asset"], { cwd: root, stdio: "ignore" });
+
+  writeFileSync(join(root, "assets", "kit.dat"), Buffer.from([0x01, 0x02, 0x03, 0x04]));
+  execFileSync("git", ["add", "assets/kit.dat"], { cwd: root });
+  const result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /waiver matches no tracked binary/);
+});
+
+test("an untracked approval manifest cannot waive a staged shared binary", (t) => {
+  const { root, entry } = sharedFixture(t);
+  writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc([entry]));
+
+  const result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /approval manifest must be tracked/i);
+});
+
+test("an untracked manifest cannot preserve a waiver staged for deletion", (t) => {
+  const { root, entry } = sharedFixture(t);
+  writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc([entry]));
+  execFileSync("git", ["add", SHARED_BINARIES_MANIFEST], { cwd: root });
+  execFileSync("git", ["commit", "-m", "approve shared asset", "--", "assets/kit.dat", SHARED_BINARIES_MANIFEST], {
+    cwd: root,
+    stdio: "ignore",
+  });
+  execFileSync("git", ["rm", "--cached", SHARED_BINARIES_MANIFEST], { cwd: root, stdio: "ignore" });
+
+  const result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /approval manifest.*staged for deletion/i);
+});
+
+test("a deleted approval manifest cannot hide a clean committed shared pair", (t) => {
+  const { root, entry } = sharedFixture(t);
+  writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc([entry]));
+  execFileSync("git", ["add", SHARED_BINARIES_MANIFEST], { cwd: root });
+  execFileSync("git", ["commit", "-m", "approve shared asset", "--", "assets/kit.dat", SHARED_BINARIES_MANIFEST], {
+    cwd: root,
+    stdio: "ignore",
+  });
+  execFileSync("git", ["rm", SHARED_BINARIES_MANIFEST], { cwd: root, stdio: "ignore" });
+
+  const result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /approval manifest.*staged for deletion/i);
+});
+
 test("a waiver stops applying when the bytes it names change", (t) => {
   const { root, entry } = sharedFixture(t);
   writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc([entry]));

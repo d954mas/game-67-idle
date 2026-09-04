@@ -33,13 +33,11 @@ function waiverKey(path, gameId, privatePath, digest) {
 // into the path and the digest stops matching, so the waiver cannot be
 // inherited silently -- which is the only reason an exception list is safe to
 // have at all.
-export function readSharedBinaryWaivers(root, { readFile = readFileSync } = {}) {
+function parseSharedBinaryWaivers(content) {
   const rel = SHARED_BINARIES_MANIFEST;
-  const absolute = join(resolve(root), rel);
-  if (!existsSync(absolute)) return { waivers: [], errors: [] };
   let document = null;
   try {
-    document = JSON.parse(readFile(absolute, "utf8"));
+    document = JSON.parse(content);
   } catch (error) {
     return { waivers: [], errors: [{ path: rel, reason: `invalid JSON (${error.message})` }] };
   }
@@ -76,6 +74,16 @@ export function readSharedBinaryWaivers(root, { readFile = readFileSync } = {}) 
     waivers.push({ ...entry, key });
   });
   return { waivers, errors };
+}
+
+export function readSharedBinaryWaivers(root, { readFile = readFileSync } = {}) {
+  const absolute = join(resolve(root), SHARED_BINARIES_MANIFEST);
+  if (!existsSync(absolute)) return { waivers: [], errors: [] };
+  try {
+    return parseSharedBinaryWaivers(readFile(absolute, "utf8"));
+  } catch (error) {
+    return { waivers: [], errors: [{ path: SHARED_BINARIES_MANIFEST, reason: `invalid JSON (${error.message})` }] };
+  }
 }
 
 function formatPreflightError(result) {
@@ -180,7 +188,7 @@ export function auditPrivateGamePreflight(mounts, state = {}) {
     });
   }
   const waivers = new Map((state.sharedBinaryWaivers || []).map((entry) => [entry.key, entry]));
-  const usedWaivers = new Set();
+  const usedWaivers = new Set(state.validSharedBinaryWaiverKeys || []);
   for (const leak of binaryLeaks) {
     const key = waiverKey(leak.path, leak.gameId, leak.privatePath, leak.digest);
     if (waivers.has(key)) {
@@ -463,6 +471,48 @@ function trackedBinaryLeaks(root, mounts, spawnGit) {
   return { leaks, errors };
 }
 
+function trackedSharedBinaryWaivers(root, spawnGit) {
+  const result = git(root, ["show", `:${SHARED_BINARIES_MANIFEST}`], spawnGit, null);
+  if (commandError(result, "git show")) {
+    const head = git(root, ["show", `HEAD:${SHARED_BINARIES_MANIFEST}`], spawnGit, null);
+    if (!commandError(head, "git show")) {
+      return {
+        waivers: [],
+        errors: [{
+          path: SHARED_BINARIES_MANIFEST,
+          reason: "shared-binary approval manifest is staged for deletion",
+        }],
+      };
+    }
+    if (!existsSync(join(root, SHARED_BINARIES_MANIFEST))) return { waivers: [], errors: [] };
+    return {
+      waivers: [],
+      errors: [{
+        path: SHARED_BINARIES_MANIFEST,
+        reason: "shared-binary approval manifest must be tracked in the parent index",
+      }],
+    };
+  }
+  const content = Buffer.isBuffer(result.stdout) ? result.stdout.toString("utf8") : String(result.stdout || "");
+  return parseSharedBinaryWaivers(content);
+}
+
+function validSharedBinaryWaiverKeys(root, mounts, waivers, spawnGit) {
+  const mountsByGameId = new Map(mounts.map((mount) => [mount.gameId, mount]));
+  const valid = new Set();
+  for (const waiver of waivers) {
+    const mount = mountsByGameId.get(waiver.game_id);
+    if (!mount) continue;
+    const publicView = indexBinaryView(root, waiver.path, spawnGit).view;
+    if (!publicView || publicView.digest !== waiver.sha256) continue;
+    const confined = confinedMountRoot(root, mount.gitRoot);
+    if (confined.error) continue;
+    const privateView = indexBinaryView(confined.root, waiver.private_path, spawnGit).view;
+    if (privateView?.digest === waiver.sha256) valid.add(waiver.key);
+  }
+  return valid;
+}
+
 export function runPrivateGamePreflight(root, options = {}) {
   const repoRoot = resolve(root || process.cwd());
   const spawnGit = options.spawnGit || spawnSync;
@@ -473,9 +523,11 @@ export function runPrivateGamePreflight(root, options = {}) {
   const tracked = trackedTextFiles(repoRoot, privateLeakTokens(mounts), spawnGit);
   const nested = nestedGitRoots(repoRoot, mounts, spawnGit);
   const binaries = trackedBinaryLeaks(repoRoot, mounts, spawnGit);
-  const shared = readSharedBinaryWaivers(repoRoot);
+  const shared = trackedSharedBinaryWaivers(repoRoot, spawnGit);
+  const validWaivers = validSharedBinaryWaiverKeys(repoRoot, mounts, shared.waivers, spawnGit);
   return auditPrivateGamePreflight(mounts, {
     sharedBinaryWaivers: shared.waivers,
+    validSharedBinaryWaiverKeys: validWaivers,
     sharedBinaryErrors: shared.errors,
     nestedGitRoots: nested.roots,
     nestedGitErrors: nested.errors,
