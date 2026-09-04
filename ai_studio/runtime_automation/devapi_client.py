@@ -920,6 +920,18 @@ def running_game(
             launch_log.close()
         raise DevApiError("no devapi connection\n" + detail)
 
+    # A bot in manual time drives every frame itself, so the 60 Hz frame cap only
+    # buys it a 16.7 ms wait per round trip -- which is where a bot run spends
+    # most of its wall clock, not in the simulation. Uncapping the loop leaves
+    # what the bot measures untouched (it still steps frame by frame) and is why
+    # a bot run is seconds instead of minutes. Manual time only: a capped
+    # real-time session is what a human watches.
+    if extra_args and "--time-manual" in extra_args:
+        try:
+            client.result("time.set_fps", {"fps": 0})
+        except DevApiError:
+            pass  # an older build without the command still runs, just slower
+
     try:
         yield client
     except Exception:
