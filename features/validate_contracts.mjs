@@ -67,9 +67,14 @@ function validateManifest(root, id, base) {
       throw new Error(`${label}: README Compatibility must define PATCH, MINOR, and MAJOR rules`);
     }
   }
+  // The seed records what the template LINKS, so only "reusable" belongs in it.
+  // "opt-in" is a finished feature the template does not link -- a game installs
+  // it, or only the test lane touches it. Declaring one in the seed would hand
+  // every new game a dependency its runtime CMake never compiles, and the
+  // runtime build record rejects exactly that.
   const defaultStatus = base.startsWith("features/") ? "reusable" : "template-local";
   const allowedStatuses = base.startsWith("features/")
-    ? new Set(["reusable", "specified"])
+    ? new Set(["reusable", "opt-in", "specified"])
     : new Set(["template-local"]);
   const status = manifest.status ?? defaultStatus;
   if (typeof status !== "string" || !allowedStatuses.has(status)) {

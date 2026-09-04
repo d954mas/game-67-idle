@@ -3,7 +3,7 @@
   "id": "software-cursor",
   "version": "0.1.0",
   "title": "Software Cursor",
-  "status": "reusable",
+  "status": "opt-in",
   "kind": "presentation",
   "summary": "In-place themed software cursor with pointer and finger samples, smooth follow, press feedback, native cursor coordination, and game-owned visual overrides.",
   "copy_model": "in-place",

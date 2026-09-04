@@ -3,7 +3,7 @@
   "id": "test-goldens",
   "version": "1.0.0",
   "title": "Test Goldens",
-  "status": "reusable",
+  "status": "opt-in",
   "kind": "tooling",
   "summary": "Record-or-compare value banks for tests, so a watched number lives in a text file beside the test and is re-recorded by one command instead of being hand-edited in test source.",
   "copy_model": "in-place",

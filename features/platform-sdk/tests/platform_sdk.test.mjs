@@ -853,7 +853,10 @@ test("loading shell does not rewrite DOM for progress inside the same whole perc
 
   const writes = [];
   function element(id) {
-    const value = { classList: { add() {} }, style: {} };
+    const value = {
+      classList: { add() {} }, style: {}, hidden: true,
+      addEventListener() {}, setAttribute() {}, removeAttribute() {}, focus() {},
+    };
     value.style = new Proxy({}, {
       set(target, property, next) {
         writes.push(`${id}.style.${String(property)}=${next}`);
@@ -876,12 +879,17 @@ test("loading shell does not rewrite DOM for progress inside the same whole perc
     ["loading-label", element("loading-label")],
     ["loading-percent", element("loading-percent")],
     ["loading-bar", element("loading-bar")],
-    ["canvas", { focus() {} }],
+    ["runtime-overlay", element("runtime-overlay")],
+    ["runtime-title", element("runtime-title")],
+    ["runtime-message", element("runtime-message")],
+    ["runtime-reload", element("runtime-reload")],
+    ["canvas", element("canvas")],
   ]);
   const window = {
     matchMedia() {
       return { matches: false };
     },
+    addEventListener() {},
   };
   runInNewContext(`${shell.slice(start, end)}\n}());`, {
     document: {

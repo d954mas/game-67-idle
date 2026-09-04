@@ -452,6 +452,7 @@ function topLevelFunctionDefinitions(tokens) {
 
 function immediatelyInvokedFunctionBlocks(tokens) {
   const depths = braceDepths(tokens);
+  const unaryIifePrefixes = new Set(["!", "+", "-", "~", "void"]);
   const result = new Set();
   for (let offset = 0; offset < tokens.length; offset += 1) {
     if (depths[offset] !== 0 || tokens[offset].value !== "function" || tokens[offset + 1]?.value !== "(") continue;
@@ -461,10 +462,34 @@ function immediatelyInvokedFunctionBlocks(tokens) {
     if (paramsEnd === -1 || bodyEnd === -1) continue;
     const invokedBeforeClosingOuter = tokenValuesAt(tokens, bodyEnd + 1, ["(", ")", ")"]);
     const invokedAfterClosingOuter = tokenValuesAt(tokens, bodyEnd + 1, [")", "(", ")"]);
-    if (invokedBeforeClosingOuter || invokedAfterClosingOuter) result.add(bodyStart);
+    // terser's negate_iife drops the wrapping parens and prefixes a unary operator instead: !function(){}()
+    const invokedWithUnaryPrefix = unaryIifePrefixes.has(tokens[offset - 1]?.value)
+      && tokenValuesAt(tokens, bodyEnd + 1, ["(", ")"]);
+    if (invokedBeforeClosingOuter || invokedAfterClosingOuter || invokedWithUnaryPrefix) result.add(bodyStart);
     offset = bodyEnd;
   }
   return result;
+}
+
+// shared by every check that must treat a recognized top-level IIFE's body as if it were top-level script
+function iifeAwareTopLevelOffsets(tokens) {
+  const paths = bracePaths(tokens);
+  const invokedBlocks = immediatelyInvokedFunctionBlocks(tokens);
+  const result = new Set();
+  for (let offset = 0; offset < tokens.length; offset += 1) {
+    const path = paths[offset];
+    if (path.length === 0 || (path.length === 1 && invokedBlocks.has(path[0]))) result.add(offset);
+  }
+  return result;
+}
+
+function liveIifeAwareTopLevelSequenceOffset(tokens, expected, start = 0) {
+  const topLevel = iifeAwareTopLevelOffsets(tokens);
+  const dead = deadTokenOffsets(tokens);
+  for (let offset = start; offset < tokens.length; offset += 1) {
+    if (topLevel.has(offset) && !dead.has(offset) && tokenValuesAt(tokens, offset, expected)) return offset;
+  }
+  return -1;
 }
 
 function falseBlockStarts(tokens) {
@@ -536,14 +561,19 @@ function callsIn(tokens) {
 }
 
 function dynamicallyLoadsGame(tokens) {
-  const create = ["const", "let", "var"].map((declaration) => liveTopLevelSequenceOffset(
+  const create = ["const", "let", "var"].map((declaration) => liveIifeAwareTopLevelSequenceOffset(
     tokens,
     [declaration, "gameScript", "=", "document", ".", "createElement", "(", "script", ")", ";"],
   )).find((offset) => offset !== -1) ?? -1;
   if (create === -1) return false;
-  const source = liveTopLevelSequenceOffset(tokens, ["gameScript", ".", "src", "=", "game.js", ";"], create + 10);
+  const source = liveIifeAwareTopLevelSequenceOffset(tokens, ["gameScript", ".", "src", "=", "game.js", ";"], create + 10);
   if (source === -1) return false;
-  return liveTopLevelSequenceOffset(tokens, ["document", ".", "body", ".", "appendChild", "(", "gameScript", ")", ";"], source + 6) !== -1;
+  const append = ["document", ".", "body", ".", "appendChild", "(", "gameScript", ")"];
+  const appendOffset = liveIifeAwareTopLevelSequenceOffset(tokens, append, source + 6);
+  if (appendOffset === -1) return false;
+  // a minifier drops the trailing ";" when the call is the script block's final statement (ASI)
+  const after = tokens[appendOffset + append.length]?.value;
+  return after === undefined || after === ";";
 }
 
 function helperInstantiatesPath(definition, pathParam, definitions, visited = new Set()) {
@@ -630,13 +660,10 @@ function parseReleaseConfig(html, requireRuntimeBuild = true) {
     }
     const tokens = lexBootstrapScript(match[2]);
     if (dynamicallyLoadsGame(tokens)) loadsGame = true;
-    const paths = bracePaths(tokens);
     const dead = deadTokenOffsets(tokens);
-    const invokedBlocks = immediatelyInvokedFunctionBlocks(tokens);
+    const topLevelOffsets = iifeAwareTopLevelOffsets(tokens);
     for (let offset = 0; offset < tokens.length; offset += 1) {
-      const path = paths[offset];
-      if (dead.has(offset)
-          || (path.length !== 0 && !(path.length === 1 && invokedBlocks.has(path[0])))) continue;
+      if (dead.has(offset) || !topLevelOffsets.has(offset)) continue;
       const prefix = ["window", ".", "__PLATFORM_SDK_CONFIG__", "=", "Object", ".", "freeze", "(", "{", "target", ":"];
       if (!tokenValuesAt(tokens, offset, prefix)) continue;
       const target = tokens[offset + prefix.length];
@@ -803,7 +830,9 @@ function bundledReleaseHtml(input) {
     const attributes = scriptAttributes(rawAttributes);
     const type = String(attributes.get("type") || "").trim().toLowerCase();
     if (type !== "module" || !/^\s*import\s*["']\.\/platform-sdk\.js["'];?/m.test(body)) return whole;
-    const bundledBody = body.replace(/^\s*import\s*["']\.\/platform-sdk\.js["'];?\s*$/gm, () => {
+    // a minifier can put later statements on the same source line right after the import, so the
+    // removed match must not require the line to end at the import's trailing ";"
+    const bundledBody = body.replace(/^\s*import\s*["']\.\/platform-sdk\.js["'];?/gm, () => {
       replacements += 1;
       return "";
     });

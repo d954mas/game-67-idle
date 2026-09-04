@@ -224,6 +224,8 @@ function transformIdentityOwnedFiles(gameDir, template, identity) {
       1,
     ]),
     ["tests/web_persistence_check.py", `STORAGE_KEY = "${template.storageNamespace}/save/autosave"`, `STORAGE_KEY = "${identity.storageNamespace}/save/autosave"`, 1],
+    // The legacy-save fixture carries the composition test's app id as data; save import rejects a foreign app.
+    ["tests/fixtures/items_save_v1.json", `"app": "${template.storageNamespace}_composition_test"`, `"app": "${identity.storageNamespace}-composition-test"`, 1],
     ["cmake/GameOptions.cmake", `set(GAME_TITLE "${template.title}" CACHE STRING "Game window title base")`, `set(GAME_TITLE "${identity.title}" CACHE STRING "Game window title base")`, 1],
     ["src/main.c", `config.app_name = "${template.title}"`, `config.app_name = "${identity.title}"`, 1],
     ["src/main.c", `GAME_WINDOW_TITLE "${template.title}"`, `GAME_WINDOW_TITLE "${identity.title}"`, 1],

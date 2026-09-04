@@ -528,8 +528,15 @@ static bool game_items_try_create_defaults_from_plan(
         }
     }
 
-    const ItemsState items_before = items_state;
-    const GameState game_before = game_state;
+    // The rollback snapshot is static, not a local: ItemsState is one flat
+    // struct of ~108KB and Emscripten's default stack is 64KB, so a by-value
+    // copy silently writes past the stack into static data and the module traps
+    // on a global it never wrote. This seed runs once per new game and never
+    // re-enters, so a single shared snapshot is safe.
+    static ItemsState s_items_before;
+    static GameState s_game_before;
+    s_items_before = items_state;
+    s_game_before = game_state;
     if (!items_runtime_rebuild(error, error_cap)) { return false; }
 
     items_container_ref_t inventory = ITEMS_CONTAINER_REF_NONE;
@@ -570,12 +577,12 @@ static bool game_items_try_create_defaults_from_plan(
     return true;
 
 rollback:
-    items_state = items_before;
-    game_state = game_before;
+    items_state = s_items_before;
+    game_state = s_game_before;
     (void)items_runtime_rebuild(NULL, 0);
     items_container_ref_t restored_wallet = ITEMS_CONTAINER_REF_NONE;
-    if (game_before.wallet_container_id != ITEMS_ID_NONE) {
-        (void)items_container_try_from_id(game_before.wallet_container_id, &restored_wallet);
+    if (s_game_before.wallet_container_id != ITEMS_ID_NONE) {
+        (void)items_container_try_from_id(s_game_before.wallet_container_id, &restored_wallet);
     }
     bind_progression_scope(restored_wallet);
     return seed_error(error, error_cap, "seed initialization failed atomically");

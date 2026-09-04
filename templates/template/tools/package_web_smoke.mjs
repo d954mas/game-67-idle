@@ -23,6 +23,12 @@ const CONTENT_TYPES = new Map([
   [".png", "image/png"],
 ]);
 
+export function smokeProbePlan(mode = "full") {
+  if (mode === "quick") return { captureFrame: false, recoveryCycles: 0 };
+  if (mode === "full") return { captureFrame: true, recoveryCycles: 2 };
+  throw new Error(`unknown smoke mode: ${mode}`);
+}
+
 function localUrl(raw, label) {
   const url = new URL(raw);
   if (url.protocol !== "http:" || !LOCAL_HOSTS.has(url.hostname.toLowerCase()) || url.username || url.password) {
@@ -43,7 +49,19 @@ function issueLabel(kind) {
   return "resource error";
 }
 
-export function assessPackagedWebObservation(observation, expectedRuntimeBuildFingerprint) {
+function assessRenderedFrame(failures, frame, label) {
+  if (!frame || !(frame.width > 0) || !(frame.height > 0)
+      || !Number.isFinite(frame.minLuma) || !Number.isFinite(frame.maxLuma)
+      || !Number.isFinite(frame.variance)) {
+    failures.push(`${label} evidence is missing`);
+  } else if (frame.maxLuma <= 12 && frame.variance <= 4) {
+    failures.push(`${label} is black`);
+  } else if (frame.maxLuma - frame.minLuma < 8 || frame.variance < 4) {
+    failures.push(`${label} is blank`);
+  }
+}
+
+export function assessPackagedWebObservation(observation, expectedRuntimeBuildFingerprint, { mode = "full" } = {}) {
   const failures = [];
   try { localUrl(observation?.finalUrl, "final page URL"); }
   catch { failures.push("final page URL left loopback"); }
@@ -63,15 +81,29 @@ export function assessPackagedWebObservation(observation, expectedRuntimeBuildFi
   if (!(observation?.canvas?.width > 0) || !(observation?.canvas?.height > 0)) {
     failures.push("render canvas has no visible area");
   }
-  const frame = observation?.frame;
-  if (!frame || !(frame.width > 0) || !(frame.height > 0)
-      || !Number.isFinite(frame.minLuma) || !Number.isFinite(frame.maxLuma)
-      || !Number.isFinite(frame.variance)) {
-    failures.push("first frame evidence is missing");
-  } else if (frame.maxLuma <= 12 && frame.variance <= 4) {
-    failures.push("first frame is black");
-  } else if (frame.maxLuma - frame.minLuma < 8 || frame.variance < 4) {
-    failures.push("first frame is blank");
+  if (mode === "quick") return failures;
+  assessRenderedFrame(failures, observation?.frame, "first frame");
+  const recovery = observation?.recovery;
+  if (!recovery) {
+    failures.push("WebGL recovery evidence is missing");
+  } else {
+    if (!(recovery.completedCycles >= 2)) failures.push("two consecutive WebGL recovery cycles were not completed");
+    if (recovery.extensionAvailable !== true) failures.push("WEBGL_lose_context is unavailable");
+    if (recovery.lostEvent !== true) failures.push("webglcontextlost was not observed");
+    if (recovery.contextLostDuringLoss !== true) failures.push("WebGL context did not enter the lost state");
+    if (recovery.overlayVisibleDuringLoss !== true) failures.push("recovery overlay was not shown during context loss");
+    if (recovery.restoredEvent !== true) failures.push("webglcontextrestored was not observed");
+    if (recovery.overlayVisibleAtRestore !== true) failures.push("recovery overlay cleared before restoration");
+    if (recovery.contextRestored !== true) failures.push("WebGL context remained lost after restoration");
+    if (recovery.overlayClearedAfterReadyFrame !== true) failures.push("runtime did not confirm a recovered frame");
+    const cycles = Array.isArray(recovery.cycles) ? recovery.cycles : [];
+    for (let index = 0; index < Math.min(2, cycles.length); index += 1) {
+      if (cycles[index]?.runtimePresentedFrameAck !== true) {
+        failures.push(`runtime did not acknowledge a presented frame after recovery cycle ${index + 1}`);
+      }
+      assessRenderedFrame(failures, cycles[index]?.frame, `recovered frame after cycle ${index + 1}`);
+    }
+    if (recovery.failure) failures.push(`WebGL recovery probe failed: ${recovery.failure}`);
   }
   return failures;
 }
@@ -190,6 +222,14 @@ export class CdpClient {
   }
 
   call(method, params, deadline) {
+    return this.callInSession(method, params, deadline, this.sessionId);
+  }
+
+  callBrowser(method, params, deadline) {
+    return this.callInSession(method, params, deadline, "");
+  }
+
+  callInSession(method, params, deadline, sessionId) {
     return new Promise((resolveCall, rejectCall) => {
       const id = ++this.nextId;
       const timer = setTimeout(() => {
@@ -203,7 +243,7 @@ export class CdpClient {
       });
       try {
         this.socket.send(JSON.stringify({
-          id, method, params: params || {}, ...(this.sessionId ? { sessionId: this.sessionId } : {}),
+          id, method, params: params || {}, ...(sessionId ? { sessionId } : {}),
         }));
       } catch (error) {
         this.pending.delete(id);
@@ -273,25 +313,119 @@ function addIssue(issues, kind, text) {
   if (!issues.some((entry) => entry.kind === issue.kind && entry.text === issue.text)) issues.push(issue);
 }
 
-export function registerBrowserIssueCapture(client, issues) {
+function cdpLocation(url, lineNumber, columnNumber) {
+  const line = Number.isInteger(lineNumber) ? lineNumber + 1 : "?";
+  const column = Number.isInteger(columnNumber) ? columnNumber + 1 : "?";
+  return `${url || "unknown URL"}:${line}:${column}`;
+}
+
+function compactStackFrames(callFrames, limit = 2) {
+  return (callFrames || []).slice(0, limit).map((frame) => (
+    `${frame?.functionName || "<anonymous>"}@${cdpLocation(frame?.url, frame?.lineNumber, frame?.columnNumber)}`
+  )).join(" <- ");
+}
+
+function runtimeExceptionText(exceptionDetails) {
+  const frames = exceptionDetails?.stackTrace?.callFrames || [];
+  const firstFrame = frames[0];
+  const message = String(
+    exceptionDetails?.exception?.description || exceptionDetails?.text || "unknown browser failure",
+  ).split(/\r?\n/, 1)[0];
+  const location = cdpLocation(
+    exceptionDetails?.url || firstFrame?.url,
+    exceptionDetails?.lineNumber ?? firstFrame?.lineNumber,
+    exceptionDetails?.columnNumber ?? firstFrame?.columnNumber,
+  );
+  const stack = compactStackFrames(frames);
+  return `${message} at ${location}${stack ? `; stack=${stack}` : ""}`;
+}
+
+function initiatorProvenance(initiator) {
+  if (!initiator) return "";
+  const type = initiator.type || "other";
+  const stack = compactStackFrames(initiator.stack?.callFrames);
+  if (stack) return `${type} ${stack}`;
+  if (initiator.url || Number.isInteger(initiator.lineNumber) || Number.isInteger(initiator.columnNumber)) {
+    return `${type} ${cdpLocation(initiator.url, initiator.lineNumber, initiator.columnNumber)}`;
+  }
+  return type;
+}
+
+function loadingFailureText(failure, request) {
+  const type = failure?.type || request?.type || "Other";
+  const url = request?.url || "unknown URL";
+  const details = [`${type} ${url} failed: ${failure?.errorText || "unknown network error"}`];
+  if (failure?.blockedReason) details.push(`blocked=${failure.blockedReason}`);
+  if (failure?.canceled) details.push("canceled=true");
+  const initiator = initiatorProvenance(request?.initiator);
+  if (initiator) details.push(`initiator=${initiator}`);
+  return details.join("; ");
+}
+
+export function registerBrowserIssueCapture(client, issues, allowedRemote = [], toleratedRemote = [], policy = {}) {
+  const allowed = (url) => allowedRemote.some((pattern) => pattern.test(url || ""));
+  // tolerated = the ad stack the platform SDK pulls: the smoke BLOCKS those
+  // requests (adblock simulation) and their failures are expected, not issues
+  const tolerated = (text) => toleratedRemote.some((pattern) => pattern.test(text || ""));
+  const toleratedRequestIds = new Set();
+  const requestMetadata = new Map();
   client.on("Runtime.exceptionThrown", ({ exceptionDetails }) => addIssue(
-    issues, "page.exception", exceptionDetails?.exception?.description || exceptionDetails?.text,
+    issues, "page.exception", runtimeExceptionText(exceptionDetails),
   ));
   client.on("Runtime.consoleAPICalled", ({ type, args }) => {
-    if (type === "error") addIssue(issues, "console.error", (args || []).map((arg) => arg?.value ?? arg?.description ?? "error").join(" "));
+    if (type !== "error") return;
+    const text = (args || []).map((arg) => arg?.value ?? arg?.description ?? "error").join(" ");
+    if (policy.consumeConsoleError?.(text) === true) return;
+    if (tolerated(text)) return;
+    addIssue(issues, "console.error", text);
   });
   client.on("Log.entryAdded", ({ entry }) => {
-    if (entry?.level === "error") addIssue(issues, entry.source === "network" ? "resource.http" : "log.error", entry.text || entry.url);
+    if (entry?.level !== "error") return;
+    if (tolerated(entry?.text) || tolerated(entry?.url)) return;
+    addIssue(issues, entry.source === "network" ? "resource.http" : "log.error", entry.text || entry.url);
   });
-  client.on("Network.responseReceived", ({ response: resource }) => {
+  client.on("Network.responseReceived", ({ requestId, response: resource }) => {
+    if (requestId && toleratedRequestIds.has(requestId)) return;
     if (resource?.status >= 400) addIssue(issues, "resource.http", `${resource.status} ${resource.url}`);
-    if (remoteNetworkUrl(resource?.url)) addIssue(issues, "resource.remote", resource?.url);
+    if (!allowed(resource?.url) && remoteNetworkUrl(resource?.url)) {
+      addIssue(issues, "resource.remote", resource?.url);
+    }
   });
-  client.on("Network.loadingFailed", ({ errorText, blockedReason, canceled }) => {
-    if (canceled && !blockedReason && errorText === "net::ERR_ABORTED") return;
-    addIssue(issues, "resource.load", blockedReason || errorText);
+  client.on("Network.loadingFailed", (failure) => {
+    const request = failure?.requestId ? requestMetadata.get(failure.requestId) : undefined;
+    const requestWasTolerated = failure?.requestId && toleratedRequestIds.has(failure.requestId);
+    if (failure?.requestId) {
+      requestMetadata.delete(failure.requestId);
+      toleratedRequestIds.delete(failure.requestId);
+    }
+    if (requestWasTolerated) return;
+    if (failure?.canceled && !failure?.blockedReason && failure?.errorText === "net::ERR_ABORTED") return;
+    addIssue(issues, "resource.load", loadingFailureText(failure, request));
   });
-  client.on("Network.requestWillBeSent", ({ request }) => {
+  client.on("Network.loadingFinished", ({ requestId }) => {
+    if (requestId) {
+      requestMetadata.delete(requestId);
+      toleratedRequestIds.delete(requestId);
+    }
+  });
+  client.on("Network.requestWillBeSent", ({ requestId, request, type, initiator }) => {
+    if (requestId) {
+      requestMetadata.set(requestId, {
+        url: request?.url,
+        type,
+        initiator,
+      });
+      toleratedRequestIds.delete(requestId);
+    }
+    // tolerated outranks allowed: an origin may be reachable (the platform CDN)
+    // and still serve ad plumbing whose failure the game must survive
+    if (tolerated(request?.url)) {
+      if (requestId) toleratedRequestIds.add(requestId);
+      return;
+    }
+    if (allowed(request?.url)) {
+      return;
+    }
     if (remoteNetworkUrl(request?.url)) addIssue(issues, "resource.remote", request?.url);
   });
   client.on("Network.webSocketCreated", ({ url }) => {
@@ -324,18 +458,130 @@ const PAGE_STATE = `(() => {
   const overlayHidden = !overlay || getComputedStyle(overlay).display === "none";
   const compiled = globalThis.__AI_STUDIO_RUNTIME_BUILD_FINGERPRINT__ || null;
   const configured = globalThis.__PLATFORM_SDK_CONFIG__?.runtimeBuildFingerprint || null;
-  const focusContract = typeof globalThis.__gameCanvasHasFocus === "function"
-    && typeof globalThis.__gameHasFinePointer === "function"
-    && !document.getElementById("focus-hint");
   return {
     finalUrl: location.href,
-    ready: document.readyState === "complete" && overlayHidden && Boolean(compiled)
-      && compiled === configured && focusContract,
+    ready: document.readyState === "complete" && overlayHidden && Boolean(compiled) && compiled === configured,
     runtimeBuildFingerprint: configured,
     compiledRuntimeBuildFingerprint: compiled,
     canvas: { x: rect?.x || 0, y: rect?.y || 0, width: rect?.width || 0, height: rect?.height || 0 }
   };
 })()`;
+
+const WEBGL_RECOVERY_STATE = `new Promise((resolve) => {
+  const canvas = document.getElementById("canvas");
+  const overlay = document.getElementById("runtime-overlay");
+  const gl = canvas?.getContext("webgl2");
+  const extension = gl?.getExtension("WEBGL_lose_context");
+  const evidence = {
+    extensionAvailable: Boolean(extension),
+    lostEvent: false,
+    contextLostDuringLoss: false,
+    overlayVisibleDuringLoss: false,
+    restoredEvent: false,
+    overlayVisibleAtRestore: false,
+    contextRestored: false,
+    overlayClearedAfterReadyFrame: false,
+    runtimePresentedFrameAck: false,
+    failure: ""
+  };
+  const clearRuntimeRecovery = globalThis.__clearRuntimeRecovery;
+  let wrappedClearRuntimeRecovery = null;
+  let finished = false;
+  let timeout = 0;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timeout);
+    if (wrappedClearRuntimeRecovery
+        && globalThis.__clearRuntimeRecovery === wrappedClearRuntimeRecovery) {
+      globalThis.__clearRuntimeRecovery = clearRuntimeRecovery;
+    }
+    resolve(evidence);
+  };
+  const fail = (error) => {
+    evidence.failure = String(error?.message || error || "unknown recovery failure");
+    finish();
+  };
+  if (!canvas || !overlay || !gl || !extension || typeof clearRuntimeRecovery !== "function") {
+    if (typeof clearRuntimeRecovery !== "function") evidence.failure = "runtime recovery bridge is unavailable";
+    finish();
+    return;
+  }
+  wrappedClearRuntimeRecovery = (...args) => {
+    evidence.runtimePresentedFrameAck = true;
+    return Reflect.apply(clearRuntimeRecovery, globalThis, args);
+  };
+  globalThis.__clearRuntimeRecovery = wrappedClearRuntimeRecovery;
+  timeout = setTimeout(() => fail("recovery timed out"), 10000);
+  canvas.addEventListener("webglcontextlost", () => {
+    evidence.lostEvent = true;
+    evidence.contextLostDuringLoss = gl.isContextLost();
+    evidence.overlayVisibleDuringLoss = !overlay.hidden;
+    setTimeout(() => {
+      try { extension.restoreContext(); }
+      catch (error) { fail(error); }
+    }, 100);
+  }, { once: true });
+  canvas.addEventListener("webglcontextrestored", () => {
+    evidence.restoredEvent = true;
+    evidence.overlayVisibleAtRestore = !overlay.hidden;
+    const waitForReadyFrame = () => {
+      if (!overlay.hidden) {
+        requestAnimationFrame(waitForReadyFrame);
+        return;
+      }
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        evidence.contextRestored = !gl.isContextLost();
+        evidence.overlayClearedAfterReadyFrame = overlay.hidden;
+        finish();
+      }));
+    };
+    requestAnimationFrame(waitForReadyFrame);
+  }, { once: true });
+  try { extension.loseContext(); }
+  catch (error) { fail(error); }
+})`;
+
+async function evaluateByValue(client, expression, deadline) {
+  const evaluated = await client.call("Runtime.evaluate", {
+    expression,
+    awaitPromise: true,
+    returnByValue: true,
+  }, deadline);
+  if (evaluated.exceptionDetails) throw new Error(runtimeExceptionText(evaluated.exceptionDetails));
+  return evaluated.result?.value;
+}
+
+async function captureCanvasFrame(client, canvas, deadline) {
+  if (!(canvas?.width > 0) || !(canvas?.height > 0)) return { bytes: null, frame: null };
+  const screenshot = await client.call("Page.captureScreenshot", {
+    format: "png",
+    fromSurface: true,
+    captureBeyondViewport: false,
+    clip: {
+      x: Math.max(0, canvas.x),
+      y: Math.max(0, canvas.y),
+      width: Math.min(1280, canvas.width),
+      height: Math.min(720, canvas.height),
+      scale: 1,
+    },
+  }, deadline);
+  const bytes = Buffer.from(screenshot.data, "base64");
+  return { bytes, frame: analyzePngFrame(bytes) };
+}
+
+function recoveryCyclePassed(evidence) {
+  return evidence?.extensionAvailable === true
+    && evidence.lostEvent === true
+    && evidence.contextLostDuringLoss === true
+    && evidence.overlayVisibleDuringLoss === true
+    && evidence.restoredEvent === true
+    && evidence.overlayVisibleAtRestore === true
+    && evidence.contextRestored === true
+    && evidence.overlayClearedAfterReadyFrame === true
+    && evidence.runtimePresentedFrameAck === true
+    && !evidence.failure;
+}
 
 async function closeChild(child, deadline) {
   const exited = () => !child || child.exitCode !== null || child.signalCode !== null;
@@ -458,7 +704,8 @@ export function analyzePngFrame(bytes) {
   return { width, height, minLuma, maxLuma, variance: Math.max(0, sumSquares / pixels - mean * mean) };
 }
 
-async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chromePath, timeoutMs = 60000, profileRoot = tmpdir() }) {
+async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chromePath, timeoutMs = 60000, allowedRemote = [], toleratedRemote = [], blockedUrlPatterns = [], profileRoot = tmpdir(), mode = "full" }) {
+  const probePlan = smokeProbePlan(mode);
   const deadline = Date.now() + timeoutMs;
   const browser = findSupportedBrowser({ chromePath });
   let profileDir = "";
@@ -468,6 +715,16 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
   let targetId = "";
   let operationError = null;
   const issues = [];
+  let contextLossConsoleAllowance = 0;
+  let expectedLossConsoleErrors = 0;
+  const issuePolicy = {
+    consumeConsoleError(text) {
+      if (text.trim() !== "ERROR [gfx] WebGL context lost" || contextLossConsoleAllowance <= 0) return false;
+      contextLossConsoleAllowance -= 1;
+      expectedLossConsoleErrors += 1;
+      return true;
+    },
+  };
   try {
     profileDir = mkdtempSync(join(profileRoot, "ai-studio-package-smoke-"));
     child = spawn(browser, [
@@ -485,6 +742,9 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
       "--disable-sync",
       ...browserSandboxArgs(),
       "--use-angle=swiftshader",
+      // Chrome 151+ refuses software WebGL without this opt-in; the smoke
+      // renders trusted local content only
+      "--enable-unsafe-swiftshader",
       "--metrics-recording-only",
       "--mute-audio",
       "about:blank",
@@ -510,7 +770,7 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
     if (!attached.sessionId) throw new Error("Chrome did not attach the package smoke target");
     rootClient.sessionId = attached.sessionId;
     client = rootClient;
-    registerBrowserIssueCapture(client, issues);
+    registerBrowserIssueCapture(client, issues, allowedRemote, toleratedRemote, issuePolicy);
     await Promise.all([
       client.call("Page.enable", {}, deadline),
       client.call("Runtime.enable", {}, deadline),
@@ -518,6 +778,11 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
       client.call("Network.enable", {}, deadline),
       client.call("Emulation.setDeviceMetricsOverride", { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false }, deadline),
     ]);
+    if (blockedUrlPatterns.length > 0) {
+      // adblock simulation: the tolerated ad stack must FAIL, and the game
+      // must still reach readiness (Poki requires adblocked players playable)
+      await client.call("Network.setBlockedURLs", { urls: blockedUrlPatterns }, deadline);
+    }
     const navigation = await client.call("Page.navigate", { url: localUrl(url, "package page URL").href }, deadline);
     if (navigation.errorText) addIssue(issues, "resource.load", navigation.errorText);
     let state = null;
@@ -528,10 +793,9 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
     while (Date.now() < readinessDeadline) {
       const evaluated = await client.call("Runtime.evaluate", { expression: PAGE_STATE, returnByValue: true }, readinessDeadline);
       state = evaluated.result?.value || null;
-      // a recorded issue still fails the smoke, but it must not end the wait: a
-      // platform SDK degrades on a deadline of its own, so abandoning readiness
-      // at the first failed request reports "not ready" for a game that does
-      // come up seconds later
+      // a recorded issue still fails the smoke, but it must not end the wait:
+      // the platform SDK degrades on a deadline, so abandoning readiness at the
+      // first failed request reports "not ready" for a game that does come up
       if (state?.ready && state.compiledRuntimeBuildFingerprint === expectedRuntimeBuildFingerprint
           && state.canvas?.width > 0 && state.canvas?.height > 0) break;
       await new Promise((resolveWait) => setTimeout(resolveWait, Math.min(100, remaining(readinessDeadline))));
@@ -543,19 +807,35 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
       }, deadline);
     }
     let frame = null;
-    if (state?.canvas?.width > 0 && state?.canvas?.height > 0) {
-      const screenshot = await client.call("Page.captureScreenshot", {
-        format: "png",
-        fromSurface: true,
-        captureBeyondViewport: false,
-        clip: {
-          x: Math.max(0, state.canvas.x), y: Math.max(0, state.canvas.y),
-          width: Math.min(1280, state.canvas.width), height: Math.min(720, state.canvas.height), scale: 1,
-        },
-      }, deadline);
-      frame = analyzePngFrame(Buffer.from(screenshot.data, "base64"));
+    let recovery = null;
+    if (probePlan.captureFrame && state?.canvas?.width > 0 && state?.canvas?.height > 0) {
+      const initialCapture = await captureCanvasFrame(client, state.canvas, deadline);
+      frame = initialCapture.frame;
+      if (state.ready) {
+        const cycles = [];
+        for (let cycle = 0; cycle < probePlan.recoveryCycles; cycle += 1) {
+          contextLossConsoleAllowance += 1;
+          const cycleEvidence = await evaluateByValue(client, WEBGL_RECOVERY_STATE, deadline);
+          const cycleCapture = await captureCanvasFrame(client, state.canvas, deadline);
+          const evidenceWithFrame = {
+            ...(cycleEvidence || { failure: "recovery result is missing" }),
+            frame: cycleCapture.frame,
+          };
+          cycles.push(evidenceWithFrame);
+          if (!recoveryCyclePassed(evidenceWithFrame)) break;
+        }
+        await evaluateByValue(client, "0", deadline);
+        contextLossConsoleAllowance = 0;
+        const evidence = cycles.at(-1);
+        recovery = {
+          ...(evidence || { failure: "recovery result is missing" }),
+          cycles,
+          completedCycles: cycles.filter(recoveryCyclePassed).length,
+          expectedLossConsoleErrors,
+        };
+      }
     }
-    return { ...state, frame, issues: [...issues] };
+    return { ...state, frame, recovery, issues: [...issues] };
   } catch (error) {
     operationError = error;
     throw error;
@@ -588,7 +868,9 @@ export async function smokePackagedWebArtifact({
   timeoutMs = 60000,
   probe = defaultBrowserProbe,
   profileRoot = tmpdir(),
+  mode = "full",
 }) {
+  smokeProbePlan(mode);
   const packagePath = resolve(zipPath);
   const entries = readStoreZip(readFileSync(packagePath));
   let release;
@@ -600,15 +882,43 @@ export async function smokePackagedWebArtifact({
     throw new Error(`reopened package release contract is invalid: ${basename(packagePath)}`);
   }
   const server = await serveEntries(entries, release.entrypoint);
+  // the poki adapter is REQUIRED to fetch the official SDK from the poki CDN;
+  // that single origin is exempt from the hermetic no-remote rule (offline the
+  // adapter degrades to no-ops, which the smoke still proves)
+  const allowedRemote = expectedTarget === "poki"
+    ? [/^https:\/\/([a-z0-9-]+\.)?poki\.com\//,
+       /^https:\/\/([a-z0-9-]+\.)?poki-cdn\.com\//,
+       /^https:\/\/([a-z0-9-]+\.)?poki\.io\//] : [];
+  // the ad stack the poki SDK pulls, poki's own ad settings endpoint included:
+  // BLOCKED (adblock simulation) and its failures tolerated; any other non-poki
+  // remote request still fails the smoke. ads.poki.com belongs here and not in
+  // allowedRemote because it is unreachable off poki's own hosting anyway (it
+  // answers no cross-origin request), which is the same shape an adblocked
+  // player sees, and the game is required to become playable through it.
+  const AD_STACK_HOSTS = [
+    "ads.poki.com",
+    "doubleclick.net", "googlesyndication.com", "googletagservices.com",
+    "googletagmanager.com", "google-analytics.com", "imasdk.googleapis.com",
+    "amazon-adsystem.com", "adsafeprotected.com",
+  ];
+  const toleratedRemote = expectedTarget === "poki"
+    ? [...AD_STACK_HOSTS.map((host) => new RegExp(`(^|[/.])${host.replaceAll(".", "\\.")}(/|$|[:?#'" )])`)),
+       /cdn\.jsdelivr\.net\/gh\/prebid/] : [];
+  const blockedUrlPatterns = expectedTarget === "poki"
+    ? [...AD_STACK_HOSTS.map((host) => `*${host}*`), "*cdn.jsdelivr.net/gh/prebid*"] : [];
   try {
     const observation = await probe({
       url: server.url,
       expectedRuntimeBuildFingerprint: release.runtimeBuildFingerprint,
       chromePath,
       timeoutMs,
+      allowedRemote,
+      toleratedRemote,
+      blockedUrlPatterns,
       profileRoot,
+      mode,
     });
-    const failures = assessPackagedWebObservation(observation, release.runtimeBuildFingerprint);
+    const failures = assessPackagedWebObservation(observation, release.runtimeBuildFingerprint, { mode });
     if (failures.length > 0) throw new Error(`packaged web smoke failed: ${failures.join("; ")}`);
     return observation;
   } finally {

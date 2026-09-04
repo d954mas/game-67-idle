@@ -63,6 +63,7 @@ function buildFixtureRepo() {
   write(root, `${template}/src/main.c`, "config.app_name = \"Template\";\n#define GAME_WINDOW_TITLE \"Template\"\n");
   write(root, `${template}/src/build_packs.c`, "nt_builder_add_font(ctx, argv[3], &font_options);\n");
   write(root, `${template}/tests/web_persistence_check.py`, "STORAGE_KEY = \"template/save/autosave\"\n");
+  write(root, `${template}/tests/fixtures/items_save_v1.json`, "{\n  \"app\": \"template_composition_test\"\n}\n");
   write(root, `${template}/assets/readme.txt`, "asset\n");
   write(root, `${template}/.gitignore`, "build/\nsrc/generated/\n.ai_studio/evidence/\n");
   write(root, `${template}/src/generated/stale.h`, "generated\n");

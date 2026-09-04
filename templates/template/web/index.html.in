@@ -80,6 +80,63 @@
     background: #f2b84b;
     transition: width 120ms linear;
   }
+
+  #runtime-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 24px;
+    background: rgba(10, 13, 18, 0.96);
+    color: #f4f0e6;
+    font: 15px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    text-align: center;
+  }
+
+  #runtime-overlay[hidden] {
+    display: none;
+  }
+
+  .runtime-panel {
+    width: min(420px, 100%);
+    box-sizing: border-box;
+    padding: 28px 24px 24px;
+    border: 1px solid #3a444f;
+    background: #1a1f26;
+  }
+
+  .runtime-panel h1 {
+    margin: 0 0 12px;
+    font-size: 24px;
+    line-height: 1.15;
+  }
+
+  .runtime-panel p {
+    margin: 0 0 22px;
+    color: #b7c4cd;
+    font-size: 16px;
+    line-height: 1.45;
+  }
+
+  #runtime-reload {
+    min-width: 144px;
+    min-height: 48px;
+    padding: 10px 24px;
+    border: 0;
+    background: #f2b84b;
+    color: #14181d;
+    cursor: pointer;
+    font: 700 17px/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    touch-action: manipulation;
+  }
+
+  #runtime-reload:focus-visible {
+    outline: 3px solid #f4f0e6;
+    outline-offset: 4px;
+  }
 </style>
 </head>
 <body>
@@ -92,6 +149,14 @@
     <div class="progress-track" aria-hidden="true">
       <div id="loading-bar"></div>
     </div>
+  </div>
+</div>
+<div id="runtime-overlay" role="status" aria-live="polite"
+  aria-labelledby="runtime-title" aria-describedby="runtime-message" hidden>
+  <div class="runtime-panel">
+    <h1 id="runtime-title"></h1>
+    <p id="runtime-message"></p>
+    <button id="runtime-reload" type="button">Reload</button>
   </div>
 </div>
 <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
@@ -115,6 +180,12 @@
         : function (callback) { callback(); });
     var lastWhole = -1;
     var hidden = false;
+    var runtimeOverlay = document.getElementById('runtime-overlay');
+    var runtimeTitle = document.getElementById('runtime-title');
+    var runtimeMessage = document.getElementById('runtime-message');
+    var runtimeReload = document.getElementById('runtime-reload');
+    var canvas = document.getElementById('canvas');
+    var runtimeState = 'ready';
 
     function clamp(value) {
       value = Number(value);
@@ -172,6 +243,93 @@
       });
       focusCanvas();
     };
+
+    function setRuntimeMessage(title, message) {
+      if (runtimeTitle) runtimeTitle.textContent = title;
+      if (runtimeMessage) runtimeMessage.textContent = message;
+    }
+
+    function setRuntimeSemantics(role, live, modal) {
+      if (!runtimeOverlay) return;
+      runtimeOverlay.setAttribute('role', role);
+      runtimeOverlay.setAttribute('aria-live', live);
+      if (modal) runtimeOverlay.setAttribute('aria-modal', 'true');
+      else runtimeOverlay.removeAttribute('aria-modal');
+    }
+
+    // A lost WebGL context is recoverable, a wasm trap is not, and the two must
+    // never share a state: covering a recovering game with the unrecoverable
+    // panel costs the whole session.
+    function showRuntimeRecovery() {
+      if (runtimeState !== 'ready') return;
+      runtimeState = 'recovering';
+      setRuntimeMessage(
+        'Graphics paused',
+        'The graphics connection was lost. Trying to recover.'
+      );
+      setRuntimeSemantics('status', 'polite', false);
+      if (runtimeOverlay) runtimeOverlay.hidden = false;
+    }
+
+    // Called from the runtime only after a rebuilt frame reached the screen.
+    function clearRuntimeRecovery() {
+      if (runtimeState !== 'recovering') return;
+      runtimeState = 'ready';
+      if (runtimeOverlay) runtimeOverlay.hidden = true;
+    }
+
+    function showRuntimeFatal() {
+      if (runtimeState === 'fatal') return;
+      runtimeState = 'fatal';
+      setRuntimeMessage(
+        'Game stopped',
+        'Something went wrong. Reload to try again.'
+      );
+      setRuntimeSemantics('alertdialog', 'assertive', true);
+      if (runtimeOverlay) runtimeOverlay.hidden = false;
+      if (runtimeReload) runtimeReload.focus({ preventScroll: true });
+    }
+
+    // The page hosts a portal SDK, ad frames and whatever the player's browser
+    // injects, and any of them can throw without the game noticing. Only a
+    // failure the game's own bundle raised may declare the run dead.
+    var GAME_BUNDLE = /\bgame\.(?:js|wasm)\b|wasm:\/\//i;
+
+    function isGameFailure(reason) {
+      // A wasm trap has exactly one possible author on this page. Matched by
+      // class NAME, not instanceof: an error that crossed a realm carries a
+      // different constructor and would slip past identity.
+      var name = reason && typeof reason.name === 'string' ? reason.name : '';
+      if (name === 'RuntimeError' || name === 'CompileError' || name === 'LinkError') return true;
+      var stack = reason && typeof reason.stack === 'string' ? reason.stack : '';
+      return GAME_BUNDLE.test(stack);
+    }
+
+    if (canvas) {
+      // Without preventDefault the browser never offers the context back.
+      canvas.addEventListener('webglcontextlost', function (event) {
+        event.preventDefault();
+        showRuntimeRecovery();
+      });
+    }
+
+    if (runtimeReload) {
+      runtimeReload.addEventListener('click', function () {
+        window.location.reload();
+      });
+    }
+
+    window.addEventListener('error', function (event) {
+      if (event.target && event.target !== window) return;
+      if (!isGameFailure(event.error) && !GAME_BUNDLE.test(event.filename || '')) return;
+      showRuntimeFatal();
+    });
+    window.addEventListener('unhandledrejection', function (event) {
+      if (!isGameFailure(event.reason)) return;
+      showRuntimeFatal();
+    });
+    window.__showRuntimeFatal = showRuntimeFatal;
+    window.__clearRuntimeRecovery = clearRuntimeRecovery;
 
     // Presentation stays in the game UI; the shell only exposes browser state.
     function focusCanvas() {

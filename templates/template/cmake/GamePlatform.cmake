@@ -76,6 +76,13 @@ if(EMSCRIPTEN)
         # and texture transcode OOMs (Aborted(OOM) on web).
         "SHELL:-sALLOW_MEMORY_GROWTH=1"
         "SHELL:-sINITIAL_MEMORY=64MB"
+        # Emscripten defaults the stack to 64KB, while native platforms give
+        # megabytes. One flat state struct (ItemsState alone is ~108KB) already
+        # exceeds that, and a by-value copy silently writes past the stack into
+        # static data -- the module then traps on a global it never wrote. Game
+        # code must not snapshot such a struct on the stack, and web is given a
+        # native-sized stack so a smaller local can never reach that edge.
+        "SHELL:-sSTACK_SIZE=4MB"
     )
     if(GAME_DEVAPI_ENABLED)
         # The engine JS shim drives the transport through Module.ccall, which

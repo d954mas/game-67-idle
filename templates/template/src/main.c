@@ -94,6 +94,23 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten/emscripten.h>
+#include <emscripten/html5.h>
+
+/* The browser hands the GPU back only if the page cancels the loss event, and
+   the engine learns the context is gone at the next frame boundary. Beginning a
+   frame here makes that discovery synchronous with the event, so no draw call
+   is issued against a dead context. */
+static EM_BOOL game_on_webgl_context_lost(int event_type, const void *event, void *user_data) {
+    (void)event_type;
+    (void)event;
+    (void)user_data;
+    nt_gfx_begin_frame();
+    return EM_TRUE;
+}
+#endif
+
 #ifndef GAME_ASSET_PACK_PATH
 #define GAME_ASSET_PACK_PATH "assets/game.ntpack"
 #endif
@@ -121,6 +138,9 @@ static int s_frame_count;
 static bool s_game_runtime_initialized;
 static bool s_game_runtime_ready;
 static bool s_game_runtime_failed;
+/* Set when the GPU objects were rebuilt, cleared when a rebuilt frame reached
+   the screen: the shell's "restoring" overlay must not lift a frame early. */
+static bool s_gfx_recovery_pending;
 
 #if NT_DEVAPI_ENABLED
 #if NT_DEVAPI_ENABLED
@@ -142,8 +162,20 @@ EM_JS(double, game_expected_pack_bytes, (void), {
     var bytes = globalThis.__gameAssetBytes && globalThis.__gameAssetBytes.pack;
     return bytes > 0 ? bytes : 0;
 })
+
+EM_JS(void, game_clear_runtime_recovery, (void), {
+    if (typeof window.__clearRuntimeRecovery === "function") {
+        window.__clearRuntimeRecovery();
+    }
+})
 /* clang-format on */
 #endif
+
+static void game_report_gfx_recovery_complete(void) {
+#if defined(__EMSCRIPTEN__)
+    game_clear_runtime_recovery();
+#endif
+}
 
 static float initial_pack_loading_progress(void) {
     uint32_t received = 0u;
@@ -463,9 +495,13 @@ static void frame(void) {
         nt_app_quit();
     }
 #endif
-    nt_resource_step();
-    nt_material_step();
-    shader_programs_update();
+    /* While the context is lost every GPU handle is dead; uploading against one
+       is what turns a recoverable loss into a crash. */
+    if (!g_nt_gfx.context_lost) {
+        nt_resource_step();
+        nt_material_step();
+        shader_programs_update();
+    }
     game_runtime_try_start();
     if (s_game_runtime_ready) {
         game_scenes_step(++s_scene_frame_index, g_nt_app.dt);
@@ -478,18 +514,32 @@ static void frame(void) {
     game_runtime_update();
 
     nt_gfx_begin_frame();
+    if (g_nt_gfx.context_lost) {
+        return;
+    }
     if (g_nt_gfx.context_restored) {
         nt_resource_invalidate(NT_ASSET_SHADER_CODE);
         nt_resource_invalidate(NT_ASSET_FONT);
         nt_resource_invalidate(NT_ASSET_MESH);
         nt_resource_invalidate(NT_ASSET_TEXTURE);
+        nt_gfx_destroy_buffer(s_frame_ubo);
         s_frame_ubo = nt_gfx_make_buffer(&(nt_buffer_desc_t){
             .type = NT_BUFFER_UNIFORM, .usage = NT_USAGE_DYNAMIC,
             .size = sizeof(nt_frame_uniforms_t), .label = "frame_uniforms"});
         nt_text_renderer_restore_gpu();
+        nt_font_step();
         render_mesh_restore_gpu();
         ui_runtime_restore_gpu();
+        s_gfx_recovery_pending = true;
+        /* Resource slots publish the invalidation on the next top-of-frame
+           resource step, so this frame must not touch their stale GPU handles. */
+        nt_gfx_end_frame();
+        nt_window_swap_buffers();
+        devapi_sample_metrics(frame_begin);
+        return;
     }
+    const bool gfx_recovery_frame_ready =
+        s_gfx_recovery_pending && playable_shell_ready && !g_nt_gfx.context_lost;
 
     // The engine's draw-pass gate (devapi render.set_enabled). A bot advancing a
     // run to a world state pays for frames nobody looks at, and the drawing is
@@ -527,6 +577,10 @@ static void frame(void) {
        the previous state; this callback is still one synchronous frame. */
     (void)game_runtime_apply_pending_new_game();
     nt_window_swap_buffers();
+    if (s_gfx_recovery_pending && gfx_recovery_frame_ready) {
+        s_gfx_recovery_pending = false;
+        game_report_gfx_recovery_complete();
+    }
     platform_lifecycle_after_frame_present(playable_shell_ready);
     devapi_sample_metrics(frame_begin);
 }
@@ -610,6 +664,10 @@ int main(int argc, char **argv) {
     gfx_desc.depth = true;
     gfx_desc.max_buffers = 256;
     nt_gfx_init(&gfx_desc);
+#if defined(__EMSCRIPTEN__)
+    (void)emscripten_set_webglcontextlost_callback("#canvas", NULL, true,
+                                                   game_on_webgl_context_lost);
+#endif
     nt_gfx_register_global_block("Globals", 0);
 
     nt_http_init();

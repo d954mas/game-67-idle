@@ -138,6 +138,45 @@ test("specified-only features stay out of runtime dependency seeds", (t) => {
   assert.ok(result.rootFeatures.includes("planned-core"));
 });
 
+test("opt-in features stay out of runtime dependency seeds", (t) => {
+  const root = fixture(t);
+  write(root, "features/cursor-core/feature.json", {
+    schema: "ai_studio.feature.v1",
+    id: "cursor-core",
+    version: "1.0.0",
+    status: "opt-in",
+    manuals: { install: "features/cursor-core/INSTALL.md" },
+  });
+  write(root, "features/cursor-core/README.md", `# cursor-core\n\n${ROUTER}\n`);
+  write(root, "features/cursor-core/INSTALL.md", "# Install\n");
+
+  const result = validateFeatureContracts(root);
+  assert.ok(result.rootFeatures.includes("cursor-core"));
+});
+
+test("an opt-in feature declared in the seed is rejected", (t) => {
+  const root = fixture(t);
+  write(root, "features/cursor-core/feature.json", {
+    schema: "ai_studio.feature.v1",
+    id: "cursor-core",
+    version: "1.0.0",
+    status: "opt-in",
+    manuals: { install: "features/cursor-core/INSTALL.md" },
+  });
+  write(root, "features/cursor-core/README.md", `# cursor-core\n\n${ROUTER}\n`);
+  write(root, "features/cursor-core/INSTALL.md", "# Install\n");
+  write(root, "templates/template/game-dependencies.json", {
+    schema: "ai_studio.game.dependencies.seed.v2",
+    engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
+    features: [...ROOT_FEATURES, "cursor-core"].map((id) => ({
+      id, source: `features/${id}`, version: "1.0.0", compatibility: "tested",
+    })),
+    compatibility: "tested",
+  });
+
+  assert.throws(() => validateFeatureContracts(root), /unknown reusable features: cursor-core/i);
+});
+
 test("feature status is a closed enum", (t) => {
   const root = fixture(t);
   write(root, "features/game-state/feature.json", {
@@ -149,7 +188,7 @@ test("feature status is a closed enum", (t) => {
   });
   assert.throws(
     () => validateFeatureContracts(root),
-    /game-state.*status must be one of reusable, specified/i,
+    /game-state.*status must be one of reusable, opt-in, specified/i,
   );
 });
 

@@ -242,6 +242,20 @@ test("release packaging accepts a minified platform SDK module bootstrap", (t) =
   assert.equal(html.includes("platform-sdk.js"), false);
 });
 
+test("release packaging accepts a same-line import immediately followed by the dynamic game.js loader", (t) => {
+  const item = fixture(t, "poki");
+  const htmlPath = join(item.artifactDir, "index.html");
+  const dynamicLoader = "var gameScript=document.createElement(\"script\");gameScript.src=\"game.js\";document.body.appendChild(gameScript)";
+  writeFileSync(htmlPath, readFileSync(htmlPath, "utf8").replace(
+    "<script type=\"module\">import './platform-sdk.js';</script><script src=\"game.js\"></script>",
+    `<script type=module>import"./platform-sdk.js";${dynamicLoader}</script>`,
+  ));
+
+  const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
+  const html = readStoreZip(readFileSync(result.zipPath)).get("index.html").toString("utf8");
+  assert.equal(html.includes("platform-sdk.js"), false);
+});
+
 test("bundled platform backend executes before the game loader for every adapter", () => {
   for (const adapter of ["mock", "poki", "yandex", "playgama"]) {
     const source = packageWeb.bundlePlatformIntoGame(
@@ -463,6 +477,40 @@ test("release config requires one precise Object.freeze assignment and ignores n
     write(join(item.artifactDir, "index.html"), html);
     assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /executable|config|entrypoint|game\.js/i, label);
   }
+});
+
+test("release config is recognized when terser's negate_iife rewrites the wrapping parens to a unary prefix", (t) => {
+  const item = fixture(t);
+  const path = join(item.artifactDir, "index.html");
+  const html = readFileSync(path, "utf8").replace(
+    /window\.__PLATFORM_SDK_CONFIG__ = Object\.freeze\(\{[^}]*\}\);/,
+    (assignment) => `!function(){${assignment}}();`,
+  );
+  write(path, html);
+  assert.doesNotThrow(() => validateWebArtifact({ ...item, studioRoot }));
+});
+
+test("release entrypoint is recognized when terser's negate_iife wraps the dynamic game.js loader", (t) => {
+  const item = fixture(t);
+  const path = join(item.artifactDir, "index.html");
+  const config = `window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: '${item.target}', platformSdk: '${item.adapter}', release: true, runtimeBuildFingerprint: '${item.runtimeBuild.fingerprint}' });`;
+  const dynamicLoader = "var gameScript = document.createElement('script'); gameScript.src = 'game.js'; document.body.appendChild(gameScript);";
+  const html = readFileSync(path, "utf8")
+    .replace(/window\.__PLATFORM_SDK_CONFIG__ = Object\.freeze\(\{[^}]*\}\);/, `!function(){${config}${dynamicLoader}}();`)
+    .replace("<script src=\"game.js\"></script>", "");
+  write(path, html);
+  assert.doesNotThrow(() => validateWebArtifact({ ...item, studioRoot }));
+});
+
+test("release entrypoint is recognized when a minifier drops the trailing semicolon (ASI) on the final loader statement", (t) => {
+  const item = fixture(t);
+  const path = join(item.artifactDir, "index.html");
+  const dynamicLoader = "var gameScript=document.createElement(\"script\");gameScript.src=\"game.js\";document.body.appendChild(gameScript)";
+  const html = readFileSync(path, "utf8")
+    .replace("<script src=\"game.js\"></script>", `<script type=module>import"./platform-sdk.js";${dynamicLoader}</script>`)
+    .replace(/<script type="module">import '\.\/platform-sdk\.js';<\/script>/, "");
+  write(path, html);
+  assert.doesNotThrow(() => validateWebArtifact({ ...item, studioRoot }));
 });
 
 test("release bootstrap ignores regex and non-executable script decoys and requires an attached dynamic entrypoint", (t) => {

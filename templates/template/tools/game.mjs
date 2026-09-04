@@ -163,8 +163,9 @@ export function ctestCatalogue(buildDir, spawn = spawnSync) {
       name: entry.name,
       tier: labels ? String([].concat(labels.value)[0] || "") : "",
       // A native test runs its own executable; a Node or Python contract runs an
-      // interpreter and owns no build target.
-      target: executable.replace(/\.exe$/i, "") === entry.name ? entry.name : "",
+      // interpreter and owns no build target. CTest omits the command while the
+      // executable is still unbuilt, which is exactly the test that needs building.
+      target: !command || executable.replace(/\.exe$/i, "") === entry.name ? entry.name : "",
     };
   });
   return catalogue;
@@ -383,7 +384,7 @@ export async function executeGameCommand(args, dependencies = {}) {
     nativeTest(gameDir, { selection: { mode: "all" } });
   }
   const result = await packageGameOwned(args, metadata);
-  await smokePackage({ zipPath: result.zipPath, expectedTarget: args.target });
+  await smokePackage({ zipPath: result.zipPath, expectedTarget: args.target, mode: "full" });
   return { message: `verify passed: ${result.zipPath}`, result };
 }
 

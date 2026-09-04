@@ -15,12 +15,30 @@ import {
   findSupportedBrowser,
   PipeTransport,
   registerBrowserIssueCapture,
+  smokeProbePlan,
   smokePackagedWebArtifact,
 } from "./package_web_smoke.mjs";
 
 const FINGERPRINT = "1".repeat(64);
 
+function passingRecoveryCycle(variance) {
+  return {
+    extensionAvailable: true,
+    lostEvent: true,
+    contextLostDuringLoss: true,
+    overlayVisibleDuringLoss: true,
+    restoredEvent: true,
+    overlayVisibleAtRestore: true,
+    contextRestored: true,
+    overlayClearedAfterReadyFrame: true,
+    runtimePresentedFrameAck: true,
+    failure: "",
+    frame: { width: 1280, height: 720, minLuma: 3, maxLuma: 239, variance },
+  };
+}
+
 function passingObservation() {
+  const cycles = [passingRecoveryCycle(790.5), passingRecoveryCycle(801.5)];
   return {
     finalUrl: "http://127.0.0.1:8123/",
     ready: true,
@@ -28,6 +46,11 @@ function passingObservation() {
     compiledRuntimeBuildFingerprint: FINGERPRINT,
     canvas: { width: 1280, height: 720 },
     frame: { width: 1280, height: 720, minLuma: 2, maxLuma: 241, variance: 812.5 },
+    recovery: {
+      ...cycles[1],
+      completedCycles: 2,
+      cycles,
+    },
     issues: [],
   };
 }
@@ -62,6 +85,47 @@ function rgbPng(width, height, pixels) {
 
 test("packaged browser observation accepts a ready rendered release frame", () => {
   assert.deepEqual(assessPackagedWebObservation(passingObservation(), FINGERPRINT), []);
+});
+
+test("quick packaged browser observation skips PNG and WebGL recovery evidence", () => {
+  const observation = passingObservation();
+  observation.frame = null;
+  observation.recovery = null;
+  assert.deepEqual(assessPackagedWebObservation(observation, FINGERPRINT, { mode: "quick" }), []);
+});
+
+test("quick browser probe schedules no screenshot or recovery cycle", () => {
+  assert.deepEqual(smokeProbePlan("quick"), { captureFrame: false, recoveryCycles: 0 });
+  assert.deepEqual(smokeProbePlan("full"), { captureFrame: true, recoveryCycles: 2 });
+  assert.throws(() => smokeProbePlan("unknown"), /unknown smoke mode/);
+});
+
+test("packaged browser observation requires WebGL loss restore and a presented recovered frame", () => {
+  const observation = passingObservation();
+  observation.recovery = null;
+  assert.deepEqual(assessPackagedWebObservation(observation, FINGERPRINT), [
+    "WebGL recovery evidence is missing",
+  ]);
+});
+
+test("packaged browser observation requires two consecutive recovery cycles", () => {
+  const observation = passingObservation();
+  observation.recovery.completedCycles = 1;
+  assert.deepEqual(assessPackagedWebObservation(observation, FINGERPRINT), [
+    "two consecutive WebGL recovery cycles were not completed",
+  ]);
+});
+
+test("packaged browser observation rejects a missing runtime-present ack and blank cycle frame", () => {
+  const observation = passingObservation();
+  observation.recovery.cycles[0].runtimePresentedFrameAck = false;
+  observation.recovery.cycles[0].frame = {
+    width: 1280, height: 720, minLuma: 247, maxLuma: 247, variance: 0,
+  };
+  assert.deepEqual(assessPackagedWebObservation(observation, FINGERPRINT), [
+    "runtime did not acknowledge a presented frame after recovery cycle 1",
+    "recovered frame after cycle 1 is blank",
+  ]);
 });
 
 test("browser discovery accepts an explicit Windows Chrome path without WSL", (t) => {
@@ -135,6 +199,35 @@ test("browser issue capture rejects remote socket and direct transport side chan
   ]);
 });
 
+test("browser issue capture consumes only the authorized context-loss console errors", () => {
+  const listeners = new Map();
+  const client = { on(method, listener) { listeners.set(method, listener); } };
+  const issues = [];
+  let allowance = 2;
+  let consumed = 0;
+  registerBrowserIssueCapture(client, issues, [], [], {
+    consumeConsoleError(text) {
+      if (text !== "ERROR [gfx] WebGL context lost" || allowance <= 0) return false;
+      allowance -= 1;
+      consumed += 1;
+      return true;
+    },
+  });
+
+  for (let occurrence = 0; occurrence < 3; occurrence += 1) {
+    listeners.get("Runtime.consoleAPICalled")({
+      type: "error",
+      args: [{ value: "ERROR [gfx] WebGL context lost" }],
+    });
+  }
+
+  assert.equal(consumed, 2);
+  assert.deepEqual(issues, [{
+    kind: "console.error",
+    text: "ERROR [gfx] WebGL context lost",
+  }]);
+});
+
 test("browser issue capture ignores canceled aborts but keeps real loading failures", () => {
   const listeners = new Map();
   const client = { on(method, listener) { listeners.set(method, listener); } };
@@ -144,18 +237,212 @@ test("browser issue capture ignores canceled aborts but keeps real loading failu
   listeners.get("Network.loadingFailed")({ errorText: "net::ERR_ABORTED", canceled: true });
   assert.deepEqual(issues, []);
 
-  listeners.get("Network.loadingFailed")({ errorText: "net::ERR_ABORTED", canceled: false });
-  listeners.get("Network.loadingFailed")({ errorText: "net::ERR_FAILED", canceled: true });
+  listeners.get("Network.loadingFailed")({ requestId: "missing-1", errorText: "net::ERR_ABORTED", canceled: false });
+  listeners.get("Network.loadingFailed")({ requestId: "missing-2", errorText: "net::ERR_FAILED", canceled: true });
   listeners.get("Network.loadingFailed")({
+    requestId: "missing-3",
     errorText: "net::ERR_ABORTED",
     blockedReason: "inspector",
     canceled: true,
   });
   assert.deepEqual(issues, [
-    { kind: "resource.load", text: "net::ERR_ABORTED" },
-    { kind: "resource.load", text: "net::ERR_FAILED" },
-    { kind: "resource.load", text: "inspector" },
+    { kind: "resource.load", text: "Other unknown URL failed: net::ERR_ABORTED" },
+    { kind: "resource.load", text: "Other unknown URL failed: net::ERR_FAILED; canceled=true" },
+    { kind: "resource.load", text: "Other unknown URL failed: net::ERR_ABORTED; blocked=inspector; canceled=true" },
   ]);
+});
+
+test("browser issue capture diagnoses a blocked allowed Poki SDK request", () => {
+  const listeners = new Map();
+  const client = { on(method, listener) { listeners.set(method, listener); } };
+  const issues = [];
+  registerBrowserIssueCapture(client, issues, [/^https:\/\/game-cdn\.poki\.com\//]);
+
+  listeners.get("Network.requestWillBeSent")({
+    requestId: "poki-sdk",
+    type: "Script",
+    request: { url: "https://game-cdn.poki.com/scripts/v2/poki-sdk.js" },
+    initiator: {
+      type: "parser",
+      url: "http://127.0.0.1:8123/index.html",
+      lineNumber: 17,
+      columnNumber: 3,
+    },
+  });
+  listeners.get("Network.loadingFailed")({
+    requestId: "poki-sdk",
+    type: "Script",
+    errorText: "net::ERR_BLOCKED_BY_CLIENT",
+    blockedReason: "inspector",
+    canceled: false,
+  });
+
+  assert.deepEqual(issues, [{
+    kind: "resource.load",
+    text: "Script https://game-cdn.poki.com/scripts/v2/poki-sdk.js failed: net::ERR_BLOCKED_BY_CLIENT; blocked=inspector; initiator=parser http://127.0.0.1:8123/index.html:18:4",
+  }]);
+});
+
+test("browser issue capture keeps HTTP failures from an allowed Poki origin", () => {
+  const listeners = new Map();
+  const client = { on(method, listener) { listeners.set(method, listener); } };
+  const issues = [];
+  registerBrowserIssueCapture(
+    client,
+    issues,
+    [/^https:\/\/game-cdn\.poki\.com\//],
+    [/doubleclick\.net/],
+  );
+
+  listeners.get("Network.requestWillBeSent")({
+    requestId: "poki-http",
+    type: "Script",
+    request: { url: "https://game-cdn.poki.com/scripts/v2/poki-sdk.js" },
+    initiator: { type: "parser" },
+  });
+  listeners.get("Network.responseReceived")({
+    requestId: "poki-http",
+    response: {
+      status: 503,
+      url: "https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
+    },
+  });
+
+  listeners.get("Network.requestWillBeSent")({
+    requestId: "tolerated-ad",
+    type: "Script",
+    request: { url: "https://securepubads.doubleclick.net/tag/js/gpt.js" },
+    initiator: { type: "script" },
+  });
+  listeners.get("Network.responseReceived")({
+    requestId: "tolerated-ad",
+    response: {
+      status: 503,
+      url: "https://securepubads.doubleclick.net/tag/js/gpt.js",
+    },
+  });
+
+  assert.deepEqual(issues, [{
+    kind: "resource.http",
+    text: "503 https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
+  }]);
+});
+
+test("browser issue capture tolerates ad plumbing served from an allowed origin", () => {
+  const listeners = new Map();
+  const client = { on(method, listener) { listeners.set(method, listener); } };
+  const issues = [];
+  registerBrowserIssueCapture(
+    client,
+    issues,
+    [/^https:\/\/([a-z0-9-]+\.)?poki\.com\//],
+    [/(^|[/.])ads\.poki\.com(\/|$|[:?#'" )])/],
+  );
+
+  listeners.get("Network.requestWillBeSent")({
+    requestId: "poki-ads",
+    type: "Fetch",
+    request: { url: "https://ads.poki.com/ads/settings?loc=" },
+    initiator: { type: "script" },
+  });
+  listeners.get("Network.loadingFailed")({
+    requestId: "poki-ads",
+    type: "Fetch",
+    errorText: "net::ERR_BLOCKED_BY_CLIENT",
+    blockedReason: "inspector",
+    canceled: false,
+  });
+  listeners.get("Log.entryAdded")({
+    entry: {
+      level: "error",
+      source: "network",
+      text: "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT",
+      url: "https://ads.poki.com/ads/settings?loc=",
+    },
+  });
+
+  assert.deepEqual(issues, []);
+});
+
+test("browser issue capture diagnoses a generic asset fetch failure with its script provenance", () => {
+  const listeners = new Map();
+  const client = { on(method, listener) { listeners.set(method, listener); } };
+  const issues = [];
+  registerBrowserIssueCapture(client, issues);
+
+  listeners.get("Network.requestWillBeSent")({
+    requestId: "slime-texture",
+    type: "Image",
+    request: { url: "http://127.0.0.1:8123/assets/slime.png" },
+    initiator: {
+      type: "script",
+      stack: {
+        callFrames: [
+          {
+            functionName: "loadTexture",
+            url: "http://127.0.0.1:8123/loader.js",
+            lineNumber: 7,
+            columnNumber: 2,
+          },
+          {
+            functionName: "boot",
+            url: "http://127.0.0.1:8123/game.js",
+            lineNumber: 20,
+            columnNumber: 4,
+          },
+        ],
+      },
+    },
+  });
+  listeners.get("Network.loadingFailed")({
+    requestId: "slime-texture",
+    type: "Image",
+    errorText: "net::ERR_FAILED",
+    canceled: true,
+  });
+
+  assert.deepEqual(issues, [{
+    kind: "resource.load",
+    text: "Image http://127.0.0.1:8123/assets/slime.png failed: net::ERR_FAILED; canceled=true; initiator=script loadTexture@http://127.0.0.1:8123/loader.js:8:3 <- boot@http://127.0.0.1:8123/game.js:21:5",
+  }]);
+});
+
+test("browser issue capture diagnoses runtime exceptions with source and compact stack frames", () => {
+  const listeners = new Map();
+  const client = { on(method, listener) { listeners.set(method, listener); } };
+  const issues = [];
+  registerBrowserIssueCapture(client, issues);
+
+  listeners.get("Runtime.exceptionThrown")({
+    exceptionDetails: {
+      text: "Uncaught",
+      url: "http://127.0.0.1:8123/game.js",
+      lineNumber: 42,
+      columnNumber: 9,
+      exception: { description: "ReferenceError: slime is not defined\n    at update (game.js:43:10)" },
+      stackTrace: {
+        callFrames: [
+          {
+            functionName: "update",
+            url: "http://127.0.0.1:8123/game.js",
+            lineNumber: 42,
+            columnNumber: 9,
+          },
+          {
+            functionName: "tick",
+            url: "http://127.0.0.1:8123/runtime.js",
+            lineNumber: 7,
+            columnNumber: 1,
+          },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(issues, [{
+    kind: "page.exception",
+    text: "ReferenceError: slime is not defined at http://127.0.0.1:8123/game.js:43:10; stack=update@http://127.0.0.1:8123/game.js:43:10 <- tick@http://127.0.0.1:8123/runtime.js:8:2",
+  }]);
 });
 
 test("PNG first-frame decoder measures rendered contrast and rejects malformed input", () => {
