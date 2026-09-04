@@ -360,6 +360,33 @@ test("a committed waiver becomes stale when its tracked public bytes change", (t
   assert.match(result.violations.map((item) => item.reason).join("\n"), /waiver matches no tracked binary/);
 });
 
+test("a scoped preflight ignores waivers for private games outside its workspace", (t) => {
+  const { root, entry } = sharedFixture(t);
+  game(root, "games/private/other-game", "other-game", "Other Title", true);
+  const other = {
+    ...entry,
+    game_id: "other-game",
+    private_path: "assets/missing.dat",
+  };
+  writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc([entry, other]));
+  execFileSync("git", ["add", SHARED_BINARIES_MANIFEST], { cwd: root });
+
+  const scoped = runPrivateGamePreflight(root, { activeGameId: "secret-game" });
+  assert.equal(scoped.ok, true);
+
+  const full = runPrivateGamePreflight(root);
+  assert.equal(full.ok, false);
+  assert.match(full.violations.map((item) => item.reason).join("\n"), /waiver matches no tracked binary/);
+});
+
+test("a scoped preflight rejects a missing active private game", (t) => {
+  const { root } = sharedFixture(t);
+  const result = runPrivateGamePreflight(root, { activeGameId: "missing-game" });
+
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /active private game.*not found/i);
+});
+
 test("an untracked approval manifest cannot waive a staged shared binary", (t) => {
   const { root, entry } = sharedFixture(t);
   writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc([entry]));

@@ -516,17 +516,32 @@ function validSharedBinaryWaiverKeys(root, mounts, waivers, spawnGit) {
 export function runPrivateGamePreflight(root, options = {}) {
   const repoRoot = resolve(root || process.cwd());
   const spawnGit = options.spawnGit || spawnSync;
-  const mounts = options.mounts || listWorkspaceMounts(repoRoot, {
-    includePrivate: true, kinds: ["game"], warnings: [],
-  }).filter((mount) => mount.visibility === "private");
+  const activeGameId = String(options.activeGameId || "").trim();
+  const discovered = options.mounts || listWorkspaceMounts(repoRoot, activeGameId
+    ? { activeGameId, kinds: ["game"], warnings: [] }
+    : { includePrivate: true, kinds: ["game"], warnings: [] });
+  const mounts = discovered.filter((mount) => mount.visibility === "private"
+    && (!activeGameId || comparable(mount.gameId) === comparable(activeGameId)));
+  if (activeGameId && mounts.length !== 1) {
+    return {
+      ok: false,
+      violations: [{
+        path: "<active-game>",
+        reason: mounts.length ? `active private game ${activeGameId} resolved to multiple mounts` : `active private game ${activeGameId} was not found`,
+      }],
+    };
+  }
   if (!mounts.length) return { ok: true, violations: [] };
   const tracked = trackedTextFiles(repoRoot, privateLeakTokens(mounts), spawnGit);
   const nested = nestedGitRoots(repoRoot, mounts, spawnGit);
   const binaries = trackedBinaryLeaks(repoRoot, mounts, spawnGit);
   const shared = trackedSharedBinaryWaivers(repoRoot, spawnGit);
-  const validWaivers = validSharedBinaryWaiverKeys(repoRoot, mounts, shared.waivers, spawnGit);
+  const waivers = activeGameId
+    ? shared.waivers.filter((entry) => comparable(entry.game_id) === comparable(activeGameId))
+    : shared.waivers;
+  const validWaivers = validSharedBinaryWaiverKeys(repoRoot, mounts, waivers, spawnGit);
   return auditPrivateGamePreflight(mounts, {
-    sharedBinaryWaivers: shared.waivers,
+    sharedBinaryWaivers: waivers,
     validSharedBinaryWaiverKeys: validWaivers,
     sharedBinaryErrors: shared.errors,
     nestedGitRoots: nested.roots,
