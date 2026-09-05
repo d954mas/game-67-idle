@@ -21,6 +21,7 @@
     "playgama-bridge-config.json"
   ],
   "optional_files": [
+    "assets/font_cjk.ntpack",
     "assets/music.ntpack",
     "assets/cosmetics.ntpack",
     "assets/theme_candy.ntpack",
