@@ -546,7 +546,7 @@ try {
     const mount = listGameMounts(repoRoot, { activeGameId: identity.id, skipPreflight: true, warnings: [] })
       .find((entry) => entry.root === gameRel);
     if (!mount) throw new Error(`private game scanner did not discover ${gameRel}`);
-    const preflight = runPrivateGamePreflight(repoRoot, { mounts: [mount] });
+    const preflight = runPrivateGamePreflight(repoRoot, { mounts: [mount], activeGameId: identity.id });
     if (!preflight.ok) throw new Error(`private game preflight failed:\n${preflight.violations.map((item) => `- ${item.path}: ${item.reason}`).join("\n")}`);
     parentHookMutation = installParentPrecommit(repoRoot);
     externalWrites = capturePostWrites(external);

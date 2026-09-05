@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -221,6 +222,29 @@ test("private creation uses games/private, installs parent preflight, and stays 
   const commit = spawnSync("git", ["commit", "-m", "leak"], { cwd: root, encoding: "utf8" });
   assert.notEqual(commit.status, 0);
   assert.match(`${commit.stdout}\n${commit.stderr}`, /private game preflight failed/);
+});
+
+test("private creation scopes shared binary waivers to the new game", (t) => {
+  const root = tempRepo(t);
+  create(root, "existing-game", "private");
+  const existing = join(root, "games/private/existing-game");
+  const bytes = Buffer.from([137, 80, 78, 71, 0, 1, 2, 3]);
+  write(root, "assets/shared.png", "");
+  writeFileSync(join(root, "assets/shared.png"), bytes);
+  writeFileSync(join(existing, "assets/shared.png"), bytes);
+  execFileSync("git", ["add", "assets/shared.png"], { cwd: existing });
+  write(root, "ai_studio/workspace/shared_private_binaries.json", JSON.stringify({
+    schema: "ai_studio.workspace.shared_private_binaries.v1",
+    entries: [{
+      path: "assets/shared.png", game_id: "existing-game", private_path: "assets/shared.png",
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+      reason: "Both copies originate from the shared fixture asset.",
+      approved_by: "fixture", approved_on: "2026-01-01",
+    }],
+  }));
+  execFileSync("git", ["add", "assets/shared.png", "ai_studio/workspace/shared_private_binaries.json"], { cwd: root });
+  create(root, "next-game", "private");
+  assert.equal(existsSync(join(root, "games/private/next-game/game.json")), true);
 });
 
 test("private preflight failure rolls publication back cleanly", (t) => {
