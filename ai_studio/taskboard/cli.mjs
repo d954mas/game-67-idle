@@ -29,7 +29,8 @@ import {
   taskboardStoreSummary,
   validateTaskboardStoresDetailed,
 } from "./stores.mjs";
-import { relative } from "node:path";
+import { dirname, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { isMain } from "../core_harness/tool_lib/cli.mjs";
 
 const USAGE = `usage: cli.mjs <list|context|show|archive|new|set|validate|help> ...
@@ -186,8 +187,16 @@ function renderContext(root, options) {
   return `${lines.join("\n")}\n`;
 }
 
+// The board this CLI edits is the one in the Studio checkout that contains
+// the script. A feature workspace carries its own copy of the Studio, and an
+// agent there usually inherits a shell whose cwd is still the source checkout;
+// walking up from cwd would land its logs on the wrong board.
+export function scriptStudioRoot() {
+  return resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+}
+
 export function main(argv, {
-  root = findRoot(),
+  root = findRoot(scriptStudioRoot()),
   writeStdout = (text) => process.stdout.write(text),
   writeStderr = (text) => process.stderr.write(text),
 } = {}) {

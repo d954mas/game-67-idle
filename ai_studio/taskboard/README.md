@@ -5,6 +5,10 @@ Source of truth for current work. Detailed protocol:
 
 **Creating items is the lead's, in every store.** `new project`, `new epic` and
 `new task` are lead-only commands; an agent proposes work in its reply and waits.
+The CLI edits the board of the Studio checkout that contains it, whatever the
+shell's cwd is; a feature workspace therefore logs to its own copy. Set
+`TASKBOARD_ROOT` to point it elsewhere.
+
 `set` is the agent's half of the board — status, log, closure evidence, quality —
 and is how finished work gets reported. The invariant is in `AGENTS.md`.
 

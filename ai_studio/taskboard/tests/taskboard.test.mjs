@@ -37,6 +37,26 @@ function runCliDirect(root, ...args) {
   return { status, stdout, stderr };
 }
 
+test("the CLI acts on the Studio that owns the script, not on the caller's cwd", (t) => {
+  const decoy = tempRoot(t);
+  const created = runCliDirect(decoy, "new", "project", "--title", "Decoy cwd project", "--json");
+  assert.equal(created.status, 0, created.stderr);
+  const result = spawnSync(process.execPath, [cliPath, "list", "--json"], {
+    cwd: decoy,
+    encoding: "utf8",
+    env: { ...process.env, TASKBOARD_ROOT: "" },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /Decoy cwd project/);
+  const pinned = spawnSync(process.execPath, [cliPath, "list", "--json"], {
+    cwd: dirname(decoy),
+    encoding: "utf8",
+    env: { ...process.env, TASKBOARD_ROOT: decoy },
+  });
+  assert.equal(pinned.status, 0, pinned.stderr);
+  assert.match(pinned.stdout, /Decoy cwd project/);
+});
+
 function tempRoot(t, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), "taskboard-test-"));
   if (options.qualityCatalog) {
