@@ -390,6 +390,8 @@ test("every persisted creation boundary can be recovered", async (t) => {
       const recovered = await recoverFeatureWorkspace({ base: fixture.base, name: "crash-test" });
       assert.equal(recovered.state, "rolled-back");
       assert.equal((await listFeatureWorkspaces({ base: fixture.base })).length, 0);
+      const branches = execFileSync("git", ["-C", fixture.gameRoot, "branch", "--list", "agent/t0001-crash-test"], { encoding: "utf8" });
+      assert.equal(branches.trim(), "", "a rolled-back creation leaves no game branch behind");
     });
   }
 });

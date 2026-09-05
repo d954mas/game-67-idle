@@ -519,6 +519,16 @@ function rollbackCreate(manifest, manifestPath, activePath) {
     catch (error) { errors.push(`game worktree: ${error.message}`); }
   }
   if (errors.length) return errors;
+  // The game branch is this run's own leftover only while it still points at
+  // the source commit; a branch that moved carries work and stays.
+  if (manifest.gameBranch && gitSucceeds(manifest.sourceGameRoot, ["show-ref", "--verify", "--quiet", `refs/heads/${manifest.gameBranch}`])) {
+    try {
+      if (git(manifest.sourceGameRoot, ["rev-parse", manifest.gameBranch]) === manifest.sourceGameCommit) {
+        git(manifest.sourceGameRoot, ["branch", "-D", manifest.gameBranch]);
+      }
+    } catch (error) { errors.push(`game branch: ${error.message}`); }
+  }
+  if (errors.length) return errors;
   if (existsSync(join(manifest.studioWorktree, "external/neotolis-engine"))) {
     try { deinitializeEngine(manifest.studioWorktree); }
     catch (error) { errors.push(`engine submodule: ${error.message}`); }
