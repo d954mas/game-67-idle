@@ -1159,6 +1159,37 @@ def corpus_codepoints(table: Table) -> list[int]:
     return sorted(cp for cp in seen if cp > 0x7F)
 
 
+# The CJK half of the charset, by Unicode block. A game that ships Japanese,
+# Chinese or Korean pays for thousands of glyphs that no other language reads,
+# which is a different download decision from the hundred-odd accented letters
+# every European language adds -- so the generated set is emitted in two halves
+# and the consumer decides which pack each one goes into. The split is by
+# block, not by language: a Korean string is Hangul plus CJK punctuation plus
+# the odd ideograph, and every one of those has to travel together.
+CJK_BLOCKS = (
+    (0x1100, 0x11FF),    # Hangul Jamo
+    (0x2E80, 0x2FDF),    # CJK radicals, Kangxi radicals
+    (0x3000, 0x303F),    # CJK symbols and punctuation
+    (0x3040, 0x309F),    # Hiragana
+    (0x30A0, 0x30FF),    # Katakana
+    (0x3130, 0x318F),    # Hangul compatibility Jamo
+    (0x31F0, 0x31FF),    # Katakana phonetic extensions
+    (0x3200, 0x33FF),    # Enclosed CJK letters and months, CJK compatibility
+    (0x3400, 0x4DBF),    # CJK unified ideographs extension A
+    (0x4E00, 0x9FFF),    # CJK unified ideographs
+    (0xA960, 0xA97F),    # Hangul Jamo extended-A
+    (0xAC00, 0xD7FF),    # Hangul syllables, Jamo extended-B
+    (0xF900, 0xFAFF),    # CJK compatibility ideographs
+    (0xFE30, 0xFE4F),    # CJK compatibility forms
+    (0xFF00, 0xFFEF),    # Halfwidth and fullwidth forms
+    (0x20000, 0x3FFFF),  # CJK unified ideographs extensions B and later
+)
+
+
+def is_cjk(codepoint: int) -> bool:
+    return any(first <= codepoint <= last for first, last in CJK_BLOCKS)
+
+
 def render_charset_header(table: Table) -> str:
     codepoints = corpus_codepoints(table)
     for cp in codepoints:
@@ -1195,24 +1226,45 @@ def render_charset_header(table: Table) -> str:
     lines.append("")
     lines.append("   Written as universal character names, not raw UTF-8: the value survives")
     lines.append("   a compiler reading the file in some other source encoding, and a diff")
-    lines.append("   shows which codepoint changed rather than a run of mojibake. */")
+    lines.append("   shows which codepoint changed rather than a run of mojibake.")
     lines.append("")
-    lines.append("#define LOC_CHARSET_NON_ASCII \\")
-    for index, cp in enumerate(codepoints):
-        char = chr(cp)
-        terminator = "" if index == len(codepoints) - 1 else " \\"
-        # \u takes EXACTLY four hex digits, \U exactly eight. Formatting an
-        # astral codepoint with "04x" (a MINIMUM width) produced five digits,
-        # and C read the first four plus a stray character: "ὠ0" compiles
-        # clean under -Wall -Wextra -Wpedantic and stores U+1F60 followed by
-        # '0'. The requested glyph silently leaves the atlas and an unrelated
-        # one takes its place -- exactly the silent-loss failure this generator
-        # exists to prevent. Found in review 2026-08-05; reachable as soon as a
-        # CJK language lands, since LilitaOne-RussianChineseKo already covers
-        # 507 codepoints above the BMP.
-        escape = f"\\u{cp:04x}" if cp <= 0xFFFF else f"\\U{cp:08x}"
-        lines.append(f'    "{escape}" /* {char} */{terminator}')
+    lines.append("   Emitted in two halves so a game can put them in different downloads:")
+    lines.append("   COMMON is what every language needs, CJK is the ideographs, kana and")
+    lines.append("   Hangul only ja/zh/ko read. LOC_CHARSET_NON_ASCII is both, for a game")
+    lines.append("   that ships one atlas. */")
     lines.append("")
+
+    def emit(macro: str, subset: list[int]) -> None:
+        if not subset:
+            # An empty macro would leave a dangling backslash; an empty string
+            # literal concatenates with the rest of the charset either way.
+            lines.append(f'#define {macro} ""')
+            lines.append("")
+            return
+        lines.append(f"#define {macro} \\")
+        for index, cp in enumerate(subset):
+            char = chr(cp)
+            terminator = "" if index == len(subset) - 1 else " \\"
+            # \u takes EXACTLY four hex digits, \U exactly eight. Formatting an
+            # astral codepoint with "04x" (a MINIMUM width) produced five digits,
+            # and C read the first four plus a stray character: "ὠ0" compiles
+            # clean under -Wall -Wextra -Wpedantic and stores U+1F60 followed by
+            # '0'. The requested glyph silently leaves the atlas and an unrelated
+            # one takes its place -- exactly the silent-loss failure this generator
+            # exists to prevent. Reachable as soon as a CJK language lands, since
+            # LilitaOne-RussianChineseKo already covers 507 codepoints above the BMP.
+            escape = f"\\u{cp:04x}" if cp <= 0xFFFF else f"\\U{cp:08x}"
+            lines.append(f'    "{escape}" /* {char} */{terminator}')
+        lines.append("")
+
+    common = [cp for cp in codepoints if not is_cjk(cp)]
+    cjk = [cp for cp in codepoints if is_cjk(cp)]
+    emit("LOC_CHARSET_NON_ASCII_COMMON", common)
+    emit("LOC_CHARSET_CJK", cjk)
+    lines.append("#define LOC_CHARSET_NON_ASCII LOC_CHARSET_NON_ASCII_COMMON LOC_CHARSET_CJK")
+    lines.append("")
+    lines.append(f"#define LOC_CHARSET_NON_ASCII_COMMON_COUNT {len(common)}")
+    lines.append(f"#define LOC_CHARSET_CJK_COUNT {len(cjk)}")
     lines.append(f"#define LOC_CHARSET_NON_ASCII_COUNT {len(codepoints)}")
     lines.append("")
     lines.append("#endif /* LOC_CHARSET_GEN_H */")
@@ -1476,7 +1528,13 @@ def cmd_fonts(args: argparse.Namespace) -> int:
     wanted = ascii_wanted + non_ascii_wanted
     # A game may split the pack across faces (a display face without Cyrillic +
     # an i18n fallback); the scope names the half of the pack that font bakes.
-    scoped = {"all": wanted, "ascii": ascii_wanted, "non-ascii": non_ascii_wanted}
+    scoped = {
+        "all": wanted,
+        "ascii": ascii_wanted,
+        "non-ascii": non_ascii_wanted,
+        "common": ascii_wanted + [cp for cp in non_ascii_wanted if not is_cjk(cp)],
+        "cjk": [cp for cp in non_ascii_wanted if is_cjk(cp)],
+    }
     failures: list[str] = []
     for spec in args.font:
         label, sep, raw_path = spec.partition("=")
@@ -1486,7 +1544,8 @@ def cmd_fonts(args: argparse.Namespace) -> int:
         if not sep:
             raw_path, scope = scope, "all"
         if scope not in scoped:
-            failures.append(f"{label}: unknown charset scope '{scope}' (all, ascii, non-ascii)")
+            failures.append(f"{label}: unknown charset scope '{scope}' "
+                            f"({', '.join(sorted(scoped))})")
             continue
         path = Path(raw_path).resolve()
         if not path.exists():
