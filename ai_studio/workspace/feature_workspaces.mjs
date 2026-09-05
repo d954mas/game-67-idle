@@ -105,9 +105,9 @@ export function parseCommandLine(argv) {
   if (command !== "new" && command !== "list" && args[0] && !args[0].startsWith("--")) {
     options.name = normalizeWorkspaceName(args.shift());
   }
-  const booleans = new Set(["json"]);
+  const booleans = new Set(["json", "noTask"]);
   const allowed = new Set(command === "new"
-    ? ["game", "task", "name", "root", "base", "branch", "devapiPort", "webPort", "json"]
+    ? ["game", "task", "noTask", "name", "root", "base", "branch", "devapiPort", "webPort", "json"]
     : command === "reallocate-ports"
       ? ["base", "devapiPort", "webPort", "json"]
       : ["base", "json"]);
@@ -124,11 +124,14 @@ export function parseCommandLine(argv) {
     options[key] = args.shift();
   }
   if (command === "new") {
-    for (const key of ["game", "task", "name"]) {
+    for (const key of ["game", "name"]) {
       if (!options[key]) throw new Error(`new requires --${key}`);
     }
+    if (options.noTask && options.task) throw new Error("--no-task and --task are mutually exclusive");
+    if (!options.noTask && !options.task) throw new Error("new requires --task, or --no-task for an exploration workspace");
     options.game = normalizeGameId(options.game);
-    options.task = normalizeTaskId(options.task);
+    options.task = options.noTask ? null : normalizeTaskId(options.task);
+    delete options.noTask;
     options.name = normalizeWorkspaceName(options.name);
     if (options.devapiPort !== undefined) options.devapiPort = normalizePort(options.devapiPort, "devapi port");
     if (options.webPort !== undefined) options.webPort = normalizePort(options.webPort, "web port");
@@ -435,6 +438,7 @@ function validateCreatedWorkspace(studioWorktree, gameId, taskId, { requireEligi
   const store = selectTaskboardStore(studioWorktree, { activeGameId: gameId });
   const problems = validateTaskboardStoresDetailed(studioWorktree, [store]);
   if (problems.length) throw new Error(`Taskboard validation failed: ${problems[0].message || problems[0]}`);
+  if (taskId == null) return;
   const task = inspectCommittedTask(
     join(studioWorktree, "games/private", gameId),
     "HEAD",
@@ -535,7 +539,9 @@ function rollbackCreate(manifest, manifestPath, activePath) {
 
 export async function createFeatureWorkspace(input) {
   const name = normalizeWorkspaceName(input.name);
-  const taskId = normalizeTaskId(input.task);
+  // A workspace without a card is for exploration: its branch carries no T#### and
+  // nothing merges from it into the integration branch without a card first.
+  const taskId = input.task == null ? null : normalizeTaskId(input.task);
   const gameId = normalizeGameId(input.game);
   const studioRoot = realpathSync(resolve(input.root || process.cwd()));
   const base = canonicalPhysicalPath(input.base || defaultWorkspaceBase(studioRoot), "workspace base");
@@ -548,7 +554,7 @@ export async function createFeatureWorkspace(input) {
   const sourceGameRoot = discoverPrivateGame(studioRoot, gameId);
   const studio = inspectRepository(studioRoot);
   const game = inspectRepository(sourceGameRoot, { requireAttached: true });
-  const task = inspectCommittedTask(sourceGameRoot, game.commit, taskId, gameId);
+  if (taskId) inspectCommittedTask(sourceGameRoot, game.commit, taskId, gameId);
   const engineCommit = engineGitlink(studioRoot, studio.commit);
   const sourceEngineRoot = realpathSync(join(studioRoot, "external/neotolis-engine"));
   if (!gitSucceeds(sourceEngineRoot, ["cat-file", "-e", `${engineCommit}^{commit}`])) {
@@ -557,8 +563,12 @@ export async function createFeatureWorkspace(input) {
 
   const branch = input.branch
     ? String(input.branch).trim()
-    : `agent/${taskId.toLowerCase()}-${name}`;
-  if (!/^agent\/t\d{4}-[a-z0-9][a-z0-9-]{0,63}$/.test(branch)) throw new Error("game branch must use agent/t####-name");
+    : taskId ? `agent/${taskId.toLowerCase()}-${name}` : `agent/${name}`;
+  if (taskId) {
+    if (!/^agent\/t\d{4}-[a-z0-9][a-z0-9-]{0,63}$/.test(branch)) throw new Error("game branch must use agent/t####-name");
+  } else if (!/^agent\/(?!t\d{4}-)[a-z0-9][a-z0-9-]{0,63}$/.test(branch)) {
+    throw new Error("an exploration branch must use agent/name without a task id");
+  }
   if (gitSucceeds(sourceGameRoot, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`])) {
     throw new Error(`game branch '${branch}' already exists`);
   }
@@ -569,7 +579,9 @@ export async function createFeatureWorkspace(input) {
   let manifestPath;
   try {
     if (existsSync(paths.active) || existsSync(paths.tombstone)) throw new Error(`workspace name '${name}' is already registered`);
-    const duplicate = liveRecords(base).find((record) => record.gameId === gameId && record.taskId === taskId);
+    const duplicate = taskId
+      ? liveRecords(base).find((record) => record.gameId === gameId && record.taskId === taskId)
+      : null;
     if (duplicate) throw new Error(`${gameId}:${taskId} is already assigned to workspace '${duplicate.name}'`);
     const ports = {
       devapi: await allocatePort(base, input.devapiPort, [17900, 17999], "devapi"),
@@ -699,7 +711,7 @@ function loadWorkspaceAuthority(base, name) {
 
 function assertOwnedPaths(authority, { allowMissing = false } = {}) {
   normalizeGameId(authority.record.gameId);
-  normalizeTaskId(authority.record.taskId);
+  if (authority.record.taskId != null) normalizeTaskId(authority.record.taskId);
   const expectedGame = join(authority.studioWorktree, "games", "private", authority.record.gameId);
   const comparisons = [
     [authority.record.name, authority.name, "name"],
@@ -1142,7 +1154,7 @@ function printHuman(command, result) {
       console.log("No active feature workspaces.");
       return;
     }
-    for (const row of result) console.log(`${row.name}\t${row.state}\t${row.gameId}:${row.taskId}\t${row.gameBranch}`);
+    for (const row of result) console.log(`${row.name}\t${row.state}\t${row.gameId}:${row.taskId ?? "no-task"}\t${row.gameBranch}`);
     return;
   }
   if (command === "check") {
@@ -1152,7 +1164,7 @@ function printHuman(command, result) {
   }
   if (command === "new") {
     console.log(`Workspace ready: ${result.studioWorktree}`);
-    console.log(`Task: ${result.gameId}:${result.taskId}`);
+    console.log(result.taskId ? `Task: ${result.gameId}:${result.taskId}` : `Task: none (exploration workspace for ${result.gameId})`);
     console.log(`Game branch: ${result.gameBranch}`);
     console.log(`Studio commit: ${result.sourceStudioCommit}`);
     console.log(`Game commit: ${result.sourceGameCommit}`);

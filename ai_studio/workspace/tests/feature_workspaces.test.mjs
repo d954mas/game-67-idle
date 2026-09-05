@@ -167,6 +167,38 @@ test("repository inspection reports dirty state without changing the selected co
   assert.deepEqual(inspection.dirty, { staged: 0, unstaged: 1, untracked: 1, ignored: 0 });
 });
 
+test("an exploration workspace needs no task and gets a branch without a task id", async (t) => {
+  const parsed = parseCommandLine(["new", "--game", "fixture-game", "--no-task", "--name", "Idea Probe"]);
+  assert.equal(parsed.options.task, null);
+  assert.equal(parsed.options.name, "idea-probe");
+  assert.throws(
+    () => parseCommandLine(["new", "--game", "fixture-game", "--no-task", "--task", "T0001", "--name", "both"]),
+    /mutually exclusive/,
+  );
+  assert.throws(() => parseCommandLine(["new", "--game", "fixture-game", "--name", "neither"]), /--no-task/);
+
+  const fixture = pairFixture();
+  t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
+  const created = await createFeatureWorkspace({
+    root: fixture.studioRoot,
+    base: fixture.base,
+    game: "fixture-game",
+    task: null,
+    name: "idea-probe",
+  });
+  assert.equal(created.state, "ready");
+  assert.equal(created.taskId, null);
+  assert.equal(git(created.gameWorktree, "symbolic-ref", "HEAD"), "refs/heads/agent/idea-probe");
+  const listed = await listFeatureWorkspaces({ base: fixture.base });
+  assert.equal(listed.find((row) => row.name === "idea-probe").taskId, null);
+  const checked = await checkFeatureWorkspace({ base: fixture.base, name: "idea-probe" });
+  assert.equal(checked.ok, true, JSON.stringify(checked.problems));
+  await assert.rejects(
+    createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: null, name: "bad", branch: "agent/t0001-bad" }),
+    /without a task id/,
+  );
+});
+
 test("committed task validation ignores working-tree edits", (t) => {
   const root = repoFixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));

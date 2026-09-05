@@ -55,6 +55,7 @@ reported as `not-configured` and workspace creation continues.
 
 ```powershell
 node ai_studio/workspace/feature_workspaces.mjs new --game <game-id> --task T0001 --name <feature>
+node ai_studio/workspace/feature_workspaces.mjs new --game <game-id> --no-task --name <probe>
 node ai_studio/workspace/feature_workspaces.mjs list
 node ai_studio/workspace/feature_workspaces.mjs check <feature>
 node ai_studio/workspace/feature_workspaces.mjs prepare-python <feature>
@@ -62,6 +63,12 @@ node ai_studio/workspace/feature_workspaces.mjs reallocate-ports <feature>
 node ai_studio/workspace/feature_workspaces.mjs recover <feature>
 node ai_studio/workspace/feature_workspaces.mjs remove <feature>
 ```
+
+`--no-task` creates an exploration workspace: the same isolation, a game branch
+named `agent/<name>` with no task id, and no Taskboard check. Use it for
+experiments and probes that may be thrown away. Work that will merge into the
+integration branch still needs a card: create the card first, or open a task
+workspace and cherry-pick the probe onto it.
 
 The default base is the sibling `<studio-folder>-workspaces`; pass `--base` to
 every command when using another location. Each active workspace owns a
