@@ -1,5 +1,7 @@
 #include "features/platform_sdk/platform_sdk_cloud.h"
 
+#include <stddef.h>
+
 #if defined(__EMSCRIPTEN__)
 
 #include <emscripten/emscripten.h>
