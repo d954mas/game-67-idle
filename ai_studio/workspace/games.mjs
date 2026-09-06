@@ -213,11 +213,25 @@ export function auditPrivateGamePreflight(mounts, state = {}) {
   return { ok: violations.length === 0, violations };
 }
 
+// A hook runs with GIT_DIR and GIT_INDEX_FILE exported for the repository being
+// committed. Inheriting them would point every query below at THAT repository
+// whatever cwd says, so a studio commit would read the studio's index while
+// asking about a private game and report every waiver as stale.
+const GIT_CONTEXT_ENV = ["GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE",
+                         "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_PREFIX"];
+
+function gitEnv() {
+  const env = { ...process.env };
+  for (const name of GIT_CONTEXT_ENV) delete env[name];
+  return env;
+}
+
 function git(root, args, spawnGit = spawnSync, encoding = "utf8") {
   const cwd = resolve(root);
   return spawnGit("git", ["-c", `safe.directory=${slash(cwd)}`, ...args], {
     cwd,
     encoding,
+    env: gitEnv(),
     shell: false,
     maxBuffer: 64 * 1024 * 1024,
   });

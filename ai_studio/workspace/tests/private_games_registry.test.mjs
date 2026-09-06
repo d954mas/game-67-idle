@@ -477,3 +477,43 @@ test("readSharedBinaryWaivers rejects a malformed manifest rather than ignoring 
   const wrongSchema = readSharedBinaryWaivers(root);
   assert.match(wrongSchema.errors.map((item) => item.reason).join("\n"), /expected schema/);
 });
+
+// A pre-commit hook exports GIT_DIR and GIT_INDEX_FILE for the repository being
+// committed. Inheriting them makes every query below read THAT repository's
+// index whatever cwd says, which reported every shared-binary waiver as stale
+// and blocked studio commits from a feature workspace.
+test("preflight Git calls do not inherit the committing repository's Git context", (t) => {
+  const root = fixture(t);
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
+  game(root, "games/private/secret-game", "secret-game", "Secret Title", true);
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "fixture"], { cwd: root, stdio: "ignore" });
+
+  const previous = { GIT_DIR: process.env.GIT_DIR, GIT_INDEX_FILE: process.env.GIT_INDEX_FILE };
+  process.env.GIT_DIR = join(root, ".git");
+  process.env.GIT_INDEX_FILE = join(root, ".git", "index");
+  t.after(() => {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+
+  const calls = [];
+  const result = runPrivateGamePreflight(root, {
+    spawnGit(command, args, options) {
+      calls.push(options.env);
+      return spawnSync(command, args, options);
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.ok(calls.length > 0);
+  for (const env of calls) {
+    assert.equal(env.GIT_DIR, undefined);
+    assert.equal(env.GIT_INDEX_FILE, undefined);
+  }
+});
