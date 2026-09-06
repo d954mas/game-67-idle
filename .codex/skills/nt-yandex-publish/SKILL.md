@@ -77,10 +77,20 @@ The rows that catch games out, in order of how often they do:
   refused with "автоматическое определение языка не реализовано" while running
   in perfect Russian. Read the locale where the SDK resolves, cache it, and let
   the game adopt it on every launch until the player picks one by hand.
-- **1.11** progress is saved immediately and survives a refresh.
+- **1.11 / 1.13** progress is saved immediately and survives a refresh, and if
+  the draft declares cloud saves it must actually cross devices. The portal's
+  player storage is asynchronous and a game loop is not, so the read starts as
+  early as the SDK exists and is awaited at the barrier the pack download
+  already occupies. Which copy wins is a stamp comparison with one exception
+  that decides the feature: a browser holding no save takes the account's copy
+  regardless of stamps, because a new game stamps itself with the current time
+  and would beat the run the player left elsewhere.
 - **1.6/1.7** no system context menu on right click or long press, no page
   scrolling, no text selection.
 - **1.9** no absolute URLs to Yandex S3 in the code.
+- **5.2** the name is the same everywhere the player can read it — the store
+  listing, the game, and the loading screen a shell template is happy to ship
+  with a placeholder.
 
 ### 4. Produce the store asset set
 
