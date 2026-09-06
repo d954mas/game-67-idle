@@ -106,10 +106,13 @@ bool game_storage_probe(char *error, int error_cap);
 
    Абсолютный путь; NULL/пустая строка снимают override. Зовётся до первого
    чтения или записи (main.c разбирает аргументы до game_save_load).
+   false = путь не абсолютный или не помещается; override не тронут, и
+   вызывающий обязан отказать запуску — молчаливый откат к штатному месту
+   означал бы запись в настоящий сейв игрока.
 
    Приоритет: этот вызов -> GAME_STORAGE_NATIVE_ROOT (компайл-тайм, только у
    тестовых целей) -> GAME_STORAGE_ROOT (окружение, для инструментов) ->
-   штатное место ОС. web игнорирует: там ключи localStorage. */
-void game_storage_set_root(const char *absolute_path);
+   штатное место ОС. web принимает и игнорирует: там ключи localStorage. */
+bool game_storage_set_root(const char *absolute_path);
 
 #endif /* GAME_STORAGE_H */

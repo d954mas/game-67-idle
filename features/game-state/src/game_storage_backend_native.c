@@ -83,12 +83,19 @@ static bool is_absolute_path(const char *path) {
    human typed on purpose. */
 static char s_root_override[GAME_STORAGE_PATH_MAX];
 
-void game_storage_set_root(const char *absolute_path) {
+bool game_storage_set_root(const char *absolute_path) {
     if (absolute_path == NULL || absolute_path[0] == '\0') {
         s_root_override[0] = '\0';
-        return;
+        return true;
     }
-    (void)snprintf(s_root_override, sizeof s_root_override, "%s", absolute_path);
+    /* A relative path would be resolved against whatever the working
+       directory happens to be, and a wrong root silently means the player's
+       real save. Refuse rather than guess. */
+    if (!is_absolute_path(absolute_path)) {
+        return false;
+    }
+    return snprintf(s_root_override, sizeof s_root_override, "%s", absolute_path) <
+           (int)sizeof s_root_override;
 }
 
 static bool resolve_storage_root(

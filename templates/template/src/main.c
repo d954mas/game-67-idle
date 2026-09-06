@@ -603,6 +603,13 @@ int main(int argc, char **argv) {
             s_fresh_state = true; /* skip load, start from reset defaults */
         } else if (strcmp(argv[i], "--disable-autosave") == 0) {
             s_disable_autosave = true; /* keep loading, but never autosave */
+        } else if (strcmp(argv[i], "--save-root") == 0 && i + 1 < argc) {
+            /* A tool that seeds or captures saves must never reach the one
+               someone is playing, so a bad root is a refused launch. */
+            if (!game_storage_set_root(argv[++i])) {
+                fprintf(stderr, "invalid --save-root, expected an absolute path\n");
+                return 2;
+            }
 #if NT_DEVAPI_ENABLED
         } else if (strcmp(argv[i], "--no-vsync") == 0) {
             /* A window launched from an agent shell never becomes the
