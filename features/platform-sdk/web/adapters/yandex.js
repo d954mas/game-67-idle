@@ -5,6 +5,7 @@ export function createYandexPlatformAdapter({ host, sdkUrl = YANDEX_SDK_URL }) {
   let sdkReady = null;
   let playerReady = null;
   let ysdkInstance = null;
+  let portalLocale = null;
   let destroyed = false;
 
   function windowRef() {
@@ -55,6 +56,10 @@ export function createYandexPlatformAdapter({ host, sdkUrl = YANDEX_SDK_URL }) {
     if (!sdkReady) {
       sdkReady = loadScript()
         .then((YaGames) => (YaGames && typeof YaGames.init === "function" ? YaGames.init() : null))
+        .then((ysdk) => {
+          readPortalLocale(ysdk);
+          return ysdk;
+        })
         .catch(() => null);
     }
     ysdkInstance = destroyed ? null : await sdkReady;
@@ -160,8 +165,17 @@ export function createYandexPlatformAdapter({ host, sdkUrl = YANDEX_SDK_URL }) {
     await p.setData({ [key]: value }).catch(() => {});
   }
 
+  /* The portal's language is read the moment the SDK answers, not when some
+     later screen happens to ask: Yandex checks that environment.i18n.lang is
+     touched while the game loads (requirement 2.14). */
+  function readPortalLocale(ysdk) {
+    const lang = ysdk && ysdk.environment && ysdk.environment.i18n && ysdk.environment.i18n.lang;
+    if (lang) portalLocale = lang;
+    return portalLocale;
+  }
+
   function getLocale() {
-    return (ysdkInstance && ysdkInstance.environment && ysdkInstance.environment.i18n && ysdkInstance.environment.i18n.lang) ||
+    return readPortalLocale(ysdkInstance) ||
       (host && host.navigator && host.navigator.language) ||
       null;
   }
