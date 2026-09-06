@@ -451,7 +451,7 @@
                 "kind": "module",
                 "path": "ai_studio/assets/tools/blender",
                 "owner": "3D Asset Pipeline Owner",
-                "description": "Fail-closed Blender workflow separating topology, art-direction, evidence freshness, independent review, and completion gates.",
+                "description": "Fail-closed Blender workflow separating topology, art-direction, evidence freshness, independent review, and completion gates, plus the vertex-colour bake add-on and command.",
                 "entry": "ai_studio/assets/tools/blender/README.md",
                 "verifyDomain": "assets",
                 "coverage": "subtree"
