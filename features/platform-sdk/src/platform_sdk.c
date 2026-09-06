@@ -671,6 +671,20 @@ platform_sdk_result_t platform_sdk_game_ready(void) {
     return PLATFORM_SDK_RESULT_OK;
 }
 
+void platform_sdk_show_banner(void) {
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED || !platform_sdk_is_ready()) return;
+    if (g_platform_sdk.has_backend && g_platform_sdk.backend.show_banner != NULL) {
+        g_platform_sdk.backend.show_banner(g_platform_sdk.backend_userdata);
+    }
+}
+
+void platform_sdk_hide_banner(void) {
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED || !platform_sdk_is_ready()) return;
+    if (g_platform_sdk.has_backend && g_platform_sdk.backend.hide_banner != NULL) {
+        g_platform_sdk.backend.hide_banner(g_platform_sdk.backend_userdata);
+    }
+}
+
 static bool platform_sdk_measure_token_valid(const char *token) {
     if (token == NULL || token[0] == '\0') return false;
     size_t length = 0u;

@@ -61,6 +61,22 @@ EM_JS(void, platform_sdk_web_backend_game_loading_finished, (void), {
     } catch (e) {}
 })
 
+EM_JS(void, platform_sdk_web_backend_show_banner, (void), {
+    var backend = globalThis.__platformSdkInternalBackend;
+    if (!backend || typeof backend.showBanner !== "function") return;
+    try {
+        Promise.resolve(backend.showBanner()).catch(function () {});
+    } catch (e) {}
+})
+
+EM_JS(void, platform_sdk_web_backend_hide_banner, (void), {
+    var backend = globalThis.__platformSdkInternalBackend;
+    if (!backend || typeof backend.hideBanner !== "function") return;
+    try {
+        Promise.resolve(backend.hideBanner()).catch(function () {});
+    } catch (e) {}
+})
+
 EM_JS(void, platform_sdk_web_backend_game_ready, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.gameReady !== "function") return;
@@ -233,6 +249,16 @@ static void web_backend_gameplay_stop(void *userdata) {
     platform_sdk_web_backend_gameplay_stop();
 }
 
+static void web_backend_show_banner(void *userdata) {
+    (void)userdata;
+    platform_sdk_web_backend_show_banner();
+}
+
+static void web_backend_hide_banner(void *userdata) {
+    (void)userdata;
+    platform_sdk_web_backend_hide_banner();
+}
+
 static void web_backend_measure(const char *category, const char *what,
                                 const char *action, void *userdata) {
     (void)userdata;
@@ -267,6 +293,8 @@ void platform_sdk_install_web_backend(void) {
         .gameplay_start = web_backend_gameplay_start,
         .gameplay_stop = web_backend_gameplay_stop,
         .measure = web_backend_measure,
+        .show_banner = web_backend_show_banner,
+        .hide_banner = web_backend_hide_banner,
         .show_interstitial = web_backend_show_interstitial,
         .show_rewarded = web_backend_show_rewarded,
         .destroy = web_backend_destroy,

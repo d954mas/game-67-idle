@@ -180,6 +180,30 @@ export function createYandexPlatformAdapter({ host, sdkUrl = YANDEX_SDK_URL }) {
       null;
   }
 
+  /* The portal picks where a sticky banner sits (right on desktop, top or
+     bottom on a phone) and draws it over the game. The console option
+     "use the API for the sticky banner" has to be on, and when it is not the
+     portal answers with a reason instead of a banner. */
+  async function showBanner() {
+    const ysdk = await sdk();
+    if (!ysdk || !ysdk.adv || typeof ysdk.adv.showBannerAdv !== "function") {
+      return { supported: false, shown: false, reason: "unsupported" };
+    }
+    const status = await ysdk.adv.showBannerAdv().catch(() => null);
+    if (!status) return { supported: true, shown: false, reason: "failed" };
+    return {
+      supported: true,
+      shown: Boolean(status.stickyAdvIsShowing),
+      reason: status.stickyAdvIsShowing ? undefined : (status.reason || "failed"),
+    };
+  }
+
+  async function hideBanner() {
+    const ysdk = await sdk();
+    if (!ysdk || !ysdk.adv || typeof ysdk.adv.hideBannerAdv !== "function") return;
+    await ysdk.adv.hideBannerAdv().catch(() => {});
+  }
+
   return {
     destroy() {
       destroyed = true;
@@ -190,14 +214,12 @@ export function createYandexPlatformAdapter({ host, sdkUrl = YANDEX_SDK_URL }) {
     gameplayStart,
     gameplayStop,
     getLocale,
-    hideBanner() {},
+    hideBanner,
     loadData,
     measure() {},
     ready,
     saveData,
-    showBanner() {
-      return { supported: false, shown: false, reason: "unsupported" };
-    },
+    showBanner,
     showInterstitial,
     showRewarded,
   };

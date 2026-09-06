@@ -21,10 +21,10 @@
       "bundleBytes": 2967
     },
     "yandex": {
-      "sourceSha256": "8993e9d3d99b6b9e4b0d776d814e0128306db663aab489c317c58fa4608b3166",
-      "bundleSha256": "a7bbc85a284295a39285506c0f7e95f7eba53b430623744d4ae24caef273dfc0",
-      "sourceBytes": 6931,
-      "bundleBytes": 3316
+      "sourceSha256": "9d6432507b97e47645c800c23d1b3f5372929310317407ea504a30f01068c0fe",
+      "bundleSha256": "77856e07c48cec1c911f7fefa49f0f5bbddadc899ea780458076963c23f02f8d",
+      "sourceBytes": 7873,
+      "bundleBytes": 3740
     },
     "playgama": {
       "sourceSha256": "cb8653eacc3aaf79f7108421d14d42e76ebcd710c3cb2ad278ec2a225c010542",

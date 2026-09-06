@@ -94,6 +94,8 @@ typedef struct platform_sdk_backend_t {
     void (*gameplay_start)(void *userdata);
     void (*gameplay_stop)(void *userdata);
     void (*measure)(const char *category, const char *what, const char *action, void *userdata);
+    void (*show_banner)(void *userdata);
+    void (*hide_banner)(void *userdata);
     platform_sdk_result_t (*show_interstitial)(const char *placement, void *userdata);
     platform_sdk_result_t (*show_rewarded)(const char *placement, void *userdata);
     void (*destroy)(void *userdata);
@@ -135,6 +137,13 @@ platform_sdk_result_t platform_sdk_show_rewarded(
     const char *placement,
     platform_sdk_rewarded_callback_t callback,
     void *userdata);
+/* The sticky banner is the one extra block a portal allows beside the
+   fullscreen ad, and the portal owns its placement and its refresh. Asking for
+   it is fire and forget: a portal whose console option is off simply keeps it
+   hidden. */
+void platform_sdk_show_banner(void);
+void platform_sdk_hide_banner(void);
+
 void platform_sdk_backend_complete_interstitial(platform_sdk_ad_result_t result);
 void platform_sdk_backend_complete_rewarded(platform_sdk_rewarded_result_t result);
 void platform_sdk_backend_complete_init(bool ready);
