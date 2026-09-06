@@ -19,7 +19,10 @@
 #endif
 
 #define GAME_STORAGE_PATH_MAX 512
-#define GAME_STORAGE_QUARANTINE_MAX_FILES 3
+/* Retention, not a hard cap: a full set rotates out the oldest copy. A cap that
+   refused would leave the slot unwritable for the rest of the install, which
+   is a worse outcome than losing the oldest forensic copy. */
+#define GAME_STORAGE_QUARANTINE_MAX_FILES 5
 
 #ifndef GAME_STORAGE_APP_ID
 #error "GAME_STORAGE_APP_ID must be defined via CMake"
@@ -259,8 +262,9 @@ static const DWORD kStorageRetryBackoffMs[] = {0, 0, 15, 30, 60, 120, 240};
 /* A whitelist with no negative test, deliberately. Every producer of a rename
    failure OUTSIDE {5, 32} is unreachable through the public surface by
    construction: slot names are validated, the temp source is proven to exist by
-   the fclose above it, and the quarantine destination is proven free before the
-   move. Widening this to `return true` therefore changes no observable
+   the fclose above it, and a quarantine destination is either free or a plain
+   file of our own that replace may overwrite. Widening this to `return true`
+   therefore changes no observable
    behaviour that a test could catch -- it would only make some novel refusal
    code cost a synchronous caller ~465ms before failing anyway. Do not add a
    synthetic producer to "cover" it; add a test the day a real code shows up. */
@@ -303,8 +307,7 @@ static bool move_file(
     }
 #else
     /* POSIX rename() is atomic and has no equivalent refusal. It replaces
-       unconditionally; the quarantine caller passes a path it has just proven
-       free, so the flag is not needed to get the same behaviour. */
+       unconditionally, which every caller here accepts. */
     (void)replace_existing;
     (void)may_wait;
     return rename(from, to) == 0;
@@ -369,6 +372,48 @@ static bool path_exists(const char *path) {
 #else
     struct stat info;
     return stat(path, &info) == 0;
+#endif
+}
+
+/* Size and modification time of a regular file; false when it is absent or
+   not a plain file. mtime is an opaque monotone value, only ever compared. */
+static bool regular_file_info(const char *path, uint64_t *size, uint64_t *mtime) {
+    uint64_t found_size;
+    uint64_t found_mtime;
+#ifdef _WIN32
+    WIN32_FILE_ATTRIBUTE_DATA data;
+    if (!GetFileAttributesExA(path, GetFileExInfoStandard, &data) ||
+        (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+        return false;
+    }
+    found_size = ((uint64_t)data.nFileSizeHigh << 32) | data.nFileSizeLow;
+    found_mtime = ((uint64_t)data.ftLastWriteTime.dwHighDateTime << 32) |
+                  data.ftLastWriteTime.dwLowDateTime;
+#else
+    struct stat info;
+    if (stat(path, &info) != 0 || !S_ISREG(info.st_mode)) {
+        return false;
+    }
+    found_size = (uint64_t)info.st_size;
+    found_mtime = (uint64_t)info.st_mtime;
+#endif
+    if (size != NULL) {
+        *size = found_size;
+    }
+    if (mtime != NULL) {
+        *mtime = found_mtime;
+    }
+    return true;
+}
+
+/* Whether a rename onto this existing path can succeed at all. Only Windows
+   refuses to replace a read-only or directory destination. */
+static bool can_be_replaced(const char *path) {
+#ifdef _WIN32
+    return !destination_refuses_permanently(path);
+#else
+    (void)path;
+    return true;
 #endif
 }
 
@@ -528,26 +573,47 @@ static bool resolve_native_paths(
     return true;
 }
 
+/* Picks a free quarantine name, or the oldest occupied one when the set is
+   full. The caller must be prepared to overwrite: the path may exist. */
 static bool resolve_quarantine_path(
     const game_storage_native_paths_t *paths, char *out, size_t out_cap,
     char *error, int error_cap) {
+    char candidate[GAME_STORAGE_PATH_MAX];
+    uint64_t oldest_mtime = 0;
+    bool have_oldest = false;
     for (int attempt = 0; attempt < GAME_STORAGE_QUARANTINE_MAX_FILES; ++attempt) {
         const int written =
             attempt == 0
                 ? snprintf(
-                      out, out_cap, "%s", paths->quarantine_base)
+                      candidate, sizeof candidate, "%s", paths->quarantine_base)
                 : snprintf(
-                      out, out_cap, "%s-%d", paths->quarantine_base, attempt);
-        if (written < 0 || written >= (int)out_cap) {
+                      candidate, sizeof candidate, "%s-%d", paths->quarantine_base, attempt);
+        if (written < 0 || written >= (int)sizeof candidate ||
+            written >= (int)out_cap) {
             set_error(error, error_cap, "resolved quarantine path is too long");
             return false;
         }
-        if (!path_exists(out)) {
+        uint64_t size = 0;
+        uint64_t mtime = 0;
+        if (!path_exists(candidate)) {
+            (void)snprintf(out, out_cap, "%s", candidate);
             return true;
         }
+        /* A directory, an unreadable entry or a read-only file under a
+           quarantine name is skipped, never evicted: rotation only ever
+           overwrites our own copies, and only where the rename can land. */
+        if (regular_file_info(candidate, &size, &mtime) && can_be_replaced(candidate) &&
+            (!have_oldest || mtime < oldest_mtime)) {
+            oldest_mtime = mtime;
+            have_oldest = true;
+            (void)snprintf(out, out_cap, "%s", candidate);
+        }
+    }
+    if (have_oldest) {
+        return true;
     }
     set_error(
-        error, error_cap, "quarantine retention limit reached for this slot");
+        error, error_cap, "no quarantine name for this slot can be reused");
     return false;
 }
 
@@ -681,14 +747,28 @@ bool game_storage_backend_quarantine(
         set_error(error, error_cap, "no primary to quarantine");
         return false;
     }
+    uint64_t primary_size = 0;
+    if (regular_file_info(paths.primary, &primary_size, NULL) && primary_size == 0 &&
+        remove(paths.primary) == 0) {
+        /* Our own write never leaves zero bytes (temp + rename), so an empty
+           primary came from outside. It holds nothing to inspect and does
+           not earn a retention slot. A refused remove (read-only attribute)
+           falls through to the rename, which does not need write access. */
+        if (!sync_parent_directory(paths.primary)) {
+            set_error_os(error, error_cap, "failed to sync storage directory", last_os_error());
+            return false;
+        }
+        return true;
+    }
     char quarantine_path[GAME_STORAGE_PATH_MAX];
     if (!resolve_quarantine_path(
             &paths, quarantine_path, sizeof quarantine_path,
             error, error_cap)) {
         return false;
     }
-    /* Quarantine happens during load, never in a frame: it may wait. */
-    if (!move_file(paths.primary, quarantine_path, false, true)) {
+    /* Quarantine happens during load, never in a frame: it may wait. The
+       destination may be the oldest retained copy, hence replace. */
+    if (!move_file(paths.primary, quarantine_path, true, true)) {
         set_error_os(error, error_cap, "failed to quarantine storage file", last_os_error());
         return false;
     }

@@ -89,7 +89,9 @@ bool game_storage_read_backup(const char *slot, char **out, char *error, int err
 
 /* Откладывает битый primary для форензики/ручной починки (Р10, восстанавливает
    .corrupt для ручной починки сейва).
-   native: rename primary в bounded set <slot>.corrupt[-N] (максимум 3);
+   native: rename primary в набор <slot>.corrupt[-N] из 5 копий; при заполнении
+   самая старая по mtime перезаписывается, отказа «набор полон» нет. Пустой
+   (0 байт) primary просто удаляется, копию не занимает;
    web: replace единственной bounded-копии "<key>.corrupt". */
 bool game_storage_quarantine(const char *slot, char *error, int error_cap);
 

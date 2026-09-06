@@ -422,6 +422,26 @@ if(NOT EMSCRIPTEN)
         COMMAND test_game_storage_write_modes)
     set_tests_properties(test_game_storage_write_modes PROPERTIES LABELS "core")
 
+    # Quarantine retention: rotation of the oldest copy and the empty-primary
+    # shortcut are backend contracts, so the test lives beside the feature.
+    add_executable(test_game_storage_quarantine
+        "${GAME_STATE_DIR}/tests/test_game_storage_quarantine.c"
+        "${GAME_STATE_SRC}/game_storage.c"
+        "${GAME_STATE_SRC}/game_storage_backend_native.c")
+    target_link_libraries(test_game_storage_quarantine PRIVATE
+        unity nt_log nt_core nt_hash)
+    target_include_directories(test_game_storage_quarantine PRIVATE
+        "${GAME_STATE_INC}" "${GAME_STATE_SRC}")
+    target_compile_definitions(test_game_storage_quarantine PRIVATE
+        GAME_STORAGE_APP_ID="storage_quarantine_test"
+        GAME_STORAGE_NATIVE_ROOT="${CMAKE_BINARY_DIR}/tests/build/quarantine"
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_storage_quarantine PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_storage_quarantine
+        COMMAND test_game_storage_quarantine)
+    set_tests_properties(test_game_storage_quarantine PROPERTIES LABELS "core")
+
     add_executable(test_game_storage_web_backend
         "${GAME_STATE_DIR}/tests/test_game_storage_backend_web.c"
         "${GAME_STATE_SRC}/game_storage.c"
@@ -1032,6 +1052,7 @@ if(NOT EMSCRIPTEN)
         test_audio_core test_audio_resource test_audio_backend_native test_game_audio
         test_game_state_json test_game_state_nested test_game_storage
         test_game_storage_write_modes
+        test_game_storage_quarantine
         test_game_storage_web_backend test_game_save_blocked test_game_save
         test_game_events test_game_events_overflow test_game_state_roundtrip
         test_game_events_typed test_game_event_render test_game_analytics
