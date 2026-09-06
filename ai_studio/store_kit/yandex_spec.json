@@ -22,7 +22,10 @@
       "file": "icon.png",
       "width": 512,
       "height": 512,
-      "formats": ["png", "jpg"],
+      "formats": [
+        "png",
+        "jpg"
+      ],
       "max_bytes": 1048576,
       "square": true,
       "from_screenshot": false,
@@ -33,7 +36,10 @@
       "file": "cover.png",
       "width": 800,
       "height": 470,
-      "formats": ["png", "jpg"],
+      "formats": [
+        "png",
+        "jpg"
+      ],
       "max_bytes": 2097152,
       "from_screenshot": false,
       "note": "Verify the ratio in the draft form before the first upload."
@@ -43,7 +49,10 @@
       "file_glob": "screenshot_landscape_*.png",
       "width": 1920,
       "height": 1080,
-      "formats": ["png", "jpg"],
+      "formats": [
+        "png",
+        "jpg"
+      ],
       "min_count": 3,
       "max_count": 10,
       "max_bytes": 5242880,
@@ -54,17 +63,56 @@
       "file_glob": "screenshot_portrait_*.png",
       "width": 1080,
       "height": 1920,
-      "formats": ["png", "jpg"],
+      "formats": [
+        "png",
+        "jpg"
+      ],
       "min_count": 0,
       "max_count": 10,
       "max_bytes": 5242880,
       "note": "Only when the draft declares a portrait orientation."
+    },
+    {
+      "id": "gameplay_landscape",
+      "file": "gameplay_landscape.mp4",
+      "kind": "video",
+      "formats": [
+        "mp4"
+      ],
+      "max_bytes": 104857600,
+      "max_seconds": 28,
+      "aspect": "16:9",
+      "note": "Required by the draft form. Real gameplay filmed from the game, no mock overlays."
     }
   ],
   "texts": [
-    { "id": "title", "file": "title.<lang>.txt", "max_chars": 50, "note": "Identical to the name inside the game." },
-    { "id": "about", "file": "about.<lang>.txt", "min_chars": 100, "max_chars": 1000 },
-    { "id": "how_to_play", "file": "how_to_play.<lang>.txt", "min_chars": 40, "max_chars": 500, "note": "Controls belong here (requirement 2.2)." }
+    {
+      "id": "title",
+      "file": "title.<lang>.txt",
+      "max_chars": 50,
+      "note": "Identical to the name inside the game."
+    },
+    {
+      "id": "about",
+      "file": "about.<lang>.txt",
+      "min_chars": 100,
+      "max_chars": 1000
+    },
+    {
+      "id": "how_to_play",
+      "file": "how_to_play.<lang>.txt",
+      "min_chars": 40,
+      "max_chars": 500,
+      "note": "Controls belong here (requirement 2.2)."
+    }
   ],
-  "languages": ["ru", "en"]
+  "languages": [
+    "ru",
+    "en"
+  ],
+  "confirmed_by_form": [
+    "the horizontal gameplay video is REQUIRED: 16:9, MP4, height from 400 px, up to 100 MB, up to 28 seconds",
+    "at most two categories per draft",
+    "icon, cover and screenshots can be copied from the Russian tab per language"
+  ]
 }

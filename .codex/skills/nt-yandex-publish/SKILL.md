@@ -69,8 +69,14 @@ The rows that catch games out, in order of how often they do:
 - **4.7** during a fullscreen or rewarded ad both the sound and the gameplay
   are paused.
 - **4.4** ads only at logical pauses, never inside a fight.
-- **2.10** the language comes from the SDK, not from a setting the player has
-  to find.
+- **2.10 / 2.14** the language comes from the SDK. The check is not "the game
+  ends up in the right language": the console watches for a READ of
+  `ysdk.environment.i18n.lang` **while the game loads**, and the debug panel's
+  i18n light is the verdict. A game that asks for the locale once, late, or
+  only on a save-less run reads its answer from `navigator.language` and is
+  refused with "автоматическое определение языка не реализовано" while running
+  in perfect Russian. Read the locale where the SDK resolves, cache it, and let
+  the game adopt it on every launch until the player picks one by hand.
 - **1.11** progress is saved immediately and survives a refresh.
 - **1.6/1.7** no system context menu on right click or long press, no page
   scrolling, no text selection.
@@ -101,13 +107,31 @@ icon with no rounded corners and no border (8.6), reading at 64 px in a
 catalogue grid; a cover in the form's own ratio. Both are game assets and carry
 license, provenance and hashes like every other asset in the repository.
 
+**The horizontal gameplay video is required** and the draft cannot be sent
+without it: 16:9, MP4, height from 400 px, up to 100 MB, up to 28 seconds. It
+is filmed from the game like the screenshots — a bot plays a real run and every
+second simulated frame is captured, then ffmpeg encodes the sequence at 30 fps
+(`devapi/promo_video_bot.py` is the working shape). Watch
+for the native build's own overlays: a mock interstitial from a commercial
+break will sit in the middle of the shot, and the frame it lands on is not in
+`ui.tree`, so the bot cannot dismiss what it cannot see — pick a stretch of the
+run that asks for no break.
+
 **Texts** are one file per field per language (`title.ru.txt`, `about.en.txt`,
 `how_to_play.ru.txt`, ...). The name must be identical in the game, the draft
 and the materials, and unique per language (5.2, 5.9); no field may repeat
 another field's text or pad itself with repeated characters (5.8); controls are
 described in "how to play" (2.2).
 
-### 5. Hand over
+### 5. Fill the draft and read the pre-check
+
+The console runs its own automated check on every archive and prints the
+verdict above the form ("Замечания к релизу"). It is free, it is the same check
+moderation starts from, and it answers in minutes — upload, read it, fix, upload
+again. Two things the form itself decides: at most **two** categories, and a
+draft cannot be submitted at all without a live RSYA contract on the account.
+
+### 6. Hand over
 
 The reply to the lead names: the archive path, the SDK probe result, the
 checklist rows that are NOT closed and what each would take, and the store
@@ -116,7 +140,8 @@ categories and the platform flags are the lead's — the console is theirs.
 
 ## What This Skill Does Not Do
 
-- It does not upload anything. No draft, no publish, no console.
+- It does not press "Отправить на модерацию". Filling the draft is work; sending
+  it is the lead's word, once per submission.
 - It does not invent sizes. Numbers come from the form or from the spec file.
 - It does not make screenshots out of promotional art, and does not make an
   icon out of a screenshot — both are refusals.

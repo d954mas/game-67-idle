@@ -54,6 +54,22 @@ function match(files, entry) {
   return files.filter((f) => re.test(f));
 }
 
+function checkVideo(dir, entry, found, problems, notes) {
+  for (const name of found) {
+    const bytes = statSync(join(dir, name)).size;
+    if (entry.max_bytes && bytes > entry.max_bytes) {
+      problems.push(`${name}: ${(bytes / 1048576).toFixed(2)} MB over the ${(entry.max_bytes / 1048576).toFixed(2)} MB cap`);
+    }
+    const ext = extname(name).slice(1).toLowerCase();
+    if (entry.formats && !entry.formats.includes(ext)) {
+      problems.push(`${name}: format .${ext}, allowed ${entry.formats.join("/")}`);
+    }
+  }
+  /* Duration and ratio are not read here: the form states them and rejects a
+   * file that misses them, and no decoder belongs in this checker. */
+  notes.push(`${entry.id}: ${entry.aspect || "ratio"} and the ${entry.max_seconds}s limit are the form's to enforce`);
+}
+
 function checkAsset(dir, entry, problems, notes) {
   const files = readdirSync(dir).filter((f) => statSync(join(dir, f)).isFile());
   const found = match(files, entry);
@@ -64,6 +80,7 @@ function checkAsset(dir, entry, problems, notes) {
     return;
   }
   if (found.length > max) problems.push(`${entry.id}: ${found.length} files, the portal takes at most ${max}`);
+  if (entry.kind === "video") { checkVideo(dir, entry, found, problems, notes); return; }
   for (const name of found) {
     const path = join(dir, name);
     const size = imageSize(path);
