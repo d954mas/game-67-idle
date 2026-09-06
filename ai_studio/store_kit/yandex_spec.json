@@ -1,0 +1,70 @@
+{
+  "schema": "ai_studio.store_kit.spec.v1",
+  "portal": "yandex",
+  "source_of_truth": "The draft form in the Yandex Games console states the current limits next to every field. The numbers below are the studio's working targets; when the form disagrees, the form wins and this file is updated in the same commit.",
+  "docs": [
+    "https://yandex.com/dev/games/doc/en/concepts/requirements",
+    "https://yandex.com/dev/games/doc/en/concepts/local-launch"
+  ],
+  "confirmed_by_docs": [
+    "icon and cover may not be screenshots from the game (5.6)",
+    "media carries no borders and no rounded corners (8.6)",
+    "media shows no system interface and no Yandex Games interface (8.7)",
+    "gameplay fills at least 70% of screenshots and of video duration (5.1)",
+    "the game name is identical in the game, the draft and the materials, and unique per language (5.2, 5.9)",
+    "repeated characters and duplicated text between fields are not allowed (5.8)",
+    "every archive keeps index.html at its root and ASCII file names (1.23)",
+    "all files together stay under 100 MB uncompressed (1.22)"
+  ],
+  "assets": [
+    {
+      "id": "icon",
+      "file": "icon.png",
+      "width": 512,
+      "height": 512,
+      "formats": ["png", "jpg"],
+      "max_bytes": 1048576,
+      "square": true,
+      "from_screenshot": false,
+      "note": "Square, no rounded corners, no border. Reads at 64 px in the catalogue grid."
+    },
+    {
+      "id": "cover",
+      "file": "cover.png",
+      "width": 800,
+      "height": 470,
+      "formats": ["png", "jpg"],
+      "max_bytes": 2097152,
+      "from_screenshot": false,
+      "note": "Verify the ratio in the draft form before the first upload."
+    },
+    {
+      "id": "screenshot_landscape",
+      "file_glob": "screenshot_landscape_*.png",
+      "width": 1920,
+      "height": 1080,
+      "formats": ["png", "jpg"],
+      "min_count": 3,
+      "max_count": 10,
+      "max_bytes": 5242880,
+      "note": "Real gameplay, no system or portal interface, no debug overlays."
+    },
+    {
+      "id": "screenshot_portrait",
+      "file_glob": "screenshot_portrait_*.png",
+      "width": 1080,
+      "height": 1920,
+      "formats": ["png", "jpg"],
+      "min_count": 0,
+      "max_count": 10,
+      "max_bytes": 5242880,
+      "note": "Only when the draft declares a portrait orientation."
+    }
+  ],
+  "texts": [
+    { "id": "title", "file": "title.<lang>.txt", "max_chars": 50, "note": "Identical to the name inside the game." },
+    { "id": "about", "file": "about.<lang>.txt", "min_chars": 100, "max_chars": 1000 },
+    { "id": "how_to_play", "file": "how_to_play.<lang>.txt", "min_chars": 40, "max_chars": 500, "note": "Controls belong here (requirement 2.2)." }
+  ],
+  "languages": ["ru", "en"]
+}
