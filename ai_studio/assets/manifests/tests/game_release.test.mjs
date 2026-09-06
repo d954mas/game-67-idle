@@ -324,3 +324,21 @@ test("game release asset audit rejects non-regular inputs and malformed source p
     /relative to assets/,
   );
 });
+
+test("pack builder art behind a DevAPI guard is not a release input", (t) => {
+  const item = fixture(t);
+  write(join(item.root, "src", "build_packs.c"),
+    `nt_atlas_add(atlas, "${item.path}", &options);\n`
+    + "#ifdef NT_DEVAPI_GROUP_OBS\n"
+    + "#if 1\n"
+    + "nt_atlas_add(atlas, \"assets/ui/review_only.png\", &options);\n"
+    + "#endif\n"
+    + "#endif\n"
+    + "#ifndef GAME_HEADLESS\n"
+    + `nt_atlas_add(atlas, "${item.path}", &options);\n`
+    + "#endif\n");
+  assert.deepEqual(builderAssetPaths(item.root), [item.path]);
+  assert.deepEqual(auditGameReleaseAssets(item.root, { trackedPaths: item.tracked }), {
+    ok: true, packed: 1, issues: [],
+  });
+});
