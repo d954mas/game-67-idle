@@ -84,6 +84,31 @@ export function webStagedAssetPaths(gameDir) {
   return [...staged].sort();
 }
 
+// A pack builder may hold review-only art behind a DevAPI guard, which a
+// release build never compiles and therefore never packs. This is a RELEASE
+// input contract, so those lines must not be read as release inputs.
+const DEV_ONLY_GUARD = /^\s*#\s*if(?:def)?\s+.*NT_DEVAPI_GROUP_\w+/;
+const ANY_IF = /^\s*#\s*if/;
+const ANY_ENDIF = /^\s*#\s*endif/;
+
+export function stripDevOnlyBlocks(source) {
+  const kept = [];
+  let guardDepth = 0; // 0 = outside a DevAPI block, else its nesting depth
+  let depth = 0;
+  for (const line of source.split(/\r?\n/)) {
+    if (ANY_IF.test(line)) {
+      depth += 1;
+      if (guardDepth === 0 && DEV_ONLY_GUARD.test(line)) guardDepth = depth;
+    } else if (ANY_ENDIF.test(line)) {
+      if (guardDepth === depth) guardDepth = 0;
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (guardDepth === 0) kept.push(line);
+  }
+  return kept.join("\n");
+}
+
 export function builderAssetPaths(gameDir) {
   const root = resolve(gameDir);
   const sourcePath = join(root, "src", "build_packs.c");
@@ -95,7 +120,7 @@ export function builderAssetPaths(gameDir) {
     const current = pending.pop();
     if (visited.has(current)) continue;
     visited.add(current);
-    const source = readFileSync(current, "utf8");
+    const source = stripDevOnlyBlocks(readFileSync(current, "utf8"));
     sources.push(source);
     for (const match of source.matchAll(/^\s*#include\s+"([^"]+)"/gm)) {
       const candidates = [join(resolve(current, ".."), match[1]), join(root, "src", match[1])];
