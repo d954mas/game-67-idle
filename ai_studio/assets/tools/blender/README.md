@@ -8,6 +8,10 @@ The repository skill surface is
 `.codex/skills/nt-blender-production/SKILL.md`. This module owns the executable
 gates and the detailed contract.
 
+The module also holds the Blender tools that sit outside that gate. See
+[Vertex Colour Bake](#vertex-colour-bake) for turning a sourced, texture-painted
+model into the flat `COLOR_0` form a game imports.
+
 ## Outcome
 
 A Blender iteration is review-ready only when four claims are independently
@@ -347,6 +351,83 @@ oblique, master-crop and 640-crop evidence, with explicit claims for target-
 camera visibility and front/side consistency. A close-up PASS cannot override a
 flat target frame, and a watertight roof cannot override a broken silhouette.
 
+## Vertex Colour Bake
+
+`vertex_color_bake.py` moves a sourced model's colour out of its texture and
+into `COLOR_0`. Free CC0 models normally carry colour in one shared palette
+atlas; a game that draws vertex colour with no textures imports such a model
+grey, which is why an otherwise usable model gets rejected and rebuilt by hand.
+
+The tool is one file with three entry points over one pipeline, so the panel and
+the command produce a byte-identical GLB from the same parameters.
+
+### Install the add-on
+
+Edit > Preferences > Add-ons > the dropdown > Install from Disk, pick
+`ai_studio/assets/tools/blender/vertex_color_bake.py`, enable
+`AI Studio Vertex Colour Bake`. The panel is View3D > sidebar (`N`) > AI Studio.
+Blender copies the file, so re-install after the repository copy changes.
+
+### Bake headlessly
+
+```powershell
+& $blender --background --factory-startup `
+  --python ai_studio/assets/tools/blender/vertex_color_bake.py -- `
+  --input <sourced.glb> --output <game>/assets/models/environment/park_bench.glb `
+  --height 1.55 --pivot floor `
+  --report tmp/vertex_color_bake/park_bench.json `
+  --proof tmp/vertex_color_bake/park_bench_proof.png
+```
+
+Accepted sources are `.glb`, `.gltf`, `.fbx` and `.obj`. Omitting `--input`
+bakes the open scene, which is how a `.blend` opened by Blender's own arguments
+is converted.
+
+Parameters:
+
+- `--height` metres, measured on the game's Y axis; `0` keeps the source size.
+  The scale is always uniform, because a non-uniform one leaves the exported
+  normals off unit length.
+- `--pivot floor|center|top|keep` plus `--pivot-offset X,Y,Z` in game Y-up
+  metres. The pivot is the model point that lands on the origin, so a grip point
+  is `--pivot floor --pivot-offset 0,<grip height>,0`.
+- `--yaw` degrees around the game's up axis.
+- `--sample face|corner` and `--filter nearest|bilinear`. `face` samples the UV
+  centroid of each polygon and paints the whole face with it, which is what a
+  flat palette fill needs. `corner` samples every loop, which follows a texture
+  that actually varies across a face.
+- `--report` writes what came in, which material became which fills, the
+  resulting bounds and counts, and the contract audit.
+- `--proof` renders the same geometry twice from one camera, textured and then
+  vertex-coloured, and reports the pixel difference between them. Both passes
+  use flat Workbench shading and the Standard view transform, so a correct sRGB
+  decode makes the halves identical and a wrong one shows as a colour shift.
+
+### Check a shipped file
+
+The audit half needs no Blender:
+
+```powershell
+python ai_studio/assets/tools/blender/vertex_color_bake.py --audit <shipped.glb>
+```
+
+It requires one node with an identity transform, one mesh with one primitive,
+`POSITION`/`NORMAL`/`COLOR_0` with colour as float RGBA in `0..1`, unit normals,
+and no images, textures or external URIs.
+
+### Limits
+
+- Colour follows Principled/Emission base colour through image textures, RGB
+  constants, existing colour attributes and constant multiply mixes. Any other
+  node graph falls back to the material's viewport colour and says so in the
+  report, as `"source": "fallback"` with a reason.
+- Alpha is always `1`. Cutout foliage that relies on texture alpha loses its
+  holes and needs real geometry.
+- One output object. Split a kit into separate GLBs by running the tool once per
+  source file.
+- The grip pivot is a number the caller supplies; nothing infers it from
+  geometry.
+
 ## Validation
 
 ```powershell
@@ -354,6 +435,12 @@ python -m unittest discover ai_studio/assets/tools/blender -p "test_*.py"
 node ai_studio/studio.mjs verify --domain assets
 node ai_studio/architecture_map/validate_map.mjs --strict
 ```
+
+The bake tests build their own palette-atlas model, so they need Blender: set
+`BLENDER` when it is not in `C:\Program Files\Blender Foundation` or on `PATH`.
+They assert that each flat fill comes back as the source colour, that the export
+passes the contract, and that the panel and the command line write the same
+bytes.
 
 Quality reporting must keep dimensions separate. Typical outcomes are
 `QART_001`, `QASSET_001`, and `QTECH_001`; one green result does not override a

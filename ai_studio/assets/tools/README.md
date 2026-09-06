@@ -40,7 +40,10 @@ model, or checking a texture. They are not a separate top-level asset group.
   generation and seam metrics.
 - `blender/`: fail-closed Blender modeling/lookdev workflow with evaluated-mesh
   topology audits, reference/style mismatch review, fresh-hash evidence packets,
-  independent verification, and completion gates before rollout or handoff.
+  independent verification, and completion gates before rollout or handoff. Also
+  holds `vertex_color_bake.py`, the add-on and headless command that bakes a
+  sourced model's palette-atlas colour into `COLOR_0` and normalizes it to the
+  flat vertex-colour contract games import.
 
 The older `source_sheets/`, `crop/`, `cutout/`, and `review_atlas/` folders
 remain in place until each step is moved into `image/` with tests and callers
