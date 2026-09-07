@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.store_kit.spec.v1",
   "portal": "yandex",
-  "source_of_truth": "The draft form in the Yandex Games console states the current limits next to every field. The numbers below are the studio's working targets; when the form disagrees, the form wins and this file is updated in the same commit.",
+  "source_of_truth": "Yandex publishes these sizes in its own requirements list, unlike the portals whose numbers only exist on a console form. The draft form still wins where the two disagree, and this file is corrected in the same commit that finds the disagreement.",
   "docs": [
     "https://yandex.com/dev/games/doc/en/concepts/requirements",
     "https://yandex.com/dev/games/doc/en/concepts/local-launch"

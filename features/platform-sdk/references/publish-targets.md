@@ -69,6 +69,19 @@ Inspection accepts either the staged build layout or the manifest-declared
 single-JS package layout. It fails if production artifacts contain debug button
 labels, `debug_test`, or SDK markers from adapters not selected by the target.
 
+## One command for everything mechanical
+
+A game checks a portal submission with one command rather than three:
+
+```powershell
+node tools/game.mjs portal-check --target <portal>
+```
+
+It runs the artifact against this manifest, the store folder against the
+portal's spec in `ai_studio/store_kit/`, and the portal's own SDK proof where
+one exists. A portal with no local proof has no such row, rather than a row that
+silently passes.
+
 ## Prove the SDK before a draft
 
 Yandex ships a dev server, so "it cannot be tested locally" is never true. The

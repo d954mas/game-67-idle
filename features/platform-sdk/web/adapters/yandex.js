@@ -53,28 +53,42 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
     });
   }
 
-  /* The portal announces its own pause as two window events, and the console
-     checks that both are handled. They are bound as soon as the script is on
-     the page: a pause that arrives during loading is still a pause. */
+  function notifyPause() {
+    if (!destroyed && lifecycle && typeof lifecycle.pause === "function") lifecycle.pause();
+  }
+
+  function notifyResume() {
+    if (!destroyed && lifecycle && typeof lifecycle.resume === "function") lifecycle.resume();
+  }
+
+  /* Bound before the SDK exists, because a pause that arrives during loading is
+     still a pause, and the documented channel is only reachable once init has
+     resolved. Both channels reach the same facade, which ignores a second pause
+     while it is already paused. */
   function installPortalPauseEvents() {
     if (portalPauseInstalled) return;
     const root = windowRef();
     if (!root || typeof root.addEventListener !== "function") return;
     portalPauseInstalled = true;
-    const pause = () => {
-      if (!destroyed && lifecycle && typeof lifecycle.pause === "function") lifecycle.pause();
-    };
-    const resume = () => {
-      if (!destroyed && lifecycle && typeof lifecycle.resume === "function") lifecycle.resume();
-    };
-    root.addEventListener("game_api_pause", pause);
-    root.addEventListener("game_api_resume", resume);
+    root.addEventListener("game_api_pause", notifyPause);
+    root.addEventListener("game_api_resume", notifyResume);
     /* Focus and visibility are different questions, and the portal asks both:
        sound must stop when the game loses focus even though the tab is still
        on screen. The game runs in the portal's frame, so a click on the page
        around it blurs the game without hiding it. */
-    root.addEventListener("blur", pause);
-    root.addEventListener("focus", resume);
+    root.addEventListener("blur", notifyPause);
+    root.addEventListener("focus", notifyResume);
+  }
+
+  /* The channel the portal documents and its console checks for. The window
+     events above are what the dev proxy actually dispatches, so the adapter
+     listens on both rather than betting on one. */
+  function subscribePortalPause(ysdk) {
+    if (!ysdk || typeof ysdk.on !== "function") return;
+    try {
+      ysdk.on("game_api_pause", notifyPause);
+      ysdk.on("game_api_resume", notifyResume);
+    } catch { /* an SDK build without the event surface */ }
   }
 
   async function sdk() {
@@ -84,6 +98,7 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
         .then((YaGames) => (YaGames && typeof YaGames.init === "function" ? YaGames.init() : null))
         .then((ysdk) => {
           readPortalLocale(ysdk);
+          subscribePortalPause(ysdk);
           return ysdk;
         })
         .catch(() => null);

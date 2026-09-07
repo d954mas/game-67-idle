@@ -56,4 +56,4 @@ game, the draft and the materials.
 
 - `features/platform-sdk/references/portals/` — the requirement packets each
   spec answers to, cited to the portals' own documentation.
-- `.codex/skills/nt-yandex-publish/` — the order of work for a Yandex draft.
+- `.codex/skills/nt-portal-publish/` — the order of work for a portal draft.
