@@ -88,6 +88,9 @@ typedef struct platform_sdk_runtime_t {
     platform_sdk_listener_slot_t resume_listeners[PLATFORM_SDK_MAX_LISTENERS];
     platform_sdk_pending_interstitial_t pending_interstitial;
     platform_sdk_pending_rewarded_t pending_rewarded;
+    /* Latched by the first "unsupported" answer and never cleared: a portal that
+       has withdrawn rewarded keeps it withdrawn for the session. */
+    bool rewarded_refused;
 } platform_sdk_runtime_t;
 
 static platform_sdk_runtime_t g_platform_sdk;
@@ -571,6 +574,10 @@ bool platform_sdk_rewarded_supported(void) {
     return platform_sdk_capabilities().rewarded_supported;
 }
 
+bool platform_sdk_rewarded_available(void) {
+    return platform_sdk_capabilities().rewarded_supported && !g_platform_sdk.rewarded_refused;
+}
+
 bool platform_sdk_storage_supported(void) {
     return platform_sdk_capabilities().storage_supported;
 }
@@ -1038,6 +1045,13 @@ void platform_sdk_backend_complete_rewarded(platform_sdk_rewarded_result_t resul
 
     if (!g_platform_sdk.pending_rewarded.active) {
         return;
+    }
+
+    /* The reason, not the supported flag: a portal that serves rewarded in
+       general and refuses it for this launch window answers "unsupported" while
+       still calling itself supported. */
+    if (result.reason == PLATFORM_SDK_AD_REASON_UNSUPPORTED) {
+        g_platform_sdk.rewarded_refused = true;
     }
 
     callback = g_platform_sdk.pending_rewarded.callback;

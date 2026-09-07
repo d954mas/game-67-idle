@@ -52,13 +52,10 @@ static char s_reward_placement[PLATFORM_HOOKS_PLACEMENT_MAX];
 static platform_sdk_listener_id_t s_pause_listener;
 static platform_sdk_listener_id_t s_resume_listener;
 
-/* The build says a portal can show videos; the portal itself can still refuse
-   at runtime (a launch window with monetization off). Its first refusal is
-   remembered, so an offer that can never pay stops being drawn. */
-static bool s_reward_refused;
-
 bool platform_hooks_rewarded_supported(void) {
-    return s_initialized && !s_reward_refused && platform_sdk_rewarded_supported();
+    /* The facade remembers a portal's refusal; this layer only adds that the
+       hooks have to be up before anything is offered. */
+    return s_initialized && platform_sdk_rewarded_available();
 }
 
 /* The facade raises the same pause listeners for an ad and for the portal's own
@@ -240,10 +237,6 @@ static void on_rewarded(platform_sdk_rewarded_result_t result, void *userdata) {
     memcpy(placement, s_reward_placement, sizeof placement);
     s_reward_callback = NULL;
     s_reward_userdata = NULL;
-    if (!result.supported) {
-        s_reward_refused = true;
-    }
-
     if (!granted || callback == NULL) {
         (void)game_log_emit("platform.reward denied");
         return;
@@ -302,5 +295,4 @@ void platform_hooks_shutdown(void) {
     s_reward_grant_count = 0u;
     s_reward_callback = NULL;
     s_reward_userdata = NULL;
-    s_reward_refused = false;
 }

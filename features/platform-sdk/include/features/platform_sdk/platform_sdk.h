@@ -115,6 +115,12 @@ platform_sdk_capabilities_t platform_sdk_capabilities(void);
 bool platform_sdk_external_links_allowed(void);
 bool platform_sdk_ads_supported(void);
 bool platform_sdk_rewarded_supported(void);
+/* What the build promises, minus what this portal has already refused. A portal
+   can withdraw rewarded for a whole session -- a launch window with monetization
+   off is the usual reason -- and only a request that came back "unsupported"
+   reveals it. Anything that decides whether to OFFER a video asks this; the
+   capability above answers what the target can do at all. */
+bool platform_sdk_rewarded_available(void);
 bool platform_sdk_storage_supported(void);
 
 void platform_sdk_set_backend(const platform_sdk_backend_t *backend, void *userdata);
