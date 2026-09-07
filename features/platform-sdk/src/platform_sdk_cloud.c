@@ -30,6 +30,11 @@ EM_JS(void, platform_sdk_cloud_web_load, (const char *key_ptr), {
     try {
         Promise.resolve(backend.loadData(UTF8ToString(key_ptr))).then(function (value) {
             if (state.ticket !== ticket) return;
+            /* Adapters hand back JSON values, and a stored JSON text comes back
+               parsed; the C side owns a text, so an object is put back as one. */
+            if (value !== null && value !== undefined && typeof value !== "string") {
+                try { value = JSON.stringify(value); } catch (e) { value = null; }
+            }
             if (typeof value === "string" && value.length > 0) {
                 state.value = value;
                 state.status = 2;
