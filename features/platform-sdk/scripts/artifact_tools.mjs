@@ -72,7 +72,7 @@ export function platformSdkBundlePrefix(sdk) {
 
 export function sdkForTarget(target) {
   if (target === "local" || target === "itch") return "mock";
-  if (target === "poki" || target === "yandex" || target === "playgama") return target;
+  if (target === "poki" || target === "yandex" || target === "playgama" || target === "crazygames") return target;
   throw new Error(`unknown publish target: ${target}`);
 }
 
