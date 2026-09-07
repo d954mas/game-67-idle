@@ -59,7 +59,7 @@ test("template gates platform gameplay through focused scene eligibility", () =>
   const source = read("templates/template/src/main.c");
   assert.match(
     source,
-    /platform_lifecycle_update\(\s*playable_shell_ready,\s*game_scenes_can_process_game_input\(\)\s*\)/s,
+    /platform_lifecycle_update\(\s*playable_shell_ready,\s*!platform_break && game_scenes_can_process_game_input\(\)\s*\)/s,
   );
   assert.doesNotMatch(
     source,
