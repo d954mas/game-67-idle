@@ -8,7 +8,8 @@ description: "Use when preparing a game in this repository for publication on Ya
 Moderation on Yandex Games runs up to a month, and a rejection costs the whole
 month. Everything here exists so that no requirement is answered from memory.
 
-The portal's own list is the authority:
+Requirement numbers move. Read them off the portal's own list on the day, and
+fix any number quoted here that has drifted. The list is the authority:
 [requirements](https://yandex.com/dev/games/doc/en/concepts/requirements),
 [local launch](https://yandex.com/dev/games/doc/en/concepts/local-launch),
 [game events](https://yandex.com/dev/games/doc/en/sdk/sdk-game-events).
@@ -29,23 +30,29 @@ unzip -l release/artifacts/<game>-yandex-<hash>.zip
 
 `package` runs the asset audit and a browser smoke over the packaged archive.
 The listing answers two requirements on its own: `index.html` at the root with
-ASCII names (1.23), and everything under 100 MB uncompressed (1.22).
+ASCII names (1.22), and everything under 100 MB uncompressed (1.21).
 
 ### 2. Prove the SDK against the portal's own proxy
 
 The portal ships a dev server, so "cannot be tested locally" is never true:
 
 ```
-npx --yes @yandex-games/sdk-dev-proxy -p build/wasm-release-yandex/bin --dev-mode=true --port 8099
-node tools/yandex_sdk_probe.mjs https://localhost:8099
+node features/platform-sdk/scripts/yandex_sdk_probe.mjs \
+  --artifact games/<id>/build/wasm-release-yandex/bin
 ```
 
-`--dev-mode=true` needs no draft and mocks the SDK; the probe drives headless
-Chrome and prints what the SDK actually saw. What must appear:
+The probe starts the proxy itself in `--dev-mode=true`, which needs no draft,
+drives the artifact in headless Chrome and prints one row per requirement, with
+the calling stack frame beside every call so the portal's own frames are not
+mistaken for the game's. It refuses to run when the port is already held: a
+proxy left behind by an earlier run serves an older artifact, and the verdict
+would then be about a build nobody asked about. What must appear:
 
-- `LoadingAPI.ready()` in the SDK's own console group — requirement 1.20;
-- `GameplayAPI.start()` after the first press, `stop()` when the game pauses;
-- `__portalPaused` flipping on `game_api_pause` / `game_api_resume`;
+- `LoadingAPI.ready()` — requirement 1.19.2;
+- `GameplayAPI.start()` after the first press, `stop()` when the game pauses
+  (1.19.3);
+- listeners for `game_api_pause` / `game_api_resume` registered by the game's
+  own bundle, and a `stop()` when the probe dispatches the pause (1.19.4);
 - a locale from `environment.i18n.lang`, and the game adopting it (2.10);
 - no exceptions.
 
@@ -64,8 +71,11 @@ The rows that catch games out, in order of how often they do:
 
 - **1.3** sound stops when the game loses focus. Focus and visibility are
   different questions: the mixer answers focus, the clock answers visibility.
-- **1.20** `LoadingAPI.ready`, `GameplayAPI.start/stop`, and the
-  `game_api_pause` / `game_api_resume` events all handled.
+- **1.19.2 / 1.19.3 / 1.19.4** `LoadingAPI.ready`, `GameplayAPI.start/stop`,
+  and the `game_api_pause` / `game_api_resume` events all handled. In this
+  studio the pause path is owned by `features/platform-sdk`: the adapter routes
+  both events into the C facade, which stops gameplay and dispatches the pause
+  listeners game code already holds.
 - **4.7** during a fullscreen or rewarded ad both the sound and the gameplay
   are paused.
 - **4.4** ads only at logical pauses, never inside a fight.
@@ -77,7 +87,7 @@ The rows that catch games out, in order of how often they do:
   refused with "автоматическое определение языка не реализовано" while running
   in perfect Russian. Read the locale where the SDK resolves, cache it, and let
   the game adopt it on every launch until the player picks one by hand.
-- **1.11 / 1.13** progress is saved immediately and survives a refresh, and if
+- **1.9 / 1.11** progress is saved immediately and survives a refresh, and if
   the draft declares cloud saves it must actually cross devices. The portal's
   player storage is asynchronous and a game loop is not, so the read starts as
   early as the SDK exists and is awaited at the barrier the pack download
@@ -85,10 +95,13 @@ The rows that catch games out, in order of how often they do:
   that decides the feature: a browser holding no save takes the account's copy
   regardless of stamps, because a new game stamps itself with the current time
   and would beat the run the player left elsewhere.
-- **1.6/1.7** no system context menu on right click or long press, no page
-  scrolling, no text selection.
-- **1.9** no absolute URLs to Yandex S3 in the code.
-- **5.2** the name is the same everywhere the player can read it — the store
+- **1.6.1.8 / 1.6.2.7 / 1.10.2** no system context menu on right click or long
+  press, no page scrolling, no text selection, no pinch zoom. A `contextmenu`
+  handler alone covers Android and misses iOS, which needs
+  `-webkit-touch-callout: none`; page scroll needs `overscroll-behavior` and a
+  canvas `touch-action`, and zoom needs the viewport tag.
+- **1.7** no absolute URLs to Yandex S3 in the code.
+- **5.1.3** the name is the same everywhere the player can read it — the store
   listing, the game, and the loading screen a shell template is happy to ship
   with a placeholder.
 
