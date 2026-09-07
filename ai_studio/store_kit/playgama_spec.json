@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.store_kit.spec.v1",
   "portal": "playgama",
-  "source_of_truth": "Playgama publishes no pixel sizes, formats, byte caps or character limits for listing media anywhere in its documentation. The console's own upload form is the only authority; read the numbers off it and record them here in the same commit that first uploads a draft.",
+  "source_of_truth": "Playgama publishes no pixel sizes, formats, byte caps or character limits for listing media anywhere in its documentation. The console's own upload form is the only authority; the numbers below were read off the form when the first draft was created and are re-read on every new draft.",
   "docs": [
     "https://docs.playgama.com/",
     "https://github.com/playgama/bridge"
@@ -14,7 +14,45 @@
     "sound and gameplay are both paused for the whole of an interstitial or rewarded ad",
     "a rewarded call-to-action carries an AD label or icon"
   ],
-  "assets": [],
+  "assets": [
+    {
+      "id": "cover_square",
+      "file": "cover_square_800.png",
+      "width": 800,
+      "height": 800,
+      "formats": [
+        "png",
+        "jpg"
+      ],
+      "square": true,
+      "from_screenshot": true,
+      "note": "Cover Images / Square 1:1. The form names the size; no byte cap shown. A frame from the game is allowed."
+    },
+    {
+      "id": "cover_portrait",
+      "file": "cover_portrait_1080x1920.png",
+      "width": 1080,
+      "height": 1920,
+      "formats": [
+        "png",
+        "jpg"
+      ],
+      "from_screenshot": true,
+      "note": "Cover Images / Portrait 9:16."
+    },
+    {
+      "id": "cover_landscape",
+      "file": "cover_landscape_1920x1080.png",
+      "width": 1920,
+      "height": 1080,
+      "formats": [
+        "png",
+        "jpg"
+      ],
+      "from_screenshot": true,
+      "note": "Cover Images / Landscape 16:9."
+    }
+  ],
   "texts": [
     {
       "id": "title",
@@ -34,10 +72,18 @@
       "max_chars": 500
     }
   ],
-  "languages": ["en", "ru"],
+  "languages": [
+    "en"
+  ],
   "undocumented": [
-    "pixel sizes, formats, byte caps and counts for icon, cover, screenshots and video",
-    "listing text character limits",
-    "the list of store languages a draft may declare"
+    "listing text character limits are not shown by the form either; the caps here are the studio's own working limits"
+  ],
+  "confirmed_by_form": [
+    "the draft form is single-language: one title, one description, one how-to-play, all in English; game languages are declared as a tag list (English, Russian, ...)",
+    "Cover Images take exactly three slots, Square 1:1 800x800, Portrait 9:16 1080x1920, Landscape 16:9 1920x1080, formats .mpeg/.jpeg/.png, no byte cap shown",
+    "Other Assets (screenshots, videos, covers) are optional, .mpeg/.jpeg/.png or .zip, max 300 MB; the widget accepts one file per selection even when several are chosen",
+    "the archive widget takes one .zip, max 300 MB, index.html at the root",
+    "Supported Devices (Desktop, iOS, Android), Screen Orientation (Portrait, Landscape) and Game Features are checkboxes; Distribution consent is on by default",
+    "Save parks the draft; submission for moderation is a separate action on the game's dashboard"
   ]
 }
