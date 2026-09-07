@@ -96,6 +96,22 @@ function checkAsset(dir, entry, problems, notes) {
     if (entry.width && (size.width !== entry.width || size.height !== entry.height)) {
       problems.push(`${name}: ${size.width}x${size.height}, the spec says ${entry.width}x${entry.height}`);
     }
+    /* The form states a range on the long side and a ratio, not one size. */
+    const longSide = Math.max(size.width, size.height);
+    if (entry.min_long_side && longSide < entry.min_long_side) {
+      problems.push(`${name}: long side ${longSide}px, the form wants at least ${entry.min_long_side}`);
+    }
+    if (entry.max_long_side && longSide > entry.max_long_side) {
+      problems.push(`${name}: long side ${longSide}px, the form takes at most ${entry.max_long_side}`);
+    }
+    if (entry.aspect) {
+      const [aw, ah] = entry.aspect.split(":").map(Number);
+      const want = aw / ah;
+      const have = size.width / size.height;
+      if (Math.abs(have - want) > 0.02) {
+        problems.push(`${name}: ${size.width}x${size.height} is not ${entry.aspect}`);
+      }
+    }
     if (entry.square && size.width !== size.height) {
       problems.push(`${name}: an icon must be square, this is ${size.width}x${size.height}`);
     }

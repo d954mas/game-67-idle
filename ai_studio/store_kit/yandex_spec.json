@@ -47,8 +47,6 @@
     {
       "id": "screenshot_landscape",
       "file_glob": "screenshot_landscape_*.png",
-      "width": 1920,
-      "height": 1080,
       "formats": [
         "png",
         "jpg"
@@ -56,13 +54,14 @@
       "min_count": 3,
       "max_count": 10,
       "max_bytes": 5242880,
-      "note": "Real gameplay, no system or portal interface, no debug overlays."
+      "note": "Real gameplay, no system or portal interface, no debug overlays. The form: 16:9, long side 1280-2560, JPEG or 24-bit PNG without alpha.",
+      "aspect": "16:9",
+      "min_long_side": 1280,
+      "max_long_side": 2560
     },
     {
       "id": "screenshot_portrait",
       "file_glob": "screenshot_portrait_*.png",
-      "width": 1080,
-      "height": 1920,
       "formats": [
         "png",
         "jpg"
@@ -70,7 +69,10 @@
       "min_count": 0,
       "max_count": 10,
       "max_bytes": 5242880,
-      "note": "Only when the draft declares a portrait orientation."
+      "note": "Only when the draft declares mobile screenshots. The form states the rule: 9:16, long side 1280-2560, JPEG or 24-bit PNG without alpha.",
+      "aspect": "9:16",
+      "min_long_side": 1280,
+      "max_long_side": 2560
     },
     {
       "id": "gameplay_landscape",
@@ -83,6 +85,19 @@
       "max_seconds": 28,
       "aspect": "16:9",
       "note": "Required by the draft form. Real gameplay filmed from the game, no mock overlays."
+    },
+    {
+      "id": "gameplay_portrait",
+      "file": "gameplay_portrait.mp4",
+      "kind": "video",
+      "formats": [
+        "mp4"
+      ],
+      "min_count": 0,
+      "max_bytes": 104857600,
+      "max_seconds": 28,
+      "aspect": "9:16",
+      "note": "Optional in the form, but a mobile-declared game without it shows nothing to phone players."
     }
   ],
   "texts": [
@@ -113,6 +128,7 @@
   "confirmed_by_form": [
     "the horizontal gameplay video is REQUIRED: 16:9, MP4, height from 400 px, up to 100 MB, up to 28 seconds",
     "at most two categories per draft",
-    "icon, cover and screenshots can be copied from the Russian tab per language"
+    "icon, cover and screenshots can be copied from the Russian tab per language",
+    "screenshots: 16:9 or 9:16, long side 1280-2560 px, JPEG or 24-bit PNG with no alpha channel"
   ]
 }
