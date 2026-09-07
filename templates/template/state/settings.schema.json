@@ -3,7 +3,7 @@
   "schema_version": 2,
   "fragment": "settings",
   "version": 1,
-  "string_max": 64,
+  "string_max": 32,
   "enums": {
     "Language": ["en", "ru"]
   },
@@ -11,7 +11,6 @@
     "master_volume": { "type": "float", "default": 0.8, "min": 0, "max": 1 },
     "music_volume":  { "type": "float", "default": 0.7, "min": 0, "max": 1 },
     "sfx_volume":    { "type": "float", "default": 0.9, "min": 0, "max": 1 },
-    "language":      { "type": "enum", "enum": "Language", "default": "en" },
-    "telemetry_id":  { "type": "string", "default": "new", "max_length": 32 }
+    "language":      { "type": "enum", "enum": "Language", "default": "en" }
   }
 }

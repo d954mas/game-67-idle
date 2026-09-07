@@ -220,11 +220,6 @@ The game-owned portions of items and progression remain in the template:
   `platform-sdk-adapter.js`; release packaging embeds the selected SDK modules
   into `game.js`. The pack also owns target manifest inspection and local NDJSON
   scorecards.
-- `telemetry/` (`L1`): portal-independent playtest funnel. A game names its
-  moments (level start/complete/fail, merge, buy, heartbeat) and the module
-  POSTs small JSON batches to the studio collector (`ai_studio/telemetry`);
-  dormant without a collector URL. The template links it; the player id lives
-  in the `settings` fragment.
 
 ### Ownership model
 

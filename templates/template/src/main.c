@@ -49,7 +49,6 @@
 #include "features/platform_sdk/platform_sdk_web.h"
 #endif
 #include "features/settings/settings.h"
-#include "features/telemetry/telemetry.h"
 #include "game_audio.h"
 #include "game_input.h"
 #include "game_events.h"
@@ -387,34 +386,6 @@ static bool game_runtime_apply_pending_new_game(void) {
     return true;
 }
 
-#ifndef GAME_RUNTIME_BUILD_FINGERPRINT
-#define GAME_RUNTIME_BUILD_FINGERPRINT "" /* only tools/build_web.mjs supplies one */
-#endif
-/* The studio funnel opens once the save is in (the player id lives there)
-   and the language is settled: the session's first event names both. The
-   build is the web fingerprint's head; a native run reports as "native". */
-static void telemetry_start(void) {
-    char build[16];
-    (void)snprintf(build, sizeof build, "%.12s", GAME_RUNTIME_BUILD_FINGERPRINT[0] != 0 ? GAME_RUNTIME_BUILD_FINGERPRINT : "native");
-    telemetry_init(&(telemetry_config_t){
-                       .url = GAME_TELEMETRY_URL, .key = GAME_TELEMETRY_KEY,
-                       .game = GAME_TELEMETRY_GAME, .build = build,
-                       .platform = platform_sdk_target_name(), .player = settings_telemetry_id()},
-                   telemetry_http_transport());
-    if (!telemetry_enabled()) return;
-    static const char *const k_lang[] = {"en", "ru"};
-    _Static_assert(sizeof k_lang / sizeof k_lang[0] == SETTINGS_STATE_LANGUAGE_COUNT,
-                   "a language in state/settings.schema.json has no telemetry code");
-    const int language = settings_language();
-    telemetry_event_begin("session_start");
-    telemetry_int("vw", (long long)g_nt_window.fb_width);
-    telemetry_int("vh", (long long)g_nt_window.fb_height);
-    telemetry_float("dpr", (double)g_nt_window.dpr);
-    telemetry_str("lang", language >= 0 && language < SETTINGS_STATE_LANGUAGE_COUNT ? k_lang[language] : "en");
-    telemetry_int("portrait", g_nt_window.fb_height > g_nt_window.fb_width ? 1 : 0);
-    telemetry_event_end();
-}
-
 static void game_runtime_load_state(void) {
     if (!s_fresh_state) {
         game_save_load_result_t load_result;
@@ -463,7 +434,6 @@ static void game_runtime_try_start(void) {
        paths above leave settings_state populated, and every accessor before
        this point renders the corpus fallback. */
     settings_apply_language();
-    telemetry_start();
 #ifdef NT_PLATFORM_WEB
     /* Do not expose pagehide/visibility flush until live fragments contain
        the loaded save. Fresh-state runs are intentionally non-persistent. */
@@ -543,7 +513,6 @@ static void frame(void) {
     (void)platform_sdk_game_loading_progress(initial_pack_loading_progress());
     platform_lifecycle_update(
         playable_shell_ready, game_scenes_can_process_game_input());
-    telemetry_update(g_nt_app.dt, playable_shell_ready && game_scenes_can_process_game_input());
     game_runtime_update();
 
     nt_gfx_begin_frame();
@@ -845,8 +814,6 @@ int main(int argc, char **argv) {
     }
     ui_runtime_shutdown();
 #if FEATURE_GAME_ANALYTICS
-    telemetry_flush();
-    telemetry_shutdown();
     game_analytics_shutdown(); // E4: final flush + close (before event infra teardown)
 #endif
     game_events_shutdown();

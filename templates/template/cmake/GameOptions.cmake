@@ -38,10 +38,6 @@ if(NOT GAME_PUBLISH_TARGET MATCHES "^(local|itch|poki|yandex|playgama)$")
 endif()
 
 set(GAME_RUNTIME_BUILD_FINGERPRINT "" CACHE STRING "Target-independent runtime source fingerprint supplied by tools/build_web.mjs.")
-# The studio funnel collector (ai_studio/telemetry). Empty URL keeps the client dormant.
-set(GAME_TELEMETRY_URL "" CACHE STRING "Telemetry collector function URL; empty = dormant.")
-set(GAME_TELEMETRY_KEY "" CACHE STRING "Telemetry collector api key.")
-set(GAME_TELEMETRY_GAME "template" CACHE STRING "Game id the collector groups events by.")
 string(LENGTH "${GAME_RUNTIME_BUILD_FINGERPRINT}" GAME_RUNTIME_BUILD_FINGERPRINT_LENGTH)
 set(GAME_RUNTIME_BUILD_FINGERPRINT_VALID OFF)
 if(GAME_RUNTIME_BUILD_FINGERPRINT_LENGTH EQUAL 64 AND GAME_RUNTIME_BUILD_FINGERPRINT MATCHES "^[0-9a-f]+$")

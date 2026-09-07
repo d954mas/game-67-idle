@@ -37,8 +37,5 @@ void settings_set_sfx(float value);
 int settings_language(void);
 void settings_set_language(int language);
 void settings_apply_language(void);
-/* The anonymous id the studio funnel groups a player's sessions by: 32 hex
-   chars, minted on first use and kept in the save. Never shown, never PII. */
-const char *settings_telemetry_id(void);
 
 #endif /* FEATURES_SETTINGS_H */

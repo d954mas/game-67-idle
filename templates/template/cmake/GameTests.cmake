@@ -364,13 +364,6 @@ if(NOT EMSCRIPTEN)
         LIBS cjson
         INCLUDES "${GAME_STATE_INC}" "${GAME_STATE_SRC}" "${NESTED_STATE_TEST_GENERATED_DIR}")
 
-    game_add_c_test(test_telemetry
-        SOURCES "${TELEMETRY_DIR}/tests/test_telemetry.c" "${TELEMETRY_SRC}/telemetry.c"
-        LIBS nt_core
-        INCLUDES "${TELEMETRY_INC}"
-        TIER core
-        WARNINGS)
-
     game_add_c_test(test_generated_text_codec
         SOURCES "${GAME_STATE_DIR}/tests/test_generated_text_codec.c"
                 "${GAME_STATE_SRC}/game_save_text.c" "${GAME_STATE_SRC}/game_state_json.c"
@@ -1013,7 +1006,7 @@ if(NOT EMSCRIPTEN)
         "${GAME_STATE_SRC}/game_storage_backend_native.c"
         "${GAME_STATE_SRC}/game_state_json.c" "${GAME_EVENTS_SRC}/game_events.c"
         "${GAME_STATE_GENERATED_SOURCE}" "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
-        "${SETTINGS_STATE_GENERATED_SOURCE}" src/features/settings/settings.c "${TELEMETRY_SRC}/telemetry.c"
+        "${SETTINGS_STATE_GENERATED_SOURCE}" src/features/settings/settings.c
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
         "${ITEMS_CORE_SRC}/items_reconcile.c" "${ITEMS_CORE_SRC}/items_containers.c"
         "${PROGRESSION_STATE_GENERATED_SOURCE}" "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"
@@ -1038,7 +1031,7 @@ if(NOT EMSCRIPTEN)
     endif()
     target_include_directories(test_template_composition PRIVATE
         "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src
-        "${LOCALIZATION_INC}" "${TELEMETRY_INC}"
+        "${LOCALIZATION_INC}"
         "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_template_composition PRIVATE
         GAME_SAVE_TESTING=1 GAME_ITEMS_TESTING=1 GAME_STORAGE_APP_ID="template_composition_test"

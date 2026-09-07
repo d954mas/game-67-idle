@@ -140,7 +140,6 @@ const CHECKS = Object.freeze([
     releaseOnly: true,
   },
   { id: "studio.shell", testRoots: ["ai_studio/studio_shell"] },
-  { id: "studio.telemetry", testRoots: ["ai_studio/telemetry/tests"] },
   {
     id: "studio.taskboard",
     testRoots: ["ai_studio/taskboard"],
@@ -211,7 +210,7 @@ const CHECKS = Object.freeze([
 ]);
 
 const DOMAINS = Object.freeze([
-  { id: "harness", checks: ["studio.facade", "studio.config", "studio.core-harness", "studio.skills.python", "studio.dev-environment", "studio.quality", "studio.telemetry"] },
+  { id: "harness", checks: ["studio.facade", "studio.config", "studio.core-harness", "studio.skills.python", "studio.dev-environment", "studio.quality"] },
   { id: "workspace", checks: ["studio.workspace", "workspace.game-create"] },
   { id: "architecture", checks: ["studio.architecture-map"] },
   { id: "shell", checks: ["studio.shell"] },
@@ -280,7 +279,6 @@ function domainForPath(path) {
   if (path.startsWith("ai_studio/runtime_automation/")) return "runtime";
   if (path.startsWith("ai_studio/studio_shell/")) return "shell";
   if (path.startsWith("ai_studio/taskboard/")) return "work-management";
-  if (path.startsWith("ai_studio/telemetry/")) return "harness";
   if (path.startsWith("ai_studio/workspace/")) return "workspace";
   if (path.startsWith("features/")) return "features";
   if (path.startsWith("templates/")) return "template-release";
