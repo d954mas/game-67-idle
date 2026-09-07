@@ -70,7 +70,7 @@ static void language_row(nt_ui_context_t *ctx, const ui_metrics_t *m, bool inter
             ui_kit_button_begin(ctx, nt_ui_id("settings/language/button"), &g_ui_theme.button, interactive, NULL);
             loc_kit_label(ctx, loc_by_key(LANGUAGE_NAMES[current]), &g_ui_theme.button_label);
             if (ui_kit_button_end(ctx) && interactive) {
-                settings_set_language((current + 1) % SETTINGS_STATE_LANGUAGE_COUNT);
+                settings_choose_language((current + 1) % SETTINGS_STATE_LANGUAGE_COUNT);
             }
         }
     }

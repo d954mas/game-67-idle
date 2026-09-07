@@ -37,5 +37,13 @@ void settings_set_sfx(float value);
 int settings_language(void);
 void settings_set_language(int language);
 void settings_apply_language(void);
+/* The player's own pick: from here on the portal's language no longer
+   overrides it. The settings screen calls this, not settings_set_language. */
+void settings_choose_language(int language);
+/* Takes the language the PORTAL says this player reads. Called on every launch,
+   because the portal can hand the same save a different language; a player who
+   picked one in the settings keeps it. Portals that watch for the SDK read
+   (Yandex, requirement 2.14) see it here, before the string table is chosen. */
+void settings_adopt_platform_language(void);
 
 #endif /* FEATURES_SETTINGS_H */

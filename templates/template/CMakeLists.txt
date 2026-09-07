@@ -81,10 +81,14 @@ add_executable(${GAME_TARGET}
     src/render/shader_programs.c
     src/render/capture.c
     src/systems/sys_move.c
+    src/systems/sys_platform_hooks.c                 # attention/ad freeze, mixer mute, ad points as API
+    src/systems/sys_cloud_save.c                     # local save mirrored to the portal, newest copy wins at boot
+    src/systems/sys_portal_metrics.c                 # frame events -> the portal's funnel, through a game mapper
     src/features/settings/settings_screen.c
     "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c" # И3a: const progression track/curve tables (content codegen)
     src/game_format.c                                # И3b: L0 int64-abbrev formatter
     "${PLATFORM_SDK_SRC}/platform_sdk.c"             # T0339: target/sdk identity + policy capabilities
+    "${PLATFORM_SDK_SRC}/platform_sdk_cloud.c"       # portal player storage: the account's copy of the save
     src/features/resource_panel/resource_panel.c     # И3b: generic counter/bar widget (zero feature headers)
     src/ui/demo_hud.c                                # И3b: game composition (resource_panel over items/progression)
     src/ui/loc_widgets.c                             # the ONLY caller of the raw text entry points

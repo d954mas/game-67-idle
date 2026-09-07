@@ -945,6 +945,48 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_platform_lifecycle COMMAND test_platform_lifecycle)
     set_tests_properties(test_platform_lifecycle PROPERTIES LABELS "core")
 
+    # nt_app_stub carries the real g_nt_app clock the freeze acts on, so the
+    # test asserts the engine's own pause flag, not a mirror of it.
+    add_executable(test_platform_hooks
+        tests/test_platform_hooks.c
+        src/systems/sys_platform_hooks.c
+        src/game_log.c
+        "${PLATFORM_SDK_SRC}/platform_sdk.c"
+        "${GAME_EVENTS_SRC}/game_events.c")
+    target_link_libraries(test_platform_hooks PRIVATE unity nt_app_stub nt_hash nt_log nt_core)
+    target_include_directories(test_platform_hooks PRIVATE
+        src "${PLATFORM_SDK_INC}" "${GAME_EVENTS_INC}")
+    target_compile_definitions(test_platform_hooks PRIVATE
+        PLATFORM_SDK_TARGET_ID=${GAME_PLATFORM_TARGET_ID}
+        PLATFORM_SDK_CURRENT_ID=${GAME_PLATFORM_SDK_ID}
+        PLATFORM_SDK_EXTERNAL_LINKS_ALLOWED=${GAME_PLATFORM_EXTERNAL_LINKS_ALLOWED}
+        PLATFORM_SDK_ADS_SUPPORTED=${GAME_PLATFORM_ADS_SUPPORTED}
+        PLATFORM_SDK_REWARDED_SUPPORTED=${GAME_PLATFORM_REWARDED_SUPPORTED}
+        PLATFORM_SDK_STORAGE_SUPPORTED=${GAME_PLATFORM_STORAGE_SUPPORTED}
+        PLATFORM_SDK_TESTING=1
+        FEATURE_GAME_EVENTS=1
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_platform_hooks PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_platform_hooks COMMAND test_platform_hooks)
+    set_tests_properties(test_platform_hooks PROPERTIES LABELS "core")
+
+    game_add_c_test(test_portal_metrics
+        SOURCES tests/test_portal_metrics.c src/systems/sys_portal_metrics.c
+                "${GAME_EVENTS_SRC}/game_events.c"
+                "${PLATFORM_SDK_SRC}/platform_sdk.c"
+        LIBS nt_hash nt_log nt_core
+        INCLUDES src "${GAME_EVENTS_INC}" "${PLATFORM_SDK_INC}"
+        DEFINES NT_DEVAPI_ENABLED=0
+                PLATFORM_SDK_TARGET_ID=${GAME_PLATFORM_TARGET_ID}
+                PLATFORM_SDK_CURRENT_ID=${GAME_PLATFORM_SDK_ID}
+                PLATFORM_SDK_EXTERNAL_LINKS_ALLOWED=${GAME_PLATFORM_EXTERNAL_LINKS_ALLOWED}
+                PLATFORM_SDK_ADS_SUPPORTED=${GAME_PLATFORM_ADS_SUPPORTED}
+                PLATFORM_SDK_REWARDED_SUPPORTED=${GAME_PLATFORM_REWARDED_SUPPORTED}
+                PLATFORM_SDK_STORAGE_SUPPORTED=${GAME_PLATFORM_STORAGE_SUPPORTED}
+                PLATFORM_SDK_TESTING=1 FEATURE_GAME_EVENTS=1
+        TIER core
+        WARNINGS)
+
     add_executable(test_platform_sdk_events
         tests/test_platform_sdk_events.c
         "${PLATFORM_SDK_SRC}/platform_sdk.c"
@@ -1006,7 +1048,7 @@ if(NOT EMSCRIPTEN)
         "${GAME_STATE_SRC}/game_storage_backend_native.c"
         "${GAME_STATE_SRC}/game_state_json.c" "${GAME_EVENTS_SRC}/game_events.c"
         "${GAME_STATE_GENERATED_SOURCE}" "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
-        "${SETTINGS_STATE_GENERATED_SOURCE}" src/features/settings/settings.c
+        "${SETTINGS_STATE_GENERATED_SOURCE}" src/features/settings/settings.c "${PLATFORM_SDK_SRC}/platform_sdk.c"
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
         "${ITEMS_CORE_SRC}/items_reconcile.c" "${ITEMS_CORE_SRC}/items_containers.c"
         "${PROGRESSION_STATE_GENERATED_SOURCE}" "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"
@@ -1031,12 +1073,18 @@ if(NOT EMSCRIPTEN)
     endif()
     target_include_directories(test_template_composition PRIVATE
         "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src
-        "${LOCALIZATION_INC}"
+        "${LOCALIZATION_INC}" "${PLATFORM_SDK_INC}"
         "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_template_composition PRIVATE
         GAME_SAVE_TESTING=1 GAME_ITEMS_TESTING=1 GAME_STORAGE_APP_ID="template_composition_test"
         GAME_STORAGE_NATIVE_ROOT="${CMAKE_BINARY_DIR}/tests/build/composition"
         GAME_SAVE_AUTOSAVE_SLOT="test_composition"
+        PLATFORM_SDK_TARGET_ID=${GAME_PLATFORM_TARGET_ID} PLATFORM_SDK_CURRENT_ID=${GAME_PLATFORM_SDK_ID}
+        PLATFORM_SDK_EXTERNAL_LINKS_ALLOWED=${GAME_PLATFORM_EXTERNAL_LINKS_ALLOWED}
+        PLATFORM_SDK_ADS_SUPPORTED=${GAME_PLATFORM_ADS_SUPPORTED}
+        PLATFORM_SDK_REWARDED_SUPPORTED=${GAME_PLATFORM_REWARDED_SUPPORTED}
+        PLATFORM_SDK_STORAGE_SUPPORTED=${GAME_PLATFORM_STORAGE_SUPPORTED}
+        PLATFORM_SDK_TESTING=1 FEATURE_GAME_EVENTS=1
         GAME_SAVE_DEBOUNCE_MS=2000 GAME_SAVE_MAX_INTERVAL_MS=30000 GAME_SAVE_DOC_VERSION=2
         ITEMS_LEGACY_SAVE_V1_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/items_save_v1.json"
         _CRT_SECURE_NO_WARNINGS)

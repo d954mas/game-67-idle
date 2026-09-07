@@ -78,6 +78,9 @@
 #include "game_state_events.gen.h" /* E2: game_ev_register (typed event labels) */
 #include "game_asset_paths.h"
 #include "platform_lifecycle.h"
+#include "systems/sys_cloud_save.h"
+#include "systems/sys_platform_hooks.h"
+#include "systems/sys_portal_metrics.h"
 #include "settings_state.h"        /* A6: SettingsState + settings_state_fragment (NOT the events header) */
 #include "game_scenes.h"
 #include "features/scenes/scene_manager_devapi.h"
@@ -273,6 +276,7 @@ static bool devapi_start(void) {
     game_iteration_proof_register_devapi();
     game_items_register_devapi();
     game_platform_sdk_register_devapi();
+    platform_hooks_register_devapi();
     game_save_register_devapi(game_runtime_on_devapi_state_change, NULL);
     game_events_register_devapi(); // E3: game.events.tail (+ enables the recorder)
 #ifdef NT_DEVAPI_GROUP_UI
@@ -386,10 +390,17 @@ static bool game_runtime_apply_pending_new_game(void) {
     return true;
 }
 
+/* A run that found nothing to load: the cloud save asks, because a new game
+   stamped with the current time would out-rank the account's older copy. */
+static bool s_local_save_was_fresh;
+
 static void game_runtime_load_state(void) {
+    s_local_save_was_fresh = s_fresh_state;
     if (!s_fresh_state) {
         game_save_load_result_t load_result;
         game_save_load(&load_result);
+        s_local_save_was_fresh = load_result.status == GAME_SAVE_LOAD_FRESH ||
+                                 load_result.status == GAME_SAVE_LOAD_CORRUPT_RESET;
         if (load_result.status == GAME_SAVE_LOAD_CORRUPT_RESET) {
             /* load already did reset()+quarantine but NOT on_new_game; this is
                the single on_new_game call on the corrupt-save path. */
@@ -420,6 +431,11 @@ static void game_runtime_try_start(void) {
     if (pack_state != NT_PACK_STATE_READY) {
         return;
     }
+    /* Held here rather than after the load: swapping the save under a run that
+       has already started is worse than a second on the loading screen. */
+    if (!cloud_save_settled()) {
+        return;
+    }
 
     char seed_error[128] = {0};
     if (!game_items_validate_default_seed(seed_error, (int)sizeof seed_error)) {
@@ -430,9 +446,16 @@ static void game_runtime_try_start(void) {
     /* A ready pack is the startup barrier: save reconciliation and every
        feature that reads content run only after this point. */
     game_runtime_load_state();
+    /* A newer run from another device replaces what this browser kept, and the
+       load runs again over it. */
+    if (cloud_save_adopt(s_local_save_was_fresh)) {
+        game_runtime_load_state();
+    }
     /* The persisted language reaches the string table only here: both load
        paths above leave settings_state populated, and every accessor before
-       this point renders the corpus fallback. */
+       this point renders the corpus fallback. The portal's language wins on
+       every launch until the player picks one in the settings. */
+    settings_adopt_platform_language();
     settings_apply_language();
 #ifdef NT_PLATFORM_WEB
     /* Do not expose pagehide/visibility flush until live fragments contain
@@ -444,6 +467,8 @@ static void game_runtime_try_start(void) {
     game_features_init(&s_world);
     game_scenes_init(&s_world);
     platform_lifecycle_init();
+    platform_hooks_init();
+    sys_portal_metrics_init(NULL, NULL); /* a game hands in its own funnel mapper */
     s_game_runtime_initialized = true;
 
     if (!devapi_start()) {
@@ -474,8 +499,10 @@ static void game_runtime_update(void) {
     } while (game_events_react_progressed());
     game_events_set_phase(GAME_EVENT_PHASE_RECORD);
     game_features_record(&s_world);
+    sys_portal_metrics_record(); /* last reader of the frame log */
     if (!s_disable_autosave) {
         game_save_tick();
+        cloud_save_tick();
     }
     game_event_frame_reset();
 }
@@ -505,16 +532,19 @@ static void frame(void) {
         shader_programs_update();
     }
     game_runtime_try_start();
-    /* An ad on screen and a portal pause are the same thing to the world: time
-       must not pass behind them. Frames keep being presented, so the page never
-       looks frozen while the SDK owns the screen. */
-    const bool platform_break = platform_sdk_break_active();
+    /* An ad on screen, a portal pause and a hidden tab are the same thing to
+       the world: time must not pass behind them. Frames keep being presented,
+       so the page never looks frozen while the SDK owns the screen. */
+    const bool platform_break = platform_sdk_break_active() || !platform_hooks_gameplay_allowed();
     if (s_game_runtime_ready) {
         game_scenes_step(++s_scene_frame_index, platform_break ? 0.0F : g_nt_app.dt);
     }
     const bool playable_shell_ready =
         s_game_runtime_ready && render_mesh_ready(&s_world) && ui_runtime_ready();
     (void)platform_sdk_game_loading_progress(initial_pack_loading_progress());
+    /* Freezing the clock comes first so the lifecycle reports the stop in the
+       same frame the simulation actually stopped. */
+    platform_hooks_update(s_game_runtime_ready);
     platform_lifecycle_update(
         playable_shell_ready,
         !platform_break && game_scenes_can_process_game_input());

@@ -85,6 +85,33 @@ Persistent state = 4 fragments (`settings`/`items`/`progression`/`game`) over th
 The state schema and migrations live in source under `state/`; CMake generates
 `game_state.*` into `build/<config>/generated/game-state/` before compiling.
 
+## Portal layer (what every portal asks, already wired)
+
+`features/platform-sdk` is the SDK facade; the template carries the game-side
+layer above it, wired in `main.c`, so a copied game only names its own
+placements and its own funnel:
+
+- `systems/sys_platform_hooks` -- a hidden tab freezes the clock, a blurred
+  window mutes the mixer, an ad on screen does both; a wedged ad request times
+  out; `platform_hooks_commercial_break("<placement>")` and
+  `platform_hooks_rewarded("<placement>", callback, userdata)` are the two ad
+  points. The portal's cooldown is the schedule: ask at every natural seam (the
+  end-of-level card is the usual one) and show a rewarded offer as a blue button
+  with an ad mark that disappears once paid. DevAPI: `platform.state`,
+  `platform.attention`, `platform.break`, `platform.reward`.
+- `systems/sys_cloud_save` -- the local save mirrored into the portal's player
+  storage; at boot the newer copy wins, and a browser with no save takes the
+  account's. `game_runtime_try_start` waits on it (at most a few seconds).
+- `systems/sys_portal_metrics` -- drains the frame event log once per frame
+  into `platform_sdk_measure`; a game hands `sys_portal_metrics_init` a mapper
+  that names its (category, what, action) triples. `NULL` keeps the drain off.
+- `features/settings` -- `settings_adopt_platform_language()` takes the
+  portal's language on every launch until the player picks one
+  (`settings_choose_language`); the read happens where Yandex watches for it.
+
+Placement ids also live in `web/playgama-bridge-config.json`; keep the two
+lists the same.
+
 ## Web build (browser, out of the box)
 
 The template builds and runs in a browser with two commands (no manual wiring).
