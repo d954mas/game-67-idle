@@ -114,6 +114,8 @@ add_executable(${GAME_TARGET}
     # scene-scaffold:sources
 )
 target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}" "${UI_KIT_INC}" "${LEADERBOARD_INC}" "${REMOTE_IMAGE_INC}")
+include("${REMOTE_IMAGE_DIR}/cmake/RemoteImage.cmake")
+remote_image_ensure_stb("${ENGINE_DIR}")
 target_link_libraries(${GAME_TARGET} PRIVATE nt_base64 stb_image)
 target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_SCENES_CORE=1 FEATURE_UI_KIT=1)
 if(GAME_DEBUG_SCENES_ENABLED)

@@ -1,7 +1,7 @@
 # remote-image Install
 
 The template already compiles the pack (`REMOTE_IMAGE_SOURCES` in
-`templates/template/CMakeLists.txt`), links `stb_image` and registers its
+`templates/template/CMakeLists.txt`), calls `remote_image_ensure_stb` from `cmake/RemoteImage.cmake` and links `stb_image` and registers its
 test. A game wires it in three steps.
 
 ## Install
