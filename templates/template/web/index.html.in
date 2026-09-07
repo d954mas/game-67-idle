@@ -33,7 +33,7 @@
     touch-action: none;
   }
 
-  #loading-overlay {
+  #game-loading-overlay {
     position: absolute;
     inset: 0;
     z-index: 10;
@@ -47,7 +47,7 @@
     transition: opacity 180ms ease;
   }
 
-  #loading-overlay.is-hidden {
+  #game-loading-overlay.is-hidden {
     opacity: 0;
   }
 
@@ -151,7 +151,9 @@
 </style>
 </head>
 <body>
-<div id="loading-overlay" role="status" aria-live="polite">
+<!-- Not "loading-overlay": Playgama Bridge gives its own overlay that id, hides
+     the first element with that id at 100% and would leave its own on screen. -->
+<div id="game-loading-overlay" role="status" aria-live="polite">
   <div class="loading-shell">
     <div class="loading-row">
       <div id="loading-label">Loading</div>
@@ -173,7 +175,7 @@
 <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
 <script>
   (function () {
-    var overlay = document.getElementById('loading-overlay');
+    var overlay = document.getElementById('game-loading-overlay');
     var label = document.getElementById('loading-label');
     var percent = document.getElementById('loading-percent');
     var bar = document.getElementById('loading-bar');

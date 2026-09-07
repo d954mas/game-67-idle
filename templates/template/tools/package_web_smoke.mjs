@@ -454,7 +454,7 @@ function remoteNetworkUrl(raw) {
 const PAGE_STATE = `(() => {
   const canvas = document.querySelector("canvas");
   const rect = canvas?.getBoundingClientRect();
-  const overlay = document.getElementById("loading-overlay");
+  const overlay = document.getElementById("game-loading-overlay");
   const overlayHidden = !overlay || getComputedStyle(overlay).display === "none";
   const compiled = globalThis.__AI_STUDIO_RUNTIME_BUILD_FINGERPRINT__ || null;
   const configured = globalThis.__PLATFORM_SDK_CONFIG__?.runtimeBuildFingerprint || null;
