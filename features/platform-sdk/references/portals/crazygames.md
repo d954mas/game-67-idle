@@ -42,6 +42,7 @@ Source index:
 - S23 `https://docs.crazygames.com/resources/html5-resources/` — HTML5 resources index (pages split into intro / sitelock / common-fixes)
 - S24 `https://developer.crazygames.com/qatool` — Preview / QA tool on the developer portal (URL surfaced by site search; page itself is behind the portal and was not fetched)
 - S25 `https://docs.crazygames.com/sdk/html5-v2/intro/` — legacy v2 SDK docs, still published alongside v3
+- S26 `https://developer.crazygames.com/submit` — the submission form itself, read field by field while filling a draft
 
 Repo files this packet maps onto: `features/platform-sdk/references/contract.md`,
 `features/platform-sdk/web/adapters/yandex.js`,
@@ -482,6 +483,32 @@ always be able to play; the auth prompt "must not trigger automatically"; the
 login button belongs top-right and must not be the blocking main CTA; prefer the
 Data module over raw `localStorage` because "multiple users might share the same
 device".
+
+### 3.6 The submission form's own answers (S26)
+
+The developer portal's submit form is the fourth source, and it contradicts the
+docs in one place worth knowing before a game is built.
+
+- The build is uploaded as a **folder**, not an archive. The control is a
+  directory input and the only stated rule is that `index.html` sits at its
+  root.
+- The game name is capped at **35 characters** and must be the same string the
+  game itself shows.
+- An Emscripten/wasm build files under engine **HTML5**. The list also offers
+  Externally hosted (iframe), Unity 6, Unity 2022, Godot, Defold, GameMaker,
+  GDevelop, Cocos and PlayCanvas.
+- The progress-save question offers a fourth answer the docs barely mention:
+  **Automatic Progress Save**, where the portal syncs the game's own
+  `localStorage` to the player's account. It removes the need for the Data
+  module for a game that already persists locally and has no in-game purchases,
+  which is the one case S14 rules out. The form states it does not work for
+  iframe games.
+- A first submission is locked to the **Basic** flow; the Full control beside it
+  is a tooltip describing global release, not a choice.
+- The steps are Upload, QA, Details, Submit. Covers, videos and listing texts
+  live in Details, so none of them can be filled before a build is uploaded.
+
+---
 
 ---
 

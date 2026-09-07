@@ -23,7 +23,10 @@
       "file": "cover_landscape.png",
       "width": 1920,
       "height": 1080,
-      "formats": ["png", "jpg"],
+      "formats": [
+        "png",
+        "jpg"
+      ],
       "from_screenshot": false,
       "note": "16:9. The opening frame of the landscape preview video."
     },
@@ -32,7 +35,10 @@
       "file": "cover_portrait.png",
       "width": 800,
       "height": 1200,
-      "formats": ["png", "jpg"],
+      "formats": [
+        "png",
+        "jpg"
+      ],
       "from_screenshot": false,
       "note": "2:3. The opening frame of the portrait preview video."
     },
@@ -41,7 +47,10 @@
       "file": "cover_square.png",
       "width": 800,
       "height": 800,
-      "formats": ["png", "jpg"],
+      "formats": [
+        "png",
+        "jpg"
+      ],
       "from_screenshot": false,
       "note": "1:1. Reads small in the catalogue grid."
     },
@@ -49,7 +58,9 @@
       "id": "preview_landscape",
       "kind": "video",
       "file_glob": "preview_landscape.mp4",
-      "formats": ["mp4"],
+      "formats": [
+        "mp4"
+      ],
       "min_count": 1,
       "max_count": 1,
       "max_bytes": 52428800,
@@ -61,7 +72,9 @@
       "id": "preview_portrait",
       "kind": "video",
       "file_glob": "preview_portrait.mp4",
-      "formats": ["mp4"],
+      "formats": [
+        "mp4"
+      ],
       "min_count": 1,
       "max_count": 1,
       "max_bytes": 52428800,
@@ -74,8 +87,8 @@
     {
       "id": "title",
       "file": "title.<lang>.txt",
-      "max_chars": 50,
-      "note": "Must not be confusable with another game's name or iconography."
+      "max_chars": 35,
+      "note": "The form states the cap and requires the same string the game itself shows. Must not be confusable with another game's name or iconography."
     },
     {
       "id": "about",
@@ -91,10 +104,22 @@
       "max_chars": 500
     }
   ],
-  "languages": ["en"],
+  "languages": [
+    "en"
+  ],
   "undocumented": [
     "accepted image file formats and per-image byte caps",
     "screenshot count and sizes: the portal asks for covers and a preview video only",
-    "listing text character limits and the list of supported store languages"
+    "the character limits of the listing texts other than the name, and the list of supported store languages"
+  ],
+  "confirmed_by_form": [
+    "the game name is capped at 35 characters and must match the title inside the game",
+    "the build is uploaded as a FOLDER, not an archive: the upload control is a directory input and the form asks only that index.html sit at its root",
+    "engine list: Externally hosted (iframe), HTML5, Unity 6, Unity 2022, Godot, Defold, GameMaker, GDevelop, Cocos, PlayCanvas; an Emscripten/wasm build files as HTML5",
+    "the progress-save question is mandatory and offers a fourth answer the docs bury: \"Yes, using LocalStorage (refer to Automatic Progress Save)\", which the portal syncs to the account for a player who logs in",
+    "Automatic Progress Save is offered only to hosted engines; the form says it does not work for iframe games, which must use the SDK data module",
+    "\"Mobile orientation\" (BOTH by default) appears only once \"The game supports mobile devices\" is checked",
+    "a first submission is locked to the Basic flow: the Full control is a tooltip explaining global release, not a selectable option",
+    "the steps are Upload, QA, Details, Submit; covers, videos and listing texts live in Details and are unreachable until a build is uploaded"
   ]
 }
