@@ -40,17 +40,19 @@
 #define PLATFORM_SDK_STORAGE_SUPPORTED 1
 #endif
 
-/* Only Yandex has a login the game acts on; the local mock fakes one so the
-   flow can be exercised without a portal. itch keeps the mock and answers
-   "unsupported" like it does for ads. The build may override this. */
-#ifndef PLATFORM_SDK_AUTH_SUPPORTED
-#if PLATFORM_SDK_CURRENT_ID == PLATFORM_SDK_YANDEX || \
-    (PLATFORM_SDK_CURRENT_ID == PLATFORM_SDK_MOCK && PLATFORM_SDK_TARGET_ID == PLATFORM_TARGET_LOCAL)
-#define PLATFORM_SDK_AUTH_SUPPORTED 1
+/* The sdk and target ids are enum constants, not macros, so this answer is
+   decided in C rather than by the preprocessor: only Yandex has a login the
+   game acts on, and the local mock fakes one so the flow can be exercised
+   without a portal. A build may pin the answer instead. */
+static bool platform_sdk_auth_capability(void) {
+#ifdef PLATFORM_SDK_AUTH_SUPPORTED
+    return PLATFORM_SDK_AUTH_SUPPORTED != 0;
 #else
-#define PLATFORM_SDK_AUTH_SUPPORTED 0
+    const platform_sdk_t sdk = PLATFORM_SDK_CURRENT_ID;
+    return sdk == PLATFORM_SDK_YANDEX ||
+           (sdk == PLATFORM_SDK_MOCK && (platform_target_t)PLATFORM_SDK_TARGET_ID == PLATFORM_TARGET_LOCAL);
 #endif
-#endif
+}
 
 #define PLATFORM_SDK_MAX_LISTENERS 8u
 #define PLATFORM_SDK_PLACEMENT_MAX 64u
@@ -640,7 +642,7 @@ platform_sdk_capabilities_t platform_sdk_capabilities(void) {
         .ads_supported = PLATFORM_SDK_ADS_SUPPORTED != 0,
         .rewarded_supported = PLATFORM_SDK_REWARDED_SUPPORTED != 0,
         .storage_supported = PLATFORM_SDK_STORAGE_SUPPORTED != 0,
-        .auth_supported = PLATFORM_SDK_AUTH_SUPPORTED != 0,
+        .auth_supported = platform_sdk_auth_capability(),
     };
 }
 

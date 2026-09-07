@@ -1,0 +1,53 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "leaderboard",
+  "version": "0.1.0",
+  "title": "Leaderboard",
+  "status": "draft",
+  "kind": "gameplay-infrastructure",
+  "summary": "In-place L1 feature pack: a capability facade over one leaderboard backend (portal, anonymous HTTP or mock), per-board per-scope score coalescing, four-kind refusal semantics, the pure day/wire/place core and the opaque extra codec. The game persists the pack's keys through a host seam and draws rows from a view.",
+  "copy_model": "in-place",
+  "layer": "L1",
+  "owners": [
+    "features/leaderboard"
+  ],
+  "dependencies": [
+    "engine nt_base64 for the HTTP payload encoding",
+    "cJSON for HTTP response parsing",
+    "features/platform-sdk leaderboard and auth entry points for the portal backend",
+    "a game-owned leaderboards.json board manifest"
+  ],
+  "commands": {
+    "ctest": "ctest --test-dir templates/template/build/native-debug -R leaderboard --output-on-failure"
+  },
+  "provides": [
+    "leaderboard_caps and leaderboard_ui_state: what a screen may show, per board, answered live",
+    "leaderboard_submit per (board, scope) with sort-aware coalescing and an already-sent guard",
+    "leaderboard_view_t rows with an opaque extra payload and no game concept",
+    "refusal semantics: UNSUPPORTED latches per capability, NEEDS_LOGIN flags, RATE_LIMITED and FAILED recover",
+    "leaderboard_host_t: the pack persists nothing itself",
+    "the extra k=v codec",
+    "the pure core: UTC day math, payload encoding, response parsing, place re-estimation",
+    "mock backend for tests and local development"
+  ],
+  "flags": {
+    "testing": "LEADERBOARD_TESTING exposes leaderboard_reset_for_tests and the test clock"
+  },
+  "manuals": {
+    "install": "features/leaderboard/INSTALL.md",
+    "contract": "features/leaderboard/SPEC.md"
+  },
+  "registers": {
+    "note": "Describes the template's existing in-place wiring.",
+    "target_sources": [
+      "${LEADERBOARD_SOURCES}"
+    ],
+    "include_dirs": [
+      "${LEADERBOARD_INC}"
+    ],
+    "ctest_targets": [
+      "test_leaderboard_core",
+      "test_leaderboard"
+    ]
+  }
+}

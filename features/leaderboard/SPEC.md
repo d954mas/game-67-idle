@@ -149,8 +149,19 @@ typedef struct {
     void *userdata;
 } leaderboard_host_t; /* the game's save; the pack owns no persistence of its own */
 
+/* The manifest's board table, generated from leaderboards.json. Coalescing
+   needs each board's sort order, and the backends need its portal id. */
+typedef struct {
+    const char *id;
+    leaderboard_sort_t sort;
+    uint32_t scopes;
+    const char *portal_id;
+} leaderboard_board_def_t;
+
 typedef struct {
     leaderboard_host_t host;
+    const leaderboard_board_def_t *boards;
+    int board_count;
     const leaderboard_backend_t *backend;
     void *backend_userdata;
 } leaderboard_config_t;
@@ -242,7 +253,18 @@ void leaderboard_backend_complete_fetch(leaderboard_board_t board, leaderboard_s
                                         leaderboard_result_t result);
 void leaderboard_backend_complete_submit(leaderboard_board_t board, leaderboard_scope_t scope,
                                          leaderboard_result_t result);
+
+/* What a backend is allowed to ask the facade for. */
+const char *leaderboard_player_id(void);
+const leaderboard_board_def_t *leaderboard_board_def(leaderboard_board_t board);
+void leaderboard_backend_auth_changed(void); /* re-send what the portal never took */
 ```
+
+A backend completes every request it starts; returning false from `submit` or
+`fetch` means it never started and counts as `FAILED`. The facade owns no clock,
+so `RATE_LIMITED` simply leaves the value pending for the next trigger — cadence
+is the backend's business. Consecutive failures raise `view.error` after a small
+budget, which a player-driven refresh clears.
 
 Shipped backends:
 

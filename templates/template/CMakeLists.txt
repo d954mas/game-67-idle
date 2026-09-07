@@ -49,6 +49,17 @@ set(LOCALIZATION_DIR         "${GAME_REPO_ROOT}/features/localization")
 set(LOCALIZATION_INC         "${LOCALIZATION_DIR}/include")
 set(LOCALIZATION_SRC         "${LOCALIZATION_DIR}/src")
 set(LOCALIZATION_SCRIPTS     "${LOCALIZATION_DIR}/scripts")
+set(LEADERBOARD_DIR          "${GAME_REPO_ROOT}/features/leaderboard")
+set(LEADERBOARD_INC          "${LEADERBOARD_DIR}/include")
+set(LEADERBOARD_SRC          "${LEADERBOARD_DIR}/src")
+# Every backend compiles in; the board manifest picks one at init.
+set(LEADERBOARD_SOURCES
+    "${LEADERBOARD_SRC}/leaderboard.c"
+    "${LEADERBOARD_SRC}/leaderboard_core.c"
+    "${LEADERBOARD_SRC}/leaderboard_extra.c"
+    "${LEADERBOARD_SRC}/leaderboard_mock.c"
+    "${LEADERBOARD_SRC}/leaderboard_http.c"
+    "${LEADERBOARD_SRC}/leaderboard_portal.c")
 
 set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
@@ -92,9 +103,11 @@ add_executable(${GAME_TARGET}
     src/features/resource_panel/resource_panel.c     # И3b: generic counter/bar widget (zero feature headers)
     src/ui/demo_hud.c                                # И3b: game composition (resource_panel over items/progression)
     src/ui/loc_widgets.c                             # the ONLY caller of the raw text entry points
+    ${LEADERBOARD_SOURCES}                           # capability facade + backends; inert until a game calls leaderboard_init
     # scene-scaffold:sources
 )
-target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}" "${UI_KIT_INC}")
+target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}" "${UI_KIT_INC}" "${LEADERBOARD_INC}")
+target_link_libraries(${GAME_TARGET} PRIVATE nt_base64)
 target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_SCENES_CORE=1 FEATURE_UI_KIT=1)
 if(GAME_DEBUG_SCENES_ENABLED)
     target_compile_definitions(${GAME_TARGET} PRIVATE
@@ -120,3 +133,19 @@ endif()
 include(cmake/GamePlatform.cmake)
 
 include(cmake/GameTests.cmake)
+
+if(NOT EMSCRIPTEN)
+    # Pure half of the leaderboard pack (day math, wire encoding, parsing,
+    # place recalc) and the facade over the mock backend.
+    game_add_c_test(test_leaderboard_core WARNINGS
+        SOURCES "${LEADERBOARD_DIR}/tests/test_leaderboard_core.c"
+                "${LEADERBOARD_SRC}/leaderboard_core.c"
+                "${LEADERBOARD_SRC}/leaderboard_extra.c"
+        LIBS cjson nt_base64
+        INCLUDES "${LEADERBOARD_INC}")
+    game_add_c_test(test_leaderboard WARNINGS
+        SOURCES "${LEADERBOARD_DIR}/tests/test_leaderboard.c" ${LEADERBOARD_SOURCES}
+        LIBS cjson nt_base64
+        DEFINES LEADERBOARD_TESTING=1
+        INCLUDES "${LEADERBOARD_INC}")
+endif()
