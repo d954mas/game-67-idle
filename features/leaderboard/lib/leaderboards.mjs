@@ -187,8 +187,63 @@ export function consoleChecklist(manifest) {
   return out;
 }
 
-/* Merges only the leaderboards block, so a hand-authored config keeps every
-   other value and its formatting. */
+/* Rewrites only the leaderboards block, as text: a Playgama config is
+   hand-authored, carries a readme and its own spacing, and a parse-and-restringify
+   would silently reformat somebody's file. */
+export function mergeLeaderboardsBlock(text, entries) {
+  JSON.parse(text); /* refuse to edit a file that is not valid JSON */
+  const key = text.indexOf('"leaderboards"');
+  const block = entries.length === 0 ? null : renderBlock(entries, detectIndent(text));
+
+  if (key === -1) {
+    if (block === null) return text;
+    const close = text.lastIndexOf("}");
+    const before = text.slice(0, close).replace(/\s*$/, "");
+    const comma = before.endsWith("{") ? "" : ",";
+    return `${before}${comma}\n${block}\n${text.slice(close)}`;
+  }
+
+  const valueStart = text.indexOf("[", key);
+  const valueEnd = matchBracket(text, valueStart);
+  if (valueStart === -1 || valueEnd === -1) throw new Error("leaderboards block is not an array");
+  if (block === null) {
+    /* Drop the whole entry, its indentation and one neighbouring comma. */
+    let start = text.lastIndexOf("\n", key);
+    let end = valueEnd + 1;
+    if (text[end] === ",") end += 1;
+    else if (text.slice(0, start).trimEnd().endsWith(",")) start = text.lastIndexOf(",", start);
+    return text.slice(0, start) + text.slice(end);
+  }
+  const lineStart = text.lastIndexOf("\n", key) + 1;
+  return text.slice(0, lineStart) + block.replace(/^\s+/, text.slice(lineStart, key)) + text.slice(valueEnd + 1);
+}
+
+function detectIndent(text) {
+  const match = text.match(/\n(\s+)"/);
+  return match ? match[1] : "  ";
+}
+
+function renderBlock(entries, indent) {
+  /* One entry per line in the spacing a Playgama config is written in. */
+  const lines = entries.map((entry) => {
+    const fields = Object.entries(entry).map(([k, v]) => `"${k}": ${JSON.stringify(v)}`);
+    return `${indent}${indent}{ ${fields.join(", ")} }`;
+  });
+  return `${indent}"leaderboards": [\n${lines.join(",\n")}\n${indent}]`;
+}
+
+function matchBracket(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i += 1) {
+    if (text[i] === "[") depth += 1;
+    else if (text[i] === "]") {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
 export function playgamaLeaderboards(manifest) {
   const entries = [];
   for (const board of manifest.boards) {

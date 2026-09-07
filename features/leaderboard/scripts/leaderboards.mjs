@@ -8,6 +8,7 @@ import { dirname } from "node:path";
 import {
   consoleChecklist,
   generateHeader,
+  mergeLeaderboardsBlock,
   playgamaLeaderboards,
   validateManifest,
 } from "../lib/leaderboards.mjs";
@@ -87,11 +88,8 @@ if (command === "validate") {
     console.error(usage());
     process.exit(2);
   }
-  const config = JSON.parse(readFileSync(args.config, "utf8"));
-  const entries = playgamaLeaderboards(manifest);
-  if (entries.length === 0) delete config.leaderboards;
-  else config.leaderboards = entries;
-  writeIfChanged(args.config, `${JSON.stringify(config, null, 2)}\n`);
+  const before = readFileSync(args.config, "utf8");
+  writeIfChanged(args.config, mergeLeaderboardsBlock(before, playgamaLeaderboards(manifest)));
 } else {
   console.error(usage());
   process.exit(2);

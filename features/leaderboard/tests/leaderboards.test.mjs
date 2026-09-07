@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   consoleChecklist,
   generateHeader,
+  mergeLeaderboardsBlock,
   playgamaLeaderboards,
   validateManifest,
 } from "../lib/leaderboards.mjs";
@@ -102,4 +103,46 @@ test("the playgama block carries isMain only where the manifest says so", () => 
   const manifest = valid();
   manifest.boards[0].backends.playgama = "none";
   assert.deepEqual(playgamaLeaderboards(manifest), []);
+});
+
+const handAuthored = `{
+  "readme": [
+    "a hand written note"
+  ],
+
+  "platforms": {},
+
+  "advertisement": {
+    "interstitial": {
+      "placements": [
+        { "id": "pause_resume" }
+      ]
+    }
+  }
+}
+`;
+
+test("only the leaderboards block is written into a hand-authored config", () => {
+  const merged = mergeLeaderboardsBlock(handAuthored, playgamaLeaderboards(valid()));
+  assert.match(merged, /"leaderboards": \[/);
+  assert.deepEqual(JSON.parse(merged).leaderboards, [{ id: "planets", isMain: true }]);
+  /* the hand-authored parts survive byte for byte, blank lines and all; only
+     the brace that now precedes a new key gains its comma */
+  const head = handAuthored.slice(0, handAuthored.indexOf('"advertisement"'));
+  assert.ok(merged.startsWith(head), "the readme and its blank lines are untouched");
+  assert.ok(merged.includes('        { "id": "pause_resume" }\n'), "placements keep their own formatting");
+});
+
+test("rewriting the block twice changes nothing the second time", () => {
+  const once = mergeLeaderboardsBlock(handAuthored, playgamaLeaderboards(valid()));
+  assert.equal(mergeLeaderboardsBlock(once, playgamaLeaderboards(valid())), once);
+});
+
+test("a game with no playgama board leaves the config without the block", () => {
+  const manifest = valid();
+  manifest.boards[0].backends.playgama = "none";
+  const once = mergeLeaderboardsBlock(handAuthored, playgamaLeaderboards(valid()));
+  const removed = mergeLeaderboardsBlock(once, playgamaLeaderboards(manifest));
+  assert.equal(JSON.parse(removed).leaderboards, undefined);
+  assert.equal(removed, handAuthored);
 });
