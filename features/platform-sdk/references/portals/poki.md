@@ -75,6 +75,11 @@ registers, undocumented on those pages: `gameLoadingStart`,
 only the documented ones as contract; the others exist but Poki does not
 document them for v2 HTML5, so QA will not expect them.
 
+Leaderboards: `sendHighscore` and `showLeaderboard` exist in the shim only,
+undocumented for v2, so they stay outside the contract. The adapter answers
+every leaderboard call `unsupported` and `leaderboardCaps` all-false; a game
+on Poki keeps its own board (the leaderboard pack's HTTP backend).
+
 `PokiSDK.measure(category, what, action)` is the documented custom-analytics
 call (S17). Reserved characters `/` and `^` are forbidden in all three
 arguments. Special actions: `start` / `complete` / `fail` for progress

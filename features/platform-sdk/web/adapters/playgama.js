@@ -309,11 +309,91 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
       null;
   }
 
+  /* The host platform, not the build, decides what a board can do, and it
+     says so through `bridge.leaderboards.type` once the bridge is up:
+     `in_game` reads and writes, `native` and `native_popup` write and let the
+     platform draw the board (the latter through a popup this adapter can
+     open), `not_available` is a complete answer. Read on every call, because a
+     cached answer would be the build deciding. */
+  function leaderboardType() {
+    const lb = bridge && bridge.leaderboards;
+    return lb && typeof lb.type === "string" ? lb.type : "not_available";
+  }
+
+  function leaderboardCaps() {
+    const lb = bridge && bridge.leaderboards;
+    const none = { canRead: false, canWrite: false, needsLogin: false, nativePopup: false };
+    if (destroyed || !lb || typeof lb.setScore !== "function") return none;
+    const type = leaderboardType();
+    if (type === "in_game") return { ...none, canRead: typeof lb.getEntries === "function", canWrite: true };
+    if (type === "native") return { ...none, canWrite: true };
+    if (type === "native_popup") return { ...none, canWrite: true, nativePopup: typeof lb.showNativePopup === "function" };
+    return none;
+  }
+
+  async function submitScore(boardId, scope, value) {
+    if (!(await ready())) return { status: "failed" };
+    if (!leaderboardCaps().canWrite) return { status: "unsupported" };
+    const score = Math.max(0, Math.floor(Number(value) || 0));
+    try {
+      await bridge.leaderboards.setScore(boardId, score);
+      return { status: "ok" };
+    } catch {
+      return { status: "failed" };
+    }
+  }
+
+  function playerId() {
+    try {
+      const p = bridge && bridge.player;
+      return p && p.id != null ? String(p.id) : "";
+    } catch {
+      return "";
+    }
+  }
+
+  async function fetchEntries(boardId) {
+    if (!(await ready())) return { status: "failed" };
+    if (!leaderboardCaps().canRead) return { status: "unsupported" };
+    let entries;
+    try {
+      entries = await bridge.leaderboards.getEntries(boardId);
+    } catch {
+      return { status: "failed" };
+    }
+    const myId = playerId();
+    const top = (Array.isArray(entries) ? entries : []).map((entry) => {
+      const e = entry || {};
+      return {
+        value: Math.max(0, Math.floor(Number(e.score) || 0)),
+        rank: Number(e.rank) | 0,
+        you: Boolean(myId && e.id != null && String(e.id) === myId),
+        name: String(e.name || ""),
+        avatarUrl: String(e.photo || ""),
+        extra: "",
+      };
+    });
+    const mine = top.find((row) => row.you);
+    return { status: "ok", top, around: [], player: mine ? { rank: mine.rank, value: mine.value } : null };
+  }
+
+  async function showLeaderboard(boardId) {
+    if (!(await ready())) return { status: "failed" };
+    if (!leaderboardCaps().nativePopup) return { status: "unsupported" };
+    try {
+      await bridge.leaderboards.showNativePopup(boardId);
+      return { status: "ok" };
+    } catch {
+      return { status: "failed" };
+    }
+  }
+
   return {
     destroy() {
       destroyed = true;
       for (const cancel of pendingAds) cancel();
     },
+    fetchEntries,
     gameLoadingProgress,
     gameLoadingFinished,
     gameReady,
@@ -326,6 +406,7 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
       return Promise.resolve({ authorized: false, name: "", avatarUrl: "" });
     },
     hideBanner,
+    leaderboardCaps,
     loadData,
     login() {
       return Promise.resolve({ supported: false, authorized: false, reason: "unsupported", name: "", avatarUrl: "" });
@@ -335,7 +416,9 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
     saveData,
     showBanner,
     showInterstitial,
+    showLeaderboard,
     showRewarded,
+    submitScore,
   };
 }
 

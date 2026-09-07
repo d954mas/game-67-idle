@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 void platform_sdk_web_complete_interstitial(int supported, int shown, int reason);
 void platform_sdk_web_complete_rewarded(int supported, int shown, int rewarded, int reason);
@@ -20,6 +21,12 @@ void platform_sdk_web_read_player(void);
 void platform_sdk_web_portal_pause(void);
 void platform_sdk_web_portal_resume(void);
 void platform_sdk_web_portal_audio(int enabled);
+void platform_sdk_web_complete_leaderboard_submit(char *board_id, int scope, int status);
+void platform_sdk_web_leaderboard_begin(void);
+void platform_sdk_web_leaderboard_row(int around, double value, int rank, int you,
+                                      char *name, char *avatar_url, char *extra);
+void platform_sdk_web_complete_leaderboard_fetch(char *board_id, int scope, int status,
+                                                 int has_player, int player_rank, double player_value);
 
 /* clang-format off */
 EM_JS_DEPS(platform_sdk_web_backend, "$UTF8ToString,$stringToNewUTF8")
@@ -263,6 +270,119 @@ EM_JS(int, platform_sdk_web_backend_login, (void), {
     }
 })
 
+/* Adapter answers speak the leaderboard status vocabulary; anything else,
+   including a rejected promise, is a transport failure and never a refusal. */
+EM_JS(int, platform_sdk_web_backend_leaderboard_caps, (const char *board_id_ptr), {
+    var backend = globalThis.__platformSdkInternalBackend;
+    if (!backend || typeof backend.leaderboardCaps !== "function") return 0;
+    var boardId = board_id_ptr ? UTF8ToString(board_id_ptr) : "";
+    try {
+        var caps = backend.leaderboardCaps(boardId) || {};
+        return (caps.canRead ? 1 : 0) | (caps.canWrite ? 2 : 0) |
+               (caps.needsLogin ? 4 : 0) | (caps.nativePopup ? 8 : 0);
+    } catch (e) {
+        return 0;
+    }
+})
+
+EM_JS(int, platform_sdk_web_backend_leaderboard_submit,
+      (const char *board_id_ptr, int scope, double value, const char *extra_ptr), {
+    function statusCode(status) {
+        if (status === "ok") return 0;
+        if (status === "unsupported") return 1;
+        if (status === "needs_login") return 2;
+        if (status === "rate_limited") return 3;
+        return 4;
+    }
+
+    var backend = globalThis.__platformSdkInternalBackend;
+    if (!backend || typeof backend.submitScore !== "function") return 0;
+    var boardId = board_id_ptr ? UTF8ToString(board_id_ptr) : "";
+    var extra = extra_ptr ? UTF8ToString(extra_ptr) : "";
+    function settle(status) {
+        _platform_sdk_web_complete_leaderboard_submit(stringToNewUTF8(boardId), scope, status);
+    }
+    try {
+        Promise.resolve(backend.submitScore(boardId, scope, value, extra)).then(function (result) {
+            settle(statusCode((result || {}).status));
+        }, function () {
+            settle(4);
+        });
+        return 1;
+    } catch (e) {
+        settle(4);
+        return 1;
+    }
+})
+
+EM_JS(int, platform_sdk_web_backend_leaderboard_fetch, (const char *board_id_ptr, int scope), {
+    function statusCode(status) {
+        if (status === "ok") return 0;
+        if (status === "unsupported") return 1;
+        if (status === "needs_login") return 2;
+        if (status === "rate_limited") return 3;
+        return 4;
+    }
+    function pushRows(rows, around) {
+        if (!Array.isArray(rows)) return;
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i] || {};
+            _platform_sdk_web_leaderboard_row(
+                around ? 1 : 0,
+                Number(row.value) || 0,
+                Number(row.rank) | 0,
+                row.you ? 1 : 0,
+                stringToNewUTF8(String(row.name || "")),
+                stringToNewUTF8(String(row.avatarUrl || "")),
+                stringToNewUTF8(typeof row.extra === "string" ? row.extra : ""));
+        }
+    }
+
+    var backend = globalThis.__platformSdkInternalBackend;
+    if (!backend || typeof backend.fetchEntries !== "function") return 0;
+    var boardId = board_id_ptr ? UTF8ToString(board_id_ptr) : "";
+    /* Rows are staged and settled inside one synchronous handler, so two
+       boards answering in the same tick cannot interleave their rows. */
+    function settle(status, page) {
+        page = page || {};
+        var player = page.player || null;
+        _platform_sdk_web_leaderboard_begin();
+        if (status === 0) {
+            pushRows(page.top, false);
+            pushRows(page.around, true);
+        }
+        _platform_sdk_web_complete_leaderboard_fetch(
+            stringToNewUTF8(boardId), scope, status,
+            player ? 1 : 0,
+            player ? (Number(player.rank) | 0) : 0,
+            player ? (Number(player.value) || 0) : 0);
+    }
+    try {
+        Promise.resolve(backend.fetchEntries(boardId, scope)).then(function (result) {
+            result = result || {};
+            settle(statusCode(result.status), result);
+        }, function () {
+            settle(4, null);
+        });
+        return 1;
+    } catch (e) {
+        settle(4, null);
+        return 1;
+    }
+})
+
+EM_JS(int, platform_sdk_web_backend_leaderboard_open, (const char *board_id_ptr), {
+    var backend = globalThis.__platformSdkInternalBackend;
+    if (!backend || typeof backend.showLeaderboard !== "function") return 0;
+    var boardId = board_id_ptr ? UTF8ToString(board_id_ptr) : "";
+    try {
+        Promise.resolve(backend.showLeaderboard(boardId)).catch(function () {});
+        return 1;
+    } catch (e) {
+        return 0;
+    }
+})
+
 EM_JS(void, platform_sdk_web_backend_destroy, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.destroy !== "function") return;
@@ -335,6 +455,108 @@ void platform_sdk_web_set_player(int authorized, char *name, char *avatar_url) {
 EMSCRIPTEN_KEEPALIVE
 void platform_sdk_web_read_player(void) {
     platform_sdk_web_backend_read_player();
+}
+
+static platform_sdk_leaderboard_status_t leaderboard_status_from_int(int status) {
+    if (status < PLATFORM_SDK_LEADERBOARD_OK || status > PLATFORM_SDK_LEADERBOARD_FAILED) {
+        return PLATFORM_SDK_LEADERBOARD_FAILED;
+    }
+    return (platform_sdk_leaderboard_status_t)status;
+}
+
+static uint32_t leaderboard_value_from_double(double value) {
+    if (!(value > 0.0)) return 0u;
+    if (value >= 4294967295.0) return 4294967295u;
+    return (uint32_t)value;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void platform_sdk_web_complete_leaderboard_submit(char *board_id, int scope, int status) {
+    platform_sdk_backend_complete_leaderboard_submit(board_id, scope, leaderboard_status_from_int(status));
+    free(board_id);
+}
+
+/* One page of rows staged by the fetch handler before it settles. Fixed
+   buffers: a longer name is cut, a longer URL or payload is dropped, because
+   a cut URL is not an image and a cut payload is not a record. */
+#define WEB_LB_NAME_MAX 96
+#define WEB_LB_URL_MAX 256
+#define WEB_LB_EXTRA_MAX 128
+#define WEB_LB_ROWS_MAX (PLATFORM_SDK_LEADERBOARD_TOP_MAX + PLATFORM_SDK_LEADERBOARD_AROUND_MAX)
+
+typedef struct web_lb_row_t {
+    char name[WEB_LB_NAME_MAX];
+    char avatar_url[WEB_LB_URL_MAX];
+    char extra[WEB_LB_EXTRA_MAX];
+} web_lb_row_t;
+
+static struct {
+    platform_sdk_leaderboard_entry_t top[PLATFORM_SDK_LEADERBOARD_TOP_MAX];
+    platform_sdk_leaderboard_entry_t around[PLATFORM_SDK_LEADERBOARD_AROUND_MAX];
+    web_lb_row_t strings[WEB_LB_ROWS_MAX];
+    int top_count;
+    int around_count;
+} g_web_lb_page;
+
+EMSCRIPTEN_KEEPALIVE
+void platform_sdk_web_leaderboard_begin(void) {
+    g_web_lb_page.top_count = 0;
+    g_web_lb_page.around_count = 0;
+}
+
+static void copy_or_drop(char *dst, size_t cap, const char *src) {
+    if (src != NULL && strlen(src) < cap) {
+        memcpy(dst, src, strlen(src) + 1u);
+    } else {
+        dst[0] = '\0';
+    }
+}
+
+EMSCRIPTEN_KEEPALIVE
+void platform_sdk_web_leaderboard_row(int around, double value, int rank, int you,
+                                      char *name, char *avatar_url, char *extra) {
+    platform_sdk_leaderboard_entry_t *entry = NULL;
+    if (around) {
+        if (g_web_lb_page.around_count < PLATFORM_SDK_LEADERBOARD_AROUND_MAX) {
+            entry = &g_web_lb_page.around[g_web_lb_page.around_count++];
+        }
+    } else if (g_web_lb_page.top_count < PLATFORM_SDK_LEADERBOARD_TOP_MAX) {
+        entry = &g_web_lb_page.top[g_web_lb_page.top_count++];
+    }
+    if (entry != NULL) {
+        web_lb_row_t *strings = &g_web_lb_page.strings[
+            around ? PLATFORM_SDK_LEADERBOARD_TOP_MAX + g_web_lb_page.around_count - 1
+                   : g_web_lb_page.top_count - 1];
+        (void)snprintf(strings->name, sizeof(strings->name), "%s", name != NULL ? name : "");
+        copy_or_drop(strings->avatar_url, sizeof(strings->avatar_url), avatar_url);
+        copy_or_drop(strings->extra, sizeof(strings->extra), extra);
+        entry->value = leaderboard_value_from_double(value);
+        entry->rank = rank > 0 ? rank : 0;
+        entry->you = you != 0;
+        entry->name = strings->name;
+        entry->avatar_url = strings->avatar_url;
+        entry->extra = strings->extra;
+    }
+    free(name);
+    free(avatar_url);
+    free(extra);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void platform_sdk_web_complete_leaderboard_fetch(char *board_id, int scope, int status,
+                                                 int has_player, int player_rank, double player_value) {
+    const platform_sdk_leaderboard_page_t page = {
+        .top = g_web_lb_page.top,
+        .top_count = g_web_lb_page.top_count,
+        .around = g_web_lb_page.around_count > 0 ? g_web_lb_page.around : NULL,
+        .around_count = g_web_lb_page.around_count,
+        .has_player = has_player != 0,
+        .player_rank = player_rank > 0 ? player_rank : 0,
+        .player_value = leaderboard_value_from_double(player_value),
+    };
+    platform_sdk_backend_complete_leaderboard_fetch(board_id, scope, leaderboard_status_from_int(status), &page);
+    platform_sdk_web_leaderboard_begin();
+    free(board_id);
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -431,6 +653,39 @@ static platform_sdk_result_t web_backend_login(void *userdata) {
         : PLATFORM_SDK_RESULT_UNSUPPORTED;
 }
 
+static platform_sdk_leaderboard_caps_t web_backend_leaderboard_caps(const char *board_id, void *userdata) {
+    (void)userdata;
+    const int bits = platform_sdk_web_backend_leaderboard_caps(board_id);
+    return (platform_sdk_leaderboard_caps_t){
+        .can_read = (bits & 1) != 0,
+        .can_write = (bits & 2) != 0,
+        .needs_login = (bits & 4) != 0,
+        .native_popup = (bits & 8) != 0,
+    };
+}
+
+static platform_sdk_result_t web_backend_leaderboard_submit(const char *board_id, int32_t scope, uint32_t value,
+                                                            const char *extra, void *userdata) {
+    (void)userdata;
+    return platform_sdk_web_backend_leaderboard_submit(board_id, (int)scope, (double)value, extra) != 0
+        ? PLATFORM_SDK_RESULT_OK
+        : PLATFORM_SDK_RESULT_UNSUPPORTED;
+}
+
+static platform_sdk_result_t web_backend_leaderboard_fetch(const char *board_id, int32_t scope, void *userdata) {
+    (void)userdata;
+    return platform_sdk_web_backend_leaderboard_fetch(board_id, (int)scope) != 0
+        ? PLATFORM_SDK_RESULT_OK
+        : PLATFORM_SDK_RESULT_UNSUPPORTED;
+}
+
+static platform_sdk_result_t web_backend_leaderboard_open(const char *board_id, void *userdata) {
+    (void)userdata;
+    return platform_sdk_web_backend_leaderboard_open(board_id) != 0
+        ? PLATFORM_SDK_RESULT_OK
+        : PLATFORM_SDK_RESULT_UNSUPPORTED;
+}
+
 static void web_backend_destroy(void *userdata) {
     (void)userdata;
     platform_sdk_web_backend_destroy();
@@ -452,6 +707,10 @@ void platform_sdk_install_web_backend(void) {
         .show_interstitial = web_backend_show_interstitial,
         .show_rewarded = web_backend_show_rewarded,
         .login = web_backend_login,
+        .leaderboard_caps = web_backend_leaderboard_caps,
+        .leaderboard_submit = web_backend_leaderboard_submit,
+        .leaderboard_fetch = web_backend_leaderboard_fetch,
+        .leaderboard_open = web_backend_leaderboard_open,
         .destroy = web_backend_destroy,
     };
     platform_sdk_set_backend(&backend, NULL);

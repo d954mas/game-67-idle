@@ -285,9 +285,9 @@ game" (S11).
   `PokiSDK.measure()`.
 
 Other SDK surfaces this packet does not map because our contract has no seam for
-them, listed so nobody concludes they are absent: leaderboards, in-app
-purchases, remote configuration, asynchronous multiplayer, game rating, desktop
-shortcut, server time, links to other games (S21 index).
+them, listed so nobody concludes they are absent: in-app purchases, remote
+configuration, asynchronous multiplayer, game rating, desktop shortcut, server
+time, links to other games (S21 index). Leaderboards are mapped in 1.9.
 
 ### 1.8 Local launch and the debug panel
 
@@ -323,6 +323,48 @@ The panel also carries toggles for language, game-link mocking, focus, network
 throttling, currency mocking and clearing cloud data (S13).
 
 ---
+
+### 1.9 Leaderboards
+
+Source: `https://yandex.com/dev/games/doc/en/sdk/sdk-leaderboard` (read
+2026-09-08).
+
+```js
+await ysdk.leaderboards.setScore(leaderboardName, score, extraData /* string, optional */);
+const page = await ysdk.leaderboards.getEntries(leaderboardName, {
+  quantityTop: 1..20,      // default 5
+  includeUser: false,      // the caller's own row; needs an authorized player
+  quantityAround: 1..10,   // neighbours of that row; default 5
+});
+// page: { leaderboard, ranges: [{ start, size }], userRank, entries: [{ score, rank,
+//         extraData, player: { publicName, uniqueID, getAvatarSrc(size), getAvatarSrcSet(size) } }] }
+```
+
+- Quotas: `setScore` 1 request/s; `getEntries` 20 requests per 5 minutes;
+  `getPlayerEntry` 60 per 5 minutes.
+- `setScore` and `getPlayerEntry` require an authorized player;
+  `ysdk.isAvailableMethod('leaderboards.setScore')` answers a
+  `Promise<boolean>`. "Unauthorized users are not included in the leaderboard
+  and cannot see their progress." Reading the top is anonymous.
+- `getPlayerEntry` throws `LEADERBOARD_PLAYER_NOT_PRESENT` for a player without
+  a row. **[docs silent]** on the error `setScore` throws for an anonymous
+  player and on the size limit of `extraData`.
+- Boards are created by hand in the console (technical name, sort order,
+  score format) and never reset; `getEntries` answers 404 until the board
+  exists.
+
+Adapter mapping (`web/adapters/yandex.js`): `leaderboardCaps` answers read,
+write, `needsLogin`, no popup, once the SDK is up. `submitScore` refuses an
+anonymous player with `needs_login` before any portal call, queues writes one
+second apart, and retries a rejected write once without `extraData`.
+`fetchEntries` asks for the top 20 and, for an authorized player only,
+`includeUser` with 10 around; the twenty-first read in five minutes is
+answered `rate_limited` locally. Rows carry `publicName`,
+`getAvatarSrc("small")` and `extraData`; `you` is `uniqueID === getUniqueID()`
+or `rank === userRank`. A `not found` error is `unsupported`, an auth error
+`needs_login`, anything else `failed`. **[unverified]** the error texts: they
+are matched by substring (`not found`/`404`, `auth`/`unauthori`/`login`) and
+were not reproduced against the live SDK.
 
 ## 2. Mapping onto this repo's wrapper contract
 

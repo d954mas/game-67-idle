@@ -349,9 +349,24 @@ Device (S20): `bridge.device.type`, `.os`, `.orientation`
 Leaderboards (S19): `bridge.leaderboards.type` is one of `not_available`,
 `in_game`, `native`, `native_popup`; `setScore(id, score)`,
 `getEntries(id)` (only when type is `in_game`; entries carry
-`id, name, photo, score, rank`), `showNativePopup(id)`. Ids come from the config,
-and `isMain: true` marks the single primary board used on `jio_games` and
-`youtube`.
+`id, name, photo, score, rank`), `showNativePopup(id)` (only when type is
+`native_popup`). Ids come from the config, and `isMain: true` marks the single
+primary board used on `jio_games` and `youtube`. Per S19 (read 2026-09-08)
+`in_game` is served on `y8` and `yandex`, `native` on `gamesnacks`,
+`jio_games`, `lagged`, `msn`, `youtube`, `native_popup` on `facebook`;
+`playgama.com` itself answers `not_available`.
+
+Adapter mapping (`web/adapters/playgama.js`): `leaderboardCaps` reads the
+type on every call, after the bridge is up — `in_game` → read + write,
+`native` → write, `native_popup` → write + popup, `not_available` → nothing,
+and nothing is cached because the host platform, not the build, decides.
+`submitScore` calls `setScore(id, score)`; `fetchEntries` calls
+`getEntries(id)` and maps rows to `{ value: score, rank, name, avatarUrl:
+photo, extra: "" }` with `you` matched against `bridge.player.id`;
+`showLeaderboard` calls `showNativePopup(id)`. A rejected bridge promise is
+`failed`; a type that does not serve the call is `unsupported`. **[docs
+silent]** on whether writes need a signed-in player; `needsLogin` is answered
+false.
 
 ### 1.11 Analytics
 

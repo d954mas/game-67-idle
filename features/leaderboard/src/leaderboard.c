@@ -588,12 +588,19 @@ void leaderboard_submit(leaderboard_board_t board, leaderboard_scope_t scope,
         return;
     }
     leaderboard_slot_t *slot = slot_of(board, scope);
+    /* The payload is recorded even when the value is not an improvement: a game
+       submits its standing best again at every launch, and a backend that sends
+       the payload with each request would otherwise blank the row until the
+       player beats their own score. NULL means "unchanged"; an empty string is
+       how a caller clears it. */
+    if (extra != NULL) {
+        snprintf(slot->extra, sizeof slot->extra, "%s", extra);
+    }
     if (slot->has_best && !better(def->sort, value, slot->best)) {
         return;
     }
     slot->has_best = true;
     slot->best = value;
-    snprintf(slot->extra, sizeof slot->extra, "%s", extra != NULL ? extra : "");
     if (scope == LEADERBOARD_SCOPE_UTC_DAY) {
         char key[LEADERBOARD_KEY_MAX];
         day_value_key(key, board);

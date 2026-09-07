@@ -167,6 +167,59 @@ identity the portal now reports. Web adapters expose `login()` resolving
 `accepted | declined | unsupported | not_ready | failed`, and `getPlayer()`
 resolving `{ authorized, name, avatarUrl }`.
 
+### Leaderboards
+
+The portal's own board is the leaderboard wherever one exists, and the pack
+that consumes it (`features/leaderboard`) never writes JavaScript: every
+portal call is a C entry point here, an `EM_JS` bridge function, an adapter
+method, and a completion. A board is named by the id its portal console
+knows; nothing in this pack knows what the score measures.
+
+```c
+platform_sdk_leaderboard_caps_t platform_sdk_leaderboard_caps(const char *board_id);
+platform_sdk_result_t platform_sdk_leaderboard_submit(const char *board_id, int32_t scope,
+                                                      uint32_t value, const char *extra);
+platform_sdk_result_t platform_sdk_leaderboard_fetch(const char *board_id, int32_t scope);
+platform_sdk_result_t platform_sdk_leaderboard_open(const char *board_id);
+void platform_sdk_leaderboard_set_listener(const platform_sdk_leaderboard_listener_t *listener);
+```
+
+- Capabilities (`can_read`, `can_write`, `needs_login`, `native_popup`) are
+  answered live and never cached by the facade: a Playgama host decides its
+  board type at run time, and a Yandex write depends on a login the player may
+  complete mid-session. Before the SDK is ready every answer is "nothing",
+  which withdraws nothing.
+- `submit` and `fetch` answer `OK` when a request started; it then settles
+  through the one registered listener with a status in the leaderboard
+  vocabulary: `OK | UNSUPPORTED | NEEDS_LOGIN | RATE_LIMITED | FAILED`.
+  `NOT_READY`, `UNSUPPORTED` (no board API on this portal, or an empty id) and
+  `DESTROYED` mean nothing started and nothing will follow. `open` is fire and
+  forget.
+- Only an explicit portal signal becomes a refusal. An unauthorized Yandex
+  write is `NEEDS_LOGIN`, never `UNSUPPORTED`; a board the console does not
+  have (`not found`) is `UNSUPPORTED`; everything else is `FAILED`. Getting
+  the first of these wrong withdraws a board the player was allowed to read.
+- The adapters enforce the portal's own quotas so no caller schedules around
+  them (see `yandex`).
+- `scope` is passed through untouched. The portals serve one all-time board
+  per id; the consumer keeps other scopes off the portal.
+- A fetched page carries up to `PLATFORM_SDK_LEADERBOARD_TOP_MAX` top rows and
+  `PLATFORM_SDK_LEADERBOARD_AROUND_MAX` neighbours, each with value, rank, a
+  `you` flag, name, avatar URL and the game's own `extra` payload as the
+  portal stored it. Strings are borrowed for the completion call. A payload or
+  URL longer than the bridge buffers is dropped whole, never cut.
+
+Backends implement `leaderboard_caps`, `leaderboard_submit`,
+`leaderboard_fetch` and `leaderboard_open` in the vtable and settle with
+`platform_sdk_backend_complete_leaderboard_submit/fetch()`. Web adapters
+expose `leaderboardCaps(boardId)` (synchronous,
+`{ canRead, canWrite, needsLogin, nativePopup }`), `submitScore(boardId, scope,
+value, extra)`, `fetchEntries(boardId, scope)` and `showLeaderboard(boardId)`,
+each resolving `{ status }` with `status` one of
+`ok | unsupported | needs_login | rate_limited | failed`; a fetch adds
+`top`, `around` (rows `{ value, rank, you, name, avatarUrl, extra }`) and
+`player` (`{ rank, value }` or `null`). A rejected promise is `failed`.
+
 ## Build Inclusion Rule
 
 Only the selected SDK adapter may be included in a release build.
@@ -368,6 +421,9 @@ Used by `local` and `itch`.
 - Must not require network access.
 - In `local`, `login()` signs in a fake player for the page so identity screens
   can be exercised; in `itch` it answers `unsupported`.
+- In `local`, a canned board: fixed rivals plus the best score submitted on
+  this page, ranked among them, so a board screen has rows before any portal
+  exists. In `itch`, every leaderboard call answers `unsupported`.
 
 ### `poki`
 
@@ -383,6 +439,8 @@ Used by `local` and `itch`.
 - Forwards selected finite typed game events through the official
   `PokiSDK.measure(category, what, action)` call. Other adapters safely no-op.
 - Use the Poki Inspector for SDK event checks before submission.
+- No leaderboard: `sendHighscore` is undocumented for SDK v2, so every
+  leaderboard call answers `unsupported` and a game keeps its own board here.
 
 ### `yandex`
 
@@ -409,6 +467,33 @@ Used by `local` and `itch`.
   answering as anonymous, and player data written through it keeps going to
   the anonymous id. A rejected dialog promise is `declined`, never logged as an
   error. An already-authorized player answers `accepted` without a dialog.
+- Leaderboards: `ysdk.leaderboards.setScore(name, score, extraData)` and
+  `ysdk.leaderboards.getEntries(name, { quantityTop: 20, includeUser,
+  quantityAround: 10 })`. Capabilities are read, write, `needsLogin`, no
+  popup, all-time only; the board must exist in the console under that name.
+  An anonymous player's write answers `needs_login` without reaching the
+  portal; the top is read anonymously (`includeUser` and `quantityAround` are
+  sent only for an authorized player). Rows carry `publicName`,
+  `getAvatarSrc("small")` and `extraData`; the first `ranges` entry is the top,
+  every later one the neighbourhood. The portal quotas are enforced in the
+  adapter: writes queue one second apart (a coalesced burst becomes spaced
+  calls, not refused ones), and the twenty-first `getEntries` within five
+  minutes answers `rate_limited` without a portal call. A `setScore` rejected
+  with a payload is retried once without it: the extra is dropped, never the
+  score.
+
+### `crazygames`
+
+Mapped in full in `portals/crazygames.md`; the leaderboard half:
+
+- Write-only. `CrazyGames.SDK.user.submitScore({ encryptedScore, score })`
+  with the score AES-GCM encrypted (12-byte iv, `base64(iv || cipher)`,
+  plaintext the decimal score) under the console key the game passes as
+  `__PLATFORM_SDK_CONFIG__.leaderboardKey`. Without a key `canWrite` is
+  false. The portal draws the board itself and offers no read API and no
+  call to open it, so `fetchEntries` and `showLeaderboard` answer
+  `unsupported`. The portal validates server-side and answers success
+  regardless, so `ok` proves delivery, not a place.
 
 ### `playgama`
 
@@ -426,6 +511,15 @@ Used by `local` and `itch`.
 - Uses `bridge.advertisement.showRewarded()` and rewards only on the `rewarded`
   state.
 - Uses `bridge.storage.get/set` only through the wrapper.
+- Leaderboards: capability is read from `bridge.leaderboards.type` on every
+  call, never at build time — `in_game` reads and writes, `native` writes
+  (the platform draws the board), `native_popup` writes and opens the overlay
+  through `showNativePopup(id)`, `not_available` is a complete answer, not a
+  bug. `setScore(id, score)` and `getEntries(id)` (rows `id, name, photo,
+  score, rank`; `you` is matched against `bridge.player.id`). Board ids come
+  from the `leaderboards` block of `playgama-bridge-config.json`, which the
+  game authors. On `playgama.com` itself the type is currently
+  `not_available`.
 
 ## First Implementation Slices
 

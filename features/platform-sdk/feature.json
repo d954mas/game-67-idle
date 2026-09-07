@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "platform-sdk",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "title": "Platform SDK",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -35,6 +35,7 @@
     "portal player storage bridge for cloud saves",
     "portal-driven pause and resume, and the portal language, bridged into C",
     "player identity and portal login (Yandex auth dialog, local mock), the auth.changed event and the auth result measure; no logout seam",
+    "portal leaderboards behind one C surface (caps, submit, fetch, open, one listener): Yandex read/write behind login with the portal quotas enforced in the adapter, CrazyGames write-only with AES-GCM scores, Playgama capability read from bridge.leaderboards.type at run time, local mock canned board",
     "publish target manifest validation",
     "local NDJSON scorecard CLI"
   ],

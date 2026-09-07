@@ -485,6 +485,17 @@ void test_loading_while_a_fetch_is_in_flight(void) {
     TEST_ASSERT_FALSE(leaderboard_ui_state(g_score).loading);
 }
 
+void test_a_payload_is_kept_when_the_value_repeats_and_null_leaves_it_alone(void) {
+    leaderboard_submit(g_score, LEADERBOARD_SCOPE_ALL_TIME, 20, "look=old;");
+    TEST_ASSERT_EQUAL_STRING("look=old;", g_mock.last_submit_extra);
+    /* a relaunch submits the standing best again, wearing what the player wears now */
+    leaderboard_submit(g_score, LEADERBOARD_SCOPE_ALL_TIME, 20, "look=new;");
+    TEST_ASSERT_EQUAL_INT(1, g_mock.submit_calls);
+    leaderboard_submit(g_score, LEADERBOARD_SCOPE_ALL_TIME, 25, NULL);
+    TEST_ASSERT_EQUAL_INT(2, g_mock.submit_calls);
+    TEST_ASSERT_EQUAL_STRING("look=new;", g_mock.last_submit_extra);
+}
+
 /* ---- extra codec ---- */
 
 void test_extra_round_trip_and_replace(void) {
@@ -564,6 +575,7 @@ int main(void) {
     RUN_TEST(test_server_day_anchors_the_clock);
     RUN_TEST(test_fetch_fills_the_view);
     RUN_TEST(test_loading_while_a_fetch_is_in_flight);
+    RUN_TEST(test_a_payload_is_kept_when_the_value_repeats_and_null_leaves_it_alone);
     RUN_TEST(test_extra_round_trip_and_replace);
     RUN_TEST(test_extra_truncates_at_the_budget);
     RUN_TEST(test_extra_rejects_garbage);

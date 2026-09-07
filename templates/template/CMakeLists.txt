@@ -60,6 +60,12 @@ set(LEADERBOARD_SOURCES
     "${LEADERBOARD_SRC}/leaderboard_mock.c"
     "${LEADERBOARD_SRC}/leaderboard_http.c"
     "${LEADERBOARD_SRC}/leaderboard_portal.c")
+set(REMOTE_IMAGE_DIR         "${GAME_REPO_ROOT}/features/remote-image")
+set(REMOTE_IMAGE_INC         "${REMOTE_IMAGE_DIR}/include")
+set(REMOTE_IMAGE_SRC         "${REMOTE_IMAGE_DIR}/src")
+set(REMOTE_IMAGE_SOURCES
+    "${REMOTE_IMAGE_SRC}/remote_image.c"
+    "${REMOTE_IMAGE_SRC}/remote_image_engine.c")
 
 set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
@@ -104,10 +110,11 @@ add_executable(${GAME_TARGET}
     src/ui/demo_hud.c                                # И3b: game composition (resource_panel over items/progression)
     src/ui/loc_widgets.c                             # the ONLY caller of the raw text entry points
     ${LEADERBOARD_SOURCES}                           # capability facade + backends; inert until a game calls leaderboard_init
+    ${REMOTE_IMAGE_SOURCES}                          # url -> texture cache; inert until a game calls remote_image_init
     # scene-scaffold:sources
 )
-target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}" "${UI_KIT_INC}" "${LEADERBOARD_INC}")
-target_link_libraries(${GAME_TARGET} PRIVATE nt_base64)
+target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}" "${UI_KIT_INC}" "${LEADERBOARD_INC}" "${REMOTE_IMAGE_INC}")
+target_link_libraries(${GAME_TARGET} PRIVATE nt_base64 stb_image)
 target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_SCENES_CORE=1 FEATURE_UI_KIT=1)
 if(GAME_DEBUG_SCENES_ENABLED)
     target_compile_definitions(${GAME_TARGET} PRIVATE
@@ -143,8 +150,22 @@ if(NOT EMSCRIPTEN)
                 "${LEADERBOARD_SRC}/leaderboard_extra.c"
         LIBS cjson nt_base64
         INCLUDES "${LEADERBOARD_INC}")
+    # The portal backend compiles into every pack target, so each of them needs
+    # the platform facade it calls.
     game_add_c_test(test_leaderboard WARNINGS
         SOURCES "${LEADERBOARD_DIR}/tests/test_leaderboard.c" ${LEADERBOARD_SOURCES}
+                "${PLATFORM_SDK_SRC}/platform_sdk.c"
+        LIBS cjson nt_base64
+        DEFINES LEADERBOARD_TESTING=1 PLATFORM_SDK_TESTING=1
+        INCLUDES "${LEADERBOARD_INC}" "${PLATFORM_SDK_INC}")
+    # The http backend under a canned transport: no engine http, no network,
+    # and no other backend.
+    game_add_c_test(test_leaderboard_http WARNINGS
+        SOURCES "${LEADERBOARD_DIR}/tests/test_leaderboard_http.c"
+                "${LEADERBOARD_SRC}/leaderboard.c"
+                "${LEADERBOARD_SRC}/leaderboard_core.c"
+                "${LEADERBOARD_SRC}/leaderboard_extra.c"
+                "${LEADERBOARD_SRC}/leaderboard_http.c"
         LIBS cjson nt_base64
         DEFINES LEADERBOARD_TESTING=1
         INCLUDES "${LEADERBOARD_INC}")
@@ -155,4 +176,12 @@ if(NOT EMSCRIPTEN)
         LIBS cjson nt_base64
         DEFINES LEADERBOARD_TESTING=1 PLATFORM_SDK_TESTING=1
         INCLUDES "${LEADERBOARD_INC}" "${PLATFORM_SDK_INC}")
+    # The remote-image table against a canned transport, decoder, GPU and
+    # clock; the engine binding stays out of the link. The engine include
+    # roots are for the nt_texture_t handle type only.
+    game_add_c_test(test_remote_image WARNINGS
+        SOURCES "${REMOTE_IMAGE_DIR}/tests/test_remote_image.c"
+                "${REMOTE_IMAGE_SRC}/remote_image.c"
+        DEFINES REMOTE_IMAGE_TESTING=1
+        INCLUDES "${REMOTE_IMAGE_INC}" "${ENGINE_DIR}/engine" "${ENGINE_DIR}/shared/include")
 endif()

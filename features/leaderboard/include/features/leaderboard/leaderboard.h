@@ -138,7 +138,11 @@ bool leaderboard_available(leaderboard_board_t board);
 /* Never blocks and never fails at the call site. Per (board, scope): the
  * better value per the board's sort is kept, a value the portal already
  * accepted is not sent again, and a portal that cannot take it withdraws or
- * waits per the refusal rules. */
+ * waits per the refusal rules.
+ *
+ * `extra` is recorded even when the value is not an improvement, because a
+ * backend that carries the payload on every request would otherwise blank the
+ * row after a relaunch. NULL leaves the stored payload alone; "" clears it. */
 void leaderboard_submit(leaderboard_board_t board, leaderboard_scope_t scope,
                         uint32_t value, const char *extra);
 void leaderboard_view_get(leaderboard_board_t board, leaderboard_scope_t scope,

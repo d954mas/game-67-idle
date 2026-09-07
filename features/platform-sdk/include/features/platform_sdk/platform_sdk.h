@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 typedef enum platform_target_t {
     PLATFORM_TARGET_LOCAL = 0,
@@ -96,6 +97,62 @@ typedef struct platform_sdk_auth_result_t {
     const char *avatar_url;
 } platform_sdk_auth_result_t;
 
+/* Leaderboards. A board is named by the id the portal console knows it by;
+   nothing here knows what the score measures. The portal answers are the
+   four refusal kinds the leaderboard pack acts on, so no caller translates
+   portal error codes. */
+typedef enum platform_sdk_leaderboard_status_t {
+    PLATFORM_SDK_LEADERBOARD_OK = 0,
+    PLATFORM_SDK_LEADERBOARD_UNSUPPORTED = 1,  /* terminal for the session: no such board here */
+    PLATFORM_SDK_LEADERBOARD_NEEDS_LOGIN = 2,  /* the player can fix it */
+    PLATFORM_SDK_LEADERBOARD_RATE_LIMITED = 3, /* the portal's own quota; try later */
+    PLATFORM_SDK_LEADERBOARD_FAILED = 4,       /* transport or parse */
+} platform_sdk_leaderboard_status_t;
+
+/* Answered live, never cached: a Playgama host decides its board type at run
+   time, and a Yandex write needs a login the player may complete mid-session. */
+typedef struct platform_sdk_leaderboard_caps_t {
+    bool can_read;     /* entries can be listed inside the game */
+    bool can_write;    /* scores can be submitted */
+    bool needs_login;  /* writing, and the player's own row, require portal auth */
+    bool native_popup; /* the portal owns the UI; platform_sdk_leaderboard_open() shows it */
+} platform_sdk_leaderboard_caps_t;
+
+/* The portal ceilings for one page (Yandex: top 1..20, around 1..10). */
+#define PLATFORM_SDK_LEADERBOARD_TOP_MAX 20
+#define PLATFORM_SDK_LEADERBOARD_AROUND_MAX 10
+
+/* Strings are borrowed for the duration of the completion call. */
+typedef struct platform_sdk_leaderboard_entry_t {
+    uint32_t value;
+    int rank; /* 1-based; 0 when the portal gives none */
+    bool you;
+    const char *name;       /* "" on an anonymous board */
+    const char *avatar_url; /* "" when the portal gives none */
+    const char *extra;      /* the game's own payload as the portal stored it; "" when none */
+} platform_sdk_leaderboard_entry_t;
+
+typedef struct platform_sdk_leaderboard_page_t {
+    const platform_sdk_leaderboard_entry_t *top;
+    int top_count;
+    const platform_sdk_leaderboard_entry_t *around; /* NULL when the portal cannot rank neighbours */
+    int around_count;
+    bool has_player;
+    int player_rank;
+    uint32_t player_value;
+} platform_sdk_leaderboard_page_t;
+
+/* One listener for every board: the consumer keys completions by board id and
+   scope, which is why the entry points carry no per-call callback. */
+typedef struct platform_sdk_leaderboard_listener_t {
+    void (*submit_done)(const char *board_id, int32_t scope,
+                        platform_sdk_leaderboard_status_t status, void *userdata);
+    void (*fetch_done)(const char *board_id, int32_t scope,
+                       platform_sdk_leaderboard_status_t status,
+                       const platform_sdk_leaderboard_page_t *page, void *userdata);
+    void *userdata;
+} platform_sdk_leaderboard_listener_t;
+
 typedef struct platform_sdk_gameplay_start_result_t {
     bool started;
     platform_sdk_result_t reason;
@@ -131,6 +188,15 @@ typedef struct platform_sdk_backend_t {
     /* Opens the portal's login dialog and later settles through
        platform_sdk_backend_complete_login(). NULL means the portal has none. */
     platform_sdk_result_t (*login)(void *userdata);
+    /* Leaderboard hooks; NULL means the portal has no board API at all. A hook
+       that answers OK has started a request that settles through the matching
+       platform_sdk_backend_complete_leaderboard_*(); any other answer means
+       nothing started and nothing will follow. */
+    platform_sdk_leaderboard_caps_t (*leaderboard_caps)(const char *board_id, void *userdata);
+    platform_sdk_result_t (*leaderboard_submit)(const char *board_id, int32_t scope, uint32_t value,
+                                                const char *extra, void *userdata);
+    platform_sdk_result_t (*leaderboard_fetch)(const char *board_id, int32_t scope, void *userdata);
+    platform_sdk_result_t (*leaderboard_open)(const char *board_id, void *userdata);
     void (*destroy)(void *userdata);
 } platform_sdk_backend_t;
 
@@ -199,6 +265,20 @@ platform_sdk_result_t platform_sdk_login(void);
 const char *platform_sdk_player_name(void);       /* "" until the portal supplies one */
 const char *platform_sdk_player_avatar_url(void); /* "" until the portal supplies one */
 
+/* Leaderboards. Every call names the board by its portal id and passes the
+   scope through untouched (the portals serve one all-time board; a consumer
+   that declares other scopes keeps them off the portal). `submit` and `fetch`
+   answer OK when a request started and will settle through the listener;
+   NOT_READY before the SDK is up, UNSUPPORTED when this portal has no board
+   API, DESTROYED after teardown. `open` is fire and forget. The adapters
+   enforce the portal's own quotas, so a caller never schedules around them. */
+void platform_sdk_leaderboard_set_listener(const platform_sdk_leaderboard_listener_t *listener);
+platform_sdk_leaderboard_caps_t platform_sdk_leaderboard_caps(const char *board_id);
+platform_sdk_result_t platform_sdk_leaderboard_submit(const char *board_id, int32_t scope,
+                                                      uint32_t value, const char *extra);
+platform_sdk_result_t platform_sdk_leaderboard_fetch(const char *board_id, int32_t scope);
+platform_sdk_result_t platform_sdk_leaderboard_open(const char *board_id);
+
 /* The portal, not the game, decides these: a tab the player left, a portal
    overlay, a phone call. The facade stops gameplay for the portal and restores
    it on resume, so a game only has to listen. */
@@ -229,6 +309,13 @@ void platform_sdk_backend_complete_login(platform_sdk_auth_result_t result);
 /* Identity known without a dialog: a player who arrives already signed in to
    the portal. Safe to call any time; only a real change is announced. */
 void platform_sdk_backend_set_player(bool authorized, const char *name, const char *avatar_url);
+/* Settle a leaderboard request the backend started. The page and its strings
+   are borrowed for the call; a NULL page with OK counts as an empty board. */
+void platform_sdk_backend_complete_leaderboard_submit(const char *board_id, int32_t scope,
+                                                      platform_sdk_leaderboard_status_t status);
+void platform_sdk_backend_complete_leaderboard_fetch(const char *board_id, int32_t scope,
+                                                     platform_sdk_leaderboard_status_t status,
+                                                     const platform_sdk_leaderboard_page_t *page);
 
 void platform_sdk_destroy(void);
 

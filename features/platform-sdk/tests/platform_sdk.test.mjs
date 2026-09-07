@@ -6,6 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 
+import { createCrazygamesPlatformAdapter } from "../web/adapters/crazygames.js";
 import { createMockPlatformAdapter } from "../web/adapters/mock.js";
 import { createPlaygamaPlatformAdapter } from "../web/adapters/playgama.js";
 import { createPokiPlatformAdapter } from "../web/adapters/poki.js";
@@ -26,9 +27,11 @@ const TargetPlatform = Object.freeze({
   POKI: "poki",
   YANDEX: "yandex",
   PLAYGAMA: "playgama",
+  CRAZYGAMES: "crazygames",
 });
 const PLATFORM_BACKEND_METHODS = Object.freeze([
   "destroy",
+  "fetchEntries",
   "gameLoadingProgress",
   "gameLoadingFinished",
   "gameReady",
@@ -37,6 +40,7 @@ const PLATFORM_BACKEND_METHODS = Object.freeze([
   "getLocale",
   "getPlayer",
   "hideBanner",
+  "leaderboardCaps",
   "loadData",
   "login",
   "measure",
@@ -44,7 +48,9 @@ const PLATFORM_BACKEND_METHODS = Object.freeze([
   "saveData",
   "showBanner",
   "showInterstitial",
+  "showLeaderboard",
   "showRewarded",
+  "submitScore",
 ]);
 
 function packagedPlatformPrefix(adapter) {
@@ -770,6 +776,297 @@ test("local mock login signs in a fake player for the page", async () => {
   assert.ok(result.name.length > 0);
   assert.equal((await adapter.getPlayer()).authorized, true);
   adapter.destroy();
+});
+
+/* A Yandex SDK with a leaderboard surface and a scriptable player. The clock
+   is the adapter's, so both portal quotas are exercised without waiting. */
+function createYandexLeaderboardFixture({ authorized = false, entries = null, reject = null } = {}) {
+  const host = createHost(TargetPlatform.YANDEX);
+  let clock = 1_000_000;
+  host.setTimeout = (fn, ms) => {
+    clock += Number(ms) || 0;
+    fn();
+    return 0;
+  };
+  host.clearTimeout = () => {};
+  const calls = [];
+  const player = {
+    isAuthorized: () => authorized,
+    getName: () => "Ada",
+    getPhoto: () => "https://avatars.example/ada",
+    getUniqueID: () => "me",
+    setData: () => Promise.resolve(),
+    getData: () => Promise.resolve({}),
+  };
+  const sdk = {
+    getPlayer: () => Promise.resolve(player),
+    leaderboards: {
+      setScore(name, score, extraData) {
+        calls.push({ at: clock, name, score, extraData });
+        if (reject && reject(name, score, extraData)) return Promise.reject(reject(name, score, extraData));
+        return Promise.resolve();
+      },
+      getEntries(name, options) {
+        calls.push({ at: clock, name, options });
+        if (reject && reject(name, options)) return Promise.reject(reject(name, options));
+        return Promise.resolve(entries || { entries: [], ranges: [], userRank: 0 });
+      },
+    },
+  };
+  host.YaGames = { init: () => Promise.resolve(sdk) };
+  const adapter = createYandexPlatformAdapter({ host, now: () => clock });
+  return { adapter, calls, advance: (ms) => { clock += ms; } };
+}
+
+function yandexEntry(rank, score, id, extraData) {
+  return {
+    rank,
+    score,
+    extraData,
+    player: { publicName: `Player ${id}`, uniqueID: id, getAvatarSrc: (size) => `https://avatars.example/${id}/${size}` },
+  };
+}
+
+test("yandex leaderboard submits with extraData and reads rows with name, avatar and payload", async () => {
+  const entries = {
+    ranges: [{ start: 0, size: 3 }, { start: 40, size: 3 }],
+    userRank: 42,
+    entries: [
+      yandexEntry(1, 900, "a", "skin=1;"),
+      yandexEntry(2, 800, "b", ""),
+      yandexEntry(3, 700, "c", undefined),
+      yandexEntry(41, 120, "x", ""),
+      yandexEntry(42, 100, "me", "skin=7;"),
+      yandexEntry(43, 90, "y", ""),
+    ],
+  };
+  const { adapter, calls } = createYandexLeaderboardFixture({ authorized: true, entries });
+  assert.equal(await adapter.ready(), true);
+  assert.deepEqual(adapter.leaderboardCaps("planets"), { canRead: true, canWrite: true, needsLogin: true, nativePopup: false });
+
+  assert.deepEqual(await adapter.submitScore("planets", 0, 100, "skin=7;"), { status: "ok" });
+  assert.equal(calls[0].name, "planets");
+  assert.equal(calls[0].score, 100);
+  assert.equal(calls[0].extraData, "skin=7;");
+
+  const page = await adapter.fetchEntries("planets", 0);
+  assert.equal(page.status, "ok");
+  assert.deepEqual(calls[1].options, { quantityTop: 20, includeUser: true, quantityAround: 10 });
+  assert.equal(page.top.length, 3);
+  assert.equal(page.around.length, 3);
+  assert.deepEqual(page.top[0], {
+    value: 900, rank: 1, you: false, name: "Player a", avatarUrl: "https://avatars.example/a/small", extra: "skin=1;",
+  });
+  assert.equal(page.top[2].extra, "", "an absent payload is empty, never undefined");
+  const mine = page.around.find((row) => row.you);
+  assert.equal(mine.rank, 42);
+  assert.equal(mine.extra, "skin=7;", "the game's payload survives the extraData round trip");
+  assert.deepEqual(page.player, { rank: 42, value: 100 });
+  adapter.destroy();
+});
+
+test("yandex anonymous write answers needs_login and never reaches the portal; the top still reads", async () => {
+  const entries = { ranges: [{ start: 0, size: 1 }], userRank: 0, entries: [yandexEntry(1, 5, "a", "")] };
+  const { adapter, calls } = createYandexLeaderboardFixture({ authorized: false, entries });
+  await adapter.ready();
+  assert.deepEqual(await adapter.submitScore("planets", 0, 100, ""), { status: "needs_login" });
+  assert.equal(calls.length, 0, "no setScore call for an anonymous player");
+
+  const page = await adapter.fetchEntries("planets", 0);
+  assert.equal(page.status, "ok");
+  assert.deepEqual(calls[0].options, { quantityTop: 20, includeUser: false });
+  assert.equal(page.top.length, 1);
+  assert.equal(page.player, null);
+  adapter.destroy();
+});
+
+test("yandex setScore is spaced one second apart and a rejected payload retries without it", async () => {
+  const { adapter, calls } = createYandexLeaderboardFixture({
+    authorized: true,
+    reject: (name, score, extraData) => (extraData === "bad" ? new Error("extraData too long") : null),
+  });
+  await adapter.ready();
+  const results = await Promise.all([
+    adapter.submitScore("planets", 0, 1, ""),
+    adapter.submitScore("planets", 0, 2, ""),
+    adapter.submitScore("planets", 0, 3, "bad"),
+  ]);
+  assert.deepEqual(results, [{ status: "ok" }, { status: "ok" }, { status: "ok" }]);
+  const scores = calls.map((call) => call.score);
+  assert.deepEqual(scores, [1, 2, 3, 3]);
+  for (let i = 1; i < calls.length; i += 1) {
+    assert.ok(calls[i].at - calls[i - 1].at >= 1000, `call ${i} respects the one-per-second quota`);
+  }
+  assert.equal(calls[2].extraData, "bad");
+  assert.equal(calls[3].extraData, undefined, "the extra is dropped, the score is not");
+  adapter.destroy();
+});
+
+test("yandex getEntries refuses the twenty-first read in five minutes and recovers after the window", async () => {
+  const { adapter, calls, advance } = createYandexLeaderboardFixture({ authorized: false });
+  await adapter.ready();
+  for (let i = 0; i < 20; i += 1) {
+    assert.equal((await adapter.fetchEntries("planets", 0)).status, "ok", `read ${i + 1}`);
+  }
+  assert.deepEqual(await adapter.fetchEntries("planets", 0), { status: "rate_limited" });
+  assert.equal(calls.length, 20, "the refused read never reached the portal");
+  advance(5 * 60 * 1000 + 1);
+  assert.equal((await adapter.fetchEntries("planets", 0)).status, "ok");
+  adapter.destroy();
+});
+
+test("yandex leaderboard errors map to the four refusals without inventing one", async () => {
+  const cases = [
+    [new Error("Leaderboard not found"), "unsupported"],
+    [{ code: "FetchError", message: "Player is not authorized" }, "needs_login"],
+    [new Error("network"), "failed"],
+  ];
+  for (const [error, status] of cases) {
+    const { adapter } = createYandexLeaderboardFixture({ authorized: true, reject: () => error });
+    await adapter.ready();
+    assert.equal((await adapter.fetchEntries("planets", 0)).status, status, String(error.message));
+    assert.equal((await adapter.submitScore("planets", 0, 1, "")).status, status, String(error.message));
+    adapter.destroy();
+  }
+});
+
+test("yandex leaderboard answers no capability before the SDK is up", () => {
+  const { adapter } = createYandexLeaderboardFixture();
+  assert.deepEqual(adapter.leaderboardCaps("planets"), { canRead: false, canWrite: false, needsLogin: false, nativePopup: false });
+  adapter.destroy();
+});
+
+test("crazygames leaderboard is write-only and submits an AES-GCM score the console key decrypts", async () => {
+  const keyBytes = globalThis.crypto.getRandomValues(new Uint8Array(32));
+  const leaderboardKey = Buffer.from(keyBytes).toString("base64");
+  const host = createHost(TargetPlatform.CRAZYGAMES);
+  const submitted = [];
+  host.CrazyGames = {
+    SDK: {
+      environment: "crazygames",
+      init: () => Promise.resolve(),
+      game: { loadingStart() {}, loadingStop() {}, settings: { muteAudio: false } },
+      user: { submitScore: (payload) => { submitted.push(payload); return Promise.resolve(); } },
+    },
+  };
+  const adapter = createCrazygamesPlatformAdapter({ host, config: { leaderboardKey } });
+  assert.equal(await adapter.ready(), true);
+  assert.deepEqual(adapter.leaderboardCaps("main"), { canRead: false, canWrite: true, needsLogin: false, nativePopup: false });
+  assert.deepEqual(await adapter.submitScore("main", 0, 4242, "skin=1;"), { status: "ok" });
+  assert.equal(submitted.length, 1);
+  assert.equal(submitted[0].score, 4242);
+
+  const combined = Buffer.from(submitted[0].encryptedScore, "base64");
+  const iv = combined.subarray(0, 12);
+  const cipher = combined.subarray(12);
+  const key = await globalThis.crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]);
+  const plain = await globalThis.crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
+  assert.equal(new TextDecoder().decode(plain), "4242");
+
+  assert.deepEqual(await adapter.fetchEntries("main", 0), { status: "unsupported" });
+  assert.deepEqual(await adapter.showLeaderboard("main"), { status: "unsupported" });
+  adapter.destroy();
+
+  const keyless = createCrazygamesPlatformAdapter({ host });
+  await keyless.ready();
+  assert.equal(keyless.leaderboardCaps("main").canWrite, false, "no console key, nothing to encrypt with");
+  assert.deepEqual(await keyless.submitScore("main", 0, 1, ""), { status: "unsupported" });
+  keyless.destroy();
+});
+
+function createPlaygamaLeaderboardHost(type) {
+  const host = createHost(TargetPlatform.PLAYGAMA);
+  const calls = [];
+  host.bridge = {
+    initialize: () => Promise.resolve(),
+    platform: { language: "en", sendMessage() {} },
+    player: { id: "p7" },
+    leaderboards: {
+      type,
+      setScore(id, score) { calls.push(`setScore:${id}:${score}`); return Promise.resolve(); },
+      getEntries(id) {
+        calls.push(`getEntries:${id}`);
+        return Promise.resolve([
+          { id: "p1", name: "One", photo: "https://p.example/1.png", score: 300, rank: 1 },
+          { id: "p7", name: "Me", photo: "", score: 200, rank: 2 },
+        ]);
+      },
+      showNativePopup(id) { calls.push(`popup:${id}`); return Promise.resolve(); },
+    },
+  };
+  return { host, calls };
+}
+
+test("playgama leaderboard capability follows the host platform's type at run time", async () => {
+  const expected = {
+    not_available: { canRead: false, canWrite: false, needsLogin: false, nativePopup: false },
+    in_game: { canRead: true, canWrite: true, needsLogin: false, nativePopup: false },
+    native: { canRead: false, canWrite: true, needsLogin: false, nativePopup: false },
+    native_popup: { canRead: false, canWrite: true, needsLogin: false, nativePopup: true },
+  };
+  for (const [type, caps] of Object.entries(expected)) {
+    const { host } = createPlaygamaLeaderboardHost(type);
+    const adapter = createPlaygamaPlatformAdapter({ host });
+    assert.equal(await adapter.ready(), true);
+    assert.deepEqual(adapter.leaderboardCaps("planets"), caps, type);
+    adapter.destroy();
+  }
+});
+
+test("playgama in_game reads entries, native_popup opens the overlay, not_available refuses writes", async () => {
+  const inGame = createPlaygamaLeaderboardHost("in_game");
+  const a = createPlaygamaPlatformAdapter({ host: inGame.host });
+  await a.ready();
+  assert.deepEqual(await a.submitScore("planets", 0, 200, "skin=1;"), { status: "ok" });
+  const page = await a.fetchEntries("planets", 0);
+  assert.equal(page.status, "ok");
+  assert.deepEqual(page.top[0], { value: 300, rank: 1, you: false, name: "One", avatarUrl: "https://p.example/1.png", extra: "" });
+  assert.equal(page.top[1].you, true);
+  assert.deepEqual(page.player, { rank: 2, value: 200 });
+  assert.deepEqual(await a.showLeaderboard("planets"), { status: "unsupported" });
+  assert.deepEqual(inGame.calls, ["setScore:planets:200", "getEntries:planets"]);
+  a.destroy();
+
+  const popup = createPlaygamaLeaderboardHost("native_popup");
+  const b = createPlaygamaPlatformAdapter({ host: popup.host });
+  await b.ready();
+  assert.deepEqual(await b.fetchEntries("planets", 0), { status: "unsupported" });
+  assert.deepEqual(await b.showLeaderboard("planets"), { status: "ok" });
+  assert.deepEqual(popup.calls, ["popup:planets"]);
+  b.destroy();
+
+  const none = createPlaygamaLeaderboardHost("not_available");
+  const c = createPlaygamaPlatformAdapter({ host: none.host });
+  await c.ready();
+  assert.deepEqual(await c.submitScore("planets", 0, 1, ""), { status: "unsupported" });
+  assert.deepEqual(none.calls, []);
+  c.destroy();
+});
+
+test("poki and itch have no board; the local mock serves canned entries around the submitted score", async () => {
+  for (const [target, factory] of [
+    [TargetPlatform.ITCH, createMockPlatformAdapter],
+    [TargetPlatform.POKI, createPokiPlatformAdapter],
+  ]) {
+    const adapter = factory({ emitVisibilityChange() {}, host: createHost(target), target });
+    assert.deepEqual(adapter.leaderboardCaps("planets"), { canRead: false, canWrite: false, needsLogin: false, nativePopup: false }, target);
+    assert.deepEqual(await adapter.submitScore("planets", 0, 1, ""), { status: "unsupported" }, target);
+    assert.deepEqual(await adapter.fetchEntries("planets", 0), { status: "unsupported" }, target);
+    adapter.destroy();
+  }
+
+  const local = createMockPlatformAdapter({ host: createHost(TargetPlatform.LOCAL), target: TargetPlatform.LOCAL });
+  assert.equal(local.leaderboardCaps("planets").canRead, true);
+  assert.deepEqual(await local.submitScore("planets", 0, 850, "skin=3;"), { status: "ok" });
+  const page = await local.fetchEntries("planets", 0);
+  assert.equal(page.status, "ok");
+  assert.ok(page.top.length > 1);
+  const mine = page.top.find((row) => row.you);
+  assert.equal(mine.value, 850);
+  assert.equal(mine.extra, "skin=3;");
+  assert.deepEqual(page.player, { rank: mine.rank, value: 850 });
+  for (let i = 1; i < page.top.length; i += 1) assert.ok(page.top[i - 1].value >= page.top[i].value, "sorted");
+  local.destroy();
 });
 
 test("yandex adapter can load the documented custom-domain SDK URL", async () => {

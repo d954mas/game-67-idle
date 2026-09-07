@@ -158,10 +158,17 @@ export function createPokiPlatformAdapter({ host }) {
     return { supported: true, shown: true, rewarded: true };
   }
 
+  /* Poki's `sendHighscore` is undocumented for SDK v2, so it stays outside the
+     contract: no board here. */
+  function unsupportedLeaderboard() {
+    return Promise.resolve({ status: "unsupported" });
+  }
+
   return {
     destroy() {
       destroyed = true;
     },
+    fetchEntries: unsupportedLeaderboard,
     gameLoadingProgress,
     gameLoadingFinished,
     gameReady,
@@ -175,6 +182,9 @@ export function createPokiPlatformAdapter({ host }) {
     },
     hideBanner() {
       return Promise.resolve();
+    },
+    leaderboardCaps() {
+      return { canRead: false, canWrite: false, needsLogin: false, nativePopup: false };
     },
     loadData() {
       return Promise.resolve(null);
@@ -191,7 +201,9 @@ export function createPokiPlatformAdapter({ host }) {
       return { supported: false, shown: false, reason: "unsupported" };
     },
     showInterstitial,
+    showLeaderboard: unsupportedLeaderboard,
     showRewarded,
+    submitScore: unsupportedLeaderboard,
   };
 }
 

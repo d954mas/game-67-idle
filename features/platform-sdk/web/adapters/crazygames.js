@@ -16,11 +16,17 @@ const AD_ERROR_REASONS = new Map([
   ["adblock", "not_ready"],
 ]);
 
-export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZYGAMES_SDK_URL }) {
+/* The score travels AES-GCM encrypted under a key the console hands the game;
+   the plaintext is the decimal score, the wire form is base64(iv || cipher)
+   with a 12-byte iv, exactly as the portal's own sample does it. */
+const SCORE_IV_BYTES = 12;
+
+export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZYGAMES_SDK_URL, config = {} }) {
   let sdkReady = null;
   let sdkInstance = null;
   let loadingStarted = false;
   let destroyed = false;
+  const leaderboardKey = typeof config.leaderboardKey === "string" ? config.leaderboardKey : "";
 
   function windowRef() {
     return (host && host.window) || host || globalThis;
@@ -220,10 +226,81 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
     return null;
   }
 
+  function cryptoRef() {
+    const root = windowRef();
+    return (root && root.crypto) || globalThis.crypto || null;
+  }
+
+  function bytesFromBase64(text) {
+    const root = windowRef();
+    const decode = (root && root.atob) || globalThis.atob;
+    const raw = decode(text);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
+    return bytes;
+  }
+
+  function base64FromBytes(bytes) {
+    const root = windowRef();
+    const encode = (root && root.btoa) || globalThis.btoa;
+    let raw = "";
+    for (let i = 0; i < bytes.length; i += 1) raw += String.fromCharCode(bytes[i]);
+    return encode(raw);
+  }
+
+  async function encryptScore(score) {
+    const crypto = cryptoRef();
+    if (!crypto || !crypto.subtle) throw new Error("no webcrypto");
+    const keyBytes = bytesFromBase64(leaderboardKey);
+    const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt"]);
+    const iv = crypto.getRandomValues(new Uint8Array(SCORE_IV_BYTES));
+    const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(String(score)));
+    const combined = new Uint8Array(iv.length + cipher.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(cipher), iv.length);
+    return base64FromBytes(combined);
+  }
+
+  /* Write-only: the portal draws the board itself, in its drawer and on the
+     game page, and offers no read API and no call to open that drawer. Without
+     the console key nothing can be encrypted, so nothing can be written. */
+  function leaderboardCaps() {
+    const user = sdkInstance && sdkInstance.user;
+    const canWrite = Boolean(!destroyed && user && typeof user.submitScore === "function" && leaderboardKey);
+    return { canRead: false, canWrite, needsLogin: false, nativePopup: false };
+  }
+
+  /* The portal validates server-side and answers success regardless, so an
+     accepted call proves delivery, not a place on the board. */
+  async function submitScore(boardId, scope, value) {
+    const instance = await sdk();
+    const user = instance && instance.user;
+    if (destroyed || !user || typeof user.submitScore !== "function" || !leaderboardKey) {
+      return { status: "unsupported" };
+    }
+    const score = Math.max(0, Math.floor(Number(value) || 0));
+    try {
+      const encryptedScore = await encryptScore(score);
+      await user.submitScore({ encryptedScore, score });
+      return { status: "ok" };
+    } catch {
+      return { status: "failed" };
+    }
+  }
+
+  async function fetchEntries() {
+    return { status: "unsupported" };
+  }
+
+  async function showLeaderboard() {
+    return { status: "unsupported" };
+  }
+
   return {
     destroy() {
       destroyed = true;
     },
+    fetchEntries,
     gameLoadingProgress() {},
     gameLoadingFinished,
     gameReady,
@@ -234,6 +311,7 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
       return Promise.resolve({ authorized: false, name: "", avatarUrl: "" });
     },
     hideBanner,
+    leaderboardCaps,
     loadData,
     login() {
       return Promise.resolve({ supported: false, authorized: false, reason: "unsupported", name: "", avatarUrl: "" });
@@ -245,7 +323,9 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
     saveData,
     showBanner,
     showInterstitial,
+    showLeaderboard,
     showRewarded,
+    submitScore,
   };
 }
 

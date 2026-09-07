@@ -73,6 +73,41 @@ export function createMockPlatformAdapter({ emitVisibilityChange = () => {}, hos
     return { supported: true, authorized: true, reason: "accepted", ...mockPlayer };
   }
 
+  /* A canned board for local development: fixed rivals plus the mock player's
+     own best, ranked among them. itch has no board and answers like it does
+     for ads. Row count and values are fixture, not design. */
+  const cannedRivals = Array.from({ length: 9 }, (_, i) => ({ name: `Rival ${i + 1}`, value: 900 - i * 100 }));
+  const mockScores = new Map();
+
+  function leaderboardCaps() {
+    if (!isLocal || destroyed) return { canRead: false, canWrite: false, needsLogin: false, nativePopup: false };
+    return { canRead: true, canWrite: true, needsLogin: false, nativePopup: false };
+  }
+
+  async function submitScore(boardId, scope, value, extra) {
+    if (!isLocal || destroyed) return { status: "unsupported" };
+    const score = Math.max(0, Math.floor(Number(value) || 0));
+    const key = `${boardId}:${scope}`;
+    const best = mockScores.get(key);
+    if (!best || score > best.value) mockScores.set(key, { value: score, extra: typeof extra === "string" ? extra : "" });
+    return { status: "ok" };
+  }
+
+  async function fetchEntries(boardId, scope) {
+    if (!isLocal || destroyed) return { status: "unsupported" };
+    const mine = mockScores.get(`${boardId}:${scope}`);
+    const rows = cannedRivals.map((rival) => ({ ...rival, avatarUrl: "", extra: "", you: false }));
+    if (mine) rows.push({ name: authorized ? mockPlayer.name : "", value: mine.value, avatarUrl: "", extra: mine.extra, you: true });
+    rows.sort((a, b) => b.value - a.value);
+    const top = rows.map((row, i) => ({ ...row, rank: i + 1 }));
+    const own = top.find((row) => row.you);
+    return { status: "ok", top, around: [], player: own ? { rank: own.rank, value: own.value } : null };
+  }
+
+  async function showLeaderboard() {
+    return { status: "unsupported" };
+  }
+
   function destroy() {
     destroyed = true;
     if (document && typeof document.removeEventListener === "function") {
@@ -82,6 +117,7 @@ export function createMockPlatformAdapter({ emitVisibilityChange = () => {}, hos
 
   return {
     destroy,
+    fetchEntries,
     gameLoadingProgress() {},
     gameLoadingFinished() {},
     gameReady() {},
@@ -90,6 +126,7 @@ export function createMockPlatformAdapter({ emitVisibilityChange = () => {}, hos
     getLocale,
     getPlayer,
     hideBanner() {},
+    leaderboardCaps,
     loadData,
     login,
     measure() {},
@@ -97,7 +134,9 @@ export function createMockPlatformAdapter({ emitVisibilityChange = () => {}, hos
     saveData,
     showBanner: unsupportedInterstitial,
     showInterstitial,
+    showLeaderboard,
     showRewarded,
+    submitScore,
   };
 }
 

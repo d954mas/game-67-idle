@@ -309,6 +309,23 @@ client-side with `encryptScore(score, encryptionKey)` before submission (S9).
 The live bundle exposes `submitScore` and `listFriends` on the user module
 (S22). **[docs silent]** on whether a signed-in user is required.
 
+The sample `encryptScore` (S9, read 2026-09-08): key bytes are
+`atob(encryptionKey)`, imported as raw `AES-GCM` for `encrypt`; iv is
+`crypto.getRandomValues(new Uint8Array(12))`; plaintext is
+`new TextEncoder().encode(score.toString())`; the wire form is
+`btoa(iv || ciphertext)`. "To avoid hacking, the server response is always
+successful and validation is applied in our back-end." There is no read API:
+the portal draws the board in its drawer, on the game page and on profiles,
+and there is no call to open that drawer. **[docs silent]** on where the key
+is issued (the placeholder is `'your-32-byte-base64-key-here'`); the studio
+assumes the game's console page, as the leaderboard itself is created there.
+
+Adapter mapping (`web/adapters/crazygames.js`): the key arrives as
+`__PLATFORM_SDK_CONFIG__.leaderboardKey`. `leaderboardCaps` answers
+write-only, and only with a key and a live `user.submitScore`; `submitScore`
+encrypts exactly as the sample does and answers `ok` on resolve, `failed` on
+any throw; `fetchEntries` and `showLeaderboard` answer `unsupported`.
+
 ---
 
 ## 2. Mapping onto this repo's wrapper contract

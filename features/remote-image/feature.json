@@ -1,0 +1,53 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "remote-image",
+  "version": "0.1.0",
+  "title": "Remote Image",
+  "status": "draft",
+  "kind": "gameplay-infrastructure",
+  "summary": "In-place L1 feature pack: a fixed URL-keyed table that fetches, decodes and uploads small images as textures, evicts the least recently touched entry that is not frame-hot, caches failures negatively on two retry schedules and caps its concurrent fetches. Every limit arrives through its config; the pack has no notion of what the images are.",
+  "copy_model": "in-place",
+  "layer": "L1",
+  "owners": [
+    "features/remote-image"
+  ],
+  "dependencies": [
+    "engine nt_http for the bytes",
+    "engine deps/stb stb_image for decoding",
+    "engine nt_gfx for the texture",
+    "engine nt_time for the retry clock"
+  ],
+  "commands": {
+    "ctest": "ctest --test-dir templates/template/build/native-debug -R remote_image --output-on-failure"
+  },
+  "provides": [
+    "remote_image_state and remote_image_get: PENDING, READY or FAILED per URL, a texture only when READY",
+    "LRU eviction that never drops an entry touched in the current frame",
+    "negative cache: transient failures and missing resources retried on separate delays",
+    "a concurrency cap so the shared http slots are not starved",
+    "decoded images fitted to a maximum dimension by area average",
+    "remote_image_backend_t: transport, decoder, GPU and clock behind one seam"
+  ],
+  "flags": {
+    "testing": "REMOTE_IMAGE_TESTING drops the engine backend from the link so the table builds against a canned one"
+  },
+  "manuals": {
+    "install": "features/remote-image/INSTALL.md",
+    "contract": "features/leaderboard/SPEC.md#10-avatar-cache--featuresremote-image"
+  },
+  "registers": {
+    "note": "Describes the template's existing in-place wiring.",
+    "target_sources": [
+      "${REMOTE_IMAGE_SOURCES}"
+    ],
+    "include_dirs": [
+      "${REMOTE_IMAGE_INC}"
+    ],
+    "link_libraries": [
+      "stb_image"
+    ],
+    "ctest_targets": [
+      "test_remote_image"
+    ]
+  }
+}

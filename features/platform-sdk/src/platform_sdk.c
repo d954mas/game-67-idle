@@ -115,6 +115,7 @@ typedef struct platform_sdk_runtime_t {
     bool authorized;
     char player_name[PLATFORM_SDK_PLAYER_NAME_MAX];
     char player_avatar_url[PLATFORM_SDK_AVATAR_URL_MAX];
+    platform_sdk_leaderboard_listener_t leaderboard_listener;
 } platform_sdk_runtime_t;
 
 static platform_sdk_runtime_t g_platform_sdk;
@@ -1276,6 +1277,95 @@ void platform_sdk_backend_complete_login(platform_sdk_auth_result_t result) {
         platform_sdk_emit_auth_changed(authorized, platform_sdk_auth_reason_name(result.reason));
     }
     platform_sdk_note_auth_result(result.reason);
+}
+
+void platform_sdk_leaderboard_set_listener(const platform_sdk_leaderboard_listener_t *listener) {
+    if (listener == NULL) {
+        g_platform_sdk.leaderboard_listener = (platform_sdk_leaderboard_listener_t){0};
+        return;
+    }
+    g_platform_sdk.leaderboard_listener = *listener;
+}
+
+platform_sdk_leaderboard_caps_t platform_sdk_leaderboard_caps(const char *board_id) {
+    platform_sdk_leaderboard_caps_t none = {0};
+    if (board_id == NULL || board_id[0] == '\0' || !platform_sdk_is_ready()) {
+        return none;
+    }
+    if (!g_platform_sdk.has_backend || g_platform_sdk.backend.leaderboard_caps == NULL) {
+        return none;
+    }
+    return g_platform_sdk.backend.leaderboard_caps(board_id, g_platform_sdk.backend_userdata);
+}
+
+/* The guards every leaderboard call shares; OK means the backend may be asked. */
+static platform_sdk_result_t platform_sdk_leaderboard_gate(const char *board_id, bool has_hook) {
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED) {
+        return PLATFORM_SDK_RESULT_DESTROYED;
+    }
+    if (board_id == NULL || board_id[0] == '\0') {
+        return PLATFORM_SDK_RESULT_UNSUPPORTED;
+    }
+    if (!platform_sdk_is_ready()) {
+        return PLATFORM_SDK_RESULT_NOT_READY;
+    }
+    if (!g_platform_sdk.has_backend || !has_hook) {
+        return PLATFORM_SDK_RESULT_UNSUPPORTED;
+    }
+    return PLATFORM_SDK_RESULT_OK;
+}
+
+platform_sdk_result_t platform_sdk_leaderboard_submit(const char *board_id, int32_t scope,
+                                                      uint32_t value, const char *extra) {
+    const platform_sdk_result_t gate =
+        platform_sdk_leaderboard_gate(board_id, g_platform_sdk.backend.leaderboard_submit != NULL);
+    if (gate != PLATFORM_SDK_RESULT_OK) {
+        return gate;
+    }
+    return g_platform_sdk.backend.leaderboard_submit(board_id, scope, value, extra != NULL ? extra : "",
+                                                     g_platform_sdk.backend_userdata);
+}
+
+platform_sdk_result_t platform_sdk_leaderboard_fetch(const char *board_id, int32_t scope) {
+    const platform_sdk_result_t gate =
+        platform_sdk_leaderboard_gate(board_id, g_platform_sdk.backend.leaderboard_fetch != NULL);
+    if (gate != PLATFORM_SDK_RESULT_OK) {
+        return gate;
+    }
+    return g_platform_sdk.backend.leaderboard_fetch(board_id, scope, g_platform_sdk.backend_userdata);
+}
+
+platform_sdk_result_t platform_sdk_leaderboard_open(const char *board_id) {
+    const platform_sdk_result_t gate =
+        platform_sdk_leaderboard_gate(board_id, g_platform_sdk.backend.leaderboard_open != NULL);
+    if (gate != PLATFORM_SDK_RESULT_OK) {
+        return gate;
+    }
+    return g_platform_sdk.backend.leaderboard_open(board_id, g_platform_sdk.backend_userdata);
+}
+
+void platform_sdk_backend_complete_leaderboard_submit(const char *board_id, int32_t scope,
+                                                      platform_sdk_leaderboard_status_t status) {
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED || board_id == NULL) {
+        return;
+    }
+    const platform_sdk_leaderboard_listener_t *listener = &g_platform_sdk.leaderboard_listener;
+    if (listener->submit_done != NULL) {
+        listener->submit_done(board_id, scope, status, listener->userdata);
+    }
+}
+
+void platform_sdk_backend_complete_leaderboard_fetch(const char *board_id, int32_t scope,
+                                                     platform_sdk_leaderboard_status_t status,
+                                                     const platform_sdk_leaderboard_page_t *page) {
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED || board_id == NULL) {
+        return;
+    }
+    const platform_sdk_leaderboard_page_t empty = {0};
+    const platform_sdk_leaderboard_listener_t *listener = &g_platform_sdk.leaderboard_listener;
+    if (listener->fetch_done != NULL) {
+        listener->fetch_done(board_id, scope, status, page != NULL ? page : &empty, listener->userdata);
+    }
 }
 
 void platform_sdk_destroy(void) {
