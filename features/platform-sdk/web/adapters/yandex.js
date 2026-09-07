@@ -61,12 +61,20 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
     const root = windowRef();
     if (!root || typeof root.addEventListener !== "function") return;
     portalPauseInstalled = true;
-    root.addEventListener("game_api_pause", () => {
+    const pause = () => {
       if (!destroyed && lifecycle && typeof lifecycle.pause === "function") lifecycle.pause();
-    });
-    root.addEventListener("game_api_resume", () => {
+    };
+    const resume = () => {
       if (!destroyed && lifecycle && typeof lifecycle.resume === "function") lifecycle.resume();
-    });
+    };
+    root.addEventListener("game_api_pause", pause);
+    root.addEventListener("game_api_resume", resume);
+    /* Focus and visibility are different questions, and the portal asks both:
+       sound must stop when the game loses focus even though the tab is still
+       on screen. The game runs in the portal's frame, so a click on the page
+       around it blurs the game without hiding it. */
+    root.addEventListener("blur", pause);
+    root.addEventListener("focus", resume);
   }
 
   async function sdk() {
