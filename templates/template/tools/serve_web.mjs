@@ -3,7 +3,7 @@
 // Self-contained on purpose (inline MIME, stdlib http only) so a copied game
 // stays portable if it is ever moved out of the repo -- no ai_studio import.
 //
-//   node tools/serve_web.mjs [--preset wasm-release|wasm-debug|wasm-devapi-debug] [--target local|itch|poki|yandex|playgama] [--port N] [--dir <bin>]
+//   node tools/serve_web.mjs [--preset wasm-release|wasm-debug|wasm-devapi-debug] [--target local|itch|poki|yandex|playgama|crazygames] [--port N] [--dir <bin>]
 //
 // Serves build/<preset>/bin/ over http://127.0.0.1:<port>/. game.wasm is served
 // as application/wasm so emscripten's streaming compile does not fall back.
@@ -61,7 +61,7 @@ function requestRel(urlPath) {
 
 function main() {
   const a = parseArgs(process.argv.slice(2));
-  if (!["local", "itch", "poki", "yandex", "playgama"].includes(a.target)) {
+  if (!["local", "itch", "poki", "yandex", "playgama", "crazygames"].includes(a.target)) {
     throw new Error(`unknown target: ${a.target}`);
   }
   const buildName = a.target === "local" ? a.preset : `${a.preset}-${a.target}`;

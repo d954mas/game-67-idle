@@ -9,7 +9,7 @@ import { findStudioRoot } from "./lib/studio_root.mjs";
 import { createRuntimeBuildRecord, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 
 const PRESETS = new Set(["wasm-release", "wasm-debug", "wasm-devapi-debug"]);
-const TARGETS = new Set(["local", "itch", "poki", "yandex", "playgama"]);
+const TARGETS = new Set(["local", "itch", "poki", "yandex", "playgama", "crazygames"]);
 
 export function parseBuildArgs(argv) {
   const args = { preset: "wasm-release", target: "local", debugUi: "default" };

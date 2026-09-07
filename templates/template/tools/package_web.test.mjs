@@ -257,7 +257,7 @@ test("release packaging accepts a same-line import immediately followed by the d
 });
 
 test("bundled platform backend executes before the game loader for every adapter", () => {
-  for (const adapter of ["mock", "poki", "yandex", "playgama"]) {
+  for (const adapter of ["mock", "poki", "yandex", "playgama", "crazygames"]) {
     const source = packageWeb.bundlePlatformIntoGame(
       Buffer.from("globalThis.__gameSawPlatformBackend = !!globalThis.__platformSdkInternalBackend;\n"),
       studioRoot,

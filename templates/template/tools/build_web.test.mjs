@@ -97,9 +97,9 @@ test("executor rechecks runtime inputs immediately before publishing the build r
   assert.deepEqual(events, ["verify"]);
 });
 
-test("plan covers all three presets across all five targets with exact debug flags", () => {
+test("plan covers every preset across every publish target with exact debug flags", () => {
   const presets = ["wasm-release", "wasm-debug", "wasm-devapi-debug"];
-  const targets = ["local", "itch", "poki", "yandex", "playgama"];
+  const targets = ["local", "itch", "poki", "yandex", "playgama", "crazygames"];
   for (const preset of presets) {
     for (const target of targets) {
       const plan = createBuildPlan({

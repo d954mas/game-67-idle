@@ -56,7 +56,7 @@ if(EMSCRIPTEN)
     # Web-devapi host contract (nt_devapi_web.h): the host exports the JS
     # transport entry points; the exports are also what pulls the EM_JS object
     # out of libnt_devapi_web.a so nt_devapi_web_install_shim resolves at link.
-    set(GAME_WEB_EXPORTS "_main,_malloc,_free,_platform_sdk_web_complete_init,_platform_sdk_web_complete_interstitial,_platform_sdk_web_complete_rewarded")
+    set(GAME_WEB_EXPORTS "_main,_malloc,_free,_platform_sdk_web_complete_init,_platform_sdk_web_complete_interstitial,_platform_sdk_web_complete_rewarded,_platform_sdk_web_portal_pause,_platform_sdk_web_portal_resume,_platform_sdk_web_portal_audio")
     if(GAME_AUDIO_BROWSER_SMOKE)
         # Narrow opt-in browser-smoke seam; ordinary release artifacts export no audio controls.
         set(GAME_WEB_EXPORTS "${GAME_WEB_EXPORTS},_game_audio_play_cue,_game_audio_play_music,_game_audio_stop_music,_game_audio_set_enabled,_game_audio_set_paused")
@@ -107,8 +107,14 @@ if(EMSCRIPTEN)
                    "${GAME_OUTPUT_DIR}/platform-sdk-adapter.js" COPYONLY)
     file(REMOVE "${GAME_OUTPUT_DIR}/platform-sdk-core.js")
     file(REMOVE "${GAME_OUTPUT_DIR}/platform-sdk-debug-ui.js")
+    # The portal ids in this config belong to the game's own console entry, so a
+    # game-owned file wins over the feature's neutral default whenever it exists.
+    set(GAME_PLAYGAMA_CONFIG "${PLATFORM_SDK_WEB}/portal/playgama-bridge-config.json")
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/web/playgama-bridge-config.json")
+        set(GAME_PLAYGAMA_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/web/playgama-bridge-config.json")
+    endif()
     if(GAME_PUBLISH_TARGET STREQUAL "playgama")
-        configure_file("${PLATFORM_SDK_WEB}/portal/playgama-bridge-config.json"
+        configure_file("${GAME_PLAYGAMA_CONFIG}"
                        "${GAME_OUTPUT_DIR}/playgama-bridge-config.json" COPYONLY)
     else()
         file(REMOVE "${GAME_OUTPUT_DIR}/playgama-bridge-config.json")
@@ -130,10 +136,10 @@ if(EMSCRIPTEN)
     if(GAME_PUBLISH_TARGET STREQUAL "playgama")
         add_custom_target(platform_sdk_playgama_config_asset
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${PLATFORM_SDK_WEB}/portal/playgama-bridge-config.json"
+            "${GAME_PLAYGAMA_CONFIG}"
                 "${GAME_OUTPUT_DIR}/playgama-bridge-config.json"
-            DEPENDS "${PLATFORM_SDK_WEB}/portal/playgama-bridge-config.json"
-            COMMENT "Staging Playgama Bridge placeholder config"
+            DEPENDS "${GAME_PLAYGAMA_CONFIG}"
+            COMMENT "Staging Playgama Bridge config (${GAME_PLAYGAMA_CONFIG})"
             VERBATIM)
         add_dependencies(platform_sdk_web_assets platform_sdk_playgama_config_asset)
     endif()

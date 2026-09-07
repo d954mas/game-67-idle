@@ -31,7 +31,7 @@ const { inspectPlatformSdkArtifact } = await import(pathToFileURL(join(
   "artifact_tools.mjs",
 )).href);
 
-const TARGETS = new Set(["itch", "poki", "yandex", "playgama"]);
+const TARGETS = new Set(["itch", "poki", "yandex", "playgama", "crazygames"]);
 const SOURCE_EXTENSIONS = /\.(?:c|cc|cpp|cxx|h|hh|hpp|cmake|py|ts|map|pdb|obj|o)$/i;
 const DEVAPI_MARKERS = ["window.__devapi", "--devapi", "wasm-devapi", "GAME_DEVAPI_ENABLED"];
 const AUDIO_SMOKE_MARKERS = [
@@ -995,6 +995,14 @@ function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuil
     const text = bytes.toString("utf8");
     const marker = forbidden.find((value) => text.includes(value));
     if (marker) throw new Error(`reopened ZIP forbidden marker in ${path}: ${marker}`);
+  }
+  /* A portal that forbids self-hosting its SDK is served by exactly one string
+     in the bundle, and a minifier that rewrote or dropped it would be found by
+     the portal's reviewer instead of here. */
+  for (const marker of contract.sdk_policy?.required_markers || []) {
+    const present = [...entries].some(([path, bytes]) =>
+      /\.(?:html|js)$/i.test(path) && bytes.toString("utf8").includes(marker));
+    if (!present) throw new Error(`reopened ZIP is missing a required ${target} marker: ${marker}`);
   }
   if (target === "playgama") {
     const bridge = JSON.parse(entries.get("playgama-bridge-config.json")?.toString("utf8") || "null");

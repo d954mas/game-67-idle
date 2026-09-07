@@ -505,14 +505,19 @@ static void frame(void) {
         shader_programs_update();
     }
     game_runtime_try_start();
+    /* An ad on screen and a portal pause are the same thing to the world: time
+       must not pass behind them. Frames keep being presented, so the page never
+       looks frozen while the SDK owns the screen. */
+    const bool platform_break = platform_sdk_break_active();
     if (s_game_runtime_ready) {
-        game_scenes_step(++s_scene_frame_index, g_nt_app.dt);
+        game_scenes_step(++s_scene_frame_index, platform_break ? 0.0F : g_nt_app.dt);
     }
     const bool playable_shell_ready =
         s_game_runtime_ready && render_mesh_ready(&s_world) && ui_runtime_ready();
     (void)platform_sdk_game_loading_progress(initial_pack_loading_progress());
     platform_lifecycle_update(
-        playable_shell_ready, game_scenes_can_process_game_input());
+        playable_shell_ready,
+        !platform_break && game_scenes_can_process_game_input());
     game_runtime_update();
 
     nt_gfx_begin_frame();

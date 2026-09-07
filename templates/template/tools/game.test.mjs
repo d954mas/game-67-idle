@@ -12,6 +12,13 @@ import { createRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 
 const gameModuleRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const studioRoot = findStudioRoot(gameModuleRoot);
+
+/* Read rather than pinned: the fixture asserts that a copied game with a
+   matching dependency record packages, not which version the feature is on
+   today, and a hardcoded number here fails every time the feature is bumped. */
+function platformSdkVersion() {
+  return JSON.parse(readFileSync(join(studioRoot, "features", "platform-sdk", "feature.json"), "utf8")).version;
+}
 const RELEASE_WASM = Buffer.from([
   0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
   0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
@@ -244,7 +251,7 @@ test("copied game CLI executes doctor and final package from a real games/privat
   write(join(gameDir, "dependencies.json"), `${JSON.stringify({
     schema: "ai_studio.game.dependencies.v3",
     engine: { source: "external/neotolis-engine", version: "0.1.0", revision: engineRevision, compatibility: "tested" },
-    features: [{ id: "platform-sdk", source: "features/platform-sdk", version: "1.2.1", compatibility: "tested" }],
+    features: [{ id: "platform-sdk", source: "features/platform-sdk", version: platformSdkVersion(), compatibility: "tested" }],
     compatibility: "copied layout fixture",
   }, null, 2)}\n`);
   const runtimeBuild = createRuntimeBuildRecord({

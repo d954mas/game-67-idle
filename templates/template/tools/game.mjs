@@ -19,7 +19,7 @@ import { createRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 
 const GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const PACKAGE_TARGETS = new Set(["itch", "poki", "yandex", "playgama"]);
+const PACKAGE_TARGETS = new Set(["itch", "poki", "yandex", "playgama", "crazygames"]);
 const BUILD_TARGETS = new Set(["local", ...PACKAGE_TARGETS]);
 const COMMANDS = new Set(["doctor", "build", "run", "test", "playable", "package", "verify"]);
 // The tier vocabulary is shared with cmake/GameTests.cmake; CTest labels carry it.

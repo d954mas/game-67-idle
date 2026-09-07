@@ -2,16 +2,24 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <link rel="icon" href="data:,">
 <title>@GAME_TITLE@</title>
 <style>
+  /* The portals refuse a page that behaves like a document: no text selection,
+     no callout on a long press, no rubber-band scroll past the edge. A
+     contextmenu handler alone covers Android and misses iOS. */
   html, body {
     margin: 0;
     padding: 0;
     height: 100%;
     background: #111418;
     overflow: hidden;
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   canvas {
@@ -20,6 +28,9 @@
     height: 100vh;
     outline: none;
     background: #111418;
+    /* The game owns every gesture on the canvas: a browser pan or pinch-zoom
+       here is a lost drag, not a page scroll. */
+    touch-action: none;
   }
 
   #loading-overlay {
