@@ -168,6 +168,30 @@
                 "contract": "features/software-cursor/feature.json",
                 "verifyDomain": "features",
                 "coverage": "subtree"
+              },
+              {
+                "id": "feature-test-goldens",
+                "title": "Test goldens",
+                "kind": "module",
+                "path": "features/test-goldens",
+                "owner": "Feature Lead",
+                "description": "Re-recordable value banks for tests over numbers design owns.",
+                "entry": "features/test-goldens/README.md",
+                "contract": "features/test-goldens/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
+                "id": "feature-ui-kit",
+                "title": "UI kit",
+                "kind": "module",
+                "path": "features/ui-kit",
+                "owner": "Feature Lead",
+                "description": "Canvas rule, slice9 art, theme and widget layer shared by every game interface.",
+                "entry": "features/ui-kit/README.md",
+                "contract": "features/ui-kit/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
               }
             ]
           },
@@ -262,6 +286,17 @@
         "description": "Runtime inspection, control, and proof interfaces for running games.",
         "entry": "ai_studio/runtime_automation/README.md",
         "verifyDomain": "runtime",
+        "coverage": "subtree"
+      },
+      {
+        "id": "store-kit",
+        "title": "Store kit",
+        "kind": "module",
+        "path": "ai_studio/store_kit",
+        "owner": "Release Owner",
+        "description": "Portal store-draft specifications and the checker that answers them before moderation does.",
+        "entry": "ai_studio/store_kit/README.md",
+        "verifyDomain": "harness",
         "coverage": "subtree"
       },
       {
