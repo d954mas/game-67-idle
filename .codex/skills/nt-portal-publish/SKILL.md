@@ -120,6 +120,12 @@ flags are the lead's; the console is theirs.
   word, once per submission.
 - **Requirement numbers move.** Read them off the live list on the day and fix
   any number in a packet that has drifted.
+- **A rewarded offer looks like a video before the tap.** The button is blue
+  (Poki's ad rule, kept on every portal so one build serves all) and carries
+  an ad mark (video/play icon or an AD label); every portal's moderation reads
+  an unmarked rewarded button as a broken ad. After the video the button is gone and the reward is
+  shown being paid, not silently added. The rule is in
+  `features/platform-sdk/references/contract.md`.
 
 ## Per-portal notes
 

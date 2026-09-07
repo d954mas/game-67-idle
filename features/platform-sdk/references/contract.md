@@ -203,6 +203,13 @@ Implementation rules:
 - Rewarded ads grant rewards only when the SDK confirms reward completion:
   Poki returns a success boolean, Yandex uses `onRewarded`, Playgama uses the
   `rewarded` state.
+- A rewarded call-to-action is a button of its own: **blue** (Poki's ad rule,
+  applied on every portal so one build serves all) with an ad mark (a
+  video/play icon or an AD label), so the player knows a video is coming
+  before the tap. Once the reward is paid the
+  button disappears and the reward is shown being paid (the prize visibly
+  changes, not only a number under it). A portal that answers a rewarded
+  request with `supported: false` gets no second offer that session.
 - Analytics subscribes to the event stream. Do not emit events merely to say
   that analytics forwarding happened. If an adapter forwards selected game
   events to a portal API such as Poki `measure`, that forwarding is an adapter
