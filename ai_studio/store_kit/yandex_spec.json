@@ -46,28 +46,28 @@
     },
     {
       "id": "screenshot_landscape",
-      "file_glob": "screenshot_landscape_*.png",
+      "file_glob": "screenshot_landscape_*_*.png",
       "formats": [
         "png",
         "jpg"
       ],
       "min_count": 3,
-      "max_count": 10,
+      "max_count": 20,
       "max_bytes": 5242880,
-      "note": "Real gameplay, no system or portal interface, no debug overlays. The form: 16:9, long side 1280-2560, JPEG or 24-bit PNG without alpha.",
+      "note": "Real gameplay in the language of the card it sits under. The form: 16:9, long side 1280-2560, JPEG or 24-bit PNG without alpha.",
       "aspect": "16:9",
       "min_long_side": 1280,
       "max_long_side": 2560
     },
     {
       "id": "screenshot_portrait",
-      "file_glob": "screenshot_portrait_*.png",
+      "file_glob": "screenshot_portrait_*_*.png",
       "formats": [
         "png",
         "jpg"
       ],
       "min_count": 0,
-      "max_count": 10,
+      "max_count": 20,
       "max_bytes": 5242880,
       "note": "Only when the draft declares mobile screenshots. The form states the rule: 9:16, long side 1280-2560, JPEG or 24-bit PNG without alpha.",
       "aspect": "9:16",
@@ -76,7 +76,6 @@
     },
     {
       "id": "gameplay_landscape",
-      "file": "gameplay_landscape.mp4",
       "kind": "video",
       "formats": [
         "mp4"
@@ -84,11 +83,13 @@
       "max_bytes": 104857600,
       "max_seconds": 28,
       "aspect": "16:9",
-      "note": "Required by the draft form. Real gameplay filmed from the game, no mock overlays."
+      "note": "Required by the draft form. Real gameplay filmed from the game, no mock overlays.",
+      "file_glob": "gameplay_landscape.*.mp4",
+      "min_count": 1,
+      "max_count": 6
     },
     {
       "id": "gameplay_portrait",
-      "file": "gameplay_portrait.mp4",
       "kind": "video",
       "formats": [
         "mp4"
@@ -97,7 +98,9 @@
       "max_bytes": 104857600,
       "max_seconds": 28,
       "aspect": "9:16",
-      "note": "Optional in the form, but a mobile-declared game without it shows nothing to phone players."
+      "note": "Optional in the form, but a mobile-declared game without it shows nothing to phone players.",
+      "file_glob": "gameplay_portrait.*.mp4",
+      "max_count": 6
     }
   ],
   "texts": [
@@ -129,6 +132,7 @@
     "the horizontal gameplay video is REQUIRED: 16:9, MP4, height from 400 px, up to 100 MB, up to 28 seconds",
     "at most two categories per draft",
     "icon, cover and screenshots can be copied from the Russian tab per language",
-    "screenshots: 16:9 or 9:16, long side 1280-2560 px, JPEG or 24-bit PNG with no alpha channel"
+    "screenshots: 16:9 or 9:16, long side 1280-2560 px, JPEG or 24-bit PNG with no alpha channel",
+    "screenshots and gameplay video are per language in the draft: each card can carry its own, and a mirror checkbox copies the Russian set when they are meant to be identical"
   ]
 }

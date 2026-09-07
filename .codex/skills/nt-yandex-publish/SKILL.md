@@ -111,6 +111,17 @@ resolutions and pick beats that are gameplay — the portal wants gameplay acros
 at least 70% of the frame (5.1). Frames must carry no debug overlay, no FPS
 counter, no system status bar and no portal interface (8.7).
 
+**Every material is filmed once per language.** The draft keeps its own set of
+screenshots and videos for each declared language and mirrors the Russian one
+into the others until the checkbox beside the field is cleared, so the default
+outcome is a Russian card showing an English HUD. Which language the game runs
+in is decided at startup, when the string table is chosen — a setting flipped
+mid-run does not change it — so the capture bot writes the language into a save
+and relaunches (`--lang ru|en`, the shape `promo_video_bot.py` uses). The
+screenshot set splits again by device: desktop is landscape, mobile is
+portrait, and the form shows one set at a time behind a select. Five of each per
+language is twenty files for two languages, and the checker counts them.
+
 **Icon and cover may NOT be screenshots** (5.6). They come from the game's own
 art through the asset pipeline (`nt-asset-workflow`, source-first): a square
 icon with no rounded corners and no border (8.6), reading at 64 px in a
@@ -141,12 +152,32 @@ moderation starts from, and it answers in minutes — upload, read it, fix, uplo
 again. Two things the form itself decides: at most **two** categories, and a
 draft cannot be submitted at all without a live RSYA contract on the account.
 
+**The video slots cannot be filled from a browser agent.** The archive and the
+screenshot widgets only ship a file to the server, so those go up fine. A video
+widget first reads the clip's metadata through a `<video>` element on a blob
+URL, and a file the browser did not pick through its own dialog is unreadable
+to the renderer: the element stays at `readyState 0` forever, and the handler
+returns without an error, a message or a request. A fresh tab behaves the same.
+Plan for the lead to drag both mp4 files in per language.
+
+The draft itself is plain JSON and worth knowing when the form fights back:
+`GET /console/api/application/<id>` returns it under `draft`, and saving is
+`PATCH /console/api/application-draft/<id>` carrying only the changed
+top-level keys (`sources`, `screenshots`, `videos`) plus an `x-csrf-token`
+header. Media inside that delta are bare file ids produced by
+`POST /console/api/files/{screenshots,videos}` with fields `file` and `app-id`.
+Video is the one thing not to attach this way: `options.orientation` is written
+by the widget, cannot be passed to the upload, and a clip that lacks it is
+never placed in a slot.
+
 ### 6. Hand over
 
 The reply to the lead names: the archive path, the SDK probe result, the
 checklist rows that are NOT closed and what each would take, and the store
-folder with the checker's output. Uploading the draft, the age rating, the
-categories and the platform flags are the lead's — the console is theirs.
+folder with the checker's output. When videos are part of the delivery, name
+the files and the slot each belongs to — that list is the lead's whole task.
+Uploading the draft, the age rating, the categories and the platform flags are
+the lead's — the console is theirs.
 
 ## What This Skill Does Not Do
 
@@ -155,3 +186,5 @@ categories and the platform flags are the lead's — the console is theirs.
 - It does not invent sizes. Numbers come from the form or from the spec file.
 - It does not make screenshots out of promotional art, and does not make an
   icon out of a screenshot — both are refusals.
+- It does not put video into the draft. It films the clips, checks them and
+  hands them over; the slots are filled by hand.
