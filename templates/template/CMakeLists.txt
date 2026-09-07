@@ -148,4 +148,11 @@ if(NOT EMSCRIPTEN)
         LIBS cjson nt_base64
         DEFINES LEADERBOARD_TESTING=1
         INCLUDES "${LEADERBOARD_INC}")
+    # The portal backend speaks to the platform facade, so its test links both.
+    game_add_c_test(test_leaderboard_portal WARNINGS
+        SOURCES "${LEADERBOARD_DIR}/tests/test_leaderboard_portal.c" ${LEADERBOARD_SOURCES}
+                "${PLATFORM_SDK_SRC}/platform_sdk.c"
+        LIBS cjson nt_base64
+        DEFINES LEADERBOARD_TESTING=1 PLATFORM_SDK_TESTING=1
+        INCLUDES "${LEADERBOARD_INC}" "${PLATFORM_SDK_INC}")
 endif()
