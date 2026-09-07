@@ -49,6 +49,9 @@ set(LOCALIZATION_DIR         "${GAME_REPO_ROOT}/features/localization")
 set(LOCALIZATION_INC         "${LOCALIZATION_DIR}/include")
 set(LOCALIZATION_SRC         "${LOCALIZATION_DIR}/src")
 set(LOCALIZATION_SCRIPTS     "${LOCALIZATION_DIR}/scripts")
+set(TELEMETRY_DIR            "${GAME_REPO_ROOT}/features/telemetry")
+set(TELEMETRY_INC            "${TELEMETRY_DIR}/include")
+set(TELEMETRY_SRC            "${TELEMETRY_DIR}/src")
 
 set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
@@ -88,9 +91,16 @@ add_executable(${GAME_TARGET}
     src/features/resource_panel/resource_panel.c     # И3b: generic counter/bar widget (zero feature headers)
     src/ui/demo_hud.c                                # И3b: game composition (resource_panel over items/progression)
     src/ui/loc_widgets.c                             # the ONLY caller of the raw text entry points
+    "${TELEMETRY_SRC}/telemetry.c"                   # the studio funnel: batches, heartbeat, one POST in flight
+    "${TELEMETRY_SRC}/telemetry_http.c"              # its nt_http transport
     # scene-scaffold:sources
 )
 target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}" "${UI_KIT_INC}")
+target_include_directories(${GAME_TARGET} PRIVATE "${TELEMETRY_INC}")
+target_compile_definitions(${GAME_TARGET} PRIVATE
+    GAME_TELEMETRY_URL="${GAME_TELEMETRY_URL}"
+    GAME_TELEMETRY_KEY="${GAME_TELEMETRY_KEY}"
+    GAME_TELEMETRY_GAME="${GAME_TELEMETRY_GAME}")
 target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_SCENES_CORE=1 FEATURE_UI_KIT=1)
 if(GAME_DEBUG_SCENES_ENABLED)
     target_compile_definitions(${GAME_TARGET} PRIVATE

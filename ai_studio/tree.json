@@ -220,6 +220,18 @@
         "coverage": "subtree"
       },
       {
+        "id": "telemetry",
+        "title": "Telemetry",
+        "kind": "module",
+        "path": "ai_studio/telemetry",
+        "owner": "Telemetry Owner",
+        "description": "Portal independent gameplay funnel: the ingest endpoint, its storage layout, and the funnel report.",
+        "entry": "ai_studio/telemetry/README.md",
+        "contract": "ai_studio/telemetry/README.md",
+        "verifyDomain": "harness",
+        "coverage": "subtree"
+      },
+      {
         "id": "workspace",
         "title": "Workspace",
         "kind": "module",

@@ -1,0 +1,18 @@
+{
+  "sessions": 1000,
+  "players": 820,
+  "play_avg": 214.5,
+  "play_over_180_share": 0.312,
+  "play_buckets": {
+    "0-60": 300,
+    "60-180": 388,
+    "180-600": 250,
+    "600+": 62
+  },
+  "levels": [
+    { "level": 1, "start": 1000, "complete": 900, "fail": 60, "sec_avg": 41.2 },
+    { "level": 2, "start": 800, "complete": 640, "fail": 120, "sec_avg": 55.7 },
+    { "level": 3, "start": 600, "complete": 300, "fail": 240, "sec_avg": 78.9 }
+  ],
+  "scopes": [{ "build": "v11", "platform": "poki" }]
+}

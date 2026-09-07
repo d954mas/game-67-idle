@@ -1,6 +1,8 @@
 #include "features/settings/settings.h"
 
 #include "game_save.h"      /* game_save_mark_dirty */
+#include "features/telemetry/telemetry.h"
+#include <string.h>
 #include "settings_state.h" /* generated: SettingsState + settings_state instance */
 
 #include "features/localization/loc.h"
@@ -28,6 +30,15 @@ void settings_set_sfx(float value) {
 
 /* Персистентный язык -> активный язык таблицы. Единственное место, где одно
    становится другим; зовётся после загрузки сейва и после каждой смены. */
+const char *settings_telemetry_id(void) {
+    /* The schema forbids an empty string, so the default "new" is the unminted value. */
+    if (strlen(settings_state.telemetry_id) != 32U) {
+        telemetry_make_id(settings_state.telemetry_id);
+        game_save_mark_dirty();
+    }
+    return settings_state.telemetry_id;
+}
+
 void settings_apply_language(void) {
     const int chosen = loc_lang_from_code(settings_state_language_name(settings_state.language));
     loc_set_lang_index(chosen >= 0 ? chosen : (int)LOC_FALLBACK_LANG);

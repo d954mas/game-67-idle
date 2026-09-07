@@ -1,0 +1,53 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "telemetry",
+  "version": "1.0.0",
+  "title": "Telemetry",
+  "status": "reusable",
+  "kind": "gameplay-infrastructure",
+  "summary": "Portal-independent playtest funnel: a C module that batches named game events into small JSON POSTs to the studio collector (ai_studio/telemetry), dormant without a collector URL.",
+  "copy_model": "in-place",
+  "layer": "L1",
+  "owners": [
+    "features/telemetry"
+  ],
+  "dependencies": [
+    "external/neotolis-engine http (nt_http) for the default transport; the stub backend keeps the module quiet",
+    "ai_studio/telemetry collector for the wire format and the report"
+  ],
+  "commands": {
+    "test": "ctest --test-dir <game>/build/native-debug -R '^test_telemetry$'"
+  },
+  "provides": [
+    "telemetry_config_t / telemetry_init: collector URL, key, game, build, platform, player id",
+    "telemetry_event_begin/int/float/str/end: one flat JSON event",
+    "telemetry_update: heartbeat while playing, interval flush, one POST in flight, retry with backoff",
+    "telemetry_flush: send now (page hidden, shutdown)",
+    "telemetry_make_id: 32-hex anonymous id for the game to persist",
+    "injectable transport for tests"
+  ],
+  "does_not_own": [
+    "which moments a game reports (the game's own funnel module names them)",
+    "the player id's persistence (a game save field)",
+    "the collector, its storage and the report (ai_studio/telemetry)"
+  ],
+  "manuals": {
+    "install": "features/telemetry/INSTALL.md",
+    "wire": "ai_studio/telemetry/README.md"
+  },
+  "registers": {
+    "target_sources": [
+      "${TELEMETRY_SRC}/telemetry.c",
+      "${TELEMETRY_SRC}/telemetry_http.c"
+    ],
+    "include_dirs": [
+      "${TELEMETRY_INC}"
+    ],
+    "ctest_targets": [
+      "test_telemetry"
+    ],
+    "save_fields": [
+      "settings.telemetry_id"
+    ]
+  }
+}
