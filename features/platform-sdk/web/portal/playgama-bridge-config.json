@@ -1,5 +1,69 @@
 {
-  "schema": "ai_studio.playgama_bridge_config.placeholder.v1",
+  "readme": [
+    "Playgama Bridge SDK configuration. Bridge fetches ./playgama-bridge-config.json next to index.html; top-level values apply to every platform and the `platforms` block overrides them per platform id.",
+    "This is the studio default. Every value below is a safe neutral choice, not a submission-ready one: the ad placements carry no native ids, `leaderboards`, `achievements` and `payments` are empty, and `device.supportedOrientations` claims both orientations.",
+    "A game overrides it by writing its own file over the staged copy in the build output (build/wasm-release-playgama/bin/playgama-bridge-config.json) before packaging. Author that file with the official editor at https://playgama.github.io/bridge-config-editor/ so the native placement, leaderboard and product ids match the developer console.",
+    "Delete `replace_before_submission` in the game-owned file. While it is present, package_web.mjs refuses to build a ZIP, which is what keeps this template out of a submission.",
+    "Bridge carries unknown keys through without complaint, so `readme` and `replace_before_submission` are inert at runtime.",
+    "A wrong-schema file does not fail loudly either: Bridge parses it, finds no placements or ids, and falls back to defaults. Check a changed config against the running build, not against the parse."
+  ],
   "replace_before_submission": true,
-  "note": "Placeholder for local artifact validation. Replace with the portal-owned Playgama Bridge config before submitting a real build."
+
+  "platforms": {},
+
+  "advertisement": {
+    "minimumDelayBetweenInterstitial": 60,
+    "initialInterstitialDelay": 60,
+    "useBuiltInErrorPopup": false,
+    "useAdvertisementErrorPopup": false,
+    "builtInErrorPopupCooldown": 0,
+    "interstitial": {
+      "disable": false,
+      "preloadOnStart": "level_break",
+      "placementFallback": "level_break",
+      "autoShow": [],
+      "placements": [
+        { "id": "level_break" }
+      ]
+    },
+    "rewarded": {
+      "disable": false,
+      "preloadOnStart": "double_reward",
+      "placementFallback": "double_reward",
+      "placements": [
+        { "id": "double_reward" },
+        { "id": "revive" }
+      ]
+    },
+    "banner": {
+      "disable": false,
+      "placementFallback": "main_menu",
+      "placements": [
+        { "id": "main_menu" }
+      ]
+    },
+    "advancedBanners": {
+      "disable": true
+    }
+  },
+
+  "leaderboards": [],
+  "achievements": [],
+  "payments": [],
+  "notifications": {},
+
+  "device": {
+    "useBuiltInOrientationPopup": true,
+    "supportedOrientations": ["landscape", "portrait"]
+  },
+
+  "storage": {
+    "allowAnonymousCloudSave": false
+  },
+
+  "disableLoadingLogo": false,
+  "debug": false,
+  "forciblySetPlatformId": "",
+  "sendAnalyticsEvents": true,
+  "remoteConfigUrl": ""
 }

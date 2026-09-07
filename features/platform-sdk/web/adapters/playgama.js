@@ -1,11 +1,13 @@
-const PLAYGAMA_BRIDGE_URL = "https://bridge.playgama.com/v1/stable/playgama-bridge.js";
+const PLAYGAMA_BRIDGE_URL = "https://bridge.playgama.com/v2/stable/playgama-bridge.js";
 const AD_TIMEOUT_MS = 120000;
+const BANNER_POSITION = "bottom";
 
-export function createPlaygamaPlatformAdapter({ host }) {
+export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
   let bridgeReady = null;
   let bridge = null;
   let destroyed = false;
   let hasStartedGameplay = false;
+  let loadingPercent = null;
   const pendingAds = new Set();
 
   function windowRef() {
@@ -16,12 +18,19 @@ export function createPlaygamaPlatformAdapter({ host }) {
     return (host && host.document) || (windowRef() && windowRef().document);
   }
 
+  /* A late-arriving result can depend on state the ad flow collected while it
+     ran, so the fallback is asked for its value at settle time instead of being
+     captured when the operation starts. */
+  function adResult(result) {
+    return typeof result === "function" ? result() : result;
+  }
+
   function adOperation(start, failedResult) {
     return new Promise((resolve) => {
       let cleanup = null;
       let settled = false;
       const root = windowRef();
-      const cancel = () => settle(failedResult);
+      const cancel = () => settle(adResult(failedResult));
       const timer = (root.setTimeout || setTimeout)(cancel, AD_TIMEOUT_MS);
 
       function setCleanup(next) {
@@ -52,7 +61,7 @@ export function createPlaygamaPlatformAdapter({ host }) {
       try {
         start(settle, setCleanup);
       } catch {
-        settle(failedResult);
+        settle(adResult(failedResult));
       }
     });
   }
@@ -76,6 +85,38 @@ export function createPlaygamaPlatformAdapter({ host }) {
     return bridge && bridge.EVENT_NAME && bridge.EVENT_NAME[group] ? bridge.EVENT_NAME[group] : fallback;
   }
 
+  function notifyLifecycle(method, ...args) {
+    if (!lifecycle || typeof lifecycle[method] !== "function") return;
+    try {
+      lifecycle[method](...args);
+    } catch {}
+  }
+
+  /* Subscribing is not enough for audio: the event fires only on later changes,
+     so the value that is already in effect has to be applied by hand or a game
+     that starts inside a muted portal frame keeps playing sound. */
+  function applyAudioState(isEnabled) {
+    if (typeof isEnabled !== "boolean") return;
+    notifyLifecycle("audio", isEnabled);
+  }
+
+  /* The portal pauses the game without the player touching it: Bridge folds ad
+     opens, tab switches and system pauses into one aggregated state. Edges are
+     forwarded raw because the C facade owns pause/resume dedupe. */
+  function subscribePortalState() {
+    const platform = bridge && bridge.platform;
+    if (!platform || typeof platform.on !== "function") return;
+    platform.on(eventName("PAUSE_STATE_CHANGED", "pause_state_changed"), (isPaused) => {
+      if (destroyed) return;
+      notifyLifecycle(isPaused ? "pause" : "resume");
+    });
+    platform.on(eventName("AUDIO_STATE_CHANGED", "audio_state_changed"), (isEnabled) => {
+      if (destroyed) return;
+      applyAudioState(isEnabled);
+    });
+    applyAudioState(platform.isAudioEnabled);
+  }
+
   async function initBridge() {
     if (bridgeReady) return bridgeReady;
     bridgeReady = (async () => {
@@ -89,6 +130,10 @@ export function createPlaygamaPlatformAdapter({ host }) {
       }
       if (destroyed) return false;
 
+      try {
+        subscribePortalState();
+      } catch {}
+      sendLoadingProgress();
       return true;
     })();
     return bridgeReady;
@@ -97,6 +142,31 @@ export function createPlaygamaPlatformAdapter({ host }) {
   async function ready() {
     if (destroyed) return false;
     return Boolean(await initBridge()) && !destroyed;
+  }
+
+  function sendLoadingProgress() {
+    if (destroyed || loadingPercent === null) return;
+    if (!bridge || typeof bridge.setGameLoadingProgress !== "function") return;
+    try {
+      bridge.setGameLoadingProgress(loadingPercent);
+    } catch {}
+  }
+
+  /* Bridge owns the loading overlay and hides it 700 ms after init unless the
+     game reports progress, which would leave the player on a blank canvas while
+     wasm and asset packs still load. Progress starts before the bridge exists,
+     so the last value is kept and replayed once it does. Bridge counts percent,
+     the facade counts 0..1. */
+  function gameLoadingProgress(progress01) {
+    const clamped = Math.max(0, Math.min(1, Number(progress01) || 0));
+    loadingPercent = Math.round(clamped * 100);
+    sendLoadingProgress();
+  }
+
+  async function gameLoadingFinished() {
+    if (!(await ready())) return;
+    loadingPercent = 100;
+    sendLoadingProgress();
   }
 
   async function gameReady() {
@@ -117,20 +187,28 @@ export function createPlaygamaPlatformAdapter({ host }) {
   async function gameplayStop() {
     if (!(await ready())) return;
     try {
-      bridge.platform.sendMessage("level_pause");
+      bridge.platform.sendMessage("level_paused");
     } catch {}
   }
 
   async function showInterstitial(placement) {
-    if (!(await ready()) || !bridge.advertisement || !bridge.advertisement.isInterstitialSupported) {
+    if (!(await ready()) || !bridge.advertisement) {
       return { supported: false, shown: false, reason: "not_ready" };
     }
+    if (!bridge.advertisement.isInterstitialSupported) {
+      return { supported: false, shown: false, reason: "unsupported" };
+    }
     const failed = { supported: true, shown: false, reason: "failed" };
+    /* Bridge reports the ordinary throttle as `failed`: the minimum delay
+       between interstitials, the initial delay after game_ready, and a disabled
+       placement all land here. Reporting it as a failure would make analytics
+       and retry logic read routine pacing as breakage. */
+    const throttled = { supported: true, shown: false, reason: "rate_limited" };
     return adOperation((settle, setCleanup) => {
       const name = eventName("INTERSTITIAL_STATE_CHANGED", "interstitial_state_changed");
       const handler = (state) => {
         if (state === "closed") settle({ supported: true, shown: true });
-        else if (state === "failed") settle(failed);
+        else if (state === "failed") settle(throttled);
       };
       bridge.advertisement.on(name, handler);
       setCleanup(() => {
@@ -141,12 +219,20 @@ export function createPlaygamaPlatformAdapter({ host }) {
   }
 
   async function showRewarded(placement) {
-    if (!(await ready()) || !bridge.advertisement || !bridge.advertisement.isRewardedSupported) {
+    if (!(await ready()) || !bridge.advertisement) {
       return { supported: false, shown: false, rewarded: false, reason: "not_ready" };
     }
+    if (!bridge.advertisement.isRewardedSupported) {
+      return { supported: false, shown: false, rewarded: false, reason: "unsupported" };
+    }
+    /* `rewarded` is what earns the reward and `closed` is the terminal state.
+       A platform adapter that stops at `rewarded` must not cost the player the
+       reward, so every later exit — a failure, the timeout, adapter teardown —
+       still resolves with the latched reward. */
+    let rewarded = false;
     const failed = { supported: true, shown: false, rewarded: false, reason: "failed" };
+    const earned = { supported: true, shown: false, rewarded: true };
     return adOperation((settle, setCleanup) => {
-      let rewarded = false;
       const name = eventName("REWARDED_STATE_CHANGED", "rewarded_state_changed");
       const handler = (state) => {
         if (state === "rewarded") rewarded = true;
@@ -155,9 +241,7 @@ export function createPlaygamaPlatformAdapter({ host }) {
             ? { supported: true, shown: true, rewarded: true }
             : { supported: true, shown: true, rewarded: false, reason: "skipped" });
         } else if (state === "failed") {
-          settle(rewarded
-            ? { supported: true, shown: false, rewarded: true }
-            : failed);
+          settle(rewarded ? earned : failed);
         }
       };
       bridge.advertisement.on(name, handler);
@@ -165,12 +249,47 @@ export function createPlaygamaPlatformAdapter({ host }) {
         if (typeof bridge.advertisement.off === "function") bridge.advertisement.off(name, handler);
       });
       bridge.advertisement.showRewarded(placement || undefined);
+    }, () => (rewarded ? earned : failed));
+  }
+
+  /* A sticky banner is the one extra ad block the portal rules allow next to
+     the fullscreen formats, and the portal draws it over the game itself. */
+  async function showBanner(placement) {
+    if (!(await ready()) || !bridge.advertisement || typeof bridge.advertisement.showBanner !== "function") {
+      return { supported: false, shown: false, reason: "unsupported" };
+    }
+    if (!bridge.advertisement.isBannerSupported) {
+      return { supported: false, shown: false, reason: "unsupported" };
+    }
+    const failed = { supported: true, shown: false, reason: "failed" };
+    return adOperation((settle, setCleanup) => {
+      const name = eventName("BANNER_STATE_CHANGED", "banner_state_changed");
+      const handler = (state) => {
+        if (state === "shown") settle({ supported: true, shown: true });
+        else if (state === "hidden") settle({ supported: true, shown: false, reason: "hidden" });
+        else if (state === "failed") settle(failed);
+      };
+      bridge.advertisement.on(name, handler);
+      setCleanup(() => {
+        if (typeof bridge.advertisement.off === "function") bridge.advertisement.off(name, handler);
+      });
+      bridge.advertisement.showBanner(BANNER_POSITION, placement || undefined);
     }, failed);
+  }
+
+  async function hideBanner() {
+    if (!(await ready()) || !bridge.advertisement || typeof bridge.advertisement.hideBanner !== "function") return;
+    try {
+      bridge.advertisement.hideBanner();
+    } catch {}
   }
 
   async function loadData(key) {
     if (!(await ready()) || !bridge.storage || typeof bridge.storage.get !== "function") return null;
-    const value = await bridge.storage.get(key, undefined, false).catch(() => null);
+    /* The second argument is tryParseJson, not a storage type. The wrapper
+       stores JSON strings and parses them here so a plain string value that is
+       not JSON survives unchanged. */
+    const value = await bridge.storage.get(key, false).catch(() => null);
     if (value == null) return null;
     try {
       return JSON.parse(value);
@@ -195,20 +314,18 @@ export function createPlaygamaPlatformAdapter({ host }) {
       destroyed = true;
       for (const cancel of pendingAds) cancel();
     },
-    gameLoadingProgress() {},
-    gameLoadingFinished() {},
+    gameLoadingProgress,
+    gameLoadingFinished,
     gameReady,
     gameplayStart,
     gameplayStop,
     getLocale,
-    hideBanner() {},
+    hideBanner,
     loadData,
     measure() {},
     ready,
     saveData,
-    showBanner() {
-      return { supported: false, shown: false, reason: "unsupported" };
-    },
+    showBanner,
     showInterstitial,
     showRewarded,
   };

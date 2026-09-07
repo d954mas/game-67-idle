@@ -46,8 +46,10 @@
     "ads": "commercialBreak for interstitial, rewardedBreak for rewarded opt-in",
     "debug_ui": "forbidden in release artifact",
     "forbidden_markers": [
+      "https://sdk.crazygames.com/crazygames-sdk-v3.js",
       "YaGames.init",
       "https://bridge.playgama.com/v1/stable/playgama-bridge.js",
+      "https://bridge.playgama.com/v2/stable/playgama-bridge.js",
       "Show interstitial ad",
       "Show rewarded ad",
       "debug_test"

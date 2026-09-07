@@ -8,12 +8,45 @@
 
 #if defined(__EMSCRIPTEN__)
 
+#include <stdio.h>
+#include <stdlib.h>
+
 void platform_sdk_web_complete_interstitial(int supported, int shown, int reason);
 void platform_sdk_web_complete_rewarded(int supported, int shown, int rewarded, int reason);
 void platform_sdk_web_complete_init(int ready);
+void platform_sdk_web_portal_pause(void);
+void platform_sdk_web_portal_resume(void);
+void platform_sdk_web_portal_audio(int enabled);
 
 /* clang-format off */
-EM_JS_DEPS(platform_sdk_web_backend, "$UTF8ToString")
+EM_JS_DEPS(platform_sdk_web_backend, "$UTF8ToString,$stringToNewUTF8")
+
+/* The selected adapter is a plain ES module and cannot reach the wasm exports,
+   so the pause path is published as two globals the moment the backend is
+   installed. */
+EM_JS(void, platform_sdk_web_install_portal_hooks, (void), {
+    globalThis.__platformSdkPortalPause = function () {
+        try { _platform_sdk_web_portal_pause(); } catch (e) {}
+    };
+    globalThis.__platformSdkPortalResume = function () {
+        try { _platform_sdk_web_portal_resume(); } catch (e) {}
+    };
+    globalThis.__platformSdkPortalAudio = function (enabled) {
+        try { _platform_sdk_web_portal_audio(enabled ? 1 : 0); } catch (e) {}
+    };
+})
+
+EM_JS(char *, platform_sdk_web_backend_locale, (void), {
+    var backend = globalThis.__platformSdkInternalBackend;
+    if (!backend || typeof backend.getLocale !== "function") return 0;
+    try {
+        var tag = backend.getLocale();
+        if (!tag) return 0;
+        return stringToNewUTF8(String(tag));
+    } catch (e) {
+        return 0;
+    }
+})
 
 EM_JS(int, platform_sdk_web_backend_init, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
@@ -219,6 +252,33 @@ void platform_sdk_web_complete_init(int ready) {
     platform_sdk_backend_complete_init(ready != 0);
 }
 
+EMSCRIPTEN_KEEPALIVE
+void platform_sdk_web_portal_pause(void) {
+    platform_sdk_backend_portal_pause();
+}
+
+EMSCRIPTEN_KEEPALIVE
+void platform_sdk_web_portal_resume(void) {
+    platform_sdk_backend_portal_resume();
+}
+
+EMSCRIPTEN_KEEPALIVE
+void platform_sdk_web_portal_audio(int enabled) {
+    platform_sdk_backend_portal_audio(enabled != 0);
+}
+
+static bool web_backend_locale(char *out, size_t out_size, void *userdata) {
+    (void)userdata;
+    if (out == NULL || out_size == 0u) return false;
+    out[0] = '\0';
+
+    char *tag = platform_sdk_web_backend_locale();
+    if (tag == NULL) return false;
+    (void)snprintf(out, out_size, "%s", tag);
+    free(tag);
+    return out[0] != '\0';
+}
+
 static bool web_backend_init(void *userdata) {
     (void)userdata;
     return platform_sdk_web_backend_init() != 0;
@@ -285,8 +345,10 @@ static void web_backend_destroy(void *userdata) {
 }
 
 void platform_sdk_install_web_backend(void) {
+    platform_sdk_web_install_portal_hooks();
     platform_sdk_backend_t backend = {
         .init = web_backend_init,
+        .locale = web_backend_locale,
         .game_loading_progress = web_backend_game_loading_progress,
         .game_loading_finished = web_backend_game_loading_finished,
         .game_ready = web_backend_game_ready,

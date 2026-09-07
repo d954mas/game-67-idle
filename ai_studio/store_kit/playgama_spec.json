@@ -1,0 +1,43 @@
+{
+  "schema": "ai_studio.store_kit.spec.v1",
+  "portal": "playgama",
+  "source_of_truth": "Playgama publishes no pixel sizes, formats, byte caps or character limits for listing media anywhere in its documentation. The console's own upload form is the only authority; read the numbers off it and record them here in the same commit that first uploads a draft.",
+  "docs": [
+    "https://docs.playgama.com/",
+    "https://github.com/playgama/bridge"
+  ],
+  "confirmed_by_docs": [
+    "the archive keeps index.html at its root and Latin-only file names",
+    "the archive stays under 300 MB, and partner channels cap it far lower (MSN 50 MB, YouTube 30 MB, TikTok 30 MB, GameSnacks 15 MiB initial)",
+    "playgama-bridge-config.json sits next to index.html and is fetched by the Bridge itself",
+    "media in the draft is an optional field: good media improves catalogue presentation",
+    "sound and gameplay are both paused for the whole of an interstitial or rewarded ad",
+    "a rewarded call-to-action carries an AD label or icon"
+  ],
+  "assets": [],
+  "texts": [
+    {
+      "id": "title",
+      "file": "title.<lang>.txt",
+      "max_chars": 50
+    },
+    {
+      "id": "about",
+      "file": "about.<lang>.txt",
+      "min_chars": 100,
+      "max_chars": 1000
+    },
+    {
+      "id": "how_to_play",
+      "file": "how_to_play.<lang>.txt",
+      "min_chars": 40,
+      "max_chars": 500
+    }
+  ],
+  "languages": ["en", "ru"],
+  "undocumented": [
+    "pixel sizes, formats, byte caps and counts for icon, cover, screenshots and video",
+    "listing text character limits",
+    "the list of store languages a draft may declare"
+  ]
+}

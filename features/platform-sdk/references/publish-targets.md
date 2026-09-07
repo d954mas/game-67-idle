@@ -1,6 +1,6 @@
 # Publish Target Manifest Contract
 
-T0339 defines publish targets separately from SDK adapters:
+Publish targets are defined separately from SDK adapters:
 
 | Target | SDK adapter | Build dir |
 | --- | --- | --- |
@@ -9,6 +9,7 @@ T0339 defines publish targets separately from SDK adapters:
 | `poki` | `poki` | `build/wasm-release-poki/bin` |
 | `yandex` | `yandex` | `build/wasm-release-yandex/bin` |
 | `playgama` | `playgama` | `build/wasm-release-playgama/bin` |
+| `crazygames` | `crazygames` | `build/wasm-release-crazygames/bin` |
 
 `local` is a development target, not a portal manifest. The portal manifest
 files live in `features/platform-sdk/publish-targets/`:
@@ -17,6 +18,7 @@ files live in `features/platform-sdk/publish-targets/`:
 - `poki.json`
 - `yandex.json`
 - `playgama.json`
+- `crazygames.json`
 
 Each manifest declares:
 
@@ -38,6 +40,7 @@ node tools/build_web.mjs --preset wasm-release --target itch
 node tools/build_web.mjs --preset wasm-release --target poki
 node tools/build_web.mjs --preset wasm-release --target yandex
 node tools/build_web.mjs --preset wasm-release --target playgama
+node tools/build_web.mjs --preset wasm-release --target crazygames
 ```
 
 The script passes `-DGAME_PUBLISH_TARGET=<target>` plus a mechanically generated
@@ -65,6 +68,21 @@ node features/platform-sdk/scripts/artifact_tools.mjs inspect --target poki --ar
 Inspection accepts either the staged build layout or the manifest-declared
 single-JS package layout. It fails if production artifacts contain debug button
 labels, `debug_test`, or SDK markers from adapters not selected by the target.
+
+## Prove the SDK before a draft
+
+Yandex ships a dev server, so "it cannot be tested locally" is never true. The
+probe starts that server against a built artifact, drives it in headless
+Chrome, and reports what the SDK itself saw: the loading-ready call, the
+gameplay start/stop pair, the portal pause and resume events, and whether the
+portal language was read while the game was still loading.
+
+```powershell
+node features/platform-sdk/scripts/yandex_sdk_probe.mjs --artifact games/<id>/build/wasm-release-yandex/bin
+```
+
+It exits non-zero on any failed row and takes `--json <file>` for the full
+transcript of calls, listeners and their originating stack frames.
 
 ## Release evidence levels
 

@@ -10,6 +10,7 @@ typedef enum platform_target_t {
     PLATFORM_TARGET_POKI = 2,
     PLATFORM_TARGET_YANDEX = 3,
     PLATFORM_TARGET_PLAYGAMA = 4,
+    PLATFORM_TARGET_CRAZYGAMES = 5,
 } platform_target_t;
 
 typedef enum platform_sdk_t {
@@ -17,6 +18,7 @@ typedef enum platform_sdk_t {
     PLATFORM_SDK_POKI = 1,
     PLATFORM_SDK_YANDEX = 2,
     PLATFORM_SDK_PLAYGAMA = 3,
+    PLATFORM_SDK_CRAZYGAMES = 4,
 } platform_sdk_t;
 
 typedef struct platform_sdk_capabilities_t {
@@ -88,6 +90,10 @@ typedef unsigned int platform_sdk_listener_id_t;
 
 typedef struct platform_sdk_backend_t {
     bool (*init)(void *userdata);
+    /* Writes the portal's own language tag and returns whether it had one. The
+       portal is asked, never the browser: a console that watches for the SDK
+       read refuses a game that answers from navigator.language. */
+    bool (*locale)(char *out, size_t out_size, void *userdata);
     void (*game_loading_progress)(float progress01, void *userdata);
     void (*game_loading_finished)(void *userdata);
     void (*game_ready)(void *userdata);
@@ -143,6 +149,27 @@ platform_sdk_result_t platform_sdk_show_rewarded(
    hidden. */
 void platform_sdk_show_banner(void);
 void platform_sdk_hide_banner(void);
+
+/* The portal, not the game, decides these: a tab the player left, a portal
+   overlay, a phone call. The facade stops gameplay for the portal and restores
+   it on resume, so a game only has to listen. */
+void platform_sdk_backend_portal_pause(void);
+void platform_sdk_backend_portal_resume(void);
+bool platform_sdk_portal_paused(void);
+
+/* Some portals own a mute switch of their own, outside the game's settings. It
+   is not a pause: the game keeps running with no sound. */
+void platform_sdk_backend_portal_audio(bool enabled);
+bool platform_sdk_portal_audio_enabled(void);
+
+/* True while the game must not advance: an ad is on screen or being fetched,
+   or the portal has paused the page. One flag so the simulation gate and the
+   gameplay-activity gate can never disagree. */
+bool platform_sdk_break_active(void);
+
+/* The portal language as the SDK answered it, or NULL when the target has no
+   portal or the SDK never resolved one. */
+const char *platform_sdk_locale(void);
 
 void platform_sdk_backend_complete_interstitial(platform_sdk_ad_result_t result);
 void platform_sdk_backend_complete_rewarded(platform_sdk_rewarded_result_t result);

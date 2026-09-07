@@ -11,7 +11,8 @@ const RELEASE_DIR = join(WEB_DIR, "release");
 export const REAL_SDK_MARKERS = Object.freeze({
   poki: ["https://game-cdn.poki.com/scripts/v2/poki-sdk.js", "PokiSDK"],
   yandex: ["YaGames.init", "/sdk.js"],
-  playgama: ["https://bridge.playgama.com/v1/stable/playgama-bridge.js", "bridge.initialize"],
+  playgama: ["https://bridge.playgama.com/v2/stable/playgama-bridge.js", "bridge.initialize"],
+  crazygames: ["https://sdk.crazygames.com/crazygames-sdk-v3.js", "CrazyGames"],
 });
 
 export const DEBUG_MARKERS = Object.freeze(["Show interstitial ad", "Show rewarded ad", "debug_test"]);

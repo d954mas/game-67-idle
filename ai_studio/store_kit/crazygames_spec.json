@@ -1,0 +1,100 @@
+{
+  "schema": "ai_studio.store_kit.spec.v1",
+  "portal": "crazygames",
+  "source_of_truth": "The submission form in the CrazyGames developer portal states the current limits next to every field. The numbers below come from the portal's own game-covers documentation; when the form disagrees, the form wins and this file is updated in the same commit.",
+  "docs": [
+    "https://docs.crazygames.com/requirements/technical/",
+    "https://docs.crazygames.com/requirements/quality/",
+    "https://docs.crazygames.com/game-covers/"
+  ],
+  "confirmed_by_docs": [
+    "all three covers are mandatory and must share one visual style",
+    "covers carry no border, no text other than the title, and no store or social icons",
+    "a cover is not a screenshot of the game",
+    "the preview video is required in landscape AND portrait, 1080p, 15-20 seconds, no audio, at most 50 MB",
+    "the preview video opens on the static cover frame and contains no black screens, letterbox bars, cursor or promotional text",
+    "the game itself must ship English",
+    "the initial download stays under 50 MB, and under 20 MB to pass the Basic Launch benchmark",
+    "load time to first interaction stays under 10 seconds"
+  ],
+  "assets": [
+    {
+      "id": "cover_landscape",
+      "file": "cover_landscape.png",
+      "width": 1920,
+      "height": 1080,
+      "formats": ["png", "jpg"],
+      "from_screenshot": false,
+      "note": "16:9. The opening frame of the landscape preview video."
+    },
+    {
+      "id": "cover_portrait",
+      "file": "cover_portrait.png",
+      "width": 800,
+      "height": 1200,
+      "formats": ["png", "jpg"],
+      "from_screenshot": false,
+      "note": "2:3. The opening frame of the portrait preview video."
+    },
+    {
+      "id": "cover_square",
+      "file": "cover_square.png",
+      "width": 800,
+      "height": 800,
+      "formats": ["png", "jpg"],
+      "from_screenshot": false,
+      "note": "1:1. Reads small in the catalogue grid."
+    },
+    {
+      "id": "preview_landscape",
+      "kind": "video",
+      "file_glob": "preview_landscape.mp4",
+      "formats": ["mp4"],
+      "min_count": 1,
+      "max_count": 1,
+      "max_bytes": 52428800,
+      "max_seconds": 20,
+      "aspect": "16:9",
+      "note": "1080p, no audio track. Real gameplay, no manual speed-up."
+    },
+    {
+      "id": "preview_portrait",
+      "kind": "video",
+      "file_glob": "preview_portrait.mp4",
+      "formats": ["mp4"],
+      "min_count": 1,
+      "max_count": 1,
+      "max_bytes": 52428800,
+      "max_seconds": 20,
+      "aspect": "2:3",
+      "note": "1080p, no audio track. Mandatory alongside the landscape clip."
+    }
+  ],
+  "texts": [
+    {
+      "id": "title",
+      "file": "title.<lang>.txt",
+      "max_chars": 50,
+      "note": "Must not be confusable with another game's name or iconography."
+    },
+    {
+      "id": "about",
+      "file": "about.<lang>.txt",
+      "min_chars": 100,
+      "max_chars": 1000,
+      "note": "The portal publishes no character limit; these are the studio's working bounds."
+    },
+    {
+      "id": "how_to_play",
+      "file": "how_to_play.<lang>.txt",
+      "min_chars": 40,
+      "max_chars": 500
+    }
+  ],
+  "languages": ["en"],
+  "undocumented": [
+    "accepted image file formats and per-image byte caps",
+    "screenshot count and sizes: the portal asks for covers and a preview video only",
+    "listing text character limits and the list of supported store languages"
+  ]
+}

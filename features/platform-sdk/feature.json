@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "platform-sdk",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "title": "Platform SDK",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -29,16 +29,17 @@
     "build-time adapter selection",
     "runtime target and SDK identity",
     "policy capabilities such as externalLinksAllowed",
-    "selected backend call semantics for mock, Poki, Yandex Games, and Playgama",
+    "selected backend call semantics for mock, Poki, Yandex Games, Playgama, and CrazyGames",
     "C/template mock ad overlays for local development",
     "internal bounded measure sink for typed game-event bridges",
     "portal player storage bridge for cloud saves",
+    "portal-driven pause and resume, and the portal language, bridged into C",
     "publish target manifest validation",
     "local NDJSON scorecard CLI"
   ],
   "flags": {
-    "target": "local|itch|poki|yandex|playgama",
-    "platform_sdk": "mock|poki|yandex|playgama",
+    "target": "local|itch|poki|yandex|playgama|crazygames",
+    "platform_sdk": "mock|poki|yandex|playgama|crazygames",
     "debug_ui": "off in release, on by explicit/debug build"
   },
   "manuals": {
@@ -77,13 +78,15 @@
       "itch",
       "poki",
       "yandex",
-      "playgama"
+      "playgama",
+      "crazygames"
     ],
     "platform_sdks": [
       "mock",
       "poki",
       "yandex",
-      "playgama"
+      "playgama",
+      "crazygames"
     ],
     "c_api": "features/platform_sdk/platform_sdk.h",
     "web_entry": "platform-sdk.js",

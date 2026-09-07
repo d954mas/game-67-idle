@@ -332,9 +332,10 @@ Used by `local` and `itch`.
   interaction.
 - Use `ysdk.features.GameplayAPI?.start()` and `.stop()` to mark active
   gameplay.
-- Forward `game_api_pause` and `game_api_resume` as runtime callbacks to the C
-  facade. The C facade dispatches pause/resume listeners; game code decides how
-  simulation, input, and audio respond.
+- Forward `game_api_pause` and `game_api_resume` through `lifecycle.pause()` and
+  `lifecycle.resume()`. The C facade stops gameplay for the portal, dispatches
+  pause/resume listeners, and restores gameplay on resume only if it was active
+  when the pause arrived.
 - Use `ysdk.adv.showFullscreenAdv()` for interstitial ads and
   `ysdk.adv.showRewardedVideo()` for rewarded ads.
 - If using Yandex player data, keep save payloads below documented limits and
@@ -342,13 +343,13 @@ Used by `local` and `itch`.
 
 ### `playgama`
 
-- Loads `https://bridge.playgama.com/v1/stable/playgama-bridge.js`.
+- Loads `https://bridge.playgama.com/v2/stable/playgama-bridge.js`.
 - Initializes with `bridge.initialize()`.
 - Calls `bridge.platform.sendMessage("game_ready")` after all loading screens
   are gone.
 - Sends Playgama gameplay messages with the documented platform-message names:
   first gameplay start uses `level_started`, resume after a stop uses
-  `level_resumed`, and gameplay stop uses `level_pause`.
+  `level_resumed`, and gameplay stop uses `level_paused`.
 - Forwards Playgama advertisement/runtime state changes as callbacks to the C
   facade. The C facade dispatches pause/resume listeners; game code decides how
   simulation, input, and audio respond.

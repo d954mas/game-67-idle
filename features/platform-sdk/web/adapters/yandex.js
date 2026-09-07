@@ -1,12 +1,13 @@
 const YANDEX_SDK_URL = "/sdk.js";
 const AD_TIMEOUT_MS = 120000;
 
-export function createYandexPlatformAdapter({ host, sdkUrl = YANDEX_SDK_URL }) {
+export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_SDK_URL }) {
   let sdkReady = null;
   let playerReady = null;
   let ysdkInstance = null;
   let portalLocale = null;
   let destroyed = false;
+  let portalPauseInstalled = false;
 
   function windowRef() {
     return (host && host.window) || host || globalThis;
@@ -52,8 +53,25 @@ export function createYandexPlatformAdapter({ host, sdkUrl = YANDEX_SDK_URL }) {
     });
   }
 
+  /* The portal announces its own pause as two window events, and the console
+     checks that both are handled. They are bound as soon as the script is on
+     the page: a pause that arrives during loading is still a pause. */
+  function installPortalPauseEvents() {
+    if (portalPauseInstalled) return;
+    const root = windowRef();
+    if (!root || typeof root.addEventListener !== "function") return;
+    portalPauseInstalled = true;
+    root.addEventListener("game_api_pause", () => {
+      if (!destroyed && lifecycle && typeof lifecycle.pause === "function") lifecycle.pause();
+    });
+    root.addEventListener("game_api_resume", () => {
+      if (!destroyed && lifecycle && typeof lifecycle.resume === "function") lifecycle.resume();
+    });
+  }
+
   async function sdk() {
     if (!sdkReady) {
+      installPortalPauseEvents();
       sdkReady = loadScript()
         .then((YaGames) => (YaGames && typeof YaGames.init === "function" ? YaGames.init() : null))
         .then((ysdk) => {
@@ -174,10 +192,11 @@ export function createYandexPlatformAdapter({ host, sdkUrl = YANDEX_SDK_URL }) {
     return portalLocale;
   }
 
+  /* Only the portal's answer. A browser language returned from here would be
+     indistinguishable from a portal one to the game, and the fallback belongs
+     where the game can see it is a fallback. */
   function getLocale() {
-    return readPortalLocale(ysdkInstance) ||
-      (host && host.navigator && host.navigator.language) ||
-      null;
+    return readPortalLocale(ysdkInstance) || null;
   }
 
   /* The portal picks where a sticky banner sits (right on desktop, top or

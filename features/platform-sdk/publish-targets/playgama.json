@@ -33,22 +33,26 @@
     "loading-title.webp",
     "loading-tram.webp"
   ],
-  "zip_layout": "Playgama upload root: index.html, bundled game.js, game.wasm, runtime-build.json, playgama-bridge-config.json, and assets/game.ntpack.",
+  "zip_layout": "Playgama upload root: index.html, bundled game.js, game.wasm, runtime-build.json, playgama-bridge-config.json, and assets/game.ntpack. index.html must sit at the archive root, not in a folder. Every file and folder name uses Latin characters only. The uploaded game must not exceed 300 MB inside the archive.",
   "metadata": {
     "portal": "Playgama",
     "requires_account": true,
     "config_file": "playgama-bridge-config.json",
-    "orientation": "game-owned",
+    "entry_file": "index.html at the archive root",
+    "file_names": "Latin characters, digits, '.', '-' and '_' only",
+    "max_archive_size_mb": 300,
+    "orientation": "The supported orientation is declared in the draft and must match the build; the portal shows a rotate-device placeholder in the other one. A one-orientation game declares that one value, and device.supportedOrientations in playgama-bridge-config.json says the same thing.",
     "viewport": "responsive canvas"
   },
   "sdk_policy": {
     "adapter": "playgama",
-    "sdk_url": "https://bridge.playgama.com/v1/stable/playgama-bridge.js",
+    "sdk_url": "https://bridge.playgama.com/v2/stable/playgama-bridge.js",
     "load_policy": "The selected adapter is embedded into game.js and loads Playgama Bridge during web backend init; no universal wrapper.",
-    "ads": "bridge.advertisement.showInterstitial/showRewarded; reward only on rewarded state",
-    "storage": "bridge.storage through wrapper only",
+    "ads": "bridge.advertisement.showInterstitial/showRewarded/showBanner; reward only on the rewarded state; a sticky banner is the one extra ad block the portal allows",
+    "storage": "bridge.storage v2 signatures (get(key, tryParseJson), set(key, value)) through wrapper only",
     "debug_ui": "forbidden in release artifact",
     "forbidden_markers": [
+      "https://sdk.crazygames.com/crazygames-sdk-v3.js",
       "https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
       "YaGames.init",
       "Show interstitial ad",

@@ -42,6 +42,9 @@
 
 #define PLATFORM_SDK_MAX_LISTENERS 8u
 #define PLATFORM_SDK_PLACEMENT_MAX 64u
+/* A BCP 47 tag the portals actually answer with ("ru", "pt-BR", "zh-Hans-CN")
+   plus room to spare; anything longer is a portal bug, not a language. */
+#define PLATFORM_SDK_LOCALE_MAX 32u
 
 typedef struct platform_sdk_listener_slot_t {
     platform_sdk_listener_id_t id;
@@ -71,6 +74,11 @@ typedef struct platform_sdk_runtime_t {
     bool has_input;
     bool has_gameplay_started;
     bool gameplay_active;
+    bool portal_paused;
+    bool portal_audio_muted;
+    bool gameplay_active_before_portal_pause;
+    char locale[PLATFORM_SDK_LOCALE_MAX];
+    bool locale_resolved;
     bool loading_progress_sent;
     bool loading_finished_sent;
     bool game_ready_sent;
@@ -522,6 +530,8 @@ const char *platform_sdk_target_name(void) {
         return "yandex";
     case PLATFORM_TARGET_PLAYGAMA:
         return "playgama";
+    case PLATFORM_TARGET_CRAZYGAMES:
+        return "crazygames";
     }
     return "local";
 }
@@ -536,6 +546,8 @@ const char *platform_sdk_current_name(void) {
         return "yandex";
     case PLATFORM_SDK_PLAYGAMA:
         return "playgama";
+    case PLATFORM_SDK_CRAZYGAMES:
+        return "crazygames";
     }
     return "mock";
 }
@@ -804,6 +816,76 @@ platform_sdk_gameplay_stop_result_t platform_sdk_gameplay_stop(void) {
         .stopped = true,
         .reason = PLATFORM_SDK_RESULT_OK,
     };
+}
+
+/* Gameplay is suspended for the portal's pause and restored only if the game
+   was actually playing when it arrived: a pause that lands on a menu must not
+   start gameplay on resume. */
+void platform_sdk_backend_portal_pause(void) {
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED) return;
+    if (g_platform_sdk.portal_paused) return;
+
+    g_platform_sdk.portal_paused = true;
+    g_platform_sdk.gameplay_active_before_portal_pause = g_platform_sdk.gameplay_active;
+    if (g_platform_sdk.gameplay_active) {
+        (void)platform_sdk_gameplay_stop();
+    }
+    emit_lifecycle(g_platform_sdk.pause_listeners);
+}
+
+void platform_sdk_backend_portal_resume(void) {
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED) return;
+    if (!g_platform_sdk.portal_paused) return;
+
+    g_platform_sdk.portal_paused = false;
+    emit_lifecycle(g_platform_sdk.resume_listeners);
+    if (g_platform_sdk.gameplay_active_before_portal_pause) {
+        (void)platform_sdk_gameplay_start();
+    }
+    g_platform_sdk.gameplay_active_before_portal_pause = false;
+}
+
+bool platform_sdk_portal_paused(void) {
+    return g_platform_sdk.portal_paused;
+}
+
+/* Stored inverted so a zeroed runtime means "the portal has not muted
+   anything", which is the state every target without a mute switch is in. */
+void platform_sdk_backend_portal_audio(bool enabled) {
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED) return;
+    g_platform_sdk.portal_audio_muted = !enabled;
+}
+
+bool platform_sdk_portal_audio_enabled(void) {
+    return !g_platform_sdk.portal_audio_muted;
+}
+
+bool platform_sdk_break_active(void) {
+    return g_platform_sdk.portal_paused ||
+           g_platform_sdk.pending_interstitial.active ||
+           g_platform_sdk.pending_rewarded.active;
+}
+
+const char *platform_sdk_locale(void) {
+    if (g_platform_sdk.locale_resolved) {
+        return g_platform_sdk.locale[0] != '\0' ? g_platform_sdk.locale : NULL;
+    }
+    /* Not gated on boot status: the language is the one answer a backend can
+       give before the SDK finishes initializing, and the game has to choose a
+       string table on the loading screen, not after it. */
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED ||
+        !g_platform_sdk.has_backend || g_platform_sdk.backend.locale == NULL) {
+        return NULL;
+    }
+
+    char tag[PLATFORM_SDK_LOCALE_MAX] = {0};
+    const bool answered = g_platform_sdk.backend.locale(tag, sizeof(tag),
+                                                        g_platform_sdk.backend_userdata);
+    if (!answered || tag[0] == '\0') return NULL;
+
+    (void)snprintf(g_platform_sdk.locale, sizeof(g_platform_sdk.locale), "%s", tag);
+    g_platform_sdk.locale_resolved = true;
+    return g_platform_sdk.locale;
 }
 
 platform_sdk_listener_id_t platform_sdk_on_pause(platform_sdk_lifecycle_callback_t callback, void *userdata) {

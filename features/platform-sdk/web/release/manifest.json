@@ -9,28 +9,34 @@
   },
   "adapters": {
     "mock": {
-      "sourceSha256": "013791cead8c9fc9cf08a7cc2b5251e5ba134c18a0ae5614c23172354f801f6b",
-      "bundleSha256": "5f480f50d3bf5b9cf2fb67de725f6d9d23fea64993a394c18e513e8078cace4c",
-      "sourceBytes": 3084,
-      "bundleBytes": 1645
+      "sourceSha256": "b732f433737719ac0088a631f78014eb2ac2bd9061b503b1d45de99c22f13083",
+      "bundleSha256": "205ed755185a984771fde76f87b8519d8d84c610bc438c2b7387dd7bc215b175",
+      "sourceBytes": 3813,
+      "bundleBytes": 1921
     },
     "poki": {
-      "sourceSha256": "071fc663538bb6bcf50413d9527caeea85eb4a38c8afab6de67d10abd01c9365",
-      "bundleSha256": "cf5fbe534141affe71af320b90a13a1a4fd47594bccb05a27461aa36fd816977",
-      "sourceBytes": 7075,
-      "bundleBytes": 2967
+      "sourceSha256": "085356aa4d4f11813417aa857e834ccfc9a71605d40c40cc011065e7c99888cd",
+      "bundleSha256": "398e22f79b725de08a8bdeffe245646a69f784a19dd39220d3c4830503cad40b",
+      "sourceBytes": 7804,
+      "bundleBytes": 3243
     },
     "yandex": {
-      "sourceSha256": "9d6432507b97e47645c800c23d1b3f5372929310317407ea504a30f01068c0fe",
-      "bundleSha256": "77856e07c48cec1c911f7fefa49f0f5bbddadc899ea780458076963c23f02f8d",
-      "sourceBytes": 7873,
-      "bundleBytes": 3740
+      "sourceSha256": "0e4d0700497b7125c6ea70d7df9b305a9da406012ac4e2ed35f48f4ff5ffdebd",
+      "bundleSha256": "32bbc7c0d4dff0f9fcd8994003728c40139d579eeeea5e771bb00d74558e30ab",
+      "sourceBytes": 9579,
+      "bundleBytes": 4265
     },
     "playgama": {
-      "sourceSha256": "cb8653eacc3aaf79f7108421d14d42e76ebcd710c3cb2ad278ec2a225c010542",
-      "bundleSha256": "ee4898b2e710b1f5e44e9987a259148e8f0b55c449152f17c74c91d754aaa017",
-      "sourceBytes": 7447,
-      "bundleBytes": 3637
+      "sourceSha256": "cce2cfa585df47c26840f729cd122c0d2cf7a6afc3f304d840333553fa8598e6",
+      "bundleSha256": "9ad82531f89d7ff914ee82b0e68c4e2252a471572fb642ac04c45558146ed753",
+      "sourceBytes": 13368,
+      "bundleBytes": 5495
+    },
+    "crazygames": {
+      "sourceSha256": "4877ecce5e6cf88f001a64bb396115a59658e51020b3f16229d4910078f3682b",
+      "bundleSha256": "70419b4f759de5d72df131141a9982dbd61114d354cfcd1c40c4f40c69bb5adf",
+      "sourceBytes": 10180,
+      "bundleBytes": 3950
     }
   }
 }
