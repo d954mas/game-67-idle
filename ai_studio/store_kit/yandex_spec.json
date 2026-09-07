@@ -108,7 +108,7 @@
       "id": "title",
       "file": "title.<lang>.txt",
       "max_chars": 50,
-      "note": "Identical to the name inside the game."
+      "note": "Identical to the name inside the game, and written in the language of the card it sits under: a Latin name on the Russian card is the first thing a reader notices and the rule 5.9 uniqueness check expects the two to differ."
     },
     {
       "id": "seo",
@@ -151,6 +151,7 @@
     "age ratings offered: 0+, 6+, 12+, 16+, 18+",
     "supported platforms are Десктоп, Мобильные and ТВ, chosen independently of the screenshot sets",
     "a live RSYA contract is required to SUBMIT, and the form says so above the submit button; it does not block filling or saving a draft",
-    "the console refuses a set containing identical screenshots and says so in red under the form"
+    "the console refuses a set containing identical screenshots and says so in red under the form",
+    "gameplay videos are stored as one entry per orientation carrying one file per language, so a slot that mixes a horizontal file for one language with a vertical one for the other is not a pair the console can show"
   ]
 }
