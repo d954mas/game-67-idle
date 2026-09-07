@@ -111,17 +111,29 @@
       "note": "Identical to the name inside the game."
     },
     {
+      "id": "seo",
+      "file": "seo.<lang>.txt",
+      "max_chars": 160,
+      "note": "Описание для SEO. A one-sentence summary for search, separate from the store description."
+    },
+    {
       "id": "about",
       "file": "about.<lang>.txt",
       "min_chars": 100,
       "max_chars": 1000
     },
     {
+      "id": "short",
+      "file": "short.<lang>.txt",
+      "max_chars": 70,
+      "note": "Короткое описание. The line under the game's name in a catalogue tile."
+    },
+    {
       "id": "how_to_play",
       "file": "how_to_play.<lang>.txt",
       "min_chars": 40,
-      "max_chars": 500,
-      "note": "Controls belong here (requirement 2.2)."
+      "max_chars": 1000,
+      "note": "Controls belong here. The form allows 1000, not the 500 this file used to claim."
     }
   ],
   "languages": [
@@ -129,10 +141,16 @@
     "en"
   ],
   "confirmed_by_form": [
-    "the horizontal gameplay video is REQUIRED: 16:9, MP4, height from 400 px, up to 100 MB, up to 28 seconds",
+    "the horizontal gameplay video is REQUIRED and carries a red asterisk in the form; the vertical one does not",
     "at most two categories per draft",
-    "icon, cover and screenshots can be copied from the Russian tab per language",
+    "icon 512x512 PNG and cover 800x470 PNG, stated beside their upload fields",
     "screenshots: 16:9 or 9:16, long side 1280-2560 px, JPEG or 24-bit PNG with no alpha channel",
-    "screenshots and gameplay video are per language in the draft: each card can carry its own, and a mirror checkbox copies the Russian set when they are meant to be identical"
+    "screenshots are split twice: by platform (Десктопные / Мобильные) and by orientation, and the pair is per language",
+    "every per-language media field carries its own \"use the Russian draft's value\" control, which is what makes an English card show a Russian interface by default",
+    "five text fields per language, not three: name, SEO description, about, short description, how to play",
+    "age ratings offered: 0+, 6+, 12+, 16+, 18+",
+    "supported platforms are Десктоп, Мобильные and ТВ, chosen independently of the screenshot sets",
+    "a live RSYA contract is required to SUBMIT, and the form says so above the submit button; it does not block filling or saving a draft",
+    "the console refuses a set containing identical screenshots and says so in red under the form"
   ]
 }
