@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "ai_studio.leaderboards.v1",
+  "title": "Leaderboard board manifest",
+  "type": "object",
+  "required": ["schema", "boards"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "ai_studio.leaderboards.v1" },
+    "boards": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["id", "metric", "sort", "scopes", "backends"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,30}$" },
+          "metric": { "type": "string", "minLength": 1 },
+          "sort": { "enum": ["desc", "asc"] },
+          "scopes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "enum": ["all_time", "utc_day"] }
+          },
+          "portal_ids": {
+            "type": "object",
+            "additionalProperties": {
+              "oneOf": [
+                { "type": "string", "minLength": 1 },
+                {
+                  "type": "object",
+                  "required": ["id"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": { "type": "string", "minLength": 1 },
+                    "isMain": { "type": "boolean" }
+                  }
+                }
+              ]
+            }
+          },
+          "backends": {
+            "type": "object",
+            "additionalProperties": { "enum": ["portal", "http", "none"] }
+          }
+        }
+      }
+    }
+  }
+}
