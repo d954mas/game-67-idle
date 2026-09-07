@@ -320,8 +320,16 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
     gameplayStart,
     gameplayStop,
     getLocale,
+    /* The bridge exposes a player, but nothing the game does depends on
+       Playgama auth, so the portal login stays out of the game. */
+    getPlayer() {
+      return Promise.resolve({ authorized: false, name: "", avatarUrl: "" });
+    },
     hideBanner,
     loadData,
+    login() {
+      return Promise.resolve({ supported: false, authorized: false, reason: "unsupported", name: "", avatarUrl: "" });
+    },
     measure() {},
     ready,
     saveData,

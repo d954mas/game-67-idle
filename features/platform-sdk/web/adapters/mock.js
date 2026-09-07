@@ -54,6 +54,25 @@ export function createMockPlatformAdapter({ emitVisibilityChange = () => {}, hos
     return (host && host.navigator && host.navigator.language) || null;
   }
 
+  /* A fake account so the login flow can be walked without a portal. It lives
+     for the page only; itch has no login and answers like it does for ads. */
+  let authorized = false;
+  const mockPlayer = { name: "Local Player", avatarUrl: "" };
+
+  async function getPlayer() {
+    return authorized
+      ? { authorized: true, ...mockPlayer }
+      : { authorized: false, name: "", avatarUrl: "" };
+  }
+
+  async function login() {
+    if (!isLocal || destroyed) {
+      return { supported: false, authorized: false, reason: "unsupported", name: "", avatarUrl: "" };
+    }
+    authorized = true;
+    return { supported: true, authorized: true, reason: "accepted", ...mockPlayer };
+  }
+
   function destroy() {
     destroyed = true;
     if (document && typeof document.removeEventListener === "function") {
@@ -69,8 +88,10 @@ export function createMockPlatformAdapter({ emitVisibilityChange = () => {}, hos
     gameplayStart() {},
     gameplayStop() {},
     getLocale,
+    getPlayer,
     hideBanner() {},
     loadData,
+    login,
     measure() {},
     ready,
     saveData,

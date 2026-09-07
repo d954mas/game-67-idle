@@ -240,6 +240,26 @@ Documented quotas (S10):
 operations work for all players, authorized or not; `player.isAuthorized()`
 reports which (S10).
 
+Profile and authorization (S10):
+
+```javascript
+player.getUniqueID();      // permanent unique ID
+player.getName();
+player.getPhoto(size);     // 'small' | 'medium' | 'large' -> avatar URL
+player.isAuthorized();
+await ysdk.auth.openAuthDialog();
+```
+
+`getMode()` (`'lite'` for an anonymous player) and `getID()` are deprecated in
+favour of `isAuthorized()` and `getUniqueID()` (S10). The player object owns
+`getPhoto`; `getAvatarSrc(size)` is a leaderboard-entry method. There is **no
+logout call** anywhere in S10. **[docs silent]** on what `openAuthDialog()`
+does when the player closes the dialog (the adapter treats a rejected promise
+and a still-anonymous player alike, as a decline), and on whether the unique id
+or the data behind `setData` carry over from the anonymous account to the
+authorized one; the S10 example re-reads `getPlayer()` after authorization,
+which is what the adapter does.
+
 ### 1.6 Environment and language (S11)
 
 ```javascript
@@ -308,8 +328,9 @@ throttling, currency mocking and clearing cloud data (S13).
 
 The adapter object our facade expects is exactly: `destroy`,
 `gameLoadingProgress`, `gameLoadingFinished`, `gameReady`, `gameplayStart`,
-`gameplayStop`, `getLocale`, `hideBanner`, `loadData`, `measure`, `ready`,
-`saveData`, `showBanner`, `showInterstitial`, `showRewarded`
+`gameplayStop`, `getLocale`, `getPlayer`, `hideBanner`, `loadData`, `login`,
+`measure`, `ready`, `saveData`, `showBanner`, `showInterstitial`,
+`showRewarded`
 (`features/platform-sdk/references/contract.md`,
 `features/platform-sdk/web/adapters/yandex.js:234-252`).
 
@@ -330,6 +351,8 @@ The adapter object our facade expects is exactly: `destroy`,
 | `saveData(key, value)` | `player.setData({[key]: value})`, ≤200 KB per player, ≤100 writes / 5 min | S10 |
 | `getLocale()` | `ysdk.environment.i18n.lang`, read during init, cached | S11, req. 2.14 |
 | `measure()` | no-op — no SDK event sink | S6-S11, **[docs silent]** |
+| `getPlayer()` | the cached `player` object: `isAuthorized()`, and for an authorized player `getName()` and `getPhoto('medium')`; anonymous publishes empty strings | S10 |
+| `login()` | `ysdk.auth.openAuthDialog()`, then drop the cached player and re-read `getPlayer()`; a rejected dialog is `declined`, an authorized player answers `accepted` without a dialog | S10, req. 1.2.1 |
 | `destroy()` | cancel pending ad promises | repo |
 
 `placement` from our contract has no Yandex counterpart: neither

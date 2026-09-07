@@ -35,8 +35,10 @@ const PLATFORM_BACKEND_METHODS = Object.freeze([
   "gameplayStart",
   "gameplayStop",
   "getLocale",
+  "getPlayer",
   "hideBanner",
   "loadData",
+  "login",
   "measure",
   "ready",
   "saveData",
@@ -654,6 +656,120 @@ test("yandex adapter uses documented loading, gameplay, and ad callbacks", async
     "fullscreen",
     "rewarded",
   ]);
+});
+
+function createYandexAuthSdk(calls, { accept, name = "Ada", photo = "https://avatars.example/ada" } = {}) {
+  let authorized = false;
+  let issued = 0;
+  function makePlayer() {
+    const authorizedAtIssue = authorized;
+    issued += 1;
+    return {
+      isAuthorized: () => authorizedAtIssue,
+      getName: () => name,
+      getPhoto: (size) => `${photo}/${size}`,
+      setData: () => Promise.resolve(),
+      getData: () => Promise.resolve({}),
+    };
+  }
+  return {
+    sdk: {
+      getPlayer() {
+        calls.push("getPlayer");
+        return Promise.resolve(makePlayer());
+      },
+      auth: {
+        openAuthDialog() {
+          calls.push("openAuthDialog");
+          if (!accept) return Promise.reject(new Error("closed"));
+          authorized = true;
+          return Promise.resolve();
+        },
+      },
+    },
+    playersIssued: () => issued,
+  };
+}
+
+test("yandex login re-reads the player after an accepted dialog", async () => {
+  const host = createHost(TargetPlatform.YANDEX);
+  const calls = [];
+  const fake = createYandexAuthSdk(calls, { accept: true });
+  host.YaGames = { init: () => Promise.resolve(fake.sdk) };
+  const adapter = createYandexPlatformAdapter({ host });
+
+  assert.equal(await adapter.ready(), true);
+  assert.deepEqual(await adapter.getPlayer(), { authorized: false, name: "", avatarUrl: "" });
+
+  const result = await adapter.login();
+  assert.equal(result.supported, true);
+  assert.equal(result.authorized, true);
+  assert.equal(result.reason, "accepted");
+  assert.equal(result.name, "Ada");
+  assert.equal(result.avatarUrl, "https://avatars.example/ada/medium");
+  assert.deepEqual(calls, ["getPlayer", "openAuthDialog", "getPlayer"]);
+  assert.equal(fake.playersIssued(), 2, "the anonymous player object is not reused after the dialog");
+
+  assert.deepEqual(await adapter.getPlayer(), { authorized: true, name: "Ada", avatarUrl: "https://avatars.example/ada/medium" });
+  assert.equal((await adapter.login()).reason, "accepted");
+  assert.deepEqual(calls, ["getPlayer", "openAuthDialog", "getPlayer"], "an authorized player is never shown the dialog again");
+});
+
+test("yandex login treats a closed dialog as declined and stays anonymous", async () => {
+  const host = createHost(TargetPlatform.YANDEX);
+  const calls = [];
+  const fake = createYandexAuthSdk(calls, { accept: false });
+  host.YaGames = { init: () => Promise.resolve(fake.sdk) };
+  const errors = [];
+  host.console = { error: (...args) => errors.push(args), warn: (...args) => errors.push(args) };
+  const adapter = createYandexPlatformAdapter({ host });
+
+  assert.deepEqual(await adapter.login(), {
+    supported: true,
+    authorized: false,
+    reason: "declined",
+    name: "",
+    avatarUrl: "",
+  });
+  assert.deepEqual(await adapter.getPlayer(), { authorized: false, name: "", avatarUrl: "" });
+  assert.deepEqual(errors, []);
+  assert.equal(calls.filter((c) => c === "openAuthDialog").length, 1);
+});
+
+test("yandex login without an auth surface is unsupported", async () => {
+  const host = createHost(TargetPlatform.YANDEX);
+  host.YaGames = { init: () => Promise.resolve({ getPlayer: () => Promise.resolve({ isAuthorized: () => false }) }) };
+  const adapter = createYandexPlatformAdapter({ host });
+  const result = await adapter.login();
+  assert.equal(result.supported, false);
+  assert.equal(result.reason, "unsupported");
+});
+
+test("every non-Yandex adapter answers auth unsupported and an anonymous player", async () => {
+  for (const [target, factory] of [
+    [TargetPlatform.ITCH, createMockPlatformAdapter],
+    [TargetPlatform.POKI, createPokiPlatformAdapter],
+    [TargetPlatform.PLAYGAMA, createPlaygamaPlatformAdapter],
+  ]) {
+    const adapter = factory({ emitVisibilityChange() {}, host: createHost(target), target });
+    const result = await adapter.login();
+    assert.equal(result.supported, false, target);
+    assert.equal(result.reason, "unsupported", target);
+    assert.deepEqual(await adapter.getPlayer(), { authorized: false, name: "", avatarUrl: "" }, target);
+    adapter.destroy();
+  }
+});
+
+test("local mock login signs in a fake player for the page", async () => {
+  const adapter = createMockPlatformAdapter({ host: createHost(TargetPlatform.LOCAL), target: TargetPlatform.LOCAL });
+  assert.deepEqual(await adapter.getPlayer(), { authorized: false, name: "", avatarUrl: "" });
+  const result = await adapter.login();
+  assert.equal(result.supported, true);
+  assert.equal(result.authorized, true);
+  assert.equal(result.reason, "accepted");
+  assert.ok(result.name.length > 0);
+  assert.equal((await adapter.getPlayer()).authorized, true);
+  adapter.destroy();
 });
 
 test("yandex adapter can load the documented custom-domain SDK URL", async () => {

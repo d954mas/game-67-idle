@@ -14,6 +14,9 @@
 void platform_sdk_web_complete_interstitial(int supported, int shown, int reason);
 void platform_sdk_web_complete_rewarded(int supported, int shown, int rewarded, int reason);
 void platform_sdk_web_complete_init(int ready);
+void platform_sdk_web_complete_login(int supported, int authorized, int reason, char *name, char *avatar_url);
+void platform_sdk_web_set_player(int authorized, char *name, char *avatar_url);
+void platform_sdk_web_read_player(void);
 void platform_sdk_web_portal_pause(void);
 void platform_sdk_web_portal_resume(void);
 void platform_sdk_web_portal_audio(int enabled);
@@ -48,6 +51,22 @@ EM_JS(char *, platform_sdk_web_backend_locale, (void), {
     }
 })
 
+/* A player who is already signed in to the portal is known the moment the SDK
+   answers; the facade learns it right after init so no screen has to ask. */
+EM_JS(void, platform_sdk_web_backend_read_player, (void), {
+    var backend = globalThis.__platformSdkInternalBackend;
+    if (!backend || typeof backend.getPlayer !== "function") return;
+    try {
+        Promise.resolve(backend.getPlayer()).then(function (player) {
+            player = player || {};
+            _platform_sdk_web_set_player(
+                player.authorized ? 1 : 0,
+                stringToNewUTF8(String(player.name || "")),
+                stringToNewUTF8(String(player.avatarUrl || "")));
+        }, function () {});
+    } catch (e) {}
+})
+
 EM_JS(int, platform_sdk_web_backend_init, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.ready !== "function") {
@@ -57,6 +76,7 @@ EM_JS(int, platform_sdk_web_backend_init, (void), {
     try {
         Promise.resolve(backend.ready()).then(function (ready) {
             _platform_sdk_web_complete_init(ready ? 1 : 0);
+            if (ready) _platform_sdk_web_read_player();
         }, function () {
             _platform_sdk_web_complete_init(0);
         });
@@ -212,6 +232,37 @@ EM_JS(int, platform_sdk_web_backend_show_rewarded, (const char *placement_ptr), 
     }
 })
 
+EM_JS(int, platform_sdk_web_backend_login, (void), {
+    function reasonCode(reason) {
+        if (reason === "unsupported") return 1;
+        if (reason === "not_ready") return 2;
+        if (reason === "failed") return 3;
+        if (reason === "declined") return 4;
+        if (reason === "accepted") return 5;
+        return 3;
+    }
+
+    var backend = globalThis.__platformSdkInternalBackend;
+    if (!backend || typeof backend.login !== "function") return 0;
+    try {
+        Promise.resolve(backend.login()).then(function (result) {
+            result = result || {};
+            _platform_sdk_web_complete_login(
+                result.supported ? 1 : 0,
+                result.authorized ? 1 : 0,
+                reasonCode(result.reason),
+                stringToNewUTF8(String(result.name || "")),
+                stringToNewUTF8(String(result.avatarUrl || "")));
+        }, function () {
+            _platform_sdk_web_complete_login(1, 0, 3, 0, 0);
+        });
+        return 1;
+    } catch (e) {
+        _platform_sdk_web_complete_login(1, 0, 3, 0, 0);
+        return 1;
+    }
+})
+
 EM_JS(void, platform_sdk_web_backend_destroy, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.destroy !== "function") return;
@@ -250,6 +301,40 @@ void platform_sdk_web_complete_rewarded(int supported, int shown, int rewarded, 
 EMSCRIPTEN_KEEPALIVE
 void platform_sdk_web_complete_init(int ready) {
     platform_sdk_backend_complete_init(ready != 0);
+}
+
+static platform_sdk_auth_reason_t auth_reason_from_int(int reason) {
+    if (reason < PLATFORM_SDK_AUTH_REASON_NONE || reason > PLATFORM_SDK_AUTH_REASON_ACCEPTED) {
+        return PLATFORM_SDK_AUTH_REASON_FAILED;
+    }
+    return (platform_sdk_auth_reason_t)reason;
+}
+
+/* The strings are minted on the JS side for this call alone. */
+EMSCRIPTEN_KEEPALIVE
+void platform_sdk_web_complete_login(int supported, int authorized, int reason, char *name, char *avatar_url) {
+    platform_sdk_backend_complete_login((platform_sdk_auth_result_t){
+        .supported = supported != 0,
+        .authorized = authorized != 0,
+        .reason = auth_reason_from_int(reason),
+        .name = name,
+        .avatar_url = avatar_url,
+    });
+    free(name);
+    free(avatar_url);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void platform_sdk_web_set_player(int authorized, char *name, char *avatar_url) {
+    platform_sdk_backend_set_player(authorized != 0, name, avatar_url);
+    free(name);
+    free(avatar_url);
+}
+
+/* Exported so the init promise can reach it by its wasm export name. */
+EMSCRIPTEN_KEEPALIVE
+void platform_sdk_web_read_player(void) {
+    platform_sdk_web_backend_read_player();
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -339,6 +424,13 @@ static platform_sdk_result_t web_backend_show_rewarded(const char *placement, vo
         : PLATFORM_SDK_RESULT_NOT_READY;
 }
 
+static platform_sdk_result_t web_backend_login(void *userdata) {
+    (void)userdata;
+    return platform_sdk_web_backend_login() != 0
+        ? PLATFORM_SDK_RESULT_OK
+        : PLATFORM_SDK_RESULT_UNSUPPORTED;
+}
+
 static void web_backend_destroy(void *userdata) {
     (void)userdata;
     platform_sdk_web_backend_destroy();
@@ -359,6 +451,7 @@ void platform_sdk_install_web_backend(void) {
         .hide_banner = web_backend_hide_banner,
         .show_interstitial = web_backend_show_interstitial,
         .show_rewarded = web_backend_show_rewarded,
+        .login = web_backend_login,
         .destroy = web_backend_destroy,
     };
     platform_sdk_set_backend(&backend, NULL);

@@ -84,9 +84,13 @@ JavaScript artifact.
   First input is only a precondition: active gameplay is still owned by the game
   state, so menus, settings, dialogs, and ad flows must call or remain in
   `platform_sdk_gameplay_stop()`.
+- Player identity: `platform_sdk_authorized()`, `platform_sdk_player_name()`,
+  `platform_sdk_player_avatar_url()` and `platform_sdk_login()`, which opens
+  the portal's own dialog from a player gesture. Only Yandex has one that
+  matters; a declined dialog is a normal outcome and there is no logout.
 - Adapter semantics for lifecycle, pause/resume, interstitials, rewarded ads,
-  banners, portal analytics forwarding, save/load, locale, and unsupported
-  operations. The C facade owns ad-flow policy and listener dispatch; selected
+  banners, portal analytics forwarding, save/load, locale, login, and
+  unsupported operations. The C facade owns ad-flow policy and listener dispatch; selected
   JavaScript backends only call portal SDK methods and report outcomes.
 - The compact SDK lifecycle/ad-flow event contract, owned by the C facade and
   bridged into `features/game-events`, plus a fixture-driven scorecard CLI.

@@ -147,6 +147,27 @@ node ai_studio/taskboard/cli.mjs validate --json
 node ai_studio/architecture_map/validate_map.mjs
 ```
 
+The C facade tests live in the consuming template or game and run in its build
+directory; the node test above also drives the Yandex login path against a
+stubbed SDK:
+
+```powershell
+cmake --build <build-dir> --target test_platform_sdk test_platform_sdk_events
+ctest --test-dir <build-dir> -R platform_sdk --output-on-failure
+```
+
+After any change under `web/adapters/` or `web/platform-sdk.js`, regenerate the
+release bundles, or the pinned hashes in `web/release/manifest.json` stop
+describing what ships:
+
+```powershell
+node features/platform-sdk/scripts/generate_release_bundles.mjs
+```
+
+Player identity is exercised from the template debug panel (`Sign in` button
+and the name label): on `local` the mock signs in a fake player, on `yandex`
+the portal dialog opens, everywhere else the request answers `unsupported`.
+
 Artifact inspection:
 
 ```powershell

@@ -230,8 +230,14 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
     gameplayStart,
     gameplayStop,
     getLocale,
+    getPlayer() {
+      return Promise.resolve({ authorized: false, name: "", avatarUrl: "" });
+    },
     hideBanner,
     loadData,
+    login() {
+      return Promise.resolve({ supported: false, authorized: false, reason: "unsupported", name: "", avatarUrl: "" });
+    },
     /* The portal has no analytics sink of its own; purchase orders are the one
        thing it tracks, and this game does not sell any. */
     measure() {},

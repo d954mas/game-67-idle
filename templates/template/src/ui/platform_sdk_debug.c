@@ -43,6 +43,9 @@ typedef enum mock_ad_flow_t {
     MOCK_AD_FLOW_NONE = 0,
     MOCK_AD_FLOW_INTERSTITIAL,
     MOCK_AD_FLOW_REWARDED,
+    /* The portal login dialog, faked the same way as the ads: a modal the
+       developer accepts or declines by hand. */
+    MOCK_AD_FLOW_LOGIN,
 } mock_ad_flow_t;
 
 static mock_ad_flow_t s_flow;
@@ -130,6 +133,26 @@ static void set_rewarded_result(platform_sdk_rewarded_result_t result) {
                    result.rewarded ? 1 : 0, ad_reason_name(result.reason));
 }
 
+#if PLATFORM_SDK_TARGET_ID == PLATFORM_SDK_TEMPLATE_TARGET_LOCAL
+static const char *auth_reason_name(platform_sdk_auth_reason_t reason) {
+    switch (reason) {
+    case PLATFORM_SDK_AUTH_REASON_NONE:
+        return "none";
+    case PLATFORM_SDK_AUTH_REASON_UNSUPPORTED:
+        return "unsupported";
+    case PLATFORM_SDK_AUTH_REASON_NOT_READY:
+        return "not_ready";
+    case PLATFORM_SDK_AUTH_REASON_FAILED:
+        return "failed";
+    case PLATFORM_SDK_AUTH_REASON_DECLINED:
+        return "declined";
+    case PLATFORM_SDK_AUTH_REASON_ACCEPTED:
+        return "accepted";
+    }
+    return "failed";
+}
+#endif
+
 static void on_pause(void *userdata) {
     (void)userdata;
     s_pause_count++;
@@ -172,6 +195,15 @@ static platform_sdk_result_t mock_backend_show_rewarded(const char *placement, v
     return PLATFORM_SDK_RESULT_OK;
 }
 
+static platform_sdk_result_t mock_backend_login(void *userdata) {
+    (void)userdata;
+    if (s_flow != MOCK_AD_FLOW_NONE) {
+        return PLATFORM_SDK_RESULT_BUSY;
+    }
+    s_flow = MOCK_AD_FLOW_LOGIN;
+    return PLATFORM_SDK_RESULT_OK;
+}
+
 static void mock_backend_destroy(void *userdata) {
     (void)userdata;
     s_flow = MOCK_AD_FLOW_NONE;
@@ -182,6 +214,7 @@ static platform_sdk_backend_t mock_backend(void) {
         .init = mock_backend_init,
         .show_interstitial = mock_backend_show_interstitial,
         .show_rewarded = mock_backend_show_rewarded,
+        .login = mock_backend_login,
         .destroy = mock_backend_destroy,
     };
 }
@@ -250,6 +283,19 @@ static void complete_rewarded(platform_sdk_ad_reason_t reason, bool shown, bool 
     s_flow = MOCK_AD_FLOW_NONE;
     platform_sdk_backend_complete_rewarded(result);
 }
+
+static void complete_login(bool accepted) {
+    platform_sdk_auth_result_t result = {
+        .supported = true,
+        .authorized = accepted,
+        .reason = accepted ? PLATFORM_SDK_AUTH_REASON_ACCEPTED : PLATFORM_SDK_AUTH_REASON_DECLINED,
+        .name = accepted ? "Local Player" : "",
+        .avatar_url = "",
+    };
+    (void)snprintf(s_last_result, sizeof s_last_result, "login: reason=%s", auth_reason_name(result.reason));
+    s_flow = MOCK_AD_FLOW_NONE;
+    platform_sdk_backend_complete_login(result);
+}
 #endif
 
 #if GAME_PLATFORM_SDK_DEBUG_UI
@@ -288,7 +334,20 @@ static void draw_debug_panel(nt_ui_context_t *ctx) {
     loc_kit_label(ctx, loc_raw(line), &g_ui_theme.hint);
     (void)snprintf(line, sizeof line, "pause=%d resume=%d", s_pause_count, s_resume_count);
     loc_kit_label(ctx, loc_raw(line), &g_ui_theme.hint);
+    (void)snprintf(line, sizeof line, "player: %s%s",
+                   platform_sdk_authorized() ? platform_sdk_player_name() : "anonymous",
+                   platform_sdk_login_pending() ? " (dialog open)" : "");
+    loc_kit_label(ctx, loc_raw(line), &g_ui_theme.hint);
     loc_kit_label(ctx, loc_raw(s_last_result), &g_ui_theme.hint);
+
+    if (platform_sdk_auth_supported() && !platform_sdk_authorized()) {
+        if (button(ctx, "platform_sdk/debug/login", "Sign in", !platform_sdk_login_pending())) {
+            platform_sdk_result_t result = platform_sdk_login();
+            if (result != PLATFORM_SDK_RESULT_OK) {
+                set_request_result("login", result);
+            }
+        }
+    }
 
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
                      .layoutDirection = CLAY_LEFT_TO_RIGHT,
@@ -327,6 +386,24 @@ static void draw_mock_modal(nt_ui_context_t *ctx) {
                                            .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                            .childGap = (uint16_t)m.gap,
                                            .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_TOP}}});
+    if (s_flow == MOCK_AD_FLOW_LOGIN) {
+        loc_kit_label(ctx, loc_raw("MOCK PORTAL LOGIN"), &g_ui_theme.title);
+        loc_kit_label(ctx, loc_raw("Closing the dialog is a normal outcome, not an error."), &g_ui_theme.hint);
+        CLAY({.layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0)},
+                         .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                         .childGap = 10}}) {
+            if (button(ctx, "platform_sdk/mock_login/accept", "Sign in", true)) {
+                complete_login(true);
+            }
+            if (button(ctx, "platform_sdk/mock_login/decline", "Close", true)) {
+                complete_login(false);
+            }
+        }
+        ui_kit_panel_end(ctx);
+        nt_ui_modal_end(ctx);
+        return;
+    }
+
     loc_kit_label(ctx, loc_raw(s_flow == MOCK_AD_FLOW_REWARDED ? "MOCK REWARDED AD" : "MOCK INTERSTITIAL AD"),
                  &g_ui_theme.title);
 

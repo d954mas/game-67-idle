@@ -170,11 +170,17 @@ export function createPokiPlatformAdapter({ host }) {
     getLocale() {
       return (host && host.navigator && host.navigator.language) || null;
     },
+    getPlayer() {
+      return Promise.resolve({ authorized: false, name: "", avatarUrl: "" });
+    },
     hideBanner() {
       return Promise.resolve();
     },
     loadData() {
       return Promise.resolve(null);
+    },
+    login() {
+      return Promise.resolve({ supported: false, authorized: false, reason: "unsupported", name: "", avatarUrl: "" });
     },
     measure,
     ready,

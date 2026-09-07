@@ -35,6 +35,11 @@ typedef struct platform_sdk_ev_rewarded_result_t {
     uint32_t reason;
 } platform_sdk_ev_rewarded_result_t;
 
+typedef struct platform_sdk_ev_auth_changed_t {
+    unsigned char authorized;
+    uint32_t reason;
+} platform_sdk_ev_auth_changed_t;
+
 nt_hash64_t platform_sdk_ev_platform_ready_type(void);
 nt_hash64_t platform_sdk_ev_game_loading_finished_type(void);
 nt_hash64_t platform_sdk_ev_gameplay_start_type(void);
@@ -43,6 +48,7 @@ nt_hash64_t platform_sdk_ev_interstitial_request_type(void);
 nt_hash64_t platform_sdk_ev_interstitial_result_type(void);
 nt_hash64_t platform_sdk_ev_rewarded_request_type(void);
 nt_hash64_t platform_sdk_ev_rewarded_result_type(void);
+nt_hash64_t platform_sdk_ev_auth_changed_type(void);
 
 extern const game_event_desc_t platform_sdk_ev_platform_ready_desc;
 extern const game_event_desc_t platform_sdk_ev_game_loading_finished_desc;
@@ -52,6 +58,7 @@ extern const game_event_desc_t platform_sdk_ev_interstitial_request_desc;
 extern const game_event_desc_t platform_sdk_ev_interstitial_result_desc;
 extern const game_event_desc_t platform_sdk_ev_rewarded_request_desc;
 extern const game_event_desc_t platform_sdk_ev_rewarded_result_desc;
+extern const game_event_desc_t platform_sdk_ev_auth_changed_desc;
 extern const game_event_desc_t *const platform_sdk_ev_descs[];
 extern const int platform_sdk_ev_desc_count;
 

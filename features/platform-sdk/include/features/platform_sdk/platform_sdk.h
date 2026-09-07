@@ -26,6 +26,9 @@ typedef struct platform_sdk_capabilities_t {
     bool ads_supported;
     bool rewarded_supported;
     bool storage_supported;
+    /* The portal has a login dialog of its own. Only Yandex ties anything the
+       game cares about (leaderboard writes, the player's own row) to it. */
+    bool auth_supported;
 } platform_sdk_capabilities_t;
 
 typedef enum platform_sdk_boot_status_t {
@@ -72,6 +75,27 @@ typedef struct platform_sdk_rewarded_result_t {
     platform_sdk_ad_reason_t reason;
 } platform_sdk_rewarded_result_t;
 
+typedef enum platform_sdk_auth_reason_t {
+    PLATFORM_SDK_AUTH_REASON_NONE = 0,
+    PLATFORM_SDK_AUTH_REASON_UNSUPPORTED = 1,
+    PLATFORM_SDK_AUTH_REASON_NOT_READY = 2,
+    PLATFORM_SDK_AUTH_REASON_FAILED = 3,
+    /* The player closed the dialog. A normal outcome: nothing to show, nothing
+       to log above debug level. */
+    PLATFORM_SDK_AUTH_REASON_DECLINED = 4,
+    PLATFORM_SDK_AUTH_REASON_ACCEPTED = 5,
+} platform_sdk_auth_reason_t;
+
+/* Name and avatar are what the portal supplied, or "" -- an anonymous Yandex
+   player has an id and nothing else. Strings are copied by the facade. */
+typedef struct platform_sdk_auth_result_t {
+    bool supported;
+    bool authorized;
+    platform_sdk_auth_reason_t reason;
+    const char *name;
+    const char *avatar_url;
+} platform_sdk_auth_result_t;
+
 typedef struct platform_sdk_gameplay_start_result_t {
     bool started;
     platform_sdk_result_t reason;
@@ -104,6 +128,9 @@ typedef struct platform_sdk_backend_t {
     void (*hide_banner)(void *userdata);
     platform_sdk_result_t (*show_interstitial)(const char *placement, void *userdata);
     platform_sdk_result_t (*show_rewarded)(const char *placement, void *userdata);
+    /* Opens the portal's login dialog and later settles through
+       platform_sdk_backend_complete_login(). NULL means the portal has none. */
+    platform_sdk_result_t (*login)(void *userdata);
     void (*destroy)(void *userdata);
 } platform_sdk_backend_t;
 
@@ -122,6 +149,10 @@ bool platform_sdk_rewarded_supported(void);
    capability above answers what the target can do at all. */
 bool platform_sdk_rewarded_available(void);
 bool platform_sdk_storage_supported(void);
+/* What the build promises, minus a portal that answered a login request with
+   "unsupported": that answer latches for the session, so a login button asks
+   this before it is drawn. */
+bool platform_sdk_auth_supported(void);
 
 void platform_sdk_set_backend(const platform_sdk_backend_t *backend, void *userdata);
 platform_sdk_boot_status_t platform_sdk_status(void);
@@ -156,6 +187,18 @@ platform_sdk_result_t platform_sdk_show_rewarded(
 void platform_sdk_show_banner(void);
 void platform_sdk_hide_banner(void);
 
+/* Player identity. There is no logout: a portal account outlives the game
+   session, and Yandex offers no call to drop it, so the only transition is
+   anonymous -> authorized, announced once through the auth.changed event.
+   platform_sdk_login() is valid only from a player gesture; before the first
+   input it is refused with WAITING_FOR_INPUT, like gameplay_start. One dialog
+   at a time: a second call while one is open answers BUSY. */
+bool platform_sdk_authorized(void);
+bool platform_sdk_login_pending(void);
+platform_sdk_result_t platform_sdk_login(void);
+const char *platform_sdk_player_name(void);       /* "" until the portal supplies one */
+const char *platform_sdk_player_avatar_url(void); /* "" until the portal supplies one */
+
 /* The portal, not the game, decides these: a tab the player left, a portal
    overlay, a phone call. The facade stops gameplay for the portal and restores
    it on resume, so a game only has to listen. */
@@ -180,6 +223,12 @@ const char *platform_sdk_locale(void);
 void platform_sdk_backend_complete_interstitial(platform_sdk_ad_result_t result);
 void platform_sdk_backend_complete_rewarded(platform_sdk_rewarded_result_t result);
 void platform_sdk_backend_complete_init(bool ready);
+/* Settles the dialog opened by the backend's login hook; an accepted result
+   carries the identity the portal now reports. */
+void platform_sdk_backend_complete_login(platform_sdk_auth_result_t result);
+/* Identity known without a dialog: a player who arrives already signed in to
+   the portal. Safe to call any time; only a real change is announced. */
+void platform_sdk_backend_set_player(bool authorized, const char *name, const char *avatar_url);
 
 void platform_sdk_destroy(void);
 

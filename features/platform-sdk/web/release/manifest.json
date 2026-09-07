@@ -9,34 +9,34 @@
   },
   "adapters": {
     "mock": {
-      "sourceSha256": "b732f433737719ac0088a631f78014eb2ac2bd9061b503b1d45de99c22f13083",
-      "bundleSha256": "205ed755185a984771fde76f87b8519d8d84c610bc438c2b7387dd7bc215b175",
-      "sourceBytes": 3813,
-      "bundleBytes": 1921
+      "sourceSha256": "209b46d2e3f9ce0e9d882f544854a150d51ce2ef3892d99f30735571e779bb11",
+      "bundleSha256": "8033eebe983520900dac7638c373c0a9a06275ff4f78b27282b6900471fb0ab2",
+      "sourceBytes": 4525,
+      "bundleBytes": 2233
     },
     "poki": {
-      "sourceSha256": "085356aa4d4f11813417aa857e834ccfc9a71605d40c40cc011065e7c99888cd",
-      "bundleSha256": "398e22f79b725de08a8bdeffe245646a69f784a19dd39220d3c4830503cad40b",
-      "sourceBytes": 7804,
-      "bundleBytes": 3243
+      "sourceSha256": "45019a9c35d179d22b49cfc932dfa4818aa325bc67f3d7865272a2e057aed729",
+      "bundleSha256": "69fa557c9df8b0935316d22f5ab60671f02252e42d8b0fec4c070645e81200e0",
+      "sourceBytes": 8047,
+      "bundleBytes": 3409
     },
     "yandex": {
-      "sourceSha256": "299c136282d43299cd4e3e290cf2fffbaa1261c2162bd53ef08d0b7af45af724",
-      "bundleSha256": "eb2bcd307d49c7d989d7a3913aae71a7fc424ba9f42c782d156023a39391dde6",
-      "sourceBytes": 10583,
-      "bundleBytes": 4447
+      "sourceSha256": "575484c09bd52487a55b6eba202b5461f09067e27c5294efa5da4c478fe6879a",
+      "bundleSha256": "75a07c6e53405738f1bd126e9bba7edbe1148276a0e1613c4eadb9bf9ab50cb6",
+      "sourceBytes": 12645,
+      "bundleBytes": 5377
     },
     "playgama": {
-      "sourceSha256": "cce2cfa585df47c26840f729cd122c0d2cf7a6afc3f304d840333553fa8598e6",
-      "bundleSha256": "9ad82531f89d7ff914ee82b0e68c4e2252a471572fb642ac04c45558146ed753",
-      "sourceBytes": 13368,
-      "bundleBytes": 5495
+      "sourceSha256": "d71c627f1cbae0d438060c6e7c34f0fef261fc467f22d2694b5dd05a27add25b",
+      "bundleSha256": "b477b7dc4b75d11e05c6ca9167746b66f66cfdf72927ef9ee00e5b98ecf13dc2",
+      "sourceBytes": 13752,
+      "bundleBytes": 5661
     },
     "crazygames": {
-      "sourceSha256": "4877ecce5e6cf88f001a64bb396115a59658e51020b3f16229d4910078f3682b",
-      "bundleSha256": "70419b4f759de5d72df131141a9982dbd61114d354cfcd1c40c4f40c69bb5adf",
-      "sourceBytes": 10180,
-      "bundleBytes": 3950
+      "sourceSha256": "89d010636121a062de868683095670c7351272fef62deee4a7341c01713011a2",
+      "bundleSha256": "ad589e3f13277edfdd488cfc17579517950ba0403d42ef0ab0aed2ea695ac353",
+      "sourceBytes": 10423,
+      "bundleBytes": 4116
     }
   }
 }

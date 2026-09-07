@@ -53,6 +53,15 @@ bool platform_sdk_external_links_allowed(void);
 bool platform_sdk_ads_supported(void);
 bool platform_sdk_rewarded_supported(void);
 bool platform_sdk_storage_supported(void);
+bool platform_sdk_auth_supported(void);
+
+/* Player identity. No logout exists: the only transition is anonymous ->
+   authorized, announced through the auth.changed event. */
+bool platform_sdk_authorized(void);
+bool platform_sdk_login_pending(void);
+platform_sdk_result_t platform_sdk_login(void);   /* player gesture only */
+const char *platform_sdk_player_name(void);       /* "" until the portal supplies one */
+const char *platform_sdk_player_avatar_url(void); /* "" until the portal supplies one */
 
 platform_sdk_result_t platform_sdk_init(void);
 platform_sdk_boot_status_t platform_sdk_status(void);
@@ -120,6 +129,43 @@ owns the active-gameplay state machine:
 
 After the first successful start, `hasGameplayStarted()` stays true;
 `gameplayActive` tracks the current start/stop interval.
+
+### Player identity and login
+
+Only Yandex ties anything the game cares about to its account: leaderboard
+writes and the player's own row need it. Every other adapter answers
+`unsupported`, and the `local` mock signs in a fake player so the flow can be
+walked without a portal.
+
+- `platform_sdk_capabilities().auth_supported` is what the build promises;
+  `platform_sdk_auth_supported()` is that minus a portal that answered a login
+  request with `unsupported`, which latches for the session like a withdrawn
+  rewarded. A login button asks the function, not the capability.
+- `platform_sdk_login()` is valid only from a player gesture. The facade's
+  proxy for a gesture is the first-input latch: before
+  `platform_sdk_mark_input()` it answers `WAITING_FOR_INPUT` and never reaches
+  the backend, exactly as `platform_sdk_gameplay_start()` does. While a dialog
+  is open a second call answers `BUSY`; an authorized player answers
+  `ALREADY_ACTIVE` because there is nothing left to open.
+- A declined dialog is a normal outcome, not an error: the player stays
+  anonymous, nothing is shown, nothing is logged above debug level, and the
+  next gesture may open the dialog again.
+- `platform_sdk_player_name()` and `platform_sdk_player_avatar_url()` are `""`
+  until the portal supplies them. An anonymous Yandex player has an id and
+  nothing else; a guest profile handed over as unauthorized is still shown as
+  anonymous.
+- A player who arrives already signed in is published by the backend right
+  after init through `platform_sdk_backend_set_player()`; no dialog opens.
+- There is no logout. Yandex has no such call, a portal account outlives the
+  game session, and no seam in the C API, the adapter contract or the event
+  bridge implies one.
+
+Backends implement `login` in the vtable and settle it with
+`platform_sdk_backend_complete_login()`, whose accepted result carries the
+identity the portal now reports. Web adapters expose `login()` resolving
+`{ supported, authorized, reason, name, avatarUrl }` with `reason` one of
+`accepted | declined | unsupported | not_ready | failed`, and `getPlayer()`
+resolving `{ authorized, name, avatarUrl }`.
 
 ## Build Inclusion Rule
 
@@ -248,6 +294,12 @@ platform-sdk payload fields.
 | `ad.interstitial.result` | `placement?: string`, `supported: boolean`, `shown: boolean`, `reason?: string` | Interstitial shown, skipped, blocked, or failed. |
 | `ad.rewarded.request` | `placement?: string` | Player opts into a rewarded ad. |
 | `ad.rewarded.result` | `placement?: string`, `supported: boolean`, `shown: boolean`, `rewarded: boolean`, `reason?: string` | Rewarded ad result; reward grants only when `rewarded` is true. |
+| `auth.changed` | `authorized: boolean`, `reason: string` | The player's identity changed: a login was accepted, or a signed-in player was reported at boot. A declined or unsupported login changes nothing and emits nothing; screens read `platform_sdk_login_pending()` for the dialog itself. |
+
+Every login attempt, whatever its outcome, goes to the bounded measure sink as
+`auth / result / accepted | declined | unsupported | failed`, so the prompt's
+conversion is visible on portals with an analytics sink without adding a
+second event per attempt.
 
 `placement` values must be finite, stable IDs such as `revive`,
 `double_reward`, or `level_break`. Do not pass dynamic strings, counters, player
@@ -314,6 +366,8 @@ Used by `local` and `itch`.
 - Does not own analytics emission; the C facade will bridge SDK-originated
   lifecycle/ad-flow events into `features/game-events`.
 - Must not require network access.
+- In `local`, `login()` signs in a fake player for the page so identity screens
+  can be exercised; in `itch` it answers `unsupported`.
 
 ### `poki`
 
@@ -347,6 +401,14 @@ Used by `local` and `itch`.
   `ysdk.adv.showRewardedVideo()` for rewarded ads.
 - If using Yandex player data, keep save payloads below documented limits and
   throttle writes.
+- `getPlayer()` reads the cached `ysdk.getPlayer()` object: `isAuthorized()`,
+  and for an authorized player `getName()` and `getPhoto("medium")`. An
+  anonymous player publishes empty name and avatar.
+- `login()` opens `ysdk.auth.openAuthDialog()` and, once it settles, drops the
+  cached player object and re-reads `getPlayer()`: the anonymous object keeps
+  answering as anonymous, and player data written through it keeps going to
+  the anonymous id. A rejected dialog promise is `declined`, never logged as an
+  error. An already-authorized player answers `accepted` without a dialog.
 
 ### `playgama`
 

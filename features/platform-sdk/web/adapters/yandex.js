@@ -118,6 +118,59 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
     return playerReady;
   }
 
+  function isAuthorized(p) {
+    try {
+      return Boolean(p && typeof p.isAuthorized === "function" && p.isAuthorized());
+    } catch {
+      return false;
+    }
+  }
+
+  /* Only an authorized player has a name and a photo the game may show; an
+     anonymous one has an id and nothing else. The player object owns getPhoto;
+     getAvatarSrc belongs to leaderboard entries. */
+  function identity(p) {
+    const authorized = isAuthorized(p);
+    let name = "";
+    let avatarUrl = "";
+    if (authorized) {
+      try { name = String((typeof p.getName === "function" && p.getName()) || ""); } catch { name = ""; }
+      try { avatarUrl = String((typeof p.getPhoto === "function" && p.getPhoto("medium")) || ""); } catch { avatarUrl = ""; }
+    }
+    return { authorized, name, avatarUrl };
+  }
+
+  async function getPlayer() {
+    return identity(await player());
+  }
+
+  /* The dialog rejects when the player closes it; that is a decline, not an
+     error, so nothing is logged. After it settles the cached player object is
+     dropped: the anonymous one keeps answering as anonymous and would keep
+     writing player data under the anonymous id. */
+  async function login() {
+    const ysdk = await sdk();
+    if (!ysdk || !ysdk.auth || typeof ysdk.auth.openAuthDialog !== "function") {
+      return { supported: false, authorized: false, reason: "unsupported", name: "", avatarUrl: "" };
+    }
+    const before = await player();
+    if (isAuthorized(before)) return { supported: true, reason: "accepted", ...identity(before) };
+
+    let opened = true;
+    try {
+      await ysdk.auth.openAuthDialog();
+    } catch {
+      opened = false;
+    }
+    if (destroyed) return { supported: true, authorized: false, reason: "failed", name: "", avatarUrl: "" };
+    playerReady = null;
+    const after = identity(await player());
+    if (!opened || !after.authorized) {
+      return { supported: true, authorized: false, reason: "declined", name: "", avatarUrl: "" };
+    }
+    return { supported: true, reason: "accepted", ...after };
+  }
+
   async function gameLoadingFinished() {
     const ysdk = await sdk();
     ysdk && ysdk.features && ysdk.features.LoadingAPI && ysdk.features.LoadingAPI.ready();
@@ -256,8 +309,10 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
     gameplayStart,
     gameplayStop,
     getLocale,
+    getPlayer,
     hideBanner,
     loadData,
+    login,
     measure() {},
     ready,
     saveData,

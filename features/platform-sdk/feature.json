@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "platform-sdk",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "title": "Platform SDK",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -34,6 +34,7 @@
     "internal bounded measure sink for typed game-event bridges",
     "portal player storage bridge for cloud saves",
     "portal-driven pause and resume, and the portal language, bridged into C",
+    "player identity and portal login (Yandex auth dialog, local mock), the auth.changed event and the auth result measure; no logout seam",
     "publish target manifest validation",
     "local NDJSON scorecard CLI"
   ],

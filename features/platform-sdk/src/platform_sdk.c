@@ -40,8 +40,25 @@
 #define PLATFORM_SDK_STORAGE_SUPPORTED 1
 #endif
 
+/* Only Yandex has a login the game acts on; the local mock fakes one so the
+   flow can be exercised without a portal. itch keeps the mock and answers
+   "unsupported" like it does for ads. The build may override this. */
+#ifndef PLATFORM_SDK_AUTH_SUPPORTED
+#if PLATFORM_SDK_CURRENT_ID == PLATFORM_SDK_YANDEX || \
+    (PLATFORM_SDK_CURRENT_ID == PLATFORM_SDK_MOCK && PLATFORM_SDK_TARGET_ID == PLATFORM_TARGET_LOCAL)
+#define PLATFORM_SDK_AUTH_SUPPORTED 1
+#else
+#define PLATFORM_SDK_AUTH_SUPPORTED 0
+#endif
+#endif
+
 #define PLATFORM_SDK_MAX_LISTENERS 8u
 #define PLATFORM_SDK_PLACEMENT_MAX 64u
+/* A portal display name; longer ones are cut, never refused. */
+#define PLATFORM_SDK_PLAYER_NAME_MAX 96u
+/* Avatar URLs the portals hand out are well under this; a longer one is
+   dropped rather than truncated, because a cut URL is not an image. */
+#define PLATFORM_SDK_AVATAR_URL_MAX 256u
 /* A BCP 47 tag the portals actually answer with ("ru", "pt-BR", "zh-Hans-CN")
    plus room to spare; anything longer is a portal bug, not a language. */
 #define PLATFORM_SDK_LOCALE_MAX 32u
@@ -91,6 +108,11 @@ typedef struct platform_sdk_runtime_t {
     /* Latched by the first "unsupported" answer and never cleared: a portal that
        has withdrawn rewarded keeps it withdrawn for the session. */
     bool rewarded_refused;
+    bool auth_refused;
+    bool login_pending;
+    bool authorized;
+    char player_name[PLATFORM_SDK_PLAYER_NAME_MAX];
+    char player_avatar_url[PLATFORM_SDK_AVATAR_URL_MAX];
 } platform_sdk_runtime_t;
 
 static platform_sdk_runtime_t g_platform_sdk;
@@ -131,6 +153,14 @@ static const char *platform_sdk_ad_reason_name(platform_sdk_ad_reason_t reason) 
         return "completed";
     }
     return "failed";
+}
+
+nt_hash64_t platform_sdk_ev_auth_changed_type(void) {
+    static nt_hash64_t h;
+    if (!h.value) {
+        h = nt_hash64_str("auth.changed");
+    }
+    return h;
 }
 
 nt_hash64_t platform_sdk_ev_platform_ready_type(void) {
@@ -220,6 +250,20 @@ static const game_event_field_t platform_sdk_rewarded_result_fields[] = {
     {"reason", GAME_EVENT_FT_STRING, (uint32_t)offsetof(platform_sdk_ev_rewarded_result_t, reason), 0u},
 };
 
+static const game_event_field_t platform_sdk_auth_changed_fields[] = {
+    {"authorized", GAME_EVENT_FT_BOOL, (uint32_t)offsetof(platform_sdk_ev_auth_changed_t, authorized), 0u},
+    {"reason", GAME_EVENT_FT_STRING, (uint32_t)offsetof(platform_sdk_ev_auth_changed_t, reason), 0u},
+};
+
+const game_event_desc_t platform_sdk_ev_auth_changed_desc = {
+    "auth.changed",
+    (uint32_t)sizeof(platform_sdk_ev_auth_changed_t),
+    platform_sdk_auth_changed_fields,
+    PLATFORM_SDK_EVENT_FIELD_COUNT(platform_sdk_auth_changed_fields),
+    NULL,
+    0,
+};
+
 const game_event_desc_t platform_sdk_ev_platform_ready_desc = {
     "platform.ready",
     (uint32_t)sizeof(platform_sdk_ev_platform_ready_t),
@@ -301,6 +345,7 @@ const game_event_desc_t *const platform_sdk_ev_descs[] = {
     &platform_sdk_ev_interstitial_result_desc,
     &platform_sdk_ev_rewarded_request_desc,
     &platform_sdk_ev_rewarded_result_desc,
+    &platform_sdk_ev_auth_changed_desc,
 };
 
 const int platform_sdk_ev_desc_count = (int)(sizeof(platform_sdk_ev_descs) / sizeof(platform_sdk_ev_descs[0]));
@@ -314,6 +359,7 @@ void platform_sdk_events_register(void) {
     game_event_register_type_name(platform_sdk_ev_interstitial_result_type(), "ad.interstitial.result");
     game_event_register_type_name(platform_sdk_ev_rewarded_request_type(), "ad.rewarded.request");
     game_event_register_type_name(platform_sdk_ev_rewarded_result_type(), "ad.rewarded.result");
+    game_event_register_type_name(platform_sdk_ev_auth_changed_type(), "auth.changed");
 }
 
 static bool platform_sdk_event_append_string(uint8_t *bytes, uint32_t *used, const char *value, uint32_t *out_offset) {
@@ -393,6 +439,20 @@ static void platform_sdk_emit_rewarded_result(const char *placement, platform_sd
     (void)game_event_emit(platform_sdk_ev_rewarded_result_type(), &u, used, _Alignof(platform_sdk_ev_rewarded_result_t));
 }
 
+static void platform_sdk_emit_auth_changed(bool authorized, const char *reason) {
+    union {
+        platform_sdk_ev_auth_changed_t ev;
+        uint8_t bytes[GAME_EVENT_EMIT_MAX];
+    } u;
+    uint32_t used = (uint32_t)sizeof(u.ev);
+    memset(&u.ev, 0, sizeof(u.ev));
+    u.ev.authorized = authorized ? 1u : 0u;
+    if (!platform_sdk_event_append_string(u.bytes, &used, reason, &u.ev.reason)) {
+        return;
+    }
+    (void)game_event_emit(platform_sdk_ev_auth_changed_type(), &u, used, _Alignof(platform_sdk_ev_auth_changed_t));
+}
+
 #else
 static void copy_placement(char dst[PLATFORM_SDK_PLACEMENT_MAX], const char *placement) {
     const char *src = placement != NULL ? placement : "";
@@ -403,7 +463,26 @@ static void copy_placement(char dst[PLATFORM_SDK_PLACEMENT_MAX], const char *pla
 #define platform_sdk_emit_placement(type, placement) ((void)0)
 #define platform_sdk_emit_interstitial_result(placement, result) ((void)0)
 #define platform_sdk_emit_rewarded_result(placement, result) ((void)0)
+#define platform_sdk_emit_auth_changed(authorized, reason) ((void)0)
 #endif
+
+static const char *platform_sdk_auth_reason_name(platform_sdk_auth_reason_t reason) {
+    switch (reason) {
+    case PLATFORM_SDK_AUTH_REASON_NONE:
+        return "none";
+    case PLATFORM_SDK_AUTH_REASON_UNSUPPORTED:
+        return "unsupported";
+    case PLATFORM_SDK_AUTH_REASON_NOT_READY:
+        return "not_ready";
+    case PLATFORM_SDK_AUTH_REASON_FAILED:
+        return "failed";
+    case PLATFORM_SDK_AUTH_REASON_DECLINED:
+        return "declined";
+    case PLATFORM_SDK_AUTH_REASON_ACCEPTED:
+        return "accepted";
+    }
+    return "failed";
+}
 
 static bool platform_sdk_is_ready(void) {
     return g_platform_sdk.status == PLATFORM_SDK_BOOT_READY;
@@ -561,6 +640,7 @@ platform_sdk_capabilities_t platform_sdk_capabilities(void) {
         .ads_supported = PLATFORM_SDK_ADS_SUPPORTED != 0,
         .rewarded_supported = PLATFORM_SDK_REWARDED_SUPPORTED != 0,
         .storage_supported = PLATFORM_SDK_STORAGE_SUPPORTED != 0,
+        .auth_supported = PLATFORM_SDK_AUTH_SUPPORTED != 0,
     };
 }
 
@@ -580,6 +660,10 @@ bool platform_sdk_rewarded_available(void) {
 
 bool platform_sdk_storage_supported(void) {
     return platform_sdk_capabilities().storage_supported;
+}
+
+bool platform_sdk_auth_supported(void) {
+    return platform_sdk_capabilities().auth_supported && !g_platform_sdk.auth_refused;
 }
 
 void platform_sdk_set_backend(const platform_sdk_backend_t *backend, void *userdata) {
@@ -1069,6 +1153,129 @@ void platform_sdk_backend_complete_init(bool ready) {
     complete_init_once(ready);
 }
 
+bool platform_sdk_authorized(void) {
+    return g_platform_sdk.authorized;
+}
+
+bool platform_sdk_login_pending(void) {
+    return g_platform_sdk.login_pending;
+}
+
+const char *platform_sdk_player_name(void) {
+    return g_platform_sdk.player_name;
+}
+
+const char *platform_sdk_player_avatar_url(void) {
+    return g_platform_sdk.player_avatar_url;
+}
+
+/* The measure sink, not the event bridge, carries every attempt: a decline is
+   analytics about the prompt, while auth.changed is state screens react to. */
+static void platform_sdk_note_auth_result(platform_sdk_auth_reason_t reason) {
+    (void)platform_sdk_measure("auth", "result", platform_sdk_auth_reason_name(reason));
+}
+
+static bool platform_sdk_apply_player(bool authorized, const char *name, const char *avatar_url) {
+    char next_name[PLATFORM_SDK_PLAYER_NAME_MAX];
+    char next_avatar[PLATFORM_SDK_AVATAR_URL_MAX];
+    (void)snprintf(next_name, sizeof(next_name), "%s", name != NULL ? name : "");
+    if (avatar_url != NULL && strlen(avatar_url) < sizeof(next_avatar)) {
+        (void)snprintf(next_avatar, sizeof(next_avatar), "%s", avatar_url);
+    } else {
+        next_avatar[0] = '\0';
+    }
+    /* Anonymous means anonymous: a portal that hands a name to a player it
+       calls unauthorized is describing a guest profile the game must not show. */
+    if (!authorized) {
+        next_name[0] = '\0';
+        next_avatar[0] = '\0';
+    }
+
+    const bool changed = authorized != g_platform_sdk.authorized ||
+                         strcmp(next_name, g_platform_sdk.player_name) != 0 ||
+                         strcmp(next_avatar, g_platform_sdk.player_avatar_url) != 0;
+    g_platform_sdk.authorized = authorized;
+    memcpy(g_platform_sdk.player_name, next_name, sizeof(next_name));
+    memcpy(g_platform_sdk.player_avatar_url, next_avatar, sizeof(next_avatar));
+    return changed;
+}
+
+void platform_sdk_backend_set_player(bool authorized, const char *name, const char *avatar_url) {
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED) return;
+    if (platform_sdk_apply_player(authorized, name, avatar_url)) {
+        platform_sdk_emit_auth_changed(authorized, authorized ? "accepted" : "none");
+    }
+}
+
+platform_sdk_result_t platform_sdk_login(void) {
+    platform_sdk_result_t backend_result = PLATFORM_SDK_RESULT_OK;
+
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED) {
+        return PLATFORM_SDK_RESULT_DESTROYED;
+    }
+    if (!platform_sdk_is_ready()) {
+        return PLATFORM_SDK_RESULT_NOT_READY;
+    }
+    if (!platform_sdk_auth_supported()) {
+        platform_sdk_note_auth_result(PLATFORM_SDK_AUTH_REASON_UNSUPPORTED);
+        return PLATFORM_SDK_RESULT_UNSUPPORTED;
+    }
+    if (!g_platform_sdk.has_input) {
+#if FEATURE_GAME_EVENTS
+        nt_log_warn("platform_sdk: login ignored before first input");
+#endif
+        return PLATFORM_SDK_RESULT_WAITING_FOR_INPUT;
+    }
+    if (g_platform_sdk.authorized) {
+        return PLATFORM_SDK_RESULT_ALREADY_ACTIVE;
+    }
+    if (g_platform_sdk.login_pending) {
+        return PLATFORM_SDK_RESULT_BUSY;
+    }
+
+    g_platform_sdk.login_pending = true;
+    if (!g_platform_sdk.has_backend || g_platform_sdk.backend.login == NULL) {
+        platform_sdk_backend_complete_login((platform_sdk_auth_result_t){
+            .supported = false,
+            .authorized = false,
+            .reason = PLATFORM_SDK_AUTH_REASON_UNSUPPORTED,
+        });
+        return PLATFORM_SDK_RESULT_UNSUPPORTED;
+    }
+
+    backend_result = g_platform_sdk.backend.login(g_platform_sdk.backend_userdata);
+    if (backend_result != PLATFORM_SDK_RESULT_OK && g_platform_sdk.login_pending) {
+        platform_sdk_auth_reason_t reason = PLATFORM_SDK_AUTH_REASON_FAILED;
+        if (backend_result == PLATFORM_SDK_RESULT_UNSUPPORTED) {
+            reason = PLATFORM_SDK_AUTH_REASON_UNSUPPORTED;
+        } else if (backend_result == PLATFORM_SDK_RESULT_NOT_READY) {
+            reason = PLATFORM_SDK_AUTH_REASON_NOT_READY;
+        }
+        platform_sdk_backend_complete_login((platform_sdk_auth_result_t){
+            .supported = backend_result != PLATFORM_SDK_RESULT_UNSUPPORTED,
+            .authorized = false,
+            .reason = reason,
+        });
+    }
+    return backend_result;
+}
+
+void platform_sdk_backend_complete_login(platform_sdk_auth_result_t result) {
+    if (!g_platform_sdk.login_pending) {
+        return;
+    }
+    g_platform_sdk.login_pending = false;
+
+    if (result.reason == PLATFORM_SDK_AUTH_REASON_UNSUPPORTED) {
+        g_platform_sdk.auth_refused = true;
+    }
+    const bool authorized = result.authorized && result.reason == PLATFORM_SDK_AUTH_REASON_ACCEPTED;
+    if (platform_sdk_apply_player(authorized, result.name, result.avatar_url)) {
+        platform_sdk_emit_auth_changed(authorized, platform_sdk_auth_reason_name(result.reason));
+    }
+    platform_sdk_note_auth_result(result.reason);
+}
+
 void platform_sdk_destroy(void) {
     if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED) {
         return;
@@ -1082,6 +1289,7 @@ void platform_sdk_destroy(void) {
     memset(g_platform_sdk.resume_listeners, 0, sizeof(g_platform_sdk.resume_listeners));
     g_platform_sdk.pending_interstitial = (platform_sdk_pending_interstitial_t){0};
     g_platform_sdk.pending_rewarded = (platform_sdk_pending_rewarded_t){0};
+    g_platform_sdk.login_pending = false;
 }
 
 #if defined(PLATFORM_SDK_TESTING)
