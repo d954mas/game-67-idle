@@ -21,11 +21,11 @@ import { findStudioRoot } from "./lib/studio_root.mjs";
 const GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const PACKAGE_TARGETS = new Set(["itch", "poki", "yandex", "playgama", "crazygames"]);
 const BUILD_TARGETS = new Set(["local", ...PACKAGE_TARGETS]);
-const COMMANDS = new Set(["doctor", "build", "run", "test", "playable", "package", "verify"]);
+const COMMANDS = new Set(["doctor", "build", "run", "test", "playable", "package", "portal-check", "verify"]);
 // The tier vocabulary is shared with cmake/GameTests.cmake; CTest labels carry it.
 export const TEST_TIERS = ["core", "slow", "taste"];
 export const TEST_TIER_DEFAULT = "core";
-const USAGE = "usage: node tools/game.mjs <doctor|build|run|test|playable|package|verify> [--target local|itch|poki|yandex|playgama] [--no-build] [--out <dir>] [--template-proof] [--skip-tests] [test: --tier core|slow|taste | --all | --only <test>] [--update-goldens]";
+const USAGE = "usage: node tools/game.mjs <doctor|build|run|test|playable|package|portal-check|verify> [--target local|itch|poki|yandex|playgama|crazygames] [--no-build] [--out <dir>] [--template-proof] [--skip-tests] [test: --tier core|slow|taste | --all | --only <test>] [--update-goldens]";
 
 function readJson(path, label) {
   let value;
@@ -253,6 +253,63 @@ function artifactDir(gameDir, target) {
   return join(gameDir, "build", target === "local" ? "wasm-release" : `wasm-release-${target}`, "bin");
 }
 
+/* One verdict for a portal submission. The three checks belong to three owners
+   -- the feature owns the artifact contract and the SDK probe, the studio owns
+   the store spec -- and a release is only ready when all three agree, so they
+   are asked together rather than remembered separately. */
+export function portalCheckPlan(studioRoot, gameDir, target, { exists = existsSync } = {}) {
+  const steps = [];
+  steps.push({
+    id: "artifact",
+    args: [join(studioRoot, "features", "platform-sdk", "scripts", "artifact_tools.mjs"),
+      "inspect", "--target", target, "--artifact", artifactDir(gameDir, target)],
+  });
+
+  const spec = join(studioRoot, "ai_studio", "store_kit", `${target}_spec.json`);
+  const storeDir = join(gameDir, "release", "store", target);
+  if (exists(spec)) {
+    steps.push({
+      id: "store",
+      args: [join(studioRoot, "ai_studio", "store_kit", "check.mjs"),
+        "--portal", target, "--dir", storeDir],
+      skip: exists(storeDir) ? null : `no store draft at ${storeDir}`,
+    });
+  }
+
+  /* Only Yandex ships a dev server a game can be driven inside. The other
+     portals prove their SDK in a console nobody can reach from here, so the
+     row is absent rather than silently passing. */
+  const probe = join(studioRoot, "features", "platform-sdk", "scripts", `${target}_sdk_probe.mjs`);
+  if (exists(probe)) {
+    steps.push({
+      id: "sdk",
+      args: [probe, "--artifact", artifactDir(gameDir, target)],
+      skip: exists(artifactDir(gameDir, target)) ? null : "no built artifact to drive",
+    });
+  }
+  return steps;
+}
+
+function portalCheck(gameDir, target) {
+  const studioRoot = findStudioRoot(gameDir);
+  const rows = [];
+  for (const step of portalCheckPlan(studioRoot, gameDir, target)) {
+    if (step.skip) {
+      rows.push({ id: step.id, ok: false, detail: step.skip });
+      continue;
+    }
+    const result = spawnSync(process.execPath, step.args, { cwd: gameDir, encoding: "utf8", shell: false });
+    const output = `${result.stdout || ""}${result.stderr || ""}`.trim();
+    rows.push({ id: step.id, ok: result.status === 0, detail: output });
+  }
+  for (const row of rows) {
+    console.log(`${row.ok ? "PASS" : "FAIL"}  ${row.id}`);
+    if (row.detail) console.log(row.detail.split("\n").map((line) => `    ${line}`).join("\n"));
+  }
+  if (rows.some((row) => !row.ok)) throw new Error(`portal-check failed for ${target}`);
+  return rows;
+}
+
 function gitRevision(cwd, label) {
   const safe = resolve(cwd).replaceAll("\\", "/");
   const result = spawnSync("git", ["-c", `safe.directory=${safe}`, "rev-parse", "HEAD"], { cwd, encoding: "utf8", shell: false });
@@ -372,6 +429,10 @@ export async function executeGameCommand(args, dependencies = {}) {
     if (args.build) (dependencies.build || buildGame)(gameDir, args.target);
     validateWebArtifact({ gameDir, artifactDir: artifactDir(gameDir, args.target), target: args.target, studioRoot: findStudioRoot(gameDir) });
     return { message: `playable proof passed (${args.target})` };
+  }
+  if (args.command === "portal-check") {
+    const rows = portalCheck(gameDir, args.target);
+    return { message: `portal-check passed for ${args.target} (${rows.map((row) => row.id).join(", ")})` };
   }
   if (args.command === "package") {
     const metadata = prepare(args.templateProof);

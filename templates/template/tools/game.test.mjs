@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, selectTests } from "./game.mjs";
+import { doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, selectTests } from "./game.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { createRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 
@@ -303,4 +303,32 @@ test("copied CI restores the Studio layout and mounts the standalone game under 
   assert.match(workflow, /repository: \$\{\{ env\.STUDIO_REPOSITORY \}\}/);
   assert.match(workflow, /path: \$\{\{ steps\.identity\.outputs\.game_path \}\}/);
   assert.match(workflow, /working-directory: \$\{\{ steps\.identity\.outputs\.game_path \}\}[\s\S]*node tools\/game\.mjs verify --target itch/);
+});
+
+test("portal-check asks the artifact, the store draft and the SDK proof that exists", () => {
+  const gameDir = "/repo/games/example";
+  const studio = "/repo";
+  // Every portal has an artifact contract; only some have a store spec, and
+  // only Yandex ships a dev server a game can be driven inside.
+  const present = new Set([
+    "/repo/ai_studio/store_kit/yandex_spec.json",
+    "/repo/features/platform-sdk/scripts/yandex_sdk_probe.mjs",
+    "/repo/games/example/release/store/yandex",
+    "/repo/games/example/build/wasm-release-yandex/bin",
+  ]);
+  const exists = (path) => present.has(path.replaceAll("\\", "/"));
+
+  const yandex = portalCheckPlan(studio, gameDir, "yandex", { exists });
+  assert.deepEqual(yandex.map((step) => step.id), ["artifact", "store", "sdk"]);
+  assert.equal(yandex.every((step) => !step.skip), true);
+
+  const itch = portalCheckPlan(studio, gameDir, "itch", { exists });
+  assert.deepEqual(itch.map((step) => step.id), ["artifact"]);
+
+  // A declared spec with no folder behind it is a failing row, never a silent
+  // pass: an unwritten store draft is exactly what this command is for.
+  const missingDraft = portalCheckPlan(studio, gameDir, "yandex", {
+    exists: (path) => exists(path) && !path.replaceAll("\\", "/").endsWith("/release/store/yandex"),
+  });
+  assert.equal(missingDraft.find((step) => step.id === "store").skip.includes("no store draft"), true);
 });
