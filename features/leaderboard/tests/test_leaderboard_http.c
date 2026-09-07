@@ -284,10 +284,19 @@ void tearDown(void) {
     leaderboard_shutdown();
 }
 
-/* One pump that must consume the request in flight. */
+/* Pumps until the wire is quiet: the first beat sends what was submitted, the
+   next consumes the answer. */
 static void settle(void) {
     leaderboard_update();
+    if (g_net.live != 0) {
+        leaderboard_update();
+    }
     TEST_ASSERT_EQUAL_INT(0, g_net.live);
+}
+
+/* A submitted score leaves on the next pump, carrying every scope of its beat. */
+static void send_beat(void) {
+    leaderboard_update();
 }
 
 /* ---- capabilities ---- */
@@ -333,10 +342,12 @@ void test_body_carries_every_scope_and_the_extra(void) {
     TEST_ASSERT_TRUE(leaderboard_extra_set(extra, sizeof extra, "skin", "hat.gummy"));
     TEST_ASSERT_TRUE(leaderboard_extra_set(extra, sizeof extra, "level", "5"));
     leaderboard_submit(g_score, LEADERBOARD_SCOPE_UTC_DAY, 3, extra);
+    send_beat();
     TEST_ASSERT_EQUAL_INT(1, g_net.request_calls);
     answer_ok("score", 3);
     settle();
     leaderboard_submit(g_score, LEADERBOARD_SCOPE_ALL_TIME, 7, extra);
+    send_beat();
     TEST_ASSERT_EQUAL_INT(2, g_net.request_calls);
     char body[1024];
     last_body(body, sizeof body);
@@ -367,6 +378,7 @@ void test_extra_cannot_forge_the_wire_fields(void) {
     TEST_ASSERT_TRUE(leaderboard_extra_set(extra, sizeof extra, "score", "999"));
     TEST_ASSERT_TRUE(leaderboard_extra_set(extra, sizeof extra, "day", "19990101"));
     leaderboard_submit(g_score, LEADERBOARD_SCOPE_ALL_TIME, 7, extra);
+    send_beat();
     char body[1024];
     last_body(body, sizeof body);
     TEST_ASSERT_NULL(strstr(body, "evil"));
@@ -382,6 +394,7 @@ void test_second_board_uses_its_wire_name_and_declared_scopes(void) {
     const leaderboard_board_t laps = leaderboard_board("laps");
     TEST_ASSERT_EQUAL_UINT32(ALL, leaderboard_caps(laps).scopes);
     leaderboard_submit(laps, LEADERBOARD_SCOPE_ALL_TIME, 61, NULL);
+    send_beat();
     char body[1024];
     last_body(body, sizeof body);
     TEST_ASSERT_NOT_NULL(strstr(body, "\"lap_time\":61"));
@@ -461,7 +474,8 @@ void test_place_is_re_estimated_locally(void) {
     TEST_ASSERT_LESS_THAN_INT(below, inside);
     TEST_ASSERT_LESS_OR_EQUAL_INT(view.top_count, inside);
     TEST_ASSERT_TRUE(view.top[inside - 1].you);
-    TEST_ASSERT_GREATER_THAN_INT(requests, g_net.request_calls); /* and goes out at once */
+    send_beat();
+    TEST_ASSERT_GREATER_THAN_INT(requests, g_net.request_calls); /* and goes out on that beat */
 
     /* a value submitted while one is in flight reaches the backend when that
        request completes; the top is re-ranked on it before its own answer */
@@ -476,6 +490,7 @@ void test_place_is_re_estimated_locally(void) {
 
 void test_submit_mid_flight_goes_out_right_after(void) {
     leaderboard_submit(g_score, LEADERBOARD_SCOPE_ALL_TIME, 7, NULL);
+    send_beat();
     TEST_ASSERT_EQUAL_INT(1, g_net.request_calls);
     leaderboard_submit(g_score, LEADERBOARD_SCOPE_ALL_TIME, 9, NULL);
     TEST_ASSERT_EQUAL_INT(1, g_net.request_calls); /* waits for the answer in flight */

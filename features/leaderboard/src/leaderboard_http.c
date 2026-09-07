@@ -40,6 +40,11 @@ typedef struct {
     double last_response;
     int errors_sequence;
     http_submit_t submit[LEADERBOARD_SCOPE_COUNT];
+    /* A submitted score waits for the pump instead of leaving at the call site:
+     * one body carries every scope, and a game that counts a run and then its
+     * day would otherwise send the first value twice, once with the day still
+     * stale. */
+    bool send_pending;
     /* The last payload the game submitted; the poll re-sends it because the
      * server row holds only what the latest request carried. */
     char extra[LEADERBOARD_EXTRA_MAX];
@@ -364,6 +369,7 @@ static bool any_submit_queued(const http_board_t *b) {
 
 static void start_request(leaderboard_http_t *self, leaderboard_board_t board, http_board_t *b) {
     const leaderboard_http_transport_t *t = transport_of(self);
+    b->send_pending = false;
     for (int s = 0; s < LEADERBOARD_SCOPE_COUNT; s++) {
         if (b->submit[s] == SUBMIT_QUEUED) {
             b->submit[s] = SUBMIT_IN_FLIGHT;
@@ -442,6 +448,13 @@ static void finish_request(leaderboard_http_t *self, leaderboard_board_t board, 
 static void poll_board(leaderboard_http_t *self, leaderboard_board_t board, http_board_t *b) {
     const leaderboard_http_transport_t *t = transport_of(self);
     const double now = t->monotonic_now(t->userdata);
+    /* A fresh score does not wait for the repeat timer, which a short session
+     * never reaches; it goes out on the next pump, with every scope of this
+     * beat in one body. */
+    if (b->send_pending && b->status != HTTP_LOADING) {
+        start_request(self, board, b);
+        return;
+    }
     switch (b->status) {
     case HTTP_IDLE:
         start_request(self, board, b);
@@ -521,9 +534,7 @@ static bool http_submit(leaderboard_board_t board, leaderboard_scope_t scope, ui
         complete_scope_page(board, b, scope, value);
     }
     b->submit[scope] = SUBMIT_QUEUED;
-    if (b->status != HTTP_LOADING) {
-        start_request(self, board, b);
-    }
+    b->send_pending = true;
     return true;
 }
 
