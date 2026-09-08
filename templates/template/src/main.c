@@ -805,7 +805,7 @@ int main(int argc, char **argv) {
     game_configure_save();
     game_save_set_hot_snapshot_buffer(s_save_snapshot, sizeof s_save_snapshot);
     game_save_init();
-    cloud_save_init(game_save_policy_decide, game_save_policy_same_features);
+    cloud_save_init(game_save_policy_decide, game_save_policy_same_features, 0.0);
 
     /* The loading bar is the pack download: the backend must be able to carry
        progress before the pack starts, not after it is ready. SDK init still

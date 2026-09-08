@@ -29,6 +29,7 @@ typedef struct game_save_cloud_runtime {
     bool write_pending;
     bool started;
     bool has_read_attempt;
+    bool has_write_attempt;
     bool first_wait_started;
     bool policy_pending;
     bool auto_remote_pending;
@@ -251,8 +252,11 @@ static void start_write(void) {
     if (s_cloud.write_pending ||
         game_save_sync_state(&s_cloud.sync) != GAME_SAVE_SYNC_UPLOAD_READY) return;
     const double now = nt_time_now();
-    if (s_cloud.last_attempt_at > 0.0 &&
-        now - s_cloud.last_attempt_at < GAME_SAVE_CLOUD_RETRY_SEC) return;
+    /* The retry floor and the configured interval are the same gate: both say
+       how soon a new upload may start, and the wider one wins. */
+    const double gap = s_cloud.config.min_write_interval_sec > GAME_SAVE_CLOUD_RETRY_SEC
+        ? s_cloud.config.min_write_interval_sec : GAME_SAVE_CLOUD_RETRY_SEC;
+    if (s_cloud.has_write_attempt && now - s_cloud.last_attempt_at < gap) return;
     if (!game_save_sync_store_started(&s_cloud.sync)) return;
     char *envelope = envelope_build(game_save_last_saved_at(),
                                     game_save_sync_sent_document(&s_cloud.sync));
@@ -263,6 +267,7 @@ static void start_write(void) {
     const bool sent = s_cloud.config.transport.store(cloud_key(), envelope);
     free(envelope);
     s_cloud.last_attempt_at = now;
+    s_cloud.has_write_attempt = true;
     if (!sent) {
         game_save_sync_store_finished(&s_cloud.sync, false);
         return;

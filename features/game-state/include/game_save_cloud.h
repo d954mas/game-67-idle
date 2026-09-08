@@ -44,6 +44,11 @@ typedef struct game_save_cloud_config {
     const char *slot;
     const char *base_slot;
     const char *key;
+    /* Shortest gap between two upload attempts. The local save keeps its own
+       cadence; this one exists because a portal store can be metered per
+       write, where an idle game that uploads on every change is the expensive
+       shape. Below the coordinator's own retry floor it changes nothing. */
+    double min_write_interval_sec;
 } game_save_cloud_config_t;
 
 /* This singleton shallow-copies config; strings and callbacks remain borrowed

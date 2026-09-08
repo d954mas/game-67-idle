@@ -34,7 +34,8 @@ static game_save_cloud_write_status_t transport_write_status(void) {
 }
 
 void cloud_save_init(game_save_cloud_choose_fn choose,
-                     game_save_cloud_same_features_fn same_features) {
+                     game_save_cloud_same_features_fn same_features,
+                     double min_write_interval_sec) {
     const game_save_cloud_config_t config = {
         .transport = {
             .supported = platform_sdk_cloud_supported,
@@ -45,6 +46,7 @@ void cloud_save_init(game_save_cloud_choose_fn choose,
         },
         .choose = choose,
         .same_features = same_features,
+        .min_write_interval_sec = min_write_interval_sec,
     };
     (void)game_save_cloud_init(&config);
 }

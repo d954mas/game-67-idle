@@ -14,6 +14,7 @@ static char *s_base;
 static char *s_live;
 static int64_t s_saved_at;
 static double s_now;
+static double s_write_interval;
 static uint32_t s_read_id;
 static uint32_t s_write_id;
 static int s_read_calls;
@@ -136,7 +137,7 @@ void setUp(void) {
         .store = backend_store,
     };
     platform_sdk_cloud_set_backend(&backend, NULL);
-    cloud_save_init(test_policy, same_document);
+    cloud_save_init(test_policy, same_document, s_write_interval);
     s_saved_at = 1;
     s_blocking_write_ok = true;
     s_policy_decision = GAME_SAVE_ASK;
@@ -157,6 +158,7 @@ void tearDown(void) {
     s_blocking_write_ok = true;
     s_policy_decision = GAME_SAVE_ASK;
     s_policy_calls = 0;
+    s_write_interval = 0.0;
 }
 
 static void test_preboot_ready_remote_adopts_fresh_local(void) {
@@ -205,6 +207,58 @@ static void test_synchronous_store_ack_commits_the_exact_snapshot(void) {
     TEST_ASSERT_EQUAL_INT(1, s_write_calls);
     TEST_ASSERT_EQUAL_STRING("local", s_base);
     TEST_ASSERT_EQUAL(GAME_SAVE_SYNC_SYNCHRONIZED, game_save_cloud_state());
+}
+
+/* A metered portal store is the reason this interval exists: the local save
+   changes every few seconds in an idle game, and every change would otherwise
+   be one paid upload. After each acknowledged upload the coordinator re-reads
+   the account document, so the second upload needs that read answered. */
+static void upload_local_and_settle(const char *document, int64_t saved_at) {
+    s_saved_at = saved_at;
+    TEST_ASSERT_TRUE(replace_text(&s_local, document));
+    TEST_ASSERT_TRUE(replace_text(&s_live, document));
+    game_save_cloud_tick();
+    complete_read(PLATFORM_SDK_CLOUD_READY, "{\"saved_at\":1,\"doc\":\"local\"}");
+    game_save_cloud_tick();
+}
+
+static void test_write_interval_holds_back_the_next_upload(void) {
+    s_write_interval = 60.0;
+    s_sync_write_ack = true;
+    game_save_cloud_shutdown();
+    cloud_save_init(test_policy, same_document, s_write_interval);
+    s_local = copy_text("local");
+    s_live = copy_text("local");
+    (void)game_save_cloud_boot_settled();
+    complete_read(PLATFORM_SDK_CLOUD_EMPTY, NULL);
+    TEST_ASSERT_FALSE(game_save_cloud_start(false));
+    game_save_cloud_tick();
+    TEST_ASSERT_EQUAL_INT(1, s_write_calls);
+
+    s_now = 30.0;
+    upload_local_and_settle("local-2", 2);
+    TEST_ASSERT_EQUAL_INT(1, s_write_calls);
+
+    s_now = 61.0;
+    game_save_cloud_tick();
+    complete_read(PLATFORM_SDK_CLOUD_READY, "{\"saved_at\":1,\"doc\":\"local\"}");
+    game_save_cloud_tick();
+    TEST_ASSERT_EQUAL_INT(2, s_write_calls);
+}
+
+static void test_no_interval_uploads_every_change(void) {
+    s_sync_write_ack = true;
+    s_local = copy_text("local");
+    s_live = copy_text("local");
+    (void)game_save_cloud_boot_settled();
+    complete_read(PLATFORM_SDK_CLOUD_EMPTY, NULL);
+    TEST_ASSERT_FALSE(game_save_cloud_start(false));
+    game_save_cloud_tick();
+    TEST_ASSERT_EQUAL_INT(1, s_write_calls);
+
+    s_now = 6.0;
+    upload_local_and_settle("local-2", 2);
+    TEST_ASSERT_EQUAL_INT(2, s_write_calls);
 }
 
 static void test_late_account_read_keeps_running_state_and_enters_conflict(void) {
@@ -340,7 +394,7 @@ static void test_elapsed_playtime_keeps_remote_auto_choice_at_safe_point(void) {
     s_live = copy_text("local");
     s_policy_decision = GAME_SAVE_KEEP_REMOTE;
     game_save_cloud_shutdown();
-    cloud_save_init(test_policy, same_features);
+    cloud_save_init(test_policy, same_features, s_write_interval);
     (void)game_save_cloud_boot_settled();
     TEST_ASSERT_FALSE(game_save_cloud_start(false));
     complete_read(PLATFORM_SDK_CLOUD_READY, "{\"saved_at\":1,\"doc\":\"account\"}");
@@ -355,7 +409,7 @@ static void test_reversed_policy_cancels_auto_remote_after_elapsed_playtime(void
     s_live = copy_text("local");
     s_policy_decision = GAME_SAVE_KEEP_REMOTE;
     game_save_cloud_shutdown();
-    cloud_save_init(test_policy, same_features);
+    cloud_save_init(test_policy, same_features, s_write_interval);
     (void)game_save_cloud_boot_settled();
     TEST_ASSERT_FALSE(game_save_cloud_start(false));
     complete_read(PLATFORM_SDK_CLOUD_READY, "{\"saved_at\":1,\"doc\":\"account\"}");
@@ -419,6 +473,8 @@ int main(void) {
     RUN_TEST(test_fresh_device_adopts_valid_account_document);
     RUN_TEST(test_failed_read_blocks_writes_and_retries_once_per_interval);
     RUN_TEST(test_synchronous_store_ack_commits_the_exact_snapshot);
+    RUN_TEST(test_write_interval_holds_back_the_next_upload);
+    RUN_TEST(test_no_interval_uploads_every_change);
     RUN_TEST(test_late_account_read_keeps_running_state_and_enters_conflict);
     RUN_TEST(test_keep_local_rereads_the_pinned_remote_before_acknowledged_upload);
     RUN_TEST(test_use_cloud_keeps_both_documents_when_local_replace_fails);
