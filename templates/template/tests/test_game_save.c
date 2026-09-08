@@ -484,7 +484,7 @@ void test_hot_snapshot_round_trips_playtime_and_saturates_import(void) {
 
     const char *near_limit =
         "{\"format\":1,\"save_version\":2,\"saved_at\":1,\"save_seq\":1,"
-        "\"playtime_ms\":\"9223372036854775806\",\"app\":\"template_save_test\",\"build\":\"0\","
+        "\"playtime_ms\":\"9223372036854775806\",\"app\":\"" GAME_STORAGE_APP_ID "\",\"build\":\"0\","
         "\"features\":{\"game\":{\"v\":1,\"coins\":1,\"name\":\"n\"},"
         "\"extra\":{\"v\":1,\"mark\":1}}}";
     TEST_ASSERT_TRUE(game_save_import_string(near_limit, NULL, 0));

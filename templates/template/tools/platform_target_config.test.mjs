@@ -1,13 +1,27 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import {
-  descriptorForTarget,
-  portalTargetNames,
-  targetNames,
-} from "../../../features/platform-sdk/publish-targets/target_config.mjs";
-import { inspectPlatformSdkArtifact } from "../../../features/platform-sdk/scripts/artifact_tools.mjs";
+// A public game sits at games/<id>, a private one at games/private/<id>, so the
+// hop count up to the studio cannot be written into the path. Walk until the
+// feature tree appears instead.
+function studioRoot() {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (let i = 0; i < 8; i += 1) {
+    if (existsSync(join(dir, "features", "platform-sdk"))) return dir;
+    dir = dirname(dir);
+  }
+  throw new Error("studio root not found above the game tools directory");
+}
+
+const featureUrl = (relative) =>
+  pathToFileURL(join(studioRoot(), "features", "platform-sdk", relative)).href;
+
+const { descriptorForTarget, portalTargetNames, targetNames } =
+  await import(featureUrl("publish-targets/target_config.mjs"));
+const { inspectPlatformSdkArtifact } = await import(featureUrl("scripts/artifact_tools.mjs"));
 
 test("canonical target descriptors expose every target and its SDK mapping", () => {
   assert.deepEqual(targetNames(), ["local", "itch", "poki", "yandex", "playgama", "crazygames"]);
@@ -32,7 +46,7 @@ test("artifact inspection rejects a missing local artifact when required files a
 test("canonical target descriptor IDs match the C platform enums", async () => {
   const { readFileSync } = await import("node:fs");
   const { join } = await import("node:path");
-  const root = fileURLToPath(new URL("../../..", import.meta.url));
+  const root = studioRoot();
   const header = readFileSync(join(root, "features", "platform-sdk", "include", "features", "platform_sdk", "platform_sdk.h"), "utf8");
   const targets = JSON.parse(readFileSync(join(root, "features", "platform-sdk", "publish-targets", "targets.json"), "utf8")).targets;
   const enumValues = (name) => Object.fromEntries(header.matchAll(new RegExp("typedef enum " + name + " \\{([\\s\\S]*?)\\} " + name + ";", "g"))[Symbol.iterator]().next().value[1]

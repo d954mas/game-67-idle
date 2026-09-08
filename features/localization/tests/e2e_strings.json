@@ -3,7 +3,8 @@
     "ru": {
       "group_separator": " ",
       "decimal_separator": ",",
-      "group_min_digits": 5
+      "group_min_digits": 5,
+      "alphabet": "абвгдежзийклмнопрстуфхцчшщъыьэюяё"
     },
     "en": {
       "group_separator": ",",
