@@ -148,7 +148,9 @@ static void test_local_change_keeps_unresolved_conflict_visible(void) {
     game_save_sync_destroy(&sync);
 }
 
-static void test_keep_local_still_requires_remote_refresh_after_local_change(void) {
+/* A resolved conflict settles what the account holds, so play that continues
+   after it uploads instead of asking the store again. */
+static void test_keep_local_uploads_after_a_resolved_conflict(void) {
     game_save_sync_t sync;
     game_save_sync_init(&sync);
     TEST_ASSERT_TRUE(game_save_sync_set_base(&sync, "base"));
@@ -157,8 +159,8 @@ static void test_keep_local_still_requires_remote_refresh_after_local_change(voi
     TEST_ASSERT_TRUE(game_save_sync_resolve(&sync, GAME_SAVE_KEEP_LOCAL));
 
     TEST_ASSERT_TRUE(game_save_sync_set_local(&sync, "local-changed", false));
-    TEST_ASSERT_EQUAL(GAME_SAVE_SYNC_NEEDS_REMOTE_REFRESH, game_save_sync_state(&sync));
-    TEST_ASSERT_EQUAL_STRING("remote", game_save_sync_remote_document_value(&sync));
+    TEST_ASSERT_EQUAL(GAME_SAVE_SYNC_UPLOAD_READY, game_save_sync_state(&sync));
+    TEST_ASSERT_EQUAL_STRING("local-changed", game_save_sync_upload_document(&sync));
     game_save_sync_destroy(&sync);
 }
 
@@ -191,8 +193,8 @@ static void test_failed_store_retries_and_acknowledges_the_sent_snapshot_only(vo
     TEST_ASSERT_EQUAL_STRING("second", game_save_sync_base_document(&sync));
     TEST_ASSERT_EQUAL(GAME_SAVE_SYNC_SYNCHRONIZED, game_save_sync_state(&sync));
     TEST_ASSERT_TRUE(game_save_sync_set_local(&sync, "third", false));
-    TEST_ASSERT_EQUAL(GAME_SAVE_SYNC_NEEDS_REMOTE_REFRESH, game_save_sync_state(&sync));
-    TEST_ASSERT_NULL(game_save_sync_upload_document(&sync));
+    TEST_ASSERT_EQUAL(GAME_SAVE_SYNC_UPLOAD_READY, game_save_sync_state(&sync));
+    TEST_ASSERT_EQUAL_STRING("third", game_save_sync_upload_document(&sync));
     game_save_sync_destroy(&sync);
 }
 
@@ -210,7 +212,7 @@ int main(void) {
     RUN_TEST(test_keep_local_against_empty_cloud_requires_empty_on_refresh);
     RUN_TEST(test_keep_local_against_remote_requires_nonempty_remote_on_refresh);
     RUN_TEST(test_local_change_keeps_unresolved_conflict_visible);
-    RUN_TEST(test_keep_local_still_requires_remote_refresh_after_local_change);
+    RUN_TEST(test_keep_local_uploads_after_a_resolved_conflict);
     RUN_TEST(test_late_remote_cannot_replace_a_running_local_save);
     RUN_TEST(test_failed_store_retries_and_acknowledges_the_sent_snapshot_only);
     return UNITY_END();

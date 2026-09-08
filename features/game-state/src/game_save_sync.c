@@ -110,8 +110,12 @@ bool game_save_sync_set_local(game_save_sync_t *sync, const char *document, bool
         evaluate(sync);
     } else if (sync->state != GAME_SAVE_SYNC_STORE_PENDING &&
                sync->state != GAME_SAVE_SYNC_UPLOAD_READY) {
+        /* The base is what the account document holds, so a local change can
+           go straight up. Re-reading first would spend one transport round
+           trip per upload to re-learn what this side already wrote; the
+           account is read once, at boot. */
         sync->state = documents_equal(sync->local, sync->base)
-            ? GAME_SAVE_SYNC_SYNCHRONIZED : GAME_SAVE_SYNC_NEEDS_REMOTE_REFRESH;
+            ? GAME_SAVE_SYNC_SYNCHRONIZED : GAME_SAVE_SYNC_UPLOAD_READY;
     }
     return true;
 }
@@ -194,9 +198,13 @@ void game_save_sync_store_finished(game_save_sync_t *sync, bool acknowledged) {
         sync->resolved_remote = NULL;
         sync->resolved_remote_was_empty = false;
         sync->local_resolution_pending = false;
+        /* An acknowledged upload IS the account document; a local change that
+           arrived while it was in flight follows it without a read. */
         sync->state = documents_equal(sync->local, sync->base)
-            ? GAME_SAVE_SYNC_SYNCHRONIZED : GAME_SAVE_SYNC_NEEDS_REMOTE_REFRESH;
+            ? GAME_SAVE_SYNC_SYNCHRONIZED : GAME_SAVE_SYNC_UPLOAD_READY;
     } else {
+        /* A failed upload leaves the account document unknown: what it holds
+           has to be read before this side may overwrite it. */
         sync->state = GAME_SAVE_SYNC_NEEDS_REMOTE_REFRESH;
     }
     free(sync->sent);

@@ -211,14 +211,12 @@ static void test_synchronous_store_ack_commits_the_exact_snapshot(void) {
 
 /* A metered portal store is the reason this interval exists: the local save
    changes every few seconds in an idle game, and every change would otherwise
-   be one paid upload. After each acknowledged upload the coordinator re-reads
-   the account document, so the second upload needs that read answered. */
+   be one paid upload. */
 static void upload_local_and_settle(const char *document, int64_t saved_at) {
     s_saved_at = saved_at;
     TEST_ASSERT_TRUE(replace_text(&s_local, document));
     TEST_ASSERT_TRUE(replace_text(&s_live, document));
     game_save_cloud_tick();
-    complete_read(PLATFORM_SDK_CLOUD_READY, "{\"saved_at\":1,\"doc\":\"local\"}");
     game_save_cloud_tick();
 }
 
@@ -241,9 +239,25 @@ static void test_write_interval_holds_back_the_next_upload(void) {
 
     s_now = 61.0;
     game_save_cloud_tick();
-    complete_read(PLATFORM_SDK_CLOUD_READY, "{\"saved_at\":1,\"doc\":\"local\"}");
-    game_save_cloud_tick();
     TEST_ASSERT_EQUAL_INT(2, s_write_calls);
+}
+
+/* An acknowledged upload leaves the coordinator knowing what the account
+   document is, so the next one needs no read to confirm it. */
+static void test_an_acknowledged_upload_needs_no_reread(void) {
+    s_sync_write_ack = true;
+    s_local = copy_text("local");
+    s_live = copy_text("local");
+    (void)game_save_cloud_boot_settled();
+    complete_read(PLATFORM_SDK_CLOUD_EMPTY, NULL);
+    TEST_ASSERT_FALSE(game_save_cloud_start(false));
+    game_save_cloud_tick();
+    const int reads_after_first_upload = s_read_calls;
+
+    s_now = 6.0;
+    upload_local_and_settle("local-2", 2);
+    TEST_ASSERT_EQUAL_INT(2, s_write_calls);
+    TEST_ASSERT_EQUAL_INT(reads_after_first_upload, s_read_calls);
 }
 
 static void test_no_interval_uploads_every_change(void) {
@@ -475,6 +489,7 @@ int main(void) {
     RUN_TEST(test_synchronous_store_ack_commits_the_exact_snapshot);
     RUN_TEST(test_write_interval_holds_back_the_next_upload);
     RUN_TEST(test_no_interval_uploads_every_change);
+    RUN_TEST(test_an_acknowledged_upload_needs_no_reread);
     RUN_TEST(test_late_account_read_keeps_running_state_and_enters_conflict);
     RUN_TEST(test_keep_local_rereads_the_pinned_remote_before_acknowledged_upload);
     RUN_TEST(test_use_cloud_keeps_both_documents_when_local_replace_fails);
