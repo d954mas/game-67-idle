@@ -320,6 +320,12 @@ ALLOWED_CONTROL = frozenset({"\n", "\t"})
 # plain one and the hole cannot happen. Belarusian is deliberately NOT here:
 # there the letter is mandatory and the plain one is a spelling error.
 YO_BANNED_LANGS = frozenset({"ru"})
+# ...but the GLYPH still has to be packed. Russian copy no longer carries it,
+# so nothing would pull it into the charset, and the first ё the game did not
+# write -- a portal player name, a Belarusian line -- would draw as a box.
+# These languages therefore declare it in their alphabet, which is the one
+# charset source that does not depend on what the copy happens to say today.
+YO_CHARSET_LANGS = frozenset({"ru", "be"})
 YO_LETTERS = "ёЁ"
 
 
@@ -484,6 +490,13 @@ class Lang:
             f"language {code!r} alphabet must be a string, got {alphabet!r}",
         )
         self.alphabet = alphabet
+        if code.split("-")[0] in YO_CHARSET_LANGS:
+            require(
+                any(ch in alphabet for ch in YO_LETTERS),
+                f"language {code!r} must declare 'ё' in its alphabet: the packed charset is built "
+                "from what the corpus says, and this letter reaches the screen through text the game "
+                "never wrote (a portal player name, a Belarusian line)",
+            )
         separator = block.get("group_separator")
         require(
             isinstance(separator, str) and len(separator) <= 4,

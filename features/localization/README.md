@@ -255,8 +255,8 @@ sixty lines a second. `loc_fallback_log_count()` exposes the count for tests.
 - a key not matching `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`
 - a malformed or unbalanced brace, or a control character other than tab/newline
 - an unknown language code with no explicit `plural_rule`
-- `ё` or `Ё` in Russian copy (see *The letter Russian copy does not
-  spell out* below)
+- `ё` or `Ё` in Russian copy, and a `ru` or `be` language whose `alphabet` does
+  not declare `ё` (see *The letter Russian copy does not spell out* below)
 
 and warns (without failing) on a missing non-fallback translation.
 
@@ -276,9 +276,15 @@ substituting it: the source and what the player reads must be the same string.
 The ban is Russian-only. Belarusian requires the letter, and `е` there is a
 spelling error, so `be` is untouched.
 
-A language's `alphabet` may still declare it. The charset is not the copy: a
-portal hands back player names the game did not write, and a name like
-`Пётр` still has to draw.
+The `alphabet` MUST still declare it, and the generator refuses a `ru` or `be`
+block that does not. The charset is not the copy: it is built from what the
+corpus happens to say, so a letter the copy no longer writes would stop being
+packed — and the first one the game did not write (a portal player name, a
+Belarusian line) would draw as a box. Declaring it costs two glyphs.
+
+`loc.py fonts` is the other half: it checks every packed face can actually
+render every non-ASCII codepoint the charset carries, so a declared letter
+that a font does not have fails the build instead of the screen.
 
 ## Output determinism
 

@@ -19,11 +19,14 @@ sys.path.insert(0, str(Path(__file__).parent))
 import loc  # noqa: E402
 
 
+RU_ALPHABET = "абвгдежзийклмнопрстуфхцчшщъыьэюяё"
+
+
 def table_doc(strings: dict, *, languages: dict | None = None, fallback: str = "ru") -> dict:
     return {
         "languages": languages
         or {
-            "ru": {"group_separator": " ", "group_min_digits": 5},
+            "ru": {"group_separator": " ", "group_min_digits": 5, "alphabet": RU_ALPHABET},
             "en": {"group_separator": ",", "group_min_digits": 4},
         },
         "fallback": fallback,
@@ -92,13 +95,27 @@ class ValidationErrors(unittest.TestCase):
         doc = table_doc(
             {"hud.score": {"ru": "Счет", "be": "Рахунак ё", "en": "Score"}},
             languages={
-                "ru": {"group_separator": " ", "group_min_digits": 5},
-                "be": {"group_separator": " ", "group_min_digits": 5},
+                "ru": {"group_separator": " ", "group_min_digits": 5, "alphabet": RU_ALPHABET},
+                "be": {"group_separator": " ", "group_min_digits": 5, "alphabet": "абвё"},
                 "en": {"group_separator": ",", "group_min_digits": 4},
             },
         )
         table = build(doc)
         self.assertIn("be", table.entries[0].forms)
+
+    def test_russian_alphabet_must_keep_the_diaeresis_letter(self):
+        # Banned in the copy, required in the charset: a portal player name
+        # carrying it must still draw.
+        self.assert_rejects(
+            table_doc(
+                {"hud.score": {"ru": "Счет", "en": "Score"}},
+                languages={
+                    "ru": {"group_separator": " ", "group_min_digits": 5, "alphabet": "абв"},
+                    "en": {"group_separator": ",", "group_min_digits": 4},
+                },
+            ),
+            "must declare",
+        )
 
     def test_arg_declared_but_unused(self):
         self.assert_rejects(
@@ -282,7 +299,7 @@ class ValidationErrors(unittest.TestCase):
             table_doc(
                 {"hud.score": {"ru": "а", "xq": "a"}},
                 languages={
-                    "ru": {"group_separator": " ", "group_min_digits": 5},
+                    "ru": {"group_separator": " ", "group_min_digits": 5, "alphabet": RU_ALPHABET},
                     "xq": {"group_separator": ",", "group_min_digits": 4},
                 },
             ),
@@ -294,7 +311,7 @@ class ValidationErrors(unittest.TestCase):
             table_doc(
                 {"hud.score": {"ru": "а", "xq": "a"}},
                 languages={
-                    "ru": {"group_separator": " ", "group_min_digits": 5},
+                    "ru": {"group_separator": " ", "group_min_digits": 5, "alphabet": RU_ALPHABET},
                     "xq": {"group_separator": ",", "group_min_digits": 4, "plural_rule": "one_other"},
                 },
             )

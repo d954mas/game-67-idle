@@ -10,7 +10,7 @@
       "group_separator": " ",
       "group_min_digits": 5,
       "decimal_separator": ",",
-      "alphabet": "абвгдежзийклмнопрстуфхцчшщъыьэюяе"
+      "alphabet": "абвгдежзийклмнопрстуфхцчшщъыьэюяё"
     }
   },
   "fallback": "en",

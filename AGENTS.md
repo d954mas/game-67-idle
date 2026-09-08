@@ -84,7 +84,9 @@ heads; source working-tree changes are intentionally not transferred.
   `draw_text`.
 - Russian copy writes `е`, never `ё`. A packed font is the first place that glyph
   goes missing, and the word then renders with a hole; the loc generator refuses
-  the letter (`features/localization`). Belarusian, which requires it, is exempt.
+  the letter (`features/localization`). Belarusian, which requires it, is exempt —
+  and both languages must still declare `ё` in their `alphabet`, so the font packs
+  it for the text the game did not write: a portal player name, a Belarusian line.
 - Source assets before generating: shared library, then free CC0/OFL sources, then
   generation.
 - SVG/vector/procedurally drawn art is a direction mockup only. It never becomes a
