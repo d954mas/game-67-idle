@@ -70,6 +70,16 @@
       "rewarded_supported": false,
       "storage_supported": true,
       "portal": true
+    },
+    "pikabu": {
+      "adapter": "pikabu",
+      "target_id": 7,
+      "sdk_id": 6,
+      "external_links_allowed": false,
+      "ads_supported": true,
+      "rewarded_supported": true,
+      "storage_supported": true,
+      "portal": true
     }
   }
 }

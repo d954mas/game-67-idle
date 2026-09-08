@@ -641,6 +641,8 @@ const char *platform_sdk_target_name(void) {
         return "crazygames";
     case PLATFORM_TARGET_WAVEDASH:
         return "wavedash";
+    case PLATFORM_TARGET_PIKABU:
+        return "pikabu";
     }
     return "local";
 }
@@ -659,6 +661,8 @@ const char *platform_sdk_current_name(void) {
         return "crazygames";
     case PLATFORM_SDK_WAVEDASH:
         return "wavedash";
+    case PLATFORM_SDK_PIKABU:
+        return "pikabu";
     }
     return "mock";
 }

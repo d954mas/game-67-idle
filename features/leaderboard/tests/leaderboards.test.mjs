@@ -23,6 +23,7 @@ const valid = () => ({
         crazygames: "portal",
         wavedash: "portal",
         playgama: "portal",
+        pikabu: "http",
         poki: "http",
         itch: "http",
         local: "http",
@@ -126,7 +127,7 @@ test("a portal without a leaderboard API cannot be the portal family", () => {
 
 test("a scope no target can serve is refused at authoring time", () => {
   const manifest = valid();
-  for (const target of ["poki", "itch", "local"]) manifest.boards[0].backends[target] = "none";
+  for (const target of ["pikabu", "poki", "itch", "local"]) manifest.boards[0].backends[target] = "none";
   assert.match(validateManifest(manifest).join("\n"), /can serve the utc_day scope/);
 });
 

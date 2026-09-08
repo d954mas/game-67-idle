@@ -35,16 +35,18 @@ part of the work (today they explicitly do not map leaderboards).
 | Playgama | `bridge.leaderboards.setScore` | only when `bridge.leaderboards.type == in_game`, **decided at run time by the host platform** | not stated | none | `id, name, photo, score, rank` |
 | Wavedash | `uploadLeaderboardScore(id, score, keepBest, ugcId?, metadata?)` | `listLeaderboardEntries`, `listLeaderboardEntriesAroundUser`, `getMyLeaderboardEntries` | none — the player arrives signed in | none | metadata: 16 pairs, string values ≤ 256 chars; rows carry `username` and `userAvatarUrl` |
 | Poki | `sendHighscore` exists but is undocumented for v2 → out of contract | none | — | none | — |
+| Pikabu | no board API at all | none | — | none | — |
 
 Sources: `https://yandex.com/dev/games/doc/en/sdk/sdk-leaderboard`,
 `https://yandex.com/dev/games/doc/en/sdk/sdk-player`,
 `https://docs.crazygames.com/sdk/leaderboards-client/`,
 `https://docs.crazygames.com/sdk/leaderboards/`,
 `https://wiki.playgama.com/playgama/bridge-sdk/api/leaderboards`,
-`https://docs.wavedash.com/sdk/leaderboards`.
+`https://docs.wavedash.com/sdk/leaderboards`,
+`https://games.pikabu.ru/sdk/docs/intro/what-do`.
 
 Consequence for the seeding game: Yandex serves the board through the portal,
-Poki/itch/local keep the existing self-hosted board, CrazyGames takes score
+Poki/itch/local/Pikabu keep the existing self-hosted board, CrazyGames takes score
 submissions it may never display, Playgama decides at run time and on
 `playgama.com` itself currently answers `not_available`.
 

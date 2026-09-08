@@ -9,6 +9,7 @@ import { runInNewContext } from "node:vm";
 import { createCrazygamesPlatformAdapter } from "../web/adapters/crazygames.js";
 import { createMockPlatformAdapter } from "../web/adapters/mock.js";
 import { createPlaygamaPlatformAdapter } from "../web/adapters/playgama.js";
+import { createPikabuPlatformAdapter } from "../web/adapters/pikabu.js";
 import { createPokiPlatformAdapter } from "../web/adapters/poki.js";
 import { createWavedashPlatformAdapter } from "../web/adapters/wavedash.js";
 import { createYandexPlatformAdapter } from "../web/adapters/yandex.js";
@@ -30,6 +31,7 @@ const TargetPlatform = Object.freeze({
   PLAYGAMA: "playgama",
   CRAZYGAMES: "crazygames",
   WAVEDASH: "wavedash",
+  PIKABU: "pikabu",
 });
 const PLATFORM_BACKEND_METHODS = Object.freeze([
   "destroy",
@@ -202,6 +204,7 @@ test("build tooling maps publish targets to exactly one platform SDK adapter", (
   assert.equal(sdkForTarget(TargetPlatform.PLAYGAMA), "playgama");
   assert.equal(sdkForTarget(TargetPlatform.CRAZYGAMES), "crazygames");
   assert.equal(sdkForTarget(TargetPlatform.WAVEDASH), "wavedash");
+  assert.equal(sdkForTarget(TargetPlatform.PIKABU), "pikabu");
 });
 
 test("every platform adapter owns exactly the complete backend method contract", () => {
@@ -211,6 +214,7 @@ test("every platform adapter owns exactly the complete backend method contract",
     [TargetPlatform.YANDEX, createYandexPlatformAdapter],
     [TargetPlatform.PLAYGAMA, createPlaygamaPlatformAdapter],
     [TargetPlatform.WAVEDASH, createWavedashPlatformAdapter],
+    [TargetPlatform.PIKABU, createPikabuPlatformAdapter],
   ]) {
     const adapter = factory({
       emitVisibilityChange() {},
@@ -1494,7 +1498,7 @@ test("staged web SDK uses only composition and selected adapter modules", () => 
 });
 
 test("release SDK bundles are minified without changing adapter startup", () => {
-  for (const adapter of ["mock", "poki", "yandex", "playgama", "wavedash"]) {
+  for (const adapter of ["mock", "poki", "yandex", "playgama", "wavedash", "pikabu"]) {
     const source = Buffer.from(packagedPlatformPrefix(adapter));
     const release = platformSdkBundlePrefix(adapter);
     assert.ok(release.length < source.length * 0.75, adapter);
@@ -1513,7 +1517,7 @@ test("release SDK bundles are minified without changing adapter startup", () => 
 });
 
 test("publish manifests distinguish staged modules from single-JS release packages", () => {
-  for (const target of [TargetPlatform.ITCH, TargetPlatform.POKI, TargetPlatform.YANDEX, TargetPlatform.PLAYGAMA, TargetPlatform.WAVEDASH]) {
+  for (const target of [TargetPlatform.ITCH, TargetPlatform.POKI, TargetPlatform.YANDEX, TargetPlatform.PLAYGAMA, TargetPlatform.WAVEDASH, TargetPlatform.PIKABU]) {
     const manifest = JSON.parse(readFileSync(join(HERE, `../publish-targets/${target}.json`), "utf8"));
     assert.equal(manifest.required_files.includes("platform-sdk.js"), true, target);
     assert.equal(manifest.packaged_required_files.includes("game.js"), true, target);
@@ -1785,4 +1789,193 @@ test("wavedash hands over a signed-in player and opens no login dialog", async (
     avatarUrl: "",
   });
   adapter.destroy();
+});
+
+function createPikabuFixture({
+  preloaderSupported = true,
+  canShow = { preloader: true, fullscreen: true, rewarded: true },
+  rewardGranted = true,
+  networkDown = false,
+  saveEndpoint = "https://saves.example/pikabu",
+  remoteSaves = new Map(),
+} = {}) {
+  const host = createHost(TargetPlatform.PIKABU);
+  const calls = [];
+  const requests = [];
+  const listeners = new Map();
+  let tokenReads = 0;
+  const player = {
+    id: "anon-1",
+    name: "",
+    avatar: "",
+    isAuthorized: false,
+    async getSignedData() {
+      tokenReads += 1;
+      return `jwt.${player.id}.sig`;
+    },
+  };
+  const ad = (kind, result) => ({
+    isSupported: kind === "preloader" ? preloaderSupported : true,
+    async canShow() {
+      calls.push(`canShow:${kind}`);
+      return canShow[kind];
+    },
+    async show() {
+      calls.push(`show:${kind}`);
+      return result;
+    },
+  });
+  const sdk = {
+    player,
+    auth: {
+      async openAuthDialog() {
+        calls.push("auth");
+        player.id = "account-7";
+        player.name = "Игрок";
+        player.avatar = "https://avatars.example/7";
+        player.isAuthorized = true;
+        const handler = listeners.get("userAuthorized");
+        if (handler) handler({ id: player.id, name: player.name, avatar: player.avatar });
+      },
+    },
+    ads: {
+      preloader: ad("preloader", { rendered: true }),
+      fullscreen: ad("fullscreen", { rendered: true }),
+      rewarded: ad("rewarded", { rendered: true, reward: rewardGranted }),
+    },
+    on(name, handler) {
+      listeners.set(name, handler);
+      return () => listeners.delete(name);
+    },
+    gameStarted() {
+      calls.push("gameStarted");
+    },
+  };
+  host.PkbSDK = { async init() { calls.push("init"); return sdk; } };
+  host.fetch = async (url, options) => {
+    const body = JSON.parse(options.body);
+    requests.push({ url, body });
+    if (networkDown) throw new Error("save backend unreachable");
+    if (body.op === "save") {
+      remoteSaves.set(body.key, body.value);
+      return { ok: true, async json() { return { status: "saved" }; } };
+    }
+    return {
+      ok: true,
+      async json() {
+        return remoteSaves.has(body.key)
+          ? { status: "found", value: remoteSaves.get(body.key) }
+          : { status: "missing" };
+      },
+    };
+  };
+  const audio = [];
+  const lifecycle = { audio: (enabled) => audio.push(enabled), pause() {}, resume() {}, adVisible() {} };
+  const adapter = createPikabuPlatformAdapter({
+    config: { saveEndpoint },
+    host,
+    lifecycle,
+    target: TargetPlatform.PIKABU,
+  });
+  return { adapter, audio, calls, player, requests, remoteSaves, tokenReads: () => tokenReads };
+}
+
+test("pikabu shows the loading ad it allows and only then declares the game started", async () => {
+  const { adapter, audio, calls } = createPikabuFixture();
+  assert.equal(await adapter.ready(), true);
+  assert.equal(calls.includes("gameStarted"), false, "readiness is not a start");
+
+  await adapter.gameLoadingFinished();
+  assert.deepEqual(calls, ["init", "canShow:preloader", "show:preloader", "gameStarted"]);
+  assert.deepEqual(audio, [false, true], "the loading screen is muted for the ad and restored");
+
+  await adapter.gameReady();
+  assert.equal(calls.filter((entry) => entry === "gameStarted").length, 1);
+});
+
+test("pikabu skips the loading ad the platform withholds", async () => {
+  const { adapter, calls } = createPikabuFixture({ canShow: { preloader: false, fullscreen: true, rewarded: true } });
+  assert.equal(await adapter.ready(), true);
+  await adapter.gameLoadingFinished();
+  assert.deepEqual(calls, ["init", "canShow:preloader", "gameStarted"]);
+});
+
+test("pikabu asks the portal before every ad and treats a refusal as an ordinary outcome", async () => {
+  const { adapter, calls } = createPikabuFixture({ canShow: { preloader: false, fullscreen: false, rewarded: true } });
+  await adapter.ready();
+  const result = await adapter.showInterstitial("break", 1);
+  assert.deepEqual(result, { supported: true, shown: false, reason: "failed" });
+  assert.equal(calls.includes("show:fullscreen"), false, "a refused ad is never shown");
+});
+
+test("pikabu grants a reward only on the portal's own confirmation", async () => {
+  const granted = await createPikabuFixture().adapter.showRewarded("shop", 1);
+  assert.deepEqual(granted, { supported: true, shown: true, rewarded: true });
+
+  const closedEarly = await createPikabuFixture({ rewardGranted: false }).adapter.showRewarded("shop", 2);
+  assert.deepEqual(closedEarly, { supported: true, shown: true, rewarded: false });
+
+  const withheld = await createPikabuFixture({
+    canShow: { preloader: false, fullscreen: true, rewarded: false },
+  }).adapter.showRewarded("shop", 3);
+  assert.deepEqual(withheld, { supported: true, shown: false, rewarded: false, reason: "failed" });
+});
+
+test("pikabu saves reach the game's own backend under the signed identity", async () => {
+  const { adapter, requests } = createPikabuFixture();
+  assert.deepEqual(await adapter.loadData("save"), { status: "missing" });
+  assert.deepEqual(await adapter.saveData("save", "{\"planets\":3}"), { status: "acknowledged" });
+  assert.deepEqual(await adapter.loadData("save"), { status: "found", value: "{\"planets\":3}" });
+
+  assert.equal(requests.length, 3);
+  for (const request of requests) {
+    assert.equal(request.url, "https://saves.example/pikabu");
+    assert.equal(request.body.signedData, "jwt.anon-1.sig", "the backend is told who to trust");
+    assert.equal(request.body.key, "save");
+  }
+});
+
+test("pikabu reports an unreachable save backend as failed, never as an empty save", async () => {
+  const down = createPikabuFixture({ networkDown: true });
+  assert.deepEqual(await down.adapter.loadData("save"), { status: "failed" });
+  assert.deepEqual(await down.adapter.saveData("save", "{}"), { status: "failed" });
+
+  const noEndpoint = createPikabuFixture({ saveEndpoint: "" });
+  assert.deepEqual(await noEndpoint.adapter.loadData("save"), { status: "unavailable" });
+  assert.deepEqual(await noEndpoint.adapter.saveData("save", "{}"), { status: "unavailable" });
+  assert.equal(noEndpoint.requests.length, 0, "a build without a save backend never calls one");
+});
+
+test("pikabu re-reads the signed identity when the player signs in mid-session", async () => {
+  const { adapter, requests, tokenReads } = createPikabuFixture();
+  await adapter.ready();
+  await adapter.saveData("save", "{}");
+  assert.equal(tokenReads(), 1);
+
+  const login = await adapter.login();
+  assert.deepEqual(login, {
+    supported: true,
+    authorized: true,
+    reason: "accepted",
+    name: "Игрок",
+    avatarUrl: "https://avatars.example/7",
+  });
+
+  await adapter.saveData("save", "{}");
+  assert.equal(tokenReads(), 2, "the account token replaces the anonymous one");
+  assert.equal(requests.at(-1).body.signedData, "jwt.account-7.sig");
+});
+
+test("pikabu offers no board of its own", async () => {
+  const { adapter } = createPikabuFixture();
+  assert.deepEqual(adapter.leaderboardCaps("planets"), {
+    canRead: false,
+    canWrite: false,
+    needsLogin: false,
+    nativePopup: false,
+  });
+  assert.deepEqual(await adapter.submitScore("planets", 0, 1, ""), { status: "unsupported" });
+  assert.deepEqual(await adapter.fetchEntries("planets", 0), { status: "unsupported" });
+  assert.deepEqual(await adapter.showLeaderboard("planets"), { status: "unsupported" });
+  assert.deepEqual(await adapter.showBanner(), { supported: false, shown: false, reason: "unsupported" });
 });

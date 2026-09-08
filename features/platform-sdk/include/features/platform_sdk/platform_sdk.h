@@ -13,6 +13,7 @@ typedef enum platform_target_t {
     PLATFORM_TARGET_PLAYGAMA = 4,
     PLATFORM_TARGET_CRAZYGAMES = 5,
     PLATFORM_TARGET_WAVEDASH = 6,
+    PLATFORM_TARGET_PIKABU = 7,
 } platform_target_t;
 
 typedef enum platform_sdk_t {
@@ -22,6 +23,7 @@ typedef enum platform_sdk_t {
     PLATFORM_SDK_PLAYGAMA = 3,
     PLATFORM_SDK_CRAZYGAMES = 4,
     PLATFORM_SDK_WAVEDASH = 5,
+    PLATFORM_SDK_PIKABU = 6,
 } platform_sdk_t;
 
 typedef struct platform_sdk_capabilities_t {

@@ -27,6 +27,7 @@ game-specific screens, economy, items, progression, or content.
 | `playgama` | `playgama` | Playgama Bridge is its own SDK adapter, not the universal wrapper. |
 | `crazygames` | `crazygames` | Direct CrazyGames SDK adapter. |
 | `wavedash` | `wavedash` | Direct Wavedash adapter; the host injects the SDK, so nothing is loaded. |
+| `pikabu` | `pikabu` | Direct Pikabu Games adapter; the portal hosts no build and carries no store or board. |
 
 `publish-targets/targets.json` is the canonical mapping and static policy source.
 CMake and JavaScript build tools consume the same descriptors. The runtime,
@@ -50,6 +51,7 @@ features/platform-sdk/
       playgama.js
       crazygames.js
       wavedash.js
+      pikabu.js
     release/
       manifest.json
       <adapter>.min.js
@@ -64,6 +66,7 @@ features/platform-sdk/
     playgama.json
     crazygames.json
     wavedash.json
+    pikabu.json
   references/
     contract.md
     publish-targets.md

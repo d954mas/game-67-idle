@@ -12,6 +12,7 @@ and JavaScript tooling. Publish targets are defined separately from SDK adapters
 | `playgama` | `playgama` | `build/wasm-release-playgama/bin` |
 | `crazygames` | `crazygames` | `build/wasm-release-crazygames/bin` |
 | `wavedash` | `wavedash` | `build/wasm-release-wavedash/bin` |
+| `pikabu` | `pikabu` | `build/wasm-release-pikabu/bin` |
 
 `local` is a development target, not a portal manifest. The portal manifest
 files live in `features/platform-sdk/publish-targets/`:
@@ -22,6 +23,7 @@ files live in `features/platform-sdk/publish-targets/`:
 - `playgama.json`
 - `crazygames.json`
 - `wavedash.json`
+- `pikabu.json`
 
 Each manifest declares:
 

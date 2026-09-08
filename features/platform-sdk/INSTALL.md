@@ -80,7 +80,7 @@ progress comparison and runtime loading:
 3. Configure target platform through the CMake cache variable:
 
    ```text
-   GAME_PUBLISH_TARGET=local|itch|poki|yandex|playgama|crazygames|wavedash
+   GAME_PUBLISH_TARGET=local|itch|poki|yandex|playgama|crazygames|wavedash|pikabu
    ```
 
    CMake computes the SDK adapter from the target:
@@ -93,6 +93,7 @@ progress comparison and runtime loading:
    playgama -> playgama
    crazygames -> crazygames
    wavedash -> wavedash
+   pikabu   -> pikabu
    ```
 
 4. Make the target selection a build-time define/config value so only the

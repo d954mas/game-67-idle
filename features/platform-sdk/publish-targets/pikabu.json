@@ -1,0 +1,66 @@
+{
+  "schema": "ai_studio.publish_target.v1",
+  "target": "pikabu",
+  "platform_sdk": "pikabu",
+  "required_files": [
+    "index.html",
+    "game.js",
+    "game.wasm",
+    "assets/game.ntpack",
+    "runtime-build.json",
+    "platform-sdk.js",
+    "platform-sdk-adapter.js"
+  ],
+  "packaged_required_files": [
+    "index.html",
+    "game.js",
+    "game.wasm",
+    "assets/game.ntpack",
+    "runtime-build.json"
+  ],
+  "optional_files": [
+    "assets/font_cjk.ntpack",
+    "assets/music.ntpack",
+    "assets/cosmetics.ntpack",
+    "assets/theme_candy.ntpack",
+    "assets/theme_dino.ntpack",
+    "assets/theme_toy.ntpack",
+    "assets/theme_robot.ntpack",
+    "assets/theme_alien.ntpack",
+    "assets/ui/loading_slime.png",
+    "loading-title.webp",
+    "loading-tram.webp"
+  ],
+  "zip_layout": "Pikabu hosts nothing: the Studio stores a URL that points at the developer's own server, and the archive is the set of files uploaded there with index.html at its root. The SDK is fetched from the portal origin at runtime and is never bundled.",
+  "metadata": {
+    "portal": "Pikabu Games",
+    "requires_account": true,
+    "orientation": "declared per game in the Studio",
+    "viewport": "responsive canvas",
+    "hosting": "developer-owned HTTPS origin; the Studio holds only the game URL",
+    "upload_config": "Studio game card: title <= 50 chars, short description <= 250 chars, square icon >= 1024x1024, horizontal icon >= 1920x1080 (16:9), screenshots >= 1280x720",
+    "upload_command": "none; the build is published by the developer's own hosting"
+  },
+  "sdk_policy": {
+    "adapter": "pikabu",
+    "sdk_url": "https://games.pikabu.ru/sdk/sdk.js",
+    "load_policy": "The SDK is loaded from the portal's own origin at runtime. It answers only inside a Pikabu game page or a Studio test environment link, so it cannot be self-hosted, mirrored, or exercised offline; the URL must survive minification.",
+    "ads": "preloader (mobile, before gameStarted), fullscreen (3s timer, >= 120s apart) and rewarded (10s timer); canShow() is required before every show",
+    "storage": "no platform store: cloud saves live on the game's own backend, keyed by the player id carried in the SDK's signed JWT",
+    "leaderboards": "unsupported by the platform; a game that wants a board brings its own backend",
+    "debug_ui": "forbidden in release artifact",
+    "forbidden_markers": [
+      "https://sdk.crazygames.com/crazygames-sdk-v3.js",
+      "https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
+      "https://bridge.playgama.com/v1/stable/playgama-bridge.js",
+      "https://bridge.playgama.com/v2/stable/playgama-bridge.js",
+      "YaGames.init",
+      "debug_test"
+    ],
+    "required_markers": [
+      "https://games.pikabu.ru/sdk/sdk.js",
+      "gameStarted"
+    ]
+  },
+  "validation_command": "node features/platform-sdk/scripts/artifact_tools.mjs inspect --target pikabu --artifact <artifact-dir>"
+}

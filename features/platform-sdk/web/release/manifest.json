@@ -43,6 +43,12 @@
       "bundleSha256": "d512346658f003e35203526e9c997d044699e682fbab6a379e1e0e7ad1113e1a",
       "sourceBytes": 13940,
       "bundleBytes": 6077
+    },
+    "pikabu": {
+      "sourceSha256": "7cd428aca291343cbbb915fa304cff3a554912b3445ceb098d7d01fc2579db7b",
+      "bundleSha256": "f61610007c098d33b962e12d22bbf0e514877f885a11b2a7de2b6ae5f097d84f",
+      "sourceBytes": 13443,
+      "bundleBytes": 5367
     }
   }
 }
