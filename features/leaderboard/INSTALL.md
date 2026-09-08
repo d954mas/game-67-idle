@@ -102,8 +102,8 @@ The target then includes `game_leaderboards.h`, which defines
 per board. The header is a build product: switching publish target regenerates
 it with that portal's board ids.
 
-Neither Yandex nor CrazyGames can create a board over an API, so print the ones
-a human has to type into a console:
+Only Wavedash creates a board over an API; the other portals need a human in a
+console, so print what they have to type:
 
 ```
 node features/leaderboard/scripts/leaderboards.mjs checklist --manifest <game>/leaderboards.json
@@ -210,6 +210,10 @@ Before any call answers, the board must exist at the portal:
   encryption key it issues reaches the adapter as
   `__PLATFORM_SDK_CONFIG__.leaderboardKey`; without it nothing is written.
   `portal_id` is any non-empty string: the portal has one board per game.
+- Wavedash: nothing to create. The adapter resolves `portal_id` through
+  `getOrCreateLeaderboard` on first use and creates a high-to-low numeric board
+  if the console has none. A board that must rank low-to-high has to exist
+  before the first submit, because the creator picks the sort order.
 - Playgama: declare the board in the `leaderboards` block of the game's
   `playgama-bridge-config.json`; `portal_id` is that block's `id`. The host
   platform decides at run time what the board can do; `not_available` is a

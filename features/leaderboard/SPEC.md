@@ -33,13 +33,15 @@ part of the work (today they explicitly do not map leaderboards).
 | Yandex | `lb.setScore(name, score, extraData)`, 1 req/s | `lb.getEntries` — top 1..20, `quantityAround` 1..10, 20 req / 5 min | **required to write and to see your own row**; reading the top is anonymous | none — boards are created in the console and never reset | `extraData` string round-trips; portal adds `publicName` and `getAvatarSrc(size)` |
 | CrazyGames | `user.submitScore({ encryptedScore, score })`, AES-GCM | **no read API** — the portal renders the board in its drawer, on the game page and on profiles | not stated | none | none; one board per game, invited games only `[unverified]` |
 | Playgama | `bridge.leaderboards.setScore` | only when `bridge.leaderboards.type == in_game`, **decided at run time by the host platform** | not stated | none | `id, name, photo, score, rank` |
+| Wavedash | `uploadLeaderboardScore(id, score, keepBest, ugcId?, metadata?)` | `listLeaderboardEntries`, `listLeaderboardEntriesAroundUser`, `getMyLeaderboardEntries` | none — the player arrives signed in | none | metadata: 16 pairs, string values ≤ 256 chars; rows carry `username` and `userAvatarUrl` |
 | Poki | `sendHighscore` exists but is undocumented for v2 → out of contract | none | — | none | — |
 
 Sources: `https://yandex.com/dev/games/doc/en/sdk/sdk-leaderboard`,
 `https://yandex.com/dev/games/doc/en/sdk/sdk-player`,
 `https://docs.crazygames.com/sdk/leaderboards-client/`,
 `https://docs.crazygames.com/sdk/leaderboards/`,
-`https://wiki.playgama.com/playgama/bridge-sdk/api/leaderboards`.
+`https://wiki.playgama.com/playgama/bridge-sdk/api/leaderboards`,
+`https://docs.wavedash.com/sdk/leaderboards`.
 
 Consequence for the seeding game: Yandex serves the board through the portal,
 Poki/itch/local keep the existing self-hosted board, CrazyGames takes score

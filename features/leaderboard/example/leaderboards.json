@@ -9,11 +9,13 @@
       "portal_ids": {
         "yandex": "lap_time",
         "crazygames": "lap_time",
+        "wavedash": "lap_time",
         "playgama": { "id": "lap_time", "isMain": true }
       },
       "backends": {
         "yandex": "portal",
         "crazygames": "portal",
+        "wavedash": "portal",
         "playgama": "portal",
         "poki": "http",
         "itch": "http",

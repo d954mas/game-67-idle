@@ -2,7 +2,7 @@
    serves them. Validation, the generated C table, the console checklist and the
    Playgama config block all read this file, so a board id is written once. */
 
-export const PUBLISH_TARGETS = ["local", "itch", "poki", "yandex", "playgama", "crazygames"];
+export const PUBLISH_TARGETS = ["local", "itch", "poki", "yandex", "playgama", "crazygames", "wavedash"];
 
 /* What each target's portal can actually serve, from SPEC.md section 2. A
    portal board never resets, so no portal can hold a day scope; the http
@@ -11,6 +11,7 @@ export const PORTAL_ABILITY = {
   yandex: { boards: true, read: true, write: true, scopes: ["all_time"] },
   crazygames: { boards: true, read: false, write: true, scopes: ["all_time"] },
   playgama: { boards: true, read: "runtime", write: true, scopes: ["all_time"] },
+  wavedash: { boards: true, read: true, write: true, scopes: ["all_time"] },
   poki: { boards: false, read: false, write: false, scopes: [] },
   itch: { boards: false, read: false, write: false, scopes: [] },
   local: { boards: false, read: false, write: false, scopes: [] },
@@ -203,6 +204,14 @@ export function consoleChecklist(manifest) {
           `crazygames: request the leaderboard for this game (invite-only) and set its board to "${pid.id}"; ` +
             `the portal renders it, the game only submits.`
         );
+      } else if (target === "wavedash") {
+        /* The only portal here that creates a board over its API. The sort
+           order comes from whoever creates it first, so an ascending board
+           has to exist before the first submit. */
+        out.push(board.sort === "asc"
+          ? `wavedash: create "${pid.id}" in the console with ascending sort before the first submit; ` +
+              `the SDK would otherwise create it ranked high-to-low.`
+          : `wavedash: nothing to create; the SDK creates "${pid.id}" ranked high-to-low on first use.`);
       } else if (target === "playgama") {
         out.push(
           `playgama: declare "${pid.id}"${pid.isMain ? " as isMain" : ""} in playgama-bridge-config.json; ` +

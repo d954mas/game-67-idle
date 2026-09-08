@@ -17,10 +17,11 @@ const valid = () => ({
       metric: "planets_devoured",
       sort: "desc",
       scopes: ["all_time", "utc_day"],
-      portal_ids: { yandex: "planets", crazygames: "main", playgama: { id: "planets", isMain: true } },
+      portal_ids: { yandex: "planets", crazygames: "main", playgama: { id: "planets", isMain: true }, wavedash: "planets" },
       backends: {
         yandex: "portal",
         crazygames: "portal",
+        wavedash: "portal",
         playgama: "portal",
         poki: "http",
         itch: "http",
@@ -41,6 +42,7 @@ function twoBoards() {
   second.id = "laps";
   second.portal_ids.yandex = "lap_times";
   second.portal_ids.playgama = { id: "lap_times" };
+  second.portal_ids.wavedash = "lap_times";
   manifest.boards.push(second);
   return manifest;
 }
@@ -52,6 +54,7 @@ test("multiple boards may share a family with distinct portal ids", () => {
     board.id = id;
     board.portal_ids.yandex = id;
     board.portal_ids.playgama = { id };
+    board.portal_ids.wavedash = id;
     manifest.boards.push(board);
   }
   assert.deepEqual(validateManifest(manifest), []);
@@ -157,6 +160,15 @@ test("the checklist names the boards a human must create", () => {
   const lines = consoleChecklist(valid()).join("\n");
   assert.match(lines, /yandex: create a leaderboard with technical name "planets"/);
   assert.match(lines, /crazygames: request the leaderboard/);
+});
+
+test("the wavedash checklist asks for a console board only when the SDK would create the wrong sort", () => {
+  const descending = consoleChecklist(valid()).join("\n");
+  assert.match(descending, /wavedash: nothing to create; the SDK creates "planets" ranked high-to-low/);
+
+  const manifest = valid();
+  manifest.boards[0].sort = "asc";
+  assert.match(consoleChecklist(manifest).join("\n"), /wavedash: create "planets" in the console with ascending sort/);
 });
 
 test("the playgama block carries isMain only where the manifest says so", () => {

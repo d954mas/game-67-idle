@@ -151,6 +151,8 @@ What each portal serves (from `features/platform-sdk/references/contract.md`):
 Yandex reads anonymously and writes behind a login, quotas enforced in the
 adapter; CrazyGames is write-only with an encrypted score and draws the board
 itself; Playgama decides at run time through `bridge.leaderboards.type`;
+Wavedash reads and writes without a login and is the one portal that creates
+a board over its API, ranked high-to-low unless the console already holds it;
 Poki, itch and local mock have no portal board (the local mock serves canned
 rows).
 
