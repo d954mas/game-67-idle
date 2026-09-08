@@ -26,6 +26,7 @@ game-specific screens, economy, items, progression, or content.
 | `yandex` | `yandex` | Selected backend calls Yandex Games SDK methods; the C facade owns game policy. |
 | `playgama` | `playgama` | Playgama Bridge is its own SDK adapter, not the universal wrapper. |
 | `crazygames` | `crazygames` | Direct CrazyGames SDK adapter. |
+| `wavedash` | `wavedash` | Direct Wavedash adapter; the host injects the SDK, so nothing is loaded. |
 
 `publish-targets/targets.json` is the canonical mapping and static policy source.
 CMake and JavaScript build tools consume the same descriptors. The runtime,
@@ -47,6 +48,8 @@ features/platform-sdk/
       poki.js
       yandex.js
       playgama.js
+      crazygames.js
+      wavedash.js
     release/
       manifest.json
       <adapter>.min.js
@@ -59,6 +62,8 @@ features/platform-sdk/
     poki.json
     yandex.json
     playgama.json
+    crazygames.json
+    wavedash.json
   references/
     contract.md
     publish-targets.md

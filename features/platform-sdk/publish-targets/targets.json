@@ -60,6 +60,16 @@
       "rewarded_supported": true,
       "storage_supported": true,
       "portal": true
+    },
+    "wavedash": {
+      "adapter": "wavedash",
+      "target_id": 6,
+      "sdk_id": 5,
+      "external_links_allowed": false,
+      "ads_supported": false,
+      "rewarded_supported": false,
+      "storage_supported": true,
+      "portal": true
     }
   }
 }

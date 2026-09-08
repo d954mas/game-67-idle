@@ -24,8 +24,8 @@ const { descriptorForTarget, portalTargetNames, targetNames } =
 const { inspectPlatformSdkArtifact } = await import(featureUrl("scripts/artifact_tools.mjs"));
 
 test("canonical target descriptors expose every target and its SDK mapping", () => {
-  assert.deepEqual(targetNames(), ["local", "itch", "poki", "yandex", "playgama", "crazygames"]);
-  assert.deepEqual(portalTargetNames(), ["itch", "poki", "yandex", "playgama", "crazygames"]);
+  assert.deepEqual(targetNames(), ["local", "itch", "poki", "yandex", "playgama", "crazygames", "wavedash"]);
+  assert.deepEqual(portalTargetNames(), ["itch", "poki", "yandex", "playgama", "crazygames", "wavedash"]);
   assert.deepEqual(descriptorForTarget("poki"), {
     target: "poki", adapter: "poki", targetId: 2, sdkId: 1,
     externalLinksAllowed: false, adsSupported: true, rewardedSupported: true, storageSupported: false,

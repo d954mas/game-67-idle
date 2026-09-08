@@ -21,6 +21,7 @@ targets that use the `mock` SDK adapter.
 | `yandex` | `yandex` | Direct Yandex Games SDK adapter. |
 | `playgama` | `playgama` | Direct Playgama Bridge adapter. |
 | `crazygames` | `crazygames` | Direct CrazyGames SDK adapter. |
+| `wavedash` | `wavedash` | Direct Wavedash adapter. The host page injects the SDK. |
 
 The authoritative mapping and static policy are in `publish-targets/targets.json`.
 See [architecture.md](architecture.md) for operation ownership, storage outcomes,
@@ -43,7 +44,8 @@ typedef enum platform_target_t {
   PLATFORM_TARGET_POKI,
   PLATFORM_TARGET_YANDEX,
   PLATFORM_TARGET_PLAYGAMA,
-  PLATFORM_TARGET_CRAZYGAMES
+  PLATFORM_TARGET_CRAZYGAMES,
+  PLATFORM_TARGET_WAVEDASH
 } platform_target_t;
 
 typedef enum platform_sdk_t {
@@ -51,7 +53,8 @@ typedef enum platform_sdk_t {
   PLATFORM_SDK_POKI,
   PLATFORM_SDK_YANDEX,
   PLATFORM_SDK_PLAYGAMA,
-  PLATFORM_SDK_CRAZYGAMES
+  PLATFORM_SDK_CRAZYGAMES,
+  PLATFORM_SDK_WAVEDASH
 } platform_sdk_t;
 
 platform_target_t platform_sdk_target(void);
@@ -139,10 +142,12 @@ After the first successful start, `hasGameplayStarted()` stays true;
 
 ### Player identity and login
 
-Only Yandex ties anything the game cares about to its account: leaderboard
-writes and the player's own row need it. Every other adapter answers
-`unsupported`, and the `local` mock signs in a fake player so the flow can be
-walked without a portal.
+Only Yandex has a login the game opens: its leaderboard writes and the
+player's own row need one. Wavedash is the opposite case — the host signs the
+player in before the game starts, so identity is read and never requested. Both
+of them, and every other adapter, answer `login()` with `unsupported` unless a
+dialog actually exists to open; the `local` mock signs in a fake player so the
+flow can be walked without a portal.
 
 - `platform_sdk_capabilities().auth_supported` is what the build promises;
   `platform_sdk_auth_supported()` is that minus a portal that answered a login
@@ -241,8 +246,8 @@ Only the selected SDK adapter may be included in a release build.
 Required build inputs:
 
 ```text
-target platform: local | itch | poki | yandex | playgama
-platform SDK:    mock  | mock | poki | yandex | playgama
+target platform: local | itch | poki | yandex | playgama | crazygames | wavedash
+platform SDK:    mock  | mock | poki | yandex | playgama | crazygames | wavedash
 ```
 
 The target manifest computes the SDK adapter from the target. The game build

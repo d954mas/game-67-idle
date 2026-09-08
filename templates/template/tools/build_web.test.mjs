@@ -99,7 +99,7 @@ test("executor rechecks runtime inputs immediately before publishing the build r
 
 test("plan covers every preset across every publish target with exact debug flags", () => {
   const presets = ["wasm-release", "wasm-debug", "wasm-devapi-debug"];
-  const targets = ["local", "itch", "poki", "yandex", "playgama", "crazygames"];
+  const targets = ["local", "itch", "poki", "yandex", "playgama", "crazygames", "wavedash"];
   for (const preset of presets) {
     for (const target of targets) {
       const plan = createBuildPlan({

@@ -8,7 +8,7 @@ import { platformSdkSourceBundle } from "./artifact_tools.mjs";
 
 const FEATURE_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 const RELEASE_DIR = join(FEATURE_DIR, "web", "release");
-const ADAPTERS = Object.freeze(["mock", "poki", "yandex", "playgama", "crazygames"]);
+const ADAPTERS = Object.freeze(["mock", "poki", "yandex", "playgama", "crazygames", "wavedash"]);
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");

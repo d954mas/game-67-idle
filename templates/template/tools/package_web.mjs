@@ -38,7 +38,7 @@ const { compileProfileForTarget } = await import(pathToFileURL(join(
   "target_config.mjs",
 )).href);
 
-const TARGETS = new Set(["itch", "poki", "yandex", "playgama", "crazygames"]);
+const TARGETS = new Set(["itch", "poki", "yandex", "playgama", "crazygames", "wavedash"]);
 const SOURCE_EXTENSIONS = /\.(?:c|cc|cpp|cxx|h|hh|hpp|cmake|py|ts|map|pdb|obj|o)$/i;
 const DEVAPI_MARKERS = ["window.__devapi", "--devapi", "wasm-devapi", "GAME_DEVAPI_ENABLED"];
 const AUDIO_SMOKE_MARKERS = [

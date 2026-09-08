@@ -10,6 +10,7 @@ import { createCrazygamesPlatformAdapter } from "../web/adapters/crazygames.js";
 import { createMockPlatformAdapter } from "../web/adapters/mock.js";
 import { createPlaygamaPlatformAdapter } from "../web/adapters/playgama.js";
 import { createPokiPlatformAdapter } from "../web/adapters/poki.js";
+import { createWavedashPlatformAdapter } from "../web/adapters/wavedash.js";
 import { createYandexPlatformAdapter } from "../web/adapters/yandex.js";
 import {
   inspectPlatformSdkArtifact,
@@ -28,6 +29,7 @@ const TargetPlatform = Object.freeze({
   YANDEX: "yandex",
   PLAYGAMA: "playgama",
   CRAZYGAMES: "crazygames",
+  WAVEDASH: "wavedash",
 });
 const PLATFORM_BACKEND_METHODS = Object.freeze([
   "destroy",
@@ -198,6 +200,8 @@ test("build tooling maps publish targets to exactly one platform SDK adapter", (
   assert.equal(sdkForTarget(TargetPlatform.POKI), "poki");
   assert.equal(sdkForTarget(TargetPlatform.YANDEX), "yandex");
   assert.equal(sdkForTarget(TargetPlatform.PLAYGAMA), "playgama");
+  assert.equal(sdkForTarget(TargetPlatform.CRAZYGAMES), "crazygames");
+  assert.equal(sdkForTarget(TargetPlatform.WAVEDASH), "wavedash");
 });
 
 test("every platform adapter owns exactly the complete backend method contract", () => {
@@ -206,6 +210,7 @@ test("every platform adapter owns exactly the complete backend method contract",
     [TargetPlatform.POKI, createPokiPlatformAdapter],
     [TargetPlatform.YANDEX, createYandexPlatformAdapter],
     [TargetPlatform.PLAYGAMA, createPlaygamaPlatformAdapter],
+    [TargetPlatform.WAVEDASH, createWavedashPlatformAdapter],
   ]) {
     const adapter = factory({
       emitVisibilityChange() {},
@@ -1489,7 +1494,7 @@ test("staged web SDK uses only composition and selected adapter modules", () => 
 });
 
 test("release SDK bundles are minified without changing adapter startup", () => {
-  for (const adapter of ["mock", "poki", "yandex", "playgama"]) {
+  for (const adapter of ["mock", "poki", "yandex", "playgama", "wavedash"]) {
     const source = Buffer.from(packagedPlatformPrefix(adapter));
     const release = platformSdkBundlePrefix(adapter);
     assert.ok(release.length < source.length * 0.75, adapter);
@@ -1508,7 +1513,7 @@ test("release SDK bundles are minified without changing adapter startup", () => 
 });
 
 test("publish manifests distinguish staged modules from single-JS release packages", () => {
-  for (const target of [TargetPlatform.ITCH, TargetPlatform.POKI, TargetPlatform.YANDEX, TargetPlatform.PLAYGAMA]) {
+  for (const target of [TargetPlatform.ITCH, TargetPlatform.POKI, TargetPlatform.YANDEX, TargetPlatform.PLAYGAMA, TargetPlatform.WAVEDASH]) {
     const manifest = JSON.parse(readFileSync(join(HERE, `../publish-targets/${target}.json`), "utf8"));
     assert.equal(manifest.required_files.includes("platform-sdk.js"), true, target);
     assert.equal(manifest.packaged_required_files.includes("game.js"), true, target);
@@ -1603,4 +1608,171 @@ test("scorecard summarizes local NDJSON without a portal account", () => {
   assert.equal(scorecard.rewardOrUpgradeInteraction, true);
   assert.equal(scorecard.adBreakOpportunity, true);
   assert.equal(scorecard.continueKillRecommendation, "continue");
+});
+
+function createWavedashFixture({ muted = false } = {}) {
+  const host = createHost(TargetPlatform.WAVEDASH);
+  const calls = [];
+  const local = new Map();
+  const remote = new Map();
+  const submissions = [];
+  const listeners = new Map();
+  const row = (userId, username, score, rank, extra) => ({
+    userId,
+    username,
+    userAvatarUrl: `https://avatars.example/${userId}`,
+    score,
+    rank,
+    metadata: extra ? { extra } : undefined,
+  });
+  const sdk = {
+    Events: { MUTE_CHANGED: "MuteChanged" },
+    LeaderboardSortOrder: { ASC: 0, DESC: 1 },
+    LeaderboardDisplayType: { NUMERIC: 0, TIME_SECONDS: 1 },
+    initialized: false,
+    init() {
+      calls.push("init");
+      sdk.initialized = true;
+      return true;
+    },
+    updateLoadProgressZeroToOne(progress) {
+      calls.push(`progress:${progress}`);
+    },
+    isMuted: () => muted,
+    on(name, handler) {
+      listeners.set(name, handler);
+      return () => listeners.delete(name);
+    },
+    getUserId: () => "me",
+    getUsername: () => "Me",
+    getUserAvatarUrl: (userId, size) => `https://avatars.example/${userId}?s=${size}`,
+    async writeLocalFile(path, bytes) {
+      local.set(path, bytes);
+      return true;
+    },
+    async readLocalFile(path) {
+      return local.has(path) ? local.get(path) : null;
+    },
+    async uploadRemoteFile(path) {
+      if (!local.has(path)) return { success: false, data: null, message: "no local file" };
+      remote.set(path, local.get(path));
+      return { success: true, data: path };
+    },
+    async remoteFileExists(path) {
+      return { success: true, data: remote.has(path) };
+    },
+    async downloadRemoteFile(path) {
+      if (!remote.has(path)) return { success: false, data: null, message: "404 (Not Found)" };
+      local.set(path, remote.get(path));
+      return { success: true, data: path };
+    },
+    async getOrCreateLeaderboard(name, sortOrder, displayType) {
+      calls.push(`board:${name}:${sortOrder}:${displayType}`);
+      return { success: true, data: { id: `lb_${name}`, name, totalEntries: 2 } };
+    },
+    async uploadLeaderboardScore(leaderboardId, score, keepBest, ugcId, metadata) {
+      submissions.push({ leaderboardId, score, keepBest, metadata });
+      return { success: true, data: { score, rank: 1 } };
+    },
+    async listLeaderboardEntries(leaderboardId) {
+      calls.push(`list:${leaderboardId}`);
+      return { success: true, data: [row("u1", "One", 300, 1), row("me", "Me", 200, 2, "skin=3")] };
+    },
+    async listLeaderboardEntriesAroundUser() {
+      return { success: true, data: [row("me", "Me", 200, 2, "skin=3")] };
+    },
+    async getMyLeaderboardEntries() {
+      return { success: true, data: [row("me", "Me", 200, 2, "skin=3")] };
+    },
+  };
+  host.Wavedash = sdk;
+  const audio = [];
+  const lifecycle = { audio: (enabled) => audio.push(enabled), pause() {}, resume() {}, adVisible() {} };
+  const adapter = createWavedashPlatformAdapter({ host, lifecycle, target: TargetPlatform.WAVEDASH });
+  return { adapter, audio, calls, listeners, remote, sdk, submissions };
+}
+
+test("wavedash reveals the game once loading finishes, not when the SDK is found", async () => {
+  const { adapter, calls } = createWavedashFixture();
+  assert.equal(await adapter.ready(), true);
+  assert.equal(calls.includes("init"), false, "readiness is not a reveal");
+
+  await adapter.gameLoadingProgress(0.5);
+  assert.equal(calls.includes("progress:0.5"), true);
+
+  await adapter.gameLoadingFinished();
+  await adapter.gameReady();
+  assert.equal(calls.filter((call) => call === "init").length, 1, "the host loading screen lifts once");
+
+  await adapter.gameLoadingProgress(0.9);
+  assert.equal(calls.includes("progress:0.9"), false, "a revealed game reports no more progress");
+  adapter.destroy();
+});
+
+test("wavedash has no ad inventory to offer", async () => {
+  const { adapter } = createWavedashFixture();
+  await adapter.ready();
+  assert.deepEqual(await adapter.showInterstitial("break", 1), { supported: false, shown: false, reason: "unsupported" });
+  assert.deepEqual(await adapter.showRewarded("revive", 2), { supported: false, shown: false, rewarded: false, reason: "unsupported" });
+  assert.deepEqual(await adapter.showBanner(), { supported: false, shown: false, reason: "unsupported" });
+  adapter.destroy();
+});
+
+test("wavedash cloud saves travel through the player's remote file root", async () => {
+  const { adapter, remote } = createWavedashFixture();
+  await adapter.ready();
+
+  assert.deepEqual(await adapter.loadData("save"), { status: "missing" }, "an absent key is not a failure");
+  assert.deepEqual(await adapter.saveData("save", { level: 7 }), { status: "acknowledged" });
+  assert.equal(remote.has("saves/save.json"), true);
+  assert.deepEqual(await adapter.loadData("save"), { status: "found", value: { level: 7 } });
+  adapter.destroy();
+});
+
+test("wavedash leaderboards read and write without a login", async () => {
+  const { adapter, calls, submissions } = createWavedashFixture();
+  await adapter.ready();
+  assert.deepEqual(adapter.leaderboardCaps("planets"), { canRead: true, canWrite: true, needsLogin: false, nativePopup: false });
+
+  assert.deepEqual(await adapter.submitScore("planets", 0, 4242, "skin=3"), { status: "ok" });
+  assert.deepEqual(submissions, [{ leaderboardId: "lb_planets", score: 4242, keepBest: true, metadata: { extra: "skin=3" } }]);
+
+  const page = await adapter.fetchEntries("planets", 0);
+  assert.equal(page.status, "ok");
+  assert.deepEqual(page.top[0], { value: 300, rank: 1, you: false, name: "One", avatarUrl: "https://avatars.example/u1", extra: "" });
+  assert.deepEqual(page.top[1].you, true);
+  assert.equal(page.top[1].extra, "skin=3");
+  assert.deepEqual(page.player, { rank: 2, value: 200 });
+
+  assert.equal(calls.filter((call) => call.startsWith("board:")).length, 1, "a board name is resolved once per session");
+  assert.deepEqual(await adapter.showLeaderboard("planets"), { status: "unsupported" });
+  adapter.destroy();
+});
+
+test("wavedash follows the host mute switch and never drives it", async () => {
+  const { adapter, audio, listeners } = createWavedashFixture({ muted: true });
+  await adapter.ready();
+  assert.deepEqual(audio, [false], "a host mute reaches the game as silence");
+
+  listeners.get("MuteChanged")({ isMuted: false });
+  assert.deepEqual(audio, [false, true]);
+  adapter.destroy();
+});
+
+test("wavedash hands over a signed-in player and opens no login dialog", async () => {
+  const { adapter } = createWavedashFixture();
+  await adapter.ready();
+  assert.deepEqual(await adapter.getPlayer(), {
+    authorized: true,
+    name: "Me",
+    avatarUrl: "https://avatars.example/me?s=128",
+  });
+  assert.deepEqual(await adapter.login(), {
+    supported: false,
+    authorized: false,
+    reason: "unsupported",
+    name: "",
+    avatarUrl: "",
+  });
+  adapter.destroy();
 });

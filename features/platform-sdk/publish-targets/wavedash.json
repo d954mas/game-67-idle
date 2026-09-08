@@ -1,0 +1,67 @@
+{
+  "schema": "ai_studio.publish_target.v1",
+  "target": "wavedash",
+  "platform_sdk": "wavedash",
+  "required_files": [
+    "index.html",
+    "game.js",
+    "game.wasm",
+    "assets/game.ntpack",
+    "runtime-build.json",
+    "platform-sdk.js",
+    "platform-sdk-adapter.js"
+  ],
+  "packaged_required_files": [
+    "index.html",
+    "game.js",
+    "game.wasm",
+    "assets/game.ntpack",
+    "runtime-build.json"
+  ],
+  "optional_files": [
+    "assets/font_cjk.ntpack",
+    "assets/music.ntpack",
+    "assets/cosmetics.ntpack",
+    "assets/theme_candy.ntpack",
+    "assets/theme_dino.ntpack",
+    "assets/theme_toy.ntpack",
+    "assets/theme_robot.ntpack",
+    "assets/theme_alien.ntpack",
+    "assets/ui/loading_slime.png",
+    "loading-title.webp",
+    "loading-tram.webp"
+  ],
+  "zip_layout": "Wavedash build folder: index.html at the root, bundled game.js, game.wasm, runtime-build.json, and assets/game.ntpack. The host page injects its SDK into the frame, so nothing about it is bundled or linked.",
+  "metadata": {
+    "portal": "Wavedash",
+    "requires_account": true,
+    "orientation": "game-owned",
+    "viewport": "responsive canvas",
+    "upload_size_limit_bytes": 1073741824,
+    "upload_config": "wavedash.toml with game_id and upload_dir",
+    "upload_command": "wavedash build push"
+  },
+  "sdk_policy": {
+    "adapter": "wavedash",
+    "sdk_url": "",
+    "load_policy": "The host page defines the Wavedash global inside the game frame before the game's own code runs. There is no script to load, self-host, or bundle, and no CDN URL to preserve.",
+    "ads": "unsupported; the platform carries no interstitial or rewarded inventory and monetizes through paid content",
+    "storage": "cloud saves are files: writeLocalFile into the player's IndexedDB, then uploadRemoteFile into the player's remote root",
+    "leaderboards": "read and write without a login, addressed by a board name resolved to its backend id",
+    "debug_ui": "forbidden in release artifact",
+    "forbidden_markers": [
+      "https://sdk.crazygames.com/crazygames-sdk-v3.js",
+      "https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
+      "https://bridge.playgama.com/v1/stable/playgama-bridge.js",
+      "https://bridge.playgama.com/v2/stable/playgama-bridge.js",
+      "YaGames.init",
+      "Show interstitial ad",
+      "Show rewarded ad",
+      "debug_test"
+    ],
+    "required_markers": [
+      "updateLoadProgressZeroToOne"
+    ]
+  },
+  "validation_command": "node features/platform-sdk/scripts/artifact_tools.mjs inspect --target wavedash --artifact <artifact-dir>"
+}

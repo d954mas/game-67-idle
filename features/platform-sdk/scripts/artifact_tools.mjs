@@ -15,6 +15,7 @@ export const REAL_SDK_MARKERS = Object.freeze({
   yandex: ["YaGames.init", "/sdk.js"],
   playgama: ["https://bridge.playgama.com/v2/stable/playgama-bridge.js", "bridge.initialize"],
   crazygames: ["https://sdk.crazygames.com/crazygames-sdk-v3.js", "CrazyGames"],
+  wavedash: ["Wavedash", "updateLoadProgressZeroToOne"],
 });
 
 export const DEBUG_MARKERS = Object.freeze(["Show interstitial ad", "Show rewarded ad", "debug_test"]);

@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "platform-sdk",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "title": "Platform SDK",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -30,21 +30,21 @@
     "build-time adapter selection",
     "runtime target and SDK identity",
     "policy capabilities such as externalLinksAllowed",
-    "selected backend call semantics for mock, Poki, Yandex Games, Playgama, and CrazyGames",
+    "selected backend call semantics for mock, Poki, Yandex Games, Playgama, CrazyGames, and Wavedash",
     "C/template mock ad overlays for local development",
     "internal bounded measure sink for typed game-event bridges",
     "portal player storage bridge for cloud saves",
     "portal-driven pause and resume, and the portal language, bridged into C",
     "player identity and portal login (Yandex auth dialog, local mock), the auth.changed event and the auth result measure; no logout seam",
-    "portal leaderboards behind one C surface (caps, submit, fetch, open, one listener): Yandex read/write behind login with the portal quotas enforced in the adapter, CrazyGames write-only with AES-GCM scores, Playgama capability read from bridge.leaderboards.type at run time, local mock canned board",
+    "portal leaderboards behind one C surface (caps, submit, fetch, open, one listener): Yandex read/write behind login with the portal quotas enforced in the adapter, CrazyGames write-only with AES-GCM scores, Playgama capability read from bridge.leaderboards.type at run time, local mock canned board, Wavedash read/write without a login behind a name-to-id board resolve",
     "publish target manifest validation",
     "local NDJSON scorecard CLI",
     "request-correlated storage transport with explicit outcomes and native backend injection",
     "canonical target descriptors and compilation-profile-bound release artifacts"
   ],
   "flags": {
-    "target": "local|itch|poki|yandex|playgama|crazygames",
-    "platform_sdk": "mock|poki|yandex|playgama|crazygames",
+    "target": "local|itch|poki|yandex|playgama|crazygames|wavedash",
+    "platform_sdk": "mock|poki|yandex|playgama|crazygames|wavedash",
     "debug_ui": "off in release, on by explicit/debug build"
   },
   "manuals": {
@@ -89,14 +89,16 @@
       "poki",
       "yandex",
       "playgama",
-      "crazygames"
+      "crazygames",
+      "wavedash"
     ],
     "platform_sdks": [
       "mock",
       "poki",
       "yandex",
       "playgama",
-      "crazygames"
+      "crazygames",
+      "wavedash"
     ],
     "c_api": "features/platform_sdk/platform_sdk.h",
     "web_entry": "platform-sdk.js",

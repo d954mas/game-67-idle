@@ -11,6 +11,7 @@ and JavaScript tooling. Publish targets are defined separately from SDK adapters
 | `yandex` | `yandex` | `build/wasm-release-yandex/bin` |
 | `playgama` | `playgama` | `build/wasm-release-playgama/bin` |
 | `crazygames` | `crazygames` | `build/wasm-release-crazygames/bin` |
+| `wavedash` | `wavedash` | `build/wasm-release-wavedash/bin` |
 
 `local` is a development target, not a portal manifest. The portal manifest
 files live in `features/platform-sdk/publish-targets/`:
@@ -20,6 +21,7 @@ files live in `features/platform-sdk/publish-targets/`:
 - `yandex.json`
 - `playgama.json`
 - `crazygames.json`
+- `wavedash.json`
 
 Each manifest declares:
 
@@ -42,6 +44,7 @@ node tools/build_web.mjs --preset wasm-release --target poki
 node tools/build_web.mjs --preset wasm-release --target yandex
 node tools/build_web.mjs --preset wasm-release --target playgama
 node tools/build_web.mjs --preset wasm-release --target crazygames
+node tools/build_web.mjs --preset wasm-release --target wavedash
 ```
 
 The script passes `-DGAME_PUBLISH_TARGET=<target>` plus a mechanically generated
