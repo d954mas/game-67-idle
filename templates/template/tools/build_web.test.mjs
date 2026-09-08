@@ -186,3 +186,32 @@ test("release build minifies the staged web shell but debug builds do not", () =
   assert.equal(debug.steps.some((step) => step.kind === "run"
     && step.args && step.args.some((arg) => String(arg).endsWith("minify_web_release.mjs"))), false);
 });
+
+
+test("plan rejects a signed profile that differs from compiler flags", () => {
+  const inputs = [
+    { id: "game", source: ".", files: 1, sha256: "1".repeat(64) },
+    { id: "engine", source: "external/neotolis-engine", files: 1, sha256: "2".repeat(64) },
+  ];
+  const profile = { target: "poki", adapter: "poki", preset: "wasm-debug", debugUi: false, devapi: false, analytics: false, eventsLogMirror: true };
+  const runtimeBuild = {
+    schema: "ai_studio.runtime_build.v2",
+    fingerprint: createHash("sha256").update(JSON.stringify({ inputs, profile })).digest("hex"),
+    inputs,
+    profile,
+  };
+  assert.throws(() => createBuildPlan({
+    gameDir: "/repo/templates/template",
+    args: { preset: "wasm-debug", target: "poki", debugUi: "on" },
+    env: { EMSDK: "/opt/emsdk" }, platform: "linux", nativeConfigured: true,
+    toolchainExists: true, runtimeBuild,
+  }), /profile does not match the configured compiler flags/);
+});
+
+test("plan refuses debug UI in a release even when called without CLI parsing", () => {
+  assert.throws(() => createBuildPlan({
+    gameDir: "/repo/templates/template",
+    args: { preset: "wasm-release", target: "poki", debugUi: "on" },
+    env: { EMSDK: "/opt/emsdk" }, platform: "linux", nativeConfigured: true, toolchainExists: true,
+  }), /debug UI is not allowed/i);
+});

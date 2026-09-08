@@ -99,9 +99,13 @@ placements and its own funnel:
   end-of-level card is the usual one) and show a rewarded offer as a blue button
   with an ad mark that disappears once paid. DevAPI: `platform.state`,
   `platform.attention`, `platform.break`, `platform.reward`.
-- `systems/sys_cloud_save` -- the local save mirrored into the portal's player
-  storage; at boot the newer copy wins, and a browser with no save takes the
-  account's. `game_runtime_try_start` waits on it (at most a few seconds).
+- `systems/sys_cloud_save` binds portal transport to the shared
+  `game-state/game_save_cloud` runtime, which reconciles saves against their
+  last shared base. A fresh installation can adopt the account save; startup
+  waits only a few seconds. A game-owned progress policy chooses a clear
+  winner automatically. Ambiguous progress exposes a choice in Settings;
+  remote adoption during play is deferred to a frame boundary. Device clocks
+  never choose the winning branch.
 - `systems/sys_portal_metrics` -- drains the frame event log once per frame
   into `platform_sdk_measure`; a game hands `sys_portal_metrics_init` a mapper
   that names its (category, what, action) triples. `NULL` keeps the drain off.

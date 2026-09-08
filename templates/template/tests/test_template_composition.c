@@ -23,6 +23,7 @@
 #include "features/progression/progression.h"
 #include "game_events.h"
 #include "game_items.h"
+#include "game_save_policy.h"
 #include "unity.h"
 
 #ifndef GAME_STORAGE_NATIVE_ROOT
@@ -368,6 +369,31 @@ void test_import_rejects_unreferenced_persistent_container_before_publish(void) 
     free(before);
 }
 
+void test_import_rejects_invalid_settings_or_progression_before_publish(void) {
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
+    char *before = game_save_export_string(err, (int)sizeof err);
+    TEST_ASSERT_NOT_NULL(before);
+
+    cJSON *settings_doc = cJSON_Parse(before);
+    TEST_ASSERT_NOT_NULL(settings_doc);
+    cJSON *settings = required_object(required_object(settings_doc, "features"), "settings");
+    TEST_ASSERT_TRUE(cJSON_ReplaceItemInObjectCaseSensitive(
+        settings, "language", cJSON_CreateString("invalid")));
+    assert_rejected_import_preserves_state(settings_doc, before);
+    cJSON_Delete(settings_doc);
+
+    cJSON *progression_doc = cJSON_Parse(before);
+    TEST_ASSERT_NOT_NULL(progression_doc);
+    cJSON *progression = required_object(
+        required_object(progression_doc, "features"), "progression");
+    TEST_ASSERT_TRUE(cJSON_ReplaceItemInObjectCaseSensitive(
+        progression, "tracks", cJSON_CreateString("invalid")));
+    assert_rejected_import_preserves_state(progression_doc, before);
+    cJSON_Delete(progression_doc);
+    free(before);
+}
+
 void test_import_rejects_invalid_items_graph_before_publish(void) {
     char err[128] = {0};
     TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
@@ -585,7 +611,7 @@ void test_devapi_rolls_back_all_successful_patch_groups_when_document_rejects(vo
     TEST_ASSERT_TRUE(fabsf(settings_master() - master_before) < COMPOSITION_TEST_FLOAT_EPS);
     TEST_ASSERT_EQUAL_INT(0, game_state.test_ui_clicks);
     TEST_ASSERT_EQUAL_INT(callback_count_before, s_devapi_change_count);
-    game_save_set_document_validator(game_items_validate_save_document);
+    game_configure_save();
 }
 
 void test_devapi_set_rolls_back_a_partially_mutating_setter(void) {
@@ -874,7 +900,7 @@ int main(void) {
     game_save_register_fragment(&items_state_fragment);
     game_save_register_fragment(&progression_state_fragment);
     game_save_register_fragment(&game_state_fragment);
-    game_items_configure_save();
+    game_configure_save();
 
     UNITY_BEGIN();
     RUN_TEST(test_configured_hot_buffer_falls_back_while_a_fragment_has_no_text_codec);
@@ -885,6 +911,7 @@ int main(void) {
     RUN_TEST(test_import_rejects_dangling_owner_before_publish);
     RUN_TEST(test_import_rejects_unreferenced_persistent_container_before_publish);
     RUN_TEST(test_import_rejects_invalid_items_graph_before_publish);
+    RUN_TEST(test_import_rejects_invalid_settings_or_progression_before_publish);
     RUN_TEST(test_save_refuses_invalid_live_ownership_without_replacing_disk_state);
     RUN_TEST(test_disk_load_rejects_invalid_primary_and_recovers_valid_backup);
     RUN_TEST(test_disk_load_rejects_invalid_primary_and_backup_before_corrupt_reset);

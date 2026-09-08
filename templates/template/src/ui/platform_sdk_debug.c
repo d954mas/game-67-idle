@@ -55,6 +55,8 @@ static int s_pause_count;
 static int s_resume_count;
 static platform_sdk_listener_id_t s_pause_listener;
 static platform_sdk_listener_id_t s_resume_listener;
+static platform_sdk_ad_request_id_t s_interstitial_request_id;
+static platform_sdk_ad_request_id_t s_rewarded_request_id;
 
 #if GAME_PLATFORM_SDK_DEBUG_UI
 static const char *sdk_result_name(platform_sdk_result_t result) {
@@ -92,6 +94,8 @@ static const char *ad_reason_name(platform_sdk_ad_reason_t reason) {
         return "not_ready";
     case PLATFORM_SDK_AD_REASON_RATE_LIMITED:
         return "rate_limited";
+    case PLATFORM_SDK_AD_REASON_TIMEOUT:
+        return "timeout";
     case PLATFORM_SDK_AD_REASON_FAILED:
         return "failed";
     case PLATFORM_SDK_AD_REASON_SKIPPED:
@@ -179,6 +183,7 @@ static platform_sdk_result_t mock_backend_show_interstitial(const char *placemen
     }
     set_placement(placement);
     s_flow = MOCK_AD_FLOW_INTERSTITIAL;
+    s_interstitial_request_id = platform_sdk_active_interstitial_request_id();
     return PLATFORM_SDK_RESULT_OK;
 }
 
@@ -192,6 +197,7 @@ static platform_sdk_result_t mock_backend_show_rewarded(const char *placement, v
     }
     set_placement(placement);
     s_flow = MOCK_AD_FLOW_REWARDED;
+    s_rewarded_request_id = platform_sdk_active_rewarded_request_id();
     return PLATFORM_SDK_RESULT_OK;
 }
 
@@ -207,6 +213,8 @@ static platform_sdk_result_t mock_backend_login(void *userdata) {
 static void mock_backend_destroy(void *userdata) {
     (void)userdata;
     s_flow = MOCK_AD_FLOW_NONE;
+    s_interstitial_request_id = 0u;
+    s_rewarded_request_id = 0u;
 }
 
 static platform_sdk_backend_t mock_backend(void) {
@@ -268,8 +276,10 @@ static void complete_interstitial(platform_sdk_ad_reason_t reason, bool shown) {
         .reason = reason,
     };
     set_interstitial_result(result);
+    const platform_sdk_ad_request_id_t request_id = s_interstitial_request_id;
+    s_interstitial_request_id = 0u;
     s_flow = MOCK_AD_FLOW_NONE;
-    platform_sdk_backend_complete_interstitial(result);
+    platform_sdk_backend_complete_interstitial_request(request_id, result);
 }
 
 static void complete_rewarded(platform_sdk_ad_reason_t reason, bool shown, bool rewarded) {
@@ -280,8 +290,10 @@ static void complete_rewarded(platform_sdk_ad_reason_t reason, bool shown, bool 
         .reason = reason,
     };
     set_rewarded_result(result);
+    const platform_sdk_ad_request_id_t request_id = s_rewarded_request_id;
+    s_rewarded_request_id = 0u;
     s_flow = MOCK_AD_FLOW_NONE;
-    platform_sdk_backend_complete_rewarded(result);
+    platform_sdk_backend_complete_rewarded_request(request_id, result);
 }
 
 static void complete_login(bool accepted) {

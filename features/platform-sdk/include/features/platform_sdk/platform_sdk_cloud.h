@@ -2,37 +2,46 @@
 #define FEATURES_PLATFORM_SDK_PLATFORM_SDK_CLOUD_H
 
 #include <stdbool.h>
-
-/* Portal-side player storage: one text document per key, carried by the
-   account rather than by the browser. The portal answers asynchronously and
-   the game runs on one thread, so the read is started early and its result is
-   polled at a barrier the game already waits on. */
+#include <stdint.h>
 
 typedef enum platform_sdk_cloud_status {
-    PLATFORM_SDK_CLOUD_IDLE = 0,   /* nothing has been asked for yet */
-    PLATFORM_SDK_CLOUD_PENDING,    /* the portal has not answered */
-    PLATFORM_SDK_CLOUD_READY,      /* a document came back; take it */
-    PLATFORM_SDK_CLOUD_EMPTY,      /* the portal has no document for this player */
-    PLATFORM_SDK_CLOUD_UNAVAILABLE /* this build or this portal has no storage */
+    PLATFORM_SDK_CLOUD_IDLE = 0,
+    PLATFORM_SDK_CLOUD_PENDING,
+    PLATFORM_SDK_CLOUD_READY,
+    PLATFORM_SDK_CLOUD_EMPTY,
+    PLATFORM_SDK_CLOUD_UNAVAILABLE,
+    PLATFORM_SDK_CLOUD_FAILED
 } platform_sdk_cloud_status_t;
 
-/* False on every target whose backend cannot carry player data; the caller
-   then stays on local storage alone and says nothing to the player. */
+typedef enum platform_sdk_cloud_write_status {
+    PLATFORM_SDK_CLOUD_WRITE_IDLE = 0,
+    PLATFORM_SDK_CLOUD_WRITE_PENDING,
+    PLATFORM_SDK_CLOUD_WRITE_ACKNOWLEDGED,
+    PLATFORM_SDK_CLOUD_WRITE_UNAVAILABLE,
+    PLATFORM_SDK_CLOUD_WRITE_FAILED
+} platform_sdk_cloud_write_status_t;
+
+/* Borrowed arguments last through the backend call; asynchronous backends
+   copy them before returning. Completions must echo the supplied request id. */
+typedef struct platform_sdk_cloud_backend {
+    bool (*supported)(void *context);
+    void (*load)(uint32_t request_id, const char *key, void *context);
+    void (*store)(uint32_t request_id, const char *key, const char *text, void *context);
+} platform_sdk_cloud_backend_t;
+
+void platform_sdk_cloud_set_backend(const platform_sdk_cloud_backend_t *backend, void *context);
+void platform_sdk_cloud_install_web_backend(void);
+void platform_sdk_cloud_reset(void);
 bool platform_sdk_cloud_supported(void);
-
-/* Starts one read. Calling it again replaces the pending read. */
 void platform_sdk_cloud_load(const char *key);
-
 platform_sdk_cloud_status_t platform_sdk_cloud_status(void);
-
-/* The document, transferred to the caller (free it), or NULL unless the status
-   is READY. Taking it moves the status to EMPTY: a document is handed over
-   once. */
+/* Ownership passes to the caller, which must free the returned text. */
 char *platform_sdk_cloud_take(void);
+/* One write at a time. The caller retains unsent snapshots and owns retries. */
+bool platform_sdk_cloud_store(const char *key, const char *text);
+platform_sdk_cloud_write_status_t platform_sdk_cloud_write_status(void);
+void platform_sdk_cloud_complete_load(uint32_t request_id, platform_sdk_cloud_status_t status,
+                                      const char *text);
+void platform_sdk_cloud_complete_store(uint32_t request_id, platform_sdk_cloud_write_status_t status);
 
-/* Fire and forget. The bridge keeps at most one write in flight and sends only
-   the newest text that arrived while one was running, because portals rate
-   limit player data far below an autosave's cadence. */
-void platform_sdk_cloud_store(const char *key, const char *text);
-
-#endif /* FEATURES_PLATFORM_SDK_PLATFORM_SDK_CLOUD_H */
+#endif

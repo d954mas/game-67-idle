@@ -19,7 +19,12 @@ int64_t game_save_platform_wall_ms(void) {
     return (int64_t)game_save_web_now_ms();
 }
 
+EMSCRIPTEN_KEEPALIVE void game_save_web_pause_playtime(void) {
+    game_save_update_playtime(false);
+}
+
 EMSCRIPTEN_KEEPALIVE void game_save_web_flush(void) {
+    game_save_web_pause_playtime();
     char error[128] = {0};
     (void)game_save_flush(error, (int)sizeof(error));
 }
@@ -33,6 +38,7 @@ EM_JS(void, game_save_web_install, (void), {
     };
     document.addEventListener('visibilitychange', function() {
         if (document.visibilityState === 'hidden') { flush(); }
+        else if (Module['_game_save_web_pause_playtime']) { Module['_game_save_web_pause_playtime'](); }
     });
     window.addEventListener('pagehide', flush);
 })

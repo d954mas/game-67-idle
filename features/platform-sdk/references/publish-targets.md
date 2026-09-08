@@ -1,6 +1,7 @@
 # Publish Target Manifest Contract
 
-Publish targets are defined separately from SDK adapters:
+`publish-targets/targets.json` is the canonical mapping consumed by both CMake
+and JavaScript tooling. Publish targets are defined separately from SDK adapters:
 
 | Target | SDK adapter | Build dir |
 | --- | --- | --- |
@@ -44,14 +45,17 @@ node tools/build_web.mjs --preset wasm-release --target crazygames
 ```
 
 The script passes `-DGAME_PUBLISH_TARGET=<target>` plus a mechanically generated
-runtime source fingerprint to CMake. CMake computes the SDK adapter and stages
+runtime source fingerprint and compilation profile to CMake. The profile
+includes target, adapter, preset, debug UI, DevAPI, analytics, and event-log
+mirror flags; CMake rejects disagreement with its effective compile options. CMake computes the SDK adapter and stages
 only that adapter as `platform-sdk-adapter.js`; release packaging embeds the
 source-hash-bound minified SDK bundle into `game.js`, removes the standalone
 modules, and minifies generated HTML with its inline CSS/JavaScript. The
 builder writes the shared record to `runtime-build.json` for local and portal
 targets.
-The game also publishes that fingerprint from compiled WASM; packaging rejects
-a release whose executable lacks the witness. Because target policy changes the
+The game also publishes that fingerprint and profile from compiled WASM;
+packaging rejects a release whose executable lacks the matching witness.
+Release validation requires all four development flags to be disabled. Because target policy changes the
 WASM bytes, local-mock attachment proves the same mechanically hashed source
 snapshot was compiled and executed, not that local and portal payloads are
 byte-identical.

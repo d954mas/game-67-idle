@@ -9,6 +9,7 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
   let hasStartedGameplay = false;
   let loadingPercent = null;
   const pendingAds = new Set();
+  let activeFullscreenAd = null;
 
   function windowRef() {
     return (host && host.window) || host || globalThis;
@@ -25,13 +26,13 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
     return typeof result === "function" ? result() : result;
   }
 
-  function adOperation(start, failedResult) {
+  function adOperation(start, timeoutResult, failedResult = timeoutResult) {
     return new Promise((resolve) => {
       let cleanup = null;
       let settled = false;
       const root = windowRef();
       const cancel = () => settle(adResult(failedResult));
-      const timer = (root.setTimeout || setTimeout)(cancel, AD_TIMEOUT_MS);
+      const timer = (root.setTimeout || setTimeout)(() => settle(adResult(timeoutResult)), AD_TIMEOUT_MS);
 
       function setCleanup(next) {
         cleanup = next;
@@ -63,6 +64,50 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
       } catch {
         settle(adResult(failedResult));
       }
+    });
+  }
+
+  function fullscreenAdOperation(requestId, start, timeoutResult, failedResult, busyResult) {
+    if (activeFullscreenAd != null) return Promise.resolve(busyResult);
+    return new Promise((resolve) => {
+      let cleanup = null;
+      let settled = false;
+      let visible = false;
+      const root = windowRef();
+      const operation = {};
+      const timer = (root.setTimeout || setTimeout)(() => settle(adResult(timeoutResult)), AD_TIMEOUT_MS);
+
+      function setCleanup(next) { cleanup = next; }
+      function setVisible(next) {
+        if (visible === next) return;
+        visible = next;
+        notifyLifecycle("adVisible", requestId, next);
+      }
+      function release() {
+        if (activeFullscreenAd === operation) activeFullscreenAd = null;
+        pendingAds.delete(cancel);
+        if (cleanup) {
+          try { cleanup(); } catch {}
+          cleanup = null;
+        }
+      }
+      function settle(result) {
+        if (settled) return;
+        settled = true;
+        (root.clearTimeout || clearTimeout)(timer);
+        resolve(result);
+      }
+      function terminal(result) {
+        if (visible) setVisible(false);
+        else notifyLifecycle("adVisible", requestId, false);
+        settle(adResult(result));
+        release();
+      }
+      function cancel() { terminal(failedResult); }
+
+      activeFullscreenAd = operation;
+      pendingAds.add(cancel);
+      try { start(terminal, setCleanup, setVisible); } catch { terminal(failedResult); }
     });
   }
 
@@ -191,65 +236,48 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
     } catch {}
   }
 
-  async function showInterstitial(placement) {
-    if (!(await ready()) || !bridge.advertisement) {
-      return { supported: false, shown: false, reason: "not_ready" };
-    }
-    if (!bridge.advertisement.isInterstitialSupported) {
-      return { supported: false, shown: false, reason: "unsupported" };
-    }
+  async function showInterstitial(placement, requestId) {
+    if (!(await ready()) || !bridge.advertisement) return { supported: false, shown: false, reason: "not_ready" };
+    if (!bridge.advertisement.isInterstitialSupported) return { supported: false, shown: false, reason: "unsupported" };
     const failed = { supported: true, shown: false, reason: "failed" };
-    /* Bridge reports the ordinary throttle as `failed`: the minimum delay
-       between interstitials, the initial delay after game_ready, and a disabled
-       placement all land here. Reporting it as a failure would make analytics
-       and retry logic read routine pacing as breakage. */
+    const timeout = { ...failed, reason: "timeout" };
     const throttled = { supported: true, shown: false, reason: "rate_limited" };
-    return adOperation((settle, setCleanup) => {
+    const busy = { supported: true, shown: false, reason: "busy" };
+    return fullscreenAdOperation(requestId, (terminal, setCleanup, setVisible) => {
       const name = eventName("INTERSTITIAL_STATE_CHANGED", "interstitial_state_changed");
       const handler = (state) => {
-        if (state === "closed") settle({ supported: true, shown: true });
-        else if (state === "failed") settle(throttled);
+        if (state === "opened" || state === "open") setVisible(true);
+        else if (state === "closed") terminal({ supported: true, shown: true });
+        else if (state === "failed") terminal(throttled);
       };
       bridge.advertisement.on(name, handler);
-      setCleanup(() => {
-        if (typeof bridge.advertisement.off === "function") bridge.advertisement.off(name, handler);
-      });
+      setCleanup(() => { if (typeof bridge.advertisement.off === "function") bridge.advertisement.off(name, handler); });
       bridge.advertisement.showInterstitial(placement || undefined);
-    }, failed);
+    }, timeout, failed, busy);
   }
 
-  async function showRewarded(placement) {
-    if (!(await ready()) || !bridge.advertisement) {
-      return { supported: false, shown: false, rewarded: false, reason: "not_ready" };
-    }
-    if (!bridge.advertisement.isRewardedSupported) {
-      return { supported: false, shown: false, rewarded: false, reason: "unsupported" };
-    }
-    /* `rewarded` is what earns the reward and `closed` is the terminal state.
-       A platform adapter that stops at `rewarded` must not cost the player the
-       reward, so every later exit — a failure, the timeout, adapter teardown —
-       still resolves with the latched reward. */
+  async function showRewarded(placement, requestId) {
+    if (!(await ready()) || !bridge.advertisement) return { supported: false, shown: false, rewarded: false, reason: "not_ready" };
+    if (!bridge.advertisement.isRewardedSupported) return { supported: false, shown: false, rewarded: false, reason: "unsupported" };
+    /* Event payloads have no request id, so this subscription remains exclusive
+       until its terminal state even after its game-facing watchdog settles. */
     let rewarded = false;
     const failed = { supported: true, shown: false, rewarded: false, reason: "failed" };
     const earned = { supported: true, shown: false, rewarded: true };
-    return adOperation((settle, setCleanup) => {
+    const timeout = () => ({ ...(rewarded ? earned : failed), reason: "timeout" });
+    const busy = { supported: true, shown: false, rewarded: false, reason: "busy" };
+    return fullscreenAdOperation(requestId, (terminal, setCleanup, setVisible) => {
       const name = eventName("REWARDED_STATE_CHANGED", "rewarded_state_changed");
       const handler = (state) => {
+        if (state === "opened" || state === "open") setVisible(true);
         if (state === "rewarded") rewarded = true;
-        if (state === "closed") {
-          settle(rewarded
-            ? { supported: true, shown: true, rewarded: true }
-            : { supported: true, shown: true, rewarded: false, reason: "skipped" });
-        } else if (state === "failed") {
-          settle(rewarded ? earned : failed);
-        }
+        if (state === "closed") terminal(rewarded ? { supported: true, shown: true, rewarded: true } : { supported: true, shown: true, rewarded: false, reason: "skipped" });
+        else if (state === "failed") terminal(rewarded ? earned : failed);
       };
       bridge.advertisement.on(name, handler);
-      setCleanup(() => {
-        if (typeof bridge.advertisement.off === "function") bridge.advertisement.off(name, handler);
-      });
+      setCleanup(() => { if (typeof bridge.advertisement.off === "function") bridge.advertisement.off(name, handler); });
       bridge.advertisement.showRewarded(placement || undefined);
-    }, () => (rewarded ? earned : failed));
+    }, timeout, failed, busy);
   }
 
   /* A sticky banner is the one extra ad block the portal rules allow next to
@@ -285,22 +313,23 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
   }
 
   async function loadData(key) {
-    if (!(await ready()) || !bridge.storage || typeof bridge.storage.get !== "function") return null;
-    /* The second argument is tryParseJson, not a storage type. The wrapper
-       stores JSON strings and parses them here so a plain string value that is
-       not JSON survives unchanged. */
-    const value = await bridge.storage.get(key, false).catch(() => null);
-    if (value == null) return null;
     try {
-      return JSON.parse(value);
-    } catch {
-      return value;
-    }
+      if (!(await ready()) || !bridge.storage || typeof bridge.storage.get !== "function") {
+        return { status: "unavailable" };
+      }
+      const value = await bridge.storage.get(key, false);
+      return value == null ? { status: "missing" } : { status: "found", value };
+    } catch { return { status: "failed" }; }
   }
 
   async function saveData(key, value) {
-    if (!(await ready()) || !bridge.storage || typeof bridge.storage.set !== "function") return;
-    await bridge.storage.set(key, typeof value === "string" ? value : JSON.stringify(value)).catch(() => {});
+    try {
+      if (!(await ready()) || !bridge.storage || typeof bridge.storage.set !== "function") {
+        return { status: "unavailable" };
+      }
+      await bridge.storage.set(key, typeof value === "string" ? value : JSON.stringify(value));
+      return { status: "acknowledged" };
+    } catch { return { status: "failed" }; }
   }
 
   function getLocale() {

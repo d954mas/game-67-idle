@@ -9,7 +9,11 @@ import { findStudioRoot } from "./lib/studio_root.mjs";
 import { createRuntimeBuildRecord, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 
 const PRESETS = new Set(["wasm-release", "wasm-debug", "wasm-devapi-debug"]);
-const TARGETS = new Set(["local", "itch", "poki", "yandex", "playgama", "crazygames"]);
+const MODULE_GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const { compileProfileForTarget, targetNames } = await import(pathToFileURL(join(
+  findStudioRoot(MODULE_GAME_DIR), "features", "platform-sdk", "publish-targets", "target_config.mjs",
+)).href);
+const TARGETS = new Set(targetNames());
 
 export function parseBuildArgs(argv) {
   const args = { preset: "wasm-release", target: "local", debugUi: "default" };
@@ -39,10 +43,26 @@ function buildName(args) {
   return args.target === "local" ? args.preset : `${args.preset}-${args.target}`;
 }
 
+export function compileFlagsForArgs(args) {
+  return Object.freeze({
+    debugUi: args.debugUi === "on",
+    devapi: args.preset === "wasm-devapi-debug",
+    analytics: args.preset === "wasm-devapi-debug",
+    eventsLogMirror: args.preset !== "wasm-release",
+  });
+}
+
 export function createBuildPlan(options) {
   const gameDir = resolve(options.gameDir);
   const args = options.args;
+  if (args.preset === "wasm-release" && args.debugUi === "on") {
+    throw new Error("debug UI is not allowed in wasm-release artifacts; use wasm-debug or --no-debug-ui");
+  }
+  const compileProfile = compileProfileForTarget(args.target, args.preset, compileFlagsForArgs(args));
   const runtimeBuild = options.runtimeBuild ? validateRuntimeBuildRecord(options.runtimeBuild) : null;
+  if (runtimeBuild?.schema === "ai_studio.runtime_build.v2" && JSON.stringify(runtimeBuild.profile) !== JSON.stringify(compileProfile)) {
+    throw new Error("runtime build profile does not match the configured compiler flags");
+  }
   const platform = options.platform || process.platform;
   const inputEnv = options.env || {};
   const name = buildName(args);
@@ -74,12 +94,17 @@ export function createBuildPlan(options) {
     configureArgs.unshift("cmake");
   }
   configureArgs.push(`-DCMAKE_BUILD_TYPE=${args.preset === "wasm-release" ? "Release" : "Debug"}`, `-DGAME_PUBLISH_TARGET=${args.target}`);
+  configureArgs.push(`-DGAME_RUNTIME_BUILD_PROFILE=${compileProfile.preset}`);
   configureArgs.push("-DGAME_AUDIO_BROWSER_SMOKE=OFF");
-  configureArgs.push(`-DGAME_ANALYTICS_ENABLED=${args.preset === "wasm-devapi-debug" ? "ON" : "OFF"}`);
-  configureArgs.push(`-DGAME_EVENTS_LOG_MIRROR=${args.preset === "wasm-release" ? "OFF" : "ON"}`);
+  configureArgs.push(`-DGAME_ANALYTICS_ENABLED=${compileProfile.analytics ? "ON" : "OFF"}`);
+  configureArgs.push(`-DGAME_EVENTS_LOG_MIRROR=${compileProfile.eventsLogMirror ? "ON" : "OFF"}`);
+  configureArgs.push(`-DGAME_RUNTIME_BUILD_DEBUG_UI=${Number(compileProfile.debugUi)}`);
+  configureArgs.push(`-DGAME_RUNTIME_BUILD_DEVAPI=${Number(compileProfile.devapi)}`);
+  configureArgs.push(`-DGAME_RUNTIME_BUILD_ANALYTICS=${Number(compileProfile.analytics)}`);
+  configureArgs.push(`-DGAME_RUNTIME_BUILD_EVENTS_LOG_MIRROR=${Number(compileProfile.eventsLogMirror)}`);
   if (runtimeBuild) configureArgs.push(`-DGAME_RUNTIME_BUILD_FINGERPRINT=${runtimeBuild.fingerprint}`);
-  configureArgs.push(`-DGAME_PLATFORM_SDK_DEBUG_UI=${args.debugUi === "on" ? "ON" : "OFF"}`);
-  configureArgs.push(`-DGAME_DEVAPI_ENABLED=${args.preset === "wasm-devapi-debug" ? "ON" : "OFF"}`);
+  configureArgs.push(`-DGAME_PLATFORM_SDK_DEBUG_UI=${compileProfile.debugUi ? "ON" : "OFF"}`);
+  configureArgs.push(`-DGAME_DEVAPI_ENABLED=${compileProfile.devapi ? "ON" : "OFF"}`);
   steps.push({ kind: "run", command: configureCommand, args: configureArgs });
   steps.push({ kind: "run", command: "cmake", args: ["--build", webDir, "--target", "game"] });
   steps.push({ kind: "run", command: "cmake", args: ["--build", webDir, "--target", "platform_sdk_web_assets"] });
@@ -134,7 +159,8 @@ export function main(argv = process.argv.slice(2), environment = process.env) {
     const gameDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
     const args = parseBuildArgs(argv);
     const studioRoot = findStudioRoot(gameDir);
-    const runtimeBuild = createRuntimeBuildRecord({ gameDir, studioRoot });
+    const compileProfile = compileProfileForTarget(args.target, args.preset, compileFlagsForArgs(args));
+    const runtimeBuild = createRuntimeBuildRecord({ gameDir, studioRoot, compileProfile });
     const emsdk = environment.EMSDK || (process.platform === "win32" && existsSync("C:/develop/emsdk") ? "C:/develop/emsdk" : "");
     const toolchain = emsdk ? join(emsdk, "upstream", "emscripten", "cmake", "Modules", "Platform", "Emscripten.cmake") : "";
     const plan = createBuildPlan({
@@ -147,7 +173,7 @@ export function main(argv = process.argv.slice(2), environment = process.env) {
       toolchainExists: Boolean(toolchain && existsSync(toolchain)),
       runtimeBuild,
       verifyRuntimeBuild() {
-        const after = createRuntimeBuildRecord({ gameDir, studioRoot });
+        const after = createRuntimeBuildRecord({ gameDir, studioRoot, compileProfile });
         if (JSON.stringify(after) !== JSON.stringify(runtimeBuild)) {
           throw new Error("runtime build inputs changed while the web artifact was building");
         }

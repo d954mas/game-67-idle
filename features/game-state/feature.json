@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "game-state",
-  "version": "4.5.0",
+  "version": "4.7.0",
   "title": "Game State",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -23,9 +23,11 @@
     "game_storage slot persistence API",
     "bounded caller-owned allocation-free snapshot writer",
     "allocation-free readable text codec for scalar fragments",
+    "persisted active playtime metadata and monotonic accumulator",
     "game_state_json validation helpers",
     "schema-first C state generation",
-    "optional game.state.* DevAPI dispatch"
+    "optional game.state.* DevAPI dispatch",
+    "SDK-independent base-aware save synchronization coordinator"
   ],
   "flags": {
     "devapi": "GAME_DEVAPI_ENABLED",
@@ -57,6 +59,8 @@
       "features/game-state/src/game_save_text.c",
       "features/game-state/src/game_storage.c",
       "features/game-state/src/game_save.c",
+      "features/game-state/src/game_save_sync.c",
+      "features/game-state/src/game_save_cloud.c",
       "features/game-state/src/game_save_devapi.c"
     ],
     "platform_sources": {

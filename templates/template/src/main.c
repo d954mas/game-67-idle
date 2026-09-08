@@ -72,6 +72,7 @@
 #include "ui/ui_runtime.h"
 #include "world/world.h"
 #include "game_save.h"
+#include "game_save_policy.h"
 #include "game_storage.h"
 #include "game_state.h"
 #include "game_items.h"
@@ -375,6 +376,13 @@ static void game_runtime_reset_fragments_without_grants(void) {
     game_items_create_defaults(false);
 }
 
+static void game_runtime_reset_world_transient_state(void) {
+    s_world.time_seconds = 0.0F;
+    s_world.player_x = 0.0F;
+    s_world.player_z = 0.0F;
+    s_world.player_yaw = 0.0F;
+}
+
 static bool game_runtime_apply_pending_new_game(void) {
     const game_save_transition_result_t transition = game_save_apply_pending_new_game();
     if (!transition.state_changed) {
@@ -383,15 +391,12 @@ static bool game_runtime_apply_pending_new_game(void) {
     if (!transition.persisted) {
         fprintf(stderr, "new game started, but save will be retried\n");
     }
-    s_world.time_seconds = 0.0F;
-    s_world.player_x = 0.0F;
-    s_world.player_z = 0.0F;
-    s_world.player_yaw = 0.0F;
+    game_runtime_reset_world_transient_state();
     return true;
 }
 
-/* A run that found nothing to load: the cloud save asks, because a new game
-   stamped with the current time would out-rank the account's older copy. */
+/* A fresh local run is distinguishable so confirmed account state can be
+   adopted before gameplay starts instead of being treated as a divergence. */
 static bool s_local_save_was_fresh;
 
 static void game_runtime_load_state(void) {
@@ -418,6 +423,29 @@ static void game_runtime_load_state(void) {
     game_runtime_reset_fragments_without_grants();
 }
 
+static void game_runtime_reload_cloud_state(void) {
+    /* The prior import is transactional; this storage reload rebinds consumers
+       through the normal LOADED path without running new-game grants. */
+    const bool fresh_state = s_fresh_state;
+    s_fresh_state = false;
+    game_runtime_load_state();
+    s_fresh_state = fresh_state;
+}
+
+static void game_runtime_apply_pending_cloud_save(void) {
+    const game_save_choice_t choice = settings_take_save_conflict_choice();
+    if (choice != GAME_SAVE_ASK && game_save_cloud_resolve(choice)) {
+        settings_close();
+    }
+    /* UI readers have finished; game-owned consumers can now bind the new state. */
+    if (game_save_cloud_apply_remote_at_safe_point()) {
+        game_runtime_reload_cloud_state();
+        settings_apply_language();
+        game_runtime_reset_world_transient_state();
+        settings_close();
+    }
+}
+
 static void game_runtime_try_start(void) {
     if (s_game_runtime_ready || s_game_runtime_failed) {
         return;
@@ -433,7 +461,7 @@ static void game_runtime_try_start(void) {
     }
     /* Held here rather than after the load: swapping the save under a run that
        has already started is worse than a second on the loading screen. */
-    if (!cloud_save_settled()) {
+    if (!game_save_cloud_boot_settled()) {
         return;
     }
 
@@ -446,10 +474,8 @@ static void game_runtime_try_start(void) {
     /* A ready pack is the startup barrier: save reconciliation and every
        feature that reads content run only after this point. */
     game_runtime_load_state();
-    /* A newer run from another device replaces what this browser kept, and the
-       load runs again over it. */
-    if (cloud_save_adopt(s_local_save_was_fresh)) {
-        game_runtime_load_state();
+    if (game_save_cloud_start(s_local_save_was_fresh)) {
+        game_runtime_reload_cloud_state();
     }
     /* The persisted language reaches the string table only here: both load
        paths above leave settings_state populated, and every accessor before
@@ -502,8 +528,11 @@ static void game_runtime_update(void) {
     sys_portal_metrics_record(); /* last reader of the frame log */
     if (!s_disable_autosave) {
         game_save_tick();
-        cloud_save_tick();
+        game_save_cloud_tick();
     }
+    settings_set_save_conflict_visible(
+        game_save_cloud_state() == GAME_SAVE_SYNC_CONFLICT,
+        game_save_cloud_conflict_remote_document() != NULL);
     game_event_frame_reset();
 }
 
@@ -548,6 +577,9 @@ static void frame(void) {
     platform_lifecycle_update(
         playable_shell_ready,
         !platform_break && game_scenes_can_process_game_input());
+    game_save_update_playtime(
+        playable_shell_ready && !g_nt_app.paused &&
+        platform_sdk_gameplay_active() && !platform_sdk_break_active());
     game_runtime_update();
 
     nt_gfx_begin_frame();
@@ -612,6 +644,7 @@ static void frame(void) {
     nt_gfx_end_frame();
     /* UI may request New Game during draw. Drain it before pagehide can flush
        the previous state; this callback is still one synchronous frame. */
+    game_runtime_apply_pending_cloud_save();
     (void)game_runtime_apply_pending_new_game();
     nt_window_swap_buffers();
     if (s_gfx_recovery_pending && gfx_recovery_frame_ready) {
@@ -769,9 +802,10 @@ int main(int argc, char **argv) {
     game_save_register_fragment(&items_state_fragment);    /* L1, no deps: between settings and game */
     game_save_register_fragment(&progression_state_fragment); /* L2 depends on items: register after items */
     game_save_register_fragment(&game_state_fragment);     /* `game` last (most dependent) */
-    game_items_configure_save();
+    game_configure_save();
     game_save_set_hot_snapshot_buffer(s_save_snapshot, sizeof s_save_snapshot);
     game_save_init();
+    cloud_save_init(game_save_policy_decide, game_save_policy_same_features);
 
     /* The loading bar is the pack download: the backend must be able to carry
        progress before the pack starts, not after it is ready. SDK init still
@@ -840,8 +874,11 @@ int main(int argc, char **argv) {
     nt_app_run(frame);
 
 #ifndef NT_PLATFORM_WEB
+    game_save_cloud_shutdown();
     devapi_shutdown_runtime();
     if (s_game_runtime_initialized) {
+        game_save_update_playtime(false);
+        if (!s_disable_autosave) (void)game_save_flush(NULL, 0);
         game_scenes_shutdown();
         nt_resource_step();
         game_features_shutdown(&s_world);

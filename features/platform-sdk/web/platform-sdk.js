@@ -3,20 +3,27 @@ import { createPlatformSdkAdapter } from "./platform-sdk-adapter.js";
 const root = globalThis;
 const config = root.__PLATFORM_SDK_CONFIG__ || {};
 
-/* The portal can pause the game without the player touching it. The C facade
-   publishes these hooks when the web backend is installed, so a portal event
-   that arrives before wasm is up is dropped rather than queued: nothing is
-   running yet to pause. */
+/* Portal lifecycle state can arrive before WASM. Keep it until the C bridge
+   installs its hooks, then replay the effective pause and audio state once. */
+const lifecycleState = root.__platformSdkLifecycleState || { paused: false, audioEnabled: true };
+root.__platformSdkLifecycleState = lifecycleState;
+
 const lifecycle = {
   pause() {
+    lifecycleState.paused = true;
     if (typeof root.__platformSdkPortalPause === "function") root.__platformSdkPortalPause();
   },
   resume() {
+    lifecycleState.paused = false;
     if (typeof root.__platformSdkPortalResume === "function") root.__platformSdkPortalResume();
   },
   /* A portal mute switch, not a pause: the game keeps running without sound. */
   audio(enabled) {
-    if (typeof root.__platformSdkPortalAudio === "function") root.__platformSdkPortalAudio(enabled);
+    lifecycleState.audioEnabled = Boolean(enabled);
+    if (typeof root.__platformSdkPortalAudio === "function") root.__platformSdkPortalAudio(lifecycleState.audioEnabled);
+  },
+  adVisible(requestId, visible) {
+    if (typeof root.__platformSdkAdVisible === "function") root.__platformSdkAdVisible(requestId, visible);
   },
 };
 

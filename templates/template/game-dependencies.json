@@ -21,7 +21,7 @@
     {
       "id": "game-state",
       "source": "features/game-state",
-      "version": "4.5.0",
+      "version": "4.7.0",
       "compatibility": "validated by the template build and test suite"
     },
     {
@@ -45,7 +45,7 @@
     {
       "id": "platform-sdk",
       "source": "features/platform-sdk",
-      "version": "1.7.0",
+      "version": "2.0.0",
       "compatibility": "validated by the template build and test suite"
     },
     {

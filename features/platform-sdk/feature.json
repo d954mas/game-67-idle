@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "platform-sdk",
-  "version": "1.7.0",
+  "version": "2.0.0",
   "title": "Platform SDK",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -18,7 +18,8 @@
     "Node.js for platform-sdk tests and scorecard/artifact CLIs"
   ],
   "commands": {
-    "test": "node --test features/platform-sdk/tests/platform_sdk.test.mjs",
+    "test": "node --test features/platform-sdk/tests/platform_sdk.test.mjs features/platform-sdk/tests/platform_storage.test.mjs features/platform-sdk/tests/platform_sdk_runtime_bridge.test.mjs",
+    "test_web": "node --test features/platform-sdk/tests/platform_sdk_web.test.mjs",
     "generate_release_bundles": "node features/platform-sdk/scripts/generate_release_bundles.mjs",
     "scorecard": "node features/platform-sdk/scripts/scorecard.mjs --input <events.ndjson> --pretty",
     "inspect": "node features/platform-sdk/scripts/artifact_tools.mjs inspect --target <target> --artifact <artifact-dir>"
@@ -37,7 +38,9 @@
     "player identity and portal login (Yandex auth dialog, local mock), the auth.changed event and the auth result measure; no logout seam",
     "portal leaderboards behind one C surface (caps, submit, fetch, open, one listener): Yandex read/write behind login with the portal quotas enforced in the adapter, CrazyGames write-only with AES-GCM scores, Playgama capability read from bridge.leaderboards.type at run time, local mock canned board",
     "publish target manifest validation",
-    "local NDJSON scorecard CLI"
+    "local NDJSON scorecard CLI",
+    "request-correlated storage transport with explicit outcomes and native backend injection",
+    "canonical target descriptors and compilation-profile-bound release artifacts"
   ],
   "flags": {
     "target": "local|itch|poki|yandex|playgama|crazygames",
@@ -47,7 +50,8 @@
   "manuals": {
     "install": "features/platform-sdk/INSTALL.md",
     "contract": "features/platform-sdk/references/contract.md",
-    "publish_targets": "features/platform-sdk/references/publish-targets.md"
+    "publish_targets": "features/platform-sdk/references/publish-targets.md",
+    "architecture": "features/platform-sdk/references/architecture.md"
   },
   "outputs": [
     "platform-sdk.js",
@@ -58,7 +62,9 @@
     "note": "Describes the template's existing in-place wiring; this feature is selected by CMake GAME_PUBLISH_TARGET.",
     "target_sources": [
       "${PLATFORM_SDK_SRC}/platform_sdk.c",
-      "${PLATFORM_SDK_SRC}/platform_sdk_web.c (Emscripten only)"
+      "${PLATFORM_SDK_SRC}/platform_sdk_web.c (Emscripten only)",
+      "${PLATFORM_SDK_SRC}/platform_sdk_storage.c",
+      "${PLATFORM_SDK_SRC}/platform_sdk_cloud.c"
     ],
     "include_dirs": [
       "${PLATFORM_SDK_INC}"
@@ -71,7 +77,9 @@
     "ctest_targets": [
       "test_platform_sdk",
       "test_platform_sdk_events",
-      "platform_sdk_node_test"
+      "platform_sdk_node_test",
+      "test_platform_storage",
+      "platform_sdk_web_test"
     ]
   },
   "default_template": {

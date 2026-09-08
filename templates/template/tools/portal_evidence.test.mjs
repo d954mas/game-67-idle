@@ -21,6 +21,7 @@ import test from "node:test";
 import { packageWebArtifact } from "./package_web.mjs";
 import { createPortalEvidence, publishPortalEvidenceReport } from "./portal_evidence.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
+import { runtimeBuildWitness } from "./lib/runtime_build.mjs";
 
 const gameModuleRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const studioRoot = findStudioRoot(gameModuleRoot);
@@ -42,19 +43,30 @@ function runtimeBuildRecord() {
     { id: "engine", source: "external/neotolis-engine", files: 5, sha256: "2".repeat(64) },
     { id: "feature:platform-sdk", source: "features/platform-sdk", files: 7, sha256: "3".repeat(64) },
   ];
+  const profile = { target: "itch", adapter: "mock", preset: "wasm-release", debugUi: false, devapi: false, analytics: false, eventsLogMirror: false };
   return {
-    schema: "ai_studio.runtime_build.v1",
-    fingerprint: createHash("sha256").update(JSON.stringify(inputs)).digest("hex"),
-    inputs,
+    schema: "ai_studio.runtime_build.v2",
+    fingerprint: createHash("sha256").update(JSON.stringify({ inputs, profile })).digest("hex"),
+    inputs, profile,
   };
+}
+
+function uleb(value) {
+  const bytes = [];
+  do {
+    let next = value & 0x7f;
+    value >>>= 7;
+    if (value) next |= 0x80;
+    bytes.push(next);
+  } while (value);
+  return Buffer.from(bytes);
 }
 
 function runtimeBoundWasm(record) {
   const name = Buffer.from("runtime_build", "ascii");
-  const marker = Buffer.from(`ai_studio.runtime_build:${record.fingerprint}`, "ascii");
-  const payloadSize = 1 + name.length + marker.length;
-  assert.ok(payloadSize < 128);
-  return Buffer.concat([RELEASE_WASM, Buffer.from([0, payloadSize, name.length]), name, marker]);
+  const marker = Buffer.from(runtimeBuildWitness(record), "ascii");
+  const payload = Buffer.concat([uleb(name.length), name, marker]);
+  return Buffer.concat([RELEASE_WASM, Buffer.from([0]), uleb(payload.length), payload]);
 }
 
 function write(path, value) {
@@ -221,7 +233,7 @@ test("matching game-owned local mock observation upgrades only that exact releas
   const mismatch = fixture(t);
   const other = runtimeBuildRecord();
   other.inputs[0] = { ...other.inputs[0], sha256: "9".repeat(64) };
-  other.fingerprint = createHash("sha256").update(JSON.stringify(other.inputs)).digest("hex");
+  other.fingerprint = createHash("sha256").update(JSON.stringify({ inputs: other.inputs, profile: other.profile })).digest("hex");
   const mismatchPath = writeLocalMockObservation(mismatch, other);
   assert.throws(() => createPortalEvidence({
     gameDir: mismatch.gameDir,

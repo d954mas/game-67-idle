@@ -1,6 +1,7 @@
 #include "features/platform_sdk/platform_sdk_web.h"
 
 #include "features/platform_sdk/platform_sdk.h"
+#include "features/platform_sdk/platform_sdk_cloud.h"
 
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/emscripten.h>
@@ -12,16 +13,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-void platform_sdk_web_complete_interstitial(int supported, int shown, int reason);
-void platform_sdk_web_complete_rewarded(int supported, int shown, int rewarded, int reason);
+void platform_sdk_web_complete_interstitial(unsigned int request_id, int supported, int shown, int reason);
+void platform_sdk_web_complete_rewarded(unsigned int request_id, int supported, int shown, int rewarded, int reason);
 void platform_sdk_web_complete_init(int ready);
 void platform_sdk_web_complete_login(int supported, int authorized, int reason, char *name, char *avatar_url);
 void platform_sdk_web_set_player(int authorized, char *name, char *avatar_url);
 void platform_sdk_web_read_player(void);
 void platform_sdk_web_portal_pause(void);
+void platform_sdk_web_ad_visible(unsigned int request_id, int visible);
 void platform_sdk_web_portal_resume(void);
 void platform_sdk_web_portal_audio(int enabled);
 void platform_sdk_web_complete_leaderboard_submit(char *board_id, int scope, int status);
+uint32_t platform_sdk_web_leaderboard_generation(void);
 void platform_sdk_web_leaderboard_begin(void);
 void platform_sdk_web_leaderboard_row(int around, double value, int rank, int you,
                                       char *name, char *avatar_url, char *extra);
@@ -38,12 +41,22 @@ EM_JS(void, platform_sdk_web_install_portal_hooks, (void), {
     globalThis.__platformSdkPortalPause = function () {
         try { _platform_sdk_web_portal_pause(); } catch (e) {}
     };
+    globalThis.__platformSdkAdVisible = function (requestId, visible) {
+        try { _platform_sdk_web_ad_visible(requestId >>> 0, visible ? 1 : 0); } catch (e) {}
+    };
     globalThis.__platformSdkPortalResume = function () {
         try { _platform_sdk_web_portal_resume(); } catch (e) {}
     };
     globalThis.__platformSdkPortalAudio = function (enabled) {
         try { _platform_sdk_web_portal_audio(enabled ? 1 : 0); } catch (e) {}
     };
+    var lifecycle = globalThis.__platformSdkLifecycleState;
+    if (lifecycle && typeof lifecycle === "object") {
+        try { _platform_sdk_web_portal_audio(lifecycle.audioEnabled === false ? 0 : 1); } catch (e) {}
+        if (lifecycle.paused) {
+            try { _platform_sdk_web_portal_pause(); } catch (e) {}
+        }
+    }
 })
 
 EM_JS(char *, platform_sdk_web_backend_locale, (void), {
@@ -173,7 +186,7 @@ EM_JS(void, platform_sdk_web_backend_measure,
     } catch (e) {}
 })
 
-EM_JS(int, platform_sdk_web_backend_show_interstitial, (const char *placement_ptr), {
+EM_JS(int, platform_sdk_web_backend_show_interstitial, (const char *placement_ptr, unsigned int request_id), {
     function reasonCode(reason, shown) {
         if (reason === "unsupported") return 1;
         if (reason === "not_ready") return 2;
@@ -182,6 +195,7 @@ EM_JS(int, platform_sdk_web_backend_show_interstitial, (const char *placement_pt
         if (reason === "skipped") return 5;
         if (reason === "declined") return 6;
         if (reason === "completed" || shown) return 7;
+        if (reason === "timeout") return 8;
         return 4;
     }
 
@@ -189,23 +203,23 @@ EM_JS(int, platform_sdk_web_backend_show_interstitial, (const char *placement_pt
     if (!backend || typeof backend.showInterstitial !== "function") return 0;
     var placement = placement_ptr ? UTF8ToString(placement_ptr) : "";
     try {
-        Promise.resolve(backend.showInterstitial(placement)).then(function (result) {
+        Promise.resolve(backend.showInterstitial(placement, request_id)).then(function (result) {
             result = result || {};
             _platform_sdk_web_complete_interstitial(
-                result.supported ? 1 : 0,
+                request_id, result.supported ? 1 : 0,
                 result.shown ? 1 : 0,
                 reasonCode(result.reason, result.shown));
         }, function () {
-            _platform_sdk_web_complete_interstitial(1, 0, 4);
+            _platform_sdk_web_complete_interstitial(request_id, 1, 0, 4);
         });
         return 1;
     } catch (e) {
-        _platform_sdk_web_complete_interstitial(1, 0, 4);
+        _platform_sdk_web_complete_interstitial(request_id, 1, 0, 4);
         return 1;
     }
 })
 
-EM_JS(int, platform_sdk_web_backend_show_rewarded, (const char *placement_ptr), {
+EM_JS(int, platform_sdk_web_backend_show_rewarded, (const char *placement_ptr, unsigned int request_id), {
     function reasonCode(reason, rewarded, shown) {
         if (reason === "unsupported") return 1;
         if (reason === "not_ready") return 2;
@@ -215,6 +229,7 @@ EM_JS(int, platform_sdk_web_backend_show_rewarded, (const char *placement_ptr), 
         if (reason === "declined") return 6;
         if (reason === "completed" || rewarded) return 7;
         if (shown) return 5;
+        if (reason === "timeout") return 8;
         return 4;
     }
 
@@ -222,19 +237,19 @@ EM_JS(int, platform_sdk_web_backend_show_rewarded, (const char *placement_ptr), 
     if (!backend || typeof backend.showRewarded !== "function") return 0;
     var placement = placement_ptr ? UTF8ToString(placement_ptr) : "";
     try {
-        Promise.resolve(backend.showRewarded(placement)).then(function (result) {
+        Promise.resolve(backend.showRewarded(placement, request_id)).then(function (result) {
             result = result || {};
             _platform_sdk_web_complete_rewarded(
-                result.supported ? 1 : 0,
+                request_id, result.supported ? 1 : 0,
                 result.shown ? 1 : 0,
                 result.rewarded ? 1 : 0,
                 reasonCode(result.reason, result.rewarded, result.shown));
         }, function () {
-            _platform_sdk_web_complete_rewarded(1, 0, 0, 4);
+            _platform_sdk_web_complete_rewarded(request_id, 1, 0, 0, 4);
         });
         return 1;
     } catch (e) {
-        _platform_sdk_web_complete_rewarded(1, 0, 0, 4);
+        _platform_sdk_web_complete_rewarded(request_id, 1, 0, 0, 4);
         return 1;
     }
 })
@@ -297,9 +312,11 @@ EM_JS(int, platform_sdk_web_backend_leaderboard_submit,
 
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.submitScore !== "function") return 0;
+    var generation = _platform_sdk_web_leaderboard_generation();
     var boardId = board_id_ptr ? UTF8ToString(board_id_ptr) : "";
     var extra = extra_ptr ? UTF8ToString(extra_ptr) : "";
     function settle(status) {
+        if (generation !== _platform_sdk_web_leaderboard_generation()) return;
         _platform_sdk_web_complete_leaderboard_submit(stringToNewUTF8(boardId), scope, status);
     }
     try {
@@ -340,10 +357,12 @@ EM_JS(int, platform_sdk_web_backend_leaderboard_fetch, (const char *board_id_ptr
 
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.fetchEntries !== "function") return 0;
+    var generation = _platform_sdk_web_leaderboard_generation();
     var boardId = board_id_ptr ? UTF8ToString(board_id_ptr) : "";
     /* Rows are staged and settled inside one synchronous handler, so two
        boards answering in the same tick cannot interleave their rows. */
     function settle(status, page) {
+        if (generation !== _platform_sdk_web_leaderboard_generation()) return;
         page = page || {};
         var player = page.player || null;
         _platform_sdk_web_leaderboard_begin();
@@ -393,15 +412,15 @@ EM_JS(void, platform_sdk_web_backend_destroy, (void), {
 /* clang-format on */
 
 static platform_sdk_ad_reason_t reason_from_int(int reason) {
-    if (reason < PLATFORM_SDK_AD_REASON_NONE || reason > PLATFORM_SDK_AD_REASON_COMPLETED) {
+    if (reason < PLATFORM_SDK_AD_REASON_NONE || reason > PLATFORM_SDK_AD_REASON_TIMEOUT) {
         return PLATFORM_SDK_AD_REASON_FAILED;
     }
     return (platform_sdk_ad_reason_t)reason;
 }
 
 EMSCRIPTEN_KEEPALIVE
-void platform_sdk_web_complete_interstitial(int supported, int shown, int reason) {
-    platform_sdk_backend_complete_interstitial((platform_sdk_ad_result_t){
+void platform_sdk_web_complete_interstitial(unsigned int request_id, int supported, int shown, int reason) {
+    platform_sdk_backend_complete_interstitial_request(request_id, (platform_sdk_ad_result_t){
         .supported = supported != 0,
         .shown = shown != 0,
         .reason = reason_from_int(reason),
@@ -409,8 +428,8 @@ void platform_sdk_web_complete_interstitial(int supported, int shown, int reason
 }
 
 EMSCRIPTEN_KEEPALIVE
-void platform_sdk_web_complete_rewarded(int supported, int shown, int rewarded, int reason) {
-    platform_sdk_backend_complete_rewarded((platform_sdk_rewarded_result_t){
+void platform_sdk_web_complete_rewarded(unsigned int request_id, int supported, int shown, int rewarded, int reason) {
+    platform_sdk_backend_complete_rewarded_request(request_id, (platform_sdk_rewarded_result_t){
         .supported = supported != 0,
         .shown = shown != 0,
         .rewarded = rewarded != 0,
@@ -468,6 +487,11 @@ static uint32_t leaderboard_value_from_double(double value) {
     if (!(value > 0.0)) return 0u;
     if (value >= 4294967295.0) return 4294967295u;
     return (uint32_t)value;
+}
+
+EMSCRIPTEN_KEEPALIVE
+uint32_t platform_sdk_web_leaderboard_generation(void) {
+    return platform_sdk_backend_leaderboard_generation();
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -560,6 +584,11 @@ void platform_sdk_web_complete_leaderboard_fetch(char *board_id, int scope, int 
 }
 
 EMSCRIPTEN_KEEPALIVE
+void platform_sdk_web_ad_visible(unsigned int request_id, int visible) {
+    platform_sdk_backend_ad_visible(request_id, visible != 0);
+}
+
+EMSCRIPTEN_KEEPALIVE
 void platform_sdk_web_portal_pause(void) {
     platform_sdk_backend_portal_pause();
 }
@@ -634,14 +663,16 @@ static void web_backend_measure(const char *category, const char *what,
 
 static platform_sdk_result_t web_backend_show_interstitial(const char *placement, void *userdata) {
     (void)userdata;
-    return platform_sdk_web_backend_show_interstitial(placement) != 0
+    return platform_sdk_web_backend_show_interstitial(
+        placement, platform_sdk_active_interstitial_request_id()) != 0
         ? PLATFORM_SDK_RESULT_OK
         : PLATFORM_SDK_RESULT_NOT_READY;
 }
 
 static platform_sdk_result_t web_backend_show_rewarded(const char *placement, void *userdata) {
     (void)userdata;
-    return platform_sdk_web_backend_show_rewarded(placement) != 0
+    return platform_sdk_web_backend_show_rewarded(
+        placement, platform_sdk_active_rewarded_request_id()) != 0
         ? PLATFORM_SDK_RESULT_OK
         : PLATFORM_SDK_RESULT_NOT_READY;
 }
@@ -689,10 +720,12 @@ static platform_sdk_result_t web_backend_leaderboard_open(const char *board_id, 
 static void web_backend_destroy(void *userdata) {
     (void)userdata;
     platform_sdk_web_backend_destroy();
+    platform_sdk_cloud_reset();
 }
 
 void platform_sdk_install_web_backend(void) {
     platform_sdk_web_install_portal_hooks();
+    platform_sdk_cloud_install_web_backend();
     platform_sdk_backend_t backend = {
         .init = web_backend_init,
         .locale = web_backend_locale,

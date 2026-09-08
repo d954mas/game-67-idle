@@ -65,6 +65,18 @@
       "ru": "Держите для сброса  {percent}%"
     },
     "settings.close": { "en": "Close", "ru": "Закрыть" },
+    "settings.cloud_conflict": {
+      "en": "Cloud save differs from this device.",
+      "ru": "Облачное сохранение отличается от этого устройства."
+    },
+    "settings.cloud_keep_local": {
+      "en": "Keep this device",
+      "ru": "Оставить это устройство"
+    },
+    "settings.cloud_keep_remote": {
+      "en": "Use cloud",
+      "ru": "Загрузить из облака"
+    },
 
     "settings.language": { "en": "Language", "ru": "Язык" },
     "settings.lang_en": {

@@ -61,6 +61,7 @@ typedef enum platform_sdk_ad_reason_t {
     PLATFORM_SDK_AD_REASON_SKIPPED = 5,
     PLATFORM_SDK_AD_REASON_DECLINED = 6,
     PLATFORM_SDK_AD_REASON_COMPLETED = 7,
+    PLATFORM_SDK_AD_REASON_TIMEOUT = 8,
 } platform_sdk_ad_reason_t;
 
 typedef struct platform_sdk_ad_result_t {
@@ -118,7 +119,7 @@ typedef struct platform_sdk_leaderboard_caps_t {
     bool native_popup; /* the portal owns the UI; platform_sdk_leaderboard_open() shows it */
 } platform_sdk_leaderboard_caps_t;
 
-/* The portal ceilings for one page (Yandex: top 1..20, around 1..10). */
+/* A neighbourhood is a centered window including the player. */
 #define PLATFORM_SDK_LEADERBOARD_TOP_MAX 20
 #define PLATFORM_SDK_LEADERBOARD_AROUND_MAX 10
 
@@ -168,6 +169,7 @@ typedef void (*platform_sdk_ad_callback_t)(platform_sdk_ad_result_t result, void
 typedef void (*platform_sdk_rewarded_callback_t)(platform_sdk_rewarded_result_t result, void *userdata);
 
 typedef unsigned int platform_sdk_listener_id_t;
+typedef uint32_t platform_sdk_ad_request_id_t;
 
 typedef struct platform_sdk_backend_t {
     bool (*init)(void *userdata);
@@ -272,6 +274,7 @@ const char *platform_sdk_player_avatar_url(void); /* "" until the portal supplie
    NOT_READY before the SDK is up, UNSUPPORTED when this portal has no board
    API, DESTROYED after teardown. `open` is fire and forget. The adapters
    enforce the portal's own quotas, so a caller never schedules around them. */
+/* Replacing or clearing the listener invalidates outstanding web requests. */
 void platform_sdk_leaderboard_set_listener(const platform_sdk_leaderboard_listener_t *listener);
 platform_sdk_leaderboard_caps_t platform_sdk_leaderboard_caps(const char *board_id);
 platform_sdk_result_t platform_sdk_leaderboard_submit(const char *board_id, int32_t scope,
@@ -283,6 +286,7 @@ platform_sdk_result_t platform_sdk_leaderboard_open(const char *board_id);
    overlay, a phone call. The facade stops gameplay for the portal and restores
    it on resume, so a game only has to listen. */
 void platform_sdk_backend_portal_pause(void);
+void platform_sdk_backend_ad_visible(platform_sdk_ad_request_id_t request_id, bool visible);
 void platform_sdk_backend_portal_resume(void);
 bool platform_sdk_portal_paused(void);
 
@@ -290,6 +294,9 @@ bool platform_sdk_portal_paused(void);
    is not a pause: the game keeps running with no sound. */
 void platform_sdk_backend_portal_audio(bool enabled);
 bool platform_sdk_portal_audio_enabled(void);
+
+/* True while an ad is pending or visible. Portal page pause is excluded. */
+bool platform_sdk_ad_active(void);
 
 /* True while the game must not advance: an ad is on screen or being fetched,
    or the portal has paused the page. One flag so the simulation gate and the
@@ -300,8 +307,18 @@ bool platform_sdk_break_active(void);
    portal or the SDK never resolved one. */
 const char *platform_sdk_locale(void);
 
+/* Compatibility for a completion issued synchronously inside a backend start
+   hook. An asynchronous backend must retain and return the request id. */
 void platform_sdk_backend_complete_interstitial(platform_sdk_ad_result_t result);
 void platform_sdk_backend_complete_rewarded(platform_sdk_rewarded_result_t result);
+/* Web and native backends use the id captured when a request starts. A late
+   completion for an earlier ad is ignored after another ad has started. */
+platform_sdk_ad_request_id_t platform_sdk_active_interstitial_request_id(void);
+platform_sdk_ad_request_id_t platform_sdk_active_rewarded_request_id(void);
+void platform_sdk_backend_complete_interstitial_request(
+    platform_sdk_ad_request_id_t request_id, platform_sdk_ad_result_t result);
+void platform_sdk_backend_complete_rewarded_request(
+    platform_sdk_ad_request_id_t request_id, platform_sdk_rewarded_result_t result);
 void platform_sdk_backend_complete_init(bool ready);
 /* Settles the dialog opened by the backend's login hook; an accepted result
    carries the identity the portal now reports. */
@@ -309,6 +326,10 @@ void platform_sdk_backend_complete_login(platform_sdk_auth_result_t result);
 /* Identity known without a dialog: a player who arrives already signed in to
    the portal. Safe to call any time; only a real change is announced. */
 void platform_sdk_backend_set_player(bool authorized, const char *name, const char *avatar_url);
+/* Capture when starting an async request; discard its completion if this
+   changes before dispatch. Listener replacement and teardown invalidate it. */
+uint32_t platform_sdk_backend_leaderboard_generation(void);
+
 /* Settle a leaderboard request the backend started. The page and its strings
    are borrowed for the call; a NULL page with OK counts as an empty board. */
 void platform_sdk_backend_complete_leaderboard_submit(const char *board_id, int32_t scope,

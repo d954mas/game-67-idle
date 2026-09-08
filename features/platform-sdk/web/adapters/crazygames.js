@@ -96,11 +96,11 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
     return Boolean(instance);
   }
 
-  function adOperation(start, failedResult) {
+  function adOperation(start, timeoutResult, failedResult = timeoutResult) {
     return new Promise((resolve) => {
       let settled = false;
       const root = windowRef();
-      const timer = (root.setTimeout || setTimeout)(() => settle(failedResult), AD_TIMEOUT_MS);
+      const timer = (root.setTimeout || setTimeout)(() => settle(timeoutResult), AD_TIMEOUT_MS);
 
       function settle(result) {
         if (settled) return;
@@ -145,45 +145,47 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
     try { instance.game.gameplayStop(); } catch { /* the portal is not listening */ }
   }
 
-  async function showInterstitial() {
+  async function showInterstitial(placement, requestId) {
     const instance = await sdk();
     if (!instance || !instance.ad || typeof instance.ad.requestAd !== "function") {
       return { supported: false, shown: false, reason: "unsupported" };
     }
 
     const failed = { supported: true, shown: false, reason: "failed" };
+    const timeout = { ...failed, reason: "timeout" };
     return adOperation((settle) => {
       let started = false;
       instance.ad.requestAd("midgame", {
-        adStarted: () => { started = true; },
-        adFinished: () => settle({ supported: true, shown: started }),
-        adError: (error) => settle({ supported: true, shown: started, reason: adErrorReason(error) }),
+        adStarted: () => { started = true; if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true); },
+        adFinished: () => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); settle({ supported: true, shown: started }); },
+        adError: (error) => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); settle({ supported: true, shown: started, reason: adErrorReason(error) }); },
       });
-    }, failed);
+    }, timeout, failed);
   }
 
   /* The portal reports no "player closed it early" outcome, so the reward is
      tied to the one signal that exists: the ad finished. */
-  async function showRewarded() {
+  async function showRewarded(placement, requestId) {
     const instance = await sdk();
     if (!instance || !instance.ad || typeof instance.ad.requestAd !== "function") {
       return { supported: false, shown: false, rewarded: false, reason: "unsupported" };
     }
 
     const failed = { supported: true, shown: false, rewarded: false, reason: "failed" };
+    const timeout = { ...failed, reason: "timeout" };
     return adOperation((settle) => {
       let started = false;
       instance.ad.requestAd("rewarded", {
-        adStarted: () => { started = true; },
-        adFinished: () => settle({ supported: true, shown: true, rewarded: true }),
-        adError: (error) => settle({
+        adStarted: () => { started = true; if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true); },
+        adFinished: () => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); settle({ supported: true, shown: true, rewarded: true }); },
+        adError: (error) => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); settle({
           supported: true,
           shown: started,
           rewarded: false,
           reason: adErrorReason(error),
-        }),
+        }); },
       });
-    }, failed);
+    }, timeout, failed);
   }
 
   /* A CrazyGames banner is drawn into a DOM element the game owns, and a
@@ -202,20 +204,25 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
   /* Portal storage is a synchronous localStorage stand-in, and its writes are
      debounced by the SDK, so the wrapper neither batches nor awaits them. */
   async function loadData(key) {
-    const instance = await sdk();
-    if (!instance || !instance.data || typeof instance.data.getItem !== "function") return null;
     try {
+      const instance = await sdk();
+      if (!instance || !instance.data || typeof instance.data.getItem !== "function") {
+        return { status: "unavailable" };
+      }
       const value = instance.data.getItem(key);
-      return value === undefined ? null : value;
-    } catch {
-      return null;
-    }
+      return value == null ? { status: "missing" } : { status: "found", value };
+    } catch { return { status: "failed" }; }
   }
 
   async function saveData(key, value) {
-    const instance = await sdk();
-    if (!instance || !instance.data || typeof instance.data.setItem !== "function") return;
-    try { instance.data.setItem(key, value); } catch { /* over the portal's 1 MB cap */ }
+    try {
+      const instance = await sdk();
+      if (!instance || !instance.data || typeof instance.data.setItem !== "function") {
+        return { status: "unavailable" };
+      }
+      instance.data.setItem(key, value);
+      return { status: "acknowledged" };
+    } catch { return { status: "failed" }; }
   }
 
   function getLocale() {

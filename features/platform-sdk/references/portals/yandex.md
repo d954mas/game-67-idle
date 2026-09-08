@@ -728,23 +728,16 @@ The material rules that decide whether those files are accepted, from S1:
   — the default outcome being a Russian card showing an English HUD. No
   documentation page states this; treat it as an observation to re-verify on the
   live form, not as a documented rule.
-- **[console]** The studio has observed that the draft could not be submitted
-  without a horizontal video. S14 marks both video fields **optional** (no
-  required marker, unlike Archive, Platforms, Orientation, Languages, Age rating,
-  Categories, Title, Description, How to play, Icon, Cover and Screenshots).
-  These two statements conflict; the form is the authority, and this row should
-  be settled on the next real draft rather than carried forward as fact.
-- **[console]** Video slots cannot be filled by a browser agent. The archive and
-  screenshot widgets ship a file to the server, but a video widget first reads
-  the clip's metadata through a `<video>` element on a blob URL, and a file the
-  browser did not pick through its own dialog stays at `readyState 0` forever —
-  the handler returns with no error, no message and no request. The draft JSON
-  route (`PATCH /console/api/application-draft/<id>` with file ids from
-  `POST /console/api/files/{screenshots,videos}`) does not help for video either:
-  `options.orientation` is written by the widget, cannot be passed to the upload,
-  and a clip lacking it is never placed in a slot. Plan for a person to drag the
-  mp4 files in. **[docs silent]** — none of this is documented; it is observed
-  console behaviour.
+- **[console]** The horizontal gameplay video carries the red required marker on
+  the live form, while S14 marks both video fields **optional**. The form is the
+  authority: a card without a horizontal clip is incomplete.
+- **[console]** A video slot cannot be filled through the widget by an agent —
+  its validator reads the clip through a `<video>` element that never decodes in
+  an automated browser — and the draft is filled through the console's own API
+  instead. The calls, the field names and the CSRF rule are procedure, not a
+  requirement, and live in the `nt-portal-publish` skill under "Uploading into a
+  console". **[docs silent]** — none of it is documented; it is observed console
+  behaviour.
 - **[docs silent]** on which text fields may repeat one another. 5.11 bans
   padding a field with repeating symbols; nothing on the live list bans one field
   reusing another field's text. Do not cite a requirement number for that.

@@ -60,6 +60,11 @@ void game_save_set_live_validator(GameSaveLiveValidateFn validator);
 void game_save_set_hot_snapshot_buffer(char *buffer, size_t capacity);
 bool game_save_validate_current(char *error, int error_cap);
 
+/* Validates an encoded JSON or NTGS document through decode, envelope migration,
+   and the registered staged document validator without publishing live state.
+   Fails closed when no staged validator is installed. */
+bool game_save_validate_document_string(const char *text, char *error, int error_cap);
+
 /* ---- Registry read-access for the DevAPI dispatch (registry dispatch contract).
    Read-only view of the registry filled by game_save_register_fragment. ---- */
 int  game_save_fragment_count(void);                             /* число зарегистрированных */
@@ -167,6 +172,13 @@ void game_save_tick(void);
    ПРОВАЛИВШЕЕСЯ сохранение тоже сдвигает его на себя, иначе ретрай шёл бы
    каждый кадр. Зовут мутаторы фич/UI. */
 void game_save_mark_dirty(void);
+
+/* Persisted active playtime in whole milliseconds. The counter excludes
+   wall-clock and offline time; legacy documents without it read as zero. */
+int64_t game_save_playtime_ms(void);
+/* Frame-time accumulator using the monotonic save clock. A false gate
+   accrues the preceding active interval, then closes it. */
+void game_save_update_playtime(bool active);
 
 /* Wall-clock ms сохранённого saved_at (оффлайн-Δt для идла; кламп отрицательных —
    задача игры). 0 если ещё не грузили/сохраняли. */

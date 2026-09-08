@@ -443,11 +443,12 @@ static void test_template_ad_flow_rejects_second_call_while_pending(void) {
     TEST_ASSERT_EQUAL_INT(0, callback_state.resumes);
     TEST_ASSERT_EQUAL_INT(0, callback_state.interstitial_callbacks);
 
-    platform_sdk_backend_complete_interstitial((platform_sdk_ad_result_t){
-        .supported = true,
-        .shown = true,
-        .reason = PLATFORM_SDK_AD_REASON_COMPLETED,
-    });
+    platform_sdk_backend_complete_interstitial_request(
+        platform_sdk_active_interstitial_request_id(), (platform_sdk_ad_result_t){
+            .supported = true,
+            .shown = true,
+            .reason = PLATFORM_SDK_AD_REASON_COMPLETED,
+        });
     TEST_ASSERT_EQUAL_INT(1, callback_state.resumes);
     TEST_ASSERT_EQUAL_INT(1, callback_state.interstitial_callbacks);
 
@@ -462,14 +463,200 @@ static void test_template_ad_flow_rejects_second_call_while_pending(void) {
     TEST_ASSERT_EQUAL_INT(1, callback_state.resumes);
     TEST_ASSERT_EQUAL_INT(0, callback_state.rewarded_callbacks);
 
-    platform_sdk_backend_complete_rewarded((platform_sdk_rewarded_result_t){
-        .supported = true,
-        .shown = true,
-        .rewarded = true,
-        .reason = PLATFORM_SDK_AD_REASON_COMPLETED,
-    });
+    platform_sdk_backend_complete_rewarded_request(
+        platform_sdk_active_rewarded_request_id(), (platform_sdk_rewarded_result_t){
+            .supported = true,
+            .shown = true,
+            .rewarded = true,
+            .reason = PLATFORM_SDK_AD_REASON_COMPLETED,
+        });
     TEST_ASSERT_EQUAL_INT(2, callback_state.resumes);
     TEST_ASSERT_EQUAL_INT(1, callback_state.rewarded_callbacks);
+}
+
+static void on_interstitial_count(platform_sdk_ad_result_t result, void *userdata) {
+    ad_callback_state_t *state = (ad_callback_state_t *)userdata;
+    (void)result;
+    state->interstitial_callbacks++;
+}
+
+static void test_template_portal_edges_do_not_duplicate_an_active_ad_lifecycle(void) {
+    platform_sdk_backend_t backend = pending_backend();
+    ad_callback_state_t callback_state = {0};
+    platform_sdk_set_backend(&backend, &g_backend_state);
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_init());
+    TEST_ASSERT_NOT_EQUAL(0u, platform_sdk_on_pause(on_pause, &callback_state));
+    TEST_ASSERT_NOT_EQUAL(0u, platform_sdk_on_resume(on_resume, &callback_state));
+
+    TEST_ASSERT_EQUAL_INT(
+        PLATFORM_SDK_RESULT_OK,
+        platform_sdk_show_interstitial("level_break", NULL, NULL));
+    TEST_ASSERT_EQUAL_INT(1, callback_state.pauses);
+
+    platform_sdk_backend_portal_pause();
+    TEST_ASSERT_EQUAL_INT(1, callback_state.pauses);
+    platform_sdk_backend_portal_resume();
+    TEST_ASSERT_EQUAL_INT(0, callback_state.resumes);
+
+    platform_sdk_backend_complete_interstitial_request(
+        platform_sdk_active_interstitial_request_id(), (platform_sdk_ad_result_t){
+            .supported = true, .shown = true, .reason = PLATFORM_SDK_AD_REASON_COMPLETED});
+    TEST_ASSERT_EQUAL_INT(1, callback_state.resumes);
+}
+
+static void test_template_ad_visibility_outlives_async_completion(void) {
+    platform_sdk_backend_t backend = pending_backend();
+    ad_callback_state_t callback_state = {0};
+    platform_sdk_set_backend(&backend, &g_backend_state);
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_init());
+    TEST_ASSERT_NOT_EQUAL(0u, platform_sdk_on_resume(on_resume, &callback_state));
+
+    TEST_ASSERT_EQUAL_INT(
+        PLATFORM_SDK_RESULT_OK,
+        platform_sdk_show_interstitial("level_break", NULL, NULL));
+    const platform_sdk_ad_request_id_t request_id = platform_sdk_active_interstitial_request_id();
+    platform_sdk_backend_ad_visible(request_id, true);
+    platform_sdk_backend_complete_interstitial_request(request_id, (platform_sdk_ad_result_t){
+        .supported = true, .shown = true, .reason = PLATFORM_SDK_AD_REASON_COMPLETED});
+    TEST_ASSERT_TRUE(platform_sdk_break_active());
+    TEST_ASSERT_EQUAL_INT(0, callback_state.resumes);
+
+    platform_sdk_backend_ad_visible(request_id, false);
+    TEST_ASSERT_FALSE(platform_sdk_break_active());
+    TEST_ASSERT_EQUAL_INT(1, callback_state.resumes);
+}
+
+static void test_template_late_overlay_holds_a_newer_ad_without_late_reward(void) {
+    platform_sdk_backend_t backend = pending_backend();
+    ad_callback_state_t callback_state = {0};
+    platform_sdk_set_backend(&backend, &g_backend_state);
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_init());
+    TEST_ASSERT_NOT_EQUAL(0u, platform_sdk_on_pause(on_pause, &callback_state));
+    TEST_ASSERT_NOT_EQUAL(0u, platform_sdk_on_resume(on_resume, &callback_state));
+
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK,
+                          platform_sdk_show_rewarded("late", on_rewarded_done, &callback_state));
+    const platform_sdk_ad_request_id_t late = platform_sdk_active_rewarded_request_id();
+    platform_sdk_backend_complete_rewarded_request(late, (platform_sdk_rewarded_result_t){
+        .supported = true, .shown = false, .rewarded = false, .reason = PLATFORM_SDK_AD_REASON_TIMEOUT});
+    TEST_ASSERT_EQUAL_INT(1, callback_state.rewarded_callbacks);
+    TEST_ASSERT_FALSE(callback_state.rewarded);
+
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK,
+                          platform_sdk_show_interstitial("new", NULL, NULL));
+    const platform_sdk_ad_request_id_t current = platform_sdk_active_interstitial_request_id();
+    platform_sdk_backend_ad_visible(late, true);
+    platform_sdk_backend_ad_visible(current, true);
+    TEST_ASSERT_TRUE(platform_sdk_break_active());
+    platform_sdk_backend_ad_visible(late, false);
+    TEST_ASSERT_TRUE(platform_sdk_break_active());
+
+    platform_sdk_backend_complete_rewarded_request(late, (platform_sdk_rewarded_result_t){
+        .supported = true, .shown = true, .rewarded = true, .reason = PLATFORM_SDK_AD_REASON_COMPLETED});
+    TEST_ASSERT_EQUAL_INT(1, callback_state.rewarded_callbacks);
+    TEST_ASSERT_FALSE(callback_state.rewarded);
+    platform_sdk_backend_complete_interstitial_request(current, (platform_sdk_ad_result_t){
+        .supported = true, .shown = true, .reason = PLATFORM_SDK_AD_REASON_COMPLETED});
+    TEST_ASSERT_TRUE(platform_sdk_break_active());
+    platform_sdk_backend_ad_visible(current, false);
+    TEST_ASSERT_FALSE(platform_sdk_break_active());
+    TEST_ASSERT_EQUAL_INT(2, callback_state.pauses);
+    TEST_ASSERT_EQUAL_INT(2, callback_state.resumes);
+}
+
+static void test_template_ordinary_failures_do_not_exhaust_late_overlay_capacity(void) {
+    platform_sdk_backend_t backend = pending_backend();
+    platform_sdk_set_backend(&backend, &g_backend_state);
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_init());
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK,
+                              platform_sdk_show_interstitial("retry", NULL, NULL));
+        platform_sdk_backend_complete_interstitial_request(
+            platform_sdk_active_interstitial_request_id(), (platform_sdk_ad_result_t){
+                .supported = true, .shown = false, .reason = PLATFORM_SDK_AD_REASON_FAILED});
+    }
+}
+
+static void test_template_nonvisible_timeout_close_has_no_lifecycle_edge(void) {
+    platform_sdk_backend_t backend = pending_backend();
+    ad_callback_state_t callback_state = {0};
+    platform_sdk_set_backend(&backend, &g_backend_state);
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_init());
+    TEST_ASSERT_NOT_EQUAL(0u, platform_sdk_on_pause(on_pause, &callback_state));
+    TEST_ASSERT_NOT_EQUAL(0u, platform_sdk_on_resume(on_resume, &callback_state));
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK,
+                          platform_sdk_show_interstitial("timeout", NULL, NULL));
+    const platform_sdk_ad_request_id_t request_id = platform_sdk_active_interstitial_request_id();
+    platform_sdk_backend_complete_interstitial_request(request_id, (platform_sdk_ad_result_t){
+        .supported = true, .shown = false, .reason = PLATFORM_SDK_AD_REASON_TIMEOUT});
+    TEST_ASSERT_EQUAL_INT(1, callback_state.pauses);
+    TEST_ASSERT_EQUAL_INT(1, callback_state.resumes);
+    platform_sdk_backend_ad_visible(request_id, false);
+    TEST_ASSERT_EQUAL_INT(1, callback_state.resumes);
+}
+
+static void test_template_stale_ad_completion_cannot_settle_a_later_request(void) {
+    platform_sdk_backend_t backend = pending_backend();
+    ad_callback_state_t callback_state = {0};
+    platform_sdk_set_backend(&backend, &g_backend_state);
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_init());
+
+    TEST_ASSERT_EQUAL_INT(
+        PLATFORM_SDK_RESULT_OK,
+        platform_sdk_show_interstitial("first", NULL, NULL));
+    const platform_sdk_ad_request_id_t first = platform_sdk_active_interstitial_request_id();
+    TEST_ASSERT_NOT_EQUAL(0u, first);
+    platform_sdk_backend_complete_interstitial_request(first, (platform_sdk_ad_result_t){
+        .supported = true, .shown = false, .reason = PLATFORM_SDK_AD_REASON_FAILED});
+
+    TEST_ASSERT_EQUAL_INT(
+        PLATFORM_SDK_RESULT_OK,
+        platform_sdk_show_interstitial("second", on_interstitial_count, &callback_state));
+    const platform_sdk_ad_request_id_t second = platform_sdk_active_interstitial_request_id();
+    TEST_ASSERT_NOT_EQUAL(0u, second);
+    TEST_ASSERT_NOT_EQUAL(first, second);
+
+    platform_sdk_backend_complete_interstitial_request(first, (platform_sdk_ad_result_t){
+        .supported = true, .shown = true, .reason = PLATFORM_SDK_AD_REASON_COMPLETED});
+    TEST_ASSERT_EQUAL_INT(0, callback_state.interstitial_callbacks);
+    TEST_ASSERT_EQUAL_UINT(second, platform_sdk_active_interstitial_request_id());
+
+    platform_sdk_backend_complete_interstitial_request(second, (platform_sdk_ad_result_t){
+        .supported = true, .shown = true, .reason = PLATFORM_SDK_AD_REASON_COMPLETED});
+    TEST_ASSERT_EQUAL_INT(1, callback_state.interstitial_callbacks);
+}
+
+static int s_reentrant_backend_calls;
+
+static platform_sdk_result_t reentrant_backend_show_interstitial(const char *placement, void *userdata) {
+    (void)placement;
+    (void)userdata;
+    s_reentrant_backend_calls++;
+    if (s_reentrant_backend_calls == 1) {
+        platform_sdk_backend_complete_interstitial((platform_sdk_ad_result_t){
+            .supported = true, .shown = true, .reason = PLATFORM_SDK_AD_REASON_COMPLETED});
+        return PLATFORM_SDK_RESULT_FAILED;
+    }
+    return PLATFORM_SDK_RESULT_OK;
+}
+
+static void start_reentrant_second_ad(platform_sdk_ad_result_t result, void *userdata) {
+    (void)result;
+    (void)userdata;
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK,
+                          platform_sdk_show_interstitial("second", NULL, NULL));
+}
+
+static void test_template_reentrant_backend_fallback_cannot_settle_second_request(void) {
+    platform_sdk_backend_t backend = pending_backend();
+    backend.show_interstitial = reentrant_backend_show_interstitial;
+    s_reentrant_backend_calls = 0;
+    platform_sdk_set_backend(&backend, &g_backend_state);
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_init());
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_FAILED,
+                          platform_sdk_show_interstitial("first", start_reentrant_second_ad, NULL));
+    TEST_ASSERT_EQUAL_INT(2, s_reentrant_backend_calls);
+    TEST_ASSERT_NOT_EQUAL(0u, platform_sdk_active_interstitial_request_id());
 }
 
 static void test_template_destroy_clears_listeners_and_blocks_flows(void) {
@@ -503,6 +690,13 @@ int main(void) {
     RUN_TEST(test_template_ad_flow_pauses_resumes_once_and_preserves_userdata);
     RUN_TEST(test_template_rewarded_decline_does_not_grant_reward);
     RUN_TEST(test_template_ad_flow_rejects_second_call_while_pending);
+    RUN_TEST(test_template_stale_ad_completion_cannot_settle_a_later_request);
+    RUN_TEST(test_template_ordinary_failures_do_not_exhaust_late_overlay_capacity);
+    RUN_TEST(test_template_nonvisible_timeout_close_has_no_lifecycle_edge);
+    RUN_TEST(test_template_late_overlay_holds_a_newer_ad_without_late_reward);
+    RUN_TEST(test_template_ad_visibility_outlives_async_completion);
+    RUN_TEST(test_template_portal_edges_do_not_duplicate_an_active_ad_lifecycle);
+    RUN_TEST(test_template_reentrant_backend_fallback_cannot_settle_second_request);
     RUN_TEST(test_template_destroy_clears_listeners_and_blocks_flows);
     return UNITY_END();
 }

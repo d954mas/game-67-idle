@@ -61,6 +61,7 @@ One save contains every registered fragment:
   "save_version": 1,
   "saved_at": 1720080000000,
   "save_seq": 42,
+  "playtime_ms": "1250",
   "app": "template",
   "build": "0",
   "features": {
@@ -77,7 +78,10 @@ DevAPI output follow registration order; the template registers `settings`,
 `items`, `progression`, then `game` last. The shell injects each fragment's
 `v`; fragment
 `to_json()` output omits it. Unknown feature keys are retained as orphans and
-round-tripped after registered fragments.
+round-tripped after registered fragments. `playtime_ms` is a nonnegative signed
+64-bit active-play counter in milliseconds. JSON writes it as a decimal string
+for exactness; NTGS writes it as an integer. Legacy envelopes without the key
+load it as zero. It never accrues wall-clock or offline time.
 
 ## Storage And Load Lifecycle
 

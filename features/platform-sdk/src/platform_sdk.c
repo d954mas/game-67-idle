@@ -73,6 +73,7 @@ typedef struct platform_sdk_listener_slot_t {
 
 typedef struct platform_sdk_pending_interstitial_t {
     bool active;
+    platform_sdk_ad_request_id_t request_id;
     platform_sdk_ad_callback_t callback;
     void *userdata;
     char placement[PLATFORM_SDK_PLACEMENT_MAX];
@@ -80,6 +81,7 @@ typedef struct platform_sdk_pending_interstitial_t {
 
 typedef struct platform_sdk_pending_rewarded_t {
     bool active;
+    platform_sdk_ad_request_id_t request_id;
     platform_sdk_rewarded_callback_t callback;
     void *userdata;
     char placement[PLATFORM_SDK_PLACEMENT_MAX];
@@ -107,6 +109,14 @@ typedef struct platform_sdk_runtime_t {
     platform_sdk_listener_slot_t resume_listeners[PLATFORM_SDK_MAX_LISTENERS];
     platform_sdk_pending_interstitial_t pending_interstitial;
     platform_sdk_pending_rewarded_t pending_rewarded;
+    platform_sdk_ad_request_id_t next_ad_request_id;
+    platform_sdk_ad_request_id_t visible_ad_request_id;
+    platform_sdk_ad_request_id_t secondary_visible_ad_request_id;
+    /* A portal may open after its watchdog settled the game-facing request.
+       Two retained ids bound overlap while refusing a third unresolved timeout. */
+    platform_sdk_ad_request_id_t late_visibility_request_id;
+    platform_sdk_ad_request_id_t secondary_late_visibility_request_id;
+    bool backend_ad_call_active;
     /* Latched by the first "unsupported" answer and never cleared: a portal that
        has withdrawn rewarded keeps it withdrawn for the session. */
     bool rewarded_refused;
@@ -119,9 +129,11 @@ typedef struct platform_sdk_runtime_t {
 } platform_sdk_runtime_t;
 
 static platform_sdk_runtime_t g_platform_sdk;
+static uint32_t g_leaderboard_generation;
 
 #if defined(PLATFORM_SDK_TESTING)
 static void platform_sdk_runtime_reset(void) {
+    g_leaderboard_generation++;
     memset(&g_platform_sdk, 0, sizeof(g_platform_sdk));
     g_platform_sdk.status = PLATFORM_SDK_BOOT_NOT_STARTED;
     g_platform_sdk.next_listener_id = 1u;
@@ -146,6 +158,8 @@ static const char *platform_sdk_ad_reason_name(platform_sdk_ad_reason_t reason) 
         return "not_ready";
     case PLATFORM_SDK_AD_REASON_RATE_LIMITED:
         return "rate_limited";
+    case PLATFORM_SDK_AD_REASON_TIMEOUT:
+        return "timeout";
     case PLATFORM_SDK_AD_REASON_FAILED:
         return "failed";
     case PLATFORM_SDK_AD_REASON_SKIPPED:
@@ -503,6 +517,14 @@ static float clamp_progress(float progress01) {
         return 1.0f;
     }
     return progress01;
+}
+
+static platform_sdk_ad_request_id_t next_ad_request_id(void) {
+    g_platform_sdk.next_ad_request_id += 1u;
+    if (g_platform_sdk.next_ad_request_id == 0u) {
+        g_platform_sdk.next_ad_request_id += 1u;
+    }
+    return g_platform_sdk.next_ad_request_id;
 }
 
 static void complete_init_once(bool ready) {
@@ -919,24 +941,32 @@ void platform_sdk_backend_portal_pause(void) {
     if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED) return;
     if (g_platform_sdk.portal_paused) return;
 
+    const bool was_break_active = platform_sdk_break_active();
     g_platform_sdk.portal_paused = true;
     g_platform_sdk.gameplay_active_before_portal_pause = g_platform_sdk.gameplay_active;
     if (g_platform_sdk.gameplay_active) {
         (void)platform_sdk_gameplay_stop();
     }
-    emit_lifecycle(g_platform_sdk.pause_listeners);
+    if (!was_break_active) {
+        emit_lifecycle(g_platform_sdk.pause_listeners);
+    }
 }
 
 void platform_sdk_backend_portal_resume(void) {
     if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED) return;
     if (!g_platform_sdk.portal_paused) return;
 
+    const bool ad_still_active = g_platform_sdk.visible_ad_request_id != 0u ||
+                                 g_platform_sdk.pending_interstitial.active ||
+                                 g_platform_sdk.pending_rewarded.active;
     g_platform_sdk.portal_paused = false;
-    emit_lifecycle(g_platform_sdk.resume_listeners);
-    if (g_platform_sdk.gameplay_active_before_portal_pause) {
-        (void)platform_sdk_gameplay_start();
+    if (!ad_still_active) {
+        emit_lifecycle(g_platform_sdk.resume_listeners);
+        if (g_platform_sdk.gameplay_active_before_portal_pause) {
+            (void)platform_sdk_gameplay_start();
+        }
+        g_platform_sdk.gameplay_active_before_portal_pause = false;
     }
-    g_platform_sdk.gameplay_active_before_portal_pause = false;
 }
 
 bool platform_sdk_portal_paused(void) {
@@ -954,10 +984,68 @@ bool platform_sdk_portal_audio_enabled(void) {
     return !g_platform_sdk.portal_audio_muted;
 }
 
-bool platform_sdk_break_active(void) {
-    return g_platform_sdk.portal_paused ||
+bool platform_sdk_ad_active(void) {
+    return g_platform_sdk.visible_ad_request_id != 0u ||
+           g_platform_sdk.secondary_visible_ad_request_id != 0u ||
            g_platform_sdk.pending_interstitial.active ||
            g_platform_sdk.pending_rewarded.active;
+}
+
+bool platform_sdk_break_active(void) {
+    return g_platform_sdk.portal_paused || platform_sdk_ad_active();
+}
+
+static bool ad_visibility_known(platform_sdk_ad_request_id_t request_id) {
+    return request_id == platform_sdk_active_interstitial_request_id() ||
+           request_id == platform_sdk_active_rewarded_request_id() ||
+           request_id == g_platform_sdk.late_visibility_request_id ||
+           request_id == g_platform_sdk.secondary_late_visibility_request_id;
+}
+
+static void resume_after_last_break(void) {
+    if (platform_sdk_break_active()) return;
+    emit_lifecycle(g_platform_sdk.resume_listeners);
+    if (g_platform_sdk.gameplay_active_before_portal_pause) {
+        (void)platform_sdk_gameplay_start();
+        g_platform_sdk.gameplay_active_before_portal_pause = false;
+    }
+}
+
+void platform_sdk_backend_ad_visible(platform_sdk_ad_request_id_t request_id, bool visible) {
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED || request_id == 0u) return;
+    if (visible) {
+        if (!ad_visibility_known(request_id)) return;
+        if (g_platform_sdk.visible_ad_request_id == request_id ||
+            g_platform_sdk.secondary_visible_ad_request_id == request_id) return;
+        const bool break_was_active = platform_sdk_break_active();
+        if (g_platform_sdk.visible_ad_request_id == 0u) {
+            g_platform_sdk.visible_ad_request_id = request_id;
+        } else if (g_platform_sdk.secondary_visible_ad_request_id == 0u) {
+            g_platform_sdk.secondary_visible_ad_request_id = request_id;
+        } else {
+            return;
+        }
+        if (!break_was_active) emit_lifecycle(g_platform_sdk.pause_listeners);
+        return;
+    }
+    const bool break_was_active = platform_sdk_break_active();
+    if (g_platform_sdk.visible_ad_request_id == request_id) {
+        g_platform_sdk.visible_ad_request_id = g_platform_sdk.secondary_visible_ad_request_id;
+        g_platform_sdk.secondary_visible_ad_request_id = 0u;
+    } else if (g_platform_sdk.secondary_visible_ad_request_id == request_id) {
+        g_platform_sdk.secondary_visible_ad_request_id = 0u;
+    } else if (g_platform_sdk.late_visibility_request_id != request_id &&
+               g_platform_sdk.secondary_late_visibility_request_id != request_id) {
+        return;
+    }
+    if (g_platform_sdk.late_visibility_request_id == request_id) {
+        g_platform_sdk.late_visibility_request_id =
+            g_platform_sdk.secondary_late_visibility_request_id;
+        g_platform_sdk.secondary_late_visibility_request_id = 0u;
+    } else if (g_platform_sdk.secondary_late_visibility_request_id == request_id) {
+        g_platform_sdk.secondary_late_visibility_request_id = 0u;
+    }
+    if (break_was_active) resume_after_last_break();
 }
 
 const char *platform_sdk_locale(void) {
@@ -1021,30 +1109,43 @@ platform_sdk_result_t platform_sdk_show_interstitial(
         }
         return PLATFORM_SDK_RESULT_UNSUPPORTED;
     }
-    if (g_platform_sdk.pending_interstitial.active || g_platform_sdk.pending_rewarded.active) {
+    if (g_platform_sdk.visible_ad_request_id != 0u ||
+        (g_platform_sdk.late_visibility_request_id != 0u &&
+         g_platform_sdk.secondary_late_visibility_request_id != 0u) ||
+        g_platform_sdk.pending_interstitial.active || g_platform_sdk.pending_rewarded.active) {
         platform_sdk_emit_interstitial_result(
             placement,
             ad_result(PLATFORM_SDK_AD_REASON_RATE_LIMITED, true, false));
         return PLATFORM_SDK_RESULT_BUSY;
     }
 
+    const bool break_was_active = platform_sdk_break_active();
     g_platform_sdk.pending_interstitial = (platform_sdk_pending_interstitial_t){
         .active = true,
+        .request_id = next_ad_request_id(),
         .callback = callback,
         .userdata = userdata,
     };
     copy_placement(g_platform_sdk.pending_interstitial.placement, placement);
-    emit_lifecycle(g_platform_sdk.pause_listeners);
+    if (!break_was_active) {
+        emit_lifecycle(g_platform_sdk.pause_listeners);
+    }
 
     if (!g_platform_sdk.has_backend || g_platform_sdk.backend.show_interstitial == NULL) {
-        platform_sdk_backend_complete_interstitial(
+        platform_sdk_backend_complete_interstitial_request(
+            platform_sdk_active_interstitial_request_id(),
             ad_result(PLATFORM_SDK_AD_REASON_FAILED, true, false));
         return PLATFORM_SDK_RESULT_FAILED;
     }
 
+    const platform_sdk_ad_request_id_t request_id = g_platform_sdk.pending_interstitial.request_id;
+    const bool backend_ad_call_was_active = g_platform_sdk.backend_ad_call_active;
+    g_platform_sdk.backend_ad_call_active = true;
     backend_result = g_platform_sdk.backend.show_interstitial(placement, g_platform_sdk.backend_userdata);
-    if (backend_result != PLATFORM_SDK_RESULT_OK && g_platform_sdk.pending_interstitial.active) {
-        platform_sdk_backend_complete_interstitial(
+    g_platform_sdk.backend_ad_call_active = backend_ad_call_was_active;
+    if (backend_result != PLATFORM_SDK_RESULT_OK) {
+        platform_sdk_backend_complete_interstitial_request(
+            request_id,
             ad_result(reason_from_result(backend_result), backend_result != PLATFORM_SDK_RESULT_UNSUPPORTED, false));
     }
     return backend_result;
@@ -1076,49 +1177,95 @@ platform_sdk_result_t platform_sdk_show_rewarded(
         }
         return PLATFORM_SDK_RESULT_UNSUPPORTED;
     }
-    if (g_platform_sdk.pending_interstitial.active || g_platform_sdk.pending_rewarded.active) {
+    if (g_platform_sdk.visible_ad_request_id != 0u ||
+        (g_platform_sdk.late_visibility_request_id != 0u &&
+         g_platform_sdk.secondary_late_visibility_request_id != 0u) ||
+        g_platform_sdk.pending_interstitial.active || g_platform_sdk.pending_rewarded.active) {
         platform_sdk_emit_rewarded_result(
             placement,
             rewarded_result(PLATFORM_SDK_AD_REASON_RATE_LIMITED, true, false, false));
         return PLATFORM_SDK_RESULT_BUSY;
     }
 
+    const bool break_was_active = platform_sdk_break_active();
     g_platform_sdk.pending_rewarded = (platform_sdk_pending_rewarded_t){
         .active = true,
+        .request_id = next_ad_request_id(),
         .callback = callback,
         .userdata = userdata,
     };
     copy_placement(g_platform_sdk.pending_rewarded.placement, placement);
-    emit_lifecycle(g_platform_sdk.pause_listeners);
+    if (!break_was_active) {
+        emit_lifecycle(g_platform_sdk.pause_listeners);
+    }
 
     if (!g_platform_sdk.has_backend || g_platform_sdk.backend.show_rewarded == NULL) {
-        platform_sdk_backend_complete_rewarded(
+        platform_sdk_backend_complete_rewarded_request(
+            platform_sdk_active_rewarded_request_id(),
             rewarded_result(PLATFORM_SDK_AD_REASON_FAILED, true, false, false));
         return PLATFORM_SDK_RESULT_FAILED;
     }
 
+    const platform_sdk_ad_request_id_t request_id = g_platform_sdk.pending_rewarded.request_id;
+    const bool backend_ad_call_was_active = g_platform_sdk.backend_ad_call_active;
+    g_platform_sdk.backend_ad_call_active = true;
     backend_result = g_platform_sdk.backend.show_rewarded(placement, g_platform_sdk.backend_userdata);
-    if (backend_result != PLATFORM_SDK_RESULT_OK && g_platform_sdk.pending_rewarded.active) {
-        platform_sdk_backend_complete_rewarded(
+    g_platform_sdk.backend_ad_call_active = backend_ad_call_was_active;
+    if (backend_result != PLATFORM_SDK_RESULT_OK) {
+        platform_sdk_backend_complete_rewarded_request(
+            request_id,
             rewarded_result(reason_from_result(backend_result), backend_result != PLATFORM_SDK_RESULT_UNSUPPORTED, false, false));
     }
     return backend_result;
 }
 
+platform_sdk_ad_request_id_t platform_sdk_active_interstitial_request_id(void) {
+    return g_platform_sdk.pending_interstitial.active
+        ? g_platform_sdk.pending_interstitial.request_id
+        : 0u;
+}
+
+platform_sdk_ad_request_id_t platform_sdk_active_rewarded_request_id(void) {
+    return g_platform_sdk.pending_rewarded.active
+        ? g_platform_sdk.pending_rewarded.request_id
+        : 0u;
+}
+
 void platform_sdk_backend_complete_interstitial(platform_sdk_ad_result_t result) {
+    if (!g_platform_sdk.backend_ad_call_active) return;
+    platform_sdk_backend_complete_interstitial_request(
+        platform_sdk_active_interstitial_request_id(), result);
+}
+
+void platform_sdk_backend_complete_interstitial_request(
+    platform_sdk_ad_request_id_t request_id, platform_sdk_ad_result_t result) {
     platform_sdk_ad_callback_t callback = NULL;
     void *userdata = NULL;
     char placement[PLATFORM_SDK_PLACEMENT_MAX];
 
-    if (!g_platform_sdk.pending_interstitial.active) {
+    if (!g_platform_sdk.pending_interstitial.active ||
+        request_id == 0u || request_id != g_platform_sdk.pending_interstitial.request_id) {
         return;
     }
 
     callback = g_platform_sdk.pending_interstitial.callback;
     userdata = g_platform_sdk.pending_interstitial.userdata;
     copy_placement(placement, g_platform_sdk.pending_interstitial.placement);
+    if (result.reason == PLATFORM_SDK_AD_REASON_TIMEOUT) {
+        if (g_platform_sdk.late_visibility_request_id == 0u) {
+            g_platform_sdk.late_visibility_request_id = request_id;
+        } else {
+            g_platform_sdk.secondary_late_visibility_request_id = request_id;
+        }
+    }
     g_platform_sdk.pending_interstitial = (platform_sdk_pending_interstitial_t){0};
-    emit_lifecycle(g_platform_sdk.resume_listeners);
+    if (!g_platform_sdk.portal_paused && g_platform_sdk.visible_ad_request_id == 0u) {
+        emit_lifecycle(g_platform_sdk.resume_listeners);
+        if (g_platform_sdk.gameplay_active_before_portal_pause) {
+            (void)platform_sdk_gameplay_start();
+            g_platform_sdk.gameplay_active_before_portal_pause = false;
+        }
+    }
     platform_sdk_emit_interstitial_result(placement, result);
     if (callback != NULL) {
         callback(result, userdata);
@@ -1126,17 +1273,22 @@ void platform_sdk_backend_complete_interstitial(platform_sdk_ad_result_t result)
 }
 
 void platform_sdk_backend_complete_rewarded(platform_sdk_rewarded_result_t result) {
+    if (!g_platform_sdk.backend_ad_call_active) return;
+    platform_sdk_backend_complete_rewarded_request(
+        platform_sdk_active_rewarded_request_id(), result);
+}
+
+void platform_sdk_backend_complete_rewarded_request(
+    platform_sdk_ad_request_id_t request_id, platform_sdk_rewarded_result_t result) {
     platform_sdk_rewarded_callback_t callback = NULL;
     void *userdata = NULL;
     char placement[PLATFORM_SDK_PLACEMENT_MAX];
 
-    if (!g_platform_sdk.pending_rewarded.active) {
+    if (!g_platform_sdk.pending_rewarded.active ||
+        request_id == 0u || request_id != g_platform_sdk.pending_rewarded.request_id) {
         return;
     }
 
-    /* The reason, not the supported flag: a portal that serves rewarded in
-       general and refuses it for this launch window answers "unsupported" while
-       still calling itself supported. */
     if (result.reason == PLATFORM_SDK_AD_REASON_UNSUPPORTED) {
         g_platform_sdk.rewarded_refused = true;
     }
@@ -1144,8 +1296,21 @@ void platform_sdk_backend_complete_rewarded(platform_sdk_rewarded_result_t resul
     callback = g_platform_sdk.pending_rewarded.callback;
     userdata = g_platform_sdk.pending_rewarded.userdata;
     copy_placement(placement, g_platform_sdk.pending_rewarded.placement);
+    if (result.reason == PLATFORM_SDK_AD_REASON_TIMEOUT) {
+        if (g_platform_sdk.late_visibility_request_id == 0u) {
+            g_platform_sdk.late_visibility_request_id = request_id;
+        } else {
+            g_platform_sdk.secondary_late_visibility_request_id = request_id;
+        }
+    }
     g_platform_sdk.pending_rewarded = (platform_sdk_pending_rewarded_t){0};
-    emit_lifecycle(g_platform_sdk.resume_listeners);
+    if (!g_platform_sdk.portal_paused && g_platform_sdk.visible_ad_request_id == 0u) {
+        emit_lifecycle(g_platform_sdk.resume_listeners);
+        if (g_platform_sdk.gameplay_active_before_portal_pause) {
+            (void)platform_sdk_gameplay_start();
+            g_platform_sdk.gameplay_active_before_portal_pause = false;
+        }
+    }
     platform_sdk_emit_rewarded_result(placement, result);
     if (callback != NULL) {
         callback(result, userdata);
@@ -1280,11 +1445,16 @@ void platform_sdk_backend_complete_login(platform_sdk_auth_result_t result) {
 }
 
 void platform_sdk_leaderboard_set_listener(const platform_sdk_leaderboard_listener_t *listener) {
+    g_leaderboard_generation++;
     if (listener == NULL) {
         g_platform_sdk.leaderboard_listener = (platform_sdk_leaderboard_listener_t){0};
         return;
     }
     g_platform_sdk.leaderboard_listener = *listener;
+}
+
+uint32_t platform_sdk_backend_leaderboard_generation(void) {
+    return g_leaderboard_generation;
 }
 
 platform_sdk_leaderboard_caps_t platform_sdk_leaderboard_caps(const char *board_id) {
@@ -1372,6 +1542,8 @@ void platform_sdk_destroy(void) {
     if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED) {
         return;
     }
+
+    g_leaderboard_generation++;
 
     if (g_platform_sdk.has_backend && g_platform_sdk.backend.destroy != NULL) {
         g_platform_sdk.backend.destroy(g_platform_sdk.backend_userdata);

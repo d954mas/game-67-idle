@@ -19,7 +19,7 @@ import { spawnSync } from "node:child_process";
 
 import { createStoreZip, readStoreZip } from "./lib/zip_store.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
-import { createRuntimeBuildRecord, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
+import { createRuntimeBuildRecord, runtimeBuildWitness, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 
 const GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const DEFAULT_STUDIO_ROOT = findStudioRoot(GAME_DIR);
@@ -29,6 +29,13 @@ const { inspectPlatformSdkArtifact } = await import(pathToFileURL(join(
   "platform-sdk",
   "scripts",
   "artifact_tools.mjs",
+)).href);
+const { compileProfileForTarget } = await import(pathToFileURL(join(
+  DEFAULT_STUDIO_ROOT,
+  "features",
+  "platform-sdk",
+  "publish-targets",
+  "target_config.mjs",
 )).href);
 
 const TARGETS = new Set(["itch", "poki", "yandex", "playgama", "crazygames"]);
@@ -58,6 +65,13 @@ const PLATFORM_MODULE_PATHS = [
   "platform-sdk.js",
   "platform-sdk-adapter.js",
 ];
+
+function isSelectedReleaseProfile(profile, target, adapter) {
+  return profile?.target === target && profile.adapter === adapter
+    && profile.preset === "wasm-release" && profile.debugUi === false
+    && profile.devapi === false && profile.analytics === false
+    && profile.eventsLogMirror === false;
+}
 
 const slash = (value) => String(value || "").replaceAll("\\", "/");
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -762,7 +776,7 @@ export function validateWasmRelease(input) {
 
 export function validateRuntimeBuildWitness(input, runtimeBuild) {
   const record = validateRuntimeBuildRecord(runtimeBuild);
-  const marker = Buffer.from(`ai_studio.runtime_build:${record.fingerprint}`, "ascii");
+  const marker = Buffer.from(runtimeBuildWitness(record), "ascii");
   const bytes = Buffer.isBuffer(input) ? input : Buffer.from(input);
   if (bytes.indexOf(marker) < 0) {
     throw new Error("release WASM does not contain the compiled runtime build fingerprint witness");
@@ -886,6 +900,10 @@ export function validateWebArtifact({ artifactDir, target, studioRoot = DEFAULT_
   if (config.runtimeBuildFingerprint !== runtimeBuild.fingerprint) {
     throw new Error("release HTML runtime build fingerprint does not match runtime-build.json");
   }
+  if (runtimeBuild.schema !== "ai_studio.runtime_build.v2"
+      || !isSelectedReleaseProfile(runtimeBuild.profile, target, contract.platform_sdk)) {
+    throw new Error("runtime build profile does not match the selected release target");
+  }
   if (readFileSync(join(root, "game.wasm")).length === 0 || readFileSync(join(root, "assets", "game.ntpack")).length === 0) {
     throw new Error("required game payload is empty");
   }
@@ -975,6 +993,10 @@ function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuil
       || (requireRuntimeBuild && config.runtimeBuildFingerprint !== runtimeBuild.fingerprint)) {
     throw new Error("reopened ZIP target/adapter/release mismatch");
   }
+  if (requireRuntimeBuild && (runtimeBuild.schema !== "ai_studio.runtime_build.v2"
+      || !isSelectedReleaseProfile(runtimeBuild.profile, target, contract.platform_sdk))) {
+    throw new Error("reopened ZIP runtime build profile mismatch");
+  }
   if (!entries.get("game.wasm")?.length || !entries.get("assets/game.ntpack")?.length) throw new Error("reopened ZIP required payload is empty");
   validateWasmRelease(entries.get("game.wasm"));
   if (requireRuntimeBuild) validateRuntimeBuildWitness(entries.get("game.wasm"), runtimeBuild);
@@ -1051,6 +1073,7 @@ export function packageWebArtifact(options) {
   const validated = validateWebArtifact({ artifactDir: options.artifactDir, target, studioRoot });
   const expectedRuntimeBuild = (options.runtimeBuildVerifier || createRuntimeBuildRecord)({
     gameDir, studioRoot, dependencies,
+    compileProfile: options.compileProfile || compileProfileForTarget(target, "wasm-release"),
   });
   if (JSON.stringify(validated.runtimeBuild) !== JSON.stringify(expectedRuntimeBuild)) {
     throw new Error("artifact runtime build fingerprint does not match current game/dependency inputs");

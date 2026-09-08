@@ -9,6 +9,7 @@ const GET_ENTRIES_WINDOW_MS = 5 * 60 * 1000;
 const GET_ENTRIES_PER_WINDOW = 20;
 const ENTRIES_TOP = 20;
 const ENTRIES_AROUND = 10;
+const AROUND_CAPACITY = 10;
 const AVATAR_SIZE = "small";
 
 export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_SDK_URL, now = () => Date.now() }) {
@@ -30,11 +31,11 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
     return (host && host.document) || (windowRef() && windowRef().document);
   }
 
-  function adOperation(start, failedResult) {
+  function adOperation(start, timeoutResult, failedResult = timeoutResult) {
     return new Promise((resolve) => {
       let settled = false;
       const root = windowRef();
-      const timer = (root.setTimeout || setTimeout)(() => settle(failedResult), AD_TIMEOUT_MS);
+      const timer = (root.setTimeout || setTimeout)(() => settle(timeoutResult), AD_TIMEOUT_MS);
 
       function settle(result) {
         if (settled) return;
@@ -127,7 +128,10 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
   async function player() {
     const ysdk = await sdk();
     if (!ysdk || typeof ysdk.getPlayer !== "function") return null;
-    if (!playerReady) playerReady = ysdk.getPlayer().catch(() => null);
+    if (!playerReady) playerReady = ysdk.getPlayer().catch(() => {
+      playerReady = null;
+      return null;
+    });
     return playerReady;
   }
 
@@ -203,31 +207,34 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
     ysdk && ysdk.features && ysdk.features.GameplayAPI && ysdk.features.GameplayAPI.stop();
   }
 
-  async function showInterstitial() {
+  async function showInterstitial(placement, requestId) {
     const ysdk = await sdk();
     if (!ysdk || !ysdk.adv || typeof ysdk.adv.showFullscreenAdv !== "function") {
       return { supported: false, shown: false, reason: "not_ready" };
     }
 
     const failed = { supported: true, shown: false, reason: "failed" };
+    const timeout = { ...failed, reason: "timeout" };
     return adOperation((settle) => {
       ysdk.adv.showFullscreenAdv({
         callbacks: {
           onClose: (wasShown) => {
+            if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
             settle(wasShown
               ? { supported: true, shown: true }
               : { supported: true, shown: false, reason: "skipped" });
           },
           onError: () => {
+            if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
             settle(failed);
           },
-          onOpen: () => {},
+          onOpen: () => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true); },
         },
       });
-    }, failed);
+    }, timeout, failed);
   }
 
-  async function showRewarded() {
+  async function showRewarded(placement, requestId) {
     const ysdk = await sdk();
     if (!ysdk || !ysdk.adv || typeof ysdk.adv.showRewardedVideo !== "function") {
       return { supported: false, shown: false, rewarded: false, reason: "not_ready" };
@@ -235,10 +242,12 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
 
     let rewarded = false;
     const failed = { supported: true, shown: false, rewarded: false, reason: "failed" };
+    const timeout = { ...failed, reason: "timeout" };
     return adOperation((settle) => {
       ysdk.adv.showRewardedVideo({
         callbacks: {
           onClose: (wasShown) => {
+            if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
             if (rewarded) {
               settle({ supported: true, shown: Boolean(wasShown), rewarded: true });
             } else if (wasShown) {
@@ -248,28 +257,37 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
             }
           },
           onError: () => {
+            if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
             settle(failed);
           },
-          onOpen: () => {},
+          onOpen: () => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true); },
           onRewarded: () => {
             rewarded = true;
           },
         },
       });
-    }, failed);
+    }, timeout, failed);
   }
 
   async function loadData(key) {
-    const p = await player();
-    if (!p || typeof p.getData !== "function") return null;
-    const data = await p.getData([key]).catch(() => null);
-    return data && Object.prototype.hasOwnProperty.call(data, key) ? data[key] : null;
+    try {
+      const p = await player();
+      if (!p) return { status: "failed" };
+      if (typeof p.getData !== "function") return { status: "unavailable" };
+      const data = await p.getData([key]);
+      return data && Object.prototype.hasOwnProperty.call(data, key)
+        ? { status: "found", value: data[key] } : { status: "missing" };
+    } catch { return { status: "failed" }; }
   }
 
   async function saveData(key, value) {
-    const p = await player();
-    if (!p || typeof p.setData !== "function") return;
-    await p.setData({ [key]: value }).catch(() => {});
+    try {
+      const p = await player();
+      if (!p) return { status: "failed" };
+      if (typeof p.setData !== "function") return { status: "unavailable" };
+      await p.setData({ [key]: value }, true);
+      return { status: "acknowledged" };
+    } catch { return { status: "failed" }; }
   }
 
   /* The portal's language is read the moment the SDK answers, not when some
@@ -444,7 +462,15 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
       : entries.length;
     const rows = entries.map((entry) => entryRow(entry, myId, userRank));
     const top = rows.slice(0, topSize);
-    const around = rows.slice(topSize);
+    const neighbours = rows.slice(topSize);
+    const ownIndex = neighbours.findIndex((row) => row.you);
+    /* Yandex returns up to ten rows on each side plus the player; the C page
+       holds one smaller window, so truncate around the player, not the start. */
+    const aroundStart = ownIndex < 0 ? 0 : Math.max(0, Math.min(
+      ownIndex - Math.floor((AROUND_CAPACITY - 1) / 2),
+      neighbours.length - AROUND_CAPACITY,
+    ));
+    const around = neighbours.slice(aroundStart, aroundStart + AROUND_CAPACITY);
     const mine = rows.find((row) => row.you);
     return {
       status: "ok",

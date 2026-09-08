@@ -51,7 +51,14 @@ if(EMSCRIPTEN)
         "${PLATFORM_SDK_SRC}/platform_sdk_web.c"
         src/runtime_build_marker.c)
     target_compile_definitions(${GAME_TARGET} PRIVATE
-        GAME_RUNTIME_BUILD_FINGERPRINT="${GAME_RUNTIME_BUILD_FINGERPRINT}")
+        GAME_RUNTIME_BUILD_FINGERPRINT="${GAME_RUNTIME_BUILD_FINGERPRINT}"
+        GAME_RUNTIME_BUILD_TARGET="${GAME_PUBLISH_TARGET}"
+        GAME_RUNTIME_BUILD_ADAPTER="${GAME_PLATFORM_SDK}"
+        GAME_RUNTIME_BUILD_PROFILE="${GAME_RUNTIME_BUILD_PROFILE}"
+        GAME_RUNTIME_BUILD_DEBUG_UI="${GAME_RUNTIME_BUILD_DEBUG_UI}"
+        GAME_RUNTIME_BUILD_DEVAPI="${GAME_RUNTIME_BUILD_DEVAPI}"
+        GAME_RUNTIME_BUILD_ANALYTICS="${GAME_RUNTIME_BUILD_ANALYTICS}"
+        GAME_RUNTIME_BUILD_EVENTS_LOG_MIRROR="${GAME_RUNTIME_BUILD_EVENTS_LOG_MIRROR}")
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http nt_platform_web)
     # Web-devapi host contract (nt_devapi_web.h): the host exports the JS
     # transport entry points; the exports are also what pulls the EM_JS object

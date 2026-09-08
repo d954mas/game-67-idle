@@ -213,8 +213,9 @@ The game-owned portions of items and progression remain in the template:
   integration tests `templates/template/tests/test_progression.c`,
   `test_progression_catalog.c`, `test_progression_curve.c`.
 - `platform-sdk/` (`L1`): in-place platform SDK facade for commercial web
-  builds. Targets are `local`, `itch`, `poki`, `yandex`, and `playgama`; SDK
-  adapters are `mock`, `poki`, `yandex`, and `playgama`. `local` and `itch`
+  builds. Targets are `local`, `itch`, `poki`, `yandex`, `playgama`, and
+  `crazygames`; SDK adapters are `mock`, `poki`, `yandex`, `playgama`, and
+  `crazygames`. The canonical descriptors live in `platform-sdk/publish-targets/targets.json`. `local` and `itch`
   both use `mock` because `mock` is an SDK adapter, not a target, and itch has
   no mandatory runtime game SDK. Web builds stage only the selected adapter as
   `platform-sdk-adapter.js`; release packaging embeds the selected SDK modules

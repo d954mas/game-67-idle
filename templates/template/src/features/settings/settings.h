@@ -9,6 +9,8 @@
 
 #include <stdbool.h>
 
+#include "game_save_sync.h"
+
 /* Фазовая отрисовка. Зовётся из game_features_draw_ui() внутри ui_runtime-кадра;
    ctx даёт агрегатор. Рисует гир-кнопку всегда + панель, когда is_open. */
 void settings_draw_launcher(nt_ui_context_t *ctx, bool interactive);
@@ -19,6 +21,11 @@ void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive);
 void settings_open(void);
 void settings_close(void);
 bool settings_is_open(void);
+
+/* The shell publishes only whether reconciliation needs a choice. The panel
+   queues intent; the shell applies it after the UI frame at a safe point. */
+void settings_set_save_conflict_visible(bool visible, bool remote_available);
+game_save_choice_t settings_take_save_conflict_choice(void);
 
 /* Текущие громкости 0..1 — игра подключает их к своему аудио-микшеру. */
 float settings_master(void);

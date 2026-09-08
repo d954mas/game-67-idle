@@ -27,30 +27,44 @@ import {
 } from "./package_web.mjs";
 import { createStoreZip, readStoreZip } from "./lib/zip_store.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
+import { runtimeBuildWitness } from "./lib/runtime_build.mjs";
 
 const gameModuleRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const studioRoot = findStudioRoot(gameModuleRoot);
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
-function runtimeBuildRecord() {
+function runtimeBuildRecord(target = "itch") {
   const inputs = [
     { id: "game", source: ".", files: 3, sha256: "1".repeat(64) },
     { id: "engine", source: "external/neotolis-engine", files: 5, sha256: "2".repeat(64) },
     { id: "feature:platform-sdk", source: "features/platform-sdk", files: 7, sha256: "3".repeat(64) },
   ];
+  const adapter = target === "local" || target === "itch" ? "mock" : target;
+  const profile = { target, adapter, preset: "wasm-release", debugUi: false, devapi: false, analytics: false, eventsLogMirror: false };
   return {
-    schema: "ai_studio.runtime_build.v1",
-    fingerprint: sha256(Buffer.from(JSON.stringify(inputs))),
+    schema: "ai_studio.runtime_build.v2",
+    fingerprint: sha256(Buffer.from(JSON.stringify({ inputs, profile }))),
     inputs,
+    profile,
   };
+}
+
+function uleb(value) {
+  const bytes = [];
+  do {
+    let next = value & 0x7f;
+    value >>>= 7;
+    if (value) next |= 0x80;
+    bytes.push(next);
+  } while (value);
+  return Buffer.from(bytes);
 }
 
 function runtimeBoundWasm(record, base = RELEASE_WASM) {
   const name = Buffer.from("runtime_build", "ascii");
-  const marker = Buffer.from(`ai_studio.runtime_build:${record.fingerprint}`, "ascii");
-  const payloadSize = 1 + name.length + marker.length;
-  assert.ok(payloadSize < 128);
-  return Buffer.concat([base, Buffer.from([0, payloadSize, name.length]), name, marker]);
+  const marker = Buffer.from(runtimeBuildWitness(record), "ascii");
+  const payload = Buffer.concat([uleb(name.length), name, marker]);
+  return Buffer.concat([base, Buffer.from([0]), uleb(payload.length), payload]);
 }
 
 test("standalone template ZIP helper matches the canonical Studio helper", () => {
@@ -98,7 +112,7 @@ function fixture(t, target = "itch") {
   const gameDir = join(root, "games", "test-game");
   const artifactDir = join(gameDir, "build", target === "local" ? "wasm-release" : `wasm-release-${target}`, "bin");
   const adapter = target === "local" || target === "itch" ? "mock" : target;
-  const runtimeBuild = runtimeBuildRecord();
+  const runtimeBuild = runtimeBuildRecord(target);
   write(join(gameDir, "game.json"), `${JSON.stringify({
     schema: "ai_studio.game.v1", id: "test-game", title: "Test Game", storageNamespace: "test-game",
   }, null, 2)}\n`);
@@ -898,4 +912,46 @@ test("dependency proof confines exact owners and checks metadata revisions and r
   const escaped = structuredClone(dependencies);
   escaped.engine.source = "../neotolis-engine";
   assert.throws(() => verifyDependencySources({ studioRoot: root, dependencies: escaped, git }), /source must be exactly/i);
+});
+
+test("release artifact rejects a matching witness with debug compiler flags", (t) => {
+  const item = fixture(t);
+  const profile = { ...item.runtimeBuild.profile, debugUi: true };
+  const runtimeBuild = {
+    ...item.runtimeBuild,
+    profile,
+    fingerprint: sha256(Buffer.from(JSON.stringify({ inputs: item.runtimeBuild.inputs, profile }))),
+  };
+  write(join(item.artifactDir, "runtime-build.json"), JSON.stringify(runtimeBuild, null, 2) + "\n");
+  write(join(item.artifactDir, "index.html"), readFileSync(join(item.artifactDir, "index.html"), "utf8")
+    .replace(item.runtimeBuild.fingerprint, runtimeBuild.fingerprint));
+  write(join(item.artifactDir, "game.wasm"), runtimeBoundWasm(runtimeBuild));
+  assert.throws(() => validateWebArtifact({ ...item, runtimeBuild, studioRoot }), /runtime build profile/i);
+});
+
+test("reopened ZIP rejects a matching witness with debug compiler flags", (t) => {
+  const item = fixture(t);
+  const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
+  const entries = readStoreZip(readFileSync(result.zipPath));
+  const profile = { ...item.runtimeBuild.profile, debugUi: true };
+  const runtimeBuild = {
+    ...item.runtimeBuild, profile,
+    fingerprint: sha256(Buffer.from(JSON.stringify({ inputs: item.runtimeBuild.inputs, profile }))),
+  };
+  entries.set("runtime-build.json", Buffer.from(JSON.stringify(runtimeBuild, null, 2) + "\n"));
+  entries.set("game.wasm", runtimeBoundWasm(runtimeBuild));
+  const release = JSON.parse(entries.get("release.json").toString("utf8"));
+  release.runtimeBuildFingerprint = runtimeBuild.fingerprint;
+  entries.set("release.json", Buffer.from(JSON.stringify(release, null, 2) + "\n"));
+  entries.set("index.html", Buffer.from(entries.get("index.html").toString("utf8")
+    .replace(item.runtimeBuild.fingerprint, runtimeBuild.fingerprint)));
+  const zip = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
+  writeFileSync(result.zipPath, zip);
+  const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));
+  manifest.runtimeBuild = runtimeBuild;
+  manifest.releaseMetadataSha256 = sha256(entries.get("release.json"));
+  manifest.artifact = { ...manifest.artifact, size: zip.length, sha256: sha256(zip) };
+  manifest.entries = [...readStoreZip(zip)].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) }));
+  writeFileSync(result.manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+  assert.throws(() => verifyWebPackage({ zipPath: result.zipPath, manifestPath: result.manifestPath, expectedTarget: "itch", studioRoot }), /reopened ZIP runtime build profile mismatch/i);
 });

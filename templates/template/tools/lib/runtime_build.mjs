@@ -8,7 +8,8 @@ import {
 } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
-const SCHEMA = "ai_studio.runtime_build.v1";
+const SCHEMA_V1 = "ai_studio.runtime_build.v1";
+const SCHEMA_V2 = "ai_studio.runtime_build.v2";
 const SHA256 = /^[0-9a-f]{64}$/;
 const GAME_IGNORED_ROOTS = new Set([".ai_studio", ".git", ".mypy_cache", ".pytest_cache", "__pycache__", "build", "capture", "design", "node_modules", "release", "tests", "tmp"]);
 const DEPENDENCY_IGNORED_ROOTS = new Set([".git", ".mypy_cache", ".pytest_cache", "__pycache__", "build", "node_modules", "out", "tests"]);
@@ -118,9 +119,28 @@ function referencedFeatureSources(gameDir) {
   return sources;
 }
 
+function validateCompileProfile(profile) {
+  exactKeys(profile, ["target", "adapter", "preset", "debugUi", "devapi", "analytics", "eventsLogMirror"], "runtime build profile");
+  if (!/^[a-z][a-z0-9-]*$/.test(profile.target || "")
+      || !/^[a-z][a-z0-9-]*$/.test(profile.adapter || "")
+      || !["wasm-release", "wasm-debug", "wasm-devapi-debug"].includes(profile.preset)
+      || typeof profile.debugUi !== "boolean" || typeof profile.devapi !== "boolean"
+      || typeof profile.analytics !== "boolean" || typeof profile.eventsLogMirror !== "boolean") {
+    throw new Error("runtime build profile is invalid");
+  }
+  return profile;
+}
+
+export function runtimeBuildWitness(record) {
+  const validated = validateRuntimeBuildRecord(record);
+  if (validated.schema !== SCHEMA_V2) throw new Error("runtime build witness requires a target-bound profile");
+  return `ai_studio.runtime_build:${validated.fingerprint};t:${validated.profile.target};a:${validated.profile.adapter};p:${validated.profile.preset};du:${Number(validated.profile.debugUi)};d:${Number(validated.profile.devapi)};a:${Number(validated.profile.analytics)};l:${Number(validated.profile.eventsLogMirror)}`;
+}
+
 export function validateRuntimeBuildRecord(record) {
-  exactKeys(record, ["schema", "fingerprint", "inputs"], "runtime build record");
-  if (record.schema !== SCHEMA || !Array.isArray(record.inputs) || record.inputs.length < 2) {
+  const v2 = record?.schema === SCHEMA_V2;
+  exactKeys(record, v2 ? ["schema", "fingerprint", "inputs", "profile"] : ["schema", "fingerprint", "inputs"], "runtime build record");
+  if (!([SCHEMA_V1, SCHEMA_V2].includes(record.schema)) || !Array.isArray(record.inputs) || record.inputs.length < 2) {
     throw new Error("runtime build record schema/inputs are invalid");
   }
   const ids = new Set();
@@ -145,14 +165,15 @@ export function validateRuntimeBuildRecord(record) {
       || record.inputs.slice(2).some((input, index, rows) => index > 0 && rows[index - 1].id >= input.id)) {
     throw new Error("runtime build inputs are not canonically ordered");
   }
-  const expected = sha256(Buffer.from(JSON.stringify(record.inputs), "utf8"));
+  const profile = v2 ? validateCompileProfile(record.profile) : null;
+  const expected = sha256(Buffer.from(JSON.stringify(v2 ? { inputs: record.inputs, profile } : record.inputs), "utf8"));
   if (!SHA256.test(record.fingerprint || "") || record.fingerprint !== expected) {
     throw new Error("runtime build fingerprint does not match its inputs");
   }
   return record;
 }
 
-export function createRuntimeBuildRecord({ gameDir, studioRoot, dependencies = readDependencies(gameDir) }) {
+export function createRuntimeBuildRecord({ gameDir, studioRoot, dependencies = readDependencies(gameDir), compileProfile = null }) {
   const gameRoot = realpathSync(resolve(gameDir));
   const root = realpathSync(resolve(studioRoot));
   const game = hashTree(gameRoot, GAME_IGNORED_ROOTS, ["design/items"]);
@@ -192,6 +213,9 @@ export function createRuntimeBuildRecord({ gameDir, studioRoot, dependencies = r
     };
   }).sort((left, right) => left.id.localeCompare(right.id));
   inputs.push(...features);
-  const record = { schema: SCHEMA, fingerprint: sha256(Buffer.from(JSON.stringify(inputs), "utf8")), inputs };
+  const profile = compileProfile ? validateCompileProfile(compileProfile) : null;
+  const record = profile
+    ? { schema: SCHEMA_V2, fingerprint: sha256(Buffer.from(JSON.stringify({ inputs, profile }), "utf8")), inputs, profile }
+    : { schema: SCHEMA_V1, fingerprint: sha256(Buffer.from(JSON.stringify(inputs), "utf8")), inputs };
   return validateRuntimeBuildRecord(record);
 }

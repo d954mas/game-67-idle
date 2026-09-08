@@ -25,6 +25,11 @@ game-specific screens, economy, items, progression, or content.
 | `poki` | `poki` | Selected backend calls Poki SDK methods; the C facade owns game policy. |
 | `yandex` | `yandex` | Selected backend calls Yandex Games SDK methods; the C facade owns game policy. |
 | `playgama` | `playgama` | Playgama Bridge is its own SDK adapter, not the universal wrapper. |
+| `crazygames` | `crazygames` | Direct CrazyGames SDK adapter. |
+
+`publish-targets/targets.json` is the canonical mapping and static policy source.
+CMake and JavaScript build tools consume the same descriptors. The runtime,
+storage and release boundaries are described in [architecture.md](references/architecture.md).
 
 ## Contents
 

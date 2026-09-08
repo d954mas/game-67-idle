@@ -190,7 +190,8 @@ static void test_commercial_break_freezes_until_the_video_ends(void) {
     TEST_ASSERT_TRUE(g_nt_app.paused);
     TEST_ASSERT_FALSE(platform_hooks_gameplay_allowed());
 
-    platform_sdk_backend_complete_interstitial((platform_sdk_ad_result_t){
+    platform_sdk_backend_complete_interstitial_request(
+        platform_sdk_active_interstitial_request_id(), (platform_sdk_ad_result_t){
         .supported = true, .shown = true, .reason = PLATFORM_SDK_AD_REASON_COMPLETED});
     TEST_ASSERT_FALSE(platform_hooks_ad_active());
 
@@ -206,7 +207,8 @@ static void test_a_refused_video_still_unmutes(void) {
     platform_hooks_update(true);
     TEST_ASSERT_TRUE(g_audio_paused);
 
-    platform_sdk_backend_complete_interstitial((platform_sdk_ad_result_t){
+    platform_sdk_backend_complete_interstitial_request(
+        platform_sdk_active_interstitial_request_id(), (platform_sdk_ad_result_t){
         .supported = true, .shown = false, .reason = PLATFORM_SDK_AD_REASON_FAILED});
     platform_hooks_update(true);
     TEST_ASSERT_FALSE(g_audio_paused);
@@ -224,13 +226,15 @@ static void test_an_empty_placement_is_refused(void) {
 static void test_reward_pays_out_only_on_success(void) {
     TEST_ASSERT_TRUE(platform_hooks_rewarded("extra_life", on_reward, NULL));
     TEST_ASSERT_EQUAL_INT(1, g_backend_state.rewarded_calls);
-    platform_sdk_backend_complete_rewarded((platform_sdk_rewarded_result_t){
+    platform_sdk_backend_complete_rewarded_request(
+        platform_sdk_active_rewarded_request_id(), (platform_sdk_rewarded_result_t){
         .supported = true, .shown = true, .rewarded = false,
         .reason = PLATFORM_SDK_AD_REASON_SKIPPED});
     TEST_ASSERT_EQUAL_INT(0, g_reward_calls);
 
     TEST_ASSERT_TRUE(platform_hooks_rewarded("double_prize", on_reward, NULL));
-    platform_sdk_backend_complete_rewarded((platform_sdk_rewarded_result_t){
+    platform_sdk_backend_complete_rewarded_request(
+        platform_sdk_active_rewarded_request_id(), (platform_sdk_rewarded_result_t){
         .supported = true, .shown = true, .rewarded = true,
         .reason = PLATFORM_SDK_AD_REASON_COMPLETED});
     TEST_ASSERT_EQUAL_INT(1, g_reward_calls);
@@ -243,7 +247,8 @@ static void test_reward_pays_out_only_on_success(void) {
 static void test_a_portal_refusal_withdraws_the_offer(void) {
     TEST_ASSERT_TRUE(platform_hooks_rewarded_supported());
     TEST_ASSERT_TRUE(platform_hooks_rewarded("double_prize", on_reward, NULL));
-    platform_sdk_backend_complete_rewarded((platform_sdk_rewarded_result_t){
+    platform_sdk_backend_complete_rewarded_request(
+        platform_sdk_active_rewarded_request_id(), (platform_sdk_rewarded_result_t){
         .supported = false, .shown = false, .rewarded = false,
         .reason = PLATFORM_SDK_AD_REASON_UNSUPPORTED});
     TEST_ASSERT_EQUAL_INT(0, g_reward_calls);
@@ -256,6 +261,29 @@ static void test_a_second_reward_request_is_refused_while_one_is_open(void) {
     TEST_ASSERT_TRUE(platform_hooks_rewarded("extra_life", on_reward, NULL));
     TEST_ASSERT_FALSE(platform_hooks_rewarded("extra_life", on_reward, NULL));
     TEST_ASSERT_EQUAL_INT(1, g_backend_state.rewarded_calls);
+}
+
+static void test_portal_resume_keeps_a_visible_ad_frozen(void) {
+    platform_sdk_backend_portal_pause();
+    platform_hooks_update(true);
+    TEST_ASSERT_TRUE(platform_hooks_commercial_break("late_ad"));
+    const platform_sdk_ad_request_id_t request_id = platform_sdk_active_interstitial_request_id();
+    platform_sdk_backend_ad_visible(request_id, true);
+    TEST_ASSERT_TRUE(platform_hooks_ad_active());
+    platform_sdk_backend_portal_resume();
+    platform_hooks_update(true);
+    TEST_ASSERT_TRUE(g_nt_app.paused);
+    TEST_ASSERT_TRUE(g_audio_paused);
+
+    platform_sdk_backend_complete_interstitial_request(request_id, (platform_sdk_ad_result_t){
+        .supported = true, .shown = true, .reason = PLATFORM_SDK_AD_REASON_COMPLETED});
+    platform_hooks_update(true);
+    TEST_ASSERT_TRUE(g_nt_app.paused);
+    platform_sdk_backend_ad_visible(request_id, false);
+    TEST_ASSERT_FALSE(platform_hooks_ad_active());
+    platform_hooks_update(true);
+    TEST_ASSERT_FALSE(g_nt_app.paused);
+    TEST_ASSERT_FALSE(g_audio_paused);
 }
 
 static void test_shutdown_thaws_a_frozen_clock(void) {
@@ -283,6 +311,7 @@ int main(void) {
     RUN_TEST(test_reward_pays_out_only_on_success);
     RUN_TEST(test_a_portal_refusal_withdraws_the_offer);
     RUN_TEST(test_a_second_reward_request_is_refused_while_one_is_open);
+    RUN_TEST(test_portal_resume_keeps_a_visible_ad_frozen);
     RUN_TEST(test_shutdown_thaws_a_frozen_clock);
     return UNITY_END();
 }

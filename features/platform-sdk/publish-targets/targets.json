@@ -1,0 +1,65 @@
+{
+  "schema": "ai_studio.platform_target_descriptors.v1",
+  "targets": {
+    "local": {
+      "adapter": "mock",
+      "target_id": 0,
+      "sdk_id": 0,
+      "external_links_allowed": true,
+      "ads_supported": true,
+      "rewarded_supported": true,
+      "storage_supported": true,
+      "portal": false
+    },
+    "itch": {
+      "adapter": "mock",
+      "target_id": 1,
+      "sdk_id": 0,
+      "external_links_allowed": true,
+      "ads_supported": false,
+      "rewarded_supported": false,
+      "storage_supported": false,
+      "portal": true
+    },
+    "poki": {
+      "adapter": "poki",
+      "target_id": 2,
+      "sdk_id": 1,
+      "external_links_allowed": false,
+      "ads_supported": true,
+      "rewarded_supported": true,
+      "storage_supported": false,
+      "portal": true
+    },
+    "yandex": {
+      "adapter": "yandex",
+      "target_id": 3,
+      "sdk_id": 2,
+      "external_links_allowed": false,
+      "ads_supported": true,
+      "rewarded_supported": true,
+      "storage_supported": true,
+      "portal": true
+    },
+    "playgama": {
+      "adapter": "playgama",
+      "target_id": 4,
+      "sdk_id": 3,
+      "external_links_allowed": false,
+      "ads_supported": true,
+      "rewarded_supported": true,
+      "storage_supported": true,
+      "portal": true
+    },
+    "crazygames": {
+      "adapter": "crazygames",
+      "target_id": 5,
+      "sdk_id": 4,
+      "external_links_allowed": false,
+      "ads_supported": true,
+      "rewarded_supported": true,
+      "storage_supported": true,
+      "portal": true
+    }
+  }
+}

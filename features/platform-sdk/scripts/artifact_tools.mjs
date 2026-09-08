@@ -4,6 +4,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { descriptorForTarget } from "../publish-targets/target_config.mjs";
+
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const WEB_DIR = join(ROOT, "web");
 const RELEASE_DIR = join(WEB_DIR, "release");
@@ -71,9 +73,7 @@ export function platformSdkBundlePrefix(sdk) {
 }
 
 export function sdkForTarget(target) {
-  if (target === "local" || target === "itch") return "mock";
-  if (target === "poki" || target === "yandex" || target === "playgama" || target === "crazygames") return target;
-  throw new Error(`unknown publish target: ${target}`);
+  return descriptorForTarget(target).adapter;
 }
 
 function copyFile(src, dst) {
@@ -118,6 +118,10 @@ export function inspectPlatformSdkArtifact({ target, artifactDir, production = t
   const sdk = sdkForTarget(target);
   const files = collectFiles(artifactDir);
   const violations = [];
+
+  if (requireFiles && (!existsSync(artifactDir) || !statSync(artifactDir).isDirectory())) {
+    violations.push({ file: artifactDir, marker: target, reason: "missing-artifact-directory" });
+  }
 
   if (requireFiles && target !== "local") {
     const manifestPath = join(ROOT, "publish-targets", `${target}.json`);

@@ -119,6 +119,50 @@ node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/genera
 Register all fragments before `game_save_init()`. Registration order is
 deterministic and owned by the consumer.
 
+## Active playtime
+
+The template and current games already count playtime. No extra feature
+registration is needed. Read `game_save_playtime_ms()` when comparing saves
+or displaying statistics. Legacy saves start at zero; New Game resets it.
+
+In a custom shell, call `game_save_update_playtime(active)` each frame with
+the game's gameplay gate, and false before the final native flush. The shared
+counter uses monotonic time; do not pass simulation dt. Browser lifecycle
+handling already closes the interval before its flush.
+
+## Optional remote save synchronization
+
+The template already compiles `game_save_sync.c` and `game_save_cloud.c`
+from this feature and binds the SDK transport in `systems/sys_cloud_save.c`.
+The game supplies `game_save_policy_decide` and
+`game_save_policy_same_features`; replace their progression rules with the
+game's own definition of completed content. `game_configure_save()` installs
+the composed validator and migrations once.
+
+The game loop stays explicit:
+
+1. Initialize the transport binding after save initialization.
+2. Optionally wait for `game_save_cloud_boot_settled()` before local loading.
+   Startup can continue after a bounded wait without enabling unsafe writes.
+3. Load local state, then call `game_save_cloud_start(local_is_fresh)` once.
+   A true result means the game must rebind its loaded state.
+4. Call `game_save_cloud_tick()` alongside autosave. It does not load live state.
+5. At the game's safe point, pass any player choice to
+   `game_save_cloud_resolve(choice)`, then call
+   `game_save_cloud_apply_remote_at_safe_point()`. Rebind world/UI when it
+   returns true. Automatic choices use the same guarded adoption path.
+6. Call `game_save_cloud_shutdown()` when the runtime actually exits.
+
+The common runtime preserves the cloud `{saved_at, doc}` envelope and local
+`cloud_sync_base` metadata in the game's storage namespace. Missing legacy
+base metadata preserves unequal branches until the game policy or player
+chooses. Device wall clocks never decide which branch wins.
+
+For a custom save shell, use `game_save_sync.h` directly: supply base/local
+documents and remote read results, report the actual write acknowledgment,
+and persist the resulting base. The smaller coordinator has no SDK, storage,
+schema, or game-loop dependency.
+
 ## Verify
 
 ```powershell

@@ -20,6 +20,11 @@ targets that use the `mock` SDK adapter.
 | `poki` | `poki` | Direct Poki SDK adapter. |
 | `yandex` | `yandex` | Direct Yandex Games SDK adapter. |
 | `playgama` | `playgama` | Direct Playgama Bridge adapter. |
+| `crazygames` | `crazygames` | Direct CrazyGames SDK adapter. |
+
+The authoritative mapping and static policy are in `publish-targets/targets.json`.
+See [architecture.md](architecture.md) for operation ownership, storage outcomes,
+save reconciliation, and compilation-profile verification.
 
 ## Game-Facing API
 
@@ -37,14 +42,16 @@ typedef enum platform_target_t {
   PLATFORM_TARGET_ITCH,
   PLATFORM_TARGET_POKI,
   PLATFORM_TARGET_YANDEX,
-  PLATFORM_TARGET_PLAYGAMA
+  PLATFORM_TARGET_PLAYGAMA,
+  PLATFORM_TARGET_CRAZYGAMES
 } platform_target_t;
 
 typedef enum platform_sdk_t {
   PLATFORM_SDK_MOCK,
   PLATFORM_SDK_POKI,
   PLATFORM_SDK_YANDEX,
-  PLATFORM_SDK_PLAYGAMA
+  PLATFORM_SDK_PLAYGAMA,
+  PLATFORM_SDK_CRAZYGAMES
 } platform_sdk_t;
 
 platform_target_t platform_sdk_target(void);
@@ -195,6 +202,9 @@ void platform_sdk_leaderboard_set_listener(const platform_sdk_leaderboard_listen
   `NOT_READY`, `UNSUPPORTED` (no board API on this portal, or an empty id) and
   `DESTROYED` mean nothing started and nothing will follow. `open` is fire and
   forget.
+- Replacing or clearing the leaderboard listener invalidates outstanding web
+  requests. Their late success or failure is dropped before dispatch or page
+  staging, so a new leaderboard session cannot inherit an old completion.
 - Only an explicit portal signal becomes a refusal. An unauthorized Yandex
   write is `NEEDS_LOGIN`, never `UNSUPPORTED`; a board the console does not
   have (`not found`) is `UNSUPPORTED`; everything else is `FAILED`. Getting
@@ -204,14 +214,18 @@ void platform_sdk_leaderboard_set_listener(const platform_sdk_leaderboard_listen
 - `scope` is passed through untouched. The portals serve one all-time board
   per id; the consumer keeps other scopes off the portal.
 - A fetched page carries up to `PLATFORM_SDK_LEADERBOARD_TOP_MAX` top rows and
-  `PLATFORM_SDK_LEADERBOARD_AROUND_MAX` neighbours, each with value, rank, a
+  `PLATFORM_SDK_LEADERBOARD_AROUND_MAX` neighbourhood rows including the player,
+  each with value, rank, a
   `you` flag, name, avatar URL and the game's own `extra` payload as the
   portal stored it. Strings are borrowed for the completion call. A payload or
   URL longer than the bridge buffers is dropped whole, never cut.
 
 Backends implement `leaderboard_caps`, `leaderboard_submit`,
 `leaderboard_fetch` and `leaderboard_open` in the vtable and settle with
-`platform_sdk_backend_complete_leaderboard_submit/fetch()`. Web adapters
+`platform_sdk_backend_complete_leaderboard_submit/fetch()`. Async backends
+capture `platform_sdk_backend_leaderboard_generation()` when starting and
+discard a completion if it changed; listener replacement and SDK teardown
+advance that generation. Web adapters
 expose `leaderboardCaps(boardId)` (synchronous,
 `{ canRead, canWrite, needsLogin, nativePopup }`), `submitScore(boardId, scope,
 value, extra)`, `fetchEntries(boardId, scope)` and `showLeaderboard(boardId)`,
@@ -295,10 +309,13 @@ Implementation rules:
 - `platform_sdk_game_ready()` is also one-shot and is only for portals with a
   distinct game-ready SDK call, such as Playgama `game_ready`; it does not emit
   an analytics event.
-- Unsupported operations return `{ supported: false, shown: false,
-  reason: "unsupported" }` or a no-op promise.
-- Ad methods fire registered pause callbacks before the ad can cover gameplay
-  and resume callbacks exactly once when control returns, including failures.
+- Unsupported ad operations return `{ supported: false, shown: false,
+  reason: "unsupported" }`. Storage operations return explicit `unavailable`
+  outcomes; no-op promises must never acknowledge a storage write.
+- Pause/resume listeners report changes in the effective break state. An ad
+  operation, a visible ad overlay and a portal pause are independent reasons;
+  completing one operation never clears another reason. Async backend ad
+  completions must carry the request id captured at dispatch.
 - Rewarded ads grant rewards only when the SDK confirms reward completion:
   Poki returns a success boolean, Yandex uses `onRewarded`, Playgama uses the
   `rewarded` state.

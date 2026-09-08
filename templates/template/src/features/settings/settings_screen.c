@@ -14,11 +14,26 @@
 #define RESET_HOLD_SECONDS 1.5F
 
 static float s_master = 0.8F, s_music = 0.7F, s_sfx = 0.9F;
+static bool s_save_conflict_visible;
+static bool s_save_conflict_remote_available;
+static game_save_choice_t s_save_conflict_choice;
 
 void settings_open(void)  { (void)game_scenes_show_settings(); }
 void settings_close(void) { (void)game_scenes_close_settings(); }
 bool settings_is_open(void) {
     return game_scenes_is_presented(GAME_SCENE_SETTINGS);
+}
+
+void settings_set_save_conflict_visible(bool visible, bool remote_available) {
+    s_save_conflict_visible = visible;
+    s_save_conflict_remote_available = remote_available;
+    if (!visible) s_save_conflict_choice = GAME_SAVE_ASK;
+}
+
+game_save_choice_t settings_take_save_conflict_choice(void) {
+    const game_save_choice_t choice = s_save_conflict_choice;
+    s_save_conflict_choice = GAME_SAVE_ASK;
+    return choice;
 }
 
 // Label + slider stacked; the slider mutates *value in place (engine owns the drag).
@@ -76,6 +91,36 @@ static void language_row(nt_ui_context_t *ctx, const ui_metrics_t *m, bool inter
     }
 }
 
+static void save_conflict_row(nt_ui_context_t *ctx, const ui_metrics_t *m, bool interactive) {
+    if (!s_save_conflict_visible) return;
+    loc_kit_label(ctx, loc_settings_cloud_conflict(), &g_ui_theme.label);
+    CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
+                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                     .childGap = (uint16_t)m->gap,
+                     .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
+        CLAY({.id = CLAY_ID("settings/cloud/keep_local"),
+              .layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(m)}}}) {
+            ui_kit_button_begin(ctx, nt_ui_id("settings/cloud/keep_local/button"),
+                                &g_ui_theme.button, interactive, NULL);
+            loc_kit_label(ctx, loc_settings_cloud_keep_local(), &g_ui_theme.button_label);
+            if (ui_kit_button_end(ctx) && interactive) {
+                s_save_conflict_choice = GAME_SAVE_KEEP_LOCAL;
+            }
+        }
+        if (s_save_conflict_remote_available) {
+            CLAY({.id = CLAY_ID("settings/cloud/keep_remote"),
+                  .layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(m)}}}) {
+                ui_kit_button_begin(ctx, nt_ui_id("settings/cloud/keep_remote/button"),
+                                    &g_ui_theme.button, interactive, NULL);
+                loc_kit_label(ctx, loc_settings_cloud_keep_remote(), &g_ui_theme.button_label);
+                if (ui_kit_button_end(ctx) && interactive) {
+                    s_save_conflict_choice = GAME_SAVE_KEEP_REMOTE;
+                }
+            }
+        }
+    }
+}
+
 void settings_draw_launcher(nt_ui_context_t *ctx, bool interactive) {
     const ui_metrics_t m = ui_metrics();
     // Root: full screen; gear button parked top-right, clear of the device's
@@ -124,6 +169,7 @@ void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
     volume_row(ctx, &m, LOC0_SETTINGS_MUSIC, "settings/music", &s_music, settings_set_music, interactive);
     volume_row(ctx, &m, LOC0_SETTINGS_SFX, "settings/sfx", &s_sfx, settings_set_sfx, interactive);
     language_row(ctx, &m, interactive);
+    save_conflict_row(ctx, &m, interactive);
 
     // Action row: hold-to-reset (long press) + close.
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},

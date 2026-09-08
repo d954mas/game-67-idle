@@ -945,6 +945,36 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_platform_lifecycle COMMAND test_platform_lifecycle)
     set_tests_properties(test_platform_lifecycle PROPERTIES LABELS "core")
 
+    game_add_c_test(test_game_save_sync
+        SOURCES "${GAME_STATE_SRC}/game_save_sync.c" "${GAME_REPO_ROOT}/features/game-state/tests/test_game_save_sync.c"
+        INCLUDES "${GAME_STATE_INC}"
+        TIER core WARNINGS)
+
+    game_add_c_test(test_platform_storage
+        SOURCES tests/test_platform_storage.c "${PLATFORM_SDK_SRC}/platform_sdk_storage.c"
+        INCLUDES "${PLATFORM_SDK_INC}"
+        TIER core WARNINGS)
+
+    game_add_c_test(test_game_save_policy
+        SOURCES tests/test_game_save_policy.c src/game_save_policy.c
+                "${GAME_STATE_SRC}/game_state_json.c"
+                "${ENGINE_DIR}/deps/cjson/cJSON.c"
+        INCLUDES src "${GAME_STATE_INC}" "${ENGINE_DIR}/engine" "${ENGINE_DIR}/deps/cjson"
+        DEFINES NT_DEVAPI_ENABLED=0
+        TIER core WARNINGS)
+
+    game_add_c_test(test_cloud_save
+        SOURCES tests/test_cloud_save.c
+                src/systems/sys_cloud_save.c
+                "${GAME_STATE_SRC}/game_save_sync.c"
+                "${GAME_STATE_SRC}/game_save_cloud.c"
+                "${PLATFORM_SDK_SRC}/platform_sdk_storage.c"
+                "${ENGINE_DIR}/deps/cjson/cJSON.c"
+        INCLUDES src "${GAME_STATE_INC}" "${PLATFORM_SDK_INC}"
+                 "${ENGINE_DIR}/engine" "${ENGINE_DIR}/deps/cjson"
+        DEFINES NT_DEVAPI_ENABLED=0
+        TIER core WARNINGS)
+
     # nt_app_stub carries the real g_nt_app clock the freeze acts on, so the
     # test asserts the engine's own pause flag, not a mirror of it.
     add_executable(test_platform_hooks
@@ -1033,9 +1063,15 @@ if(NOT EMSCRIPTEN)
                     "SCENE_DEVAPI_SCHEMA_FIXTURE=$<TARGET_FILE:test_scenes_core_devapi>")
         endif()
         add_test(NAME platform_sdk_node_test
-            COMMAND "${Node_EXECUTABLE}" --test features/platform-sdk/tests/platform_sdk.test.mjs
+            COMMAND "${Node_EXECUTABLE}" --test
+                features/platform-sdk/tests/platform_sdk.test.mjs
+                features/platform-sdk/tests/platform_storage.test.mjs
+                features/platform-sdk/tests/platform_sdk_runtime_bridge.test.mjs
             WORKING_DIRECTORY "${GAME_REPO_ROOT}")
         set_tests_properties(platform_sdk_node_test PROPERTIES LABELS "core")
+        game_add_node_test(platform_sdk_web_test
+            SCRIPTS features/platform-sdk/tests/platform_sdk_web.test.mjs
+            TIER slow)
     endif()
 
     # T0327 tail: 4-fragment composition test -- lifts settings/items/progression/game
@@ -1044,6 +1080,7 @@ if(NOT EMSCRIPTEN)
     add_executable(test_template_composition
         tests/test_template_composition.c
         src/game_items.c
+        src/game_save_policy.c src/game_save_policy_validator.c
         "${GAME_STATE_SRC}/game_save.c" "${GAME_STATE_SRC}/game_save_writer.c" "${GAME_STATE_SRC}/game_storage.c"
         "${GAME_STATE_SRC}/game_storage_backend_native.c"
         "${GAME_STATE_SRC}/game_state_json.c" "${GAME_EVENTS_SRC}/game_events.c"

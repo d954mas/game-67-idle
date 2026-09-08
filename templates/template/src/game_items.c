@@ -330,15 +330,6 @@ bool game_items_migrate_document_v1_to_v2(cJSON *features, char *error, int erro
            set_owner_ref(game, "wallet_container_id", 2U, error, error_cap);
 }
 
-void game_items_configure_save(void) {
-    static const GameSaveDocumentMigrateFn migrations[] = {
-        game_items_migrate_document_v1_to_v2,
-    };
-    game_save_set_document_migrations(migrations, 1);
-    game_save_set_document_validator(game_items_validate_save_document);
-    game_save_set_live_validator(game_items_validate_live_save);
-}
-
 bool game_items_validate_live_save(char *error, int error_cap) {
     if (!settings_state_validate(&settings_state, error, error_cap) ||
         !items_state_validate(&items_state, error, error_cap) ||

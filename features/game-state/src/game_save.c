@@ -5,6 +5,7 @@
    visibility-flush + export/import + empty transform seam. Single thread. */
 
 #include "game_save.h"
+#include "game_save_playtime_internal.h"
 
 #include "game_state_json.h"
 #include "game_storage.h"
@@ -91,6 +92,7 @@ static int64_t s_dirty_at;        /* mono ms of the first mark after clean, or o
 static int64_t s_last_save_mono;  /* mono ms of the last save ATTEMPT or load */
 static int64_t s_last_saved_at;   /* wall ms stamped into the last save/load */
 static int64_t s_save_seq;        /* monotonic counter, restored from the loaded envelope */
+static game_save_playtime_t s_playtime;
 
 static int64_t (*s_mono_clock)(void);
 static int64_t (*s_wall_clock)(void);
@@ -107,6 +109,10 @@ static int64_t default_wall_ms(void) { return game_save_platform_wall_ms(); }
 
 static int64_t mono_now(void) { return s_mono_clock ? s_mono_clock() : 0; }
 static int64_t wall_now(void) { return s_wall_clock ? s_wall_clock() : 0; }
+
+static void set_playtime_ms(int64_t value) {
+    game_save_playtime_set(&s_playtime, value, mono_now());
+}
 
 /* ---- small helpers ---- */
 
@@ -188,6 +194,24 @@ static cJSON *text_record_value(
     return NULL;
 }
 
+static bool text_metadata_i64(const game_save_text_record_t *record) {
+    return game_save_text_record_key_is(record, "saved_at") ||
+           game_save_text_record_key_is(record, "save_seq") ||
+           game_save_text_record_key_is(record, "playtime_ms");
+}
+
+static cJSON *text_metadata_i64_value(
+    const game_save_text_record_t *record, char *error, int error_cap) {
+    int64_t value = 0;
+    if (!game_save_text_record_i64(
+            record, 0, INT64_MAX, &value, error,
+            error_cap > 0 ? (size_t)error_cap : 0U)) {
+        return NULL;
+    }
+    char decimal[32];
+    return cJSON_CreateString(gsj_i64_to_string(value, decimal, sizeof decimal));
+}
+
 static bool add_text_record(
     cJSON *object, const game_save_text_record_t *record,
     bool nested_path, char *error, int error_cap) {
@@ -231,7 +255,9 @@ static bool add_text_record(
             gsj_set_error(error, error_cap, "duplicate save field");
             return false;
         }
-        cJSON *value = text_record_value(record, error, error_cap);
+        cJSON *value = !nested_path && text_metadata_i64(record)
+                           ? text_metadata_i64_value(record, error, error_cap)
+                           : text_record_value(record, error, error_cap);
         if (value == NULL || !cJSON_AddItemToObject(owner, key, value)) {
             cJSON_Delete(value);
             free(key);
@@ -521,6 +547,7 @@ static cJSON *build_root(bool bump_seq, int64_t *out_wall, int64_t *out_seq) {
         !cJSON_AddNumberToObject(root, "save_version", (double)GAME_SAVE_DOC_VERSION) ||
         !cJSON_AddNumberToObject(root, "saved_at", (double)wall) ||
         !cJSON_AddNumberToObject(root, "save_seq", (double)seq) ||
+        !gsj_add_i64(root, "playtime_ms", s_playtime.milliseconds) ||
         !cJSON_AddStringToObject(root, "app", GAME_STORAGE_APP_ID) ||
         !cJSON_AddStringToObject(root, "build", GAME_SAVE_BUILD)) {
         cJSON_Delete(root);
@@ -582,6 +609,12 @@ static bool validate_document(const cJSON *doc, char *error, int error_cap) {
     return s_document_validator(features, error, error_cap);
 }
 
+static bool read_playtime_ms(
+    const cJSON *doc, int64_t *out, char *error, int error_cap) {
+    *out = 0;
+    return gsj_read_i64(doc, "playtime_ms", 0, INT64_MAX, out, error, error_cap);
+}
+
 static bool validate_envelope_header(const cJSON *doc, char *error, int error_cap) {
     const cJSON *format = gsj_object_item(doc, "format");
     if (!cJSON_IsNumber(format) || format->valuedouble != (double)GAME_SAVE_FORMAT) {
@@ -612,12 +645,15 @@ static bool validate_envelope_header(const cJSON *doc, char *error, int error_ca
         !gsj_read_i64(doc, "save_seq", 0, INT64_MAX, &metadata, error, error_cap)) {
         return false;
     }
-    return true;
+    int64_t playtime_ms = 0;
+    return read_playtime_ms(doc, &playtime_ms, error, error_cap);
 }
 
 /* Duplicate -> migrate every cross-fragment version -> validate, with no live
    publication and no mutation of caller-owned JSON until the whole document is
    known-good. */
+static bool doc_is_newer(const cJSON *doc);
+
 static bool prepare_document_for_load(
     const cJSON *doc, cJSON **out_doc, bool *out_migrated, char *error, int error_cap) {
     if (out_doc) {
@@ -727,6 +763,42 @@ static bool prepare_document_for_load(
     return true;
 }
 
+bool game_save_validate_document_string(const char *text, char *error, int error_cap) {
+    if (text == NULL) {
+        gsj_set_error(error, error_cap, "save document is required");
+        return false;
+    }
+    if (strlen(text) > GAME_STORAGE_MAX_BYTES) {
+        gsj_set_error(error, error_cap, "save document exceeds storage size limit");
+        return false;
+    }
+    if (s_document_validator == NULL) {
+        gsj_set_error(error, error_cap, "staged document validator is not configured");
+        return false;
+    }
+    char *decoded = transform_decode(text, error, error_cap);
+    if (decoded == NULL) {
+        return false;
+    }
+    cJSON *document = parse_save_document(decoded, error, error_cap);
+    free(decoded);
+    if (document == NULL || !cJSON_IsObject(document)) {
+        cJSON_Delete(document);
+        gsj_set_error(error, error_cap, "save document is not valid");
+        return false;
+    }
+    if (doc_is_newer(document)) {
+        cJSON_Delete(document);
+        gsj_set_error(error, error_cap, "save document is newer than this build");
+        return false;
+    }
+    cJSON *prepared = NULL;
+    const bool valid = prepare_document_for_load(document, &prepared, NULL, error, error_cap);
+    cJSON_Delete(prepared);
+    cJSON_Delete(document);
+    return valid;
+}
+
 /* The reason of the LAST failure logged. Deliberately not keyed on
    `s_unpersisted`: a failed storage probe at init raises that too, which would
    silence the first real failure on the very platform where failures are
@@ -771,6 +843,7 @@ static bool write_hot_snapshot(game_save_text_writer_t *writer, int64_t wall, in
         !game_save_text_write_i64(writer, "save_version", GAME_SAVE_DOC_VERSION) ||
         !game_save_text_write_i64(writer, "saved_at", wall) ||
         !game_save_text_write_i64(writer, "save_seq", seq) ||
+        !game_save_text_write_i64(writer, "playtime_ms", s_playtime.milliseconds) ||
         !game_save_text_write_string(writer, "app", GAME_STORAGE_APP_ID) ||
         !game_save_text_write_string(writer, "build", GAME_SAVE_BUILD)) {
         return false;
@@ -979,6 +1052,9 @@ static void load_from_doc(const cJSON *doc, game_save_load_result_t *result) {
     int64_t saved_at = 0;
     (void)gsj_read_i64(doc, "saved_at", 0, INT64_MAX, &saved_at, NULL, 0);
     s_last_saved_at = saved_at;
+    int64_t playtime_ms = 0;
+    (void)read_playtime_ms(doc, &playtime_ms, NULL, 0);
+    set_playtime_ms(playtime_ms);
 
     /* Step 5: cross-fragment doc steps — DOC_VERSION=1, none in A3 (seam present). */
 
@@ -1070,6 +1146,7 @@ static void set_aside_and_start_new(
 
     free_orphans();
     reset_all();
+    set_playtime_ms(0);
 
     if (!game_storage_quarantine(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err)) {
         /* Not writable and not movable: keep the bytes, keep trying. */
@@ -1135,6 +1212,7 @@ void game_save_load(game_save_load_result_t *result) {
             }
             free_orphans();
             reset_all();
+            set_playtime_ms(0);
             s_autosave_paused = true;
             result->status = GAME_SAVE_LOAD_CORRUPT_RESET;
             set_message(result, "save read failed; original quarantined; new game");
@@ -1145,6 +1223,7 @@ void game_save_load(game_save_load_result_t *result) {
         /* No save -> FRESH: reset + on_new_game + save. */
         free_orphans();
         reset_all();
+        set_playtime_ms(0);
         on_new_game_all();
         s_autosave_paused = false;
         game_save_mark_dirty();
@@ -1213,6 +1292,7 @@ void game_save_load(game_save_load_result_t *result) {
     }
     free_orphans();
     reset_all();
+    set_playtime_ms(0);
     s_quarantine_owed = false;
     s_autosave_paused = true;
     result->status = GAME_SAVE_LOAD_CORRUPT_RESET;
@@ -1313,6 +1393,7 @@ void game_save_init(void) {
     s_last_save_mono = 0;
     s_last_saved_at = 0;
     s_save_seq = 0;
+    set_playtime_ms(0);
     s_logged_failure[0] = '\0';
     s_failure_logged = false;
 
@@ -1326,6 +1407,7 @@ void game_save_init(void) {
 static void begin_new_game_except(const char *skip_id) {
     free_orphans();
     reset_all_except(skip_id);
+    set_playtime_ms(0);
     on_new_game_all_except(skip_id);
     /* A New Game is not a licence to overwrite bytes we could not move aside:
        retry the move, and stay held if it is still refused. */
@@ -1431,6 +1513,14 @@ void game_save_mark_dirty(void) {
     if (!s_dirty) {
         s_dirty = true;
         s_dirty_at = mono_now(); /* first mark after clean */
+    }
+}
+
+int64_t game_save_playtime_ms(void) { return s_playtime.milliseconds; }
+
+void game_save_update_playtime(bool active) {
+    if (game_save_playtime_update(&s_playtime, mono_now(), active)) {
+        game_save_mark_dirty();
     }
 }
 
@@ -1548,6 +1638,7 @@ bool game_save_import_string(const char *text, char *error, int error_cap) {
     }
     const int64_t old_seq = s_save_seq;
     const int64_t old_saved_at = s_last_saved_at;
+    const game_save_playtime_t old_playtime = s_playtime;
     const bool old_autosave_paused = s_autosave_paused;
     const bool old_dirty = s_dirty;
     const bool old_unpersisted = s_unpersisted;
@@ -1575,6 +1666,7 @@ bool game_save_import_string(const char *text, char *error, int error_cap) {
         }
         s_save_seq = old_seq;
         s_last_saved_at = old_saved_at;
+        s_playtime = old_playtime;
         s_autosave_paused = old_autosave_paused;
         s_dirty = old_dirty;
         s_unpersisted = old_unpersisted;

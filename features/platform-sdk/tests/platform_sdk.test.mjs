@@ -402,9 +402,57 @@ test("poki progress throw does not poison SDK readiness or loading completion", 
   adapter.destroy();
 });
 
-test("hung platform ads settle with a bounded failed result", async (t) => {
+test("poki rejection closes a request that reported ad visibility", async () => {
+  for (const [name, install, show] of [
+    ["interstitial", (sdk, start) => { sdk.commercialBreak = start; }, (adapter) => adapter.showInterstitial("break", 71)],
+    ["rewarded", (sdk, start) => { sdk.rewardedBreak = ({ onStart }) => start(onStart); }, (adapter) => adapter.showRewarded("reward", 72)],
+  ]) {
+    const host = createHost(TargetPlatform.POKI);
+    const visibility = [];
+    const sdk = { init: () => Promise.resolve() };
+    install(sdk, (onStart) => { onStart(); return Promise.reject(new Error("rejected")); });
+    host.PokiSDK = sdk;
+    const adapter = createPokiPlatformAdapter({ host, lifecycle: { adVisible(id, visible) { visibility.push([id, visible]); } } });
+    await show(adapter);
+    assert.deepEqual(visibility, [[name === "interstitial" ? 71 : 72, true], [name === "interstitial" ? 71 : 72, false]], name);
+    adapter.destroy();
+  }
+});
+
+test("playgama retains a timed-out global ad stream until its terminal event", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const failed = { supported: true, shown: false, reason: "failed" };
+  const host = createHost(TargetPlatform.PLAYGAMA);
+  const handlers = new Map();
+  let calls = 0;
+  const visibility = [];
+  host.bridge = {
+    initialize: () => Promise.resolve(),
+    platform: {},
+    advertisement: {
+      isRewardedSupported: true,
+      on(name, handler) { handlers.set(name, handler); },
+      off(name) { handlers.delete(name); },
+      showRewarded() { calls += 1; },
+    },
+  };
+  const adapter = createPlaygamaPlatformAdapter({ host, lifecycle: { adVisible(id, visible) { visibility.push([id, visible]); } } });
+  const first = adapter.showRewarded("reward", 81);
+  await flushMicrotasks();
+  t.mock.timers.runAll();
+  assert.deepEqual(await first, { supported: true, shown: false, rewarded: false, reason: "timeout" });
+  assert.deepEqual(await adapter.showRewarded("reward", 82), { supported: true, shown: false, rewarded: false, reason: "busy" });
+  const handler = handlers.get("rewarded_state_changed");
+  handler("rewarded");
+  handler("closed");
+  assert.deepEqual(visibility, [[81, false]]);
+  void adapter.showRewarded("reward", 82);
+  await flushMicrotasks();
+  assert.equal(calls, 2);
+  adapter.destroy();
+});
+test("hung platform ads settle with an explicit timeout result", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const failed = { supported: true, shown: false, reason: "timeout" };
   const cases = [
     ["poki", () => {
       const host = createHost(TargetPlatform.POKI);
@@ -827,6 +875,76 @@ function yandexEntry(rank, score, id, extraData) {
   };
 }
 
+
+test("yandex full neighbourhood keeps the player and neighbours on both sides within the bridge capacity", async () => {
+  const header = readFileSync(join(HERE, "../include/features/platform_sdk/platform_sdk.h"), "utf8");
+  const capacity = Number(header.match(/#define PLATFORM_SDK_LEADERBOARD_AROUND_MAX (\d+)/)[1]);
+  const neighbours = Array.from({ length: 21 }, (_, i) => yandexEntry(90 + i, 200 - i, i === 10 ? "me" : "n" + i, ""));
+  const entries = {
+    ranges: [{ start: 0, size: 20 }, { start: 89, size: neighbours.length }],
+    userRank: 100,
+    entries: [...Array.from({ length: 20 }, (_, i) => yandexEntry(i + 1, 500 - i, "top" + i, "")), ...neighbours],
+  };
+  const { adapter } = createYandexLeaderboardFixture({ authorized: true, entries });
+  await adapter.ready();
+  const page = await adapter.fetchEntries("planets", 0);
+  assert.ok(page.around.length <= capacity);
+  const mine = page.around.findIndex((row) => row.you);
+  assert.ok(mine > 0 && mine < page.around.length - 1);
+  assert.ok(Math.abs(mine - (page.around.length - mine - 1)) <= 1);
+  assert.deepEqual(page.player, { rank: 100, value: 190 });
+  adapter.destroy();
+});
+
+function leaderboardWebBridge(operation, context) {
+  const source = readFileSync(join(HERE, "../src/platform_sdk_web.c"), "utf8");
+  const start = source.indexOf("EM_JS(int, platform_sdk_web_backend_leaderboard_" + operation + ",");
+  assert.notEqual(start, -1);
+  const bodyStart = source.indexOf("{", start);
+  const bodyEnd = source.indexOf("\n})", bodyStart) + 2;
+  return runInNewContext("(function(board_id_ptr, scope, value, extra_ptr) " + source.slice(bodyStart, bodyEnd) + ")", context);
+}
+
+for (const operation of ["submit", "fetch"]) {
+  for (const outcome of ["resolve", "reject"]) {
+    test("web leaderboard " + operation + " ignores " + outcome + " from a replaced listener", async () => {
+      let generation = 1;
+      const pending = [];
+      const completed = [];
+      const rows = [];
+      const backend = {
+        [operation === "submit" ? "submitScore" : "fetchEntries"]() {
+          return new Promise((resolve, reject) => pending.push({ resolve, reject }));
+        },
+      };
+      const context = {
+        __platformSdkInternalBackend: backend,
+        UTF8ToString: (value) => value,
+        stringToNewUTF8: (value) => value,
+        _platform_sdk_web_leaderboard_generation: () => generation,
+        _platform_sdk_web_complete_leaderboard_submit: (...args) => completed.push(args),
+        _platform_sdk_web_leaderboard_begin: () => rows.push("begin"),
+        _platform_sdk_web_leaderboard_row: (...args) => rows.push(args),
+        _platform_sdk_web_complete_leaderboard_fetch: (...args) => completed.push(args),
+      };
+      const call = leaderboardWebBridge(operation, context);
+      call("planets", 0, 100, "");
+      generation += 1;
+      call("planets", 0, 200, "");
+      const answer = { status: "ok", top: [{ rank: 1, value: 100, name: "old" }] };
+      pending[0][outcome](outcome === "resolve" ? answer : new Error("offline"));
+      await new Promise(setImmediate);
+      assert.deepEqual(completed, []);
+      assert.deepEqual(rows, [], "stale fetches must not stage a page");
+      pending[1].resolve({ status: "ok", top: [{ rank: 1, value: 200, name: "current" }] });
+      await new Promise(setImmediate);
+      assert.equal(completed.length, 1);
+      assert.equal(completed[0][0], "planets");
+      assert.equal(completed[0][2], 0);
+    });
+  }
+}
+
 test("yandex leaderboard submits with extraData and reads rows with name, avatar and payload", async () => {
   const entries = {
     ranges: [{ start: 0, size: 3 }, { start: 40, size: 3 }],
@@ -1221,7 +1339,7 @@ test("storage and destroy do not emit platform SDK analytics events", async () =
   const { backend, host } = createMockBackend(TargetPlatform.LOCAL);
 
   await backend.saveData("slot", { coins: 5 });
-  assert.deepEqual(await backend.loadData("slot"), { coins: 5 });
+  assert.deepEqual(await backend.loadData("slot"), { status: "found", value: { coins: 5 } });
   backend.destroy();
 
   assert.equal(Object.hasOwn(host, "__platformSdkEvents"), false);

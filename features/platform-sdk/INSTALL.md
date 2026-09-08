@@ -4,9 +4,62 @@ This feature is installed in-place by the template. It is not copied into
 `templates/template/src/features`; CMake references `${GAME_REPO_ROOT}/features/platform-sdk`
 the same way it references `items-core` and `progression-core`.
 
-## Install
+## Build a game from the template
 
-A consuming template or game should wire this as an L1 feature:
+The template already wires the SDK, save synchronization, and active playtime.
+Run from the template or game directory:
+
+```powershell
+node tools/build_web.mjs --preset wasm-release --target poki
+```
+
+Web builds default to a checkout-local Emscripten cache:
+
+```text
+templates/template/build/emscripten-cache
+```
+
+The template CMake also prefixes Emscripten compile/link rules with that cache
+when `EM_CACHE` is not already set. This keeps release web links independent
+from a stale or locked global emsdk cache.
+
+`local` keeps the historic output directory:
+
+```text
+templates/template/build/wasm-release/bin
+```
+
+Portal targets use target-specific directories:
+
+```text
+templates/template/build/wasm-release-itch/bin
+templates/template/build/wasm-release-poki/bin
+templates/template/build/wasm-release-yandex/bin
+templates/template/build/wasm-release-playgama/bin
+```
+
+The CMake web step copies:
+
+```text
+platform-sdk.js          # internal web backend bootstrap for C bridge
+platform-sdk-adapter.js   # selected adapter only
+```
+
+The release packer verifies those canonical staged bytes and the generated
+bundle's source/output hashes, embeds the selected minified bundle before the
+Emscripten loader in `game.js`, and omits the two standalone module files from
+the final upload ZIP. Release builds also minify generated HTML, inline CSS,
+and inline JavaScript with `html-minifier-terser` from Emscripten. Debug builds
+stay readable.
+
+The debug/test panel is C UI in the game/template binary. It is not copied as a
+web JavaScript file.
+
+## Integrate a custom shell
+
+Use these wiring details only when maintaining a custom shell. The SDK is an
+L1 transport feature; game-state owns save synchronization and the game owns
+progress comparison and runtime loading:
 
 1. Add module paths near the other in-place modules:
 
@@ -20,12 +73,14 @@ A consuming template or game should wire this as an L1 feature:
 2. Compile `features/platform-sdk/src/platform_sdk.c` and include
    `features/platform-sdk/include`. Web/Emscripten builds should also compile
    `features/platform-sdk/src/platform_sdk_web.c`; it installs the selected
-   JavaScript backend behind the C facade.
+   JavaScript backend behind the C facade. Also compile `src/platform_sdk_storage.c`
+   and `src/platform_sdk_cloud.c` for the C-owned storage transport and its web
+   backend. `platform_sdk_install_web_backend()` installs both backends.
 
 3. Configure target platform through the CMake cache variable:
 
    ```text
-   GAME_PUBLISH_TARGET=local|itch|poki|yandex|playgama
+   GAME_PUBLISH_TARGET=local|itch|poki|yandex|playgama|crazygames
    ```
 
    CMake computes the SDK adapter from the target:
@@ -36,6 +91,7 @@ A consuming template or game should wire this as an L1 feature:
    poki     -> poki
    yandex   -> yandex
    playgama -> playgama
+   crazygames -> crazygames
    ```
 
 4. Make the target selection a build-time define/config value so only the
@@ -86,56 +142,6 @@ A consuming template or game should wire this as an L1 feature:
     template-local C/Clay UI module (`src/ui/platform_sdk_debug.c`) and pass
     `GAME_PLATFORM_SDK_DEBUG_UI=1` only in non-release builds. Release builds
     must keep that define off.
-
-## Template Web Build
-
-The current template command is:
-
-```powershell
-node tools/build_web.mjs --preset wasm-release --target poki
-```
-
-Web builds default to a checkout-local Emscripten cache:
-
-```text
-templates/template/build/emscripten-cache
-```
-
-The template CMake also prefixes Emscripten compile/link rules with that cache
-when `EM_CACHE` is not already set. This keeps release web links independent
-from a stale or locked global emsdk cache.
-
-`local` keeps the historic output directory:
-
-```text
-templates/template/build/wasm-release/bin
-```
-
-Portal targets use target-specific directories:
-
-```text
-templates/template/build/wasm-release-itch/bin
-templates/template/build/wasm-release-poki/bin
-templates/template/build/wasm-release-yandex/bin
-templates/template/build/wasm-release-playgama/bin
-```
-
-The CMake web step copies:
-
-```text
-platform-sdk.js          # internal web backend bootstrap for C bridge
-platform-sdk-adapter.js   # selected adapter only
-```
-
-The release packer verifies those canonical staged bytes and the generated
-bundle's source/output hashes, embeds the selected minified bundle before the
-Emscripten loader in `game.js`, and omits the two standalone module files from
-the final upload ZIP. Release builds also minify generated HTML, inline CSS,
-and inline JavaScript with `html-minifier-terser` from Emscripten. Debug builds
-stay readable.
-
-The debug/test panel is C UI in the game/template binary. It is not copied as a
-web JavaScript file.
 
 ## Verify
 

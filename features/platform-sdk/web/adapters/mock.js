@@ -35,19 +35,22 @@ export function createMockPlatformAdapter({ emitVisibilityChange = () => {}, hos
   }
 
   async function loadData(key) {
-    if (!isLocal || !host || !host.localStorage) return null;
-    const raw = host.localStorage.getItem(`platform-sdk:${key}`);
-    if (raw == null) return null;
     try {
-      return JSON.parse(raw);
-    } catch {
-      return raw;
-    }
+      if (!isLocal || !host || !host.localStorage) return { status: "unavailable" };
+      const raw = host.localStorage.getItem(`platform-sdk:${key}`);
+      if (raw == null) return { status: "missing" };
+      let value = raw;
+      try { value = JSON.parse(raw); } catch {}
+      return { status: "found", value };
+    } catch { return { status: "failed" }; }
   }
 
   async function saveData(key, value) {
-    if (!isLocal || !host || !host.localStorage) return;
-    host.localStorage.setItem(`platform-sdk:${key}`, JSON.stringify(value));
+    try {
+      if (!isLocal || !host || !host.localStorage) return { status: "unavailable" };
+      host.localStorage.setItem(`platform-sdk:${key}`, JSON.stringify(value));
+      return { status: "acknowledged" };
+    } catch { return { status: "failed" }; }
   }
 
   function getLocale() {

@@ -6,7 +6,7 @@ const AD_TIMEOUT_MS = 120000;
 // adapter degrades to no-ops (Poki requires adblocked players to be playable).
 const POKI_INIT_TIMEOUT_MS = 10000;
 
-export function createPokiPlatformAdapter({ host }) {
+export function createPokiPlatformAdapter({ host, lifecycle }) {
   let sdkReady = null;
   let sdkInstance = null;
   let destroyed = false;
@@ -132,22 +132,26 @@ export function createPokiPlatformAdapter({ host }) {
     });
   }
 
-  async function showInterstitial() {
+  async function showInterstitial(placement, requestId) {
     const failed = { supported: true, shown: false, reason: "failed" };
+    const timeout = { ...failed, reason: "timeout" };
     const shown = await withAdDeadline(withSdk((sdk) => {
       if (typeof sdk.commercialBreak !== "function") return null;
-      return sdk.commercialBreak().then(() => true);
-    }), failed);
+      return sdk.commercialBreak(() => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true); }).then(() => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); return true; });
+    }).catch(() => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); return failed; }), timeout);
+    if (shown === timeout) return timeout;
     if (shown === failed) return failed;
     return shown ? { supported: true, shown: true } : { supported: false, shown: false, reason: "not_ready" };
   }
 
-  async function showRewarded() {
+  async function showRewarded(placement, requestId) {
     const failed = { supported: true, shown: false, rewarded: false, reason: "failed" };
+    const timeout = { ...failed, reason: "timeout" };
     const rewarded = await withAdDeadline(withSdk((sdk) => {
       if (typeof sdk.rewardedBreak !== "function") return null;
-      return sdk.rewardedBreak();
-    }), failed);
+      return sdk.rewardedBreak({ onStart: () => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true); } }).then((result) => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); return result; });
+    }).catch(() => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); return failed; }), timeout);
+    if (rewarded === timeout) return timeout;
     if (rewarded === failed) return failed;
     if (rewarded === null) {
       return { supported: false, shown: false, rewarded: false, reason: "not_ready" };
@@ -187,7 +191,7 @@ export function createPokiPlatformAdapter({ host }) {
       return { canRead: false, canWrite: false, needsLogin: false, nativePopup: false };
     },
     loadData() {
-      return Promise.resolve(null);
+      return Promise.resolve({ status: "unavailable" });
     },
     login() {
       return Promise.resolve({ supported: false, authorized: false, reason: "unsupported", name: "", avatarUrl: "" });
@@ -195,7 +199,7 @@ export function createPokiPlatformAdapter({ host }) {
     measure,
     ready,
     saveData() {
-      return Promise.resolve();
+      return Promise.resolve({ status: "unavailable" });
     },
     showBanner() {
       return { supported: false, shown: false, reason: "unsupported" };

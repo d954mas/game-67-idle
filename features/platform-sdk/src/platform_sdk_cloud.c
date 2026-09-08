@@ -1,136 +1,82 @@
 #include "features/platform_sdk/platform_sdk_cloud.h"
 
-#include <stddef.h>
-
 #if defined(__EMSCRIPTEN__)
-
+#include "features/platform_sdk/platform_sdk.h"
 #include <emscripten/emscripten.h>
 #include <stdlib.h>
 
+EMSCRIPTEN_KEEPALIVE
+void platform_sdk_cloud_web_complete_load(uint32_t id, int status, char *text) {
+    platform_sdk_cloud_complete_load(id, (platform_sdk_cloud_status_t)status, text);
+    free(text);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void platform_sdk_cloud_web_complete_store(uint32_t id, int status) {
+    platform_sdk_cloud_complete_store(id, (platform_sdk_cloud_write_status_t)status);
+}
+
 /* clang-format off */
-EM_JS_DEPS(platform_sdk_cloud, "$UTF8ToString,$lengthBytesUTF8,$stringToUTF8,malloc,free")
+EM_JS_DEPS(platform_sdk_cloud, "$UTF8ToString,$stringToNewUTF8,malloc,free")
 
-EM_JS(int, platform_sdk_cloud_web_supported, (void), {
+EM_JS(int, web_supported, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
-    return (backend && typeof backend.loadData === "function" &&
-            typeof backend.saveData === "function") ? 1 : 0;
+    return backend && typeof backend.loadData === "function" &&
+        typeof backend.saveData === "function" ? 1 : 0;
 })
 
-EM_JS(void, platform_sdk_cloud_web_load, (const char *key_ptr), {
+EM_JS(void, web_load, (uint32_t id, const char *key_ptr), {
     var backend = globalThis.__platformSdkInternalBackend;
-    var state = globalThis.__platformSdkCloud || (globalThis.__platformSdkCloud = {});
-    state.status = 1;
-    state.value = null;
-    if (!backend || typeof backend.loadData !== "function") {
-        state.status = 4;
-        return;
-    }
-    var ticket = (state.ticket || 0) + 1;
-    state.ticket = ticket;
-    try {
-        Promise.resolve(backend.loadData(UTF8ToString(key_ptr))).then(function (value) {
-            if (state.ticket !== ticket) return;
-            /* Adapters hand back JSON values, and a stored JSON text comes back
-               parsed; the C side owns a text, so an object is put back as one. */
-            if (value !== null && value !== undefined && typeof value !== "string") {
-                try { value = JSON.stringify(value); } catch (e) { value = null; }
-            }
-            if (typeof value === "string" && value.length > 0) {
-                state.value = value;
-                state.status = 2;
-            } else {
-                state.status = 3;
-            }
-        }, function () {
-            if (state.ticket !== ticket) return;
-            state.status = 4;
-        });
-    } catch (e) {
-        state.status = 4;
-    }
-})
-
-EM_JS(int, platform_sdk_cloud_web_status, (void), {
-    var state = globalThis.__platformSdkCloud;
-    return state ? (state.status | 0) : 0;
-})
-
-EM_JS(char *, platform_sdk_cloud_web_take, (void), {
-    var state = globalThis.__platformSdkCloud;
-    if (!state || state.status !== 2 || typeof state.value !== "string") return 0;
-    var size = lengthBytesUTF8(state.value) + 1;
-    var ptr = _malloc(size);
-    if (!ptr) return 0;
-    stringToUTF8(state.value, ptr, size);
-    state.value = null;
-    state.status = 3;
-    return ptr;
-})
-
-/* Portals throttle player data hard (Yandex accepts roughly one write a
-   second and answers the rest with an error), while an autosave fires
-   whenever the run changes. One write is in flight at a time and only the
-   newest text queued behind it is ever sent: the intermediate states of a
-   save nobody has loaded yet are worth nothing. */
-EM_JS(void, platform_sdk_cloud_web_store, (const char *key_ptr, const char *text_ptr), {
-    var backend = globalThis.__platformSdkInternalBackend;
-    if (!backend || typeof backend.saveData !== "function") return;
-    var state = globalThis.__platformSdkCloud || (globalThis.__platformSdkCloud = {});
-    state.pendingKey = UTF8ToString(key_ptr);
-    state.pendingText = UTF8ToString(text_ptr);
-    if (state.writing) return;
-    var flush = function () {
-        if (state.pendingText === null || state.pendingText === undefined) {
-            state.writing = false;
-            return;
+    var key = UTF8ToString(key_ptr);
+    Promise.resolve().then(function () {
+        return backend.loadData(key);
+    }).then(function (result) {
+        if (!result) throw new Error("Missing storage result");
+        if (result.status === "missing") {
+            _platform_sdk_cloud_web_complete_load(id, 3, 0);
+        } else if (result.status === "unavailable") {
+            _platform_sdk_cloud_web_complete_load(id, 4, 0);
+        } else if (result.status === "found") {
+            var text = typeof result.value === "string" ? result.value : JSON.stringify(result.value);
+            if (typeof text !== "string") throw new Error("Invalid storage value");
+            var pointer = stringToNewUTF8(text);
+            if (!pointer) throw new Error("Storage allocation failed");
+            _platform_sdk_cloud_web_complete_load(id, 2, pointer);
+        } else {
+            _platform_sdk_cloud_web_complete_load(id, 5, 0);
         }
-        var key = state.pendingKey;
-        var text = state.pendingText;
-        state.pendingText = null;
-        state.writing = true;
-        var done = function () {
-            (globalThis.setTimeout || setTimeout)(flush, 3000);
-        };
-        try {
-            Promise.resolve(backend.saveData(key, text)).then(done, done);
-        } catch (e) {
-            done();
-        }
-    };
-    flush();
+    }).catch(function () { _platform_sdk_cloud_web_complete_load(id, 5, 0); });
+})
+
+EM_JS(void, web_store, (uint32_t id, const char *key_ptr, const char *text_ptr), {
+    var backend = globalThis.__platformSdkInternalBackend;
+    var key = UTF8ToString(key_ptr);
+    var text = UTF8ToString(text_ptr);
+    Promise.resolve().then(function () { return backend.saveData(key, text); }).then(function (result) {
+        var status = result && result.status === "acknowledged" ? 2 :
+            result && result.status === "unavailable" ? 3 : 4;
+        _platform_sdk_cloud_web_complete_store(id, status);
+    }).catch(function () { _platform_sdk_cloud_web_complete_store(id, 4); });
 })
 /* clang-format on */
 
-bool platform_sdk_cloud_supported(void) { return platform_sdk_cloud_web_supported() != 0; }
-
-void platform_sdk_cloud_load(const char *key) {
-    if (key == NULL || key[0] == '\0') return;
-    platform_sdk_cloud_web_load(key);
+static bool supported(void *context) {
+    (void)context;
+    return platform_sdk_storage_supported() && web_supported() != 0;
 }
-
-platform_sdk_cloud_status_t platform_sdk_cloud_status(void) {
-    switch (platform_sdk_cloud_web_status()) {
-        case 1: return PLATFORM_SDK_CLOUD_PENDING;
-        case 2: return PLATFORM_SDK_CLOUD_READY;
-        case 3: return PLATFORM_SDK_CLOUD_EMPTY;
-        case 4: return PLATFORM_SDK_CLOUD_UNAVAILABLE;
-        default: return PLATFORM_SDK_CLOUD_IDLE;
-    }
+static void load(uint32_t id, const char *key, void *context) {
+    (void)context;
+    web_load(id, key);
 }
-
-char *platform_sdk_cloud_take(void) { return platform_sdk_cloud_web_take(); }
-
-void platform_sdk_cloud_store(const char *key, const char *text) {
-    if (key == NULL || key[0] == '\0' || text == NULL) return;
-    platform_sdk_cloud_web_store(key, text);
+static void store(uint32_t id, const char *key, const char *text, void *context) {
+    (void)context;
+    web_store(id, key, text);
+}
+void platform_sdk_cloud_install_web_backend(void) {
+    const platform_sdk_cloud_backend_t backend = { .supported = supported, .load = load, .store = store };
+    platform_sdk_cloud_set_backend(&backend, NULL);
 }
 
 #else
-
-bool platform_sdk_cloud_supported(void) { return false; }
-void platform_sdk_cloud_load(const char *key) { (void)key; }
-platform_sdk_cloud_status_t platform_sdk_cloud_status(void) { return PLATFORM_SDK_CLOUD_UNAVAILABLE; }
-char *platform_sdk_cloud_take(void) { return NULL; }
-void platform_sdk_cloud_store(const char *key, const char *text) { (void)key; (void)text; }
-
+void platform_sdk_cloud_install_web_backend(void) {}
 #endif

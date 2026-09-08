@@ -464,6 +464,37 @@ void test_undersized_hot_buffer_keeps_last_complete_save(void) {
     free(before);
 }
 
+void test_hot_snapshot_round_trips_playtime_and_saturates_import(void) {
+    static char snapshot[512];
+    game_save_set_hot_snapshot_buffer(snapshot, sizeof snapshot);
+    game_save_update_playtime(true);
+    g_mono_ms += 1;
+    game_save_update_playtime(true);
+    TEST_ASSERT_EQUAL_INT64(1, game_save_playtime_ms());
+    g_mono_ms += GAME_SAVE_DEBOUNCE_MS;
+    game_save_tick();
+    char *raw = read_raw(PRIMARY_PATH);
+    TEST_ASSERT_NOT_NULL(raw);
+    TEST_ASSERT_NOT_NULL(strstr(raw, "playtime_ms=1"));
+    free(raw);
+
+    game_save_init();
+    game_save_load(NULL);
+    TEST_ASSERT_EQUAL_INT64(1, game_save_playtime_ms());
+
+    const char *near_limit =
+        "{\"format\":1,\"save_version\":2,\"saved_at\":1,\"save_seq\":1,"
+        "\"playtime_ms\":\"9223372036854775806\",\"app\":\"template_save_test\",\"build\":\"0\","
+        "\"features\":{\"game\":{\"v\":1,\"coins\":1,\"name\":\"n\"},"
+        "\"extra\":{\"v\":1,\"mark\":1}}}";
+    TEST_ASSERT_TRUE(game_save_import_string(near_limit, NULL, 0));
+    game_save_update_playtime(true);
+    g_mono_ms += 10;
+    game_save_update_playtime(true);
+    TEST_ASSERT_EQUAL_INT64(INT64_MAX, game_save_playtime_ms());
+    TEST_ASSERT_EQUAL_INT64(INT64_MAX, game_save_playtime_ms());
+}
+
 /* 1. Envelope round trip. */
 void test_envelope_round_trip(void) {
     char err[128] = {0};
@@ -1258,6 +1289,7 @@ int main(void) {
     RUN_TEST(test_absent_hot_buffer_uses_legacy_save_path);
     RUN_TEST(test_configured_hot_buffer_uses_no_cjson_allocation);
     RUN_TEST(test_undersized_hot_buffer_keeps_last_complete_save);
+    RUN_TEST(test_hot_snapshot_round_trips_playtime_and_saturates_import);
     RUN_TEST(test_envelope_round_trip);
     RUN_TEST(test_fresh_runs_on_new_game);
     RUN_TEST(test_new_game_runs_on_new_game);

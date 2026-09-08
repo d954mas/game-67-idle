@@ -17,10 +17,12 @@ import {
 import { smokePackagedWebArtifact } from "./package_web_smoke.mjs";
 import { createRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
-
 const GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const PACKAGE_TARGETS = new Set(["itch", "poki", "yandex", "playgama", "crazygames"]);
-const BUILD_TARGETS = new Set(["local", ...PACKAGE_TARGETS]);
+const TARGET_CONFIG = await import(pathToFileURL(join(
+  findStudioRoot(GAME_DIR), "features", "platform-sdk", "publish-targets", "target_config.mjs",
+)).href);
+const PACKAGE_TARGETS = new Set(TARGET_CONFIG.portalTargetNames());
+const BUILD_TARGETS = new Set(TARGET_CONFIG.targetNames());
 const COMMANDS = new Set(["doctor", "build", "run", "test", "playable", "package", "portal-check", "verify"]);
 // The tier vocabulary is shared with cmake/GameTests.cmake; CTest labels carry it.
 export const TEST_TIERS = ["core", "slow", "taste"];
@@ -41,6 +43,7 @@ export function parseGameArgs(argv) {
   const args = {
     command,
     target: ["playable", "package", "verify"].includes(command) ? "itch" : "local",
+    targetSpecified: false,
     build: true,
     templateProof: false,
     skipTests: false,
@@ -52,7 +55,7 @@ export function parseGameArgs(argv) {
   };
   for (let index = 1; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === "--target") args.target = argv[++index] || "";
+    if (arg === "--target") { args.target = argv[++index] || ""; args.targetSpecified = true; }
     else if (arg === "--no-build") args.build = false;
     else if (arg === "--template-proof") args.templateProof = true;
     else if (arg === "--skip-tests") args.skipTests = true;
@@ -74,11 +77,14 @@ export function parseGameArgs(argv) {
   if (!BUILD_TARGETS.has(args.target) || (["package", "verify"].includes(command) && !PACKAGE_TARGETS.has(args.target))) {
     throw new Error(`unknown target for ${command}: ${args.target}`);
   }
+  if (command === "portal-check" && !args.targetSpecified) throw new Error("portal-check requires --target <portal>");
+  if (command === "portal-check" && !PACKAGE_TARGETS.has(args.target)) throw new Error("portal-check requires a portal target");
   if (!args.build && !["playable", "package", "verify"].includes(command)) throw new Error(`--no-build is not valid for ${command}`);
   if (args.templateProof && !["package", "verify"].includes(command)) throw new Error(`--template-proof is not valid for ${command}`);
   if (args.skipTests && command !== "verify") throw new Error(`--skip-tests is not valid for ${command}`);
   if (args.skipTests && !args.templateProof) throw new Error("--skip-tests is valid only with --template-proof");
   if (args.outDir && !["package", "verify"].includes(command)) throw new Error(`--out is not valid for ${command}`);
+  delete args.targetSpecified;
   return args;
 }
 
@@ -258,6 +264,7 @@ function artifactDir(gameDir, target) {
    the store spec -- and a release is only ready when all three agree, so they
    are asked together rather than remembered separately. */
 export function portalCheckPlan(studioRoot, gameDir, target, { exists = existsSync } = {}) {
+  if (!PACKAGE_TARGETS.has(target)) throw new Error("portal-check requires a portal target");
   const steps = [];
   steps.push({
     id: "artifact",
@@ -345,11 +352,13 @@ function gamePackageMetadata(gameDir, templateProof) {
   return { dependencies: validateDependencies(readJson(join(gameDir, "dependencies.json"), "dependencies")), proof: "game" };
 }
 
-async function auditGameReleaseAssets({ gameDir, artifactDir: releaseArtifactDir, studioRoot, dependencies }) {
+async function auditGameReleaseAssets({ gameDir, artifactDir: releaseArtifactDir, studioRoot, dependencies, target }) {
   const modulePath = join(studioRoot, "ai_studio", "assets", "manifests", "game_release.mjs");
   const { assertGameReleaseAssets } = await import(pathToFileURL(modulePath).href);
   const result = assertGameReleaseAssets(gameDir);
-  const runtimeBuild = createRuntimeBuildRecord({ gameDir, studioRoot, dependencies });
+  const runtimeBuild = createRuntimeBuildRecord({
+    gameDir, studioRoot, dependencies, compileProfile: TARGET_CONFIG.compileProfileForTarget(target, "wasm-release"),
+  });
   const assetPack = readFileSync(join(releaseArtifactDir, "assets", "game.ntpack"));
   return {
     schema: "ai_studio.game_release_asset_audit.v1",
@@ -367,7 +376,7 @@ export async function packageGame(options, dependencies = {}, metadata = null) {
   const studioRoot = findStudioRoot(gameDir);
   const releaseArtifactDir = artifactDir(gameDir, options.target);
   const assetAuditProof = await (dependencies.assetAudit || auditGameReleaseAssets)({
-    gameDir, artifactDir: releaseArtifactDir, studioRoot, dependencies: proof.dependencies,
+    gameDir, artifactDir: releaseArtifactDir, studioRoot, dependencies: proof.dependencies, target: options.target,
   });
   return packageWebArtifact({
     gameDir,

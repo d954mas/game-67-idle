@@ -1,4 +1,5 @@
 #include "game_save.h"
+#include "game_save_playtime_internal.h"
 
 #include "game_storage.h"
 #if !defined(GAME_SAVE_TESTING)
@@ -49,6 +50,7 @@ typedef struct {
     text_fragment_t fragments[GAME_SAVE_MAX_FRAGMENTS];
     int64_t saved_at;
     int64_t save_seq;
+    int64_t playtime_ms;
 } text_document_t;
 
 typedef enum {
@@ -72,6 +74,7 @@ static int64_t s_dirty_at;
 static int64_t s_last_save_mono;
 static int64_t s_last_saved_at;
 static int64_t s_save_seq;
+static game_save_playtime_t s_playtime;
 static int64_t (*s_mono_clock)(void);
 static int64_t (*s_wall_clock)(void);
 
@@ -85,6 +88,10 @@ static int64_t default_wall_ms(void) { return game_save_platform_wall_ms(); }
 
 static int64_t mono_now(void) { return s_mono_clock != NULL ? s_mono_clock() : 0; }
 static int64_t wall_now(void) { return s_wall_clock != NULL ? s_wall_clock() : 0; }
+
+static void set_playtime_ms(int64_t value) {
+    game_save_playtime_set(&s_playtime, value, mono_now());
+}
 
 static void set_error(char *error, int error_cap, const char *message) {
     if (error != NULL && error_cap > 0) {
@@ -165,6 +172,7 @@ static bool write_document(
         !game_save_text_write_i64(writer, "save_version", GAME_SAVE_DOC_VERSION) ||
         !game_save_text_write_i64(writer, "saved_at", saved_at) ||
         !game_save_text_write_i64(writer, "save_seq", save_seq) ||
+        !game_save_text_write_i64(writer, "playtime_ms", s_playtime.milliseconds) ||
         !game_save_text_write_string(writer, "app", GAME_STORAGE_APP_ID) ||
         !game_save_text_write_string(writer, "build", GAME_SAVE_BUILD)) {
         return false;
@@ -247,6 +255,7 @@ static text_document_status_t scan_document(
         META_SAVE_SEQ = 1U << 3,
         META_APP = 1U << 4,
         META_BUILD = 1U << 5,
+        META_PLAYTIME = 1U << 6,
         META_REQUIRED = (1U << 6) - 1U,
     };
     unsigned metadata = 0U;
@@ -307,6 +316,9 @@ static text_document_status_t scan_document(
         } else if (game_save_text_record_key_is(&record, "save_seq")) {
             bit = META_SAVE_SEQ;
             valid = read_meta_i64(&record, 0, INT64_MAX, &document->save_seq, error, error_cap);
+        } else if (game_save_text_record_key_is(&record, "playtime_ms")) {
+            bit = META_PLAYTIME;
+            valid = read_meta_i64(&record, 0, INT64_MAX, &document->playtime_ms, error, error_cap);
         } else if (game_save_text_record_key_is(&record, "app")) {
             bit = META_APP;
             valid = game_save_text_record_string(
@@ -398,6 +410,7 @@ static bool publish_document(
     }
     s_save_seq = document->save_seq;
     s_last_saved_at = document->saved_at;
+    set_playtime_ms(document->playtime_ms);
     reconcile_all();
     return true;
 }
@@ -416,6 +429,7 @@ static bool load_text(
 
 static void start_fresh(game_save_load_result_t *result, const char *message) {
     reset_all_except(NULL);
+    set_playtime_ms(0);
     seed_all_except(NULL);
     s_autosave_paused = false;
     s_quarantine_owed = false;
@@ -451,6 +465,7 @@ static void quarantine_and_start(
     const char *message, char *error, int error_cap) {
     if (!game_storage_quarantine(GAME_SAVE_AUTOSAVE_SLOT, error, error_cap)) {
         reset_all_except(NULL);
+        set_playtime_ms(0);
         seed_all_except(NULL);
         s_quarantine_owed = true;
         s_autosave_paused = true;
@@ -555,6 +570,7 @@ void game_save_init(void) {
     s_last_save_mono = 0;
     s_last_saved_at = 0;
     s_save_seq = 0;
+    set_playtime_ms(0);
     char error[128] = {0};
     if (!game_storage_probe(error, (int)sizeof error)) {
         s_unpersisted = true;
@@ -610,6 +626,7 @@ void game_save_load(game_save_load_result_t *result) {
 
 static void begin_new_game(const char *skip_id) {
     reset_all_except(skip_id);
+    set_playtime_ms(0);
     seed_all_except(skip_id);
     if (s_quarantine_owed) {
         char error[128] = {0};
@@ -697,6 +714,14 @@ void game_save_mark_dirty(void) {
     }
 }
 
+int64_t game_save_playtime_ms(void) { return s_playtime.milliseconds; }
+
+void game_save_update_playtime(bool active) {
+    if (game_save_playtime_update(&s_playtime, mono_now(), active)) {
+        game_save_mark_dirty();
+    }
+}
+
 int64_t game_save_last_saved_at(void) { return s_last_saved_at; }
 
 bool game_save_is_unpersisted(void) { return s_unpersisted; }
@@ -761,6 +786,12 @@ bool game_save_import_string(const char *text, char *error, int error_cap) {
     s_autosave_paused = false;
     game_save_mark_dirty();
     return true;
+}
+
+bool game_save_validate_document_string(const char *text, char *error, int error_cap) {
+    (void)text;
+    set_error(error, error_cap, "full document validation is unavailable for text-only saves");
+    return false;
 }
 
 void game_save_set_transforms(const game_save_transform_t *chain, int count) {

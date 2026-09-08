@@ -8,7 +8,7 @@ import test from "node:test";
 
 import { doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, selectTests } from "./game.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
-import { createRuntimeBuildRecord } from "./lib/runtime_build.mjs";
+import { createRuntimeBuildRecord, runtimeBuildWitness } from "./lib/runtime_build.mjs";
 
 const gameModuleRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const studioRoot = findStudioRoot(gameModuleRoot);
@@ -30,12 +30,22 @@ const RELEASE_WASM = Buffer.from([
   0x0a, 0x04, 0x01, 0x02, 0x00, 0x0b,
 ]);
 
+function uleb(value) {
+  const bytes = [];
+  do {
+    let next = value & 0x7f;
+    value >>>= 7;
+    if (value) next |= 0x80;
+    bytes.push(next);
+  } while (value);
+  return Buffer.from(bytes);
+}
+
 function runtimeBoundWasm(record) {
   const name = Buffer.from("runtime_build", "ascii");
-  const marker = Buffer.from(`ai_studio.runtime_build:${record.fingerprint}`, "ascii");
-  const payloadSize = 1 + name.length + marker.length;
-  assert.ok(payloadSize < 128);
-  return Buffer.concat([RELEASE_WASM, Buffer.from([0, payloadSize, name.length]), name, marker]);
+  const marker = Buffer.from(runtimeBuildWitness(record), "ascii");
+  const payload = Buffer.concat([uleb(name.length), name, marker]);
+  return Buffer.concat([RELEASE_WASM, Buffer.from([0]), uleb(payload.length), payload]);
 }
 
 function write(path, value) {
@@ -68,6 +78,8 @@ test("game CLI exposes game-owned lifecycle commands with fail-closed arguments"
   }
   assert.throws(() => parseGameArgs(["unknown"]), /usage:/);
   assert.throws(() => parseGameArgs(["package", "--target", "bad"]), /unknown target/);
+  assert.throws(() => parseGameArgs(["portal-check"]), /requires --target/);
+  assert.throws(() => parseGameArgs(["portal-check", "--target", "local"]), /portal target/);
   assert.throws(() => parseGameArgs(["doctor", "--no-build"]), /not valid/i);
   assert.throws(() => parseGameArgs(["verify", "--skip-tests"]), /template-proof/i);
 });
@@ -258,6 +270,7 @@ test("copied game CLI executes doctor and final package from a real games/privat
     gameDir,
     studioRoot: root,
     dependencies: JSON.parse(readFileSync(join(gameDir, "dependencies.json"), "utf8")),
+    compileProfile: { target: "itch", adapter: "mock", preset: "wasm-release", debugUi: false, devapi: false, analytics: false, eventsLogMirror: false },
   });
   const artifact = join(gameDir, "build", "wasm-release-itch", "bin");
   write(join(artifact, "index.html"), `<!doctype html><script>window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: 'itch', platformSdk: 'mock', release: true, runtimeBuildFingerprint: '${runtimeBuild.fingerprint}' });</script><script src='game.js'></script>\n`);

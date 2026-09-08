@@ -29,6 +29,7 @@ format=1
 save_version=2
 saved_at=1788012345678
 save_seq=42
+playtime_ms=1250
 app="sample-game"
 build="0"
 
@@ -44,6 +45,21 @@ tutorial_done=true
 Blank lines and lines beginning with `#` are ignored. Unknown fields are
 preserved by legacy import paths or ignored by tolerant fragment readers;
 duplicate known fields and invalid typed values are rejected.
+
+## Active playtime
+
+The template and all current games count active playtime by default. Read it
+with `game_save_playtime_ms()`; it persists with the save, starts at zero for
+legacy saves, and resets on New Game. The game owns the activity gate through
+`game_save_update_playtime(active)`; the shared counter reads monotonic time.
+Pauses, ads, and browser lifecycle suspension close the active interval.
+A custom shell calls the update once per frame and with false before its
+native shutdown flush. Simulation speed never changes recorded playtime.
+
+`game_save_validate_document_string(text, error, cap)` validates an encoded
+JSON or NTGS document without publishing live state. It requires a registered
+staged document validator. Text-only builds return unsupported because they
+cannot stage-validate fragment input without mutation.
 
 ## Contents
 
@@ -129,6 +145,27 @@ node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/genera
 
 Runtime state cannot be disabled (no build flag). To remove DevAPI commands
 from the build, configure `GAME_DEVAPI_ENABLED=OFF`.
+
+## Save synchronization
+
+`game_save_cloud.h` is the optional shared runtime for the registered save.
+It owns cloud retries, the exact in-flight snapshot, durable adoption, and the
+last acknowledged base. The template's `systems/sys_cloud_save` only binds
+the platform transport. Compile the shared source in place; do not copy it
+into each game.
+
+The game supplies its progress policy and controls startup, tick, and the
+safe point where a remote save may replace live state. Successful adoption
+returns true so the game can rebind its own world and UI. A single
+`game_save_choice_t` carries automatic and player decisions. Contradictory
+progress can remain a conflict for game-owned UI. No generic layer interprets
+levels, currency, playtime, or content.
+
+`game_save_sync.h` remains the smaller, transport-independent building block
+for consumers with their own save shell. Its documents are opaque; the caller
+supplies transport, validation, persistence, and retry scheduling. Failed or
+unknown reads prohibit uploads, and only an acknowledgment advances the base
+to the exact sent snapshot.
 
 ## Commands
 
