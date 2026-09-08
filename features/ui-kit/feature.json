@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "ui-kit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "title": "UI Kit",
   "status": "reusable",
   "kind": "presentation",
@@ -25,7 +25,7 @@
     "ui_tokens_t design tokens with a studio default sheet",
     "ui_scale_fit short-edge canvas rule with a density floor and cap",
     "ui_frame_begin / ui_metrics per-frame sizes in UI units and CSS pixels",
-    "ui_theme_init token-driven engine styles in g_ui_theme",
+    "ui_theme_init token-driven engine styles in g_ui_theme, dropdown included",
     "ui_kit panel/tile/scrim/label/button/meter widgets and the UI_LAYER_* order",
     "ui_safe_area device insets",
     "gen_ui_kit.py slice9 art generator driven by a token sheet"

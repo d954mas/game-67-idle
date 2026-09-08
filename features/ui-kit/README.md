@@ -41,8 +41,10 @@ set the bar: a prototype should not have to design a UI before it has a game.
 - `ui_metrics.h` — `ui_frame_begin()` (the consumer's UI runtime opens the
   frame), then `ui_metrics()`, `ui_css()`, `ui_css_unit()`.
 - `ui_theme.h` — `ui_theme_init(tokens, art)` and the mutable `g_ui_theme`
-  carrying every engine style. The CONSUMER resolves the atlas regions, because
-  it owns its pack builder and generated asset ids.
+  carrying every engine style, the `dropdown` pick-one style among them (a
+  screen calls the engine's `nt_ui_combo_*` with it and sets `min_width` to its
+  own content box). The CONSUMER resolves the atlas regions, because it owns its
+  pack builder and generated asset ids.
 - `ui_kit.h` — the widgets: panel, tile, scrim, label, shadowed label, button,
   meter, slider style, touch-target height, and the `UI_LAYER_*` order every
   surface sorts on.

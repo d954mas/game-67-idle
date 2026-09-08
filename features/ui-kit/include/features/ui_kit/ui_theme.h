@@ -3,6 +3,7 @@
 
 #include "atlas/nt_atlas.h"
 #include "ui/nt_ui_button.h"
+#include "ui/nt_ui_dropdown.h"
 #include "ui/nt_ui_image.h"
 #include "ui/nt_ui_label.h"
 #include "ui/nt_ui_progress.h"
@@ -45,6 +46,7 @@ typedef struct {
     nt_ui_button_style_t button_info;    // a secondary or rewarded action; never green
     nt_ui_button_style_t button_danger;  // destructive action
     nt_ui_slider_style_t slider;         // track + fill + thumb
+    nt_ui_dropdown_style_t dropdown;     // pick-one list: tile trigger, tile panel
     nt_ui_progress_style_t progress;     // meter drawn from the slider art
 
     // Label styles. font_size is a CSS-pixel ramp step; see the note above.

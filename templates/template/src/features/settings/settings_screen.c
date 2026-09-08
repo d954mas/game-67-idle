@@ -5,6 +5,7 @@
 #include "game_save.h" /* Р11 hold-to-reset: game_save_request_new_game (L0 shell) */
 
 #include "clay.h"
+#include "ui/nt_ui_dropdown.h"
 #include "ui/nt_ui_slider.h"
 #include "ui/theme.h"
 #include "ui/loc_widgets.h"
@@ -18,8 +19,15 @@ static bool s_save_conflict_visible;
 static bool s_save_conflict_remote_available;
 static game_save_choice_t s_save_conflict_choice;
 
+// The open list is game-owned state: closing the panel folds it, so the picker
+// never reopens already unrolled.
+static bool s_language_open;
+
 void settings_open(void)  { (void)game_scenes_show_settings(); }
-void settings_close(void) { (void)game_scenes_close_settings(); }
+void settings_close(void) {
+    s_language_open = false; // the picker never reopens with the panel
+    (void)game_scenes_close_settings();
+}
 bool settings_is_open(void) {
     return game_scenes_is_presented(GAME_SCENE_SETTINGS);
 }
@@ -70,23 +78,42 @@ static const LocKey0 LANGUAGE_NAMES[] = {LOC0_SETTINGS_LANG_EN, LOC0_SETTINGS_LA
 _Static_assert((int)(sizeof LANGUAGE_NAMES / sizeof LANGUAGE_NAMES[0]) == SETTINGS_STATE_LANGUAGE_COUNT,
                "a language in state/settings.schema.json has no endonym key");
 
-// One button cycling the languages: label + the CURRENT language in its own
-// name. The switch is immediate -- every accessor reads the active language on
-// the next call, so the next frame is already translated.
+/* Clay hashes a widget id from its string, so every row needs its own literal.
+   These are the ids a DevAPI bot clicks. */
+static const char *const LANGUAGE_ROW_IDS[] = {"settings/language/0", "settings/language/1"};
+_Static_assert((int)(sizeof LANGUAGE_ROW_IDS / sizeof LANGUAGE_ROW_IDS[0]) == SETTINGS_STATE_LANGUAGE_COUNT,
+               "a language in state/settings.schema.json has no widget id");
+
+// The picker: a trigger carrying the CURRENT language in its own name, and a
+// list of the rest. The switch is immediate -- every accessor reads the active
+// language on the next call, so the next frame is already translated.
 static void language_row(nt_ui_context_t *ctx, const ui_metrics_t *m, bool interactive) {
     const int current = settings_language();
+    if (!interactive) {
+        s_language_open = false; // no list left hanging over a frozen panel
+    }
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
                      .layoutDirection = CLAY_LEFT_TO_RIGHT,
                      .childGap = (uint16_t)m->gap,
                      .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
         loc_kit_label(ctx, loc_settings_language(), &g_ui_theme.label);
-        CLAY({.id = CLAY_ID("settings/language"),
-              .layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(m)}}}) {
-            ui_kit_button_begin(ctx, nt_ui_id("settings/language/button"), &g_ui_theme.button, interactive, NULL);
+        nt_ui_combo_preview_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), UI_LAYER_TEXT,
+                                  nt_ui_id("settings/language/trigger"), &g_ui_theme.dropdown, &s_language_open);
+        CLAY({.id = CLAY_ID("settings/language/current"), .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
             loc_kit_label(ctx, loc_by_key(LANGUAGE_NAMES[current]), &g_ui_theme.button_label);
-            if (ui_kit_button_end(ctx) && interactive) {
-                settings_choose_language((current + 1) % SETTINGS_STATE_LANGUAGE_COUNT);
+        }
+        if (nt_ui_combo_preview_end(ctx)) {
+            for (int index = 0; index < SETTINGS_STATE_LANGUAGE_COUNT; index++) {
+                nt_ui_combo_selectable_begin(ctx, (uint32_t)index, index == current);
+                CLAY({.id = (Clay_ElementId){.id = nt_ui_id(LANGUAGE_ROW_IDS[index])},
+                      .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
+                    loc_kit_label(ctx, loc_by_key(LANGUAGE_NAMES[index]), &g_ui_theme.button_label);
+                }
+                if (nt_ui_combo_selectable_end(ctx) && interactive) {
+                    settings_choose_language(index);
+                }
             }
+            nt_ui_combo_end(ctx);
         }
     }
 }
