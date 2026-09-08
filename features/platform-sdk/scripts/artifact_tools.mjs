@@ -12,10 +12,13 @@ const RELEASE_DIR = join(WEB_DIR, "release");
 
 export const REAL_SDK_MARKERS = Object.freeze({
   poki: ["https://game-cdn.poki.com/scripts/v2/poki-sdk.js", "PokiSDK"],
-  yandex: ["YaGames.init", "/sdk.js"],
+  /* The Yandex loader path is a bare "/sdk.js", so the marker carries its
+     quotes: another portal's absolute URL can end in the same characters. */
+  yandex: ["YaGames.init", "\"/sdk.js\""],
   playgama: ["https://bridge.playgama.com/v2/stable/playgama-bridge.js", "bridge.initialize"],
   crazygames: ["https://sdk.crazygames.com/crazygames-sdk-v3.js", "CrazyGames"],
   wavedash: ["Wavedash", "updateLoadProgressZeroToOne"],
+  pikabu: ["https://games.pikabu.ru/sdk/sdk.js", "PkbSDK"],
 });
 
 export const DEBUG_MARKERS = Object.freeze(["Show interstitial ad", "Show rewarded ad", "debug_test"]);

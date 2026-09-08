@@ -700,12 +700,20 @@ function parseReleaseConfig(html, requireRuntimeBuild = true) {
       const fingerprintPrefix = [",", "runtimeBuildFingerprint", ":"];
       const fingerprint = tokens[fingerprintOffset + fingerprintPrefix.length];
       const endOffset = fingerprintOffset + fingerprintPrefix.length + 1;
+      /* A portal that stores nothing needs the game's own save backend named
+         here; it is the one optional member, and it is still pinned to a
+         literal https URL so a release cannot point saves anywhere else. */
+      const savePrefix = [",", "saveEndpoint", ":"];
+      const hasSaveEndpoint = tokenValuesAt(tokens, endOffset, savePrefix);
+      const saveEndpoint = hasSaveEndpoint ? tokens[endOffset + savePrefix.length] : null;
+      const closeOffset = hasSaveEndpoint ? endOffset + savePrefix.length + 1 : endOffset;
       if (target?.type !== "string" || !tokenValuesAt(tokens, middleOffset, middle)
           || adapter?.type !== "string" || !tokenValuesAt(tokens, suffixOffset, suffix)
           || !["true", "false"].includes(release?.value)
           || !tokenValuesAt(tokens, fingerprintOffset, fingerprintPrefix)
           || fingerprint?.type !== "string" || !SHA256.test(fingerprint.value)
-          || !tokenValuesAt(tokens, endOffset, ["}", ")", ";"])) {
+          || (hasSaveEndpoint && (saveEndpoint?.type !== "string" || !saveEndpoint.value.startsWith("https://")))
+          || !tokenValuesAt(tokens, closeOffset, ["}", ")", ";"])) {
         throw new Error(`release HTML has an invalid executable ${marker} assignment`);
       }
       configs.push({
@@ -713,6 +721,7 @@ function parseReleaseConfig(html, requireRuntimeBuild = true) {
         platformAdapter: adapter.value,
         release: release.value === "true",
         runtimeBuildFingerprint: fingerprint.value,
+        ...(hasSaveEndpoint ? { saveEndpoint: saveEndpoint.value } : {}),
       });
     }
   }
