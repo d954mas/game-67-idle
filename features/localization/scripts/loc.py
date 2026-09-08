@@ -313,6 +313,15 @@ MAX_ARGS = 8
 # Newline and tab are the only control characters a UI string may carry.
 ALLOWED_CONTROL = frozenset({"\n", "\t"})
 
+# A packed font carries only the charset a game asked for, and the Russian
+# glyph a sheet misses most often is the diaeresis one -- the word then renders
+# with a hole mid-sentence, in copy nobody re-reads before release. Russian
+# orthography accepts the plain letter in its place, so the corpus writes the
+# plain one and the hole cannot happen. Belarusian is deliberately NOT here:
+# there the letter is mandatory and the plain one is a spelling error.
+YO_BANNED_LANGS = frozenset({"ru"})
+YO_LETTERS = "ёЁ"
+
 
 class LocError(SystemExit):
     def __init__(self, message: str) -> None:
@@ -630,6 +639,18 @@ class Entry:
             f"key {key!r} has no text for the fallback language {fallback!r} -- the fallback language "
             "must be complete",
         )
+
+        for code, forms in self.forms.items():
+            if code.split("-")[0] not in YO_BANNED_LANGS:
+                continue
+            for cat, text in forms.items():
+                found = next((ch for ch in text if ch in YO_LETTERS), None)
+                require(
+                    found is None,
+                    f"key {key!r} language {code!r} form {cat!r}: {found!r} in {text!r} -- write the "
+                    "plain letter instead; a packed font may not carry this glyph and the word would "
+                    "render with a hole",
+                )
 
         # Placeholder parity is checked per LANGUAGE (union over that language's
         # forms), not per form: an English 'one' form may legitimately read

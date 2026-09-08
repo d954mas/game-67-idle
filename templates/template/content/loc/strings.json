@@ -10,7 +10,7 @@
       "group_separator": " ",
       "group_min_digits": 5,
       "decimal_separator": ",",
-      "alphabet": "абвгдежзийклмнопрстуфхцчшщъыьэюяё"
+      "alphabet": "абвгдежзийклмнопрстуфхцчшщъыьэюяе"
     }
   },
   "fallback": "en",
@@ -22,7 +22,7 @@
     "hud.title": { "en": "TEMPLATE", "ru": "ШАБЛОН" },
     "hud.hint": {
       "en": "empty scene - gear (top-right) opens settings",
-      "ru": "пустая сцена - шестерёнка справа вверху открывает настройки"
+      "ru": "пустая сцена - шестеренка справа вверху открывает настройки"
     },
 
     "resources.gold": { "en": "Gold", "ru": "Золото" },

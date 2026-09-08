@@ -72,7 +72,7 @@ class ValidationErrors(unittest.TestCase):
                 {
                     "hud.score": {
                         "args": {"n": "int"},
-                        "ru": "Счёт {n}",
+                        "ru": "Счет {n}",
                         "en": "Score",
                     }
                 }
@@ -80,15 +80,35 @@ class ValidationErrors(unittest.TestCase):
             "placeholder mismatch",
         )
 
+    def test_russian_diaeresis_letter_is_refused(self):
+        # A packed font may not carry it, and the word would render with a hole.
+        self.assert_rejects(
+            table_doc({"hud.score": {"ru": "Счёт", "en": "Score"}}),
+            "write the plain letter instead",
+        )
+
+    def test_belarusian_keeps_the_diaeresis_letter(self):
+        # Mandatory there: the rule is Russian-only, not a charset-wide ban.
+        doc = table_doc(
+            {"hud.score": {"ru": "Счет", "be": "Рахунак ё", "en": "Score"}},
+            languages={
+                "ru": {"group_separator": " ", "group_min_digits": 5},
+                "be": {"group_separator": " ", "group_min_digits": 5},
+                "en": {"group_separator": ",", "group_min_digits": 4},
+            },
+        )
+        table = build(doc)
+        self.assertIn("be", table.entries[0].forms)
+
     def test_arg_declared_but_unused(self):
         self.assert_rejects(
-            table_doc({"hud.score": {"args": {"n": "int"}, "ru": "Счёт", "en": "Score"}}),
+            table_doc({"hud.score": {"args": {"n": "int"}, "ru": "Счет", "en": "Score"}}),
             "declares argument(s) ['n'] that no form uses",
         )
 
     def test_arg_used_but_undeclared(self):
         self.assert_rejects(
-            table_doc({"hud.score": {"ru": "Счёт {n}", "en": "Score {n}"}}),
+            table_doc({"hud.score": {"ru": "Счет {n}", "en": "Score {n}"}}),
             "uses placeholder(s) ['n'] that are not declared",
         )
 
@@ -327,12 +347,12 @@ class SchemaIsLoadBearing(unittest.TestCase):
 
 class Warnings(unittest.TestCase):
     def test_missing_non_fallback_translation_warns(self):
-        table = build(table_doc({"hud.score": {"ru": "Счёт"}}))
+        table = build(table_doc({"hud.score": {"ru": "Счет"}}))
         self.assertEqual(len(table.warnings), 1)
         self.assertIn("no 'en' translation for 'hud.score'", table.warnings[0])
 
     def test_warning_reaches_stderr_without_failing(self):
-        _, stderr = generate(table_doc({"hud.score": {"ru": "Счёт"}}))
+        _, stderr = generate(table_doc({"hud.score": {"ru": "Счет"}}))
         self.assertIn("no 'en' translation for 'hud.score'", stderr)
 
 

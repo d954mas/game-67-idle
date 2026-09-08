@@ -82,6 +82,9 @@ heads; source working-tree changes are intentionally not transferred.
 - Game/world/UI logic is Y-up; convert Y-down input/platform data only at boundaries.
 - All user-visible text uses the engine text renderer with real fonts; no handmade
   `draw_text`.
+- Russian copy writes `е`, never `ё`. A packed font is the first place that glyph
+  goes missing, and the word then renders with a hole; the loc generator refuses
+  the letter (`features/localization`). Belarusian, which requires it, is exempt.
 - Source assets before generating: shared library, then free CC0/OFL sources, then
   generation.
 - SVG/vector/procedurally drawn art is a direction mockup only. It never becomes a

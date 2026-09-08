@@ -255,12 +255,30 @@ sixty lines a second. `loc_fallback_log_count()` exposes the count for tests.
 - a key not matching `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`
 - a malformed or unbalanced brace, or a control character other than tab/newline
 - an unknown language code with no explicit `plural_rule`
+- `ё` or `Ё` in Russian copy (see *The letter Russian copy does not
+  spell out* below)
 
 and warns (without failing) on a missing non-fallback translation.
 
 Placeholder parity is checked per language over the union of that language's
 forms, not per form: an English `one` form may read "need a coin" as long as
 some form in English still uses `{n}`.
+
+## The letter Russian copy does not spell out
+
+Russian text in a corpus writes `е`, never `ё`. A packed font carries only the
+charset the build asked for, and `ё` is the glyph a Russian sheet is missing most
+often; the word then renders with a hole in the middle, in copy nobody re-reads
+before release. Russian orthography accepts `е` in its place, so the corpus never
+puts the studio in that position. The generator refuses the letter rather than
+substituting it: the source and what the player reads must be the same string.
+
+The ban is Russian-only. Belarusian requires the letter, and `е` there is a
+spelling error, so `be` is untouched.
+
+A language's `alphabet` may still declare it. The charset is not the copy: a
+portal hands back player names the game did not write, and a name like
+`Пётр` still has to draw.
 
 ## Output determinism
 
