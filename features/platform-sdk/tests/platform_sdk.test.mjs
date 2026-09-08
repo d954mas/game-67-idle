@@ -1749,6 +1749,16 @@ test("wavedash leaderboards read and write without a login", async () => {
   adapter.destroy();
 });
 
+test("a wavedash board that cannot be resolved is a failure, not a withdrawn board", async () => {
+  const { adapter, sdk } = createWavedashFixture();
+  await adapter.ready();
+  sdk.getOrCreateLeaderboard = async () => ({ success: false, data: null, message: "network" });
+  assert.deepEqual(await adapter.submitScore("planets", 0, 10, ""), { status: "failed" });
+  assert.deepEqual((await adapter.fetchEntries("planets", 0)).status, "failed");
+  assert.deepEqual(await adapter.submitScore("", 0, 10, ""), { status: "unsupported" }, "an empty id names no board");
+  adapter.destroy();
+});
+
 test("wavedash follows the host mute switch and never drives it", async () => {
   const { adapter, audio, listeners } = createWavedashFixture({ muted: true });
   await adapter.ready();

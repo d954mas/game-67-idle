@@ -39,10 +39,10 @@
       "bundleBytes": 6313
     },
     "wavedash": {
-      "sourceSha256": "e6bf31e4add77c416435bd1756e06347d489cede19d6db50d880374ab18dae95",
-      "bundleSha256": "d9da3e518f24f643c6951a23e48a3b70da95f884bf01312b41b72bff12534228",
-      "sourceBytes": 13867,
-      "bundleBytes": 6027
+      "sourceSha256": "6589f0ab1cc54a2be795db04b9147450b0cb5f4bcb84fc91d28075977840fee0",
+      "bundleSha256": "d512346658f003e35203526e9c997d044699e682fbab6a379e1e0e7ad1113e1a",
+      "sourceBytes": 13940,
+      "bundleBytes": 6077
     }
   }
 }

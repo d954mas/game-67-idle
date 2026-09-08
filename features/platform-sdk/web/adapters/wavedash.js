@@ -206,22 +206,24 @@ export function createWavedashPlatformAdapter({ host, lifecycle }) {
      knows is resolved once per session. A board the console has not created
      yet is created on first use, ranked high-to-low. */
   async function resolveBoard(instance, boardId) {
-    if (!boardId || typeof instance.getOrCreateLeaderboard !== "function") return null;
-    if (boardIds.has(boardId)) return boardIds.get(boardId);
+    if (!boardId || typeof instance.getOrCreateLeaderboard !== "function") return { status: "unsupported" };
+    const cached = boardIds.get(boardId);
+    if (cached) return { id: cached };
     const sort = instance.LeaderboardSortOrder ? instance.LeaderboardSortOrder.DESC : 1;
     const display = instance.LeaderboardDisplayType ? instance.LeaderboardDisplayType.NUMERIC : 0;
     const response = await instance.getOrCreateLeaderboard(boardId, sort, display);
     const id = response && response.success && response.data ? response.data.id : null;
-    if (id) boardIds.set(boardId, id);
-    return id;
+    if (!id) return { status: "failed" };
+    boardIds.set(boardId, id);
+    return { id };
   }
 
   async function submitScore(boardId, scope, value, extra) {
     try {
       const instance = await sdk();
       if (!instance) return { status: "unsupported" };
-      const id = await resolveBoard(instance, boardId);
-      if (!id) return { status: "unsupported" };
+      const { id, status } = await resolveBoard(instance, boardId);
+      if (!id) return { status };
       const score = Math.max(0, Math.floor(Number(value) || 0));
       const payload = typeof extra === "string" && extra ? { extra: extra.slice(0, EXTRA_MAX) } : undefined;
       const response = await instance.uploadLeaderboardScore(id, score, true, undefined, payload);
@@ -245,8 +247,8 @@ export function createWavedashPlatformAdapter({ host, lifecycle }) {
     try {
       const instance = await sdk();
       if (!instance) return { status: "unsupported" };
-      const id = await resolveBoard(instance, boardId);
-      if (!id) return { status: "unsupported" };
+      const { id, status } = await resolveBoard(instance, boardId);
+      if (!id) return { status };
       const [top, around, mine] = await Promise.all([
         instance.listLeaderboardEntries(id, 0, TOP_ROWS, false),
         instance.listLeaderboardEntriesAroundUser(id, AROUND_AHEAD, AROUND_BEHIND, false),
