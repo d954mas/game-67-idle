@@ -1870,14 +1870,21 @@ function createPikabuFixture({
     };
   };
   const audio = [];
-  const lifecycle = { audio: (enabled) => audio.push(enabled), pause() {}, resume() {}, adVisible() {} };
+  const lifecycleCalls = [];
+  host.lifecycleCalls = lifecycleCalls;
+  const lifecycle = {
+    audio: (enabled) => audio.push(enabled),
+    pause: () => lifecycleCalls.push("pause"),
+    resume: () => lifecycleCalls.push("resume"),
+    adVisible() {},
+  };
   const adapter = createPikabuPlatformAdapter({
     config: { saveEndpoint },
     host,
     lifecycle,
     target: TargetPlatform.PIKABU,
   });
-  return { adapter, audio, calls, player, requests, remoteSaves, tokenReads: () => tokenReads };
+  return { adapter, audio, calls, host, player, requests, remoteSaves, tokenReads: () => tokenReads };
 }
 
 test("pikabu shows the loading ad it allows and only then declares the game started", async () => {
@@ -1978,4 +1985,25 @@ test("pikabu offers no board of its own", async () => {
   assert.deepEqual(await adapter.fetchEntries("planets", 0), { status: "unsupported" });
   assert.deepEqual(await adapter.showLeaderboard("planets"), { status: "unsupported" });
   assert.deepEqual(await adapter.showBanner(), { supported: false, shown: false, reason: "unsupported" });
+});
+
+test("pikabu pauses and silences the game when the tab goes away", async () => {
+  const { adapter, audio, host } = createPikabuFixture();
+  await adapter.ready();
+  const lifecycleCalls = host.lifecycleCalls;
+
+  host.document.hidden = true;
+  host.document.dispatch("visibilitychange");
+  assert.equal(audio.at(-1), false, "background audio stops");
+  assert.equal(lifecycleCalls.at(-1), "pause");
+
+  host.document.hidden = false;
+  host.document.dispatch("visibilitychange");
+  assert.equal(audio.at(-1), true);
+  assert.equal(lifecycleCalls.at(-1), "resume");
+
+  adapter.destroy();
+  host.document.hidden = true;
+  host.document.dispatch("visibilitychange");
+  assert.equal(lifecycleCalls.at(-1), "resume", "a destroyed adapter drives nothing");
 });

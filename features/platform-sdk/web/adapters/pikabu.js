@@ -30,6 +30,19 @@ export function createPikabuPlatformAdapter({ config, host, lifecycle }) {
     return (host && host.document) || (windowRef() && windowRef().document);
   }
 
+  /* The platform broadcasts no lifecycle event of its own, yet requires the
+     game to pause and fall silent when the tab goes away. The document is the
+     only signal there is, so this adapter owns that duty. */
+  const onVisibilityChange = () => {
+    if (destroyed || !lifecycle) return;
+    const hidden = Boolean(documentRef() && documentRef().hidden);
+    audio(!hidden);
+    try {
+      if (hidden) lifecycle.pause();
+      else lifecycle.resume();
+    } catch { /* the facade is not up */ }
+  };
+
   function deadline(operation, failedResult, ms) {
     return new Promise((resolve) => {
       let settled = false;
@@ -294,10 +307,18 @@ export function createPikabuPlatformAdapter({ config, host, lifecycle }) {
     return { status: "unsupported" };
   }
 
+  const visibilityDocument = documentRef();
+  if (visibilityDocument && typeof visibilityDocument.addEventListener === "function") {
+    visibilityDocument.addEventListener("visibilitychange", onVisibilityChange);
+  }
+
   return {
     destroy() {
       destroyed = true;
       sdkInstance = null;
+      if (visibilityDocument && typeof visibilityDocument.removeEventListener === "function") {
+        visibilityDocument.removeEventListener("visibilitychange", onVisibilityChange);
+      }
     },
     fetchEntries,
     gameLoadingFinished,
