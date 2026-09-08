@@ -147,7 +147,8 @@ void leaderboard_submit(leaderboard_board_t board, leaderboard_scope_t scope,
                         uint32_t value, const char *extra);
 void leaderboard_view_get(leaderboard_board_t board, leaderboard_scope_t scope,
                           leaderboard_view_t *out);
-/* Manual retry: clears the error, re-sends what is pending, fetches every scope. */
+/* Call on screen open or manual retry: clears errors, re-sends pending scores,
+ * and fetches supported scopes, queuing while the backend initializes. */
 void leaderboard_refresh_now(leaderboard_board_t board);
 bool leaderboard_open_native(leaderboard_board_t board);
 
@@ -173,6 +174,10 @@ bool leaderboard_extra_get(const char *extra, const char *key, char *out, size_t
  * started and counts as FAILED. `init` answering false makes the pack inert
  * for the session. A NULL entry answers UNSUPPORTED. */
 struct leaderboard_backend_t {
+    /* Polling backends own their cadence; otherwise the facade retries failures. */
+    bool owns_retry_cadence;
+    /* Optional startup signal; a missing reader is otherwise unavailable. */
+    bool (*initializing)(void *ud);
     leaderboard_caps_t (*caps)(leaderboard_board_t board, void *ud);
     bool (*init)(void *ud);
     bool (*submit)(leaderboard_board_t board, leaderboard_scope_t scope,
@@ -185,9 +190,9 @@ struct leaderboard_backend_t {
 
 /* Refusal rules: UNSUPPORTED latches for the session and only for the
  * capability that refused (a write refusal leaves reading alone); NEEDS_LOGIN
- * raises the board's login flag and never latches; RATE_LIMITED changes
- * nothing, the request is simply not in flight any more; FAILED counts toward
- * the retry budget and sets `view.error` once it is spent. */
+ * raises the board's login flag and never latches; RATE_LIMITED retries after
+ * a delay. FAILED uses independent read/write budgets and exposes an error
+ * when either is spent. Polling backends own their retry cadence instead. */
 void leaderboard_backend_complete_fetch(leaderboard_board_t board, leaderboard_scope_t scope,
                                         const leaderboard_page_t *page,
                                         leaderboard_result_t result);
@@ -200,6 +205,9 @@ void leaderboard_backend_auth_changed(void);
 /* The anonymous id the host stores under "lb.id"; "" before init. Backends
  * without portal identity key their rows by it. */
 const char *leaderboard_player_id(void);
+/* Latest non-NULL payload submitted for this board, even when the score was
+ * already accepted. Borrowed until the next submit or shutdown. */
+const char *leaderboard_extra(leaderboard_board_t board);
 /* The board definition init received; NULL for an invalid board. */
 const leaderboard_board_def_t *leaderboard_board_def(leaderboard_board_t board);
 

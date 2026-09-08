@@ -34,6 +34,67 @@ test("a complete manifest validates", () => {
   assert.deepEqual(validateManifest(valid()), []);
 });
 
+function twoBoards() {
+  const manifest = valid();
+  manifest.boards[0].backends.crazygames = "none";
+  const second = structuredClone(manifest.boards[0]);
+  second.id = "laps";
+  second.portal_ids.yandex = "lap_times";
+  second.portal_ids.playgama = { id: "lap_times" };
+  manifest.boards.push(second);
+  return manifest;
+}
+
+test("multiple boards may share a family with distinct portal ids", () => {
+  const manifest = twoBoards();
+  for (const id of ["distance", "wins"]) {
+    const board = structuredClone(manifest.boards[1]);
+    board.id = id;
+    board.portal_ids.yandex = id;
+    board.portal_ids.playgama = { id };
+    manifest.boards.push(board);
+  }
+  assert.deepEqual(validateManifest(manifest), []);
+});
+
+test("one target cannot mix backend families, including disabled boards", () => {
+  for (const [target, family] of [["local", "none"], ["yandex", "http"]]) {
+    const manifest = twoBoards();
+    manifest.boards[1].backends[target] = family;
+    assert.match(validateManifest(manifest).join("\n"), new RegExp(`${target}:.*one backend family`));
+  }
+});
+
+test("portal completion ids must identify one board per target", () => {
+  for (const target of ["yandex", "playgama"]) {
+    const manifest = twoBoards();
+    manifest.boards[1].portal_ids[target] = { id: "planets" };
+    assert.match(validateManifest(manifest).join("\n"), new RegExp(`${target}:.*duplicate portal id`));
+  }
+});
+
+test("CrazyGames has only one effective portal board regardless of configured names", () => {
+  const manifest = twoBoards();
+  for (const board of manifest.boards) board.backends.crazygames = "portal";
+  manifest.boards[1].portal_ids.crazygames = "laps";
+  assert.match(validateManifest(manifest).join("\n"), /crazygames:.*one portal board/);
+});
+
+test("malformed portal ids fail validation before C generation", () => {
+  for (const portalId of ["", 12, [], {}, { id: 12 }, { id: "" }, "bad\nname", "bad\0name", { id: "ok", isMain: "yes" }]) {
+    const manifest = valid();
+    manifest.boards[0].portal_ids.yandex = portalId;
+    assert.match(validateManifest(manifest).join("\n"), /portal_ids\.yandex.*must/);
+  }
+});
+
+test("quoted portal ids retain their bytes in generated C string literals", () => {
+  const manifest = valid();
+  manifest.boards[0].portal_ids.yandex = 'lap"time\\best';
+  assert.deepEqual(validateManifest(manifest), []);
+  assert.ok(generateHeader(manifest, "yandex").includes('.portal_id = "lap\\"time\\\\best",'));
+});
+
 test("a family of portal without a portal id is refused", () => {
   const manifest = valid();
   delete manifest.boards[0].portal_ids.yandex;

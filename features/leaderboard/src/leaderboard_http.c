@@ -45,9 +45,6 @@ typedef struct {
      * day would otherwise send the first value twice, once with the day still
      * stale. */
     bool send_pending;
-    /* The last payload the game submitted; the poll re-sends it because the
-     * server row holds only what the latest request carried. */
-    char extra[LEADERBOARD_EXTRA_MAX];
     lb_response_t response;
 } http_board_t;
 
@@ -246,8 +243,7 @@ static bool append_extra_fields(char *out, size_t cap, size_t *len, const char *
     return true;
 }
 
-static bool build_body(const leaderboard_http_t *self, leaderboard_board_t board, const http_board_t *b,
-                       char out[HTTP_BODY_MAX]) {
+static bool build_body(const leaderboard_http_t *self, leaderboard_board_t board, char out[HTTP_BODY_MAX]) {
     const leaderboard_board_def_t *def = leaderboard_board_def(board);
     char metric[HTTP_METRIC_MAX];
     char day_field[HTTP_METRIC_MAX + 4];
@@ -280,7 +276,7 @@ static bool build_body(const leaderboard_http_t *self, leaderboard_board_t board
     char day_pair[LB_DAY_STR_MAX + 16];
     snprintf(day_pair, sizeof day_pair, ",\"day\":\"%s\"", day);
     if (!append_text(out, HTTP_BODY_MAX, &len, day_pair) ||
-        !append_extra_fields(out, HTTP_BODY_MAX, &len, b->extra, metric, day_field) ||
+        !append_extra_fields(out, HTTP_BODY_MAX, &len, leaderboard_extra(board), metric, day_field) ||
         !append_text(out, HTTP_BODY_MAX, &len, "}")) {
         return false;
     }
@@ -297,15 +293,12 @@ static void complete_scope_page(leaderboard_board_t board, http_board_t *b, lead
                                 uint32_t value) {
     const char *player = leaderboard_player_id();
     lb_board_t ranked = scope == LEADERBOARD_SCOPE_UTC_DAY ? b->response.day : b->response.all;
-    const int place = lb_recalc_place(&ranked, player, b->extra, value);
+    const int place = lb_recalc_place(&ranked, player, leaderboard_extra(board), value,
+                                     leaderboard_board_def(board)->sort);
     int count = 0;
     for (int i = 0; i < ranked.top_count && count < LEADERBOARD_TOP_MAX; i++) {
         const lb_top_entry_t *e = &ranked.top[i];
         const bool you = strcmp(e->user_id, player) == 0;
-        /* zero rows exist only when the board held nobody but the player */
-        if (e->value == 0 && !you) {
-            break;
-        }
         leaderboard_row_t *row = &s_rows[count++];
         memset(row, 0, sizeof *row);
         row->value = e->value;
@@ -378,7 +371,7 @@ static void start_request(leaderboard_http_t *self, leaderboard_board_t board, h
     char body[HTTP_BODY_MAX];
     char payload[HTTP_PAYLOAD_MAX];
     char url[HTTP_URL_MAX];
-    bool started = build_body(self, board, b, body) &&
+    bool started = build_body(self, board, body) &&
                    lb_encode_payload(body, self->config.key, payload, sizeof payload) != 0;
     if (started) {
         const int n = snprintf(url, sizeof url, "%s?d=%s", self->config.url, payload);
@@ -527,7 +520,7 @@ static bool http_submit(leaderboard_board_t board, leaderboard_scope_t scope, ui
     if (!ready(self, board, &b) || (int)scope < 0 || (int)scope >= LEADERBOARD_SCOPE_COUNT) {
         return false;
     }
-    snprintf(b->extra, sizeof b->extra, "%s", extra != NULL ? extra : "");
+    (void)extra;
     /* The place moves with the score before the server confirms it, exactly
      * as the counter does: the last top is re-ranked around the new value. */
     if (b->response.valid) {
@@ -597,6 +590,7 @@ const leaderboard_backend_t *leaderboard_http_backend(void) {
         .fetch = http_fetch,
         .open_native = http_open_native,
         .update = http_update,
+        .owns_retry_cadence = true,
         .destroy = http_destroy,
     };
     return &backend;

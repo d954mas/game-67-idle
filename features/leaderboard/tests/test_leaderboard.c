@@ -547,8 +547,19 @@ void test_extra_rejects_garbage(void) {
     TEST_ASSERT_EQUAL_STRING("", extra);
 }
 
+void test_daily_submit_completion_cannot_acknowledge_a_new_day(void) {
+    g_mock.defer = true;
+    leaderboard_submit(g_score, LEADERBOARD_SCOPE_UTC_DAY, 100, "");
+    leaderboard_set_now_for_tests(NOON_2026_08_31 + 86400);
+    leaderboard_update();
+    leaderboard_submit(g_score, LEADERBOARD_SCOPE_UTC_DAY, 1, "");
+    leaderboard_update();
+    TEST_ASSERT_EQUAL_STRING("1", kv_get("lb.sent.score.utc_day"));
+}
+
 int main(void) {
     UNITY_BEGIN();
+    RUN_TEST(test_daily_submit_completion_cannot_acknowledge_a_new_day);
     RUN_TEST(test_board_lookup);
     RUN_TEST(test_invalid_board_is_inert);
     RUN_TEST(test_backend_that_never_readies_is_inert);

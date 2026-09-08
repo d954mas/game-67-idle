@@ -359,6 +359,106 @@ void test_body_carries_every_scope_and_the_extra(void) {
     TEST_ASSERT_NOT_NULL(strstr(body, "\"day\":\"" LOCAL_DAY "\""));
 }
 
+
+void test_relaunch_poll_keeps_extra_from_an_already_accepted_score(void) {
+    leaderboard_submit(g_score, LEADERBOARD_SCOPE_ALL_TIME, 7, "skin=hat.old;");
+    answer_ok("score", 3);
+    settle();
+    TEST_ASSERT_EQUAL_STRING("7", kv_get("lb.sent.score.all_time"));
+    leaderboard_shutdown();
+    boot();
+    leaderboard_submit(g_score, LEADERBOARD_SCOPE_ALL_TIME, 7, "skin=hat.current;");
+    send_beat();
+    char body[1024];
+    last_body(body, sizeof body);
+    TEST_ASSERT_NOT_NULL(strstr(body, "\"skin\":\"hat.current\""));
+    settle();
+    leaderboard_view_t view;
+    leaderboard_view_get(g_score, LEADERBOARD_SCOPE_ALL_TIME, &view);
+    bool found = false;
+    for (int i = 0; i < view.top_count; i++) {
+        if (view.top[i].you) {
+            found = true;
+            TEST_ASSERT_EQUAL_STRING("skin=hat.current;", view.top[i].extra);
+        }
+    }
+    TEST_ASSERT_TRUE(found);
+}
+
+void test_poll_uses_latest_extra_across_scopes_even_when_score_is_unchanged(void) {
+    leaderboard_submit(g_score, LEADERBOARD_SCOPE_ALL_TIME, 7, "skin=hat.all;");
+    leaderboard_submit(g_score, LEADERBOARD_SCOPE_UTC_DAY, 3, "skin=hat.day;");
+    answer_ok("score", 3);
+    settle();
+    leaderboard_submit(g_score, LEADERBOARD_SCOPE_UTC_DAY, 3, "skin=hat.latest;");
+    leaderboard_submit(g_score, LEADERBOARD_SCOPE_ALL_TIME, 7, NULL);
+    g_net.mono += REPEAT_S + 1;
+    send_beat();
+    char body[1024];
+    last_body(body, sizeof body);
+    TEST_ASSERT_NOT_NULL(strstr(body, "\"skin\":\"hat.latest\""));
+}
+
+void test_ascending_board_ranks_smaller_values_first_and_preserves_ties(void) {
+    leaderboard_shutdown();
+    boot_with(k_two_boards + 1, 1, "https://example.invalid/board");
+    const leaderboard_board_t laps = leaderboard_board("laps");
+    leaderboard_submit(laps, LEADERBOARD_SCOPE_ALL_TIME, 20, NULL);
+    answer_body("{\"success\":true,\"lap_time\":{\"all\":{\"top\":["
+                "{\"user_id\":\"a\",\"value\":0},{\"user_id\":\"b\",\"value\":20},"
+                "{\"user_id\":\"c\",\"value\":50}],\"userPlace\":4,\"interpolation\":[]},"
+                "\"day\":{\"top\":[],\"userPlace\":0,\"interpolation\":[],\"day\":\"" LOCAL_DAY "\"}}}");
+    settle();
+    leaderboard_view_t view;
+    leaderboard_view_get(laps, LEADERBOARD_SCOPE_ALL_TIME, &view);
+    TEST_ASSERT_TRUE(view.loaded);
+    TEST_ASSERT_EQUAL_INT(3, view.place);
+    TEST_ASSERT_FALSE(view.top[1].you);
+    TEST_ASSERT_TRUE(view.top[2].you);
+    for (int i = 1; i < view.top_count; i++) {
+        TEST_ASSERT_GREATER_OR_EQUAL_UINT32(view.top[i - 1].value, view.top[i].value);
+    }
+    leaderboard_submit(laps, LEADERBOARD_SCOPE_ALL_TIME, 5, NULL);
+    leaderboard_view_get(laps, LEADERBOARD_SCOPE_ALL_TIME, &view);
+    TEST_ASSERT_EQUAL_INT(2, view.place);
+    TEST_ASSERT_TRUE(view.top[1].you);
+}
+
+void test_ascending_board_estimates_places_past_the_top_from_better_counts(void) {
+    leaderboard_shutdown();
+    boot_with(k_two_boards + 1, 1, "https://example.invalid/board");
+    const leaderboard_board_t laps = leaderboard_board("laps");
+    leaderboard_submit(laps, LEADERBOARD_SCOPE_ALL_TIME, 2000, NULL);
+    size_t len = (size_t)snprintf(g_net.body, sizeof g_net.body,
+                                "{\"success\":true,\"lap_time\":{\"all\":{\"top\":[");
+    for (int i = 0; i < LEADERBOARD_TOP_MAX; i++) {
+        len += (size_t)snprintf(g_net.body + len, sizeof g_net.body - len,
+                               "%s{\"user_id\":\"r%d\",\"value\":%u}", i ? "," : "", i, 10u + (unsigned)i);
+    }
+    len += (size_t)snprintf(g_net.body + len, sizeof g_net.body - len,
+                           "],\"userPlace\":1001,\"interpolation\":[{\"value\":100,\"count\":100},"
+                           "{\"value\":1000,\"count\":1000}]},\"day\":{\"top\":[],\"userPlace\":0,"
+                           "\"interpolation\":[],\"day\":\"" LOCAL_DAY "\"}}}");
+    TEST_ASSERT_LESS_THAN(sizeof g_net.body, len);
+    g_net.answer = LEADERBOARD_HTTP_DONE;
+    settle();
+    leaderboard_view_t view;
+    leaderboard_view_get(laps, LEADERBOARD_SCOPE_ALL_TIME, &view);
+    const int slow_place = view.place;
+    TEST_ASSERT_GREATER_THAN_INT(1000, slow_place);
+    leaderboard_submit(laps, LEADERBOARD_SCOPE_ALL_TIME, 500, NULL);
+    leaderboard_view_get(laps, LEADERBOARD_SCOPE_ALL_TIME, &view);
+    TEST_ASSERT_GREATER_THAN_INT(view.top_count, view.place);
+    TEST_ASSERT_LESS_THAN_INT(slow_place, view.place);
+    const int middle_place = view.place;
+    send_beat();
+    leaderboard_submit(laps, LEADERBOARD_SCOPE_ALL_TIME, 50, NULL);
+    leaderboard_update();
+    leaderboard_view_get(laps, LEADERBOARD_SCOPE_ALL_TIME, &view);
+    TEST_ASSERT_GREATER_THAN_INT(view.top_count, view.place);
+    TEST_ASSERT_LESS_THAN_INT(middle_place, view.place);
+}
+
 void test_server_day_anchors_the_clock_and_the_request(void) {
     leaderboard_update();
     answer_ok_on("score", 3, NEXT_DAY);
@@ -652,6 +752,10 @@ int main(void) {
     RUN_TEST(test_serves_both_scopes_anonymously);
     RUN_TEST(test_first_update_polls_without_a_submit);
     RUN_TEST(test_body_carries_every_scope_and_the_extra);
+    RUN_TEST(test_relaunch_poll_keeps_extra_from_an_already_accepted_score);
+    RUN_TEST(test_poll_uses_latest_extra_across_scopes_even_when_score_is_unchanged);
+    RUN_TEST(test_ascending_board_ranks_smaller_values_first_and_preserves_ties);
+    RUN_TEST(test_ascending_board_estimates_places_past_the_top_from_better_counts);
     RUN_TEST(test_server_day_anchors_the_clock_and_the_request);
     RUN_TEST(test_extra_cannot_forge_the_wire_fields);
     RUN_TEST(test_second_board_uses_its_wire_name_and_declared_scopes);

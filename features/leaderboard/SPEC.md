@@ -1,8 +1,9 @@
 # Leaderboard feature pack — design contract
 
-Status: approved design, not yet implemented. This file is the contract the
-implementation is measured against; once the pack exists it becomes its
-reference doc next to `README.md` and `INSTALL.md`.
+Status: implemented draft; live portal acceptance remains unverified. This
+file is the design contract alongside `README.md` and `INSTALL.md`. Public C
+declarations in `include/features/leaderboard/leaderboard.h` define the current
+ABI; code excerpts here describe the design rather than a second header.
 
 ## 1. Why a pack
 
@@ -131,7 +132,8 @@ Refusal has four kinds and only one of them is terminal:
   survive a portal that refuses submissions.
 - `NEEDS_LOGIN` never latches. It sets `view.needs_login`, which is what raises
   the login button — the one thing that can actually fix it.
-- `RATE_LIMITED` never latches; the backend re-schedules.
+- `RATE_LIMITED` never latches; the facade retries after backoff unless the
+  backend owns its retry cadence.
 - `FAILED` never latches; the existing retry and back-off cadence applies, and
   after the fast retries are spent `view.error` is set so the screen can offer a
   manual retry.
@@ -232,39 +234,40 @@ leaderboard_ui_state_t leaderboard_ui_state(leaderboard_board_t board);
 This is the seam the capability tests assert on, and the only thing a new game's
 screen has to obey. Nothing in a game asks which portal is running.
 
+The game calls `leaderboard_refresh_now(board)` when opening the screen and
+for manual retry. It requests every supported scope and queues a fetch if the
+SDK is not ready yet. `leaderboard_update()` keeps running while the screen is
+open, including when the game world is paused behind a modal.
+
 ## 7. Backend contract
 
-One vtable, chosen once at init from the board manifest and the build target.
-
-```c
-typedef struct {
-    leaderboard_caps_t (*caps)(leaderboard_board_t board, void *ud);
-    bool (*init)(void *ud);
-    bool (*submit)(leaderboard_board_t board, leaderboard_scope_t scope,
-                   uint32_t value, const char *extra, void *ud);
-    bool (*fetch)(leaderboard_board_t board, leaderboard_scope_t scope, void *ud);
-    bool (*open_native)(leaderboard_board_t board, void *ud);
-    void (*update)(void *ud);
-    void (*destroy)(void *ud);
-} leaderboard_backend_t;
-
-void leaderboard_backend_complete_fetch(leaderboard_board_t board, leaderboard_scope_t scope,
-                                        const leaderboard_page_t *page,
-                                        leaderboard_result_t result);
-void leaderboard_backend_complete_submit(leaderboard_board_t board, leaderboard_scope_t scope,
-                                         leaderboard_result_t result);
-
-/* What a backend is allowed to ask the facade for. */
-const char *leaderboard_player_id(void);
-const leaderboard_board_def_t *leaderboard_board_def(leaderboard_board_t board);
-void leaderboard_backend_auth_changed(void); /* re-send what the portal never took */
-```
+One vtable is chosen once at init from the board manifest and build target.
+The backend vtable, completion entry points and borrowed metadata helpers are
+declared in [leaderboard.h](include/features/leaderboard/leaderboard.h).
+`leaderboard_extra(board)` exposes the most recent row payload even when the
+associated score was already acknowledged and no new submit was needed.
 
 A backend completes every request it starts; returning false from `submit` or
-`fetch` means it never started and counts as `FAILED`. The facade owns no clock,
-so `RATE_LIMITED` simply leaves the value pending for the next trigger — cadence
-is the backend's business. Consecutive failures raise `view.error` after a small
-budget, which a player-driven refresh clears.
+`fetch` means it never started and counts as `FAILED`. The facade schedules
+bounded retries for failures and backoff for `RATE_LIMITED`, while
+`NEEDS_LOGIN` waits for an auth change. Consecutive failures raise `view.error`
+after the retry budget is spent; a player-driven refresh clears it. Requested
+fetches wait through SDK startup rather than being dropped for temporarily
+missing capabilities. `UNSUPPORTED` remains a per-capability session latch.
+
+Read and write retry failures are tracked independently: a successful read
+cannot clear an exhausted write error, or vice versa. A backend's optional
+`initializing(ud)` callback distinguishes startup from permanent absence of a
+capability. Only a true answer retains a requested refresh while no read
+capability exists; a ready backend that cannot read clears that queue.
+
+Daily submissions capture the day when they start. An acknowledgment from an
+earlier day cannot persist its score as already sent for the current day.
+
+A backend that sets `owns_retry_cadence` retains responsibility for polling
+and retry timing. The HTTP backend uses that option so its existing healthy
+poll and failure cadence are not duplicated by facade retries. The game must
+continue pumping the facade while requests or retries are pending.
 
 Shipped backends:
 
@@ -273,7 +276,10 @@ Shipped backends:
   adapter contract, the EM_JS bridge and the pinned release bundles.
 - **http** — the anonymous self-hosted client: all-time plus UTC-day,
   locally re-estimated place. Its endpoint, obfuscation key and cadence arrive in
-  its own config struct from the game.
+  its own config struct from the game. The service must enforce the same sort
+  as the board manifest and return rows in that order. Histogram counts used
+  for place estimation represent scores better than the player under that
+  sort, including smaller scores for ascending boards.
 - **mock** — deterministic in-process data for tests and local development.
 
 `leaderboard_core` stays free of I/O: UTC-day math, the payload codec, response
@@ -311,6 +317,14 @@ Game-owned `leaderboards.json`, one source of truth for what boards exist.
 at run time", and a Playgama build whose host platform answers `not_available`
 simply reports no capabilities. A scope the chosen family cannot serve is
 dropped from `caps.scopes`, never faked.
+
+All boards on each publish target must select the same family, including
+`none`; the current facade does not route boards between different backends.
+Portal IDs must be unique per target. CrazyGames serves one effective board
+per game regardless of configured name, so only one board may select its
+portal family. IDs must be non-empty strings without ASCII control characters,
+or objects with such an `id` and optional boolean `isMain`; generated C escapes
+quotes and backslashes. A refused portal capability never switches to HTTP.
 
 The manifest generates the C board constants, feeds the `leaderboards` block of
 `playgama-bridge-config.json`, and prints the checklist of boards a human must
@@ -393,9 +407,9 @@ Core tier, pure, no network and no GPU:
 - the `extra` codec: round trip, truncation at the budget, garbage input;
 - remote-image on an injected capacity of two: eviction order, a frame-hot entry
   survives, the negative cache honours its delay, the concurrency cap holds;
-- manifest validation: schema, every publish target has a family, portal ids
-  exist where the family is `portal`, an unservable scope is rejected at
-  authoring time.
+- manifest validation: every publish target has one family shared by its
+  boards, portal IDs are valid and unique, CrazyGames has at most one portal
+  board, and an unservable scope is rejected at authoring time.
 
 Not tested: exact board contents, row counts, layout offsets, table capacity
 defaults, any balance number. Portal behaviour and visual acceptance are proven
@@ -407,6 +421,12 @@ Declare `leaderboards.json`, implement two host callbacks against its own save,
 call `leaderboard_submit` where its metric changes, and draw rows from
 `leaderboard_view_t` while obeying `leaderboard_ui_state`. No portal code, no
 new adapter, no fork of the row type.
+
+`example/` supplies a compilable lap-time consumer: an ascending all-time
+manifest, caller-provided save/backend wiring, a no-result sentinel owned by
+the example, explicit refresh on screen open, and a mock-backed C test. Its
+README includes template CMake wiring. It proves the integration contract
+without a complete racing game or live portal acceptance claim.
 
 ## 13. Open risks
 

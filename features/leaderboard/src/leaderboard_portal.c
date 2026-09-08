@@ -148,6 +148,12 @@ static bool portal_init(void *ud) {
     return true;
 }
 
+static bool portal_initializing(void *ud) {
+    (void)ud;
+    const platform_sdk_boot_status_t status = platform_sdk_status();
+    return status == PLATFORM_SDK_BOOT_NOT_STARTED || status == PLATFORM_SDK_BOOT_INITIALIZING;
+}
+
 /* UNSUPPORTED is the one answer that latches, so only the platform's own
  * "no such API here" earns it. Anything else -- not ready yet, torn down --
  * never started and is retried on the next trigger. */
@@ -217,6 +223,7 @@ static void portal_destroy(void *ud) {
 
 const leaderboard_backend_t *leaderboard_portal_backend(void) {
     static const leaderboard_backend_t backend = {
+        .initializing = portal_initializing,
         .caps = portal_caps,
         .init = portal_init,
         .submit = portal_submit,

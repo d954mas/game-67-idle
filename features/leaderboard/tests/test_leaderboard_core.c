@@ -121,7 +121,7 @@ static lb_board_t small_board(void) {
 
 void test_recalc_inserts_player_between_rows(void) {
     lb_board_t b = small_board();
-    TEST_ASSERT_EQUAL_INT(2, lb_recalc_place(&b, "me", "tag=toy;", 30));
+    TEST_ASSERT_EQUAL_INT(2, lb_recalc_place(&b, "me", "tag=toy;", 30, LEADERBOARD_SORT_DESC));
     TEST_ASSERT_EQUAL_STRING("tag=toy;", b.top[1].extra);
     TEST_ASSERT_EQUAL_INT(3, b.top_count);
     TEST_ASSERT_EQUAL_STRING("me", b.top[1].user_id);
@@ -132,7 +132,7 @@ void test_recalc_updates_existing_player_row(void) {
     strcpy(b.top[2].user_id, "me");
     b.top[2].value = 5;
     b.top_count = 3;
-    TEST_ASSERT_EQUAL_INT(1, lb_recalc_place(&b, "me", "", 60));
+    TEST_ASSERT_EQUAL_INT(1, lb_recalc_place(&b, "me", "", 60, LEADERBOARD_SORT_DESC));
     TEST_ASSERT_EQUAL_INT(3, b.top_count);
     TEST_ASSERT_EQUAL_STRING("me", b.top[0].user_id);
 }
@@ -140,7 +140,7 @@ void test_recalc_updates_existing_player_row(void) {
 void test_recalc_only_player_is_first(void) {
     lb_board_t b;
     memset(&b, 0, sizeof b);
-    TEST_ASSERT_EQUAL_INT(1, lb_recalc_place(&b, "me", "", 0));
+    TEST_ASSERT_EQUAL_INT(1, lb_recalc_place(&b, "me", "", 0, LEADERBOARD_SORT_DESC));
 }
 
 void test_recalc_past_full_window_uses_interpolation(void) {
@@ -154,7 +154,7 @@ void test_recalc_past_full_window_uses_interpolation(void) {
     b.interp[0] = (lb_interp_entry_t){.value = 10, .count = 500};
     b.interp[1] = (lb_interp_entry_t){.value = 2000, .count = 0};
     b.interp_count = 2;
-    const int place = lb_recalc_place(&b, "me", "", 5);
+    const int place = lb_recalc_place(&b, "me", "", 5, LEADERBOARD_SORT_DESC);
     /* below the whole window: the estimate must land past it, not at its edge */
     TEST_ASSERT_GREATER_THAN_INT(LB_TOP_MAX, place);
 }
@@ -171,12 +171,13 @@ void test_recalc_server_ranked_last_keeps_exact_place(void) {
     b.top_count = LB_TOP_MAX - 1;
     b.interp[0] = (lb_interp_entry_t){.value = 2000, .count = 500};
     b.interp_count = 1;
-    TEST_ASSERT_EQUAL_INT(LB_TOP_MAX - 1, lb_recalc_place(&b, "me", "", b.top[LB_TOP_MAX - 2].value));
+    TEST_ASSERT_EQUAL_INT(LB_TOP_MAX - 1,
+                          lb_recalc_place(&b, "me", "", b.top[LB_TOP_MAX - 2].value, LEADERBOARD_SORT_DESC));
 }
 
 void test_recalc_ties_keep_server_order(void) {
     lb_board_t b = small_board();
-    (void)lb_recalc_place(&b, "me", "", 20);
+    (void)lb_recalc_place(&b, "me", "", 20, LEADERBOARD_SORT_DESC);
     /* equal value: the earlier (server-ranked) row stays above the newcomer */
     TEST_ASSERT_EQUAL_STRING("b", b.top[1].user_id);
     TEST_ASSERT_EQUAL_STRING("me", b.top[2].user_id);

@@ -104,6 +104,33 @@ export function validateManifest(manifest, { file = "leaderboards.json" } = {}) 
 
     for (const target of Object.keys(board.portal_ids || {})) {
       if (!PUBLISH_TARGETS.includes(target)) fail(`${where}: portal_ids names unknown target ${JSON.stringify(target)}`);
+      const raw = board.portal_ids[target];
+      const object = raw !== null && typeof raw === "object" && !Array.isArray(raw);
+      const name = object ? raw.id : raw;
+      if (typeof name !== "string" || name.length === 0 || /[\u0000-\u001f\u007f]/.test(name) ||
+          (typeof raw !== "string" && !object)) {
+        fail(`${where}: portal_ids.${target} must be a non-empty string without control characters or an object with such an id`);
+      }
+      if (object && raw.isMain !== undefined && typeof raw.isMain !== "boolean") {
+        fail(`${where}: portal_ids.${target}.isMain must be a boolean`);
+      }
+    }
+  }
+
+  for (const target of PUBLISH_TARGETS) {
+    const families = new Set(boards.map((board) => board?.backends?.[target]).filter((family) =>
+      ["portal", "http", "none"].includes(family)));
+    if (families.size > 1) fail(`${target}: all boards must use one backend family`);
+    const portalBoards = boards.filter((board) => board?.backends?.[target] === "portal");
+    if (target === "crazygames" && portalBoards.length > 1) {
+      fail(`${target}: the game can declare only one portal board`);
+    }
+    const portalNames = new Set();
+    for (const board of portalBoards) {
+      const name = portalId(board, target)?.id;
+      if (typeof name !== "string" || name.length === 0) continue;
+      if (portalNames.has(name)) fail(`${target}: duplicate portal id ${JSON.stringify(name)}`);
+      portalNames.add(name);
     }
   }
   return errors;
@@ -141,7 +168,7 @@ export function generateHeader(manifest, target) {
     lines.push(`        .id = "${board.id}",`);
     lines.push(`        .sort = ${SORT_ENUM[board.sort]},`);
     lines.push(`        .scopes = ${scopeMask(board.scopes)},`);
-    lines.push(`        .portal_id = ${pid ? `"${pid.id}"` : "NULL"},`);
+    lines.push(`        .portal_id = ${pid ? JSON.stringify(pid.id) : "NULL"},`);
     lines.push("    },");
   }
   lines.push("};");
@@ -149,7 +176,7 @@ export function generateHeader(manifest, target) {
   lines.push(`#define GAME_LEADERBOARD_BOARD_COUNT ${manifest.boards.length}`);
   const families = new Set(manifest.boards.map((b) => b.backends[target]));
   lines.push("");
-  lines.push("/* Which backend this build links; a game with mixed families asks per board. */");
+  lines.push("/* All boards in this build use the same backend family. */");
   for (const family of ["portal", "http", "none"]) {
     lines.push(`#define GAME_LEADERBOARD_HAS_${family.toUpperCase()} ${families.has(family) ? 1 : 0}`);
   }

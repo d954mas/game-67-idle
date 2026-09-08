@@ -6,9 +6,8 @@ in four steps; none of them names a portal.
 
 ## Install
 
-1. Declare the boards. Until the manifest generator exists, hand the facade a
-   table of `leaderboard_board_def_t` (id, sort, declared scopes, the board's
-   name at the portal of this build).
+1. Declare the boards in `leaderboards.json` and wire the manifest generator
+   shown below. Include its `game_leaderboards.h` in the game's host module.
 2. Implement the two host callbacks against the game's save. The pack stores
    strings under `lb.id`, `lb.day`, `lb.day.<board>` and
    `lb.sent.<board>.<scope>`; `load` answers false for an absent key.
@@ -21,26 +20,31 @@ in four steps; none of them names a portal.
 
    static leaderboard_mock_t s_mock;
 
-   static const leaderboard_board_def_t k_boards[] = {
-       {.id = "score", .sort = LEADERBOARD_SORT_DESC,
-        .scopes = (1u << LEADERBOARD_SCOPE_ALL_TIME) | (1u << LEADERBOARD_SCOPE_UTC_DAY)},
-   };
+   #include "game_leaderboards.h"
 
    leaderboard_mock_defaults(&s_mock);
    const leaderboard_config_t config = {
        .host = {.load = my_save_load, .store = my_save_store},
        .backend = leaderboard_mock_backend(),
        .backend_userdata = &s_mock,
-       .boards = k_boards,
-       .board_count = 1,
+       .boards = GAME_LEADERBOARD_BOARDS,
+       .board_count = GAME_LEADERBOARD_BOARD_COUNT,
    };
    leaderboard_init(&config);
    ```
 
-4. Call `leaderboard_submit(board, scope, value, extra)` where the metric
-   changes, and draw the screen from `leaderboard_view_get` while obeying
-   `leaderboard_ui_state`. Pack game-specific row data with
-   `leaderboard_extra_set` and unpack it with `leaderboard_extra_get`.
+   This snippet explicitly injects the mock for local tests. Production selects
+   the portal or HTTP backend using the generated `GAME_LEADERBOARD_HAS_*`
+   flags; `none` uses NULL.
+4. Submit the game's saved counters after initialization and where the metric
+   changes. On screen open call `leaderboard_refresh_now(board)`, which requests
+   every supported scope; use it again for manual retry. Draw from
+   `leaderboard_view_get` while obeying `leaderboard_ui_state`. Keep pumping
+   `leaderboard_update` while the screen is open. Pack game-specific row data
+   with `leaderboard_extra_set` and unpack it with `leaderboard_extra_get`.
+
+The compilable [lap-time example](example/README.md) includes an ascending board,
+consumer-owned save callbacks and backend, explicit screen refresh, and a C test.
 
 ## Board Manifest
 
@@ -73,6 +77,14 @@ constants all come from it.
 board simply reports none. `sort` decides which of two submissions wins when
 they coalesce — `asc` for lap times. A scope no target can serve is refused when
 the manifest is validated rather than dropped silently at run time.
+
+All boards must use one family per publish target, including `none`: mixing
+`http` and `none`, or `http` and `portal`, is rejected. Portal IDs must be unique
+within each target. CrazyGames has one effective board per game, so at most one
+board may select its portal family. Portal IDs are non-empty strings without
+ASCII control characters, or objects containing such an `id` and an optional
+boolean `isMain`. Quotes and backslashes are escaped in generated C. There is
+no automatic portal-to-HTTP fallback.
 
 Wire the generator in the game's `CMakeLists.txt`:
 
@@ -140,14 +152,18 @@ What the backend needs from the rest of the wiring:
   wire: the request carries `<name>` and `<name>_day`, the response is read
   under `<name>`. Set it to whatever the server function calls the metric.
 - Every request is also the submit: the body carries the facade's current
-  value for every declared scope, so the server row is never overwritten with
-  a smaller number. Call `leaderboard_submit` with the game's counters at
+  value for every declared scope, retaining the better value according to the
+  board's sort. The server must enforce the same ordering. Call
+  `leaderboard_submit` with the game's counters at
   startup as well as on every change.
 - Row data beyond the value rides in `extra`: each `k=v;` pair becomes a body
   field (a plain integer as a JSON number, anything else as a string), and
   every server row field beyond `user_id` and `value` comes back packed the
   same way. Pairs named `user_id`, `day`, `<name>` or `<name>_day` are dropped.
 - Both scopes are served; the manifest's `scopes` mask hides one.
+- The service returns rows in the manifest's sort order. Histogram counts for
+  place estimation describe scores better than the player under that order;
+  an ascending board counts smaller scores, rather than larger ones.
 
 Dev builds point `url` at a local mock such as the seeding game's
 `tools/lb_mock_server.mjs` (any server that speaks the same shape works):

@@ -151,6 +151,8 @@ include(cmake/GameTests.cmake)
 if(NOT EMSCRIPTEN)
     # Pure half of the leaderboard pack (day math, wire encoding, parsing,
     # place recalc) and the facade over the mock backend.
+    include("${LEADERBOARD_DIR}/cmake/LeaderboardExample.cmake")
+    leaderboard_add_example_test()
     game_add_c_test(test_leaderboard_core WARNINGS
         SOURCES "${LEADERBOARD_DIR}/tests/test_leaderboard_core.c"
                 "${LEADERBOARD_SRC}/leaderboard_core.c"

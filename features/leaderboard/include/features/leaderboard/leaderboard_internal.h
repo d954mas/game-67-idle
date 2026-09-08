@@ -26,6 +26,7 @@ typedef struct {
 
 typedef struct {
     uint32_t value;
+    /* Number of better scores under the board's sort; thresholds ascend by value. */
     uint32_t count;
 } lb_interp_entry_t;
 
@@ -63,7 +64,8 @@ bool lb_parse_response(const char *json, uint32_t len, const char *root_key, lb_
 /* Re-ranks the player inside a board copy: replaces/inserts the player's
  * entry (carrying the given extra payload), sorts, and falls back to bucket
  * interpolation past the visible top. Returns the 1-based place. */
-int lb_recalc_place(lb_board_t *board, const char *user_id, const char *extra, uint32_t value);
+int lb_recalc_place(lb_board_t *board, const char *user_id, const char *extra, uint32_t value,
+                    leaderboard_sort_t sort);
 
 /* Seconds left in the UTC day that contains `now`; 86400 at a day's first second. */
 int64_t lb_seconds_until_day_end(time_t now);

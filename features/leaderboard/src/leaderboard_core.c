@@ -182,13 +182,14 @@ bool lb_parse_response(const char *json, uint32_t len, const char *root_key, lb_
     return ok;
 }
 
-static int approx_place(const lb_board_t *board, uint32_t value) {
+static int approx_place(const lb_board_t *board, uint32_t value, leaderboard_sort_t sort) {
     for (int i = 0; i < board->interp_count; i++) {
         if (value <= board->interp[i].value) {
             const lb_interp_entry_t upper = board->interp[i];
             const lb_interp_entry_t lower =
                 i > 0 ? board->interp[i - 1]
-                      : (lb_interp_entry_t){.value = 0, .count = upper.count + 100};
+                      : (lb_interp_entry_t){.value = 0,
+                                            .count = sort == LEADERBOARD_SORT_ASC ? 0 : upper.count + 100};
             const int64_t range_value = (int64_t)upper.value - (int64_t)lower.value;
             const int64_t range_count = (int64_t)lower.count - (int64_t)upper.count;
             if (range_value <= 0) {
@@ -199,7 +200,9 @@ static int approx_place(const lb_board_t *board, uint32_t value) {
             return place < 1 ? 1 : place;
         }
     }
-    return 1;
+    return sort == LEADERBOARD_SORT_ASC && board->interp_count > 0
+               ? (int)board->interp[board->interp_count - 1].count + 1
+               : 1;
 }
 
 int64_t lb_seconds_until_day_end(time_t now) {
@@ -208,7 +211,8 @@ int64_t lb_seconds_until_day_end(time_t now) {
     return 86400 - into_day;
 }
 
-int lb_recalc_place(lb_board_t *board, const char *user_id, const char *extra, uint32_t value) {
+int lb_recalc_place(lb_board_t *board, const char *user_id, const char *extra, uint32_t value,
+                    leaderboard_sort_t sort) {
     int self = -1;
     for (int i = 0; i < board->top_count; i++) {
         if (strcmp(board->top[i].user_id, user_id) == 0) {
@@ -228,12 +232,12 @@ int lb_recalc_place(lb_board_t *board, const char *user_id, const char *extra, u
     /* The live payload, not the one the server last saw: what the player just
      * changed shows on the board without waiting for the next poll. */
     snprintf(board->top[self].extra, LEADERBOARD_EXTRA_MAX, "%s", extra != NULL ? extra : "");
-    /* insertion sort, desc; ties keep order so the player does not jump above
-     * equals on a pure re-render */
+    /* Ties keep server order so the player does not jump above equals on a re-render. */
     for (int i = 1; i < board->top_count; i++) {
         const lb_top_entry_t e = board->top[i];
         int j = i - 1;
-        while (j >= 0 && board->top[j].value < e.value) {
+        while (j >= 0 && (sort == LEADERBOARD_SORT_ASC ? board->top[j].value > e.value
+                                                      : board->top[j].value < e.value)) {
             board->top[j + 1] = board->top[j];
             j--;
         }
@@ -251,7 +255,7 @@ int lb_recalc_place(lb_board_t *board, const char *user_id, const char *extra, u
      * player the server itself ranked last keeps that exact place. */
     if (appended && place == board->top_count && board->top_count >= LB_TOP_MAX - 1 &&
         board->interp_count > 0) {
-        const int est = approx_place(board, value);
+        const int est = approx_place(board, value, sort);
         if (est > place) {
             place = est;
         }

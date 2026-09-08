@@ -1,0 +1,24 @@
+{
+  "schema": "ai_studio.leaderboards.v1",
+  "boards": [
+    {
+      "id": "lap_time",
+      "metric": "lap_time_ms",
+      "sort": "asc",
+      "scopes": ["all_time"],
+      "portal_ids": {
+        "yandex": "lap_time",
+        "crazygames": "lap_time",
+        "playgama": { "id": "lap_time", "isMain": true }
+      },
+      "backends": {
+        "yandex": "portal",
+        "crazygames": "portal",
+        "playgama": "portal",
+        "poki": "http",
+        "itch": "http",
+        "local": "http"
+      }
+    }
+  ]
+}

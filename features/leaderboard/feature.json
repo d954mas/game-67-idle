@@ -3,7 +3,7 @@
   "id": "leaderboard",
   "version": "0.1.0",
   "title": "Leaderboard",
-  "status": "draft",
+  "status": "reusable",
   "kind": "gameplay-infrastructure",
   "summary": "In-place L1 feature pack: a capability facade over one leaderboard backend (portal, anonymous HTTP or mock), per-board per-scope score coalescing, four-kind refusal semantics, the pure day/wire/place core and the opaque extra codec. The game persists the pack's keys through a host seam and draws rows from a view.",
   "copy_model": "in-place",
@@ -28,7 +28,8 @@
     "leaderboard_host_t: the pack persists nothing itself",
     "the extra k=v codec",
     "the pure core: UTC day math, payload encoding, response parsing, place re-estimation",
-    "mock backend for tests and local development"
+    "mock backend for tests and local development",
+    "ascending lap-time consumer example with generated manifest and explicit screen refresh"
   ],
   "flags": {
     "testing": "LEADERBOARD_TESTING exposes leaderboard_reset_for_tests and the test clock"

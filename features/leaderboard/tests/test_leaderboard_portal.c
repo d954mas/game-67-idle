@@ -408,8 +408,102 @@ void test_a_completion_for_an_unknown_portal_board_is_ignored(void) {
     TEST_ASSERT_FALSE(view.loaded);
 }
 
+void test_refresh_waits_for_portal_readiness(void) {
+    g_bridge.init_ready = false;
+    install_bridge();
+    (void)platform_sdk_init();
+    boot_leaderboard();
+    leaderboard_refresh_now(g_score);
+    platform_sdk_backend_complete_init(true);
+    leaderboard_update();
+    TEST_ASSERT_EQUAL_INT(1, g_bridge.fetch_calls);
+    TEST_ASSERT_TRUE(leaderboard_ui_state(g_score).loading);
+}
+
+void test_fetch_retries_stop_at_error_and_manual_refresh_recovers(void) {
+    boot();
+    int64_t now = 1788177600;
+    leaderboard_set_now_for_tests(now);
+    leaderboard_refresh_now(g_score);
+    int attempts = 0;
+    while (!leaderboard_ui_state(g_score).show_retry && attempts++ < 10) {
+        platform_sdk_backend_complete_leaderboard_fetch("planets", 0, PLATFORM_SDK_LEADERBOARD_FAILED, NULL);
+        now += 60;
+        leaderboard_set_now_for_tests(now);
+        leaderboard_update();
+    }
+    TEST_ASSERT_TRUE(leaderboard_ui_state(g_score).show_retry);
+    TEST_ASSERT_GREATER_THAN_INT(1, g_bridge.fetch_calls);
+    const int calls = g_bridge.fetch_calls;
+    leaderboard_set_now_for_tests(now + 3600);
+    leaderboard_update();
+    TEST_ASSERT_EQUAL_INT(calls, g_bridge.fetch_calls);
+    leaderboard_refresh_now(g_score);
+    const platform_sdk_leaderboard_page_t page = {0};
+    platform_sdk_backend_complete_leaderboard_fetch("planets", 0, PLATFORM_SDK_LEADERBOARD_OK, &page);
+    leaderboard_view_t view;
+    leaderboard_view_get(g_score, LEADERBOARD_SCOPE_ALL_TIME, &view);
+    TEST_ASSERT_TRUE(view.loaded);
+    TEST_ASSERT_FALSE(view.error);
+}
+
+void test_failed_submit_retries_the_pending_best_without_new_score(void) {
+    boot();
+    leaderboard_set_now_for_tests(1788177600);
+    leaderboard_submit(g_score, LEADERBOARD_SCOPE_ALL_TIME, 100, "");
+    platform_sdk_backend_complete_leaderboard_submit("planets", 0, PLATFORM_SDK_LEADERBOARD_FAILED);
+    leaderboard_update();
+    TEST_ASSERT_EQUAL_INT(1, g_bridge.submit_calls);
+    leaderboard_set_now_for_tests(1788177660);
+    leaderboard_update();
+    TEST_ASSERT_EQUAL_INT(2, g_bridge.submit_calls);
+    platform_sdk_backend_complete_leaderboard_submit("planets", 0, PLATFORM_SDK_LEADERBOARD_OK);
+    TEST_ASSERT_EQUAL_STRING("100", kv_get("lb.sent.score.all_time"));
+}
+
+void test_readless_portal_does_not_leave_a_refresh_loading(void) {
+    g_bridge.caps.can_read = false;
+    g_bridge.caps.native_popup = true;
+    boot();
+    leaderboard_refresh_now(g_score);
+    leaderboard_update();
+    TEST_ASSERT_EQUAL_INT(0, g_bridge.fetch_calls);
+    TEST_ASSERT_FALSE(leaderboard_ui_state(g_score).loading);
+}
+
+void test_submit_success_does_not_hide_an_exhausted_read_error(void) {
+    boot();
+    leaderboard_submit(g_score, LEADERBOARD_SCOPE_ALL_TIME, 100, "");
+    leaderboard_refresh_now(g_score);
+    for (int attempt = 0; attempt < 10 && !leaderboard_ui_state(g_score).show_retry; attempt++) {
+        platform_sdk_backend_complete_leaderboard_fetch("planets", 0, PLATFORM_SDK_LEADERBOARD_FAILED, NULL);
+        leaderboard_set_now_for_tests(1788177600 + (attempt + 1) * 60);
+        leaderboard_update();
+    }
+    TEST_ASSERT_TRUE(leaderboard_ui_state(g_score).show_retry);
+    platform_sdk_backend_complete_leaderboard_submit("planets", 0, PLATFORM_SDK_LEADERBOARD_OK);
+    TEST_ASSERT_TRUE(leaderboard_ui_state(g_score).show_retry);
+}
+
+void test_login_refused_read_resumes_on_auth_change(void) {
+    boot();
+    leaderboard_refresh_now(g_score);
+    platform_sdk_backend_complete_leaderboard_fetch("planets", 0, PLATFORM_SDK_LEADERBOARD_NEEDS_LOGIN, NULL);
+    leaderboard_update();
+    TEST_ASSERT_EQUAL_INT(1, g_bridge.fetch_calls);
+    leaderboard_backend_auth_changed();
+    leaderboard_update();
+    TEST_ASSERT_EQUAL_INT(2, g_bridge.fetch_calls);
+}
+
 int main(void) {
     UNITY_BEGIN();
+    RUN_TEST(test_refresh_waits_for_portal_readiness);
+    RUN_TEST(test_readless_portal_does_not_leave_a_refresh_loading);
+    RUN_TEST(test_login_refused_read_resumes_on_auth_change);
+    RUN_TEST(test_submit_success_does_not_hide_an_exhausted_read_error);
+    RUN_TEST(test_fetch_retries_stop_at_error_and_manual_refresh_recovers);
+    RUN_TEST(test_failed_submit_retries_the_pending_best_without_new_score);
     RUN_TEST(test_caps_come_from_the_portal_and_only_the_all_time_scope_is_offered);
     RUN_TEST(test_a_board_without_a_portal_id_has_no_capability);
     RUN_TEST(test_a_platform_without_a_board_api_withdraws_everything);

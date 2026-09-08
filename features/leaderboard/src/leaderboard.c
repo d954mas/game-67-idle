@@ -25,6 +25,8 @@
 /* FAILED answers before the screen is told the retries are spent. A design
  * knob for the retry feel; only its existence is asserted. */
 #define LEADERBOARD_FAILED_BUDGET 3
+#define LEADERBOARD_RETRY_DELAY_S 5
+#define LEADERBOARD_RATE_LIMIT_DELAY_S 15
 
 /* "lb.sent." + id + "." + scope name, with room to spare. */
 #define LEADERBOARD_KEY_MAX 64
@@ -40,11 +42,17 @@ typedef struct {
     uint32_t sent;
     bool submit_in_flight;
     uint32_t in_flight;
+    char in_flight_day[LB_DAY_STR_MAX];
     bool fetch_in_flight;
+    bool fetch_requested;
+    bool fetch_waits_for_login;
+    int64_t submit_retry_at;
+    int64_t fetch_retry_at;
     /* The player's value as the last page reported it; shown until the game submits. */
     bool has_page_value;
     uint32_t page_value;
-    int failures;
+    int fetch_failures;
+    int submit_failures;
 } leaderboard_slot_t;
 
 typedef struct {
@@ -62,6 +70,7 @@ typedef struct {
     bool read_refused[LEADERBOARD_MAX_BOARDS];
     bool write_refused[LEADERBOARD_MAX_BOARDS];
     bool needs_login[LEADERBOARD_MAX_BOARDS];
+    char extra[LEADERBOARD_MAX_BOARDS][LEADERBOARD_EXTRA_MAX];
     leaderboard_slot_t slots[LEADERBOARD_MAX_BOARDS][LEADERBOARD_SCOPE_COUNT];
 } leaderboard_runtime_t;
 
@@ -245,7 +254,10 @@ static void roll_day_if_needed(void) {
         slot->has_best = false;
         slot->has_sent = false;
         slot->extra[0] = '\0';
-        slot->failures = 0;
+        slot->fetch_failures = 0;
+        slot->submit_failures = 0;
+        slot->submit_retry_at = 0;
+        slot->fetch_retry_at = 0;
         reset_slot_view(slot);
         clear_day_keys((leaderboard_board_t){(uint8_t)b});
     }
@@ -260,7 +272,7 @@ static const leaderboard_backend_t *backend(void) {
 static void try_send(leaderboard_board_t board, leaderboard_scope_t scope) {
     leaderboard_slot_t *slot = slot_of(board, scope);
     const leaderboard_board_def_t *def = &g_lb.boards[board.index];
-    if (slot->submit_in_flight || !slot->has_best) {
+    if (slot->submit_in_flight || !slot->has_best || slot->submit_retry_at > now_seconds()) {
         return;
     }
     if (slot->has_sent && !better(def->sort, slot->best, slot->sent)) {
@@ -276,7 +288,9 @@ static void try_send(leaderboard_board_t board, leaderboard_scope_t scope) {
         return;
     }
     slot->submit_in_flight = true;
+    slot->submit_retry_at = 0;
     slot->in_flight = slot->best;
+    snprintf(slot->in_flight_day, sizeof slot->in_flight_day, "%s", g_lb.day);
     const bool started = be->submit(board, scope, slot->best, slot->extra, g_lb.config.backend_userdata);
     /* A backend may complete inside the call; only a request that never
      * started is still in flight here. */
@@ -287,30 +301,52 @@ static void try_send(leaderboard_board_t board, leaderboard_scope_t scope) {
 
 static void request_fetch(leaderboard_board_t board, leaderboard_scope_t scope) {
     leaderboard_slot_t *slot = slot_of(board, scope);
-    if (slot->fetch_in_flight) {
-        return;
-    }
-    const leaderboard_caps_t caps = leaderboard_caps(board);
-    if (!caps.can_read || (caps.scopes & scope_bit(scope)) == 0) {
+    if (slot->fetch_in_flight || slot->fetch_retry_at > now_seconds()) {
         return;
     }
     const leaderboard_backend_t *be = backend();
+    if (be != NULL && be->initializing != NULL && be->initializing(g_lb.config.backend_userdata)) {
+        return;
+    }
+    const leaderboard_caps_t caps = leaderboard_caps(board);
+    if ((caps.scopes & scope_bit(scope)) == 0 || g_lb.read_refused[board.index]) {
+        slot->fetch_requested = false;
+        return;
+    }
+    if (!caps.can_read) {
+        slot->fetch_requested = false;
+        return;
+    }
     if (be == NULL || be->fetch == NULL) {
         g_lb.read_refused[board.index] = true;
         return;
     }
     slot->fetch_in_flight = true;
+    slot->fetch_requested = false;
+    slot->fetch_retry_at = 0;
     const bool started = be->fetch(board, scope, g_lb.config.backend_userdata);
     if (!started && slot->fetch_in_flight) {
         leaderboard_backend_complete_fetch(board, scope, NULL, LEADERBOARD_RESULT_FAILED);
     }
 }
 
-static void note_failure(leaderboard_slot_t *slot) {
-    slot->failures++;
-    if (slot->failures >= LEADERBOARD_FAILED_BUDGET) {
-        slot->view.error = true;
+static void update_error(leaderboard_slot_t *slot) {
+    slot->view.error = slot->fetch_failures >= LEADERBOARD_FAILED_BUDGET ||
+                       slot->submit_failures >= LEADERBOARD_FAILED_BUDGET;
+}
+
+static int64_t retry_at(int failures, leaderboard_result_t result) {
+    const leaderboard_backend_t *be = backend();
+    if (be == NULL || be->owns_retry_cadence) {
+        return 0;
     }
+    if (result == LEADERBOARD_RESULT_RATE_LIMITED) {
+        return now_seconds() + LEADERBOARD_RATE_LIMIT_DELAY_S;
+    }
+    if (result == LEADERBOARD_RESULT_FAILED && failures < LEADERBOARD_FAILED_BUDGET) {
+        return now_seconds() + LEADERBOARD_RETRY_DELAY_S * failures;
+    }
+    return 0;
 }
 
 static void apply_page(leaderboard_board_t board, leaderboard_scope_t scope, const leaderboard_page_t *page) {
@@ -356,13 +392,15 @@ void leaderboard_backend_complete_fetch(leaderboard_board_t board, leaderboard_s
     }
     leaderboard_slot_t *slot = slot_of(board, scope);
     slot->fetch_in_flight = false;
+    slot->fetch_requested = false;
+    slot->fetch_retry_at = 0;
+    slot->fetch_waits_for_login = false;
     switch (result) {
     case LEADERBOARD_RESULT_OK:
         if (page != NULL) {
             apply_page(board, scope, page);
         }
-        slot->failures = 0;
-        slot->view.error = false;
+        slot->fetch_failures = 0;
         break;
     case LEADERBOARD_RESULT_UNSUPPORTED:
         g_lb.read_refused[board.index] = true;
@@ -370,6 +408,7 @@ void leaderboard_backend_complete_fetch(leaderboard_board_t board, leaderboard_s
     case LEADERBOARD_RESULT_NEEDS_LOGIN:
         /* The top is real; only the player's own row is missing. */
         g_lb.needs_login[board.index] = true;
+        slot->fetch_waits_for_login = true;
         if (page != NULL) {
             apply_page(board, scope, page);
         }
@@ -377,9 +416,12 @@ void leaderboard_backend_complete_fetch(leaderboard_board_t board, leaderboard_s
     case LEADERBOARD_RESULT_RATE_LIMITED:
         break;
     case LEADERBOARD_RESULT_FAILED:
-        note_failure(slot);
+        if (slot->fetch_failures < LEADERBOARD_FAILED_BUDGET) slot->fetch_failures++;
         break;
     }
+    update_error(slot);
+    slot->fetch_retry_at = retry_at(slot->fetch_failures, result);
+    slot->fetch_requested = slot->fetch_retry_at != 0;
 }
 
 void leaderboard_backend_complete_submit(leaderboard_board_t board, leaderboard_scope_t scope,
@@ -392,6 +434,11 @@ void leaderboard_backend_complete_submit(leaderboard_board_t board, leaderboard_
         return;
     }
     slot->submit_in_flight = false;
+    slot->submit_retry_at = 0;
+    if (scope == LEADERBOARD_SCOPE_UTC_DAY && strcmp(slot->in_flight_day, g_lb.day) != 0) {
+        try_send(board, scope);
+        return;
+    }
     switch (result) {
     case LEADERBOARD_RESULT_OK: {
         char key[LEADERBOARD_KEY_MAX];
@@ -399,8 +446,7 @@ void leaderboard_backend_complete_submit(leaderboard_board_t board, leaderboard_
         slot->sent = slot->in_flight;
         sent_key(key, board, scope);
         host_store_u32(key, slot->sent);
-        slot->failures = 0;
-        slot->view.error = false;
+        slot->submit_failures = 0;
         g_lb.needs_login[board.index] = false;
         try_send(board, scope); /* a better value may have arrived meanwhile */
         break;
@@ -414,8 +460,12 @@ void leaderboard_backend_complete_submit(leaderboard_board_t board, leaderboard_
     case LEADERBOARD_RESULT_RATE_LIMITED:
         break;
     case LEADERBOARD_RESULT_FAILED:
-        note_failure(slot);
+        if (slot->submit_failures < LEADERBOARD_FAILED_BUDGET) slot->submit_failures++;
         break;
+    }
+    update_error(slot);
+    if (result != LEADERBOARD_RESULT_OK) {
+        slot->submit_retry_at = retry_at(slot->submit_failures, result);
     }
 }
 
@@ -426,6 +476,11 @@ void leaderboard_backend_auth_changed(void) {
     for (int b = 0; b < g_lb.board_count; b++) {
         g_lb.needs_login[b] = false;
         for (int s = 0; s < LEADERBOARD_SCOPE_COUNT; s++) {
+            g_lb.slots[b][s].submit_retry_at = 0;
+            if (g_lb.slots[b][s].fetch_waits_for_login) {
+                g_lb.slots[b][s].fetch_waits_for_login = false;
+                g_lb.slots[b][s].fetch_requested = true;
+            }
             try_send((leaderboard_board_t){(uint8_t)b}, (leaderboard_scope_t)s);
         }
     }
@@ -433,6 +488,10 @@ void leaderboard_backend_auth_changed(void) {
 
 const char *leaderboard_player_id(void) {
     return g_lb.player_id;
+}
+
+const char *leaderboard_extra(leaderboard_board_t board) {
+    return board_valid(board) ? g_lb.extra[board.index] : "";
 }
 
 const leaderboard_board_def_t *leaderboard_board_def(leaderboard_board_t board) {
@@ -518,6 +577,18 @@ void leaderboard_update(void) {
     if (be != NULL && be->update != NULL) {
         be->update(g_lb.config.backend_userdata);
     }
+    for (int b = 0; b < g_lb.board_count; b++) {
+        const leaderboard_board_t board = {(uint8_t)b};
+        for (int s = 0; s < LEADERBOARD_SCOPE_COUNT; s++) {
+            leaderboard_slot_t *slot = &g_lb.slots[b][s];
+            if (slot->submit_retry_at != 0 && slot->submit_retry_at <= now_seconds()) {
+                try_send(board, (leaderboard_scope_t)s);
+            }
+            if (slot->fetch_requested) {
+                request_fetch(board, (leaderboard_scope_t)s);
+            }
+        }
+    }
 }
 
 void leaderboard_shutdown(void) {
@@ -595,6 +666,7 @@ void leaderboard_submit(leaderboard_board_t board, leaderboard_scope_t scope,
        how a caller clears it. */
     if (extra != NULL) {
         snprintf(slot->extra, sizeof slot->extra, "%s", extra);
+        snprintf(g_lb.extra[board.index], sizeof g_lb.extra[board.index], "%s", extra);
     }
     if (slot->has_best && !better(def->sort, value, slot->best)) {
         return;
@@ -637,8 +709,13 @@ void leaderboard_refresh_now(leaderboard_board_t board) {
     }
     for (int s = 0; s < LEADERBOARD_SCOPE_COUNT; s++) {
         leaderboard_slot_t *slot = &g_lb.slots[board.index][s];
-        slot->failures = 0;
+        slot->fetch_failures = 0;
+        slot->submit_failures = 0;
         slot->view.error = false;
+        slot->submit_retry_at = 0;
+        slot->fetch_retry_at = 0;
+        slot->fetch_requested = !slot->fetch_in_flight;
+        slot->fetch_waits_for_login = false;
         try_send(board, (leaderboard_scope_t)s);
         request_fetch(board, (leaderboard_scope_t)s);
     }
@@ -674,7 +751,7 @@ leaderboard_ui_state_t leaderboard_ui_state(leaderboard_board_t board) {
     for (int s = 0; s < LEADERBOARD_SCOPE_COUNT; s++) {
         const leaderboard_slot_t *slot = &g_lb.slots[board.index][s];
         state.show_retry = state.show_retry || slot->view.error;
-        state.loading = state.loading || slot->fetch_in_flight;
+        state.loading = state.loading || slot->fetch_in_flight || slot->fetch_requested;
     }
     return state;
 }
