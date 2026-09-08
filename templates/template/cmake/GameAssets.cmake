@@ -12,8 +12,23 @@ file(GLOB_RECURSE GAME_PACK_SOURCE_ASSETS CONFIGURE_DEPENDS
 
 # --- asset pack builder (runs at build time -> game.ntpack + asset-id header) ---
 if(NOT EMSCRIPTEN)
-    set(GAME_FONT_SOURCE
+    # The engine's face is the BASE, not the shipped font: it draws Ń ń Ё ё in a
+    # lighter, narrower hand it borrowed from another typeface, and carries no
+    # Turkish or Polish letters at all (engine issue #441). tools/merge_font_glyphs.py
+    # composes those from the base's own outlines. The result is built here rather
+    # than committed -- 14 MB the recipe reproduces byte for byte.
+    set(GAME_FONT_BASE
         "${GAME_REPO_ROOT}/external/neotolis-engine/assets/fonts/LilitaOne-RussianChineseKo.ttf")
+    set(GAME_FONT_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/generated/fonts/GameDisplay.ttf")
+    add_custom_command(
+        OUTPUT "${GAME_FONT_SOURCE}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/generated/fonts"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/merge_font_glyphs.py"
+            --base "${GAME_FONT_BASE}" --out "${GAME_FONT_SOURCE}"
+        DEPENDS "${GAME_FONT_BASE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/merge_font_glyphs.py"
+        COMMENT "Composing the game font from the engine face"
+        VERBATIM
+    )
     # The generated charset header is a SOURCE, not just a dependency of the
     # pack command below: that is what orders the loc codegen ahead of
     # compiling build_packs.c, which includes it.
