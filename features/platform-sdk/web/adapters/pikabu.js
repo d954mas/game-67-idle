@@ -102,11 +102,16 @@ export function createPikabuPlatformAdapter({ config, host, lifecycle }) {
     } catch { /* the portal is not broadcasting */ }
   }
 
-  async function ready() {
-    const instance = await sdk();
-    if (!instance) return false;
-    followAuth(instance);
-    showPreloader(instance);
+  /* The adapter is operational whether or not the SDK ever answers, and it
+     must say so at once: the facade turns a failed boot into a game that never
+     leaves its loading screen, while the portal requires a build that plays
+     with an adblocker on and this SDK stays silent outside the platform. */
+  function ready() {
+    sdk().then((instance) => {
+      if (!instance || destroyed) return;
+      followAuth(instance);
+      showPreloader(instance);
+    }, () => {});
     return true;
   }
 

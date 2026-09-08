@@ -45,10 +45,10 @@
       "bundleBytes": 6077
     },
     "pikabu": {
-      "sourceSha256": "220850722c6f993c2a5a8893e71ea778ff1be87f9ab63812f605bdb5f67ab281",
-      "bundleSha256": "54a1e8377b203167f077a79b7e454890e10435c75fbe76b03d7218510c9241bf",
-      "sourceBytes": 14364,
-      "bundleBytes": 5711
+      "sourceSha256": "1d32c421c4aacb38ef719b124c031f33e5b8892e7063d04053393bd463016019",
+      "bundleSha256": "56ab0da65c6b6ebc11f5d875eb4d567181cea5cbf1edb0f2ab4ddf19b6ef7716",
+      "sourceBytes": 14696,
+      "bundleBytes": 5716
     }
   }
 }

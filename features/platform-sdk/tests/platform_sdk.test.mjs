@@ -378,7 +378,7 @@ test("poki adapter reuses one payload object across loading progress updates", a
   };
   const adapter = createPokiPlatformAdapter({ host });
 
-  adapter.ready();
+  await adapter.ready();
   await adapter.gameLoadingFinished();
   adapter.gameLoadingProgress(0.25);
   adapter.gameLoadingProgress(0.75);
@@ -1050,7 +1050,7 @@ test("yandex leaderboard errors map to the four refusals without inventing one",
   ];
   for (const [error, status] of cases) {
     const { adapter } = createYandexLeaderboardFixture({ authorized: true, reject: () => error });
-    await adapter.ready();
+    adapter.ready();
     assert.equal((await adapter.fetchEntries("planets", 0)).status, status, String(error.message));
     assert.equal((await adapter.submitScore("planets", 0, 1, "")).status, status, String(error.message));
     adapter.destroy();
@@ -1889,7 +1889,7 @@ function createPikabuFixture({
 
 test("pikabu shows the loading ad it allows and only then declares the game started", async () => {
   const { adapter, audio, calls } = createPikabuFixture();
-  assert.equal(await adapter.ready(), true);
+  assert.equal(adapter.ready(), true);
   assert.equal(calls.includes("gameStarted"), false, "readiness is not a start");
 
   await adapter.gameLoadingFinished();
@@ -1902,14 +1902,14 @@ test("pikabu shows the loading ad it allows and only then declares the game star
 
 test("pikabu skips the loading ad the platform withholds", async () => {
   const { adapter, calls } = createPikabuFixture({ canShow: { preloader: false, fullscreen: true, rewarded: true } });
-  assert.equal(await adapter.ready(), true);
+  assert.equal(adapter.ready(), true);
   await adapter.gameLoadingFinished();
   assert.deepEqual(calls, ["init", "canShow:preloader", "gameStarted"]);
 });
 
 test("pikabu asks the portal before every ad and treats a refusal as an ordinary outcome", async () => {
   const { adapter, calls } = createPikabuFixture({ canShow: { preloader: false, fullscreen: false, rewarded: true } });
-  await adapter.ready();
+  adapter.ready();
   const result = await adapter.showInterstitial("break", 1);
   assert.deepEqual(result, { supported: true, shown: false, reason: "failed" });
   assert.equal(calls.includes("show:fullscreen"), false, "a refused ad is never shown");
@@ -1955,7 +1955,7 @@ test("pikabu reports an unreachable save backend as failed, never as an empty sa
 
 test("pikabu re-reads the signed identity when the player signs in mid-session", async () => {
   const { adapter, requests, tokenReads } = createPikabuFixture();
-  await adapter.ready();
+  adapter.ready();
   await adapter.saveData("save", "{}");
   assert.equal(tokenReads(), 1);
 
@@ -1989,7 +1989,7 @@ test("pikabu offers no board of its own", async () => {
 
 test("pikabu pauses and silences the game when the tab goes away", async () => {
   const { adapter, audio, host } = createPikabuFixture();
-  await adapter.ready();
+  adapter.ready();
   const lifecycleCalls = host.lifecycleCalls;
 
   host.document.hidden = true;
@@ -2006,4 +2006,29 @@ test("pikabu pauses and silences the game when the tab goes away", async () => {
   host.document.hidden = true;
   host.document.dispatch("visibilitychange");
   assert.equal(lifecycleCalls.at(-1), "resume", "a destroyed adapter drives nothing");
+});
+
+test("a pikabu SDK that never answers still lets the game boot and play", async () => {
+  const host = createHost(TargetPlatform.PIKABU);
+  /* The SDK is served from the portal and answers only there: off-platform,
+     and behind an adblocker, init() simply never settles. */
+  host.PkbSDK = { init: () => new Promise(() => {}) };
+  host.setTimeout = (fn) => { Promise.resolve().then(fn); return 0; };
+  host.clearTimeout = () => {};
+  const adapter = createPikabuPlatformAdapter({
+    config: {},
+    host,
+    lifecycle: { audio() {}, pause() {}, resume() {}, adVisible() {} },
+    target: TargetPlatform.PIKABU,
+  });
+
+  assert.equal(adapter.ready(), true, "a silent portal is not a failed boot");
+  await adapter.gameLoadingFinished();
+  assert.deepEqual(await adapter.showInterstitial("break", 1), {
+    supported: false,
+    shown: false,
+    reason: "unsupported",
+  });
+  assert.deepEqual(await adapter.getPlayer(), { authorized: false, name: "", avatarUrl: "" });
+  adapter.destroy();
 });
