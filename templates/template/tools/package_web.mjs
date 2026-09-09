@@ -38,7 +38,7 @@ const { compileProfileForTarget } = await import(pathToFileURL(join(
   "target_config.mjs",
 )).href);
 
-const TARGETS = new Set(["itch", "poki", "yandex", "playgama", "crazygames", "wavedash", "pikabu"]);
+const TARGETS = new Set(["itch", "poki", "yandex", "playgama", "crazygames", "wavedash", "pikabu", "gamepush"]);
 const SOURCE_EXTENSIONS = /\.(?:c|cc|cpp|cxx|h|hh|hpp|cmake|py|ts|map|pdb|obj|o)$/i;
 const DEVAPI_MARKERS = ["window.__devapi", "--devapi", "wasm-devapi", "GAME_DEVAPI_ENABLED"];
 const AUDIO_SMOKE_MARKERS = [
@@ -659,6 +659,16 @@ function validateGameLoader(input, label = "game.js") {
   }
 }
 
+/* What a portal-specific build may add after the four pinned members. Each one
+   is optional and each stays a literal the release cannot compute, so a build
+   can neither point saves at another host nor report to another project. The
+   order is fixed: an unexpected member ends the sequence and fails the parse. */
+const OPTIONAL_CONFIG_MEMBERS = Object.freeze([
+  ["saveEndpoint", (token) => token?.type === "string" && token.value.startsWith("https://")],
+  ["gamePushProjectId", (token) => token?.type === "string" && /^[0-9]+$/.test(token.value)],
+  ["gamePushPublicToken", (token) => token?.type === "string" && /^[A-Za-z0-9_-]{8,}$/.test(token.value)],
+]);
+
 function parseReleaseConfig(html, requireRuntimeBuild = true) {
   const marker = "window.__PLATFORM_SDK_CONFIG__";
   const withoutComments = html.replace(/<!--[\s\S]*?-->/g, "");
@@ -703,16 +713,23 @@ function parseReleaseConfig(html, requireRuntimeBuild = true) {
       /* A portal that stores nothing needs the game's own save backend named
          here; it is the one optional member, and it is still pinned to a
          literal https URL so a release cannot point saves anywhere else. */
-      const savePrefix = [",", "saveEndpoint", ":"];
-      const hasSaveEndpoint = tokenValuesAt(tokens, endOffset, savePrefix);
-      const saveEndpoint = hasSaveEndpoint ? tokens[endOffset + savePrefix.length] : null;
-      const closeOffset = hasSaveEndpoint ? endOffset + savePrefix.length + 1 : endOffset;
+      let closeOffset = endOffset;
+      const optional = {};
+      let optionalValid = true;
+      for (const [name, valid] of OPTIONAL_CONFIG_MEMBERS) {
+        const prefix = [",", name, ":"];
+        if (!tokenValuesAt(tokens, closeOffset, prefix)) continue;
+        const value = tokens[closeOffset + prefix.length];
+        if (!valid(value)) optionalValid = false;
+        optional[name] = value?.value;
+        closeOffset += prefix.length + 1;
+      }
       if (target?.type !== "string" || !tokenValuesAt(tokens, middleOffset, middle)
           || adapter?.type !== "string" || !tokenValuesAt(tokens, suffixOffset, suffix)
           || !["true", "false"].includes(release?.value)
           || !tokenValuesAt(tokens, fingerprintOffset, fingerprintPrefix)
           || fingerprint?.type !== "string" || !SHA256.test(fingerprint.value)
-          || (hasSaveEndpoint && (saveEndpoint?.type !== "string" || !saveEndpoint.value.startsWith("https://")))
+          || !optionalValid
           || !tokenValuesAt(tokens, closeOffset, ["}", ")", ";"])) {
         throw new Error(`release HTML has an invalid executable ${marker} assignment`);
       }
@@ -721,7 +738,7 @@ function parseReleaseConfig(html, requireRuntimeBuild = true) {
         platformAdapter: adapter.value,
         release: release.value === "true",
         runtimeBuildFingerprint: fingerprint.value,
-        ...(hasSaveEndpoint ? { saveEndpoint: saveEndpoint.value } : {}),
+        ...optional,
       });
     }
   }

@@ -643,6 +643,8 @@ const char *platform_sdk_target_name(void) {
         return "wavedash";
     case PLATFORM_TARGET_PIKABU:
         return "pikabu";
+    case PLATFORM_TARGET_GAMEPUSH:
+        return "gamepush";
     }
     return "local";
 }
@@ -663,6 +665,8 @@ const char *platform_sdk_current_name(void) {
         return "wavedash";
     case PLATFORM_SDK_PIKABU:
         return "pikabu";
+    case PLATFORM_SDK_GAMEPUSH:
+        return "gamepush";
     }
     return "mock";
 }

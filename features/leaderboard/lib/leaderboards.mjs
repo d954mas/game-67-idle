@@ -2,7 +2,7 @@
    serves them. Validation, the generated C table, the console checklist and the
    Playgama config block all read this file, so a board id is written once. */
 
-export const PUBLISH_TARGETS = ["local", "itch", "poki", "yandex", "playgama", "crazygames", "wavedash", "pikabu"];
+export const PUBLISH_TARGETS = ["local", "itch", "poki", "yandex", "playgama", "crazygames", "wavedash", "pikabu", "gamepush"];
 
 /* What each target's portal can actually serve, from SPEC.md section 2. A
    portal board never resets, so no portal can hold a day scope; the http
@@ -13,6 +13,9 @@ export const PORTAL_ABILITY = {
   playgama: { boards: true, read: "runtime", write: true, scopes: ["all_time"] },
   wavedash: { boards: true, read: true, write: true, scopes: ["all_time"] },
   pikabu: { boards: false, read: false, write: false, scopes: [] },
+  /* GamePush has a board of its own, but one build is re-served to two dozen
+     hosts, so a portal board would split the ranking by host. */
+  gamepush: { boards: false, read: false, write: false, scopes: [] },
   poki: { boards: false, read: false, write: false, scopes: [] },
   itch: { boards: false, read: false, write: false, scopes: [] },
   local: { boards: false, read: false, write: false, scopes: [] },

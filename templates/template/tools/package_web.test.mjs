@@ -955,3 +955,34 @@ test("reopened ZIP rejects a matching witness with debug compiler flags", (t) =>
   writeFileSync(result.manifestPath, JSON.stringify(manifest, null, 2) + "\n");
   assert.throws(() => verifyWebPackage({ zipPath: result.zipPath, manifestPath: result.manifestPath, expectedTarget: "itch", studioRoot }), /reopened ZIP runtime build profile mismatch/i);
 });
+
+/* A portal-specific member is where a release could quietly point saves or the
+   publisher's project somewhere else, so each one stays a literal the build
+   cannot compute, and the sequence is fixed. */
+test("release config takes portal members as literals, in order, or not at all", (t) => {
+  const member = (extra) => (t2) => {
+    const item = fixture(t2);
+    const path = join(item.artifactDir, "index.html");
+    write(path, readFileSync(path, "utf8").replace(" });\n</script>", `${extra} });\n</script>`));
+    return item;
+  };
+
+  const accepted = member(", saveEndpoint: 'https://saves.example/cloud'"
+    + ", gamePushProjectId: '30356'"
+    + ", gamePushPublicToken: 'vVMwyT51ffktwvnINjYFkstEEhbKQgc7'")(t);
+  assert.doesNotThrow(() => validateWebArtifact({ ...accepted, studioRoot }));
+
+  for (const [label, extra] of [
+    ["computed project id", ", gamePushProjectId: String(30356)"],
+    ["project id that is not a number", ", gamePushProjectId: 'thirty'"],
+    ["public token from a variable", ", gamePushPublicToken: token"],
+    ["members out of order", ", gamePushPublicToken: 'vVMwyT51ffktwvnINjYFkstEEhbKQgc7', gamePushProjectId: '30356'"],
+    ["a member nobody declared", ", gamePushSecretKey: 'leaked'"],
+  ]) {
+    assert.throws(
+      () => validateWebArtifact({ ...member(extra)(t), studioRoot }),
+      /invalid executable.*PLATFORM_SDK_CONFIG/i,
+      label,
+    );
+  }
+});

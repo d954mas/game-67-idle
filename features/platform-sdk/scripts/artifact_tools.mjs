@@ -19,6 +19,7 @@ export const REAL_SDK_MARKERS = Object.freeze({
   crazygames: ["https://sdk.crazygames.com/crazygames-sdk-v3.js", "CrazyGames"],
   wavedash: ["Wavedash", "updateLoadProgressZeroToOne"],
   pikabu: ["https://games.pikabu.ru/sdk/sdk.js", "PkbSDK"],
+  gamepush: ["https://gs.eponesh.com/sdk/game-score.js", "isStickyAvailable"],
 });
 
 export const DEBUG_MARKERS = Object.freeze(["Show interstitial ad", "Show rewarded ad", "debug_test"]);

@@ -80,6 +80,16 @@
       "rewarded_supported": true,
       "storage_supported": true,
       "portal": true
+    },
+    "gamepush": {
+      "adapter": "gamepush",
+      "target_id": 8,
+      "sdk_id": 7,
+      "external_links_allowed": false,
+      "ads_supported": true,
+      "rewarded_supported": true,
+      "storage_supported": true,
+      "portal": true
     }
   }
 }

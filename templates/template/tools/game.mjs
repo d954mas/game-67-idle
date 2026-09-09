@@ -27,7 +27,7 @@ const COMMANDS = new Set(["doctor", "build", "run", "test", "playable", "package
 // The tier vocabulary is shared with cmake/GameTests.cmake; CTest labels carry it.
 export const TEST_TIERS = ["core", "slow", "taste"];
 export const TEST_TIER_DEFAULT = "core";
-const USAGE = "usage: node tools/game.mjs <doctor|build|run|test|playable|package|portal-check|verify> [--target local|itch|poki|yandex|playgama|crazygames|wavedash|pikabu] [--no-build] [--out <dir>] [--template-proof] [--skip-tests] [test: --tier core|slow|taste | --all | --only <test>] [--update-goldens]";
+const USAGE = "usage: node tools/game.mjs <doctor|build|run|test|playable|package|portal-check|verify> [--target local|itch|poki|yandex|playgama|crazygames|wavedash|pikabu|gamepush] [--no-build] [--out <dir>] [--template-proof] [--skip-tests] [test: --tier core|slow|taste | --all | --only <test>] [--update-goldens]";
 
 function readJson(path, label) {
   let value;

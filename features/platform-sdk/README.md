@@ -28,6 +28,7 @@ game-specific screens, economy, items, progression, or content.
 | `crazygames` | `crazygames` | Direct CrazyGames SDK adapter. |
 | `wavedash` | `wavedash` | Direct Wavedash adapter; the host injects the SDK, so nothing is loaded. |
 | `pikabu` | `pikabu` | Direct Pikabu Games adapter; the portal hosts no build and carries no store or board. |
+| `gamepush` | `gamepush` | GamePush publisher SDK; one build is re-served to many platforms, so the host is unknown at build time. |
 
 `publish-targets/targets.json` is the canonical mapping and static policy source.
 CMake and JavaScript build tools consume the same descriptors. The runtime,
@@ -52,6 +53,7 @@ features/platform-sdk/
       crazygames.js
       wavedash.js
       pikabu.js
+      gamepush.js
     release/
       manifest.json
       <adapter>.min.js
@@ -67,6 +69,7 @@ features/platform-sdk/
     crazygames.json
     wavedash.json
     pikabu.json
+    gamepush.json
   references/
     contract.md
     publish-targets.md

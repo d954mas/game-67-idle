@@ -9,6 +9,7 @@ import { runInNewContext } from "node:vm";
 import { createCrazygamesPlatformAdapter } from "../web/adapters/crazygames.js";
 import { createMockPlatformAdapter } from "../web/adapters/mock.js";
 import { createPlaygamaPlatformAdapter } from "../web/adapters/playgama.js";
+import { createGamePushPlatformAdapter } from "../web/adapters/gamepush.js";
 import { createPikabuPlatformAdapter } from "../web/adapters/pikabu.js";
 import { createPokiPlatformAdapter } from "../web/adapters/poki.js";
 import { createWavedashPlatformAdapter } from "../web/adapters/wavedash.js";
@@ -32,6 +33,7 @@ const TargetPlatform = Object.freeze({
   CRAZYGAMES: "crazygames",
   WAVEDASH: "wavedash",
   PIKABU: "pikabu",
+  GAMEPUSH: "gamepush",
 });
 const PLATFORM_BACKEND_METHODS = Object.freeze([
   "destroy",
@@ -205,6 +207,7 @@ test("build tooling maps publish targets to exactly one platform SDK adapter", (
   assert.equal(sdkForTarget(TargetPlatform.CRAZYGAMES), "crazygames");
   assert.equal(sdkForTarget(TargetPlatform.WAVEDASH), "wavedash");
   assert.equal(sdkForTarget(TargetPlatform.PIKABU), "pikabu");
+  assert.equal(sdkForTarget(TargetPlatform.GAMEPUSH), "gamepush");
 });
 
 test("every platform adapter owns exactly the complete backend method contract", () => {
@@ -215,6 +218,7 @@ test("every platform adapter owns exactly the complete backend method contract",
     [TargetPlatform.PLAYGAMA, createPlaygamaPlatformAdapter],
     [TargetPlatform.WAVEDASH, createWavedashPlatformAdapter],
     [TargetPlatform.PIKABU, createPikabuPlatformAdapter],
+    [TargetPlatform.GAMEPUSH, createGamePushPlatformAdapter],
   ]) {
     const adapter = factory({
       emitVisibilityChange() {},
@@ -1498,7 +1502,7 @@ test("staged web SDK uses only composition and selected adapter modules", () => 
 });
 
 test("release SDK bundles are minified without changing adapter startup", () => {
-  for (const adapter of ["mock", "poki", "yandex", "playgama", "wavedash", "pikabu"]) {
+  for (const adapter of ["mock", "poki", "yandex", "playgama", "wavedash", "pikabu", "gamepush"]) {
     const source = Buffer.from(packagedPlatformPrefix(adapter));
     const release = platformSdkBundlePrefix(adapter);
     assert.ok(release.length < source.length * 0.75, adapter);
@@ -1517,7 +1521,7 @@ test("release SDK bundles are minified without changing adapter startup", () => 
 });
 
 test("publish manifests distinguish staged modules from single-JS release packages", () => {
-  for (const target of [TargetPlatform.ITCH, TargetPlatform.POKI, TargetPlatform.YANDEX, TargetPlatform.PLAYGAMA, TargetPlatform.WAVEDASH, TargetPlatform.PIKABU]) {
+  for (const target of [TargetPlatform.ITCH, TargetPlatform.POKI, TargetPlatform.YANDEX, TargetPlatform.PLAYGAMA, TargetPlatform.WAVEDASH, TargetPlatform.PIKABU, TargetPlatform.GAMEPUSH]) {
     const manifest = JSON.parse(readFileSync(join(HERE, `../publish-targets/${target}.json`), "utf8"));
     assert.equal(manifest.required_files.includes("platform-sdk.js"), true, target);
     assert.equal(manifest.packaged_required_files.includes("game.js"), true, target);
@@ -2029,6 +2033,311 @@ test("a pikabu SDK that never answers still lets the game boot and play", async 
     shown: false,
     reason: "unsupported",
   });
+  assert.deepEqual(await adapter.getPlayer(), { authorized: false, name: "", avatarUrl: "" });
+  adapter.destroy();
+});
+
+function createGamePushFixture({
+  available = { preloader: true, fullscreen: true, rewarded: true, sticky: true },
+  rewardGranted = true,
+  blockedMirrors = 0,
+  syncFails = false,
+  declaredFields = ["autosave"],
+  language = "ru",
+} = {}) {
+  const host = createHost(TargetPlatform.GAMEPUSH);
+  const calls = [];
+  const sources = [];
+  const adListeners = new Map();
+  const profile = new Map();
+  let syncs = 0;
+  const player = {
+    ready: Promise.resolve(),
+    isLoggedIn: false,
+    name: "",
+    avatar: "",
+    get(key) {
+      return profile.has(key) ? profile.get(key) : undefined;
+    },
+    /* The panel owns the field list; the SDK drops anything else without
+       raising, which is the case the adapter has to notice. */
+    set(key, value) {
+      if (declaredFields.includes(key)) profile.set(key, value);
+    },
+    async sync() {
+      syncs += 1;
+      if (syncFails) throw new Error("profile sync rejected");
+    },
+    async login() {
+      calls.push("login");
+      player.isLoggedIn = true;
+      player.name = "Игрок";
+      player.avatar = "https://avatars.example/7";
+      return true;
+    },
+  };
+  const gp = {
+    language,
+    player,
+    ads: {
+      isPreloaderAvailable: available.preloader,
+      isFullscreenAvailable: available.fullscreen,
+      isRewardedAvailable: available.rewarded,
+      isStickyAvailable: available.sticky,
+      on(name, handler) {
+        const list = adListeners.get(name) || [];
+        list.push(handler);
+        adListeners.set(name, list);
+      },
+      async showPreloader() {
+        calls.push("preloader");
+        return true;
+      },
+      async showFullscreen() {
+        calls.push("fullscreen");
+        return true;
+      },
+      async showRewardedVideo() {
+        calls.push("rewarded");
+        return rewardGranted;
+      },
+      async showSticky() {
+        calls.push("sticky");
+        return true;
+      },
+      async closeSticky() {
+        calls.push("sticky:close");
+      },
+    },
+    async gameStart() {
+      calls.push("gameStart");
+    },
+    async gameplayStart() {
+      calls.push("gameplayStart");
+    },
+    async gameplayStop() {
+      calls.push("gameplayStop");
+    },
+  };
+  host.document.head.appendChild = (script) => {
+    sources.push(script.src);
+    if (sources.length <= blockedMirrors) {
+      Promise.resolve().then(() => script.onerror());
+      return script;
+    }
+    Promise.resolve().then(() => host.__gamePushAdapterInit(gp));
+    return script;
+  };
+  const audio = [];
+  const lifecycleCalls = [];
+  const visible = [];
+  const lifecycle = {
+    audio: (enabled) => audio.push(enabled),
+    pause: () => lifecycleCalls.push("pause"),
+    resume: () => lifecycleCalls.push("resume"),
+    adVisible: (id, on) => visible.push([id, on]),
+  };
+  const adapter = createGamePushPlatformAdapter({
+    config: { gamePushProjectId: 2782, gamePushPublicToken: "token-xyz" },
+    host,
+    lifecycle,
+    target: TargetPlatform.GAMEPUSH,
+  });
+  const emitAd = (name) => {
+    for (const handler of adListeners.get(name) || []) handler();
+  };
+  return {
+    adapter, audio, calls, emitAd, host, lifecycleCalls, player, profile, sources, visible,
+    syncs: () => syncs,
+  };
+}
+
+test("gamepush carries the project identity into the SDK it loads", async () => {
+  const { adapter, calls, sources } = createGamePushFixture();
+  assert.equal(adapter.ready(), true);
+  await adapter.gameLoadingFinished();
+  assert.equal(sources.length, 1);
+  assert.match(sources[0], /^https:\/\/gs\.eponesh\.com\/sdk\/game-score\.js\?/);
+  assert.match(sources[0], /projectId=2782/);
+  assert.match(sources[0], /publicToken=token-xyz/);
+  assert.match(sources[0], /callback=__gamePushAdapterInit/);
+  assert.deepEqual(calls, ["preloader", "gameStart"]);
+  adapter.destroy();
+});
+
+test("gamepush falls through to the next mirror when a CDN is blocked", async () => {
+  const { adapter, calls, sources } = createGamePushFixture({ blockedMirrors: 2 });
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+  assert.equal(sources.length, 3, "the first answering mirror ends the search");
+  assert.equal(new Set(sources).size, 3, "each mirror is a distinct host");
+  assert.ok(calls.includes("gameStart"));
+  adapter.destroy();
+});
+
+test("gamepush shows the loading ad it allows and only then declares the game started", async () => {
+  const { adapter, calls } = createGamePushFixture();
+  adapter.ready();
+  assert.equal(calls.includes("gameStart"), false, "readiness is not a start");
+
+  await adapter.gameLoadingFinished();
+  assert.deepEqual(calls, ["preloader", "gameStart"]);
+
+  await adapter.gameReady();
+  assert.equal(calls.filter((entry) => entry === "gameStart").length, 1);
+  adapter.destroy();
+});
+
+test("gamepush skips the loading ad the publisher withholds", async () => {
+  const { adapter, calls } = createGamePushFixture({
+    available: { preloader: false, fullscreen: true, rewarded: true, sticky: true },
+  });
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+  assert.deepEqual(calls, ["gameStart"]);
+  adapter.destroy();
+});
+
+test("gamepush treats withheld inventory as a refusal, not as a missing format", async () => {
+  const { adapter, calls } = createGamePushFixture({
+    available: { preloader: false, fullscreen: false, rewarded: false, sticky: false },
+  });
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+  assert.deepEqual(await adapter.showInterstitial("break", 1),
+                   { supported: true, shown: false, reason: "rate_limited" });
+  assert.deepEqual(await adapter.showRewarded("offer", 2),
+                   { supported: true, shown: false, rewarded: false, reason: "rate_limited" });
+  assert.deepEqual(await adapter.showBanner("hud"),
+                   { supported: false, shown: false, reason: "unsupported" });
+  assert.deepEqual(calls, ["gameStart"], "nothing is shown behind the publisher's back");
+  adapter.destroy();
+});
+
+test("gamepush grants a reward only when the SDK confirms the view", async () => {
+  const granted = createGamePushFixture();
+  granted.adapter.ready();
+  await granted.adapter.gameLoadingFinished();
+  assert.deepEqual(await granted.adapter.showRewarded("offer", 4),
+                   { supported: true, shown: true, rewarded: true });
+  assert.deepEqual(granted.visible, [[4, true], [4, false]]);
+  granted.adapter.destroy();
+
+  const refused = createGamePushFixture({ rewardGranted: false });
+  refused.adapter.ready();
+  await refused.adapter.gameLoadingFinished();
+  assert.deepEqual(await refused.adapter.showRewarded("offer", 5),
+                   { supported: true, shown: false, rewarded: false, reason: "failed" });
+  refused.adapter.destroy();
+});
+
+test("gamepush stores a save in the player profile and only a sync confirms it", async () => {
+  const { adapter, profile, syncs } = createGamePushFixture();
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+
+  assert.deepEqual(await adapter.loadData("autosave"), { status: "missing" });
+  assert.deepEqual(await adapter.saveData("autosave", '{"planets":9}'), { status: "acknowledged" });
+  assert.equal(profile.get("autosave"), '{"planets":9}');
+  assert.equal(syncs(), 1);
+  assert.deepEqual(await adapter.loadData("autosave"),
+                   { status: "found", value: '{"planets":9}' });
+  adapter.destroy();
+});
+
+test("gamepush reports an undeclared save field instead of a save that was never stored", async () => {
+  const { adapter, syncs } = createGamePushFixture({ declaredFields: [] });
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+  assert.deepEqual(await adapter.saveData("autosave", "{}"), { status: "unavailable" });
+  assert.equal(syncs(), 0, "a dropped field is never worth a round trip");
+  adapter.destroy();
+});
+
+test("gamepush reports a rejected sync as a failed write, never as a stored one", async () => {
+  const { adapter } = createGamePushFixture({ syncFails: true });
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+  assert.deepEqual(await adapter.saveData("autosave", "{}"), { status: "failed" });
+  adapter.destroy();
+});
+
+test("gamepush pauses the game for a full-window ad and never for the banner", async () => {
+  const { adapter, audio, emitAd, lifecycleCalls } = createGamePushFixture();
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+
+  emitAd("sticky:start");
+  assert.deepEqual(lifecycleCalls, [], "a banner shares the page with a running game");
+
+  emitAd("fullscreen:start");
+  emitAd("fullscreen:close");
+  emitAd("rewarded:start");
+  emitAd("rewarded:close");
+  assert.deepEqual(lifecycleCalls, ["pause", "resume", "pause", "resume"]);
+  assert.deepEqual(audio, [false, true, false, true]);
+  adapter.destroy();
+});
+
+test("gamepush resumes only once the tab and the ad have both released the game", async () => {
+  const { adapter, emitAd, host, lifecycleCalls } = createGamePushFixture();
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+
+  host.document.hidden = true;
+  host.document.dispatch("visibilitychange");
+  emitAd("fullscreen:start");
+  emitAd("fullscreen:close");
+  assert.deepEqual(lifecycleCalls, ["pause"], "the tab still holds the game");
+
+  host.document.hidden = false;
+  host.document.dispatch("visibilitychange");
+  assert.deepEqual(lifecycleCalls, ["pause", "resume"]);
+  adapter.destroy();
+});
+
+test("gamepush reports the publisher's language, not the browser's", async () => {
+  const { adapter } = createGamePushFixture({ language: "PT-BR" });
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+  assert.equal(adapter.getLocale(), "pt");
+  adapter.destroy();
+});
+
+test("gamepush hands over the signed-in player after its own login overlay", async () => {
+  const { adapter } = createGamePushFixture();
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+  assert.deepEqual(await adapter.getPlayer(), { authorized: false, name: "", avatarUrl: "" });
+  assert.deepEqual(await adapter.login(), {
+    supported: true,
+    authorized: true,
+    reason: "accepted",
+    name: "Игрок",
+    avatarUrl: "https://avatars.example/7",
+  });
+  adapter.destroy();
+});
+
+test("gamepush offers no board of its own", async () => {
+  const { adapter } = createGamePushFixture();
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+  assert.deepEqual(adapter.leaderboardCaps(),
+                   { canRead: false, canWrite: false, needsLogin: false, nativePopup: false });
+  assert.deepEqual(await adapter.submitScore("planets", 10), { status: "unsupported" });
+  assert.deepEqual(await adapter.fetchEntries("planets"), { status: "unsupported" });
+  adapter.destroy();
+});
+
+test("a gamepush SDK that no mirror delivers still lets the game boot and play", async () => {
+  const { adapter, sources } = createGamePushFixture({ blockedMirrors: 4 });
+  assert.equal(adapter.ready(), true, "a silent publisher is not a failed boot");
+  await adapter.gameLoadingFinished();
+  assert.equal(sources.length, 4, "every mirror is tried exactly once");
+  assert.deepEqual(await adapter.showInterstitial("break", 1),
+                   { supported: false, shown: false, reason: "unsupported" });
+  assert.deepEqual(await adapter.saveData("autosave", "{}"), { status: "unavailable" });
   assert.deepEqual(await adapter.getPlayer(), { authorized: false, name: "", avatarUrl: "" });
   adapter.destroy();
 });

@@ -23,6 +23,7 @@ targets that use the `mock` SDK adapter.
 | `crazygames` | `crazygames` | Direct CrazyGames SDK adapter. |
 | `wavedash` | `wavedash` | Direct Wavedash adapter. The host page injects the SDK. |
 | `pikabu` | `pikabu` | Direct Pikabu Games adapter. The SDK loads from the portal origin and answers only there. |
+| `gamepush` | `gamepush` | GamePush publisher SDK. One build is re-served to many host platforms. |
 
 The authoritative mapping and static policy are in `publish-targets/targets.json`.
 See [architecture.md](architecture.md) for operation ownership, storage outcomes,
@@ -47,7 +48,8 @@ typedef enum platform_target_t {
   PLATFORM_TARGET_PLAYGAMA,
   PLATFORM_TARGET_CRAZYGAMES,
   PLATFORM_TARGET_WAVEDASH,
-  PLATFORM_TARGET_PIKABU
+  PLATFORM_TARGET_PIKABU,
+  PLATFORM_TARGET_GAMEPUSH
 } platform_target_t;
 
 typedef enum platform_sdk_t {
@@ -57,7 +59,8 @@ typedef enum platform_sdk_t {
   PLATFORM_SDK_PLAYGAMA,
   PLATFORM_SDK_CRAZYGAMES,
   PLATFORM_SDK_WAVEDASH,
-  PLATFORM_SDK_PIKABU
+  PLATFORM_SDK_PIKABU,
+  PLATFORM_SDK_GAMEPUSH
 } platform_sdk_t;
 
 platform_target_t platform_sdk_target(void);
@@ -249,8 +252,8 @@ Only the selected SDK adapter may be included in a release build.
 Required build inputs:
 
 ```text
-target platform: local | itch | poki | yandex | playgama | crazygames | wavedash | pikabu
-platform SDK:    mock  | mock | poki | yandex | playgama | crazygames | wavedash | pikabu
+target platform: local | itch | poki | yandex | playgama | crazygames | wavedash | pikabu | gamepush
+platform SDK:    mock  | mock | poki | yandex | playgama | crazygames | wavedash | pikabu | gamepush
 ```
 
 The target manifest computes the SDK adapter from the target. The game build
