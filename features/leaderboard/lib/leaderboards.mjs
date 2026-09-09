@@ -13,8 +13,10 @@ export const PORTAL_ABILITY = {
   playgama: { boards: true, read: "runtime", write: true, scopes: ["all_time"] },
   wavedash: { boards: true, read: true, write: true, scopes: ["all_time"] },
   pikabu: { boards: false, read: false, write: false, scopes: [] },
-  /* GamePush has a board of its own, but one build is re-served to two dozen
-     hosts, so a portal board would split the ranking by host. */
+  /* GamePush has a board of its own -- global, scoped, with a native popup --
+     but it is scoped to the GamePush project, and this game also ships to
+     portals GamePush does not serve. Taking it would leave those players on a
+     second ladder. */
   gamepush: { boards: false, read: false, write: false, scopes: [] },
   poki: { boards: false, read: false, write: false, scopes: [] },
   itch: { boards: false, read: false, write: false, scopes: [] },
