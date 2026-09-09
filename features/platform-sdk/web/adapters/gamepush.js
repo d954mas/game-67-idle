@@ -17,6 +17,11 @@ const SDK_MIRRORS = Object.freeze([
    itself detects that condition and still expects the game to play. Past this
    deadline every call degrades to a no-op instead of hanging the boot. */
 const SDK_INIT_TIMEOUT_MS = 15000;
+/* How long the loading screen may wait for the SDK to appear. The publisher
+   has to learn the game started, but a player whose adblocker swallowed the
+   script must not sit and watch a full bar: past this the game is revealed and
+   the milestone is reported later, if the SDK ever arrives. */
+const SDK_REVEAL_WAIT_MS = 4000;
 const AD_TIMEOUT_MS = 120000;
 const SAVE_TIMEOUT_MS = 15000;
 
@@ -27,6 +32,7 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
   let sdkReady = null;
   let gp = null;
   let started = false;
+  let startSignalled = null;
   let preloaderShowing = null;
   /* Ad events arrive from the SDK as well as from this adapter's own calls, so
      pause is counted: the game resumes when the last overlay is gone. */
@@ -185,13 +191,24 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
      learns only that the game is ready. */
   function gameLoadingProgress() {}
 
+  function signalStart() {
+    if (startSignalled) return startSignalled;
+    startSignalled = (async () => {
+      const instance = await sdk();
+      if (!instance || destroyed || typeof instance.gameStart !== "function") return;
+      /* The preloader is waited for in full once the SDK is there: it is a real
+         ad, and the platform refuses the format after the start. */
+      if (preloaderShowing) await preloaderShowing;
+      if (destroyed) return;
+      started = true;
+      try { await instance.gameStart(); } catch { /* the host is not listening */ }
+    })();
+    return startSignalled;
+  }
+
   async function reveal() {
-    const instance = await sdk();
-    if (!instance || started || typeof instance.gameStart !== "function") return;
-    if (preloaderShowing) await preloaderShowing;
-    if (started || destroyed) return;
-    started = true;
-    try { await instance.gameStart(); } catch { /* the host is not listening */ }
+    const pending = signalStart();
+    if (await deadline(sdk(), null, SDK_REVEAL_WAIT_MS)) await pending;
   }
 
   async function gameLoadingFinished() {

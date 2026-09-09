@@ -2044,6 +2044,8 @@ function createGamePushFixture({
   syncFails = false,
   declaredFields = ["autosave"],
   language = "ru",
+  deliver = "auto",
+  manualTimers = false,
 } = {}) {
   const host = createHost(TargetPlatform.GAMEPUSH);
   const calls = [];
@@ -2119,13 +2121,18 @@ function createGamePushFixture({
       calls.push("gameplayStop");
     },
   };
+  const timers = [];
+  if (manualTimers) {
+    host.setTimeout = (fn, ms) => timers.push({ fn, ms });
+    host.clearTimeout = () => {};
+  }
   host.document.head.appendChild = (script) => {
     sources.push(script.src);
     if (sources.length <= blockedMirrors) {
       Promise.resolve().then(() => script.onerror());
       return script;
     }
-    Promise.resolve().then(() => host.__gamePushAdapterInit(gp));
+    if (deliver === "auto") Promise.resolve().then(() => host.__gamePushAdapterInit(gp));
     return script;
   };
   const audio = [];
@@ -2149,6 +2156,14 @@ function createGamePushFixture({
   return {
     adapter, audio, calls, emitAd, host, lifecycleCalls, player, profile, sources, visible,
     syncs: () => syncs,
+    deliverSdk: () => host.__gamePushAdapterInit(gp),
+    fireTimers: (ms) => {
+      for (const timer of timers.filter((entry) => entry.ms === ms && entry.fn)) {
+        const fire = timer.fn;
+        timer.fn = null;
+        fire();
+      }
+    },
   };
 }
 
@@ -2340,4 +2355,22 @@ test("a gamepush SDK that no mirror delivers still lets the game boot and play",
   assert.deepEqual(await adapter.saveData("autosave", "{}"), { status: "unavailable" });
   assert.deepEqual(await adapter.getPlayer(), { authorized: false, name: "", avatarUrl: "" });
   adapter.destroy();
+});
+
+test("gamepush reveals the game instead of waiting out an SDK that stays silent", async () => {
+  /* The script answered with bytes but the SDK never called back -- an
+     adblocker, or a host that has not whitelisted the page. The loading screen
+     is not the publisher's to hold. */
+  const fx = createGamePushFixture({ deliver: "manual", manualTimers: true });
+  assert.equal(fx.adapter.ready(), true);
+  const revealed = fx.adapter.gameLoadingFinished();
+  fx.fireTimers(4000);
+  await revealed;
+  assert.deepEqual(fx.calls, [], "a silent SDK reports nothing and holds nothing");
+
+  fx.deliverSdk();
+  await flushMicrotasks();
+  await flushMicrotasks();
+  assert.deepEqual(fx.calls, ["preloader", "gameStart"], "a late SDK still gets its milestone");
+  fx.adapter.destroy();
 });

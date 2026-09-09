@@ -51,10 +51,10 @@
       "bundleBytes": 5716
     },
     "gamepush": {
-      "sourceSha256": "7c9162850daba25b4164c55ff6c7fce6044070cf62b60adda28e3b7505ecc6a1",
-      "bundleSha256": "ac702d34545e0e2d41aa70fb7440292c2c2fcf458838ea6c3cc3ec994055c46a",
-      "sourceBytes": 17138,
-      "bundleBytes": 6690
+      "sourceSha256": "9132d774ed0569be67f2234f0bd2f2996b6cf7408705975fde8c4f70c02fb124",
+      "bundleSha256": "513448fc0ecb9a42cad3a4e74be1a643a88b536b34590694b902f56d793a6f5f",
+      "sourceBytes": 17910,
+      "bundleBytes": 6756
     }
   }
 }
