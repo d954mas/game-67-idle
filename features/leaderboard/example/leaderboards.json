@@ -18,6 +18,7 @@
         "wavedash": "portal",
         "playgama": "portal",
         "pikabu": "http",
+        "gamepush": "http",
         "poki": "http",
         "itch": "http",
         "local": "http"
