@@ -2096,7 +2096,12 @@ function createGamePushFixture({
       }
       return {
         abovePlayers: [{ id: 7, name: "Bo", avatar: "", position: 2, score: 20 }],
-        belowPlayers: [{ id: 5, name: "Cy", avatar: "", position: 4, score: 5 }],
+        /* The neighbour list carries the player again, which is what the SDK
+           does when it is asked to place the player in the answer. */
+        belowPlayers: [
+          { id: 1, name: "Me", avatar: "", position: 3, score: 12 },
+          { id: 5, name: "Cy", avatar: "", position: 4, score: 5 },
+        ],
         player: { id: 1, name: "Me", avatar: "", position: 3, score: 12 },
       };
     },

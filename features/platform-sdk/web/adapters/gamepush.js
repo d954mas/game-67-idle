@@ -439,11 +439,9 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
     const instance = await sdk();
     const board = leaderboardBoard();
     if (!board) return { status: "unsupported" };
-    const query = {
-      orderBy: [LEADERBOARD_FIELD],
-      order: "DESC",
-      includeFields: [LEADERBOARD_FIELD],
-    };
+    /* The ranked field comes back with the rows on its own; asking for it again
+       as an included field only repeats it in the answer's field list. */
+    const query = { orderBy: [LEADERBOARD_FIELD], order: "DESC" };
     try {
       /* Two answers, because one cannot be both: a clean top ends at the top,
          while the rows around the player are only returned when the player is
@@ -454,13 +452,18 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
       ]);
       if (!top) return { status: "failed" };
       const selfId = instance && instance.player ? instance.player.id : null;
-      const above = near && near.abovePlayers;
-      const below = near && near.belowPlayers;
       const own = near && near.player ? leaderboardRow(near.player, selfId) : null;
+      /* A neighbour list can carry the player again, so the player's own row is
+         placed once, from the answer that is about the player. */
+      const neighbours = (list) => leaderboardRows(list, selfId).filter((row) => !row.you);
       return {
         status: "ok",
         top: leaderboardRows(top.players || top.topPlayers, selfId),
-        around: [...leaderboardRows(above, selfId), ...(own ? [own] : []), ...leaderboardRows(below, selfId)],
+        around: [
+          ...neighbours(near && near.abovePlayers),
+          ...(own ? [own] : []),
+          ...neighbours(near && near.belowPlayers),
+        ],
         player: own ? { rank: own.rank, value: own.value } : null,
       };
     } catch { return { status: "failed" }; }
@@ -472,12 +475,7 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
     if (!board || typeof board.open !== "function") return { status: "unsupported" };
     enterPause();
     try {
-      await board.open({
-        orderBy: [LEADERBOARD_FIELD],
-        order: "DESC",
-        limit: TOP_ROWS,
-        includeFields: [LEADERBOARD_FIELD],
-      });
+      await board.open({ orderBy: [LEADERBOARD_FIELD], order: "DESC", limit: TOP_ROWS });
       return { status: "ok" };
     } catch {
       return { status: "failed" };
