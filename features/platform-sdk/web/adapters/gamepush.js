@@ -29,6 +29,11 @@ const SDK_REVEAL_WAIT_MS = 4000;
 const PRELOADER_START_MS = 3000;
 const AD_TIMEOUT_MS = 120000;
 const SAVE_TIMEOUT_MS = 15000;
+/* The global board ranks players by their own fields; this is the one the
+   publisher's overlay shows by default and the one their hosts read. */
+const LEADERBOARD_FIELD = "score";
+const TOP_ROWS = 20;
+const AROUND_ROWS = 5;
 
 export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
   const projectId = String((config && config.gamePushProjectId) || "");
@@ -375,23 +380,110 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
     return language ? String(language).slice(0, 2).toLowerCase() : "en";
   }
 
-  /* GamePush carries a board of its own, but it lives per project and cannot
-     hold the entries this game already keeps for every other target, so the
-     self-hosted board stays the single ranking. */
-  function leaderboardCaps() {
-    return { canRead: false, canWrite: false, needsLogin: false, nativePopup: false };
+  /* The global board is built by the publisher out of player fields, so it has
+     no id to address and no console entry to create: a score is a field write
+     that travels with the next sync. The board id the game passes names the
+     same single ranking on every other portal and is not needed here. The
+     isolated boards the panel can create -- daily, per level, tournament -- are
+     a different feature this game does not use. */
+  function leaderboardBoard() {
+    const board = gp && gp.leaderboard;
+    return !destroyed && board && typeof board.fetch === "function" ? board : null;
   }
 
-  async function submitScore() {
-    return { status: "unsupported" };
+  function leaderboardCaps() {
+    const board = leaderboardBoard();
+    return {
+      canRead: Boolean(board),
+      canWrite: Boolean(!destroyed && gp && gp.player && typeof gp.player.set === "function"),
+      needsLogin: false,
+      nativePopup: Boolean(board && typeof board.open === "function"),
+    };
+  }
+
+  async function submitScore(boardId, scope, value) {
+    const instance = await sdk();
+    const player = instance && instance.player;
+    if (!player || typeof player.set !== "function" || typeof player.sync !== "function") {
+      return { status: "unsupported" };
+    }
+    const score = Math.max(0, Math.floor(Number(value) || 0));
+    try {
+      player.set(LEADERBOARD_FIELD, score);
+      if (Number(player.get(LEADERBOARD_FIELD)) !== score) return { status: "unsupported" };
+    } catch { return { status: "unsupported" }; }
+    const synced = await deadline(
+      Promise.resolve(player.sync()).then(() => true, () => false),
+      false,
+      SAVE_TIMEOUT_MS);
+    return synced ? { status: "ok" } : { status: "failed" };
+  }
+
+  function leaderboardRow(entry, selfId) {
+    const rank = entry.position !== undefined ? entry.position : entry.rank;
+    return {
+      value: Math.max(0, Math.floor(Number(entry[LEADERBOARD_FIELD]) || 0)),
+      rank: Math.max(0, Math.floor(Number(rank) || 0)),
+      you: Boolean(selfId !== undefined && selfId !== null && entry.id === selfId),
+      name: typeof entry.name === "string" ? entry.name : "",
+      avatarUrl: typeof entry.avatar === "string" ? entry.avatar : "",
+      extra: "",
+    };
+  }
+
+  function leaderboardRows(list, selfId) {
+    return Array.isArray(list) ? list.map((entry) => leaderboardRow(entry, selfId)) : [];
   }
 
   async function fetchEntries() {
-    return { status: "unsupported" };
+    const instance = await sdk();
+    const board = leaderboardBoard();
+    if (!board) return { status: "unsupported" };
+    const query = {
+      orderBy: [LEADERBOARD_FIELD],
+      order: "DESC",
+      includeFields: [LEADERBOARD_FIELD],
+    };
+    try {
+      /* Two answers, because one cannot be both: a clean top ends at the top,
+         while the rows around the player are only returned when the player is
+         asked for. */
+      const [top, near] = await Promise.all([
+        board.fetch({ ...query, limit: TOP_ROWS, withMe: "none" }),
+        board.fetch({ ...query, limit: 1, withMe: "first", showNearest: AROUND_ROWS }),
+      ]);
+      if (!top) return { status: "failed" };
+      const selfId = instance && instance.player ? instance.player.id : null;
+      const above = near && near.abovePlayers;
+      const below = near && near.belowPlayers;
+      const own = near && near.player ? leaderboardRow(near.player, selfId) : null;
+      return {
+        status: "ok",
+        top: leaderboardRows(top.players || top.topPlayers, selfId),
+        around: [...leaderboardRows(above, selfId), ...(own ? [own] : []), ...leaderboardRows(below, selfId)],
+        player: own ? { rank: own.rank, value: own.value } : null,
+      };
+    } catch { return { status: "failed" }; }
   }
 
+  /* The overlay is the publisher's, and it covers the canvas while it is up. */
   async function showLeaderboard() {
-    return { status: "unsupported" };
+    const board = leaderboardBoard();
+    if (!board || typeof board.open !== "function") return { status: "unsupported" };
+    enterPause();
+    try {
+      await board.open({
+        orderBy: [LEADERBOARD_FIELD],
+        order: "DESC",
+        limit: TOP_ROWS,
+        includeFields: [LEADERBOARD_FIELD],
+      });
+      return { status: "ok" };
+    } catch {
+      return { status: "failed" };
+    } finally {
+      leavePause();
+    }
   }
 
   const visibilityDocument = documentRef();

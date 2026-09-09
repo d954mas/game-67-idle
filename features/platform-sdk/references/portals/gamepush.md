@@ -28,10 +28,12 @@ Source index:
 - S11 `https://gamepush.com/sdk/docs/classes/MyPlayer.html` — the player object's typed surface
 - S12 `https://docs.gamepush.com/tutorials/publishing-the-game-on-platforms-guide/` — hosting, distribution, per-platform requirements
 - S13 `https://gamepush.com/service/distribution-agreement/` — the revenue split by developer status
+- S14 `https://docs.gamepush.com/docs/leaderboards/leaderboard/` — the global board, its query and its result
+- S15 `https://gamepush.com/sdk/docs/classes/Leaderboard.html` — the board's typed surface, global and scoped
 
 Not read for this packet, and therefore not described here: purchases,
-multiplayer, channels, achievements, A/B experiments, rewards, segments and
-triggers.
+multiplayer, channels, achievements, A/B experiments, rewards, segments,
+triggers, and the isolated (scoped) leaderboards.
 
 Repo files this packet maps onto: `features/platform-sdk/references/contract.md`,
 `features/platform-sdk/web/adapters/gamepush.js`,
@@ -185,10 +187,36 @@ flag afterwards is the outcome.
 
 ## 7. Leaderboards
 
-GamePush ships `gp.leaderboard` (S9). This game does not use it: its board is
-its own backend so that one ranking spans every publishing target, and a
-GamePush board would be scoped to the GamePush project while the same build
-runs on two dozen hosts.
+Two kinds, and the panel names them apart. The **global** board is assembled by
+the publisher out of player fields -- it has no id, no console entry, and
+nothing to create: whatever the player's `score` field holds is their standing.
+The **isolated** boards (S9's `fetchScoped`/`openScoped`, created in the panel)
+are the daily, per-level and tournament ones, addressed by tag and variant.
+
+This game takes the global board, which makes a score a field write:
+
+```javascript
+gp.player.set('score', value);
+await gp.player.sync();
+```
+
+Reading and showing it (S9, and the query shape from the leaderboard docs):
+
+```javascript
+gp.leaderboard.fetch({ orderBy: ['score'], order: 'DESC', limit: 20,
+                       includeFields: ['score'], withMe: 'first', showNearest: 5 });
+gp.leaderboard.open();
+```
+
+`fetch` answers with `{ players, fields, topPlayers, abovePlayers, belowPlayers,
+player }`, and a row carries `id`, `name`, `avatar`, `position` and the ranked
+fields. `open()` draws the publisher's own overlay over the canvas.
+
+Consequence for this repo: `gamepush` is a portal board family in
+`features/leaderboard`, like Yandex, and the board id the manifest carries is a
+formality -- the global board is one board, so the adapter ignores it. The day
+scope stays with the self-hosted targets: only an isolated board could reset,
+and this game does not create one.
 
 ## 8. What the platform requires of the build
 

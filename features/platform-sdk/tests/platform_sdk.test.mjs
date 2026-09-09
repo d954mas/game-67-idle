@@ -2042,7 +2042,8 @@ function createGamePushFixture({
   rewardGranted = true,
   blockedMirrors = 0,
   syncFails = false,
-  declaredFields = ["autosave"],
+  declaredFields = ["autosave", "score"],
+  boardAnswers = true,
   language = "ru",
   deliver = "auto",
   manualTimers = false,
@@ -2057,6 +2058,7 @@ function createGamePushFixture({
   let releasePreloader = () => {};
   const player = {
     ready: Promise.resolve(),
+    id: 1,
     isLoggedIn: false,
     name: "",
     avatar: "",
@@ -2080,9 +2082,32 @@ function createGamePushFixture({
       return true;
     },
   };
+  const board = {
+    async fetch(query) {
+      calls.push(`board:fetch:${query.withMe}`);
+      if (!boardAnswers) throw new Error("board unavailable");
+      if (query.withMe === "none") {
+        return {
+          players: [
+            { id: 9, name: "Ada", avatar: "https://avatars.example/9", position: 1, score: 40 },
+            { id: 7, name: "Bo", avatar: "", position: 2, score: 20 },
+          ],
+        };
+      }
+      return {
+        abovePlayers: [{ id: 7, name: "Bo", avatar: "", position: 2, score: 20 }],
+        belowPlayers: [{ id: 5, name: "Cy", avatar: "", position: 4, score: 5 }],
+        player: { id: 1, name: "Me", avatar: "", position: 3, score: 12 },
+      };
+    },
+    async open() {
+      calls.push("board:open");
+    },
+  };
   const gp = {
     language,
     player,
+    leaderboard: board,
     ads: {
       isPreloaderAvailable: available.preloader,
       isFullscreenAvailable: available.fullscreen,
@@ -2338,14 +2363,65 @@ test("gamepush hands over the signed-in player after its own login overlay", asy
   adapter.destroy();
 });
 
-test("gamepush offers no board of its own", async () => {
+test("gamepush ranks players on the board the publisher assembles", async () => {
   const { adapter } = createGamePushFixture();
   adapter.ready();
   await adapter.gameLoadingFinished();
   assert.deepEqual(adapter.leaderboardCaps(),
-                   { canRead: false, canWrite: false, needsLogin: false, nativePopup: false });
-  assert.deepEqual(await adapter.submitScore("planets", 10), { status: "unsupported" });
-  assert.deepEqual(await adapter.fetchEntries("planets"), { status: "unsupported" });
+                   { canRead: true, canWrite: true, needsLogin: false, nativePopup: true });
+  adapter.destroy();
+});
+
+test("gamepush submits a score as the field write it is", async () => {
+  const { adapter, profile, syncs } = createGamePushFixture();
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+  assert.deepEqual(await adapter.submitScore("planets", "all_time", 42), { status: "ok" });
+  assert.equal(profile.get("score"), 42);
+  assert.equal(syncs(), 1);
+  adapter.destroy();
+});
+
+test("gamepush reports a rejected sync as a failed score, never as a ranked one", async () => {
+  const { adapter } = createGamePushFixture({ syncFails: true });
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+  assert.deepEqual(await adapter.submitScore("planets", "all_time", 42), { status: "failed" });
+  adapter.destroy();
+});
+
+test("gamepush reads the head of the board and the rows around the player", async () => {
+  const { adapter } = createGamePushFixture();
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+  const answer = await adapter.fetchEntries("planets");
+  assert.equal(answer.status, "ok");
+  assert.deepEqual(answer.top, [
+    { value: 40, rank: 1, you: false, name: "Ada", avatarUrl: "https://avatars.example/9", extra: "" },
+    { value: 20, rank: 2, you: false, name: "Bo", avatarUrl: "", extra: "" },
+  ]);
+  assert.deepEqual(answer.around.map((row) => row.rank), [2, 3, 4], "the player sits between its neighbours");
+  assert.deepEqual(answer.around.map((row) => row.you), [false, true, false]);
+  assert.deepEqual(answer.player, { rank: 3, value: 12 });
+  adapter.destroy();
+});
+
+test("gamepush answers a board that refuses with a failure, not with an empty ranking", async () => {
+  const { adapter } = createGamePushFixture({ boardAnswers: false });
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+  assert.deepEqual(await adapter.fetchEntries("planets"), { status: "failed" });
+  adapter.destroy();
+});
+
+test("gamepush pauses the game behind the publisher's own board overlay", async () => {
+  const { adapter, audio, calls, lifecycleCalls } = createGamePushFixture();
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+  assert.deepEqual(await adapter.showLeaderboard("planets"), { status: "ok" });
+  assert.ok(calls.includes("board:open"));
+  assert.deepEqual(lifecycleCalls, ["pause", "resume"]);
+  assert.deepEqual(audio, [false, true]);
   adapter.destroy();
 });
 

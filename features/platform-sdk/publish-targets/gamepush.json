@@ -48,7 +48,7 @@
     "load_policy": "The adapter injects the SDK with the project id and public token as query parameters and receives the instance through a global callback. Four mirrors carry the same file; the first that answers wins, so a blocked CDN is not a dead game.",
     "ads": "showFullscreen for interstitial, showRewardedVideo for rewarded, showSticky/closeSticky for the banner, showPreloader before gameStart only; every format is gated on its is*Available flag",
     "storage": "player fields on GamePush servers: set() then sync(); a field the panel does not declare is dropped silently",
-    "leaderboards": "the platform has a board, but this game keeps its own so one ranking spans every target",
+    "leaderboards": "the global board is assembled from player fields: a score is player.set('score') plus sync(), read back with leaderboard.fetch and shown by leaderboard.open; it has no id and no console entry",
     "debug_ui": "forbidden in release artifact",
     "forbidden_markers": [
       "https://sdk.crazygames.com/crazygames-sdk-v3.js",

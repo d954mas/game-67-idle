@@ -13,11 +13,10 @@ export const PORTAL_ABILITY = {
   playgama: { boards: true, read: "runtime", write: true, scopes: ["all_time"] },
   wavedash: { boards: true, read: true, write: true, scopes: ["all_time"] },
   pikabu: { boards: false, read: false, write: false, scopes: [] },
-  /* GamePush has a board of its own -- global, scoped, with a native popup --
-     but it is scoped to the GamePush project, and this game also ships to
-     portals GamePush does not serve. Taking it would leave those players on a
-     second ladder. */
-  gamepush: { boards: false, read: false, write: false, scopes: [] },
+  /* The global board is assembled from player fields, so it needs no console
+     entry and holds no scope of its own; the isolated boards that could carry a
+     day are a separate feature. */
+  gamepush: { boards: true, read: true, write: true, scopes: ["all_time"] },
   poki: { boards: false, read: false, write: false, scopes: [] },
   itch: { boards: false, read: false, write: false, scopes: [] },
   local: { boards: false, read: false, write: false, scopes: [] },
