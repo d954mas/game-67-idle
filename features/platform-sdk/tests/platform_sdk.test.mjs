@@ -2046,6 +2046,7 @@ function createGamePushFixture({
   language = "ru",
   deliver = "auto",
   manualTimers = false,
+  preloaderResolves = true,
 } = {}) {
   const host = createHost(TargetPlatform.GAMEPUSH);
   const calls = [];
@@ -2053,6 +2054,7 @@ function createGamePushFixture({
   const adListeners = new Map();
   const profile = new Map();
   let syncs = 0;
+  let releasePreloader = () => {};
   const player = {
     ready: Promise.resolve(),
     isLoggedIn: false,
@@ -2093,7 +2095,8 @@ function createGamePushFixture({
       },
       async showPreloader() {
         calls.push("preloader");
-        return true;
+        if (preloaderResolves) return true;
+        return new Promise((resolve) => { releasePreloader = () => resolve(true); });
       },
       async showFullscreen() {
         calls.push("fullscreen");
@@ -2157,6 +2160,7 @@ function createGamePushFixture({
     adapter, audio, calls, emitAd, host, lifecycleCalls, player, profile, sources, visible,
     syncs: () => syncs,
     deliverSdk: () => host.__gamePushAdapterInit(gp),
+    releasePreloader: () => releasePreloader(),
     fireTimers: (ms) => {
       for (const timer of timers.filter((entry) => entry.ms === ms && entry.fn)) {
         const fire = timer.fn;
@@ -2372,5 +2376,35 @@ test("gamepush reveals the game instead of waiting out an SDK that stays silent"
   await flushMicrotasks();
   await flushMicrotasks();
   assert.deepEqual(fx.calls, ["preloader", "gameStart"], "a late SDK still gets its milestone");
+  fx.adapter.destroy();
+});
+
+test("gamepush does not hold the loading screen for a loading ad that never begins", async () => {
+  /* With no inventory the call is simply never answered -- neither an ad nor a
+     refusal comes back. */
+  const fx = createGamePushFixture({ preloaderResolves: false, manualTimers: true });
+  fx.adapter.ready();
+  const revealed = fx.adapter.gameLoadingFinished();
+  await flushMicrotasks();
+  fx.fireTimers(3000);
+  await revealed;
+  assert.deepEqual(fx.calls, ["preloader", "gameStart"]);
+  fx.adapter.destroy();
+});
+
+test("gamepush stays behind a loading ad that did begin, however long it runs", async () => {
+  const fx = createGamePushFixture({ preloaderResolves: false, manualTimers: true });
+  fx.adapter.ready();
+  const revealed = fx.adapter.gameLoadingFinished();
+  await flushMicrotasks();
+  fx.emitAd("preloader:start");
+  fx.fireTimers(3000);
+  await flushMicrotasks();
+  assert.deepEqual(fx.calls, ["preloader"], "the game is not revealed under a running ad");
+
+  fx.releasePreloader();
+  fx.emitAd("preloader:close");
+  await revealed;
+  assert.deepEqual(fx.calls, ["preloader", "gameStart"]);
   fx.adapter.destroy();
 });

@@ -22,6 +22,11 @@ const SDK_INIT_TIMEOUT_MS = 15000;
    script must not sit and watch a full bar: past this the game is revealed and
    the milestone is reported later, if the SDK ever arrives. */
 const SDK_REVEAL_WAIT_MS = 4000;
+/* How long the loading ad has to begin. A preloader with nothing to fill it
+   answers neither with an ad nor with a refusal, so an unanswered call past
+   this window is treated as no ad at all. Once one is on screen it is waited
+   out in full, however long it runs. */
+const PRELOADER_START_MS = 3000;
 const AD_TIMEOUT_MS = 120000;
 const SAVE_TIMEOUT_MS = 15000;
 
@@ -34,6 +39,7 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
   let started = false;
   let startSignalled = null;
   let preloaderShowing = null;
+  let preloaderStarted = false;
   /* Ad events arrive from the SDK as well as from this adapter's own calls, so
      pause is counted: the game resumes when the last overlay is gone. */
   let pauseDepth = 0;
@@ -154,7 +160,10 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
     if (!ads || typeof ads.on !== "function") return;
     for (const format of ["fullscreen", "rewarded", "preloader"]) {
       try {
-        ads.on(`${format}:start`, () => { if (!destroyed) enterPause(); });
+        ads.on(`${format}:start`, () => {
+          if (format === "preloader") preloaderStarted = true;
+          if (!destroyed) enterPause();
+        });
         ads.on(`${format}:close`, () => { if (!destroyed) leavePause(); });
       } catch { /* the SDK is not broadcasting this format */ }
     }
@@ -180,10 +189,14 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
     const ads = instance.ads;
     if (preloaderShowing || started || !ads || typeof ads.showPreloader !== "function") return;
     preloaderShowing = (async () => {
+      if (!ads.isPreloaderAvailable) return;
+      let finished = null;
       try {
-        if (!ads.isPreloaderAvailable) return;
-        await ads.showPreloader();
-      } catch { /* an unavailable preloader is a normal outcome */ }
+        finished = Promise.resolve(ads.showPreloader()).catch(() => null);
+      } catch { return; /* an unavailable preloader is a normal outcome */ }
+      const closed = await deadline(finished.then(() => true), null, PRELOADER_START_MS);
+      if (closed === null && !preloaderStarted) return;
+      await finished;
     })();
   }
 
@@ -201,7 +214,9 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
       if (preloaderShowing) await preloaderShowing;
       if (destroyed) return;
       started = true;
-      try { await instance.gameStart(); } catch { /* the host is not listening */ }
+      /* The milestone is a notification, not a handshake: nothing the game does
+         next depends on the publisher acknowledging it. */
+      try { Promise.resolve(instance.gameStart()).catch(() => {}); } catch { /* the host is not listening */ }
     })();
     return startSignalled;
   }
