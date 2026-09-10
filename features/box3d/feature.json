@@ -1,0 +1,38 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "box3d",
+  "version": "0.1.0",
+  "title": "Box3D Physics",
+  "summary": "Optional in-place 3D rigid-body physics with pinned MIT Box3D source and portable native/WASM build wiring.",
+  "status": "opt-in",
+  "kind": "gameplay-infrastructure",
+  "copy_model": "in-place",
+  "layer": "L1",
+  "owners": [
+    "features/box3d"
+  ],
+  "dependencies": [],
+  "provides": [
+    "box3d_enable(target)",
+    "nt::box3d CMake target",
+    "box3d/box3d.h upstream b3 API"
+  ],
+  "registers": {
+    "link_libraries": [
+      "nt::box3d"
+    ]
+  },
+  "flags": {
+    "runtime": "FEATURE_BOX3D=1 when linked"
+  },
+  "commands": {
+    "test": "node --test features/box3d/tests/integration.test.mjs",
+    "contracts": "node features/validate_contracts.mjs"
+  },
+  "manuals": {
+    "install": "features/box3d/INSTALL.md",
+    "upstream": "features/box3d/UPSTREAM.json"
+  },
+  "art_needs": [],
+  "default_template": false
+}

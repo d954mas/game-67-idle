@@ -1,0 +1,513 @@
+{
+  "name": "Box3D",
+  "origin": "sourced",
+  "repository": "https://github.com/erincatto/box3d.git",
+  "revision": "47d7f7cc7e091142c08d11dc7d2e493c5d34f536",
+  "version": "0.1.0",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2026 Erin Catto",
+  "licenseFile": "vendor/box3d/LICENSE",
+  "selection": [
+    "src/",
+    "include/",
+    "LICENSE"
+  ],
+  "modifications": [],
+  "files": [
+    {
+      "path": "include/box3d/base.h",
+      "bytes": 6166,
+      "sha256": "9cc8ef385f7967136f1bc5c7e07a2f3f3bad9449887c3b6e9ad76e6206732206"
+    },
+    {
+      "path": "include/box3d/box3d.h",
+      "bytes": 83379,
+      "sha256": "b0538f06f38514d0118cc244251135f641ac0ef0197c3db5d4438b5ab3c24c78"
+    },
+    {
+      "path": "include/box3d/collision.h",
+      "bytes": 27865,
+      "sha256": "746500371a59e523266c41208d38b7c40c7d833d111c07d0aa5a40e9dfb6381e"
+    },
+    {
+      "path": "include/box3d/config.h",
+      "bytes": 1284,
+      "sha256": "7aae58402d9324d6f63917336ad39b92d1dfcbc3df81a932b824110af0a9fe6d"
+    },
+    {
+      "path": "include/box3d/constants.h",
+      "bytes": 6633,
+      "sha256": "da64e18e50811b3ed630669f01c8f0ac76633c87949a25f62e363ef054b8e9bb"
+    },
+    {
+      "path": "include/box3d/id.h",
+      "bytes": 5198,
+      "sha256": "c8f1ab6e9016125037dae37a837938a3b1770696c796ed0131c3142760219657"
+    },
+    {
+      "path": "include/box3d/math_functions.h",
+      "bytes": 33311,
+      "sha256": "974f813d8b5e1cd5fad98a655e79e9f5027cb3f9e07628227eb583fe635f4461"
+    },
+    {
+      "path": "include/box3d/types.h",
+      "bytes": 95750,
+      "sha256": "832320d29bd609fbad03bcc3d548752120fb5a2692a210ed29e49bbe0e61d794"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1088,
+      "sha256": "d8455e91cc46d72163cf58a3827c7983e1ffa5b8f2de1ceaa8d08d6a4956829a"
+    },
+    {
+      "path": "src/aabb.c",
+      "bytes": 3854,
+      "sha256": "5010942515fca3ba8de2dfa7b81aa2cdcab0f60f371860407b7bd5943ee32b32"
+    },
+    {
+      "path": "src/aabb.h",
+      "bytes": 2092,
+      "sha256": "f0e27d72cb41a2ee3e3c09067410c6611d919288b6ecf2ff9df795006ec58fe9"
+    },
+    {
+      "path": "src/algorithm.h",
+      "bytes": 1406,
+      "sha256": "5109f3d34e2ff37672515162501c783ff62306f45742ff98ac4039279a9328e8"
+    },
+    {
+      "path": "src/arena_allocator.c",
+      "bytes": 4169,
+      "sha256": "ff2a7652df0fe8eff0f7dbb71f037b856ebdf6d156c48a2f80513dc331292437"
+    },
+    {
+      "path": "src/arena_allocator.h",
+      "bytes": 3150,
+      "sha256": "b5e366198f1da32a47448f5dd0c020504cfec7b11684cac016e6b0bb60c6cb8f"
+    },
+    {
+      "path": "src/bitset.c",
+      "bytes": 2104,
+      "sha256": "42e469ca216142d360f71635b6286c0a4e030fd212fcb737c85d5b2b15ff8e0e"
+    },
+    {
+      "path": "src/bitset.h",
+      "bytes": 1790,
+      "sha256": "8845be065a83615d4bf121cb9fb3f4d0417d1652f53ea0bdfa5f0256ea9810f6"
+    },
+    {
+      "path": "src/block_allocator.c",
+      "bytes": 2662,
+      "sha256": "a5e260094bc29a4f9bb5c1b94f88d6c925aa5bdc0e6492303d76590fabefc96b"
+    },
+    {
+      "path": "src/block_allocator.h",
+      "bytes": 936,
+      "sha256": "a0e891c36e523ece3e24536550e502009396dbed8f6a42a45799dad6fe071e36"
+    },
+    {
+      "path": "src/body.c",
+      "bytes": 73285,
+      "sha256": "66fc2f029894b934e8779f7d09e2ee60e7564ce001150c8d53f038683aa70c43"
+    },
+    {
+      "path": "src/body.h",
+      "bytes": 8160,
+      "sha256": "946c22e3955f09ef727fadecba62566c3920bfae487c14ab207d040ae91cfd22"
+    },
+    {
+      "path": "src/box3d.natvis",
+      "bytes": 4019,
+      "sha256": "0908b550a73c14f70320866a4fb65519c486fc79f6e104d49f762c16d48e4459"
+    },
+    {
+      "path": "src/broad_phase.c",
+      "bytes": 16449,
+      "sha256": "1bb213f5c8120123aca36dec20eff71ac8dfb7d577ce8601b7e3894faadc6b9e"
+    },
+    {
+      "path": "src/broad_phase.h",
+      "bytes": 2986,
+      "sha256": "20ed40f9e64037f290b4eda0d91754e1f53adfe7b5409935c50a1e9d24449529"
+    },
+    {
+      "path": "src/capsule.c",
+      "bytes": 11657,
+      "sha256": "2c31cb8b8366195ed0376af0190450cf7dbdcacfca5391e732ffc8c57570c20c"
+    },
+    {
+      "path": "src/CMakeLists.txt",
+      "bytes": 6427,
+      "sha256": "959389f2d52aa318d5f33827308a2d55bec30d52c64bf4f22c1b95d1f6e9125f"
+    },
+    {
+      "path": "src/compound.c",
+      "bytes": 37031,
+      "sha256": "8c4d6c1b8af953d3a6171d50e4908a1571881476222ec90a5b5863a85d97c7aa"
+    },
+    {
+      "path": "src/compound.h",
+      "bytes": 569,
+      "sha256": "d3f812cae54fe279c056cc2d7fe895494edc23ca2194742f5e0c940defae9941"
+    },
+    {
+      "path": "src/constraint_graph.c",
+      "bytes": 10961,
+      "sha256": "d47476dc226a75c591a1ce9cd95a7d3514127a488bd43609b0e110bc40fe0fb7"
+    },
+    {
+      "path": "src/constraint_graph.h",
+      "bytes": 3092,
+      "sha256": "25222c16c0737976b1d5e4e965c3fb25ef4f1e66b8a6917c2f0f1e074f8670c8"
+    },
+    {
+      "path": "src/contact.c",
+      "bytes": 28403,
+      "sha256": "7ac3cdde148e6e9d0beb94a36a65593dff6819ec94e4cd5720c204982d7ba8c7"
+    },
+    {
+      "path": "src/contact.h",
+      "bytes": 4780,
+      "sha256": "f76596990765d2771aba577c585844b3b08c289ddabc1f7613eaf37bcd88ea99"
+    },
+    {
+      "path": "src/contact_solver.c",
+      "bytes": 74269,
+      "sha256": "0b56eae65179780bcc6d05b8095d2b60a8dbea4a982a1c71f3e00f4b14a5af23"
+    },
+    {
+      "path": "src/contact_solver.h",
+      "bytes": 2400,
+      "sha256": "23c949616239ea6ad2fd90f7cdd2f6fd3180809397c04785fb6762ece57f0934"
+    },
+    {
+      "path": "src/container.h",
+      "bytes": 14619,
+      "sha256": "991696d44fa9aa5e2380bc50c4dcea27e9bfeda51d0c0adbbccc885c299a4dfb"
+    },
+    {
+      "path": "src/convex_manifold.c",
+      "bytes": 84497,
+      "sha256": "08a27999b87fd659b13d701a859a7c19fbf1847c5fa51f309dd6cfc240a615f0"
+    },
+    {
+      "path": "src/core.c",
+      "bytes": 5411,
+      "sha256": "33f7376928a3fb209c96fac216afa66a1a4aa12247a74741a9bbc455afdca5bd"
+    },
+    {
+      "path": "src/core.h",
+      "bytes": 4553,
+      "sha256": "6fd65040fac72564d2450cf5b84ef03a3d653cf4085f72c7983bf7870794c73c"
+    },
+    {
+      "path": "src/ctz.h",
+      "bytes": 2458,
+      "sha256": "269b6dca6d8d150558aa534b7c1f7732618cc2a2b25fdc23b02ef233a50a3cc8"
+    },
+    {
+      "path": "src/distance.c",
+      "bytes": 50373,
+      "sha256": "aed195ace10a54767fbd41bcc9aa1a8fddc1c23f13d7aab297df66fa7e3f384c"
+    },
+    {
+      "path": "src/distance_joint.c",
+      "bytes": 20127,
+      "sha256": "87e9dba911ec049fb6b67dff23c7303b6e3e231949df78e18d81717211056309"
+    },
+    {
+      "path": "src/dynamic_tree.c",
+      "bytes": 56907,
+      "sha256": "e8cc587f877ba41e1c7a44ada0a3fe98352b0d2596eee28a498b2bd1a0ecc8be"
+    },
+    {
+      "path": "src/height_field.c",
+      "bytes": 47729,
+      "sha256": "cafd825eb475aff4817614b3e1cde4f958b7259aa5279a356aa616f16e131056"
+    },
+    {
+      "path": "src/hull.c",
+      "bytes": 80210,
+      "sha256": "2efbf3d2df14c58994e551a7d2ed65adcd9a9acb21f2e18361dc361783993d0b"
+    },
+    {
+      "path": "src/hull.h",
+      "bytes": 701,
+      "sha256": "893f877e4dd66011720e1d4a4d73288c323554363dd94c83c4f03b0e8c94a0b6"
+    },
+    {
+      "path": "src/id_pool.c",
+      "bytes": 1298,
+      "sha256": "db34e5e5c5d60bcdd7372dbf4ee190a8c0e24d699ec24ad00c486f81bf706cab"
+    },
+    {
+      "path": "src/id_pool.h",
+      "bytes": 736,
+      "sha256": "7c1311422314d410277e923f297f8348d8d672c1565a1e5c00feab3c4bbef2da"
+    },
+    {
+      "path": "src/island.c",
+      "bytes": 24456,
+      "sha256": "1661fd1d278675c2abc19c9a29092b0ca7859677c92cf6f096314ba5c85b6fc4"
+    },
+    {
+      "path": "src/island.h",
+      "bytes": 3224,
+      "sha256": "0ce130e56f356fb78bb868697bb5d42de8c51092d9186c14c804dd010295449a"
+    },
+    {
+      "path": "src/joint.c",
+      "bytes": 51723,
+      "sha256": "d415774cd65da83920316b689d70d94fe97f184f041f7c213589af582f1c0208"
+    },
+    {
+      "path": "src/joint.h",
+      "bytes": 11820,
+      "sha256": "9059cf5e6d1259bc278459f45a3d79bc28de2b186767d32217e9fa5bbe2452f2"
+    },
+    {
+      "path": "src/manifold.c",
+      "bytes": 6284,
+      "sha256": "69e78d471e7f92ae2bc2fbe75c3b5d39d316bbcf77dff8a78d20881b4bb78c6f"
+    },
+    {
+      "path": "src/manifold.h",
+      "bytes": 2214,
+      "sha256": "0c8cdfbd6be6f842aafc1c4dfe04ecb57f8d103365f8ea2bceea6feab657852c"
+    },
+    {
+      "path": "src/math_functions.c",
+      "bytes": 13415,
+      "sha256": "0d630d6fed07420735acb02ad9fe9ef40cc4b85be2e9d8c9d9ae1508c9fe75ac"
+    },
+    {
+      "path": "src/math_internal.h",
+      "bytes": 12729,
+      "sha256": "cefe2d593674e1a59c07fa3ac3e15395c1da7dccd039e0f8ed4634cafc6fea21"
+    },
+    {
+      "path": "src/mesh.c",
+      "bytes": 70394,
+      "sha256": "2cd9ef84f3c3cb0d177285b8c5baf23960c49d0ea213e8c394fa7de4c08ecf77"
+    },
+    {
+      "path": "src/mesh_contact.c",
+      "bytes": 35423,
+      "sha256": "1e7fc4b686457cd04b430c06c36c97031f53281b19fcd859b771ac421c17ec7c"
+    },
+    {
+      "path": "src/motor_joint.c",
+      "bytes": 16345,
+      "sha256": "a1fb4624048b6772e701c76db491636810ebaddde25a929af67ae5bc1a50ce5c"
+    },
+    {
+      "path": "src/mover.c",
+      "bytes": 1705,
+      "sha256": "0312dce5559a6aee62f430b730e6c48bcd98c8e7a3ba57362b44f413dbf98470"
+    },
+    {
+      "path": "src/name_cache.c",
+      "bytes": 3369,
+      "sha256": "81796f1556552866ca39926dcf5a206ef188b959177c0e4f311fc2cf75add701"
+    },
+    {
+      "path": "src/name_cache.h",
+      "bytes": 1102,
+      "sha256": "2bb7ec4e49b01726b776de3f52f74f7fd03394f01a125d3c1799b3fe9b7ac330"
+    },
+    {
+      "path": "src/parallel_for.c",
+      "bytes": 3509,
+      "sha256": "faeb8a7c4507b2deecaae4dcb998a3adc430e353a13233e35cb03c17aca518ef"
+    },
+    {
+      "path": "src/parallel_for.h",
+      "bytes": 1267,
+      "sha256": "7fd5f961147989218c897f6765117d32d04bc354d685c99e31eceb46fcd44e91"
+    },
+    {
+      "path": "src/parallel_joint.c",
+      "bytes": 9580,
+      "sha256": "d2bfce5b333306054e7a44ff48c5ac3f90861e374e518c9dd4f1a7eb67494e0f"
+    },
+    {
+      "path": "src/physics_world.c",
+      "bytes": 131568,
+      "sha256": "902a5f8370df60ab79ec6c6ac255ddc557a8873e5e1f6c5a1da045ad90abe81b"
+    },
+    {
+      "path": "src/physics_world.h",
+      "bytes": 10712,
+      "sha256": "25478f0d1f2e9635385cf4de55e57169ad8a933bbd64c7a69498ec1145a60ed7"
+    },
+    {
+      "path": "src/platform.h",
+      "bytes": 3234,
+      "sha256": "2a8f7bfa97a38263bde10cfc7926e451a92a507415aeb5763b42cf74ed1d4da7"
+    },
+    {
+      "path": "src/prismatic_joint.c",
+      "bytes": 27182,
+      "sha256": "ec70e4b7b5f3b13954d2e5e70ec1a250b0776fc3d8860c03a592078c8438b628"
+    },
+    {
+      "path": "src/qsort.h",
+      "bytes": 7583,
+      "sha256": "694123f343db1abccd63144c4111e9c7d4526782e785a28d97a8d86f6ffee78c"
+    },
+    {
+      "path": "src/rapidhash.h",
+      "bytes": 21261,
+      "sha256": "de0a6acd5e7901470f348c6de4634be076f39c4dc190e02e724eaff52040baac"
+    },
+    {
+      "path": "src/recording.c",
+      "bytes": 40771,
+      "sha256": "298fd01d93734d23ad188b0cbb27a75da82fe2fec07e1b2ca2d6b8463256833e"
+    },
+    {
+      "path": "src/recording.h",
+      "bytes": 18392,
+      "sha256": "31aa0d56f9a41a84758383b6dff901f82f73f12188a8f991f7328f1285e819d4"
+    },
+    {
+      "path": "src/recording_ops.inl",
+      "bytes": 18833,
+      "sha256": "4b96a782265b0d88d46d0278b3b6cb60703cc9759687328814a295e4b4a29d7f"
+    },
+    {
+      "path": "src/recording_replay.c",
+      "bytes": 124237,
+      "sha256": "957bae3d85a45f1f96b88194b2d4ac34833d1121f12343e7f78ad21e9324ed13"
+    },
+    {
+      "path": "src/recording_replay.h",
+      "bytes": 10080,
+      "sha256": "0baa7e7e6deb278af613266bea3ec72e6e17d99bba21b4eea75339eafaddddb5"
+    },
+    {
+      "path": "src/revolute_joint.c",
+      "bytes": 24738,
+      "sha256": "1adb220c946b9d0cf8eb9d422a9a2fdc3fe8b416a674b4c4f8eaa32dc72b65ff"
+    },
+    {
+      "path": "src/scheduler.c",
+      "bytes": 5086,
+      "sha256": "f40b07e0f38b8ed2c82caad0dd4ce57945960608b977e93ee2775d9a116989cc"
+    },
+    {
+      "path": "src/scheduler.h",
+      "bytes": 577,
+      "sha256": "62035ecb182613e369bcf4aef9ec541d1fa0bc4852ea2dff80dd57bdf2a087de"
+    },
+    {
+      "path": "src/sensor.c",
+      "bytes": 13477,
+      "sha256": "fe86f0b641d5fb0e75823747756fd979b94b1f90ef22800e0d719e2b484266a1"
+    },
+    {
+      "path": "src/sensor.h",
+      "bytes": 817,
+      "sha256": "c2ca5431d8aa40dea333d5a656ab4cb348c103893367f157b0a3c668c102aff7"
+    },
+    {
+      "path": "src/shape.c",
+      "bytes": 73381,
+      "sha256": "eaf80b7ef2615efc2a792d988fe553f99ac6d7eb0b2b308fe51373d285c3ffb6"
+    },
+    {
+      "path": "src/shape.h",
+      "bytes": 6178,
+      "sha256": "d8f95ae66ae2de7de024f8a0cbc89f676d672841742cfe32327184b346b79c95"
+    },
+    {
+      "path": "src/simd.c",
+      "bytes": 7858,
+      "sha256": "bc891cddfe3ae11882885b30193eb0cb5fe2b0c3c3592da408bfc6d89219f24c"
+    },
+    {
+      "path": "src/simd.h",
+      "bytes": 22332,
+      "sha256": "353381621b9be948dcd49762c3c556b378ed135da1087a06947a65cbd6781914"
+    },
+    {
+      "path": "src/solver.c",
+      "bytes": 82377,
+      "sha256": "3ae76527b6ac42dfd7b15c7f7a6aeb06a9bea43eb989fbb4d50541ae7f0a3261"
+    },
+    {
+      "path": "src/solver.h",
+      "bytes": 9669,
+      "sha256": "1b7eee8eca5bca386198c1e46b276b5c64691455f25774acf1272517587e4d0e"
+    },
+    {
+      "path": "src/solver_set.c",
+      "bytes": 21423,
+      "sha256": "9f5790e420bc17548df95acc1602245e7184f1f5a7c7efc507e2a21c552b97c4"
+    },
+    {
+      "path": "src/solver_set.h",
+      "bytes": 2671,
+      "sha256": "f8112aacb8c5be388fe85424d45abd01d42b342fd5b02797a098c6fab3ab7d0c"
+    },
+    {
+      "path": "src/sphere.c",
+      "bytes": 6588,
+      "sha256": "95a820834dc98fd86b6b3882a55719728ff95a63f443724afc1466ce52b1f69a"
+    },
+    {
+      "path": "src/spherical_joint.c",
+      "bytes": 27484,
+      "sha256": "a18b75e8597d70d962cea8749b8772ff3b5988a8f5f65765474b2a8ced483bba"
+    },
+    {
+      "path": "src/table.c",
+      "bytes": 5652,
+      "sha256": "c239a435492806be34eae723703105160b1c58e31fffb79156c5806c793f7baf"
+    },
+    {
+      "path": "src/table.h",
+      "bytes": 1342,
+      "sha256": "ab135ef8f213e1cba26b6cc1ab05664483c08ebab0ffdcfe8f8a9d17ace3d9d1"
+    },
+    {
+      "path": "src/timer.c",
+      "bytes": 14568,
+      "sha256": "8fc4fbe7818de8cfab1dd026de0a4501e57581941a192cc3c6a10e9061223350"
+    },
+    {
+      "path": "src/triangle_manifold.c",
+      "bytes": 42441,
+      "sha256": "090d0f319440c50f0434195dc12ac3cf77b0978c38d5468bbb4c8731890225c9"
+    },
+    {
+      "path": "src/types.c",
+      "bytes": 4193,
+      "sha256": "ed809b9c375f4870051fd64b4b313834fbc6c258a506f1d5010fdbeff963770d"
+    },
+    {
+      "path": "src/verstable.h",
+      "bytes": 86638,
+      "sha256": "42945725d850f94b34330fb548a7b20db0d89e0bda136c05ccd64166aa439cfb"
+    },
+    {
+      "path": "src/weld_joint.c",
+      "bytes": 10886,
+      "sha256": "5feca5e7f99fff85c813868e4e473ffdc97c133a934c3a5e0ab44ec42e0192ba"
+    },
+    {
+      "path": "src/wheel_joint.c",
+      "bytes": 40685,
+      "sha256": "e72e1fc23a09fd15ed659f2e68de28239848a1d8b8c041c4f9beda24db3adcc1"
+    },
+    {
+      "path": "src/world_snapshot.c",
+      "bytes": 41203,
+      "sha256": "156e2714c3c942faad37c40077128700082c58f9110d2a5166559efd8a713110"
+    },
+    {
+      "path": "src/world_snapshot.h",
+      "bytes": 816,
+      "sha256": "551bd4b30e4c29b335b7f3a6625ee50347fef503e81e08fc1a433d3d59ce0512"
+    }
+  ]
+}

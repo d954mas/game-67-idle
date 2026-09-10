@@ -1,0 +1,11 @@
+include_guard(GLOBAL)
+
+function(box3d_enable target)
+    if(NOT TARGET "${target}")
+        message(FATAL_ERROR "box3d_enable requires an existing CMake target: ${target}")
+    endif()
+    if(NOT TARGET nt::box3d)
+        add_subdirectory("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/.." "${CMAKE_BINARY_DIR}/_features/box3d")
+    endif()
+    target_link_libraries("${target}" PRIVATE nt::box3d)
+endfunction()

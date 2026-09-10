@@ -125,6 +125,10 @@ possibility, not a feature.
 
 ## Current Packs
 
+- `box3d/` (`L1`, opt-in): pinned MIT 3D rigid-body physics, shared in-place
+  through `box3d_enable(target)` for native and WASM. Games own their worlds,
+  shapes, timing and collision rules. See `box3d/README.md` and `box3d/INSTALL.md`.
+
 - `game-state/`: schema-first generated GameState, save/load contract,
   migrations, and DevAPI state adapters. It is consumed in place by
   templates/games.
