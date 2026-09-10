@@ -33,7 +33,7 @@
     {
       "id": "leaderboard",
       "source": "features/leaderboard",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "compatibility": "validated by the template build and test suite"
     },
     {
@@ -45,7 +45,7 @@
     {
       "id": "platform-sdk",
       "source": "features/platform-sdk",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "compatibility": "validated by the template build and test suite"
     },
     {
