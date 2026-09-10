@@ -7,10 +7,15 @@
 #include "clay.h"
 #include "ui/nt_ui_dropdown.h"
 #include "ui/nt_ui_slider.h"
+#include "ui/nt_ui_scroll.h"
+#include "ui/nt_ui_state.h"
+#include "ui/ui_runtime.h"
 #include "ui/theme.h"
 #include "ui/loc_widgets.h"
 
 #include "loc_strings.gen.h"
+
+#include <math.h>
 
 #define RESET_HOLD_SECONDS 1.5F
 
@@ -26,6 +31,8 @@ static bool s_language_open;
 void settings_open(void)  { (void)game_scenes_show_settings(); }
 void settings_close(void) {
     s_language_open = false; // the picker never reopens with the panel
+    nt_ui_context_t *ctx = ui_runtime_ctx();
+    if (ctx != NULL) nt_ui_state_clear(ctx, nt_ui_id("settings/scroll"));
     (void)game_scenes_close_settings();
 }
 bool settings_is_open(void) {
@@ -54,10 +61,16 @@ static void volume_row(nt_ui_context_t *ctx, const ui_metrics_t *m, LocKey0 name
     const LocStr row = loc_settings_volume_row(loc_by_key(name), (int64_t)(*value * 100.0F + 0.5F));
     const float before = *value;
     nt_ui_slider_style_t slider = ui_kit_slider_style(m);
+    const bool landscape = m->view_w > m->view_h;
+    const float row_width = m->panel_w - m->pad * 2.0F - m->gap;
+    slider.track_w = landscape ? row_width * .56F - m->gap * .4F : row_width;
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
-                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                     .layoutDirection = landscape ? CLAY_LEFT_TO_RIGHT : CLAY_TOP_TO_BOTTOM,
+                     .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER},
                      .childGap = (uint16_t)(m->gap * 0.4F)}}) {
-        loc_kit_label(ctx, row, &g_ui_theme.label);
+        CLAY({.layout = {.sizing = {landscape ? CLAY_SIZING_PERCENT(.44F) : CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
+            loc_kit_label(ctx, row, &g_ui_theme.label);
+        }
         // The slider's own label is NULL here, so no text reaches the engine
         // through an unwrapped entry point. The row is a full touch target: the
         // track is thin, and the thumb alone is not something a thumb can find.
@@ -89,6 +102,13 @@ _Static_assert((int)(sizeof LANGUAGE_ROW_IDS / sizeof LANGUAGE_ROW_IDS[0]) == SE
 // language on the next call, so the next frame is already translated.
 static void language_row(nt_ui_context_t *ctx, const ui_metrics_t *m, bool interactive) {
     const int current = settings_language();
+    nt_ui_dropdown_style_t dropdown = g_ui_theme.dropdown;
+    const float row_width = m->panel_w - m->pad * 2.0F - m->gap;
+    dropdown.min_width = (uint16_t)(row_width * .56F);
+    dropdown.font_size = ui_css(dropdown.font_size);
+    dropdown.row_height = (uint16_t)m->hit;
+    dropdown.pad = (uint16_t)(m->gap * .6F);
+    dropdown.max_visible_rows = SETTINGS_STATE_LANGUAGE_COUNT;
     if (!interactive) {
         s_language_open = false; // no list left hanging over a frozen panel
     }
@@ -96,9 +116,11 @@ static void language_row(nt_ui_context_t *ctx, const ui_metrics_t *m, bool inter
                      .layoutDirection = CLAY_LEFT_TO_RIGHT,
                      .childGap = (uint16_t)m->gap,
                      .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
-        loc_kit_label(ctx, loc_settings_language(), &g_ui_theme.label);
+        CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
+            loc_kit_label(ctx, loc_settings_language(), &g_ui_theme.label);
+        }
         nt_ui_combo_preview_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), UI_LAYER_TEXT,
-                                  nt_ui_id("settings/language/trigger"), &g_ui_theme.dropdown, &s_language_open);
+                                  nt_ui_id("settings/language/trigger"), &dropdown, &s_language_open);
         CLAY({.id = CLAY_ID("settings/language/current"), .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
             loc_kit_label(ctx, loc_by_key(LANGUAGE_NAMES[current]), &g_ui_theme.button_label);
         }
@@ -160,7 +182,7 @@ void settings_draw_launcher(nt_ui_context_t *ctx, bool interactive) {
                                  .bottom = (uint16_t)(m.margin + m.safe_b)},
                      .childAlignment = {CLAY_ALIGN_X_RIGHT, CLAY_ALIGN_Y_TOP}}}) {
         CLAY({.id = CLAY_ID("settings/gear"),
-              .layout = {.sizing = {CLAY_SIZING_FIT(.min = m.hit * 2.4F), ui_kit_hit_height(&m)}}}) {
+              .layout = {.sizing = {CLAY_SIZING_FIXED(m.hit * 2.4F), ui_kit_hit_height(&m)}}}) {
             ui_kit_button_begin(ctx, nt_ui_id("settings/gear/button"), &g_ui_theme.button, interactive, NULL);
             loc_kit_label(ctx, loc_settings_open(), &g_ui_theme.button_label);
             if (ui_kit_button_end(ctx) && interactive) {
@@ -172,19 +194,31 @@ void settings_draw_launcher(nt_ui_context_t *ctx, bool interactive) {
 
 void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
     const ui_metrics_t m = ui_metrics();
-    // Centred plate over a scrim: the dim is what tells the player the world
-    // behind is not taking input right now.
+    const float available_w = m.view_w - m.safe_l - m.safe_r;
+    const float available_h = m.view_h - m.safe_t - m.safe_b;
+    const float panel_h = fminf(available_h * .86F, fminf(available_w, available_h) * 1.15F);
+    // The body scrolls inside the available viewport; the close action stays outside it.
     ui_kit_scrim(ctx);
     ui_kit_panel_begin(ctx, &(Clay_ElementDeclaration){
                                 .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
                                              .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER,
-                                                              .parent = CLAY_ATTACH_POINT_CENTER_CENTER}},
-                                .layout = {.sizing = {CLAY_SIZING_FIXED(m.panel_w), CLAY_SIZING_FIT(0)},
+                                                              .parent = CLAY_ATTACH_POINT_CENTER_CENTER},
+                                             .offset = {(m.safe_l - m.safe_r) * .5F, (m.safe_t - m.safe_b) * .5F}},
+                                .layout = {.sizing = {CLAY_SIZING_FIXED(m.panel_w), CLAY_SIZING_FIXED(panel_h)},
                                            .padding = CLAY_PADDING_ALL((uint16_t)m.pad),
                                            .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                            .childGap = (uint16_t)m.gap,
                                            .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
     loc_kit_label(ctx, loc_settings_title(), &g_ui_theme.title);
+    nt_ui_scroll_style_t scroll = nt_ui_scroll_style_defaults();
+    scroll.bar_visibility = NT_UI_SCROLLBAR_AUTO;
+    scroll.bar_thickness = m.gap * .3F;
+    scroll.thumb_ref = g_ui_theme.art.slider_fill;
+    scroll.thumb_tint = ui_theme_tokens()->ink_soft;
+    nt_ui_scroll_begin(ctx, NULL, nt_ui_id("settings/scroll"), &scroll,
+        &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
+            .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = (uint16_t)m.gap,
+            .padding = {0, (uint16_t)m.gap, 0, 0}}});
 
     // Authority is the persisted settings state: reseed the slider backing-floats
     // from the feature each frame the panel is open; the commit callback is the
@@ -198,7 +232,7 @@ void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
     language_row(ctx, &m, interactive);
     save_conflict_row(ctx, &m, interactive);
 
-    // Action row: hold-to-reset (long press) + close.
+    // Reset remains in the scrollable body, with its full label on a separate row.
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
                      .layoutDirection = CLAY_LEFT_TO_RIGHT,
                      .childGap = (uint16_t)m.gap,
@@ -224,14 +258,15 @@ void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
             }
         }
 
-        CLAY({.id = CLAY_ID("settings/close"),
-              .layout = {.sizing = {CLAY_SIZING_FIT(.min = m.hit * 2.0F), ui_kit_hit_height(&m)}}}) {
+    }
+    nt_ui_scroll_end(ctx);
+    CLAY({.id = CLAY_ID("settings/close"),
+          .layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(&m)}}}) {
             ui_kit_button_begin(ctx, nt_ui_id("settings/close/button"), &g_ui_theme.button, interactive, NULL);
             loc_kit_label(ctx, loc_settings_close(), &g_ui_theme.button_label);
             if (ui_kit_button_end(ctx) && interactive) {
                 settings_close();
             }
-        }
     }
     ui_kit_panel_end(ctx);
 }

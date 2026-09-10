@@ -78,6 +78,45 @@ static void test_degenerate_window_still_yields_a_canvas(void) {
     TEST_ASSERT_TRUE(measured.logical_h > 0.0F);
 }
 
+
+static void test_relative_sizes_follow_available_short_edge(void) {
+    const UiScaleFit small = ui_scale_fit_relative(180, 320, 1, 400, 0, 0);
+    const UiScaleFit large = ui_scale_fit_relative(360, 640, 1, 400, 0, 0);
+    const ui_tokens_t *t = ui_tokens_studio_default();
+    const float authored[] = {t->t_body, t->hit, t->gap, t->pad};
+    for (unsigned i = 0; i < sizeof authored / sizeof authored[0]; ++i) {
+        TEST_ASSERT_TRUE(near(authored[i] * large.scale, authored[i] * small.scale * 2, .001F));
+    }
+    TEST_ASSERT_TRUE(near(small.logical_w, large.logical_w, .001F));
+    TEST_ASSERT_TRUE(near(small.logical_h, large.logical_h, .001F));
+}
+
+static void test_relative_mode_has_no_small_window_floor(void) {
+    const UiScaleFit tiny = ui_scale_fit_relative(40, 70, 1, 400, 0, 0);
+    const UiScaleFit twice = ui_scale_fit_relative(80, 140, 1, 400, 0, 0);
+    TEST_ASSERT_TRUE(tiny.scale > 0 && tiny.scale < UI_SCALE_MIN);
+    TEST_ASSERT_TRUE(near(twice.scale, tiny.scale * 2, .001F));
+    TEST_ASSERT_TRUE(near(tiny.logical_w, twice.logical_w, .001F));
+}
+
+static void test_relative_safe_area_and_density_keep_their_units(void) {
+    const UiScaleFit one = ui_scale_fit_relative(360, 640, 1, 400, 24, 30);
+    const UiScaleFit dense = ui_scale_fit_relative(1080, 1920, 3, 400, 24, 30);
+    const UiScaleFit turned = ui_scale_fit_relative(640, 360, 1, 400, 30, 24);
+    TEST_ASSERT_TRUE(near(one.scale, dense.scale / 3, .001F));
+    TEST_ASSERT_TRUE(near(one.logical_w, dense.logical_w, .001F));
+    TEST_ASSERT_TRUE(near(one.scale, turned.scale, .001F));
+    const float inset_units = 24 * ui_scale_css_unit(dense.scale, 3);
+    TEST_ASSERT_TRUE(near(inset_units * dense.scale / 3, 24, .001F));
+}
+
+static void test_relative_unsized_or_occluded_viewport_is_finite(void) {
+    const UiScaleFit empty = ui_scale_fit_relative(0, 0, 0, 0, 0, 0);
+    const UiScaleFit occluded = ui_scale_fit_relative(80, 100, 1, 400, 80, 100);
+    TEST_ASSERT_TRUE(empty.scale > 0 && empty.logical_w > 0 && empty.logical_h > 0);
+    TEST_ASSERT_TRUE(occluded.scale > 0 && occluded.logical_w > 0 && occluded.logical_h > 0);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_phone_short_edge_is_capped);
@@ -86,5 +125,9 @@ int main(void) {
     RUN_TEST(test_css_unit_is_density_independent);
     RUN_TEST(test_scale_is_monotone_in_window_size);
     RUN_TEST(test_degenerate_window_still_yields_a_canvas);
+    RUN_TEST(test_relative_sizes_follow_available_short_edge);
+    RUN_TEST(test_relative_mode_has_no_small_window_floor);
+    RUN_TEST(test_relative_safe_area_and_density_keep_their_units);
+    RUN_TEST(test_relative_unsized_or_occluded_viewport_is_finite);
     return UNITY_END();
 }

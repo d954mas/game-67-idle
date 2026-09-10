@@ -15,10 +15,8 @@
 // that uses it: a screen picks a role (`button_danger`, `hint`) and never a
 // colour or a size.
 //
-// SIZES IN THIS STRUCT ARE CSS PIXELS, not UI units. A label style's font_size
-// is the ramp step from the tokens, and ui_kit converts it for the frame.
-// Passing one straight to an engine widget renders CSS numbers as UI units,
-// which is a phone-sized interface on a monitor and the reverse.
+// Sizes use authored units: CSS pixels in legacy frames, reference-design units
+// in relative frames. ui_kit converts them for the active frame.
 
 // The atlas regions the kit draws with. The CONSUMER resolves these, because it
 // owns `build_packs.c` and the generated asset ids; the feature never writes to

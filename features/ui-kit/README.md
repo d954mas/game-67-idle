@@ -12,21 +12,15 @@ theme, and a widget layer. This pack owns all four, so a new prototype starts
 with an interface that is already readable in a hand and already looks like one
 product.
 
-Two decisions carry the pack:
+**Sizing.** New templates use viewport-relative frames. The available short edge,
+after physical safe-area insets, fits a consumer-selected reference design.
+Text, hits, spacing and panel dimensions scale proportionally with that area;
+there are no fixed CSS minimum or maximum sizes. Rotating the same available
+rectangle preserves the authored size scale.
 
-**Size.** The canvas is scaled off the SHORT edge with a density floor and a cap
-(`ui_scale_policy.h`), not by fitting a landscape reference rectangle. The
-engine's `NT_UI_SCALE_EXPAND` answers "how much of 1280x720 fits", which on a
-360x640 phone means one UI unit is 0.28 device pixels and every widget arrives at
-a quarter of its intended size. The short edge is what a hand spans in either
-orientation, so the rule is orientation-free and a device turned sideways is not
-a different design.
-
-**Units.** Type and touch targets are stated in CSS pixels, the only unit that is
-the same PHYSICAL size on a phone and on a monitor. Plates are a share of the
-canvas with a CSS-pixel clamp. Getting this backwards is the classic pair of
-bugs: a dialog sized in raw CSS pixels overflows a phone, and type sized as a
-share of the canvas is unreadable in a hand.
+Existing games keep the original CSS sizing contract through `ui_frame_begin()`:
+its density floor, logical cap and panel clamps remain unchanged. Choosing the
+new entry point is an explicit consumer migration that needs fresh layout proof.
 
 The default look is the studio's, taken from the reference game the lead uses to
 set the bar: a prototype should not have to design a UI before it has a game.
@@ -85,7 +79,10 @@ not be replaced with generated art solely because filenames match.
 
 ## Compatibility
 
-Contract version in `feature.json`.
+Contract version in `feature.json`. Version 1.3 adds the opt-in relative API;
+existing entry points, token layout and canvas behavior are unchanged. Exact
+consumer dependency records still need a deliberate version acknowledgement
+before strict package validation; this does not migrate their frame mode.
 
 - **PATCH** — art the generator draws differently at identical tokens, a comment,
   an internal helper. Consumers rebuild and regenerate; no source change.

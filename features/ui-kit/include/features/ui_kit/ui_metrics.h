@@ -8,24 +8,15 @@
 // instead of inventing its own share of the canvas, which is what keeps a HUD
 // chip and a dialog button looking like two pieces of one surface.
 //
-// Two units live here and they must not be mixed up:
-//   UI units - what Clay lays out in. The logical short edge is held near
-//              tokens->short_edge_max, so a size written as a share of
-//              `shortest` is the same share of any screen.
-//   CSS px   - the only unit that is the same PHYSICAL size on a phone and on a
-//              monitor. Readability floors and touch targets are stated in CSS
-//              px and converted with `css`.
-//
-// The split that matters: TYPE and TOUCH TARGETS are physical, so they come
-// from CSS px. PLATES and their rhythm are relative, so they come from a share
-// of the canvas with a CSS-px clamp. Sizing a plate in raw CSS px overflows a
-// phone; sizing type as a share of the canvas makes it unreadable in a hand.
+// Legacy frames convert authored CSS sizes into canvas units. Relative frames
+// use reference-design units for every authored size, including text and hits.
+// Platform safe-area insets always keep their physical CSS-pixel meaning.
 
 typedef struct {
     float view_w; // the logical canvas
     float view_h;
     float shortest; // its short edge: everything relative is a share of this
-    float css;      // UI units per CSS pixel
+    float css;      // UI units per authored unit (CSS in legacy, reference in relative)
 
     // Type ramp, already in UI units.
     float t_display;
@@ -56,13 +47,17 @@ typedef struct {
 // Everything below reads the frame this stored.
 UiScaleFit ui_frame_begin(float fb_w, float fb_h, float dpr);
 
+// Opt-in proportional layout. The available short edge fits reference_short;
+// panel_min_w, panel_max_w and the legacy density floor/cap do not apply.
+UiScaleFit ui_frame_begin_relative(float fb_w, float fb_h, float dpr, float reference_short);
+
 ui_metrics_t ui_metrics(void);
 
-// A size stated in CSS pixels, in UI units. Use for anything the player has to
-// read or hit; never state such a size in device pixels.
+// Converts an authored size: CSS pixels in legacy frames, reference units in
+// relative frames. Device-pixel input and safe areas use the frame scale instead.
 float ui_css(float css_px);
 
-// UI units one CSS pixel is worth, for a caller that needs the raw factor.
+// Raw authored-unit conversion factor, following the active frame mode.
 float ui_css_unit(void);
 
 #endif /* FEATURE_UI_KIT_METRICS_H */

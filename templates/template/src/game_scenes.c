@@ -31,8 +31,10 @@ static void root_update(void *instance, float dt) {
 
 static void root_ui(void *instance, void *ui_context, scene_ui_mode_t mode) {
     (void)instance;
+    // The root HUD yields to a covering modal instead of sharing its text layers.
+    if (mode != SCENE_UI_INTERACTIVE) return;
     demo_hud_draw_ui(ui_context);
-    settings_draw_launcher(ui_context, mode == SCENE_UI_INTERACTIVE);
+    settings_draw_launcher(ui_context, true);
 }
 
 static void settings_ui(void *instance,

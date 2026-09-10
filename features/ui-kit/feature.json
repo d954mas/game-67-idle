@@ -1,11 +1,11 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "ui-kit",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "title": "UI Kit",
   "status": "reusable",
   "kind": "presentation",
-  "summary": "The studio interface system: short-edge canvas rule with a density floor, CSS-pixel type and touch targets, token-driven slice9 art generator, theme, and the widget layer every screen is built from.",
+  "summary": "The studio interface system: opt-in viewport-relative sizing, compatible legacy CSS sizing, token-driven slice9 art, theme and widgets.",
   "copy_model": "in-place",
   "layer": "L1",
   "owners": [
@@ -24,7 +24,7 @@
   "provides": [
     "ui_tokens_t design tokens with a studio default sheet",
     "ui_scale_fit short-edge canvas rule with a density floor and cap",
-    "ui_frame_begin / ui_metrics per-frame sizes in UI units and CSS pixels",
+    "ui_frame_begin_relative proportional frames, ui_frame_begin compatible legacy frames, and ui_metrics",
     "ui_theme_init token-driven engine styles in g_ui_theme, dropdown included",
     "ui_kit panel/tile/scrim/label/button/meter widgets and the UI_LAYER_* order",
     "ui_safe_area device insets",

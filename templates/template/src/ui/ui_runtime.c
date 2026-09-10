@@ -126,7 +126,7 @@ bool ui_runtime_begin(float dt, const game_input_frame_t *input) {
     const float fb_h = (float)(g_nt_window.fb_height > 0 ? g_nt_window.fb_height : 720);
     // The ui-kit feature owns the canvas rule and the frame every metric is
     // read from; this only hands it the framebuffer it is about to draw into.
-    const UiScaleFit fit = ui_frame_begin(fb_w, fb_h, g_nt_window.dpr);
+    const UiScaleFit fit = ui_frame_begin_relative(fb_w, fb_h, g_nt_window.dpr, 400.0F);
     s_scale = (nt_ui_scale_t){
         .logical_w = fit.logical_w,
         .logical_h = fit.logical_h,

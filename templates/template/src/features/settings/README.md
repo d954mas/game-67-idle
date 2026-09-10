@@ -16,6 +16,13 @@ language in exactly one place, `settings_apply_language()`, which the game calls
 once the save has loaded — before that call every accessor renders the corpus
 fallback.
 
+## Responsive layout
+
+The template opens viewport-relative UI frames. Settings use the safe-area
+rectangle, with a bounded scrollable body and an always-reachable Close row.
+Volume rows switch to a horizontal layout on wide screens; the language picker
+uses its row width instead of a fixed minimum. Saved settings are unchanged.
+
 ## Validation
 
 Build the template settings/save tests and run
@@ -25,7 +32,8 @@ Build the template settings/save tests and run
 
 `feature.json.version` is exact SemVer. Patch preserves the public contract,
 minor adds backward-compatible surface, and major permits breaking changes.
-A copied game owns its revision after creation.
+A copied game owns its revision after creation. Version `1.1.1` fits the panel
+to the viewport and keeps its close action outside scrollable content.
 Version `1.1.0` adds the language getter/setter and `settings_apply_language()`,
 plus the `language` field in the settings fragment.
 

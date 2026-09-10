@@ -51,20 +51,18 @@ typedef struct {
     float t_row;     // list row name
     float t_row_sub; // list row second line
 
-    // Geometry rhythm, CSS pixels.
+    // Geometry rhythm, authored units (CSS in legacy frames, reference in relative).
     float rim;  // one outline thickness across the system
     float lift; // the pressable ledge under a button
     float gap;  // rhythm between siblings
     float pad;  // rhythm inside a plate
     float hit;  // minimum touch target
 
-    // A dialog is as wide as the frame allows minus its margins, but never
-    // wider than one comfortable reading measure nor narrower than its
-    // controls. CSS pixels.
+    // Legacy-only panel width bounds, in CSS pixels. Relative frames ignore them.
     float panel_min_w;
     float panel_max_w;
 
-    // Canvas rule (ui_scale_policy.h): the reference short edge the window's
+    // Legacy canvas rule (ui_scale_policy.h): the reference short edge the window's
     // own share is measured against, and the cap the logical short edge is held
     // at. UI units, not CSS pixels — these two DEFINE the unit.
     float ref_short;

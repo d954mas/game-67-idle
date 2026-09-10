@@ -85,11 +85,21 @@ The consumer's UI runtime hands the feature the framebuffer it is about to draw
 into, and lays out on the canvas it gets back:
 
 ```c
-const UiScaleFit fit = ui_frame_begin(fb_w, fb_h, g_nt_window.dpr);
+const UiScaleFit fit = ui_frame_begin_relative(fb_w, fb_h, g_nt_window.dpr, 400.0F);
 nt_ui_begin(ctx, fit.logical_w, fit.logical_h, dt, pointers, NT_INPUT_MAX_POINTERS);
 ```
 
-Every screen then reads `ui_metrics()` and states no size of its own.
+The last argument is the authored reference short edge, not a minimum window
+size. Every screen reads `ui_metrics()`: text, hits and spacing use reference
+units, and `panel_w` is a share of the available width. `ui_css()` retains its
+name for widget compatibility but converts reference units in this mode.
+Safe-area insets remain physical CSS pixels and are converted separately.
+
+Existing consumers can keep `ui_frame_begin(fb_w, fb_h, dpr)` unchanged. That
+entry point retains CSS sizes and the original panel clamps. Do not silently
+replace it in shipped games. A relative migration also needs a content-width
+dropdown override and bounded, scrollable dialogs; the template settings screen
+shows both and keeps Close outside the scroll region.
 
 ## 6. Localized text
 

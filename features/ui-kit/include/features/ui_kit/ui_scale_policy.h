@@ -32,6 +32,24 @@ typedef struct UiScaleFit {
     float logical_h;
 } UiScaleFit;
 
+// Safe-area sizes are platform CSS pixels; authored sizes use reference units.
+// A positive viewport has no scale floor, so its layout stays proportional.
+static inline UiScaleFit ui_scale_fit_relative(float fb_w, float fb_h, float dpr,
+                                               float reference_short, float safe_w_css,
+                                               float safe_h_css) {
+    if (!(dpr > 0.0F)) dpr = 1.0F;
+    if (!(reference_short > 0.0F)) reference_short = 400.0F;
+    if (!(fb_w > 0.0F)) fb_w = reference_short * dpr;
+    if (!(fb_h > 0.0F)) fb_h = reference_short * dpr;
+    float available_w = fb_w - (safe_w_css > 0.0F ? safe_w_css * dpr : 0.0F);
+    float available_h = fb_h - (safe_h_css > 0.0F ? safe_h_css * dpr : 0.0F);
+    // A fully occluded or unsized surface still needs a finite projection.
+    if (!(available_w > 0.0F)) available_w = fb_w;
+    if (!(available_h > 0.0F)) available_h = fb_h;
+    const float scale = (available_w < available_h ? available_w : available_h) / reference_short;
+    return (UiScaleFit){scale, fb_w / scale, fb_h / scale};
+}
+
 static inline UiScaleFit ui_scale_fit(float fb_w, float fb_h, float dpr, float ref_short,
                                       float short_edge_max) {
     if (!(fb_w > 0.0F)) {

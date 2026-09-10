@@ -165,9 +165,9 @@ possibility, not a feature.
   `game.scene.*` automation, and an agent scaffold. The default template owns
   its root/settings catalog. Reference: `scenes-core/README.md`, `scenes-core/INSTALL.md`, and
   `scenes-core/IMPLEMENTATION-PLAN.md`.
-- `ui-kit/` (`L1`, `1.0.0`): the studio interface system. Owns the canvas rule
-  (short edge with a density floor and a cap, so a phone is not handed a
-  quarter-size UI), the CSS-pixel unit for type and touch targets, the token
+- `ui-kit/` (`L1`, `1.3.0`): the studio interface system. Owns opt-in
+  viewport-relative sizing and the compatible legacy CSS canvas rule,
+  the authored unit for type and touch targets, the token
   sheet and the slice9 art generator that reads it, the theme, and the widget
   layer every screen composes. Tokens are the seam: `ui_tokens_studio_default()`
   is the look a new prototype wears, and a game with its own face passes its own
