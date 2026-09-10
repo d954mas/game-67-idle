@@ -54,6 +54,7 @@ class Kit:
         self.lift = int(tokens["geometry"]["lift"])
         self.export_scale = int(art["export_scale"])
         self.supersample = int(art["supersample"])
+        self.resample = Image.Resampling[art.get("resample", "LANCZOS")]
         self.center = int(art["center"])
         # Deep step of an action colour; the grayscale art encodes that ratio so
         # one white slice9 tints into every action colour.
@@ -114,7 +115,7 @@ class Kit:
         elif name in self.half_art:
             scale = self.export_scale // 2
         divisor = self.supersample * (self.export_scale // scale)
-        img = img.resize((img.width // divisor, img.height // divisor), Image.Resampling.LANCZOS)
+        img = img.resize((img.width // divisor, img.height // divisor), self.resample)
         key = name[: -len(".png")]
         if key in self.slice9:
             img = self.compact9(img, self.slice9[key], scale)
@@ -126,7 +127,7 @@ class Kit:
         img = Image.open(self.out / name)
         small = img.resize(
             (img.width // self.export_scale, img.height // self.export_scale),
-            Image.Resampling.LANCZOS,
+            self.resample,
         )
         small.save(self.out / small_name)
         print(f"wrote {small_name} {small.size[0]}x{small.size[1]}")
