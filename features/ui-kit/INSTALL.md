@@ -31,14 +31,20 @@ node ai_studio/dev_environment/python_run.mjs features/ui-kit/tools/gen_ui_kit.p
 That writes nine PNGs: `panel`, `button`, `tile`, `slider_track`, `slider_fill`,
 `slider_track_sm`, `slider_fill_sm`, `slider_thumb`, `icon_play`. Record them in
 the consumer's asset pack manifest with licence, provenance, origin and a
-`sha256` per file, and re-run this after any token change.
+`sha256` per file, and re-run this after any token change. The default sheet
+uses working supersample 16 and BOX area downsampling; export scale and slice9
+geometry are independent of this offline quality setting. `art.resample` can
+explicitly select another Pillow resampling filter.
 
 ## 3. Pack them
 
 The pack builder stays game code — the feature never writes to a pack. Add the
 nine files to the `ui` atlas with the slice9 borders from the token sheet's
 `art.slice9`, multiplied by `art.export_scale`, and give the atlas mipmaps: the
-kit ships above its on-screen size, so without mips it aliases.
+kit ships above its on-screen size, so without mips it aliases. Use
+`NT_TEXTURE_DEFAULT_FILTER_LINEAR_MIPMAP_LINEAR` for minification and
+`NT_TEXTURE_DEFAULT_FILTER_LINEAR` for magnification when generating mipmaps.
+Preserve mip-safe gutters and premultiply the atlas during preparation.
 
 `slider_track_sm` / `slider_fill_sm` take their borders at DESIGN size, without
 the export multiplier: the engine slider bakes its slice9 at source-pixel size
@@ -61,6 +67,17 @@ const ui_theme_art_t art = {
 };
 ui_theme_init(ui_tokens_studio_default(), &art);
 ```
+
+The supplied sprite shader expects a premultiplied atlas and premultiplies
+vertex tint alpha. Bind its material with `nt_blend_alpha_premultiplied()`.
+The Slug text shader also outputs premultiplied RGB, so screen text and world
+text materials need that blend state too. Applying straight-alpha blending to
+these outputs multiplies coverage twice and darkens edges and faded states.
+Shaders that output straight alpha need their corresponding straight blend;
+this is a contract check, not a global replacement of every alpha material.
+Legacy engine descriptors can use `NT_BLEND_MODE_ALPHA` for premultiplied
+blending already. Inspect the pinned renderer factors before translating enum
+calls to the current blend-state helpers.
 
 ## 5. Open a frame
 

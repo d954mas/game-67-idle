@@ -1,13 +1,24 @@
-# Template Generated UI Kit
+# Generated UI kit
 
-The slice9 plates, pills and the one glyph that every template screen renders
-with. Nothing in this pack is sourced: `tools/gen_ui_kit.py` draws all of it
-from the `--ui-*` tokens in `design/references/ui_kit/styles.css`, at 4x, and
-downsamples with LANCZOS.
+These project-original UI PNGs are generated from the shared token sheet at
+`features/ui-kit/tokens/studio_default.json`. The owning generator is
+`features/ui-kit/tools/gen_ui_kit.py` in the Studio repository.
 
-Change a colour or a radius in `styles.css`, run the generator, and update the
-`sha256` rows in `assets.jsonl`. Do not edit the PNGs: the next regeneration
-overwrites them, and the tokens stop being the source of truth.
+The standard sheet uses export scale 4, working supersample 16 and BOX area
+downsampling. The slider thumb and small slider variants keep their design-size
+exports; the play glyph uses half export scale. Colors, radii, slice9 borders
+and final dimensions are unchanged by the antialiasing update.
 
-The slice9 borders in `src/build_packs.c` are stated in design units times the
-generator's export scale. The two must move together.
+Regenerate from the Studio root with:
+
+```sh
+python features/ui-kit/tools/gen_ui_kit.py --out <consumer>/assets/ui
+```
+
+Use `--tokens <sheet.json>` for a game-owned sheet. Refresh the SHA-256 and byte
+counts in `assets/packs/template-ui-kit/assets.jsonl` after generation.
+The pack records license, provenance and origin; existing project-original
+CC0-1.0 licensing remains unchanged. Do not hand-edit the generated PNGs.
+
+The runtime uses a premultiplied UI atlas and premultiplied sprite/text blending.
+Generated mipmaps require trilinear minification; magnification stays linear.

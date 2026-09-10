@@ -46,7 +46,8 @@
   },
   "art": {
     "export_scale": 4,
-    "supersample": 4,
+    "supersample": 16,
+    "resample": "BOX",
     "deep_step": 0.72,
     "center": 2,
     "radius": {

@@ -68,6 +68,21 @@ becomes a raw pointer and calls the kit from there.
 - A consumer proves the rest with frames, not asserts: layout and readability
   are judged by looking (`devapi/responsive_viewports.py`).
 
+## Source antialiasing and alpha contract
+
+The standard token sheet uses working supersample 16 and BOX area downsampling.
+The default for an omitted `art.resample` is BOX; an explicit filter remains
+supported. Area averaging avoids the faint ringing of the previous Lanczos
+export around high-contrast UI silhouettes. It smooths both transparent edges
+and opaque fill/rim boundaries without changing export sizes or slice9 geometry.
+
+The consumer owns the matching renderer setup: premultiplied atlas, matching
+sprite/text output, and `nt_blend_alpha_premultiplied()`. Mipmapped UI atlases
+use trilinear minification and linear magnification. See INSTALL for wiring.
+The template carries these defaults into newly created games; existing copies
+need their own material and asset update. Source art from other libraries must
+not be replaced with generated art solely because filenames match.
+
 ## Compatibility
 
 Contract version in `feature.json`.

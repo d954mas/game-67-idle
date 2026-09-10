@@ -190,7 +190,7 @@ int main(int argc, char *argv[]) {
     atlas_opts.extrude = 2;
     atlas_opts.premultiplied = true;
     atlas_opts.compress = NULL;
-    atlas_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
+    atlas_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR_MIPMAP_LINEAR;
     atlas_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     atlas_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
     atlas_opts.wrap_v = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;

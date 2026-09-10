@@ -54,7 +54,7 @@ class Kit:
         self.lift = int(tokens["geometry"]["lift"])
         self.export_scale = int(art["export_scale"])
         self.supersample = int(art["supersample"])
-        self.resample = Image.Resampling[art.get("resample", "LANCZOS")]
+        self.resample = Image.Resampling[art.get("resample", "BOX")]
         self.center = int(art["center"])
         # Deep step of an action colour; the grayscale art encodes that ratio so
         # one white slice9 tints into every action colour.

@@ -829,7 +829,7 @@ int main(int argc, char **argv) {
     s_font_resource = nt_resource_request(rid("game/font"), NT_ASSET_FONT);
 
     s_text_material = shader_program_material(s_text_vs, s_text_fs, &(nt_material_create_desc_t){
-        .blend = nt_blend_alpha(),
+        .blend = nt_blend_alpha_premultiplied(),
         .depth_test = false,
         .depth_write = false,
         .cull_mode = NT_CULL_NONE,
