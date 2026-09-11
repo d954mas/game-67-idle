@@ -22,6 +22,7 @@ destructive action behind a confirmation.
 node features/ui-kit/example/native/tools/lab.mjs build
 node features/ui-kit/example/native/tools/lab.mjs run
 node features/ui-kit/example/native/tools/lab.mjs run --scene upgrade --theme night --size 390x844
+node features/ui-kit/example/native/tools/lab.mjs configure --fresh   # drop CMakeCache.txt, then reconfigure
 ```
 
 `build` configures `build/native-debug` with Ninja and clang (Debug), builds
@@ -61,8 +62,7 @@ acceptance: tap the HUD action (opens the sheet), buy an upgrade (wallet and
 card change), close by the cross and by the backdrop (back to the HUD), tap a
 volume slider, open the language list, flip the catalogue toggles, scroll the
 catalogue with the wheel, pick a theme, and the HUD and sheets at 1280x800,
-390x844, 320x568 and 844x390. `contact_sheet.png` there is twelve of those
-frames on one page.
+390x844, 320x568 and 844x390.
 
 ## Layout
 

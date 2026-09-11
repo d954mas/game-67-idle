@@ -95,6 +95,26 @@ set_target_properties(${LAB_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${LAB_O
 # --- asset pack: kit art for every theme, demo icons, the scene backdrop, the font ---
 file(GLOB_RECURSE LAB_PACK_SOURCE_ASSETS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/*.png")
+if(NOT LAB_PACK_SOURCE_ASSETS)
+    message(FATAL_ERROR "no kit art; run node tools/lab.mjs art")
+endif()
+
+# Inputs src/build_packs.c reads but that CONFIGURE_DEPENDS above cannot see,
+# because they sit outside assets/*.png: the five template icons, the engine
+# font, and the six shaders. Listed by hand so a change to any of them
+# invalidates the pack instead of leaving it stale.
+set(LAB_PACK_ICONS "")
+foreach(icon gold xp energy sword potion)
+    list(APPEND LAB_PACK_ICONS "${GAME_REPO_ROOT}/templates/template/assets/icons/${icon}.png")
+endforeach()
+set(LAB_PACK_FONT "${ENGINE_DIR}/assets/fonts/LilitaOne-RussianChineseKo.ttf")
+set(LAB_PACK_SHADERS
+    "${ENGINE_DIR}/assets/shaders/sprite.vert"
+    "${ENGINE_DIR}/assets/shaders/sprite.frag"
+    "${ENGINE_DIR}/assets/shaders/slug_text.vert"
+    "${ENGINE_DIR}/assets/shaders/slug_text.frag"
+    "${ENGINE_DIR}/assets/shaders/sprite_radial.vert"
+    "${ENGINE_DIR}/assets/shaders/radial.frag")
 
 add_executable(build_ui_lab_packs src/build_packs.c)
 target_link_libraries(build_ui_lab_packs PRIVATE nt_builder nt_log nt_meshwire)
@@ -112,7 +132,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E make_directory "${LAB_PACK_DIR}" "${LAB_GENERATED_DIR}"
     COMMAND $<TARGET_FILE:build_ui_lab_packs>
         "${LAB_PACK_DIR}" "${LAB_GENERATED_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}"
-    DEPENDS build_ui_lab_packs src/build_packs.c ${LAB_PACK_SOURCE_ASSETS}
+    DEPENDS build_ui_lab_packs src/build_packs.c ${LAB_PACK_SOURCE_ASSETS} ${LAB_PACK_ICONS} ${LAB_PACK_FONT} ${LAB_PACK_SHADERS}
     WORKING_DIRECTORY "${ENGINE_DIR}"
     COMMENT "Building ui_lab asset pack"
     VERBATIM)

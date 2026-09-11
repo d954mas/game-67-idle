@@ -15,11 +15,6 @@
 #define WORLD_W 1152.0F
 #define WORLD_H 768.0F
 
-static Clay_Color clay_color(uint32_t abgr) {
-    return (Clay_Color){(float)(abgr & 0xFFU), (float)((abgr >> 8) & 0xFFU), (float)((abgr >> 16) & 0xFFU),
-                        (float)((abgr >> 24) & 0xFFU)};
-}
-
 void scene_hud_build_world(nt_ui_context_t *ctx) {
     const ui_metrics_t m = ui_metrics();
     const float cover = fmaxf(m.view_w / WORLD_W, m.view_h / WORLD_H);
@@ -52,9 +47,8 @@ void scene_hud_build_overlay(nt_ui_context_t *ctx) {
     const ui_tokens_t *t = ui_theme_tokens();
     char buf[48];
 
-    const nt_ui_label_style_t on_world = g_ui_theme.on_world;
     nt_ui_label_style_t meter_caption = g_ui_theme.row_sub;
-    meter_caption.color = clay_color(t->ink);
+    meter_caption.color = ui_kit_color(t->ink);
 
     // The top inset carries no safe_t here because the lab's scene list above
     // already does; a game copying this HUD adds m.safe_t to the top padding.
@@ -74,8 +68,10 @@ void scene_hud_build_overlay(nt_ui_context_t *ctx) {
             CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
                              .layoutDirection = CLAY_TOP_TO_BOTTOM,
                              .childGap = (uint16_t)(m.gap * 0.4F)}}) {
+                // The level rides in a counter pill like the wallet: a number on
+                // the world always gets a plate.
                 (void)snprintf(buf, sizeof buf, "УРОВЕНЬ %d", g_lab.level);
-                ui_kit_label(ctx, buf, &on_world);
+                ui_kit_counter(ctx, "hud/level", &g_lab_art.xp, buf);
                 (void)snprintf(buf, sizeof buf, "%d / %d", g_lab.xp, g_lab.xp_next);
                 ui_kit_meter_captioned(ctx, "hud/xp", m.hit * 4.0F, m.hit * 0.55F,
                           g_lab.xp_next > 0 ? (float)g_lab.xp / (float)g_lab.xp_next : 0.0F, t->go, buf, &meter_caption);

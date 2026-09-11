@@ -42,12 +42,12 @@ static void upgrade_card(nt_ui_context_t *ctx, int index) {
                                           .layoutDirection = CLAY_LEFT_TO_RIGHT,
                                           .childGap = (uint16_t)(m.gap * 0.7F),
                                           .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}});
-    // The icon sits on a plate in the action colour so it reads at list size.
+    // The icon sits on a recessed plate: a socket, not a second buy button.
     const float socket = m.hit * 1.1F;
     ui_kit_plate_begin(ctx,
                        &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(socket), CLAY_SIZING_FIXED(socket)},
                                                              .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
-                       unlocked ? t->go : t->off);
+                       unlocked ? t->inset : t->tile_dim);
     ui_kit_icon(ctx, u->icon, m.hit * 0.7F);
     ui_kit_plate_end(ctx);
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
@@ -90,12 +90,7 @@ void scene_upgrade_build(nt_ui_context_t *ctx) {
     const float panel_h = fminf(available_h * 0.82F, m.hit * 11.0F);
     if (ui_kit_sheet_begin(ctx, "upgrade/sheet", "УЛУЧШЕНИЯ", "×", &g_lab.sheet_open, m.panel_w, panel_h)) {
         // The list scrolls inside the sheet; the continue action stays outside it.
-        nt_ui_scroll_style_t scroll = nt_ui_scroll_style_defaults();
-        scroll.bar_visibility = NT_UI_SCROLLBAR_AUTO;
-        scroll.bar_thickness = m.gap * 0.3F;
-        scroll.thumb_ref = g_ui_theme.art.slider_fill;
-        scroll.thumb_tint = ui_theme_tokens()->ink_soft;
-        nt_ui_scroll_begin(ctx, NULL, nt_ui_id("upgrade/scroll"), &scroll,
+        nt_ui_scroll_begin(ctx, NULL, nt_ui_id("upgrade/scroll"), ui_kit_scroll_style(),
                            &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                                                                  .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                                                  .childGap = (uint16_t)(m.gap * 0.7F),

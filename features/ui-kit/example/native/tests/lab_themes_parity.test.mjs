@@ -85,6 +85,25 @@ test("the geometry macro carries Studio B's numbers", () => {
   assert.equal(Number.parseFloat(field(geometryMacro, "slice9_scale")), 1 / studioB.art.export_scale);
 });
 
+test("the pack builder's slice9 macros are Studio B's art tokens times its export scale", () => {
+  const builder = readFileSync(join(LAB, "src", "build_packs.c"), "utf8");
+  const scale = Number.parseInt(/#define UI_KIT_EXPORT_SCALE (\d+)/.exec(builder)[1], 10);
+  assert.equal(scale, studioB.art.export_scale);
+  const macros = {
+    PANEL_BORDER: studioB.art.slice9.panel[0],
+    BUTTON_BORDER_X: studioB.art.slice9.button[0],
+    BUTTON_BORDER_TOP: studioB.art.slice9.button[2],
+    BUTTON_BORDER_BOTTOM: studioB.art.slice9.button[3],
+    TILE_BORDER: studioB.art.slice9.tile[0],
+    BAR_BORDER: studioB.art.slice9.slider_track[0],
+  };
+  for (const [name, designPx] of Object.entries(macros)) {
+    const match = new RegExp(`#define ${name} \\((\\d+) \\* UI_KIT_EXPORT_SCALE\\)`).exec(builder);
+    assert.ok(match, `no ${name} macro`);
+    assert.equal(Number.parseInt(match[1], 10), designPx, `${name} disagrees with Studio B's art.slice9`);
+  }
+});
+
 test("the pack builder and the theme table name the same theme folders", () => {
   const builder = readFileSync(join(LAB, "src", "build_packs.c"), "utf8");
   const packed = /THEMES\[\] = \{([^}]*)\}/.exec(builder)[1].match(/"([a-z]+)"/g).map((s) => s.replaceAll('"', ""));

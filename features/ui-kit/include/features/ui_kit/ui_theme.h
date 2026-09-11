@@ -9,6 +9,7 @@
 #include "ui/nt_ui_image.h"
 #include "ui/nt_ui_label.h"
 #include "ui/nt_ui_progress.h"
+#include "ui/nt_ui_scroll.h"
 #include "ui/nt_ui_slider.h"
 
 #include "features/ui_kit/ui_tokens.h"
@@ -34,6 +35,7 @@ typedef struct {
     nt_atlas_region_ref_t slider_fill_sm;  // slider, which bakes borders 1:1
     nt_atlas_region_ref_t thumb;
     nt_atlas_region_ref_t icon_play;
+    nt_atlas_region_ref_t header; // the band across the top of a titled plate
     // The engine's radial SDF material (the sprite_radial + radial shaders,
     // attr_map a_radial@4 and a_layout@7), for the discs the kit draws without
     // art: crisp at every size. id 0 = the kit falls back to the thumb art.
@@ -42,6 +44,10 @@ typedef struct {
 
 typedef struct {
     const ui_tokens_t *tokens;
+    // Bumps on every ui_theme_init: a widget that keeps a resolved copy of a
+    // style refreshes it when this moves and keeps the engine's memoized
+    // regions otherwise.
+    uint32_t generation;
     ui_theme_art_t art;
     nt_ui_image_style_t plate_img; // slice9 image style shared by every plate
 
@@ -53,6 +59,7 @@ typedef struct {
     nt_ui_button_style_t button_close;   // the round dismiss: the thumb art in the danger colour
     nt_ui_slider_style_t slider;         // track + fill + thumb
     nt_ui_dropdown_style_t dropdown;     // pick-one list: tile trigger, tile panel
+    nt_ui_scroll_style_t scroll;         // a scrolled list's bar, in CSS pixels
     nt_ui_progress_style_t progress;     // meter drawn from the slider art
     // The engine's stateful switches in the kit's art: the small fill pill is
     // the body, the thumb is the knob, so no new region is needed. Sizes are
@@ -79,6 +86,10 @@ typedef struct {
     // Text over the world: white inside the theme's contour, so a level or a
     // wave stays readable on any picture and still belongs to the kit.
     nt_ui_label_style_t on_world;
+    // The title on the header band of a titled plate: white in the contour.
+    nt_ui_label_style_t header_title;
+    // The label of a disabled button: soft ink on the off fill.
+    nt_ui_label_style_t button_label_disabled;
 } ui_theme_t;
 
 // Builds every style above from `tokens` and binds `art`. `tokens` must outlive

@@ -27,8 +27,9 @@ makes a phone's layout something a reviewer can look at on a monitor by resizing
 one.
 
 Pick `ref_short` from the hand, because the finger is the constraint nothing
-else can relax -- `test_ui_scale` holds it: `hit / ref_short * 390 >= 44`, a
-touch target still 44 CSS pixels on a 390-pixel phone. Every larger screen is
+else can relax: `hit / ref_short * 390 >= 44` keeps a touch target 44 CSS
+pixels on a 390-pixel phone. A recommendation the sheet has to satisfy, checked
+by eye, not an assert. Every larger screen is
 then served by the same number, since a bigger screen makes the same share
 physically larger.
 
@@ -59,11 +60,15 @@ set the bar: a prototype should not have to design a UI before it has a game.
   shadowed label, button plate, meter, slider style, touch-target height, and
   the `UI_LAYER_*` order every surface sorts on. Composites: a labelled or icon
   button by role (`ui_kit_button`, `ui_kit_icon_button`), the round close
-  (`ui_kit_close_button`, the thumb art in the danger colour), a counter, a
-  captioned meter, a badge, a sheet (the engine modal carrying the kit's panel
-  with a title row and that close), and settings rows (toggle, checkbox,
-  radio, slider) that express the engine's stateful widgets in the kit's own
-  art.
+  (`ui_kit_close_button`, the thumb art in the danger colour), the tinted
+  plate and disc containers (`ui_kit_plate_begin`, `ui_kit_disc_begin`: a
+  socket, a swatch, a badge, where a Clay rectangle would draw an unantialiased
+  border), a counter, a captioned meter, a badge, a titled plate
+  (`ui_kit_dialog_begin`: the header band, the title on it, the close on the
+  corner, the body), a sheet (that plate inside the engine modal), settings
+  rows (toggle, checkbox, radio, slider, dropdown) that express the engine's
+  stateful widgets in the kit's own art, the theme's scroll bar, and
+  `ui_kit_color`.
 - `example/native/` — the UI Lab: a standalone engine consumer with six scenes
   and four themes where every widget above is tried in the real renderer, and
   the example a game copies a screen from. Opt-in; nothing in it is compiled
@@ -117,7 +122,12 @@ not be replaced with generated art solely because filenames match.
 
 ## Compatibility
 
-Contract version in `feature.json`. Version 1.5 adds the opt-in Studio B sheet
+Contract version in `feature.json`. Version 1.6 adds the `header` colour token
+and art slot (0 = shell), the titled plate and dropdown row, the tinted plate
+and disc, the theme scroll style, the disabled-label role, outlined action
+labels (a consumer builds the engine with `NT_FONT_EMBOLDEN_ENABLED=ON` or the
+outline is not drawn), and moves every Studio B contour to the shell colour.
+Version 1.5 adds the opt-in Studio B sheet
 and `on_action` (zero keeps the historical `on_panel` action-label colour for
 existing game-owned initializers), the composites, the `counter` and
 `on_world` label roles, the toggle, checkbox and radio styles, and the UI

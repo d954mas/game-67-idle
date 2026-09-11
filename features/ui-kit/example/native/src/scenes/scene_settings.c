@@ -16,7 +16,6 @@
 
 static const char *const LANGUAGES[] = {"Русский", "English"};
 #define LANGUAGE_COUNT ((int)(sizeof LANGUAGES / sizeof LANGUAGES[0]))
-static const char *const LANGUAGE_ROW_IDS[] = {"settings/language/0", "settings/language/1"};
 
 // View state: closing the panel folds the list and the confirmation.
 static bool s_language_open;
@@ -38,43 +37,6 @@ static void volume_row(nt_ui_context_t *ctx, const char *id, const char *name, f
     char caption[64];
     (void)snprintf(caption, sizeof caption, "%s: %d%%", name, (int)(*value * 100.0F + 0.5F));
     (void)ui_kit_slider_row(ctx, id, caption, value, true, row_width);
-}
-
-// The picker: the trigger names the current choice, the list holds them all.
-static void language_row(nt_ui_context_t *ctx, const ui_metrics_t *m, float row_width) {
-    nt_ui_dropdown_style_t dropdown = g_ui_theme.dropdown;
-    dropdown.min_width = (uint16_t)(row_width * 0.56F);
-    dropdown.font_size = ui_css(dropdown.font_size);
-    dropdown.row_height = (uint16_t)m->hit;
-    dropdown.pad = (uint16_t)(m->gap * 0.6F);
-    dropdown.max_visible_rows = LANGUAGE_COUNT;
-    CLAY({.id = CLAY_ID("settings/language"),
-          .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
-                     .layoutDirection = CLAY_LEFT_TO_RIGHT,
-                     .childGap = (uint16_t)m->gap,
-                     .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
-        CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
-            ui_kit_label(ctx, "Язык", &g_ui_theme.label);
-        }
-        nt_ui_combo_preview_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), UI_LAYER_TEXT, nt_ui_id("settings/language/trigger"),
-                                  &dropdown, &s_language_open);
-        CLAY({.id = CLAY_ID("settings/language/current"), .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
-            ui_kit_label(ctx, LANGUAGES[g_lab.language], &g_ui_theme.button_label);
-        }
-        if (nt_ui_combo_preview_end(ctx)) {
-            for (int i = 0; i < LANGUAGE_COUNT; ++i) {
-                nt_ui_combo_selectable_begin(ctx, (uint32_t)i, i == g_lab.language);
-                CLAY({.id = (Clay_ElementId){.id = nt_ui_id(LANGUAGE_ROW_IDS[i])},
-                      .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
-                    ui_kit_label(ctx, LANGUAGES[i], &g_ui_theme.button_label);
-                }
-                if (nt_ui_combo_selectable_end(ctx)) {
-                    g_lab.language = i;
-                }
-            }
-            nt_ui_combo_end(ctx);
-        }
-    }
 }
 
 // The destructive action is two steps: a small red button here, sized to its
@@ -131,33 +93,28 @@ void scene_settings_build(nt_ui_context_t *ctx) {
     const ui_metrics_t m = ui_metrics();
     const float row_width = m.panel_w - m.pad * 2.0F - m.gap;
 
-    ui_kit_scrim(ctx);
-    nt_ui_block_pointer(ctx, nt_ui_id("ui_kit/scrim"), NULL);
-    ui_kit_panel_begin(ctx, &(Clay_ElementDeclaration){
-                                .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
-                                             .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER,
-                                                              .parent = CLAY_ATTACH_POINT_CENTER_CENTER},
-                                             .offset = {(m.safe_l - m.safe_r) * 0.5F, (m.safe_t - m.safe_b) * 0.5F}},
-                                .layout = {.sizing = {CLAY_SIZING_FIXED(m.panel_w), CLAY_SIZING_FIT(0)},
-                                           .padding = {.left = (uint16_t)m.pad, .right = (uint16_t)m.pad,
-                                                       .top = (uint16_t)(m.pad * 0.5F), .bottom = (uint16_t)(m.pad * 0.5F)},
-                                           .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                                           .childGap = (uint16_t)(m.gap * 0.6F),
-                                           .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
-    ui_kit_label(ctx, "НАСТРОЙКИ", &g_ui_theme.title);
-    // The cross is what a player looks for; the bottom Close is what a thumb reaches.
-    if (ui_kit_close_button(ctx, "settings/cross", "×")) {
-        g_lab.sheet_open = false;
+    ui_kit_scrim(ctx, true);
+    // The plate floats centred in the safe area; the cross on its corner is
+    // what a player looks for, the bottom Close is what a thumb reaches.
+    CLAY({.floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
+                       .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER,
+                                        .parent = CLAY_ATTACH_POINT_CENTER_CENTER},
+                       .offset = {(m.safe_l - m.safe_r) * 0.5F, (m.safe_t - m.safe_b) * 0.5F}},
+          .layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0)}}}) {
+        if (ui_kit_dialog_begin(ctx, "settings/panel", "НАСТРОЙКИ", "×", CLAY_SIZING_FIXED(m.panel_w), CLAY_SIZING_FIT(0))) {
+            g_lab.sheet_open = false;
+        }
+        volume_row(ctx, "settings/master", "Общая", &g_lab.volume_master, row_width);
+        volume_row(ctx, "settings/music", "Музыка", &g_lab.volume_music, row_width);
+        volume_row(ctx, "settings/sfx", "Звуки", &g_lab.volume_sfx, row_width);
+        (void)ui_kit_dropdown_row(ctx, "settings/language", "Язык", LANGUAGES, LANGUAGE_COUNT, &g_lab.language,
+                                  &s_language_open, row_width * 0.56F);
+        reset_row(ctx, &m);
+        if (ui_kit_button(ctx, "settings/close", "ЗАКРЫТЬ", UI_KIT_BUTTON_NEUTRAL, true, CLAY_SIZING_GROW(0), ui_kit_hit_height(&m))) {
+            g_lab.sheet_open = false;
+        }
+        ui_kit_dialog_end(ctx);
     }
-    volume_row(ctx, "settings/master", "Общая", &g_lab.volume_master, row_width);
-    volume_row(ctx, "settings/music", "Музыка", &g_lab.volume_music, row_width);
-    volume_row(ctx, "settings/sfx", "Звуки", &g_lab.volume_sfx, row_width);
-    language_row(ctx, &m, row_width);
-    reset_row(ctx, &m);
-    if (ui_kit_button(ctx, "settings/close", "ЗАКРЫТЬ", UI_KIT_BUTTON_NEUTRAL, true, CLAY_SIZING_GROW(0), ui_kit_hit_height(&m))) {
-        g_lab.sheet_open = false;
-    }
-    ui_kit_panel_end(ctx);
 
     confirm_sheet(ctx, &m);
 }

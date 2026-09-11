@@ -50,6 +50,7 @@ class Kit:
         self.inset_rim = rgb(colors["inset_rim"])
         self.tile = rgb(colors["tile"])
         self.tile_rim = rgb(colors["tile_rim"])
+        self.header = rgb(colors.get("header", colors["shell"]))
         self.rim = int(tokens["geometry"]["rim"])
         self.lift = int(tokens["geometry"]["lift"])
         self.export_scale = int(art["export_scale"])
@@ -59,6 +60,9 @@ class Kit:
         # Deep step of an action colour; the grayscale art encodes that ratio so
         # one white slice9 tints into every action colour.
         self.deep = int(255 * float(art["deep_step"]))
+        # The ledge under a button body: a mid grey, so the tint leaves it a
+        # darker shade of the fill rather than black.
+        self.ledge = int(255 * float(art.get("ledge_step", art["deep_step"])))
         # Light band along the top of a coloured body: how far its colour travels
         # towards white. 0 leaves the art flat, which is why an omitted key draws
         # exactly what it drew before.
@@ -206,12 +210,13 @@ def gen_panel(kit: Kit):
 
 
 def gen_button(kit: Kit):
-    # Grayscale for tint: fill white, rim + bottom lift in the deep step.
+    # For tint: the rim is the contour colour (white tint keeps it, an action
+    # tint only darkens it), the ledge a mid grey, the body white.
     s, r = 64, kit.radius["button"]
     img = kit.canvas(s, s)
     d = ImageDraw.Draw(img)
-    g = (kit.deep, kit.deep, kit.deep, 255)
-    kit.rounded(d, (0, 0, s - 1, s - 1), r, g)
+    kit.rounded(d, (0, 0, s - 1, s - 1), r, kit.shell + (255,))
+    kit.rounded(d, (kit.rim, kit.rim, s - 1 - kit.rim, s - 1 - kit.rim), r - kit.rim, (kit.ledge, kit.ledge, kit.ledge, 255))
     # The body sits LIFT higher than the deep base = the pressable ledge. Its
     # flat value is below white so the top edge has somewhere to catch light.
     flat = int(255 * (1.0 - kit.gloss))
@@ -236,6 +241,16 @@ def gen_tile(kit: Kit):
     kit.body(img, (kit.rim, kit.rim, s - 1 - kit.rim, s - 1 - kit.rim), r - kit.rim, kit.tile, kit.slice9["tile"][2])
     kit.rivets(ImageDraw.Draw(img), (kit.rim, kit.rim, s - 1 - kit.rim, s - 1 - kit.rim), kit.tile)
     kit.save(img, "tile.png")
+
+
+def gen_header(kit: Kit):
+    # The band across the top of a titled plate, inside the panel's rim: round
+    # on top only, the bottom corners pushed past the canvas so they stay square.
+    s, r = 64, kit.radius.get("header", kit.radius["panel"] - kit.rim)
+    img = kit.canvas(s, s)
+    d = ImageDraw.Draw(img)
+    kit.rounded(d, (0, 0, s - 1, s - 1 + r), r, kit.header + (255,))
+    kit.save(img, "header.png")
 
 
 def gen_slider(kit: Kit):
@@ -264,7 +279,7 @@ def gen_slider(kit: Kit):
     s = 32
     img = kit.canvas(s, s)
     d = ImageDraw.Draw(img)
-    d.ellipse(kit.scaled_box((0, 0, s - 1, s - 1)), fill=(kit.deep, kit.deep, kit.deep, 255))
+    d.ellipse(kit.scaled_box((0, 0, s - 1, s - 1)), fill=kit.shell + (255,))
     d.ellipse(
         kit.scaled_box((kit.rim, kit.rim, s - 1 - kit.rim, s - 1 - kit.rim)),
         fill=(255, 255, 255, 255),
@@ -294,6 +309,7 @@ def generate(tokens: dict, out: Path):
     gen_panel(kit)
     gen_button(kit)
     gen_tile(kit)
+    gen_header(kit)
     gen_slider(kit)
     gen_play(kit)
     # The engine slider bakes its slice9 borders at source pixel size, so it gets

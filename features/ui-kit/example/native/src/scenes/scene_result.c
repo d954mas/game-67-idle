@@ -17,18 +17,20 @@ void scene_result_leave(nt_ui_context_t *ctx) {
     ui_kit_sheet_clear(ctx, "result/sheet");
 }
 
-// A reward tile: the icon and the delta, large, nothing else.
+// A reward tile: a big icon with the delta under it, the size of a prize,
+// nothing else.
 static void reward(nt_ui_context_t *ctx, const char *id, nt_atlas_region_ref_t *icon, const char *text) {
     const ui_metrics_t m = ui_metrics();
+    const float side = m.hit * 2.2F;
     nt_ui_label_style_t amount = g_ui_theme.amount;
     amount.color = g_ui_theme.row_title.color;
-    CLAY({.id = (Clay_ElementId){.id = nt_ui_id(id)}, .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
+    CLAY({.id = (Clay_ElementId){.id = nt_ui_id(id)}, .layout = {.sizing = {CLAY_SIZING_FIXED(side), CLAY_SIZING_FIT(0)}}}) {
         ui_kit_tile_begin(ctx, &(Clay_ElementDeclaration){
-                                   .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(m.hit * 1.4F)},
-                                              .childGap = (uint16_t)(m.gap * 0.5F),
-                                              .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                                   .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(side)},
+                                              .childGap = (uint16_t)(m.gap * 0.3F),
+                                              .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                               .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}});
-        ui_kit_icon(ctx, icon, m.hit * 0.8F);
+        ui_kit_icon(ctx, icon, m.hit * 1.2F);
         ui_kit_label(ctx, text, &amount);
         ui_kit_tile_end(ctx);
     }
@@ -55,7 +57,8 @@ void scene_result_build(nt_ui_context_t *ctx) {
         }
         CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
                          .layoutDirection = CLAY_LEFT_TO_RIGHT,
-                         .childGap = (uint16_t)m.gap}}) {
+                         .childGap = (uint16_t)m.gap,
+                         .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}) {
             reward(ctx, "result/reward/coins", &g_lab_art.coin, "+240");
             reward(ctx, "result/reward/nuts", &g_lab_art.xp, "+15");
         }

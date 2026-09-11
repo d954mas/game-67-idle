@@ -49,6 +49,14 @@ for (const { sheet, source: preset } of presets) {
     }
   });
 
+  test(`${sheet.id}: every colour ui_tokens.c packs comes from the sheet`, () => {
+    // The other direction: a colour added to the struct and its preset but not
+    // to the sheet is a repaint that only half happens, in the art or the styles.
+    for (const [, name] of preset.matchAll(/\.(\w+)\s*=\s*0x[0-9A-Fa-f]{8}U/g)) {
+      assert.ok(name in sheet.colors, `sheet has no colour '${name}'`);
+    }
+  });
+
   test(`${sheet.id}: type ramp and geometry reach ui_tokens.c unchanged`, () => {
     const scalars = {
       t_display: sheet.type.display,

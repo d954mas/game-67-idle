@@ -45,6 +45,9 @@
 #define TAP_FIRST 20
 #define TAP_PERIOD 15
 #define SHOT_SETTLE 30
+// A broken pack (bad shaders, no atlas region) can leave the UI runtime
+// gated forever; without a cap the process hangs instead of failing.
+#define READY_WATCHDOG_FRAMES 600
 
 static struct {
     const char *scene;
@@ -73,10 +76,29 @@ static nt_resource_t s_font_resource;
 static nt_font_t s_font;
 static nt_hash32_t s_pack_id;
 static uint32_t s_ready_frames;
+static uint32_t s_total_frames; // frames spent waiting on the ready gate
 static bool s_regions_checked;
+static bool s_regions_warned;
+static int s_exit_code; // set by a frame-loop failure; nt_app_quit() alone cannot carry one
+
+// Mirrors lab_theme.c's THEMES[] and lab.c's SCENES[] ids. Kept as a literal
+// copy (like this file's own usage() string already was) so an unknown id is
+// rejected before nt_engine_init, rather than after a window/GL/pack is open.
+static const char *const LAB_THEME_IDS[] = {"b", "forest", "ember", "night"};
+static const char *const LAB_SCENE_IDS[] = {"hud", "upgrade", "result", "settings", "components", "themes"};
+
+static bool id_known(const char *id, const char *const *ids, size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+        if (strcmp(ids[i], id) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
 
 static void usage(void) {
-    (void)printf("ui_lab [--scene hud|upgrade|result|settings|components|themes] [--theme b|forest|ember|night]\n"
+    (void)printf("Exit codes: 0 ok, 2 usage, 3 runtime failure.\n"
+                 "ui_lab [--scene hud|upgrade|result|settings|components|themes] [--theme b|forest|ember|night]\n"
                  "       [--size WxH] [--frames N] [--shot file.ppm] [--tap X,Y]... [--hover X,Y] [--wheel N]\n"
                  "Keys: 1-6 scenes, T next theme, Esc closes a sheet or returns to the HUD.\n");
 }
@@ -141,6 +163,10 @@ static bool parse_args(int argc, char *argv[]) {
             usage();
             return false;
         }
+    }
+    if (s_cli.wheel != 0.0F && !s_cli.hover) {
+        (void)fprintf(stderr, "--wheel needs --hover: a wheel notch is delivered at the hover point\n");
+        return false;
     }
     return true;
 }
@@ -308,8 +334,13 @@ static void frame(void) {
 
     bool drew = false;
     if (lab_ui_runtime_ready()) {
-        if (!s_regions_checked && lab_theme_regions_ready()) {
-            s_regions_checked = true;
+        if (!s_regions_checked) {
+            if (lab_theme_regions_ready()) {
+                s_regions_checked = true;
+            } else if (!s_regions_warned) {
+                nt_log_error("ui_lab: theme regions not ready yet");
+                s_regions_warned = true;
+            }
         }
         lab_update(ctx, g_nt_app.dt);
         nt_pointer_t pointers[NT_INPUT_MAX_POINTERS];
@@ -333,17 +364,38 @@ static void frame(void) {
         const bool capture = s_cli.shot != NULL && s_ready_frames == shot_frame();
         const bool done = s_cli.shot == NULL && s_cli.frames > 0 && s_ready_frames >= (uint32_t)s_cli.frames;
         if (capture) {
-            (void)write_ppm(s_cli.shot);
+            // Never write a capture over regions that failed to load: a blank
+            // or garbage frame must not read back as success.
+            if (!s_regions_checked) {
+                nt_log_error("ui_lab: capture requested before theme regions were ready");
+                s_exit_code = 3;
+            } else if (!write_ppm(s_cli.shot)) {
+                s_exit_code = 3;
+            }
         }
         if (capture || done) {
             nt_app_quit();
         }
+    } else if (s_ready_frames == 0 && ++s_total_frames >= READY_WATCHDOG_FRAMES) {
+        nt_log_error("ui_lab: pack never became ready");
+        s_exit_code = 3;
+        nt_app_quit();
     }
     nt_window_swap_buffers();
 }
 
 int main(int argc, char *argv[]) {
     if (!parse_args(argc, argv)) {
+        return 2;
+    }
+    // Validated here, against the id tables above, before any window, GL
+    // context or pack is opened: a bad id must not leave one of those behind.
+    if (s_cli.theme != NULL && !id_known(s_cli.theme, LAB_THEME_IDS, sizeof LAB_THEME_IDS / sizeof LAB_THEME_IDS[0])) {
+        (void)fprintf(stderr, "unknown theme %s\n", s_cli.theme);
+        return 2;
+    }
+    if (s_cli.scene != NULL && !id_known(s_cli.scene, LAB_SCENE_IDS, sizeof LAB_SCENE_IDS / sizeof LAB_SCENE_IDS[0])) {
+        (void)fprintf(stderr, "unknown scene %s\n", s_cli.scene);
         return 2;
     }
 
@@ -382,7 +434,10 @@ int main(int argc, char *argv[]) {
     nt_resource_mount(s_pack_id, 100);
     char path[1024];
     pack_path(path, sizeof path);
-    nt_resource_load_auto(s_pack_id, path);
+    if (nt_resource_load_auto(s_pack_id, path) != NT_OK) {
+        (void)fprintf(stderr, "ui_lab: failed to load pack %s\n", path);
+        return 3;
+    }
 
     s_sprite_program.vs = nt_resource_request(ASSET_SHADER_ASSETS_SHADERS_SPRITE_VERT, NT_ASSET_SHADER_CODE);
     s_sprite_program.fs = nt_resource_request(ASSET_SHADER_ASSETS_SHADERS_SPRITE_FRAG, NT_ASSET_SHADER_CODE);
@@ -437,13 +492,15 @@ int main(int argc, char *argv[]) {
     lab_ui_runtime_init(s_sprite_material, s_text_material, s_font, s_font_resource, s_atlas);
     lab_theme_bind(s_atlas, s_radial_material);
     lab_init();
+    // The id itself was already validated pre-init; a failure here means the
+    // live theme/scene table disagrees with LAB_THEME_IDS/LAB_SCENE_IDS above.
     if (s_cli.theme != NULL && !lab_theme_apply_id(s_cli.theme)) {
-        (void)fprintf(stderr, "unknown theme %s\n", s_cli.theme);
-        return 2;
+        nt_log_error("ui_lab: theme %s passed CLI validation but lab_theme_apply_id rejected it", s_cli.theme);
+        return 3;
     }
     if (s_cli.scene != NULL && !lab_goto_id(s_cli.scene)) {
-        (void)fprintf(stderr, "unknown scene %s\n", s_cli.scene);
-        return 2;
+        nt_log_error("ui_lab: scene %s passed CLI validation but lab_goto_id rejected it", s_cli.scene);
+        return 3;
     }
 
     g_nt_app.target_dt = 0.0F;
@@ -478,5 +535,5 @@ int main(int argc, char *argv[]) {
     nt_window_shutdown();
     nt_engine_shutdown();
 #endif
-    return 0;
+    return s_exit_code;
 }

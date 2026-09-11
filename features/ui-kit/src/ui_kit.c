@@ -2,14 +2,21 @@
 
 #include "ui/nt_ui_image.h"
 #include "ui/nt_ui_modal.h"
+#include "ui/nt_ui_dropdown.h"
 #include "ui/nt_ui_panel.h"
+#include "ui/nt_ui_scroll.h"
 
 #include <stdio.h>
 #include <string.h>
 
 static const char *text_of(const char *text) { return text != NULL ? text : ""; }
 
-static Clay_ElementId element_id(const char *s) { return (Clay_ElementId){.id = nt_ui_id(s)}; }
+// Through Clay's own hash, with the string kept: that is what names the
+// element in the ui.tree a DevAPI bot reads. Callers pass strings that outlive
+// the frame (literals, statics).
+static Clay_ElementId element_id(const char *s) {
+    return Clay_GetElementId((Clay_String){.length = (int32_t)strlen(s), .chars = s});
+}
 
 static Clay_Color clay_color(uint32_t abgr) {
     return (Clay_Color){(float)(abgr & 0xFFU), (float)((abgr >> 8) & 0xFFU), (float)((abgr >> 16) & 0xFFU),
@@ -30,8 +37,7 @@ void ui_kit_tile_begin(nt_ui_context_t *ctx, const Clay_ElementDeclaration *decl
 
 void ui_kit_tile_end(nt_ui_context_t *ctx) { nt_ui_panel_end(ctx); }
 
-void ui_kit_scrim(nt_ui_context_t *ctx) {
-    (void)ctx;
+void ui_kit_scrim(nt_ui_context_t *ctx, bool occludes) {
     const uint32_t c = ui_theme_tokens()->scrim;
     CLAY({.id = CLAY_ID("ui_kit/scrim"),
           .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
@@ -40,6 +46,9 @@ void ui_kit_scrim(nt_ui_context_t *ctx) {
           .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}},
           .backgroundColor = clay_color(c),
           .userData = NT_UI_CLAY_DATA(UI_LAYER_SCRIM)}) {}
+    if (occludes) {
+        nt_ui_block_pointer(ctx, nt_ui_id("ui_kit/scrim"), NULL);
+    }
 }
 
 nt_ui_label_style_t ui_text(const nt_ui_label_style_t *kit_style) { return ui_text_scaled(kit_style, 1.0F); }
@@ -129,16 +138,35 @@ void ui_kit_meter(nt_ui_context_t *ctx, float w, float h, float ratio, uint32_t 
                     .layout = {.sizing = {CLAY_SIZING_FIXED(fill_w), CLAY_SIZING_FIXED(h - inset * 2.0F)}}});
 }
 
-nt_ui_slider_style_t ui_kit_slider_style(const ui_metrics_t *m) {
-    nt_ui_slider_style_t s = g_ui_theme.slider;
-    s.track_h = ui_css(s.track_h);
-    s.thumb_w = ui_css(s.thumb_w);
-    s.thumb_h = ui_css(s.thumb_h);
+nt_ui_slider_style_t *ui_kit_slider_style(const ui_metrics_t *m) {
+    static nt_ui_slider_style_t s;
+    static uint32_t generation;
+    if (generation != g_ui_theme.generation) {
+        s = g_ui_theme.slider;
+        generation = g_ui_theme.generation;
+    }
+    const nt_ui_slider_style_t *d = &g_ui_theme.slider;
+    s.track_h = ui_css(d->track_h);
+    s.thumb_w = ui_css(d->thumb_w);
+    s.thumb_h = ui_css(d->thumb_h);
     // The track is whatever the row gives it; a fixed width would overflow the
     // narrow frame a plate gets on a phone.
     s.track_w = m->panel_w - m->pad * 2.0F;
-    return s;
+    return &s;
 }
+
+nt_ui_scroll_style_t *ui_kit_scroll_style(void) {
+    static nt_ui_scroll_style_t s;
+    static uint32_t generation;
+    if (generation != g_ui_theme.generation) {
+        s = g_ui_theme.scroll;
+        generation = g_ui_theme.generation;
+    }
+    s.bar_thickness = ui_css(g_ui_theme.scroll.bar_thickness);
+    return &s;
+}
+
+Clay_Color ui_kit_color(uint32_t abgr) { return clay_color(abgr); }
 
 Clay_SizingAxis ui_kit_hit_height(const ui_metrics_t *m) { return CLAY_SIZING_FIXED(m->hit); }
 
@@ -179,7 +207,7 @@ static bool button_with(nt_ui_context_t *ctx, const char *id, nt_atlas_region_re
                 ui_kit_icon(ctx, icon, m.hit * 0.6F);
             }
             if (label != NULL) {
-                ui_kit_label(ctx, label, ui_kit_button_label_style(kind));
+                ui_kit_label(ctx, label, enabled ? ui_kit_button_label_style(kind) : &g_ui_theme.button_label_disabled);
             }
         }
         clicked = ui_kit_button_end(ctx);
@@ -308,37 +336,75 @@ static nt_ui_modal_style_t sheet_style(void) {
     return s;
 }
 
+// The close's derived name has to outlive the frame for the ui.tree; a few
+// dialogs per frame is the most a screen opens.
+static const char *derived_id(const char *id, const char *suffix) {
+    static char ring[4][128];
+    static unsigned slot;
+    char *buf = ring[slot++ % 4U];
+    (void)snprintf(buf, sizeof ring[0], "%s/%s", id, suffix);
+    return buf;
+}
+
+bool ui_kit_dialog_begin(nt_ui_context_t *ctx, const char *id, const char *title, const char *close_label,
+                         Clay_SizingAxis w, Clay_SizingAxis h) {
+    const ui_metrics_t m = ui_metrics();
+    bool closed = false;
+    // The named wrapper carries the size; the plate inside it fills it.
+    Clay__OpenElement();
+    Clay__ConfigureOpenElement((Clay_ElementDeclaration){.id = element_id(id), .layout = {.sizing = {w, h}}});
+    // The band sits inside the panel's rim, so the plate keeps only its rim as
+    // padding up there; the body brings the kit's padding back.
+    ui_kit_panel_begin(ctx, &(Clay_ElementDeclaration){
+                                .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
+                                           .padding = {.left = (uint16_t)m.rim, .right = (uint16_t)m.rim,
+                                                       .top = (uint16_t)m.rim, .bottom = (uint16_t)(m.pad * 0.5F)},
+                                           .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                           .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
+    if (title != NULL) {
+        nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_FILL), &g_ui_theme.art.header, &g_ui_theme.plate_img,
+                          &(Clay_ElementDeclaration){
+                              .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(m.hit)},
+                                         .padding = {.left = (uint16_t)(m.pad - m.rim), .right = (uint16_t)m.hit},
+                                         .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}});
+        ui_kit_label(ctx, title, &g_ui_theme.header_title);
+        nt_ui_panel_end(ctx);
+    }
+    if (close_label != NULL) {
+        closed = ui_kit_close_button(ctx, derived_id(id, "close"), close_label);
+    }
+    Clay__OpenElement();
+    Clay__ConfigureOpenElement((Clay_ElementDeclaration){
+        .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
+                   .padding = {.left = (uint16_t)(m.pad - m.rim), .right = (uint16_t)(m.pad - m.rim),
+                               .top = (uint16_t)(title != NULL ? m.gap : m.pad * 0.5F - m.rim)},
+                   .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                   .childGap = (uint16_t)m.gap,
+                   .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
+    return closed;
+}
+
+void ui_kit_dialog_end(nt_ui_context_t *ctx) {
+    Clay__CloseElement();
+    ui_kit_panel_end(ctx);
+    Clay__CloseElement();
+}
+
 bool ui_kit_sheet_begin(nt_ui_context_t *ctx, const char *id, const char *title, const char *close_label, bool *open,
                         float w, float h) {
-    const ui_metrics_t m = ui_metrics();
     const nt_ui_modal_style_t style = sheet_style();
     if (!nt_ui_modal_visible(ctx, nt_ui_id(id), &style, open)) {
         return false;
     }
-    // Half the side padding above the title and below the last row: a dialog
-    // reads from its edges, and the rows carry their own rhythm.
-    ui_kit_panel_begin(ctx, &(Clay_ElementDeclaration){
-                                .layout = {.sizing = {CLAY_SIZING_FIXED(w), h > 0.0F ? CLAY_SIZING_FIXED(h) : CLAY_SIZING_FIT(0)},
-                                           .padding = {.left = (uint16_t)m.pad, .right = (uint16_t)m.pad,
-                                                       .top = (uint16_t)(m.pad * 0.5F), .bottom = (uint16_t)(m.pad * 0.5F)},
-                                           .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                                           .childGap = (uint16_t)m.gap,
-                                           .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
-    if (title != NULL) {
-        ui_kit_label(ctx, title, &g_ui_theme.title);
-    }
-    if (close_label != NULL) {
-        char close_id[128];
-        (void)snprintf(close_id, sizeof close_id, "%s/close", id);
-        if (ui_kit_close_button(ctx, close_id, close_label)) {
-            *open = false;
-        }
+    if (ui_kit_dialog_begin(ctx, derived_id(id, "panel"), title, close_label, CLAY_SIZING_FIXED(w),
+                            h > 0.0F ? CLAY_SIZING_FIXED(h) : CLAY_SIZING_FIT(0))) {
+        *open = false;
     }
     return true;
 }
 
 void ui_kit_sheet_end(nt_ui_context_t *ctx) {
-    ui_kit_panel_end(ctx);
+    ui_kit_dialog_end(ctx);
     nt_ui_modal_end(ctx);
 }
 
@@ -406,11 +472,9 @@ bool ui_kit_slider_row(nt_ui_context_t *ctx, const char *id, const char *caption
     const ui_metrics_t m = ui_metrics();
     const float before = *value;
     const bool landscape = !m.portrait;
-    nt_ui_slider_style_t slider = ui_kit_slider_style(&m);
-    slider.track_w = landscape ? row_width * 0.56F - m.gap * 0.4F : row_width;
-    if (!enabled) {
-        slider.states[NT_UI_SLIDER_DISABLED].opacity = 0.4F;
-    }
+    nt_ui_slider_style_t *slider = ui_kit_slider_style(&m);
+    slider->track_w = landscape ? row_width * 0.56F - m.gap * 0.4F : row_width;
+    slider->states[NT_UI_SLIDER_DISABLED].opacity = enabled ? 1.0F : 0.4F;
     CLAY({.id = element_id(id),
           .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
                      .layoutDirection = landscape ? CLAY_LEFT_TO_RIGHT : CLAY_TOP_TO_BOTTOM,
@@ -422,9 +486,51 @@ bool ui_kit_slider_row(nt_ui_context_t *ctx, const char *id, const char *caption
         // The row is the touch target: the track is thin, and the thumb alone
         // is not something a thumb can find.
         (void)nt_ui_slider_float(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), UI_LAYER_TEXT, nt_ui_child_id(nt_ui_id(id), "slider"),
-                                 NULL, value, 0.0F, 1.0F, 0.0F, &slider,
+                                 NULL, value, 0.0F, 1.0F, 0.0F, slider,
                                  &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(&m)}}},
                                  enabled);
     }
     return *value != before;
+}
+
+bool ui_kit_dropdown_row(nt_ui_context_t *ctx, const char *id, const char *label, const char *const *options,
+                         int count, int *selected, bool *open, float list_width) {
+    static nt_ui_dropdown_style_t style;
+    static uint32_t generation;
+    const ui_metrics_t m = ui_metrics();
+    const uint32_t base = nt_ui_id(id);
+    const int before = *selected;
+    if (generation != g_ui_theme.generation) {
+        style = g_ui_theme.dropdown;
+        generation = g_ui_theme.generation;
+    }
+    style.font_size = ui_css(g_ui_theme.dropdown.font_size);
+    style.row_height = (uint16_t)ui_css((float)g_ui_theme.dropdown.row_height);
+    style.pad = (uint16_t)ui_css((float)g_ui_theme.dropdown.pad);
+    style.min_width = (uint16_t)list_width;
+    style.max_visible_rows = (uint16_t)count;
+    UI_KIT_ROW(id, &m) {
+        row_label(ctx, label, true);
+        nt_ui_combo_preview_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), UI_LAYER_TEXT, nt_ui_child_id(base, "trigger"),
+                                  &style, open);
+        CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
+            ui_kit_label(ctx, options[*selected], &g_ui_theme.button_label);
+        }
+        if (nt_ui_combo_preview_end(ctx)) {
+            for (int i = 0; i < count; ++i) {
+                char key[16];
+                (void)snprintf(key, sizeof key, "%d", i);
+                nt_ui_combo_selectable_begin(ctx, (uint32_t)i, i == *selected);
+                CLAY({.id = (Clay_ElementId){.id = nt_ui_child_id(base, key)},
+                      .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
+                    ui_kit_label(ctx, options[i], &g_ui_theme.button_label);
+                }
+                if (nt_ui_combo_selectable_end(ctx)) {
+                    *selected = i;
+                }
+            }
+            nt_ui_combo_end(ctx);
+        }
+    }
+    return *selected != before;
 }

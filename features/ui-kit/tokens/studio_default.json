@@ -21,7 +21,8 @@
     "go": "#35C46F",
     "info": "#4A7BF7",
     "danger": "#FF6B6B",
-    "off": "#8B90AB"
+    "off": "#8B90AB",
+    "header": "#3E3299"
   },
   "type": {
     "display": 32,

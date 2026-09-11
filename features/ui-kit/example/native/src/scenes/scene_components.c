@@ -26,20 +26,11 @@ static bool s_dialog_open;
 
 static const char *const PICKS[] = {"Маленький", "Средний", "Большой"};
 
-static Clay_Color clay_color(uint32_t abgr) {
-    return (Clay_Color){(float)(abgr & 0xFFU), (float)((abgr >> 8) & 0xFFU), (float)((abgr >> 16) & 0xFFU),
-                        (float)((abgr >> 24) & 0xFFU)};
-}
-
 void scene_components_leave(nt_ui_context_t *ctx) {
     s_pick_open = false;
     s_dialog_open = false;
     nt_ui_state_clear(ctx, nt_ui_id("components/scroll"));
     ui_kit_sheet_clear(ctx, "components/dialog");
-}
-
-static void two_up(const ui_metrics_t *m, bool *portrait_out) {
-    *portrait_out = m->portrait;
 }
 
 // Two cells per row on a phone, four across a desk.
@@ -51,7 +42,7 @@ static void two_up(const ui_metrics_t *m, bool *portrait_out) {
 
 static void buttons(nt_ui_context_t *ctx, const ui_metrics_t *m) {
     bool portrait = false;
-    two_up(m, &portrait);
+    portrait = m->portrait;
     lab_section(ctx, "Кнопки");
     const Clay_SizingAxis w = CLAY_SIZING_GROW(0);
     const Clay_SizingAxis h = ui_kit_hit_height(m);
@@ -101,7 +92,7 @@ static void counters(nt_ui_context_t *ctx, const ui_metrics_t *m) {
         ui_kit_counter(ctx, "components/chip/nuts", &g_lab_art.xp, amount);
     }
     nt_ui_label_style_t caption = g_ui_theme.row_sub;
-    caption.color = clay_color(ui_theme_tokens()->ink);
+    caption.color = ui_kit_color(ui_theme_tokens()->ink);
     const float meter_w = m->panel_w - m->pad * 2.0F;
     ROW_BEGIN(*m) {
         ui_kit_meter_captioned(ctx, "components/meter/xp", meter_w, m->hit * 0.55F, 0.3F, ui_theme_tokens()->go, "30 / 100", &caption);
@@ -136,34 +127,8 @@ static void controls(nt_ui_context_t *ctx, const ui_metrics_t *m) {
 
 static void picker(nt_ui_context_t *ctx, const ui_metrics_t *m) {
     lab_section(ctx, "Выпадающий список");
-    nt_ui_dropdown_style_t dropdown = g_ui_theme.dropdown;
-    dropdown.min_width = (uint16_t)((m->panel_w - m->pad * 2.0F) * 0.56F);
-    dropdown.font_size = ui_css(dropdown.font_size);
-    dropdown.row_height = (uint16_t)m->hit;
-    dropdown.pad = (uint16_t)(m->gap * 0.6F);
-    dropdown.max_visible_rows = 3;
-    ROW_BEGIN(*m) {
-        CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
-            ui_kit_label(ctx, "Размер", &g_ui_theme.label);
-        }
-        nt_ui_combo_preview_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), UI_LAYER_TEXT, nt_ui_id("components/pick/trigger"),
-                                  &dropdown, &s_pick_open);
-        CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
-            ui_kit_label(ctx, PICKS[s_pick], &g_ui_theme.button_label);
-        }
-        if (nt_ui_combo_preview_end(ctx)) {
-            for (int i = 0; i < 3; ++i) {
-                nt_ui_combo_selectable_begin(ctx, (uint32_t)i, i == s_pick);
-                CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
-                    ui_kit_label(ctx, PICKS[i], &g_ui_theme.button_label);
-                }
-                if (nt_ui_combo_selectable_end(ctx)) {
-                    s_pick = i;
-                }
-            }
-            nt_ui_combo_end(ctx);
-        }
-    }
+    (void)ui_kit_dropdown_row(ctx, "components/pick", "Размер", PICKS, 3, &s_pick, &s_pick_open,
+                              (m->panel_w - m->pad * 2.0F) * 0.56F);
 }
 
 static void plates(nt_ui_context_t *ctx, const ui_metrics_t *m) {
@@ -197,12 +162,7 @@ void scene_components_build(nt_ui_context_t *ctx) {
                      .padding = {.left = (uint16_t)(m.margin + m.safe_l), .right = (uint16_t)(m.margin + m.safe_r),
                                  .bottom = (uint16_t)(m.margin + m.safe_b)},
                      .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_TOP}}}) {
-        nt_ui_scroll_style_t scroll = nt_ui_scroll_style_defaults();
-        scroll.bar_visibility = NT_UI_SCROLLBAR_AUTO;
-        scroll.bar_thickness = m.gap * 0.3F;
-        scroll.thumb_ref = g_ui_theme.art.slider_fill;
-        scroll.thumb_tint = ui_theme_tokens()->ink_soft;
-        nt_ui_scroll_begin(ctx, NULL, nt_ui_id("components/scroll"), &scroll,
+        nt_ui_scroll_begin(ctx, NULL, nt_ui_id("components/scroll"), ui_kit_scroll_style(),
                            &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(m.panel_w), CLAY_SIZING_GROW(0)},
                                                                  .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                                                  .childGap = (uint16_t)(m.gap * 0.6F),

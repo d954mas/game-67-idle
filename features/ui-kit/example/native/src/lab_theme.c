@@ -20,11 +20,11 @@ static const ui_tokens_t FOREST = {
     .shell = 0xFF2D3621U,
     .panel = 0xFFF3FDFFU,
     .inset = 0xFFDEECE7U,
-    .inset_rim = 0xFF536456U,
+    .inset_rim = 0xFF2D3621U,
     .scrim = 0x8C2D3621U,
     .tile = 0xFFF3FDFFU,
     .tile_dim = 0xFFDEECE7U,
-    .tile_rim = 0xFF536456U,
+    .tile_rim = 0xFF2D3621U,
     .ink = 0xFF2D3621U,
     .ink_soft = 0xFF536456U,
     .on_panel = 0xFF2D3621U,
@@ -34,6 +34,7 @@ static const ui_tokens_t FOREST = {
     .info = 0xFFC97F1EU,
     .danger = 0xFF2A3AA6U,
     .off = 0xFF89968AU,
+    .header = 0xFF43543FU,
     LAB_THEME_GEOMETRY,
     .on_action = 0xFFFFFFFFU,
 };
@@ -42,11 +43,11 @@ static const ui_tokens_t EMBER = {
     .shell = 0xFF222835U,
     .panel = 0xFFF5FBFFU,
     .inset = 0xFFDDE5F1U,
-    .inset_rim = 0xFF505B70U,
+    .inset_rim = 0xFF222835U,
     .scrim = 0x8C222835U,
     .tile = 0xFFF5FBFFU,
     .tile_dim = 0xFFDDE5F1U,
-    .tile_rim = 0xFF505B70U,
+    .tile_rim = 0xFF222835U,
     .ink = 0xFF222835U,
     .ink_soft = 0xFF505B70U,
     .on_panel = 0xFF222835U,
@@ -56,6 +57,7 @@ static const ui_tokens_t EMBER = {
     .info = 0xFFD47F2AU,
     .danger = 0xFF1F1F7EU,
     .off = 0xFF828B9CU,
+    .header = 0xFF353C4BU,
     LAB_THEME_GEOMETRY,
     .on_action = 0xFFFFFFFFU,
 };
@@ -64,11 +66,11 @@ static const ui_tokens_t NIGHT = {
     .shell = 0xFF20120BU,
     .panel = 0xFF36251BU,
     .inset = 0xFF271911U,
-    .inset_rim = 0xFF634A3AU,
+    .inset_rim = 0xFF20120BU,
     .scrim = 0x8C100805U,
     .tile = 0xFF473224U,
     .tile_dim = 0xFF36251BU,
-    .tile_rim = 0xFF634A3AU,
+    .tile_rim = 0xFF20120BU,
     .ink = 0xFFFBF6F2U,
     .ink_soft = 0xFFCBB7A9U,
     .on_panel = 0xFFFBF6F2U,
@@ -78,6 +80,7 @@ static const ui_tokens_t NIGHT = {
     .info = 0xFFFF8C3DU,
     .danger = 0xFF5D5DFFU,
     .off = 0xFF846B5BU,
+    .header = 0xFF523A2AU,
     LAB_THEME_GEOMETRY,
     .on_action = 0xFFFFFFFFU,
 };
@@ -91,7 +94,7 @@ static const lab_theme_desc_t THEMES[] = {
 #define THEME_COUNT ((int)(sizeof THEMES / sizeof THEMES[0]))
 
 static const char *const REGIONS[] = {"panel",           "button",         "tile",         "slider_track", "slider_fill",
-                                      "slider_track_sm", "slider_fill_sm", "slider_thumb", "icon_play"};
+                                      "slider_track_sm", "slider_fill_sm", "slider_thumb", "icon_play", "header"};
 #define REGION_COUNT ((int)(sizeof REGIONS / sizeof REGIONS[0]))
 
 lab_art_t g_lab_art;
@@ -131,6 +134,7 @@ void lab_theme_bind(nt_resource_t ui_atlas, nt_material_t radial) {
             .slider_fill_sm = region_ref(id, "slider_fill_sm"),
             .thumb = region_ref(id, "slider_thumb"),
             .icon_play = region_ref(id, "icon_play"),
+            .header = region_ref(id, "header"),
             .radial = radial,
         };
     }

@@ -25,6 +25,7 @@ static const ui_tokens_t STUDIO_DEFAULT = {
     .info = 0xFFF77B4AU,
     .danger = 0xFF6B6BFFU,
     .off = 0xFFAB908BU,
+    .header = 0xFF99323EU,
 
     .t_display = 32.0F,
     .t_title = 24.0F,
@@ -55,14 +56,14 @@ static const ui_tokens_t STUDIO_DEFAULT = {
    STUDIO_DEFAULT until their game-owned theme binding selects this sheet. */
 static const ui_tokens_t STUDIO_B = {
     .shell = 0xFF382517U,
-    .panel = 0xFFF9FDFFU,
-    .inset = 0xFFF5EEE8U,
-    .inset_rim = 0xFF756152U,
+    .panel = 0xFFF5EEE8U,
+    .inset = 0xFFECE3DCU,
+    .inset_rim = 0xFF382517U,
     .scrim = 0x8C382517U,
 
     .tile = 0xFFF9FDFFU,
     .tile_dim = 0xFFF5EEE8U,
-    .tile_rim = 0xFF756152U,
+    .tile_rim = 0xFF382517U,
 
     .ink = 0xFF382517U,
     .ink_soft = 0xFF756152U,
@@ -73,7 +74,8 @@ static const ui_tokens_t STUDIO_B = {
     .go = 0xFF559D1FU,
     .info = 0xFFA47B08U,
     .danger = 0xFF1823B4U,
-    .off = 0xFFA49387U,
+    .off = 0xFFD6CCC5U,
+    .header = 0xFF5C4434U,
 
     .t_display = 32.0F,
     .t_title = 24.0F,

@@ -13,11 +13,6 @@
 
 static bool s_sample_toggle = true;
 
-static Clay_Color clay_color(uint32_t abgr) {
-    return (Clay_Color){(float)(abgr & 0xFFU), (float)((abgr >> 8) & 0xFFU), (float)((abgr >> 16) & 0xFFU),
-                        (float)((abgr >> 24) & 0xFFU)};
-}
-
 void scene_themes_leave(nt_ui_context_t *ctx) { nt_ui_state_clear(ctx, nt_ui_id("themes/scroll")); }
 
 // One theme row: three swatches (plate, action, coin) and the name; the active
@@ -52,7 +47,7 @@ static void theme_row(nt_ui_context_t *ctx, int index, const ui_metrics_t *m) {
 static void sample(nt_ui_context_t *ctx, const ui_metrics_t *m) {
     char amount[24];
     nt_ui_label_style_t caption = g_ui_theme.row_sub;
-    caption.color = clay_color(ui_theme_tokens()->ink);
+    caption.color = ui_kit_color(ui_theme_tokens()->ink);
     ui_kit_panel_begin(ctx, &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
                                                                   .padding = CLAY_PADDING_ALL((uint16_t)m->pad),
                                                                   .layoutDirection = CLAY_TOP_TO_BOTTOM,
@@ -85,12 +80,7 @@ void scene_themes_build(nt_ui_context_t *ctx) {
                      .padding = {.left = (uint16_t)(m.margin + m.safe_l), .right = (uint16_t)(m.margin + m.safe_r),
                                  .bottom = (uint16_t)(m.margin + m.safe_b)},
                      .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_TOP}}}) {
-        nt_ui_scroll_style_t scroll = nt_ui_scroll_style_defaults();
-        scroll.bar_visibility = NT_UI_SCROLLBAR_AUTO;
-        scroll.bar_thickness = m.gap * 0.3F;
-        scroll.thumb_ref = g_ui_theme.art.slider_fill;
-        scroll.thumb_tint = ui_theme_tokens()->ink_soft;
-        nt_ui_scroll_begin(ctx, NULL, nt_ui_id("themes/scroll"), &scroll,
+        nt_ui_scroll_begin(ctx, NULL, nt_ui_id("themes/scroll"), ui_kit_scroll_style(),
                            &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(m.panel_w), CLAY_SIZING_GROW(0)},
                                                                  .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                                                  .childGap = (uint16_t)(m.gap * 0.6F),

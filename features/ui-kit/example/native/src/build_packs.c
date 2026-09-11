@@ -24,6 +24,8 @@
 #define BUTTON_BORDER_TOP (16 * UI_KIT_EXPORT_SCALE)
 #define BUTTON_BORDER_BOTTOM (22 * UI_KIT_EXPORT_SCALE)
 #define TILE_BORDER (14 * UI_KIT_EXPORT_SCALE)
+#define HEADER_BORDER (12 * UI_KIT_EXPORT_SCALE)
+#define HEADER_BORDER_BOTTOM (2 * UI_KIT_EXPORT_SCALE)
 #define BAR_BORDER (11 * UI_KIT_EXPORT_SCALE)
 #define BAR_BORDER_SM 11 /* design-size copies the engine slider draws 1:1 */
 
@@ -144,6 +146,7 @@ int main(int argc, char *argv[]) {
         add_slice9(ui, lab_dir, theme, "slider_fill_sm", BAR_BORDER_SM, BAR_BORDER_SM, BAR_BORDER_SM, BAR_BORDER_SM);
         add_plain(ui, lab_dir, NULL, theme, "slider_thumb", "ui");
         add_plain(ui, lab_dir, NULL, theme, "icon_play", "ui");
+        add_slice9(ui, lab_dir, theme, "header", HEADER_BORDER, HEADER_BORDER, HEADER_BORDER, HEADER_BORDER_BOTTOM);
     }
     for (size_t i = 0; i < sizeof ICONS / sizeof ICONS[0]; ++i) {
         char name[64];

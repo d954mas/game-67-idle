@@ -17,6 +17,7 @@ target_sources(${GAME_TARGET} PRIVATE
     "${UI_KIT_SRC}/ui_theme.c"
     "${UI_KIT_SRC}/ui_metrics.c"
     "${UI_KIT_SRC}/ui_kit.c"
+    "${UI_KIT_SRC}/ui_reach.c"
     "${UI_KIT_SRC}/ui_safe_area.c")
 target_include_directories(${GAME_TARGET} PRIVATE "${UI_KIT_INC}")
 target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_UI_KIT=1)
@@ -168,6 +169,6 @@ Copy `tokens/studio_b.json` or `tokens/studio_default.json`, edit it, pass the m
 
 ## Uninstall
 
-Drop the five sources and the include directory from the consumer's CMake,
+Drop the six sources and the include directory from the consumer's CMake,
 delete its `theme.c` binding, and remove the nine PNGs and their manifest rows.
 Nothing else in the feature reaches into a consumer.

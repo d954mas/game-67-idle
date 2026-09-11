@@ -44,7 +44,6 @@ static nt_ui_button_style_t action_button(nt_ui_button_style_t base, uint32_t ti
     base.idle.bg_tint = tint;
     base.hover.bg_tint = lighten(tint);
     base.pressed.bg_tint = deepen(tint);
-    base.disabled.bg_tint = tint;
     return base;
 }
 
@@ -113,8 +112,10 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
         .hover = {.bg = g_ui_theme.art.button, .bg_tint = 0xFFFFFFFFU, .scale = 1.04F, .opacity = 1.0F},
         // Pressed sinks INTO the lift ledge the art already draws: the offset is
         // the whole press, the scale only keeps the corners from popping.
-        .pressed = {.bg = g_ui_theme.art.button, .bg_tint = 0xFFFFFFFFU, .scale = 0.98F, .offset_y = 3.0F, .opacity = 1.0F},
-        .disabled = {.bg = g_ui_theme.art.button, .bg_tint = 0xFFFFFFFFU, .scale = 1.0F, .opacity = 0.4F},
+        .pressed = {.bg = g_ui_theme.art.button, .bg_tint = 0xFFFFFFFFU, .scale = 0.98F, .offset_y = t->lift * 0.75F, .opacity = 1.0F},
+        // One disabled look for every role: the off fill, no dimming, so a
+        // disabled buy never reads as a faded buy.
+        .disabled = {.bg = g_ui_theme.art.button, .bg_tint = t->off, .scale = 1.0F, .opacity = 1.0F},
         .transition_speed = 12.0F,
         .hit_padding_lrtb = {8, 8, 8, 8},
         .slice9_scale = t->slice9_scale,
@@ -153,7 +154,7 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     s.states[NT_UI_SLIDER_IDLE].track = g_ui_theme.art.slider_track_sm;
     s.states[NT_UI_SLIDER_IDLE].fill = g_ui_theme.art.slider_fill_sm;
     s.states[NT_UI_SLIDER_IDLE].thumb = g_ui_theme.art.thumb;
-    s.states[NT_UI_SLIDER_IDLE].fill_tint = t->info;
+    s.states[NT_UI_SLIDER_IDLE].fill_tint = t->go;
     g_ui_theme.slider = s;
 
     // Pick-one control. The trigger wears the neutral button art so it reads as
@@ -168,20 +169,32 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     dd.row_hover = (nt_ui_dd_state_t){.fill = t->tile_dim, .bg_tint = 0xFFFFFFFFU, .scale = 1.0F, .opacity = 1.0F};
     dd.row_pressed = (nt_ui_dd_state_t){.fill = deepen(t->tile_dim), .bg_tint = 0xFFFFFFFFU, .scale = 1.0F, .opacity = 1.0F};
     dd.row_selected = (nt_ui_dd_state_t){.fill = wash(t->go, t->tile), .bg_tint = 0xFFFFFFFFU, .scale = 1.0F, .opacity = 1.0F};
+    // The open list is the tile plate, so its corners and rim are the kit's.
+    dd.panel_bg = g_ui_theme.art.tile;
+    dd.panel_tint = 0xFFFFFFFFU;
     dd.panel_fill = t->tile;
     dd.panel_corner_radius = 12U;
     dd.trigger_text = t->ink;
     dd.row_text = t->ink;
     dd.font_size = t->t_body;
     dd.slice9_scale = t->slice9_scale;
-    dd.row_height = 40U;
-    dd.min_width = 240U;
-    dd.pad = 8U;
+    dd.row_height = (uint16_t)t->hit;
+    dd.min_width = (uint16_t)t->panel_min_w;
+    dd.pad = (uint16_t)(t->gap * 0.6F);
     dd.chevron_size = 0U;     // the kit ships no chevron sprite; the open list is the affordance
     dd.max_visible_rows = 6U; // a longer list scrolls instead of leaving the panel
     dd.state_speed = 12.0F;
     dd.open_ease_speed = 16.0F;
     g_ui_theme.dropdown = dd;
+
+    // A scrolled list's bar: thin, the fill pill in soft ink, gone when the
+    // list rests, so a long list never grows a hairline down its edge.
+    nt_ui_scroll_style_t sc = nt_ui_scroll_style_defaults();
+    sc.bar_visibility = NT_UI_SCROLLBAR_AUTO_HIDE;
+    sc.bar_thickness = t->gap * 0.5F;
+    sc.thumb_ref = g_ui_theme.art.slider_fill;
+    sc.thumb_tint = t->ink_soft;
+    g_ui_theme.scroll = sc;
 
     // The engine progress bar bakes its slice9 borders at source size, like the
     // slider, so it takes the design-size pair; the 4x pair belongs to
@@ -211,6 +224,13 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     g_ui_theme.label = label_style(t->t_body, t->on_panel, CLAY_TEXT_WRAP_WORDS);
     g_ui_theme.button_label = label_style(t->t_body, t->ink, CLAY_TEXT_WRAP_WORDS);
     g_ui_theme.button_label_action = label_style(t->t_body, action_text, CLAY_TEXT_WRAP_WORDS);
+    // White on a colour reads at any size with the contour around the glyphs.
+    g_ui_theme.button_label_action.outline_w = 0.09F;
+    g_ui_theme.button_label_action.outline_color = t->shell;
+    g_ui_theme.button_label_disabled = label_style(t->t_body, t->ink_soft, CLAY_TEXT_WRAP_WORDS);
+    g_ui_theme.header_title = label_style(t->t_title, action_text, CLAY_TEXT_WRAP_NONE);
+    g_ui_theme.header_title.outline_w = 0.09F;
+    g_ui_theme.header_title.outline_color = t->shell;
     g_ui_theme.hint = label_style(t->t_badge, t->on_panel_soft, CLAY_TEXT_WRAP_WORDS);
     g_ui_theme.amount = label_style(t->t_num, t->coin, CLAY_TEXT_WRAP_NONE);
     g_ui_theme.row_title = label_style(t->t_row, t->ink, CLAY_TEXT_WRAP_NONE);
@@ -220,4 +240,5 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     // The outline is in em so it keeps its share of the glyph at every scale.
     g_ui_theme.on_world.outline_w = 0.09F;
     g_ui_theme.on_world.outline_color = t->shell;
+    g_ui_theme.generation++;
 }

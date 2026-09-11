@@ -41,6 +41,8 @@ typedef struct {
     uint32_t info; // the rewarded-ad button, and only that: portals read blue as "ad"
     uint32_t danger;
     uint32_t off;
+    // The band across the top of a titled plate; 0 = the shell colour.
+    uint32_t header;
 
     // Type ramp, CSS pixels.
     float t_display; // modal title

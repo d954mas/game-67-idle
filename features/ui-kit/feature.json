@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "ui-kit",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "title": "UI Kit",
   "status": "reusable",
   "kind": "presentation",
@@ -108,6 +108,11 @@
       "slot": "icon_play",
       "kind": "atlas-region",
       "hint": "White play triangle for a video or ad badge."
+    },
+    {
+      "slot": "header",
+      "kind": "atlas-region",
+      "hint": "The band across the top of a titled plate, in the header colour; rounded on top only."
     }
   ]
 }

@@ -56,16 +56,16 @@ void ui_kit_panel_end(nt_ui_context_t *ctx);
 void ui_kit_tile_begin(nt_ui_context_t *ctx, const Clay_ElementDeclaration *decl);
 void ui_kit_tile_end(nt_ui_context_t *ctx);
 
-// The dim under a modal. Emit it before the plate; it blocks nothing, so the
-// caller still decides what stays interactive (nt_ui_block_pointer on
-// "ui_kit/scrim" makes it an occluder).
+// The dim under a modal. Emit it before the plate. `occludes` makes it swallow
+// the pointer, so the world under it stops reacting; without it the caller
+// decides what stays interactive.
 //
 // It floats at zIndex 0 on purpose: the walker sorts one zIndex by UI layer,
 // so plates the screen draws under it on a higher layer stay undimmed, but a
 // panel at a higher zIndex is laid out after any engine slider thumb inside
 // it, which the walker rejects. A sheet (ui_kit_sheet_begin) dims everything
 // and holds no slider; a scrimmed panel holds the slider and dims the ground.
-void ui_kit_scrim(nt_ui_context_t *ctx);
+void ui_kit_scrim(nt_ui_context_t *ctx, bool occludes);
 
 // Text at the kit's ramp. `style` is a theme label style, whose font_size is in
 // CSS pixels; this is the only conversion point a screen needs.
@@ -105,9 +105,14 @@ void ui_kit_plate_end(nt_ui_context_t *ctx);
 void ui_kit_disc_begin(nt_ui_context_t *ctx, const Clay_ElementDeclaration *decl, uint32_t tint);
 void ui_kit_disc_end(nt_ui_context_t *ctx);
 
-// The theme slider at this frame's size: the theme carries CSS pixels, the
-// engine wants UI units, and the track grows to whatever row holds it.
-nt_ui_slider_style_t ui_kit_slider_style(const ui_metrics_t *m);
+// The theme slider and scroll bar at this frame's size: the theme carries CSS
+// pixels, the engine wants UI units. Pointers into a kit-owned copy that keeps
+// the engine's memoized regions between frames; the copy follows a repaint.
+nt_ui_slider_style_t *ui_kit_slider_style(const ui_metrics_t *m);
+nt_ui_scroll_style_t *ui_kit_scroll_style(void);
+
+// A packed 0xAABBGGRR token as the colour Clay takes.
+Clay_Color ui_kit_color(uint32_t abgr);
 
 // A row height no interactive element goes below, in UI units.
 Clay_SizingAxis ui_kit_hit_height(const ui_metrics_t *m);
@@ -157,6 +162,15 @@ void ui_kit_meter_captioned(nt_ui_context_t *ctx, const char *id, float w, float
 // A small round count pinned to the top-right corner of the open element.
 void ui_kit_badge(nt_ui_context_t *ctx, const char *text);
 
+// A titled plate: the panel with the header band across its top carrying
+// `title` in the header role, the round close on the corner when `close_label`
+// is given, and the body under it with the kit's padding. `id` names the
+// plate in the ui.tree; the close derives "<id>/close". Returns whether the
+// close was clicked this frame. A sheet is this inside the engine modal.
+bool ui_kit_dialog_begin(nt_ui_context_t *ctx, const char *id, const char *title, const char *close_label,
+                         Clay_SizingAxis w, Clay_SizingAxis h);
+void ui_kit_dialog_end(nt_ui_context_t *ctx);
+
 // A sheet: the engine modal (backdrop, occluder, Esc and backdrop close,
 // open/close tween) carrying the kit's panel with a title row. Declare it at
 // ROOT level, never inside a scroll or clip. `open` is the caller's bool; the
@@ -191,5 +205,12 @@ bool ui_kit_radio_row(nt_ui_context_t *ctx, const char *id, const char *label, i
 // Returns true the frame the value changed.
 bool ui_kit_slider_row(nt_ui_context_t *ctx, const char *id, const char *caption, float *value, bool enabled,
                        float row_width);
+
+// A pick-one row: the label fills the row, the trigger names the current
+// option and opens the list of all of them. `open` is the caller's bool for the
+// list; `list_width` is the trigger's width in UI units. Returns true the frame
+// `*selected` changed.
+bool ui_kit_dropdown_row(nt_ui_context_t *ctx, const char *id, const char *label, const char *const *options,
+                         int count, int *selected, bool *open, float list_width);
 
 #endif /* FEATURE_UI_KIT_WIDGETS_H */

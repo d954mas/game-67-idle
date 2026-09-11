@@ -7,11 +7,11 @@
     "shell": "#21362D",
     "panel": "#FFFDF3",
     "inset": "#E7ECDE",
-    "inset_rim": "#566453",
+    "inset_rim": "#21362D",
     "scrim": "#21362D8C",
     "tile": "#FFFDF3",
     "tile_dim": "#E7ECDE",
-    "tile_rim": "#566453",
+    "tile_rim": "#21362D",
     "ink": "#21362D",
     "ink_soft": "#566453",
     "on_panel": "#21362D",
@@ -21,7 +21,8 @@
     "go": "#22724F",
     "info": "#1E7FC9",
     "danger": "#A63A2A",
-    "off": "#8A9689"
+    "off": "#8A9689",
+    "header": "#3F5443"
   },
   "type": {
     "display": 32,
@@ -49,13 +50,15 @@
     "supersample": 16,
     "resample": "BOX",
     "deep_step": 0.08,
-    "gloss": 0,
+    "gloss": 0.12,
+    "ledge_step": 0.62,
     "center": 2,
     "radius": {
       "panel": 14,
       "button": 12,
       "tile": 12,
-      "bar": 11
+      "bar": 11,
+      "header": 11
     },
     "slice9": {
       "panel": [
@@ -87,7 +90,8 @@
         11,
         11,
         11
-      ]
+      ],
+      "header": [12, 12, 12, 2]
     }
   }
 }
