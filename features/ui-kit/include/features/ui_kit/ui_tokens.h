@@ -64,16 +64,16 @@ typedef struct {
     float panel_max_w;
 
     // The canvas rule (ui_scale_policy.h): this many units span the viewport's
-    // short edge. It DEFINES the unit every size above is stated in.
+    // short edge. It DEFINES the unit every size above is stated in, and it is
+    // the ONLY thing that decides how large anything is -- not the device, not
+    // the input, not the orientation. The same window gets the same interface
+    // wherever it is running, which is what makes a phone's layout something a
+    // reviewer can see on a monitor.
     //
-    // Two of them, because one number cannot be right for a screen in a hand and
-    // a screen across a desk: the same share of a 5 cm edge and of a 30 cm one
-    // are not the same button. The frame picks by reach (ui_reach.h), never by
-    // the window's shape -- a phone held sideways is still a phone, and a small
-    // window on a monitor is still a monitor. `ref_hand` is the smaller number:
-    // fewer units across the edge means every authored size owns more of it.
-    float ref_hand;
-    float ref_desk;
+    // Pick it from the hand, because the finger is the constraint nothing else
+    // can relax: a phone is 390 CSS pixels across its short edge and a touch
+    // target has to stay 44 of them, so `hit / ref_short * 390 >= 44`.
+    float ref_short;
 
     // The kit's slice9 art ships above its on-screen size, so a style drawing
     // it must shrink the baked borders by this factor. 1 / export scale.

@@ -97,20 +97,19 @@ screen reads `ui_metrics()`: text, hits and spacing are authored units, and
 spelling for "this number is an authored size" and converts nothing. Safe-area
 insets stay physical CSS pixels and are converted separately.
 
-The sheet states two references and the frame picks one by reach, not by window
-shape: `ref_hand` on a touch screen (a phone in either orientation, a tablet),
-`ref_desk` otherwise. Author against the hand number first — at `ref_hand` the
-`hit` token has to stay 44 CSS pixels on a 390-pixel phone, which is what
-`test_ui_scale` checks — then choose how much smaller a share the same design
-takes across a desk. A game that is a phone screen wherever it runs sets both to
-the same number.
+Pick `ref_short` from the hand: at that reference the `hit` token has to stay 44
+CSS pixels on a 390-pixel phone, which is what `test_ui_scale` checks. Nothing
+else enters the size — a window of a given size draws the same interface on a
+phone and on a monitor, so resizing a desktop window is a faithful preview of a
+phone.
 
-Orientation is an arrangement decision, not a size one: `ui_metrics()` reports
-`portrait` and `in_hand`, and a screen uses them to stack a row, move a control
-under the thumb, or drop a column. On a development machine `UI_KIT_IN_HAND=1`
-forces the hand reference so the phone frames are provable. Dialogs need a
-content-width dropdown override and bounded, scrollable content; the template
-settings screen shows both and keeps Close outside the scroll region.
+`ui_metrics()` reports `portrait` and `in_hand`, and neither changes a size. Use
+them for arrangement: stack a row, move a control under the thumb, replace a
+hover-only affordance with a visible button, leave a little more room around
+something a finger has to hit. `UI_KIT_IN_HAND=1` forces the touch answer on a
+development machine. Dialogs need a content-width dropdown override and bounded,
+scrollable content; the template settings screen shows both and keeps Close
+outside the scroll region.
 
 ## 6. Localized text
 

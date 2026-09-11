@@ -29,10 +29,8 @@ UiScaleFit ui_frame_begin(float fb_w, float fb_h, float dpr) {
 }
 
 float ui_reference_short(void) {
-    const ui_tokens_t *t = ui_theme_tokens();
-    const bool in_hand = s_frame.open ? s_frame.in_hand : ui_screen_in_hand();
-    const float reference = in_hand ? t->ref_hand : t->ref_desk;
-    return reference > 0.0F ? reference : (t->ref_desk > 0.0F ? t->ref_desk : 400.0F);
+    const float reference = ui_theme_tokens()->ref_short;
+    return reference > 0.0F ? reference : 400.0F;
 }
 
 float ui_css_unit(void) { return 1.0F; }

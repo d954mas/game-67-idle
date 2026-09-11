@@ -43,8 +43,7 @@ static const ui_tokens_t STUDIO_DEFAULT = {
     .panel_min_w = 260.0F,
     .panel_max_w = 560.0F,
 
-    .ref_hand = 390.0F,
-    .ref_desk = 720.0F,
+    .ref_short = 390.0F,
 
     /* The art ships at 4 source pixels per design unit (art.export_scale). */
     .slice9_scale = 0.25F,

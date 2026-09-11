@@ -42,28 +42,27 @@ typedef struct {
     float safe_t;
     float safe_b;
 
-    // What the screen is, for the arrangement. Sizing is already handled -- the
-    // frame picked its reference from `in_hand` before any of this was read --
-    // so these two are here for the decisions a size cannot make: a row that has
-    // to become a column, a side panel that has to become a sheet, a control
-    // that belongs under the thumb rather than in a corner.
+    // What the screen is. NEITHER of these changes a size: the canvas above is
+    // decided by the viewport alone, so the same window draws the same interface
+    // on a phone and on a monitor and a reviewer can see both. They are here for
+    // the decisions a size cannot make -- a row that becomes a column, a control
+    // that moves under the thumb, a hover-only affordance that has to become a
+    // visible button, a little more room around something a finger has to hit.
     bool in_hand;
     bool portrait;
 } ui_metrics_t;
 
 // Opens a frame: the consumer's UI runtime calls this once per frame with the
 // framebuffer it is about to draw into, and lays out on the canvas it returns.
-// The canvas is a proportion -- the sheet's reference in authored units spans
-// the viewport's short edge, safe area excluded -- so the interface keeps its
-// share of the screen at every window size. Which of the sheet's two references
-// applies comes from reach (ui_reach.h), not from the window's shape.
+// The canvas is a proportion -- the sheet's `ref_short` authored units span the
+// viewport's short edge, safe area excluded -- and the viewport is the ONLY
+// input: the same window yields the same interface on any device.
 // Everything below reads the frame this stored.
 UiScaleFit ui_frame_begin(float fb_w, float fb_h, float dpr);
 
 ui_metrics_t ui_metrics(void);
 
-// The reference short edge this frame is laying out against: the sheet's
-// `ref_hand` on a touch screen, its `ref_desk` otherwise.
+// The reference short edge this frame is laying out against.
 float ui_reference_short(void);
 
 // An authored size, in the units the frame lays out in. The conversion is the

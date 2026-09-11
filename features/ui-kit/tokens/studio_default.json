@@ -41,8 +41,7 @@
     "panel_max_w": 560
   },
   "canvas": {
-    "ref_hand": 390,
-    "ref_desk": 720
+    "ref_short": 390
   },
   "art": {
     "export_scale": 4,

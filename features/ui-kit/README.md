@@ -21,18 +21,21 @@ sizes, no density floor and no logical cap: a floor hands a small window a
 LARGER share of itself than a big one, which is how a HUD ends up eating a short
 window.
 
-The sheet carries TWO references, `ref_hand` and `ref_desk`, and the frame picks
-by reach (`ui_reach.h`, `pointer: coarse`), never by the window's shape. One
-number cannot serve both: 390 units across five centimetres of phone and across
-thirty of monitor are not the same button. This is also the whole answer to
-"readable in portrait AND landscape" -- a phone held sideways is still a phone,
-so it keeps the hand reference, while a narrow window on a desk stays a desk.
-`test_ui_scale` holds the bar: at `ref_hand`, the `hit` token must still be 44
-CSS pixels on a 390-pixel phone.
+The viewport is the ONLY input. Not the device, not the input method, not the
+orientation: the same window draws the same interface everywhere, which is what
+makes a phone's layout something a reviewer can look at on a monitor by resizing
+one.
 
-What orientation DOES decide is arrangement, and `ui_metrics()` reports it:
-`portrait` and `in_hand` are there for the row that has to become a column and
-the control that belongs under a thumb.
+Pick `ref_short` from the hand, because the finger is the constraint nothing
+else can relax -- `test_ui_scale` holds it: `hit / ref_short * 390 >= 44`, a
+touch target still 44 CSS pixels on a 390-pixel phone. Every larger screen is
+then served by the same number, since a bigger screen makes the same share
+physically larger.
+
+`ui_metrics()` reports two facts that change NO size: `portrait` and `in_hand`.
+They are for what a size cannot express -- a row that becomes a column, a
+control that moves under the thumb, a hover-only affordance that has to become a
+visible button, a little more room around something a finger has to hit.
 
 The default look is the studio's, taken from the reference game the lead uses to
 set the bar: a prototype should not have to design a UI before it has a game.
