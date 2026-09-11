@@ -44,20 +44,20 @@ typedef struct {
 
 // Opens a frame: the consumer's UI runtime calls this once per frame with the
 // framebuffer it is about to draw into, and lays out on the canvas it returns.
-// Everything below reads the frame this stored.
+// The canvas is a proportion -- `ref_short` authored units span the viewport's
+// short edge, safe area excluded -- so the interface keeps its share of the
+// screen at every window size. Everything below reads the frame this stored.
 UiScaleFit ui_frame_begin(float fb_w, float fb_h, float dpr);
-
-// Opt-in proportional layout. The available short edge fits reference_short;
-// panel_min_w, panel_max_w and the legacy density floor/cap do not apply.
-UiScaleFit ui_frame_begin_relative(float fb_w, float fb_h, float dpr, float reference_short);
 
 ui_metrics_t ui_metrics(void);
 
-// Converts an authored size: CSS pixels in legacy frames, reference units in
-// relative frames. Device-pixel input and safe areas use the frame scale instead.
+// An authored size, in the units the frame lays out in. The conversion is the
+// identity: a size IS a share of the reference short edge. It stays a call so
+// game sources keep one spelling for "this number is an authored size", and so
+// device-pixel input and CSS-pixel safe areas remain visibly different things.
 float ui_css(float css_px);
 
-// Raw authored-unit conversion factor, following the active frame mode.
+// The authored-unit conversion factor.
 float ui_css_unit(void);
 
 #endif /* FEATURE_UI_KIT_METRICS_H */

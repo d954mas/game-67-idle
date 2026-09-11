@@ -58,15 +58,15 @@ typedef struct {
     float pad;  // rhythm inside a plate
     float hit;  // minimum touch target
 
-    // Legacy-only panel width bounds, in CSS pixels. Relative frames ignore them.
+    // A dialog's authored width bounds. The frame fits panels to the viewport on
+    // its own; these are here for a screen that wants the sheet's own number.
     float panel_min_w;
     float panel_max_w;
 
-    // Legacy canvas rule (ui_scale_policy.h): the reference short edge the window's
-    // own share is measured against, and the cap the logical short edge is held
-    // at. UI units, not CSS pixels — these two DEFINE the unit.
+    // The canvas rule (ui_scale_policy.h): this many units span the viewport's
+    // short edge. It DEFINES the unit every size above is stated in, and it is
+    // the one place a game says how close its interface is read.
     float ref_short;
-    float short_edge_max;
 
     // The kit's slice9 art ships above its on-screen size, so a style drawing
     // it must shrink the baked borders by this factor. 1 / export scale.

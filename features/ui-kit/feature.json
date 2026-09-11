@@ -23,8 +23,8 @@
   },
   "provides": [
     "ui_tokens_t design tokens with a studio default sheet",
-    "ui_scale_fit short-edge canvas rule with a density floor and cap",
-    "ui_frame_begin_relative proportional frames, ui_frame_begin compatible legacy frames, and ui_metrics",
+    "ui_scale_fit short-edge canvas rule: authored units are a share of the viewport, with no floor or cap",
+    "ui_frame_begin proportional frames and ui_metrics",
     "ui_theme_init token-driven engine styles in g_ui_theme, dropdown included",
     "ui_kit panel/tile/scrim/label/button/meter widgets and the UI_LAYER_* order",
     "ui_safe_area device insets",

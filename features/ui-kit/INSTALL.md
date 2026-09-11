@@ -85,21 +85,24 @@ The consumer's UI runtime hands the feature the framebuffer it is about to draw
 into, and lays out on the canvas it gets back:
 
 ```c
-const UiScaleFit fit = ui_frame_begin_relative(fb_w, fb_h, g_nt_window.dpr, 400.0F);
+const UiScaleFit fit = ui_frame_begin(fb_w, fb_h, g_nt_window.dpr);
 nt_ui_begin(ctx, fit.logical_w, fit.logical_h, dt, pointers, NT_INPUT_MAX_POINTERS);
 ```
 
-The last argument is the authored reference short edge, not a minimum window
-size. Every screen reads `ui_metrics()`: text, hits and spacing use reference
-units, and `panel_w` is a share of the available width. `ui_css()` retains its
-name for widget compatibility but converts reference units in this mode.
-Safe-area insets remain physical CSS pixels and are converted separately.
+The canvas comes from the sheet: `ref_short` authored units span the available
+short edge, and that is the only size contract there is. It is a reference, not
+a minimum window size — nothing here floors or caps the scale. Every screen
+reads `ui_metrics()`: text, hits and spacing are authored units, and `panel_w`
+is a share of the available width. `ui_css()` keeps its name as the spelling for
+"this number is an authored size" and converts nothing. Safe-area insets stay
+physical CSS pixels and are converted separately.
 
-Existing consumers can keep `ui_frame_begin(fb_w, fb_h, dpr)` unchanged. That
-entry point retains CSS sizes and the original panel clamps. Do not silently
-replace it in shipped games. A relative migration also needs a content-width
-dropdown override and bounded, scrollable dialogs; the template settings screen
-shows both and keeps Close outside the scroll region.
+Pick `ref_short` from how close the screen is read, and check the result in a
+hand: a design authored for landscape arrives at half size in portrait, where
+the short edge is the width, so a portrait screen usually states its own factor.
+Dialogs need a content-width dropdown override and bounded, scrollable content;
+the template settings screen shows both and keeps Close outside the scroll
+region.
 
 ## 6. Localized text
 

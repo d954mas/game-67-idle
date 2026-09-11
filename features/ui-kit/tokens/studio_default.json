@@ -41,8 +41,7 @@
     "panel_max_w": 560
   },
   "canvas": {
-    "ref_short": 720,
-    "short_edge_max": 480
+    "ref_short": 720
   },
   "art": {
     "export_scale": 4,

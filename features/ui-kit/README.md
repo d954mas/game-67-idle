@@ -12,15 +12,17 @@ theme, and a widget layer. This pack owns all four, so a new prototype starts
 with an interface that is already readable in a hand and already looks like one
 product.
 
-**Sizing.** New templates use viewport-relative frames. The available short edge,
-after physical safe-area insets, fits a consumer-selected reference design.
-Text, hits, spacing and panel dimensions scale proportionally with that area;
-there are no fixed CSS minimum or maximum sizes. Rotating the same available
-rectangle preserves the authored size scale.
+**Sizing.** One rule, and it is a proportion. The available short edge, after
+physical safe-area insets, fits the sheet's `ref_short` authored units. Text,
+hits, spacing and panel dimensions are shares of that area, so the interface
+owns the same fraction of a phone, a laptop and a monitor; rotating the same
+rectangle changes nothing. There are no minimum sizes, no density floor and no
+logical cap: a floor hands a small window a LARGER share of itself than a big
+one, which is how a HUD ends up eating a short window.
 
-Existing games keep the original CSS sizing contract through `ui_frame_begin()`:
-its density floor, logical cap and panel clamps remain unchanged. Choosing the
-new entry point is an explicit consumer migration that needs fresh layout proof.
+A game that wants its interface read closer says so in one number -- its own
+`ref_short` -- or scales a screen it authored for one orientation by a factor it
+states itself. Not through a clamp in the kit.
 
 The default look is the studio's, taken from the reference game the lead uses to
 set the bar: a prototype should not have to design a UI before it has a game.
@@ -30,7 +32,7 @@ set the bar: a prototype should not have to design a UI before it has a game.
 - `ui_tokens.h` — `ui_tokens_t`: colour, type ramp, geometry, canvas rule.
   `ui_tokens_studio_default()` is the look a new prototype wears.
 - `ui_scale_policy.h` — `ui_scale_fit()` and `ui_scale_css_unit()`. Pure
-  arithmetic, no engine types, so the readability rule is testable without a
+  arithmetic, no engine types, so the sizing rule is testable without a
   window.
 - `ui_metrics.h` — `ui_frame_begin()` (the consumer's UI runtime opens the
   frame), then `ui_metrics()`, `ui_css()`, `ui_css_unit()`.
@@ -55,10 +57,11 @@ becomes a raw pointer and calls the kit from there.
 
 ## Validation
 
-- `test_ui_scale` — the canvas rule's invariants: the short edge is capped, the
-  scale is orientation-free and monotone in window size, one CSS pixel buys the
-  same share of the canvas at any density, and a window the platform has not
-  sized yet still yields a finite canvas.
+- `test_ui_scale` — the canvas rule's invariants: an authored size keeps its
+  share of the short edge at every window size and density, the scale is
+  orientation-free and monotone, nothing floors it in a small window, a CSS-pixel
+  safe area survives the round trip, and a window the platform has not sized yet
+  still yields a finite canvas.
 - `node --test features/ui-kit/tests/tokens_parity.test.mjs` — the token sheet
   the art generator reads and the tokens compiled into `ui_tokens.c` are the
   same numbers. Without it a repaint lands in the art and not in the styles.
