@@ -136,15 +136,6 @@
     },
     {
       "path": "templates/template/assets/ui/slider_thumb.png",
-      "game_id": "pose-play",
-      "private_path": "assets/ui/slider_thumb.png",
-      "sha256": "d71189eea7ae8d723a1237be8b4febd0cb821b7fd8053a1dfefddec53615232f",
-      "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
-      "approved_by": "lead",
-      "approved_on": "2026-09-10"
-    },
-    {
-      "path": "templates/template/assets/ui/slider_thumb.png",
       "game_id": "slime-eater-evolution",
       "private_path": "assets/ui/slider_thumb.png",
       "sha256": "d71189eea7ae8d723a1237be8b4febd0cb821b7fd8053a1dfefddec53615232f",

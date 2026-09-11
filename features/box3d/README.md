@@ -23,7 +23,7 @@ smoke in CTest (core). The same test accepts `CC=clang-cl` after loading the
 MSVC developer environment; it does not require a C++ language or compiler. It requires CMake, Ninja and a C17 compiler (`CC` override).
 `UPSTREAM.json` records exact selected source bytes and the original revision;
 `THIRD_PARTY_NOTICES.txt` carries all four MIT notices for redistribution.
-Toy Smash provides the native 30-level and real-browser consumer proof.
+A private consumer game provides the native 30-level and real-browser proof.
 
 ## Compatibility
 

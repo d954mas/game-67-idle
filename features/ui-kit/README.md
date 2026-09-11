@@ -44,7 +44,10 @@ set the bar: a prototype should not have to design a UI before it has a game.
   surface sorts on.
 - `ui_safe_area.h` — the device's own insets, in CSS pixels.
 - `tools/gen_ui_kit.py --tokens <sheet> --out <assets/ui>` — draws the slice9 art
-  from a token sheet.
+  from a token sheet. `art.gloss` (0 when omitted) lightens the top rim of the
+  fixed-colour surfaces — panel and tile — so they read as moulded plastic
+  rather than flat fills. Grayscale art cannot take it: a runtime multiply tint
+  has no headroom above white.
 
 Text takes `const char *`: the kit does not know how its consumer localizes. A
 consumer with a localization wrapper keeps ONE place where its string type

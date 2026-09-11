@@ -59,6 +59,15 @@ class Kit:
         # Deep step of an action colour; the grayscale art encodes that ratio so
         # one white slice9 tints into every action colour.
         self.deep = int(255 * float(art["deep_step"]))
+        # Light band along the top of a coloured body: how far its colour travels
+        # towards white. 0 leaves the art flat, which is why an omitted key draws
+        # exactly what it drew before.
+        self.gloss = float(art.get("gloss", 0.0))
+        # Rivets: a plate that is bolted down rather than moulded. Absent key =
+        # no rivets, which is why an omitted block draws what it drew before.
+        rivet = art.get("rivet") or {}
+        self.rivet = float(rivet.get("radius", 0.0))
+        self.rivet_inset = float(rivet.get("inset", 0.0))
         self.radius = {key: int(value) for key, value in art["radius"].items()}
         self.slice9 = {key: tuple(int(v) for v in value) for key, value in art["slice9"].items()}
         self.draw_scale = self.supersample * self.export_scale
@@ -79,6 +88,58 @@ class Kit:
 
     def rounded(self, draw: ImageDraw.ImageDraw, box, radius, fill):
         draw.rounded_rectangle(self.scaled_box(box), radius=radius * self.draw_scale, fill=fill)
+
+    def body(self, img: Image.Image, box, radius, fill, fade, top=None):
+        """A body with the kit's light catch along its top edge.
+
+        The ramp finishes inside the top slice9 border and everything below it is
+        one flat colour, so the stretched middle of a nine-slice cannot show a
+        seam. `top` overrides the lit colour: grayscale art that a runtime tint
+        multiplies has no headroom above white, so it ramps the other way --
+        white at the edge down to the flat body.
+        """
+        draw = ImageDraw.Draw(img)
+        self.rounded(draw, box, radius, fill + (255,))
+        if self.gloss <= 0.0:
+            return
+        if top is None:
+            top = tuple(int(c + (255 - c) * self.gloss) for c in fill)
+        left, upper, right, lower = self.scaled_box(box)
+        depth = max(1, int(fade * self.draw_scale))
+        band = Image.new("RGB", (1, depth))
+        for y in range(depth):
+            t = y / depth
+            # Smoothstep: the ramp meets the flat body with no slope, so the
+            # junction cannot show as a line across a stretched nine-slice.
+            t = t * t * (3.0 - 2.0 * t)
+            band.putpixel((0, y), tuple(int(top[i] + (fill[i] - top[i]) * t) for i in range(3)))
+        shape = Image.new("L", img.size, 0)
+        ImageDraw.Draw(shape).rounded_rectangle(
+            (left, upper, right, lower), radius=radius * self.draw_scale, fill=255
+        )
+        # Only the ramp's own rows are pasted, so the flat body underneath stays
+        # exactly the token colour.
+        cut = shape.crop((0, int(upper), img.width, int(upper) + depth))
+        img.paste(band.resize((img.width, depth)), (0, int(upper)), cut)
+
+    def dot(self, draw: ImageDraw.ImageDraw, cx, cy, r, fill):
+        draw.ellipse(self.scaled_box((cx - r, cy - r, cx + r, cy + r)), fill=fill)
+
+    def rivets(self, draw: ImageDraw.ImageDraw, box, fill):
+        """Four bolt heads, one per corner of a plate.
+
+        They sit inside the slice9 CORNER regions, which a nine-slice copies
+        rather than stretches, so a plate of any size keeps exactly four.
+        """
+        if self.rivet <= 0.0:
+            return
+        left, top, right, bottom = box
+        i = self.rivet_inset
+        shadow = tuple(int(c * 0.5) for c in fill) + (255,)
+        head = tuple(int(c + (255 - c) * 0.45) for c in fill) + (255,)
+        for cx, cy in ((left + i, top + i), (right - i, top + i), (left + i, bottom - i), (right - i, bottom - i)):
+            self.dot(draw, cx, cy + 0.6, self.rivet + 0.5, shadow)
+            self.dot(draw, cx, cy, self.rivet, head)
 
     def canvas(self, width: int, height: int) -> Image.Image:
         return Image.new("RGBA", (width * self.draw_scale, height * self.draw_scale), (0, 0, 0, 0))
@@ -139,7 +200,8 @@ def gen_panel(kit: Kit):
     img = kit.canvas(s, s)
     d = ImageDraw.Draw(img)
     kit.rounded(d, (0, 0, s - 1, s - 1), r, kit.shell + (255,))
-    kit.rounded(d, (kit.rim, kit.rim, s - 1 - kit.rim, s - 1 - kit.rim), r - kit.rim, kit.panel + (255,))
+    kit.body(img, (kit.rim, kit.rim, s - 1 - kit.rim, s - 1 - kit.rim), r - kit.rim, kit.panel, kit.slice9["panel"][2])
+    kit.rivets(ImageDraw.Draw(img), (kit.rim, kit.rim, s - 1 - kit.rim, s - 1 - kit.rim), kit.panel)
     kit.save(img, "panel.png")
 
 
@@ -150,12 +212,16 @@ def gen_button(kit: Kit):
     d = ImageDraw.Draw(img)
     g = (kit.deep, kit.deep, kit.deep, 255)
     kit.rounded(d, (0, 0, s - 1, s - 1), r, g)
-    # The body sits LIFT higher than the deep base = the pressable ledge.
-    kit.rounded(
-        d,
+    # The body sits LIFT higher than the deep base = the pressable ledge. Its
+    # flat value is below white so the top edge has somewhere to catch light.
+    flat = int(255 * (1.0 - kit.gloss))
+    kit.body(
+        img,
         (kit.rim, kit.rim, s - 1 - kit.rim, s - 1 - kit.rim - kit.lift),
         r - kit.rim,
-        (255, 255, 255, 255),
+        (flat, flat, flat),
+        kit.slice9["button"][2],
+        top=(255, 255, 255),
     )
     kit.save(img, "button.png")
 
@@ -167,7 +233,8 @@ def gen_tile(kit: Kit):
     img = kit.canvas(s, s)
     d = ImageDraw.Draw(img)
     kit.rounded(d, (0, 0, s - 1, s - 1), r, kit.tile_rim + (255,))
-    kit.rounded(d, (kit.rim, kit.rim, s - 1 - kit.rim, s - 1 - kit.rim), r - kit.rim, kit.tile + (255,))
+    kit.body(img, (kit.rim, kit.rim, s - 1 - kit.rim, s - 1 - kit.rim), r - kit.rim, kit.tile, kit.slice9["tile"][2])
+    kit.rivets(ImageDraw.Draw(img), (kit.rim, kit.rim, s - 1 - kit.rim, s - 1 - kit.rim), kit.tile)
     kit.save(img, "tile.png")
 
 
