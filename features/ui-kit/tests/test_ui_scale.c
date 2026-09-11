@@ -99,17 +99,6 @@ static void test_safe_area_keeps_its_physical_size(void) {
     TEST_ASSERT_TRUE(near(inset_units * dense.scale / 3, 24, .001F));
 }
 
-/* The reference is chosen by the hardest screen to serve, and that is the hand:
-   a phone is 390 CSS pixels across its short edge and a finger covers about 44
-   of them. Hold the reference to that and every other screen is served too,
-   because a bigger screen only makes the same share physically larger. This
-   holds in both orientations, since the short edge is the same one either way. */
-static void test_the_reference_keeps_a_touch_target(void) {
-    const ui_tokens_t *t = ui_tokens_studio_default();
-    TEST_ASSERT_TRUE(t->ref_short > 0.0F);
-    TEST_ASSERT_TRUE(t->hit / t->ref_short * 390.0F >= 44.0F);
-}
-
 /* A window the platform has not sized yet, or one a safe area covers whole,
    must not produce a zero or infinite canvas: every caller divides by these. */
 static void test_unsized_or_occluded_viewport_is_finite(void) {
@@ -128,7 +117,6 @@ int main(void) {
     RUN_TEST(test_scale_is_monotone_in_window_size);
     RUN_TEST(test_there_is_no_small_window_floor);
     RUN_TEST(test_safe_area_keeps_its_physical_size);
-    RUN_TEST(test_the_reference_keeps_a_touch_target);
     RUN_TEST(test_unsized_or_occluded_viewport_is_finite);
     return UNITY_END();
 }

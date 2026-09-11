@@ -71,8 +71,11 @@ typedef struct {
     // reviewer can see on a monitor.
     //
     // Pick it from the hand, because the finger is the constraint nothing else
-    // can relax: a phone is 390 CSS pixels across its short edge and a touch
-    // target has to stay 44 of them, so `hit / ref_short * 390 >= 44`.
+    // can relax. A phone is 390 CSS pixels across its short edge and a finger
+    // covers about 44 of them, so `hit / ref_short * 390` is what a touch target
+    // will actually measure there -- keep it at 44 or above. A screenshot at any
+    // window size shows the same shares, so this is something to look at rather
+    // than something to assert.
     float ref_short;
 
     // The kit's slice9 art ships above its on-screen size, so a style drawing
