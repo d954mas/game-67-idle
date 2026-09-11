@@ -24,6 +24,7 @@
   "provides": [
     "ui_tokens_t design tokens with a studio default sheet",
     "ui_scale_fit short-edge canvas rule: authored units are a share of the viewport, with no floor or cap",
+    "ui_reach hand-or-desk reference pair, so one design is readable on a phone in either orientation and on a monitor",
     "ui_frame_begin proportional frames and ui_metrics",
     "ui_theme_init token-driven engine styles in g_ui_theme, dropdown included",
     "ui_kit panel/tile/scrim/label/button/meter widgets and the UI_LAYER_* order",
@@ -42,7 +43,8 @@
       "${UI_KIT_SRC}/ui_theme.c",
       "${UI_KIT_SRC}/ui_metrics.c",
       "${UI_KIT_SRC}/ui_kit.c",
-      "${UI_KIT_SRC}/ui_safe_area.c"
+      "${UI_KIT_SRC}/ui_safe_area.c",
+      "${UI_KIT_SRC}/ui_reach.c"
     ],
     "include_dirs": [
       "${UI_KIT_INC}"

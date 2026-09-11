@@ -2,6 +2,7 @@
 #define FEATURE_UI_KIT_METRICS_H
 
 #include "features/ui_kit/ui_scale_policy.h"
+#include "features/ui_kit/ui_reach.h"
 #include "features/ui_kit/ui_tokens.h"
 
 // The ONE place the interface's sizes come from. Every screen reads this struct
@@ -40,16 +41,30 @@ typedef struct {
     float safe_r;
     float safe_t;
     float safe_b;
+
+    // What the screen is, for the arrangement. Sizing is already handled -- the
+    // frame picked its reference from `in_hand` before any of this was read --
+    // so these two are here for the decisions a size cannot make: a row that has
+    // to become a column, a side panel that has to become a sheet, a control
+    // that belongs under the thumb rather than in a corner.
+    bool in_hand;
+    bool portrait;
 } ui_metrics_t;
 
 // Opens a frame: the consumer's UI runtime calls this once per frame with the
 // framebuffer it is about to draw into, and lays out on the canvas it returns.
-// The canvas is a proportion -- `ref_short` authored units span the viewport's
-// short edge, safe area excluded -- so the interface keeps its share of the
-// screen at every window size. Everything below reads the frame this stored.
+// The canvas is a proportion -- the sheet's reference in authored units spans
+// the viewport's short edge, safe area excluded -- so the interface keeps its
+// share of the screen at every window size. Which of the sheet's two references
+// applies comes from reach (ui_reach.h), not from the window's shape.
+// Everything below reads the frame this stored.
 UiScaleFit ui_frame_begin(float fb_w, float fb_h, float dpr);
 
 ui_metrics_t ui_metrics(void);
+
+// The reference short edge this frame is laying out against: the sheet's
+// `ref_hand` on a touch screen, its `ref_desk` otherwise.
+float ui_reference_short(void);
 
 // An authored size, in the units the frame lays out in. The conversion is the
 // identity: a size IS a share of the reference short edge. It stays a call so

@@ -15,7 +15,7 @@ void tearDown(void) {}
    prototype runs on; a game with its own sheet passes its own reference. */
 static UiScaleFit fit(float fb_w, float fb_h, float dpr) {
     const ui_tokens_t *t = ui_tokens_studio_default();
-    return ui_scale_fit(fb_w, fb_h, dpr, t->ref_short, 0.0F, 0.0F);
+    return ui_scale_fit(fb_w, fb_h, dpr, t->ref_desk, 0.0F, 0.0F);
 }
 
 static bool near(float a, float b, float tolerance) {
@@ -44,7 +44,7 @@ static void test_portrait_is_not_scaled_by_the_long_edge(void) {
     /* What fitting a 1280x720 reference RECTANGLE into this window would give. */
     const float rectangle_fit = 360.0F / 1280.0F;
     TEST_ASSERT_TRUE(measured.scale > rectangle_fit);
-    TEST_ASSERT_TRUE(near(measured.scale, 360.0F / ui_tokens_studio_default()->ref_short, .001F));
+    TEST_ASSERT_TRUE(near(measured.scale, 360.0F / ui_tokens_studio_default()->ref_desk, .001F));
 }
 
 /* Orientation is not a different design: turning the device must not change how
@@ -99,6 +99,22 @@ static void test_safe_area_keeps_its_physical_size(void) {
     TEST_ASSERT_TRUE(near(inset_units * dense.scale / 3, 24, .001F));
 }
 
+/* The pair is the whole answer to "readable in the hand AND on a monitor": the
+   same authored size owns more of a screen that is held than of one across a
+   desk, because 400 units across 5 cm of glass and across 30 cm are not the same
+   button. A phone is 390 CSS pixels across its short edge and a finger covers
+   about 44 of them, so the hand reference has to keep a touch target at least
+   that big -- in either orientation, since the short edge is the same one. */
+static void test_hand_reference_keeps_a_touch_target(void) {
+    const ui_tokens_t *t = ui_tokens_studio_default();
+    TEST_ASSERT_TRUE(t->ref_hand > 0.0F);
+    TEST_ASSERT_TRUE(t->ref_desk >= t->ref_hand);
+    TEST_ASSERT_TRUE(t->hit / t->ref_hand * 390.0F >= 44.0F);
+    const UiScaleFit held = ui_scale_fit(1170, 2532, 3, t->ref_hand, 0, 0);
+    const UiScaleFit desk = ui_scale_fit(1170, 2532, 3, t->ref_desk, 0, 0);
+    TEST_ASSERT_TRUE(t->hit * held.scale > t->hit * desk.scale);
+}
+
 /* A window the platform has not sized yet, or one a safe area covers whole,
    must not produce a zero or infinite canvas: every caller divides by these. */
 static void test_unsized_or_occluded_viewport_is_finite(void) {
@@ -117,6 +133,7 @@ int main(void) {
     RUN_TEST(test_scale_is_monotone_in_window_size);
     RUN_TEST(test_there_is_no_small_window_floor);
     RUN_TEST(test_safe_area_keeps_its_physical_size);
+    RUN_TEST(test_hand_reference_keeps_a_touch_target);
     RUN_TEST(test_unsized_or_occluded_viewport_is_finite);
     return UNITY_END();
 }

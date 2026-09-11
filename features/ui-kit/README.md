@@ -12,17 +12,27 @@ theme, and a widget layer. This pack owns all four, so a new prototype starts
 with an interface that is already readable in a hand and already looks like one
 product.
 
-**Sizing.** One rule, and it is a proportion. The available short edge, after
-physical safe-area insets, fits the sheet's `ref_short` authored units. Text,
+**Sizing.** One rule, and it is a proportion: the available short edge, after
+physical safe-area insets, fits the sheet's reference in authored units. Text,
 hits, spacing and panel dimensions are shares of that area, so the interface
-owns the same fraction of a phone, a laptop and a monitor; rotating the same
-rectangle changes nothing. There are no minimum sizes, no density floor and no
-logical cap: a floor hands a small window a LARGER share of itself than a big
-one, which is how a HUD ends up eating a short window.
+owns the same fraction of any window, and rotating the device changes nothing --
+the short edge is the same edge in both orientations. There are no minimum
+sizes, no density floor and no logical cap: a floor hands a small window a
+LARGER share of itself than a big one, which is how a HUD ends up eating a short
+window.
 
-A game that wants its interface read closer says so in one number -- its own
-`ref_short` -- or scales a screen it authored for one orientation by a factor it
-states itself. Not through a clamp in the kit.
+The sheet carries TWO references, `ref_hand` and `ref_desk`, and the frame picks
+by reach (`ui_reach.h`, `pointer: coarse`), never by the window's shape. One
+number cannot serve both: 390 units across five centimetres of phone and across
+thirty of monitor are not the same button. This is also the whole answer to
+"readable in portrait AND landscape" -- a phone held sideways is still a phone,
+so it keeps the hand reference, while a narrow window on a desk stays a desk.
+`test_ui_scale` holds the bar: at `ref_hand`, the `hit` token must still be 44
+CSS pixels on a 390-pixel phone.
+
+What orientation DOES decide is arrangement, and `ui_metrics()` reports it:
+`portrait` and `in_hand` are there for the row that has to become a column and
+the control that belongs under a thumb.
 
 The default look is the studio's, taken from the reference game the lead uses to
 set the bar: a prototype should not have to design a UI before it has a game.

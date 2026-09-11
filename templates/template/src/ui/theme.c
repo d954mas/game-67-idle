@@ -3,10 +3,11 @@
 #include "features/ui_kit/ui_tokens.h"
 #include "generated/game_assets.h"
 
-/* How close this game's interface is read: 400 authored units span the short
-   edge, which is a phone held in the hand. Every size in the sheet is a share of
-   this, so the interface keeps its proportion on any window. A game that wants a
-   denser interface raises this number; nothing clamps it. */
+/* The studio defaults already carry the pair this game lays out against: 400
+   authored units across the short edge when the screen is in a hand, 720 when it
+   is across a desk. Both are shares, not minimum sizes -- the interface keeps
+   its proportion of any window -- and a game that wants to be read closer moves
+   its own number here. */
 static ui_tokens_t s_tokens;
 
 void theme_init(nt_resource_t atlas) {
@@ -24,6 +25,5 @@ void theme_init(nt_resource_t atlas) {
         .icon_play = nt_atlas_ref(atlas, ASSET_ATLAS_REGION_UI_ICON_PLAY.value),
     };
     s_tokens = *ui_tokens_studio_default();
-    s_tokens.ref_short = 400.0F;
     ui_theme_init(&s_tokens, &art);
 }

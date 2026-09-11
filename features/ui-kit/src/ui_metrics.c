@@ -1,5 +1,6 @@
 #include "features/ui_kit/ui_metrics.h"
 
+#include "features/ui_kit/ui_reach.h"
 #include "features/ui_kit/ui_safe_area.h"
 #include "features/ui_kit/ui_theme.h"
 
@@ -13,17 +14,25 @@ static struct {
     UiScaleFit fit;
     float dpr;
     bool open;
+    bool in_hand;
 } s_frame;
 
 UiScaleFit ui_frame_begin(float fb_w, float fb_h, float dpr) {
-    const ui_tokens_t *t = ui_theme_tokens();
     float insets[4];
     ui_safe_area_insets_css(insets);
-    s_frame.fit = ui_scale_fit(fb_w, fb_h, dpr, t->ref_short,
+    s_frame.in_hand = ui_screen_in_hand();
+    s_frame.fit = ui_scale_fit(fb_w, fb_h, dpr, ui_reference_short(),
                                insets[0] + insets[1], insets[2] + insets[3]);
     s_frame.dpr = dpr > 0.0F ? dpr : 1.0F;
     s_frame.open = true;
     return s_frame.fit;
+}
+
+float ui_reference_short(void) {
+    const ui_tokens_t *t = ui_theme_tokens();
+    const bool in_hand = s_frame.open ? s_frame.in_hand : ui_screen_in_hand();
+    const float reference = in_hand ? t->ref_hand : t->ref_desk;
+    return reference > 0.0F ? reference : (t->ref_desk > 0.0F ? t->ref_desk : 400.0F);
 }
 
 float ui_css_unit(void) { return 1.0F; }
@@ -37,8 +46,11 @@ ui_metrics_t ui_metrics(void) {
 
     /* Before the first frame the reference canvas is the honest answer, and it
        keeps callers free of divide-by-zero. */
-    m.view_w = s_frame.open ? s_frame.fit.logical_w : t->ref_short * 16.0F / 9.0F;
-    m.view_h = s_frame.open ? s_frame.fit.logical_h : t->ref_short;
+    const float reference = ui_reference_short();
+    m.view_w = s_frame.open ? s_frame.fit.logical_w : reference * 16.0F / 9.0F;
+    m.view_h = s_frame.open ? s_frame.fit.logical_h : reference;
+    m.in_hand = s_frame.open ? s_frame.in_hand : ui_screen_in_hand();
+    m.portrait = m.view_h > m.view_w;
     m.css = ui_css_unit();
     m.shortest = m.view_w < m.view_h ? m.view_w : m.view_h;
 

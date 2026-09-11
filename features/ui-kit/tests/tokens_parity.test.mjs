@@ -50,7 +50,8 @@ test("the type ramp and geometry reach ui_tokens.c unchanged", () => {
     hit: sheet.geometry.hit,
     panel_min_w: sheet.geometry.panel_min_w,
     panel_max_w: sheet.geometry.panel_max_w,
-    ref_short: sheet.canvas.ref_short,
+    ref_hand: sheet.canvas.ref_hand,
+    ref_desk: sheet.canvas.ref_desk,
   };
   for (const [name, value] of Object.entries(scalars)) {
     assert.equal(Number.parseFloat(field(name)), value, `token '${name}' disagrees`);

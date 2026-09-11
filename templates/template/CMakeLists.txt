@@ -94,6 +94,7 @@ add_executable(${GAME_TARGET}
     "${UI_KIT_SRC}/ui_metrics.c"
     "${UI_KIT_SRC}/ui_kit.c"
     "${UI_KIT_SRC}/ui_safe_area.c"
+    "${UI_KIT_SRC}/ui_reach.c"
     src/render/render_mesh.c
     src/render/shader_programs.c
     src/render/capture.c

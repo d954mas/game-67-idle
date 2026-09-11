@@ -89,20 +89,28 @@ const UiScaleFit fit = ui_frame_begin(fb_w, fb_h, g_nt_window.dpr);
 nt_ui_begin(ctx, fit.logical_w, fit.logical_h, dt, pointers, NT_INPUT_MAX_POINTERS);
 ```
 
-The canvas comes from the sheet: `ref_short` authored units span the available
-short edge, and that is the only size contract there is. It is a reference, not
-a minimum window size — nothing here floors or caps the scale. Every screen
-reads `ui_metrics()`: text, hits and spacing are authored units, and `panel_w`
-is a share of the available width. `ui_css()` keeps its name as the spelling for
-"this number is an authored size" and converts nothing. Safe-area insets stay
-physical CSS pixels and are converted separately.
+The canvas comes from the sheet: its reference in authored units spans the
+available short edge, and that is the only size contract there is. It is a
+reference, not a minimum window size — nothing floors or caps the scale. Every
+screen reads `ui_metrics()`: text, hits and spacing are authored units, and
+`panel_w` is a share of the available width. `ui_css()` keeps its name as the
+spelling for "this number is an authored size" and converts nothing. Safe-area
+insets stay physical CSS pixels and are converted separately.
 
-Pick `ref_short` from how close the screen is read, and check the result in a
-hand: a design authored for landscape arrives at half size in portrait, where
-the short edge is the width, so a portrait screen usually states its own factor.
-Dialogs need a content-width dropdown override and bounded, scrollable content;
-the template settings screen shows both and keeps Close outside the scroll
-region.
+The sheet states two references and the frame picks one by reach, not by window
+shape: `ref_hand` on a touch screen (a phone in either orientation, a tablet),
+`ref_desk` otherwise. Author against the hand number first — at `ref_hand` the
+`hit` token has to stay 44 CSS pixels on a 390-pixel phone, which is what
+`test_ui_scale` checks — then choose how much smaller a share the same design
+takes across a desk. A game that is a phone screen wherever it runs sets both to
+the same number.
+
+Orientation is an arrangement decision, not a size one: `ui_metrics()` reports
+`portrait` and `in_hand`, and a screen uses them to stack a row, move a control
+under the thumb, or drop a column. On a development machine `UI_KIT_IN_HAND=1`
+forces the hand reference so the phone frames are provable. Dialogs need a
+content-width dropdown override and bounded, scrollable content; the template
+settings screen shows both and keeps Close outside the scroll region.
 
 ## 6. Localized text
 
