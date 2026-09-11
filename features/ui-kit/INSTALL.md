@@ -25,13 +25,18 @@ target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_UI_KIT=1)
 ## 2. Draw the art
 
 ```
-node ai_studio/dev_environment/python_run.mjs features/ui-kit/tools/gen_ui_kit.py --out assets/ui
+node ai_studio/dev_environment/python_run.mjs features/ui-kit/tools/gen_ui_kit.py --tokens features/ui-kit/tokens/studio_b.json --out assets/ui
 ```
+
+The sheet named here and the preset bound in step 4 are one decision made
+twice: panel and tile colours are baked into the PNGs, so art from one sheet
+under the styles of another is a repaint that only half happened. Omitting
+`--tokens` draws `studio_default.json`, the legacy template look.
 
 That writes nine PNGs: `panel`, `button`, `tile`, `slider_track`, `slider_fill`,
 `slider_track_sm`, `slider_fill_sm`, `slider_thumb`, `icon_play`. Record them in
 the consumer's asset pack manifest with licence, provenance, origin and a
-`sha256` per file, and re-run this after any token change. The default sheet
+`sha256` per file, and re-run this after any token change. The legacy default sheet
 uses working supersample 16 and BOX area downsampling; export scale and slice9
 geometry are independent of this offline quality setting. `art.resample` can
 explicitly select another Pillow resampling filter.
@@ -65,7 +70,7 @@ const ui_theme_art_t art = {
     .panel = nt_atlas_ref(atlas, ASSET_ATLAS_REGION_UI_PANEL.value),
     /* ...the other eight... */
 };
-ui_theme_init(ui_tokens_studio_default(), &art);
+ui_theme_init(ui_tokens_studio_b(), &art);
 ```
 
 The supplied sprite shader expects a premultiplied atlas and premultiplies
@@ -111,7 +116,21 @@ development machine. Dialogs need a content-width dropdown override and bounded,
 scrollable content; the template settings screen shows both and keeps Close
 outside the scroll region.
 
-## 6. Localized text
+## 6. Build a screen
+
+Start from the composites, not the plates: `ui_kit_button` in a sized element,
+`ui_kit_counter` for a wallet, `ui_kit_sheet_begin` for a dialog, the
+`ui_kit_*_row` functions for settings. `example/native/src/scenes/` holds one
+worked screen of each kind; `example/native/SCENES.md` maps them.
+
+Two rules the composites carry: a plate (`ui_kit_panel_begin`, `ui_kit_tile_begin`)
+takes no `.id` in its declaration, so wrap it when the ui.tree needs a name;
+and a sheet is declared at root level, never inside a scroll or clip. An
+engine slider inside a scroll inside a sheet trips a walker assert (its thumb's
+clip marker resolves before the sheet's root is laid out), which is why the
+studio's settings screen is a scrimmed panel with a scroll and not a sheet.
+
+## 7. Localized text
 
 The kit's text entry points take `const char *`. A consumer with a localization
 wrapper adds the bridge to that wrapper's own file, keeping one place where its
@@ -137,9 +156,13 @@ proven by frames, not by asserts:
 node ai_studio/dev_environment/python_run.mjs <consumer>/devapi/responsive_viewports.py --exe <exe> --out tmp/ui
 ```
 
+The call above selects Studio B for a new UI polygon/example. Existing template
+and game bindings continue to call `ui_tokens_studio_default()` until their
+owners deliberately select Studio B and regenerate its matching art.
+
 ## Repaint
 
-Copy `tokens/studio_default.json`, edit it, pass the matching `ui_tokens_t` to
+Copy `tokens/studio_b.json` or `tokens/studio_default.json`, edit it, pass the matching `ui_tokens_t` to
 `ui_theme_init`, and regenerate with `--tokens <your sheet>`. See README
 "Extension points".
 

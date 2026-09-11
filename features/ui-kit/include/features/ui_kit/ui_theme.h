@@ -2,7 +2,9 @@
 #define FEATURE_UI_KIT_THEME_H
 
 #include "atlas/nt_atlas.h"
+#include "material/nt_material.h"
 #include "ui/nt_ui_button.h"
+#include "ui/nt_ui_checkbox.h"
 #include "ui/nt_ui_dropdown.h"
 #include "ui/nt_ui_image.h"
 #include "ui/nt_ui_label.h"
@@ -32,6 +34,10 @@ typedef struct {
     nt_atlas_region_ref_t slider_fill_sm;  // slider, which bakes borders 1:1
     nt_atlas_region_ref_t thumb;
     nt_atlas_region_ref_t icon_play;
+    // The engine's radial SDF material (the sprite_radial + radial shaders,
+    // attr_map a_radial@4 and a_layout@7), for the discs the kit draws without
+    // art: crisp at every size. id 0 = the kit falls back to the thumb art.
+    nt_material_t radial;
 } ui_theme_art_t;
 
 typedef struct {
@@ -41,11 +47,19 @@ typedef struct {
 
     nt_ui_button_style_t button;         // neutral action: the light tile surface
     nt_ui_button_style_t button_confirm; // the standard action in a pair
-    nt_ui_button_style_t button_info;    // a secondary or rewarded action; never green
+    nt_ui_button_style_t button_ad;      // the rewarded-ad button: blue, and blue is used for nothing else (portal rule)
+    nt_ui_button_style_t button_info;    // the same style under its earlier name; existing games keep compiling
     nt_ui_button_style_t button_danger;  // destructive action
+    nt_ui_button_style_t button_close;   // the round dismiss: the thumb art in the danger colour
     nt_ui_slider_style_t slider;         // track + fill + thumb
     nt_ui_dropdown_style_t dropdown;     // pick-one list: tile trigger, tile panel
     nt_ui_progress_style_t progress;     // meter drawn from the slider art
+    // The engine's stateful switches in the kit's art: the small fill pill is
+    // the body, the thumb is the knob, so no new region is needed. Sizes are
+    // shares of `hit`, in authored units. Rows pass their own label.
+    nt_ui_checkbox_style_t toggle;
+    nt_ui_checkbox_style_t checkbox;
+    nt_ui_checkbox_style_t radio;
 
     // Label styles. font_size is a CSS-pixel ramp step; see the note above.
     nt_ui_label_style_t title;               // modal / screen title
@@ -59,6 +73,12 @@ typedef struct {
     // wrapped name would climb over the line under it.
     nt_ui_label_style_t row_title;
     nt_ui_label_style_t row_sub;
+    // A number on a light tile, in ink: the counter and the price. `amount`
+    // keeps the coin colour for a number on the panel.
+    nt_ui_label_style_t counter;
+    // Text over the world: white inside the theme's contour, so a level or a
+    // wave stays readable on any picture and still belongs to the kit.
+    nt_ui_label_style_t on_world;
 } ui_theme_t;
 
 // Builds every style above from `tokens` and binds `art`. `tokens` must outlive

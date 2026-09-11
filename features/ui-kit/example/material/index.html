@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Neotolis UI — Material prototype</title>
+  <link rel="stylesheet" href="kit.css">
+  <link rel="stylesheet" href="preview.css">
+  <script type="module" src="preview.mjs"></script>
+</head>
+<body>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" stroke-width="3"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8m-3-4h6"/></symbol>
+    <symbol id="i-sound" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4zm4 3a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></symbol>
+    <symbol id="i-replay" viewBox="0 0 24 24"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.6 6.2.9-4.5 4.4 1.1 6.1-5.5-2.9-5.5 2.9 1.1-6.1-4.5-4.4 6.2-.9z"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10Z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="18" r="2"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+  </defs></svg>
+
+  <header class="workbench-header">
+    <a href="#screens" class="brand" aria-label="Neotolis UI kit"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span> NEOTOLIS <span class="brand-slash">/</span> <strong>UI</strong></a>
+    <div class="header-meta"><span class="version-dot"></span> Material prototype <span class="version">01</span></div>
+  </header>
+  <div class="workbench">
+    <aside>
+      <details class="customizer" open>
+        <summary>Настроить стиль <span aria-hidden="true">+</span></summary>
+        <div class="customizer-body">
+          <p class="eyebrow">ТЕМА ИГРЫ</p>
+          <div class="preset-list" role="group" aria-label="Тема игры">
+            <button class="preset" data-preset="studio" aria-pressed="true"><span class="preset-swatches studio"><i></i><i></i><i></i></span><span><b>Studio</b><small>Нейтральная основа</small></span><span class="preset-check" aria-hidden="true">✓</span></button>
+            <button class="preset" data-preset="arcade" aria-pressed="false"><span class="preset-swatches arcade"><i></i><i></i><i></i></span><span><b>Arcade</b><small>Четче и плотнее</small></span><span class="preset-check" aria-hidden="true">✓</span></button>
+            <button class="preset" data-preset="soft" aria-pressed="false"><span class="preset-swatches soft"><i></i><i></i><i></i></span><span><b>Soft</b><small>Теплее и мягче</small></span><span class="preset-check" aria-hidden="true">✓</span></button>
+          </div>
+          <div class="mode-control" role="group" aria-label="Светлая или темная тема"><button data-mode="light" aria-pressed="true">Светлая</button><button data-mode="dark" aria-pressed="false">Темная</button></div>
+          <div class="control-divider"></div>
+          <p class="eyebrow">НАСТРОЙКА</p>
+          <label class="editor-color">Акцент <span><input id="accent" type="color" value="#236757" aria-label="Цвет акцента"><output id="accent-value">#236757</output></span></label>
+          <label class="editor-field">Форма<select id="shape"><option value="balanced">Умеренное скругление</option><option value="sharp">Четкие углы</option><option value="round">Округлая</option></select></label>
+          <label class="editor-field">Шрифт<select id="font"><option value="system">Нейтральный</option><option value="technical">Технический</option><option value="humanist">Гуманистический</option></select></label>
+          <label class="editor-field">Плотность<select id="density"><option value="comfortable">Свободная</option><option value="compact">Компактная</option></select></label>
+          <label class="editor-field">Глубина<select id="depth"><option value="flat">Плоская</option><option value="raised">Легкая тень</option></select></label>
+          <div class="control-divider"></div>
+          <button class="export-button" id="export-theme"><svg class="nt-icon"><use href="#i-download"/></svg> Скачать тему</button>
+          <button class="reset-button" id="reset-theme">Сбросить изменения</button>
+          <p class="editor-note">Меняется оформление.<br>Компоненты остаются общими.</p>
+        </div>
+      </details>
+    </aside>
+    <main>
+      <div class="page-heading"><div><p class="eyebrow">NEOTOLIS DESIGN SYSTEM</p><h1>UI kit</h1><p>Игровые экраны и компоненты. Один набор, свой стиль у каждой игры.</p></div><span class="prototype-label">Интерактивный прототип</span></div>
+      <nav class="section-nav" aria-label="Разделы"><a href="#screens" class="active">Экраны</a><a href="#components">Компоненты</a><a href="#ownership">Как менять стиль</a></nav>
+
+      <div class="nt-kit" id="kit" data-mode="light" data-shape="balanced" data-density="comfortable" data-depth="flat">
+        <section id="screens" aria-labelledby="screens-heading">
+          <div class="section-heading"><h2 id="screens-heading">В игре</h2><span id="theme-label">Studio · Светлая</span></div>
+          <div class="screen-grid">
+            <article class="screen-example"><div class="screen-caption"><span>01 / Игровой экран</span><span>HUD</span></div>
+              <div class="game-screen">
+                <div class="game-top"><span class="game-title">Поток<span>Уровень 12</span></span><div class="game-top-actions"><span class="balance"><svg class="nt-icon"><use href="#i-coin"/></svg> 1 240</span><button class="nt-icon-button" data-action="settings" aria-label="Открыть настройки"><svg class="nt-icon"><use href="#i-pause"/></svg></button></div></div>
+                <div class="game-objective"><div><span>Соберите 128</span><span class="nt-muted">8 / 12</span></div><div class="nt-meter" role="progressbar" aria-label="Прогресс уровня" aria-valuemin="0" aria-valuemax="12" aria-valuenow="8"><span style="width:66.67%"></span></div></div>
+                <div class="board-wrap"><div class="puzzle-board" role="img" aria-label="Пример игрового поля с числовыми плитками"><span class="tile tile-2">2</span><span class="tile tile-8">8</span><span class="tile tile-2">2</span><span></span><span></span><span class="tile tile-4">4</span><span class="tile tile-16">16</span><span></span><span class="tile tile-4">4</span><span></span><span class="tile tile-64">64</span><span class="tile tile-8">8</span><span></span><span class="tile tile-2">2</span><span></span><span class="tile tile-4">4</span></div><p class="board-hint">Соединяйте одинаковые числа</p></div>
+                <div class="game-bottom"><div class="round-score"><span class="nt-muted">За этот раунд</span><strong>+120 <svg class="nt-icon"><use href="#i-coin"/></svg></strong></div><button class="nt-button" data-action="result">Завершить раунд<svg class="nt-icon"><use href="#i-arrow"/></svg></button></div>
+              </div>
+            </article>
+            <article class="screen-example"><div class="screen-caption"><span>02 / Настройки</span><span>Dialog</span></div><div class="example-backdrop"><div class="ambient-board" aria-hidden="true"></div><div class="settings-mount example-panel"></div></div></article>
+            <article class="screen-example"><div class="screen-caption"><span>03 / Результат</span><span>Feedback</span></div><div class="example-backdrop"><div class="ambient-board" aria-hidden="true"></div><div class="result-mount example-panel"></div></div></article>
+          </div>
+          <p class="section-footnote">Кнопка паузы открывает настройки. Завершение раунда показывает результат. Поле и числа — содержимое примера.</p>
+        </section>
+
+        <section id="components" aria-labelledby="components-heading">
+          <div class="section-heading"><h2 id="components-heading">Компоненты</h2><span>Общие состояния и поведение</span></div>
+          <div class="component-sheet">
+            <div class="component-row"><div class="component-title"><h3>Действия</h3><p>Главное, вторичное, спокойное</p></div><div class="component-content button-samples"><button class="nt-button" data-notice="Главное действие">Продолжить<svg class="nt-icon"><use href="#i-arrow"/></svg></button><button class="nt-button nt-button--tonal" data-notice="Вторичное действие">Повторить</button><button class="nt-button nt-button--outline" data-notice="Действие с контуром">Подробнее</button><button class="nt-button nt-button--text" data-notice="Текстовое действие">Отмена</button><button class="nt-button" disabled>Недоступно</button></div></div>
+            <div class="component-row"><div class="component-title"><h3>Выбор</h3><p>Переключатели и фильтры</p></div><div class="component-content choice-samples"><div class="nt-segments" role="group" aria-label="Сложность примера"><button class="nt-segment" aria-pressed="true">Легко</button><button class="nt-segment" aria-pressed="false">Обычно</button><button class="nt-segment" aria-pressed="false">Сложно</button></div><div class="chip-group"><button class="nt-chip" aria-pressed="true">Все</button><button class="nt-chip" aria-pressed="false">Новые</button><button class="nt-chip" aria-pressed="false">Избранное</button></div></div></div>
+            <div class="component-row"><div class="component-title"><h3>Ввод</h3><p>Настройки и значения</p></div><div class="component-content input-samples"><label class="nt-field">Имя игрока<input value="Игрок" maxlength="24" autocomplete="off"></label><label class="nt-field">Язык<select id="sample-language"><option>Русский</option><option>English</option></select></label><label class="nt-settings-row sample-switch"><span>Вибрация</span><span class="nt-switch"><input type="checkbox" checked><span></span></span></label></div></div>
+            <div class="component-row"><div class="component-title"><h3>Обратная связь</h3><p>Статус без лишнего шума</p></div><div class="component-content feedback-samples"><div class="nt-banner"><svg class="nt-icon"><use href="#i-check"/></svg><span>Прогресс сохранен</span></div><div class="nt-snackbar"><span>Звук выключен</span><button class="nt-button nt-button--text" data-notice="Звук снова включен">Вернуть</button></div></div></div>
+          </div>
+          <p class="section-footnote">Tab показывает фокус. Наведение, нажатие и недоступность — настоящие состояния компонентов.</p>
+        </section>
+
+        <dialog id="live-dialog" aria-labelledby="dialog-title"><div id="dialog-body"></div></dialog>
+        <div id="notice" class="nt-snackbar floating-notice" role="status" aria-live="polite" hidden><span></span><button class="nt-button nt-button--text" aria-label="Закрыть уведомление"><svg class="nt-icon"><use href="#i-close"/></svg></button></div>
+      </div>
+
+      <section class="ownership" id="ownership" aria-labelledby="ownership-heading"><h2 id="ownership-heading">Игра владеет своим стилем</h2><div class="ownership-columns"><div><span>01</span><h3>Общий UI kit</h3><p>Компоненты, состояния, доступность и правила компоновки.</p></div><div><span>02</span><h3>Тема игры</h3><p>Цвета, шрифт, формы, плотность и эффекты. Меняются в одном месте.</p></div><div><span>03</span><h3>Экраны игры</h3><p>Своя композиция и механики. Магазин, валюты и уровни подключает игра.</p></div></div><details class="theme-source"><summary>Посмотреть настройки темы</summary><pre id="theme-json"></pre></details></section>
+      <footer class="workbench-footer"><span>NEOTOLIS UI · Визуальный прототип</span><span>HTML / CSS · Без сгенерированного арта</span></footer>
+    </main>
+  </div>
+
+  <template id="settings-template"><section class="nt-panel settings-panel"><div class="panel-heading"><h3>Настройки</h3><button class="nt-icon-button quiet-close" data-action="close" aria-label="Закрыть настройки"><svg class="nt-icon"><use href="#i-close"/></svg></button></div><p class="nt-muted panel-subtitle">Комфортный темп игры</p><div class="nt-divider"></div><label class="nt-settings-row"><span>Музыка<span class="nt-muted">Фоновое сопровождение</span></span><span class="nt-switch"><input type="checkbox" data-setting="music" checked><span></span></span></label><label class="nt-settings-row"><span>Звуки<span class="nt-muted">Действия и награды</span></span><span class="nt-switch"><input type="checkbox" data-setting="sound" checked><span></span></span></label><div class="volume-heading"><span>Громкость</span><output data-volume-output>70%</output></div><input class="nt-range" type="range" min="0" max="100" value="70" data-setting="volume" aria-label="Громкость"><div class="nt-divider"></div><label class="nt-field">Язык<select data-setting="language"><option value="ru">Русский</option><option value="en">English</option></select></label><button class="nt-button panel-primary" data-action="close">Готово</button></section></template>
+  <template id="result-template"><section class="nt-panel result-panel"><span class="nt-badge"><svg class="nt-icon"><use href="#i-check"/></svg> Уровень завершен</span><div class="result-score"><span class="nt-label">ВАШ РЕЗУЛЬТАТ</span><strong>2 048</strong><span class="personal-best">Новый рекорд</span></div><div class="result-reward"><span class="nt-muted">Награда</span><strong><svg class="nt-icon"><use href="#i-coin"/></svg> +120</strong></div><div class="result-stat"><span class="nt-muted">Ходов сделано</span><span>24</span></div><div class="nt-divider"></div><button class="nt-button panel-primary" data-action="next">Следующий уровень<svg class="nt-icon"><use href="#i-arrow"/></svg></button><button class="nt-button nt-button--text panel-primary replay" data-action="replay"><svg class="nt-icon"><use href="#i-replay"/></svg>Еще раз</button></section></template>
+</body>
+</html>

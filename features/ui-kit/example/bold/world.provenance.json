@@ -1,0 +1,11 @@
+{
+  "origin": "generated",
+  "sha256": "67C67D03473E0533FE9A44B533264E16B0560F710AA876643CE51D99EBCDB4F6",
+  "licenseStatus": "Preview-only generated output; not approved as a shipping asset.",
+  "purpose": "Preview-only original world background for the selected B UI direction; not a shipping asset.",
+  "generator": "Built-in image_gen.imagegen",
+  "referenceImages": [],
+  "prompt": "Use case: stylized-concept.\nCreate a single original low-poly 3D casual game world background, wide landscape 3:2, with NO UI or letters anywhere. It is the quiet background for an interactive studio UI kit prototype. An orthographic slightly overhead view of a small turquoise block-shaped practice robot in the lower middle of a circular pale sand arena; the robot has a dark rectangular face with two simple white eyes, square fists and short feet. A few orange breakable cuboid practice targets near its feet, a few tiny scattered cuboid fragments. Simple chunky angular rocks and sage-green plants around the outside. Muted olive-sage background, sand stone arena edge. The arena and robot should be clearly visible when the middle 60% of this wide image is cropped to a phone portrait. Keep top 20% relatively quiet greenery/rocks for UI overlays and bottom 15% quiet sand. Robot about 20% of image height, expressive silhouette. Crisp genuinely low-poly modeled look, flat matte colors, warm soft grounded shadows, no painterly texture, no tiny details, no haze. No gradients in artwork textures. Fully original geometry and composition. No commercial reference images. NO text, buttons, HUD, icons, counters, bars, logos, badges, panels, frames, labels, watermarks, or borders. Only the 3D game world. Output is preview-only concept art, not a production game asset.",
+  "source": "C:/Users/ROG/.codex/generated_images/01a0905b-4a91-7351-b945-408c2398aac0/exec-9302f38a-5ab6-41e4-b536-0ad9fb0edb07.png",
+  "file": "world.png"
+}

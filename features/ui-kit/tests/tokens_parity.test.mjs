@@ -4,18 +4,32 @@ import { join } from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-// The token sheet is read by the art generator; ui_tokens.c is read by the
-// runtime. They are the same design decision expressed twice, and a repaint that
-// lands in only one of them ships art that does not match its own styles. This
-// is the seam that catches it.
+// The sheets drive generated art while ui_tokens.c drives runtime styles. Each
+// preset therefore has one decision expressed twice; this test catches a
+// repaint that reaches only one side of that seam.
 
 const FEATURE = fileURLToPath(new URL("../", import.meta.url));
-const sheet = JSON.parse(readFileSync(join(FEATURE, "tokens", "studio_default.json"), "utf8"));
-const source = readFileSync(join(FEATURE, "src", "ui_tokens.c"), "utf8");
+const tokenSource = readFileSync(join(FEATURE, "src", "ui_tokens.c"), "utf8");
+const themeSource = readFileSync(join(FEATURE, "src", "ui_theme.c"), "utf8");
+const presets = [
+  { sheet: "studio_default.json", symbol: "STUDIO_DEFAULT" },
+  { sheet: "studio_b.json", symbol: "STUDIO_B" },
+].map(({ sheet, symbol }) => ({
+  sheet: JSON.parse(readFileSync(join(FEATURE, "tokens", sheet), "utf8")),
+  source: tokenBlock(symbol),
+}));
 
-function field(name) {
-  const match = new RegExp(`\\.${name}\\s*=\\s*([^,]+),`).exec(source);
-  assert.ok(match, `ui_tokens.c has no .${name}`);
+function tokenBlock(symbol) {
+  const start = tokenSource.indexOf(`static const ui_tokens_t ${symbol} = {`);
+  assert.notEqual(start, -1, `ui_tokens.c has no ${symbol} preset`);
+  const end = tokenSource.indexOf("\n};", start);
+  assert.notEqual(end, -1, `${symbol} has no closing initializer`);
+  return tokenSource.slice(start, end + 3);
+}
+
+function field(block, name) {
+  const match = new RegExp(`\\.${name}\\s*=\\s*([^,]+),`).exec(block);
+  assert.ok(match, `preset has no .${name}`);
   return match[1].trim();
 }
 
@@ -28,58 +42,66 @@ function packed(hex) {
   return `0x${value.padStart(8, "0")}U`;
 }
 
-test("every colour token is packed into ui_tokens.c unchanged", () => {
-  for (const [name, hex] of Object.entries(sheet.colors)) {
-    assert.equal(field(name), packed(hex), `colour '${name}' disagrees`);
-  }
-});
-
-test("the type ramp and geometry reach ui_tokens.c unchanged", () => {
-  const scalars = {
-    t_display: sheet.type.display,
-    t_title: sheet.type.title,
-    t_body: sheet.type.body,
-    t_num: sheet.type.num,
-    t_badge: sheet.type.badge,
-    t_row: sheet.type.row,
-    t_row_sub: sheet.type.row_sub,
-    rim: sheet.geometry.rim,
-    lift: sheet.geometry.lift,
-    gap: sheet.geometry.gap,
-    pad: sheet.geometry.pad,
-    hit: sheet.geometry.hit,
-    panel_min_w: sheet.geometry.panel_min_w,
-    panel_max_w: sheet.geometry.panel_max_w,
-    ref_short: sheet.canvas.ref_short,
-  };
-  for (const [name, value] of Object.entries(scalars)) {
-    assert.equal(Number.parseFloat(field(name)), value, `token '${name}' disagrees`);
-  }
-});
-
-test("the runtime slice9 scale is the reciprocal of the art export scale", () => {
-  assert.equal(Number.parseFloat(field("slice9_scale")), 1 / sheet.art.export_scale);
-});
-
-test("every slice9 border contains its corner radius", () => {
-  const radius = sheet.art.radius;
-  const pairs = [
-    ["panel", radius.panel],
-    ["button", radius.button],
-    ["tile", radius.tile],
-    ["slider_track", radius.bar],
-    ["slider_fill", radius.bar],
-  ];
-  for (const [name, r] of pairs) {
-    const [left, right, top, bottom] = sheet.art.slice9[name];
-    for (const [side, border] of [["left", left], ["right", right], ["top", top], ["bottom", bottom]]) {
-      assert.ok(border >= r, `${name} ${side} border ${border} cuts through radius ${r}`);
+for (const { sheet, source: preset } of presets) {
+  test(`${sheet.id}: every colour token is packed into ui_tokens.c unchanged`, () => {
+    for (const [name, hex] of Object.entries(sheet.colors)) {
+      assert.equal(field(preset, name), packed(hex), `colour '${name}' disagrees`);
     }
+  });
+
+  test(`${sheet.id}: type ramp and geometry reach ui_tokens.c unchanged`, () => {
+    const scalars = {
+      t_display: sheet.type.display,
+      t_title: sheet.type.title,
+      t_body: sheet.type.body,
+      t_num: sheet.type.num,
+      t_badge: sheet.type.badge,
+      t_row: sheet.type.row,
+      t_row_sub: sheet.type.row_sub,
+      rim: sheet.geometry.rim,
+      lift: sheet.geometry.lift,
+      gap: sheet.geometry.gap,
+      pad: sheet.geometry.pad,
+      hit: sheet.geometry.hit,
+      panel_min_w: sheet.geometry.panel_min_w,
+      panel_max_w: sheet.geometry.panel_max_w,
+      ref_short: sheet.canvas.ref_short,
+    };
+    for (const [name, value] of Object.entries(scalars)) {
+      assert.equal(Number.parseFloat(field(preset, name)), value, `token '${name}' disagrees`);
+    }
+  });
+
+  test(`${sheet.id}: slice9 scale and borders are compatible with its art`, () => {
+    assert.equal(Number.parseFloat(field(preset, "slice9_scale")), 1 / sheet.art.export_scale);
+    const radius = sheet.art.radius;
+    const pairs = [
+      ["panel", radius.panel],
+      ["button", radius.button],
+      ["tile", radius.tile],
+      ["slider_track", radius.bar],
+      ["slider_fill", radius.bar],
+    ];
+    for (const [name, r] of pairs) {
+      const [left, right, top, bottom] = sheet.art.slice9[name];
+      for (const [side, border] of [["left", left], ["right", right], ["top", top], ["bottom", bottom]]) {
+        assert.ok(border >= r, `${name} ${side} border ${border} cuts through radius ${r}`);
+      }
+    }
+    assert.ok(
+      sheet.art.slice9.button[3] >= radius.button + sheet.geometry.lift,
+      "button bottom border does not contain radius plus lift",
+    );
+  });
+}
+
+test("legacy token initializers fall back to on_panel for action labels", () => {
+  const actionText = (tokens) => tokens.on_action || tokens.on_panel;
+  const legacy = { on_panel: 0xFF382517, on_action: 0 };
+  assert.equal(actionText(legacy), legacy.on_panel);
+  for (const { sheet } of presets) {
+    assert.equal(actionText({ on_panel: packed(sheet.colors.on_panel), on_action: packed(sheet.colors.on_action) }), packed(sheet.colors.on_action));
   }
-  // The button's bottom border must also clear the lift ledge, or the press
-  // shadow gets stretched instead of held.
-  assert.ok(
-    sheet.art.slice9.button[3] >= radius.button + sheet.geometry.lift,
-    "button bottom border does not contain radius plus lift",
-  );
+  assert.match(themeSource, /t->on_action != 0U \? t->on_action : t->on_panel/);
+  assert.match(themeSource, /button_label_action = label_style\(t->t_body, action_text,/);
 });

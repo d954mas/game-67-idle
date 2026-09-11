@@ -1,0 +1,93 @@
+{
+  "schema": "ai_studio.ui_kit.tokens.v1",
+  "id": "ember",
+  "title": "Ember",
+  "description": "Lab theme: parchment plates, dark cocoa contours and a burnt-orange action colour. Same geometry as Studio B.",
+  "colors": {
+    "shell": "#352822",
+    "panel": "#FFFBF5",
+    "inset": "#F1E5DD",
+    "inset_rim": "#705B50",
+    "scrim": "#3528228C",
+    "tile": "#FFFBF5",
+    "tile_dim": "#F1E5DD",
+    "tile_rim": "#705B50",
+    "ink": "#352822",
+    "ink_soft": "#705B50",
+    "on_panel": "#352822",
+    "on_panel_soft": "#705B50",
+    "on_action": "#FFFFFF",
+    "coin": "#F4C151",
+    "go": "#B8421E",
+    "info": "#2A7FD4",
+    "danger": "#7E1F1F",
+    "off": "#9C8B82"
+  },
+  "type": {
+    "display": 32,
+    "title": 24,
+    "body": 20,
+    "num": 21,
+    "badge": 16,
+    "row": 18,
+    "row_sub": 14
+  },
+  "geometry": {
+    "rim": 3,
+    "lift": 4,
+    "gap": 12,
+    "pad": 20,
+    "hit": 44,
+    "panel_min_w": 260,
+    "panel_max_w": 560
+  },
+  "canvas": {
+    "ref_short": 390
+  },
+  "art": {
+    "export_scale": 4,
+    "supersample": 16,
+    "resample": "BOX",
+    "deep_step": 0.08,
+    "gloss": 0,
+    "center": 2,
+    "radius": {
+      "panel": 14,
+      "button": 12,
+      "tile": 12,
+      "bar": 11
+    },
+    "slice9": {
+      "panel": [
+        14,
+        14,
+        14,
+        14
+      ],
+      "button": [
+        16,
+        16,
+        16,
+        22
+      ],
+      "tile": [
+        14,
+        14,
+        14,
+        14
+      ],
+      "slider_track": [
+        11,
+        11,
+        11,
+        11
+      ],
+      "slider_fill": [
+        11,
+        11,
+        11,
+        11
+      ]
+    }
+  }
+}

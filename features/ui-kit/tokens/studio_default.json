@@ -16,6 +16,7 @@
     "ink_soft": "#6B6F8C",
     "on_panel": "#FFFFFF",
     "on_panel_soft": "#CFC8FF",
+    "on_action": "#FFFFFF",
     "coin": "#FFC94D",
     "go": "#35C46F",
     "info": "#4A7BF7",

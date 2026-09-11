@@ -47,6 +47,56 @@ static const ui_tokens_t STUDIO_DEFAULT = {
 
     /* The art ships at 4 source pixels per design unit (art.export_scale). */
     .slice9_scale = 0.25F,
+
+    .on_action = 0xFFFFFFFFU,
+};
+
+/* Mirrors tokens/studio_b.json. Studio B is opt-in: existing consumers keep
+   STUDIO_DEFAULT until their game-owned theme binding selects this sheet. */
+static const ui_tokens_t STUDIO_B = {
+    .shell = 0xFF382517U,
+    .panel = 0xFFF9FDFFU,
+    .inset = 0xFFF5EEE8U,
+    .inset_rim = 0xFF756152U,
+    .scrim = 0x8C382517U,
+
+    .tile = 0xFFF9FDFFU,
+    .tile_dim = 0xFFF5EEE8U,
+    .tile_rim = 0xFF756152U,
+
+    .ink = 0xFF382517U,
+    .ink_soft = 0xFF756152U,
+    .on_panel = 0xFF382517U,
+    .on_panel_soft = 0xFF756152U,
+
+    .coin = 0xFF32BFF5U,
+    .go = 0xFF559D1FU,
+    .info = 0xFFA47B08U,
+    .danger = 0xFF1823B4U,
+    .off = 0xFFA49387U,
+
+    .t_display = 32.0F,
+    .t_title = 24.0F,
+    .t_body = 20.0F,
+    .t_num = 21.0F,
+    .t_badge = 16.0F,
+    .t_row = 18.0F,
+    .t_row_sub = 14.0F,
+
+    .rim = 3.0F,
+    .lift = 4.0F,
+    .gap = 12.0F,
+    .pad = 20.0F,
+    .hit = 44.0F,
+
+    .panel_min_w = 260.0F,
+    .panel_max_w = 560.0F,
+
+    .ref_short = 390.0F,
+    .slice9_scale = 0.25F,
+
+    .on_action = 0xFFFFFFFFU,
 };
 
 const ui_tokens_t *ui_tokens_studio_default(void) { return &STUDIO_DEFAULT; }
+const ui_tokens_t *ui_tokens_studio_b(void) { return &STUDIO_B; }

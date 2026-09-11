@@ -17,7 +17,7 @@ import { join } from "node:path";
 export const ICON_PRESETS = ["native-debug", "devapi-debug"];
 
 const NT_PACK_MAGIC = 0x4b41504e; // "NPAK" LE (nt_pack_format.h)
-const NT_PACK_VERSION = 2;
+const NT_PACK_VERSION = 3;
 const NT_ATLAS_MAGIC = 0x534c5441; // "ATLS" LE (nt_atlas_format.h)
 const NT_ATLAS_VERSION = 6;
 const NT_ASSET_ATLAS = 6; // nt_asset_type_t

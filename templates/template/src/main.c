@@ -557,7 +557,6 @@ static void frame(void) {
        is what turns a recoverable loss into a crash. */
     if (!g_nt_gfx.context_lost) {
         nt_resource_step();
-        nt_material_step();
         shader_programs_update();
     }
     game_runtime_try_start();

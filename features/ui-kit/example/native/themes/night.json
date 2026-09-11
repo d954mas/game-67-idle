@@ -1,0 +1,93 @@
+{
+  "schema": "ai_studio.ui_kit.tokens.v1",
+  "id": "night",
+  "title": "Night",
+  "description": "Lab theme: the dark counterpart. Navy plates, near-black contours, light ink and a bright blue action colour. Same geometry as Studio B.",
+  "colors": {
+    "shell": "#0B1220",
+    "panel": "#1B2536",
+    "inset": "#111927",
+    "inset_rim": "#3A4A63",
+    "scrim": "#0508108C",
+    "tile": "#243247",
+    "tile_dim": "#1B2536",
+    "tile_rim": "#3A4A63",
+    "ink": "#F2F6FB",
+    "ink_soft": "#A9B7CB",
+    "on_panel": "#F2F6FB",
+    "on_panel_soft": "#A9B7CB",
+    "on_action": "#FFFFFF",
+    "coin": "#FFD25A",
+    "go": "#35B36B",
+    "info": "#3D8CFF",
+    "danger": "#FF5D5D",
+    "off": "#5B6B84"
+  },
+  "type": {
+    "display": 32,
+    "title": 24,
+    "body": 20,
+    "num": 21,
+    "badge": 16,
+    "row": 18,
+    "row_sub": 14
+  },
+  "geometry": {
+    "rim": 3,
+    "lift": 4,
+    "gap": 12,
+    "pad": 20,
+    "hit": 44,
+    "panel_min_w": 260,
+    "panel_max_w": 560
+  },
+  "canvas": {
+    "ref_short": 390
+  },
+  "art": {
+    "export_scale": 4,
+    "supersample": 16,
+    "resample": "BOX",
+    "deep_step": 0.08,
+    "gloss": 0,
+    "center": 2,
+    "radius": {
+      "panel": 14,
+      "button": 12,
+      "tile": 12,
+      "bar": 11
+    },
+    "slice9": {
+      "panel": [
+        14,
+        14,
+        14,
+        14
+      ],
+      "button": [
+        16,
+        16,
+        16,
+        22
+      ],
+      "tile": [
+        14,
+        14,
+        14,
+        14
+      ],
+      "slider_track": [
+        11,
+        11,
+        11,
+        11
+      ],
+      "slider_fill": [
+        11,
+        11,
+        11,
+        11
+      ]
+    }
+  }
+}

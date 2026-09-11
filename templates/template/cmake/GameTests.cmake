@@ -272,7 +272,7 @@ if(NOT EMSCRIPTEN)
     target_include_directories(test_game_audio PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/audio"
         "${AUDIO_CORE_INC}" "${PLATFORM_SDK_INC}" src "${ENGINE_DIR}/engine")
-    target_compile_definitions(test_game_audio PRIVATE NT_INTROSPECT_ENABLED=0 _CRT_SECURE_NO_WARNINGS)
+    target_compile_definitions(test_game_audio PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_options(test_game_audio PRIVATE -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
     nt_set_warning_flags(test_game_audio)
     set_target_properties(test_game_audio PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")

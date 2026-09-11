@@ -48,6 +48,38 @@ static nt_ui_button_style_t action_button(nt_ui_button_style_t base, uint32_t ti
     return base;
 }
 
+static void switch_cells(nt_ui_cb_state_t cells[4], nt_atlas_region_ref_t box, nt_atlas_region_ref_t check,
+                         uint32_t box_tint, uint32_t check_tint) {
+    for (int i = 0; i < 4; ++i) {
+        cells[i].box = box;
+        cells[i].check = check;
+        cells[i].box_tint = box_tint;
+        cells[i].check_tint = check_tint;
+    }
+    cells[NT_UI_CB_HOVER].scale = 1.04F;
+    cells[NT_UI_CB_PRESSED].scale = 0.96F;
+    cells[NT_UI_CB_DISABLED].opacity = 0.4F;
+}
+
+/* One switch style: the unchecked and checked rows differ only in the body
+   tint (or, for the radio, in nothing but the dot). */
+static nt_ui_checkbox_style_t switch_style(const ui_tokens_t *t, nt_atlas_region_ref_t body, uint32_t off_tint,
+                                           uint32_t on_tint, nt_atlas_region_ref_t knob, uint32_t knob_tint,
+                                           float box_w, float box_h, float overlay, float thumb_pad) {
+    nt_ui_checkbox_style_t s = nt_ui_checkbox_style_defaults();
+    switch_cells(s.unchecked, body, knob, off_tint, knob_tint);
+    switch_cells(s.checked, body, knob, on_tint, knob_tint);
+    s.box_w = box_w;
+    s.box_h = box_h;
+    s.overlay_w = overlay;
+    s.overlay_h = overlay;
+    s.thumb_pad = thumb_pad;
+    s.gap = t->gap * 0.6F;
+    s.state_speed = 12.0F;
+    s.value_speed = 16.0F;
+    return s;
+}
+
 static Clay_Color clay_color(uint32_t abgr) {
     return (Clay_Color){
         (float)(abgr & 0xFFU),
@@ -67,6 +99,7 @@ const ui_tokens_t *ui_theme_tokens(void) {
 
 void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     const ui_tokens_t *t = tokens != NULL ? tokens : ui_tokens_studio_default();
+    const uint32_t action_text = t->on_action != 0U ? t->on_action : t->on_panel;
     g_ui_theme.tokens = t;
     if (art != NULL) {
         g_ui_theme.art = *art;
@@ -94,8 +127,20 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     g_ui_theme.button.pressed.bg_tint = t->tile_dim;
 
     g_ui_theme.button_confirm = action_button(base, t->go);
-    g_ui_theme.button_info = action_button(base, t->info);
+    g_ui_theme.button_ad = action_button(base, t->info);
+    g_ui_theme.button_info = g_ui_theme.button_ad;
     g_ui_theme.button_danger = action_button(base, t->danger);
+
+    // The round close: the thumb art (a circle with the contour rim) takes the
+    // danger tint; a circle has no ledge to sink into, so the press is scale alone.
+    nt_ui_button_style_t round = base;
+    round.idle.bg = g_ui_theme.art.thumb;
+    round.hover.bg = g_ui_theme.art.thumb;
+    round.pressed.bg = g_ui_theme.art.thumb;
+    round.disabled.bg = g_ui_theme.art.thumb;
+    round.pressed.offset_y = 0.0F;
+    round.pressed.scale = 0.92F;
+    g_ui_theme.button_close = action_button(round, t->danger);
 
     // Slider sizes are CSS pixels; ui_kit_slider_style converts them per frame.
     nt_ui_slider_style_t s = nt_ui_slider_style_defaults();
@@ -138,21 +183,41 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     dd.open_ease_speed = 16.0F;
     g_ui_theme.dropdown = dd;
 
+    // The engine progress bar bakes its slice9 borders at source size, like the
+    // slider, so it takes the design-size pair; the 4x pair belongs to
+    // ui_kit_meter, which scales the borders itself.
     nt_ui_progress_style_t p = nt_ui_progress_style_defaults();
-    p.track = g_ui_theme.art.slider_track;
-    p.fill = g_ui_theme.art.slider_fill;
+    p.track = g_ui_theme.art.slider_track_sm;
+    p.fill = g_ui_theme.art.slider_fill_sm;
     p.fill_tint = t->go;
     p.track_h = 18.0F;
     p.fill_mode = NT_UI_FILL_STRETCH;
     g_ui_theme.progress = p;
 
+    // The white fill pill takes a tint exactly, so the body is the action
+    // colour when on; the radio is the knob art twice, a white ring around a
+    // coloured dot.
+    const nt_atlas_region_ref_t pill = g_ui_theme.art.slider_fill_sm;
+    const nt_atlas_region_ref_t knob = g_ui_theme.art.thumb;
+    g_ui_theme.toggle = switch_style(t, pill, t->off, t->go, knob, 0xFFFFFFFFU, t->hit * 1.18F, t->hit * 0.68F, t->hit * 0.55F, t->rim);
+    g_ui_theme.checkbox = switch_style(t, pill, t->tile_dim, t->go, knob, 0xFFFFFFFFU, t->hit * 0.64F, t->hit * 0.64F, t->hit * 0.32F, 0.0F);
+    g_ui_theme.radio = switch_style(t, knob, 0xFFFFFFFFU, 0xFFFFFFFFU, knob, t->go, t->hit * 0.64F, t->hit * 0.64F, t->hit * 0.32F, 0.0F);
+    g_ui_theme.toggle.text_base = label_style(t->t_body, t->on_panel, CLAY_TEXT_WRAP_NONE);
+    g_ui_theme.checkbox.text_base = g_ui_theme.toggle.text_base;
+    g_ui_theme.radio.text_base = g_ui_theme.toggle.text_base;
+
     g_ui_theme.title = label_style(t->t_display, t->on_panel, CLAY_TEXT_WRAP_WORDS);
     g_ui_theme.heading = label_style(t->t_title, t->on_panel, CLAY_TEXT_WRAP_WORDS);
     g_ui_theme.label = label_style(t->t_body, t->on_panel, CLAY_TEXT_WRAP_WORDS);
     g_ui_theme.button_label = label_style(t->t_body, t->ink, CLAY_TEXT_WRAP_WORDS);
-    g_ui_theme.button_label_action = label_style(t->t_body, t->on_panel, CLAY_TEXT_WRAP_WORDS);
+    g_ui_theme.button_label_action = label_style(t->t_body, action_text, CLAY_TEXT_WRAP_WORDS);
     g_ui_theme.hint = label_style(t->t_badge, t->on_panel_soft, CLAY_TEXT_WRAP_WORDS);
     g_ui_theme.amount = label_style(t->t_num, t->coin, CLAY_TEXT_WRAP_NONE);
     g_ui_theme.row_title = label_style(t->t_row, t->ink, CLAY_TEXT_WRAP_NONE);
     g_ui_theme.row_sub = label_style(t->t_row_sub, t->ink_soft, CLAY_TEXT_WRAP_NONE);
+    g_ui_theme.counter = label_style(t->t_num, t->ink, CLAY_TEXT_WRAP_NONE);
+    g_ui_theme.on_world = label_style(t->t_title, 0xFFFFFFFFU, CLAY_TEXT_WRAP_WORDS);
+    // The outline is in em so it keeps its share of the glyph at every scale.
+    g_ui_theme.on_world.outline_w = 0.09F;
+    g_ui_theme.on_world.outline_color = t->shell;
 }

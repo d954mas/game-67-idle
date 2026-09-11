@@ -291,7 +291,7 @@
       else if (detail.kind === "font" && detail.font) renderFontPreview(container, detail);
       else {
         container.append(previewNote(
-          `${entry.typeTag} · offset ${entry.offset} · ${entry.size} bytes · format v${entry.formatVersion} · no visual preview`,
+          `${entry.typeTag} · offset ${entry.offset} · ${entry.size} bytes · owner #${entry.ownerEntry} · no visual preview`,
         ));
       }
     } catch (error) {

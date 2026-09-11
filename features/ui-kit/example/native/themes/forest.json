@@ -1,0 +1,93 @@
+{
+  "schema": "ai_studio.ui_kit.tokens.v1",
+  "id": "forest",
+  "title": "Forest",
+  "description": "Lab theme: warm cream plates, deep green contours and a moss action colour. Same geometry as Studio B.",
+  "colors": {
+    "shell": "#21362D",
+    "panel": "#FFFDF3",
+    "inset": "#E7ECDE",
+    "inset_rim": "#566453",
+    "scrim": "#21362D8C",
+    "tile": "#FFFDF3",
+    "tile_dim": "#E7ECDE",
+    "tile_rim": "#566453",
+    "ink": "#21362D",
+    "ink_soft": "#566453",
+    "on_panel": "#21362D",
+    "on_panel_soft": "#566453",
+    "on_action": "#FFFFFF",
+    "coin": "#EAC45E",
+    "go": "#22724F",
+    "info": "#1E7FC9",
+    "danger": "#A63A2A",
+    "off": "#8A9689"
+  },
+  "type": {
+    "display": 32,
+    "title": 24,
+    "body": 20,
+    "num": 21,
+    "badge": 16,
+    "row": 18,
+    "row_sub": 14
+  },
+  "geometry": {
+    "rim": 3,
+    "lift": 4,
+    "gap": 12,
+    "pad": 20,
+    "hit": 44,
+    "panel_min_w": 260,
+    "panel_max_w": 560
+  },
+  "canvas": {
+    "ref_short": 390
+  },
+  "art": {
+    "export_scale": 4,
+    "supersample": 16,
+    "resample": "BOX",
+    "deep_step": 0.08,
+    "gloss": 0,
+    "center": 2,
+    "radius": {
+      "panel": 14,
+      "button": 12,
+      "tile": 12,
+      "bar": 11
+    },
+    "slice9": {
+      "panel": [
+        14,
+        14,
+        14,
+        14
+      ],
+      "button": [
+        16,
+        16,
+        16,
+        22
+      ],
+      "tile": [
+        14,
+        14,
+        14,
+        14
+      ],
+      "slider_track": [
+        11,
+        11,
+        11,
+        11
+      ],
+      "slider_fill": [
+        11,
+        11,
+        11,
+        11
+      ]
+    }
+  }
+}

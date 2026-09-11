@@ -1,0 +1,20 @@
+{
+  "pack": "ui-lab-backdrop",
+  "title": "UI Lab Scene Backdrop",
+  "source": "ai-studio",
+  "kind": "scene",
+  "origin": "generated",
+  "license": "preview-only-generated",
+  "license_url": "",
+  "license_kind": "none",
+  "attribution_required": "false",
+  "notice_required": "false",
+  "commercial_use": "false",
+  "modification_allowed": "true",
+  "redistribution_allowed": "false",
+  "publish": "false",
+  "source_page": "features/ui-kit/example/bold/world.provenance.json",
+  "author_vendor": "AI Studio (text-only image generation)",
+  "restricted": true,
+  "description": "Preview-only generated backdrop for the lab HUD scenes. Not approved as a shipping asset; the lab is an example, not a game. Downscaled copy of example/bold/world.png."
+}

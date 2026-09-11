@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "ui-kit",
-  "version": "1.3.0",
+  "version": "1.5.0",
   "title": "UI Kit",
   "status": "reusable",
   "kind": "presentation",
@@ -19,15 +19,20 @@
   "commands": {
     "generate": "node ai_studio/dev_environment/python_run.mjs features/ui-kit/tools/gen_ui_kit.py --out <consumer>/assets/ui",
     "ctest": "ctest --test-dir <consumer build dir> -R test_ui_scale --output-on-failure",
-    "parity": "node --test features/ui-kit/tests/tokens_parity.test.mjs"
+    "parity": "node --test features/ui-kit/tests/tokens_parity.test.mjs",
+    "lab": "node features/ui-kit/example/native/tools/lab.mjs test",
+    "lab_build": "node features/ui-kit/example/native/tools/lab.mjs build"
   },
   "provides": [
-    "ui_tokens_t design tokens with a studio default sheet",
+    "ui_tokens_t design tokens with legacy Studio Default and opt-in Studio B sheets",
     "ui_scale_fit short-edge canvas rule: authored units are a share of the viewport, with no floor or cap",
     "ui_reach touch-or-pointer flag for composition, deliberately outside the sizing path",
     "ui_frame_begin proportional frames and ui_metrics",
     "ui_theme_init token-driven engine styles in g_ui_theme, dropdown included",
     "ui_kit panel/tile/scrim/label/button/meter widgets and the UI_LAYER_* order",
+    "ui_kit composites: labelled and icon buttons by role, counter, captioned meter, badge, sheet (engine modal + panel), toggle/checkbox/radio/slider rows in the kit's own art",
+    "counter and on_world label roles",
+    "example/native: the UI Lab, a standalone engine consumer with six scenes and four themes",
     "ui_safe_area device insets",
     "gen_ui_kit.py slice9 art generator driven by a token sheet"
   ],

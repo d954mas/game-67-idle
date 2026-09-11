@@ -43,7 +43,8 @@ set the bar: a prototype should not have to design a UI before it has a game.
 ## Public surface
 
 - `ui_tokens.h` — `ui_tokens_t`: colour, type ramp, geometry, canvas rule.
-  `ui_tokens_studio_default()` is the look a new prototype wears.
+  `ui_tokens_studio_default()` preserves the legacy template look;
+  `ui_tokens_studio_b()` is the opt-in game-facing preset for new UI examples.
 - `ui_scale_policy.h` — `ui_scale_fit()` and `ui_scale_css_unit()`. Pure
   arithmetic, no engine types, so the sizing rule is testable without a
   window.
@@ -54,15 +55,29 @@ set the bar: a prototype should not have to design a UI before it has a game.
   screen calls the engine's `nt_ui_combo_*` with it and sets `min_width` to its
   own content box). The CONSUMER resolves the atlas regions, because it owns its
   pack builder and generated asset ids.
-- `ui_kit.h` — the widgets: panel, tile, scrim, label, shadowed label, button,
-  meter, slider style, touch-target height, and the `UI_LAYER_*` order every
-  surface sorts on.
+- `ui_kit.h` — the widgets in two tiers. Primitives: panel, tile, scrim, label,
+  shadowed label, button plate, meter, slider style, touch-target height, and
+  the `UI_LAYER_*` order every surface sorts on. Composites: a labelled or icon
+  button by role (`ui_kit_button`, `ui_kit_icon_button`), the round close
+  (`ui_kit_close_button`, the thumb art in the danger colour), a counter, a
+  captioned meter, a badge, a sheet (the engine modal carrying the kit's panel
+  with a title row and that close), and settings rows (toggle, checkbox,
+  radio, slider) that express the engine's stateful widgets in the kit's own
+  art.
+- `example/native/` — the UI Lab: a standalone engine consumer with six scenes
+  and four themes where every widget above is tried in the real renderer, and
+  the example a game copies a screen from. Opt-in; nothing in it is compiled
+  into a game or the template.
 - `ui_safe_area.h` — the device's own insets, in CSS pixels.
 - `tools/gen_ui_kit.py --tokens <sheet> --out <assets/ui>` — draws the slice9 art
   from a token sheet. `art.gloss` (0 when omitted) lightens the top rim of the
   fixed-colour surfaces — panel and tile — so they read as moulded plastic
   rather than flat fills. Grayscale art cannot take it: a runtime multiply tint
   has no headroom above white.
+
+The `on_world` role outlines its glyphs, which the engine builds only with
+`NT_FONT_EMBOLDEN_ENABLED=ON`; a consumer that uses the role sets that option
+before adding the engine.
 
 Text takes `const char *`: the kit does not know how its consumer localizes. A
 consumer with a localization wrapper keeps ONE place where its string type
@@ -78,6 +93,10 @@ becomes a raw pointer and calls the kit from there.
 - `node --test features/ui-kit/tests/tokens_parity.test.mjs` — the token sheet
   the art generator reads and the tokens compiled into `ui_tokens.c` are the
   same numbers. Without it a repaint lands in the art and not in the styles.
+- `node features/ui-kit/example/native/tools/lab.mjs test` — the lab's theme
+  sheets and its compiled tokens agree, and the pack builder and the theme
+  table name the same theme folders. `lab.mjs build` and `lab.mjs shots` are
+  the kit's own consumer proof: every widget in the real renderer.
 - A consumer proves the rest with frames, not asserts: layout and readability
   are judged by looking (`devapi/responsive_viewports.py`).
 
@@ -98,16 +117,22 @@ not be replaced with generated art solely because filenames match.
 
 ## Compatibility
 
-Contract version in `feature.json`. Version 1.3 adds the opt-in relative API;
-existing entry points, token layout and canvas behavior are unchanged. Exact
+Contract version in `feature.json`. Version 1.5 adds the opt-in Studio B sheet
+and `on_action` (zero keeps the historical `on_panel` action-label colour for
+existing game-owned initializers), the composites, the `counter` and
+`on_world` label roles, the toggle, checkbox and radio styles, and the UI
+Lab; it also binds the engine progress bar to the design-size track and fill
+(the engine bakes those borders at source size, so the 4x pair drew bloated).
+Existing entry points and canvas behavior are unchanged. Exact
 consumer dependency records still need a deliberate version acknowledgement
 before strict package validation; this does not migrate their frame mode.
 
 - **PATCH** — art the generator draws differently at identical tokens, a comment,
   an internal helper. Consumers rebuild and regenerate; no source change.
-- **MINOR** — a new token field with a default, a new widget, a new style role.
-  Existing consumers keep compiling; a consumer with its own token sheet gets
-  the new field's default until it adds it.
+- **MINOR** — a new token field with a default, a new widget, a new style role,
+  or an existing widget drawn differently at the same tokens because it was
+  drawn wrong. Existing consumers keep compiling; a consumer with its own
+  token sheet gets the new field's default until it adds it.
 - **MAJOR** — a removed or renamed public symbol, a changed `ui_tokens_t` layout
   that an existing sheet cannot satisfy, or a change to the canvas rule that
   moves layout at the same tokens. Consumers edit source and re-shoot their
@@ -116,7 +141,7 @@ before strict package validation; this does not migrate their frame mode.
 ## Extension points
 
 **Repainting.** The tokens are the seam. A game that wants its own face copies
-`tokens/studio_default.json`, edits it, and passes its own `ui_tokens_t` to
+`tokens/studio_b.json` or `tokens/studio_default.json`, edits it, and passes its own `ui_tokens_t` to
 `ui_theme_init` — the feature is not touched and nothing is forked:
 
 ```c
@@ -137,6 +162,16 @@ Partial overrides work the same way: start from a copy of the default struct,
 change the fields that matter, pass that. A game that only wants different
 action colours never touches geometry, and its art keeps regenerating from the
 default sheet.
+
+## Presets
+
+`studio_default` remains the legacy template preset. `studio_b` is an opt-in
+light game UI: dark blue-grey contours, shallow action ledges, white panels and
+tiles, and white labels on its green action fill; blue is the rewarded-ad button
+and nothing else, the way the portals read it. A new UI polygon/example selects
+Studio B explicitly; an existing template or game stays on `studio_default`
+until its game-owned theme binding chooses `ui_tokens_studio_b()` and regenerates
+its matching art.
 
 **Art.** `ui_theme_art_t` is by-value region refs, so a consumer may bind fewer
 regions than the kit knows about; an unbound region simply does not draw.

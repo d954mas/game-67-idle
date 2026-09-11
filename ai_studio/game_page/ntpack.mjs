@@ -4,7 +4,7 @@
 import { gzipSync } from "node:zlib";
 
 const NT_PACK_MAGIC = 0x4b41504e; // "NPAK"
-const NT_PACK_VERSION = 2;
+const NT_PACK_VERSION = 3;
 const PACK_HEADER_SIZE = 32;
 const ASSET_ENTRY_SIZE = 24;
 
@@ -267,7 +267,7 @@ export function parseNtpack(buffer, options = {}) {
       named: names.has(resourceId),
       offset,
       size,
-      formatVersion: view.getUint16(at + 16, true),
+      ownerEntry: view.getUint16(at + 16, true),
       type,
       typeName: ASSET_TYPE_NAMES[type] || "UNKNOWN",
       typeTag: type === 2 && inBounds ? textureFormatTag(view, offset, size) : (ASSET_TYPE_NAMES[type] || "UNKNOWN"),

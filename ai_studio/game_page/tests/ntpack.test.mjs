@@ -26,7 +26,7 @@ function buildPack(assets) {
   const view = new DataView(bytes.buffer);
   view.setUint32(0, 0x4b41504e, true);
   view.setUint32(4, 0, true);
-  view.setUint16(8, 2, true);
+  view.setUint16(8, 3, true);
   view.setUint16(10, placed.length, true);
   view.setUint32(12, dataStart, true);
   view.setUint32(16, total, true);
@@ -36,7 +36,7 @@ function buildPack(assets) {
     view.setBigUint64(at, asset.id, true);
     view.setUint32(at + 8, source.offset, true);
     view.setUint32(at + 12, source.data.length, true);
-    view.setUint16(at + 16, 1, true);
+    view.setUint16(at + 16, asset.aliasOf != null ? asset.aliasOf : index, true);
     view.setUint8(at + 18, asset.type);
     if (asset.aliasOf == null) bytes.set(asset.data, asset.offset);
   });
@@ -66,7 +66,7 @@ test("parseNtpack reads entries, texture tags, duplicates, and the type summary"
   const names = new Map([[hashHex(0x1111n), "assets/textures/tile.png"]]);
   const dump = parseNtpack(pack, { names });
 
-  assert.equal(dump.header.version, 2);
+  assert.equal(dump.header.version, 3);
   assert.equal(dump.header.assetCount, 3);
   assert.equal(dump.entries[0].name, "assets/textures/tile.png");
   assert.equal(dump.entries[0].typeTag, "TEX|RAW");

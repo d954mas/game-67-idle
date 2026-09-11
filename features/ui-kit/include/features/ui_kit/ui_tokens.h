@@ -38,7 +38,7 @@ typedef struct {
     // Currency and actions.
     uint32_t coin;
     uint32_t go;
-    uint32_t info;
+    uint32_t info; // the rewarded-ad button, and only that: portals read blue as "ad"
     uint32_t danger;
     uint32_t off;
 
@@ -81,11 +81,21 @@ typedef struct {
     // The kit's slice9 art ships above its on-screen size, so a style drawing
     // it must shrink the baked borders by this factor. 1 / export scale.
     float slice9_scale;
+
+    // Text on a coloured action. Zero preserves the historical on_panel role
+    // for game-owned positional and designated initializers that predate this
+    // optional token.
+    uint32_t on_action;
 } ui_tokens_t;
 
 // The studio's default look: what a new prototype wears before anyone repaints
 // it. Mirrors tokens/studio_default.json, which the art generator reads; the
 // two are held together by tests/tokens_parity.test.mjs.
 const ui_tokens_t *ui_tokens_studio_default(void);
+
+// The opt-in Studio B look for game-facing prototypes. Its matching art sheet
+// is tokens/studio_b.json; existing consumers keep studio_default unless they
+// explicitly select this preset.
+const ui_tokens_t *ui_tokens_studio_b(void);
 
 #endif /* FEATURE_UI_KIT_TOKENS_H */

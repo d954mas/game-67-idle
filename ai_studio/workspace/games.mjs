@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -361,6 +361,8 @@ function worktreeBinaryView(root, path) {
   const absolute = join(root, path);
   if (!existsSync(absolute)) return { view: null, error: null };
   try {
+    // A nested repository lists as a directory; it holds no bytes to compare.
+    if (!statSync(absolute).isFile()) return { view: null, error: null };
     const bytes = readFileSync(absolute);
     if (!isBinaryView(path, bytes)) return { view: null, error: null };
     return { view: { path, source: "worktree", digest: sha256(bytes) }, error: null };

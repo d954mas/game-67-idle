@@ -189,7 +189,7 @@ int main(int argc, char *argv[]) {
     atlas_opts.margin = 8;
     atlas_opts.extrude = 2;
     atlas_opts.premultiplied = true;
-    atlas_opts.compress = NULL;
+    atlas_opts.compress = (nt_basisu_encode_opts_t){0};
     atlas_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR_MIPMAP_LINEAR;
     atlas_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     atlas_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
@@ -263,7 +263,7 @@ int main(int argc, char *argv[]) {
     icons_opts.extrude = 1;               // outline lands in the extrude gutter
     icons_opts.premultiplied = true;      // affects ONLY the packed texture (ui parity);
                                           // debug-PNG is copied BEFORE premultiply -> straight alpha
-    icons_opts.compress = NULL;           // parity with ui atlas (raw RGBA page)
+    icons_opts.compress = (nt_basisu_encode_opts_t){0};   // parity with ui atlas (raw RGBA page)
     icons_opts.debug_png = true;          // -> <CMAKE_BINARY_DIR>/pack/icons_page0.png
     icons_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     icons_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;

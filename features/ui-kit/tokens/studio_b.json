@@ -1,0 +1,68 @@
+{
+  "schema": "ai_studio.ui_kit.tokens.v1",
+  "id": "studio_b",
+  "title": "Studio B",
+  "description": "Opt-in game-facing studio preset: white plates, blue-grey contours and shallow dark action ledges. Mirrored by src/ui_tokens.c for runtime styles.",
+  "colors": {
+    "shell": "#172538",
+    "panel": "#FFFDF9",
+    "inset": "#E8EEF5",
+    "inset_rim": "#526175",
+    "scrim": "#1725388C",
+    "tile": "#FFFDF9",
+    "tile_dim": "#E8EEF5",
+    "tile_rim": "#526175",
+    "ink": "#172538",
+    "ink_soft": "#526175",
+    "on_panel": "#172538",
+    "on_panel_soft": "#526175",
+    "on_action": "#FFFFFF",
+    "coin": "#F5BF32",
+    "go": "#1F9D55",
+    "info": "#087BA4",
+    "danger": "#B42318",
+    "off": "#8793A4"
+  },
+  "type": {
+    "display": 32,
+    "title": 24,
+    "body": 20,
+    "num": 21,
+    "badge": 16,
+    "row": 18,
+    "row_sub": 14
+  },
+  "geometry": {
+    "rim": 3,
+    "lift": 4,
+    "gap": 12,
+    "pad": 20,
+    "hit": 44,
+    "panel_min_w": 260,
+    "panel_max_w": 560
+  },
+  "canvas": {
+    "ref_short": 390
+  },
+  "art": {
+    "export_scale": 4,
+    "supersample": 16,
+    "resample": "BOX",
+    "deep_step": 0.08,
+    "gloss": 0,
+    "center": 2,
+    "radius": {
+      "panel": 14,
+      "button": 12,
+      "tile": 12,
+      "bar": 11
+    },
+    "slice9": {
+      "panel": [14, 14, 14, 14],
+      "button": [16, 16, 16, 22],
+      "tile": [14, 14, 14, 14],
+      "slider_track": [11, 11, 11, 11],
+      "slider_fill": [11, 11, 11, 11]
+    }
+  }
+}
