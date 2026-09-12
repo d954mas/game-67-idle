@@ -60,7 +60,7 @@ static void volume_row(nt_ui_context_t *ctx, const ui_metrics_t *m, LocKey0 name
                        float *value, void (*commit)(float), bool interactive) {
     const LocStr row = loc_settings_volume_row(loc_by_key(name), (int64_t)(*value * 100.0F + 0.5F));
     const float before = *value;
-    nt_ui_slider_style_t slider = ui_kit_slider_style(m);
+    nt_ui_slider_style_t slider = *ui_kit_slider_style(m);
     const bool landscape = m->view_w > m->view_h;
     const float row_width = m->panel_w - m->pad * 2.0F - m->gap;
     slider.track_w = landscape ? row_width * .56F - m->gap * .4F : row_width;
@@ -198,7 +198,7 @@ void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
     const float available_h = m.view_h - m.safe_t - m.safe_b;
     const float panel_h = fminf(available_h * .86F, fminf(available_w, available_h) * 1.15F);
     // The body scrolls inside the available viewport; the close action stays outside it.
-    ui_kit_scrim(ctx);
+    ui_kit_scrim(ctx, true);
     ui_kit_panel_begin(ctx, &(Clay_ElementDeclaration){
                                 .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
                                              .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER,

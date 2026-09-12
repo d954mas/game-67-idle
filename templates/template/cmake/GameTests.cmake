@@ -972,6 +972,7 @@ if(NOT EMSCRIPTEN)
                 "${ENGINE_DIR}/deps/cjson/cJSON.c"
         INCLUDES src "${GAME_STATE_INC}" "${PLATFORM_SDK_INC}"
                  "${ENGINE_DIR}/engine" "${ENGINE_DIR}/deps/cjson"
+        LIBS nt_log_interface
         DEFINES NT_DEVAPI_ENABLED=0
         TIER core WARNINGS)
 

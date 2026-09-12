@@ -193,5 +193,6 @@ if(NOT EMSCRIPTEN)
         SOURCES "${REMOTE_IMAGE_DIR}/tests/test_remote_image.c"
                 "${REMOTE_IMAGE_SRC}/remote_image.c"
         DEFINES REMOTE_IMAGE_TESTING=1
+        LIBS nt_gfx_interface
         INCLUDES "${REMOTE_IMAGE_INC}" "${ENGINE_DIR}/engine" "${ENGINE_DIR}/shared/include")
 endif()
