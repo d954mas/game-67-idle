@@ -66,6 +66,22 @@ static void buttons(nt_ui_context_t *ctx, const ui_metrics_t *m) {
     }
 }
 
+// Every glyph of the set in ink, wrapped to the sheet, so a missing or a
+// misnamed file shows as a hole here before it shows in a game.
+static void icons(nt_ui_context_t *ctx, const ui_metrics_t *m) {
+    lab_section(ctx, "Иконки");
+    const float cell = m->hit * 0.8F;
+    int per_row = (int)((m->panel_w - m->pad * 2.0F + m->gap) / (cell + m->gap));
+    per_row = per_row < 1 ? 1 : per_row;
+    for (int first = 0; first < UI_ICON_COUNT; first += per_row) {
+        ROW_BEGIN(*m) {
+            for (int i = first; i < UI_ICON_COUNT && i < first + per_row; ++i) {
+                ui_kit_icon_tinted(ctx, ui_kit_icon_ref((ui_icon_t)i), cell, ui_theme_tokens()->ink);
+            }
+        }
+    }
+}
+
 static void text(nt_ui_context_t *ctx, const ui_metrics_t *m) {
     (void)m;
     lab_section(ctx, "Текст");
@@ -168,6 +184,7 @@ void scene_components_build(nt_ui_context_t *ctx) {
                                                                  .childGap = (uint16_t)(m.gap * 0.6F),
                                                                  .padding = {.left = (uint16_t)m.pad, .right = (uint16_t)m.pad, .bottom = (uint16_t)m.pad}}});
         buttons(ctx, &m);
+        icons(ctx, &m);
         text(ctx, &m);
         counters(ctx, &m);
         controls(ctx, &m);

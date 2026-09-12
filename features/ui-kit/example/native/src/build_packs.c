@@ -5,6 +5,8 @@
  * Run from the engine root so the shader resource ids match other consumers. */
 #include "nt_builder.h"
 
+#include "features/ui_kit/ui_icons.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -153,6 +155,16 @@ int main(int argc, char *argv[]) {
         char rel[256];
         (void)snprintf(name, sizeof name, "icon/%s", ICONS[i]);
         (void)snprintf(rel, sizeof rel, STUDIO_FROM_LAB "/templates/template/assets/icons/%s.png", ICON_FILES[i]);
+        nt_atlas_sprite_opts_t opts = nt_atlas_sprite_opts_defaults();
+        opts.name = name;
+        nt_atlas_add(ui, path_join(lab_dir, rel), &opts);
+    }
+    /* The kit's own glyphs, under `kit/` as the theme binds them. */
+    for (int i = 0; i < UI_ICON_COUNT; ++i) {
+        char name[64];
+        char rel[256];
+        (void)snprintf(name, sizeof name, "kit/%s", ui_icon_name((ui_icon_t)i));
+        (void)snprintf(rel, sizeof rel, STUDIO_FROM_LAB "/features/ui-kit/assets/icons/%s.png", ui_icon_name((ui_icon_t)i));
         nt_atlas_sprite_opts_t opts = nt_atlas_sprite_opts_defaults();
         opts.name = name;
         nt_atlas_add(ui, path_join(lab_dir, rel), &opts);

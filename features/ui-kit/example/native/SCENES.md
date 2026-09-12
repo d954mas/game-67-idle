@@ -50,10 +50,10 @@ theme keeps the same reading:
 
 | Role | Colour | Used for | In the lab |
 | --- | --- | --- | --- |
-| `UI_KIT_BUTTON_NEUTRAL` | white tile, ink label | a regular action, Close, Cancel, an unselected ability | Опции, ЗАКРЫТЬ, Отмена |
+| `UI_KIT_BUTTON_NEUTRAL` | white tile, ink label | a regular action, Close, Cancel, an unselected ability | Опции, ЗАКРЫТЬ, Отмена, the round close cross |
 | `UI_KIT_BUTTON_CONFIRM` | green (`go`) | yes, the main action, a purchase for coins with the price and the coin on the button | УЛУЧШИТЬ, the upgrade prices, ДАЛЬШЕ |
 | `UI_KIT_BUTTON_AD` | blue (`info`) | a rewarded ad and nothing else: Poki reads a blue button as "watch an ad" | `hud/ad` (+240 with the play glyph), Реклама |
-| `UI_KIT_BUTTON_DANGER` | red (`danger`) | a destructive action, always behind a confirmation | Сбросить прогресс, the round close cross |
+| `UI_KIT_BUTTON_DANGER` | red (`danger`) | a destructive action, always behind a confirmation | Сбросить прогресс |
 
 `button_info` stays in the theme as an alias of `button_ad` for a game that
 already binds it; `UI_KIT_BUTTON_INFO` is gone.
@@ -90,8 +90,9 @@ Kit, open:
 - The neutral button's hover is pure white on a near-white tile: invisible. A
   hover to `tile_dim`, or a scale-only hover, would read. Left as is because
   the template's look depends on it.
-- Icons: the lab uses five CC0 demo glyphs; gear, close, check, lock and star
-  are text or absent. A kit icon set is a separate asset task.
+- Icons: the kit ships its glyph set (`features/ui-kit/assets/icons`, CC0
+  white masks, `ui_icons.h`); the lab packs it under `kit/` and binds it with
+  `ui_theme_art_bind_icons`. The five coloured demo icons stay the template's.
 
 Engine, after the update to 37d7f117 (the lab builds and runs on it):
 

@@ -12,6 +12,7 @@
 #include "ui/nt_ui_scroll.h"
 #include "ui/nt_ui_slider.h"
 
+#include "features/ui_kit/ui_icons.h"
 #include "features/ui_kit/ui_tokens.h"
 
 // The tokens as engine styles. All styling lives here, separate from the logic
@@ -36,6 +37,9 @@ typedef struct {
     nt_atlas_region_ref_t thumb;
     nt_atlas_region_ref_t icon_play;
     nt_atlas_region_ref_t header; // the band across the top of a titled plate
+    // The glyph set by ui_icon_t: white masks the kit tints. A zeroed entry
+    // does not draw, and the composites that use one fall back to text.
+    nt_atlas_region_ref_t icons[UI_ICON_COUNT];
     // The engine's radial SDF material (the sprite_radial + radial shaders,
     // attr_map a_radial@4 and a_layout@7), for the discs the kit draws without
     // art: crisp at every size. id 0 = the kit falls back to the thumb art.
@@ -56,7 +60,7 @@ typedef struct {
     nt_ui_button_style_t button_ad;      // the rewarded-ad button: blue, and blue is used for nothing else (portal rule)
     nt_ui_button_style_t button_info;    // the same style under its earlier name; existing games keep compiling
     nt_ui_button_style_t button_danger;  // destructive action
-    nt_ui_button_style_t button_close;   // the round dismiss: the thumb art in the danger colour
+    nt_ui_button_style_t button_close;   // the round dismiss: the thumb art on the neutral tile, the glyph in ink
     nt_ui_slider_style_t slider;         // track + fill + thumb
     nt_ui_dropdown_style_t dropdown;     // pick-one list: tile trigger, tile panel
     nt_ui_scroll_style_t scroll;         // a scrolled list's bar, in CSS pixels
@@ -91,6 +95,11 @@ typedef struct {
     // The label of a disabled button: soft ink on the off fill.
     nt_ui_label_style_t button_label_disabled;
 } ui_theme_t;
+
+// Fills `art->icons` from the atlas where the consumer packed the kit's glyphs
+// as `<prefix>/<name>` (the names of ui_icons.h), so a game binds the set in
+// one line. Regions resolve lazily; a glyph the game did not pack stays zero.
+void ui_theme_art_bind_icons(ui_theme_art_t *art, nt_resource_t atlas, const char *prefix);
 
 // Builds every style above from `tokens` and binds `art`. `tokens` must outlive
 // the process (a static, which is what ui_tokens_studio_default returns).

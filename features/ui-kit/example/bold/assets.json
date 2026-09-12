@@ -1,0 +1,24 @@
+{
+  "schema": "ai_studio.asset_records.v1",
+  "scope": "features:ui-kit-bold-example",
+  "assets": [
+    {
+      "asset_id": "ui-kit-bold__world__preview-only",
+      "path": "features/ui-kit/example/bold/world.png",
+      "classification": "generated-procedural-output",
+      "license": "pending",
+      "license_url": "",
+      "license_kind": "unknown",
+      "publish": "false",
+      "redistribution_allowed": "false",
+      "commercial_use": "false",
+      "modification_allowed": "true",
+      "author_vendor": "AI Studio (text-only image generation)",
+      "origin": "ai",
+      "provenance": "Generated from a text prompt (features/ui-kit/example/bold/world.provenance.json) as the preview backdrop of the browser example; awaits the lead's disposition on studio-owned generated output",
+      "source_page": "features/ui-kit/example/bold/world.provenance.json",
+      "sha256": "67c67d03473e0533fe9a44b533264e16b0560f710aa876643ce51d99ebcdb4f6",
+      "bytes": 1525563
+    }
+  ]
+}

@@ -1,6 +1,18 @@
 #include "features/ui_kit/ui_theme.h"
 
+#include "hash/nt_hash.h"
+
+#include <stdio.h>
+
 ui_theme_t g_ui_theme;
+
+void ui_theme_art_bind_icons(ui_theme_art_t *art, nt_resource_t atlas, const char *prefix) {
+    for (int i = 0; i < UI_ICON_COUNT; ++i) {
+        char name[96];
+        (void)snprintf(name, sizeof name, "%s/%s", prefix, ui_icon_name((ui_icon_t)i));
+        art->icons[i] = nt_atlas_ref(atlas, nt_hash64_str(name).value);
+    }
+}
 
 // Hover lightens the tint ~12% per channel (saturating); pressed drops to the
 // deep step so the whole button reads pushed into its lift shadow. The art is
@@ -132,8 +144,10 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     g_ui_theme.button_info = g_ui_theme.button_ad;
     g_ui_theme.button_danger = action_button(base, t->danger);
 
-    // The round close: the thumb art (a circle with the contour rim) takes the
-    // danger tint; a circle has no ledge to sink into, so the press is scale alone.
+    // The round close: the thumb art (a circle with the contour rim) in the
+    // neutral tile colour, because dismissing is the most frequent tap and red
+    // is kept for what destroys; a circle has no ledge to sink into, so the
+    // press is scale alone.
     nt_ui_button_style_t round = base;
     round.idle.bg = g_ui_theme.art.thumb;
     round.hover.bg = g_ui_theme.art.thumb;
@@ -141,7 +155,9 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     round.disabled.bg = g_ui_theme.art.thumb;
     round.pressed.offset_y = 0.0F;
     round.pressed.scale = 0.92F;
-    g_ui_theme.button_close = action_button(round, t->danger);
+    g_ui_theme.button_close = action_button(round, t->tile);
+    g_ui_theme.button_close.hover.bg_tint = 0xFFFFFFFFU;
+    g_ui_theme.button_close.pressed.bg_tint = t->tile_dim;
 
     // Slider sizes are CSS pixels; ui_kit_slider_style converts them per frame.
     nt_ui_slider_style_t s = nt_ui_slider_style_defaults();
@@ -181,7 +197,11 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     dd.row_height = (uint16_t)t->hit;
     dd.min_width = (uint16_t)t->panel_min_w;
     dd.pad = (uint16_t)(t->gap * 0.6F);
-    dd.chevron_size = 0U;     // the kit ships no chevron sprite; the open list is the affordance
+    // The trigger's chevron is the kit's glyph in ink; a consumer that packed
+    // no glyphs gets the plain trigger, and the open list is the affordance.
+    dd.chevron = g_ui_theme.art.icons[UI_ICON_ARROW_DOWN];
+    dd.chevron_tint = t->ink;
+    dd.chevron_size = (uint16_t)(dd.chevron.atlas.id != 0U ? t->hit * 0.4F : 0.0F);
     dd.max_visible_rows = 6U; // a longer list scrolls instead of leaving the panel
     dd.state_speed = 12.0F;
     dd.open_ease_speed = 16.0F;

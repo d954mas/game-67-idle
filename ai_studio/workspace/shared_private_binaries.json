@@ -9,24 +9,6 @@
   ],
   "entries": [
     {
-      "path": "templates/template/assets/ui/button.png",
-      "game_id": "planet-eater",
-      "private_path": "assets/ui/button.png",
-      "sha256": "f84774fbcf5f90db253ef02e66cde7661154631dbd2a32c42de33cbffb5114a7",
-      "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
-      "approved_by": "lead",
-      "approved_on": "2026-09-10"
-    },
-    {
-      "path": "templates/template/assets/ui/button.png",
-      "game_id": "slime-eater-evolution",
-      "private_path": "assets/ui/button.png",
-      "sha256": "f84774fbcf5f90db253ef02e66cde7661154631dbd2a32c42de33cbffb5114a7",
-      "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
-      "approved_by": "lead",
-      "approved_on": "2026-09-10"
-    },
-    {
       "path": "templates/template/assets/ui/icon_play.png",
       "game_id": "planet-eater",
       "private_path": "assets/ui/icon_play.png",
@@ -49,24 +31,6 @@
       "game_id": "slime-eater-evolution",
       "private_path": "assets/ui/icon_play.png",
       "sha256": "04863a6eebd0ff1d6fe964248969ca8da30469b974699986265a7d95bc31b3ac",
-      "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
-      "approved_by": "lead",
-      "approved_on": "2026-09-10"
-    },
-    {
-      "path": "templates/template/assets/ui/panel.png",
-      "game_id": "planet-eater",
-      "private_path": "assets/ui/panel.png",
-      "sha256": "d7258ce9ed899ca260828df10dc2bf4d48eb56683dc03f0b5c8f3142e3d63376",
-      "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
-      "approved_by": "lead",
-      "approved_on": "2026-09-10"
-    },
-    {
-      "path": "templates/template/assets/ui/panel.png",
-      "game_id": "slime-eater-evolution",
-      "private_path": "assets/ui/panel.png",
-      "sha256": "d7258ce9ed899ca260828df10dc2bf4d48eb56683dc03f0b5c8f3142e3d63376",
       "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
       "approved_by": "lead",
       "approved_on": "2026-09-10"
@@ -121,42 +85,6 @@
       "game_id": "slime-eater-evolution",
       "private_path": "assets/ui/slider_fill_sm.png",
       "sha256": "34025f64be1360854e7b76ba2f326f653c8c8e1814fdd54cf5078512a6ff1400",
-      "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
-      "approved_by": "lead",
-      "approved_on": "2026-09-10"
-    },
-    {
-      "path": "templates/template/assets/ui/slider_thumb.png",
-      "game_id": "planet-eater",
-      "private_path": "assets/ui/slider_thumb.png",
-      "sha256": "d71189eea7ae8d723a1237be8b4febd0cb821b7fd8053a1dfefddec53615232f",
-      "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
-      "approved_by": "lead",
-      "approved_on": "2026-09-10"
-    },
-    {
-      "path": "templates/template/assets/ui/slider_thumb.png",
-      "game_id": "slime-eater-evolution",
-      "private_path": "assets/ui/slider_thumb.png",
-      "sha256": "d71189eea7ae8d723a1237be8b4febd0cb821b7fd8053a1dfefddec53615232f",
-      "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
-      "approved_by": "lead",
-      "approved_on": "2026-09-10"
-    },
-    {
-      "path": "templates/template/assets/ui/slider_track.png",
-      "game_id": "planet-eater",
-      "private_path": "assets/ui/slider_track.png",
-      "sha256": "d9e0940c1b9efbbf8cdc88c7bfa4c4936712e3dc9b33b9ddba6aaacd8fc2c882",
-      "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
-      "approved_by": "lead",
-      "approved_on": "2026-09-10"
-    },
-    {
-      "path": "templates/template/assets/ui/slider_track.png",
-      "game_id": "slime-eater-evolution",
-      "private_path": "assets/ui/slider_track.png",
-      "sha256": "d9e0940c1b9efbbf8cdc88c7bfa4c4936712e3dc9b33b9ddba6aaacd8fc2c882",
       "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
       "approved_by": "lead",
       "approved_on": "2026-09-10"
@@ -175,24 +103,6 @@
       "game_id": "slime-eater-evolution",
       "private_path": "assets/ui/slider_track_sm.png",
       "sha256": "dccd9f5cd7e0bb940bbee63f628983cc9b5fb83b70bdb6d61cc2cdc4af0be402",
-      "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
-      "approved_by": "lead",
-      "approved_on": "2026-09-10"
-    },
-    {
-      "path": "templates/template/assets/ui/tile.png",
-      "game_id": "planet-eater",
-      "private_path": "assets/ui/tile.png",
-      "sha256": "6b33c2513d35533488008a5fd712e1f13ad4aa1825e7fa92f431919b423f746c",
-      "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
-      "approved_by": "lead",
-      "approved_on": "2026-09-10"
-    },
-    {
-      "path": "templates/template/assets/ui/tile.png",
-      "game_id": "slime-eater-evolution",
-      "private_path": "assets/ui/tile.png",
-      "sha256": "6b33c2513d35533488008a5fd712e1f13ad4aa1825e7fa92f431919b423f746c",
       "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
       "approved_by": "lead",
       "approved_on": "2026-09-10"

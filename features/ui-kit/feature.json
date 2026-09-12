@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "ui-kit",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "title": "UI Kit",
   "status": "reusable",
   "kind": "presentation",
@@ -13,7 +13,7 @@
   ],
   "dependencies": [
     "neotolis-engine nt_ui widgets, atlas, and Clay",
-    "consumer-owned pack builder for the nine kit regions",
+    "consumer-owned pack builder for the ten kit regions and the glyph set",
     "Pillow for the art generator (ai_studio/dev_environment)"
   ],
   "commands": {
@@ -21,7 +21,8 @@
     "ctest": "ctest --test-dir <consumer build dir> -R test_ui_scale --output-on-failure",
     "parity": "node --test features/ui-kit/tests/tokens_parity.test.mjs",
     "lab": "node features/ui-kit/example/native/tools/lab.mjs test",
-    "lab_build": "node features/ui-kit/example/native/tools/lab.mjs build"
+    "lab_build": "node features/ui-kit/example/native/tools/lab.mjs build",
+    "icons": "node --test features/ui-kit/tests/icons_manifest.test.mjs"
   },
   "provides": [
     "ui_tokens_t design tokens with legacy Studio Default and opt-in Studio B sheets",
@@ -34,7 +35,8 @@
     "counter and on_world label roles",
     "example/native: the UI Lab, a standalone engine consumer with six scenes and four themes",
     "ui_safe_area device insets",
-    "gen_ui_kit.py slice9 art generator driven by a token sheet"
+    "gen_ui_kit.py slice9 art generator driven by a token sheet",
+    "assets/icons: the kit's CC0 glyph set as white masks, named by ui_icons.h and bound in one call (ui_theme_art_bind_icons)"
   ],
   "flags": {
     "feature": "FEATURE_UI_KIT=1 in consuming game/template targets"
@@ -113,6 +115,11 @@
       "slot": "header",
       "kind": "atlas-region",
       "hint": "The band across the top of a titled plate, in the header colour; rounded on top only."
+    },
+    {
+      "slot": "icons",
+      "kind": "atlas-region-set",
+      "hint": "The glyphs of ui_icons.h packed as `<prefix>/<name>` from features/ui-kit/assets/icons, or a game's own same-named masks; white on transparent, tinted at runtime."
     }
   ]
 }

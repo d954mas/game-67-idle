@@ -60,7 +60,8 @@ set the bar: a prototype should not have to design a UI before it has a game.
   shadowed label, button plate, meter, slider style, touch-target height, and
   the `UI_LAYER_*` order every surface sorts on. Composites: a labelled or icon
   button by role (`ui_kit_button`, `ui_kit_icon_button`), the round close
-  (`ui_kit_close_button`, the thumb art in the danger colour), the tinted
+  (`ui_kit_close_button`, the thumb art on the neutral tile with the close
+  glyph in ink), the tinted
   plate and disc containers (`ui_kit_plate_begin`, `ui_kit_disc_begin`: a
   socket, a swatch, a badge, where a Clay rectangle would draw an unantialiased
   border), a counter, a captioned meter, a badge, a titled plate
@@ -69,6 +70,12 @@ set the bar: a prototype should not have to design a UI before it has a game.
   rows (toggle, checkbox, radio, slider, dropdown) that express the engine's
   stateful widgets in the kit's own art, the theme's scroll bar, and
   `ui_kit_color`.
+- `ui_icons.h` and `assets/icons/` — the glyph set: white masks (CC0, see
+  `assets/icons/README.md`) named once in an X-macro, so the enum, the pack
+  builder's region names and `ui_theme_art_bind_icons` cannot drift. A game
+  packs the files under one prefix and binds them in one call; a game with its
+  own glyphs replaces any file with a same-named mask. `ui_kit_icon_ref` and
+  `ui_kit_icon_tinted` draw one in any colour.
 - `example/native/` — the UI Lab: a standalone engine consumer with six scenes
   and four themes where every widget above is tried in the real renderer, and
   the example a game copies a screen from. Opt-in; nothing in it is compiled
@@ -122,7 +129,11 @@ not be replaced with generated art solely because filenames match.
 
 ## Compatibility
 
-Contract version in `feature.json`. Version 1.6 adds the `header` colour token
+Contract version in `feature.json`. Version 1.7 adds the glyph set
+(`ui_icons.h`, `assets/icons/`, the `icons` art slots and
+`ui_theme_art_bind_icons`), draws the close cross and the dropdown chevron
+from it when bound, and moves the round close to the neutral tile colour.
+Version 1.6 adds the `header` colour token
 and art slot (0 = shell), the titled plate and dropdown row, the tinted plate
 and disc, the theme scroll style, the disabled-label role, outlined action
 labels (a consumer builds the engine with `NT_FONT_EMBOLDEN_ENABLED=ON` or the

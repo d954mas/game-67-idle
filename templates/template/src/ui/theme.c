@@ -13,7 +13,7 @@ static ui_tokens_t s_tokens;
 void theme_init(nt_resource_t atlas) {
     // Region refs resolve lazily on first emit, once the atlas resource is
     // ready, so this may run before the pack has landed.
-    const ui_theme_art_t art = {
+    ui_theme_art_t art = {
         .panel = nt_atlas_ref(atlas, ASSET_ATLAS_REGION_UI_PANEL.value),
         .button = nt_atlas_ref(atlas, ASSET_ATLAS_REGION_UI_BUTTON.value),
         .tile = nt_atlas_ref(atlas, ASSET_ATLAS_REGION_UI_TILE.value),
@@ -23,7 +23,9 @@ void theme_init(nt_resource_t atlas) {
         .slider_fill_sm = nt_atlas_ref(atlas, ASSET_ATLAS_REGION_UI_SLIDER_FILL_SM.value),
         .thumb = nt_atlas_ref(atlas, ASSET_ATLAS_REGION_UI_SLIDER_THUMB.value),
         .icon_play = nt_atlas_ref(atlas, ASSET_ATLAS_REGION_UI_ICON_PLAY.value),
+        .header = nt_atlas_ref(atlas, ASSET_ATLAS_REGION_UI_HEADER.value),
     };
+    ui_theme_art_bind_icons(&art, atlas, "kit");
     s_tokens = *ui_tokens_studio_default();
     ui_theme_init(&s_tokens, &art);
 }

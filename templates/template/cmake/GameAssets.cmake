@@ -8,7 +8,8 @@ file(GLOB_RECURSE GAME_PACK_SOURCE_ASSETS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3"
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/*.png"
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/*.vert"
-    "${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav")
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav"
+    "${UI_KIT_DIR}/assets/icons/*.png")
 
 # --- asset pack builder (runs at build time -> game.ntpack + asset-id header) ---
 if(NOT EMSCRIPTEN)
@@ -34,9 +35,10 @@ if(NOT EMSCRIPTEN)
     # compiling build_packs.c, which includes it.
     add_executable(build_game_packs src/build_packs.c
         "${GAME_SOURCE_GENERATED_DIR}/loc_charset.gen.h")
-    target_include_directories(build_game_packs PRIVATE src)
+    target_include_directories(build_game_packs PRIVATE src "${UI_KIT_INC}")
     target_link_libraries(build_game_packs PRIVATE nt_builder nt_log nt_meshwire)
-    target_compile_definitions(build_game_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_definitions(build_game_packs PRIVATE _CRT_SECURE_NO_WARNINGS
+        UI_KIT_ASSETS_DIR="${UI_KIT_DIR}/assets")
     target_compile_options(build_game_packs PRIVATE -U_DLL)
     nt_set_sanitizer_flags(build_game_packs)
     set_target_properties(build_game_packs PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}")

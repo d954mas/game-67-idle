@@ -34,18 +34,23 @@ twice: panel and tile colours are baked into the PNGs, so art from one sheet
 under the styles of another is a repaint that only half happened. Omitting
 `--tokens` draws `studio_default.json`, the legacy template look.
 
-That writes nine PNGs: `panel`, `button`, `tile`, `slider_track`, `slider_fill`,
-`slider_track_sm`, `slider_fill_sm`, `slider_thumb`, `icon_play`. Record them in
+That writes ten PNGs: `panel`, `button`, `tile`, `header`, `slider_track`,
+`slider_fill`, `slider_track_sm`, `slider_fill_sm`, `slider_thumb`,
+`icon_play`. Record them in
 the consumer's asset pack manifest with licence, provenance, origin and a
 `sha256` per file, and re-run this after any token change. The legacy default sheet
 uses working supersample 16 and BOX area downsampling; export scale and slice9
 geometry are independent of this offline quality setting. `art.resample` can
 explicitly select another Pillow resampling filter.
 
+The glyph set is not generated: `features/ui-kit/assets/icons/<name>.png` are
+white masks (CC0, provenance in `assets/icons/README.md`) the pack builder
+reads in place. A game with its own glyphs packs same-named masks of its own.
+
 ## 3. Pack them
 
 The pack builder stays game code — the feature never writes to a pack. Add the
-nine files to the `ui` atlas with the slice9 borders from the token sheet's
+ten files to the `ui` atlas with the slice9 borders from the token sheet's
 `art.slice9`, multiplied by `art.export_scale`, and give the atlas mipmaps: the
 kit ships above its on-screen size, so without mips it aliases. Use
 `NT_TEXTURE_DEFAULT_FILTER_LINEAR_MIPMAP_LINEAR` for minification and
@@ -57,6 +62,11 @@ the export multiplier: the engine slider bakes its slice9 at source-pixel size
 (neotolis-engine#349) while everything drawn through an image style scales the
 borders down by `tokens->slice9_scale`.
 
+Pack the glyphs as plain sprites named `<prefix>/<name>` for every name of
+`ui_icons.h` (`UI_KIT_ICONS`, `ui_icon_name`), as the template does under
+`kit/`; the builder includes that header, so a new glyph in the kit is packed
+without a game edit.
+
 ## 4. Bind it
 
 One game-owned file resolves the regions and hands them over, because the
@@ -67,10 +77,11 @@ generated asset ids are the game's:
 #include "features/ui_kit/ui_tokens.h"
 #include "generated/game_assets.h"
 
-const ui_theme_art_t art = {
+ui_theme_art_t art = {
     .panel = nt_atlas_ref(atlas, ASSET_ATLAS_REGION_UI_PANEL.value),
-    /* ...the other eight... */
+    /* ...the other nine... */
 };
+ui_theme_art_bind_icons(&art, atlas, "kit"); // the glyph set, by name
 ui_theme_init(ui_tokens_studio_b(), &art);
 ```
 
@@ -147,7 +158,7 @@ void loc_kit_label(nt_ui_context_t *ctx, LocStr text, const nt_ui_label_style_t 
 
 ```
 ctest --test-dir <consumer build dir> -R test_ui_scale --output-on-failure
-node --test features/ui-kit/tests/tokens_parity.test.mjs
+node --test features/ui-kit/tests/tokens_parity.test.mjs features/ui-kit/tests/icons_manifest.test.mjs
 ```
 
 Then shoot the consumer's own layout evidence at phone sizes — a canvas rule is

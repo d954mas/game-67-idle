@@ -61,6 +61,27 @@
       "type": "records-json",
       "path": "features/software-cursor/example/assets/assets.json",
       "scope": "features:software-cursor-example"
+    },
+    {
+      "type": "pack-manifest",
+      "root": "features/ui-kit/assets",
+      "packs": [
+        "ui-kit-icons"
+      ],
+      "scope": "features:ui-kit-icons"
+    },
+    {
+      "type": "pack-manifest",
+      "root": "features/ui-kit/example/native/assets",
+      "packs": [
+        "ui-lab-backdrop"
+      ],
+      "scope": "features:ui-lab-backdrop"
+    },
+    {
+      "type": "records-json",
+      "path": "features/ui-kit/example/bold/assets.json",
+      "scope": "features:ui-kit-bold-example"
     }
   ],
   "entries": [
@@ -185,6 +206,11 @@
       "metadata_scope": "template:ui"
     },
     {
+      "path": "templates/template/assets/ui/header.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:ui"
+    },
+    {
       "path": "templates/template/assets/ui/panel.png",
       "classification": "product-asset",
       "metadata_scope": "template:ui"
@@ -233,6 +259,146 @@
       "path": "features/software-cursor/example/assets/touch_hand_closed.png",
       "classification": "product-asset",
       "metadata_scope": "features:software-cursor-example"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/close.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/gear.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/check.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/lock.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/unlock.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/plus.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/minus.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/back.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/arrow_left.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/arrow_right.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/arrow_up.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/arrow_down.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/star.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/coin.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/sound_on.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/sound_off.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/music_on.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/music_off.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/info.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/question.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/warning.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/home.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/pause.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/trophy.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/cart.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/assets/icons/trash.png",
+      "classification": "product-asset",
+      "metadata_scope": "features:ui-kit-icons"
+    },
+    {
+      "path": "features/ui-kit/example/native/assets/scene/world.png",
+      "classification": "generated-procedural-output",
+      "metadata_scope": "features:ui-lab-backdrop"
+    },
+    {
+      "path": "features/ui-kit/example/bold/world.png",
+      "classification": "generated-procedural-output",
+      "metadata_scope": "features:ui-kit-bold-example"
     }
   ],
   "boundaries": [

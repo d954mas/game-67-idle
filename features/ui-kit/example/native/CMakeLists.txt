@@ -117,6 +117,7 @@ set(LAB_PACK_SHADERS
     "${ENGINE_DIR}/assets/shaders/radial.frag")
 
 add_executable(build_ui_lab_packs src/build_packs.c)
+target_include_directories(build_ui_lab_packs PRIVATE "${UI_KIT_INC}")
 target_link_libraries(build_ui_lab_packs PRIVATE nt_builder nt_log nt_meshwire)
 target_compile_definitions(build_ui_lab_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
 nt_set_static_crt(build_ui_lab_packs)

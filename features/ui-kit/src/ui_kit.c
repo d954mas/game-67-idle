@@ -228,7 +228,8 @@ bool ui_kit_icon_button(nt_ui_context_t *ctx, const char *id, nt_atlas_region_re
 bool ui_kit_close_button(nt_ui_context_t *ctx, const char *id, const char *label) {
     const ui_metrics_t m = ui_metrics();
     bool clicked = false;
-    nt_ui_label_style_t glyph = g_ui_theme.button_label_action;
+    nt_atlas_region_ref_t *icon = ui_kit_icon_ref(UI_ICON_CLOSE);
+    nt_ui_label_style_t glyph = g_ui_theme.button_label;
     glyph.wrap_mode = CLAY_TEXT_WRAP_NONE;
     // Centred a little inside the corner, so the circle reads as part of the
     // plate and the safe area never clips half of it.
@@ -239,7 +240,11 @@ bool ui_kit_close_button(nt_ui_context_t *ctx, const char *id, const char *label
                        .offset = {-inset, inset}},
           .layout = {.sizing = {CLAY_SIZING_FIXED(m.hit), CLAY_SIZING_FIXED(m.hit)}}}) {
         ui_kit_button_begin(ctx, nt_ui_child_id(nt_ui_id(id), "plate"), &g_ui_theme.button_close, true, NULL);
-        ui_kit_label_scaled(ctx, label, &glyph, 1.3F);
+        if (icon->atlas.id != 0U) {
+            ui_kit_icon_tinted(ctx, icon, m.hit * 0.42F, ui_theme_tokens()->ink);
+        } else {
+            ui_kit_label_scaled(ctx, label, &glyph, 1.3F);
+        }
         clicked = ui_kit_button_end(ctx);
     }
     return clicked;
@@ -249,6 +254,17 @@ void ui_kit_icon(nt_ui_context_t *ctx, nt_atlas_region_ref_t *icon, float size) 
     const nt_ui_image_style_t style = nt_ui_image_style_defaults();
     nt_ui_image(ctx, NT_UI_DATA_LAYER(UI_LAYER_ICON), icon, &style,
                 &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(size), CLAY_SIZING_FIXED(size)}}});
+}
+
+void ui_kit_icon_tinted(nt_ui_context_t *ctx, nt_atlas_region_ref_t *icon, float size, uint32_t tint) {
+    nt_ui_image_style_t style = nt_ui_image_style_defaults();
+    style.color_packed = tint;
+    nt_ui_image(ctx, NT_UI_DATA_LAYER(UI_LAYER_ICON), icon, &style,
+                &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(size), CLAY_SIZING_FIXED(size)}}});
+}
+
+nt_atlas_region_ref_t *ui_kit_icon_ref(ui_icon_t icon) {
+    return &g_ui_theme.art.icons[(icon >= 0 && icon < UI_ICON_COUNT) ? icon : UI_ICON_CLOSE];
 }
 
 void ui_kit_counter(nt_ui_context_t *ctx, const char *id, nt_atlas_region_ref_t *icon, const char *text) {
@@ -507,6 +523,7 @@ bool ui_kit_dropdown_row(nt_ui_context_t *ctx, const char *id, const char *label
     style.font_size = ui_css(g_ui_theme.dropdown.font_size);
     style.row_height = (uint16_t)ui_css((float)g_ui_theme.dropdown.row_height);
     style.pad = (uint16_t)ui_css((float)g_ui_theme.dropdown.pad);
+    style.chevron_size = (uint16_t)ui_css((float)g_ui_theme.dropdown.chevron_size);
     style.min_width = (uint16_t)list_width;
     style.max_visible_rows = (uint16_t)count;
     UI_KIT_ROW(id, &m) {

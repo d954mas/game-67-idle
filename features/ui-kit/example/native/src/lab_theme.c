@@ -137,6 +137,7 @@ void lab_theme_bind(nt_resource_t ui_atlas, nt_material_t radial) {
             .header = region_ref(id, "header"),
             .radial = radial,
         };
+        ui_theme_art_bind_icons(&s_art[i], ui_atlas, "kit");
     }
     g_lab_art = (lab_art_t){
         .coin = nt_atlas_ref(ui_atlas, nt_hash64_str("icon/coin").value),
@@ -164,6 +165,12 @@ bool lab_theme_regions_ready(void) {
                 nt_log_error("ui_lab: atlas has no region ui/%s/%s", s_themes[t].id, REGIONS[r]);
                 s_regions_ok = false;
             }
+        }
+    }
+    for (int i = 0; i < UI_ICON_COUNT; ++i) {
+        if (nt_atlas_find_region(s_ui_atlas, region_hash("kit", ui_icon_name((ui_icon_t)i))) == NT_ATLAS_INVALID_REGION) {
+            nt_log_error("ui_lab: atlas has no glyph kit/%s", ui_icon_name((ui_icon_t)i));
+            s_regions_ok = false;
         }
     }
     return s_regions_ok;

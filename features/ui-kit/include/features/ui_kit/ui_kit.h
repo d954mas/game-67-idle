@@ -139,16 +139,22 @@ bool ui_kit_button(nt_ui_context_t *ctx, const char *id, const char *label, ui_k
 bool ui_kit_icon_button(nt_ui_context_t *ctx, const char *id, nt_atlas_region_ref_t *icon, const char *label,
                         ui_kit_button_kind_t kind, bool enabled, Clay_SizingAxis w, Clay_SizingAxis h);
 
-// The round dismiss mobile players look for: a `hit`-sized circle in the
-// danger colour with `label` on it (the cross glyph the consumer's font
-// packs), floating on the top-right corner of the element that is open. A
-// floating's zIndex is relative to the floating it sits in, so it lands in
-// its panel's own band. Returns clicked.
+// The round dismiss mobile players look for: a `hit`-sized neutral circle
+// with the kit's close glyph in ink, or `label` (the cross the consumer's font
+// packs) when no glyph is bound, floating on the top-right corner of the
+// element that is open. A floating's zIndex is relative to the floating it
+// sits in, so it lands in its panel's own band. Returns clicked.
 bool ui_kit_close_button(nt_ui_context_t *ctx, const char *id, const char *label);
 
 // A square icon on the icon layer, `size` UI units. The ref is by pointer
 // because the engine memoizes the resolved region into it.
 void ui_kit_icon(nt_ui_context_t *ctx, nt_atlas_region_ref_t *icon, float size);
+// The same in a colour: the kit's glyphs are white masks, so ink on a light
+// plate and white on an action fill are one region.
+void ui_kit_icon_tinted(nt_ui_context_t *ctx, nt_atlas_region_ref_t *icon, float size, uint32_t tint);
+// The theme's glyph by name, for `ui_kit_icon*` and the icon button. The
+// pointer is into g_ui_theme, where the engine memoizes the resolved region.
+nt_atlas_region_ref_t *ui_kit_icon_ref(ui_icon_t icon);
 
 // A counter: tile plate, icon, number in the `counter` role. A wallet, a
 // resource, a score.

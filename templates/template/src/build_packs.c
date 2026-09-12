@@ -6,6 +6,8 @@
 #define NT_BUILD_MAX_ASSETS 4096
 #include "nt_builder.h"
 
+#include "features/ui_kit/ui_icons.h"
+
 #include "generated/loc_charset.gen.h" /* LOC_CHARSET_NON_ASCII, generated from the corpus */
 
 #include <limits.h>
@@ -41,6 +43,8 @@ const char *__lsan_default_suppressions(void) { return "leak:extensionSupportedG
 #define BUTTON_BORDER_TOP (16 * UI_KIT_EXPORT_SCALE)
 #define BUTTON_BORDER_BOTTOM (22 * UI_KIT_EXPORT_SCALE)
 #define TILE_BORDER (14 * UI_KIT_EXPORT_SCALE)
+#define HEADER_BORDER (12 * UI_KIT_EXPORT_SCALE)
+#define HEADER_BORDER_BOTTOM (2 * UI_KIT_EXPORT_SCALE) // rounded on top only
 #define BAR_BORDER (11 * UI_KIT_EXPORT_SCALE)
 #define BAR_BORDER_SM 11 // the design-size copies the engine slider draws 1:1
 
@@ -246,6 +250,24 @@ int main(int argc, char *argv[]) {
     nt_atlas_sprite_opts_t play_opts = nt_atlas_sprite_opts_defaults();
     play_opts.name = "icon_play"; // flat glyph, no slice9
     nt_atlas_add(ui_atlas, "assets/ui/icon_play.png", &play_opts);
+
+    nt_atlas_sprite_opts_t header_opts = nt_atlas_sprite_opts_defaults();
+    header_opts.name = "header";
+    header_opts.slice9_left = header_opts.slice9_right = header_opts.slice9_top = HEADER_BORDER;
+    header_opts.slice9_bottom = HEADER_BORDER_BOTTOM;
+    nt_atlas_add(ui_atlas, "assets/ui/header.png", &header_opts);
+
+    // The kit's glyph set from the feature's own assets, under the prefix
+    // theme.c binds; a game that draws its own points this at its files.
+    for (int i = 0; i < UI_ICON_COUNT; ++i) {
+        char name[64];
+        char path[512];
+        (void)snprintf(name, sizeof name, "kit/%s", ui_icon_name((ui_icon_t)i));
+        (void)snprintf(path, sizeof path, UI_KIT_ASSETS_DIR "/icons/%s.png", ui_icon_name((ui_icon_t)i));
+        nt_atlas_sprite_opts_t o = nt_atlas_sprite_opts_defaults();
+        o.name = name;
+        nt_atlas_add(ui_atlas, path, &o);
+    }
 
     (void)nt_atlas_commit(ui_atlas);
 

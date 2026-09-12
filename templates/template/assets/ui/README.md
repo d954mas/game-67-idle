@@ -9,6 +9,11 @@ downsampling. The slider thumb and small slider variants keep their design-size
 exports; the play glyph uses half export scale. Colors, radii, slice9 borders
 and final dimensions are unchanged by the antialiasing update.
 
+The ten files are the kit's slots: `panel`, `button`, `tile`, `header`,
+`slider_track`, `slider_fill`, `slider_track_sm`, `slider_fill_sm`,
+`slider_thumb`, `icon_play`. The kit's glyph set is not copied here: the pack
+builder reads `features/ui-kit/assets/icons/` in place.
+
 Regenerate from the Studio root with:
 
 ```sh

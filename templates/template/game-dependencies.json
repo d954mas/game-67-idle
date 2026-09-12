@@ -69,7 +69,7 @@
     {
       "id": "ui-kit",
       "source": "features/ui-kit",
-      "version": "1.6.0",
+      "version": "1.7.0",
       "compatibility": "validated by the template build and test suite"
     }
   ],
