@@ -3,6 +3,7 @@
 #include <stddef.h>
 
 #include "features/platform_sdk/platform_sdk_cloud.h"
+#include "features/platform_sdk/platform_sdk.h"
 
 static game_save_cloud_read_status_t transport_read(char **owned_text) {
     if (owned_text != NULL) *owned_text = NULL;
@@ -36,6 +37,11 @@ static game_save_cloud_write_status_t transport_write_status(void) {
 void cloud_save_init(game_save_cloud_choose_fn choose,
                      game_save_cloud_same_features_fn same_features,
                      double min_write_interval_sec) {
+    /* Permanent platform capability is distinct from an SDK still becoming ready. */
+    if (!platform_sdk_storage_supported()) {
+        game_save_cloud_shutdown();
+        return;
+    }
     const game_save_cloud_config_t config = {
         .transport = {
             .supported = platform_sdk_cloud_supported,

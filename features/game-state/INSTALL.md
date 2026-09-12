@@ -142,6 +142,11 @@ the composed validator and migrations once.
 The game loop stays explicit:
 
 1. Initialize the transport binding after save initialization.
+   The SDK binding first checks the permanent platform capability through
+   `platform_sdk_storage_supported()`. On platforms without cloud storage,
+   leave the cloud coordinator shut down so boot settles immediately. Do not
+   use backend readiness (`platform_sdk_cloud_supported()`) for this decision:
+   a supported portal may install its backend after the game module starts.
 2. Optionally wait for `game_save_cloud_boot_settled()` before local loading.
    Startup can continue after a bounded wait without enabling unsafe writes.
 3. Load local state, then call `game_save_cloud_start(local_is_fresh)` once.

@@ -23,6 +23,10 @@ static bool s_sync_write_ack;
 static bool s_blocking_write_ok;
 static game_save_choice_t s_policy_decision;
 static int s_policy_calls;
+static bool s_storage_capability;
+static bool s_backend_ready;
+
+bool platform_sdk_storage_supported(void) { return s_storage_capability; }
 
 static char *copy_text(const char *text) {
     if (text == NULL) return NULL;
@@ -86,7 +90,7 @@ bool game_save_import_string(const char *text, char *error, int error_cap) {
 
 int64_t game_save_last_saved_at(void) { return s_saved_at; }
 
-static bool backend_supported(void *context) { (void)context; return true; }
+static bool backend_supported(void *context) { (void)context; return s_backend_ready; }
 static void backend_load(uint32_t id, const char *key, void *context) {
     (void)key;
     (void)context;
@@ -131,6 +135,8 @@ static void complete_read_id(uint32_t id, platform_sdk_cloud_status_t status, co
 }
 
 void setUp(void) {
+    s_storage_capability = true;
+    s_backend_ready = true;
     const platform_sdk_cloud_backend_t backend = {
         .supported = backend_supported,
         .load = backend_load,
@@ -477,8 +483,43 @@ static void test_failed_remote_replace_restores_live_snapshot(void) {
     TEST_ASSERT_EQUAL_STRING("live-current", s_live);
 }
 
+static void test_unsupported_cloud_preserves_local_and_skips_wait(void) {
+    s_local = copy_text("local-progress");
+    s_live = copy_text("live-progress");
+    s_storage_capability = false;
+    cloud_save_init(test_policy, same_document, s_write_interval);
+    TEST_ASSERT_TRUE(game_save_cloud_boot_settled());
+    TEST_ASSERT_FALSE(game_save_cloud_start(false));
+    game_save_cloud_tick();
+    TEST_ASSERT_EQUAL_INT(0, s_read_calls);
+    TEST_ASSERT_EQUAL_INT(0, s_write_calls);
+    TEST_ASSERT_EQUAL_STRING("local-progress", s_local);
+    TEST_ASSERT_EQUAL_STRING("live-progress", s_live);
+}
+
+static void test_capable_cloud_keeps_pending_read_barrier(void) {
+    TEST_ASSERT_FALSE(game_save_cloud_boot_settled());
+    TEST_ASSERT_EQUAL_INT(1, s_read_calls);
+    complete_read(PLATFORM_SDK_CLOUD_EMPTY, NULL);
+    TEST_ASSERT_TRUE(game_save_cloud_boot_settled());
+}
+
+static void test_capable_cloud_retries_when_backend_becomes_ready(void) {
+    s_backend_ready = false;
+    cloud_save_init(test_policy, same_document, s_write_interval);
+    (void)game_save_cloud_boot_settled();
+    TEST_ASSERT_EQUAL_INT(0, s_read_calls);
+    s_backend_ready = true;
+    TEST_ASSERT_FALSE(game_save_cloud_boot_settled());
+    TEST_ASSERT_EQUAL_INT(1, s_read_calls);
+    TEST_ASSERT_EQUAL_INT(0, s_write_calls);
+}
+
 int main(void) {
     UNITY_BEGIN();
+    RUN_TEST(test_unsupported_cloud_preserves_local_and_skips_wait);
+    RUN_TEST(test_capable_cloud_keeps_pending_read_barrier);
+    RUN_TEST(test_capable_cloud_retries_when_backend_becomes_ready);
     RUN_TEST(test_failed_local_read_blocks_later_boot_adoption);
     RUN_TEST(test_start_is_idempotent);
     RUN_TEST(test_policy_runs_only_when_documents_change);
