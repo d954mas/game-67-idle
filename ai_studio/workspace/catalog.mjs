@@ -14,9 +14,10 @@ export const GAME_IDENTITY_SCHEMA = "ai_studio.game.v1";
 export const TEMPLATE_IDENTITY_SCHEMA = "ai_studio.template.v1";
 export const GAME_DEPENDENCIES_SCHEMA = "ai_studio.game.dependencies.v3";
 
-// "version" is the game's own release version and "webDownloadBudgetBytes" its
-// web packaging budget; both are read by game packaging tools, the catalog
-// tolerates them but does not interpret them.
+// "version" is the game's own release version and "webDownloadBudgetBytes" its budget
+// for the bytes a player waits for before the first frame, not the whole archive;
+// both are read by game packaging tools, the catalog tolerates them but does not
+// interpret them.
 const IDENTITY_KEYS = new Set(["schema", "id", "title", "storageNamespace", "aliases", "version", "webDownloadBudgetBytes"]);
 const DEPENDENCY_KEYS = new Set(["schema", "engine", "features", "compatibility"]);
 const ENGINE_KEYS = new Set(["source", "version", "revision", "compatibility"]);
