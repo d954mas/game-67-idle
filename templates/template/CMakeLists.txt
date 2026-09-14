@@ -5,6 +5,9 @@ include(cmake/GameOptions.cmake)
 
 # Shared engine (one copy, referenced not copied).
 set(ENGINE_DIR "${GAME_REPO_ROOT}/external/neotolis-engine")
+# The UI kit outlines its action labels and on-world text; the engine
+# defaults the feature off and asserts on the first outlined glyph.
+set(NT_FONT_EMBOLDEN_ENABLED ON CACHE BOOL "Build synthetic font weight and outline support." FORCE)
 add_subdirectory("${ENGINE_DIR}" "${CMAKE_BINARY_DIR}/_engine")
 if(NOT EMSCRIPTEN AND NOT TARGET nt_builder)
     add_subdirectory("${ENGINE_DIR}/tools/builder" "${CMAKE_BINARY_DIR}/_builder")

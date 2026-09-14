@@ -40,9 +40,13 @@ target_include_directories(${GAME_TARGET} PRIVATE
     "${AUDIO_CORE_INC}" "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${PLATFORM_SDK_INC}" "${GAME_EVENTS_INC}"
     src "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/deps/glfw/deps")
 target_compile_definitions(${GAME_TARGET} PRIVATE GAME_WINDOW_TITLE="${GAME_WINDOW_TITLE}")
+# nt_fs is native-only: the web build loads packs through nt_http.
+if(NOT EMSCRIPTEN)
+    target_link_libraries(${GAME_TARGET} PRIVATE nt_fs)
+endif()
 target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core nt_app nt_input nt_window nt_gfx nt_text_renderer nt_font
-    nt_resource nt_material nt_shared nt_render nt_hash nt_fs nt_log nt_math nt_time
+    nt_resource nt_material nt_shared nt_render nt_hash nt_log nt_math nt_time
     nt_mesh_renderer nt_entity nt_transform_comp nt_mesh_comp nt_material_comp nt_drawable_comp
     nt_ui nt_sprite_renderer nt_atlas nt_mem_scratch nt_clipboard nt_basisu_transcoder_stub nt_meshwire
 )

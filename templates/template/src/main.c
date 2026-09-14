@@ -6,7 +6,9 @@
 #include "core/nt_core.h"
 #include "core/nt_platform.h"
 #include "font/nt_font.h"
+#ifndef NT_PLATFORM_WEB
 #include "fs/nt_fs.h"
+#endif
 #include "graphics/nt_gfx.h"
 #include "hash/nt_hash.h"
 #include "http/nt_http.h"
@@ -747,7 +749,9 @@ int main(int argc, char **argv) {
     nt_gfx_register_global_block("Globals", 0);
 
     nt_http_init();
+#ifndef NT_PLATFORM_WEB
     nt_fs_init();
+#endif
     nt_hash_init(&(nt_hash_desc_t){0});
     game_events_init(); // type-hashes/labels need hash init; arena is gfx-independent
     game_ev_register(); // register typed-event debug labels (effect under NT_HASH_LABELS, E3)
@@ -896,7 +900,9 @@ int main(int argc, char **argv) {
     shader_programs_shutdown();
     nt_material_shutdown();
     nt_resource_shutdown();
+#ifndef NT_PLATFORM_WEB
     nt_fs_shutdown();
+#endif
     nt_http_shutdown();
     nt_hash_shutdown();
     nt_gfx_destroy_buffer(s_frame_ubo);
