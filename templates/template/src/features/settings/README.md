@@ -23,6 +23,16 @@ rectangle, with a bounded scrollable body and an always-reachable Close row.
 Volume rows switch to a horizontal layout on wide screens; the language picker
 uses its row width instead of a fixed minimum. Saved settings are unchanged.
 
+## Portal account
+
+On a portal with a login (`platform_sdk_auth_supported()`) the panel shows an
+Account row: the player's name once logged in, otherwise the login offer from
+`src/ui/login_prompt.c` — the benefits beside a Log in button, which opens the
+game's own confirm modal (`login_confirm` scene: Log in / Not now) before the
+portal's dialog. That order is what Yandex requirement 1.2.1 asks for. A portal
+without a login never draws the row; there is no logout, the portal has no
+such call.
+
 ## Validation
 
 Build the template settings/save tests and run
@@ -32,7 +42,8 @@ Build the template settings/save tests and run
 
 `feature.json.version` is exact SemVer. Patch preserves the public contract,
 minor adds backward-compatible surface, and major permits breaking changes.
-A copied game owns its revision after creation. Version `1.1.1` fits the panel
+A copied game owns its revision after creation. Version `1.2.0` adds the
+portal account row and the login offer. Version `1.1.1` fits the panel
 to the viewport and keeps its close action outside scrollable content.
 Version `1.1.0` adds the language getter/setter and `settings_apply_language()`,
 plus the `language` field in the settings fragment.

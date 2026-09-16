@@ -5,6 +5,7 @@
 #include "clay.h"
 #include "ui/nt_ui.h"
 #include "ui/demo_hud.h"
+#include "scenes/login_confirm_scene.h"
 /* scene-scaffold:includes */
 
 #include <stdlib.h>
@@ -70,6 +71,14 @@ static const scene_descriptor_t k_catalog[] = {
         .modal_update_policy = SCENE_MODAL_PAUSE_BELOW,
         .instance = &s_settings,
         .api = &k_settings_api,
+    },
+    {
+        .id = GAME_SCENE_LOGIN_CONFIRM,
+        .kind = SCENE_KIND_MODAL,
+        .debug_only = false,
+        .modal_update_policy = SCENE_MODAL_PAUSE_BELOW,
+        .instance = &g_game_login_confirm_scene,
+        .api = &g_game_login_confirm_scene_api,
     },
     /* scene-scaffold:catalog */
 };
@@ -196,6 +205,31 @@ scene_result_t game_scenes_show_settings(void) {
     return scene_manager_show(
         &s_manager, GAME_SCENE_SETTINGS, (scene_route_args_view_t){0},
         &operation_id, NULL);
+}
+
+scene_result_t game_scenes_show_login_confirm(void) {
+    scene_operation_id_t operation_id;
+    if (!s_initialized) {
+        return SCENE_RESULT_BUSY;
+    }
+    return scene_manager_show(
+        &s_manager, GAME_SCENE_LOGIN_CONFIRM, (scene_route_args_view_t){0},
+        &operation_id, NULL);
+}
+
+scene_result_t game_scenes_close_login_confirm(void) {
+    scene_operation_id_t operation_id;
+    const scene_descriptor_t *confirm_scene;
+    if (!s_initialized ||
+        !scene_manager_contains(&s_manager, GAME_SCENE_LOGIN_CONFIRM)) {
+        return SCENE_RESULT_ALREADY_TOP;
+    }
+    confirm_scene =
+        scene_manager_find_scene(&s_manager, GAME_SCENE_LOGIN_CONFIRM);
+    if (scene_manager_top(&s_manager).scene != confirm_scene) {
+        return SCENE_RESULT_NOT_TOP;
+    }
+    return scene_manager_back(&s_manager, 1, &operation_id, NULL);
 }
 
 scene_result_t game_scenes_close_settings(void) {

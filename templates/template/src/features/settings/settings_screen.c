@@ -12,6 +12,8 @@
 #include "ui/ui_runtime.h"
 #include "ui/theme.h"
 #include "ui/loc_widgets.h"
+#include "ui/login_prompt.h"
+#include "features/platform_sdk/platform_sdk.h"
 
 #include "loc_strings.gen.h"
 
@@ -140,6 +142,29 @@ static void language_row(nt_ui_context_t *ctx, const ui_metrics_t *m, bool inter
     }
 }
 
+// The portal account: hidden on a portal without one, the login offer while
+// anonymous, the name once in. No logout -- the portal has no such call.
+static void account_row(nt_ui_context_t *ctx, const ui_metrics_t *m, bool interactive) {
+    if (!platform_sdk_auth_supported()) return;
+    CLAY({.id = CLAY_ID("settings/account"),
+          .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
+                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                     .childGap = (uint16_t)m->gap,
+                     .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
+        loc_kit_label(ctx, loc_settings_account(), &g_ui_theme.label);
+        if (platform_sdk_authorized()) {
+            nt_ui_label_style_t name = g_ui_theme.label;
+            name.wrap_mode = CLAY_TEXT_WRAP_NONE;
+            CLAY({.id = CLAY_ID("settings/account/name"),
+                  .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
+                loc_kit_label(ctx, loc_raw(platform_sdk_player_name()), &name);
+            }
+        } else {
+            login_prompt_row(ctx, m, "settings/login", "settings/login/button", "settings", interactive);
+        }
+    }
+}
+
 static void save_conflict_row(nt_ui_context_t *ctx, const ui_metrics_t *m, bool interactive) {
     if (!s_save_conflict_visible) return;
     loc_kit_label(ctx, loc_settings_cloud_conflict(), &g_ui_theme.label);
@@ -230,6 +255,7 @@ void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
     volume_row(ctx, &m, LOC0_SETTINGS_MUSIC, "settings/music", &s_music, settings_set_music, interactive);
     volume_row(ctx, &m, LOC0_SETTINGS_SFX, "settings/sfx", &s_sfx, settings_set_sfx, interactive);
     language_row(ctx, &m, interactive);
+    account_row(ctx, &m, interactive);
     save_conflict_row(ctx, &m, interactive);
 
     // Reset remains in the scrollable body, with its full label on a separate row.

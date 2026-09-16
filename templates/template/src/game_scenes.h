@@ -12,6 +12,7 @@ typedef struct nt_ui_context nt_ui_context_t;
 
 #define GAME_SCENE_ROOT "game"
 #define GAME_SCENE_SETTINGS "settings"
+#define GAME_SCENE_LOGIN_CONFIRM "login_confirm"
 
 void game_scenes_init(World *world);
 void game_scenes_step(uint64_t frame_index, float dt);
@@ -31,5 +32,10 @@ bool game_scenes_handle_escape(void);
 scene_result_t game_scenes_show_settings(void);
 /* Returns NOT_TOP when settings exists in history but is not the focused top. */
 scene_result_t game_scenes_close_settings(void);
+
+/* The login offer's confirm step, a small MODAL over whichever screen held
+   the button: the benefits and a way out before the portal's dialog opens. */
+scene_result_t game_scenes_show_login_confirm(void);
+scene_result_t game_scenes_close_login_confirm(void);
 
 #endif

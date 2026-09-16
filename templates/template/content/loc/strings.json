@@ -79,6 +79,32 @@
     },
 
     "settings.language": { "en": "Language", "ru": "Язык" },
+    "settings.account": { "en": "Account", "ru": "Аккаунт" },
+    "login.hint": {
+      "note": "Next to every login button: the portal requires the benefits stated beside the offer. Only what is true on every portal with a login: the account keeps the progress.",
+      "en": "Log in to keep your progress on your account",
+      "ru": "Войди, чтобы сохранять прогресс в аккаунте"
+    },
+    "login.button": {
+      "note": "Button label, offer and confirm alike. There is no logout: the portal has no such call.",
+      "en": "Log in",
+      "ru": "Войти"
+    },
+    "login.confirm_title": {
+      "note": "The confirm modal after a login tap: the portal wants the benefits and a way out shown before its own dialog opens.",
+      "en": "Log in?",
+      "ru": "Войти в аккаунт?"
+    },
+    "login.confirm_body": {
+      "note": "The last sentence is the way out the portal asks for. A game with a ranking adds it here.",
+      "en": "Your progress is saved to your account and follows you to any device. You can keep playing without logging in.",
+      "ru": "Прогресс сохранится в аккаунте и будет с тобой на любом устройстве. Играть можно и без входа."
+    },
+    "login.later": {
+      "note": "The way out of the confirm modal; the game goes on as before.",
+      "en": "Not now",
+      "ru": "Не сейчас"
+    },
     "settings.lang_en": {
       "note": "An endonym: a language names itself the same way in every UI language.",
       "en": "English",

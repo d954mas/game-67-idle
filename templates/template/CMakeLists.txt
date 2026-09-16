@@ -89,6 +89,7 @@ add_executable(${GAME_TARGET}
     src/features/game_features.c # E1
     src/ui/hud.c
     src/ui/focus_prompt_ui.c
+    src/ui/login_prompt.c                            # the portal login offer: benefits + button, and its confirm modal
     src/ui/platform_sdk_debug.c
     src/ui/ui_runtime.c
     src/ui/theme.c                                   # binds THIS game's atlas to the ui-kit feature
@@ -120,6 +121,7 @@ add_executable(${GAME_TARGET}
     src/ui/loc_widgets.c                             # the ONLY caller of the raw text entry points
     ${LEADERBOARD_SOURCES}                           # capability facade + backends; inert until a game calls leaderboard_init
     ${REMOTE_IMAGE_SOURCES}                          # url -> texture cache; inert until a game calls remote_image_init
+    src/scenes/login_confirm_scene.c
     # scene-scaffold:sources
 )
 target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}" "${UI_KIT_INC}" "${LEADERBOARD_INC}" "${REMOTE_IMAGE_INC}")

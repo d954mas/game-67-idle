@@ -28,6 +28,9 @@
         "to_index":   { "type": "int" },
         "note":       { "type": "string" }
       }
+    },
+    "login_tap": {
+      "fields": { "source": { "type": "string" } }
     }
   }
 }

@@ -86,9 +86,10 @@ void game_features_draw_ui(
        ctx и рисует свой слой ОДНОЙ строкой, порядок вызовов = z-order. */
     if (ui_runtime_begin(g_nt_app.dt, input)) {
         game_scenes_build_ui(ui_runtime_ctx());
-        if (game_scenes_can_process_game_input()) {
-            platform_sdk_debug_draw_ui(ui_runtime_ctx());
-        }
+        // Outside the gate: the mock portal overlay stands in for a real one,
+        // and a break or a login can open from a modal scene (settings) where
+        // the root scene no longer takes input.
+        platform_sdk_debug_draw_ui(ui_runtime_ctx());
         game_scenes_build_input_gate(ui_runtime_ctx());
         focus_prompt_ui_build(ui_runtime_ctx());
         ui_runtime_end();
