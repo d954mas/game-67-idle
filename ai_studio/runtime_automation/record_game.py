@@ -239,7 +239,8 @@ def resolve_capture_settings(
 
 
 def resolve_obs_capture_settings(settings: CaptureSettings) -> CaptureSettings:
-    return CaptureSettings(settings.width, settings.height, settings.fps)
+    # OBS rounds output width down to four pixels; center padding preserves the requested view.
+    return CaptureSettings((settings.width+3)//4*4, settings.height, settings.fps)
 
 
 def build_master_command(
@@ -273,7 +274,9 @@ def build_master_command(
         "-vf",
         (
             f"trim=start={start_seconds:.3f},setpts=PTS-STARTPTS,"
-            f"fps={fps},scale={width}:{height}:flags=lanczos"
+            f"fps={fps},"
+            + (f"crop={width}:{height}," if width % 4 else "")
+            + f"scale={width}:{height}:flags=lanczos"
         ),
         "-af",
         (

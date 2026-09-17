@@ -128,6 +128,18 @@ class CaptureSettingsTest(unittest.TestCase):
         self.assertEqual(capture.fps, 30)
 
 
+class ObsAlignedResolutionTest(unittest.TestCase):
+    def test_requested_phone_view_is_preserved_inside_obs_alignment(self) -> None:
+        for width,height in ((390,844),(534,960),(960,534)):
+            requested=resolve_capture_settings("social", f"{width}x{height}", 30)
+            capture=resolve_obs_capture_settings(requested)
+            self.assertEqual(capture.width % 4,0)
+            self.assertGreaterEqual(capture.width,width)
+            self.assertLess(capture.width-width,4)
+            self.assertEqual(capture.height,height)
+            self.assertEqual(requested.width,width)
+
+
 class ObsContractTest(unittest.TestCase):
     def test_hidden_capture_settles_with_the_game_in_background(self) -> None:
         events: list[object] = []

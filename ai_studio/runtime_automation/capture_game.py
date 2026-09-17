@@ -235,6 +235,81 @@ def cleanup_shot(game) -> None:
         game.result("time.set_mode", {"mode": "run"})
 
 
+def _dispatch_timeline_event(game, event: dict, *, capture_width: int, capture_height: int) -> None:
+    method = event["method"]
+    params = event.get("params") or {}
+    if method == "game.toy.shoot_target":
+        state = game.result("game.toy.state")
+        targets = state.get("targets") or []
+        if targets and state.get("phase") == 0:
+            target = max(targets, key=lambda item: item.get("y", 0.0))
+            aim_y = max(target["y"] - target.get("height", 0.0) * 0.5 + 0.35, min(target["y"], 1.0))
+            game.result("game.toy.shoot", {"x": target["x"], "y": aim_y, "z": target.get("z", 0.0)})
+        return
+    if method == "game.toy.special_target":
+        shot_name = params["shot"]
+        game.result("input.set_player_enabled", {"enabled": True})
+        game.result("ui.click", {"id": f"toy/shot/{shot_name}", "button": "left"})
+        state = game.result("game.toy.state")
+        targets = state.get("targets") or []
+        if targets and state.get("phase") == 0:
+            tree = game.result("ui.tree")
+            target = max(targets, key=lambda item: item.get("y", 0.0))
+            game.result("ui.click", {"id": {"x": target["screenX"] * tree["width"] / capture_width,
+                                             "y": target["screenY"] * tree["height"] / capture_height},
+                                      "button": "left"})
+        game.result("input.set_player_enabled", {"enabled": False})
+        return
+    game.result(method, params)
+
+
+def _autoplay_tick(game, bot: dict, state: dict, controller: dict, *, capture_width: int, capture_height: int) -> bool:
+    levels = bot["levels"]
+    tick_frames = int(bot.get("tick_frames", 18))
+    phase = state.get("phase")
+    if phase not in (0, 1):
+        retry_level = int(state.get("level") or levels[controller["level_index"]])
+        game.result("game.toy.load", {"level": retry_level})
+        controller["special_used"] = False
+        controller["victory_frames"] = 0
+        controller["last_level"] = retry_level
+        return True
+    if phase == 1:
+        controller["victory_frames"] += tick_frames
+        if controller["victory_frames"] < int(bot.get("victory_hold_frames", 30)):
+            return False
+        controller["level_index"] = (controller["level_index"] + 1) % len(levels)
+        game.result("game.toy.load", {"level": levels[controller["level_index"]]})
+        controller["victory_frames"] = 0
+        controller["special_used"] = False
+        return True
+    if phase != 0:
+        return False
+    if state.get("balls", 0) <= 0:
+        retry_level = int(state.get("level") or levels[controller["level_index"]])
+        game.result("game.toy.load", {"level": retry_level})
+        controller["special_used"] = False
+        controller["victory_frames"] = 0
+        controller["last_level"] = retry_level
+        return True
+    if not state.get("targets"):
+        return False
+    if controller.get("last_level") != state.get("level"):
+        controller["last_level"] = state.get("level")
+        controller["special_used"] = False
+        controller["victory_frames"] = 0
+    specials = bot.get("special_by_level", {})
+    special_name = specials.get(str(state.get("level")))
+    if special_name and not controller.get("special_used"):
+        _dispatch_timeline_event(game, {"method": "game.toy.special_target", "params": {"shot": special_name}}, capture_width=capture_width, capture_height=capture_height)
+        controller["special_used"] = True
+        return True
+    target = max(state["targets"], key=lambda item: sum(max(0.0, 1.6 - abs(item["x"] - other["x"])) for other in state["targets"] if other["y"] >= item["y"] - 0.3) / (1.0 + item["y"] * 0.35))
+    aim_y = max(target["y"] - target.get("height", 0.0) * 0.5 + 0.35, min(target["y"], 1.0))
+    result = game.result("game.toy.shoot", {"x": target["x"], "y": aim_y, "z": target.get("z", 0.0)})
+    return bool(result.get("fired"))
+
+
 def play_timeline(
     game,
     shot: dict,
@@ -243,7 +318,10 @@ def play_timeline(
     monotonic: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
 ) -> dict:
+    shot_width, shot_height = (int(part) for part in shot.get("size", "1920x1080").split("x", 1))
     total_frames = _output_frame_count(shot["seconds"], output_fps, "shot")
+    autoplay = shot.get("autoplay")
+    bot_controller = {"level_index": 0, "victory_frames": 0, "special_used": False, "last_level": None}
     events_by_frame: dict[int, list[dict]] = {}
     for event in shot.get("events", []):
         frame = int(event["frame"])
@@ -260,8 +338,12 @@ def play_timeline(
         if delay > 0:
             sleep(delay)
         for event in events_by_frame.get(frame, []):
-            game.result(event["method"], event.get("params") or {})
+            _dispatch_timeline_event(game, event, capture_width=shot_width, capture_height=shot_height)
             event_count += 1
+        if autoplay and frame % int(autoplay.get("tick_frames", 18)) == 0:
+            state = game.result("game.toy.state")
+            if _autoplay_tick(game, autoplay, state, bot_controller, capture_width=shot_width, capture_height=shot_height):
+                event_count += 1
     duration = float(shot["seconds"])
     delay = started + duration - monotonic()
     if delay > 0:
@@ -304,7 +386,7 @@ def run(args: argparse.Namespace) -> dict:
     with running_game(
         exe=str(executable),
         cwd=str(game_root),
-        fresh_state=shot is not None,
+        fresh_state=shot is not None and not bool(shot.get("preserve_state", False)),
         autosave_enabled=shot is None,
         window_size=f"{settings.width}x{settings.height}",
         extra_args=["--no-vsync"],
