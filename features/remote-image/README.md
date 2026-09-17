@@ -1,9 +1,19 @@
 # remote-image
 
+## Purpose
+
 A small cache that turns a URL into a texture and forgets it again. The
 consumer asks about a URL every frame it draws it and gets one of three
 answers: `PENDING` (draw a spinner), `READY` (draw the texture), `FAILED`
 (draw a fallback). The contract is section 10 of `features/leaderboard/SPEC.md`.
+
+## Public surface
+
+`include/features/remote-image/remote_image.h`: `remote_image_init` with a
+config every field of which is required, `remote_image_update` once per frame,
+`remote_image_state` / `remote_image_get` per URL, `remote_image_shutdown`, and
+`remote_image_backend_t` — the seam behind which the engine's transport,
+decoder, GPU and clock sit. See `INSTALL.md`.
 
 ## Layer
 
@@ -52,6 +62,25 @@ vendored `stb_image`.
 ## Commands
 
 - `ctest --test-dir templates/template/build/native-debug -R remote_image --output-on-failure`
+
+## Validation
+
+The core-tier test above builds the table against a canned backend
+(`REMOTE_IMAGE_TESTING`) and covers touch order, eviction, both negative-cache
+schedules, the concurrency cap and the fit. The engine backend is proven by a
+run: a leaderboard with avatar URLs on a portal draft.
+
+## Compatibility
+
+PATCH fixes preserve the API and the config's meaning. MINOR additions keep
+every existing consumer compiling with its config unchanged. MAJOR changes
+alter the API, the config or the backend seam and require consumer migration.
+
+## Extension points
+
+A consumer supplies the limits and, for tests or another engine, its own
+`remote_image_backend_t`. What the images are, and what to draw while one is
+`PENDING` or after it `FAILED`, stays with the consumer.
 
 ## References
 

@@ -3,7 +3,7 @@
   "id": "remote-image",
   "version": "0.1.0",
   "title": "Remote Image",
-  "status": "draft",
+  "status": "reusable",
   "kind": "gameplay-infrastructure",
   "summary": "In-place L1 feature pack: a fixed URL-keyed table that fetches, decodes and uploads small images as textures, evicts the least recently touched entry that is not frame-hot, caches failures negatively on two retry schedules and caps its concurrent fetches. Every limit arrives through its config; the pack has no notion of what the images are.",
   "copy_model": "in-place",
