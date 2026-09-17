@@ -19,3 +19,7 @@ Rules:
   the source matters.
 - Do not store project task status here.
 - Do not require tooling to read this folder; plain Markdown is enough.
+
+## Reference Studies
+
+- [Smash Fest: 30 levels and physics](smash-fest-physics/README.md) — downloaded gameplay evidence, shot counts, material behavior, and [Box3D assessment](smash-fest-physics/physics.md).
