@@ -86,3 +86,6 @@ web_launch.txt
 /*.log
 output/
 .codex-remote-attachments/
+
+# Local DeepSeek harness launcher (dsh web); studio tooling lives under ai_studio/.
+/tools/
