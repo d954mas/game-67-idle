@@ -515,6 +515,31 @@ static void test_capable_cloud_retries_when_backend_becomes_ready(void) {
     TEST_ASSERT_EQUAL_INT(0, s_write_calls);
 }
 
+/* A synced account whose cloud copy vanished (new guest session, a cleared
+   platform store, a login onto an empty account) holds the only copy locally:
+   there is nothing to choose between, so the local document goes back up. */
+static void test_empty_cloud_after_sync_uploads_local_without_asking(void) {
+    s_sync_write_ack = true;
+    s_base = copy_text("local");
+    s_local = copy_text("local");
+    s_live = copy_text("local");
+    game_save_cloud_shutdown();
+    cloud_save_init(test_policy, same_document, s_write_interval);
+    (void)game_save_cloud_boot_settled();
+    complete_read(PLATFORM_SDK_CLOUD_EMPTY, NULL);
+    TEST_ASSERT_FALSE(game_save_cloud_start(false));
+    TEST_ASSERT_EQUAL_INT(0, s_policy_calls);
+    for (int tick = 0; tick < 4 && s_write_calls == 0; ++tick) {
+        s_now += 6.0;
+        game_save_cloud_tick();
+        if (s_read_calls > 1 && s_write_calls == 0) complete_read(PLATFORM_SDK_CLOUD_EMPTY, NULL);
+    }
+    TEST_ASSERT_EQUAL_INT(1, s_write_calls);
+    game_save_cloud_tick();
+    TEST_ASSERT_EQUAL(GAME_SAVE_SYNC_SYNCHRONIZED, game_save_cloud_state());
+    TEST_ASSERT_EQUAL_INT(1, s_write_calls);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_unsupported_cloud_preserves_local_and_skips_wait);
@@ -530,6 +555,7 @@ int main(void) {
     RUN_TEST(test_synchronous_store_ack_commits_the_exact_snapshot);
     RUN_TEST(test_write_interval_holds_back_the_next_upload);
     RUN_TEST(test_no_interval_uploads_every_change);
+    RUN_TEST(test_empty_cloud_after_sync_uploads_local_without_asking);
     RUN_TEST(test_an_acknowledged_upload_needs_no_reread);
     RUN_TEST(test_late_account_read_keeps_running_state_and_enters_conflict);
     RUN_TEST(test_keep_local_rereads_the_pinned_remote_before_acknowledged_upload);

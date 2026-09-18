@@ -138,7 +138,16 @@ static void consider_auto_resolution(void) {
         game_save_sync_state(&s_cloud.sync) != GAME_SAVE_SYNC_CONFLICT) return;
     const char *local = game_save_sync_local_document(&s_cloud.sync);
     const char *remote = game_save_sync_remote_document_value(&s_cloud.sync);
-    if (local == NULL || remote == NULL) return;
+    if (local == NULL) return;
+    /* A synced account whose cloud copy vanished (a new guest session, a login
+       onto an empty account) leaves the local document as the only copy. The
+       policy and the player have nothing to compare it against, so it goes up. */
+    if (remote == NULL) {
+        if (s_cloud.sync.remote_is_empty) {
+            (void)game_save_sync_resolve(&s_cloud.sync, GAME_SAVE_KEEP_LOCAL);
+        }
+        return;
+    }
     switch (s_cloud.config.choose(local, remote)) {
         case GAME_SAVE_KEEP_LOCAL:
             (void)game_save_sync_resolve(&s_cloud.sync, GAME_SAVE_KEEP_LOCAL);
