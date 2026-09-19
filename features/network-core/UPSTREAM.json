@@ -1,0 +1,1270 @@
+{
+  "name": "libwebsockets",
+  "origin": "sourced",
+  "repository": "https://github.com/warmcat/libwebsockets.git",
+  "revision": "fbb0baf6af9c4324f0f1591734c78b0089b599d4",
+  "version": "4.5.8",
+  "license": "MIT",
+  "copyright": "Copyright (C) 2010 - 2025 Andy Green <andy@warmcat.com>",
+  "licenseFile": "vendor/libwebsockets/LICENSE",
+  "selection": [
+    "CMakeLists.txt",
+    "CMakeLists-implied-options.txt",
+    "LICENSE",
+    "cmake/",
+    "include/",
+    "lib/ (pruned to the compiled option set)",
+    "win32port/win32helpers/",
+    "win32port/dirent/",
+    "win32port/version.rc.in",
+    "stub CMakeLists.txt for lib/secure-streams/serialized/client, test-apps, plugins, lwsws"
+  ],
+  "modifications": [],
+  "files": [
+    {
+      "path": "CMakeLists-implied-options.txt",
+      "bytes": 11526,
+      "sha256": "b945c3954467043f546b11bc80a96c32c94585da12a0ba5165b17c38916b9167"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "bytes": 50755,
+      "sha256": "b3dfc7b99658951c92eb8d9c22aabaebcc851be2feee59bc798ecde77bdb14bf"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 19205,
+      "sha256": "6ff2868dd9d9e251de27574342663f4773a8c2f954128899eb6f3c2ba9d9a245"
+    },
+    {
+      "path": "cmake/FindGit.cmake",
+      "bytes": 6519,
+      "sha256": "e59a844d296920d85be2ab6560d6fe92f08e9a7a248b14c525f7f2391e47e1d6"
+    },
+    {
+      "path": "cmake/FindMiniz.cmake",
+      "bytes": 867,
+      "sha256": "daa2c9bfa832d99e4eb7e432081a7f99a12807c3c230ea20b6ab012aa6d22321"
+    },
+    {
+      "path": "cmake/FindOpenSSLbins.cmake",
+      "bytes": 3636,
+      "sha256": "4a0830200b1b0961dc548deebabf8017ac8aa0da9c18f7fc1730be2ab55274a1"
+    },
+    {
+      "path": "cmake/LwsCheckRequirements.cmake",
+      "bytes": 3747,
+      "sha256": "8bdb5b6346d699dd7c4cb87da0f6ab5725ea6c5fb974648b75021d7cb7de10be"
+    },
+    {
+      "path": "cmake/UseRPMTools.cmake",
+      "bytes": 5873,
+      "sha256": "fec259e4f815f5859cc5aa4bbfad55b89d793c2702d6c08a2bea0d0bb226db62"
+    },
+    {
+      "path": "cmake/libwebsockets-config-version.cmake.in",
+      "bytes": 386,
+      "sha256": "2e2a4805dd97ac2abb6d66ce31523ad8c38ae8dffdebdd25d835cf021836542f"
+    },
+    {
+      "path": "cmake/libwebsockets-config.cmake.in",
+      "bytes": 1260,
+      "sha256": "553860bbea394c58a79834da4cef9c7ec3eb7088c00e053685cbc830582d00ab"
+    },
+    {
+      "path": "cmake/lws_config.h.in",
+      "bytes": 9926,
+      "sha256": "59b567408daa9f12f45594465fd86c14c1662edbe4428ad54018eb38be0a8c15"
+    },
+    {
+      "path": "cmake/lws_config_private.h.in",
+      "bytes": 3179,
+      "sha256": "de6378d56568ae2bb6be65e4579e9534971e1bfcd396ef735f891236397ea1d1"
+    },
+    {
+      "path": "cmake/pico_sdk_import.cmake",
+      "bytes": 2807,
+      "sha256": "ac4f7e20ed1fefbb0c10e9defb094c8f01053912e567d8bfddaf2907a2648c85"
+    },
+    {
+      "path": "include/libwebsockets.h",
+      "bytes": 21685,
+      "sha256": "f8e6c8b4bc58653b652c524e62d8dfbb2c649021bb8b625540f6240f4d1977fb"
+    },
+    {
+      "path": "include/libwebsockets.hxx",
+      "bytes": 3517,
+      "sha256": "c1f58ed86654fae8b938cbe1900f8e30c66ed219c07bd517dde7dc5c42def1ce"
+    },
+    {
+      "path": "include/libwebsockets/lws-adopt.h",
+      "bytes": 10659,
+      "sha256": "b5baec4f7387f7e9ae1779fecd2065265f452cdb9b5d8da76719c7c61ab31ad5"
+    },
+    {
+      "path": "include/libwebsockets/lws-async-dns.h",
+      "bytes": 4883,
+      "sha256": "68157bad0737bfc0b2154cc09b82ddd4a8203131ec6c89c155de082d71174278"
+    },
+    {
+      "path": "include/libwebsockets/lws-backtrace.h",
+      "bytes": 10611,
+      "sha256": "45fff612e62aa0396a74f1ff9538309487b6465fe3522c70520fc59c210ec1ce"
+    },
+    {
+      "path": "include/libwebsockets/lws-bb-i2c.h",
+      "bytes": 2119,
+      "sha256": "7d7b6ba4188eacd54599a1c489da9d8527cd127bd0fb5aa43e34019c61d80825"
+    },
+    {
+      "path": "include/libwebsockets/lws-bb-spi.h",
+      "bytes": 2276,
+      "sha256": "c001295b01fa0e442f0df0a77d76c9f2f36a313c001e8885a6cb032bf0b3ae45"
+    },
+    {
+      "path": "include/libwebsockets/lws-button.h",
+      "bytes": 3988,
+      "sha256": "fa4a23a9ee3165c425ce4991a33ec5e67132ebba4588fa2d3e48705d239c65e1"
+    },
+    {
+      "path": "include/libwebsockets/lws-cache-ttl.h",
+      "bytes": 13342,
+      "sha256": "5ad21dc4cc7765062b74b24afa120d8ba084e161836c4cee03994393f0c786ad"
+    },
+    {
+      "path": "include/libwebsockets/lws-callbacks.h",
+      "bytes": 36981,
+      "sha256": "10f9dad2eda7f8a6d466c17947c41ffa8e5dbbe16f9f4fd398cfd379b3a8e6f5"
+    },
+    {
+      "path": "include/libwebsockets/lws-cgi.h",
+      "bytes": 4347,
+      "sha256": "0734c5b57f807e4d447612d694875a7b6b79de7a894272204812b53a899ee4aa"
+    },
+    {
+      "path": "include/libwebsockets/lws-client.h",
+      "bytes": 19879,
+      "sha256": "e324fc5dd918ca872ba682711c5b22ba678fce7f1f3edcf7004aa7747e07d181"
+    },
+    {
+      "path": "include/libwebsockets/lws-conmon.h",
+      "bytes": 5643,
+      "sha256": "5ad3cdedb2cc0054b8bb21342f3384761327decaf5e9c5a172bed509fa968d42"
+    },
+    {
+      "path": "include/libwebsockets/lws-context-vhost.h",
+      "bytes": 61396,
+      "sha256": "1fcebcd8ac94dccaefc2ef172681074a64b44b8065baa78deaf0581197e93bce"
+    },
+    {
+      "path": "include/libwebsockets/lws-cose.h",
+      "bytes": 15637,
+      "sha256": "e9abcecb350595a38697f5438da2c021f835868a9acd8cb27f9f275ba25def21"
+    },
+    {
+      "path": "include/libwebsockets/lws-dbus.h",
+      "bytes": 3492,
+      "sha256": "33a41b0f429f8ec98c06c229c4a85bd2a729821b55db6881d9f89f111bd556c5"
+    },
+    {
+      "path": "include/libwebsockets/lws-diskcache.h",
+      "bytes": 8570,
+      "sha256": "725c065aea17dd3bdaa0100a1e71990a069ca1255f02e2c2dc9bf98a0b5f0613"
+    },
+    {
+      "path": "include/libwebsockets/lws-display.h",
+      "bytes": 7351,
+      "sha256": "bb3632ede4016c5a94896f39c7a6494f6cd98a416fe5b482ab94413a8bbbd5e4"
+    },
+    {
+      "path": "include/libwebsockets/lws-dll2.h",
+      "bytes": 9975,
+      "sha256": "b4c6e64a677f2f78184298d1bd532fb662ec1710d4c7282230ccd7bba3801c07"
+    },
+    {
+      "path": "include/libwebsockets/lws-dlo.h",
+      "bytes": 14211,
+      "sha256": "c63196aafde0aaa322c32acf5bb4616ed0fab53869afb3a6c1f14353d7fa7540"
+    },
+    {
+      "path": "include/libwebsockets/lws-dsh.h",
+      "bytes": 6469,
+      "sha256": "9c384e9497e8608462df394ebb538666b4734fddae32a790b25f985aac2acc27"
+    },
+    {
+      "path": "include/libwebsockets/lws-esp32-spi.h",
+      "bytes": 2051,
+      "sha256": "d592dada51dad37ef5c020383dcfd6008617933379aa918bca37ce5d42463b4f"
+    },
+    {
+      "path": "include/libwebsockets/lws-eventlib-exports.h",
+      "bytes": 5136,
+      "sha256": "dea2f77db4d103108e1ef23449afdab882bc124bf0fc53fdeb8d6253100a6da6"
+    },
+    {
+      "path": "include/libwebsockets/lws-fault-injection.h",
+      "bytes": 8933,
+      "sha256": "1d4cd33dc2f4d8df91d353ec0d9791c920bd8bc22db298dc317ce65f2cd49c7e"
+    },
+    {
+      "path": "include/libwebsockets/lws-freertos.h",
+      "bytes": 2751,
+      "sha256": "5cebb062cb8b118a1589aacdead31c8b11ea55a74bd90af1601c0da29d635e11"
+    },
+    {
+      "path": "include/libwebsockets/lws-fts.h",
+      "bytes": 7089,
+      "sha256": "0c222b2f7b21c232cb16a67d52f4bff4f5d8c613f88c792ca32101b94c2cbc31"
+    },
+    {
+      "path": "include/libwebsockets/lws-genaes.h",
+      "bytes": 5577,
+      "sha256": "6eba8ed51fe37bbfe8317546f28837a9da287e5f409d9be2f4efa78027eddbff"
+    },
+    {
+      "path": "include/libwebsockets/lws-gencrypto.h",
+      "bytes": 4357,
+      "sha256": "9ba59547da8283ad442a3ea8687d4e73363056d61664143e1994b2d1be7392f8"
+    },
+    {
+      "path": "include/libwebsockets/lws-genec.h",
+      "bytes": 7152,
+      "sha256": "354633ffbe248a217a1461afeb91f591e52035c597b9df3e4f6f9fedf6237ba4"
+    },
+    {
+      "path": "include/libwebsockets/lws-genhash.h",
+      "bytes": 6344,
+      "sha256": "ae491c5bac52e7b4893d1eebeba80f9d6f4fb7faaad94979efcb3de748e990b4"
+    },
+    {
+      "path": "include/libwebsockets/lws-genrsa.h",
+      "bytes": 9205,
+      "sha256": "4f241699c2321188c2c9e2fdc5fa88e3b0c7eb7af54a22ac926905bcbbbb6504"
+    },
+    {
+      "path": "include/libwebsockets/lws-gpio.h",
+      "bytes": 2072,
+      "sha256": "207fc3cb31f76383899cb58a161742a5a0889d8dbc9c51be28dc285b9f740c01"
+    },
+    {
+      "path": "include/libwebsockets/lws-html.h",
+      "bytes": 18904,
+      "sha256": "d5a0192e731d92be70a479146ecd0420e2412c8ec68a368be3979afd0a28dca5"
+    },
+    {
+      "path": "include/libwebsockets/lws-http.h",
+      "bytes": 36573,
+      "sha256": "616a087ec5fdad7fb7ab74bba473256f355ee778de153fadb1a2a865b00c6df2"
+    },
+    {
+      "path": "include/libwebsockets/lws-i2c.h",
+      "bytes": 2061,
+      "sha256": "a30cb382a1bb05e5e5d0cd7f999765c904834139ea5bc66e65fe9458e345fb11"
+    },
+    {
+      "path": "include/libwebsockets/lws-ili9341-spi.h",
+      "bytes": 2114,
+      "sha256": "d53b29706405147979dccb65045c398924d3fd441e31b0723b299224b49e406b"
+    },
+    {
+      "path": "include/libwebsockets/lws-jose.h",
+      "bytes": 7214,
+      "sha256": "7f40f7db3911842e9717677299891682bce264e004aa7ebf3c9e0f7908970df9"
+    },
+    {
+      "path": "include/libwebsockets/lws-jpeg.h",
+      "bytes": 4340,
+      "sha256": "e6b86163e7945074cf704630e8d211da532450b180805fdecde45ce5a96e017b"
+    },
+    {
+      "path": "include/libwebsockets/lws-jrpc.h",
+      "bytes": 7986,
+      "sha256": "877c5921111bd19fe87007270c15680d691ebefcdcee556af58a543bc362c716"
+    },
+    {
+      "path": "include/libwebsockets/lws-jwe.h",
+      "bytes": 5907,
+      "sha256": "e34f3fea340f28019aca5d0703e132dc3f8b016b021bb25864e84111efa1af8c"
+    },
+    {
+      "path": "include/libwebsockets/lws-jwk.h",
+      "bytes": 7932,
+      "sha256": "d1d641eec93ed0f3ecdb4c4ee6ba4a12782cfdba66b45d8d5dc77330e7cc96b6"
+    },
+    {
+      "path": "include/libwebsockets/lws-jws.h",
+      "bytes": 21790,
+      "sha256": "0c845c0c2b9c4130a5ed836f911db7a85ddce9b193ca8c08ebd0680bc76a2d43"
+    },
+    {
+      "path": "include/libwebsockets/lws-lecp.h",
+      "bytes": 15623,
+      "sha256": "cda6510fb12f52833a05225ac7e943e8be5f66e01d22437f79dddde92d850cc5"
+    },
+    {
+      "path": "include/libwebsockets/lws-led.h",
+      "bytes": 4964,
+      "sha256": "824ff5808dafcd77b2075111e0e676e7cd8666e482f9515e27eefe4d86f89939"
+    },
+    {
+      "path": "include/libwebsockets/lws-lejp.h",
+      "bytes": 9811,
+      "sha256": "190d85e74115bcaa0d6f1e975b1fe70f5129486db39e840261c8c764795c7c9d"
+    },
+    {
+      "path": "include/libwebsockets/lws-logs.h",
+      "bytes": 24740,
+      "sha256": "a50e6afd7ac8f22c3852ce11a17103d61a5d2c6298a0fe9b1caa4fd0ac9a7b83"
+    },
+    {
+      "path": "include/libwebsockets/lws-lwsac.h",
+      "bytes": 11226,
+      "sha256": "3587bcdabb6e1c43d911b3d1ee1a97e4e3e6f0bf45e914725133a70ed617315a"
+    },
+    {
+      "path": "include/libwebsockets/lws-map.h",
+      "bytes": 6664,
+      "sha256": "753bb6aec3b63b07af2dc7f488fdb9e0bb9a787f4b11fa26ce52ed8bd690e71b"
+    },
+    {
+      "path": "include/libwebsockets/lws-metrics.h",
+      "bytes": 11543,
+      "sha256": "5a55faee82d947ab1fa68478c1cd3f2c3b4748df14e7d6bdb65e3b5c35209eb6"
+    },
+    {
+      "path": "include/libwebsockets/lws-misc.h",
+      "bytes": 55194,
+      "sha256": "b7b4cc8e4fbac4a33f80c5490b2de3ee91b1c7a27baaf124a912155c37a54ea8"
+    },
+    {
+      "path": "include/libwebsockets/lws-mqtt.h",
+      "bytes": 14273,
+      "sha256": "686740c9e58841c307267d558865cfacd0c3d1d20bb63f5cb3f3f75f77575ac5"
+    },
+    {
+      "path": "include/libwebsockets/lws-netdev.h",
+      "bytes": 8541,
+      "sha256": "8a86cc5d109dcfbf09ea466196721b871e4b5c348199c87e077ce03b51b5ada4"
+    },
+    {
+      "path": "include/libwebsockets/lws-network-helper.h",
+      "bytes": 8851,
+      "sha256": "584dc6ee10ed8450f885eb98057641a686851d7798112e6fe94b0e810bc262c0"
+    },
+    {
+      "path": "include/libwebsockets/lws-optee.h",
+      "bytes": 2587,
+      "sha256": "52b92f8811af2d476b5ed5fcb0d6aec450ebae5c78873a796d3de4da5710b885"
+    },
+    {
+      "path": "include/libwebsockets/lws-ota.h",
+      "bytes": 4261,
+      "sha256": "43b3daf79641a40ed1999e9c67803f20f9f5606981b0191e4a907c05a98509b8"
+    },
+    {
+      "path": "include/libwebsockets/lws-protocols-plugins.h",
+      "bytes": 14480,
+      "sha256": "678aeac3007f5e6611185b654463501e6a556246cef80e3f1c9fb07aa8bea130"
+    },
+    {
+      "path": "include/libwebsockets/lws-purify.h",
+      "bytes": 3728,
+      "sha256": "89faa7672fa9bc9c3f6ba8494bc6a9da969a11ca458f17c2db0ac368de96bdab"
+    },
+    {
+      "path": "include/libwebsockets/lws-pwm.h",
+      "bytes": 2441,
+      "sha256": "f2bc169cf7162a0668eb7e922d118561ff9fb29cb81fa50b86836cb3f13d29f6"
+    },
+    {
+      "path": "include/libwebsockets/lws-retry.h",
+      "bytes": 4398,
+      "sha256": "a6bb5dd23574b9c451d92a6ea72cbe0f0243821be87236ce578db4907fc13f90"
+    },
+    {
+      "path": "include/libwebsockets/lws-ring.h",
+      "bytes": 11869,
+      "sha256": "422b81b7ad33a402a7d1289dc7f2bce3103c955678c21d5f7c2c36e3e7578d70"
+    },
+    {
+      "path": "include/libwebsockets/lws-secure-streams-client.h",
+      "bytes": 11922,
+      "sha256": "92aca3836652022206d65a84226443648dac8abd6f01da0b2abca47685624db0"
+    },
+    {
+      "path": "include/libwebsockets/lws-secure-streams-policy.h",
+      "bytes": 12832,
+      "sha256": "18f738f53c3bd4d058f88247be61bb88d7f73a4646d058a47dd94466e3ac50b3"
+    },
+    {
+      "path": "include/libwebsockets/lws-secure-streams-serialization.h",
+      "bytes": 20367,
+      "sha256": "aa54d640df760cf0e7bb49c327261a6f96b38dbfb187798faed3ce561fa66bf1"
+    },
+    {
+      "path": "include/libwebsockets/lws-secure-streams-transport-proxy.h",
+      "bytes": 2059,
+      "sha256": "6f2ec850c6178062b9a92cba11a5c3a0839e6f58a7883eafa77fe96e2ca576b4"
+    },
+    {
+      "path": "include/libwebsockets/lws-secure-streams.h",
+      "bytes": 27265,
+      "sha256": "c4a28812d606c9c2e320ed158a872e0496180ba4ba86da1dbc76f28fdd6dc4c5"
+    },
+    {
+      "path": "include/libwebsockets/lws-service.h",
+      "bytes": 7679,
+      "sha256": "d72ed85c3c05902317e976c88d4af4d15c66336e47ec675f11ec067cffacf879"
+    },
+    {
+      "path": "include/libwebsockets/lws-settings.h",
+      "bytes": 4448,
+      "sha256": "6f807f1517fec0577bf2fbe1af34a9be1c8e609dded8daf06f2f66b96cabcbb5"
+    },
+    {
+      "path": "include/libwebsockets/lws-sha1-base64.h",
+      "bytes": 3613,
+      "sha256": "81048a2fa30e353c5ff4286e33e1876c0b9a9ee496850df253a3de460c3fbf93"
+    },
+    {
+      "path": "include/libwebsockets/lws-smd.h",
+      "bytes": 8345,
+      "sha256": "dc58c4778cb621f7ca883b23d2d802bc1f0a21761ad6b73d56da35af7e2352aa"
+    },
+    {
+      "path": "include/libwebsockets/lws-spa.h",
+      "bytes": 6833,
+      "sha256": "726c3d063e831384f5160e1c75f16072b628dbbb6a8aaedaacd3168b30014f15"
+    },
+    {
+      "path": "include/libwebsockets/lws-spd1656-spi.h",
+      "bytes": 2164,
+      "sha256": "1eadf42b21419c04484611554d18aacf98d7fbf34501ed185f22d034bc744516"
+    },
+    {
+      "path": "include/libwebsockets/lws-spi.h",
+      "bytes": 3314,
+      "sha256": "4399ff80352160e63e256b37388fcd920ad9be02aaa75d25d20812066d8a200e"
+    },
+    {
+      "path": "include/libwebsockets/lws-ssd1306-i2c.h",
+      "bytes": 2387,
+      "sha256": "33fcb3365dfde2822701304b48bdc14a1da525c0f0b21cfefa013e6508445500"
+    },
+    {
+      "path": "include/libwebsockets/lws-ssd1675b-spi.h",
+      "bytes": 2159,
+      "sha256": "13262bb6223a436b61b9b803da990f29540457ecbf9a0ffd4da9e700f81364c1"
+    },
+    {
+      "path": "include/libwebsockets/lws-state.h",
+      "bytes": 3946,
+      "sha256": "b693872b5cc6f33741ab3e116e4a089214a51a024fff85da30dbc243540253be"
+    },
+    {
+      "path": "include/libwebsockets/lws-struct.h",
+      "bytes": 12857,
+      "sha256": "de9a46e29b8f1d718644e4d822b3ef14bc20fe86d1d4ede3fcb6e23d7393335a"
+    },
+    {
+      "path": "include/libwebsockets/lws-system.h",
+      "bytes": 17283,
+      "sha256": "6ce35876cbca8b40661182c109048cda5886c85b8c256a8c15ccbeea1d786ffd"
+    },
+    {
+      "path": "include/libwebsockets/lws-test-sequencer.h",
+      "bytes": 2527,
+      "sha256": "4081d5999932e1d8f33c4de0e1a1f187cb7dbfa23a70f21f1079c5178f651243"
+    },
+    {
+      "path": "include/libwebsockets/lws-threadpool.h",
+      "bytes": 10272,
+      "sha256": "97693aa26c4e8b4a5c64015d96b1c82d04a4f3d84c51b7886d122a8343d33ac8"
+    },
+    {
+      "path": "include/libwebsockets/lws-timeout-timer.h",
+      "bytes": 11809,
+      "sha256": "43202842ba449f5f1e08f33eae141e399a747760eec8d2f22f42ade48cbcc372"
+    },
+    {
+      "path": "include/libwebsockets/lws-tls-sessions.h",
+      "bytes": 3076,
+      "sha256": "d0210bd15bbf0f4bc6e95da2a82e6e5eda1924306c7ba86e253eb03d0d72b1c0"
+    },
+    {
+      "path": "include/libwebsockets/lws-tokenize.h",
+      "bytes": 11416,
+      "sha256": "feb4af0525b3d16b684026c28c0b42c85bc9e957f607763230cec0ad4e33e632"
+    },
+    {
+      "path": "include/libwebsockets/lws-uc8176-spi.h",
+      "bytes": 2152,
+      "sha256": "a2f2ca998c55f80ce50210fb67661b2a88b7c5861c91e4c871382182d60b4559"
+    },
+    {
+      "path": "include/libwebsockets/lws-upng.h",
+      "bytes": 5978,
+      "sha256": "ff83101ecfcdc1fcb407b212545134b4cfcb7d29d278054329062d911516dc99"
+    },
+    {
+      "path": "include/libwebsockets/lws-vfs.h",
+      "bytes": 9683,
+      "sha256": "8364efe17c5ca95dd1b5e447dde23f540fb115c0ef1159d5b3a7ca34b7226c83"
+    },
+    {
+      "path": "include/libwebsockets/lws-write.h",
+      "bytes": 9733,
+      "sha256": "4b0855605e657f625777a39f3365440dbac15c9f255ff76bba8372423723cbb3"
+    },
+    {
+      "path": "include/libwebsockets/lws-writeable.h",
+      "bytes": 8900,
+      "sha256": "bfc84a8d2e1f25401d83ad78a04c2cbc0c83bc26fda84ededd19e95a20cd3ac1"
+    },
+    {
+      "path": "include/libwebsockets/lws-ws-close.h",
+      "bytes": 6056,
+      "sha256": "5d19f81a78b87a8a5b361258aad537c6be6d4dd65b25f1cb1f3e7b8fdd492a41"
+    },
+    {
+      "path": "include/libwebsockets/lws-ws-ext.h",
+      "bytes": 7849,
+      "sha256": "79eb983bc4884b7c347512ed5a58992e14392c14835b4ec116622b6749d4d06b"
+    },
+    {
+      "path": "include/libwebsockets/lws-ws-state.h",
+      "bytes": 3710,
+      "sha256": "7a3c48775d3f1f913137d8e5ca426e6a670e085ba504d012bd516a88ee839582"
+    },
+    {
+      "path": "include/libwebsockets/lws-x509.h",
+      "bytes": 11496,
+      "sha256": "b03896dabf8bab6c9a34d9a2581677c21ee377e7be15c1f46bacabae126101db"
+    },
+    {
+      "path": "lib/CMakeLists.txt",
+      "bytes": 15233,
+      "sha256": "868270c3d1175af61af85e816d8e54e09db860078b24f5894b1402256af91748"
+    },
+    {
+      "path": "lib/core-net/CMakeLists.txt",
+      "bytes": 2230,
+      "sha256": "11772b54aef3ef14788193104438fddd0cd22e4f4c84d6fb9a78d746a4e7c3ef"
+    },
+    {
+      "path": "lib/core-net/adopt.c",
+      "bytes": 25701,
+      "sha256": "e23d6dfe78664afe5b67a391382b3a7d5a63ccae97719b4d8c9793769bc5173c"
+    },
+    {
+      "path": "lib/core-net/client/client.c",
+      "bytes": 3484,
+      "sha256": "8beb8221803094a9e066d56998fb836feb1c31e884d6a2f79c2f01caa29f7a5b"
+    },
+    {
+      "path": "lib/core-net/client/conmon.c",
+      "bytes": 4391,
+      "sha256": "fb9f6879752a4eb195ddd8f658098a41b6779f3cfed02fa3d26e2d4abe0928ff"
+    },
+    {
+      "path": "lib/core-net/client/connect.c",
+      "bytes": 15880,
+      "sha256": "cfc9d09b96871f6a6b2a68609c0327c8efa6c8f77b57d8789d9239940b0d7551"
+    },
+    {
+      "path": "lib/core-net/client/connect2.c",
+      "bytes": 10119,
+      "sha256": "563da68859c57e083dba943ccf929687219302892a71d0ce112dcaf33f74fe6c"
+    },
+    {
+      "path": "lib/core-net/client/connect3.c",
+      "bytes": 20947,
+      "sha256": "5afc686f6a332fba00eded58a9f7205fb2cc69efaaa6e07fb62c114afcab823f"
+    },
+    {
+      "path": "lib/core-net/client/connect4.c",
+      "bytes": 9396,
+      "sha256": "33300155a14f922682109f3150fbfaa81b2b2fd9cca29048ddeeded0730a1769"
+    },
+    {
+      "path": "lib/core-net/client/sort-dns.c",
+      "bytes": 21029,
+      "sha256": "cdebf9ede3e351773b8095feabb5adf15083eabcaa79cf0f37f7f8458c4c0fc4"
+    },
+    {
+      "path": "lib/core-net/close.c",
+      "bytes": 28875,
+      "sha256": "fe64a7b1dd482fba307e561ab3324ae0cc3ef1e219289fe39671272daed20582"
+    },
+    {
+      "path": "lib/core-net/dummy-callback.c",
+      "bytes": 24254,
+      "sha256": "bae07906ceb88492b1cff80ced455f3467aa590548db772ad8ced126a463a1be"
+    },
+    {
+      "path": "lib/core-net/lws-dsh.c",
+      "bytes": 16596,
+      "sha256": "15f662c6f6665ea0f6fd09de9b8688c524029f46325d6db18d3e597463871b78"
+    },
+    {
+      "path": "lib/core-net/network.c",
+      "bytes": 27193,
+      "sha256": "10414af9a8d9b32f1a8271c293069f78dd26b7f0e29c654475c6063cac085fd0"
+    },
+    {
+      "path": "lib/core-net/output.c",
+      "bytes": 9914,
+      "sha256": "0631c03ab1fd8af16d85ff6d5c5c30f466598215c8b243d95b6f04f1ac4a5a8c"
+    },
+    {
+      "path": "lib/core-net/pollfd.c",
+      "bytes": 17575,
+      "sha256": "de9fbf329c4731de5b76e62cb76ffbaaab7ddfe2248a2d466f12f1c35dea9256"
+    },
+    {
+      "path": "lib/core-net/private-lib-core-net.h",
+      "bytes": 44185,
+      "sha256": "07a8f7ad3b5f10250d6606575c7c02f6d96f441fd86120d4c6b4055b847ed5c2"
+    },
+    {
+      "path": "lib/core-net/route.c",
+      "bytes": 10989,
+      "sha256": "49c193332b443b005291d2ee26185c6fca72223766d3f32002861460dbb78df8"
+    },
+    {
+      "path": "lib/core-net/service.c",
+      "bytes": 22024,
+      "sha256": "5c55e5e3b33a4d63b85d5536449111d93bda1e0cde1c81c9db4cfa753ca7eb1b"
+    },
+    {
+      "path": "lib/core-net/socks5-client.c",
+      "bytes": 9949,
+      "sha256": "34c4e15ed5bc38e43770e392f741d2a56ef9a9ec88b4f50009cd04814cadf4b8"
+    },
+    {
+      "path": "lib/core-net/sorted-usec-list.c",
+      "bytes": 9547,
+      "sha256": "b16a9bdd5e1605b9971b97f0034aa93b160de816f055e24e97e9638e54b1f828"
+    },
+    {
+      "path": "lib/core-net/state.c",
+      "bytes": 3971,
+      "sha256": "7efc7ab79078d10bcf1c5be896d732a8693552037e156a666a6a4fb639fb5201"
+    },
+    {
+      "path": "lib/core-net/transport-mux-client.c",
+      "bytes": 8673,
+      "sha256": "04de1fc91e9d499917493288d3c2c7d73071fed739da120a827638bcd8163fb9"
+    },
+    {
+      "path": "lib/core-net/transport-mux-common.c",
+      "bytes": 20633,
+      "sha256": "28ebbd79b0e87ef45bc2ccc5152a81a54853dddabcb9a09c028821f699c4261d"
+    },
+    {
+      "path": "lib/core-net/transport-mux-proxy.c",
+      "bytes": 10448,
+      "sha256": "6e701936f3861d7029b8929665a9099278474ad050d6a8494c0030a39dbc895e"
+    },
+    {
+      "path": "lib/core-net/vhost.c",
+      "bytes": 49581,
+      "sha256": "bb7fa6b131d1cfbd1131d618102b0dff0b02c528a08cde8009b1f86d0a1b1a19"
+    },
+    {
+      "path": "lib/core-net/wol.c",
+      "bytes": 3622,
+      "sha256": "13bcf3ecb555007e30a0e4182a5b6f406fb8636e108b4dffb5cc616f8dcdd933"
+    },
+    {
+      "path": "lib/core-net/wsi-timeout.c",
+      "bytes": 8887,
+      "sha256": "dbbe20f9a90cfe660cbd7bf4751284eca02707923f778f25ac03d4dcd3cb8ed4"
+    },
+    {
+      "path": "lib/core-net/wsi.c",
+      "bytes": 38628,
+      "sha256": "074d25aa2e30cd39740d7c34b399c70d955813f06d0f0f08611b0e8101e8440a"
+    },
+    {
+      "path": "lib/core/CMakeLists.txt",
+      "bytes": 1842,
+      "sha256": "211c0a0e6e3fc4c373c35e5775e4942f8a8795fc213344bbe343c33dd08a3ebd"
+    },
+    {
+      "path": "lib/core/alloc.c",
+      "bytes": 5210,
+      "sha256": "7134021997545638ee973631c90e58b10a146ab61911a64d6f416e6e7773566a"
+    },
+    {
+      "path": "lib/core/buflist.c",
+      "bytes": 9897,
+      "sha256": "e438c8eafe8e22071504e2e7ac2c31631d0a44b278b62d0b09828e97a34ba8e3"
+    },
+    {
+      "path": "lib/core/context.c",
+      "bytes": 66631,
+      "sha256": "ed2f116d01871040de058a54185c5f022d8b241ffea4a832529b815b9702f683"
+    },
+    {
+      "path": "lib/core/libwebsockets.c",
+      "bytes": 44277,
+      "sha256": "17fcb910a001694e8824f2672966bfdef3f049288d530d1961ed57a68ec9452d"
+    },
+    {
+      "path": "lib/core/logs.c",
+      "bytes": 13665,
+      "sha256": "24b70fbcd24ac610834c438d875a9efd4592cb4fd210e2ada9fc39f915194d8e"
+    },
+    {
+      "path": "lib/core/lws_dll2.c",
+      "bytes": 7830,
+      "sha256": "5b357022fbad2705f900c3dc8995b88a19d2fd92237c959533d601c7cafcdaa1"
+    },
+    {
+      "path": "lib/core/lws_map.c",
+      "bytes": 5835,
+      "sha256": "a853934874fb90ccfc243b27bfa548270951a73c05d1f89b14cb0c034fc804b0"
+    },
+    {
+      "path": "lib/core/private-lib-core.h",
+      "bytes": 30915,
+      "sha256": "470478e609d346c2662cd5fdf188721d93f69d6c0a25fedfa17325f0aecef001"
+    },
+    {
+      "path": "lib/core/vfs.c",
+      "bytes": 3924,
+      "sha256": "ffb5f8454b8116c69283ea50a95461b0341e485e51f56dfbd3a13f23203ef8ff"
+    },
+    {
+      "path": "lib/event-libs/CMakeLists.txt",
+      "bytes": 5075,
+      "sha256": "bc6dd7854cc9b15a0488cf561028cb29bedf7665a97e9a6a8a04467809b5dbe1"
+    },
+    {
+      "path": "lib/event-libs/poll/CMakeLists.txt",
+      "bytes": 1533,
+      "sha256": "0e1a2bda086920fa8d31452f49c134f11fa84979d0ef74457746503a83a25e8e"
+    },
+    {
+      "path": "lib/event-libs/poll/poll.c",
+      "bytes": 2103,
+      "sha256": "6ebe808037cddbfe88eed5ec634d8bc6b8adba71c0e9c5f679ecc7672495443e"
+    },
+    {
+      "path": "lib/event-libs/poll/private-lib-event-libs-poll.h",
+      "bytes": 1277,
+      "sha256": "6e84408db9c79027c0219ed15dc08d1dc747a403d0c1a3e06dea0dec98c6b1f0"
+    },
+    {
+      "path": "lib/event-libs/private-lib-event-libs.h",
+      "bytes": 1273,
+      "sha256": "f63089dcf4dddef4b675c9312cdcb0b14e5a66a74c5f236b5591a5f48018ef3c"
+    },
+    {
+      "path": "lib/misc/CMakeLists.txt",
+      "bytes": 4349,
+      "sha256": "414d4784f2714d96331348f51b8a57bf0b1d4e1ffe4c028484bb10c7044865a6"
+    },
+    {
+      "path": "lib/misc/base64-decode.c",
+      "bytes": 8008,
+      "sha256": "44f75026c0aa7b120d64f8352d0c448ba35d547a9860a5504f7b1fe789b4555d"
+    },
+    {
+      "path": "lib/misc/cache-ttl/heap.c",
+      "bytes": 15683,
+      "sha256": "087069f573faf57e503d56526441d828c727593d94da4ffc35b899da91f3d8c4"
+    },
+    {
+      "path": "lib/misc/cache-ttl/lws-cache-ttl.c",
+      "bytes": 7212,
+      "sha256": "7256650dc46d9689b945d527836d3a33276caaa999a064523fb8b084d42d9042"
+    },
+    {
+      "path": "lib/misc/cache-ttl/private-lib-misc-cache-ttl.h",
+      "bytes": 3375,
+      "sha256": "8b66af916c6fe0c93b0e31e180d04ecc1365c4edff41fa967ea2dfb913af28cc"
+    },
+    {
+      "path": "lib/misc/css-prop-constants.txt",
+      "bytes": 1087,
+      "sha256": "1b6bd91085411a849aca9ed42edc8fecdc2c15db22f7d9c826cc8d7196d14120"
+    },
+    {
+      "path": "lib/misc/dir.c",
+      "bytes": 11801,
+      "sha256": "93d051d6fec349de064f7aa152832c838b4239bcaab502b797e2b0f571f352f2"
+    },
+    {
+      "path": "lib/misc/getifaddrs.c",
+      "bytes": 6855,
+      "sha256": "e12f1decf3fc466ecfaf0945fc02279ef7ab11f0fe3be5040c81e34e519525d7"
+    },
+    {
+      "path": "lib/misc/getifaddrs.h",
+      "bytes": 2583,
+      "sha256": "042cc179a7f8af33041d02eacbe16413e638145049cace660fb2a49047d5114d"
+    },
+    {
+      "path": "lib/misc/jrpc/jrpc.c",
+      "bytes": 9157,
+      "sha256": "db2e6fa59850d49005b7315361f48f168be1627c4a7c8fd763a3f8c43ca7dc98"
+    },
+    {
+      "path": "lib/misc/lws-ring.c",
+      "bytes": 7541,
+      "sha256": "31ee592dd722ee3052a00bb5cda669e54ac721b6c3d613a120a37d269abb52ad"
+    },
+    {
+      "path": "lib/misc/minilex.c",
+      "bytes": 5452,
+      "sha256": "13fc31a6fcfac6e024bdf152cf4c5f13721964243c007aecf7f225db1523ff6a"
+    },
+    {
+      "path": "lib/misc/peer-limits.c",
+      "bytes": 8317,
+      "sha256": "e7dd03e8f4aa33d77077a82cae097367f0a4b9c611361e6ac45e7da589c9aa5f"
+    },
+    {
+      "path": "lib/misc/prng.c",
+      "bytes": 2154,
+      "sha256": "961d712b3d143780427ed02d1015f29eefc314dda2347ab7faeb2ca873dafe2c"
+    },
+    {
+      "path": "lib/misc/sha-1.c",
+      "bytes": 9297,
+      "sha256": "4995d17f937902b924879c842b3c75d9633dfc6efa25a338ce6a3978dfc906aa"
+    },
+    {
+      "path": "lib/plat/unix/CMakeLists.txt",
+      "bytes": 3252,
+      "sha256": "adef0348eeb5f1d0a183328089ac1ff7e9496f1842c5e14f277494ddd339321e"
+    },
+    {
+      "path": "lib/plat/unix/private-lib-plat-unix.h",
+      "bytes": 5700,
+      "sha256": "6f29ab8856d41210d2b4b1303d09a71ea74a016c7b181186e9b19e06d921a40c"
+    },
+    {
+      "path": "lib/plat/unix/unix-caps.c",
+      "bytes": 5805,
+      "sha256": "3d628f778c798a082bad73f7b412130a0febbef79175a9e017dcc02b0cc61a32"
+    },
+    {
+      "path": "lib/plat/unix/unix-fds.c",
+      "bytes": 5628,
+      "sha256": "9f792e6f396a2751354b6f359224cce38be12abe32ce4d07ea862b7f208d9600"
+    },
+    {
+      "path": "lib/plat/unix/unix-file.c",
+      "bytes": 4184,
+      "sha256": "453eebe7d582672483033c38218689831aa0443c5d96829bb739c43d67044b7a"
+    },
+    {
+      "path": "lib/plat/unix/unix-init.c",
+      "bytes": 7911,
+      "sha256": "e0248fab9f535f671300b7a434d62f01dcb3a0a77c55637a41d55d726a0c026f"
+    },
+    {
+      "path": "lib/plat/unix/unix-misc.c",
+      "bytes": 3400,
+      "sha256": "061d77ce4723854b3016f864c395607ab5d812e577811e8411b40e7650f3c50e"
+    },
+    {
+      "path": "lib/plat/unix/unix-pipe.c",
+      "bytes": 3083,
+      "sha256": "53157ffa37b43cc6012f34225c156ed6e2105920a592683efdbfec01cbcbaa66"
+    },
+    {
+      "path": "lib/plat/unix/unix-plugins.c",
+      "bytes": 3226,
+      "sha256": "961f13c16a5dd7debdbf0ef8e46ebdcfef3c62b58c929da1423084f811105da0"
+    },
+    {
+      "path": "lib/plat/unix/unix-resolv.c",
+      "bytes": 2745,
+      "sha256": "6d7d2b447de2bf3cdf21486adc52c590edc963efd02533fed92e9b7bfe7a977e"
+    },
+    {
+      "path": "lib/plat/unix/unix-service.c",
+      "bytes": 8013,
+      "sha256": "c02832cc032548756a556877ece1efcce3daf8aed6df52e75872d13fda60c4f6"
+    },
+    {
+      "path": "lib/plat/unix/unix-sockets.c",
+      "bytes": 16655,
+      "sha256": "f17dc0ced1b00377907de1443d7d2c4d211b8d0870c0124c13c1793928bc828e"
+    },
+    {
+      "path": "lib/plat/unix/unix-spawn.c",
+      "bytes": 23716,
+      "sha256": "6b18329c6eef564972d19b81af850d5e2d64f009666be1fdbce78c47cc6f8afd"
+    },
+    {
+      "path": "lib/plat/unix/unix-systemd.c",
+      "bytes": 2891,
+      "sha256": "ec6361f82868e2001444635cdd59c6e62d4a2a7d2a8ca291c92b3b3a59c518a9"
+    },
+    {
+      "path": "lib/plat/windows/CMakeLists.txt",
+      "bytes": 3332,
+      "sha256": "a1b2ed6ab6e422e7613137f9edad749f0d0cd8ded3456a2a94736882f2c4843e"
+    },
+    {
+      "path": "lib/plat/windows/private-lib-plat-windows.h",
+      "bytes": 4772,
+      "sha256": "c7535f8882618f874e84502d1cfa2eaebd36f1b5ad8c291441efa4845620126f"
+    },
+    {
+      "path": "lib/plat/windows/windows-fds.c",
+      "bytes": 2465,
+      "sha256": "edfb8e918a8e3e0e224efd650d3d36fb2a8ed0a8023788ce272c89119cb4d245"
+    },
+    {
+      "path": "lib/plat/windows/windows-file.c",
+      "bytes": 4624,
+      "sha256": "55674489a194bd3e5479eafab8e702ac16facd88b1f92915e124108da480c45b"
+    },
+    {
+      "path": "lib/plat/windows/windows-init.c",
+      "bytes": 4425,
+      "sha256": "ec32605b88004bdf7c5c1eef99e5821dbf546d2c416c152410f5275598fcaa0d"
+    },
+    {
+      "path": "lib/plat/windows/windows-misc.c",
+      "bytes": 2913,
+      "sha256": "5c390da7554895a09845d779a7a16a4bb2cfa427facddd422f69914b246d11bb"
+    },
+    {
+      "path": "lib/plat/windows/windows-pipe.c",
+      "bytes": 4186,
+      "sha256": "7c32fef1af49f166a4cf4ed28d416fea005742f094944292c9ab1c2f25b6a9df"
+    },
+    {
+      "path": "lib/plat/windows/windows-plugins.c",
+      "bytes": 4366,
+      "sha256": "440ac822c28e2982d792ad07658dc93b4ee2e746a69534aa11d7e4a442fb1e01"
+    },
+    {
+      "path": "lib/plat/windows/windows-resolv.c",
+      "bytes": 2838,
+      "sha256": "f5f66ce5e5e76178592ef385efb559810d31295dba5a3dae33d65b42ee27d234"
+    },
+    {
+      "path": "lib/plat/windows/windows-service.c",
+      "bytes": 5496,
+      "sha256": "cfcf28610fe63c5d1e4b57302db92e6f75ffe85fb12bdc1e93750fc9a8825b8f"
+    },
+    {
+      "path": "lib/plat/windows/windows-sockets.c",
+      "bytes": 16219,
+      "sha256": "ca401b6c1c760ba5272cae82f0786b000ac98b4a98105c435c2d82f1bcc32e21"
+    },
+    {
+      "path": "lib/roles/CMakeLists.txt",
+      "bytes": 2560,
+      "sha256": "633626f5cfde29316828f0305120b16cf9f55ba2391ea0c20fdafcb34070c445"
+    },
+    {
+      "path": "lib/roles/h1/CMakeLists.txt",
+      "bytes": 1514,
+      "sha256": "e2753fee0612d6be19da8f509e0b2b5a430665c2a60f63f93094f6d0ae165b78"
+    },
+    {
+      "path": "lib/roles/h1/ops-h1.c",
+      "bytes": 32002,
+      "sha256": "1e0013884c74dbb55ed74ccbb6887e3ce6783d5d27e75b9476bc5328494913c6"
+    },
+    {
+      "path": "lib/roles/h1/private-lib-roles-h1.h",
+      "bytes": 1514,
+      "sha256": "0b8624d26654df2d5a6cbece066ff49f804f9b33890a6c7462f3e7f93aa38c34"
+    },
+    {
+      "path": "lib/roles/http/CMakeLists.txt",
+      "bytes": 2793,
+      "sha256": "280b542147c340801ff0d6039b8ea41f3f1a6c6b5923cd1e063aed79497968ba"
+    },
+    {
+      "path": "lib/roles/http/client/client-http.c",
+      "bytes": 63270,
+      "sha256": "d252993665591ae8f2ec0f8d8ee040da5d07fce5558dcfb5146794f6155bc687"
+    },
+    {
+      "path": "lib/roles/http/cookie.c",
+      "bytes": 15256,
+      "sha256": "bd8fc6293f2d0d5a0b320e0b4d3b430516f0a26c5b35cb886b0f721692e898e2"
+    },
+    {
+      "path": "lib/roles/http/date.c",
+      "bytes": 5319,
+      "sha256": "0c3e505f107b4b8bc27591ffc3f60285e9e917fdde5b448d8ff08f96c9728731"
+    },
+    {
+      "path": "lib/roles/http/header.c",
+      "bytes": 17153,
+      "sha256": "f93360f7e63ff842486d2e497dbfc7a169f8eee0f3238e170c931ac2808b786b"
+    },
+    {
+      "path": "lib/roles/http/lextable-strings.h",
+      "bytes": 3242,
+      "sha256": "c18a698ba67cb278c9c131ab5b7911d1c30035ae9d040fec7b1e56b7088c3a58"
+    },
+    {
+      "path": "lib/roles/http/lextable.h",
+      "bytes": 340443,
+      "sha256": "42c885f2dbd4f91c8e49af2df6209cbb9effe5415a5c3997d995b5755074e778"
+    },
+    {
+      "path": "lib/roles/http/minilex.c",
+      "bytes": 10631,
+      "sha256": "8d1f6b4bf80d64e41b158e036b0ac7b49aa744f1506d62186c8d803fdd1fe35b"
+    },
+    {
+      "path": "lib/roles/http/parsers.c",
+      "bytes": 41239,
+      "sha256": "a8155b4eba5307420b1d993d3d65a84b82ddcaa963da44cd610d147a4aabab8e"
+    },
+    {
+      "path": "lib/roles/http/private-lib-roles-http.h",
+      "bytes": 9062,
+      "sha256": "008b86648f89697500017f7deef55eecf38c35f868674184be6cd3327325f254"
+    },
+    {
+      "path": "lib/roles/http/server/access-log.c",
+      "bytes": 5914,
+      "sha256": "a9bdd5a0b417955d245131b04a5350220da8f81d86a2085bc26d5b66ffed617a"
+    },
+    {
+      "path": "lib/roles/http/server/fops-zip.c",
+      "bytes": 17414,
+      "sha256": "b3e83c4b1b03305fea59f0bf92a61664d0dd822c975915201965ae216b1b1fc5"
+    },
+    {
+      "path": "lib/roles/http/server/lejp-conf.c",
+      "bytes": 31371,
+      "sha256": "536650513f2bf4678fa4d7a147cbb5968d0a645dc8f15ee529f016db547df0d1"
+    },
+    {
+      "path": "lib/roles/http/server/lws-spa.c",
+      "bytes": 14880,
+      "sha256": "cbc24d9e1f40756fd8417ff304f9347d4b1a6c8e1e0e1715300e040b8a04c0d5"
+    },
+    {
+      "path": "lib/roles/http/server/ranges.c",
+      "bytes": 4960,
+      "sha256": "851b802da0473eeceebf90dda4c853866e9e7af0e7a3973fa17c4884858d6f55"
+    },
+    {
+      "path": "lib/roles/http/server/rewrite.c",
+      "bytes": 1022,
+      "sha256": "1d262b3d015ce53b82069150a608ff797502c59ed191fc523d7abe527b73342b"
+    },
+    {
+      "path": "lib/roles/http/server/server.c",
+      "bytes": 91451,
+      "sha256": "15df602062c477dbecc72f6e98bcda3e48faf4775fb0422c9d74e241e841616b"
+    },
+    {
+      "path": "lib/roles/listen/CMakeLists.txt",
+      "bytes": 1523,
+      "sha256": "34bb1051d38c781c9e708160e5b768fe606a939a9c9c74a7f862a881a547bb17"
+    },
+    {
+      "path": "lib/roles/listen/ops-listen.c",
+      "bytes": 6864,
+      "sha256": "cda3c007ce12e8d5c25ea9de98d317715fbeffeb7352a7aa753bd14441d69ded"
+    },
+    {
+      "path": "lib/roles/pipe/ops-pipe.c",
+      "bytes": 5107,
+      "sha256": "a76055efb4af3cbe6d51e7b877fe87f658d247d3cb36b227469c1995abe7d661"
+    },
+    {
+      "path": "lib/roles/private-lib-roles.h",
+      "bytes": 15018,
+      "sha256": "e286b03e04581e26dd441a631ec35b72ffb651ae6d6d202715341b410a9e23d3"
+    },
+    {
+      "path": "lib/roles/raw-skt/CMakeLists.txt",
+      "bytes": 1610,
+      "sha256": "5ecf217a29a971551571bff55855e2fa02d0d1b735fa808b8c6cfc9ece2051b1"
+    },
+    {
+      "path": "lib/roles/raw-skt/ops-raw-skt.c",
+      "bytes": 10611,
+      "sha256": "49092d285981916dbf877da7f88d554485ed70fed8f45e14ddde67952c9c163d"
+    },
+    {
+      "path": "lib/roles/ws/CMakeLists.txt",
+      "bytes": 1917,
+      "sha256": "9e9fca643859b947d29d228da19b0c6a40a64414ecc4b62e1a41a719f66c19eb"
+    },
+    {
+      "path": "lib/roles/ws/client-parser-ws.c",
+      "bytes": 22492,
+      "sha256": "7625f7d99d5cae9abc19834959b4b7d6e65413f1be857c97a4995e5056886479"
+    },
+    {
+      "path": "lib/roles/ws/client-ws.c",
+      "bytes": 16736,
+      "sha256": "7c6d1f91894426dc4192740a31e1cc3e232ebe815a232d44a0fcaee3e4a3faae"
+    },
+    {
+      "path": "lib/roles/ws/ext/extension-permessage-deflate.c",
+      "bytes": 16053,
+      "sha256": "7fc303f29e718301d301846c8dff3d09478207deba3ab22de78bc2b02d02d1e1"
+    },
+    {
+      "path": "lib/roles/ws/ext/extension-permessage-deflate.h",
+      "bytes": 2128,
+      "sha256": "898e59ffb96a3733e001a920a4efc3bb1c44fadea1ec90293dce4d32d2325eb7"
+    },
+    {
+      "path": "lib/roles/ws/ext/extension.c",
+      "bytes": 8776,
+      "sha256": "a6e8b08039cf1077ec111af198a71e1142904bc0f32566856a1f3428b4f6678d"
+    },
+    {
+      "path": "lib/roles/ws/ops-ws.c",
+      "bytes": 60148,
+      "sha256": "07494c5a94e0683b1739b0c9393bdab1a76129adb9100544bb72bf694a0f315c"
+    },
+    {
+      "path": "lib/roles/ws/private-lib-roles-ws.h",
+      "bytes": 6140,
+      "sha256": "6cc37f4f178224ec5599a6868723e321388e0a8661888b8c7d25882564abdd55"
+    },
+    {
+      "path": "lib/roles/ws/server-ws.c",
+      "bytes": 28675,
+      "sha256": "8e491f9899720fe0ddbf1b93c7742c4815d05f40956f8c63097194fbd294230d"
+    },
+    {
+      "path": "lib/secure-streams/serialized/client/CMakeLists.txt",
+      "bytes": 575,
+      "sha256": "11d2353c079b3c0964d4ce0494d63f4dfc3756a06b66432cce61c9b31776d25f"
+    },
+    {
+      "path": "lib/system/CMakeLists.txt",
+      "bytes": 2414,
+      "sha256": "893ca4f803c2baec293c35cbc76d4b3d1dea863b0641b7f63b39034e6ab64888"
+    },
+    {
+      "path": "lib/system/async-dns/async-dns-parse.c",
+      "bytes": 18546,
+      "sha256": "c6a168f08a80afc44194c6d4031858240a8b88ac17d5421c5aa44fa5298bc2b4"
+    },
+    {
+      "path": "lib/system/async-dns/async-dns.c",
+      "bytes": 29404,
+      "sha256": "cc4f931e727cf077f674098c353520aca7b49790b8c5d2dcd9648bdd35bde4d0"
+    },
+    {
+      "path": "lib/system/async-dns/private-lib-async-dns.h",
+      "bytes": 4562,
+      "sha256": "0c594a4641a6ac60d46c9dfa74c683c1f8c2a8e9aed3c7af289649d62b928f25"
+    },
+    {
+      "path": "lib/system/fault-injection/fault-injection.c",
+      "bytes": 9843,
+      "sha256": "637a0a26e314ddf0631dc1df484cea484622d0863946e46b86a367a8e5f57239"
+    },
+    {
+      "path": "lib/system/fault-injection/private-lib-system-fault-injection.h",
+      "bytes": 1385,
+      "sha256": "61b571791155187468113a4708ed3c37109e4bbb01510181371f7795d5474958"
+    },
+    {
+      "path": "lib/system/metrics/CMakeLists.txt",
+      "bytes": 137,
+      "sha256": "c28559893a37772512a073266568c1df6ff1eb22beeb506f764f4e697aa39b36"
+    },
+    {
+      "path": "lib/system/metrics/metrics.c",
+      "bytes": 22177,
+      "sha256": "bb086458da28aae0cc77f8ce6a30a6efc15ce89eba2314d04b63491dbdacb40f"
+    },
+    {
+      "path": "lib/system/metrics/private-lib-system-metrics.h",
+      "bytes": 4287,
+      "sha256": "c125a77899e96233919972f97958ee99fcea1e3461ac81c30d17917ac9165ca7"
+    },
+    {
+      "path": "lib/system/smd/CMakeLists.txt",
+      "bytes": 92,
+      "sha256": "141a818cf44833505e3d46e75e80de5d857b07ab713172cbd36925a27e05b9fd"
+    },
+    {
+      "path": "lib/system/smd/private-lib-system-smd.h",
+      "bytes": 2752,
+      "sha256": "22550f7441a54508e0ac8e0a86c3233ff59876de8b59e6002df84213a80549fe"
+    },
+    {
+      "path": "lib/system/smd/smd.c",
+      "bytes": 21748,
+      "sha256": "c2502fe6e4d2c22b0e049cb5d8fd4413b878cafc718ec5605d71e39c80260133"
+    },
+    {
+      "path": "lib/system/stdin.c",
+      "bytes": 4699,
+      "sha256": "ebc2a2e2ddb7cd1876a371a00f38be0a5b49a3a2c5c0dbbad400e33ea9a39fad"
+    },
+    {
+      "path": "lib/system/system.c",
+      "bytes": 5790,
+      "sha256": "086c30109052699361d1bc141c3619965bcb5348aa524bd239ea27efedc1e66d"
+    },
+    {
+      "path": "lwsws/CMakeLists.txt",
+      "bytes": 2265,
+      "sha256": "cff53903fb55a44fd3a7fe84bc5a431463ffcd8c3131cc742617af3bd48d4a21"
+    },
+    {
+      "path": "plugins/CMakeLists.txt",
+      "bytes": 7952,
+      "sha256": "deb3ad054a3e5ff344a01e723e7806883c9167af059e49da0bb327f09878c969"
+    },
+    {
+      "path": "test-apps/CMakeLists.txt",
+      "bytes": 7827,
+      "sha256": "00ae341a187f1e6c2096d787d2eb66f942743ad0e0e1b39e67524b45633dd45d"
+    },
+    {
+      "path": "win32port/dirent/dirent-win32.h",
+      "bytes": 26801,
+      "sha256": "70676c386529e7d6e8551d045eaff46cc2a97c8d98fea05128cf36f0a856f133"
+    },
+    {
+      "path": "win32port/version.rc.in",
+      "bytes": 1419,
+      "sha256": "72677dec811ac4a38359611e636a96745b4227609ffc78bbe411ed19340a3d9f"
+    },
+    {
+      "path": "win32port/win32helpers/getopt.c",
+      "bytes": 4442,
+      "sha256": "3e584071cf468f6b3f4c0b23423428617b1429816137dcea5276b07b29cf1514"
+    },
+    {
+      "path": "win32port/win32helpers/getopt.h",
+      "bytes": 670,
+      "sha256": "7188e2297aacf5ec2b41c77e12f516de4d6b74455ca7611b770974b21fce9b2a"
+    },
+    {
+      "path": "win32port/win32helpers/getopt_long.c",
+      "bytes": 6611,
+      "sha256": "8a2591e8b8b7d7ca6c68d59f734e36d8fec007e9c4e3372c4943e88d036bd5d6"
+    },
+    {
+      "path": "win32port/win32helpers/gettimeofday.c",
+      "bytes": 775,
+      "sha256": "9a2c698461e87fa94b35a6c882d6fa365d26d941860a3fcfcaa4ae693f532151"
+    },
+    {
+      "path": "win32port/win32helpers/gettimeofday.h",
+      "bytes": 570,
+      "sha256": "65bbb4e729c9a645f9f1ff125c5e116af137f285812b3da31bd44801ccf1fb8c"
+    }
+  ]
+}

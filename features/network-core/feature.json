@@ -1,0 +1,43 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "network-core",
+  "version": "0.1.0",
+  "title": "Network Core",
+  "status": "opt-in",
+  "kind": "gameplay-infrastructure",
+  "summary": "In-place WebSocket transport for authoritative rooms: single-threaded server and client on a pruned MIT libwebsockets, a browser client on the Emscripten WebSocket API, a bounded little-endian codec, and the HELLO version gate, message and queue limits, and rate limit every room shares.",
+  "copy_model": "in-place",
+  "layer": "L1",
+  "owners": [
+    "features/network-core"
+  ],
+  "dependencies": [
+    "vendored libwebsockets v4.5.8 (MIT) for native builds, TLS off",
+    "emscripten websocket.h (-lwebsocket.js) for web builds"
+  ],
+  "commands": {
+    "test": "node --test features/network-core/tests/integration.test.mjs",
+    "contracts": "node features/validate_contracts.mjs"
+  },
+  "provides": [
+    "nt::network_core CMake target (server + client natively, client on web)",
+    "nt::network_core_codec CMake target (codec only, every platform)",
+    "net_ws_server.h: net_ws_server_create/service/send/close",
+    "net_ws_client.h: net_ws_client_create/service/send on native and web",
+    "net_codec.h: bounded reader/writer, HELLO, NET_CLOSE_* codes"
+  ],
+  "registers": {
+    "link_libraries": [
+      "nt::network_core"
+    ]
+  },
+  "flags": {
+    "runtime": "none; the transport is compiled in wherever the target is linked"
+  },
+  "manuals": {
+    "install": "features/network-core/INSTALL.md",
+    "upstream": "features/network-core/UPSTREAM.json"
+  },
+  "art_needs": [],
+  "default_template": false
+}
