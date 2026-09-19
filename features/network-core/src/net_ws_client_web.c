@@ -165,6 +165,13 @@ void net_ws_client_service(net_ws_client_t *client, uint32_t timeout_ms) {
 
 bool net_ws_client_send(net_ws_client_t *client, const uint8_t *data, size_t size) {
     if (client->state != NET_WS_CLIENT_OPEN || size == 0U || size > UINT32_MAX) { return false; }
+    /* The browser buffers without limit; the send queue bound is enforced on
+       what it still holds. */
+    size_t buffered = 0U;
+    if (emscripten_websocket_get_buffered_amount(client->socket, &buffered) == EMSCRIPTEN_RESULT_SUCCESS &&
+        buffered + size > client->config.send_queue_bytes) {
+        return false;
+    }
     return emscripten_websocket_send_binary(client->socket, (void *)data, (uint32_t)size) ==
         EMSCRIPTEN_RESULT_SUCCESS;
 }

@@ -30,7 +30,7 @@ typedef enum net_ws_close_reason_t {
 typedef struct net_ws_server_config_t {
     const char *bind_address;         /* NULL binds every interface */
     uint16_t port;                    /* 0 picks an ephemeral port */
-    const char *subprotocol;          /* required Sec-WebSocket-Protocol, NULL = clients send none */
+    const char *subprotocol;          /* Sec-WebSocket-Protocol clients must request; NULL = none */
     uint32_t max_clients;
     uint32_t max_message_bytes;       /* inbound, after fragment reassembly */
     uint32_t send_queue_bytes;        /* outbound per client, incl. 4-byte prefixes */

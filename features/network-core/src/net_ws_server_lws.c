@@ -138,16 +138,21 @@ static void on_complete_message(net_ws_server_t *server, struct lws *wsi, sessio
         session->hello_done = true;
         server->client_count += 1U;
         lws_set_timeout(wsi, NO_PENDING_TIMEOUT, 0);
-        if (server->config.on_connect != NULL) {
+        if (!server->destroying && server->config.on_connect != NULL) {
             server->config.on_connect(server->config.user, session->id);
         }
+        return;
+    }
+    /* HELLO is the transport's own frame; the budget starts with the game's. */
+    if (!rate_allows(server, session)) {
+        request_close(server, wsi, session, NET_CLOSE_RATE, NET_WS_CLOSE_RATE);
         return;
     }
     if (session->rx_size == 0U || session->rx[0] < NET_MSG_APP_FIRST) {
         request_close(server, wsi, session, NET_CLOSE_FORMAT, NET_WS_CLOSE_PROTOCOL);
         return;
     }
-    if (server->config.on_message != NULL) {
+    if (!server->destroying && server->config.on_message != NULL) {
         server->config.on_message(server->config.user, session->id, session->rx, session->rx_size);
     }
 }
@@ -170,10 +175,6 @@ static int on_receive(net_ws_server_t *server, struct lws *wsi, session_t *sessi
     memcpy(session->rx + session->rx_size, data, size);
     session->rx_size += size;
     if (!lws_is_final_fragment(wsi) || lws_remaining_packet_payload(wsi) > 0U) { return 0; }
-    if (!rate_allows(server, session)) {
-        request_close(server, wsi, session, NET_CLOSE_RATE, NET_WS_CLOSE_RATE);
-        return 0;
-    }
     on_complete_message(server, wsi, session);
     return 0;
 }
@@ -200,7 +201,7 @@ static int on_writeable(net_ws_server_t *server, struct lws *wsi, session_t *ses
            before it (a kick reason, a final state); protocol closes do not. */
         if (session->close_reason == NET_WS_CLOSE_APP) {
             drain(server, wsi, session);
-            if (session->tx.count > 0U) {
+            if (session->tx.count > 0U || lws_send_pipe_choked(wsi)) {
                 lws_callback_on_writable(wsi);
                 return 0;
             }
@@ -226,6 +227,14 @@ static int protocol_callback(struct lws *wsi, enum lws_callback_reasons reason,
         return on_writeable(server_of(wsi), wsi, session);
     case LWS_CALLBACK_CLOSED:
         on_closed(server_of(wsi), session);
+        return 0;
+    case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
+        /* lws binds a header-less upgrade to protocols[0] whatever its name;
+           a configured subprotocol must actually be requested. */
+        if (server_of(wsi)->config.subprotocol != NULL &&
+            lws_hdr_total_length(wsi, WSI_TOKEN_PROTOCOL) == 0) {
+            return 1;
+        }
         return 0;
     case LWS_CALLBACK_HTTP:
         /* Plain HTTP has nothing to serve here. */

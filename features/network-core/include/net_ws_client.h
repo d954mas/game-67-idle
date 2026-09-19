@@ -42,7 +42,7 @@ typedef struct net_ws_client_config_t {
     uint32_t protocol_version;
     uint32_t max_message_bytes;     /* inbound, after fragment reassembly */
     /* Inbound messages held until service(); must hold at least one
-       message (max_message_bytes + 5). */
+       message (max_message_bytes + 4). */
     uint32_t receive_queue_bytes;
     net_ws_overflow_policy_t overflow_policy;
     uint32_t send_queue_bytes;      /* outbound messages waiting for the socket */

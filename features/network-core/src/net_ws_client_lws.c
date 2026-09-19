@@ -53,7 +53,7 @@ static int on_established(net_ws_client_t *client) {
     net_hello_encode(&writer, client->config.protocol_version);
     net_queue_push(&client->tx, hello, sizeof hello);
     lws_callback_on_writable(client->wsi);
-    if (client->config.on_open != NULL) { client->config.on_open(client->config.user); }
+    if (!client->destroying && client->config.on_open != NULL) { client->config.on_open(client->config.user); }
     return 0;
 }
 
@@ -74,7 +74,7 @@ static int on_receive(net_ws_client_t *client, struct lws *wsi, const uint8_t *d
     memcpy(client->rx + client->rx_size, data, size);
     client->rx_size += size;
     if (!lws_is_final_fragment(wsi) || lws_remaining_packet_payload(wsi) > 0U) { return 0; }
-    if (client->config.on_message != NULL) {
+    if (!client->destroying && client->config.on_message != NULL) {
         client->config.on_message(client->config.user, client->rx, client->rx_size);
     }
     return 0;
