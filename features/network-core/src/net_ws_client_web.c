@@ -14,6 +14,7 @@
    so no overflow policy can ever discard them. */
 struct net_ws_client_t {
     net_ws_client_config_t config;
+    uint8_t ticket[NET_HELLO_TICKET_MAX];
     EMSCRIPTEN_WEBSOCKET_T socket;
     net_ws_client_state_t state;
     net_queue_t messages;
@@ -37,11 +38,11 @@ static EM_BOOL on_open(int type, const EmscriptenWebSocketOpenEvent *event, void
     (void)type;
     (void)event;
     net_ws_client_t *client = (net_ws_client_t *)user;
-    uint8_t hello[NET_HELLO_SIZE];
+    uint8_t hello[NET_HELLO_MAX_SIZE];
     net_writer_t writer;
     net_writer_init(&writer, hello, sizeof hello);
-    net_hello_encode(&writer, client->config.protocol_version);
-    emscripten_websocket_send_binary(client->socket, hello, sizeof hello);
+    net_hello_encode(&writer, client->config.protocol_version, client->ticket, client->config.ticket_size);
+    emscripten_websocket_send_binary(client->socket, hello, (uint32_t)writer.pos);
     client->state = NET_WS_CLIENT_OPEN;
     client->open_pending = true;
     return EM_TRUE;
@@ -96,11 +97,12 @@ static void free_client(net_ws_client_t *client) {
 net_ws_client_t *net_ws_client_create(const net_ws_client_config_t *config) {
     if (config == NULL || config->url == NULL || config->max_message_bytes == 0U ||
         config->receive_queue_bytes < config->max_message_bytes + 4U ||
-        !emscripten_websocket_is_supported()) {
+        config->ticket_size > NET_HELLO_TICKET_MAX || !emscripten_websocket_is_supported()) {
         return NULL;
     }
     net_ws_client_t *client = (net_ws_client_t *)calloc(1U, sizeof *client);
     if (client == NULL) { return NULL; }
+    if (config->ticket_size > 0U) { memcpy(client->ticket, config->ticket, config->ticket_size); }
     client->config = *config;
     client->state = NET_WS_CLIENT_CONNECTING;
     client->scratch = (uint8_t *)malloc(config->max_message_bytes);

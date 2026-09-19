@@ -40,6 +40,10 @@ typedef struct net_ws_client_config_t {
     const char *url;                /* ws://host:port/path */
     const char *subprotocol;        /* Sec-WebSocket-Protocol, NULL for none */
     uint32_t protocol_version;
+    /* Opaque bytes carried in HELLO for the server's on_connect; at most
+       NET_HELLO_TICKET_MAX, copied at create. */
+    const uint8_t *ticket;
+    size_t ticket_size;
     uint32_t max_message_bytes;     /* inbound, after fragment reassembly */
     /* Inbound messages held until service(); must hold at least one
        message (max_message_bytes + 4). */

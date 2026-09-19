@@ -40,9 +40,17 @@ typedef struct net_ws_server_config_t {
     /* A connection that has not sent HELLO, or a close the peer does not
        acknowledge, is dropped after this long. 0 = 10 s. */
     uint32_t handshake_timeout_ms;
+    /* Liveness, server-owned because browsers cannot send pings: after
+       ping_idle_s without inbound traffic a protocol ping goes out, and a
+       client silent for hangup_idle_s (pongs count) is dropped with
+       NET_WS_CLOSE_DROPPED. 0 = no pings. */
+    uint16_t ping_idle_s;
+    uint16_t hangup_idle_s;
     uint32_t protocol_version;
     void *user;
-    void (*on_connect)(void *user, uint32_t client);
+    /* `ticket` is what the client put in its HELLO, NET_HELLO_TICKET_MAX
+       bytes at most, valid for the call. */
+    void (*on_connect)(void *user, uint32_t client, const uint8_t *ticket, size_t ticket_size);
     void (*on_message)(void *user, uint32_t client, const uint8_t *data, size_t size);
     void (*on_disconnect)(void *user, uint32_t client, net_ws_close_reason_t reason);
 } net_ws_server_config_t;

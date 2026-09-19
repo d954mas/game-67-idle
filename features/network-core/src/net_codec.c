@@ -100,21 +100,31 @@ void net_write_f32(net_writer_t *writer, float value) {
     net_write_u32(writer, bits);
 }
 
-void net_hello_encode(net_writer_t *writer, uint32_t protocol_version) {
+void net_hello_encode(net_writer_t *writer, uint32_t protocol_version, const uint8_t *ticket,
+    size_t ticket_size) {
     net_write_u8(writer, NET_MSG_HELLO);
     net_write_u32(writer, NET_HELLO_MAGIC);
     net_write_u32(writer, protocol_version);
+    if (ticket_size > NET_HELLO_TICKET_MAX) {
+        writer->ok = false;
+        return;
+    }
+    for (size_t index = 0U; index < ticket_size; ++index) { net_write_u8(writer, ticket[index]); }
 }
 
-bool net_hello_decode(const uint8_t *data, size_t size, uint32_t *protocol_version) {
+bool net_hello_decode(const uint8_t *data, size_t size, uint32_t *protocol_version,
+    const uint8_t **ticket, size_t *ticket_size) {
     net_reader_t reader;
     net_reader_init(&reader, data, size);
     const uint8_t type = net_read_u8(&reader);
     const uint32_t magic = net_read_u32(&reader);
     const uint32_t version = net_read_u32(&reader);
-    if (!net_reader_complete(&reader) || type != NET_MSG_HELLO || magic != NET_HELLO_MAGIC) {
+    if (!reader.ok || type != NET_MSG_HELLO || magic != NET_HELLO_MAGIC ||
+        size - NET_HELLO_BASE_SIZE > NET_HELLO_TICKET_MAX) {
         return false;
     }
     *protocol_version = version;
+    *ticket = data + NET_HELLO_BASE_SIZE;
+    *ticket_size = size - NET_HELLO_BASE_SIZE;
     return true;
 }

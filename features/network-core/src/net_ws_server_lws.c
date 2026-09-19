@@ -35,6 +35,7 @@ struct net_ws_server_t {
     struct lws_context *context;
     struct lws_vhost *vhost;
     struct lws_protocols protocols[2];
+    lws_retry_bo_t idle_policy;
     lws_sorted_usec_list_t wake;
     slot_t *slots;
     uint32_t client_count;     /* sessions past HELLO */
@@ -72,8 +73,8 @@ static int on_established(net_ws_server_t *server, struct lws *wsi, session_t *s
     session->last_us = lws_now_usecs();
     session->tokens = (double)server->config.max_messages_per_second;
     /* HELLO may be longer than the smallest application message. */
-    session->rx_capacity = server->config.max_message_bytes > NET_HELLO_SIZE
-        ? server->config.max_message_bytes : NET_HELLO_SIZE;
+    session->rx_capacity = server->config.max_message_bytes > NET_HELLO_MAX_SIZE
+        ? server->config.max_message_bytes : NET_HELLO_MAX_SIZE;
     session->rx = (uint8_t *)malloc(session->rx_capacity);
     if (session->rx == NULL || !net_queue_init(&session->tx, server->config.send_queue_bytes)) {
         return -1;
@@ -127,7 +128,9 @@ static bool rate_allows(net_ws_server_t *server, session_t *session) {
 static void on_complete_message(net_ws_server_t *server, struct lws *wsi, session_t *session) {
     if (!session->hello_done) {
         uint32_t version = 0U;
-        if (!net_hello_decode(session->rx, session->rx_size, &version)) {
+        const uint8_t *ticket = NULL;
+        size_t ticket_size = 0U;
+        if (!net_hello_decode(session->rx, session->rx_size, &version, &ticket, &ticket_size)) {
             request_close(server, wsi, session, NET_CLOSE_BAD_HELLO, NET_WS_CLOSE_PROTOCOL);
             return;
         }
@@ -139,7 +142,7 @@ static void on_complete_message(net_ws_server_t *server, struct lws *wsi, sessio
         server->client_count += 1U;
         lws_set_timeout(wsi, NO_PENDING_TIMEOUT, 0);
         if (!server->destroying && server->config.on_connect != NULL) {
-            server->config.on_connect(server->config.user, session->id);
+            server->config.on_connect(server->config.user, session->id, ticket, ticket_size);
         }
         return;
     }
@@ -275,8 +278,8 @@ net_ws_server_t *net_ws_server_create(const net_ws_server_config_t *config) {
     server->protocols[0].name = config->subprotocol != NULL ? config->subprotocol : "";
     server->protocols[0].callback = protocol_callback;
     server->protocols[0].per_session_data_size = sizeof(session_t);
-    server->protocols[0].rx_buffer_size = config->max_message_bytes > NET_HELLO_SIZE
-        ? config->max_message_bytes : NET_HELLO_SIZE;
+    server->protocols[0].rx_buffer_size = config->max_message_bytes > NET_HELLO_MAX_SIZE
+        ? config->max_message_bytes : NET_HELLO_MAX_SIZE;
 
     /* Process-global in lws; every context in this process wants the same. */
     lws_set_log_level(LLL_ERR | LLL_WARN, NULL);
@@ -302,6 +305,12 @@ net_ws_server_t *net_ws_server_create(const net_ws_server_config_t *config) {
     info.extensions = NULL;
     info.gid = (gid_t)-1;
     info.uid = (uid_t)-1;
+    if (config->ping_idle_s > 0U) {
+        server->idle_policy.secs_since_valid_ping = config->ping_idle_s;
+        server->idle_policy.secs_since_valid_hangup = config->hangup_idle_s > config->ping_idle_s
+            ? config->hangup_idle_s : (uint16_t)(config->ping_idle_s + 1U);
+        info.retry_and_idle_policy = &server->idle_policy;
+    }
     server->vhost = lws_create_vhost(server->context, &info);
     if (server->vhost == NULL) {
         free_server(server);

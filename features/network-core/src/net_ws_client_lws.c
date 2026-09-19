@@ -11,6 +11,7 @@
 
 struct net_ws_client_t {
     net_ws_client_config_t config;
+    uint8_t ticket[NET_HELLO_TICKET_MAX];
     struct lws_context *context;
     struct lws_protocols protocols[2];
     struct lws *wsi;
@@ -47,11 +48,11 @@ static void finish(net_ws_client_t *client, uint16_t code) {
 
 static int on_established(net_ws_client_t *client) {
     client->state = NET_WS_CLIENT_OPEN;
-    uint8_t hello[NET_HELLO_SIZE];
+    uint8_t hello[NET_HELLO_MAX_SIZE];
     net_writer_t writer;
     net_writer_init(&writer, hello, sizeof hello);
-    net_hello_encode(&writer, client->config.protocol_version);
-    net_queue_push(&client->tx, hello, sizeof hello);
+    net_hello_encode(&writer, client->config.protocol_version, client->ticket, client->config.ticket_size);
+    net_queue_push(&client->tx, hello, writer.pos);
     lws_callback_on_writable(client->wsi);
     if (!client->destroying && client->config.on_open != NULL) { client->config.on_open(client->config.user); }
     return 0;
@@ -134,10 +135,11 @@ static void free_client(net_ws_client_t *client) {
 
 net_ws_client_t *net_ws_client_create(const net_ws_client_config_t *config) {
     if (config == NULL || config->url == NULL || config->max_message_bytes == 0U ||
-        config->send_queue_bytes < NET_HELLO_SIZE + 4U) {
+        config->send_queue_bytes < NET_HELLO_MAX_SIZE + 4U || config->ticket_size > NET_HELLO_TICKET_MAX) {
         return NULL;
     }
     net_ws_client_t *client = (net_ws_client_t *)calloc(1U, sizeof *client);
+    if (client != NULL && config->ticket_size > 0U) { memcpy(client->ticket, config->ticket, config->ticket_size); }
     if (client == NULL) { return NULL; }
     client->config = *config;
     client->state = NET_WS_CLIENT_CONNECTING;

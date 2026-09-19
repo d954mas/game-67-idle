@@ -20,7 +20,14 @@ consumer.
   are all closed with a `NET_CLOSE_*` code (4001-4006) before the application
   hears about them. A socket that never sends HELLO, or never acknowledges a
   close, is dropped after `handshake_timeout_ms`. Client ids are never reused
-  within a server lifetime.
+  within a server lifetime. HELLO may carry a ticket of up to
+  `NET_HELLO_TICKET_MAX` opaque bytes (a seat to resume, a join code); the
+  transport hands it to `on_connect` and attaches no meaning to it.
+- **Liveness is the server's**, because browsers cannot send pings: with
+  `ping_idle_s` set, a protocol ping goes out after that much inbound
+  silence and a peer silent for `hangup_idle_s` is dropped. Browsers answer
+  pings natively, even from a hidden tab, so a backgrounded page stays a
+  client while a dead network does not.
 - **What stays the application's call**, exposed as config or queries rather
   than decided here: the close code of an application close
   (`net_ws_server_close(..., code)`, 4007 or a game range such as 4100+),

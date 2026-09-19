@@ -20,6 +20,8 @@ typedef struct server_log_t {
     uint32_t connects;
     uint32_t disconnects;
     uint32_t last_client;
+    uint8_t last_ticket[NET_HELLO_TICKET_MAX];
+    size_t last_ticket_size;
     uint32_t messages;
     net_ws_close_reason_t last_reason;
     bool echo;
@@ -35,10 +37,14 @@ typedef struct client_log_t {
     net_ws_client_t *destroy_on_close; /* the natural game pattern: free in on_close */
 } client_log_t;
 
-static void server_connect(void *user, uint32_t client) {
+static void server_connect(void *user, uint32_t client, const uint8_t *ticket, size_t ticket_size) {
     server_log_t *log = (server_log_t *)user;
     log->connects += 1U;
     log->last_client = client;
+    log->last_ticket_size = ticket_size;
+    if (ticket_size > 0U && ticket_size <= sizeof log->last_ticket) {
+        memcpy(log->last_ticket, ticket, ticket_size);
+    }
 }
 
 static void server_message(void *user, uint32_t client, const uint8_t *data, size_t size) {
@@ -84,8 +90,10 @@ static net_ws_client_t *connect_client_sized(uint16_t port, uint32_t version, cl
     uint32_t send_queue, uint32_t max_message) {
     char url[64];
     snprintf(url, sizeof url, "ws://127.0.0.1:%u/", (unsigned)port);
+    static const uint8_t ticket[] = {'s', 'e', 'a', 't'};
     const net_ws_client_config_t config = {
         .url = url, .protocol_version = version, .max_message_bytes = max_message,
+        .ticket = ticket, .ticket_size = sizeof ticket,
         .receive_queue_bytes = 1024U, .send_queue_bytes = send_queue, .user = log,
         .on_open = client_open, .on_message = client_message, .on_close = client_close,
     };
@@ -128,14 +136,23 @@ static void test_codec(void) {
     (void)net_read_u32(&reader);
     CHECK(!reader.ok);
 
-    uint8_t hello[NET_HELLO_SIZE];
+    uint8_t hello[NET_HELLO_MAX_SIZE];
+    const uint8_t stub[3] = {7U, 8U, 9U};
     net_writer_init(&writer, hello, sizeof hello);
-    net_hello_encode(&writer, 42U);
+    net_hello_encode(&writer, 42U, stub, sizeof stub);
     uint32_t version = 0U;
-    CHECK(writer.ok && net_hello_decode(hello, sizeof hello, &version) && version == 42U);
-    CHECK(!net_hello_decode(hello, sizeof hello - 1U, &version));
+    const uint8_t *ticket = NULL;
+    size_t ticket_size = 0U;
+    CHECK(writer.ok && writer.pos == NET_HELLO_BASE_SIZE + sizeof stub);
+    CHECK(net_hello_decode(hello, writer.pos, &version, &ticket, &ticket_size) && version == 42U);
+    CHECK(ticket_size == sizeof stub && memcmp(ticket, stub, sizeof stub) == 0);
+    CHECK(net_hello_decode(hello, NET_HELLO_BASE_SIZE, &version, &ticket, &ticket_size) && ticket_size == 0U);
+    CHECK(!net_hello_decode(hello, NET_HELLO_BASE_SIZE - 1U, &version, &ticket, &ticket_size));
     hello[1] ^= 0xFFU;
-    CHECK(!net_hello_decode(hello, sizeof hello, &version));
+    CHECK(!net_hello_decode(hello, writer.pos, &version, &ticket, &ticket_size));
+    net_writer_init(&writer, hello, sizeof hello);
+    net_hello_encode(&writer, 42U, hello, NET_HELLO_TICKET_MAX + 1U);
+    CHECK(!writer.ok);
 }
 
 int main(void) {
@@ -144,6 +161,7 @@ int main(void) {
     server_log_t slog = {0};
     const net_ws_server_config_t sconfig = {
         .bind_address = "127.0.0.1", .port = 0U, .max_clients = 2U, .handshake_timeout_ms = 1000U,
+        .ping_idle_s = 1U, .hangup_idle_s = 3U,
         .max_message_bytes = MAX_MESSAGE, .send_queue_bytes = 256U,
         .max_messages_per_second = 200U, .protocol_version = VERSION, .user = &slog,
         .on_connect = server_connect, .on_message = server_message,
@@ -161,6 +179,8 @@ int main(void) {
     net_ws_client_t *client = connect_client(port, VERSION, &clog, 256U);
     pump(server, client, 50);
     CHECK(clog.opens == 1U && slog.connects == 1U && net_ws_server_client_count(server) == 1U);
+    /* The HELLO ticket reaches the application with the connect. */
+    CHECK(slog.last_ticket_size == 4U && memcmp(slog.last_ticket, "seat", 4U) == 0);
     const uint8_t ping[] = {NET_MSG_APP_FIRST, 1U, 2U, 3U};
     CHECK(net_ws_client_send(client, ping, sizeof ping));
     pump(server, client, 50);

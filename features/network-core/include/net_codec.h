@@ -42,18 +42,24 @@ void net_write_u32(net_writer_t *writer, uint32_t value);
 void net_write_f32(net_writer_t *writer, float value);
 
 /* Message type 0 is owned by network-core: the first frame of every
-   connection carries the magic and the protocol version, and the transport
-   rejects the session before the application sees anything on mismatch.
-   Application message types start at NET_MSG_APP_FIRST. */
+   connection carries the magic, the protocol version and an optional
+   ticket, opaque bytes the application handed the client (a session to
+   resume, a join code). The transport rejects the session before the
+   application sees anything on a version mismatch and passes the ticket to
+   on_connect otherwise. Application message types start at NET_MSG_APP_FIRST. */
 #define NET_MSG_HELLO 0U
 #define NET_MSG_APP_FIRST 1U
 #define NET_HELLO_MAGIC 0x5357544EU /* "NTWS" */
-#define NET_HELLO_SIZE 9U
+#define NET_HELLO_BASE_SIZE 9U
+#define NET_HELLO_TICKET_MAX 64U
+#define NET_HELLO_MAX_SIZE (NET_HELLO_BASE_SIZE + NET_HELLO_TICKET_MAX)
 
-void net_hello_encode(net_writer_t *writer, uint32_t protocol_version);
-/* False when the bytes are not a well-formed HELLO; the version is only
-   valid when true is returned. */
-bool net_hello_decode(const uint8_t *data, size_t size, uint32_t *protocol_version);
+void net_hello_encode(net_writer_t *writer, uint32_t protocol_version, const uint8_t *ticket,
+    size_t ticket_size);
+/* False when the bytes are not a well-formed HELLO; the outputs are only
+   valid when true is returned. `ticket` points into `data`. */
+bool net_hello_decode(const uint8_t *data, size_t size, uint32_t *protocol_version,
+    const uint8_t **ticket, size_t *ticket_size);
 
 /* Close codes in the application range of RFC 6455 (4000-4999). */
 #define NET_CLOSE_BAD_HELLO 4001U
