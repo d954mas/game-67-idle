@@ -2,6 +2,7 @@
    in one process, pumped alternately from one thread. Proves the handshake,
    echo, and every rejection path the transport promises. */
 #include "net_codec.h"
+#include "net_hmac.h"
 #include "net_ws_client.h"
 #include "net_ws_server.h"
 
@@ -236,8 +237,70 @@ static void test_codec(void) {
     CHECK(!writer.ok);
 }
 
+static bool hex_equals(const uint8_t *bytes, size_t size, const char *hex) {
+    static const char digits[] = "0123456789abcdef";
+    for (size_t i = 0U; i < size; ++i) {
+        if (hex[i * 2U] != digits[bytes[i] >> 4] || hex[i * 2U + 1U] != digits[bytes[i] & 0xFU]) { return false; }
+    }
+    return hex[size * 2U] == '\0';
+}
+
+/* FIPS 180-4 / NIST CAVP vectors for SHA-256, RFC 4231 for HMAC. */
+static void test_hmac(void) {
+    uint8_t digest[NET_SHA256_SIZE];
+    net_sha256("abc", 3U, digest);
+    CHECK(hex_equals(digest, sizeof digest, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"));
+    net_sha256("", 0U, digest);
+    CHECK(hex_equals(digest, sizeof digest, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+    net_sha256("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", 56U, digest);
+    CHECK(hex_equals(digest, sizeof digest, "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"));
+    net_sha256_t ctx;
+    net_sha256_init(&ctx);
+    uint8_t chunk[1000];
+    memset(chunk, 'a', sizeof chunk);
+    for (size_t i = 0U; i < 1000U; ++i) { net_sha256_update(&ctx, chunk, sizeof chunk); }
+    net_sha256_final(&ctx, digest);
+    CHECK(hex_equals(digest, sizeof digest, "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0"));
+    /* Streaming in odd pieces must equal one shot. */
+    net_sha256_init(&ctx);
+    net_sha256_update(&ctx, "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", 3U);
+    net_sha256_update(&ctx, "dbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", 53U);
+    net_sha256_final(&ctx, digest);
+    CHECK(hex_equals(digest, sizeof digest, "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"));
+
+    uint8_t mac[NET_SHA256_SIZE];
+    uint8_t key[131];
+    memset(key, 0x0bU, 20U);
+    net_hmac_sha256(key, 20U, "Hi There", 8U, mac);
+    CHECK(hex_equals(mac, sizeof mac, "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"));
+    net_hmac_sha256("Jefe", 4U, "what do ya want for nothing?", 28U, mac);
+    CHECK(hex_equals(mac, sizeof mac, "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"));
+    memset(key, 0xaaU, sizeof key);
+    net_hmac_sha256(key, sizeof key, "Test Using Larger Than Block-Size Key - Hash Key First", 54U, mac);
+    CHECK(hex_equals(mac, sizeof mac, "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"));
+
+    uint8_t other[NET_SHA256_SIZE];
+    memcpy(other, mac, sizeof other);
+    CHECK(net_equal_constant_time(mac, other, sizeof mac));
+    other[31] ^= 1U;
+    CHECK(!net_equal_constant_time(mac, other, sizeof mac));
+    CHECK(net_equal_constant_time(mac, other, 0U));
+
+    uint8_t buffer[8];
+    net_writer_t writer;
+    net_writer_init(&writer, buffer, sizeof buffer);
+    net_write_u64(&writer, 0x0102030405060708ULL);
+    CHECK(writer.ok && writer.pos == 8U && buffer[0] == 8U && buffer[7] == 1U);
+    net_reader_t reader;
+    net_reader_init(&reader, buffer, sizeof buffer);
+    CHECK(net_read_u64(&reader) == 0x0102030405060708ULL && net_reader_complete(&reader));
+    net_reader_init(&reader, buffer, 7U);
+    CHECK(net_read_u64(&reader) == 0U && !reader.ok);
+}
+
 int main(void) {
     test_codec();
+    test_hmac();
 
     server_log_t slog = {0};
     const net_ws_server_config_t sconfig = {

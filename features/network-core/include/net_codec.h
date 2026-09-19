@@ -22,6 +22,7 @@ uint8_t net_read_u8(net_reader_t *reader);
 int8_t net_read_i8(net_reader_t *reader);
 uint16_t net_read_u16(net_reader_t *reader);
 uint32_t net_read_u32(net_reader_t *reader);
+uint64_t net_read_u64(net_reader_t *reader);
 float net_read_f32(net_reader_t *reader);
 /* Whole message consumed without a bounds failure: trailing bytes are a
    protocol error, not padding. */
@@ -39,6 +40,7 @@ void net_write_u8(net_writer_t *writer, uint8_t value);
 void net_write_i8(net_writer_t *writer, int8_t value);
 void net_write_u16(net_writer_t *writer, uint16_t value);
 void net_write_u32(net_writer_t *writer, uint32_t value);
+void net_write_u64(net_writer_t *writer, uint64_t value);
 void net_write_f32(net_writer_t *writer, float value);
 
 /* Message type 0 is owned by network-core: the first frame of every

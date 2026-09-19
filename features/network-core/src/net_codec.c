@@ -41,6 +41,13 @@ uint32_t net_read_u32(net_reader_t *reader) {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
+uint64_t net_read_u64(net_reader_t *reader) {
+    if (!reader_take(reader, 8U)) { return 0U; }
+    const uint32_t low = net_read_u32(reader);
+    const uint32_t high = net_read_u32(reader);
+    return (uint64_t)low | ((uint64_t)high << 32);
+}
+
 float net_read_f32(net_reader_t *reader) {
     const uint32_t bits = net_read_u32(reader);
     float value;
@@ -92,6 +99,12 @@ void net_write_u32(net_writer_t *writer, uint32_t value) {
     p[2] = (uint8_t)((value >> 16) & 0xFFU);
     p[3] = (uint8_t)(value >> 24);
     writer->pos += 4U;
+}
+
+void net_write_u64(net_writer_t *writer, uint64_t value) {
+    if (!writer_take(writer, 8U)) { return; }
+    net_write_u32(writer, (uint32_t)value);
+    net_write_u32(writer, (uint32_t)(value >> 32));
 }
 
 void net_write_f32(net_writer_t *writer, float value) {

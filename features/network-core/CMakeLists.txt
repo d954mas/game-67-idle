@@ -11,7 +11,8 @@ set(NETWORK_CORE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 set(NETWORK_CORE_LWS_DIR "${NETWORK_CORE_DIR}/vendor/libwebsockets")
 
 add_library(network_core_codec STATIC
-    "${NETWORK_CORE_DIR}/src/net_codec.c")
+    "${NETWORK_CORE_DIR}/src/net_codec.c"
+    "${NETWORK_CORE_DIR}/src/net_hmac.c")
 target_include_directories(network_core_codec PUBLIC "${NETWORK_CORE_DIR}/include")
 add_library(nt::network_core_codec ALIAS network_core_codec)
 
