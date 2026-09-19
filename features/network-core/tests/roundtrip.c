@@ -10,6 +10,22 @@
 #include <string.h>
 #include <time.h>
 
+#if defined(_WIN32)
+#include <winsock2.h>
+#include <ws2tcpip.h>
+typedef SOCKET raw_socket_t;
+#define RAW_INVALID INVALID_SOCKET
+#define raw_close closesocket
+#else
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+typedef int raw_socket_t;
+#define RAW_INVALID (-1)
+#define raw_close close
+#endif
+
 #define CHECK(condition) \
     do { if (!(condition)) { fprintf(stderr, "%s:%d: check failed: %s\n", __FILE__, __LINE__, #condition); exit(1); } } while (0)
 
@@ -35,6 +51,7 @@ typedef struct client_log_t {
     uint32_t messages;
     uint8_t last[MAX_MESSAGE];
     size_t last_size;
+    double last_received_at;
     net_ws_client_t *destroy_on_close; /* the natural game pattern: free in on_close */
 } client_log_t;
 
@@ -63,9 +80,10 @@ static void server_disconnect(void *user, uint32_t client, net_ws_close_reason_t
 
 static void client_open(void *user) { ((client_log_t *)user)->opens += 1U; }
 
-static void client_message(void *user, const uint8_t *data, size_t size) {
+static void client_message(void *user, const uint8_t *data, size_t size, double received_at) {
     client_log_t *log = (client_log_t *)user;
     log->messages += 1U;
+    log->last_received_at = received_at;
     log->last_size = size;
     memcpy(log->last, data, size);
 }
@@ -78,6 +96,67 @@ static void client_close(void *user, uint16_t code) {
         net_ws_client_destroy(log->destroy_on_close);
         log->destroy_on_close = NULL;
     }
+}
+
+
+/* A peer made of a bare socket: it completes the upgrade and HELLO like a
+   real client and then answers nothing, which no library client will do
+   for us since every one of them pongs by itself. */
+static raw_socket_t raw_peer_connect(uint16_t port) {
+#if defined(_WIN32)
+    WSADATA wsa;
+    WSAStartup(MAKEWORD(2, 2), &wsa);
+#endif
+    raw_socket_t sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock == RAW_INVALID) { return RAW_INVALID; }
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof addr);
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (connect(sock, (struct sockaddr *)&addr, sizeof addr) != 0) {
+        raw_close(sock);
+        return RAW_INVALID;
+    }
+    char request[256];
+    const int length = snprintf(request, sizeof request,
+        "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n");
+    if (send(sock, request, length, 0) != length) {
+        raw_close(sock);
+        return RAW_INVALID;
+    }
+    return sock;
+}
+
+/* True once the 101 has arrived; the server must be serviced meanwhile. */
+static bool raw_peer_upgraded(raw_socket_t sock) {
+    fd_set readable;
+    FD_ZERO(&readable);
+    FD_SET(sock, &readable);
+    struct timeval zero = {0, 0};
+    if (select((int)sock + 1, &readable, NULL, NULL, &zero) <= 0) { return false; }
+    char response[512];
+    const int got = (int)recv(sock, response, (int)sizeof response - 1, 0);
+    if (got <= 0) { return false; }
+    response[got] = '\0';
+    return strstr(response, " 101 ") != NULL;
+}
+
+static bool raw_peer_send_hello(raw_socket_t sock, uint32_t version) {
+    /* One masked binary frame: the HELLO. */
+    uint8_t hello[NET_HELLO_MAX_SIZE];
+    net_writer_t writer;
+    net_writer_init(&writer, hello, sizeof hello);
+    net_hello_encode(&writer, version, NULL, 0U);
+    uint8_t frame[2U + 4U + NET_HELLO_MAX_SIZE];
+    const uint8_t mask[4] = {1U, 2U, 3U, 4U};
+    frame[0] = 0x82U;
+    frame[1] = (uint8_t)(0x80U | writer.pos);
+    memcpy(frame + 2U, mask, 4U);
+    for (size_t index = 0U; index < writer.pos; ++index) { frame[6U + index] = hello[index] ^ mask[index % 4U]; }
+    const int frame_size = (int)(6U + writer.pos);
+    return send(sock, (const char *)frame, frame_size, 0) == frame_size;
 }
 
 static void pump(net_ws_server_t *server, net_ws_client_t *client, int rounds) {
@@ -187,6 +266,8 @@ int main(void) {
     pump(server, client, 50);
     CHECK(slog.messages == 1U && clog.messages == 1U);
     CHECK(clog.last_size == sizeof ping && memcmp(clog.last, ping, sizeof ping) == 0);
+    /* Stamped on arrival: after the send, before this service pass. */
+    CHECK(clog.last_received_at > 0.0 && clog.last_received_at <= net_ws_client_clock());
 
     /* An application close delivers what was queued before it, then the
        application's own code. */
@@ -219,7 +300,11 @@ int main(void) {
     memset(&clog, 0, sizeof clog);
     client = connect_client_sized(1U, VERSION, &clog, 256U, MAX_MESSAGE);
     CHECK(clog.closes == 0U);
-    for (int round = 0; round < 200 && clog.closes == 0U; ++round) { net_ws_client_service(client, 5U); }
+    {
+        /* The client's service returns at once; the refusal comes from its thread. */
+        const time_t started = time(NULL);
+        while (clog.closes == 0U && time(NULL) - started < 5) { net_ws_client_service(client, 5U); }
+    }
     CHECK(clog.closes == 1U && clog.close_code == 0U);
     CHECK(net_ws_client_state(client) == NET_WS_CLIENT_CLOSED);
     net_ws_client_destroy(client);
@@ -321,8 +406,7 @@ int main(void) {
     CHECK(clog.close_code == NET_CLOSE_SLOW);
     net_ws_client_destroy(client);
 
-    /* A peer that never answers pings is dropped: the native client pongs
-       only inside its own service, so leaving it unpumped is silence. */
+    /* A peer that never answers pings is dropped. */
     {
         net_ws_server_config_t lconfig = sconfig;
         lconfig.ping_idle_s = 1U;
@@ -332,15 +416,21 @@ int main(void) {
         net_ws_server_t *live = net_ws_server_create(&lconfig);
         CHECK(live != NULL);
         llog.server = live;
-        client_log_t quiet = {0};
-        client = connect_client(net_ws_server_port(live), VERSION, &quiet, 256U);
-        pump(live, client, 50);
+        raw_socket_t quiet = raw_peer_connect(net_ws_server_port(live));
+        CHECK(quiet != RAW_INVALID);
+        bool upgraded = false;
+        for (int round = 0; round < 100 && !upgraded; ++round) {
+            net_ws_server_service(live, 5U);
+            upgraded = raw_peer_upgraded(quiet);
+        }
+        CHECK(upgraded && raw_peer_send_hello(quiet, VERSION));
+        pump(live, NULL, 50);
         CHECK(llog.connects == 1U);
         /* Service calls return early on any event, so count time, not rounds. */
         const time_t started = time(NULL);
         while (llog.disconnects == 0U && time(NULL) - started < 6) { net_ws_server_service(live, 50U); }
         CHECK(llog.disconnects == 1U && llog.last_reason == NET_WS_CLOSE_PEER);
-        net_ws_client_destroy(client);
+        raw_close(quiet);
         net_ws_server_destroy(live);
         /* A pong window of zero is refused, not silently widened. */
         lconfig.hangup_idle_s = 1U;

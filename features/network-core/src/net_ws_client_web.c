@@ -3,7 +3,10 @@
 #include "net_codec.h"
 #include "net_queue.h"
 
+#include <emscripten/emscripten.h>
 #include <emscripten/websocket.h>
+
+#define TIMESTAMP_BYTES 8U
 
 #include <stdlib.h>
 #include <string.h>
@@ -48,6 +51,8 @@ static EM_BOOL on_open(int type, const EmscriptenWebSocketOpenEvent *event, void
     return EM_TRUE;
 }
 
+double net_ws_client_clock(void) { return emscripten_get_now() / 1000.0; }
+
 static EM_BOOL on_message(int type, const EmscriptenWebSocketMessageEvent *event, void *user) {
     (void)type;
     net_ws_client_t *client = (net_ws_client_t *)user;
@@ -57,7 +62,12 @@ static EM_BOOL on_message(int type, const EmscriptenWebSocketMessageEvent *event
         mark_closed(client, NET_CLOSE_FORMAT);
         return EM_TRUE;
     }
-    while (!net_queue_push(&client->messages, event->data, event->numBytes)) {
+    /* Stamped here, in the browser's event, not when the game gets to it. */
+    const double received_at = net_ws_client_clock();
+    memcpy(client->scratch, &received_at, sizeof received_at);
+    memcpy(client->scratch + TIMESTAMP_BYTES, event->data, event->numBytes);
+    const size_t size = TIMESTAMP_BYTES + event->numBytes;
+    while (!net_queue_push(&client->messages, client->scratch, size)) {
         if (client->config.overflow_policy != NET_WS_OVERFLOW_DROP_OLDEST) {
             emscripten_websocket_close(client->socket, NET_CLOSE_SLOW, "receive queue full");
             mark_closed(client, NET_CLOSE_SLOW);
@@ -96,7 +106,7 @@ static void free_client(net_ws_client_t *client) {
 
 net_ws_client_t *net_ws_client_create(const net_ws_client_config_t *config) {
     if (config == NULL || config->url == NULL || config->max_message_bytes == 0U ||
-        config->receive_queue_bytes < config->max_message_bytes + 4U ||
+        config->receive_queue_bytes < config->max_message_bytes + TIMESTAMP_BYTES + 4U ||
         config->ticket_size > NET_HELLO_TICKET_MAX || (config->ticket_size > 0U && config->ticket == NULL) ||
         !emscripten_websocket_is_supported()) {
         return NULL;
@@ -107,7 +117,7 @@ net_ws_client_t *net_ws_client_create(const net_ws_client_config_t *config) {
     if (config->ticket_size > 0U) { memcpy(client->ticket, config->ticket, config->ticket_size); }
     client->config.ticket = client->ticket;
     client->state = NET_WS_CLIENT_CONNECTING;
-    client->scratch = (uint8_t *)malloc(config->max_message_bytes);
+    client->scratch = (uint8_t *)malloc(TIMESTAMP_BYTES + (size_t)config->max_message_bytes);
     if (client->scratch == NULL || !net_queue_init(&client->messages, config->receive_queue_bytes)) {
         free_client(client);
         return NULL;
@@ -155,8 +165,11 @@ void net_ws_client_service(net_ws_client_t *client, uint32_t timeout_ms) {
     while (!client->destroying && (size = net_queue_front_size(&client->messages)) > 0U) {
         net_queue_front_copy(&client->messages, client->scratch, size);
         net_queue_pop(&client->messages);
+        double received_at = 0.0;
+        memcpy(&received_at, client->scratch, sizeof received_at);
         if (client->config.on_message != NULL) {
-            client->config.on_message(client->config.user, client->scratch, size);
+            client->config.on_message(client->config.user, client->scratch + TIMESTAMP_BYTES,
+                size - TIMESTAMP_BYTES, received_at);
         }
     }
     if (!client->destroying && client->close_pending) {

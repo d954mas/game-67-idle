@@ -10,8 +10,12 @@ consumer.
   callbacks, and returns by the timeout so a fixed simulation tick can share
   the thread. No thread per connection, no lock around the world.
 - **Client** (`net_ws_client.h`): the same header on native (libwebsockets
-  client) and web (`emscripten/websocket.h`, the page's own `WebSocket`).
-  Callbacks fire only from `net_ws_client_service()`, on the caller's thread.
+  client on a thread of its own) and web (`emscripten/websocket.h`, the
+  page's own `WebSocket`). In both the socket is read the moment the
+  network delivers, so every message carries its exact arrival time
+  (`received_at`, on `net_ws_client_clock()`), pongs go out during a
+  loading stall and sends never wait for the next frame. Callbacks still
+  fire only from `net_ws_client_service()`, on the caller's thread.
 - **Codec** (`net_codec.h`): bounded little-endian reader/writer. A read past
   the end clears `ok` and returns zero; the caller checks once at the end.
 - **Session rules every room inherits**: the first frame must be HELLO with
