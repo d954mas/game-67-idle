@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define CHECK(condition) \
     do { if (!(condition)) { fprintf(stderr, "%s:%d: check failed: %s\n", __FILE__, __LINE__, #condition); exit(1); } } while (0)
@@ -234,6 +235,25 @@ int main(void) {
     CHECK(slog.last_reason == NET_WS_CLOSE_PEER);
     net_ws_client_destroy(client);
 
+    /* A ticketless HELLO reaches on_connect with an empty ticket. */
+    memset(&clog, 0, sizeof clog);
+    {
+        char url[64];
+        snprintf(url, sizeof url, "ws://127.0.0.1:%u/", (unsigned)port);
+        const net_ws_client_config_t bare = {
+            .url = url, .protocol_version = VERSION, .max_message_bytes = MAX_MESSAGE,
+            .receive_queue_bytes = 1024U, .send_queue_bytes = NET_HELLO_BASE_SIZE + 4U, .user = &clog,
+            .on_open = client_open, .on_message = client_message, .on_close = client_close,
+        };
+        client = net_ws_client_create(&bare);
+        CHECK(client != NULL);
+        slog.last_ticket_size = 99U;
+        pump(server, client, 50);
+        CHECK(clog.opens == 1U && slog.last_ticket_size == 0U);
+        net_ws_client_destroy(client);
+        pump(server, NULL, 20);
+    }
+
     /* Version mismatch is refused before on_connect. */
     memset(&clog, 0, sizeof clog);
     const uint32_t connects_before = slog.connects;
@@ -300,6 +320,32 @@ int main(void) {
     CHECK(slog.last_reason == NET_WS_CLOSE_SLOW && clog.closes == 1U);
     CHECK(clog.close_code == NET_CLOSE_SLOW);
     net_ws_client_destroy(client);
+
+    /* A peer that never answers pings is dropped: the native client pongs
+       only inside its own service, so leaving it unpumped is silence. */
+    {
+        net_ws_server_config_t lconfig = sconfig;
+        lconfig.ping_idle_s = 1U;
+        lconfig.hangup_idle_s = 2U;
+        server_log_t llog = {0};
+        lconfig.user = &llog;
+        net_ws_server_t *live = net_ws_server_create(&lconfig);
+        CHECK(live != NULL);
+        llog.server = live;
+        client_log_t quiet = {0};
+        client = connect_client(net_ws_server_port(live), VERSION, &quiet, 256U);
+        pump(live, client, 50);
+        CHECK(llog.connects == 1U);
+        /* Service calls return early on any event, so count time, not rounds. */
+        const time_t started = time(NULL);
+        while (llog.disconnects == 0U && time(NULL) - started < 6) { net_ws_server_service(live, 50U); }
+        CHECK(llog.disconnects == 1U && llog.last_reason == NET_WS_CLOSE_PEER);
+        net_ws_client_destroy(client);
+        net_ws_server_destroy(live);
+        /* A pong window of zero is refused, not silently widened. */
+        lconfig.hangup_idle_s = 1U;
+        CHECK(net_ws_server_create(&lconfig) == NULL);
+    }
 
     /* Room capacity is enforced per connection. */
     client_log_t alog = {0};

@@ -135,13 +135,15 @@ static void free_client(net_ws_client_t *client) {
 
 net_ws_client_t *net_ws_client_create(const net_ws_client_config_t *config) {
     if (config == NULL || config->url == NULL || config->max_message_bytes == 0U ||
-        config->send_queue_bytes < NET_HELLO_MAX_SIZE + 4U || config->ticket_size > NET_HELLO_TICKET_MAX) {
+        config->ticket_size > NET_HELLO_TICKET_MAX || (config->ticket_size > 0U && config->ticket == NULL) ||
+        config->send_queue_bytes < NET_HELLO_BASE_SIZE + config->ticket_size + 4U) {
         return NULL;
     }
     net_ws_client_t *client = (net_ws_client_t *)calloc(1U, sizeof *client);
-    if (client != NULL && config->ticket_size > 0U) { memcpy(client->ticket, config->ticket, config->ticket_size); }
     if (client == NULL) { return NULL; }
     client->config = *config;
+    if (config->ticket_size > 0U) { memcpy(client->ticket, config->ticket, config->ticket_size); }
+    client->config.ticket = client->ticket;
     client->state = NET_WS_CLIENT_CONNECTING;
     client->in_create = true;
     client->rx = (uint8_t *)malloc(config->max_message_bytes);

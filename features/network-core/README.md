@@ -24,10 +24,14 @@ consumer.
   `NET_HELLO_TICKET_MAX` opaque bytes (a seat to resume, a join code); the
   transport hands it to `on_connect` and attaches no meaning to it.
 - **Liveness is the server's**, because browsers cannot send pings: with
-  `ping_idle_s` set, a protocol ping goes out after that much inbound
-  silence and a peer silent for `hangup_idle_s` is dropped. Browsers answer
+  `ping_idle_s` set, a protocol ping goes out every `ping_idle_s` after the
+  last pong, and a peer whose pong is still missing `hangup_idle_s` after
+  that pong is dropped as `NET_WS_CLOSE_PEER`. Only pongs count as life, so
+  the window for the pong is the difference of the two. Browsers answer
   pings natively, even from a hidden tab, so a backgrounded page stays a
-  client while a dead network does not.
+  client while a dead network does not. The native client keeps lws' own
+  40 s ping / 50 s hangup toward the server; the server answers inside its
+  service loop.
 - **What stays the application's call**, exposed as config or queries rather
   than decided here: the close code of an application close
   (`net_ws_server_close(..., code)`, 4007 or a game range such as 4100+),

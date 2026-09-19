@@ -97,13 +97,15 @@ static void free_client(net_ws_client_t *client) {
 net_ws_client_t *net_ws_client_create(const net_ws_client_config_t *config) {
     if (config == NULL || config->url == NULL || config->max_message_bytes == 0U ||
         config->receive_queue_bytes < config->max_message_bytes + 4U ||
-        config->ticket_size > NET_HELLO_TICKET_MAX || !emscripten_websocket_is_supported()) {
+        config->ticket_size > NET_HELLO_TICKET_MAX || (config->ticket_size > 0U && config->ticket == NULL) ||
+        !emscripten_websocket_is_supported()) {
         return NULL;
     }
     net_ws_client_t *client = (net_ws_client_t *)calloc(1U, sizeof *client);
     if (client == NULL) { return NULL; }
-    if (config->ticket_size > 0U) { memcpy(client->ticket, config->ticket, config->ticket_size); }
     client->config = *config;
+    if (config->ticket_size > 0U) { memcpy(client->ticket, config->ticket, config->ticket_size); }
+    client->config.ticket = client->ticket;
     client->state = NET_WS_CLIENT_CONNECTING;
     client->scratch = (uint8_t *)malloc(config->max_message_bytes);
     if (client->scratch == NULL || !net_queue_init(&client->messages, config->receive_queue_bytes)) {

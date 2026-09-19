@@ -172,7 +172,8 @@ static int on_receive(net_ws_server_t *server, struct lws *wsi, session_t *sessi
     }
     const size_t limit = session->hello_done ? server->config.max_message_bytes : session->rx_capacity;
     if (size > limit - session->rx_size) {
-        request_close(server, wsi, session, NET_CLOSE_FORMAT, NET_WS_CLOSE_PROTOCOL);
+        request_close(server, wsi, session, session->hello_done ? NET_CLOSE_FORMAT : NET_CLOSE_BAD_HELLO,
+            NET_WS_CLOSE_PROTOCOL);
         return 0;
     }
     memcpy(session->rx + session->rx_size, data, size);
@@ -259,7 +260,8 @@ static void free_server(net_ws_server_t *server) {
 
 net_ws_server_t *net_ws_server_create(const net_ws_server_config_t *config) {
     if (config == NULL || config->max_clients == 0U || config->max_message_bytes == 0U ||
-        config->send_queue_bytes < 4U) {
+        config->send_queue_bytes < 4U ||
+        (config->ping_idle_s > 0U && config->hangup_idle_s <= config->ping_idle_s)) {
         return NULL;
     }
     net_ws_server_t *server = (net_ws_server_t *)calloc(1U, sizeof *server);
@@ -305,12 +307,11 @@ net_ws_server_t *net_ws_server_create(const net_ws_server_config_t *config) {
     info.extensions = NULL;
     info.gid = (gid_t)-1;
     info.uid = (uid_t)-1;
-    if (config->ping_idle_s > 0U) {
-        server->idle_policy.secs_since_valid_ping = config->ping_idle_s;
-        server->idle_policy.secs_since_valid_hangup = config->hangup_idle_s > config->ping_idle_s
-            ? config->hangup_idle_s : (uint16_t)(config->ping_idle_s + 1U);
-        info.retry_and_idle_policy = &server->idle_policy;
-    }
+    /* Always ours: without a policy lws applies its own 40 s ping / 50 s
+       hangup, and a zeroed policy is what turns validity checks off. */
+    server->idle_policy.secs_since_valid_ping = config->ping_idle_s;
+    server->idle_policy.secs_since_valid_hangup = config->ping_idle_s > 0U ? config->hangup_idle_s : 0U;
+    info.retry_and_idle_policy = &server->idle_policy;
     server->vhost = lws_create_vhost(server->context, &info);
     if (server->vhost == NULL) {
         free_server(server);
