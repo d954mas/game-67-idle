@@ -30,8 +30,10 @@ struct net_ws_client_t {
     net_thread_t thread;
     bool thread_started;
 
-    /* lws thread only */
+    /* lws thread only; the connect itself is its first act, so a slow DNS
+       lookup never stalls the game and lws state has one owner. */
     struct lws *wsi;
+    char url[512];
     uint8_t *assembly;              /* fragment reassembly, max_message_bytes */
     size_t assembly_size;
     uint8_t *tx_scratch;            /* LWS_PRE + max message */
@@ -54,7 +56,7 @@ struct net_ws_client_t {
     bool destroying;
 };
 
-double net_ws_client_clock(void) { return (double)lws_now_usecs() / 1e6; }
+double net_ws_client_clock(void) { return net_clock_seconds(); }
 
 static void wake_noop(lws_sorted_usec_list_t *sul) { (void)sul; }
 
@@ -168,13 +170,44 @@ static int protocol_callback(struct lws *wsi, enum lws_callback_reasons reason,
     }
 }
 
+static void start_connect(net_ws_client_t *client) {
+    const char *scheme = NULL;
+    const char *address = NULL;
+    const char *path = NULL;
+    int port = 0;
+    if (lws_parse_uri(client->url, &scheme, &address, &port, &path) != 0 || strcmp(scheme, "ws") != 0) {
+        finish(client, 0U);
+        return;
+    }
+    /* lws_parse_uri hands back "/" for an empty path and the bare remainder
+       otherwise; the request line needs exactly one leading slash. */
+    char full_path[512];
+    snprintf(full_path, sizeof full_path, "%s%s", path[0] == '/' ? "" : "/", path);
+    struct lws_client_connect_info connect;
+    memset(&connect, 0, sizeof connect);
+    connect.context = client->context;
+    connect.address = address;
+    connect.port = port;
+    connect.path = full_path;
+    connect.host = address;
+    connect.origin = address;
+    connect.protocol = client->config.subprotocol;
+    connect.userdata = client;
+    connect.pwsi = &client->wsi;
+    /* A synchronous failure (DNS, refused) lands in finish() during this call. */
+    if (lws_client_connect_via_info(&connect) == NULL) { finish(client, 0U); }
+}
+
 static void service_thread(void *arg) {
     net_ws_client_t *client = (net_ws_client_t *)arg;
+    start_connect(client);
     for (;;) {
         net_mutex_lock(&client->lock);
-        const bool stop = client->stop;
+        const bool stop = client->stop || client->state == NET_WS_CLIENT_CLOSED;
         const bool pending = client->tx.count > 0U && client->state == NET_WS_CLIENT_OPEN;
         net_mutex_unlock(&client->lock);
+        /* Nothing more can happen on a closed socket; the thread idles out
+           and destroy joins it at once. */
         if (stop) { break; }
         if (pending && client->wsi != NULL) { lws_callback_on_writable(client->wsi); }
         /* lws ignores a positive timeout; the no-op wake bounds the sleep. */
@@ -231,8 +264,13 @@ net_ws_client_t *net_ws_client_create(const net_ws_client_config_t *config) {
     client->protocols[0].callback = protocol_callback;
     client->protocols[0].rx_buffer_size = config->max_message_bytes;
 
-    /* Process-global in lws; every context in this process wants the same. */
-    lws_set_log_level(LLL_ERR | LLL_WARN, NULL);
+    /* Process-global in lws; every context in this process wants the same,
+       and one store keeps other clients' threads from reading a write. */
+    static bool log_level_set;
+    if (!log_level_set) {
+        log_level_set = true;
+        lws_set_log_level(LLL_ERR | LLL_WARN, NULL);
+    }
     struct lws_context_creation_info info;
     memset(&info, 0, sizeof info);
     info.port = CONTEXT_PORT_NO_LISTEN;
@@ -246,39 +284,25 @@ net_ws_client_t *net_ws_client_create(const net_ws_client_config_t *config) {
         return NULL;
     }
 
-    char url[512];
-    if (strlen(config->url) >= sizeof url) {
+    /* An unusable URL is the caller's mistake and refused here; a resolver
+       or connect failure is the network's and arrives as on_close. */
+    if (strlen(config->url) >= sizeof client->url) {
         free_client(client);
         return NULL;
     }
-    memcpy(url, config->url, strlen(config->url) + 1U);
-    const char *scheme = NULL;
-    const char *address = NULL;
-    const char *path = NULL;
-    int port = 0;
-    if (lws_parse_uri(url, &scheme, &address, &port, &path) != 0 || strcmp(scheme, "ws") != 0) {
-        free_client(client);
-        return NULL;
+    memcpy(client->url, config->url, strlen(config->url) + 1U);
+    {
+        char probe[512];
+        memcpy(probe, client->url, strlen(client->url) + 1U);
+        const char *scheme = NULL;
+        const char *address = NULL;
+        const char *path = NULL;
+        int port = 0;
+        if (lws_parse_uri(probe, &scheme, &address, &port, &path) != 0 || strcmp(scheme, "ws") != 0) {
+            free_client(client);
+            return NULL;
+        }
     }
-    /* lws_parse_uri hands back "/" for an empty path and the bare remainder
-       otherwise; the request line needs exactly one leading slash. */
-    char full_path[512];
-    snprintf(full_path, sizeof full_path, "%s%s", path[0] == '/' ? "" : "/", path);
-
-    struct lws_client_connect_info connect;
-    memset(&connect, 0, sizeof connect);
-    connect.context = client->context;
-    connect.address = address;
-    connect.port = port;
-    connect.path = full_path;
-    connect.host = address;
-    connect.origin = address;
-    connect.protocol = config->subprotocol;
-    connect.userdata = client;
-    connect.pwsi = &client->wsi;
-    /* A synchronous failure (DNS, refused) lands in finish() during this
-       call and is delivered as on_close from the first service(). */
-    if (lws_client_connect_via_info(&connect) == NULL) { finish(client, 0U); }
     if (!net_thread_start(&client->thread, service_thread, client)) {
         free_client(client);
         return NULL;
@@ -311,34 +335,35 @@ void net_ws_client_service(net_ws_client_t *client, uint32_t timeout_ms) {
     (void)timeout_ms;
     if (client->destroying) { return; }
     client->in_service = true;
-    net_mutex_lock(&client->lock);
-    const bool opened = client->open_event;
-    client->open_event = false;
-    net_mutex_unlock(&client->lock);
-    if (opened && client->config.on_open != NULL) { client->config.on_open(client->config.user); }
+    /* One critical section decides each delivery, so what the socket did in
+       the order open, messages, close is replayed in that order. */
     while (!client->destroying) {
         net_mutex_lock(&client->lock);
+        if (client->open_event) {
+            client->open_event = false;
+            net_mutex_unlock(&client->lock);
+            if (client->config.on_open != NULL) { client->config.on_open(client->config.user); }
+            continue;
+        }
         const size_t size = net_queue_front_size(&client->rx);
         if (size > 0U) {
             net_queue_front_copy(&client->rx, client->scratch, size);
             net_queue_pop(&client->rx);
+            net_mutex_unlock(&client->lock);
+            double received_at = 0.0;
+            memcpy(&received_at, client->scratch, sizeof received_at);
+            if (client->config.on_message != NULL) {
+                client->config.on_message(client->config.user, client->scratch + TIMESTAMP_BYTES,
+                    size - TIMESTAMP_BYTES, received_at);
+            }
+            continue;
         }
+        const bool closed = client->close_event;
+        client->close_event = false;
+        const uint16_t code = client->close_code;
         net_mutex_unlock(&client->lock);
-        if (size == 0U) { break; }
-        double received_at = 0.0;
-        memcpy(&received_at, client->scratch, sizeof received_at);
-        if (client->config.on_message != NULL) {
-            client->config.on_message(client->config.user, client->scratch + TIMESTAMP_BYTES,
-                size - TIMESTAMP_BYTES, received_at);
-        }
-    }
-    net_mutex_lock(&client->lock);
-    const bool closed = client->close_event;
-    client->close_event = false;
-    const uint16_t code = client->close_code;
-    net_mutex_unlock(&client->lock);
-    if (closed && !client->destroying && client->config.on_close != NULL) {
-        client->config.on_close(client->config.user, code);
+        if (closed && client->config.on_close != NULL) { client->config.on_close(client->config.user, code); }
+        break;
     }
     client->in_service = false;
     if (client->destroy_requested) { free_client(client); }

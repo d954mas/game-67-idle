@@ -13,9 +13,12 @@ consumer.
   client on a thread of its own) and web (`emscripten/websocket.h`, the
   page's own `WebSocket`). In both the socket is read the moment the
   network delivers, so every message carries its exact arrival time
-  (`received_at`, on `net_ws_client_clock()`), pongs go out during a
-  loading stall and sends never wait for the next frame. Callbacks still
-  fire only from `net_ws_client_service()`, on the caller's thread.
+  (`received_at`, on `net_ws_client_clock()`, the performance counter on
+  Windows and CLOCK_MONOTONIC elsewhere), pongs go out during a loading
+  stall and sends never wait for the next frame, or for 100 ms at most
+  when the wake pipe is unavailable. Callbacks still fire only from
+  `net_ws_client_service()`, on the caller's thread, in the order the
+  socket saw them.
 - **Codec** (`net_codec.h`): bounded little-endian reader/writer. A read past
   the end clears `ok` and returns zero; the caller checks once at the end.
 - **Session rules every room inherits**: the first frame must be HELLO with

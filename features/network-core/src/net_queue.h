@@ -53,7 +53,7 @@ static inline void net_queue_read_at(const net_queue_t *queue, size_t offset,
 }
 
 static inline bool net_queue_push(net_queue_t *queue, const uint8_t *data, size_t size) {
-    if (size > UINT32_MAX || queue->capacity - queue->used < size + 4U) { return false; }
+    if (size > UINT32_MAX - 4U || queue->capacity - queue->used < size + 4U) { return false; }
     const uint32_t length = (uint32_t)size;
     uint8_t prefix[4] = {(uint8_t)(length & 0xFFU), (uint8_t)((length >> 8) & 0xFFU),
         (uint8_t)((length >> 16) & 0xFFU), (uint8_t)(length >> 24)};

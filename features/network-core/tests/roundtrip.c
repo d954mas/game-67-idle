@@ -129,17 +129,18 @@ static raw_socket_t raw_peer_connect(uint16_t port) {
     return sock;
 }
 
-/* True once the 101 has arrived; the server must be serviced meanwhile. */
-static bool raw_peer_upgraded(raw_socket_t sock) {
+/* True once the 101 has arrived, however it was split; the server must be
+   serviced between calls. `response`/`got` accumulate across calls. */
+static bool raw_peer_upgraded(raw_socket_t sock, char *response, size_t capacity, int *got) {
     fd_set readable;
     FD_ZERO(&readable);
     FD_SET(sock, &readable);
     struct timeval zero = {0, 0};
     if (select((int)sock + 1, &readable, NULL, NULL, &zero) <= 0) { return false; }
-    char response[512];
-    const int got = (int)recv(sock, response, (int)sizeof response - 1, 0);
-    if (got <= 0) { return false; }
-    response[got] = '\0';
+    const int part = (int)recv(sock, response + *got, (int)capacity - 1 - *got, 0);
+    if (part <= 0) { return false; }
+    *got += part;
+    response[*got] = '\0';
     return strstr(response, " 101 ") != NULL;
 }
 
@@ -419,9 +420,11 @@ int main(void) {
         raw_socket_t quiet = raw_peer_connect(net_ws_server_port(live));
         CHECK(quiet != RAW_INVALID);
         bool upgraded = false;
+        char response[512];
+        int got = 0;
         for (int round = 0; round < 100 && !upgraded; ++round) {
             net_ws_server_service(live, 5U);
-            upgraded = raw_peer_upgraded(quiet);
+            upgraded = raw_peer_upgraded(quiet, response, sizeof response, &got);
         }
         CHECK(upgraded && raw_peer_send_hello(quiet, VERSION));
         pump(live, NULL, 50);

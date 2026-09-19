@@ -67,6 +67,8 @@ double net_ws_client_clock(void);
    is reported later through on_close from the first service() call. */
 net_ws_client_t *net_ws_client_create(const net_ws_client_config_t *config);
 void net_ws_client_destroy(net_ws_client_t *client);
+/* May already read OPEN or CLOSED before the matching callback has been
+   delivered by service(); the callbacks are the ordered account. */
 net_ws_client_state_t net_ws_client_state(const net_ws_client_t *client);
 
 /* Delivers the callbacks queued since the last call and returns at once;
