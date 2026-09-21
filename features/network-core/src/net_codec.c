@@ -1,6 +1,11 @@
 #include "net_codec.h"
 
+#include <math.h>
 #include <string.h>
+
+#define NET_TAU 6.283185307179586F
+#define ANGLE16_PER_RADIAN (65536.0F / NET_TAU)
+#define ANGLE16_RADIANS (NET_TAU / 65536.0F)
 
 static bool reader_take(net_reader_t *reader, size_t count) {
     if (!reader->ok || reader->size - reader->pos < count) {
@@ -111,6 +116,73 @@ void net_write_f32(net_writer_t *writer, float value) {
     uint32_t bits;
     memcpy(&bits, &value, sizeof bits);
     net_write_u32(writer, bits);
+}
+
+static uint32_t grid_last(net_grid_t grid) {
+    return grid.bits >= 32U ? UINT32_MAX : (1U << grid.bits) - 1U;
+}
+
+static uint32_t grid_raw(net_grid_t grid, float value) {
+    const float steps = (value - grid.min) / grid.step;
+    const uint32_t last = grid_last(grid);
+    if (!(steps > 0.0F)) { return 0U; }
+    if (steps >= (float)last) { return last; }
+    return (uint32_t)(steps + 0.5F);
+}
+
+static float grid_value(net_grid_t grid, uint32_t raw) {
+    const uint32_t last = grid_last(grid);
+    return grid.min + (float)(raw > last ? last : raw) * grid.step;
+}
+
+float net_quantize(net_grid_t grid, float value) {
+    return grid_value(grid, grid_raw(grid, value));
+}
+
+void net_write_quantized(net_writer_t *writer, net_grid_t grid, float value) {
+    const uint32_t raw = grid_raw(grid, value);
+    if (grid.bits <= 8U) {
+        net_write_u8(writer, (uint8_t)raw);
+    } else if (grid.bits <= 16U) {
+        net_write_u16(writer, (uint16_t)raw);
+    } else {
+        net_write_u32(writer, raw);
+    }
+}
+
+float net_read_quantized(net_reader_t *reader, net_grid_t grid) {
+    uint32_t raw;
+    if (grid.bits <= 8U) {
+        raw = net_read_u8(reader);
+    } else if (grid.bits <= 16U) {
+        raw = net_read_u16(reader);
+    } else {
+        raw = net_read_u32(reader);
+    }
+    return grid_value(grid, raw);
+}
+
+/* remainderf lands in [-pi, pi]; pi scales to 32768, which the 16-bit wrap
+   folds onto -pi. */
+static uint16_t angle16_raw(float radians) {
+    return (uint16_t)lroundf(remainderf(radians, NET_TAU) * ANGLE16_PER_RADIAN);
+}
+
+static float angle16_radians(uint16_t raw) {
+    const int32_t steps = raw < 0x8000U ? (int32_t)raw : (int32_t)raw - 0x10000;
+    return (float)steps * ANGLE16_RADIANS;
+}
+
+float net_quantize_angle16(float radians) {
+    return angle16_radians(angle16_raw(radians));
+}
+
+void net_write_angle16(net_writer_t *writer, float radians) {
+    net_write_u16(writer, angle16_raw(radians));
+}
+
+float net_read_angle16(net_reader_t *reader) {
+    return angle16_radians(net_read_u16(reader));
 }
 
 void net_hello_encode(net_writer_t *writer, uint32_t protocol_version, const uint8_t *ticket,

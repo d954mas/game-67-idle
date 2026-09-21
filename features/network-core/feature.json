@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "network-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "title": "Network Core",
   "status": "opt-in",
   "kind": "gameplay-infrastructure",
@@ -24,7 +24,7 @@
     "nt::network_core_codec CMake target (codec only, every platform)",
     "net_ws_server.h: net_ws_server_create/service/send/close",
     "net_ws_client.h: net_ws_client_create/service/send on native and web",
-    "net_codec.h: bounded reader/writer, HELLO, NET_CLOSE_* codes"
+    "net_codec.h: bounded reader/writer, fixed-point grids and 16-bit headings, HELLO, NET_CLOSE_* codes"
   ],
   "registers": {
     "link_libraries": [

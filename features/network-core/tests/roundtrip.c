@@ -6,6 +6,7 @@
 #include "net_ws_client.h"
 #include "net_ws_server.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -237,6 +238,56 @@ static void test_codec(void) {
     CHECK(!writer.ok);
 }
 
+static void test_quantized(void) {
+    /* A power-of-two step over a range that starts on it: the grid's
+       points, its ends included, come back exact. */
+    const net_grid_t metres = {.min = -19.5F, .step = 1.0F / 1024.0F, .bits = 16U};
+    CHECK(net_quantize(metres, -19.5F) == -19.5F);
+    CHECK(net_quantize(metres, 0.0F) == 0.0F);
+    CHECK(net_quantize(metres, 19.5F) == 19.5F);
+    CHECK(net_quantize(metres, 1.75F) == 1.75F);
+    /* Nearest point; past the ends clamps; a snap is idempotent. */
+    const float snapped = net_quantize(metres, 3.14159F);
+    CHECK(fabsf(snapped - 3.14159F) <= 0.5F / 1024.0F);
+    CHECK(net_quantize(metres, snapped) == snapped);
+    CHECK(net_quantize(metres, -1e9F) == -19.5F);
+    CHECK(net_quantize(metres, 1e9F) == -19.5F + 65535.0F / 1024.0F);
+    CHECK(net_quantize(metres, NAN) == -19.5F);
+
+    uint8_t buffer[16];
+    net_writer_t writer;
+    net_writer_init(&writer, buffer, sizeof buffer);
+    net_write_quantized(&writer, metres, 1.75F);
+    const net_grid_t bytes = {.min = 0.0F, .step = 0.25F, .bits = 8U};
+    net_write_quantized(&writer, bytes, 63.75F);
+    const net_grid_t wide = {.min = -1.0F, .step = 1e-6F, .bits = 32U};
+    net_write_quantized(&writer, wide, 0.5F);
+    net_write_angle16(&writer, 3.0F);
+    CHECK(writer.ok && writer.pos == 2U + 1U + 4U + 2U);
+    /* -19.5 + 21760 / 1024 == 1.75: two bytes, little-endian. */
+    CHECK(buffer[0] == 0x00U && buffer[1] == 0x55U && buffer[2] == 0xFFU);
+
+    net_reader_t reader;
+    net_reader_init(&reader, buffer, writer.pos);
+    CHECK(net_read_quantized(&reader, metres) == 1.75F);
+    CHECK(net_read_quantized(&reader, bytes) == 63.75F);
+    CHECK(fabsf(net_read_quantized(&reader, wide) - 0.5F) <= 1e-6F);
+    CHECK(fabsf(net_read_angle16(&reader) - 3.0F) <= 3.14159F / 65536.0F);
+    CHECK(net_reader_complete(&reader));
+
+    /* Angles wrap: a turn and a half is half a turn, pi lands on -pi, and
+       the quarter turns are exact. */
+    CHECK(net_quantize_angle16(0.0F) == 0.0F);
+    CHECK(net_quantize_angle16(3.14159265F) == net_quantize_angle16(-3.14159265F));
+    CHECK(net_quantize_angle16(3.14159265F) < 0.0F);
+    CHECK(net_quantize_angle16(3.0F * 3.14159265F) == net_quantize_angle16(3.14159265F));
+    CHECK(net_quantize_angle16(1.57079633F) == 1.57079633F);
+    CHECK(net_quantize_angle16(-0.78539816F) == -0.78539816F);
+    CHECK(net_quantize_angle16(1e30F) >= -3.14159274F && net_quantize_angle16(1e30F) < 3.14159274F);
+    const float turned = net_quantize_angle16(2.5F);
+    CHECK(net_quantize_angle16(turned) == turned);
+}
+
 static bool hex_equals(const uint8_t *bytes, size_t size, const char *hex) {
     static const char digits[] = "0123456789abcdef";
     for (size_t i = 0U; i < size; ++i) {
@@ -300,6 +351,7 @@ static void test_hmac(void) {
 
 int main(void) {
     test_codec();
+    test_quantized();
     test_hmac();
 
     server_log_t slog = {0};

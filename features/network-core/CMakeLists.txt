@@ -14,6 +14,15 @@ add_library(network_core_codec STATIC
     "${NETWORK_CORE_DIR}/src/net_codec.c"
     "${NETWORK_CORE_DIR}/src/net_hmac.c")
 target_include_directories(network_core_codec PUBLIC "${NETWORK_CORE_DIR}/include")
+# Both sides of a wire replay the quantizer's arithmetic bit for bit; a fused
+# multiply-add on one of them would put the same value on different grid
+# points.
+if(NOT MSVC)
+    target_compile_options(network_core_codec PRIVATE -ffp-contract=off)
+endif()
+if(UNIX)
+    target_link_libraries(network_core_codec PUBLIC m)
+endif()
 add_library(nt::network_core_codec ALIAS network_core_codec)
 
 if(EMSCRIPTEN)

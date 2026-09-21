@@ -23,6 +23,13 @@ consumer.
   socket saw them.
 - **Codec** (`net_codec.h`): bounded little-endian reader/writer. A read past
   the end clears `ok` and returns zero; the caller checks once at the end.
+  Fixed-point fields: a `net_grid_t` (`min`, `step`, `bits`) names the grid a
+  value travels on (`net_write_quantized` / `net_read_quantized`), and
+  `net_quantize` is the same value snapped to it, so a simulation that snaps
+  its state after every step holds the wire's numbers exactly and a correct
+  prediction is never a correction. Headings go as 16 bits of a turn
+  (`net_write_angle16`). A power-of-two step with `min` on the grid keeps
+  every point exact in float.
 - **Session rules every room inherits**: the first frame must be HELLO with
   the configured protocol version; text frames, oversize messages, reserved
   message types, a flooding sender and a client that cannot drain its queue

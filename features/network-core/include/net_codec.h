@@ -43,6 +43,29 @@ void net_write_u32(net_writer_t *writer, uint32_t value);
 void net_write_u64(net_writer_t *writer, uint64_t value);
 void net_write_f32(net_writer_t *writer, float value);
 
+/* Fixed point on the wire. A value travels as a whole count of `step`s
+   above `min`, `bits` (8, 16 or 32) wide; anything past the grid's ends
+   clamps to them, and a value that is not a number lands on `min`.
+   `net_quantize` is what the other side reads: a simulation that snaps its
+   state to the grid after every step holds the wire's numbers exactly, so a
+   snapshot of a correct prediction is never a correction. A power-of-two
+   step with `min` on it keeps every grid point exact in float. */
+typedef struct net_grid_t {
+    float min;
+    float step;
+    unsigned bits;
+} net_grid_t;
+
+float net_quantize(net_grid_t grid, float value);
+void net_write_quantized(net_writer_t *writer, net_grid_t grid, float value);
+float net_read_quantized(net_reader_t *reader, net_grid_t grid);
+
+/* A heading in radians as 16 bits of a turn: any angle lands in [-pi, pi),
+   pi itself on -pi. */
+float net_quantize_angle16(float radians);
+void net_write_angle16(net_writer_t *writer, float radians);
+float net_read_angle16(net_reader_t *reader);
+
 /* Message type 0 is owned by network-core: the first frame of every
    connection carries the magic, the protocol version and an optional
    ticket, opaque bytes the application handed the client (a session to
