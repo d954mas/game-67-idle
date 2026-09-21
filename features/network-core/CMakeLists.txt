@@ -97,10 +97,23 @@ else()
     set(DISABLE_WERROR ON CACHE BOOL "" FORCE)
     add_subdirectory("${NETWORK_CORE_LWS_DIR}" "${CMAKE_BINARY_DIR}/_network_core_lws" EXCLUDE_FROM_ALL)
 
+    # The native client rides libcurl's WebSocket when the engine built it
+    # in (NT_HTTP_WEBSOCKETS: Schannel on Windows, OpenSSL elsewhere), so
+    # wss:// comes with the box's own trust store and no second TLS
+    # library; any other build keeps the lws client, plain ws://.
+    get_property(network_core_curl_ws GLOBAL PROPERTY NT_HTTP_WEBSOCKETS)
+    if(TARGET CURL::libcurl AND network_core_curl_ws)
+        set(network_core_client "${NETWORK_CORE_DIR}/src/net_ws_client_curl.c")
+    else()
+        set(network_core_client "${NETWORK_CORE_DIR}/src/net_ws_client_lws.c")
+    endif()
     add_library(network_core STATIC
         "${NETWORK_CORE_DIR}/src/net_ws_server_lws.c"
-        "${NETWORK_CORE_DIR}/src/net_ws_client_lws.c")
+        "${network_core_client}")
     target_link_libraries(network_core PUBLIC network_core_codec PRIVATE websockets)
+    if(network_core_client MATCHES "curl")
+        target_link_libraries(network_core PRIVATE CURL::libcurl)
+    endif()
     target_compile_definitions(network_core PRIVATE NET_WS_TLS=$<BOOL:${NETWORK_CORE_WITH_TLS}>)
     if(WIN32)
         target_link_libraries(network_core PUBLIC ws2_32)

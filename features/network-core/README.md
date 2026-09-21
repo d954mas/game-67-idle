@@ -9,9 +9,11 @@ consumer.
   `net_ws_server_service(server, timeout_ms)` runs accept, reads, writes and
   callbacks, and returns by the timeout so a fixed simulation tick can share
   the thread. No thread per connection, no lock around the world.
-- **Client** (`net_ws_client.h`): the same header on native (libwebsockets
-  client on a thread of its own) and web (`emscripten/websocket.h`, the
-  page's own `WebSocket`). In both the socket is read the moment the
+- **Client** (`net_ws_client.h`): the same header on native (a client on
+  a thread of its own: libcurl's WebSocket where the engine built it in
+  with `NT_HTTP_WEBSOCKETS`, libwebsockets otherwise) and web
+  (`emscripten/websocket.h`, the page's own `WebSocket`). In all the
+  socket is read the moment the
   network delivers, so every message carries its exact arrival time
   (`received_at`, on `net_ws_client_clock()`, the performance counter on
   Windows and CLOCK_MONOTONIC elsewhere), pongs go out during a loading
@@ -65,9 +67,12 @@ the socket is choked. TLS is opt-in: built with `NETWORK_CORE_WITH_TLS`
 (OpenSSL on the box) a server given PEM files speaks wss:// itself, which
 takes the proxy out of the game path: TLS 1.2 and 1.3 only, forward-secret
 AEAD suites, the full chain from the certificate file; built without, the
-same config refuses to create, so a plain room never poses as a secure one. The
-native client stays plain (a development tool); browsers speak wss://
-by themselves.
+same config refuses to create, so a plain room never poses as a secure one.
+The native client speaks wss:// through libcurl, with the box's own trust
+store (Schannel on Windows, OpenSSL elsewhere) and no second TLS library;
+`tls_insecure` in its config accepts a stand's own CA. The lws client, the
+fallback of a build without libcurl's WebSocket, stays plain ws://;
+browsers speak wss:// by themselves.
 
 ## Layout
 

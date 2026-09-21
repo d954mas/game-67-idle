@@ -5,12 +5,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* One WebSocket connection to a room. Native builds drive libwebsockets on
-   a thread of their own, the browser build drives the page's own WebSocket;
-   in both the socket is read the moment the network delivers, so every
-   message carries its exact arrival time, and callbacks fire only from
-   inside net_ws_client_service(), on the caller's thread, so the game
-   reads the network at one point of its frame.
+/* One WebSocket connection to a room. Native builds drive libcurl's
+   WebSocket (or libwebsockets where no libcurl is built) on a thread of
+   their own, the browser build drives the page's own WebSocket; in all
+   the socket is read the moment the network delivers, so every message
+   carries its exact arrival time, and callbacks fire only from inside
+   net_ws_client_service(), on the caller's thread, so the game reads the
+   network at one point of its frame.
 
    The client sends HELLO with its protocol version as the first frame; the
    server closes with NET_CLOSE_VERSION when the versions differ.
@@ -37,8 +38,11 @@ typedef enum net_ws_overflow_policy_t {
 } net_ws_overflow_policy_t;
 
 typedef struct net_ws_client_config_t {
-    const char *url;                /* ws://host:port/path */
+    const char *url;                /* ws://host:port/path, or wss:// where the build speaks TLS */
     const char *subprotocol;        /* Sec-WebSocket-Protocol, NULL for none */
+    /* Accept any certificate: a stand signing with its own CA. Native
+       libcurl builds only; the browser trusts what the browser trusts. */
+    bool tls_insecure;
     uint32_t protocol_version;
     /* Opaque bytes carried in HELLO for the server's on_connect; at most
        NET_HELLO_TICKET_MAX, copied at create. */
