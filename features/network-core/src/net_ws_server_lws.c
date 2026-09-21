@@ -41,6 +41,8 @@ struct net_ws_server_t {
     uint32_t client_count;     /* sessions past HELLO */
     uint32_t next_id;
     int timeout_seconds;
+    double accept_tokens;
+    lws_usec_t accept_last_us;
     uint8_t *tx_scratch;       /* LWS_PRE + largest queued message */
     bool in_service;
     bool destroy_requested;
@@ -53,6 +55,20 @@ static session_t *session_of(struct lws *wsi) { return (session_t *)lws_wsi_user
 
 static net_ws_server_t *server_of(struct lws *wsi) {
     return (net_ws_server_t *)lws_context_user(lws_get_context(wsi));
+}
+
+/* Accepts are budgeted before any TLS or HTTP work is done for a socket:
+   every seat may reconnect at once, and a connect flood costs one
+   handshake per seat per second on the service thread, never more. */
+static bool accept_allowed(net_ws_server_t *server) {
+    const lws_usec_t now = lws_now_usecs();
+    const double rate = (double)server->config.max_clients;
+    server->accept_tokens += (double)(now - server->accept_last_us) * rate / 1000000.0;
+    server->accept_last_us = now;
+    if (server->accept_tokens > 2.0 * rate) { server->accept_tokens = 2.0 * rate; }
+    if (server->accept_tokens < 1.0) { return false; }
+    server->accept_tokens -= 1.0;
+    return true;
 }
 
 /* Closes go through the writeable callback so queued messages can drain
@@ -232,6 +248,8 @@ static int protocol_callback(struct lws *wsi, enum lws_callback_reasons reason,
     case LWS_CALLBACK_CLOSED:
         on_closed(server_of(wsi), session);
         return 0;
+    case LWS_CALLBACK_FILTER_NETWORK_CONNECTION:
+        return accept_allowed(server_of(wsi)) ? 0 : 1;
     case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
         /* lws binds a header-less upgrade to protocols[0] whatever its name;
            a configured subprotocol must actually be requested. */
@@ -270,6 +288,8 @@ net_ws_server_t *net_ws_server_create(const net_ws_server_config_t *config) {
     server->next_id = 1U;
     server->timeout_seconds = config->handshake_timeout_ms == 0U
         ? 10 : (int)((config->handshake_timeout_ms + 999U) / 1000U);
+    server->accept_tokens = 2.0 * (double)config->max_clients;
+    server->accept_last_us = lws_now_usecs();
     server->slots = (slot_t *)calloc(config->max_clients, sizeof *server->slots);
     server->tx_scratch = (uint8_t *)malloc(LWS_PRE + (size_t)config->send_queue_bytes);
     if (server->slots == NULL || server->tx_scratch == NULL) {
@@ -307,6 +327,13 @@ net_ws_server_t *net_ws_server_create(const net_ws_server_config_t *config) {
     info.user = server;
     info.gid = (gid_t)-1;
     info.uid = (uid_t)-1;
+    /* Sockets short of a seat (a TLS handshake, an upgrade in flight) are
+       bounded too: past this many the listener pauses until one closes,
+       and one that stalls before HELLO is dropped on the same timeout as
+       one that stalls after. Without a bound the process's fd limit is
+       the only one, and every pending handshake holds a TLS buffer. */
+    info.fd_limit_per_thread = config->max_clients * 4U + 8U;
+    info.timeout_secs = (unsigned int)server->timeout_seconds;
     server->context = lws_create_context(&info);
     if (server->context == NULL) {
         free_server(server);
@@ -319,9 +346,16 @@ net_ws_server_t *net_ws_server_create(const net_ws_server_config_t *config) {
     info.vhost_name = "default";
 #if NET_WS_TLS
     if (tls) {
+        /* Once more on the vhost: its own options decide whether it
+           speaks TLS at all; the context's did the library-wide init. */
         info.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
         info.ssl_cert_filepath = config->tls_cert_path;
         info.ssl_private_key_filepath = config->tls_key_path;
+        /* TLS 1.2 and 1.3 only, forward-secret AEAD suites: the library
+           itself leaves the floor to whatever the runtime's OpenSSL was
+           built with, and a Debian default is not a policy. */
+        info.ssl_options_set = SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1;
+        info.ssl_cipher_list = "ECDHE+AESGCM:ECDHE+CHACHA20:!aNULL:!MD5";
     }
 #endif
     /* Compression trades CPU and latency for bytes on every frame; messages
@@ -401,14 +435,17 @@ bool net_ws_server_send(net_ws_server_t *server, uint32_t client, const uint8_t 
     return true;
 }
 
-bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size) {
+bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size,
+    size_t *replaced) {
+    if (replaced != NULL) { *replaced = 0U; }
     struct lws *wsi = wsi_for(server, client);
     if (wsi == NULL || size == 0U) { return false; }
     session_t *session = session_of(wsi);
     if (session->close_pending || !session->hello_done) { return false; }
     /* Whole messages only sit in the ring: a message being written lives
        in lws's own buffer once popped, so nothing here cuts a frame. */
-    net_queue_drop_kind(&session->tx, data[0]);
+    const size_t dropped = net_queue_drop_kind(&session->tx, data[0]);
+    if (replaced != NULL) { *replaced = dropped; }
     if (!net_queue_push(&session->tx, data, size)) {
         request_close(server, wsi, session, NET_CLOSE_SLOW, NET_WS_CLOSE_SLOW);
         return false;

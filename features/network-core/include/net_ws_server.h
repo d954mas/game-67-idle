@@ -84,9 +84,11 @@ bool net_ws_server_send(net_ws_server_t *server, uint32_t client, const uint8_t 
    type, equals this one's are dropped first, so a client that cannot
    drain gets the newest when it can, not a backlog of stale ones, while
    messages of other kinds keep their place. Nothing mid-write is touched;
-   the transport keeps a partial write itself. False as for
+   the transport keeps a partial write itself. `replaced` (may be NULL)
+   receives how many queued messages this one superseded. False as for
    net_ws_server_send. */
-bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size);
+bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size,
+    size_t *replaced);
 /* Bytes still queued for the client, so the application can decide to
    coalesce (skip a snapshot) instead of piling up. 0 for an unknown client. */
 size_t net_ws_server_queued_bytes(const net_ws_server_t *server, uint32_t client);

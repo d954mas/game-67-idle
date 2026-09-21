@@ -66,8 +66,8 @@ static inline bool net_queue_push(net_queue_t *queue, const uint8_t *data, size_
 
 /* Drops every queued message whose first byte is `first_byte`, keeping the
    others in order: compaction in place, front to back, through a small
-   window, so no message-sized buffer is needed. */
-static inline void net_queue_drop_kind(net_queue_t *queue, uint8_t first_byte) {
+   window, so no message-sized buffer is needed. Returns how many went. */
+static inline size_t net_queue_drop_kind(net_queue_t *queue, uint8_t first_byte) {
     size_t read = 0U;
     size_t write = 0U;
     size_t kept = 0U;
@@ -90,8 +90,10 @@ static inline void net_queue_drop_kind(net_queue_t *queue, uint8_t first_byte) {
         }
         read += total;
     }
+    const size_t dropped = queue->count - kept;
     queue->used = write;
     queue->count = kept;
+    return dropped;
 }
 
 /* Size of the front message, or 0 when the queue is empty. */

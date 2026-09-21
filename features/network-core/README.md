@@ -26,8 +26,12 @@ consumer.
   message types, a flooding sender and a client that cannot drain its queue
   are all closed with a `NET_CLOSE_*` code (4001-4006) before the application
   hears about them. A socket that never sends HELLO, or never acknowledges a
-  close, is dropped after `handshake_timeout_ms`. Client ids are never reused
-  within a server lifetime. HELLO may carry a ticket of up to
+  close, is dropped after `handshake_timeout_ms`, and so is a socket that
+  stalls in the TLS or HTTP handshake. Accepts are budgeted at `max_clients`
+  per second (burst of twice that) and sockets short of a seat at
+  `4 * max_clients + 8`, so a connect flood costs the service thread one
+  handshake per seat per second and never the process's fd limit. Client
+  ids are never reused within a server lifetime. HELLO may carry a ticket of up to
   `NET_HELLO_TICKET_MAX` opaque bytes (a seat to resume, a join code); the
   transport hands it to `on_connect` and attaches no meaning to it.
 - **Liveness is the server's**, because browsers cannot send pings: with
@@ -59,8 +63,9 @@ No permessage-deflate (extensions are compiled out), binary frames only,
 side, per-connection byte-bounded queues, and a drain loop that writes until
 the socket is choked. TLS is opt-in: built with `NETWORK_CORE_WITH_TLS`
 (OpenSSL on the box) a server given PEM files speaks wss:// itself, which
-takes the proxy out of the game path; built without, the same config
-refuses to create, so a plain room never poses as a secure one. The
+takes the proxy out of the game path: TLS 1.2 and 1.3 only, forward-secret
+AEAD suites, the full chain from the certificate file; built without, the
+same config refuses to create, so a plain room never poses as a secure one. The
 native client stays plain (a development tool); browsers speak wss://
 by themselves.
 
