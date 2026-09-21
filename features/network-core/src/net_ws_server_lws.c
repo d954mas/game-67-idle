@@ -5,6 +5,10 @@
 
 #include <libwebsockets.h>
 
+#if defined(__linux__)
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -200,15 +204,27 @@ static int on_receive(net_ws_server_t *server, struct lws *wsi, session_t *sessi
 }
 
 static void drain(net_ws_server_t *server, struct lws *wsi, session_t *session) {
-    /* Drain while the socket accepts writes; lws buffers the tail of a
-       partial write itself and reports choked until it is flushed. A refused
-       write means lws is already closing the socket and will say so. */
-    while (session->tx.count > 0U && !lws_send_pipe_choked(wsi)) {
+    /* Write until the socket refuses: lws keeps the tail of a partial
+       write itself, asks for a writable callback and must not be handed
+       another message until that tail is out. Asking the kernel first
+       whether the socket would take a write costs a poll per message and
+       answers nothing the write itself does not. A refused write means
+       lws is already closing the socket and will say so. */
+    while (session->tx.count > 0U && !lws_partial_buffered(wsi)) {
         const size_t size = net_queue_front_size(&session->tx);
         net_queue_front_copy(&session->tx, server->tx_scratch + LWS_PRE, size);
         net_queue_pop(&session->tx);
         if (lws_write(wsi, server->tx_scratch + LWS_PRE, size, LWS_WRITE_BINARY) < 0) { return; }
     }
+}
+
+/* A queued message goes out on the spot: the caller's thread is the
+   service thread, so the socket is as writable now as it would be on the
+   writable callback, and waiting for that callback costs a pass. What the
+   socket does not take now waits for the callback. */
+static void flush(net_ws_server_t *server, struct lws *wsi, session_t *session) {
+    drain(server, wsi, session);
+    if (session->tx.count > 0U || lws_partial_buffered(wsi)) { lws_callback_on_writable(wsi); }
 }
 
 static int on_writeable(net_ws_server_t *server, struct lws *wsi, session_t *session) {
@@ -221,7 +237,7 @@ static int on_writeable(net_ws_server_t *server, struct lws *wsi, session_t *ses
            before it (a kick reason, a final state); protocol closes do not. */
         if (session->close_reason == NET_WS_CLOSE_APP) {
             drain(server, wsi, session);
-            if (session->tx.count > 0U || lws_send_pipe_choked(wsi)) {
+            if (session->tx.count > 0U || lws_partial_buffered(wsi)) {
                 lws_callback_on_writable(wsi);
                 return 0;
             }
@@ -436,7 +452,7 @@ bool net_ws_server_send(net_ws_server_t *server, uint32_t client, const uint8_t 
         request_close(server, wsi, session, NET_CLOSE_SLOW, NET_WS_CLOSE_SLOW);
         return false;
     }
-    lws_callback_on_writable(wsi);
+    flush(server, wsi, session);
     return true;
 }
 
@@ -455,8 +471,23 @@ bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const u
         request_close(server, wsi, session, NET_CLOSE_SLOW, NET_WS_CLOSE_SLOW);
         return false;
     }
-    lws_callback_on_writable(wsi);
+    flush(server, wsi, session);
     return true;
+}
+
+double net_ws_server_receive_age(const net_ws_server_t *server, uint32_t client) {
+#if defined(__linux__)
+    struct lws *wsi = wsi_for(server, client);
+    if (wsi == NULL) { return 0.0; }
+    struct tcp_info info;
+    socklen_t length = sizeof info;
+    if (getsockopt(lws_get_socket_fd(wsi), IPPROTO_TCP, TCP_INFO, &info, &length) != 0) { return 0.0; }
+    return (double)info.tcpi_last_data_recv / 1000.0;
+#else
+    (void)server;
+    (void)client;
+    return 0.0;
+#endif
 }
 
 size_t net_ws_server_queued_bytes(const net_ws_server_t *server, uint32_t client) {

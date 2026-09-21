@@ -92,6 +92,12 @@ bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const u
 /* Bytes still queued for the client, so the application can decide to
    coalesce (skip a snapshot) instead of piling up. 0 for an unknown client. */
 size_t net_ws_server_queued_bytes(const net_ws_server_t *server, uint32_t client);
+/* Seconds since the kernel last received data on the client's connection,
+   read from the socket: what a message delivered in this pass has waited
+   since it arrived, so a server that services its sockets on its own
+   schedule still knows when each message came in. 0 where the platform
+   cannot tell (only Linux can) and for an unknown client. */
+double net_ws_server_receive_age(const net_ws_server_t *server, uint32_t client);
 /* Flushes what is queued, then closes with the application's code
    (NET_CLOSE_APP, or a game-defined 4100-4999). on_disconnect fires from a
    later service call with NET_WS_CLOSE_APP. */
