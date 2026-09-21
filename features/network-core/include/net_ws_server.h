@@ -79,6 +79,14 @@ void net_ws_server_service(net_ws_server_t *server, uint32_t timeout_ms);
    the client is unknown, or its queue is full and it is being closed as
    NET_WS_CLOSE_SLOW; the id stays valid until on_disconnect fires. */
 bool net_ws_server_send(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size);
+/* Queues a message that supersedes every queued message of its kind (a
+   newer full state): the queued ones whose first byte, the application's
+   type, equals this one's are dropped first, so a client that cannot
+   drain gets the newest when it can, not a backlog of stale ones, while
+   messages of other kinds keep their place. Nothing mid-write is touched;
+   the transport keeps a partial write itself. False as for
+   net_ws_server_send. */
+bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size);
 /* Bytes still queued for the client, so the application can decide to
    coalesce (skip a snapshot) instead of piling up. 0 for an unknown client. */
 size_t net_ws_server_queued_bytes(const net_ws_server_t *server, uint32_t client);

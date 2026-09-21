@@ -401,6 +401,22 @@ bool net_ws_server_send(net_ws_server_t *server, uint32_t client, const uint8_t 
     return true;
 }
 
+bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size) {
+    struct lws *wsi = wsi_for(server, client);
+    if (wsi == NULL || size == 0U) { return false; }
+    session_t *session = session_of(wsi);
+    if (session->close_pending || !session->hello_done) { return false; }
+    /* Whole messages only sit in the ring: a message being written lives
+       in lws's own buffer once popped, so nothing here cuts a frame. */
+    net_queue_drop_kind(&session->tx, data[0]);
+    if (!net_queue_push(&session->tx, data, size)) {
+        request_close(server, wsi, session, NET_CLOSE_SLOW, NET_WS_CLOSE_SLOW);
+        return false;
+    }
+    lws_callback_on_writable(wsi);
+    return true;
+}
+
 size_t net_ws_server_queued_bytes(const net_ws_server_t *server, uint32_t client) {
     struct lws *wsi = wsi_for(server, client);
     return wsi == NULL ? 0U : session_of(wsi)->tx.used;
