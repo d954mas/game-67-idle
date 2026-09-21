@@ -45,6 +45,11 @@ void audio_clip_unload(audio_clip_t clip);
 audio_voice_t audio_play(audio_clip_t clip, audio_bus_t bus, float gain, bool loop);
 void audio_voice_stop(audio_voice_t voice);
 bool audio_voice_is_playing(audio_voice_t voice);
+/* Live control of a playing voice: gain in [0, 1] on top of the bus mix,
+   pitch as a playback-rate multiplier (1 = as recorded). Non-finite or
+   non-positive pitch is ignored; a stale handle is ignored. */
+void audio_voice_set_gain(audio_voice_t voice, float gain);
+void audio_voice_set_pitch(audio_voice_t voice, float pitch);
 
 void audio_set_mix(float master, float music, float sfx);
 void audio_set_enabled(bool enabled);

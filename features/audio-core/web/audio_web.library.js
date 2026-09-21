@@ -426,6 +426,18 @@ mergeInto(LibraryManager.library, {
       if (entry) AudioWebRuntime._releaseVoice(entry.index, true);
     },
 
+    voiceSetGain: function(handle, gain) {
+      var entry = AudioWebRuntime._voice(handle);
+      if (!entry || !entry.slot.gainNode) return;
+      try { entry.slot.gainNode.gain.value = AudioWebRuntime._finiteGain(gain); } catch (ignored) {}
+    },
+
+    voiceSetPitch: function(handle, pitch) {
+      var entry = AudioWebRuntime._voice(handle);
+      if (!entry || !entry.slot.source || !(pitch > 0) || !isFinite(pitch)) return;
+      try { entry.slot.source.playbackRate.value = pitch; } catch (ignored) {}
+    },
+
     setMix: function(master, music, sfx) {
       AudioWebRuntime.masterGain = AudioWebRuntime._finiteGain(master);
       AudioWebRuntime.musicGain = AudioWebRuntime._finiteGain(music);
@@ -481,6 +493,10 @@ mergeInto(LibraryManager.library, {
   audio_web_voice_active: function(handle) { return AudioWebRuntime.voiceActive(handle) ? 1 : 0; },
   audio_web_voice_stop__deps: ["$AudioWebRuntime"],
   audio_web_voice_stop: function(handle) { AudioWebRuntime.voiceStop(handle); },
+  audio_web_voice_set_gain__deps: ["$AudioWebRuntime"],
+  audio_web_voice_set_gain: function(handle, gain) { AudioWebRuntime.voiceSetGain(handle, gain); },
+  audio_web_voice_set_pitch__deps: ["$AudioWebRuntime"],
+  audio_web_voice_set_pitch: function(handle, pitch) { AudioWebRuntime.voiceSetPitch(handle, pitch); },
   audio_web_set_mix__deps: ["$AudioWebRuntime"],
   audio_web_set_mix: function(master, music, sfx) { AudioWebRuntime.setMix(master, music, sfx); },
   audio_web_set_enabled__deps: ["$AudioWebRuntime"],

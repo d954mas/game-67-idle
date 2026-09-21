@@ -240,6 +240,16 @@ bool audio_voice_is_playing(audio_voice_t voice) {
     return slot != NULL && audio_core_backend_voice_active(slot->backend);
 }
 
+void audio_voice_set_gain(audio_voice_t voice, float gain) {
+    audio_voice_slot_t *slot = voice_slot(voice, NULL);
+    if (slot != NULL && isfinite(gain)) audio_core_backend_voice_set_gain(slot->backend, finite_gain(gain));
+}
+
+void audio_voice_set_pitch(audio_voice_t voice, float pitch) {
+    audio_voice_slot_t *slot = voice_slot(voice, NULL);
+    if (slot != NULL && isfinite(pitch) && pitch > 0.0f) audio_core_backend_voice_set_pitch(slot->backend, pitch);
+}
+
 void audio_set_mix(float master, float music, float sfx) {
     s_master = finite_gain(master);
     s_music = finite_gain(music);

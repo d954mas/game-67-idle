@@ -20,6 +20,8 @@ typedef struct fake_decode_t {
 } fake_decode_t;
 
 typedef struct fake_voice_t {
+    float gain;
+    float pitch;
     bool used;
     bool active;
 } fake_voice_t;
@@ -191,13 +193,14 @@ void audio_core_backend_clip_destroy(uint32_t clip) {
 
 uint32_t audio_core_backend_voice_play(uint32_t clip, uint32_t bus, float gain, bool loop) {
     (void)bus;
-    (void)gain;
     (void)loop;
     if (audio_core_backend_decode_state(clip) != 1) return 0;
     for (uint32_t i = 0; i < FAKE_LIMIT; ++i) {
         if (!s_voices[i].used) {
             s_voices[i].used = true;
             s_voices[i].active = true;
+            s_voices[i].gain = gain;
+            s_voices[i].pitch = 1.0f;
             ++s_plays;
             return i + 1;
         }
@@ -207,6 +210,22 @@ uint32_t audio_core_backend_voice_play(uint32_t clip, uint32_t bus, float gain, 
 
 bool audio_core_backend_voice_active(uint32_t voice) {
     return voice > 0 && voice <= FAKE_LIMIT && s_voices[voice - 1].used && s_voices[voice - 1].active;
+}
+
+void audio_core_backend_voice_set_gain(uint32_t voice, float gain) {
+    if (voice > 0 && voice <= FAKE_LIMIT && s_voices[voice - 1].used) s_voices[voice - 1].gain = gain;
+}
+
+void audio_core_backend_voice_set_pitch(uint32_t voice, float pitch) {
+    if (voice > 0 && voice <= FAKE_LIMIT && s_voices[voice - 1].used) s_voices[voice - 1].pitch = pitch;
+}
+
+float fake_audio_backend_voice_gain(uint32_t voice) {
+    return voice > 0 && voice <= FAKE_LIMIT ? s_voices[voice - 1].gain : 0.0f;
+}
+
+float fake_audio_backend_voice_pitch(uint32_t voice) {
+    return voice > 0 && voice <= FAKE_LIMIT ? s_voices[voice - 1].pitch : 0.0f;
 }
 
 void audio_core_backend_voice_stop(uint32_t voice) {

@@ -13,7 +13,8 @@ persisted settings, platform lifecycle composition, and user-gesture wiring.
 The only game-facing header is
 `include/features/audio/audio.h`. It exposes lifecycle and status, loading by a
 ready `NT_ASSET_BLOB` hash, generation-checked clip/voice handles, playback and
-stop queries, MUSIC/SFX buses, mix controls, pause/enable state, and browser
+stop queries, live per-voice gain and pitch, MUSIC/SFX buses, mix controls,
+pause/enable state, and browser
 user-gesture unlock. Its fixed limits are 64 decoded clips and 32 voices.
 Backend types, file paths, codecs, and JavaScript handles stay private.
 

@@ -189,6 +189,32 @@ void test_finished_voice_is_cleaned_and_reused_with_new_generation(void) {
     TEST_ASSERT_TRUE(audio_voice_is_playing(replacement));
 }
 
+void test_voice_gain_and_pitch_reach_the_backend_and_ignore_stale_or_bad_values(void) {
+    audio_clip_t clip = make_ready_clip(ASSET_READY);
+    unlock_audio();
+    audio_voice_t voice = audio_play(clip, AUDIO_BUS_SFX, 0.5f, true);
+    TEST_ASSERT_TRUE(audio_voice_is_playing(voice));
+    TEST_ASSERT_EQUAL_FLOAT(0.5f, fake_audio_backend_voice_gain(1));
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, fake_audio_backend_voice_pitch(1));
+
+    audio_voice_set_gain(voice, 0.25f);
+    audio_voice_set_pitch(voice, 1.3f);
+    TEST_ASSERT_EQUAL_FLOAT(0.25f, fake_audio_backend_voice_gain(1));
+    TEST_ASSERT_EQUAL_FLOAT(1.3f, fake_audio_backend_voice_pitch(1));
+
+    audio_voice_set_gain(voice, 4.0f);
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, fake_audio_backend_voice_gain(1));
+    audio_voice_set_pitch(voice, 0.0f);
+    audio_voice_set_pitch(voice, -1.0f);
+    TEST_ASSERT_EQUAL_FLOAT(1.3f, fake_audio_backend_voice_pitch(1));
+
+    audio_voice_stop(voice);
+    audio_voice_set_gain(voice, 0.9f);
+    audio_voice_set_pitch(voice, 0.9f);
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, fake_audio_backend_voice_gain(1));
+    TEST_ASSERT_EQUAL_FLOAT(1.3f, fake_audio_backend_voice_pitch(1));
+}
+
 void test_full_voice_pool_evicts_oldest_voice_without_growing(void) {
     audio_clip_t clip = make_ready_clip(ASSET_READY);
     unlock_audio();
@@ -305,6 +331,7 @@ int main(void) {
     RUN_TEST(test_user_gesture_is_forwarded_and_status_records_success_only);
     RUN_TEST(test_update_reconciles_an_async_backend_unlock_rejection);
     RUN_TEST(test_finished_voice_is_cleaned_and_reused_with_new_generation);
+    RUN_TEST(test_voice_gain_and_pitch_reach_the_backend_and_ignore_stale_or_bad_values);
     RUN_TEST(test_full_voice_pool_evicts_oldest_voice_without_growing);
     RUN_TEST(test_full_voice_pool_preserves_looping_voice_and_evicts_oldest_non_looping);
     RUN_TEST(test_full_voice_pool_rejects_new_voice_when_every_voice_is_looping);

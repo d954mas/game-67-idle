@@ -13,6 +13,8 @@ extern void audio_web_clip_destroy(uint32_t clip);
 extern uint32_t audio_web_voice_play(uint32_t clip, uint32_t bus, float gain, int loop);
 extern int audio_web_voice_active(uint32_t voice);
 extern void audio_web_voice_stop(uint32_t voice);
+extern void audio_web_voice_set_gain(uint32_t voice, float gain);
+extern void audio_web_voice_set_pitch(uint32_t voice, float pitch);
 extern void audio_web_set_mix(float master, float music, float sfx);
 extern void audio_web_set_enabled(int enabled);
 extern void audio_web_set_paused(int paused);
@@ -44,6 +46,10 @@ bool audio_core_backend_voice_active(uint32_t voice) {
 }
 
 void audio_core_backend_voice_stop(uint32_t voice) { audio_web_voice_stop(voice); }
+
+void audio_core_backend_voice_set_gain(uint32_t voice, float gain) { audio_web_voice_set_gain(voice, gain); }
+
+void audio_core_backend_voice_set_pitch(uint32_t voice, float pitch) { audio_web_voice_set_pitch(voice, pitch); }
 
 void audio_core_backend_set_mix(float master, float music, float sfx) {
     audio_web_set_mix(master, music, sfx);

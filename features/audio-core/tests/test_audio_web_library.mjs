@@ -38,6 +38,7 @@ class FakeBufferSourceNode extends FakeNode {
     this.onended = null;
     this.started = false;
     this.stopped = false;
+    this.playbackRate = { value: 1 };
   }
 
   start() { this.started = true; }
@@ -303,8 +304,18 @@ test("play creates one source and gain per voice and ended state is polled", asy
   assert.deepEqual(voiceGain.connections, [library.$AudioWebRuntime.sfxNode]);
   assert.equal(library.audio_web_voice_active(voice), 1);
 
+  library.audio_web_voice_set_gain(voice, 0.6);
+  library.audio_web_voice_set_pitch(voice, 1.3);
+  assert.equal(voiceGain.gain.value, 0.6);
+  assert.equal(source.playbackRate.value, 1.3);
+  library.audio_web_voice_set_pitch(voice, 0);
+  library.audio_web_voice_set_pitch(voice, NaN);
+  assert.equal(source.playbackRate.value, 1.3);
+
   source.finish();
   assert.equal(library.audio_web_voice_active(voice), 0);
+  library.audio_web_voice_set_gain(voice, 0.1);
+  assert.equal(voiceGain.gain.value, 0.6);
 });
 
 test("pointerdown resumes synchronously and the C hook reports the attempt", async () => {

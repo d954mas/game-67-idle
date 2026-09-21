@@ -20,6 +20,8 @@ void audio_core_backend_clip_destroy(uint32_t clip);
 uint32_t audio_core_backend_voice_play(uint32_t clip, uint32_t bus, float gain, bool loop);
 bool audio_core_backend_voice_active(uint32_t voice);
 void audio_core_backend_voice_stop(uint32_t voice);
+void audio_core_backend_voice_set_gain(uint32_t voice, float gain);
+void audio_core_backend_voice_set_pitch(uint32_t voice, float pitch);
 void audio_core_backend_set_mix(float master, float music, float sfx);
 void audio_core_backend_set_enabled(bool enabled);
 void audio_core_backend_set_paused(bool paused);

@@ -312,6 +312,16 @@ bool audio_core_backend_voice_active(uint32_t voice) {
     return ma_sound_is_playing(&s_voices[voice - 1u].sound) == MA_TRUE;
 }
 
+void audio_core_backend_voice_set_gain(uint32_t voice, float gain) {
+    if (voice == 0 || voice > AUDIO_NATIVE_VOICES || !s_voices[voice - 1u].used) return;
+    ma_sound_set_volume(&s_voices[voice - 1u].sound, gain);
+}
+
+void audio_core_backend_voice_set_pitch(uint32_t voice, float pitch) {
+    if (voice == 0 || voice > AUDIO_NATIVE_VOICES || !s_voices[voice - 1u].used) return;
+    ma_sound_set_pitch(&s_voices[voice - 1u].sound, pitch);
+}
+
 void audio_core_backend_voice_stop(uint32_t voice) {
     if (voice == 0 || voice > AUDIO_NATIVE_VOICES || !s_voices[voice - 1u].used) return;
     voice_stop(&s_voices[voice - 1u]);
