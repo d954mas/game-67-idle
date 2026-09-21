@@ -49,6 +49,7 @@ struct net_ws_server_t {
     lws_usec_t accept_last_us;
     uint8_t *tx_scratch;       /* LWS_PRE + largest queued message */
     bool in_service;
+    uint32_t pass_reads;       /* receive callbacks in the current pass */
     bool destroy_requested;
     bool destroying;
 };
@@ -219,9 +220,8 @@ static void drain(net_ws_server_t *server, struct lws *wsi, session_t *session) 
 }
 
 /* A queued message goes out on the spot: the caller's thread is the
-   service thread, so the socket is as writable now as it would be on the
-   writable callback, and waiting for that callback costs a pass. What the
-   socket does not take now waits for the callback. */
+   service thread. What the socket refuses waits for the writable
+   callback. */
 static void flush(net_ws_server_t *server, struct lws *wsi, session_t *session) {
     drain(server, wsi, session);
     if (session->tx.count > 0U || lws_partial_buffered(wsi)) { lws_callback_on_writable(wsi); }
@@ -256,8 +256,10 @@ static int protocol_callback(struct lws *wsi, enum lws_callback_reasons reason,
     session_t *session = (session_t *)user;
     switch (reason) {
     case LWS_CALLBACK_ESTABLISHED:
+        server_of(wsi)->pass_reads += 1U;
         return on_established(server_of(wsi), wsi, session);
     case LWS_CALLBACK_RECEIVE:
+        server_of(wsi)->pass_reads += 1U;
         return on_receive(server_of(wsi), wsi, session, (const uint8_t *)in, len);
     case LWS_CALLBACK_SERVER_WRITEABLE:
         return on_writeable(server_of(wsi), wsi, session);
@@ -425,7 +427,16 @@ void net_ws_server_service(net_ws_server_t *server, uint32_t timeout_ms) {
        would fire before the poll and leave it unbounded, so zero maps to
        the one value lws does honour: a non-blocking pass. */
     if (timeout_ms == 0U) {
-        lws_service(server->context, -1);
+        /* A pass takes one TLS record per socket; a second record a
+           client sent within the same interval would wait for the next
+           call. Passes repeat while they still read something, so a
+           caller that services on its own schedule gets everything that
+           has arrived. */
+        for (uint32_t pass = 0U; pass < 8U; ++pass) {
+            server->pass_reads = 0U;
+            lws_service(server->context, -1);
+            if (server->pass_reads == 0U || server->destroy_requested) { break; }
+        }
     } else {
         lws_sul_schedule(server->context, 0, &server->wake, wake_noop,
             (lws_usec_t)timeout_ms * LWS_US_PER_MS);
@@ -475,6 +486,14 @@ bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const u
     return true;
 }
 
+bool net_ws_server_reports_arrival(void) {
+#if defined(__linux__)
+    return true;
+#else
+    return false;
+#endif
+}
+
 double net_ws_server_receive_age(const net_ws_server_t *server, uint32_t client) {
 #if defined(__linux__)
     struct lws *wsi = wsi_for(server, client);
@@ -486,7 +505,7 @@ double net_ws_server_receive_age(const net_ws_server_t *server, uint32_t client)
 #else
     (void)server;
     (void)client;
-    return 0.0;
+    return -1.0;
 #endif
 }
 
