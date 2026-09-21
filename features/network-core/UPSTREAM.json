@@ -13,7 +13,7 @@
     "LICENSE",
     "cmake/",
     "include/",
-    "lib/ (pruned to the compiled option set)",
+    "lib/ (pruned to the compiled option set; lib/tls keeps the common and OpenSSL files for the opt-in TLS build)",
     "win32port/win32helpers/",
     "win32port/dirent/",
     "win32port/version.rc.in",
@@ -1215,6 +1215,126 @@
       "path": "lib/system/system.c",
       "bytes": 5790,
       "sha256": "086c30109052699361d1bc141c3619965bcb5348aa524bd239ea27efedc1e66d"
+    },
+    {
+      "path": "lib/tls/CMakeLists.txt",
+      "bytes": 24826,
+      "sha256": "03e2c1b2616d440893a19a2b5cd60ab3df72dc5a3195a8a42a7a030b4702431a"
+    },
+    {
+      "path": "lib/tls/lws-gencrypto-common.c",
+      "bytes": 22038,
+      "sha256": "859459a4dbfae09e5cb09f610de849a4928c2b564d32aed86162751364f14aec"
+    },
+    {
+      "path": "lib/tls/lws-genec-common.c",
+      "bytes": 3635,
+      "sha256": "c83c1327c6cb83314fcb1a259ee66e2a165f9768fbeab14b7c6d4a91981cece3"
+    },
+    {
+      "path": "lib/tls/openssl/lws-genaes.c",
+      "bytes": 9843,
+      "sha256": "a5e7728d3e6408d2c293af2038ce12327475844a32512e862c696de15337d74c"
+    },
+    {
+      "path": "lib/tls/openssl/lws-gencrypto.c",
+      "bytes": 2397,
+      "sha256": "5715e2c944fc9ed812092d44d04d6b7f0aeebef29a373ab301848ddcd9210369"
+    },
+    {
+      "path": "lib/tls/openssl/lws-genec.c",
+      "bytes": 17544,
+      "sha256": "8fc24ca770f2f09531e6d95085967f0fa466fd402bf95021973d5604f1560bbf"
+    },
+    {
+      "path": "lib/tls/openssl/lws-genhash.c",
+      "bytes": 5923,
+      "sha256": "74f60a5fb0c82cccc4e709eb29a6d7145fff88b3a967d1cb297c6dc6991c4986"
+    },
+    {
+      "path": "lib/tls/openssl/lws-genrsa.c",
+      "bytes": 9755,
+      "sha256": "f25954f0fc80039457c93631e4a455a9aaa064c84e968837219071de384fc732"
+    },
+    {
+      "path": "lib/tls/openssl/openssl-client.c",
+      "bytes": 30002,
+      "sha256": "9d5d396acd22276ecfee78133c054f581ea229c32325afe723b9a5844a6c5851"
+    },
+    {
+      "path": "lib/tls/openssl/openssl-server.c",
+      "bytes": 27600,
+      "sha256": "68487ff4c547ee2ccf6956a0fbd5d15c46eeb5bbcf06d140fe1bd045cef8e111"
+    },
+    {
+      "path": "lib/tls/openssl/openssl-session.c",
+      "bytes": 12513,
+      "sha256": "9fb0d718aeae5927a82ca89dfc2e6a98f4ad61c73518729ab6ea8796db0df197"
+    },
+    {
+      "path": "lib/tls/openssl/openssl-ssl.c",
+      "bytes": 15656,
+      "sha256": "bf79bc79f239ee0f6b7f3e975acb24999705f600fefe5d035d60764cfc82fde4"
+    },
+    {
+      "path": "lib/tls/openssl/openssl-tls.c",
+      "bytes": 4884,
+      "sha256": "99c69bf2f00f7a1feff995bf2c56ba8f1e930a56fa064a44a6ec5a553b8f7ac6"
+    },
+    {
+      "path": "lib/tls/openssl/openssl-x509.c",
+      "bytes": 20718,
+      "sha256": "d5c8165eda3cb22b54c143ee7245cd8da8a14e1545ffa2e160cc9bd052d2330b"
+    },
+    {
+      "path": "lib/tls/openssl/private-lib-tls-openssl.h",
+      "bytes": 3382,
+      "sha256": "e77895046bcfa028bb2a8edce2573004570439980a3d69d968ff2ec654cb34ce"
+    },
+    {
+      "path": "lib/tls/private-jit-trust.h",
+      "bytes": 4835,
+      "sha256": "358fd8c0b6172ed291ee73fff565b4afddfcdeaabda5d91b99c4c36b6c2a4a1f"
+    },
+    {
+      "path": "lib/tls/private-lib-tls.h",
+      "bytes": 7283,
+      "sha256": "4bb420d58d095e5aa6397b147bd31f031ba3f3dbdd227cefc1bf8f251cf7f315"
+    },
+    {
+      "path": "lib/tls/private-network.h",
+      "bytes": 6205,
+      "sha256": "aedb849342644c6911f778693627a553c8ebf314729bb18767a035c8c87cd431"
+    },
+    {
+      "path": "lib/tls/tls-client.c",
+      "bytes": 6935,
+      "sha256": "e63d6f9885a658d0f689b9892267140daf601c561db8d28beb9a42f1f8c008bf"
+    },
+    {
+      "path": "lib/tls/tls-jit-trust.c",
+      "bytes": 18484,
+      "sha256": "92e209a09537de9ebdabdef252376ad33531226766a93681fde2670fe5d61112"
+    },
+    {
+      "path": "lib/tls/tls-network.c",
+      "bytes": 7355,
+      "sha256": "b7b8dc07ddea6f572f14902f239b6e40acdf92e009859a0e6adead8531644d43"
+    },
+    {
+      "path": "lib/tls/tls-server.c",
+      "bytes": 10739,
+      "sha256": "d13498adb9141c14e8e73e373ba6fcece6b93d558a8ed9cf570356adf2e248be"
+    },
+    {
+      "path": "lib/tls/tls-sessions.c",
+      "bytes": 2022,
+      "sha256": "813eaf57dc2d3a28bfec32f16fbf868e0c2e4252afe43986f96ec79da723b7c9"
+    },
+    {
+      "path": "lib/tls/tls.c",
+      "bytes": 14230,
+      "sha256": "2c57dd6ac8a97e0858886afe4eb9f3795c89c5f540b9569f942cf556035319b8"
     },
     {
       "path": "lwsws/CMakeLists.txt",

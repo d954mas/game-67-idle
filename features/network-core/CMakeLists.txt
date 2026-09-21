@@ -23,10 +23,22 @@ if(EMSCRIPTEN)
     # The browser owns the socket; emscripten's websocket.h is a thin binding.
     target_link_options(network_core INTERFACE "SHELL:-lwebsocket.js")
 else()
-    # Rooms sit behind a TLS-terminating proxy, so the library builds without
-    # TLS, HTTP/2, extensions (no permessage-deflate), file serving or any of
-    # the optional subsystems; the vendored tree only carries what remains.
-    set(LWS_WITH_SSL OFF CACHE BOOL "" FORCE)
+    # The library builds without HTTP/2, extensions (no permessage-deflate),
+    # file serving or any of the optional subsystems; the vendored tree only
+    # carries what remains. TLS is opt-in: a room that terminates its own
+    # TLS (no proxy in the game path) builds with NETWORK_CORE_WITH_TLS and
+    # OpenSSL on the box; everything else, tests included, stays plain.
+    option(NETWORK_CORE_WITH_TLS "Serve wss:// from the room itself (needs OpenSSL)" OFF)
+    if(NETWORK_CORE_WITH_TLS)
+        set(LWS_WITH_SSL ON CACHE BOOL "" FORCE)
+        set(LWS_WITH_GENCRYPTO OFF CACHE BOOL "" FORCE)
+        set(LWS_WITH_TLS_JIT_TRUST OFF CACHE BOOL "" FORCE)
+        # Digest auth is an HTTP client feature that TLS switches on and the
+        # pruned header table cannot serve; nothing here authenticates.
+        set(LWS_WITH_HTTP_DIGEST_AUTH OFF CACHE BOOL "" FORCE)
+    else()
+        set(LWS_WITH_SSL OFF CACHE BOOL "" FORCE)
+    endif()
     set(LWS_WITH_SHARED OFF CACHE BOOL "" FORCE)
     set(LWS_WITH_STATIC ON CACHE BOOL "" FORCE)
     set(LWS_STATIC_PIC ON CACHE BOOL "" FORCE)
@@ -89,6 +101,7 @@ else()
         "${NETWORK_CORE_DIR}/src/net_ws_server_lws.c"
         "${NETWORK_CORE_DIR}/src/net_ws_client_lws.c")
     target_link_libraries(network_core PUBLIC network_core_codec PRIVATE websockets)
+    target_compile_definitions(network_core PRIVATE NET_WS_TLS=$<BOOL:${NETWORK_CORE_WITH_TLS}>)
     if(WIN32)
         target_link_libraries(network_core PUBLIC ws2_32)
     else()

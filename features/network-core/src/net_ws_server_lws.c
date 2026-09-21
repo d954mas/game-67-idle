@@ -283,12 +283,27 @@ net_ws_server_t *net_ws_server_create(const net_ws_server_config_t *config) {
     server->protocols[0].rx_buffer_size = config->max_message_bytes > NET_HELLO_MAX_SIZE
         ? config->max_message_bytes : NET_HELLO_MAX_SIZE;
 
+    const bool tls = config->tls_cert_path != NULL || config->tls_key_path != NULL;
+    if (tls && (config->tls_cert_path == NULL || config->tls_key_path == NULL)) {
+        free_server(server);
+        return NULL;
+    }
+#if !NET_WS_TLS
+    if (tls) {
+        /* Built without TLS: a wss:// room would silently be a ws:// one. */
+        free_server(server);
+        return NULL;
+    }
+#endif
     /* Process-global in lws; every context in this process wants the same. */
     lws_set_log_level(LLL_ERR | LLL_WARN, NULL);
     struct lws_context_creation_info info;
     memset(&info, 0, sizeof info);
     info.port = CONTEXT_PORT_NO_LISTEN;
     info.options = LWS_SERVER_OPTION_EXPLICIT_VHOSTS;
+#if NET_WS_TLS
+    if (tls) { info.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT; }
+#endif
     info.user = server;
     info.gid = (gid_t)-1;
     info.uid = (uid_t)-1;
@@ -302,6 +317,13 @@ net_ws_server_t *net_ws_server_create(const net_ws_server_config_t *config) {
     info.iface = config->bind_address;
     info.protocols = server->protocols;
     info.vhost_name = "default";
+#if NET_WS_TLS
+    if (tls) {
+        info.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
+        info.ssl_cert_filepath = config->tls_cert_path;
+        info.ssl_private_key_filepath = config->tls_key_path;
+    }
+#endif
     /* Compression trades CPU and latency for bytes on every frame; messages
        are small and time-critical, so no extensions are offered. */
     info.extensions = NULL;

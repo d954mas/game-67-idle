@@ -57,8 +57,12 @@ game. The feature carries transport and limits only.
 No permessage-deflate (extensions are compiled out), binary frames only,
 `TCP_NODELAY` (lws default), one preallocated `LWS_PRE` scratch buffer per
 side, per-connection byte-bounded queues, and a drain loop that writes until
-the socket is choked. TLS is deliberately absent: rooms sit behind a
-TLS-terminating reverse proxy on the public domain.
+the socket is choked. TLS is opt-in: built with `NETWORK_CORE_WITH_TLS`
+(OpenSSL on the box) a server given PEM files speaks wss:// itself, which
+takes the proxy out of the game path; built without, the same config
+refuses to create, so a plain room never poses as a secure one. The
+native client stays plain (a development tool); browsers speak wss://
+by themselves.
 
 ## Layout
 
@@ -76,8 +80,9 @@ vendor/libwebsockets/  pruned v4.5.8, MIT; see UPSTREAM.json
 libwebsockets v4.5.8, https://github.com/warmcat/libwebsockets, MIT. The
 vendored tree keeps only what the option set in `CMakeLists.txt` compiles:
 core, core-net, poll event loop, ws/h1/http/listen/pipe/raw-skt roles, unix and
-windows platform layers, misc helpers, `win32port/win32helpers`. Removed:
-TLS, HTTP/2, secure streams, extensions, plugins, mqtt/dbus/cgi/netlink
+windows platform layers, misc helpers, `win32port/win32helpers`, and
+`lib/tls` (common + OpenSSL backend) for the opt-in TLS build. Removed:
+mbedTLS, HTTP/2, secure streams, extensions, plugins, mqtt/dbus/cgi/netlink
 roles, jose/cose, display-list and image decoders, test apps and examples.
 `UPSTREAM.json` records the pinned revision and per-file hashes.
 
@@ -118,5 +123,5 @@ Consumers pin both this version and an exact repository revision.
 - `overflow_policy` on the client and `net_ws_server_queued_bytes` on the
   server are where a game plugs its own backlog policy (coalescing, deltas
   with resync, or a hard close).
-- TLS is intentionally absent; put a TLS-terminating reverse proxy in front
+- TLS is opt-in (`NETWORK_CORE_WITH_TLS`); without it, put a TLS-terminating reverse proxy in front
   of the room.

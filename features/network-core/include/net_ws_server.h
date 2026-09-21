@@ -30,6 +30,11 @@ typedef enum net_ws_close_reason_t {
 typedef struct net_ws_server_config_t {
     const char *bind_address;         /* NULL binds every interface */
     uint16_t port;                    /* 0 picks an ephemeral port */
+    /* PEM files; both set = the server speaks wss:// itself, which needs
+       the library built with NETWORK_CORE_WITH_TLS (creation fails
+       otherwise). Both NULL = plain ws://, a proxy's job to wrap. */
+    const char *tls_cert_path;
+    const char *tls_key_path;
     const char *subprotocol;          /* Sec-WebSocket-Protocol clients must request; NULL = none */
     uint32_t max_clients;
     uint32_t max_message_bytes;       /* inbound, after fragment reassembly */
