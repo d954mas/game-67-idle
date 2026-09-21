@@ -56,6 +56,11 @@ static inline bool net_thread_start(net_thread_t *thread, void (*run)(void *), v
 static inline void net_thread_join(net_thread_t *thread) {
     WaitForSingleObject(thread->handle, INFINITE);
     CloseHandle(thread->handle);
+}
+
+/* The thread runs on to its own end; nobody waits for it. */
+static inline void net_thread_detach(net_thread_t *thread) {
+    CloseHandle(thread->handle);
     thread->handle = NULL;
 }
 
@@ -101,6 +106,7 @@ static inline bool net_thread_start(net_thread_t *thread, void (*run)(void *), v
 }
 
 static inline void net_thread_join(net_thread_t *thread) { pthread_join(thread->handle, NULL); }
+static inline void net_thread_detach(net_thread_t *thread) { pthread_detach(thread->handle); }
 
 #endif
 

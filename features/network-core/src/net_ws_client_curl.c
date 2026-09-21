@@ -30,15 +30,19 @@
    (Schannel on Windows, OpenSSL elsewhere) and no second TLS library. The
    socket lives on its own thread so a frame arrives the moment the network
    delivers it, whatever the game is doing: its arrival time is exact,
-   pings are answered (libcurl pongs by itself) during a loading stall,
-   and sends never wait for the next frame. The game thread sees only the
-   queues; callbacks still fire from net_ws_client_service() alone. The
-   thread sleeps in poll() on the socket and a loopback wake socket, which
-   a send from the game thread kicks. */
+   pings are answered during a loading stall, and sends never wait for
+   the next frame. The game thread sees only the queues; callbacks still
+   fire from net_ws_client_service() alone. The thread sleeps in poll()
+   on the socket and a loopback wake socket, which a send from the game
+   thread kicks. A destroy while the connect is still in flight does not
+   wait for it: the thread is handed the client and frees it on its way
+   out. */
 
 #define SERVICE_SLICE_MS 100
 #define CONNECT_TIMEOUT_MS 15000L
 #define TIMESTAMP_BYTES 8U
+#define PONG_MAX 125U               /* a control frame's payload, RFC 6455 */
+#define CLOSE_FRAME_WAITS 5         /* slices given to a half-sent frame before a close */
 
 #if defined(_WIN32)
 typedef SOCKET wake_socket_t;
@@ -72,6 +76,13 @@ struct net_ws_client_t {
     size_t tx_offset;               /* sent so far; a frame goes out whole across calls */
     uint8_t *rx_chunk;              /* one curl_ws_recv worth */
     uint16_t peer_close_code;
+    /* The peer's last ping, answered between our own frames: libcurl
+       would answer it by itself, but only on the next send or the next
+       frame received, which a quiet room may not give within its
+       hangup. */
+    uint8_t pong[PONG_MAX];
+    size_t pong_size;
+    bool pong_pending;
 
     /* shared, under lock */
     net_mutex_t lock;
@@ -82,6 +93,8 @@ struct net_ws_client_t {
     bool close_event;
     uint16_t close_code;
     bool stop;
+    bool thread_done;               /* the service thread is past its last touch */
+    bool orphaned;                  /* destroyed mid-connect: the thread frees the client */
 
     /* game thread only */
     uint8_t *scratch;               /* TIMESTAMP_BYTES + max_message_bytes */
@@ -160,7 +173,19 @@ static void finish(net_ws_client_t *client, uint16_t code) {
     net_mutex_unlock(&client->lock);
 }
 
+static bool flush_tx(net_ws_client_t *client);
+static void wait_for(curl_socket_t socket, bool writable, wake_socket_t wake);
+
+/* A close frame cannot cut into a frame that went out in part: libcurl
+   would take the close bytes as that frame's payload. The frame gets a
+   few slices to finish; a socket that stays choked gets no close frame,
+   and the TCP close that follows tells the peer the same. */
 static void send_close(net_ws_client_t *client, uint16_t code) {
+    for (int slice = 0; slice < CLOSE_FRAME_WAITS && client->tx_size != 0U; ++slice) {
+        if (!flush_tx(client)) { return; }
+        if (client->tx_size != 0U) { wait_for(client->socket, true, client->wake); }
+    }
+    if (client->tx_size != 0U) { return; }
     const uint8_t payload[2] = {(uint8_t)(code >> 8), (uint8_t)(code & 0xFFU)};
     size_t sent = 0U;
     (void)curl_ws_send(client->easy, payload, sizeof payload, &sent, 0, CURLWS_CLOSE);
@@ -179,9 +204,15 @@ static bool connect_ws(net_ws_client_t *client) {
     CURL *easy = client->easy;
     curl_easy_setopt(easy, CURLOPT_URL, client->url);
     curl_easy_setopt(easy, CURLOPT_CONNECT_ONLY, 2L);
+    /* The whole handshake is bounded, not only the TCP connect: a peer
+       that accepts and never answers would otherwise hold the thread. */
     curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, CONNECT_TIMEOUT_MS);
+    curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, CONNECT_TIMEOUT_MS);
+    /* A resolver still working is left to itself at cleanup. */
+    curl_easy_setopt(easy, CURLOPT_QUICK_EXIT, 1L);
     curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L);
     curl_easy_setopt(easy, CURLOPT_TCP_NODELAY, 1L);
+    curl_easy_setopt(easy, CURLOPT_WS_OPTIONS, (long)CURLWS_NOAUTOPONG);
     curl_easy_setopt(easy, CURLOPT_ERRORBUFFER, client->error);
     if (client->config.subprotocol != NULL) {
         char header[128];
@@ -225,6 +256,16 @@ static void on_established(net_ws_client_t *client) {
    bytes it flushed and takes the remainder, exactly, next time. */
 static bool flush_tx(net_ws_client_t *client) {
     for (;;) {
+        if (client->tx_size == 0U && client->pong_pending) {
+            size_t sent = 0U;
+            const CURLcode code = curl_ws_send(client->easy, client->pong, client->pong_size, &sent, 0, CURLWS_PONG);
+            if (code == CURLE_AGAIN) { return true; }
+            if (code != CURLE_OK) {
+                finish(client, 0U);
+                return false;
+            }
+            client->pong_pending = false;
+        }
         if (client->tx_size == 0U) {
             net_mutex_lock(&client->lock);
             const size_t size = net_queue_front_size(&client->tx);
@@ -291,7 +332,16 @@ static bool drain_rx(net_ws_client_t *client) {
             finish(client, client->peer_close_code);
             return false;
         }
-        if (meta->flags & (CURLWS_PING | CURLWS_PONG)) { continue; }
+        if (meta->flags & CURLWS_PING) {
+            /* The newest ping is the one worth answering. */
+            if (meta->offset == 0 && nread <= PONG_MAX) {
+                memcpy(client->pong, client->rx_chunk, nread);
+                client->pong_size = nread;
+                client->pong_pending = true;
+            }
+            continue;
+        }
+        if (meta->flags & CURLWS_PONG) { continue; }
         if (meta->flags & CURLWS_TEXT) {
             refuse(client, NET_CLOSE_FORMAT);
             return false;
@@ -327,51 +377,49 @@ static bool drain_rx(net_ws_client_t *client) {
     }
 }
 
+static void release(net_ws_client_t *client);
+
 static void service_thread(void *arg) {
     net_ws_client_t *client = (net_ws_client_t *)arg;
-    if (!connect_ws(client)) {
-        finish(client, 0U);
-        if (client->easy != NULL) {
-            curl_easy_cleanup(client->easy);
-            client->easy = NULL;
+    if (connect_ws(client)) {
+        on_established(client);
+        for (;;) {
+            net_mutex_lock(&client->lock);
+            const bool stop = client->stop || client->state == NET_WS_CLIENT_CLOSED;
+            net_mutex_unlock(&client->lock);
+            /* Nothing more can happen on a closed socket; the thread idles
+               out and destroy joins it at once. */
+            if (stop) { break; }
+            if (!flush_tx(client)) { break; }
+            net_mutex_lock(&client->lock);
+            const bool pending = client->tx_size > 0U || client->tx.count > 0U || client->pong_pending;
+            net_mutex_unlock(&client->lock);
+            wait_for(client->socket, pending, client->wake);
+            if (!drain_rx(client)) { break; }
         }
-        return;
-    }
-    on_established(client);
-    for (;;) {
         net_mutex_lock(&client->lock);
-        const bool stop = client->stop || client->state == NET_WS_CLIENT_CLOSED;
+        const bool open = client->state == NET_WS_CLIENT_OPEN;
         net_mutex_unlock(&client->lock);
-        /* Nothing more can happen on a closed socket; the thread idles out
-           and destroy joins it at once. */
-        if (stop) { break; }
-        if (!flush_tx(client)) { break; }
-        net_mutex_lock(&client->lock);
-        const bool pending = client->tx_size > 0U || client->tx.count > 0U;
-        net_mutex_unlock(&client->lock);
-        wait_for(client->socket, pending, client->wake);
-        if (!drain_rx(client)) { break; }
+        /* Going away on the game's word is a normal close for the peer. */
+        if (open) { send_close(client, 1000U); }
+    } else {
+        finish(client, 0U);
     }
-    net_mutex_lock(&client->lock);
-    const bool open = client->state == NET_WS_CLIENT_OPEN;
-    net_mutex_unlock(&client->lock);
-    /* Going away on the game's word is a normal close for the peer. */
-    if (open) { send_close(client, 1000U); }
     /* The socket closes with the thread, not with the game's destroy: a
        peer that closed us sees the connection end at once. */
-    curl_easy_cleanup(client->easy);
-    client->easy = NULL;
+    if (client->easy != NULL) {
+        curl_easy_cleanup(client->easy);
+        client->easy = NULL;
+    }
+    net_mutex_lock(&client->lock);
+    const bool orphaned = client->orphaned;
+    client->thread_done = true;
+    net_mutex_unlock(&client->lock);
+    if (orphaned) { release(client); }
 }
 
-static void free_client(net_ws_client_t *client) {
-    if (client->thread_started) {
-        net_mutex_lock(&client->lock);
-        client->stop = true;
-        net_mutex_unlock(&client->lock);
-        wake_kick(client->wake);
-        net_thread_join(&client->thread);
-    }
-    if (client->easy != NULL) { curl_easy_cleanup(client->easy); }
+/* Frees what the client holds; the thread is gone or detached by now. */
+static void release(net_ws_client_t *client) {
     if (client->headers != NULL) { curl_slist_free_all(client->headers); }
     if (client->wake != WAKE_INVALID) { wake_close(client->wake); }
     net_mutex_free(&client->lock);
@@ -382,6 +430,26 @@ static void free_client(net_ws_client_t *client) {
     net_queue_free(&client->rx);
     net_queue_free(&client->tx);
     free(client);
+}
+
+/* A thread still connecting is not waited for: it takes the client with
+   it and frees it when the connect returns. */
+static void free_client(net_ws_client_t *client) {
+    if (client->thread_started) {
+        net_mutex_lock(&client->lock);
+        client->stop = true;
+        const bool done = client->thread_done;
+        const bool open = client->state != NET_WS_CLIENT_CONNECTING;
+        if (!done && !open) { client->orphaned = true; }
+        net_mutex_unlock(&client->lock);
+        wake_kick(client->wake);
+        if (!done && !open) {
+            net_thread_detach(&client->thread);
+            return;
+        }
+        net_thread_join(&client->thread);
+    }
+    release(client);
 }
 
 net_ws_client_t *net_ws_client_create(const net_ws_client_config_t *config) {
