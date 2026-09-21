@@ -263,6 +263,9 @@ net_ws_client_t *net_ws_client_create(const net_ws_client_config_t *config) {
     client->protocols[0].name = config->subprotocol != NULL ? config->subprotocol : "";
     client->protocols[0].callback = protocol_callback;
     client->protocols[0].rx_buffer_size = config->max_message_bytes;
+    /* At 0 lws would cap a send at rx_buffer_size and fragment the rest
+       into further writes; a message never exceeds its queue. */
+    client->protocols[0].tx_packet_size = config->send_queue_bytes;
 
     /* Process-global in lws; every context in this process wants the same,
        and one store keeps other clients' threads from reading a write. */

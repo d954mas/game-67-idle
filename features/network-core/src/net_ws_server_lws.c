@@ -302,6 +302,11 @@ net_ws_server_t *net_ws_server_create(const net_ws_server_config_t *config) {
     server->protocols[0].per_session_data_size = sizeof(session_t);
     server->protocols[0].rx_buffer_size = config->max_message_bytes > NET_HELLO_MAX_SIZE
         ? config->max_message_bytes : NET_HELLO_MAX_SIZE;
+    /* Left at 0, lws caps a single send at rx_buffer_size and drips the
+       rest out on later writable callbacks: a message bigger than the
+       inbound limit becomes several TLS records, writes and packets. No
+       message is bigger than the queue it came from. */
+    server->protocols[0].tx_packet_size = config->send_queue_bytes;
 
     const bool tls = config->tls_cert_path != NULL || config->tls_key_path != NULL;
     if (tls && (config->tls_cert_path == NULL || config->tls_key_path == NULL)) {
