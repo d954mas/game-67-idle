@@ -40,6 +40,9 @@ else()
         set(LWS_WITH_SSL OFF CACHE BOOL "" FORCE)
     endif()
     set(LWS_WITH_SHARED OFF CACHE BOOL "" FORCE)
+    # One address may hold only so many sockets of a server, handshaking
+    # ones included: the rooms face the internet with no proxy in front.
+    set(LWS_WITH_PEER_LIMITS ON CACHE BOOL "" FORCE)
     set(LWS_WITH_STATIC ON CACHE BOOL "" FORCE)
     set(LWS_STATIC_PIC ON CACHE BOOL "" FORCE)
     set(LWS_WITHOUT_TESTAPPS ON CACHE BOOL "" FORCE)

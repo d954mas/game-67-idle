@@ -32,8 +32,13 @@ consumer.
   stalls in the TLS or HTTP handshake. Accepts are budgeted at `max_clients`
   per second (burst of twice that) and sockets short of a seat at
   `4 * max_clients + 8`, so a connect flood costs the service thread one
-  handshake per seat per second and never the process's fd limit. Client
-  ids are never reused within a server lifetime. HELLO may carry a ticket of up to
+  handshake per seat per second and never the process's fd limit. A slot
+  (and the client id) is earned by HELLO: sockets upgraded but not yet past
+  HELLO wait in a room of `max_clients`, at most four of them from one
+  address, so holding open connections without HELLO takes no seat and
+  one machine cannot fill the waiting room. A message in more than eight
+  fragments is closed as malformed. Client ids are never reused within a
+  server lifetime. HELLO may carry a ticket of up to
   `NET_HELLO_TICKET_MAX` opaque bytes (a seat to resume, a join code); the
   transport hands it to `on_connect` and attaches no meaning to it.
 - **Liveness is the server's**, because browsers cannot send pings: with

@@ -70,6 +70,7 @@ struct net_ws_client_t {
     char error[CURL_ERROR_SIZE];
     uint8_t *assembly;              /* fragment reassembly, max_message_bytes */
     size_t assembly_size;
+    uint32_t fragments;             /* of the message being reassembled */
     bool assembling;
     uint8_t *tx_scratch;            /* the message being sent */
     size_t tx_size;
@@ -355,8 +356,11 @@ static bool drain_rx(net_ws_client_t *client) {
             }
             client->assembling = true;
             client->assembly_size = TIMESTAMP_BYTES;
+            client->fragments = 0U;
         }
-        if (nread > client->config.max_message_bytes - (client->assembly_size - TIMESTAMP_BYTES)) {
+        /* A message in more fragments than this is not a game message. */
+        if (nread > client->config.max_message_bytes - (client->assembly_size - TIMESTAMP_BYTES) ||
+            ++client->fragments > 8U) {
             refuse(client, NET_CLOSE_FORMAT);
             return false;
         }
@@ -440,13 +444,17 @@ static void free_client(net_ws_client_t *client) {
         client->stop = true;
         const bool done = client->thread_done;
         const bool open = client->state != NET_WS_CLIENT_CONNECTING;
-        if (!done && !open) { client->orphaned = true; }
-        net_mutex_unlock(&client->lock);
-        wake_kick(client->wake);
         if (!done && !open) {
+            /* The thread frees the client the moment it sees this under
+               the lock: nothing here may touch the client once the lock
+               is dropped. */
             net_thread_detach(&client->thread);
+            client->orphaned = true;
+            net_mutex_unlock(&client->lock);
             return;
         }
+        net_mutex_unlock(&client->lock);
+        wake_kick(client->wake);
         net_thread_join(&client->thread);
     }
     release(client);

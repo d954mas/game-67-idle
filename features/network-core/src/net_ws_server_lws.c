@@ -14,9 +14,11 @@
 #include <string.h>
 
 typedef struct session_t {
-    uint32_t id;               /* 0 until a slot is assigned */
+    uint32_t id;               /* 0 until HELLO earns a slot */
     uint32_t slot;
     bool hello_done;
+    uint32_t fragments;        /* of the message being reassembled */
+    char peer[48];             /* address, while waiting for HELLO */
     bool close_pending;
     bool close_started;
     uint16_t close_code;
@@ -42,6 +44,12 @@ struct net_ws_server_t {
     lws_retry_bo_t idle_policy;
     lws_sorted_usec_list_t wake;
     slot_t *slots;
+    /* Sockets upgraded but not yet past HELLO: they hold no slot, so a
+       crowd of them cannot take the seats, and no more than a few come
+       from one address, so one machine cannot fill the waiting room. */
+    session_t **pending;
+    uint32_t pending_count;
+    uint32_t pending_max;
     uint32_t client_count;     /* sessions past HELLO */
     uint32_t next_id;
     int timeout_seconds;
@@ -54,7 +62,46 @@ struct net_ws_server_t {
     bool destroying;
 };
 
+#define PENDING_PER_PEER 4U
+/* A message in more fragments than this is not a game message. */
+#define FRAGMENTS_MAX 8U
+
 static void wake_noop(lws_sorted_usec_list_t *sul) { (void)sul; }
+
+static void pending_remove(net_ws_server_t *server, const session_t *session) {
+    for (uint32_t index = 0U; index < server->pending_count; ++index) {
+        if (server->pending[index] != session) { continue; }
+        server->pending[index] = server->pending[server->pending_count - 1U];
+        server->pending_count -= 1U;
+        return;
+    }
+}
+
+static bool pending_admit(net_ws_server_t *server, session_t *session) {
+    if (server->pending_count >= server->pending_max) { return false; }
+    uint32_t same_peer = 0U;
+    for (uint32_t index = 0U; index < server->pending_count; ++index) {
+        if (strcmp(server->pending[index]->peer, session->peer) == 0) { same_peer += 1U; }
+    }
+    if (same_peer >= PENDING_PER_PEER) { return false; }
+    server->pending[server->pending_count++] = session;
+    return true;
+}
+
+/* The slot, and with it the id, is earned by HELLO. */
+static bool assign_slot(net_ws_server_t *server, struct lws *wsi, session_t *session) {
+    for (uint32_t index = 0U; index < server->config.max_clients; ++index) {
+        if (server->slots[index].wsi != NULL) { continue; }
+        if (server->next_id == 0U) { server->next_id = 1U; }
+        server->slots[index].wsi = wsi;
+        server->slots[index].id = server->next_id;
+        session->slot = index;
+        session->id = server->next_id;
+        server->next_id += 1U;
+        return true;
+    }
+    return false;
+}
 
 static session_t *session_of(struct lws *wsi) { return (session_t *)lws_wsi_user(wsi); }
 
@@ -100,24 +147,18 @@ static int on_established(net_ws_server_t *server, struct lws *wsi, session_t *s
     if (session->rx == NULL || !net_queue_init(&session->tx, server->config.send_queue_bytes)) {
         return -1;
     }
-    for (uint32_t index = 0U; index < server->config.max_clients; ++index) {
-        if (server->slots[index].wsi == NULL) {
-            if (server->next_id == 0U) { server->next_id = 1U; }
-            server->slots[index].wsi = wsi;
-            server->slots[index].id = server->next_id;
-            session->slot = index;
-            session->id = server->next_id;
-            server->next_id += 1U;
-            /* A socket that never says HELLO must not hold the slot. */
-            lws_set_timeout(wsi, PENDING_TIMEOUT_USER_OK, server->timeout_seconds);
-            return 0;
-        }
+    lws_get_peer_simple(wsi, session->peer, sizeof session->peer);
+    if (!pending_admit(server, session)) {
+        request_close(server, wsi, session, NET_CLOSE_FULL, NET_WS_CLOSE_PEER);
+        return 0;
     }
-    request_close(server, wsi, session, NET_CLOSE_FULL, NET_WS_CLOSE_PEER);
+    /* A socket that never says HELLO must not wait for ever. */
+    lws_set_timeout(wsi, PENDING_TIMEOUT_USER_OK, server->timeout_seconds);
     return 0;
 }
 
 static void on_closed(net_ws_server_t *server, session_t *session) {
+    if (!session->hello_done) { pending_remove(server, session); }
     if (session->id != 0U) {
         server->slots[session->slot].wsi = NULL;
         server->slots[session->slot].id = 0U;
@@ -159,6 +200,11 @@ static void on_complete_message(net_ws_server_t *server, struct lws *wsi, sessio
             request_close(server, wsi, session, NET_CLOSE_VERSION, NET_WS_CLOSE_PROTOCOL);
             return;
         }
+        if (!assign_slot(server, wsi, session)) {
+            request_close(server, wsi, session, NET_CLOSE_FULL, NET_WS_CLOSE_PEER);
+            return;
+        }
+        pending_remove(server, session);
         session->hello_done = true;
         server->client_count += 1U;
         lws_set_timeout(wsi, NO_PENDING_TIMEOUT, 0);
@@ -183,13 +229,18 @@ static void on_complete_message(net_ws_server_t *server, struct lws *wsi, sessio
 
 static int on_receive(net_ws_server_t *server, struct lws *wsi, session_t *session,
     const uint8_t *data, size_t size) {
-    if (session->id == 0U || session->close_pending) { return 0; }
+    if (session->close_pending) { return 0; }
     if (lws_is_first_fragment(wsi)) {
         session->rx_size = 0U;
+        session->fragments = 0U;
         if (!lws_frame_is_binary(wsi)) {
             request_close(server, wsi, session, NET_CLOSE_FORMAT, NET_WS_CLOSE_PROTOCOL);
             return 0;
         }
+    }
+    if (++session->fragments > FRAGMENTS_MAX) {
+        request_close(server, wsi, session, NET_CLOSE_FORMAT, NET_WS_CLOSE_PROTOCOL);
+        return 0;
     }
     const size_t limit = session->hello_done ? server->config.max_message_bytes : session->rx_capacity;
     if (size > limit - session->rx_size) {
@@ -215,7 +266,13 @@ static void drain(net_ws_server_t *server, struct lws *wsi, session_t *session) 
         const size_t size = net_queue_front_size(&session->tx);
         net_queue_front_copy(&session->tx, server->tx_scratch + LWS_PRE, size);
         net_queue_pop(&session->tx);
-        if (lws_write(wsi, server->tx_scratch + LWS_PRE, size, LWS_WRITE_BINARY) < 0) { return; }
+        if (lws_write(wsi, server->tx_scratch + LWS_PRE, size, LWS_WRITE_BINARY) < 0) {
+            /* A socket lws will not write to again is closed by lws only
+               when the kernel says so; a close in progress finishes long
+               before this deadline, a dead socket does not linger to it. */
+            lws_set_timeout(wsi, PENDING_TIMEOUT_USER_OK, 2);
+            return;
+        }
     }
 }
 
@@ -261,6 +318,10 @@ static int protocol_callback(struct lws *wsi, enum lws_callback_reasons reason,
     case LWS_CALLBACK_RECEIVE:
         server_of(wsi)->pass_reads += 1U;
         return on_receive(server_of(wsi), wsi, session, (const uint8_t *)in, len);
+    case LWS_CALLBACK_RECEIVE_PONG:
+        /* A record read all the same: the next record may be waiting. */
+        server_of(wsi)->pass_reads += 1U;
+        return 0;
     case LWS_CALLBACK_SERVER_WRITEABLE:
         return on_writeable(server_of(wsi), wsi, session);
     case LWS_CALLBACK_CLOSED:
@@ -290,6 +351,7 @@ static void free_server(net_ws_server_t *server) {
         lws_context_destroy(server->context);
     }
     free(server->tx_scratch);
+    free(server->pending);
     free(server->slots);
     free(server);
 }
@@ -309,8 +371,10 @@ net_ws_server_t *net_ws_server_create(const net_ws_server_config_t *config) {
     server->accept_tokens = 2.0 * (double)config->max_clients;
     server->accept_last_us = lws_now_usecs();
     server->slots = (slot_t *)calloc(config->max_clients, sizeof *server->slots);
+    server->pending_max = config->max_clients;
+    server->pending = (session_t **)calloc(server->pending_max, sizeof *server->pending);
     server->tx_scratch = (uint8_t *)malloc(LWS_PRE + (size_t)config->send_queue_bytes);
-    if (server->slots == NULL || server->tx_scratch == NULL) {
+    if (server->slots == NULL || server->pending == NULL || server->tx_scratch == NULL) {
         free_server(server);
         return NULL;
     }
@@ -357,6 +421,14 @@ net_ws_server_t *net_ws_server_create(const net_ws_server_config_t *config) {
        the only one, and every pending handshake holds a TLS buffer. */
     info.fd_limit_per_thread = config->max_clients * 4U + 8U;
     info.timeout_secs = (unsigned int)server->timeout_seconds;
+#if defined(LWS_WITH_PEER_LIMITS)
+    /* Sockets per address, the TLS handshake included: the seats and the
+       waiting room over again is a LAN party behind one address with
+       everyone reconnecting at once, more is nobody honest. */
+    const uint32_t per_address = config->max_clients > 32767U ? 65535U : 2U * config->max_clients;
+    info.ip_limit_wsi = (unsigned short)per_address;
+    info.ip_limit_ah = info.ip_limit_wsi;
+#endif
     server->context = lws_create_context(&info);
     if (server->context == NULL) {
         free_server(server);

@@ -36,6 +36,7 @@ struct net_ws_client_t {
     char url[512];
     uint8_t *assembly;              /* fragment reassembly, max_message_bytes */
     size_t assembly_size;
+    uint32_t fragments;             /* of the message being reassembled */
     uint8_t *tx_scratch;            /* LWS_PRE + max message */
     uint16_t peer_close_code;
 
@@ -102,8 +103,11 @@ static void write_timestamp(uint8_t *out, double seconds) {
 static int on_receive(net_ws_client_t *client, struct lws *wsi, const uint8_t *data, size_t size) {
     if (lws_is_first_fragment(wsi)) {
         client->assembly_size = TIMESTAMP_BYTES;
+        client->fragments = 0U;
         if (!lws_frame_is_binary(wsi)) { return refuse(client, wsi, NET_CLOSE_FORMAT); }
     }
+    /* A message in more fragments than this is not a game message. */
+    if (++client->fragments > 8U) { return refuse(client, wsi, NET_CLOSE_FORMAT); }
     if (size > client->config.max_message_bytes - (client->assembly_size - TIMESTAMP_BYTES)) {
         return refuse(client, wsi, NET_CLOSE_FORMAT);
     }
