@@ -64,6 +64,7 @@ class FakeAudioContext {
     this.pendingDecodes = [];
     this.resumeCalls = 0;
     this.rejectResume = false;
+    this.holdResume = false; // a resume asked for without user activation never settles
     this.suspendCalls = 0;
     this.closeCalls = 0;
   }
@@ -90,6 +91,7 @@ class FakeAudioContext {
   resume() {
     this.resumeCalls += 1;
     if (this.rejectResume) return Promise.reject(new Error("gesture rejected"));
+    if (this.holdResume) return new Promise(() => {});
     return Promise.resolve().then(() => { this.state = "running"; });
   }
 
@@ -453,4 +455,23 @@ test("shutdown stops voices, removes all DOM listeners, disconnects graph, and c
   assert.equal(document.listeners.has("keydown"), false);
   assert.equal(library.audio_web_voice_active(voice), 0);
   assert.equal(library.audio_web_decode_state(clip), 2);
+});
+
+test("a touch whose resume stays pending is asked again by the next activating gesture", async () => {
+  const { document, library } = await loadLibrary();
+  library.audio_web_init();
+  const audioContext = library.$AudioWebRuntime.context;
+  audioContext.holdResume = true;
+  document.dispatch("pointerdown"); // a touch's pointerdown carries no activation: this resume never settles
+  assert.equal(audioContext.resumeCalls, 1);
+  document.dispatch("touchend"); // within the same 250 ms window: still the in-flight resume
+  assert.equal(audioContext.resumeCalls, 1);
+  library.$AudioWebRuntime.resumeAskedAt -= 1000;
+  audioContext.holdResume = false;
+  document.dispatch("touchend");
+  assert.equal(audioContext.resumeCalls, 2);
+  await flushPromises();
+  assert.equal(audioContext.state, "running");
+  assert.equal(library.audio_web_user_gesture(), 1);
+  assert.equal(library.audio_web_is_unlocked(), 1);
 });

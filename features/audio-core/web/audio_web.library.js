@@ -24,6 +24,7 @@ mergeInto(LibraryManager.library, {
     gestureSerial: 0,
     everUnlocked: false,
     resumePending: false,
+    resumeAskedAt: 0,
     gestureListener: null,
     visibilityListener: null,
     decodedPcmBytes: 0,
@@ -114,11 +115,27 @@ mergeInto(LibraryManager.library, {
         AudioWebRuntime.resumePending = false;
         return true;
       }
-      if (AudioWebRuntime.resumePending) return true;
+      if (AudioWebRuntime.resumePending) {
+        // A resume asked for outside a user activation (a touch's pointerdown
+        // is not one) stays pending for good; a later gesture that carries
+        // activation must ask again, or the phone stays silent behind that
+        // promise. A resume that is merely in flight resolves within a frame,
+        // so only a long-pending one is asked again.
+        var now = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+        if (allowFirstUnlock && now - AudioWebRuntime.resumeAskedAt > 250) {
+          AudioWebRuntime.resumeAskedAt = now;
+          try {
+            var again = context.resume();
+            if (again && typeof again.then === "function") again.then(null, function() {});
+          } catch (error) { /* the first promise reports the failure */ }
+        }
+        return true;
+      }
       if (!allowFirstUnlock && !AudioWebRuntime.everUnlocked) return false;
 
       AudioWebRuntime.gestureAccepted = true;
       AudioWebRuntime.resumePending = true;
+      AudioWebRuntime.resumeAskedAt = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
       var resumeSerial = ++AudioWebRuntime.gestureSerial;
       try {
         var result = context.resume();
@@ -263,7 +280,12 @@ mergeInto(LibraryManager.library, {
       };
       if (typeof document !== "undefined" && document.addEventListener) {
         document.addEventListener("visibilitychange", AudioWebRuntime.visibilityListener);
+        // pointerup, touchend, click and keydown carry user activation on
+        // every browser; a touch's pointerdown does not, so it is not enough.
         document.addEventListener("pointerdown", AudioWebRuntime.gestureListener, true);
+        document.addEventListener("pointerup", AudioWebRuntime.gestureListener, true);
+        document.addEventListener("touchend", AudioWebRuntime.gestureListener, true);
+        document.addEventListener("click", AudioWebRuntime.gestureListener, true);
         document.addEventListener("keydown", AudioWebRuntime.gestureListener, true);
       }
       AudioWebRuntime._applyMix();
@@ -279,6 +301,9 @@ mergeInto(LibraryManager.library, {
       if (typeof document !== "undefined" && document.removeEventListener &&
           AudioWebRuntime.gestureListener) {
         document.removeEventListener("pointerdown", AudioWebRuntime.gestureListener, true);
+        document.removeEventListener("pointerup", AudioWebRuntime.gestureListener, true);
+        document.removeEventListener("touchend", AudioWebRuntime.gestureListener, true);
+        document.removeEventListener("click", AudioWebRuntime.gestureListener, true);
         document.removeEventListener("keydown", AudioWebRuntime.gestureListener, true);
       }
       AudioWebRuntime.visibilityListener = null;
