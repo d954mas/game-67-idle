@@ -21,6 +21,7 @@ typedef struct session_t {
     char peer[48];             /* address, while waiting for HELLO */
     bool close_pending;
     bool close_started;
+    bool terminal;
     uint16_t close_code;
     net_ws_close_reason_t close_reason;
     uint8_t *rx;               /* fragment reassembly, rx_capacity bytes */
@@ -60,6 +61,8 @@ struct net_ws_server_t {
     uint32_t pass_reads;       /* receive callbacks in the current pass */
     bool destroy_requested;
     bool destroying;
+    bool test_fail_next_write;
+    bool test_hold_writes;
 };
 
 #define PENDING_PER_PEER 4U
@@ -255,33 +258,54 @@ static int on_receive(net_ws_server_t *server, struct lws *wsi, session_t *sessi
     return 0;
 }
 
-static void drain(net_ws_server_t *server, struct lws *wsi, session_t *session) {
+static void terminal_close(net_ws_server_t *server, struct lws *wsi, session_t *session) {
+    session->terminal = true;
+    if (session->close_started ||
+        (session->close_pending && session->close_reason != NET_WS_CLOSE_APP)) { return; }
+    session->close_pending = true;
+    session->close_code = NET_CLOSE_SLOW;
+    session->close_reason = NET_WS_CLOSE_SLOW;
+    lws_set_timeout(wsi, PENDING_TIMEOUT_USER_OK, server->timeout_seconds);
+    lws_callback_on_writable(wsi);
+}
+
+static int write_message(net_ws_server_t *server, struct lws *wsi, uint8_t *data, size_t size) {
+    if (server->test_fail_next_write) {
+        server->test_fail_next_write = false;
+        return -1;
+    }
+    return lws_write(wsi, data, size, LWS_WRITE_BINARY);
+}
+
+static bool drain(net_ws_server_t *server, struct lws *wsi, session_t *session) {
     /* Write until the socket refuses: lws keeps the tail of a partial
        write itself, asks for a writable callback and must not be handed
        another message until that tail is out. Asking the kernel first
        whether the socket would take a write costs a poll per message and
-       answers nothing the write itself does not. A refused write means
-       lws is already closing the socket and will say so. */
+       answers nothing the write itself does not. */
     while (session->tx.count > 0U && !lws_partial_buffered(wsi)) {
         const size_t size = net_queue_front_size(&session->tx);
         net_queue_front_copy(&session->tx, server->tx_scratch + LWS_PRE, size);
         net_queue_pop(&session->tx);
-        if (lws_write(wsi, server->tx_scratch + LWS_PRE, size, LWS_WRITE_BINARY) < 0) {
-            /* A socket lws will not write to again is closed by lws only
-               when the kernel says so; a close in progress finishes long
-               before this deadline, a dead socket does not linger to it. */
-            lws_set_timeout(wsi, PENDING_TIMEOUT_USER_OK, 2);
-            return;
+        if (write_message(server, wsi, server->tx_scratch + LWS_PRE, size) < 0) {
+            terminal_close(server, wsi, session);
+            return false;
         }
     }
+    return !session->terminal;
 }
 
 /* A queued message goes out on the spot: the caller's thread is the
    service thread. What the socket refuses waits for the writable
    callback. */
-static void flush(net_ws_server_t *server, struct lws *wsi, session_t *session) {
-    drain(server, wsi, session);
+static bool flush(net_ws_server_t *server, struct lws *wsi, session_t *session) {
+    if (server->test_hold_writes) {
+        lws_callback_on_writable(wsi);
+        return true;
+    }
+    if (!drain(server, wsi, session)) { return false; }
     if (session->tx.count > 0U || lws_partial_buffered(wsi)) { lws_callback_on_writable(wsi); }
+    return true;
 }
 
 static int on_writeable(net_ws_server_t *server, struct lws *wsi, session_t *session) {
@@ -293,7 +317,7 @@ static int on_writeable(net_ws_server_t *server, struct lws *wsi, session_t *ses
         /* An application close still delivers what the application queued
            before it (a kick reason, a final state); protocol closes do not. */
         if (session->close_reason == NET_WS_CLOSE_APP) {
-            drain(server, wsi, session);
+            if (!drain(server, wsi, session)) { return -1; }
             if (session->tx.count > 0U || lws_partial_buffered(wsi)) {
                 lws_callback_on_writable(wsi);
                 return 0;
@@ -303,7 +327,7 @@ static int on_writeable(net_ws_server_t *server, struct lws *wsi, session_t *ses
         lws_close_reason(wsi, (enum lws_close_status)session->close_code, NULL, 0U);
         return -1;
     }
-    drain(server, wsi, session);
+    if (!drain(server, wsi, session)) { return -1; }
     if (session->tx.count > 0U) { lws_callback_on_writable(wsi); }
     return 0;
 }
@@ -526,17 +550,27 @@ static struct lws *wsi_for(const net_ws_server_t *server, uint32_t client) {
     return NULL;
 }
 
+static bool session_live(const session_t *session) {
+    return session->hello_done && !session->close_pending && !session->terminal;
+}
+
 bool net_ws_server_send(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size) {
     struct lws *wsi = wsi_for(server, client);
     if (wsi == NULL || size == 0U) { return false; }
     session_t *session = session_of(wsi);
-    if (session->close_pending || !session->hello_done) { return false; }
+    if (!session_live(session)) { return false; }
     if (!net_queue_push(&session->tx, data, size)) {
-        request_close(server, wsi, session, NET_CLOSE_SLOW, NET_WS_CLOSE_SLOW);
+        terminal_close(server, wsi, session);
         return false;
     }
-    flush(server, wsi, session);
-    return true;
+    return flush(server, wsi, session);
+}
+
+bool net_ws_server_send_ready(const net_ws_server_t *server, uint32_t client) {
+    struct lws *wsi = wsi_for(server, client);
+    if (wsi == NULL) { return false; }
+    const session_t *session = session_of(wsi);
+    return session_live(session) && session->tx.count == 0U && !lws_partial_buffered(wsi);
 }
 
 bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size,
@@ -545,17 +579,16 @@ bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const u
     struct lws *wsi = wsi_for(server, client);
     if (wsi == NULL || size == 0U) { return false; }
     session_t *session = session_of(wsi);
-    if (session->close_pending || !session->hello_done) { return false; }
+    if (!session_live(session)) { return false; }
     /* Whole messages only sit in the ring: a message being written lives
        in lws's own buffer once popped, so nothing here cuts a frame. */
     const size_t dropped = net_queue_drop_kind(&session->tx, data[0]);
     if (replaced != NULL) { *replaced = dropped; }
     if (!net_queue_push(&session->tx, data, size)) {
-        request_close(server, wsi, session, NET_CLOSE_SLOW, NET_WS_CLOSE_SLOW);
+        terminal_close(server, wsi, session);
         return false;
     }
-    flush(server, wsi, session);
-    return true;
+    return flush(server, wsi, session);
 }
 
 bool net_ws_server_reports_arrival(void) {
@@ -590,4 +623,18 @@ void net_ws_server_close(net_ws_server_t *server, uint32_t client, uint16_t code
     struct lws *wsi = wsi_for(server, client);
     if (wsi == NULL) { return; }
     request_close(server, wsi, session_of(wsi), code, NET_WS_CLOSE_APP);
+}
+
+void net_ws_server_close_slow(net_ws_server_t *server, uint32_t client) {
+    struct lws *wsi = wsi_for(server, client);
+    if (wsi == NULL) { return; }
+    terminal_close(server, wsi, session_of(wsi));
+}
+
+void net_ws_server_test_fail_next_write(net_ws_server_t *server) {
+    if (server != NULL) { server->test_fail_next_write = true; }
+}
+
+void net_ws_server_test_hold_writes(net_ws_server_t *server, bool hold) {
+    if (server != NULL) { server->test_hold_writes = hold; }
 }

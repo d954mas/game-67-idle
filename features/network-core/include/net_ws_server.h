@@ -75,16 +75,23 @@ uint32_t net_ws_server_client_count(const net_ws_server_t *server);
    at the latest so a fixed tick can share the thread. */
 void net_ws_server_service(net_ws_server_t *server, uint32_t timeout_ms);
 
-/* Queues one non-empty binary message. False means the message is empty,
-   the client is unknown, or its queue is full and it is being closed as
-   NET_WS_CLOSE_SLOW; the id stays valid until on_disconnect fires. */
+/* Queues one non-empty binary message. True means immutable local
+   admission, not kernel or network delivery. False means the message is
+   empty, the client is unavailable, its queue is full, or a direct write
+   failed and it is terminal-closing as NET_WS_CLOSE_SLOW; the id stays valid
+   until on_disconnect fires. */
 bool net_ws_server_send(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size);
+/* True only when an authenticated live client has no local queued or partial
+   output, so an immutable stream frame can be admitted. It says nothing
+   about bytes already accepted by the kernel or network. */
+bool net_ws_server_send_ready(const net_ws_server_t *server, uint32_t client);
 /* Queues a message that supersedes every queued message of its kind (a
    newer full state): the queued ones whose first byte, the application's
    type, equals this one's are dropped first, so a client that cannot
    drain gets the newest when it can, not a backlog of stale ones, while
    messages of other kinds keep their place. Nothing mid-write is touched;
-   the transport keeps a partial write itself. `replaced` (may be NULL)
+   the transport keeps a partial write itself. True means immutable local
+   admission, not kernel or network delivery. `replaced` (may be NULL)
    receives how many queued messages this one superseded. False as for
    net_ws_server_send. */
 bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size,
@@ -105,5 +112,8 @@ bool net_ws_server_reports_arrival(void);
    (NET_CLOSE_APP, or a game-defined 4100-4999). on_disconnect fires from a
    later service call with NET_WS_CLOSE_APP. */
 void net_ws_server_close(net_ws_server_t *server, uint32_t client, uint16_t code);
+/* Ends a terminal stream as NET_CLOSE_SLOW without draining application
+   output. Ordinary application closes retain their drain-first behavior. */
+void net_ws_server_close_slow(net_ws_server_t *server, uint32_t client);
 
 #endif

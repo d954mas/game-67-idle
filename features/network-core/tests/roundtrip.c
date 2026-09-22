@@ -34,6 +34,10 @@ typedef int raw_socket_t;
 #define VERSION 7U
 #define MAX_MESSAGE 64U
 
+/* The native backend owns this deterministic failure seam; it is not a
+   transport API and keeps lws write-error coverage off socket timing. */
+void net_ws_server_test_fail_next_write(net_ws_server_t *server);
+void net_ws_server_test_hold_writes(net_ws_server_t *server, bool hold);
 typedef struct server_log_t {
     net_ws_server_t *server;
     uint32_t connects;
@@ -396,6 +400,47 @@ int main(void) {
     CHECK(slog.disconnects == 1U && slog.last_reason == NET_WS_CLOSE_APP);
     CHECK(net_ws_server_client_count(server) == 0U);
     CHECK(!net_ws_server_send(server, slog.last_client, ping, 0U));
+    net_ws_client_destroy(client);
+
+    /* A terminal slow close overrides an application close before its
+       queued output can become visible. */
+    memset(&clog, 0, sizeof clog);
+    client = connect_client(port, VERSION, &clog, 256U);
+    pump(server, client, 50);
+    const uint32_t slow_client = slog.last_client;
+    const uint32_t slow_disconnects = slog.disconnects;
+    CHECK(net_ws_server_send_ready(server, slow_client));
+    net_ws_server_test_hold_writes(server, true);
+    CHECK(net_ws_server_send(server, slow_client, farewell, sizeof farewell));
+    CHECK(net_ws_server_queued_bytes(server, slow_client) > 0U);
+    net_ws_server_close(server, slow_client, 4123U);
+    net_ws_server_close_slow(server, slow_client);
+    net_ws_server_test_hold_writes(server, false);
+    CHECK(!net_ws_server_send_ready(server, slow_client));
+    CHECK(!net_ws_server_send(server, slow_client, ping, sizeof ping));
+    CHECK(!net_ws_server_send_latest(server, slow_client, ping, sizeof ping, NULL));
+    pump(server, client, 50);
+    CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW);
+    CHECK(clog.messages == 0U);
+    CHECK(slog.disconnects == slow_disconnects + 1U && slog.last_reason == NET_WS_CLOSE_SLOW);
+    net_ws_client_destroy(client);
+
+    /* A write error is synchronous admission failure and leaves the stream
+       terminal before the later close lifecycle callback. */
+    memset(&clog, 0, sizeof clog);
+    client = connect_client(port, VERSION, &clog, 256U);
+    pump(server, client, 50);
+    const uint32_t failed_client = slog.last_client;
+    const uint32_t failed_disconnects = slog.disconnects;
+    CHECK(net_ws_server_send_ready(server, failed_client));
+    net_ws_server_test_fail_next_write(server);
+    CHECK(!net_ws_server_send(server, failed_client, ping, sizeof ping));
+    CHECK(!net_ws_server_send_ready(server, failed_client));
+    CHECK(!net_ws_server_send(server, failed_client, ping, sizeof ping));
+    CHECK(!net_ws_server_send_latest(server, failed_client, ping, sizeof ping, NULL));
+    pump(server, client, 50);
+    CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW);
+    CHECK(slog.disconnects == failed_disconnects + 1U && slog.last_reason == NET_WS_CLOSE_SLOW);
     net_ws_client_destroy(client);
 
     /* Destroying the client from inside on_close is safe. */
