@@ -63,6 +63,7 @@ struct net_ws_server_t {
     bool destroying;
     bool test_fail_next_write;
     bool test_hold_writes;
+    bool test_partial_buffered;
 };
 
 #define PENDING_PER_PEER 4U
@@ -277,13 +278,17 @@ static int write_message(net_ws_server_t *server, struct lws *wsi, uint8_t *data
     return lws_write(wsi, data, size, LWS_WRITE_BINARY);
 }
 
+static bool partial_buffered(const net_ws_server_t *server, struct lws *wsi) {
+    return server->test_partial_buffered || lws_partial_buffered(wsi);
+}
+
 static bool drain(net_ws_server_t *server, struct lws *wsi, session_t *session) {
     /* Write until the socket refuses: lws keeps the tail of a partial
        write itself, asks for a writable callback and must not be handed
        another message until that tail is out. Asking the kernel first
        whether the socket would take a write costs a poll per message and
        answers nothing the write itself does not. */
-    while (session->tx.count > 0U && !lws_partial_buffered(wsi)) {
+    while (session->tx.count > 0U && !partial_buffered(server, wsi)) {
         const size_t size = net_queue_front_size(&session->tx);
         net_queue_front_copy(&session->tx, server->tx_scratch + LWS_PRE, size);
         net_queue_pop(&session->tx);
@@ -308,26 +313,29 @@ static bool flush(net_ws_server_t *server, struct lws *wsi, session_t *session) 
     return true;
 }
 
+static int start_close(struct lws *wsi, session_t *session) {
+    /* One -1 starts the close handshake; a second one while lws awaits the
+       peer's ack kills the socket outright and loses the close code. */
+    if (session->close_started) { return 0; }
+    session->close_started = true;
+    lws_close_reason(wsi, (enum lws_close_status)session->close_code, NULL, 0U);
+    return -1;
+}
+
 static int on_writeable(net_ws_server_t *server, struct lws *wsi, session_t *session) {
     if (session->close_pending) {
-        /* One -1 starts the close handshake; a second one while lws awaits
-           the peer's ack kills the socket outright and the peer sees a reset
-           instead of the close code. */
-        if (session->close_started) { return 0; }
         /* An application close still delivers what the application queued
            before it (a kick reason, a final state); protocol closes do not. */
         if (session->close_reason == NET_WS_CLOSE_APP) {
-            if (!drain(server, wsi, session)) { return -1; }
+            if (!drain(server, wsi, session)) { return start_close(wsi, session); }
             if (session->tx.count > 0U || lws_partial_buffered(wsi)) {
                 lws_callback_on_writable(wsi);
                 return 0;
             }
         }
-        session->close_started = true;
-        lws_close_reason(wsi, (enum lws_close_status)session->close_code, NULL, 0U);
-        return -1;
+        return start_close(wsi, session);
     }
-    if (!drain(server, wsi, session)) { return -1; }
+    if (!drain(server, wsi, session)) { return start_close(wsi, session); }
     if (session->tx.count > 0U) { lws_callback_on_writable(wsi); }
     return 0;
 }
@@ -570,7 +578,7 @@ bool net_ws_server_send_ready(const net_ws_server_t *server, uint32_t client) {
     struct lws *wsi = wsi_for(server, client);
     if (wsi == NULL) { return false; }
     const session_t *session = session_of(wsi);
-    return session_live(session) && session->tx.count == 0U && !lws_partial_buffered(wsi);
+    return session_live(session) && session->tx.count == 0U && !partial_buffered(server, wsi);
 }
 
 bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size,
@@ -637,4 +645,8 @@ void net_ws_server_test_fail_next_write(net_ws_server_t *server) {
 
 void net_ws_server_test_hold_writes(net_ws_server_t *server, bool hold) {
     if (server != NULL) { server->test_hold_writes = hold; }
+}
+
+void net_ws_server_test_partial_buffered(net_ws_server_t *server, bool buffered) {
+    if (server != NULL) { server->test_partial_buffered = buffered; }
 }

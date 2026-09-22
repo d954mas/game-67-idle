@@ -90,8 +90,9 @@ bool net_ws_server_send_ready(const net_ws_server_t *server, uint32_t client);
    type, equals this one's are dropped first, so a client that cannot
    drain gets the newest when it can, not a backlog of stale ones, while
    messages of other kinds keep their place. Nothing mid-write is touched;
-   the transport keeps a partial write itself. True means immutable local
-   admission, not kernel or network delivery. `replaced` (may be NULL)
+   the transport keeps a partial write itself. True means replaceable local
+   admission, not kernel or network delivery. A later
+   send_latest() of the same kind may replace it. `replaced` (may be NULL)
    receives how many queued messages this one superseded. False as for
    net_ws_server_send. */
 bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size,

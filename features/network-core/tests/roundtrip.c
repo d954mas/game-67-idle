@@ -38,6 +38,7 @@ typedef int raw_socket_t;
    transport API and keeps lws write-error coverage off socket timing. */
 void net_ws_server_test_fail_next_write(net_ws_server_t *server);
 void net_ws_server_test_hold_writes(net_ws_server_t *server, bool hold);
+void net_ws_server_test_partial_buffered(net_ws_server_t *server, bool buffered);
 typedef struct server_log_t {
     net_ws_server_t *server;
     uint32_t connects;
@@ -499,6 +500,10 @@ int main(void) {
     const uint32_t failed_client = slog.last_client;
     const uint32_t failed_disconnects = slog.disconnects;
     CHECK(net_ws_server_send_ready(server, failed_client));
+    net_ws_server_test_partial_buffered(server, true);
+    CHECK(!net_ws_server_send_ready(server, failed_client));
+    net_ws_server_test_partial_buffered(server, false);
+    CHECK(net_ws_server_send_ready(server, failed_client));
     net_ws_server_test_fail_next_write(server);
     CHECK(!net_ws_server_send(server, failed_client, ping, sizeof ping));
     CHECK(!net_ws_server_send_ready(server, failed_client));
@@ -507,6 +512,35 @@ int main(void) {
     pump(server, client, 50);
     CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW);
     CHECK(slog.disconnects == failed_disconnects + 1U && slog.last_reason == NET_WS_CLOSE_SLOW);
+    net_ws_client_destroy(client);
+
+    /* Admission can succeed before a later writable callback fails. */
+    memset(&clog, 0, sizeof clog);
+    client = connect_client(port, VERSION, &clog, 256U);
+    pump(server, client, 50);
+    const uint32_t delayed_client = slog.last_client;
+    net_ws_server_test_hold_writes(server, true);
+    CHECK(net_ws_server_send(server, delayed_client, ping, sizeof ping));
+    net_ws_server_test_fail_next_write(server);
+    net_ws_server_test_hold_writes(server, false);
+    pump(server, client, 50);
+    CHECK(clog.messages == 0U && clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW);
+    CHECK(!net_ws_server_send_ready(server, delayed_client));
+    CHECK(!net_ws_server_send(server, delayed_client, ping, sizeof ping));
+    net_ws_client_destroy(client);
+
+    /* A failing drain escalates a pending application close to SLOW. */
+    memset(&clog, 0, sizeof clog);
+    client = connect_client(port, VERSION, &clog, 256U);
+    pump(server, client, 50);
+    const uint32_t app_failed_client = slog.last_client;
+    net_ws_server_test_hold_writes(server, true);
+    CHECK(net_ws_server_send(server, app_failed_client, farewell, sizeof farewell));
+    net_ws_server_close(server, app_failed_client, 4123U);
+    net_ws_server_test_fail_next_write(server);
+    net_ws_server_test_hold_writes(server, false);
+    pump(server, client, 50);
+    CHECK(clog.messages == 0U && clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW);
     net_ws_client_destroy(client);
 
     /* Destroying the client from inside on_close is safe. */
