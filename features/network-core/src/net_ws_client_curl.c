@@ -297,11 +297,15 @@ static bool queue_message(net_ws_client_t *client) {
     const double now = net_ws_client_clock();
     memcpy(client->assembly, &now, sizeof now);
     net_mutex_lock(&client->lock);
-    bool queued = net_queue_push(&client->rx, client->assembly, client->assembly_size);
-    while (!queued && client->config.overflow_policy == NET_WS_OVERFLOW_DROP_OLDEST && client->rx.count > 0U) {
-        /* The queue holds at least one message, so a pop always makes room. */
+    bool queued = client->state == NET_WS_CLIENT_OPEN &&
+        (client->config.receive_queue_messages == 0U || client->rx.count < client->config.receive_queue_messages) &&
+        net_queue_push(&client->rx, client->assembly, client->assembly_size);
+    while (!queued && client->state == NET_WS_CLIENT_OPEN &&
+        client->config.overflow_policy == NET_WS_OVERFLOW_DROP_OLDEST && client->rx.count > 0U) {
         net_queue_pop(&client->rx);
-        queued = net_queue_push(&client->rx, client->assembly, client->assembly_size);
+        queued = (client->config.receive_queue_messages == 0U ||
+            client->rx.count < client->config.receive_queue_messages) &&
+            net_queue_push(&client->rx, client->assembly, client->assembly_size);
     }
     net_mutex_unlock(&client->lock);
     return queued;
@@ -536,7 +540,9 @@ void net_ws_client_service(net_ws_client_t *client, uint32_t timeout_ms) {
     client->in_service = true;
     /* One critical section decides each delivery, so what the socket did in
        the order open, messages, close is replayed in that order. */
+    uint32_t delivered = 0U;
     while (!client->destroying) {
+        if (client->config.service_message_limit > 0U && delivered >= client->config.service_message_limit) { break; }
         net_mutex_lock(&client->lock);
         if (client->open_event) {
             client->open_event = false;
@@ -554,6 +560,7 @@ void net_ws_client_service(net_ws_client_t *client, uint32_t timeout_ms) {
             if (client->config.on_message != NULL) {
                 client->config.on_message(client->config.user, client->scratch + TIMESTAMP_BYTES,
                     size - TIMESTAMP_BYTES, received_at);
+                delivered += 1U;
             }
             continue;
         }

@@ -29,8 +29,9 @@ typedef enum net_ws_client_state_t {
 
 /* What happens when messages arrive faster than the game services them. */
 typedef enum net_ws_overflow_policy_t {
-    /* Close with NET_CLOSE_SLOW; the game sees on_close and decides. Right
-       for delta streams, where a lost message poisons everything after it. */
+    /* Close with NET_CLOSE_SLOW; already queued messages stay FIFO and
+       on_close follows their delivery. Right for delta streams, where a
+       lost message poisons everything after it. */
     NET_WS_OVERFLOW_CLOSE,
     /* Drop the oldest queued messages and keep the newest. Right for full
        snapshots, where only the latest one matters. */
@@ -52,7 +53,13 @@ typedef struct net_ws_client_config_t {
     /* Inbound messages held until service(); must hold at least one
        message (max_message_bytes + 12). */
     uint32_t receive_queue_bytes;
+    /* 0 keeps the byte-only queue bound; otherwise this independent cap
+       limits whole queued messages. */
+    uint32_t receive_queue_messages;
     net_ws_overflow_policy_t overflow_policy;
+    /* 0 replays every queued message; otherwise one service() call invokes
+       at most this many on_message callbacks and leaves the FIFO tail. */
+    uint32_t service_message_limit;
     uint32_t send_queue_bytes;      /* outbound messages waiting for the socket */
     void *user;
     void (*on_open)(void *user);

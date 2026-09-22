@@ -194,6 +194,28 @@ static net_ws_client_t *connect_client(uint16_t port, uint32_t version, client_l
     return connect_client_sized(port, version, log, send_queue, MAX_MESSAGE);
 }
 
+static net_ws_client_t *connect_client_limits(uint16_t port, uint32_t version, client_log_t *log,
+    uint32_t receive_messages, uint32_t service_limit) {
+    char url[64];
+    snprintf(url, sizeof url, "ws://127.0.0.1:%u/", (unsigned)port);
+    const net_ws_client_config_t config = {
+        .url = url, .protocol_version = version, .max_message_bytes = MAX_MESSAGE,
+        .receive_queue_bytes = 1024U, .receive_queue_messages = receive_messages,
+        .service_message_limit = service_limit, .send_queue_bytes = 256U, .user = log,
+        .on_open = client_open, .on_message = client_message, .on_close = client_close,
+    };
+    net_ws_client_t *client = net_ws_client_create(&config);
+    CHECK(client != NULL);
+    return client;
+}
+
+static void send_numbered(net_ws_server_t *server, uint32_t client, uint32_t count) {
+    for (uint32_t index = 0U; index < count; ++index) {
+        const uint8_t message[] = {NET_MSG_APP_FIRST, (uint8_t)index};
+        CHECK(net_ws_server_send(server, client, message, sizeof message));
+    }
+}
+
 static void test_codec(void) {
     uint8_t buffer[16];
     net_writer_t writer;
@@ -401,6 +423,50 @@ int main(void) {
     CHECK(net_ws_server_client_count(server) == 0U);
     CHECK(!net_ws_server_send(server, slog.last_client, ping, 0U));
     net_ws_client_destroy(client);
+
+    /* A zero message cap and service cap preserve the former byte-only,
+       all-queued-callback behavior. */
+    memset(&clog, 0, sizeof clog);
+    client = connect_client_limits(port, VERSION, &clog, 0U, 0U);
+    pump(server, client, 50);
+    send_numbered(server, slog.last_client, 17U);
+    pump(server, NULL, 50);
+    net_ws_client_service(client, 0U);
+    CHECK(clog.messages == 17U && clog.last[1] == 16U && clog.closes == 0U);
+    net_ws_client_destroy(client);
+    pump(server, NULL, 20);
+
+    /* A bounded service pass leaves the FIFO tail for later frames. */
+    memset(&clog, 0, sizeof clog);
+    client = connect_client_limits(port, VERSION, &clog, 64U, 16U);
+    pump(server, client, 50);
+    send_numbered(server, slog.last_client, 64U);
+    pump(server, NULL, 50);
+    for (uint32_t batch = 1U; batch <= 4U; ++batch) {
+        net_ws_client_service(client, 0U);
+        CHECK(clog.messages == batch * 16U && clog.last[1] == batch * 16U - 1U);
+        CHECK(clog.closes == 0U);
+    }
+    net_ws_client_destroy(client);
+    pump(server, NULL, 20);
+
+    /* The 65th tiny message reaches the independent record cap. The valid
+       64-message prefix still arrives before close, including a destroy in
+       that delayed close callback. */
+    memset(&clog, 0, sizeof clog);
+    client = connect_client_limits(port, VERSION, &clog, 64U, 16U);
+    pump(server, client, 50);
+    send_numbered(server, slog.last_client, 65U);
+    pump(server, NULL, 50);
+    for (uint32_t batch = 1U; batch <= 4U; ++batch) {
+        net_ws_client_service(client, 0U);
+        CHECK(clog.messages == batch * 16U && clog.last[1] == batch * 16U - 1U);
+        CHECK(clog.closes == 0U);
+    }
+    clog.destroy_on_close = client;
+    net_ws_client_service(client, 0U);
+    CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW && clog.destroy_on_close == NULL);
+    pump(server, NULL, 20);
 
     /* A terminal slow close overrides an application close before its
        queued output can become visible. */

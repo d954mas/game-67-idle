@@ -67,13 +67,14 @@ static EM_BOOL on_message(int type, const EmscriptenWebSocketMessageEvent *event
     memcpy(client->scratch, &received_at, sizeof received_at);
     memcpy(client->scratch + TIMESTAMP_BYTES, event->data, event->numBytes);
     const size_t size = TIMESTAMP_BYTES + event->numBytes;
-    while (!net_queue_push(&client->messages, client->scratch, size)) {
-        if (client->config.overflow_policy != NET_WS_OVERFLOW_DROP_OLDEST) {
+    while ((client->config.receive_queue_messages > 0U &&
+            client->messages.count >= client->config.receive_queue_messages) ||
+        !net_queue_push(&client->messages, client->scratch, size)) {
+        if (client->config.overflow_policy != NET_WS_OVERFLOW_DROP_OLDEST || client->messages.count == 0U) {
             emscripten_websocket_close(client->socket, NET_CLOSE_SLOW, "receive queue full");
             mark_closed(client, NET_CLOSE_SLOW);
             return EM_TRUE;
         }
-        /* The queue holds at least one message, so a pop always makes room. */
         net_queue_pop(&client->messages);
     }
     return EM_TRUE;
@@ -162,7 +163,10 @@ void net_ws_client_service(net_ws_client_t *client, uint32_t timeout_ms) {
         if (client->config.on_open != NULL) { client->config.on_open(client->config.user); }
     }
     size_t size;
-    while (!client->destroying && (size = net_queue_front_size(&client->messages)) > 0U) {
+    uint32_t delivered = 0U;
+    while (!client->destroying &&
+        (client->config.service_message_limit == 0U || delivered < client->config.service_message_limit) &&
+        (size = net_queue_front_size(&client->messages)) > 0U) {
         net_queue_front_copy(&client->messages, client->scratch, size);
         net_queue_pop(&client->messages);
         double received_at = 0.0;
@@ -170,9 +174,10 @@ void net_ws_client_service(net_ws_client_t *client, uint32_t timeout_ms) {
         if (client->config.on_message != NULL) {
             client->config.on_message(client->config.user, client->scratch + TIMESTAMP_BYTES,
                 size - TIMESTAMP_BYTES, received_at);
+            delivered += 1U;
         }
     }
-    if (!client->destroying && client->close_pending) {
+    if (!client->destroying && client->close_pending && net_queue_front_size(&client->messages) == 0U) {
         client->close_pending = false;
         if (client->config.on_close != NULL) { client->config.on_close(client->config.user, client->close_code); }
     }
