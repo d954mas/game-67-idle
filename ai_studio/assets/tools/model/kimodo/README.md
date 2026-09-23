@@ -42,8 +42,16 @@ kimodo/
    `cmake -S src -B src/build/release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DKIMODO_ENABLE_VULKAN=OFF -DKIMODO_BUILD_TESTS=OFF`,
    then `cmake --build src/build/release`.
 2. For GPU generation, install the Vulkan SDK and build the same way into
-   `src/build/vulkan` with `-DKIMODO_ENABLE_VULKAN=ON`. The adapter picks that
-   build when it exists; `--backend cpu` still forces the CPU path.
+   `src/build/vulkan` with `-DKIMODO_ENABLE_VULKAN=ON` (set `VULKAN_SDK` and
+   put its `Bin` on `PATH` first). The adapter picks that build when it
+   exists; `--backend cpu` still forces the CPU path. kimodo.cpp always uses
+   Vulkan device 0, which on a laptop is usually the integrated GPU: find the
+   discrete GPU's index in the `ggml_vulkan: N = ...` lines of
+   `tmp/ai_studio/assets/kimodo/logs/generator.log` and set
+   `kimodoVulkanDevice` in `ai_studio/studio.config.local.json` (or
+   `KIMODO_VULKAN_DEVICE`). If an antivirus holds new executables for
+   analysis, the build hangs in `vulkan-shaders-gen.exe` at 0% CPU; exclude
+   the install folder.
 3. Download weights with the Hugging Face CLI (`pip install huggingface_hub`):
    `hf download LocalAI-io/Kimodo-SOMA-RP-v1.1-GGML models/kimodo-soma-rp-v1.1-f32.gguf --local-dir weights`
    and `hf download LocalAI-io/Llama-3-Kimodo-GGML Llama-3-Kimodo-Q8_0.gguf tokenizer.gguf LICENSE-META-LLAMA-3.txt NOTICE --local-dir weights`.
@@ -66,8 +74,9 @@ front/side `preview.png` of eight frames, and `provenance.json`. Identical
 requests (prompt, frames, steps, seed, model, backend, kimodo commit) reuse the
 existing run. Change `--seed` for a different take of the same prompt.
 
-On the RTX 4080 Laptop test machine, the CPU build needs about five minutes for
-a 150-frame clip.
+On the RTX 4080 Laptop test machine, two 90-frame clips at 100 steps take
+47 s on the discrete GPU through Vulkan, most of it loading the text encoder,
+against 304 s on the integrated GPU and 624 s on the CPU.
 
 ## Retarget
 

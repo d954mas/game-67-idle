@@ -74,6 +74,15 @@ test("install prefers the Vulkan build and cpu forces the CPU backend", async (t
   assert.equal(resolveInstall(loadKimodoConfig(cpuOnly.root, cpuOnly.env)).build, "release");
 });
 
+test("the Vulkan device defaults to 0, follows config, and is dropped on CPU", async (t) => {
+  const { root, env } = await fixture(t, { vulkan: true });
+  assert.equal(resolveInstall(loadKimodoConfig(root, env)).vulkanDevice, "0");
+  const picked = loadKimodoConfig(root, { ...env, KIMODO_VULKAN_DEVICE: "1" });
+  assert.equal(resolveInstall(picked).vulkanDevice, "1");
+  assert.equal(resolveInstall(picked, { backend: "cpu" }).vulkanDevice, "");
+  assert.throws(() => loadKimodoConfig(root, { ...env, KIMODO_VULKAN_DEVICE: "nvidia" }), /device index/);
+});
+
 test("only commercial SOMA checkpoints are accepted", async (t) => {
   const { root, env } = await fixture(t);
   assert.throws(() => resolveInstall(loadKimodoConfig(root, env), { model: "smplx-rp-v1" }), /--model must be one of/);

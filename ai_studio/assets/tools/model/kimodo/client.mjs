@@ -71,7 +71,10 @@ export function loadKimodoConfig(root = process.cwd(), env = process.env) {
   const home = String(env.KIMODO_HOME || config.kimodoHome || defaultHome(env)).trim();
   if (!home) throw new Error("missing KIMODO_HOME and LOCALAPPDATA is unavailable");
   const blender = String(env.KIMODO_BLENDER || config.blenderExecutable || "").trim();
-  return { home: resolve(home), workRoot: resolve(root, workRoot), blender: blender ? resolve(blender) : "" };
+  // kimodo.cpp always takes Vulkan device 0, which on laptops is usually the integrated GPU.
+  const vulkanDevice = String(env.KIMODO_VULKAN_DEVICE ?? config.kimodoVulkanDevice ?? "").trim();
+  if (vulkanDevice && !/^\d+$/.test(vulkanDevice)) throw new Error("kimodoVulkanDevice must be a Vulkan device index");
+  return { home: resolve(home), workRoot: resolve(root, workRoot), blender: blender ? resolve(blender) : "", vulkanDevice };
 }
 
 /** The Vulkan build wins when present; `cpu` forces the CPU backend in either build. */
@@ -82,13 +85,15 @@ export function resolveInstall(config, { model = DEFAULTS.model, backend = DEFAU
   const builds = ["vulkan", "release"].map((name) => ({ name, generator: join(src, "build", name, "kmd-generate.exe") }));
   const build = backend === "vulkan" ? builds[0] : builds.find((b) => existsSync(b.generator)) || builds[1];
   const weights = join(config.home, "weights");
+  const resolvedBackend = backend === "cpu" || build.name === "release" ? "cpu" : "vulkan";
   return {
     src,
     scripts: join(src, "scripts"),
     build: build.name,
     generator: build.generator,
     dllDir: join(dirname(build.generator), "bin"),
-    backend: backend === "cpu" || build.name === "release" ? "cpu" : "vulkan",
+    backend: resolvedBackend,
+    vulkanDevice: resolvedBackend === "vulkan" ? config.vulkanDevice || "0" : "",
     motionModel: join(weights, MODELS[model].file),
     textModel: join(weights, TEXT_MODEL.file),
     tokenizer: join(weights, TEXT_MODEL.tokenizer),
@@ -108,7 +113,7 @@ export async function doctor({ root = process.cwd(), env = process.env } = {}) {
     ["blender", config.blender],
   ].map(([name, path]) => ({ name, path, ok: Boolean(path) && existsSync(path) }));
   const ok = checks.every((c) => c.ok);
-  return { ok, home: config.home, work_root: config.workRoot, build: install.build, backend: install.backend, checks, ...(ok ? {} : { hint: "see ai_studio/assets/tools/model/kimodo/README.md#local-setup" }) };
+  return { ok, home: config.home, work_root: config.workRoot, build: install.build, backend: install.backend, vulkan_device: install.vulkanDevice, checks, ...(ok ? {} : { hint: "see ai_studio/assets/tools/model/kimodo/README.md#local-setup" }) };
 }
 
 function execFileText(file, args) {
@@ -140,6 +145,7 @@ async function buildIdentity(install) {
 export async function runGeneratorSession(install, requests, logPath, spawnImpl = spawn) {
   const env = { ...process.env, PATH: `${install.dllDir}${delimiter}${process.env.PATH || ""}` };
   if (install.backend === "cpu") env.KIMODO_BACKEND = "cpu";
+  else env.GGML_VK_VISIBLE_DEVICES = install.vulkanDevice;
   const log = createWriteStream(logPath, { flags: "a" });
   const child = spawnImpl(install.generator, ["--server", install.motionModel, install.textModel], { env, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   child.stderr.pipe(log, { end: false });
@@ -222,7 +228,7 @@ export async function generate(options = {}, dependencies = {}) {
   const identity = await deps.buildIdentity(install);
 
   const clips = request.prompts.map((prompt) => {
-    const params = { prompt, frames: request.frames, steps: request.steps, seed: request.seed, model: request.model, text_model: TEXT_MODEL.file, backend: install.backend, ...identity };
+    const params = { prompt, frames: request.frames, steps: request.steps, seed: request.seed, model: request.model, text_model: TEXT_MODEL.file, backend: install.backend, vulkan_device: install.vulkanDevice, ...identity };
     const fingerprint = fingerprintOf(params);
     const runDir = join(config.workRoot, "runs", `${slug(prompt)}-${fingerprint.slice(0, 12)}`);
     return { params, fingerprint, runDir, provenance: join(runDir, "provenance.json") };
