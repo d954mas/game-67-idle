@@ -37,6 +37,9 @@ Free local single-image, multiview, and texture generation through Hunyuan3D
 2.0 lives under `tools/model/hunyuan3d/`. Model weights remain outside the
 repository, source images never leave the machine, and generated GLB candidates
 still require review and asset intake.
+Local text-to-motion through Kimodo lives under `tools/model/kimodo/`: it
+generates humanoid clips from a prompt and retargets them onto a character rig
+as GLB clips, for gaps the animation library cannot fill.
 Raster generation is handled by the `nt-asset-image-generation` skill after
 source-first search fails. This module does not own shared raster-generation
 job scaffolds, prompt contracts, or prompt records. If a game needs durable

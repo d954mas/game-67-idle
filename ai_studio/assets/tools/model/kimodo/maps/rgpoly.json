@@ -1,0 +1,33 @@
+{
+  "schema": "ai_studio.assets.kimodo_rig_map.v1",
+  "id": "rgpoly",
+  "description": "RG Poly Cartoon City characters (CharacterArmature, T-pose, facing -X).",
+  "bones": [
+    ["Hips", "Hips"],
+    ["Torso", "Chest"],
+    ["Head", "Head"],
+    ["Shoulder.L", "LeftShoulder"],
+    ["Arm.L", "LeftArm"],
+    ["ForeArm.L", "LeftForeArm"],
+    ["Hand.L", "LeftHand"],
+    ["Shoulder.R", "RightShoulder"],
+    ["Arm.R", "RightArm"],
+    ["ForeArm.R", "RightForeArm"],
+    ["Hand.R", "RightHand"],
+    ["UpperLeg.L", "LeftLeg"],
+    ["Leg.L", "LeftShin"],
+    ["Foot.L", "LeftFoot"],
+    ["Toes.L", "LeftToeBase"],
+    ["UpperLeg.R", "RightLeg"],
+    ["Leg.R", "RightShin"],
+    ["Foot.R", "RightFoot"],
+    ["Toes.R", "RightToeBase"]
+  ],
+  "legs": {
+    "L": { "upper": "UpperLeg.L", "lower": "Leg.L", "foot": "Foot.L", "toe": "Toes.L" },
+    "R": { "upper": "UpperLeg.R", "lower": "Leg.R", "foot": "Foot.R", "toe": "Toes.R" }
+  },
+  "arms": { "left": "Arm.L", "right": "Arm.R" },
+  "hinges": ["Leg.L", "Leg.R"],
+  "offsets": {}
+}

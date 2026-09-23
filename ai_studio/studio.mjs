@@ -51,6 +51,7 @@ const ROUTES = Object.freeze({
       canvas: ["node", "ai_studio/assets/canvas/cli.mjs"],
       meshy: ["node", "ai_studio/assets/tools/model/meshy/cli.mjs"],
       hunyuan3d: ["node", "ai_studio/assets/tools/model/hunyuan3d/cli.mjs"],
+      kimodo: ["node", "ai_studio/assets/tools/model/kimodo/cli.mjs"],
     },
   },
 });

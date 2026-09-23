@@ -1,6 +1,6 @@
 ---
 name: nt-asset-workflow
-description: "Use when sourcing, adding, moving, preparing, recording, promoting, pulling, reviewing, licensing, or validating game assets in this repository: add an asset to a game, reuse an asset from the global library, add a new asset or pack to the global library, handle paid/non-redistributable assets, refresh previews, inspect unregistered files, or update asset storage/viewer/index/manifest workflows. Source first, keep license/provenance, and route through ai_studio/assets."
+description: "Use when sourcing, adding, moving, preparing, recording, promoting, pulling, reviewing, licensing, or validating game assets in this repository: add an asset to a game, reuse an asset from the global library, add a new asset or pack to the global library, handle paid/non-redistributable assets, find or generate character animation clips, refresh previews, inspect unregistered files, or update asset storage/viewer/index/manifest workflows. Source first, keep license/provenance, and route through ai_studio/assets."
 ---
 
 # NT Asset Workflow
@@ -20,6 +20,9 @@ decisions.
   the metadata is added.
 - **3D models or meshes**: load `references/3d-models.md` for source-first model
   reuse, conversion, texture dedup, and engine pack/load integration.
+- **Animation clips for a character** (walk, jump, attack, gesture): load
+  `references/animation.md` for library-first search and Kimodo text-to-motion
+  generation with retargeting onto the character rig.
 - **Standalone textures or materials**: load `references/textures-and-materials.md`
   for tiling, material maps, downloaded texture provenance, and seam checks.
 - **Paid or non-redistributable asset**: load
