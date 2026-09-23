@@ -93,7 +93,12 @@ heads; source working-tree changes are intentionally not transferred.
   game asset unless the lead explicitly asked for or approved it; real game art
   goes through the asset pipeline (source-first, then raster generation).
 - Every committed asset must have license, provenance, integrity, and `origin`.
-- Paid or non-redistributable binaries never enter git.
+- Paid or non-redistributable binaries never enter git. One exception, granted
+  by the lead per game: a private game repository whose
+  `assets/PURCHASED_EXPORTS.md` records that grant may track its own
+  game-ready exports of purchased packs (re-coloured GLBs, atlases, retargeted
+  clips), and only those the game ships. Source archives (zip, FBX, .blend) and
+  unused pack content never enter any repository.
 - Heavy authoring workfiles that are not themselves shipping game assets live
   under the synchronized `<YandexDisk>/gamedev/games/<game-id>/` workspace;
   game repositories keep their scripts, provenance, manifests and hashes.
