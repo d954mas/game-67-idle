@@ -290,7 +290,9 @@ static void test_quantized(void) {
     const net_grid_t wide = {.min = -1.0F, .step = 1e-6F, .bits = 32U};
     net_write_quantized(&writer, wide, 0.5F);
     net_write_angle16(&writer, 3.0F);
-    CHECK(writer.ok && writer.pos == 2U + 1U + 4U + 2U);
+    const net_grid_t city = {.min = -256.0F, .step = 1.0F / 1024.0F, .bits = 19U};
+    net_write_quantized(&writer, city, 200.25F);
+    CHECK(writer.ok && writer.pos == 2U + 1U + 4U + 2U + 3U);
     /* -19.5 + 21760 / 1024 == 1.75: two bytes, little-endian. */
     CHECK(buffer[0] == 0x00U && buffer[1] == 0x55U && buffer[2] == 0xFFU);
 
@@ -300,6 +302,7 @@ static void test_quantized(void) {
     CHECK(net_read_quantized(&reader, bytes) == 63.75F);
     CHECK(fabsf(net_read_quantized(&reader, wide) - 0.5F) <= 1e-6F);
     CHECK(fabsf(net_read_angle16(&reader) - 3.0F) <= 3.14159F / 65536.0F);
+    CHECK(net_read_quantized(&reader, city) == 200.25F);
     CHECK(net_reader_complete(&reader));
 
     /* Angles wrap: a turn and a half is half a turn, pi lands on -pi, and

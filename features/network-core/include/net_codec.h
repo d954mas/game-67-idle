@@ -44,7 +44,8 @@ void net_write_u64(net_writer_t *writer, uint64_t value);
 void net_write_f32(net_writer_t *writer, float value);
 
 /* Fixed point on the wire. A value travels as a whole count of `step`s
-   above `min`, `bits` (8, 16 or 32) wide; anything past the grid's ends
+   above `min`, in the fewest whole bytes that hold `bits` (1 to 4);
+   anything past the grid's ends
    clamps to them, and a value that is not a number lands on `min`.
    `net_quantize` is what the other side reads: a simulation that snaps its
    state to the grid after every step holds the wire's numbers exactly, so a

@@ -145,6 +145,9 @@ void net_write_quantized(net_writer_t *writer, net_grid_t grid, float value) {
         net_write_u8(writer, (uint8_t)raw);
     } else if (grid.bits <= 16U) {
         net_write_u16(writer, (uint16_t)raw);
+    } else if (grid.bits <= 24U) {
+        net_write_u16(writer, (uint16_t)(raw & 0xFFFFU));
+        net_write_u8(writer, (uint8_t)(raw >> 16));
     } else {
         net_write_u32(writer, raw);
     }
@@ -156,6 +159,9 @@ float net_read_quantized(net_reader_t *reader, net_grid_t grid) {
         raw = net_read_u8(reader);
     } else if (grid.bits <= 16U) {
         raw = net_read_u16(reader);
+    } else if (grid.bits <= 24U) {
+        raw = net_read_u16(reader);
+        raw |= (uint32_t)net_read_u8(reader) << 16;
     } else {
         raw = net_read_u32(reader);
     }
