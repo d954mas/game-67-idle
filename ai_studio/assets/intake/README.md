@@ -20,6 +20,11 @@ stage  ->  review  ->  accept | reject  ->  refresh index/previews
   `restricted/packs/<pack-id>/`, append/update `assets.jsonl`, then move the
   staged candidate folder to `_accepted/<source>/<slug>/` as an audit trail.
 - `reject.mjs`: move a staged candidate into `_rejected/` or delete it.
+- `accept_pack.mjs`: accept a whole extracted pack in one pass, for bought
+  packs of hundreds of models. One record per model in the first available
+  format of `--prefer` (GLB before FBX by default), one per texture, the
+  folder layout kept under `files/`; `--move` avoids a second copy on disk
+  and `--dry-run` reports the counts first.
 
 `_incoming/` means "not decided yet". ssset Index may show those files as
 `unregistered` so the user can see forgotten local additions. `_accepted/` and

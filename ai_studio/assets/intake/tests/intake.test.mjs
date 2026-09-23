@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { stageAsset } from "../stage.mjs";
 import { acceptStagedAsset } from "../accept.mjs";
 import { rejectStagedAsset } from "../reject.mjs";
+import { acceptPack } from "../accept_pack.mjs";
 import { scanPackManifestSource } from "../../manifests/ops.mjs";
 
 test("stage + accept writes a publishable pack manifest asset", async () => {
@@ -207,6 +208,58 @@ test("accept rejects staged file paths that escape into same-prefix sibling fold
       ]),
       /escapes staged directory/,
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("accept_pack keeps one format per model, every texture and the folder layout", async () => {
+  const root = await mkdtemp(join(tmpdir(), "asset-pack-"));
+  try {
+    const sourceRoot = join(root, "source");
+    const pack = join(root, "Bought Pack");
+    await mkdir(join(pack, "GLB", "Buildings"), { recursive: true });
+    await mkdir(join(pack, "FBX", "Buildings"), { recursive: true });
+    await mkdir(join(pack, "Textures"), { recursive: true });
+    await writeFile(join(pack, "GLB", "Buildings", "House_A.glb"), "glb");
+    await writeFile(join(pack, "FBX", "Buildings", "House_A.fbx"), "fbx");
+    await writeFile(join(pack, "FBX", "Buildings", "Tower.fbx"), "fbx only");
+    await writeFile(join(pack, "Textures", "atlas.png"), "png");
+    await writeFile(join(pack, "Textures", "atlas.webp"), "webp");
+    await writeFile(join(pack, "readme.txt"), "notes");
+    await mkdir(join(pack, "GLTF"), { recursive: true });
+    await writeFile(join(pack, "GLTF", "Car.gltf"), JSON.stringify({ buffers: [{ uri: "Car.bin" }] }));
+    await writeFile(join(pack, "GLTF", "Car.bin"), "geometry");
+
+    const result = await acceptPack([
+      "--source-root", sourceRoot, "--folder", pack, "--source", "Vendor Store", "--pack", "vendor-city",
+      "--license", "Vendor EULA", "--license-kind", "custom", "--commercial-use", "true",
+      "--modification-allowed", "true", "--redistribution-allowed", "false", "--publish", "false",
+      "--tags", "city", "--move",
+    ]);
+
+    assert.equal(result.models, 3);
+    assert.equal(result.textures, 2);
+    assert.equal(result.companions, 1);
+    assert.equal(result.skipped, 2);
+    const packDir = join(sourceRoot, "restricted", "packs", "vendor-city");
+    const rows = (await readFile(join(packDir, "assets.jsonl"), "utf8")).trim().split(/\r?\n/).map((line) => JSON.parse(line));
+    const resources = rows.map((row) => row.resource).sort();
+    assert.deepEqual(resources, ["files/FBX/Buildings/Tower.fbx", "files/GLB/Buildings/House_A.glb", "files/GLTF/Car.gltf", "files/Textures/atlas.png", "files/Textures/atlas.webp"]);
+    assert.equal(new Set(rows.map((row) => row.asset_id)).size, rows.length);
+    assert.equal(existsSync(join(packDir, "files", "GLTF", "Car.bin")), true);
+    const house = rows.find((row) => row.resource.endsWith("House_A.glb"));
+    assert.equal(house.model, "files/GLB/Buildings/House_A.glb");
+    assert.equal(house.publish, "false");
+    assert.ok(house.tags.includes("city") && house.tags.includes("buildings"));
+    assert.equal(existsSync(join(pack, "GLB", "Buildings", "House_A.glb")), false);
+    assert.equal(existsSync(join(packDir, "files", "GLB", "Buildings", "House_A.glb")), true);
+
+    const { records } = await scanPackManifestSource(sourceRoot);
+    assert.equal(records.filter((record) => record.pack === "vendor-city" || /vendor-city/.test(record.resource)).length, 5);
+    await assert.rejects(acceptPack([
+      "--source-root", sourceRoot, "--folder", pack, "--source", "vendor", "--pack", "vendor-city", "--license", "Vendor EULA",
+    ]), /already has records/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
