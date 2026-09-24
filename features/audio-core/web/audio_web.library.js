@@ -27,6 +27,15 @@ mergeInto(LibraryManager.library, {
     resumeAskedAt: 0,
     gestureListener: null,
     visibilityListener: null,
+    wakeListener: null,
+    retryTimer: null,
+    pumpTimer: null,
+    lastUpdateMs: 0,
+    // How often a context that should run is asked to resume again, and how
+    // often streams are topped up when the game loop has stopped calling.
+    RETRY_MS: 2000,
+    PUMP_MS: 150,
+    PUMP_STALE_MS: 200,
     decodedPcmBytes: 0,
 
     _makeSlots: function(capacity) {
@@ -228,8 +237,7 @@ mergeInto(LibraryManager.library, {
       }
     },
 
-    init: function() {
-      if (AudioWebRuntime.context) AudioWebRuntime.shutdown();
+    _createContext: function() {
       var AudioContextClass = null;
       if (typeof window !== "undefined") {
         AudioContextClass = window.AudioContext || window.webkitAudioContext || null;
@@ -256,6 +264,127 @@ mergeInto(LibraryManager.library, {
         }
         return false;
       }
+      context.onstatechange = function() { AudioWebRuntime._onStateChange(context); };
+      context.onerror = function() {
+        if (AudioWebRuntime.context === context) AudioWebRuntime._rebuild();
+      };
+      return true;
+    },
+
+    // Whether the context should be running now: the page wants sound and a
+    // gesture has unlocked it once.
+    _wantsRunning: function() {
+      return AudioWebRuntime.enabled && !AudioWebRuntime.paused && !AudioWebRuntime.hidden &&
+        AudioWebRuntime.everUnlocked;
+    },
+
+    // The OS or the browser can suspend or interrupt a running context (a
+    // call, a device switch) and a context can close or fail; none of that
+    // waits for a gesture here, it recovers on its own.
+    _onStateChange: function(context) {
+      if (context !== AudioWebRuntime.context) return;
+      if (context.state === "closed") {
+        AudioWebRuntime._rebuild();
+        return;
+      }
+      if (context.state === "running") {
+        AudioWebRuntime._stopRetry();
+        if (!AudioWebRuntime._wantsRunning()) {
+          AudioWebRuntime._suspendForPolicy();
+          return;
+        }
+        AudioWebRuntime.resumePending = false;
+        AudioWebRuntime.gestureAccepted = true;
+        return;
+      }
+      AudioWebRuntime._wake();
+    },
+
+    _wake: function() {
+      var context = AudioWebRuntime.context;
+      if (!context || context.state === "running" || context.state === "closed" ||
+          !AudioWebRuntime._wantsRunning()) return;
+      try {
+        var result = context.resume();
+        if (result && typeof result.catch === "function") result.catch(function() {});
+      } catch (ignored) {}
+      if (AudioWebRuntime.retryTimer === null && typeof setInterval === "function") {
+        AudioWebRuntime.retryTimer = setInterval(AudioWebRuntime._wake, AudioWebRuntime.RETRY_MS);
+      }
+    },
+
+    _stopRetry: function() {
+      if (AudioWebRuntime.retryTimer !== null) clearInterval(AudioWebRuntime.retryTimer);
+      AudioWebRuntime.retryTimer = null;
+    },
+
+    // A closed or failed context is replaced. Effect voices end with it; a
+    // stream voice keeps its unplayed chunks and its place in the track and is
+    // scheduled again on the new context.
+    _rebuild: function() {
+      var old = AudioWebRuntime.context;
+      var carried = [];
+      for (var i = 0; i < AudioWebRuntime.voices.length; ++i) {
+        var slot = AudioWebRuntime.voices[i];
+        if (!slot.occupied) continue;
+        if (!slot.streamSources) {
+          AudioWebRuntime._releaseVoice(i, true);
+          continue;
+        }
+        var handle = AudioWebRuntime._packHandle(i, slot.generation);
+        var wasParked = !!slot.streamParked;
+        if (!wasParked) AudioWebRuntime.streamPark(handle);
+        carried.push({ slot: slot, handle: handle, resume: !wasParked,
+          gain: slot.gainNode ? slot.gainNode.gain.value : 0 });
+        if (slot.gainNode) try { slot.gainNode.disconnect(); } catch (ignored) {}
+        slot.gainNode = null;
+      }
+      var nodes = [AudioWebRuntime.musicNode, AudioWebRuntime.sfxNode, AudioWebRuntime.masterNode];
+      for (var n = 0; n < nodes.length; ++n) {
+        if (nodes[n]) try { nodes[n].disconnect(); } catch (ignored) {}
+      }
+      if (old) {
+        old.onstatechange = null;
+        old.onerror = null;
+        if (old.state !== "closed") try { old.close(); } catch (ignored) {}
+      }
+      AudioWebRuntime.context = null;
+      AudioWebRuntime.gestureAccepted = false;
+      AudioWebRuntime.resumePending = false;
+      if (!AudioWebRuntime._createContext()) return;
+      AudioWebRuntime.rebuilds = (AudioWebRuntime.rebuilds || 0) + 1;
+      for (var c = 0; c < carried.length; ++c) {
+        var entry = carried[c];
+        var voiceGain = AudioWebRuntime.context.createGain();
+        voiceGain.gain.value = entry.gain;
+        voiceGain.connect(entry.slot.streamBus === 0 ? AudioWebRuntime.musicNode : AudioWebRuntime.sfxNode);
+        entry.slot.gainNode = voiceGain;
+        if (entry.resume) AudioWebRuntime.streamResume(entry.handle);
+      }
+      AudioWebRuntime._applyMix();
+      AudioWebRuntime._suspendForPolicy();
+      AudioWebRuntime._wake();
+    },
+
+    // Streams are fed from the game loop; when frames stop coming while the
+    // page still plays (an offscreen or throttled frame), a timer feeds them.
+    _pump: function() {
+      var context = AudioWebRuntime.context;
+      if (!context || context.state !== "running") return;
+      var now = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+      if (now - AudioWebRuntime.lastUpdateMs < AudioWebRuntime.PUMP_STALE_MS) return;
+      AudioWebRuntime.pumps = (AudioWebRuntime.pumps || 0) + 1;
+      if (typeof _audio_core_web_pump === "function") _audio_core_web_pump();
+    },
+
+    update: function() {
+      AudioWebRuntime.lastUpdateMs = typeof performance !== "undefined" && performance.now ?
+        performance.now() : Date.now();
+    },
+
+    init: function() {
+      if (AudioWebRuntime.context) AudioWebRuntime.shutdown();
+      if (!AudioWebRuntime._createContext()) return false;
 
       if (AudioWebRuntime.clips.length !== AudioWebRuntime.CLIP_CAPACITY) {
         AudioWebRuntime.clips = AudioWebRuntime._makeSlots(AudioWebRuntime.CLIP_CAPACITY);
@@ -287,6 +416,14 @@ mergeInto(LibraryManager.library, {
         AudioWebRuntime._suspendForPolicy();
         if (!AudioWebRuntime.hidden) AudioWebRuntime._requestResume(false);
       };
+      AudioWebRuntime.wakeListener = function() { AudioWebRuntime._wake(); };
+      if (typeof window !== "undefined" && window.addEventListener) {
+        window.addEventListener("focus", AudioWebRuntime.wakeListener);
+        window.addEventListener("pageshow", AudioWebRuntime.wakeListener);
+      }
+      if (typeof setInterval === "function") {
+        AudioWebRuntime.pumpTimer = setInterval(AudioWebRuntime._pump, AudioWebRuntime.PUMP_MS);
+      }
       if (typeof document !== "undefined" && document.addEventListener) {
         document.addEventListener("visibilitychange", AudioWebRuntime.visibilityListener);
         // pointerup, touchend, click and keydown carry user activation on
@@ -315,8 +452,16 @@ mergeInto(LibraryManager.library, {
         document.removeEventListener("click", AudioWebRuntime.gestureListener, true);
         document.removeEventListener("keydown", AudioWebRuntime.gestureListener, true);
       }
+      if (typeof window !== "undefined" && window.removeEventListener && AudioWebRuntime.wakeListener) {
+        window.removeEventListener("focus", AudioWebRuntime.wakeListener);
+        window.removeEventListener("pageshow", AudioWebRuntime.wakeListener);
+      }
+      if (AudioWebRuntime.pumpTimer !== null) clearInterval(AudioWebRuntime.pumpTimer);
+      AudioWebRuntime.pumpTimer = null;
+      AudioWebRuntime._stopRetry();
       AudioWebRuntime.visibilityListener = null;
       AudioWebRuntime.gestureListener = null;
+      AudioWebRuntime.wakeListener = null;
       AudioWebRuntime._cancelPendingResume();
       for (var voiceIndex = 0; voiceIndex < AudioWebRuntime.voices.length; ++voiceIndex) {
         AudioWebRuntime._releaseVoice(voiceIndex, true);
@@ -332,6 +477,10 @@ mergeInto(LibraryManager.library, {
         }
       }
       var context = AudioWebRuntime.context;
+      if (context) {
+        context.onstatechange = null;
+        context.onerror = null;
+      }
       AudioWebRuntime.context = null;
       AudioWebRuntime.masterNode = null;
       AudioWebRuntime.musicNode = null;
@@ -613,6 +762,7 @@ mergeInto(LibraryManager.library, {
       slot.active = true;
       slot.source = null;
       slot.gainNode = voiceGain;
+      slot.streamBus = bus;
       slot.streamSources = [];
       slot.streamOrigin = null;
       slot.streamRate = 0;
@@ -680,12 +830,12 @@ mergeInto(LibraryManager.library, {
     }
   },
 
-  audio_web_init__deps: ["$AudioWebRuntime"],
+  audio_web_init__deps: ["$AudioWebRuntime", "audio_core_web_pump"],
   audio_web_init: function() { return AudioWebRuntime.init() ? 1 : 0; },
   audio_web_shutdown__deps: ["$AudioWebRuntime"],
   audio_web_shutdown: function() { AudioWebRuntime.shutdown(); },
   audio_web_update__deps: ["$AudioWebRuntime"],
-  audio_web_update: function() {},
+  audio_web_update: function() { AudioWebRuntime.update(); },
   audio_web_decode_begin__deps: ["$AudioWebRuntime"],
   audio_web_decode_begin: function(pointer, size) { return AudioWebRuntime.decodeBegin(pointer, size); },
   audio_web_decode_state__deps: ["$AudioWebRuntime"],

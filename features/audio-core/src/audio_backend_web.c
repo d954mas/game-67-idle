@@ -9,6 +9,7 @@
    source file and consumers need no new wiring. */
 #include "audio_miniaudio_impl.c"
 
+#include <emscripten.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,12 +44,23 @@ extern void audio_web_stream_resume(uint32_t voice);
 /* Track frames per scheduled buffer: 64 ms at 32 kHz, so the decode is spread
    thin over frames. */
 #define AUDIO_WEB_STREAM_CHUNK_FRAMES 2048u
-/* A voice keeps this much scheduled ahead of the clock: the main thread may
-   stall this long before the music gaps. */
-#define AUDIO_WEB_STREAM_AHEAD_SECONDS 1.0
-/* Chunks decoded per voice per update: one keeps pace, the second catches up
-   after a slow frame or fills the lookahead at a start. */
+/* A voice keeps this much scheduled ahead of the clock, so the main thread
+   may stall this long before the music gaps. Stop and gain act on the voice's
+   gain node, so a longer lookahead adds no control latency. Each gap grows
+   the voice's lookahead by GROWTH, up to MAX. */
+#define AUDIO_WEB_STREAM_AHEAD_SECONDS 3.0
+#define AUDIO_WEB_STREAM_AHEAD_MAX_SECONDS 4.0
+#define AUDIO_WEB_STREAM_AHEAD_GROWTH 1.5
+/* Chunks decoded per voice per update once filled: one keeps pace, the second
+   catches up after a slow frame. */
 #define AUDIO_WEB_STREAM_CHUNKS_PER_UPDATE 2u
+/* After a start or a gap an audible voice fills up to its lookahead in one
+   go, within this much main-thread time per update for all voices together,
+   so a load right after it cannot starve it. */
+#define AUDIO_WEB_STREAM_FILL_BUDGET_MS 4.0
+/* The chunk after a gap fades in over this long, so the restart does not
+   click; the cut at the gap's start happened before it could be known. */
+#define AUDIO_WEB_STREAM_GAP_FADE_SECONDS 0.008
 
 typedef struct audio_web_stream_clip_t {
     uint32_t clip;
@@ -67,6 +79,11 @@ typedef struct audio_web_stream_voice_t {
     bool primed;
     bool ended;
     bool parked;
+    /* Something was scheduled: an empty queue after that is a gap. */
+    bool started;
+    /* Fill to the lookahead within the time budget instead of the chunk cap. */
+    bool filling;
+    double ahead_seconds;
     /* Context time the gain went to zero; negative while audible. */
     double muted_since;
 } audio_web_stream_voice_t;
@@ -118,6 +135,8 @@ static bool stream_voice_start(uint32_t voice, const audio_web_stream_clip_t *cl
     stream->voice = voice;
     stream->clip = clip->clip;
     stream->muted_since = gain > 0.0f ? -1.0 : audio_web_now();
+    stream->ahead_seconds = AUDIO_WEB_STREAM_AHEAD_SECONDS;
+    stream->filling = true;
     *slot = stream;
     return true;
 }
@@ -136,7 +155,7 @@ static uint32_t stream_read(audio_web_stream_voice_t *stream, float *out, uint32
 }
 
 /* Decodes the next chunk and hands it over; false once the stream is done. */
-static bool stream_push_chunk(audio_web_stream_voice_t *stream) {
+static bool stream_push_chunk(audio_web_stream_voice_t *stream, bool fade_in) {
     const uint32_t channels = stream->decoder.outputChannels;
     if (!stream->primed) {
         if (stream_read(stream, stream->carry, 1) == 0) return false;
@@ -151,6 +170,13 @@ static bool stream_push_chunk(audio_web_stream_voice_t *stream) {
     const uint32_t frames = last ? got + 1u : got;
     if (last) memcpy(s_interleaved + frames * channels, s_interleaved + (frames - 1u) * channels, sizeof(float) * channels);
     memcpy(stream->carry, s_interleaved + frames * channels, sizeof(float) * channels);
+    if (fade_in) {
+        uint32_t ramp = (uint32_t)(AUDIO_WEB_STREAM_GAP_FADE_SECONDS * (double)stream->decoder.outputSampleRate);
+        if (ramp > frames) ramp = frames;
+        for (uint32_t i = 0; i < ramp; ++i) {
+            for (uint32_t c = 0; c < channels; ++c) s_interleaved[i * channels + c] *= (float)i / (float)ramp;
+        }
+    }
     for (uint32_t c = 0; c < channels; ++c) {
         for (uint32_t i = 0; i <= frames; ++i) s_planes[c * (frames + 1u) + i] = s_interleaved[i * channels + c];
     }
@@ -159,18 +185,37 @@ static bool stream_push_chunk(audio_web_stream_voice_t *stream) {
     return pushed && !last;
 }
 
-static void stream_feed(audio_web_stream_voice_t *stream) {
-    const int wanted = (int)(AUDIO_WEB_STREAM_AHEAD_SECONDS * (double)stream->decoder.outputSampleRate);
-    for (uint32_t chunk = 0; chunk < AUDIO_WEB_STREAM_CHUNKS_PER_UPDATE; ++chunk) {
+static void stream_feed(audio_web_stream_voice_t *stream, double began) {
+    const double rate = (double)stream->decoder.outputSampleRate;
+    for (uint32_t chunk = 0;; ++chunk) {
         const int ahead = audio_web_stream_buffered_frames(stream->voice);
-        if (ahead < 0 || ahead >= wanted) return;
+        if (ahead < 0) return;
+        const bool gap = stream->started && ahead == 0;
+        if (gap) {
+            stream->ahead_seconds *= AUDIO_WEB_STREAM_AHEAD_GROWTH;
+            if (stream->ahead_seconds > AUDIO_WEB_STREAM_AHEAD_MAX_SECONDS) {
+                stream->ahead_seconds = AUDIO_WEB_STREAM_AHEAD_MAX_SECONDS;
+            }
+            stream->filling = true;
+        }
+        if (ahead >= (int)(stream->ahead_seconds * rate)) {
+            stream->filling = false;
+            return;
+        }
+        /* A silent voice is about to park: it only keeps pace. */
+        const bool fill = stream->filling && stream->muted_since < 0.0;
+        if (fill ? emscripten_get_now() - began >= AUDIO_WEB_STREAM_FILL_BUDGET_MS
+                 : chunk >= AUDIO_WEB_STREAM_CHUNKS_PER_UPDATE) {
+            return;
+        }
         /* A refused chunk would leave a hole in the schedule: the voice plays
            out what it has and ends instead. */
-        if (!stream_push_chunk(stream)) {
+        if (!stream_push_chunk(stream, gap)) {
             stream->ended = true;
             audio_web_stream_end(stream->voice);
             return;
         }
+        stream->started = true;
     }
 }
 
@@ -195,8 +240,8 @@ void audio_core_backend_shutdown(void) {
     audio_web_shutdown();
 }
 
-void audio_core_backend_update(void) {
-    audio_web_update();
+static void streams_update(void) {
+    const double began = emscripten_get_now();
     for (uint32_t i = 0; i < AUDIO_WEB_STREAM_VOICES; ++i) {
         audio_web_stream_voice_t *stream = s_stream_voices[i];
         if (stream == NULL) continue;
@@ -205,9 +250,20 @@ void audio_core_backend_update(void) {
             continue;
         }
         stream_park_check(stream);
-        if (!stream->ended && !stream->parked) stream_feed(stream);
+        if (!stream->ended && !stream->parked) stream_feed(stream, began);
     }
 }
+
+void audio_core_backend_update(void) {
+    audio_web_update();
+    streams_update();
+}
+
+/* The web runtime's timer calls this when frames stop coming while the page
+   still plays sound (a throttled or offscreen frame), so streams keep their
+   lookahead without the game loop. */
+void audio_core_web_pump(void);
+EMSCRIPTEN_KEEPALIVE void audio_core_web_pump(void) { streams_update(); }
 
 uint32_t audio_core_backend_decode_begin(const void *bytes, uint32_t size) {
     return audio_web_decode_begin(bytes, size);
@@ -285,6 +341,7 @@ void audio_core_backend_voice_set_gain(uint32_t voice, float gain) {
         stream->muted_since = -1.0;
         if (stream->parked) {
             stream->parked = false;
+            stream->filling = true;
             audio_web_stream_resume(voice);
         }
     } else if (stream->muted_since < 0.0) {

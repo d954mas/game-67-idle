@@ -158,8 +158,14 @@ async function loadLibrary() {
   const source = await readFile(LIBRARY_PATH, "utf8");
   const library = {};
   const document = new FakeDocument();
+  const timers = [];
+  const pumped = { count: 0 };
   const context = vm.createContext({
     ArrayBuffer,
+    setInterval(fn, ms) { timers.push({ fn, ms, live: true }); return timers.length; },
+    clearInterval(id) { if (timers[id - 1]) timers[id - 1].live = false; },
+    performance: { now: () => context.nowMs },
+    _audio_core_web_pump() { pumped.count += 1; },
     AudioContext: FakeAudioContext,
     HEAPU8: new Uint8Array(1024),
     HEAPF32: new Float32Array(4096),
@@ -170,9 +176,10 @@ async function loadLibrary() {
     mergeInto(target, additions) { Object.assign(target, additions); },
     window: { AudioContext: FakeAudioContext },
   });
+  context.nowMs = 0;
   vm.runInContext(source, context, { filename: LIBRARY_PATH.pathname });
   context.AudioWebRuntime = library.$AudioWebRuntime;
-  return { context, document, library };
+  return { context, document, library, timers, pumped };
 }
 
 test("init creates music and sfx buses under master without resuming", async () => {
@@ -634,4 +641,73 @@ test("destroying a stream clip frees its slot for reuse", async () => {
   const again = library.audio_web_stream_open(1);
   assert.notEqual(again, 0);
   assert.notEqual(again, clip);
+});
+
+function live(timers, ms) { return timers.filter((timer) => timer.live && timer.ms === ms); }
+
+test("a context the browser suspends or interrupts resumes without a gesture, and retries", async () => {
+  const { document, library, timers } = await loadLibrary();
+  library.audio_web_init();
+  document.dispatch("pointerdown");
+  await flushPromises();
+  const audioContext = library.$AudioWebRuntime.context;
+  const asked = audioContext.resumeCalls;
+  audioContext.holdResume = true;
+  audioContext.state = "interrupted";
+  audioContext.onstatechange();
+  assert.equal(audioContext.resumeCalls, asked + 1);
+  const [retry] = live(timers, 2000);
+  assert.ok(retry, "a slow retry runs while it stays down");
+  retry.fn();
+  assert.equal(audioContext.resumeCalls, asked + 2);
+  audioContext.state = "running";
+  audioContext.onstatechange();
+  assert.equal(live(timers, 2000).length, 0);
+
+  library.audio_web_set_paused(1); // a pause the game asked for is left alone
+  audioContext.onstatechange();
+  assert.equal(audioContext.resumeCalls, asked + 2);
+});
+
+test("a context that closes is replaced and its streams go on from their place", async () => {
+  const { context, library } = await unlockedStreamVoice();
+  const runtime = library.$AudioWebRuntime;
+  const old = runtime.context;
+  mono(context, 3200);
+  const voice = library.audio_web_voice_play(library.audio_web_stream_open(1), 0, 0.5, 1);
+  for (let i = 0; i < 3; ++i) library.audio_web_stream_push(voice, 0, 3200, 1, 32000);
+  const buffers = old.sources.map((source) => source.buffer);
+  old.currentTime = 0.2; // 0.15 s into the stream
+  old.state = "closed";
+  old.onstatechange();
+  assert.notEqual(runtime.context, old);
+  assert.equal(runtime.rebuilds, 1);
+  assert.equal(library.audio_web_voice_active(voice), 1);
+  const rescheduled = runtime.context.sources;
+  assert.equal(rescheduled.length, 2);
+  assert.equal(rescheduled[0].buffer, buffers[1]);
+  near(rescheduled[0].offset, 1600 / 32000);
+  assert.equal(runtime.context.gains.length, 5, "master, music, sfx and both stream voices' gains");
+  assert.equal(library.audio_web_stream_push(voice, 0, 3200, 1, 32000), 1);
+});
+
+test("streams are topped up by a timer when the game loop stops calling", async () => {
+  const { context, document, library, timers, pumped } = await loadLibrary();
+  library.audio_web_init();
+  document.dispatch("pointerdown");
+  await flushPromises();
+  const [pump] = live(timers, 150);
+  context.nowMs = 1000;
+  library.audio_web_update();
+  context.nowMs = 1100;
+  pump.fn();
+  assert.equal(pumped.count, 0, "the loop is still running");
+  context.nowMs = 1300;
+  pump.fn();
+  assert.equal(pumped.count, 1);
+  library.$AudioWebRuntime.context.state = "suspended";
+  pump.fn();
+  assert.equal(pumped.count, 1, "a suspended context needs nothing");
+  library.audio_web_shutdown();
+  assert.equal(live(timers, 150).length, 0);
 });

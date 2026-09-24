@@ -45,14 +45,32 @@ where it left off rather than where it would have been.
   count, and the browser resamples it. Chunks play back to back on the
   track's own timeline (origin + frames / track rate), so rounding never adds
   up, and each carries one guard frame, the next chunk's first, so the
-  browser's interpolation across a join reads the real next sample. A voice
-  stays about 1 s ahead of the clock, decoding at most two chunks per update.
-  A stream starts, or restarts after a stall, twice the context's output
-  latency ahead of the clock and at least 50 ms ahead. If the main thread
-  stalls longer than the 1 s lookahead, the track gaps and then resumes;
-  while a tab is hidden the context is suspended, so the lookahead holds. A
-  parked voice keeps its unplayed chunks and schedules them again when it
+  browser's interpolation across a join reads the real next sample. A stream
+  starts, or restarts after a gap, twice the context's output latency ahead
+  of the clock and at least 50 ms ahead, and a restart fades in over 8 ms.
+  A parked voice keeps its unplayed chunks and schedules them again when it
   resumes.
+
+Web robustness, because a main-thread decoder only runs when the main thread
+does:
+
+- Lookahead: 3 s per stream voice, grown ×1.5 after each gap up to 4 s, so a
+  3 s main-thread stall plays through. Stop and gain act on the voice's gain
+  node, so the lookahead adds no control latency. At 32 kHz mono that is
+  384 KB of PCM per playing voice, 512 KB at the cap. Effects are unaffected.
+- Fill: once full, a voice decodes at most two chunks per update. After a
+  start or a gap, an audible voice fills to its lookahead within 4 ms of
+  main-thread time per update for all voices together: in -O3 wasm the
+  first update schedules 3 s in 2.6 ms, so a load right after the music
+  starts does not starve it.
+- A timer every 150 ms feeds the streams when the game loop has not called
+  for 200 ms and the context runs, so music continues while frames stop but
+  the page stays visible (an offscreen or throttled frame).
+- Context recovery: `onstatechange` resumes a context the browser or OS
+  suspended or interrupted, unless the game is hidden, paused, disabled or
+  never unlocked, and retries every 2 s and on `focus` and `pageshow`. A
+  context that closes or fails is replaced: effect voices end, and stream
+  voices are scheduled again on the new context from where they were.
 
 Why this web path, measured on a game's music tracks (32 kHz mono MP3,
 48 kHz context):
@@ -60,9 +78,9 @@ Why this web path, measured on a game's music tracks (32 kHz mono MP3,
 - `decodeAudioData` of the whole track, the path before streaming, decodes off
   the main thread but keeps 16.4 MB of PCM per 90 s track.
 - The chosen path, in -O3 wasm with three beds of which one is audible and
-  two parked, costs 0.009 ms per 60 Hz frame on average and 0.32 ms at most;
-  the stream start peaks at 0.63 ms. It keeps about 0.13 MB of PCM per
-  playing voice (1 s at 32 kHz mono). Played back in Chrome, it matches
+  two parked, costs 0.008 ms per 60 Hz frame on average and 0.21 ms at most
+  once filled; the first update after a start fills 3 s in 2.6 ms. It keeps
+  384 KB of PCM per playing voice. Played back in Chrome, it matches
   Chrome's own resampling of the whole track as one buffer to 1.7e-5 across
   every join and the loop seam, with no drift over a minute. The decoder is
   the one the native path uses.
