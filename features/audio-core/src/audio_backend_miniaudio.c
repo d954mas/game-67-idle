@@ -37,6 +37,7 @@ typedef struct audio_native_voice_t {
     ma_bool32 sound_initialized;
     ma_bool32 streaming;
     ma_bool32 used;
+    uint32_t clip;
 } audio_native_voice_t;
 
 static ma_context s_context;
@@ -338,6 +339,11 @@ uint32_t audio_core_backend_decode_state(uint32_t clip) {
 
 void audio_core_backend_clip_destroy(uint32_t clip) {
     if (clip == 0 || clip > AUDIO_NATIVE_CLIPS || !s_clips[clip - 1u].used) return;
+    /* A voice reads its clip's PCM or encoded bytes on the audio thread, so
+       none may outlive the clip, whatever the caller asserted. */
+    for (ma_uint32 i = 0; i < AUDIO_NATIVE_VOICES; ++i) {
+        if (s_voices[i].used && s_voices[i].clip == clip) voice_stop(&s_voices[i]);
+    }
     clip_destroy(&s_clips[clip - 1u]);
 }
 
@@ -352,6 +358,7 @@ static uint32_t stream_play(audio_native_voice_t *voice, ma_uint32 index, const 
     }
     voice->streaming = MA_TRUE;
     voice->used = MA_TRUE;
+    voice->clip = (uint32_t)(clip - s_clips) + 1u;
     ma_sound_set_volume(&voice->stream, gain);
     ma_sound_set_looping(&voice->stream, loop ? MA_TRUE : MA_FALSE);
     if (ma_node_attach_output_bus((ma_node *)&voice->stream, 0, (ma_node *)group, 0) != MA_SUCCESS ||
@@ -383,7 +390,10 @@ uint32_t audio_core_backend_voice_play(uint32_t clip, uint32_t bus, float gain, 
         return 0;
     }
     voice->used = MA_TRUE;
+    voice->clip = clip;
     ma_sound_set_volume(&voice->sound, gain);
+    /* A pooled sound keeps the pitch of its last play. */
+    ma_sound_set_pitch(&voice->sound, 1.0f);
     ma_sound_set_looping(&voice->sound, loop ? MA_TRUE : MA_FALSE);
     if (ma_sound_start(&voice->sound) != MA_SUCCESS) {
         voice_stop(voice);

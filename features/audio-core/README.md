@@ -34,10 +34,14 @@ to a streamed voice.
 - Native: each voice is an `ma_sound` over its own `ma_decoder`, so miniaudio
   decodes on the audio thread. The main thread only opens the decoder when the
   voice starts.
-- Web: miniaudio's decoder and converter, built into the wasm with no device or
-  threads, decode on the main thread in 8192-frame chunks. The context-rate PCM
+- Web: miniaudio's MP3 decoder and converter, built into the wasm with no
+  device, threads or WAV support, decode on the main thread in 8192-frame
+  chunks. A web stream is MP3 only; a WAV opened with `audio_clip_stream`
+  fails there, while `audio_clip_load` still takes WAV through the browser. The context-rate PCM
   goes into `AudioBufferSourceNode`s, which play back to back on whole context
-  frames about 1 s ahead of the clock. Each update decodes at most two chunks
+  frames about 1 s ahead of the clock. A stream starts, or restarts after a
+  stall, twice the context's output latency ahead of the clock and at least
+  50 ms ahead. Each update decodes at most two chunks
   per voice. If the main thread stalls longer than that 1 s lookahead, the
   track gaps and then resumes; while a tab is hidden the context is suspended,
   so the lookahead holds.
@@ -110,7 +114,8 @@ See `INSTALL.md` for wiring, validation, and removal.
 
 - `1.2.0`: `audio_clip_stream` plays long tracks without decoding them whole
   (native: decoded on the audio thread; web: chunks scheduled from a wasm
-  decoder). Native pooled voices now honour `audio_voice_set_pitch`; they were
-  created with miniaudio's pitch stage disabled, so the call did nothing.
+  MP3 decoder). Native pooled voices now honour `audio_voice_set_pitch`; they
+  were created with miniaudio's pitch stage disabled, so the call did nothing.
+  Each play starts at pitch 1. Destroying a clip stops its voices.
 - `1.1.1`: a phone's first tap unlocks the sound.
 - `1.1.0`: live gain and pitch per voice.

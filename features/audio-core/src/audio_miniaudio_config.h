@@ -13,6 +13,8 @@
 #define MA_NO_THREADING
 #define MA_NO_NODE_GRAPH
 #define MA_NO_ENGINE
+/* Web streams are MP3 only; WAV effects still decode through the browser. */
+#define MA_NO_WAV
 #else
 #define MA_ENABLE_ONLY_SPECIFIC_BACKENDS
 #if defined(_WIN32)

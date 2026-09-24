@@ -66,7 +66,7 @@ class FakeAudioBuffer {
     this.channels = Array.from({ length: channels }, () => new Float32Array(length));
   }
 
-  copyToChannel(source, channel) { this.channels[channel].set(source); }
+  getChannelData(channel) { return this.channels[channel]; }
 }
 
 class FakeAudioContext {
@@ -526,10 +526,10 @@ test("stream chunks are scheduled back to back on whole frames", async () => {
   audioContext.currentTime = 1.5;
   context.HEAPF32.set([0.25, 0.5, 0.75], 0);
   context.HEAPF32.set([-0.25, -0.5, -0.75], 8);
-  library.audio_web_stream_push(voice, 0, 32, 3);
+  assert.equal(library.audio_web_stream_push(voice, 0, 32, 3), 1);
   library.audio_web_stream_push(voice, 0, 32, 3);
   const [first, second] = audioContext.sources;
-  const lead = Math.round(0.02 * 48000);
+  const lead = Math.round(0.05 * 48000);
   assert.equal(first.when * 48000, 72000 + lead);
   assert.equal(second.when * 48000, 72000 + lead + 3);
   assert.deepEqual(Array.from(first.buffer.channels[0]), [0.25, 0.5, 0.75]);
@@ -538,9 +538,18 @@ test("stream chunks are scheduled back to back on whole frames", async () => {
 
   library.audio_web_voice_set_pitch(voice, 2);
   assert.equal(first.playbackRate.value, 1);
-  audioContext.currentTime = 10; // a stall past the queue: the next chunk starts just ahead of the clock
+  audioContext.currentTime = 10; // a stall past the queue: the next chunk starts ahead of the output latency
+  audioContext.baseLatency = 0.01;
+  audioContext.outputLatency = 0.04;
   library.audio_web_stream_push(voice, 0, 32, 3);
-  assert.equal(audioContext.sources[2].when * 48000, 480000 + lead);
+  assert.equal(audioContext.sources[2].when * 48000, 480000 + Math.round(0.1 * 48000));
+});
+
+test("a chunk that cannot be scheduled is reported to the decoder", async () => {
+  const { library, voice } = await unlockedStreamVoice();
+  library.$AudioWebRuntime.context.createBuffer = () => { throw new Error("out of memory"); };
+  assert.equal(library.audio_web_stream_push(voice, 0, 32, 3), 0);
+  assert.equal(library.audio_web_stream_push(0, 0, 32, 3), 0);
 });
 
 test("stopping a stream voice stops every scheduled chunk", async () => {

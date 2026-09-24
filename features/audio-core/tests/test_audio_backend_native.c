@@ -294,6 +294,39 @@ void test_pitch_reaches_a_pooled_voice(void) {
     audio_core_backend_clip_destroy(cue.clip);
 }
 
+void test_a_replay_on_a_pooled_voice_starts_at_its_own_pitch(void) {
+    decoded_cue_t cue = decode_cue(AUDIO_TEST_CUE_WAV_PATH);
+    TEST_ASSERT_TRUE(audio_core_backend_user_gesture());
+    const uint64_t plain = frames_until_silent(audio_core_backend_voice_play(cue.clip, 1, 1.0f, false));
+    const uint32_t slow = audio_core_backend_voice_play(cue.clip, 1, 1.0f, false);
+    audio_core_backend_voice_set_pitch(slow, 0.5f);
+    audio_core_backend_voice_stop(slow);
+    const uint32_t replay = audio_core_backend_voice_play(cue.clip, 1, 1.0f, false);
+    TEST_ASSERT_EQUAL_UINT32(slow, replay);
+    const uint64_t replayed = frames_until_silent(replay);
+    const uint64_t drift = replayed > plain ? replayed - plain : plain - replayed;
+    TEST_ASSERT_TRUE_MESSAGE(drift <= 512u, "the replay kept the previous play's pitch");
+    audio_core_backend_clip_destroy(cue.clip);
+}
+
+void test_destroying_a_clip_stops_its_voices(void) {
+    decoded_cue_t cue = decode_cue(AUDIO_TEST_CUE_WAV_PATH);
+    uint32_t size = 0;
+    uint8_t *bytes = read_fixture(AUDIO_TEST_CUE_MP3_PATH, &size);
+    TEST_ASSERT_NOT_NULL(bytes);
+    const uint32_t stream = audio_core_backend_stream_open(bytes, size);
+    free(bytes);
+    TEST_ASSERT_TRUE(audio_core_backend_user_gesture());
+    const uint32_t pooled = audio_core_backend_voice_play(cue.clip, 1, 1.0f, true);
+    const uint32_t streamed = audio_core_backend_voice_play(stream, 0, 1.0f, true);
+    audio_core_backend_clip_destroy(stream);
+    TEST_ASSERT_FALSE(audio_core_backend_voice_active(streamed));
+    TEST_ASSERT_TRUE(audio_core_backend_voice_active(pooled));
+    audio_core_backend_clip_destroy(cue.clip);
+    TEST_ASSERT_FALSE(audio_core_backend_voice_active(pooled));
+    TEST_ASSERT_EQUAL_UINT64(2048u, audio_miniaudio_test_render(2048u));
+}
+
 static uint32_t open_stream(const char *path) {
     uint32_t size = 0;
     uint8_t *bytes = read_fixture(path, &size);
@@ -382,6 +415,8 @@ int main(void) {
     RUN_TEST(test_shipped_cue_starts_where_its_master_starts);
     RUN_TEST(test_shipped_cue_attack_window_carries_the_transient);
     RUN_TEST(test_pitch_reaches_a_pooled_voice);
+    RUN_TEST(test_a_replay_on_a_pooled_voice_starts_at_its_own_pitch);
+    RUN_TEST(test_destroying_a_clip_stops_its_voices);
     RUN_TEST(test_stream_opens_ready_without_decoding_pcm);
     RUN_TEST(test_stream_voice_plays_through_the_engine_and_ends);
     RUN_TEST(test_stream_loop_repeats_the_master_length_exactly);

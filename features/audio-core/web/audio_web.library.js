@@ -7,8 +7,6 @@ mergeInto(LibraryManager.library, {
     HANDLE_INDEX_BITS: 8,
     HANDLE_INDEX_MASK: 255,
     HANDLE_GENERATION_MASK: 0x00ffffff,
-    // How far past the clock a stream's first chunk, or one after a stall, starts.
-    STREAM_LEAD_SECONDS: 0.02,
 
     context: null,
     masterNode: null,
@@ -425,29 +423,39 @@ mergeInto(LibraryManager.library, {
       return entry.slot.streamNextFrame > now ? entry.slot.streamNextFrame - now : 0;
     },
 
+    // How far past the clock a stream's first chunk, or one after a stall,
+    // starts: past what the output path already holds, or its head is cut.
+    _streamLeadSeconds: function(context) {
+      var latency = (Number(context.baseLatency) || 0) + (Number(context.outputLatency) || 0);
+      return Math.max(0.05, 2 * latency);
+    },
+
     // Chunks are scheduled back to back on whole context frames, so they
     // join sample-exact; a chunk that finds the clock past the queue (a stall
     // longer than the lookahead) starts a little ahead of it instead.
+    // Returns 0 when the chunk could not be scheduled.
     streamPush: function(handle, leftPointer, rightPointer, frames) {
       var entry = AudioWebRuntime._voice(handle);
-      if (!entry || !entry.slot.streamSources || frames <= 0) return;
+      if (!entry || !entry.slot.streamSources || frames <= 0) return 0;
       var slot = entry.slot;
       var context = AudioWebRuntime.context;
       var rate = context.sampleRate;
       var now = Math.ceil(context.currentTime * rate);
-      if (slot.streamNextFrame < now) slot.streamNextFrame = now + Math.round(AudioWebRuntime.STREAM_LEAD_SECONDS * rate);
+      if (slot.streamNextFrame < now) {
+        slot.streamNextFrame = now + Math.round(AudioWebRuntime._streamLeadSeconds(context) * rate);
+      }
       var source;
       try {
         var buffer = context.createBuffer(2, frames, rate);
-        buffer.copyToChannel(HEAPF32.subarray(leftPointer >> 2, (leftPointer >> 2) + frames), 0);
-        buffer.copyToChannel(HEAPF32.subarray(rightPointer >> 2, (rightPointer >> 2) + frames), 1);
+        buffer.getChannelData(0).set(HEAPF32.subarray(leftPointer >> 2, (leftPointer >> 2) + frames));
+        buffer.getChannelData(1).set(HEAPF32.subarray(rightPointer >> 2, (rightPointer >> 2) + frames));
         source = context.createBufferSource();
         source.buffer = buffer;
         source.connect(slot.gainNode);
         source.start(slot.streamNextFrame / rate);
       } catch (error) {
         if (source) try { source.disconnect(); } catch (ignored) {}
-        return;
+        return 0;
       }
       slot.streamNextFrame += frames;
       slot.streamSources.push(source);
@@ -460,6 +468,7 @@ mergeInto(LibraryManager.library, {
         try { source.disconnect(); } catch (ignored) {}
         if (current.slot.streamEnded && sources.length === 0) AudioWebRuntime._releaseVoice(current.index, false);
       };
+      return 1;
     },
 
     streamEnd: function(handle) {
@@ -647,7 +656,7 @@ mergeInto(LibraryManager.library, {
   audio_web_stream_buffered_frames: function(handle) { return AudioWebRuntime.streamBufferedFrames(handle); },
   audio_web_stream_push__deps: ["$AudioWebRuntime"],
   audio_web_stream_push: function(handle, left, right, frames) {
-    AudioWebRuntime.streamPush(handle, left, right, frames);
+    return AudioWebRuntime.streamPush(handle, left, right, frames);
   },
   audio_web_stream_end__deps: ["$AudioWebRuntime"],
   audio_web_stream_end: function(handle) { AudioWebRuntime.streamEnd(handle); },

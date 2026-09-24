@@ -32,7 +32,7 @@ extern int audio_web_is_unlocked(void);
 extern uint32_t audio_web_stream_open(int ready);
 extern uint32_t audio_web_sample_rate(void);
 extern int audio_web_stream_buffered_frames(uint32_t voice);
-extern void audio_web_stream_push(uint32_t voice, const float *left, const float *right, uint32_t frames);
+extern int audio_web_stream_push(uint32_t voice, const float *left, const float *right, uint32_t frames);
 extern void audio_web_stream_end(uint32_t voice);
 
 #define AUDIO_WEB_STREAM_CLIPS 64u
@@ -58,6 +58,7 @@ typedef struct audio_web_stream_clip_t {
    reset, so a wrap is sample-exact and the resampler never sees a seam. */
 typedef struct audio_web_stream_voice_t {
     uint32_t voice;
+    uint32_t clip;
     ma_decoder decoder;
     ma_data_converter converter;
     float source[AUDIO_WEB_STREAM_SOURCE_FRAMES * 2u];
@@ -121,6 +122,7 @@ static bool stream_voice_start(uint32_t voice, const audio_web_stream_clip_t *cl
     }
     (void)ma_data_source_set_looping((ma_data_source *)&stream->decoder, loop ? MA_TRUE : MA_FALSE);
     stream->voice = voice;
+    stream->clip = clip->clip;
     *slot = stream;
     return true;
 }
@@ -166,8 +168,10 @@ static void stream_feed(audio_web_stream_voice_t *stream, uint32_t rate) {
             s_left[i] = s_chunk[i * 2u];
             s_right[i] = s_chunk[i * 2u + 1u];
         }
-        if (frames > 0) audio_web_stream_push(stream->voice, s_left, s_right, frames);
-        if (frames < AUDIO_WEB_STREAM_CHUNK_FRAMES) {
+        /* A refused chunk would leave a hole in the schedule: the voice plays
+           out what it has and ends instead. */
+        const bool pushed = frames == 0 || audio_web_stream_push(stream->voice, s_left, s_right, frames) != 0;
+        if (!pushed || frames < AUDIO_WEB_STREAM_CHUNK_FRAMES) {
             stream->ended = true;
             audio_web_stream_end(stream->voice);
             return;
@@ -236,6 +240,14 @@ uint32_t audio_core_backend_decode_state(uint32_t clip) {
 
 void audio_core_backend_clip_destroy(uint32_t clip) {
     audio_web_stream_clip_t *entry = stream_clip(clip);
+    /* A stream voice decodes from its clip's encoded bytes, so none may
+       outlive the clip. */
+    for (uint32_t i = 0; entry != NULL && i < AUDIO_WEB_STREAM_VOICES; ++i) {
+        if (s_stream_voices[i] != NULL && s_stream_voices[i]->clip == clip) {
+            audio_web_voice_stop(s_stream_voices[i]->voice);
+            stream_voice_release(&s_stream_voices[i]);
+        }
+    }
     if (entry != NULL) stream_clip_release(entry);
     audio_web_clip_destroy(clip);
 }
