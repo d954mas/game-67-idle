@@ -36,6 +36,17 @@ mergeInto(LibraryManager.library, {
     RETRY_MS: 2000,
     PUMP_MS: 150,
     PUMP_STALE_MS: 200,
+    // A context that keeps failing is rebuilt after 0.5, 1, 2, 4 s; past five
+    // rebuilds a minute it waits for a gesture or the page coming back.
+    REBUILD_BACKOFF_MS: 500,
+    REBUILD_LIMIT: 5,
+    REBUILD_WINDOW_MS: 60000,
+    // A resumed stream fades in over this long, as a restart after a gap does.
+    RESUME_FADE_SECONDS: 0.008,
+    rebuildTimer: null,
+    rebuildTimes: [],
+    rebuildWanted: false,
+    rebuilds: 0,
     decodedPcmBytes: 0,
 
     _makeSlots: function(capacity) {
@@ -266,7 +277,7 @@ mergeInto(LibraryManager.library, {
       }
       context.onstatechange = function() { AudioWebRuntime._onStateChange(context); };
       context.onerror = function() {
-        if (AudioWebRuntime.context === context) AudioWebRuntime._rebuild();
+        if (AudioWebRuntime.context === context) AudioWebRuntime._scheduleRebuild();
       };
       return true;
     },
@@ -284,7 +295,7 @@ mergeInto(LibraryManager.library, {
     _onStateChange: function(context) {
       if (context !== AudioWebRuntime.context) return;
       if (context.state === "closed") {
-        AudioWebRuntime._rebuild();
+        AudioWebRuntime._scheduleRebuild();
         return;
       }
       if (context.state === "running") {
@@ -300,7 +311,39 @@ mergeInto(LibraryManager.library, {
       AudioWebRuntime._wake();
     },
 
+    _nowMs: function() {
+      return typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+    },
+
+    _scheduleRebuild: function() {
+      if (AudioWebRuntime.rebuildTimer !== null) return;
+      var now = AudioWebRuntime._nowMs();
+      AudioWebRuntime.rebuildTimes = AudioWebRuntime.rebuildTimes.filter(function(at) {
+        return now - at < AudioWebRuntime.REBUILD_WINDOW_MS;
+      });
+      var recent = AudioWebRuntime.rebuildTimes.length;
+      if (recent === 0) {
+        AudioWebRuntime._rebuild();
+        return;
+      }
+      if (recent >= AudioWebRuntime.REBUILD_LIMIT || typeof setTimeout !== "function") {
+        AudioWebRuntime.rebuildWanted = true;
+        return;
+      }
+      AudioWebRuntime.rebuildTimer = setTimeout(function() {
+        AudioWebRuntime.rebuildTimer = null;
+        AudioWebRuntime._rebuild();
+      }, AudioWebRuntime.REBUILD_BACKOFF_MS * Math.pow(2, recent - 1));
+    },
+
+    // A rebuild that failed or hit its limit is tried again when the player
+    // acts or the page comes back.
+    _retryRebuild: function() {
+      if (AudioWebRuntime.rebuildWanted && AudioWebRuntime.rebuildTimer === null) AudioWebRuntime._rebuild();
+    },
+
     _wake: function() {
+      AudioWebRuntime._retryRebuild();
       var context = AudioWebRuntime.context;
       if (!context || context.state === "running" || context.state === "closed" ||
           !AudioWebRuntime._wantsRunning()) return;
@@ -318,25 +361,26 @@ mergeInto(LibraryManager.library, {
       AudioWebRuntime.retryTimer = null;
     },
 
-    // A closed or failed context is replaced. Effect voices end with it; a
-    // stream voice keeps its unplayed chunks and its place in the track and is
-    // scheduled again on the new context.
+    // A closed or failed context is replaced. Effect voices and streams that
+    // already ended go with it; a stream voice keeps its unplayed chunks and
+    // its place in the track and is scheduled again on the new context. If no
+    // context can be made, the stream voices wait parked for the next try.
     _rebuild: function() {
       var old = AudioWebRuntime.context;
-      var carried = [];
+      AudioWebRuntime.rebuildTimes.push(AudioWebRuntime._nowMs());
       for (var i = 0; i < AudioWebRuntime.voices.length; ++i) {
         var slot = AudioWebRuntime.voices[i];
         if (!slot.occupied) continue;
-        if (!slot.streamSources) {
+        if (!slot.streamSources || slot.streamEnded) {
           AudioWebRuntime._releaseVoice(i, true);
           continue;
         }
-        var handle = AudioWebRuntime._packHandle(i, slot.generation);
-        var wasParked = !!slot.streamParked;
-        if (!wasParked) AudioWebRuntime.streamPark(handle);
-        carried.push({ slot: slot, handle: handle, resume: !wasParked,
-          gain: slot.gainNode ? slot.gainNode.gain.value : 0 });
-        if (slot.gainNode) try { slot.gainNode.disconnect(); } catch (ignored) {}
+        if (!slot.gainNode) continue;
+        if (!slot.streamParked) {
+          AudioWebRuntime.streamPark(AudioWebRuntime._packHandle(i, slot.generation));
+          slot.rebuildResume = true;
+        }
+        try { slot.gainNode.disconnect(); } catch (ignored) {}
         slot.gainNode = null;
       }
       var nodes = [AudioWebRuntime.musicNode, AudioWebRuntime.sfxNode, AudioWebRuntime.masterNode];
@@ -349,17 +393,26 @@ mergeInto(LibraryManager.library, {
         if (old.state !== "closed") try { old.close(); } catch (ignored) {}
       }
       AudioWebRuntime.context = null;
+      AudioWebRuntime.masterNode = null;
+      AudioWebRuntime.musicNode = null;
+      AudioWebRuntime.sfxNode = null;
       AudioWebRuntime.gestureAccepted = false;
       AudioWebRuntime.resumePending = false;
-      if (!AudioWebRuntime._createContext()) return;
-      AudioWebRuntime.rebuilds = (AudioWebRuntime.rebuilds || 0) + 1;
-      for (var c = 0; c < carried.length; ++c) {
-        var entry = carried[c];
+      if (!AudioWebRuntime._createContext()) {
+        AudioWebRuntime.rebuildWanted = true;
+        return;
+      }
+      AudioWebRuntime.rebuildWanted = false;
+      AudioWebRuntime.rebuilds += 1;
+      for (var v = 0; v < AudioWebRuntime.voices.length; ++v) {
+        var voice = AudioWebRuntime.voices[v];
+        if (!voice.occupied || !voice.streamSources || voice.gainNode) continue;
         var voiceGain = AudioWebRuntime.context.createGain();
-        voiceGain.gain.value = entry.gain;
-        voiceGain.connect(entry.slot.streamBus === 0 ? AudioWebRuntime.musicNode : AudioWebRuntime.sfxNode);
-        entry.slot.gainNode = voiceGain;
-        if (entry.resume) AudioWebRuntime.streamResume(entry.handle);
+        voiceGain.gain.value = voice.gainValue;
+        voiceGain.connect(voice.streamBus === 0 ? AudioWebRuntime.musicNode : AudioWebRuntime.sfxNode);
+        voice.gainNode = voiceGain;
+        if (voice.rebuildResume) AudioWebRuntime.streamResume(AudioWebRuntime._packHandle(v, voice.generation));
+        voice.rebuildResume = false;
       }
       AudioWebRuntime._applyMix();
       AudioWebRuntime._suspendForPolicy();
@@ -403,6 +456,7 @@ mergeInto(LibraryManager.library, {
       AudioWebRuntime.decodedPcmBytes = 0;
       AudioWebRuntime.hidden = typeof document !== "undefined" && !!document.hidden;
       AudioWebRuntime.gestureListener = function() {
+        AudioWebRuntime._retryRebuild();
         AudioWebRuntime._applyMix();
         AudioWebRuntime._requestResume(true);
       };
@@ -459,6 +513,10 @@ mergeInto(LibraryManager.library, {
       if (AudioWebRuntime.pumpTimer !== null) clearInterval(AudioWebRuntime.pumpTimer);
       AudioWebRuntime.pumpTimer = null;
       AudioWebRuntime._stopRetry();
+      if (AudioWebRuntime.rebuildTimer !== null) clearTimeout(AudioWebRuntime.rebuildTimer);
+      AudioWebRuntime.rebuildTimer = null;
+      AudioWebRuntime.rebuildWanted = false;
+      AudioWebRuntime.rebuildTimes = [];
       AudioWebRuntime.visibilityListener = null;
       AudioWebRuntime.gestureListener = null;
       AudioWebRuntime.wakeListener = null;
@@ -569,10 +627,14 @@ mergeInto(LibraryManager.library, {
       return entry && entry.slot.streamSources ? entry.slot : null;
     },
 
-    // Track frames scheduled past the clock; -1 for a voice that is gone.
+    // A context rebuild restarts the clock; the C side rebases its times on it.
+    contextEpoch: function() { return AudioWebRuntime.rebuilds; },
+
+    // Track frames scheduled past the clock; -1 for a voice that is gone or
+    // cannot be fed now (no context).
     streamBufferedFrames: function(handle) {
       var slot = AudioWebRuntime._streamSlot(handle);
-      if (!slot) return -1;
+      if (!slot || !AudioWebRuntime.context || !slot.gainNode) return -1;
       if (slot.streamOrigin === null) return 0;
       var ahead = slot.streamOrigin + slot.streamFrames / slot.streamRate - AudioWebRuntime.context.currentTime;
       return ahead > 0 ? Math.floor(ahead * slot.streamRate) : 0;
@@ -589,9 +651,13 @@ mergeInto(LibraryManager.library, {
       var source = AudioWebRuntime.context.createBufferSource();
       source.buffer = buffer;
       source.connect(slot.gainNode);
-      // Chrome renders the frame a duration ends on, so a chunk that ended on
-      // the next one's first frame would play it twice: end half a frame short.
-      var duration = (frames - skip) / slot.streamRate - 0.5 / AudioWebRuntime.context.sampleRate;
+      // The next chunk renders from the first context frame at or after this
+      // chunk's end, so this one ends half a frame before that frame: no
+      // frame twice and none dropped at any rate pair, and no float noise on
+      // a join that falls exactly on a frame.
+      var rate = AudioWebRuntime.context.sampleRate;
+      var end = (slot.streamOrigin + (start + frames) / slot.streamRate) * rate;
+      var duration = (Math.ceil(end - 1e-6) - 0.5) / rate - when;
       source.start(when, skip / slot.streamRate, duration);
       var chunk = { source: source, buffer: buffer, start: start, frames: frames };
       slot.streamSources.push(chunk);
@@ -615,8 +681,9 @@ mergeInto(LibraryManager.library, {
     // Returns 0 when the chunk could not be scheduled.
     streamPush: function(handle, pointer, frames, channels, rate) {
       var slot = AudioWebRuntime._streamSlot(handle);
-      if (!slot || slot.streamParked || frames <= 0 || channels <= 0 || rate <= 0) return 0;
       var context = AudioWebRuntime.context;
+      if (!slot || !context || !slot.gainNode || slot.streamParked || frames <= 0 || channels <= 0 ||
+          rate <= 0) return 0;
       if (slot.streamRate !== rate) {
         if (slot.streamFrames !== 0) return 0;
         slot.streamRate = rate;
@@ -653,7 +720,7 @@ mergeInto(LibraryManager.library, {
       var slot = AudioWebRuntime._streamSlot(handle);
       if (!slot || slot.streamParked) return;
       var played = 0;
-      if (slot.streamOrigin !== null) {
+      if (slot.streamOrigin !== null && AudioWebRuntime.context) {
         played = Math.round((AudioWebRuntime.context.currentTime - slot.streamOrigin) * slot.streamRate);
         played = Math.max(0, Math.min(slot.streamFrames, played));
       }
@@ -669,13 +736,29 @@ mergeInto(LibraryManager.library, {
       slot.streamParked = { played: played, chunks: kept };
     },
 
+    _fadeIn: function(buffer, from, seconds) {
+      var frames = Math.min(buffer.length - from, Math.round(seconds * buffer.sampleRate));
+      for (var c = 0; c < buffer.numberOfChannels; ++c) {
+        var data = buffer.getChannelData(c);
+        for (var i = 0; i < frames; ++i) data[from + i] *= i / frames;
+      }
+    },
+
     streamResume: function(handle) {
       var slot = AudioWebRuntime._streamSlot(handle);
-      if (!slot || !slot.streamParked) return;
-      var parked = slot.streamParked;
       var context = AudioWebRuntime.context;
+      if (!slot || !slot.streamParked || !context || !slot.gainNode) {
+        if (slot && slot.streamParked) slot.rebuildResume = true;
+        return;
+      }
+      var parked = slot.streamParked;
       slot.streamParked = null;
       if (slot.streamOrigin === null) return;
+      if (parked.chunks.length > 0) {
+        var first = parked.chunks[0];
+        AudioWebRuntime._fadeIn(first.buffer, Math.max(0, parked.played - first.start),
+          AudioWebRuntime.RESUME_FADE_SECONDS);
+      }
       slot.streamOrigin = context.currentTime + AudioWebRuntime._streamLeadSeconds(context) -
         parked.played / slot.streamRate;
       for (var i = 0; i < parked.chunks.length; ++i) {
@@ -762,6 +845,8 @@ mergeInto(LibraryManager.library, {
       slot.active = true;
       slot.source = null;
       slot.gainNode = voiceGain;
+      slot.gainValue = voiceGain.gain.value;
+      slot.rebuildResume = false;
       slot.streamBus = bus;
       slot.streamSources = [];
       slot.streamOrigin = null;
@@ -785,6 +870,7 @@ mergeInto(LibraryManager.library, {
 
     voiceSetGain: function(handle, gain) {
       var entry = AudioWebRuntime._voice(handle);
+      if (entry) entry.slot.gainValue = AudioWebRuntime._finiteGain(gain);
       if (!entry || !entry.slot.gainNode) return;
       try { entry.slot.gainNode.gain.value = AudioWebRuntime._finiteGain(gain); } catch (ignored) {}
     },
@@ -825,6 +911,7 @@ mergeInto(LibraryManager.library, {
     },
 
     userGesture: function() {
+      AudioWebRuntime._retryRebuild();
       AudioWebRuntime._applyMix();
       return AudioWebRuntime._requestResume(true);
     }
@@ -876,6 +963,8 @@ mergeInto(LibraryManager.library, {
   audio_web_stream_end: function(handle) { AudioWebRuntime.streamEnd(handle); },
   audio_web_stream_park__deps: ["$AudioWebRuntime"],
   audio_web_stream_park: function(handle) { AudioWebRuntime.streamPark(handle); },
+  audio_web_context_epoch__deps: ["$AudioWebRuntime"],
+  audio_web_context_epoch: function() { return AudioWebRuntime.contextEpoch(); },
   audio_web_stream_resume__deps: ["$AudioWebRuntime"],
   audio_web_stream_resume: function(handle) { AudioWebRuntime.streamResume(handle); },
   audio_web_is_unlocked__deps: ["$AudioWebRuntime"],

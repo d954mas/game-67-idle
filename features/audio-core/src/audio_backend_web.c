@@ -38,6 +38,7 @@ extern int audio_web_stream_push(uint32_t voice, const float *planes, uint32_t f
 extern void audio_web_stream_end(uint32_t voice);
 extern void audio_web_stream_park(uint32_t voice);
 extern void audio_web_stream_resume(uint32_t voice);
+extern uint32_t audio_web_context_epoch(void);
 
 #define AUDIO_WEB_STREAM_CLIPS 64u
 #define AUDIO_WEB_STREAM_VOICES 32u
@@ -52,12 +53,11 @@ extern void audio_web_stream_resume(uint32_t voice);
 #define AUDIO_WEB_STREAM_AHEAD_SECONDS 3.25
 #define AUDIO_WEB_STREAM_AHEAD_MAX_SECONDS 4.0
 #define AUDIO_WEB_STREAM_AHEAD_GROWTH 1.5
-/* Chunks decoded per voice per update once filled: one keeps pace, the second
-   catches up after a slow frame. */
-#define AUDIO_WEB_STREAM_CHUNKS_PER_UPDATE 2u
-/* After a start or a gap an audible voice fills up to its lookahead in one
-   go, within this much main-thread time per update for all voices together,
-   so a load right after it cannot starve it. */
+/* After a start, a resume or a gap an audible voice fills up to its lookahead
+   within this much main-thread time per update for all voices together, one
+   chunk per voice in turn, so a load right after it cannot starve it. Once
+   full, a voice is fed what played since its last feed (see
+   audio_core_stream_pace_frames), however far apart the updates come. */
 #define AUDIO_WEB_STREAM_FILL_BUDGET_MS 4.0
 /* The chunk after a gap fades in over this long, so the restart does not
    click; the cut at the gap's start happened before it could be known. */
@@ -82,11 +82,15 @@ typedef struct audio_web_stream_voice_t {
     bool parked;
     /* Something was scheduled: an empty queue after that is a gap. */
     bool started;
-    /* Fill to the lookahead within the time budget instead of the chunk cap. */
+    /* Fill to the lookahead within the time budget instead of at pace. */
     bool filling;
     double ahead_seconds;
     /* Context time the gain went to zero; negative while audible. */
     double muted_since;
+    /* Context time of the last feed; negative before the first. */
+    double last_feed;
+    /* The context these times belong to: a rebuilt context restarts its clock. */
+    uint32_t epoch;
 } audio_web_stream_voice_t;
 
 static audio_web_stream_clip_t s_stream_clips[AUDIO_WEB_STREAM_CLIPS];
@@ -138,6 +142,8 @@ static bool stream_voice_start(uint32_t voice, const audio_web_stream_clip_t *cl
     stream->muted_since = gain > 0.0f ? -1.0 : audio_web_now();
     stream->ahead_seconds = AUDIO_WEB_STREAM_AHEAD_SECONDS;
     stream->filling = true;
+    stream->last_feed = -1.0;
+    stream->epoch = audio_web_context_epoch();
     *slot = stream;
     return true;
 }
@@ -186,38 +192,49 @@ static bool stream_push_chunk(audio_web_stream_voice_t *stream, bool fade_in) {
     return pushed && !last;
 }
 
-static void stream_feed(audio_web_stream_voice_t *stream, double began) {
-    const double rate = (double)stream->decoder.outputSampleRate;
-    for (uint32_t chunk = 0;; ++chunk) {
-        const int ahead = audio_web_stream_buffered_frames(stream->voice);
-        if (ahead < 0) return;
-        const bool gap = stream->started && ahead == 0;
-        if (gap) {
+/* Whether the voice is below its lookahead; notes a gap on the way. `gap` is
+   set when the queue ran dry, so the next chunk fades in. */
+static bool stream_needs(audio_web_stream_voice_t *stream, bool *gap) {
+    const int ahead = audio_web_stream_buffered_frames(stream->voice);
+    *gap = false;
+    if (ahead < 0) return false;
+    if (stream->started && ahead == 0) {
+        *gap = true;
+        /* One gap grows the lookahead once, however many updates it takes to
+           fill again. */
+        if (!stream->filling) {
             stream->ahead_seconds *= AUDIO_WEB_STREAM_AHEAD_GROWTH;
             if (stream->ahead_seconds > AUDIO_WEB_STREAM_AHEAD_MAX_SECONDS) {
                 stream->ahead_seconds = AUDIO_WEB_STREAM_AHEAD_MAX_SECONDS;
             }
             stream->filling = true;
         }
-        if (ahead >= (int)(stream->ahead_seconds * rate)) {
-            stream->filling = false;
-            return;
-        }
-        /* A silent voice is about to park: it only keeps pace. */
-        const bool fill = stream->filling && stream->muted_since < 0.0;
-        if (fill ? emscripten_get_now() - began >= AUDIO_WEB_STREAM_FILL_BUDGET_MS
-                 : chunk >= AUDIO_WEB_STREAM_CHUNKS_PER_UPDATE) {
-            return;
-        }
-        /* A refused chunk would leave a hole in the schedule: the voice plays
-           out what it has and ends instead. */
-        if (!stream_push_chunk(stream, gap)) {
-            stream->ended = true;
-            audio_web_stream_end(stream->voice);
-            return;
-        }
-        stream->started = true;
     }
+    if (ahead >= (int)(stream->ahead_seconds * (double)stream->decoder.outputSampleRate)) {
+        stream->filling = false;
+        return false;
+    }
+    return true;
+}
+
+/* One chunk; false once the voice can take no more this update. A refused
+   chunk would leave a hole in the schedule: the voice plays out what it has
+   and ends instead. */
+static bool stream_feed_one(audio_web_stream_voice_t *stream) {
+    bool gap = false;
+    if (!stream_needs(stream, &gap)) return false;
+    if (!stream_push_chunk(stream, gap)) {
+        stream->ended = true;
+        audio_web_stream_end(stream->voice);
+        return false;
+    }
+    stream->started = true;
+    return true;
+}
+
+static bool stream_fills(const audio_web_stream_voice_t *stream) {
+    /* A silent voice is about to park: it only keeps pace. */
+    return stream->filling && stream->muted_since < 0.0 && !stream->ended && !stream->parked;
 }
 
 /* A voice held silent for AUDIO_CORE_STREAM_PARK_SECONDS stops decoding; its
@@ -243,6 +260,8 @@ void audio_core_backend_shutdown(void) {
 
 static void streams_update(void) {
     const double began = emscripten_get_now();
+    const double now = audio_web_now();
+    const uint32_t epoch = audio_web_context_epoch();
     for (uint32_t i = 0; i < AUDIO_WEB_STREAM_VOICES; ++i) {
         audio_web_stream_voice_t *stream = s_stream_voices[i];
         if (stream == NULL) continue;
@@ -250,8 +269,30 @@ static void streams_update(void) {
             stream_voice_release(&s_stream_voices[i]);
             continue;
         }
+        if (stream->epoch != epoch) {
+            stream->epoch = epoch;
+            if (stream->muted_since >= 0.0) stream->muted_since = now;
+            stream->last_feed = -1.0;
+            stream->filling = true;
+        }
         stream_park_check(stream);
-        if (!stream->ended && !stream->parked) stream_feed(stream, began);
+        if (stream->ended || stream->parked) continue;
+        /* Keep pace: what played since the last feed, with margin. A filling
+           voice gets its first chunk here and the rest in turn below. */
+        const double elapsed = stream->last_feed < 0.0 || now < stream->last_feed ? 0.0 : now - stream->last_feed;
+        const uint32_t allowed = audio_core_stream_pace_frames(elapsed, stream->decoder.outputSampleRate,
+            AUDIO_WEB_STREAM_CHUNK_FRAMES);
+        stream->last_feed = now;
+        for (uint32_t fed = 0; fed < allowed; fed += AUDIO_WEB_STREAM_CHUNK_FRAMES) {
+            if (!stream_feed_one(stream) || stream_fills(stream)) break;
+        }
+    }
+    for (bool more = true; more && emscripten_get_now() - began < AUDIO_WEB_STREAM_FILL_BUDGET_MS;) {
+        more = false;
+        for (uint32_t i = 0; i < AUDIO_WEB_STREAM_VOICES; ++i) {
+            audio_web_stream_voice_t *stream = s_stream_voices[i];
+            if (stream != NULL && stream_fills(stream) && stream_feed_one(stream)) more = true;
+        }
     }
 }
 

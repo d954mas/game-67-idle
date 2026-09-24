@@ -397,6 +397,29 @@ void test_a_stream_held_silent_parks_and_resumes_where_it_paused(void) {
     audio_core_backend_clip_destroy(clip);
 }
 
+/* Fed only at pace from a full queue, a stream must never run dry, from a
+   60 fps loop down to the web runtime's 150 ms timer and a 2 fps crawl. */
+void test_stream_pace_supplies_at_least_real_time(void) {
+    const uint32_t rate = 32000u;
+    const uint32_t chunk = 2048u;
+    const double target = 3.25 * (double)rate;
+    const double intervals[] = {1.0 / 60.0, 0.15, 0.5};
+    for (size_t k = 0; k < sizeof intervals / sizeof intervals[0]; ++k) {
+        double queue = target;
+        double lowest = queue;
+        for (double t = 0.0; t < 60.0; t += intervals[k]) {
+            queue -= intervals[k] * (double)rate;
+            if (queue < lowest) lowest = queue;
+            const uint32_t allowed = audio_core_stream_pace_frames(intervals[k], rate, chunk);
+            for (uint32_t fed = 0; fed < allowed && queue < target; fed += chunk) queue += (double)chunk;
+        }
+        TEST_ASSERT_TRUE_MESSAGE(lowest > target - (intervals[k] * (double)rate + (double)chunk),
+            "the queue drains at this update interval");
+    }
+    TEST_ASSERT_TRUE(audio_core_stream_pace_frames(0.0, rate, chunk) >= chunk);
+    TEST_ASSERT_TRUE(audio_core_stream_pace_frames(-1.0, rate, chunk) >= chunk);
+}
+
 /* A loop is seamless when each pass repeats the first sample for sample and
    is as long as the master: the encoder's delay and padding are both gone. */
 void test_stream_loop_repeats_the_master_length_exactly(void) {
@@ -448,6 +471,7 @@ int main(void) {
     RUN_TEST(test_stream_opens_ready_without_decoding_pcm);
     RUN_TEST(test_stream_voice_plays_through_the_engine_and_ends);
     RUN_TEST(test_stream_loop_repeats_the_master_length_exactly);
+    RUN_TEST(test_stream_pace_supplies_at_least_real_time);
     RUN_TEST(test_a_stream_held_silent_parks_and_resumes_where_it_paused);
     return UNITY_END();
 }

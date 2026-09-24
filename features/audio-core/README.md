@@ -45,11 +45,15 @@ where it left off rather than where it would have been.
   count, and the browser resamples it. Chunks play back to back on the
   track's own timeline (origin + frames / track rate), so rounding never adds
   up, and each carries one guard frame, the next chunk's first, so the
-  browser's interpolation across a join reads the real next sample. A stream
-  starts, or restarts after a gap, twice the context's output latency ahead
-  of the clock and at least 50 ms ahead, and a restart fades in over 8 ms.
-  A parked voice keeps its unplayed chunks and schedules them again when it
-  resumes.
+  browser's interpolation across a join reads the real next sample. A chunk
+  ends half a context frame before the first frame the next chunk renders,
+  so no frame plays twice or drops, whatever the two rates. Checked in an
+  `OfflineAudioContext` in Chrome against one whole buffer, contexts at
+  44.1, 48 and 96 kHz with tracks at 32, 44.1 and 48 kHz: at most 3e-8
+  apart. A stream starts, or restarts after a gap, twice the context's
+  output latency ahead of the clock and at least 50 ms ahead, and a restart
+  or a resume fades in over 8 ms. A parked voice keeps its unplayed chunks
+  and schedules them again when it resumes.
 
 Web robustness, because a main-thread decoder only runs when the main thread
 does:
@@ -59,19 +63,27 @@ does:
   frames on either side of it. Stop and gain act on the voice's gain
   node, so the lookahead adds no control latency. At 32 kHz mono that is
   416 KB of PCM per playing voice, 512 KB at the cap. Effects are unaffected.
-- Fill: once full, a voice decodes at most two chunks per update. After a
-  start or a gap, an audible voice fills to its lookahead within 4 ms of
-  main-thread time per update for all voices together: in -O3 wasm the
-  first update schedules 3.25 s in 2.7 ms, so a load right after the music
-  starts does not starve it.
+- Fill: once full, a voice is refilled to its lookahead each update, but
+  fed at most what played since its last feed, at least 0.5 s' worth, half
+  again as a margin, plus a chunk. Sized by time, that keeps up at 60 fps,
+  at the 150 ms timer and at 1 update a second alike. After a start, a
+  resume or a gap, audible voices fill to their lookahead in turn, a chunk
+  each, within 4 ms of main-thread time per update for all of them: in -O3
+  wasm the first update schedules 3.25 s in 2.6 ms, so a load right after
+  the music starts does not starve it. One gap grows the lookahead once,
+  however many updates the fill takes.
 - A timer every 150 ms feeds the streams when the game loop has not called
   for 200 ms and the context runs, so music continues while frames stop but
   the page stays visible (an offscreen or throttled frame).
 - Context recovery: `onstatechange` resumes a context the browser or OS
   suspended or interrupted, unless the game is hidden, paused, disabled or
   never unlocked, and retries every 2 s and on `focus` and `pageshow`. A
-  context that closes or fails is replaced: effect voices end, and stream
-  voices are scheduled again on the new context from where they were.
+  context that closes or fails is replaced: effect voices and streams that
+  already ended go with it, and stream voices are scheduled again on the
+  new context from where they were. Repeated failures back off (0.5, 1, 2,
+  4 s); past five rebuilds a minute, or when no context can be made, the
+  next gesture or return to the page tries again, and until then stream
+  voices wait parked.
 
 Why this web path, measured on a game's music tracks (32 kHz mono MP3,
 48 kHz context):

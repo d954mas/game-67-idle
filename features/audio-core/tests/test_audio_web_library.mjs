@@ -164,6 +164,8 @@ async function loadLibrary() {
     ArrayBuffer,
     setInterval(fn, ms) { timers.push({ fn, ms, live: true }); return timers.length; },
     clearInterval(id) { if (timers[id - 1]) timers[id - 1].live = false; },
+    setTimeout(fn, ms) { timers.push({ fn, ms, live: true, once: true }); return timers.length; },
+    clearTimeout(id) { if (timers[id - 1]) timers[id - 1].live = false; },
     performance: { now: () => context.nowMs },
     _audio_core_web_pump() { pumped.count += 1; },
     AudioContext: FakeAudioContext,
@@ -504,6 +506,16 @@ test("a touch whose resume stays pending is asked again by the next activating g
   assert.equal(library.audio_web_is_unlocked(), 1);
 });
 
+function within(actual, low, high, message) {
+  assert.ok(actual > low && actual < high, `${message}: ${actual} not in (${low}, ${high})`);
+}
+
+// A chunk of `frames` source frames plays about that long: at most a context
+// frame either way, the one its end is rounded to.
+function playsAbout(duration, frames, message) {
+  within(duration, frames / 32000 - 1 / 48000, frames / 32000 + 1 / 48000, message);
+}
+
 function near(actual, expected) {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} is not ${expected}`);
 }
@@ -551,7 +563,7 @@ test("stream chunks play at the track's rate back to back on its own timeline", 
   assert.equal(first.buffer.length, 4, "a guard frame past the chunk");
   assert.deepEqual(Array.from(first.buffer.channels[0]), [0, 0.01, 0.02, 0.03].map(Math.fround));
   near(first.when, 1.55);
-  near(first.duration, 3 / 32000 - 0.5 / 48000);
+  playsAbout(first.duration, 3, "a chunk plays its frames and not the guard");
   near(second.when, 1.55 + 3 / 32000);
   assert.equal(library.audio_web_stream_buffered_frames(voice), Math.floor((0.05 + 6 / 32000) * 32000));
 
@@ -600,7 +612,7 @@ test("a parked stream keeps its unplayed chunks and resumes on the sample it sto
   assert.equal(resumedSecond.buffer, scheduled[1].buffer);
   near(resumedSecond.when, 5.05);
   near(resumedSecond.offset, 1600 / 32000);
-  near(resumedSecond.duration, 1600 / 32000 - 0.5 / 48000);
+  playsAbout(resumedSecond.duration, 1600, "the resumed chunk plays its unplayed half");
   assert.equal(resumedThird.buffer, scheduled[2].buffer);
   near(resumedThird.when, 5.05 + 1600 / 32000);
   assert.equal(library.audio_web_stream_push(voice, 0, 3200, 1, 32000), 1);
@@ -710,4 +722,81 @@ test("streams are topped up by a timer when the game loop stops calling", async 
   assert.equal(pumped.count, 1, "a suspended context needs nothing");
   library.audio_web_shutdown();
   assert.equal(live(timers, 150).length, 0);
+});
+
+test("a parked stream fades in where it resumes", async () => {
+  const { context, library, voice } = await unlockedStreamVoice();
+  const audioContext = library.$AudioWebRuntime.context;
+  context.HEAPF32.fill(0.5, 0, 3201);
+  library.audio_web_stream_push(voice, 0, 3200, 1, 32000);
+  audioContext.currentTime = 0.1; // 0.05 s into the chunk: frame 1600
+  library.audio_web_stream_park(voice);
+  library.audio_web_stream_resume(voice);
+  const data = audioContext.sources.at(-1).buffer.channels[0];
+  assert.equal(data[1600], 0);
+  assert.ok(data[1700] > 0 && data[1700] < 0.5);
+  assert.equal(data[2400], 0.5);
+});
+
+test("a rebuild that cannot make a context leaves streams parked and safe, and a gesture retries", async () => {
+  const { context, document, library } = await unlockedStreamVoice();
+  const runtime = library.$AudioWebRuntime;
+  mono(context, 3200);
+  const voice = library.audio_web_voice_play(library.audio_web_stream_open(1), 0, 0.5, 1);
+  library.audio_web_stream_push(voice, 0, 3200, 1, 32000);
+  const Working = context.window.AudioContext;
+  context.window.AudioContext = class { constructor() { throw new Error("no device"); } };
+  runtime.context.state = "closed";
+  runtime.context.onstatechange();
+  assert.equal(runtime.context, null);
+  assert.equal(library.audio_web_stream_buffered_frames(voice), -1, "no context: nothing to feed");
+  assert.equal(library.audio_web_stream_push(voice, 0, 3200, 1, 32000), 0);
+  library.audio_web_stream_park(voice);
+  library.audio_web_stream_resume(voice);
+  library.audio_web_voice_set_gain(voice, 0.25);
+  assert.equal(library.audio_web_now(), 0);
+  assert.equal(library.audio_web_voice_active(voice), 1);
+
+  context.window.AudioContext = Working;
+  document.dispatch("pointerup");
+  assert.ok(runtime.context, "the gesture made a context");
+  assert.equal(runtime.context.gains.at(-1).gain.value, 0.25, "the voice keeps the gain it was given meanwhile");
+  assert.equal(runtime.context.sources.length, 1, "the unplayed chunk is scheduled again");
+  assert.equal(library.audio_web_context_epoch(), runtime.rebuilds);
+});
+
+test("a context that keeps failing is rebuilt with growing delays, then waits for the player", async () => {
+  const { document, library, timers } = await loadLibrary();
+  library.audio_web_init();
+  document.dispatch("pointerdown");
+  await flushPromises();
+  const runtime = library.$AudioWebRuntime;
+  const delays = [];
+  runtime.context.onerror(); // the first rebuild is immediate
+  for (let i = 0; i < 6; ++i) {
+    runtime.context.onerror();
+    const timer = timers.find((entry) => entry.once && entry.live);
+    if (!timer) break;
+    delays.push(timer.ms);
+    timer.live = false;
+    timer.fn();
+  }
+  assert.ok(delays.length >= 2 && delays.length < 6, `rebuilds stop: ${delays}`);
+  assert.ok(delays.every((ms, i) => i === 0 || ms > delays[i - 1]), `delays grow: ${delays}`);
+  const rebuilt = runtime.rebuilds;
+  runtime.context.onerror();
+  assert.equal(runtime.rebuilds, rebuilt, "past the limit nothing rebuilds by itself");
+  document.dispatch("pointerup");
+  assert.equal(runtime.rebuilds, rebuilt + 1, "the player's gesture does");
+});
+
+test("a stream that already ended is released by a rebuild, not kept", async () => {
+  const { context, library, voice } = await unlockedStreamVoice(0);
+  mono(context, 2);
+  library.audio_web_stream_push(voice, 0, 2, 1, 32000);
+  library.audio_web_stream_end(voice);
+  const runtime = library.$AudioWebRuntime;
+  runtime.context.state = "closed";
+  runtime.context.onstatechange();
+  assert.equal(library.audio_web_voice_active(voice), 0);
 });
