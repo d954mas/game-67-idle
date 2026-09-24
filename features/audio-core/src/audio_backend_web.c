@@ -44,11 +44,12 @@ extern void audio_web_stream_resume(uint32_t voice);
 /* Track frames per scheduled buffer: 64 ms at 32 kHz, so the decode is spread
    thin over frames. */
 #define AUDIO_WEB_STREAM_CHUNK_FRAMES 2048u
-/* A voice keeps this much scheduled ahead of the clock, so the main thread
-   may stall this long before the music gaps. Stop and gain act on the voice's
-   gain node, so a longer lookahead adds no control latency. Each gap grows
-   the voice's lookahead by GROWTH, up to MAX. */
-#define AUDIO_WEB_STREAM_AHEAD_SECONDS 3.0
+/* A voice keeps this much scheduled ahead of the clock: a 3 s main-thread
+   stall plays through, with a quarter second for the frame before it and the
+   one after it. Stop and gain act on the voice's gain node, so a longer
+   lookahead adds no control latency. Each gap grows the voice's lookahead by
+   GROWTH, up to MAX. */
+#define AUDIO_WEB_STREAM_AHEAD_SECONDS 3.25
 #define AUDIO_WEB_STREAM_AHEAD_MAX_SECONDS 4.0
 #define AUDIO_WEB_STREAM_AHEAD_GROWTH 1.5
 /* Chunks decoded per voice per update once filled: one keeps pace, the second
