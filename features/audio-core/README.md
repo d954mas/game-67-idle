@@ -29,32 +29,43 @@ same track at 48 kHz stereo). The clip shares the handle pool and every clip
 and voice call. A looping voice wraps sample-exact: the loop runs in the decoder
 at the source rate, ahead of the resampler, and the decoder trims the encoder
 delay and padding that the MP3's Xing/LAME header declares. Pitch does not apply
-to a streamed voice.
+to a streamed voice. A streamed voice held at gain 0 for 2 s parks: it stops
+decoding but still counts as playing, and when its gain rises it goes on from
+the sample it paused on. A muted bed therefore costs nothing, and it comes back
+where it left off rather than where it would have been.
 
 - Native: each voice is an `ma_sound` over its own `ma_decoder`, so miniaudio
   decodes on the audio thread. The main thread only opens the decoder when the
   voice starts.
-- Web: miniaudio's MP3 decoder and converter, built into the wasm with no
-  device, threads or WAV support, decode on the main thread in 8192-frame
-  chunks. A web stream is MP3 only; a WAV opened with `audio_clip_stream`
-  fails there, while `audio_clip_load` still takes WAV through the browser. The context-rate PCM
-  goes into `AudioBufferSourceNode`s, which play back to back on whole context
-  frames about 1 s ahead of the clock. A stream starts, or restarts after a
-  stall, twice the context's output latency ahead of the clock and at least
-  50 ms ahead. Each update decodes at most two chunks
-  per voice. If the main thread stalls longer than that 1 s lookahead, the
-  track gaps and then resumes; while a tab is hidden the context is suspended,
-  so the lookahead holds.
+- Web: miniaudio's MP3 decoder, built into the wasm with no device, threads
+  or WAV support, decodes on the main thread in 2048-frame chunks (64 ms at
+  32 kHz). A web stream is MP3 only; a WAV opened with `audio_clip_stream`
+  fails there, while `audio_clip_load` still takes WAV through the browser.
+  Each chunk becomes an `AudioBuffer` at the track's own rate and channel
+  count, and the browser resamples it. Chunks play back to back on the
+  track's own timeline (origin + frames / track rate), so rounding never adds
+  up, and each carries one guard frame, the next chunk's first, so the
+  browser's interpolation across a join reads the real next sample. A voice
+  stays about 1 s ahead of the clock, decoding at most two chunks per update.
+  A stream starts, or restarts after a stall, twice the context's output
+  latency ahead of the clock and at least 50 ms ahead. If the main thread
+  stalls longer than the 1 s lookahead, the track gaps and then resumes;
+  while a tab is hidden the context is suspended, so the lookahead holds. A
+  parked voice keeps its unplayed chunks and schedules them again when it
+  resumes.
 
 Why this web path, measured on a game's music tracks (32 kHz mono MP3,
 48 kHz context):
 
 - `decodeAudioData` of the whole track, the path before streaming, decodes off
   the main thread but keeps 16.4 MB of PCM per 90 s track.
-- The chosen path decodes and converts at 0.75 ms per second of audio in -O3
-  wasm, about 0.01 ms per 60 Hz frame for each playing stream. It keeps about
-  0.4 MB of PCM per voice. Chrome joins the chunks and the loop seam
-  sample-exact, and the decoder is the one the native path uses.
+- The chosen path, in -O3 wasm with three beds of which one is audible and
+  two parked, costs 0.009 ms per 60 Hz frame on average and 0.32 ms at most;
+  the stream start peaks at 0.63 ms. It keeps about 0.13 MB of PCM per
+  playing voice (1 s at 32 kHz mono). Played back in Chrome, it matches
+  Chrome's own resampling of the whole track as one buffer to 1.7e-5 across
+  every join and the loop seam, with no drift over a minute. The decoder is
+  the one the native path uses.
 - `MediaElementAudioSourceNode` over a Blob URL keeps no PCM, but an
   `<audio>` loop is not sample-accurate: it gaps or clicks at the seam, and the
   MP3 delay handling depends on the browser.

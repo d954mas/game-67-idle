@@ -210,10 +210,11 @@ mergeInto(LibraryManager.library, {
       slot.gainNode = null;
       slot.streamSources = null;
       slot.generation = AudioWebRuntime._nextGeneration(slot.generation);
+      slot.streamParked = null;
       for (var i = 0; i < streamSources.length; ++i) {
-        streamSources[i].onended = null;
-        try { streamSources[i].stop(); } catch (ignored) {}
-        try { streamSources[i].disconnect(); } catch (ignored) {}
+        streamSources[i].source.onended = null;
+        try { streamSources[i].source.stop(); } catch (ignored) {}
+        try { streamSources[i].source.disconnect(); } catch (ignored) {}
       }
       if (source) {
         source.onended = null;
@@ -410,17 +411,22 @@ mergeInto(LibraryManager.library, {
       return 0;
     },
 
-    sampleRate: function() {
-      return AudioWebRuntime.context ? Math.round(AudioWebRuntime.context.sampleRate) : 0;
+    now: function() {
+      return AudioWebRuntime.context ? AudioWebRuntime.context.currentTime : 0;
     },
 
-    // Frames scheduled past the clock; -1 for a voice that is gone.
-    streamBufferedFrames: function(handle) {
+    _streamSlot: function(handle) {
       var entry = AudioWebRuntime._voice(handle);
-      if (!entry || !entry.slot.streamSources) return -1;
-      var context = AudioWebRuntime.context;
-      var now = Math.floor(context.currentTime * context.sampleRate);
-      return entry.slot.streamNextFrame > now ? entry.slot.streamNextFrame - now : 0;
+      return entry && entry.slot.streamSources ? entry.slot : null;
+    },
+
+    // Track frames scheduled past the clock; -1 for a voice that is gone.
+    streamBufferedFrames: function(handle) {
+      var slot = AudioWebRuntime._streamSlot(handle);
+      if (!slot) return -1;
+      if (slot.streamOrigin === null) return 0;
+      var ahead = slot.streamOrigin + slot.streamFrames / slot.streamRate - AudioWebRuntime.context.currentTime;
+      return ahead > 0 ? Math.floor(ahead * slot.streamRate) : 0;
     },
 
     // How far past the clock a stream's first chunk, or one after a stall,
@@ -430,44 +436,58 @@ mergeInto(LibraryManager.library, {
       return Math.max(0.05, 2 * latency);
     },
 
-    // Chunks are scheduled back to back on whole context frames, so they
-    // join sample-exact; a chunk that finds the clock past the queue (a stall
-    // longer than the lookahead) starts a little ahead of it instead.
-    // Returns 0 when the chunk could not be scheduled.
-    streamPush: function(handle, leftPointer, rightPointer, frames) {
-      var entry = AudioWebRuntime._voice(handle);
-      if (!entry || !entry.slot.streamSources || frames <= 0) return 0;
-      var slot = entry.slot;
-      var context = AudioWebRuntime.context;
-      var rate = context.sampleRate;
-      var now = Math.ceil(context.currentTime * rate);
-      if (slot.streamNextFrame < now) {
-        slot.streamNextFrame = now + Math.round(AudioWebRuntime._streamLeadSeconds(context) * rate);
-      }
-      var source;
-      try {
-        var buffer = context.createBuffer(2, frames, rate);
-        buffer.getChannelData(0).set(HEAPF32.subarray(leftPointer >> 2, (leftPointer >> 2) + frames));
-        buffer.getChannelData(1).set(HEAPF32.subarray(rightPointer >> 2, (rightPointer >> 2) + frames));
-        source = context.createBufferSource();
-        source.buffer = buffer;
-        source.connect(slot.gainNode);
-        source.start(slot.streamNextFrame / rate);
-      } catch (error) {
-        if (source) try { source.disconnect(); } catch (ignored) {}
-        return 0;
-      }
-      slot.streamNextFrame += frames;
-      slot.streamSources.push(source);
+    _streamSchedule: function(handle, slot, buffer, start, skip, frames, when) {
+      var source = AudioWebRuntime.context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(slot.gainNode);
+      // Chrome renders the frame a duration ends on, so a chunk that ended on
+      // the next one's first frame would play it twice: end half a frame short.
+      var duration = (frames - skip) / slot.streamRate - 0.5 / AudioWebRuntime.context.sampleRate;
+      source.start(when, skip / slot.streamRate, duration);
+      var chunk = { source: source, buffer: buffer, start: start, frames: frames };
+      slot.streamSources.push(chunk);
       source.onended = function() {
         var current = AudioWebRuntime._voice(handle);
         if (!current || !current.slot.streamSources) return;
-        var sources = current.slot.streamSources;
-        var at = sources.indexOf(source);
-        if (at >= 0) sources.splice(at, 1);
+        var chunks = current.slot.streamSources;
+        var at = chunks.indexOf(chunk);
+        if (at >= 0) chunks.splice(at, 1);
         try { source.disconnect(); } catch (ignored) {}
-        if (current.slot.streamEnded && sources.length === 0) AudioWebRuntime._releaseVoice(current.index, false);
+        if (current.slot.streamEnded && chunks.length === 0) AudioWebRuntime._releaseVoice(current.index, false);
       };
+    },
+
+    // A chunk is `frames` frames at the track's own rate, planar, each channel
+    // followed by one guard frame (the next chunk's first) that only feeds the
+    // browser's interpolation at the join. Chunks play back to back on the
+    // track's own timeline, origin + frames / rate, so rounding never adds up;
+    // a chunk that finds the clock past the queue (a stall longer than the
+    // lookahead) moves the timeline a little ahead of the clock instead.
+    // Returns 0 when the chunk could not be scheduled.
+    streamPush: function(handle, pointer, frames, channels, rate) {
+      var slot = AudioWebRuntime._streamSlot(handle);
+      if (!slot || slot.streamParked || frames <= 0 || channels <= 0 || rate <= 0) return 0;
+      var context = AudioWebRuntime.context;
+      if (slot.streamRate !== rate) {
+        if (slot.streamFrames !== 0) return 0;
+        slot.streamRate = rate;
+      }
+      var when = slot.streamOrigin === null ? -1 : slot.streamOrigin + slot.streamFrames / rate;
+      if (when < context.currentTime) {
+        when = context.currentTime + AudioWebRuntime._streamLeadSeconds(context);
+        slot.streamOrigin = when - slot.streamFrames / rate;
+      }
+      try {
+        var buffer = context.createBuffer(channels, frames + 1, rate);
+        var base = pointer >> 2;
+        for (var c = 0; c < channels; ++c) {
+          buffer.getChannelData(c).set(HEAPF32.subarray(base + c * (frames + 1), base + (c + 1) * (frames + 1)));
+        }
+        AudioWebRuntime._streamSchedule(handle, slot, buffer, slot.streamFrames, 0, frames, when);
+      } catch (error) {
+        return 0;
+      }
+      slot.streamFrames += frames;
       return 1;
     },
 
@@ -476,6 +496,47 @@ mergeInto(LibraryManager.library, {
       if (!entry || !entry.slot.streamSources) return;
       entry.slot.streamEnded = true;
       if (entry.slot.streamSources.length === 0) AudioWebRuntime._releaseVoice(entry.index, false);
+    },
+
+    // A parked voice keeps the chunks it had not played yet and the track
+    // frame it stopped on, so a resume picks up on that sample.
+    streamPark: function(handle) {
+      var slot = AudioWebRuntime._streamSlot(handle);
+      if (!slot || slot.streamParked) return;
+      var played = 0;
+      if (slot.streamOrigin !== null) {
+        played = Math.round((AudioWebRuntime.context.currentTime - slot.streamOrigin) * slot.streamRate);
+        played = Math.max(0, Math.min(slot.streamFrames, played));
+      }
+      var kept = [];
+      for (var i = 0; i < slot.streamSources.length; ++i) {
+        var chunk = slot.streamSources[i];
+        chunk.source.onended = null;
+        try { chunk.source.stop(); } catch (ignored) {}
+        try { chunk.source.disconnect(); } catch (ignored) {}
+        if (chunk.start + chunk.frames > played) kept.push(chunk);
+      }
+      slot.streamSources = [];
+      slot.streamParked = { played: played, chunks: kept };
+    },
+
+    streamResume: function(handle) {
+      var slot = AudioWebRuntime._streamSlot(handle);
+      if (!slot || !slot.streamParked) return;
+      var parked = slot.streamParked;
+      var context = AudioWebRuntime.context;
+      slot.streamParked = null;
+      if (slot.streamOrigin === null) return;
+      slot.streamOrigin = context.currentTime + AudioWebRuntime._streamLeadSeconds(context) -
+        parked.played / slot.streamRate;
+      for (var i = 0; i < parked.chunks.length; ++i) {
+        var chunk = parked.chunks[i];
+        var skip = Math.max(0, parked.played - chunk.start);
+        try {
+          AudioWebRuntime._streamSchedule(handle, slot, chunk.buffer, chunk.start, skip, chunk.frames,
+            slot.streamOrigin + (chunk.start + skip) / slot.streamRate);
+        } catch (ignored) {}
+      }
     },
 
     decodeState: function(handle) {
@@ -553,7 +614,10 @@ mergeInto(LibraryManager.library, {
       slot.source = null;
       slot.gainNode = voiceGain;
       slot.streamSources = [];
-      slot.streamNextFrame = 0;
+      slot.streamOrigin = null;
+      slot.streamRate = 0;
+      slot.streamFrames = 0;
+      slot.streamParked = null;
       slot.streamEnded = false;
       slot.resumeSerial = AudioWebRuntime.resumePending ? AudioWebRuntime.gestureSerial : 0;
       return AudioWebRuntime._packHandle(index, slot.generation);
@@ -650,16 +714,20 @@ mergeInto(LibraryManager.library, {
   audio_web_user_gesture: function() { return AudioWebRuntime.userGesture() ? 1 : 0; },
   audio_web_stream_open__deps: ["$AudioWebRuntime"],
   audio_web_stream_open: function(ready) { return AudioWebRuntime.streamOpen(ready); },
-  audio_web_sample_rate__deps: ["$AudioWebRuntime"],
-  audio_web_sample_rate: function() { return AudioWebRuntime.sampleRate(); },
+  audio_web_now__deps: ["$AudioWebRuntime"],
+  audio_web_now: function() { return AudioWebRuntime.now(); },
   audio_web_stream_buffered_frames__deps: ["$AudioWebRuntime"],
   audio_web_stream_buffered_frames: function(handle) { return AudioWebRuntime.streamBufferedFrames(handle); },
   audio_web_stream_push__deps: ["$AudioWebRuntime"],
-  audio_web_stream_push: function(handle, left, right, frames) {
-    return AudioWebRuntime.streamPush(handle, left, right, frames);
+  audio_web_stream_push: function(handle, pointer, frames, channels, rate) {
+    return AudioWebRuntime.streamPush(handle, pointer, frames, channels, rate);
   },
   audio_web_stream_end__deps: ["$AudioWebRuntime"],
   audio_web_stream_end: function(handle) { AudioWebRuntime.streamEnd(handle); },
+  audio_web_stream_park__deps: ["$AudioWebRuntime"],
+  audio_web_stream_park: function(handle) { AudioWebRuntime.streamPark(handle); },
+  audio_web_stream_resume__deps: ["$AudioWebRuntime"],
+  audio_web_stream_resume: function(handle) { AudioWebRuntime.streamResume(handle); },
   audio_web_is_unlocked__deps: ["$AudioWebRuntime"],
   audio_web_is_unlocked: function() {
     return AudioWebRuntime.context && AudioWebRuntime.context.state === "running" &&

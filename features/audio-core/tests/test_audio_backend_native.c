@@ -369,6 +369,34 @@ void test_stream_voice_plays_through_the_engine_and_ends(void) {
     audio_core_backend_clip_destroy(clip);
 }
 
+void test_a_stream_held_silent_parks_and_resumes_where_it_paused(void) {
+    const uint32_t clip = open_stream(AUDIO_TEST_CUE_MP3_PATH);
+    TEST_ASSERT_TRUE(audio_core_backend_user_gesture());
+    const uint32_t voice = audio_core_backend_voice_play(clip, 0, 1.0f, true);
+    audio_miniaudio_test_render(AUDIO_TEST_MS(100));
+    audio_core_backend_voice_set_gain(voice, 0.0f);
+    audio_miniaudio_test_render(AUDIO_TEST_MS(1000));
+    audio_core_backend_update();
+    TEST_ASSERT_FALSE_MESSAGE(audio_miniaudio_test_stream_parked(voice), "parked before its silence ran out");
+    audio_miniaudio_test_render(AUDIO_TEST_MS(1100));
+    audio_core_backend_update();
+    TEST_ASSERT_TRUE(audio_miniaudio_test_stream_parked(voice));
+    TEST_ASSERT_TRUE(audio_core_backend_voice_active(voice));
+    const uint64_t paused_at = audio_miniaudio_test_stream_cursor(voice);
+    audio_miniaudio_test_render(AUDIO_TEST_MS(3000));
+    audio_core_backend_update();
+    TEST_ASSERT_EQUAL_UINT64_MESSAGE(paused_at, audio_miniaudio_test_stream_cursor(voice), "a parked stream decoded");
+
+    audio_core_backend_voice_set_gain(voice, 0.5f);
+    TEST_ASSERT_FALSE(audio_miniaudio_test_stream_parked(voice));
+    audio_miniaudio_test_render(AUDIO_TEST_MS(10));
+    const uint64_t resumed = audio_miniaudio_test_stream_cursor(voice);
+    TEST_ASSERT_TRUE_MESSAGE(resumed != paused_at && resumed - paused_at < 44100u / 10u,
+        "the stream did not go on from where it paused");
+    audio_core_backend_voice_stop(voice);
+    audio_core_backend_clip_destroy(clip);
+}
+
 /* A loop is seamless when each pass repeats the first sample for sample and
    is as long as the master: the encoder's delay and padding are both gone. */
 void test_stream_loop_repeats_the_master_length_exactly(void) {
@@ -420,5 +448,6 @@ int main(void) {
     RUN_TEST(test_stream_opens_ready_without_decoding_pcm);
     RUN_TEST(test_stream_voice_plays_through_the_engine_and_ends);
     RUN_TEST(test_stream_loop_repeats_the_master_length_exactly);
+    RUN_TEST(test_a_stream_held_silent_parks_and_resumes_where_it_paused);
     return UNITY_END();
 }

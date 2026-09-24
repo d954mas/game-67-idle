@@ -37,6 +37,11 @@ typedef struct audio_native_voice_t {
     ma_bool32 sound_initialized;
     ma_bool32 streaming;
     ma_bool32 used;
+    /* A stream held silent stops and keeps its cursor, so it decodes nothing
+       until its gain rises and then goes on from the frame it paused on. */
+    ma_bool32 parked;
+    /* Engine milliseconds the gain went to zero; negative while audible. */
+    double muted_since;
     uint32_t clip;
 } audio_native_voice_t;
 
@@ -84,6 +89,7 @@ static void stream_teardown(audio_native_voice_t *voice) {
     ma_sound_uninit(&voice->stream);
     (void)ma_decoder_uninit(&voice->decoder);
     voice->streaming = MA_FALSE;
+    voice->parked = MA_FALSE;
 }
 
 static ma_sound *voice_sound(audio_native_voice_t *voice) {
@@ -258,7 +264,20 @@ bool audio_core_backend_init(void) {
 }
 
 void audio_core_backend_shutdown(void) { backend_cleanup(); }
-void audio_core_backend_update(void) {}
+static double engine_ms(void) { return (double)ma_engine_get_time_in_milliseconds(&s_engine); }
+
+void audio_core_backend_update(void) {
+    if (!s_available) return;
+    const double now = engine_ms();
+    for (ma_uint32 i = 0; i < AUDIO_NATIVE_VOICES; ++i) {
+        audio_native_voice_t *voice = &s_voices[i];
+        if (!voice->used || !voice->streaming || voice->parked || voice->muted_since < 0.0) continue;
+        if (now - voice->muted_since < AUDIO_CORE_STREAM_PARK_SECONDS * 1000.0) continue;
+        if (!ma_sound_is_playing(&voice->stream)) continue;
+        (void)ma_sound_stop(&voice->stream);
+        voice->parked = MA_TRUE;
+    }
+}
 
 static ma_uint32 clip_claim(void) {
     for (ma_uint32 i = 0; i < AUDIO_NATIVE_CLIPS; ++i) {
@@ -358,6 +377,8 @@ static uint32_t stream_play(audio_native_voice_t *voice, ma_uint32 index, const 
     }
     voice->streaming = MA_TRUE;
     voice->used = MA_TRUE;
+    voice->parked = MA_FALSE;
+    voice->muted_since = gain > 0.0f ? -1.0 : engine_ms();
     voice->clip = (uint32_t)(clip - s_clips) + 1u;
     ma_sound_set_volume(&voice->stream, gain);
     ma_sound_set_looping(&voice->stream, loop ? MA_TRUE : MA_FALSE);
@@ -404,12 +425,23 @@ uint32_t audio_core_backend_voice_play(uint32_t clip, uint32_t bus, float gain, 
 
 bool audio_core_backend_voice_active(uint32_t voice) {
     if (voice == 0 || voice > AUDIO_NATIVE_VOICES || !s_voices[voice - 1u].used) return false;
-    return ma_sound_is_playing(voice_sound(&s_voices[voice - 1u])) == MA_TRUE;
+    return s_voices[voice - 1u].parked || ma_sound_is_playing(voice_sound(&s_voices[voice - 1u])) == MA_TRUE;
 }
 
 void audio_core_backend_voice_set_gain(uint32_t voice, float gain) {
     if (voice == 0 || voice > AUDIO_NATIVE_VOICES || !s_voices[voice - 1u].used) return;
-    ma_sound_set_volume(voice_sound(&s_voices[voice - 1u]), gain);
+    audio_native_voice_t *entry = &s_voices[voice - 1u];
+    ma_sound_set_volume(voice_sound(entry), gain);
+    if (!entry->streaming) return;
+    if (gain > 0.0f) {
+        entry->muted_since = -1.0;
+        if (entry->parked) {
+            entry->parked = MA_FALSE;
+            (void)ma_sound_start(&entry->stream);
+        }
+    } else if (entry->muted_since < 0.0) {
+        entry->muted_since = engine_ms();
+    }
 }
 
 void audio_core_backend_voice_set_pitch(uint32_t voice, float pitch) {
@@ -484,6 +516,15 @@ uint64_t audio_miniaudio_test_stream_read(uint32_t voice, float *frames_out, uin
         total += read;
     }
     return total;
+}
+bool audio_miniaudio_test_stream_parked(uint32_t voice) {
+    return voice != 0 && voice <= AUDIO_NATIVE_VOICES && s_voices[voice - 1u].parked;
+}
+uint64_t audio_miniaudio_test_stream_cursor(uint32_t voice) {
+    ma_uint64 cursor = 0;
+    if (voice == 0 || voice > AUDIO_NATIVE_VOICES || !s_voices[voice - 1u].streaming) return 0;
+    (void)ma_data_source_get_cursor_in_pcm_frames((ma_data_source *)&s_voices[voice - 1u].decoder, &cursor);
+    return cursor;
 }
 const float *audio_miniaudio_test_clip_pcm(uint32_t clip) {
     if (clip == 0 || clip > AUDIO_NATIVE_CLIPS || !s_clips[clip - 1u].used) return NULL;

@@ -18,6 +18,9 @@ uint32_t audio_core_backend_decode_begin(const void *bytes, uint32_t size);
 /* A streamed clip shares the clip handles, states and destroy of decoded ones;
    it owns a copy of the encoded bytes and each voice decodes as it plays. */
 uint32_t audio_core_backend_stream_open(const void *bytes, uint32_t size);
+/* A streamed voice held at gain 0 this long stops decoding and resumes on the
+   sample it paused on once its gain rises. */
+#define AUDIO_CORE_STREAM_PARK_SECONDS 2.0
 uint32_t audio_core_backend_decode_state(uint32_t clip);
 void audio_core_backend_clip_destroy(uint32_t clip);
 uint32_t audio_core_backend_voice_play(uint32_t clip, uint32_t bus, float gain, bool loop);
@@ -42,6 +45,9 @@ uint64_t audio_miniaudio_test_clip_frames(uint32_t clip);
 const float *audio_miniaudio_test_clip_pcm(uint32_t clip);
 /* Mixes `frames` of engine output and drops them; returns the frames mixed. */
 uint64_t audio_miniaudio_test_render(uint64_t frames);
+bool audio_miniaudio_test_stream_parked(uint32_t voice);
+/* A streamed voice's decoder cursor, in source frames. */
+uint64_t audio_miniaudio_test_stream_cursor(uint32_t voice);
 /* Reads a streamed voice's own decoder at its source format, loop included. */
 uint64_t audio_miniaudio_test_stream_read(uint32_t voice, float *frames_out, uint64_t frames);
 #endif
