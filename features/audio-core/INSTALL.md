@@ -23,7 +23,9 @@ ${AUDIO_CORE_SRC}/audio_miniaudio_impl.c
 
 Linux additionally needs threads, `${CMAKE_DL_LIBS}`, and `m`. On Emscripten
 compile `audio_backend_web.c` and link
-`--js-library ${AUDIO_CORE_WEB}/audio_web.library.js`.
+`--js-library ${AUDIO_CORE_WEB}/audio_web.library.js`. The web backend compiles
+miniaudio's decoder into its own translation unit for streamed clips, so it
+needs no other source.
 
 Put `${AUDIO_CORE_INC}` before the game `src` include directory so a stale
 local copy cannot shadow the shared public header.
@@ -32,9 +34,11 @@ local copy cannot shadow the shared public header.
 
 1. Add audio files to the game's asset tree with license/provenance metadata.
    Encode MP3 with its Xing/LAME header (`ffmpeg -write_xing 1`): both backends
-   read the encoder delay from that header and trim it. A file encoded without
-   one carries about 25 ms of encoder silence that nothing can remove, and the
-   cue fires late.
+   read the encoder delay and padding from that header and trim them. A file
+   encoded without one carries about 25 ms of encoder silence that nothing can
+   remove: the cue fires late and a loop gaps. ffmpeg writes the header by
+   seeking back, so encode to a file: an MP3 written to a pipe has none.
+   Open music with `audio_clip_stream` and short cues with `audio_clip_load`.
 2. Add each file to `build_packs.c` as `NT_ASSET_BLOB` under a codec-neutral ID.
 3. Add source files to the pack target's `DEPENDS` list.
 4. Regenerate the game's asset hashes before compiling code that uses them.

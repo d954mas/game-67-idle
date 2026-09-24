@@ -41,7 +41,10 @@ class FakeBufferSourceNode extends FakeNode {
     this.playbackRate = { value: 1 };
   }
 
-  start() { this.started = true; }
+  start(when = 0) {
+    this.started = true;
+    this.when = when;
+  }
 
   stop() {
     this.stopped = true;
@@ -55,9 +58,22 @@ class FakeBufferSourceNode extends FakeNode {
   }
 }
 
+class FakeAudioBuffer {
+  constructor(channels, length, sampleRate) {
+    this.numberOfChannels = channels;
+    this.length = length;
+    this.sampleRate = sampleRate;
+    this.channels = Array.from({ length: channels }, () => new Float32Array(length));
+  }
+
+  copyToChannel(source, channel) { this.channels[channel].set(source); }
+}
+
 class FakeAudioContext {
   constructor() {
     this.state = "suspended";
+    this.sampleRate = 48000;
+    this.currentTime = 0;
     this.destination = new FakeNode();
     this.gains = [];
     this.sources = [];
@@ -74,6 +90,8 @@ class FakeAudioContext {
     this.gains.push(node);
     return node;
   }
+
+  createBuffer(channels, length, sampleRate) { return new FakeAudioBuffer(channels, length, sampleRate); }
 
   createBufferSource() {
     const source = new FakeBufferSourceNode();
@@ -142,6 +160,7 @@ async function loadLibrary() {
     ArrayBuffer,
     AudioContext: FakeAudioContext,
     HEAPU8: new Uint8Array(1024),
+    HEAPF32: new Float32Array(1024),
     LibraryManager: { library },
     Uint8Array,
     console,
@@ -474,4 +493,86 @@ test("a touch whose resume stays pending is asked again by the next activating g
   assert.equal(audioContext.state, "running");
   assert.equal(library.audio_web_user_gesture(), 1);
   assert.equal(library.audio_web_is_unlocked(), 1);
+});
+
+async function unlockedStreamVoice(loop = 1) {
+  const loaded = await loadLibrary();
+  const { document, library } = loaded;
+  library.audio_web_init();
+  document.dispatch("pointerdown");
+  await flushPromises();
+  const clip = library.audio_web_stream_open(1);
+  assert.equal(library.audio_web_decode_state(clip), 1);
+  const voice = library.audio_web_voice_play(clip, 0, 0.5, loop);
+  assert.notEqual(voice, 0);
+  return { ...loaded, clip, voice };
+}
+
+test("a stream clip is ready at once and its voice holds a gain but no source", async () => {
+  const { library, voice } = await unlockedStreamVoice();
+  const runtime = library.$AudioWebRuntime;
+  assert.equal(runtime.context.sources.length, 0);
+  assert.equal(library.audio_web_voice_active(voice), 1);
+  assert.equal(library.audio_web_stream_buffered_frames(voice), 0);
+  assert.equal(library.audio_web_sample_rate(), 48000);
+  const voiceGain = runtime.context.gains.at(-1);
+  assert.deepEqual(voiceGain.connections, [runtime.musicNode]);
+  assert.equal(library.audio_web_decode_state(library.audio_web_stream_open(0)), 2);
+});
+
+test("stream chunks are scheduled back to back on whole frames", async () => {
+  const { context, library, voice } = await unlockedStreamVoice();
+  const audioContext = library.$AudioWebRuntime.context;
+  audioContext.currentTime = 1.5;
+  context.HEAPF32.set([0.25, 0.5, 0.75], 0);
+  context.HEAPF32.set([-0.25, -0.5, -0.75], 8);
+  library.audio_web_stream_push(voice, 0, 32, 3);
+  library.audio_web_stream_push(voice, 0, 32, 3);
+  const [first, second] = audioContext.sources;
+  const lead = Math.round(0.02 * 48000);
+  assert.equal(first.when * 48000, 72000 + lead);
+  assert.equal(second.when * 48000, 72000 + lead + 3);
+  assert.deepEqual(Array.from(first.buffer.channels[0]), [0.25, 0.5, 0.75]);
+  assert.deepEqual(Array.from(first.buffer.channels[1]), [-0.25, -0.5, -0.75]);
+  assert.equal(library.audio_web_stream_buffered_frames(voice), lead + 6);
+
+  library.audio_web_voice_set_pitch(voice, 2);
+  assert.equal(first.playbackRate.value, 1);
+  audioContext.currentTime = 10; // a stall past the queue: the next chunk starts just ahead of the clock
+  library.audio_web_stream_push(voice, 0, 32, 3);
+  assert.equal(audioContext.sources[2].when * 48000, 480000 + lead);
+});
+
+test("stopping a stream voice stops every scheduled chunk", async () => {
+  const { library, voice } = await unlockedStreamVoice();
+  library.audio_web_stream_push(voice, 0, 32, 2);
+  library.audio_web_stream_push(voice, 0, 32, 2);
+  const sources = library.$AudioWebRuntime.context.sources;
+  library.audio_web_voice_stop(voice);
+  assert.ok(sources.every((source) => source.stopped));
+  assert.equal(library.audio_web_voice_active(voice), 0);
+  assert.equal(library.audio_web_stream_buffered_frames(voice), -1);
+  library.audio_web_stream_push(voice, 0, 32, 2);
+  assert.equal(sources.length, 2);
+});
+
+test("an ended stream voice goes inactive when its last chunk finishes", async () => {
+  const { library, voice } = await unlockedStreamVoice(0);
+  library.audio_web_stream_push(voice, 0, 32, 2);
+  library.audio_web_stream_push(voice, 0, 32, 2);
+  library.audio_web_stream_end(voice);
+  const [first, second] = library.$AudioWebRuntime.context.sources;
+  first.finish();
+  assert.equal(library.audio_web_voice_active(voice), 1);
+  second.finish();
+  assert.equal(library.audio_web_voice_active(voice), 0);
+});
+
+test("destroying a stream clip frees its slot for reuse", async () => {
+  const { library, clip } = await unlockedStreamVoice();
+  library.audio_web_clip_destroy(clip);
+  assert.equal(library.audio_web_decode_state(clip), 2);
+  const again = library.audio_web_stream_open(1);
+  assert.notEqual(again, 0);
+  assert.notEqual(again, clip);
 });

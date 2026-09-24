@@ -215,6 +215,34 @@ void test_voice_gain_and_pitch_reach_the_backend_and_ignore_stale_or_bad_values(
     TEST_ASSERT_EQUAL_FLOAT(1.3f, fake_audio_backend_voice_pitch(1));
 }
 
+void test_streamed_clip_opens_without_a_decode_and_plays_like_a_clip(void) {
+    fake_audio_add_ready_blob(ASSET_READY);
+    audio_clip_t clip = audio_clip_stream(asset(ASSET_READY));
+    TEST_ASSERT_FALSE(clip_equal(AUDIO_CLIP_INVALID, clip));
+    TEST_ASSERT_EQUAL_UINT32(1, fake_audio_backend_stream_open_count());
+    TEST_ASSERT_EQUAL_UINT32(0, fake_audio_backend_decode_begin_count());
+    audio_update();
+    TEST_ASSERT_EQUAL(AUDIO_CLIP_STATE_READY, audio_clip_state(clip));
+    unlock_audio();
+    audio_voice_t voice = audio_play(clip, AUDIO_BUS_MUSIC, 0.5f, true);
+    TEST_ASSERT_TRUE(audio_voice_is_playing(voice));
+    audio_voice_set_gain(voice, 0.25f);
+    TEST_ASSERT_EQUAL_FLOAT(0.25f, fake_audio_backend_voice_gain(1));
+    audio_voice_set_pitch(voice, 1.5f);
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, fake_audio_backend_voice_pitch(1));
+    audio_voice_stop(voice);
+    TEST_ASSERT_FALSE(audio_voice_is_playing(voice));
+    audio_clip_unload(clip);
+    TEST_ASSERT_EQUAL(AUDIO_CLIP_STATE_INVALID, audio_clip_state(clip));
+    TEST_ASSERT_EQUAL_UINT32(1, fake_audio_backend_clip_destroy_count());
+}
+
+void test_streamed_clip_refuses_a_blob_that_is_not_ready(void) {
+    fake_audio_add_not_ready_blob(ASSET_READY);
+    TEST_ASSERT_TRUE(clip_equal(AUDIO_CLIP_INVALID, audio_clip_stream(asset(ASSET_READY))));
+    TEST_ASSERT_EQUAL_UINT32(0, fake_audio_backend_stream_open_count());
+}
+
 void test_full_voice_pool_evicts_oldest_voice_without_growing(void) {
     audio_clip_t clip = make_ready_clip(ASSET_READY);
     unlock_audio();
@@ -332,6 +360,8 @@ int main(void) {
     RUN_TEST(test_update_reconciles_an_async_backend_unlock_rejection);
     RUN_TEST(test_finished_voice_is_cleaned_and_reused_with_new_generation);
     RUN_TEST(test_voice_gain_and_pitch_reach_the_backend_and_ignore_stale_or_bad_values);
+    RUN_TEST(test_streamed_clip_opens_without_a_decode_and_plays_like_a_clip);
+    RUN_TEST(test_streamed_clip_refuses_a_blob_that_is_not_ready);
     RUN_TEST(test_full_voice_pool_evicts_oldest_voice_without_growing);
     RUN_TEST(test_full_voice_pool_preserves_looping_voice_and_evicts_oldest_non_looping);
     RUN_TEST(test_full_voice_pool_rejects_new_voice_when_every_voice_is_looping);

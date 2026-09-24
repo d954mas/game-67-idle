@@ -14,19 +14,28 @@
 #define AUDIO_NATIVE_MAX_DECODED_BYTES_PER_CLIP (UINT64_C(128) * UINT64_C(1024) * UINT64_C(1024))
 #define AUDIO_NATIVE_MAX_DECODED_BYTES_TOTAL (UINT64_C(256) * UINT64_C(1024) * UINT64_C(1024))
 
+/* A decoded clip owns its PCM; a streamed one owns only its encoded bytes,
+   which each of its voices decodes on the audio thread as it plays. */
 typedef struct audio_native_clip_t {
     void *pcm;
     ma_uint64 frames;
     uint64_t pcm_bytes;
+    void *encoded;
+    uint32_t encoded_bytes;
     ma_uint32 state;
     ma_bool32 used;
 } audio_native_clip_t;
 
+/* `sound` plays the pooled buffer of a decoded clip; a streamed voice builds
+   `stream` over its own `decoder` at play and tears both down at stop. */
 typedef struct audio_native_voice_t {
     ma_audio_buffer_ref buffer;
     ma_sound sound;
+    ma_decoder decoder;
+    ma_sound stream;
     ma_bool32 buffer_initialized;
     ma_bool32 sound_initialized;
+    ma_bool32 streaming;
     ma_bool32 used;
 } audio_native_voice_t;
 
@@ -67,7 +76,21 @@ static void audio_free(void *memory, void *user_data) {
     free(memory);
 }
 
+static void stream_teardown(audio_native_voice_t *voice) {
+    if (!voice->streaming) return;
+    /* Uninit detaches the sound from the graph first, so the audio thread is
+       done with the decoder before it goes. */
+    ma_sound_uninit(&voice->stream);
+    (void)ma_decoder_uninit(&voice->decoder);
+    voice->streaming = MA_FALSE;
+}
+
+static ma_sound *voice_sound(audio_native_voice_t *voice) {
+    return voice->streaming ? &voice->stream : &voice->sound;
+}
+
 static void voice_uninit(audio_native_voice_t *voice) {
+    stream_teardown(voice);
     if (voice->sound_initialized) ma_sound_uninit(&voice->sound);
     if (voice->buffer_initialized) ma_audio_buffer_ref_uninit(&voice->buffer);
     memset(voice, 0, sizeof(*voice));
@@ -75,6 +98,11 @@ static void voice_uninit(audio_native_voice_t *voice) {
 
 static void voice_stop(audio_native_voice_t *voice) {
     if (!voice->used) return;
+    if (voice->streaming) {
+        stream_teardown(voice);
+        voice->used = MA_FALSE;
+        return;
+    }
     (void)ma_sound_stop(&voice->sound);
     (void)ma_node_detach_output_bus((ma_node *)&voice->sound, 0);
     (void)ma_audio_buffer_ref_set_data(&voice->buffer, NULL, 0);
@@ -87,6 +115,7 @@ static void clip_destroy(audio_native_clip_t *clip) {
         s_decoded_pcm_bytes -= clip->pcm_bytes;
         audio_free(clip->pcm, NULL);
     }
+    if (clip->encoded != NULL) audio_free(clip->encoded, NULL);
     memset(clip, 0, sizeof(*clip));
 }
 
@@ -183,7 +212,7 @@ static ma_bool32 engine_and_groups_init(ma_context *context, ma_bool32 no_device
         if (ma_sound_init_from_data_source(
                 &s_engine,
                 (ma_data_source *)&voice->buffer,
-                MA_SOUND_FLAG_NO_DEFAULT_ATTACHMENT | MA_SOUND_FLAG_NO_PITCH | MA_SOUND_FLAG_NO_SPATIALIZATION,
+                MA_SOUND_FLAG_NO_DEFAULT_ATTACHMENT | MA_SOUND_FLAG_NO_SPATIALIZATION,
                 NULL,
                 &voice->sound) != MA_SUCCESS) {
             return MA_FALSE;
@@ -230,16 +259,50 @@ bool audio_core_backend_init(void) {
 void audio_core_backend_shutdown(void) { backend_cleanup(); }
 void audio_core_backend_update(void) {}
 
-uint32_t audio_core_backend_decode_begin(const void *bytes, uint32_t size) {
-    if (!s_available || bytes == NULL || size == 0) return 0;
-    ma_uint32 index = AUDIO_NATIVE_CLIPS;
+static ma_uint32 clip_claim(void) {
     for (ma_uint32 i = 0; i < AUDIO_NATIVE_CLIPS; ++i) {
-        if (!s_clips[i].used) { index = i; break; }
+        if (!s_clips[i].used) {
+            s_clips[i].used = MA_TRUE;
+            s_clips[i].state = 2;
+            return i;
+        }
     }
+    return AUDIO_NATIVE_CLIPS;
+}
+
+/* A stream decodes at its source rate and channel count; the sound's own
+   converter takes it to the engine's, so a loop wraps before that converter
+   and the resampler never sees the seam. */
+static ma_decoder_config stream_decoder_config(void) {
+    ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 0, 0);
+    config.allocationCallbacks.onMalloc = audio_malloc;
+    config.allocationCallbacks.onRealloc = audio_realloc;
+    config.allocationCallbacks.onFree = audio_free;
+    return config;
+}
+
+uint32_t audio_core_backend_stream_open(const void *bytes, uint32_t size) {
+    if (!s_available || bytes == NULL || size == 0) return 0;
+    const ma_uint32 index = clip_claim();
     if (index == AUDIO_NATIVE_CLIPS) return 0;
     audio_native_clip_t *clip = &s_clips[index];
-    clip->used = MA_TRUE;
-    clip->state = 2;
+    ma_decoder_config config = stream_decoder_config();
+    ma_decoder probe;
+    if (ma_decoder_init_memory(bytes, size, &config, &probe) != MA_SUCCESS) return index + 1u;
+    (void)ma_decoder_uninit(&probe);
+    clip->encoded = audio_malloc(size, NULL);
+    if (clip->encoded == NULL) return index + 1u;
+    memcpy(clip->encoded, bytes, size);
+    clip->encoded_bytes = size;
+    clip->state = 1;
+    return index + 1u;
+}
+
+uint32_t audio_core_backend_decode_begin(const void *bytes, uint32_t size) {
+    if (!s_available || bytes == NULL || size == 0) return 0;
+    const ma_uint32 index = clip_claim();
+    if (index == AUDIO_NATIVE_CLIPS) return 0;
+    audio_native_clip_t *clip = &s_clips[index];
     ma_decoder_config config = ma_decoder_config_init(ma_format_f32, AUDIO_NATIVE_CHANNELS, AUDIO_NATIVE_SAMPLE_RATE);
     ma_decoder decoder;
     if (ma_decoder_init_memory(bytes, size, &config, &decoder) == MA_SUCCESS) {
@@ -278,6 +341,27 @@ void audio_core_backend_clip_destroy(uint32_t clip) {
     clip_destroy(&s_clips[clip - 1u]);
 }
 
+static uint32_t stream_play(audio_native_voice_t *voice, ma_uint32 index, const audio_native_clip_t *clip,
+        ma_sound_group *group, float gain, bool loop) {
+    ma_decoder_config config = stream_decoder_config();
+    if (ma_decoder_init_memory(clip->encoded, clip->encoded_bytes, &config, &voice->decoder) != MA_SUCCESS) return 0;
+    if (ma_sound_init_from_data_source(&s_engine, (ma_data_source *)&voice->decoder,
+            MA_SOUND_FLAG_NO_DEFAULT_ATTACHMENT | MA_SOUND_FLAG_NO_SPATIALIZATION, NULL, &voice->stream) != MA_SUCCESS) {
+        (void)ma_decoder_uninit(&voice->decoder);
+        return 0;
+    }
+    voice->streaming = MA_TRUE;
+    voice->used = MA_TRUE;
+    ma_sound_set_volume(&voice->stream, gain);
+    ma_sound_set_looping(&voice->stream, loop ? MA_TRUE : MA_FALSE);
+    if (ma_node_attach_output_bus((ma_node *)&voice->stream, 0, (ma_node *)group, 0) != MA_SUCCESS ||
+            ma_sound_start(&voice->stream) != MA_SUCCESS) {
+        voice_stop(voice);
+        return 0;
+    }
+    return index + 1u;
+}
+
 uint32_t audio_core_backend_voice_play(uint32_t clip, uint32_t bus, float gain, bool loop) {
     if (!s_available || clip == 0 || clip > AUDIO_NATIVE_CLIPS || s_clips[clip - 1u].state != 1) return 0;
     if (bus > 1) return 0;
@@ -288,10 +372,11 @@ uint32_t audio_core_backend_voice_play(uint32_t clip, uint32_t bus, float gain, 
     if (index == AUDIO_NATIVE_VOICES) return 0;
     audio_native_clip_t *clip_slot = &s_clips[clip - 1u];
     audio_native_voice_t *voice = &s_voices[index];
+    ma_sound_group *group = bus == 0 ? &s_music_group : &s_sfx_group;
+    if (clip_slot->encoded != NULL) return stream_play(voice, index, clip_slot, group, gain, loop);
     if (ma_audio_buffer_ref_set_data(&voice->buffer, clip_slot->pcm, clip_slot->frames) != MA_SUCCESS) {
         return 0;
     }
-    ma_sound_group *group = bus == 0 ? &s_music_group : &s_sfx_group;
     if (ma_sound_seek_to_pcm_frame(&voice->sound, 0) != MA_SUCCESS ||
             ma_node_attach_output_bus((ma_node *)&voice->sound, 0, (ma_node *)group, 0) != MA_SUCCESS) {
         (void)ma_audio_buffer_ref_set_data(&voice->buffer, NULL, 0);
@@ -309,17 +394,17 @@ uint32_t audio_core_backend_voice_play(uint32_t clip, uint32_t bus, float gain, 
 
 bool audio_core_backend_voice_active(uint32_t voice) {
     if (voice == 0 || voice > AUDIO_NATIVE_VOICES || !s_voices[voice - 1u].used) return false;
-    return ma_sound_is_playing(&s_voices[voice - 1u].sound) == MA_TRUE;
+    return ma_sound_is_playing(voice_sound(&s_voices[voice - 1u])) == MA_TRUE;
 }
 
 void audio_core_backend_voice_set_gain(uint32_t voice, float gain) {
     if (voice == 0 || voice > AUDIO_NATIVE_VOICES || !s_voices[voice - 1u].used) return;
-    ma_sound_set_volume(&s_voices[voice - 1u].sound, gain);
+    ma_sound_set_volume(voice_sound(&s_voices[voice - 1u]), gain);
 }
 
 void audio_core_backend_voice_set_pitch(uint32_t voice, float pitch) {
     if (voice == 0 || voice > AUDIO_NATIVE_VOICES || !s_voices[voice - 1u].used) return;
-    ma_sound_set_pitch(&s_voices[voice - 1u].sound, pitch);
+    ma_sound_set_pitch(voice_sound(&s_voices[voice - 1u]), pitch);
 }
 
 void audio_core_backend_voice_stop(uint32_t voice) {
@@ -364,6 +449,31 @@ bool audio_miniaudio_test_pcm_size(uint64_t frames, uint64_t *bytes) {
 uint64_t audio_miniaudio_test_clip_frames(uint32_t clip) {
     if (clip == 0 || clip > AUDIO_NATIVE_CLIPS || !s_clips[clip - 1u].used) return 0;
     return s_clips[clip - 1u].frames;
+}
+uint64_t audio_miniaudio_test_render(uint64_t frames) {
+    float block[512 * AUDIO_NATIVE_CHANNELS];
+    uint64_t rendered = 0;
+    while (rendered < frames) {
+        const ma_uint64 step = frames - rendered < 512 ? frames - rendered : 512;
+        ma_uint64 read = 0;
+        if (ma_engine_read_pcm_frames(&s_engine, block, step, &read) != MA_SUCCESS || read == 0) break;
+        rendered += read;
+    }
+    return rendered;
+}
+uint64_t audio_miniaudio_test_stream_read(uint32_t voice, float *frames_out, uint64_t frames) {
+    if (voice == 0 || voice > AUDIO_NATIVE_VOICES || !s_voices[voice - 1u].streaming) return 0;
+    ma_decoder *decoder = &s_voices[voice - 1u].decoder;
+    uint64_t total = 0;
+    while (total < frames) {
+        ma_uint64 read = 0;
+        if (ma_data_source_read_pcm_frames((ma_data_source *)decoder,
+                frames_out + total * decoder->outputChannels, frames - total, &read) != MA_SUCCESS || read == 0) {
+            break;
+        }
+        total += read;
+    }
+    return total;
 }
 const float *audio_miniaudio_test_clip_pcm(uint32_t clip) {
     if (clip == 0 || clip > AUDIO_NATIVE_CLIPS || !s_clips[clip - 1u].used) return NULL;

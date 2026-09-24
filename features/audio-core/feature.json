@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "audio-core",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "title": "Audio Core",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -23,6 +23,7 @@
   },
   "provides": [
     "generation-safe clip and voice handles",
+    "streamed long tracks with sample-exact loops",
     "fixed 64-clip and 32-voice pools",
     "master, music, and SFX mix buses",
     "pause, enable, and browser unlock policy",

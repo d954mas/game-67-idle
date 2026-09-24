@@ -12,11 +12,55 @@ persisted settings, platform lifecycle composition, and user-gesture wiring.
 
 The only game-facing header is
 `include/features/audio/audio.h`. It exposes lifecycle and status, loading by a
-ready `NT_ASSET_BLOB` hash, generation-checked clip/voice handles, playback and
-stop queries, live per-voice gain and pitch, MUSIC/SFX buses, mix controls,
-pause/enable state, and browser
-user-gesture unlock. Its fixed limits are 64 decoded clips and 32 voices.
+ready `NT_ASSET_BLOB` hash (decoded whole, or streamed), generation-checked
+clip/voice handles, playback and stop queries, live per-voice gain and pitch,
+MUSIC/SFX buses, mix controls, pause/enable state, and browser
+user-gesture unlock. Its fixed limits are 64 clips and 32 voices.
 Backend types, file paths, codecs, and JavaScript handles stay private.
+
+## Streamed clips
+
+`audio_clip_load` decodes a clip whole: right for short cues, which then start
+with no work. A long track is opened with `audio_clip_stream` instead. It
+decodes nothing when it opens; each voice decodes the encoded blob a little at a
+time while it plays. The clip holds a copy of the encoded bytes (about 0.5 MB
+for a 90 s mono MP3 at 32 kHz) where a decoded one holds the PCM (33 MB for the
+same track at 48 kHz stereo). The clip shares the handle pool and every clip
+and voice call. A looping voice wraps sample-exact: the loop runs in the decoder
+at the source rate, ahead of the resampler, and the decoder trims the encoder
+delay and padding that the MP3's Xing/LAME header declares. Pitch does not apply
+to a streamed voice.
+
+- Native: each voice is an `ma_sound` over its own `ma_decoder`, so miniaudio
+  decodes on the audio thread. The main thread only opens the decoder when the
+  voice starts.
+- Web: miniaudio's decoder and converter, built into the wasm with no device or
+  threads, decode on the main thread in 8192-frame chunks. The context-rate PCM
+  goes into `AudioBufferSourceNode`s, which play back to back on whole context
+  frames about 1 s ahead of the clock. Each update decodes at most two chunks
+  per voice. If the main thread stalls longer than that 1 s lookahead, the
+  track gaps and then resumes; while a tab is hidden the context is suspended,
+  so the lookahead holds.
+
+Why this web path, measured on a game's music tracks (32 kHz mono MP3,
+48 kHz context):
+
+- `decodeAudioData` of the whole track, the path before streaming, decodes off
+  the main thread but keeps 16.4 MB of PCM per 90 s track.
+- The chosen path decodes and converts at 0.75 ms per second of audio in -O3
+  wasm, about 0.01 ms per 60 Hz frame for each playing stream. It keeps about
+  0.4 MB of PCM per voice. Chrome joins the chunks and the loop seam
+  sample-exact, and the decoder is the one the native path uses.
+- `MediaElementAudioSourceNode` over a Blob URL keeps no PCM, but an
+  `<audio>` loop is not sample-accurate: it gaps or clicks at the seam, and the
+  MP3 delay handling depends on the browser.
+- An `AudioWorklet` ring buffer is sample-exact as well, but it needs a worklet
+  module (a Blob URL that a portal CSP may refuse) and a message channel. It
+  gains nothing over scheduled buffers at this lookahead.
+- `decodeAudioData` on MP3 segments keeps the decode off the main thread. But
+  each segment is primed and resampled on its own, so the joins click unless
+  the frames overlap and are trimmed. That trimming depends on the browser's
+  decoder.
 
 ## Validation
 
@@ -42,9 +86,7 @@ any console, page, or request error.
 
 ## Compatibility
 
-Version `1.0.1` identifies the existing public contract above; it is not a
-claim that T0393 or every platform integration is complete. A consumer records
-the exact version it validated. `feature.json.version` is mandatory SemVer:
+A consumer records the exact version it validated. `feature.json.version` is mandatory SemVer:
 
 - PATCH: compatible fixes, tests, or documentation;
 - MINOR: backward-compatible additions to the public contract;
@@ -63,3 +105,12 @@ semantics, copy the module into that game and own the fork; do not add a
 speculative shared switch.
 
 See `INSTALL.md` for wiring, validation, and removal.
+
+## Version history
+
+- `1.2.0`: `audio_clip_stream` plays long tracks without decoding them whole
+  (native: decoded on the audio thread; web: chunks scheduled from a wasm
+  decoder). Native pooled voices now honour `audio_voice_set_pitch`; they were
+  created with miniaudio's pitch stage disabled, so the call did nothing.
+- `1.1.1`: a phone's first tap unlocks the sound.
+- `1.1.0`: live gain and pitch per voice.

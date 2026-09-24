@@ -274,6 +274,97 @@ void test_shipped_cue_attack_window_carries_the_transient(void) {
     audio_core_backend_clip_destroy(shipped.clip);
 }
 
+static uint64_t frames_until_silent(uint32_t voice) {
+    uint64_t rendered = 0;
+    while (audio_core_backend_voice_active(voice) && rendered < AUDIO_TEST_RATE * 10u) {
+        rendered += audio_miniaudio_test_render(256);
+    }
+    return rendered;
+}
+
+void test_pitch_reaches_a_pooled_voice(void) {
+    decoded_cue_t cue = decode_cue(AUDIO_TEST_CUE_WAV_PATH);
+    TEST_ASSERT_TRUE(audio_core_backend_user_gesture());
+    const uint64_t plain = frames_until_silent(audio_core_backend_voice_play(cue.clip, 1, 1.0f, false));
+    const uint32_t fast = audio_core_backend_voice_play(cue.clip, 1, 1.0f, false);
+    audio_core_backend_voice_set_pitch(fast, 2.0f);
+    const uint64_t pitched = frames_until_silent(fast);
+    TEST_ASSERT_TRUE(plain >= cue.frames);
+    TEST_ASSERT_TRUE_MESSAGE(pitched * 10u < plain * 6u, "an octave up did not shorten the voice");
+    audio_core_backend_clip_destroy(cue.clip);
+}
+
+static uint32_t open_stream(const char *path) {
+    uint32_t size = 0;
+    uint8_t *bytes = read_fixture(path, &size);
+    TEST_ASSERT_NOT_NULL(bytes);
+    const uint32_t clip = audio_core_backend_stream_open(bytes, size);
+    free(bytes);
+    return clip;
+}
+
+void test_stream_opens_ready_without_decoding_pcm(void) {
+    const uint32_t clip = open_stream(AUDIO_TEST_CUE_MP3_PATH);
+    TEST_ASSERT_NOT_EQUAL_UINT32(0, clip);
+    TEST_ASSERT_EQUAL_UINT32(1, audio_core_backend_decode_state(clip));
+    TEST_ASSERT_EQUAL_UINT64(0, audio_miniaudio_test_decoded_bytes());
+    audio_core_backend_clip_destroy(clip);
+    TEST_ASSERT_EQUAL_UINT32(2, audio_core_backend_decode_state(clip));
+
+    const uint32_t bad = audio_core_backend_stream_open(k_invalid, (uint32_t)sizeof(k_invalid));
+    TEST_ASSERT_NOT_EQUAL_UINT32(0, bad);
+    TEST_ASSERT_EQUAL_UINT32(2, audio_core_backend_decode_state(bad));
+    audio_core_backend_clip_destroy(bad);
+}
+
+void test_stream_voice_plays_through_the_engine_and_ends(void) {
+    const uint32_t clip = open_stream(AUDIO_TEST_CUE_MP3_PATH);
+    TEST_ASSERT_TRUE(audio_core_backend_user_gesture());
+    const uint32_t voice = audio_core_backend_voice_play(clip, 0, 1.0f, false);
+    TEST_ASSERT_NOT_EQUAL_UINT32(0, voice);
+    TEST_ASSERT_TRUE(audio_core_backend_voice_active(voice));
+    const uint64_t played = frames_until_silent(voice);
+    TEST_ASSERT_FALSE(audio_core_backend_voice_active(voice));
+    TEST_ASSERT_TRUE(played > 0 && played < AUDIO_TEST_RATE * 10u);
+    audio_core_backend_voice_stop(voice);
+
+    const uint32_t looping = audio_core_backend_voice_play(clip, 0, 1.0f, true);
+    TEST_ASSERT_EQUAL_UINT64(played * 3u, audio_miniaudio_test_render(played * 3u));
+    TEST_ASSERT_TRUE(audio_core_backend_voice_active(looping));
+    audio_core_backend_voice_stop(looping);
+    TEST_ASSERT_FALSE(audio_core_backend_voice_active(looping));
+    audio_core_backend_clip_destroy(clip);
+}
+
+/* A loop is seamless when each pass repeats the first sample for sample and
+   is as long as the master: the encoder's delay and padding are both gone. */
+void test_stream_loop_repeats_the_master_length_exactly(void) {
+    decoded_cue_t master = decode_cue(AUDIO_TEST_CUE_WAV_PATH);
+    const uint32_t clip = open_stream(AUDIO_TEST_CUE_MP3_PATH);
+    TEST_ASSERT_TRUE(audio_core_backend_user_gesture());
+    const uint32_t voice = audio_core_backend_voice_play(clip, 0, 0.0f, true);
+    audio_core_backend_set_paused(true);
+
+    const uint64_t master_frames = master.frames * 44100u / AUDIO_TEST_RATE;
+    const uint64_t frames = master_frames * 2u + 64u;
+    float *pcm = (float *)malloc(sizeof(float) * (size_t)frames);
+    TEST_ASSERT_NOT_NULL(pcm);
+    TEST_ASSERT_EQUAL_UINT64(frames, audio_miniaudio_test_stream_read(voice, pcm, frames));
+    uint64_t period = 0;
+    for (uint64_t candidate = master_frames - 64u; candidate <= master_frames + 64u && period == 0; ++candidate) {
+        bool repeats = true;
+        for (uint64_t i = 0; i + candidate < frames && repeats; ++i) repeats = pcm[i] == pcm[i + candidate];
+        if (repeats) period = candidate;
+    }
+    free(pcm);
+    TEST_ASSERT_TRUE_MESSAGE(period != 0, "the loop does not repeat its first pass");
+    const uint64_t drift = period > master_frames ? period - master_frames : master_frames - period;
+    TEST_ASSERT_TRUE_MESSAGE(drift <= 44u, "the loop is longer or shorter than its master");
+    audio_core_backend_voice_stop(voice);
+    audio_core_backend_clip_destroy(clip);
+    audio_core_backend_clip_destroy(master.clip);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_wav_decode_is_synchronous_and_reports_ready);
@@ -290,5 +381,9 @@ int main(void) {
     RUN_TEST(test_pcm_size_calculation_rejects_uint64_overflow);
     RUN_TEST(test_shipped_cue_starts_where_its_master_starts);
     RUN_TEST(test_shipped_cue_attack_window_carries_the_transient);
+    RUN_TEST(test_pitch_reaches_a_pooled_voice);
+    RUN_TEST(test_stream_opens_ready_without_decoding_pcm);
+    RUN_TEST(test_stream_voice_plays_through_the_engine_and_ends);
+    RUN_TEST(test_stream_loop_repeats_the_master_length_exactly);
     return UNITY_END();
 }

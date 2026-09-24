@@ -39,6 +39,13 @@ void audio_shutdown(void);
 void audio_update(void);
 
 audio_clip_t audio_clip_load(nt_hash64_t ready_blob_id);
+/* A long track played from its encoded blob, decoded a little at a time while
+   it plays: nothing is decoded here, and it holds the encoded bytes plus a
+   short buffer per voice instead of the whole track as PCM. For music; short
+   cues stay on audio_clip_load. It shares the clip pool and every clip and
+   voice call; a looping voice wraps sample-exact, trimming the MP3 encoder
+   delay and padding its Xing/LAME header declares. Pitch is ignored. */
+audio_clip_t audio_clip_stream(nt_hash64_t ready_blob_id);
 audio_clip_state_t audio_clip_state(audio_clip_t clip);
 void audio_clip_unload(audio_clip_t clip);
 

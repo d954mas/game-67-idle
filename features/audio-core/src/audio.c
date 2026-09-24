@@ -15,6 +15,7 @@ typedef struct audio_clip_slot_t {
     uint32_t backend;
     audio_clip_state_t state;
     bool occupied;
+    bool streamed;
 } audio_clip_slot_t;
 
 typedef struct audio_voice_slot_t {
@@ -151,7 +152,7 @@ void audio_update(void) {
     }
 }
 
-audio_clip_t audio_clip_load(nt_hash64_t ready_blob_id) {
+static audio_clip_t clip_open(nt_hash64_t ready_blob_id, bool streamed) {
     if (!s_initialized || !s_status.available || ready_blob_id.value == 0) return AUDIO_CLIP_INVALID;
     if (audio_core_resource_state(ready_blob_id.value) != 2) return AUDIO_CLIP_INVALID;
     const void *bytes = NULL;
@@ -164,14 +165,20 @@ audio_clip_t audio_clip_load(nt_hash64_t ready_blob_id) {
         if (!s_clips[i].occupied) { index = i; break; }
     }
     if (index == AUDIO_MAX_CLIPS) return AUDIO_CLIP_INVALID;
-    uint32_t backend = audio_core_backend_decode_begin(bytes, size);
+    uint32_t backend = streamed ? audio_core_backend_stream_open(bytes, size)
+                                : audio_core_backend_decode_begin(bytes, size);
     if (backend == 0) return AUDIO_CLIP_INVALID;
     audio_clip_slot_t *slot = &s_clips[index];
     slot->occupied = true;
+    slot->streamed = streamed;
     slot->backend = backend;
     slot->state = AUDIO_CLIP_STATE_LOADING;
     return (audio_clip_t){handle_pack(index, slot->generation)};
 }
+
+audio_clip_t audio_clip_load(nt_hash64_t ready_blob_id) { return clip_open(ready_blob_id, false); }
+
+audio_clip_t audio_clip_stream(nt_hash64_t ready_blob_id) { return clip_open(ready_blob_id, true); }
 
 audio_clip_state_t audio_clip_state(audio_clip_t clip) {
     audio_clip_slot_t *slot = clip_slot(clip, NULL);
@@ -247,7 +254,11 @@ void audio_voice_set_gain(audio_voice_t voice, float gain) {
 
 void audio_voice_set_pitch(audio_voice_t voice, float pitch) {
     audio_voice_slot_t *slot = voice_slot(voice, NULL);
-    if (slot != NULL && isfinite(pitch) && pitch > 0.0f) audio_core_backend_voice_set_pitch(slot->backend, pitch);
+    if (slot == NULL || !isfinite(pitch) || pitch <= 0.0f) return;
+    /* The web stream is scheduled ahead of the clock, where a rate change
+       would land late and tear the seams, so no backend pitches a stream. */
+    if (s_clips[slot->clip_index].streamed) return;
+    audio_core_backend_voice_set_pitch(slot->backend, pitch);
 }
 
 void audio_set_mix(float master, float music, float sfx) {

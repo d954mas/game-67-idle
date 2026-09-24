@@ -31,6 +31,7 @@ static fake_resource_t s_resources[FAKE_LIMIT];
 static fake_decode_t s_decodes[FAKE_LIMIT];
 static fake_voice_t s_voices[FAKE_LIMIT];
 static uint32_t s_decode_begins;
+static uint32_t s_stream_opens;
 static uint32_t s_clip_destroys;
 static uint32_t s_voice_stops;
 static uint32_t s_mix_applies;
@@ -52,6 +53,7 @@ void fake_audio_reset(void) {
     memset(s_decodes, 0, sizeof(s_decodes));
     memset(s_voices, 0, sizeof(s_voices));
     s_decode_begins = 0;
+    s_stream_opens = 0;
     s_clip_destroys = 0;
     s_voice_stops = 0;
     s_mix_applies = 0;
@@ -134,6 +136,7 @@ void fake_audio_set_backend_unlocked(bool unlocked) { s_backend_unlocked = unloc
 void fake_audio_set_gesture_result(bool result) { s_gesture_result = result; }
 void fake_audio_set_gesture_unlocks_immediately(bool unlocks) { s_gesture_unlocks_immediately = unlocks; }
 uint32_t fake_audio_backend_decode_begin_count(void) { return s_decode_begins; }
+uint32_t fake_audio_backend_stream_open_count(void) { return s_stream_opens; }
 uint32_t fake_audio_backend_clip_destroy_count(void) { return s_clip_destroys; }
 uint32_t fake_audio_backend_voice_stop_count(void) { return s_voice_stops; }
 uint32_t fake_audio_backend_mix_apply_count(void) { return s_mix_applies; }
@@ -173,6 +176,20 @@ uint32_t audio_core_backend_decode_begin(const void *bytes, uint32_t size) {
             s_decodes[i].state = 0;
             memcpy(s_decodes[i].copied, bytes, FAKE_BYTES);
             ++s_decode_begins;
+            return i + 1;
+        }
+    }
+    return 0;
+}
+
+uint32_t audio_core_backend_stream_open(const void *bytes, uint32_t size) {
+    if (bytes == NULL || size != FAKE_BYTES) return 0;
+    for (uint32_t i = 0; i < FAKE_LIMIT; ++i) {
+        if (!s_decodes[i].used) {
+            s_decodes[i].used = true;
+            s_decodes[i].state = 1;
+            memcpy(s_decodes[i].copied, bytes, FAKE_BYTES);
+            ++s_stream_opens;
             return i + 1;
         }
     }

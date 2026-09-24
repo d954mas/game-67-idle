@@ -7,6 +7,8 @@ mergeInto(LibraryManager.library, {
     HANDLE_INDEX_BITS: 8,
     HANDLE_INDEX_MASK: 255,
     HANDLE_GENERATION_MASK: 0x00ffffff,
+    // How far past the clock a stream's first chunk, or one after a stall, starts.
+    STREAM_LEAD_SECONDS: 0.02,
 
     context: null,
     masterNode: null,
@@ -193,6 +195,7 @@ mergeInto(LibraryManager.library, {
       slot.occupied = false;
       slot.state = 2;
       slot.buffer = null;
+      slot.stream = false;
       slot.pcmBytes = 0;
       slot.generation = AudioWebRuntime._nextGeneration(slot.generation);
     },
@@ -202,11 +205,18 @@ mergeInto(LibraryManager.library, {
       if (!slot || !slot.occupied) return;
       var source = slot.source;
       var gainNode = slot.gainNode;
+      var streamSources = slot.streamSources || [];
       slot.occupied = false;
       slot.active = false;
       slot.source = null;
       slot.gainNode = null;
+      slot.streamSources = null;
       slot.generation = AudioWebRuntime._nextGeneration(slot.generation);
+      for (var i = 0; i < streamSources.length; ++i) {
+        streamSources[i].onended = null;
+        try { streamSources[i].stop(); } catch (ignored) {}
+        try { streamSources[i].disconnect(); } catch (ignored) {}
+      }
       if (source) {
         source.onended = null;
         if (stopSource) {
@@ -353,6 +363,7 @@ mergeInto(LibraryManager.library, {
       slot.occupied = true;
       slot.state = 0;
       slot.buffer = null;
+      slot.stream = false;
       slot.pcmBytes = 0;
       var handle = AudioWebRuntime._packHandle(index, slot.generation);
       try {
@@ -384,6 +395,80 @@ mergeInto(LibraryManager.library, {
       return handle;
     },
 
+    // A streamed clip holds no PCM here: the C side owns its encoded bytes and
+    // pushes each voice's decoded chunks through streamPush.
+    streamOpen: function(ready) {
+      if (!AudioWebRuntime.context) return 0;
+      for (var i = 0; i < AudioWebRuntime.clips.length; ++i) {
+        var slot = AudioWebRuntime.clips[i];
+        if (slot.occupied) continue;
+        slot.occupied = true;
+        slot.state = ready ? 1 : 2;
+        slot.buffer = null;
+        slot.stream = true;
+        slot.pcmBytes = 0;
+        return AudioWebRuntime._packHandle(i, slot.generation);
+      }
+      return 0;
+    },
+
+    sampleRate: function() {
+      return AudioWebRuntime.context ? Math.round(AudioWebRuntime.context.sampleRate) : 0;
+    },
+
+    // Frames scheduled past the clock; -1 for a voice that is gone.
+    streamBufferedFrames: function(handle) {
+      var entry = AudioWebRuntime._voice(handle);
+      if (!entry || !entry.slot.streamSources) return -1;
+      var context = AudioWebRuntime.context;
+      var now = Math.floor(context.currentTime * context.sampleRate);
+      return entry.slot.streamNextFrame > now ? entry.slot.streamNextFrame - now : 0;
+    },
+
+    // Chunks are scheduled back to back on whole context frames, so they
+    // join sample-exact; a chunk that finds the clock past the queue (a stall
+    // longer than the lookahead) starts a little ahead of it instead.
+    streamPush: function(handle, leftPointer, rightPointer, frames) {
+      var entry = AudioWebRuntime._voice(handle);
+      if (!entry || !entry.slot.streamSources || frames <= 0) return;
+      var slot = entry.slot;
+      var context = AudioWebRuntime.context;
+      var rate = context.sampleRate;
+      var now = Math.ceil(context.currentTime * rate);
+      if (slot.streamNextFrame < now) slot.streamNextFrame = now + Math.round(AudioWebRuntime.STREAM_LEAD_SECONDS * rate);
+      var source;
+      try {
+        var buffer = context.createBuffer(2, frames, rate);
+        buffer.copyToChannel(HEAPF32.subarray(leftPointer >> 2, (leftPointer >> 2) + frames), 0);
+        buffer.copyToChannel(HEAPF32.subarray(rightPointer >> 2, (rightPointer >> 2) + frames), 1);
+        source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(slot.gainNode);
+        source.start(slot.streamNextFrame / rate);
+      } catch (error) {
+        if (source) try { source.disconnect(); } catch (ignored) {}
+        return;
+      }
+      slot.streamNextFrame += frames;
+      slot.streamSources.push(source);
+      source.onended = function() {
+        var current = AudioWebRuntime._voice(handle);
+        if (!current || !current.slot.streamSources) return;
+        var sources = current.slot.streamSources;
+        var at = sources.indexOf(source);
+        if (at >= 0) sources.splice(at, 1);
+        try { source.disconnect(); } catch (ignored) {}
+        if (current.slot.streamEnded && sources.length === 0) AudioWebRuntime._releaseVoice(current.index, false);
+      };
+    },
+
+    streamEnd: function(handle) {
+      var entry = AudioWebRuntime._voice(handle);
+      if (!entry || !entry.slot.streamSources) return;
+      entry.slot.streamEnded = true;
+      if (entry.slot.streamSources.length === 0) AudioWebRuntime._releaseVoice(entry.index, false);
+    },
+
     decodeState: function(handle) {
       var entry = AudioWebRuntime._clip(handle);
       return entry ? entry.slot.state : 2;
@@ -398,12 +483,14 @@ mergeInto(LibraryManager.library, {
       if (!AudioWebRuntime.context || !AudioWebRuntime.enabled || AudioWebRuntime.paused ||
           AudioWebRuntime.hidden || !AudioWebRuntime.gestureAccepted) return 0;
       var clip = AudioWebRuntime._clip(clipHandle);
-      if (!clip || clip.slot.state !== 1 || !clip.slot.buffer || (bus !== 0 && bus !== 1)) return 0;
+      if (!clip || clip.slot.state !== 1 || (!clip.slot.buffer && !clip.slot.stream) ||
+          (bus !== 0 && bus !== 1)) return 0;
       var index = -1;
       for (var i = 0; i < AudioWebRuntime.voices.length; ++i) {
         if (!AudioWebRuntime.voices[i].occupied) { index = i; break; }
       }
       if (index < 0) return 0;
+      if (clip.slot.stream) return AudioWebRuntime._streamVoicePlay(index, bus, gain);
 
       var source;
       var voiceGain;
@@ -439,6 +526,28 @@ mergeInto(LibraryManager.library, {
         return 0;
       }
       return handle;
+    },
+
+    _streamVoicePlay: function(index, bus, gain) {
+      var voiceGain;
+      try {
+        voiceGain = AudioWebRuntime.context.createGain();
+        voiceGain.gain.value = AudioWebRuntime._finiteGain(gain);
+        voiceGain.connect(bus === 0 ? AudioWebRuntime.musicNode : AudioWebRuntime.sfxNode);
+      } catch (error) {
+        if (voiceGain) try { voiceGain.disconnect(); } catch (ignored) {}
+        return 0;
+      }
+      var slot = AudioWebRuntime.voices[index];
+      slot.occupied = true;
+      slot.active = true;
+      slot.source = null;
+      slot.gainNode = voiceGain;
+      slot.streamSources = [];
+      slot.streamNextFrame = 0;
+      slot.streamEnded = false;
+      slot.resumeSerial = AudioWebRuntime.resumePending ? AudioWebRuntime.gestureSerial : 0;
+      return AudioWebRuntime._packHandle(index, slot.generation);
     },
 
     voiceActive: function(handle) {
@@ -530,6 +639,18 @@ mergeInto(LibraryManager.library, {
   audio_web_set_paused: function(paused) { AudioWebRuntime.setPaused(paused); },
   audio_web_user_gesture__deps: ["$AudioWebRuntime"],
   audio_web_user_gesture: function() { return AudioWebRuntime.userGesture() ? 1 : 0; },
+  audio_web_stream_open__deps: ["$AudioWebRuntime"],
+  audio_web_stream_open: function(ready) { return AudioWebRuntime.streamOpen(ready); },
+  audio_web_sample_rate__deps: ["$AudioWebRuntime"],
+  audio_web_sample_rate: function() { return AudioWebRuntime.sampleRate(); },
+  audio_web_stream_buffered_frames__deps: ["$AudioWebRuntime"],
+  audio_web_stream_buffered_frames: function(handle) { return AudioWebRuntime.streamBufferedFrames(handle); },
+  audio_web_stream_push__deps: ["$AudioWebRuntime"],
+  audio_web_stream_push: function(handle, left, right, frames) {
+    AudioWebRuntime.streamPush(handle, left, right, frames);
+  },
+  audio_web_stream_end__deps: ["$AudioWebRuntime"],
+  audio_web_stream_end: function(handle) { AudioWebRuntime.streamEnd(handle); },
   audio_web_is_unlocked__deps: ["$AudioWebRuntime"],
   audio_web_is_unlocked: function() {
     return AudioWebRuntime.context && AudioWebRuntime.context.state === "running" &&

@@ -19,6 +19,7 @@ void fake_audio_set_gesture_result(bool result);
 void fake_audio_set_gesture_unlocks_immediately(bool unlocks);
 
 uint32_t fake_audio_backend_decode_begin_count(void);
+uint32_t fake_audio_backend_stream_open_count(void);
 uint32_t fake_audio_backend_clip_destroy_count(void);
 uint32_t fake_audio_backend_voice_stop_count(void);
 uint32_t fake_audio_backend_mix_apply_count(void);
@@ -42,6 +43,7 @@ bool audio_core_backend_init(void);
 void audio_core_backend_shutdown(void);
 void audio_core_backend_update(void);
 uint32_t audio_core_backend_decode_begin(const void *bytes, uint32_t size);
+uint32_t audio_core_backend_stream_open(const void *bytes, uint32_t size);
 uint32_t audio_core_backend_decode_state(uint32_t clip);
 void audio_core_backend_clip_destroy(uint32_t clip);
 uint32_t audio_core_backend_voice_play(uint32_t clip, uint32_t bus, float gain, bool loop);
