@@ -21,18 +21,13 @@ uint32_t audio_core_backend_stream_open(const void *bytes, uint32_t size);
 /* A streamed voice held at gain 0 this long stops decoding and resumes on the
    sample it paused on once its gain rises. */
 #define AUDIO_CORE_STREAM_PARK_SECONDS 2.0
-/* What a full stream may be fed in one update, in source frames: what played
-   in `elapsed_seconds` since its last feed, but at least half a second, half
-   again as a margin, plus a chunk. Sized by time, it keeps up however far
-   apart the updates come; the floor covers a first feed, which has no
-   elapsed time to go by. */
-#define AUDIO_CORE_STREAM_PACE_MARGIN 1.5
-#define AUDIO_CORE_STREAM_PACE_FLOOR_SECONDS 0.5
-static inline uint32_t audio_core_stream_pace_frames(double elapsed_seconds, uint32_t rate, uint32_t chunk) {
-    const double seconds = elapsed_seconds > AUDIO_CORE_STREAM_PACE_FLOOR_SECONDS ? elapsed_seconds
-                                                                                   : AUDIO_CORE_STREAM_PACE_FLOOR_SECONDS;
-    const double played = seconds * (double)rate * AUDIO_CORE_STREAM_PACE_MARGIN;
-    return played > 4.0e9 ? UINT32_MAX : (uint32_t)played + chunk;
+/* A stream short of its lookahead by up to this many chunks is topped up at
+   pace, that many at most per update; a bigger deficit (a stall, a start, a
+   slow update rate) goes to the fill, which shares a time budget between
+   voices. Either way no update decodes more than the budget allows. */
+#define AUDIO_CORE_STREAM_PACE_CHUNKS 3u
+static inline bool audio_core_stream_deficit_fills(uint32_t deficit_frames, uint32_t chunk) {
+    return deficit_frames > AUDIO_CORE_STREAM_PACE_CHUNKS * chunk;
 }
 uint32_t audio_core_backend_decode_state(uint32_t clip);
 void audio_core_backend_clip_destroy(uint32_t clip);

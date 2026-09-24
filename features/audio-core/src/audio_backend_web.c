@@ -53,11 +53,10 @@ extern uint32_t audio_web_context_epoch(void);
 #define AUDIO_WEB_STREAM_AHEAD_SECONDS 3.25
 #define AUDIO_WEB_STREAM_AHEAD_MAX_SECONDS 4.0
 #define AUDIO_WEB_STREAM_AHEAD_GROWTH 1.5
-/* After a start, a resume or a gap an audible voice fills up to its lookahead
-   within this much main-thread time per update for all voices together, one
-   chunk per voice in turn, so a load right after it cannot starve it. Once
-   full, a voice is fed what played since its last feed (see
-   audio_core_stream_pace_frames), however far apart the updates come. */
+/* A voice further below its lookahead than pace covers (a start, a resume, a
+   gap, a slow update rate; see audio_core_stream_deficit_fills) fills within
+   this much main-thread time per update for all voices together, one chunk
+   per voice in turn, so a load right after a start cannot starve it. */
 #define AUDIO_WEB_STREAM_FILL_BUDGET_MS 4.0
 /* The chunk after a gap fades in over this long, so the restart does not
    click; the cut at the gap's start happened before it could be known. */
@@ -87,8 +86,6 @@ typedef struct audio_web_stream_voice_t {
     double ahead_seconds;
     /* Context time the gain went to zero; negative while audible. */
     double muted_since;
-    /* Context time of the last feed; negative before the first. */
-    double last_feed;
     /* The context these times belong to: a rebuilt context restarts its clock. */
     uint32_t epoch;
 } audio_web_stream_voice_t;
@@ -142,7 +139,6 @@ static bool stream_voice_start(uint32_t voice, const audio_web_stream_clip_t *cl
     stream->muted_since = gain > 0.0f ? -1.0 : audio_web_now();
     stream->ahead_seconds = AUDIO_WEB_STREAM_AHEAD_SECONDS;
     stream->filling = true;
-    stream->last_feed = -1.0;
     stream->epoch = audio_web_context_epoch();
     *slot = stream;
     return true;
@@ -210,9 +206,13 @@ static bool stream_needs(audio_web_stream_voice_t *stream, bool *gap) {
             stream->filling = true;
         }
     }
-    if (ahead >= (int)(stream->ahead_seconds * (double)stream->decoder.outputSampleRate)) {
+    const int target = (int)(stream->ahead_seconds * (double)stream->decoder.outputSampleRate);
+    if (ahead >= target) {
         stream->filling = false;
         return false;
+    }
+    if (audio_core_stream_deficit_fills((uint32_t)(target - ahead), AUDIO_WEB_STREAM_CHUNK_FRAMES)) {
+        stream->filling = true;
     }
     return true;
 }
@@ -233,8 +233,7 @@ static bool stream_feed_one(audio_web_stream_voice_t *stream) {
 }
 
 static bool stream_fills(const audio_web_stream_voice_t *stream) {
-    /* A silent voice is about to park: it only keeps pace. */
-    return stream->filling && stream->muted_since < 0.0 && !stream->ended && !stream->parked;
+    return stream->filling && !stream->ended && !stream->parked;
 }
 
 /* A voice held silent for AUDIO_CORE_STREAM_PARK_SECONDS stops decoding; its
@@ -272,18 +271,13 @@ static void streams_update(void) {
         if (stream->epoch != epoch) {
             stream->epoch = epoch;
             if (stream->muted_since >= 0.0) stream->muted_since = now;
-            stream->last_feed = -1.0;
             stream->filling = true;
         }
         stream_park_check(stream);
         if (stream->ended || stream->parked) continue;
-        /* Keep pace: what played since the last feed, with margin. A filling
-           voice gets its first chunk here and the rest in turn below. */
-        const double elapsed = stream->last_feed < 0.0 || now < stream->last_feed ? 0.0 : now - stream->last_feed;
-        const uint32_t allowed = audio_core_stream_pace_frames(elapsed, stream->decoder.outputSampleRate,
-            AUDIO_WEB_STREAM_CHUNK_FRAMES);
-        stream->last_feed = now;
-        for (uint32_t fed = 0; fed < allowed; fed += AUDIO_WEB_STREAM_CHUNK_FRAMES) {
+        /* At pace; a filling voice gets its first chunk here and the rest in
+           turn below. */
+        for (uint32_t fed = 0; fed < AUDIO_CORE_STREAM_PACE_CHUNKS; ++fed) {
             if (!stream_feed_one(stream) || stream_fills(stream)) break;
         }
     }

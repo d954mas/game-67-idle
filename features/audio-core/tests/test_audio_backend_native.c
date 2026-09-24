@@ -397,27 +397,44 @@ void test_a_stream_held_silent_parks_and_resumes_where_it_paused(void) {
     audio_core_backend_clip_destroy(clip);
 }
 
-/* Fed only at pace from a full queue, a stream must never run dry, from a
-   60 fps loop down to the web runtime's 150 ms timer and a 2 fps crawl. */
+/* The web feed's policy: at most AUDIO_CORE_STREAM_PACE_CHUNKS a voice per
+   update at pace, a bigger deficit filled within a budget. With a budget of a
+   second's chunks, as slow as a -O0 build manages in 4 ms, the queue must
+   never run dry at 60 fps, the 150 ms timer, 1 Hz, or after a 2 s stall, and
+   no update may take more than the pace chunks plus the budget. */
 void test_stream_pace_supplies_at_least_real_time(void) {
     const uint32_t rate = 32000u;
     const uint32_t chunk = 2048u;
     const double target = 3.25 * (double)rate;
-    const double intervals[] = {1.0 / 60.0, 0.15, 0.5};
+    const uint32_t budget_chunks = rate / chunk;
+    const double intervals[] = {1.0 / 60.0, 0.15, 1.0};
     for (size_t k = 0; k < sizeof intervals / sizeof intervals[0]; ++k) {
         double queue = target;
         double lowest = queue;
+        uint32_t most = 0;
         for (double t = 0.0; t < 60.0; t += intervals[k]) {
             queue -= intervals[k] * (double)rate;
+            if (t >= 30.0 && t < 30.0 + intervals[k]) queue -= 2.0 * (double)rate; /* a 2 s stall */
             if (queue < lowest) lowest = queue;
-            const uint32_t allowed = audio_core_stream_pace_frames(intervals[k], rate, chunk);
-            for (uint32_t fed = 0; fed < allowed && queue < target; fed += chunk) queue += (double)chunk;
+            if (queue < 0.0) queue = 0.0;
+            uint32_t fed = 0;
+            bool fill = false;
+            for (uint32_t n = 0; n < AUDIO_CORE_STREAM_PACE_CHUNKS && queue < target && !fill; ++n) {
+                fill = audio_core_stream_deficit_fills((uint32_t)(target - queue), chunk);
+                queue += (double)chunk;
+                ++fed;
+            }
+            for (uint32_t n = 0; fill && n < budget_chunks && queue < target; ++n) {
+                queue += (double)chunk;
+                ++fed;
+            }
+            if (fed > most) most = fed;
         }
-        TEST_ASSERT_TRUE_MESSAGE(lowest > target - (intervals[k] * (double)rate + (double)chunk),
-            "the queue drains at this update interval");
+        TEST_ASSERT_TRUE_MESSAGE(lowest > 0.0, "the queue ran dry at this update interval");
+        TEST_ASSERT_TRUE(most <= AUDIO_CORE_STREAM_PACE_CHUNKS + budget_chunks);
     }
-    TEST_ASSERT_TRUE(audio_core_stream_pace_frames(0.0, rate, chunk) >= chunk);
-    TEST_ASSERT_TRUE(audio_core_stream_pace_frames(-1.0, rate, chunk) >= chunk);
+    TEST_ASSERT_FALSE(audio_core_stream_deficit_fills(AUDIO_CORE_STREAM_PACE_CHUNKS * chunk, chunk));
+    TEST_ASSERT_TRUE(audio_core_stream_deficit_fills(AUDIO_CORE_STREAM_PACE_CHUNKS * chunk + 1u, chunk));
 }
 
 /* A loop is seamless when each pass repeats the first sample for sample and

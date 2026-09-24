@@ -342,8 +342,9 @@ mergeInto(LibraryManager.library, {
       if (AudioWebRuntime.rebuildWanted && AudioWebRuntime.rebuildTimer === null) AudioWebRuntime._rebuild();
     },
 
+    // Also the 2 s retry timer's callback: it only ever resumes, so timers
+    // alone never make a context past the rebuild limit.
     _wake: function() {
-      AudioWebRuntime._retryRebuild();
       var context = AudioWebRuntime.context;
       if (!context || context.state === "running" || context.state === "closed" ||
           !AudioWebRuntime._wantsRunning()) return;
@@ -470,7 +471,10 @@ mergeInto(LibraryManager.library, {
         AudioWebRuntime._suspendForPolicy();
         if (!AudioWebRuntime.hidden) AudioWebRuntime._requestResume(false);
       };
-      AudioWebRuntime.wakeListener = function() { AudioWebRuntime._wake(); };
+      AudioWebRuntime.wakeListener = function() {
+        AudioWebRuntime._retryRebuild();
+        AudioWebRuntime._wake();
+      };
       if (typeof window !== "undefined" && window.addEventListener) {
         window.addEventListener("focus", AudioWebRuntime.wakeListener);
         window.addEventListener("pageshow", AudioWebRuntime.wakeListener);

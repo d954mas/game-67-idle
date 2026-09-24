@@ -786,6 +786,10 @@ test("a context that keeps failing is rebuilt with growing delays, then waits fo
   const rebuilt = runtime.rebuilds;
   runtime.context.onerror();
   assert.equal(runtime.rebuilds, rebuilt, "past the limit nothing rebuilds by itself");
+  for (let round = 0; round < 10; ++round) {
+    for (const timer of timers.filter((entry) => entry.live)) timer.fn();
+  }
+  assert.equal(runtime.rebuilds, rebuilt, "timers alone make no new context past the limit");
   document.dispatch("pointerup");
   assert.equal(runtime.rebuilds, rebuilt + 1, "the player's gesture does");
 });

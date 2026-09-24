@@ -63,15 +63,14 @@ does:
   frames on either side of it. Stop and gain act on the voice's gain
   node, so the lookahead adds no control latency. At 32 kHz mono that is
   416 KB of PCM per playing voice, 512 KB at the cap. Effects are unaffected.
-- Fill: once full, a voice is refilled to its lookahead each update, but
-  fed at most what played since its last feed, at least 0.5 s' worth, half
-  again as a margin, plus a chunk. Sized by time, that keeps up at 60 fps,
-  at the 150 ms timer and at 1 update a second alike. After a start, a
-  resume or a gap, audible voices fill to their lookahead in turn, a chunk
-  each, within 4 ms of main-thread time per update for all of them: in -O3
+- Fill: a voice up to three chunks below its lookahead is topped up at
+  pace, three chunks an update at most. A bigger deficit (a start, a
+  resume, a gap, a stall, a slow update rate) fills in turn, a chunk per
+  voice, within 4 ms of main-thread time per update for all voices: in -O3
   wasm the first update schedules 3.25 s in 2.6 ms, so a load right after
-  the music starts does not starve it. One gap grows the lookahead once,
-  however many updates the fill takes.
+  the music starts does not starve it. That keeps up at 60 fps, at the
+  150 ms timer and at one update a second alike. One gap grows the
+  lookahead once, however many updates the fill takes.
 - A timer every 150 ms feeds the streams when the game loop has not called
   for 200 ms and the context runs, so music continues while frames stop but
   the page stays visible (an offscreen or throttled frame).
