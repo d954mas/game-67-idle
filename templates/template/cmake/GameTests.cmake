@@ -514,6 +514,13 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_game_events COMMAND test_game_events)
     set_tests_properties(test_game_events PROPERTIES LABELS "core")
 
+    game_add_c_test(test_game_events_ctx
+        SOURCES "${GAME_EVENTS_DIR}/tests/test_game_events_ctx.c" "${GAME_EVENTS_SRC}/game_events.c"
+                "${ENGINE_DIR}/tests/unit/test_helpers/nt_assert_trap.c"
+        LIBS nt_hash nt_log nt_core
+        INCLUDES "${GAME_EVENTS_INC}" "${ENGINE_DIR}/tests/unit"
+        TIER core WARNINGS)
+
     # (2) overflow-drop: тот же файл + GAME_EVENTS_SOFT_OVERFLOW=1 -> emit ДРОПАЕТ
     # (не assert'ит) в debug-ctest, проверяет release-семантику (тест #10). Не
     # звено с nt_assert_trap: этот бинарь не использует NT_TEST_EXPECT_ASSERT

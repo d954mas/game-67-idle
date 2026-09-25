@@ -110,6 +110,57 @@ bool game_events_react_progressed(void);
    frame падает громко). */
 void game_event_frame_reset(void);
 
+/* ---- Contexts: an event log in caller memory ----
+   A context is a double-buffered log. `cur` takes emits; `prev` is the log as it
+   stood at the last swap and stays readable until the next swap, which poisons it
+   (0xDD in debug). A context has no phases and no react loop: a tick-driven
+   caller emits in system order and reads backward edges through `prev`.
+   Contexts share nothing with each other or with the global API above, which is
+   the default, single-buffered context. Fields are private to game_events.c. */
+typedef struct {
+    uint8_t *arena;
+    game_event_t *log;
+    size_t arena_used;
+    uint32_t count;
+} game_events_buffer_t;
+
+typedef struct {
+    game_events_buffer_t cur;
+    game_events_buffer_t prev;
+    size_t arena_bytes; /* per buffer */
+    uint32_t log_cap;   /* events per buffer */
+    uint64_t seq;       /* survives swaps */
+    uint32_t tick;      /* bumped by each swap */
+    uint32_t dropped;   /* cumulative, release overflow only */
+    bool overflow_warned;
+    bool soft_warned;
+} game_events_ctx_t;
+
+/* Bytes of caller memory a context with these caps needs: two arenas and two logs. */
+size_t game_events_ctx_memory_bytes(size_t arena_bytes, uint32_t log_cap);
+
+/* `memory` is aligned to max_align_t, holds game_events_ctx_memory_bytes() bytes
+   and outlives the context; the context never allocates. seq = 0, tick = 0. */
+void game_events_ctx_init(game_events_ctx_t *ctx, void *memory, size_t memory_bytes,
+                          size_t arena_bytes, uint32_t log_cap);
+
+/* game_event_emit() into `cur`, with the same alignment and overflow contract
+   against this context's caps. */
+const void *game_events_ctx_emit(game_events_ctx_t *ctx, nt_hash64_t type, const void *payload,
+                                 uint32_t size, size_t align);
+
+/* This tick's events, in emit order. Valid until the second swap from now. */
+const game_event_t *game_events_ctx_log(const game_events_ctx_t *ctx, int *count);
+
+/* The previous tick's events. Valid until the next swap. */
+const game_event_t *game_events_ctx_prev(const game_events_ctx_t *ctx, int *count);
+
+/* cur -> prev, the old prev is poisoned and becomes the empty cur, tick++. */
+void game_events_ctx_swap(game_events_ctx_t *ctx);
+
+uint32_t game_events_ctx_tick(const game_events_ctx_t *ctx);
+uint32_t game_events_ctx_dropped(const game_events_ctx_t *ctx);
+
 /* ---- Type-name registration seam used by generated event code ----
    Тонкая обёртка над nt_hash_register_label64: в debug-сборках с NT_HASH_LABELS
    DevAPI/лог показывают "items.txn" вместо хекса. No-op, если nt_hash собран без

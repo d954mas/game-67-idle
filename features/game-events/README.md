@@ -28,6 +28,8 @@ features/game-events/
     game_events_log_mirror.c
     game_events_devapi.c
     game_analytics.c
+  tests/
+    test_game_events_ctx.c
 ```
 
 ## What It Owns
@@ -53,6 +55,24 @@ features/game-events/
 Events are transient frame data, not state. Producers emit payload copies into a
 fixed arena; consumers read them in the same frame during react/record phases.
 State remains the source of truth.
+
+## Contexts
+
+The global API is the default context: one log, cleared by
+`game_event_frame_reset`, driven through the emit/react/record phases. A caller
+that needs a log of its own -- a simulated room, one per process slot -- gives a
+`game_events_ctx_t` its own memory (`game_events_ctx_memory_bytes`, aligned to
+`max_align_t`) and caps. A context never allocates and shares nothing with
+another context or with the default one: its seq, tick, drop counter and
+warnings are its own.
+
+A context is double-buffered and has no phases. `game_events_ctx_emit` appends
+to `cur`; `game_events_ctx_swap` turns `cur` into `prev` and hands back the old
+`prev`, poisoned (`0xDD` in debug) and empty, as the new `cur`. So a tick's
+events are readable through `game_events_ctx_prev` for exactly one tick after
+the swap that ended it, which is what a system late in the order needs to react
+to an event emitted by an earlier tick. Overflow follows the default context's
+contract against the context's own caps.
 
 Typed event producers register descriptors from their owning feature or game
 layer. `game-events` renders any descriptor-compatible event generically, so
@@ -111,6 +131,11 @@ section makes the rendered length content-driven, and a marker carrying none of 
 payment is worse than a stop. Every caller must pass a buffer of
 `GAME_EVENT_RENDER_LINE_MAX`; a render that still does not fit asserts. A consumer
 that sized its own 512-byte line must adopt the shared budget.
+
+3.1.0 adds caller-owned contexts (`game_events_ctx_t`, `game_events_ctx_init`,
+`_emit`, `_log`, `_prev`, `_swap`, `_tick`, `_dropped`). The global API is the
+default context and behaves as before, except that a debug `frame_reset` now
+poisons the used log entries as well as the arena.
 
 ## Extension points
 
