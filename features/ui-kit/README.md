@@ -110,8 +110,10 @@ set the bar: a prototype should not have to design a UI before it has a game.
   regions may then stay unpacked. A button's plate follows the engine button's
   state tint without its easing, and the engine still moves and scales it.
   Engine widgets that take only atlas regions -- `nt_ui_slider`,
-  `nt_ui_progress`, the switches, the dropdown and the scroll thumb -- keep
-  drawing the art. The shapes are flat: a sheet's gloss and rivets (Studio B)
+  `nt_ui_progress`, the switches and the dropdown -- keep drawing the art,
+  and their kit style accessors assert when it is not bound. With `art.white`
+  set to the atlas's white pixel the scroll thumb draws from it, tinted: a
+  flat bar rather than the pill. `ui_kit_disc_begin` needs a FIXED width. The shapes are flat: a sheet's gloss and rivets (Studio B)
   are not drawn, so that sheet keeps its art.
 - `tools/gen_ui_kit.py --tokens <sheet> --out <assets/ui>` — draws the slice9 art
   from a token sheet. `art.gloss` (0 when omitted) lightens the top rim of the

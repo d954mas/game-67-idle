@@ -102,6 +102,8 @@ void ui_kit_meter(nt_ui_context_t *ctx, float w, float h, float ratio, uint32_t 
 // draws those without antialiasing, the art is antialiased at every scale.
 void ui_kit_plate_begin(nt_ui_context_t *ctx, const Clay_ElementDeclaration *decl, uint32_t tint);
 void ui_kit_plate_end(nt_ui_context_t *ctx);
+// Under the shape theme the disc's `decl` must size its width FIXED: the rim
+// scales with it (asserted).
 void ui_kit_disc_begin(nt_ui_context_t *ctx, const Clay_ElementDeclaration *decl, uint32_t tint);
 void ui_kit_disc_end(nt_ui_context_t *ctx);
 

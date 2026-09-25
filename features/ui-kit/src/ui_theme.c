@@ -216,7 +216,8 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     nt_ui_scroll_style_t sc = nt_ui_scroll_style_defaults();
     sc.bar_visibility = NT_UI_SCROLLBAR_AUTO_HIDE;
     sc.bar_thickness = t->gap * 0.5F;
-    sc.thumb_ref = g_ui_theme.art.slider_fill;
+    sc.thumb_ref = (g_ui_theme.art.shapes && g_ui_theme.art.white.atlas.id != 0U) ? g_ui_theme.art.white
+                                                                                   : g_ui_theme.art.slider_fill;
     sc.thumb_tint = t->ink_soft;
     g_ui_theme.scroll = sc;
 

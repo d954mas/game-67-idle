@@ -84,10 +84,16 @@ static ui_kit_radial_style_t disc_plate(uint32_t tint, float size) {
         .outline_w = t->rim * size / 32.0F, .outline_rgb = times(rgb_of(t->shell), face), .alpha = alpha_of(tint)};
 }
 
+// The disc's rim grows with its width, which has to be known before layout.
 static float fixed_side(const Clay_ElementDeclaration *decl) {
-    if (decl == NULL || decl->layout.sizing.width.type != CLAY__SIZING_TYPE_FIXED) { return 32.0F; }
+    NT_ASSERT(decl != NULL && decl->layout.sizing.width.type == CLAY__SIZING_TYPE_FIXED &&
+              "ui_kit_disc_begin: the shape theme needs a FIXED width");
     return decl->layout.sizing.width.size.minMax.min;
 }
+
+// An engine widget that takes only atlas regions draws nothing under the shape
+// theme unless the consumer still packs that art.
+#define ART_PACKED(region) (!shapes() || (region).atlas.id != 0U)
 
 // ---- primitives -----------------------------------------------------------
 
@@ -191,13 +197,12 @@ static uint32_t state_tint(nt_ui_context_t *ctx, uint32_t id, const nt_ui_button
     return in.hovered ? style->hover.bg_tint : style->idle.bg_tint;
 }
 
-void ui_kit_button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t *style, bool enabled,
-                         const nt_ui_events_cfg_t *cfg) {
+static void button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t *style, bool enabled,
+                         const nt_ui_events_cfg_t *cfg, bool round) {
     const Clay_ElementDeclaration fill = {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                                                      .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}};
     NT_ASSERT(s_button_depth < UI_KIT_BUTTON_DEPTH && "ui_kit_button_begin: buttons nest too deep");
     const bool shape = shapes() && style->idle.bg.atlas.id == 0U;
-    const bool round = style == &g_ui_theme.button_close;
     s_button_shape[s_button_depth++] = !shape ? BUTTON_ART : round ? BUTTON_RADIAL : BUTTON_PANEL;
     if (!shape) {
         nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), id, style, &fill, enabled, cfg);
@@ -221,6 +226,11 @@ void ui_kit_button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t
         const ui_kit_panel_style_t s = button_plate(tint);
         ui_kit_panel_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), &s, &fill);
     }
+}
+
+void ui_kit_button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t *style, bool enabled,
+                         const nt_ui_events_cfg_t *cfg) {
+    button_begin(ctx, id, style, enabled, cfg, false);
 }
 
 bool ui_kit_button_end(nt_ui_context_t *ctx) {
@@ -277,6 +287,7 @@ void ui_kit_meter(nt_ui_context_t *ctx, float w, float h, float ratio, uint32_t 
 }
 
 nt_ui_slider_style_t *ui_kit_slider_style(const ui_metrics_t *m) {
+    NT_ASSERT(ART_PACKED(g_ui_theme.slider.states[NT_UI_SLIDER_IDLE].track) && "ui_kit_slider_style: the shape theme packs no slider art");
     static nt_ui_slider_style_t s;
     static uint32_t generation;
     if (generation != g_ui_theme.generation) {
@@ -377,7 +388,7 @@ bool ui_kit_close_button(nt_ui_context_t *ctx, const char *id, const char *label
                        .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER, .parent = CLAY_ATTACH_POINT_RIGHT_TOP},
                        .offset = {-inset, inset}},
           .layout = {.sizing = {CLAY_SIZING_FIXED(m.hit), CLAY_SIZING_FIXED(m.hit)}}}) {
-        ui_kit_button_begin(ctx, nt_ui_child_id(nt_ui_id(id), "plate"), &g_ui_theme.button_close, true, NULL);
+        button_begin(ctx, nt_ui_child_id(nt_ui_id(id), "plate"), &g_ui_theme.button_close, true, NULL, true);
         if (icon->atlas.id != 0U) {
             ui_kit_icon_tinted(ctx, icon, m.hit * 0.42F, ui_theme_tokens()->ink);
         } else {
@@ -598,9 +609,18 @@ void ui_kit_sheet_end(nt_ui_context_t *ctx) {
 
 void ui_kit_sheet_clear(nt_ui_context_t *ctx, const char *id) { nt_ui_modal_clear_state(ctx, nt_ui_id(id)); }
 
-nt_ui_checkbox_style_t *ui_kit_toggle_style(void) { return &g_ui_theme.toggle; }
-nt_ui_checkbox_style_t *ui_kit_checkbox_style(void) { return &g_ui_theme.checkbox; }
-nt_ui_checkbox_style_t *ui_kit_radio_style(void) { return &g_ui_theme.radio; }
+nt_ui_checkbox_style_t *ui_kit_toggle_style(void) {
+    NT_ASSERT(ART_PACKED(g_ui_theme.art.slider_fill_sm) && "ui_kit_toggle_style: the shape theme packs no switch art");
+    return &g_ui_theme.toggle;
+}
+nt_ui_checkbox_style_t *ui_kit_checkbox_style(void) {
+    NT_ASSERT(ART_PACKED(g_ui_theme.art.slider_fill_sm) && "ui_kit_checkbox_style: the shape theme packs no switch art");
+    return &g_ui_theme.checkbox;
+}
+nt_ui_checkbox_style_t *ui_kit_radio_style(void) {
+    NT_ASSERT(ART_PACKED(g_ui_theme.art.thumb) && "ui_kit_radio_style: the shape theme packs no switch art");
+    return &g_ui_theme.radio;
+}
 
 // A settings row: the label fills the row, the control sits at one end, and
 // the whole row is one touch-height line.

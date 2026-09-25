@@ -52,6 +52,9 @@ typedef struct {
     // scroll) still draw from the art. The shapes reproduce flat art: a
     // sheet's gloss and rivets are not drawn.
     bool shapes;
+    // The atlas's white pixel. Under the shape theme the scroll thumb is it,
+    // tinted: a flat bar, since the engine scroll takes only a region.
+    nt_atlas_region_ref_t white;
 } ui_theme_art_t;
 
 typedef struct {
