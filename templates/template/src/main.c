@@ -331,7 +331,7 @@ static void devapi_sample_metrics(double frame_begin) {
         .frame_ms = frame_ms,
         .cpu_ms = (float)((nt_time_now() - frame_begin) * 1000.0),
         .gpu_ms = -1.0F,
-        .draw_calls = nt_gfx_get_frame_draw_calls(),
+        .draw_calls = nt_gfx_draw_calls(&g_nt_gfx.counters),
         .mem_used = mem_used,
         .scratch_hwm = (uint32_t)nt_mem_scratch_high_water_mark(),
         .scratch_used = (uint32_t)nt_mem_scratch_used(),
@@ -603,7 +603,6 @@ static void frame(void) {
         s_gfx_recovery_pending = true;
         /* Resource slots publish the invalidation on the next top-of-frame
            resource step, so this frame must not touch their stale GPU handles. */
-        nt_gfx_end_frame();
         nt_window_swap_buffers();
         devapi_sample_metrics(frame_begin);
         return;
@@ -642,7 +641,6 @@ static void frame(void) {
         nt_app_quit();
     }
 
-    nt_gfx_end_frame();
     /* UI may request New Game during draw. Drain it before pagehide can flush
        the previous state; this callback is still one synchronous frame. */
     game_runtime_apply_pending_cloud_save();
@@ -792,9 +790,12 @@ int main(int argc, char **argv) {
     game_events_log_mirror_register_descs(game_log_descs, game_log_desc_count);
 #endif
     nt_resource_init(&(nt_resource_desc_t){0});
-    nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader, nt_gfx_deactivate_shader);
-    nt_resource_set_activator(NT_ASSET_MESH, nt_gfx_activate_mesh, nt_gfx_deactivate_mesh);
-    nt_resource_set_activator(NT_ASSET_TEXTURE, nt_gfx_activate_texture, nt_gfx_deactivate_texture); // mesh texture + UI atlas page
+    nt_resource_register_type(NT_ASSET_SHADER_CODE, &(nt_resource_type_desc_t){
+        .activate = nt_gfx_activate_shader, .deactivate = nt_gfx_deactivate_shader});
+    nt_resource_register_type(NT_ASSET_MESH, &(nt_resource_type_desc_t){
+        .activate = nt_gfx_activate_mesh, .deactivate = nt_gfx_deactivate_mesh});
+    nt_resource_register_type(NT_ASSET_TEXTURE, &(nt_resource_type_desc_t){
+        .activate = nt_gfx_activate_texture, .deactivate = nt_gfx_deactivate_texture}); // mesh texture + UI atlas page
     nt_mem_scratch_init((size_t)512U * 1024U); // per-frame arena nt_ui builds element data from
     loc_init(); // after the scratch arena: formatted strings allocate from it
 

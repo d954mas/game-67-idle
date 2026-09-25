@@ -357,7 +357,6 @@ static void frame(void) {
         }
     }
     nt_gfx_end_pass();
-    nt_gfx_end_frame();
 
     if (drew) {
         s_ready_frames++;
