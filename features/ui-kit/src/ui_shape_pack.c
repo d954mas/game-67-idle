@@ -44,5 +44,8 @@ void ui_kit_pack_radial(const ui_kit_radial_style_t *s, ui_kit_shape_block_t *ou
 
 uint32_t ui_kit_shape_tint(uint32_t rgb, float alpha) {
     const uint32_t a = (uint32_t)byte01(alpha);
-    return (a << 24U) | ((rgb & 0xFFU) << 16U) | (rgb & 0xFF00U) | ((rgb >> 16U) & 0xFFU);
+    const uint32_t packed = (a << 24U) | ((rgb & 0xFFU) << 16U) | (rgb & 0xFF00U) | ((rgb >> 16U) & 0xFFU);
+    // The walker reads an all-zero tint as "untinted" and draws opaque white;
+    // one unit of red at zero alpha still draws nothing.
+    return packed != 0U ? packed : 1U;
 }

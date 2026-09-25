@@ -95,11 +95,20 @@ static void test_zero_style_is_not_a_sprite(void) {
     TEST_ASSERT_EQUAL_HEX32(0xFF563412U, ui_kit_shape_tint(0x123456U, 1.0F));
 }
 
+/* The engine reads an all-zero tint as "untinted" and draws it opaque white,
+   so black faded to nothing must still pack to a non-zero, fully clear tint. */
+static void test_clear_black_is_not_untinted(void) {
+    const uint32_t tint = ui_kit_shape_tint(0x000000U, 0.0F);
+    TEST_ASSERT_NOT_EQUAL_HEX32(0U, tint);
+    TEST_ASSERT_EQUAL_UINT32(0U, tint >> 24U);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_panel_fields_round_trip);
     RUN_TEST(test_lengths_clamp_to_their_field);
     RUN_TEST(test_radial_carries_angles_verbatim);
     RUN_TEST(test_zero_style_is_not_a_sprite);
+    RUN_TEST(test_clear_black_is_not_untinted);
     return UNITY_END();
 }
