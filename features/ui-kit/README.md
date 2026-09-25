@@ -100,6 +100,19 @@ set the bar: a prototype should not have to design a UI before it has a game.
   `ui_kit_panel_begin_styled`/`ui_kit_radial_begin_styled` are containers:
   the engine has no container form of `nt_ui_image_custom`, so they open the
   element with the public image payload themselves.
+- The shape theme: with `ui_theme_art_t.shapes` set (and the uber material as
+  the base), the kit's own plates -- `ui_kit_panel_begin`, `ui_kit_tile_begin`,
+  the dialog's header band, every `ui_kit_button*` and the round close,
+  `ui_kit_plate_begin`, `ui_kit_disc_begin` and `ui_kit_meter` -- draw as SDF
+  shapes of what `gen_ui_kit.py` bakes: the same radii (`r_panel`, `r_button`,
+  `r_tile`, `r_bar`, `r_header` in the tokens), rim, lift and ledge shade
+  (`ledge_step`), in the UI units the art's slice9 borders land in. Their
+  regions may then stay unpacked. A button's plate follows the engine button's
+  state tint without its easing, and the engine still moves and scales it.
+  Engine widgets that take only atlas regions -- `nt_ui_slider`,
+  `nt_ui_progress`, the switches, the dropdown and the scroll thumb -- keep
+  drawing the art. The shapes are flat: a sheet's gloss and rivets (Studio B)
+  are not drawn, so that sheet keeps its art.
 - `tools/gen_ui_kit.py --tokens <sheet> --out <assets/ui>` — draws the slice9 art
   from a token sheet. `art.gloss` (0 when omitted) lightens the top rim of the
   fixed-colour surfaces — panel and tile — so they read as moulded plastic

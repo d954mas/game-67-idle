@@ -29,7 +29,8 @@ void ui_kit_pack_panel(const ui_kit_panel_style_t *s, ui_kit_shape_block_t *out)
         .paint = {rgb24(s->bottom_rgb), rgb24(s->outline_rgb), rgb24(s->lip_rgb),
             bytes3(s->gloss_a, s->checker_a, s->highlight_a)},
         .fx = {pair12(quarters(s->gloss_inset), quarters(s->gloss_top)), pair12(quarters(s->gloss_h), quarters(s->gloss_cap)),
-            pair12(quarters(s->checker_px), quarters(s->highlight_w)), pair12(byte01(s->press), s->overlay ? 1.0F : 0.0F)},
+            pair12(quarters(s->checker_px), quarters(s->highlight_w)),
+            pair12(byte01(s->press), (s->overlay ? 1.0F : 0.0F) + (s->lip_inside ? 2.0F : 0.0F))},
     };
 }
 

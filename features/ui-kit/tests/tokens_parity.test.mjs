@@ -101,6 +101,23 @@ for (const { sheet, source: preset } of presets) {
       "button bottom border does not contain radius plus lift",
     );
   });
+
+  // The shape theme draws the same corners and ledge the art bakes; the
+  // generator's defaults (header = panel - rim, ledge = deep step) apply here too.
+  test(`${sheet.id}: shape radii and ledge match its art`, () => {
+    const radius = sheet.art.radius;
+    const expected = {
+      r_panel: radius.panel,
+      r_button: radius.button,
+      r_tile: radius.tile,
+      r_bar: radius.bar,
+      r_header: radius.header ?? radius.panel - sheet.geometry.rim,
+      ledge_step: sheet.art.ledge_step ?? sheet.art.deep_step,
+    };
+    for (const [name, value] of Object.entries(expected)) {
+      assert.equal(Number.parseFloat(field(preset, name)), value, name);
+    }
+  });
 }
 
 test("legacy token initializers fall back to on_panel for action labels", () => {

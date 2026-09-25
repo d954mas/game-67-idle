@@ -44,6 +44,14 @@ typedef struct {
     // attr_map a_radial@4 and a_layout@7), for the discs the kit draws without
     // art: crisp at every size. id 0 = the kit falls back to the thumb art.
     nt_material_t radial;
+    // The kit draws its own plates -- panel, tile, header band, buttons, the
+    // round close, plates, discs and the meter -- as ui_shape.h SDF shapes
+    // instead of the art above, so those regions may stay zero. Needs the uber
+    // material as the context's base and ui_kit_shape_bind. Engine widgets
+    // that take only atlas regions (slider, progress, switches, dropdown,
+    // scroll) still draw from the art. The shapes reproduce flat art: a
+    // sheet's gloss and rivets are not drawn.
+    bool shapes;
 } ui_theme_art_t;
 
 typedef struct {

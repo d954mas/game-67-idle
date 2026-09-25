@@ -21,6 +21,10 @@ typedef struct ui_kit_panel_style_t {
     float face_radius;    // the fill's corner radius inside the contour; 0 = radius - outline_w
     float lip_h;          // the step under the face, inside the box; 0 for none
     uint32_t lip_rgb;
+    // The lip inside the contour, as the kit's button art draws it: the
+    // contour runs round the whole box and the face stands lip_h above its
+    // bottom rim. `press` does not apply; the engine button moves the box.
+    bool lip_inside;
     float press;          // 0..1: the face sinks onto the lip
     float highlight_w;    // a white band just inside the contour
     float highlight_a;

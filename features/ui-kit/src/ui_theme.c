@@ -119,15 +119,19 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     g_ui_theme.plate_img = nt_ui_image_style_defaults();
     g_ui_theme.plate_img.slice9_scale = t->slice9_scale;
 
+    // A shape theme draws the kit's own button plates itself (ui_kit.c), so
+    // the engine button behind them carries no art, only the motion.
+    const nt_atlas_region_ref_t plate = g_ui_theme.art.shapes ? (nt_atlas_region_ref_t){0} : g_ui_theme.art.button;
+    const nt_atlas_region_ref_t disc = g_ui_theme.art.shapes ? (nt_atlas_region_ref_t){0} : g_ui_theme.art.thumb;
     nt_ui_button_style_t base = {
-        .idle = {.bg = g_ui_theme.art.button, .bg_tint = 0xFFFFFFFFU, .scale = 1.0F, .opacity = 1.0F},
-        .hover = {.bg = g_ui_theme.art.button, .bg_tint = 0xFFFFFFFFU, .scale = 1.04F, .opacity = 1.0F},
+        .idle = {.bg = plate, .bg_tint = 0xFFFFFFFFU, .scale = 1.0F, .opacity = 1.0F},
+        .hover = {.bg = plate, .bg_tint = 0xFFFFFFFFU, .scale = 1.04F, .opacity = 1.0F},
         // Pressed sinks INTO the lift ledge the art already draws: the offset is
         // the whole press, the scale only keeps the corners from popping.
-        .pressed = {.bg = g_ui_theme.art.button, .bg_tint = 0xFFFFFFFFU, .scale = 0.98F, .offset_y = t->lift * 0.75F, .opacity = 1.0F},
+        .pressed = {.bg = plate, .bg_tint = 0xFFFFFFFFU, .scale = 0.98F, .offset_y = t->lift * 0.75F, .opacity = 1.0F},
         // One disabled look for every role: the off fill, no dimming, so a
         // disabled buy never reads as a faded buy.
-        .disabled = {.bg = g_ui_theme.art.button, .bg_tint = t->off, .scale = 1.0F, .opacity = 1.0F},
+        .disabled = {.bg = plate, .bg_tint = t->off, .scale = 1.0F, .opacity = 1.0F},
         .transition_speed = 12.0F,
         .hit_padding_lrtb = {8, 8, 8, 8},
         .slice9_scale = t->slice9_scale,
@@ -149,10 +153,10 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     // is kept for what destroys; a circle has no ledge to sink into, so the
     // press is scale alone.
     nt_ui_button_style_t round = base;
-    round.idle.bg = g_ui_theme.art.thumb;
-    round.hover.bg = g_ui_theme.art.thumb;
-    round.pressed.bg = g_ui_theme.art.thumb;
-    round.disabled.bg = g_ui_theme.art.thumb;
+    round.idle.bg = disc;
+    round.hover.bg = disc;
+    round.pressed.bg = disc;
+    round.disabled.bg = disc;
     round.pressed.offset_y = 0.0F;
     round.pressed.scale = 0.92F;
     g_ui_theme.button_close = action_button(round, t->tile);

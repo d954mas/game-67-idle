@@ -95,6 +95,15 @@ static void test_zero_style_is_not_a_sprite(void) {
     TEST_ASSERT_EQUAL_HEX32(0xFF563412U, ui_kit_shape_tint(0x123456U, 1.0F));
 }
 
+/* The flags share one 12-bit field: overlay is bit 0, the inside lip bit 1. */
+static void test_flags_pack_as_bits(void) {
+    ui_kit_shape_block_t b;
+    ui_kit_pack_panel(&(ui_kit_panel_style_t){.lip_inside = true, .alpha = 1.0F}, &b);
+    TEST_ASSERT_EQUAL_UINT32(2U, hi12(b.fx[3]));
+    ui_kit_pack_panel(&(ui_kit_panel_style_t){.lip_inside = true, .overlay = true, .alpha = 1.0F}, &b);
+    TEST_ASSERT_EQUAL_UINT32(3U, hi12(b.fx[3]));
+}
+
 /* The engine reads an all-zero tint as "untinted" and draws it opaque white,
    so black faded to nothing must still pack to a non-zero, fully clear tint. */
 static void test_clear_black_is_not_untinted(void) {
@@ -110,5 +119,6 @@ int main(void) {
     RUN_TEST(test_radial_carries_angles_verbatim);
     RUN_TEST(test_zero_style_is_not_a_sprite);
     RUN_TEST(test_clear_black_is_not_untinted);
+    RUN_TEST(test_flags_pack_as_bits);
     return UNITY_END();
 }

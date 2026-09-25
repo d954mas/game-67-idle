@@ -88,6 +88,11 @@ typedef struct {
     // for game-owned positional and designated initializers that predate this
     // optional token.
     uint32_t on_action;
+    // The art's corner radii and button ledge shade (art.radius and
+    // art.ledge_step of the sheet), for a theme that draws its plates as
+    // shapes (ui_theme_art_t.shapes). Zero takes the studio default's.
+    float r_panel, r_button, r_tile, r_bar, r_header;
+    float ledge_step;
 } ui_tokens_t;
 
 // The studio's default look: what a new prototype wears before anyone repaints

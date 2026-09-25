@@ -75,13 +75,29 @@ vec4 panel(vec2 size, vec2 px) {
     float lip = face_lip.y;
     float press = press_flags.x / 255.0 * lip;
     bool overlay = mod(press_flags.y, 2.0) >= 1.0;
+    bool lip_inside = mod(floor(press_flags.y * 0.5), 2.0) >= 1.0;
+    vec4 inner_r = face_lip.x > 0.0 ? vec4(face_lip.x) : max(radius - outline, 0.0);
+
+    // The kit's button art: the contour rims the whole box, the lip fills its
+    // inside, and the face covers that inside but for lip units at the bottom.
+    if (lip_inside && !overlay) {
+        vec2 box_c = size * 0.5;
+        vec2 top_half = vec2(size.x * 0.5 - outline, (size.y - 2.0 * outline - lip) * 0.5);
+        vec4 acc_in = vec4(0.0);
+        if (outline > 0.0) {
+            acc_in = over(acc_in, outline_rgb, cov(sd_rbox(px - box_c, box_c, radius)));
+        }
+        acc_in = over(acc_in, lip_rgb, cov(sd_rbox(px - box_c, box_c - outline, inner_r)));
+        float t_in = clamp((px.y - outline) / max(2.0 * top_half.y, 1e-3), 0.0, 1.0);
+        float d_top = sd_rbox(px - vec2(box_c.x, outline + top_half.y), top_half, inner_r);
+        return over(acc_in, mix(v_color.rgb, bottom, t_in), cov(d_top));
+    }
 
     // The face stands on the lip: the element's box is the face plus the lip
     // under it, and a press sinks the face onto the lip.
     float face_h = size.y - lip;
     vec2 face_c = vec2(size.x * 0.5, press + face_h * 0.5);
     vec2 face_half = vec2(size.x, face_h) * 0.5;
-    vec4 inner_r = face_lip.x > 0.0 ? vec4(face_lip.x) : max(radius - outline, 0.0);
     float d_face = sd_rbox(px - face_c, face_half, radius);
     float d_in = sd_rbox(px - face_c, face_half - outline, inner_r);
 

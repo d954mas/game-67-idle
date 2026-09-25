@@ -50,6 +50,13 @@ static const ui_tokens_t STUDIO_DEFAULT = {
     .slice9_scale = 0.25F,
 
     .on_action = 0xFFFFFFFFU,
+
+    .r_panel = 14.0F,
+    .r_button = 16.0F,
+    .r_tile = 12.0F,
+    .r_bar = 11.0F,
+    .r_header = 11.0F,
+    .ledge_step = 0.72F,
 };
 
 /* Mirrors tokens/studio_b.json. Studio B is opt-in: existing consumers keep
@@ -98,6 +105,13 @@ static const ui_tokens_t STUDIO_B = {
     .slice9_scale = 0.25F,
 
     .on_action = 0xFFFFFFFFU,
+
+    .r_panel = 14.0F,
+    .r_button = 12.0F,
+    .r_tile = 12.0F,
+    .r_bar = 11.0F,
+    .r_header = 11.0F,
+    .ledge_step = 0.62F,
 };
 
 const ui_tokens_t *ui_tokens_studio_default(void) { return &STUDIO_DEFAULT; }
