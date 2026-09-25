@@ -171,6 +171,15 @@ to the exact sent snapshot. `game_save_sync_decide(sync, choose, user)` is the
 cloud coordinator's automatic decision for such a shell: the base settles
 "remote unchanged -> upload local" and "local unchanged -> adopt remote", and a
 conflict goes to the game's `choose` callback, which sees both whole documents.
+The reference policy is `choose_by_progress` in `tests/test_game_state_doc.c`:
+migrate both documents first, and answer `GAME_SAVE_ASK` when either is
+unreadable or newer than the build, so neither is overwritten automatically.
+
+An adoption never destroys a local document with unsynced changes: the sync
+keeps it (`game_save_sync_displaced_document`) and refuses the next displacing
+adoption until the caller has persisted it and called
+`game_save_sync_clear_displaced`. The registered-save coordinator writes it to
+the `cloud_sync_displaced` storage slot.
 
 ## Instance documents
 
@@ -191,13 +200,16 @@ uses instance documents instead, which never touch the `game_save` singleton:
   fragment the schema lacks: only a document migration drops one.
 - `game_state_doc_migrate` is pure: document steps, then each fragment's steps,
   in the order the `game_save` load path uses, on the same cJSON shapes. A
-  current document is copied byte for byte.
+  current document, and every current fragment no document step changes, is
+  copied byte for byte; a stepped fragment holding an integer of magnitude 2^53
+  or more is refused rather than rounded.
 - `game_save_seal.h` seals any text with ChaCha20 and HMAC-SHA256 under a
   32-byte game key, encrypt-then-MAC, with a nonce derived from the plaintext so
   one document always seals to one text. The key ships in the client: it stops
   casual reading and editing, not a determined player. The header documents the
   format a server needs to verify the tag. Nothing seals the registered save by
-  accident; a caller seals explicitly.
+  accident; a caller seals explicitly. A text that fails to unseal is kept
+  (quarantined) by the caller, never overwritten.
 
 Sources: `src/game_state_doc.c` (with `game_save_text.c`, `game_state_json.c`,
 cJSON) and `src/game_save_seal.c` (standalone). The template builds and runs
@@ -332,7 +344,9 @@ tick.
 Version `4.8.0` adds instance fragments (`generate_state.py --instance`),
 instance documents with a pure migration (`game_state_doc.h`), the save seal
 (`game_save_seal.h`), and `game_save_sync_decide`. Generated singleton
-fragments and every existing API are unchanged.
+fragments and every existing API are unchanged. One behaviour is new: when a
+cloud adoption replaces a local save that held unsynced changes, the
+registered-save coordinator keeps that save in the `cloud_sync_displaced` slot.
 
 ## Extension points
 

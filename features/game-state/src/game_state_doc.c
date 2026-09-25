@@ -279,35 +279,92 @@ static bool add_field(cJSON *fragment, const game_save_text_record_t *record, ch
     }
 }
 
-static cJSON *parse_features(const char *text, size_t size, char *error, int error_cap) {
+/* A fragment's body as the document wrote it, so a fragment no step touches is
+   copied byte for byte instead of passing through cJSON doubles. */
+typedef struct {
+    char id[DOC_KEY_MAX];
+    const char *body;
+    size_t body_size;
+} source_fragment_t;
+
+typedef struct {
+    source_fragment_t items[GAME_SAVE_MAX_FRAGMENTS];
+    int count;
+} source_fragments_t;
+
+static const source_fragment_t *find_source(const source_fragments_t *sources, const char *id) {
+    for (int i = 0; i < sources->count; i++) {
+        if (strcmp(sources->items[i].id, id) == 0) return &sources->items[i];
+    }
+    return NULL;
+}
+
+static cJSON *parse_features(const char *text, size_t size, source_fragments_t *sources, char *error,
+                             int error_cap) {
     cJSON *features = cJSON_CreateObject();
-    if (features == NULL) return NULL;
+    if (features == NULL) {
+        gsj_set_error(error, error_cap, "failed to stage document");
+        return NULL;
+    }
+    sources->count = 0;
     game_save_text_reader_t reader;
     game_save_text_record_t record;
     cJSON *fragment = NULL;
     game_save_text_reader_init(&reader, text, size);
     for (;;) {
         const game_save_text_result_t result = game_save_text_reader_next(&reader, &record, error, error_size(error_cap));
-        if (result == GAME_SAVE_TEXT_DONE) return features;
         if (result == GAME_SAVE_TEXT_ERROR) break;
         if (result == GAME_SAVE_TEXT_RECORD_META) continue;
+        if (result == GAME_SAVE_TEXT_DONE || result == GAME_SAVE_TEXT_RECORD_FRAGMENT) {
+            if (sources->count > 0) {
+                source_fragment_t *open = &sources->items[sources->count - 1];
+                const char *end = result == GAME_SAVE_TEXT_DONE ? text + size : text + record.source_offset;
+                open->body_size = (size_t)(end - open->body);
+            }
+            if (result == GAME_SAVE_TEXT_DONE) return features;
+        }
         if (result == GAME_SAVE_TEXT_RECORD_FRAGMENT) {
-            char id[DOC_KEY_MAX];
-            if (record.key_size >= sizeof id) break;
-            memcpy(id, record.key, record.key_size);
-            id[record.key_size] = '\0';
-            if (cJSON_GetObjectItemCaseSensitive(features, id) != NULL) {
+            if (record.key_size >= DOC_KEY_MAX) {
+                gsj_set_error(error, error_cap, "fragment id too long");
+                break;
+            }
+            if (sources->count >= GAME_SAVE_MAX_FRAGMENTS) {
+                gsj_set_error(error, error_cap, "document has too many fragments");
+                break;
+            }
+            source_fragment_t *source = &sources->items[sources->count++];
+            memcpy(source->id, record.key, record.key_size);
+            source->id[record.key_size] = '\0';
+            source->body = text + record.next_offset;
+            source->body_size = 0;
+            if (cJSON_GetObjectItemCaseSensitive(features, source->id) != NULL) {
                 gsj_set_error(error, error_cap, "duplicate fragment");
                 break;
             }
-            fragment = cJSON_AddObjectToObject(features, id);
-            if (fragment == NULL || cJSON_AddNumberToObject(fragment, "v", (double)record.version) == NULL) break;
+            fragment = cJSON_AddObjectToObject(features, source->id);
+            if (fragment == NULL || cJSON_AddNumberToObject(fragment, "v", (double)record.version) == NULL) {
+                gsj_set_error(error, error_cap, "failed to stage fragment");
+                break;
+            }
             continue;
         }
         if (!add_field(fragment, &record, error, error_cap)) break;
     }
     cJSON_Delete(features);
     return NULL;
+}
+
+static bool append_body(game_save_text_writer_t *out, const char *body, size_t size) {
+    while (size > 0U && (body[size - 1U] == '\n' || body[size - 1U] == '\r' || body[size - 1U] == ' ')) size--;
+    if (!game_save_text_writer_ok(out) || size + 1U >= out->capacity - out->used) {
+        out->failed = true;
+        return false;
+    }
+    memcpy(out->data + out->used, body, size);
+    out->used += size;
+    if (size > 0U) out->data[out->used++] = '\n';
+    out->data[out->used] = '\0';
+    return true;
 }
 
 static bool write_json_fields(game_save_text_writer_t *out, const cJSON *object, char *path, size_t path_size,
@@ -332,9 +389,17 @@ static bool write_json_fields(game_save_text_writer_t *out, const cJSON *object,
             ok = game_save_text_write_string(out, path, item->valuestring);
         } else if (cJSON_IsNumber(item)) {
             const double value = item->valuedouble;
-            ok = value == trunc(value) && fabs(value) <= 9007199254740992.0
-                     ? game_save_text_write_i64(out, path, (int64_t)value)
-                     : game_save_text_write_number(out, path, value);
+            if (value == trunc(value) && fabs(value) >= 9007199254740992.0) {
+                /* A double cannot tell such an integer from its neighbours; writing
+                   it would produce a document that reads back wrong or not at all. */
+                char message[DOC_KEY_MAX + 64];
+                (void)snprintf(message, sizeof message, "an integer of magnitude 2^53 or more cannot pass a migration step: %s",
+                               path);
+                gsj_set_error(error, error_cap, message);
+                return false;
+            }
+            ok = value == trunc(value) ? game_save_text_write_i64(out, path, (int64_t)value)
+                                       : game_save_text_write_number(out, path, value);
         } else {
             gsj_set_error(error, error_cap, "a migrated fragment holds a value NTGS cannot carry");
             return false;
@@ -396,9 +461,12 @@ bool game_state_doc_migrate(const game_state_doc_schema_t *schema, const char *t
         return true;
     }
 
-    cJSON *features = parse_features(text, size, error, error_cap);
+    source_fragments_t sources;
+    cJSON *features = parse_features(text, size, &sources, error, error_cap);
     if (features == NULL) return false;
-    bool ok = true;
+    cJSON *before = cJSON_Duplicate(features, true);
+    bool ok = before != NULL;
+    if (!ok) gsj_set_error(error, error_cap, "failed to stage document");
     for (int v = header.save_version; ok && v < schema->save_version; v++) {
         const GameSaveDocumentMigrateFn step = schema->document_steps != NULL ? schema->document_steps[v - 1] : NULL;
         if (step == NULL) {
@@ -425,12 +493,24 @@ bool game_state_doc_migrate(const game_state_doc_schema_t *schema, const char *t
         const game_state_doc_fragment_t *fragment = schema->fragments[i];
         cJSON *object = cJSON_GetObjectItemCaseSensitive(features, fragment->id);
         if (object == NULL) continue;
+        /* Untouched by every document step and already current: its source text
+           is the exact document, integers beyond 2^53 included. */
+        const source_fragment_t *source = find_source(&sources, fragment->id);
+        const cJSON *staged = cJSON_GetObjectItemCaseSensitive(before, fragment->id);
+        const cJSON *stored = cJSON_GetObjectItemCaseSensitive(object, "v");
+        if (source != NULL && staged != NULL && cJSON_IsNumber(stored) &&
+            (int)stored->valuedouble == fragment->version && cJSON_Compare(object, staged, true)) {
+            ok = game_save_text_begin_fragment(out, fragment->id, fragment->version) &&
+                 append_body(out, source->body, source->body_size);
+            continue;
+        }
         char path[DOC_KEY_MAX];
         path[0] = '\0';
         ok = run_fragment_steps(fragment, object, error, error_cap) &&
              game_save_text_begin_fragment(out, fragment->id, fragment->version) &&
              write_json_fields(out, object, path, sizeof path, 0U, error, error_cap);
     }
+    cJSON_Delete(before);
     cJSON_Delete(features);
     if (ok && !game_save_text_writer_ok(out)) {
         gsj_set_error(error, error_cap, "migration output does not fit");

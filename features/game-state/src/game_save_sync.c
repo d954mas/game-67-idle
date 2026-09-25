@@ -91,6 +91,7 @@ void game_save_sync_destroy(game_save_sync_t *sync) {
     free(sync->remote);
     free(sync->sent);
     free(sync->resolved_remote);
+    free(sync->displaced);
     *sync = (game_save_sync_t){.state = GAME_SAVE_SYNC_WAITING_REMOTE};
 }
 
@@ -233,8 +234,21 @@ void game_save_sync_reject_remote(game_save_sync_t *sync) {
 }
 
 bool game_save_sync_commit_remote_adoption(game_save_sync_t *sync) {
-    if (sync == NULL || sync->state != GAME_SAVE_SYNC_ADOPT_REMOTE || sync->remote == NULL ||
-        !replace_document(&sync->local, sync->remote) || !replace_document(&sync->base, sync->remote)) return false;
+    if (sync == NULL || sync->state != GAME_SAVE_SYNC_ADOPT_REMOTE || sync->remote == NULL) return false;
+    const bool displaces = sync->local != NULL && !sync->local_is_fresh && !documents_equal(sync->local, sync->base) &&
+        !documents_equal(sync->local, sync->remote);
+    if (displaces) {
+        if (sync->displaced != NULL) return false; /* the previous copy is not persisted yet */
+        sync->displaced = sync->local;
+        sync->local = NULL;
+    }
+    if (!replace_document(&sync->local, sync->remote) || !replace_document(&sync->base, sync->remote)) {
+        if (displaces && sync->local == NULL) {
+            sync->local = sync->displaced;
+            sync->displaced = NULL;
+        }
+        return false;
+    }
     sync->local_is_fresh = false;
     free(sync->resolved_remote);
     sync->resolved_remote = NULL;
@@ -257,4 +271,14 @@ game_save_sync_state_t game_save_sync_decide(game_save_sync_t *sync, game_save_s
         if (choice != GAME_SAVE_ASK) (void)game_save_sync_resolve(sync, choice);
     }
     return sync->state;
+}
+
+const char *game_save_sync_displaced_document(const game_save_sync_t *sync) {
+    return sync != NULL ? sync->displaced : NULL;
+}
+
+void game_save_sync_clear_displaced(game_save_sync_t *sync) {
+    if (sync == NULL) return;
+    free(sync->displaced);
+    sync->displaced = NULL;
 }

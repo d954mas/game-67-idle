@@ -25,6 +25,7 @@ static game_save_choice_t s_policy_decision;
 static int s_policy_calls;
 static bool s_storage_capability;
 static bool s_backend_ready;
+static char *s_displaced;
 
 bool platform_sdk_storage_supported(void) { return s_storage_capability; }
 
@@ -68,6 +69,7 @@ bool game_storage_read(const char *slot, char **out, game_storage_read_status_t 
 bool game_storage_write(const char *slot, const char *text, char *error, int error_cap) {
     (void)error;
     (void)error_cap;
+    if (strcmp(slot, "cloud_sync_displaced") == 0) return replace_text(&s_displaced, text);
     return replace_text(strcmp(slot, "cloud_sync_base") == 0 ? &s_base : &s_local, text);
 }
 
@@ -156,7 +158,8 @@ void tearDown(void) {
     free(s_local);
     free(s_base);
     free(s_live);
-    s_local = s_base = s_live = NULL;
+    free(s_displaced);
+    s_local = s_base = s_live = s_displaced = NULL;
     s_now = 0.0;
     s_read_id = s_write_id = 0;
     s_read_calls = s_write_calls = 0;
@@ -186,6 +189,7 @@ static void test_fresh_device_adopts_valid_account_document(void) {
     TEST_ASSERT_EQUAL_STRING("account", s_live);
     TEST_ASSERT_EQUAL_STRING("account", s_local);
     TEST_ASSERT_EQUAL_STRING("account", s_base);
+    TEST_ASSERT_NULL(s_displaced); /* a fresh default save holds no progress */
 }
 
 static void test_failed_read_blocks_writes_and_retries_once_per_interval(void) {
@@ -392,6 +396,7 @@ static void test_auto_remote_applies_only_at_the_safe_point(void) {
     TEST_ASSERT_TRUE(game_save_cloud_apply_remote_at_safe_point());
     TEST_ASSERT_EQUAL_STRING("account", s_live);
     TEST_ASSERT_EQUAL_STRING("account", s_base);
+    TEST_ASSERT_EQUAL_STRING("local", s_displaced);
 }
 
 static void test_new_local_state_cancels_auto_remote_before_apply(void) {

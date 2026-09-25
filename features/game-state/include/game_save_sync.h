@@ -35,6 +35,9 @@ typedef struct game_save_sync {
     bool remote_adoption_allowed;
     bool local_resolution_pending;
     bool resolved_remote_was_empty;
+    /* The local document a remote adoption replaced while it held changes the
+       base did not: player progress the adoption would otherwise destroy. */
+    char *displaced;
 } game_save_sync_t;
 
 void game_save_sync_init(game_save_sync_t *sync);
@@ -65,6 +68,14 @@ void game_save_sync_store_finished(game_save_sync_t *sync, bool acknowledged);
 bool game_save_sync_resolve(game_save_sync_t *sync, game_save_choice_t resolution);
 void game_save_sync_reject_remote(game_save_sync_t *sync);
 bool game_save_sync_commit_remote_adoption(game_save_sync_t *sync);
+
+/* After an adoption that replaced a local document with unsynced changes, that
+   document is kept here, never discarded: the caller writes it to a quarantine
+   slot, then clears it. A later adoption replaces it only after a clear, so an
+   unpersisted copy is never lost; until then the adoption is refused. NULL when
+   nothing was displaced. game_save_sync_destroy frees it. */
+const char *game_save_sync_displaced_document(const game_save_sync_t *sync);
+void game_save_sync_clear_displaced(game_save_sync_t *sync);
 
 /* The instance form of the cloud coordinator's automatic decision, for a caller
    that owns its transport and storage (several profiles, a server). The sync

@@ -15,6 +15,8 @@
 
 #define GAME_SAVE_CLOUD_DEFAULT_SLOT GAME_SAVE_AUTOSAVE_SLOT
 #define GAME_SAVE_CLOUD_DEFAULT_BASE_SLOT "cloud_sync_base"
+/* The last local document an adoption replaced while it held unsynced progress. */
+#define GAME_SAVE_CLOUD_DISPLACED_SLOT "cloud_sync_displaced"
 #define GAME_SAVE_CLOUD_BOOT_WAIT_SEC 4.0
 #define GAME_SAVE_CLOUD_RETRY_SEC 5.0
 
@@ -243,6 +245,13 @@ static bool adopt_remote(void) {
         game_save_sync_reject_remote(&s_cloud.sync);
         return true;
     }
+    const char *displaced = game_save_sync_displaced_document(&s_cloud.sync);
+    if (displaced != NULL &&
+        !game_storage_write(GAME_SAVE_CLOUD_DISPLACED_SLOT, displaced, error, (int)sizeof error)) {
+        nt_log_warn("game_save_cloud: could not keep the replaced local save (%s)",
+                    error[0] != '\0' ? error : "no reason reported");
+    }
+    game_save_sync_clear_displaced(&s_cloud.sync);
     (void)persist_base();
     return true;
 }

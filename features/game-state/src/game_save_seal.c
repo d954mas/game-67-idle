@@ -234,13 +234,25 @@ static int b64_value(char c) {
     return -1;
 }
 
+/* The largest plaintext whose sealed size fits size_t and whose ChaCha20 block
+   counter (32-bit, RFC 8439) never wraps. */
+static size_t max_plain_size(void) {
+    const size_t digits = (SIZE_MAX - PREFIX_SIZE - 1U) / 4U * 4U;
+    size_t limit = digits / 4U * 3U - NONCE_SIZE - TAG_SIZE;
+    const uint64_t counter_limit = (uint64_t)UINT32_MAX * 64U;
+    if ((uint64_t)limit > counter_limit) limit = (size_t)counter_limit;
+    return limit;
+}
+
 size_t game_save_seal_capacity(size_t plain_size) {
+    if (plain_size > max_plain_size()) return 0U;
     return PREFIX_SIZE + b64_size(NONCE_SIZE + plain_size + TAG_SIZE) + 1U;
 }
 
 bool game_save_seal(const uint8_t key[GAME_SAVE_SEAL_KEY_SIZE], const char *plain, size_t plain_size, char *out,
                     size_t out_capacity, size_t *out_size) {
-    if (key == NULL || plain == NULL || out == NULL || out_capacity < game_save_seal_capacity(plain_size)) {
+    const size_t needed = game_save_seal_capacity(plain_size);
+    if (key == NULL || plain == NULL || out == NULL || needed == 0U || out_capacity < needed) {
         return false;
     }
     uint8_t enc_key[SHA_SIZE], mac_key[SHA_SIZE], iv_key[SHA_SIZE], iv[SHA_SIZE];
@@ -277,7 +289,9 @@ bool game_save_seal(const uint8_t key[GAME_SAVE_SEAL_KEY_SIZE], const char *plai
 }
 
 size_t game_save_unseal_capacity(size_t sealed_size) {
-    return sealed_size > PREFIX_SIZE ? (sealed_size - PREFIX_SIZE) * 3U / 4U + 1U : 1U;
+    /* Divide before multiplying: sealed_size * 3 wraps on a 32-bit size_t. */
+    const size_t digits = sealed_size > PREFIX_SIZE ? sealed_size - PREFIX_SIZE : 0U;
+    return digits / 4U * 3U + digits % 4U + 1U;
 }
 
 bool game_save_unseal(const uint8_t key[GAME_SAVE_SEAL_KEY_SIZE], const char *sealed, size_t sealed_size, char *out,
@@ -291,6 +305,7 @@ bool game_save_unseal(const uint8_t key[GAME_SAVE_SEAL_KEY_SIZE], const char *se
     const size_t digits = sealed_size - PREFIX_SIZE;
     const size_t raw_size = digits / 4U * 3U + (digits % 4U ? digits % 4U - 1U : 0U);
     if (digits % 4U == 1U || raw_size < NONCE_SIZE + TAG_SIZE ||
+        raw_size - NONCE_SIZE - TAG_SIZE > max_plain_size() ||
         out_capacity < raw_size - NONCE_SIZE - TAG_SIZE + 1U) {
         gsj_set_error(error, error_cap, "not a sealed save");
         return false;
@@ -303,6 +318,7 @@ bool game_save_unseal(const uint8_t key[GAME_SAVE_SEAL_KEY_SIZE], const char *se
     for (size_t i = 0; i < digits; i++) {
         const int v = b64_value(sealed[PREFIX_SIZE + i]);
         if (v < 0) {
+            memset(out, 0, plain_size + 1U);
             gsj_set_error(error, error_cap, "not a sealed save");
             return false;
         }

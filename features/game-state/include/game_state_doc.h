@@ -69,8 +69,10 @@ bool game_state_doc_read_header(const char *text, size_t size, game_state_doc_he
    current one, running document steps first and then each fragment's steps,
    exactly as the game_save load path orders them. save_id and rev pass through.
    A current document is copied byte for byte, so migrating twice changes
-   nothing. Numbers travel through cJSON doubles, as on the game_save path, so
-   an old i64 beyond 2^53 loses precision in a migrated fragment. */
+   nothing, and so is every fragment that is current and no document step
+   changed. A fragment a step does touch travels through cJSON doubles, as on the
+   game_save path; if it holds an integer of magnitude 2^53 or more the migration fails with
+   an error naming the field rather than write a document that reads back wrong. */
 bool game_state_doc_migrate(const game_state_doc_schema_t *schema, const char *text, size_t size,
                             game_save_text_writer_t *out, char *error, int error_cap);
 

@@ -220,7 +220,20 @@ static void test_a_tampered_seal_is_rejected(void) {
                                            (int)sizeof error));
         TEST_ASSERT_EQUAL_CHAR('\0', plain[0]);
     }
+    /* Non-canonical digits fail and leave no partial ciphertext behind. */
+    const char invalid[] = {'=', '\n', ' ', '+', '/'};
+    for (size_t k = 0; k < sizeof invalid; k++) {
+        memcpy(again, sealed, sealed_size + 1u);
+        again[sealed_size - 3u] = invalid[k];
+        memset(plain, 'Z', sizeof plain);
+        TEST_ASSERT_FALSE(game_save_unseal(k_key, again, sealed_size, plain, sizeof plain, NULL, NULL, 0));
+        for (size_t i = 0; i < size; i++) TEST_ASSERT_EQUAL_CHAR('\0', plain[i]);
+    }
     TEST_ASSERT_FALSE(game_save_unseal(k_key, sealed, sealed_size - 1u, plain, sizeof plain, NULL, NULL, 0));
+    TEST_ASSERT_EQUAL_size_t(0u, game_save_seal_capacity(SIZE_MAX));
+    TEST_ASSERT_EQUAL_size_t(0u, game_save_seal_capacity(SIZE_MAX - 100u));
+    TEST_ASSERT_FALSE(game_save_seal(k_key, doc, SIZE_MAX, again, sizeof again, NULL));
+    TEST_ASSERT_TRUE(game_save_unseal_capacity(SIZE_MAX) > SIZE_MAX / 2u);
     uint8_t wrong[GAME_SAVE_SEAL_KEY_SIZE];
     memcpy(wrong, k_key, sizeof wrong);
     wrong[31] ^= 1u;
@@ -228,11 +241,20 @@ static void test_a_tampered_seal_is_rejected(void) {
     TEST_ASSERT_FALSE(game_save_unseal(k_key, doc, size, plain, sizeof plain, NULL, NULL, 0));
 }
 
-/* ---- The lead's solo-sync rule on sealed fixture documents ---- */
+/* ---- Solo-sync rule on sealed fixture documents ----
+   choose_by_progress is the reference policy a game copies: it compares only
+   documents this build can read at the current version, and never lets an
+   unreadable or newer document be overwritten without the player. */
 
 typedef struct {
     char text[2048];
 } sealed_doc_t;
+
+static sealed_doc_t seal_text(const char *plain) {
+    sealed_doc_t sealed;
+    TEST_ASSERT_TRUE(game_save_seal(k_key, plain, strlen(plain), sealed.text, sizeof sealed.text, NULL));
+    return sealed;
+}
 
 static sealed_doc_t make_doc(uint64_t save_id, int64_t rev, int64_t xp, int level) {
     profile_t profile;
@@ -242,30 +264,33 @@ static sealed_doc_t make_doc(uint64_t save_id, int64_t rev, int64_t xp, int leve
     profile.progress.level = level;
     const game_state_doc_header_t header = {.save_id = save_id, .rev = rev};
     char doc[DOC_CAP];
-    const size_t size = write_profile(&profile, &header, doc, sizeof doc);
-    sealed_doc_t sealed;
-    TEST_ASSERT_TRUE(game_save_seal(k_key, doc, size, sealed.text, sizeof sealed.text, NULL));
-    return sealed;
+    (void)write_profile(&profile, &header, doc, sizeof doc);
+    return seal_text(doc);
 }
 
+/* Unseal, migrate to the current version, read. False for a bad seal, a
+   document newer than this build, or one that does not parse. */
 static bool open_doc(const char *sealed, profile_t *profile, game_state_doc_header_t *header) {
-    char plain[DOC_CAP];
+    char plain[DOC_CAP], current[DOC_CAP];
     size_t size = 0;
-    return game_save_unseal(k_key, sealed, strlen(sealed), plain, sizeof plain, &size, NULL, 0) &&
-           read_profile(plain, size, profile, header);
+    if (!game_save_unseal(k_key, sealed, strlen(sealed), plain, sizeof plain, &size, NULL, 0)) return false;
+    game_save_text_writer_t writer;
+    game_save_text_writer_init(&writer, current, sizeof current);
+    return game_state_doc_migrate(&k_schema, plain, size, &writer, NULL, 0) &&
+           read_profile(current, game_save_text_writer_size(&writer), profile, header);
 }
 
 static int s_choose_calls;
 
-/* Another lineage wins outright; otherwise the whole document with more progress
-   (total XP, then level) wins, and a tie keeps the cloud. */
+/* Another lineage: the cloud wins. Same lineage: the whole document with more
+   progress (total XP, then level) wins, and a tie keeps the cloud. */
 static game_save_choice_t choose_by_progress(const char *local, const char *remote, void *user) {
     (void)user;
     s_choose_calls++;
     profile_t l, r;
     game_state_doc_header_t lh, rh;
-    TEST_ASSERT_TRUE(open_doc(remote, &r, &rh));
-    if (!open_doc(local, &l, &lh) || lh.save_id != rh.save_id) return GAME_SAVE_KEEP_REMOTE;
+    if (!open_doc(local, &l, &lh) || !open_doc(remote, &r, &rh)) return GAME_SAVE_ASK;
+    if (lh.save_id != rh.save_id) return GAME_SAVE_KEEP_REMOTE;
     if (l.progress.xp != r.progress.xp) {
         return l.progress.xp > r.progress.xp ? GAME_SAVE_KEEP_LOCAL : GAME_SAVE_KEEP_REMOTE;
     }
@@ -294,11 +319,12 @@ static void test_the_four_sync_outcomes(void) {
     TEST_ASSERT_EQUAL_INT(0, s_choose_calls);
     game_save_sync_destroy(&sync);
 
-    /* 2. Local unchanged, cloud changed: adopt the cloud. */
+    /* 2. Local unchanged, cloud changed: adopt the cloud; nothing is displaced. */
     const sealed_doc_t elsewhere = make_doc(id, 6, 1100, 3);
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_SYNC_ADOPT_REMOTE, sync_outcome(&sync, &base, &base, &elsewhere));
     TEST_ASSERT_TRUE(game_save_sync_commit_remote_adoption(&sync));
     TEST_ASSERT_EQUAL_STRING(elsewhere.text, game_save_sync_base_document(&sync));
+    TEST_ASSERT_NULL(game_save_sync_displaced_document(&sync));
     TEST_ASSERT_EQUAL_INT(0, s_choose_calls);
     game_save_sync_destroy(&sync);
 
@@ -315,12 +341,89 @@ static void test_the_four_sync_outcomes(void) {
     TEST_ASSERT_EQUAL_STRING(played.text, game_save_sync_remote_document_value(&sync));
     game_save_sync_destroy(&sync);
 
-    /* 4. Another save_id: the cloud wins even against more local progress. */
+    /* 4. Another save_id: the cloud wins even against more local progress, and
+       the local document it replaces is kept, not destroyed. */
     const sealed_doc_t other_account = make_doc(0x5151u, 1, 10, 1);
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_SYNC_ADOPT_REMOTE, sync_outcome(&sync, &base, &played, &other_account));
     TEST_ASSERT_EQUAL_STRING(other_account.text, game_save_sync_remote_document_value(&sync));
     TEST_ASSERT_EQUAL_INT(4, s_choose_calls);
+    TEST_ASSERT_TRUE(game_save_sync_commit_remote_adoption(&sync));
+    TEST_ASSERT_EQUAL_STRING(other_account.text, game_save_sync_local_document(&sync));
+    TEST_ASSERT_EQUAL_STRING(played.text, game_save_sync_displaced_document(&sync));
+
+    /* An unpersisted displaced copy blocks the next adoption that would displace. */
+    const sealed_doc_t second_local = make_doc(0x5151u, 2, 20, 1);
+    const sealed_doc_t second_remote = make_doc(0x5151u, 3, 30, 1);
+    TEST_ASSERT_TRUE(game_save_sync_set_local(&sync, second_local.text, false));
+    TEST_ASSERT_TRUE(game_save_sync_remote_document(&sync, second_remote.text));
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_SYNC_ADOPT_REMOTE, game_save_sync_decide(&sync, choose_by_progress, NULL));
+    TEST_ASSERT_FALSE(game_save_sync_commit_remote_adoption(&sync));
+    TEST_ASSERT_EQUAL_STRING(second_local.text, game_save_sync_local_document(&sync));
+    TEST_ASSERT_EQUAL_STRING(played.text, game_save_sync_displaced_document(&sync));
+    game_save_sync_clear_displaced(&sync);
+    TEST_ASSERT_TRUE(game_save_sync_commit_remote_adoption(&sync));
+    TEST_ASSERT_EQUAL_STRING(second_local.text, game_save_sync_displaced_document(&sync));
     game_save_sync_destroy(&sync);
+}
+
+static void test_the_rule_compares_migrated_documents_and_asks_about_the_rest(void) {
+    const uint64_t id = 0x00c0ffee00c0ffeeULL;
+    const sealed_doc_t base = make_doc(id, 2, 1000, 3);
+    const sealed_doc_t remote = make_doc(id, 4, 1100, 3);
+    game_save_sync_t sync;
+
+    /* A local save from an older build is migrated, not discarded: its 1200 XP win. */
+    const sealed_doc_t stale_local = seal_text(k_v1_document);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_SYNC_NEEDS_REMOTE_REFRESH, sync_outcome(&sync, &base, &stale_local, &remote));
+    game_save_sync_destroy(&sync);
+
+    /* Newer than this build, or unreadable: never overwritten automatically. */
+    const sealed_doc_t newer_local =
+        seal_text("NTGS 1\nsave_version=3\nsave_id=\"00c0ffee00c0ffee\"\nrev=9\n\n[progress 2]\nxp=1\n");
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_SYNC_CONFLICT, sync_outcome(&sync, &base, &newer_local, &remote));
+    game_save_sync_destroy(&sync);
+    sealed_doc_t broken_remote;
+    (void)snprintf(broken_remote.text, sizeof broken_remote.text, "%s", "NTSEAL1:AAAA");
+    const sealed_doc_t played = make_doc(id, 3, 5000, 9);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_SYNC_CONFLICT, sync_outcome(&sync, &base, &played, &broken_remote));
+    game_save_sync_destroy(&sync);
+}
+
+static bool migrate_text(const char *text, char *out, size_t cap, char *error, int error_cap) {
+    game_save_text_writer_t writer;
+    game_save_text_writer_init(&writer, out, cap);
+    return game_state_doc_migrate(&k_schema, text, strlen(text), &writer, error, error_cap);
+}
+
+static void test_migration_keeps_big_integers_exact_or_refuses(void) {
+    char out[DOC_CAP];
+    char error[160] = {0};
+    /* progress is current and no step touches it, so it is copied as written. */
+    const char *untouched = "NTGS 1\nsave_version=1\nsave_id=\"0000000000000001\"\nrev=0\n\n"
+                            "[progress 2]\nxp=9007199254740993\nlevel=2\n\n[purse 1]\ncoins=1\n";
+    TEST_ASSERT_TRUE_MESSAGE(migrate_text(untouched, out, sizeof out, error, (int)sizeof error), error);
+    profile_t loaded;
+    TEST_ASSERT_TRUE(read_profile(out, strlen(out), &loaded, NULL));
+    TEST_ASSERT_EQUAL_INT64(9007199254740993LL, loaded.progress.xp);
+    TEST_ASSERT_EQUAL_UINT32(1u, loaded.wallet.coins);
+
+    /* A step does touch it: refused, naming the field, instead of an unreadable document. */
+    const char *stepped = "NTGS 1\nsave_version=2\nsave_id=\"0000000000000001\"\nrev=0\n\n"
+                          "[progress 1]\nexperience=9007199254740993\nlevel=2\n";
+    error[0] = '\0';
+    TEST_ASSERT_FALSE(migrate_text(stepped, out, sizeof out, error, (int)sizeof error));
+    TEST_ASSERT_NOT_NULL(strstr(error, "2^53"));
+    TEST_ASSERT_NOT_NULL(strstr(error, "xp"));
+
+    char long_id[DOC_CAP];
+    char name[140];
+    memset(name, 'a', sizeof name - 1u);
+    name[sizeof name - 1u] = '\0';
+    (void)snprintf(long_id, sizeof long_id, "NTGS 1\nsave_version=1\nsave_id=\"0000000000000001\"\nrev=0\n\n[%s 1]\n",
+                   name);
+    error[0] = '\0';
+    TEST_ASSERT_FALSE(migrate_text(long_id, out, sizeof out, error, (int)sizeof error));
+    TEST_ASSERT_NOT_EQUAL(0, error[0]);
 }
 
 int main(void) {
@@ -332,5 +435,7 @@ int main(void) {
     RUN_TEST(test_the_seal_matches_its_reference_vector);
     RUN_TEST(test_a_tampered_seal_is_rejected);
     RUN_TEST(test_the_four_sync_outcomes);
+    RUN_TEST(test_the_rule_compares_migrated_documents_and_asks_about_the_rest);
+    RUN_TEST(test_migration_keeps_big_integers_exact_or_refuses);
     return UNITY_END();
 }
