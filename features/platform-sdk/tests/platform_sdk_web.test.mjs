@@ -64,7 +64,7 @@ async function buildFixture() {
     "-sEXPORT_NAME=createPlatformSdkWebFixture",
     "-sENVIRONMENT=web",
     "-sALLOW_MEMORY_GROWTH=1",
-    "-sEXPORTED_FUNCTIONS=[\"_fixture_boot\",\"_fixture_status\",\"_fixture_portal_paused\",\"_fixture_audio_enabled\",\"_fixture_break_active\",\"_fixture_pause_count\",\"_fixture_resume_count\",\"_fixture_show_interstitial\",\"_fixture_active_interstitial_id\",\"_fixture_complete_interstitial\",\"_fixture_interstitial_completions\",\"_fixture_last_interstitial_reason\",\"_fixture_cloud_load\",\"_fixture_cloud_load_status\",\"_fixture_cloud_take_is\",\"_fixture_cloud_store\",\"_fixture_cloud_write_status\",\"_malloc\",\"_free\"]",
+    "-sEXPORTED_FUNCTIONS=[\"_fixture_boot\",\"_fixture_status\",\"_fixture_portal_paused\",\"_fixture_audio_enabled\",\"_fixture_break_active\",\"_fixture_sound_switches\",\"_fixture_sound_muted\",\"_fixture_set_sound_muted\",\"_fixture_pause_count\",\"_fixture_resume_count\",\"_fixture_show_interstitial\",\"_fixture_active_interstitial_id\",\"_fixture_complete_interstitial\",\"_fixture_interstitial_completions\",\"_fixture_last_interstitial_reason\",\"_fixture_cloud_load\",\"_fixture_cloud_load_status\",\"_fixture_cloud_take_is\",\"_fixture_cloud_store\",\"_fixture_cloud_write_status\",\"_malloc\",\"_free\"]",
     "-o", join(OUTPUT, "fixture.js"),
   ]);
 }
@@ -73,12 +73,14 @@ function writePage() {
   writeFileSync(join(OUTPUT, "index.html"), `<!doctype html>
 <meta charset="utf-8">
 <script>
-  globalThis.__platformSdkLifecycleState = { paused: true, audioEnabled: false };
-  globalThis.__fixture = { ads: [], loads: [], stores: [] };
+  globalThis.__platformSdkLifecycleState = { paused: true, audioEnabled: false, soundMuted: [false, true, false] };
+  globalThis.__fixture = { ads: [], loads: [], stores: [], sounds: [] };
   globalThis.__platformSdkInternalBackend = {
     ready: () => Promise.resolve(true),
     getLocale: () => "en-US",
     getPlayer: () => Promise.resolve({}),
+    soundSwitches: () => true,
+    setSoundMuted(sound, muted) { globalThis.__fixture.sounds.push([sound, muted]); },
     showInterstitial(placement, requestId) {
       return new Promise((resolve, reject) => globalThis.__fixture.ads.push({ placement, requestId, resolve, reject }));
     },
@@ -158,6 +160,16 @@ test("web bridge replays lifecycle and rejects stale ads and storage completions
       return [m._fixture_portal_paused(), m._fixture_audio_enabled(), m._fixture_pause_count(), m._fixture_break_active()];
     })()`, deadline);
     assert.deepEqual(replay, [1, 0, 0, 1]);
+
+    const sounds = await evaluate(client, `(() => {
+      const m = globalThis.fixtureModule;
+      const replayed = [m._fixture_sound_muted(0), m._fixture_sound_muted(1), m._fixture_sound_muted(2)];
+      m._fixture_set_sound_muted(2, 1);
+      globalThis.__platformSdkPortalSound(1, false);
+      return [m._fixture_sound_switches(), replayed, m._fixture_sound_muted(1), m._fixture_sound_muted(2),
+              globalThis.__fixture.sounds];
+    })()`, deadline);
+    assert.deepEqual(sounds, [1, [0, 1, 0], 0, 1, [[2, true]]]);
     await waitFor(client, "fixtureModule._fixture_status() === 2", deadline);
 
     const first = await evaluate(client, `(() => {

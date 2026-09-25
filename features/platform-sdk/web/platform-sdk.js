@@ -6,6 +6,7 @@ const config = root.__PLATFORM_SDK_CONFIG__ || {};
 /* Portal lifecycle state can arrive before WASM. Keep it until the C bridge
    installs its hooks, then replay the effective pause and audio state once. */
 const lifecycleState = root.__platformSdkLifecycleState || { paused: false, audioEnabled: true };
+if (!Array.isArray(lifecycleState.soundMuted)) lifecycleState.soundMuted = [false, false, false];
 root.__platformSdkLifecycleState = lifecycleState;
 
 const lifecycle = {
@@ -21,6 +22,11 @@ const lifecycle = {
   audio(enabled) {
     lifecycleState.audioEnabled = Boolean(enabled);
     if (typeof root.__platformSdkPortalAudio === "function") root.__platformSdkPortalAudio(lifecycleState.audioEnabled);
+  },
+  /* A portal-owned sound switch: 0 all, 1 music, 2 sfx (platform_sdk_sound_t). */
+  sound(index, muted) {
+    lifecycleState.soundMuted[index] = Boolean(muted);
+    if (typeof root.__platformSdkPortalSound === "function") root.__platformSdkPortalSound(index, Boolean(muted));
   },
   adVisible(requestId, visible) {
     if (typeof root.__platformSdkAdVisible === "function") root.__platformSdkAdVisible(requestId, visible);

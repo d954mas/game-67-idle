@@ -496,6 +496,9 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
     gameplayStop,
     getLocale,
     getPlayer,
+    /* No portal-owned sound switches here; the game's volume is its own. */
+    setSoundMuted() {},
+    soundSwitches() { return false; },
     hideBanner,
     leaderboardCaps,
     loadData,

@@ -67,7 +67,7 @@ if(EMSCRIPTEN)
     # Web-devapi host contract (nt_devapi_web.h): the host exports the JS
     # transport entry points; the exports are also what pulls the EM_JS object
     # out of libnt_devapi_web.a so nt_devapi_web_install_shim resolves at link.
-    set(GAME_WEB_EXPORTS "_main,_malloc,_free,_platform_sdk_web_complete_init,_platform_sdk_web_complete_interstitial,_platform_sdk_web_complete_rewarded,_platform_sdk_web_portal_pause,_platform_sdk_web_portal_resume,_platform_sdk_web_portal_audio")
+    set(GAME_WEB_EXPORTS "_main,_malloc,_free,_platform_sdk_web_complete_init,_platform_sdk_web_complete_interstitial,_platform_sdk_web_complete_rewarded,_platform_sdk_web_portal_pause,_platform_sdk_web_portal_resume,_platform_sdk_web_portal_audio,_platform_sdk_web_portal_sound")
     if(GAME_AUDIO_BROWSER_SMOKE)
         # Narrow opt-in browser-smoke seam; ordinary release artifacts export no audio controls.
         set(GAME_WEB_EXPORTS "${GAME_WEB_EXPORTS},_game_audio_play_cue,_game_audio_play_music,_game_audio_stop_music,_game_audio_set_enabled,_game_audio_set_paused")

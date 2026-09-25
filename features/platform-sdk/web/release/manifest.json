@@ -9,52 +9,52 @@
   },
   "adapters": {
     "mock": {
-      "sourceSha256": "f84b55eada41800ead789a2325e64c3135047114e170c2934040b1a22600af72",
-      "bundleSha256": "9b96d11457b960b3aa8e094feefaf5ddfe86d6074b455325e4e926c44aa0157d",
-      "sourceBytes": 6964,
-      "bundleBytes": 3595
+      "sourceSha256": "093819fc514e28077d686556ae6b1cbfbd31162bd4d3c6f2b262cf4e6aecece5",
+      "bundleSha256": "30e08627b12c66305493e017ae53619ccf31a6a0a4ba486fecb56ff8761a8727",
+      "sourceBytes": 7484,
+      "bundleBytes": 3816
     },
     "poki": {
-      "sourceSha256": "9f306126fd74501195417eb778c3f6274ce6907c345777fa20dd6da6731f8ee0",
-      "bundleSha256": "8d4ff3ccb5fc05e68398b4fd3945babf77cc257715912460eb16584ddcee25d9",
-      "sourceBytes": 9873,
-      "bundleBytes": 4362
+      "sourceSha256": "e79d641dc1f135e4fb3698b1ea70f5e66d9120c49ab5087e135737bbe5f15588",
+      "bundleSha256": "4b60cd2430cb5ef9ba867d5852bb89ce2f0ad45e73e5f4edefcc31389c1f379e",
+      "sourceBytes": 10393,
+      "bundleBytes": 4583
     },
     "yandex": {
-      "sourceSha256": "c93f656c8eab571ef55c04e44d76f9c5670eccc7b654f2c63d6b6416b04bb69f",
-      "bundleSha256": "9a6f1e45c0c0513bff67801a9e81908c97867c610f9d560d119dc5917952aa7c",
-      "sourceBytes": 21286,
-      "bundleBytes": 8882
+      "sourceSha256": "d1c504b29b6b5d18bf683f8d63f9697ec555de3632a3c9308c7c96b2ecedb9b0",
+      "bundleSha256": "744ea63525c18052eedb3dcbe0904d748d8b3920092337a5bf0275d9942b8370",
+      "sourceBytes": 21806,
+      "bundleBytes": 9103
     },
     "playgama": {
-      "sourceSha256": "f502e84fdb68050c9dea7f883f523b7fb183b2e3a66a7de1ba52c6a0dfdeea79",
-      "bundleSha256": "2a6507fe39177c476a8843d0de37c18b1ea91c8b803c079341ecfa816aad68f7",
-      "sourceBytes": 18679,
-      "bundleBytes": 8298
+      "sourceSha256": "4a7d06817c486b87739dad9f464cafdcfa8dd719c0a6af68b1caa60928a966fa",
+      "bundleSha256": "aeb1c020b7487b0f156a151f677ed1d7bbe7f087ea2d723b6f76713789085688",
+      "sourceBytes": 19199,
+      "bundleBytes": 8519
     },
     "crazygames": {
-      "sourceSha256": "11c7c4c70e2c594641d2a1ebcc6e7cb1f8ed4f08ef9553d8aaa22f33f2bdee9f",
-      "bundleSha256": "36db9d73d40218e5e5ca823a6e1d546650312b9d634df5fd05f551af4794a801",
-      "sourceBytes": 14888,
-      "bundleBytes": 6313
+      "sourceSha256": "2af9bf2aa8a155c3d81767f7e7d8defd451e5aad3c7d2bb021c1de01a9c4d470",
+      "bundleSha256": "b160e80768be0546f49d7072bc586fbcb45551a561621a07a913763e34dfa641",
+      "sourceBytes": 15408,
+      "bundleBytes": 6534
     },
     "wavedash": {
-      "sourceSha256": "6589f0ab1cc54a2be795db04b9147450b0cb5f4bcb84fc91d28075977840fee0",
-      "bundleSha256": "d512346658f003e35203526e9c997d044699e682fbab6a379e1e0e7ad1113e1a",
-      "sourceBytes": 13940,
-      "bundleBytes": 6077
+      "sourceSha256": "cbcf93ac3488edc66f25457ce943faa87c83b2cb2985c262f799fca1d101cb77",
+      "bundleSha256": "45e889a48fac180422aa5009b62266f3e57fbd0370539d067fbb8dabfcbfdf6f",
+      "sourceBytes": 14460,
+      "bundleBytes": 6298
     },
     "pikabu": {
-      "sourceSha256": "1d32c421c4aacb38ef719b124c031f33e5b8892e7063d04053393bd463016019",
-      "bundleSha256": "56ab0da65c6b6ebc11f5d875eb4d567181cea5cbf1edb0f2ab4ddf19b6ef7716",
-      "sourceBytes": 14696,
-      "bundleBytes": 5716
+      "sourceSha256": "052c6d9b06ca5fd3af800bd3e2422d2ec7c12f0bd85bb620f3823e4546f531c2",
+      "bundleSha256": "e1b8158eb27c3f20247d142b2c530315ea35b2ca7c004d1983d2217182eb25cd",
+      "sourceBytes": 15216,
+      "bundleBytes": 5937
     },
     "gamepush": {
-      "sourceSha256": "8b4aa1cf8aabfee6866948657606303db5c0ca1504d5e967ab731a8b01b927ef",
-      "bundleSha256": "780f76f84ae9d5b6c4739071616abb05095f01d72af16c26b5435baaeaa9a8c9",
-      "sourceBytes": 22827,
-      "bundleBytes": 8504
+      "sourceSha256": "46b429a67502adcd2d3e90c6f1688dcccb353aaedbfdabd3d535c2baad2548e0",
+      "bundleSha256": "c8bb38f09edaafd4e75d223c04758758bb43632d234a94289cd6b3249653046e",
+      "sourceBytes": 26041,
+      "bundleBytes": 9657
     }
   }
 }

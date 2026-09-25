@@ -97,6 +97,7 @@ typedef struct platform_sdk_runtime_t {
     bool gameplay_active;
     bool portal_paused;
     bool portal_audio_muted;
+    bool portal_sound_muted[PLATFORM_SDK_SOUND_COUNT];
     bool gameplay_active_before_portal_pause;
     char locale[PLATFORM_SDK_LOCALE_MAX];
     bool locale_resolved;
@@ -994,6 +995,40 @@ void platform_sdk_backend_portal_audio(bool enabled) {
 
 bool platform_sdk_portal_audio_enabled(void) {
     return !g_platform_sdk.portal_audio_muted;
+}
+
+static bool platform_sdk_sound_valid(platform_sdk_sound_t sound) {
+    return (int)sound >= 0 && sound < PLATFORM_SDK_SOUND_COUNT;
+}
+
+bool platform_sdk_sound_switches_supported(void) {
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED || !g_platform_sdk.has_backend ||
+        g_platform_sdk.backend.sound_switches == NULL || g_platform_sdk.backend.set_sound_muted == NULL) {
+        return false;
+    }
+    return g_platform_sdk.backend.sound_switches(g_platform_sdk.backend_userdata);
+}
+
+bool platform_sdk_sound_muted(platform_sdk_sound_t sound) {
+    return platform_sdk_sound_valid(sound) && g_platform_sdk.portal_sound_muted[sound];
+}
+
+bool platform_sdk_sound_channel_muted(platform_sdk_sound_t channel) {
+    return platform_sdk_sound_muted(PLATFORM_SDK_SOUND_ALL) || platform_sdk_sound_muted(channel);
+}
+
+/* The switch is recorded at once so the game's controls do not flicker while
+   the portal confirms; the portal's own answer arrives through the backend
+   entry below and wins. */
+void platform_sdk_set_sound_muted(platform_sdk_sound_t sound, bool muted) {
+    if (!platform_sdk_sound_valid(sound) || !platform_sdk_sound_switches_supported()) return;
+    g_platform_sdk.portal_sound_muted[sound] = muted;
+    g_platform_sdk.backend.set_sound_muted(sound, muted, g_platform_sdk.backend_userdata);
+}
+
+void platform_sdk_backend_portal_sound(platform_sdk_sound_t sound, bool muted) {
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED || !platform_sdk_sound_valid(sound)) return;
+    g_platform_sdk.portal_sound_muted[sound] = muted;
 }
 
 bool platform_sdk_ad_active(void) {

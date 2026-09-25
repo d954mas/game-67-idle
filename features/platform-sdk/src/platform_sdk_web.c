@@ -23,6 +23,7 @@ void platform_sdk_web_portal_pause(void);
 void platform_sdk_web_ad_visible(unsigned int request_id, int visible);
 void platform_sdk_web_portal_resume(void);
 void platform_sdk_web_portal_audio(int enabled);
+void platform_sdk_web_portal_sound(int sound, int muted);
 void platform_sdk_web_complete_leaderboard_submit(char *board_id, int scope, int status);
 uint32_t platform_sdk_web_leaderboard_generation(void);
 void platform_sdk_web_leaderboard_begin(void);
@@ -50,9 +51,16 @@ EM_JS(void, platform_sdk_web_install_portal_hooks, (void), {
     globalThis.__platformSdkPortalAudio = function (enabled) {
         try { _platform_sdk_web_portal_audio(enabled ? 1 : 0); } catch (e) {}
     };
+    globalThis.__platformSdkPortalSound = function (sound, muted) {
+        try { _platform_sdk_web_portal_sound(sound | 0, muted ? 1 : 0); } catch (e) {}
+    };
     var lifecycle = globalThis.__platformSdkLifecycleState;
     if (lifecycle && typeof lifecycle === "object") {
         try { _platform_sdk_web_portal_audio(lifecycle.audioEnabled === false ? 0 : 1); } catch (e) {}
+        var sounds = Array.isArray(lifecycle.soundMuted) ? lifecycle.soundMuted : [];
+        for (var sound = 0; sound < sounds.length; sound++) {
+            try { _platform_sdk_web_portal_sound(sound, sounds[sound] ? 1 : 0); } catch (e) {}
+        }
         if (lifecycle.paused) {
             try { _platform_sdk_web_portal_pause(); } catch (e) {}
         }
@@ -148,6 +156,18 @@ EM_JS(void, platform_sdk_web_backend_hide_banner, (void), {
     try {
         Promise.resolve(backend.hideBanner()).catch(function () {});
     } catch (e) {}
+})
+
+EM_JS(int, platform_sdk_web_backend_sound_switches, (void), {
+    var backend = globalThis.__platformSdkInternalBackend;
+    if (!backend || typeof backend.soundSwitches !== "function") return 0;
+    try { return backend.soundSwitches() ? 1 : 0; } catch (e) { return 0; }
+})
+
+EM_JS(void, platform_sdk_web_backend_set_sound_muted, (int sound, int muted), {
+    var backend = globalThis.__platformSdkInternalBackend;
+    if (!backend || typeof backend.setSoundMuted !== "function") return;
+    try { backend.setSoundMuted(sound, muted !== 0); } catch (e) {}
 })
 
 EM_JS(void, platform_sdk_web_backend_game_ready, (void), {
@@ -603,6 +623,11 @@ void platform_sdk_web_portal_audio(int enabled) {
     platform_sdk_backend_portal_audio(enabled != 0);
 }
 
+EMSCRIPTEN_KEEPALIVE
+void platform_sdk_web_portal_sound(int sound, int muted) {
+    platform_sdk_backend_portal_sound((platform_sdk_sound_t)sound, muted != 0);
+}
+
 static bool web_backend_locale(char *out, size_t out_size, void *userdata) {
     (void)userdata;
     if (out == NULL || out_size == 0u) return false;
@@ -653,6 +678,16 @@ static void web_backend_show_banner(void *userdata) {
 static void web_backend_hide_banner(void *userdata) {
     (void)userdata;
     platform_sdk_web_backend_hide_banner();
+}
+
+static bool web_backend_sound_switches(void *userdata) {
+    (void)userdata;
+    return platform_sdk_web_backend_sound_switches() != 0;
+}
+
+static void web_backend_set_sound_muted(platform_sdk_sound_t sound, bool muted, void *userdata) {
+    (void)userdata;
+    platform_sdk_web_backend_set_sound_muted((int)sound, muted ? 1 : 0);
 }
 
 static void web_backend_measure(const char *category, const char *what,
@@ -737,6 +772,8 @@ void platform_sdk_install_web_backend(void) {
         .measure = web_backend_measure,
         .show_banner = web_backend_show_banner,
         .hide_banner = web_backend_hide_banner,
+        .sound_switches = web_backend_sound_switches,
+        .set_sound_muted = web_backend_set_sound_muted,
         .show_interstitial = web_backend_show_interstitial,
         .show_rewarded = web_backend_show_rewarded,
         .login = web_backend_login,

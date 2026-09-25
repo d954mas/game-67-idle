@@ -434,6 +434,9 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
     getPlayer() {
       return Promise.resolve({ authorized: false, name: "", avatarUrl: "" });
     },
+    /* No portal-owned sound switches here; the game's volume is its own. */
+    setSoundMuted() {},
+    soundSwitches() { return false; },
     hideBanner,
     leaderboardCaps,
     loadData,

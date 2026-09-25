@@ -37,6 +37,11 @@ int fixture_status(void) { return (int)platform_sdk_status(); }
 int fixture_portal_paused(void) { return platform_sdk_portal_paused() ? 1 : 0; }
 int fixture_audio_enabled(void) { return platform_sdk_portal_audio_enabled() ? 1 : 0; }
 int fixture_break_active(void) { return platform_sdk_break_active() ? 1 : 0; }
+int fixture_sound_switches(void) { return platform_sdk_sound_switches_supported() ? 1 : 0; }
+int fixture_sound_muted(int sound) { return platform_sdk_sound_muted((platform_sdk_sound_t)sound) ? 1 : 0; }
+void fixture_set_sound_muted(int sound, int muted) {
+    platform_sdk_set_sound_muted((platform_sdk_sound_t)sound, muted != 0);
+}
 int fixture_pause_count(void) { return s_pause_count; }
 int fixture_resume_count(void) { return s_resume_count; }
 

@@ -38,6 +38,15 @@ typedef struct platform_sdk_capabilities_t {
     bool auth_supported;
 } platform_sdk_capabilities_t;
 
+/* The portal switches a sound can sit behind: every sound at once, or one of
+   the two channels a game mixes separately. */
+typedef enum platform_sdk_sound_t {
+    PLATFORM_SDK_SOUND_ALL = 0,
+    PLATFORM_SDK_SOUND_MUSIC = 1,
+    PLATFORM_SDK_SOUND_SFX = 2,
+    PLATFORM_SDK_SOUND_COUNT = 3,
+} platform_sdk_sound_t;
+
 typedef enum platform_sdk_boot_status_t {
     PLATFORM_SDK_BOOT_NOT_STARTED = 0,
     PLATFORM_SDK_BOOT_INITIALIZING = 1,
@@ -191,6 +200,9 @@ typedef struct platform_sdk_backend_t {
     void (*measure)(const char *category, const char *what, const char *action, void *userdata);
     void (*show_banner)(void *userdata);
     void (*hide_banner)(void *userdata);
+    /* Portal-owned sound switches; NULL means the portal keeps none. */
+    bool (*sound_switches)(void *userdata);
+    void (*set_sound_muted)(platform_sdk_sound_t sound, bool muted, void *userdata);
     platform_sdk_result_t (*show_interstitial)(const char *placement, void *userdata);
     platform_sdk_result_t (*show_rewarded)(const char *placement, void *userdata);
     /* Opens the portal's login dialog and later settles through
@@ -300,6 +312,17 @@ bool platform_sdk_portal_paused(void);
    is not a pause: the game keeps running with no sound. */
 void platform_sdk_backend_portal_audio(bool enabled);
 bool platform_sdk_portal_audio_enabled(void);
+
+/* A portal that keeps the player's sound switches (GamePush) remembers them
+   across sessions and flips them itself around ads and pauses. The game's own
+   volume controls drive these switches instead of storing a zero, and show a
+   muted channel as silent while keeping the volume to return to. */
+bool platform_sdk_sound_switches_supported(void);
+bool platform_sdk_sound_muted(platform_sdk_sound_t sound);
+/* True when the channel is silenced by its own switch or by the ALL switch. */
+bool platform_sdk_sound_channel_muted(platform_sdk_sound_t channel);
+void platform_sdk_set_sound_muted(platform_sdk_sound_t sound, bool muted);
+void platform_sdk_backend_portal_sound(platform_sdk_sound_t sound, bool muted);
 
 /* True while an ad is pending or visible. Portal page pause is excluded. */
 bool platform_sdk_ad_active(void);
