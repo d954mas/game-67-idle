@@ -117,7 +117,10 @@ def snapshot_content_hash(snapshot: dict[str, Any]) -> str:
     missing = [key for key in keys if key not in snapshot]
     if missing:
         _fail("snapshot.content_hash", f"Snapshot hash input is missing {missing[0]}")
-    return "sha256:" + hashlib.sha256(_json_bytes({key: snapshot[key] for key in keys})).hexdigest()
+    payload = {key: snapshot[key] for key in keys}
+    if snapshot.get("exports"):
+        payload["exports"] = snapshot["exports"]
+    return "sha256:" + hashlib.sha256(_json_bytes(payload)).hexdigest()
 
 
 def validate_snapshot_content_hash(snapshot: dict[str, Any]) -> str:
@@ -777,6 +780,16 @@ def _runtime_export_metadata(
     }
 
 
+def _normalize_exports(evaluation: dict[str, Any]) -> dict[str, Any]:
+    raw_exports = evaluation.get("exports", {})
+    if not isinstance(raw_exports, dict):
+        _fail("snapshot.exports", "evaluation exports must be an object", "$.exports")
+    for name in raw_exports:
+        if not FIELD_ID_RE.fullmatch(name):
+            _fail("snapshot.export_name", f"export name must use stable lowercase segments: {name}", "$.exports")
+    return _canonical(raw_exports, "$.exports")
+
+
 def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(evaluation, dict) or evaluation.get("schema") != EVALUATION_SCHEMA:
         _fail("snapshot.evaluation_schema", f"expected {EVALUATION_SCHEMA}")
@@ -811,6 +824,7 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     runtime_export = _runtime_export_metadata(items, fields)
     tracks, track_sources = _normalize_tracks(evaluation, fields, seen, kinds)
     requirements, requirement_sources, waiver_sources = _normalize_requirements(evaluation, seen)
+    exports = _normalize_exports(evaluation)
 
     dependencies: dict[str, list[str]] = {}
     for item in items:
@@ -843,6 +857,10 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
         "dependencies": dependencies,
         "dependents": dependents,
     }
+    # Absent when empty, so a catalog without exports keeps the Snapshot and the hash
+    # it had before exports existed.
+    if exports:
+        snapshot["exports"] = exports
     snapshot["content_hash"] = snapshot_content_hash(snapshot)
     if field_sources:
         snapshot["field_sources"] = field_sources
@@ -1243,6 +1261,13 @@ def _diff_kinds(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
+def _diff_exports(snapshot: dict[str, Any]) -> dict[str, Any]:
+    exports = snapshot.get("exports", {})
+    if not isinstance(exports, dict):
+        _fail("diff.exports", "snapshot exports must be an object", "$.exports")
+    return _canonical(exports, "$.exports")
+
+
 def _diff_requirements(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     items = snapshot.get("items")
     if not isinstance(items, list):
@@ -1412,6 +1437,22 @@ def diff_snapshots(
                 before_requirements[requirement_id], after_requirements[requirement_id],
                 identity={"requirement": requirement_id}, path="",
                 changes=changes, max_changes=max_changes,
+            )
+    before_exports = _diff_exports(before)
+    after_exports = _diff_exports(after)
+    for name in sorted(set(before_exports) | set(after_exports)):
+        if name not in after_exports:
+            _record(changes, {
+                "op": "remove", "export": name, "path": "", "before": before_exports[name],
+            }, max_changes)
+        elif name not in before_exports:
+            _record(changes, {
+                "op": "add", "export": name, "path": "", "after": after_exports[name],
+            }, max_changes)
+        else:
+            _diff_value(
+                before_exports[name], after_exports[name], identity={"export": name},
+                path="", changes=changes, max_changes=max_changes,
             )
     return {
         "schema": DIFF_SCHEMA,

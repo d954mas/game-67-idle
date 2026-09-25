@@ -1,0 +1,16 @@
+{
+  "schema": "studio.lua.sandbox.v1",
+  "modules": [
+    {
+      "name": "game.mob_stats",
+      "file": "game/mob_stats.lua"
+    },
+    {
+      "name": "game.mobs",
+      "file": "game/mobs.lua"
+    }
+  ],
+  "entries": [
+    "game.mobs"
+  ]
+}

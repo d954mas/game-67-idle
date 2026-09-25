@@ -59,6 +59,27 @@ their own generator. A field is required for at least one kind; the wire format
 keeps the two spaces apart in `required_for_items` and `required_for_tracks`,
 which the evaluator fills from the handles the author wrote.
 
+## Exports: checked data the feature does not model
+
+`studio.export` is a function, not a declaration space:
+`require("studio.export")("game.mobs", rows)` carries one named value into the
+evaluation and the Snapshot's `exports` section, where it joins the content hash.
+The feature neither types nor reads it; a game-local generator does. It exists so
+a game-local catalog (mobs, looks, balance knobs) has the same single Lua source,
+the same sandbox, and the same hash as items, without a new space per catalog.
+
+The name follows requirement ids (`game.mobs`: lowercase dotted segments) and is
+unique. The value is copied when exported, so a later edit of the source table
+changes nothing. It must be plain JSON: booleans, strings, finite numbers,
+integers inside ±2^53-1, and tables that are either string-keyed objects or
+contiguous arrays, with no cycles, no functions, no studio handles, and at most
+32 tables deep. Tables from a required module are read through. An empty table
+is an empty object.
+
+An evaluation or Snapshot without exports carries no `exports` key at all, so
+its bytes and content hash are the ones it had before exports existed. The item
+C catalog ignores exports; `diff` reports an export edit under an `export` key.
+
 ## Exact and fractional columns
 
 `field.i64` declares an exact column and must declare `rounding: "exact"`.
@@ -250,6 +271,10 @@ The feature manifest uses exact SemVer. PATCH releases preserve behavior and
 wire/API contracts, MINOR releases add backward-compatible surface, and MAJOR
 releases may remove or change public commands, APIs, or catalog contracts.
 Consumers pin both the version and repository revision.
+
+8.1.0 adds `studio.export(name, value)`: plain, checked data carried into an
+`exports` Snapshot section and the content hash, for catalogs a game types
+itself. A catalog that exports nothing keeps its Snapshot bytes and hash.
 
 5.1.0 lets a track row `grant` items on being reached, written with the same
 quantity primitive a price is, and accepts a dot-separated track id: a track id

@@ -1,3 +1,4 @@
+import copy
 import json
 import importlib.util
 from pathlib import Path
@@ -15,6 +16,12 @@ SPEC = importlib.util.spec_from_file_location("items_lua_sandbox", SCRIPT)
 SANDBOX = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(SANDBOX)
+EXPORT_FIXTURE_ROOT = Path(__file__).parents[1] / "tests" / "fixtures" / "export"
+SNAPSHOT_SPEC = importlib.util.spec_from_file_location("items_snapshot", SCRIPT.with_name("items_snapshot.py"))
+SNAPSHOT = importlib.util.module_from_spec(SNAPSHOT_SPEC)
+assert SNAPSHOT_SPEC.loader is not None
+sys.path.insert(0, str(SCRIPT.parent))
+SNAPSHOT_SPEC.loader.exec_module(SNAPSHOT)
 
 
 class ItemsLuaSandboxTests(unittest.TestCase):
@@ -1233,6 +1240,59 @@ items.define({ id="game.number", kind=items.kind({ id="number" }), value=1e309 }
         )
         self.assertEqual(internal.error["file"], "game/items.lua")
         self.assertEqual(internal.error["line"], 1)
+
+    def test_a_fixture_export_reaches_the_snapshot_and_moves_its_hash(self):
+        result = subprocess.run(
+            [
+                sys.executable, str(SCRIPT), "evaluate", "--root", str(EXPORT_FIXTURE_ROOT),
+                "--manifest", str(EXPORT_FIXTURE_ROOT / "items.lua.json"),
+            ],
+            text=True, capture_output=True, encoding="utf-8", timeout=10,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        evaluation = json.loads(result.stdout)
+        self.assertEqual(evaluation["exports"]["game.movement"], {
+            "golem": {"hp": 400, "speed": 0.75}, "slime": {"hp": 30, "speed": 1.5},
+        })
+        snapshot = SNAPSHOT.build_snapshot(evaluation)
+        self.assertEqual(snapshot["exports"]["game.mobs"], [
+            {"hp": 30, "id": "slime", "speed": 1.5, "tags": ["soft"]},
+            {"hp": 400, "id": "golem", "speed": 0.75, "tags": ["heavy", "slow"]},
+        ])
+        SNAPSHOT.validate_snapshot_content_hash(snapshot)
+        without = SNAPSHOT.build_snapshot({key: value for key, value in evaluation.items() if key != "exports"})
+        self.assertNotIn("exports", without)
+        self.assertNotEqual(snapshot["content_hash"], without["content_hash"])
+        edited = copy.deepcopy(evaluation)
+        edited["exports"]["game.mobs"][0]["hp"] = 31
+        edited_snapshot = SNAPSHOT.build_snapshot(edited)
+        self.assertNotEqual(edited_snapshot["content_hash"], snapshot["content_hash"])
+        self.assertEqual(SNAPSHOT.diff_snapshots(snapshot, edited_snapshot)["changes"], [{
+            "op": "replace", "export": "game.mobs", "path": "/0/hp", "before": 30, "after": 31,
+        }])
+
+    def test_an_export_is_plain_data_checked_where_it_is_written(self):
+        header = 'local export = require("studio.export")\nlocal items = require("studio.items")\n'
+        cases = {
+            'export("mobs", {})': ("export.name", 3),
+            'export("game.a", 1)\nexport("game.a", 2)': ("export.duplicate", 4),
+            'export("game.a", nil)': ("export.value", 3),
+            'export("game.a", { f=function() end })': ("export.value", 3),
+            'export("game.a", { k=items.kind({ id="k" }) })': ("export.value", 3),
+            'export("game.a", { 1, 2, [4]=4 })': ("export.value", 3),
+            'export("game.a", { 1, x=2 })': ("export.value", 3),
+            'export("game.a", 9007199254740992)': ("export.value", 3),
+            'local t = {}\nt.self = t\nexport("game.a", t)': ("export.value", 5),
+        }
+        for body, (code, line) in cases.items():
+            with self.subTest(body=body):
+                result = self.evaluate({"game.exp": header + body + "\n"}, ["game.exp"])
+                self.assert_error(result, code, "game/exp.lua", line)
+        copied = self.evaluate({"game.exp": header + (
+            'local t = { n=1 }\nexport("game.a", t)\nt.n = 2\n'
+        )}, ["game.exp"])
+        self.assertEqual(copied.returncode, 0, copied.stderr)
+        self.assertEqual(json.loads(copied.stdout)["exports"], {"game.a": {"n": 1}})
 
 
 if __name__ == "__main__":

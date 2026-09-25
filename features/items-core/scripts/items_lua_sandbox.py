@@ -32,6 +32,7 @@ BUILTIN_MODULE_NAMES = frozenset({
     "studio.requirements",
     "studio.tracks",
     "studio.math",
+    "studio.export",
 })
 
 
@@ -92,6 +93,9 @@ return function(raise_internal)
     if condition then return condition, message end
     safe_error(message or "assertion failed")
   end
+
+  local MAX_EXACT = 9007199254740991
+  local exports = {}
 
   local function copy(value, seen)
     if raw_type(value) ~= "table" then return value end
@@ -261,6 +265,65 @@ return function(raise_internal)
     track_declarations[#track_declarations + 1] = copied
   end
 
+  -- An export is data the feature neither types nor reads: it is copied, checked to
+  -- be plain JSON, and carried into the Snapshot and its hash. Typing it is the
+  -- consuming game's generator's job.
+  local function plain_copy(value, seen, depth)
+    local value_type = raw_type(value)
+    if value_type == "boolean" or value_type == "string" then return value end
+    if value_type == "number" then
+      if raw_math.type(value) == "integer" then
+        if value < -MAX_EXACT or value > MAX_EXACT then
+          return fail("export.value", "an exported integer must be exact in a double")
+        end
+        return value
+      end
+      if value ~= value or value == raw_math.huge or value == -raw_math.huge then
+        return fail("export.value", "an exported number must be finite")
+      end
+      return value
+    end
+    if value_type ~= "table" then
+      return fail("export.value", "an export holds only booleans, numbers, strings and tables")
+    end
+    if depth > 32 then return fail("export.value", "an export nests deeper than 32 tables") end
+    local target = frozen_targets[value] or value
+    if target.__studio_kind ~= nil or authentic_kinds[value] ~= nil then
+      return fail("export.value", "a studio handle is not plain data")
+    end
+    if seen[target] then return fail("export.value", "an export cannot contain cycles") end
+    seen[target] = true
+    local result, key_mode, count, max_index = {}, nil, 0, 0
+    for key, child in raw_pairs(target) do
+      local mode = raw_type(key) == "string" and "object" or "array"
+      if mode == "array" and (raw_math.type(key) ~= "integer" or key < 1) then
+        return fail("export.value", "export keys must be strings or contiguous positive integers")
+      end
+      if key_mode ~= nil and key_mode ~= mode then
+        return fail("export.value", "an export table cannot mix object and array keys")
+      end
+      key_mode, count = mode, count + 1
+      if mode == "array" and key > max_index then max_index = key end
+      result[key] = plain_copy(child, seen, depth + 1)
+    end
+    if key_mode == "array" and count ~= max_index then
+      return fail("export.value", "export arrays must be contiguous")
+    end
+    seen[target] = nil
+    return result
+  end
+  local function export(name, value)
+    if evaluation_finalizing then
+      return fail("evaluation.phase", "exports are closed before formula evaluation")
+    end
+    if not valid_dotted_id(name) then
+      return fail("export.name", "an export name must use stable lowercase segments")
+    end
+    if exports[name] ~= nil then return fail("export.duplicate", "duplicate export: " .. name) end
+    if value == nil then return fail("export.value", "an export needs a value") end
+    exports[name] = plain_copy(value, {}, 0)
+  end
+
   local requirements = {}
   function requirements.define(options)
     if evaluation_finalizing then
@@ -390,7 +453,6 @@ return function(raise_internal)
     }, source_at(3))
   end
 
-  local MAX_EXACT = 9007199254740991
   local function checked(value)
     if raw_math.type(value) ~= "integer" or value < -MAX_EXACT or value > MAX_EXACT then
       return fail("formula.math", "expected exact integer")
@@ -1255,6 +1317,7 @@ return function(raise_internal)
       table.sort(kind_declarations[space], function(a, b) return a.id < b.id end)
     end
     return {
+      exports = exports,
       fields = fields,
       field_sources = field_sources,
       items = declarations,
@@ -1275,8 +1338,8 @@ return function(raise_internal)
     })
   end
 
-  return items, levels, field, requirements, tracks, math_view, finalize, freeze, setup_limits,
-    safe_assert, safe_error, lock_string_surface
+  return items, levels, field, requirements, tracks, math_view, export, finalize, freeze,
+    setup_limits, safe_assert, safe_error, lock_string_surface
 end
 '''
 
@@ -1495,8 +1558,8 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         attribute_filter=lambda _obj, _name, _setting: (_ for _ in ()).throw(AttributeError("access denied")),
     )
     (
-        items, levels, field, requirements, tracks, studio_math, finalize, freeze, setup_limits,
-        safe_assert, safe_error, lock_string_surface,
+        items, levels, field, requirements, tracks, studio_math, export, finalize, freeze,
+        setup_limits, safe_assert, safe_error, lock_string_surface,
     ) = runtime.execute(
         PRELUDE, name="@studio/sandbox.lua", mode="t",
     )(raise_internal)
@@ -1507,6 +1570,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         "studio.requirements": freeze(requirements),
         "studio.tracks": freeze(tracks),
         "studio.math": studio_math,
+        "studio.export": export,
     }
     setup_limits(
         int(request.get("instructionLimit", DEFAULT_INSTRUCTION_LIMIT)),
@@ -1662,6 +1726,10 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
     requirement_sources = normalized.get("requirement_sources")
     tracks = normalized.get("tracks")
     waiver_sources = normalized.get("waiver_sources")
+    exports = normalized.get("exports")
+    # An empty Lua table converts to an array, so no exports is an empty object again.
+    if exports == []:
+        exports = {}
     if not isinstance(normalized_items, list):
         normalized_items = [] if normalized_items == {} else normalized_items
     if not isinstance(fields, list):
@@ -1738,7 +1806,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
             for requirement_id, source in waiver_sources.items()
         }
     max_rows = int(request.get("maxOutputRows", DEFAULT_MAX_OUTPUT_ROWS))
-    if _output_rows(normalized_items, fields, requirement_results, tracks, kinds) > max_rows:
+    if _output_rows(normalized_items, fields, requirement_results, tracks, kinds) + len(exports) > max_rows:
         raise _failure(
             "output.row_limit", f"output exceeds {max_rows} rows",
             file=fallback, path="$.items",
@@ -1762,6 +1830,9 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         "tracks": tracks,
         "waiver_sources": waiver_sources,
     }
+    # Absent when empty, so an evaluation without exports stays byte-identical.
+    if exports:
+        payload["exports"] = exports
     max_bytes = int(request.get("maxOutputBytes", DEFAULT_MAX_OUTPUT_BYTES))
     encoded_size = len(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
     if encoded_size > max_bytes:
