@@ -233,10 +233,16 @@ void game_save_sync_reject_remote(game_save_sync_t *sync) {
     if (sync != NULL && sync->remote != NULL) sync->state = GAME_SAVE_SYNC_CONFLICT;
 }
 
+const char *game_save_sync_adoption_displaces(const game_save_sync_t *sync) {
+    if (sync == NULL || sync->state != GAME_SAVE_SYNC_ADOPT_REMOTE || sync->local == NULL ||
+        sync->local_is_fresh || documents_equal(sync->local, sync->base) ||
+        documents_equal(sync->local, sync->remote)) return NULL;
+    return sync->local;
+}
+
 bool game_save_sync_commit_remote_adoption(game_save_sync_t *sync) {
     if (sync == NULL || sync->state != GAME_SAVE_SYNC_ADOPT_REMOTE || sync->remote == NULL) return false;
-    const bool displaces = sync->local != NULL && !sync->local_is_fresh && !documents_equal(sync->local, sync->base) &&
-        !documents_equal(sync->local, sync->remote);
+    const bool displaces = game_save_sync_adoption_displaces(sync) != NULL;
     if (displaces) {
         if (sync->displaced != NULL) return false; /* the previous copy is not persisted yet */
         sync->displaced = sync->local;

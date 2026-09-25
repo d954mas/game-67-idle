@@ -77,6 +77,11 @@ bool game_save_sync_commit_remote_adoption(game_save_sync_t *sync);
 const char *game_save_sync_displaced_document(const game_save_sync_t *sync);
 void game_save_sync_clear_displaced(game_save_sync_t *sync);
 
+/* The local document the pending adoption would displace, or NULL. A caller that
+   overwrites its own storage persists this copy first and adopts only if that
+   write succeeded. */
+const char *game_save_sync_adoption_displaces(const game_save_sync_t *sync);
+
 /* The instance form of the cloud coordinator's automatic decision, for a caller
    that owns its transport and storage (several profiles, a server). The sync
    settles what the base decides: remote unchanged -> UPLOAD_READY, local

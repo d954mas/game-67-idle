@@ -26,6 +26,7 @@ static int s_policy_calls;
 static bool s_storage_capability;
 static bool s_backend_ready;
 static char *s_displaced;
+static bool s_displaced_write_ok = true;
 
 bool platform_sdk_storage_supported(void) { return s_storage_capability; }
 
@@ -69,7 +70,9 @@ bool game_storage_read(const char *slot, char **out, game_storage_read_status_t 
 bool game_storage_write(const char *slot, const char *text, char *error, int error_cap) {
     (void)error;
     (void)error_cap;
-    if (strcmp(slot, "cloud_sync_displaced") == 0) return replace_text(&s_displaced, text);
+    if (strcmp(slot, "cloud_sync_displaced") == 0) {
+        return s_displaced_write_ok && replace_text(&s_displaced, text);
+    }
     return replace_text(strcmp(slot, "cloud_sync_base") == 0 ? &s_base : &s_local, text);
 }
 
@@ -165,6 +168,7 @@ void tearDown(void) {
     s_read_calls = s_write_calls = 0;
     s_sync_write_ack = false;
     s_blocking_write_ok = true;
+    s_displaced_write_ok = true;
     s_policy_decision = GAME_SAVE_ASK;
     s_policy_calls = 0;
     s_write_interval = 0.0;
@@ -399,6 +403,29 @@ static void test_auto_remote_applies_only_at_the_safe_point(void) {
     TEST_ASSERT_EQUAL_STRING("local", s_displaced);
 }
 
+static void test_no_adoption_while_the_replaced_save_cannot_be_kept(void) {
+    s_local = copy_text("local");
+    s_live = copy_text("local");
+    s_policy_decision = GAME_SAVE_KEEP_REMOTE;
+    s_displaced_write_ok = false;
+    (void)game_save_cloud_boot_settled();
+    TEST_ASSERT_FALSE(game_save_cloud_start(false));
+    complete_read(PLATFORM_SDK_CLOUD_READY, "{\"saved_at\":1,\"doc\":\"account\"}");
+    game_save_cloud_tick();
+    TEST_ASSERT_FALSE(game_save_cloud_apply_remote_at_safe_point());
+    TEST_ASSERT_EQUAL_STRING("local", s_live);
+    TEST_ASSERT_EQUAL_STRING("local", s_local);
+    TEST_ASSERT_NULL(s_displaced);
+    TEST_ASSERT_EQUAL(GAME_SAVE_SYNC_CONFLICT, game_save_cloud_state());
+
+    s_displaced_write_ok = true;
+    TEST_ASSERT_TRUE(game_save_cloud_resolve(GAME_SAVE_KEEP_REMOTE));
+    TEST_ASSERT_TRUE(game_save_cloud_apply_remote_at_safe_point());
+    TEST_ASSERT_EQUAL_STRING("local", s_displaced);
+    TEST_ASSERT_EQUAL_STRING("account", s_local);
+    TEST_ASSERT_EQUAL_STRING("account", s_live);
+}
+
 static void test_new_local_state_cancels_auto_remote_before_apply(void) {
     s_local = copy_text("local");
     s_live = copy_text("local");
@@ -569,6 +596,7 @@ int main(void) {
     RUN_TEST(test_auto_remote_adopts_before_game_start);
     RUN_TEST(test_auto_local_rereads_and_acknowledges_before_upload);
     RUN_TEST(test_auto_remote_applies_only_at_the_safe_point);
+    RUN_TEST(test_no_adoption_while_the_replaced_save_cannot_be_kept);
     RUN_TEST(test_new_local_state_cancels_auto_remote_before_apply);
     RUN_TEST(test_elapsed_playtime_keeps_remote_auto_choice_at_safe_point);
     RUN_TEST(test_reversed_policy_cancels_auto_remote_after_elapsed_playtime);

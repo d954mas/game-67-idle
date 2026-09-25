@@ -178,8 +178,10 @@ unreadable or newer than the build, so neither is overwritten automatically.
 An adoption never destroys a local document with unsynced changes: the sync
 keeps it (`game_save_sync_displaced_document`) and refuses the next displacing
 adoption until the caller has persisted it and called
-`game_save_sync_clear_displaced`. The registered-save coordinator writes it to
-the `cloud_sync_displaced` storage slot.
+`game_save_sync_clear_displaced`. `game_save_sync_adoption_displaces` names the
+copy before the adoption. The registered-save coordinator writes it to the
+`cloud_sync_displaced` storage slot first and overwrites the local slot only
+if that write succeeded; otherwise it stays in conflict and retries later.
 
 ## Instance documents
 

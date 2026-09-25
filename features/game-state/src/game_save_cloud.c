@@ -227,6 +227,16 @@ static bool adopt_remote(void) {
     const char *remote = game_save_sync_remote_document_value(&s_cloud.sync);
     if (remote == NULL) return false;
     char error[160] = {0};
+    /* The replaced save is durable before anything overwrites it; without that
+       copy the adoption waits and the conflict stays for a later retry. */
+    const char *displacing = game_save_sync_adoption_displaces(&s_cloud.sync);
+    if (displacing != NULL &&
+        !game_storage_write_blocking(GAME_SAVE_CLOUD_DISPLACED_SLOT, displacing, error, (int)sizeof error)) {
+        nt_log_warn("game_save_cloud: not adopting the cloud save; could not keep the local one (%s)",
+                    error[0] != '\0' ? error : "no reason reported");
+        game_save_sync_reject_remote(&s_cloud.sync);
+        return false;
+    }
     char *live_before = game_save_export_string(error, (int)sizeof error);
     if (live_before == NULL || !game_save_import_string(remote, error, (int)sizeof error)) {
         free(live_before);
@@ -245,13 +255,7 @@ static bool adopt_remote(void) {
         game_save_sync_reject_remote(&s_cloud.sync);
         return true;
     }
-    const char *displaced = game_save_sync_displaced_document(&s_cloud.sync);
-    if (displaced != NULL &&
-        !game_storage_write(GAME_SAVE_CLOUD_DISPLACED_SLOT, displaced, error, (int)sizeof error)) {
-        nt_log_warn("game_save_cloud: could not keep the replaced local save (%s)",
-                    error[0] != '\0' ? error : "no reason reported");
-    }
-    game_save_sync_clear_displaced(&s_cloud.sync);
+    game_save_sync_clear_displaced(&s_cloud.sync); /* already in its slot */
     (void)persist_base();
     return true;
 }
