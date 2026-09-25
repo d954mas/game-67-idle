@@ -1,0 +1,11 @@
+{
+  "schema": "profile_test.wallet",
+  "schema_version": 2,
+  "fragment": "wallet",
+  "version": 1,
+  "string_max": 16,
+  "fields": {
+    "coins": { "type": "u32", "default": 0, "min": 0, "max": 1000000 },
+    "nickname": { "type": "string", "default": "player", "max_length": 15 }
+  }
+}

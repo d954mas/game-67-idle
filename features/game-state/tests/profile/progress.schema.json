@@ -1,0 +1,15 @@
+{
+  "schema": "profile_test.progress",
+  "schema_version": 2,
+  "fragment": "progress",
+  "version": 2,
+  "string_max": 16,
+  "reserved": ["experience"],
+  "migrations": [
+    { "to_version": 2, "fn": "progress_migrate_experience_to_xp" }
+  ],
+  "fields": {
+    "xp": { "type": "i64", "default": 0, "min": 0, "max": 1000000000000 },
+    "level": { "type": "int", "default": 1, "min": 1, "max": 100 }
+  }
+}

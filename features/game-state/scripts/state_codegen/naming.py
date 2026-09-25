@@ -43,6 +43,8 @@ class Ns:
     def inst(self) -> str: return f"{self.id}_state"
     @property
     def frag(self) -> str: return f"{self.id}_state_fragment"
+    @property
+    def doc_frag(self) -> str: return f"{self.id}_state_doc_fragment"
 
 
 def provenance_label(path: Path, repo_root: Path) -> str:

@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "game-state",
-  "version": "4.7.0",
+  "version": "4.8.0",
   "title": "Game State",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -27,7 +27,10 @@
     "game_state_json validation helpers",
     "schema-first C state generation",
     "optional game.state.* DevAPI dispatch",
-    "SDK-independent base-aware save synchronization coordinator"
+    "SDK-independent base-aware save synchronization coordinator",
+    "game_save_sync_decide: the coordinator's automatic choice over a caller-owned game_save_sync_t",
+    "instance fragments (generate_state.py --instance) and game_state_doc documents over caller-owned states, with a pure game_state_doc_migrate",
+    "game_save_seal: ChaCha20 + HMAC-SHA256 sealed save text"
   ],
   "flags": {
     "devapi": "GAME_DEVAPI_ENABLED",

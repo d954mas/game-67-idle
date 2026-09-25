@@ -13,8 +13,9 @@ def is_map_type(type_text: str) -> bool:
     return map_type_name(type_text) is not None
 
 class StateRenderer:
-    def __init__(self, ns: Ns) -> None:
+    def __init__(self, ns: Ns, instance: bool = False) -> None:
         self.ns = ns
+        self.instance = instance
 
     def field_c_type(self, field: dict[str, Any]) -> str:
         typ = field["type"]
@@ -302,7 +303,7 @@ class StateRenderer:
 #include <stdint.h>
 
 #include "cJSON.h"
-#include "game_save.h"
+#include "game_save.h"{chr(10) + '#include "game_state_doc.h"' if self.instance else ""}
 
 #define {self.ns.macro}SCHEMA_ID "{schema["schema"]}"
 #define {self.ns.macro}FRAGMENT_ID "{schema["fragment"]}"
@@ -317,9 +318,7 @@ class StateRenderer:
 
 {self.render_state_struct(schema)}
 
-/* Instance owned by this fragment TU (the shared global-state monolith is gone).
-   Feature LOGIC works with it directly or through its own API. */
-extern {self.ns.type} {self.ns.inst};
+{self.render_instance_decl()}
 
 {self.render_enum_name_decls(schema)}
 
@@ -337,8 +336,7 @@ bool   {self.ns.fn}patch_json({self.ns.type} *state, const cJSON *values, char *
 bool   {self.ns.fn}from_json({self.ns.type} *state, const cJSON *json, char *error, int error_cap);
 #endif
 
-/* Generated descriptor — replaces the hand-written fragment adapter. */
-extern const GameSaveFragment {self.ns.frag};
+{self.render_descriptor_decl()}
 
 #endif
 """
@@ -1535,7 +1533,81 @@ static bool {aggregate_ident}_write_snapshot(const {self.ns.type} *state, game_s
     # ---------------------------------------------------------------------------
 
 
+    def render_instance_decl(self) -> str:
+        if self.instance:
+            return "/* Instance fragment: every state is caller-owned; there is no process-wide copy. */"
+        return "\n".join([
+            "/* Instance owned by this fragment TU (the shared global-state monolith is gone).",
+            "   Feature LOGIC works with it directly or through its own API. */",
+            f"extern {self.ns.type} {self.ns.inst};",
+        ])
+
+
+    def render_descriptor_decl(self) -> str:
+        if self.instance:
+            return "\n".join([
+                "/* Generated descriptor for game_state_doc documents. */",
+                f"extern const game_state_doc_fragment_t {self.ns.doc_frag};",
+            ])
+        return "\n".join([
+            "/* Generated descriptor — replaces the hand-written fragment adapter. */",
+            f"extern const GameSaveFragment {self.ns.frag};",
+        ])
+
+
+    def validate_instance(self, schema: dict[str, Any]) -> None:
+        if not self.supports_text_codec(schema):
+            raise SystemExit(
+                f"--instance needs a readable text codec, so fragment {schema['fragment']} "
+                "may declare only scalar fields"
+            )
+        if any(schema["hooks"].values()):
+            raise SystemExit(
+                f"--instance fragment {schema['fragment']} cannot declare hooks: "
+                "on_new_game and reconcile act on process-wide state"
+            )
+
+
+    def render_doc_fragment_descriptor(self, schema: dict[str, Any]) -> str:
+        self.validate_instance(schema)
+        migrations = schema["migrations"]
+        lines = [
+            f"static void doc_reset(void *state) {{ {self.ns.fn}init_defaults(({self.ns.type} *)state); }}",
+            "static bool doc_validate(const void *state, char *error, int error_cap) {",
+            f"    return {self.ns.fn}validate((const {self.ns.type} *)state, error, error_cap);",
+            "}",
+            "static bool doc_write_text(const void *state, game_save_text_writer_t *writer) {",
+            f"    return {self.ns.fn}write_text((const {self.ns.type} *)state, writer);",
+            "}",
+            "static bool doc_from_text(void *state, const char *text, size_t size, char *error, int error_cap) {",
+            f"    return {self.ns.fn}from_text(({self.ns.type} *)state, text, size, error, error_cap);",
+            "}",
+        ]
+        steps_field = "NULL"
+        if migrations:
+            lines.extend(f'extern bool {entry["fn"]}(cJSON *frag, char *err, int cap);' for entry in migrations)
+            lines.append(f"static const GameSaveMigrateFn {self.ns.inst}_migration_steps[] = {{")
+            lines.extend(f'    {entry["fn"]},' for entry in migrations)
+            lines.append("};")
+            steps_field = f"{self.ns.inst}_migration_steps"
+        lines.extend([
+            f"const game_state_doc_fragment_t {self.ns.doc_frag} = {{",
+            f"    .id         = {self.ns.macro}FRAGMENT_ID,",
+            f"    .version    = {self.ns.macro}VERSION,",
+            f"    .steps      = {steps_field},",
+            "    .state_size = sizeof(" + self.ns.type + "),",
+            "    .reset      = doc_reset,",
+            "    .validate   = doc_validate,",
+            "    .write_text = doc_write_text,",
+            "    .from_text  = doc_from_text,",
+            "};",
+        ])
+        return "\n".join(lines)
+
+
     def render_fragment_descriptor(self, schema: dict[str, Any]) -> str:
+        if self.instance:
+            return self.render_doc_fragment_descriptor(schema)
         migrations = schema["migrations"]
         hooks = schema["hooks"]
         pre: list[str] = []
@@ -1704,7 +1776,7 @@ static bool {aggregate_ident}_write_snapshot(const {self.ns.type} *state, game_s
 
 {self.render_enum_tables(schema)}
 
-{self.ns.type} {self.ns.inst};   /* fragment instance (ownership lives here) */
+{"" if self.instance else f"{self.ns.type} {self.ns.inst};   /* fragment instance (ownership lives here) */"}
 
 #if !defined(GAME_SAVE_TEXT_ONLY)
 {self.render_object_helpers(schema)}

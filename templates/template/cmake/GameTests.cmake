@@ -373,6 +373,36 @@ if(NOT EMSCRIPTEN)
         OPTIONS -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE
         INCLUDES "${GAME_STATE_INC}" "${GAME_STATE_SRC}" "${SCALAR_STATE_TEST_GENERATED_DIR}")
 
+    set(PROFILE_STATE_TEST_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/game-state-profile-test")
+    set(PROFILE_STATE_TEST_SOURCES)
+    foreach(_profile_fragment progress wallet)
+        set(_profile_schema "${GAME_STATE_DIR}/tests/profile/${_profile_fragment}.schema.json")
+        add_custom_command(
+            OUTPUT
+                "${PROFILE_STATE_TEST_GENERATED_DIR}/${_profile_fragment}_state.h"
+                "${PROFILE_STATE_TEST_GENERATED_DIR}/${_profile_fragment}_state.c"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${PROFILE_STATE_TEST_GENERATED_DIR}"
+            COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
+                --schema "${_profile_schema}"
+                --out-dir "${PROFILE_STATE_TEST_GENERATED_DIR}"
+                --fragment ${_profile_fragment}
+                --instance
+            DEPENDS "${_profile_schema}" ${GAME_STATE_GENERATOR_SOURCES}
+            WORKING_DIRECTORY "${GAME_REPO_ROOT}"
+            COMMENT "Generating ${_profile_fragment} instance game-state test fixture"
+            VERBATIM)
+        list(APPEND PROFILE_STATE_TEST_SOURCES "${PROFILE_STATE_TEST_GENERATED_DIR}/${_profile_fragment}_state.c")
+    endforeach()
+
+    game_add_c_test(test_game_state_doc
+        SOURCES "${GAME_STATE_DIR}/tests/test_game_state_doc.c"
+                "${GAME_STATE_SRC}/game_state_doc.c" "${GAME_STATE_SRC}/game_save_seal.c"
+                "${GAME_STATE_SRC}/game_save_sync.c" "${GAME_STATE_SRC}/game_save_text.c"
+                "${GAME_STATE_SRC}/game_state_json.c" "${GAME_STATE_SRC}/game_save_writer.c"
+                ${PROFILE_STATE_TEST_SOURCES}
+        LIBS cjson
+        INCLUDES "${GAME_STATE_INC}" "${GAME_STATE_SRC}" "${PROFILE_STATE_TEST_GENERATED_DIR}")
+
     set(SOFTWARE_CURSOR_DIR "${GAME_REPO_ROOT}/features/software-cursor")
     game_add_c_test(test_software_cursor
         SOURCES "${SOFTWARE_CURSOR_DIR}/tests/test_software_cursor.c"

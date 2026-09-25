@@ -305,6 +305,32 @@ class StateCodegenTests(unittest.TestCase):
         self.assertIn(".write_text     = NULL", mini)
         self.assertIn(".from_text      = NULL", mini)
 
+    def test_an_instance_fragment_has_no_process_wide_state(self):
+        progress = ROOT / "features" / "game-state" / "tests" / "profile" / "progress.schema.json"
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "generated"
+            self.assertEqual(generate_state.main(
+                ["--schema", str(progress), "--out-dir", str(out), "--instance"]), 0)
+            outputs = read_outputs(out, "progress_state")
+            with self.assertRaises(SystemExit):
+                generate_state.main(["--schema", str(MINI_SCHEMA), "--out-dir", str(out), "--instance"])
+            hooked = json.loads(progress.read_text(encoding="utf-8"))
+            hooked["hooks"] = {"on_new_game": True}
+            hooked_path = Path(tmp) / "hooked.schema.json"
+            hooked_path.write_text(json.dumps(hooked), encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                generate_state.main(["--schema", str(hooked_path), "--out-dir", str(out), "--instance"])
+        header = outputs["progress_state.h"]
+        source = outputs["progress_state.c"]
+        self.assertIn('#include "game_state_doc.h"', header)
+        self.assertIn("extern const game_state_doc_fragment_t progress_state_doc_fragment;", header)
+        self.assertNotIn("extern ProgressState progress_state;", header)
+        self.assertNotIn("GameSaveFragment", header)
+        self.assertNotIn("ProgressState progress_state;", source)
+        self.assertNotIn("GameSaveFragment progress_state_fragment", source)
+        self.assertIn(".steps      = progress_state_migration_steps,", source)
+        self.assertIn(".validate   = doc_validate,", source)
+
     def test_text_only_build_preprocesses_out_legacy_json_and_snapshot_code(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

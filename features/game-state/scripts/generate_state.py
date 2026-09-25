@@ -47,6 +47,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--schema", required=True, help="Schema JSON to generate from.")
     parser.add_argument("--out-dir", default=None, help="Directory for generated fragment state files.")
     parser.add_argument("--fragment", default=None, help="Expected fragment id (asserted against schema.fragment).")
+    parser.add_argument(
+        "--instance", action="store_true",
+        help="Emit an instance fragment: no process-wide state or GameSaveFragment, "
+             "a game_state_doc_fragment_t descriptor over caller-owned states instead.",
+    )
     args = parser.parse_args(argv)
 
     schema_path = Path(args.schema).resolve()
@@ -55,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.fragment is not None and args.fragment != fragment:
         raise SystemExit(f"--fragment {args.fragment!r} does not match schema.fragment {fragment!r}")
     out_dir = Path(args.out_dir).resolve() if args.out_dir else default_out_dir(schema_path).resolve()
-    model = build_model(schema, relative_label(schema_path))
+    model = build_model(schema, relative_label(schema_path), instance=args.instance)
     changed = write_bundle(model, out_dir)
     if changed:
         for path in changed:

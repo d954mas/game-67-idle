@@ -243,3 +243,18 @@ bool game_save_sync_commit_remote_adoption(game_save_sync_t *sync) {
     sync->state = GAME_SAVE_SYNC_SYNCHRONIZED;
     return true;
 }
+
+game_save_sync_state_t game_save_sync_decide(game_save_sync_t *sync, game_save_sync_choose_fn choose, void *user) {
+    if (sync == NULL || sync->state != GAME_SAVE_SYNC_CONFLICT || sync->local == NULL) {
+        return game_save_sync_state(sync);
+    }
+    if (sync->remote == NULL) {
+        if (sync->remote_is_empty) (void)game_save_sync_resolve(sync, GAME_SAVE_KEEP_LOCAL);
+        return sync->state;
+    }
+    if (choose != NULL) {
+        const game_save_choice_t choice = choose(sync->local, sync->remote, user);
+        if (choice != GAME_SAVE_ASK) (void)game_save_sync_resolve(sync, choice);
+    }
+    return sync->state;
+}

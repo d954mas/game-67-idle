@@ -32,7 +32,7 @@ def write_if_changed(path: Path, text: str) -> bool:
 
 
 def render_bundle(model: GenerationModel) -> dict[str, str]:
-    state = StateRenderer(model.ns)
+    state = StateRenderer(model.ns, instance=model.instance)
     events = EventRenderer(model.ns)
     prefix = f"{model.ns.id}_state"
     return {

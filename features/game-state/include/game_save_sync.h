@@ -66,4 +66,15 @@ bool game_save_sync_resolve(game_save_sync_t *sync, game_save_choice_t resolutio
 void game_save_sync_reject_remote(game_save_sync_t *sync);
 bool game_save_sync_commit_remote_adoption(game_save_sync_t *sync);
 
+/* The instance form of the cloud coordinator's automatic decision, for a caller
+   that owns its transport and storage (several profiles, a server). The sync
+   settles what the base decides: remote unchanged -> UPLOAD_READY, local
+   unchanged -> ADOPT_REMOTE. A CONFLICT goes to `choose`; an emptied remote
+   keeps local without asking, as the singleton does. KEEP_LOCAL still needs a
+   fresh remote read before the upload (NEEDS_REMOTE_REFRESH), and ASK leaves the
+   conflict for the player. Returns the state after deciding. */
+typedef game_save_choice_t (*game_save_sync_choose_fn)(const char *local_document, const char *remote_document,
+                                                      void *user);
+game_save_sync_state_t game_save_sync_decide(game_save_sync_t *sync, game_save_sync_choose_fn choose, void *user);
+
 #endif /* GAME_SAVE_SYNC_H */

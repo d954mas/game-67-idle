@@ -21,7 +21,7 @@
     {
       "id": "game-state",
       "source": "features/game-state",
-      "version": "4.7.0",
+      "version": "4.8.0",
       "compatibility": "validated by the template build and test suite"
     },
     {

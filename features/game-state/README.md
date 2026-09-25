@@ -70,7 +70,9 @@ features/game-state/
   feature.json
   include/
     game_save.h
+    game_save_seal.h
     game_save_text.h
+    game_state_doc.h
     game_state_json.h
     game_storage.h
   src/
@@ -165,7 +167,41 @@ levels, currency, playtime, or content.
 for consumers with their own save shell. Its documents are opaque; the caller
 supplies transport, validation, persistence, and retry scheduling. Failed or
 unknown reads prohibit uploads, and only an acknowledgment advances the base
-to the exact sent snapshot.
+to the exact sent snapshot. `game_save_sync_decide(sync, choose, user)` is the
+cloud coordinator's automatic decision for such a shell: the base settles
+"remote unchanged -> upload local" and "local unchanged -> adopt remote", and a
+conflict goes to the game's `choose` callback, which sees both whole documents.
+
+## Instance documents
+
+The registered save is one process-wide document. A process that holds many
+profiles -- a room server, a solo client comparing its local and cloud copies --
+uses instance documents instead, which never touch the `game_save` singleton:
+
+- `generate_state.py --instance` generates a fragment with no process-wide
+  state and no `GameSaveFragment`; it exports a `game_state_doc_fragment_t`
+  descriptor over caller-owned states. Only scalar fragments qualify (the
+  readable text codec), and hooks are refused, since they act on process-wide
+  state. Migrations and `reserved` tombstones work as for any fragment.
+- `game_state_doc.h` writes and reads a whole NTGS document over an array of
+  states, with a `save_version`, a `save_id` (the profile's lineage, 16 hex
+  digits) and a `rev` (its stored-write counter) in the header. A write
+  validates every state first. A read requires the current `save_version` and
+  fragment versions, treats a missing fragment as defaults, and refuses a
+  fragment the schema lacks: only a document migration drops one.
+- `game_state_doc_migrate` is pure: document steps, then each fragment's steps,
+  in the order the `game_save` load path uses, on the same cJSON shapes. A
+  current document is copied byte for byte.
+- `game_save_seal.h` seals any text with ChaCha20 and HMAC-SHA256 under a
+  32-byte game key, encrypt-then-MAC, with a nonce derived from the plaintext so
+  one document always seals to one text. The key ships in the client: it stops
+  casual reading and editing, not a determined player. The header documents the
+  format a server needs to verify the tag. Nothing seals the registered save by
+  accident; a caller seals explicitly.
+
+Sources: `src/game_state_doc.c` (with `game_save_text.c`, `game_state_json.c`,
+cJSON) and `src/game_save_seal.c` (standalone). The template builds and runs
+`tests/test_game_state_doc.c` over the fixture schemas in `tests/profile/`.
 
 ## Commands
 
@@ -292,6 +328,11 @@ writes are synchronous, so it is never published while the writer is still
 filling it. Without those hooks, or when transforms/orphans are present, the
 save shell uses its legacy JSON path rather than claiming an allocation-free
 tick.
+
+Version `4.8.0` adds instance fragments (`generate_state.py --instance`),
+instance documents with a pure migration (`game_state_doc.h`), the save seal
+(`game_save_seal.h`), and `game_save_sync_decide`. Generated singleton
+fragments and every existing API are unchanged.
 
 ## Extension points
 
