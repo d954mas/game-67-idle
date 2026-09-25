@@ -48,6 +48,9 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
   /* Ad events arrive from the SDK as well as from this adapter's own calls, so
      pause is counted: the game resumes when the last overlay is gone. */
   let pauseDepth = 0;
+  /* The SDK's own pause is one more reason, held as a flag: its pause and
+     resume events are not guaranteed to alternate. */
+  let sdkPaused = false;
 
   function windowRef() {
     return (host && host.window) || host || globalThis;
@@ -174,6 +177,67 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
     }
   }
 
+  /* Moderation freezes the game through `gp.pause()`, which reaches the page
+     only as this event pair. */
+  function followPause(instance) {
+    if (typeof instance.on !== "function") return;
+    const apply = (paused) => {
+      if (destroyed || paused === sdkPaused) return;
+      sdkPaused = paused;
+      if (paused) enterPause();
+      else leavePause();
+    };
+    try {
+      instance.on("pause", () => apply(true));
+      instance.on("resume", () => apply(false));
+    } catch { /* the SDK is not broadcasting its pause */ }
+    if (instance.isPaused) apply(true);
+  }
+
+  /* GamePush keeps the player's mute switches, remembers them across sessions
+     and flips them itself around ads; the game mirrors them and drives them
+     from its own volume controls. Indices follow platform_sdk_sound_t. */
+  const SOUND_SWITCHES = Object.freeze([
+    { state: "isMuted", event: "", mute: "mute", unmute: "unmute" },
+    { state: "isMusicMuted", event: ":music", mute: "muteMusic", unmute: "unmuteMusic" },
+    { state: "isSFXMuted", event: ":sfx", mute: "muteSFX", unmute: "unmuteSFX" },
+  ]);
+
+  function soundApi() {
+    const sounds = !destroyed && gp && gp.sounds;
+    return sounds && typeof sounds.mute === "function" ? sounds : null;
+  }
+
+  function reportSound(index, muted) {
+    if (destroyed || !lifecycle || typeof lifecycle.sound !== "function") return;
+    try { lifecycle.sound(index, Boolean(muted)); } catch { /* the facade is not up */ }
+  }
+
+  function followSounds(instance) {
+    const sounds = instance.sounds;
+    if (!sounds || typeof sounds.on !== "function") return;
+    SOUND_SWITCHES.forEach((entry, index) => {
+      try {
+        sounds.on(`mute${entry.event}`, () => reportSound(index, true));
+        sounds.on(`unmute${entry.event}`, () => reportSound(index, false));
+      } catch { /* the SDK is not broadcasting this switch */ }
+      reportSound(index, sounds[entry.state]);
+    });
+  }
+
+  function soundSwitches() {
+    return Boolean(soundApi());
+  }
+
+  function setSoundMuted(index, muted) {
+    const sounds = soundApi();
+    const entry = SOUND_SWITCHES[index];
+    if (!sounds || !entry) return;
+    const method = sounds[muted ? entry.mute : entry.unmute];
+    if (typeof method !== "function") return;
+    try { method.call(sounds); } catch { /* the switch stays where it was */ }
+  }
+
   /* The adapter is operational whether or not the SDK ever answers, and it must
      say so at once: the facade turns a failed boot into a game that never
      leaves its loading screen, while a player with an adblocker must still
@@ -182,6 +246,8 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
     sdk().then((instance) => {
       if (!instance || destroyed) return;
       followAds(instance);
+      followPause(instance);
+      followSounds(instance);
       showPreloader(instance);
     }, () => {});
     return true;
@@ -222,6 +288,9 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
       /* The milestone is a notification, not a handshake: nothing the game does
          next depends on the publisher acknowledging it. */
       try { Promise.resolve(instance.gameStart()).catch(() => {}); } catch { /* the host is not listening */ }
+      /* The publisher requires the sticky banner from the start and switches
+         it off per platform in its panel where it would cover the game. */
+      void requestSticky(instance);
     })();
     return startSignalled;
   }
@@ -285,7 +354,10 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
   /* The sticky banner is the publisher's own frame around the canvas: it is
      placed and refreshed by the SDK, and the game only asks for it. */
   async function showBanner() {
-    const instance = await sdk();
+    return requestSticky(await sdk());
+  }
+
+  async function requestSticky(instance) {
     const ads = instance && instance.ads;
     if (!ads || typeof ads.showSticky !== "function" || !ads.isStickyAvailable) {
       return { supported: false, shown: false, reason: "unsupported" };
@@ -514,10 +586,12 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
     measure() {},
     ready,
     saveData,
+    setSoundMuted,
     showBanner,
     showInterstitial,
     showLeaderboard,
     showRewarded,
+    soundSwitches,
     submitScore,
   };
 }

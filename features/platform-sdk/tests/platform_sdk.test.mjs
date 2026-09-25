@@ -52,10 +52,12 @@ const PLATFORM_BACKEND_METHODS = Object.freeze([
   "measure",
   "ready",
   "saveData",
+  "setSoundMuted",
   "showBanner",
   "showInterstitial",
   "showLeaderboard",
   "showRewarded",
+  "soundSwitches",
   "submitScore",
 ]);
 
@@ -2048,11 +2050,14 @@ function createGamePushFixture({
   deliver = "auto",
   manualTimers = false,
   preloaderResolves = true,
+  soundsMuted = { music: false },
 } = {}) {
   const host = createHost(TargetPlatform.GAMEPUSH);
   const calls = [];
   const sources = [];
   const adListeners = new Map();
+  const sdkListeners = new Map();
+  const soundListeners = new Map();
   const profile = new Map();
   let syncs = 0;
   let releasePreloader = () => {};
@@ -2109,9 +2114,36 @@ function createGamePushFixture({
       calls.push("board:open");
     },
   };
+  const listen = (map) => (name, handler) => {
+    const list = map.get(name) || [];
+    list.push(handler);
+    map.set(name, list);
+  };
+  const emit = (map, name) => {
+    for (const handler of map.get(name) || []) handler();
+  };
+  const sounds = {
+    isMuted: false,
+    isMusicMuted: soundsMuted.music,
+    isSFXMuted: false,
+    on: listen(soundListeners),
+  };
+  for (const [method, field, value] of [
+    ["mute", "isMuted", true], ["unmute", "isMuted", false],
+    ["muteMusic", "isMusicMuted", true], ["unmuteMusic", "isMusicMuted", false],
+    ["muteSFX", "isSFXMuted", true], ["unmuteSFX", "isSFXMuted", false],
+  ]) {
+    sounds[method] = () => {
+      calls.push(`sounds:${method}`);
+      sounds[field] = value;
+    };
+  }
   const gp = {
     language,
     player,
+    sounds,
+    isPaused: false,
+    on: listen(sdkListeners),
     leaderboard: board,
     ads: {
       isPreloaderAvailable: available.preloader,
@@ -2171,11 +2203,13 @@ function createGamePushFixture({
   const audio = [];
   const lifecycleCalls = [];
   const visible = [];
+  const soundReports = [];
   const lifecycle = {
     audio: (enabled) => audio.push(enabled),
     pause: () => lifecycleCalls.push("pause"),
     resume: () => lifecycleCalls.push("resume"),
     adVisible: (id, on) => visible.push([id, on]),
+    sound: (index, muted) => soundReports.push([index, muted]),
   };
   const adapter = createGamePushPlatformAdapter({
     config: { gamePushProjectId: 2782, gamePushPublicToken: "token-xyz" },
@@ -2187,7 +2221,9 @@ function createGamePushFixture({
     for (const handler of adListeners.get(name) || []) handler();
   };
   return {
-    adapter, audio, calls, emitAd, host, lifecycleCalls, player, profile, sources, visible,
+    adapter, audio, calls, emitAd, host, lifecycleCalls, player, profile, soundReports, sources, visible,
+    emitSdk: (name) => emit(sdkListeners, name),
+    emitSound: (name) => emit(soundListeners, name),
     syncs: () => syncs,
     deliverSdk: () => host.__gamePushAdapterInit(gp),
     releasePreloader: () => releasePreloader(),
@@ -2210,7 +2246,7 @@ test("gamepush carries the project identity into the SDK it loads", async () => 
   assert.match(sources[0], /projectId=2782/);
   assert.match(sources[0], /publicToken=token-xyz/);
   assert.match(sources[0], /callback=__gamePushAdapterInit/);
-  assert.deepEqual(calls, ["preloader", "gameStart"]);
+  assert.deepEqual(calls, ["preloader", "gameStart", "sticky"]);
   adapter.destroy();
 });
 
@@ -2230,7 +2266,7 @@ test("gamepush shows the loading ad it allows and only then declares the game st
   assert.equal(calls.includes("gameStart"), false, "readiness is not a start");
 
   await adapter.gameLoadingFinished();
-  assert.deepEqual(calls, ["preloader", "gameStart"]);
+  assert.deepEqual(calls, ["preloader", "gameStart", "sticky"]);
 
   await adapter.gameReady();
   assert.equal(calls.filter((entry) => entry === "gameStart").length, 1);
@@ -2243,7 +2279,7 @@ test("gamepush skips the loading ad the publisher withholds", async () => {
   });
   adapter.ready();
   await adapter.gameLoadingFinished();
-  assert.deepEqual(calls, ["gameStart"]);
+  assert.deepEqual(calls, ["gameStart", "sticky"]);
   adapter.destroy();
 });
 
@@ -2343,6 +2379,46 @@ test("gamepush resumes only once the tab and the ad have both released the game"
   host.document.dispatch("visibilitychange");
   assert.deepEqual(lifecycleCalls, ["pause", "resume"]);
   adapter.destroy();
+});
+
+test("gamepush freezes the game for the SDK's own pause, counted with the other reasons", async () => {
+  const { adapter, emitAd, emitSdk, lifecycleCalls } = createGamePushFixture();
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+
+  emitSdk("pause");
+  emitSdk("pause");
+  emitAd("fullscreen:start");
+  emitSdk("resume");
+  assert.deepEqual(lifecycleCalls, ["pause"], "the ad still holds the game");
+  emitAd("fullscreen:close");
+  emitSdk("resume");
+  assert.deepEqual(lifecycleCalls, ["pause", "resume"]);
+  adapter.destroy();
+});
+
+test("gamepush mirrors the publisher's sound switches and drives them from the game", async () => {
+  const { adapter, calls, emitSound, soundReports } = createGamePushFixture({ soundsMuted: { music: true } });
+  assert.equal(adapter.soundSwitches(), false, "no switches before the SDK answers");
+  adapter.ready();
+  await adapter.gameLoadingFinished();
+
+  assert.equal(adapter.soundSwitches(), true);
+  assert.deepEqual(soundReports, [[0, false], [1, true], [2, false]], "the remembered state arrives at boot");
+
+  emitSound("mute:sfx");
+  emitSound("unmute:music");
+  emitSound("mute");
+  assert.deepEqual(soundReports.slice(3), [[2, true], [1, false], [0, true]]);
+
+  adapter.setSoundMuted(1, true);
+  adapter.setSoundMuted(2, false);
+  adapter.setSoundMuted(0, false);
+  adapter.setSoundMuted(7, true);
+  assert.deepEqual(calls.filter((entry) => entry.startsWith("sounds:")),
+                   ["sounds:muteMusic", "sounds:unmuteSFX", "sounds:unmute"]);
+  adapter.destroy();
+  assert.equal(adapter.soundSwitches(), false);
 });
 
 test("gamepush reports the publisher's language, not the browser's", async () => {
@@ -2456,7 +2532,7 @@ test("gamepush reveals the game instead of waiting out an SDK that stays silent"
   fx.deliverSdk();
   await flushMicrotasks();
   await flushMicrotasks();
-  assert.deepEqual(fx.calls, ["preloader", "gameStart"], "a late SDK still gets its milestone");
+  assert.deepEqual(fx.calls, ["preloader", "gameStart", "sticky"], "a late SDK still gets its milestone");
   fx.adapter.destroy();
 });
 
@@ -2469,7 +2545,7 @@ test("gamepush does not hold the loading screen for a loading ad that never begi
   await flushMicrotasks();
   fx.fireTimers(3000);
   await revealed;
-  assert.deepEqual(fx.calls, ["preloader", "gameStart"]);
+  assert.deepEqual(fx.calls, ["preloader", "gameStart", "sticky"]);
   fx.adapter.destroy();
 });
 
@@ -2486,6 +2562,6 @@ test("gamepush stays behind a loading ad that did begin, however long it runs", 
   fx.releasePreloader();
   fx.emitAd("preloader:close");
   await revealed;
-  assert.deepEqual(fx.calls, ["preloader", "gameStart"]);
+  assert.deepEqual(fx.calls, ["preloader", "gameStart", "sticky"]);
   fx.adapter.destroy();
 });

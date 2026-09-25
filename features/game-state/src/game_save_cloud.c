@@ -41,6 +41,8 @@ typedef struct game_save_cloud_runtime {
     double asked_at;
     double first_wait_at;
     double last_attempt_at;
+    /* No upload starts before this; 0 when no interval is configured. */
+    double writes_open_at;
     double last_read_at;
     int64_t last_local_saved_at;
 } game_save_cloud_runtime_t;
@@ -369,6 +371,7 @@ static void start_write(void) {
     const double gap = s_cloud.config.min_write_interval_sec > GAME_SAVE_CLOUD_RETRY_SEC
         ? s_cloud.config.min_write_interval_sec : GAME_SAVE_CLOUD_RETRY_SEC;
     if (s_cloud.has_write_attempt && now - s_cloud.last_attempt_at < gap) return;
+    if (now < s_cloud.writes_open_at) return;
     if (!game_save_sync_store_started(&s_cloud.sync)) return;
     char *envelope = envelope_build(game_save_last_saved_at(),
                                     game_save_sync_sent_document(&s_cloud.sync));
@@ -393,6 +396,12 @@ bool game_save_cloud_init(const game_save_cloud_config_t *config) {
         config->transport.store == NULL || config->transport.write_status == NULL) return false;
     game_save_cloud_shutdown();
     s_cloud.config = *config;
+    /* The interval also holds the first upload: a session that starts by
+       writing the account back is the churn the interval exists to prevent,
+       and a portal reads a write at boot as overwriting the player's data. */
+    if (config->min_write_interval_sec > 0.0) {
+        s_cloud.writes_open_at = nt_time_now() + config->min_write_interval_sec;
+    }
     game_save_sync_init(&s_cloud.sync);
     s_cloud.initialized = true;
     char *base = NULL;

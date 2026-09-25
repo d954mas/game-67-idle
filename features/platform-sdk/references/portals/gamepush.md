@@ -218,7 +218,23 @@ formality -- the global board is one board, so the adapter ignores it. The day
 scope stays with the self-hosted targets: only an isolated board could reset,
 and this game does not create one.
 
-## 8. What the platform requires of the build
+## 8. What moderation checks
+
+A rejection report (2026-09) listed four requirements, all enforced in the
+adapter or the game:
+
+- Saves go through `gp.player` fields and `sync()`, never a sync at boot and
+  never one per change: the game spaces cloud uploads by an interval that also
+  holds the first one.
+- Sound settings drive `gp.sounds` (`mute`/`unmute`, `muteMusic`,
+  `muteSFX` and their inverses) and follow its `mute*`/`unmute*` events, so
+  the publisher's remembered state survives sessions.
+- `gp.on('pause')` freezes the world and the interface until `resume`;
+  `gp.pause()` is how the reviewer tests it.
+- The sticky banner is requested at game start; the panel turns it off per
+  platform where it covers the interface.
+
+## 9. What the platform requires of the build
 
 From S12, the requirements that reach the artifact:
 

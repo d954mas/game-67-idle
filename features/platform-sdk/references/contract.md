@@ -327,6 +327,13 @@ Implementation rules:
   operation, a visible ad overlay and a portal pause are independent reasons;
   completing one operation never clears another reason. Async backend ad
   completions must carry the request id captured at dispatch.
+- Portal sound switches (`platform_sdk_sound_t`: all, music, sfx) exist only
+  where the portal keeps the player's mute state itself (GamePush). The
+  adapter reports them through `lifecycle.sound(index, muted)` and exposes
+  `soundSwitches()` / `setSoundMuted(index, muted)`; every other adapter
+  answers `false` and ignores the call. A game's volume control pulled to zero
+  flips the switch instead of storing a zero, and a muted channel is shown and
+  mixed as silent while the stored volume is kept for the unmute.
 - Rewarded ads grant rewards only when the SDK confirms reward completion:
   Poki returns a success boolean, Yandex uses `onRewarded`, Playgama uses the
   `rewarded` state.

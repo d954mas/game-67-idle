@@ -264,7 +264,7 @@ static void upload_local_and_settle(const char *document, int64_t saved_at) {
     game_save_cloud_tick();
 }
 
-static void test_write_interval_holds_back_the_next_upload(void) {
+static void test_write_interval_holds_back_every_upload_including_the_first(void) {
     s_write_interval = 60.0;
     s_sync_write_ack = true;
     game_save_cloud_shutdown();
@@ -275,13 +275,17 @@ static void test_write_interval_holds_back_the_next_upload(void) {
     complete_read(PLATFORM_SDK_CLOUD_EMPTY, NULL);
     TEST_ASSERT_FALSE(game_save_cloud_start(false));
     game_save_cloud_tick();
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, s_write_calls, "no upload at boot");
+
+    s_now = 61.0;
+    game_save_cloud_tick();
     TEST_ASSERT_EQUAL_INT(1, s_write_calls);
 
-    s_now = 30.0;
+    s_now = 90.0;
     upload_local_and_settle("local-2", 2);
     TEST_ASSERT_EQUAL_INT(1, s_write_calls);
 
-    s_now = 61.0;
+    s_now = 122.0;
     game_save_cloud_tick();
     TEST_ASSERT_EQUAL_INT(2, s_write_calls);
 }
@@ -672,7 +676,7 @@ int main(void) {
     RUN_TEST(test_fresh_device_adopts_valid_account_document);
     RUN_TEST(test_failed_read_blocks_writes_and_retries_once_per_interval);
     RUN_TEST(test_synchronous_store_ack_commits_the_exact_snapshot);
-    RUN_TEST(test_write_interval_holds_back_the_next_upload);
+    RUN_TEST(test_write_interval_holds_back_every_upload_including_the_first);
     RUN_TEST(test_no_interval_uploads_every_change);
     RUN_TEST(test_empty_cloud_after_sync_uploads_local_without_asking);
     RUN_TEST(test_an_acknowledged_upload_needs_no_reread);
