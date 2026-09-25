@@ -139,7 +139,12 @@ Consumers pin both this version and an exact repository revision.
 ## Extension points
 
 - `protocol_version` and message types from `NET_MSG_APP_FIRST` up are the
-  game's; the transport never interprets them.
+  game's; the transport never interprets them beyond this: after HELLO, the
+  first byte of every message a client sends is its type and must be at
+  least `NET_MSG_APP_FIRST`. The server closes a client whose message starts
+  with 0 (the reserved HELLO type) with `NET_CLOSE_FORMAT` (4004) before
+  `on_message` sees it, so a payload that can begin with a zero byte (a
+  varint id of 0, a small count) needs a type byte in front of it.
 - `net_ws_server_close(..., code)` carries any application code; 4100-4999 is
   the suggested game range.
 - `overflow_policy` on the client and `net_ws_server_queued_bytes` on the
