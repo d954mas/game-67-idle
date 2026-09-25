@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "ui-kit",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "title": "UI Kit",
   "status": "reusable",
   "kind": "presentation",
@@ -14,7 +14,8 @@
   "dependencies": [
     "neotolis-engine nt_ui widgets, atlas, and Clay",
     "consumer-owned pack builder for the ten kit regions and the glyph set",
-    "Pillow for the art generator (ai_studio/dev_environment)"
+    "Pillow for the art generator (ai_studio/dev_environment)",
+    "consumer-owned pack builder for shaders/ui_uber.vert and ui_uber.frag (their globals include resolves from the consumer's shader root)"
   ],
   "commands": {
     "generate": "node ai_studio/dev_environment/python_run.mjs features/ui-kit/tools/gen_ui_kit.py --out <consumer>/assets/ui",
@@ -22,7 +23,8 @@
     "parity": "node --test features/ui-kit/tests/tokens_parity.test.mjs",
     "lab": "node features/ui-kit/example/native/tools/lab.mjs test",
     "lab_build": "node features/ui-kit/example/native/tools/lab.mjs build",
-    "icons": "node --test features/ui-kit/tests/icons_manifest.test.mjs"
+    "icons": "node --test features/ui-kit/tests/icons_manifest.test.mjs",
+    "ctest_shape": "ctest --test-dir <consumer build dir> -R test_ui_shape_pack --output-on-failure"
   },
   "provides": [
     "ui_tokens_t design tokens with legacy Studio Default and opt-in Studio B sheets",
@@ -36,7 +38,8 @@
     "example/native: the UI Lab, a standalone engine consumer with six scenes and four themes",
     "ui_safe_area device insets",
     "gen_ui_kit.py slice9 art generator driven by a token sheet",
-    "assets/icons: the kit's CC0 glyph set as white masks, named by ui_icons.h and bound in one call (ui_theme_art_bind_icons)"
+    "assets/icons: the kit's CC0 glyph set as white masks, named by ui_icons.h and bound in one call (ui_theme_art_bind_icons)",
+    "ui_shape: the uber sprite material (shaders/ui_uber.*) and SDF panels and radials (ui_kit_panel*, ui_kit_radial*) that batch with plain sprites when it is the context's base material"
   ],
   "flags": {
     "feature": "FEATURE_UI_KIT=1 in consuming game/template targets"
@@ -51,7 +54,9 @@
       "${UI_KIT_SRC}/ui_metrics.c",
       "${UI_KIT_SRC}/ui_kit.c",
       "${UI_KIT_SRC}/ui_safe_area.c",
-      "${UI_KIT_SRC}/ui_reach.c"
+      "${UI_KIT_SRC}/ui_reach.c",
+      "${UI_KIT_SRC}/ui_shape.c",
+      "${UI_KIT_SRC}/ui_shape_pack.c"
     ],
     "include_dirs": [
       "${UI_KIT_INC}"
@@ -61,7 +66,8 @@
       "frame-begin"
     ],
     "ctest_targets": [
-      "test_ui_scale"
+      "test_ui_scale",
+      "test_ui_shape_pack"
     ]
   },
   "assets_tag": "feature=ui-kit",

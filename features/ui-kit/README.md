@@ -81,6 +81,25 @@ set the bar: a prototype should not have to design a UI before it has a game.
   the example a game copies a screen from. Opt-in; nothing in it is compiled
   into a game or the template.
 - `ui_safe_area.h` — the device's own insets, in CSS pixels.
+- `ui_shape.h`, `ui_shape_pack.h` and `shaders/ui_uber.vert|frag` — the uber
+  sprite material and the shapes it draws without art: rounded panels
+  (per-corner radii, two-colour vertical gradient, contour, lip, press, gloss
+  band, checker, inner highlight) and discs, rings and arcs (rim, gradient,
+  lip, round gloss). Mode 0 of the shader is `sprite.frag`, so a game that
+  makes it the context's base material — `nt_ui_set_sprite_material(ctx, uber)`
+  with the material created from `ui_kit_uber_material_desc(atlas page)` and
+  `ui_kit_shape_bind(uber, atlas)` — draws icons, Clay rectangles and shapes in
+  one draw per text-free run. The desc sets all-zero attr defaults, which every
+  plain emit bakes and the shader reads as mode 0. Shapes are GEOMETRY-mode quads against the white
+  region (the walker aligns them to four vertices), so they need no atlas
+  region; styles are plain structs packed at call time
+  (`ui_kit_pack_panel`/`ui_kit_pack_radial`). The consumer packs both shaders
+  with its `common/globals.glsl` on the include path and raises the sprite
+  renderer's `custom_max_vertices` to `max_vertices`: every UI batch now stages
+  under that cap, and a lower one splits a run into extra draws.
+  `ui_kit_panel_begin_styled`/`ui_kit_radial_begin_styled` are containers:
+  the engine has no container form of `nt_ui_image_custom`, so they open the
+  element with the public image payload themselves.
 - `tools/gen_ui_kit.py --tokens <sheet> --out <assets/ui>` — draws the slice9 art
   from a token sheet. `art.gloss` (0 when omitted) lightens the top rim of the
   fixed-colour surfaces — panel and tile — so they read as moulded plastic
@@ -102,6 +121,9 @@ becomes a raw pointer and calls the kit from there.
   orientation-free and monotone, nothing floors it in a small window, a CSS-pixel
   safe area survives the round trip, and a window the platform has not sized yet
   still yields a finite canvas.
+- `test_ui_shape_pack` — every packed shape field reads back exactly as the
+  shader unpacks it, lengths clamp inside their 12-bit field, and a zero style
+  is not the plain-sprite block.
 - `node --test features/ui-kit/tests/tokens_parity.test.mjs` — the token sheet
   the art generator reads and the tokens compiled into `ui_tokens.c` are the
   same numbers. Without it a repaint lands in the art and not in the styles.

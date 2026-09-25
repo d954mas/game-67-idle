@@ -938,6 +938,11 @@ if(NOT EMSCRIPTEN)
         INCLUDES "${UI_KIT_INC}"
         WARNINGS)
 
+    game_add_c_test(test_ui_shape_pack
+        SOURCES "${UI_KIT_DIR}/tests/test_ui_shape_pack.c" "${UI_KIT_SRC}/ui_shape_pack.c"
+        INCLUDES "${UI_KIT_INC}"
+        WARNINGS)
+
     add_executable(test_game_input
         tests/test_game_input.c
         src/game_input.c)

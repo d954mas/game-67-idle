@@ -102,6 +102,8 @@ add_executable(${GAME_TARGET}
     "${UI_KIT_SRC}/ui_kit.c"
     "${UI_KIT_SRC}/ui_safe_area.c"
     "${UI_KIT_SRC}/ui_reach.c"
+    "${UI_KIT_SRC}/ui_shape.c"
+    "${UI_KIT_SRC}/ui_shape_pack.c"
     src/render/render_mesh.c
     src/render/shader_programs.c
     src/render/capture.c
