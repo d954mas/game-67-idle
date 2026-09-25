@@ -182,11 +182,12 @@ enum { BUTTON_ART, BUTTON_PANEL, BUTTON_RADIAL };
 static uint8_t s_button_shape[UI_KIT_BUTTON_DEPTH];
 static int s_button_depth;
 
-// The tint the engine would put on the art for the button's state this frame.
+// The tint the engine would put on the art for the button's state this frame:
+// hover counts the hit padding, and a press dragged off the button shows idle.
 static uint32_t state_tint(nt_ui_context_t *ctx, uint32_t id, const nt_ui_button_style_t *style, bool enabled) {
     if (!enabled) { return style->disabled.bg_tint; }
-    const nt_ui_interaction_t in = nt_ui_query_interaction(ctx, id);
-    if (in.pressed) { return style->pressed.bg_tint; }
+    const nt_ui_interaction_t in = nt_ui_query_interaction_padded(ctx, id, style->hit_padding_lrtb);
+    if (in.pressed && in.hovered) { return style->pressed.bg_tint; }
     return in.hovered ? style->hover.bg_tint : style->idle.bg_tint;
 }
 
