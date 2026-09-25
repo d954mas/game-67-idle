@@ -1283,6 +1283,8 @@ items.define({ id="game.number", kind=items.kind({ id="number" }), value=1e309 }
             'export("game.a", { 1, x=2 })': ("export.value", 3),
             'export("game.a", 9007199254740992)': ("export.value", 3),
             'local t = {}\nt.self = t\nexport("game.a", t)': ("export.value", 5),
+            'export("game.a", {})': ("export.value", 3),
+            'export("game.a", { rows={ { hp=1 }, {} } })': ("export.value", 3),
         }
         for body, (code, line) in cases.items():
             with self.subTest(body=body):
@@ -1293,6 +1295,24 @@ items.define({ id="game.number", kind=items.kind({ id="number" }), value=1e309 }
         )}, ["game.exp"])
         self.assertEqual(copied.returncode, 0, copied.stderr)
         self.assertEqual(json.loads(copied.stdout)["exports"], {"game.a": {"n": 1}})
+
+        # Of several faults, the first in key order is the one reported, with its path.
+        for _ in range(3):
+            faulty = self.evaluate({"game.exp": header + (
+                'export("game.a", { zed={ f=function() end }, alpha={ 1, { g=function() end } } })\n'
+            )}, ["game.exp"])
+            self.assert_error(faulty, "export.value", "game/exp.lua", 3)
+            self.assertIn("at game.a.alpha[2].g", json.loads(faulty.stderr)["error"]["message"])
+        empty = self.evaluate({"game.exp": header + 'export("game.a", { rows={ {} } })\n'}, ["game.exp"])
+        self.assertIn("empty table", json.loads(empty.stderr)["error"]["message"])
+
+    def test_nested_export_values_count_against_the_row_budget(self):
+        source = 'local export = require("studio.export")\nexport("game.a", { rows={ 1, 2, 3, 4, 5, 6, 7, 8 } })\n'
+        # Ten rows: the export, its `rows` member, and eight values.
+        fits = self.evaluate({"game.exp": source}, ["game.exp"], "--max-output-rows", "10")
+        self.assertEqual(fits.returncode, 0, fits.stderr)
+        over = self.evaluate({"game.exp": source}, ["game.exp"], "--max-output-rows", "9")
+        self.assertEqual(json.loads(over.stderr)["error"]["code"], "output.row_limit")
 
 
 if __name__ == "__main__":

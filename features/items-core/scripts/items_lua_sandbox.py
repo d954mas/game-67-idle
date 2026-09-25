@@ -41,6 +41,7 @@ return function(raise_internal)
   local raw_error = error
   local raw_debug, raw_math = debug, math
   local raw_pairs, raw_type = pairs, type
+  local raw_rawget, raw_sort, raw_tostring = rawget, table.sort, tostring
   local raw_string_match, raw_string_sub = string.match, string.sub
   local declarations = {}
   local track_declarations = {}
@@ -268,46 +269,54 @@ return function(raise_internal)
   -- An export is data the feature neither types nor reads: it is copied, checked to
   -- be plain JSON, and carried into the Snapshot and its hash. Typing it is the
   -- consuming game's generator's job.
-  local function plain_copy(value, seen, depth)
+  -- Keys are visited in sorted order so that, of several faults, the one reported
+  -- is always the same; `path` names it.
+  local function plain_copy(value, seen, depth, path)
+    local function refuse(message) return fail("export.value", message .. " at " .. path) end
     local value_type = raw_type(value)
     if value_type == "boolean" or value_type == "string" then return value end
     if value_type == "number" then
       if raw_math.type(value) == "integer" then
         if value < -MAX_EXACT or value > MAX_EXACT then
-          return fail("export.value", "an exported integer must be exact in a double")
+          return refuse("an exported integer must be exact in a double")
         end
         return value
       end
       if value ~= value or value == raw_math.huge or value == -raw_math.huge then
-        return fail("export.value", "an exported number must be finite")
+        return refuse("an exported number must be finite")
       end
       return value
     end
     if value_type ~= "table" then
-      return fail("export.value", "an export holds only booleans, numbers, strings and tables")
+      return refuse("an export holds only booleans, numbers, strings and tables")
     end
-    if depth > 32 then return fail("export.value", "an export nests deeper than 32 tables") end
+    if depth > 32 then return refuse("an export nests deeper than 32 tables") end
     local target = frozen_targets[value] or value
-    if target.__studio_kind ~= nil or authentic_kinds[value] ~= nil then
-      return fail("export.value", "a studio handle is not plain data")
+    if raw_rawget(target, "__studio_kind") ~= nil or authentic_kinds[value] ~= nil then
+      return refuse("a studio handle is not plain data")
     end
-    if seen[target] then return fail("export.value", "an export cannot contain cycles") end
+    if seen[target] then return refuse("an export cannot contain cycles") end
     seen[target] = true
-    local result, key_mode, count, max_index = {}, nil, 0, 0
-    for key, child in raw_pairs(target) do
-      local mode = raw_type(key) == "string" and "object" or "array"
-      if mode == "array" and (raw_math.type(key) ~= "integer" or key < 1) then
-        return fail("export.value", "export keys must be strings or contiguous positive integers")
+    local keys, strings, integers = {}, 0, 0
+    for key in raw_pairs(target) do
+      if raw_type(key) == "string" then
+        strings = strings + 1
+      elseif raw_math.type(key) == "integer" and key >= 1 then
+        integers = integers + 1
+      else
+        return refuse("export keys must be strings or contiguous positive integers")
       end
-      if key_mode ~= nil and key_mode ~= mode then
-        return fail("export.value", "an export table cannot mix object and array keys")
-      end
-      key_mode, count = mode, count + 1
-      if mode == "array" and key > max_index then max_index = key end
-      result[key] = plain_copy(child, seen, depth + 1)
+      keys[#keys + 1] = key
     end
-    if key_mode == "array" and count ~= max_index then
-      return fail("export.value", "export arrays must be contiguous")
+    -- JSON cannot say whether an empty Lua table was a list or an object.
+    if #keys == 0 then return refuse("an empty table is neither an object nor an array; omit it") end
+    if strings > 0 and integers > 0 then return refuse("an export table cannot mix object and array keys") end
+    raw_sort(keys)
+    if integers > 0 and keys[#keys] ~= #keys then return refuse("export arrays must be contiguous") end
+    local result = {}
+    for _, key in ipairs(keys) do
+      local child_path = integers > 0 and path .. "[" .. raw_tostring(key) .. "]" or path .. "." .. key
+      result[key] = plain_copy(raw_rawget(target, key), seen, depth + 1, child_path)
     end
     seen[target] = nil
     return result
@@ -321,7 +330,7 @@ return function(raise_internal)
     end
     if exports[name] ~= nil then return fail("export.duplicate", "duplicate export: " .. name) end
     if value == nil then return fail("export.value", "an export needs a value") end
-    exports[name] = plain_copy(value, {}, 0)
+    exports[name] = plain_copy(value, {}, 0, name)
   end
 
   local requirements = {}
@@ -1467,6 +1476,18 @@ def _normalize_lua_failure(
     return _failure("lua.execution", message.splitlines()[0], file=file, line=line, path=path)
 
 
+def _export_rows(exports: Any) -> int:
+    """Every value inside every export is a row, so the budget bounds nested data too."""
+    rows, pending = 0, [exports]
+    while pending:
+        value = pending.pop()
+        children = value.values() if isinstance(value, dict) else value if isinstance(value, list) else ()
+        for child in children:
+            rows += 1
+            pending.append(child)
+    return rows
+
+
 def _output_rows(
     items: list[dict[str, Any]], fields: list[dict[str, Any]], requirements: list[dict[str, Any]],
     tracks: list[dict[str, Any]], kinds: dict[str, Any],
@@ -1806,7 +1827,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
             for requirement_id, source in waiver_sources.items()
         }
     max_rows = int(request.get("maxOutputRows", DEFAULT_MAX_OUTPUT_ROWS))
-    if _output_rows(normalized_items, fields, requirement_results, tracks, kinds) + len(exports) > max_rows:
+    if _output_rows(normalized_items, fields, requirement_results, tracks, kinds) + _export_rows(exports) > max_rows:
         raise _failure(
             "output.row_limit", f"output exceeds {max_rows} rows",
             file=fallback, path="$.items",

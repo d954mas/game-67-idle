@@ -74,7 +74,10 @@ changes nothing. It must be plain JSON: booleans, strings, finite numbers,
 integers inside ±2^53-1, and tables that are either string-keyed objects or
 contiguous arrays, with no cycles, no functions, no studio handles, and at most
 32 tables deep. Tables from a required module are read through. An empty table
-is an empty object.
+is refused at any depth: JSON cannot tell whether it was a list or an object,
+so omit it instead. Keys are checked in sorted order, so the fault reported is
+always the same one, with its path (`game.mobs[2].hp`). Every value inside an
+export counts as one row against the evaluator's output row budget.
 
 An evaluation or Snapshot without exports carries no `exports` key at all, so
 its bytes and content hash are the ones it had before exports existed. The item
