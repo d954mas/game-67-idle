@@ -15,7 +15,10 @@ if(NOT EMSCRIPTEN AND NOT TARGET nt_builder)
     # (basisu at -O0 encodes for minutes, not seconds). Engine CI does the same
     # by building its pack builders with a release preset; games get the same
     # effect here without patching the engine. Asserts stay on (no NDEBUG).
-    foreach(nt_builder_opt_tgt nt_basisu_encoder clipper2 nt_clipper2_bridge tinycthread nt_builder builder)
+    # The encoder calls the full transcoder per block (UASTC unpack for error
+    # and RDO), so that library at -O0 alone makes an encode ~4x slower.
+    foreach(nt_builder_opt_tgt nt_basisu_encoder nt_basisu_transcoder_full clipper2 nt_clipper2_bridge tinycthread
+            nt_builder builder)
         target_compile_options(${nt_builder_opt_tgt} PRIVATE $<$<NOT:$<CONFIG:Release>>:-O2>)
     endforeach()
 endif()

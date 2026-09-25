@@ -36,7 +36,10 @@ if(NOT TARGET nt_builder)
     add_subdirectory("${ENGINE_DIR}/tools/builder" "${CMAKE_BINARY_DIR}/_builder")
     # The pack builder is an offline tool; -O2 keeps a Debug tree from encoding
     # for minutes.
-    foreach(nt_builder_opt_tgt nt_basisu_encoder clipper2 nt_clipper2_bridge tinycthread nt_builder builder)
+    # The encoder calls the full transcoder per block (UASTC unpack for error
+    # and RDO), so that library at -O0 alone makes an encode ~4x slower.
+    foreach(nt_builder_opt_tgt nt_basisu_encoder nt_basisu_transcoder_full clipper2 nt_clipper2_bridge tinycthread
+            nt_builder builder)
         if(TARGET ${nt_builder_opt_tgt})
             target_compile_options(${nt_builder_opt_tgt} PRIVATE $<$<NOT:$<CONFIG:Release>>:-O2>)
         endif()
