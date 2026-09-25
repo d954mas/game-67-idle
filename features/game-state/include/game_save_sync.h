@@ -69,17 +69,20 @@ bool game_save_sync_resolve(game_save_sync_t *sync, game_save_choice_t resolutio
 void game_save_sync_reject_remote(game_save_sync_t *sync);
 bool game_save_sync_commit_remote_adoption(game_save_sync_t *sync);
 
-/* After an adoption that replaced a local document with unsynced changes, that
-   document is kept here, never discarded: the caller writes it to a quarantine
-   slot, then clears it. A later adoption replaces it only after a clear, so an
-   unpersisted copy is never lost; until then the adoption is refused. NULL when
-   nothing was displaced. game_save_sync_destroy frees it. */
+/* After an adoption that replaced a non-fresh local document different from the
+   remote one, that document is kept here, never discarded: the caller writes it
+   to a quarantine slot, then clears it. A caller that never clears gets exactly
+   one adoption: every later adoption that would displace a document is refused
+   (commit returns false, the state stays ADOPT_REMOTE, local is untouched), so an
+   unpersisted copy is never lost, and the sync does not converge until the
+   clear. NULL when nothing was displaced. game_save_sync_destroy frees it. */
 const char *game_save_sync_displaced_document(const game_save_sync_t *sync);
 void game_save_sync_clear_displaced(game_save_sync_t *sync);
 
-/* The local document the pending adoption would displace, or NULL. A caller that
-   overwrites its own storage persists this copy first and adopts only if that
-   write succeeded. */
+/* The local document the pending adoption would displace, or NULL: any
+   non-fresh local that differs from the remote, whatever the base says. A
+   caller that overwrites its own storage persists this copy first and adopts
+   only if that write succeeded. */
 const char *game_save_sync_adoption_displaces(const game_save_sync_t *sync);
 
 /* The instance form of the cloud coordinator's automatic decision, for a caller

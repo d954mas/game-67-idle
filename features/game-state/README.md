@@ -175,13 +175,19 @@ The reference policy is `choose_by_progress` in `tests/test_game_state_doc.c`:
 migrate both documents first, and answer `GAME_SAVE_ASK` when either is
 unreadable or newer than the build, so neither is overwritten automatically.
 
-An adoption never destroys a local document with unsynced changes: the sync
-keeps it (`game_save_sync_displaced_document`) and refuses the next displacing
-adoption until the caller has persisted it and called
-`game_save_sync_clear_displaced`. `game_save_sync_adoption_displaces` names the
-copy before the adoption. The registered-save coordinator writes it to the
-`cloud_sync_displaced` storage slot first and overwrites the local slot only
-if that write succeeded; otherwise it stays in conflict and retries later.
+An adoption never destroys a non-fresh local document that differs from the
+remote one, whatever the base says: the sync keeps it
+(`game_save_sync_displaced_document`) and refuses the next displacing adoption
+until the caller has persisted it and called `game_save_sync_clear_displaced`.
+`game_save_sync_adoption_displaces` names the copy before the adoption.
+
+The registered-save coordinator keeps the live state -- unsaved changes
+included -- in a ring of four slots (`cloud_sync_displaced_0..3` plus
+`cloud_sync_displaced_index`) before it overwrites anything, and adopts only if
+that write succeeded; otherwise it stays in conflict and retries later. A copy
+identical to one already kept is not written again. `game_save_cloud_kept_count`,
+`game_save_cloud_kept_read` and `game_save_cloud_restore_kept` list, read and
+restore kept copies; a restore keeps the live state first, like an adoption.
 
 ## Instance documents
 
@@ -346,9 +352,10 @@ tick.
 Version `4.8.0` adds instance fragments (`generate_state.py --instance`),
 instance documents with a pure migration (`game_state_doc.h`), the save seal
 (`game_save_seal.h`), and `game_save_sync_decide`. Generated singleton
-fragments and every existing API are unchanged. One behaviour is new: when a
-cloud adoption replaces a local save that held unsynced changes, the
-registered-save coordinator keeps that save in the `cloud_sync_displaced` slot.
+fragments and every existing API are unchanged. One behaviour is new: before a
+cloud adoption replaces a non-fresh local save that differs from the cloud one,
+the registered-save coordinator keeps it in a four-slot ring
+(`cloud_sync_displaced_0..3`), and adopts only once that copy is durable.
 
 ## Extension points
 

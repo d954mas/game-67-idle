@@ -402,7 +402,9 @@ static bool game_runtime_apply_pending_new_game(void) {
 static bool s_local_save_was_fresh;
 
 static void game_runtime_load_state(void) {
-    s_local_save_was_fresh = s_fresh_state;
+    /* Fresh means no local slot survived: a --fresh-state run over a real save
+       must not let the account document replace that save unkept. */
+    s_local_save_was_fresh = s_fresh_state && !game_storage_exists(GAME_SAVE_AUTOSAVE_SLOT);
     if (!s_fresh_state) {
         game_save_load_result_t load_result;
         game_save_load(&load_result);

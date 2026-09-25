@@ -234,9 +234,10 @@ void game_save_sync_reject_remote(game_save_sync_t *sync) {
 }
 
 const char *game_save_sync_adoption_displaces(const game_save_sync_t *sync) {
+    /* The base is not consulted: a local equal to the base may still be the only
+       copy of another lineage a boot adoption is about to replace. */
     if (sync == NULL || sync->state != GAME_SAVE_SYNC_ADOPT_REMOTE || sync->local == NULL ||
-        sync->local_is_fresh || documents_equal(sync->local, sync->base) ||
-        documents_equal(sync->local, sync->remote)) return NULL;
+        sync->local_is_fresh || documents_equal(sync->local, sync->remote)) return NULL;
     return sync->local;
 }
 

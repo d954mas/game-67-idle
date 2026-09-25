@@ -1,4 +1,5 @@
 #include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -25,8 +26,14 @@ static game_save_choice_t s_policy_decision;
 static int s_policy_calls;
 static bool s_storage_capability;
 static bool s_backend_ready;
-static char *s_displaced;
-static bool s_displaced_write_ok = true;
+/* Every slot other than the local and base ones, by name (the kept-copy ring). */
+typedef struct {
+    char name[64];
+    char *text;
+} fake_slot_t;
+static fake_slot_t s_slots[8];
+static bool s_kept_write_ok = true;
+static bool s_local_write_ok = true;
 
 bool platform_sdk_storage_supported(void) { return s_storage_capability; }
 
@@ -46,6 +53,13 @@ static bool replace_text(char **destination, const char *text) {
     return true;
 }
 
+static bool kept_is(int age, const char *expected) {
+    char *kept = game_save_cloud_kept_read(age, NULL, 0);
+    const bool same = expected == NULL ? kept == NULL : kept != NULL && strcmp(kept, expected) == 0;
+    free(kept);
+    return same;
+}
+
 double nt_time_now(void) { return s_now; }
 void nt_log_write(nt_log_level_t level, const char *domain, const char *format, ...) {
     (void)level;
@@ -58,6 +72,12 @@ bool game_storage_read(const char *slot, char **out, game_storage_read_status_t 
     (void)error;
     (void)error_cap;
     const char *source = strcmp(slot, "cloud_sync_base") == 0 ? s_base : s_local;
+    if (strncmp(slot, "cloud_sync_displaced", 20) == 0) {
+        source = NULL;
+        for (size_t i = 0; i < sizeof s_slots / sizeof s_slots[0]; i++) {
+            if (strcmp(s_slots[i].name, slot) == 0) source = s_slots[i].text;
+        }
+    }
     if (source == NULL) {
         if (status != NULL) *status = GAME_STORAGE_READ_ABSENT;
         return false;
@@ -70,9 +90,17 @@ bool game_storage_read(const char *slot, char **out, game_storage_read_status_t 
 bool game_storage_write(const char *slot, const char *text, char *error, int error_cap) {
     (void)error;
     (void)error_cap;
-    if (strcmp(slot, "cloud_sync_displaced") == 0) {
-        return s_displaced_write_ok && replace_text(&s_displaced, text);
+    if (strncmp(slot, "cloud_sync_displaced", 20) == 0) {
+        if (!s_kept_write_ok) return false;
+        for (size_t i = 0; i < sizeof s_slots / sizeof s_slots[0]; i++) {
+            if (s_slots[i].name[0] == 0 || strcmp(s_slots[i].name, slot) == 0) {
+                (void)snprintf(s_slots[i].name, sizeof s_slots[i].name, "%s", slot);
+                return replace_text(&s_slots[i].text, text);
+            }
+        }
+        return false;
     }
+    if (strcmp(slot, "cloud_sync_base") != 0 && !s_local_write_ok) return false;
     return replace_text(strcmp(slot, "cloud_sync_base") == 0 ? &s_base : &s_local, text);
 }
 
@@ -161,14 +189,16 @@ void tearDown(void) {
     free(s_local);
     free(s_base);
     free(s_live);
-    free(s_displaced);
-    s_local = s_base = s_live = s_displaced = NULL;
+    for (size_t i = 0; i < sizeof s_slots / sizeof s_slots[0]; i++) free(s_slots[i].text);
+    memset(s_slots, 0, sizeof s_slots);
+    s_local = s_base = s_live = NULL;
     s_now = 0.0;
     s_read_id = s_write_id = 0;
     s_read_calls = s_write_calls = 0;
     s_sync_write_ack = false;
     s_blocking_write_ok = true;
-    s_displaced_write_ok = true;
+    s_kept_write_ok = true;
+    s_local_write_ok = true;
     s_policy_decision = GAME_SAVE_ASK;
     s_policy_calls = 0;
     s_write_interval = 0.0;
@@ -193,7 +223,7 @@ static void test_fresh_device_adopts_valid_account_document(void) {
     TEST_ASSERT_EQUAL_STRING("account", s_live);
     TEST_ASSERT_EQUAL_STRING("account", s_local);
     TEST_ASSERT_EQUAL_STRING("account", s_base);
-    TEST_ASSERT_NULL(s_displaced); /* a fresh default save holds no progress */
+    TEST_ASSERT_EQUAL_INT(0, game_save_cloud_kept_count()); /* a fresh default save holds no progress */
 }
 
 static void test_failed_read_blocks_writes_and_retries_once_per_interval(void) {
@@ -400,14 +430,14 @@ static void test_auto_remote_applies_only_at_the_safe_point(void) {
     TEST_ASSERT_TRUE(game_save_cloud_apply_remote_at_safe_point());
     TEST_ASSERT_EQUAL_STRING("account", s_live);
     TEST_ASSERT_EQUAL_STRING("account", s_base);
-    TEST_ASSERT_EQUAL_STRING("local", s_displaced);
+    TEST_ASSERT_TRUE(kept_is(0, "local"));
 }
 
 static void test_no_adoption_while_the_replaced_save_cannot_be_kept(void) {
     s_local = copy_text("local");
     s_live = copy_text("local");
     s_policy_decision = GAME_SAVE_KEEP_REMOTE;
-    s_displaced_write_ok = false;
+    s_kept_write_ok = false;
     (void)game_save_cloud_boot_settled();
     TEST_ASSERT_FALSE(game_save_cloud_start(false));
     complete_read(PLATFORM_SDK_CLOUD_READY, "{\"saved_at\":1,\"doc\":\"account\"}");
@@ -415,15 +445,72 @@ static void test_no_adoption_while_the_replaced_save_cannot_be_kept(void) {
     TEST_ASSERT_FALSE(game_save_cloud_apply_remote_at_safe_point());
     TEST_ASSERT_EQUAL_STRING("local", s_live);
     TEST_ASSERT_EQUAL_STRING("local", s_local);
-    TEST_ASSERT_NULL(s_displaced);
+    TEST_ASSERT_EQUAL_INT(0, game_save_cloud_kept_count());
     TEST_ASSERT_EQUAL(GAME_SAVE_SYNC_CONFLICT, game_save_cloud_state());
 
-    s_displaced_write_ok = true;
+    /* The copy is the live state at the adoption, unsaved changes included. */
+    s_kept_write_ok = true;
+    free(s_live);
+    s_live = copy_text("local+unsaved");
     TEST_ASSERT_TRUE(game_save_cloud_resolve(GAME_SAVE_KEEP_REMOTE));
     TEST_ASSERT_TRUE(game_save_cloud_apply_remote_at_safe_point());
-    TEST_ASSERT_EQUAL_STRING("local", s_displaced);
+    TEST_ASSERT_TRUE(kept_is(0, "local+unsaved"));
     TEST_ASSERT_EQUAL_STRING("account", s_local);
     TEST_ASSERT_EQUAL_STRING("account", s_live);
+}
+
+static void test_a_failed_local_write_after_keeping_loses_nothing(void) {
+    begin_running_conflict();
+    s_local_write_ok = false;
+    TEST_ASSERT_TRUE(game_save_cloud_resolve(GAME_SAVE_KEEP_REMOTE));
+    TEST_ASSERT_FALSE(game_save_cloud_apply_remote_at_safe_point());
+    TEST_ASSERT_TRUE(kept_is(0, "local"));
+    TEST_ASSERT_EQUAL_STRING("local", s_local);
+    TEST_ASSERT_EQUAL_STRING("local", s_live);
+    TEST_ASSERT_EQUAL(GAME_SAVE_SYNC_CONFLICT, game_save_cloud_state());
+
+    /* The retry does not keep the same copy twice. */
+    s_local_write_ok = true;
+    TEST_ASSERT_TRUE(game_save_cloud_resolve(GAME_SAVE_KEEP_REMOTE));
+    TEST_ASSERT_TRUE(game_save_cloud_apply_remote_at_safe_point());
+    TEST_ASSERT_EQUAL_INT(1, game_save_cloud_kept_count());
+    TEST_ASSERT_EQUAL_STRING("account", s_local);
+}
+
+static void test_a_boot_adoption_keeps_another_lineage_equal_to_the_base(void) {
+    s_base = copy_text("old-lineage");
+    s_local = copy_text("old-lineage");
+    s_live = copy_text("old-lineage");
+    game_save_cloud_shutdown();
+    cloud_save_init(test_policy, same_document, s_write_interval);
+    (void)game_save_cloud_boot_settled();
+    complete_read(PLATFORM_SDK_CLOUD_READY, "{\"saved_at\":1,\"doc\":\"account\"}");
+    TEST_ASSERT_TRUE(game_save_cloud_start(false));
+    TEST_ASSERT_EQUAL_STRING("account", s_local);
+    TEST_ASSERT_TRUE(kept_is(0, "old-lineage"));
+}
+
+static void test_kept_copies_are_a_ring_of_four_and_restore_like_an_adoption(void) {
+    s_live = copy_text("v0");
+    s_local = copy_text("v0");
+    char error[128] = {0};
+    s_slots[0] = (fake_slot_t){.name = "cloud_sync_displaced_0", .text = copy_text("seed")};
+    s_slots[1] = (fake_slot_t){.name = "cloud_sync_displaced_index", .text = copy_text("next=1 count=1")};
+    /* Each pass restores the newest copy over a new live state, which is kept. */
+    for (int i = 1; i <= 5; i++) {
+        char name[16];
+        (void)snprintf(name, sizeof name, "v%d", i);
+        free(s_live);
+        s_live = copy_text(name);
+        TEST_ASSERT_TRUE_MESSAGE(game_save_cloud_restore_kept(0, error, (int)sizeof error), error);
+    }
+    /* Each restore kept the live state it replaced; the oldest fell out at five. */
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_CLOUD_KEPT_MAX, game_save_cloud_kept_count());
+    TEST_ASSERT_TRUE(kept_is(0, "v5"));
+    TEST_ASSERT_TRUE(kept_is(3, "v2"));
+    TEST_ASSERT_TRUE(kept_is(4, NULL));
+    TEST_ASSERT_EQUAL_STRING("v4", s_live);
+    TEST_ASSERT_EQUAL_STRING("v4", s_local);
 }
 
 static void test_new_local_state_cancels_auto_remote_before_apply(void) {
@@ -597,6 +684,9 @@ int main(void) {
     RUN_TEST(test_auto_local_rereads_and_acknowledges_before_upload);
     RUN_TEST(test_auto_remote_applies_only_at_the_safe_point);
     RUN_TEST(test_no_adoption_while_the_replaced_save_cannot_be_kept);
+    RUN_TEST(test_a_failed_local_write_after_keeping_loses_nothing);
+    RUN_TEST(test_a_boot_adoption_keeps_another_lineage_equal_to_the_base);
+    RUN_TEST(test_kept_copies_are_a_ring_of_four_and_restore_like_an_adoption);
     RUN_TEST(test_new_local_state_cancels_auto_remote_before_apply);
     RUN_TEST(test_elapsed_playtime_keeps_remote_auto_choice_at_safe_point);
     RUN_TEST(test_reversed_policy_cancels_auto_remote_after_elapsed_playtime);

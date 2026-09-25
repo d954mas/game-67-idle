@@ -6,6 +6,7 @@
 #include "log/nt_log.h"
 #include "time/nt_time.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -15,8 +16,10 @@
 
 #define GAME_SAVE_CLOUD_DEFAULT_SLOT GAME_SAVE_AUTOSAVE_SLOT
 #define GAME_SAVE_CLOUD_DEFAULT_BASE_SLOT "cloud_sync_base"
-/* The last local document an adoption replaced while it held unsynced progress. */
-#define GAME_SAVE_CLOUD_DISPLACED_SLOT "cloud_sync_displaced"
+/* Local saves an adoption or a restore replaced: a ring of GAME_SAVE_CLOUD_KEPT_MAX
+   slots and an index record naming the next slot and how many are kept. */
+#define GAME_SAVE_CLOUD_KEPT_SLOT_PREFIX "cloud_sync_displaced_"
+#define GAME_SAVE_CLOUD_KEPT_INDEX_SLOT "cloud_sync_displaced_index"
 #define GAME_SAVE_CLOUD_BOOT_WAIT_SEC 4.0
 #define GAME_SAVE_CLOUD_RETRY_SEC 5.0
 
@@ -222,42 +225,129 @@ static void begin_read(void) {
     s_cloud.config.transport.load(cloud_key());
 }
 
+/* ---- Kept copies of replaced local saves ---- */
+
+typedef struct {
+    int next;
+    int count;
+} kept_index_t;
+
+static kept_index_t read_kept_index(void) {
+    kept_index_t index = {0, 0};
+    char *text = NULL;
+    game_storage_read_status_t status = GAME_STORAGE_READ_ABSENT;
+    char error[160] = {0};
+    int next = 0, count = 0;
+    if (game_storage_read(GAME_SAVE_CLOUD_KEPT_INDEX_SLOT, &text, &status, error, (int)sizeof error) &&
+        text != NULL && sscanf(text, "next=%d count=%d", &next, &count) == 2 && next >= 0 &&
+        next < GAME_SAVE_CLOUD_KEPT_MAX && count >= 0 && count <= GAME_SAVE_CLOUD_KEPT_MAX) {
+        index = (kept_index_t){next, count};
+    }
+    free(text);
+    return index;
+}
+
+/* age 0 is the newest kept copy. */
+static void kept_slot_name(kept_index_t index, int age, char *out, size_t out_size) {
+    const int ring = (index.next - 1 - age + 2 * GAME_SAVE_CLOUD_KEPT_MAX) % GAME_SAVE_CLOUD_KEPT_MAX;
+    (void)snprintf(out, out_size, "%s%d", GAME_SAVE_CLOUD_KEPT_SLOT_PREFIX, ring);
+}
+
+static char *read_kept(kept_index_t index, int age, char *error, int error_cap) {
+    if (age < 0 || age >= index.count) return NULL;
+    char slot[64];
+    kept_slot_name(index, age, slot, sizeof slot);
+    char *text = NULL;
+    game_storage_read_status_t status = GAME_STORAGE_READ_ABSENT;
+    if (!game_storage_read(slot, &text, &status, error, error_cap)) {
+        free(text);
+        return NULL;
+    }
+    return text;
+}
+
+/* Durable before it returns true. A copy byte-identical to one already kept is
+   not written again, so repeated adoptions do not push older copies out. */
+static bool keep_copy(const char *document, char *error, int error_cap) {
+    const kept_index_t index = read_kept_index();
+    for (int age = 0; age < index.count; age++) {
+        char *kept = read_kept(index, age, NULL, 0);
+        const bool same = same_text(kept, document);
+        free(kept);
+        if (same) return true;
+    }
+    char slot[64];
+    (void)snprintf(slot, sizeof slot, "%s%d", GAME_SAVE_CLOUD_KEPT_SLOT_PREFIX, index.next);
+    if (!game_storage_write_blocking(slot, document, error, error_cap)) return false;
+    char record[48];
+    (void)snprintf(record, sizeof record, "next=%d count=%d", (index.next + 1) % GAME_SAVE_CLOUD_KEPT_MAX,
+                   index.count < GAME_SAVE_CLOUD_KEPT_MAX ? index.count + 1 : GAME_SAVE_CLOUD_KEPT_MAX);
+    return game_storage_write_blocking(GAME_SAVE_CLOUD_KEPT_INDEX_SLOT, record, error, error_cap);
+}
+
+/* Replaces the live save and the local slot with `document`, keeping the live
+   state first -- unsaved changes included -- unless it is fresh or identical.
+   Nothing is overwritten until that copy is durable; any failure restores live. */
+static bool replace_live(const char *document, bool live_is_fresh, char *error, int error_cap) {
+    char *live_before = game_save_export_string(error, error_cap);
+    if (live_before == NULL) return false;
+    if (!live_is_fresh && !same_text(live_before, document) && !keep_copy(live_before, error, error_cap)) {
+        nt_log_warn("game_save_cloud: not replacing the local save; could not keep it (%s)",
+                    error != NULL && error[0] != '\0' ? error : "no reason reported");
+        free(live_before);
+        return false;
+    }
+    if (!game_save_import_string(document, error, error_cap)) {
+        free(live_before);
+        return false;
+    }
+    if (!game_storage_write_blocking(slot_name(), document, error, error_cap)) {
+        (void)game_save_import_string(live_before, NULL, 0);
+        free(live_before);
+        return false;
+    }
+    free(live_before);
+    return true;
+}
+
 static bool adopt_remote(void) {
     if (game_save_sync_state(&s_cloud.sync) != GAME_SAVE_SYNC_ADOPT_REMOTE) return false;
     const char *remote = game_save_sync_remote_document_value(&s_cloud.sync);
     if (remote == NULL) return false;
     char error[160] = {0};
-    /* The replaced save is durable before anything overwrites it; without that
-       copy the adoption waits and the conflict stays for a later retry. */
-    const char *displacing = game_save_sync_adoption_displaces(&s_cloud.sync);
-    if (displacing != NULL &&
-        !game_storage_write_blocking(GAME_SAVE_CLOUD_DISPLACED_SLOT, displacing, error, (int)sizeof error)) {
-        nt_log_warn("game_save_cloud: not adopting the cloud save; could not keep the local one (%s)",
-                    error[0] != '\0' ? error : "no reason reported");
+    if (!replace_live(remote, s_cloud.sync.local_is_fresh, error, (int)sizeof error)) {
         game_save_sync_reject_remote(&s_cloud.sync);
         return false;
     }
-    char *live_before = game_save_export_string(error, (int)sizeof error);
-    if (live_before == NULL || !game_save_import_string(remote, error, (int)sizeof error)) {
-        free(live_before);
-        game_save_sync_reject_remote(&s_cloud.sync);
-        return false;
-    }
-    if (!game_storage_write_blocking(slot_name(), remote, error, (int)sizeof error)) {
-        (void)game_save_import_string(live_before, NULL, 0);
-        free(live_before);
-        game_save_sync_reject_remote(&s_cloud.sync);
-        return false;
-    }
-    free(live_before);
-    if (!game_save_sync_commit_remote_adoption(&s_cloud.sync)) {
+    /* The live copy is durable, so the sync's in-memory one is redundant; clearing
+       it first also keeps a stale copy from refusing this commit. */
+    game_save_sync_clear_displaced(&s_cloud.sync);
+    const bool committed = game_save_sync_commit_remote_adoption(&s_cloud.sync);
+    game_save_sync_clear_displaced(&s_cloud.sync);
+    if (!committed) {
         (void)game_save_sync_set_local(&s_cloud.sync, remote, false);
         game_save_sync_reject_remote(&s_cloud.sync);
         return true;
     }
-    game_save_sync_clear_displaced(&s_cloud.sync); /* already in its slot */
     (void)persist_base();
     return true;
+}
+
+int game_save_cloud_kept_count(void) { return read_kept_index().count; }
+
+char *game_save_cloud_kept_read(int age, char *error, int error_cap) {
+    return read_kept(read_kept_index(), age, error, error_cap);
+}
+
+bool game_save_cloud_restore_kept(int age, char *error, int error_cap) {
+    char *kept = game_save_cloud_kept_read(age, error, error_cap);
+    if (kept == NULL) return false;
+    const bool restored = replace_live(kept, false, error, error_cap);
+    if (restored && s_cloud.initialized && game_save_sync_set_local(&s_cloud.sync, kept, false)) {
+        s_cloud.policy_pending = true;
+    }
+    free(kept);
+    return restored;
 }
 
 static void finish_write(void) {

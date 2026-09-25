@@ -68,4 +68,18 @@ bool game_save_cloud_resolve(game_save_choice_t resolution);
 /* Applies a previously chosen remote document and returns true only on adoption. */
 bool game_save_cloud_apply_remote_at_safe_point(void);
 
+/* Kept copies. Before an adoption (or a restore) replaces a non-fresh live save
+   that differs from what replaces it, the live state is written to a ring of
+   GAME_SAVE_CLOUD_KEPT_MAX storage slots; the replacement happens only once that
+   write is durable. A copy identical to one already kept is not written again,
+   and the oldest is dropped only when the ring is full. Age 0 is the newest. */
+#define GAME_SAVE_CLOUD_KEPT_MAX 4
+int game_save_cloud_kept_count(void);
+/* malloc'd document text, freed by the caller; NULL when absent or unreadable. */
+char *game_save_cloud_kept_read(int age, char *error, int error_cap);
+/* Makes a kept copy the live save and the local slot, keeping the current live
+   state first exactly as an adoption does. Returns true when the game must
+   rebind its world; the restored document then syncs as a local change. */
+bool game_save_cloud_restore_kept(int age, char *error, int error_cap);
+
 #endif /* GAME_SAVE_CLOUD_H */

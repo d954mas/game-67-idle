@@ -319,12 +319,14 @@ static void test_the_four_sync_outcomes(void) {
     TEST_ASSERT_EQUAL_INT(0, s_choose_calls);
     game_save_sync_destroy(&sync);
 
-    /* 2. Local unchanged, cloud changed: adopt the cloud; nothing is displaced. */
+    /* 2. Local unchanged, cloud changed: adopt the cloud. The replaced local is kept
+       even though the base matches it: the sync cannot tell a synced copy from the
+       only copy of another lineage. */
     const sealed_doc_t elsewhere = make_doc(id, 6, 1100, 3);
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_SYNC_ADOPT_REMOTE, sync_outcome(&sync, &base, &base, &elsewhere));
     TEST_ASSERT_TRUE(game_save_sync_commit_remote_adoption(&sync));
     TEST_ASSERT_EQUAL_STRING(elsewhere.text, game_save_sync_base_document(&sync));
-    TEST_ASSERT_NULL(game_save_sync_displaced_document(&sync));
+    TEST_ASSERT_EQUAL_STRING(base.text, game_save_sync_displaced_document(&sync));
     TEST_ASSERT_EQUAL_INT(0, s_choose_calls);
     game_save_sync_destroy(&sync);
 
