@@ -74,6 +74,11 @@ static const char *cloud_key(void) {
     return s_cloud.config.key != NULL ? s_cloud.config.key : slot_name();
 }
 
+static double boot_wait_sec(void) {
+    return s_cloud.config.boot_wait_sec > 0.0
+        ? s_cloud.config.boot_wait_sec : GAME_SAVE_CLOUD_BOOT_WAIT_SEC;
+}
+
 static void clear_auto_remote(void) {
     free(s_cloud.auto_local_snapshot);
     s_cloud.auto_local_snapshot = NULL;
@@ -432,12 +437,12 @@ bool game_save_cloud_boot_settled(void) {
     begin_read();
     consume_remote_result();
 #if defined(__EMSCRIPTEN__)
-    if (!s_cloud.asked) return now - s_cloud.first_wait_at >= GAME_SAVE_CLOUD_BOOT_WAIT_SEC;
+    if (!s_cloud.asked) return now - s_cloud.first_wait_at >= boot_wait_sec();
 #else
     if (!s_cloud.asked) return true;
 #endif
     if (!s_cloud.read_pending) return true;
-    return now - s_cloud.asked_at >= GAME_SAVE_CLOUD_BOOT_WAIT_SEC;
+    return now - s_cloud.asked_at >= boot_wait_sec();
 }
 
 bool game_save_cloud_start(bool local_is_fresh) {

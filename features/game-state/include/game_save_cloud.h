@@ -50,6 +50,9 @@ typedef struct game_save_cloud_config {
        churn, where a game that uploads on every change is the expensive
        shape. Below the coordinator's own retry floor it changes nothing. */
     double min_write_interval_sec;
+    /* The initial read may include an SDK's own startup deadline. Zero keeps
+       the default barrier for transports that are ready with the page. */
+    double boot_wait_sec;
 } game_save_cloud_config_t;
 
 /* This singleton shallow-copies config; strings and callbacks remain borrowed
