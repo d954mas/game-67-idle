@@ -187,6 +187,17 @@ function loadPackRecords(gameDir, records, duplicates) {
   }
 }
 
+function loadSourceSidecars(gameDir, paths, records) {
+  for (const path of paths) {
+    if (records.has(path)) continue;
+    const metadataPath = path.replace(PACKED_EXTENSIONS, ".provenance.json");
+    const absolute = join(gameDir, ...metadataPath.split("/"));
+    if (!existsSync(absolute)) continue;
+    const record = JSON.parse(readFileSync(absolute, "utf8").replace(/^\uFEFF/, ""));
+    records.set(path, { ...record, metadataPath, sidecar: true });
+  }
+}
+
 function trackedPaths(gameDir) {
   const safe = slash(resolve(gameDir));
   const result = spawnSync("git", ["-c", `safe.directory=${safe}`, "ls-files", "-z"], {
@@ -213,6 +224,7 @@ export function auditGameReleaseAssets(gameDir, options = {}) {
   const records = new Map();
   const duplicates = new Set();
   loadPackRecords(root, records, duplicates);
+  loadSourceSidecars(root, [...packed, ...standalone], records);
   const issues = [];
   if (!tracked.has("assets/release_inputs.json")) {
     issues.push("assets/release_inputs.json: release input contract is not tracked");
@@ -271,12 +283,23 @@ export function auditGameReleaseAssets(gameDir, options = {}) {
     if (record.defaultsPath && !tracked.has(record.defaultsPath)) {
       issues.push(`${path}: Pack Manifest defaults are not tracked`);
     }
-    if (!String(record.asset_id || "").trim()) issues.push(`${path}: missing asset_id`);
-    if (!ORIGINS.has(String(record.origin || "").trim())) {
-      issues.push(`${path}: origin must be mine, ai, or sourced`);
-    }
-    if (!String(record.provenance || record.source_first || record.generator || "").trim()) {
-      issues.push(`${path}: missing provenance`);
+    if (record.sidecar) {
+      if (record.asset !== path) issues.push(`${path}: source sidecar asset path does not match`);
+      if (!String(record.schema || "").trim()) issues.push(`${path}: missing source sidecar schema`);
+      if (!["mine", "original", "generated", "sourced"].includes(record.origin)) {
+        issues.push(`${path}: missing or invalid origin`);
+      }
+      if (!record.source || typeof record.source !== "object" || Object.keys(record.source).length === 0) {
+        issues.push(`${path}: missing provenance source`);
+      }
+    } else {
+      if (!String(record.asset_id || "").trim()) issues.push(`${path}: missing asset_id`);
+      if (!ORIGINS.has(String(record.origin || "").trim())) {
+        issues.push(`${path}: origin must be mine, ai, or sourced`);
+      }
+      if (!String(record.provenance || record.source_first || record.generator || "").trim()) {
+        issues.push(`${path}: missing provenance`);
+      }
     }
     const license = validateLicenseRecord(record, { forDistribution: true, forRelease: true });
     if (!license.ok) issues.push(`${path}: ${license.issues.join("; ")}`);

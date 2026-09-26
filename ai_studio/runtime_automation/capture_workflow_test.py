@@ -135,6 +135,8 @@ class CatalogTest(unittest.TestCase):
     def test_load_catalog_resolves_approved_shot_and_checks_duration(self):
         with tempfile.TemporaryDirectory() as directory:
             game_root = Path(directory)
+            document = catalog_document()
+            document["launch"] = {"fresh_state": False, "autosave_enabled": True, "args": ["--solo"]}
             scenario_path = (
                 game_root / "devapi" / "capture_scenarios" / "showcase.v1.json"
             )
@@ -144,7 +146,7 @@ class CatalogTest(unittest.TestCase):
             )
             (game_root / "capture").mkdir()
             (game_root / "capture" / "catalog.json").write_text(
-                json.dumps(catalog_document()), encoding="utf-8"
+                json.dumps(document), encoding="utf-8"
             )
 
             catalog = load_catalog(game_root)
@@ -152,6 +154,7 @@ class CatalogTest(unittest.TestCase):
             self.assertEqual(catalog.game, "example-game")
             self.assertEqual(catalog.shot("showcase").purpose, "Show the core interaction")
             self.assertEqual(catalog.shot("showcase").scenario.duration_frames, 2)
+            self.assertEqual(catalog.launch, document["launch"])
 
     def test_load_catalog_rejects_scenario_paths_outside_the_game(self):
         with tempfile.TemporaryDirectory() as directory:

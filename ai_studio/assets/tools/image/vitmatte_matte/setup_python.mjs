@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // One-shot Python environment setup for the vitmatte_matte image tool.
 //
-// Mirrors ai_studio/assets/tools/image/_bridge/setup_python.mjs, but creates
+// Unlike ai_studio/dev_environment/python_setup.mjs, this creates
 // THIS TOOL's OWN venv INSIDE its own folder (vitmatte_matte/.venv/,
 // gitignored) instead of the shared repo .venv/. GPU torch (cu128, ~2.7GB)
 // must never enter the shared venv every other image tool uses -- that is the

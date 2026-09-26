@@ -211,7 +211,7 @@ export async function runRepoPython(scriptAbs, args, { root = REPO_ROOT, cwd, en
     if (/ModuleNotFoundError|No module named|ImportError/.test(detail)) {
       throw new Error(
         `${detail}\nMissing Python dependency in the studio venv (${python}); ` +
-          `reinstall: node ai_studio/assets/tools/image/_bridge/setup_python.mjs`,
+          `reinstall: node ai_studio/dev_environment/python_setup.mjs`,
       );
     }
     throw new Error(`repo python failed (exit ${code}) for ${scriptAbs}:\n${detail}`);

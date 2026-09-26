@@ -17,7 +17,7 @@ The tools run against the repo-local, gitignored root `.venv/` resolved from
 the repo root):
 
 ```
-node ai_studio/assets/tools/image/_bridge/setup_python.mjs
+node ai_studio/dev_environment/python_setup.mjs
 ```
 
 The interpreter is resolved from `ai_studio/studio.config.json` -> `pythonPath`

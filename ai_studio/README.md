@@ -112,20 +112,10 @@ Detailed procedures belong in owned modules, docs, or skills, not here.
 
 ## Map Ownership
 
-`ai_studio/tree.json` is the single architecture source. It lists durable module
-owners and boundaries, not their implementation files or tests. The map page is
-a renderer: open it through the local server so it can fetch the same JSON data.
-
-```powershell
-node ai_studio/architecture_map/validate_map.mjs
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
-```
-
-Open `http://127.0.0.1:8765/`. The map page reads the tree from
-`/api/architecture-tree` and a live report from `/api/architecture-validation`;
-the report is generated on demand and is not committed. Scanning is validation
-only: new files or shallow workspace folders appear in the report until a human
-maps, ignores, moves, or deletes them.
+`ai_studio/tree.json` is the single architecture source. The
+[architecture map guide](architecture_map/README.md) owns coverage,
+validation and UI details. Run
+`node ai_studio/architecture_map/validate_map.mjs` after changing ownership.
 
 ## Module Intake Rule
 

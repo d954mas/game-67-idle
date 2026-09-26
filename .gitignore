@@ -1,4 +1,6 @@
 tmp/
+.wrangler/
+*.stackdump
 .serena/
 .cache/
 .pytest_cache/

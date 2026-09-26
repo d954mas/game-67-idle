@@ -69,7 +69,7 @@ except ImportError as exc:  # pragma: no cover - environment/setup failure
         "(ai_studio.assets.tools.image.alpha_dualplate.dual_plate_alpha, "
         ".dual_plate_pair_gate, and .pair_align) but they could not be imported; "
         "install/repair the studio Python deps: "
-        "node ai_studio/assets/tools/image/_bridge/setup_python.mjs "
+        "node ai_studio/dev_environment/python_setup.mjs "
         f"({exc})"
     ) from exc
 

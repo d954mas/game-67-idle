@@ -140,6 +140,15 @@ def validate_catalog(catalog: object) -> dict:
     executable = catalog.get("executable")
     if executable is not None and (not isinstance(executable, str) or not executable):
         raise ValueError("catalog executable must be a non-empty string")
+    launch = catalog.get("launch", {})
+    if not isinstance(launch, dict) or set(launch) - {"fresh_state", "autosave_enabled", "args"}:
+        raise ValueError("catalog launch must contain only fresh_state, autosave_enabled, and args")
+    for key in ("fresh_state", "autosave_enabled"):
+        if key in launch and not isinstance(launch[key], bool):
+            raise ValueError(f"catalog launch {key} must be a boolean")
+    if "args" in launch and (not isinstance(launch["args"], list)
+                             or any(not isinstance(arg, str) or not arg for arg in launch["args"])):
+        raise ValueError("catalog launch args must be a list of non-empty strings")
 
     defaults = catalog.get("defaults", {})
     _validate_capture_fields(defaults, "catalog defaults")
@@ -382,14 +391,18 @@ def run(args: argparse.Namespace) -> dict:
         catalog.get("executable", "build/devapi-debug/bin/game.exe"),
     )
     output_root = args.out.resolve() if args.out else default_output_root(game_root)
+    launch = catalog.get("launch", {})
+    storage_root = output_root / ".game_storage"
+    storage_root.mkdir(parents=True, exist_ok=True)
 
     with running_game(
         exe=str(executable),
         cwd=str(game_root),
-        fresh_state=shot is not None and not bool(shot.get("preserve_state", False)),
-        autosave_enabled=shot is None,
+        fresh_state=launch.get("fresh_state", shot is not None and not bool(shot.get("preserve_state", False))),
+        autosave_enabled=launch.get("autosave_enabled", shot is None),
         window_size=f"{settings.width}x{settings.height}",
-        extra_args=["--no-vsync"],
+        extra_args=["--no-vsync", *launch.get("args", [])],
+        env_overrides={"GAME_STORAGE_ROOT": str(storage_root)},
     ) as game:
         cleaned = False
 

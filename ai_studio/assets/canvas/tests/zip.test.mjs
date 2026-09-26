@@ -16,7 +16,7 @@ import { EventEmitter } from "node:events";
 import { URL, fileURLToPath } from "node:url";
 import { addImage, createProject, exportElements, zipExport } from "../ops.mjs";
 import { createCanvasApi } from "../api.mjs";
-import { crc32, zipStore } from "../zip.mjs";
+import { crc32, createStoreZip } from "../../../core_harness/tool_lib/zip_store.mjs";
 import { magentaSheetPng, solidPng } from "./png_fixture.mjs";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
@@ -64,10 +64,10 @@ function readZip(buffer) {
 
 // ---- the pure writer ---------------------------------------------------------
 
-test("zipStore writes a valid STORE archive with correct CRCs and verbatim bytes", () => {
+test("createStoreZip writes a valid STORE archive with correct CRCs and verbatim bytes", () => {
   const a = Buffer.from("hello canvas", "utf8");
   const b = magentaSheetPng();
-  const archive = zipStore([{ name: "note.txt", data: a }, { name: "pic.png", data: b }]);
+  const archive = createStoreZip([{ path: "note.txt", bytes: a }, { path: "pic.png", bytes: b }]);
 
   const { total, entries } = readZip(archive);
   assert.equal(total, 2, "EOCD reports two entries");

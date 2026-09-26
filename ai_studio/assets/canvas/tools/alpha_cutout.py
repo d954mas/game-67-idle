@@ -57,7 +57,7 @@ except ImportError as exc:  # pragma: no cover - environment/setup failure
         "canvas alpha cutout requires the image-tools alpha modules "
         "(ai_studio.assets.tools.image.alpha_matte.key_matte and .route.route_cutout) but "
         "they could not be imported; install/repair the studio Python deps: "
-        f"node ai_studio/assets/tools/image/_bridge/setup_python.mjs ({exc})"
+        f"node ai_studio/dev_environment/python_setup.mjs ({exc})"
     ) from exc
 
 ALPHA_METHODS = ("auto", "matte")

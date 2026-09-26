@@ -49,6 +49,7 @@ class CaptureCatalog:
     game_root: Path
     game: str
     executable: Path
+    launch: dict[str, Any]
     live: dict[str, Any]
     safe_area: dict[str, Any]
     shots: tuple[ApprovedShot, ...]
@@ -78,6 +79,15 @@ def load_catalog(game_root: Path) -> CaptureCatalog:
             raise CaptureWorkflowError("unsupported capture catalog")
         game = data["game"]
         executable = _inside_game(game_root, data["executable"], "executable")
+        launch = data.get("launch", {})
+        if not isinstance(launch, dict) or set(launch) - {"fresh_state", "autosave_enabled", "args"}:
+            raise CaptureWorkflowError("catalog launch must contain only fresh_state, autosave_enabled, and args")
+        for key in ("fresh_state", "autosave_enabled"):
+            if key in launch and not isinstance(launch[key], bool):
+                raise CaptureWorkflowError(f"catalog launch {key} must be a boolean")
+        if "args" in launch and (not isinstance(launch["args"], list)
+                                 or any(not isinstance(arg, str) or not arg for arg in launch["args"])):
+            raise CaptureWorkflowError("catalog launch args must be a list of non-empty strings")
         live = data["live"]
         safe_area = data["safe_area"]
         if live["preset"] not in {"social", "landscape", "square"}:
@@ -119,7 +129,7 @@ def load_catalog(game_root: Path) -> CaptureCatalog:
         raise
     except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         raise CaptureWorkflowError(f"invalid capture catalog: {exc}") from exc
-    return CaptureCatalog(game_root, game, executable, dict(live), dict(safe_area), tuple(shots))
+    return CaptureCatalog(game_root, game, executable, dict(launch), dict(live), dict(safe_area), tuple(shots))
 
 
 def evaluate_shot_safe_area(
@@ -345,12 +355,16 @@ def run_capture(
     window = resolve_obs_capture_settings(settings)
     take_root = _take_root(catalog.game_root, label)
     recorder_root = take_root / ".recorder"
+    storage_root = take_root / ".game_storage"
+    storage_root.mkdir(parents=True, exist_ok=True)
     with running_game(
         exe=str(catalog.executable),
         cwd=str(catalog.game_root),
-        fresh_state=True,
-        autosave_enabled=False,
+        fresh_state=catalog.launch.get("fresh_state", True),
+        autosave_enabled=catalog.launch.get("autosave_enabled", False),
         window_size=f"{window.width}x{window.height}",
+        extra_args=catalog.launch.get("args", []),
+        env_overrides={"GAME_STORAGE_ROOT": str(storage_root)},
     ) as game:
         if shot is None:
             prepare_live(game, live_shot.scenario)

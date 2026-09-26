@@ -431,6 +431,47 @@ class CaptureGameAdoptionTest(unittest.TestCase):
         self.assertNotIn("max_freeze_seconds", recorded)
         self.assertEqual(recorded["duration_seconds"], 4.0)
 
+    def test_catalog_launch_options_override_template_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            executable = root / "bin" / "plw_client.exe"
+            executable.parent.mkdir()
+            executable.touch()
+            (root / "capture").mkdir()
+            (root / "capture" / "catalog.json").write_text(json.dumps({
+                "version": 1, "executable": "bin/plw_client.exe",
+                "launch": {"fresh_state": True, "autosave_enabled": False, "args": ["--solo"]},
+                "defaults": {"size": "1280x720", "fps": 30},
+                "live": {"seconds": 1}, "shots": {},
+            }), encoding="utf-8")
+            game = FakeGame()
+            game.process_id = 123
+            launch = {}
+
+            class GameContext:
+                def __enter__(self):
+                    return game
+
+                def __exit__(self, *_args):
+                    return None
+
+            def fake_running_game(**kwargs):
+                launch.update(kwargs)
+                return GameContext()
+
+            with patch("ai_studio.runtime_automation.capture_game.running_game", fake_running_game), patch(
+                "ai_studio.runtime_automation.capture_game.record_take",
+                return_value={"edit": root / "edit.mp4", "master": root / "master.mkv"},
+            ):
+                run(parse_args([str(root), "live"]))
+
+            self.assertTrue(launch["fresh_state"])
+            self.assertFalse(launch["autosave_enabled"])
+            self.assertEqual(launch["extra_args"], ["--no-vsync", "--solo"])
+            storage_root = Path(launch["env_overrides"]["GAME_STORAGE_ROOT"])
+            self.assertTrue(storage_root.is_dir())
+            self.assertEqual(storage_root.parent.parent, root / "tmp" / "captures")
+
     def test_main_prints_only_the_edit_path_on_success(self) -> None:
         output = StringIO()
         with patch(

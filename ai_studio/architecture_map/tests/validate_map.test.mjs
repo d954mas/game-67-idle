@@ -559,7 +559,6 @@ test("repo tree maps product boundaries without authored implementation or test 
   assert.match(byPath.get("templates/template")?.boundary || "", /Settings.*resource-panel/);
   assert.equal(byPath.get("features")?.coverage, "direct-files");
   assert.equal(byPath.get("games")?.coverage, "direct-files");
-  assert.equal(byPath.get("extensions")?.coverage, "direct-files");
   assert.equal(byPath.get("ai_studio/game_design/knowledge_base")?.id, "design-knowledge-base");
 
   for (const pack of ["audio-core", "game-events", "game-state", "items-core", "platform-sdk", "progression-core"]) {
@@ -668,9 +667,5 @@ test("CLI help documents every strict description gate", () => {
 
 test("the tracked repository architecture report is strict-clean", () => {
   const validation = createValidationReport({ repoRoot });
-  assert.deepEqual(
-    validation.scanRoots.find((root) => typeof root === "object" && root.path === "extensions"),
-    { path: "extensions", mode: "root-files-and-child-directories" },
-  );
   assert.equal(hasStrictFailures(validation), false, JSON.stringify(validation.issues, null, 2));
 });

@@ -74,6 +74,18 @@
                 "coverage": "subtree"
               },
               {
+                "id": "feature-box3d",
+                "title": "Box3D",
+                "kind": "module",
+                "path": "features/box3d",
+                "owner": "Physics Feature Owner",
+                "description": "Optional rigid-body physics capability for native and WebAssembly games.",
+                "entry": "features/box3d/README.md",
+                "contract": "features/box3d/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
                 "id": "feature-game-events",
                 "title": "Game events",
                 "kind": "module",
@@ -110,6 +122,18 @@
                 "coverage": "subtree"
               },
               {
+                "id": "feature-leaderboard",
+                "title": "Leaderboard",
+                "kind": "module",
+                "path": "features/leaderboard",
+                "owner": "Leaderboard Feature Owner",
+                "description": "Leaderboard capability facade over platform backends.",
+                "entry": "features/leaderboard/README.md",
+                "contract": "features/leaderboard/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
                 "id": "feature-localization",
                 "title": "Localization",
                 "kind": "module",
@@ -118,6 +142,18 @@
                 "description": "Data-only localization capability shared across games.",
                 "entry": "features/localization/README.md",
                 "contract": "features/localization/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
+                "id": "feature-network-core",
+                "title": "Network core",
+                "kind": "module",
+                "path": "features/network-core",
+                "owner": "Network Feature Owner",
+                "description": "WebSocket transport for authoritative game rooms and clients.",
+                "entry": "features/network-core/README.md",
+                "contract": "features/network-core/feature.json",
                 "verifyDomain": "features",
                 "coverage": "subtree"
               },
@@ -142,6 +178,18 @@
                 "description": "Reusable progression capability and integration contract.",
                 "entry": "features/progression-core/README.md",
                 "contract": "features/progression-core/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
+                "id": "feature-remote-image",
+                "title": "Remote image",
+                "kind": "module",
+                "path": "features/remote-image",
+                "owner": "Remote Image Feature Owner",
+                "description": "Cached URL-to-texture loading capability for game interfaces.",
+                "entry": "features/remote-image/README.md",
+                "contract": "features/remote-image/feature.json",
                 "verifyDomain": "features",
                 "coverage": "subtree"
               },
@@ -204,17 +252,6 @@
             "description": "Public game mounts; each new game requires an explicit map owner.",
             "entry": "games/README.md",
             "verifyDomain": "workspace",
-            "coverage": "direct-files"
-          },
-          {
-            "id": "extensions",
-            "title": "Extensions",
-            "kind": "workspace",
-            "path": "extensions",
-            "owner": "Extension Lead",
-            "description": "Optional Studio extensions with explicit child ownership.",
-            "entry": "extensions/README.md",
-            "verifyDomain": "features",
             "coverage": "direct-files"
           }
         ]

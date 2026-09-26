@@ -14,7 +14,7 @@ import { resolveRepoPython, runProcess } from "../../tools/video/_lib.mjs";
 import { frontOrder, isNodeHidden, isNodeTransformed, orderedChildren } from "../tree.mjs";
 import { defaultTextStyle, resolveFontEntry, splitTextLines } from "../fonts.mjs";
 import { addFile as storeAddFile, addGeneratedImage as storeAddImage, capToolRuns, getProject, imageSize, readElementBytes, resolveProjectFile, resolveProjectPath, updateProject, withProjectLock, writeProjectBytes } from "../store.mjs";
-import { zipStore } from "../zip.mjs";
+import { createStoreZip } from "../../../core_harness/tool_lib/zip_store.mjs";
 import { parseScaleSpec, resolveExportScale } from "./export_scale.mjs";
 import { commitMutation, finite, groupsOf, mimeForExt, readFontsManifest, refuseIfHeadMoved, resolveFontFileAbs, slug } from "./core.mjs";
 import { DEFAULT_EXPORT_ROW, cleanExportRows } from "./elements.mjs";
@@ -2329,7 +2329,8 @@ export function zipExport(root, { projectId, stamp } = {}) {
     entries.push({ name: file, data: readFileSync(abs) });
   }
   if (!entries.length) throw new Error(`export run ${stamp} has no files to zip`);
-  return { bytes: zipStore(entries), files: entries.map((entry) => entry.name) };
+  return { bytes: createStoreZip(entries.map(({ name, data }) => ({ path: name, bytes: data }))),
+    files: entries.map((entry) => entry.name) };
 }
 
 // ---- renderGroup (screen compositing) ----------------------------------------

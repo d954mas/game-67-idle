@@ -1,20 +1,17 @@
 #!/usr/bin/env node
 // Housekeeping for the ignored tmp/ scratch folder.
 //
-//   node ai_studio/core_harness/tool_lib/tmp_sweep.mjs [--list] [--all-scratch] [--keep-validate <n>] [--dry-run] [--root <dir>]
+//   node ai_studio/core_harness/tool_lib/tmp_sweep.mjs [--list] [--all-scratch] [--dry-run] [--root <dir>]
 //
 // tmp/ is gitignored disposable scratch; durable evidence lives under
-// games/<id>/design/. Legacy pipeline validation exports are pruned
-// tmp/pipeline-validate-* dirs (T0043). This sweep is the EXPLICIT, opt-in way
-// to clear the rest (closed-prototype renders, generation pipelines, atlas
-// review dirs) at prototype close. Default is --list (reports, deletes nothing).
+// games/<id>/design/. This sweep is the explicit, opt-in way to clear scratch.
+// Default is --list (reports, deletes nothing).
 
 import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
-const VALIDATE_EXPORT_PREFIX = "pipeline-validate-";
 const args = process.argv.slice(2);
 
 function flagValue(name, fallback) {
@@ -23,23 +20,22 @@ function flagValue(name, fallback) {
   return args[idx + 1];
 }
 
-const allowed = new Set(["--list", "--all-scratch", "--keep-validate", "--dry-run", "--root", "--help", "-h"]);
+const allowed = new Set(["--list", "--all-scratch", "--dry-run", "--root", "--help", "-h"]);
 for (let i = 0; i < args.length; i += 1) {
   const a = args[i];
-  if (a === "--keep-validate" || a === "--root") { i += 1; continue; }
+  if (a === "--root") { i += 1; continue; }
   if (!allowed.has(a)) {
     console.error(`unknown arg: ${a}`);
     process.exit(2);
   }
 }
 if (args.includes("--help") || args.includes("-h")) {
-  console.log("usage: node ai_studio/core_harness/tool_lib/tmp_sweep.mjs [--list] [--all-scratch] [--keep-validate <n>] [--dry-run] [--root <dir>]");
+  console.log("usage: node ai_studio/core_harness/tool_lib/tmp_sweep.mjs [--list] [--all-scratch] [--dry-run] [--root <dir>]");
   process.exit(0);
 }
 
 const root = resolve(flagValue("--root", repoRoot));
 const tmpDir = join(root, "tmp");
-const keepValidate = Math.max(0, Number.parseInt(flagValue("--keep-validate", "3"), 10) || 0);
 const allScratch = args.includes("--all-scratch");
 const dryRun = args.includes("--dry-run");
 
@@ -59,15 +55,6 @@ function dirSizeBytes(path) {
   return total;
 }
 
-function isValidateExportDir(tmpDir, name) {
-  if (!name.startsWith(VALIDATE_EXPORT_PREFIX)) return false;
-  try {
-    return statSync(join(tmpDir, name)).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
 function human(bytes) {
   if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(1)}G`;
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}M`;
@@ -81,28 +68,21 @@ if (!existsSync(tmpDir)) {
 }
 
 const entries = readdirSync(tmpDir).sort();
-const validateDirs = entries.filter((name) => isValidateExportDir(tmpDir, name));
-const keepStart = Math.max(0, validateDirs.length - keepValidate);
-const keptValidate = new Set(validateDirs.slice(keepStart));
-
-// Scratch = everything except the newest N pipeline-validate dirs we keep.
-const scratch = entries.filter((n) => !keptValidate.has(n));
-
 if (!allScratch) {
   let total = 0;
-  console.log(`tmp/ scratch report (${tmpDir}); --all-scratch to delete, keeping newest ${keepValidate} pipeline-validate dir(s):`);
-  for (const name of scratch) {
+  console.log(`tmp/ scratch report (${tmpDir}); --all-scratch to delete:`);
+  for (const name of entries) {
     const bytes = dirSizeBytes(join(tmpDir, name));
     total += bytes;
     console.log(`  ${human(bytes).padStart(7)}  ${name}`);
   }
-  console.log(`reclaimable: ${human(total)} across ${scratch.length} entr${scratch.length === 1 ? "y" : "ies"} (kept ${keptValidate.size} validate dir(s))`);
+  console.log(`reclaimable: ${human(total)} across ${entries.length} entr${entries.length === 1 ? "y" : "ies"}`);
   process.exit(0);
 }
 
 let removed = 0;
 let freed = 0;
-for (const name of scratch) {
+for (const name of entries) {
   const path = join(tmpDir, name);
   const bytes = dirSizeBytes(path);
   if (dryRun) {
@@ -114,4 +94,4 @@ for (const name of scratch) {
   removed += 1;
   freed += bytes;
 }
-console.log(`${dryRun ? "would free" : "freed"} ${human(freed)} across ${removed} entr${removed === 1 ? "y" : "ies"}; kept ${keptValidate.size} newest pipeline-validate dir(s)`);
+console.log(`${dryRun ? "would free" : "freed"} ${human(freed)} across ${removed} entr${removed === 1 ? "y" : "ies"}`);

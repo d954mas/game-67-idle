@@ -16,6 +16,7 @@ from devapi_client import (
     pick_free_port,
     resolve_launch_port,
     run_capture_screenshot,
+    running_game,
     write_engine_capture_payload_png,
 )
 
@@ -270,6 +271,25 @@ class EngineCapturePayloadTest(unittest.TestCase):
 
 
 class LaunchPortResolutionTest(unittest.TestCase):
+    def test_launch_scopes_storage_override_to_child_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            original_storage_root = os.environ.get("GAME_STORAGE_ROOT")
+            exe = os.path.join(directory, "game.exe")
+            open(exe, "wb").close()
+            child = mock.Mock(pid=123)
+            client = mock.Mock()
+            log = os.path.join(directory, "launch.log")
+            with mock.patch("devapi_client.connect_existing", side_effect=[None, client]), \
+                 mock.patch("devapi_client.make_launch_log_path", return_value=log), \
+                 mock.patch("devapi_client.subprocess.Popen", return_value=child) as popen, \
+                 mock.patch("devapi_client.stop_game_process"):
+                with running_game(port=19001, exe=exe, cwd=directory,
+                                  env_overrides={"GAME_STORAGE_ROOT": os.path.join(directory, "storage")}):
+                    pass
+            child_env = popen.call_args.kwargs["env"]
+            self.assertEqual(child_env["GAME_STORAGE_ROOT"], os.path.join(directory, "storage"))
+            self.assertEqual(os.environ.get("GAME_STORAGE_ROOT"), original_storage_root)
+
     def test_pick_free_port_returns_a_bindable_port(self):
         port = pick_free_port()
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:

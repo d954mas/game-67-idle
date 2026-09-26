@@ -146,6 +146,34 @@ test("game release asset audit validates packed tracked bytes and metadata", (t)
   });
 });
 
+test("game release asset audit accepts a tracked source sidecar and checks its release fields", (t) => {
+  const item = fixture(t);
+  rmSync(join(item.root, "assets", "packs"), { recursive: true });
+  const sidecar = "assets/ui/panel.provenance.json";
+  const provenance = {
+    schema: "fixture.asset.v1", asset: item.path, origin: "original",
+    license: "Original project art; game-owned.", license_file: "LICENSE.md",
+    redistribution_allowed: true, commercial_use: true, modification_allowed: true,
+    source: { script: "paint.py" }, publish: false,
+    sha256: item.record.sha256, bytes: item.record.bytes,
+  };
+  write(join(item.root, ...sidecar.split("/")), JSON.stringify(provenance));
+  const options = { builderPaths: [item.path], trackedPaths: ["assets/release_inputs.json", item.path, sidecar] };
+  assert.deepEqual(auditGameReleaseAssets(item.root, options), { ok: true, packed: 1, issues: [] });
+
+  provenance.redistribution_allowed = false;
+  write(join(item.root, ...sidecar.split("/")), JSON.stringify(provenance));
+  assert.match(auditGameReleaseAssets(item.root, options).issues.join("\n"), /redistribution_allowed=true/);
+  provenance.redistribution_allowed = true;
+  provenance.sha256 = "0".repeat(64);
+  write(join(item.root, ...sidecar.split("/")), JSON.stringify(provenance));
+  assert.match(auditGameReleaseAssets(item.root, options).issues.join("\n"), /sha256 mismatch/);
+  provenance.sha256 = item.record.sha256;
+  provenance.license = "";
+  write(join(item.root, ...sidecar.split("/")), JSON.stringify(provenance));
+  assert.match(auditGameReleaseAssets(item.root, options).issues.join("\n"), /missing license/);
+});
+
 test("game release asset audit requires exact agreement with pack builder inputs", (t) => {
   const builderOnly = fixture(t);
   write(

@@ -20,69 +20,36 @@ logs, generated artifacts, and broad design only when task-linked or requested.
 ## Work Loop
 
 1. Interpret the request into one working scope.
-2. Select or create a task only when durable tracking is useful.
+2. Use an existing task when durable tracking is useful. Only the lead creates
+   new Taskboard items, except through lead-invoked `/to-spec` or `/to-tickets`
+   (see [hard invariants](../../../AGENTS.md#hard-invariants)).
 3. Read only files needed for the selected scope.
 4. Make the smallest coherent change.
 5. Run the narrowest validation that proves the change.
 6. Record evidence in the task log and final response when project state changes.
 
-For substantial implementation, state four short fields before changing code:
-
-```text
-Goal: concrete outcome
-Scope: allowed modules
-Done: observable completion condition
-Proof: commands or evidence that establish Done
-```
-
-Use the validation ladder once per meaningful state change: focused proof during
-RED/GREEN, `studio.mjs verify --changed` after the coherent change, and one
-`verify --full` before publishing or closing the work. Run CI once per SHA.
+Before substantial implementation, make the outcome, scope and proof clear in
+the task or discussion. Run focused checks as the work changes; use
+`studio.mjs verify --changed` for changed shared Studio owners. The full Studio
+gate runs in CI on master and before Studio publication or release work. A
+routine task can close with narrower evidence. Run CI once per SHA.
 After the same unexplained failure twice, diagnose the cause instead of retrying
 the same command again.
 
 ## Checkpoint And Handoff
 
-Checkpoint when the task finishes, scope or domain changes, two or three
-independent commits accumulate, an external pause exceeds ten minutes, or the
-lead leaves a long-running work packet. For long sessions, checkpoint after four
-hours; start a fresh session after six hours or when current model context reaches
-70%. A 300-tool-call session also needs a checkpoint. These are advisory
-boundaries: continuing is allowed when the reason is explicit.
+Checkpoint when the task changes hands, pauses, or needs a fresh context.
+`profiling/status.mjs --complete` reports advisory session limits; the
+[profiling guide](../profiling/README.md) owns their thresholds.
 
-`profiling/status.mjs --complete` reports `continue`,
-`checkpoint-recommended`, or `new-session-recommended` from the evidence the
-Codex transcript exposes.
-
-Keep handoff content compact and point to canonical state instead of copying it:
-
-```text
-Task:
-Accepted decisions:
-Current SHA and dirty state:
-Changed:
-Proven:
-Remaining:
-Next command:
-Do not repeat:
-```
+Keep handoffs compact: link canonical decisions and state, name what was
+proven, and give the next actionable step.
 
 ## Quality Feedback
 
-Quality checks are iterative feedback, not only final acceptance gates.
-
-During substantial work, pause at natural iteration points and ask whether
-quality feedback would reduce risk or rework:
-
-- before expensive implementation;
-- after the first draft;
-- after visible, runtime, design, asset, or document changes;
-- before expanding scope;
-- before closeout.
-
-Use quality feedback when the task changes player-facing output, game design,
-assets, GDD, runtime behavior, or release-facing state. If useful, choose only
-relevant rules from `ai_studio/quality/README.md`.
+Use [quality rules](../../quality/README.md) when a changed player-facing,
+design, asset, runtime or release claim needs evidence. The matching rule's
+`Use When` decides; there is no check at every iteration point.
 
 Do not create project-local quality rules. Tools and templates should capture
 review evidence and acceptance notes, not define or link quality rule IDs.
@@ -107,27 +74,11 @@ Pin the engine submodule only to reviewed commits from the engine's main branch
 
 ## Task Log
 
-When a durable task is selected, `## Log` is the handoff record for the lead and
-orchestrator. Use it for status changes, validation evidence, review handoff,
-acceptance, rejection, pauses, and integrated delegated work.
-
-Use `node ai_studio/taskboard/cli.mjs set <id> --log "..."` for short
-checkpoints during work. Keep the log useful, not ceremonial: record what changed,
-what was proven, what was delegated, what was accepted or rejected, and what
-remains unclear.
-
-Entry shape:
-
-```text
-- YYYY-MM-DD: Changed/validated/accepted <scope>. Evidence: <command or result>. Open: <optional next issue>.
-```
-
-Delegation entries should show the worker task and the integrated outcome:
-
-```text
-- YYYY-MM-DD: Delegated: <worker task>. Return: <expected result shape>.
-- YYYY-MM-DD: Worker result: <short finding/result>. Integrated: <accepted change or decision>.
-```
+When a durable task exists, use its `## Log` for decisions, evidence, handoffs
+and remaining work. Update it with
+`node ai_studio/taskboard/cli.mjs set <id> --log "..."`; record integrated
+delegated results once, without copying worker transcripts. Taskboard owns the
+item lifecycle.
 
 ## Delegation
 

@@ -83,7 +83,7 @@ def _require_rembg() -> Any:
         raise RuntimeError(
             "truststore is required for birefnet_cutout (Avast TLS-MITM boxes need the OS "
             "trust store for the first-run model download); run "
-            "node ai_studio/assets/tools/image/_bridge/setup_python.mjs to install the "
+            "node ai_studio/dev_environment/python_setup.mjs to install the "
             "pinned studio Python deps."
         ) from exc
     truststore.inject_into_ssl()
@@ -92,7 +92,7 @@ def _require_rembg() -> Any:
     except ImportError as exc:
         raise RuntimeError(
             "rembg is required for birefnet_cutout but could not be imported; run "
-            "node ai_studio/assets/tools/image/_bridge/setup_python.mjs to install the "
+            "node ai_studio/dev_environment/python_setup.mjs to install the "
             "pinned studio Python deps (rembg, onnxruntime)."
         ) from exc
     return rembg

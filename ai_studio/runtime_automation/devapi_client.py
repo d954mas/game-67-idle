@@ -864,6 +864,7 @@ def running_game(
     autosave_enabled: bool = False,
     window_size: str | None = None,
     extra_args: list[str] | None = None,
+    env_overrides: dict[str, str] | None = None,
 ):
     # No explicit port: pick a fresh ephemeral port (see resolve_launch_port) so
     # concurrent launches never collide on the fixed default. Everything below
@@ -897,7 +898,10 @@ def running_game(
         launch_log.write("command: " + " ".join(args) + "\n")
         launch_log.write("cwd: " + cwd + "\n\n")
         launch_log.flush()
-        proc = subprocess.Popen(args, cwd=cwd, stdout=launch_log, stderr=subprocess.STDOUT)
+        env = dict(os.environ)
+        if env_overrides:
+            env.update(env_overrides)
+        proc = subprocess.Popen(args, cwd=cwd, env=env, stdout=launch_log, stderr=subprocess.STDOUT)
         print(f"launch log: {launch_log_path}", file=sys.stderr)
         try:
             client = connect_existing(port=port, process=proc, launch_log_path=launch_log_path)

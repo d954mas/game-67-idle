@@ -27,7 +27,7 @@ const maxBodyBytes = 64 * 1024 * 1024;
 // One-shot command that (re)creates the studio venv and installs pinned deps.
 // Quoted verbatim in every "missing interpreter/dependency" error so an operator
 // can copy-paste the fix.
-export const IMAGE_PYTHON_SETUP_COMMAND = "node ai_studio/assets/tools/image/_bridge/setup_python.mjs";
+export const IMAGE_PYTHON_SETUP_COMMAND = "node ai_studio/dev_environment/python_setup.mjs";
 
 // ---------------------------------------------------------------------------
 // Slug + path confinement
