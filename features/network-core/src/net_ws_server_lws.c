@@ -259,15 +259,16 @@ static int on_receive(net_ws_server_t *server, struct lws *wsi, session_t *sessi
     return 0;
 }
 
-static void terminal_close(net_ws_server_t *server, struct lws *wsi, session_t *session) {
+static bool terminal_close(net_ws_server_t *server, struct lws *wsi, session_t *session) {
     session->terminal = true;
     if (session->close_started ||
-        (session->close_pending && session->close_reason != NET_WS_CLOSE_APP)) { return; }
+        (session->close_pending && session->close_reason != NET_WS_CLOSE_APP)) { return false; }
     session->close_pending = true;
     session->close_code = NET_CLOSE_SLOW;
     session->close_reason = NET_WS_CLOSE_SLOW;
     lws_set_timeout(wsi, PENDING_TIMEOUT_USER_OK, server->timeout_seconds);
     lws_callback_on_writable(wsi);
+    return true;
 }
 
 static int write_message(net_ws_server_t *server, struct lws *wsi, uint8_t *data, size_t size) {
@@ -633,10 +634,14 @@ void net_ws_server_close(net_ws_server_t *server, uint32_t client, uint16_t code
     request_close(server, wsi, session_of(wsi), code, NET_WS_CLOSE_APP);
 }
 
-void net_ws_server_close_slow(net_ws_server_t *server, uint32_t client) {
+bool net_ws_server_try_close_slow(net_ws_server_t *server, uint32_t client) {
     struct lws *wsi = wsi_for(server, client);
-    if (wsi == NULL) { return; }
-    terminal_close(server, wsi, session_of(wsi));
+    if (wsi == NULL) { return false; }
+    return terminal_close(server, wsi, session_of(wsi));
+}
+
+void net_ws_server_close_slow(net_ws_server_t *server, uint32_t client) {
+    (void)net_ws_server_try_close_slow(server, client);
 }
 
 void net_ws_server_test_fail_next_write(net_ws_server_t *server) {

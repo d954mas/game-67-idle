@@ -116,5 +116,7 @@ void net_ws_server_close(net_ws_server_t *server, uint32_t client, uint16_t code
 /* Ends a terminal stream as NET_CLOSE_SLOW without draining application
    output. Ordinary application closes retain their drain-first behavior. */
 void net_ws_server_close_slow(net_ws_server_t *server, uint32_t client);
+/* Returns true only when this call establishes the slow close reason. */
+bool net_ws_server_try_close_slow(net_ws_server_t *server, uint32_t client);
 
 #endif

@@ -484,7 +484,8 @@ int main(void) {
     CHECK(net_ws_server_send(server, slow_client, farewell, sizeof farewell));
     CHECK(net_ws_server_queued_bytes(server, slow_client) > 0U);
     net_ws_server_close(server, slow_client, 4123U);
-    net_ws_server_close_slow(server, slow_client);
+    CHECK(net_ws_server_try_close_slow(server, slow_client));
+    CHECK(!net_ws_server_try_close_slow(server, slow_client));
     net_ws_server_test_hold_writes(server, false);
     CHECK(!net_ws_server_send_ready(server, slow_client));
     CHECK(!net_ws_server_send(server, slow_client, ping, sizeof ping));
@@ -509,6 +510,7 @@ int main(void) {
     CHECK(net_ws_server_send_ready(server, failed_client));
     net_ws_server_test_fail_next_write(server);
     CHECK(!net_ws_server_send(server, failed_client, ping, sizeof ping));
+    CHECK(!net_ws_server_try_close_slow(server, failed_client));
     CHECK(!net_ws_server_send_ready(server, failed_client));
     CHECK(!net_ws_server_send(server, failed_client, ping, sizeof ping));
     CHECK(!net_ws_server_send_latest(server, failed_client, ping, sizeof ping, NULL));
