@@ -153,6 +153,9 @@ See `INSTALL.md` for wiring, validation, and removal.
 
 ## Version history
 
+- `1.2.1`: the web bridge writes a bus `AudioParam.value` only when it
+  differs from the value it last wrote to that node, so an unchanged mix no
+  longer costs a write every call.
 - `1.2.0`: `audio_clip_stream` plays long tracks without decoding them whole
   (native: decoded on the audio thread; web: chunks scheduled from a wasm
   MP3 decoder). Native pooled voices now honour `audio_voice_set_pitch`; they
