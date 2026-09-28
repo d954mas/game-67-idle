@@ -28,253 +28,253 @@
   "files": [
     {
       "path": "LICENSE",
-      "bytes": 11558,
-      "sha256": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6"
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
     },
     {
       "path": "src/App.h",
-      "bytes": 30720,
-      "sha256": "d95ce1f52cc643fbeaf41e090601b31fea62a74dbe05c566973f618ddf251435"
+      "bytes": 30032,
+      "sha256": "6e96323c8479f1e74b4bc8aa104a96d260ff604f856c2ce3b521ba985e5d696e"
     },
     {
       "path": "src/AsyncSocket.h",
-      "bytes": 15239,
-      "sha256": "382a764ee6536374b1ca0d0502d7393b960abad9f6b595f739ce50b958b4ed5f"
+      "bytes": 14863,
+      "sha256": "0e4c6a1a9df9f8962358a7a1ab788e9813c354dd71d97143c7fa11c1ec39ea6f"
     },
     {
       "path": "src/AsyncSocketData.h",
-      "bytes": 2877,
-      "sha256": "272d6fe23b56af68481db2a55c93c46a322f3ffee228ab9033d5de5b13984425"
+      "bytes": 2783,
+      "sha256": "28037864f6451bb0f172d19e86b7649cf36f8f79ee11f8cf0328b88654627e80"
     },
     {
       "path": "src/BloomFilter.h",
-      "bytes": 2330,
-      "sha256": "385877ac49617942b6e74c082ad8ca7d3faecfa57ae7181c114907068b2e0e91"
+      "bytes": 2247,
+      "sha256": "77c32bb26d54b49988f9a747b42a5be125a4c2224df8e6cc83333393a3572db6"
     },
     {
       "path": "src/ChunkedEncoding.h",
-      "bytes": 14094,
-      "sha256": "82243291cfb4561dba995b22b2e653362b6ea6a18199ccafc5eb22bdcb866226"
+      "bytes": 13747,
+      "sha256": "d12bbc0439ebbb8a4fa261b2fe856c7fc02a8ab6a677bb5d8fe3e0295a587d37"
     },
     {
       "path": "src/HttpContext.h",
-      "bytes": 24801,
-      "sha256": "fbdac236eec937df8b7e382156f79cee83e21164a792325aa5c690e2417b29e1"
+      "bytes": 24280,
+      "sha256": "edcfd55415e47f23f406107488bef4a6bd73ec628021430ba1b0516b5fe6cf8a"
     },
     {
       "path": "src/HttpContextData.h",
-      "bytes": 1841,
-      "sha256": "9f0c166949f8bd916d918cfdee771c5a550fbff7c88b86ff061be4785933d74c"
+      "bytes": 1781,
+      "sha256": "1ebf86d75c0c748847dd40e89b4910cdc20a5c97084072b5dd1da098525ed50b"
     },
     {
       "path": "src/HttpErrors.h",
-      "bytes": 2021,
-      "sha256": "519aba10f1969206ce7481f96397404b3d62d7fe6631c3242671574c58cf0531"
+      "bytes": 1969,
+      "sha256": "98146d2facdee9a05f6368ec1b39b8d5847e05c349fb87d5976f39c3a4c78a04"
     },
     {
       "path": "src/HttpParser.h",
-      "bytes": 34320,
-      "sha256": "a6868abe90ab31fc3d77ed5c74e32f56d4bdf4fe359ee2bd2af3c59bd138a63b"
+      "bytes": 33535,
+      "sha256": "4d848c1d38588973f1ead6e2486e7a52c54a46b5f8ba9799a736848fc1ff5011"
     },
     {
       "path": "src/HttpResponse.h",
-      "bytes": 27548,
-      "sha256": "41526c8ef02cf3fdcabfa0b9300663f00b23b53eab7ecf425ed19b57acd87ec3"
+      "bytes": 26917,
+      "sha256": "b0a295f5191adb98489b070a06f45f217275bccad5f936aef165964cc28cee4c"
     },
     {
       "path": "src/HttpResponseData.h",
-      "bytes": 4081,
-      "sha256": "55249caa2ed7bb623986b8eda7a9018d17dca89202c938f2926f34705301cba3"
+      "bytes": 3958,
+      "sha256": "dd0b631f129aa3b31b99bf73302b1e730ca7ad0f792c1503b1a53f095607e0a4"
     },
     {
       "path": "src/HttpRouter.h",
-      "bytes": 14509,
-      "sha256": "11018808912c493c42a42556e9dbb0811b1e0774aa911b94136e13f613b4445f"
+      "bytes": 14125,
+      "sha256": "8ded0be4f7fd1da15409d4bfb03b36b7a5cc619f92aeb5146242e4bbcce55f90"
     },
     {
       "path": "src/Loop.h",
-      "bytes": 8304,
-      "sha256": "d3e1cb74ccde27db4deb20dda89ef6dbfa0f41c23ea3c1f7eeaa44458099d4b4"
+      "bytes": 8066,
+      "sha256": "f7794d5e3475bc9c1c841d32943789e69f91758b362557ef4c8b71cb77290f81"
     },
     {
       "path": "src/LoopData.h",
-      "bytes": 3108,
-      "sha256": "c7b7594628dd799f96406301fb5e85849846fe8d5a8e0ae23da35bc97cae69c4"
+      "bytes": 2995,
+      "sha256": "59b5f8b2a13309d3bf7064779e04a6b882b9ae6d1ce66e4ea50a56247f595c82"
     },
     {
       "path": "src/MessageParser.h",
-      "bytes": 2766,
-      "sha256": "8be8bac84589f7c479b56c98cd793e1c62ea73df43da62cf00e5dab26a80dd81"
+      "bytes": 2703,
+      "sha256": "a070ffb5623e3d104a0e73d3ba5d59fb7c48a25c233403de1454572105baf9cd"
     },
     {
       "path": "src/MoveOnlyFunction.h",
-      "bytes": 15106,
-      "sha256": "41990d527151d385d7b89e2556cc460602d9d8fb77277391eb47f0707f4f5ccb"
+      "bytes": 14717,
+      "sha256": "c9ae25a11c5a24fc28e7bdb49a90fd5b16fc7e863bb5c4eaaea98228a4b9ba05"
     },
     {
       "path": "src/Multipart.h",
-      "bytes": 8842,
-      "sha256": "18eb67e1dfb200072ca6c5a9a84248d0e0bc7ef337daf647321ce40ac841b660"
+      "bytes": 8611,
+      "sha256": "aff7467d95eeb82df7e7f4d0f4f1acad301ccc1ca1bd22336494f6486856ad59"
     },
     {
       "path": "src/PerMessageDeflate.h",
-      "bytes": 11598,
-      "sha256": "cd89b3117b3eae46817f06daa1c2215ab88d6dbbc9e4dbb36d61b41f86f5899e"
+      "bytes": 11295,
+      "sha256": "70e127c9715ee5fe94d8562e2636b2d8f86a4b77198bd476d73237a6e8912c22"
     },
     {
       "path": "src/ProxyParser.h",
-      "bytes": 5606,
-      "sha256": "d0d446de15f0d00d0dcfda0232606ebdac2802403a7a167891de7ad8d3f910a9"
+      "bytes": 5419,
+      "sha256": "4ffa20d56e6509b6ecb6445552ecb05431f3b9e298554df68f42b0c55b069898"
     },
     {
       "path": "src/QueryParser.h",
-      "bytes": 5018,
-      "sha256": "7203cb21534a79e1b83d9115788513684a26f950019a1db7f4dc5901aa97ef00"
+      "bytes": 4898,
+      "sha256": "87debaf12d45bf1a76ed3c04f0e95db39d4be7b348b1afa5add3809d74c674c9"
     },
     {
       "path": "src/TopicTree.h",
-      "bytes": 11914,
-      "sha256": "9b8cffc8b83e92755a4f5eb91ffa3227f537cf51cd664c3391c608faa0c580f8"
+      "bytes": 11550,
+      "sha256": "c24fb02005f7b348408c7ec14ecc11a30c99ebe26d5fa3c5c6a6aa331aa729ec"
     },
     {
       "path": "src/Utilities.h",
-      "bytes": 1502,
-      "sha256": "6765136669bfdd4c7877cc124b9bfa35f3ee67a494dbfa37b1ad9cc77254a5dd"
+      "bytes": 1436,
+      "sha256": "948614136e7edf4a0a413dcff1182e3ba5bee0f9a147958a0da37329903525cc"
     },
     {
       "path": "src/WebSocket.h",
-      "bytes": 19574,
-      "sha256": "4f5ff1214c44f7f9c41297683fc236951f85f584ca30bfad29adc0c3d1f9cfe5"
+      "bytes": 19167,
+      "sha256": "e63e835afc2ebf936b3b30aba7d756a2be26e9659240dcfe8612f84209121207"
     },
     {
       "path": "src/WebSocketContext.h",
-      "bytes": 23134,
-      "sha256": "58044473f1e6a2416446155c222949d2e6a87dfd0892e9509d710391661a9fba"
+      "bytes": 22698,
+      "sha256": "fa6b1b5d7de3f07890364e4dfddeabf172c3155a4dc0ffd5f6a2e69fe3f62822"
     },
     {
       "path": "src/WebSocketContextData.h",
-      "bytes": 3833,
-      "sha256": "6c1a6f482d830fad190ea88922b2cc54034d144dd08824f997c98fd6774c157f"
+      "bytes": 3724,
+      "sha256": "b00e6f949d4f310774e5e0cb44c7122d7dd306074fdb66b55a1c93259a33cfae"
     },
     {
       "path": "src/WebSocketData.h",
-      "bytes": 2867,
-      "sha256": "d5cfa10a40dc7635e84f344dbe815980b7e1f391426c55226b3ac61cd9ab202e"
+      "bytes": 2781,
+      "sha256": "4bf3385ee9f7a7ea2bbd5e899ba049439c7ad0b4b418f4a25ee1bac367ca81fc"
     },
     {
       "path": "src/WebSocketExtensions.h",
-      "bytes": 9404,
-      "sha256": "82b4e15c6d12ff7bce140e8f042ca5880e57967c97a78940bfdffa14288be9fc"
+      "bytes": 9148,
+      "sha256": "bcb56a39fa0e0700bd4112e8df36b2c16b29b1e75d39361e2ccd1b3e903a267d"
     },
     {
       "path": "src/WebSocketHandshake.h",
-      "bytes": 5721,
-      "sha256": "fa186faf46cc9209673a544ac087d1bb808184a210e8a346ef9a28b541a96252"
+      "bytes": 5576,
+      "sha256": "4ef537f1c444ae07c14ad5d051a909f3cf8d752168a83da6180d3d4c3608cc6e"
     },
     {
       "path": "src/WebSocketProtocol.h",
-      "bytes": 19240,
-      "sha256": "e07630eec681da2d4c55086cb3a6d459aecb2799d8036c24d354b18bdcaf9f3a"
+      "bytes": 18715,
+      "sha256": "5019346562e00c14dc976a38e8c83f726bf2d95b50ce1314be86eba695111027"
     },
     {
       "path": "uSockets/LICENSE",
-      "bytes": 11558,
-      "sha256": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6"
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
     },
     {
       "path": "uSockets/src/bsd.c",
-      "bytes": 24877,
-      "sha256": "f31d53ea4491193bf84a2fc295faded5273d9a37de588e9a33525f4a329f93e7"
+      "bytes": 24110,
+      "sha256": "280e86b28b6321c5ee22f72fa1bf8f1af28263e107e4306f014ba07c3f93c655"
     },
     {
       "path": "uSockets/src/context.c",
-      "bytes": 20500,
-      "sha256": "e7befc2020d7ef70ee802ccdf4978d127ba7bebefb5adb96f85cc6c675390c54"
+      "bytes": 19977,
+      "sha256": "1fbdd2a10a0bb67778971f14eb8e16a31cd4db37a0a9391c4d0f7c559cf0f1e0"
     },
     {
       "path": "uSockets/src/crypto/openssl.c",
-      "bytes": 36150,
-      "sha256": "9edf5b97328fca517445e1ba0620b8b39794223c95ffeaf67f8fef8d6af92ced"
+      "bytes": 35292,
+      "sha256": "fae56e4a7ca0d85111226a7d7692a298b944fb16cec91f6e5e9876821792f90a"
     },
     {
       "path": "uSockets/src/crypto/sni_tree.cpp",
-      "bytes": 7294,
-      "sha256": "1254ffc68ded64790e4049482d984c049f13dffa15c08de810b9b70f6eaf32a4"
+      "bytes": 7077,
+      "sha256": "07edddca362bb8032b9748c038b4ea51acc1a4db0436a1a8de18f6aa728da9a5"
     },
     {
       "path": "uSockets/src/eventing/epoll_kqueue.c",
-      "bytes": 17694,
-      "sha256": "15db8476e9adae10b73f7171090f559cecf54df4eca47beadd360f1564e1578b"
+      "bytes": 17236,
+      "sha256": "a3ad65dc8fffa0126ab6dce6b54d3cc79f514052a949a228591c9993baab7297"
     },
     {
       "path": "uSockets/src/eventing/libuv.c",
-      "bytes": 10735,
-      "sha256": "64037aa7a203100802ca4938c1f1beb6cb7b27a41fc64828d3fafe9ffdad7865"
+      "bytes": 10430,
+      "sha256": "1e2010573e51b13d248b395143f9e4eb6d22f979ab1933eaf0c2f9afeff2185f"
     },
     {
       "path": "uSockets/src/internal/eventing/asio.h",
-      "bytes": 1256,
-      "sha256": "ad6a480ec9a21ccb1987e198baf558c3aee65587724531fd71c9a16db5167a04"
+      "bytes": 1211,
+      "sha256": "6db5f479422770defb97bd6889081336067953bc741586acbab7c376925265c6"
     },
     {
       "path": "uSockets/src/internal/eventing/epoll_kqueue.h",
-      "bytes": 1958,
-      "sha256": "5362fc599dcdc32e2b1eae1d56cee267798c13e2cdc4fdadeef91b2f99b477b5"
+      "bytes": 1891,
+      "sha256": "fe39e7e7348610370ce1b1f390dcb112b3b20b40171bc79c901da885829e73cc"
     },
     {
       "path": "uSockets/src/internal/eventing/gcd.h",
-      "bytes": 1124,
-      "sha256": "22bb6272eddf3593bc5fdbeaf11c397334a9317a297fdfebe255f7668fcffd22"
+      "bytes": 1084,
+      "sha256": "2bc8b8c8fe5f82b8900f1adf1fab10d1cc91ebe6b6ffc518165180058d91f27f"
     },
     {
       "path": "uSockets/src/internal/eventing/libuv.h",
-      "bytes": 1348,
-      "sha256": "fdc9f471ff62b4250e7ae4b46d207ba98646f4f605092b588e0480907d7bfe53"
+      "bytes": 1303,
+      "sha256": "a4b15ab5d434e977ae99a175b9bed566bdcc38da610507a98f22ef21341e926a"
     },
     {
       "path": "uSockets/src/internal/internal.h",
-      "bytes": 10916,
-      "sha256": "2e80896ed487a430e9511c6bd02f3e458b6aaaa82f0cf3d990e4f36601257cbc"
+      "bytes": 10692,
+      "sha256": "edffabd7ce7aa328fcd63d66cc4cd4bb11a15541ebbb61522fa77722d4bf941a"
     },
     {
       "path": "uSockets/src/internal/loop_data.h",
-      "bytes": 1281,
-      "sha256": "0b26df983411c45ea9d7d585ffb37c6b0508a6680483069f404de13fde3af41a"
+      "bytes": 1243,
+      "sha256": "004ab1c6bd3401f4b5a494d170cb2d04d1b20b2b3a861cba6989928f82c40327"
     },
     {
       "path": "uSockets/src/internal/networking/bsd.h",
-      "bytes": 4243,
-      "sha256": "840c2d66621d7ba04a019dbac8d29e7e968138a5779d5c9c82c6998f3ab73459"
+      "bytes": 4134,
+      "sha256": "06aa23fec69de0fb4d6a229d6899252ded48de7242f50ae27e531f2aadeade8e"
     },
     {
       "path": "uSockets/src/libusockets.h",
-      "bytes": 17250,
-      "sha256": "1f1047d8dbadf4a0e301e5f70a088de36866f9778005938a748e93f37f7d9fc2"
+      "bytes": 16897,
+      "sha256": "6368d4864dee5e8904c7a5469ebde8cdf3d8ec3e274f91c33e517cfedaf5912c"
     },
     {
       "path": "uSockets/src/loop.c",
-      "bytes": 16801,
-      "sha256": "37884351182dc2d4e030cd993c4a21a78f40bb438ecce96c61e5df231fa5ea32"
+      "bytes": 16406,
+      "sha256": "cb06a785cdd914fc5d416657ded3d9b97beb389c28bcc6a711a9d96da7a1a747"
     },
     {
       "path": "uSockets/src/quic.c",
-      "bytes": 35439,
-      "sha256": "0b3652d0ddaa86d12e6abb0a3daa67934ef6b44770f4dd9d48419a27d0e2b595"
+      "bytes": 34368,
+      "sha256": "1d88176fbab38bed6383eaf8664af1d1c7ac6b3166a821d284ace4b87f763260"
     },
     {
       "path": "uSockets/src/quic.h",
-      "bytes": 3281,
-      "sha256": "d6f91a53e7df28ad05abb6b9999147eddeac923becb4f7c19e827e42d96550af"
+      "bytes": 3214,
+      "sha256": "385f40b32a9b24fe7d29158c99175299ca802f337aaf9e35ee8326d8df156206"
     },
     {
       "path": "uSockets/src/socket.c",
-      "bytes": 7881,
-      "sha256": "c03d6e9129adaf4b43f44196b6cc78dc07510511a6d229ea83b2ad26b394a05c"
+      "bytes": 7650,
+      "sha256": "3636cd10ab8f61d18ceaea51f84060d23199739e837fb576b4aa8dca651fd52a"
     },
     {
       "path": "uSockets/src/udp.c",
-      "bytes": 5307,
-      "sha256": "3c7d6e84cce1534cc65eadab69de35e4bf3358f33ad2f29b53690047378a5696"
+      "bytes": 5157,
+      "sha256": "dfc8f891acb67caf1291ff0039863048cd44d2b7d1ff532358a15edbd43fd315"
     }
   ]
 }
