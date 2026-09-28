@@ -76,6 +76,10 @@ progress comparison and runtime loading:
    JavaScript backend behind the C facade. Also compile `src/platform_sdk_storage.c`
    and `src/platform_sdk_cloud.c` for the C-owned storage transport and its web
    backend. `platform_sdk_install_web_backend()` installs both backends.
+   A client linked with `--closure 1` also calls
+   `platform_sdk_closure_externs(<target>)` from `cmake/PlatformSdk.cmake`,
+   which hands Closure the names the web bridge shares with the platform
+   bundle.
 
 3. Configure target platform through the CMake cache variable:
 

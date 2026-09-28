@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "platform-sdk",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "title": "Platform SDK",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -40,7 +40,8 @@
     "publish target manifest validation",
     "local NDJSON scorecard CLI",
     "request-correlated storage transport with explicit outcomes and native backend injection",
-    "canonical target descriptors and compilation-profile-bound release artifacts"
+    "canonical target descriptors and compilation-profile-bound release artifacts",
+    "Closure externs of the web bridge names and platform_sdk_closure_externs(<target>) to link them"
   ],
   "flags": {
     "target": "local|itch|poki|yandex|playgama|crazygames|wavedash",

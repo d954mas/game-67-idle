@@ -43,8 +43,10 @@ features/platform-sdk/
   feature.json
   include/features/platform_sdk/platform_sdk.h
   src/platform_sdk.c
+  cmake/PlatformSdk.cmake
   web/
     platform-sdk.js
+    platform_sdk.externs.js
     adapters/
       mock.js
       poki.js

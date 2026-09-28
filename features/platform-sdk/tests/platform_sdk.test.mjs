@@ -235,6 +235,18 @@ test("every platform adapter owns exactly the complete backend method contract",
   }
 });
 
+test("the Closure externs list every backend method and every bridge global", () => {
+  const externs = new Set(readFileSync(join(HERE, "../web/platform_sdk.externs.js"), "utf8").split(/\r?\n/));
+  for (const method of PLATFORM_BACKEND_METHODS) {
+    assert.ok(externs.has(`PlatformSdkBackend.prototype.${method};`), method);
+  }
+  const bridge = ["platform_sdk_web.c", "platform_sdk_cloud.c", "platform_sdk_storage.c"]
+    .map((file) => readFileSync(join(HERE, "../src", file), "utf8")).join("\n");
+  const globals = new Set(bridge.match(/__platformSdk\w+/g));
+  assert.ok(globals.size > 0);
+  for (const name of globals) assert.ok(externs.has(`var ${name};`), name);
+});
+
 test("template CMake isolates web presets by publish target", () => {
   const cmake = readFileSync(join(HERE, "../../../templates/template/cmake/GameOptions.cmake"), "utf8");
 
