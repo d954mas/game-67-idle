@@ -152,7 +152,10 @@ else()
     if(NETWORK_CORE_SERVER STREQUAL "uws")
         target_include_directories(network_core SYSTEM PRIVATE "${NETWORK_CORE_DIR}/vendor/uwebsockets/src")
         # No permessage-deflate is ever offered, so zlib is not linked.
-        target_compile_definitions(network_core PRIVATE UWS_NO_ZLIB NETWORK_CORE_UWS_VERSION="20.80.0")
+        # The peer's address is the one accept() gave, kept in user space: a
+        # closed socket still has it, and no getpeername runs per read.
+        target_compile_definitions(network_core PRIVATE UWS_NO_ZLIB UWS_REMOTE_ADDRESS_USERSPACE
+            NETWORK_CORE_UWS_VERSION="20.80.0")
         # The server is C++ behind a C API: a C consumer's link step, which
         # knows nothing of C++, still needs its runtime.
         target_link_libraries(network_core PRIVATE network_core_usockets PUBLIC stdc++)

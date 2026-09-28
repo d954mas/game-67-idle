@@ -14,6 +14,10 @@ void net_us_loop_integrate(struct us_loop_t *loop);
 /* Waits up to `timeout_ms` (0: not at all) and dispatches what is ready.
    Returns how many polls were ready. */
 int net_us_loop_run_once(struct us_loop_t *loop, int timeout_ms);
+/* Frees the sockets closed since the last pass; only outside a pass. */
+void net_us_loop_free_closed(struct us_loop_t *loop);
+/* Closes the handshakes of `context` waiting in the low-priority queue. */
+void net_us_loop_close_waiting(struct us_loop_t *loop, struct us_socket_context_t *context, int ssl);
 int net_us_socket_fd(struct us_socket_t *socket);
 
 #ifdef __cplusplus

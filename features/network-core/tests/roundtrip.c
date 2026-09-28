@@ -719,6 +719,46 @@ int main(void) {
         CHECK(net_ws_server_create(&lconfig) == NULL);
     }
 
+    /* Sockets that close before their upgrade give back their address's
+       share: more of them than one address may hold at once still leave it
+       free to enter. lws keeps that share for a socket closed before its
+       HTTP request, so the address stays locked out of the server. */
+    if (strncmp(net_ws_library_version(), "uWebSockets", 11U) == 0) {
+        server_log_t plog = {0};
+        net_ws_server_config_t pconfig = sconfig;
+        pconfig.user = &plog;
+        net_ws_server_t *plain = net_ws_server_create(&pconfig);
+        CHECK(plain != NULL);
+        plog.server = plain;
+        struct sockaddr_in addr;
+        memset(&addr, 0, sizeof addr);
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(net_ws_server_port(plain));
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        /* Past the per-address cap (2 x max_clients), paced under the
+           accept budget (max_clients a second). */
+        for (uint32_t index = 0U; index < 2U * pconfig.max_clients + 2U; ++index) {
+            raw_socket_t sock = socket(AF_INET, SOCK_STREAM, 0);
+            CHECK(sock != RAW_INVALID && connect(sock, (struct sockaddr *)&addr, sizeof addr) == 0);
+            pump(plain, NULL, 10);
+            raw_close(sock);
+            const double closed_at = net_ws_client_clock();
+            while (net_ws_client_clock() - closed_at < 0.6) { net_ws_server_service(plain, 50U); }
+        }
+        /* The accept budget refills; only a leaked share could still refuse. */
+        const double settled_at = net_ws_client_clock();
+        while (net_ws_client_clock() - settled_at < 2.5) { net_ws_server_service(plain, 50U); }
+        client_log_t elog = {0};
+        net_ws_client_t *entrant = connect_client(net_ws_server_port(plain), VERSION, &elog, 256U);
+        const double dialed_at = net_ws_client_clock();
+        while (elog.opens == 0U && elog.closes == 0U && net_ws_client_clock() - dialed_at < 8.0) { pump(plain, entrant, 1); }
+        pump(plain, entrant, 20);
+        CHECK(elog.opens == 1U && elog.closes == 0U && plog.connects == 1U);
+        net_ws_client_destroy(entrant);
+        pump(plain, NULL, 20);
+        net_ws_server_destroy(plain);
+    }
+
     /* Room capacity is enforced per connection. */
     client_log_t alog = {0};
     client_log_t blog = {0};

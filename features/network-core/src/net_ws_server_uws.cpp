@@ -110,6 +110,8 @@ struct net_ws_server_t {
     /* Every socket from accept on, the handshake included, and per address. */
     uint32_t sockets = 0U;
     std::unordered_map<std::string, uint32_t> per_address;
+    /* Sockets before their upgrade, and the address each was counted under. */
+    std::unordered_map<us_socket_t *, std::string> http_sockets;
     std::vector<uint8_t> scratch;
     net_ws_server_stats_t stats{};
     bool destroy_requested = false;
@@ -293,14 +295,22 @@ template <bool SSL> void progress_closes(net_ws_server_t *server) {
     }
 }
 
+/* Before its upgrade a socket is counted under the address accept() gave;
+   an upgraded one is uncounted by the WebSocket close handler instead. */
 template <bool SSL> void on_filter(net_ws_server_t *server, uWS::HttpResponse<SSL> *res, int delta) {
-    const std::string address(res->getRemoteAddressAsText());
-    count_socket(server, address, delta);
-    if (delta < 0 || server->destroying) { return; }
-    if (!accept_allowed(server) || server->sockets > socket_limit(server) ||
-        server->per_address[address] > address_limit(server)) {
-        us_socket_close(SSL, reinterpret_cast<us_socket_t *>(res), 0, nullptr);
+    auto *socket = reinterpret_cast<us_socket_t *>(res);
+    if (delta < 0) {
+        auto found = server->http_sockets.find(socket);
+        if (found == server->http_sockets.end()) { return; }
+        count_socket(server, found->second, -1);
+        server->http_sockets.erase(found);
+        return;
     }
+    std::string address(res->getRemoteAddressAsText());
+    count_socket(server, address, 1);
+    const bool over = server->sockets > socket_limit(server) || server->per_address[address] > address_limit(server);
+    server->http_sockets.emplace(socket, std::move(address));
+    if (server->destroying || over || !accept_allowed(server)) { us_socket_close(SSL, socket, 0, nullptr); }
 }
 
 template <bool SSL> void on_open(net_ws_server_t *server, Socket<SSL> *ws) {
@@ -313,7 +323,7 @@ template <bool SSL> void on_open(net_ws_server_t *server, Socket<SSL> *ws) {
     peer->pinged_at = now;
     peer->rate_at = now;
     peer->tokens = static_cast<double>(server->config.max_messages_per_second);
-    peer->address = std::string(ws->getRemoteAddressAsText());
+    if (peer->address.empty()) { peer->address = std::string(ws->getRemoteAddressAsText()); }
     if (!net_queue_init(&peer->tx, server->config.send_queue_bytes)) {
         request_close(server, peer, NET_CLOSE_FULL, NET_WS_CLOSE_PEER);
         return;
@@ -471,8 +481,11 @@ template <bool SSL> bool build(net_ws_server_t *server) {
        are small and time-critical, so none is offered. */
     behavior.compression = uWS::DISABLED;
     behavior.maxPayloadLength = std::max<uint32_t>(server->config.max_message_bytes, NET_HELLO_MAX_SIZE);
-    /* Deadlines and pings are the sweep's; the outbound bound is the queue's. */
-    behavior.idleTimeout = 0U;
+    /* Deadlines and pings are the sweep's; the outbound bound is the queue's.
+       uWebSockets' own idle timeout stays as a backstop past the hangup: it
+       is what bounds a socket after end() whose peer stops reading. */
+    behavior.idleTimeout = server->config.ping_idle_s == 0U
+        ? 0U : static_cast<unsigned short>(std::min(960U, std::max(8U, server->config.hangup_idle_s + 4U)));
     behavior.sendPingsAutomatically = false;
     behavior.maxBackpressure = 0U;
     behavior.closeOnBackpressureLimit = false;
@@ -488,14 +501,30 @@ template <bool SSL> bool build(net_ws_server_t *server) {
             }
             protocol = wanted;
         }
-        res->template upgrade<Peer>(Peer{}, key, protocol, std::string_view(), context);
+        /* The socket moves to the WebSocket context and keeps its count. */
+        Peer peer;
+        auto found = server->http_sockets.find(reinterpret_cast<us_socket_t *>(res));
+        if (found != server->http_sockets.end()) {
+            peer.address = std::move(found->second);
+            server->http_sockets.erase(found);
+        }
+        res->template upgrade<Peer>(std::move(peer), key, protocol, std::string_view(), context);
     };
     behavior.open = [server](Socket<SSL> *ws) { on_open<SSL>(server, ws); };
     behavior.message = [server](Socket<SSL> *ws, std::string_view message, uWS::OpCode op) {
         on_message<SSL>(server, ws, message, op);
     };
     behavior.drain = [server](Socket<SSL> *ws) { on_drain<SSL>(server, ws); };
-    behavior.ping = [](Socket<SSL> *ws, std::string_view) { ws->getUserData()->heard_at = now_seconds(); };
+    behavior.ping = [server](Socket<SSL> *ws, std::string_view) {
+        Peer *peer = ws->getUserData();
+        peer->heard_at = now_seconds();
+        /* uWebSockets answers every ping with a pong before this runs; a peer
+           that pings and never reads would grow that output without bound. */
+        if (ws->getBufferedAmount() > server->config.send_queue_bytes) {
+            if (peer->hello_done && !peer->close_pending) { peer->close_reason = NET_WS_CLOSE_SLOW; }
+            ws->close();
+        }
+    };
     behavior.pong = [server](Socket<SSL> *ws, std::string_view) {
         ws->getUserData()->heard_at = now_seconds();
         server->stats.rx_pongs += 1U;
@@ -516,10 +545,15 @@ template <bool SSL> bool build(net_ws_server_t *server) {
 template <bool SSL> void close_app(net_ws_server_t *server) {
     auto *app = static_cast<App<SSL> *>(server->app);
     if (app == nullptr) { return; }
+    struct us_loop_t *loop = thread_loop();
+    if (server->listen != nullptr) {
+        net_us_loop_close_waiting(loop, us_socket_context(SSL, reinterpret_cast<us_socket_t *>(server->listen)), SSL);
+    }
     app->close();
     /* Closed sockets are freed at the end of a loop pass; the app's
-       contexts may go only after that. */
-    net_us_loop_run_once(thread_loop(), 0);
+       contexts may go only after that. No pass runs here: it would run
+       other servers' callbacks inside this one's teardown. */
+    net_us_loop_free_closed(loop);
     delete app;
     server->app = nullptr;
 }
@@ -536,12 +570,23 @@ void sweep_timer(us_timer_t *timer) {
 
 void free_server(net_ws_server_t *server) {
     server->destroying = true;
+    /* Inside a pass the loop still walks sockets this would free; the
+       service that is running frees the server after its pass. */
+    if (t_in_service > 0) {
+        if (!server->destroy_requested) {
+            server->destroy_requested = true;
+            t_doomed.push_back(server);
+        }
+        return;
+    }
+    t_in_service += 1;
     if (server->sweep != nullptr) { us_timer_close(server->sweep); }
     if (server->tls) {
         close_app<true>(server);
     } else {
         close_app<false>(server);
     }
+    t_in_service -= 1;
     delete server;
 }
 
@@ -583,16 +628,6 @@ net_ws_server_t *net_ws_server_create(const net_ws_server_config_t *config) {
 
 void net_ws_server_destroy(net_ws_server_t *server) {
     if (server == nullptr) { return; }
-    server->destroying = true;
-    /* Inside a callback the loop still walks its sockets; the service that
-       is running frees the server after its pass. */
-    if (t_in_service > 0) {
-        if (!server->destroy_requested) {
-            server->destroy_requested = true;
-            t_doomed.push_back(server);
-        }
-        return;
-    }
     free_server(server);
 }
 
@@ -601,7 +636,9 @@ uint16_t net_ws_server_port(const net_ws_server_t *server) { return server->port
 uint32_t net_ws_server_client_count(const net_ws_server_t *server) { return server->client_count; }
 
 void net_ws_server_service(net_ws_server_t *server, uint32_t timeout_ms) {
-    if (server->destroying) { return; }
+    /* Not from inside a callback: a nested pass would walk the loop's ready
+       list under the running one. */
+    if (server->destroying || t_in_service > 0) { return; }
     t_in_service += 1;
     server->stats.services += 1U;
     struct us_loop_t *loop = thread_loop();

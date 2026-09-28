@@ -33,6 +33,29 @@ int net_us_loop_run_once(struct us_loop_t *loop, int timeout_ms) {
     return loop->num_ready_polls;
 }
 
+void net_us_loop_free_closed(struct us_loop_t *loop) {
+    /* What a pass's post step does: closed sockets are only unlinked until
+       then, and their contexts must outlive them. */
+    us_internal_free_closed_sockets(loop);
+}
+
+void net_us_loop_close_waiting(struct us_loop_t *loop, struct us_socket_context_t *context, int ssl) {
+    /* A TLS handshake past the per-pass budget waits in the loop's
+       low-priority queue, linked to no context, so closing its context
+       misses it; it would come back into a freed one. */
+    for (;;) {
+        struct us_socket_t *found = NULL;
+        for (struct us_socket_t *s = loop->data.low_prio_head; s != NULL; s = s->next) {
+            if (s->context == context) {
+                found = s;
+                break;
+            }
+        }
+        if (found == NULL) { return; }
+        us_socket_close(ssl, found, 0, NULL);
+    }
+}
+
 int net_us_socket_fd(struct us_socket_t *socket) {
     /* A TLS socket begins with its plain one, poll first. */
     return us_poll_fd((struct us_poll_t *)socket);
