@@ -1,0 +1,311 @@
+{
+  "name": "libuv",
+  "origin": "sourced",
+  "repository": "https://github.com/libuv/libuv.git",
+  "revision": "840404ce8ba7cc0204be52389a6cfff9f2c90fb6",
+  "version": "1.53.0",
+  "license": "MIT",
+  "copyright": "Copyright libuv project contributors",
+  "licenseFile": "vendor/libuv/LICENSE",
+  "selection": [
+    "LICENSE",
+    "LICENSE-extra",
+    "include/uv.h",
+    "include/uv/{errno,threadpool,version,win,tree}.h",
+    "src/*.c, *.h (the common core)",
+    "src/win/ (uSockets loop on Windows; unix/ left out: Linux runs uSockets on epoll)"
+  ],
+  "modifications": [],
+  "files": [
+    {
+      "path": "LICENSE",
+      "bytes": 1079,
+      "sha256": "16de0c32b265cb7d46a6d3bd614f259dd4d693a5e26b3407b04aae8d73041f0c"
+    },
+    {
+      "path": "LICENSE-extra",
+      "bytes": 1603,
+      "sha256": "262c44bd2cdba037e6d2a82fba15f5800d292bc993a6f5d6b6ea487744d02836"
+    },
+    {
+      "path": "include/uv.h",
+      "bytes": 73771,
+      "sha256": "565b25538707aa7244eb197af397e566be591b26cb66b5742ed095063946a558"
+    },
+    {
+      "path": "include/uv/errno.h",
+      "bytes": 11216,
+      "sha256": "4242edf790e4569ef349026ab4c6e31093334ee5fc02b16ed7a0d9fbacdffd16"
+    },
+    {
+      "path": "include/uv/threadpool.h",
+      "bytes": 1505,
+      "sha256": "09ae41099af710289155be012df45c2fce04da6a02e813278b4558935e645938"
+    },
+    {
+      "path": "include/uv/tree.h",
+      "bytes": 36117,
+      "sha256": "34393c74082c71ddd5bd9ec4afe30ef03df7fa7bb64be5a50ae070cdfebb5c43"
+    },
+    {
+      "path": "include/uv/version.h",
+      "bytes": 1831,
+      "sha256": "8e216f0998cae52664f5a9889a2ec921e43c7abf7970c4780ab4e1bb6262932c"
+    },
+    {
+      "path": "include/uv/win.h",
+      "bytes": 34509,
+      "sha256": "414f87cfec6fe111b893c71894bb3bf4afd1ae8e9fc601aa6cf7fb54dc3a1ca7"
+    },
+    {
+      "path": "src/fs-poll.c",
+      "bytes": 7681,
+      "sha256": "e4869036bc54bc5a881794ca6aac044c9c567361fff48dd7f02f3a4640e6d271"
+    },
+    {
+      "path": "src/heap-inl.h",
+      "bytes": 7053,
+      "sha256": "e8dbafbe40150143a740e9b1aff03c4e623ebfe5d6b5e1834a09626a303ddbc2"
+    },
+    {
+      "path": "src/idna.c",
+      "bytes": 12844,
+      "sha256": "99a7634718087d25e341ebf8ba818ee43244c6806c959e90bb78a9c765663d33"
+    },
+    {
+      "path": "src/idna.h",
+      "bytes": 1449,
+      "sha256": "d72fc711db6309e6c6ec0fc777cb0bcbcfa3942262be25d315ac469db2787559"
+    },
+    {
+      "path": "src/inet.c",
+      "bytes": 8093,
+      "sha256": "71b08670424d9e7d062a75f5554da606c2340f2dd55c3df5f4cd7f132a6b727d"
+    },
+    {
+      "path": "src/queue.h",
+      "bytes": 2671,
+      "sha256": "abdeddeefb025fcdeff7737d4d465d89081ab2c3cc08a423c042ee2093b8695a"
+    },
+    {
+      "path": "src/random.c",
+      "bytes": 3433,
+      "sha256": "67199a9dbc4b455a0a5a5d9ff53b80b269d7ad2776f2b97c33ea661978677458"
+    },
+    {
+      "path": "src/strscpy.c",
+      "bytes": 1449,
+      "sha256": "0058568b1a47d2a35ce3dd32d52463af5e066c1065fbb6dc28dd68107a978c1c"
+    },
+    {
+      "path": "src/strscpy.h",
+      "bytes": 1748,
+      "sha256": "e3e5f81613b169ccd76eee4972d37e7cd5d875ac20d578467b2e42ee5c7f4051"
+    },
+    {
+      "path": "src/strtok.c",
+      "bytes": 1656,
+      "sha256": "fdcd8971cef7aff15ed950c8d71521888eb57ab48b62196e1f4170b4cf522d2c"
+    },
+    {
+      "path": "src/strtok.h",
+      "bytes": 1271,
+      "sha256": "2bb2ed731c7afb0efb14670854bc47fe435d72e93cb7b5a1ba99fc5d0548467f"
+    },
+    {
+      "path": "src/thread-common.c",
+      "bytes": 3941,
+      "sha256": "0ce1ce99b53c1e453439fae0be62c417fca8a1850cd97be65ace5b36b306a7b9"
+    },
+    {
+      "path": "src/threadpool.c",
+      "bytes": 11507,
+      "sha256": "7699c72b9ad442a1e4ef96ce3affabffdf4cf5d66876542fab59637d1461fa4a"
+    },
+    {
+      "path": "src/timer.c",
+      "bytes": 5194,
+      "sha256": "5a2326203a3ac21b16093e0928db393e00caf919c1ede5316ac7174b72daf217"
+    },
+    {
+      "path": "src/uv-common.c",
+      "bytes": 29951,
+      "sha256": "8be5802be4ab39842e549974431be18daddf102fb2f192236344cf8008ca8aea"
+    },
+    {
+      "path": "src/uv-common.h",
+      "bytes": 18975,
+      "sha256": "d186b3b037ca384168111fe6bacd85d015e890ed732ab4a07ead3e3533ad5b04"
+    },
+    {
+      "path": "src/uv-data-getter-setters.c",
+      "bytes": 3126,
+      "sha256": "ce7fab84519adc0f9b63c268fcb5a73e643a4d9a22db125cf58db88a6acd38ee"
+    },
+    {
+      "path": "src/version.c",
+      "bytes": 1751,
+      "sha256": "53296d9934d952545064673758e3ed46c10ab52e34ce540fbab4c595a0b44bfa"
+    },
+    {
+      "path": "src/win/async.c",
+      "bytes": 3932,
+      "sha256": "f2b258626ac09a31b41490ba409b1ef3f8ec9c649bf27e37ec8e6550f61a3672"
+    },
+    {
+      "path": "src/win/core.c",
+      "bytes": 24190,
+      "sha256": "c23607fcfa6b389b96559dbcbea336469737ad0ad3b2724d9663e6293f834c9c"
+    },
+    {
+      "path": "src/win/detect-wakeup.c",
+      "bytes": 2264,
+      "sha256": "914143627a1a97fafbf64a71564dce389a877b2e5aa9797f12dbc2811bd71d7a"
+    },
+    {
+      "path": "src/win/dl.c",
+      "bytes": 4396,
+      "sha256": "2b5c586518c6e3b02108e5a47c0ae481a5059dbd2af4031bcc5402b16b013048"
+    },
+    {
+      "path": "src/win/error.c",
+      "bytes": 8817,
+      "sha256": "c804f3da1436393d1170688cb9d0210638174c0f1af03013360a7d0a7eb945a8"
+    },
+    {
+      "path": "src/win/fs-event.c",
+      "bytes": 20792,
+      "sha256": "20e696a67a5ea1e9dea28d18156f320266f8b339baf7fff2a803db0576f26ce1"
+    },
+    {
+      "path": "src/win/fs-fd-hash-inl.h",
+      "bytes": 6800,
+      "sha256": "2baf0886b443d529c5c70f3ff85be0f667da59582d93603b64f6a54ca92ac14b"
+    },
+    {
+      "path": "src/win/fs.c",
+      "bytes": 107822,
+      "sha256": "9eb94731d89c55a27ef9ead98de7d003cb2f261f14fd898c1bcef46c1607f619"
+    },
+    {
+      "path": "src/win/getaddrinfo.c",
+      "bytes": 12306,
+      "sha256": "b2d85b2bf70dffd307fd13de2119702ee57746419ac35920fb6eff1aebe6a81a"
+    },
+    {
+      "path": "src/win/getnameinfo.c",
+      "bytes": 4069,
+      "sha256": "c002f8d434ea01952671117dcc4f36bcb74cebcaf4f16b60de997afecfdac39b"
+    },
+    {
+      "path": "src/win/handle-inl.h",
+      "bytes": 5208,
+      "sha256": "e590c46ef6bf5110be61015db784d515fcef34f9dfde61b674af1c28413eabc0"
+    },
+    {
+      "path": "src/win/handle.c",
+      "bytes": 3987,
+      "sha256": "36778077a3ad0fb0ee55ccdba904e7393f74601be72be989110be4ee26ff753d"
+    },
+    {
+      "path": "src/win/internal.h",
+      "bytes": 10568,
+      "sha256": "5ea4ffdd048b99bf14f169c8859564fb27c1a95ea5e906290a6bfbada98b565d"
+    },
+    {
+      "path": "src/win/loop-watcher.c",
+      "bytes": 7998,
+      "sha256": "b349a8ebf8f330418f7d15739441fdbd648b96ae7c4161a3d1145494a0c46c3a"
+    },
+    {
+      "path": "src/win/pipe.c",
+      "bytes": 88628,
+      "sha256": "d5ce447af0526cc38e79bd5a8e59f9a30de29a83d3afce69bdfa9d2d9769eaff"
+    },
+    {
+      "path": "src/win/poll.c",
+      "bytes": 17148,
+      "sha256": "d0711a1433e870d5a776def8b4934a2b60cb3ed17e86aa77f5f97aa4ef4d36bb"
+    },
+    {
+      "path": "src/win/process-stdio.c",
+      "bytes": 12760,
+      "sha256": "7fc621cd23ba371c7c05863a927eead0a652430d26322c0a85e5cc81bb511cf3"
+    },
+    {
+      "path": "src/win/process.c",
+      "bytes": 44940,
+      "sha256": "4b9975bde42483f8915dff79c3d2a6f2da58374ac4dbad0983be0bb94442c8fe"
+    },
+    {
+      "path": "src/win/req-inl.h",
+      "bytes": 3827,
+      "sha256": "783d01defaab5afcfbdb15860fb608bab92ab74499f237f6b10ef6b732e88582"
+    },
+    {
+      "path": "src/win/signal.c",
+      "bytes": 8203,
+      "sha256": "7cbe1ec895c1fa5c974e6d59e55e6a6d7180e9c83ffbffa12691c24c44fdf1f0"
+    },
+    {
+      "path": "src/win/snprintf.c",
+      "bytes": 1546,
+      "sha256": "2596b168ad64f54e94b95779f654326c107f43e0645efa11185f8e9b04ec2f6f"
+    },
+    {
+      "path": "src/win/stream-inl.h",
+      "bytes": 2005,
+      "sha256": "071341e25de533dc19eeb3ee3ff3985caae7578c8da9109ffcf08b6574584712"
+    },
+    {
+      "path": "src/win/stream.c",
+      "bytes": 8391,
+      "sha256": "38a75ae0bb0a78bd39ae4e44645b54256c114f23c36fe0a6c9fc4de1e8af59b6"
+    },
+    {
+      "path": "src/win/tcp.c",
+      "bytes": 52015,
+      "sha256": "c7edccf4c5f672c1d448c4d9704ac7bbb4509abc27b8346134a5b89e6c568d14"
+    },
+    {
+      "path": "src/win/thread.c",
+      "bytes": 13506,
+      "sha256": "09f63fb6aaf93c2cd1bc09988bf6193de4940c85f8f6952ab51a6a2f9e126408"
+    },
+    {
+      "path": "src/win/tty.c",
+      "bytes": 79199,
+      "sha256": "4ea062dd0dfafcc23561f7cbb31b22b1522d8d0a5f7ee1ffb9e030ae634ffa2c"
+    },
+    {
+      "path": "src/win/udp.c",
+      "bytes": 36072,
+      "sha256": "81568a98b8670632f1fac81430906de9365035e077c76f47c489a27cdaf898ab"
+    },
+    {
+      "path": "src/win/util.c",
+      "bytes": 44766,
+      "sha256": "807264f6c142de6283e71e1c97baae5527d46824419a71deab8d3ff42586c3f4"
+    },
+    {
+      "path": "src/win/winapi.c",
+      "bytes": 6539,
+      "sha256": "9a54878daa60d6ca1acc3dc6032dee8803325cf9cd1c0aaa241a5c8d510ed201"
+    },
+    {
+      "path": "src/win/winapi.h",
+      "bytes": 130474,
+      "sha256": "df3c6538ad950b17a40c02e9648c1bbfc256ead3c69e342aa8a824e34744665c"
+    },
+    {
+      "path": "src/win/winsock.c",
+      "bytes": 15850,
+      "sha256": "e29db8541459f6081b3af2398949d2f6b9aa3b128a6172fc748c12d9dcabf56e"
+    },
+    {
+      "path": "src/win/winsock.h",
+      "bytes": 5980,
+      "sha256": "ab759f6d8dc22dbffae7e4eceebd1aaffa31173f64f135c0f51e9eebff11e0e5"
+    }
+  ]
+}

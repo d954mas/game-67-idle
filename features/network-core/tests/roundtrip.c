@@ -35,7 +35,7 @@ typedef int raw_socket_t;
 #define MAX_MESSAGE 64U
 
 /* The native backend owns this deterministic failure seam; it is not a
-   transport API and keeps lws write-error coverage off socket timing. */
+   transport API and keeps write-error coverage off socket timing. */
 void net_ws_server_test_fail_next_write(net_ws_server_t *server);
 void net_ws_server_test_hold_writes(net_ws_server_t *server, bool hold);
 void net_ws_server_test_partial_buffered(net_ws_server_t *server, bool buffered);
@@ -721,9 +721,8 @@ int main(void) {
 
     /* Sockets that close before their upgrade give back their address's
        share: more of them than one address may hold at once still leave it
-       free to enter. lws keeps that share for a socket closed before its
-       HTTP request, so the address stays locked out of the server. */
-    if (strncmp(net_ws_library_version(), "uWebSockets", 11U) == 0) {
+       free to enter. */
+    {
         server_log_t plog = {0};
         net_ws_server_config_t pconfig = sconfig;
         pconfig.user = &plog;

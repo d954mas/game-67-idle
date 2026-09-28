@@ -43,5 +43,6 @@ Uninstall: remove the `add_subdirectory`, the link lines, the dependency row
 and the game's message code. Nothing else is installed. Do not remove the
 shared feature while another game consumes it.
 
-Distributed binaries must carry `vendor/libwebsockets/LICENSE` (MIT) in their
-third-party notices.
+Distributed binaries must carry `vendor/uwebsockets/LICENSE` and
+`vendor/uwebsockets/uSockets/LICENSE` (Apache-2.0), and on Windows
+`vendor/libuv/LICENSE` (MIT), in their third-party notices.

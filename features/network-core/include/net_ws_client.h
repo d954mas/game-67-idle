@@ -6,8 +6,7 @@
 #include <stdint.h>
 
 /* One WebSocket connection to a room. Native builds drive libcurl's
-   WebSocket (or libwebsockets where no libcurl is built) on a thread of
-   their own, the browser build drives the page's own WebSocket; in all
+   WebSocket on a thread of their own, the browser build drives the page's own WebSocket; in all
    the socket is read the moment the network delivers, so every message
    carries its exact arrival time, and callbacks fire only from inside
    net_ws_client_service(), on the caller's thread, so the game reads the

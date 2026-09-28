@@ -5,13 +5,16 @@ consumer.
 
 ## What it does
 
-- **Server** (`net_ws_server.h`, native only): one `lws` context, one thread.
+- **Server** (`net_ws_server.h`, native only): uWebSockets on uSockets, one
+  thread; its event loop wakes for ready sockets only (epoll on Linux,
+  libuv on Windows).
   `net_ws_server_service(server, timeout_ms)` runs accept, reads, writes and
   callbacks, and returns by the timeout so a fixed simulation tick can share
   the thread. No thread per connection, no lock around the world.
 - **Client** (`net_ws_client.h`): the same header on native (a client on
-  a thread of its own: libcurl's WebSocket where the engine built it in
-  with `NT_HTTP_WEBSOCKETS`, libwebsockets otherwise) and web
+  a thread of its own on libcurl's WebSocket: the engine's curl with
+  `NT_HTTP_WEBSOCKETS`, or a consumer's own `CURL::libcurl` with the same
+  global property) and web
   (`emscripten/websocket.h`, the page's own `WebSocket`). In all the
   socket is read the moment the
   network delivers, so every message carries its exact arrival time
@@ -23,8 +26,8 @@ consumer.
   socket saw them.
 - **Workload counters** (`net_ws_server_take_stats`): plain counters of
   what the server handed the OS - messages and bytes each way, WebSocket
-  frames read, pongs, `lws_write` calls (one frame each, one TLS record each
-  under `wss://`), partial writes, full-queue refusals, writable callbacks,
+  messages read, pongs, sends handed to the socket (one frame each, one TLS
+  record each under `wss://`), partial writes, full-queue refusals, writable callbacks,
   service calls and passes, and the fullest queue since the previous take.
   No clock read or lock; they describe transport work, not syscalls.
   `net_ws_library_version()` and `net_ws_tls_library_version()` name the
@@ -42,7 +45,8 @@ consumer.
   the configured protocol version; text frames, oversize messages, reserved
   message types, a flooding sender and a client that cannot drain its queue
   are all closed with a `NET_CLOSE_*` code (4001-4006) before the application
-  hears about them. A socket that never sends HELLO, or never acknowledges a
+  hears about them; a frame past `max(max_message_bytes, NET_HELLO_MAX_SIZE)`
+  or a broken frame is closed by uWebSockets with its own standard code. A socket that never sends HELLO, or never acknowledges a
   close, is dropped after `handshake_timeout_ms`, and so is a socket that
   stalls in the TLS or HTTP handshake. Accepts are budgeted at `max_clients`
   per second (burst of twice that) and sockets short of a seat at
@@ -51,20 +55,22 @@ consumer.
   (and the client id) is earned by HELLO: sockets upgraded but not yet past
   HELLO wait in a room of `max_clients`, at most four of them from one
   address, so holding open connections without HELLO takes no seat and
-  one machine cannot fill the waiting room. A message in more than eight
-  fragments is closed as malformed. Client ids are never reused within a
+  one machine cannot fill the waiting room. A socket that closes before its
+  upgrade gives its address's share back at once. Client ids are never
+  reused within a
   server lifetime. HELLO may carry a ticket of up to
   `NET_HELLO_TICKET_MAX` opaque bytes (a seat to resume, a join code); the
   transport hands it to `on_connect` and attaches no meaning to it.
 - **Liveness is the server's**, because browsers cannot send pings: with
-  `ping_idle_s` set, a protocol ping goes out every `ping_idle_s` after the
-  last pong, and a peer whose pong is still missing `hangup_idle_s` after
-  that pong is dropped as `NET_WS_CLOSE_PEER`. Only pongs count as life, so
-  the window for the pong is the difference of the two. Browsers answer
+  `ping_idle_s` set, a peer silent for `ping_idle_s` gets a protocol ping
+  (again every `ping_idle_s` while it stays silent), and a peer silent for
+  `hangup_idle_s` is dropped as `NET_WS_CLOSE_PEER`. Any frame from the peer
+  counts as life, so an active client is never pinged. Browsers answer
   pings natively, even from a hidden tab, so a backgrounded page stays a
-  client while a dead network does not. The native client keeps lws' own
-  40 s ping / 50 s hangup toward the server; the server answers inside its
-  service loop.
+  client while a dead network does not. uWebSockets' own idle timeout stays
+  on a few seconds past the hangup as a backstop, which also bounds a
+  closing socket whose peer stops reading. A peer that pings without
+  reading is closed as slow once the pongs pile past its send queue.
 - **What stays the application's call**, exposed as config or queries rather
   than decided here: the close code of an application close
   (`net_ws_server_close(..., code)`, 4007 or a game range such as 4100+),
@@ -80,59 +86,60 @@ game. The feature carries transport and limits only.
 
 ## Performance choices
 
-No permessage-deflate (extensions are compiled out), binary frames only,
-`TCP_NODELAY` (lws default), one preallocated `LWS_PRE` scratch buffer per
-side, per-connection byte-bounded queues, and a drain loop that writes until
-the socket is choked. TLS is opt-in: built with `NETWORK_CORE_WITH_TLS`
+No permessage-deflate (never offered, zlib not linked), binary frames only,
+one preallocated scratch buffer per server, per-connection byte-bounded
+queues, and a drain that hands the socket one message at a time until it
+holds a tail. The event loop wakes for ready sockets only: libwebsockets,
+the transport before, walked every socket of the process on each wakeup in
+`poll()`, which cost it 28 % more CPU on a room's traffic and 12.7 % more
+of a room machine per player (the game's `room-ws-stack-2026-09-28.md`).
+`net_ws_server_service()` runs one bounded loop pass (`src/net_us_loop.c`)
+and repeats it while a zero-timeout pass still found something ready. TLS is opt-in: built with `NETWORK_CORE_WITH_TLS`
 (OpenSSL on the box) a server given PEM files speaks wss:// itself, which
 takes the proxy out of the game path: TLS 1.2 and 1.3 only, forward-secret
 AEAD suites, the full chain from the certificate file; built without, the
 same config refuses to create, so a plain room never poses as a secure one.
 The native client speaks wss:// through libcurl, with the box's own trust
 store (Schannel on Windows, OpenSSL elsewhere) and no second TLS library;
-`tls_insecure` in its config accepts a stand's own CA. The lws client, the
-fallback of a build without libcurl's WebSocket, stays plain ws://;
-browsers speak wss:// by themselves.
+`tls_insecure` in its config accepts a stand's own CA; browsers speak
+wss:// by themselves.
 
-The server transport is chosen at configure time: `NETWORK_CORE_SERVER=lws`
-(the default) or `uws`, uWebSockets on uSockets, Linux only for now. The
-uws server wakes through epoll for ready sockets only where lws' poll loop
-walks every socket of the process on each wakeup, which cost lws about 28 %
-more CPU on a room's traffic (the game's `room-ws-stack-2026-09-28.md`).
-Both keep the same API and session rules; uws counts any frame from the
-peer as life (lws only pongs) and closes a frame past the size cap, or a
-broken one, with uWebSockets' own standard code.
+Every server of a thread shares that thread's uWebSockets loop (it keeps one
+per thread): servicing one server runs the others' sockets too, and a
+server destroyed from inside a callback is freed after the pass. On Windows
+a pass waits at the system timer's resolution (about 15 ms) when idle; a
+ready socket still ends it at once.
 
 ## Layout
 
 ```text
 include/      public headers
-src/          net_codec.c, net_ws_server_lws.c, net_ws_server_uws.cpp,
-              net_us_loop.c (a bounded uSockets pass), net_ws_client_lws.c,
-              net_ws_client_web.c, net_queue.h (internal ring)
+src/          net_codec.c, net_ws_server_uws.cpp, net_us_loop.c (a bounded
+              uSockets pass), net_ws_client_curl.c, net_ws_client_web.c,
+              net_queue.h (internal ring)
 tests/        roundtrip.c (server + native client in one process),
-              integration.test.mjs (builds a bare consumer, checks UPSTREAM.json)
-vendor/libwebsockets/  pruned v4.5.8, MIT; see UPSTREAM.json
-vendor/uwebsockets/    uWebSockets v20.80.0 with uSockets, Apache-2.0;
-                       see UPSTREAM.uwebsockets.json
+              curl.cmake (a bare consumer's libcurl from the engine's deps),
+              integration.test.mjs (builds a bare consumer, checks the
+              UPSTREAM.*.json records)
+vendor/uwebsockets/  uWebSockets v20.80.0 with uSockets, Apache-2.0;
+                     see UPSTREAM.uwebsockets.json
+vendor/libuv/        libuv v1.53.0, MIT, Windows only; see UPSTREAM.libuv.json
 ```
 
 ## Origin
-
-libwebsockets v4.5.8, https://github.com/warmcat/libwebsockets, MIT. The
-vendored tree keeps only what the option set in `CMakeLists.txt` compiles:
-core, core-net, poll event loop, ws/h1/http/listen/pipe/raw-skt roles, unix and
-windows platform layers, misc helpers, `win32port/win32helpers`, and
-`lib/tls` (common + OpenSSL backend) for the opt-in TLS build. Removed:
-mbedTLS, HTTP/2, secure streams, extensions, plugins, mqtt/dbus/cgi/netlink
-roles, jose/cose, display-list and image decoders, test apps and examples.
-`UPSTREAM.json` records the pinned revision and per-file hashes.
 
 uWebSockets v20.80.0, https://github.com/uNetworking/uWebSockets, with its
 pinned uSockets, Apache-2.0: the headers without HTTP/3 and the client and
 cluster helpers, uSockets' core, its epoll and libuv loops and its OpenSSL
 layer. `UPSTREAM.uwebsockets.json` records both revisions and per-file
 hashes.
+
+libuv v1.53.0, https://github.com/libuv/libuv, MIT: the headers, the common
+core and the Windows backend, which is where uSockets runs on Windows; the
+Unix backend is left out, Linux runs uSockets on epoll.
+`UPSTREAM.libuv.json` records the revision and per-file hashes.
+
+Both trees are byte-for-byte upstream (`-text` in `.gitattributes`).
 
 ## Purpose
 
@@ -150,7 +157,7 @@ targets. `src/net_queue.h` and the vendored library are private.
 
 Run `node --test features/network-core/tests/integration.test.mjs` from the
 Studio root (it builds a bare consumer, runs `tests/roundtrip.c` and checks
-`UPSTREAM.json` against the vendored bytes), then
+the `UPSTREAM.*.json` records against the vendored bytes), then
 `node features/validate_contracts.mjs`, then the consuming game's
 `node tools/game.mjs test`.
 

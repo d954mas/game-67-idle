@@ -1,19 +1,20 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "network-core",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "title": "Network Core",
   "status": "opt-in",
   "kind": "gameplay-infrastructure",
-  "summary": "In-place WebSocket transport for authoritative rooms: single-threaded server and client on a pruned MIT libwebsockets, a browser client on the Emscripten WebSocket API, a bounded little-endian codec, and the HELLO version gate, message and queue limits, and rate limit every room shares.",
+  "summary": "In-place WebSocket transport for authoritative rooms: single-threaded server on uWebSockets (epoll on Linux, libuv on Windows), a native client on libcurl's WebSocket, a browser client on the Emscripten WebSocket API, a bounded little-endian codec, and the HELLO version gate, message and queue limits, and rate limit every room shares.",
   "copy_model": "in-place",
   "layer": "L1",
   "owners": [
     "features/network-core"
   ],
   "dependencies": [
-    "vendored libwebsockets v4.5.8 (MIT) for native builds, TLS off",
-    "vendored uWebSockets v20.80.0 with uSockets (Apache-2.0) for the opt-in uws server on Linux",
+    "vendored uWebSockets v20.80.0 with uSockets (Apache-2.0) for the native server",
+    "vendored libuv v1.53.0 (MIT) for the native server on Windows",
+    "CURL::libcurl with WebSockets (NT_HTTP_WEBSOCKETS) for the native client",
     "emscripten websocket.h (-lwebsocket.js) for web builds"
   ],
   "commands": {

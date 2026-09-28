@@ -71,15 +71,20 @@ constexpr int SWEEP_MS = 250;
 
 thread_local int t_in_service = 0;
 thread_local std::vector<net_ws_server_t *> t_doomed;
-thread_local bool t_integrated = false;
+struct LoopHold {
+    struct us_loop_t *loop;
+    ~LoopHold() { net_us_loop_release(loop); }
+};
 
 struct us_loop_t *thread_loop() {
     auto *loop = reinterpret_cast<struct us_loop_t *>(uWS::Loop::get());
-    if (!t_integrated) {
+    /* Built right after uWebSockets' own per-thread loop, so destroyed
+       before it: what the passes hold on the loop goes first. */
+    thread_local LoopHold hold = [loop]() {
         net_us_loop_integrate(loop);
-        t_integrated = true;
-    }
-    return loop;
+        return LoopHold{loop};
+    }();
+    return hold.loop;
 }
 
 } // namespace

@@ -110,27 +110,27 @@ size_t net_ws_server_queued_bytes(const net_ws_server_t *server, uint32_t client
 double net_ws_server_receive_age(const net_ws_server_t *server, uint32_t client);
 bool net_ws_server_reports_arrival(void);
 /* Cumulative workload the server handed the OS, for observability. It
-   describes application and transport work, not syscalls: lws may merge or
-   split a write in the kernel. Plain counters, no clock reads or locks. */
+   describes application and transport work, not syscalls: the kernel may
+   merge or split a write. Plain counters, no clock reads or locks. */
 typedef struct net_ws_server_stats_t {
     uint64_t rx_messages;      /* application messages handed to on_message */
     uint64_t rx_bytes;         /* their bytes */
-    uint64_t rx_frames;        /* data fragments read, HELLO and refused ones included */
-    uint64_t rx_pongs;         /* pongs to the server's liveness pings; lws sends the pings itself */
+    uint64_t rx_frames;        /* data messages read, HELLO and refused ones included */
+    uint64_t rx_pongs;         /* pongs to the server's liveness pings */
     uint64_t tx_messages;      /* messages admitted to a queue */
     uint64_t tx_bytes;         /* their bytes */
-    uint64_t tx_writes;        /* lws_write calls: one WebSocket frame each, one TLS record each under wss:// */
-    uint64_t tx_partial;       /* writes the socket took only in part; lws keeps the tail */
+    uint64_t tx_writes;        /* sends handed to the socket: one WebSocket frame each, one TLS record each under wss:// */
+    uint64_t tx_partial;       /* writes the socket took only in part; the transport keeps the tail */
     uint64_t tx_refused;       /* sends refused by a full queue (each closes its client as slow) */
     uint64_t writable;         /* writable callbacks */
     uint64_t services;         /* net_ws_server_service calls */
-    uint64_t service_passes;   /* lws_service passes they ran */
+    uint64_t service_passes;   /* event loop passes they ran */
     uint32_t queue_peak_bytes; /* the fullest one client's queue got since the previous take */
 } net_ws_server_stats_t;
 
 /* Copies the counters and restarts the peak. */
 void net_ws_server_take_stats(net_ws_server_t *server, net_ws_server_stats_t *out);
-/* The linked libwebsockets and TLS library versions ("none" without TLS). */
+/* The WebSocket server library and TLS library versions ("none" without TLS). */
 const char *net_ws_library_version(void);
 const char *net_ws_tls_library_version(void);
 

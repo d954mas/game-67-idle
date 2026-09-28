@@ -20,6 +20,7 @@ test("a bare consumer builds the transport and passes the roundtrip", () => {
   writeFileSync(join(dir, "CMakeLists.txt"), [
     "cmake_minimum_required(VERSION 3.25)",
     "project(consumer LANGUAGES C)",
+    `include("${feature}/tests/curl.cmake")`,
     `add_subdirectory("${feature}" network_core)`,
     `add_executable(roundtrip "${feature}/tests/roundtrip.c")`,
     "target_link_libraries(roundtrip PRIVATE nt::network_core)",
@@ -36,8 +37,8 @@ test("a bare consumer builds the transport and passes the roundtrip", () => {
 });
 
 for (const [record, dir, license, least] of [
-  ["UPSTREAM.json", "vendor/libwebsockets", "MIT", 100],
   ["UPSTREAM.uwebsockets.json", "vendor/uwebsockets", "Apache-2.0", 40],
+  ["UPSTREAM.libuv.json", "vendor/libuv", "MIT", 40],
 ]) {
   test(`${dir} matches its pinned integrity record`, () => {
     const manifest = JSON.parse(readFileSync(join(feature, record), "utf8"));
