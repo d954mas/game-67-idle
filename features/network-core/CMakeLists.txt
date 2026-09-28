@@ -119,10 +119,44 @@ else()
     else()
         set(network_core_client "${NETWORK_CORE_DIR}/src/net_ws_client_lws.c")
     endif()
+    # The server transport: lws, or uws (uWebSockets on uSockets, epoll; Linux).
+    set(NETWORK_CORE_SERVER "lws" CACHE STRING "Server transport: lws or uws")
+    if(NETWORK_CORE_SERVER STREQUAL "uws")
+        if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            message(FATAL_ERROR "NETWORK_CORE_SERVER=uws drives uSockets' epoll loop: Linux only")
+        endif()
+        enable_language(CXX)
+        set(network_core_us "${NETWORK_CORE_DIR}/vendor/uwebsockets/uSockets/src")
+        add_library(network_core_usockets STATIC
+            "${network_core_us}/bsd.c" "${network_core_us}/context.c" "${network_core_us}/loop.c"
+            "${network_core_us}/socket.c" "${network_core_us}/udp.c" "${network_core_us}/eventing/epoll_kqueue.c")
+        target_include_directories(network_core_usockets SYSTEM PUBLIC "${network_core_us}")
+        if(NETWORK_CORE_WITH_TLS)
+            find_package(OpenSSL REQUIRED)
+            target_sources(network_core_usockets PRIVATE
+                "${network_core_us}/crypto/openssl.c" "${network_core_us}/crypto/sni_tree.cpp")
+            target_compile_definitions(network_core_usockets PUBLIC LIBUS_USE_OPENSSL)
+            target_link_libraries(network_core_usockets PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+        else()
+            target_compile_definitions(network_core_usockets PUBLIC LIBUS_NO_SSL)
+        endif()
+        target_compile_features(network_core_usockets PUBLIC cxx_std_20)
+        set(network_core_server "${NETWORK_CORE_DIR}/src/net_ws_server_uws.cpp" "${NETWORK_CORE_DIR}/src/net_us_loop.c")
+    else()
+        set(network_core_server "${NETWORK_CORE_DIR}/src/net_ws_server_lws.c")
+    endif()
     add_library(network_core STATIC
-        "${NETWORK_CORE_DIR}/src/net_ws_server_lws.c"
+        ${network_core_server}
         "${network_core_client}")
     target_link_libraries(network_core PUBLIC network_core_codec PRIVATE websockets)
+    if(NETWORK_CORE_SERVER STREQUAL "uws")
+        target_include_directories(network_core SYSTEM PRIVATE "${NETWORK_CORE_DIR}/vendor/uwebsockets/src")
+        # No permessage-deflate is ever offered, so zlib is not linked.
+        target_compile_definitions(network_core PRIVATE UWS_NO_ZLIB NETWORK_CORE_UWS_VERSION="20.80.0")
+        # The server is C++ behind a C API: a C consumer's link step, which
+        # knows nothing of C++, still needs its runtime.
+        target_link_libraries(network_core PRIVATE network_core_usockets PUBLIC stdc++)
+    endif()
     if(network_core_client MATCHES "curl")
         target_link_libraries(network_core PRIVATE CURL::libcurl)
     endif()

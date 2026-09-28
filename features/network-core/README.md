@@ -94,15 +94,27 @@ store (Schannel on Windows, OpenSSL elsewhere) and no second TLS library;
 fallback of a build without libcurl's WebSocket, stays plain ws://;
 browsers speak wss:// by themselves.
 
+The server transport is chosen at configure time: `NETWORK_CORE_SERVER=lws`
+(the default) or `uws`, uWebSockets on uSockets, Linux only for now. The
+uws server wakes through epoll for ready sockets only where lws' poll loop
+walks every socket of the process on each wakeup, which cost lws about 28 %
+more CPU on a room's traffic (the game's `room-ws-stack-2026-09-28.md`).
+Both keep the same API and session rules; uws counts any frame from the
+peer as life (lws only pongs) and closes a frame past the size cap, or a
+broken one, with uWebSockets' own standard code.
+
 ## Layout
 
 ```text
 include/      public headers
-src/          net_codec.c, net_ws_server_lws.c, net_ws_client_lws.c,
+src/          net_codec.c, net_ws_server_lws.c, net_ws_server_uws.cpp,
+              net_us_loop.c (a bounded uSockets pass), net_ws_client_lws.c,
               net_ws_client_web.c, net_queue.h (internal ring)
 tests/        roundtrip.c (server + native client in one process),
               integration.test.mjs (builds a bare consumer, checks UPSTREAM.json)
 vendor/libwebsockets/  pruned v4.5.8, MIT; see UPSTREAM.json
+vendor/uwebsockets/    uWebSockets v20.80.0 with uSockets, Apache-2.0;
+                       see UPSTREAM.uwebsockets.json
 ```
 
 ## Origin
@@ -115,6 +127,12 @@ windows platform layers, misc helpers, `win32port/win32helpers`, and
 mbedTLS, HTTP/2, secure streams, extensions, plugins, mqtt/dbus/cgi/netlink
 roles, jose/cose, display-list and image decoders, test apps and examples.
 `UPSTREAM.json` records the pinned revision and per-file hashes.
+
+uWebSockets v20.80.0, https://github.com/uNetworking/uWebSockets, with its
+pinned uSockets, Apache-2.0: the headers without HTTP/3 and the client and
+cluster helpers, uSockets' core, its epoll and libuv loops and its OpenSSL
+layer. `UPSTREAM.uwebsockets.json` records both revisions and per-file
+hashes.
 
 ## Purpose
 

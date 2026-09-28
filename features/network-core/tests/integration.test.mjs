@@ -35,14 +35,19 @@ test("a bare consumer builds the transport and passes the roundtrip", () => {
   run("ctest", ["--test-dir", join(dir, "build"), "--output-on-failure"], dir);
 });
 
-test("the vendored libwebsockets matches its pinned integrity record", () => {
-  const manifest = JSON.parse(readFileSync(join(feature, "UPSTREAM.json"), "utf8"));
-  assert.equal(manifest.license, "MIT");
-  assert.equal(manifest.modifications.length, 0);
-  assert.ok(manifest.files.length > 100);
-  for (const row of manifest.files) {
-    const bytes = readFileSync(join(feature, "vendor/libwebsockets", row.path));
-    assert.equal(bytes.length, row.bytes, row.path);
-    assert.equal(createHash("sha256").update(bytes).digest("hex"), row.sha256, row.path);
-  }
-});
+for (const [record, dir, license, least] of [
+  ["UPSTREAM.json", "vendor/libwebsockets", "MIT", 100],
+  ["UPSTREAM.uwebsockets.json", "vendor/uwebsockets", "Apache-2.0", 40],
+]) {
+  test(`${dir} matches its pinned integrity record`, () => {
+    const manifest = JSON.parse(readFileSync(join(feature, record), "utf8"));
+    assert.equal(manifest.license, license);
+    assert.equal(manifest.modifications.length, 0);
+    assert.ok(manifest.files.length > least);
+    for (const row of manifest.files) {
+      const bytes = readFileSync(join(feature, dir, row.path));
+      assert.equal(bytes.length, row.bytes, row.path);
+      assert.equal(createHash("sha256").update(bytes).digest("hex"), row.sha256, row.path);
+    }
+  });
+}
