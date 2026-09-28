@@ -9,6 +9,9 @@
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #endif
+#if NET_WS_TLS
+#include <openssl/crypto.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -59,6 +62,7 @@ struct net_ws_server_t {
     uint8_t *tx_scratch;       /* LWS_PRE + largest queued message */
     bool in_service;
     uint32_t pass_reads;       /* receive callbacks in the current pass */
+    net_ws_server_stats_t stats;
     bool destroy_requested;
     bool destroying;
     bool test_fail_next_write;
@@ -226,6 +230,8 @@ static void on_complete_message(net_ws_server_t *server, struct lws *wsi, sessio
         request_close(server, wsi, session, NET_CLOSE_FORMAT, NET_WS_CLOSE_PROTOCOL);
         return;
     }
+    server->stats.rx_messages += 1U;
+    server->stats.rx_bytes += session->rx_size;
     if (!server->destroying && server->config.on_message != NULL) {
         server->config.on_message(server->config.user, session->id, session->rx, session->rx_size);
     }
@@ -233,6 +239,7 @@ static void on_complete_message(net_ws_server_t *server, struct lws *wsi, sessio
 
 static int on_receive(net_ws_server_t *server, struct lws *wsi, session_t *session,
     const uint8_t *data, size_t size) {
+    server->stats.rx_frames += 1U;
     if (session->close_pending) { return 0; }
     if (lws_is_first_fragment(wsi)) {
         session->rx_size = 0U;
@@ -276,7 +283,10 @@ static int write_message(net_ws_server_t *server, struct lws *wsi, uint8_t *data
         server->test_fail_next_write = false;
         return -1;
     }
-    return lws_write(wsi, data, size, LWS_WRITE_BINARY);
+    server->stats.tx_writes += 1U;
+    const int written = lws_write(wsi, data, size, LWS_WRITE_BINARY);
+    if (written >= 0 && lws_partial_buffered(wsi)) { server->stats.tx_partial += 1U; }
+    return written;
 }
 
 static bool partial_buffered(const net_ws_server_t *server, struct lws *wsi) {
@@ -354,8 +364,10 @@ static int protocol_callback(struct lws *wsi, enum lws_callback_reasons reason,
     case LWS_CALLBACK_RECEIVE_PONG:
         /* A record read all the same: the next record may be waiting. */
         server_of(wsi)->pass_reads += 1U;
+        server_of(wsi)->stats.rx_pongs += 1U;
         return 0;
     case LWS_CALLBACK_SERVER_WRITEABLE:
+        server_of(wsi)->stats.writable += 1U;
         return on_writeable(server_of(wsi), wsi, session);
     case LWS_CALLBACK_CLOSED:
         on_closed(server_of(wsi), session);
@@ -527,6 +539,7 @@ uint32_t net_ws_server_client_count(const net_ws_server_t *server) {
 void net_ws_server_service(net_ws_server_t *server, uint32_t timeout_ms) {
     if (server->destroying) { return; }
     server->in_service = true;
+    server->stats.services += 1U;
     /* lws ignores a positive service timeout; a scheduled no-op is what
        bounds the poll wait to the caller's deadline. A zero-delay timer
        would fire before the poll and leave it unbounded, so zero maps to
@@ -539,12 +552,14 @@ void net_ws_server_service(net_ws_server_t *server, uint32_t timeout_ms) {
            has arrived. */
         for (uint32_t pass = 0U; pass < 8U; ++pass) {
             server->pass_reads = 0U;
+            server->stats.service_passes += 1U;
             lws_service(server->context, -1);
             if (server->pass_reads == 0U || server->destroy_requested) { break; }
         }
     } else {
         lws_sul_schedule(server->context, 0, &server->wake, wake_noop,
             (lws_usec_t)timeout_ms * LWS_US_PER_MS);
+        server->stats.service_passes += 1U;
         lws_service(server->context, 0);
     }
     server->in_service = false;
@@ -563,12 +578,23 @@ static bool session_live(const session_t *session) {
     return session->hello_done && !session->close_pending && !session->terminal;
 }
 
+static bool admit(net_ws_server_t *server, session_t *session, const uint8_t *data, size_t size) {
+    if (!net_queue_push(&session->tx, data, size)) {
+        server->stats.tx_refused += 1U;
+        return false;
+    }
+    server->stats.tx_messages += 1U;
+    server->stats.tx_bytes += size;
+    if (session->tx.used > server->stats.queue_peak_bytes) { server->stats.queue_peak_bytes = (uint32_t)session->tx.used; }
+    return true;
+}
+
 bool net_ws_server_send(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size) {
     struct lws *wsi = wsi_for(server, client);
     if (wsi == NULL || size == 0U) { return false; }
     session_t *session = session_of(wsi);
     if (!session_live(session)) { return false; }
-    if (!net_queue_push(&session->tx, data, size)) {
+    if (!admit(server, session, data, size)) {
         terminal_close(server, wsi, session);
         return false;
     }
@@ -593,7 +619,7 @@ bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const u
        in lws's own buffer once popped, so nothing here cuts a frame. */
     const size_t dropped = net_queue_drop_kind(&session->tx, data[0]);
     if (replaced != NULL) { *replaced = dropped; }
-    if (!net_queue_push(&session->tx, data, size)) {
+    if (!admit(server, session, data, size)) {
         terminal_close(server, wsi, session);
         return false;
     }
@@ -626,6 +652,21 @@ double net_ws_server_receive_age(const net_ws_server_t *server, uint32_t client)
 size_t net_ws_server_queued_bytes(const net_ws_server_t *server, uint32_t client) {
     struct lws *wsi = wsi_for(server, client);
     return wsi == NULL ? 0U : session_of(wsi)->tx.used;
+}
+
+void net_ws_server_take_stats(net_ws_server_t *server, net_ws_server_stats_t *out) {
+    *out = server->stats;
+    server->stats.queue_peak_bytes = 0U;
+}
+
+const char *net_ws_library_version(void) { return lws_get_library_version(); }
+
+const char *net_ws_tls_library_version(void) {
+#if NET_WS_TLS
+    return OpenSSL_version(OPENSSL_VERSION);
+#else
+    return "none";
+#endif
 }
 
 void net_ws_server_close(net_ws_server_t *server, uint32_t client, uint16_t code) {

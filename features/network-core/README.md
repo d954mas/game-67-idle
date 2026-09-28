@@ -21,6 +21,14 @@ consumer.
   when the wake pipe is unavailable. Callbacks still fire only from
   `net_ws_client_service()`, on the caller's thread, in the order the
   socket saw them.
+- **Workload counters** (`net_ws_server_take_stats`): plain counters of
+  what the server handed the OS - messages and bytes each way, WebSocket
+  frames read, pongs, `lws_write` calls (one frame each, one TLS record each
+  under `wss://`), partial writes, full-queue refusals, writable callbacks,
+  service calls and passes, and the fullest queue since the previous take.
+  No clock read or lock; they describe transport work, not syscalls.
+  `net_ws_library_version()` and `net_ws_tls_library_version()` name the
+  linked libraries for run records.
 - **Codec** (`net_codec.h`): bounded little-endian reader/writer. A read past
   the end clears `ok` and returns zero; the caller checks once at the end.
   Fixed-point fields: a `net_grid_t` (`min`, `step`, `bits`) names the grid a

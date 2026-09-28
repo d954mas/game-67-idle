@@ -412,6 +412,15 @@ int main(void) {
     pump(server, client, 50);
     CHECK(slog.messages == 1U && clog.messages == 1U);
     CHECK(clog.last_size == sizeof ping && memcmp(clog.last, ping, sizeof ping) == 0);
+    /* The echo is one message each way: HELLO is a frame, not a message. */
+    net_ws_server_stats_t stats;
+    net_ws_server_take_stats(server, &stats);
+    CHECK(stats.rx_messages == 1U && stats.rx_bytes == sizeof ping && stats.rx_frames == 2U);
+    CHECK(stats.tx_messages == 1U && stats.tx_bytes == sizeof ping && stats.tx_writes == 1U && stats.tx_refused == 0U);
+    CHECK(stats.queue_peak_bytes == sizeof ping + 4U && stats.services > 0U && stats.service_passes >= stats.services);
+    net_ws_server_take_stats(server, &stats);
+    CHECK(stats.queue_peak_bytes == 0U && stats.rx_messages == 1U);
+    CHECK(strlen(net_ws_library_version()) > 0U && strlen(net_ws_tls_library_version()) > 0U);
     /* Stamped on arrival: after the send, before this service pass. */
     CHECK(clog.last_received_at > 0.0 && clog.last_received_at <= net_ws_client_clock());
 
