@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "game-state",
-  "version": "4.8.0",
+  "version": "4.9.0",
   "title": "Game State",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -60,6 +60,7 @@
       "features/game-state/src/game_state_json.c",
       "features/game-state/src/game_save_writer.c",
       "features/game-state/src/game_save_text.c",
+      "features/game-state/src/game_save_text_json.c",
       "features/game-state/src/game_storage.c",
       "features/game-state/src/game_save.c",
       "features/game-state/src/game_save_sync.c",

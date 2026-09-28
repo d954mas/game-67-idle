@@ -72,6 +72,7 @@ features/game-state/
     game_save.h
     game_save_seal.h
     game_save_text.h
+    game_save_text_json.h
     game_state_doc.h
     game_state_json.h
     game_storage.h
@@ -81,6 +82,7 @@ features/game-state/
     game_save_platform_native.c
     game_save_platform_web.c
     game_save_text.c
+    game_save_text_json.c
     game_state_json.c
     game_storage.c
     game_storage_backend.h
@@ -157,7 +159,13 @@ the platform transport. Compile the shared source in place; do not copy it
 into each game.
 
 The game supplies its progress policy and controls startup, tick, and the
-safe point where a remote save may replace live state. Successful adoption
+safe point where a remote save may replace live state. The policy receives
+documents in their stored format -- NTGS text, or JSON from a legacy save -- so
+it must not assume JSON. `game_save_text_json_parse` (`game_save_text_json.h`)
+reads either into the JSON document shape without registered fragments or
+`game_state_json.c`, so it also links into the text-only shell, whose
+`game_save_validate_document_string` refuses every document. It does not undo
+save transforms, and an empty object is absent after the round trip. Successful adoption
 returns true so the game can rebind its own world and UI. A single
 `game_save_choice_t` carries automatic and player decisions. Contradictory
 progress can remain a conflict for game-owned UI. No generic layer interprets
@@ -356,6 +364,13 @@ fragments and every existing API are unchanged. One behaviour is new: before a
 cloud adoption replaces a non-fresh local save that differs from the cloud one,
 the registered-save coordinator keeps it in a four-slot ring
 (`cloud_sync_displaced_0..3`), and adopts only once that copy is durable.
+
+Version `4.9.0` adds `game_save_text_json_parse` in the new
+`src/game_save_text_json.c`, so a game's save policy can read stored NTGS
+documents; add that source where the policy is compiled. A policy that tested
+for a leading `{` never saw an NTGS document as readable and always kept the
+local save. `game_save_cloud_config_t.boot_wait_sec` lets the first cloud read
+wait out an SDK's own startup deadline. Existing APIs are unchanged.
 
 ## Extension points
 

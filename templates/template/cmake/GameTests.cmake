@@ -351,6 +351,13 @@ if(NOT EMSCRIPTEN)
         SOURCES "${GAME_STATE_DIR}/tests/test_game_save_text.c" "${GAME_STATE_SRC}/game_save_text.c"
         INCLUDES "${GAME_STATE_INC}" "${GAME_STATE_SRC}")
 
+    game_add_c_test(test_game_save_text_json
+        SOURCES "${GAME_STATE_DIR}/tests/test_game_save_text_json.c"
+                "${GAME_STATE_SRC}/game_save_text_json.c" "${GAME_STATE_SRC}/game_save_text.c"
+                "${GAME_STATE_SRC}/game_state_json.c"
+        LIBS cjson
+        INCLUDES "${GAME_STATE_INC}" "${GAME_STATE_SRC}")
+
     game_add_c_test(test_game_save_writer
         SOURCES "${GAME_STATE_DIR}/tests/test_game_save_writer.c"
                 "${GAME_STATE_SRC}/game_save_writer.c" "${GAME_STATE_SRC}/game_save_text.c"
@@ -1000,6 +1007,8 @@ if(NOT EMSCRIPTEN)
     game_add_c_test(test_game_save_policy
         SOURCES tests/test_game_save_policy.c src/game_save_policy.c
                 "${GAME_STATE_SRC}/game_state_json.c"
+                "${GAME_STATE_SRC}/game_save_text.c"
+                "${GAME_STATE_SRC}/game_save_text_json.c"
                 "${ENGINE_DIR}/deps/cjson/cJSON.c"
         INCLUDES src "${GAME_STATE_INC}" "${ENGINE_DIR}/engine" "${ENGINE_DIR}/deps/cjson"
         DEFINES NT_DEVAPI_ENABLED=0
@@ -1124,6 +1133,7 @@ if(NOT EMSCRIPTEN)
         tests/test_template_composition.c
         src/game_items.c
         src/game_save_policy.c src/game_save_policy_validator.c
+        "${GAME_STATE_SRC}/game_save_text_json.c"
         "${GAME_STATE_SRC}/game_save.c" "${GAME_STATE_SRC}/game_save_writer.c" "${GAME_STATE_SRC}/game_storage.c"
         "${GAME_STATE_SRC}/game_storage_backend_native.c"
         "${GAME_STATE_SRC}/game_state_json.c" "${GAME_EVENTS_SRC}/game_events.c"

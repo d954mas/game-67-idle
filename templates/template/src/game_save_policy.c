@@ -3,6 +3,7 @@
 #include <limits.h>
 
 #include "game_save.h"
+#include "game_save_text_json.h"
 #include "game_state_json.h"
 
 typedef struct game_save_progress {
@@ -29,7 +30,9 @@ static bool read_progress(const cJSON *document, game_save_progress_t *out,
         ? cJSON_GetObjectItemCaseSensitive(tracks, "hero") : NULL;
     if (!cJSON_IsObject(features) || !cJSON_IsObject(game) ||
         !cJSON_IsObject(progression) || !cJSON_IsObject(tutorial) ||
-        !cJSON_IsBool(done) || !cJSON_IsObject(tracks)) return false;
+        !cJSON_IsBool(done) ||
+        /* NTGS writes no record for an empty map: no track yet reads as absent. */
+        (tracks != NULL && !cJSON_IsObject(tracks))) return false;
 
     int hero_level = 0;
     if (hero != NULL) {
@@ -54,9 +57,9 @@ static bool read_progress(const cJSON *document, game_save_progress_t *out,
 static bool parse_progress(const char *document, cJSON **root_out,
                            game_save_progress_t *progress_out,
                            const cJSON **features_out) {
-    if (document == NULL || document[0] != '{' ||
-        !game_save_validate_document_string(document, NULL, 0)) return false;
-    cJSON *root = cJSON_Parse(document);
+    /* Storage and the cloud carry NTGS text, not JSON. */
+    if (document == NULL || !game_save_validate_document_string(document, NULL, 0)) return false;
+    cJSON *root = game_save_text_json_parse(document, NULL, 0);
     if (root == NULL || !read_progress(root, progress_out, features_out)) {
         cJSON_Delete(root);
         return false;
