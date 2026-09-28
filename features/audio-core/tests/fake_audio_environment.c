@@ -35,6 +35,7 @@ static uint32_t s_stream_opens;
 static uint32_t s_clip_destroys;
 static uint32_t s_voice_stops;
 static uint32_t s_mix_applies;
+static uint32_t s_gain_sets;
 static uint32_t s_gestures;
 static uint32_t s_shutdowns;
 static uint32_t s_plays;
@@ -57,6 +58,7 @@ void fake_audio_reset(void) {
     s_clip_destroys = 0;
     s_voice_stops = 0;
     s_mix_applies = 0;
+    s_gain_sets = 0;
     s_gestures = 0;
     s_shutdowns = 0;
     s_plays = 0;
@@ -140,6 +142,7 @@ uint32_t fake_audio_backend_stream_open_count(void) { return s_stream_opens; }
 uint32_t fake_audio_backend_clip_destroy_count(void) { return s_clip_destroys; }
 uint32_t fake_audio_backend_voice_stop_count(void) { return s_voice_stops; }
 uint32_t fake_audio_backend_mix_apply_count(void) { return s_mix_applies; }
+uint32_t fake_audio_backend_gain_set_count(void) { return s_gain_sets; }
 uint32_t fake_audio_backend_gesture_count(void) { return s_gestures; }
 uint32_t fake_audio_backend_shutdown_count(void) { return s_shutdowns; }
 uint32_t fake_audio_backend_play_count(void) { return s_plays; }
@@ -230,6 +233,7 @@ bool audio_core_backend_voice_active(uint32_t voice) {
 }
 
 void audio_core_backend_voice_set_gain(uint32_t voice, float gain) {
+    ++s_gain_sets;
     if (voice > 0 && voice <= FAKE_LIMIT && s_voices[voice - 1].used) s_voices[voice - 1].gain = gain;
 }
 

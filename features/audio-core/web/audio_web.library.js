@@ -90,22 +90,12 @@ mergeInto(LibraryManager.library, {
       return value > 1 ? 1 : value;
     },
 
-    // The cache lives on the node itself, so a freshly created node (init,
-    // rebuild) has no cached value and always gets its first real write; only
-    // a call that would repeat the value already written to that node is
-    // skipped.
-    _writeGain: function(node, value) {
-      if (!node || node._mixCache === value) return;
-      node._mixCache = value;
-      node.gain.value = value;
-    },
-
     _applyMix: function() {
       if (!AudioWebRuntime.masterNode) return;
       var audible = AudioWebRuntime.enabled && !AudioWebRuntime.paused && !AudioWebRuntime.hidden;
-      AudioWebRuntime._writeGain(AudioWebRuntime.masterNode, audible ? AudioWebRuntime.masterGain : 0);
-      AudioWebRuntime._writeGain(AudioWebRuntime.musicNode, AudioWebRuntime.musicGain);
-      AudioWebRuntime._writeGain(AudioWebRuntime.sfxNode, AudioWebRuntime.sfxGain);
+      AudioWebRuntime.masterNode.gain.value = audible ? AudioWebRuntime.masterGain : 0;
+      AudioWebRuntime.musicNode.gain.value = AudioWebRuntime.musicGain;
+      AudioWebRuntime.sfxNode.gain.value = AudioWebRuntime.sfxGain;
     },
 
     _suspendForPolicy: function() {

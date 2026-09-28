@@ -24,6 +24,7 @@ typedef struct audio_voice_slot_t {
     uint32_t clip_index;
     uint32_t clip_generation;
     uint64_t serial;
+    float gain; // as last handed to the backend
     bool occupied;
     bool loop;
 } audio_voice_slot_t;
@@ -225,9 +226,11 @@ audio_voice_t audio_play(audio_clip_t clip, audio_bus_t bus, float gain, bool lo
         if (voice_index == AUDIO_MAX_VOICES) return AUDIO_VOICE_INVALID;
         release_voice(voice_index);
     }
-    uint32_t backend = audio_core_backend_voice_play(clip_entry->backend, (uint32_t)bus, finite_gain(gain), loop);
+    gain = finite_gain(gain);
+    uint32_t backend = audio_core_backend_voice_play(clip_entry->backend, (uint32_t)bus, gain, loop);
     if (backend == 0) return AUDIO_VOICE_INVALID;
     audio_voice_slot_t *voice = &s_voices[voice_index];
+    voice->gain = gain;
     voice->occupied = true;
     voice->backend = backend;
     voice->clip_index = clip_index;
@@ -249,7 +252,11 @@ bool audio_voice_is_playing(audio_voice_t voice) {
 
 void audio_voice_set_gain(audio_voice_t voice, float gain) {
     audio_voice_slot_t *slot = voice_slot(voice, NULL);
-    if (slot != NULL && isfinite(gain)) audio_core_backend_voice_set_gain(slot->backend, finite_gain(gain));
+    if (slot == NULL || !isfinite(gain)) return;
+    gain = finite_gain(gain);
+    if (gain == slot->gain) return;
+    slot->gain = gain;
+    audio_core_backend_voice_set_gain(slot->backend, gain);
 }
 
 void audio_voice_set_pitch(audio_voice_t voice, float pitch) {
@@ -261,10 +268,15 @@ void audio_voice_set_pitch(audio_voice_t voice, float pitch) {
     audio_core_backend_voice_set_pitch(slot->backend, pitch);
 }
 
+// Games set the mix every frame; the backend hears only a change.
 void audio_set_mix(float master, float music, float sfx) {
-    s_master = finite_gain(master);
-    s_music = finite_gain(music);
-    s_sfx = finite_gain(sfx);
+    master = finite_gain(master);
+    music = finite_gain(music);
+    sfx = finite_gain(sfx);
+    if (master == s_master && music == s_music && sfx == s_sfx) return;
+    s_master = master;
+    s_music = music;
+    s_sfx = sfx;
     if (s_initialized && s_status.available) audio_core_backend_set_mix(s_master, s_music, s_sfx);
 }
 

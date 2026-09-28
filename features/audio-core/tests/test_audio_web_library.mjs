@@ -6,13 +6,7 @@ import vm from "node:vm";
 const LIBRARY_PATH = new URL("../web/audio_web.library.js", import.meta.url);
 
 class FakeAudioParam {
-  constructor() {
-    this._value = 1;
-    this.writes = 0; // how many times .value was assigned, to prove a dirty-check skip
-  }
-
-  get value() { return this._value; }
-  set value(next) { this._value = next; this.writes += 1; }
+  constructor() { this.value = 1; }
 }
 
 class FakeNode {
@@ -356,30 +350,7 @@ test("play creates one source and gain per voice and ended state is polled", asy
   assert.equal(voiceGain.gain.value, 0.6);
 });
 
-test("setMix skips an AudioParam write when the value did not change", async () => {
-  const { library } = await loadLibrary();
-  library.audio_web_init();
-  const runtime = library.$AudioWebRuntime;
-  const master = runtime.masterNode.gain;
-  const music = runtime.musicNode.gain;
-  const sfx = runtime.sfxNode.gain;
-  const writesAfterInit = master.writes;
-
-  library.audio_web_set_mix(1, 1, 1); // identical to the mix init already applied
-  assert.equal(master.writes, writesAfterInit);
-  assert.equal(music.writes, writesAfterInit);
-  assert.equal(sfx.writes, writesAfterInit);
-
-  library.audio_web_set_mix(0.5, 1, 1);
-  assert.equal(master.value, 0.5);
-  assert.equal(master.writes, writesAfterInit + 1);
-  assert.equal(music.writes, writesAfterInit); // unchanged bus stays unwritten
-
-  library.audio_web_set_mix(0.5, 1, 1); // repeating the now-current mix writes nothing
-  assert.equal(master.writes, writesAfterInit + 1);
-});
-
-test("a rebuilt context's new bus nodes get the current mix on their first write", async () => {
+test("a rebuilt context's new bus nodes get the current mix", async () => {
   const { library } = await loadLibrary();
   library.audio_web_init();
   library.audio_web_set_mix(0.3, 0.4, 0.5);
@@ -392,35 +363,6 @@ test("a rebuilt context's new bus nodes get the current mix on their first write
   assert.equal(runtime.masterNode.gain.value, 0.3);
   assert.equal(runtime.musicNode.gain.value, 0.4);
   assert.equal(runtime.sfxNode.gain.value, 0.5);
-  assert.equal(runtime.masterNode.gain.writes, 1, "a fresh node has no cached value to skip");
-});
-
-test("mute and resume toggles rewrite the master bus", async () => {
-  const { document, library } = await loadLibrary();
-  library.audio_web_init();
-  const master = library.$AudioWebRuntime.masterNode.gain;
-  const writesAfterInit = master.writes;
-
-  library.audio_web_set_enabled(0);
-  assert.equal(master.value, 0);
-  assert.equal(master.writes, writesAfterInit + 1);
-
-  library.audio_web_set_enabled(0); // already muted, nothing to rewrite
-  assert.equal(master.writes, writesAfterInit + 1);
-
-  library.audio_web_set_enabled(1);
-  assert.equal(master.value, 1);
-  assert.equal(master.writes, writesAfterInit + 2);
-
-  document.hidden = true;
-  document.dispatch("visibilitychange");
-  assert.equal(master.value, 0);
-  assert.equal(master.writes, writesAfterInit + 3);
-
-  document.hidden = false;
-  document.dispatch("visibilitychange");
-  assert.equal(master.value, 1);
-  assert.equal(master.writes, writesAfterInit + 4);
 });
 
 test("pointerdown resumes synchronously and the C hook reports the attempt", async () => {

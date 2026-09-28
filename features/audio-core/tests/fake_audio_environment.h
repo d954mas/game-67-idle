@@ -23,6 +23,7 @@ uint32_t fake_audio_backend_stream_open_count(void);
 uint32_t fake_audio_backend_clip_destroy_count(void);
 uint32_t fake_audio_backend_voice_stop_count(void);
 uint32_t fake_audio_backend_mix_apply_count(void);
+uint32_t fake_audio_backend_gain_set_count(void);
 uint32_t fake_audio_backend_gesture_count(void);
 uint32_t fake_audio_backend_shutdown_count(void);
 uint32_t fake_audio_backend_play_count(void);

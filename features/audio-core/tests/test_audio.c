@@ -117,6 +117,16 @@ void test_mix_is_clamped_and_applied_atomically(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.0001f, 0.25f, fake_audio_backend_sfx());
 }
 
+void test_a_repeated_mix_does_not_reach_the_backend(void) {
+    audio_set_mix(0.5f, 0.5f, 0.5f);
+    uint32_t before = fake_audio_backend_mix_apply_count();
+    audio_set_mix(0.5f, 0.5f, 0.5f);
+    audio_set_mix(0.5f, 2.0f, 0.5f);
+    audio_set_mix(0.5f, 1.0f, 0.5f);
+    TEST_ASSERT_EQUAL_UINT32(before + 1, fake_audio_backend_mix_apply_count());
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, 1.0f, fake_audio_backend_music());
+}
+
 void test_play_requires_available_unlocked_enabled_and_not_paused(void) {
     audio_clip_t clip = make_ready_clip(ASSET_READY);
     TEST_ASSERT_TRUE(audio_status().available);
@@ -213,6 +223,20 @@ void test_voice_gain_and_pitch_reach_the_backend_and_ignore_stale_or_bad_values(
     audio_voice_set_pitch(voice, 0.9f);
     TEST_ASSERT_EQUAL_FLOAT(1.0f, fake_audio_backend_voice_gain(1));
     TEST_ASSERT_EQUAL_FLOAT(1.3f, fake_audio_backend_voice_pitch(1));
+}
+
+void test_a_repeated_voice_gain_does_not_reach_the_backend(void) {
+    audio_clip_t clip = make_ready_clip(ASSET_READY);
+    unlock_audio();
+    audio_voice_t voice = audio_play(clip, AUDIO_BUS_MUSIC, 0.5f, true);
+    uint32_t before = fake_audio_backend_gain_set_count();
+    audio_voice_set_gain(voice, 0.5f);
+    audio_voice_set_gain(voice, 0.25f);
+    audio_voice_set_gain(voice, 0.25f);
+    audio_voice_set_gain(voice, 4.0f);
+    audio_voice_set_gain(voice, 1.0f);
+    TEST_ASSERT_EQUAL_UINT32(before + 2, fake_audio_backend_gain_set_count());
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, fake_audio_backend_voice_gain(1));
 }
 
 void test_streamed_clip_opens_without_a_decode_and_plays_like_a_clip(void) {
@@ -354,12 +378,14 @@ int main(void) {
     RUN_TEST(test_decode_copies_borrowed_blob_bytes_before_load_returns);
     RUN_TEST(test_clip_handles_are_generation_safe_and_capacity_is_fixed);
     RUN_TEST(test_mix_is_clamped_and_applied_atomically);
+    RUN_TEST(test_a_repeated_mix_does_not_reach_the_backend);
     RUN_TEST(test_play_requires_available_unlocked_enabled_and_not_paused);
     RUN_TEST(test_unavailable_backend_is_reported_and_refuses_load_and_play);
     RUN_TEST(test_user_gesture_is_forwarded_and_status_records_success_only);
     RUN_TEST(test_update_reconciles_an_async_backend_unlock_rejection);
     RUN_TEST(test_finished_voice_is_cleaned_and_reused_with_new_generation);
     RUN_TEST(test_voice_gain_and_pitch_reach_the_backend_and_ignore_stale_or_bad_values);
+    RUN_TEST(test_a_repeated_voice_gain_does_not_reach_the_backend);
     RUN_TEST(test_streamed_clip_opens_without_a_decode_and_plays_like_a_clip);
     RUN_TEST(test_streamed_clip_refuses_a_blob_that_is_not_ready);
     RUN_TEST(test_full_voice_pool_evicts_oldest_voice_without_growing);

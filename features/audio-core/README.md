@@ -153,6 +153,9 @@ See `INSTALL.md` for wiring, validation, and removal.
 
 ## Version history
 
+- `1.2.2`: `audio_set_mix` and `audio_voice_set_gain` skip the backend when
+  the clamped value repeats the one it already has, so a game may set them
+  every frame; the web bridge writes its bus nodes directly again.
 - `1.2.1`: the web bridge writes a bus `AudioParam.value` only when it
   differs from the value it last wrote to that node, so an unchanged mix no
   longer costs a write every call.
