@@ -161,17 +161,30 @@ export function ctestCatalogue(buildDir, spawn = spawnSync) {
   });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`CTest discovery exited ${result.status ?? 1}`);
+  const buildRoot = `${buildDir.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()}/`;
   const catalogue = JSON.parse(result.stdout).tests.map((entry) => {
     const labels = (entry.properties || []).find((property) => property.name === "LABELS");
-    const command = Array.isArray(entry.command) ? entry.command[0] || "" : "";
-    const executable = command.replace(/\\/g, "/").split("/").pop() || "";
+    const argv = Array.isArray(entry.command) ? entry.command : [];
+    // Every executable a test runs out of the build tree is a target it needs
+    // built: its own, a tool it drives under another name, or the binary a Node
+    // or Python contract is handed. The interpreter itself is not, and neither
+    // is a pack or data file read out of the tree.
+    const targets = argv
+      .map((arg) => String(arg).replace(/\\/g, "/"))
+      .filter((arg) => arg.toLowerCase().startsWith(buildRoot))
+      .map((arg) => arg.split("/").pop() || "")
+      .filter((name) => /\.exe$/i.test(name) || (name !== "" && !name.includes(".")))
+      .map((name) => name.replace(/\.exe$/i, ""));
+    // CTest omits the command while the executable is still unbuilt, and a
+    // checkout reached through a link can report a path outside the tree it was
+    // asked about: either way a test named after its own executable still names
+    // that target.
+    const own = (String(argv[0] || "").replace(/\\/g, "/").split("/").pop() || "").replace(/\.exe$/i, "");
+    if (argv.length === 0 || own === entry.name) targets.push(entry.name);
     return {
       name: entry.name,
       tier: labels ? String([].concat(labels.value)[0] || "") : "",
-      // A native test runs its own executable; a Node or Python contract runs an
-      // interpreter and owns no build target. CTest omits the command while the
-      // executable is still unbuilt, which is exactly the test that needs building.
-      target: !command || executable.replace(/\.exe$/i, "") === entry.name ? entry.name : "",
+      targets: [...new Set(targets)],
     };
   });
   return catalogue;
@@ -202,7 +215,7 @@ export function selectTests(catalogue, selection = {}) {
     names: selected.map((entry) => entry.name),
     // Running everything builds everything: a narrowed target list would leave
     // out fixture and tool targets that no test names directly.
-    targets: mode === "all" ? [] : ["game", ...new Set(selected.map((entry) => entry.target).filter(Boolean))],
+    targets: mode === "all" ? [] : ["game", ...new Set(selected.flatMap((entry) => entry.targets))],
   };
 }
 

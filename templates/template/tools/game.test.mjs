@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, selectTests } from "./game.mjs";
+import { ctestCatalogue, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, selectTests } from "./game.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { createRuntimeBuildRecord, runtimeBuildWitness } from "./lib/runtime_build.mjs";
 
@@ -134,11 +134,29 @@ test("native game test plan configures, builds, and runs CTest without a clean r
     [join(gameDir, "build", "native-debug")]);
 });
 
+test("every executable a test runs from the build tree is a target it needs built", () => {
+  const spawn = () => ({ status: 0, stdout: JSON.stringify({ tests: [
+    { name: "test_fresh", properties: [{ name: "LABELS", value: ["core"] }] },
+    { name: "test_built", command: ["C:/b/tests/test_built.exe"], properties: [{ name: "LABELS", value: ["core"] }] },
+    { name: "node_contract", command: ["node", "tests/x.mjs"], properties: [{ name: "LABELS", value: ["core"] }] },
+    // Named after what it proves, driving a tool of another name.
+    { name: "tool_smoke", command: ["C:\\b\\tools\\stand.exe", "--duration", "300"], properties: [{ name: "LABELS", value: ["core"] }] },
+    // A contract handed the binary it checks.
+    { name: "tool_contract", command: ["node", "tests/y.mjs", "C:/b/tools/stand.exe"], properties: [{ name: "LABELS", value: ["slow"] }] },
+    // A data file read out of the build tree is not a target.
+    { name: "pack_contract", command: ["node", "tests/z.mjs", "C:/b/bin/game.ntpack"], properties: [{ name: "LABELS", value: ["core"] }] },
+    // Reported through a link, outside the tree asked about.
+    { name: "test_linked", command: ["D:/real/b/tests/test_linked.exe"], properties: [{ name: "LABELS", value: ["core"] }] },
+  ] }) });
+  assert.deepEqual(ctestCatalogue("C:/b", spawn).map((entry) => entry.targets),
+    [["test_fresh"], ["test_built"], [], ["stand"], ["stand"], [], ["test_linked"]]);
+});
+
 test("a tier selects its tests and only the targets they need", () => {
   const catalogue = [
-    { name: "test_logic", tier: "core", target: "test_logic" },
-    { name: "test_slow_sim", tier: "slow", target: "test_slow_sim" },
-    { name: "layout_contract", tier: "taste", target: "" },
+    { name: "test_logic", tier: "core", targets: ["test_logic"] },
+    { name: "test_slow_sim", tier: "slow", targets: ["test_slow_sim"] },
+    { name: "layout_contract", tier: "taste", targets: [] },
   ];
   assert.deepEqual(selectTests(catalogue, { mode: "tier", tier: "core" }),
     { names: ["test_logic"], targets: ["game", "test_logic"] });
