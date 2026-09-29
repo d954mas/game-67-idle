@@ -192,6 +192,13 @@ function parseFlags(args) {
   return { positional, flags };
 }
 
+// parseFlags stores a bare flag as the string "true"; any other value means the caller passed one.
+function bareFlag(flags, name) {
+  if (flags[name] === undefined) return false;
+  if (flags[name] !== "true") fail(`--${name} does not take a value`);
+  return true;
+}
+
 function defaultPrint(value) {
   process.stdout.write(`${JSON.stringify(value)}\n`);
   return value;
@@ -840,8 +847,7 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
       // description appended to both subject-lock prompts.
       if (!id) fail("alpha-dual-generate requires <id>");
       if (!flags.element || flags.element === "true") fail("alpha-dual-generate requires --element <eid>");
-      if (flags["no-lock"] !== undefined && flags["no-lock"] !== true) fail("--no-lock does not take a value");
-      const args = { projectId: id, elementId: flags.element, noLock: flags["no-lock"] === true };
+      const args = { projectId: id, elementId: flags.element, noLock: bareFlag(flags, "no-lock") };
       if (flags.prompt && flags.prompt !== "true") args.prompt = flags.prompt;
       return print(await alphaDualPlateGenerate(repoRoot, args));
     }
@@ -1147,8 +1153,7 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
       // from the CLI (that is a test-only seam), so this always runs the DEFAULT engine(s).
       if (!id) fail("recipe-generate requires <id>");
       if (!flags.group) fail("recipe-generate requires --group <gid>");
-      if (flags["no-lock"] !== undefined && flags["no-lock"] !== true) fail("--no-lock does not take a value");
-      return print(await generateFromRecipe(repoRoot, { projectId: id, groupId: flags.group, noLock: flags["no-lock"] === true }));
+      return print(await generateFromRecipe(repoRoot, { projectId: id, groupId: flags.group, noLock: bareFlag(flags, "no-lock") }));
     }
     case "recipe-expand": {
       // T0239 increment 4: real codex TEXT spawn — no fake-assistant injection from the
@@ -1166,8 +1171,7 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
       // one sheet (by the expander's own job name) into that same group even if present.
       if (!id) fail("recipe-pack-generate requires <id>");
       if (!flags.group) fail("recipe-pack-generate requires --group <gid>");
-      if (flags["no-lock"] !== undefined && flags["no-lock"] !== true) fail("--no-lock does not take a value");
-      const args = { projectId: id, groupId: flags.group, noLock: flags["no-lock"] === true };
+      const args = { projectId: id, groupId: flags.group, noLock: bareFlag(flags, "no-lock") };
       if (flags.run !== undefined && flags.run !== "true") args.runGroupId = flags.run;
       if (flags.sheet !== undefined && flags.sheet !== "true") args.sheetSlug = flags.sheet;
       const result = await generateFromRecipe(repoRoot, args);
@@ -1306,11 +1310,10 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
       // runs the DEFAULT generator (tools/anim_generate.mjs).
       if (!id) fail("anim-generate requires <id>");
       if (!flags.group) fail("anim-generate requires --group <gid>");
-      if (flags["no-lock"] !== undefined && flags["no-lock"] !== true) fail("--no-lock does not take a value");
       return print(await generateAnimFromCard(repoRoot, {
         projectId: id,
         groupId: flags.group,
-        noLock: flags["no-lock"] === true,
+        noLock: bareFlag(flags, "no-lock"),
       }));
     }
     case "extract": {

@@ -61,7 +61,7 @@ def curl_post(url, headers, body_path, timeout):
            "-X", "POST", url, "--data-binary", "@" + body_path]
     for k, v in headers.items():
         cmd += ["-H", f"{k}: {v}"]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
         raise SystemExit(f"curl exit {r.returncode}: {r.stderr.strip()[:400]}")
     return r.stdout
@@ -88,7 +88,7 @@ def curl_post_multipart(url, headers, fields, files, timeout):
     for name, path in files:
         mime = mimetypes.guess_type(path)[0] or "application/octet-stream"
         cmd += ["-F", f"{name}=@{path};type={mime}"]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
         raise SystemExit(f"curl exit {r.returncode}: {r.stderr.strip()[:400]}")
     return r.stdout
