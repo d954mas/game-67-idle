@@ -13,12 +13,14 @@
 static struct {
     UiScaleFit fit;
     float dpr;
+    /* Read once here: on the web each read is a call into the page's style. */
+    float insets_css[4];
     bool open;
     bool in_hand;
 } s_frame;
 
 UiScaleFit ui_frame_begin(float fb_w, float fb_h, float dpr) {
-    float insets[4];
+    float *insets = s_frame.insets_css;
     ui_safe_area_insets_css(insets);
     s_frame.in_hand = ui_screen_in_hand();
     s_frame.fit = ui_scale_fit(fb_w, fb_h, dpr, ui_reference_short(),
@@ -40,7 +42,7 @@ float ui_css(float css_px) { return css_px * ui_css_unit(); }
 ui_metrics_t ui_metrics(void) {
     const ui_tokens_t *t = ui_theme_tokens();
     ui_metrics_t m = {0};
-    float insets[4];
+    float live[4];
 
     /* Before the first frame the reference canvas is the honest answer, and it
        keeps callers free of divide-by-zero. */
@@ -68,7 +70,11 @@ ui_metrics_t ui_metrics(void) {
     /* The platform states its insets in CSS pixels, which is the one unit that
        means the same physical size on every device; everything else here is
        already in reference units. */
-    ui_safe_area_insets_css(insets);
+    const float *insets = s_frame.insets_css;
+    if (!s_frame.open) {
+        ui_safe_area_insets_css(live);
+        insets = live;
+    }
     const float safe_unit = ui_scale_css_unit(s_frame.fit.scale, s_frame.dpr);
     m.safe_l = insets[0] * safe_unit;
     m.safe_r = insets[1] * safe_unit;

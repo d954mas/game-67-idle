@@ -169,7 +169,7 @@ possibility, not a feature.
   `game.scene.*` automation, and an agent scaffold. The default template owns
   its root/settings catalog. Reference: `scenes-core/README.md`, `scenes-core/INSTALL.md`, and
   `scenes-core/IMPLEMENTATION-PLAN.md`.
-- `ui-kit/` (`L1`, `1.3.0`): the studio interface system. Owns opt-in
+- `ui-kit/` (`L1`, `1.9.1`): the studio interface system. Owns opt-in
   viewport-relative sizing and the compatible legacy CSS canvas rule,
   the authored unit for type and touch targets, the token
   sheet and the slice9 art generator that reads it, the theme, and the widget
