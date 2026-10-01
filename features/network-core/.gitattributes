@@ -1,2 +1,3 @@
 vendor/uwebsockets/** -text
 vendor/libuv/** -text
+patches/** -text

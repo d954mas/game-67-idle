@@ -147,7 +147,12 @@ core and the Windows backend, which is where uSockets runs on Windows; the
 Unix backend is left out, Linux runs uSockets on epoll.
 `UPSTREAM.libuv.json` records the revision and per-file hashes.
 
-Both trees are byte-for-byte upstream (`-text` in `.gitattributes`).
+Both trees are byte-for-byte upstream (`-text` in `.gitattributes`). A local
+change to a vendored file is allowed only as a recorded patch: the file
+under `patches/`, and an entry in the record's `modifications` naming the
+path, the patch, the reason and the upstream bytes and hash. The integrity
+test undoes each patch and checks it gives the upstream file back, so an
+unrecorded edit fails it.
 
 ## Purpose
 
