@@ -17,7 +17,7 @@
 2. Add to the consuming game's `dependencies.json` features array:
 
    ```json
-   {"id":"network-core","source":"features/network-core","version":"0.6.1","compatibility":"..."}
+   {"id":"network-core","source":"features/network-core","version":"0.7.0","compatibility":"..."}
    ```
 
 3. Write the game's messages on top of the codec. Message type `0` is HELLO

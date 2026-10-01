@@ -109,6 +109,12 @@ size_t net_ws_server_queued_bytes(const net_ws_server_t *server, uint32_t client
    caller that needs arrival times then services as messages arrive. */
 double net_ws_server_receive_age(const net_ws_server_t *server, uint32_t client);
 bool net_ws_server_reports_arrival(void);
+/* True while a pass deferred to the caller's schedule would slow a
+   connection down: a connection is still in its handshake or before HELLO,
+   one is closing, or a client's output is queued or held by the socket. A
+   caller that otherwise sleeps to its own schedule and then services with
+   no wait services as events arrive while this holds. */
+bool net_ws_server_needs_events(const net_ws_server_t *server);
 /* Cumulative workload the server handed the OS, for observability. It
    describes application and transport work, not syscalls: the kernel may
    merge or split a write. Plain counters, no clock reads or locks. */

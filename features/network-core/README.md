@@ -94,7 +94,14 @@ the transport before, walked every socket of the process on each wakeup in
 `poll()`, which cost it 28 % more CPU on a room's traffic and 12.7 % more
 of a room machine per player (the game's `room-ws-stack-2026-09-28.md`).
 `net_ws_server_service()` runs one bounded loop pass (`src/net_us_loop.c`)
-and repeats it while a zero-timeout pass still found something ready. TLS is opt-in: built with `NETWORK_CORE_WITH_TLS`
+and repeats it while a zero-timeout pass still found something ready. A
+caller on a fixed tick may sleep to it and service with no wait, so a
+busy server wakes once a tick instead of on every packet:
+`net_ws_server_receive_age()` still tells when each message came in, and
+`net_ws_server_needs_events()` says when it must not wait (a handshake,
+a connection before HELLO or closing, output the socket has not taken).
+On a 64-room machine this cut the rooms' CPU by a quarter (the game's
+`tick-only-reads-2026-10-01.md`). TLS is opt-in: built with `NETWORK_CORE_WITH_TLS`
 (OpenSSL on the box) a server given PEM files speaks wss:// itself, which
 takes the proxy out of the game path: TLS 1.2 and 1.3 only, forward-secret
 AEAD suites, the full chain from the certificate file; built without, the

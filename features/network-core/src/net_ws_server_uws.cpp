@@ -698,6 +698,16 @@ bool net_ws_server_send_ready(const net_ws_server_t *server, uint32_t client) {
     return !(server->tls ? buffered<true>(server, peer) : buffered<false>(server, peer));
 }
 
+bool net_ws_server_needs_events(const net_ws_server_t *server) {
+    if (!server->http_sockets.empty() || !server->pending.empty() || !server->closing.empty()) { return true; }
+    for (const auto &slot : server->slots) {
+        const Peer *peer = slot.peer;
+        if (slot.ws == nullptr || peer == nullptr || !live(peer)) { continue; }
+        if (peer->tx.count > 0U || (server->tls ? buffered<true>(server, peer) : buffered<false>(server, peer))) { return true; }
+    }
+    return false;
+}
+
 bool net_ws_server_send_latest(net_ws_server_t *server, uint32_t client, const uint8_t *data, size_t size,
     size_t *replaced) {
     if (replaced != nullptr) { *replaced = 0U; }

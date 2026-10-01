@@ -424,6 +424,20 @@ int main(void) {
     /* Stamped on arrival: after the send, before this service pass. */
     CHECK(clog.last_received_at > 0.0 && clog.last_received_at <= net_ws_client_clock());
 
+    /* A settled connection lets the caller defer its pass; output the socket
+       has not taken, held by it or still queued, does not. */
+    CHECK(!net_ws_server_needs_events(server));
+    net_ws_server_test_partial_buffered(server, true);
+    CHECK(net_ws_server_needs_events(server));
+    net_ws_server_test_partial_buffered(server, false);
+    net_ws_server_test_hold_writes(server, true);
+    CHECK(net_ws_server_send(server, slog.last_client, ping, sizeof ping));
+    CHECK(net_ws_server_needs_events(server));
+    net_ws_server_test_hold_writes(server, false);
+    CHECK(net_ws_server_send(server, slog.last_client, ping, sizeof ping));
+    pump(server, client, 50);
+    CHECK(clog.messages == 3U && !net_ws_server_needs_events(server));
+
     /* An application close delivers what was queued before it, then the
        application's own code. */
     const uint8_t farewell[] = {NET_MSG_APP_FIRST, 9U};
@@ -431,7 +445,7 @@ int main(void) {
     net_ws_server_close(server, slog.last_client, 4123U);
     pump(server, client, 50);
     CHECK(clog.closes == 1U && clog.close_code == 4123U);
-    CHECK(clog.messages == 2U && clog.last_size == sizeof farewell && clog.last[1] == 9U);
+    CHECK(clog.messages == 4U && clog.last_size == sizeof farewell && clog.last[1] == 9U);
     CHECK(slog.disconnects == 1U && slog.last_reason == NET_WS_CLOSE_APP);
     CHECK(net_ws_server_client_count(server) == 0U);
     CHECK(!net_ws_server_send(server, slog.last_client, ping, 0U));
