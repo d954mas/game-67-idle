@@ -118,6 +118,7 @@ src/          net_codec.c, net_ws_server_uws.cpp, net_us_loop.c (a bounded
               uSockets pass), net_ws_client_curl.c, net_ws_client_web.c,
               net_queue.h (internal ring)
 tests/        roundtrip.c (server + native client in one process),
+              idle_ping.c (raw-wire empty PING, PONG and idle disconnect),
               curl.cmake (a bare consumer's libcurl from the engine's deps),
               integration.test.mjs (builds a bare consumer, checks the
               UPSTREAM.*.json records)
@@ -156,7 +157,8 @@ targets. `src/net_queue.h` and the vendored library are private.
 ## Validation
 
 Run `node --test features/network-core/tests/integration.test.mjs` from the
-Studio root (it builds a bare consumer, runs `tests/roundtrip.c` and checks
+Studio root (it builds a bare consumer, runs `tests/roundtrip.c` and
+`tests/idle_ping.c` with UBSan on supported non-Windows compilers, and checks
 the `UPSTREAM.*.json` records against the vendored bytes), then
 `node features/validate_contracts.mjs`, then the consuming game's
 `node tools/game.mjs test`.

@@ -455,7 +455,7 @@ template <bool SSL> void sweep(net_ws_server_t *server) {
         } else if (silent >= static_cast<double>(server->config.ping_idle_s) &&
                    now - peer->pinged_at >= static_cast<double>(server->config.ping_idle_s)) {
             peer->pinged_at = now;
-            static_cast<Socket<SSL> *>(peer->ws)->send(std::string_view(), uWS::OpCode::PING);
+            static_cast<Socket<SSL> *>(peer->ws)->send(std::string_view("", 0U), uWS::OpCode::PING);
         }
     }
     for (Peer *peer : server->pending) {
