@@ -146,6 +146,56 @@ void test_reader_rejects_noncanonical_fragment_id(void) {
     TEST_ASSERT_EQUAL_STRING("line 2: invalid fragment header", error);
 }
 
+static game_save_text_record_t field_record(const char *body) {
+    static game_save_text_reader_t reader;
+    game_save_text_record_t record;
+    char error[96];
+    game_save_text_fragment_reader_init(&reader, body, strlen(body), 1U);
+    TEST_ASSERT_EQUAL(GAME_SAVE_TEXT_RECORD_FIELD,
+                      game_save_text_reader_next(&reader, &record, error, sizeof error));
+    return record;
+}
+
+void test_clamped_readers_pin_a_well_formed_value_to_its_range(void) {
+    char error[96];
+    int64_t whole = 0;
+    game_save_text_record_t record = field_record("coins=7778888\n");
+    TEST_ASSERT_FALSE(game_save_text_record_i64(&record, 0, 1000000, &whole, error, sizeof error));
+    TEST_ASSERT_TRUE(game_save_text_record_i64_clamped(&record, 0, 1000000, &whole, error, sizeof error));
+    TEST_ASSERT_EQUAL_INT64(1000000, whole);
+
+    record = field_record("coins=-5\n");
+    TEST_ASSERT_TRUE(game_save_text_record_i64_clamped(&record, 0, 1000000, &whole, error, sizeof error));
+    TEST_ASSERT_EQUAL_INT64(0, whole);
+
+    record = field_record("coins=99999999999999999999999\n");
+    TEST_ASSERT_TRUE(game_save_text_record_i64_clamped(&record, 0, 1000000, &whole, error, sizeof error));
+    TEST_ASSERT_EQUAL_INT64(1000000, whole);
+
+    double number = 0.0;
+    record = field_record("volume=7.5\n");
+    TEST_ASSERT_TRUE(game_save_text_record_number_clamped(&record, 0.0, 1.0, &number, error, sizeof error));
+    TEST_ASSERT_TRUE(number == 1.0);
+
+    record = field_record("volume=1e999\n");
+    TEST_ASSERT_TRUE(game_save_text_record_number_clamped(&record, 0.0, 1.0, &number, error, sizeof error));
+    TEST_ASSERT_TRUE(number == 1.0);
+}
+
+void test_clamped_readers_still_refuse_malformed_text(void) {
+    char error[96];
+    int64_t whole = 0;
+    double number = 0.0;
+    game_save_text_record_t record = field_record("coins=12abc\n");
+    TEST_ASSERT_FALSE(game_save_text_record_i64_clamped(&record, 0, 10, &whole, error, sizeof error));
+    record = field_record("coins=1.5\n");
+    TEST_ASSERT_FALSE(game_save_text_record_i64_clamped(&record, 0, 10, &whole, error, sizeof error));
+    record = field_record("volume=nan\n");
+    TEST_ASSERT_FALSE(game_save_text_record_number_clamped(&record, 0.0, 1.0, &number, error, sizeof error));
+    record = field_record("volume=inf\n");
+    TEST_ASSERT_FALSE(game_save_text_record_number_clamped(&record, 0.0, 1.0, &number, error, sizeof error));
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_writer_produces_readable_versioned_document);
@@ -154,5 +204,7 @@ int main(void) {
     RUN_TEST(test_writer_fails_closed_without_partial_line);
     RUN_TEST(test_fragment_reader_parses_a_section_body_without_document_preamble);
     RUN_TEST(test_reader_rejects_noncanonical_fragment_id);
+    RUN_TEST(test_clamped_readers_pin_a_well_formed_value_to_its_range);
+    RUN_TEST(test_clamped_readers_still_refuse_malformed_text);
     return UNITY_END();
 }

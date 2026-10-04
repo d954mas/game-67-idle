@@ -470,6 +470,59 @@ bool game_save_text_record_number(
     return true;
 }
 
+static bool well_formed_integer(const game_save_text_record_t *record) {
+    const char *at = record->value;
+    const char *end = at + record->value_size;
+    if (at < end && *at == '-') at++;
+    if (at == end) return false;
+    for (; at < end; at++) {
+        if (*at < '0' || *at > '9') return false;
+    }
+    return true;
+}
+
+bool game_save_text_record_i64_clamped(
+    const game_save_text_record_t *record, int64_t min_value, int64_t max_value,
+    int64_t *out, char *error, size_t error_capacity) {
+    if (record == NULL || record->value == NULL || out == NULL || min_value > max_value) {
+        return false;
+    }
+    if (!well_formed_integer(record)) {
+        set_error(error, error_capacity, record->line, "expected integer");
+        return false;
+    }
+    int64_t value = 0;
+    if (!game_save_text_record_i64(record, INT64_MIN, INT64_MAX, &value, NULL, 0U)) {
+        value = record->value[0] == '-' ? INT64_MIN : INT64_MAX;
+    }
+    *out = value < min_value ? min_value : (value > max_value ? max_value : value);
+    return true;
+}
+
+bool game_save_text_record_number_clamped(
+    const game_save_text_record_t *record, double min_value, double max_value,
+    double *out, char *error, size_t error_capacity) {
+    if (record == NULL || record->value == NULL || out == NULL ||
+        record->value_size == 0U || record->value_size >= 64U || min_value > max_value) {
+        return false;
+    }
+    char token[64];
+    memcpy(token, record->value, record->value_size);
+    token[record->value_size] = '\0';
+    char *end = NULL;
+    errno = 0;
+    const double value = strtod(token, &end);
+    /* Only a finite literal or one that overflowed is a number; "nan" and
+       "inf" spelled out are not values the writer ever produces. */
+    if (end != token + record->value_size || isnan(value) ||
+        (!isfinite(value) && errno != ERANGE)) {
+        set_error(error, error_capacity, record->line, "expected number");
+        return false;
+    }
+    *out = value < min_value ? min_value : (value > max_value ? max_value : value);
+    return true;
+}
+
 bool game_save_text_record_bool(
     const game_save_text_record_t *record, bool *out,
     char *error, size_t error_capacity) {

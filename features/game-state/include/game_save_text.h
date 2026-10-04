@@ -67,6 +67,16 @@ bool game_save_text_record_i64(
 bool game_save_text_record_number(
     const game_save_text_record_t *record, double min_value, double max_value,
     double *out, char *error, size_t error_capacity);
+/* State fields read through these: a well-formed value outside its schema
+   range is pinned to the nearest bound instead of refusing the document, so
+   one hand-edited or overgrown field cannot cost the whole save. Malformed
+   text is still refused. Header fields keep the strict readers above. */
+bool game_save_text_record_i64_clamped(
+    const game_save_text_record_t *record, int64_t min_value, int64_t max_value,
+    int64_t *out, char *error, size_t error_capacity);
+bool game_save_text_record_number_clamped(
+    const game_save_text_record_t *record, double min_value, double max_value,
+    double *out, char *error, size_t error_capacity);
 bool game_save_text_record_bool(
     const game_save_text_record_t *record, bool *out,
     char *error, size_t error_capacity);

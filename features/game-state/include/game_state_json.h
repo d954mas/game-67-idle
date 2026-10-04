@@ -62,6 +62,18 @@ bool gsj_read_i64(const cJSON *obj, const char *name,
                   char *error, int error_cap);
 bool gsj_parse_i64_value(const cJSON *item, int64_t min_value, int64_t max_value,
                          int64_t *out, char *error, int error_cap);
+/* Load-path readers for generated from_json: a well-formed number outside
+   min..max is pinned to the nearest bound instead of refusing the fragment,
+   matching the NTGS text readers. A non-number, a fraction for a whole field,
+   NaN or infinity is still an error. Absent = true, *out untouched. */
+bool gsj_read_int_clamped(const cJSON *obj, const char *name, int min_value, int max_value,
+                          int *out, char *error, int error_cap);
+bool gsj_read_u32_clamped(const cJSON *obj, const char *name, uint32_t min_value,
+                          uint32_t max_value, uint32_t *out, char *error, int error_cap);
+bool gsj_read_i64_clamped(const cJSON *obj, const char *name, int64_t min_value,
+                          int64_t max_value, int64_t *out, char *error, int error_cap);
+bool gsj_read_float_clamped(const cJSON *obj, const char *name, float min_value,
+                            float max_value, float *out, char *error, int error_cap);
 /* Кладёт value как JSON-СТРОКУ в obj (узел во владении obj). NULL при OOM. */
 cJSON *gsj_add_i64(cJSON *obj, const char *name, int64_t value);
 /* value -> десятичная строка в buf (cap >= 21). Возвращает buf. */

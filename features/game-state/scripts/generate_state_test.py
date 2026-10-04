@@ -401,7 +401,7 @@ class StateCodegenTests(unittest.TestCase):
         self.assertIn("extern GameState game_state;", hdr)
         self.assertIn("const GameSaveFragment game_state_fragment", src)
         self.assertIn('#include "game_state_json.h"', src)
-        self.assertIn("gsj_read_int_range", src)
+        self.assertIn("gsj_read_int_clamped", src)
         # i64 wire coverage (gsj_add_i64/gsj_read_i64) is NOT asserted here: the
         # template's `game` fragment carries no i64 field post-T0327-hygiene. The
         # property is still covered by

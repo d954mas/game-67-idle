@@ -256,3 +256,77 @@ cJSON *gsj_add_i64(cJSON *obj, const char *name, int64_t value) {
     char buf[32];
     return cJSON_AddStringToObject(obj, name, gsj_i64_to_string(value, buf, sizeof buf));
 }
+
+static bool gsj_whole_number(const cJSON *item, double *out, char *error, int error_cap) {
+    if (!cJSON_IsNumber(item) || !isfinite(item->valuedouble) ||
+        item->valuedouble != trunc(item->valuedouble)) {
+        gsj_set_error(error, error_cap, "expected integer");
+        return false;
+    }
+    *out = item->valuedouble;
+    return true;
+}
+
+static double gsj_clamp_double(double value, double min_value, double max_value) {
+    return value < min_value ? min_value : (value > max_value ? max_value : value);
+}
+
+bool gsj_read_int_clamped(const cJSON *obj, const char *name, int min_value, int max_value,
+                          int *out, char *error, int error_cap) {
+    const cJSON *item = gsj_object_item(obj, name);
+    if (!item) return true;
+    double number = 0.0;
+    if (min_value > max_value || !gsj_whole_number(item, &number, error, error_cap)) return false;
+    *out = (int)gsj_clamp_double(number, (double)min_value, (double)max_value);
+    return true;
+}
+
+bool gsj_read_u32_clamped(const cJSON *obj, const char *name, uint32_t min_value,
+                          uint32_t max_value, uint32_t *out, char *error, int error_cap) {
+    const cJSON *item = gsj_object_item(obj, name);
+    if (!item) return true;
+    double number = 0.0;
+    if (min_value > max_value || !gsj_whole_number(item, &number, error, error_cap)) return false;
+    *out = (uint32_t)gsj_clamp_double(number, (double)min_value, (double)max_value);
+    return true;
+}
+
+bool gsj_read_i64_clamped(const cJSON *obj, const char *name, int64_t min_value,
+                          int64_t max_value, int64_t *out, char *error, int error_cap) {
+    const cJSON *item = gsj_object_item(obj, name);
+    if (!item) return true;
+    if (min_value > max_value) return false;
+    int64_t value = 0;
+    if (cJSON_IsString(item)) {
+        const char *text = item->valuestring;
+        char *end = NULL;
+        errno = 0;
+        const long long parsed = text != NULL ? strtoll(text, &end, 10) : 0;
+        if (text == NULL || end == text || *end != '\0') {
+            gsj_set_error(error, error_cap, "invalid i64 string");
+            return false;
+        }
+        value = (int64_t)parsed; /* ERANGE already saturated to LLONG_MIN/MAX */
+    } else {
+        double number = 0.0;
+        if (!gsj_whole_number(item, &number, error, error_cap)) return false;
+        /* Pinned in double first: casting a double beyond int64 is undefined. */
+        const double pinned = gsj_clamp_double(number, (double)min_value, (double)max_value);
+        value = pinned >= 9223372036854775807.0 ? INT64_MAX
+              : pinned <= -9223372036854775808.0 ? INT64_MIN : (int64_t)pinned;
+    }
+    *out = value < min_value ? min_value : (value > max_value ? max_value : value);
+    return true;
+}
+
+bool gsj_read_float_clamped(const cJSON *obj, const char *name, float min_value,
+                            float max_value, float *out, char *error, int error_cap) {
+    const cJSON *item = gsj_object_item(obj, name);
+    if (!item) return true;
+    if (min_value > max_value || !cJSON_IsNumber(item) || !isfinite(item->valuedouble)) {
+        gsj_set_error(error, error_cap, "expected number");
+        return false;
+    }
+    *out = (float)gsj_clamp_double(item->valuedouble, (double)min_value, (double)max_value);
+    return true;
+}

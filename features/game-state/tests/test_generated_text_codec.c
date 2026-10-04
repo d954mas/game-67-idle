@@ -52,10 +52,20 @@ void test_generated_reader_is_transactional_and_defaults_missing_fields(void) {
     scalar_state_init_defaults(&state);
     state.count = 5;
     char error[128];
-    static const char invalid[] = "count=99\n";
+    static const char invalid[] = "active=true\ncount=nine\n";
     TEST_ASSERT_FALSE(scalar_state_from_text(
         &state, invalid, sizeof invalid - 1U, error, sizeof error));
     TEST_ASSERT_EQUAL_INT(5, state.count);
+    TEST_ASSERT_FALSE(state.active);
+
+    /* A well-formed value past its range is pinned, not a reason to refuse. */
+    static const char overgrown[] = "count=99\ncoins=100000\ntotal=-5000\nrate=7.5\n";
+    TEST_ASSERT_TRUE(scalar_state_from_text(
+        &state, overgrown, sizeof overgrown - 1U, error, sizeof error));
+    TEST_ASSERT_EQUAL_INT(9, state.count);
+    TEST_ASSERT_EQUAL_UINT32(99U, state.coins);
+    TEST_ASSERT_EQUAL_INT64(-999, state.total);
+    TEST_ASSERT_FLOAT_WITHIN(0.00001F, 1.0F, state.rate);
 
     static const char partial[] = "active=true\nunknown=17\n";
     TEST_ASSERT_TRUE(scalar_state_from_text(

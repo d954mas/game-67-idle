@@ -76,7 +76,7 @@ static bool cell_set_field_json(MiniCell *obj, const char *field, const cJSON *v
 static bool cell_from_json(MiniCell *obj, const cJSON *json, char *error, int error_cap) {
     if (!cJSON_IsObject(json)) { gsj_set_error(error, error_cap, "object must be json object"); return false; }
     if (!gsj_read_string(json, "def_id", obj->def_id, sizeof(obj->def_id), error, error_cap)) { return false; }
-    if (!gsj_read_i64(json, "count", MINI_STATE_CELL_COUNT_MIN, MINI_STATE_CELL_COUNT_MAX, &obj->count, error, error_cap)) { return false; }
+    if (!gsj_read_i64_clamped(json, "count", MINI_STATE_CELL_COUNT_MIN, MINI_STATE_CELL_COUNT_MAX, &obj->count, error, error_cap)) { return false; }
     return cell_validate(obj, error, error_cap);
 }
 
@@ -371,7 +371,7 @@ bool mini_state_from_json(MiniState *state, const cJSON *json, char *error, int 
     mini_state_init_defaults(next);
     if (!gsj_read_enum(json, "mode_index", k_mode_names, MINI_STATE_MODE_COUNT, &next->mode_index, error, error_cap)) { free(next); return false; }
     if (!gsj_read_string(json, "label", next->label, sizeof(next->label), error, error_cap)) { free(next); return false; }
-    if (!gsj_read_i64(json, "total", MINI_STATE_TOTAL_MIN, MINI_STATE_TOTAL_MAX, &next->total, error, error_cap)) { free(next); return false; }
+    if (!gsj_read_i64_clamped(json, "total", MINI_STATE_TOTAL_MIN, MINI_STATE_TOTAL_MAX, &next->total, error, error_cap)) { free(next); return false; }
     const cJSON *cells_json = gsj_object_item(json, "cells");
     if (cells_json && !set_cells_from_json(next, cells_json, error, error_cap)) {
         free(next); return false;

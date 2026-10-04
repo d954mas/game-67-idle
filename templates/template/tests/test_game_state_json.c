@@ -517,6 +517,50 @@ void test_add_i64_then_read_i64_round_trip(void) {
     }
 }
 
+/* ---- load-path readers: a well-formed value outside the range is pinned ---- */
+
+void test_read_clamped_pins_out_of_range_numbers(void) {
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "n", 7778888);
+    cJSON_AddNumberToObject(root, "neg", -5);
+    cJSON_AddNumberToObject(root, "u", 1e12);
+    cJSON_AddStringToObject(root, "big", "99999999999999999999999");
+    cJSON_AddNumberToObject(root, "f", 7.5);
+    int n = 0, neg = 9;
+    uint32_t u = 0;
+    int64_t big = 0;
+    float f = 0.0f;
+    TEST_ASSERT_TRUE(gsj_read_int_clamped(root, "n", 0, 1000000, &n, NULL, 0));
+    TEST_ASSERT_EQUAL_INT(1000000, n);
+    TEST_ASSERT_TRUE(gsj_read_int_clamped(root, "neg", 0, 100, &neg, NULL, 0));
+    TEST_ASSERT_EQUAL_INT(0, neg);
+    TEST_ASSERT_TRUE(gsj_read_u32_clamped(root, "u", 0u, 99u, &u, NULL, 0));
+    TEST_ASSERT_EQUAL_UINT32(99u, u);
+    TEST_ASSERT_TRUE(gsj_read_i64_clamped(root, "big", 0, 1000, &big, NULL, 0));
+    TEST_ASSERT_EQUAL_INT64(1000, big);
+    TEST_ASSERT_TRUE(gsj_read_float_clamped(root, "f", 0.0f, 1.0f, &f, NULL, 0));
+    TEST_ASSERT_TRUE(f == 1.0f);
+    cJSON_Delete(root);
+}
+
+void test_read_clamped_still_refuses_malformed_values(void) {
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "s", "lots");
+    cJSON_AddNumberToObject(root, "frac", 5.5);
+    cJSON_AddStringToObject(root, "bad64", "12abc");
+    int out = 3;
+    int64_t out64 = 3;
+    float f = 0.0f;
+    TEST_ASSERT_FALSE(gsj_read_int_clamped(root, "s", 0, 100, &out, NULL, 0));
+    TEST_ASSERT_FALSE(gsj_read_int_clamped(root, "frac", 0, 100, &out, NULL, 0));
+    TEST_ASSERT_FALSE(gsj_read_i64_clamped(root, "bad64", 0, 100, &out64, NULL, 0));
+    TEST_ASSERT_FALSE(gsj_read_float_clamped(root, "s", 0.0f, 1.0f, &f, NULL, 0));
+    TEST_ASSERT_EQUAL_INT(3, out);
+    TEST_ASSERT_TRUE(gsj_read_int_clamped(root, "absent", 0, 100, &out, NULL, 0));
+    TEST_ASSERT_EQUAL_INT(3, out);
+    cJSON_Delete(root);
+}
+
 int main(void) {
     UNITY_BEGIN();
 
@@ -532,6 +576,8 @@ int main(void) {
     RUN_TEST(test_read_int_range_wrong_type);
     RUN_TEST(test_read_int_range_out_of_range);
     RUN_TEST(test_read_int_range_valid);
+    RUN_TEST(test_read_clamped_pins_out_of_range_numbers);
+    RUN_TEST(test_read_clamped_still_refuses_malformed_values);
 
     RUN_TEST(test_read_float_range_absent_key);
     RUN_TEST(test_read_float_range_wrong_type);

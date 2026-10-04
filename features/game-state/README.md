@@ -44,7 +44,10 @@ tutorial_done=true
 
 Blank lines and lines beginning with `#` are ignored. Unknown fields are
 preserved by legacy import paths or ignored by tolerant fragment readers;
-duplicate known fields and invalid typed values are rejected.
+duplicate known fields and malformed typed values are rejected. A well-formed
+number outside its schema range is pinned to the nearest bound instead: a save
+edited by hand, or grown past a cap, loads with that one field capped rather
+than being refused whole.
 
 ## Active playtime
 
@@ -371,6 +374,12 @@ documents; add that source where the policy is compiled. A policy that tested
 for a leading `{` never saw an NTGS document as readable and always kept the
 local save. `game_save_cloud_config_t.boot_wait_sec` lets the first cloud read
 wait out an SDK's own startup deadline. Existing APIs are unchanged.
+
+Version `4.10.0` changes generated fragment readers: an int, u32, i64 or float
+field whose value parses but lies outside `min`..`max` is clamped through
+`game_save_text_record_i64_clamped` / `game_save_text_record_number_clamped`
+instead of failing the import. Header fields keep the strict readers.
+Regenerate state sources after the update.
 
 ## Extension points
 

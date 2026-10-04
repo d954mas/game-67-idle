@@ -144,7 +144,7 @@ bool game_state_from_text(GameState *state, const char *text, size_t size, char 
             if (seen[2]) { gsj_set_error(error, error_cap, "duplicate field"); return false; }
             seen[2] = true;
             double value = 0.0;
-            if (!game_save_text_record_number(&record, (double)GAME_STATE_CAMERA_DISTANCE_MIN, (double)GAME_STATE_CAMERA_DISTANCE_MAX, &value, error, error_size)) { return false; }
+            if (!game_save_text_record_number_clamped(&record, (double)GAME_STATE_CAMERA_DISTANCE_MIN, (double)GAME_STATE_CAMERA_DISTANCE_MAX, &value, error, error_size)) { return false; }
             next.camera_distance = (float)value;
             continue;
         }
@@ -152,7 +152,7 @@ bool game_state_from_text(GameState *state, const char *text, size_t size, char 
             if (seen[3]) { gsj_set_error(error, error_cap, "duplicate field"); return false; }
             seen[3] = true;
             int64_t value = 0;
-            if (!game_save_text_record_i64(&record, GAME_STATE_TEST_UI_CLICKS_MIN, GAME_STATE_TEST_UI_CLICKS_MAX, &value, error, error_size)) { return false; }
+            if (!game_save_text_record_i64_clamped(&record, GAME_STATE_TEST_UI_CLICKS_MIN, GAME_STATE_TEST_UI_CLICKS_MAX, &value, error, error_size)) { return false; }
             next.test_ui_clicks = (int)value;
             continue;
         }
@@ -178,7 +178,7 @@ bool game_state_from_text(GameState *state, const char *text, size_t size, char 
             if (seen[7]) { gsj_set_error(error, error_cap, "duplicate field"); return false; }
             seen[7] = true;
             int64_t value = 0;
-            if (!game_save_text_record_i64(&record, (int64_t)GAME_STATE_INVENTORY_CONTAINER_ID_MIN, (int64_t)GAME_STATE_INVENTORY_CONTAINER_ID_MAX, &value, error, error_size)) { return false; }
+            if (!game_save_text_record_i64_clamped(&record, (int64_t)GAME_STATE_INVENTORY_CONTAINER_ID_MIN, (int64_t)GAME_STATE_INVENTORY_CONTAINER_ID_MAX, &value, error, error_size)) { return false; }
             next.inventory_container_id = (uint32_t)value;
             continue;
         }
@@ -186,7 +186,7 @@ bool game_state_from_text(GameState *state, const char *text, size_t size, char 
             if (seen[8]) { gsj_set_error(error, error_cap, "duplicate field"); return false; }
             seen[8] = true;
             int64_t value = 0;
-            if (!game_save_text_record_i64(&record, (int64_t)GAME_STATE_WALLET_CONTAINER_ID_MIN, (int64_t)GAME_STATE_WALLET_CONTAINER_ID_MAX, &value, error, error_size)) { return false; }
+            if (!game_save_text_record_i64_clamped(&record, (int64_t)GAME_STATE_WALLET_CONTAINER_ID_MIN, (int64_t)GAME_STATE_WALLET_CONTAINER_ID_MAX, &value, error, error_size)) { return false; }
             next.wallet_container_id = (uint32_t)value;
             continue;
         }
@@ -354,14 +354,14 @@ bool game_state_from_json(GameState *state, const cJSON *json, char *error, int 
     game_state_init_defaults(next);
     if (!gsj_read_enum(json, "shape_index", k_shape_names, GAME_STATE_SHAPE_COUNT, &next->shape_index, error, error_cap)) { free(next); return false; }
     if (!gsj_read_enum(json, "render_mode_index", k_render_mode_names, GAME_STATE_RENDER_MODE_COUNT, &next->render_mode_index, error, error_cap)) { free(next); return false; }
-    if (!gsj_read_float_range(json, "camera_distance", GAME_STATE_CAMERA_DISTANCE_MIN, GAME_STATE_CAMERA_DISTANCE_MAX, &next->camera_distance, error, error_cap)) { free(next); return false; }
-    if (!gsj_read_int_range(json, "test_ui_clicks", GAME_STATE_TEST_UI_CLICKS_MIN, GAME_STATE_TEST_UI_CLICKS_MAX, &next->test_ui_clicks, error, error_cap)) { free(next); return false; }
+    if (!gsj_read_float_clamped(json, "camera_distance", GAME_STATE_CAMERA_DISTANCE_MIN, GAME_STATE_CAMERA_DISTANCE_MAX, &next->camera_distance, error, error_cap)) { free(next); return false; }
+    if (!gsj_read_int_clamped(json, "test_ui_clicks", GAME_STATE_TEST_UI_CLICKS_MIN, GAME_STATE_TEST_UI_CLICKS_MAX, &next->test_ui_clicks, error, error_cap)) { free(next); return false; }
     if (!gsj_read_string(json, "test_label_text", next->test_label_text, sizeof(next->test_label_text), error, error_cap)) { free(next); return false; }
     if (!gsj_read_string(json, "test_button_text", next->test_button_text, sizeof(next->test_button_text), error, error_cap)) { free(next); return false; }
     const cJSON *tutorial = gsj_object_item(json, "tutorial");
     if (!gsj_read_bool(tutorial, "done", &next->tutorial_done, error, error_cap)) { free(next); return false; }
-    if (!gsj_read_u32(json, "inventory_container_id", GAME_STATE_INVENTORY_CONTAINER_ID_MIN, GAME_STATE_INVENTORY_CONTAINER_ID_MAX, &next->inventory_container_id, error, error_cap)) { free(next); return false; }
-    if (!gsj_read_u32(json, "wallet_container_id", GAME_STATE_WALLET_CONTAINER_ID_MIN, GAME_STATE_WALLET_CONTAINER_ID_MAX, &next->wallet_container_id, error, error_cap)) { free(next); return false; }
+    if (!gsj_read_u32_clamped(json, "inventory_container_id", GAME_STATE_INVENTORY_CONTAINER_ID_MIN, GAME_STATE_INVENTORY_CONTAINER_ID_MAX, &next->inventory_container_id, error, error_cap)) { free(next); return false; }
+    if (!gsj_read_u32_clamped(json, "wallet_container_id", GAME_STATE_WALLET_CONTAINER_ID_MIN, GAME_STATE_WALLET_CONTAINER_ID_MAX, &next->wallet_container_id, error, error_cap)) { free(next); return false; }
     if (!game_state_validate(next, error, error_cap)) { free(next); return false; }
     *state = *next;
     free(next);

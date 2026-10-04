@@ -27,6 +27,21 @@ static inline const char *game_ev_shape_changed_note(const GameEvShapeChanged *e
 
 extern const game_event_desc_t game_ev_shape_changed_desc;
 
+/* ---- game.login_tap ---- */
+typedef struct GameEvLoginTap {
+    uint32_t source; /* byte offset -> inline NUL string (read via accessor) */
+} GameEvLoginTap;
+
+nt_hash64_t game_ev_login_tap_type(void); /* nt_hash64_str("game.login_tap"), cached */
+
+const void *game_emit_login_tap(const char *source);
+
+static inline const char *game_ev_login_tap_source(const GameEvLoginTap *e) {
+    return (const char *)e + e->source;
+}
+
+extern const game_event_desc_t game_ev_login_tap_desc;
+
 /* ---- fragment event table + label registration ---- */
 extern const game_event_desc_t *const game_ev_descs[];
 extern const int game_ev_desc_count;

@@ -541,13 +541,13 @@ bool   {self.ns.fn}from_json({self.ns.type} *state, const cJSON *json, char *err
             names_table, count_macro = self.enum_table(field)
             call = f'gsj_read_enum({source}, "{key}", {names_table}, {count_macro}, &{target}->{ident}, error, error_cap)'
         elif typ == "int":
-            call = f'gsj_read_int_range({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
+            call = f'gsj_read_int_clamped({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
         elif typ == "u32":
-            call = f'gsj_read_u32({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
+            call = f'gsj_read_u32_clamped({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
         elif typ == "i64":
-            call = f'gsj_read_i64({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
+            call = f'gsj_read_i64_clamped({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
         elif typ == "float":
-            call = f'gsj_read_float_range({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
+            call = f'gsj_read_float_clamped({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
         elif typ == "bool":
             call = f'gsj_read_bool({source}, "{key}", &{target}->{ident}, error, error_cap)'
         elif typ == "string":
@@ -1228,23 +1228,23 @@ static bool {aggregate_ident}_write_snapshot(const {self.ns.type} *state, game_s
         elif typ == "int":
             lines.extend([
                 "            int64_t value = 0;",
-                f"            if (!game_save_text_record_i64(&record, {macro}_MIN, {macro}_MAX, &value, error, (size_t)error_cap)) {{ return false; }}",
+                f"            if (!game_save_text_record_i64_clamped(&record, {macro}_MIN, {macro}_MAX, &value, error, (size_t)error_cap)) {{ return false; }}",
                 f"            next.{ident} = (int)value;",
             ])
         elif typ == "u32":
             lines.extend([
                 "            int64_t value = 0;",
-                f"            if (!game_save_text_record_i64(&record, (int64_t){macro}_MIN, (int64_t){macro}_MAX, &value, error, (size_t)error_cap)) {{ return false; }}",
+                f"            if (!game_save_text_record_i64_clamped(&record, (int64_t){macro}_MIN, (int64_t){macro}_MAX, &value, error, (size_t)error_cap)) {{ return false; }}",
                 f"            next.{ident} = (uint32_t)value;",
             ])
         elif typ == "i64":
             lines.append(
-                f"            if (!game_save_text_record_i64(&record, {macro}_MIN, {macro}_MAX, &next.{ident}, error, (size_t)error_cap)) {{ return false; }}"
+                f"            if (!game_save_text_record_i64_clamped(&record, {macro}_MIN, {macro}_MAX, &next.{ident}, error, (size_t)error_cap)) {{ return false; }}"
             )
         elif typ == "float":
             lines.extend([
                 "            double value = 0.0;",
-                f"            if (!game_save_text_record_number(&record, (double){macro}_MIN, (double){macro}_MAX, &value, error, (size_t)error_cap)) {{ return false; }}",
+                f"            if (!game_save_text_record_number_clamped(&record, (double){macro}_MIN, (double){macro}_MAX, &value, error, (size_t)error_cap)) {{ return false; }}",
                 f"            next.{ident} = (float)value;",
             ])
         elif typ == "bool":

@@ -11,6 +11,8 @@
 
 _Static_assert(_Alignof(GameEvShapeChanged) <= _Alignof(max_align_t),
                "GameEvShapeChanged over-aligned for game_event_emit");
+_Static_assert(_Alignof(GameEvLoginTap) <= _Alignof(max_align_t),
+               "GameEvLoginTap over-aligned for game_event_emit");
 
 /* ---- game.shape_changed ---- */
 nt_hash64_t game_ev_shape_changed_type(void) {
@@ -56,12 +58,54 @@ const game_event_desc_t game_ev_shape_changed_desc = {
     0,
 };
 
+/* ---- game.login_tap ---- */
+nt_hash64_t game_ev_login_tap_type(void) {
+    static nt_hash64_t h;
+    if (!h.value) { h = nt_hash64_str("game.login_tap"); }
+    return h;
+}
+
+const void *game_emit_login_tap(const char *source) {
+    union {
+        GameEvLoginTap ev;
+        uint8_t bytes[GAME_EVENT_EMIT_MAX];
+    } u;
+    memset(&u, 0, sizeof(u.ev)); /* deterministic struct padding; strings written below */
+
+    uint32_t off = (uint32_t)sizeof(u.ev);
+    const char *source_s = source ? source : "";
+    size_t source_n = strlen(source_s) + 1u; /* incl. NUL */
+    if ((size_t)off + source_n > sizeof(u.bytes)) {
+        NT_ASSERT(0 && "game_emit_login_tap payload exceeds GAME_EVENT_EMIT_MAX");
+        nt_log_warn("game_emit_login_tap: payload exceeds GAME_EVENT_EMIT_MAX (%u B) -> dropped", (unsigned)GAME_EVENT_EMIT_MAX);
+        return NULL; /* release: warned drop (no dropped-counter -- E1's counter is private/frozen) */
+    }
+    u.ev.source = off;
+    memcpy(u.bytes + off, source_s, source_n);
+    off += (uint32_t)source_n;
+    return game_event_emit(game_ev_login_tap_type(), &u, off, _Alignof(GameEvLoginTap));
+}
+
+static const game_event_field_t game_ev_login_tap_fields[] = {
+    { "source", GAME_EVENT_FT_STRING, (uint32_t)offsetof(GameEvLoginTap, source), 0u },
+};
+const game_event_desc_t game_ev_login_tap_desc = {
+    "game.login_tap",
+    (uint32_t)sizeof(GameEvLoginTap),
+    game_ev_login_tap_fields,
+    (int)(sizeof(game_ev_login_tap_fields) / sizeof(game_ev_login_tap_fields[0])),
+    NULL,
+    0,
+};
+
 /* ---- fragment event table ---- */
 const game_event_desc_t *const game_ev_descs[] = {
     &game_ev_shape_changed_desc,
+    &game_ev_login_tap_desc,
 };
-const int game_ev_desc_count = 1;
+const int game_ev_desc_count = 2;
 
 void game_ev_register(void) {
     game_event_register_type_name(game_ev_shape_changed_type(), "game.shape_changed");
+    game_event_register_type_name(game_ev_login_tap_type(), "game.login_tap");
 }
