@@ -381,6 +381,13 @@ field whose value parses but lies outside `min`..`max` is clamped through
 instead of failing the import. Header fields keep the strict readers.
 Regenerate state sources after the update.
 
+Version `4.11.0` adds `game_save_cloud_flush`: a page being hidden starts the
+first upload of unsent progress at once instead of waiting out the boot hold;
+later uploads still keep `min_write_interval_sec`, since every hide stamps new
+playtime. A hidden tab gets no frame to wait the hold out. Init
+registers it through the new `game_save_set_hide_listener`; nothing goes up
+before `game_save_cloud_start`.
+
 ## Extension points
 
 Extend through game-owned schemas, migrations, hooks, and DevAPI adapters;

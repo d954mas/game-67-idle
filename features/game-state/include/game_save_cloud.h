@@ -65,6 +65,11 @@ bool game_save_cloud_boot_settled(void);
 /* Starts once and returns true only when it adopted the account document. */
 bool game_save_cloud_start(bool local_is_fresh);
 void game_save_cloud_tick(void);
+/* Starts the first upload of unsent local progress now, past the hold that
+   keeps it back after boot; later ones still wait the write interval.
+   Registered as the page-hide listener by init; a no-op
+   before game_save_cloud_start. */
+void game_save_cloud_flush(void);
 
 game_save_sync_state_t game_save_cloud_state(void);
 const char *game_save_cloud_conflict_remote_document(void);

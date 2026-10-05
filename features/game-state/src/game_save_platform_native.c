@@ -14,3 +14,5 @@ int64_t game_save_platform_wall_ms(void) {
 }
 
 void game_save_install_web_flush(void) {}
+
+void game_save_set_hide_listener(void (*listener)(void)) { (void)listener; }

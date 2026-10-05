@@ -367,16 +367,18 @@ static void finish_write(void) {
     if (status == GAME_SAVE_CLOUD_WRITE_ACKNOWLEDGED) (void)persist_base();
 }
 
-static void start_write(void) {
+static void start_write(bool honour_boot_hold) {
     if (s_cloud.write_pending ||
         game_save_sync_state(&s_cloud.sync) != GAME_SAVE_SYNC_UPLOAD_READY) return;
     const double now = nt_time_now();
     /* The retry floor and the configured interval are the same gate: both say
-       how soon a new upload may start, and the wider one wins. */
+       how soon a new upload may start, and the wider one wins. A page being
+       hidden skips only the hold on the first upload: it may get no later frame,
+       and every hide stamps new playtime, so the interval still caps writes. */
     const double gap = s_cloud.config.min_write_interval_sec > GAME_SAVE_CLOUD_RETRY_SEC
         ? s_cloud.config.min_write_interval_sec : GAME_SAVE_CLOUD_RETRY_SEC;
     if (s_cloud.has_write_attempt && now - s_cloud.last_attempt_at < gap) return;
-    if (now < s_cloud.writes_open_at) return;
+    if (honour_boot_hold && now < s_cloud.writes_open_at) return;
     if (!game_save_sync_store_started(&s_cloud.sync)) return;
     char *envelope = envelope_build(game_save_last_saved_at(),
                                     game_save_sync_sent_document(&s_cloud.sync));
@@ -409,6 +411,7 @@ bool game_save_cloud_init(const game_save_cloud_config_t *config) {
     }
     game_save_sync_init(&s_cloud.sync);
     s_cloud.initialized = true;
+    game_save_set_hide_listener(game_save_cloud_flush);
     char *base = NULL;
     game_storage_read_status_t status = GAME_STORAGE_READ_ABSENT;
     char error[160] = {0};
@@ -421,6 +424,7 @@ bool game_save_cloud_init(const game_save_cloud_config_t *config) {
 }
 
 void game_save_cloud_shutdown(void) {
+    game_save_set_hide_listener(NULL);
     if (s_cloud.initialized) game_save_sync_destroy(&s_cloud.sync);
     free(s_cloud.persisted_base);
     clear_auto_remote();
@@ -478,7 +482,20 @@ void game_save_cloud_tick(void) {
         request_remote_refresh(false);
         return;
     }
-    start_write();
+    start_write(true);
+}
+
+void game_save_cloud_flush(void) {
+    /* Before start the boot reconciliation has not run: nothing may go up. */
+    if (!s_cloud.initialized || !s_cloud.started) return;
+    finish_write();
+    consume_remote_result();
+    const int64_t saved_at = game_save_last_saved_at();
+    if (saved_at != 0 && saved_at != s_cloud.last_local_saved_at && refresh_local(false)) {
+        s_cloud.last_local_saved_at = saved_at;
+    }
+    consider_auto_resolution();
+    start_write(false);
 }
 
 game_save_sync_state_t game_save_cloud_state(void) {

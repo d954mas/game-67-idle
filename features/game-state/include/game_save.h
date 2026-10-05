@@ -210,6 +210,9 @@ bool  game_save_import_string(const char *text, char *error, int error_cap);
 /* Web: ставит visibilitychange(->hidden) + pagehide -> game_save_flush (НЕ
    beforeunload). No-op на native. */
 void game_save_install_web_flush(void);
+/* Runs right after that page-hide flush, while the page can still start a
+   request; rAF has stopped by then. One listener; NULL clears it. */
+void game_save_set_hide_listener(void (*listener)(void));
 
 /* ---- Transform-шов. Дефолт пуст -> сейв = читаемый JSON ('{'). ---- */
 typedef struct {

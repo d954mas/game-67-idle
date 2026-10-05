@@ -23,10 +23,15 @@ EMSCRIPTEN_KEEPALIVE void game_save_web_pause_playtime(void) {
     game_save_update_playtime(false);
 }
 
+static void (*s_hide_listener)(void);
+
+void game_save_set_hide_listener(void (*listener)(void)) { s_hide_listener = listener; }
+
 EMSCRIPTEN_KEEPALIVE void game_save_web_flush(void) {
     game_save_web_pause_playtime();
     char error[128] = {0};
     (void)game_save_flush(error, (int)sizeof(error));
+    if (s_hide_listener != NULL) s_hide_listener();
 }
 
 /* rAF freezes on a hidden tab, so persistence must flush synchronously from
