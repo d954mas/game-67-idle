@@ -541,8 +541,9 @@ static void game_runtime_update(void) {
 static void frame(void) {
     const double frame_begin = nt_time_now();
     nt_window_poll();
-    nt_gfx_begin_frame();
+    // DevAPI handlers run between frames, where every gfx call (timing toggle included) is allowed.
     devapi_update_frame();
+    nt_gfx_begin_frame();
     nt_input_poll();
     game_input_capture(&s_input);
     focus_prompt_ui_update(&s_input);
