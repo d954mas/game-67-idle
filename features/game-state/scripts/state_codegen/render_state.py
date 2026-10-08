@@ -375,6 +375,8 @@ bool   {self.ns.fn}from_json({self.ns.type} *state, const cJSON *json, char *err
         elif typ in {"int", "u32", "float", "i64"}:
             condition = f"{target}->{ident} < {macro}_MIN || {target}->{ident} > {macro}_MAX"
         elif typ == "string":
+            if field.get("allow_empty", False):
+                return []
             condition = f"{target}->{ident}[0] == '\\0'"
         else:
             return []
