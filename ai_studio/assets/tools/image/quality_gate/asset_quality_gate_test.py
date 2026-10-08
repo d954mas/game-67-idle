@@ -150,6 +150,24 @@ class AssetQualityGateTest(unittest.TestCase):
             [4, 4, 24, 24],
         )
 
+    def test_tolerated_alpha_noise_pass_has_no_problem_bbox(self) -> None:
+        image = clean_square()
+        image.putpixel((1, 1), (180, 110, 40, 255))
+        limits = {**THRESHOLDS, "max_spill_edge_ratio": None, "max_halo_edge_ratio": None}
+
+        report = evaluate(image, key_color=None, thresholds=limits)
+
+        self.assertEqual(report["verdict"], "pass")
+        self.assertGreater(report["metrics"]["alpha_noise_ratio"], 0)
+        self.assertLessEqual(report["metrics"]["alpha_noise_ratio"], limits["max_alpha_noise_ratio"])
+        self.assertEqual(report["problems"], [])
+        self.assertIsNone(report["problem_bbox"])
+
+        rejected = evaluate(image, key_color=None, thresholds={**limits, "max_alpha_noise_ratio": 0})
+        self.assertEqual(rejected["verdict"], "fail")
+        self.assertIsNotNone(rejected["problem_bbox"])
+        self.assertIn("alpha_noise", {problem["code"] for problem in rejected["problems"]})
+
     def test_key_spill_and_non_key_halo_are_separate_edge_failures(self) -> None:
         spill = clean_square()
         draw = ImageDraw.Draw(spill)

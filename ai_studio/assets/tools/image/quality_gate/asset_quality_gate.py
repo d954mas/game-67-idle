@@ -188,7 +188,7 @@ def evaluate(image: Image.Image, *, key_color: RGB | None, thresholds: dict[str,
     check("aspect_ratio", "aspect_relative_error", limits["aspect_ratio"]["max_relative_error"])
 
     local_problem_mask = spill_mask | halo_mask | alpha_noise_mask
-    problem_bbox = mask_bbox(local_problem_mask)
+    problem_bbox = mask_bbox(local_problem_mask) if problems else None
     if problem_bbox is None and problems:
         problem_bbox = content_bbox or [0, 0, width, height]
     return {
