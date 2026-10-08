@@ -75,7 +75,7 @@ export function compileProfileForTarget(target, preset, flags = {}) {
   const profileFlags = {
     debugUi: false, devapi: false, analytics: false, eventsLogMirror: false, ...flags,
   };
-  if (!["wasm-release", "wasm-debug", "wasm-devapi-debug"].includes(preset)
+  if (!["wasm-release", "wasm-debug", "wasm-devapi-debug", "wasm-devapi-perf"].includes(preset)
       || JSON.stringify(Object.keys(profileFlags).sort()) !== JSON.stringify(["analytics", "debugUi", "devapi", "eventsLogMirror"])
       || Object.values(profileFlags).some((value) => typeof value !== "boolean")) {
     throw new Error("web compile profile is invalid");
