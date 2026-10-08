@@ -162,7 +162,7 @@ void ui_kit_label_shadowed(nt_ui_context_t *ctx, const char *id, int slot, const
                            const nt_ui_label_style_t *style) {
     const nt_ui_label_style_t sized = ui_text(style);
     nt_ui_label_style_t shadow = sized;
-    shadow.color = (Clay_Color){8.0F, 5.0F, 3.0F, 142.0F};
+    shadow.color = NT_RGBA8(8, 5, 3, 142);
     // The shadow is a fixed CSS offset below the glyph, so it holds its physical
     // depth instead of thinning out as the type scales.
     const float drop = ui_css(ui_theme_tokens()->rim);
@@ -494,7 +494,7 @@ void ui_kit_badge(nt_ui_context_t *ctx, const char *text) {
     const ui_tokens_t *t = ui_theme_tokens();
     const float d = m.hit * 0.55F;
     nt_ui_label_style_t style = g_ui_theme.hint;
-    style.color = clay_color(t->on_action != 0U ? t->on_action : t->on_panel);
+    style.color = t->on_action != 0U ? t->on_action : t->on_panel;
     ui_kit_disc_begin(ctx,
                       &(Clay_ElementDeclaration){
                           .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,

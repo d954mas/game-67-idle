@@ -47,7 +47,7 @@ static void theme_row(nt_ui_context_t *ctx, int index, const ui_metrics_t *m) {
 static void sample(nt_ui_context_t *ctx, const ui_metrics_t *m) {
     char amount[24];
     nt_ui_label_style_t caption = g_ui_theme.row_sub;
-    caption.color = ui_kit_color(ui_theme_tokens()->ink);
+    caption.color = ui_theme_tokens()->ink;
     ui_kit_panel_begin(ctx, &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
                                                                   .padding = CLAY_PADDING_ALL((uint16_t)m->pad),
                                                                   .layoutDirection = CLAY_TOP_TO_BOTTOM,

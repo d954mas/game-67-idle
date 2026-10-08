@@ -21,7 +21,6 @@ void loc_kit_label_shadowed(nt_ui_context_t *ctx, const char *id, int slot, LocS
     ui_kit_label_shadowed(ctx, id, slot, text_of(text), style);
 }
 
-void loc_text_draw(LocStr text, const float model[16], float size, const float color[4],
-                   float letter_tracking, float line_leading) {
-    nt_text_renderer_draw(text_of(text), model, size, color, letter_tracking, line_leading);
+void loc_text_draw(LocStr text, const nt_text_style_t *style, const float model[16]) {
+    nt_text_renderer_draw(style, model, text_of(text));
 }

@@ -108,7 +108,7 @@ static void counters(nt_ui_context_t *ctx, const ui_metrics_t *m) {
         ui_kit_counter(ctx, "components/chip/nuts", &g_lab_art.xp, amount);
     }
     nt_ui_label_style_t caption = g_ui_theme.row_sub;
-    caption.color = ui_kit_color(ui_theme_tokens()->ink);
+    caption.color = ui_theme_tokens()->ink;
     const float meter_w = m->panel_w - m->pad * 2.0F;
     ROW_BEGIN(*m) {
         ui_kit_meter_captioned(ctx, "components/meter/xp", meter_w, m->hit * 0.55F, 0.3F, ui_theme_tokens()->go, "30 / 100", &caption);

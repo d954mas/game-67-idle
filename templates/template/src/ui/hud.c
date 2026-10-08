@@ -1,6 +1,8 @@
 #include "ui/hud.h"
 
+#include "color/nt_color.h"
 #include "math/nt_math.h"
+#include "graphics/nt_gfx.h"
 #include "render/nt_render_defs.h"
 #include "renderers/nt_text_renderer.h"
 #include "ui/loc_widgets.h"
@@ -21,35 +23,35 @@
 #define HUD_TITLE_Y_CSS 56.0F
 #define HUD_HINT_Y_CSS 28.0F
 
-static void hud_text(LocStr text, float x, float y, float size, const float color[4]) {
+static void hud_text(nt_font_t font, LocStr text, float x, float y, float size, uint32_t color) {
     float model[16];
     glm_mat4_identity((vec4 *)model);
     glm_translate((vec4 *)model, (vec3){x, y, 0.0F});
-    loc_text_draw(text, model, size, color, 0.0F, 0.0F);
+    loc_text_draw(text, &(nt_text_style_t){.font = font, .size = size, .color = color}, model);
 }
 
 /* A dark offset copy under the line keeps it readable over whatever the world
    draws behind it, and the shadow tracks the caller's alpha so a fading line
    does not end its life as a dark ghost of itself. */
-static void hud_text_shadowed(LocStr text, float x, float y, float size, const float color[4]) {
-    const float shadow[4] = {0.07F, 0.10F, 0.13F, 0.55F * color[3]};
-    hud_text(text, x + size * 0.07F, y - size * 0.07F, size, shadow);
-    hud_text(text, x, y, size, color);
+static void hud_text_shadowed(nt_font_t font, LocStr text, float x, float y, float size, uint32_t color) {
+    const uint32_t shadow = nt_color_scale_alpha(NT_RGBA8(18, 26, 33, 255), 0.55F * (float)(color >> 24) / 255.0F);
+    hud_text(font, text, x + size * 0.07F, y - size * 0.07F, size, shadow);
+    hud_text(font, text, x, y, size, color);
 }
 
 /* Localized lines vary wildly in width, and a narrow portrait window is the
    case where the difference stops fitting: measure, then shrink rather than
    run off the edge. */
-static void hud_text_fitted(nt_font_t font, LocStr text, float x, float y, float size, const float color[4]) {
+static void hud_text_fitted(nt_font_t font, LocStr text, float x, float y, float size, uint32_t color) {
     const float max_w = (float)g_nt_window.fb_width - x * 2.0F;
     const float w = nt_font_measure(font, text.s, size, 0.0F).width;
     if (w > max_w && w > 1.0F) {
         size *= max_w / w;
     }
-    hud_text_shadowed(text, x, y, size, color);
+    hud_text_shadowed(font, text, x, y, size, color);
 }
 
-void hud_draw(nt_material_t text_material, nt_resource_t font_resource, nt_font_t font, nt_buffer_t frame_ubo) {
+void hud_draw(nt_material_t text_material, nt_resource_t font_resource, nt_font_t font) {
     if (!nt_material_get_info(text_material) || !nt_resource_is_ready(font_resource)) {
         return;
     }
@@ -67,15 +69,12 @@ void hud_draw(nt_material_t text_material, nt_resource_t font_resource, nt_font_
     memcpy(u.view, view, 64);
     memcpy(u.proj, proj, 64);
     u.camera_pos[2] = 1.0F;
-    nt_gfx_update_buffer(frame_ubo, 0, &u, sizeof(u));
-    nt_gfx_bind_uniform_buffer(frame_ubo, 0);
+    nt_gfx_bind_uniform_block(0, &u, sizeof(u));
 
-    nt_font_step();
     nt_text_renderer_set_material(text_material);
-    nt_text_renderer_set_font(font);
 
-    const float white[4] = {1.0F, 1.0F, 1.0F, 1.0F};
-    const float cyan[4] = {0.35F, 0.82F, 1.0F, 1.0F};
+    const uint32_t white = NT_RGBA8(255, 255, 255, 255);
+    const uint32_t cyan = NT_RGBA8(89, 209, 255, 255);
     /* This title must not sit top-left: the resource panel owns that corner
        with the demo gold/hero HUD, and the two overlapped ("Gold 50" read
        through "TEMPLATE"'s letters). Both demo labels sit BOTTOM-left instead.
@@ -85,5 +84,4 @@ void hud_draw(nt_material_t text_material, nt_resource_t font_resource, nt_font_
     const float x = HUD_MARGIN_CSS * dpr;
     hud_text_fitted(font, loc_hud_title(), x, HUD_TITLE_Y_CSS * dpr, HUD_TITLE_CSS * dpr, white);
     hud_text_fitted(font, loc_hud_hint(), x, HUD_HINT_Y_CSS * dpr, HUD_HINT_CSS * dpr, cyan);
-    nt_text_renderer_flush();
 }

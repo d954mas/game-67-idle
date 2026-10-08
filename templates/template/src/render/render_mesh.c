@@ -2,8 +2,10 @@
 #include "render/shader_programs.h"
 
 #include "app/nt_app.h"
+#include "color/nt_color.h"
 #include "drawable_comp/nt_drawable_comp.h"
 #include "entity/nt_entity.h"
+#include "graphics/nt_gfx.h"
 #include "material/nt_material.h"
 #include "material_comp/nt_material_comp.h"
 #include "math/nt_math.h"
@@ -31,7 +33,7 @@ void render_mesh_init(nt_resource_t mesh_vs, nt_resource_t mesh_fs, nt_resource_
     nt_mesh_comp_init(&(nt_mesh_comp_desc_t){.capacity = 128});
     nt_material_comp_init(&(nt_material_comp_desc_t){.capacity = 128});
     nt_drawable_comp_init(&(nt_drawable_comp_desc_t){.capacity = 128});
-    nt_mesh_renderer_init(&(nt_mesh_renderer_desc_t){.max_instances = 256, .max_pipelines = 16, .max_mesh_layouts = 4});
+    nt_mesh_renderer_init(&(nt_mesh_renderer_desc_t){.max_pipelines = 16, .max_mesh_layouts = 4});
 
     s_material = shader_program_material(mesh_vs, mesh_fs, &(nt_material_create_desc_t){
         .attr_map = {{.stream_name = "position", .location = 0}},
@@ -39,7 +41,6 @@ void render_mesh_init(nt_resource_t mesh_vs, nt_resource_t mesh_fs, nt_resource_
         .depth_test = true,
         .depth_write = true,
         .cull_mode = NT_CULL_BACK,
-        .color_mode = NT_COLOR_MODE_FLOAT4,
         .label = "mesh",
     });
 
@@ -53,12 +54,11 @@ void render_mesh_init(nt_resource_t mesh_vs, nt_resource_t mesh_fs, nt_resource_
         .depth_test = true,
         .depth_write = true,
         .cull_mode = NT_CULL_BACK,
-        .color_mode = NT_COLOR_MODE_FLOAT4,
         .label = "mesh_tex",
     });
 }
 
-void render_mesh_spawn_player(World *w, nt_resource_t cube_mesh, const float color[4]) {
+void render_mesh_spawn_player(World *w, nt_resource_t cube_mesh, uint32_t color) {
     s_cube_mesh = cube_mesh;
     w->player_entity = nt_entity_create();
     nt_transform_comp_add(w->player_entity);
@@ -66,7 +66,7 @@ void render_mesh_spawn_player(World *w, nt_resource_t cube_mesh, const float col
     nt_material_comp_add(w->player_entity);
     nt_drawable_comp_add(w->player_entity);
     *nt_material_comp_handle(w->player_entity) = s_material;
-    nt_drawable_comp_set_color(w->player_entity, color[0], color[1], color[2], color[3]);
+    nt_drawable_comp_set_color(w->player_entity, color);
     w->player_spawned = true;
 }
 
@@ -77,7 +77,7 @@ void render_mesh_spawn_prop(World *w, nt_resource_t cube_mesh) {
     nt_material_comp_add(w->prop_entity);
     nt_drawable_comp_add(w->prop_entity);
     *nt_material_comp_handle(w->prop_entity) = s_material_tex;
-    nt_drawable_comp_set_color(w->prop_entity, 1.0F, 1.0F, 1.0F, 1.0F); // white = texture verbatim
+    nt_drawable_comp_set_color(w->prop_entity, NT_RGBA8(255, 255, 255, 255)); // white = texture verbatim
     // Static, parked to the player's right; set once (transform persists).
     float *pos = nt_transform_comp_position(w->prop_entity);
     float *scale = nt_transform_comp_scale(w->prop_entity);
@@ -97,7 +97,7 @@ bool render_mesh_ready(const World *w) {
     return w != NULL && w->player_spawned && material_program_ready(s_material) && nt_resource_is_ready(s_cube_mesh);
 }
 
-void render_mesh_draw(World *w, nt_buffer_t frame_ubo) {
+void render_mesh_draw(World *w) {
     if (!material_program_ready(s_material) || !w->player_spawned || !nt_resource_is_ready(s_cube_mesh)) {
         return;
     }
@@ -126,8 +126,7 @@ void render_mesh_draw(World *w, nt_buffer_t frame_ubo) {
     u.resolution[1] = (float)g_nt_window.fb_height;
     u.near_far[0] = 0.1F;
     u.near_far[1] = 100.0F;
-    nt_gfx_update_buffer(frame_ubo, 0, &u, sizeof(u));
-    nt_gfx_bind_uniform_buffer(frame_ubo, 0);
+    nt_gfx_bind_uniform_block(0, &u, sizeof(u));
 
     // set the player transform from the World, then draw
     float *pos = nt_transform_comp_position(w->player_entity);

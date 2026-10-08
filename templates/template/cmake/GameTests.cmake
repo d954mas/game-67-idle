@@ -1019,6 +1019,7 @@ if(NOT EMSCRIPTEN)
                 src/systems/sys_cloud_save.c
                 "${GAME_STATE_SRC}/game_save_sync.c"
                 "${GAME_STATE_SRC}/game_save_cloud.c"
+                "${GAME_STATE_SRC}/game_save_platform_native.c"
                 "${PLATFORM_SDK_SRC}/platform_sdk_storage.c"
                 "${ENGINE_DIR}/deps/cjson/cJSON.c"
         INCLUDES src "${GAME_STATE_INC}" "${PLATFORM_SDK_INC}"

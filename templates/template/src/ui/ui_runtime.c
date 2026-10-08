@@ -13,7 +13,6 @@
 #include "nt_pack_format.h"
 #include "render/nt_render_defs.h"
 #include "renderers/nt_sprite_renderer.h"
-#include "renderers/nt_text_renderer.h"
 #include "resource/nt_resource.h"
 #include "ui/nt_ui_scale.h"
 #include "window/nt_window.h"
@@ -35,7 +34,6 @@
 
 static NT_UI_DECLARE_ARENA(s_ui_arena, UI_ARENA_SIZE);
 static nt_ui_context_t *s_ctx;
-static nt_buffer_t s_ui_ubo;
 static nt_ui_scale_t s_scale;
 
 static nt_resource_t s_sprite_vs, s_sprite_fs, s_atlas, s_atlas_tex;
@@ -47,22 +45,10 @@ static bool s_atlas_bound, s_font_bound;
 
 static nt_hash64_t rid(const char *s) { return nt_hash64_str(s); }
 
-static nt_buffer_t make_ubo(void) {
-    return nt_gfx_make_buffer(&(nt_buffer_desc_t){
-        .type = NT_BUFFER_UNIFORM, .usage = NT_USAGE_DYNAMIC, .size = sizeof(nt_frame_uniforms_t), .label = "ui_frame_uniforms"});
-}
-
 void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t font_resource) {
     s_text_material = text_material;
     s_font = font;
     s_font_resource = font_resource;
-
-    // Atlas resource activator (the NT_ASSET_TEXTURE activator is set in main, shared
-    // with the mesh texture path).
-    nt_atlas_init();
-
-    nt_sprite_renderer_desc_t sr = nt_sprite_renderer_desc_defaults();
-    nt_sprite_renderer_init(&sr);
 
     nt_ui_module_init();
     nt_ui_create_desc_t desc = nt_ui_create_desc_defaults();
@@ -91,9 +77,8 @@ void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t 
         .label = "ui_sprite",
     });
     nt_ui_set_sprite_material(s_ctx, s_sprite_material);
-    nt_ui_set_text_material(s_ctx, s_text_material);
+    nt_ui_set_text_material(s_ctx, s_text_material, 0.0F);
 
-    s_ui_ubo = make_ubo();
     theme_init(s_atlas);
 }
 
@@ -149,10 +134,8 @@ bool ui_runtime_begin(float dt, const game_input_frame_t *input) {
     u.resolution[1] = fb_h;
     u.near_far[0] = -1.0F;
     u.near_far[1] = 1.0F;
-    nt_gfx_update_buffer(s_ui_ubo, 0, &u, sizeof u);
-    nt_gfx_bind_uniform_buffer(s_ui_ubo, 0);
+    nt_gfx_bind_uniform_block(0, &u, sizeof u);
 
-    nt_font_step();
     nt_mem_scratch_reset();
     // Feed ALL pointer slots in raw device coordinates: a DevAPI-injected
     // click lands in the first FREE slot, which is not 0 when a real mouse
@@ -193,14 +176,9 @@ void ui_runtime_end(void) {
     nt_ui_end(s_ctx);
     nt_ui_target_t target = nt_ui_scale_make_target(&s_scale);
     nt_ui_walk(s_ctx, &target);
-    nt_sprite_renderer_flush();
-    nt_text_renderer_flush();
 }
 
 void ui_runtime_restore_gpu(void) {
-    nt_gfx_destroy_buffer(s_ui_ubo);
-    s_ui_ubo = make_ubo();
-    nt_sprite_renderer_restore_gpu();
     s_atlas_bound = false; // re-resolve atlas white region after GL restore
     s_font_bound = false;
 }
@@ -210,7 +188,6 @@ void ui_runtime_shutdown(void) {
     nt_ui_module_shutdown();
     nt_sprite_renderer_shutdown();
     nt_material_destroy(s_sprite_material);
-    nt_gfx_destroy_buffer(s_ui_ubo);
 }
 
 nt_ui_context_t *ui_runtime_ctx(void) { return s_ctx; }

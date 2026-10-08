@@ -21,7 +21,7 @@ void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t 
 bool ui_runtime_begin(float dt, const game_input_frame_t *input);
 bool ui_runtime_ready(void);
 
-// Closes the frame, walks the tree, flushes the sprite + text renderers.
+// Closes the frame, walks the tree, records the sprite + text draws into the open pass.
 void ui_runtime_end(void);
 
 // Sizes come from the ui-kit feature, not from here: ui_runtime_begin opens the

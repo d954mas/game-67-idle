@@ -48,7 +48,7 @@ void scene_hud_build_overlay(nt_ui_context_t *ctx) {
     char buf[48];
 
     nt_ui_label_style_t meter_caption = g_ui_theme.row_sub;
-    meter_caption.color = ui_kit_color(t->ink);
+    meter_caption.color = t->ink;
 
     // The top inset carries no safe_t here because the lab's scene list above
     // already does; a game copying this HUD adds m.safe_t to the top padding.

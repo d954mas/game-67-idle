@@ -39,6 +39,10 @@
 #endif
 
 #define SCRATCH_ARENA_SIZE ((size_t)512U * 1024U)
+// Quads and glyphs per frame: vertex = quads x 4 x (20 B sprite + 64 B custom attrs) + glyphs x 4 x 52 B; index = (quads + glyphs) x 6 x 4 B.
+#define FRAME_QUADS 4096U
+#define FRAME_VERTEX_BYTES (FRAME_QUADS * 4U * (84U + 52U))
+#define FRAME_INDEX_BYTES (FRAME_QUADS * 2U * 6U * 4U)
 #define TAP_MAX 8
 // A scripted tap lands after the first frames settled and the next one waits
 // for the previous press to be handled and animated.
@@ -255,7 +259,7 @@ static bool write_ppm(const char *path) {
     const size_t count = (size_t)w * (size_t)h;
     uint8_t *rgba = (uint8_t *)malloc(count * 4U);
     uint8_t *rgb = (uint8_t *)malloc(count * 3U);
-    bool ok = rgba != NULL && rgb != NULL && nt_gfx_read_pixels(0, 0, w, h, rgba, (uint32_t)(count * 4U));
+    bool ok = rgba != NULL && rgb != NULL && nt_gfx_read_pixels(NT_RENDER_TARGET_INVALID, 0, 0, w, h, rgba, (uint32_t)(count * 4U));
     if (ok) {
         for (size_t i = 0; i < count; ++i) {
             rgb[i * 3U] = rgba[i * 4U];
@@ -302,6 +306,16 @@ static void handle_keys(nt_ui_context_t *ctx) {
 
 static void frame(void) {
     nt_window_poll();
+    nt_gfx_begin_frame();
+    if (g_nt_gfx.context_restored) {
+        nt_resource_invalidate(NT_ASSET_TEXTURE);
+        nt_resource_invalidate(NT_ASSET_FONT);
+        nt_program_ref_drop(&s_sprite_program);
+        nt_program_ref_drop(&s_text_program);
+        nt_program_ref_drop(&s_radial_program);
+        nt_resource_invalidate(NT_ASSET_SHADER_CODE);
+        lab_ui_runtime_restore_gpu();
+    }
     nt_input_poll();
     nt_mem_scratch_reset();
 
@@ -310,19 +324,8 @@ static void frame(void) {
 
     nt_resource_step();
     link_programs();
+    nt_font_step();
 
-    nt_gfx_begin_frame();
-    if (g_nt_gfx.context_restored) {
-        nt_resource_invalidate(NT_ASSET_TEXTURE);
-        nt_resource_invalidate(NT_ASSET_FONT);
-        (void)nt_sprite_renderer_restore_gpu();
-        (void)nt_text_renderer_restore_gpu();
-        nt_program_ref_drop(&s_sprite_program);
-        nt_program_ref_drop(&s_text_program);
-        nt_program_ref_drop(&s_radial_program);
-        nt_resource_invalidate(NT_ASSET_SHADER_CODE);
-        lab_ui_runtime_restore_gpu();
-    }
 
     const ui_tokens_t *t = ui_theme_tokens();
     nt_gfx_begin_pass(&(nt_pass_desc_t){
@@ -330,7 +333,6 @@ static void frame(void) {
                         (float)((t->shell >> 16) & 0xFFU) / 255.0F, 1.0F},
         .clear_depth = 1.0F,
     });
-    nt_font_step();
 
     bool drew = false;
     if (lab_ui_runtime_ready()) {
@@ -357,6 +359,7 @@ static void frame(void) {
         }
     }
     nt_gfx_end_pass();
+    nt_gfx_end_frame();
 
     if (drew) {
         s_ready_frames++;
@@ -412,22 +415,22 @@ int main(int argc, char *argv[]) {
     nt_input_init();
 
     nt_gfx_desc_t gfx_desc = nt_gfx_desc_defaults();
+    gfx_desc.frame_capacity[NT_GFX_FRAME_VERTEX] = FRAME_VERTEX_BYTES;
+    gfx_desc.frame_capacity[NT_GFX_FRAME_INDEX] = FRAME_INDEX_BYTES;
+    gfx_desc.frame_capacity[NT_GFX_FRAME_UNIFORM] = 512U; // one 256 B view block plus offset alignment up to 256
+    gfx_desc.global_blocks[0] = (nt_global_block_t){"Globals", 0};
     nt_gfx_init(&gfx_desc);
-    nt_gfx_register_global_block("Globals", 0);
 
     nt_http_init();
     nt_fs_init();
     nt_hash_init(&(nt_hash_desc_t){0});
     nt_resource_init(&(nt_resource_desc_t){0});
     nt_mem_scratch_init(SCRATCH_ARENA_SIZE);
-    nt_resource_set_activator(NT_ASSET_TEXTURE, nt_gfx_activate_texture, nt_gfx_deactivate_texture);
-    nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader, nt_gfx_deactivate_shader);
+    nt_resource_register_type(NT_ASSET_TEXTURE, &(nt_resource_type_desc_t){.activate = nt_gfx_activate_texture, .deactivate = nt_gfx_deactivate_texture});
+    nt_resource_register_type(NT_ASSET_SHADER_CODE, &(nt_resource_type_desc_t){.activate = nt_gfx_activate_shader, .deactivate = nt_gfx_deactivate_shader});
     nt_atlas_init();
     nt_material_init(&(nt_material_desc_t){.max_materials = 4});
     nt_font_init(&(nt_font_desc_t){.max_fonts = 1});
-    nt_sprite_renderer_desc_t sprite_desc = nt_sprite_renderer_desc_defaults();
-    nt_sprite_renderer_init(&sprite_desc);
-    nt_text_renderer_init();
 
     s_pack_id = nt_hash32_str("ui_lab");
     nt_resource_mount(s_pack_id, 100);
@@ -463,8 +466,6 @@ int main(int argc, char *argv[]) {
         .depth_test = false,
         .depth_write = false,
         .cull_mode = NT_CULL_NONE,
-        .params[0] = {.name = "u_alpha_cutoff", .value = {NT_TEXT_ALPHA_CUTOFF_DEFAULT}},
-        .param_count = 1,
         .label = "ui_lab_text",
     });
     // The radial SDF: the extended sprite layout the kit draws its discs with.
@@ -479,10 +480,7 @@ int main(int argc, char *argv[]) {
         .label = "ui_lab_radial",
     });
     s_font = nt_font_create(&(nt_font_create_desc_t){
-        .curve_texture_width = 1024,
-        .curve_texture_height = 512,
-        .band_texture_height = 256,
-        .band_count = 8,
+        .max_glyphs = 256,
         .measure_cache_size = 256,
     });
     nt_font_add(s_font, s_font_resource);

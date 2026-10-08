@@ -6,8 +6,6 @@
 #include "math/nt_math.h"
 #include "memory/nt_mem_scratch.h"
 #include "render/nt_render_defs.h"
-#include "renderers/nt_sprite_renderer.h"
-#include "renderers/nt_text_renderer.h"
 #include "ui/nt_ui_scale.h"
 #include "window/nt_window.h"
 
@@ -22,7 +20,6 @@
 
 static NT_UI_DECLARE_ARENA(s_ui_arena, UI_ARENA_SIZE);
 static nt_ui_context_t *s_ctx;
-static nt_buffer_t s_ubo;
 static nt_ui_scale_t s_scale;
 
 static nt_material_t s_sprite_material;
@@ -32,11 +29,6 @@ static nt_resource_t s_font_resource;
 static nt_resource_t s_atlas;
 static bool s_atlas_bound;
 static bool s_font_bound;
-
-static nt_buffer_t make_ubo(void) {
-    return nt_gfx_make_buffer(&(nt_buffer_desc_t){
-        .type = NT_BUFFER_UNIFORM, .usage = NT_USAGE_DYNAMIC, .size = sizeof(nt_frame_uniforms_t), .label = "ui_lab_frame_uniforms"});
-}
 
 static bool material_ready(nt_material_t material) {
     const nt_material_info_t *info = nt_material_get_info(material);
@@ -60,8 +52,7 @@ void lab_ui_runtime_init(nt_material_t sprite_material, nt_material_t text_mater
     NT_ASSERT(s_ctx != NULL && "ui_lab: failed to create UI context");
 
     nt_ui_set_sprite_material(s_ctx, s_sprite_material);
-    nt_ui_set_text_material(s_ctx, s_text_material);
-    s_ubo = make_ubo();
+    nt_ui_set_text_material(s_ctx, s_text_material, 0.0F);
 }
 
 static void resolve_bindings(void) {
@@ -112,8 +103,7 @@ bool lab_ui_runtime_begin(float dt, const nt_pointer_t *pointers, uint32_t count
     u.resolution[1] = fb_h;
     u.near_far[0] = -1.0F;
     u.near_far[1] = 1.0F;
-    nt_gfx_update_buffer(s_ubo, 0, &u, sizeof u);
-    nt_gfx_bind_uniform_buffer(s_ubo, 0);
+    nt_gfx_bind_uniform_block(0, &u, sizeof u);
 
     nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, pointers, count);
     nt_ui_set_viewport(s_ctx, nt_ui_viewport_from_scale(&s_scale));
@@ -124,13 +114,9 @@ void lab_ui_runtime_end(void) {
     nt_ui_end(s_ctx);
     const nt_ui_target_t target = nt_ui_scale_make_target(&s_scale);
     nt_ui_walk(s_ctx, &target);
-    nt_sprite_renderer_flush();
-    nt_text_renderer_flush();
 }
 
 void lab_ui_runtime_restore_gpu(void) {
-    nt_gfx_destroy_buffer(s_ubo);
-    s_ubo = make_ubo();
     s_atlas_bound = false;
     s_font_bound = false;
 }
@@ -138,7 +124,6 @@ void lab_ui_runtime_restore_gpu(void) {
 void lab_ui_runtime_shutdown(void) {
     nt_ui_destroy_context(s_ctx);
     nt_ui_module_shutdown();
-    nt_gfx_destroy_buffer(s_ubo);
 }
 
 nt_ui_context_t *lab_ui_runtime_ctx(void) { return s_ctx; }

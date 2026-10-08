@@ -4,6 +4,7 @@
 
 #include "app/nt_app.h" /* g_nt_app.dt */
 #include "clay.h"
+#include "color/nt_color.h"
 #include "ui/loc_widgets.h"
 #include "ui/nt_ui_image.h"
 #include "ui/nt_ui_label.h"
@@ -64,20 +65,10 @@ static float rp_panel_y(void) { return ui_css(RP_PANEL_Y_CSS); }
 #define RP_ACCENT_SECS 0.35F  /* accent decay window */
 #define RP_SNAP_ABS 1000LL    /* counter snap-ref floor when max is absent, #10 */
 
-/* The image widget tints in packed 0xAABBGGRR; the panel's own accent maths is
-   in Clay's 0..255 float colour. */
-static uint32_t rp_pack_color(Clay_Color c) {
-    const uint32_t r = (uint32_t)(c.r + 0.5F) & 0xFFU;
-    const uint32_t g = (uint32_t)(c.g + 0.5F) & 0xFFU;
-    const uint32_t b = (uint32_t)(c.b + 0.5F) & 0xFFU;
-    const uint32_t a = (uint32_t)(c.a + 0.5F) & 0xFFU;
-    return (a << 24) | (b << 16) | (g << 8) | r;
-}
-
 static const Clay_Color RP_COLOR_ICON_FALLBACK = {70.0F, 70.0F, 78.0F, 220.0F};
-static const Clay_Color RP_COLOR_FILL = {74.0F, 123.0F, 247.0F, 255.0F}; /* --ui-info */
-static const Clay_Color RP_COLOR_GAIN = {120.0F, 220.0F, 120.0F, 255.0F};  /* gain accent */
-static const Clay_Color RP_COLOR_SPEND = {225.0F, 95.0F, 95.0F, 255.0F};   /* акцент spend */
+#define RP_COLOR_FILL NT_RGBA8(74, 123, 247, 255)  /* --ui-info */
+#define RP_COLOR_GAIN NT_RGBA8(120, 220, 120, 255) /* gain accent */
+#define RP_COLOR_SPEND NT_RGBA8(225, 95, 95, 255)  /* акцент spend */
 
 /* ---- Транзиентное состояние (static, keyed by entry.id -- НЕ в сейве, не в World) ---- */
 
@@ -145,19 +136,21 @@ static Clay_ElementId rp_clay_id(const char *entry_id, const char *suffix) {
     return Clay_GetElementId((Clay_String){.isStaticallyAllocated = false, .length = (int32_t)strlen(buf), .chars = buf});
 }
 
-static Clay_Color rp_lerp_color(Clay_Color a, Clay_Color b, float t) {
+static uint32_t rp_lerp_color(uint32_t a, uint32_t b, float t) {
     if (t <= 0.0F) {
         return a;
     }
     if (t >= 1.0F) {
         return b;
     }
-    return (Clay_Color){
-        a.r + (b.r - a.r) * t,
-        a.g + (b.g - a.g) * t,
-        a.b + (b.b - a.b) * t,
-        a.a + (b.a - a.a) * t,
-    };
+    float fa[4];
+    float fb[4];
+    nt_color_unpack(a, fa);
+    nt_color_unpack(b, fb);
+    for (int i = 0; i < 4; ++i) {
+        fa[i] += (fb[i] - fa[i]) * t;
+    }
+    return nt_color_pack(fa);
 }
 
 /* Graceful no-art: icon==NULL -> flat rect placeholder, never
@@ -224,7 +217,7 @@ static void rp_draw_counter(nt_ui_context_t *ctx, const resource_panel_entry_t *
     (void)game_format_i64_abbrev((int64_t)llround(slot->displayed), loc_decimal_separator(), value_buf,
                                  sizeof value_buf);
 
-    Clay_Color accent_tint = slot->accent_gain ? RP_COLOR_GAIN : RP_COLOR_SPEND;
+    uint32_t accent_tint = slot->accent_gain ? RP_COLOR_GAIN : RP_COLOR_SPEND;
     nt_ui_label_style_t value_style = ui_text(&g_ui_theme.label);
     value_style.color = rp_lerp_color(g_ui_theme.label.color, accent_tint, slot->accent);
 
@@ -270,7 +263,7 @@ static void rp_draw_bar(nt_ui_context_t *ctx, const resource_panel_entry_t *entr
     char value_buf[24];
     (void)game_format_i64_abbrev((int64_t)llround(slot->displayed), loc_decimal_separator(), value_buf,
                                  sizeof value_buf);
-    Clay_Color accent_tint = slot->accent_gain ? RP_COLOR_GAIN : RP_COLOR_SPEND;
+    uint32_t accent_tint = slot->accent_gain ? RP_COLOR_GAIN : RP_COLOR_SPEND;
 
     CLAY({.layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(rp_row_h())},
                       .layoutDirection = CLAY_LEFT_TO_RIGHT,
@@ -302,7 +295,7 @@ static void rp_draw_bar(nt_ui_context_t *ctx, const resource_panel_entry_t *entr
                   .layout = {.sizing = {CLAY_SIZING_FIXED(rp_bar_w()), CLAY_SIZING_FIXED(rp_bar_h())},
                              .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}) {
                 ui_kit_meter(ctx, rp_bar_w(), rp_bar_h(), ratio,
-                             rp_pack_color(rp_lerp_color(RP_COLOR_FILL, accent_tint, slot->accent)));
+                             rp_lerp_color(RP_COLOR_FILL, accent_tint, slot->accent));
                 loc_kit_label_shadowed(ctx, "resource_panel/caption", index, caption, &g_ui_theme.label);
             }
         }

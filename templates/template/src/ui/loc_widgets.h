@@ -2,6 +2,7 @@
 #define GAME_UI_LOC_WIDGETS_H
 
 #include "ui/nt_ui.h"
+#include "renderers/nt_text_renderer.h"
 #include "ui/nt_ui_label.h"
 
 #include "features/localization/loc.h"
@@ -37,7 +38,6 @@ void loc_kit_label_shadowed(nt_ui_context_t *ctx, const char *id, int slot, LocS
                             const nt_ui_label_style_t *style);
 
 // The immediate text renderer, for surfaces that draw outside the nt_ui tree.
-void loc_text_draw(LocStr text, const float model[16], float size, const float color[4],
-                   float letter_tracking, float line_leading);
+void loc_text_draw(LocStr text, const nt_text_style_t *style, const float model[16]);
 
 #endif /* GAME_UI_LOC_WIDGETS_H */

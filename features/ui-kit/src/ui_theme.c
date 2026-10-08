@@ -91,17 +91,8 @@ static nt_ui_checkbox_style_t switch_style(const ui_tokens_t *t, nt_atlas_region
     return s;
 }
 
-static Clay_Color clay_color(uint32_t abgr) {
-    return (Clay_Color){
-        (float)(abgr & 0xFFU),
-        (float)((abgr >> 8) & 0xFFU),
-        (float)((abgr >> 16) & 0xFFU),
-        (float)((abgr >> 24) & 0xFFU),
-    };
-}
-
 static nt_ui_label_style_t label_style(float css_size, uint32_t color, uint8_t wrap) {
-    return (nt_ui_label_style_t){.font_id = 0, .font_size = css_size, .color = clay_color(color), .wrap_mode = wrap};
+    return (nt_ui_label_style_t){.font_id = 0, .font_size = css_size, .color = color, .wrap_mode = wrap};
 }
 
 const ui_tokens_t *ui_theme_tokens(void) {

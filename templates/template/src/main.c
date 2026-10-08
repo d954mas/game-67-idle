@@ -3,6 +3,8 @@
 // A game adds systems (systems/sys_*.c, render/*, ui/*) and registers them in
 // frame(); it never grows this file with gameplay rules.
 #include "app/nt_app.h"
+#include "atlas/nt_atlas.h"
+#include "color/nt_color.h"
 #include "core/nt_core.h"
 #include "core/nt_platform.h"
 #include "font/nt_font.h"
@@ -103,27 +105,22 @@
 
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/emscripten.h>
-#include <emscripten/html5.h>
-
-/* The browser hands the GPU back only if the page cancels the loss event, and
-   the engine learns the context is gone at the next frame boundary. Beginning a
-   frame here makes that discovery synchronous with the event, so no draw call
-   is issued against a dead context. */
-static EM_BOOL game_on_webgl_context_lost(int event_type, const void *event, void *user_data) {
-    (void)event_type;
-    (void)event;
-    (void)user_data;
-    nt_gfx_begin_frame();
-    return EM_TRUE;
-}
 #endif
 
 #ifndef GAME_ASSET_PACK_PATH
 #define GAME_ASSET_PACK_PATH "assets/game.ntpack"
 #endif
 
+// UI quads and glyphs one frame can record. Vertex = quads x 4 x 20 B + glyphs x 4 x 52 B + mesh instances x 52 B;
+// index = (quads + glyphs) x 6 x 4 B; uniform = view-block binds per frame (mesh, HUD, UI) x (sizeof block + 256).
+#define FRAME_QUADS 2048U
+#define FRAME_GLYPHS 2048U
+#define FRAME_MESH_INSTANCES 16U
+#define FRAME_VERTEX_BYTES (FRAME_QUADS * 4U * 20U + FRAME_GLYPHS * 4U * 52U + FRAME_MESH_INSTANCES * 52U)
+#define FRAME_INDEX_BYTES ((FRAME_QUADS + FRAME_GLYPHS) * 6U * 4U)
+#define FRAME_UNIFORM_BYTES (3U * ((uint32_t)sizeof(nt_frame_uniforms_t) + 256U))
+
 static nt_hash32_t s_pack_id;
-static nt_buffer_t s_frame_ubo;
 static nt_material_t s_text_material;
 static nt_font_t s_font;
 static nt_resource_t s_text_vs, s_text_fs, s_font_resource;
@@ -544,6 +541,7 @@ static void game_runtime_update(void) {
 static void frame(void) {
     const double frame_begin = nt_time_now();
     nt_window_poll();
+    nt_gfx_begin_frame();
     devapi_update_frame();
     nt_input_poll();
     game_input_capture(&s_input);
@@ -585,8 +583,8 @@ static void frame(void) {
         platform_sdk_gameplay_active() && !platform_sdk_break_active());
     game_runtime_update();
 
-    nt_gfx_begin_frame();
     if (g_nt_gfx.context_lost) {
+        nt_gfx_end_frame();
         return;
     }
     if (g_nt_gfx.context_restored) {
@@ -594,17 +592,13 @@ static void frame(void) {
         nt_resource_invalidate(NT_ASSET_FONT);
         nt_resource_invalidate(NT_ASSET_MESH);
         nt_resource_invalidate(NT_ASSET_TEXTURE);
-        nt_gfx_destroy_buffer(s_frame_ubo);
-        s_frame_ubo = nt_gfx_make_buffer(&(nt_buffer_desc_t){
-            .type = NT_BUFFER_UNIFORM, .usage = NT_USAGE_DYNAMIC,
-            .size = sizeof(nt_frame_uniforms_t), .label = "frame_uniforms"});
-        nt_text_renderer_restore_gpu();
         nt_font_step();
         render_mesh_restore_gpu();
         ui_runtime_restore_gpu();
         s_gfx_recovery_pending = true;
         /* Resource slots publish the invalidation on the next top-of-frame
            resource step, so this frame must not touch their stale GPU handles. */
+        nt_gfx_end_frame();
         nt_window_swap_buffers();
         devapi_sample_metrics(frame_begin);
         return;
@@ -619,13 +613,14 @@ static void frame(void) {
     // The UI is immediate mode: while the gate is off no widget exists to be
     // hit, so anything that clicks or photographs must turn rendering back on
     // and let a frame pass.
+    nt_font_step();
     if (nt_app_render_enabled()) {
     // render systems read the world
     nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.50F, 0.75F, 0.96F, 1.0F}, .clear_depth = 1.0F});
     if (game_scenes_should_render_world()) {
         // draw_world stays a direct shell call until render systems become features.
-        render_mesh_draw(&s_world, s_frame_ubo);
-        hud_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
+        render_mesh_draw(&s_world);
+        hud_draw(s_text_material, s_font_resource, s_font);
     }
     // UI-слой фич: агрегатор владеет ui_runtime-кадром и рисует settings (z-order).
     if (s_game_runtime_ready) {
@@ -633,6 +628,7 @@ static void frame(void) {
     }
     nt_gfx_end_pass();
     }
+    nt_gfx_end_frame();
 
     // --capture: after a few frames (resources loaded + rendered), grab + quit.
     if (s_game_runtime_ready) {
@@ -741,12 +737,11 @@ int main(int argc, char **argv) {
     nt_gfx_desc_t gfx_desc = nt_gfx_desc_defaults();
     gfx_desc.depth = true;
     gfx_desc.max_buffers = 256;
+    gfx_desc.frame_capacity[NT_GFX_FRAME_VERTEX] = FRAME_VERTEX_BYTES;
+    gfx_desc.frame_capacity[NT_GFX_FRAME_INDEX] = FRAME_INDEX_BYTES;
+    gfx_desc.frame_capacity[NT_GFX_FRAME_UNIFORM] = FRAME_UNIFORM_BYTES;
+    gfx_desc.global_blocks[0] = (nt_global_block_t){"Globals", 0};
     nt_gfx_init(&gfx_desc);
-#if defined(__EMSCRIPTEN__)
-    (void)emscripten_set_webglcontextlost_callback("#canvas", NULL, true,
-                                                   game_on_webgl_context_lost);
-#endif
-    nt_gfx_register_global_block("Globals", 0);
 
     nt_http_init();
 #ifndef NT_PLATFORM_WEB
@@ -798,12 +793,12 @@ int main(int argc, char **argv) {
         .activate = nt_gfx_activate_mesh, .deactivate = nt_gfx_deactivate_mesh});
     nt_resource_register_type(NT_ASSET_TEXTURE, &(nt_resource_type_desc_t){
         .activate = nt_gfx_activate_texture, .deactivate = nt_gfx_deactivate_texture}); // mesh texture + UI atlas page
+    nt_atlas_init(); // resource types register before the first mount
     nt_mem_scratch_init((size_t)512U * 1024U); // per-frame arena nt_ui builds element data from
     loc_init(); // after the scratch arena: formatted strings allocate from it
 
     nt_font_init(&(nt_font_desc_t){.max_fonts = 2});
     nt_material_init(&(nt_material_desc_t){.max_materials = 8});
-    nt_text_renderer_init();
     game_save_register_fragment(&settings_state_fragment); /* settings first */
     game_save_register_fragment(&items_state_fragment);    /* L1, no deps: between settings and game */
     game_save_register_fragment(&progression_state_fragment); /* L2 depends on items: register after items */
@@ -839,22 +834,13 @@ int main(int argc, char **argv) {
         .depth_test = false,
         .depth_write = false,
         .cull_mode = NT_CULL_NONE,
-        .params[0] = {.name = "u_alpha_cutoff", .value = {NT_TEXT_ALPHA_CUTOFF_DEFAULT}},
-        .param_count = 1,
         .label = "text",
     });
     s_font = nt_font_create(&(nt_font_create_desc_t){
-        .curve_texture_width = 1024,
-        .curve_texture_height = 512,
-        .band_texture_height = 256,
-        .band_count = 8,
+        .max_glyphs = 256,
         .measure_cache_size = 256,
     });
     nt_font_add(s_font, s_font_resource);
-
-    s_frame_ubo = nt_gfx_make_buffer(&(nt_buffer_desc_t){
-        .type = NT_BUFFER_UNIFORM, .usage = NT_USAGE_DYNAMIC,
-        .size = sizeof(nt_frame_uniforms_t), .label = "frame_uniforms"});
 
     // mesh render system + two sample cubes: a coloured one (mesh_inst) and a
     // textured one (mesh_tex, samples the uv_grid texture). Same cube mesh feeds both.
@@ -865,7 +851,7 @@ int main(int argc, char **argv) {
     s_uv_texture = nt_resource_request(rid("assets/textures/uv_grid"), NT_ASSET_TEXTURE);
     s_cube = nt_resource_request(rid("assets/meshes/cube.glb"), NT_ASSET_MESH);
     render_mesh_init(s_mesh_vs, s_mesh_fs, s_tex_vs, s_tex_fs, s_uv_texture);
-    render_mesh_spawn_player(&s_world, s_cube, (float[4]){0.16F, 0.78F, 0.30F, 1.0F});
+    render_mesh_spawn_player(&s_world, s_cube, NT_RGBA8(41, 199, 77, 255));
     render_mesh_spawn_prop(&s_world, s_cube);
 
     // engine UI stack (sprite renderer + slice9 atlas + nt_ui ctx); reuses the font + text material
@@ -908,7 +894,6 @@ int main(int argc, char **argv) {
 #endif
     nt_http_shutdown();
     nt_hash_shutdown();
-    nt_gfx_destroy_buffer(s_frame_ubo);
     nt_gfx_shutdown();
     nt_input_shutdown();
     nt_window_shutdown();
