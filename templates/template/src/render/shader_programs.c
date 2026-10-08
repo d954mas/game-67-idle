@@ -57,6 +57,10 @@ void shader_programs_update(void) {
     }
 }
 
+void shader_programs_restore_gpu(void) {
+    for (int pair = 0; pair < s_pair_count; ++pair) { nt_program_ref_drop(&s_pairs[pair]); }
+}
+
 void shader_programs_shutdown(void) {
     for (int pair = 0; pair < s_pair_count; ++pair) {
         nt_program_ref_drop(&s_pairs[pair]);

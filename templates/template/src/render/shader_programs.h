@@ -20,6 +20,10 @@ nt_material_t shader_program_material(nt_resource_t vs, nt_resource_t fs,
 // Once per frame while the context is live, after nt_material_step().
 void shader_programs_update(void);
 
+// After a context restore, before the first pass: a lost program is never relinked by
+// itself, so this drops every ref and the next update links them again.
+void shader_programs_restore_gpu(void);
+
 // Before nt_gfx_shutdown: releases every owned program.
 void shader_programs_shutdown(void);
 
