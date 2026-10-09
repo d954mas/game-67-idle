@@ -159,5 +159,5 @@ void render_mesh_draw(World *w) {
         count += 1;
     }
 
-    nt_mesh_renderer_draw_list(items, count);
+    nt_mesh_renderer_draw_list(NT_GFX_FRAME_VERTEX, items, count);
 }
