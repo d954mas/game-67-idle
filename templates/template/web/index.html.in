@@ -25,7 +25,10 @@
   canvas {
     display: block;
     width: 100vw;
+    /* Mobile browsers size vh as if their toolbar were hidden; dvh is what is
+       actually visible, so the bottom of the game is never under the bar. */
     height: 100vh;
+    height: 100dvh;
     outline: none;
     background: #111418;
     /* The game owns every gesture on the canvas: a browser pan or pinch-zoom
