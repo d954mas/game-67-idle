@@ -320,6 +320,7 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
     /* No portal-owned sound switches here; the game's volume is its own. */
     setSoundMuted() {},
     soundSwitches() { return false; },
+    errorSink() { return null; },
     hideBanner,
     leaderboardCaps,
     loadData,

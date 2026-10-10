@@ -35,6 +35,7 @@ PlatformSdkBackend.prototype.measure;
 PlatformSdkBackend.prototype.showBanner;
 PlatformSdkBackend.prototype.hideBanner;
 PlatformSdkBackend.prototype.soundSwitches;
+PlatformSdkBackend.prototype.errorSink;
 PlatformSdkBackend.prototype.setSoundMuted;
 PlatformSdkBackend.prototype.showInterstitial;
 PlatformSdkBackend.prototype.showRewarded;

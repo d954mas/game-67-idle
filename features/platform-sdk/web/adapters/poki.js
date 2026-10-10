@@ -187,6 +187,12 @@ export function createPokiPlatformAdapter({ host, lifecycle }) {
     /* No portal-owned sound switches here; the game's volume is its own. */
     setSoundMuted() {},
     soundSwitches() { return false; },
+    /* A page's crash reporter hands its reports to Poki's own error reporting: the SDK object once its
+       script has defined captureError, null before that or without it. */
+    errorSink() {
+      const sdk = windowRef().PokiSDK;
+      return sdk && typeof sdk.captureError === "function" ? sdk : null;
+    },
     hideBanner() {
       return Promise.resolve();
     },

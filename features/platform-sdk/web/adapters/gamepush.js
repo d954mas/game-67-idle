@@ -592,6 +592,7 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
     showLeaderboard,
     showRewarded,
     soundSwitches,
+    errorSink() { return null; },
     submitScore,
   };
 }

@@ -334,6 +334,9 @@ Implementation rules:
   answers `false` and ignores the call. A game's volume control pulled to zero
   flips the switch instead of storing a zero, and a muted channel is shown and
   mixed as silent while the stored volume is kept for the unmute.
+- A page's crash reporter is the game's, every portal alike; `errorSink()` names where a portal takes
+  those reports itself. Poki answers its SDK object once `captureError` exists; every other adapter
+  answers `null`, and the reporter keeps the report in the console.
 - Rewarded ads grant rewards only when the SDK confirms reward completion:
   Poki returns a success boolean, Yandex uses `onRewarded`, Playgama uses the
   `rewarded` state.

@@ -50,6 +50,7 @@ const PLATFORM_BACKEND_METHODS = Object.freeze([
   "loadData",
   "login",
   "measure",
+  "errorSink",
   "ready",
   "saveData",
   "setSoundMuted",
