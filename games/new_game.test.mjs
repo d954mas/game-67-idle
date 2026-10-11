@@ -146,6 +146,8 @@ test("private derivative copies tracked source bytes with fresh identity and iso
   write(source, "assets/restricted/private.glb", "restricted binary\n");
   write(source, "assets/PURCHASED_EXPORTS.md", "source-only grant\n");
   write(source, ".env", "synthetic private configuration\n");
+  const network = { metaserverUrl: "https://source-service.example.invalid", timeoutMs: 3500, options: { reconnect: true } };
+  write(source, "config/network.json", JSON.stringify(network));
   execFileSync("git", ["config", "user.email", "tests@example.invalid"], { cwd: source });
   execFileSync("git", ["config", "user.name", "Tests"], { cwd: source });
   execFileSync("git", ["add", "."], { cwd: source });
@@ -172,6 +174,8 @@ test("private derivative copies tracked source bytes with fresh identity and iso
   assert.equal(existsSync(join(game, ".ai_studio/taskboard/items/tasks/T0001.md")), false);
   assert.deepEqual(JSON.parse(readFileSync(join(game, "dependencies.json"), "utf8")), lock);
   assert.equal(readFileSync(join(source, "game.json"), "utf8"), originalIdentity);
+  assert.deepEqual(JSON.parse(readFileSync(join(source, "config/network.json"), "utf8")), network);
+  assert.deepEqual(JSON.parse(readFileSync(join(game, "config/network.json"), "utf8")), { ...network, metaserverUrl: "" });
   assert.match(readFileSync(join(game, "cmake/GamePlatform.cmake"), "utf8"), /GAME_STORAGE_APP_ID="derivative-save"/);
   assert.match(readFileSync(join(game, "cmake/GameOptions.cmake"), "utf8"), /GAME_TITLE "Derivative Title"/);
   assert.match(readCanvasLink(game).ref, /^canvas:\/\/game\/derivative-game\//);
@@ -194,6 +198,23 @@ test("private derivative rejects incompatible locks and replacing its own source
   assert.match(invoke(["--id", "source-game", "--replace"]).stderr, /destination must differ from source/);
   assert.equal(existsSync(join(root, "games/private/derived-game")), false);
   assert.equal(existsSync(join(source, "game.json")), true);
+});
+
+test("private derivative rejects malformed network configuration before publication", (t) => {
+  const root = tempRepo(t);
+  create(root, "source-game", "private");
+  const source = join(root, "games/private/source-game");
+  execFileSync("git", ["add", "."], { cwd: source });
+  for (const config of ["[]", "{\"metaserverUrl\":42}", "{\"other\":true}"]) {
+    write(source, "config/network.json", config);
+    execFileSync("git", ["add", "config/network.json"], { cwd: source });
+    const result = invokeNewGame(["--root", root, "--id", "derived-game", "--visibility", "private",
+      "--from", "games/private/source-game"]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /source game network config.*(object|string)/);
+    assert.equal(existsSync(join(root, "games/private/derived-game")), false);
+    assert.equal(readFileSync(join(source, "config/network.json"), "utf8"), config);
+  }
 });
 
 function canvasProjectId(ref) {

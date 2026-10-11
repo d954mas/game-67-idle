@@ -42,6 +42,9 @@ and profile/runtime directories are also omitted; missing licensed resources
 must be supplied locally under authorization for the derivative.
 The destination gets fresh Git metadata, storage/title bindings and Studio
 stores. Its source remains unchanged; `--replace` cannot replace the source.
+When present, `config/network.json` must contain a string `metaserverUrl`;
+creation resets that address to empty in the derivative and preserves its other
+fields, so the new game cannot enter the source game's service automatically.
 
 For backward compatibility, omitting `--visibility` still creates a public
 tracked game. Human-facing, agent-facing, or Studio browser flows should add

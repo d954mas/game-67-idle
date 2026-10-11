@@ -210,6 +210,15 @@ function transformGameIdentityFiles(gameDir, source, identity) {
   if (!storageFound || !titleFound) throw new Error("source game identity producers are unsupported: expected storage and title bindings");
 }
 
+function isolateGameNetworkConfig(gameDir) {
+  const path = join(gameDir, "config", "network.json");
+  if (!existsSync(path)) return;
+  const config = readJsonStrict(path, "source game network config");
+  if (typeof config.metaserverUrl !== "string") throw new Error("source game network config metaserverUrl must be a string");
+  config.metaserverUrl = "";
+  writeJson(path, config);
+}
+
 function runGit(root, args) {
   return spawnSync("git", ["-C", root, ...args], { encoding: "utf8", shell: false });
 }
@@ -575,7 +584,10 @@ try {
   writeJson(join(stagingDir, "dependencies.json"), dependencies);
   ensureGameStudioScaffold(stagingDir, requestedIdentity, visibility);
   itemsLockReset = resetItemsLock(stagingDir);
-  if (gameSource) transformGameIdentityFiles(stagingDir, templateIdentity, requestedIdentity);
+  if (gameSource) {
+    transformGameIdentityFiles(stagingDir, templateIdentity, requestedIdentity);
+    isolateGameNetworkConfig(stagingDir);
+  }
   else transformIdentityOwnedFiles(stagingDir, templateIdentity, requestedIdentity);
   if (isPrivate) ensureNestedGit(stagingDir, args.id);
 } catch (error) {
