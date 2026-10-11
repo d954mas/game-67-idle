@@ -31,6 +31,18 @@ generated `.vscode` entries. The committed `games/private/` ignore keeps the
 whole root out of parent Git. Do not put private game ids, remotes, task logs,
 canvas refs, or evidence paths in tracked Studio files.
 
+To create a separate private derivative, pass `--from games/private/<source-id>`
+with a fresh `--id`, `--title` and optional `--storage-namespace`. The source
+must own a nested Git repository and a valid `dependencies.json` lock matching
+the current engine and feature versions. The lock is preserved. Tracked files
+are copied from the working tree, including tracked edits; untracked files,
+build/cache directories and the source `.ai_studio/` stores are omitted.
+Restricted assets, source-specific purchased-export grants, local `.env` files
+and profile/runtime directories are also omitted; missing licensed resources
+must be supplied locally under authorization for the derivative.
+The destination gets fresh Git metadata, storage/title bindings and Studio
+stores. Its source remains unchanged; `--replace` cannot replace the source.
+
 For backward compatibility, omitting `--visibility` still creates a public
 tracked game. Human-facing, agent-facing, or Studio browser flows should add
 `--require-visibility` so a missing public/private choice fails before any game

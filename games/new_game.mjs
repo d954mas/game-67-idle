@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Transactionally copy a registered template into games/<game-id>.
 import {
-  chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync,
+  chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
@@ -11,7 +11,7 @@ import { listRegisteredTemplates } from "../ai_studio/assets/sources/ops.mjs";
 import { writeVscodeProjectFiles } from "../ai_studio/dev_environment/vscode_projects.mjs";
 import { ensureProject, updateDoc } from "../ai_studio/taskboard/store.mjs";
 import { listGameMounts, runPrivateGamePreflight } from "../ai_studio/workspace/games.mjs";
-import { copyGitSourceTree } from "../ai_studio/workspace/copy_source_tree.mjs";
+import { copyGitSourceTree, copyTrackedGameSourceTree } from "../ai_studio/workspace/copy_source_tree.mjs";
 import {
   ensureGameCanvasProject, readGameCanvasLink, rollbackGameCanvasMutation,
   rollbackPrivateCanvasStoreTransfer, transferPrivateCanvasStore,
@@ -66,6 +66,7 @@ export function usageText() {
     "visibility: public registers the game in the parent Studio; private creates a nested private repo.",
     "compatibility: omitting --visibility still creates a public/tracked game; human/Studio flows may require the choice.",
     "--private is a compatibility alias for --visibility private.",
+    "--from accepts a template or an existing private game; game derivatives require private visibility and copy tracked working-tree files only.",
     "--replace atomically replaces an existing destination and rolls it back on failure.",
   ].join("\n");
 }
@@ -145,6 +146,68 @@ function readTemplateDependencySeed(templateDir) {
     ids.add(feature.id);
   }
   return value;
+}
+
+function readGameSource(sourceDir) {
+  const identity = readJsonStrict(join(sourceDir, "game.json"), "source game identity");
+  if (identity.schema !== "ai_studio.game.v1") throw new Error("source game identity has an unsupported schema");
+  validateRequestedIdentity(identity);
+  const dependencies = readJsonStrict(join(sourceDir, "dependencies.json"), "source game dependencies");
+  exactKeys(dependencies, ["schema", "engine", "features", "compatibility"], "source game dependencies");
+  if (dependencies.schema !== "ai_studio.game.dependencies.v3") throw new Error("source game dependencies have an unsupported schema");
+  exactKeys(dependencies.engine, ["source", "version", "revision", "compatibility"], "source game engine lock");
+  if (!/^[0-9a-f]{40,64}$/i.test(dependencies.engine.revision)) throw new Error("source game engine lock requires an exact Git revision");
+  if (dependencies.engine.source !== "external/neotolis-engine"
+      || !EXACT_SEMVER.test(dependencies.engine.version) || !dependencies.engine.compatibility
+      || !dependencies.compatibility || !Array.isArray(dependencies.features)) throw new Error("source game dependencies are invalid");
+  const ids = new Set();
+  for (const feature of dependencies.features) {
+    exactKeys(feature, ["id", "source", "version", "compatibility"], "source game feature lock");
+    if (!/^[a-z][a-z0-9-]*$/.test(feature.id) || feature.source !== `features/${feature.id}`
+        || !EXACT_SEMVER.test(feature.version) || !feature.compatibility || ids.has(feature.id)) {
+      throw new Error("source game feature lock is invalid or duplicated");
+    }
+    ids.add(feature.id);
+  }
+  return { identity, dependencies };
+}
+
+function transformGameIdentityFiles(gameDir, source, identity) {
+  const files = [];
+  const visit = (dir) => {
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) visit(path);
+      else if (entry.name.endsWith(".cmake")) files.push(path);
+    }
+  };
+  visit(join(gameDir, "cmake"));
+  files.push(...["src/main.c", "src/host/client/main.c", "tests/web_persistence_check.py", "tests/fixtures/items_save_v1.json"]
+    .map((path) => join(gameDir, path)).filter(existsSync));
+  let storageFound = false;
+  let titleFound = false;
+  const replacements = [
+    [`GAME_STORAGE_APP_ID="${source.storageNamespace}"`, `GAME_STORAGE_APP_ID="${identity.storageNamespace}"`, "storage"],
+    [`set(GAME_TITLE "${source.title}"`, `set(GAME_TITLE "${identity.title}"`, "title"],
+    [`config.app_name = "${source.title}"`, `config.app_name = "${identity.title}"`, "title"],
+    [`WINDOW_TITLE "${source.title}"`, `WINDOW_TITLE "${identity.title}"`, "title"],
+    [`STORAGE_KEY = "${source.storageNamespace}/save/autosave"`, `STORAGE_KEY = "${identity.storageNamespace}/save/autosave"`, "storage"],
+    ...["storage", "save", "analytics", "composition"].flatMap((suffix) => ["-", "_"].map((separator) => [
+      `${source.storageNamespace}${separator}${suffix}${separator}test`, `${identity.storageNamespace}-${suffix}-test`, "test",
+    ])),
+  ];
+  for (const path of files) {
+    let text = readFileSync(path, "utf8");
+    for (const [before, after, kind] of replacements) {
+      if (!text.includes(before)) continue;
+      storageFound ||= kind === "storage";
+      titleFound ||= kind === "title";
+      text = text.split(before).join(after);
+    }
+    writeFileSync(path, text, "utf8");
+  }
+  if (!storageFound || !titleFound) throw new Error("source game identity producers are unsupported: expected storage and title bindings");
 }
 
 function runGit(root, args) {
@@ -432,10 +495,21 @@ let templateIdentity;
 let dependencySeed;
 let repoRevision;
 let engineRevision;
+let gameSource = null;
 try {
   if (!existsSync(join(fromDir, "CMakeLists.txt"))) throw new Error(`template not found at ${fromDir}`);
-  templateIdentity = readTemplateIdentity(fromDir);
-  dependencySeed = readTemplateDependencySeed(fromDir);
+  if (existsSync(join(fromDir, "game.json"))) {
+    if (resolve(fromDir) === resolve(finalDir)) throw new Error("game derivative destination must differ from source");
+    if (!isPrivate || !registeredGameIdentities(repoRoot).some((game) => game.root === fromRel && game.visibility === "private")) {
+      throw new Error("game derivatives require a private source and private destination");
+    }
+    gameSource = readGameSource(fromDir);
+    templateIdentity = gameSource.identity;
+    dependencySeed = gameSource.dependencies;
+  } else {
+    templateIdentity = readTemplateIdentity(fromDir);
+    dependencySeed = readTemplateDependencySeed(fromDir);
+  }
   const rootRevisions = tryGitRevisions(repoRoot, ["HEAD", "HEAD:external/neotolis-engine"]);
   repoRevision = rootRevisions?.[0]
     || requireGitRevision(repoRoot, ["rev-parse", "HEAD"], "game dependency record");
@@ -443,12 +517,13 @@ try {
     || requireGitRevision(repoRoot, ["rev-parse", "HEAD:external/neotolis-engine"], "parent engine gitlink");
   engineRevision = requireGitRevision(join(repoRoot, "external", "neotolis-engine"), ["rev-parse", "HEAD"], "engine dependency record");
   if (engineRevision !== engineGitlink) throw new Error("engine checkout HEAD must match the parent engine gitlink");
+  if (gameSource && dependencySeed.engine.revision !== engineRevision) throw new Error("source game engine lock must match the current engine checkout");
   const engineVersion = readEngineSemVer(repoRoot);
   if (dependencySeed.engine.version !== engineVersion) {
     throw new Error(`template engine version ${dependencySeed.engine.version} does not match nt_core.h ${engineVersion}`);
   }
   const rootPathsClean = pathsAreClean(repoRoot, [fromRel, ...dependencySeed.features.map((feature) => feature.source)]);
-  if (!rootPathsClean) requireClean(repoRoot, fromRel, `template ${fromRel}`);
+  if (!rootPathsClean && !gameSource) requireClean(repoRoot, fromRel, `template ${fromRel}`);
   requireClean(join(repoRoot, "external", "neotolis-engine"), "", "external/neotolis-engine");
   for (const feature of dependencySeed.features) {
     if (!existsSync(join(repoRoot, feature.source))) throw new Error(`template references missing shared feature ${feature.source}`);
@@ -475,7 +550,7 @@ try {
 const nonce = `${process.pid}-${randomUUID()}`;
 const stagingDir = join(gamesDir, `.${args.id}.new-${nonce}`);
 const backupDir = join(gamesDir, `.${args.id}.backup-${nonce}`);
-const dependencies = {
+const dependencies = gameSource ? gameSource.dependencies : {
   schema: "ai_studio.game.dependencies.v3",
   engine: {
     source: dependencySeed.engine.source, version: dependencySeed.engine.version,
@@ -492,14 +567,16 @@ try { previousCanvasLink = existsSync(finalDir) ? readGameCanvasLink(finalDir) :
 catch (error) { fail(error.message); }
 let itemsLockReset = false;
 try {
-  copyGitSourceTree(repoRoot, fromDir, stagingDir);
+  if (gameSource) copyTrackedGameSourceTree(fromDir, stagingDir);
+  else copyGitSourceTree(repoRoot, fromDir, stagingDir);
   rmSync(join(stagingDir, "template.json"), { force: true });
   rmSync(join(stagingDir, "game-dependencies.json"), { force: true });
   writeJson(join(stagingDir, "game.json"), requestedIdentity);
   writeJson(join(stagingDir, "dependencies.json"), dependencies);
   ensureGameStudioScaffold(stagingDir, requestedIdentity, visibility);
   itemsLockReset = resetItemsLock(stagingDir);
-  transformIdentityOwnedFiles(stagingDir, templateIdentity, requestedIdentity);
+  if (gameSource) transformGameIdentityFiles(stagingDir, templateIdentity, requestedIdentity);
+  else transformIdentityOwnedFiles(stagingDir, templateIdentity, requestedIdentity);
   if (isPrivate) ensureNestedGit(stagingDir, args.id);
 } catch (error) {
   rmSync(stagingDir, { recursive: true, force: true });

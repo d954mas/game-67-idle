@@ -135,6 +135,67 @@ function readCanvasLink(gameDir) {
   return { text, ref: value("canvas_ref"), browserUrl: value("browser_url") };
 }
 
+test("private derivative copies tracked source bytes with fresh identity and isolated stores", (t) => {
+  const root = tempRepo(t);
+  create(root, "source-game", "private", ["--title", "Source Title"]);
+  const source = join(root, "games/private/source-game");
+  write(source, ".ai_studio/taskboard/items/tasks/T0001.md", "source task\n");
+  write(source, "build/tracked-cache.obj", "tracked cache\n");
+  write(source, "server/secrets/key.json", "synthetic nested secret\n");
+  write(source, "client/build/cache.obj", "nested build cache\n");
+  write(source, "assets/restricted/private.glb", "restricted binary\n");
+  write(source, "assets/PURCHASED_EXPORTS.md", "source-only grant\n");
+  write(source, ".env", "synthetic private configuration\n");
+  execFileSync("git", ["config", "user.email", "tests@example.invalid"], { cwd: source });
+  execFileSync("git", ["config", "user.name", "Tests"], { cwd: source });
+  execFileSync("git", ["add", "."], { cwd: source });
+  execFileSync("git", ["add", "-f", "build/tracked-cache.obj"], { cwd: source });
+  execFileSync("git", ["add", "-f", "server/secrets/key.json", "client/build/cache.obj"], { cwd: source });
+  execFileSync("git", ["commit", "-m", "source fixture"], { cwd: source, stdio: "ignore" });
+  write(source, "assets/readme.txt", "tracked dirty asset\n");
+  write(source, "assets/untracked.txt", "untracked\n");
+  write(source, "build/restricted.glb", "ignored\n");
+  const originalIdentity = readFileSync(join(source, "game.json"), "utf8");
+  const lock = JSON.parse(readFileSync(join(source, "dependencies.json"), "utf8"));
+  const result = invokeNewGame(["--root", root, "--id", "derivative-game", "--title", "Derivative Title",
+    "--storage-namespace", "derivative-save", "--visibility", "private", "--from", "games/private/source-game"]);
+  assert.equal(result.status, 0, result.stderr);
+  const game = join(root, "games/private/derivative-game");
+  assert.equal(readFileSync(join(game, "assets/readme.txt"), "utf8"), "tracked dirty asset\n");
+  assert.equal(existsSync(join(game, "assets/untracked.txt")), false);
+  assert.equal(existsSync(join(game, "build")), false);
+  assert.equal(existsSync(join(game, "server/secrets/key.json")), false);
+  assert.equal(existsSync(join(game, "client/build/cache.obj")), false);
+  assert.equal(existsSync(join(game, "assets/restricted/private.glb")), false);
+  assert.equal(existsSync(join(game, "assets/PURCHASED_EXPORTS.md")), false);
+  assert.equal(existsSync(join(game, ".env")), false);
+  assert.equal(existsSync(join(game, ".ai_studio/taskboard/items/tasks/T0001.md")), false);
+  assert.deepEqual(JSON.parse(readFileSync(join(game, "dependencies.json"), "utf8")), lock);
+  assert.equal(readFileSync(join(source, "game.json"), "utf8"), originalIdentity);
+  assert.match(readFileSync(join(game, "cmake/GamePlatform.cmake"), "utf8"), /GAME_STORAGE_APP_ID="derivative-save"/);
+  assert.match(readFileSync(join(game, "cmake/GameOptions.cmake"), "utf8"), /GAME_TITLE "Derivative Title"/);
+  assert.match(readCanvasLink(game).ref, /^canvas:\/\/game\/derivative-game\//);
+  assert.equal(execFileSync("git", ["rev-list", "--all", "--count"], { cwd: game, encoding: "utf8" }).trim(), "0");
+});
+
+test("private derivative rejects incompatible locks and replacing its own source", (t) => {
+  const root = tempRepo(t);
+  create(root, "source-game", "private", ["--title", "Source Title"]);
+  const source = join(root, "games/private/source-game");
+  const lockPath = join(source, "dependencies.json");
+  const lock = JSON.parse(readFileSync(lockPath, "utf8"));
+  const invoke = (extra = []) => invokeNewGame(["--root", root, "--id", "derived-game", "--visibility", "private",
+    "--from", "games/private/source-game", ...extra]);
+  writeFileSync(lockPath, JSON.stringify({ ...lock, engine: { ...lock.engine, revision: "0".repeat(40) } }));
+  assert.match(invoke().stderr, /source game engine lock must match/);
+  writeFileSync(lockPath, JSON.stringify({ ...lock, features: [{ ...lock.features[0], version: "99.0.0" }] }));
+  assert.match(invoke().stderr, /dependency seed version 99.0.0 does not match/);
+  writeFileSync(lockPath, JSON.stringify(lock));
+  assert.match(invoke(["--id", "source-game", "--replace"]).stderr, /destination must differ from source/);
+  assert.equal(existsSync(join(root, "games/private/derived-game")), false);
+  assert.equal(existsSync(join(source, "game.json")), true);
+});
+
 function canvasProjectId(ref) {
   return ref.split("/").filter(Boolean).at(-1);
 }
