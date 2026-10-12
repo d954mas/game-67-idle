@@ -146,8 +146,8 @@ int main(int argc, char *argv[]) {
     nt_builder_add_shader(ctx, "assets/shaders/mesh_tex.vert", NT_BUILD_SHADER_VERTEX);
     nt_builder_add_shader(ctx, "assets/shaders/mesh_tex.frag", NT_BUILD_SHADER_FRAGMENT);
     NtStreamLayout mesh_layout[] = {
-        {"position", "POSITION", NT_STREAM_FLOAT32, 3, false},
-        {"uv0", "TEXCOORD_0", NT_STREAM_FLOAT32, 2, false},
+        {"POSITION", NT_STREAM_FLOAT32, 3, false, 0, NT_LOC_POSITION},
+        {"TEXCOORD_0", NT_STREAM_FLOAT32, 2, false, 0, NT_LOC_UV0},
     };
     nt_builder_add_mesh(ctx, "assets/meshes/cube.glb",
                         &(nt_mesh_opts_t){.layout = mesh_layout, .stream_count = 2, .tangent_mode = NT_TANGENT_AUTO});

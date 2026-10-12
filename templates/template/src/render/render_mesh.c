@@ -33,11 +33,9 @@ void render_mesh_init(nt_resource_t mesh_vs, nt_resource_t mesh_fs, nt_resource_
     nt_mesh_comp_init(&(nt_mesh_comp_desc_t){.capacity = 128});
     nt_material_comp_init(&(nt_material_comp_desc_t){.capacity = 128});
     nt_drawable_comp_init(&(nt_drawable_comp_desc_t){.capacity = 128});
-    nt_mesh_renderer_init(&(nt_mesh_renderer_desc_t){.max_pipelines = 16, .max_mesh_vertex_inputs = 4});
+    nt_mesh_renderer_init(&(nt_mesh_renderer_desc_t){.max_pipelines = 16});
 
     s_material = shader_program_material(mesh_vs, mesh_fs, &(nt_material_create_desc_t){
-        .attr_map = {{.stream_name = "position", .location = 0}},
-        .attr_map_count = 1,
         .depth_test = true,
         .depth_write = true,
         .cull_mode = NT_CULL_BACK,
@@ -47,8 +45,6 @@ void render_mesh_init(nt_resource_t mesh_vs, nt_resource_t mesh_fs, nt_resource_
     // Textured material: position + uv0 streams, samples u_texture; per-instance
     // colour still multiplies (white = texture verbatim).
     s_material_tex = shader_program_material(tex_vs, tex_fs, &(nt_material_create_desc_t){
-        .attr_map = {{.stream_name = "position", .location = 0}, {.stream_name = "uv0", .location = 1}},
-        .attr_map_count = 2,
         .textures = {{.name = "u_texture", .resource = texture}},
         .texture_count = 1,
         .depth_test = true,
@@ -87,10 +83,6 @@ void render_mesh_spawn_prop(World *w, nt_resource_t cube_mesh) {
     scale[0] = scale[1] = scale[2] = 1.0F;
     *nt_transform_comp_dirty(w->prop_entity) = true;
     w->prop_spawned = true;
-}
-
-void render_mesh_restore_gpu(void) {
-    nt_mesh_renderer_restore_gpu();
 }
 
 bool render_mesh_ready(const World *w) {

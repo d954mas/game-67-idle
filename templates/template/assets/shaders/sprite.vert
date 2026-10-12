@@ -8,7 +8,7 @@ precision highp int;
 // blocks itself.
 #include "common/globals.glsl"
 
-// Locations match nt_attr_location_t in engine/graphics/nt_gfx.h.
+// Locations match NT_LOC_POSITION/COLOR/UV0 in the engine's nt_vertex_locations.h.
 layout(location = 0) in vec3 a_position;
 layout(location = 2) in vec4 a_color;
 layout(location = 3) in vec2 a_texcoord;

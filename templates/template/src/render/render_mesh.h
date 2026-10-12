@@ -13,6 +13,5 @@ void render_mesh_spawn_player(World *w, nt_resource_t cube_mesh, uint32_t color)
 void render_mesh_spawn_prop(World *w, nt_resource_t cube_mesh);                         // textured cube
 bool render_mesh_ready(const World *w);
 void render_mesh_draw(World *w);
-void render_mesh_restore_gpu(void);
 
 #endif /* GAME_RENDER_MESH_H */

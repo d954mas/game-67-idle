@@ -1,8 +1,8 @@
 precision highp float;
 
-layout(location = 0) in vec3 a_position;
-
 #include "common/instance.glsl"
+
+layout(location = NT_LOC_POSITION) in vec3 a_position;
 #include "common/globals.glsl"
 
 out vec4 v_color;

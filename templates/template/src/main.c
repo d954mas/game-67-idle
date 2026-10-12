@@ -595,7 +595,6 @@ static void frame(void) {
         nt_resource_invalidate(NT_ASSET_TEXTURE);
         nt_font_step();
         shader_programs_restore_gpu();
-        render_mesh_restore_gpu();
         ui_runtime_restore_gpu();
         s_gfx_recovery_pending = true;
         /* Resource slots publish the invalidation on the next top-of-frame
