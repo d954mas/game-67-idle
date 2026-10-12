@@ -19,6 +19,7 @@ ai_studio/store_kit/
   yandex_spec.json
   playgama_spec.json
   crazygames_spec.json
+  poki_spec.json         documented static thumbnail; console fields unverified
 ```
 
 ## The form wins

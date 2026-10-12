@@ -1,0 +1,33 @@
+{
+  "schema": "ai_studio.store_kit.spec.v1",
+  "portal": "poki",
+  "source_of_truth": "Poki Developer Guide, Game thumbnail, checked 2026-10-13. This spec covers the documented static thumbnail only; the authenticated submission form has not been inspected. The form wins when it supplies additional or changed requirements. The local thumbnail.png filename is a Studio convention, not a portal filename rule.",
+  "docs": [
+    "https://developers.poki.com/guide/game-thumbnail"
+  ],
+  "confirmed_by_docs": [
+    "A static thumbnail is required to start the player fit test.",
+    "Deliver a full-bleed square of at least 628 by 628 pixels.",
+    "Use no padding, borders or letterboxing; Poki applies rounded corners.",
+    "Avoid text, keep the composition readable at small sizes, and show the game's actual default character or a key gameplay element.",
+    "An animated thumbnail is added during Soft Release and is required before global release; this static-thumbnail spec does not validate it."
+  ],
+  "assets": [
+    {
+      "id": "thumbnail",
+      "file": "thumbnail.png",
+      "square": true,
+      "min_long_side": 628,
+      "from_screenshot": false,
+      "note": "PNG is the Studio output convention. This guide does not establish upload MIME types, byte caps or a maximum pixel size. Visual and provenance review remain required."
+    }
+  ],
+  "texts": [],
+  "languages": [],
+  "undocumented": [
+    "Accepted upload formats, byte caps and maximum image dimensions are not stated on the cited page; confirm in the authenticated form.",
+    "Listing text fields, language requirements, character limits and screenshot counts are not covered by this page or this spec.",
+    "Animated-thumbnail duration, dimensions and encoding are outside this static-thumbnail contract.",
+    "A passing local check proves only the declared static-thumbnail fields, not complete store readiness or portal approval."
+  ]
+}
