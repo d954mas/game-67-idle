@@ -9,7 +9,7 @@
     {
       "id": "audio-core",
       "source": "features/audio-core",
-      "version": "1.0.2",
+      "version": "1.2.2",
       "compatibility": "validated by the template build and test suite"
     },
     {
@@ -45,7 +45,7 @@
     {
       "id": "platform-sdk",
       "source": "features/platform-sdk",
-      "version": "2.1.0",
+      "version": "2.4.0",
       "compatibility": "validated by the template build and test suite"
     },
     {
