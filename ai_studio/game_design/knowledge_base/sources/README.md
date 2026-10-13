@@ -22,4 +22,5 @@ Rules:
 
 ## Reference Studies
 
+- [D2R Mobile: мобильное управление для RPG](d2r_mobile_touch_controls_2026-10-13.md) — навыки, выбор цели, подход к объектам и жесты инвентаря; документация и код, без проверки на устройстве.
 - [Smash Fest: 30 levels and physics](smash-fest-physics/README.md) — downloaded gameplay evidence, shot counts, material behavior, and [Box3D assessment](smash-fest-physics/physics.md).
