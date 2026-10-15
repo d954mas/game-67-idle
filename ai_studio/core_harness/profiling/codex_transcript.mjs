@@ -1,6 +1,7 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { StringDecoder } from "node:string_decoder";
 
 function sessionRoot() {
   return process.env.CODEX_SESSION_ROOT || join(homedir(), ".codex", "sessions");
@@ -137,6 +138,31 @@ function tokenTelemetry(payload, measuredRecords) {
   };
 }
 
+function* transcriptLines(file) {
+  const descriptor = openSync(file, "r");
+  try {
+    const buffer = Buffer.alloc(64 * 1024);
+    const decoder = new StringDecoder("utf8");
+    let pending = "", index = 0;
+    for (;;) {
+      const bytes = readSync(descriptor, buffer, 0, buffer.length, null);
+      if (bytes === 0) break;
+      const text = decoder.write(buffer.subarray(0, bytes));
+      let start = 0;
+      for (let end = text.indexOf("\n"); end !== -1; end = text.indexOf("\n", start)) {
+        const line = pending + text.slice(start, end);
+        yield [index++, line.endsWith("\r") ? line.slice(0, -1) : line];
+        pending = "";
+        start = end + 1;
+      }
+      pending += text.slice(start);
+    }
+    yield [index, pending + decoder.end()];
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
 export function parseCodexTranscript(file) {
   if (!file || !existsSync(file)) {
     return {
@@ -154,7 +180,7 @@ export function parseCodexTranscript(file) {
   let tokenRecords = 0;
   let tokens = { available: false, measured_records: 0 };
 
-  for (const [index, rawLine] of readFileSync(file, "utf8").split(/\r?\n/).entries()) {
+  for (const [index, rawLine] of transcriptLines(file)) {
     if (!rawLine.trim()) continue;
     let line;
     try { line = JSON.parse(rawLine); } catch (error) {

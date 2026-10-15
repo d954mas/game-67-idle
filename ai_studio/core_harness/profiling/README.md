@@ -8,6 +8,9 @@ subagent transcript diagnostics.
 Lightweight hook profiles require matching start events or an explicit
 `duration_ms`; some hosts record results only. A complete Codex review reads the
 canonical rollout transcript directly, including tool timing and token totals.
+The Codex parser reads UTF-8 in 64 KiB chunks so a long transcript does not
+require one whole-file JavaScript string. Memory still includes the retained
+records and one JSON line; an individual record must fit the JSON parser.
 
 Profiling is passive. Hooks write JSONL records under `tmp/session_profiles/`.
 Those files are disposable live diagnostics, not the source of truth. Codex
