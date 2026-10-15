@@ -221,7 +221,7 @@ def main():
     ap.add_argument("--background", choices=["transparent", "opaque", "auto"])
     ap.add_argument("--input-image", action="append", dest="input_image",
                     help="reference image path (repeatable, <=5) -> edit / style-match")
-    ap.add_argument("--responses-model", default="gpt-5.5", help="outer model for codex backend path")
+    ap.add_argument("--responses-model", default="gpt-6.1-sol", help="outer model for codex backend path")
     ap.add_argument("--timeout", type=int, help="override seconds (default by --quality)")
     ap.add_argument("--force", action="store_true", help="regenerate even if an unchanged output already exists")
     a = ap.parse_args()
