@@ -39,6 +39,44 @@ class CaptureGameCliTest(unittest.TestCase):
 
             self.assertEqual(resolve_game_executable(root), executable.resolve())
 
+    def test_executable_override_resolves_relative_and_absolute_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            relative = root / "frozen" / "game.exe"
+            absolute = root / "outside" / "game.exe"
+            relative.parent.mkdir(parents=True)
+            absolute.parent.mkdir(parents=True)
+            relative.touch()
+            absolute.touch()
+
+            self.assertEqual(
+                resolve_game_executable(root, override=Path("frozen/game.exe")),
+                relative.resolve(),
+            )
+            self.assertEqual(
+                resolve_game_executable(root, override=absolute),
+                absolute.resolve(),
+            )
+
+    def test_missing_executable_override_fails_before_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            executable = root / "out" / "game.exe"
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            (root / "capture").mkdir()
+            (root / "capture" / "catalog.json").write_text(json.dumps({
+                "version": 1, "executable": "out/game.exe",
+                "defaults": {"size": "1280x720", "fps": 30},
+                "live": {"seconds": 1}, "shots": {},
+            }), encoding="utf-8")
+
+            with patch("ai_studio.runtime_automation.capture_game.running_game") as launch:
+                with self.assertRaisesRegex(RuntimeError, "capture executable is missing"):
+                    run(parse_args([str(root), "live", "--executable", "missing/game.exe"]))
+
+            launch.assert_not_called()
+
     def test_missing_executable_reports_the_build_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -129,6 +167,7 @@ class CaptureGameCliTest(unittest.TestCase):
                 kwargs["recording_prepare"]()
                 recorded["prepare_end"] = len(game.calls)
                 kwargs["recording_driver"]()
+                (root / "capture.json").write_text("{}\n", encoding="utf-8")
                 return {"edit": root / "edit.mp4", "master": root / "master.mp4"}
 
             with patch(
@@ -141,6 +180,8 @@ class CaptureGameCliTest(unittest.TestCase):
                 result = run(parse_args([str(root), "shot", "intro"]))
 
         self.assertEqual(result["edit"].name, "edit.mp4")
+        self.assertEqual(result["effectiveExecutable"]["path"], str(executable.resolve()))
+        self.assertIn("sha256", result["effectiveExecutable"])
         self.assertEqual(launch["exe"], str(executable.resolve()))
         self.assertEqual(launch["window_size"], "1080x1920")
         self.assertEqual(recorded["duration_seconds"], 0.1)
@@ -471,6 +512,41 @@ class CaptureGameAdoptionTest(unittest.TestCase):
             storage_root = Path(launch["env_overrides"]["GAME_STORAGE_ROOT"])
             self.assertTrue(storage_root.is_dir())
             self.assertEqual(storage_root.parent.parent, root / "tmp" / "captures")
+
+    def test_shot_can_keep_vsync_for_a_heavy_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            executable = root / "bin" / "plw_client.exe"
+            executable.parent.mkdir()
+            executable.touch()
+            (root / "capture").mkdir()
+            (root / "capture" / "catalog.json").write_text(json.dumps({
+                "version": 1, "executable": "bin/plw_client.exe",
+                "defaults": {"size": "1280x720", "fps": 30},
+                "shots": {"crowd": {"seconds": 1, "no_vsync": False}},
+            }), encoding="utf-8")
+            game = FakeGame()
+            game.process_id = 123
+            launch = {}
+
+            class GameContext:
+                def __enter__(self):
+                    return game
+
+                def __exit__(self, *_args):
+                    return None
+
+            def fake_running_game(**kwargs):
+                launch.update(kwargs)
+                return GameContext()
+
+            with patch("ai_studio.runtime_automation.capture_game.running_game", fake_running_game), patch(
+                "ai_studio.runtime_automation.capture_game.record_take",
+                return_value={"edit": root / "edit.mp4", "master": root / "master.mkv"},
+            ):
+                run(parse_args([str(root), "shot", "crowd"]))
+
+            self.assertNotIn("--no-vsync", launch["extra_args"])
 
     def test_main_prints_only_the_edit_path_on_success(self) -> None:
         output = StringIO()

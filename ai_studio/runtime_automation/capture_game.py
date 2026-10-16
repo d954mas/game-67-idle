@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from contextlib import redirect_stdout
 from datetime import datetime
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -35,20 +36,51 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--size", help="output size, for example 1920x1080")
     parser.add_argument("--fps", type=int, help="output FPS")
     parser.add_argument("--out", type=Path, help="take directory")
+    parser.add_argument("--executable", type=Path,
+                        help="override executable; relative paths use the selected game root")
     return parser.parse_args(argv)
 
 
 def resolve_game_executable(
     game_root: Path,
     relative_path: str = "build/devapi-debug/bin/game.exe",
+    *,
+    override: Path | None = None,
 ) -> Path:
-    executable = game_root.resolve() / relative_path
+    requested = override if override is not None else Path(relative_path)
+    executable = requested if requested.is_absolute() else game_root.resolve() / requested
     if not executable.is_file():
+        if override is not None:
+            raise RuntimeError(f"capture executable is missing: {executable}")
         raise RuntimeError(
             "game executable is missing; build the debug game first: "
             f"{executable}"
         )
     return executable.resolve()
+
+
+def executable_identity(executable: Path) -> dict[str, object]:
+    digest = hashlib.sha256()
+    with executable.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return {
+        "path": str(executable),
+        "bytes": executable.stat().st_size,
+        "sha256": digest.hexdigest(),
+    }
+
+
+def append_executable_identity(result: dict, identity: dict[str, object]) -> dict:
+    edit = Path(result["edit"])
+    metadata_path = edit.parent / "capture.json"
+    if not metadata_path.is_file():
+        return result
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["effectiveExecutable"] = identity
+    metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    result["effectiveExecutable"] = identity
+    return result
 
 
 def resolve_studio_root(game_root: Path) -> Path:
@@ -173,6 +205,8 @@ def validate_catalog(catalog: object) -> dict:
             value = shot["max_freeze_seconds"]
             if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
                 raise ValueError(f"catalog shot {shot_id} max_freeze_seconds must be non-negative")
+        if "no_vsync" in shot and not isinstance(shot["no_vsync"], bool):
+            raise ValueError(f"catalog shot {shot_id} no_vsync must be a boolean")
         for key in ("setup", "events"):
             if key in shot and not isinstance(shot[key], list):
                 raise ValueError(f"catalog shot {shot_id} {key} must be a list")
@@ -389,7 +423,9 @@ def run(args: argparse.Namespace) -> dict:
     executable = resolve_game_executable(
         game_root,
         catalog.get("executable", "build/devapi-debug/bin/game.exe"),
+        override=args.executable,
     )
+    identity_before = executable_identity(executable)
     output_root = args.out.resolve() if args.out else default_output_root(game_root)
     launch = catalog.get("launch", {})
     storage_root = output_root / ".game_storage"
@@ -401,7 +437,10 @@ def run(args: argparse.Namespace) -> dict:
         fresh_state=launch.get("fresh_state", shot is not None and not bool(shot.get("preserve_state", False))),
         autosave_enabled=launch.get("autosave_enabled", shot is None),
         window_size=f"{settings.width}x{settings.height}",
-        extra_args=["--no-vsync", *launch.get("args", [])],
+        extra_args=[
+            *([] if shot is not None and shot.get("no_vsync") is False else ["--no-vsync"]),
+            *launch.get("args", []),
+        ],
         env_overrides={"GAME_STORAGE_ROOT": str(storage_root)},
     ) as game:
         cleaned = False
@@ -447,7 +486,10 @@ def run(args: argparse.Namespace) -> dict:
             if shot is not None:
                 kwargs["max_freeze_seconds"] = float(shot.get("max_freeze_seconds", 2.0))
             with redirect_stdout(sys.stderr):
-                return record_take(**kwargs)
+                result = record_take(**kwargs)
+                if executable_identity(executable) != identity_before:
+                    raise RuntimeError("effective capture executable changed during recording")
+                return append_executable_identity(result, identity_before)
         finally:
             finish_shot()
 
