@@ -35,13 +35,13 @@ function tempFixtureDir(t) {
 // Lays out a throwaway catalog folder exactly like templates/template:
 // build/<preset>/pack/{game.ntpack,icons_page0.png} + build/<preset>/generated/game/game_assets.h
 // -- copied from the real fixture, never synthesized, per spec §5.
-function layoutFixture(dir, { preset = "native-debug", withPack = true, withPng = true, withHdr = true } = {}) {
+function layoutFixture(dir, { preset = "native-debug", withPack = true, withPng = true, withHdr = true, legacyHdr = false } = {}) {
   const packDir = join(dir, "build", preset, "pack");
   mkdirSync(packDir, { recursive: true });
   if (withPack) copyFileSync(join(FIXTURE_DIR, "game.ntpack"), join(packDir, "game.ntpack"));
   if (withPng) copyFileSync(join(FIXTURE_DIR, "icons_page0.png"), join(packDir, "icons_page0.png"));
   if (withHdr) {
-    const genDir = join(dir, "build", preset, "generated", "game");
+    const genDir = legacyHdr ? join(dir, "src", "generated") : join(dir, "build", preset, "generated", "game");
     mkdirSync(genDir, { recursive: true });
     copyFileSync(join(FIXTURE_DIR, "game_assets.h.slice"), join(genDir, "game_assets.h"));
   }
@@ -92,6 +92,20 @@ test("buildIconPreview: pack + header built but debug PNG missing -> a DISTINCT 
   assert.deepEqual(preview.regions, {});
   assert.match(preview.reason, /page PNG missing/);
   assert.doesNotMatch(preview.reason, /pack not built/, "must not be conflated with the 'pack not built' reason");
+});
+
+test("buildIconPreview: a game on the older layout still finds its src/generated header", async (t) => {
+  const dir = tempFixtureDir(t);
+  layoutFixture(dir, { withPng: false, legacyHdr: true });
+  const preview = await buildIconPreview(dir);
+  assert.match(preview.reason, /page PNG missing/, "header found, so the pack is judged on its page PNG");
+});
+
+test("buildIconPreview: no header in either layout reads as 'pack not built'", async (t) => {
+  const dir = tempFixtureDir(t);
+  layoutFixture(dir, { withPng: false, withHdr: false });
+  const preview = await buildIconPreview(dir);
+  assert.match(preview.reason, /pack not built/);
 });
 
 test("buildIconPreview: devapi-debug preset resolves too when native-debug has no pack (preset order fallback)", async (t) => {

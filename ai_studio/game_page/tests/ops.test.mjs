@@ -12,6 +12,7 @@ import {
   getGameSaves,
   getGameStateSchemas,
   listGames,
+  nameHeaderRel,
   resolveGameMount,
 } from "../ops.mjs";
 
@@ -241,6 +242,42 @@ test("getGameSaves lists slots with envelope meta and save content stays confine
   assert.equal(content.content.features.settings.language, "ru");
   assert.equal(getGameSaveContent(root, "alpha-game", "../autosave.json", { storageRoot }), null);
   assert.equal(getGameSaveContent(root, "alpha-game", "notes.txt", { storageRoot }), null);
+});
+
+test("pack name headers come from the packing config, its host tree, or the older shared dir", () => {
+  const present = (paths) => (rel) => paths.includes(rel);
+  assert.equal(nameHeaderRel("build/native-debug/pack/game.ntpack", "game", present(["build/native-debug/generated/game/game.h"])),
+    "build/native-debug/generated/game/game.h");
+  // A web config's pack is copied from the native host tree that packed it.
+  assert.equal(nameHeaderRel("build/wasm-release/bin/assets/game.ntpack", "game", present(["build/wasm-release-host/generated/game/game.h"])),
+    "build/wasm-release-host/generated/game/game.h");
+  // A game still on the older template layout keeps one shared header.
+  assert.equal(nameHeaderRel("build/native-debug/pack/game.ntpack", "game", present(["src/generated/game.h"])),
+    "src/generated/game.h");
+  assert.equal(nameHeaderRel("release/game.ntpack", "game", present(["src/generated/game.h"])), "src/generated/game.h");
+  assert.equal(nameHeaderRel("build/native-debug/pack/game.ntpack", "game", present([])),
+    "build/native-debug/generated/game/game.h");
+});
+
+test("getGameSaves reads a feature workspace's save root for its own worktree only", (t) => {
+  const base = mkdtempSync(join(tmpdir(), "game-page-ws-"));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const studio = join(base, "studio");
+  gameIdentity(studio, "games/alpha-game", "alpha-game", "Alpha Game");
+  const storageRoot = join(base, "storage");
+  mkdirSync(join(storageRoot, "alpha-game"), { recursive: true });
+  writeFileSync(join(storageRoot, "alpha-game", "autosave.json"), JSON.stringify({ save_version: 1, app: "alpha-game" }), "utf8");
+  const record = { schema: "ai_studio.feature_workspace.v1", studioWorktree: studio, storageRoot };
+  writeJson(base, "workspace.json", record);
+
+  const saves = getGameSaves(studio, "alpha-game");
+  assert.equal(saves.savesRoot, join(storageRoot, "alpha-game"));
+  assert.deepEqual(saves.slots.map((slot) => slot.slot), ["autosave.json"]);
+  assert.equal(getGameSaveContent(studio, "alpha-game", "autosave.json").content.app, "alpha-game");
+
+  writeJson(base, "workspace.json", { ...record, studioWorktree: join(base, "elsewhere") });
+  mkdirSync(join(base, "elsewhere"));
+  assert.notEqual(getGameSaves(studio, "alpha-game").savesRoot, join(storageRoot, "alpha-game"));
 });
 
 test("getGameOverview returns null for unknown games", (t) => {

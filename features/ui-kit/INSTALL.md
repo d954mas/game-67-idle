@@ -75,7 +75,7 @@ generated asset ids are the game's:
 ```c
 #include "features/ui_kit/ui_theme.h"
 #include "features/ui_kit/ui_tokens.h"
-#include "generated/game_assets.h"
+#include "game_assets.h" /* in the build dir: ${GAME_SOURCE_GENERATED_DIR} */
 
 ui_theme_art_t art = {
     .panel = nt_atlas_ref(atlas, ASSET_ATLAS_REGION_UI_PANEL.value),

@@ -67,7 +67,7 @@ pack builder prepends `NT_CHARSET_ASCII` — digits and debug text never pass
 through the corpus — and packs the union:
 
 ```c
-#include "generated/loc_charset.gen.h"
+#include "loc_charset.gen.h" /* in ${GAME_SOURCE_GENERATED_DIR} */
 
 nt_builder_add_font(ctx, font_path,
                     &(nt_font_opts_t){.charset = NT_CHARSET_ASCII LOC_CHARSET_NON_ASCII,

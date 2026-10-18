@@ -5,6 +5,7 @@ import { gzipSync } from "node:zlib";
 import { basename, extname, join, normalize, resolve, sep } from "node:path";
 
 import { listGameMounts } from "../workspace/games.mjs";
+import { workspaceStorageRootFor } from "../workspace/workspace_storage.mjs";
 import { listProjects } from "../taskboard/store.mjs";
 import { entryDetail, parseNameHeader, parseNtpack } from "./ntpack.mjs";
 
@@ -18,6 +19,7 @@ const GAME_LAYOUT = {
   buildDir: "build",
   releaseArtifactsDir: "release/artifacts",
   generatedNamesDir: "generated/game",
+  legacyGeneratedNamesDir: "src/generated",
   stateDir: "state",
   capturesDir: "tmp/captures",
 };
@@ -287,12 +289,14 @@ export function confinedGamePath(root, mount, relPath) {
 
 // The name header lives in the generated-code dir of the build config that
 // packed the assets. A web config copies its pack from a native `<config>-host`
-// build, so that sibling holds the header instead.
-function nameHeaderRel(relPath, stem, exists) {
+// build, so that sibling holds the header instead. Games still on the older
+// template layout keep one shared header in src/generated/.
+export function nameHeaderRel(relPath, stem, exists) {
   const [top, config] = String(relPath || "").replace(/\\/g, "/").split("/");
-  if (top !== GAME_LAYOUT.buildDir || !config) return "";
-  const candidates = [config, `${config}-host`]
-    .map((name) => `${GAME_LAYOUT.buildDir}/${name}/${GAME_LAYOUT.generatedNamesDir}/${stem}.h`);
+  const candidates = top === GAME_LAYOUT.buildDir && config
+    ? [config, `${config}-host`].map((name) => `${GAME_LAYOUT.buildDir}/${name}/${GAME_LAYOUT.generatedNamesDir}/${stem}.h`)
+    : [];
+  candidates.push(`${GAME_LAYOUT.legacyGeneratedNamesDir}/${stem}.h`);
   return candidates.find(exists) || candidates[0];
 }
 
@@ -395,8 +399,13 @@ export function getPackEntryData(root, gameId, relPath, index) {
 // <LOCALAPPDATA>/neotolis/<app-id>/saves (game_storage_backend_native.c). The
 // app id matches the game id for template-derived games. A game launched with
 // --save-root writes elsewhere and simply is not visible here.
+// Mirrors the game's own resolution: a native build made inside a feature
+// workspace saves under <storageRoot>/<app-id> (no "saves" level), every other
+// checkout under the platform's <root>/neotolis/<app-id>/saves.
 function defaultSavesRoot(gameId, options = {}) {
   if (options.storageRoot) return join(options.storageRoot, gameId, "saves");
+  const workspaceRoot = options.studioRoot ? workspaceStorageRootFor(options.studioRoot) : null;
+  if (workspaceRoot) return join(workspaceRoot, gameId);
   const localAppData = process.env.LOCALAPPDATA;
   if (!localAppData) return null;
   return join(localAppData, "neotolis", gameId, "saves");
@@ -407,7 +416,7 @@ const SAVE_SLOT_NAME = /^[\w.-]+\.(json|bak)$/;
 export function getGameSaves(root, gameId, options = {}) {
   const mount = resolveGameMount(root, gameId);
   if (!mount) return null;
-  const savesRoot = defaultSavesRoot(mount.gameId, options);
+  const savesRoot = defaultSavesRoot(mount.gameId, { studioRoot: root, ...options });
   const slots = [];
   if (savesRoot) {
     for (const entry of safeFiles(savesRoot)) {
@@ -443,7 +452,7 @@ export function getGameSaveContent(root, gameId, slot, options = {}) {
   if (!mount) return null;
   const name = String(slot || "");
   if (!SAVE_SLOT_NAME.test(name)) return null;
-  const savesRoot = defaultSavesRoot(mount.gameId, options);
+  const savesRoot = defaultSavesRoot(mount.gameId, { studioRoot: root, ...options });
   if (!savesRoot || !existsSync(join(savesRoot, name))) return null;
   try {
     return {

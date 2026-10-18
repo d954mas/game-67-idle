@@ -78,6 +78,7 @@
 #include "game_save.h"
 #include "game_save_policy.h"
 #include "game_storage.h"
+#include "startup_save_root.h"
 #include "game_state.h"
 #include "game_items.h"
 #include "game_state_events.gen.h" /* E2: game_ev_register (typed event labels) */
@@ -654,11 +655,20 @@ static void frame(void) {
 }
 
 int main(int argc, char **argv) {
+#ifndef NT_PLATFORM_WEB
+    {
 #ifdef GAME_WORKSPACE_STORAGE_ROOT
-    /* A feature workspace build keeps its saves apart from every other
-       checkout; GAME_STORAGE_ROOT and --save-root still take precedence. */
-    if (getenv("GAME_STORAGE_ROOT") == NULL) {
-        (void)game_storage_set_root(GAME_WORKSPACE_STORAGE_ROOT);
+        const char *workspace_root = GAME_WORKSPACE_STORAGE_ROOT;
+#else
+        const char *workspace_root = NULL;
+#endif
+        const char *save_root = startup_save_root(getenv("GAME_STORAGE_ROOT"), workspace_root);
+        /* The backend would ignore a relative GAME_STORAGE_ROOT and fall back to
+           the player's real saves, so a root it refuses is a refused launch. */
+        if (save_root != NULL && !game_storage_set_root(save_root)) {
+            fprintf(stderr, "invalid save root '%s', expected an absolute path\n", save_root);
+            return 2;
+        }
     }
 #endif
     for (int i = 1; i < argc; ++i) {

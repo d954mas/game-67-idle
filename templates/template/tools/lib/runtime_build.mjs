@@ -14,6 +14,9 @@ const SHA256 = /^[0-9a-f]{64}$/;
 const GAME_IGNORED_ROOTS = new Set([".ai_studio", ".git", ".mypy_cache", ".pytest_cache", "__pycache__", "build", "capture", "design", "node_modules", "release", "tests", "tmp"]);
 const DEPENDENCY_IGNORED_ROOTS = new Set([".git", ".mypy_cache", ".pytest_cache", "__pycache__", "build", "node_modules", "out", "tests"]);
 const IGNORED_ANYWHERE = new Set([".mypy_cache", ".pytest_cache", "__pycache__"]);
+// Codegen output from builds made before it moved into the build dir; nothing
+// writes here any more, and a leftover copy must not shift the fingerprint.
+const GAME_IGNORED_PATHS = new Set(["src/generated"]);
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 function exactKeys(value, keys, label) {
@@ -45,7 +48,7 @@ function confinedRoot(studioRoot, source, label) {
   return actual;
 }
 
-function hashTree(root, ignoredRoots, extraRoots = []) {
+function hashTree(root, ignoredRoots, extraRoots = [], ignoredPaths = new Set()) {
   const realRoot = realpathSync(resolve(root));
   const rows = [];
   function visit(dir, prefix = "") {
@@ -53,6 +56,7 @@ function hashTree(root, ignoredRoots, extraRoots = []) {
       if ((!prefix && ignoredRoots.has(name)) || IGNORED_ANYWHERE.has(name)) continue;
       const path = join(dir, name);
       const rel = prefix ? `${prefix}/${name}` : name;
+      if (ignoredPaths.has(rel)) continue;
       const info = lstatSync(path);
       if (info.isSymbolicLink()) throw new Error(`runtime build input must not contain a symbolic link: ${rel}`);
       const actual = realpathSync(path);
@@ -176,7 +180,7 @@ export function validateRuntimeBuildRecord(record) {
 export function createRuntimeBuildRecord({ gameDir, studioRoot, dependencies = readDependencies(gameDir), compileProfile = null }) {
   const gameRoot = realpathSync(resolve(gameDir));
   const root = realpathSync(resolve(studioRoot));
-  const game = hashTree(gameRoot, GAME_IGNORED_ROOTS, ["design/items"]);
+  const game = hashTree(gameRoot, GAME_IGNORED_ROOTS, ["design/items"], GAME_IGNORED_PATHS);
   const engineSource = safeSource(dependencies?.engine?.source, "engine dependency");
   if (engineSource !== "external/neotolis-engine") {
     throw new Error("engine dependency source must be exactly external/neotolis-engine");

@@ -78,13 +78,17 @@ process races the advisory lease, stop workspace processes and run
 `reallocate-ports`.
 
 Each workspace also owns a save root, `<base>/<name>/storage`, recorded as
-`storageRoot` in `workspace.json`. Native game builds configured inside the
-workspace read that record (`cmake/GameWorkspaceStorage.cmake` in the template
-and games) and save under `<storageRoot>/<storage-app-id>` by default, so two
+`storageRoot` in `workspace.json`. Native Debug game builds (native-debug,
+devapi-debug) configured inside the workspace read that record
+(`cmake/GameWorkspaceStorage.cmake`, behind the `GAME_WORKSPACE_STORAGE` option,
+which defaults on for Debug and refuses to configure a Release build) and save
+under `<storageRoot>/<storage-app-id>` by default, so two
 workspaces running reload scenarios never load or overwrite each other's saves
 or the main checkout's `%LOCALAPPDATA%` saves. Precedence in the game is
 `--save-root`, then the `GAME_STORAGE_ROOT` environment variable (capture and
-test tools set it), then the workspace root, then the platform default. Web
+test tools set it), then the workspace root, then the platform default. A
+relative `GAME_STORAGE_ROOT` refuses the launch instead of falling back. The
+game page's save view reads the same workspace root. Web
 builds are unaffected: each workspace serves on its own port, which is its own
 localStorage origin. A workspace created before this record existed has no
 `storageRoot` and keeps the platform default; set `GAME_STORAGE_ROOT` there.

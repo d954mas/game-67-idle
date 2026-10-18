@@ -134,8 +134,13 @@ node tools/serve_web.mjs --preset wasm-release        # http://127.0.0.1:8080/
 
 `build_web.mjs` builds the wasm `game` target and copies the native asset pack
 flat to `bin/assets/game.ntpack` (the engine streams packs over HTTP relative to
-the page URL; the pack builder is native-only, so the pack is taken from the
-native build). It also hashes the game plus declared engine/feature source
+the page URL; the pack builder is native-only, so the pack is taken from a
+native build). Each web build packs in its own native host tree,
+`build/<preset>[-<target>]-host`, so builds of different presets, and
+`game.mjs test` in `build/native-debug`, can run at the same time. The cost is
+one cold host build (builder, engine libs, pack) and about 100 MB per web build
+dir; texture encodes are shared through the pack builder cache. Codegen lands
+in each build dir's `generated/`, never in the source tree. It also hashes the game plus declared engine/feature source
 trees before the build, rechecks them before publication, and writes the same
 target-independent binding to `bin/runtime-build.json` and the HTML bootstrap.
 `serve_web.mjs` is a self-contained static server that serves

@@ -11,7 +11,8 @@ import { join } from "node:path";
 
 // Presets tried in order (spec §3b). Each preset writes its own pack and its
 // own game_assets.h (build/<preset>/generated/game/), so a pack is always read
-// with the header that the same build produced.
+// with the header that the same build produced. Games still on the older
+// template layout write one shared header to src/generated/ instead.
 export const ICON_PRESETS = ["native-debug", "devapi-debug"];
 
 const NT_PACK_MAGIC = 0x4b41504e; // "NPAK" LE (nt_pack_format.h)
@@ -194,8 +195,11 @@ function findPackArtifacts(folderAbs) {
   for (const preset of ICON_PRESETS) {
     const packDir = join(folderAbs, "build", preset, "pack");
     const packPath = join(packDir, "game.ntpack");
-    const hdrPath = join(folderAbs, "build", preset, "generated", "game", "game_assets.h");
-    if (!existsSync(packPath) || !existsSync(hdrPath)) continue;
+    const hdrPath = [
+      join(folderAbs, "build", preset, "generated", "game", "game_assets.h"),
+      join(folderAbs, "src", "generated", "game_assets.h"),
+    ].find((candidate) => existsSync(candidate));
+    if (!existsSync(packPath) || !hdrPath) continue;
     const pngPath = findDebugPagePng(packDir);
     if (!pngPath) return { reason: "atlas built but page PNG missing (debug_png off?)" };
     return { packPath, hdrPath, pngPath };

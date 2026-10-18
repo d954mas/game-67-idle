@@ -106,6 +106,10 @@ if(NOT EMSCRIPTEN)
         WARNINGS)
 
     game_add_plain_c_tests()
+    add_test(NAME test_workspace_storage_cmake
+        COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/workspace_storage_test.cmake"
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    set_tests_properties(test_workspace_storage_cmake PROPERTIES LABELS "core")
     include_directories("${GAME_STATE_INC}")
     set(SCENES_CORE_TESTS "${SCENES_CORE_DIR}/tests")
     set(AUDIO_CORE_TESTS "${AUDIO_CORE_DIR}/tests")
