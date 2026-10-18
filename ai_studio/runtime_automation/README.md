@@ -199,6 +199,11 @@ canonical `cmake --build ... --target game` command on every run. An existing
 executable is never accepted as freshness evidence; CMake/Ninja decides whether
 the requested build is a true no-op.
 
+The shared client's short loopback probes and retry waits share one monotonic
+connection deadline, including the prelaunch occupied-port check. Successful
+connections receive their separate request timeout; a quick connection budget
+does not shorten a later capture or command response deadline.
+
 The helper launches a fresh process on an ephemeral port by default. A socket
 connection is not readiness: the launch phase ends only after `endpoints`
 succeeds and advertises the consumer-owned `game.iteration.proof` command. That
