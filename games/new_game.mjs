@@ -157,8 +157,12 @@ function readGameSource(sourceDir) {
   if (dependencies.schema !== "ai_studio.game.dependencies.v3") throw new Error("source game dependencies have an unsupported schema");
   exactKeys(dependencies.engine, ["source", "version", "revision", "compatibility"], "source game engine lock");
   if (!/^[0-9a-f]{40,64}$/i.test(dependencies.engine.revision)) throw new Error("source game engine lock requires an exact Git revision");
+  const enginePrefix = dependencies.engine.revision.slice(0, 8).toLowerCase();
+  if (dependencies.engine.version !== enginePrefix) {
+    throw new Error(`source game engine version ${JSON.stringify(dependencies.engine.version)} must be the engine revision prefix ${enginePrefix}`);
+  }
   if (dependencies.engine.source !== "external/neotolis-engine"
-      || dependencies.engine.version !== dependencies.engine.revision.slice(0, 8).toLowerCase() || !dependencies.engine.compatibility
+      || !dependencies.engine.compatibility
       || !dependencies.compatibility || !Array.isArray(dependencies.features)) throw new Error("source game dependencies are invalid");
   const ids = new Set();
   for (const feature of dependencies.features) {

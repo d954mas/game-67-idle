@@ -115,7 +115,8 @@ function validateDependencyRow(row, label, feature = false) {
   const versionValid = feature ? SEMVER.test(row.version || "") : ENGINE_VERSION.test(row.version || "");
   if (!String(row.source || "").trim() || !versionValid
       || !String(row.compatibility || "").trim()) throw new Error(`${label} version record is invalid`);
-  if (!feature && (!REVISION.test(row.revision || "") || !row.revision.startsWith(row.version))) throw new Error(`${label} revision is invalid`);
+  if (!feature && !REVISION.test(row.revision || "")) throw new Error(`${label} revision is invalid`);
+  if (!feature && !row.revision.startsWith(row.version)) throw new Error(`${label} version prefix ${row.version} does not match revision ${row.revision}`);
 }
 
 export function validateDependencies(dependencies) {

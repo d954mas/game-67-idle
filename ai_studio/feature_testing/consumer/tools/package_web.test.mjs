@@ -911,7 +911,7 @@ test("dependency proof confines exact owners and checks metadata revisions and r
   assert.throws(() => verifyDependencySources({ studioRoot: root, dependencies: semverEngine, git }), /engine dependency version record is invalid/i);
   const foreignPrefix = structuredClone(dependencies);
   foreignPrefix.engine.version = "22222222";
-  assert.throws(() => verifyDependencySources({ studioRoot: root, dependencies: foreignPrefix, git }), /engine dependency revision is invalid/i);
+  assert.throws(() => verifyDependencySources({ studioRoot: root, dependencies: foreignPrefix, git }), /engine dependency version prefix 22222222 does not match revision/i);
   dirty = " M features/platform-sdk/feature.json";
   assert.throws(() => verifyDependencySources({ studioRoot: root, dependencies, git }), /source is dirty/i);
   const escaped = structuredClone(dependencies);

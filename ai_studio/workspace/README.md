@@ -22,6 +22,8 @@ Workspace owns the single resolver for game and template mounts. It scans
   `games/new_game.mjs` resolves its entries to clean, exact Git revisions. The
   seed names no engine version: the engine has none besides its commit
   (`nt_version_engine()`), so a new game records the revision prefix.
+  A game whose copied `tools/package_web.mjs` still reads `NT_VERSION_*` from
+  `nt_core.h` fails on that engine until it takes the template's copy.
 
 Public mount roots must be direct children of `games/` or `templates/`; private
 mounts must be direct children of `games/private/`. The resolver rejects public

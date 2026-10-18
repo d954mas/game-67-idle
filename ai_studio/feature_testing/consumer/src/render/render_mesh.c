@@ -33,7 +33,7 @@ void render_mesh_init(nt_resource_t mesh_vs, nt_resource_t mesh_fs, nt_resource_
     nt_mesh_comp_init(&(nt_mesh_comp_desc_t){.capacity = 128});
     nt_material_comp_init(&(nt_material_comp_desc_t){.capacity = 128});
     nt_drawable_comp_init(&(nt_drawable_comp_desc_t){.capacity = 128});
-    nt_mesh_renderer_init(&(nt_mesh_renderer_desc_t){.max_pipelines = 16});
+    nt_mesh_renderer_init();
 
     s_material = shader_program_material(mesh_vs, mesh_fs, &(nt_material_create_desc_t){
         .depth_test = true,
@@ -118,7 +118,7 @@ void render_mesh_draw(World *w) {
     u.resolution[1] = (float)g_nt_window.fb_height;
     u.near_far[0] = 0.1F;
     u.near_far[1] = 100.0F;
-    nt_gfx_bind_uniform_block(0, &u, sizeof(u));
+    nt_gfx_bind_uniform_block(NT_GFX_SLOT_GLOBALS, &u, sizeof(u));
 
     // set the player transform from the World, then draw
     float *pos = nt_transform_comp_position(w->player_entity);

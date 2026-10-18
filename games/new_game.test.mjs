@@ -241,6 +241,8 @@ test("private derivative rejects incompatible locks and replacing its own source
     "--from", "games/private/source-game", ...extra]);
   writeFileSync(lockPath, JSON.stringify({ ...lock, engine: { ...lock.engine, version: "00000000", revision: "0".repeat(40) } }));
   assert.match(invoke().stderr, /source game engine lock must match/);
+  writeFileSync(lockPath, JSON.stringify({ ...lock, engine: { ...lock.engine, version: "0.1.0" } }));
+  assert.match(invoke().stderr, /engine version "0\.1\.0" must be the engine revision prefix/);
   writeFileSync(lockPath, JSON.stringify({ ...lock, features: [{ ...lock.features[0], version: "99.0.0" }] }));
   assert.match(invoke().stderr, /dependency seed version 99.0.0 does not match/);
   writeFileSync(lockPath, JSON.stringify(lock));

@@ -111,11 +111,11 @@ nt_ui_begin(ctx, fit.logical_w, fit.logical_h, dt, pointers, NT_INPUT_MAX_POINTE
 
 Build the tree and `nt_ui_walk` inside the pass: the walk records sprite and text
 draws into gfx frame storage, so the host sets `frame_capacity[NT_GFX_FRAME_VERTEX]`
-and `[NT_GFX_FRAME_INDEX]` for its quads and glyphs, declares the `Globals` block in
-`nt_gfx_desc_t.global_blocks`, and calls `nt_gfx_bind_uniform_block(0, &view, sizeof view)`
-in the pass before the walk. Nothing flushes: `nt_gfx_end_frame()` executes the frame.
-Call `nt_ui_set_text_material(ctx, material, glyph_depth_bias)` once the text
-material exists.
+and `[NT_GFX_FRAME_INDEX]` for its quads and glyphs, and calls
+`nt_gfx_bind_uniform_block(NT_GFX_SLOT_GLOBALS, &view, sizeof view)` in the pass before
+the walk; the engine binds the `Globals` block name to that slot. Nothing flushes:
+`nt_gfx_end_frame()` executes the frame. Call `nt_ui_set_text_material(ctx, material)`
+once the text material exists; text does not write depth.
 
 The canvas comes from the sheet: its reference in authored units spans the
 available short edge, and that is the only size contract there is. It is a
