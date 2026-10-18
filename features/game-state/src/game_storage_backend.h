@@ -18,7 +18,9 @@ bool game_storage_backend_write_backup(
 bool game_storage_backend_read_backup(
     const char *slot, char **out, char *error, int error_cap);
 static inline const char *game_storage_premigration_suffix(game_storage_premigration_t kind) {
-    return kind == GAME_STORAGE_PREMIGRATION_KEPT ? ".premigration-kept" : ".premigration";
+    return kind == GAME_STORAGE_PREMIGRATION_KEPT          ? ".premigration-kept"
+           : kind == GAME_STORAGE_PREMIGRATION_KEPT_LATEST ? ".premigration-latest"
+                                                           : ".premigration";
 }
 bool game_storage_backend_write_premigration(
     const char *slot, game_storage_premigration_t kind, const char *text, char *error, int error_cap);

@@ -125,15 +125,26 @@ The droppable copy is removed only by a load in a later session (after a new
 reset, and only after that load has refreshed the backup. A reload inside the
 session that migrated, such as DevAPI `state.load`, removes nothing.
 
-A migrating load that resets any fragment has already lost that fragment's
-data, and later sessions load the defaults cleanly. Its oldest pre-migration
-bytes are therefore also stored as a kept copy (`<slot>.premigration-kept`,
-web `<key>.premigration-kept`) that no load removes.
+A load that resets any fragment while it migrates, or while a droppable copy
+exists, has lost data that later sessions will not notice: they load the
+defaults cleanly. Such a load copies its bytes aside into at most two kept
+copies that no load removes:
 
-When a primary write fails with `QuotaExceededError`, the save removes the
-droppable copy and retries; if that still does not make room, it removes the
-kept copy and retries again. Other write failures leave both copies alone.
-Read either copy with `game_storage_read_premigration` for support or manual
+- `<slot>.premigration-kept` (web `<key>.premigration-kept`): written once, by
+  the first such load, from the droppable copy when one exists (it predates the
+  migration) or else from the load's own bytes. The droppable copy is then
+  removed, since the kept copy holds it.
+- `<slot>.premigration-latest`: the bytes of the most recent such load when
+  they differ from the kept copy; each later incident replaces it.
+
+Until those bytes are copied aside the slot holds their only copy, so a failed
+copy holds every write (`game_save_flush` refuses, autosave pauses) and the
+tick retries until it lands; a full store is the exception below.
+
+When a save write fails with `QuotaExceededError`, `game_storage_write_save`
+removes the droppable copy, then the latest, then the kept one, retrying after
+each; both save shells write through it. Other write failures leave every copy
+alone. Read a copy with `game_storage_read_premigration` for support or manual
 recovery; the loader never restores one on its own.
 
 An absent fragment resets independently. A fragment parse or migration failure

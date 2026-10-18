@@ -2,6 +2,8 @@
 
 #include "game_storage_backend.h"
 
+#include "log/nt_log.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -62,6 +64,43 @@ bool game_storage_write_blocking(
     const char *slot, const char *text, char *error, int error_cap) {
     return validate_write(slot, text, error, error_cap) &&
            game_storage_backend_write(slot, text, error, error_cap, true);
+}
+
+bool game_storage_write_save(
+    const char *slot, const char *text, bool may_wait, char *error, int error_cap) {
+    if (!validate_write(slot, text, error, error_cap)) {
+        return false;
+    }
+    char reason[192] = {0};
+    bool ok = game_storage_backend_write(slot, text, reason, (int)sizeof reason, may_wait);
+    static const game_storage_premigration_t room_order[] = {
+        GAME_STORAGE_PREMIGRATION_DROPPABLE,
+        GAME_STORAGE_PREMIGRATION_KEPT_LATEST,
+        GAME_STORAGE_PREMIGRATION_KEPT,
+    };
+    for (size_t i = 0; !ok && i < sizeof room_order / sizeof room_order[0]; i++) {
+        if (strstr(reason, "QuotaExceededError") == NULL) {
+            break;
+        }
+        const game_storage_premigration_t kind = room_order[i];
+        if (!game_storage_backend_premigration_exists(slot, kind)) {
+            continue;
+        }
+        char remove_error[128] = {0};
+        if (!game_storage_backend_remove_premigration(slot, kind, remove_error, (int)sizeof remove_error)) {
+            nt_log_warn("game_storage: storage is full and copy '%s%s' could not be removed (%s)",
+                        slot, game_storage_premigration_suffix(kind), remove_error);
+            break;
+        }
+        nt_log_warn("game_storage: storage is full; removed copy '%s%s' to save progress",
+                    slot, game_storage_premigration_suffix(kind));
+        reason[0] = '\0';
+        ok = game_storage_backend_write(slot, text, reason, (int)sizeof reason, may_wait);
+    }
+    if (!ok) {
+        set_error(error, error_cap, reason);
+    }
+    return ok;
 }
 
 bool game_storage_read(

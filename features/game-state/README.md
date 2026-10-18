@@ -393,13 +393,15 @@ migrates stores the stored bytes it started from beside the slot (native
 `<slot>.premigration`, web `<key>.premigration`), leaves `.bak` alone that
 session and marks the save dirty; recovery from a `.bak` that needed migrating
 keeps that `.bak`. A load in a later session that loads with nothing to migrate
-and no fragment reset refreshes `.bak` and then removes the copy. A migrating
-load that reset a fragment also writes `<slot>.premigration-kept`, which no load
-removes. A save refused with `QuotaExceededError` removes the droppable copy,
-then the kept one, before giving up. `game_storage.h` adds
-`game_storage_premigration_t` and `game_storage_{write,read,remove}_premigration`
-and `game_storage_premigration_exists`; a consumer that fakes `game_storage`
-must supply them. Rules: `references/contract.md`.
+and no fragment reset refreshes `.bak` and then removes the copy. A load that
+resets a fragment while it migrates or while a droppable copy exists moves its
+bytes into at most two kept copies (`-kept`: the first incident, `-latest`: the
+most recent) that no load removes, and holds writes until they are written. A
+save refused with `QuotaExceededError` removes the droppable, latest and kept
+copies in that order before giving up. `game_storage.h` adds
+`game_storage_premigration_t`, `game_storage_{write,read,remove}_premigration`,
+`game_storage_premigration_exists` and `game_storage_write_save`; a consumer
+that fakes `game_storage` must supply them. Rules: `references/contract.md`.
 
 ## Extension points
 

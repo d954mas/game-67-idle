@@ -18,6 +18,7 @@
 #define PRIMARY_KEY "quota_test/save/test_slot"
 #define DROPPABLE_KEY PRIMARY_KEY ".premigration"
 #define KEPT_KEY PRIMARY_KEY ".premigration-kept"
+#define LATEST_KEY PRIMARY_KEY ".premigration-latest"
 
 typedef struct {
     char key[128];
@@ -251,6 +252,20 @@ void test_kept_copy_goes_last_when_nothing_else_makes_room(void) {
     TEST_ASSERT_NULL(find_item(KEPT_KEY));
 }
 
+void test_latest_copy_goes_before_the_first_one(void) {
+    load_migrated_save();
+    char error[128] = {0};
+    remove_item(DROPPABLE_KEY);
+    TEST_ASSERT_TRUE(put_item(KEPT_KEY, k_v1_save, error, (int)sizeof error));
+    TEST_ASSERT_TRUE(put_item(LATEST_KEY, k_v1_save, error, (int)sizeof error));
+    s_quota = stored_bytes() - 1U;
+
+    TEST_ASSERT_TRUE(game_save_flush(error, (int)sizeof error));
+
+    TEST_ASSERT_NULL(find_item(LATEST_KEY));
+    TEST_ASSERT_NOT_NULL(find_item(KEPT_KEY));
+}
+
 void test_other_write_failures_keep_the_copy(void) {
     load_migrated_save();
     s_forced_failure = "exception SecurityError";
@@ -268,6 +283,7 @@ int main(void) {
     RUN_TEST(test_full_storage_drops_the_droppable_copy_and_saves);
     RUN_TEST(test_kept_copy_survives_when_dropping_the_droppable_one_is_enough);
     RUN_TEST(test_kept_copy_goes_last_when_nothing_else_makes_room);
+    RUN_TEST(test_latest_copy_goes_before_the_first_one);
     RUN_TEST(test_other_write_failures_keep_the_copy);
     return UNITY_END();
 }

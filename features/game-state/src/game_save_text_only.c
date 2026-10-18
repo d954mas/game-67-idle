@@ -203,13 +203,9 @@ static bool save_current(char *error, int error_cap, bool may_wait) {
         if (!write_document(&writer, saved_at, save_seq)) {
             set_error(reason, (int)sizeof reason, "save snapshot exceeds configured capacity");
         } else {
-            const bool written = may_wait
-                ? game_storage_write_blocking(
-                      GAME_SAVE_AUTOSAVE_SLOT, game_save_text_writer_data(&writer),
-                      reason, (int)sizeof reason)
-                : game_storage_write(
-                      GAME_SAVE_AUTOSAVE_SLOT, game_save_text_writer_data(&writer),
-                      reason, (int)sizeof reason);
+            const bool written = game_storage_write_save(
+                GAME_SAVE_AUTOSAVE_SLOT, game_save_text_writer_data(&writer), may_wait,
+                reason, (int)sizeof reason);
             if (written) {
                 s_save_seq = save_seq;
                 s_last_saved_at = saved_at;

@@ -75,6 +75,12 @@ bool game_storage_write_blocking(
     return game_storage_write(slot, text, error, error_cap);
 }
 
+bool game_storage_write_save(
+    const char *slot, const char *text, bool may_wait, char *error, int error_cap) {
+    (void)may_wait;
+    return game_storage_write(slot, text, error, error_cap);
+}
+
 bool game_storage_read(
     const char *slot, char **out, game_storage_read_status_t *status,
     char *error, int error_cap) {

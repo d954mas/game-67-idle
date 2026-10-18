@@ -39,6 +39,8 @@
 #define PREMIG_TMP GAME_STORAGE_NATIVE_ROOT "/test_slot.premigration.tmp"
 #define KEPT_PATH GAME_STORAGE_NATIVE_ROOT "/test_slot.premigration-kept"
 #define KEPT_TMP GAME_STORAGE_NATIVE_ROOT "/test_slot.premigration-kept.tmp"
+#define LATEST_PATH GAME_STORAGE_NATIVE_ROOT "/test_slot.premigration-latest"
+#define LATEST_TMP GAME_STORAGE_NATIVE_ROOT "/test_slot.premigration-latest.tmp"
 
 /* ---- injected clocks ---- */
 static int64_t g_mono_ms;
@@ -374,6 +376,22 @@ static bool first_corrupt_name(char *name, size_t cap) {
 #endif
 }
 
+static void remove_dir(const char *path) {
+#ifdef _WIN32
+    (void)_rmdir(path);
+#else
+    (void)rmdir(path);
+#endif
+}
+
+static void make_dir(const char *path) {
+#ifdef _WIN32
+    TEST_ASSERT_EQUAL_INT(0, _mkdir(path));
+#else
+    TEST_ASSERT_EQUAL_INT(0, mkdir(path, 0777));
+#endif
+}
+
 static void cleanup_all(void) {
     (void)remove(PRIMARY_PATH);
     (void)remove(PRIMARY_TMP);
@@ -388,11 +406,10 @@ static void cleanup_all(void) {
     (void)remove(PREMIG_TMP);
     (void)remove(KEPT_PATH);
     (void)remove(KEPT_TMP);
-#ifdef _WIN32
-    (void)_rmdir(BAK_TMP);
-#else
-    (void)rmdir(BAK_TMP);
-#endif
+    (void)remove(LATEST_PATH);
+    (void)remove(LATEST_TMP);
+    remove_dir(BAK_TMP);
+    remove_dir(KEPT_TMP);
     (void)sweep_corrupt(true);
 }
 
@@ -1374,13 +1391,25 @@ void test_load_with_reset_fragment_keeps_premigration_copy(void) {
               "{\"format\":1,\"save_version\":2,\"saved_at\":1,\"save_seq\":1,\"app\":\"" GAME_STORAGE_APP_ID "\","
               "\"build\":\"0\",\"features\":{\"game\":{\"v\":1,\"coins\":2000000000},\"extra\":{\"v\":1,\"mark\":7}}}");
     write_raw(PREMIG_PATH, "ORIGINAL");
+    char *raw = read_raw(PRIMARY_PATH);
+    TEST_ASSERT_NOT_NULL(raw);
 
     game_save_load_result_t result;
     game_save_load(&result);
 
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, result.status);
     TEST_ASSERT_TRUE(result.reset_fragment_count >= 1);
-    assert_file_equals(PREMIG_PATH, "ORIGINAL");
+    /* A reset with a droppable copy present may be that migration's fault, so
+       the copy is promoted and a clean later session cannot drop it. */
+    TEST_ASSERT_FALSE(file_present(PREMIG_PATH));
+    assert_file_equals(KEPT_PATH, "ORIGINAL");
+    assert_file_equals(LATEST_PATH, raw);
+    free(raw);
+
+    game_save_init();
+    game_save_load_result_t later;
+    game_save_load(&later);
+    assert_file_equals(KEPT_PATH, "ORIGINAL");
 }
 
 /* Without a migration the load keeps its old shape: .bak mirrors the primary
@@ -1516,17 +1545,70 @@ void test_failed_backup_refresh_keeps_the_copy(void) {
     s_frag_coins = 3;
     TEST_ASSERT_TRUE(game_save_flush(err, (int)sizeof err));
     write_raw(PREMIG_PATH, "ORIGINAL");
-#ifdef _WIN32
-    TEST_ASSERT_EQUAL_INT(0, _mkdir(BAK_TMP));
-#else
-    TEST_ASSERT_EQUAL_INT(0, mkdir(BAK_TMP, 0777));
-#endif
+    make_dir(BAK_TMP);
 
     game_save_load_result_t result;
     game_save_load(&result);
 
     TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, result.status);
     assert_file_equals(PREMIG_PATH, "ORIGINAL");
+    remove_dir(BAK_TMP);
+}
+
+/* With an older droppable copy present, the reset load's own bytes still hold
+   progress made since that copy, so both are kept. */
+void test_reset_with_older_droppable_keeps_both_bytes(void) {
+    write_raw(PREMIG_PATH, "V1-ORIGINAL");
+    write_raw(PRIMARY_PATH, k_third_v1_save);
+    s_third_step_fail = true;
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+
+    TEST_ASSERT_EQUAL_INT(1, result.reset_fragment_count);
+    assert_file_equals(KEPT_PATH, "V1-ORIGINAL");
+    assert_file_equals(LATEST_PATH, k_third_v1_save);
+    TEST_ASSERT_FALSE(file_present(PREMIG_PATH));
+}
+
+/* A later incident keeps the first one's copy and replaces only the latest:
+   two kept copies at most. */
+void test_later_incident_replaces_only_the_latest_copy(void) {
+    write_raw(KEPT_PATH, "FIRST-INCIDENT");
+    write_raw(LATEST_PATH, "SECOND-INCIDENT");
+    write_raw(PRIMARY_PATH, k_third_v1_save);
+    s_third_step_fail = true;
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+
+    TEST_ASSERT_EQUAL_INT(1, result.reset_fragment_count);
+    assert_file_equals(KEPT_PATH, "FIRST-INCIDENT");
+    assert_file_equals(LATEST_PATH, k_third_v1_save);
+}
+
+/* Until the lost data is copied aside the slot is its only copy, so nothing
+   may overwrite it; the tick retries and resumes saving once the copy lands. */
+void test_unkept_lost_data_holds_writes_until_copied(void) {
+    char err[128] = {0};
+    write_raw(PRIMARY_PATH, k_third_v1_save);
+    s_third_step_fail = true;
+    make_dir(KEPT_TMP);
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+
+    TEST_ASSERT_EQUAL_INT(1, result.reset_fragment_count);
+    TEST_ASSERT_FALSE(file_present(KEPT_PATH));
+    TEST_ASSERT_FALSE(game_save_flush(err, (int)sizeof err));
+    assert_file_equals(PRIMARY_PATH, k_third_v1_save);
+    TEST_ASSERT_TRUE(file_present(PREMIG_PATH));
+
+    remove_dir(KEPT_TMP);
+    game_save_tick();
+
+    assert_file_equals(KEPT_PATH, k_third_v1_save);
+    TEST_ASSERT_TRUE(game_save_flush(err, (int)sizeof err));
 }
 
 /* 20. Failure after mutating the staged first owner leaves both live owners and
@@ -1657,5 +1739,8 @@ int main(void) {
     RUN_TEST(test_copy_keeps_the_transformed_bytes);
     RUN_TEST(test_migrating_import_keeps_a_copy);
     RUN_TEST(test_failed_backup_refresh_keeps_the_copy);
+    RUN_TEST(test_reset_with_older_droppable_keeps_both_bytes);
+    RUN_TEST(test_later_incident_replaces_only_the_latest_copy);
+    RUN_TEST(test_unkept_lost_data_holds_writes_until_copied);
     return UNITY_END();
 }

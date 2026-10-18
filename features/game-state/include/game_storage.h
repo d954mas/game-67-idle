@@ -87,18 +87,29 @@ bool game_storage_write_backup(const char *slot, char *error, int error_cap);
 /* Чтение .bak (фолбэк лоадера). native only; web всегда false. */
 bool game_storage_read_backup(const char *slot, char **out, char *error, int error_cap);
 
-/* Pre-migration copies: the exact stored bytes of a save that a load migrated.
-   The loader owns the policy; these only move bytes.
-   DROPPABLE lives until a later session proves the migrated save loads cleanly.
-   KEPT is written when a migrating load had to reset a fragment and is never
-   removed automatically, because the loss it records looks clean afterwards.
-   native: <slot>.premigration / <slot>.premigration-kept (atomic, may wait).
-   web: "<key>.premigration" / "<key>.premigration-kept".
+/* Pre-migration copies: exact stored bytes of saves the loader could not yet
+   prove. The loader owns the policy; these only move bytes.
+   DROPPABLE: the source of a migration, until a later session loads cleanly.
+   KEPT: the oldest bytes of the first load that lost a fragment's data.
+   KEPT_LATEST: the bytes of the most recent such load.
+   No load removes either kept copy, because the loss they record looks clean
+   afterwards; only game_storage_write_save removes them, when the store is
+   full and nothing else makes room for the player's save.
+   native: <slot>.premigration[-kept|-latest] (atomic, may wait).
+   web: "<key>.premigration[-kept|-latest]".
    remove: an absent copy counts as success. */
 typedef enum {
     GAME_STORAGE_PREMIGRATION_DROPPABLE = 0,
     GAME_STORAGE_PREMIGRATION_KEPT = 1,
+    GAME_STORAGE_PREMIGRATION_KEPT_LATEST = 2,
 } game_storage_premigration_t;
+
+/* The save write itself. When the store reports QuotaExceededError it removes
+   the slot's pre-migration copies one at a time -- droppable, latest, kept --
+   retrying after each: a copy must never cost the player every later save.
+   Any other failure leaves the copies alone. */
+bool game_storage_write_save(
+    const char *slot, const char *text, bool may_wait, char *error, int error_cap);
 
 bool game_storage_write_premigration(
     const char *slot, game_storage_premigration_t kind, const char *text, char *error, int error_cap);
