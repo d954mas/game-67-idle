@@ -137,9 +137,12 @@ copies that no load removes:
 - `<slot>.premigration-latest`: the bytes of the most recent such load when
   they differ from the kept copy; each later incident replaces it.
 
-Until those bytes are copied aside the slot holds their only copy, so a failed
-copy holds every write (`game_save_flush` refuses, autosave pauses) and the
-tick retries until it lands; a full store is the exception below.
+If the kept copy cannot be written, saves still go on: holding them on a
+persistent storage error would lose all new progress. The droppable copy is
+then the best record left, so a small hold marker (`<slot>.premigration-hold`)
+keeps every later load from removing it. The marker goes with that copy: when a
+later incident writes the kept copy, when a new droppable copy replaces it, or
+when a full store removes it.
 
 When a save write fails with `QuotaExceededError`, `game_storage_write_save`
 removes the droppable copy, then the latest, then the kept one, retrying after

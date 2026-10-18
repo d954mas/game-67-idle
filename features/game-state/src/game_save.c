@@ -93,7 +93,6 @@ static int64_t s_last_save_mono;  /* mono ms of the last save ATTEMPT or load */
 static int64_t s_last_saved_at;   /* wall ms stamped into the last save/load */
 static int64_t s_save_seq;        /* monotonic counter, restored from the loaded envelope */
 static bool s_migrated_this_session; /* a migration's output is proven only by a later session */
-static char *s_lost_data_owed;       /* bytes a load lost data from, not yet copied aside; writes held */
 static game_save_playtime_t s_playtime;
 
 static int64_t (*s_mono_clock)(void);
@@ -1114,6 +1113,8 @@ static void keep_premigration_copy(const char *raw) {
     if (game_storage_premigration_exists(GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_DROPPABLE)) {
         return;
     }
+    /* A hold names the droppable copy it protected; that copy is gone. */
+    (void)game_storage_remove_premigration(GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_HOLD, NULL, 0);
     if (!game_storage_write_premigration(
             GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_DROPPABLE, raw, err, (int)sizeof err)) {
         nt_log_warn("game_save: pre-migration copy could not be kept (%s)", err);
@@ -1141,6 +1142,7 @@ static bool copy_lost_data_aside(const char *raw, char *err, int cap) {
             return false;
         }
         (void)game_storage_remove_premigration(slot, GAME_STORAGE_PREMIGRATION_DROPPABLE, NULL, 0);
+        (void)game_storage_remove_premigration(slot, GAME_STORAGE_PREMIGRATION_HOLD, NULL, 0);
         if (same) {
             return true;
         }
@@ -1149,30 +1151,23 @@ static bool copy_lost_data_aside(const char *raw, char *err, int cap) {
 }
 
 /* A load that reset a fragment lost that fragment's data, and the next session
-   loads the defaults cleanly, so nothing would remember it. Until the bytes are
-   copied aside the slot itself is their only copy, so writes are held and the
-   tick retries -- except on a full store, where the copies yield to the save
-   as they do in game_storage_write_save. Call after the load set the pause. */
+   loads the defaults cleanly, so nothing would remember it. When the bytes
+   cannot be copied aside, the droppable copy is the best record left: a hold
+   marker keeps every later clean load from dropping it. Saves go on -- holding
+   them on a persistent storage error would lose all new progress instead. */
 static void keep_lost_data(const char *raw) {
     char err[128];
     err[0] = '\0';
     if (copy_lost_data_aside(raw, err, (int)sizeof err)) {
         nt_log_warn("game_save: a load reset a fragment; the save it read is kept for recovery");
-        free(s_lost_data_owed);
-        s_lost_data_owed = NULL;
         return;
     }
-    if (strstr(err, "QuotaExceededError") != NULL) {
-        nt_log_warn("game_save: a load reset a fragment and storage is full; its copy is not kept (%s)", err);
-        free(s_lost_data_owed);
-        s_lost_data_owed = NULL;
-        return;
+    nt_log_warn("game_save: a load reset a fragment and its copy could not be kept (%s)", err);
+    if (game_storage_premigration_exists(GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_DROPPABLE) &&
+        !game_storage_write_premigration(
+            GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_HOLD, "hold", err, (int)sizeof err)) {
+        nt_log_warn("game_save: the pre-migration copy could not be marked to keep (%s)", err);
     }
-    if (s_lost_data_owed == NULL) {
-        s_lost_data_owed = dup_string(raw);
-        nt_log_warn("game_save: a load reset a fragment and its copy could not be kept (%s); writes held", err);
-    }
-    s_autosave_paused = true;
 }
 
 static bool load_lost_data(const game_save_load_result_t *result, bool migrated) {
@@ -1181,17 +1176,12 @@ static bool load_lost_data(const game_save_load_result_t *result, bool migrated)
                             GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_DROPPABLE));
 }
 
-static void retry_owed_lost_data(void) {
-    keep_lost_data(s_lost_data_owed);
-    if (s_lost_data_owed == NULL && !s_quarantine_owed) {
-        s_autosave_paused = false;
-        game_save_mark_dirty();
-    }
-}
-
 static void drop_premigration_copy(void) {
     char err[128];
     err[0] = '\0';
+    if (game_storage_premigration_exists(GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_HOLD)) {
+        return;
+    }
     if (!game_storage_remove_premigration(
             GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_DROPPABLE, err, (int)sizeof err)) {
         nt_log_warn("game_save: pre-migration copy could not be removed (%s)", err);
@@ -1239,7 +1229,7 @@ static bool try_recover_from_backup(game_save_load_result_t *result, const char 
     /* The existing .bak is the only known durable good copy until primary is
        rewritten successfully. Never refresh it from a still-corrupt primary,
        nor from a migration's output, which no clean load has proven yet. */
-    if (!s_autosave_paused && save_internal(err, cap, true) && !migrated && !lost_data) {
+    if (save_internal(err, cap, true) && !migrated && !lost_data) {
         (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, cap);
     }
     s_last_save_mono = mono_now();
@@ -1388,7 +1378,7 @@ void game_save_load(game_save_load_result_t *result) {
                good until a later session loads it with nothing to migrate. A
                reload in the session that migrated (DevAPI state.load) reads that
                session's own output, which proves nothing. */
-            if (!any_migration && !s_migrated_this_session && !s_autosave_paused &&
+            if (!any_migration && !s_migrated_this_session &&
                 game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err) &&
                 result->reset_fragment_count == 0) {
                 drop_premigration_copy();
@@ -1526,8 +1516,6 @@ void game_save_init(void) {
     s_last_saved_at = 0;
     s_save_seq = 0;
     s_migrated_this_session = false; /* init is the start of a session */
-    free(s_lost_data_owed);
-    s_lost_data_owed = NULL;
     set_playtime_ms(0);
     s_logged_failure[0] = '\0';
     s_failure_logged = false;
@@ -1627,9 +1615,6 @@ bool game_save_flush(char *error, int error_cap) {
 void game_save_tick(void) {
     if (s_quarantine_owed) {
         retry_owed_quarantine();
-    }
-    if (s_lost_data_owed != NULL) {
-        retry_owed_lost_data();
     }
     if (s_autosave_paused || !s_dirty) {
         return;

@@ -94,6 +94,9 @@ bool game_storage_write_save(
         }
         nt_log_warn("game_storage: storage is full; removed copy '%s%s' to save progress",
                     slot, game_storage_premigration_suffix(kind));
+        if (kind == GAME_STORAGE_PREMIGRATION_DROPPABLE) {
+            (void)game_storage_backend_remove_premigration(slot, GAME_STORAGE_PREMIGRATION_HOLD, NULL, 0);
+        }
         reason[0] = '\0';
         ok = game_storage_backend_write(slot, text, reason, (int)sizeof reason, may_wait);
     }

@@ -92,16 +92,19 @@ bool game_storage_read_backup(const char *slot, char **out, char *error, int err
    DROPPABLE: the source of a migration, until a later session loads cleanly.
    KEPT: the oldest bytes of the first load that lost a fragment's data.
    KEPT_LATEST: the bytes of the most recent such load.
+   HOLD: a tiny marker that keeps loads from dropping DROPPABLE, written when a
+   load lost data but could not write KEPT; it lives as long as that copy.
    No load removes either kept copy, because the loss they record looks clean
    afterwards; only game_storage_write_save removes them, when the store is
    full and nothing else makes room for the player's save.
-   native: <slot>.premigration[-kept|-latest] (atomic, may wait).
-   web: "<key>.premigration[-kept|-latest]".
+   native: <slot>.premigration[-kept|-latest|-hold] (atomic, may wait).
+   web: "<key>.premigration[-kept|-latest|-hold]".
    remove: an absent copy counts as success. */
 typedef enum {
     GAME_STORAGE_PREMIGRATION_DROPPABLE = 0,
     GAME_STORAGE_PREMIGRATION_KEPT = 1,
     GAME_STORAGE_PREMIGRATION_KEPT_LATEST = 2,
+    GAME_STORAGE_PREMIGRATION_HOLD = 3,
 } game_storage_premigration_t;
 
 /* The save write itself. When the store reports QuotaExceededError it removes

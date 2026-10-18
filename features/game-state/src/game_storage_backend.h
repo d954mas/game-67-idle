@@ -20,6 +20,7 @@ bool game_storage_backend_read_backup(
 static inline const char *game_storage_premigration_suffix(game_storage_premigration_t kind) {
     return kind == GAME_STORAGE_PREMIGRATION_KEPT          ? ".premigration-kept"
            : kind == GAME_STORAGE_PREMIGRATION_KEPT_LATEST ? ".premigration-latest"
+           : kind == GAME_STORAGE_PREMIGRATION_HOLD        ? ".premigration-hold"
                                                            : ".premigration";
 }
 bool game_storage_backend_write_premigration(

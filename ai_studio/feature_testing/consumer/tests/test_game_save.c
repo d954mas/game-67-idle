@@ -408,6 +408,8 @@ static void cleanup_all(void) {
     (void)remove(KEPT_TMP);
     (void)remove(LATEST_PATH);
     (void)remove(LATEST_TMP);
+    (void)remove(GAME_STORAGE_NATIVE_ROOT "/test_slot.premigration-hold");
+    (void)remove(GAME_STORAGE_NATIVE_ROOT "/test_slot.premigration-hold.tmp");
     remove_dir(BAK_TMP);
     remove_dir(KEPT_TMP);
     (void)sweep_corrupt(true);
@@ -1587,9 +1589,9 @@ void test_later_incident_replaces_only_the_latest_copy(void) {
     assert_file_equals(LATEST_PATH, k_third_v1_save);
 }
 
-/* Until the lost data is copied aside the slot is its only copy, so nothing
-   may overwrite it; the tick retries and resumes saving once the copy lands. */
-void test_unkept_lost_data_holds_writes_until_copied(void) {
+/* When the lost data cannot be copied aside, saves go on and the droppable
+   copy -- now the best record of it -- survives every later clean load. */
+void test_unkept_lost_data_keeps_the_droppable_copy(void) {
     char err[128] = {0};
     write_raw(PRIMARY_PATH, k_third_v1_save);
     s_third_step_fail = true;
@@ -1600,15 +1602,18 @@ void test_unkept_lost_data_holds_writes_until_copied(void) {
 
     TEST_ASSERT_EQUAL_INT(1, result.reset_fragment_count);
     TEST_ASSERT_FALSE(file_present(KEPT_PATH));
-    TEST_ASSERT_FALSE(game_save_flush(err, (int)sizeof err));
-    assert_file_equals(PRIMARY_PATH, k_third_v1_save);
-    TEST_ASSERT_TRUE(file_present(PREMIG_PATH));
-
-    remove_dir(KEPT_TMP);
-    game_save_tick();
-
-    assert_file_equals(KEPT_PATH, k_third_v1_save);
     TEST_ASSERT_TRUE(game_save_flush(err, (int)sizeof err));
+    remove_dir(KEPT_TMP);
+    s_third_step_fail = false;
+
+    for (int session = 0; session < 2; session++) {
+        game_save_init();
+        game_save_load_result_t clean;
+        game_save_load(&clean);
+        TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, clean.status);
+        TEST_ASSERT_EQUAL_INT(0, clean.reset_fragment_count);
+    }
+    assert_file_equals(PREMIG_PATH, k_third_v1_save);
 }
 
 /* 20. Failure after mutating the staged first owner leaves both live owners and
@@ -1741,6 +1746,6 @@ int main(void) {
     RUN_TEST(test_failed_backup_refresh_keeps_the_copy);
     RUN_TEST(test_reset_with_older_droppable_keeps_both_bytes);
     RUN_TEST(test_later_incident_replaces_only_the_latest_copy);
-    RUN_TEST(test_unkept_lost_data_holds_writes_until_copied);
+    RUN_TEST(test_unkept_lost_data_keeps_the_droppable_copy);
     return UNITY_END();
 }

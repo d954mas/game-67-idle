@@ -396,7 +396,8 @@ keeps that `.bak`. A load in a later session that loads with nothing to migrate
 and no fragment reset refreshes `.bak` and then removes the copy. A load that
 resets a fragment while it migrates or while a droppable copy exists moves its
 bytes into at most two kept copies (`-kept`: the first incident, `-latest`: the
-most recent) that no load removes, and holds writes until they are written. A
+most recent) that no load removes; if they cannot be written, a hold marker
+keeps the droppable copy from being removed instead, and saves go on. A
 save refused with `QuotaExceededError` removes the droppable, latest and kept
 copies in that order before giving up. `game_storage.h` adds
 `game_storage_premigration_t`, `game_storage_{write,read,remove}_premigration`,
