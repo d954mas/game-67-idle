@@ -1,6 +1,6 @@
 # Runtime Automation
 
-AI Studio module for local runtime proof automation.
+AI Studio module for local runtime preview and proof automation.
 
 ## Role
 
@@ -9,6 +9,7 @@ native playable work:
 
 - DevAPI TCP client and minimal CLI.
 - Native debug launch/reuse helpers.
+- Catalog-selected non-proof web preview through game-owned build plans.
 - Framebuffer, window screenshot, and screen recording helpers.
 - PNG encode/decode utilities used by capture and health checks.
 - Pixel-health checks for blank or flat screenshots.
@@ -31,6 +32,36 @@ node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/ui_re
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/pixel_health.py tmp/captures/screenshot.png
 node ai_studio/runtime_automation/web_local_mock_probe.mjs --url http://127.0.0.1:8092/ --cdp http://127.0.0.1:9222 --out games/<game-id>/.ai_studio/evidence/local-mock/<observation>.json
 ```
+
+## Fast web preview
+
+Run from the Studio root with a canonical catalog game ID:
+
+```powershell
+node ai_studio/runtime_automation/preview_game.mjs --game <game-id> --preset wasm-devapi-debug
+```
+
+Use `wasm-debug` when DevAPI is unnecessary. The adapter uses the game's exported
+build-plan API, preserving its own build steps and artifact layout. Catalog and
+physical-path checks run before importing the game builder. Unsupported builder
+APIs fail explicitly. Plans were checked across eleven catalog games and three
+local derivative checkouts; the CLI selects canonical catalog mounts.
+
+Preview skips the full source-tree fingerprints before and after compilation.
+It clears the compiled fingerprint, removes an older proof record before the
+build and writes `ai_studio.runtime_build.preview.v1` with `proof: "none"`.
+Only debug presets accept this mode. Release packaging rejects this record;
+native capture and formal release checks retain their source freshness checks.
+The next ordinary build restores proof generation in the same build directory.
+
+Keep the game's local server running and refresh after incremental builds.
+Run only tests for the changed contract while editing. Use ordinary builds and
+the owning module's checks at integration, capture or release boundaries; the
+complete Studio gate belongs at CI/acceptance boundaries. Preview build time
+still includes actual CMake/compiler work and varies with changed inputs.
+
+The current starter and shared feature consumer also accept
+`node tools/build_web.mjs --preset wasm-debug --preview` from their own roots.
 
 ## Gameplay recording
 

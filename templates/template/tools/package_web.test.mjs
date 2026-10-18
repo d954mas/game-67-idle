@@ -929,6 +929,14 @@ test("release artifact rejects a matching witness with debug compiler flags", (t
   assert.throws(() => validateWebArtifact({ ...item, runtimeBuild, studioRoot }), /runtime build profile/i);
 });
 
+test("release artifact rejects an explicit non-proof preview record", (t) => {
+  const item = fixture(t);
+  write(join(item.artifactDir, "runtime-build.json"), JSON.stringify({
+    schema: "ai_studio.runtime_build.preview.v1", proof: "none", preset: "wasm-debug", target: "local",
+  }, null, 2) + "\n");
+  assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /preview web artifacts cannot be packaged/i);
+});
+
 test("reopened ZIP rejects a matching witness with debug compiler flags", (t) => {
   const item = fixture(t);
   const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });

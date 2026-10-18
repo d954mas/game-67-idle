@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -14,21 +14,26 @@ const { compileProfileForTarget, targetNames } = await import(pathToFileURL(join
   findStudioRoot(MODULE_GAME_DIR), "features", "platform-sdk", "publish-targets", "target_config.mjs",
 )).href);
 const TARGETS = new Set(targetNames());
+const PREVIEW_SCHEMA = "ai_studio.runtime_build.preview.v1";
 
 export function parseBuildArgs(argv) {
-  const args = { preset: "wasm-release", target: "local", debugUi: "default" };
+  const args = { preset: "wasm-release", target: "local", debugUi: "default", preview: false };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--preset") args.preset = argv[++index] || "";
     else if (arg === "--target") args.target = argv[++index] || "";
     else if (arg === "--debug-ui") args.debugUi = "on";
     else if (arg === "--no-debug-ui") args.debugUi = "off";
+    else if (arg === "--preview") args.preview = true;
     else throw new Error(`unknown option: ${arg}`);
   }
   if (!PRESETS.has(args.preset)) throw new Error(`unknown preset: ${args.preset} (use ${[...PRESETS].join("|")})`);
   if (!TARGETS.has(args.target)) throw new Error(`unknown target: ${args.target} (use ${[...TARGETS].join("|")})`);
   if (args.preset === "wasm-release" && args.debugUi === "on") {
     throw new Error("debug UI is not allowed in wasm-release artifacts; use wasm-debug or --no-debug-ui");
+  }
+  if (args.preview && !["wasm-debug", "wasm-devapi-debug"].includes(args.preset)) {
+    throw new Error("preview requires wasm-debug or wasm-devapi-debug");
   }
   return args;
 }
@@ -58,6 +63,12 @@ export function createBuildPlan(options) {
   if (args.preset === "wasm-release" && args.debugUi === "on") {
     throw new Error("debug UI is not allowed in wasm-release artifacts; use wasm-debug or --no-debug-ui");
   }
+  if (args.preview && !["wasm-debug", "wasm-devapi-debug"].includes(args.preset)) {
+    throw new Error("preview requires wasm-debug or wasm-devapi-debug");
+  }
+  if (args.preview && options.runtimeBuild) {
+    throw new Error("preview must not receive a runtime build proof");
+  }
   const compileProfile = compileProfileForTarget(args.target, args.preset, compileFlagsForArgs(args));
   const runtimeBuild = options.runtimeBuild ? validateRuntimeBuildRecord(options.runtimeBuild) : null;
   if (runtimeBuild?.schema === "ai_studio.runtime_build.v2" && JSON.stringify(runtimeBuild.profile) !== JSON.stringify(compileProfile)) {
@@ -77,6 +88,7 @@ export function createBuildPlan(options) {
   }
   const env = { ...inputEnv, EM_CACHE: inputEnv.EM_CACHE || join(gameDir, "build", "emscripten-cache") };
   const steps = [{ kind: "mkdir", path: env.EM_CACHE }];
+  if (args.preview) steps.push({ kind: "remove", path: join(webDir, "bin", "runtime-build.json") });
   if (!options.nativeConfigured) {
     const nativeArgs = ["-S", gameDir, "-B", nativeDir, "-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Debug"];
     if (platform === "linux") nativeArgs.push("-DCMAKE_EXE_LINKER_FLAGS_DEBUG=-fsanitize=address,undefined");
@@ -102,7 +114,8 @@ export function createBuildPlan(options) {
   configureArgs.push(`-DGAME_RUNTIME_BUILD_DEVAPI=${Number(compileProfile.devapi)}`);
   configureArgs.push(`-DGAME_RUNTIME_BUILD_ANALYTICS=${Number(compileProfile.analytics)}`);
   configureArgs.push(`-DGAME_RUNTIME_BUILD_EVENTS_LOG_MIRROR=${Number(compileProfile.eventsLogMirror)}`);
-  if (runtimeBuild) configureArgs.push(`-DGAME_RUNTIME_BUILD_FINGERPRINT=${runtimeBuild.fingerprint}`);
+  configureArgs.push(`-DGAME_RUNTIME_BUILD_PREVIEW=${args.preview ? "ON" : "OFF"}`);
+  configureArgs.push(`-DGAME_RUNTIME_BUILD_FINGERPRINT=${runtimeBuild ? runtimeBuild.fingerprint : ""}`);
   configureArgs.push(`-DGAME_PLATFORM_SDK_DEBUG_UI=${compileProfile.debugUi ? "ON" : "OFF"}`);
   configureArgs.push(`-DGAME_DEVAPI_ENABLED=${compileProfile.devapi ? "ON" : "OFF"}`);
   steps.push({ kind: "run", command: configureCommand, args: configureArgs });
@@ -124,10 +137,13 @@ export function createBuildPlan(options) {
       args: [join(gameDir, "tools", "minify_web_release.mjs"), "--artifact", join(webDir, "bin")],
     });
   }
-  if (runtimeBuild) steps.push({ kind: "write", path: join(webDir, "bin", "runtime-build.json"), value: runtimeBuild });
+  const previewRecord = args.preview
+    ? { schema: PREVIEW_SCHEMA, proof: "none", preset: args.preset, target: args.target }
+    : null;
+  if (runtimeBuild || previewRecord) steps.push({ kind: "write", path: join(webDir, "bin", "runtime-build.json"), value: runtimeBuild || previewRecord });
   return {
-    env, nativeDir, webDir, steps, verifyRuntimeBuild: options.verifyRuntimeBuild,
-    message: `built ${name} (${args.target} -> platform-sdk); serve with: node tools/serve_web.mjs --preset ${args.preset} --target ${args.target}`,
+    env, nativeDir, webDir, steps, verifyRuntimeBuild: args.preview ? null : options.verifyRuntimeBuild,
+    message: `${args.preview ? "built NON-PROOF preview" : "built"} ${name} (${args.target} -> platform-sdk); serve with: node tools/serve_web.mjs --preset ${args.preset} --target ${args.target}`,
   };
 }
 
@@ -138,9 +154,11 @@ export function executeBuildPlan(plan, deps = {}) {
     mkdir(dirname(path));
     writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
   });
+  const remove = deps.remove || ((path) => rmSync(path, { force: true }));
   const run = deps.run || ((command, args, options) => spawnSync(command, args, { ...options, stdio: "inherit", shell: false }));
   for (const step of plan.steps) {
     if (step.kind === "mkdir") mkdir(step.path);
+    else if (step.kind === "remove") remove(step.path);
     else if (step.kind === "copy") copy(step.from, step.to);
     else if (step.kind === "write") {
       (deps.verifyRuntimeBuild || plan.verifyRuntimeBuild)?.();
@@ -160,7 +178,7 @@ export function main(argv = process.argv.slice(2), environment = process.env) {
     const args = parseBuildArgs(argv);
     const studioRoot = findStudioRoot(gameDir);
     const compileProfile = compileProfileForTarget(args.target, args.preset, compileFlagsForArgs(args));
-    const runtimeBuild = createRuntimeBuildRecord({ gameDir, studioRoot, compileProfile });
+    const runtimeBuild = args.preview ? null : createRuntimeBuildRecord({ gameDir, studioRoot, compileProfile });
     const emsdk = environment.EMSDK || (process.platform === "win32" && existsSync("C:/develop/emsdk") ? "C:/develop/emsdk" : "");
     const toolchain = emsdk ? join(emsdk, "upstream", "emscripten", "cmake", "Modules", "Platform", "Emscripten.cmake") : "";
     const plan = createBuildPlan({
@@ -172,7 +190,7 @@ export function main(argv = process.argv.slice(2), environment = process.env) {
       nativeConfigured: existsSync(join(gameDir, "build", "native-debug", "CMakeCache.txt")),
       toolchainExists: Boolean(toolchain && existsSync(toolchain)),
       runtimeBuild,
-      verifyRuntimeBuild() {
+      verifyRuntimeBuild: args.preview ? null : () => {
         const after = createRuntimeBuildRecord({ gameDir, studioRoot, compileProfile });
         if (JSON.stringify(after) !== JSON.stringify(runtimeBuild)) {
           throw new Error("runtime build inputs changed while the web artifact was building");

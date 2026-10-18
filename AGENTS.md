@@ -16,6 +16,14 @@ Minimize optional commentary. During execution, send only required notices,
 blocking questions, meaningful progress updates, risk/verification notes, and
 the final result.
 
+## Fast Iteration
+
+Fast local feedback is a priority. Use incremental builds, local preview and
+the smallest relevant test selection while editing. Run owner checks when the
+change is ready; reserve complete Studio and release proof for their CI/release
+boundaries. Do not repeat whole-Studio, all-tier or packaging checks after each
+game edit. Preview output is not freshness, capture or release evidence.
+
 ## AI Studio
 
 `ai_studio/` is the target home for reviewed AI pipeline architecture: core

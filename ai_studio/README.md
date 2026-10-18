@@ -20,6 +20,30 @@ native, web/package, and platform release proof. Checks inside one domain remain
 ordered. Blocked/setup exits `2`, executed failures exit `1`, and passes exit
 `0`.
 
+## Fast local feedback
+
+During game edits, build the local preview and run the native tests for the
+changed contract. In a game root, `node tools/game.mjs test --only <ctest-name>`
+selects a native test; the current starter and shared consumer skip unrelated
+Node suites in that mode. Regular `test` retains the core and tooling checks.
+
+From the Studio root, use the catalog-selected game's own build tooling:
+
+```powershell
+node ai_studio/runtime_automation/preview_game.mjs --game <game-id> --preset wasm-devapi-debug
+```
+
+The adapter skips source-proof hashing and marks its output as non-proof.
+The current starter also supports the `--preview` flag on its own web builder.
+Preview artifacts cannot be packaged as a release.
+Native capture and release verification still require their full freshness
+evidence. See [Runtime Automation](runtime_automation/README.md#fast-web-preview).
+
+The Studio-wide `verify --full` is the complete CI/acceptance gate. It is not the
+inner game iteration loop. `verify --changed` selects whole affected owner
+domains and can include expensive repository lifecycle fixtures; use the owning
+module's focused tests while editing, then run that owner before integration.
+
 `ai_studio/` is the target home for reviewed AI game-studio pipeline modules.
 Do not use it as a dump: move a module here only after it has an owner, contract,
 public surface, internals, and validation path.

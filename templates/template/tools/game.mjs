@@ -250,13 +250,14 @@ export function runNativeTests(gameDir, options = {}, dependencies = {}) {
   const runCommand = dependencies.run || run;
   const catalogue = dependencies.catalogue || ctestCatalogue;
   const buildDir = join(gameDir, "build", "native-debug");
-  const configured = existsSync(join(buildDir, "CMakeCache.txt"));
+  const configured = existsSync(join(buildDir, "CMakeCache.txt")) && existsSync(join(buildDir, "build.ninja"));
   const env = goldenEnvironment(gameDir, options.updateGoldens === true);
   mkdirSync(env.GAME_GOLDENS_DIR, { recursive: true });
   const selection = { ...options.selection };
   if (configured) {
-    // Refresh discovery before narrowing targets so new tests build on the first run.
-    runCommand("cmake", ["-S", gameDir, "-B", buildDir], gameDir, "native test configure", env);
+    // Ninja regenerates the build graph before discovery, so a new test is visible
+    // without paying for a second configure process on every iteration.
+    runCommand("cmake", ["--build", buildDir, "--target", "build.ninja"], gameDir, "native test graph refresh", env);
     Object.assign(selection, selectTests(catalogue(buildDir), selection));
   }
   for (const [command, ...args] of nativeTestPlan(gameDir, process.platform, configured, selection)) {
@@ -442,8 +443,10 @@ export async function executeGameCommand(args, dependencies = {}) {
     // Iteration gate: dependency shape/version checks stay hard, but a dirty
     // engine/feature tree only warns here — release lanes still require clean.
     prepare(args.templateProof, { cleanliness: "warn" });
-    nodeTest(gameDir);
     const only = args.only || [];
+    // A focused CTest run is the explicit fast path; the default core gate still
+    // runs the complete Node suite before native tests.
+    if (only.length === 0) nodeTest(gameDir);
     const selection = args.all ? { mode: "all" }
       : only.length > 0 ? { mode: "only", names: only }
       : { mode: "tier", tier: args.tier || TEST_TIER_DEFAULT };

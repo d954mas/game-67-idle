@@ -7,13 +7,48 @@ import { createBuildPlan, executeBuildPlan, parseBuildArgs, resolveEmcmakePath }
 const slash = (value) => value.replaceAll("\\", "/").replace(/^[A-Za-z]:/, "");
 
 test("build web arguments preserve preset target and release debug validation", () => {
-  assert.deepEqual(parseBuildArgs([]), { preset: "wasm-release", target: "local", debugUi: "default" });
+  assert.deepEqual(parseBuildArgs([]), { preset: "wasm-release", target: "local", debugUi: "default", preview: false });
   assert.deepEqual(parseBuildArgs(["--preset", "wasm-devapi-debug", "--target", "poki", "--no-debug-ui"]), {
-    preset: "wasm-devapi-debug", target: "poki", debugUi: "off",
+    preset: "wasm-devapi-debug", target: "poki", debugUi: "off", preview: false,
+  });
+  assert.deepEqual(parseBuildArgs(["--preset", "wasm-debug", "--preview"]), {
+    preset: "wasm-debug", target: "local", debugUi: "default", preview: true,
   });
   assert.throws(() => parseBuildArgs(["--preset", "bad"]), /unknown preset/);
   assert.throws(() => parseBuildArgs(["--target", "bad"]), /unknown target/);
   assert.throws(() => parseBuildArgs(["--debug-ui"]), /not allowed in wasm-release/);
+  assert.throws(() => parseBuildArgs(["--preview"]), /preview requires wasm-debug or wasm-devapi-debug/);
+});
+
+test("preview plan writes an explicit non-proof record and clears the compiled fingerprint", () => {
+  const plan = createBuildPlan({
+    gameDir: "/repo/ai_studio/feature_testing/consumer",
+    args: { preset: "wasm-debug", target: "local", debugUi: "on", preview: true },
+    env: { EMSDK: "/opt/emsdk" }, platform: "linux", nativeConfigured: true, toolchainExists: true,
+  });
+  const configure = plan.steps.find((step) => step.kind === "run" && step.args.includes("-G"));
+  assert.ok(configure.args.includes("-DGAME_RUNTIME_BUILD_FINGERPRINT="));
+  assert.ok(configure.args.includes("-DGAME_RUNTIME_BUILD_PREVIEW=ON"));
+  assert.equal(plan.steps[1].kind, "remove");
+  assert.match(slash(plan.steps[1].path), /wasm-debug\/bin\/runtime-build\.json$/);
+  assert.deepEqual(plan.steps.at(-1).value, {
+    schema: "ai_studio.runtime_build.preview.v1", proof: "none", preset: "wasm-debug", target: "local",
+  });
+  assert.match(plan.message, /NON-PROOF/i);
+});
+
+test("preview refuses a runtime proof that could masquerade as current output", () => {
+  const inputs = [{ id: "game", source: ".", files: 1, sha256: "1".repeat(64) }];
+  const runtimeBuild = {
+    schema: "ai_studio.runtime_build.v1",
+    fingerprint: createHash("sha256").update(JSON.stringify(inputs)).digest("hex"),
+    inputs,
+  };
+  assert.throws(() => createBuildPlan({
+    gameDir: "/repo/ai_studio/feature_testing/consumer",
+    args: { preset: "wasm-debug", target: "local", debugUi: "on", preview: true },
+    env: { EMSDK: "/opt/emsdk" }, platform: "linux", nativeConfigured: true, toolchainExists: true, runtimeBuild,
+  }), /preview must not receive a runtime build proof/i);
 });
 
 test("plan preserves build dirs local cache native pack web targets and final message", () => {

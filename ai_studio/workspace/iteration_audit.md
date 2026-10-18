@@ -99,6 +99,42 @@ with their devices and conditions. Missing timing evidence is unknown.
   an empty initial frame and two WebGL recovery cycles; ordinary games retain
   non-empty frame checks. No engine changes were needed.
 
+## Fast iteration follow-up
+
+The observed 122,288 ms operation was a real commit including the deep privacy
+guard, not the cost of every game build. Profiling separated that guard from
+web source fingerprints and test-runner configuration.
+
+| Operation | Earlier observation | Current observation |
+| --- | --- | --- |
+| Text-only privacy preflight | 5.4 s | 2.4 s; a real commit including its mandatory hook took 1.9 s |
+| Deep privacy comparison with a changed public binary | 145.0 s | 23.0 s, with the same four violations |
+| Bytes read by that binary probe, filesystem plus Git output | 18.04 GB | 4.99 MB |
+| One representative warm web build | 18.0 s with source proof | 4.5 s as a local non-proof preview |
+| Final shared preview CLI on that game | No identical baseline | 7.4 s including catalog/path validation and the game build plan |
+| Focused native test / regular two-test core run | No comparable baseline | 1.94 s / 2.21 s |
+
+These are local observations, affected by caches and concurrent work, not
+latency guarantees. Binary scans now filter candidates by size before reading
+their bytes, batch waiver lookups and walk each private tree once. Matching
+bytes still receive full hashes; immutable Git metadata, file identity and
+physical containment checks remain enforced. No antivirus exclusion is needed.
+
+The shared preview adapter uses each selected game's own build plan without
+the two full source-tree hashes. It writes an explicit non-proof record and
+clears the compiled fingerprint. Release packaging rejects previews. Actual
+incremental compilation remains required; first builds and broad header edits
+can take longer. A real browser run showed rendered content with no runtime
+exceptions; this is local preview evidence, not capture or release proof.
+
+The starter and independent feature consumer skip unrelated Node suites for
+`test --only`, and existing Ninja builds regenerate configuration only when
+needed before discovering CTest names. Ordinary test and release modes retain
+their checks. The documented inner loop is preview plus the smallest relevant
+test; owner checks run at integration and the full Studio gate at acceptance/CI.
+Focused contract tests and independent security/release reviews validate this
+follow-up; the earlier complete Studio gate is recorded separately below.
+
 ## Decisions and deferred boundaries
 
 The generic numeric limb solver and event-to-portal mapper belong in shared

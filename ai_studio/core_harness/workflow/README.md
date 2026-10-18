@@ -47,6 +47,11 @@ proven, and give the next actionable step.
 
 ## Quality Feedback
 
+Keep the editing loop small: incremental build, local preview, changed-contract
+tests. Preview is explicitly non-proof. Broaden checks at integration and
+release boundaries; do not rerun the entire Studio or packaging suite after
+every game change. Measure a slow command by stage before adding more checks.
+
 Use [quality rules](../../quality/README.md) when a changed player-facing,
 design, asset, runtime or release claim needs evidence. The matching rule's
 `Use When` decides; there is no check at every iteration point.

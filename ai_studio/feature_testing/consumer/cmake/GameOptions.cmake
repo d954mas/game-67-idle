@@ -97,6 +97,7 @@ set(GAME_RUNTIME_BUILD_DEBUG_UI "" CACHE STRING "Debug UI flag bound into the ru
 set(GAME_RUNTIME_BUILD_DEVAPI "" CACHE STRING "DevAPI flag bound into the runtime build witness.")
 set(GAME_RUNTIME_BUILD_ANALYTICS "" CACHE STRING "Analytics flag bound into the runtime build witness.")
 set(GAME_RUNTIME_BUILD_EVENTS_LOG_MIRROR "" CACHE STRING "Event log mirror flag bound into the runtime build witness.")
+set(GAME_RUNTIME_BUILD_PREVIEW OFF CACHE BOOL "Allow an explicit non-proof developer web preview.")
 if(EMSCRIPTEN AND (NOT GAME_RUNTIME_BUILD_PROFILE MATCHES "^(wasm-release|wasm-debug|wasm-devapi-debug)$"
         OR NOT GAME_RUNTIME_BUILD_DEBUG_UI MATCHES "^[01]$"
         OR NOT GAME_RUNTIME_BUILD_DEVAPI MATCHES "^[01]$"
@@ -109,10 +110,16 @@ set(GAME_RUNTIME_BUILD_FINGERPRINT_VALID OFF)
 if(GAME_RUNTIME_BUILD_FINGERPRINT_LENGTH EQUAL 64 AND GAME_RUNTIME_BUILD_FINGERPRINT MATCHES "^[0-9a-f]+$")
     set(GAME_RUNTIME_BUILD_FINGERPRINT_VALID ON)
 endif()
+if(GAME_RUNTIME_BUILD_FINGERPRINT_VALID)
+    set(GAME_RUNTIME_BUILD_PREVIEW OFF CACHE BOOL "Allow an explicit non-proof developer web preview." FORCE)
+endif()
 if(GAME_RUNTIME_BUILD_FINGERPRINT AND NOT GAME_RUNTIME_BUILD_FINGERPRINT_VALID)
     message(FATAL_ERROR "GAME_RUNTIME_BUILD_FINGERPRINT must be a lowercase SHA-256 supplied by tools/build_web.mjs.")
 endif()
-if(EMSCRIPTEN AND NOT GAME_RUNTIME_BUILD_FINGERPRINT_VALID)
+if(GAME_RUNTIME_BUILD_PREVIEW AND (GAME_RUNTIME_BUILD_FINGERPRINT OR NOT GAME_RUNTIME_BUILD_PROFILE MATCHES "^(wasm-debug|wasm-devapi-debug)$"))
+    message(FATAL_ERROR "A runtime preview must use a debug preset without a runtime fingerprint.")
+endif()
+if(EMSCRIPTEN AND NOT GAME_RUNTIME_BUILD_FINGERPRINT_VALID AND NOT GAME_RUNTIME_BUILD_PREVIEW)
     message(FATAL_ERROR "Emscripten builds must be owned by tools/build_web.mjs with a runtime fingerprint.")
 endif()
 

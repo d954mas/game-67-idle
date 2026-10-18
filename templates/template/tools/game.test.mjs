@@ -114,20 +114,23 @@ test("native iteration builds a newly registered test after refreshing CMake", (
   try {
     mkdirSync(join(dir, "build", "native-debug"), { recursive: true });
     writeFileSync(join(dir, "build", "native-debug", "CMakeCache.txt"), "configured");
+    writeFileSync(join(dir, "build", "native-debug", "build.ninja"), "ninja graph");
     let refreshed = false;
     const calls = [];
     runNativeTests(dir, { selection: { mode: "tier", tier: "core" } }, {
       run: (command, args) => {
         calls.push([command, ...args]);
-        if (command === "cmake" && args[0] === "-S") refreshed = true;
+        if (command === "cmake" && args[0] === "--build" && args[3] === "build.ninja") refreshed = true;
       },
       catalogue: () => (refreshed
         ? [{ name: "test_new", tier: "core", targets: ["test_new"] }]
         : [{ name: "test_old", tier: "core", targets: ["test_old"] }]),
     });
-    const build = calls.find((call) => call[0] === "cmake" && call[1] === "--build");
+    const build = calls.find((call) => call[0] === "cmake" && call[1] === "--build" && !call.includes("build.ninja"));
     assert.ok(build.includes("test_new"));
     assert.equal(build.includes("test_old"), false);
+    assert.deepEqual(calls[0].slice(0, 5), ["cmake", "--build", join(dir, "build", "native-debug"), "--target", "build.ninja"]);
+    assert.equal(calls.some((call) => call[0] === "cmake" && call[1] === "-S"), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -263,6 +266,22 @@ test("template test uses reference metadata while retaining both test gates", as
     nativeTest: () => calls.push("native"),
   });
   assert.deepEqual(calls, ["template-doctor", "dependencies:warn", "node", "native"]);
+});
+
+test("focused native test skips unrelated Node suites", async () => {
+  const calls = [];
+  await executeGameCommand({
+    command: "test", target: "local", build: false, templateProof: true, skipTests: false, outDir: "",
+    only: ["test_game_save"], tier: "", all: false, updateGoldens: false,
+  }, {
+    gameDir: "/repo/templates/template",
+    doctor: () => ({ gameId: "template" }),
+    loadMetadata: () => ({ dependencies: {}, proof: "reference-template" }),
+    verifyDependencies: () => calls.push("dependencies"),
+    nodeTest: () => calls.push("node"),
+    nativeTest: (_gameDir, options) => calls.push(["native", options.selection]),
+  });
+  assert.deepEqual(calls, ["dependencies", ["native", { mode: "only", names: ["test_game_save"] }]]);
 });
 
 test("template test bypass validates identity before the parent proof can skip tests", async () => {

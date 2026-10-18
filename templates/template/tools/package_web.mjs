@@ -917,7 +917,9 @@ export function validateWebArtifact({ artifactDir, target, studioRoot = DEFAULT_
 
   const html = readFileSync(join(root, "index.html"), "utf8");
   const config = parseReleaseConfig(html);
-  const runtimeBuild = validateRuntimeBuildRecord(readJson(join(root, "runtime-build.json"), "runtime build record"));
+  const runtimeRecord = readJson(join(root, "runtime-build.json"), "runtime build record");
+  if (runtimeRecord.schema === "ai_studio.runtime_build.preview.v1") throw new Error("preview web artifacts cannot be packaged or released");
+  const runtimeBuild = validateRuntimeBuildRecord(runtimeRecord);
   if (config.target !== target) throw new Error(`release target mismatch: expected ${target}, found ${config.target || "missing"}`);
   if (config.platformAdapter !== contract.platform_sdk) {
     throw new Error(`release adapter mismatch: expected ${contract.platform_sdk}, found ${config.platformAdapter || "missing"}`);

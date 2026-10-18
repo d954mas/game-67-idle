@@ -7,8 +7,13 @@ or portal behavior.
 
 ## Start here
 
-Run `node tools/game.mjs test --template-proof`, then
-`node tools/build_web.mjs --preset wasm-debug`.
+For local iteration, run `node tools/build_web.mjs --preset wasm-debug --preview`.
+Use `node tools/game.mjs test --only <ctest-name>` for a changed native contract;
+this focused mode skips unrelated tooling suites. Ordinary `test` retains them.
+
+Before accepting changes to the starter itself, run
+`node tools/game.mjs test --template-proof`. Preview is explicitly non-proof;
+use an ordinary build for capture and release checks.
 
 `src/main.c` owns startup, the frame loop, and shutdown. Game logic belongs in
 feature modules and is sequenced by `src/features/game_features.c`.
