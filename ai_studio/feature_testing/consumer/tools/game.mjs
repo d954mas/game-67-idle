@@ -131,7 +131,7 @@ export function doctorGame({ gameDir = GAME_DIR, templateProof = false } = {}) {
   if (templateProof) {
     const template = validateTemplateIdentity(readJson(join(root, "template.json"), "template identity"));
     const seed = readJson(join(root, "game-dependencies.json"), "template dependency seed");
-    if (template.schema !== "ai_studio.template.v1" || seed.schema !== "ai_studio.game.dependencies.seed.v2") throw new Error("reference-template proof metadata is invalid");
+    if (template.schema !== "ai_studio.template.v1" || seed.schema !== "ai_studio.game.dependencies.seed.v3") throw new Error("reference-template proof metadata is invalid");
     return { gameId: template.id, kind: "reference-template" };
   }
   const identity = validateGameIdentity(readJson(join(root, "game.json"), "game identity"));
@@ -351,7 +351,7 @@ function referenceTemplatePackageMetadata(gameDir) {
   const engineRevision = gitRevision(join(studioRoot, seed.engine?.source || ""), "reference-template engine proof");
   const dependencies = {
     schema: "ai_studio.game.dependencies.v3",
-    engine: { ...seed.engine, revision: engineRevision },
+    engine: { ...seed.engine, version: engineRevision.slice(0, 8), revision: engineRevision },
     features: (seed.features || []).map((feature) => ({ ...feature })),
     compatibility: `${seed.compatibility}; reference-template proof at exact Studio revision ${repoRevision}`,
   };

@@ -50,6 +50,7 @@ const AUDIO_SMOKE_MARKERS = [
 ];
 const RELEASE_FORBIDDEN_TEXT_MARKERS = [...DEVAPI_MARKERS, ...AUDIO_SMOKE_MARKERS];
 const REVISION = /^[0-9a-f]{40}$/;
+const ENGINE_VERSION = /^[0-9a-f]{8}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const WASM_MAGIC = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
@@ -106,14 +107,15 @@ function validateManifestGame(game, label) {
 }
 
 /* A feature is identified by its declared version, which its own feature.json has to
-   match. The engine also carries a revision: it is a submodule, so the gitlink is the
-   authoritative record and a version alone cannot name the commit. */
+   match. The engine is identified by its revision: it is a submodule, so the gitlink is
+   the authoritative record, and its version is that revision's eight-character prefix. */
 function validateDependencyRow(row, label, feature = false) {
   exactKeys(row, feature ? ["id", "source", "version", "compatibility"] : ["source", "version", "revision", "compatibility"], label);
   if (feature && !/^[a-z][a-z0-9-]*$/.test(row.id || "")) throw new Error(`${label} id is invalid`);
-  if (!String(row.source || "").trim() || !SEMVER.test(row.version || "")
+  const versionValid = feature ? SEMVER.test(row.version || "") : ENGINE_VERSION.test(row.version || "");
+  if (!String(row.source || "").trim() || !versionValid
       || !String(row.compatibility || "").trim()) throw new Error(`${label} version record is invalid`);
-  if (!feature && !REVISION.test(row.revision || "")) throw new Error(`${label} revision is invalid`);
+  if (!feature && (!REVISION.test(row.revision || "") || !row.revision.startsWith(row.version))) throw new Error(`${label} revision is invalid`);
 }
 
 export function validateDependencies(dependencies) {
@@ -164,15 +166,6 @@ function confinedSource(root, source, expected, label) {
   return realCandidate;
 }
 
-function engineVersion(header) {
-  const parts = ["MAJOR", "MINOR", "PATCH"].map((name) => {
-    const match = new RegExp(`^\\s*#define\\s+NT_VERSION_${name}\\s+(\\d+)\\s*$`, "m").exec(header);
-    if (!match) throw new Error(`engine nt_core.h is missing NT_VERSION_${name}`);
-    return Number(match[1]);
-  });
-  return parts.join(".");
-}
-
 export function verifyDependencySources({ studioRoot, dependencies, git = defaultGit, cleanliness = "require" }) {
   const root = realpathSync(resolve(studioRoot));
   // "warn" keeps identity/version proof hard but lets an iteration gate run
@@ -188,10 +181,11 @@ export function verifyDependencySources({ studioRoot, dependencies, git = defaul
 
   const engine = dependencies.engine;
   const engineRoot = confinedSource(root, engine.source, "external/neotolis-engine", "engine");
-  const actualEngineVersion = engineVersion(readFileSync(join(engineRoot, "engine", "core", "nt_core.h"), "utf8"));
-  if (actualEngineVersion !== engine.version) throw new Error(`engine dependency version mismatch: expected ${engine.version}, found ${actualEngineVersion}`);
   const engineRevision = gitText(git, engineRoot, ["rev-parse", "HEAD"], "engine dependency revision is unavailable").toLowerCase();
   if (engineRevision !== engine.revision) throw new Error(`engine dependency revision mismatch: expected ${engine.revision}, found ${engineRevision}`);
+  // The engine has no SemVer; its version is the commit prefix nt_version_engine() reports.
+  const actualEngineVersion = engineRevision.slice(0, 8);
+  if (actualEngineVersion !== engine.version) throw new Error(`engine dependency version mismatch: expected ${engine.version}, found ${actualEngineVersion}`);
   const gitlink = gitText(git, root, ["ls-tree", "HEAD", "--", engine.source], "engine gitlink is unavailable");
   if (!new RegExp(`^160000 commit ${engine.revision}\\t${engine.source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`).test(gitlink)) {
     cleanlinessGap("engine dependency revision does not match the authoritative Studio gitlink");

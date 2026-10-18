@@ -1,8 +1,7 @@
 {
-  "schema": "ai_studio.game.dependencies.seed.v2",
+  "schema": "ai_studio.game.dependencies.seed.v3",
   "engine": {
     "source": "external/neotolis-engine",
-    "version": "0.1.0",
     "compatibility": "validated by the template build and test suite"
   },
   "features": [
