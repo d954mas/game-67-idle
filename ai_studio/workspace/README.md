@@ -16,6 +16,8 @@ Workspace owns the single resolver for game and template mounts. It scans
   sources. Private games use `games/private/<id>/game.json`.
 - `games/<id>/dependencies.json` records the exact engine and shared-feature
   revisions tested with that game checkout.
+- Engine `version` can be the eight-character prefix of its pinned Git revision.
+  Older engine pins may retain exact SemVer; feature versions remain SemVer.
 - `templates/<id>/game-dependencies.json` is the strict creation seed;
   `games/new_game.mjs` resolves its entries to clean, exact Git revisions.
 

@@ -84,8 +84,10 @@ function validateGameDependenciesValue(value, rel) {
   for (const key of ["source", "version", "revision", "compatibility"]) {
     if (!String(value.engine[key] || "").trim()) throw new Error(`${rel}.engine.${key} must not be empty`);
   }
-  if (!EXACT_SEMVER.test(value.engine.version)) throw new Error(`${rel}.engine.version must be exact SemVer x.y.z`);
+  const gitVersion = /^[0-9a-f]{8}$/.test(value.engine.version);
+  if (!gitVersion && !EXACT_SEMVER.test(value.engine.version)) throw new Error(`${rel}.engine.version must be exact SemVer x.y.z or an eight-character Git version`);
   if (!/^[0-9a-f]{40,64}$/i.test(value.engine.revision)) throw new Error(`${rel}.engine.revision must be an exact Git revision`);
+  if (gitVersion && !value.engine.revision.toLowerCase().startsWith(value.engine.version)) throw new Error(`${rel}.engine.version must match the pinned revision`);
   if (!Array.isArray(value.features)) throw new Error(`${rel}.features must be an array`);
   const featureIds = new Set();
   for (const [index, feature] of value.features.entries()) {

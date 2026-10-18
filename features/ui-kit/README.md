@@ -87,7 +87,7 @@ set the bar: a prototype should not have to design a UI before it has a game.
   band, checker, inner highlight) and discs, rings and arcs (rim, gradient,
   lip, round gloss). Mode 0 of the shader is `sprite.frag`, so a game that
   makes it the context's base material — `nt_ui_set_sprite_material(ctx, uber)`
-  with the material created from `ui_kit_uber_material_desc(atlas page)` and
+  with the material created from `ui_kit_uber_material_desc()` and
   `ui_kit_shape_bind(uber, atlas)` — draws icons, Clay rectangles and shapes in
   one draw per text-free run. The desc sets all-zero attr defaults, which every
   plain emit bakes and the shader reads as mode 0. Shapes are GEOMETRY-mode quads against the white

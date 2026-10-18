@@ -12,10 +12,8 @@ static const char *const k_attr_names[] = {"a_layout", "a_shape", "a_paint", "a_
 static nt_material_t s_uber;
 static nt_resource_t s_atlas;
 
-nt_material_create_desc_t ui_kit_uber_material_desc(nt_resource_t atlas_texture) {
+nt_material_create_desc_t ui_kit_uber_material_desc(void) {
     return (nt_material_create_desc_t){
-        .textures = {{.name = "u_texture", .resource = atlas_texture}},
-        .texture_count = 1,
         .blend = nt_blend_alpha_premultiplied(),
         .depth_test = false,
         .depth_write = false,
