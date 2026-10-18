@@ -20,6 +20,7 @@
 #if defined(NT_PLATFORM_WEB)
 #include "platform/web/nt_platform_web.h"
 #include "runtime_build_marker.h"
+#include <emscripten.h>
 #endif
 
 #include <stdint.h>
@@ -45,6 +46,12 @@ static bool parse_devapi_port(const char *raw, uint16_t *out) {
 #endif
 #if defined(NT_PLATFORM_WEB)
 static bool s_presented_first_frame;
+static bool s_gfx_recovery_pending;
+EM_JS(void, game_clear_runtime_recovery, (void), {
+    if (typeof window.__clearRuntimeRecovery === 'function') {
+        window.__clearRuntimeRecovery();
+    }
+})
 #endif
 
 #if NT_DEVAPI_ENABLED
@@ -97,6 +104,15 @@ static void frame(void) {
     nt_window_poll();
     devapi_update();
     nt_gfx_begin_frame();
+#if defined(NT_PLATFORM_WEB)
+    if (g_nt_gfx.context_lost) {
+        nt_gfx_end_frame();
+        return;
+    }
+    if (g_nt_gfx.context_restored) {
+        s_gfx_recovery_pending = true;
+    }
+#endif
     nt_input_poll();
     game_input_capture(&s_input);
 #ifndef NT_PLATFORM_WEB
@@ -123,6 +139,11 @@ static void frame(void) {
     if (render_enabled) {
         nt_window_swap_buffers();
 #if defined(NT_PLATFORM_WEB)
+        // The shell may clear recovery only after a restored frame is presented.
+        if (s_gfx_recovery_pending) {
+            s_gfx_recovery_pending = false;
+            game_clear_runtime_recovery();
+        }
         if (!s_presented_first_frame) {
             runtime_build_marker_present_ready();
             s_presented_first_frame = true;

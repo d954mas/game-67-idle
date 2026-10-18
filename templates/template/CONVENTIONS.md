@@ -12,5 +12,8 @@
   pipeline. The blank foundation has no game assets.
 - Use engine public APIs before adding custom platform, save, rendering, or UI
   infrastructure.
+- Skip drawing while the graphics context is lost. A feature with persistent
+  GPU resources restores them on the engine's `context_restored` signal before
+  drawing. Web recovery is acknowledged only after presenting a restored frame.
 
 Optional integration examples live in `ai_studio/feature_testing/consumer`.

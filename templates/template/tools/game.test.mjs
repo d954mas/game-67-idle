@@ -213,7 +213,10 @@ test("verify composes doctor tests and one package without discovering workspace
     nodeTest: () => { calls.push("node"); },
     nativeTest: () => { calls.push("native"); },
     package: (options) => { calls.push(["package", options.build, options.target]); return { zipPath: "release/template-local.zip" }; },
-    smoke: ({ zipPath, expectedTarget }) => { calls.push(["smoke", zipPath, expectedTarget]); },
+    smoke: ({ zipPath, expectedTarget, frameExpectation }) => {
+      assert.equal(frameExpectation, "blank");
+      calls.push(["smoke", zipPath, expectedTarget]);
+    },
   });
   assert.deepEqual(calls, [
     "doctor", "dependencies", "node", "native",
@@ -235,7 +238,10 @@ test("game test and plain verify require dependency proof plus Node and native C
       nodeTest: () => calls.push("node"),
       nativeTest: () => calls.push("native"),
       package: () => { calls.push("package"); return { zipPath: "example.zip" }; },
-      smoke: () => calls.push("smoke"),
+      smoke: ({ frameExpectation }) => {
+        assert.equal(frameExpectation, "rendered");
+        calls.push("smoke");
+      },
     });
     assert.deepEqual(calls, command === "test"
       ? ["dependencies:warn", "node", "native"]

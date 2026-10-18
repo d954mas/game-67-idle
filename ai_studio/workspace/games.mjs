@@ -737,18 +737,34 @@ function trackedSharedBinaryWaivers(root, spawnGit) {
   return parseSharedBinaryWaivers(content);
 }
 
-function validSharedBinaryWaiverKeys(root, mounts, waivers, spawnGit) {
-  const mountsByGameId = new Map(mounts.map((mount) => [mount.gameId, mount]));
+function validSharedBinaryWaiverKeys(root, auditMounts, waivers, spawnGit) {
+  const mountsByGameId = new Map();
+  for (const mount of auditMounts) {
+    const key = comparable(mount.gameId);
+    const roots = mountsByGameId.get(key) || [];
+    roots.push(mount);
+    mountsByGameId.set(key, roots);
+  }
   const valid = new Set();
   for (const waiver of waivers) {
-    const mount = mountsByGameId.get(waiver.game_id);
-    if (!mount) continue;
+    const mounts = mountsByGameId.get(comparable(waiver.game_id)) || [];
+    if (!mounts.length) continue;
     const publicView = indexBinaryView(root, waiver.path, spawnGit).view;
     if (!publicView || publicView.digest !== waiver.sha256) continue;
-    const confined = confinedMountRoot(root, mount.gitRoot);
-    if (confined.error) continue;
-    const privateView = indexBinaryView(confined.root, waiver.private_path, spawnGit).view;
-    if (privateView?.digest === waiver.sha256) valid.add(waiver.key);
+    for (const mount of mounts) {
+      const confined = confinedMountRoot(root, mount.gitRoot);
+      if (confined.error) continue;
+      const privateIndex = indexBinaryView(confined.root, waiver.private_path, spawnGit).view;
+      if (privateIndex?.digest === waiver.sha256) {
+        valid.add(waiver.key);
+        break;
+      }
+      const privateWorktree = worktreeBinaryView(confined.root, waiver.private_path).view;
+      if (privateWorktree?.digest === waiver.sha256) {
+        valid.add(waiver.key);
+        break;
+      }
+    }
   }
   return valid;
 }
@@ -799,7 +815,7 @@ export function runPrivateGamePreflight(root, options = {}) {
   const waivers = activeGameId
     ? shared.waivers.filter((entry) => comparable(entry.game_id) === comparable(activeGameId))
     : shared.waivers;
-  const validWaivers = validSharedBinaryWaiverKeys(repoRoot, mounts, waivers, spawnGit);
+  const validWaivers = validSharedBinaryWaiverKeys(repoRoot, auditMounts, waivers, spawnGit);
   return auditPrivateGamePreflight(auditMounts, {
     sharedBinaryWaivers: waivers,
     validSharedBinaryWaiverKeys: validWaivers,

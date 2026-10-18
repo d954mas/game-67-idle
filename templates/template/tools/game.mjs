@@ -471,7 +471,7 @@ export async function executeGameCommand(args, dependencies = {}) {
     nativeTest(gameDir, { selection: { mode: "all" } });
   }
   const result = await packageGameOwned(args, metadata);
-  await smokePackage({ zipPath: result.zipPath, expectedTarget: args.target, mode: "full" });
+  await smokePackage({ zipPath: result.zipPath, expectedTarget: args.target, mode: "full", frameExpectation: args.templateProof ? "blank" : "rendered" });
   return { message: `verify passed: ${result.zipPath}`, result };
 }
 

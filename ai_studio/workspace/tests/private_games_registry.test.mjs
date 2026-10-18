@@ -694,6 +694,36 @@ test("a committed shared-binary waiver remains valid in a clean parent repo", (t
   assert.equal(runPrivateGamePreflight(root).ok, true);
 });
 
+test("a committed waiver validates its ignored private worktree file on a text-only change", (t) => {
+  const { root, entry, bytes } = sharedFixture(t);
+  const privateRoot = join(root, "games/private/secret-game");
+  const privatePath = ".ai_studio/evidence/audio-selection/ui-1.wav";
+  const evidence = join(privateRoot, ...privatePath.split("/"));
+  writeFileSync(join(privateRoot, ".gitignore"), ".ai_studio/evidence/\n", "utf8");
+  execFileSync("git", ["add", ".gitignore"], { cwd: privateRoot });
+  execFileSync("git", ["commit", "-m", "ignore evidence"], { cwd: privateRoot, stdio: "ignore" });
+  mkdirSync(dirname(evidence), { recursive: true });
+  writeFileSync(evidence, bytes);
+  const ignored = { ...entry, private_path: privatePath };
+  writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc([ignored]));
+  execFileSync("git", ["add", SHARED_BINARIES_MANIFEST], { cwd: root });
+  execFileSync("git", ["commit", "-m", "approve shared asset"], { cwd: root, stdio: "ignore" });
+
+  writeFileSync(join(root, "README.md"), "public studio update\n", "utf8");
+  execFileSync("git", ["add", "README.md"], { cwd: root });
+  assert.equal(runPrivateGamePreflight(root).ok, true);
+
+  writeFileSync(evidence, Buffer.from([0x01, 0x02, 0x03, 0x04]));
+  let result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /waiver matches no tracked binary/);
+
+  rmSync(evidence);
+  result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /waiver matches no tracked binary/);
+});
+
 test("a committed waiver becomes stale when its tracked public bytes change", (t) => {
   const { root, entry } = sharedFixture(t);
   writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc([entry]));

@@ -49,11 +49,19 @@ function issueLabel(kind) {
   return "resource error";
 }
 
-function assessRenderedFrame(failures, frame, label) {
+function validateFrameExpectation(value) {
+  if (!["rendered", "blank"].includes(value)) throw new Error(`unknown frame expectation: ${value}`);
+}
+
+function assessRenderedFrame(failures, frame, label, frameExpectation) {
   if (!frame || !(frame.width > 0) || !(frame.height > 0)
       || !Number.isFinite(frame.minLuma) || !Number.isFinite(frame.maxLuma)
       || !Number.isFinite(frame.variance)) {
     failures.push(`${label} evidence is missing`);
+  } else if (frameExpectation === "blank") {
+    if (frame.maxLuma - frame.minLuma >= 8 || frame.variance >= 4) {
+      failures.push(`${label} contains content in a blank foundation`);
+    }
   } else if (frame.maxLuma <= 12 && frame.variance <= 4) {
     failures.push(`${label} is black`);
   } else if (frame.maxLuma - frame.minLuma < 8 || frame.variance < 4) {
@@ -61,7 +69,8 @@ function assessRenderedFrame(failures, frame, label) {
   }
 }
 
-export function assessPackagedWebObservation(observation, expectedRuntimeBuildFingerprint, { mode = "full" } = {}) {
+export function assessPackagedWebObservation(observation, expectedRuntimeBuildFingerprint, { mode = "full", frameExpectation = "rendered" } = {}) {
+  validateFrameExpectation(frameExpectation);
   const failures = [];
   try { localUrl(observation?.finalUrl, "final page URL"); }
   catch { failures.push("final page URL left loopback"); }
@@ -82,7 +91,7 @@ export function assessPackagedWebObservation(observation, expectedRuntimeBuildFi
     failures.push("render canvas has no visible area");
   }
   if (mode === "quick") return failures;
-  assessRenderedFrame(failures, observation?.frame, "first frame");
+  assessRenderedFrame(failures, observation?.frame, "first frame", frameExpectation);
   const recovery = observation?.recovery;
   if (!recovery) {
     failures.push("WebGL recovery evidence is missing");
@@ -101,7 +110,7 @@ export function assessPackagedWebObservation(observation, expectedRuntimeBuildFi
       if (cycles[index]?.runtimePresentedFrameAck !== true) {
         failures.push(`runtime did not acknowledge a presented frame after recovery cycle ${index + 1}`);
       }
-      assessRenderedFrame(failures, cycles[index]?.frame, `recovered frame after cycle ${index + 1}`);
+      assessRenderedFrame(failures, cycles[index]?.frame, `recovered frame after cycle ${index + 1}`, frameExpectation);
     }
     if (recovery.failure) failures.push(`WebGL recovery probe failed: ${recovery.failure}`);
   }
@@ -869,8 +878,10 @@ export async function smokePackagedWebArtifact({
   probe = defaultBrowserProbe,
   profileRoot = tmpdir(),
   mode = "full",
+  frameExpectation = "rendered",
 }) {
   smokeProbePlan(mode);
+  validateFrameExpectation(frameExpectation);
   const packagePath = resolve(zipPath);
   const entries = readStoreZip(readFileSync(packagePath));
   let release;
@@ -918,7 +929,7 @@ export async function smokePackagedWebArtifact({
       profileRoot,
       mode,
     });
-    const failures = assessPackagedWebObservation(observation, release.runtimeBuildFingerprint, { mode });
+    const failures = assessPackagedWebObservation(observation, release.runtimeBuildFingerprint, { mode, frameExpectation });
     if (failures.length > 0) throw new Error(`packaged web smoke failed: ${failures.join("; ")}`);
     return observation;
   } finally {

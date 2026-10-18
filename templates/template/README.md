@@ -34,3 +34,8 @@ Run `node tools/build_web.mjs --preset wasm-release`, then
 `node tools/game.mjs verify --target itch --template-proof`. The copied toolchain, CI scaffold,
 and release procedure are retained so a game can add features without
 rebuilding its delivery path. See `release/README.md`.
+
+The template proof requires an empty frame and two WebGL context-loss/recovery
+cycles. Normal game verification requires rendered content. The foundation has
+no persistent GPU resources; after recovery it acknowledges the first presented
+frame so the web bootstrap can clear its recovery overlay.

@@ -87,6 +87,47 @@ test("packaged browser observation accepts a ready rendered release frame", () =
   assert.deepEqual(assessPackagedWebObservation(passingObservation(), FINGERPRINT), []);
 });
 
+test("blank foundation proof accepts empty frames and still requires recovery acknowledgements", () => {
+  const observation = passingObservation();
+  const frame = { width: 1280, height: 720, minLuma: 20, maxLuma: 20, variance: 0 };
+  observation.frame = frame;
+  for (const cycle of observation.recovery.cycles) cycle.frame = frame;
+  assert.deepEqual(assessPackagedWebObservation(observation, FINGERPRINT, { frameExpectation: "blank" }), []);
+  observation.recovery.cycles[0].runtimePresentedFrameAck = false;
+  assert.deepEqual(assessPackagedWebObservation(observation, FINGERPRINT, { frameExpectation: "blank" }), [
+    "runtime did not acknowledge a presented frame after recovery cycle 1",
+  ]);
+});
+
+test("blank foundation proof rejects demonstration content and missing frame evidence", () => {
+  const observation = passingObservation();
+  assert.ok(assessPackagedWebObservation(observation, FINGERPRINT, { frameExpectation: "blank" })
+    .includes("first frame contains content in a blank foundation"));
+  observation.frame = null;
+  assert.ok(assessPackagedWebObservation(observation, FINGERPRINT, { frameExpectation: "blank" })
+    .includes("first frame evidence is missing"));
+});
+
+test("blank foundation proof validates its frame expectation", () => {
+  assert.throws(() => assessPackagedWebObservation(passingObservation(), FINGERPRINT, { frameExpectation: "unknown" }), /unknown frame expectation/);
+});
+
+test("blank foundation proof rejects sparse content in initial and recovered frames", () => {
+  const observation = passingObservation();
+  const blank = { width: 1280, height: 720, minLuma: 19, maxLuma: 19, variance: 0 };
+  const sparse = { ...blank, maxLuma: 255, variance: 0.05 };
+  for (const cycle of observation.recovery.cycles) cycle.frame = blank;
+  observation.frame = sparse;
+  assert.deepEqual(assessPackagedWebObservation(observation, FINGERPRINT, { frameExpectation: "blank" }), [
+    "first frame contains content in a blank foundation",
+  ]);
+  observation.frame = blank;
+  observation.recovery.cycles[1].frame = sparse;
+  assert.deepEqual(assessPackagedWebObservation(observation, FINGERPRINT, { frameExpectation: "blank" }), [
+    "recovered frame after cycle 2 contains content in a blank foundation",
+  ]);
+});
+
 test("quick packaged browser observation skips PNG and WebGL recovery evidence", () => {
   const observation = passingObservation();
   observation.frame = null;
