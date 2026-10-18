@@ -21,7 +21,7 @@ import {
   stagePlatformSdkWebAssets,
 } from "../scripts/artifact_tools.mjs";
 import { scorecardFromNdjson } from "../scripts/scorecard.mjs";
-import { createBuildPlan } from "../../../templates/template/tools/build_web.mjs";
+import { createBuildPlan } from "../../../ai_studio/feature_testing/consumer/tools/build_web.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TargetPlatform = Object.freeze({
@@ -249,7 +249,7 @@ test("the Closure externs list every backend method and every bridge global", ()
 });
 
 test("template CMake isolates web presets by publish target", () => {
-  const cmake = readFileSync(join(HERE, "../../../templates/template/cmake/GameOptions.cmake"), "utf8");
+  const cmake = readFileSync(join(HERE, "../../../ai_studio/feature_testing/consumer/cmake/GameOptions.cmake"), "utf8");
 
   assert.match(cmake, /set\(GAME_PUBLISH_TARGET "local" CACHE STRING/);
   assert.match(cmake, /if\(EMSCRIPTEN AND NOT GAME_PUBLISH_TARGET STREQUAL "local"\)/);
@@ -258,8 +258,8 @@ test("template CMake isolates web presets by publish target", () => {
 });
 
 test("web builds use a checkout-local Emscripten cache by default", () => {
-  const cmake = readFileSync(join(HERE, "../../../templates/template/cmake/GameOptions.cmake"), "utf8");
-  const gameDir = join(HERE, "../../../templates/template");
+  const cmake = readFileSync(join(HERE, "../../../ai_studio/feature_testing/consumer/cmake/GameOptions.cmake"), "utf8");
+  const gameDir = join(HERE, "../../../ai_studio/feature_testing/consumer");
   const plan = createBuildPlan({
     gameDir,
     args: { preset: "wasm-release", target: "local", debugUi: "default" },
@@ -1390,7 +1390,7 @@ test("web runtime does not expose game-facing platform SDK globals", () => {
 });
 
 test("template web shell loads selected platform backend before game.js", () => {
-  const shell = readFileSync(join(HERE, "../../../templates/template/web/index.html.in"), "utf8");
+  const shell = readFileSync(join(HERE, "../../../ai_studio/feature_testing/consumer/web/index.html.in"), "utf8");
   const source = readFileSync(join(HERE, "../web/platform-sdk.js"), "utf8");
 
   assert.equal(shell.includes('import \'./platform-sdk.js\';'), true);
@@ -1404,7 +1404,7 @@ test("template web shell loads selected platform backend before game.js", () => 
 });
 
 test("loading shell does not rewrite DOM for progress inside the same whole percent", () => {
-  const shell = readFileSync(join(HERE, "../../../templates/template/web/index.html.in"), "utf8");
+  const shell = readFileSync(join(HERE, "../../../ai_studio/feature_testing/consumer/web/index.html.in"), "utf8");
   const start = shell.indexOf("(function () {");
   const end = shell.indexOf("window.__PLATFORM_SDK_CONFIG__", start);
   assert.notEqual(start, -1);
@@ -1473,7 +1473,7 @@ test("loading shell does not rewrite DOM for progress inside the same whole perc
 
 test("template web runtime keeps the installed web backend for local mock", () => {
   const debugUi = readFileSync(
-    join(HERE, "../../../templates/template/src/ui/platform_sdk_debug.c"),
+    join(HERE, "../../../ai_studio/feature_testing/consumer/src/ui/platform_sdk_debug.c"),
     "utf8",
   );
 

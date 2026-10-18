@@ -1,0 +1,84 @@
+# Template Items integration
+
+The reusable evaluator, package runtime, ownership operations, and reconcile
+logic live in `features/items-core`. This directory contains only game-owned
+policy:
+
+- `src/game_items.c`: concrete player containers, owner refs, and initial grants;
+- `src/game_items_devapi.c`: development-only bounded runtime projection;
+- this integration and migration note.
+
+## Authoring and build
+
+The canonical catalog is `items.lua.json` plus the allowlisted modules under
+`design/items/`. Use the single semantic CLI:
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root ai_studio/feature_testing/consumer list
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root ai_studio/feature_testing/consumer validate
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root ai_studio/feature_testing/consumer build --out-dir ai_studio/feature_testing/consumer/build/items-catalog
+```
+
+CMake performs the same build into its generated directory and compiles the
+resulting `items_catalog.gen.c` into the game. The catalog needs no startup
+step. There is no JSON, blob, or fallback path.
+
+## Ownership
+
+Stack APIs reject `stack == 1`; instance APIs require it. The template creates
+its finite player inventory and currency-only wallet in `src/game_items.c`,
+stores only their persistent numeric IDs in the game fragment, and passes
+explicit runtime refs to progression and UI consumers. Reusable Items Core has
+no fixed backpack/purse or implicit payment scope. Currency and finite stack
+caps come from the bound catalog package.
+
+Runtime tools use the bounded inspection API rather than serializing the whole
+Items fragment: container lists are filtered and paginated, entry reads require
+an explicit slot range, and every query carries row/byte/context budgets.
+DevAPI-enabled builds expose this as `game.items.container.list` and
+`game.items.container.inspect`; entry `count` is an exact decimal string so
+the JSON bridge never rounds i64 values. Release builds do not compile the
+adapter.
+
+Every mutation uses a bounded `verb:subject` reason; the closed verb list
+lives in items-core (`features/items/reason_tags.h`).
+Malformed, unknown, or oversized reasons return `ITEMS_RESULT_INVALID_REASON`
+before any state change or audit event, including in release builds. Persistent
+ownership mutations also return `ITEMS_RESULT_AUDIT_UNAVAILABLE` unchanged when
+their one bounded audit event cannot fit. Normal new games are seeded in
+`src/game_items.c`; `--fresh-state` intentionally runs only the generated reset
+defaults and skips those grants. The game-owned seed plan is
+validated against the bound catalog at the startup barrier and again before
+initialization; incompatible IDs, storage routes, capacities, duplicate grants,
+or minimum amounts fail before any seed state or event is published.
+
+## Release receipt and destructive changes
+
+`content/items.lock.json` records shipped field IDs, item storage, and maximum
+shipped level counts. `validate` fails when an authored change is incompatible
+with that history. After the matching save migration is implemented and the
+release candidate is verified, seal the compatible new bounds once:
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root ai_studio/feature_testing/consumer seal-receipt
+```
+
+The write is atomic and idempotent. Removed item IDs stay in `removed`; removed
+field IDs move from `receipt.field_ids.active` to `reserved`. Never erase
+identity history.
+
+## Save migrations
+
+The save fragment is generated from `state/items.schema.json`. A destructive
+catalog change must first raise the fragment version and add an ordered,
+idempotent migration step. Migration bodies are game code because they encode
+this game's shipped history. `items_reconcile()` then quarantines any remaining
+unknown definitions without deleting player data and restores them if the
+definition returns.
+
+Verification:
+
+```powershell
+cmake --build ai_studio/feature_testing/consumer/build/native-debug --target game test_items_fragment test_progression test_template_composition
+ctest --test-dir ai_studio/feature_testing/consumer/build/native-debug -R "items|progression|template_composition" --output-on-failure
+```

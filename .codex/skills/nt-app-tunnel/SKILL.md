@@ -1,6 +1,6 @@
 ---
 name: nt-app-tunnel
-description: "Manually selected workflow for exposing a specific local preview, build, or static directory through a temporary public URL. Public exposure is never automatic: explain that the URL is public and unauthenticated, then ask for confirmation immediately before launch."
+description: "Expose a local preview through a temporary public URL when the user requests a tunnel. Confirm public exposure before launch."
 ---
 
 # NT App Tunnel

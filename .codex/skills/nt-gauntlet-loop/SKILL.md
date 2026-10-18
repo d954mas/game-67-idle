@@ -1,6 +1,6 @@
 ---
 name: nt-gauntlet-loop
-description: Run an autonomous Gauntlet Loop for ambitious player-facing game work. Use when the user asks to gauntlet, keep improving, reach reference quality, fan out subagents, compare against another game or visual target, or continue until independent critics approve. Orchestrates builder subagents and separate fresh critics without ultracode or GSD.
+description: "Run repeated building and independent criticism when the user asks for a gauntlet, reference-quality comparison, or improvement until critics approve."
 ---
 
 # NT Gauntlet Loop

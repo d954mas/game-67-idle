@@ -1,9 +1,7 @@
 // Read-only Items Viewer contract tests over the single-source Lua route.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -20,10 +18,13 @@ import {
 } from "../ops.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../..", import.meta.url)).replace(/[\\/]$/, "");
-const STATE_SCHEMA = readFileSync(join(REPO_ROOT, "templates", "template", "state", "items.schema.json"), "utf8");
+const CONSUMER_ROOT = join(REPO_ROOT, "ai_studio", "feature_testing", "consumer");
+const STATE_SCHEMA = readFileSync(join(CONSUMER_ROOT, "state", "items.schema.json"), "utf8");
+const TEST_TMP_ROOT = join(REPO_ROOT, "tmp", "items-viewer-tests");
 
 function tempDir(t, prefix = "items-viewer-") {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
+  mkdirSync(TEST_TMP_ROOT, { recursive: true });
+  const dir = mkdtempSync(join(TEST_TMP_ROOT, prefix));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
@@ -98,11 +99,8 @@ function writeLuaFixture(dir, ids = ["fx.a", "fx.b"]) {
 }
 
 function privateGameFixture(root) {
-  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
-  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
   const game = join(root, "games", "private", "secret-game");
-  mkdirSync(game, { recursive: true });
-  execFileSync("git", ["init"], { cwd: game, stdio: "ignore" });
+  mkdirSync(join(game, ".git"), { recursive: true });
   writeGameIdentity(root, "secret-game", true);
   writeJson(join(game, "items.lua.json"), {});
 }
@@ -122,8 +120,13 @@ test("listCatalogs uses Items manifests and hides private games by default", (t)
   assert.deepEqual(listCatalogs(privateRoot, { includePrivate: true }).catalogs.map((entry) => entry.id), ["game:secret-game"]);
 });
 
-test("live template view exposes Snapshot fields, receipt status, and no catalog containers", async () => {
-  const view = await getCatalogView(REPO_ROOT, "template:template");
+test("independent consumer fixture exposes Snapshot fields, receipt status, and no catalog containers", async () => {
+  const view = await loadCatalogView(REPO_ROOT, CONSUMER_ROOT, {
+    id: "fixture:feature-test-consumer",
+    kind: "template",
+    title: "Feature integration test fixture",
+    folder: "ai_studio/feature_testing/consumer",
+  });
   assert.ok(view);
   assert.equal(view.meta.hasItems, true);
   assert.equal(view.namespace, "tmpl");
@@ -173,6 +176,9 @@ test("item detail stays bounded to semantic inspect, schema, source, dependencie
 test("Workbench edit bridge previews, applies, and replays only the returned inverse patch", async (t) => {
   const project = join(tempDir(t), "project");
   cpSync(join(REPO_ROOT, "features", "items-core", "tests", "fixtures", "items_cli"), project, { recursive: true });
+  const evaluatorTemp = join(project, ".items-cli-temp");
+  mkdirSync(evaluatorTemp);
+  const evaluatorEnv = { ...process.env, TEMP: evaluatorTemp, TMP: evaluatorTemp, TMPDIR: evaluatorTemp };
   const sourcePath = join(project, "game", "items.lua");
   const original = readFileSync(sourcePath, "utf8");
   const detail = await loadItemDetail(REPO_ROOT, project, "game.levelled_sword");
@@ -185,23 +191,23 @@ test("Workbench edit bridge previews, applies, and replays only the returned inv
     expected_source_hash: detail.source.source_hash,
   };
 
-  const preview = await runItemEdit(REPO_ROOT, project, edit);
-  assert.equal(preview.ok, true);
+  const preview = await runItemEdit(REPO_ROOT, project, edit, { env: evaluatorEnv });
+  assert.ok(preview.ok, JSON.stringify(preview));
   assert.equal(preview.result.applied, false);
   assert.equal(preview.result.source_diff.old_value, 15);
   assert.equal(preview.result.source_diff.new_value, 17);
   assert.equal(readFileSync(sourcePath, "utf8"), original);
 
-  const applied = await runItemEdit(REPO_ROOT, project, edit, { apply: true });
-  assert.equal(applied.ok, true);
+  const applied = await runItemEdit(REPO_ROOT, project, edit, { apply: true, env: evaluatorEnv });
+  assert.ok(applied.ok, JSON.stringify(applied));
   assert.equal(applied.result.applied, true);
   assert.match(readFileSync(sourcePath, "utf8"), /attack = 17/);
 
-  const conflict = await runItemEdit(REPO_ROOT, project, edit, { apply: true });
+  const conflict = await runItemEdit(REPO_ROOT, project, edit, { apply: true, env: evaluatorEnv });
   assert.equal(conflict.ok, false);
   assert.equal(conflict.error.code, "edit.conflict");
 
-  const undone = await runItemEdit(REPO_ROOT, project, applied.result.inverse_patch, { apply: true });
+  const undone = await runItemEdit(REPO_ROOT, project, applied.result.inverse_patch, { apply: true, env: evaluatorEnv });
   assert.equal(undone.ok, true);
   assert.equal(readFileSync(sourcePath, "utf8"), original);
 });
@@ -259,7 +265,7 @@ test("routeIssues attaches only issues whose item still exists", () => {
 
 test("runItemsCliRaw rejects when the Studio Python cannot be spawned", async () => {
   await assert.rejects(
-    () => runItemsCliRaw(REPO_ROOT, join(REPO_ROOT, "templates", "template"), ["list"], { bin: "python-does-not-exist-items-viewer" }),
+    () => runItemsCliRaw(REPO_ROOT, CONSUMER_ROOT, ["list"], { bin: "python-does-not-exist-items-viewer" }),
     /could not be spawned/,
   );
 });
@@ -270,7 +276,7 @@ test("runItemsCliRaw terminates the process tree before reporting a timeout", as
   const neverCompletes = () => child;
 
   await assert.rejects(
-    () => runItemsCliRaw(REPO_ROOT, join(REPO_ROOT, "templates", "template"), ["list"], {
+    () => runItemsCliRaw(REPO_ROOT, CONSUMER_ROOT, ["list"], {
       execFileImpl: neverCompletes,
       killProcessTree: async (candidate) => { killed = candidate; },
       timeoutMs: 5,
@@ -284,7 +290,7 @@ test("runItemsCliRaw preserves timeout classification when Windows cleanup finds
   const alreadyExited = new Error("taskkill: process not found");
   alreadyExited.code = 128;
   await assert.rejects(
-    () => runItemsCliRaw(REPO_ROOT, join(REPO_ROOT, "templates", "template"), ["list"], {
+    () => runItemsCliRaw(REPO_ROOT, CONSUMER_ROOT, ["list"], {
       execFileImpl: () => ({ pid: 4242 }),
       killProcessTree: async () => { throw alreadyExited; },
       timeoutMs: 5,

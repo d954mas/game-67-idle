@@ -41,10 +41,10 @@
                 "kind": "module",
                 "path": "templates/template",
                 "owner": "Template Lead",
-                "description": "The default game scaffold and its template-owned product features.",
+                "description": "The blank default starter with explicit lifecycle, state, input, and rendering boundaries.",
                 "entry": "templates/template/README.md",
                 "contract": "templates/template/template.json",
-                "boundary": "Settings and resource-panel implementations remain template-owned features.",
+                "boundary": "Shared-feature tests belong to the independent feature-testing module.",
                 "verifyDomain": "template-release",
                 "coverage": "subtree"
               }
@@ -134,6 +134,18 @@
                 "coverage": "subtree"
               },
               {
+                "id": "feature-limb-ik",
+                "title": "Limb IK",
+                "kind": "module",
+                "path": "features/limb-ik",
+                "owner": "Geometry Feature Owner",
+                "description": "Optional planar two-link inverse kinematics without rig or rendering dependencies.",
+                "entry": "features/limb-ik/README.md",
+                "contract": "features/limb-ik/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
                 "id": "feature-localization",
                 "title": "Localization",
                 "kind": "module",
@@ -166,6 +178,18 @@
                 "description": "Platform-service integration capability and contract.",
                 "entry": "features/platform-sdk/README.md",
                 "contract": "features/platform-sdk/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
+                "id": "feature-portal-metrics",
+                "title": "Portal metrics",
+                "kind": "module",
+                "path": "features/portal-metrics",
+                "owner": "Platform Feature Owner",
+                "description": "Optional frame-event drain to portal analytics through a consumer-owned event mapper.",
+                "entry": "features/portal-metrics/README.md",
+                "contract": "features/portal-metrics/feature.json",
                 "verifyDomain": "features",
                 "coverage": "subtree"
               },
@@ -278,6 +302,18 @@
         "entry": "ai_studio/game_page/README.md",
         "contract": "ai_studio/game_page/README.md",
         "verifyDomain": "shell",
+        "coverage": "subtree"
+      },
+      {
+        "id": "feature-testing",
+        "title": "Feature testing",
+        "kind": "module",
+        "path": "ai_studio/feature_testing",
+        "owner": "Feature Lead",
+        "description": "Independent native and toolchain test consumer for reusable game capabilities.",
+        "entry": "ai_studio/feature_testing/README.md",
+        "contract": "ai_studio/feature_testing/README.md",
+        "verifyDomain": "features",
         "coverage": "subtree"
       },
       {
@@ -450,7 +486,18 @@
         "coverage": "subtree"
       },
       {
-        "id": "codex-skill-catalog",
+          "id": "codex-discovery-skills",
+          "title": "Codex discovery skills",
+          "kind": "boundary",
+          "path": ".agents/skills",
+          "owner": "Agent Surface Owner",
+          "description": "Generated current Codex discovery pointers to canonical Studio skills.",
+          "entry": "ai_studio/core_harness/agent_surfaces/README.md",
+          "verifyDomain": "harness",
+          "coverage": "subtree"
+        },
+        {
+          "id": "codex-skill-catalog",
         "title": "Codex skill catalog",
         "kind": "boundary",
         "path": ".codex/skills",

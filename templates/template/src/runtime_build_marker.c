@@ -53,3 +53,13 @@ EM_JS(void, runtime_build_marker_publish_js, (const char *marker_ptr), {
 void runtime_build_marker_publish(void) {
     runtime_build_marker_publish_js(s_runtime_build_marker);
 }
+
+EM_JS(void, runtime_build_marker_present_ready_js, (void), {
+    if (typeof globalThis.__platformSdkHideLoadingOverlay === "function") {
+        globalThis.__platformSdkHideLoadingOverlay();
+    }
+})
+
+void runtime_build_marker_present_ready(void) {
+    runtime_build_marker_present_ready_js();
+}

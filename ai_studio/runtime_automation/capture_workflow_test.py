@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from capture_scenario import parse_scenario
 from capture_workflow import (
@@ -15,6 +16,7 @@ from capture_workflow import (
     publish_take,
     record_with_transient_retry,
     reset_scenario_for_recording,
+    run_capture,
 )
 
 
@@ -97,6 +99,27 @@ def catalog_document(*, policy_status="incomplete"):
 
 
 class CatalogTest(unittest.TestCase):
+    def test_preflight_build_failure_prevents_running_game(self):
+        with tempfile.TemporaryDirectory() as directory:
+            game_root = Path(directory)
+            scenario_path = game_root / "devapi" / "capture_scenarios"
+            scenario_path.mkdir(parents=True)
+            (scenario_path / "showcase.v1.json").write_text(
+                json.dumps(scenario_document()), encoding="utf-8"
+            )
+            (game_root / "capture").mkdir()
+            (game_root / "capture" / "catalog.json").write_text(
+                json.dumps(catalog_document()), encoding="utf-8"
+            )
+            with patch(
+                "capture_workflow.prepare_native_capture",
+                side_effect=RuntimeError("native build failed"),
+            ), patch("capture_workflow.running_game") as launch:
+                with self.assertRaisesRegex(RuntimeError, "native build failed"):
+                    run_capture(game_root, "shot", "showcase")
+
+            launch.assert_not_called()
+
     def test_incomplete_obs_container_gets_one_clean_local_retry(self):
         roots = []
 
@@ -433,10 +456,16 @@ class PublicationTest(unittest.TestCase):
                         "status": "guidance_only",
                         "masterEligible": False,
                     },
+                    "nativeBuild": {
+                        "proofKind": "native-rebuilt",
+                        "sourceFingerprint": "a" * 64,
+                        "executable": {"sha256": "b" * 64},
+                    },
                 },
             )
 
             self.assertEqual(result["classification"], "draft")
+            self.assertEqual(result["manifest"]["nativeBuild"]["sourceFingerprint"], "a" * 64)
             self.assertTrue((root / "take" / "draft" / "recording.mkv").is_file())
             self.assertFalse((root / "take" / "master").exists())
 

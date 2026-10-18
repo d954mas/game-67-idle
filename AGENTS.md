@@ -168,7 +168,7 @@ Keep binaries out of the transcript, patch through the harness edit tool rather
 than shell-escaped strings, and when a result comes back truncated, narrow the
 query instead of re-running it wider.
 
-`profiling/iteration_report.mjs` reports what this costs per week.
+`ai_studio/core_harness/profiling/iteration_report.mjs` reports what this costs per week.
 
 ## Source Comments
 

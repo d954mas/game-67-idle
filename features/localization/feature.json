@@ -49,7 +49,7 @@
       "loc_generator_test"
     ]
   },
-  "default_template": {
+  "test_consumer": {
     "strings": "content/loc/strings.json",
     "generated_dir": "src/generated",
     "game_side_sources": [

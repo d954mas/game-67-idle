@@ -18,7 +18,7 @@ const ROUTER = [
   "## Extension points\nExtend only through documented seams.",
 ].join("\n\n");
 const SKILL_ROUTERS = {
-  ".codex/skills/nt-game-feature/SKILL.md": ["features/README.md", "templates/template/src/features/README.md", "README.md", "INSTALL.md", "feature.json"],
+  ".codex/skills/nt-game-feature/SKILL.md": ["features/README.md", "ai_studio/feature_testing/consumer/src/features/README.md", "README.md", "INSTALL.md", "feature.json"],
   ".codex/skills/nt-game-state-management/SKILL.md": ["features/game-state/README.md", "features/game-state/INSTALL.md", "features/game-state/feature.json"],
   ".codex/skills/nt-game-items/SKILL.md": ["features/items-core/README.md", "features/items-core/INSTALL.md", "features/items-core/feature.json"],
 };
@@ -119,7 +119,7 @@ test("inventory discovers new manifests instead of silently relying on a fixed l
   });
   write(root, "features/new-core/README.md", `# new-core\n\n${ROUTER}\n`);
   write(root, "features/new-core/INSTALL.md", "# Install\n");
-  assert.throws(() => validateFeatureContracts(root), /missing reusable feature 'new-core'/i);
+  assert.ok(validateFeatureContracts(root).rootFeatures.includes("new-core"));
 });
 
 test("specified-only features stay out of runtime dependency seeds", (t) => {
@@ -154,7 +154,7 @@ test("opt-in features stay out of runtime dependency seeds", (t) => {
   assert.ok(result.rootFeatures.includes("cursor-core"));
 });
 
-test("an opt-in feature declared in the seed is rejected", (t) => {
+test("a template can explicitly select an opt-in runtime feature", (t) => {
   const root = fixture(t);
   write(root, "features/cursor-core/feature.json", {
     schema: "ai_studio.feature.v1",
@@ -174,7 +174,45 @@ test("an opt-in feature declared in the seed is rejected", (t) => {
     compatibility: "tested",
   });
 
-  assert.throws(() => validateFeatureContracts(root), /unknown reusable features: cursor-core/i);
+  assert.ok(validateFeatureContracts(root).rootFeatures.includes("cursor-core"));
+});
+
+test("a blank starter declares only the runtime modules it actually uses", (t) => {
+  const root = fixture(t);
+  write(root, "templates/template/game-dependencies.json", {
+    schema: "ai_studio.game.dependencies.seed.v2",
+    engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
+    features: [{ id: "game-state", source: "features/game-state", version: "1.0.0", compatibility: "tested" }],
+    compatibility: "tested",
+  });
+  assert.ok(validateFeatureContracts(root).rootFeatures.includes("items-core"));
+});
+
+test("specified-only modules cannot be selected as runtime dependencies", (t) => {
+  const root = fixture(t);
+  write(root, "features/items-core/feature.json", {
+    schema: "ai_studio.feature.v1", id: "items-core", version: "1.0.0", status: "specified",
+    manuals: { install: "features/items-core/INSTALL.md" },
+  });
+  assert.throws(() => validateFeatureContracts(root), /items-core.*specified/i);
+});
+
+test("dependency compatibility evidence must be nonempty text at every level", (t) => {
+  const root = fixture(t);
+  const makeSeed = () => ({
+    schema: "ai_studio.game.dependencies.seed.v2",
+    engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
+    features: [{ id: "game-state", source: "features/game-state", version: "1.0.0", compatibility: "tested" }],
+    compatibility: "tested",
+  });
+  for (const value of [{}, null, 0, " "]) {
+    for (const select of [(seed) => seed, (seed) => seed.engine, (seed) => seed.features[0]]) {
+      const seed = makeSeed();
+      select(seed).compatibility = value;
+      write(root, "templates/template/game-dependencies.json", seed);
+      assert.throws(() => validateFeatureContracts(root), /compatibility|engine version/i);
+    }
+  }
 });
 
 test("feature status is a closed enum", (t) => {

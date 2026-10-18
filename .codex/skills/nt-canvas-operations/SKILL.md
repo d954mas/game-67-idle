@@ -1,6 +1,6 @@
 ---
 name: nt-canvas-operations
-description: "Use for canvas:// refs and Canvas project, screen, group, element, region, export, history, or Chat operations."
+description: "Read or edit Canvas projects, screens, elements, exports, history, and canvas:// references."
 ---
 
 # NT Canvas Operations

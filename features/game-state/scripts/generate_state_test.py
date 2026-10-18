@@ -7,8 +7,8 @@ import generate_state
 
 
 ROOT = Path(__file__).resolve().parents[3]
-TEMPLATE_SCHEMA = ROOT / "templates" / "template" / "state" / "game_state.schema.json"
-SETTINGS_SCHEMA = ROOT / "templates" / "template" / "state" / "settings.schema.json"
+CONSUMER_SCHEMA = ROOT / "ai_studio" / "feature_testing" / "consumer" / "state" / "game_state.schema.json"
+CONSUMER_SETTINGS_SCHEMA = ROOT / "ai_studio" / "feature_testing" / "consumer" / "state" / "settings.schema.json"
 MINI_SCHEMA = ROOT / "features" / "game-state" / "tests" / "mini_state.schema.json"
 ITEMS_CONTAINERS_SCHEMA = ROOT / "features" / "game-state" / "tests" / "items_containers.schema.json"
 GOLDEN = ROOT / "features" / "game-state" / "tests" / "golden"
@@ -43,20 +43,20 @@ def generate_and_join(schema_path: Path, out_dir: Path, prefix: str, fragment: s
 
 
 class StateCodegenTests(unittest.TestCase):
-    def test_default_template_out_dir_uses_build_generated_folder(self):
-        expected = ROOT / "templates" / "template" / "build" / "generated" / "game-state"
-        self.assertEqual(generate_state.default_out_dir(TEMPLATE_SCHEMA), expected)
+    def test_default_consumer_out_dir_uses_build_generated_folder(self):
+        expected = ROOT / "ai_studio" / "feature_testing" / "consumer" / "build" / "generated" / "game-state"
+        self.assertEqual(generate_state.default_out_dir(CONSUMER_SCHEMA), expected)
 
     def test_clean_schema_excludes_closed_prototype_fields(self):
         with tempfile.TemporaryDirectory() as tmp:
-            text = generate_and_join(TEMPLATE_SCHEMA, Path(tmp) / "clean", "game_state", "game")
+            text = generate_and_join(CONSUMER_SCHEMA, Path(tmp) / "clean", "game_state", "game")
         for token in CLOSED_TOKENS:
             self.assertNotIn(token, text)
 
     def test_clean_schema_generates_all_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp) / "generated"
-            generate(TEMPLATE_SCHEMA, out_dir, "game")
+            generate(CONSUMER_SCHEMA, out_dir, "game")
             for suffix in OUTPUT_SUFFIXES:
                 self.assertTrue((out_dir / f"game_state{suffix}").exists())
 
@@ -66,7 +66,7 @@ class StateCodegenTests(unittest.TestCase):
         # schema is caught here without a full build.
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp) / "generated"
-            generate(SETTINGS_SCHEMA, out_dir, "settings")
+            generate(CONSUMER_SETTINGS_SCHEMA, out_dir, "settings")
             outputs = read_outputs(out_dir, "settings_state")
         self.assertIn("extern SettingsState settings_state;", outputs["settings_state.h"])
         self.assertIn("const GameSaveFragment settings_state_fragment", outputs["settings_state.c"])
@@ -78,7 +78,7 @@ class StateCodegenTests(unittest.TestCase):
         # so the generator no longer emits a devapi source or a header declaration.
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp)
-            generate(TEMPLATE_SCHEMA, out_dir, "game")
+            generate(CONSUMER_SCHEMA, out_dir, "game")
             hdr = (out_dir / "game_state.h").read_text(encoding="utf-8")
         self.assertNotIn("register_devapi", hdr)
         self.assertNotIn("NT_DEVAPI_ENABLED", hdr)
@@ -189,7 +189,7 @@ class StateCodegenTests(unittest.TestCase):
 
     def test_schema_owns_devapi_write_permissions(self):
         with tempfile.TemporaryDirectory() as tmp:
-            text = generate_and_join(TEMPLATE_SCHEMA, Path(tmp) / "generated", "game_state", "game")
+            text = generate_and_join(CONSUMER_SCHEMA, Path(tmp) / "generated", "game_state", "game")
         self.assertIn('\\"devapi_writable\\":false', text)
         self.assertIn('strcmp(path, "inventory_container_id") == 0', text)
         self.assertIn('state path is read-only', text)
@@ -334,7 +334,7 @@ class StateCodegenTests(unittest.TestCase):
     def test_text_only_build_preprocesses_out_legacy_json_and_snapshot_code(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            generate(TEMPLATE_SCHEMA, root, "game")
+            generate(CONSUMER_SCHEMA, root, "game")
             outputs = read_outputs(root, "game_state")
 
         header = outputs["game_state.h"]
@@ -373,8 +373,8 @@ class StateCodegenTests(unittest.TestCase):
             expected = expected_path.read_text(encoding="utf-8")
             self.assertEqual(got, expected, f"golden mismatch for {golden_sub}/{name}")
 
-    def test_v2_template_golden(self):
-        self._assert_golden(TEMPLATE_SCHEMA, "game_state", "game", "game")
+    def test_v2_consumer_golden(self):
+        self._assert_golden(CONSUMER_SCHEMA, "game_state", "game", "game")
 
     def test_v2_namespace_golden(self):
         self._assert_golden(MINI_SCHEMA, "mini_state", "mini", "mini")
@@ -384,7 +384,7 @@ class StateCodegenTests(unittest.TestCase):
     def test_property_game_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp)
-            generate(TEMPLATE_SCHEMA, out_dir, "game")
+            generate(CONSUMER_SCHEMA, out_dir, "game")
             files = read_outputs(out_dir, "game_state")
         src = files["game_state.c"]
         hdr = files["game_state.h"]
@@ -403,12 +403,12 @@ class StateCodegenTests(unittest.TestCase):
         self.assertIn('#include "game_state_json.h"', src)
         self.assertIn("gsj_read_int_clamped", src)
         # i64 wire coverage (gsj_add_i64/gsj_read_i64) is NOT asserted here: the
-        # template's `game` fragment carries no i64 field post-T0327-hygiene. The
+        # consumer's `game` fragment carries no i64 field. The
         # property is still covered by
         # test_v2_namespace_golden (MINI_SCHEMA's `total`/`Cell.count` i64 fields,
         # golden/mini/mini_state.c) -- this test only needs to stay schema-agnostic
         # about which downstream game happens to have an i64 field.
-        self.assertIn(".steps         = NULL", src)  # no migrations for the template
+        self.assertIn(".steps         = NULL", src)  # no migrations for the consumer
 
         # E2: typed events are a SEPARATE file family (read the event keys, not the
         # state .c). state output above is unaffected by the events section.

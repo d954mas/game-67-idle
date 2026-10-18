@@ -49,6 +49,7 @@ function itemsCliScriptPath(root) {
 // (spec §3 "TOOL-FAILURE — the ONLY 500").
 export function runItemsCliRaw(root, projectRoot, args, {
   bin,
+  env,
   execFileImpl = execFile,
   killProcessTree = killItemsProcessTree,
   timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -69,6 +70,7 @@ export function runItemsCliRaw(root, projectRoot, args, {
         [scriptPath, "--project-root", projectRoot, ...args],
         {
           cwd: root,
+          ...(env ? { env } : {}),
           detached: process.platform !== "win32",
           maxBuffer: MAX_BUFFER,
           windowsHide: true,
@@ -254,10 +256,10 @@ function parseEditFailure(stdout, stderr) {
 // UI preview/apply/undo all invoke the same T0366 semantic operation. Preview
 // omits --apply and therefore evaluates only an allowlisted temporary copy;
 // undo passes the returned inverse patch back through this exact function.
-export async function runItemEdit(root, projectRoot, edit, { apply = false } = {}) {
+export async function runItemEdit(root, projectRoot, edit, { apply = false, env } = {}) {
   const args = semanticEditArgs(edit);
   if (apply) args.push("--apply");
-  const { code, stdout, stderr } = await runItemsCliRaw(root, projectRoot, args);
+  const { code, stdout, stderr } = await runItemsCliRaw(root, projectRoot, args, { env });
   if (code === 0) return { ok: true, result: parseJsonOrThrow(stdout, edit.operation).result };
   if (code === 1) return parseEditFailure(stdout, stderr);
   throw new Error(`items_cli.py ${edit.operation} exited ${code} unexpectedly: ${stderr.trim()}`);

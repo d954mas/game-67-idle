@@ -7,9 +7,32 @@ import {
   createRequestCoordinator,
   RequestOverloadedError,
 } from "../api.mjs";
-import { ItemsCliTimeoutError } from "../ops.mjs";
+import { ItemsCliTimeoutError, runItemEdit } from "../ops.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../..", import.meta.url)).replace(/[\\/]$/, "");
+const CONSUMER_ROOT = fileURLToPath(new URL("../../../feature_testing/consumer", import.meta.url)).replace(/[\\/]$/, "");
+const FIXTURE_CATALOG = "template:feature-test-consumer";
+const FIXTURE_DETAIL = Object.freeze({
+  item: { item: { id: "tmpl.sword" } },
+  source: {
+    definition: { file: "design/items/weapons.lua" },
+    source_hash: `sha256:${"a".repeat(64)}`,
+  },
+  fields: [],
+});
+
+function consumerFixtureOptions() {
+  return {
+    getItemDetail: async (_root, catalogId, itemId) => (
+      catalogId === FIXTURE_CATALOG && itemId === "tmpl.sword" ? FIXTURE_DETAIL : null
+    ),
+    editCatalogItem: async (_root, catalogId, edit, options) => {
+      if (catalogId !== FIXTURE_CATALOG) return null;
+      if (edit.operation === "rewrite-lua") return runItemEdit(REPO_ROOT, CONSUMER_ROOT, edit, options);
+      return { ok: false, error: { code: "edit.validation", message: "fixture declines this edit" } };
+    },
+  };
+}
 
 function responseCapture() {
   return {
@@ -194,9 +217,10 @@ test("same-origin edits use reserved priority when read admission is saturated",
   assert.deepEqual(order, ["first", "edit", "queued"]);
 });
 
-test("focused item endpoint resolves only registered catalogs", async () => {
+test("focused item endpoint resolves only the independent consumer fixture", async () => {
   const { handled, response, json } = await request(
-    "/api/items-viewer/item?catalog=template%3Atemplate&item=tmpl.sword",
+    `/api/items-viewer/item?catalog=${encodeURIComponent(FIXTURE_CATALOG)}&item=tmpl.sword`,
+    { viewerOptions: consumerFixtureOptions() },
   );
   assert.equal(handled, true);
   assert.equal(response.status, 200);
@@ -206,8 +230,16 @@ test("focused item endpoint resolves only registered catalogs", async () => {
 
   const missing = await request(
     "/api/items-viewer/item?catalog=template%3Aunknown&item=tmpl.sword",
+    { viewerOptions: consumerFixtureOptions() },
   );
   assert.equal(missing.response.status, 404);
+});
+
+test("blank starter template remains a registered empty catalog", async () => {
+  const { response, json } = await request("/api/items-viewer/catalog?id=template%3Atemplate");
+  assert.equal(response.status, 200);
+  assert.equal(json.meta.hasItems, false);
+  assert.deepEqual(json.items, []);
 });
 
 test("catalog JSON references a separately served bounded icon page", async () => {
@@ -237,7 +269,7 @@ test("catalog JSON references a separately served bounded icon page", async () =
 
 test("focused chart endpoint requires an explicit selected field", async () => {
   const { response, json } = await request(
-    "/api/items-viewer/chart?catalog=template%3Atemplate&item=tmpl.sword",
+    `/api/items-viewer/chart?catalog=${encodeURIComponent(FIXTURE_CATALOG)}&item=tmpl.sword`,
   );
   assert.equal(response.status, 400);
   assert.match(json.error, /field/);
@@ -245,7 +277,8 @@ test("focused chart endpoint requires an explicit selected field", async () => {
 
 test("edit endpoint delegates preview refusal and rejects operations outside the shared semantic contract", async () => {
   const detail = await request(
-    "/api/items-viewer/item?catalog=template%3Atemplate&item=tmpl.sword",
+    `/api/items-viewer/item?catalog=${encodeURIComponent(FIXTURE_CATALOG)}&item=tmpl.sword`,
+    { viewerOptions: consumerFixtureOptions() },
   );
   const edit = {
     schema: "items.cli.patch.v1",
@@ -258,14 +291,16 @@ test("edit endpoint delegates preview refusal and rejects operations outside the
   };
   const refused = await request("/api/items-viewer/edit", {
     method: "POST",
-    body: { catalog: "template:template", edit, apply: false },
+    body: { catalog: FIXTURE_CATALOG, edit, apply: false },
+    viewerOptions: consumerFixtureOptions(),
   });
   assert.equal(refused.response.status, 422);
   assert.equal(refused.json.ok, false);
 
   const invalid = await request("/api/items-viewer/edit", {
     method: "POST",
-    body: { catalog: "template:template", edit: { ...edit, operation: "rewrite-lua" }, apply: false },
+    body: { catalog: FIXTURE_CATALOG, edit: { ...edit, operation: "rewrite-lua" }, apply: false },
+    viewerOptions: consumerFixtureOptions(),
   });
   assert.equal(invalid.response.status, 400);
   assert.match(invalid.json.error, /unsupported/);

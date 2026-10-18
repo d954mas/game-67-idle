@@ -32,10 +32,8 @@ automation. Parameterized scenes keep a game-owned typed endpoint.
 Core and scaffold validation:
 
 ```powershell
-cmake --build templates/template/build/devapi-debug --target test_scenes_core_catalog test_scenes_core_lifecycle test_scenes_core_navigation test_scenes_core_ordering test_scenes_core_presentation test_scenes_core_deadlines test_scenes_core_reentrancy test_scenes_core_devapi
-ctest --test-dir templates/template/build/devapi-debug -R "^test_scenes_core_" --output-on-failure
-cmake --build templates/template/build/wasm-release-itch --target test_scenes_core_web_smoke
-ctest --test-dir templates/template/build/wasm-release-itch -R "^(test_scenes_core_web_smoke|scenes_core_)" --output-on-failure
+cmake --build ai_studio/feature_testing/consumer/build/feature-verify --target test_scenes_core_catalog test_scenes_core_lifecycle test_scenes_core_navigation test_scenes_core_ordering test_scenes_core_presentation test_scenes_core_deadlines test_scenes_core_reentrancy test_scenes_core_devapi
+ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R "^test_scenes_core_" --output-on-failure
 node --test features/scenes-core/tests/test_scaffold_scene.mjs
 node --test features/scenes-core/tests/test_scene_devapi_schema.mjs
 node --test features/scenes-core/tests/test_consumer_scene_contracts.mjs
@@ -81,8 +79,8 @@ bubbling, state serialization, and capture protocols remain outside V1.
 Preview or add a scene without generating a resource pack:
 
 ```powershell
-node features/scenes-core/scripts/scaffold_scene.mjs --project templates/template --id debug.recording --debug
-node features/scenes-core/scripts/scaffold_scene.mjs --project templates/template --id debug.recording --debug --apply
+node features/scenes-core/scripts/scaffold_scene.mjs --project ai_studio/feature_testing/consumer --id debug.recording --debug
+node features/scenes-core/scripts/scaffold_scene.mjs --project ai_studio/feature_testing/consumer --id debug.recording --debug --apply
 ```
 
 Debug scene catalog entries and sources compile only when the consumer is

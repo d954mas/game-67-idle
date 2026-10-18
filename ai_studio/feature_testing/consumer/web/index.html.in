@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>@GAME_TITLE@</title>
+<style>
+  /* The portals refuse a page that behaves like a document: no text selection,
+     no callout on a long press, no rubber-band scroll past the edge. A
+     contextmenu handler alone covers Android and misses iOS. */
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #111418;
+    overflow: hidden;
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  canvas {
+    display: block;
+    width: 100vw;
+    /* Mobile browsers size vh as if their toolbar were hidden; dvh is what is
+       actually visible, so the bottom of the game is never under the bar. */
+    height: 100vh;
+    height: 100dvh;
+    outline: none;
+    background: #111418;
+    /* The game owns every gesture on the canvas: a browser pan or pinch-zoom
+       here is a lost drag, not a page scroll. */
+    touch-action: none;
+  }
+
+  #game-loading-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    color: #f4f0e6;
+    background: #111418;
+    font: 15px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    opacity: 1;
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+
+  #game-loading-overlay.is-hidden {
+    opacity: 0;
+  }
+
+  .loading-shell {
+    width: min(360px, calc(100vw - 48px));
+  }
+
+  .loading-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 16px;
+  }
+
+  #loading-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #f4f0e6;
+    font-weight: 650;
+  }
+
+  #loading-percent {
+    min-width: 44px;
+    color: #b7c4cd;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .progress-track {
+    width: 100%;
+    height: 8px;
+    overflow: hidden;
+    background: #27303a;
+  }
+
+  #loading-bar {
+    width: 0%;
+    height: 100%;
+    background: #f2b84b;
+    transition: width 120ms linear;
+  }
+
+  #runtime-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 24px;
+    background: rgba(10, 13, 18, 0.96);
+    color: #f4f0e6;
+    font: 15px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    text-align: center;
+  }
+
+  #runtime-overlay[hidden] {
+    display: none;
+  }
+
+  .runtime-panel {
+    width: min(420px, 100%);
+    box-sizing: border-box;
+    padding: 28px 24px 24px;
+    border: 1px solid #3a444f;
+    background: #1a1f26;
+  }
+
+  .runtime-panel h1 {
+    margin: 0 0 12px;
+    font-size: 24px;
+    line-height: 1.15;
+  }
+
+  .runtime-panel p {
+    margin: 0 0 22px;
+    color: #b7c4cd;
+    font-size: 16px;
+    line-height: 1.45;
+  }
+
+  #runtime-reload {
+    min-width: 144px;
+    min-height: 48px;
+    padding: 10px 24px;
+    border: 0;
+    background: #f2b84b;
+    color: #14181d;
+    cursor: pointer;
+    font: 700 17px/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    touch-action: manipulation;
+  }
+
+  #runtime-reload:focus-visible {
+    outline: 3px solid #f4f0e6;
+    outline-offset: 4px;
+  }
+</style>
+</head>
+<body>
+<!-- Not "loading-overlay": Playgama Bridge gives its own overlay that id, hides
+     the first element with that id at 100% and would leave its own on screen. -->
+<div id="game-loading-overlay" role="status" aria-live="polite">
+  <div class="loading-shell">
+    <div class="loading-row">
+      <div id="loading-label">Loading</div>
+      <div id="loading-percent">0%</div>
+    </div>
+    <div class="progress-track" aria-hidden="true">
+      <div id="loading-bar"></div>
+    </div>
+  </div>
+</div>
+<div id="runtime-overlay" role="status" aria-live="polite"
+  aria-labelledby="runtime-title" aria-describedby="runtime-message" hidden>
+  <div class="runtime-panel">
+    <h1 id="runtime-title"></h1>
+    <p id="runtime-message"></p>
+    <button id="runtime-reload" type="button">Reload</button>
+  </div>
+</div>
+<canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+<script>
+  (function () {
+    var overlay = document.getElementById('game-loading-overlay');
+    var label = document.getElementById('loading-label');
+    var percent = document.getElementById('loading-percent');
+    var bar = document.getElementById('loading-bar');
+    // `progress` is what the player sees; it eases toward `target`, which is
+    // the last measured value. Loading reports arrive in coarse steps, and a
+    // bar that jumps and then freezes reads as a hung game.
+    var progress = 0;
+    var target = 0;
+    var easing = false;
+    // Hosts without a frame clock (headless contract checks) still have to be
+    // able to run the shell: fall back to a timer, then to a direct call.
+    var raf = window.requestAnimationFrame ||
+      (typeof setTimeout === 'function'
+        ? function (callback) { return setTimeout(callback, 16); }
+        : function (callback) { callback(); });
+    var lastWhole = -1;
+    var hidden = false;
+    var runtimeOverlay = document.getElementById('runtime-overlay');
+    var runtimeTitle = document.getElementById('runtime-title');
+    var runtimeMessage = document.getElementById('runtime-message');
+    var runtimeReload = document.getElementById('runtime-reload');
+    var canvas = document.getElementById('canvas');
+    var runtimeState = 'ready';
+
+    function clamp(value) {
+      value = Number(value);
+      if (!Number.isFinite(value)) return 0;
+      if (value < 0) return 0;
+      if (value > 1) return 1;
+      return value;
+    }
+
+    function render() {
+      var whole = Math.floor(progress * 100);
+      if (whole === lastWhole) return;
+      lastWhole = whole;
+      if (bar) bar.style.width = whole + '%';
+      if (percent) percent.textContent = whole + '%';
+      if (label && whole >= 100) label.textContent = 'Finalizing';
+    }
+
+    function ease() {
+      var delta = target - progress;
+      if (delta <= 0.001) {
+        progress = target;
+        easing = false;
+        render();
+        return;
+      }
+      progress += Math.max(delta * 0.16, 0.002);
+      if (progress > target) progress = target;
+      render();
+      raf(ease);
+    }
+
+    window.__platformSdkSetLoadingProgress = function (value) {
+      if (hidden) return;
+      target = Math.max(target, clamp(value));
+      if (easing) return;
+      easing = true;
+      raf(ease);
+    };
+
+    window.__platformSdkHideLoadingOverlay = function () {
+      if (hidden) return;
+      hidden = true;
+      progress = 1;
+      target = 1;
+      render();
+      raf(function () {
+        raf(function () {
+          if (!overlay) return;
+          overlay.classList.add('is-hidden');
+          setTimeout(function () {
+            if (overlay) overlay.style.display = 'none';
+          }, 220);
+        });
+      });
+      focusCanvas();
+    };
+
+    function setRuntimeMessage(title, message) {
+      if (runtimeTitle) runtimeTitle.textContent = title;
+      if (runtimeMessage) runtimeMessage.textContent = message;
+    }
+
+    function setRuntimeSemantics(role, live, modal) {
+      if (!runtimeOverlay) return;
+      runtimeOverlay.setAttribute('role', role);
+      runtimeOverlay.setAttribute('aria-live', live);
+      if (modal) runtimeOverlay.setAttribute('aria-modal', 'true');
+      else runtimeOverlay.removeAttribute('aria-modal');
+    }
+
+    // A lost WebGL context is recoverable, a wasm trap is not, and the two must
+    // never share a state: covering a recovering game with the unrecoverable
+    // panel costs the whole session.
+    function showRuntimeRecovery() {
+      if (runtimeState !== 'ready') return;
+      runtimeState = 'recovering';
+      setRuntimeMessage(
+        'Graphics paused',
+        'The graphics connection was lost. Trying to recover.'
+      );
+      setRuntimeSemantics('status', 'polite', false);
+      if (runtimeOverlay) runtimeOverlay.hidden = false;
+    }
+
+    // Called from the runtime only after a rebuilt frame reached the screen.
+    function clearRuntimeRecovery() {
+      if (runtimeState !== 'recovering') return;
+      runtimeState = 'ready';
+      if (runtimeOverlay) runtimeOverlay.hidden = true;
+    }
+
+    function showRuntimeFatal() {
+      if (runtimeState === 'fatal') return;
+      runtimeState = 'fatal';
+      setRuntimeMessage(
+        'Game stopped',
+        'Something went wrong. Reload to try again.'
+      );
+      setRuntimeSemantics('alertdialog', 'assertive', true);
+      if (runtimeOverlay) runtimeOverlay.hidden = false;
+      if (runtimeReload) runtimeReload.focus({ preventScroll: true });
+    }
+
+    // The page hosts a portal SDK, ad frames and whatever the player's browser
+    // injects, and any of them can throw without the game noticing. Only a
+    // failure the game's own bundle raised may declare the run dead.
+    var GAME_BUNDLE = /\bgame\.(?:js|wasm)\b|wasm:\/\//i;
+
+    function isGameFailure(reason) {
+      // A wasm trap has exactly one possible author on this page. Matched by
+      // class NAME, not instanceof: an error that crossed a realm carries a
+      // different constructor and would slip past identity.
+      var name = reason && typeof reason.name === 'string' ? reason.name : '';
+      if (name === 'RuntimeError' || name === 'CompileError' || name === 'LinkError') return true;
+      var stack = reason && typeof reason.stack === 'string' ? reason.stack : '';
+      return GAME_BUNDLE.test(stack);
+    }
+
+    if (canvas) {
+      // Without preventDefault the browser never offers the context back.
+      canvas.addEventListener('webglcontextlost', function (event) {
+        event.preventDefault();
+        showRuntimeRecovery();
+      });
+    }
+
+    if (runtimeReload) {
+      runtimeReload.addEventListener('click', function () {
+        window.location.reload();
+      });
+    }
+
+    window.addEventListener('error', function (event) {
+      if (event.target && event.target !== window) return;
+      if (!isGameFailure(event.error) && !GAME_BUNDLE.test(event.filename || '')) return;
+      showRuntimeFatal();
+    });
+    window.addEventListener('unhandledrejection', function (event) {
+      if (!isGameFailure(event.reason)) return;
+      showRuntimeFatal();
+    });
+    window.__showRuntimeFatal = showRuntimeFatal;
+    window.__clearRuntimeRecovery = clearRuntimeRecovery;
+
+    // Presentation stays in the game UI; the shell only exposes browser state.
+    function focusCanvas() {
+      var canvas = document.getElementById('canvas');
+      if (canvas) canvas.focus({ preventScroll: true });
+    }
+
+    window.__gameCanvasHasFocus = function () {
+      var canvas = document.getElementById('canvas');
+      return !!canvas && document.hasFocus() && document.activeElement === canvas;
+    };
+
+    window.__gameHasFinePointer = function () {
+      return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    };
+
+    window.__PLATFORM_SDK_CONFIG__ = Object.freeze({
+      target: '@GAME_PUBLISH_TARGET@',
+      platformSdk: '@GAME_PLATFORM_SDK@',
+      release: @GAME_PLATFORM_SDK_RELEASE_JS@,
+      runtimeBuildFingerprint: '@GAME_RUNTIME_BUILD_FINGERPRINT@'
+    });
+    window.__platformSdkSetLoadingProgress(0.01);
+  }());
+
+  // Filled in by the build with the DECOMPRESSED byte sizes. A CDN that
+  // compresses on the fly sends no Content-Length (or the compressed one), while
+  // the stream a page reads is already decompressed, so the header cannot size
+  // the download. Zero means "unknown": fall back to Content-Length.
+  window.__gameAssetBytes = { wasm: 0, pack: 0 };
+
+  var Module = {
+    canvas: document.getElementById('canvas'),
+    @GAME_DEVAPI_MODULE_ARGS@
+    // The wasm download is the longest stretch of a cold start. Emscripten's
+    // own fetch reports nothing, so the bar would sit still for seconds; this
+    // takes the stream over only to count bytes into the shell's first band.
+    instantiateWasm: function (imports, successCallback) {
+      var BAND_START = 0.02;
+      var BAND_END = 0.40;
+
+      function report(received, total) {
+        var ratio = received / total;
+        if (!(ratio > 0)) return;
+        if (ratio > 1) ratio = 1;
+        window.__platformSdkSetLoadingProgress(BAND_START + ratio * (BAND_END - BAND_START));
+      }
+
+      // Counting happens inside the body stream so the response stays
+      // streamable: instantiateStreaming still compiles while bytes arrive.
+      function countBytes(response) {
+        var total = window.__gameAssetBytes.wasm || Number(response.headers.get('content-length')) || 0;
+        if (!total || !response.body || typeof ReadableStream !== 'function') return response;
+        var reader = response.body.getReader();
+        var received = 0;
+        var counted = new ReadableStream({
+          pull: function (controller) {
+            return reader.read().then(function (chunk) {
+              if (chunk.done) { controller.close(); return; }
+              received += chunk.value.byteLength;
+              report(received, total);
+              controller.enqueue(chunk.value);
+            });
+          },
+          cancel: function (reason) { return reader.cancel(reason); }
+        });
+        return new Response(counted, { headers: { 'content-type': 'application/wasm' } });
+      }
+
+      function instantiate(response) {
+        if (typeof WebAssembly.instantiateStreaming === 'function') {
+          return WebAssembly.instantiateStreaming(response, imports);
+        }
+        return response.arrayBuffer().then(function (bytes) {
+          return WebAssembly.instantiate(bytes, imports);
+        });
+      }
+
+      fetch('game.wasm', { credentials: 'same-origin' }).then(function (response) {
+        if (!response.ok) throw new Error('game.wasm http ' + response.status);
+        return instantiate(countBytes(response));
+      }).then(function (result) {
+        window.__platformSdkSetLoadingProgress(BAND_END);
+        successCallback(result.instance, result.module);
+      }).catch(function (error) {
+        console.error(error);
+        window.__showRuntimeFatal();
+      });
+      return {}; // asynchronous instantiation: exports arrive through successCallback
+    },
+    onRuntimeInitialized: function () {
+      window.__platformSdkSetLoadingProgress(0.45);
+    },
+    setStatus: function (text) {
+      var label = document.getElementById('loading-label');
+      if (label && text) label.textContent = text;
+    }
+  };
+</script>
+<script type="module">
+  import './platform-sdk.js';
+  var gameScript = document.createElement('script');
+  gameScript.src = 'game.js';
+  document.body.appendChild(gameScript);
+</script>
+</body>
+</html>

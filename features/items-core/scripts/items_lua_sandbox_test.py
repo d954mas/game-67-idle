@@ -11,7 +11,7 @@ import unittest
 
 SCRIPT = Path(__file__).with_name("items_lua_sandbox.py")
 FIXTURE_ROOT = Path(__file__).parents[1] / "tests" / "fixtures" / "lua_sandbox"
-TEMPLATE_ROOT = Path(__file__).parents[3] / "templates" / "template"
+CONSUMER_ROOT = Path(__file__).parents[3] / "ai_studio" / "feature_testing" / "consumer"
 SPEC = importlib.util.spec_from_file_location("items_lua_sandbox", SCRIPT)
 SANDBOX = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -126,11 +126,11 @@ class ItemsLuaSandboxTests(unittest.TestCase):
             "tracks": [{"id": "hauler"}, {"id": "rank"}],
         })
 
-    def test_template_lua_reproduces_six_catalog_definitions_without_containers(self):
+    def test_consumer_lua_reproduces_six_catalog_definitions_without_containers(self):
         result = subprocess.run(
             [
-                sys.executable, str(SCRIPT), "evaluate", "--root", str(TEMPLATE_ROOT),
-                "--manifest", str(TEMPLATE_ROOT / "items.lua.json"),
+                sys.executable, str(SCRIPT), "evaluate", "--root", str(CONSUMER_ROOT),
+                "--manifest", str(CONSUMER_ROOT / "items.lua.json"),
             ],
             text=True, capture_output=True, encoding="utf-8", timeout=10,
         )

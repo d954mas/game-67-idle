@@ -316,10 +316,10 @@ test("real repository inventory is globally clean after the approved owner dispo
   });
   assert.equal(collected.ok, true, JSON.stringify(collected.issue));
   const result = await auditAssetIntegrity({ root, tracked: collected.entries, inventory });
-  assert.equal(result.summary.externalBoundaries, 1);
-  assert.equal(result.summary.inventoryEntries, 34);
-  assert.equal(result.summary.metadataRecords, 34);
-  assert.equal(result.summary.verified, 34);
+  assert.equal(result.summary.externalBoundaries, inventory.boundaries.length);
+  assert.equal(result.summary.inventoryEntries, inventory.entries.length);
+  assert.equal(result.summary.metadataRecords, inventory.entries.length);
+  assert.equal(result.summary.verified, inventory.entries.length);
   assert.equal(result.ok, true, JSON.stringify(result.issues));
   assert.equal(result.exitCode, 0);
   assert.deepEqual(result.issues, []);
@@ -342,10 +342,10 @@ test("real repository inventory is globally clean after the approved owner dispo
     assert.doesNotMatch(text, /"license_url"\s*:\s*"(?!https?:)/, path);
     assert.match(text, /"license_file"\s*:/, path);
   }
-  const templateCube = (await import("node:fs/promises").then(({ readFile }) => readFile(join(root, "templates/template/assets/packs/template-starter-meshes/assets.jsonl"), "utf8"))).trim();
-  assert.match(templateCube, /b21a81e96/);
-  assert.match(templateCube, /68cfaabcf/);
-  assert.match(templateCube, /f8be370c2/);
-  const template = await auditAssetIntegrity({ root, tracked: collected.entries, inventory, scope: "templates/template/assets" });
-  assert.equal(template.ok, true, JSON.stringify(template.issues));
+  const consumerCube = (await import("node:fs/promises").then(({ readFile }) => readFile(join(root, "ai_studio/feature_testing/consumer/assets/packs/template-starter-meshes/assets.jsonl"), "utf8"))).trim();
+  assert.match(consumerCube, /b21a81e96/);
+  assert.match(consumerCube, /68cfaabcf/);
+  assert.match(consumerCube, /f8be370c2/);
+  const consumer = await auditAssetIntegrity({ root, tracked: collected.entries, inventory, scope: "ai_studio/feature_testing/consumer/assets" });
+  assert.equal(consumer.ok, true, JSON.stringify(consumer.issues));
 });

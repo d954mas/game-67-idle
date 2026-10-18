@@ -34,5 +34,5 @@
     "upstream": "features/box3d/UPSTREAM.json"
   },
   "art_needs": [],
-  "default_template": false
+  "test_consumer": false
 }

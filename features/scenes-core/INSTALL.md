@@ -47,7 +47,7 @@ Exact order and UI gating are defined in
 Validate with:
 
 ```powershell
-ctest --test-dir templates/template/build/devapi-debug -R "^test_scenes_core_" --output-on-failure
+ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R "^test_scenes_core_" --output-on-failure
 node --test features/scenes-core/tests/test_scaffold_scene.mjs
 node --test features/scenes-core/tests/test_scene_devapi_schema.mjs
 node --test features/scenes-core/tests/test_consumer_scene_contracts.mjs

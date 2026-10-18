@@ -1,6 +1,6 @@
 ---
 name: nt-primary-gdd
-description: Use when starting or revising a game concept, first GDD, visual GDD, fake gameplay shot, gameplay loop, design pillars, reference pack, implementation handoff, or design-source cleanup for a specific game. Also use when converting loose ideas into scoped first playable requirements, gameplay data, UI flow, risks, and next implementation steps.
+description: "Create or revise a game's concept, GDD, gameplay loop, reference pack, or scoped first-playable handoff."
 ---
 
 # NT Primary GDD

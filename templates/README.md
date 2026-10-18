@@ -2,6 +2,13 @@
 
 Reusable game starting points live here as `templates/<template-id>/`.
 
+- `template`: the default blank foundation; no gameplay, HUD, or sample world.
+
+Shared features are tested separately in `ai_studio/feature_testing/`. They do
+not add test fixtures, sample content, or dependencies to the starter.
+
+The architecture and acceptance contract is [TEMPLATE.md](TEMPLATE.md).
+
 There can be multiple templates. Give each usable template a `template.json` so
 AI Studio surfaces and `games/new_game.mjs --template <template-id>` can find it
 by scanning `templates/<template-id>`.

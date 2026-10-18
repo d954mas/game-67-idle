@@ -163,16 +163,28 @@ function* transcriptLines(file) {
   }
 }
 
+export function readCodexSessionCwd(file) {
+  try {
+    for (const [, text] of transcriptLines(file)) {
+      const meta = JSON.parse(text);
+      return meta.type === "session_meta" ? String(meta.payload?.cwd || "") : "";
+    }
+  } catch { return ""; }
+  return "";
+}
+
 export function parseCodexTranscript(file) {
   if (!file || !existsSync(file)) {
     return {
-      records: [], errors: [], exists: false, sourceKind: "codex-transcript",
+      records: [], turns: [], errors: [], exists: false, sourceKind: "codex-transcript",
       tokenTelemetry: { available: false, measured_records: 0 },
       durationTelemetry: { available: false, start_records: 0, result_records: 0, measured_records: 0 },
     };
   }
 
   const records = [];
+  const turns = [];
+  let turnStart = 0, turnTools = 0, lastActivity = 0;
   const errors = [];
   const pending = new Map();
   const runningCells = new Map();
@@ -188,6 +200,20 @@ export function parseCodexTranscript(file) {
       continue;
     }
     const payload = line.payload || {};
+    if (line.type === "response_item") {
+      const ts = line.timestamp ? Date.parse(line.timestamp) : 0;
+      if (payload.type === "message" && payload.role === "user") {
+        if (turnStart && lastActivity > turnStart) turns.push({ ms: lastActivity - turnStart, tools: turnTools });
+        turnStart = ts;
+        turnTools = 0;
+        lastActivity = ts;
+      } else if (payload.type === "custom_tool_call" || payload.type === "function_call") {
+        turnTools += 1;
+        lastActivity = ts || lastActivity;
+      } else if (payload.type === "custom_tool_call_output" || payload.type === "function_call_output") {
+        lastActivity = ts || lastActivity;
+      }
+    }
     if (line.type === "session_meta") {
       sessionId = String(payload.id || sessionId);
       records.push({
@@ -278,12 +304,14 @@ export function parseCodexTranscript(file) {
     records.push(record);
   }
 
+  if (turnStart && lastActivity > turnStart) turns.push({ ms: lastActivity - turnStart, tools: turnTools });
   const resultRecords = records.filter((record) => record.event_type === "tool_call_result").length;
   const measuredRecords = records.filter((record) => record.event_type === "tool_call_result"
     && Number.isFinite(Number(record.duration_ms))).length;
 
   return {
     records,
+    turns,
     errors,
     exists: true,
     sourceKind: "codex-transcript",

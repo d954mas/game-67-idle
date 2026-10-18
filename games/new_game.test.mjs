@@ -5,9 +5,12 @@ import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { main, parseArgs, resolveVisibility, usageText, validateRequestedIdentity } from "./new_game.mjs";
 import { rollbackPrivateCanvasStoreTransfer } from "./new_game_canvas.mjs";
+
+const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 function write(root, rel, text) {
   const path = join(root, rel);
@@ -94,15 +97,39 @@ function buildFixtureRepo() {
   return root;
 }
 
+function buildBlankBindingFixtureRepo() {
+  const root = buildFixtureRepo();
+  const source = join(repositoryRoot, "templates", "template");
+  const template = "templates/template";
+  for (const rel of ["CMakeLists.txt", "cmake/GameOptions.cmake", "cmake/GameTests.cmake", "src/main.c"]) {
+    write(root, `${template}/${rel}`, readFileSync(join(source, rel), "utf8"));
+  }
+  write(root, `${template}/template.json`, readFileSync(join(source, "template.json"), "utf8"));
+  rmSync(join(root, template, "cmake", "GamePlatform.cmake"), { force: true });
+  execFileSync("git", ["add", "templates/template"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "blank template bindings"], { cwd: root, stdio: "ignore" });
+  return root;
+}
+
 let fixtureRepo;
+let blankBindingFixtureRepo;
 after(() => {
   if (fixtureRepo) rmSync(fixtureRepo, { recursive: true, force: true });
+  if (blankBindingFixtureRepo) rmSync(blankBindingFixtureRepo, { recursive: true, force: true });
 });
 
 function tempRepo(t) {
   fixtureRepo ||= buildFixtureRepo();
   const root = mkdtempSync(join(tmpdir(), "new-game-"));
   cpSync(fixtureRepo, root, { recursive: true });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  return root;
+}
+
+function tempBlankBindingRepo(t) {
+  blankBindingFixtureRepo ||= buildBlankBindingFixtureRepo();
+  const root = mkdtempSync(join(tmpdir(), "new-game-blank-bindings-"));
+  cpSync(blankBindingFixtureRepo, root, { recursive: true });
   t.after(() => rmSync(root, { recursive: true, force: true }));
   return root;
 }
@@ -180,6 +207,31 @@ test("private derivative copies tracked source bytes with fresh identity and iso
   assert.match(readFileSync(join(game, "cmake/GameOptions.cmake"), "utf8"), /GAME_TITLE "Derivative Title"/);
   assert.match(readCanvasLink(game).ref, /^canvas:\/\/game\/derivative-game\//);
   assert.equal(execFileSync("git", ["rev-list", "--all", "--count"], { cwd: game, encoding: "utf8" }).trim(), "0");
+});
+
+test("blank template binds title and autosave namespace without legacy platform glue", (t) => {
+  const root = tempBlankBindingRepo(t);
+  create(root, "blank-source", "private", ["--title", "Blank Source", "--storage-namespace", "blank-source-save"]);
+  const source = join(root, "games/private/blank-source");
+  const sourceOptions = readFileSync(join(source, "cmake/GameOptions.cmake"), "utf8");
+  assert.match(sourceOptions, /GAME_TITLE "Blank Source"/);
+  assert.match(sourceOptions, /GAME_STORAGE_APP_ID="blank-source-save"/);
+  assert.doesNotMatch(sourceOptions, /GAME_STORAGE_APP_ID="template"/);
+  assert.equal(existsSync(join(source, "cmake/GamePlatform.cmake")), false);
+  const sourceMain = readFileSync(join(source, "src/main.c"), "utf8");
+  assert.match(sourceMain, /\.app_name = GAME_APP_NAME/);
+  assert.match(sourceMain, /g_nt_window\.title = GAME_WINDOW_TITLE/);
+
+  execFileSync("git", ["add", "."], { cwd: source });
+  execFileSync("git", ["commit", "-m", "blank source"], { cwd: source, stdio: "ignore" });
+  create(root, "blank-derived", "private", [
+    "--title", "Blank Derived", "--storage-namespace", "blank-derived-save",
+    "--from", "games/private/blank-source",
+  ]);
+  const derivedOptions = readFileSync(join(root, "games/private/blank-derived/cmake/GameOptions.cmake"), "utf8");
+  assert.match(derivedOptions, /GAME_TITLE "Blank Derived"/);
+  assert.match(derivedOptions, /GAME_STORAGE_APP_ID="blank-derived-save"/);
+  assert.doesNotMatch(derivedOptions, /GAME_STORAGE_APP_ID="blank-source-save"/);
 });
 
 test("private derivative rejects incompatible locks and replacing its own source", (t) => {

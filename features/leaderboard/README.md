@@ -172,7 +172,7 @@ require the portal draft runs described in `SPEC.md`.
 
 ## Commands
 
-- `ctest --test-dir templates/template/build/native-debug -R leaderboard --output-on-failure`
+- `ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R leaderboard --output-on-failure`
 - `node --test features/leaderboard/tests/leaderboards.test.mjs` — the manifest validator and generator
 
 ## Compatibility

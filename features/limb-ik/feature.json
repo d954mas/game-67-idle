@@ -1,0 +1,39 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "limb-ik",
+  "version": "0.1.0",
+  "title": "Limb IK",
+  "status": "opt-in",
+  "kind": "gameplay-foundation",
+  "summary": "Header-only planar two-link inverse kinematics with finite-input validation, bounded reach, and caller-owned output.",
+  "copy_model": "in-place",
+  "layer": "L1",
+  "owners": [
+    "features/limb-ik"
+  ],
+  "dependencies": [
+    "C99 math functions and finite floating-point values"
+  ],
+  "commands": {
+    "configure": "cmake -S features/limb-ik -B build/limb-ik",
+    "test_core": "ctest --test-dir build/limb-ik -C Debug -L core --output-on-failure"
+  },
+  "provides": [
+    "limb_ik_point_t and limb_ik_solution_t planar value types",
+    "limb_ik_solve_2link bounded two-link solve"
+  ],
+  "flags": {
+    "feature": "FEATURE_LIMB_IK=1 in consuming game or template targets"
+  },
+  "manuals": {
+    "install": "features/limb-ik/INSTALL.md"
+  },
+  "registers": {
+    "include_dirs": [
+      "${LIMB_IK_INC}"
+    ],
+    "ctest_targets": [
+      "test_limb_ik"
+    ]
+  }
+}

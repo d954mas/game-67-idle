@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 from io import StringIO
 import json
 import tempfile
@@ -18,6 +19,22 @@ from ai_studio.runtime_automation.capture_game import (
     default_output_root,
     resolve_studio_root,
 )
+from ai_studio.runtime_automation.native_capture_preflight import (
+    canonical_native_executable,
+    executable_identity,
+)
+
+
+def capture_executable_relative() -> str:
+    return str(Path("build") / "devapi-debug" / "bin" / ("game.exe" if os.name == "nt" else "game"))
+
+
+def native_build_record(executable: Path) -> dict:
+    return {
+        "proofKind": "native-rebuilt",
+        "sourceFingerprint": "a" * 64,
+        "executable": executable_identity(executable),
+    }
 
 
 class CaptureGameCliTest(unittest.TestCase):
@@ -33,56 +50,74 @@ class CaptureGameCliTest(unittest.TestCase):
     def test_resolves_the_standard_debug_executable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            executable = root / "build" / "devapi-debug" / "bin" / "game.exe"
-            executable.parent.mkdir(parents=True)
-            executable.touch()
+            executable = canonical_native_executable(root)
 
             self.assertEqual(resolve_game_executable(root), executable.resolve())
 
-    def test_executable_override_resolves_relative_and_absolute_paths(self) -> None:
+    def test_executable_override_accepts_only_the_canonical_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            relative = root / "frozen" / "game.exe"
-            absolute = root / "outside" / "game.exe"
-            relative.parent.mkdir(parents=True)
-            absolute.parent.mkdir(parents=True)
-            relative.touch()
-            absolute.touch()
+            executable = canonical_native_executable(root)
 
             self.assertEqual(
-                resolve_game_executable(root, override=Path("frozen/game.exe")),
-                relative.resolve(),
+                resolve_game_executable(root, override=executable.relative_to(root)),
+                executable.resolve(),
             )
             self.assertEqual(
-                resolve_game_executable(root, override=absolute),
-                absolute.resolve(),
+                resolve_game_executable(root, override=executable),
+                executable.resolve(),
             )
+            with self.assertRaisesRegex(RuntimeError, "canonical DevAPI artifact"):
+                resolve_game_executable(root, override=Path("frozen/game.exe"))
 
     def test_missing_executable_override_fails_before_launch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            executable = root / "out" / "game.exe"
+            executable = canonical_native_executable(root)
             executable.parent.mkdir(parents=True)
             executable.touch()
             (root / "capture").mkdir()
             (root / "capture" / "catalog.json").write_text(json.dumps({
-                "version": 1, "executable": "out/game.exe",
+                "version": 1, "executable": capture_executable_relative(),
                 "defaults": {"size": "1280x720", "fps": 30},
                 "live": {"seconds": 1}, "shots": {},
             }), encoding="utf-8")
 
             with patch("ai_studio.runtime_automation.capture_game.running_game") as launch:
-                with self.assertRaisesRegex(RuntimeError, "capture executable is missing"):
+                with self.assertRaisesRegex(RuntimeError, "canonical DevAPI artifact"):
                     run(parse_args([str(root), "live", "--executable", "missing/game.exe"]))
 
             launch.assert_not_called()
 
-    def test_missing_executable_reports_the_build_path(self) -> None:
+    def test_preflight_build_failure_prevents_launch_and_recorder(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "capture").mkdir()
+            (root / "capture" / "catalog.json").write_text(json.dumps({
+                "version": 1,
+                "executable": capture_executable_relative(),
+                "defaults": {"size": "1280x720", "fps": 30},
+                "live": {"seconds": 1},
+                "shots": {},
+            }), encoding="utf-8")
+            with patch(
+                "ai_studio.runtime_automation.capture_game.prepare_native_capture",
+                side_effect=RuntimeError("native build failed"),
+            ), patch("ai_studio.runtime_automation.capture_game.running_game") as launch, patch(
+                "ai_studio.runtime_automation.capture_game.record_take"
+            ) as recorder:
+                with self.assertRaisesRegex(RuntimeError, "native build failed"):
+                    run(parse_args([str(root), "live"]))
+
+            launch.assert_not_called()
+            recorder.assert_not_called()
+
+    def test_noncanonical_catalog_executable_reports_the_build_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
 
             with self.assertRaisesRegex(RuntimeError, r"build[\\/]devapi-debug"):
-                resolve_game_executable(root)
+                resolve_game_executable(root, "out/game.exe")
 
     def test_parses_a_deterministic_shot_command(self) -> None:
         args = parse_args(["games/private/example", "shot", "intro"])
@@ -99,7 +134,7 @@ class CaptureGameCliTest(unittest.TestCase):
                 json.dumps(
                     {
                         "version": 1,
-                        "executable": "build/devapi-debug/bin/game.exe",
+                        "executable": capture_executable_relative(),
                         "defaults": {"size": "1920x1080", "fps": 30, "ticks_per_frame": 2},
                         "live": {"seconds": 60},
                         "shots": {
@@ -125,7 +160,7 @@ class CaptureGameCliTest(unittest.TestCase):
     def test_run_uses_catalog_settings_and_a_driver_for_shots(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            executable = root / "out" / "game.exe"
+            executable = canonical_native_executable(root)
             executable.parent.mkdir(parents=True)
             executable.touch()
             capture = root / "capture"
@@ -134,7 +169,7 @@ class CaptureGameCliTest(unittest.TestCase):
                 json.dumps(
                     {
                         "version": 1,
-                        "executable": "out/game.exe",
+                        "executable": capture_executable_relative(),
                         "defaults": {
                             "preset": "landscape",
                             "size": "1280x720",
@@ -176,12 +211,18 @@ class CaptureGameCliTest(unittest.TestCase):
             ), patch(
                 "ai_studio.runtime_automation.capture_game.record_take",
                 fake_record_take,
+            ), patch(
+                "ai_studio.runtime_automation.capture_game.prepare_native_capture",
+                return_value=native_build_record(executable),
+            ), patch(
+                "ai_studio.runtime_automation.capture_game.validate_native_capture_final",
             ):
                 result = run(parse_args([str(root), "shot", "intro"]))
 
         self.assertEqual(result["edit"].name, "edit.mp4")
         self.assertEqual(result["effectiveExecutable"]["path"], str(executable.resolve()))
         self.assertIn("sha256", result["effectiveExecutable"])
+        self.assertEqual(result["nativeBuild"]["sourceFingerprint"], "a" * 64)
         self.assertEqual(launch["exe"], str(executable.resolve()))
         self.assertEqual(launch["window_size"], "1080x1920")
         self.assertEqual(recorded["duration_seconds"], 0.1)
@@ -418,7 +459,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
             (root / "ai_studio" / "runtime_automation" / "capture_game.py").touch()
             self.assertEqual(resolve_studio_root(root / "templates" / "template"), root)
             self.assertEqual(resolve_studio_root(root / "games" / "private" / "example-game"), root)
-            wrapper = (Path(__file__).parents[2] / "templates" / "template" / "capture.cmd").read_text(encoding="ascii")
+            wrapper = (Path(__file__).parents[2] / "ai_studio" / "feature_testing" / "consumer" / "capture.cmd").read_text(encoding="ascii")
             self.assertIn(":find_studio", wrapper)
             self.assertIn("ai_studio\\dev_environment\\python_run.mjs", wrapper)
             self.assertNotIn("py -3.12", wrapper)
@@ -426,13 +467,13 @@ class CaptureGameAdoptionTest(unittest.TestCase):
     def test_live_uses_saved_state_autosave_and_fifteen_second_default(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            executable = root / "out" / "game.exe"
+            executable = canonical_native_executable(root)
             executable.parent.mkdir(parents=True)
             executable.touch()
             capture = root / "capture"
             capture.mkdir()
             (capture / "catalog.json").write_text(
-                json.dumps({"version": 1, "executable": "out/game.exe", "defaults": {"size": "1280x720", "fps": 30}, "live": {"seconds": 15}, "shots": {}}),
+                json.dumps({"version": 1, "executable": capture_executable_relative(), "defaults": {"size": "1280x720", "fps": 30}, "live": {"seconds": 15}, "shots": {}}),
                 encoding="utf-8",
             )
             game = FakeGame()
@@ -458,6 +499,11 @@ class CaptureGameAdoptionTest(unittest.TestCase):
 
             with patch("ai_studio.runtime_automation.capture_game.running_game", fake_running_game), patch(
                 "ai_studio.runtime_automation.capture_game.record_take", fake_record_take
+            ), patch(
+                "ai_studio.runtime_automation.capture_game.prepare_native_capture",
+                return_value=native_build_record(executable),
+            ), patch(
+                "ai_studio.runtime_automation.capture_game.validate_native_capture_final",
             ):
                 output = StringIO()
                 with redirect_stdout(output):
@@ -475,12 +521,12 @@ class CaptureGameAdoptionTest(unittest.TestCase):
     def test_catalog_launch_options_override_template_flags(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            executable = root / "bin" / "plw_client.exe"
-            executable.parent.mkdir()
+            executable = canonical_native_executable(root)
+            executable.parent.mkdir(parents=True)
             executable.touch()
             (root / "capture").mkdir()
             (root / "capture" / "catalog.json").write_text(json.dumps({
-                "version": 1, "executable": "bin/plw_client.exe",
+                "version": 1, "executable": capture_executable_relative(),
                 "launch": {"fresh_state": True, "autosave_enabled": False, "args": ["--solo"]},
                 "defaults": {"size": "1280x720", "fps": 30},
                 "live": {"seconds": 1}, "shots": {},
@@ -503,6 +549,11 @@ class CaptureGameAdoptionTest(unittest.TestCase):
             with patch("ai_studio.runtime_automation.capture_game.running_game", fake_running_game), patch(
                 "ai_studio.runtime_automation.capture_game.record_take",
                 return_value={"edit": root / "edit.mp4", "master": root / "master.mkv"},
+            ), patch(
+                "ai_studio.runtime_automation.capture_game.prepare_native_capture",
+                return_value=native_build_record(executable),
+            ), patch(
+                "ai_studio.runtime_automation.capture_game.validate_native_capture_final",
             ):
                 run(parse_args([str(root), "live"]))
 
@@ -516,12 +567,12 @@ class CaptureGameAdoptionTest(unittest.TestCase):
     def test_shot_can_keep_vsync_for_a_heavy_capture(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            executable = root / "bin" / "plw_client.exe"
-            executable.parent.mkdir()
+            executable = canonical_native_executable(root)
+            executable.parent.mkdir(parents=True)
             executable.touch()
             (root / "capture").mkdir()
             (root / "capture" / "catalog.json").write_text(json.dumps({
-                "version": 1, "executable": "bin/plw_client.exe",
+                "version": 1, "executable": capture_executable_relative(),
                 "defaults": {"size": "1280x720", "fps": 30},
                 "shots": {"crowd": {"seconds": 1, "no_vsync": False}},
             }), encoding="utf-8")
@@ -543,6 +594,11 @@ class CaptureGameAdoptionTest(unittest.TestCase):
             with patch("ai_studio.runtime_automation.capture_game.running_game", fake_running_game), patch(
                 "ai_studio.runtime_automation.capture_game.record_take",
                 return_value={"edit": root / "edit.mp4", "master": root / "master.mkv"},
+            ), patch(
+                "ai_studio.runtime_automation.capture_game.prepare_native_capture",
+                return_value=native_build_record(executable),
+            ), patch(
+                "ai_studio.runtime_automation.capture_game.validate_native_capture_final",
             ):
                 run(parse_args([str(root), "shot", "crowd"]))
 

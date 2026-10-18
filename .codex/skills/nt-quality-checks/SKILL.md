@@ -1,6 +1,6 @@
 ---
 name: nt-quality-checks
-description: "Use this skill when selecting, running, reviewing, logging, profiling, or explaining AI Studio quality checks in this repository. Triggers include explicit user requests for quality checks, QCLR, QART, QASSET, QGDD, QDES, or QTECH rules, and agent self-checks after substantial work that changed player-facing output, assets, GDD/design docs, gameplay/design logic, technical behavior, or quality-rule files."
+description: "Select and record Studio quality checks for changed game output, assets, design, runtime behavior, or quality rules; also use for explicit Q-check requests."
 ---
 
 # NT Quality Checks

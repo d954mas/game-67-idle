@@ -1,6 +1,6 @@
 ---
 name: nt-game-items
-description: "Use for the items catalog CLI, ownership API, reason tags, quarantine/reconcile, or items state and migrations."
+description: "Maintain item catalogs, ownership operations, reason tags, reconciliation, and item-state migrations."
 ---
 
 # NT Game Items

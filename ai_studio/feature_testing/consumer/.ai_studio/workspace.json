@@ -1,0 +1,10 @@
+{
+  "schema": "ai_studio.game.workspace.v1",
+  "gameId": "feature-test-consumer",
+  "visibility": "template",
+  "stores": {
+    "taskboard": ".ai_studio/taskboard/items",
+    "evidence": ".ai_studio/evidence",
+    "assets": "assets"
+  }
+}

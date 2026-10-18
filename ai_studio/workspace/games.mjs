@@ -1,13 +1,23 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { TextDecoder } from "node:util";
 
 import { BINARY_EXTENSIONS } from "../assets/manifests/integrity.mjs";
+import { canvasPrivateGameProjectsRoots } from "../assets/canvas/config.mjs";
 import { listWorkspaceMounts } from "./catalog.mjs";
+import {
+  assertGitRelativePath,
+  batchInput,
+  parseBatchBodies,
+  parseBatchCheck,
+  parseIndexEntries,
+  parseUntrackedGitPath,
+  splitBatchOids,
+} from "./git_index_blobs.mjs";
 
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
 
@@ -20,9 +30,15 @@ function comparable(value) {
   return process.platform === "win32" ? text.toLowerCase() : text;
 }
 
+function pathIsInside(parent, child) {
+  const childPath = relative(resolve(parent), resolve(child));
+  return childPath !== ".." && !childPath.startsWith(`..${sep}`) && !isAbsolute(childPath);
+}
+
 export const SHARED_BINARIES_MANIFEST = "ai_studio/workspace/shared_private_binaries.json";
 const SHARED_BINARIES_SCHEMA = "ai_studio.workspace.shared_private_binaries.v1";
 const WAIVER_FIELDS = ["path", "game_id", "private_path", "sha256", "reason", "approved_by", "approved_on"];
+const CANVAS_PROJECTS_RELATIVE_ROOT = ".ai_studio/canvas/projects";
 
 function waiverKey(path, gameId, privatePath, digest) {
   return [slash(path), gameId, slash(privatePath), String(digest || "").toLowerCase()].join("\0");
@@ -218,7 +234,7 @@ export function auditPrivateGamePreflight(mounts, state = {}) {
 // whatever cwd says, so a studio commit would read the studio's index while
 // asking about a private game and report every waiver as stale.
 const GIT_CONTEXT_ENV = ["GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE",
-                         "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_PREFIX"];
+                         "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_PREFIX", "GIT_NO_REPLACE_OBJECTS"];
 
 function gitEnv() {
   const env = { ...process.env };
@@ -226,11 +242,12 @@ function gitEnv() {
   return env;
 }
 
-function git(root, args, spawnGit = spawnSync, encoding = "utf8") {
+function git(root, args, spawnGit = spawnSync, encoding = "utf8", input) {
   const cwd = resolve(root);
-  return spawnGit("git", ["-c", `safe.directory=${slash(cwd)}`, ...args], {
+  return spawnGit("git", ["--no-replace-objects", "-c", `safe.directory=${slash(cwd)}`, ...args], {
     cwd,
     encoding,
+    input,
     env: gitEnv(),
     shell: false,
     maxBuffer: 64 * 1024 * 1024,
@@ -357,12 +374,157 @@ function indexBinaryView(root, path, spawnGit) {
   return { view: { path, source: "index", digest: sha256(bytes) }, error: null };
 }
 
-function worktreeBinaryView(root, path) {
-  const absolute = join(root, path);
-  if (!existsSync(absolute)) return { view: null, error: null };
+function indexBinaryViews(root, entries, spawnGit) {
+  const entryByOid = new Map();
+  for (const entry of entries) {
+    const rows = entryByOid.get(entry.oid) || [];
+    rows.push(entry);
+    entryByOid.set(entry.oid, rows);
+  }
+  const oids = [...entryByOid.keys()];
+  if (!oids.length) return { views: [], error: null };
+  const check = git(root, ["cat-file", "--batch-check"], spawnGit, null, batchInput(oids));
+  const checkError = commandError(check, "git cat-file --batch-check");
+  if (checkError) return { views: [], error: checkError };
+  let metadata;
   try {
+    metadata = parseBatchCheck(check.stdout, oids);
+  } catch (error) {
+    return { views: [], error: `invalid index blob metadata (${error.message})` };
+  }
+  const views = [];
+  let batches;
+  try {
+    batches = splitBatchOids(oids, metadata);
+  } catch (error) {
+    return { views: [], error: `invalid index blob batch (${error.message})` };
+  }
+  for (const batch of batches) {
+    const result = git(root, ["cat-file", "--batch"], spawnGit, null, batchInput(batch));
+    const batchError = commandError(result, "git cat-file --batch");
+    if (batchError) return { views: [], error: batchError };
+    let blobs;
+    try {
+      blobs = parseBatchBodies(result.stdout, batch, metadata);
+    } catch (error) {
+      return { views: [], error: `invalid index blob content (${error.message})` };
+    }
+    for (const oid of batch) {
+      const bytes = blobs.get(oid);
+      const rows = entryByOid.get(oid) || [];
+      let digest = null;
+      for (const entry of rows) {
+        if (!isBinaryView(entry.path, bytes)) continue;
+        digest ||= sha256(bytes);
+        views.push({ path: entry.path, source: "index", digest });
+      }
+    }
+  }
+  return { views, error: null };
+}
+
+function canvasLogicalProjectsRoot(gameRoot) {
+  return join(gameRoot, ...CANVAS_PROJECTS_RELATIVE_ROOT.split("/"));
+}
+
+function validateCanvasLogicalMount(gameRoot, registeredRoot) {
+  const logicalRoot = canvasLogicalProjectsRoot(gameRoot);
+  if (!existsSync(logicalRoot)) return null;
+  try {
+    const entry = lstatSync(logicalRoot);
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) return "private Canvas projects mount is not a directory";
+    const physicalRoot = realpathSync(logicalRoot);
+    if (!registeredRoot && !pathIsInside(realpathSync(gameRoot), physicalRoot)) {
+      return "private Canvas projects mount resolves outside the game root without registration";
+    }
+    if (registeredRoot && comparable(physicalRoot) !== comparable(realpathSync(registeredRoot))) {
+      return "private Canvas projects mount does not match its registered root";
+    }
+    return null;
+  } catch {
+    return "private Canvas projects mount cannot be resolved";
+  }
+}
+
+function privateCanvasBinaryViews(mount, registeredRoot) {
+  try {
+    const rootEntry = lstatSync(registeredRoot);
+    if (!rootEntry.isDirectory() || rootEntry.isSymbolicLink()) {
+      return { views: [], error: "registered private Canvas projects root is not a physical directory" };
+    }
+    const physicalRoot = realpathSync(registeredRoot);
+    const views = [];
+    const visit = (directory, relativePath = "") => {
+      const physicalDirectory = realpathSync(directory);
+      if (!pathIsInside(physicalRoot, physicalDirectory)) {
+        throw new Error("registered private Canvas projects root contains a reparse escape");
+      }
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const childRelative = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+        assertGitRelativePath(childRelative);
+        const child = join(directory, entry.name);
+        const stat = lstatSync(child);
+        if (stat.isSymbolicLink()) {
+          throw new Error("registered private Canvas projects root contains a symlink or reparse point");
+        }
+        if (stat.isDirectory()) {
+          visit(child, childRelative);
+          continue;
+        }
+        if (!stat.isFile()) {
+          throw new Error("registered private Canvas projects root contains an unsupported entry");
+        }
+        const physical = realpathSync(child);
+        if (!pathIsInside(physicalRoot, physical)) {
+          throw new Error("registered private Canvas file resolves outside its root");
+        }
+        if (lstatSync(child).isSymbolicLink()) {
+          throw new Error("registered private Canvas file changed to a symlink or reparse point");
+        }
+        const bytes = readFileSync(child);
+        const logicalPath = `${CANVAS_PROJECTS_RELATIVE_ROOT}/${slash(childRelative)}`;
+        if (isBinaryView(logicalPath, bytes)) {
+          views.push({ path: logicalPath, source: "canvas", digest: sha256(bytes), gameId: mount.gameId });
+        }
+      }
+    };
+    visit(registeredRoot);
+    return { views, error: null };
+  } catch (error) {
+    return { views: [], error: error.message || "registered private Canvas projects root cannot be scanned" };
+  }
+}
+
+function worktreeBinaryView(root, path, { indexedSymlink = false } = {}) {
+  try {
+    const rootEntry = lstatSync(root);
+    if (rootEntry.isSymbolicLink()) return { view: null, error: "private game root is a symlink or reparse point" };
+    const absolute = resolve(root, assertGitRelativePath(path));
+    const logical = relative(root, absolute);
+    if (!logical || logical === ".." || logical.startsWith(`..${sep}`)) {
+      return { view: null, error: "private worktree path escapes the game root" };
+    }
+    let entry;
+    try {
+      entry = lstatSync(absolute);
+    } catch (error) {
+      if (error.code === "ENOENT") return { view: null, error: null };
+      throw error;
+    }
+    if (entry.isSymbolicLink()) {
+      return indexedSymlink
+        ? { view: null, error: null }
+        : { view: null, error: "private worktree path is a symlink or reparse point" };
+    }
     // A nested repository lists as a directory; it holds no bytes to compare.
-    if (!statSync(absolute).isFile()) return { view: null, error: null };
+    if (!entry.isFile()) return { view: null, error: null };
+    const physicalRoot = realpathSync(root);
+    const physical = realpathSync(absolute);
+    const physicalRelative = relative(physicalRoot, physical);
+    if (!physicalRelative || physicalRelative === ".." || physicalRelative.startsWith(`..${sep}`)) {
+      return { view: null, error: "private worktree file resolves outside the game root" };
+    }
+    if (lstatSync(absolute).isSymbolicLink()) return { view: null, error: "private worktree path changed to a symlink or reparse point" };
     const bytes = readFileSync(absolute);
     if (!isBinaryView(path, bytes)) return { view: null, error: null };
     return { view: { path, source: "worktree", digest: sha256(bytes) }, error: null };
@@ -407,9 +569,11 @@ function parentBinaryViews(root, spawnGit) {
   return { views, errors };
 }
 
-function privateBinaryViews(root, mount, spawnGit) {
+function privateBinaryViews(root, mount, spawnGit, registeredCanvasRoot = null) {
   const confined = confinedMountRoot(root, mount.gitRoot);
   if (confined.error) return { views: [], errors: [{ path: mount.gitRoot, reason: confined.error }] };
+  const mountError = validateCanvasLogicalMount(confined.root, registeredCanvasRoot);
+  if (mountError) return { views: [], errors: [{ path: mount.gitRoot, reason: mountError }] };
   const pathspec = [
     "--", ".",
     ":(exclude).mypy_cache/**",
@@ -420,13 +584,14 @@ function privateBinaryViews(root, mount, spawnGit) {
     ":(exclude)release/artifacts/**",
     ":(exclude)tmp/**",
   ];
+  if (registeredCanvasRoot) pathspec.push(`:(exclude)${CANVAS_PROJECTS_RELATIVE_ROOT}/**`);
   const selections = [
-    { args: ["ls-files", "-z", "--cached", ...pathspec], tracked: true },
+    { args: ["ls-files", "--stage", "-z", "--cached", ...pathspec], tracked: true },
     { args: ["ls-files", "-z", "--others", "--exclude-standard", ...pathspec], tracked: false },
     { args: ["ls-files", "-z", "--others", "--ignored", "--exclude-standard", ...pathspec], tracked: false },
   ];
   const paths = new Set();
-  const trackedPaths = new Set();
+  const indexedSymlinkPaths = new Set();
   const views = [];
   const errors = [];
   for (const selection of selections) {
@@ -436,34 +601,93 @@ function privateBinaryViews(root, mount, spawnGit) {
       errors.push({ path: mount.gitRoot, reason: setupError });
       continue;
     }
-    for (const path of nulPaths(result.stdout)) {
+    let selectedPaths;
+    if (selection.tracked) {
+      try {
+        const entries = parseIndexEntries(result.stdout);
+        const index = indexBinaryViews(confined.root, entries, spawnGit);
+        if (index.error) {
+          errors.push({ path: mount.gitRoot, reason: index.error });
+          continue;
+        }
+        selectedPaths = entries.map((entry) => entry.path);
+        for (const entry of entries) {
+          if (entry.mode === "120000") indexedSymlinkPaths.add(entry.path);
+        }
+        views.push(...index.views.map((view) => ({ ...view, gameId: mount.gameId })));
+      } catch (error) {
+        errors.push({ path: mount.gitRoot, reason: `invalid index entries (${error.message})` });
+        continue;
+      }
+    } else {
+      try {
+        selectedPaths = nulPaths(result.stdout).map(parseUntrackedGitPath);
+      } catch (error) {
+        errors.push({ path: mount.gitRoot, reason: `invalid untracked path (${error.message})` });
+        continue;
+      }
+    }
+    for (const path of selectedPaths) {
       paths.add(path);
-      if (selection.tracked) trackedPaths.add(path);
     }
   }
   if (errors.length) return { views: [], errors };
   for (const path of paths) {
-    const worktree = worktreeBinaryView(confined.root, path);
+    const worktree = worktreeBinaryView(confined.root, path, { indexedSymlink: indexedSymlinkPaths.has(path) });
     if (worktree.view) views.push({ ...worktree.view, gameId: mount.gameId });
     if (worktree.error) errors.push({ path: `${mount.gitRoot}/${path}`, reason: worktree.error });
-    if (trackedPaths.has(path)) {
-      const index = indexBinaryView(confined.root, path, spawnGit);
-      if (index.view) views.push({ ...index.view, gameId: mount.gameId });
-      if (index.error) errors.push({ path: `${mount.gitRoot}/${path}`, reason: index.error });
-    }
   }
   return { views, errors };
 }
 
-function trackedBinaryLeaks(root, mounts, spawnGit) {
+function registeredPrivateCanvasRoots(root, mounts, { ignoreUnselected = false } = {}) {
+  let configured;
+  try {
+    configured = canvasPrivateGameProjectsRoots(root);
+  } catch (error) {
+    return { roots: new Map(), errors: [{ path: "<canvas-config>", reason: error.message }] };
+  }
+  const mountsByGameId = new Map();
+  for (const mount of mounts) mountsByGameId.set(comparable(mount.gameId), mount);
+  const roots = new Map();
+  const errors = [];
+  for (const [gameId, projectsRoot] of configured) {
+    const mount = mountsByGameId.get(comparable(gameId));
+    if (!mount) {
+      if (!ignoreUnselected) {
+        errors.push({ path: "<canvas-config>", reason: "registered private Canvas root has no canonical private game" });
+      }
+      continue;
+    }
+    roots.set(comparable(mount.gameId), projectsRoot);
+  }
+  return { roots, errors };
+}
+
+function trackedBinaryLeaks(root, mounts, spawnGit, canvasRoots = new Map()) {
   const parent = parentBinaryViews(root, spawnGit);
   if (!parent.views.length) return { leaks: [], errors: parent.errors };
   const privateByDigest = new Map();
   const errors = [...parent.errors];
+  const scannedCanvasRoots = new Set();
   for (const mount of mounts) {
-    const scanned = privateBinaryViews(root, mount, spawnGit);
+    const canvasRoot = canvasRoots.get(comparable(mount.gameId)) || null;
+    const scanned = privateBinaryViews(root, mount, spawnGit, canvasRoot);
     errors.push(...scanned.errors);
     for (const view of scanned.views) {
+      const rows = privateByDigest.get(view.digest) || [];
+      rows.push(view);
+      privateByDigest.set(view.digest, rows);
+    }
+    const canvasKey = comparable(mount.gameId);
+    if (!canvasRoot || scannedCanvasRoots.has(canvasKey)) continue;
+    scannedCanvasRoots.add(canvasKey);
+    const external = privateCanvasBinaryViews(mount, canvasRoot);
+    if (external.error) {
+      errors.push({ path: mount.gitRoot, reason: external.error });
+      continue;
+    }
+    for (const view of external.views) {
       const rows = privateByDigest.get(view.digest) || [];
       rows.push(view);
       privateByDigest.set(view.digest, rows);
@@ -529,6 +753,24 @@ function validSharedBinaryWaiverKeys(root, mounts, waivers, spawnGit) {
   return valid;
 }
 
+function privateAuditMounts(mounts) {
+  const auditMounts = [];
+  for (const mount of mounts) {
+    const roots = Array.isArray(mount.auditRoots) && mount.auditRoots.length ? mount.auditRoots : [mount.gitRoot];
+    for (const root of roots) {
+      auditMounts.push({
+        ...mount,
+        root,
+        gitRoot: root,
+        folder: root,
+        assetRoot: `${root}/assets`,
+        assets: `${root}/assets`,
+      });
+    }
+  }
+  return auditMounts;
+}
+
 export function runPrivateGamePreflight(root, options = {}) {
   const repoRoot = resolve(root || process.cwd());
   const spawnGit = options.spawnGit || spawnSync;
@@ -548,15 +790,17 @@ export function runPrivateGamePreflight(root, options = {}) {
     };
   }
   if (!mounts.length) return { ok: true, violations: [] };
-  const tracked = trackedTextFiles(repoRoot, privateLeakTokens(mounts), spawnGit);
-  const nested = nestedGitRoots(repoRoot, mounts, spawnGit);
-  const binaries = trackedBinaryLeaks(repoRoot, mounts, spawnGit);
+  const auditMounts = privateAuditMounts(mounts);
+  const privateCanvas = registeredPrivateCanvasRoots(repoRoot, mounts, { ignoreUnselected: Boolean(activeGameId) });
+  const tracked = trackedTextFiles(repoRoot, privateLeakTokens(auditMounts), spawnGit);
+  const nested = nestedGitRoots(repoRoot, auditMounts, spawnGit);
+  const binaries = trackedBinaryLeaks(repoRoot, auditMounts, spawnGit, privateCanvas.roots);
   const shared = trackedSharedBinaryWaivers(repoRoot, spawnGit);
   const waivers = activeGameId
     ? shared.waivers.filter((entry) => comparable(entry.game_id) === comparable(activeGameId))
     : shared.waivers;
   const validWaivers = validSharedBinaryWaiverKeys(repoRoot, mounts, waivers, spawnGit);
-  return auditPrivateGamePreflight(mounts, {
+  return auditPrivateGamePreflight(auditMounts, {
     sharedBinaryWaivers: waivers,
     validSharedBinaryWaiverKeys: validWaivers,
     sharedBinaryErrors: shared.errors,
@@ -565,7 +809,7 @@ export function runPrivateGamePreflight(root, options = {}) {
     trackedTextFiles: tracked.files,
     unscannedTextFiles: tracked.unscanned,
     binaryLeaks: binaries.leaks,
-    binaryScanErrors: binaries.errors,
+    binaryScanErrors: [...privateCanvas.errors, ...binaries.errors],
   });
 }
 

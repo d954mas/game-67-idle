@@ -80,7 +80,7 @@ src/build_packs.c     the pack: shaders, font, one UI atlas (4 themes x 9
 themes/*.json         lab-owned token sheets (forest, ember, night); Studio B is
                       the kit's own tokens/studio_b.json
 assets/ui/<theme>/    generated kit art per theme; not tracked, `tools/lab.mjs build` draws it
-(icons)               the five CC0 Kenney icons come from templates/template/assets/icons
+(icons)               the five CC0 Kenney icons come from the feature-test consumer's assets/icons
 assets/packs/         provenance: license, origin, sha256 per file
 tests/                node tests (theme sheet <-> C tokens parity)
 ```

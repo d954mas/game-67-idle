@@ -4,11 +4,13 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   renameSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { basename, dirname, join, resolve } from "node:path";
 
 export const GAME_IDENTITY_SCHEMA = "ai_studio.game.v1";
 export const TEMPLATE_IDENTITY_SCHEMA = "ai_studio.template.v1";
@@ -101,14 +103,16 @@ function validateGameDependenciesValue(value, rel) {
   return value;
 }
 
-function readIdentity(root, relRoot, kind) {
+function readIdentity(root, relRoot, kind, { allowRootIdMismatch = false } = {}) {
   const rel = `${relRoot}/${kind}.json`;
   const identity = readJson(join(root, rel), rel);
   assertKnownKeys(identity, IDENTITY_KEYS, rel);
   const expectedSchema = kind === "game" ? GAME_IDENTITY_SCHEMA : TEMPLATE_IDENTITY_SCHEMA;
   if (identity.schema !== expectedSchema) throw new Error(`${rel}: expected schema ${expectedSchema}`);
   const id = normalizeId(identity.id, `${kind} id`);
-  if (basename(relRoot) !== id) throw new Error(`${relRoot}: root basename must match identity id '${id}'`);
+  if (!allowRootIdMismatch && basename(relRoot) !== id) {
+    throw new Error(`${relRoot}: root basename must match identity id '${id}'`);
+  }
   const title = String(identity.title || "").trim();
   if (!title) throw new Error(`${rel}: title must not be empty`);
   return {
@@ -116,6 +120,13 @@ function readIdentity(root, relRoot, kind) {
     title,
     storageNamespace: normalizeId(identity.storageNamespace, `${kind} storageNamespace`),
     aliases: normalizeAliases(identity.aliases, `${rel}.aliases`),
+    identitySignature: JSON.stringify({
+      schema: identity.schema,
+      id,
+      title,
+      storageNamespace: normalizeId(identity.storageNamespace, `${kind} storageNamespace`),
+      aliases: normalizeAliases(identity.aliases, `${rel}.aliases`),
+    }),
   };
 }
 
@@ -135,20 +146,21 @@ function enabledStores(root, relRoot, kind) {
     .map(([store]) => store);
 }
 
-function resolveMount(root, relRoot, kind, visibility) {
+function resolveMount(root, relRoot, kind, visibility, identityOptions) {
   const absolute = join(root, relRoot);
   const linked = lstatSync(absolute).isSymbolicLink();
   if (visibility === "public" && linked) {
     throw new Error(`public ${kind} root must not be a symlink or junction: ${relRoot}`);
   }
-  const identity = readIdentity(root, relRoot, kind);
+  const identity = readIdentity(root, relRoot, kind, identityOptions);
+  const { identitySignature, ...identityFields } = identity;
   if (kind === "game") {
     const rel = `${relRoot}/dependencies.json`;
     if (!existsSync(join(root, rel))) throw new Error(`${relRoot}: missing game dependencies.json`);
     validateGameDependenciesValue(readJson(join(root, rel), rel), rel);
   }
   const nestedGit = kind === "game" && visibility === "private" && existsSync(join(absolute, ".git"));
-  return {
+  const mount = {
     kind,
     root: relRoot,
     visibility,
@@ -156,7 +168,7 @@ function resolveMount(root, relRoot, kind, visibility) {
     commitPolicy: visibility === "public" ? "parent-public" : nestedGit ? "nested-private" : "local-only",
     enabledStores: enabledStores(root, relRoot, kind),
     aliases: identity.aliases,
-    ...identity,
+    ...identityFields,
     storeId: `${kind}:${identity.storageNamespace}`,
     gameId: kind === "game" ? identity.id : undefined,
     templateId: kind === "template" ? identity.id : undefined,
@@ -166,6 +178,81 @@ function resolveMount(root, relRoot, kind, visibility) {
     publicAlias: identity.aliases[0] || "",
     source: "scan",
   };
+  Object.defineProperties(mount, {
+    auditRoots: { value: [relRoot], writable: true },
+    identitySignature: { value: identitySignature },
+  });
+  return mount;
+}
+
+const GIT_CONTEXT_ENV = ["GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_PREFIX"];
+
+function gitEnvironment() {
+  const env = { ...process.env };
+  for (const name of GIT_CONTEXT_ENV) delete env[name];
+  return env;
+}
+
+function git(root, args, spawnGit = spawnSync) {
+  const cwd = resolve(root);
+  return spawnGit("git", ["-c", `safe.directory=${slash(cwd)}`, ...args], {
+    cwd,
+    encoding: "utf8",
+    env: gitEnvironment(),
+    shell: false,
+  });
+}
+
+function gitError(result, fallback) {
+  if (!result?.error && result?.status === 0) return "";
+  const stderr = Buffer.isBuffer(result?.stderr) ? result.stderr.toString("utf8") : String(result?.stderr || "");
+  return result?.error?.message || stderr.trim().split(/\r?\n/, 1)[0] || `${fallback} exited ${result?.status}`;
+}
+
+function physicalGitRoot(root, spawnGit) {
+  let physical;
+  try { physical = realpathSync(root); }
+  catch { throw new Error("private worktree path is invalid"); }
+  const result = git(physical, ["rev-parse", "--is-inside-work-tree", "--show-toplevel", "--git-common-dir"], spawnGit);
+  const error = gitError(result, "git rev-parse");
+  if (error) throw new Error(`private worktree Git validation failed: ${error}`);
+  const lines = String(result.stdout || "").replace(/\r\n/g, "\n").trimEnd().split("\n");
+  if (lines.length !== 3 || lines[0].trim() !== "true") throw new Error("private worktree is not a Git worktree root");
+  const topLevel = resolve(physical, lines[1].trim());
+  const commonDir = resolve(physical, lines[2].trim());
+  if (slash(topLevel) !== slash(physical)) throw new Error("private worktree is not rooted at its game folder");
+  if (!existsSync(commonDir)) throw new Error("private worktree Git common directory is missing");
+  return { physical, commonDir };
+}
+
+function verifyPrivateWorktreeAlias(root, canonical, alias, options) {
+  const aliasAbsolute = join(root, alias.root);
+  const gitFile = join(aliasAbsolute, ".git");
+  if (!existsSync(gitFile) || !lstatSync(gitFile).isFile()) {
+    throw new Error(`${alias.root}: private identity alias must have linked Git worktree metadata`);
+  }
+  if (canonical.identitySignature !== alias.identitySignature) {
+    throw new Error(`${alias.root}: private worktree identity differs from canonical game '${canonical.id}'`);
+  }
+  const canonicalGit = physicalGitRoot(join(root, canonical.root), options.spawnGit);
+  const aliasGit = physicalGitRoot(aliasAbsolute, options.spawnGit);
+  if (slash(canonicalGit.commonDir) !== slash(aliasGit.commonDir)) {
+    throw new Error(`${alias.root}: private worktree Git common directory differs from canonical game`);
+  }
+  const result = git(canonicalGit.physical, ["worktree", "list", "--porcelain"], options.spawnGit);
+  const error = gitError(result, "git worktree list");
+  if (error) throw new Error(`${alias.root}: private worktree registration check failed: ${error}`);
+  const aliasPath = slash(aliasGit.physical);
+  let registered = false;
+  for (const line of String(result.stdout || "").replace(/\r\n/g, "\n").split("\n")) {
+    if (!line.startsWith("worktree ")) continue;
+    const listed = resolve(canonicalGit.physical, line.slice("worktree ".length));
+    if (slash(listed) !== aliasPath) continue;
+    try { registered = slash(realpathSync(listed)) === aliasPath; }
+    catch { registered = false; }
+    if (registered) break;
+  }
+  if (!registered) throw new Error(`${alias.root}: private identity alias is not a registered Git worktree`);
 }
 
 function warn(options, message) {
@@ -203,6 +290,44 @@ function scanChildren(root, relParent, kind, visibility, options, unusable) {
     }
   }
   return mounts;
+}
+
+function scanPrivateGames(root, options) {
+  const relParent = "games/private";
+  const parent = join(root, relParent);
+  if (!existsSync(parent)) return [];
+  const canonical = [];
+  const aliases = [];
+  for (const entry of readdirSync(parent, { withFileTypes: true })) {
+    if (entry.name.startsWith(".")) continue;
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+    const relRoot = `${relParent}/${entry.name}`;
+    if (lstatSync(join(root, relRoot)).isSymbolicLink()) {
+      throw new Error(`private game root must not be a symlink or junction: ${relRoot}`);
+    }
+    const manifest = join(root, relRoot, "game.json");
+    if (!existsSync(manifest)) {
+      warn(options, `${relRoot}: missing game.json; skipping incomplete folder`);
+      continue;
+    }
+    const mount = resolveMount(root, relRoot, "game", "private", { allowRootIdMismatch: true });
+    if (entry.name !== mount.id && comparable(entry.name) === comparable(mount.id)) {
+      throw new Error(`${relRoot}: private worktree alias case-collides canonical game '${mount.id}'`);
+    }
+    if (entry.name === mount.id) canonical.push(mount);
+    else aliases.push(mount);
+  }
+  assertUniqueResolved(canonical);
+  const canonicalById = new Map(canonical.map((mount) => [comparable(mount.id), mount]));
+  for (const alias of aliases) {
+    const canonicalMount = canonicalById.get(comparable(alias.id));
+    if (!canonicalMount) {
+      throw new Error(`${alias.root}: private identity alias has no canonical game '${alias.id}'`);
+    }
+    verifyPrivateWorktreeAlias(root, canonicalMount, alias, options);
+    canonicalMount.auditRoots.push(alias.root);
+  }
+  return canonical;
 }
 
 function assertUniqueResolved(mounts) {
@@ -252,7 +377,7 @@ export function listWorkspaceMounts(root, options = {}) {
     ...scanChildren(root, "templates", "template", "public", options, unusable),
   ];
   if (options.includePrivate === true || options.activeGameId || options.activeStoreId) {
-    mounts.push(...scanChildren(root, "games/private", "game", "private", options, unusable).filter((mount) => privateMountSelected(mount, options)));
+    mounts.push(...scanPrivateGames(root, options).filter((mount) => privateMountSelected(mount, options)));
   }
   assertRequestedTargetUsable(unusable, options);
   assertUniqueResolved(mounts);

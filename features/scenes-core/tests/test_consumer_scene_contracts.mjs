@@ -33,7 +33,7 @@ function sliceFromRequired(source, marker) {
 }
 
 test("template gates snapshotted movement through scene and focus eligibility", () => {
-  const source = read("templates/template/src/features/game_features.c");
+  const source = read("ai_studio/feature_testing/consumer/src/features/game_features.c");
   assert.match(
     source,
     /if\s*\(game_scenes_can_process_game_input\(\)\s*&&\s*!focus_prompt_ui_visible\(\)\)\s*\{\s*sys_move\(w,\s*dt,\s*input\);\s*\}/s,
@@ -41,7 +41,7 @@ test("template gates snapshotted movement through scene and focus eligibility", 
 });
 
 test("template samples focus before scene updates even when root is paused", () => {
-  const source = read("templates/template/src/main.c");
+  const source = read("ai_studio/feature_testing/consumer/src/main.c");
   const frame = sliceFromRequired(source, "game_input_capture(&s_input);");
   assertOrdered(
     frame,
@@ -56,7 +56,7 @@ test("template samples focus before scene updates even when root is paused", () 
 });
 
 test("template gates platform gameplay through focused scene eligibility", () => {
-  const source = read("templates/template/src/main.c");
+  const source = read("ai_studio/feature_testing/consumer/src/main.c");
   assert.match(
     source,
     /platform_lifecycle_update\(\s*playable_shell_ready,\s*!platform_break && game_scenes_can_process_game_input\(\)\s*\)/s,
@@ -71,7 +71,7 @@ test("settings close reports not-top without inventing a busy operation", () => 
   const header = read(
     "features/scenes-core/include/features/scenes/scene_manager.h",
   );
-  const adapter = read("templates/template/src/game_scenes.c");
+  const adapter = read("ai_studio/feature_testing/consumer/src/game_scenes.c");
   assert.match(header, /SCENE_RESULT_NOT_TOP/);
   assert.match(
     adapter,
@@ -80,7 +80,7 @@ test("settings close reports not-top without inventing a busy operation", () => 
 });
 
 test("template proves root scene start succeeds before initialization", () => {
-  const source = read("templates/template/src/game_scenes.c");
+  const source = read("ai_studio/feature_testing/consumer/src/game_scenes.c");
   assert.match(
     source,
     /const scene_result_t start_result\s*=\s*scene_manager_start\(/,
@@ -92,7 +92,7 @@ test("template proves root scene start succeeds before initialization", () => {
 });
 
 test("template fails startup when scene DevAPI registration is rejected", () => {
-  const source = read("templates/template/src/main.c");
+  const source = read("ai_studio/feature_testing/consumer/src/main.c");
   assert.match(
     source,
     /if\s*\(\s*!scene_manager_register_devapi\(game_scenes_manager\(\)\)\s*\)[\s\S]*return false;/,
@@ -100,7 +100,7 @@ test("template fails startup when scene DevAPI registration is rejected", () => 
 });
 
 test("template links the shared scenes-core implementation", () => {
-  const project = "templates/template";
+  const project = "ai_studio/feature_testing/consumer";
   const cmake = read(`${project}/CMakeLists.txt`);
   assert.match(
     cmake,
@@ -118,8 +118,8 @@ test("template links the shared scenes-core implementation", () => {
 });
 
 test("template exposes an independent debug-scene build flag", () => {
-  const options = read("templates/template/cmake/GameOptions.cmake");
-  const cmake = read("templates/template/CMakeLists.txt");
+  const options = read("ai_studio/feature_testing/consumer/cmake/GameOptions.cmake");
+  const cmake = read("ai_studio/feature_testing/consumer/CMakeLists.txt");
   assert.match(options, /GAME_DEBUG_SCENES_ENABLED/);
   assert.match(
     cmake,
@@ -141,7 +141,7 @@ test("core runtime remains fixed-storage and allocation-free", () => {
 });
 
 test("template preserves scene resource and shutdown barriers", () => {
-  const source = read("templates/template/src/main.c");
+  const source = read("ai_studio/feature_testing/consumer/src/main.c");
   assertOrdered(
     source,
     "nt_resource_step();",
@@ -166,7 +166,7 @@ test("template preserves scene resource and shutdown barriers", () => {
 });
 
 test("transition pointer gate is declared after scene and global UI", () => {
-  const source = read("templates/template/src/features/game_features.c");
+  const source = read("ai_studio/feature_testing/consumer/src/features/game_features.c");
   assertOrdered(
     source,
     "game_scenes_build_ui(ui_runtime_ctx());",
@@ -180,8 +180,8 @@ test("transition pointer gate is declared after scene and global UI", () => {
 });
 
 test("template gates world rendering through scene presentation", () => {
-  const templateHeader = read("templates/template/src/game_scenes.h");
-  const templateMain = read("templates/template/src/main.c");
+  const templateHeader = read("ai_studio/feature_testing/consumer/src/game_scenes.h");
+  const templateMain = read("ai_studio/feature_testing/consumer/src/main.c");
 
   assert.match(templateHeader, /game_scenes_should_render_world/);
   assert.match(templateMain, /game_scenes_should_render_world\(\)/);
@@ -189,7 +189,7 @@ test("template gates world rendering through scene presentation", () => {
 
 test("template overlay open queries use current presentation", () => {
   const templateSettings = read(
-    "templates/template/src/features/settings/settings_screen.c",
+    "ai_studio/feature_testing/consumer/src/features/settings/settings_screen.c",
   );
 
   assert.match(templateSettings, /game_scenes_is_presented/);

@@ -1,6 +1,6 @@
-// T0316 test fixture: a SLICE of templates/template/src/generated/game_assets.h
+// Test fixture: a SLICE of ai_studio/feature_testing/consumer/src/generated/game_assets.h
 // (the ATLAS + ATLAS_REGION sections only, both `icons` and `ui`), captured
-// verbatim from a real native-debug build alongside the sibling game.ntpack /
+// verbatim from a game_asset_packs build alongside the sibling game.ntpack /
 // icons_page0.png in this folder. Real header, trimmed to the two sections the
 // parser actually reads -- the MESH/TEXTURE/SHADER/FONT sections are irrelevant
 // to icon_preview.mjs and are dropped to keep the fixture focused.

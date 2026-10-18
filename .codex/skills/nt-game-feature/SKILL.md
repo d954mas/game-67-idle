@@ -1,6 +1,6 @@
 ---
 name: nt-game-feature
-description: "Use when creating a reusable feature or deciding whether game code belongs in a root module, a template feature-pointer, or game-owned code."
+description: "Extract or integrate reusable game capabilities; choose shared modules, optional copyable references, or game-owned code."
 ---
 
 # NT Game Feature
@@ -11,7 +11,7 @@ feature contracts live with their owners, not in this skill.
 ## Start
 
 1. Read `features/README.md` for category selection and current modules.
-2. Read `templates/template/src/features/README.md` for template-pointer
+2. Read `ai_studio/feature_testing/consumer/src/features/README.md` for optional reference
    conventions, layers, lifecycle, state, and asset boundaries.
 3. For every existing owner being changed, read its local `README.md`,
    `INSTALL.md`, and `feature.json`. Those files own its public surface,
@@ -22,7 +22,7 @@ feature contracts live with their owners, not in this skill.
 - Byte-identical reusable code configured through data belongs under
   `features/`.
 - A reusable reference games are expected to repaint or hand-edit belongs
-  under `templates/template/src/features/`.
+  in an optional copyable feature example; keep it out of default startup.
 - Game-specific seed, verbs, save history, and composition remain game-owned.
 
 Consumer count does not decide the category. Do not add speculative switches,
@@ -38,6 +38,21 @@ registries, or hooks without a real consumer need.
    only paths/wiring, verify generated-output identity, then run consumer tests.
 5. Prove a root module through a throwaway `games/new_game.mjs` consumer.
 6. Keep each increment buildable.
+
+For extraction from an existing game, inventory its lifecycle, logic, view,
+state/save, content, assets, tooling, and platform bindings first. Compare the
+candidate with existing engine APIs and feature packs before creating an owner.
+Extract a concrete invariant API, not the game's composition or balance.
+Record source provenance inside the private game; keep private identifiers and
+restricted assets out of tracked Studio files. Prove the shared module with an
+isolated consumer and the source game's focused checks before claiming it has
+been integrated there.
+
+Name the included files and explicit exclusions before moving them. Keep a
+compatibility adapter when changing a source game's include/API boundary.
+For a renamed or parameterized API, prove behavioral equivalence and invariants;
+byte identity alone applies only to relocation. Land the shared module first,
+adapt the source consumer, verify it, then remove the replaced implementation.
 
 ## Routing
 

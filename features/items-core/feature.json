@@ -17,7 +17,7 @@
     "game-events",
     "game-state",
     "a game-local items.lua.json manifest plus allowlisted Lua modules",
-    "template or game C runtime compiling the generated items catalog + generated items save fragment (features/game-state)",
+    "consumer or game C runtime compiling the generated items catalog + generated items save fragment (features/game-state)",
     "the consuming game's own src/features/items/reason_tags.h (closed reason-verb list, resolved via the game's include path)"
   ],
   "commands": {
@@ -61,7 +61,7 @@
     "items_catalog.luau"
   ],
   "registers": {
-    "note": "Describes the EXISTING wiring in templates/template/CMakeLists.txt (target_sources/ctest) -- items-core is an in-place module (precedent features/game-state), not an install-script target. This section documents the consuming game's provisioning, it does not perform it.",
+    "note": "Describes consumer provisioning (target_sources/ctest) -- items-core is an in-place module (precedent features/game-state), not an install-script target. This section documents the consuming project's provisioning, it does not perform it.",
     "target_sources": [
       "${ITEMS_CORE_SRC}/items_api.c",
       "${ITEMS_CATALOG_SOURCE}",
@@ -81,17 +81,17 @@
       "items_c_catalog_test"
     ]
   },
-  "default_template": {
-    "manifest": "templates/template/items.lua.json",
-    "lua_modules": "templates/template/design/items/*.lua",
-    "lock": "templates/template/content/items.lock.json",
-    "state_schema": "templates/template/state/items.schema.json",
-    "generated_dir": "templates/template/<build>/generated/items-catalog",
+  "test_consumer": {
+    "manifest": "ai_studio/feature_testing/consumer/items.lua.json",
+    "lua_modules": "ai_studio/feature_testing/consumer/design/items/*.lua",
+    "lock": "ai_studio/feature_testing/consumer/content/items.lock.json",
+    "state_schema": "ai_studio/feature_testing/consumer/state/items.schema.json",
+    "generated_dir": "ai_studio/feature_testing/consumer/<build>/generated/items-catalog",
     "game_side_sources": [
-      "templates/template/src/features/items/reason_tags.h",
-      "templates/template/src/game_items.c",
-      "templates/template/src/game_items.h",
-      "templates/template/src/game_items_devapi.c"
+      "ai_studio/feature_testing/consumer/src/features/items/reason_tags.h",
+      "ai_studio/feature_testing/consumer/src/game_items.c",
+      "ai_studio/feature_testing/consumer/src/game_items.h",
+      "ai_studio/feature_testing/consumer/src/game_items_devapi.c"
     ]
   }
 }

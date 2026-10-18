@@ -18,12 +18,17 @@ different agent CLIs.
 
 - `.claude/skills/*/SKILL.md`: generated thin pointers to Codex-discoverable
   skill entrypoints.
+- `.agents/skills/*/SKILL.md`: generated thin pointers for current Codex local
+  discovery. Supporting files stay with the canonical skill.
 - `.codex/hooks.json`: generated Codex hook config.
 - `.claude/settings.json`: generated Claude hook config; Claude-only keys are
   preserved.
 - `.claude/settings.local.json`: never generated and never committed.
 
 ## Commands
+
+Follow [skill authoring](skill_authoring.md) when changing skill content or
+discovery. It records the official Codex/Claude guides and Studio conventions.
 
 Public facade:
 

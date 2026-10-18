@@ -20,7 +20,7 @@ import items_cli as CLI
 SCRIPT_DIR = Path(__file__).resolve().parent
 SCRIPT = SCRIPT_DIR / "items_cli.py"
 PROJECT = SCRIPT_DIR.parent / "tests" / "fixtures" / "items_cli"
-TEMPLATE_ROOT = SCRIPT_DIR.parents[2] / "templates" / "template"
+CONSUMER_ROOT = SCRIPT_DIR.parents[2] / "ai_studio" / "feature_testing" / "consumer"
 CATALOG_OUTPUT_NAMES = CLI.catalog_api.OUTPUT_NAMES
 
 
@@ -28,9 +28,9 @@ class ItemsCliTests(unittest.TestCase):
     def test_lua_cli_does_not_depend_on_legacy_json_ops(self):
         self.assertEqual(CLI.receipt_api.__name__, "items_receipt")
 
-    def test_template_lua_matches_the_shipped_release_receipt(self):
+    def test_consumer_lua_matches_the_shipped_release_receipt(self):
         process = subprocess.run(
-            [sys.executable, str(SCRIPT), "--project-root", str(TEMPLATE_ROOT), "validate"],
+            [sys.executable, str(SCRIPT), "--project-root", str(CONSUMER_ROOT), "validate"],
             text=True, capture_output=True, encoding="utf-8", timeout=20,
         )
         self.assertEqual(process.returncode, 0, process.stderr)
@@ -75,7 +75,7 @@ class ItemsCliTests(unittest.TestCase):
 
     def test_list_exposes_bounded_viewer_metadata_without_level_tables(self):
         process = subprocess.run(
-            [sys.executable, str(SCRIPT), "--project-root", str(TEMPLATE_ROOT), "list"],
+            [sys.executable, str(SCRIPT), "--project-root", str(CONSUMER_ROOT), "list"],
             text=True, capture_output=True, encoding="utf-8", timeout=20,
         )
         self.assertEqual(process.returncode, 0, process.stderr)
@@ -88,11 +88,11 @@ class ItemsCliTests(unittest.TestCase):
         self.assertNotIn("levels", energy)
         self.assertNotIn("acquire", energy)
 
-    def test_template_lua_builds_the_runtime_projection(self):
+    def test_consumer_lua_builds_the_runtime_projection(self):
         with tempfile.TemporaryDirectory() as tmp:
             process = subprocess.run(
                 [
-                    sys.executable, str(SCRIPT), "--project-root", str(TEMPLATE_ROOT),
+                    sys.executable, str(SCRIPT), "--project-root", str(CONSUMER_ROOT),
                     "build", "--out-dir", tmp,
                 ],
                 text=True, capture_output=True, encoding="utf-8", timeout=20,

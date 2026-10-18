@@ -1,0 +1,322 @@
+// Template pack builder: packs the starter-shell assets into game.ntpack + a
+// generated asset-id header. Runs natively at build time (CMake custom command).
+// A game extends this with its own meshes/textures; the shell below is what every
+// game starts with: a font (text), the text shader, the instanced-mesh shader, and
+// a 1x1 white texture (neutral u_texture for per-instance-coloured meshes).
+#define NT_BUILD_MAX_ASSETS 4096
+#include "nt_builder.h"
+
+#include "features/ui_kit/ui_icons.h"
+
+#include "generated/loc_charset.gen.h" /* LOC_CHARSET_NON_ASCII, generated from the corpus */
+
+#include <limits.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#if defined(__linux__)
+/* GLFW/GLX keeps an extension-query cache after glfwTerminate(). The engine's
+ * native builder/window tests suppress this same external allocation. Keep the
+ * suppression local to the pack-builder executable so every other LSan report
+ * remains actionable. */
+const char *__lsan_default_suppressions(void);                                           // NOLINT(bugprone-reserved-identifier)
+const char *__lsan_default_suppressions(void) { return "leak:extensionSupportedGLX\n"; } // NOLINT(bugprone-reserved-identifier)
+#endif
+
+#ifdef _WIN32
+#include <direct.h>
+#define MKDIR(p) _mkdir(p)
+#else
+#include <sys/stat.h>
+#define MKDIR(p) mkdir(p, 0755)
+#endif
+
+#define HEADER_DIR "src/generated"
+
+// Source-pixel cut lines fully contain each rounded corner before any center stretch.
+// The kit ships at UI_KIT_EXPORT_SCALE times its design units (tools/gen_ui_kit.py),
+// so every slice9 border is that many source pixels wide.
+#define UI_KIT_EXPORT_SCALE 4
+#define PANEL_BORDER (14 * UI_KIT_EXPORT_SCALE)
+#define BUTTON_BORDER_X (16 * UI_KIT_EXPORT_SCALE)
+#define BUTTON_BORDER_TOP (16 * UI_KIT_EXPORT_SCALE)
+#define BUTTON_BORDER_BOTTOM (22 * UI_KIT_EXPORT_SCALE)
+#define TILE_BORDER (14 * UI_KIT_EXPORT_SCALE)
+#define HEADER_BORDER (12 * UI_KIT_EXPORT_SCALE)
+#define HEADER_BORDER_BOTTOM (2 * UI_KIT_EXPORT_SCALE) // rounded on top only
+#define BAR_BORDER (11 * UI_KIT_EXPORT_SCALE)
+#define BAR_BORDER_SM 11 // the design-size copies the engine slider draws 1:1
+
+static char s_path_buf[512];
+static const char *pack_path(const char *dir, const char *name) {
+    (void)snprintf(s_path_buf, sizeof(s_path_buf), "%s/%s", dir, name);
+    return s_path_buf;
+}
+
+static bool add_blob_file(NtBuilderContext *ctx, const char *path, const char *resource_id) {
+    FILE *file = NULL;
+#ifdef _WIN32
+    (void)fopen_s(&file, path, "rb");
+#else
+    file = fopen(path, "rb");
+#endif
+    if (file == NULL) {
+        (void)fprintf(stderr, "Failed to open blob source: %s\n", path);
+        return false;
+    }
+    if (fseek(file, 0, SEEK_END) != 0) {
+        (void)fprintf(stderr, "Failed to seek blob source: %s\n", path);
+        (void)fclose(file);
+        return false;
+    }
+    const long end = ftell(file);
+    if (end <= 0 || (uint64_t)end > UINT32_MAX || fseek(file, 0, SEEK_SET) != 0) {
+        (void)fprintf(stderr, "Invalid blob source size: %s\n", path);
+        (void)fclose(file);
+        return false;
+    }
+
+    const uint32_t size = (uint32_t)end;
+    uint8_t *bytes = (uint8_t *)malloc(size);
+    if (bytes == NULL || fread(bytes, 1, size, file) != size) {
+        (void)fprintf(stderr, "Failed to read blob source: %s\n", path);
+        free(bytes);
+        (void)fclose(file);
+        return false;
+    }
+    if (fclose(file) != 0) {
+        (void)fprintf(stderr, "Failed to close blob source: %s\n", path);
+        free(bytes);
+        return false;
+    }
+
+    nt_builder_add_blob(ctx, bytes, size, resource_id);
+    free(bytes);
+    return true;
+}
+
+int main(int argc, char *argv[]) {
+    if (argc != 3) {
+        (void)fprintf(stderr, "Usage: build_game_packs <pack_dir> <font_source>\n");
+        return 1;
+    }
+    const char *out_dir = argv[1];
+    (void)MKDIR(out_dir);
+    (void)MKDIR("src");
+    (void)MKDIR(HEADER_DIR);
+
+    NtBuilderContext *ctx = nt_builder_start_pack(pack_path(out_dir, "game.ntpack"));
+    if (!ctx) {
+        (void)fprintf(stderr, "Failed to start game pack\n");
+        return 1;
+    }
+    nt_builder_set_header_dir(ctx, HEADER_DIR);
+    (void)MKDIR("build");
+    nt_builder_set_cache_dir(ctx, "build/_cache");
+    nt_builder_set_threads_auto(ctx); // Basis encode is CPU-bound; default is single-threaded
+
+    // text shell
+    nt_builder_add_shader(ctx, "assets/shaders/slug_text.vert", NT_BUILD_SHADER_VERTEX);
+    nt_builder_add_shader(ctx, "assets/shaders/slug_text.frag", NT_BUILD_SHADER_FRAGMENT);
+    // The charset FOLLOWS THE CORPUS: content/loc/strings.json generates
+    // loc_charset.gen.h and this pack build depends on it, so editing a string
+    // repacks the atlas. A hand-kept alphabet lets a new translation introduce a
+    // character nobody added here and ship as a blank box with every gate green.
+    // ASCII stays unconditional -- numbers and debug text never pass through the
+    // corpus.
+    nt_builder_add_font(ctx, argv[2],
+                        &(nt_font_opts_t){.charset = NT_CHARSET_ASCII LOC_CHARSET_NON_ASCII,
+                                          .resource_name = "game/font"});
+
+    // Audio stays an opaque game-owned blob. The runtime chooses the decoder;
+    // the resource ID intentionally contains no codec or file extension.
+    if (!add_blob_file(ctx, "assets/audio/sfx/ui_click.wav", "audio/sfx/ui_click") ||
+        !add_blob_file(ctx, "assets/audio/music/demo_jingle.mp3", "audio/music/demo_jingle")) {
+        nt_builder_free_pack(ctx);
+        return 1;
+    }
+
+    // instanced-mesh shell: TWO mesh paths a game learns from. The COLOURED path
+    // (mesh_inst = position + per-instance world matrix + colour, no texture) and the
+    // TEXTURED path (mesh_tex = position + uv0, samples u_texture). The starter cube is
+    // packed with BOTH streams (it has UVs) so one mesh feeds both materials.
+    nt_builder_add_shader(ctx, "assets/shaders/mesh_inst.vert", NT_BUILD_SHADER_VERTEX);
+    nt_builder_add_shader(ctx, "assets/shaders/mesh_inst.frag", NT_BUILD_SHADER_FRAGMENT);
+    nt_builder_add_shader(ctx, "assets/shaders/mesh_tex.vert", NT_BUILD_SHADER_VERTEX);
+    nt_builder_add_shader(ctx, "assets/shaders/mesh_tex.frag", NT_BUILD_SHADER_FRAGMENT);
+    NtStreamLayout mesh_layout[] = {
+        {"POSITION", NT_STREAM_FLOAT32, 3, false, 0, NT_LOC_POSITION},
+        {"TEXCOORD_0", NT_STREAM_FLOAT32, 2, false, 0, NT_LOC_UV0},
+    };
+    nt_builder_add_mesh(ctx, "assets/meshes/cube.glb",
+                        &(nt_mesh_opts_t){.layout = mesh_layout, .stream_count = 2, .tangent_mode = NT_TANGENT_AUTO});
+
+    // UV-grid texture for the textured mesh path. Source-first search did not find
+    // a better CC0 surface texture for the starter template, so the template ships
+    // a generated checker test-grid - the canonical textured-mesh teaching asset.
+    // Swap in a sourced CC0 texture (nt_builder_add_texture) when one is available.
+    enum { UV_TEX = 256, UV_CELL = 32 };
+    static uint8_t uv_pixels[UV_TEX * UV_TEX * 4];
+    for (int y = 0; y < UV_TEX; ++y) {
+        for (int x = 0; x < UV_TEX; ++x) {
+            uint8_t *px = &uv_pixels[(y * UV_TEX + x) * 4];
+            const bool checker = (((x / UV_CELL) + (y / UV_CELL)) & 1) != 0;
+            const bool grid = (x % UV_CELL) < 2 || (y % UV_CELL) < 2;
+            uint8_t r = (uint8_t)(40 + (x * 180) / UV_TEX);  // gradient so orientation reads
+            uint8_t g = (uint8_t)(40 + (y * 180) / UV_TEX);
+            uint8_t b = checker ? 200 : 90;
+            if (grid) { r = g = b = 20; } // dark grid lines
+            px[0] = r;
+            px[1] = g;
+            px[2] = b;
+            px[3] = 255;
+        }
+    }
+    nt_tex_opts_t uv_opts = nt_tex_opts_defaults();
+    nt_builder_add_texture_raw(ctx, uv_pixels, UV_TEX, UV_TEX, "assets/textures/uv_grid", &uv_opts);
+
+    // UI shell: the sprite shader (UI rects/images) + a slice9 GUI atlas. The atlas
+    // holds a 1x1 white pixel (UI rect fill / nt_ui white region) and the generated
+    // design-system kit every screen renders with. nt_ui draws from this.
+    nt_builder_add_shader(ctx, "assets/shaders/sprite.vert", NT_BUILD_SHADER_VERTEX);
+    nt_builder_add_shader(ctx, "assets/shaders/sprite.frag", NT_BUILD_SHADER_FRAGMENT);
+
+    nt_atlas_opts_t atlas_opts = nt_atlas_opts_defaults();
+    atlas_opts.shape = NT_ATLAS_SHAPE_RECT;
+    atlas_opts.allowed_transforms = NT_ATLAS_TRANSFORMS_IDENTITY;
+    atlas_opts.pixels_per_unit = 1.0F; // nt_ui asserts PPU=1 for a UI atlas
+    // Mip-safe gutters: the kit ships above its on-screen size, so the sampler
+    // walks down the mip chain and a 2 px gutter would bleed neighbours into a
+    // region by the third level.
+    atlas_opts.padding = 8;
+    atlas_opts.margin = 8;
+    atlas_opts.extrude = 2;
+    atlas_opts.premultiplied = true;
+    atlas_opts.compress = (nt_basisu_encode_opts_t){0};
+    atlas_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR_MIPMAP_LINEAR;
+    atlas_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
+    atlas_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
+    atlas_opts.wrap_v = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
+    atlas_opts.gen_mipmaps = true; // UI art is drawn below native size: without mips it aliases
+    NtAtlasBuild *ui_atlas = nt_atlas_begin(ctx, "ui", &atlas_opts);
+
+    // 1x1 white pixel: UI rect fill + nt_ui's required white region.
+    static const uint8_t white_pixel[4] = {255, 255, 255, 255};
+    nt_atlas_sprite_opts_t white_opts = nt_atlas_sprite_opts_defaults();
+    white_opts.name = "_white";
+    nt_atlas_add_raw(ui_atlas, white_pixel, 1, 1, &white_opts);
+
+    nt_atlas_sprite_opts_t panel_opts = nt_atlas_sprite_opts_defaults();
+    panel_opts.name = "panel";
+    panel_opts.slice9_left = panel_opts.slice9_right = panel_opts.slice9_top = panel_opts.slice9_bottom = PANEL_BORDER;
+    nt_atlas_add(ui_atlas, "assets/ui/panel.png", &panel_opts);
+
+    // The button's bottom border is taller than the other three: it has to
+    // contain the lift ledge as well as the corner radius.
+    nt_atlas_sprite_opts_t button_opts = nt_atlas_sprite_opts_defaults();
+    button_opts.name = "button";
+    button_opts.slice9_left = button_opts.slice9_right = BUTTON_BORDER_X;
+    button_opts.slice9_top = BUTTON_BORDER_TOP;
+    button_opts.slice9_bottom = BUTTON_BORDER_BOTTOM;
+    nt_atlas_add(ui_atlas, "assets/ui/button.png", &button_opts);
+
+    nt_atlas_sprite_opts_t tile_opts = nt_atlas_sprite_opts_defaults();
+    tile_opts.name = "tile";
+    tile_opts.slice9_left = tile_opts.slice9_right = tile_opts.slice9_top = tile_opts.slice9_bottom = TILE_BORDER;
+    nt_atlas_add(ui_atlas, "assets/ui/tile.png", &tile_opts);
+
+    nt_atlas_sprite_opts_t bar_opts = nt_atlas_sprite_opts_defaults();
+    bar_opts.slice9_left = bar_opts.slice9_right = bar_opts.slice9_top = bar_opts.slice9_bottom = BAR_BORDER;
+    bar_opts.name = "slider_track";
+    nt_atlas_add(ui_atlas, "assets/ui/slider_track.png", &bar_opts);
+    bar_opts.name = "slider_fill";
+    nt_atlas_add(ui_atlas, "assets/ui/slider_fill.png", &bar_opts);
+
+    // Design-size pair for the engine slider, whose baked borders are drawn 1:1
+    // (neotolis-engine#349); a game's own meters use the 4x pair above.
+    nt_atlas_sprite_opts_t bar_sm_opts = nt_atlas_sprite_opts_defaults();
+    bar_sm_opts.slice9_left = bar_sm_opts.slice9_right = bar_sm_opts.slice9_top =
+        bar_sm_opts.slice9_bottom = BAR_BORDER_SM;
+    bar_sm_opts.name = "slider_track_sm";
+    nt_atlas_add(ui_atlas, "assets/ui/slider_track_sm.png", &bar_sm_opts);
+    bar_sm_opts.name = "slider_fill_sm";
+    nt_atlas_add(ui_atlas, "assets/ui/slider_fill_sm.png", &bar_sm_opts);
+
+    nt_atlas_sprite_opts_t thumb_opts = nt_atlas_sprite_opts_defaults();
+    thumb_opts.name = "slider_thumb"; // circle: no slice9
+    nt_atlas_add(ui_atlas, "assets/ui/slider_thumb.png", &thumb_opts);
+
+    nt_atlas_sprite_opts_t play_opts = nt_atlas_sprite_opts_defaults();
+    play_opts.name = "icon_play"; // flat glyph, no slice9
+    nt_atlas_add(ui_atlas, "assets/ui/icon_play.png", &play_opts);
+
+    nt_atlas_sprite_opts_t header_opts = nt_atlas_sprite_opts_defaults();
+    header_opts.name = "header";
+    header_opts.slice9_left = header_opts.slice9_right = header_opts.slice9_top = HEADER_BORDER;
+    header_opts.slice9_bottom = HEADER_BORDER_BOTTOM;
+    nt_atlas_add(ui_atlas, "assets/ui/header.png", &header_opts);
+
+    // The kit's glyph set from the feature's own assets, under the prefix
+    // theme.c binds; a game that draws its own points this at its files.
+    for (int i = 0; i < UI_ICON_COUNT; ++i) {
+        char name[64];
+        char path[512];
+        (void)snprintf(name, sizeof name, "kit/%s", ui_icon_name((ui_icon_t)i));
+        (void)snprintf(path, sizeof path, UI_KIT_ASSETS_DIR "/icons/%s.png", ui_icon_name((ui_icon_t)i));
+        nt_atlas_sprite_opts_t o = nt_atlas_sprite_opts_defaults();
+        o.name = name;
+        nt_atlas_add(ui_atlas, path, &o);
+    }
+
+    (void)nt_atlas_commit(ui_atlas);
+
+    // Item icons: SECOND atlas (ui is first). Explicit region names = the
+    // authored "icons/<name>" contract half. debug_png=true emits the page PNG
+    // the studio items-viewer previews from. Identity-only transforms keep every
+    // region an axis-aligned rect so a preview crop is a simple rectangle.
+    // Opts mirror the ui atlas (build_packs.c:104-117) for parity.
+    nt_atlas_opts_t icons_opts = nt_atlas_opts_defaults();
+    icons_opts.shape = NT_ATLAS_SHAPE_RECT;
+    icons_opts.allowed_transforms = NT_ATLAS_TRANSFORMS_IDENTITY; // -> region.transform == 0, simple rect
+    icons_opts.pixels_per_unit = 1.0F;    // parity with ui atlas
+    icons_opts.padding = 2;
+    icons_opts.margin = 2;
+    icons_opts.extrude = 1;               // outline lands in the extrude gutter
+    icons_opts.premultiplied = true;      // affects ONLY the packed texture (ui parity);
+                                          // debug-PNG is copied BEFORE premultiply -> straight alpha
+    icons_opts.compress = (nt_basisu_encode_opts_t){0};   // parity with ui atlas (raw RGBA page)
+    icons_opts.debug_png = true;          // -> <CMAKE_BINARY_DIR>/pack/icons_page0.png
+    icons_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
+    icons_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
+    icons_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
+    icons_opts.wrap_v = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
+    icons_opts.gen_mipmaps = false;
+    NtAtlasBuild *icons_atlas = nt_atlas_begin(ctx, "icons", &icons_opts);
+    static const char *icon_names[] = {"gold","xp","energy","potion","sword","wood"};
+    static const char *icon_paths[] = {
+        "assets/icons/gold.png",
+        "assets/icons/xp.png",
+        "assets/icons/energy.png",
+        "assets/icons/potion.png",
+        "assets/icons/sword.png",
+        "assets/icons/wood.png",
+    };
+    for (int i = 0; i < 6; ++i) {
+        nt_atlas_sprite_opts_t o = nt_atlas_sprite_opts_defaults();
+        o.name = icon_names[i];
+        nt_atlas_add(icons_atlas, icon_paths[i], &o);
+    }
+    (void)nt_atlas_commit(icons_atlas);
+
+    nt_build_result_t r = nt_builder_finish_pack(ctx);
+    nt_builder_free_pack(ctx);
+    if (r != NT_BUILD_OK) {
+        (void)fprintf(stderr, "game pack failed: %d\n", r);
+        return 1;
+    }
+    const char *headers[] = {HEADER_DIR "/game.h"};
+    nt_builder_merge_headers(headers, 1, HEADER_DIR "/game_assets.h");
+    (void)printf("Built game.ntpack\n");
+    return 0;
+}

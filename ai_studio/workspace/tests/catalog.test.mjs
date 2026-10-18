@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -31,6 +32,19 @@ function fixture(t) {
   mkdirSync(join(root, "games", "private"), { recursive: true });
   mkdirSync(join(root, "templates"), { recursive: true });
   return root;
+}
+
+function privateWorktree(root, id = "secret-game", alias = "secret-game-worktree") {
+  const canonical = join(root, "games", "private", id);
+  identity(root, `games/private/${id}`, "game", id, "Secret", `${id}-store`, ["Private Slot"]);
+  execFileSync("git", ["init"], { cwd: canonical, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "tests@example.invalid"], { cwd: canonical });
+  execFileSync("git", ["config", "user.name", "Tests"], { cwd: canonical });
+  execFileSync("git", ["add", "."], { cwd: canonical });
+  execFileSync("git", ["commit", "-m", "private game"], { cwd: canonical, stdio: "ignore" });
+  const worktree = join(root, "games", "private", alias);
+  execFileSync("git", ["worktree", "add", "--detach", worktree], { cwd: canonical, stdio: "ignore" });
+  return { canonical, worktree };
 }
 
 test("scanner derives public templates and games from folders and store folders", (t) => {
@@ -69,6 +83,92 @@ test("private games are discovered under games/private only when selected", (t) 
   assert.equal(mount.commitPolicy, "nested-private");
   assert.equal(mount.publicAlias, "Private Slot");
   assert.deepEqual(mount.enabledStores, ["evidence"]);
+});
+
+test("registered private worktrees extend one canonical mount's audit roots", (t) => {
+  const root = fixture(t);
+  const { worktree } = privateWorktree(root);
+
+  const mounts = listWorkspaceMounts(root, { includePrivate: true });
+  assert.equal(mounts.length, 1);
+  assert.equal(mounts[0].root, "games/private/secret-game");
+  assert.deepEqual(mounts[0].auditRoots, [
+    "games/private/secret-game",
+    "games/private/secret-game-worktree",
+  ]);
+  assert.equal(mounts[0].auditRoots.includes(worktree), false);
+});
+
+test("private worktree aliases may carry a different release version and web budget", (t) => {
+  const root = fixture(t);
+  const { worktree } = privateWorktree(root);
+  const manifest = join(worktree, "game.json");
+  const aliasIdentity = JSON.parse(readFileSync(manifest, "utf8"));
+  aliasIdentity.version = "1.1.0";
+  aliasIdentity.webDownloadBudgetBytes = 12345678;
+  writeFileSync(manifest, `${JSON.stringify(aliasIdentity, null, 2)}\n`, "utf8");
+
+  const [mount] = listWorkspaceMounts(root, { includePrivate: true });
+  assert.equal(mount.id, "secret-game");
+  assert.deepEqual(mount.auditRoots, [
+    "games/private/secret-game",
+    "games/private/secret-game-worktree",
+  ]);
+});
+
+test("an unregistered private identity alias fails closed", (t) => {
+  const root = fixture(t);
+  const { canonical } = privateWorktree(root);
+  identity(root, "games/private/forged-worktree", "game", "secret-game", "Secret", "secret-game-store", ["Private Slot"]);
+  writeFileSync(
+    join(root, "games/private/forged-worktree/.git"),
+    `gitdir: ${join(canonical, ".git")}\n`,
+    "utf8",
+  );
+
+  assert.throws(
+    () => listWorkspaceMounts(root, { includePrivate: true }),
+    /registered Git worktree/i,
+  );
+});
+
+test("a private identity alias cannot borrow another repository's Git common directory", (t) => {
+  const root = fixture(t);
+  privateWorktree(root);
+  identity(root, "games/private/external-worktree", "game", "secret-game", "Secret", "secret-game-store", ["Private Slot"]);
+  const external = join(root, "external-repository");
+  mkdirSync(external, { recursive: true });
+  execFileSync("git", ["init"], { cwd: external, stdio: "ignore" });
+  writeFileSync(join(root, "games/private/external-worktree/.git"), `gitdir: ${join(external, ".git")}\n`, "utf8");
+
+  assert.throws(
+    () => listWorkspaceMounts(root, { includePrivate: true }),
+    /common directory differs from canonical/i,
+  );
+});
+
+test("a private worktree alias with a changed identity fails closed", (t) => {
+  const root = fixture(t);
+  const { worktree } = privateWorktree(root);
+  identity(root, "games/private/secret-game-worktree", "game", "secret-game", "Other", "secret-game-store", ["Private Slot"]);
+
+  assert.throws(
+    () => listWorkspaceMounts(root, { includePrivate: true }),
+    /identity differs from canonical/i,
+  );
+  assert.equal(worktree.endsWith("secret-game-worktree"), true);
+});
+
+test("private worktree aliases reject symlinks and canonical case collisions", (t) => {
+  const root = fixture(t);
+  const { canonical } = privateWorktree(root);
+  symlinkSync(canonical, join(root, "games/private/secret-game-link"), process.platform === "win32" ? "junction" : "dir");
+  assert.throws(() => listWorkspaceMounts(root, { includePrivate: true }), /private.*symlink|junction/i);
+
+  rmSync(join(root, "games/private/secret-game-link"), { recursive: true, force: true });
+  const caseRoot = fixture(t);
+  identity(caseRoot, "games/private/Secret-Game", "game", "secret-game", "Secret", "secret-game-store");
+  assert.throws(() => listWorkspaceMounts(caseRoot, { includePrivate: true }), /case-collides canonical/i);
 });
 
 test("folder without an identity manifest is skipped with a warning", (t) => {
@@ -138,14 +238,14 @@ test("a malformed folder is skipped with a warning instead of failing the scan",
   assert.match(warnings[0], /mismatched.*basename must match/i);
 });
 
-test("a private game broken beside the requested one does not hide it", (t) => {
+test("a private identity alias without worktree registration cannot hide beside its canonical game", (t) => {
   const root = fixture(t);
   identity(root, "games/private/wanted-game", "game", "wanted-game", "Wanted", "wanted-game");
   identity(root, "games/private/wanted-game-perf", "game", "wanted-game", "Perf copy", "wanted-game-perf");
-  const warnings = [];
-  const [mount] = listWorkspaceMounts(root, { activeGameId: "wanted-game", warnings });
-  assert.equal(mount.root, "games/private/wanted-game");
-  assert.match(warnings[0], /wanted-game-perf.*basename must match/i);
+  assert.throws(
+    () => listWorkspaceMounts(root, { activeGameId: "wanted-game", warnings: [] }),
+    /identity differs from canonical|linked Git worktree metadata|registered Git worktree/i,
+  );
 });
 
 test("asking for a broken folder by name still fails loudly", (t) => {
@@ -153,7 +253,7 @@ test("asking for a broken folder by name still fails loudly", (t) => {
   identity(root, "games/private/broken-game", "game", "different-id", "Broken", "different-id");
   assert.throws(
     () => listWorkspaceMounts(root, { activeGameId: "broken-game", warnings: [] }),
-    /basename must match identity id/i,
+    /no canonical game/i,
   );
 });
 

@@ -25,7 +25,7 @@ TODO
 
 ## Core Loop
 
-See `data/core_loop.json`.
+TODO
 
 ## Player Verbs
 
@@ -37,11 +37,11 @@ TODO
 
 ## UI Flow
 
-See `data/ui_flow.json`.
+TODO
 
 ## Assets And Visual Proof
 
-See `data/asset_manifest.json`.
+TODO
 
 ## Validation
 

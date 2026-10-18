@@ -7,35 +7,35 @@
   "metadata_sources": [
     {
       "type": "pack-manifest",
-      "root": "templates/template/assets",
+      "root": "ai_studio/feature_testing/consumer/assets",
       "packs": [
         "kenney-audio"
       ],
-      "scope": "template:audio"
+      "scope": "feature-test-consumer:audio"
     },
     {
       "type": "pack-manifest",
-      "root": "templates/template/assets",
+      "root": "ai_studio/feature_testing/consumer/assets",
       "packs": [
         "kenney-icons"
       ],
-      "scope": "template:icons"
+      "scope": "feature-test-consumer:icons"
     },
     {
       "type": "pack-manifest",
-      "root": "templates/template/assets",
+      "root": "ai_studio/feature_testing/consumer/assets",
       "packs": [
         "template-starter-meshes"
       ],
-      "scope": "template:mesh"
+      "scope": "feature-test-consumer:mesh"
     },
     {
       "type": "pack-manifest",
-      "root": "templates/template/assets",
+      "root": "ai_studio/feature_testing/consumer/assets",
       "packs": [
         "template-ui-kit"
       ],
-      "scope": "template:ui"
+      "scope": "feature-test-consumer:ui"
     },
     {
       "type": "fonts-json",
@@ -151,99 +151,99 @@
       "metadata_scope": "ai-studio:profiling-hook"
     },
     {
-      "path": "templates/template/assets/audio/music/demo_jingle.mp3",
+      "path": "ai_studio/feature_testing/consumer/assets/audio/music/demo_jingle.mp3",
       "classification": "product-asset",
-      "metadata_scope": "template:audio"
+      "metadata_scope": "feature-test-consumer:audio"
     },
     {
-      "path": "templates/template/assets/audio/sfx/ui_click.wav",
+      "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
       "classification": "product-asset",
-      "metadata_scope": "template:audio"
+      "metadata_scope": "feature-test-consumer:audio"
     },
     {
-      "path": "templates/template/assets/icons/energy.png",
+      "path": "ai_studio/feature_testing/consumer/assets/icons/energy.png",
       "classification": "product-asset",
-      "metadata_scope": "template:icons"
+      "metadata_scope": "feature-test-consumer:icons"
     },
     {
-      "path": "templates/template/assets/icons/gold.png",
+      "path": "ai_studio/feature_testing/consumer/assets/icons/gold.png",
       "classification": "product-asset",
-      "metadata_scope": "template:icons"
+      "metadata_scope": "feature-test-consumer:icons"
     },
     {
-      "path": "templates/template/assets/icons/potion.png",
+      "path": "ai_studio/feature_testing/consumer/assets/icons/potion.png",
       "classification": "product-asset",
-      "metadata_scope": "template:icons"
+      "metadata_scope": "feature-test-consumer:icons"
     },
     {
-      "path": "templates/template/assets/icons/sword.png",
+      "path": "ai_studio/feature_testing/consumer/assets/icons/sword.png",
       "classification": "product-asset",
-      "metadata_scope": "template:icons"
+      "metadata_scope": "feature-test-consumer:icons"
     },
     {
-      "path": "templates/template/assets/icons/wood.png",
+      "path": "ai_studio/feature_testing/consumer/assets/icons/wood.png",
       "classification": "product-asset",
-      "metadata_scope": "template:icons"
+      "metadata_scope": "feature-test-consumer:icons"
     },
     {
-      "path": "templates/template/assets/icons/xp.png",
+      "path": "ai_studio/feature_testing/consumer/assets/icons/xp.png",
       "classification": "product-asset",
-      "metadata_scope": "template:icons"
+      "metadata_scope": "feature-test-consumer:icons"
     },
     {
-      "path": "templates/template/assets/meshes/cube.glb",
+      "path": "ai_studio/feature_testing/consumer/assets/meshes/cube.glb",
       "classification": "product-asset",
-      "metadata_scope": "template:mesh"
+      "metadata_scope": "feature-test-consumer:mesh"
     },
     {
-      "path": "templates/template/assets/ui/button.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/button.png",
       "classification": "product-asset",
-      "metadata_scope": "template:ui"
+      "metadata_scope": "feature-test-consumer:ui"
     },
     {
-      "path": "templates/template/assets/ui/icon_play.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/icon_play.png",
       "classification": "product-asset",
-      "metadata_scope": "template:ui"
+      "metadata_scope": "feature-test-consumer:ui"
     },
     {
-      "path": "templates/template/assets/ui/header.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/header.png",
       "classification": "product-asset",
-      "metadata_scope": "template:ui"
+      "metadata_scope": "feature-test-consumer:ui"
     },
     {
-      "path": "templates/template/assets/ui/panel.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/panel.png",
       "classification": "product-asset",
-      "metadata_scope": "template:ui"
+      "metadata_scope": "feature-test-consumer:ui"
     },
     {
-      "path": "templates/template/assets/ui/slider_fill_sm.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_fill_sm.png",
       "classification": "product-asset",
-      "metadata_scope": "template:ui"
+      "metadata_scope": "feature-test-consumer:ui"
     },
     {
-      "path": "templates/template/assets/ui/slider_fill.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_fill.png",
       "classification": "product-asset",
-      "metadata_scope": "template:ui"
+      "metadata_scope": "feature-test-consumer:ui"
     },
     {
-      "path": "templates/template/assets/ui/slider_thumb.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_thumb.png",
       "classification": "product-asset",
-      "metadata_scope": "template:ui"
+      "metadata_scope": "feature-test-consumer:ui"
     },
     {
-      "path": "templates/template/assets/ui/slider_track_sm.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_track_sm.png",
       "classification": "product-asset",
-      "metadata_scope": "template:ui"
+      "metadata_scope": "feature-test-consumer:ui"
     },
     {
-      "path": "templates/template/assets/ui/slider_track.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_track.png",
       "classification": "product-asset",
-      "metadata_scope": "template:ui"
+      "metadata_scope": "feature-test-consumer:ui"
     },
     {
-      "path": "templates/template/assets/ui/tile.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/tile.png",
       "classification": "product-asset",
-      "metadata_scope": "template:ui"
+      "metadata_scope": "feature-test-consumer:ui"
     },
     {
       "path": "features/software-cursor/example/assets/kenney_pointer_c_shaded_cc0.png",

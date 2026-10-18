@@ -1,6 +1,6 @@
 ---
 name: nt-blender-production
-description: "Use for Blender 3D scene creation, modeling, procedural geometry, look-development, lighting, rendering, technical scene audits, visual-reference matching, style propagation, or Blender-to-engine handoff. Enforces a fail-closed feedback loop so geometry integrity, art-direction fidelity, completion, evidence freshness, and independent review are proven before user review or rollout."
+description: "Create, render, audit, or hand off Blender scenes and models with geometry checks and visual-reference evidence."
 ---
 
 # NT Blender Production

@@ -1,7 +1,7 @@
 # remote-image Install
 
 The template already compiles the pack (`REMOTE_IMAGE_SOURCES` in
-`templates/template/CMakeLists.txt`), calls `remote_image_ensure_stb` from `cmake/RemoteImage.cmake` and links `stb_image` and registers its
+the consumer's `CMakeLists.txt`), calls `remote_image_ensure_stb` from `cmake/RemoteImage.cmake` and links `stb_image` and registers its
 test. A game wires it in three steps.
 
 ## Install
@@ -63,8 +63,8 @@ headroom so that scrolling evicts what left the screen, not what is on it.
 
 ## Verify
 
-- `cmake --build templates/template/build/native-debug --target test_remote_image`
-- `ctest --test-dir templates/template/build/native-debug -R remote_image --output-on-failure`
+- `cmake --build ai_studio/feature_testing/consumer/build/feature-verify --target test_remote_image`
+- `ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R remote_image --output-on-failure`
 
 The visual proof that a real image reaches the screen is the first
 consumer's, with a real URL.

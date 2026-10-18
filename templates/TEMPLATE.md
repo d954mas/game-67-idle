@@ -1,238 +1,88 @@
-# Game template (copy model)
+# Game starter contract
 
-A new game starts by **copying the template**. Reusable improvements go into
-AI Studio, the engine, or a reusable feature pack after review.
+The default `templates/template` starts with an empty screen. It provides an
+engine-backed application lifecycle, input boundary, game-owned state, save/load,
+a pack/build path, and places to add logic and presentation. It contains no
+sample gameplay, currencies, progression, HUD, settings screen, or sample world.
 
-**The template has two jobs:** (1) a runnable shell a game copies, and (2) — just
-as important — it **lays down the architecture for all future work**: the worked
-example of how code is decomposed (thin entry + systems + world state), how assets
-flow (pull → pack → render), and how UI/state/audio are wired. Future games (and
-the AI building them) follow the template's structure instead of inventing one or
-piling everything into one file. Investing in the template's architecture pays off
-in every game after it.
+## Separate ownership
 
-**Layout: in THIS repo, as folders** - `templates/<template-id>/` and
-`games/<game-id>/`. Each game is a self-contained folder copied from a template.
+- `template`: the lean default for a new game.
+- `ai_studio/feature_testing/`: the independent shared-feature test harness.
+  Its consumer owns integration fixtures and optional reference examples.
 
-- `games/new_game.mjs --visibility public|private` - copy `templates/template/`
-  -> `games/<game-id>/`; the engine submodule and shared asset library are
-  referenced, not copied. Public games are tracked by the parent Studio repo;
-  private games are nested repos under `games/<game-id>/`.
-- The asset library is a registered external source; never copied wholesale.
+New games are independent copies. Updating the template does not rewrite an
+existing game's state, assets, dependency records, or gameplay.
 
-## Reuse tiers — what is shared vs copied-and-customized
+## Architecture
 
-Two KINDS of reuse, different by nature:
+`src/main.c` owns initialization, frame order, and teardown. Keep gameplay
+decisions out of it.
 
-- **Dev pipeline** — `ai_studio/`, `.codex/skills/`, taskboard, reusable design
-  knowledge, and the shared asset library. Shared infra, ONE copy used by every
-  game; improvements are reviewed in their owning module. A copied game also
-  has its own private design knowledge base under `games/<id>/design/knowledge/`.
-- **Feature packs** — gameplay AND the shell (settings, audio, save, UI, terrain,
-  character controller, ...). These inherently need PER-GAME tweaks, so they are
-  **COPIED into a game when needed and the game owns/customizes its copy** — the same
-  model as the asset library (pull a copy → edit locally → promote good ones back).
-  NOT a frozen linked core: a single "terrain render" or "character controller" can't
-  fit every game unchanged.
+`src/world/world.h` holds game-owned runtime state. Systems own transitions;
+rendering reads the result. Persistent state is declared under `state/` and
+generated through `features/game-state`; saves and migrations use that module's
+public contract.
 
-Tiers:
-1. **Engine** — `external/neotolis-engine` (submodule; a linked, fix-once
-   shared core; stable public API).
-2. **Features** — storage of reusable feature packs. Three categories live here
-   (`features/README.md` §"Categories: module vs feature-pointer vs game code"):
-   **in-place module** (one shared copy, linked in-place by every consumer, e.g.
-   `items-core`/`progression-core`/`game-state`) joins the engine as the
-   LINKED-shared tier; **feature-pointer** (copy-then-own, e.g. `settings`/
-   `resource_panel`) is the copy-then-own tier below. A game copies a
-   feature-pointer when it needs one; good feature-pointers are promoted back.
-3. **Template** (minimal) — thin `main.c` conductor + `world` + game-owned
-   composition files (settings UI, audio composition, UI gear/panel, render shell,
-   pack builder). Persistence/storage and other in-place modules remain shared under
-   `features/`; the copied game owns only their wiring and policy.
-4. **Game-only** — a game's own systems, logic, pulled assets, tasks, design.
+`src/game_input.*` is the input boundary. Keep platform coordinates and device
+events there. Simulation and UI use Y-up coordinates.
 
-Trade-off (named honestly, per research): copy-then-customize IS "clone-and-own",
-which needs discipline — keep each feature self-contained and PROMOTE improvements
-back so `features/` stays the best version. The LINKED-shared tier (engine +
-in-place modules) absorbs the cross-cutting fixes that clone-and-own otherwise
-can't propagate; the copy-then-own tier (feature-pointers + game code) is where
-per-game customization is expected and healthy.
+`src/features/game_features.*` provides explicit lifecycle phases:
+init, update, react, record, draw-world, draw-UI, shutdown. Add direct calls for
+installed capabilities. Call order is visible; no automatic registry or plugin
+scheduler is required.
 
-## Feature library - copyable feature packs
+`src/render/` owns presentation. The default renderer clears the framebuffer;
+it does not spawn entities or manufacture UI. Add real game presentation only
+when the game's design needs it. User-visible text uses engine text rendering
+and real fonts.
 
-Besides the template, `features/` is the shared pool of optional game capabilities:
-browse what exists, copy what you need, customize the local copy, and promote useful
-generalized improvements back. A feature can contain code, assets, state schema,
-UI screens, DevAPI hooks, validation, and notes. Not every entry here copy-then-owns
-the same way — see `features/README.md` §"Categories: module vs feature-pointer vs
-game code" for which is which.
+## Optional capabilities
 
-- **Each feature is its own folder.** e.g. `features/terrain/` can include
-  source files, asset inputs, state keys, a copy note, and an `example/` when a tiny
-  runnable demo is useful.
-- **Self-contained is the entry rule**: a feature lists its dependencies explicitly
-  and does not rely on a specific game's globals. Use the engine, the template's
-  public world/state/system boundaries, and explicitly listed sibling features.
-- **Copy** a feature into a game or template; the copied project owns its version.
-  Promote a game's good local feature back to `features/` only after it generalizes.
-- **Browsable later**: a future pass can add manifests, previews, install scripts,
-  dependency checks, or enable/disable switches. For now this is a simple folder
-  convention, not a plugin architecture.
-- `features/` holds optional capabilities (terrain, inventory, dialogue, settings
-  screen variants, day/night, etc.) that a game or template pulls on demand. The
-  always-needed starter shell remains in the template.
+Look in `features/README.md` before implementing a capability. Use engine public
+APIs before custom primitives. A shared invariant implementation compiles in
+place from `features/`; a reference expected to be repainted is copied and then
+owned by its game. Game composition, balance, seed content and save history stay
+with the game.
 
-## Reusable Studio Base
+Settings and resource-panel references live under
+`ai_studio/feature_testing/consumer/src/features/`. Their INSTALL files state dependencies;
+copying the UI alone does not install localization, schemas, theme, or scene
+bindings.
 
-The reusable pipeline: `ai_studio/`, `.codex/skills/`, and
-`ai_studio/game_design/knowledge_base/knowledge` + `sources`. Game-specific knowledge is not
-stored there; it lives in each copied game's `design/knowledge/`.
+Feature maturity does not force default installation. Each template's
+`game-dependencies.json` names only the modules its runtime actually compiles,
+with exact matching versions. `specified` modules cannot be runtime
+dependencies.
 
-## Template Seed - the runnable starter shell
+## Creation and ownership
 
-The template is NOT a bare seed: a new game opens to a working shell and builds on it.
+Use an explicit visibility choice:
 
-- **Design scaffold**: `design/concept.md`, `design/gdd.md`,
-  `design/knowledge/`, and `design/data/*.json`. This scaffold belongs in the
-  template and is copied into each new game.
-- **Pack pipeline**: `src/build_packs.c` + CMake `build_game_packs` → `<game>.ntpack`
-  + generated asset-id header. Packs the items below.
-- **Text**: a starter **OFL font** (`assets/fonts/`) + `slug_text` shaders +
-  `nt_text_renderer`. Every game has readable text from the first run.
-- **Meshes**: `mesh_inst` shaders through `nt_mesh_renderer`, with TWO worked
-  examples so the AI learns both paths and uses the right one:
-  - **untextured / per-instance colour** — 1×1 white texture + `baseColorFactor`
-    (most library glb, e.g. poly.pizza, are vertex/colour-only),
-  - **textured** — a starter glb that ships a texture; pack the texture, bind it as
-    `u_texture`, sample it. So games take **textured** meshes from the first run, not
-    only flat-coloured ones.
-  Ready to draw library glb: pull → pack → render (skill `nt-asset-workflow`). A small
-  CC0 textured glb is sourced into `assets/meshes/` as the textured example.
-- **State + saves**: game-owned schemas/migrations under `state/`, generated
-  fragments in the build tree, and the in-place `features/game-state` runtime
-  (save/load, autosave, native/web adapters).
-- **Audio**: `src/game_audio.*` (music/SFX buses).
-- **Startup UX**: the template opens to a **live resource-panel HUD** (gold
-  counter + xp bar, via `resource_panel`/`demo_hud`) over two sample cubes, with a
-  **settings (gear) button in the top-right** of the GUI. Settings are NOT shown on
-  launch — pressing the gear opens the panel below.
-- **Settings panel** (`src/features/settings/` + `src/ui/*`):
-  - volume sliders (master / music / SFX),
-  - a **Close** button,
-  - a **Reset** button that **resets the game state on a long-press** (hold to
-    confirm — avoids an accidental wipe).
-- **Base GUI art** (CC0, sourced from the library/Kenney UI): panels, buttons,
-  a close (✕) icon — a 9-slice panel + button kit so menus look intentional day one.
+```powershell
+node games/new_game.mjs --id <game-id> --template template --visibility private
+```
 
-## Architecture — decomposition the template teaches BY EXAMPLE
+Public games use `--visibility public`. Private game identities, design and
+evidence remain in their nested private repositories. Keep heavy authoring files
+in the external synchronized workfile workspace; import only shipping assets
+with license, provenance, origin and integrity.
 
-The biggest problem: agents dump the whole game into one file. The template ships
-a **decomposed reference structure** so a copied game inherits it instead of a
-mega-`main`. Rules the seed demonstrates:
+The copied `design/` and `.ai_studio/` scaffolds give the game its own design,
+knowledge, task/canvas/evidence routing. They do not prescribe a gameplay genre.
 
-- **Thin entry point** (`src/main.c`): init systems → run the frame loop → tear
-  down. NO game logic lives here — it only wires systems together.
-- **Systems, one file each** (`.c`/`.h`), single responsibility, data-oriented
-  per the engine. The template ships a minimal but REAL set:
-  - **world state** (`world/world.h`) — the World's source of truth (player
-    position/yaw, mesh entity handles). Other systems read/write it; they do
-    not own entities.
-  - **movement** (`systems/sys_move.c`) — WASD input drives the World's player
-    position/yaw, its own system, separate from rendering.
-  - **render** (`render/render_mesh.c`) — draws the World's mesh entities (a
-    coloured player cube + a textured prop cube) from world state, separate
-    from movement.
-  - **settings** (`src/features/settings/`, the reference feature-pointer) —
-    the gear panel, sliders, long-press reset.
-- Systems communicate through the **world state**, not by calling each other's
-  internals. A new game adds its own systems the same way (copy a system file,
-  register it in `main`), never by growing one file.
+## Proof
 
-This is what "the AI understands the structure" means: the template is the worked
-example of decomposition, not a blank seed.
+Run the selected consumer's `tools/game.mjs` from that template or game folder.
+The tool owns compiler-output capture and the core/slow/taste test tiers.
 
-### Concrete `src/` layout the template ships
+Prove the blank starter with a real launch and screenshot: no sample entities,
+HUD or unsolicited menus. A uniform clear frame is the expected output. Prove
+state/save and creation/build contracts with focused tests.
 
-Motivated by the anti-pattern: an earlier game-local seed grew into a large
-god-file mixing scene build, input, update, render, DevAPI endpoints, the
-HUD/UI tree, material setup, and `main`. The template ships these as SEPARATE
-modules from day one so a copied game keeps them apart:
+Shared-feature integration coverage belongs in `ai_studio/feature_testing/` or the feature's
+own test consumer. Removing a module from default startup must not silently
+remove that module's test coverage.
 
-    src/
-      main.c                   THE CONDUCTOR: init subsystems -> nt_app_run(frame) ->
-                               teardown. frame() only CALLS subsystems in order
-                               (game_features -> render); it holds no game logic
-                               of its own.
-      world/world.h            the World: single source of truth (player position/
-                               yaw, mesh entity handles).
-      systems/
-        sys_move.{c,h}          WASD input -> the World's player position/yaw.
-      features/                FEATURE-BASED ARCHITECTURE: folder per feature, ONE
-                               public header (rules: src/features/README.md):
-        game_features.{c,h}      the frame aggregator (7 phases: init/update/react/
-                                 record/draw_world/draw_ui/shutdown; list = z-order)
-        settings/                 feature-pointer: gear panel, sliders, close,
-                                 long-press reset (public API: settings.h)
-        items/                    on_new_game seed (reason verbs in items-core); the
-                                 ownership core is the in-place module
-                                 features/items-core/ (L1)
-        resource_panel/           feature-pointer: HUD widget, gold counter + xp
-                                 bar over items/progression (L2)
-      render/                  RENDER SYSTEMS, separate from game logic:
-        render_mesh.{c,h}        materials (coloured + textured), the mesh
-                                 renderer, a follow camera; draws the World's
-                                 mesh entities from world state + frame uniforms
-        capture.{c,h}             screenshot/capture support
-      ui/
-        hud.{c,h}                 the HUD/UI tree (panels/buttons, the top-right gear)
-        ui_runtime.{c,h}          per-feature draw_ui frame (ctx + z-order calls)
-        theme.{c,h}               shared UI theme
-        demo_hud.{c,h}            resource_panel composition (idle-income demo)
-      game_{events,event_render,log,analytics,format}.*
-                               Game-owned L0 event/observability/format helpers.
-                               Save/storage/JSON orchestration is consumed in
-                               place from `features/game-state`.
-      build_packs.c           pack builder (font + shaders + white + textured sample)
-      game_audio.*            game audio composition over `features/audio-core`
-    devapi/
-      smoke_bot.py            game-local Python runtime bot: launch via DevAPI,
-                              discover commands, click a stable UI id, capture
-                              evidence; copy this pattern for scenario tests
-      responsive_viewports.py reusable QCLR_002 helper: relaunch each viewport,
-                              let a bot prepare a state, then capture screenshots
-                              plus ui.tree bounds for responsive-layout review
-    state/                    the 4 fragment schemas (codegen source): settings/
-                              items/progression/game
-    content/                  items.lock.json (Items release history) + loc strings
-    items.lua.json            canonical Items Lua evaluator manifest
-    design/items/             modular Items Lua declarations
-
-Outside `src/`, shared in-place modules carry the reusable runtime
-(one shared copy, linked in-place, NOT copy-then-own): `features/items-core/`
-(ownership, catalog, reconcile), `features/progression-core/` (curve,
-level-ups), and `features/game-state/` (fragment registry, native/web storage,
-universal `game.state` DevAPI dispatch). See `features/README.md`
-§"Categories: module vs feature-pointer vs game code".
-
-Engine-owned pieces stay engine-side (public API): `nt_mesh_renderer`,
-`nt_text_renderer`, `nt_devapi`, `cjson`, ECS comps, `nt_resource`. Seed infra
-files (`game_audio.*`, `state/`) stay game-side; persistence/storage implementation
-stays in-place under `features/game-state`. A new game adds a
-system by dropping `systems/sys_<thing>.{c,h}` and registering it in `main`; do
-not grow one large file.
-
-## GAME-ONLY
-
-The template contains only a placeholder `design/` scaffold. Filled-in game
-design content, private knowledge pages, Taskboard project/epic/task entries in
-`ai_studio/taskboard/items/`, game-local runtime scripts, game-local asset
-source/storage folders, built runtime packs (`*.ntpack`), and game src modules
-(anything in `src/` beyond the seed files) are owned by `games/<id>/`.
-
-## Build approach
-
-Most of the shell already exists as proven reusable runtime code: pack pipeline,
-text, meshes, state, storage, and audio. The template is distilled from earlier
-prototype work: genericize game-specific names, strip game logic, keep the
-shell. The settings screen + GUI art + long-press reset are added on top,
-sourcing the panel/button kit from the shared library (Kenney UI, CC0).
+Release and portal behavior use the owning platform/package contracts and are
+verified separately from the blank-screen claim.

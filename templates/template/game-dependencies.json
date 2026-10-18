@@ -7,70 +7,16 @@
   },
   "features": [
     {
-      "id": "audio-core",
-      "source": "features/audio-core",
-      "version": "1.2.2",
-      "compatibility": "validated by the template build and test suite"
-    },
-    {
-      "id": "game-events",
-      "source": "features/game-events",
-      "version": "3.1.0",
-      "compatibility": "validated by the template build and test suite"
-    },
-    {
       "id": "game-state",
       "source": "features/game-state",
       "version": "4.11.0",
       "compatibility": "validated by the template build and test suite"
     },
     {
-      "id": "items-core",
-      "source": "features/items-core",
-      "version": "8.1.0",
-      "compatibility": "validated by the template build and test suite"
-    },
-    {
-      "id": "leaderboard",
-      "source": "features/leaderboard",
-      "version": "0.2.0",
-      "compatibility": "validated by the template build and test suite"
-    },
-    {
-      "id": "localization",
-      "source": "features/localization",
-      "version": "1.2.0",
-      "compatibility": "validated by the template build and test suite"
-    },
-    {
       "id": "platform-sdk",
       "source": "features/platform-sdk",
       "version": "2.4.0",
-      "compatibility": "validated by the template build and test suite"
-    },
-    {
-      "id": "progression-core",
-      "source": "features/progression-core",
-      "version": "8.0.0",
-      "compatibility": "validated by the template build and test suite"
-    },
-    {
-      "id": "remote-image",
-      "source": "features/remote-image",
-      "version": "0.1.0",
-      "compatibility": "validated by the template build and test suite"
-    },
-    {
-      "id": "scenes-core",
-      "source": "features/scenes-core",
-      "version": "0.3.0",
-      "compatibility": "validated by the template scene-manager CTests, scaffold/consumer tests, and native/web builds"
-    },
-    {
-      "id": "ui-kit",
-      "source": "features/ui-kit",
-      "version": "2.0.0",
-      "compatibility": "validated by the template build and test suite"
+      "compatibility": "web bootstrap and selected target adapter; no gameplay, ads, or native SDK composition is installed"
     }
   ],
   "compatibility": "seed for exact game-owned dependency records created from this template"

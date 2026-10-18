@@ -19,14 +19,15 @@ export const ICON_PRESETS = ["native-debug", "devapi-debug"];
 const NT_PACK_MAGIC = 0x4b41504e; // "NPAK" LE (nt_pack_format.h)
 const NT_PACK_VERSION = 3;
 const NT_ATLAS_MAGIC = 0x534c5441; // "ATLS" LE (nt_atlas_format.h)
-const NT_ATLAS_VERSION = 6;
+const NT_ATLAS_VERSION = 8;
 const NT_ASSET_ATLAS = 6; // nt_asset_type_t
 
 const PACK_HEADER_SIZE = 32; // NtPackHeader
 const ASSET_ENTRY_SIZE = 24; // NtAssetEntry
-const ATLAS_HEADER_SIZE = 28; // NtAtlasHeader
-const ATLAS_REGION_SIZE = 48; // NtAtlasRegion (v6)
-const ATLAS_VERTEX_SIZE = 8; // NtAtlasVertex
+const ATLAS_HEADER_SIZE = 32; // NtAtlasHeader
+const ATLAS_REGION_SIZE = 48; // NtAtlasRegion (v8)
+const ATLAS_POSITION_SIZE = 8; // float[2]
+const ATLAS_UV_SIZE = 4; // NtAtlasUv
 
 export const ICON_LIMITS = Object.freeze({
   maxPackBytes: 64 * 1024 * 1024,
@@ -45,7 +46,7 @@ export const ICON_LIMITS = Object.freeze({
 // Parse NtPackHeader + NtAssetEntry[] and, for EVERY asset_type==NT_ASSET_ATLAS
 // entry (spec §3b step 2 -- the template pack has TWO atlases, `ui` then
 // `icons`; stopping at the first entry would silently drop every icon region),
-// the NtAtlasRegion[]/NtAtlasVertex[] rect data. Version-assert FIRST (spec §3b
+// the NtAtlasRegion[]/NtAtlasUv[] rect data. Version-assert FIRST (spec §3b
 // step 0): a pack/atlas version this parser was not written against returns a
 // `reason` instead of guessing at a since-changed byte layout.
 export function parsePackBuffer(buf) {
@@ -64,19 +65,26 @@ export function parsePackBuffer(buf) {
     return { reason: "pack asset table exceeds file bounds" };
   }
 
-  const atlasOffsets = [];
+  const atlasEntries = [];
   for (let i = 0; i < assetCount; i++) {
     const off = PACK_HEADER_SIZE + i * ASSET_ENTRY_SIZE;
     if (dv.getUint8(off + 18) !== NT_ASSET_ATLAS) continue;
-    atlasOffsets.push(dv.getUint32(off + 8, true));
+    atlasEntries.push({
+      offset: dv.getUint32(off + 8, true),
+      size: dv.getUint32(off + 12, true),
+    });
   }
-  if (atlasOffsets.length > ICON_LIMITS.maxAtlasCount) return { reason: "pack atlas count exceeds viewer cap" };
-  if (atlasOffsets.length === 0) return { reason: "pack has no atlas assets" };
+  if (atlasEntries.length > ICON_LIMITS.maxAtlasCount) return { reason: "pack atlas count exceeds viewer cap" };
+  if (atlasEntries.length === 0) return { reason: "pack has no atlas assets" };
 
   const regionsByHash = new Map();
   let totalVertices = 0;
-  for (const base of atlasOffsets) {
-    if (base + ATLAS_HEADER_SIZE > buf.length) return { reason: "atlas header exceeds file bounds" };
+  for (const { offset: base, size: atlasSize } of atlasEntries) {
+    // NtAtlasHeader offsets are relative to this asset, never to the pack.
+    // Checking against its declared span prevents one corrupt atlas from
+    // borrowing metadata or geometry from its next pack neighbour.
+    if (base > buf.length || atlasSize > buf.length - base) return { reason: "atlas asset exceeds file bounds" };
+    if (atlasSize < ATLAS_HEADER_SIZE) return { reason: "atlas header exceeds asset bounds" };
     const atlasMagic = dv.getUint32(base, true);
     const atlasVersion = dv.getUint16(base + 4, true);
     if (atlasMagic !== NT_ATLAS_MAGIC || atlasVersion !== NT_ATLAS_VERSION) {
@@ -84,13 +92,31 @@ export function parsePackBuffer(buf) {
     }
     const regionCount = dv.getUint16(base + 6, true);
     const pageCount = dv.getUint16(base + 8, true);
+    const totalVertexCount = dv.getUint32(base + 16, true);
+    const indexOffset = dv.getUint32(base + 20, true);
+    const totalIndexCount = dv.getUint32(base + 24, true);
     if (pageCount > ICON_LIMITS.maxPageCount) return { reason: "atlas page count exceeds viewer cap" };
     if (regionCount > ICON_LIMITS.maxRegionCount) return { reason: "atlas region count exceeds viewer cap" };
+    if (totalVertexCount > ICON_LIMITS.maxVertexCount) return { reason: "atlas vertex count exceeds viewer cap" };
     const vertexOffset = dv.getUint32(base + 12, true);
     const regionsStart = base + ATLAS_HEADER_SIZE + pageCount * 8; // skip texture_resource_ids[page_count]
-    if (regionsStart + regionCount * ATLAS_REGION_SIZE > buf.length) {
-      return { reason: "atlas region section exceeds file bounds" };
-    }
+    const metadataEnd = regionsStart + regionCount * ATLAS_REGION_SIZE;
+    if (metadataEnd > base + atlasSize) return { reason: "atlas region section exceeds asset bounds" };
+
+    // Mirror atlas_try_validate_and_carve_blob: the builder serializes the
+    // metadata, positions, UVs and indices as one ordered asset layout.
+    const metadataSize = metadataEnd - base;
+    if (vertexOffset !== metadataSize) return { reason: "atlas vertex offset does not follow metadata" };
+    const positionBytes = totalVertexCount * ATLAS_POSITION_SIZE;
+    if (positionBytes > atlasSize - vertexOffset) return { reason: "atlas position section exceeds asset bounds" };
+    const uvOffset = vertexOffset + positionBytes;
+    const uvBytes = totalVertexCount * ATLAS_UV_SIZE;
+    if (uvBytes > atlasSize - uvOffset) return { reason: "atlas UV section exceeds asset bounds" };
+    const expectedIndexOffset = uvOffset + uvBytes;
+    if (indexOffset !== expectedIndexOffset) return { reason: "atlas index offset does not follow UV data" };
+    const indexBytes = totalIndexCount * 2;
+    if (indexBytes > atlasSize - indexOffset) return { reason: "atlas index section exceeds asset bounds" };
+
     for (let r = 0; r < regionCount; r++) {
       const rOff = regionsStart + r * ATLAS_REGION_SIZE;
       // BigInt ALWAYS: name_hash is a 64-bit xxh64, well past
@@ -103,19 +129,28 @@ export function parsePackBuffer(buf) {
       if (vertexCount < 1 || vertexCount > ICON_LIMITS.maxRegionVertices) {
         return { reason: "atlas region vertex count exceeds viewer cap" };
       }
+      if (vertexStart > totalVertexCount || vertexCount > totalVertexCount - vertexStart) {
+        return { reason: "atlas region vertex span exceeds atlas vertices" };
+      }
       totalVertices += vertexCount;
       if (totalVertices > ICON_LIMITS.maxVertexCount) return { reason: "atlas vertex count exceeds viewer cap" };
+      const indexStart = dv.getUint32(rOff + 28, true);
+      const indexCount = dv.getUint8(rOff + 35);
+      if (indexStart > totalIndexCount || indexCount > totalIndexCount - indexStart) {
+        return { reason: "atlas region index span exceeds atlas indices" };
+      }
       const pageIndex = dv.getUint8(rOff + 33);
       if (pageIndex >= pageCount) return { reason: "atlas region page index exceeds page count" };
       let minU = Infinity;
       let minV = Infinity;
       let maxU = -Infinity;
       let maxV = -Infinity;
+      const uvsStart = base + uvOffset;
       for (let v = 0; v < vertexCount; v++) {
-        const vOff = base + vertexOffset + (vertexStart + v) * ATLAS_VERTEX_SIZE;
-        if (vOff + ATLAS_VERTEX_SIZE > buf.length) return { reason: "atlas vertex section exceeds file bounds" };
-        const u = dv.getUint16(vOff + 4, true);
-        const vv = dv.getUint16(vOff + 6, true);
+        const uvOff = uvsStart + (vertexStart + v) * ATLAS_UV_SIZE;
+        if (uvOff + ATLAS_UV_SIZE > base + atlasSize) return { reason: "atlas UV section exceeds asset bounds" };
+        const u = dv.getUint16(uvOff, true);
+        const vv = dv.getUint16(uvOff + 2, true);
         if (u < minU) minU = u;
         if (u > maxU) maxU = u;
         if (vv < minV) minV = vv;

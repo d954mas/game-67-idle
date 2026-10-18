@@ -1,0 +1,102 @@
+#include "features/game_features.h"
+#include "systems/sys_move.h"
+#include "features/settings/settings.h"
+#include "game_scenes.h"
+#if defined(__EMSCRIPTEN__)
+#include "features/platform_sdk/platform_sdk_web.h"
+#endif
+#include "features/progression/progression.h" /* И3a: progression_update() tick (auto/threshold level-ups) */
+#include "ui/demo_hud.h" /* И3b: demo composition (resource_panel over items/progression) */
+#include "ui/focus_prompt_ui.h"
+#include "ui/platform_sdk_debug.h"
+#include "ui/ui_runtime.h"
+#include "game_audio.h"
+#include "app/nt_app.h" /* g_nt_app.dt */
+#if GAME_EVENTS_LOG_MIRROR
+#include "game_events_log_mirror.h"
+#endif
+#if NT_DEVAPI_ENABLED
+#include "game_events_devapi.h" /* E3: DevAPI tail recorder */
+#endif
+#if FEATURE_GAME_ANALYTICS
+#include "game_analytics.h" /* E4: local analytics NDJSON writer */
+#endif
+
+/* settings — первая мигрированная фича (И1): draw_ui теперь владеет
+   ui_runtime-кадром и рисует settings по одной строке (z-order). Рендер-
+   системы (render_mesh_draw/hud_draw) ПОКА прямые вызовы шелла в main.c,
+   поэтому draw_world остаётся заглушкой. */
+
+static bool s_settings_was_open;
+
+void game_features_init(World *w) {
+    platform_sdk_debug_init();
+    (void)game_audio_init();
+    s_settings_was_open = settings_is_open();
+    (void)w; /* TODO(feature-migration): per-feature <id>_init(w) здесь */
+}
+
+void game_features_update(World *w, float dt) {
+    game_audio_update();
+    const bool settings_open_now = settings_is_open();
+    if (settings_open_now && !s_settings_was_open) {
+        /* Keep retrying until the asynchronous clip is ready. */
+        if (game_audio_play_cue(GAME_AUDIO_CUE_UI_CLICK)) {
+            s_settings_was_open = true;
+        }
+    } else {
+        s_settings_was_open = settings_open_now;
+    }
+    (void)w;
+    (void)dt;
+}
+
+void game_features_update_root(
+    World *w, float dt, const game_input_frame_t *input) {
+    if (game_scenes_can_process_game_input() && !focus_prompt_ui_visible()) {
+        sys_move(w, dt, input);
+    }
+    demo_hud_update(dt);
+    progression_update();
+}
+
+/* Event consumers reset cursors when game_events_tick changes. The fixed
+   frame arena keeps event and payload pointers stable until reset. */
+void game_features_react(World *w) {
+    (void)w; /* TODO: add event reactors using game_event_log(). */
+}
+
+void game_features_record(World *w) {
+    (void)w;
+#if GAME_EVENTS_LOG_MIRROR
+    game_events_log_mirror_record();
+#endif
+#if NT_DEVAPI_ENABLED
+    game_events_devapi_record(); /* E3: DevAPI tail — render-at-copy into the ring */
+#endif
+#if FEATURE_GAME_ANALYTICS
+    game_analytics_record(); /* E4: local analytics NDJSON writer (arena alive; reads only) */
+#endif
+}
+
+void game_features_draw_world(World *w) { (void)w; /* TODO: add feature render systems. */ }
+void game_features_draw_ui(
+    World *w, const game_input_frame_t *input) {
+    /* UI-слой фич: агрегатор владеет ui_runtime-кадром; каждая фича получает
+       ctx и рисует свой слой ОДНОЙ строкой, порядок вызовов = z-order. */
+    if (ui_runtime_begin(g_nt_app.dt, input)) {
+        game_scenes_build_ui(ui_runtime_ctx());
+        // Outside the gate: the mock portal overlay stands in for a real one,
+        // and a break or a login can open from a modal scene (settings) where
+        // the root scene no longer takes input.
+        platform_sdk_debug_draw_ui(ui_runtime_ctx());
+        game_scenes_build_input_gate(ui_runtime_ctx());
+        focus_prompt_ui_build(ui_runtime_ctx());
+        ui_runtime_end();
+    }
+}
+void game_features_shutdown(World *w) {
+    game_audio_shutdown();
+    (void)w; /* TODO: per-feature shutdown */
+    platform_sdk_debug_shutdown();
+}

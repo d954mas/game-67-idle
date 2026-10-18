@@ -260,8 +260,8 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot_test.py
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli_test.py
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_c_catalog_test.py
-cmake --build templates/template/build/native-debug --target game test_items_api test_items_fragment
-ctest --test-dir templates/template/build/native-debug -R "items|progression|template_composition" --output-on-failure
+cmake --build ai_studio/feature_testing/consumer/build/feature-verify --target test_items_api test_items_fragment
+ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R "items|progression|feature_consumer_composition" --output-on-failure
 node features/validate_contracts.mjs
 ```
 

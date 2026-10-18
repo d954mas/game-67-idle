@@ -56,9 +56,9 @@ const ROUTES = Object.freeze({
   },
 });
 
-export function nativeConfigureCommand(platform = process.platform) {
+export function nativeConfigureCommand(platform = process.platform, source = "templates/template", build = "native-debug") {
   return [
-    "cmake", "-S", "templates/template", "-B", "templates/template/build/native-debug", "-G", "Ninja",
+    "cmake", "-S", source, "-B", `${source}/build/${build}`, "-G", "Ninja",
     "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Debug",
     ...(platform === "linux" ? ["-DCMAKE_EXE_LINKER_FLAGS_DEBUG=-fsanitize=address,undefined"] : []),
   ];
@@ -70,12 +70,9 @@ const NATIVE_COMMANDS = [
   ["ctest", "--test-dir", "templates/template/build/native-debug", "--output-on-failure"],
 ];
 const FEATURE_NATIVE_COMMANDS = [
-  [
-    "cmake", "-S", "templates/template", "-B", "templates/template/build/feature-verify", "-G", "Ninja",
-    "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Debug",
-  ],
-  ["cmake", "--build", "templates/template/build/feature-verify"],
-  ["ctest", "--test-dir", "templates/template/build/feature-verify", "--output-on-failure"],
+  nativeConfigureCommand(process.platform, "ai_studio/feature_testing/consumer", "feature-verify"),
+  ["cmake", "--build", "ai_studio/feature_testing/consumer/build/feature-verify"],
+  ["ctest", "--test-dir", "ai_studio/feature_testing/consumer/build/feature-verify", "--output-on-failure"],
 ];
 const WEB_COMMANDS = [
   ["node", "templates/template/tools/build_web.mjs", "--preset", "wasm-release", "--target", "itch", "--no-debug-ui"],
@@ -89,7 +86,7 @@ const CHECKS = Object.freeze([
   {
     id: "reference-template.native",
     commands: NATIVE_COMMANDS,
-    nativeRoots: ["features/audio-core/tests", "templates/template/tests"],
+    nativeRoots: ["templates/template/tests"],
     releaseOnly: true,
   },
   { id: "reference-template.web", commands: WEB_COMMANDS, requiresEmsdk: true, releaseOnly: true },
@@ -149,20 +146,14 @@ const CHECKS = Object.freeze([
   { id: "studio.workspace", testRoots: ["ai_studio/workspace"] },
   { id: "workspace.game-create", testFiles: ["games/new_game.test.mjs"] },
   { id: "features.contracts", testFiles: ["features/validate_contracts.test.mjs"], commands: [["node", "features/validate_contracts.mjs"]] },
+  { id: "features.node", testRoots: ["features"] },
   { id: "features.audio.web", testFiles: ["features/audio-core/tests/test_audio_web_library.mjs"] },
   {
     id: "features.native",
     commands: FEATURE_NATIVE_COMMANDS,
-    changedOnly: true,
-    nativeRoots: [
-      "features/audio-core/tests",
-      "features/game-state/tests",
-      "features/items-core/tests",
-      "features/progression-core/tests",
-      "features/scenes-core/tests",
-      "features/test-goldens/tests",
-    ],
+    nativeRoots: ["features", "ai_studio/feature_testing/consumer/tests"],
   },
+  { id: "features.consumer", testRoots: ["ai_studio/feature_testing"], pythonRoots: ["ai_studio/feature_testing/consumer/devapi"] },
   {
     id: "features.audio.linux",
     commandsByPlatform: { linux: [["bash", "features/audio-core/tests/run_linux.sh"]] },
@@ -197,16 +188,7 @@ const CHECKS = Object.freeze([
     ],
     nativeRoots: ["features/scenes-core/tests"],
   },
-  { id: "reference-template", testFiles: [
-    "templates/template/tools/build_web.test.mjs",
-    "templates/template/tools/game.test.mjs",
-    "templates/template/tools/lib/runtime_build.test.mjs",
-    "templates/template/tools/lib/studio_root.test.mjs",
-    "templates/template/tools/package_web.test.mjs",
-    "templates/template/tools/minify_web_release.test.mjs",
-    "templates/template/tools/package_web_smoke.test.mjs",
-    "templates/template/tools/portal_evidence.test.mjs",
-  ] },
+  { id: "reference-template", testRoots: ["templates/template/tools"] },
   { id: "reference-template.python", pythonRoots: ["templates/template/devapi"] },
 ]);
 
@@ -219,7 +201,7 @@ const DOMAINS = Object.freeze([
   { id: "work-management", checks: ["studio.taskboard"] },
   { id: "design", checks: [] },
   { id: "runtime", checks: ["studio.runtime-automation", "studio.runtime-automation.live"] },
-  { id: "features", checks: ["features.contracts", "features.audio.web", "features.native", "features.audio.linux", "features.platform-sdk", "features.game-state", "features.items-core", "features.progression-core", "features.scenes-core"] },
+  { id: "features", checks: ["features.contracts", "features.node", "features.consumer", "features.audio.web", "features.native", "features.audio.linux", "features.platform-sdk", "features.game-state", "features.items-core", "features.progression-core", "features.scenes-core", "features.localization", "features.software-cursor", "features.test-goldens"] },
   { id: "template-release", checks: ["reference-template", "reference-template.python", "reference-template.native", "reference-template.web"] },
 ]);
 
@@ -281,6 +263,7 @@ function domainForPath(path) {
   if (path.startsWith("ai_studio/studio_shell/")) return "shell";
   if (path.startsWith("ai_studio/taskboard/")) return "work-management";
   if (path.startsWith("ai_studio/workspace/")) return "workspace";
+  if (path.startsWith("ai_studio/feature_testing/")) return "features";
   if (path.startsWith("features/")) return "features";
   if (path.startsWith("templates/")) return "template-release";
   if (
@@ -294,6 +277,7 @@ function domainForPath(path) {
     || path.startsWith("ai_studio/python/")
     || path.startsWith("ai_studio/quality/")
     || path.startsWith(".codex/")
+    || path.startsWith(".agents/")
     || path.startsWith(".claude/")
     || [".gitignore", "AGENTS.md", "CLAUDE.md", "README.md", "ai_studio/README.md"].includes(path)
   ) return "harness";
@@ -358,8 +342,7 @@ function suiteOwnsTest(suite, path) {
 
 function cmakeSourceCorpus(root, trackedPaths) {
   return trackedPaths
-    .filter((path) => path === "templates/template/CMakeLists.txt"
-      || (path.startsWith("templates/template/cmake/") && path.endsWith(".cmake")))
+    .filter((path) => /^(?:(?:templates|features)\/[^/]+|ai_studio\/feature_testing\/consumer)\/(?:CMakeLists\.txt|cmake\/.+\.cmake)$/.test(path))
     .filter((path) => existsSync(resolve(root, path)))
     .map((path) => readFileSync(resolve(root, path), "utf8").replace(/#.*$/gm, ""))
     .join("\n");
@@ -391,14 +374,16 @@ function rollingAppend(current, chunk, limit = 8192) {
   return `${current}${chunk}`.slice(-limit);
 }
 
-function runCommandBounded(command, args, options) {
+export function runCommandBounded(command, args, options) {
   return new Promise((resolveResult) => {
     const child = spawn(command, args, { cwd: options.root, shell: false, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
-    let tail = "";
-    child.stdout.on("data", (chunk) => { tail = rollingAppend(tail, chunk); });
-    child.stderr.on("data", (chunk) => { tail = rollingAppend(tail, chunk); });
-    child.on("error", (error) => resolveResult({ status: 2, setupError: true, tail: rollingAppend(tail, error.message) }));
-    child.on("close", (status) => resolveResult({ status: status ?? 1, tail }));
+    let stdout = "";
+    let stderr = "";
+    const captured = () => stderr ? `${stdout}\n${stderr}` : stdout;
+    child.stdout.on("data", (chunk) => { stdout = rollingAppend(stdout, chunk); });
+    child.stderr.on("data", (chunk) => { stderr = rollingAppend(stderr, chunk); });
+    child.on("error", (error) => resolveResult({ status: 2, setupError: true, tail: `${captured()}\n${error.message}` }));
+    child.on("close", (status) => resolveResult({ status: status ?? 1, tail: captured() }));
   });
 }
 

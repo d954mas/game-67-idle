@@ -41,5 +41,5 @@
     "upstream": "features/network-core/UPSTREAM.json"
   },
   "art_needs": [],
-  "default_template": false
+  "test_consumer": false
 }

@@ -97,9 +97,9 @@ event spine does not include `platform_sdk.h`.
 Configure and run the focused native tests:
 
 ```powershell
-cmake -S templates/template -B templates/template/build/native-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build templates/template/build/native-debug --target test_game_events test_game_events_typed test_game_event_render test_game_events_log_mirror test_game_analytics test_platform_sdk_events
-ctest --test-dir templates/template/build/native-debug -R "test_game_events|test_game_events_typed|test_game_event_render|test_game_events_log_mirror|test_game_analytics|test_platform_sdk_events" --output-on-failure
+cmake -S ai_studio/feature_testing/consumer -B ai_studio/feature_testing/consumer/build/feature-verify -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build ai_studio/feature_testing/consumer/build/feature-verify --target test_game_events test_game_events_typed test_game_event_render test_game_events_log_mirror test_game_analytics test_platform_sdk_events
+ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R "test_game_events|test_game_events_typed|test_game_event_render|test_game_events_log_mirror|test_game_analytics|test_platform_sdk_events" --output-on-failure
 ```
 
 Run full taskboard validation before closing taskboard work:

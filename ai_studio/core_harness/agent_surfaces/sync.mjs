@@ -5,7 +5,7 @@
 //
 // Surfaces:
 //   instructions  AGENTS.md -> CLAUDE.md imports it via @AGENTS.md.
-//   skills        .codex/skills/* -> .claude/skills/* thin pointers.
+//   skills        .codex/skills/* -> .agents/skills/* and .claude/skills/*.
 //   hooks         hook source -> .codex/hooks.json + .claude/settings.json hooks.
 //
 // Add new generated surfaces as standalone --check-aware steps.

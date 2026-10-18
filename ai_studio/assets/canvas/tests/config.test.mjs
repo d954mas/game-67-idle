@@ -5,7 +5,12 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { canvasHistoryDepth, canvasLocalCacheRoot, canvasProjectsRoot } from "../config.mjs";
+import {
+  canvasHistoryDepth,
+  canvasLocalCacheRoot,
+  canvasPrivateGameProjectsRoots,
+  canvasProjectsRoot,
+} from "../config.mjs";
 
 function tempRoot(t) {
   const dir = mkdtempSync(join(tmpdir(), "canvas-config-"));
@@ -45,6 +50,35 @@ test("CANVAS_PROJECTS_ROOT env overrides config and needs no config file", (t) =
   });
 
   assert.equal(canvasProjectsRoot(root), resolve("C:/env/override"));
+});
+
+test("private Canvas game roots come only from the local Studio config", (t) => {
+  const root = tempRoot(t);
+  writeConfig(root, "studio.config.json", {
+    schema: "ai_studio.studio_config.v1",
+    canvasPrivateGameProjectsRoots: { committed: "C:/committed" },
+  });
+  writeConfig(root, "studio.config.local.json", {
+    canvasPrivateGameProjectsRoots: { "private-game": "C:/local/private-game" },
+  });
+
+  assert.deepEqual(
+    [...canvasPrivateGameProjectsRoots(root)],
+    [["private-game", resolve("C:/local/private-game")]],
+  );
+});
+
+test("private Canvas game root registration rejects ambiguous ids and relative paths", (t) => {
+  const root = tempRoot(t);
+  writeConfig(root, "studio.config.local.json", {
+    canvasPrivateGameProjectsRoots: { "bad/id": "C:/private" },
+  });
+  assert.throws(() => canvasPrivateGameProjectsRoots(root), /invalid game id/);
+
+  writeConfig(root, "studio.config.local.json", {
+    canvasPrivateGameProjectsRoots: { private: "relative/projects" },
+  });
+  assert.throws(() => canvasPrivateGameProjectsRoots(root), /absolute path/);
 });
 
 test("canvasHistoryDepth: env override > config value > default 200", (t) => {

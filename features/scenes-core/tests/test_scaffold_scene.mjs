@@ -28,7 +28,7 @@ function createFixture() {
 }
 
 function createRealTemplateCopy() {
-  const source = path.join(repositoryRoot, "templates", "template");
+  const source = path.join(repositoryRoot, "ai_studio", "feature_testing", "consumer");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "scene-template-"));
   fs.mkdirSync(path.join(root, "src"), { recursive: true });
   for (const relative of ["CMakeLists.txt", path.join("src", "game_scenes.c")]) {

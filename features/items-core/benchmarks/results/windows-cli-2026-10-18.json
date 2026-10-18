@@ -1,0 +1,65 @@
+{
+  "command_count": 5,
+  "commands": [
+    {
+      "exit_code": 0,
+      "logical_project_file_reads": 4,
+      "operation": "source",
+      "stderr_bytes": 0,
+      "stdout_bytes": 434,
+      "wall_ms": 268.817
+    },
+    {
+      "exit_code": 0,
+      "logical_project_file_reads": 12,
+      "operation": "level-set",
+      "stderr_bytes": 0,
+      "stdout_bytes": 1311,
+      "wall_ms": 427.379
+    },
+    {
+      "exit_code": 0,
+      "logical_project_file_reads": 5,
+      "operation": "validate",
+      "stderr_bytes": 0,
+      "stdout_bytes": 400,
+      "wall_ms": 260.643
+    },
+    {
+      "exit_code": 0,
+      "logical_project_file_reads": 3,
+      "operation": "inspect",
+      "stderr_bytes": 0,
+      "stdout_bytes": 827,
+      "wall_ms": 256.677
+    },
+    {
+      "exit_code": 1,
+      "logical_project_file_reads": 4,
+      "operation": "level-set",
+      "stderr_bytes": 331,
+      "stdout_bytes": 0,
+      "wall_ms": 255.079
+    }
+  ],
+  "diagnostic_quality": {
+    "actionable_message": true,
+    "has_expected_actual": true,
+    "stable_code": true,
+    "structured_json": true
+  },
+  "method": {
+    "context_bytes": "exact captured UTF-8 stdout/stderr byte counts",
+    "file_reads": "deterministic application-level project reads implied by the manifest, temporary validation copy, receipt and state inputs; excludes OS/library reads",
+    "latency": "subprocess wall clock; advisory machine sample",
+    "source_sha256": "sha256:93feca36a4ec653559111ea389abf51e694543451318a31b62339c8d56db543b"
+  },
+  "scenario": "source-preview-validate-affected-inspect-conflict",
+  "schema": "items.cli.benchmark.v1",
+  "totals": {
+    "logical_project_file_reads": 28,
+    "stderr_bytes": 331,
+    "stdout_bytes": 2972,
+    "wall_ms": 1468.595
+  }
+}

@@ -23,6 +23,13 @@ into their ignored game-local store path with a directory junction. Project
 ownership is metadata (`ownership.kind=game`, `gameId`), not a committed
 game-side copy of project data.
 
+The private-game preflight accepts such a mount only when the ignored local
+Studio config registers its exact canonical game id in
+`canvasPrivateGameProjectsRoots` with the absolute physical projects root. The
+preflight scans that registered root directly when staged public binary bytes
+need comparison, and rejects an unregistered or differently resolved mount.
+`CANVAS_PROJECTS_ROOT` never grants this registration.
+
 Private game stores are explicit mounts. They are excluded from aggregate reads
 unless the caller opts in, and private exports may not target the public parent
 repository. Public object references use `canvas://<project>/<kind>/<id>`;

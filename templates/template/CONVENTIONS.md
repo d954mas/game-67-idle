@@ -1,76 +1,16 @@
-# Conventions (copied into every game)
+# Foundation conventions
 
-How code is structured here. These exist to stop the failure mode where an agent
-dumps a whole game into one file. Keep them.
+- `main.c` coordinates lifecycle and platform boundaries. It does not contain
+  game rules or presentation details.
+- `World` owns transient game data. State that must survive a restart belongs
+  in a schema fragment under `state/`.
+- A feature owns one coherent rule set. `game_features.c` calls its lifecycle
+  phases in a stable order.
+- Rule updates happen before presentation. Renderer and UI modules read state;
+  they do not mutate gameplay state.
+- Add an asset only when a feature uses it, with its provenance in the asset
+  pipeline. The blank foundation has no game assets.
+- Use engine public APIs before adding custom platform, save, rendering, or UI
+  infrastructure.
 
-## Engine first (don't hand-roll)
-
-- Before writing custom code, SEARCH THE ENGINE and use its public API. UI uses the
-  engine widgets (`nt_ui_panel`/`nt_ui_slider_float`/`nt_ui_button`/`nt_ui_label`,
-  see `external/neotolis-engine/examples/ui_showcase`), not hand-drawn text/quads.
-  Same for renderers, math, input, resources. Hand-roll ONLY when the engine has no
-  fit -- and say why. (A text-drawn "UI" is a hack; the nt_ui widgets are the way.)
-- Styles/theme (colours, button/slider/panel styles) live in their OWN file
-  (e.g. `ui/theme.{c,h}`), separate from the logic that uses them.
-- **A screen never states its own sizes.** `ui/theme.h` holds the styles,
-  `ui/ui_metrics.h` the ramp, `ui/ui_kit.h` the widgets; a screen composes those.
-  The tokens all three follow are `design/references/ui_kit/styles.css`, and
-  `tools/gen_ui_kit.py` draws the slice9 art from the same file.
-- **Type and touch targets are CSS pixels; plates are a share of the canvas.**
-  A CSS pixel is the only unit that is the same physical size on a phone and on
-  a monitor, so a readability floor or a 44 px touch target is stated in CSS px
-  and converted (`ui_css`, `ui_text`). A panel width in CSS px overflows a
-  phone; type sized as a share of the canvas is unreadable in a hand.
-- **Nothing the player did not ask for sits on the player's screen.** A
-  developer probe reports through DevAPI (`game.platform_sdk.state` is the
-  pattern) and, if it must be drawn at all, only behind an explicit build flag.
-
-## Decomposition
-
-- **`main.c` is the conductor, not the game.** It only: init subsystems ->
-  `nt_app_run(frame)` -> teardown. `frame()` only CALLS subsystems in order
-  (input -> game-system updates -> render systems). No gameplay rules in `main.c`.
-- **One system per file.** A system (`systems/sys_*.c`, `render/*.c`, `ui/*.c`,
-  `scene/*.c`, root `*_devapi.c`) has a single responsibility. Add a feature by adding a
-  file + registering it in `frame()`, NEVER by growing an existing file.
-- **The World is the source of truth.** Systems read/write the `World`
-  (`world/world.{c,h}`): entity handles + per-system SoA state. Systems do not own
-  entities and do not call into each other's internals -- they go through the World.
-- **Game-owned C DevAPI commands live as root `src/*_devapi.c` modules**. Engine-owned groups (`ui.*`,
-  input/time/frame, obs, capture) stay wired through `nt_devapi`; do not duplicate
-  them in the template. The HUD/UI tree lives in `ui/`, render + material
-  setup in `render/` -- never inline in `main.c`.
-  The in-place `game-state` module owns the hand-written registry dispatcher for
-  `game.state.*`; generated fragment code only supplies typed state/schema
-  operations. The dispatcher compiles only under `GAME_DEVAPI_ENABLED`.
-  Add separate semantic commands only for game-specific actions and dev-editable
-  fields.
-
-- **Game-owned DevAPI bots live in top-level `devapi/`**. Import the shared
-  `ai_studio/runtime_automation` client there, then add semantic scenarios for
-  the game. Follow observe -> act -> `frame.wait` -> observe and use stable
-  `ui.tree` ids.
-
-## Anti-patterns (do NOT do)
-
-- **God-file:** a monolithic `main.c` with window + assets + all systems + render +
-  rules. (If `main.c` exceeds ~200 lines or contains gameplay logic, decompose.)
-- **God-struct:** one fat `Entity`/struct every system reads (AoS). Use per-system
-  SoA; an entity is a handle indexing into system data.
-- **Clone-and-own as a strategy:** don't copy a previous game and mutate it. Start
-  from `templates/template/`, pull reusable feature packs from `features/`, and
-  promote good features back so the shared versions stay best. Engine fixes come
-  from the one shared `external/neotolis-engine`.
-
-## Assets
-
-- Reuse first: the shared asset library has thousands of reusable game assets.
-  Search with `node ai_studio/assets/catalog/search.mjs --query "<need>" --kind <kind> --json`,
-  pull with `node ai_studio/assets/gallery/pull.mjs --ids <asset-id> --to <game>/assets --apply`,
-  then pack from the game-local asset copy. Generate only what you can't source.
-- All on-screen text uses the engine text renderer + a real font -- never
-  hand-drawn pixel/shape text.
-- Heavy authoring workfiles that are not shipping assets stay OUT of the game
-  repo: offload them to the synchronized workspace with a manifest, per
-  `ai_studio/assets/external_game_workfiles.md`. Iteration output of art tools
-  defaults to `tmp/` (gitignored), never to `design/`.
+Optional integration examples live in `ai_studio/feature_testing/consumer`.

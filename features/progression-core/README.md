@@ -6,7 +6,7 @@ In-place L2 module (see `features/README.md` — decisive rule: same-`.c`-across
 here, each consuming game/template compiles it in-place against ITS OWN
 generated headers and content (`../../features/progression-core/` from any
 `templates/<x>` or `games/<id>`, depth-2 invariant). Extracted in T0337 out of
-`templates/template/src/features/progression/` (the ENTIRE folder — items
+`ai_studio/feature_testing/consumer/src/features/progression/` (the ENTIRE folder — items
 kept a game-side corner, progression did not, see "No game-owned C hooks"
 below).
 

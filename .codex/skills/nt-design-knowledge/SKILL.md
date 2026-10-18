@@ -1,6 +1,6 @@
 ---
 name: nt-design-knowledge
-description: "Use when adding, reviewing, reorganizing, or promoting game-design research sources and design knowledge: source notes, article/video/reference packet parsing, reusable `ai_studio/game_design/knowledge_base/knowledge/` rules, private `games/<game-id>/design/knowledge/` routing, source hygiene review, knowledge index/log updates, or reference-backed design claims."
+description: "Maintain cited game-design sources and reusable knowledge; route game-specific findings into that game's private design knowledge."
 ---
 
 # NT Design Knowledge

@@ -1,0 +1,4 @@
+interface:
+  display_name: "NT Gauntlet Loop"
+  short_description: "Subagent game-quality gauntlet loop"
+  default_prompt: "Use $nt-gauntlet-loop to improve the selected game's requested slice with independent builders and critics until it reaches the agreed reference bar."

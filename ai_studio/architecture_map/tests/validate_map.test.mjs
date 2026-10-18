@@ -556,7 +556,8 @@ test("repo tree maps product boundaries without authored implementation or test 
 
   assert.equal(byPath.get("templates")?.coverage, "direct-files");
   assert.equal(byPath.get("templates/template")?.coverage, "subtree");
-  assert.match(byPath.get("templates/template")?.boundary || "", /Settings.*resource-panel/);
+  assert.equal(byPath.get("ai_studio/feature_testing")?.coverage, "subtree");
+  assert.equal(byPath.has("templates/feature-lab"), false);
   assert.equal(byPath.get("features")?.coverage, "direct-files");
   assert.equal(byPath.get("games")?.coverage, "direct-files");
   assert.equal(byPath.get("ai_studio/game_design/knowledge_base")?.id, "design-knowledge-base");

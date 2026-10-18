@@ -18,7 +18,7 @@
     "a game-owned leaderboards.json board manifest"
   ],
   "commands": {
-    "ctest": "ctest --test-dir templates/template/build/native-debug -R leaderboard --output-on-failure"
+    "ctest": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R leaderboard --output-on-failure"
   },
   "provides": [
     "leaderboard_caps and leaderboard_ui_state: what a screen may show, per board, answered live",

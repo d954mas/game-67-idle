@@ -41,7 +41,7 @@
  * "ui/<theme>/<region>" by hash, so a new theme needs no new symbol. */
 static const char *const THEMES[] = {"b", "forest", "ember", "night"};
 static const char *const ICONS[] = {"coin", "xp", "energy", "sword", "potion"};
-/* The template's CC0 Kenney files, read in place: the studio tracks one copy. */
+/* The consumer's CC0 Kenney files are read in place to keep one shared copy. */
 static const char *const ICON_FILES[] = {"gold", "xp", "energy", "sword", "potion"};
 #define STUDIO_FROM_LAB "../../../.."
 
@@ -154,7 +154,7 @@ int main(int argc, char *argv[]) {
         char name[64];
         char rel[256];
         (void)snprintf(name, sizeof name, "icon/%s", ICONS[i]);
-        (void)snprintf(rel, sizeof rel, STUDIO_FROM_LAB "/templates/template/assets/icons/%s.png", ICON_FILES[i]);
+        (void)snprintf(rel, sizeof rel, STUDIO_FROM_LAB "/ai_studio/feature_testing/consumer/assets/icons/%s.png", ICON_FILES[i]);
         nt_atlas_sprite_opts_t opts = nt_atlas_sprite_opts_defaults();
         opts.name = name;
         nt_atlas_add(ui, path_join(lab_dir, rel), &opts);

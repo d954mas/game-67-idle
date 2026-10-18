@@ -1,6 +1,6 @@
 ---
 name: nt-taskboard-manager
-description: "Use this skill when routing project, epic, or task work through AI Studio Taskboard: creating or updating projects for games/templates/AI Studio work, capturing/refining/decomposing/planning/prioritizing/reporting work items, backlog grooming, marking work done, and any request to inspect or update the task board."
+description: "Inspect, plan, update, or close Studio Taskboard work. Create items only when the human lead requests them or invokes the item-creation workflow."
 ---
 
 # NT Taskboard Manager
@@ -37,12 +37,16 @@ Taskboard data contract here.
 1. Start with `context --json`; open a specific item only when needed.
 2. Use projects as top-level owners, epics as grouped slices, and tasks as
    actionable cards.
-3. Load `task-store-reference.md` only when changing project/task fields,
+3. Create items only when the human lead requests creation or invokes the
+   designated creation workflow. Otherwise propose deferred work in the reply.
+   Use `--game <game-id>` for private game stores; do not duplicate their work
+   into the shared board.
+4. Load `task-store-reference.md` only when changing project/task fields,
    statuses, epics, lifecycle rules, or markdown format.
-4. Capture deferred work as `status: idea`; use `backlog` only after scope and
+5. For authorized creation, use `status: idea` for unrefined work and `backlog` only after scope and
    checkable done criteria are clear.
-5. Mark `done` only when `## Done when` is checked and `## Log` has evidence.
-6. Do not search archive ZIPs during normal routing; sealed history is explicit
+6. Mark `done` only when `## Done when` is checked and `## Log` has evidence.
+7. Do not search archive ZIPs during normal routing; sealed history is explicit
    evidence, not working context.
 
 ## Boundary

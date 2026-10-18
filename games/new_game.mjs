@@ -287,31 +287,52 @@ function ensureGameStudioScaffold(gameDir, identity, visibility) {
 
 function transformIdentityOwnedFiles(gameDir, template, identity) {
   // Exact producer-owned substitutions only. This is deliberately not a tree-wide name replacement.
-  const table = [
-    ["cmake/GamePlatform.cmake", `GAME_STORAGE_APP_ID="${template.storageNamespace}"`, `GAME_STORAGE_APP_ID="${identity.storageNamespace}"`, 1],
+  const replaceExact = (rel, before, after, required = true) => {
+    const path = join(gameDir, rel);
+    if (!existsSync(path)) {
+      if (required) throw new Error(`identity-owned template producer is missing: ${rel}`);
+      return false;
+    }
+    const source = readFileSync(path, "utf8");
+    const count = source.split(before).length - 1;
+    if (count !== 1) {
+      if (!required && count === 0) return false;
+      throw new Error(`identity-owned template token drifted in ${rel}: expected 1, found ${count}`);
+    }
+    const transformed = source.split(before).join(after);
+    if (before !== after && transformed.includes(before)) throw new Error(`template identity survived transformation in ${rel}`);
+    writeFileSync(path, transformed, "utf8");
+    return true;
+  };
+
+  replaceExact(
+    "cmake/GameOptions.cmake",
+    `set(GAME_TITLE "${template.title}" CACHE STRING "Game window title base")`,
+    `set(GAME_TITLE "${identity.title}" CACHE STRING "Game window title base")`,
+  );
+
+  const storageBindings = [
+    ["cmake/GameOptions.cmake", `GAME_STORAGE_APP_ID="${template.storageNamespace}"`],
+    ["cmake/GamePlatform.cmake", `GAME_STORAGE_APP_ID="${template.storageNamespace}"`],
+  ];
+  let storageBound = false;
+  for (const [rel, before] of storageBindings) {
+    storageBound = replaceExact(rel, before, `GAME_STORAGE_APP_ID="${identity.storageNamespace}"`, false) || storageBound;
+  }
+  if (!storageBound) throw new Error("identity-owned template producer is missing: storage namespace binding");
+
+  for (const [rel, before, after] of [
     ...["storage", "save", "analytics", "composition"].map((suffix) => [
       "cmake/GameTests.cmake",
       `GAME_STORAGE_APP_ID="${template.storageNamespace}_${suffix}_test"`,
       `GAME_STORAGE_APP_ID="${identity.storageNamespace}-${suffix}-test"`,
-      1,
     ]),
-    ["tests/web_persistence_check.py", `STORAGE_KEY = "${template.storageNamespace}/save/autosave"`, `STORAGE_KEY = "${identity.storageNamespace}/save/autosave"`, 1],
+    ["tests/web_persistence_check.py", `STORAGE_KEY = "${template.storageNamespace}/save/autosave"`, `STORAGE_KEY = "${identity.storageNamespace}/save/autosave"`],
     // The legacy-save fixture carries the composition test's app id as data; save import rejects a foreign app.
-    ["tests/fixtures/items_save_v1.json", `"app": "${template.storageNamespace}_composition_test"`, `"app": "${identity.storageNamespace}-composition-test"`, 1],
-    ["cmake/GameOptions.cmake", `set(GAME_TITLE "${template.title}" CACHE STRING "Game window title base")`, `set(GAME_TITLE "${identity.title}" CACHE STRING "Game window title base")`, 1],
-    ["src/main.c", `config.app_name = "${template.title}"`, `config.app_name = "${identity.title}"`, 1],
-    ["src/main.c", `GAME_WINDOW_TITLE "${template.title}"`, `GAME_WINDOW_TITLE "${identity.title}"`, 1],
-  ];
-  for (const [rel, before, after, required] of table) {
-    const path = join(gameDir, rel);
-    if (!existsSync(path)) throw new Error(`identity-owned template producer is missing: ${rel}`);
-    const source = readFileSync(path, "utf8");
-    const count = source.split(before).length - 1;
-    if (count !== required) throw new Error(`identity-owned template token drifted in ${rel}: expected ${required}, found ${count}`);
-    const transformed = source.split(before).join(after);
-    if (before !== after && transformed.includes(before)) throw new Error(`template identity survived transformation in ${rel}`);
-    writeFileSync(path, transformed, "utf8");
-  }
+    ["tests/fixtures/items_save_v1.json", `"app": "${template.storageNamespace}_composition_test"`, `"app": "${identity.storageNamespace}-composition-test"`],
+    ["src/main.c", `config.app_name = "${template.title}"`, `config.app_name = "${identity.title}"`],
+    ["src/main.c", `GAME_WINDOW_TITLE "${template.title}"`, `GAME_WINDOW_TITLE "${identity.title}"`],
+  ]) replaceExact(rel, before, after, false);
 }
 
 function shellPath(path) {

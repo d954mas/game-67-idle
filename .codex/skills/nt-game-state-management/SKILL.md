@@ -1,6 +1,6 @@
 ---
 name: nt-game-state-management
-description: "Use when adding, changing, testing, reviewing, or migrating schema-first game state, generated APIs, saves, migrations, DevAPI state commands, or state fixtures."
+description: "Change schema-first game state, generated APIs, saves, migrations, DevAPI state commands, or state fixtures."
 ---
 
 # NT Game State Management

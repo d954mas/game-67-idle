@@ -12,7 +12,7 @@ import benchmark_items_cli as BENCHMARK
 
 
 PROJECT = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "items_cli"
-RESULT = Path(__file__).resolve().parent / "results" / "windows-cli-2026-07-15.json"
+RESULT = Path(__file__).resolve().parent / "results" / "windows-cli-2026-10-18.json"
 
 
 class ItemsCliBenchmarkTests(unittest.TestCase):

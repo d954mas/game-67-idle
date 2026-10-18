@@ -12,10 +12,18 @@ import {
   nativeConfigureCommand,
   parsePorcelainZ,
   runOwnedDomain,
+  runCommandBounded,
   selectChangedDomains,
   unassignedDeterministicTests,
   verifyStudio,
 } from "./studio.mjs";
+
+test("command capture preserves failure diagnostics after noisy stdout", async () => {
+  const result = await runCommandBounded(process.execPath, ["-e", "process.stderr.write('diagnostic-marker\\n');setTimeout(()=>{process.stdout.write('generated\\n'.repeat(2000));process.exitCode=1},20)"], { root: process.cwd() });
+  assert.equal(result.status, 1);
+  assert.ok(result.tail.endsWith("diagnostic-marker\n"));
+  assert.ok(result.tail.length <= 16385);
+});
 
 test("describe exposes stable owner routes without a Studio game proxy", () => {
   const result = describeStudio();
@@ -95,6 +103,10 @@ test("changed selection is coarse and unknown shared paths fail ownership", () =
 });
 
 test("feature docs and runtime paths stay in the same owner domain", () => {
+  for (const path of ["ai_studio/feature_testing/README.md", "ai_studio/feature_testing/consumer/tests/test_game_events.c"]) {
+    assert.deepEqual(selectChangedDomains([path]), ["features"]);
+  }
+  assert.deepEqual(selectChangedDomains([".agents/skills/nt-game-feature/SKILL.md"]), ["harness"]);
   for (const feature of ["audio-core", "game-events", "game-state", "items-core", "platform-sdk", "progression-core"]) {
     assert.deepEqual(selectChangedDomains([`features/${feature}/README.md`]), ["features"], feature);
     assert.deepEqual(selectChangedDomains([`features/${feature}/src/runtime.c`]), ["features"], feature);
@@ -159,12 +171,25 @@ test("features owner runs a real isolated native configure build and CTest lane"
   });
   assert.equal(result.status, 0);
   assert.equal(calls.length, 3);
-  assert.ok(calls[0].includes("templates/template/build/feature-verify"));
-  assert.deepEqual(calls[1].slice(0, 3), ["cmake", "--build", "templates/template/build/feature-verify"]);
-  assert.deepEqual(calls[2].slice(0, 3), ["ctest", "--test-dir", "templates/template/build/feature-verify"]);
+  assert.ok(calls[0].includes("ai_studio/feature_testing/consumer/build/feature-verify"));
+  assert.deepEqual(calls[1].slice(0, 3), ["cmake", "--build", "ai_studio/feature_testing/consumer/build/feature-verify"]);
+  assert.deepEqual(calls[2].slice(0, 3), ["ctest", "--test-dir", "ai_studio/feature_testing/consumer/build/feature-verify"]);
 });
 
-test("full verification leaves native build ownership to template-release", async () => {
+test("template proof builds only the blank starter", async () => {
+  const calls = [];
+  const result = await runOwnedDomain({ id: "template-release", checks: ["reference-template.native"] }, {
+    includeRelease: true,
+    verificationMode: "full",
+    runCommand: async (command, args) => { calls.push([command, ...args]); return { status: 0, tail: "" }; },
+  });
+  assert.equal(result.status, 0);
+  const sources = calls.filter(([command, ...args]) => command === "cmake" && args.includes("-S"));
+  assert.ok(sources.some((call) => call.includes("templates/template")));
+  assert.equal(sources.length, 1);
+});
+
+test("full verification tests shared features through their independent consumer", async () => {
   const calls = [];
   const result = await runOwnedDomain({ id: "features", checks: ["features.native"] }, {
     includeRelease: true,
@@ -174,8 +199,9 @@ test("full verification leaves native build ownership to template-release", asyn
       return { status: 0, tail: "" };
     },
   });
-  assert.equal(result.classification, "not-applicable");
-  assert.deepEqual(calls, []);
+  assert.equal(result.status, 0);
+  assert.equal(calls.length, 3);
+  assert.ok(calls[0].includes("ai_studio/feature_testing/consumer"));
 });
 
 test("an owner domain batches its Node tests into one process", async () => {

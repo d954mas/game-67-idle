@@ -7,7 +7,7 @@ second library copy.
 A feature is a game capability, not just one source file. It can include code,
 assets, state schema, migrations, UI, DevAPI hooks, tests, examples, and notes.
 Its owner determines installation: reusable core modules compile in place;
-template-owned UI features copy with the template and are then game-owned;
+optional UI references copy from the integration consumer and are then game-owned;
 game-specific composition stays in the game.
 
 There is no plugin manager, install command, dependency solver, or automatic
@@ -57,10 +57,9 @@ Three categories of code live in or are pointed at from this folder:
   resolve `GAME_REPO_ROOT`, then use `${GAME_REPO_ROOT}/features/<id>-core`;
   this works for templates, public games, and `games/private/<id>`. Shared; edits are
   under test discipline (every consumer's tests must stay green).
-- **Feature-pointer** (`templates/template/src/features/<id>/`, single copy,
-  copy-then-own) — the template IS the single source of truth; a new game
-  gets it via a full template copy, and any further move is copy-then-own
-  from that point on.
+- **Feature-pointer** (`ai_studio/feature_testing/consumer/src/features/<id>/`, single copy,
+  copy-then-own) — the integration consumer is the source of truth. A game takes
+  a reference explicitly; the blank starter does not copy it.
 - **Game code** (in the template or a specific `games/<id>`) — content/
   config, seed data, closed verb/reason lists, save-history migrations,
   composition. Never promoted to a shared copy; it encodes one game's
@@ -103,11 +102,12 @@ possibility, not a feature.
 - `schema` — всегда `ai_studio.feature.v1`.
 - `id` — строковый id (= имя папки, `[a-z_][a-z0-9_]*`), C-префикс символов.
 - `title`, `summary`, `kind` — человекочитаемая метаинформация.
-- `status` — `reusable` | `opt-in` | `specified`. Шаблон линкует только
-  `reusable`, и только они попадают в `templates/template/game-dependencies.json`:
-  объявленная там фича обязана компилироваться рантайм-CMake шаблона. `opt-in` —
-  готовая фича, которую игра ставит сама (или её трогает только тестовая линия);
-  `specified` — пока только спека.
+- `status` — `reusable` | `opt-in` | `specified`. Статус описывает готовность
+  библиотеки, а не обязательность установки. `game-dependencies.json` перечисляет
+  только модули, которые действительно использует данный шаблон; он может выбрать
+  готовый `reusable` или `opt-in` модуль. `specified` — пока только спека,
+  ее нельзя объявить runtime-зависимостью. Новая готовая фича не добавляется
+  автоматически в пустой стартовый шаблон.
 - `layer` — `L0` | `L1` | `L2` (слой; include-и строго вниз).
 - `provides` — список публичных API-имён/возможностей, которые фича даёт
   фичам выше (напр. геттеры/операции её публичного хедера).
@@ -120,10 +120,17 @@ possibility, not a feature.
   (icon/panel/…), `kind` — тип (sprite/atlas-region/…), `hint` — подсказка
   подбора/генерации. Фича берёт арт ТОЛЬКО как хендлы в конфиге, с graceful-
   фолбэком; `build_packs.c` остаётся кодом игры (фича в паки не пишет).
-- `dependencies`, `flags`, `commands`, `manuals`, `outputs`, `default_template`
-  — как прежде (движок/тулинг/инсталл/генвыходы/дефолтная привязка к шаблону).
+- `dependencies`, `flags`, `commands`, `manuals`, `outputs`, `test_consumer`
+  — как прежде (движок/тулинг/инсталл/генвыходы/проверочная привязка к consumer).
 
 ## Current Packs
+
+- `limb-ik/` (`L1`, opt-in): header-only planar two-link solver. The consumer
+  owns rigs, animation and rendering. See `limb-ik/README.md` and
+  `limb-ik/INSTALL.md`.
+- `portal-metrics/` (`L1`, opt-in): once-per-frame event drain and direct portal
+  measurement over `game-events` and `platform-sdk`. The consumer owns its
+  event mapper. See `portal-metrics/README.md` and `portal-metrics/INSTALL.md`.
 
 - `box3d/` (`L1`, opt-in): pinned MIT 3D rigid-body physics, shared in-place
   through `box3d_enable(target)` for native and WASM. Games own their worlds,
@@ -141,7 +148,7 @@ possibility, not a feature.
   Lua manifest/modules (`items.lua.json` + `design/items/*.lua`), release
   history (`content/items.lock.json`), its state schema
   (`state/items.schema.json`), and a small game-owned "items corner"
-  (`templates/template/src/features/items/`: `reason_tags.h` + the
+  (`ai_studio/feature_testing/consumer/src/features/items/`: `reason_tags.h` + the
   `items_bootstrap.c`'s `items_on_new_game` seed — see that folder's own
   `README.md`). Reference: `items-core/README.md` + `items-core/INSTALL.md`.
 - `progression-core/` (`L2`, depends on `items-core`): level/xp tracks
@@ -185,36 +192,37 @@ possibility, not a feature.
   intended design change costs a diff instead of hand-edited test source.
   Reference: `test-goldens/README.md` + `test-goldens/INSTALL.md`.
 
-## Features (reference implementations live in the template)
+## Optional reference examples
 
 `settings` and `resource_panel` do NOT have a library copy under `features/`.
-Their single source of truth is the live implementation in
-`templates/template/src/features/<id>/`, which ships with tests and a real
-consumer (the template itself). Entries are pointers, not copies:
+Their single source of truth is the live implementation in the independent
+feature-test consumer at `ai_studio/feature_testing/consumer/src/features/<id>/`,
+which ships with tests and a real consumer. Entries are pointers, not copies:
 
 - **settings** (`L2`) — settings screen + persisted settings fragment.
-  Reference: `templates/template/src/features/settings/` (`settings.c/.h`,
-  `settings_screen.c`) + `templates/template/state/settings.schema.json`.
+  Reference: `ai_studio/feature_testing/consumer/src/features/settings/` (`settings.c/.h`,
+  `settings_screen.c`) + `ai_studio/feature_testing/consumer/state/settings.schema.json`.
 - **resource_panel** (`L2`, UI widget) — generic counter/bar HUD driven by
   game-supplied entries/getters; zero items/progression coupling. Reference:
-  `templates/template/src/features/resource_panel/` (`resource_panel.c/.h`,
+  `ai_studio/feature_testing/consumer/src/features/resource_panel/` (`resource_panel.c/.h`,
   `README.md`, `feature.json`).
 
-The game-owned portions of items and progression remain in the template:
+The game-owned portions of items and progression remain in the feature-test
+consumer; a new game starts without them:
 
-- **items** — game corner `templates/template/src/features/items/`
+- **items** — game corner `ai_studio/feature_testing/consumer/src/features/items/`
   (`reason_tags.h` + `items_bootstrap.c`'s `items_on_new_game` seed, plus its
-  own `README.md`) + catalog `templates/template/items.lua.json` and
+  own `README.md`) + catalog `ai_studio/feature_testing/consumer/items.lua.json` and
   `design/items/*.lua`, `content/items.lock.json` + state
-  `templates/template/state/items.schema.json` + the template's own
-  package-backed integration tests `templates/template/tests/test_items_fragment.c`
+  `ai_studio/feature_testing/consumer/state/items.schema.json` + the template's own
+  package-backed integration tests `ai_studio/feature_testing/consumer/tests/test_items_fragment.c`
   and `test_template_composition.c` (+ focused Items fixtures).
 - **progression** — no game-side C corner at all (see
   `progression-core/README.md` "No game-owned C hooks") — just the track
-  declarations in `templates/template/design/items/tracks.lua` + state
-  `templates/template/state/progression.schema.json` + the demo composition
-  `templates/template/src/ui/demo_hud.c` + the template's own content-coupled
-  integration tests `templates/template/tests/test_progression.c`,
+  declarations in `ai_studio/feature_testing/consumer/design/items/tracks.lua` + state
+  `ai_studio/feature_testing/consumer/state/progression.schema.json` + the demo composition
+  `ai_studio/feature_testing/consumer/src/ui/demo_hud.c` + the template's own content-coupled
+  integration tests `ai_studio/feature_testing/consumer/tests/test_progression.c`,
   `test_progression_catalog.c`, `test_progression_curve.c`.
 - `platform-sdk/` (`L1`): in-place platform SDK facade for commercial web
   builds. Targets are `local`, `itch`, `poki`, `yandex`, `playgama`, and
@@ -228,14 +236,15 @@ The game-owned portions of items and progression remain in the template:
 
 ### Ownership model
 
-- Single source of truth for `settings`/`resource_panel` = `templates/template`
-  (live reference implementation with tests and a real consumer). There is
+- Single source of truth for `settings`/`resource_panel` =
+  `ai_studio/feature_testing/consumer` (live reference implementation with
+  tests and a real consumer). There is
   deliberately no library copy of these two features, so there is no duplicate
   implementation to keep in sync.
-- A brand-new game gets all of them via a full template copy
-  (`games/new_game.mjs`).
+- A brand-new game gets the blank foundation only. To exercise these examples,
+  run `node ai_studio/feature_testing/run.mjs`.
 - Moving `settings`/`resource_panel` into an existing game, or into a second
-  template, is copy-then-own straight from the template pointer above — that
+  template, is copy-then-own straight from the consumer reference above — that
   copy then belongs to its new project (see Rules).
 - Promote a feature-pointer into `features/<id>/` or `features/<id>-core/`
   only once its `.c` is proven byte-identical across a real second

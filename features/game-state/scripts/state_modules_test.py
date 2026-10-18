@@ -59,7 +59,11 @@ class StateModuleTests(unittest.TestCase):
 
     def test_in_repo_project_provenance_is_project_relative(self):
         self.assertEqual(
-            provenance_label(ROOT / "templates/template/state/game_state.schema.json", ROOT),
+            provenance_label(ROOT / "ai_studio/feature_testing/consumer/state/game_state.schema.json", ROOT),
+            "ai_studio/feature_testing/consumer/state/game_state.schema.json",
+        )
+        self.assertEqual(
+            provenance_label(ROOT / "templates/fixture-template/state/game_state.schema.json", ROOT),
             "state/game_state.schema.json",
         )
         self.assertEqual(

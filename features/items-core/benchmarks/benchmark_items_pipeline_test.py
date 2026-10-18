@@ -13,7 +13,7 @@ import unittest
 import benchmark_items_pipeline as BENCHMARK
 
 
-RESULT = Path(__file__).resolve().parent / "results" / "windows-pipeline-2026-08-10.json"
+RESULT = Path(__file__).resolve().parent / "results" / "windows-pipeline-2026-10-18.json"
 
 
 class ItemsPipelineBenchmarkTests(unittest.TestCase):

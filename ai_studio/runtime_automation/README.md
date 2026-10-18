@@ -48,6 +48,36 @@ path. The fresh state, setup, and event schedule are deterministic; rendering,
 OBS encoding, and the MP4 are not byte- or frame-identical between takes. There
 is no montage, retiming, x4 mode, or preroll in the result.
 
+### Native capture provenance
+
+Before either command opens the game window, capture rebuilds the current game's
+canonical native CMake target: `build/devapi-debug`, target `game`, and its
+platform artifact `bin/game.exe` on Windows or `bin/game` on POSIX. The cache
+must declare its exact `CMAKE_CACHEFILE_DIR`, the selected game as
+`CMAKE_HOME_DIRECTORY`, `GAME_DEVAPI_ENABLED=ON`, `CMAKE_GENERATOR=Ninja`, and
+`CMAKE_BUILD_TYPE=Debug`. When `GAME_REPO_ROOT` is present, it must resolve to
+the Studio root. A missing, foreign, or incompatible cache fails with the
+configure command instead of accepting a previously built executable.
+`--executable` remains available only when it resolves to that exact canonical
+artifact.
+
+The preflight calls the selected game's `tools/lib/runtime_build.mjs`
+`createRuntimeBuildRecord({gameDir, studioRoot})` through a fixed Node script.
+It records the resulting `sourceFingerprint`, executable SHA-256 and byte size
+as `nativeBuild` in the capture manifest. It checks the source record before and
+after the rebuild, then checks the source record, executable, and critical cache
+contract again after REC. The critical cache values must remain stable across
+those checkpoints. Any observed change invalidates the capture proof; rerun
+capture after the edit settles. Full Node and CMake output is stored in the
+take's `.preflight/` directory while failure messages contain only a bounded
+tail. These checkpoints detect changes that persist to an observation point;
+they cannot attest an external writer that swaps and restores a cache entirely
+between observations.
+
+`nativeBuild.proofKind` is `native-rebuilt`. It proves that this local native
+capture came from a rebuilt configured target. It does not witness a web build,
+portal package, or release artifact.
+
 Each game owns `capture/catalog.json`:
 
 ```json
@@ -125,8 +155,8 @@ supplied ZIP hash is never treated as that binding.
 
 ## Native source-to-runtime proof
 
-Normal `iterate.py` mode owns the reference-template proof loop. It prepares
-`templates/template/build/devapi-debug` with `GAME_DEVAPI_ENABLED=ON` when the
+Normal `iterate.py` mode owns the independent feature-consumer proof loop. It prepares
+`ai_studio/feature_testing/consumer/build/devapi-debug` with `GAME_DEVAPI_ENABLED=ON` when the
 cached Ninja configuration is absent or incompatible, then invokes the
 canonical `cmake --build ... --target game` command on every run. An existing
 executable is never accepted as freshness evidence; CMake/Ninja decides whether
@@ -134,7 +164,7 @@ the requested build is a true no-op.
 
 The helper launches a fresh process on an ephemeral port by default. A socket
 connection is not readiness: the launch phase ends only after `endpoints`
-succeeds and advertises the template-owned `game.iteration.proof` command. That
+succeeds and advertises the consumer-owned `game.iteration.proof` command. That
 DevAPI-only command returns a dedicated leaf-C token plus the generated
 `test_label_text` schema default. The helper reads both source fixtures before
 building and exact-compares both live values, proving that the launched binary
@@ -150,7 +180,7 @@ port and positive PID, command paths actually executed (configure remains null
 when skipped), actual tool versions, start/end commit and scoped input identity,
 engine gitlink/cleanliness, executable/pack hashes, and rebuilt Ninja outputs
 when the log exposes them. The scoped identity comes from Git's binary diff plus
-sorted nonignored untracked paths and bytes under the template, features, and
+sorted nonignored untracked paths and bytes under the consumer, features, and
 iteration-orchestrator surfaces. It excludes ignored build/tmp products. This
 identity is only a race guard; it never decides whether to build. Foreign or
 incompatible cache roots use CMake's supported `--fresh` configure instead of

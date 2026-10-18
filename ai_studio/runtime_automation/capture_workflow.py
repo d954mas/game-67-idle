@@ -16,6 +16,7 @@ from typing import Any, Callable, Mapping
 
 from capture_scenario import Scenario, expand_schedule, parse_scenario, validate_against_describe
 from devapi_client import DevApiError, running_game
+from native_capture_preflight import prepare_native_capture, validate_native_capture_final
 from record_game import (
     _extract_health_frame,
     _require_tool,
@@ -283,6 +284,8 @@ def publish_take(
         "workflow": dict(workflow),
         "classification": classification,
     }
+    if "nativeBuild" in workflow:
+        manifest["nativeBuild"] = workflow["nativeBuild"]
     draft.mkdir(parents=True)
     for name in ("recording.mkv", "edit.mp4", "representative-frame.png"):
         os.replace(sources[name], draft / name)
@@ -332,8 +335,6 @@ def run_capture(
     countdown: int = 3,
 ) -> dict[str, Any]:
     catalog = load_catalog(game_root)
-    if not catalog.executable.is_file():
-        raise CaptureWorkflowError(f"build the DevAPI game first: {catalog.executable}")
     if command == "shot":
         if shot_id is None:
             raise CaptureWorkflowError("shot id is required")
@@ -357,8 +358,14 @@ def run_capture(
     recorder_root = take_root / ".recorder"
     storage_root = take_root / ".game_storage"
     storage_root.mkdir(parents=True, exist_ok=True)
+    native_build = prepare_native_capture(
+        catalog.game_root,
+        take_root,
+        requested_executable=catalog.executable,
+    )
+    executable = Path(str(native_build["executable"]["path"]))
     with running_game(
-        exe=str(catalog.executable),
+        exe=str(executable),
         cwd=str(catalog.game_root),
         fresh_state=catalog.launch.get("fresh_state", True),
         autosave_enabled=catalog.launch.get("autosave_enabled", False),
@@ -380,7 +387,7 @@ def run_capture(
             recorder_root,
             lambda root: record_take(
                 pid=game.process_id,
-                executable_name=catalog.executable.name,
+                executable_name=executable.name,
                 output_root=root,
                 settings=settings,
                 duration_seconds=duration,
@@ -388,6 +395,8 @@ def run_capture(
                 recording_driver=driver,
             ),
         )
+
+    validate_native_capture_final(native_build)
 
     representative_frame = recorder_root / "representative-frame.png"
     _extract_health_frame(
@@ -428,6 +437,7 @@ def run_capture(
             "scenarioStatus": scenario_status,
             "safeArea": safe_area,
             "recorderStatus": recorder_result.get("status"),
+            "nativeBuild": native_build,
         },
     )
     try:

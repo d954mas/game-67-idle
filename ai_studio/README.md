@@ -47,6 +47,8 @@ public surface, internals, and validation path.
 - `dev_environment/`: local developer-environment generators such as VS Code
   task and launch file generation.
 - `quality/`: reviewed small quality rules for selecting evidence and checks.
+- `feature_testing/`: independent shared-feature test consumer, separate from
+  the blank game starter.
 - `taskboard/`: reviewed durable task state module.
 
 Create domain folders such as `assets/` or `tech/` only when that module is

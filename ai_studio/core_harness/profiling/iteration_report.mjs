@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { parseArgs, stringArg, numberArg } from "./profile_lib.mjs";
 import { parseSince } from "./agent_rollup.mjs";
-import { categoryFor, parseCodexTranscript } from "./codex_transcript.mjs";
+import { categoryFor, parseCodexTranscript, readCodexSessionCwd } from "./codex_transcript.mjs";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const MAX_TOOL_MS = 20 * 60 * 1000;
@@ -143,17 +143,6 @@ export function parseClaudeTranscript(file) {
 
 // --- Codex rollouts -------------------------------------------------------
 
-function codexTranscriptCwd(file) {
-  const handle = readFileSync(file, "utf8");
-  const firstLine = handle.slice(0, handle.indexOf("\n") + 1 || undefined);
-  try {
-    const meta = JSON.parse(firstLine);
-    return String(meta?.payload?.cwd || "");
-  } catch {
-    return "";
-  }
-}
-
 function codexTranscriptFiles(root, since) {
   if (!existsSync(root)) return [];
   const files = [];
@@ -167,37 +156,6 @@ function codexTranscriptFiles(root, since) {
     }
   }
   return files;
-}
-
-function codexTurns(file) {
-  const turns = [];
-  let turnStart = 0;
-  let turnTools = 0;
-  let lastActivity = 0;
-  for (const rawLine of readFileSync(file, "utf8").split(/\r?\n/)) {
-    if (!rawLine.trim()) continue;
-    let line;
-    try { line = JSON.parse(rawLine); } catch { continue; }
-    if (line.type !== "response_item") continue;
-    const ts = line.timestamp ? Date.parse(line.timestamp) : 0;
-    const payload = line.payload || {};
-    if (payload.type === "message" && payload.role === "user") {
-      if (turnStart && lastActivity > turnStart) turns.push({ ms: lastActivity - turnStart, tools: turnTools });
-      turnStart = ts;
-      turnTools = 0;
-      lastActivity = ts;
-      continue;
-    }
-    if (payload.type === "custom_tool_call" || payload.type === "function_call") {
-      turnTools += 1;
-      lastActivity = ts || lastActivity;
-    }
-    if (payload.type === "custom_tool_call_output" || payload.type === "function_call_output") {
-      lastActivity = ts || lastActivity;
-    }
-  }
-  if (turnStart && lastActivity > turnStart) turns.push({ ms: lastActivity - turnStart, tools: turnTools });
-  return turns;
 }
 
 // --- git churn ------------------------------------------------------------
@@ -299,12 +257,12 @@ export function buildIterationReport(options = {}) {
 
   for (const file of codexTranscriptFiles(codexRoot, sinceMs)) {
     let cwd = "";
-    try { cwd = codexTranscriptCwd(file); } catch { continue; }
+    try { cwd = readCodexSessionCwd(file); } catch { continue; }
     if (!cwd || !cwd.replace(/\\/g, "/").toLowerCase().includes(basename(repoRoot).toLowerCase())) continue;
     const parsed = parseCodexTranscript(file);
     if (parsed.records.length === 0) continue;
     harness.codex.sessions += 1;
-    harness.codex.turns.push(...codexTurns(file));
+    harness.codex.turns.push(...parsed.turns);
     account("codex", parsed.records);
   }
 

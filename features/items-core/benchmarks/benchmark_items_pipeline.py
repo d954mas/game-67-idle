@@ -23,7 +23,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 CLI = ROOT / "features" / "items-core" / "scripts" / "items_cli.py"
-DEFAULT_PROJECT = ROOT / "templates" / "template"
+DEFAULT_CONSUMER_PROJECT = ROOT / "ai_studio" / "feature_testing" / "consumer"
 DEFAULT_EDIT_PROJECT = ROOT / "features" / "items-core" / "tests" / "fixtures" / "items_cli"
 BENCHMARK_SOURCES = {
     "benchmark": Path(__file__).resolve(),
@@ -528,7 +528,7 @@ def benchmark(project: Path, edit_project: Path, build_dir: Path, *, warm_runs: 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--project-root", type=Path, default=DEFAULT_PROJECT)
+    parser.add_argument("--project-root", type=Path, default=DEFAULT_CONSUMER_PROJECT)
     parser.add_argument("--edit-project", type=Path, default=DEFAULT_EDIT_PROJECT)
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--warm-runs", type=int, default=3)

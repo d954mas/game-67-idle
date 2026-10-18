@@ -61,7 +61,7 @@ vendored `stb_image`.
 
 ## Commands
 
-- `ctest --test-dir templates/template/build/native-debug -R remote_image --output-on-failure`
+- `ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R remote_image --output-on-failure`
 
 ## Validation
 

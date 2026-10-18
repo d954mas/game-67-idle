@@ -132,9 +132,9 @@ For exact install, enable/disable, verification, and uninstall steps, read
 
 Default template integration uses:
 
-- schema sources: `templates/template/state/{settings,items,progression,game_state}.schema.json`;
-- generated output: `templates/template/build/<config>/generated/game-state/`;
-- migrations: `templates/template/state/migrations/`;
+- schema sources: `ai_studio/feature_testing/consumer/state/{settings,items,progression,game_state}.schema.json`;
+- generated output: `ai_studio/feature_testing/consumer/build/<config>/generated/game-state/`;
+- migrations: `ai_studio/feature_testing/consumer/state/migrations/`;
 - always compiled (the `FEATURE_GAME_STATE` on/off flag was removed
   2026-07-07 — a game without state is impossible);
 - DevAPI registrations from the hand-written
@@ -239,7 +239,7 @@ cJSON) and `src/game_save_seal.c` (standalone). The template builds and runs
 Generate from the template schema:
 
 ```powershell
-node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py --schema templates/template/state/game_state.schema.json
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py --schema ai_studio/feature_testing/consumer/state/game_state.schema.json
 ```
 
 Without `--out-dir`, the command writes to `build/generated/game-state` under

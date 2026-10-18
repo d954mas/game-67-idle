@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const ROUTER_SECTIONS = ["Purpose", "Public surface", "Validation", "Compatibility", "Extension points"];
 const SKILL_ROUTES = {
-  ".codex/skills/nt-game-feature/SKILL.md": ["features/README.md", "templates/template/src/features/README.md", "README.md", "INSTALL.md", "feature.json"],
+  ".codex/skills/nt-game-feature/SKILL.md": ["features/README.md", "ai_studio/feature_testing/consumer/src/features/README.md", "README.md", "INSTALL.md", "feature.json"],
   ".codex/skills/nt-game-state-management/SKILL.md": ["features/game-state/README.md", "features/game-state/INSTALL.md", "features/game-state/feature.json"],
   ".codex/skills/nt-game-items/SKILL.md": ["features/items-core/README.md", "features/items-core/INSTALL.md", "features/items-core/feature.json"],
 };
@@ -67,11 +67,7 @@ function validateManifest(root, id, base) {
       throw new Error(`${label}: README Compatibility must define PATCH, MINOR, and MAJOR rules`);
     }
   }
-  // The seed records what the template LINKS, so only "reusable" belongs in it.
-  // "opt-in" is a finished feature the template does not link -- a game installs
-  // it, or only the test lane touches it. Declaring one in the seed would hand
-  // every new game a dependency its runtime CMake never compiles, and the
-  // runtime build record rejects exactly that.
+  // Maturity and default composition are independent: the seed names actual consumers.
   const defaultStatus = base.startsWith("features/") ? "reusable" : "template-local";
   const allowedStatuses = base.startsWith("features/")
     ? new Set(["reusable", "opt-in", "specified"])
@@ -99,16 +95,19 @@ function discoverFeatureDirectories(root, rel, { declaredOnly = false } = {}) {
     .sort();
 }
 
-function validateSeed(root, rootContracts) {
-  const rel = "templates/template/game-dependencies.json";
+function validateSeed(root, rootContracts, template) {
+  const rel = `${template}/game-dependencies.json`;
   const seed = readJson(root, rel);
   exactKeys(seed, ["schema", "engine", "features", "compatibility"], rel);
+  if (typeof seed.compatibility !== "string" || !seed.compatibility.trim()) {
+    throw new Error(`${rel}: compatibility must be nonempty text`);
+  }
   if (seed.schema !== "ai_studio.game.dependencies.seed.v2") throw new Error(`${rel}: unsupported schema`);
   if (!seed.engine || typeof seed.engine !== "object" || Array.isArray(seed.engine)) throw new Error(`${rel}: invalid engine contract`);
   exactKeys(seed.engine, ["source", "version", "compatibility"], `${rel}.engine`);
   const engineVersion = readEngineSemVer(root);
   if (seed.engine.source !== "external/neotolis-engine" || seed.engine.version !== engineVersion
-      || !String(seed.engine.compatibility || "").trim()) {
+      || typeof seed.engine.compatibility !== "string" || !seed.engine.compatibility.trim()) {
     throw new Error(`${rel}: engine version ${seed.engine.version || "<missing>"} does not match nt_core.h ${engineVersion}`);
   }
   if (!Array.isArray(seed.features)) throw new Error(`${rel}: features must be an array`);
@@ -119,19 +118,19 @@ function validateSeed(root, rootContracts) {
     if (declared.has(entry.id)) throw new Error(`${rel}: duplicate feature '${entry.id}'`);
     declared.set(entry.id, entry);
   }
-  const runtimeContracts = rootContracts.filter(({ status }) => status === "reusable");
-  for (const contract of runtimeContracts) {
-    const entry = declared.get(contract.id);
-    if (!entry) throw new Error(`${rel}: missing reusable feature '${contract.id}'`);
+  const contracts = new Map(rootContracts.map((contract) => [contract.id, contract]));
+  for (const entry of declared.values()) {
+    const contract = contracts.get(entry.id);
+    if (!contract) throw new Error(`${rel}: unknown feature '${entry.id}'`);
+    if (contract.status === "specified") throw new Error(`${entry.id}: specified-only feature cannot be a runtime dependency`);
     if (entry.source !== contract.source) throw new Error(`${contract.id}: seed source must be '${contract.source}'`);
     if (entry.version !== contract.version) {
       throw new Error(`${contract.id}: seed version ${entry.version || "<missing>"} does not match feature.json ${contract.version}`);
     }
-    if (!String(entry.compatibility || "").trim()) throw new Error(`${contract.id}: seed compatibility must not be empty`);
+    if (typeof entry.compatibility !== "string" || !entry.compatibility.trim()) {
+      throw new Error(`${contract.id}: seed compatibility must be nonempty text`);
+    }
   }
-  const rootIds = new Set(runtimeContracts.map(({ id }) => id));
-  const extras = [...declared.keys()].filter((id) => !rootIds.has(id));
-  if (extras.length) throw new Error(`${rel}: unknown reusable features: ${extras.join(", ")}`);
   return seed;
 }
 
@@ -148,10 +147,18 @@ export function validateFeatureContracts(root = DEFAULT_ROOT) {
   const repoRoot = resolve(root);
   const rootContracts = discoverFeatureDirectories(repoRoot, "features")
     .map((id) => validateManifest(repoRoot, id, `features/${id}`));
-  const pointerContracts = discoverFeatureDirectories(repoRoot, "templates/template/src/features", { declaredOnly: true }).map((id) => (
-    validateManifest(repoRoot, id, `templates/template/src/features/${id}`)
-  ));
-  validateSeed(repoRoot, rootContracts);
+  const templates = readdirSync(join(repoRoot, "templates"), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(join(repoRoot, "templates", entry.name, "game-dependencies.json")))
+    .map((entry) => `templates/${entry.name}`);
+  const consumer = "ai_studio/feature_testing/consumer";
+  if (existsSync(join(repoRoot, consumer, "game-dependencies.json"))) templates.push(consumer);
+  const pointerContracts = templates.flatMap((template) => {
+    const base = `${template}/src/features`;
+    if (!existsSync(join(repoRoot, base))) return [];
+    return discoverFeatureDirectories(repoRoot, base, { declaredOnly: true })
+      .map((id) => validateManifest(repoRoot, id, `${base}/${id}`));
+  });
+  for (const template of templates) validateSeed(repoRoot, rootContracts, template);
   validateSkillRouters(repoRoot);
   return {
     rootFeatures: rootContracts.map(({ id }) => id),

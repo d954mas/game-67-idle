@@ -17,6 +17,7 @@ const defaultScanRoots = [
   "CLAUDE.md",
   ".codex/agents",
   ".codex/skills",
+  ".agents/skills",
   ".claude/agents",
   { path: "templates", mode: "root-files-and-child-directories" },
   { path: "features", mode: "root-files-and-child-directories" },

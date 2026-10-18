@@ -1,6 +1,6 @@
 ---
 name: nt-asset-workflow
-description: "Use when sourcing, adding, moving, preparing, recording, promoting, pulling, reviewing, licensing, or validating game assets in this repository: add an asset to a game, reuse an asset from the global library, add a new asset or pack to the global library, handle paid/non-redistributable assets, find or generate character animation clips, refresh previews, inspect unregistered files, or update asset storage/viewer/index/manifest workflows. Source first, keep license/provenance, and route through ai_studio/assets."
+description: "Source, import, prepare, promote, or validate game assets and licenses through the Studio asset library. Use for asset manifests and viewer workflows."
 ---
 
 # NT Asset Workflow

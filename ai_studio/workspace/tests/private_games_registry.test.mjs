@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -38,6 +38,19 @@ function fixture(t) {
   mkdirSync(join(root, "games", "private"), { recursive: true });
   mkdirSync(join(root, "templates"), { recursive: true });
   return root;
+}
+
+function registeredPrivateWorktree(root, id = "secret-game", alias = "secret-game-worktree") {
+  const canonical = `games/private/${id}`;
+  game(root, canonical, id, "Secret Title", true);
+  const canonicalRoot = join(root, canonical);
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: canonicalRoot });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: canonicalRoot });
+  execFileSync("git", ["add", "."], { cwd: canonicalRoot });
+  execFileSync("git", ["commit", "-m", "private fixture"], { cwd: canonicalRoot, stdio: "ignore" });
+  const worktree = join(root, "games", "private", alias);
+  execFileSync("git", ["worktree", "add", "--detach", worktree], { cwd: canonicalRoot, stdio: "ignore" });
+  return { canonical: canonicalRoot, worktree, alias };
 }
 
 test("listGameMounts keeps private games hidden unless explicitly selected", (t) => {
@@ -107,6 +120,31 @@ test("runPrivateGamePreflight scans tracked text and otherwise accepts an ignore
   assert.match(leaked.violations[0].reason, /private token/);
 });
 
+test("privacy preflight audits registered private worktree paths and untracked binary contents", (t) => {
+  const root = fixture(t);
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
+  const { worktree, alias } = registeredPrivateWorktree(root);
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "parent fixture"], { cwd: root, stdio: "ignore" });
+
+  const secret = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x42]);
+  mkdirSync(join(worktree, "assets"), { recursive: true });
+  writeFileSync(join(worktree, "assets", "alias-secret.png"), secret);
+  mkdirSync(join(root, "assets"), { recursive: true });
+  writeFileSync(join(root, "assets", "leaked.png"), secret);
+  writeFileSync(join(root, "README.md"), `games/private/${alias}\n`, "utf8");
+  execFileSync("git", ["add", "README.md", "assets/leaked.png"], { cwd: root });
+
+  const result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /private token.*secret-game/i);
+  assert.equal(result.violations.some((item) => item.path === "assets/leaked.png"), true);
+});
+
 test("runPrivateGamePreflight confines every Git call with the exact repository safe.directory", (t) => {
   const root = fixture(t);
   execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
@@ -119,21 +157,76 @@ test("runPrivateGamePreflight confines every Git call with the exact repository 
   execFileSync("git", ["commit", "-m", "fixture"], { cwd: root, stdio: "ignore" });
 
   const calls = [];
-  const result = runPrivateGamePreflight(root, {
-    spawnGit(command, args, options) {
-      calls.push({ command, args, cwd: options.cwd });
-      return spawnSync(command, args, options);
-    },
-  });
+  const inheritedReplacement = process.env.GIT_NO_REPLACE_OBJECTS;
+  process.env.GIT_NO_REPLACE_OBJECTS = "0";
+  let result;
+  try {
+    result = runPrivateGamePreflight(root, {
+      spawnGit(command, args, options) {
+        calls.push({ command, args, cwd: options.cwd, env: options.env });
+        return spawnSync(command, args, options);
+      },
+    });
+  } finally {
+    if (inheritedReplacement === undefined) delete process.env.GIT_NO_REPLACE_OBJECTS;
+    else process.env.GIT_NO_REPLACE_OBJECTS = inheritedReplacement;
+  }
   assert.equal(result.ok, true);
   assert.ok(calls.length > 0);
   for (const call of calls) {
     assert.equal(call.command, "git");
-    assert.deepEqual(call.args.slice(0, 2), [
+    assert.deepEqual(call.args.slice(0, 3), [
+      "--no-replace-objects",
       "-c",
       `safe.directory=${resolve(call.cwd).replaceAll("\\", "/")}`,
     ]);
+    assert.equal(call.env.GIT_NO_REPLACE_OBJECTS, undefined);
   }
+});
+
+test("privacy preflight batches private index blobs without skipping hidden binary text files", (t) => {
+  const root = fixture(t);
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
+  game(root, "games/private/secret-game", "secret-game", "Secret Title", true);
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "parent fixture"], { cwd: root, stdio: "ignore" });
+  const privateRoot = join(root, "games/private/secret-game");
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: privateRoot });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: privateRoot });
+  mkdirSync(join(privateRoot, "notes"), { recursive: true });
+  for (let index = 0; index < 24; index += 1) {
+    writeFileSync(join(privateRoot, "notes", `plain ${index}.txt`), `note ${index}\n`, "utf8");
+  }
+  writeFileSync(join(privateRoot, "notes", "space name-кириллица.txt"), "plain text\n", "utf8");
+  const secret = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x42]);
+  const privatePath = join(privateRoot, "assets", "секрет name.txt");
+  mkdirSync(dirname(privatePath), { recursive: true });
+  writeFileSync(privatePath, secret);
+  execFileSync("git", ["add", "."], { cwd: privateRoot });
+  execFileSync("git", ["commit", "-m", "private sources"], { cwd: privateRoot, stdio: "ignore" });
+
+  mkdirSync(join(root, "assets"), { recursive: true });
+  writeFileSync(join(root, "assets", "leaked.txt"), secret);
+  execFileSync("git", ["add", "assets/leaked.txt"], { cwd: root });
+
+  const calls = [];
+  const result = runPrivateGamePreflight(root, {
+    spawnGit(command, args, options) {
+      calls.push({ args, cwd: resolve(options.cwd) });
+      return spawnSync(command, args, options);
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.violations.some((item) => item.path === "assets/leaked.txt"), true);
+  const privateCalls = calls.filter((call) => call.cwd === resolve(privateRoot));
+  assert.equal(privateCalls.filter((call) => call.args.includes("show")).length, 0);
+  assert.equal(privateCalls.filter((call) => call.args.includes("cat-file")).length, 2);
+  assert.equal(privateCalls.some((call) => call.args.includes("--batch-check")), true);
+  assert.equal(privateCalls.some((call) => call.args.includes("--batch")), true);
 });
 
 test("privacy preflight blocks a staged parent binary copied byte-identically from a private game", (t) => {
@@ -166,6 +259,108 @@ test("privacy preflight blocks a staged parent binary copied byte-identically fr
   assert.equal(leaked.ok, false);
   assert.match(leaked.violations.map((item) => item.reason).join("\n"), /byte-identical.*private binary/i);
   assert.equal(leaked.violations.some((item) => item.path === "assets/leaked.dat"), true);
+});
+
+test("privacy preflight ignores Git replacement refs when reading private staged blobs", (t) => {
+  const root = fixture(t);
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
+  game(root, "games/private/secret-game", "secret-game", "Secret Title", true);
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "parent fixture"], { cwd: root, stdio: "ignore" });
+
+  const privateRoot = join(root, "games/private/secret-game");
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: privateRoot });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: privateRoot });
+  const secret = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x42]);
+  const privateAsset = join(privateRoot, "assets", "secret.dat");
+  mkdirSync(dirname(privateAsset), { recursive: true });
+  writeFileSync(privateAsset, secret);
+  execFileSync("git", ["add", "assets/secret.dat"], { cwd: privateRoot });
+  execFileSync("git", ["commit", "-m", "private binary"], { cwd: privateRoot, stdio: "ignore" });
+  const original = execFileSync("git", ["rev-parse", ":assets/secret.dat"], { cwd: privateRoot, encoding: "utf8" }).trim();
+  const replacement = execFileSync("git", ["hash-object", "-w", "--stdin"], {
+    cwd: privateRoot,
+    encoding: "utf8",
+    input: "benign text\n",
+  }).trim();
+  execFileSync("git", ["replace", original, replacement], { cwd: privateRoot, stdio: "ignore" });
+  rmSync(privateAsset);
+
+  mkdirSync(join(root, "assets"), { recursive: true });
+  writeFileSync(join(root, "assets", "leaked.dat"), secret);
+  execFileSync("git", ["add", "assets/leaked.dat"], { cwd: root });
+
+  const result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.equal(result.violations.some((item) => item.path === "assets/leaked.dat"), true);
+});
+
+test("privacy preflight rejects a private junction before reading outside the game root", (t) => {
+  const root = fixture(t);
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
+  game(root, "games/private/secret-game", "secret-game", "Secret Title", true);
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "parent fixture"], { cwd: root, stdio: "ignore" });
+
+  const secret = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x42]);
+  const privateRoot = join(root, "games/private/secret-game");
+  const nested = join(privateRoot, "nested");
+  const replacedPath = join(nested, "original.txt");
+  mkdirSync(nested, { recursive: true });
+  writeFileSync(replacedPath, "benign text\n", "utf8");
+  execFileSync("git", ["add", "nested/original.txt"], { cwd: privateRoot });
+  rmSync(replacedPath, { force: true });
+  const outside = join(root, "outside-content");
+  mkdirSync(outside, { recursive: true });
+  try {
+    symlinkSync(outside, replacedPath, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    t.skip(`directory symlink unavailable: ${error.code || error.message}`);
+    return;
+  }
+  mkdirSync(join(root, "assets"), { recursive: true });
+  writeFileSync(join(root, "assets", "leaked.dat"), secret);
+  execFileSync("git", ["add", "assets/leaked.dat"], { cwd: root });
+
+  const result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /not a directory|resolves outside|symlink|reparse/i);
+  assert.equal(result.violations.some((item) => item.path === "assets/leaked.dat"), false);
+});
+
+test("privacy preflight accepts one trailing slash for an ignored nested Git directory", (t) => {
+  const root = fixture(t);
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
+  game(root, "games/private/secret-game", "secret-game", "Secret Title", true);
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "parent fixture"], { cwd: root, stdio: "ignore" });
+  mkdirSync(join(root, "assets"), { recursive: true });
+  writeFileSync(join(root, "assets", "trigger.dat"), Buffer.from([0x00, 0x42]));
+  execFileSync("git", ["add", "assets/trigger.dat"], { cwd: root });
+
+  const privateRoot = join(root, "games/private/secret-game");
+  writeFileSync(join(privateRoot, ".gitignore"), "tmp/nested/\n", "utf8");
+  const nested = join(privateRoot, "tmp", "nested");
+  mkdirSync(nested, { recursive: true });
+  execFileSync("git", ["init"], { cwd: nested, stdio: "ignore" });
+  const listed = execFileSync("git", ["ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", "."], {
+    cwd: privateRoot,
+  });
+  assert.equal(listed.includes(Buffer.from("tmp/nested/\0", "utf8")), true);
+
+  assert.equal(runPrivateGamePreflight(root).ok, true);
 });
 
 test("privacy preflight also compares untracked and ignored private binaries", (t) => {
@@ -207,6 +402,158 @@ test("privacy preflight also compares untracked and ignored private binaries", (
   assert.equal(leakedPaths.has("assets/leaked-untracked.png"), true);
   assert.equal(leakedPaths.has("assets/leaked-ignored.png"), true);
   assert.equal(leakedPaths.has("assets/leaked-evidence.png"), true);
+});
+
+test("privacy preflight compares registered external private Canvas bytes without a mounted junction", (t) => {
+  const root = fixture(t);
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
+  game(root, "games/private/secret-game", "secret-game", "Secret Title", true);
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "fixture"], { cwd: root, stdio: "ignore" });
+
+  const secret = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x44]);
+  const projectsRoot = join(root, "external-private-canvas");
+  mkdirSync(join(projectsRoot, "project-a", "files"), { recursive: true });
+  writeFileSync(join(projectsRoot, "project-a", "files", "secret.png"), secret, { encoding: "binary", flag: "w" });
+  writeJson(root, "ai_studio/studio.config.local.json", {
+    canvasPrivateGameProjectsRoots: { "secret-game": projectsRoot },
+  });
+  mkdirSync(join(root, "assets"), { recursive: true });
+  writeFileSync(join(root, "assets", "leaked.png"), secret);
+  execFileSync("git", ["add", "assets/leaked.png"], { cwd: root });
+
+  const result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.equal(result.violations.some((item) => item.path === "assets/leaked.png"), true);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /canvas\/projects\/project-a\/files\/secret\.png/i);
+});
+
+test("privacy preflight accepts a registered private Canvas junction", (t) => {
+  const root = fixture(t);
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
+  game(root, "games/private/secret-game", "secret-game", "Secret Title", true);
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "fixture"], { cwd: root, stdio: "ignore" });
+
+  const secret = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x55]);
+  const projectsRoot = join(root, "registered-private-canvas");
+  mkdirSync(join(projectsRoot, "project-a", "files"), { recursive: true });
+  writeFileSync(join(projectsRoot, "project-a", "files", "secret.png"), secret);
+  const privateRoot = join(root, "games", "private", "secret-game");
+  mkdirSync(join(privateRoot, ".ai_studio", "canvas"), { recursive: true });
+  try {
+    symlinkSync(projectsRoot, join(privateRoot, ".ai_studio", "canvas", "projects"), process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    t.skip(`directory symlink unavailable: ${error.code || error.message}`);
+    return;
+  }
+  writeJson(root, "ai_studio/studio.config.local.json", {
+    canvasPrivateGameProjectsRoots: { "secret-game": projectsRoot },
+  });
+  mkdirSync(join(root, "assets"), { recursive: true });
+  writeFileSync(join(root, "assets", "leaked.png"), secret);
+  execFileSync("git", ["add", "assets/leaked.png"], { cwd: root });
+
+  const result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.equal(result.violations.some((item) => item.path === "assets/leaked.png"), true);
+  assert.equal(result.violations.some((item) => /Canvas projects mount/.test(item.reason)), false);
+});
+
+test("scoped privacy preflight accepts registrations owned by another private game", (t) => {
+  const root = fixture(t);
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
+  game(root, "games/private/game-a", "game-a", "Game A", true);
+  game(root, "games/private/game-b", "game-b", "Game B", true);
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "fixture"], { cwd: root, stdio: "ignore" });
+
+  const projectsA = join(root, "external-private-canvas-a");
+  const projectsB = join(root, "external-private-canvas-b");
+  mkdirSync(projectsA, { recursive: true });
+  mkdirSync(projectsB, { recursive: true });
+  writeJson(root, "ai_studio/studio.config.local.json", {
+    canvasPrivateGameProjectsRoots: { "game-a": projectsA, "game-b": projectsB },
+  });
+
+  const result = runPrivateGamePreflight(root, { activeGameId: "game-a" });
+  assert.equal(result.ok, true);
+  assert.equal(result.violations.some((item) => item.path === "<canvas-config>"), false);
+});
+
+test("privacy preflight rejects an unregistered private Canvas junction", (t) => {
+  const root = fixture(t);
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
+  game(root, "games/private/secret-game", "secret-game", "Secret Title", true);
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "fixture"], { cwd: root, stdio: "ignore" });
+
+  const privateRoot = join(root, "games", "private", "secret-game");
+  const outside = join(root, "unregistered-private-canvas");
+  mkdirSync(outside, { recursive: true });
+  mkdirSync(join(privateRoot, ".ai_studio", "canvas"), { recursive: true });
+  try {
+    symlinkSync(outside, join(privateRoot, ".ai_studio", "canvas", "projects"), process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    t.skip(`directory symlink unavailable: ${error.code || error.message}`);
+    return;
+  }
+  mkdirSync(join(root, "assets"), { recursive: true });
+  writeFileSync(join(root, "assets", "trigger.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]));
+  execFileSync("git", ["add", "assets/trigger.png"], { cwd: root });
+
+  const result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /not a directory|resolves outside|symlink|reparse/i);
+});
+
+test("privacy preflight rejects a registered Canvas root with a nested reparse escape", (t) => {
+  const root = fixture(t);
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
+  game(root, "games/private/secret-game", "secret-game", "Secret Title", true);
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "fixture"], { cwd: root, stdio: "ignore" });
+
+  const projectsRoot = join(root, "registered-private-canvas");
+  const outside = join(root, "outside-content");
+  mkdirSync(projectsRoot, { recursive: true });
+  mkdirSync(outside, { recursive: true });
+  try {
+    symlinkSync(outside, join(projectsRoot, "escape"), process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    t.skip(`directory symlink unavailable: ${error.code || error.message}`);
+    return;
+  }
+  writeJson(root, "ai_studio/studio.config.local.json", {
+    canvasPrivateGameProjectsRoots: { "secret-game": projectsRoot },
+  });
+  mkdirSync(join(root, "assets"), { recursive: true });
+  writeFileSync(join(root, "assets", "trigger.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]));
+  execFileSync("git", ["add", "assets/trigger.png"], { cwd: root });
+
+  const result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /Canvas projects root contains a symlink or reparse point/i);
 });
 
 test("privacy preflight compares only the changed Git view of a parent binary", (t) => {

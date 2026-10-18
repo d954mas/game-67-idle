@@ -1,6 +1,6 @@
 ---
 name: nt-runtime-automation
-description: "Use when working with AI Studio runtime automation for a running game: DevAPI client/CLI, endpoints and command.describe discovery, frame.wait loops, ui.tree/ui.click, native iteration helpers, screenshots, recordings, pixel-health checks, UI readability evidence, or live-state capture matrices. Use for runtime proof collection and automation tooling, not for game design, task tracking, or general visual quality rules."
+description: "Collect game runtime proof through DevAPI discovery, input, frame waits, screenshots, and recordings; maintain the shared automation helpers."
 ---
 
 # NT Runtime Automation

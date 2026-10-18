@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 from contextlib import redirect_stdout
 from datetime import datetime
-import hashlib
 import json
 import math
 from pathlib import Path
@@ -17,9 +16,19 @@ import uuid
 
 try:
     from .devapi_client import running_game
+    from .native_capture_preflight import (
+        canonical_native_executable,
+        prepare_native_capture,
+        validate_native_capture_final,
+    )
     from .record_game import PRESETS, record_take, resolve_capture_settings
 except ImportError:
     from devapi_client import running_game  # type: ignore[no-redef]
+    from native_capture_preflight import (  # type: ignore[no-redef]
+        canonical_native_executable,
+        prepare_native_capture,
+        validate_native_capture_final,
+    )
     from record_game import PRESETS, record_take, resolve_capture_settings  # type: ignore[no-redef]
 
 
@@ -43,43 +52,31 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def resolve_game_executable(
     game_root: Path,
-    relative_path: str = "build/devapi-debug/bin/game.exe",
+    relative_path: str | None = None,
     *,
     override: Path | None = None,
 ) -> Path:
-    requested = override if override is not None else Path(relative_path)
+    requested = override if override is not None else (
+        Path(relative_path) if relative_path is not None else canonical_native_executable(game_root)
+    )
     executable = requested if requested.is_absolute() else game_root.resolve() / requested
-    if not executable.is_file():
-        if override is not None:
-            raise RuntimeError(f"capture executable is missing: {executable}")
-        raise RuntimeError(
-            "game executable is missing; build the debug game first: "
-            f"{executable}"
-        )
-    return executable.resolve()
+    canonical = canonical_native_executable(game_root)
+    if executable.resolve() != canonical:
+        raise RuntimeError(f"capture executable must be the canonical DevAPI artifact: {canonical}")
+    return canonical
 
 
-def executable_identity(executable: Path) -> dict[str, object]:
-    digest = hashlib.sha256()
-    with executable.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return {
-        "path": str(executable),
-        "bytes": executable.stat().st_size,
-        "sha256": digest.hexdigest(),
-    }
-
-
-def append_executable_identity(result: dict, identity: dict[str, object]) -> dict:
+def append_executable_identity(result: dict, native_build: dict[str, object]) -> dict:
     edit = Path(result["edit"])
     metadata_path = edit.parent / "capture.json"
+    result["effectiveExecutable"] = native_build["executable"]
+    result["nativeBuild"] = native_build
     if not metadata_path.is_file():
         return result
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    metadata["effectiveExecutable"] = identity
+    metadata["effectiveExecutable"] = native_build["executable"]
+    metadata["nativeBuild"] = native_build
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    result["effectiveExecutable"] = identity
     return result
 
 
@@ -420,13 +417,18 @@ def run(args: argparse.Namespace) -> dict:
             args.seconds if args.seconds is not None else live.get("seconds", 15),
             "live seconds",
         )
-    executable = resolve_game_executable(
+    output_root = args.out.resolve() if args.out else default_output_root(game_root)
+    requested_executable = resolve_game_executable(
         game_root,
-        catalog.get("executable", "build/devapi-debug/bin/game.exe"),
+        catalog.get("executable", str(canonical_native_executable(game_root).relative_to(game_root))),
         override=args.executable,
     )
-    identity_before = executable_identity(executable)
-    output_root = args.out.resolve() if args.out else default_output_root(game_root)
+    native_build = prepare_native_capture(
+        game_root,
+        output_root,
+        requested_executable=requested_executable,
+    )
+    executable = Path(str(native_build["executable"]["path"]))
     launch = catalog.get("launch", {})
     storage_root = output_root / ".game_storage"
     storage_root.mkdir(parents=True, exist_ok=True)
@@ -487,9 +489,8 @@ def run(args: argparse.Namespace) -> dict:
                 kwargs["max_freeze_seconds"] = float(shot.get("max_freeze_seconds", 2.0))
             with redirect_stdout(sys.stderr):
                 result = record_take(**kwargs)
-                if executable_identity(executable) != identity_before:
-                    raise RuntimeError("effective capture executable changed during recording")
-                return append_executable_identity(result, identity_before)
+                validate_native_capture_final(native_build)
+                return append_executable_identity(result, native_build)
         finally:
             finish_shot()
 

@@ -46,16 +46,16 @@ local copy cannot shadow the shared public header.
 6. Call init/update/shutdown from the game shell, forward persisted mix values,
    platform pause/resume, and a real browser input gesture.
 
-The template reference is `templates/template/src/game_audio.c`.
+The feature-test consumer reference is `ai_studio/feature_testing/consumer/src/game_audio.c`.
 
 ## Validation
 
 With the template build configured, run:
 
 ```powershell
-cmake --build templates/template/build/native-debug --target test_audio_core `
+cmake --build ai_studio/feature_testing/consumer/build/feature-verify --target test_audio_core `
   test_audio_resource test_audio_backend_native test_game_audio
-ctest --test-dir templates/template/build/native-debug `
+ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify `
   -R "test_audio_core|test_audio_resource|test_audio_backend_native|test_game_audio|test_audio_web_library" `
   --output-on-failure
 node --test features/audio-core/tests/test_audio_web_library.mjs

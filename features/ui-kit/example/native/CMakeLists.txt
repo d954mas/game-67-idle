@@ -105,12 +105,12 @@ if(NOT LAB_PACK_SOURCE_ASSETS)
 endif()
 
 # Inputs src/build_packs.c reads but that CONFIGURE_DEPENDS above cannot see,
-# because they sit outside assets/*.png: the five template icons, the engine
+# because they sit outside assets/*.png: the five consumer icons, the engine
 # font, and the six shaders. Listed by hand so a change to any of them
 # invalidates the pack instead of leaving it stale.
 set(LAB_PACK_ICONS "")
 foreach(icon gold xp energy sword potion)
-    list(APPEND LAB_PACK_ICONS "${GAME_REPO_ROOT}/templates/template/assets/icons/${icon}.png")
+    list(APPEND LAB_PACK_ICONS "${GAME_REPO_ROOT}/ai_studio/feature_testing/consumer/assets/icons/${icon}.png")
 endforeach()
 set(LAB_PACK_FONT "${ENGINE_DIR}/assets/fonts/LilitaOne-RussianChineseKo.ttf")
 set(LAB_PACK_SHADERS

@@ -49,6 +49,25 @@ function layoutFixture(dir, { preset = "native-debug", withPack = true, withPng 
 
 const ICON_NAMES = ["gold", "xp", "energy", "potion", "sword", "wood"];
 
+function firstAtlas(buf) {
+  const assetCount = buf.readUInt16LE(10);
+  for (let index = 0; index < assetCount; index++) {
+    const entryOffset = 32 + index * 24;
+    if (buf.readUInt8(entryOffset + 18) !== 6) continue;
+    const base = buf.readUInt32LE(entryOffset + 8);
+    return {
+      entryOffset,
+      base,
+      regionsStart: base + 32 + buf.readUInt16LE(base + 8) * 8,
+      vertexOffset: buf.readUInt32LE(base + 12),
+      totalVertexCount: buf.readUInt32LE(base + 16),
+      indexOffset: buf.readUInt32LE(base + 20),
+      totalIndexCount: buf.readUInt32LE(base + 24),
+    };
+  }
+  assert.fail("fixture contains an atlas asset");
+}
+
 test("buildIconPreview: real two-atlas fixture resolves all 6 icons/* regions, ui/* never leaks in", async (t) => {
   const dir = tempFixtureDir(t);
   layoutFixture(dir);
@@ -109,6 +128,72 @@ test("parsePackBuffer: version-assert FIRST -- a pack version mismatch is caught
   const result = parsePackBuffer(mutated);
   assert.match(result.reason, /pack format newer than viewer/);
   assert.match(result.reason, /pack v99/);
+});
+
+test("parsePackBuffer: an atlas version mismatch is rejected before reading atlas data", () => {
+  const mutated = Buffer.from(readFileSync(join(FIXTURE_DIR, "game.ntpack")));
+  const atlas = firstAtlas(mutated);
+  mutated.writeUInt16LE(99, atlas.base + 4);
+  const result = parsePackBuffer(mutated);
+  assert.match(result.reason, /pack format newer than viewer/);
+  assert.match(result.reason, /atlas v99/);
+});
+
+test("parsePackBuffer: rejects atlas geometry placed inside metadata", () => {
+  const mutated = Buffer.from(readFileSync(join(FIXTURE_DIR, "game.ntpack")));
+  const atlas = firstAtlas(mutated);
+  mutated.writeUInt32LE(32, atlas.base + 12); // NtAtlasHeader.vertex_offset
+  assert.match(parsePackBuffer(mutated).reason, /vertex offset does not follow metadata/);
+});
+
+test("parsePackBuffer: rejects an atlas whose declared asset span truncates indices", () => {
+  const mutated = Buffer.from(readFileSync(join(FIXTURE_DIR, "game.ntpack")));
+  const atlas = firstAtlas(mutated);
+  const indexBytes = atlas.totalIndexCount * 2;
+  mutated.writeUInt32LE(atlas.indexOffset + indexBytes - 1, atlas.entryOffset + 12); // NtAssetEntry.size
+  assert.match(parsePackBuffer(mutated).reason, /index section exceeds asset bounds/);
+});
+
+test("parsePackBuffer: rejects truncated position and UV arrays before reading region UVs", () => {
+  const truncatedPositions = Buffer.from(readFileSync(join(FIXTURE_DIR, "game.ntpack")));
+  const positionAtlas = firstAtlas(truncatedPositions);
+  const positionBytes = positionAtlas.totalVertexCount * 8;
+  truncatedPositions.writeUInt32LE(positionAtlas.vertexOffset + positionBytes - 1, positionAtlas.entryOffset + 12);
+  assert.match(parsePackBuffer(truncatedPositions).reason, /position section exceeds asset bounds/);
+
+  const truncatedUvs = Buffer.from(readFileSync(join(FIXTURE_DIR, "game.ntpack")));
+  const uvAtlas = firstAtlas(truncatedUvs);
+  const uvBytes = uvAtlas.totalVertexCount * 4;
+  const uvOffset = uvAtlas.indexOffset - uvBytes;
+  truncatedUvs.writeUInt32LE(uvOffset + uvBytes - 1, uvAtlas.entryOffset + 12);
+  assert.match(parsePackBuffer(truncatedUvs).reason, /UV section exceeds asset bounds/);
+  assert.ok(positionBytes > 0 && uvBytes > 0, "fixture has serialized geometry");
+});
+
+test("parsePackBuffer: validates total_index_count against the declared atlas span", () => {
+  const mutated = Buffer.from(readFileSync(join(FIXTURE_DIR, "game.ntpack")));
+  const atlas = firstAtlas(mutated);
+  mutated.writeUInt32LE(atlas.totalIndexCount + 1, atlas.base + 24); // NtAtlasHeader.total_index_count
+  assert.match(parsePackBuffer(mutated).reason, /index section exceeds asset bounds/);
+});
+
+test("parsePackBuffer: rejects an index offset that does not immediately follow UVs", () => {
+  const mutated = Buffer.from(readFileSync(join(FIXTURE_DIR, "game.ntpack")));
+  const atlas = firstAtlas(mutated);
+  mutated.writeUInt32LE(atlas.indexOffset + 4, atlas.base + 20); // NtAtlasHeader.index_offset
+  assert.match(parsePackBuffer(mutated).reason, /index offset does not follow UV data/);
+});
+
+test("parsePackBuffer: rejects region vertex and index spans outside their atlas arrays", () => {
+  const vertexOverflow = Buffer.from(readFileSync(join(FIXTURE_DIR, "game.ntpack")));
+  const vertexAtlas = firstAtlas(vertexOverflow);
+  vertexOverflow.writeUInt32LE(vertexAtlas.totalVertexCount, vertexAtlas.regionsStart + 24); // NtAtlasRegion.vertex_start
+  assert.match(parsePackBuffer(vertexOverflow).reason, /region vertex span exceeds atlas vertices/);
+
+  const indexOverflow = Buffer.from(readFileSync(join(FIXTURE_DIR, "game.ntpack")));
+  const indexAtlas = firstAtlas(indexOverflow);
+  indexOverflow.writeUInt32LE(indexAtlas.totalIndexCount, indexAtlas.regionsStart + 28); // NtAtlasRegion.index_start
+  assert.match(parsePackBuffer(indexOverflow).reason, /region index span exceeds atlas indices/);
 });
 
 test("parsePackBuffer: bad magic is rejected, not silently parsed as garbage", () => {

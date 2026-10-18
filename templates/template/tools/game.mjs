@@ -80,7 +80,7 @@ export function parseGameArgs(argv) {
   if (command === "portal-check" && !args.targetSpecified) throw new Error("portal-check requires --target <portal>");
   if (command === "portal-check" && !PACKAGE_TARGETS.has(args.target)) throw new Error("portal-check requires a portal target");
   if (!args.build && !["playable", "package", "verify"].includes(command)) throw new Error(`--no-build is not valid for ${command}`);
-  if (args.templateProof && !["package", "verify"].includes(command)) throw new Error(`--template-proof is not valid for ${command}`);
+  if (args.templateProof && !["doctor", "test", "package", "verify"].includes(command)) throw new Error(`--template-proof is not valid for ${command}`);
   if (args.skipTests && command !== "verify") throw new Error(`--skip-tests is not valid for ${command}`);
   if (args.skipTests && !args.templateProof) throw new Error("--skip-tests is valid only with --template-proof");
   if (args.outDir && !["package", "verify"].includes(command)) throw new Error(`--out is not valid for ${command}`);
@@ -246,20 +246,24 @@ export function goldenEnvironment(gameDir, updateGoldens, env = process.env) {
   return next;
 }
 
-function runNativeTests(gameDir, options = {}) {
+export function runNativeTests(gameDir, options = {}, dependencies = {}) {
+  const runCommand = dependencies.run || run;
+  const catalogue = dependencies.catalogue || ctestCatalogue;
   const buildDir = join(gameDir, "build", "native-debug");
   const configured = existsSync(join(buildDir, "CMakeCache.txt"));
   const env = goldenEnvironment(gameDir, options.updateGoldens === true);
   mkdirSync(env.GAME_GOLDENS_DIR, { recursive: true });
   const selection = { ...options.selection };
-  // An unconfigured tree has no CTest catalogue yet, so the first run builds
-  // everything and filters by label; later runs build only what they will run.
-  if (configured) Object.assign(selection, selectTests(ctestCatalogue(buildDir), selection));
+  if (configured) {
+    // Refresh discovery before narrowing targets so new tests build on the first run.
+    runCommand("cmake", ["-S", gameDir, "-B", buildDir], gameDir, "native test configure", env);
+    Object.assign(selection, selectTests(catalogue(buildDir), selection));
+  }
   for (const [command, ...args] of nativeTestPlan(gameDir, process.platform, configured, selection)) {
-    run(command, args, gameDir, "native game tests", env);
+    runCommand(command, args, gameDir, "native game tests", env);
     // CMake regenerates during the build step, so the labels are only settled
     // once it has run.
-    if (command === "cmake" && args[0] === "--build") assertTiersLabelled(ctestCatalogue(buildDir));
+    if (command === "cmake" && args[0] === "--build") assertTiersLabelled(catalogue(buildDir));
   }
 }
 
@@ -421,8 +425,8 @@ export async function executeGameCommand(args, dependencies = {}) {
     return metadata;
   };
   if (args.command === "doctor") {
-    const result = doctor({ gameDir, templateProof: false });
-    verifyDependencies(loadMetadata(gameDir, false));
+    const result = doctor({ gameDir, templateProof: args.templateProof });
+    verifyDependencies(loadMetadata(gameDir, args.templateProof));
     return { message: `doctor passed (${result.gameId})` };
   }
   if (args.command === "build") {
@@ -437,7 +441,7 @@ export async function executeGameCommand(args, dependencies = {}) {
   if (args.command === "test") {
     // Iteration gate: dependency shape/version checks stay hard, but a dirty
     // engine/feature tree only warns here — release lanes still require clean.
-    prepare(false, { cleanliness: "warn" });
+    prepare(args.templateProof, { cleanliness: "warn" });
     nodeTest(gameDir);
     const only = args.only || [];
     const selection = args.all ? { mode: "all" }

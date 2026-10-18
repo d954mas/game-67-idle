@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Trustworthy reference-template source-edit to DevAPI proof loop."""
+"""Trustworthy integration-consumer source-edit to DevAPI proof loop."""
 from __future__ import annotations
 
 import argparse
@@ -28,22 +28,23 @@ from devapi_client import (
 
 
 ROOT_PATH = Path(ROOT)
-TEMPLATE_ROOT = ROOT_PATH / "templates" / "template"
-BUILD_DIR = TEMPLATE_ROOT / "build" / "devapi-debug"
+CONSUMER_PATH = "ai_studio/feature_testing/consumer"
+CONSUMER_ROOT = ROOT_PATH / CONSUMER_PATH
+BUILD_DIR = CONSUMER_ROOT / "build" / "devapi-debug"
 CACHE_PATH = BUILD_DIR / "CMakeCache.txt"
 NINJA_LOG = BUILD_DIR / ".ninja_log"
 EXE_NAME = "game.exe" if os.name == "nt" else "game"
 NATIVE_DEVAPI_EXE = BUILD_DIR / "bin" / EXE_NAME
 PACK_PATH = BUILD_DIR / "bin" / "assets" / "game.ntpack"
-PROOF_SOURCE = TEMPLATE_ROOT / "src" / "iteration_proof_devapi.c"
-STATE_SCHEMA = TEMPLATE_ROOT / "state" / "game_state.schema.json"
+PROOF_SOURCE = CONSUMER_ROOT / "src" / "iteration_proof_devapi.c"
+STATE_SCHEMA = CONSUMER_ROOT / "state" / "game_state.schema.json"
 PROOF_METHOD = "game.iteration.proof"
 SHOT = "tmp/captures/iterate.png"
 RESULT_SCHEMA = "ai_studio.runtime_automation.iterate.v2"
 ERROR_TAIL_LIMIT = 4096
 INVENTORY_LIMIT = 256
 SCOPED_GUARD_PATHS = (
-    "templates/template",
+    CONSUMER_PATH,
     "features",
     "ai_studio/runtime_automation",
     "ai_studio/studio.mjs",
@@ -90,8 +91,8 @@ def canonical_configure_command(platform_name: str | None = None, *, fresh: bool
     if fresh:
         command.append("--fresh")
     command.extend([
-        "-S", "templates/template",
-        "-B", "templates/template/build/devapi-debug",
+        "-S", CONSUMER_PATH,
+        "-B", f"{CONSUMER_PATH}/build/devapi-debug",
         "-G", "Ninja",
         "-DCMAKE_C_COMPILER=clang",
         "-DCMAKE_CXX_COMPILER=clang++",
@@ -104,7 +105,7 @@ def canonical_configure_command(platform_name: str | None = None, *, fresh: bool
 
 
 def canonical_build_command() -> list[str]:
-    return ["cmake", "--build", "templates/template/build/devapi-debug", "--target", "game"]
+    return ["cmake", "--build", f"{CONSUMER_PATH}/build/devapi-debug", "--target", "game"]
 
 
 def _cache_values(cache_path: Path) -> dict[str, str]:
@@ -131,7 +132,7 @@ def _same_path(left: str, right: Path) -> bool:
 
 def cache_compatibility(
     cache_path: Path = CACHE_PATH,
-    source: Path = TEMPLATE_ROOT,
+    source: Path = CONSUMER_ROOT,
     build: Path = BUILD_DIR,
     *,
     platform_name: str | None = None,

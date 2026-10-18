@@ -10,6 +10,16 @@ from unittest import mock
 import iterate
 
 
+class RepositoryFixtureTest(unittest.TestCase):
+    def test_source_proof_uses_the_independent_feature_consumer(self):
+        fixtures = iterate.read_expected_fixtures()
+        self.assertTrue(fixtures["cFixture"])
+        self.assertTrue(fixtures["schemaFixture"])
+        self.assertTrue(iterate.PROOF_SOURCE.is_relative_to(
+            iterate.ROOT_PATH / "ai_studio" / "feature_testing" / "consumer"
+        ))
+
+
 FIXTURES = {"cFixture": "leaf-c-v1", "schemaFixture": "Template ready"}
 GUARD = {
     "commit": "a" * 40,

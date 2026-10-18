@@ -4,8 +4,8 @@ The authoring loop — evaluate, validate, build, one-edit apply, rebuild — is
 what this measures. Reproduce the current Windows result with:
 
 ```powershell
-cmake -S templates/template -B templates/template/build/items-benchmark-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang
-node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/benchmark_items_pipeline.py --build-dir templates/template/build/items-benchmark-release --out features/items-core/benchmarks/results/windows-pipeline-2026-08-10.json
+cmake -S ai_studio/feature_testing/consumer -B ai_studio/feature_testing/consumer/build/items-benchmark-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang
+node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/benchmark_items_pipeline.py --project-root ai_studio/feature_testing/consumer --build-dir ai_studio/feature_testing/consumer/build/items-benchmark-release --out features/items-core/benchmarks/results/windows-pipeline-2026-10-18.json
 node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/benchmark_items_pipeline_test.py
 ```
 
@@ -16,6 +16,8 @@ behavior and builds but is not presented as a second performance profile.
 
 The production/agent-loop analysis, before/after evidence, and backend decision
 are recorded in [`items_pipeline_2026-07-16.md`](items_pipeline_2026-07-16.md).
+The current CLI consumer measurement is
+[`results/windows-cli-2026-10-18.json`](results/windows-cli-2026-10-18.json).
 
 ## Retired: the runtime-format comparison
 

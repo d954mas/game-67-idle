@@ -1,7 +1,7 @@
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 
-import { STUDIO_CONFIG_SCHEMA, loadStudioConfig } from "../../config.mjs";
+import { STUDIO_CONFIG_SCHEMA, loadStudioConfig, loadStudioLocalConfig } from "../../config.mjs";
 
 function looksAbsolute(value) {
   return isAbsolute(value) || /^[a-zA-Z]:[\\/]/.test(value);
@@ -24,6 +24,31 @@ export function canvasProjectsRoot(root) {
     throw new Error(`studio config is missing canvasProjectsRoot (schema ${STUDIO_CONFIG_SCHEMA})`);
   }
   return looksAbsolute(raw) ? resolve(raw) : resolve(root, raw);
+}
+
+export function canvasPrivateGameProjectsRoots(root) {
+  const raw = (loadStudioLocalConfig(root) || {}).canvasPrivateGameProjectsRoots;
+  if (raw === undefined) return new Map();
+  if (!raw || Array.isArray(raw) || typeof raw !== "object") {
+    throw new Error("canvasPrivateGameProjectsRoots must be an object");
+  }
+  const roots = new Map();
+  const ids = new Set();
+  for (const [rawGameId, rawPath] of Object.entries(raw)) {
+    const gameId = rawGameId.trim();
+    const path = typeof rawPath === "string" ? rawPath.trim() : "";
+    const key = process.platform === "win32" ? gameId.toLowerCase() : gameId;
+    if (!/^[a-z][a-z0-9-]*$/.test(gameId)) {
+      throw new Error("canvasPrivateGameProjectsRoots has an invalid game id");
+    }
+    if (ids.has(key)) throw new Error("canvasPrivateGameProjectsRoots has duplicate game ids");
+    if (!path || !looksAbsolute(path)) {
+      throw new Error(`canvasPrivateGameProjectsRoots.${gameId} must be an absolute path`);
+    }
+    ids.add(key);
+    roots.set(gameId, resolve(path));
+  }
+  return roots;
 }
 
 export const DEFAULT_CANVAS_HISTORY_DEPTH = 200;

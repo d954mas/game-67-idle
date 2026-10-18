@@ -1,7 +1,7 @@
 # leaderboard Install
 
 The template already compiles the pack (`LEADERBOARD_SOURCES` in
-`templates/template/CMakeLists.txt`) and registers its tests. A game wires it
+the feature-test consumer's `CMakeLists.txt`) and registers its tests. A game wires it
 in four steps; none of them names a portal.
 
 ## Install
@@ -224,8 +224,8 @@ Poki, itch and local builds keep the HTTP backend (or the mock).
 ## Verify
 
 ```
-cmake --build templates/template/build/native-debug --target test_leaderboard test_leaderboard_core test_leaderboard_http
-ctest --test-dir templates/template/build/native-debug -R leaderboard --output-on-failure
+cmake --build ai_studio/feature_testing/consumer/build/feature-verify --target test_leaderboard test_leaderboard_core test_leaderboard_http
+ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R leaderboard --output-on-failure
 ```
 
 ## Uninstall

@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { extname, join, normalize, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const artifact = resolve(process.argv[2] || "templates/template/build/wasm-debug/bin");
+const artifact = resolve(process.argv[2] || "ai_studio/feature_testing/consumer/build/wasm-debug/bin");
 assert.ok(existsSync(join(artifact, "index.html")), `missing web artifact: ${artifact}`);
 
 async function loadPlaywright() {

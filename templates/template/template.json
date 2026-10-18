@@ -1,6 +1,6 @@
 {
   "schema": "ai_studio.template.v1",
   "id": "template",
-  "title": "Template",
+  "title": "Blank Game Foundation",
   "storageNamespace": "template"
 }

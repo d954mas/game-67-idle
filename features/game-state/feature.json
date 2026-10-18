@@ -13,7 +13,7 @@
   ],
   "dependencies": [
     "Python 3.12",
-    "templates/template/state/game_state.schema.json or a game-local state schema",
+    "ai_studio/feature_testing/consumer/state/game_state.schema.json or a game-local state schema",
     "template or game C runtime using generated GameState files",
     "features/game-events >= 2.1.0 for schemas declaring repeated sections: the emitters this generates use its six-member descriptor and record type",
     "Neotolis engine targets nt_time and nt_log; DevAPI targets when enabled"
@@ -37,7 +37,7 @@
     "devapi_condition": "GAME_DEVAPI_ENABLED"
   },
   "commands": {
-    "generate": "node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py --schema templates/template/state/game_state.schema.json",
+    "generate": "node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py --schema ai_studio/feature_testing/consumer/state/game_state.schema.json",
     "test": "node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/run_tests.py"
   },
   "manuals": {
@@ -53,9 +53,9 @@
     "<id>_state_events.gen.h",
     "<id>_state_events.gen.c"
   ],
-  "default_template": {
-    "schema": "templates/template/state/game_state.schema.json",
-    "generated_dir": "templates/template/build/<config>/generated/game-state",
+  "test_consumer": {
+    "schema": "ai_studio/feature_testing/consumer/state/game_state.schema.json",
+    "generated_dir": "ai_studio/feature_testing/consumer/build/<config>/generated/game-state",
     "runtime_sources": [
       "features/game-state/src/game_state_json.c",
       "features/game-state/src/game_save_writer.c",

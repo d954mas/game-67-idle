@@ -1,5 +1,10 @@
 # Workspace Discovery
 
+The [reuse audit](reuse_audit.md) records the source decomposition, reusable
+boundaries, and separation of the blank starter from the independent feature
+consumer. The [iteration audit](iteration_audit.md) records recurring workflow
+constraints, inspected evidence and measured Studio improvements.
+
 Workspace owns the single resolver for game and template mounts. It scans
 `templates/<id>`, `games/<id>`, and (when explicitly requested)
 `games/private/<id>`; there is no mount registry.
@@ -22,7 +27,11 @@ game or explicitly request private mounts. The committed `games/private/`
 ignore protects the parent repository; every private game keeps nested Git
 metadata. Creating a private game installs a parent-repository pre-commit hook
 that runs the privacy preflight. The preflight validates nested Git and scans
-tracked parent text for private tokens.
+tracked parent text for private tokens. A private Canvas projects junction may
+resolve outside its game only when its canonical game id and physical projects
+root are registered in ignored `ai_studio/studio.config.local.json`; the hook
+scans that external root directly and rejects unregistered or nested reparse
+escapes.
 
 ```powershell
 node ai_studio/workspace/games.mjs list --json

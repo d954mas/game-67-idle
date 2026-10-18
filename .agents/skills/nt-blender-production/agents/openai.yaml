@@ -1,0 +1,4 @@
+interface:
+  display_name: "NT Blender Production"
+  short_description: "Blender lookdev with enforced feedback gates"
+  default_prompt: "Use $nt-blender-production to build and verify a Blender scene through technical and art-direction feedback loops."

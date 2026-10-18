@@ -31,7 +31,7 @@
     "progression_tracks.gen.c"
   ],
   "registers": {
-    "note": "Describes the EXISTING wiring in templates/template/CMakeLists.txt (target_sources/ctest) -- progression-core is an in-place module (precedent features/game-state / features/items-core), not an install-script target. This section documents the consuming game's provisioning, it does not perform it.",
+    "note": "Describes consumer provisioning (target_sources/ctest) -- progression-core is an in-place module (precedent features/game-state / features/items-core), not an install-script target. This section documents the consuming project's provisioning, it does not perform it.",
     "target_sources": [
       "${PROGRESSION_CORE_SRC}/progression.c"
     ],
@@ -46,11 +46,11 @@
       "test_progression_curve"
     ]
   },
-  "default_template": {
-    "tracks": "templates/template/design/items/tracks.lua",
+  "test_consumer": {
+    "tracks": "ai_studio/feature_testing/consumer/design/items/tracks.lua",
     "snapshot": "<build>/generated/items-catalog/items.snapshot.json",
-    "state_schema": "templates/template/state/progression.schema.json",
-    "generated_dir": "templates/template/src/generated",
+    "state_schema": "ai_studio/feature_testing/consumer/state/progression.schema.json",
+    "generated_dir": "ai_studio/feature_testing/consumer/src/generated",
     "game_side_sources": []
   }
 }

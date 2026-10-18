@@ -1,25 +1,13 @@
 ---
 name: nt-portal-publish
-description: "Use when preparing a game in this repository for publication on a web game portal: Yandex Games, Poki, Playgama, CrazyGames or itch. Covers building the portal target, proving the SDK, walking that portal's requirement list, and producing the store asset set for the console draft. Triggers include requests to publish, submit, upload, or prepare assets for any of those portals, and any moderation-rejection follow-up."
+description: "Prepare portal builds, SDK evidence, store assets, uploads, and moderation fixes for Yandex Games, Poki, Playgama, CrazyGames, or itch."
 ---
 
 # NT Portal Publish
 
-A rejection costs more than the review itself. Yandex answers in three to five
-business days, but every refused resubmission doubles the wait before the next
-one, from a day up to sixteen, and the counter resets only once every four
-weeks. CrazyGames grades a build over a launch window of one to three weeks.
-Everything here exists so that no requirement is answered from memory.
-
-This skill owns the ORDER of the work, the rules that do not change between
-portals, and how a console is driven from the agent's browser. It owns no
-portal REQUIREMENTS. Those live where the code that enforces them already reads
-them, and a second copy in a skill body drifts: this skill once quoted Yandex
-requirement numbers the portal had renumbered, and a row citing a number nobody
-can find reads as a row nobody checked. Upload mechanics are the exception on
-purpose — they are how the work is done, not what the portal demands, and every
-hour lost to them was lost because they were written down in a game's private
-notes instead of here.
+Use the portal's current official documentation for requirements and review
+timings. This skill owns workflow order and console operation; the owning
+modules below hold requirements, artifact contracts, and store specifications.
 
 ## Where a portal's facts live
 

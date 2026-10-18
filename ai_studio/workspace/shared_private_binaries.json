@@ -9,7 +9,7 @@
   ],
   "entries": [
     {
-      "path": "templates/template/assets/ui/icon_play.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/icon_play.png",
       "game_id": "planet-eater",
       "private_path": "assets/ui/icon_play.png",
       "sha256": "04863a6eebd0ff1d6fe964248969ca8da30469b974699986265a7d95bc31b3ac",
@@ -18,7 +18,7 @@
       "approved_on": "2026-09-10"
     },
     {
-      "path": "templates/template/assets/ui/icon_play.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/icon_play.png",
       "game_id": "pose-play",
       "private_path": "assets/ui/icon_play.png",
       "sha256": "04863a6eebd0ff1d6fe964248969ca8da30469b974699986265a7d95bc31b3ac",
@@ -27,7 +27,7 @@
       "approved_on": "2026-09-10"
     },
     {
-      "path": "templates/template/assets/ui/icon_play.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/icon_play.png",
       "game_id": "slime-eater-evolution",
       "private_path": "assets/ui/icon_play.png",
       "sha256": "04863a6eebd0ff1d6fe964248969ca8da30469b974699986265a7d95bc31b3ac",
@@ -36,7 +36,7 @@
       "approved_on": "2026-09-10"
     },
     {
-      "path": "templates/template/assets/ui/slider_fill.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_fill.png",
       "game_id": "planet-eater",
       "private_path": "assets/ui/slider_fill.png",
       "sha256": "e05453811df6f0f7d10796bb86706510d4da131a4b80c055b39a739ee8200c06",
@@ -45,7 +45,7 @@
       "approved_on": "2026-09-10"
     },
     {
-      "path": "templates/template/assets/ui/slider_fill.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_fill.png",
       "game_id": "pose-play",
       "private_path": "assets/ui/slider_fill.png",
       "sha256": "e05453811df6f0f7d10796bb86706510d4da131a4b80c055b39a739ee8200c06",
@@ -54,7 +54,7 @@
       "approved_on": "2026-09-10"
     },
     {
-      "path": "templates/template/assets/ui/slider_fill.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_fill.png",
       "game_id": "slime-eater-evolution",
       "private_path": "assets/ui/slider_fill.png",
       "sha256": "e05453811df6f0f7d10796bb86706510d4da131a4b80c055b39a739ee8200c06",
@@ -63,7 +63,7 @@
       "approved_on": "2026-09-10"
     },
     {
-      "path": "templates/template/assets/ui/slider_fill_sm.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_fill_sm.png",
       "game_id": "planet-eater",
       "private_path": "assets/ui/slider_fill_sm.png",
       "sha256": "34025f64be1360854e7b76ba2f326f653c8c8e1814fdd54cf5078512a6ff1400",
@@ -72,7 +72,7 @@
       "approved_on": "2026-09-10"
     },
     {
-      "path": "templates/template/assets/ui/slider_fill_sm.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_fill_sm.png",
       "game_id": "pose-play",
       "private_path": "assets/ui/slider_fill_sm.png",
       "sha256": "34025f64be1360854e7b76ba2f326f653c8c8e1814fdd54cf5078512a6ff1400",
@@ -81,7 +81,7 @@
       "approved_on": "2026-09-10"
     },
     {
-      "path": "templates/template/assets/ui/slider_fill_sm.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_fill_sm.png",
       "game_id": "slime-eater-evolution",
       "private_path": "assets/ui/slider_fill_sm.png",
       "sha256": "34025f64be1360854e7b76ba2f326f653c8c8e1814fdd54cf5078512a6ff1400",
@@ -90,7 +90,7 @@
       "approved_on": "2026-09-10"
     },
     {
-      "path": "templates/template/assets/ui/slider_track_sm.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_track_sm.png",
       "game_id": "planet-eater",
       "private_path": "assets/ui/slider_track_sm.png",
       "sha256": "dccd9f5cd7e0bb940bbee63f628983cc9b5fb83b70bdb6d61cc2cdc4af0be402",
@@ -99,13 +99,607 @@
       "approved_on": "2026-09-10"
     },
     {
-      "path": "templates/template/assets/ui/slider_track_sm.png",
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_track_sm.png",
       "game_id": "slime-eater-evolution",
       "private_path": "assets/ui/slider_track_sm.png",
       "sha256": "dccd9f5cd7e0bb940bbee63f628983cc9b5fb83b70bdb6d61cc2cdc4af0be402",
       "reason": "Lead-approved rollout of the shared UI antialiasing source to all games. The ui-kit generator and its game-local copy use the same primitive geometry and matching tokens for this asset, now supersampled and area-filtered with BOX; both destinations intentionally receive identical output.",
       "approved_by": "lead",
       "approved_on": "2026-09-10"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/music/demo_jingle.mp3",
+      "game_id": "crazy-flying-car",
+      "private_path": "assets/audio/music/demo_jingle.mp3",
+      "sha256": "fb2542970639f83f3d05556308a69a5c373dbc7a972196f3d5efa3b2c28d1e7c",
+      "reason": "Existing public starter asset from templates/template/assets/audio/music/demo_jingle.mp3, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/music/demo_jingle.mp3",
+      "game_id": "cube-rpg",
+      "private_path": "assets/audio/music/demo_jingle.mp3",
+      "sha256": "fb2542970639f83f3d05556308a69a5c373dbc7a972196f3d5efa3b2c28d1e7c",
+      "reason": "Existing public starter asset from templates/template/assets/audio/music/demo_jingle.mp3, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/music/demo_jingle.mp3",
+      "game_id": "game-not-a-trolley-problem",
+      "private_path": "tests/fixtures/audio/demo_jingle.mp3",
+      "sha256": "fb2542970639f83f3d05556308a69a5c373dbc7a972196f3d5efa3b2c28d1e7c",
+      "reason": "Existing public starter asset from templates/template/assets/audio/music/demo_jingle.mp3, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/music/demo_jingle.mp3",
+      "game_id": "pose-play",
+      "private_path": "assets/audio/music/demo_jingle.mp3",
+      "sha256": "fb2542970639f83f3d05556308a69a5c373dbc7a972196f3d5efa3b2c28d1e7c",
+      "reason": "Existing public starter asset from templates/template/assets/audio/music/demo_jingle.mp3, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/music/demo_jingle.mp3",
+      "game_id": "punch-legend-world",
+      "private_path": "tests/fixtures/audio/demo_jingle.mp3",
+      "sha256": "fb2542970639f83f3d05556308a69a5c373dbc7a972196f3d5efa3b2c28d1e7c",
+      "reason": "Existing public starter asset from templates/template/assets/audio/music/demo_jingle.mp3, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/music/demo_jingle.mp3",
+      "game_id": "robot-smash",
+      "private_path": "assets/audio/music/demo_jingle.mp3",
+      "sha256": "fb2542970639f83f3d05556308a69a5c373dbc7a972196f3d5efa3b2c28d1e7c",
+      "reason": "Existing public starter asset from templates/template/assets/audio/music/demo_jingle.mp3, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/music/demo_jingle.mp3",
+      "game_id": "slime-eater-evolution",
+      "private_path": "assets/audio/music/demo_jingle.mp3",
+      "sha256": "fb2542970639f83f3d05556308a69a5c373dbc7a972196f3d5efa3b2c28d1e7c",
+      "reason": "Existing public starter asset from templates/template/assets/audio/music/demo_jingle.mp3, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/music/demo_jingle.mp3",
+      "game_id": "speed-legend-world",
+      "private_path": "tests/fixtures/audio/demo_jingle.mp3",
+      "sha256": "fb2542970639f83f3d05556308a69a5c373dbc7a972196f3d5efa3b2c28d1e7c",
+      "reason": "Existing public starter asset from templates/template/assets/audio/music/demo_jingle.mp3, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/music/demo_jingle.mp3",
+      "game_id": "toy-smash",
+      "private_path": "assets/audio/music/demo_jingle.mp3",
+      "sha256": "fb2542970639f83f3d05556308a69a5c373dbc7a972196f3d5efa3b2c28d1e7c",
+      "reason": "Existing public starter asset from templates/template/assets/audio/music/demo_jingle.mp3, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
+      "game_id": "crazy-flying-car",
+      "private_path": "assets/audio/sfx/ui_click.wav",
+      "sha256": "35aced7b6594bb2b10ae9564b7f0a58e438c5e744c7c5f288d28728c40c6b599",
+      "reason": "Existing public starter asset from templates/template/assets/audio/sfx/ui_click.wav, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
+      "game_id": "cube-rpg",
+      "private_path": "assets/audio/sfx/ui_click.wav",
+      "sha256": "35aced7b6594bb2b10ae9564b7f0a58e438c5e744c7c5f288d28728c40c6b599",
+      "reason": "Existing public starter asset from templates/template/assets/audio/sfx/ui_click.wav, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
+      "game_id": "planet-eater",
+      "private_path": "assets/cc0_sources/audio/ui_click.wav",
+      "sha256": "35aced7b6594bb2b10ae9564b7f0a58e438c5e744c7c5f288d28728c40c6b599",
+      "reason": "Existing public starter asset from templates/template/assets/audio/sfx/ui_click.wav, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
+      "game_id": "pose-play",
+      "private_path": "assets/audio/sfx/ui_click.wav",
+      "sha256": "35aced7b6594bb2b10ae9564b7f0a58e438c5e744c7c5f288d28728c40c6b599",
+      "reason": "Existing public starter asset from templates/template/assets/audio/sfx/ui_click.wav, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
+      "game_id": "punch-legend-world",
+      "private_path": "tests/fixtures/audio/ui_click.wav",
+      "sha256": "35aced7b6594bb2b10ae9564b7f0a58e438c5e744c7c5f288d28728c40c6b599",
+      "reason": "Existing public starter asset from templates/template/assets/audio/sfx/ui_click.wav, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
+      "game_id": "robot-smash",
+      "private_path": "assets/audio/sfx/ui_click.wav",
+      "sha256": "35aced7b6594bb2b10ae9564b7f0a58e438c5e744c7c5f288d28728c40c6b599",
+      "reason": "Existing public starter asset from templates/template/assets/audio/sfx/ui_click.wav, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
+      "game_id": "slime-eater-evolution",
+      "private_path": "assets/audio/sfx/ui_click.wav",
+      "sha256": "35aced7b6594bb2b10ae9564b7f0a58e438c5e744c7c5f288d28728c40c6b599",
+      "reason": "Existing public starter asset from templates/template/assets/audio/sfx/ui_click.wav, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
+      "game_id": "speed-legend-world",
+      "private_path": "tests/fixtures/audio/ui_click.wav",
+      "sha256": "35aced7b6594bb2b10ae9564b7f0a58e438c5e744c7c5f288d28728c40c6b599",
+      "reason": "Existing public starter asset from templates/template/assets/audio/sfx/ui_click.wav, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
+      "game_id": "toy-smash",
+      "private_path": "assets/audio/sfx/ui_click.wav",
+      "sha256": "35aced7b6594bb2b10ae9564b7f0a58e438c5e744c7c5f288d28728c40c6b599",
+      "reason": "Existing public starter asset from templates/template/assets/audio/sfx/ui_click.wav, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
+      "game_id": "toy-smash",
+      "private_path": ".ai_studio/evidence/audio-selection-0910/ui-1.wav",
+      "sha256": "35aced7b6594bb2b10ae9564b7f0a58e438c5e744c7c5f288d28728c40c6b599",
+      "reason": "Existing public starter asset from templates/template/assets/audio/sfx/ui_click.wav, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/energy.png",
+      "game_id": "merge-tanks-city",
+      "private_path": "assets/icons/energy.png",
+      "sha256": "1bf743020a400c09a564e2b6047a4e55e7199743b015ce4e25675a20896636db",
+      "reason": "Existing public starter asset from templates/template/assets/icons/energy.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/energy.png",
+      "game_id": "pose-play",
+      "private_path": "assets/icons/energy.png",
+      "sha256": "1bf743020a400c09a564e2b6047a4e55e7199743b015ce4e25675a20896636db",
+      "reason": "Existing public starter asset from templates/template/assets/icons/energy.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/energy.png",
+      "game_id": "robot-smash",
+      "private_path": "assets/icons/energy.png",
+      "sha256": "1bf743020a400c09a564e2b6047a4e55e7199743b015ce4e25675a20896636db",
+      "reason": "Existing public starter asset from templates/template/assets/icons/energy.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/energy.png",
+      "game_id": "slime-eater-evolution",
+      "private_path": "assets/icons/energy.png",
+      "sha256": "1bf743020a400c09a564e2b6047a4e55e7199743b015ce4e25675a20896636db",
+      "reason": "Existing public starter asset from templates/template/assets/icons/energy.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/gold.png",
+      "game_id": "cube-rpg",
+      "private_path": "assets/icons/gold.png",
+      "sha256": "bc6d1e2b3f2ce81495198defc02a9a48d5ba78697b9f4a432ff43241beb5908a",
+      "reason": "Existing public starter asset from templates/template/assets/icons/gold.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/gold.png",
+      "game_id": "merge-tanks-city",
+      "private_path": "assets/icons/gold.png",
+      "sha256": "bc6d1e2b3f2ce81495198defc02a9a48d5ba78697b9f4a432ff43241beb5908a",
+      "reason": "Existing public starter asset from templates/template/assets/icons/gold.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/gold.png",
+      "game_id": "pose-play",
+      "private_path": "assets/icons/gold.png",
+      "sha256": "bc6d1e2b3f2ce81495198defc02a9a48d5ba78697b9f4a432ff43241beb5908a",
+      "reason": "Existing public starter asset from templates/template/assets/icons/gold.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/gold.png",
+      "game_id": "robot-smash",
+      "private_path": "assets/icons/gold.png",
+      "sha256": "bc6d1e2b3f2ce81495198defc02a9a48d5ba78697b9f4a432ff43241beb5908a",
+      "reason": "Existing public starter asset from templates/template/assets/icons/gold.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/gold.png",
+      "game_id": "slime-eater-evolution",
+      "private_path": "assets/icons/gold.png",
+      "sha256": "bc6d1e2b3f2ce81495198defc02a9a48d5ba78697b9f4a432ff43241beb5908a",
+      "reason": "Existing public starter asset from templates/template/assets/icons/gold.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/potion.png",
+      "game_id": "merge-tanks-city",
+      "private_path": "assets/icons/potion.png",
+      "sha256": "3d5d664a7b141bb1efa9d9bb12d71bc6d42141e1ef1f5dc760a39c78837a184d",
+      "reason": "Existing public starter asset from templates/template/assets/icons/potion.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/potion.png",
+      "game_id": "pose-play",
+      "private_path": "assets/icons/potion.png",
+      "sha256": "3d5d664a7b141bb1efa9d9bb12d71bc6d42141e1ef1f5dc760a39c78837a184d",
+      "reason": "Existing public starter asset from templates/template/assets/icons/potion.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/potion.png",
+      "game_id": "robot-smash",
+      "private_path": "assets/icons/potion.png",
+      "sha256": "3d5d664a7b141bb1efa9d9bb12d71bc6d42141e1ef1f5dc760a39c78837a184d",
+      "reason": "Existing public starter asset from templates/template/assets/icons/potion.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/potion.png",
+      "game_id": "slime-eater-evolution",
+      "private_path": "assets/icons/potion.png",
+      "sha256": "3d5d664a7b141bb1efa9d9bb12d71bc6d42141e1ef1f5dc760a39c78837a184d",
+      "reason": "Existing public starter asset from templates/template/assets/icons/potion.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/sword.png",
+      "game_id": "merge-tanks-city",
+      "private_path": "assets/icons/sword.png",
+      "sha256": "648d6a21a19583a8bf405b000515ba63ccd5751d47594fac9878253dcb6e2cdd",
+      "reason": "Existing public starter asset from templates/template/assets/icons/sword.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/sword.png",
+      "game_id": "pose-play",
+      "private_path": "assets/icons/sword.png",
+      "sha256": "648d6a21a19583a8bf405b000515ba63ccd5751d47594fac9878253dcb6e2cdd",
+      "reason": "Existing public starter asset from templates/template/assets/icons/sword.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/sword.png",
+      "game_id": "robot-smash",
+      "private_path": "assets/icons/sword.png",
+      "sha256": "648d6a21a19583a8bf405b000515ba63ccd5751d47594fac9878253dcb6e2cdd",
+      "reason": "Existing public starter asset from templates/template/assets/icons/sword.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/sword.png",
+      "game_id": "slime-eater-evolution",
+      "private_path": "assets/icons/sword.png",
+      "sha256": "648d6a21a19583a8bf405b000515ba63ccd5751d47594fac9878253dcb6e2cdd",
+      "reason": "Existing public starter asset from templates/template/assets/icons/sword.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/wood.png",
+      "game_id": "merge-tanks-city",
+      "private_path": "assets/icons/wood.png",
+      "sha256": "52eec1a49d5376f49c76358c2457734a3c44c5bb0ccdd52bdca7c1254e9e4df5",
+      "reason": "Existing public starter asset from templates/template/assets/icons/wood.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/wood.png",
+      "game_id": "pose-play",
+      "private_path": "assets/icons/wood.png",
+      "sha256": "52eec1a49d5376f49c76358c2457734a3c44c5bb0ccdd52bdca7c1254e9e4df5",
+      "reason": "Existing public starter asset from templates/template/assets/icons/wood.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/wood.png",
+      "game_id": "robot-smash",
+      "private_path": "assets/icons/wood.png",
+      "sha256": "52eec1a49d5376f49c76358c2457734a3c44c5bb0ccdd52bdca7c1254e9e4df5",
+      "reason": "Existing public starter asset from templates/template/assets/icons/wood.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/wood.png",
+      "game_id": "slime-eater-evolution",
+      "private_path": "assets/icons/wood.png",
+      "sha256": "52eec1a49d5376f49c76358c2457734a3c44c5bb0ccdd52bdca7c1254e9e4df5",
+      "reason": "Existing public starter asset from templates/template/assets/icons/wood.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/xp.png",
+      "game_id": "merge-tanks-city",
+      "private_path": "assets/icons/xp.png",
+      "sha256": "c907663e17116beedf86cd5a4df814bd6da1ffefbf90e507740b48a7dc43cea4",
+      "reason": "Existing public starter asset from templates/template/assets/icons/xp.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/xp.png",
+      "game_id": "pose-play",
+      "private_path": "assets/icons/xp.png",
+      "sha256": "c907663e17116beedf86cd5a4df814bd6da1ffefbf90e507740b48a7dc43cea4",
+      "reason": "Existing public starter asset from templates/template/assets/icons/xp.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/xp.png",
+      "game_id": "robot-smash",
+      "private_path": "assets/icons/xp.png",
+      "sha256": "c907663e17116beedf86cd5a4df814bd6da1ffefbf90e507740b48a7dc43cea4",
+      "reason": "Existing public starter asset from templates/template/assets/icons/xp.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/icons/xp.png",
+      "game_id": "slime-eater-evolution",
+      "private_path": "assets/icons/xp.png",
+      "sha256": "c907663e17116beedf86cd5a4df814bd6da1ffefbf90e507740b48a7dc43cea4",
+      "reason": "Existing public starter asset from templates/template/assets/icons/xp.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/meshes/cube.glb",
+      "game_id": "cube-rpg",
+      "private_path": "assets/meshes/cube.glb",
+      "sha256": "5fb9816c0719e723d7db81e461891b08c0451f2c35826122cc9a337ba6f245a0",
+      "reason": "Existing public starter asset from templates/template/assets/meshes/cube.glb, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/meshes/cube.glb",
+      "game_id": "game-not-a-trolley-problem",
+      "private_path": "assets/meshes/cube.glb",
+      "sha256": "5fb9816c0719e723d7db81e461891b08c0451f2c35826122cc9a337ba6f245a0",
+      "reason": "Existing public starter asset from templates/template/assets/meshes/cube.glb, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/meshes/cube.glb",
+      "game_id": "merge-tanks-city",
+      "private_path": "assets/meshes/cube.glb",
+      "sha256": "5fb9816c0719e723d7db81e461891b08c0451f2c35826122cc9a337ba6f245a0",
+      "reason": "Existing public starter asset from templates/template/assets/meshes/cube.glb, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/meshes/cube.glb",
+      "game_id": "pose-play",
+      "private_path": "assets/meshes/cube.glb",
+      "sha256": "5fb9816c0719e723d7db81e461891b08c0451f2c35826122cc9a337ba6f245a0",
+      "reason": "Existing public starter asset from templates/template/assets/meshes/cube.glb, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/meshes/cube.glb",
+      "game_id": "punch-legend-world",
+      "private_path": "assets/meshes/cube.glb",
+      "sha256": "5fb9816c0719e723d7db81e461891b08c0451f2c35826122cc9a337ba6f245a0",
+      "reason": "Existing public starter asset from templates/template/assets/meshes/cube.glb, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/meshes/cube.glb",
+      "game_id": "robot-smash",
+      "private_path": "assets/meshes/cube.glb",
+      "sha256": "5fb9816c0719e723d7db81e461891b08c0451f2c35826122cc9a337ba6f245a0",
+      "reason": "Existing public starter asset from templates/template/assets/meshes/cube.glb, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/meshes/cube.glb",
+      "game_id": "slime-eater-evolution",
+      "private_path": "assets/meshes/cube.glb",
+      "sha256": "5fb9816c0719e723d7db81e461891b08c0451f2c35826122cc9a337ba6f245a0",
+      "reason": "Existing public starter asset from templates/template/assets/meshes/cube.glb, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/meshes/cube.glb",
+      "game_id": "speed-legend-world",
+      "private_path": "assets/meshes/cube.glb",
+      "sha256": "5fb9816c0719e723d7db81e461891b08c0451f2c35826122cc9a337ba6f245a0",
+      "reason": "Existing public starter asset from templates/template/assets/meshes/cube.glb, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/ui/button.png",
+      "game_id": "cube-rpg",
+      "private_path": "assets/ui/button.png",
+      "sha256": "5d1f8bc032346fd9896268ebfedb5f628b55664b2dc8b781a6667025ed01ffb9",
+      "reason": "Existing public starter asset from templates/template/assets/ui/button.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/ui/header.png",
+      "game_id": "cube-rpg",
+      "private_path": "assets/ui/header.png",
+      "sha256": "9838d8014148342a1e35fb76cc4ce63d84f3a16f1f769d2a2370d93794e54564",
+      "reason": "Existing public starter asset from templates/template/assets/ui/header.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/ui/icon_play.png",
+      "game_id": "cube-rpg",
+      "private_path": "assets/ui/icon_play.png",
+      "sha256": "04863a6eebd0ff1d6fe964248969ca8da30469b974699986265a7d95bc31b3ac",
+      "reason": "Existing public starter asset from templates/template/assets/ui/icon_play.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/ui/icon_play.png",
+      "game_id": "robot-smash",
+      "private_path": "assets/ui/icon_play.png",
+      "sha256": "04863a6eebd0ff1d6fe964248969ca8da30469b974699986265a7d95bc31b3ac",
+      "reason": "Existing public starter asset from templates/template/assets/ui/icon_play.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/ui/icon_play.png",
+      "game_id": "toy-smash",
+      "private_path": "assets/ui/icon_play.png",
+      "sha256": "04863a6eebd0ff1d6fe964248969ca8da30469b974699986265a7d95bc31b3ac",
+      "reason": "Existing public starter asset from templates/template/assets/ui/icon_play.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/ui/panel.png",
+      "game_id": "cube-rpg",
+      "private_path": "assets/ui/panel.png",
+      "sha256": "4136e2bec90182eee3ad07698ee31c301e3fec6326e7ab6c709782467a8649b2",
+      "reason": "Existing public starter asset from templates/template/assets/ui/panel.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_fill.png",
+      "game_id": "cube-rpg",
+      "private_path": "assets/ui/slider_fill.png",
+      "sha256": "e05453811df6f0f7d10796bb86706510d4da131a4b80c055b39a739ee8200c06",
+      "reason": "Existing public starter asset from templates/template/assets/ui/slider_fill.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_fill.png",
+      "game_id": "toy-smash",
+      "private_path": "assets/ui/slider_fill.png",
+      "sha256": "e05453811df6f0f7d10796bb86706510d4da131a4b80c055b39a739ee8200c06",
+      "reason": "Existing public starter asset from templates/template/assets/ui/slider_fill.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_fill_sm.png",
+      "game_id": "cube-rpg",
+      "private_path": "assets/ui/slider_fill_sm.png",
+      "sha256": "34025f64be1360854e7b76ba2f326f653c8c8e1814fdd54cf5078512a6ff1400",
+      "reason": "Existing public starter asset from templates/template/assets/ui/slider_fill_sm.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_fill_sm.png",
+      "game_id": "toy-smash",
+      "private_path": "assets/ui/slider_fill_sm.png",
+      "sha256": "34025f64be1360854e7b76ba2f326f653c8c8e1814fdd54cf5078512a6ff1400",
+      "reason": "Existing public starter asset from templates/template/assets/ui/slider_fill_sm.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_thumb.png",
+      "game_id": "cube-rpg",
+      "private_path": "assets/ui/slider_thumb.png",
+      "sha256": "66a56a8e8726365f70ef09c645554e60159e72e5f936ffd9620cc9578ed40ee6",
+      "reason": "Existing public starter asset from templates/template/assets/ui/slider_thumb.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_track.png",
+      "game_id": "cube-rpg",
+      "private_path": "assets/ui/slider_track.png",
+      "sha256": "16354fa1774c11997e7e43782ea54cdf5c17d4a9f9f3fe1a3ad0b73cbd564082",
+      "reason": "Existing public starter asset from templates/template/assets/ui/slider_track.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/ui/slider_track_sm.png",
+      "game_id": "cube-rpg",
+      "private_path": "assets/ui/slider_track_sm.png",
+      "sha256": "dccd9f5cd7e0bb940bbee63f628983cc9b5fb83b70bdb6d61cc2cdc4af0be402",
+      "reason": "Existing public starter asset from templates/template/assets/ui/slider_track_sm.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
+    },
+    {
+      "path": "ai_studio/feature_testing/consumer/assets/ui/tile.png",
+      "game_id": "cube-rpg",
+      "private_path": "assets/ui/tile.png",
+      "sha256": "d8a4d91b6567ababf2caa4f34602fce49b3cad743d8c5b80d60de71df8e70db3",
+      "reason": "Existing public starter asset from templates/template/assets/ui/tile.png, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
+      "approved_by": "lead (Studio maintenance request)",
+      "approved_on": "2026-10-18"
     }
   ]
 }

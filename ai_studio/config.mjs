@@ -33,18 +33,23 @@ function validateSchema(config, path, { required = false } = {}) {
   }
 }
 
+export function loadStudioLocalConfig(root) {
+  const localPath = localConfigPath(root);
+  const local = readJsonIfExists(localPath);
+  validateSchema(local, localPath);
+  return local;
+}
+
 export function loadStudioConfig(root) {
   const mainPath = mainConfigPath(root);
-  const localPath = localConfigPath(root);
   const main = readJsonIfExists(mainPath);
-  const local = readJsonIfExists(localPath);
+  const local = loadStudioLocalConfig(root);
   if (!main && !local) {
     throw new Error(
       `missing studio config: create ai_studio/studio.config.json (schema ${STUDIO_CONFIG_SCHEMA})`,
     );
   }
   validateSchema(main, mainPath, { required: true });
-  validateSchema(local, localPath);
   const { schema: _localSchema, ...localValues } = local || {};
   return { schema: STUDIO_CONFIG_SCHEMA, ...(main || {}), ...localValues };
 }

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { ctestCatalogue, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, selectTests } from "./game.mjs";
+import { ctestCatalogue, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, runNativeTests, selectTests } from "./game.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { createRuntimeBuildRecord, runtimeBuildWitness } from "./lib/runtime_build.mjs";
 
@@ -67,6 +67,8 @@ test("game CLI exposes game-owned lifecycle commands with fail-closed arguments"
     only: [], tier: "", all: false, updateGoldens: false,
   });
   assert.deepEqual(parseGameArgs(["test", "--only", "test_game_save", "--update-goldens"]).only, ["test_game_save"]);
+  assert.equal(parseGameArgs(["test", "--template-proof"]).templateProof, true);
+  assert.equal(parseGameArgs(["doctor", "--template-proof"]).templateProof, true);
   assert.equal(parseGameArgs(["test", "--update-goldens"]).updateGoldens, true);
   assert.throws(() => parseGameArgs(["verify", "--update-goldens"]), /only for test/i);
   assert.equal(parseGameArgs(["test", "--tier", "taste"]).tier, "taste");
@@ -105,6 +107,30 @@ test("doctor requires the copied game-owned scaffold and exact dependency record
   write(join(gameDir, "template.json"), JSON.stringify({ schema: "ai_studio.template.v1", id: "Bad ID", title: "Template", storageNamespace: "template" }));
   write(join(gameDir, "game-dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.seed.v2" }));
   assert.throws(() => doctorGame({ gameDir, templateProof: true }), /template identity is invalid/i);
+});
+
+test("native iteration builds a newly registered test after refreshing CMake", () => {
+  const dir = mkdtempSync(join(tmpdir(), "native-catalogue-refresh-"));
+  try {
+    mkdirSync(join(dir, "build", "native-debug"), { recursive: true });
+    writeFileSync(join(dir, "build", "native-debug", "CMakeCache.txt"), "configured");
+    let refreshed = false;
+    const calls = [];
+    runNativeTests(dir, { selection: { mode: "tier", tier: "core" } }, {
+      run: (command, args) => {
+        calls.push([command, ...args]);
+        if (command === "cmake" && args[0] === "-S") refreshed = true;
+      },
+      catalogue: () => (refreshed
+        ? [{ name: "test_new", tier: "core", targets: ["test_new"] }]
+        : [{ name: "test_old", tier: "core", targets: ["test_old"] }]),
+    });
+    const build = calls.find((call) => call[0] === "cmake" && call[1] === "--build");
+    assert.ok(build.includes("test_new"));
+    assert.equal(build.includes("test_old"), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("native game test plan configures, builds, and runs CTest without a clean rebuild", () => {
@@ -215,6 +241,22 @@ test("game test and plain verify require dependency proof plus Node and native C
       ? ["dependencies:warn", "node", "native"]
       : ["dependencies", "node", "native", "package", "smoke"]);
   }
+});
+
+test("template test uses reference metadata while retaining both test gates", async () => {
+  const calls = [];
+  await executeGameCommand({
+    command: "test", target: "local", build: true, templateProof: true, skipTests: false, outDir: "",
+    only: [], tier: "", all: false, updateGoldens: false,
+  }, {
+    gameDir: "/repo/templates/template",
+    doctor: ({ templateProof }) => { calls.push(templateProof ? "template-doctor" : "game-doctor"); return { gameId: "template" }; },
+    loadMetadata: (_gameDir, templateProof) => ({ dependencies: {}, proof: templateProof ? "reference-template" : "game" }),
+    verifyDependencies: (_metadata, opts) => calls.push(opts?.cleanliness === "warn" ? "dependencies:warn" : "dependencies"),
+    nodeTest: () => calls.push("node"),
+    nativeTest: () => calls.push("native"),
+  });
+  assert.deepEqual(calls, ["template-doctor", "dependencies:warn", "node", "native"]);
 });
 
 test("template test bypass validates identity before the parent proof can skip tests", async () => {

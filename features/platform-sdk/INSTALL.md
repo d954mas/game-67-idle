@@ -1,13 +1,13 @@
 # platform-sdk Install
 
-This feature is installed in-place by the template. It is not copied into
-`templates/template/src/features`; CMake references `${GAME_REPO_ROOT}/features/platform-sdk`
+This feature is installed in-place by a consumer. It is not copied into the
+blank starter's source tree; CMake references `${GAME_REPO_ROOT}/features/platform-sdk`
 the same way it references `items-core` and `progression-core`.
 
-## Build a game from the template
+## Build a consumer
 
 The template already wires the SDK, save synchronization, and active playtime.
-Run from the template or game directory:
+Run from the consumer or game directory:
 
 ```powershell
 node tools/build_web.mjs --preset wasm-release --target poki
@@ -16,7 +16,7 @@ node tools/build_web.mjs --preset wasm-release --target poki
 Web builds default to a checkout-local Emscripten cache:
 
 ```text
-templates/template/build/emscripten-cache
+<consumer>/build/emscripten-cache
 ```
 
 The template CMake also prefixes Emscripten compile/link rules with that cache
@@ -26,16 +26,16 @@ from a stale or locked global emsdk cache.
 `local` keeps the historic output directory:
 
 ```text
-templates/template/build/wasm-release/bin
+<consumer>/build/wasm-release/bin
 ```
 
 Portal targets use target-specific directories:
 
 ```text
-templates/template/build/wasm-release-itch/bin
-templates/template/build/wasm-release-poki/bin
-templates/template/build/wasm-release-yandex/bin
-templates/template/build/wasm-release-playgama/bin
+<consumer>/build/wasm-release-itch/bin
+<consumer>/build/wasm-release-poki/bin
+<consumer>/build/wasm-release-yandex/bin
+<consumer>/build/wasm-release-playgama/bin
 ```
 
 The CMake web step copies:
@@ -146,7 +146,7 @@ progress comparison and runtime loading:
     and let the C lifecycle hide only after the first playable frame.
 
 11. If the template/game wants the built-in debug controls, compile the
-    template-local C/Clay UI module (`src/ui/platform_sdk_debug.c`) and pass
+    consumer-local C/Clay UI module (`src/ui/platform_sdk_debug.c`) and pass
     `GAME_PLATFORM_SDK_DEBUG_UI=1` only in non-release builds. Release builds
     must keep that define off.
 
@@ -184,8 +184,8 @@ the portal dialog opens, everywhere else the request answers `unsupported`.
 Artifact inspection:
 
 ```powershell
-node features/platform-sdk/scripts/artifact_tools.mjs inspect --target itch --artifact templates/template/build/wasm-release-itch/bin
-node features/platform-sdk/scripts/artifact_tools.mjs inspect --target poki --artifact templates/template/build/wasm-release-poki/bin
+node features/platform-sdk/scripts/artifact_tools.mjs inspect --target itch --artifact <consumer>/build/wasm-release-itch/bin
+node features/platform-sdk/scripts/artifact_tools.mjs inspect --target poki --artifact <consumer>/build/wasm-release-poki/bin
 ```
 
 Scorecard fixture:

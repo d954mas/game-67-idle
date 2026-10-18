@@ -60,11 +60,98 @@ test("skills sync generates thin pointers and check passes", () => {
     assert.match(generated.stdout, /done: 1 generated, 0 stale removed, 0 skipped/);
 
     const out = readFileSync(join(dir, ".claude", "skills", "sample", "SKILL.md"), "utf8");
-    assert.match(out, /Codex-discoverable instructions live in `.codex\/skills\/sample\/SKILL.md`/);
+    assert.match(out, /\.\.\/\.\.\/\.\.\/\.codex\/skills\/sample\/SKILL.md/);
+    const codex = readFileSync(join(dir, ".agents", "skills", "sample", "SKILL.md"), "utf8");
+    assert.match(codex, /name: sample/);
+    assert.match(codex, /\.codex\/skills\/sample\/SKILL.md/);
 
     const checked = run(["--root", dir, "--check"]);
     assert.equal(checked.status, 0, checked.stderr);
     assert.match(checked.stdout, /skills in sync/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("canonical invocation policy reaches both hosts", () => {
+  const dir = tempDir();
+  try {
+    writeSkill(dir, "sample");
+    const policy = "policy:\n  allow_implicit_invocation: false\n";
+    const agentDir = join(dir, ".codex", "skills", "sample", "agents");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(join(agentDir, "openai.yaml"), policy);
+    assert.equal(run(["--root", dir]).status, 0);
+    assert.equal(readFileSync(join(dir, ".agents", "skills", "sample", "agents", "openai.yaml"), "utf8"), policy);
+    const claude = readFileSync(join(dir, ".claude", "skills", "sample", "SKILL.md"), "utf8");
+    assert.match(claude, /disable-model-invocation: true/);
+    writeFileSync(join(dir, ".agents", "skills", "sample", "agents", "openai.yaml"), "policy: {}\n");
+    assert.equal(run(["--root", dir, "--check"]).status, 1);
+    assert.equal(run(["--root", dir]).status, 0);
+    assert.equal(run(["--root", dir, "--check"]).status, 0);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("inline invocation policy is preserved and unsupported values fail before generation", () => {
+  const dir = tempDir();
+  try {
+    writeSkill(dir, "sample");
+    const agentDir = join(dir, ".codex", "skills", "sample", "agents");
+    mkdirSync(agentDir, { recursive: true });
+    const metadata = join(agentDir, "openai.yaml");
+    writeFileSync(metadata, "policy: { allow_implicit_invocation: false }\n");
+    assert.equal(run(["--root", dir]).status, 0);
+    assert.match(readFileSync(join(dir, ".claude", "skills", "sample", "SKILL.md"), "utf8"), /disable-model-invocation: true/);
+    for (const value of ['"false"', "0", "no"]) {
+      writeFileSync(metadata, `policy: { allow_implicit_invocation: ${value} }\n`);
+      const result = run(["--root", dir]);
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /invocation.*boolean/);
+      writeFileSync(metadata, `policy:\n  allow_implicit_invocation: ${value}\n`);
+      assert.equal(run(["--root", dir]).status, 1);
+    }
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("a manual skill with the canonical name is preserved and reported as a collision", () => {
+  const dir = tempDir();
+  try {
+    writeSkill(dir, "sample");
+    writeClaudeSkill(dir, "sample", "# Manual override\n");
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /collision.*sample/);
+    assert.equal(readFileSync(join(dir, ".claude", "skills", "sample", "SKILL.md"), "utf8"), "# Manual override\n");
+    assert.equal(run(["--root", dir, "--check"]).status, 1);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("skills sync checks and repairs modern Codex discovery without overwriting manual skills", () => {
+  const dir = tempDir();
+  try {
+    writeSkill(dir, "sample");
+    const manualDir = join(dir, ".agents", "skills", "manual");
+    mkdirSync(manualDir, { recursive: true });
+    writeFileSync(join(manualDir, "SKILL.md"), "# Manual Codex skill\n");
+    assert.equal(run(["--root", dir]).status, 0);
+    const generatedPath = join(dir, ".agents", "skills", "sample", "SKILL.md");
+    assert.ok(existsSync(generatedPath));
+    writeFileSync(generatedPath, `${marker}\nDrift\n`);
+    assert.equal(run(["--root", dir, "--check"]).status, 1);
+    assert.equal(run(["--root", dir]).status, 0);
+    assert.equal(readFileSync(join(manualDir, "SKILL.md"), "utf8"), "# Manual Codex skill\n");
+    const staleDir = join(dir, ".agents", "skills", "stale");
+    mkdirSync(staleDir, { recursive: true });
+    writeFileSync(join(staleDir, "SKILL.md"), `${marker}\nStale\n`);
+    assert.equal(run(["--root", dir, "--check"]).status, 1);
+    assert.equal(run(["--root", dir]).status, 0);
+    assert.equal(existsSync(staleDir), false);
   } finally {
     cleanup(dir);
   }
@@ -120,6 +207,21 @@ test("skills sync preserves hand-written claude skills", () => {
 
     const checked = run(["--root", dir, "--check"]);
     assert.equal(checked.status, 0, checked.stderr);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("invalid canonical metadata fails before writing discovery surfaces", () => {
+  const dir = tempDir();
+  try {
+    writeSkill(dir, "valid");
+    writeSkill(dir, "invalid", "");
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /invalid.*description/);
+    assert.equal(existsSync(join(dir, ".agents")), false);
+    assert.equal(existsSync(join(dir, ".claude")), false);
   } finally {
     cleanup(dir);
   }

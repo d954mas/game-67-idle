@@ -1,0 +1,34 @@
+# Line endings are a property of the repository, not of the machine that clones
+# it. Without this file the endings a game stores depend on each clone's
+# core.autocrlf, so an agent or a CI runner configured differently commits CRLF
+# and the next edit shows a diff on the whole file.
+* text=auto eol=lf
+
+# Binary assets: git must never rewrite a byte. They are already treated as
+# binary by NUL-byte detection; naming them makes that a rule rather than a
+# guess that a header change could flip.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.gif  binary
+*.ico  binary
+*.ttf  binary
+*.otf  binary
+*.woff binary
+*.woff2 binary
+*.ntpack binary
+*.basis binary
+*.ktx2 binary
+*.glb  binary
+*.gltf binary
+*.wasm binary
+*.zip  binary
+*.ogg  binary
+*.wav  binary
+*.mp3  binary
+
+# cmd.exe reads a batch file by bytes: with LF endings a label or a multi-line
+# block can be misparsed, so these keep CRLF everywhere.
+*.bat text eol=crlf
+*.cmd text eol=crlf

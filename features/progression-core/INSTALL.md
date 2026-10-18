@@ -149,7 +149,7 @@ target_include_directories(test_progression_curve PRIVATE "${ITEMS_CORE_INC}" "$
 ## Verify
 
 ```powershell
-ctest --test-dir templates/template/build/native-debug --output-on-failure -R "test_progression|test_progression_curve"
+ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify --output-on-failure -R "test_progression|test_progression_curve"
 ```
 
 ## Uninstall

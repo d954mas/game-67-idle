@@ -17,7 +17,7 @@
     "engine DevAPI only when GAME_DEVAPI_ENABLED is on"
   ],
   "commands": {
-    "ctest": "ctest --test-dir templates/template/build/native-debug -R \"test_game_events|test_game_events_ctx|test_game_events_typed|test_game_event_render|test_game_analytics|test_platform_sdk_events\" --output-on-failure"
+    "ctest": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"test_game_events|test_game_events_ctx|test_game_events_typed|test_game_event_render|test_game_analytics|test_platform_sdk_events\" --output-on-failure"
   },
   "provides": [
     "game_event_emit and per-frame game_event_log",
@@ -60,7 +60,7 @@
       "test_platform_sdk_events"
     ]
   },
-  "default_template": {
+  "test_consumer": {
     "event_log_api": "game_events.h",
     "descriptor_api": "game_event_desc.h",
     "render_api": "game_event_render.h",

@@ -84,8 +84,8 @@ JavaScript backend adapter as `platform-sdk-adapter.js`; release packaging embed
 the source-hash-bound minified SDK bundle into `game.js` so the upload has one
 local JavaScript file. Editable sources stay readable; release bundles are
 regenerated with the Terser version shipped by Emscripten.
-The template's debug/test controls are C/Clay UI in
-`templates/template/src/ui/platform_sdk_debug.c`; they are not staged as a web
+The feature-test consumer's debug/test controls are C/Clay UI in
+`ai_studio/feature_testing/consumer/src/ui/platform_sdk_debug.c`; they are not staged as a web
 JavaScript artifact.
 
 ## What It Owns
@@ -134,7 +134,7 @@ JavaScript artifact.
 node --test features/platform-sdk/tests/platform_sdk.test.mjs
 node features/platform-sdk/scripts/generate_release_bundles.mjs
 node features/platform-sdk/scripts/scorecard.mjs --input features/platform-sdk/tests/fixtures/scorecard-sample.ndjson --pretty
-node features/platform-sdk/scripts/artifact_tools.mjs inspect --target itch --artifact templates/template/build/wasm-release-itch/bin
+node features/platform-sdk/scripts/artifact_tools.mjs inspect --target itch --artifact ai_studio/feature_testing/consumer/build/wasm-release-itch/bin
 ```
 
 ## References

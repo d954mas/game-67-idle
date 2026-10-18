@@ -1,6 +1,6 @@
 ---
 name: nt-game-ui-layout
-description: "Use for layout-affecting in-game UI work in this repository: new or changed HUDs, game screens, modal/dialogue sheets, menus, bottom navigation, responsive PC/phone layout, floating layers, clipping/scrolling/overflow, hit targets, or visual proof for a changed game UI surface. Forces a short widget/mode inventory before non-trivial edits so agents reuse existing Neotolis UI APIs. Skip for pure copy tweaks, asset swaps, or runtime automation tasks that do not change layout."
+description: "Build or fix game HUDs, screens, menus, and responsive layouts using existing engine widgets. Skip copy-only and asset-only changes."
 ---
 
 # NT Game UI Layout
