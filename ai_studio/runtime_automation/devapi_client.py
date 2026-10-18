@@ -808,14 +808,18 @@ def connect_existing(
     process: subprocess.Popen | None = None,
     launch_log_path: str | None = None,
 ) -> DevApiClient | None:
-    end = time.time() + timeout
-    while time.time() < end:
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
         if process is not None:
             exit_code = process.poll()
             if exit_code is not None:
                 raise _dead_child_error(port, exit_code, launch_log_path)
+        remaining = end - time.monotonic()
+        if remaining <= 0:
+            break
         try:
-            client = DevApiClient(port=port, timeout=1.0)
+            # Refused loopback connections can consume their full timeout on Windows.
+            client = DevApiClient(port=port, timeout=min(0.05, remaining))
             try:
                 client.sock.settimeout(request_timeout)
             except (OSError, TypeError, ValueError):
@@ -823,7 +827,9 @@ def connect_existing(
                 raise
             return client
         except OSError:
-            time.sleep(0.2)
+            remaining = end - time.monotonic()
+            if remaining > 0:
+                time.sleep(min(0.01, remaining))
     return None
 
 

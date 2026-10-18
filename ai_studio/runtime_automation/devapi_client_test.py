@@ -324,8 +324,79 @@ class LaunchPreflightDeadChildTest(unittest.TestCase):
             connected = connect_existing(port=19001, timeout=0.1)
 
         self.assertIs(connected, client)
-        client_type.assert_called_once_with(port=19001, timeout=1.0)
+        client_type.assert_called_once()
+        self.assertEqual(client_type.call_args.kwargs["port"], 19001)
+        self.assertGreater(client_type.call_args.kwargs["timeout"], 0)
+        self.assertLessEqual(client_type.call_args.kwargs["timeout"], 0.1)
         client.sock.settimeout.assert_called_once_with(5.0)
+
+    def test_connect_existing_bounds_attempts_and_retries_by_total_deadline(self):
+        clock = [10.0]
+        attempts = []
+        sleeps = []
+
+        def attempt(*, port, timeout):
+            self.assertEqual(port, 19001)
+            self.assertGreater(timeout, 0)
+            self.assertLessEqual(timeout, 10.1 - clock[0] + 1e-9)
+            attempts.append(timeout)
+            clock[0] += timeout
+            raise socket.timeout("unavailable")
+
+        def sleep(seconds):
+            self.assertGreaterEqual(seconds, 0)
+            self.assertLessEqual(seconds, 10.1 - clock[0] + 1e-9)
+            sleeps.append(seconds)
+            clock[0] += seconds
+
+        with mock.patch("devapi_client.time.monotonic", side_effect=lambda: clock[0]), \
+                mock.patch("devapi_client.time.sleep", side_effect=sleep), \
+                mock.patch("devapi_client.DevApiClient", side_effect=attempt):
+            self.assertIsNone(connect_existing(port=19001, timeout=0.1))
+
+        self.assertTrue(attempts)
+        self.assertAlmostEqual(clock[0], 10.1)
+
+    def test_connect_existing_retries_until_a_delayed_listener_is_available(self):
+        clock = [10.0]
+        client = mock.Mock()
+        attempts = []
+
+        def attempt(*, port, timeout):
+            attempts.append(timeout)
+            if clock[0] < 10.08:
+                clock[0] += timeout
+                raise socket.timeout("starting")
+            return client
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        with mock.patch("devapi_client.time.monotonic", side_effect=lambda: clock[0]), \
+                mock.patch("devapi_client.time.sleep", side_effect=sleep), \
+                mock.patch("devapi_client.DevApiClient", side_effect=attempt):
+            connected = connect_existing(port=19001, timeout=0.3, request_timeout=2.0)
+
+        self.assertIs(connected, client)
+        self.assertGreater(len(attempts), 1)
+        self.assertLess(clock[0], 10.3)
+        client.sock.settimeout.assert_called_once_with(2.0)
+
+    def test_connect_existing_does_not_probe_after_an_empty_deadline(self):
+        with mock.patch("devapi_client.DevApiClient") as client_type:
+            self.assertIsNone(connect_existing(port=19001, timeout=0))
+        client_type.assert_not_called()
+
+    def test_running_game_rejects_a_live_occupied_port_before_launch(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            port = listener.getsockname()[1]
+            with mock.patch("devapi_client.subprocess.Popen") as launch:
+                with self.assertRaisesRegex(DevApiError, "already in use"):
+                    with running_game(port=port, reuse_existing=False):
+                        self.fail("an occupied port must not launch another game")
+            launch.assert_not_called()
 
     def test_connect_existing_closes_client_when_request_timeout_is_invalid(self):
         client = mock.Mock()
