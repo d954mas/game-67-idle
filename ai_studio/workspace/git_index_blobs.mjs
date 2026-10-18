@@ -51,7 +51,7 @@ function records(output, description) {
   return rows;
 }
 
-export function parseIndexEntries(output) {
+export function parseIndexEntries(output, { includeGitlinks = false } = {}) {
   const paths = new Set();
   const entries = [];
   for (const row of records(output, "index entry list")) {
@@ -66,7 +66,7 @@ export function parseIndexEntries(output) {
     paths.add(path);
     if (stage !== "0") throw new Error(`unmerged index entry: ${path}`);
     // A gitlink points at a commit. It has no file bytes to scan.
-    if (mode !== "160000") entries.push({ mode, oid, path });
+    if (mode !== "160000" || includeGitlinks) entries.push({ mode, oid, path });
   }
   return entries;
 }

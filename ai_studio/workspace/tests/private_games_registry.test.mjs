@@ -5,6 +5,8 @@ import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 
 import {
   SHARED_BINARIES_MANIFEST,
@@ -227,6 +229,95 @@ test("privacy preflight batches private index blobs without skipping hidden bina
   assert.equal(privateCalls.filter((call) => call.args.includes("cat-file")).length, 2);
   assert.equal(privateCalls.some((call) => call.args.includes("--batch-check")), true);
   assert.equal(privateCalls.some((call) => call.args.includes("--batch")), true);
+});
+
+test("binary comparison reads only size-compatible index blobs and detects same-size worktree edits", (t) => {
+  const { root } = sharedFixture(t);
+  const privateRoot = join(root, "games/private/secret-game");
+  const unrelated = Buffer.alloc(2 * 1024 * 1024, 1);
+  writeFileSync(join(privateRoot, "assets", "unrelated.bin"), unrelated);
+  execFileSync("git", ["add", "assets/unrelated.bin"], { cwd: privateRoot });
+  execFileSync("git", ["commit", "-m", "unrelated private bytes"], { cwd: privateRoot, stdio: "ignore" });
+  const publicPath = join(root, "assets", "kit.dat");
+  const privatePath = join(privateRoot, "assets", "live.txt");
+  const candidate = Buffer.from([1, 0, 3, 4, 5, 6]);
+  writeFileSync(publicPath, candidate);
+  execFileSync("git", ["add", "assets/kit.dat"], { cwd: root });
+  writeFileSync(privatePath, Buffer.from([9, 0, 9, 9, 9, 9]));
+  let bodyBytes = 0;
+  const first = runPrivateGamePreflight(root, {
+    spawnGit(command, args, options) {
+      const result = spawnSync(command, args, options);
+      if (resolve(options.cwd) === resolve(privateRoot) && args.includes("--batch")) bodyBytes += result.stdout.length;
+      return result;
+    },
+  });
+  assert.equal(first.ok, true);
+  assert.ok(bodyBytes < unrelated.length, "an unrelated private blob must not be read into the comparison");
+  writeFileSync(privatePath, candidate);
+  const changed = runPrivateGamePreflight(root);
+  assert.equal(changed.ok, false);
+  assert.ok(changed.violations.some((row) => row.path === "assets/kit.dat"));
+});
+
+test("binary comparison rejects a file replaced between its path check and opening", (t) => {
+  const { root } = sharedFixture(t);
+  const privatePath = join(root, "games/private/secret-game/assets/kit.dat");
+  const originalOpen = fs.openSync;
+  let replaced = false;
+  fs.openSync = function (path, ...args) {
+    if (!replaced && path === privatePath) {
+      replaced = true;
+      const replacement = `${privatePath}.replacement`;
+      writeFileSync(replacement, Buffer.from([9, 8, 7, 6]));
+      fs.renameSync(replacement, privatePath);
+    }
+    return originalOpen(path, ...args);
+  };
+  syncBuiltinESMExports();
+  try {
+    const result = runPrivateGamePreflight(root);
+    assert.equal(replaced, true);
+    assert.equal(result.ok, false);
+    assert.match(result.violations.map((row) => row.reason).join("\n"), /changed while opening/);
+  } finally {
+    fs.openSync = originalOpen;
+    syncBuiltinESMExports();
+  }
+});
+
+test("binary comparison returns a structured violation when a private root disappears", (t) => {
+  const { root } = sharedFixture(t);
+  const privateRoot = join(root, "games/private/secret-game");
+  const result = runPrivateGamePreflight(root, {
+    spawnGit(command, args, options) {
+      const output = spawnSync(command, args, options);
+      if (resolve(options.cwd) === resolve(privateRoot) && args.includes("--batch")) {
+        rmSync(privateRoot, { recursive: true, force: true });
+      }
+      return output;
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.violations.some((row) => row.path === "games/private/secret-game"));
+});
+
+test("worktree enumeration keeps nested repositories separate without trusting a fake git marker", (t) => {
+  const { root } = sharedFixture(t);
+  const privateRoot = join(root, "games/private/secret-game");
+  const nested = join(privateRoot, "deps", "tool");
+  mkdirSync(nested, { recursive: true });
+  execFileSync("git", ["init"], { cwd: nested, stdio: "ignore" });
+  const bytes = Buffer.from([1, 0, 3, 4, 5, 6]);
+  writeFileSync(join(nested, "independent.dat"), bytes);
+  writeFileSync(join(root, "assets", "kit.dat"), bytes);
+  execFileSync("git", ["add", "assets/kit.dat"], { cwd: root });
+  const listed = execFileSync("git", ["ls-files", "-z", "--others", "--exclude-standard"], { cwd: privateRoot, encoding: "utf8" });
+  assert.ok(listed.split("\0").includes("deps/tool/"));
+  assert.equal(runPrivateGamePreflight(root).ok, true);
+  rmSync(join(nested, ".git"), { recursive: true, force: true });
+  mkdirSync(join(nested, ".git"));
+  assert.equal(runPrivateGamePreflight(root).ok, false, "an empty marker must not hide ordinary private files");
 });
 
 test("privacy preflight blocks a staged parent binary copied byte-identically from a private game", (t) => {
@@ -692,6 +783,34 @@ test("a committed shared-binary waiver remains valid in a clean parent repo", (t
   execFileSync("git", ["commit", "-m", "shared asset"], { cwd: root, stdio: "ignore" });
 
   assert.equal(runPrivateGamePreflight(root).ok, true);
+});
+
+test("text-only preflight batches exact waiver paths instead of spawning Git per pair", (t) => {
+  const { root, entry, bytes } = sharedFixture(t);
+  const privateRoot = join(root, "games/private/secret-game");
+  const entries = [];
+  for (let index = 0; index < 8; index++) {
+    const path = `assets/kit[${index}].dat`;
+    writeFileSync(join(privateRoot, path), bytes);
+    entries.push({ ...entry, private_path: path });
+  }
+  execFileSync("git", ["add", "assets"], { cwd: privateRoot });
+  execFileSync("git", ["commit", "-m", "shared copies"], { cwd: privateRoot, stdio: "ignore" });
+  writeJson(root, SHARED_BINARIES_MANIFEST, waiverDoc(entries));
+  execFileSync("git", ["add", SHARED_BINARIES_MANIFEST], { cwd: root });
+  execFileSync("git", ["commit", "-m", "approved copies"], { cwd: root, stdio: "ignore" });
+  writeFileSync(join(root, "README.md"), "public change\n");
+  execFileSync("git", ["add", "README.md"], { cwd: root });
+  const calls = [];
+  const result = runPrivateGamePreflight(root, {
+    spawnGit(command, args, options) {
+      calls.push(args);
+      return spawnSync(command, args, options);
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(calls.filter((args) => args.includes("show") && args.some((arg) => arg.startsWith(":assets/"))).length, 0);
+  assert.ok(calls.filter((args) => args.includes("cat-file")).length <= 4);
 });
 
 test("a committed waiver validates its ignored private worktree file on a text-only change", (t) => {

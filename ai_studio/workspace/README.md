@@ -37,9 +37,19 @@ escapes.
 node ai_studio/workspace/games.mjs list --json
 node ai_studio/workspace/games.mjs list --include-private --json
 node ai_studio/workspace/games.mjs preflight --json
+node ai_studio/workspace/games.mjs preflight --json --timings
 node --test ai_studio/workspace/tests/catalog.test.mjs
 node --test ai_studio/workspace/tests/private_games_registry.test.mjs
 ```
+
+The commit preflight is separate from the game build/test/run loop. Text-only
+changes do not walk private binary trees. A changed public binary compares
+only size-compatible bytes: index lengths come from validated Git metadata;
+worktree lengths and contents are checked through stable file handles. All
+path, reparse and privacy guards remain active. One physical walk includes
+ignored and untracked files; nested repositories and gitlinks retain their
+separate ownership boundary. Exact sharing approvals are batched per Git root.
+There is no persistent freshness cache. Use `--timings` to locate a slow stage.
 
 ## Parallel feature workspaces
 

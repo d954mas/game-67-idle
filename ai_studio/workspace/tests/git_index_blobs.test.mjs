@@ -26,6 +26,9 @@ test("index blob parser preserves spaces and Unicode paths while excluding gitli
     { mode: "120000", oid: OID_B, path: "links/target" },
   ]);
   assert.deepEqual(batchInput([OID_A, OID_B]), Buffer.from(`${OID_A}\n${OID_B}\n`, "ascii"));
+  assert.deepEqual(parseIndexEntries(Buffer.from(`160000 ${OID_A} 0\texternal/engine\0`), { includeGitlinks: true }), [
+    { mode: "160000", oid: OID_A, path: "external/engine" },
+  ]);
 });
 
 test("index blob parser fails closed for unmerged entries and malformed stage records", () => {
