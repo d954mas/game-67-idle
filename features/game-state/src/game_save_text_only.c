@@ -609,13 +609,12 @@ void game_save_load(game_save_load_result_t *result) {
         s_autosave_paused = false;
         result->status = GAME_SAVE_LOAD_LOADED;
         set_result_message(result, "loaded");
-        (void)game_storage_write_backup(
-            GAME_SAVE_AUTOSAVE_SLOT, error, (int)sizeof error);
         /* This shell has no migrations, so every load it accepts is clean at
-           the current version: the full shell's pre-migration copy is spent. */
-        if (result->reset_fragment_count == 0) {
+           the current version: the full shell's droppable copy is spent. */
+        if (game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, error, (int)sizeof error) &&
+            result->reset_fragment_count == 0) {
             (void)game_storage_remove_premigration(
-                GAME_SAVE_AUTOSAVE_SLOT, error, (int)sizeof error);
+                GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_DROPPABLE, error, (int)sizeof error);
         }
         s_last_save_mono = mono_now();
         return;

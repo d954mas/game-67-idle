@@ -92,6 +92,7 @@ static int64_t s_dirty_at;        /* mono ms of the first mark after clean, or o
 static int64_t s_last_save_mono;  /* mono ms of the last save ATTEMPT or load */
 static int64_t s_last_saved_at;   /* wall ms stamped into the last save/load */
 static int64_t s_save_seq;        /* monotonic counter, restored from the loaded envelope */
+static bool s_migrated_this_session; /* a migration's output is proven only by a later session */
 static game_save_playtime_t s_playtime;
 
 static int64_t (*s_mono_clock)(void);
@@ -858,6 +859,48 @@ static bool write_hot_snapshot(game_save_text_writer_t *writer, int64_t wall, in
     return game_save_text_writer_ok(writer);
 }
 
+static bool write_primary_once(const char *text, bool may_wait, char *reason, int reason_cap) {
+    return may_wait ? game_storage_write_blocking(GAME_SAVE_AUTOSAVE_SLOT, text, reason, reason_cap)
+                    : game_storage_write(GAME_SAVE_AUTOSAVE_SLOT, text, reason, reason_cap);
+}
+
+static bool drop_copy_for_room(game_storage_premigration_t kind) {
+    char err[128];
+    err[0] = '\0';
+    if (!game_storage_premigration_exists(GAME_SAVE_AUTOSAVE_SLOT, kind)) {
+        return false;
+    }
+    if (!game_storage_remove_premigration(GAME_SAVE_AUTOSAVE_SLOT, kind, err, (int)sizeof err)) {
+        nt_log_warn("game_save: storage is full and a pre-migration copy could not be removed (%s)", err);
+        return false;
+    }
+    nt_log_warn("game_save: storage is full; removed a pre-migration copy to save progress");
+    return true;
+}
+
+/* A pre-migration copy is a second save-sized key on web, and keeping it must
+   never cost the player every later save. The droppable copy goes first; the
+   kept one only if that still did not make room. */
+static bool write_primary(const char *text, bool may_wait, char *reason, int reason_cap) {
+    if (write_primary_once(text, may_wait, reason, reason_cap)) {
+        return true;
+    }
+    const game_storage_premigration_t order[] = {
+        GAME_STORAGE_PREMIGRATION_DROPPABLE, GAME_STORAGE_PREMIGRATION_KEPT};
+    for (size_t i = 0; i < sizeof order / sizeof order[0]; i++) {
+        if (strstr(reason, "QuotaExceededError") == NULL) {
+            return false;
+        }
+        if (drop_copy_for_room(order[i])) {
+            reason[0] = '\0';
+            if (write_primary_once(text, may_wait, reason, reason_cap)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static bool save_hot_snapshot(char *error, int error_cap, bool may_wait) {
     char reason[GAME_SAVE_REASON_MAX] = {0};
     bool ok = false;
@@ -874,13 +917,7 @@ static bool save_hot_snapshot(char *error, int error_cap, bool may_wait) {
         if (!write_hot_snapshot(&writer, wall, seq)) {
             gsj_set_error(reason, (int)sizeof reason, "save snapshot exceeds hot snapshot capacity");
         } else {
-            ok = may_wait
-                     ? game_storage_write_blocking(
-                           GAME_SAVE_AUTOSAVE_SLOT, game_save_text_writer_data(&writer),
-                           reason, (int)sizeof reason)
-                     : game_storage_write(
-                           GAME_SAVE_AUTOSAVE_SLOT, game_save_text_writer_data(&writer),
-                           reason, (int)sizeof reason);
+            ok = write_primary(game_save_text_writer_data(&writer), may_wait, reason, (int)sizeof reason);
         }
     }
     if (ok) {
@@ -949,11 +986,7 @@ static bool save_internal(char *error, int error_cap, bool may_wait) {
     if (!encoded) {
         goto done;
     }
-    ok = may_wait
-             ? game_storage_write_blocking(GAME_SAVE_AUTOSAVE_SLOT, encoded, reason,
-                                           (int)sizeof reason)
-             : game_storage_write(GAME_SAVE_AUTOSAVE_SLOT, encoded, reason,
-                                  (int)sizeof reason);
+    ok = write_primary(encoded, may_wait, reason, (int)sizeof reason);
 
 done:
     cJSON_Delete(root);
@@ -1114,18 +1147,44 @@ static bool doc_needs_fragment_migration(const cJSON *doc) {
 static void keep_premigration_copy(const char *raw) {
     char err[128];
     err[0] = '\0';
-    if (game_storage_premigration_exists(GAME_SAVE_AUTOSAVE_SLOT)) {
+    s_migrated_this_session = true;
+    if (game_storage_premigration_exists(GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_DROPPABLE)) {
         return;
     }
-    if (!game_storage_write_premigration(GAME_SAVE_AUTOSAVE_SLOT, raw, err, (int)sizeof err)) {
+    if (!game_storage_write_premigration(
+            GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_DROPPABLE, raw, err, (int)sizeof err)) {
         nt_log_warn("game_save: pre-migration copy could not be kept (%s)", err);
     }
+}
+
+/* A migrating load that reset a fragment already lost that fragment's data, and
+   the next session will load the defaults cleanly, so the clean-load rule would
+   delete the only evidence. The oldest pre-migration bytes become a copy no
+   load removes. */
+static void keep_lost_data_copy(const char *raw) {
+    char err[128];
+    err[0] = '\0';
+    if (game_storage_premigration_exists(GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_KEPT)) {
+        return;
+    }
+    char *oldest = NULL;
+    (void)game_storage_read_premigration(
+        GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_DROPPABLE, &oldest, NULL, 0);
+    if (!game_storage_write_premigration(
+            GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_KEPT, oldest ? oldest : raw,
+            err, (int)sizeof err)) {
+        nt_log_warn("game_save: copy of the save a migration lost data from could not be kept (%s)", err);
+    } else {
+        nt_log_warn("game_save: a migrating load reset a fragment; its source is kept for recovery");
+    }
+    free(oldest);
 }
 
 static void drop_premigration_copy(void) {
     char err[128];
     err[0] = '\0';
-    if (!game_storage_remove_premigration(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err)) {
+    if (!game_storage_remove_premigration(
+            GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_DROPPABLE, err, (int)sizeof err)) {
         nt_log_warn("game_save: pre-migration copy could not be removed (%s)", err);
     }
 }
@@ -1156,8 +1215,11 @@ static bool try_recover_from_backup(game_save_load_result_t *result, const char 
     if (migrated) {
         keep_premigration_copy(baktext);
     }
-    free(baktext);
     load_from_doc(prepared, result);
+    if (migrated && result->reset_fragment_count > 0) {
+        keep_lost_data_copy(baktext);
+    }
+    free(baktext);
     cJSON_Delete(prepared);
     cJSON_Delete(bakdoc);
     s_autosave_paused = false;
@@ -1301,23 +1363,27 @@ void game_save_load(game_save_load_result_t *result) {
             if (any_migration) {
                 keep_premigration_copy(text);
             }
-            free(text);
             load_from_doc(prepared, result);
+            if (any_migration && result->reset_fragment_count > 0) {
+                keep_lost_data_copy(text);
+            }
+            free(text);
             cJSON_Delete(prepared);
             cJSON_Delete(doc);
             s_autosave_paused = false;
             result->status = GAME_SAVE_LOAD_LOADED;
             set_message(result, "loaded");
             /* .bak is last-known-good, and a migration's output is not known
-               good until a later session loads it with nothing to migrate. */
-            if (!any_migration) {
-                (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err);
-                if (result->reset_fragment_count == 0) {
-                    drop_premigration_copy();
-                }
+               good until a later session loads it with nothing to migrate. A
+               reload in the session that migrated (DevAPI state.load) reads that
+               session's own output, which proves nothing. */
+            if (!any_migration && !s_migrated_this_session &&
+                game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err) &&
+                result->reset_fragment_count == 0) {
+                drop_premigration_copy();
             }
-            if (migrated || legacy_plain_json) {
-                game_save_mark_dirty(); /* persist the current envelope version after debounce */
+            if (any_migration || legacy_plain_json) {
+                game_save_mark_dirty(); /* persist the current versions after debounce */
             }
             s_last_save_mono = mono_now();
             return;
@@ -1448,6 +1514,7 @@ void game_save_init(void) {
     s_last_save_mono = 0;
     s_last_saved_at = 0;
     s_save_seq = 0;
+    s_migrated_this_session = false; /* init is the start of a session */
     set_playtime_ms(0);
     s_logged_failure[0] = '\0';
     s_failure_logged = false;
@@ -1661,10 +1728,12 @@ bool game_save_import_string(const char *text, char *error, int error_cap) {
         gsj_set_error(error, error_cap, "import is newer than this build");
         return false;
     }
-    if (!prepare_document_for_load(doc, &prepared, NULL, error, error_cap)) {
+    bool migrated = false;
+    if (!prepare_document_for_load(doc, &prepared, &migrated, error, error_cap)) {
         cJSON_Delete(doc);
         return false; /* staged cross-fragment state was never published */
     }
+    migrated = migrated || doc_needs_fragment_migration(prepared);
     /* Fragment descriptors intentionally hide their storage. Snapshot every
        fragment before publication so an invalid import cannot leave a mixture
        of imported neighbours and reset defaults. Normal disk load remains
@@ -1741,6 +1810,11 @@ bool game_save_import_string(const char *text, char *error, int error_cap) {
     }
     if (s_save_seq < old_seq) {
         s_save_seq = old_seq; /* never rewind the counter on import */
+    }
+    /* An adopted cloud save replaces the slot through here, so it needs the
+       same pre-migration copy a disk load would keep. */
+    if (migrated) {
+        keep_premigration_copy(text);
     }
     s_autosave_paused = false;
     game_save_mark_dirty();

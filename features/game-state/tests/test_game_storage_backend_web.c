@@ -130,15 +130,19 @@ int game_storage_web_probe(const char *key, char *reason, int reason_cap) {
 
 void test_web_premigration_copy_has_its_own_key(void) {
     char error[128] = {0};
-    TEST_ASSERT_TRUE(game_storage_write_premigration("autosave", "old", error, (int)sizeof error));
+    const game_storage_premigration_t drop = GAME_STORAGE_PREMIGRATION_DROPPABLE;
+    TEST_ASSERT_TRUE(game_storage_write_premigration("autosave", drop, "old", error, (int)sizeof error));
     TEST_ASSERT_EQUAL_STRING("web_storage_test/save/autosave.premigration", s_last_key);
-    TEST_ASSERT_TRUE(game_storage_premigration_exists("autosave"));
+    TEST_ASSERT_TRUE(game_storage_premigration_exists("autosave", drop));
     TEST_ASSERT_EQUAL_STRING("web_storage_test/save/autosave.premigration", s_last_key);
-    TEST_ASSERT_TRUE(game_storage_remove_premigration("autosave", error, (int)sizeof error));
+    TEST_ASSERT_TRUE(game_storage_remove_premigration("autosave", drop, error, (int)sizeof error));
     TEST_ASSERT_EQUAL_STRING("web_storage_test/save/autosave.premigration", s_last_key);
+    TEST_ASSERT_TRUE(game_storage_write_premigration(
+        "autosave", GAME_STORAGE_PREMIGRATION_KEPT, "old", error, (int)sizeof error));
+    TEST_ASSERT_EQUAL_STRING("web_storage_test/save/autosave.premigration-kept", s_last_key);
 
     s_delete_allowed = false;
-    TEST_ASSERT_FALSE(game_storage_remove_premigration("autosave", error, (int)sizeof error));
+    TEST_ASSERT_FALSE(game_storage_remove_premigration("autosave", drop, error, (int)sizeof error));
     TEST_ASSERT_NOT_NULL(strstr(error, "QuotaExceededError"));
 }
 

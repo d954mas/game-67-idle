@@ -87,15 +87,26 @@ bool game_storage_write_backup(const char *slot, char *error, int error_cap);
 /* Чтение .bak (фолбэк лоадера). native only; web всегда false. */
 bool game_storage_read_backup(const char *slot, char **out, char *error, int error_cap);
 
-/* Pre-migration copy: the exact stored bytes of a save that a load migrated,
-   kept beside the slot until a later load proves the migrated save loads
-   cleanly. The loader owns that policy; these only move bytes.
-   native: <slot>.premigration (atomic, may wait). web: "<key>.premigration".
+/* Pre-migration copies: the exact stored bytes of a save that a load migrated.
+   The loader owns the policy; these only move bytes.
+   DROPPABLE lives until a later session proves the migrated save loads cleanly.
+   KEPT is written when a migrating load had to reset a fragment and is never
+   removed automatically, because the loss it records looks clean afterwards.
+   native: <slot>.premigration / <slot>.premigration-kept (atomic, may wait).
+   web: "<key>.premigration" / "<key>.premigration-kept".
    remove: an absent copy counts as success. */
-bool game_storage_write_premigration(const char *slot, const char *text, char *error, int error_cap);
-bool game_storage_read_premigration(const char *slot, char **out, char *error, int error_cap);
-bool game_storage_premigration_exists(const char *slot);
-bool game_storage_remove_premigration(const char *slot, char *error, int error_cap);
+typedef enum {
+    GAME_STORAGE_PREMIGRATION_DROPPABLE = 0,
+    GAME_STORAGE_PREMIGRATION_KEPT = 1,
+} game_storage_premigration_t;
+
+bool game_storage_write_premigration(
+    const char *slot, game_storage_premigration_t kind, const char *text, char *error, int error_cap);
+bool game_storage_read_premigration(
+    const char *slot, game_storage_premigration_t kind, char **out, char *error, int error_cap);
+bool game_storage_premigration_exists(const char *slot, game_storage_premigration_t kind);
+bool game_storage_remove_premigration(
+    const char *slot, game_storage_premigration_t kind, char *error, int error_cap);
 
 /* Откладывает битый primary для форензики/ручной починки (Р10, восстанавливает
    .corrupt для ручной починки сейва).

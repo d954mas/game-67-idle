@@ -388,15 +388,18 @@ playtime. A hidden tab gets no frame to wait the hold out. Init
 registers it through the new `game_save_set_hide_listener`; nothing goes up
 before `game_save_cloud_start`.
 
-Version `4.12.0` keeps a pre-migration copy of the save. A load that migrates
-stores the bytes it started from beside the slot (native `<slot>.premigration`,
-web `<key>.premigration`) and leaves `.bak` alone that session; recovery from a
-`.bak` that needed migrating keeps that `.bak`. The first later clean load at
-the current version removes the copy. `game_storage.h` adds
-`game_storage_{write,read,remove}_premigration` and
-`game_storage_premigration_exists`; a consumer that fakes `game_storage` must
-supply them. Web storage needs room for one more save-sized key while a
-migration is unproven. Rules: `references/contract.md`.
+Version `4.12.0` keeps a pre-migration copy of the save. A load or import that
+migrates stores the stored bytes it started from beside the slot (native
+`<slot>.premigration`, web `<key>.premigration`), leaves `.bak` alone that
+session and marks the save dirty; recovery from a `.bak` that needed migrating
+keeps that `.bak`. A load in a later session that loads with nothing to migrate
+and no fragment reset refreshes `.bak` and then removes the copy. A migrating
+load that reset a fragment also writes `<slot>.premigration-kept`, which no load
+removes. A save refused with `QuotaExceededError` removes the droppable copy,
+then the kept one, before giving up. `game_storage.h` adds
+`game_storage_premigration_t` and `game_storage_{write,read,remove}_premigration`
+and `game_storage_premigration_exists`; a consumer that fakes `game_storage`
+must supply them. Rules: `references/contract.md`.
 
 ## Extension points
 

@@ -107,13 +107,13 @@ bool game_storage_read_backup(
 }
 
 bool game_storage_write_premigration(
-    const char *slot, const char *text, char *error, int error_cap) {
+    const char *slot, game_storage_premigration_t kind, const char *text, char *error, int error_cap) {
     return validate_write(slot, text, error, error_cap) &&
-           game_storage_backend_write_premigration(slot, text, error, error_cap);
+           game_storage_backend_write_premigration(slot, kind, text, error, error_cap);
 }
 
 bool game_storage_read_premigration(
-    const char *slot, char **out, char *error, int error_cap) {
+    const char *slot, game_storage_premigration_t kind, char **out, char *error, int error_cap) {
     if (out == NULL) {
         set_error(error, error_cap, "storage output pointer is required");
         return false;
@@ -122,19 +122,19 @@ bool game_storage_read_premigration(
     if (!validate_slot(slot, error, error_cap)) {
         return false;
     }
-    return game_storage_backend_read_premigration(slot, out, error, error_cap);
+    return game_storage_backend_read_premigration(slot, kind, out, error, error_cap);
 }
 
-bool game_storage_premigration_exists(const char *slot) {
-    return slot_is_valid(slot) && game_storage_backend_premigration_exists(slot);
+bool game_storage_premigration_exists(const char *slot, game_storage_premigration_t kind) {
+    return slot_is_valid(slot) && game_storage_backend_premigration_exists(slot, kind);
 }
 
 bool game_storage_remove_premigration(
-    const char *slot, char *error, int error_cap) {
+    const char *slot, game_storage_premigration_t kind, char *error, int error_cap) {
     if (!validate_slot(slot, error, error_cap)) {
         return false;
     }
-    return game_storage_backend_remove_premigration(slot, error, error_cap);
+    return game_storage_backend_remove_premigration(slot, kind, error, error_cap);
 }
 
 bool game_storage_quarantine(

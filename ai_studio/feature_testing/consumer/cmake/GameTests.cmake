@@ -518,6 +518,28 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_game_save_blocked COMMAND test_game_save_blocked)
     set_tests_properties(test_game_save_blocked PROPERTIES LABELS "core")
 
+    add_executable(test_game_save_web_quota
+        "${GAME_STATE_DIR}/tests/test_game_save_web_quota.c"
+        "${GAME_STATE_SRC}/game_save.c"
+        "${GAME_STATE_SRC}/game_save_writer.c"
+        "${GAME_STATE_SRC}/game_state_json.c"
+        "${GAME_STATE_SRC}/game_storage.c"
+        "${GAME_STATE_SRC}/game_storage_backend_web.c")
+    target_link_libraries(test_game_save_web_quota PRIVATE
+        cjson unity nt_log nt_core nt_hash)
+    target_include_directories(test_game_save_web_quota PRIVATE
+        "${GAME_STATE_INC}" "${GAME_STATE_SRC}")
+    target_compile_definitions(test_game_save_web_quota PRIVATE
+        GAME_SAVE_TESTING=1
+        GAME_STORAGE_APP_ID="quota_test"
+        GAME_SAVE_AUTOSAVE_SLOT="test_slot"
+        GAME_SAVE_DOC_VERSION=1
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_save_web_quota PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_save_web_quota COMMAND test_game_save_web_quota)
+    set_tests_properties(test_game_save_web_quota PROPERTIES LABELS "core")
+
     add_executable(test_game_save
         tests/test_game_save.c
         "${GAME_STATE_SRC}/game_save.c" "${GAME_STATE_SRC}/game_save_writer.c" "${GAME_STATE_SRC}/game_storage.c"
@@ -1182,7 +1204,7 @@ if(NOT EMSCRIPTEN)
         test_game_state_json test_game_state_nested test_game_storage
         test_game_storage_write_modes
         test_game_storage_quarantine
-        test_game_storage_web_backend test_game_save_blocked test_game_save
+        test_game_storage_web_backend test_game_save_blocked test_game_save_web_quota test_game_save
         test_game_events test_game_events_overflow test_game_state_roundtrip
         test_game_events_typed test_game_event_render test_game_analytics
         test_game_events_log_mirror test_items_api_core_only

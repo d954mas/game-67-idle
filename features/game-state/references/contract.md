@@ -110,17 +110,31 @@ Load distinguishes absence from failure:
 - newer envelope or known-fragment version: report `NEWER`, perform no writes,
   preserve current live fragments, and pause autosave.
 
-A migration's output is unproven until a later session loads it. A load that
-runs any document or fragment migration, from the primary or from the backup,
-first stores the exact stored bytes it started from as the slot's
-pre-migration copy (native `<slot>.premigration`, web key
-`<key>.premigration`) and does not refresh the backup that session. An
-existing copy is never replaced: anything written after it came out of a
-migration no clean load has proven. The copy is removed by the first later
-load that is `LOADED` at the current versions with nothing to migrate and no
-fragment reset; that load also refreshes the backup again. Read it with
-`game_storage_read_premigration` for support or manual recovery; the loader
-never restores it on its own.
+A migration's output is unproven until a later session loads it. A load or
+import that runs any document or fragment migration -- from the primary, from
+the backup, or from an adopted cloud save -- first stores the exact stored
+bytes it started from, before any transform is decoded, as the slot's
+droppable pre-migration copy (native `<slot>.premigration`, web key
+`<key>.premigration`). That session does not refresh the backup, and it marks
+the save dirty so the migrated document is written. An existing copy is never
+replaced: anything written after it came out of a migration no clean load has
+proven.
+
+The droppable copy is removed only by a load in a later session (after a new
+`game_save_init`) that is `LOADED` with nothing to migrate and no fragment
+reset, and only after that load has refreshed the backup. A reload inside the
+session that migrated, such as DevAPI `state.load`, removes nothing.
+
+A migrating load that resets any fragment has already lost that fragment's
+data, and later sessions load the defaults cleanly. Its oldest pre-migration
+bytes are therefore also stored as a kept copy (`<slot>.premigration-kept`,
+web `<key>.premigration-kept`) that no load removes.
+
+When a primary write fails with `QuotaExceededError`, the save removes the
+droppable copy and retries; if that still does not make room, it removes the
+kept copy and retries again. Other write failures leave both copies alone.
+Read either copy with `game_storage_read_premigration` for support or manual
+recovery; the loader never restores one on its own.
 
 An absent fragment resets independently. A fragment parse or migration failure
 resets only that fragment and is recorded in the load result. Orphans survive

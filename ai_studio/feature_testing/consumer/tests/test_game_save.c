@@ -37,6 +37,8 @@
 #define BAK_TMP GAME_STORAGE_NATIVE_ROOT "/test_slot.bak.tmp"
 #define PREMIG_PATH GAME_STORAGE_NATIVE_ROOT "/test_slot.premigration"
 #define PREMIG_TMP GAME_STORAGE_NATIVE_ROOT "/test_slot.premigration.tmp"
+#define KEPT_PATH GAME_STORAGE_NATIVE_ROOT "/test_slot.premigration-kept"
+#define KEPT_TMP GAME_STORAGE_NATIVE_ROOT "/test_slot.premigration-kept.tmp"
 
 /* ---- injected clocks ---- */
 static int64_t g_mono_ms;
@@ -151,6 +153,61 @@ static const GameSaveFragment s_extra_fragment = {
     .schema_json = NULL,
     .write_snapshot = extra_write_snapshot,
     .write_text = extra_write_text,
+};
+
+/* ---- third fragment at version 2: its own v1 -> v2 step renames old -> val ---- */
+static int s_third_val;
+static bool s_third_step_fail;
+static bool third_v1_to_v2(cJSON *frag, char *err, int cap) {
+    if (s_third_step_fail) {
+        gsj_set_error(err, cap, "injected fragment step failure");
+        return false;
+    }
+    const cJSON *old = cJSON_GetObjectItemCaseSensitive(frag, "old");
+    if (!cJSON_IsNumber(old)) {
+        gsj_set_error(err, cap, "third.old is missing");
+        return false;
+    }
+    const double value = old->valuedouble;
+    cJSON_DeleteItemFromObjectCaseSensitive(frag, "old");
+    return cJSON_AddNumberToObject(frag, "val", value) != NULL;
+}
+static const GameSaveMigrateFn s_third_steps[] = {third_v1_to_v2};
+static cJSON *third_to_json(void) {
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddNumberToObject(o, "val", (double)s_third_val);
+    return o;
+}
+static bool third_from_json(const cJSON *json, char *err, int cap) {
+    int val = 0;
+    if (!gsj_read_int_range(json, "val", 0, 1000000, &val, err, cap)) {
+        return false;
+    }
+    s_third_val = val;
+    return true;
+}
+static void third_reset(void) { s_third_val = 0; }
+static bool third_write_snapshot(game_save_writer_t *writer) {
+    return game_save_writer_key(writer, "val") &&
+           game_save_writer_number(writer, (double)s_third_val);
+}
+static bool third_write_text(game_save_text_writer_t *writer) {
+    return game_save_text_write_i64(writer, "val", (int64_t)s_third_val);
+}
+static const GameSaveFragment s_third_fragment = {
+    .id = "third",
+    .version = 2,
+    .steps = s_third_steps,
+    .reset = third_reset,
+    .on_new_game = NULL,
+    .to_json = third_to_json,
+    .from_json = third_from_json,
+    .reconcile = NULL,
+    .get_path_json = NULL,
+    .set_path_json = NULL,
+    .schema_json = NULL,
+    .write_snapshot = third_write_snapshot,
+    .write_text = third_write_text,
 };
 
 /* ---- document v1 -> v2 migration test seam ---- */
@@ -329,6 +386,13 @@ static void cleanup_all(void) {
     (void)remove(BAK_TMP);
     (void)remove(PREMIG_PATH);
     (void)remove(PREMIG_TMP);
+    (void)remove(KEPT_PATH);
+    (void)remove(KEPT_TMP);
+#ifdef _WIN32
+    (void)_rmdir(BAK_TMP);
+#else
+    (void)rmdir(BAK_TMP);
+#endif
     (void)sweep_corrupt(true);
 }
 
@@ -407,6 +471,8 @@ void setUp(void) {
     s_frag_name[0] = '\0';
     s_extra_mark = 0;
     s_document_migration_fail = false;
+    s_third_val = 0;
+    s_third_step_fail = false;
     g_mono_ms = 5000000;
     g_wall_ms = 1720080000000LL;
     game_save__set_clocks_for_test(test_mono, test_wall);
@@ -1288,6 +1354,7 @@ void test_later_clean_load_drops_premigration_copy(void) {
     TEST_ASSERT_TRUE(game_save_flush(err, (int)sizeof err));
     TEST_ASSERT_TRUE(file_present(PREMIG_PATH));
 
+    game_save_init(); /* a later session */
     game_save_load_result_t clean;
     game_save_load(&clean);
 
@@ -1332,6 +1399,134 @@ void test_non_migrating_load_refreshes_backup_without_copy(void) {
     assert_file_equals(BAK_PATH, primary);
     TEST_ASSERT_FALSE(file_present(PREMIG_PATH));
     free(primary);
+}
+
+static const char k_third_v1_save[] =
+    "{\"format\":1,\"save_version\":2,\"saved_at\":1,\"save_seq\":3,\"app\":\"" GAME_STORAGE_APP_ID "\","
+    "\"build\":\"0\",\"features\":{\"game\":{\"v\":1,\"coins\":4},"
+    "\"extra\":{\"v\":1,\"mark\":5},\"third\":{\"v\":1,\"old\":7}}}";
+
+/* A fragment migration with no document migration is a migration too: the copy
+   is kept and the migrated document is written without waiting for a change. */
+void test_fragment_only_migration_keeps_copy_and_rewrites_the_save(void) {
+    write_raw(PRIMARY_PATH, k_third_v1_save);
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, result.status);
+    TEST_ASSERT_EQUAL_INT(0, result.reset_fragment_count);
+    TEST_ASSERT_EQUAL_INT(7, s_third_val);
+    assert_file_equals(PREMIG_PATH, k_third_v1_save);
+    TEST_ASSERT_FALSE(file_present(BAK_PATH));
+
+    g_mono_ms += GAME_SAVE_DEBOUNCE_MS;
+    game_save_tick();
+    cJSON *doc = parse_primary();
+    const cJSON *third = cJSON_GetObjectItemCaseSensitive(
+        cJSON_GetObjectItemCaseSensitive(doc, "features"), "third");
+    const cJSON *version = cJSON_GetObjectItemCaseSensitive(third, "v");
+    TEST_ASSERT_TRUE(cJSON_IsNumber(version));
+    TEST_ASSERT_EQUAL_INT(2, (int)version->valuedouble);
+    cJSON_Delete(doc);
+}
+
+/* A failed step resets its fragment, and the next session loads the defaults
+   cleanly; only a copy no load removes still holds what was lost. */
+void test_migration_that_reset_a_fragment_keeps_a_copy_no_load_removes(void) {
+    char err[128] = {0};
+    write_raw(PRIMARY_PATH, k_third_v1_save);
+    s_third_step_fail = true;
+
+    game_save_load_result_t migrating;
+    game_save_load(&migrating);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, migrating.status);
+    TEST_ASSERT_EQUAL_INT(1, migrating.reset_fragment_count);
+    assert_file_equals(KEPT_PATH, k_third_v1_save);
+    TEST_ASSERT_TRUE(game_save_flush(err, (int)sizeof err));
+
+    for (int session = 0; session < 2; session++) {
+        game_save_init();
+        game_save_load_result_t clean;
+        game_save_load(&clean);
+        TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, clean.status);
+        TEST_ASSERT_EQUAL_INT(0, clean.reset_fragment_count);
+    }
+    TEST_ASSERT_FALSE(file_present(PREMIG_PATH));
+    assert_file_equals(KEPT_PATH, k_third_v1_save);
+}
+
+/* DevAPI state.load reloads inside the session that migrated: that reads the
+   session's own output and proves nothing, so only a new session drops it. */
+void test_reload_in_the_migrating_session_keeps_the_copy(void) {
+    char err[128] = {0};
+    write_raw(PRIMARY_PATH, k_legacy_v1_save);
+    game_save_load_result_t migrating;
+    game_save_load(&migrating);
+    TEST_ASSERT_TRUE(game_save_flush(err, (int)sizeof err));
+
+    game_save_load_result_t reload;
+    game_save_load(&reload);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, reload.status);
+    assert_file_equals(PREMIG_PATH, k_legacy_v1_save);
+    TEST_ASSERT_FALSE(file_present(BAK_PATH));
+
+    game_save_init();
+    game_save_load_result_t later;
+    game_save_load(&later);
+    TEST_ASSERT_FALSE(file_present(PREMIG_PATH));
+}
+
+/* The copy is the stored bytes, not the decoded document. */
+void test_copy_keeps_the_transformed_bytes(void) {
+    char err[128] = {0};
+    char *toggled = xf_toggle_case(k_legacy_v1_save, err, (int)sizeof err);
+    TEST_ASSERT_NOT_NULL(toggled);
+    char stored[1024];
+    (void)snprintf(stored, sizeof stored, "NTSV1:case:%s", toggled);
+    free(toggled);
+    write_raw(PRIMARY_PATH, stored);
+    game_save_set_transforms(&k_xf, 1);
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+    game_save_set_transforms(NULL, 0);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, result.status);
+    TEST_ASSERT_EQUAL_INT(77, s_frag_coins);
+    assert_file_equals(PREMIG_PATH, stored);
+}
+
+/* Cloud adoption replaces the slot through import, so an import that migrates
+   keeps the same copy a disk load would, under the same only-if-absent rule. */
+void test_migrating_import_keeps_a_copy(void) {
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_import_string(k_legacy_v1_save, err, (int)sizeof err));
+    assert_file_equals(PREMIG_PATH, k_legacy_v1_save);
+
+    TEST_ASSERT_TRUE(game_save_import_string(k_third_v1_save, err, (int)sizeof err));
+    assert_file_equals(PREMIG_PATH, k_legacy_v1_save);
+}
+
+/* The copy is dropped only once .bak again holds the proven primary. */
+void test_failed_backup_refresh_keeps_the_copy(void) {
+    char err[128] = {0};
+    s_frag_coins = 3;
+    TEST_ASSERT_TRUE(game_save_flush(err, (int)sizeof err));
+    write_raw(PREMIG_PATH, "ORIGINAL");
+#ifdef _WIN32
+    TEST_ASSERT_EQUAL_INT(0, _mkdir(BAK_TMP));
+#else
+    TEST_ASSERT_EQUAL_INT(0, mkdir(BAK_TMP, 0777));
+#endif
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, result.status);
+    assert_file_equals(PREMIG_PATH, "ORIGINAL");
 }
 
 /* 20. Failure after mutating the staged first owner leaves both live owners and
@@ -1409,6 +1604,7 @@ void test_import_rejects_oversized_text_before_decode(void) {
 
 int main(void) {
     game_save_register_fragment(&s_extra_fragment);
+    game_save_register_fragment(&s_third_fragment);
     game_save_register_fragment(&s_fake_fragment); /* `game` registered last */
 
     UNITY_BEGIN();
@@ -1455,5 +1651,11 @@ int main(void) {
     RUN_TEST(test_later_clean_load_drops_premigration_copy);
     RUN_TEST(test_load_with_reset_fragment_keeps_premigration_copy);
     RUN_TEST(test_non_migrating_load_refreshes_backup_without_copy);
+    RUN_TEST(test_fragment_only_migration_keeps_copy_and_rewrites_the_save);
+    RUN_TEST(test_migration_that_reset_a_fragment_keeps_a_copy_no_load_removes);
+    RUN_TEST(test_reload_in_the_migrating_session_keeps_the_copy);
+    RUN_TEST(test_copy_keeps_the_transformed_bytes);
+    RUN_TEST(test_migrating_import_keeps_a_copy);
+    RUN_TEST(test_failed_backup_refresh_keeps_the_copy);
     return UNITY_END();
 }

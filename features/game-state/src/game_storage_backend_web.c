@@ -178,12 +178,13 @@ bool game_storage_backend_read_backup(
 }
 
 static bool resolve_premigration_key(
-    const char *slot, char *out, size_t out_cap, char *error, int error_cap) {
+    const char *slot, game_storage_premigration_t kind, char *out, size_t out_cap,
+    char *error, int error_cap) {
     char key[GAME_STORAGE_KEY_MAX];
     if (!resolve_key(slot, key, sizeof key, error, error_cap)) {
         return false;
     }
-    if (snprintf(out, out_cap, "%s.premigration", key) >= (int)out_cap) {
+    if (snprintf(out, out_cap, "%s%s", key, game_storage_premigration_suffix(kind)) >= (int)out_cap) {
         set_error(error, error_cap, "resolved storage key is too long");
         return false;
     }
@@ -191,9 +192,9 @@ static bool resolve_premigration_key(
 }
 
 bool game_storage_backend_write_premigration(
-    const char *slot, const char *text, char *error, int error_cap) {
+    const char *slot, game_storage_premigration_t kind, const char *text, char *error, int error_cap) {
     char key[GAME_STORAGE_KEY_MAX];
-    if (!resolve_premigration_key(slot, key, sizeof key, error, error_cap)) {
+    if (!resolve_premigration_key(slot, kind, key, sizeof key, error, error_cap)) {
         return false;
     }
     char reason[GAME_STORAGE_WEB_REASON_MAX] = {0};
@@ -206,9 +207,9 @@ bool game_storage_backend_write_premigration(
 }
 
 bool game_storage_backend_read_premigration(
-    const char *slot, char **out, char *error, int error_cap) {
+    const char *slot, game_storage_premigration_t kind, char **out, char *error, int error_cap) {
     char key[GAME_STORAGE_KEY_MAX];
-    if (!resolve_premigration_key(slot, key, sizeof key, error, error_cap)) {
+    if (!resolve_premigration_key(slot, kind, key, sizeof key, error, error_cap)) {
         return false;
     }
     int web_status = GAME_STORAGE_READ_ERROR;
@@ -225,16 +226,16 @@ bool game_storage_backend_read_premigration(
     return true;
 }
 
-bool game_storage_backend_premigration_exists(const char *slot) {
+bool game_storage_backend_premigration_exists(const char *slot, game_storage_premigration_t kind) {
     char key[GAME_STORAGE_KEY_MAX];
-    return resolve_premigration_key(slot, key, sizeof key, NULL, 0) &&
+    return resolve_premigration_key(slot, kind, key, sizeof key, NULL, 0) &&
            game_storage_web_key_exists(key) != 0;
 }
 
 bool game_storage_backend_remove_premigration(
-    const char *slot, char *error, int error_cap) {
+    const char *slot, game_storage_premigration_t kind, char *error, int error_cap) {
     char key[GAME_STORAGE_KEY_MAX];
-    if (!resolve_premigration_key(slot, key, sizeof key, error, error_cap)) {
+    if (!resolve_premigration_key(slot, kind, key, sizeof key, error, error_cap)) {
         return false;
     }
     char reason[GAME_STORAGE_WEB_REASON_MAX] = {0};

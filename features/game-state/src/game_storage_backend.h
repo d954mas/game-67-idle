@@ -17,13 +17,16 @@ bool game_storage_backend_write_backup(
     const char *slot, char *error, int error_cap);
 bool game_storage_backend_read_backup(
     const char *slot, char **out, char *error, int error_cap);
+static inline const char *game_storage_premigration_suffix(game_storage_premigration_t kind) {
+    return kind == GAME_STORAGE_PREMIGRATION_KEPT ? ".premigration-kept" : ".premigration";
+}
 bool game_storage_backend_write_premigration(
-    const char *slot, const char *text, char *error, int error_cap);
+    const char *slot, game_storage_premigration_t kind, const char *text, char *error, int error_cap);
 bool game_storage_backend_read_premigration(
-    const char *slot, char **out, char *error, int error_cap);
-bool game_storage_backend_premigration_exists(const char *slot);
+    const char *slot, game_storage_premigration_t kind, char **out, char *error, int error_cap);
+bool game_storage_backend_premigration_exists(const char *slot, game_storage_premigration_t kind);
 bool game_storage_backend_remove_premigration(
-    const char *slot, char *error, int error_cap);
+    const char *slot, game_storage_premigration_t kind, char *error, int error_cap);
 bool game_storage_backend_quarantine(
     const char *slot, char *error, int error_cap);
 bool game_storage_backend_probe(char *error, int error_cap);
