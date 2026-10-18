@@ -87,6 +87,7 @@ add_custom_command(
         "${GAME_SOURCE_GENERATED_DIR}/loc_strings.gen.c"
         "${GAME_SOURCE_GENERATED_DIR}/loc_keys.gen.json"
         "${GAME_SOURCE_GENERATED_DIR}/loc_charset.gen.h"
+    BYPRODUCTS "${GAME_SOURCE_GENERATED_DIR}/loc_strings.gen.txt"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_SOURCE_GENERATED_DIR}"
     COMMAND "${Python3_EXECUTABLE}" "${LOC_GENERATOR}" generate
         --strings "${LOC_STRINGS_JSON}"

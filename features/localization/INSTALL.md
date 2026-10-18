@@ -35,6 +35,7 @@ add_custom_command(
         "${GAME_SOURCE_GENERATED_DIR}/loc_strings.gen.c"
         "${GAME_SOURCE_GENERATED_DIR}/loc_keys.gen.json"
         "${GAME_SOURCE_GENERATED_DIR}/loc_charset.gen.h"
+    BYPRODUCTS "${GAME_SOURCE_GENERATED_DIR}/loc_strings.gen.txt"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_SOURCE_GENERATED_DIR}"
     COMMAND "${Python3_EXECUTABLE}" "${LOC_GENERATOR}" generate
         --strings "${LOC_STRINGS_JSON}"
@@ -47,6 +48,10 @@ add_custom_command(
 ```
 
 Sources and include path:
+
+`loc_strings.gen.txt` is a searchable key-to-text companion. Do not include it
+in C targets or asset-pack dependencies; ordinary copy edits leave the API and
+charset headers unchanged when their contracts stay the same.
 
 ```cmake
 target_sources(${GAME_TARGET} PRIVATE

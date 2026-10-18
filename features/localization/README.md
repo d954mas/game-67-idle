@@ -11,7 +11,8 @@ Every player-visible string in a game declared as DATA in
 `content/loc/strings.json`, compiled by `scripts/loc.py` into typed C
 accessors (`loc_strings.gen.{h,c}`) plus a machine-readable key index
 (`loc_keys.gen.json`) for tools that need to name a key without re-implementing
-the mangling.
+the mangling. `loc_strings.gen.txt` keeps keys and authored forms greppable
+without making translated copy rebuild C headers.
 
 The module is universal: it knows nothing about any game, any surface, or any
 key vocabulary. Everything game-specific is data.
@@ -24,7 +25,7 @@ features/localization/
   src/
     loc.c                    lookup, fallback chain, CLDR plurals, grouping, arena formatting
   scripts/
-    loc.py                   strings.json -> loc_strings.gen.{h,c} + loc_keys.gen.json
+    loc.py                   strings.json -> C, key index, charset, and grep text outputs
     loc_test.py              generator contract tests
   schema/strings.schema.json the data contract
   feature.json
@@ -177,11 +178,11 @@ Three properties fall out:
   key; nesting one localized string inside another is a `str` argument fed by
   `loc_by_key`.
 
-The header carries the source text beside each enumerator, so grep works from
-the Russian on screen back to the key:
+`loc_strings.gen.txt` carries the source text beside each key, so grep works
+from the Russian on screen back to the key without changing the API header:
 
-```c
-LOC_UPGRADES_REQUIRES = 12, /* ru "Нужно {parent} Ур {n}"  en "Requires {parent} Lv {n}" */
+```text
+upgrades.requires: ru "Нужно {parent} Ур {n}"  en "Requires {parent} Lv {n}"
 ```
 
 Key → identifier mangling is not injective (`a.b_c` and `a_b.c` both give
@@ -327,6 +328,9 @@ Run the ctest targets named in `feature.json.registers.ctest_targets`
 `feature.json.version` is exact SemVer. Patch preserves the public contract,
 minor adds backward-compatible surface, and major permits breaking changes.
 Consumers pin both this version and an exact repository revision.
+Version `1.3.0` keeps translated copy in `loc_strings.gen.txt` instead of API
+header comments. C signatures and key indices stay unchanged; grep tools should
+use the text companion to avoid recompilation on copy edits.
 Version `1.1.0` replaced six hand-rolled plural rules with the reference table's
 24 partitions over 172 locales; a corpus in a language whose rule moved
 (`az fa hu ka tr`) must re-declare its forms.

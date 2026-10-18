@@ -877,7 +877,7 @@ def render_header(table: Table) -> str:
     lines.append("/* Every key. The enumerator IS the table index. */")
     lines.append("typedef enum LocKey {")
     for index, entry in enumerate(table.entries):
-        lines.append(f"    LOC_{entry.ident.upper()} = {index}, /* {entry.comment(table.langs)} */")
+        lines.append(f"    LOC_{entry.ident.upper()} = {index},")
     lines.append(f"    LOC_KEY_COUNT = {len(table.entries)}")
     lines.append("} LocKey;")
     lines.append("")
@@ -886,7 +886,7 @@ def render_header(table: Table) -> str:
     lines.append("   placeholders on screen, so it is not representable here. */")
     lines.append("typedef enum LocKey0 {")
     for index, entry in enumerate(table.key0):
-        lines.append(f"    LOC0_{entry.ident.upper()} = {index}, /* {entry.comment(table.langs)} */")
+        lines.append(f"    LOC0_{entry.ident.upper()} = {index},")
     lines.append(f"    LOC0_COUNT = {len(table.key0)}")
     lines.append("} LocKey0;")
     lines.append("")
@@ -900,12 +900,15 @@ def render_header(table: Table) -> str:
     lines.append("static inline LocLang loc_lang(void) { return (LocLang)loc_lang_index(); }")
     lines.append("")
     for entry in table.entries:
-        lines.append(f"/* {entry.comment(table.langs)} */")
         lines.append(f"LocStr loc_{entry.ident}({entry.signature()});")
     lines.append("")
     lines.append("#endif /* LOC_STRINGS_GEN_H */")
     lines.append("")
     return "\n".join(lines)
+
+
+def render_search_text(table: Table) -> str:
+    return "\n".join(f"{entry.key}: {entry.comment(table.langs)}" for entry in table.entries) + "\n"
 
 
 def render_source(table: Table) -> str:
@@ -1532,12 +1535,15 @@ def cmd_generate(args: argparse.Namespace) -> int:
         header_path = out_dir / "loc_strings.gen.h"
         source_path = out_dir / "loc_strings.gen.c"
         charset_path = out_dir / "loc_charset.gen.h"
+        search_path = out_dir / "loc_strings.gen.txt"
         if write_if_changed(header_path, render_header(table)):
             changed.append(header_path)
         if write_if_changed(source_path, render_source(table)):
             changed.append(source_path)
         if write_if_changed(charset_path, render_charset_header(table)):
             changed.append(charset_path)
+        if write_if_changed(search_path, render_search_text(table)):
+            changed.append(search_path)
     if changed:
         print(f"loc generate: wrote {', '.join(str(path) for path in changed)}", file=sys.stderr)
     return 0

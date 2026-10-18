@@ -417,6 +417,7 @@ class GeneratedOutput(unittest.TestCase):
         self.out_dir, _ = generate(self.DOC)
         self.header = (self.out_dir / "loc_strings.gen.h").read_text(encoding="utf-8")
         self.source = (self.out_dir / "loc_strings.gen.c").read_text(encoding="utf-8")
+        self.search = (self.out_dir / "loc_strings.gen.txt").read_text(encoding="utf-8")
         self.index = json.loads((self.out_dir / "loc_keys.gen.json").read_text(encoding="utf-8"))
 
     def test_lang_enum(self):
@@ -441,10 +442,25 @@ class GeneratedOutput(unittest.TestCase):
         self.assertIn("LocStr loc_upgrades_requires(LocStr parent, int64_t n);", self.header)
         self.assertIn("LocStr loc_upgrades_coins_needed(int64_t n);", self.header)
 
-    def test_source_text_is_greppable_from_the_header(self):
-        self.assertIn('ru "ЗАКРЫТЬ"', self.header)
-        self.assertIn('en "Close"', self.header)
-        self.assertIn('ru "Нужно {parent} Ур {n}"', self.header)
+    def test_source_text_is_greppable_from_the_search_index(self):
+        self.assertIn('common.close: ru "ЗАКРЫТЬ"  en "Close"', self.search)
+        self.assertIn('upgrades.requires: ru "Нужно {parent} Ур {n}"', self.search)
+
+    def test_text_only_edit_keeps_stable_outputs_and_updates_search(self):
+        paths = ["loc_strings.gen.h", "loc_charset.gen.h", "loc_keys.gen.json"]
+        before = {name: (self.out_dir / name).read_bytes() for name in paths}
+        mtimes = {name: (self.out_dir / name).stat().st_mtime_ns for name in paths}
+        doc = json.loads(json.dumps(self.DOC))
+        doc["strings"]["common.close"]["en"] = "Shut"
+        strings = self.out_dir.parent / "strings.json"
+        strings.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+        loc.main(["generate", "--strings", str(strings), "--out-dir", str(self.out_dir)])
+        self.assertEqual(before, {name: (self.out_dir / name).read_bytes() for name in paths})
+        self.assertEqual(mtimes, {name: (self.out_dir / name).stat().st_mtime_ns for name in paths})
+        changed_source = (self.out_dir / "loc_strings.gen.c").read_text(encoding="utf-8")
+        self.assertNotEqual(self.source, changed_source)
+        self.assertIn('"Shut", /* en */', changed_source)
+        self.assertIn('common.close: ru "ЗАКРЫТЬ"  en "Shut"', (self.out_dir / "loc_strings.gen.txt").read_text(encoding="utf-8"))
 
     def test_forms_table_layout(self):
         # Non-plural: one slot per language. Plural: six CLDR slots per language.
