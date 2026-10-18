@@ -10,6 +10,10 @@ import test from "node:test";
 const testDir = fileURLToPath(new URL(".", import.meta.url));
 const repoRoot = resolve(testDir, "../../..");
 const serverPath = join(repoRoot, "ai_studio", "studio_shell", "server.mjs");
+// Security responses are functional evidence; concurrent build load is not an HTTP latency SLA.
+const configuredBudget = Number.parseInt(process.env.AI_STUDIO_SHELL_TEST_BUDGET_MS || "", 10);
+const INTEGRATION_BUDGET_MS = Number.isSafeInteger(configuredBudget) && configuredBudget >= 5_000 && configuredBudget <= 30_000
+  ? configuredBudget : 30_000;
 
 async function reservePort() {
   const server = createNetServer();
@@ -24,13 +28,13 @@ async function reservePort() {
   return port;
 }
 
-function waitForServer(child) {
+function waitForServer(child, deadline) {
   return new Promise((resolveReady, reject) => {
     let stdout = "";
     let stderr = "";
     const timeout = setTimeout(() => {
       reject(new Error(`studio shell startup timed out\nstdout: ${stdout}\nstderr: ${stderr}`));
-    }, 10_000);
+    }, Math.max(1, deadline - Date.now()));
 
     const cleanup = () => {
       clearTimeout(timeout);
@@ -59,7 +63,7 @@ function waitForServer(child) {
   });
 }
 
-function rawGet(port, target, host = `127.0.0.1:${port}`) {
+function rawGet(port, target, host, deadline) {
   return new Promise((resolveResponse, reject) => {
     let response = "";
     const request = httpRequest({
@@ -82,7 +86,7 @@ function rawGet(port, target, host = `127.0.0.1:${port}`) {
       incoming.once("error", reject);
       incoming.once("end", () => resolveResponse(response));
     });
-    request.setTimeout(5_000, () => request.destroy(new Error(`request timed out: ${target}`)));
+    request.setTimeout(Math.max(1, deadline - Date.now()), () => request.destroy(new Error(`request timed out: ${target}`)));
     request.once("error", reject);
     request.end();
   });
@@ -108,7 +112,8 @@ async function stopServer(child, pidFile) {
   if (existsSync(pidFile)) rmSync(pidFile);
 }
 
-test("malformed percent-encoded request targets return 400 without killing studio shell", async () => {
+test("malformed percent-encoded request targets return 400 without killing studio shell", { timeout: INTEGRATION_BUDGET_MS }, async () => {
+  const deadline = Date.now() + INTEGRATION_BUDGET_MS;
   const port = await reservePort();
   const pidFile = join(repoRoot, "tmp", "ai_studio", `studio_shell_${port}.pid`);
   const child = spawn(process.execPath, [serverPath, String(port)], {
@@ -118,15 +123,15 @@ test("malformed percent-encoded request targets return 400 without killing studi
   });
 
   try {
-    await waitForServer(child);
+    await waitForServer(child, deadline);
 
-    const hostileHost = parseResponse(await rawGet(port, "/", "evil.test"));
+    const hostileHost = parseResponse(await rawGet(port, "/", "evil.test", deadline));
     assert.equal(hostileHost.status, 403);
     assert.equal(hostileHost.body, "forbidden");
 
     const bodies = [];
     for (const target of ["/%", "/%A", "/%C0%AF"]) {
-      const response = parseResponse(await rawGet(port, target));
+      const response = parseResponse(await rawGet(port, target, `127.0.0.1:${port}`, deadline));
       assert.equal(response.status, 400, `unexpected status for ${target}`);
       assert.equal(response.body, "bad request");
       assert.match(response.head.toLowerCase(), /content-type: text\/plain; charset=utf-8/);
@@ -136,16 +141,16 @@ test("malformed percent-encoded request targets return 400 without killing studi
     }
     assert.equal(new Set(bodies).size, 1, "malformed targets must return a deterministic body");
 
-    const rootResponse = parseResponse(await rawGet(port, "/"));
+    const rootResponse = parseResponse(await rawGet(port, "/", `127.0.0.1:${port}`, deadline));
     assert.equal(rootResponse.status, 200);
-    const encodedStaticResponse = parseResponse(await rawGet(port, "/ai_studio/studio_shell/index%2Ehtml"));
+    const encodedStaticResponse = parseResponse(await rawGet(port, "/ai_studio/studio_shell/index%2Ehtml", `127.0.0.1:${port}`, deadline));
     assert.equal(encodedStaticResponse.status, 200, "valid encoded static paths must keep working");
     for (const target of ["/asset_viewer/studio_env.hdr", "/viewer/studio_env.hdr"]) {
-      const previewResponse = parseResponse(await rawGet(port, target));
+      const previewResponse = parseResponse(await rawGet(port, target, `127.0.0.1:${port}`, deadline));
       assert.equal(previewResponse.status, 200, `${target} must use the owned assets/previews store`);
       assert.ok(previewResponse.body.length > 0, `${target} must serve the committed HDR`);
     }
-    const literalPercentResponse = parseResponse(await rawGet(port, "/%25"));
+    const literalPercentResponse = parseResponse(await rawGet(port, "/%25", `127.0.0.1:${port}`, deadline));
     assert.equal(literalPercentResponse.status, 404, "valid percent encoding must not be rejected as malformed");
     assert.equal(child.exitCode, null, "the same studio shell process must remain alive");
   } finally {

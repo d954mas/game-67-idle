@@ -130,7 +130,7 @@ const CHECKS = Object.freeze([
   {
     id: "studio.runtime-automation",
     pythonRoots: ["ai_studio/runtime_automation"],
-    testFiles: ["ai_studio/runtime_automation/web_local_mock_probe.test.mjs"],
+    testRoots: ["ai_studio/runtime_automation"],
   },
   {
     id: "studio.runtime-automation.live",
