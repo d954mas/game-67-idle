@@ -63,14 +63,31 @@ export function createWavedashPlatformAdapter({ host, lifecycle }) {
   function followPortalAudio(instance) {
     if (!lifecycle || typeof lifecycle.audio !== "function") return;
     const apply = (muted) => {
-      try { lifecycle.audio(!muted); } catch { /* the facade is not up */ }
+      lifecycle.audio(!muted);
     };
-    try { apply(Boolean(instance.isMuted && instance.isMuted())); } catch { /* not mirrored yet */ }
+    let muted = false;
+    try { muted = Boolean(instance.isMuted && instance.isMuted()); } catch { /* not mirrored yet */ }
+    apply(muted);
     const events = instance.Events;
     if (!events || typeof instance.on !== "function") return;
+    let callbackFault;
+    let didFault = false;
+    const listener = (payload) => {
+      try {
+        apply(Boolean(payload && payload.isMuted));
+      } catch (error) {
+        didFault = true;
+        callbackFault = error;
+        throw error;
+      }
+    };
     try {
-      muteUnsubscribe = instance.on(events.MUTE_CHANGED, (payload) => apply(Boolean(payload && payload.isMuted)));
-    } catch { /* the host is not broadcasting */ }
+      muteUnsubscribe = instance.on(events.MUTE_CHANGED, listener);
+    } catch (error) {
+      if (didFault) throw callbackFault;
+      /* The host can omit this optional notification channel. */
+    }
+    if (didFault) throw callbackFault;
   }
 
   async function ready() {
@@ -82,25 +99,25 @@ export function createWavedashPlatformAdapter({ host, lifecycle }) {
   /* `init()` calls `loadComplete()` internally, and load completion is what
      lifts the host loading screen. Whichever of the two loading milestones the
      game reaches first is the honest moment to reveal it. */
-  function reveal(instance) {
+  async function reveal(instance) {
     if (revealed || !instance) return;
     revealed = true;
-    try { instance.init(); } catch { /* the host is not listening */ }
+    try { await instance.init(); } catch { /* the host is not listening */ }
   }
 
   async function gameLoadingProgress(progress01) {
     const instance = await sdk();
     if (!instance || revealed || typeof instance.updateLoadProgressZeroToOne !== "function") return;
     const progress = Math.min(1, Math.max(0, Number(progress01) || 0));
-    try { instance.updateLoadProgressZeroToOne(progress); } catch { /* the host is not listening */ }
+    try { await instance.updateLoadProgressZeroToOne(progress); } catch { /* the host is not listening */ }
   }
 
   async function gameLoadingFinished() {
-    reveal(await sdk());
+    await reveal(await sdk());
   }
 
   async function gameReady() {
-    reveal(await sdk());
+    await reveal(await sdk());
   }
 
   /* Wavedash measures a session by its own heartbeat and exposes no

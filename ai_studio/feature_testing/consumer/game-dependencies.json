@@ -44,7 +44,7 @@
     {
       "id": "platform-sdk",
       "source": "features/platform-sdk",
-      "version": "2.4.0",
+      "version": "3.0.0",
       "compatibility": "validated by the template build and test suite"
     },
     {

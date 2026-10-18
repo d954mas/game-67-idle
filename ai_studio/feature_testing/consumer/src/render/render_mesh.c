@@ -33,7 +33,7 @@ void render_mesh_init(nt_resource_t mesh_vs, nt_resource_t mesh_fs, nt_resource_
     nt_mesh_comp_init(&(nt_mesh_comp_desc_t){.capacity = 128});
     nt_material_comp_init(&(nt_material_comp_desc_t){.capacity = 128});
     nt_drawable_comp_init(&(nt_drawable_comp_desc_t){.capacity = 128});
-    nt_mesh_renderer_init(&(nt_mesh_renderer_desc_t){.max_pipelines = 16});
+    nt_mesh_renderer_init();
 
     s_material = shader_program_material(mesh_vs, mesh_fs, &(nt_material_create_desc_t){
         .depth_test = true,

@@ -1,5 +1,6 @@
 const POKI_SDK_URL = "https://game-cdn.poki.com/scripts/v2/poki-sdk.js";
 const AD_TIMEOUT_MS = 120000;
+const VENDOR_FAILURE = Symbol("vendor failure");
 
 // An adblocker can leave PokiSDK.init() pending forever while it waits for ad
 // scripts; the game must never hang on that promise, so past this deadline the
@@ -12,6 +13,11 @@ export function createPokiPlatformAdapter({ host, lifecycle }) {
   let destroyed = false;
   let lastLoadingProgress = 0;
   let lastSentLoadingProgress = -1;
+  let sdkCoreLoaded = false;
+  let lastObservedError = -1000;
+  let lastSentError = -1000;
+  let errorFlushTimer = null;
+  const pendingErrors = [];
   const loadingProgressPayload = { percentageDone: 0 };
 
   function windowRef() {
@@ -22,20 +28,151 @@ export function createPokiPlatformAdapter({ host, lifecycle }) {
     return (host && host.document) || (windowRef() && windowRef().document);
   }
 
-  function withAdDeadline(operation, failedResult) {
-    return new Promise((resolve) => {
-      let settled = false;
+  function now() {
+    const root = windowRef();
+    return root.performance && typeof root.performance.now === "function" ? root.performance.now() : Date.now();
+  }
+
+  function noteObservedError() {
+    lastObservedError = now();
+  }
+
+  function onSdkScriptLoad(event) {
+    const source = event && event.target && event.target.src;
+    if (typeof source === "string" && /\/poki-sdk-(?:core|playground|hoist|app|netflix)-[a-f0-9]{40}\.js/.test(source)) {
+      sdkCoreLoaded = true;
+      notifyDiagnosticsReady();
+      flushErrors();
+    }
+  }
+
+  function notifyDiagnosticsReady() {
+    try {
       const root = windowRef();
-      const timer = (root.setTimeout || setTimeout)(() => settle(failedResult), AD_TIMEOUT_MS);
-
-      function settle(result) {
-        if (settled) return;
-        settled = true;
-        (root.clearTimeout || clearTimeout)(timer);
-        resolve(result);
+      const EventType = root && root.Event;
+      if (root && typeof root.dispatchEvent === "function" && typeof EventType === "function") {
+        root.dispatchEvent(new EventType("platform-diagnostics-ready"));
       }
+    } catch {}
+  }
 
-      operation.then(settle, () => settle(failedResult));
+  function flushErrors() {
+    if (errorFlushTimer || destroyed || !pendingErrors.length) return;
+    const root = windowRef();
+    const sdk = root.PokiSDK;
+    if (!sdkCoreLoaded || !sdk || typeof sdk.captureError !== "function") return;
+    const delay = Math.max(0, lastObservedError + 200 - now(), lastSentError + 200 - now());
+    if (delay > 0) {
+      errorFlushTimer = (root.setTimeout || setTimeout)(() => {
+        errorFlushTimer = null;
+        flushErrors();
+      }, delay);
+      return;
+    }
+    const error = pendingErrors.shift();
+    lastSentError = now();
+    try {
+      sdk.captureError(error);
+    } catch {}
+    if (pendingErrors.length) flushErrors();
+  }
+
+  const errorSink = {
+    captureError(error) {
+      if (destroyed) return;
+      pendingErrors.push(error);
+      flushErrors();
+    },
+  };
+
+  const rootForErrors = windowRef();
+  if (rootForErrors && typeof rootForErrors.addEventListener === "function") {
+    rootForErrors.addEventListener("error", noteObservedError);
+    rootForErrors.addEventListener("unhandledrejection", noteObservedError);
+  }
+  const documentForErrors = documentRef();
+  if (documentForErrors && typeof documentForErrors.addEventListener === "function") {
+    documentForErrors.addEventListener("load", onSdkScriptLoad, true);
+  }
+
+  function reportLateFault(error) {
+    const root = windowRef();
+    const throwFault = () => { throw error; };
+    if (typeof root.queueMicrotask === "function") {
+      root.queueMicrotask(throwFault);
+      return;
+    }
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(throwFault);
+      return;
+    }
+    Promise.resolve().then(throwFault);
+  }
+
+  function createAdBoundary(timeoutResult) {
+    const root = windowRef();
+    let settled = false;
+    let faulted = false;
+    let resolveOuter;
+    let rejectOuter;
+    const outer = new Promise((resolve, reject) => {
+      resolveOuter = resolve;
+      rejectOuter = reject;
+    });
+    const timer = (root.setTimeout || setTimeout)(() => settle(timeoutResult), AD_TIMEOUT_MS);
+
+    function settle(result) {
+      if (settled || faulted) return;
+      settled = true;
+      (root.clearTimeout || clearTimeout)(timer);
+      resolveOuter(result);
+    }
+
+    function fault(error) {
+      if (faulted) return;
+      faulted = true;
+      if (settled) {
+        reportLateFault(error);
+        return;
+      }
+      settled = true;
+      (root.clearTimeout || clearTimeout)(timer);
+      rejectOuter(error);
+    }
+
+    function bridge(callback) {
+      if (faulted) return false;
+      try {
+        callback();
+      } catch (error) {
+        fault(error);
+        return false;
+      }
+      return !faulted;
+    }
+
+    return { bridge, faulted: () => faulted, promise: outer, settle };
+  }
+
+  function startAd(boundary, invoke, complete) {
+    void sdkAvailable().then((sdk) => {
+      if (!sdk || destroyed) {
+        complete(null);
+        return;
+      }
+      let vendorOperation;
+      try {
+        vendorOperation = invoke(sdk);
+      } catch (error) {
+        if (!boundary.faulted()) complete(VENDOR_FAILURE);
+        return;
+      }
+      Promise.resolve(vendorOperation).then(
+        (result) => { if (!boundary.faulted()) complete(result); },
+        () => { if (!boundary.faulted()) complete(VENDOR_FAILURE); },
+      );
+    }, () => {
+      if (!boundary.faulted()) complete(VENDOR_FAILURE);
     });
   }
 
@@ -88,7 +225,11 @@ export function createPokiPlatformAdapter({ host, lifecycle }) {
   async function withSdk(callback) {
     const sdk = await sdkAvailable();
     if (!sdk || destroyed) return null;
-    return callback(sdk);
+    try {
+      return await callback(sdk);
+    } catch {
+      return null;
+    }
   }
 
   async function gameLoadingFinished() {
@@ -101,7 +242,7 @@ export function createPokiPlatformAdapter({ host, lifecycle }) {
     if (typeof sdkInstance.gameLoadingProgress === "function") {
       loadingProgressPayload.percentageDone = lastLoadingProgress;
       try {
-        sdkInstance.gameLoadingProgress(loadingProgressPayload);
+        Promise.resolve(sdkInstance.gameLoadingProgress(loadingProgressPayload)).catch(() => {});
       } catch {}
     }
   }
@@ -127,39 +268,50 @@ export function createPokiPlatformAdapter({ host, lifecycle }) {
   }
 
   async function measure(category, what, action) {
-    await withSdk((sdk) => {
-      if (typeof sdk.measure === "function") sdk.measure(category, what, action);
-    });
+    await withSdk((sdk) => (typeof sdk.measure === "function"
+      ? sdk.measure(category, what, action)
+      : null));
   }
 
-  async function showInterstitial(placement, requestId) {
+  function showInterstitial(placement, requestId) {
     const failed = { supported: true, shown: false, reason: "failed" };
     const timeout = { ...failed, reason: "timeout" };
-    const shown = await withAdDeadline(withSdk((sdk) => {
+    const boundary = createAdBoundary(timeout);
+    const visible = (value) => boundary.bridge(() => {
+      if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, value);
+    });
+    startAd(boundary, (sdk) => {
       if (typeof sdk.commercialBreak !== "function") return null;
-      return sdk.commercialBreak(() => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true); }).then(() => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); return true; });
-    }).catch(() => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); return failed; }), timeout);
-    if (shown === timeout) return timeout;
-    if (shown === failed) return failed;
-    return shown ? { supported: true, shown: true } : { supported: false, shown: false, reason: "not_ready" };
+      return sdk.commercialBreak(() => { visible(true); });
+    }, (result) => {
+      if (result !== null) visible(false);
+      if (boundary.faulted()) return;
+      if (result === null) boundary.settle({ supported: false, shown: false, reason: "not_ready" });
+      else if (result === VENDOR_FAILURE) boundary.settle(failed);
+      else boundary.settle({ supported: true, shown: true });
+    });
+    return boundary.promise;
   }
 
-  async function showRewarded(placement, requestId) {
+  function showRewarded(placement, requestId) {
     const failed = { supported: true, shown: false, rewarded: false, reason: "failed" };
     const timeout = { ...failed, reason: "timeout" };
-    const rewarded = await withAdDeadline(withSdk((sdk) => {
+    const boundary = createAdBoundary(timeout);
+    const visible = (value) => boundary.bridge(() => {
+      if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, value);
+    });
+    startAd(boundary, (sdk) => {
       if (typeof sdk.rewardedBreak !== "function") return null;
-      return sdk.rewardedBreak({ onStart: () => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true); } }).then((result) => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); return result; });
-    }).catch(() => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); return failed; }), timeout);
-    if (rewarded === timeout) return timeout;
-    if (rewarded === failed) return failed;
-    if (rewarded === null) {
-      return { supported: false, shown: false, rewarded: false, reason: "not_ready" };
-    }
-    if (!rewarded) {
-      return { supported: true, shown: false, rewarded: false, reason: "skipped" };
-    }
-    return { supported: true, shown: true, rewarded: true };
+      return sdk.rewardedBreak({ onStart: () => { visible(true); } });
+    }, (result) => {
+      if (result !== null) visible(false);
+      if (boundary.faulted()) return;
+      if (result === null) boundary.settle({ supported: false, shown: false, rewarded: false, reason: "not_ready" });
+      else if (result === VENDOR_FAILURE) boundary.settle(failed);
+      else if (result) boundary.settle({ supported: true, shown: true, rewarded: true });
+      else boundary.settle({ supported: true, shown: false, rewarded: false, reason: "skipped" });
+    });
+    return boundary.promise;
   }
 
   /* Poki's `sendHighscore` is undocumented for SDK v2, so it stays outside the
@@ -171,6 +323,18 @@ export function createPokiPlatformAdapter({ host, lifecycle }) {
   return {
     destroy() {
       destroyed = true;
+      const root = windowRef();
+      if (errorFlushTimer) (root.clearTimeout || clearTimeout)(errorFlushTimer);
+      errorFlushTimer = null;
+      pendingErrors.length = 0;
+      if (root && typeof root.removeEventListener === "function") {
+        root.removeEventListener("error", noteObservedError);
+        root.removeEventListener("unhandledrejection", noteObservedError);
+      }
+      const document = documentRef();
+      if (document && typeof document.removeEventListener === "function") {
+        document.removeEventListener("load", onSdkScriptLoad, true);
+      }
     },
     fetchEntries: unsupportedLeaderboard,
     gameLoadingProgress,
@@ -187,11 +351,10 @@ export function createPokiPlatformAdapter({ host, lifecycle }) {
     /* No portal-owned sound switches here; the game's volume is its own. */
     setSoundMuted() {},
     soundSwitches() { return false; },
-    /* A page's crash reporter hands its reports to Poki's own error reporting: the SDK object once its
-       script has defined captureError, null before that or without it. */
+    /* Poki's core reports become callable only after its own hashed bundle loads. */
     errorSink() {
       const sdk = windowRef().PokiSDK;
-      return sdk && typeof sdk.captureError === "function" ? sdk : null;
+      return !destroyed && sdkCoreLoaded && sdk && typeof sdk.captureError === "function" ? errorSink : null;
     },
     hideBanner() {
       return Promise.resolve();

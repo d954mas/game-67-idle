@@ -77,7 +77,7 @@ void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t 
         .label = "ui_sprite",
     });
     nt_ui_set_sprite_material(s_ctx, s_sprite_material);
-    nt_ui_set_text_material(s_ctx, s_text_material, 0.0F);
+    nt_ui_set_text_material(s_ctx, s_text_material);
 
     theme_init(s_atlas);
 }

@@ -116,6 +116,9 @@ JavaScript artifact.
   subscribers. It is not a second game event API; selected bridges translate
   finite game-owned events into portal analytics triples.
 - Publish target manifest contracts for itch, Poki, Yandex Games, and Playgama.
+- Shared Web crash delivery and early loader diagnostics. The engine keeps the
+  journal; the feature owns transport, bounded web-only persistence and browser
+  graphics signals. Games supply identity/context and retain their loading UI.
 
 ## What It Does Not Own
 

@@ -53,6 +53,8 @@ endif()
 
 if(EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_platform_web)
+    include("${GAME_REPO_ROOT}/features/platform-sdk/cmake/PlatformSdk.cmake")
+    platform_sdk_crash(${GAME_TARGET})
     target_sources(${GAME_TARGET} PRIVATE src/runtime_build_marker.c)
     target_compile_definitions(${GAME_TARGET} PRIVATE
         GAME_RUNTIME_BUILD_FINGERPRINT="${GAME_RUNTIME_BUILD_FINGERPRINT}"

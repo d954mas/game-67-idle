@@ -150,6 +150,44 @@ progress comparison and runtime loading:
     `GAME_PLATFORM_SDK_DEBUG_UI=1` only in non-release builds. Release builds
     must keep that define off.
 
+## Web diagnostics (3.0)
+
+SDK 3.0 moves the reporter out of individual games. Existing copied shells and
+packagers must be migrated; changing a dependency version alone is insufficient.
+Keep engine crash fixes installed and verified before removing a game's fallback.
+
+For Web targets, include `cmake/PlatformSdk.cmake` and call
+`platform_sdk_crash(target)` before configuring the HTML. It links `nt_crash`,
+derives `GAME_CRASH_STORAGE_KEY` from `game.json` (or `template.json`), and reads
+the shared source into `PLATFORM_SDK_DIAGNOSTICS_JS`. Set
+`GAME_CRASH_STORAGE_PREFIX` before this call only to retain an existing storage
+namespace. The same prefix must reach the C definition and HTML installation.
+
+Call `nt_crash_init(GAME_CRASH_STORAGE_KEY, GAME_RUNTIME_BUILD_FINGERPRINT)` once,
+after engine initialization and before window/graphics. Set non-secret context
+through `nt_crash_set_context()` at state changes. No previous-record C buffer or
+replay bridge is needed; shared JS reads the documented storage key directly.
+
+Embed the source in the starter's `platform-diagnostics` script block after the
+frozen platform config and before SDK/runtime loading. Install it with the game
+runtime URL and generated prefix. The returned `report(kind, error)` operation
+handles explicit loader failures; `intentionalLoss()` suppresses the existing
+deliberate WebGL loss probe. Keep fatal overlay handling in the shell, including
+its pre-init `Module.onAbort` handler. Catch loader I/O failures separately from
+the runtime success callback. Local SDK module failure is fatal; a blocked remote
+portal SDK keeps the adapter's playable fallback.
+
+The shared source must remain a single source dependency; do not copy an editable
+reporter into each game. The packager checks the executable inline source and
+installation arguments, while CMake source dependencies regenerate the shell.
+If a game keeps a CMake `GAME_CRASH_STORAGE_PREFIX` override or uses a runtime
+file other than `game.js`, its package wrapper passes the same
+`crashStoragePrefix` and `runtimeScript` values to `validateWebArtifact`,
+`packageWebArtifact`, and standalone `verifyWebPackage`. The package call
+forwards them to the reopened-ZIP check, so a stale generated reporter fails.
+Keep low-level legacy HTTP portal instrumentation until its separate retirement
+or replacement decision; it is not all duplicate crash reporting.
+
 ## Verify
 
 Current validation:

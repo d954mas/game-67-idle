@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "platform-sdk",
-  "version": "2.4.0",
+  "version": "3.0.0",
   "title": "Platform SDK",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -18,13 +18,15 @@
     "Node.js for platform-sdk tests and scorecard/artifact CLIs"
   ],
   "commands": {
-    "test": "node --test features/platform-sdk/tests/platform_sdk.test.mjs features/platform-sdk/tests/platform_storage.test.mjs features/platform-sdk/tests/platform_sdk_runtime_bridge.test.mjs",
+    "test": "node --test features/platform-sdk/tests/platform_sdk.test.mjs features/platform-sdk/tests/platform_storage.test.mjs features/platform-sdk/tests/platform_sdk_runtime_bridge.test.mjs features/platform-sdk/tests/runtime_diagnostics.test.mjs",
+    "test_install": "node --test features/platform-sdk/tests/runtime_diagnostics_install.test.mjs",
     "test_web": "node --test features/platform-sdk/tests/platform_sdk_web.test.mjs",
     "generate_release_bundles": "node features/platform-sdk/scripts/generate_release_bundles.mjs",
     "scorecard": "node features/platform-sdk/scripts/scorecard.mjs --input <events.ndjson> --pretty",
     "inspect": "node features/platform-sdk/scripts/artifact_tools.mjs inspect --target <target> --artifact <artifact-dir>"
   },
   "provides": [
+    "shared bounded Web crash delivery and pre-runtime diagnostics without a second engine journal",
     "target-to-platform-sdk mapping",
     "C-owned game-facing PlatformSdk wrapper contract",
     "build-time adapter selection",

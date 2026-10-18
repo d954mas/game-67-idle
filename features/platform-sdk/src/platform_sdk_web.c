@@ -40,29 +40,29 @@ EM_JS_DEPS(platform_sdk_web_backend, "$UTF8ToString,$stringToNewUTF8")
    installed. */
 EM_JS(void, platform_sdk_web_install_portal_hooks, (void), {
     globalThis.__platformSdkPortalPause = function () {
-        try { _platform_sdk_web_portal_pause(); } catch (e) {}
+        _platform_sdk_web_portal_pause();
     };
     globalThis.__platformSdkAdVisible = function (requestId, visible) {
-        try { _platform_sdk_web_ad_visible(requestId >>> 0, visible ? 1 : 0); } catch (e) {}
+        _platform_sdk_web_ad_visible(requestId >>> 0, visible ? 1 : 0);
     };
     globalThis.__platformSdkPortalResume = function () {
-        try { _platform_sdk_web_portal_resume(); } catch (e) {}
+        _platform_sdk_web_portal_resume();
     };
     globalThis.__platformSdkPortalAudio = function (enabled) {
-        try { _platform_sdk_web_portal_audio(enabled ? 1 : 0); } catch (e) {}
+        _platform_sdk_web_portal_audio(enabled ? 1 : 0);
     };
     globalThis.__platformSdkPortalSound = function (sound, muted) {
-        try { _platform_sdk_web_portal_sound(sound | 0, muted ? 1 : 0); } catch (e) {}
+        _platform_sdk_web_portal_sound(sound | 0, muted ? 1 : 0);
     };
     var lifecycle = globalThis.__platformSdkLifecycleState;
     if (lifecycle && typeof lifecycle === "object") {
-        try { _platform_sdk_web_portal_audio(lifecycle.audioEnabled === false ? 0 : 1); } catch (e) {}
+        _platform_sdk_web_portal_audio(lifecycle.audioEnabled === false ? 0 : 1);
         var sounds = Array.isArray(lifecycle.soundMuted) ? lifecycle.soundMuted : [];
         for (var sound = 0; sound < sounds.length; sound++) {
-            try { _platform_sdk_web_portal_sound(sound, sounds[sound] ? 1 : 0); } catch (e) {}
+            _platform_sdk_web_portal_sound(sound, sounds[sound] ? 1 : 0);
         }
         if (lifecycle.paused) {
-            try { _platform_sdk_web_portal_pause(); } catch (e) {}
+            _platform_sdk_web_portal_pause();
         }
     }
 })
@@ -70,13 +70,9 @@ EM_JS(void, platform_sdk_web_install_portal_hooks, (void), {
 EM_JS(char *, platform_sdk_web_backend_locale, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.getLocale !== "function") return 0;
-    try {
-        var tag = backend.getLocale();
-        if (!tag) return 0;
-        return stringToNewUTF8(String(tag));
-    } catch (e) {
-        return 0;
-    }
+    var tag = backend.getLocale();
+    if (!tag) return 0;
+    return stringToNewUTF8(String(tag));
 })
 
 /* A player who is already signed in to the portal is known the moment the SDK
@@ -84,15 +80,13 @@ EM_JS(char *, platform_sdk_web_backend_locale, (void), {
 EM_JS(void, platform_sdk_web_backend_read_player, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.getPlayer !== "function") return;
-    try {
-        Promise.resolve(backend.getPlayer()).then(function (player) {
-            player = player || {};
-            _platform_sdk_web_set_player(
-                player.authorized ? 1 : 0,
-                stringToNewUTF8(String(player.name || "")),
-                stringToNewUTF8(String(player.avatarUrl || "")));
-        }, function () {});
-    } catch (e) {}
+    Promise.resolve(backend.getPlayer()).then(function (player) {
+        player = player || {};
+        _platform_sdk_web_set_player(
+            player.authorized ? 1 : 0,
+            stringToNewUTF8(String(player.name || "")),
+            stringToNewUTF8(String(player.avatarUrl || "")));
+    });
 })
 
 EM_JS(int, platform_sdk_web_backend_init, (void), {
@@ -101,97 +95,72 @@ EM_JS(int, platform_sdk_web_backend_init, (void), {
         _platform_sdk_web_complete_init(0);
         return 0;
     }
-    try {
-        Promise.resolve(backend.ready()).then(function (ready) {
-            _platform_sdk_web_complete_init(ready ? 1 : 0);
-            if (ready) _platform_sdk_web_read_player();
-        }, function () {
-            _platform_sdk_web_complete_init(0);
-        });
-        return 0;
-    } catch (e) {
-        _platform_sdk_web_complete_init(0);
-        return 0;
-    }
+    Promise.resolve(backend.ready()).then(function (ready) {
+        _platform_sdk_web_complete_init(ready ? 1 : 0);
+        if (ready) _platform_sdk_web_read_player();
+    });
+    return 0;
 })
 
 EM_JS(void, platform_sdk_web_backend_game_loading_progress, (double progress01), {
     var progress = Math.max(0, Math.min(1, Number(progress01) || 0));
     if (typeof globalThis.__platformSdkSetLoadingProgress === "function") {
-        try {
-            globalThis.__platformSdkSetLoadingProgress(progress);
-        } catch (e) {}
+        globalThis.__platformSdkSetLoadingProgress(progress);
     }
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.gameLoadingProgress !== "function") return;
-    try {
-        backend.gameLoadingProgress(progress);
-    } catch (e) {}
+    backend.gameLoadingProgress(progress);
 })
 
 EM_JS(void, platform_sdk_web_backend_game_loading_finished, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (typeof globalThis.__platformSdkHideLoadingOverlay === "function") {
-        try {
-            globalThis.__platformSdkHideLoadingOverlay();
-        } catch (e) {}
+        globalThis.__platformSdkHideLoadingOverlay();
     }
     if (!backend || typeof backend.gameLoadingFinished !== "function") return;
-    try {
-        Promise.resolve(backend.gameLoadingFinished()).catch(function () {});
-    } catch (e) {}
+    Promise.resolve(backend.gameLoadingFinished());
 })
 
 EM_JS(void, platform_sdk_web_backend_show_banner, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.showBanner !== "function") return;
-    try {
-        Promise.resolve(backend.showBanner()).catch(function () {});
-    } catch (e) {}
+    Promise.resolve(backend.showBanner());
 })
 
 EM_JS(void, platform_sdk_web_backend_hide_banner, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.hideBanner !== "function") return;
-    try {
-        Promise.resolve(backend.hideBanner()).catch(function () {});
-    } catch (e) {}
+    Promise.resolve(backend.hideBanner());
 })
 
 EM_JS(int, platform_sdk_web_backend_sound_switches, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.soundSwitches !== "function") return 0;
-    try { return backend.soundSwitches() ? 1 : 0; } catch (e) { return 0; }
+    return backend.soundSwitches() ? 1 : 0;
 })
 
 EM_JS(void, platform_sdk_web_backend_set_sound_muted, (int sound, int muted), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.setSoundMuted !== "function") return;
-    try { backend.setSoundMuted(sound, muted !== 0); } catch (e) {}
+    backend.setSoundMuted(sound, muted !== 0);
 })
 
 EM_JS(void, platform_sdk_web_backend_game_ready, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.gameReady !== "function") return;
-    try {
-        Promise.resolve(backend.gameReady()).catch(function () {});
-    } catch (e) {}
+    Promise.resolve(backend.gameReady());
 })
 
 EM_JS(void, platform_sdk_web_backend_gameplay_start, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.gameplayStart !== "function") return;
-    try {
-        Promise.resolve(backend.gameplayStart()).catch(function () {});
-    } catch (e) {}
+    Promise.resolve(backend.gameplayStart());
 })
 
 EM_JS(void, platform_sdk_web_backend_gameplay_stop, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.gameplayStop !== "function") return;
-    try {
-        Promise.resolve(backend.gameplayStop()).catch(function () {});
-    } catch (e) {}
+    Promise.resolve(backend.gameplayStop());
 })
 
 EM_JS(void, platform_sdk_web_backend_measure,
@@ -201,9 +170,7 @@ EM_JS(void, platform_sdk_web_backend_measure,
     var category = category_ptr ? UTF8ToString(category_ptr) : "";
     var what = what_ptr ? UTF8ToString(what_ptr) : "";
     var action = action_ptr ? UTF8ToString(action_ptr) : "";
-    try {
-        Promise.resolve(backend.measure(category, what, action)).catch(function () {});
-    } catch (e) {}
+    Promise.resolve(backend.measure(category, what, action));
 })
 
 EM_JS(int, platform_sdk_web_backend_show_interstitial, (const char *placement_ptr, unsigned int request_id), {
@@ -222,21 +189,14 @@ EM_JS(int, platform_sdk_web_backend_show_interstitial, (const char *placement_pt
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.showInterstitial !== "function") return 0;
     var placement = placement_ptr ? UTF8ToString(placement_ptr) : "";
-    try {
-        Promise.resolve(backend.showInterstitial(placement, request_id)).then(function (result) {
-            result = result || {};
-            _platform_sdk_web_complete_interstitial(
-                request_id, result.supported ? 1 : 0,
-                result.shown ? 1 : 0,
-                reasonCode(result.reason, result.shown));
-        }, function () {
-            _platform_sdk_web_complete_interstitial(request_id, 1, 0, 4);
-        });
-        return 1;
-    } catch (e) {
-        _platform_sdk_web_complete_interstitial(request_id, 1, 0, 4);
-        return 1;
-    }
+    Promise.resolve(backend.showInterstitial(placement, request_id)).then(function (result) {
+        result = result || {};
+        _platform_sdk_web_complete_interstitial(
+            request_id, result.supported ? 1 : 0,
+            result.shown ? 1 : 0,
+            reasonCode(result.reason, result.shown));
+    });
+    return 1;
 })
 
 EM_JS(int, platform_sdk_web_backend_show_rewarded, (const char *placement_ptr, unsigned int request_id), {
@@ -256,22 +216,15 @@ EM_JS(int, platform_sdk_web_backend_show_rewarded, (const char *placement_ptr, u
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.showRewarded !== "function") return 0;
     var placement = placement_ptr ? UTF8ToString(placement_ptr) : "";
-    try {
-        Promise.resolve(backend.showRewarded(placement, request_id)).then(function (result) {
-            result = result || {};
-            _platform_sdk_web_complete_rewarded(
-                request_id, result.supported ? 1 : 0,
-                result.shown ? 1 : 0,
-                result.rewarded ? 1 : 0,
-                reasonCode(result.reason, result.rewarded, result.shown));
-        }, function () {
-            _platform_sdk_web_complete_rewarded(request_id, 1, 0, 0, 4);
-        });
-        return 1;
-    } catch (e) {
-        _platform_sdk_web_complete_rewarded(request_id, 1, 0, 0, 4);
-        return 1;
-    }
+    Promise.resolve(backend.showRewarded(placement, request_id)).then(function (result) {
+        result = result || {};
+        _platform_sdk_web_complete_rewarded(
+            request_id, result.supported ? 1 : 0,
+            result.shown ? 1 : 0,
+            result.rewarded ? 1 : 0,
+            reasonCode(result.reason, result.rewarded, result.shown));
+    });
+    return 1;
 })
 
 EM_JS(int, platform_sdk_web_backend_login, (void), {
@@ -286,38 +239,26 @@ EM_JS(int, platform_sdk_web_backend_login, (void), {
 
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.login !== "function") return 0;
-    try {
-        Promise.resolve(backend.login()).then(function (result) {
-            result = result || {};
-            _platform_sdk_web_complete_login(
-                result.supported ? 1 : 0,
-                result.authorized ? 1 : 0,
-                reasonCode(result.reason),
-                stringToNewUTF8(String(result.name || "")),
-                stringToNewUTF8(String(result.avatarUrl || "")));
-        }, function () {
-            _platform_sdk_web_complete_login(1, 0, 3, 0, 0);
-        });
-        return 1;
-    } catch (e) {
-        _platform_sdk_web_complete_login(1, 0, 3, 0, 0);
-        return 1;
-    }
+    Promise.resolve(backend.login()).then(function (result) {
+        result = result || {};
+        _platform_sdk_web_complete_login(
+            result.supported ? 1 : 0,
+            result.authorized ? 1 : 0,
+            reasonCode(result.reason),
+            stringToNewUTF8(String(result.name || "")),
+            stringToNewUTF8(String(result.avatarUrl || "")));
+    });
+    return 1;
 })
 
-/* Adapter answers speak the leaderboard status vocabulary; anything else,
-   including a rejected promise, is a transport failure and never a refusal. */
+/* Adapter answers speak the leaderboard status vocabulary. */
 EM_JS(int, platform_sdk_web_backend_leaderboard_caps, (const char *board_id_ptr), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.leaderboardCaps !== "function") return 0;
     var boardId = board_id_ptr ? UTF8ToString(board_id_ptr) : "";
-    try {
-        var caps = backend.leaderboardCaps(boardId) || {};
-        return (caps.canRead ? 1 : 0) | (caps.canWrite ? 2 : 0) |
-               (caps.needsLogin ? 4 : 0) | (caps.nativePopup ? 8 : 0);
-    } catch (e) {
-        return 0;
-    }
+    var caps = backend.leaderboardCaps(boardId) || {};
+    return (caps.canRead ? 1 : 0) | (caps.canWrite ? 2 : 0) |
+           (caps.needsLogin ? 4 : 0) | (caps.nativePopup ? 8 : 0);
 })
 
 EM_JS(int, platform_sdk_web_backend_leaderboard_submit,
@@ -339,17 +280,10 @@ EM_JS(int, platform_sdk_web_backend_leaderboard_submit,
         if (generation !== _platform_sdk_web_leaderboard_generation()) return;
         _platform_sdk_web_complete_leaderboard_submit(stringToNewUTF8(boardId), scope, status);
     }
-    try {
-        Promise.resolve(backend.submitScore(boardId, scope, value, extra)).then(function (result) {
-            settle(statusCode((result || {}).status));
-        }, function () {
-            settle(4);
-        });
-        return 1;
-    } catch (e) {
-        settle(4);
-        return 1;
-    }
+    Promise.resolve(backend.submitScore(boardId, scope, value, extra)).then(function (result) {
+        settle(statusCode((result || {}).status));
+    });
+    return 1;
 })
 
 EM_JS(int, platform_sdk_web_backend_leaderboard_fetch, (const char *board_id_ptr, int scope), {
@@ -396,38 +330,25 @@ EM_JS(int, platform_sdk_web_backend_leaderboard_fetch, (const char *board_id_ptr
             player ? (Number(player.rank) | 0) : 0,
             player ? (Number(player.value) || 0) : 0);
     }
-    try {
-        Promise.resolve(backend.fetchEntries(boardId, scope)).then(function (result) {
-            result = result || {};
-            settle(statusCode(result.status), result);
-        }, function () {
-            settle(4, null);
-        });
-        return 1;
-    } catch (e) {
-        settle(4, null);
-        return 1;
-    }
+    Promise.resolve(backend.fetchEntries(boardId, scope)).then(function (result) {
+        result = result || {};
+        settle(statusCode(result.status), result);
+    });
+    return 1;
 })
 
 EM_JS(int, platform_sdk_web_backend_leaderboard_open, (const char *board_id_ptr), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.showLeaderboard !== "function") return 0;
     var boardId = board_id_ptr ? UTF8ToString(board_id_ptr) : "";
-    try {
-        Promise.resolve(backend.showLeaderboard(boardId)).catch(function () {});
-        return 1;
-    } catch (e) {
-        return 0;
-    }
+    Promise.resolve(backend.showLeaderboard(boardId));
+    return 1;
 })
 
 EM_JS(void, platform_sdk_web_backend_destroy, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.destroy !== "function") return;
-    try {
-        backend.destroy();
-    } catch (e) {}
+    backend.destroy();
 })
 /* clang-format on */
 

@@ -112,6 +112,8 @@ if(EMSCRIPTEN)
     endif()
 
     file(MAKE_DIRECTORY "${GAME_OUTPUT_DIR}")
+    include("${PLATFORM_SDK_DIR}/cmake/PlatformSdk.cmake")
+    platform_sdk_crash(${GAME_TARGET})
     configure_file("${PLATFORM_SDK_WEB}/platform-sdk.js"
                    "${GAME_OUTPUT_DIR}/platform-sdk.js" COPYONLY)
     configure_file("${PLATFORM_SDK_WEB}/adapters/${GAME_PLATFORM_SDK}.js"

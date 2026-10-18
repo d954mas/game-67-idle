@@ -35,6 +35,39 @@ its bridge. The game resumes only when the last effective pause reason clears.
 A watchdog timeout settles the operation without proving that the SDK closed
 its overlay; late visibility remains correlated until a definitive close.
 
+A fault in a lifecycle or completion callback is not a portal refusal. The
+adapter converts raw vendor failures into supported results before first-party
+callbacks; the C bridge does not convert callback faults into a second completion.
+An ad operation that faults stops making further C calls. If it is still pending,
+it rejects with the original fault; after timeout, a late callback fault escapes
+through one microtask throw. Healthy late visibility and independent portal
+pause/audio events retain their normal contracts.
+
+GamePush global ad events carry no request identity. Only lifecycle callbacks
+emitted synchronously while an ad invocation is in progress belong to that
+operation; later global events remain independent portal signals.
+
+## Web crash ownership
+
+`nt_crash` is explicitly initialized before window/graphics startup. It owns the
+WARN/ERROR journal, runtime identity, context and one persistent raw record.
+It does not send reports. The shared inline reporter reads that record's public
+storage key and listens to `nt-crash`; it never calls WASM after a fault and does
+not mirror the engine journal.
+
+The shell embeds the single feature source before loading the SDK/runtime bundle.
+A failed bundle download therefore still has a reporter. The shell owns fatal
+and recovery UI and explicitly reports its loader failures. Only configured
+runtime and local `platform-sdk.js`/`platform-sdk-adapter.js` errors without
+engine capture use one separate bounded web record; there is no page-wide catch.
+Known extension/portal exceptions are excluded.
+
+Records retain their original build/time. A current engine report takes priority
+over its deferred WASM/abort fallback. SDK invocation has no receipt acknowledgement:
+raw records remain stored and may replay on every launch. Only the web record has
+a 24-hour lifetime; the engine record remains until overwritten or explicitly
+cleared. A successful invocation must not write a persistent sent marker.
+
 ## Storage contract
 
 Backend `loadData(key)` resolves one of `{ status: "found", value }`,

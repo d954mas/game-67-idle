@@ -18,6 +18,7 @@
 #include "render/blank_renderer.h"
 #include "window/nt_window.h"
 #if defined(NT_PLATFORM_WEB)
+#include "crash/nt_crash.h"
 #include "platform/web/nt_platform_web.h"
 #include "runtime_build_marker.h"
 #include <emscripten.h>
@@ -171,6 +172,9 @@ int main(int argc, char **argv) {
     if (nt_engine_init(&config) != NT_OK) {
         return 1;
     }
+#if defined(NT_PLATFORM_WEB)
+    nt_crash_init(GAME_CRASH_STORAGE_KEY, GAME_RUNTIME_BUILD_FINGERPRINT);
+#endif
     g_nt_window.title = GAME_WINDOW_TITLE;
     g_nt_window.width = 1280U;
     g_nt_window.height = 720U;
