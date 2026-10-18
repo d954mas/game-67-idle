@@ -7,7 +7,7 @@
 
 // The game's half of the theme: the ui-kit feature owns every style, and this
 // binds it to THIS game's atlas. The split is where the generated asset ids
-// live — `build_packs.c` and `generated/game_assets.h` are game-owned, and the
+// live — `build_packs.c` and `game_assets.h` are game-owned, and the
 // feature must not include either.
 //
 // A game that wants its own face passes its own token sheet here instead of the

@@ -266,6 +266,8 @@ test("creation makes detached Studio and branched game worktrees at committed he
   assert.equal(git(result.gameWorktree, "rev-parse", "HEAD"), gameCommit);
   assert.equal(git(result.studioWorktree, "rev-parse", "--abbrev-ref", "HEAD"), "HEAD");
   assert.equal(git(result.gameWorktree, "symbolic-ref", "HEAD"), "refs/heads/agent/t0001-death-reward");
+  // The save root sits beside the Studio worktree, where the game build looks for it.
+  assert.equal(result.storageRoot, join(dirname(result.studioWorktree), "storage"));
   assert.equal(git(join(result.studioWorktree, "external/neotolis-engine"), "rev-parse", "HEAD"), fixture.engineCommit);
   assert.equal(result.sourceDirty.studio.untracked, 1);
   assert.equal(result.sourceDirty.game.untracked, 1);
@@ -492,8 +494,10 @@ test("removal refuses dirty work and preserves the game branch", async (t) => {
   mkdirSync(linkedTarget);
   write(linkedTarget, "keep.txt", "keep\n");
   symlinkSync(linkedTarget, join(created.studioWorktree, ".venv", "linked-tool"), process.platform === "win32" ? "junction" : "dir");
+  write(created.storageRoot, "fixture-game/slot.json", "{}\n");
   const removed = await removeFeatureWorkspace({ base: fixture.base, name: "remove-me" });
   assert.equal(removed.state, "removed");
+  assert.equal(existsSync(created.storageRoot), false);
   assert.equal(readFileSync(join(linkedTarget, "keep.txt"), "utf8"), "keep\n");
   assert.equal(git(fixture.gameRoot, "show-ref", "--verify", `refs/heads/${created.gameBranch}`).length > 0, true);
   const checked = await checkFeatureWorkspace({ base: fixture.base, name: "remove-me" });

@@ -190,6 +190,15 @@ export function ctestCatalogue(buildDir, spawn = spawnSync) {
   return catalogue;
 }
 
+// The catalogue is read before the build, so the CTest files must first be
+// regenerated: a test added since the last configure would otherwise be left
+// out of the target list, and CTest would then report it "Not Run".
+export function catalogueRefreshCommand(gameDir, buildDir, exists = existsSync) {
+  return exists(join(buildDir, "build.ninja"))
+    ? ["cmake", "--build", buildDir, "--target", "build.ninja"]
+    : ["cmake", "-S", gameDir, "-B", buildDir];
+}
+
 // A test with no tier would belong to no tier and quietly stop running. The
 // check lives after the build, where CMake has regenerated the labels.
 export function assertTiersLabelled(catalogue) {
@@ -254,7 +263,11 @@ function runNativeTests(gameDir, options = {}) {
   const selection = { ...options.selection };
   // An unconfigured tree has no CTest catalogue yet, so the first run builds
   // everything and filters by label; later runs build only what they will run.
-  if (configured) Object.assign(selection, selectTests(ctestCatalogue(buildDir), selection));
+  if (configured) {
+    const [command, ...args] = catalogueRefreshCommand(gameDir, buildDir);
+    run(command, args, gameDir, "native game tests", env);
+    Object.assign(selection, selectTests(ctestCatalogue(buildDir), selection));
+  }
   for (const [command, ...args] of nativeTestPlan(gameDir, process.platform, configured, selection)) {
     run(command, args, gameDir, "native game tests", env);
     // CMake regenerates during the build step, so the labels are only settled

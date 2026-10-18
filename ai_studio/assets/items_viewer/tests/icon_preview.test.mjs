@@ -5,7 +5,7 @@
 // native-debug build -- tests/fixtures/icon_pack/{game.ntpack,icons_page0.png,
 // game_assets.h.slice} -- copied into a throwaway temp folder per test so the
 // module's own preset/file-layout lookup (build/<preset>/pack/...,
-// src/generated/game_assets.h) is exercised unmodified, exactly as it runs
+// build/<preset>/generated/game/game_assets.h) is exercised unmodified, exactly as it runs
 // against templates/template.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -33,7 +33,7 @@ function tempFixtureDir(t) {
 }
 
 // Lays out a throwaway catalog folder exactly like templates/template:
-// build/<preset>/pack/{game.ntpack,icons_page0.png} + src/generated/game_assets.h
+// build/<preset>/pack/{game.ntpack,icons_page0.png} + build/<preset>/generated/game/game_assets.h
 // -- copied from the real fixture, never synthesized, per spec §5.
 function layoutFixture(dir, { preset = "native-debug", withPack = true, withPng = true, withHdr = true } = {}) {
   const packDir = join(dir, "build", preset, "pack");
@@ -41,7 +41,7 @@ function layoutFixture(dir, { preset = "native-debug", withPack = true, withPng 
   if (withPack) copyFileSync(join(FIXTURE_DIR, "game.ntpack"), join(packDir, "game.ntpack"));
   if (withPng) copyFileSync(join(FIXTURE_DIR, "icons_page0.png"), join(packDir, "icons_page0.png"));
   if (withHdr) {
-    const genDir = join(dir, "src", "generated");
+    const genDir = join(dir, "build", preset, "generated", "game");
     mkdirSync(genDir, { recursive: true });
     copyFileSync(join(FIXTURE_DIR, "game_assets.h.slice"), join(genDir, "game_assets.h"));
   }
@@ -78,7 +78,7 @@ test("buildIconPreview: real two-atlas fixture resolves all 6 icons/* regions, u
 });
 
 test("buildIconPreview: no build at all -> reason distinguishes 'pack not built'", async (t) => {
-  const dir = tempFixtureDir(t); // empty -- no build/, no src/generated/
+  const dir = tempFixtureDir(t); // empty -- no build/ at all
   const preview = await buildIconPreview(dir);
   assert.equal(preview.page_available, false);
   assert.deepEqual(preview.regions, {});

@@ -50,7 +50,7 @@
     "tracks": "templates/template/design/items/tracks.lua",
     "snapshot": "<build>/generated/items-catalog/items.snapshot.json",
     "state_schema": "templates/template/state/progression.schema.json",
-    "generated_dir": "templates/template/src/generated",
+    "generated_dir": "templates/template/<build>/generated/game",
     "game_side_sources": []
   }
 }

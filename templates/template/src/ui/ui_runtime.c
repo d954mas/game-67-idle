@@ -17,7 +17,7 @@
 #include "ui/nt_ui_scale.h"
 #include "window/nt_window.h"
 
-#include "generated/game_assets.h"
+#include "game_assets.h"
 #include "features/ui_kit/ui_metrics.h"
 #include "ui/theme.h"
 

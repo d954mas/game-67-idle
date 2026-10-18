@@ -91,6 +91,18 @@ export function normalizeWorkspaceName(value) {
   return name;
 }
 
+// Native game builds made inside a workspace read this from workspace.json and
+// save there by default (templates/template/cmake/GameWorkspaceStorage.cmake),
+// so concurrent workspaces never load or overwrite each other's saves.
+export function workspaceStorageRoot(workspaceRoot) {
+  return join(workspaceRoot, "storage");
+}
+
+function removeWorkspaceStorage(workspaceRoot) {
+  const storage = workspaceStorageRoot(workspaceRoot);
+  if (existsSync(storage)) rmSync(storage, { recursive: true, force: true });
+}
+
 export function defaultWorkspaceBase(studioRoot) {
   const root = resolve(studioRoot);
   return join(dirname(root), `${basename(root)}-workspaces`);
@@ -541,6 +553,7 @@ function rollbackCreate(manifest, manifestPath, activePath) {
   if (!errors.length) {
     if (existsSync(manifestPath)) rmSync(manifestPath);
     const workspaceRoot = dirname(manifestPath);
+    removeWorkspaceStorage(workspaceRoot);
     if (existsSync(workspaceRoot)) rmdirSync(workspaceRoot);
     if (existsSync(activePath)) rmSync(activePath);
   }
@@ -620,6 +633,7 @@ export async function createFeatureWorkspace(input) {
       gameWorktree,
       gameBranch: branch,
       ports,
+      storageRoot: workspaceStorageRoot(workspaceRoot),
       sourceDirty: { studio: studio.dirty, game: game.dirty },
       ownership: {
         studioCommonGitDir: resolve(studioRoot, git(studioRoot, ["rev-parse", "--git-common-dir"])),
@@ -880,6 +894,7 @@ export async function listFeatureWorkspaces({ base }) {
       gameBranch: record.gameBranch,
       sourceCommits: { studio: record.sourceStudioCommit, game: record.sourceGameCommit },
       ports: record.ports,
+      storageRoot: record.storageRoot || null,
       studioWorktree: record.studioWorktree,
       gameWorktree: record.gameWorktree,
     };
@@ -1077,6 +1092,7 @@ async function continueRemoval(authority, record, { failAt } = {}) {
     atomicWriteJson(authority.paths.active, record);
   }
   if (existsSync(authority.manifestPath)) rmSync(authority.manifestPath);
+  removeWorkspaceStorage(authority.root);
   if (existsSync(authority.root)) rmdirSync(authority.root);
   record.portsReleased = true;
   record.state = "removed";
@@ -1184,6 +1200,7 @@ function printHuman(command, result) {
     }
     console.log(`Run the agent from: ${result.gameWorktree}`);
     console.log(`Game launch: <game.exe> --devapi ${result.ports.devapi} --fresh-state`);
+    console.log(`Saves: ${result.storageRoot}/<storage-app-id> (default for native builds made in this workspace)`);
     console.log(`Web launch: node tools/serve_web.mjs --port ${result.ports.web} --dir <dir>`);
     return;
   }

@@ -35,7 +35,7 @@ if(NOT EMSCRIPTEN)
     # compiling build_packs.c, which includes it.
     add_executable(build_game_packs src/build_packs.c
         "${GAME_SOURCE_GENERATED_DIR}/loc_charset.gen.h")
-    target_include_directories(build_game_packs PRIVATE src "${UI_KIT_INC}")
+    target_include_directories(build_game_packs PRIVATE src "${GAME_SOURCE_GENERATED_DIR}" "${UI_KIT_INC}")
     target_link_libraries(build_game_packs PRIVATE nt_builder nt_log nt_meshwire)
     target_compile_definitions(build_game_packs PRIVATE _CRT_SECURE_NO_WARNINGS
         UI_KIT_ASSETS_DIR="${UI_KIT_DIR}/assets")
@@ -44,10 +44,10 @@ if(NOT EMSCRIPTEN)
     set_target_properties(build_game_packs PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}")
 
     add_custom_command(
-        OUTPUT "${GAME_PACK_DIR}/game.ntpack" "${CMAKE_CURRENT_SOURCE_DIR}/src/generated/game_assets.h"
+        OUTPUT "${GAME_PACK_DIR}/game.ntpack" "${GAME_SOURCE_GENERATED_DIR}/game_assets.h"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_PACK_DIR}"
         COMMAND $<TARGET_FILE:build_game_packs>
-            "${GAME_PACK_DIR}" "${GAME_FONT_SOURCE}"
+            "${GAME_PACK_DIR}" "${GAME_FONT_SOURCE}" "${GAME_SOURCE_GENERATED_DIR}"
         DEPENDS build_game_packs src/build_packs.c
             "${GAME_FONT_SOURCE}" ${GAME_PACK_SOURCE_ASSETS}
             assets/audio/sfx/ui_click.wav assets/audio/music/demo_jingle.mp3

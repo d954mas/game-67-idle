@@ -77,6 +77,19 @@ DevAPI/web port pair and records its immutable source commits in
 process races the advisory lease, stop workspace processes and run
 `reallocate-ports`.
 
+Each workspace also owns a save root, `<base>/<name>/storage`, recorded as
+`storageRoot` in `workspace.json`. Native game builds configured inside the
+workspace read that record (`cmake/GameWorkspaceStorage.cmake` in the template
+and games) and save under `<storageRoot>/<storage-app-id>` by default, so two
+workspaces running reload scenarios never load or overwrite each other's saves
+or the main checkout's `%LOCALAPPDATA%` saves. Precedence in the game is
+`--save-root`, then the `GAME_STORAGE_ROOT` environment variable (capture and
+test tools set it), then the workspace root, then the platform default. Web
+builds are unaffected: each workspace serves on its own port, which is its own
+localStorage origin. A workspace created before this record existed has no
+`storageRoot` and keeps the platform default; set `GAME_STORAGE_ROOT` there.
+`remove` deletes the save root with the workspace.
+
 `remove` refuses staged, unstaged, or untracked changes in Studio, game, or
 engine. It retains the game branch, even when unmerged. The registry moves a
 completed removal to a tombstone so `check` can distinguish a removed workspace

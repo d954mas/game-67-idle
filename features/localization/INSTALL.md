@@ -55,8 +55,9 @@ target_sources(${GAME_TARGET} PRIVATE
 target_include_directories(${GAME_TARGET} PRIVATE "${LOCALIZATION_INC}")
 ```
 
-`${GAME_SOURCE_GENERATED_DIR}` must already be on the include path (it is, for
-the other generators). Link `nt_mem_scratch`, `nt_log`, and `nt_core` — most games already do.
+`${GAME_SOURCE_GENERATED_DIR}` (the template sets it to
+`${CMAKE_BINARY_DIR}/generated/game`, so every build dir owns its generated
+code) must already be on the include path (it is, for the other generators). Link `nt_mem_scratch`, `nt_log`, and `nt_core` — most games already do.
 
 ## The font charset follows the corpus
 

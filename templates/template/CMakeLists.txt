@@ -77,7 +77,9 @@ set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
 set(GAME_PACK_DIR "${CMAKE_BINARY_DIR}/pack")
 set(GAME_ASSETS_DIR "${GAME_OUTPUT_DIR}/assets")
-set(GAME_SOURCE_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/generated")
+# Codegen output belongs to the build tree: build dirs that share one source
+# tree (native, devapi, wasm presets) must never rewrite each other's files.
+set(GAME_SOURCE_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/game")
 
 # --- game executable (the conductor + systems) ---
 add_executable(${GAME_TARGET}

@@ -6,7 +6,7 @@
 #include "features/audio/audio.h"
 #include "features/platform_sdk/platform_sdk.h"
 #include "game_audio.h"
-#include "generated/game_assets.h"
+#include "game_assets.h"
 #include "nt_pack_format.h"
 #include "resource/nt_resource.h"
 

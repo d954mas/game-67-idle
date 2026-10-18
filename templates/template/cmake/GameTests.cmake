@@ -271,7 +271,8 @@ if(NOT EMSCRIPTEN)
     target_link_libraries(test_game_audio PRIVATE audio_unity nt_ui_interface nt_shared nt_log)
     target_include_directories(test_game_audio PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/audio"
-        "${AUDIO_CORE_INC}" "${PLATFORM_SDK_INC}" src "${ENGINE_DIR}/engine")
+        "${AUDIO_CORE_INC}" "${PLATFORM_SDK_INC}" src "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/engine")
+    add_dependencies(test_game_audio game_asset_packs)
     target_compile_definitions(test_game_audio PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_options(test_game_audio PRIVATE -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
     nt_set_warning_flags(test_game_audio)

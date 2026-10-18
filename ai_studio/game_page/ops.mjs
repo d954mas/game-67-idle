@@ -17,7 +17,7 @@ const GAME_LAYOUT = {
   designDir: "design",
   buildDir: "build",
   releaseArtifactsDir: "release/artifacts",
-  generatedNamesDir: "src/generated",
+  generatedNamesDir: "generated/game",
   stateDir: "state",
   capturesDir: "tmp/captures",
 };
@@ -285,15 +285,26 @@ export function confinedGamePath(root, mount, relPath) {
   }
 }
 
+// The name header lives in the generated-code dir of the build config that
+// packed the assets. A web config copies its pack from a native `<config>-host`
+// build, so that sibling holds the header instead.
+function nameHeaderRel(relPath, stem, exists) {
+  const [top, config] = String(relPath || "").replace(/\\/g, "/").split("/");
+  if (top !== GAME_LAYOUT.buildDir || !config) return "";
+  const candidates = [config, `${config}-host`]
+    .map((name) => `${GAME_LAYOUT.buildDir}/${name}/${GAME_LAYOUT.generatedNamesDir}/${stem}.h`);
+  return candidates.find(exists) || candidates[0];
+}
+
 function packContext(root, gameId, relPath) {
   const mount = resolveGameMount(root, gameId);
   if (!mount) return null;
   const full = confinedGamePath(root, mount, relPath);
   if (!full || extname(full).toLowerCase() !== ".ntpack" || !existsSync(full)) return null;
   const stem = basename(full, ".ntpack");
-  const namesFromRel = `${GAME_LAYOUT.generatedNamesDir}/${stem}.h`;
-  const nameHeaderPath = join(root, mount.root, namesFromRel);
-  const names = existsSync(nameHeaderPath) ? parseNameHeader(readFileSync(nameHeaderPath, "utf8")) : new Map();
+  const namesFromRel = nameHeaderRel(relPath, stem, (rel) => existsSync(join(root, mount.root, rel)));
+  const nameHeaderPath = namesFromRel ? join(root, mount.root, namesFromRel) : "";
+  const names = nameHeaderPath && existsSync(nameHeaderPath) ? parseNameHeader(readFileSync(nameHeaderPath, "utf8")) : new Map();
   return { mount, full, names, nameHeaderPath, namesFromRel };
 }
 

@@ -2,7 +2,7 @@
 """Localization codegen: content/loc/strings.json -> loc_strings.gen.{h,c} + loc_keys.gen.json.
 
     node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc.py \
-        generate --strings content/loc/strings.json --out-dir src/generated
+        generate --strings content/loc/strings.json --out-dir build/<config>/generated/game
 
 Universal: this script knows nothing about any game, any key vocabulary, or the
 jam dump. Everything game-specific is data in strings.json.

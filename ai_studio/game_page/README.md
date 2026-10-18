@@ -28,8 +28,9 @@ mutates game data and never launches builds or games.
 
 The page reads template conventions, all collected in `GAME_LAYOUT` at the
 top of `ops.mjs`: `design/*.md`, `build/<config>/` (packs and `bin/`
-payload), `release/artifacts/*.manifest.json`, `src/generated/<pack>.h`
-(asset names from nt_builder), `state/*.schema.json`, and capture takes under
+payload), `release/artifacts/*.manifest.json`,
+`build/<config>/generated/game/<pack>.h` (asset names from nt_builder; a web
+config reads its `<config>-host` sibling), `state/*.schema.json`, and capture takes under
 `tmp/captures/`. A game that diverges from a convention shows an honest empty
 section — there is no per-game configuration.
 

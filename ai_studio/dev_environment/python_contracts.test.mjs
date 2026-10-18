@@ -5,7 +5,7 @@ import { delimiter, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
-import { studioPythonPath } from "./python.mjs";
+import { pathInside, studioPythonPath } from "./python.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const runner = "node ai_studio/dev_environment/python_run.mjs";
@@ -63,6 +63,16 @@ test("studioPythonPath rejects missing, external, and non-root venv interpreters
 
   const other = pythonFixture(t, "tools/.venv");
   assert.throws(() => studioPythonPath(other, "win32"), /root \.venv/);
+});
+
+test("venv containment accepts a drive-root checkout and rejects siblings", () => {
+  assert.equal(pathInside("X:\\.venv", "X:\\", "win32"), true);
+  assert.equal(pathInside("x:\\.VENV", "X:\\", "win32"), true);
+  assert.equal(pathInside("C:\\repo\\.venv", "C:\\repo", "win32"), true);
+  assert.equal(pathInside("C:\\repo-other\\.venv", "C:\\repo", "win32"), false);
+  assert.equal(pathInside("C:\\repo", "C:\\repo", "win32"), false);
+  assert.equal(pathInside("/srv/repo/.venv", "/srv/repo", "linux"), true);
+  assert.equal(pathInside("/srv/repo/../other/.venv", "/srv/repo", "linux"), false);
 });
 
 test("active ordinary Python contracts do not advertise ambient launchers", () => {

@@ -8,7 +8,7 @@
 
 #include "features/ui_kit/ui_icons.h"
 
-#include "generated/loc_charset.gen.h" /* LOC_CHARSET_NON_ASCII, generated from the corpus */
+#include "loc_charset.gen.h" /* LOC_CHARSET_NON_ASCII, generated from the corpus */
 
 #include <limits.h>
 #include <stdint.h>
@@ -31,8 +31,6 @@ const char *__lsan_default_suppressions(void) { return "leak:extensionSupportedG
 #include <sys/stat.h>
 #define MKDIR(p) mkdir(p, 0755)
 #endif
-
-#define HEADER_DIR "src/generated"
 
 // Source-pixel cut lines fully contain each rounded corner before any center stretch.
 // The kit ships at UI_KIT_EXPORT_SCALE times its design units (tools/gen_ui_kit.py),
@@ -97,21 +95,21 @@ static bool add_blob_file(NtBuilderContext *ctx, const char *path, const char *r
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        (void)fprintf(stderr, "Usage: build_game_packs <pack_dir> <font_source>\n");
+    if (argc != 4) {
+        (void)fprintf(stderr, "Usage: build_game_packs <pack_dir> <font_source> <header_dir>\n");
         return 1;
     }
     const char *out_dir = argv[1];
+    const char *header_dir = argv[3];
     (void)MKDIR(out_dir);
-    (void)MKDIR("src");
-    (void)MKDIR(HEADER_DIR);
+    (void)MKDIR(header_dir);
 
     NtBuilderContext *ctx = nt_builder_start_pack(pack_path(out_dir, "game.ntpack"));
     if (!ctx) {
         (void)fprintf(stderr, "Failed to start game pack\n");
         return 1;
     }
-    nt_builder_set_header_dir(ctx, HEADER_DIR);
+    nt_builder_set_header_dir(ctx, header_dir);
     (void)MKDIR("build");
     nt_builder_set_cache_dir(ctx, "build/_cache");
     nt_builder_set_threads_auto(ctx); // Basis encode is CPU-bound; default is single-threaded
@@ -315,8 +313,12 @@ int main(int argc, char *argv[]) {
         (void)fprintf(stderr, "game pack failed: %d\n", r);
         return 1;
     }
-    const char *headers[] = {HEADER_DIR "/game.h"};
-    nt_builder_merge_headers(headers, 1, HEADER_DIR "/game_assets.h");
+    char game_header[1024];
+    char merged_header[1024];
+    (void)snprintf(game_header, sizeof game_header, "%s/game.h", header_dir);
+    (void)snprintf(merged_header, sizeof merged_header, "%s/game_assets.h", header_dir);
+    const char *headers[] = {game_header};
+    nt_builder_merge_headers(headers, 1, merged_header);
     (void)printf("Built game.ntpack\n");
     return 0;
 }

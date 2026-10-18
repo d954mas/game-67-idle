@@ -39,6 +39,9 @@ endif()
 target_include_directories(${GAME_TARGET} PRIVATE
     "${AUDIO_CORE_INC}" "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${PLATFORM_SDK_INC}" "${GAME_EVENTS_INC}"
     src "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/deps/glfw/deps")
+if(EMSCRIPTEN)
+    target_include_directories(${GAME_TARGET} PRIVATE "${GAME_HOST_GENERATED_DIR}")
+endif()
 target_compile_definitions(${GAME_TARGET} PRIVATE GAME_WINDOW_TITLE="${GAME_WINDOW_TITLE}")
 # nt_fs is native-only: the web build loads packs through nt_http.
 if(NOT EMSCRIPTEN)
@@ -217,7 +220,9 @@ target_compile_definitions(${GAME_TARGET} PRIVATE
     GAME_EVENTS_LOG_MIRROR=$<BOOL:${GAME_EVENTS_LOG_MIRROR}>)
 # GAME_STORAGE_APP_ID namespaces the shared web-origin (itch) localStorage; "template" is
 # the template's own default, games override it (A2).
-target_compile_definitions(${GAME_TARGET} PRIVATE GAME_STORAGE_APP_ID="template")
+set(GAME_STORAGE_APP_ID "template")
+target_compile_definitions(${GAME_TARGET} PRIVATE GAME_STORAGE_APP_ID="${GAME_STORAGE_APP_ID}")
+include(cmake/GameWorkspaceStorage.cmake)
 if(NOT GAME_DEVAPI_ENABLED)
     target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=0)
 endif()

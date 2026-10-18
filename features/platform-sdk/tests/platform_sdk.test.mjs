@@ -250,10 +250,18 @@ test("the Closure externs list every backend method and every bridge global", ()
 
 test("template CMake isolates web presets by publish target", () => {
   const cmake = readFileSync(join(HERE, "../../../templates/template/cmake/GameOptions.cmake"), "utf8");
+  const plan = createBuildPlan({
+    gameDir: join(HERE, "../../../templates/template"),
+    args: { preset: "wasm-release", target: "yandex", debugUi: "default" },
+    env: {}, platform: "linux", nativeConfigured: true, toolchainExists: false,
+  });
 
   assert.match(cmake, /set\(GAME_PUBLISH_TARGET "local" CACHE STRING/);
-  assert.match(cmake, /if\(EMSCRIPTEN AND NOT GAME_PUBLISH_TARGET STREQUAL "local"\)/);
-  assert.match(cmake, /set\(NT_PRESET_NAME "\$\{NT_PRESET_NAME\}-\$\{GAME_PUBLISH_TARGET\}"\)/);
+  // The engine names its shared output dirs after the binary dir, so a unique
+  // binary dir per publish target is what keeps their engine libs apart.
+  assert.equal(/set\(NT_PRESET_NAME/.test(cmake), false);
+  assert.match(plan.webDir.replace(/\\/g, "/"), /\/build\/wasm-release-yandex$/);
+  assert.match(plan.nativeDir.replace(/\\/g, "/"), /\/build\/wasm-release-yandex-host$/);
   assert.equal(cmake.includes("GAME_BUILD_VARIANT"), false);
 });
 

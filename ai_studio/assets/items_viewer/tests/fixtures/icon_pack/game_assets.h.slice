@@ -1,4 +1,4 @@
-// T0316 test fixture: a SLICE of templates/template/src/generated/game_assets.h
+// T0316 test fixture: a SLICE of templates/template/build/<preset>/generated/game/game_assets.h
 // (the ATLAS + ATLAS_REGION sections only, both `icons` and `ui`), captured
 // verbatim from a real native-debug build alongside the sibling game.ntpack /
 // icons_page0.png in this folder. Real header, trimmed to the two sections the

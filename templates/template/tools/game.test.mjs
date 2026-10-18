@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { ctestCatalogue, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, selectTests } from "./game.mjs";
+import { catalogueRefreshCommand, ctestCatalogue, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, selectTests } from "./game.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { createRuntimeBuildRecord, runtimeBuildWitness } from "./lib/runtime_build.mjs";
 
@@ -132,6 +132,15 @@ test("native game test plan configures, builds, and runs CTest without a clean r
   // Without a tier every test runs, so nothing narrows the build either.
   assert.deepEqual(nativeTestPlan(gameDir, "win32", true, { mode: "all" })[0].slice(-1),
     [join(gameDir, "build", "native-debug")]);
+});
+
+test("a configured tree regenerates its CTest files before the catalogue is read", () => {
+  const gameDir = join("repo", "games", "example");
+  const buildDir = join(gameDir, "build", "native-debug");
+  assert.deepEqual(catalogueRefreshCommand(gameDir, buildDir, () => true),
+    ["cmake", "--build", buildDir, "--target", "build.ninja"]);
+  assert.deepEqual(catalogueRefreshCommand(gameDir, buildDir, () => false),
+    ["cmake", "-S", gameDir, "-B", buildDir]);
 });
 
 test("every executable a test runs from the build tree is a target it needs built", () => {

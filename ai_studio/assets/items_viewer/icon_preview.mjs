@@ -9,11 +9,9 @@ import { existsSync, readdirSync } from "node:fs";
 import { open, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-// Presets tried in order (spec §3b). game_assets.h is written to ONE shared
-// path regardless of which preset triggered the build (CMakeLists' HEADER_DIR
-// is source-tree-relative, not binary-dir-relative), so its presence only
-// means "some build ran"; the per-preset game.ntpack under build/<preset>/pack/
-// is what actually decides which preset's pack gets read.
+// Presets tried in order (spec §3b). Each preset writes its own pack and its
+// own game_assets.h (build/<preset>/generated/game/), so a pack is always read
+// with the header that the same build produced.
 export const ICON_PRESETS = ["native-debug", "devapi-debug"];
 
 const NT_PACK_MAGIC = 0x4b41504e; // "NPAK" LE (nt_pack_format.h)
@@ -193,12 +191,11 @@ function findDebugPagePng(packDir) {
 // debug-PNG page is missing" (e.g. debug_png got turned off) -- the caller
 // should not have to guess which one happened from a single generic message.
 function findPackArtifacts(folderAbs) {
-  const hdrPath = join(folderAbs, "src", "generated", "game_assets.h");
-  const hdrExists = existsSync(hdrPath);
   for (const preset of ICON_PRESETS) {
     const packDir = join(folderAbs, "build", preset, "pack");
     const packPath = join(packDir, "game.ntpack");
-    if (!existsSync(packPath) || !hdrExists) continue;
+    const hdrPath = join(folderAbs, "build", preset, "generated", "game", "game_assets.h");
+    if (!existsSync(packPath) || !existsSync(hdrPath)) continue;
     const pngPath = findDebugPagePng(packDir);
     if (!pngPath) return { reason: "atlas built but page PNG missing (debug_png off?)" };
     return { packPath, hdrPath, pngPath };

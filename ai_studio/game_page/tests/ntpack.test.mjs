@@ -267,13 +267,13 @@ test("getPackDump serves a confined pack with names and rejects escapes", (t) =>
   }));
   const pack = buildPack([{ id: 0x4b6889c73adcb47an, type: 4, data: new Uint8Array(16).fill(3) }]);
   write(`${gameRel}/build/dev/pack/game.ntpack`, pack);
-  write(`${gameRel}/src/generated/game.h`, "#define A ((nt_hash64_t){0x4B6889C73ADCB47AULL}) /* assets/blob.bin */");
+  write(`${gameRel}/build/dev/generated/game/game.h`, "#define A ((nt_hash64_t){0x4B6889C73ADCB47AULL}) /* assets/blob.bin */");
   write("secret.ntpack", pack);
 
   const dump = getPackDump(root, "alpha-game", "build/dev/pack/game.ntpack");
   assert.equal(dump.schema, "ai_studio.game_page.pack.v1");
   assert.equal(dump.entries[0].name, "assets/blob.bin");
-  assert.equal(dump.pack.namesFrom, "src/generated/game.h");
+  assert.equal(dump.pack.namesFrom, "build/dev/generated/game/game.h");
 
   assert.equal(getPackDump(root, "alpha-game", "../../secret.ntpack"), null);
   assert.equal(getPackDump(root, "alpha-game", "game.json"), null);

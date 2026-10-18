@@ -115,6 +115,12 @@ endif()
 if(EMSCRIPTEN AND NOT GAME_RUNTIME_BUILD_FINGERPRINT_VALID)
     message(FATAL_ERROR "Emscripten builds must be owned by tools/build_web.mjs with a runtime fingerprint.")
 endif()
+# The asset pack and its id header come from a native host build, because the
+# pack builder cannot run under Emscripten; build_web.mjs names that build.
+set(GAME_HOST_GENERATED_DIR "" CACHE PATH "Generated-code dir of the native host build that packed the assets.")
+if(EMSCRIPTEN AND NOT EXISTS "${GAME_HOST_GENERATED_DIR}/game_assets.h")
+    message(FATAL_ERROR "Emscripten builds need GAME_HOST_GENERATED_DIR with game_assets.h from a native host build (tools/build_web.mjs).")
+endif()
 
 if(EMSCRIPTEN)
     set(_game_default_em_cache "${CMAKE_SOURCE_DIR}/build/emscripten-cache")
@@ -127,44 +133,19 @@ if(EMSCRIPTEN)
     set(_game_emcache_launcher "\"${CMAKE_COMMAND}\" -E env \"EM_CACHE=${GAME_EMSCRIPTEN_CACHE_DIR}\"")
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${_game_emcache_launcher}")
     set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${_game_emcache_launcher}")
+    # emcc is a .bat on Windows, so every compile line passes through cmd.exe and
+    # its 8191-character limit; a checkout path a few dozen characters longer
+    # (a feature workspace) overflows it. Response files keep the line short.
+    if(CMAKE_HOST_WIN32)
+        set(CMAKE_NINJA_FORCE_RESPONSE_FILE ON)
+    endif()
 endif()
 
-# Preset name must encode the devapi split: engine libs land in
-# build/engine/<preset> and build/tools/builder/<preset>, so two builds sharing
-# one preset would overwrite each other's engine libs (nt_input with/without
-# inject symbols; nt_devapi_web presence) — the parallel-build collision the
-# convention exists to prevent. Every web (publish-target x devapi x build-type)
-# gets a UNIQUE name, so no combination can alias into another's engine dir.
-# Local keeps the legacy wasm preset names because it is the default developer
-# path; portal targets append the publish target.
-if(EMSCRIPTEN)
-    if(GAME_DEVAPI_ENABLED)
-        if(CMAKE_BUILD_TYPE STREQUAL "Release")
-            set(NT_PRESET_NAME "wasm-devapi-release")
-        else()
-            set(NT_PRESET_NAME "wasm-devapi-debug")
-        endif()
-    elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(NT_PRESET_NAME "wasm-release")
-    else()
-        set(NT_PRESET_NAME "wasm-debug")
-    endif()
-else()
-    if(GAME_DEVAPI_ENABLED)
-        if(CMAKE_BUILD_TYPE STREQUAL "Release")
-            set(NT_PRESET_NAME "native-devapi-release")
-        else()
-            set(NT_PRESET_NAME "devapi-debug")
-        endif()
-    elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(NT_PRESET_NAME "native-release")
-    else()
-        set(NT_PRESET_NAME "native-debug")
-    endif()
-endif()
-if(EMSCRIPTEN AND NOT GAME_PUBLISH_TARGET STREQUAL "local")
-    set(NT_PRESET_NAME "${NT_PRESET_NAME}-${GAME_PUBLISH_TARGET}")
-endif()
+# NT_PRESET_NAME is left to the engine, which names the shared output dirs
+# (build/engine/<name>, build/deps/...) after the binary dir. Every build dir
+# is therefore isolated by construction: build_web.mjs names each web build
+# <preset>[-<target>] and its native host <preset>[-<target>]-host, so no two
+# trees -- even two with the same configuration -- overwrite each other's libs.
 set(GAME_TITLE "Template" CACHE STRING "Game window title base")
 if(GAME_DEVAPI_ENABLED)
     set(GAME_WINDOW_TITLE "${GAME_TITLE} [AI]")

@@ -51,7 +51,7 @@
   },
   "default_template": {
     "strings": "content/loc/strings.json",
-    "generated_dir": "src/generated",
+    "generated_dir": "<build>/generated/game",
     "game_side_sources": [
       "src/ui/loc_widgets.c"
     ]

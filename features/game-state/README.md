@@ -147,7 +147,7 @@ Default template integration uses:
 For a game-specific variant, pass explicit paths:
 
 ```powershell
-node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py --schema games/<game-id>/state/game_state.schema.json --out-dir games/<game-id>/src/generated
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py --schema games/<game-id>/state/game_state.schema.json --out-dir games/<game-id>/build/<config>/generated/game-state
 ```
 
 Runtime state cannot be disabled (no build flag). To remove DevAPI commands

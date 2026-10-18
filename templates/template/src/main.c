@@ -654,6 +654,13 @@ static void frame(void) {
 }
 
 int main(int argc, char **argv) {
+#ifdef GAME_WORKSPACE_STORAGE_ROOT
+    /* A feature workspace build keeps its saves apart from every other
+       checkout; GAME_STORAGE_ROOT and --save-root still take precedence. */
+    if (getenv("GAME_STORAGE_ROOT") == NULL) {
+        (void)game_storage_set_root(GAME_WORKSPACE_STORAGE_ROOT);
+    }
+#endif
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--capture") == 0 && i + 1 < argc) {
             (void)snprintf(s_capture_path, sizeof(s_capture_path), "%s", argv[++i]);

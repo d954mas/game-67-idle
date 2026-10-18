@@ -1,7 +1,7 @@
 #include "ui/theme.h"
 
 #include "features/ui_kit/ui_tokens.h"
-#include "generated/game_assets.h"
+#include "game_assets.h"
 
 /* The studio defaults already carry the pair this game lays out against: 400
    authored units across the short edge when the screen is in a hand, 720 when it
