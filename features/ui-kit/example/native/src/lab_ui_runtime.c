@@ -52,7 +52,7 @@ void lab_ui_runtime_init(nt_material_t sprite_material, nt_material_t text_mater
     NT_ASSERT(s_ctx != NULL && "ui_lab: failed to create UI context");
 
     nt_ui_set_sprite_material(s_ctx, s_sprite_material);
-    nt_ui_set_text_material(s_ctx, s_text_material, 0.0F);
+    nt_ui_set_text_material(s_ctx, s_text_material);
 }
 
 static void resolve_bindings(void) {
@@ -103,7 +103,7 @@ bool lab_ui_runtime_begin(float dt, const nt_pointer_t *pointers, uint32_t count
     u.resolution[1] = fb_h;
     u.near_far[0] = -1.0F;
     u.near_far[1] = 1.0F;
-    nt_gfx_bind_uniform_block(0, &u, sizeof u);
+    nt_gfx_bind_uniform_block(NT_GFX_SLOT_GLOBALS, &u, sizeof u);
 
     nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, pointers, count);
     nt_ui_set_viewport(s_ctx, nt_ui_viewport_from_scale(&s_scale));

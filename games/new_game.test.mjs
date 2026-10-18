@@ -30,8 +30,8 @@ function buildFixtureRepo() {
     schema: "ai_studio.template.v1", id: "template", title: "Template", storageNamespace: "template",
   }));
   write(root, `${template}/game-dependencies.json`, JSON.stringify({
-    schema: "ai_studio.game.dependencies.seed.v2",
-    engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
+    schema: "ai_studio.game.dependencies.seed.v3",
+    engine: { source: "external/neotolis-engine", compatibility: "tested" },
     features: [{ id: "game-state", source: "features/game-state", version: "1.0.0", compatibility: "tested" }],
     compatibility: "tested template seed",
   }));
@@ -79,9 +79,6 @@ function buildFixtureRepo() {
   write(root, "features/game-state/README.md", "# game-state\n");
 
   const engine = join(root, "external", "neotolis-engine");
-  write(engine, "engine/core/nt_core.h", [
-    "#define NT_VERSION_MAJOR 0", "#define NT_VERSION_MINOR 1", "#define NT_VERSION_PATCH 0", "",
-  ].join("\n"));
   write(engine, "README.md", "# engine\n");
   execFileSync("git", ["init"], { cwd: engine, stdio: "ignore" });
   execFileSync("git", ["config", "user.email", "tests@example.invalid"], { cwd: engine });
@@ -242,8 +239,10 @@ test("private derivative rejects incompatible locks and replacing its own source
   const lock = JSON.parse(readFileSync(lockPath, "utf8"));
   const invoke = (extra = []) => invokeNewGame(["--root", root, "--id", "derived-game", "--visibility", "private",
     "--from", "games/private/source-game", ...extra]);
-  writeFileSync(lockPath, JSON.stringify({ ...lock, engine: { ...lock.engine, revision: "0".repeat(40) } }));
+  writeFileSync(lockPath, JSON.stringify({ ...lock, engine: { ...lock.engine, version: "00000000", revision: "0".repeat(40) } }));
   assert.match(invoke().stderr, /source game engine lock must match/);
+  writeFileSync(lockPath, JSON.stringify({ ...lock, engine: { ...lock.engine, version: "0.1.0" } }));
+  assert.match(invoke().stderr, /engine version "0\.1\.0" must be the engine revision prefix/);
   writeFileSync(lockPath, JSON.stringify({ ...lock, features: [{ ...lock.features[0], version: "99.0.0" }] }));
   assert.match(invoke().stderr, /dependency seed version 99.0.0 does not match/);
   writeFileSync(lockPath, JSON.stringify(lock));

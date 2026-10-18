@@ -111,12 +111,12 @@
 #define GAME_ASSET_PACK_PATH "assets/game.ntpack"
 #endif
 
-// UI quads and glyphs one frame can record. Vertex = quads x 4 x 20 B + glyphs x 4 x 52 B + mesh instances x 52 B;
+// UI quads and glyphs one frame can record. Vertex = quads x 4 x 20 B + glyphs x 4 x 48 B + mesh instances x 52 B;
 // index = (quads + glyphs) x 6 x 4 B; uniform = view-block binds per frame (mesh, HUD, UI) x (sizeof block + 256).
 #define FRAME_QUADS 2048U
 #define FRAME_GLYPHS 2048U
 #define FRAME_MESH_INSTANCES 16U
-#define FRAME_VERTEX_BYTES (FRAME_QUADS * 4U * 20U + FRAME_GLYPHS * 4U * 52U + FRAME_MESH_INSTANCES * 52U)
+#define FRAME_VERTEX_BYTES (FRAME_QUADS * 4U * 20U + FRAME_GLYPHS * 4U * 48U + FRAME_MESH_INSTANCES * 52U)
 #define FRAME_INDEX_BYTES ((FRAME_QUADS + FRAME_GLYPHS) * 6U * 4U)
 #define FRAME_UNIFORM_BYTES (3U * ((uint32_t)sizeof(nt_frame_uniforms_t) + 256U))
 
@@ -741,7 +741,6 @@ int main(int argc, char **argv) {
     gfx_desc.frame_capacity[NT_GFX_FRAME_VERTEX] = FRAME_VERTEX_BYTES;
     gfx_desc.frame_capacity[NT_GFX_FRAME_INDEX] = FRAME_INDEX_BYTES;
     gfx_desc.frame_capacity[NT_GFX_FRAME_UNIFORM] = FRAME_UNIFORM_BYTES;
-    gfx_desc.global_blocks[0] = (nt_global_block_t){"Globals", 0};
     nt_gfx_init(&gfx_desc);
 
     nt_http_init();

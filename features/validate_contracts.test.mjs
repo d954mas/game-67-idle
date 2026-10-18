@@ -32,9 +32,6 @@ function write(root, rel, value) {
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), "feature-contracts-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  write(root, "external/neotolis-engine/engine/core/nt_core.h", [
-    "#define NT_VERSION_MAJOR 0", "#define NT_VERSION_MINOR 1", "#define NT_VERSION_PATCH 0", "",
-  ].join("\n"));
   for (const id of ROOT_FEATURES) {
     write(root, `features/${id}/feature.json`, {
       schema: "ai_studio.feature.v1", id, version: "1.0.0",
@@ -53,8 +50,8 @@ function fixture(t) {
     write(root, `${base}/INSTALL.md`, `# Install ${id}\n`);
   }
   write(root, "templates/template/game-dependencies.json", {
-    schema: "ai_studio.game.dependencies.seed.v2",
-    engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
+    schema: "ai_studio.game.dependencies.seed.v3",
+    engine: { source: "external/neotolis-engine", compatibility: "tested" },
     features: ROOT_FEATURES.map((id) => ({
       id, source: `features/${id}`, version: "1.0.0", compatibility: "tested",
     })),
@@ -100,8 +97,8 @@ test("feature contract router sections require substantive bodies and explicit S
 test("template dependency seed versions must match owning feature metadata", (t) => {
   const root = fixture(t);
   const seed = {
-    schema: "ai_studio.game.dependencies.seed.v2",
-    engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
+    schema: "ai_studio.game.dependencies.seed.v3",
+    engine: { source: "external/neotolis-engine", compatibility: "tested" },
     features: ROOT_FEATURES.map((id) => ({
       id, source: `features/${id}`, version: id === "items-core" ? "1.1.0" : "1.0.0", compatibility: "tested",
     })),
@@ -166,8 +163,8 @@ test("a template can explicitly select an opt-in runtime feature", (t) => {
   write(root, "features/cursor-core/README.md", `# cursor-core\n\n${ROUTER}\n`);
   write(root, "features/cursor-core/INSTALL.md", "# Install\n");
   write(root, "templates/template/game-dependencies.json", {
-    schema: "ai_studio.game.dependencies.seed.v2",
-    engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
+    schema: "ai_studio.game.dependencies.seed.v3",
+    engine: { source: "external/neotolis-engine", compatibility: "tested" },
     features: [...ROOT_FEATURES, "cursor-core"].map((id) => ({
       id, source: `features/${id}`, version: "1.0.0", compatibility: "tested",
     })),
@@ -180,8 +177,8 @@ test("a template can explicitly select an opt-in runtime feature", (t) => {
 test("a blank starter declares only the runtime modules it actually uses", (t) => {
   const root = fixture(t);
   write(root, "templates/template/game-dependencies.json", {
-    schema: "ai_studio.game.dependencies.seed.v2",
-    engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
+    schema: "ai_studio.game.dependencies.seed.v3",
+    engine: { source: "external/neotolis-engine", compatibility: "tested" },
     features: [{ id: "game-state", source: "features/game-state", version: "1.0.0", compatibility: "tested" }],
     compatibility: "tested",
   });
@@ -200,8 +197,8 @@ test("specified-only modules cannot be selected as runtime dependencies", (t) =>
 test("dependency compatibility evidence must be nonempty text at every level", (t) => {
   const root = fixture(t);
   const makeSeed = () => ({
-    schema: "ai_studio.game.dependencies.seed.v2",
-    engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
+    schema: "ai_studio.game.dependencies.seed.v3",
+    engine: { source: "external/neotolis-engine", compatibility: "tested" },
     features: [{ id: "game-state", source: "features/game-state", version: "1.0.0", compatibility: "tested" }],
     compatibility: "tested",
   });
@@ -210,7 +207,7 @@ test("dependency compatibility evidence must be nonempty text at every level", (
       const seed = makeSeed();
       select(seed).compatibility = value;
       write(root, "templates/template/game-dependencies.json", seed);
-      assert.throws(() => validateFeatureContracts(root), /compatibility|engine version/i);
+      assert.throws(() => validateFeatureContracts(root), /compatibility|engine contract/i);
     }
   }
 });
@@ -236,18 +233,20 @@ test("root feature inventory rejects immediate child directories without metadat
   assert.throws(() => validateFeatureContracts(root), /features\/new-core\/feature\.json/i);
 });
 
-test("template engine version must match the authoritative public engine header", (t) => {
+test("template seed names no engine version: the gitlink pins the engine", (t) => {
   const root = fixture(t);
   const seed = {
-    schema: "ai_studio.game.dependencies.seed.v2",
-    engine: { source: "external/neotolis-engine", version: "0.2.0", compatibility: "tested" },
+    schema: "ai_studio.game.dependencies.seed.v3",
+    engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
     features: ROOT_FEATURES.map((id) => ({
       id, source: `features/${id}`, version: "1.0.0", compatibility: "tested",
     })),
     compatibility: "tested",
   };
   write(root, "templates/template/game-dependencies.json", seed);
-  assert.throws(() => validateFeatureContracts(root), /engine version 0\.2\.0.*nt_core\.h 0\.1\.0/i);
+  assert.throws(() => validateFeatureContracts(root), /engine: unexpected fields/i);
+  write(root, "templates/template/game-dependencies.json", { ...seed, schema: "ai_studio.game.dependencies.seed.v2" });
+  assert.throws(() => validateFeatureContracts(root), /unsupported schema/i);
 });
 
 test("matching skills must route to every owning feature contract", (t) => {

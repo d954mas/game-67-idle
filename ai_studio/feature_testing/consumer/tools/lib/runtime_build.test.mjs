@@ -29,7 +29,7 @@ function fixture(t) {
     schema: "ai_studio.game.dependencies.v3",
     engine: {
       source: "external/neotolis-engine",
-      version: "0.1.0",
+      version: "11111111",
       revision: "1".repeat(40),
       compatibility: "tested",
     },

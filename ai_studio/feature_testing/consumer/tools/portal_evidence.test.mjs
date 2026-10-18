@@ -116,7 +116,7 @@ function fixture(t) {
     },
     dependencies: {
       schema: "ai_studio.game.dependencies.v3",
-      engine: { source: "external/neotolis-engine", version: "0.1.0", revision: "1".repeat(40), compatibility: "tested" },
+      engine: { source: "external/neotolis-engine", version: "11111111", revision: "1".repeat(40), compatibility: "tested" },
       features: [{ id: "platform-sdk", source: "features/platform-sdk", version: "1.1.0", compatibility: "tested" }],
       compatibility: "evidence fixture",
     },
