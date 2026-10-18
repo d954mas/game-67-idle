@@ -99,9 +99,11 @@ download budgets may differ between legitimate iterations.
   the previous public commit and each private counterpart; they cover relocation,
   not new private content. Global asset integrity covers 63 tracked blobs and
   one engine boundary. The complete assets owner domain passes.
-- Architecture discovery, harness and runtime owner checks pass after updating
-  their consumers and fixtures. The final complete Studio gate additionally
-  requires a committed shared dependency snapshot for release validation.
+- The complete Studio gate passes on the saved implementation snapshot:
+  all nine applicable owner domains, including native/web template release,
+  pass; design has no deterministic technical checks. The release smoke proves
+  an empty starter frame and two WebGL recovery cycles. Shared dependencies are
+  committed; private game working-copy changes remain with their owning games.
 
 Current Items CLI and pipeline measurements were reproduced into new dated
 reports under `features/items-core/benchmarks/results/`; historical reports were

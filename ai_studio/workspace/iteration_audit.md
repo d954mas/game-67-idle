@@ -122,6 +122,22 @@ proof. They are recommendations in this audit, not automatically created tasks.
 
 ## Verification
 
-Final commands, measured changes and remaining limits are recorded in T0461's
-closure log. This document does not substitute for the checks or claim that
-all games were rebuilt, played or tested on portals during the audit.
+`node ai_studio/studio.mjs verify --full --json` passed after implementation
+commit `60bc8ebde` in 224,234 ms. Harness, workspace, architecture, shell,
+assets, work-management, runtime, features and template-release all passed;
+design has no deterministic technical checks. The workspace domain took
+224.1 s, feature checks 159.5 s, and template release 41.7 s while domains ran
+concurrently. These are observations, not fixed performance budgets.
+
+The runtime owner discovers its Node suites from the owning directory, so new
+tests cannot silently remain outside the gate. The HTTP functional scenario
+uses one bounded integration deadline while retaining all security assertions;
+it does not impose a five-second latency SLA under concurrent build load.
+
+The accepted workspace retained pre-existing asset-manifest edits outside this
+task's commits. Private game changes remain in their owning working copies;
+they were not bulk-committed with Studio. Full and focused reports, source-only
+record equality and native/browser evidence remain under ignored
+`tmp/studio-refresh/`. T0461's closure log records the commands and review
+decisions. These checks do not claim that all games were rebuilt, played or
+tested on devices or portals during the audit.
