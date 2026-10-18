@@ -1,4 +1,4 @@
-import { existsSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -7,23 +7,35 @@ function fail(message) {
   process.exitCode = 2;
 }
 
+function inside(root, path) {
+  const confined = relative(root, path);
+  return confined !== "" && confined !== ".." && !confined.startsWith(`..${sep}`) && !isAbsolute(confined);
+}
+
 const [gameArgument, studioArgument] = process.argv.slice(2);
 if (!gameArgument || !studioArgument || process.argv.length !== 4) {
   fail("usage: native_capture_fingerprint.mjs <game-root> <studio-root>");
 } else {
-  const gameRoot = resolve(gameArgument);
-  const studioRoot = resolve(studioArgument);
-  const confined = relative(studioRoot, gameRoot);
-  if (confined === "" || confined === ".." || confined.startsWith(`..${sep}`) || isAbsolute(confined)) {
+  const gameRoot = realpathSync(resolve(gameArgument));
+  const studioRoot = realpathSync(resolve(studioArgument));
+  if (!inside(studioRoot, gameRoot)) {
     fail("game root must stay inside the Studio root");
   } else {
     const modulePath = resolve(gameRoot, "tools", "lib", "runtime_build.mjs");
     if (!existsSync(modulePath) || !statSync(modulePath).isFile()) {
       fail(`game-owned runtime build module is missing: ${modulePath}`);
+    } else if (!inside(gameRoot, realpathSync(modulePath))) {
+      fail("game-owned runtime build module escapes its game root");
     } else {
-      const { createRuntimeBuildRecord } = await import(pathToFileURL(modulePath).href);
-      const record = createRuntimeBuildRecord({ gameDir: gameRoot, studioRoot });
-      process.stdout.write(`${JSON.stringify(record)}\n`);
+      const module = await import(pathToFileURL(modulePath).href);
+      const createRecord = Object.hasOwn(module, "createRuntimeSourceRecord")
+        ? module.createRuntimeSourceRecord : module.createRuntimeBuildRecord;
+      if (typeof createRecord !== "function") {
+        fail("game-owned runtime source record API is missing");
+      } else {
+        const record = createRecord({ gameDir: gameRoot, studioRoot });
+        process.stdout.write(`${JSON.stringify(record)}\n`);
+      }
     }
   }
 }

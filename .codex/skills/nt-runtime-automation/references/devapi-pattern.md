@@ -51,8 +51,8 @@ selectors. Never rely on tree array indices as stable selectors.
 Use:
 
 ```powershell
-py -3.12 ai_studio/runtime_automation/devapi_cli.py 17890 endpoints
-py -3.12 ai_studio/runtime_automation/iterate.py 17890 --reuse
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/devapi_cli.py 17890 endpoints
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/iterate.py 17890 --reuse
 ```
 
 Python helpers live in `ai_studio/runtime_automation/devapi_client.py`.

@@ -62,7 +62,11 @@ configure command instead of accepting a previously built executable.
 artifact.
 
 The preflight calls the selected game's `tools/lib/runtime_build.mjs`
-`createRuntimeBuildRecord({gameDir, studioRoot})` through a fixed Node script.
+`createRuntimeSourceRecord({gameDir, studioRoot})` through a fixed Node script.
+Legacy modules retain their `createRuntimeBuildRecord` entrypoint. Source-only
+records do not invent a web compile profile for a native build. Physical game
+and module paths must stay inside their owning roots before the script imports
+game tooling.
 It records the resulting `sourceFingerprint`, executable SHA-256 and byte size
 as `nativeBuild` in the capture manifest. It checks the source record before and
 after the rebuild, then checks the source record, executable, and critical cache
@@ -230,6 +234,27 @@ re-enables it on exit, even if the body raises:
 with game.player_gated():
     game.click_ui("settings/gear")
     game.wait_frames(2)
+```
+
+## Build input hashing
+
+`runtime_hash_tree.cjs` provides synchronous, streaming tree hashing through the
+installed Node.js runtime. Migrated game build-record modules load it from their
+resolved Studio root; standalone roots without the module retain a JavaScript
+fallback. Games still own file selection, credential exclusions and record
+schemas. The helper preserves deterministic row serialization and checks
+physical containment, including explicitly selected directories and files.
+
+Build tooling must not compile or run an ad-hoc fingerprint executable. A shared
+cache alone does not solve reputation checks: a source change creates another
+unsigned executable. The former source-versioned helper triggered CyberCapture
+on this host. Avast documents that CyberCapture analyzes rare, suspicious files;
+see its [official FAQ](https://support.avast.com/en-en/article/antivirus-cybercapture-faq/).
+This change removes that helper launch, without changing antivirus settings.
+Game executables and external SDK tools remain subject to normal protection.
+
+```powershell
+node --test ai_studio/runtime_automation/runtime_hash_tree.test.mjs
 ```
 
 ## Skill

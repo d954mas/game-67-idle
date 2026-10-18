@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { existsSync, rmSync } from "node:fs";
-import { createServer as createNetServer, createConnection } from "node:net";
+import { request as httpRequest } from "node:http";
+import { createServer as createNetServer } from "node:net";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -60,18 +61,30 @@ function waitForServer(child) {
 
 function rawGet(port, target, host = `127.0.0.1:${port}`) {
   return new Promise((resolveResponse, reject) => {
-    const socket = createConnection({ host: "127.0.0.1", port });
     let response = "";
-    socket.setEncoding("utf8");
-    socket.setTimeout(5_000, () => socket.destroy(new Error(`request timed out: ${target}`)));
-    socket.on("connect", () => {
-      socket.write(`GET ${target} HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\n\r\n`);
+    const request = httpRequest({
+      hostname: "127.0.0.1",
+      port,
+      method: "GET",
+      path: target,
+      headers: { Host: host, Connection: "close" },
+    }, (incoming) => {
+      response = `HTTP/${incoming.httpVersion} ${incoming.statusCode} ${incoming.statusMessage || ""}\r\n`;
+      for (let index = 0; index < incoming.rawHeaders.length; index += 2) {
+        response += `${incoming.rawHeaders[index]}: ${incoming.rawHeaders[index + 1]}\r\n`;
+      }
+      response += "\r\n";
+      incoming.setEncoding("utf8");
+      incoming.on("data", (chunk) => {
+        response += chunk;
+      });
+      incoming.once("aborted", () => reject(new Error(`response aborted: ${target}`)));
+      incoming.once("error", reject);
+      incoming.once("end", () => resolveResponse(response));
     });
-    socket.on("data", (chunk) => {
-      response += chunk;
-    });
-    socket.once("error", reject);
-    socket.once("close", () => resolveResponse(response));
+    request.setTimeout(5_000, () => request.destroy(new Error(`request timed out: ${target}`)));
+    request.once("error", reject);
+    request.end();
   });
 }
 

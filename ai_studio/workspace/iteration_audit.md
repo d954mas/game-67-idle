@@ -36,6 +36,7 @@ Raw profiles, command strings and performance artifacts remain under ignored
 | Default validation blocks short iterations | One historical game gate around 135 s, including a 122.8 s test; current Studio workspace domain around 316 s | Expensive subprocess fixtures and broad owner domains; build/test tooling | P2 |
 | Duplicate worktrees obstruct discovery or inflate history counts | Three registered derivatives; two share the same tracked snapshot | Identity differs from release metadata; Workspace | P1 |
 | External private research storage conflicts with repository-only containment | One existing Canvas mount blocked the real commit guard after containment was tightened | Canvas already permits external game stores; Workspace needs an explicit private storage boundary | P1 |
+| Antivirus pauses a build fingerprint helper | Lead-provided CyberCapture result; four checked-out games contain native helper compilation, with one source hash matching the reported executable name | Game-local tooling builds unsigned, source-versioned executables even though a shared cache already exists; Runtime Automation | P1 |
 | Profiling itself rereads large transcripts | Full baseline report around 172 s; metadata sample reads 119,948,396 bytes for eight profiles | Metadata discovery reads full files, and turn accounting reparses them; Core Harness profiling | P2 |
 
 Frequencies are confirmed lower bounds within inspected evidence, not complete
@@ -73,12 +74,30 @@ with their devices and conditions. Missing timing evidence is unknown.
   work; this is observed scan time, not a promised universal speedup. Replacement
   refs cannot substitute scanned bytes. Final acceptance retains fail-closed
   privacy guards, independent review and the complete Studio gate.
+  The first successful real commit, including its stronger final guard and Git
+  write, took 122,288 ms. A later text-only commit passed the narrow guard in
+  about 5 s; these operations have different scan scopes.
 - External private Canvas projects have an explicit machine-local registration
   owned by Canvas configuration. Required private-byte comparisons enumerate
   the registered store independently of Git or a mounted directory link.
   Different mount targets and nested escapes fail closed. Scoped game checks
   ignore other games' valid registrations. No private paths enter tracked
   configuration, and text-only changes retain the existing narrow scan scope.
+- Four game build-record consumers now use the shared Node.js tree hasher.
+  They no longer compile or launch source-versioned fingerprint executables.
+  Selection policy and record schemas remain game-owned; standalone roots use
+  their JavaScript fallback. This removes the reported CyberCapture trigger
+  without antivirus exceptions. Other executable checks remain outside this
+  claim; moving the old cache alone would not have removed the trigger.
+  On one real current-source record with eleven inputs, shared Node and local
+  JavaScript produced identical records in 7,797 ms and 7,001 ms respectively.
+  This is a compatibility measurement, not a speedup claim; the old executable
+  was deliberately not launched again. Native capture now uses a source-only
+  record where the game otherwise requires a web compile profile.
+- The blank starter's web release substitutes a real SDK release Boolean and
+  acknowledges a restored frame only after presentation. Browser proof covers
+  an empty initial frame and two WebGL recovery cycles; ordinary games retain
+  non-empty frame checks. No engine changes were needed.
 
 ## Decisions and deferred boundaries
 

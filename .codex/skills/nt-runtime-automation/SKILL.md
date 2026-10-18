@@ -83,6 +83,6 @@ do not add a backend selector, job, queue, or alternate routine capture path.
 ## Validation
 
 ```powershell
-py -3.12 -m pytest ai_studio/runtime_automation
+node ai_studio/studio.mjs verify --domain runtime
 node ai_studio/architecture_map/validate_map.mjs
 ```
