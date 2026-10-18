@@ -34,6 +34,8 @@ typedef struct game_storage_native_paths_t {
     char primary_tmp[GAME_STORAGE_PATH_MAX];
     char backup[GAME_STORAGE_PATH_MAX];
     char backup_tmp[GAME_STORAGE_PATH_MAX];
+    char premigration[GAME_STORAGE_PATH_MAX];
+    char premigration_tmp[GAME_STORAGE_PATH_MAX];
     char quarantine_base[GAME_STORAGE_PATH_MAX];
 } game_storage_native_paths_t;
 
@@ -571,6 +573,12 @@ static bool resolve_native_paths(
             (int)sizeof paths->backup ||
         snprintf(paths->backup_tmp, sizeof paths->backup_tmp,
                  "%s.tmp", paths->backup) >= (int)sizeof paths->backup_tmp ||
+        snprintf(paths->premigration, sizeof paths->premigration,
+                 "%s/%s.premigration", paths->directory, slot) >=
+            (int)sizeof paths->premigration ||
+        snprintf(paths->premigration_tmp, sizeof paths->premigration_tmp,
+                 "%s.tmp", paths->premigration) >=
+            (int)sizeof paths->premigration_tmp ||
         snprintf(paths->quarantine_base, sizeof paths->quarantine_base,
                  "%s/%s.corrupt", paths->directory, slot) >=
             (int)sizeof paths->quarantine_base) {
@@ -742,6 +750,41 @@ bool game_storage_backend_read_backup(
     game_storage_native_paths_t paths;
     return resolve_native_paths(slot, &paths, error, error_cap) &&
            read_file_bytes(paths.backup, out, NULL, error, error_cap);
+}
+
+/* Written from the load path only, which has no frame to lose, so it may wait. */
+bool game_storage_backend_write_premigration(
+    const char *slot, const char *text, char *error, int error_cap) {
+    game_storage_native_paths_t paths;
+    return resolve_native_paths(slot, &paths, error, error_cap) &&
+           write_file_atomic(paths.premigration_tmp, paths.premigration, text,
+                             error, error_cap, true);
+}
+
+bool game_storage_backend_read_premigration(
+    const char *slot, char **out, char *error, int error_cap) {
+    game_storage_native_paths_t paths;
+    return resolve_native_paths(slot, &paths, error, error_cap) &&
+           read_file_bytes(paths.premigration, out, NULL, error, error_cap);
+}
+
+bool game_storage_backend_premigration_exists(const char *slot) {
+    game_storage_native_paths_t paths;
+    return resolve_native_paths(slot, &paths, NULL, 0) &&
+           path_exists(paths.premigration);
+}
+
+bool game_storage_backend_remove_premigration(
+    const char *slot, char *error, int error_cap) {
+    game_storage_native_paths_t paths;
+    if (!resolve_native_paths(slot, &paths, error, error_cap)) {
+        return false;
+    }
+    if (!path_exists(paths.premigration) || remove(paths.premigration) == 0) {
+        return true;
+    }
+    set_error_crt(error, error_cap, "failed to remove pre-migration copy", last_crt_error());
+    return false;
 }
 
 bool game_storage_backend_quarantine(

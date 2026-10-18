@@ -117,6 +117,27 @@ bool game_storage_read_backup(
     return false;
 }
 
+bool game_storage_write_premigration(
+    const char *slot, const char *text, char *error, int error_cap) {
+    (void)slot;
+    (void)text;
+    (void)error;
+    (void)error_cap;
+    return true;
+}
+
+bool game_storage_premigration_exists(const char *slot) {
+    (void)slot;
+    return false;
+}
+
+bool game_storage_remove_premigration(const char *slot, char *error, int error_cap) {
+    (void)slot;
+    (void)error;
+    (void)error_cap;
+    return true;
+}
+
 bool game_storage_quarantine(
     const char *slot, char *error, int error_cap) {
     (void)slot;

@@ -1095,6 +1095,41 @@ static void load_from_doc(const cJSON *doc, game_save_load_result_t *result) {
     reconcile_all();
 }
 
+/* `doc` is already document-migrated; fragment versions are independent of it. */
+static bool doc_needs_fragment_migration(const cJSON *doc) {
+    const cJSON *features = gsj_object_item(doc, "features");
+    for (int i = 0; i < s_fragment_count; i++) {
+        const cJSON *f = gsj_object_item(features, s_fragments[i]->id);
+        if (f && read_frag_version(f) < s_fragments[i]->version) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* A migration's output stays unproven until a later session loads it cleanly.
+   Only the first migrating load keeps its source: any save written after it
+   came out of an unproven migration, so overwriting the copy with it would
+   throw away the one save that migration never touched. */
+static void keep_premigration_copy(const char *raw) {
+    char err[128];
+    err[0] = '\0';
+    if (game_storage_premigration_exists(GAME_SAVE_AUTOSAVE_SLOT)) {
+        return;
+    }
+    if (!game_storage_write_premigration(GAME_SAVE_AUTOSAVE_SLOT, raw, err, (int)sizeof err)) {
+        nt_log_warn("game_save: pre-migration copy could not be kept (%s)", err);
+    }
+}
+
+static void drop_premigration_copy(void) {
+    char err[128];
+    err[0] = '\0';
+    if (!game_storage_remove_premigration(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err)) {
+        nt_log_warn("game_save: pre-migration copy could not be removed (%s)", err);
+    }
+}
+
 /* Rewrite the primary from the backup, THEN refresh the backup -- never the
    other way round: the primary is bad right now, so backing it up first would
    clobber the live .bak with garbage. Returns false with `result` untouched
@@ -1103,19 +1138,25 @@ static bool try_recover_from_backup(game_save_load_result_t *result, const char 
     char *baktext = NULL;
     cJSON *bakdoc = NULL;
     cJSON *prepared = NULL;
+    bool migrated = false;
     if (game_storage_read_backup(GAME_SAVE_AUTOSAVE_SLOT, &baktext, err, cap)) {
         char *bakdec = transform_decode(baktext, err, cap);
-        free(baktext);
         bakdoc = bakdec ? parse_save_document(bakdec, err, cap) : NULL;
         free(bakdec);
     }
     if (!(bakdoc && cJSON_IsObject(bakdoc) && !doc_is_newer(bakdoc) &&
-          prepare_document_for_load(bakdoc, &prepared, NULL, err, cap))) {
+          prepare_document_for_load(bakdoc, &prepared, &migrated, err, cap))) {
         if (bakdoc) {
             cJSON_Delete(bakdoc);
         }
+        free(baktext);
         return false;
     }
+    migrated = migrated || doc_needs_fragment_migration(prepared);
+    if (migrated) {
+        keep_premigration_copy(baktext);
+    }
+    free(baktext);
     load_from_doc(prepared, result);
     cJSON_Delete(prepared);
     cJSON_Delete(bakdoc);
@@ -1124,8 +1165,9 @@ static bool try_recover_from_backup(game_save_load_result_t *result, const char 
     set_message(result, reason);
     game_save_mark_dirty();
     /* The existing .bak is the only known durable good copy until primary is
-       rewritten successfully. Never refresh it from a still-corrupt primary. */
-    if (save_internal(err, cap, true)) {
+       rewritten successfully. Never refresh it from a still-corrupt primary,
+       nor from a migration's output, which no clean load has proven yet. */
+    if (save_internal(err, cap, true) && !migrated) {
         (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, cap);
     }
     s_last_save_mono = mono_now();
@@ -1234,7 +1276,6 @@ void game_save_load(game_save_load_result_t *result) {
         return;
     }
     char *decoded = transform_decode(text, err, (int)sizeof err);
-    free(text);
     const bool legacy_plain_json = s_transform_count == 0 && decoded != NULL &&
                                    strncmp(decoded, "NTGS 1", 6U) != 0;
     cJSON *doc = decoded ? parse_save_document(decoded, err, (int)sizeof err) : NULL;
@@ -1245,6 +1286,7 @@ void game_save_load(game_save_load_result_t *result) {
             /* A save from a build ahead of this one: loading it is unsafe and
                overwriting it would destroy real progress, since the usual cause
                is a rolled-back build that may come back tomorrow. */
+            free(text);
             cJSON_Delete(doc);
             set_aside_and_start_new(
                 result, GAME_SAVE_LOAD_NEWER, "the save is newer than this build",
@@ -1255,13 +1297,25 @@ void game_save_load(game_save_load_result_t *result) {
         bool migrated = false;
         if (prepare_document_for_load(doc, &prepared, &migrated, err, (int)sizeof err)) {
             /* LOADED. */
+            const bool any_migration = migrated || doc_needs_fragment_migration(prepared);
+            if (any_migration) {
+                keep_premigration_copy(text);
+            }
+            free(text);
             load_from_doc(prepared, result);
             cJSON_Delete(prepared);
             cJSON_Delete(doc);
             s_autosave_paused = false;
             result->status = GAME_SAVE_LOAD_LOADED;
             set_message(result, "loaded");
-            (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err); /* last-known-good */
+            /* .bak is last-known-good, and a migration's output is not known
+               good until a later session loads it with nothing to migrate. */
+            if (!any_migration) {
+                (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err);
+                if (result->reset_fragment_count == 0) {
+                    drop_premigration_copy();
+                }
+            }
             if (migrated || legacy_plain_json) {
                 game_save_mark_dirty(); /* persist the current envelope version after debounce */
             }
@@ -1269,6 +1323,7 @@ void game_save_load(game_save_load_result_t *result) {
             return;
         }
     }
+    free(text);
     if (doc) {
         cJSON_Delete(doc);
     }

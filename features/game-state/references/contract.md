@@ -110,6 +110,18 @@ Load distinguishes absence from failure:
 - newer envelope or known-fragment version: report `NEWER`, perform no writes,
   preserve current live fragments, and pause autosave.
 
+A migration's output is unproven until a later session loads it. A load that
+runs any document or fragment migration, from the primary or from the backup,
+first stores the exact stored bytes it started from as the slot's
+pre-migration copy (native `<slot>.premigration`, web key
+`<key>.premigration`) and does not refresh the backup that session. An
+existing copy is never replaced: anything written after it came out of a
+migration no clean load has proven. The copy is removed by the first later
+load that is `LOADED` at the current versions with nothing to migrate and no
+fragment reset; that load also refreshes the backup again. Read it with
+`game_storage_read_premigration` for support or manual recovery; the loader
+never restores it on its own.
+
 An absent fragment resets independently. A fragment parse or migration failure
 resets only that fragment and is recorded in the load result. Orphans survive
 load/save. Public transform/export/import behavior is defined by the installed

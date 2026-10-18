@@ -76,6 +76,12 @@ else()
 endif()
 ```
 
+Both adapters keep a pre-migration copy beside the slot while a migrated save
+is unproven (`references/contract.md`). On web that is a second key of up to
+`GAME_STORAGE_MAX_BYTES`, so budget localStorage for primary, quarantine copy
+and pre-migration copy. A test fake of `game_storage` must also define the
+`game_storage_*premigration*` functions.
+
 When DevAPI is enabled, add the universal registry dispatch:
 
 ```cmake

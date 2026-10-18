@@ -110,6 +110,15 @@ int game_storage_web_quarantine(const char *key, char *reason, int reason_cap) {
     return 1;
 }
 
+int game_storage_web_remove(const char *key, char *reason, int reason_cap) {
+    (void)snprintf(s_last_key, sizeof s_last_key, "%s", key);
+    if (!s_delete_allowed) {
+        write_reason(reason, reason_cap);
+        return 0;
+    }
+    return 1;
+}
+
 int game_storage_web_probe(const char *key, char *reason, int reason_cap) {
     (void)snprintf(s_last_key, sizeof s_last_key, "%s", key);
     if (!s_probe_allowed) {
@@ -117,6 +126,20 @@ int game_storage_web_probe(const char *key, char *reason, int reason_cap) {
         return 0;
     }
     return 1;
+}
+
+void test_web_premigration_copy_has_its_own_key(void) {
+    char error[128] = {0};
+    TEST_ASSERT_TRUE(game_storage_write_premigration("autosave", "old", error, (int)sizeof error));
+    TEST_ASSERT_EQUAL_STRING("web_storage_test/save/autosave.premigration", s_last_key);
+    TEST_ASSERT_TRUE(game_storage_premigration_exists("autosave"));
+    TEST_ASSERT_EQUAL_STRING("web_storage_test/save/autosave.premigration", s_last_key);
+    TEST_ASSERT_TRUE(game_storage_remove_premigration("autosave", error, (int)sizeof error));
+    TEST_ASSERT_EQUAL_STRING("web_storage_test/save/autosave.premigration", s_last_key);
+
+    s_delete_allowed = false;
+    TEST_ASSERT_FALSE(game_storage_remove_premigration("autosave", error, (int)sizeof error));
+    TEST_ASSERT_NOT_NULL(strstr(error, "QuotaExceededError"));
 }
 
 void test_web_backend_scopes_keys_and_round_trips(void) {
@@ -325,5 +348,6 @@ int main(void) {
     RUN_TEST(test_web_backend_keeps_primary_when_quarantine_copy_fails);
     RUN_TEST(test_web_backend_accepts_verified_copy_when_primary_delete_fails);
     RUN_TEST(test_web_backup_is_noop_but_still_validates_slot);
+    RUN_TEST(test_web_premigration_copy_has_its_own_key);
     return UNITY_END();
 }

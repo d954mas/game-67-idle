@@ -27,6 +27,8 @@ char *game_storage_web_load(
     int reason_cap) GAME_STORAGE_WEB_IMPORT(game_storage_web_load);
 int game_storage_web_quarantine(const char *key, char *reason, int reason_cap)
     GAME_STORAGE_WEB_IMPORT(game_storage_web_quarantine);
+int game_storage_web_remove(const char *key, char *reason, int reason_cap)
+    GAME_STORAGE_WEB_IMPORT(game_storage_web_remove);
 int game_storage_web_probe(const char *key, char *reason, int reason_cap)
     GAME_STORAGE_WEB_IMPORT(game_storage_web_probe);
 

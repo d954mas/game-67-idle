@@ -10,6 +10,7 @@ int main(void) {
     result ^= game_storage_web_load(
                   "slot", 1024u, &status, reason, (int)sizeof reason) != NULL;
     result ^= game_storage_web_quarantine("slot", reason, (int)sizeof reason);
+    result ^= game_storage_web_remove("slot", reason, (int)sizeof reason);
     result ^= game_storage_web_probe("slot", reason, (int)sizeof reason);
     return result;
 }

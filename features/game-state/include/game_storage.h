@@ -87,6 +87,16 @@ bool game_storage_write_backup(const char *slot, char *error, int error_cap);
 /* Чтение .bak (фолбэк лоадера). native only; web всегда false. */
 bool game_storage_read_backup(const char *slot, char **out, char *error, int error_cap);
 
+/* Pre-migration copy: the exact stored bytes of a save that a load migrated,
+   kept beside the slot until a later load proves the migrated save loads
+   cleanly. The loader owns that policy; these only move bytes.
+   native: <slot>.premigration (atomic, may wait). web: "<key>.premigration".
+   remove: an absent copy counts as success. */
+bool game_storage_write_premigration(const char *slot, const char *text, char *error, int error_cap);
+bool game_storage_read_premigration(const char *slot, char **out, char *error, int error_cap);
+bool game_storage_premigration_exists(const char *slot);
+bool game_storage_remove_premigration(const char *slot, char *error, int error_cap);
+
 /* Откладывает битый primary для форензики/ручной починки (Р10, восстанавливает
    .corrupt для ручной починки сейва).
    native: rename primary в набор <slot>.corrupt[-N] из 5 копий; при заполнении

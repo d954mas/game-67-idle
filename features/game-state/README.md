@@ -388,6 +388,16 @@ playtime. A hidden tab gets no frame to wait the hold out. Init
 registers it through the new `game_save_set_hide_listener`; nothing goes up
 before `game_save_cloud_start`.
 
+Version `4.12.0` keeps a pre-migration copy of the save. A load that migrates
+stores the bytes it started from beside the slot (native `<slot>.premigration`,
+web `<key>.premigration`) and leaves `.bak` alone that session; recovery from a
+`.bak` that needed migrating keeps that `.bak`. The first later clean load at
+the current version removes the copy. `game_storage.h` adds
+`game_storage_{write,read,remove}_premigration` and
+`game_storage_premigration_exists`; a consumer that fakes `game_storage` must
+supply them. Web storage needs room for one more save-sized key while a
+migration is unproven. Rules: `references/contract.md`.
+
 ## Extension points
 
 Extend through game-owned schemas, migrations, hooks, and DevAPI adapters;

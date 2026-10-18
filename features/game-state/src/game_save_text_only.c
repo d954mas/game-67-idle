@@ -611,6 +611,12 @@ void game_save_load(game_save_load_result_t *result) {
         set_result_message(result, "loaded");
         (void)game_storage_write_backup(
             GAME_SAVE_AUTOSAVE_SLOT, error, (int)sizeof error);
+        /* This shell has no migrations, so every load it accepts is clean at
+           the current version: the full shell's pre-migration copy is spent. */
+        if (result->reset_fragment_count == 0) {
+            (void)game_storage_remove_premigration(
+                GAME_SAVE_AUTOSAVE_SLOT, error, (int)sizeof error);
+        }
         s_last_save_mono = mono_now();
         return;
     }

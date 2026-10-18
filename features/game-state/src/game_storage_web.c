@@ -140,4 +140,17 @@ EM_JS(int, game_storage_web_probe,
         return 0;
     }
 })
+
+EM_JS(int, game_storage_web_remove,
+      (const char *key_ptr, char *reason_ptr, int reason_cap), {
+    try {
+        window.localStorage.removeItem(UTF8ToString(key_ptr));
+        return 1;
+    } catch (e) {
+        if (reason_ptr && reason_cap > 0) {
+            stringToUTF8("exception " + ((e && e.name) ? e.name : "unknown"), reason_ptr, reason_cap);
+        }
+        return 0;
+    }
+})
 /* clang-format on */

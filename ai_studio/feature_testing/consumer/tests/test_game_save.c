@@ -35,6 +35,8 @@
 #define PRIMARY_TMP GAME_STORAGE_NATIVE_ROOT "/test_slot.json.tmp"
 #define BAK_PATH GAME_STORAGE_NATIVE_ROOT "/test_slot.bak"
 #define BAK_TMP GAME_STORAGE_NATIVE_ROOT "/test_slot.bak.tmp"
+#define PREMIG_PATH GAME_STORAGE_NATIVE_ROOT "/test_slot.premigration"
+#define PREMIG_TMP GAME_STORAGE_NATIVE_ROOT "/test_slot.premigration.tmp"
 
 /* ---- injected clocks ---- */
 static int64_t g_mono_ms;
@@ -325,6 +327,8 @@ static void cleanup_all(void) {
 #endif
     (void)remove(BAK_PATH);
     (void)remove(BAK_TMP);
+    (void)remove(PREMIG_PATH);
+    (void)remove(PREMIG_TMP);
     (void)sweep_corrupt(true);
 }
 
@@ -1208,6 +1212,128 @@ void test_document_migration_publishes_owner_pair_together(void) {
     TEST_ASSERT_EQUAL_INT(88, s_extra_mark);
 }
 
+static const char k_legacy_v1_save[] =
+    "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":3,\"app\":\"" GAME_STORAGE_APP_ID "\","
+    "\"features\":{\"game\":{\"v\":1,\"coins\":1,\"name\":\"legacy\"},"
+    "\"extra\":{\"v\":1,\"mark\":2},\"legacy_pair\":{\"coins\":77,\"mark\":88}}}";
+
+static void assert_file_equals(const char *path, const char *expected) {
+    char *raw = read_raw(path);
+    TEST_ASSERT_NOT_NULL(raw);
+    TEST_ASSERT_EQUAL_STRING(expected, raw);
+    free(raw);
+}
+
+/* A migrating load keeps the exact stored bytes and leaves .bak alone: the
+   migrated save is not last-known-good until a later load proves it. */
+void test_migrating_load_keeps_premigration_bytes(void) {
+    char err[128] = {0};
+    write_raw(PRIMARY_PATH, k_legacy_v1_save);
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, result.status);
+    assert_file_equals(PREMIG_PATH, k_legacy_v1_save);
+    TEST_ASSERT_FALSE(file_present(BAK_PATH));
+
+    TEST_ASSERT_TRUE(game_save_flush(err, (int)sizeof err));
+    char *primary = read_raw(PRIMARY_PATH);
+    TEST_ASSERT_NOT_NULL(primary);
+    TEST_ASSERT_TRUE(strcmp(primary, k_legacy_v1_save) != 0);
+    free(primary);
+    assert_file_equals(PREMIG_PATH, k_legacy_v1_save);
+}
+
+/* A save written after a migration came out of that migration, so a second
+   migrating load before any clean one must not replace the original copy. */
+void test_second_migrating_load_keeps_the_first_copy(void) {
+    write_raw(PREMIG_PATH, "ORIGINAL-BEFORE-ANY-MIGRATION");
+    write_raw(PRIMARY_PATH, k_legacy_v1_save);
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, result.status);
+    assert_file_equals(PREMIG_PATH, "ORIGINAL-BEFORE-ANY-MIGRATION");
+}
+
+/* Recovery from a .bak that itself needed migrating must keep that .bak and a
+   pre-migration copy of it; the rewritten primary is the unproven one. */
+void test_recovery_from_backup_that_needed_migration_keeps_it(void) {
+    write_raw(BAK_PATH, k_legacy_v1_save);
+    write_raw(PRIMARY_PATH, "CORRUPT-PRIMARY");
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_RECOVERED_BAK, result.status);
+    TEST_ASSERT_EQUAL_INT(77, s_frag_coins);
+    assert_file_equals(BAK_PATH, k_legacy_v1_save);
+    assert_file_equals(PREMIG_PATH, k_legacy_v1_save);
+    cJSON *primary = parse_primary();
+    const cJSON *version = cJSON_GetObjectItemCaseSensitive(primary, "save_version");
+    TEST_ASSERT_TRUE(cJSON_IsNumber(version));
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_DOC_VERSION, (int)version->valuedouble);
+    cJSON_Delete(primary);
+}
+
+/* The next session that loads at the current version with nothing reset is
+   the proof: the copy goes and .bak follows the primary again. */
+void test_later_clean_load_drops_premigration_copy(void) {
+    char err[128] = {0};
+    write_raw(PRIMARY_PATH, k_legacy_v1_save);
+    game_save_load_result_t migrating;
+    game_save_load(&migrating);
+    TEST_ASSERT_TRUE(game_save_flush(err, (int)sizeof err));
+    TEST_ASSERT_TRUE(file_present(PREMIG_PATH));
+
+    game_save_load_result_t clean;
+    game_save_load(&clean);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, clean.status);
+    TEST_ASSERT_EQUAL_INT(77, s_frag_coins);
+    TEST_ASSERT_FALSE(file_present(PREMIG_PATH));
+    char *primary = read_raw(PRIMARY_PATH);
+    TEST_ASSERT_NOT_NULL(primary);
+    assert_file_equals(BAK_PATH, primary);
+    free(primary);
+}
+
+/* A load that reset a fragment did not load cleanly, so it is no proof. */
+void test_load_with_reset_fragment_keeps_premigration_copy(void) {
+    game_save_set_document_validator(NULL); /* current-version fragment-local contract */
+    write_raw(PRIMARY_PATH,
+              "{\"format\":1,\"save_version\":2,\"saved_at\":1,\"save_seq\":1,\"app\":\"" GAME_STORAGE_APP_ID "\","
+              "\"build\":\"0\",\"features\":{\"game\":{\"v\":1,\"coins\":2000000000},\"extra\":{\"v\":1,\"mark\":7}}}");
+    write_raw(PREMIG_PATH, "ORIGINAL");
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, result.status);
+    TEST_ASSERT_TRUE(result.reset_fragment_count >= 1);
+    assert_file_equals(PREMIG_PATH, "ORIGINAL");
+}
+
+/* Without a migration the load keeps its old shape: .bak mirrors the primary
+   and no pre-migration copy appears. */
+void test_non_migrating_load_refreshes_backup_without_copy(void) {
+    char err[128] = {0};
+    s_frag_coins = 9;
+    TEST_ASSERT_TRUE(game_save_flush(err, (int)sizeof err));
+    char *primary = read_raw(PRIMARY_PATH);
+    TEST_ASSERT_NOT_NULL(primary);
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, result.status);
+    assert_file_equals(BAK_PATH, primary);
+    TEST_ASSERT_FALSE(file_present(PREMIG_PATH));
+    free(primary);
+}
+
 /* 20. Failure after mutating the staged first owner leaves both live owners and
    the caller-owned import bytes exactly unchanged. */
 void test_document_migration_failure_keeps_input_and_live_state_exact(void) {
@@ -1323,5 +1449,11 @@ int main(void) {
     RUN_TEST(test_document_migration_rejects_missing_step_without_publish);
     RUN_TEST(test_document_migration_rejects_second_owner_parse_before_publish);
     RUN_TEST(test_import_rejects_oversized_text_before_decode);
+    RUN_TEST(test_migrating_load_keeps_premigration_bytes);
+    RUN_TEST(test_second_migrating_load_keeps_the_first_copy);
+    RUN_TEST(test_recovery_from_backup_that_needed_migration_keeps_it);
+    RUN_TEST(test_later_clean_load_drops_premigration_copy);
+    RUN_TEST(test_load_with_reset_fragment_keeps_premigration_copy);
+    RUN_TEST(test_non_migrating_load_refreshes_backup_without_copy);
     return UNITY_END();
 }
