@@ -286,7 +286,7 @@ export function auditGameReleaseAssets(gameDir, options = {}) {
     if (record.sidecar) {
       if (record.asset !== path) issues.push(`${path}: source sidecar asset path does not match`);
       if (!String(record.schema || "").trim()) issues.push(`${path}: missing source sidecar schema`);
-      if (!["mine", "original", "generated", "sourced"].includes(record.origin)) {
+      if (!ORIGINS.has(record.origin) && !["original", "generated"].includes(record.origin)) {
         issues.push(`${path}: missing or invalid origin`);
       }
       if (!record.source || typeof record.source !== "object" || Object.keys(record.source).length === 0) {

@@ -48,9 +48,36 @@ proven, and give the next actionable step.
 ## Quality Feedback
 
 Keep the editing loop small: incremental build, local preview, changed-contract
-tests. Preview is explicitly non-proof. Broaden checks at integration and
+tests. Opening a preview alone does not prove acceptance; inspect the changed
+behavior and retain the relevant runtime evidence. Broaden checks at integration and
 release boundaries; do not rerun the entire Studio or packaging suite after
 every game change. Measure a slow command by stage before adding more checks.
+
+### Interactive iteration
+
+Keep one suitable development workspace and a reusable local preview for the
+current visual/gameplay change. Prefer the game's existing `dev` or preview
+entrypoint; do not build a second launcher or disposable server/database stand
+for a change that an existing in-memory preview can show. Keep its process ID,
+port and log path so reuse is based on a live process, not a stale receipt.
+
+An edit loop is: change, incremental build, inspect the changed behavior. Run
+changed-contract tests when logic changes; use a comparable frame for art or
+layout. Do not add unrelated checks to fill a wait. Full core checks belong at
+integration, and portal packaging/deployment checks at a release boundary.
+Reuse evidence while its relevant inputs and claimed behavior are unchanged;
+a documentation update alone does not invalidate gameplay proof.
+
+Review a coherent ready batch once at its risk tier. Source review, visual
+review and deployment review prove different claims, not successive mandatory
+stages for every edit. After a small finding, review the changed seam rather
+than rebuilding the whole review packet; repeat a full review only for a
+high-risk finding or changed contract. Validate a new fixture against one real
+input before asking reviewers to judge its frozen packet.
+
+Measure edit-to-visible-result separately from test execution and coordination.
+If a small iteration stalls, name the blocking step and take the shortest
+remaining proof path; do not turn iteration timing into another acceptance gate.
 
 Use [quality rules](../../quality/README.md) when a changed player-facing,
 design, asset, runtime or release claim needs evidence. The matching rule's

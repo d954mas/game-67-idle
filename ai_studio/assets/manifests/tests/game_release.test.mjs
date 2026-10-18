@@ -174,6 +174,33 @@ test("game release asset audit accepts a tracked source sidecar and checks its r
   assert.match(auditGameReleaseAssets(item.root, options).issues.join("\n"), /missing license/);
 });
 
+test("AI source sidecars retain license and provenance requirements", (t) => {
+  const item = fixture(t);
+  rmSync(join(item.root, "assets", "packs"), { recursive: true });
+  const sidecar = "assets/ui/panel.provenance.json";
+  const provenance = {
+    schema: "fixture.asset.v1", asset: item.path, origin: "ai",
+    license: "Original project art; game-owned.", license_file: "LICENSE.md",
+    redistribution_allowed: true, commercial_use: true, modification_allowed: true,
+    source: { script: "model.py" }, publish: false,
+    sha256: item.record.sha256, bytes: item.record.bytes,
+  };
+  const options = { builderPaths: [item.path], trackedPaths: ["assets/release_inputs.json", item.path, sidecar] };
+  const audit = () => {
+    write(join(item.root, ...sidecar.split("/")), JSON.stringify(provenance));
+    return auditGameReleaseAssets(item.root, options);
+  };
+  assert.deepEqual(audit(), { ok: true, packed: 1, issues: [] });
+  provenance.origin = "unclassified";
+  assert.match(audit().issues.join("\n"), /missing or invalid origin/);
+  provenance.origin = "ai";
+  provenance.commercial_use = false;
+  assert.match(audit().issues.join("\n"), /commercial_use=true/);
+  provenance.commercial_use = true;
+  provenance.source = null;
+  assert.match(audit().issues.join("\n"), /missing provenance source/);
+});
+
 test("game release asset audit requires exact agreement with pack builder inputs", (t) => {
   const builderOnly = fixture(t);
   write(
