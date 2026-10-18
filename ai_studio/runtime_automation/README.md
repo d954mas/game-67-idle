@@ -35,7 +35,9 @@ node ai_studio/runtime_automation/web_local_mock_probe.mjs --url http://127.0.0.
 
 ## Fast web preview
 
-Run from the Studio root with a canonical catalog game ID:
+Use web preview for browser-specific work; ordinary gameplay iteration should
+use the game's documented native path. Run web preview from the Studio root
+with a canonical catalog game ID:
 
 ```powershell
 node ai_studio/runtime_automation/preview_game.mjs --game <game-id> --preset wasm-devapi-debug
@@ -239,8 +241,9 @@ proves, or captures; only `endpoints` readiness is checked. It reports
 iteration claim.
 
 Set `AI_STUDIO_GAME_EXE` when driving a specific game through the low-level
-client helpers. `iterate.py` intentionally drives the canonical reference
-template executable under `templates/template/build/devapi-debug/bin/`.
+client helpers. `iterate.py` intentionally drives the independent feature
+consumer executable under `ai_studio/feature_testing/consumer/build/devapi-debug/bin/`;
+it does not select an arbitrary game's executable.
 `AI_STUDIO_DEVAPI_PORT` or
 `NT_DEVAPI_PORT` still pin an explicit port when set.
 

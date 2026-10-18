@@ -4,6 +4,9 @@ The [reuse audit](reuse_audit.md) records the source decomposition, reusable
 boundaries, and separation of the blank starter from the independent feature
 consumer. The [iteration audit](iteration_audit.md) records recurring workflow
 constraints, inspected evidence and measured Studio improvements.
+The [iteration performance research](iteration_performance_research.md)
+separates current native-loop measurements, dependency readiness, confirmed
+overhead and withdrawn optimization proposals.
 
 Workspace owns the single resolver for game and template mounts. It scans
 `templates/<id>`, `games/<id>`, and (when explicitly requested)

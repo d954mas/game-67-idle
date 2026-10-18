@@ -22,12 +22,20 @@ ordered. Blocked/setup exits `2`, executed failures exit `1`, and passes exit
 
 ## Fast local feedback
 
-During game edits, build the local preview and run the native tests for the
-changed contract. In a game root, `node tools/game.mjs test --only <ctest-name>`
-selects a native test; the current starter and shared consumer skip unrelated
-Node suites in that mode. Regular `test` retains the core and tooling checks.
+During ordinary game edits, use the game's documented native build/run path and
+run tests for the changed contract. Some games already expose a native `dev`
+loop; others retain a web-oriented `build/run` CLI. Check the selected game's
+runbook before choosing a command. The shared `iterate.py` is a proof loop for
+the independent feature consumer, not a universal game launcher.
 
-From the Studio root, use the catalog-selected game's own build tooling:
+In a game root, `node tools/game.mjs test --only <ctest-name>` selects a native
+test. The current starter and shared consumer skip unrelated Node suites in
+that mode; older game copies may still run them. Regular `test` retains the
+core and tooling checks. Current measurements and compatibility limits are in
+the [iteration performance research](workspace/iteration_performance_research.md).
+
+For browser-specific changes or web validation, the Studio root can route a
+preview through the catalog-selected game's own build tooling:
 
 ```powershell
 node ai_studio/runtime_automation/preview_game.mjs --game <game-id> --preset wasm-devapi-debug
