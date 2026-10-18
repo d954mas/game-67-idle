@@ -229,6 +229,8 @@ test("blank template binds title and autosave namespace without legacy platform 
     assert.equal(readFileSync(join(source, "tools", tool), "utf8"), readFileSync(join(repositoryRoot, "templates/template/tools", tool), "utf8"));
   }
 
+  execFileSync("git", ["config", "user.email", "tests@example.invalid"], { cwd: source });
+  execFileSync("git", ["config", "user.name", "Tests"], { cwd: source });
   execFileSync("git", ["add", "."], { cwd: source });
   execFileSync("git", ["commit", "-m", "blank source"], { cwd: source, stdio: "ignore" });
   create(root, "blank-derived", "private", [

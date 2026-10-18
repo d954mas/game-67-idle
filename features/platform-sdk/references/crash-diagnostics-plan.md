@@ -4,6 +4,52 @@ Status: reviewed plan; both independent subagents and Claude report ready.
 Implementation is authorized. HTTP-sample retirement remains a separate lead decision.
 Research date: 2026-10-19. Engine baseline: `8eb37192`; local Emscripten: `4.0.19`.
 
+## Implementation evidence
+
+The selected architecture is implemented in [Studio PR #33](https://github.com/d954mas/game-67-idle/pull/33)
+and [engine PR #696](https://github.com/d954mas/neotolis-engine/pull/696), which addresses
+issues #691 and #694. The engine candidate is `4e6b453d`; official consumer pins
+remain on `8eb37192` until the candidate is merged to engine `master`. The Studio
+and game migration PRs are drafts pending that pin update and integrated proof.
+
+- Two independent engine reviewers approved the capture/HTTP changes. Engine
+  `format_and_check` and `check --push` passed; 7 source regressions and 5 optimized
+  Chromium crash cases passed. The optimized test caught and fixed an absent
+  abort reason: the raw record now uses `abort` when Emscripten supplies none.
+- Two independent SDK reviewers approved the final operation boundaries. The
+  combined SDK/runtime/storage suite passed 122 tests. Untagged asynchronous
+  GamePush events remain independent lifecycle events; only synchronous events
+  emitted during a vendor invocation can be assigned to that request.
+- Shared reporter tests passed 15 cases; CMake installation passed 3. Template
+  and consumer package/minifier suites passed 89 cases. Generated-game wiring
+  passed, including a run without a global Git identity. Feature contracts
+  passed for 17 modules and 2 pointers. The copied-game CLI fixtures passed 30
+  tests; runtime-build suites passed 16, with 2 Windows symlink cases skipped.
+- The actual optimized engine browser fixture delivered one report for caught
+  abort and one for trap through the canonical shared reporter. Build, GPU,
+  context, reason and the newest journal tail were retained. A throwing prior
+  abort handler ran once. Engine persistence and direct reporter replay passed;
+  the replay setup explicitly copied the byte-identical engine fixture record
+  from its arbitrary test key into the reporter's configured `.v1` key.
+- The shared reporter is 11,362 source bytes / 3,328 gzip bytes. No engine
+  persistent C storage or diagnostic hot-path calls were added. A matched
+  before/after linked WASM baseline was unavailable locally, so no binary-size
+  delta is claimed for the crash fixture. The later
+  [paired CI size report](https://github.com/d954mas/neotolis-engine/pull/696#issuecomment-6255450112)
+  confirms zero gzip growth for `hello`, which does not opt into `nt_crash`.
+
+Independent integration review approved two existing game migrations. Their
+private matrix records separate PRs and the nine older consumers whose pinned
+engine revisions lack `nt_crash`. Those upgrades remain explicit prerequisites;
+updating this template does not update a published game or its engine pin.
+
+Hosted portal delivery, physical PowerVR behavior, and a new Poki release remain
+outside the completed proof. The existing Linux Studio CI also has unrelated
+baseline failures in Windows-path/tool fixtures; the same failures appear in
+[the preceding master run](https://github.com/d954mas/game-67-idle/actions/runs/39138573969).
+New failures caused by the reporter installation gate are fixed in the affected
+package fixtures rather than bypassing the gate.
+
 ## Outcome and boundaries
 
 Every integrated game's Web build uses the same diagnostic implementation. The engine owns
