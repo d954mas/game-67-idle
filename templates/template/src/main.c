@@ -173,7 +173,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 #if defined(NT_PLATFORM_WEB)
-    nt_crash_init(GAME_CRASH_STORAGE_KEY, GAME_RUNTIME_BUILD_FINGERPRINT);
+    nt_crash_init(GAME_CRASH_STORAGE_KEY, GAME_RUNTIME_BUILD_FINGERPRINT[0] ? GAME_RUNTIME_BUILD_FINGERPRINT : "preview");
 #endif
     g_nt_window.title = GAME_WINDOW_TITLE;
     g_nt_window.width = 1280U;

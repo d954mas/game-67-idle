@@ -218,7 +218,7 @@ test("blank template binds title and autosave namespace without legacy platform 
   const sourceMain = readFileSync(join(source, "src/main.c"), "utf8");
   assert.match(sourceMain, /\.app_name = GAME_APP_NAME/);
   assert.match(sourceMain, /g_nt_window\.title = GAME_WINDOW_TITLE/);
-  assert.match(sourceMain, /nt_crash_init\(GAME_CRASH_STORAGE_KEY, GAME_RUNTIME_BUILD_FINGERPRINT\)/);
+  assert.match(sourceMain, /nt_crash_init\(\s*GAME_CRASH_STORAGE_KEY,\s*GAME_RUNTIME_BUILD_FINGERPRINT\[0\]\s*\?\s*GAME_RUNTIME_BUILD_FINGERPRINT\s*:\s*"preview"\s*\)/);
   assert.match(readFileSync(join(source, "CMakeLists.txt"), "utf8"), /platform_sdk_crash\(\$\{GAME_TARGET\}\)/);
   const shell = readFileSync(join(source, "web/index.html.in"), "utf8");
   assert.match(shell, /@PLATFORM_SDK_DIAGNOSTICS_JS@/);

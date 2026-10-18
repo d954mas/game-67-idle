@@ -722,7 +722,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 #if defined(__EMSCRIPTEN__)
-    nt_crash_init(GAME_CRASH_STORAGE_KEY, GAME_RUNTIME_BUILD_FINGERPRINT);
+    nt_crash_init(GAME_CRASH_STORAGE_KEY, GAME_RUNTIME_BUILD_FINGERPRINT[0] ? GAME_RUNTIME_BUILD_FINGERPRINT : "preview");
 #endif
 
 #ifndef GAME_WINDOW_TITLE
