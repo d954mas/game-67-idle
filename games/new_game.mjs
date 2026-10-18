@@ -128,10 +128,10 @@ function readTemplateIdentity(templateDir) {
 function readTemplateDependencySeed(templateDir) {
   const value = readJsonStrict(join(templateDir, "game-dependencies.json"), "template dependency seed");
   exactKeys(value, ["schema", "engine", "features", "compatibility"], "template dependency seed");
-  if (value.schema !== "ai_studio.game.dependencies.seed.v2") throw new Error("template dependency seed has an unsupported schema");
-  exactKeys(value.engine, ["source", "version", "compatibility"], "template dependency seed engine");
-  if (value.engine.source !== "external/neotolis-engine" || !EXACT_SEMVER.test(String(value.engine.version || ""))
-      || !String(value.engine.compatibility || "").trim()) {
+  if (value.schema !== "ai_studio.game.dependencies.seed.v3") throw new Error("template dependency seed has an unsupported schema");
+  // The engine carries no version of its own: a new game records its revision prefix.
+  exactKeys(value.engine, ["source", "compatibility"], "template dependency seed engine");
+  if (value.engine.source !== "external/neotolis-engine" || !String(value.engine.compatibility || "").trim()) {
     throw new Error("template dependency seed engine is invalid");
   }
   if (!Array.isArray(value.features) || !String(value.compatibility || "").trim()) throw new Error("template dependency seed is invalid");
@@ -157,8 +157,12 @@ function readGameSource(sourceDir) {
   if (dependencies.schema !== "ai_studio.game.dependencies.v3") throw new Error("source game dependencies have an unsupported schema");
   exactKeys(dependencies.engine, ["source", "version", "revision", "compatibility"], "source game engine lock");
   if (!/^[0-9a-f]{40,64}$/i.test(dependencies.engine.revision)) throw new Error("source game engine lock requires an exact Git revision");
+  const enginePrefix = dependencies.engine.revision.slice(0, 8).toLowerCase();
+  if (dependencies.engine.version !== enginePrefix) {
+    throw new Error(`source game engine version ${JSON.stringify(dependencies.engine.version)} must be the engine revision prefix ${enginePrefix}`);
+  }
   if (dependencies.engine.source !== "external/neotolis-engine"
-      || !EXACT_SEMVER.test(dependencies.engine.version) || !dependencies.engine.compatibility
+      || !dependencies.engine.compatibility
       || !dependencies.compatibility || !Array.isArray(dependencies.features)) throw new Error("source game dependencies are invalid");
   const ids = new Set();
   for (const feature of dependencies.features) {
@@ -246,17 +250,6 @@ function requireClean(root, path, label) {
 function pathsAreClean(root, paths) {
   const result = runGit(root, ["status", "--porcelain", "--", ...paths]);
   return result.status === 0 && !result.stdout.trim();
-}
-
-function readEngineSemVer(repoRoot) {
-  const rel = "external/neotolis-engine/engine/core/nt_core.h";
-  const header = readFileSync(join(repoRoot, rel), "utf8");
-  const component = (name) => {
-    const match = new RegExp(`^#define\\s+NT_VERSION_${name}\\s+(0|[1-9]\\d*)\\s*$`, "m").exec(header);
-    if (!match) throw new Error(`engine version metadata is missing NT_VERSION_${name}`);
-    return match[1];
-  };
-  return `${component("MAJOR")}.${component("MINOR")}.${component("PATCH")}`;
 }
 
 function ensureGameStudioScaffold(gameDir, identity, visibility) {
@@ -548,10 +541,6 @@ try {
   engineRevision = requireGitRevision(join(repoRoot, "external", "neotolis-engine"), ["rev-parse", "HEAD"], "engine dependency record");
   if (engineRevision !== engineGitlink) throw new Error("engine checkout HEAD must match the parent engine gitlink");
   if (gameSource && dependencySeed.engine.revision !== engineRevision) throw new Error("source game engine lock must match the current engine checkout");
-  const engineVersion = readEngineSemVer(repoRoot);
-  if (dependencySeed.engine.version !== engineVersion) {
-    throw new Error(`template engine version ${dependencySeed.engine.version} does not match nt_core.h ${engineVersion}`);
-  }
   const rootPathsClean = pathsAreClean(repoRoot, [fromRel, ...dependencySeed.features.map((feature) => feature.source)]);
   if (!rootPathsClean && !gameSource) requireClean(repoRoot, fromRel, `template ${fromRel}`);
   requireClean(join(repoRoot, "external", "neotolis-engine"), "", "external/neotolis-engine");
@@ -583,7 +572,7 @@ const backupDir = join(gamesDir, `.${args.id}.backup-${nonce}`);
 const dependencies = gameSource ? gameSource.dependencies : {
   schema: "ai_studio.game.dependencies.v3",
   engine: {
-    source: dependencySeed.engine.source, version: dependencySeed.engine.version,
+    source: dependencySeed.engine.source, version: engineRevision.slice(0, 8),
     revision: engineRevision, compatibility: dependencySeed.engine.compatibility,
   },
   features: dependencySeed.features.map((feature) => ({

@@ -119,7 +119,7 @@ function fixture(t, target = "itch") {
   write(join(gameDir, "dependencies.json"), `${JSON.stringify({
     schema: "ai_studio.game.dependencies.v3",
     engine: {
-      source: "external/neotolis-engine", version: "0.1.0",
+      source: "external/neotolis-engine", version: "11111111",
       revision: "1".repeat(40), compatibility: "tested",
     },
     features: [{
@@ -407,6 +407,7 @@ test("reopened verification re-derives the portal allowlist and dependency recor
   const clean = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "clean") });
   const badDependencies = JSON.parse(readFileSync(clean.manifestPath, "utf8"));
   badDependencies.dependencies.record.engine.revision = "3".repeat(40);
+  badDependencies.dependencies.record.engine.version = "33333333";
   writeFileSync(clean.manifestPath, `${JSON.stringify(badDependencies, null, 2)}\n`);
   assert.throws(
     () => verifyWebPackage({ zipPath: clean.zipPath, manifestPath: clean.manifestPath, expectedTarget: "itch", studioRoot }),
@@ -882,15 +883,13 @@ test("packaging runs default dependency-source verification for exact source rev
 test("dependency proof confines exact owners and checks metadata revisions and relevant cleanliness", (t) => {
   const root = mkdtempSync(join(tmpdir(), "dependency-proof-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  write(join(root, "external", "neotolis-engine", "engine", "core", "nt_core.h"), [
-    "#define NT_VERSION_MAJOR 0", "#define NT_VERSION_MINOR 1", "#define NT_VERSION_PATCH 0", "",
-  ].join("\n"));
+  write(join(root, "external", "neotolis-engine", "engine", "version", "nt_version.h"), "const char *nt_version_engine(void);\n");
   write(join(root, "features", "platform-sdk", "feature.json"), JSON.stringify({ id: "platform-sdk", version: "1.1.0" }));
   const engineRevision = "1".repeat(40);
   const studioRevision = "2".repeat(40);
   const dependencies = {
     schema: "ai_studio.game.dependencies.v3",
-    engine: { source: "external/neotolis-engine", version: "0.1.0", revision: engineRevision, compatibility: "tested" },
+    engine: { source: "external/neotolis-engine", version: engineRevision.slice(0, 8), revision: engineRevision, compatibility: "tested" },
     features: [{ id: "platform-sdk", source: "features/platform-sdk", version: "1.1.0", compatibility: "tested" }],
     compatibility: "tested",
   };
@@ -907,6 +906,12 @@ test("dependency proof confines exact owners and checks metadata revisions and r
   const wrongVersion = structuredClone(dependencies);
   wrongVersion.features[0].version = "1.2.0";
   assert.throws(() => verifyDependencySources({ studioRoot: root, dependencies: wrongVersion, git }), /version mismatch/i);
+  const semverEngine = structuredClone(dependencies);
+  semverEngine.engine.version = "0.1.0";
+  assert.throws(() => verifyDependencySources({ studioRoot: root, dependencies: semverEngine, git }), /engine dependency version record is invalid/i);
+  const foreignPrefix = structuredClone(dependencies);
+  foreignPrefix.engine.version = "22222222";
+  assert.throws(() => verifyDependencySources({ studioRoot: root, dependencies: foreignPrefix, git }), /engine dependency version prefix 22222222 does not match revision/i);
   dirty = " M features/platform-sdk/feature.json";
   assert.throws(() => verifyDependencySources({ studioRoot: root, dependencies, git }), /source is dirty/i);
   const escaped = structuredClone(dependencies);

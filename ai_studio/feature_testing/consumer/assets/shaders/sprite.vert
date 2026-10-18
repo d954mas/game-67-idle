@@ -2,8 +2,8 @@ precision highp float;
 precision highp int;
 
 // UBO contract: this shader uses "Globals" (defined in common/globals.glsl)
-// for view_proj. The game declares the block in nt_gfx_desc_t.global_blocks at
-// slot 0 and binds its view block with nt_gfx_bind_uniform_block(0, ...) in
+// for view_proj. The engine binds that name to NT_GFX_SLOT_GLOBALS; the game binds
+// its view block with nt_gfx_bind_uniform_block(NT_GFX_SLOT_GLOBALS, ...) in
 // every pass before nt_sprite_renderer_draw_list; the renderer binds no uniform
 // blocks itself.
 #include "common/globals.glsl"

@@ -39,9 +39,9 @@
 #endif
 
 #define SCRATCH_ARENA_SIZE ((size_t)512U * 1024U)
-// Quads and glyphs per frame: vertex = quads x 4 x (20 B sprite + 64 B custom attrs) + glyphs x 4 x 52 B; index = (quads + glyphs) x 6 x 4 B.
+// Quads and glyphs per frame: vertex = quads x 4 x (20 B sprite + 64 B custom attrs) + glyphs x 4 x 48 B; index = (quads + glyphs) x 6 x 4 B.
 #define FRAME_QUADS 4096U
-#define FRAME_VERTEX_BYTES (FRAME_QUADS * 4U * (84U + 52U))
+#define FRAME_VERTEX_BYTES (FRAME_QUADS * 4U * (84U + 48U))
 #define FRAME_INDEX_BYTES (FRAME_QUADS * 2U * 6U * 4U)
 #define TAP_MAX 8
 // A scripted tap lands after the first frames settled and the next one waits
@@ -75,7 +75,6 @@ static nt_material_t s_sprite_material;
 static nt_material_t s_text_material;
 static nt_material_t s_radial_material;
 static nt_resource_t s_atlas;
-static nt_resource_t s_atlas_tex;
 static nt_resource_t s_font_resource;
 static nt_font_t s_font;
 static nt_hash32_t s_pack_id;
@@ -418,7 +417,6 @@ int main(int argc, char *argv[]) {
     gfx_desc.frame_capacity[NT_GFX_FRAME_VERTEX] = FRAME_VERTEX_BYTES;
     gfx_desc.frame_capacity[NT_GFX_FRAME_INDEX] = FRAME_INDEX_BYTES;
     gfx_desc.frame_capacity[NT_GFX_FRAME_UNIFORM] = 512U; // one 256 B view block plus offset alignment up to 256
-    gfx_desc.global_blocks[0] = (nt_global_block_t){"Globals", 0};
     nt_gfx_init(&gfx_desc);
 
     nt_http_init();
@@ -448,13 +446,11 @@ int main(int argc, char *argv[]) {
     s_radial_program.vs = nt_resource_request(ASSET_SHADER_ASSETS_SHADERS_SPRITE_RADIAL_VERT, NT_ASSET_SHADER_CODE);
     s_radial_program.fs = nt_resource_request(ASSET_SHADER_ASSETS_SHADERS_RADIAL_FRAG, NT_ASSET_SHADER_CODE);
     s_atlas = nt_resource_request(ASSET_ATLAS_UI, NT_ASSET_ATLAS);
-    s_atlas_tex = nt_resource_request(ASSET_TEXTURE_UI_TEX0, NT_ASSET_TEXTURE);
     s_font_resource = nt_resource_request(ASSET_FONT_UI_LAB_FONT, NT_ASSET_FONT);
 
     // Premultiplied atlas and premultiplied text output: the kit's alpha contract.
+    // The sprite renderer binds the atlas page as u_texture on every draw.
     s_sprite_material = nt_material_create(&(nt_material_create_desc_t){
-        .textures = {{.name = "u_texture", .resource = s_atlas_tex}},
-        .texture_count = 1,
         .blend = nt_blend_alpha_premultiplied(),
         .depth_test = false,
         .depth_write = false,
