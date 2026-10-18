@@ -1,7 +1,8 @@
 # Shared crash diagnostics: research and implementation plan
 
-Status: reviewed plan; both independent subagents and Claude report ready.
-Implementation is authorized. HTTP-sample retirement remains a separate lead decision.
+Status: implemented in reviewed pull requests; release integration awaits the
+engine master pin. The plan passed independent subagent and Claude reviews.
+HTTP samples remain supported; retirement requires a separate lead decision.
 Research date: 2026-10-19. Engine baseline: `8eb37192`; local Emscripten: `4.0.19`.
 
 ## Implementation evidence
@@ -21,7 +22,7 @@ and game migration PRs are drafts pending that pin update and integrated proof.
   GamePush events remain independent lifecycle events; only synchronous events
   emitted during a vendor invocation can be assigned to that request.
 - Shared reporter tests passed 15 cases; CMake installation passed 3. Template
-  and consumer package/minifier suites passed 89 cases. Generated-game wiring
+  and consumer package/minifier suites passed 93 cases. Generated-game wiring
   passed, including a run without a global Git identity. Feature contracts
   passed for 17 modules and 2 pointers. The copied-game CLI fixtures passed 30
   tests; runtime-build suites passed 16, with 2 Windows symlink cases skipped.
@@ -31,6 +32,24 @@ and game migration PRs are drafts pending that pin update and integrated proof.
   abort handler ran once. Engine persistence and direct reporter replay passed;
   the replay setup explicitly copied the byte-identical engine fixture record
   from its arbitrary test key into the reporter's configured `.v1` key.
+- Actual consumer preview failure probes passed: missing runtime JS, an owned
+  runtime script throw, missing or throwing SDK module, and missing WASM all
+  retained the corresponding report and displayed fatal UI. An SDK evaluation
+  failure persists the report before an error sink exists. Browser execution
+  also exposed an empty preview identity and a duplicate sprite-atlas binding;
+  both caller fixes passed an independent engine-contract review. The generated
+  game test preserves the nonempty preview identity requirement.
+  Normal preview then passed in a fresh browser with the real SDK: the loading
+  overlay closed, the scene and HUD rendered, and no fatal UI or crash record
+  appeared. The initial stuck-loading observation was caused by a test harness
+  replacing the SDK backend; normal-mode instrumentation was corrected.
+- Linux and Windows CI passed native template linking after correcting the
+  executable-selected Basis provider order. The next release gate exposed an
+  omitted invoked `startRuntime` loader path. Focused proof now transforms the
+  caught bootstrap, runs the actual release minifier, and verifies the reopened
+  ZIP. Dormant, member, arrow and dead-code calls remain rejected. Canonical
+  reporter comparison permits CRLF/LF materialization differences while still
+  rejecting changed executable contents; both cases have regression coverage.
 - The shared reporter is 11,362 source bytes / 3,328 gzip bytes. No engine
   persistent C storage or diagnostic hot-path calls were added. A matched
   before/after linked WASM baseline was unavailable locally, so no binary-size
@@ -42,6 +61,10 @@ Independent integration review approved two existing game migrations. Their
 private matrix records separate PRs and the nine older consumers whose pinned
 engine revisions lack `nt_crash`. Those upgrades remain explicit prerequisites;
 updating this template does not update a published game or its engine pin.
+Both migrated games passed local optimized Web builds and normal browser
+startup. The source game also passed two sequential intentional context-loss
+and recovery cycles in one page without a crash report. These builds use the
+official engine pin; they are not integrated proof of the candidate engine fix.
 
 Hosted portal delivery, physical PowerVR behavior, and a new Poki release remain
 outside the completed proof. The existing Linux Studio CI also has unrelated

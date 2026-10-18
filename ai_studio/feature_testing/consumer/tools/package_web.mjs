@@ -587,20 +587,47 @@ function callsIn(tokens) {
   return calls;
 }
 
-function dynamicallyLoadsGame(tokens) {
-  const create = ["const", "let", "var"].map((declaration) => liveIifeAwareTopLevelSequenceOffset(
-    tokens,
-    [declaration, "gameScript", "=", "document", ".", "createElement", "(", "script", ")", ";"],
-  )).find((offset) => offset !== -1) ?? -1;
-  if (create === -1) return false;
-  const source = liveIifeAwareTopLevelSequenceOffset(tokens, ["gameScript", ".", "src", "=", "game.js", ";"], create + 10);
-  if (source === -1) return false;
-  const append = ["document", ".", "body", ".", "appendChild", "(", "gameScript", ")"];
-  const appendOffset = liveIifeAwareTopLevelSequenceOffset(tokens, append, source + 6);
-  if (appendOffset === -1) return false;
-  // a minifier drops the trailing ";" when the call is the script block's final statement (ASI)
-  const after = tokens[appendOffset + append.length]?.value;
-  return after === undefined || after === ";";
+function dynamicallyLoadsGameStatements(tokens, sequenceOffset) {
+  for (const declaration of ["const", "let", "var"]) {
+    for (let create = sequenceOffset(tokens, [declaration]); create !== -1; create = sequenceOffset(tokens, [declaration], create + 1)) {
+      const gameScript = tokens[create + 1];
+      if (gameScript?.type !== "identifier" || !tokenValuesAt(tokens, create, [
+        declaration, gameScript.value, "=", "document", ".", "createElement", "(", "script", ")", ";",
+      ])) continue;
+      const source = sequenceOffset(tokens, [gameScript.value, ".", "src", "=", "game.js", ";"], create + 10);
+      if (source === -1) continue;
+      const append = ["document", ".", "body", ".", "appendChild", "(", gameScript.value, ")"];
+      const appendOffset = sequenceOffset(tokens, append, source + 6);
+      if (appendOffset === -1) continue;
+      // a minifier drops the trailing ";" when the call is the script block's final statement (ASI)
+      const after = tokens[appendOffset + append.length]?.value;
+      if (after === undefined || after === ";") return true;
+    }
+  }
+  return false;
+}
+
+function dynamicallyLoadsGame(tokens, isModule = false) {
+  if (dynamicallyLoadsGameStatements(tokens, liveIifeAwareTopLevelSequenceOffset)) return true;
+  const startRuntime = topLevelFunctionDefinitions(tokens).get("startRuntime");
+  if (!startRuntime || !dynamicallyLoadsGameStatements(startRuntime.body, liveTopLevelSequenceOffset)) return false;
+  for (let offset = liveIifeAwareTopLevelSequenceOffset(tokens, ["startRuntime", "(", ")"]);
+    offset !== -1;
+    offset = liveIifeAwareTopLevelSequenceOffset(tokens, ["startRuntime", "(", ")"], offset + 1)) {
+    const before = tokens[offset - 1]?.value;
+    const after = tokens[offset + 3]?.value;
+    if ((before === undefined || before === ";" || before === "}") && (after === undefined || after === ";")) return true;
+  }
+  if (!isModule) return false;
+  const bootstrap = ["import", "(", "./platform-sdk.js", ")", ".", "then", "(", "startRuntime", ",", "failLocalBootstrap", ")"];
+  for (let offset = liveIifeAwareTopLevelSequenceOffset(tokens, bootstrap);
+    offset !== -1;
+    offset = liveIifeAwareTopLevelSequenceOffset(tokens, bootstrap, offset + 1)) {
+    const before = tokens[offset - 1]?.value;
+    const after = tokens[offset + bootstrap.length]?.value;
+    if ((before === undefined || before === ";" || before === "}") && (after === undefined || after === ";")) return true;
+  }
+  return false;
 }
 
 function helperInstantiatesPath(definition, pathParam, definitions, visited = new Set()) {
@@ -696,7 +723,7 @@ function parseReleaseConfig(html, requireRuntimeBuild = true) {
       continue;
     }
     const tokens = lexBootstrapScript(match[2]);
-    if (dynamicallyLoadsGame(tokens)) loadsGame = true;
+    if (dynamicallyLoadsGame(tokens, attributes.get("type") === "module")) loadsGame = true;
     const dead = deadTokenOffsets(tokens);
     const topLevelOffsets = iifeAwareTopLevelOffsets(tokens);
     for (let offset = 0; offset < tokens.length; offset += 1) {
@@ -809,6 +836,10 @@ function diagnosticReporterBody(studioRoot, storageNamespace, crashStoragePrefix
   return `${source}\nwindow.__platformDiagnostics = installPlatformDiagnostics(window, { storagePrefix: '${args.storagePrefix}', runtimeScript: '${args.runtimeScript}' });`;
 }
 
+function canonicalDiagnosticsBody(value) {
+  return String(value).trim().replace(/\r\n/g, "\n");
+}
+
 function isPlatformBootstrap(body) {
   const tokens = lexBootstrapScript(body);
   return tokens.some((token, index) => token.value === "import" && (
@@ -828,8 +859,10 @@ function validatePlatformDiagnostics(html, studioRoot, storageNamespace, configS
   const reporters = scripts.filter((script) => !script.attributes.has("src") && script.attributes.get("id") === "platform-diagnostics");
   if (reporters.length !== 1) throw new Error("release HTML must contain exactly one executable platform diagnostics reporter");
   const reporter = reporters[0];
-  if (reporter.body.trim() !== expected) throw new Error("release platform diagnostics reporter does not match the shared source and generated arguments");
-  if (scripts.filter((script) => script.body.trim() === expected).length !== 1) {
+  if (canonicalDiagnosticsBody(reporter.body) !== canonicalDiagnosticsBody(expected)) {
+    throw new Error("release platform diagnostics reporter does not match the shared source and generated arguments");
+  }
+  if (scripts.filter((script) => canonicalDiagnosticsBody(script.body) === canonicalDiagnosticsBody(expected)).length !== 1) {
     throw new Error("release HTML has duplicated executable platform diagnostics reporter body");
   }
   if (reporter.index <= configScriptIndex) throw new Error("release platform diagnostics reporter must follow the frozen config");

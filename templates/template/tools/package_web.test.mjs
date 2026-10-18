@@ -25,6 +25,7 @@ import {
   verifyDependencySources,
   verifyWebPackage,
 } from "./package_web.mjs";
+import { minifyWebRelease } from "./minify_web_release.mjs";
 import { createStoreZip, readStoreZip } from "./lib/zip_store.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { runtimeBuildWitness } from "./lib/runtime_build.mjs";
@@ -535,16 +536,18 @@ function diagnosticsFixture(t) {
       "</script>",
       `<script id=\"platform-diagnostics\">${reporter}</script>`,
       "<script type=\"module\">",
-      "function startRuntime() { globalThis.__runtimeStarted = true; }",
+      "function startRuntime() { var gameScript = document.createElement('script'); gameScript.src = 'game.js'; document.body.appendChild(gameScript); }",
       "function failLocalBootstrap(error) { globalThis.__bootstrapFailure = error; }",
       "import('./platform-sdk.js').then(startRuntime, failLocalBootstrap);",
       "</script>",
-    ].join("\n"));
+    ].join("\n"))
+    .replace("<script src=\"game.js\"></script>", "")
+    .replace(/window\.__PLATFORM_SDK_CONFIG__ = Object\.freeze\(\{[^}]*\}\);/, (config) => `(function () { ${config} }()); window.__platformSdkSetLoadingProgress(0.01);`);
   write(htmlPath, html);
   return { ...item, reporter, htmlPath };
 }
 
-test("platform-sdk 3.0.0 validates canonical diagnostics before the caught bootstrap and packages it", (t) => {
+test("platform-sdk 3.0.0 validates the canonical diagnostics caught bootstrap after release minification", async (t) => {
   const item = diagnosticsFixture(t);
   assert.doesNotThrow(() => validateWebArtifact({ ...item, studioRoot }));
 
@@ -557,10 +560,48 @@ test("platform-sdk 3.0.0 validates canonical diagnostics before the caught boots
       return true;
     },
   });
-  const html = readStoreZip(readFileSync(result.zipPath)).get("index.html").toString("utf8");
+  const entries = readStoreZip(readFileSync(result.zipPath));
+  const minifiedArtifact = join(item.root, "minified-release");
+  mkdirSync(minifiedArtifact);
+  write(join(minifiedArtifact, "index.html"), entries.get("index.html"));
+  await minifyWebRelease({ artifactDir: minifiedArtifact });
+  entries.set("index.html", readFileSync(join(minifiedArtifact, "index.html")));
+  const zip = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
+  writeFileSync(result.zipPath, zip);
+  const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));
+  manifest.artifact.size = zip.length;
+  manifest.artifact.sha256 = sha256(zip);
+  manifest.entries = [...entries].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) }));
+  write(result.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  assert.doesNotThrow(() => verifyWebPackage({ zipPath: result.zipPath, manifestPath: result.manifestPath, expectedTarget: item.target, studioRoot }));
+  const html = entries.get("index.html").toString("utf8");
   assert.equal(html.includes(item.reporter), true);
-  assert.match(html, /<script>\s*function startRuntime[\s\S]*?startRuntime\(\);\s*<\/script>/);
   assert.doesNotMatch(html, /\bimport\s*\(\s*["']\.\/platform-sdk\.js/);
+});
+
+test("caught bootstrap requires an executable standalone startRuntime call", (t) => {
+  const bootstrap = "import('./platform-sdk.js').then(startRuntime, failLocalBootstrap);";
+  for (const [label, replacement] of [
+    ["declared", ""],
+    ["arrow", "const never = () => startRuntime();"],
+    ["arrow import", "const never = () => import('./platform-sdk.js').then(startRuntime, failLocalBootstrap);"],
+    ["dead", "if (false) startRuntime();"],
+    ["member", "holder.startRuntime();"],
+    ["nested", "function later() { startRuntime(); }"],
+    ["uncaught", "import('./platform-sdk.js').then(startRuntime);"],
+  ]) {
+    const item = diagnosticsFixture(t);
+    write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace(bootstrap, replacement));
+    assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /entrypoint.*game\.js/i, label);
+  }
+});
+
+test("platform diagnostics accepts CMake CRLF substitution without accepting a changed body", (t) => {
+  const item = diagnosticsFixture(t);
+  write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace(item.reporter, item.reporter.replace(/\r?\n/g, "\r\n")));
+  assert.doesNotThrow(() => validateWebArtifact({ ...item, studioRoot }));
+  write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace("MAX_OUTGOING = 12000", "MAX_OUTGOING = 12001"));
+  assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /diagnostics reporter.*shared source/i);
 });
 
 test("platform diagnostics accepts an explicit CMake crash prefix and runtime script", (t) => {
@@ -601,7 +642,7 @@ test("platform-sdk 3.0.0 rejects missing, stale, duplicate, and late executable 
     ["missing", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace(`<script id=\"platform-diagnostics\">${item.reporter}</script>`, "")), /platform diagnostics/i],
     ["stale", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace("MAX_OUTGOING = 12000", "MAX_OUTGOING = 12001")), /diagnostics reporter.*shared source/i],
     ["duplicate", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace("<script type=\"module\">", `<script>${item.reporter}</script><script type=\"module\">`)), /platform diagnostics reporter/i],
-    ["late", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace(`<script id=\"platform-diagnostics\">${item.reporter}</script>\n`, "").replace("<script src=\"game.js\"></script>", `<script src=\"game.js\"></script><script id=\"platform-diagnostics\">${item.reporter}</script>`)), /platform diagnostics reporter must precede/i],
+    ["late", (item) => write(item.htmlPath, `${readFileSync(item.htmlPath, "utf8").replace(`<script id=\"platform-diagnostics\">${item.reporter}</script>\n`, "")}<script id=\"platform-diagnostics\">${item.reporter}</script>`), /platform diagnostics reporter must precede/i],
     ["module", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace('<script id="platform-diagnostics">', '<script id="platform-diagnostics" type="module">')), /classic inline JavaScript/i],
     ["nomodule", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace('<script id="platform-diagnostics">', '<script id="platform-diagnostics" nomodule>')), /classic inline JavaScript/i],
     ["external", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace('<script id="platform-diagnostics">', '<script id="platform-diagnostics" src="diagnostics.js">')), /classic inline JavaScript/i],
