@@ -89,22 +89,35 @@ function resolveAssetPath(sourceRoot, packDir, value = "", sourceRelative = fals
   return safeResolve(sourceRelative ? sourceRoot : packDir, value);
 }
 
-function normalizeAsset(sourceRoot, packDir, pack, asset) {
-  const packId = pack.pack || basename(packDir);
-  const assetId = asset.asset_id || asset.id;
-  if (!assetId) throw new Error(`${join(packDir, "assets.jsonl")}: asset row is missing asset_id`);
+// The one rule for where an asset row's files live: `source_*` keys are relative
+// to the source root (a game's assets/), the plain keys to the row's pack folder.
+// Returns absolute paths; an absent file is "".
+export function assetRowFiles(sourceRoot, packDir, asset) {
   const resourcePath = asset.source_resource || asset.resource || asset.path || "";
   const previewPath = asset.source_preview || asset.preview || "";
   const resourceSourceRelative = Boolean(asset.source_resource);
   const previewSourceRelative = Boolean(asset.source_preview);
   const modelPath = asset.model || (modelExt.has(extname(resourcePath).toLowerCase()) ? resourcePath : "");
-  const resolvedResource = resolveAssetPath(sourceRoot, packDir, resourcePath, resourceSourceRelative);
-  const resolvedPreview = resolveAssetPath(sourceRoot, packDir, previewPath, previewSourceRelative);
-  const resolvedModel = asset.source_model
-    ? resolveAssetPath(sourceRoot, packDir, asset.source_model, true)
-    : modelPath
-      ? resolveAssetPath(sourceRoot, packDir, modelPath, resourceSourceRelative)
-      : "";
+  return {
+    resource: resolveAssetPath(sourceRoot, packDir, resourcePath, resourceSourceRelative),
+    preview: resolveAssetPath(sourceRoot, packDir, previewPath, previewSourceRelative),
+    model: asset.source_model
+      ? resolveAssetPath(sourceRoot, packDir, asset.source_model, true)
+      : modelPath
+        ? resolveAssetPath(sourceRoot, packDir, modelPath, resourceSourceRelative)
+        : "",
+  };
+}
+
+function normalizeAsset(sourceRoot, packDir, pack, asset) {
+  const packId = pack.pack || basename(packDir);
+  const assetId = asset.asset_id || asset.id;
+  if (!assetId) throw new Error(`${join(packDir, "assets.jsonl")}: asset row is missing asset_id`);
+  const {
+    resource: resolvedResource,
+    preview: resolvedPreview,
+    model: resolvedModel,
+  } = assetRowFiles(sourceRoot, packDir, asset);
   const filesDir = resolvedResource ? dirname(resolvedResource) : "";
   return {
     asset_id: assetId,

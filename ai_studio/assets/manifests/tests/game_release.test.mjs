@@ -146,6 +146,28 @@ test("game release asset audit validates packed tracked bytes and metadata", (t)
   });
 });
 
+test("a row naming its file relative to its pack folder is audited like a source_resource row", (t) => {
+  const path = "assets/packs/fixture/files/rock.glb";
+  const bytes = Buffer.from("rock-bytes");
+  const packRelative = (overrides) => {
+    const item = fixture(t);
+    write(join(item.root, ...path.split("/")), bytes);
+    write(join(item.root, "assets", "release_inputs.json"), JSON.stringify({
+      schema: "ai_studio.game_release_assets.v1", inputs: [item.path, path].sort(),
+    }));
+    write(join(item.root, "src", "build_packs.c"),
+      `nt_atlas_add(atlas, "${item.path}", &options);\nnt_builder_add_mesh(ctx, "${path}", &mesh);\n`);
+    const { source_resource: _, ...rest } = item.record;
+    write(join(item.root, "assets", "packs", "fixture", "assets.jsonl"), `${JSON.stringify(item.record)}\n${JSON.stringify({
+      ...rest, asset_id: "fixture__rock__cc0-1-0", resource: "files/rock.glb",
+      sha256: createHash("sha256").update(bytes).digest("hex"), bytes: bytes.length, ...overrides,
+    })}\n`);
+    return auditGameReleaseAssets(item.root, { trackedPaths: [...item.tracked, path] });
+  };
+  assert.deepEqual(packRelative({}), { ok: true, packed: 2, issues: [] });
+  assert.match(packRelative({ redistribution_allowed: "false" }).issues.join("\n"), new RegExp(`^${path}: `, "m"));
+});
+
 test("game release asset audit accepts a tracked source sidecar and checks its release fields", (t) => {
   const item = fixture(t);
   rmSync(join(item.root, "assets", "packs"), { recursive: true });

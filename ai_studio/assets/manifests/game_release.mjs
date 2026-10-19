@@ -4,6 +4,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { validateLicenseRecord } from "../licenses/ops.mjs";
+import { assetRowFiles } from "./manifest.mjs";
 
 const PACKED_EXTENSIONS = /\.(?:glb|mp3|png|wav)$/i;
 const SAFE_ASSET_PATH = /^assets\/[A-Za-z0-9_./-]+$/;
@@ -170,15 +171,21 @@ function loadPackRecords(gameDir, records, duplicates) {
         ...row,
         defaultsPath: existsSync(packPath) ? slash(relative(gameDir, packPath)) : "",
       };
-      const rowPaths = new Set();
+      const where = `${slash(relative(gameDir, path))}:${index + 1}`;
       for (const key of ["source_resource", "source_model", "source_preview"]) {
-        if (typeof row[key] === "string") {
-          const sourcePath = slash(row[key]);
-          if (sourcePath.startsWith("assets/") || !isSafeAssetPath(`assets/${sourcePath}`)) {
-            throw new Error(`${slash(relative(gameDir, path))}:${index + 1}: ${key} must be a safe path relative to assets/`);
-          }
-          rowPaths.add(`assets/${sourcePath}`);
+        if (typeof row[key] === "string" && slash(row[key]).startsWith("assets/")) {
+          throw new Error(`${where}: ${key} must be a safe path relative to assets/`);
         }
+      }
+      let files;
+      try { files = assetRowFiles(join(gameDir, "assets"), join(packsRoot, pack), row); }
+      catch (error) { throw new Error(`${where}: ${error.message}`); }
+      const rowPaths = new Set();
+      for (const file of [files.resource, files.model, files.preview]) {
+        if (!file) continue;
+        const assetPath = slash(relative(gameDir, file));
+        if (!isSafeAssetPath(assetPath)) throw new Error(`${where}: asset path is not a safe path under assets/: ${assetPath}`);
+        rowPaths.add(assetPath);
       }
       for (const assetPath of rowPaths) {
         addRecord(records, duplicates, assetPath, record, slash(relative(gameDir, path)));
