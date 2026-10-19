@@ -114,7 +114,7 @@ this panel renders visibly counts up and levels on its own — otherwise a
 fresh boot would show a perfectly static bar and nothing would prove the
 panel's count-up/accent/levelup behavior without manual DevAPI pokes. This
 income marks the save dirty on every flush (autosave debounces at 2s,
-`main.c` `GAME_SAVE_DEBOUNCE_MS`) — a template that visibly "keeps ticking"
+`cmake/GameCodegen.cmake` `GAME_SAVE_DEBOUNCE_MS`) — a template that visibly "keeps ticking"
 in the background is the INTENDED demo of an idle game, not a bug. A real
 game (or a lead who wants a silent template) can zero `DEMO_XP_PER_SEC` in
 `demo_hud.c`; the bar then sits static at `0/cost` and every acceptance gate

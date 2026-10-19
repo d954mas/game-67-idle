@@ -17,7 +17,7 @@ void settings_draw_launcher(nt_ui_context_t *ctx, bool interactive);
 void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive);
 
 /* Навигация: фича экспортирует open/close/is_open; КОГДА открыть решает игра
-   (main.c, флаг --settings). Гир-кнопка панели — собственный аффорданс фичи. */
+   (shell/shell_tick.c, флаг --settings). Гир-кнопка панели — собственный аффорданс фичи. */
 void settings_open(void);
 void settings_close(void);
 bool settings_is_open(void);

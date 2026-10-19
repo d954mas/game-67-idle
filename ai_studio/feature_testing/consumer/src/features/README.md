@@ -36,7 +36,7 @@
 
 ## Слои (включать строго ВНИЗ)
 
-- **L0 шелл** — не фича: `main.c`-кондуктор, `game_features.{c,h}`, `world.h`
+- **L0 шелл** — не фича: `main.c`-кондуктор и фазы `shell/`, `game_features.{c,h}`, `world.h`
   (заморожен как handle-bag), `ui_runtime`, `theme`, render bootstrap, codegen,
   persistence toolkit (`game_save` реестр/оркестрация + `game_storage` бэкенд +
   JSON-хелперы + транзакционный swap + codegen-инструмент), build_packs-каркас,
@@ -75,7 +75,7 @@
   `<id>_state_t`, свои `to_json/from_json/reset` (генератор `--fragment <id>`
   для крупных, руками над хелперами для мелких), версия+миграции ЛОКАЛЬНЫ фиче.
   Идентичность фрагмента = имя JSON-ключа (числовых id-диапазонов нет).
-  Фрагмент регистрируется ОДНОЙ строкой в шелле (`main.c`, ср. `main.c:397-398`
+  Фрагмент регистрируется ОДНОЙ строкой в шелле (`shell/shell_boot.c`, ср. `register_saves()`
   `game_save_register_fragment(&<id>_state_fragment)`) — это легальный include
   ВНИЗ к L0-persistence-toolkit (напр. items → `game_save_register_fragment`).
 - Кросс-фичевый доступ к стейту — только через API владельца, не через чужой

@@ -38,7 +38,7 @@ extern const int game_log_desc_count;                   /* 1 */
 
 /* Register the debug label "log" (effect only under NT_HASH_LABELS). Call once after
    nt_hash_init. Descriptor registration into the tail/analytics registries is a separate
-   *_register_descs(game_log_descs, ...) call at the conductor (main.c). */
+   *_register_descs(game_log_descs, ...) call at boot (shell/shell_boot.c). */
 void game_log_register(void);
 
 #endif /* GAME_LOG_H */

@@ -159,7 +159,7 @@ if(EMSCRIPTEN)
 
     # Deliver the tracked web shell to bin/ at configure time. Two substitutions:
     # the tab title (GAME_TITLE) and Module.arguments. The engine web devapi shim
-    # installs only if main() saw `--devapi <port>` in argv (main.c parses it, and
+    # installs only if main() saw `--devapi <port>` in argv (src/shell/shell_platform.c parses it, and
     # on web argv comes ONLY from Module.arguments); the devapi presets carry the
     # flag, the human presets (devapi OFF) expand to empty.
     if(GAME_DEVAPI_ENABLED)
@@ -211,7 +211,7 @@ target_compile_definitions(${GAME_TARGET} PRIVATE
     _CRT_SECURE_NO_WARNINGS
 )
 # E4: FEATURE_GAME_ANALYTICS is defined ALWAYS (1/0) at target level -- game_features.c and
-# main.c carry #if FEATURE_GAME_ANALYTICS unconditionally, and an undefined macro under
+# src/shell/shell_boot.c carry #if FEATURE_GAME_ANALYTICS unconditionally, and an undefined macro under
 # -Wundef + -Werror would fail native-debug/release. Mirrors NT_DEVAPI_ENABLED=0.
 target_compile_definitions(${GAME_TARGET} PRIVATE
     FEATURE_GAME_ANALYTICS=$<BOOL:${GAME_ANALYTICS_ENABLED}>

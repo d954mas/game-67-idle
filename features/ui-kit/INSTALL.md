@@ -19,7 +19,6 @@ target_sources(${GAME_TARGET} PRIVATE
     "${UI_KIT_SRC}/ui_kit.c"
     "${UI_KIT_SRC}/ui_reach.c"
     "${UI_KIT_SRC}/ui_safe_area.c"
-    # Only for text standing over the world:
     "${UI_KIT_SRC}/ui_world_anchor.c"
     "${UI_KIT_SRC}/ui_screen_pack.c")
 target_include_directories(${GAME_TARGET} PRIVATE "${UI_KIT_INC}")

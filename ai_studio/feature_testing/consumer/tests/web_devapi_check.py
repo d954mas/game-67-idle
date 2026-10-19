@@ -15,7 +15,7 @@ Flow:
   1. build_wasm_devapi() -> build/wasm-devapi-debug (Debug+DevAPI; its own
      build/engine dir, no clobber) with the pack copied flat next to index.html.
      configure_file bakes `Module.arguments=['--devapi','17890']` into the shell,
-     so main() sees `--devapi` in argv and installs window.__devapi (main.c: the
+     so main() sees `--devapi` in argv and installs window.__devapi (src/shell/shell_platform.c: the
      web shim installs ONLY when --devapi was parsed).
   2. Serve bin/ and load index.html headless; wait for window.__devapi.ready
      (set SYNCHRONOUSLY at shim install -- proves the transport is live, not that

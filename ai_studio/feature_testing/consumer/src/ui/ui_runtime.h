@@ -10,8 +10,8 @@
 #include <stdbool.h>
 
 // Owns the engine UI stack (sprite renderer + slice9 atlas + nt_ui context) so
-// game systems only build widgets. main.c drives: init -> begin/build/end per
-// frame -> teardown. Reuses main's text material + font (one glyph atlas).
+// game systems only build widgets. The shell drives it: init in shell_boot.c -> begin/build/end per
+// frame -> teardown. Reuses boot's text material + font (one glyph atlas).
 //
 //   if (ui_runtime_begin(dt, input)) { game_scenes_build_ui(ui_runtime_ctx()); ui_runtime_end(); }
 void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t font_resource);

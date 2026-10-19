@@ -1,7 +1,9 @@
 #ifndef GAME_SHELL_H
 #define GAME_SHELL_H
 
-/* The shell runs every frame as four phases, in this order and no other:
+/* The shell has four phases: platform, boot, tick and present. Boot runs once
+   before the loop and once at teardown; every frame then runs, in this order
+   and no other:
 
      shell_platform_frame_begin -> shell_tick -> shell_present -> shell_platform_frame_end
 
@@ -9,7 +11,8 @@
    input, swap, page markers). Boot owns startup and teardown of engine
    subsystems. Tick owns the session: load, rules and saves. Present owns
    drawing and GPU loss/recovery. Rules run before presentation, and present
-   only reads the World. main.c sequences the phases and owns nothing else. */
+   only reads the World. main.c sequences the calls and owns only the storage
+   they share: the World and the input frame. */
 
 // Every phase and main.c gate their web edge on NT_PLATFORM_WEB; without this header it is silently undefined.
 #include "core/nt_platform.h"

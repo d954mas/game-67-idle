@@ -24,7 +24,7 @@
 
 /* settings — первая мигрированная фича (И1): draw_ui теперь владеет
    ui_runtime-кадром и рисует settings по одной строке (z-order). Рендер-
-   системы (render_mesh_draw/hud_draw) ПОКА прямые вызовы шелла в main.c,
+   системы (render_mesh_draw/hud_draw) ПОКА прямые вызовы шелла в shell/shell_present.c,
    поэтому draw_world остаётся заглушкой. */
 
 static bool s_settings_was_open;

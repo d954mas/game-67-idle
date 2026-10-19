@@ -204,7 +204,7 @@ void tearDown(void) {
     remove_slot_files();
 }
 
-/* 1. Locks the exact registration contract main.c depends on: order matters
+/* 1. Locks the exact registration contract src/shell/shell_boot.c depends on: order matters
    for reconcile/on_new_game fan-out and the L1(items)-before-L2(progression) rule.
    A new template fragment updates this assertion together with its own
    registration -- an intentional composition contract, not brittleness. */
