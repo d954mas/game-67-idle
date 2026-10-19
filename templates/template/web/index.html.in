@@ -376,9 +376,18 @@
   // the stream a page reads is already decompressed, so the header cannot size
   // the download. Zero means "unknown": fall back to Content-Length.
   window.__gameAssetBytes = { wasm: 0, pack: 0 };
-
+</script>
+<script id="platform-diagnostics">
+@PLATFORM_SDK_DIAGNOSTICS_JS@
+window.__platformDiagnostics = installPlatformDiagnostics(window, { storagePrefix: '@GAME_CRASH_STORAGE_PREFIX@', runtimeScript: 'game.js' });
+</script>
+<script>
   var Module = {
     canvas: document.getElementById('canvas'),
+    onAbort: function (reason) {
+      window.__platformDiagnostics.report('wasm.abort', new Error(String(reason)));
+      window.__showRuntimeFatal();
+    },
     @GAME_DEVAPI_MODULE_ARGS@
     // The wasm download is the longest stretch of a cold start. Emscripten's
     // own fetch reports nothing, so the bar would sit still for seconds; this
@@ -430,7 +439,8 @@
       }).then(function (result) {
         window.__platformSdkSetLoadingProgress(BAND_END);
         successCallback(result.instance, result.module);
-      }).catch(function (error) {
+      }, function (error) {
+        window.__platformDiagnostics.report('boot.wasm_failed', error);
         console.error(error);
         window.__showRuntimeFatal();
       });
@@ -446,10 +456,20 @@
   };
 </script>
 <script type="module">
-  import './platform-sdk.js';
-  var gameScript = document.createElement('script');
-  gameScript.src = 'game.js';
-  document.body.appendChild(gameScript);
+  function startRuntime() {
+    var gameScript = document.createElement('script');
+    gameScript.src = 'game.js';
+    gameScript.onerror = function () {
+      window.__platformDiagnostics.report('boot.script_failed', new Error('Runtime script could not load'));
+      window.__showRuntimeFatal();
+    };
+    document.body.appendChild(gameScript);
+  }
+  function failLocalBootstrap(error) {
+    window.__platformDiagnostics.report('boot.sdk_failed', error);
+    window.__showRuntimeFatal();
+  }
+  import('./platform-sdk.js').then(startRuntime, failLocalBootstrap);
 </script>
 </body>
 </html>

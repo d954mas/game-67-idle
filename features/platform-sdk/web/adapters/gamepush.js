@@ -51,6 +51,7 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
   /* The SDK's own pause is one more reason, held as a flag: its pause and
      resume events are not guaranteed to alternate. */
   let sdkPaused = false;
+  let invokingAdOperation = null;
 
   function windowRef() {
     return (host && host.window) || host || globalThis;
@@ -67,29 +68,36 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
     else leavePause();
   };
 
-  function audio(enabled) {
-    if (!lifecycle || typeof lifecycle.audio !== "function") return;
-    try { lifecycle.audio(enabled); } catch { /* the facade is not up */ }
+  function dispatchLifecycle(callback, fault) {
+    if (invokingAdOperation && invokingAdOperation.faulted) return false;
+    try {
+      callback();
+      return true;
+    } catch (error) {
+      if (fault) fault(error);
+      else reportLateFault(error);
+      return false;
+    }
   }
 
-  function enterPause() {
+  function audio(enabled, fault) {
+    if (!lifecycle || typeof lifecycle.audio !== "function") return;
+    return dispatchLifecycle(() => lifecycle.audio(enabled), fault);
+  }
+
+  function enterPause(fault) {
     pauseDepth += 1;
     if (pauseDepth !== 1) return;
-    audio(false);
-    try { if (lifecycle) lifecycle.pause(); } catch { /* the facade is not up */ }
+    if (audio(false, fault) === false) return;
+    if (lifecycle) dispatchLifecycle(() => lifecycle.pause(), fault);
   }
 
-  function leavePause() {
+  function leavePause(fault) {
     if (pauseDepth === 0) return;
     pauseDepth -= 1;
     if (pauseDepth !== 0) return;
-    audio(true);
-    try { if (lifecycle) lifecycle.resume(); } catch { /* the facade is not up */ }
-  }
-
-  function adVisible(requestId, visible) {
-    if (!lifecycle || typeof lifecycle.adVisible !== "function") return;
-    try { lifecycle.adVisible(requestId, visible); } catch { /* the facade is not up */ }
+    if (audio(true, fault) === false) return;
+    if (lifecycle) dispatchLifecycle(() => lifecycle.resume(), fault);
   }
 
   function deadline(operation, failedResult, ms) {
@@ -107,6 +115,68 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
 
       operation.then(settle, () => settle(failedResult));
     });
+  }
+
+  function adOperation(start, timeoutResult, failedResult = timeoutResult) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let faulted = false;
+      let onSettle = () => {};
+      const root = windowRef();
+      const timer = (root.setTimeout || setTimeout)(() => settle(timeoutResult), AD_TIMEOUT_MS);
+
+      function settle(result) {
+        if (settled || faulted) return;
+        settled = true;
+        (root.clearTimeout || clearTimeout)(timer);
+        onSettle();
+        resolve(result);
+      }
+
+      function fault(error) {
+        if (faulted) return;
+        faulted = true;
+        if (settled) {
+          reportLateFault(error);
+          return;
+        }
+        settled = true;
+        (root.clearTimeout || clearTimeout)(timer);
+        onSettle();
+        reject(error);
+      }
+
+      function bridge(callback) {
+        if (faulted) return false;
+        try {
+          callback();
+        } catch (error) {
+          fault(error);
+          return false;
+        }
+        return !faulted;
+      }
+
+      try {
+        start(settle, bridge, fault, (callback) => { onSettle = callback; });
+      } catch {
+        if (!faulted) settle(failedResult);
+      }
+    });
+  }
+
+  function reportLateFault(error) {
+    const root = windowRef();
+    const throwFault = () => { throw error; };
+    if (typeof root.queueMicrotask === "function") {
+      root.queueMicrotask(throwFault);
+      return;
+    }
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(throwFault);
+      return;
+    }
+    Promise.resolve().then(throwFault);
   }
 
   /* The mirrors are equivalent copies of one SDK, listed so a blocked or slow
@@ -170,9 +240,13 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
       try {
         ads.on(`${format}:start`, () => {
           if (format === "preloader") preloaderStarted = true;
-          if (!destroyed) enterPause();
+          const operation = invokingAdOperation;
+          if (!destroyed && (!operation || !operation.faulted)) enterPause(operation && operation.fault);
         });
-        ads.on(`${format}:close`, () => { if (!destroyed) leavePause(); });
+        ads.on(`${format}:close`, () => {
+          const operation = invokingAdOperation;
+          if (!destroyed && (!operation || !operation.faulted)) leavePause(operation && operation.fault);
+        });
       } catch { /* the SDK is not broadcasting this format */ }
     }
   }
@@ -210,7 +284,7 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
 
   function reportSound(index, muted) {
     if (destroyed || !lifecycle || typeof lifecycle.sound !== "function") return;
-    try { lifecycle.sound(index, Boolean(muted)); } catch { /* the facade is not up */ }
+    return dispatchLifecycle(() => lifecycle.sound(index, Boolean(muted)));
   }
 
   function followSounds(instance) {
@@ -332,15 +406,47 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
     /* Availability is a live answer about inventory and frequency caps, not a
        statement about the format, so a false one is an ordinary refusal. */
     if (!ads[available]) return { supported: true, shown: false, reason: "rate_limited", ...extra };
-    adVisible(requestId, true);
-    const result = await deadline(
-      Promise.resolve(ads[method]()).then((value) => ({ value }), () => null),
-      null,
-      AD_TIMEOUT_MS);
-    adVisible(requestId, false);
-    if (result === null) return { supported: true, shown: false, reason: "timeout", ...extra };
-    if (!result.value) return { supported: true, shown: false, reason: "failed", ...extra };
-    return { supported: true, shown: true, ...extra, ...(kind === "rewarded" ? { rewarded: true } : {}) };
+    const failed = { supported: true, shown: false, reason: "failed", ...extra };
+    const timeout = { supported: true, shown: false, reason: "timeout", ...extra };
+    return adOperation((settle, bridge, fault) => {
+      const operation = {
+        faulted: false,
+        fault(error) {
+          if (operation.faulted) return;
+          operation.faulted = true;
+          fault(error);
+        },
+      };
+      const visible = (next) => {
+        if (operation.faulted) return false;
+        try {
+          if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, next);
+        } catch (error) {
+          operation.fault(error);
+          return false;
+        }
+        return !operation.faulted;
+      };
+      if (!visible(true)) return;
+      let shown;
+      invokingAdOperation = operation;
+      try {
+        shown = ads[method]();
+      } catch {
+        if (visible(false)) settle(failed);
+        invokingAdOperation = null;
+        return;
+      }
+      invokingAdOperation = null;
+      Promise.resolve(shown).then((value) => {
+        if (!visible(false)) return;
+        settle(value
+          ? { supported: true, shown: true, ...extra, ...(kind === "rewarded" ? { rewarded: true } : {}) }
+          : failed);
+      }, () => {
+        if (visible(false)) settle(failed);
+      });
+    }, timeout, failed);
   }
 
   async function showInterstitial(placement, requestId) {
@@ -437,10 +543,13 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
       player.set(name, text);
       if (String(player.get(name)) !== text) return { status: "unavailable" };
     } catch { return { status: "unavailable" }; }
-    const synced = await deadline(
-      Promise.resolve(player.sync()).then(() => true, () => false),
-      false,
-      SAVE_TIMEOUT_MS);
+    let sync;
+    try {
+      sync = player.sync();
+    } catch {
+      return { status: "failed" };
+    }
+    const synced = await deadline(Promise.resolve(sync).then(() => true, () => false), false, SAVE_TIMEOUT_MS);
     return synced ? { status: "acknowledged" } : { status: "failed" };
   }
 
@@ -484,10 +593,13 @@ export function createGamePushPlatformAdapter({ config, host, lifecycle }) {
       player.set(LEADERBOARD_FIELD, score);
       if (Number(player.get(LEADERBOARD_FIELD)) !== score) return { status: "unsupported" };
     } catch { return { status: "unsupported" }; }
-    const synced = await deadline(
-      Promise.resolve(player.sync()).then(() => true, () => false),
-      false,
-      SAVE_TIMEOUT_MS);
+    let sync;
+    try {
+      sync = player.sync();
+    } catch {
+      return { status: "failed" };
+    }
+    const synced = await deadline(Promise.resolve(sync).then(() => true, () => false), false, SAVE_TIMEOUT_MS);
     return synced ? { status: "ok" } : { status: "failed" };
   }
 

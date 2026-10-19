@@ -42,6 +42,11 @@ const platformSdkInternalBackend = createPlatformSdkAdapter({
 });
 
 root.__platformSdkInternalBackend = platformSdkInternalBackend;
+try {
+  if (typeof root.dispatchEvent === "function" && typeof root.Event === "function") {
+    root.dispatchEvent(new root.Event("platform-diagnostics-ready"));
+  }
+} catch {}
 if (typeof root.__platformSdkSetLoadingProgress === "function") {
   root.__platformSdkSetLoadingProgress(0.015);
 }
@@ -52,5 +57,4 @@ Promise.resolve(platformSdkInternalBackend.ready())
     if (ready && typeof root.__platformSdkSetLoadingProgress === "function") {
       root.__platformSdkSetLoadingProgress(0.02);
     }
-  })
-  .catch(() => {});
+  });

@@ -50,6 +50,7 @@
 #include "features/platform_sdk/platform_sdk.h"
 #include "features/platform_sdk/platform_sdk_events.h"
 #if defined(__EMSCRIPTEN__)
+#include "crash/nt_crash.h"
 #include "features/platform_sdk/platform_sdk_web.h"
 #endif
 #include "features/settings/settings.h"
@@ -720,6 +721,9 @@ int main(int argc, char **argv) {
     if (nt_engine_init(&config) != NT_OK) {
         return 1;
     }
+#if defined(__EMSCRIPTEN__)
+    nt_crash_init(GAME_CRASH_STORAGE_KEY, GAME_RUNTIME_BUILD_FINGERPRINT[0] ? GAME_RUNTIME_BUILD_FINGERPRINT : "preview");
+#endif
 
 #ifndef GAME_WINDOW_TITLE
 #define GAME_WINDOW_TITLE "Template" // CMake sets "<GAME_TITLE> [AI]" for DevAPI builds

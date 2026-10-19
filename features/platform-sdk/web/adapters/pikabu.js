@@ -37,10 +37,8 @@ export function createPikabuPlatformAdapter({ config, host, lifecycle }) {
     if (destroyed || !lifecycle) return;
     const hidden = Boolean(documentRef() && documentRef().hidden);
     audio(!hidden);
-    try {
-      if (hidden) lifecycle.pause();
-      else lifecycle.resume();
-    } catch { /* the facade is not up */ }
+    if (hidden) lifecycle.pause();
+    else lifecycle.resume();
   };
 
   function deadline(operation, failedResult, ms) {
@@ -58,6 +56,65 @@ export function createPikabuPlatformAdapter({ config, host, lifecycle }) {
 
       operation.then(settle, () => settle(failedResult));
     });
+  }
+
+  function adOperation(start, timeoutResult, failedResult = timeoutResult) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let faulted = false;
+      const root = windowRef();
+      const timer = (root.setTimeout || setTimeout)(() => settle(timeoutResult), AD_TIMEOUT_MS);
+
+      function settle(result) {
+        if (settled || faulted) return;
+        settled = true;
+        (root.clearTimeout || clearTimeout)(timer);
+        resolve(result);
+      }
+
+      function fault(error) {
+        if (faulted) return;
+        faulted = true;
+        if (settled) {
+          reportLateFault(error);
+          return;
+        }
+        settled = true;
+        (root.clearTimeout || clearTimeout)(timer);
+        reject(error);
+      }
+
+      function bridge(callback) {
+        if (faulted) return false;
+        try {
+          callback();
+        } catch (error) {
+          fault(error);
+          return false;
+        }
+        return !faulted;
+      }
+
+      try {
+        start(settle, bridge);
+      } catch {
+        if (!faulted) settle(failedResult);
+      }
+    });
+  }
+
+  function reportLateFault(error) {
+    const root = windowRef();
+    const throwFault = () => { throw error; };
+    if (typeof root.queueMicrotask === "function") {
+      root.queueMicrotask(throwFault);
+      return;
+    }
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(throwFault);
+      return;
+    }
+    Promise.resolve().then(throwFault);
   }
 
   function loadScript() {
@@ -122,11 +179,18 @@ export function createPikabuPlatformAdapter({ config, host, lifecycle }) {
     const ads = instance.ads;
     if (preloaderShowing || started || !ads || !ads.preloader) return;
     preloaderShowing = (async () => {
+      let canShow = false;
       try {
-        if (!ads.preloader.isSupported || !(await ads.preloader.canShow())) return;
-        audio(false);
+        canShow = Boolean(ads.preloader.isSupported && await ads.preloader.canShow());
+      } catch { /* an unavailable preloader is a normal outcome */
+        return;
+      }
+      if (!canShow) return;
+      audio(false);
+      try {
         await ads.preloader.show();
-      } catch { /* an unavailable preloader is a normal outcome */ } finally {
+      } catch { /* an unavailable preloader is a normal outcome */
+      } finally {
         audio(true);
       }
     })();
@@ -134,12 +198,12 @@ export function createPikabuPlatformAdapter({ config, host, lifecycle }) {
 
   function audio(enabled) {
     if (!lifecycle || typeof lifecycle.audio !== "function") return;
-    try { lifecycle.audio(enabled); } catch { /* the facade is not up */ }
+    lifecycle.audio(enabled);
   }
 
   function adVisible(requestId, visible) {
     if (!lifecycle || typeof lifecycle.adVisible !== "function") return;
-    try { lifecycle.adVisible(requestId, visible); } catch { /* the facade is not up */ }
+    lifecycle.adVisible(requestId, visible);
   }
 
   /* No progress channel exists: the host draws its own loading screen and
@@ -152,7 +216,7 @@ export function createPikabuPlatformAdapter({ config, host, lifecycle }) {
     if (preloaderShowing) await preloaderShowing;
     if (started || destroyed) return;
     started = true;
-    try { instance.gameStarted(); } catch { /* the host is not listening */ }
+    try { await instance.gameStarted(); } catch { /* the host is not listening */ }
   }
 
   async function gameLoadingFinished() {
@@ -181,17 +245,27 @@ export function createPikabuPlatformAdapter({ config, host, lifecycle }) {
     try {
       if (!(await ad.canShow())) return failed;
     } catch { return failed; }
-    adVisible(requestId, true);
-    const result = await deadline(
-      Promise.resolve(ad.show()).catch(() => null),
-      null,
-      AD_TIMEOUT_MS);
-    adVisible(requestId, false);
-    if (!result) return { ...failed, reason: "timeout" };
-    if (!result.rendered) {
-      return result.reason === "NOT_SUPPORTED" ? unsupported : failed;
-    }
-    return { supported: true, shown: true, ...extra, ...(kind === "rewarded" ? { rewarded: Boolean(result.reward) } : {}) };
+    const timeout = { ...failed, reason: "timeout" };
+    return adOperation((settle, bridge) => {
+      if (!bridge(() => adVisible(requestId, true))) return;
+      let shown;
+      try {
+        shown = ad.show();
+      } catch {
+        if (bridge(() => adVisible(requestId, false))) settle(failed);
+        return;
+      }
+      Promise.resolve(shown).then((result) => {
+        if (!bridge(() => adVisible(requestId, false))) return;
+        if (!result || !result.rendered) {
+          settle(result && result.reason === "NOT_SUPPORTED" ? unsupported : failed);
+          return;
+        }
+        settle({ supported: true, shown: true, ...extra, ...(kind === "rewarded" ? { rewarded: Boolean(result.reward) } : {}) });
+      }, () => {
+        if (bridge(() => adVisible(requestId, false))) settle(failed);
+      });
+    }, timeout, failed);
   }
 
   async function showInterstitial(placement, requestId) {

@@ -25,6 +25,7 @@ import {
   verifyDependencySources,
   verifyWebPackage,
 } from "./package_web.mjs";
+import { minifyWebRelease } from "./minify_web_release.mjs";
 import { createStoreZip, readStoreZip } from "./lib/zip_store.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { runtimeBuildWitness } from "./lib/runtime_build.mjs";
@@ -228,7 +229,15 @@ test("final package is deterministic and binds the reopened ZIP to exact depende
 
 test("Poki release embeds the selected platform backend into game.js", (t) => {
   const item = fixture(t, "poki");
-  const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
+  const result = packageWebArtifact({
+    ...item,
+    studioRoot,
+    outDir: join(item.root, "release"),
+    publisher: (temporary, destination) => {
+      writeFileSync(destination, readFileSync(temporary));
+      return true;
+    },
+  });
   const zip = readStoreZip(readFileSync(result.zipPath));
 
   assert.equal(zip.has("platform-sdk.js"), false);
@@ -243,6 +252,22 @@ test("Poki release embeds the selected platform backend into game.js", (t) => {
   assert.doesNotMatch(gameJs, /^\s*(?:import|export)\b/m);
 });
 
+test("release SDK evaluation failure reports and shows the fatal shell before rethrowing", () => {
+  const calls = [];
+  let fatalCount = 0;
+  const source = packageWeb.wrapPlatformSdkBundleForRelease(Buffer.from("console.log('sdk initialization');"))
+    .toString("utf8")
+    .replace("try {\n", "try {\nthrow new Error('sdk evaluation fault');\n");
+  const window = {
+    __platformDiagnostics: { report: (kind, error) => calls.push([kind, error.message]) },
+    __showRuntimeFatal: () => { fatalCount += 1; },
+  };
+
+  assert.throws(() => runInNewContext(source, { window, console }), /sdk evaluation fault/);
+  assert.deepEqual(calls, [["boot.sdk_failed", "sdk evaluation fault"]]);
+  assert.equal(fatalCount, 1);
+});
+
 test("release packaging accepts a minified platform SDK module bootstrap", (t) => {
   const item = fixture(t, "poki");
   const htmlPath = join(item.artifactDir, "index.html");
@@ -251,7 +276,13 @@ test("release packaging accepts a minified platform SDK module bootstrap", (t) =
     'import"./platform-sdk.js";',
   ));
 
-  const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
+  const result = packageWebArtifact({
+    ...item, studioRoot, outDir: join(item.root, "release"),
+    publisher: (temporary, destination) => {
+      writeFileSync(destination, readFileSync(temporary));
+      return true;
+    },
+  });
   const html = readStoreZip(readFileSync(result.zipPath)).get("index.html").toString("utf8");
   assert.equal(html.includes("platform-sdk.js"), false);
 });
@@ -277,7 +308,15 @@ test("bundled platform backend executes before the game loader for every adapter
       studioRoot,
       adapter,
     ).toString("utf8");
-    const context = { clearTimeout, console, globalThis: null, Promise, setTimeout };
+  const context = {
+    clearInterval,
+    clearTimeout,
+    console,
+    globalThis: null,
+    Promise,
+    setInterval,
+    setTimeout,
+  };
     context.globalThis = context;
     runInNewContext(source, context);
     assert.equal(context.__gameSawPlatformBackend, true, adapter);
@@ -462,6 +501,215 @@ test("platform wrapper bytes must match the exact verified feature source", (t) 
     write(join(item.artifactDir, file), "// substituted release wrapper\n");
     assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /platform.*mismatch/i, file);
   }
+});
+
+test("platform-sdk 3.0.0 artifacts require the shared diagnostics reporter", (t) => {
+  const item = fixture(t);
+  const dependencyPath = join(item.gameDir, "dependencies.json");
+  const dependencies = JSON.parse(readFileSync(dependencyPath, "utf8"));
+  dependencies.features[0].version = "3.0.0";
+  write(dependencyPath, `${JSON.stringify(dependencies, null, 2)}\n`);
+
+  assert.throws(
+    () => validateWebArtifact({ ...item, studioRoot }),
+    /platform diagnostics/i,
+  );
+  assert.throws(
+    () => packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") }),
+    /platform diagnostics/i,
+  );
+});
+
+function diagnosticsFixture(t) {
+  const item = fixture(t);
+  const dependencyPath = join(item.gameDir, "dependencies.json");
+  const dependencies = JSON.parse(readFileSync(dependencyPath, "utf8"));
+  dependencies.features[0].version = "3.0.0";
+  write(dependencyPath, `${JSON.stringify(dependencies, null, 2)}\n`);
+  const reporter = [
+    readFileSync(join(studioRoot, "features", "platform-sdk", "web", "runtime-diagnostics.js"), "utf8").trimEnd(),
+    "window.__platformDiagnostics = installPlatformDiagnostics(window, { storagePrefix: 'test-game.crash', runtimeScript: 'game.js' });",
+  ].join("\n");
+  const htmlPath = join(item.artifactDir, "index.html");
+  const html = readFileSync(htmlPath, "utf8")
+    .replace("</script><script type=\"module\">import './platform-sdk.js';</script>", [
+      "</script>",
+      `<script id=\"platform-diagnostics\">${reporter}</script>`,
+      "<script type=\"module\">",
+      "function startRuntime() { var gameScript = document.createElement('script'); gameScript.src = 'game.js'; document.body.appendChild(gameScript); }",
+      "function failLocalBootstrap(error) { globalThis.__bootstrapFailure = error; }",
+      "import('./platform-sdk.js').then(startRuntime, failLocalBootstrap);",
+      "</script>",
+    ].join("\n"))
+    .replace("<script src=\"game.js\"></script>", "")
+    .replace(/window\.__PLATFORM_SDK_CONFIG__ = Object\.freeze\(\{[^}]*\}\);/, (config) => `(function () { ${config} }()); window.__platformSdkSetLoadingProgress(0.01);`);
+  write(htmlPath, html);
+  return { ...item, reporter, htmlPath };
+}
+
+test("platform-sdk 3.0.0 validates the canonical diagnostics caught bootstrap after release minification", async (t) => {
+  const item = diagnosticsFixture(t);
+  assert.doesNotThrow(() => validateWebArtifact({ ...item, studioRoot }));
+
+  const result = packageWebArtifact({
+    ...item,
+    studioRoot,
+    outDir: join(item.root, "release"),
+    publisher: (temporary, destination) => {
+      writeFileSync(destination, readFileSync(temporary));
+      return true;
+    },
+  });
+  const entries = readStoreZip(readFileSync(result.zipPath));
+  const minifiedArtifact = join(item.root, "minified-release");
+  mkdirSync(minifiedArtifact);
+  write(join(minifiedArtifact, "index.html"), entries.get("index.html"));
+  await minifyWebRelease({ artifactDir: minifiedArtifact });
+  entries.set("index.html", readFileSync(join(minifiedArtifact, "index.html")));
+  const zip = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
+  writeFileSync(result.zipPath, zip);
+  const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));
+  manifest.artifact.size = zip.length;
+  manifest.artifact.sha256 = sha256(zip);
+  manifest.entries = [...entries].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) }));
+  write(result.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  assert.doesNotThrow(() => verifyWebPackage({ zipPath: result.zipPath, manifestPath: result.manifestPath, expectedTarget: item.target, studioRoot }));
+  const html = entries.get("index.html").toString("utf8");
+  assert.equal(html.includes(item.reporter), true);
+  assert.doesNotMatch(html, /\bimport\s*\(\s*["']\.\/platform-sdk\.js/);
+});
+
+test("caught bootstrap requires an executable standalone startRuntime call", (t) => {
+  const bootstrap = "import('./platform-sdk.js').then(startRuntime, failLocalBootstrap);";
+  for (const [label, replacement] of [
+    ["declared", ""],
+    ["arrow", "const never = () => startRuntime();"],
+    ["arrow import", "const never = () => import('./platform-sdk.js').then(startRuntime, failLocalBootstrap);"],
+    ["dead", "if (false) startRuntime();"],
+    ["member", "holder.startRuntime();"],
+    ["nested", "function later() { startRuntime(); }"],
+    ["uncaught", "import('./platform-sdk.js').then(startRuntime);"],
+  ]) {
+    const item = diagnosticsFixture(t);
+    write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace(bootstrap, replacement));
+    assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /entrypoint.*game\.js/i, label);
+  }
+});
+
+test("platform diagnostics accepts CMake CRLF substitution without accepting a changed body", (t) => {
+  const item = diagnosticsFixture(t);
+  write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace(item.reporter, item.reporter.replace(/\r?\n/g, "\r\n")));
+  assert.doesNotThrow(() => validateWebArtifact({ ...item, studioRoot }));
+  write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace("MAX_OUTGOING = 12000", "MAX_OUTGOING = 12001"));
+  assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /diagnostics reporter.*shared source/i);
+});
+
+test("platform diagnostics accepts an explicit CMake crash prefix and runtime script", (t) => {
+  const item = diagnosticsFixture(t);
+  assert.throws(
+    () => validateWebArtifact({ ...item, studioRoot, crashStoragePrefix: "plw crash" }),
+    /safe storage key prefix/i,
+  );
+  assert.throws(
+    () => validateWebArtifact({ ...item, studioRoot, runtimeScript: "plw client.js" }),
+    /safe JavaScript filename/i,
+  );
+  const reporter = item.reporter
+    .replace("test-game.crash", "plw.crash")
+    .replace("runtimeScript: 'game.js'", "runtimeScript: 'plw_client.js'");
+  write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace(item.reporter, reporter));
+
+  assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /generated arguments/i);
+  assert.doesNotThrow(() => validateWebArtifact({
+    ...item, studioRoot, crashStoragePrefix: "plw.crash", runtimeScript: "plw_client.js",
+  }));
+  const result = packageWebArtifact({
+    ...item, studioRoot, outDir: join(item.root, "release"),
+    crashStoragePrefix: "plw.crash", runtimeScript: "plw_client.js",
+  });
+  assert.throws(
+    () => verifyWebPackage({ zipPath: result.zipPath, manifestPath: result.manifestPath, expectedTarget: "itch", studioRoot }),
+    /generated arguments/i,
+  );
+  assert.doesNotThrow(() => verifyWebPackage({
+    zipPath: result.zipPath, manifestPath: result.manifestPath, expectedTarget: "itch", studioRoot,
+    crashStoragePrefix: "plw.crash", runtimeScript: "plw_client.js",
+  }));
+});
+
+test("platform-sdk 3.0.0 rejects missing, stale, duplicate, and late executable reporters", (t) => {
+  const cases = [
+    ["missing", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace(`<script id=\"platform-diagnostics\">${item.reporter}</script>`, "")), /platform diagnostics/i],
+    ["stale", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace("MAX_OUTGOING = 12000", "MAX_OUTGOING = 12001")), /diagnostics reporter.*shared source/i],
+    ["duplicate", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace("<script type=\"module\">", `<script>${item.reporter}</script><script type=\"module\">`)), /platform diagnostics reporter/i],
+    ["late", (item) => write(item.htmlPath, `${readFileSync(item.htmlPath, "utf8").replace(`<script id=\"platform-diagnostics\">${item.reporter}</script>\n`, "")}<script id=\"platform-diagnostics\">${item.reporter}</script>`), /platform diagnostics reporter must precede/i],
+    ["module", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace('<script id="platform-diagnostics">', '<script id="platform-diagnostics" type="module">')), /classic inline JavaScript/i],
+    ["nomodule", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace('<script id="platform-diagnostics">', '<script id="platform-diagnostics" nomodule>')), /classic inline JavaScript/i],
+    ["external", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace('<script id="platform-diagnostics">', '<script id="platform-diagnostics" src="diagnostics.js">')), /classic inline JavaScript/i],
+  ];
+  for (const [label, mutate, expected] of cases) {
+    const item = diagnosticsFixture(t);
+    mutate(item);
+    assert.throws(() => validateWebArtifact({ ...item, studioRoot }), expected, label);
+  }
+});
+
+test("reopened ZIP rejects a non-classic diagnostics reporter", (t) => {
+  const item = diagnosticsFixture(t);
+  const result = packageWebArtifact({
+    ...item, studioRoot, outDir: join(item.root, "release"),
+    publisher: (temporary, destination) => {
+      writeFileSync(destination, readFileSync(temporary));
+      return true;
+    },
+  });
+  const entries = readStoreZip(readFileSync(result.zipPath));
+  entries.set("index.html", Buffer.from(entries.get("index.html").toString("utf8").replace(
+    '<script id="platform-diagnostics">', '<script id="platform-diagnostics" type="module">',
+  )));
+  const zipBytes = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
+  writeFileSync(result.zipPath, zipBytes);
+  const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));
+  manifest.artifact.size = zipBytes.length;
+  manifest.artifact.sha256 = sha256(zipBytes);
+  manifest.entries = [...entries].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) }));
+  writeFileSync(result.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  assert.throws(
+    () => verifyWebPackage({ zipPath: result.zipPath, manifestPath: result.manifestPath, expectedTarget: item.target, studioRoot }),
+    /classic inline JavaScript/i,
+  );
+});
+
+test("platform-sdk 3.0.0 release verification rechecks diagnostics and permits inert module filenames", (t) => {
+  const item = diagnosticsFixture(t);
+  write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace(
+    "<script type=\"module\">",
+    "<script>const archivedModuleName = 'platform-sdk.js';</script><script type=\"module\">",
+  ));
+  const result = packageWebArtifact({
+    ...item,
+    studioRoot,
+    outDir: join(item.root, "release"),
+    publisher: (temporary, destination) => {
+      writeFileSync(destination, readFileSync(temporary));
+      return true;
+    },
+  });
+  const entries = readStoreZip(readFileSync(result.zipPath));
+  entries.set("index.html", Buffer.from(entries.get("index.html").toString("utf8").replace("MAX_OUTGOING = 12000", "MAX_OUTGOING = 12001")));
+  const zipBytes = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
+  writeFileSync(result.zipPath, zipBytes);
+  const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));
+  manifest.artifact.size = zipBytes.length;
+  manifest.artifact.sha256 = sha256(zipBytes);
+  manifest.entries = [...entries].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) }));
+  writeFileSync(result.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  assert.throws(
+    () => verifyWebPackage({ zipPath: result.zipPath, manifestPath: result.manifestPath, expectedTarget: item.target, studioRoot }),
+    /diagnostics reporter.*shared source/i,
+  );
 });
 
 test("release config requires one precise Object.freeze assignment and ignores no comment decoys", (t) => {

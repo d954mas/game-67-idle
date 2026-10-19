@@ -66,6 +66,7 @@ const PLATFORM_MODULE_PATHS = [
   "platform-sdk.js",
   "platform-sdk-adapter.js",
 ];
+const PLATFORM_DIAGNOSTICS_VERSION = [3, 0, 0];
 
 function isSelectedReleaseProfile(profile, target, adapter) {
   return profile?.target === target && profile.adapter === adapter
@@ -138,6 +139,24 @@ function requirePlatformSdkDependency(dependencies) {
   if (candidates.length !== 1 || candidates[0].id !== "platform-sdk" || candidates[0].source !== "features/platform-sdk") {
     throw new Error("web packaging requires exactly one canonical platform-sdk dependency");
   }
+}
+
+function platformSdkDependency(dependencies) {
+  requirePlatformSdkDependency(dependencies);
+  return dependencies.features.find((feature) => feature.id === "platform-sdk");
+}
+
+function versionAtLeast(version, minimum) {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(String(version || ""));
+  if (!match) return false;
+  return match.slice(1).map(Number).some((value, index) => {
+    if (minimum.slice(0, index).some((prior, priorIndex) => Number(match[priorIndex + 1]) !== prior)) return false;
+    return value > minimum[index];
+  }) || minimum.every((value, index) => Number(match[index + 1]) === value);
+}
+
+function requiresPlatformDiagnostics(dependencies) {
+  return Boolean(dependencies) && versionAtLeast(platformSdkDependency(dependencies).version, PLATFORM_DIAGNOSTICS_VERSION);
 }
 
 function defaultGit(cwd, args) {
@@ -569,20 +588,47 @@ function callsIn(tokens) {
   return calls;
 }
 
-function dynamicallyLoadsGame(tokens) {
-  const create = ["const", "let", "var"].map((declaration) => liveIifeAwareTopLevelSequenceOffset(
-    tokens,
-    [declaration, "gameScript", "=", "document", ".", "createElement", "(", "script", ")", ";"],
-  )).find((offset) => offset !== -1) ?? -1;
-  if (create === -1) return false;
-  const source = liveIifeAwareTopLevelSequenceOffset(tokens, ["gameScript", ".", "src", "=", "game.js", ";"], create + 10);
-  if (source === -1) return false;
-  const append = ["document", ".", "body", ".", "appendChild", "(", "gameScript", ")"];
-  const appendOffset = liveIifeAwareTopLevelSequenceOffset(tokens, append, source + 6);
-  if (appendOffset === -1) return false;
-  // a minifier drops the trailing ";" when the call is the script block's final statement (ASI)
-  const after = tokens[appendOffset + append.length]?.value;
-  return after === undefined || after === ";";
+function dynamicallyLoadsGameStatements(tokens, sequenceOffset) {
+  for (const declaration of ["const", "let", "var"]) {
+    for (let create = sequenceOffset(tokens, [declaration]); create !== -1; create = sequenceOffset(tokens, [declaration], create + 1)) {
+      const gameScript = tokens[create + 1];
+      if (gameScript?.type !== "identifier" || !tokenValuesAt(tokens, create, [
+        declaration, gameScript.value, "=", "document", ".", "createElement", "(", "script", ")", ";",
+      ])) continue;
+      const source = sequenceOffset(tokens, [gameScript.value, ".", "src", "=", "game.js", ";"], create + 10);
+      if (source === -1) continue;
+      const append = ["document", ".", "body", ".", "appendChild", "(", gameScript.value, ")"];
+      const appendOffset = sequenceOffset(tokens, append, source + 6);
+      if (appendOffset === -1) continue;
+      // a minifier drops the trailing ";" when the call is the script block's final statement (ASI)
+      const after = tokens[appendOffset + append.length]?.value;
+      if (after === undefined || after === ";") return true;
+    }
+  }
+  return false;
+}
+
+function dynamicallyLoadsGame(tokens, isModule = false) {
+  if (dynamicallyLoadsGameStatements(tokens, liveIifeAwareTopLevelSequenceOffset)) return true;
+  const startRuntime = topLevelFunctionDefinitions(tokens).get("startRuntime");
+  if (!startRuntime || !dynamicallyLoadsGameStatements(startRuntime.body, liveTopLevelSequenceOffset)) return false;
+  for (let offset = liveIifeAwareTopLevelSequenceOffset(tokens, ["startRuntime", "(", ")"]);
+    offset !== -1;
+    offset = liveIifeAwareTopLevelSequenceOffset(tokens, ["startRuntime", "(", ")"], offset + 1)) {
+    const before = tokens[offset - 1]?.value;
+    const after = tokens[offset + 3]?.value;
+    if ((before === undefined || before === ";" || before === "}") && (after === undefined || after === ";")) return true;
+  }
+  if (!isModule) return false;
+  const bootstrap = ["import", "(", "./platform-sdk.js", ")", ".", "then", "(", "startRuntime", ",", "failLocalBootstrap", ")"];
+  for (let offset = liveIifeAwareTopLevelSequenceOffset(tokens, bootstrap);
+    offset !== -1;
+    offset = liveIifeAwareTopLevelSequenceOffset(tokens, bootstrap, offset + 1)) {
+    const before = tokens[offset - 1]?.value;
+    const after = tokens[offset + bootstrap.length]?.value;
+    if ((before === undefined || before === ";" || before === "}") && (after === undefined || after === ";")) return true;
+  }
+  return false;
 }
 
 function helperInstantiatesPath(definition, pathParam, definitions, visited = new Set()) {
@@ -669,7 +715,7 @@ function parseReleaseConfig(html, requireRuntimeBuild = true) {
   const withoutComments = html.replace(/<!--[\s\S]*?-->/g, "");
   const configs = [];
   let loadsGame = false;
-  for (const match of withoutComments.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)) {
+  for (const [scriptIndex, match] of [...withoutComments.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)].entries()) {
     const attributes = scriptAttributes(match[1]);
     if (!executableScript(attributes)) continue;
     const src = attributes.get("src");
@@ -678,7 +724,7 @@ function parseReleaseConfig(html, requireRuntimeBuild = true) {
       continue;
     }
     const tokens = lexBootstrapScript(match[2]);
-    if (dynamicallyLoadsGame(tokens)) loadsGame = true;
+    if (dynamicallyLoadsGame(tokens, attributes.get("type") === "module")) loadsGame = true;
     const dead = deadTokenOffsets(tokens);
     const topLevelOffsets = iifeAwareTopLevelOffsets(tokens);
     for (let offset = 0; offset < tokens.length; offset += 1) {
@@ -699,7 +745,7 @@ function parseReleaseConfig(html, requireRuntimeBuild = true) {
             || !["true", "false"].includes(release?.value)) {
           throw new Error(`release HTML has an invalid executable ${marker} assignment`);
         }
-        configs.push({ target: target.value, platformAdapter: adapter.value, release: release.value === "true" });
+        configs.push({ target: target.value, platformAdapter: adapter.value, release: release.value === "true", scriptIndex });
         continue;
       }
       const fingerprintPrefix = [",", "runtimeBuildFingerprint", ":"];
@@ -734,12 +780,108 @@ function parseReleaseConfig(html, requireRuntimeBuild = true) {
         release: release.value === "true",
         runtimeBuildFingerprint: fingerprint.value,
         ...optional,
+        scriptIndex,
       });
     }
   }
   if (configs.length !== 1) throw new Error(`release HTML must contain exactly one executable inline ${marker} assignment`);
   if (!loadsGame) throw new Error("release entrypoint index.html does not executably load game.js");
   return configs[0];
+}
+
+function executableInlineScripts(html) {
+  const scripts = [];
+  const withoutComments = String(html).replace(/<!--[\s\S]*?-->/g, "");
+  for (const [index, match] of [...withoutComments.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)].entries()) {
+    const attributes = scriptAttributes(match[1]);
+    if (!executableScript(attributes)) continue;
+    scripts.push({ index, attributes, body: match[2] });
+  }
+  return scripts;
+}
+
+function diagnosticReporterTags(html) {
+  return [...String(html).replace(/<!--[\s\S]*?-->/g, "").matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)]
+    .map((match) => ({ attributes: scriptAttributes(match[1]), body: match[2] }))
+    .filter((script) => script.attributes.get("id") === "platform-diagnostics");
+}
+
+function classicDiagnosticsReporter(attributes) {
+  if (attributes.has("src") || attributes.has("nomodule")) return false;
+  if (!attributes.has("type")) return true;
+  const type = String(attributes.get("type") || "").trim().toLowerCase().split(";", 1)[0].trim();
+  return type === "" || [
+    "text/javascript",
+    "application/javascript",
+    "text/ecmascript",
+    "application/ecmascript",
+  ].includes(type);
+}
+
+function diagnosticReporterArguments(storageNamespace, crashStoragePrefix, runtimeScript) {
+  const storagePrefix = crashStoragePrefix ?? `${storageNamespace}.crash`;
+  if (typeof storagePrefix !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(storagePrefix)) {
+    throw new Error("platform diagnostics crashStoragePrefix must be a safe storage key prefix");
+  }
+  if (typeof runtimeScript !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_.-]*\.js$/.test(runtimeScript)) {
+    throw new Error("platform diagnostics runtimeScript must be a safe JavaScript filename");
+  }
+  return { storagePrefix, runtimeScript };
+}
+
+function diagnosticReporterBody(studioRoot, storageNamespace, crashStoragePrefix, runtimeScript = "game.js") {
+  const sourcePath = join(studioRoot, "features", "platform-sdk", "web", "runtime-diagnostics.js");
+  if (!existsSync(sourcePath)) throw new Error("platform diagnostics shared source is missing");
+  const source = readFileSync(sourcePath, "utf8").trimEnd();
+  const args = diagnosticReporterArguments(storageNamespace, crashStoragePrefix, runtimeScript);
+  return `${source}\nwindow.__platformDiagnostics = installPlatformDiagnostics(window, { storagePrefix: '${args.storagePrefix}', runtimeScript: '${args.runtimeScript}' });`;
+}
+
+function canonicalDiagnosticsBody(value) {
+  return String(value).trim().replace(/\r\n/g, "\n");
+}
+
+function isPlatformBootstrap(body) {
+  const tokens = lexBootstrapScript(body);
+  return tokens.some((token, index) => token.value === "import" && (
+    tokens[index + 1]?.type === "string" && tokens[index + 1].value === "./platform-sdk.js"
+    || tokenValuesAt(tokens, index, ["import", "(", "./platform-sdk.js", ")"])
+  ));
+}
+
+function validatePlatformDiagnostics(html, studioRoot, storageNamespace, configScriptIndex, crashStoragePrefix, runtimeScript) {
+  const expected = diagnosticReporterBody(studioRoot, storageNamespace, crashStoragePrefix, runtimeScript);
+  const scripts = executableInlineScripts(html);
+  const reporterTags = diagnosticReporterTags(html);
+  if (reporterTags.length !== 1) throw new Error("release HTML must contain exactly one platform diagnostics reporter");
+  if (!classicDiagnosticsReporter(reporterTags[0].attributes)) {
+    throw new Error("release platform diagnostics reporter must be a classic inline JavaScript script");
+  }
+  const reporters = scripts.filter((script) => !script.attributes.has("src") && script.attributes.get("id") === "platform-diagnostics");
+  if (reporters.length !== 1) throw new Error("release HTML must contain exactly one executable platform diagnostics reporter");
+  const reporter = reporters[0];
+  if (canonicalDiagnosticsBody(reporter.body) !== canonicalDiagnosticsBody(expected)) {
+    throw new Error("release platform diagnostics reporter does not match the shared source and generated arguments");
+  }
+  if (scripts.filter((script) => canonicalDiagnosticsBody(script.body) === canonicalDiagnosticsBody(expected)).length !== 1) {
+    throw new Error("release HTML has duplicated executable platform diagnostics reporter body");
+  }
+  if (reporter.index <= configScriptIndex) throw new Error("release platform diagnostics reporter must follow the frozen config");
+  if (scripts.some((script) => script.index < reporter.index && isPlatformBootstrap(script.body))) {
+    throw new Error("release platform diagnostics reporter must precede the platform bootstrap");
+  }
+  const gameScript = scripts.find((script) => script.attributes.get("src") === "game.js");
+  if (gameScript && reporter.index >= gameScript.index) {
+    throw new Error("release platform diagnostics reporter must precede game.js");
+  }
+}
+
+function artifactPlatformSdkDependencies(gameDir, dependencies) {
+  if (dependencies) return validateDependencies(dependencies);
+  const dependencyPath = gameDir && join(resolve(gameDir), "dependencies.json");
+  return dependencyPath && existsSync(dependencyPath)
+    ? validateDependencies(readJson(dependencyPath, "dependencies"))
+    : null;
 }
 
 function readUleb(bytes, offset, label) {
@@ -856,14 +998,41 @@ function platformBundlePrefix(studioRoot, adapter) {
 }
 
 export function bundlePlatformIntoGame(loader, studioRoot, adapter) {
-  return Buffer.concat([platformBundlePrefix(studioRoot, adapter), Buffer.from(loader)]);
+  return Buffer.concat([wrapPlatformSdkBundleForRelease(platformBundlePrefix(studioRoot, adapter)), Buffer.from(loader)]);
 }
 
-function bundledReleaseHtml(input) {
+export function wrapPlatformSdkBundleForRelease(bundle) {
+  return Buffer.concat([
+    Buffer.from("try {\n", "utf8"),
+    bundle,
+    Buffer.from("\n} catch (error) {\n  try { window.__platformDiagnostics.report('boot.sdk_failed', error); } catch (_) {}\n  try { window.__showRuntimeFatal(); } catch (_) {}\n  throw error;\n}\n", "utf8"),
+  ]);
+}
+
+function hasExecutablePlatformModuleReference(html) {
+  const withoutComments = String(html).replace(/<!--[\s\S]*?-->/g, "");
+  for (const match of withoutComments.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)) {
+    const attributes = scriptAttributes(match[1]);
+    if (!executableScript(attributes)) continue;
+    if (["platform-sdk.js", "platform-sdk-adapter.js", "platform-sdk-core.js", "./platform-sdk.js", "./platform-sdk-adapter.js", "./platform-sdk-core.js"].includes(attributes.get("src"))) return true;
+    if (isPlatformBootstrap(match[2])) return true;
+  }
+  return false;
+}
+
+function bundledReleaseHtml(input, useDiagnosticsBootstrap = false) {
   let replacements = 0;
   const html = String(input).replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi, (whole, rawAttributes, body) => {
     const attributes = scriptAttributes(rawAttributes);
     const type = String(attributes.get("type") || "").trim().toLowerCase();
+    if (useDiagnosticsBootstrap && type === "module" && !attributes.has("src")) {
+      const bootstrap = /\bimport\s*\(\s*["']\.\/platform-sdk\.js["']\s*\)\s*\.then\s*\(\s*startRuntime\s*,\s*failLocalBootstrap\s*\)\s*;?/g;
+      const count = [...body.matchAll(bootstrap)].length;
+      if (count === 0) return whole;
+      replacements += count;
+      const classicAttributes = rawAttributes.replace(/\s+type\s*=\s*(?:"module"|'module'|module)/i, "");
+      return `<script${classicAttributes}>${body.replace(bootstrap, "startRuntime();")}</script>`;
+    }
     if (type !== "module" || !/^\s*import\s*["']\.\/platform-sdk\.js["'];?/m.test(body)) return whole;
     // a minifier can put later statements on the same source line right after the import, so the
     // removed match must not require the line to end at the import's trailing ";"
@@ -874,26 +1043,28 @@ function bundledReleaseHtml(input) {
     return whole.replace(body, bundledBody);
   });
   if (replacements > 1) throw new Error("release HTML has multiple platform SDK module bootstraps");
+  if (useDiagnosticsBootstrap && replacements !== 1) {
+    throw new Error("release HTML must contain one caught platform SDK bootstrap");
+  }
   if (replacements === 0) parseReleaseConfig(String(input));
-  const executableHtml = html.replace(/<!--[\s\S]*?-->/g, "");
-  if (/platform-sdk(?:-core|-adapter)?\.js/i.test(executableHtml)) {
+  if (hasExecutablePlatformModuleReference(html)) {
     throw new Error("release HTML contains an unsupported platform SDK bootstrap");
   }
   return Buffer.from(html, "utf8");
 }
 
-function packagedWebFiles(files, studioRoot, adapter) {
+function packagedWebFiles(files, studioRoot, adapter, useDiagnosticsBootstrap = false) {
   return files
     .filter(({ path }) => !PLATFORM_MODULE_PATHS.includes(path))
     .map(({ path, bytes }) => {
       if (path === "game.js") return { path, bytes: bundlePlatformIntoGame(bytes, studioRoot, adapter) };
-      if (path === "index.html") return { path, bytes: bundledReleaseHtml(bytes.toString("utf8")) };
+      if (path === "index.html") return { path, bytes: bundledReleaseHtml(bytes.toString("utf8"), useDiagnosticsBootstrap) };
       return { path, bytes };
     });
 }
 
 function validateBundledPlatform(input, studioRoot, adapter, label) {
-  const expected = platformBundlePrefix(studioRoot, adapter);
+  const expected = wrapPlatformSdkBundleForRelease(platformBundlePrefix(studioRoot, adapter));
   const actual = Buffer.isBuffer(input) ? input : Buffer.from(input || "");
   if (actual.subarray(0, expected.length).equals(expected)) return;
   throw new Error(`${label} does not embed the selected platform SDK source`);
@@ -903,7 +1074,7 @@ function fileBytes(artifactDir, paths) {
   return paths.map((path) => ({ path, bytes: readFileSync(join(artifactDir, ...path.split("/"))) }));
 }
 
-export function validateWebArtifact({ artifactDir, target, studioRoot = DEFAULT_STUDIO_ROOT }) {
+export function validateWebArtifact({ artifactDir, target, studioRoot = DEFAULT_STUDIO_ROOT, gameDir, dependencies, identity, crashStoragePrefix, runtimeScript }) {
   const root = resolve(artifactDir);
   if (!existsSync(root) || !statSync(root).isDirectory()) throw new Error(`web artifact directory is missing: ${root}`);
   const contract = targetManifest(resolve(studioRoot), target);
@@ -912,6 +1083,12 @@ export function validateWebArtifact({ artifactDir, target, studioRoot = DEFAULT_
 
   const html = readFileSync(join(root, "index.html"), "utf8");
   const config = parseReleaseConfig(html);
+  const platformDependencies = artifactPlatformSdkDependencies(gameDir, dependencies);
+  if (requiresPlatformDiagnostics(platformDependencies)) {
+    const gameIdentity = identity || (gameDir && readJson(join(resolve(gameDir), "game.json"), "game identity"));
+    if (!gameIdentity) throw new Error("platform diagnostics validation requires the game identity");
+    validatePlatformDiagnostics(html, resolve(studioRoot), validateIdentity(gameIdentity).storageNamespace, config.scriptIndex, crashStoragePrefix, runtimeScript);
+  }
   const runtimeRecord = readJson(join(root, "runtime-build.json"), "runtime build record");
   if (runtimeRecord.schema === "ai_studio.runtime_build.preview.v1") throw new Error("preview web artifacts cannot be packaged or released");
   const runtimeBuild = validateRuntimeBuildRecord(runtimeRecord);
@@ -995,7 +1172,7 @@ function manifestFromZip({ zipBytes, zipPath, entries, release, dependencies, ru
   };
 }
 
-function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuild = true) {
+function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuild = true, dependencies, identity, crashStoragePrefix, runtimeScript) {
   const contract = targetManifest(studioRoot, target);
   const actual = [...entries.keys()];
   const required = requireRuntimeBuild
@@ -1010,6 +1187,10 @@ function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuil
   }
   const html = entries.get("index.html")?.toString("utf8") || "";
   const config = parseReleaseConfig(html, requireRuntimeBuild);
+  if (requiresPlatformDiagnostics(dependencies)) {
+    if (!identity?.storageNamespace) throw new Error("reopened ZIP platform diagnostics validation requires the game identity");
+    validatePlatformDiagnostics(html, studioRoot, identity.storageNamespace, config.scriptIndex, crashStoragePrefix, runtimeScript);
+  }
   const runtimeBuild = requireRuntimeBuild
     ? validateRuntimeBuildRecord(JSON.parse(entries.get("runtime-build.json")?.toString("utf8") || "null")) : null;
   if (config.target !== target || config.platformAdapter !== contract.platform_sdk || !config.release
@@ -1093,7 +1274,16 @@ export function packageWebArtifact(options) {
   requirePlatformSdkDependency(dependencies);
   (options.dependencyVerifier || verifyDependencySources)({ studioRoot, dependencies, ...(options.git ? { git: options.git } : {}) });
   const dependencyBytes = jsonBytes(dependencies);
-  const validated = validateWebArtifact({ artifactDir: options.artifactDir, target, studioRoot });
+  const validated = validateWebArtifact({
+    artifactDir: options.artifactDir,
+    target,
+    studioRoot,
+    gameDir,
+    dependencies,
+    identity,
+    crashStoragePrefix: options.crashStoragePrefix,
+    runtimeScript: options.runtimeScript,
+  });
   const expectedRuntimeBuild = (options.runtimeBuildVerifier || createRuntimeBuildRecord)({
     gameDir, studioRoot, dependencies,
     compileProfile: options.compileProfile || compileProfileForTarget(target, "wasm-release"),
@@ -1120,7 +1310,12 @@ export function packageWebArtifact(options) {
     validated.runtimeBuild.fingerprint,
     options.proof || "game",
   );
-  const releaseFiles = packagedWebFiles(validated.files, studioRoot, validated.contract.platform_sdk);
+  const releaseFiles = packagedWebFiles(
+    validated.files,
+    studioRoot,
+    validated.contract.platform_sdk,
+    requiresPlatformDiagnostics(dependencies),
+  );
   const entries = [...releaseFiles, { path: "release.json", bytes: jsonBytes(release) }];
   const zipBytes = createStoreZip(entries);
   const outDir = resolve(options.outDir || join(gameDir, "release", "artifacts"));
@@ -1142,7 +1337,10 @@ export function packageWebArtifact(options) {
       dependencies: compact, runtimeBuild: validated.runtimeBuild,
     });
     writeFileSync(tempManifest, jsonBytes(manifest));
-    verifyWebPackage({ zipPath: tempZip, manifestPath: tempManifest, expectedTarget: target, studioRoot });
+    verifyWebPackage({
+      zipPath: tempZip, manifestPath: tempManifest, expectedTarget: target, studioRoot,
+      crashStoragePrefix: options.crashStoragePrefix, runtimeScript: options.runtimeScript,
+    });
     const publisher = options.publisher || publishVerified;
     preflightVerified(tempManifest, manifestPath);
     preflightVerified(tempZip, zipPath);
@@ -1154,7 +1352,7 @@ export function packageWebArtifact(options) {
   }
 }
 
-export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studioRoot = DEFAULT_STUDIO_ROOT }) {
+export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studioRoot = DEFAULT_STUDIO_ROOT, crashStoragePrefix, runtimeScript }) {
   const zipBytes = readFileSync(zipPath);
   const entries = readStoreZip(zipBytes);
   const canonical = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
@@ -1199,7 +1397,10 @@ export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studio
   if (runtimeBuildRequired && !entries.get("runtime-build.json")?.equals(jsonBytes(runtimeBuild))) {
     throw new Error("runtime build record mismatch");
   }
-  validateReopenedPayload(entries, manifest.target, resolve(studioRoot), runtimeBuildRequired);
+  validateReopenedPayload(
+    entries, manifest.target, resolve(studioRoot), runtimeBuildRequired, dependencies, release.game,
+    crashStoragePrefix, runtimeScript,
+  );
   const rows = [...entries].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) }));
   if (JSON.stringify(manifest.entries) !== JSON.stringify(rows)) throw new Error("artifact entry hash/size/path manifest mismatch");
   if (!entries.has("index.html") || !entries.has(release.entrypoint)) throw new Error("artifact entrypoint is missing");

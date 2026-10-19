@@ -24,6 +24,30 @@ export function resolveHtmlMinifierModule(environment = process.env, platform = 
   return modulePath;
 }
 
+function protectDiagnosticsReporter(source) {
+  const reporters = [];
+  const protectedSource = String(source).replace(/<script\b([^>]*)>[\s\S]*?<\/script\s*>/gi, (whole, attributes) => {
+    if (!/\bid\s*=\s*(?:"platform-diagnostics"|'platform-diagnostics'|platform-diagnostics)(?:\s|>|$)/i.test(attributes)) {
+      return whole;
+    }
+    const slot = reporters.length;
+    reporters.push(whole);
+    return `<script data-platform-diagnostics-slot="${slot}"></script>`;
+  });
+  return {
+    source: protectedSource,
+    restore(output) {
+      let restored = String(output);
+      for (let slot = 0; slot < reporters.length; slot += 1) {
+        const marker = new RegExp(`<script\\b[^>]*\\bdata-platform-diagnostics-slot\\s*=\\s*(?:"${slot}"|'${slot}'|${slot})[^>]*>[\\s\\S]*?<\\/script\\s*>`, "i");
+        if (!marker.test(restored)) throw new Error("HTML minifier removed the platform diagnostics reporter");
+        restored = restored.replace(marker, reporters[slot]);
+      }
+      return restored;
+    },
+  };
+}
+
 export async function minifyWebRelease({ artifactDir, minify } = {}) {
   const root = resolve(artifactDir || "");
   const htmlPath = join(root, "index.html");
@@ -34,7 +58,9 @@ export async function minifyWebRelease({ artifactDir, minify } = {}) {
     const module = await import(pathToFileURL(resolveHtmlMinifierModule()).href);
     minifyHtml = module.minify;
   }
-  const output = await minifyHtml(source, HTML_MINIFY_OPTIONS);
+  const protectedReporter = protectDiagnosticsReporter(source);
+  const minified = await minifyHtml(protectedReporter.source, HTML_MINIFY_OPTIONS);
+  const output = protectedReporter.restore(minified);
   if (typeof output !== "string" || output.length === 0) throw new Error("HTML minifier produced empty output");
   writeFileSync(htmlPath, output);
   return { beforeBytes: Buffer.byteLength(source), afterBytes: Buffer.byteLength(output) };

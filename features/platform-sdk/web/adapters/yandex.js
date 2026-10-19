@@ -31,9 +31,24 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
     return (host && host.document) || (windowRef() && windowRef().document);
   }
 
+  function reportLateFault(error) {
+    const root = windowRef();
+    const throwFault = () => { throw error; };
+    if (typeof root.queueMicrotask === "function") {
+      root.queueMicrotask(throwFault);
+      return;
+    }
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(throwFault);
+      return;
+    }
+    Promise.resolve().then(throwFault);
+  }
+
   function adOperation(start, timeoutResult, failedResult = timeoutResult) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       let settled = false;
+      let faulted = false;
       const root = windowRef();
       const timer = (root.setTimeout || setTimeout)(() => settle(timeoutResult), AD_TIMEOUT_MS);
 
@@ -44,10 +59,33 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
         resolve(result);
       }
 
+      function fault(error) {
+        if (faulted) return;
+        faulted = true;
+        if (settled) {
+          reportLateFault(error);
+          return;
+        }
+        settled = true;
+        (root.clearTimeout || clearTimeout)(timer);
+        reject(error);
+      }
+
+      function bridge(callback) {
+        if (faulted) return false;
+        try {
+          callback();
+        } catch (error) {
+          fault(error);
+          return false;
+        }
+        return !faulted;
+      }
+
       try {
-        start(settle);
+        start(settle, bridge);
       } catch {
-        settle(failedResult);
+        if (!faulted) settle(failedResult);
       }
     });
   }
@@ -99,23 +137,46 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
      listens on both rather than betting on one. */
   function subscribePortalPause(ysdk) {
     if (!ysdk || typeof ysdk.on !== "function") return;
-    try {
-      ysdk.on("game_api_pause", notifyPause);
-      ysdk.on("game_api_resume", notifyResume);
-    } catch { /* an SDK build without the event surface */ }
+    function subscribe(name, callback) {
+      let callbackFault;
+      let didFault = false;
+      const guarded = () => {
+        try {
+          callback();
+        } catch (error) {
+          didFault = true;
+          callbackFault = error;
+          throw error;
+        }
+      };
+      try { ysdk.on(name, guarded); } catch (error) {
+        if (didFault) throw callbackFault;
+        /* An older SDK can omit this optional event surface. */
+      }
+      if (didFault) throw callbackFault;
+    }
+    subscribe("game_api_pause", notifyPause);
+    subscribe("game_api_resume", notifyResume);
   }
 
   async function sdk() {
     if (!sdkReady) {
       installPortalPauseEvents();
       sdkReady = loadScript()
-        .then((YaGames) => (YaGames && typeof YaGames.init === "function" ? YaGames.init() : null))
+        .then((YaGames) => {
+          if (!YaGames || typeof YaGames.init !== "function") return null;
+          try {
+            return Promise.resolve(YaGames.init()).catch(() => null);
+          } catch {
+            return null;
+          }
+        })
         .then((ysdk) => {
+          if (!ysdk) return null;
           readPortalLocale(ysdk);
           subscribePortalPause(ysdk);
           return ysdk;
         })
-        .catch(() => null);
     }
     ysdkInstance = destroyed ? null : await sdkReady;
     return ysdkInstance;
@@ -128,10 +189,16 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
   async function player() {
     const ysdk = await sdk();
     if (!ysdk || typeof ysdk.getPlayer !== "function") return null;
-    if (!playerReady) playerReady = ysdk.getPlayer().catch(() => {
-      playerReady = null;
-      return null;
-    });
+    if (!playerReady) {
+      try {
+        playerReady = Promise.resolve(ysdk.getPlayer()).catch(() => {
+          playerReady = null;
+          return null;
+        });
+      } catch {
+        return null;
+      }
+    }
     return playerReady;
   }
 
@@ -190,7 +257,8 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
 
   async function gameLoadingFinished() {
     const ysdk = await sdk();
-    ysdk && ysdk.features && ysdk.features.LoadingAPI && ysdk.features.LoadingAPI.ready();
+    if (!ysdk || !ysdk.features || !ysdk.features.LoadingAPI || typeof ysdk.features.LoadingAPI.ready !== "function") return;
+    try { await ysdk.features.LoadingAPI.ready(); } catch { /* loading remains playable */ }
   }
 
   async function gameReady() {
@@ -199,12 +267,14 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
 
   async function gameplayStart() {
     const ysdk = await sdk();
-    ysdk && ysdk.features && ysdk.features.GameplayAPI && ysdk.features.GameplayAPI.start();
+    if (!ysdk || !ysdk.features || !ysdk.features.GameplayAPI || typeof ysdk.features.GameplayAPI.start !== "function") return;
+    try { await ysdk.features.GameplayAPI.start(); } catch { /* analytics is optional */ }
   }
 
   async function gameplayStop() {
     const ysdk = await sdk();
-    ysdk && ysdk.features && ysdk.features.GameplayAPI && ysdk.features.GameplayAPI.stop();
+    if (!ysdk || !ysdk.features || !ysdk.features.GameplayAPI || typeof ysdk.features.GameplayAPI.stop !== "function") return;
+    try { await ysdk.features.GameplayAPI.stop(); } catch { /* analytics is optional */ }
   }
 
   async function showInterstitial(placement, requestId) {
@@ -215,20 +285,26 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
 
     const failed = { supported: true, shown: false, reason: "failed" };
     const timeout = { ...failed, reason: "timeout" };
-    return adOperation((settle) => {
+    return adOperation((settle, bridge) => {
       ysdk.adv.showFullscreenAdv({
         callbacks: {
           onClose: (wasShown) => {
-            if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
+            if (!bridge(() => {
+              if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
+            })) return;
             settle(wasShown
               ? { supported: true, shown: true }
               : { supported: true, shown: false, reason: "skipped" });
           },
           onError: () => {
-            if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
+            if (!bridge(() => {
+              if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
+            })) return;
             settle(failed);
           },
-          onOpen: () => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true); },
+          onOpen: () => bridge(() => {
+            if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true);
+          }),
         },
       });
     }, timeout, failed);
@@ -243,11 +319,13 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
     let rewarded = false;
     const failed = { supported: true, shown: false, rewarded: false, reason: "failed" };
     const timeout = { ...failed, reason: "timeout" };
-    return adOperation((settle) => {
+    return adOperation((settle, bridge) => {
       ysdk.adv.showRewardedVideo({
         callbacks: {
           onClose: (wasShown) => {
-            if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
+            if (!bridge(() => {
+              if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
+            })) return;
             if (rewarded) {
               settle({ supported: true, shown: Boolean(wasShown), rewarded: true });
             } else if (wasShown) {
@@ -257,10 +335,14 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
             }
           },
           onError: () => {
-            if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
+            if (!bridge(() => {
+              if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
+            })) return;
             settle(failed);
           },
-          onOpen: () => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true); },
+          onOpen: () => bridge(() => {
+            if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true);
+          }),
           onRewarded: () => {
             rewarded = true;
           },
@@ -315,7 +397,10 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
     if (!ysdk || !ysdk.adv || typeof ysdk.adv.showBannerAdv !== "function") {
       return { supported: false, shown: false, reason: "unsupported" };
     }
-    const status = await ysdk.adv.showBannerAdv().catch(() => null);
+    let status = null;
+    try {
+      status = await ysdk.adv.showBannerAdv();
+    } catch { /* an unfilled banner is a normal outcome */ }
     if (!status) return { supported: true, shown: false, reason: "failed" };
     return {
       supported: true,
@@ -327,7 +412,7 @@ export function createYandexPlatformAdapter({ host, lifecycle, sdkUrl = YANDEX_S
   async function hideBanner() {
     const ysdk = await sdk();
     if (!ysdk || !ysdk.adv || typeof ysdk.adv.hideBannerAdv !== "function") return;
-    await ysdk.adv.hideBannerAdv().catch(() => {});
+    try { await ysdk.adv.hideBannerAdv(); } catch { /* no banner was visible */ }
   }
 
   /* Boards are created by hand in the console and never reset, so the portal

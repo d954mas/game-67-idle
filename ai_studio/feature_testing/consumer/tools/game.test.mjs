@@ -19,6 +19,22 @@ const studioRoot = findStudioRoot(gameModuleRoot);
 function platformSdkVersion() {
   return JSON.parse(readFileSync(join(studioRoot, "features", "platform-sdk", "feature.json"), "utf8")).version;
 }
+
+function diagnosticsReporter(studio, storageNamespace, runtimeScript = "game.js") {
+  const source = readFileSync(join(studio, "features", "platform-sdk", "web", "runtime-diagnostics.js"), "utf8").trimEnd();
+  return `${source}\nwindow.__platformDiagnostics = installPlatformDiagnostics(window, { storagePrefix: '${storageNamespace}.crash', runtimeScript: '${runtimeScript}' });`;
+}
+
+function diagnosticsBootstrap() {
+  return [
+    '<script type="module">',
+    "function startRuntime() {}",
+    "function failLocalBootstrap(error) { window.__platformDiagnostics.report('boot.sdk_failed', error); window.__showRuntimeFatal(); }",
+    "import('./platform-sdk.js').then(startRuntime, failLocalBootstrap);",
+    "</script>",
+  ].join("");
+}
+
 const RELEASE_WASM = Buffer.from([
   0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
   0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
@@ -350,7 +366,7 @@ test("copied game CLI executes doctor and final package from a real games/privat
     compileProfile: { target: "itch", adapter: "mock", preset: "wasm-release", debugUi: false, devapi: false, analytics: false, eventsLogMirror: false },
   });
   const artifact = join(gameDir, "build", "wasm-release-itch", "bin");
-  write(join(artifact, "index.html"), `<!doctype html><script>window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: 'itch', platformSdk: 'mock', release: true, runtimeBuildFingerprint: '${runtimeBuild.fingerprint}' });</script><script src='game.js'></script>\n`);
+  write(join(artifact, "index.html"), `<!doctype html><script>window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: 'itch', platformSdk: 'mock', release: true, runtimeBuildFingerprint: '${runtimeBuild.fingerprint}' });</script><script id="platform-diagnostics">${diagnosticsReporter(root, "copied-game")}</script>${diagnosticsBootstrap()}<script src="game.js"></script>\n`);
   write(join(artifact, "game.js"), [
     "var wasmBinaryFile;",
     "function findWasmBinary() { return locateFile('game.wasm'); }",

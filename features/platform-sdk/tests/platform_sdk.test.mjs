@@ -201,6 +201,16 @@ async function flushMicrotasks() {
   for (let i = 0; i < 8; i += 1) await Promise.resolve();
 }
 
+function extractedWebBridge(source, name) {
+  const declaration = `EM_JS(int, ${name}`;
+  const start = source.indexOf(declaration);
+  assert.notEqual(start, -1, name);
+  const bodyStart = source.indexOf("{", start) + 1;
+  const bodyEnd = source.indexOf("\n})", bodyStart);
+  assert.notEqual(bodyEnd, -1, name);
+  return source.slice(bodyStart, bodyEnd);
+}
+
 test("build tooling maps publish targets to exactly one platform SDK adapter", () => {
   assert.equal(sdkForTarget(TargetPlatform.LOCAL), "mock");
   assert.equal(sdkForTarget(TargetPlatform.ITCH), "mock");
@@ -246,6 +256,60 @@ test("the Closure externs list every backend method and every bridge global", ()
   const globals = new Set(bridge.match(/__platformSdk\w+/g));
   assert.ok(globals.size > 0);
   for (const name of globals) assert.ok(externs.has(`var ${name};`), name);
+});
+
+test("extracted web bridge faults never synthesize a fallback C completion", () => {
+  const source = readFileSync(join(HERE, "../src/platform_sdk_web.c"), "utf8");
+  const rejections = [];
+  const immediatePromise = {
+    resolve(value) {
+      return {
+        then(fulfilled) {
+          try { fulfilled(value); } catch (error) { rejections.push(error); }
+        },
+      };
+    },
+  };
+
+  const allocationFault = new Error("row allocation fault");
+  let leaderboardCompletions = 0;
+  const fetchContext = {
+    Promise: immediatePromise,
+    board_id_ptr: 1,
+    scope: 0,
+    UTF8ToString: () => "board",
+    globalThis: { __platformSdkInternalBackend: { fetchEntries: () => ({ status: "ok", top: [{ name: "Ada" }] }) } },
+    _platform_sdk_web_leaderboard_generation: () => 1,
+    _platform_sdk_web_leaderboard_begin: () => {},
+    _platform_sdk_web_leaderboard_row: () => {},
+    _platform_sdk_web_complete_leaderboard_fetch: () => { leaderboardCompletions += 1; },
+    stringToNewUTF8: () => { throw allocationFault; },
+    Array,
+    Number,
+    String,
+  };
+  const fetchResult = runInNewContext(`(function () {${extractedWebBridge(source, "platform_sdk_web_backend_leaderboard_fetch")} })()`, fetchContext);
+  assert.equal(fetchResult, 1);
+  assert.equal(leaderboardCompletions, 0);
+  assert.deepEqual(rejections, [allocationFault]);
+
+  const completionFault = new Error("completion fault");
+  let completions = 0;
+  const adContext = {
+    Promise: immediatePromise,
+    placement_ptr: 1,
+    request_id: 71,
+    UTF8ToString: () => "break",
+    globalThis: { __platformSdkInternalBackend: { showInterstitial: () => ({ supported: true, shown: true, reason: "completed" }) } },
+    _platform_sdk_web_complete_interstitial: () => {
+      completions += 1;
+      throw completionFault;
+    },
+  };
+  const adResult = runInNewContext(`(function () {${extractedWebBridge(source, "platform_sdk_web_backend_show_interstitial")} })()`, adContext);
+  assert.equal(adResult, 1);
+  assert.equal(completions, 1);
+  assert.deepEqual(rejections, [allocationFault, completionFault]);
 });
 
 test("template CMake isolates web presets by publish target", () => {
@@ -307,6 +371,62 @@ test("poki adapter preloads a pending SDK without blocking backend readiness", a
     await Promise.resolve(ready);
     adapter.destroy();
   }
+});
+
+test("poki error sink waits for its core bundle and paces captureError calls", () => {
+  const host = createHost(TargetPlatform.POKI);
+  const rootListeners = new Map();
+  const timers = new Map();
+  const captured = [];
+  let clock = 0;
+  let timerId = 0;
+  host.performance = { now: () => clock };
+  host.addEventListener = (type, callback) => rootListeners.set(type, callback);
+  host.removeEventListener = (type, callback) => {
+    if (rootListeners.get(type) === callback) rootListeners.delete(type);
+  };
+  host.setTimeout = (callback, delay) => {
+    const id = ++timerId;
+    timers.set(id, { callback, delay });
+    return id;
+  };
+  host.clearTimeout = (id) => timers.delete(id);
+  host.PokiSDK = { captureError(error) { captured.push(error); } };
+  const adapter = createPokiPlatformAdapter({ host });
+
+  assert.equal(adapter.errorSink(), null);
+  const coreLoad = host.document.listeners.get("load").at(-1);
+  coreLoad({ target: { src: `https://cdn.example/poki-sdk-core-${"a".repeat(40)}.js` } });
+  const sink = adapter.errorSink();
+  assert.equal(typeof sink?.captureError, "function");
+
+  const first = new Error("first");
+  const second = new Error("second");
+  sink.captureError(first);
+  sink.captureError(second);
+  assert.deepEqual(captured, [first]);
+  const queued = [...timers.values()];
+  assert.deepEqual(queued.map((entry) => entry.delay), [200]);
+  clock = 200;
+  timers.clear();
+  queued[0].callback();
+  assert.deepEqual(captured, [first, second]);
+
+  rootListeners.get("error")({});
+  sink.captureError(new Error("third"));
+  assert.equal(timers.size, 1);
+  adapter.destroy();
+});
+
+test("poki error sink consumes a vendor captureError throw", () => {
+  const host = createHost(TargetPlatform.POKI);
+  host.PokiSDK = { captureError() { throw new Error("reporting unavailable"); } };
+  const adapter = createPokiPlatformAdapter({ host });
+  const coreLoad = host.document.listeners.get("load").at(-1);
+  coreLoad({ target: { src: `https://cdn.example/poki-sdk-core-${"a".repeat(40)}.js` } });
+
+  assert.doesNotThrow(() => adapter.errorSink().captureError(new Error("original fault")));
+  adapter.destroy();
 });
 
 test("poki rewarded reports not-ready when the external SDK is unavailable", async () => {
@@ -445,6 +565,214 @@ test("poki rejection closes a request that reported ad visibility", async () => 
     assert.deepEqual(visibility, [[name === "interstitial" ? 71 : 72, true], [name === "interstitial" ? 71 : 72, false]], name);
     adapter.destroy();
   }
+});
+
+test("poki callback faults reject a pending ad once and block later bridge entries", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  for (const [name, install, show] of [
+    ["interstitial", (sdk, start) => { sdk.commercialBreak = start; }, (adapter) => adapter.showInterstitial("break", 71)],
+    ["rewarded", (sdk, start) => { sdk.rewardedBreak = ({ onStart }) => start(onStart); }, (adapter) => adapter.showRewarded("reward", 72)],
+  ]) {
+    const host = createHost(TargetPlatform.POKI);
+    const fault = new Error(`${name} bridge fault`);
+    let start;
+    const sdk = { init: () => Promise.resolve() };
+    install(sdk, (onStart) => {
+      start = onStart;
+      return new Promise(() => {});
+    });
+    host.PokiSDK = sdk;
+    let bridgeCalls = 0;
+    const adapter = createPokiPlatformAdapter({ host, lifecycle: {
+      adVisible() {
+        bridgeCalls += 1;
+        throw fault;
+      },
+    } });
+
+    const pending = show(adapter);
+    await flushMicrotasks();
+    assert.doesNotThrow(() => {
+      try { start(); } catch {}
+    }, name);
+    t.mock.timers.runAll();
+    await assert.rejects(pending, fault, name);
+    assert.equal(bridgeCalls, 1, name);
+    adapter.destroy();
+  }
+});
+
+test("poki observes a vendor rejection after a synchronous callback fault", async () => {
+  const host = createHost(TargetPlatform.POKI);
+  const fault = new Error("poki bridge fault");
+  host.PokiSDK = {
+    init: () => Promise.resolve(),
+    commercialBreak(onStart) {
+      onStart();
+      return Promise.reject(new Error("vendor rejection"));
+    },
+  };
+  const adapter = createPokiPlatformAdapter({ host, lifecycle: { adVisible() { throw fault; } } });
+  await assert.rejects(adapter.showInterstitial("break", 71), fault);
+  await flushMicrotasks();
+  adapter.destroy();
+});
+
+test("poki post-timeout callback faults escape through one browser microtask", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const host = createHost(TargetPlatform.POKI);
+  const escaped = [];
+  host.queueMicrotask = (callback) => escaped.push(callback);
+  const fault = new Error("late bridge fault");
+  let start;
+  host.PokiSDK = {
+    init: () => Promise.resolve(),
+    commercialBreak(onStart) {
+      start = onStart;
+      return new Promise(() => {});
+    },
+  };
+  const adapter = createPokiPlatformAdapter({ host, lifecycle: { adVisible() { throw fault; } } });
+
+  const pending = adapter.showInterstitial("break", 71);
+  await flushMicrotasks();
+  t.mock.timers.runAll();
+  assert.deepEqual(await pending, { supported: true, shown: false, reason: "timeout" });
+
+  assert.doesNotThrow(() => {
+    try { start(); } catch {}
+  });
+  assert.equal(escaped.length, 1);
+  assert.throws(() => escaped[0](), fault);
+  try { start(); } catch {}
+  assert.equal(escaped.length, 1);
+  adapter.destroy();
+});
+
+test("poki keeps healthy late visibility correlated after an ad timeout", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const host = createHost(TargetPlatform.POKI);
+  const visibility = [];
+  let resolveBreak;
+  host.PokiSDK = {
+    init: () => Promise.resolve(),
+    commercialBreak(onStart) {
+      return new Promise((resolve) => {
+        resolveBreak = () => {
+          onStart();
+          resolve();
+        };
+      });
+    },
+  };
+  const adapter = createPokiPlatformAdapter({ host, lifecycle: { adVisible(id, visible) { visibility.push([id, visible]); } } });
+
+  const pending = adapter.showInterstitial("break", 71);
+  await flushMicrotasks();
+  t.mock.timers.runAll();
+  assert.deepEqual(await pending, { supported: true, shown: false, reason: "timeout" });
+
+  resolveBreak();
+  await flushMicrotasks();
+  assert.deepEqual(visibility, [[71, true], [71, false]]);
+  adapter.destroy();
+});
+
+test("yandex callback faults reject a pending ad without a failed completion", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  for (const [name, install, show] of [
+    ["interstitial", (adv, set) => { adv.showFullscreenAdv = ({ callbacks }) => set(callbacks); }, (adapter) => adapter.showInterstitial("break", 71)],
+    ["rewarded", (adv, set) => { adv.showRewardedVideo = ({ callbacks }) => set(callbacks); }, (adapter) => adapter.showRewarded("reward", 72)],
+  ]) {
+    const host = createHost(TargetPlatform.YANDEX);
+    const adv = {};
+    let callbacks;
+    install(adv, (value) => { callbacks = value; });
+    host.YaGames = { init: () => Promise.resolve({ adv }) };
+    const fault = new Error(`${name} bridge fault`);
+    const adapter = createYandexPlatformAdapter({ host, lifecycle: { adVisible() { throw fault; } } });
+    await adapter.ready();
+
+    const pending = show(adapter);
+    await flushMicrotasks();
+    assert.doesNotThrow(() => {
+      try { callbacks.onOpen(); } catch {}
+    }, name);
+    t.mock.timers.runAll();
+    await assert.rejects(pending, fault, name);
+    adapter.destroy();
+  }
+});
+
+test("portal lifecycle replay faults escape instead of becoming a missing SDK", async () => {
+  const yandexHost = createHost(TargetPlatform.YANDEX);
+  const yandexFault = new Error("yandex replay fault");
+  yandexHost.YaGames = { init: async () => ({
+    on(name, callback) {
+      if (name === "game_api_pause") callback();
+    },
+  }) };
+  const yandex = createYandexPlatformAdapter({ host: yandexHost, lifecycle: { pause() { throw yandexFault; } } });
+  await assert.rejects(yandex.ready(), yandexFault);
+  yandex.destroy();
+
+  const playgamaHost = createHost(TargetPlatform.PLAYGAMA);
+  const playgamaFault = new Error("playgama replay fault");
+  playgamaHost.bridge = {
+    initialize: async () => {},
+    platform: {
+      isAudioEnabled: true,
+      on(name, callback) {
+        if (name === "audio_state_changed") callback(true);
+      },
+    },
+  };
+  const playgama = createPlaygamaPlatformAdapter({ host: playgamaHost, lifecycle: { audio() { throw playgamaFault; } } });
+  await assert.rejects(playgama.ready(), playgamaFault);
+  playgama.destroy();
+});
+
+test("crazygames callback faults reject ads while vendor faults stay results", async () => {
+  const host = createHost(TargetPlatform.CRAZYGAMES);
+  let callbacks;
+  host.CrazyGames = { SDK: {
+    environment: "crazygames",
+    init: async () => {},
+    ad: { requestAd(kind, next) { callbacks = next; } },
+  } };
+  const fault = new Error("crazygames bridge fault");
+  const adapter = createCrazygamesPlatformAdapter({ host, lifecycle: { adVisible() { throw fault; } } });
+  const pending = adapter.showInterstitial("break", 71);
+  await flushMicrotasks();
+  assert.doesNotThrow(() => callbacks.adStarted());
+  await assert.rejects(pending, fault);
+  adapter.destroy();
+
+  host.CrazyGames.SDK.ad.requestAd = () => { throw new Error("vendor down"); };
+  const normal = createCrazygamesPlatformAdapter({ host });
+  assert.deepEqual(await normal.showInterstitial("break", 71), { supported: true, shown: false, reason: "failed" });
+  normal.destroy();
+});
+
+test("pikabu callback faults reject ads while vendor faults stay results", async () => {
+  const host = createHost(TargetPlatform.PIKABU);
+  let calls = 0;
+  const fullscreen = {
+    isSupported: true,
+    async canShow() { return true; },
+    show() { calls += 1; return new Promise(() => {}); },
+  };
+  host.PkbSDK = { async init() { return { ads: { fullscreen } }; } };
+  const fault = new Error("pikabu bridge fault");
+  const adapter = createPikabuPlatformAdapter({ host, lifecycle: { adVisible() { throw fault; } } });
+  await assert.rejects(adapter.showInterstitial("break", 71), fault);
+  assert.equal(calls, 0, "a faulted operation never invokes the vendor");
+  adapter.destroy();
+
+  fullscreen.show = () => { throw new Error("vendor down"); };
+  const normal = createPikabuPlatformAdapter({ host });
+  assert.deepEqual(await normal.showInterstitial("break", 71), { supported: true, shown: false, reason: "failed" });
+  normal.destroy();
 });
 
 test("playgama retains a timed-out global ad stream until its terminal event", async (t) => {
@@ -940,6 +1268,7 @@ for (const operation of ["submit", "fetch"]) {
       const pending = [];
       const completed = [];
       const rows = [];
+      const propagated = [];
       const backend = {
         [operation === "submit" ? "submitScore" : "fetchEntries"]() {
           return new Promise((resolve, reject) => pending.push({ resolve, reject }));
@@ -954,14 +1283,30 @@ for (const operation of ["submit", "fetch"]) {
         _platform_sdk_web_leaderboard_begin: () => rows.push("begin"),
         _platform_sdk_web_leaderboard_row: (...args) => rows.push(args),
         _platform_sdk_web_complete_leaderboard_fetch: (...args) => completed.push(args),
+        Promise: {
+          resolve(value) {
+            return {
+              then(onFulfilled) {
+                return value.then(onFulfilled, (error) => { propagated.push(error); });
+              },
+            };
+          },
+        },
       };
       const call = leaderboardWebBridge(operation, context);
       call("planets", 0, 100, "");
       generation += 1;
       call("planets", 0, 200, "");
       const answer = { status: "ok", top: [{ rank: 1, value: 100, name: "old" }] };
-      pending[0][outcome](outcome === "resolve" ? answer : new Error("offline"));
+      let fault = null;
+      if (outcome === "resolve") {
+        pending[0].resolve(answer);
+      } else {
+        fault = new Error("offline");
+        pending[0].reject(fault);
+      }
       await new Promise(setImmediate);
+      if (outcome === "reject") assert.deepEqual(propagated, [fault]);
       assert.deepEqual(completed, []);
       assert.deepEqual(rows, [], "stale fetches must not stage a page");
       pending[1].resolve({ status: "ok", top: [{ rank: 1, value: 200, name: "current" }] });
@@ -1393,7 +1738,7 @@ test("template web shell loads selected platform backend before game.js", () => 
   const shell = readFileSync(join(HERE, "../../../ai_studio/feature_testing/consumer/web/index.html.in"), "utf8");
   const source = readFileSync(join(HERE, "../web/platform-sdk.js"), "utf8");
 
-  assert.equal(shell.includes('import \'./platform-sdk.js\';'), true);
+  assert.equal(shell.includes("import('./platform-sdk.js').then(startRuntime, failLocalBootstrap);"), true);
   assert.equal(shell.includes("gameScript.src = 'game.js';"), true);
   assert.equal(shell.includes('<script type="module" src="platform-sdk.js"></script>'), false);
   assert.equal(shell.includes('<script src="game.js"></script>'), false);
@@ -1516,22 +1861,45 @@ test("staged web SDK uses only composition and selected adapter modules", () => 
   }
 });
 
-test("release SDK bundles are minified without changing adapter startup", () => {
+test("release SDK bundles are minified without changing adapter startup", async () => {
   for (const adapter of ["mock", "poki", "yandex", "playgama", "wavedash", "pikabu", "gamepush"]) {
     const source = Buffer.from(packagedPlatformPrefix(adapter));
     const release = platformSdkBundlePrefix(adapter);
     assert.ok(release.length < source.length * 0.75, adapter);
     assert.ok(release.toString("utf8").split("\n").length <= 2, adapter);
 
-    const context = { clearTimeout, console, globalThis: null, Promise, setTimeout };
-    context.globalThis = context;
-    runInNewContext(`${release}globalThis.__releaseBundleReady = !!globalThis.__platformSdkInternalBackend;`, context);
-    assert.equal(context.__releaseBundleReady, true, adapter);
-    assert.deepEqual(
-      Object.keys(context.__platformSdkInternalBackend).sort(),
-      [...PLATFORM_BACKEND_METHODS].sort(),
-      adapter,
-    );
+    const intervals = new Set();
+    const setFixtureInterval = (callback, delay) => {
+      const timer = setInterval(callback, delay);
+      intervals.add(timer);
+      return timer;
+    };
+    const clearFixtureInterval = (timer) => {
+      intervals.delete(timer);
+      clearInterval(timer);
+    };
+    try {
+      const context = {
+        clearInterval: clearFixtureInterval,
+        clearTimeout,
+        console,
+        globalThis: null,
+        Promise,
+        setInterval: setFixtureInterval,
+        setTimeout,
+      };
+      context.globalThis = context;
+      runInNewContext(`${release}globalThis.__releaseBundleReady = !!globalThis.__platformSdkInternalBackend;`, context);
+      await Promise.resolve();
+      assert.equal(context.__releaseBundleReady, true, adapter);
+      assert.deepEqual(
+        Object.keys(context.__platformSdkInternalBackend).sort(),
+        [...PLATFORM_BACKEND_METHODS].sort(),
+        adapter,
+      );
+    } finally {
+      for (const timer of intervals) clearInterval(timer);
+    }
   }
 });
 
@@ -2064,6 +2432,7 @@ function createGamePushFixture({
   manualTimers = false,
   preloaderResolves = true,
   soundsMuted = { music: false },
+  lifecycleOverrides = {},
 } = {}) {
   const host = createHost(TargetPlatform.GAMEPUSH);
   const calls = [];
@@ -2223,6 +2592,7 @@ function createGamePushFixture({
     resume: () => lifecycleCalls.push("resume"),
     adVisible: (id, on) => visible.push([id, on]),
     sound: (index, muted) => soundReports.push([index, muted]),
+    ...lifecycleOverrides,
   };
   const adapter = createGamePushPlatformAdapter({
     config: { gamePushProjectId: 2782, gamePushPublicToken: "token-xyz" },
@@ -2234,7 +2604,7 @@ function createGamePushFixture({
     for (const handler of adListeners.get(name) || []) handler();
   };
   return {
-    adapter, audio, calls, emitAd, host, lifecycleCalls, player, profile, soundReports, sources, visible,
+    adapter, audio, calls, emitAd, gp, host, lifecycleCalls, player, profile, soundReports, sources, visible,
     emitSdk: (name) => emit(sdkListeners, name),
     emitSound: (name) => emit(soundListeners, name),
     syncs: () => syncs,
@@ -2327,6 +2697,144 @@ test("gamepush grants a reward only when the SDK confirms the view", async () =>
   assert.deepEqual(await refused.adapter.showRewarded("offer", 5),
                    { supported: true, shown: false, rewarded: false, reason: "failed" });
   refused.adapter.destroy();
+});
+
+test("gamepush callback faults reject ads while vendor faults stay results", async () => {
+  const fault = new Error("gamepush bridge fault");
+  const broken = createGamePushFixture({ lifecycleOverrides: { adVisible() { throw fault; } } });
+  await assert.rejects(broken.adapter.showInterstitial("break", 71), fault);
+  assert.equal(broken.calls.includes("fullscreen"), false, "a faulted operation never invokes the vendor");
+  broken.adapter.destroy();
+
+  const normal = createGamePushFixture();
+  normal.gp.ads.showFullscreen = () => { throw new Error("vendor down"); };
+  assert.deepEqual(await normal.adapter.showInterstitial("break", 71),
+                   { supported: true, shown: false, reason: "failed" });
+  normal.adapter.destroy();
+});
+
+test("gamepush attributes synchronous ad-event faults to the active operation", async () => {
+  const fault = new Error("gamepush audio fault");
+  const fixture = createGamePushFixture({ lifecycleOverrides: { audio() { throw fault; } } });
+  fixture.adapter.ready();
+  await flushMicrotasks();
+  fixture.gp.ads.showFullscreen = () => {
+    fixture.emitAd("fullscreen:start");
+    return Promise.reject(new Error("vendor rejection"));
+  };
+  await assert.rejects(fixture.adapter.showInterstitial("break", 71), fault);
+  await flushMicrotasks();
+  fixture.adapter.destroy();
+});
+
+test("gamepush ignores later ad callbacks after its first callback fault", async () => {
+  const fault = new Error("gamepush audio fault");
+  let audioCalls = 0;
+  const fixture = createGamePushFixture({ lifecycleOverrides: { audio() { audioCalls += 1; throw fault; } } });
+  fixture.adapter.ready();
+  await flushMicrotasks();
+  fixture.gp.ads.showFullscreen = () => {
+    fixture.emitAd("fullscreen:start");
+    fixture.emitAd("fullscreen:close");
+    return new Promise(() => {});
+  };
+  await assert.rejects(fixture.adapter.showInterstitial("break", 71), fault);
+  assert.equal(audioCalls, 1, "a faulted ad never re-enters lifecycle callbacks");
+  fixture.adapter.destroy();
+});
+
+test("gamepush does not assign document visibility faults to a pending ad", async () => {
+  const fault = new Error("visibility fault");
+  const escaped = [];
+  const fixture = createGamePushFixture({ lifecycleOverrides: { audio() { throw fault; } } });
+  fixture.host.queueMicrotask = (callback) => escaped.push(callback);
+  fixture.gp.ads.showFullscreen = () => new Promise(() => {});
+  const pending = fixture.adapter.showInterstitial("break", 71);
+  await flushMicrotasks();
+  fixture.host.document.hidden = true;
+  fixture.host.document.dispatch("visibilitychange");
+  let outcome = null;
+  pending.then(() => { outcome = "resolved"; }, () => { outcome = "rejected"; });
+  await flushMicrotasks();
+  assert.equal(outcome, null);
+  assert.equal(escaped.length, 1);
+  assert.throws(() => escaped[0](), fault);
+  fixture.adapter.destroy();
+});
+
+test("gamepush consumes every vendor outcome after a pending callback fault", async () => {
+  for (const [name, complete] of [
+    ["resolve", (resolve) => resolve(true)],
+    ["reject", (resolve, reject) => reject(new Error("vendor rejection"))],
+    ["silent", () => {}],
+  ]) {
+    const fault = new Error(`gamepush ${name} fault`);
+    const fixture = createGamePushFixture({ lifecycleOverrides: { audio() { throw fault; } } });
+    fixture.adapter.ready();
+    await flushMicrotasks();
+    let completeVendor;
+    fixture.gp.ads.showFullscreen = () => new Promise((resolve, reject) => {
+      completeVendor = () => complete(resolve, reject);
+      fixture.emitAd("fullscreen:start");
+    });
+    await assert.rejects(fixture.adapter.showInterstitial("break", 71), fault, name);
+    completeVendor();
+    await flushMicrotasks();
+    fixture.adapter.destroy();
+  }
+});
+
+test("gamepush reports a late direct ad callback fault once", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const fault = new Error("late gamepush fault");
+  let visibleCalls = 0;
+  const escaped = [];
+  const fixture = createGamePushFixture({ lifecycleOverrides: { adVisible() {
+    visibleCalls += 1;
+    if (visibleCalls === 2) throw fault;
+  } } });
+  fixture.host.queueMicrotask = (callback) => escaped.push(callback);
+  let resolveVendor;
+  fixture.gp.ads.showFullscreen = () => new Promise((resolve) => { resolveVendor = resolve; });
+  const pending = fixture.adapter.showInterstitial("break", 71);
+  await flushMicrotasks();
+  t.mock.timers.runAll();
+  assert.deepEqual(await pending, { supported: true, shown: false, reason: "timeout" });
+
+  resolveVendor(true);
+  await flushMicrotasks();
+  assert.equal(visibleCalls, 2);
+  assert.equal(escaped.length, 1);
+  assert.throws(() => escaped[0](), fault);
+  fixture.adapter.destroy();
+});
+
+test("gamepush late global events do not fault a newer untagged operation", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const fault = new Error("late global event");
+  const escaped = [];
+  const fixture = createGamePushFixture({ lifecycleOverrides: { audio() { throw fault; } } });
+  fixture.host.queueMicrotask = (callback) => escaped.push(callback);
+  fixture.adapter.ready();
+  await flushMicrotasks();
+  fixture.gp.ads.showFullscreen = () => new Promise(() => {});
+  const first = fixture.adapter.showInterstitial("A", 71);
+  await flushMicrotasks();
+  t.mock.timers.tick(120000);
+  assert.deepEqual(await first, { supported: true, shown: false, reason: "timeout" });
+
+  const second = fixture.adapter.showInterstitial("B", 72);
+  await flushMicrotasks();
+  fixture.emitAd("fullscreen:start");
+  fixture.emitAd("fullscreen:close");
+  let outcome = null;
+  second.then(() => { outcome = "resolved"; }, () => { outcome = "rejected"; });
+  await flushMicrotasks();
+  assert.equal(outcome, null);
+  assert.equal(escaped.length, 2);
+  assert.throws(() => escaped[0](), fault);
+  assert.throws(() => escaped[1](), fault);
+  fixture.adapter.destroy();
 });
 
 test("gamepush stores a save in the player profile and only a sync confirms it", async () => {
