@@ -48,7 +48,7 @@ commands. Load only the sections the current surface needs.
 - Prefer semantic UI IDs and one adaptive PC/phone contract.
 - Inspect `ui.tree` and matching examples before tuning broken geometry.
 - Keep HUD out of the publish target's reserved zones (the Poki Pill, top-left);
-  prove it with `devapi/responsive_viewports.py --portal <target>`.
+  prove it with `ai_studio/runtime_automation/responsive_viewports.py --game <id> --portal <target>`.
 
 ## Verification
 

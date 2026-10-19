@@ -11,7 +11,8 @@ layout structure, retained UI state, clipping, overflow, or responsive proof.
 - Current game: `games/<game-id>/src/ui/`, `tests/`, `devapi/`, and
   `design/ui_ux/`; start runtime glue at `src/ui/ui_runtime.*`.
 - Proof: `ai_studio/runtime_automation/README.md`, `pixel_health.py`,
-  `ui_readability.py`, and game-local `devapi/responsive_viewports.py`.
+  `ui_readability.py`, and `responsive_viewports.py` (QCLR_002 matrix,
+  `--portal` reserved zones).
 - Also load `nt-runtime-automation` for DevAPI/screenshots/`ui.tree`, and
   `nt-quality-checks` when selecting quality gates.
 

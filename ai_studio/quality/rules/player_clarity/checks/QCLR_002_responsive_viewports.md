@@ -36,7 +36,8 @@ If virtual controls affect layout or safe space, also use
 - important HUD, text, state, feedback, or danger are not cropped or pushed off-screen;
 - player-facing actions are not hidden, overlapped, or misplaced;
 - for a portal build, no visible HUD leaf sits under the target's reserved
-  zones (the Poki Pill): `responsive_viewports.py --portal <target>` checks
+  zones (the Poki Pill): `ai_studio/runtime_automation/responsive_viewports.py
+  --game <id> --portal <target>` checks
   `ui.tree` bounds against `metadata.reserved_zones` in
   `features/platform-sdk/publish-targets/<target>.json` and fails on overlap.
 

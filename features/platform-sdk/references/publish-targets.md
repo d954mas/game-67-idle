@@ -39,7 +39,7 @@ Each manifest declares:
   max_frame_width_px?, width_px, height_px}], source}`; `sizes` cover every
   frame width once, in order. Only Poki declares one (the Pill); other portals
   show only loading and ad overlays. `target_config.mjs#reservedZonesForTarget`
-  validates it, and `devapi/responsive_viewports.py --portal <target>` checks
+  validates it, and `ai_studio/runtime_automation/responsive_viewports.py --portal <target>` checks
   HUD bounds against it;
 - `sdk_policy`: selected adapter, SDK/placeholder policy, forbidden markers,
   and unsupported/no-op behavior;

@@ -105,6 +105,20 @@ class CheckTreeTest(unittest.TestCase):
         result = pz.check_tree(t, [PILL], 640, 360, ignore=["bg/*"])
         self.assertEqual([v["id_string"] for v in result["violations"]], ["hud/coins"])
 
+    def test_window_wide_leaves_are_backdrops_not_violations(self):
+        t = tree(640, 360, [
+            leaf("shell", 0, 0, 640, 360),              # full-window root panel
+            leaf("tutorial/scrim/top", 0, 300, 640, 60),  # full-width scrim band over the corner
+            leaf("hud/pets", 4, 300, 60, 30),           # the button drawn over them still counts
+        ])
+        result = pz.check_tree(t, [PILL], 640, 360)
+        self.assertEqual([v["id_string"] for v in result["violations"]], ["hud/pets"])
+        self.assertEqual(result["backdrops"], 2)
+
+    def test_sub_pixel_edge_contact_is_not_an_overlap(self):
+        self.assertFalse(pz.intersects((0.0, 85.98, 2.4, 324.0), (0.0, 24.0, 46.0, 86.0)))
+        self.assertTrue(pz.intersects((0.0, 85.0, 2.4, 324.0), (0.0, 24.0, 46.0, 86.0)))
+
     def test_leaf_below_pill_is_clear(self):
         # Pill bottom is window y 86 at width 640; a leaf from y 90 down is clear.
         t = tree(640, 360, [leaf("hud/coins", 0, 240, 60, 30)])
