@@ -42,7 +42,9 @@ Build the template settings/save tests and run
 
 `feature.json.version` is exact SemVer. Patch preserves the public contract,
 minor adds backward-compatible surface, and major permits breaking changes.
-A copied game owns its revision after creation. Version `1.2.0` adds the
+A copied game owns its revision after creation. Version `1.3.0` adds the
+Graphics and Shadows rows and fields over `features/graphics-quality`.
+Version `1.2.0` adds the
 portal account row and the login offer. Version `1.1.1` fits the panel
 to the viewport and keeps its close action outside scrollable content.
 Version `1.1.0` adds the language getter/setter and `settings_apply_language()`,

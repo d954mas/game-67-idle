@@ -60,6 +60,12 @@
       "compatibility": "validated by the template build and test suite"
     },
     {
+      "id": "graphics-quality",
+      "source": "features/graphics-quality",
+      "version": "0.1.0",
+      "compatibility": "validated by test_graphics_quality and the settings composition tests"
+    },
+    {
       "id": "remote-image",
       "source": "features/remote-image",
       "version": "0.1.0",
