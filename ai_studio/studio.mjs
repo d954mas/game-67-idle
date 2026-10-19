@@ -125,7 +125,10 @@ const CHECKS = Object.freeze([
   },
   { id: "studio.skills.python", pythonRoots: [".codex/skills"] },
   { id: "studio.dev-environment", testRoots: ["ai_studio/dev_environment"] },
-  { id: "studio.quality", testRoots: ["ai_studio/quality"] },
+  {
+    id: "studio.quality", testRoots: ["ai_studio/quality"],
+    commands: [["node", "ai_studio/quality/check_shaders.mjs", "templates", "features", "ai_studio/feature_testing/consumer"]],
+  },
   {
     id: "studio.runtime-automation",
     pythonRoots: ["ai_studio/runtime_automation"],

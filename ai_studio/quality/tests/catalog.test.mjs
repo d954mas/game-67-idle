@@ -6,7 +6,7 @@ test("quality catalog exposes rule groups and numbered checks", () => {
   const catalog = loadQualityCatalog(process.cwd());
 
   assert.equal(catalog.groups.length, 6);
-  assert.equal(catalog.totalChecks, 9);
+  assert.equal(catalog.totalChecks, 10);
 
   const clarity = catalog.groups.find((group) => group.slug === "player_clarity");
   assert.equal(clarity.title, "Player Clarity Rules");
@@ -24,4 +24,6 @@ test("quality catalog exposes rule groups and numbered checks", () => {
 
   const technical = catalog.groups.find((group) => group.slug === "technical");
   assert.equal(technical.checks[0].id, "QTECH_001");
+  assert.equal(technical.checks[1].id, "QTECH_002");
+  assert.match(technical.checks[1].whatItChecks, /gl_Position/);
 });
