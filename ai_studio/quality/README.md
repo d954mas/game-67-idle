@@ -11,6 +11,9 @@ Do not create ad-hoc quality rule IDs in project docs, generated templates, or
 tasks. New reusable rules belong under `ai_studio/quality/rules` and must be
 listed in the catalog below.
 
+Write rules for agents: short, direct instructions, a safe example when needed,
+and the check to run. Keep tool details and research in linked references.
+
 ## Rule Catalog
 
 Use this table to decide without loading rule files. After selecting an ID,
