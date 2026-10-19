@@ -259,7 +259,7 @@ test("an owner domain batches its Node tests into one process", async () => {
     assert.equal(calls.length, 2);
     assert.equal(calls[0][1], "--test");
     for (const path of files) assert.ok(calls[0].includes(path), path);
-    assert.deepEqual(calls[1], ["node", "ai_studio/quality/check_shader_positions.mjs",
+    assert.deepEqual(calls[1], ["node", "ai_studio/quality/check_shaders.mjs",
       "templates", "features", "ai_studio/feature_testing/consumer"]);
   } finally {
     rmSync(root, { recursive: true, force: true });

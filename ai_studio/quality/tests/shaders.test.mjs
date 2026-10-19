@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { checkShaderSource, checkShaderPaths } from "../check_shader_positions.mjs";
+import { checkShaderSource, checkShaderPaths } from "../check_shaders.mjs";
 
 const shader = (body) => `void main() { ${body} }`;
 
@@ -66,7 +66,7 @@ test("CLI checks explicit trees, skips generated output, and fails on missing in
     mkdirSync(join(root, "build"));
     writeFileSync(join(root, "build", "old.vert"), shader("gl_Position.z = 1.;"));
     assert.equal(checkShaderPaths([root, join(root, "ok.vert")]).files, 1);
-    const cli = (args) => spawnSync(process.execPath, ["ai_studio/quality/check_shader_positions.mjs", ...args], { encoding: "utf8" });
+    const cli = (args) => spawnSync(process.execPath, ["ai_studio/quality/check_shaders.mjs", ...args], { encoding: "utf8" });
     assert.equal(cli([root]).status, 0);
     writeFileSync(join(root, "bad.vert"), shader("gl_Position = p; gl_Position.z = 1.;"));
     const bad = cli(["--json", root]);

@@ -1,15 +1,23 @@
 ---
 id: QTECH_002
-name: Shader Position Compatibility
+name: Shader Writing Rules
 group: technical
-description: Keep vertex position calculations local and write the built-in output once.
+description: Shared shader practices, documented prohibitions and their automated checks.
 ---
 
-# QTECH_002 Shader Position Compatibility
+# QTECH_002 Shader Writing Rules
 
 ## What It Checks
 
-Authored GLSL uses `gl_Position` only as a final output: one whole-vector
+Shared rules for authored GLSL live here. Prohibitions cover documented unsafe
+patterns; recommendations guide review. The single `check_shaders.mjs` script
+enforces only unambiguous prohibitions. Its current check covers `gl_Position`.
+
+### Prohibitions
+
+#### Reading, partial writes or repeated writes to gl_Position
+
+Use `gl_Position` only as a final output: one whole-vector
 assignment at the top level of `main` in the vertex entry file. Calculate and
 adjust the position in a local highp vector. Do not read `gl_Position`, update
 its components, pass it to helpers, or hide its writes behind macros.
@@ -21,13 +29,23 @@ gl_Position = position;
 ```
 
 Helpers return values or operate on local variables; shared `.glsl` includes
-must not access `gl_Position`. Preserve precision, transform order and depth
-adjustments when changing an existing shader.
+must not access `gl_Position`. This avoids the documented PowerVR compiler
+failure described in Source below. The script checks this prohibition.
+
+### Recommendations for review
+
+- Keep intermediate position calculations in a local highp vector, then write
+  the final output. Review helpers through their returned or local values.
+- Preserve precision, transform order and depth adjustments when refactoring.
+  Compare rendered output or captured results before and after the change.
+- Compile and link affected programs for the intended backend. A source check
+  or an offline compiler pass alone does not establish retail driver behavior.
 
 ## Use When
 
-Adding, changing, importing or reviewing vertex shaders or shared GLSL includes,
-especially shadow depth clamping and sky depth adjustments.
+Adding, changing, importing or reviewing shader sources. Apply only the points
+relevant to the changed stage; the current automated check covers vertex
+outputs and shared GLSL includes.
 
 ## Do Not Use For
 
@@ -39,7 +57,7 @@ performance, or that a specific device crash has been fixed.
 From the Studio root, check the game's shader source directory:
 
 ```powershell
-node ai_studio/quality/check_shader_positions.mjs games/private/<game-id>/assets/shaders
+node ai_studio/quality/check_shaders.mjs games/private/<game-id>/assets/shaders
 ```
 
 The same script accepts individual `.vert`, `.vs`, `.vsh` and `.glsl` files,
@@ -51,7 +69,7 @@ line and rule. An empty input tree is not a passing check.
 Studio checks its template, shared features and reference consumer with:
 
 ```powershell
-node ai_studio/quality/check_shader_positions.mjs templates features ai_studio/feature_testing/consumer
+node ai_studio/quality/check_shaders.mjs templates features ai_studio/feature_testing/consumer
 ```
 
 The checker joins backslash-continued lines, then ignores comments and string
@@ -62,6 +80,14 @@ assignment: the GLSL compiler still owns completeness and language validity.
 Directory scans skip `.git`, `node_modules`, `build`, `release`, `tmp` and
 symlinks. Generated output can be checked by naming its real file explicitly.
 Embedded GLSL strings in C/JS require extraction before checking.
+
+### Extending these rules
+
+Add a point here when a documented problem or reproducible failure justifies
+it. State the unsafe pattern, reason, safe alternative and source. Add a check
+to the same script with safe/unsafe regression cases only when detection is
+unambiguous. Keep judgment-based advice in review; do not create a separate
+rule document or CLI for each shader pitfall.
 
 ## Evidence
 

@@ -89,7 +89,7 @@ export function main(args = process.argv.slice(2)) {
   const json = args.includes("--json");
   const paths = args.filter((arg) => arg !== "--json");
   try {
-    if (!paths.length || paths.some((path) => path.startsWith("--"))) throw new Error("Usage: node ai_studio/quality/check_shader_positions.mjs [--json] <file-or-directory> [...]");
+    if (!paths.length || paths.some((path) => path.startsWith("--"))) throw new Error("Usage: node ai_studio/quality/check_shaders.mjs [--json] <file-or-directory> [...]");
     const result = checkShaderPaths(paths);
     if (json) console.log(JSON.stringify(result));
     else {
