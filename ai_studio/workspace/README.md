@@ -79,7 +79,10 @@ uses only the committed Studio and game `HEAD` objects; staged, unstaged,
 untracked, and ignored source files are never copied. The assigned task must be
 an implementation-eligible committed card in the selected game's Taskboard.
 
-When the source Studio has a configured root `.venv`, `new` derives its base
+A workspace has no Python environment by default (`deferred`): a fresh `.venv`
+costs about 0.5 GB and most tasks never run Python. Pass `--python` to `new`, or
+run `prepare-python <feature>` later. When asked and the source Studio has a
+configured root `.venv`, it derives the base
 Python executable from `pyvenv.cfg`, creates a fresh root `.venv` inside the
 Studio worktree, installs the pinned Studio requirements, and validates it with
 `python_check.mjs`. It never copies or links the source environment. `check`
@@ -88,7 +91,7 @@ environment. When the source Studio has no configured `.venv`, Python setup is
 reported as `not-configured` and workspace creation continues.
 
 ```powershell
-node ai_studio/workspace/feature_workspaces.mjs new --game <game-id> --task T0001 --name <feature>
+node ai_studio/workspace/feature_workspaces.mjs new --game <game-id> --task T0001 --name <feature> [--python]
 node ai_studio/workspace/feature_workspaces.mjs new --game <game-id> --no-task --name <probe>
 node ai_studio/workspace/feature_workspaces.mjs list
 node ai_studio/workspace/feature_workspaces.mjs check <feature>

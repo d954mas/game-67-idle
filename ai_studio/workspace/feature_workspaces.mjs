@@ -118,9 +118,9 @@ export function parseCommandLine(argv) {
   if (!registryWide.has(command) && args[0] && !args[0].startsWith("--")) {
     options.name = normalizeWorkspaceName(args.shift());
   }
-  const booleans = new Set(["json", "noTask", "apply"]);
+  const booleans = new Set(["json", "noTask", "apply", "python"]);
   const allowed = new Set(command === "new"
-    ? ["game", "task", "noTask", "name", "root", "base", "branch", "devapiPort", "webPort", "json"]
+    ? ["game", "task", "noTask", "name", "root", "base", "branch", "devapiPort", "webPort", "python", "json"]
     : command === "reallocate-ports"
       ? ["base", "devapiPort", "webPort", "json"]
       : command === "remove-merged" || command === "forget-missing"
@@ -495,7 +495,7 @@ function pythonCommandError(error) {
 }
 
 function inspectWorkspacePython(contract, studioWorktree) {
-  if (!contract?.required) return { required: false, state: "not-configured" };
+  if (!contract?.required) return { required: false, state: contract?.state === "deferred" ? "deferred" : "not-configured" };
   const venvRoot = join(studioWorktree, ".venv");
   const interpreter = join(venvRoot, process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
   if (!existsSync(join(venvRoot, "pyvenv.cfg")) || !existsSync(interpreter)) {
@@ -661,10 +661,16 @@ export async function createFeatureWorkspace(input) {
     git(studioRoot, ["worktree", "add", "--detach", studioWorktree, studio.commit]);
     updateTransaction(manifestPath, paths.active, manifest, "studio-worktree-added");
     injectCrash(input, "after-studio-worktree");
-    try {
-      manifest.python = prepareWorkspacePython(studioRoot, studioWorktree);
-    } catch (error) {
-      throw new Error(`workspace Python setup failed: ${pythonCommandError(error)}`);
+    // A fresh .venv costs about 0.5 GB per workspace and most tasks never run
+    // Python; prepare-python creates it later when one does.
+    if (input.python === true) {
+      try {
+        manifest.python = prepareWorkspacePython(studioRoot, studioWorktree);
+      } catch (error) {
+        throw new Error(`workspace Python setup failed: ${pythonCommandError(error)}`);
+      }
+    } else {
+      manifest.python = { required: false, state: "deferred" };
     }
     updateTransaction(manifestPath, paths.active, manifest, "python-prepared");
     git(studioWorktree, [

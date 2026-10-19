@@ -312,6 +312,7 @@ test("creation prepares and check validates an isolated Studio Python environmen
     game: "fixture-game",
     task: "T0001",
     name: "python-ready",
+    python: true,
   });
 
   const workspaceVenv = join(created.studioWorktree, ".venv");
@@ -504,7 +505,7 @@ test("creation rejects an overlapping explicit port pair", async (t) => {
 test("removal refuses dirty work and preserves the game branch", async (t) => {
   const fixture = pairFixture({ withPython: true });
   t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
-  const created = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0001", name: "remove-me" });
+  const created = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0001", name: "remove-me", python: true });
   const dirtyPath = join(created.gameWorktree, "dirty.txt");
   writeFileSync(dirtyPath, "keep me\n", "utf8");
   await assert.rejects(removeFeatureWorkspace({ base: fixture.base, name: "remove-me" }), /dirty/i);
@@ -828,4 +829,24 @@ test("all lifecycle commands reject a junction base", { skip: process.platform !
     await assert.rejects(action(), /link or reparse point/i);
   }
   assert.equal(git(created.gameWorktree, "rev-parse", "HEAD"), created.sourceGameCommit);
+});
+
+test("creation defers the Studio Python environment until it is asked for", async (t) => {
+  const fixture = pairFixture({ withPython: true });
+  t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
+
+  const created = await createFeatureWorkspace({
+    root: fixture.studioRoot,
+    base: fixture.base,
+    game: "fixture-game",
+    task: "T0001",
+    name: "python-deferred",
+  });
+  assert.equal(created.python.state, "deferred");
+  assert.equal(existsSync(join(created.studioWorktree, ".venv")), false);
+  const checked = await checkFeatureWorkspace({ base: fixture.base, name: "python-deferred" });
+  assert.equal(checked.python.state, "deferred");
+  assert.equal(checked.ok, true);
+  assert.equal((await prepareFeatureWorkspacePython({ base: fixture.base, name: "python-deferred" })).python.state, "ready");
+  assert.equal(parseCommandLine(["new", "--game", "g", "--task", "T0001", "--name", "n", "--python"]).options.python, true);
 });
