@@ -4,6 +4,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { validateLicenseRecord } from "../licenses/ops.mjs";
+import { assetRowFiles } from "./manifest.mjs";
 
 const PACKED_EXTENSIONS = /\.(?:glb|mp3|png|wav)$/i;
 const SAFE_ASSET_PATH = /^assets\/[A-Za-z0-9_./-]+$/;
@@ -130,10 +131,16 @@ export function builderAssetPaths(gameDir) {
       }
     }
   }
-  const paths = [...sources.join("\n").matchAll(/"(assets\/[^"\r\n]+\.(?:glb|mp3|png|wav))"/gi)]
+  const source = sources.join("\n");
+  const paths = [...source.matchAll(/"(assets\/[^"\r\n]+\.(?:glb|mp3|png|wav))"/gi)]
     .map((match) => slash(match[1]));
-  if (paths.some((path) => path.includes("%"))) {
-    throw new Error("game pack builder binary asset paths must be explicit string literals");
+  // Only whole literals are visible here, so a directory prefix or a format
+  // pattern would let the file it builds ship unaudited.
+  const assembled = [...source.matchAll(/"([^"\r\n]*)"/g)].map((match) => match[1])
+    .filter((literal) => /^assets\/.*\/$/.test(literal));
+  if (paths.some((path) => path.includes("%")) || assembled.length) {
+    throw new Error(`game pack builder binary asset paths must be explicit string literals${
+      assembled.length ? `: ${assembled.slice(0, 3).join(", ")}` : ""}`);
   }
   if (paths.some((path) => !isSafeAssetPath(path) || !PACKED_EXTENSIONS.test(path))) {
     throw new Error("game pack builder contains an unsafe binary asset path");
@@ -170,15 +177,24 @@ function loadPackRecords(gameDir, records, duplicates) {
         ...row,
         defaultsPath: existsSync(packPath) ? slash(relative(gameDir, packPath)) : "",
       };
-      const rowPaths = new Set();
+      const where = `${slash(relative(gameDir, path))}:${index + 1}`;
       for (const key of ["source_resource", "source_model", "source_preview"]) {
-        if (typeof row[key] === "string") {
-          const sourcePath = slash(row[key]);
-          if (sourcePath.startsWith("assets/") || !isSafeAssetPath(`assets/${sourcePath}`)) {
-            throw new Error(`${slash(relative(gameDir, path))}:${index + 1}: ${key} must be a safe path relative to assets/`);
-          }
-          rowPaths.add(`assets/${sourcePath}`);
+        if (typeof row[key] === "string" && slash(row[key]).startsWith("assets/")) {
+          throw new Error(`${where}: ${key} must be a safe path relative to assets/`);
         }
+      }
+      let files;
+      try { files = assetRowFiles(join(gameDir, "assets"), join(packsRoot, pack), row); }
+      catch (error) { throw new Error(`${where}: ${error.message}`); }
+      // A preview is review art, never packed, so only an explicit source_preview
+      // claims one; a pulled model's preview.png would otherwise read as stale.
+      const rowPaths = new Set();
+      for (const file of [files.resource, files.model, row.source_preview ? files.preview : ""]) {
+        if (!file) continue;
+        const assetPath = slash(relative(gameDir, file));
+        if (!PACKED_EXTENSIONS.test(assetPath)) continue;
+        if (!isSafeAssetPath(assetPath)) throw new Error(`${where}: asset path is not a safe path under assets/: ${assetPath}`);
+        rowPaths.add(assetPath);
       }
       for (const assetPath of rowPaths) {
         addRecord(records, duplicates, assetPath, record, slash(relative(gameDir, path)));
@@ -242,7 +258,9 @@ export function auditGameReleaseAssets(gameDir, options = {}) {
   for (const path of standalone) {
     if (!stagedSet.has(path)) issues.push(`${path}: standalone input is not staged by the local web build`);
   }
-  for (const path of duplicates) issues.push(`${path}: duplicate asset metadata`);
+  for (const path of duplicates) {
+    if (releaseSet.has(path)) issues.push(`${path}: duplicate asset metadata`);
+  }
   for (const path of releaseSet) {
     const record = records.get(path);
     const absolute = join(root, ...path.split("/"));
@@ -282,6 +300,10 @@ export function auditGameReleaseAssets(gameDir, options = {}) {
     if (!tracked.has(record.metadataPath)) issues.push(`${path}: Pack Manifest record is not tracked`);
     if (record.defaultsPath && !tracked.has(record.defaultsPath)) {
       issues.push(`${path}: Pack Manifest defaults are not tracked`);
+    }
+    const licenseFile = slash(String(record.license_file || "").trim());
+    if (licenseFile && !tracked.has(licenseFile)) {
+      issues.push(`${path}: license_file is not a tracked file of the game: ${licenseFile}`);
     }
     if (record.sidecar) {
       if (record.asset !== path) issues.push(`${path}: source sidecar asset path does not match`);
