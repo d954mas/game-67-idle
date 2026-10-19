@@ -165,7 +165,20 @@ test("a row naming its file relative to its pack folder is audited like a source
     return auditGameReleaseAssets(item.root, { trackedPaths: [...item.tracked, path] });
   };
   assert.deepEqual(packRelative({}), { ok: true, packed: 2, issues: [] });
-  assert.match(packRelative({ redistribution_allowed: "false" }).issues.join("\n"), new RegExp(`^${path}: `, "m"));
+  assert.match(packRelative({ redistribution_allowed: "false" }).issues.join("\n"), /rock\.glb: .*redistribution_allowed=true/);
+  assert.deepEqual(packRelative({ preview: "previews/rock.png" }), { ok: true, packed: 2, issues: [] });
+});
+
+test("pack builder paths assembled from a directory prefix are rejected", (t) => {
+  const item = fixture(t);
+  write(join(item.root, "src", "build_packs.c"),
+    `#define KIT_DIR "assets/kit/"\nnt_atlas_add(atlas, "${item.path}", &o);\nadd(KIT_DIR "rock" ".glb");\n`);
+  assert.throws(() => builderAssetPaths(item.root), /explicit string literals: assets\/kit\//);
+});
+
+test("a row whose source_resource and resource disagree is rejected", (t) => {
+  const item = fixture(t, { resource: "files/other.png" });
+  assert.throws(() => auditGameReleaseAssets(item.root, { trackedPaths: item.tracked }), /name different files/);
 });
 
 test("game release asset audit accepts a tracked source sidecar and checks its release fields", (t) => {
@@ -180,8 +193,14 @@ test("game release asset audit accepts a tracked source sidecar and checks its r
     sha256: item.record.sha256, bytes: item.record.bytes,
   };
   write(join(item.root, ...sidecar.split("/")), JSON.stringify(provenance));
-  const options = { builderPaths: [item.path], trackedPaths: ["assets/release_inputs.json", item.path, sidecar] };
+  const options = {
+    builderPaths: [item.path], trackedPaths: ["assets/release_inputs.json", item.path, sidecar, "LICENSE.md"],
+  };
   assert.deepEqual(auditGameReleaseAssets(item.root, options), { ok: true, packed: 1, issues: [] });
+  assert.match(
+    auditGameReleaseAssets(item.root, { ...options, trackedPaths: options.trackedPaths.slice(0, -1) }).issues.join("\n"),
+    /license_file is not a tracked file of the game: LICENSE\.md/,
+  );
 
   provenance.redistribution_allowed = false;
   write(join(item.root, ...sidecar.split("/")), JSON.stringify(provenance));
@@ -207,7 +226,9 @@ test("AI source sidecars retain license and provenance requirements", (t) => {
     source: { script: "model.py" }, publish: false,
     sha256: item.record.sha256, bytes: item.record.bytes,
   };
-  const options = { builderPaths: [item.path], trackedPaths: ["assets/release_inputs.json", item.path, sidecar] };
+  const options = {
+    builderPaths: [item.path], trackedPaths: ["assets/release_inputs.json", item.path, sidecar, "LICENSE.md"],
+  };
   const audit = () => {
     write(join(item.root, ...sidecar.split("/")), JSON.stringify(provenance));
     return auditGameReleaseAssets(item.root, options);

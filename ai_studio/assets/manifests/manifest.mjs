@@ -98,8 +98,12 @@ export function assetRowFiles(sourceRoot, packDir, asset) {
   const resourceSourceRelative = Boolean(asset.source_resource);
   const previewSourceRelative = Boolean(asset.source_preview);
   const modelPath = asset.model || (modelExt.has(extname(resourcePath).toLowerCase()) ? resourcePath : "");
+  const resource = resolveAssetPath(sourceRoot, packDir, resourcePath, resourceSourceRelative);
+  if (asset.source_resource && asset.resource && resource !== resolveAssetPath(sourceRoot, packDir, asset.resource)) {
+    throw new Error(`asset ${asset.asset_id || asset.id}: source_resource and resource name different files`);
+  }
   return {
-    resource: resolveAssetPath(sourceRoot, packDir, resourcePath, resourceSourceRelative),
+    resource,
     preview: resolveAssetPath(sourceRoot, packDir, previewPath, previewSourceRelative),
     model: asset.source_model
       ? resolveAssetPath(sourceRoot, packDir, asset.source_model, true)
