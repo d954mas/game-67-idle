@@ -72,3 +72,25 @@ and manifest contract is in
 
 `.vscode/tasks.json` and `.vscode/launch.json` are generated from scanned public
 game and template folders. Private games need explicit workspace activation.
+
+## Frozen Games
+
+A game nobody is developing is frozen instead of ported. Its `game.json` gets:
+
+```json
+"lifecycle": { "state": "frozen", "studioCommit": "<full Studio SHA>", "since": "YYYY-MM-DD" }
+```
+
+`studioCommit` is the Studio revision the game was last ported to. Games build
+`features/` and the engine from the Studio checkout they sit in, so a frozen game
+is expected to break as the Studio moves on; nobody repairs it in place.
+
+- `ai_studio/workspace/version_drift.mjs` skips frozen games; agents porting a
+  Studio contract or running a multi-game migration skip them too.
+- Taskboard aggregate context (`--include-private`) leaves frozen stores out;
+  `--include-frozen` or `--game <id>` brings one back, and `validate` always
+  covers them.
+
+To revive a game: create a Studio worktree at `studioCommit`, build the game
+there to confirm the last known state, then port it forward on a branch to the
+current Studio and remove `lifecycle` in the same change.

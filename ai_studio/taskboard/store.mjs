@@ -1104,6 +1104,16 @@ export function readyQueueRows(root, limit = READY_QUEUE_LIMIT, options = {}) {
   return rankedTaskRows(root, ["backlog"], limit, options);
 }
 
+// Review waits on the lead; a card untouched this long is a queue nobody is draining.
+export const STALE_REVIEW_DAYS = 7;
+
+export function isStaleReview(doc, now = new Date()) {
+  const touched = String(doc.fields.updated || doc.fields.created || "");
+  if (doc.fields.status !== "review" || !touched) return false;
+  const cutoff = new Date(now.getTime() - STALE_REVIEW_DAYS * 86400000).toISOString().slice(0, 10);
+  return touched < cutoff;
+}
+
 export function agentContextPayload(root, options = {}) {
   const limit = Number.isFinite(Number(options.limit)) ? Number(options.limit) : 5;
   const tasks = listTasks(root, options);
@@ -1123,6 +1133,7 @@ export function agentContextPayload(root, options = {}) {
       currentWork: tasks.filter((task) => CURRENT_TASK_STATUSES.includes(task.fields.status)).length,
       readyQueue: tasks.filter((task) => task.fields.status === "backlog").length,
       review: tasks.filter((task) => task.fields.status === "review").length,
+      staleReview: tasks.filter((task) => isStaleReview(task)).length,
     },
     currentWork,
     readyQueue,

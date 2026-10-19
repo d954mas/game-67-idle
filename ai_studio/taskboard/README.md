@@ -74,6 +74,10 @@ Taskboard is store-qualified:
   or explicitly asks for aggregate private visibility (`--include-private` or
   `?includePrivate=1`). `?store=game:<id>` and `?game=<id>` remain manual
   fallback API inputs, not the browser UI contract.
+- Frozen games (`games/README.md#frozen-games`) stay out of aggregate reads
+  unless `--include-frozen` (HTTP `?includeFrozen=1`) is passed; naming the store still works, and
+  `validate` always includes them.
+- `context` reports `stale_review`: cards in `review` untouched for 7 days.
 - Rows include `storeId`, `visibility`, and `qualifiedId`. Bare IDs remain valid
   inside a selected store; aggregate reads reject ambiguous bare IDs.
 

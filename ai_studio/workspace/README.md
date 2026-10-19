@@ -15,7 +15,12 @@ Workspace owns the single resolver for game and template mounts. It scans
 - `games/<id>/game.json` and `templates/<id>/template.json` are the identity
   sources. Private games use `games/private/<id>/game.json`.
 - `games/<id>/dependencies.json` records the exact engine and shared-feature
-  revisions tested with that game checkout.
+  revisions tested with that game checkout. Games compile both from the Studio
+  checkout they sit in, so a record is only true while it matches what is
+  checked out; `version_drift.mjs` lists every record that does not (frozen
+  games are skipped unless named).
+- `game.json` may carry `lifecycle` for a frozen game; see
+  `games/README.md#frozen-games`.
 - Engine `version` can be the eight-character prefix of its pinned Git revision.
   Older engine pins may retain exact SemVer; feature versions remain SemVer.
 - `templates/<id>/game-dependencies.json` is the strict creation seed;
@@ -47,6 +52,7 @@ node ai_studio/workspace/games.mjs list --json
 node ai_studio/workspace/games.mjs list --include-private --json
 node ai_studio/workspace/games.mjs preflight --json
 node ai_studio/workspace/games.mjs preflight --json --timings
+node ai_studio/workspace/version_drift.mjs --include-private
 node --test ai_studio/workspace/tests/catalog.test.mjs
 node --test ai_studio/workspace/tests/private_games_registry.test.mjs
 ```

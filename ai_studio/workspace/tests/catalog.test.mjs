@@ -281,3 +281,28 @@ test("callers can read back exactly which folders were unusable", (t) => {
   listWorkspaceMounts(root, { warnings: [], unusable });
   assert.deepEqual(unusable.map((entry) => entry.root), ["games/mismatched"]);
 });
+
+test("a frozen game names the Studio commit a revival starts from", (t) => {
+  const root = fixture(t);
+  identity(root, "games/private/old-game", "game", "old-game");
+  const manifest = join(root, "games/private/old-game/game.json");
+  const base = JSON.parse(readFileSync(manifest, "utf8"));
+  const write = (lifecycle) => writeFileSync(manifest, JSON.stringify({ ...base, lifecycle }), "utf8");
+  const scan = () => listWorkspaceMounts(root, { includePrivate: true }).find((mount) => mount.id === "old-game");
+
+  write({ state: "frozen", studioCommit: "b".repeat(40), since: "2026-10-19" });
+  assert.deepEqual(scan().lifecycle, { state: "frozen", studioCommit: "b".repeat(40), since: "2026-10-19" });
+
+  for (const bad of [
+    { state: "paused", studioCommit: "b".repeat(40), since: "2026-10-19" },
+    { state: "frozen", studioCommit: "HEAD", since: "2026-10-19" },
+    { state: "frozen", studioCommit: "b".repeat(40), since: "yesterday" },
+    { state: "frozen", studioCommit: "b".repeat(40), since: "2026-10-19", note: "x" },
+  ]) {
+    write(bad);
+    assert.throws(() => listWorkspaceMounts(root, { includePrivate: true }), /lifecycle/, JSON.stringify(bad));
+  }
+
+  writeFileSync(manifest, JSON.stringify(base), "utf8");
+  assert.deepEqual(scan().lifecycle, { state: "active" });
+});

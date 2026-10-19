@@ -19,6 +19,7 @@ import {
   findRoot, listTasks, listEpics, listProjects, findDoc, createTask, createEpic, createProject,
   sealTaskArchive, updateDoc, canonicalQualityAssignments, CURRENT_TASK_STATUSES,
   parseQualityAssignments, rankTaskEntries, READY_QUEUE_LIMIT, TASK_STATUSES, ephemeralEvidencePath,
+  isStaleReview, STALE_REVIEW_DAYS,
 } from "./store.mjs";
 import {
   agentContextPayloadForStores,
@@ -36,9 +37,9 @@ import { isMain } from "../core_harness/tool_lib/cli.mjs";
 const USAGE = `usage: cli.mjs <list|context|show|archive|new|set|validate|help> ...
 
 Commands:
-  list [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--status s] [--project P001] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
-  context [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--tasks-limit 5]
-  show <P###|E###|T####|store:id> [--archive] [--json] [--store studio|game:<id>] [--game <id>] [--include-private]
+  list [--json] [--store studio|game:<id>] [--game <id>] [--include-private [--include-frozen]] [--status s] [--project P001] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
+  context [--json] [--store studio|game:<id>] [--game <id>] [--include-private [--include-frozen]] [--tasks-limit 5]
+  show <P###|E###|T####|store:id> [--archive] [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--include-frozen]
   archive seal --name <immutable-batch-name> [--json] [--store studio|game:<id>] [--game <id>]
   new project --title "..." [--store studio|game:<id>] [--game <id>] [--kind ai-studio|game|template|tooling|research|other] [--target path] [--tags a,b]
   new epic --title "..." [--store studio|game:<id>] [--game <id>] [--project P001] [--status active] [--tags a,b]
@@ -71,6 +72,7 @@ function storeQueryArgs(args) {
     store: typeof args.store === "string" ? args.store : "",
     game: typeof args.game === "string" ? args.game : "",
     includePrivate: args["include-private"] === true,
+    includeFrozen: args["include-frozen"] === true,
     includeArchive: args.archive === true,
   };
 }
@@ -165,6 +167,12 @@ function renderContext(root, options) {
   lines.push("# Current Context Digest");
   lines.push("");
   lines.push(`active_task_counts: ${statusCounts(allTasks)}`);
+  const stale = taskEntries.filter(({ task }) => isStaleReview(task)).sort((a, b) => String(a.task.fields.updated).localeCompare(String(b.task.fields.updated)));
+  if (stale.length) {
+    lines.push(`stale_review: ${stale.length} in review over ${STALE_REVIEW_DAYS} days; accept, reopen or park them`);
+    for (const { task, store } of stale.slice(0, 3)) lines.push(`  - ${shortRow(task, store)} (updated ${task.fields.updated})`);
+  }
+  lines.push("");
   lines.push("## Actionable Tasks");
   lines.push("");
   for (const { task, store } of shownCurrent) {
@@ -508,7 +516,7 @@ export function main(argv, {
     break;
   }
   case "validate": {
-    const stores = taskboardStoresForQuery(root, storeQueryArgs(args));
+    const stores = taskboardStoresForQuery(root, { ...storeQueryArgs(args), includeFrozen: true });
     const detailedProblems = validateTaskboardStoresDetailed(root, stores);
     if (args.json) {
       writeJson({ ok: detailedProblems.length === 0, problems: detailedProblems });

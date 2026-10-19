@@ -18,6 +18,7 @@ import {
   READY_QUEUE_LIMIT,
   TASK_STATUSES,
   validateStoreDetailed,
+  isStaleReview,
 } from "./store.mjs";
 
 export const STUDIO_STORE_ID = "studio";
@@ -70,6 +71,8 @@ export function listTaskboardStores(root, options = {}) {
     activeStoreId,
   });
   for (const mount of mounts) {
+    const named = (activeGameId && mount.gameId === activeGameId) || (activeStoreId && mount.storeId === activeStoreId);
+    if (mount.lifecycle?.state === "frozen" && !named && options.includeFrozen !== true) continue;
     if (mountHasTaskboard(root, mount)) {
       stores.push(gameTaskboardStore(root, mount));
     }
@@ -109,7 +112,7 @@ export function taskboardStoresForQuery(root, options = {}) {
     return [selectTaskboardStore(root, options)];
   }
   if (options.includePrivate === true) {
-    return listTaskboardStores(root, { includePrivate: true });
+    return listTaskboardStores(root, { includePrivate: true, includeFrozen: options.includeFrozen === true });
   }
   return [studioTaskboardStore(root)];
 }
@@ -157,7 +160,7 @@ export function findTaskboardDoc(root, rawId, options = {}) {
     const doc = findDoc(root, parsed.id, storeOptions(store, { includeArchive: options.includeArchive === true }));
     return doc ? { doc, store, id: parsed.id } : null;
   }
-  const stores = taskboardStoresForQuery(root, { includePrivate: options.includePrivate === true });
+  const stores = taskboardStoresForQuery(root, { includePrivate: options.includePrivate === true, includeFrozen: options.includeFrozen === true });
   const matches = [];
   for (const store of stores) {
     const doc = findDoc(root, parsed.id, storeOptions(store, { includeArchive: options.includeArchive === true }));
@@ -217,6 +220,7 @@ export function agentContextPayloadForStores(root, stores, options = {}) {
       currentWork: currentEntries.length,
       readyQueue: readyEntries.length,
       review: tasks.filter(({ doc }) => doc.fields.status === "review").length,
+      staleReview: tasks.filter(({ doc }) => isStaleReview(doc)).length,
     },
     currentWork,
     readyQueue,

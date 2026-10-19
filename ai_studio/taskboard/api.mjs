@@ -63,6 +63,7 @@ function queryOptions(req, url) {
     store: headerStore || queryStore,
     game: url.searchParams.get("game") || "",
     includePrivate: ["1", "true", "yes"].includes(String(url.searchParams.get("includePrivate") || "").toLowerCase()),
+    includeFrozen: ["1", "true", "yes"].includes(String(url.searchParams.get("includeFrozen") || "").toLowerCase()),
   };
 }
 

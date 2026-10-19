@@ -10,7 +10,7 @@ import { URL } from "node:url";
 import vm from "node:vm";
 import {
   createTask, createEpic, createProject, listTasks,
-  listEpics, listProjects, updateDoc, findDoc, sealTaskArchive, validateStore, validateStoreDetailed,
+  listEpics, listProjects, updateDoc, findDoc, sealTaskArchive, validateStore, validateStoreDetailed, isStaleReview,
 } from "../store.mjs";
 import { createStoreZip, readStoreZip } from "../../core_harness/tool_lib/zip_store.mjs";
 import { boardPayload, parseDoc, serializeDoc } from "../store.mjs";
@@ -1693,4 +1693,45 @@ test("ten concurrent task creates preserve unique ids and the counter high-water
     readdirSync(join(root, "ai_studio", "taskboard", "items", "active")).sort(),
     ids.sort().map((id) => `${id}.md`),
   );
+});
+
+function freezeGame(gameRoot) {
+  const manifest = join(gameRoot, "game.json");
+  const identity = JSON.parse(readFileSync(manifest, "utf8"));
+  identity.lifecycle = { state: "frozen", studioCommit: "a".repeat(40), since: "2026-10-19" };
+  writeFileSync(manifest, JSON.stringify(identity), "utf8");
+}
+
+test("frozen game stores leave aggregate context but stay reachable by name and in validation", (t) => {
+  const root = tempRoot(t);
+  const live = ensurePrivateGameMount(root, "live-game");
+  const frozen = ensurePrivateGameMount(root, "old-game");
+  writeTaskDoc(live.itemsRoot, "T0001", "Live work", "doing");
+  writeTaskDoc(frozen.itemsRoot, "T0001", "Old work", "review");
+  freezeGame(frozen.gameRoot);
+
+  const storesOf = (...args) => JSON.parse(runCliDirect(root, "context", ...args, "--json").stdout).stores.map((store) => store.storeId);
+  assert.deepEqual(storesOf("--include-private"), ["studio", "game:live-game"]);
+  assert.deepEqual(storesOf("--include-private", "--include-frozen"), ["studio", "game:live-game", "game:old-game"]);
+  assert.deepEqual(storesOf("--game", "old-game"), ["game:old-game"]);
+
+  writeFileSync(join(frozen.itemsRoot, "active", "T0002-broken.md"), "no frontmatter\n", "utf8");
+  const validation = JSON.parse(runCliDirect(root, "validate", "--include-private", "--json").stdout);
+  assert.equal(validation.problems.some((problem) => problem.storeId === "game:old-game"), true);
+});
+
+test("context flags review cards nobody has touched for a week", (t) => {
+  const now = new Date("2026-10-19T12:00:00Z");
+  const card = (status, updated) => ({ fields: { status, updated } });
+  assert.equal(isStaleReview(card("review", "2026-10-01"), now), true);
+  assert.equal(isStaleReview(card("review", "2026-10-15"), now), false);
+  assert.equal(isStaleReview(card("doing", "2026-01-01"), now), false);
+
+  const root = tempRoot(t);
+  const game = ensurePrivateGameMount(root, "live-game");
+  writeTaskDoc(game.itemsRoot, "T0001", "Waiting on the lead", "review");
+  const text = runCliDirect(root, "context", "--game", "live-game").stdout;
+  assert.match(text, /stale_review: 1 in review over 7 days/);
+  assert.match(text, /T0001 .*\(updated 2026-07-09\)/);
+  assert.equal(JSON.parse(runCliDirect(root, "context", "--game", "live-game", "--json").stdout).counts.staleReview, 1);
 });

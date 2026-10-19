@@ -20,7 +20,10 @@ export const GAME_DEPENDENCIES_SCHEMA = "ai_studio.game.dependencies.v3";
 // for the bytes a player waits for before the first frame, not the whole archive;
 // both are read by game packaging tools, the catalog tolerates them but does not
 // interpret them.
-const IDENTITY_KEYS = new Set(["schema", "id", "title", "storageNamespace", "aliases", "version", "webDownloadBudgetBytes"]);
+const IDENTITY_KEYS = new Set(["schema", "id", "title", "storageNamespace", "aliases", "version", "webDownloadBudgetBytes", "lifecycle"]);
+// A frozen game stops receiving Studio ports; studioCommit is the Studio revision
+// it was last ported to, which is where a revival starts.
+const LIFECYCLE_KEYS = new Set(["state", "studioCommit", "since"]);
 const DEPENDENCY_KEYS = new Set(["schema", "engine", "features", "compatibility"]);
 const ENGINE_KEYS = new Set(["source", "version", "revision", "compatibility"]);
 const FEATURE_KEYS = new Set(["id", "source", "version", "compatibility"]);
@@ -105,6 +108,16 @@ function validateGameDependenciesValue(value, rel) {
   return value;
 }
 
+function readLifecycle(value, label) {
+  if (value === undefined) return { state: "active" };
+  assertObject(value, label);
+  assertKnownKeys(value, LIFECYCLE_KEYS, label);
+  if (value.state !== "frozen") throw new Error(`${label}.state must be 'frozen' (omit lifecycle for an active game)`);
+  if (!/^[0-9a-f]{40}$/.test(String(value.studioCommit || ""))) throw new Error(`${label}.studioCommit must be a full Studio commit SHA`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value.since || ""))) throw new Error(`${label}.since must be YYYY-MM-DD`);
+  return { state: "frozen", studioCommit: value.studioCommit, since: value.since };
+}
+
 function readIdentity(root, relRoot, kind, { allowRootIdMismatch = false } = {}) {
   const rel = `${relRoot}/${kind}.json`;
   const identity = readJson(join(root, rel), rel);
@@ -122,6 +135,7 @@ function readIdentity(root, relRoot, kind, { allowRootIdMismatch = false } = {})
     title,
     storageNamespace: normalizeId(identity.storageNamespace, `${kind} storageNamespace`),
     aliases: normalizeAliases(identity.aliases, `${rel}.aliases`),
+    lifecycle: readLifecycle(identity.lifecycle, `${rel}.lifecycle`),
     identitySignature: JSON.stringify({
       schema: identity.schema,
       id,
