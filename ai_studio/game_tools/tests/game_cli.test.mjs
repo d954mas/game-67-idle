@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { ctestCatalogue, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, runNativeTests, selectTests } from "../game_cli.mjs";
+import { ctestCatalogue, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, runNativeTests, runTestSuites, selectTests, summarizeTestCapture } from "../game_cli.mjs";
 import { findStudioRoot } from "../lib/studio_root.mjs";
 import { createRuntimeBuildRecord, runtimeBuildWitness } from "../lib/runtime_build.mjs";
 
@@ -80,7 +80,7 @@ function git(cwd, args) {
 test("game CLI exposes game-owned lifecycle commands with fail-closed arguments", () => {
   assert.deepEqual(parseGameArgs(["verify", "--target", "poki", "--no-build", "--template-proof", "--skip-tests"]), {
     command: "verify", target: "poki", build: false, templateProof: true, skipTests: true, outDir: "",
-    only: [], tier: "", all: false, updateGoldens: false,
+    only: [], tier: "", all: false, updateGoldens: false, verbose: false,
   });
   assert.deepEqual(parseGameArgs(["test", "--only", "test_game_save", "--update-goldens"]).only, ["test_game_save"]);
   assert.equal(parseGameArgs(["test", "--template-proof"]).templateProof, true);
@@ -452,4 +452,30 @@ test("portal-check asks the artifact, the store draft and the SDK proof that exi
     exists: (path) => exists(path) && !path.replaceAll("\\", "/").endsWith("/release/store/yandex"),
   });
   assert.equal(missingDraft.find((step) => step.id === "store").skip.includes("no store draft"), true);
+});
+
+test("a green test run prints one summary line and keeps the output in a log", (t) => {
+  const gameDir = mkdtempSync(join(tmpdir(), "game-quiet-"));
+  t.after(() => rmSync(gameDir, { recursive: true, force: true }));
+  const nodeTest = (_dir, capture) => capture.steps.push({ label: "node", command: "node --test", output: "ok 1\n# pass 6\n# fail 0\n" });
+  const nativeTest = (_dir, options) => options.capture.steps.push({ label: "native", command: "ctest", output: "noise\n100% tests passed, 0 tests failed out of 125\n" });
+  const summary = runTestSuites(gameDir, { nodeTest, nativeTest, selection: { mode: "tier", tier: "core" } });
+  assert.match(summary, /^node 6 passed, native 125 passed in [\d.]+s; log: /);
+  assert.match(readFileSync(join(gameDir, "build", "logs", "game-test.log"), "utf8"), /\$ ctest\nnoise/);
+  assert.equal(runTestSuites(gameDir, { nodeTest: () => {}, nativeTest: () => {}, selection: {}, verbose: true }), "");
+});
+
+test("a red test run shows the failing step's tail and where the full log is", (t) => {
+  const gameDir = mkdtempSync(join(tmpdir(), "game-quiet-fail-"));
+  t.after(() => rmSync(gameDir, { recursive: true, force: true }));
+  const nativeTest = () => {
+    const error = new Error("native game tests exited 8");
+    error.output = `${"earlier line\n".repeat(200)}The following tests FAILED:\n  12 - test_save (Failed)\n`;
+    throw error;
+  };
+  assert.throws(
+    () => runTestSuites(gameDir, { nodeTest: () => {}, nativeTest, selection: {} }),
+    (error) => /exited 8\n[\s\S]*test_save \(Failed\)\nfull log: /.test(error.message) && error.message.split("\n").length < 90,
+  );
+  assert.deepEqual(summarizeTestCapture({ steps: [{ output: "ℹ pass 3\n" }, { output: "ℹ pass 2\n90% tests passed, 1 tests failed out of 10\n" }] }), { nodePassed: 5, nativePassed: 9 });
 });

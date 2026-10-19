@@ -18,7 +18,9 @@ sit in, so loading the CLI from the same checkout adds no new coupling.
 ## Contents
 
 - `game_cli.mjs`: `doctor`, `build`, `run`, `test`, `playable`, `package`,
-  `portal-check`, `verify`; test tiers come from CTest labels.
+  `portal-check`, `verify`; test tiers come from CTest labels. `test` and
+  `verify` keep test output in `build/logs/game-test.log` and print one summary
+  line, or the failing step's tail and the log path; `--verbose` streams it all.
 - `build_web.mjs`: the web build plan and runtime build fingerprint.
 - `package_web.mjs`, `package_web_smoke.mjs`, `minify_web_release.mjs`,
   `inject_asset_bytes.mjs`: the deterministic portal package and its proof.
@@ -26,7 +28,11 @@ sit in, so loading the CLI from the same checkout adds no new coupling.
   the game root.
 - `serve_web.mjs`: a loopback server for a built artifact. Run it from the game
   root, or through `node tools/game.mjs run`.
-- `lib/runtime_build.mjs`: runtime source and build records.
+- `lib/runtime_build.mjs`: runtime source and build records. For a game without
+  copied tooling the record includes a `tooling` input: the files here that
+  change artifact bytes (`build_web`, `inject_asset_bytes`, `minify_web_release`).
+- `lib/copied_tooling.mjs`: the one test for a game that still carries copied
+  tooling (`tools/package_web.mjs` present).
 
 ZIP writing comes from `ai_studio/core_harness/tool_lib/zip_store.mjs`.
 

@@ -2,6 +2,8 @@ import { existsSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { hasCopiedGameTooling } from "../game_tools/lib/copied_tooling.mjs";
+
 function fail(message) {
   process.stderr.write(`${message}\n`);
   process.exitCode = 2;
@@ -23,7 +25,7 @@ if (!gameArgument || !studioArgument || process.argv.length !== 4) {
   } else {
     // Games with copied tooling keep their own module; current games use the Studio's.
     const gameModule = resolve(gameRoot, "tools", "lib", "runtime_build.mjs");
-    const ownModule = existsSync(gameModule);
+    const ownModule = hasCopiedGameTooling(gameRoot);
     const modulePath = ownModule ? gameModule : resolve(studioRoot, "ai_studio", "game_tools", "lib", "runtime_build.mjs");
     if (!existsSync(modulePath) || !statSync(modulePath).isFile()) {
       fail(`runtime build module is missing: ${modulePath}`);

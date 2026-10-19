@@ -34,7 +34,9 @@ Run game commands from the game root; run Studio commands from the Studio root.
 | Browser-only behaviour | `node ai_studio/runtime_automation/preview_game.mjs --game <id> --preset wasm-devapi-debug` from the Studio root; preview output is never release evidence |
 
 Build through `tools/game.mjs`, never raw `cmake --build`: it keeps compiler
-output out of the transcript. Do not run Studio `verify --full` or every tier
+output out of the transcript. A green `test` prints one line and a red one the
+failing tail plus the log path; read the log rather than rerunning with
+`--verbose`. Do not run Studio `verify --full` or every tier
 after each edit; that is the release and CI boundary.
 
 Tests follow the Game Test Policy in `AGENTS.md`: cover saves, schema, economy

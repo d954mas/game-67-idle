@@ -8,6 +8,8 @@ import {
 } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
+import { hasCopiedGameTooling } from "./copied_tooling.mjs";
+
 const SCHEMA_V1 = "ai_studio.runtime_build.v1";
 const SCHEMA_V2 = "ai_studio.runtime_build.v2";
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -15,6 +17,10 @@ const GAME_IGNORED_ROOTS = new Set([".ai_studio", ".git", ".mypy_cache", ".pytes
 const DEPENDENCY_IGNORED_ROOTS = new Set([".git", ".mypy_cache", ".pytest_cache", "__pycache__", "build", "node_modules", "out", "tests"]);
 const IGNORED_ANYWHERE = new Set([".mypy_cache", ".pytest_cache", "__pycache__"]);
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+// The Studio files that change the bytes of a web artifact. A game with copied
+// tooling hashes its own copies as part of the game tree instead.
+const TOOLING_SOURCE = "ai_studio/game_tools";
+const TOOLING_FILES = ["build_web.mjs", "inject_asset_bytes.mjs", "minify_web_release.mjs"];
 
 function exactKeys(value, keys, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)
@@ -76,6 +82,15 @@ function hashTree(root, ignoredRoots, extraRoots = []) {
   const digest = createHash("sha256");
   for (const row of rows) digest.update(row.path).update("\0").update(String(row.size)).update("\0").update(row.sha256).update("\n");
   return { files: rows.length, sha256: digest.digest("hex") };
+}
+
+function hashFiles(root, names) {
+  const digest = createHash("sha256");
+  for (const name of names) {
+    const bytes = readFileSync(join(root, name));
+    digest.update(name).update("\0").update(String(bytes.length)).update("\0").update(sha256(bytes)).update("\n");
+  }
+  return { files: names.length, sha256: digest.digest("hex") };
 }
 
 function readDependencies(gameDir) {
@@ -146,7 +161,7 @@ export function validateRuntimeBuildRecord(record) {
   const ids = new Set();
   for (const input of record.inputs) {
     exactKeys(input, ["id", "source", "files", "sha256"], "runtime build input");
-    if (!/^(?:game|engine|feature:[a-z][a-z0-9-]*)$/.test(input.id || "") || ids.has(input.id)) {
+    if (!/^(?:game|engine|tooling|feature:[a-z][a-z0-9-]*)$/.test(input.id || "") || ids.has(input.id)) {
       throw new Error("runtime build input id is invalid or duplicated");
     }
     ids.add(input.id);
@@ -154,7 +169,8 @@ export function validateRuntimeBuildRecord(record) {
       if (input.source !== ".") throw new Error("runtime build game source is invalid");
     } else {
       safeSource(input.source, `runtime build ${input.id}`);
-      const expectedSource = input.id === "engine" ? "external/neotolis-engine" : `features/${input.id.slice("feature:".length)}`;
+      const expectedSource = input.id === "engine" ? "external/neotolis-engine"
+        : input.id === "tooling" ? TOOLING_SOURCE : `features/${input.id.slice("feature:".length)}`;
       if (input.source !== expectedSource) throw new Error(`runtime build ${input.id} source must be exactly ${expectedSource}`);
     }
     if (!Number.isSafeInteger(input.files) || input.files < 1 || !SHA256.test(input.sha256 || "")) {
@@ -213,6 +229,9 @@ export function createRuntimeBuildRecord({ gameDir, studioRoot, dependencies = r
     };
   }).sort((left, right) => left.id.localeCompare(right.id));
   inputs.push(...features);
+  if (!hasCopiedGameTooling(gameRoot)) {
+    inputs.push({ id: "tooling", source: TOOLING_SOURCE, ...hashFiles(confinedRoot(root, TOOLING_SOURCE, "game tooling"), TOOLING_FILES) });
+  }
   const profile = compileProfile ? validateCompileProfile(compileProfile) : null;
   const record = profile
     ? { schema: SCHEMA_V2, fingerprint: sha256(Buffer.from(JSON.stringify({ inputs, profile }), "utf8")), inputs, profile }

@@ -3,7 +3,7 @@
 // Self-contained on purpose (inline MIME, stdlib http only) so a copied game
 // stays portable if it is ever moved out of the repo -- no ai_studio import.
 //
-//   node tools/serve_web.mjs [--preset wasm-release|wasm-debug|wasm-devapi-debug] [--target local|itch|poki|yandex|playgama|crazygames|wavedash|pikabu|gamepush] [--port N] [--dir <bin>]
+//   node <studio>/ai_studio/game_tools/serve_web.mjs (from the game root) [--preset wasm-release|wasm-debug|wasm-devapi-debug] [--target local|itch|poki|yandex|playgama|crazygames|wavedash|pikabu|gamepush] [--port N] [--dir <bin>]
 //
 // Serves build/<preset>/bin/ over http://127.0.0.1:<port>/. game.wasm is served
 // as application/wasm so emscripten's streaming compile does not fall back.

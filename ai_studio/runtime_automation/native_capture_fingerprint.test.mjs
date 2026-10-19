@@ -15,6 +15,8 @@ function fixture(t, source) {
   const module = join(game, "tools", "lib", "runtime_build.mjs");
   mkdirSync(dirname(module), { recursive: true });
   writeFileSync(module, source);
+  // A game that still carries copied tooling; its packager is the marker.
+  writeFileSync(join(game, "tools", "package_web.mjs"), "");
   return { studio, game };
 }
 
@@ -53,6 +55,7 @@ test("native capture rejects a game module that escapes through a directory link
   rmSync(tools, { recursive: true });
   mkdirSync(join(outside, "lib"));
   writeFileSync(join(outside, "lib", "runtime_build.mjs"), "throw new Error('outside module executed');");
+  writeFileSync(join(outside, "package_web.mjs"), "");
   symlinkSync(outside, tools, process.platform === "win32" ? "junction" : "dir");
   const result = run(item);
   assert.notEqual(result.status, 0);

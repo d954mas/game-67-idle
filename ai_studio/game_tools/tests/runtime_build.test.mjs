@@ -50,6 +50,9 @@ function fixture(t) {
   write(join(gameDir, "dependencies.json"), `${JSON.stringify(dependencies, null, 2)}\n`);
   write(join(studioRoot, "external", "neotolis-engine", "engine", "core.c"), "void engine(void) {}\n");
   write(join(studioRoot, "features", "platform-sdk", "src", "sdk.c"), "void sdk(void) {}\n");
+  for (const name of ["build_web.mjs", "inject_asset_bytes.mjs", "minify_web_release.mjs"]) {
+    write(join(studioRoot, "ai_studio", "game_tools", name), `// ${name}\n`);
+  }
   return { studioRoot, gameDir, dependencies };
 }
 
@@ -62,7 +65,7 @@ test("runtime build record deterministically binds game and dependency source tr
   assert.equal(one.schema, "ai_studio.runtime_build.v1");
   assert.match(one.fingerprint, /^[0-9a-f]{64}$/);
   assert.deepEqual(validateRuntimeBuildRecord(one), one);
-  assert.deepEqual(one.inputs.map((input) => input.id), ["game", "engine", "feature:platform-sdk"]);
+  assert.deepEqual(one.inputs.map((input) => input.id), ["game", "engine", "feature:platform-sdk", "tooling"]);
 
   write(join(item.gameDir, "build", "wasm-release", "bin", "game.wasm"), "ignored build output");
   write(join(item.gameDir, "capture", "catalog.json"), "ignored capture tooling state");
@@ -84,6 +87,18 @@ test("runtime build record deterministically binds game and dependency source tr
 
   write(join(item.studioRoot, "features", "platform-sdk", "src", "sdk.c"), "void sdk_changed(void) {}\n");
   assert.notEqual(createRuntimeBuildRecord(item).fingerprint, one.fingerprint);
+});
+
+test("the Studio tooling that shapes an artifact is an input unless the game carries its own copy", (t) => {
+  const item = fixture(t);
+  const one = createRuntimeBuildRecord(item);
+  write(join(item.studioRoot, "ai_studio", "game_tools", "package_web.mjs"), "// packages, does not shape bin/\n");
+  assert.equal(createRuntimeBuildRecord(item).fingerprint, one.fingerprint);
+  write(join(item.studioRoot, "ai_studio", "game_tools", "minify_web_release.mjs"), "// changed minifier\n");
+  assert.notEqual(createRuntimeBuildRecord(item).fingerprint, one.fingerprint);
+
+  write(join(item.gameDir, "tools", "package_web.mjs"), "// copied tooling\n");
+  assert.deepEqual(createRuntimeBuildRecord(item).inputs.map((input) => input.id), ["game", "engine", "feature:platform-sdk"]);
 });
 
 test("runtime build hashing rejects linked source paths", (t) => {

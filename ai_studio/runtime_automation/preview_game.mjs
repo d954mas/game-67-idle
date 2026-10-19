@@ -4,6 +4,7 @@ import { existsSync, lstatSync, realpathSync, rmSync, writeFileSync } from "node
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
+import { hasCopiedGameTooling } from "../game_tools/lib/copied_tooling.mjs";
 import { listWorkspaceMounts } from "../workspace/catalog.mjs";
 
 const PREVIEW_SCHEMA = "ai_studio.runtime_build.preview.v1";
@@ -86,7 +87,7 @@ function assertArtifactDir(gameDir, artifactDir, requirePhysical) {
 // game's tools/build_web.mjs is a shim that builds on import, so the Studio
 // builder is loaded instead.
 export function resolveGameModule(gameDir, studioRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")) {
-  if (!existsSync(join(gameDir, "tools", "package_web.mjs"))) {
+  if (!hasCopiedGameTooling(gameDir)) {
     return realpathSync(join(studioRoot, "ai_studio", "game_tools", "build_web.mjs"));
   }
   const modulePath = realpathSync(join(gameDir, "tools", "build_web.mjs"));

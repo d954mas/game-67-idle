@@ -18,7 +18,7 @@ import { verifyWebPackage } from "./package_web.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 
-const USAGE = "usage: node tools/portal_evidence.mjs --manifest release/artifacts/<artifact>.manifest.json [--local-mock-observation .ai_studio/evidence/local-mock/<observation>.json]";
+const USAGE = "usage: node <studio>/ai_studio/game_tools/portal_evidence.mjs --manifest release/artifacts/<artifact>.manifest.json [--local-mock-observation .ai_studio/evidence/local-mock/<observation>.json] (run from the game root)";
 const jsonBytes = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8");
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -68,7 +68,7 @@ function releaseLevels(localMockObservation = null) {
       id: "local-sdk-contract",
       status: "pass",
       reason: "The exact ZIP and sidecar passed the game-owned reopened package and platform SDK contract verifier.",
-      evidence: "tools/package_web.mjs#verifyWebPackage",
+      evidence: "ai_studio/game_tools/package_web.mjs#verifyWebPackage",
     },
     {
       id: "public-inspector",

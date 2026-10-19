@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -28,7 +28,7 @@ const COMMANDS = new Set(["doctor", "build", "run", "test", "playable", "package
 // The tier vocabulary is shared with cmake/GameTests.cmake; CTest labels carry it.
 export const TEST_TIERS = ["core", "slow", "taste"];
 export const TEST_TIER_DEFAULT = "core";
-const USAGE = "usage: node tools/game.mjs <doctor|build|run|test|playable|package|portal-check|verify> [--target local|itch|poki|yandex|playgama|crazygames|wavedash|pikabu|gamepush] [--no-build] [--out <dir>] [--template-proof] [--skip-tests] [test: --tier core|slow|taste | --all | --only <test>] [--update-goldens]";
+const USAGE = "usage: node tools/game.mjs <doctor|build|run|test|playable|package|portal-check|verify> [--target local|itch|poki|yandex|playgama|crazygames|wavedash|pikabu|gamepush] [--no-build] [--out <dir>] [--template-proof] [--skip-tests] [test: --tier core|slow|taste | --all | --only <test>] [--update-goldens] [test|verify: --verbose]";
 
 function readJson(path, label) {
   let value;
@@ -53,6 +53,7 @@ export function parseGameArgs(argv) {
     tier: "",
     all: false,
     updateGoldens: false,
+    verbose: false,
   };
   for (let index = 1; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -65,6 +66,7 @@ export function parseGameArgs(argv) {
     else if (arg === "--tier") args.tier = argv[++index] || "";
     else if (arg === "--all") args.all = true;
     else if (arg === "--update-goldens") args.updateGoldens = true;
+    else if (arg === "--verbose") args.verbose = true;
     else throw new Error(`unknown option: ${arg}\n${USAGE}`);
   }
   if (args.only.some((name) => !/^[A-Za-z0-9_.-]+$/.test(name))) throw new Error(`--only takes CTest names\n${USAGE}`);
@@ -85,6 +87,7 @@ export function parseGameArgs(argv) {
   if (args.skipTests && command !== "verify") throw new Error(`--skip-tests is not valid for ${command}`);
   if (args.skipTests && !args.templateProof) throw new Error("--skip-tests is valid only with --template-proof");
   if (args.outDir && !["package", "verify"].includes(command)) throw new Error(`--out is not valid for ${command}`);
+  if (args.verbose && !["test", "verify"].includes(command)) throw new Error(`--verbose is not valid for ${command}`);
   delete args.targetSpecified;
   return args;
 }
@@ -134,18 +137,74 @@ export function doctorGame({ gameDir, templateProof = false } = {}) {
   return { gameId: identity.id, kind: "game" };
 }
 
-function run(command, args, cwd, label, env = process.env) {
-  const result = spawnSync(command, args, { cwd, shell: false, stdio: "inherit", env });
+// With a capture, a step's output goes to the capture instead of the terminal:
+// a green test run is read back by agents on every later turn, so it must stay
+// one line, while a red one still shows what failed.
+function run(command, args, cwd, label, env = process.env, capture = null) {
+  if (!capture) {
+    const result = spawnSync(command, args, { cwd, shell: false, stdio: "inherit", env });
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error(`${label} exited ${result.status ?? 1}`);
+    return;
+  }
+  const result = spawnSync(command, args, {
+    cwd, shell: false, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 512 * 1024 * 1024,
+  });
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`${label} exited ${result.status ?? 1}`);
+  const output = `${result.stdout || ""}${result.stderr || ""}`;
+  capture.steps.push({ label, command: [command, ...args].join(" "), output });
+  if (result.status !== 0) {
+    const error = new Error(`${label} exited ${result.status ?? 1}`);
+    error.output = output;
+    throw error;
+  }
 }
 
-function runNodeTests(gameDir) {
+function runNodeTests(gameDir, capture = null) {
   const tools = join(gameDir, "tools");
   const files = readdirSync(tools).filter((name) => name.endsWith(".test.mjs")).sort().map((name) => join("tools", name));
   if (files.length === 0) throw new Error("game scaffold has no Node tests");
   // Concurrency mirrors the studio gate; every heavy fixture is mkdtemp-isolated.
-  run(process.execPath, ["--test", "--test-concurrency=4", ...files], gameDir, "game tests");
+  run(process.execPath, ["--test", "--test-concurrency=4", ...files], gameDir, "game tests", process.env, capture);
+}
+
+export function summarizeTestCapture(capture) {
+  const text = capture.steps.map((step) => step.output).join("\n");
+  const nodePassed = [...text.matchAll(/^(?:ℹ|#) pass (\d+)$/gm)].reduce((sum, match) => sum + Number(match[1]), 0);
+  const native = [...text.matchAll(/(\d+)% tests passed, (\d+) tests? failed out of (\d+)/g)].at(-1);
+  return { nodePassed, nativePassed: native ? Number(native[3]) - Number(native[2]) : 0 };
+}
+
+function writeTestLog(gameDir, capture) {
+  const path = join(gameDir, "build", "logs", "game-test.log");
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, capture.steps.map((step) => `$ ${step.command}\n${step.output}`).join("\n"));
+  return path;
+}
+
+function outputTail(output, lines = 80) {
+  return String(output || "").trimEnd().split(/\r?\n/).slice(-lines).join("\n");
+}
+
+// Runs the game's Node and native suites; quiet unless verbose.
+export function runTestSuites(gameDir, { nodeTest, nativeTest, selection, updateGoldens = false, includeNode = true, verbose = false }) {
+  const capture = verbose ? null : { steps: [] };
+  const started = Date.now();
+  try {
+    if (includeNode) nodeTest(gameDir, capture);
+    nativeTest(gameDir, { selection, updateGoldens, capture });
+  } catch (error) {
+    if (capture) {
+      const log = writeTestLog(gameDir, capture);
+      error.message = `${error.message}\n${outputTail(error.output)}\nfull log: ${log}`;
+    }
+    throw error;
+  }
+  if (!capture) return "";
+  const log = writeTestLog(gameDir, capture);
+  const { nodePassed, nativePassed } = summarizeTestCapture(capture);
+  const seconds = ((Date.now() - started) / 1000).toFixed(1);
+  return `node ${nodePassed} passed, native ${nativePassed} passed in ${seconds}s; log: ${log}`;
 }
 
 // CTest labels are the only record of which tier a test belongs to, so the
@@ -252,11 +311,11 @@ export function runNativeTests(gameDir, options = {}, dependencies = {}) {
   if (configured) {
     // Ninja regenerates the build graph before discovery, so a new test is visible
     // without paying for a second configure process on every iteration.
-    runCommand("cmake", ["--build", buildDir, "--target", "build.ninja"], gameDir, "native test graph refresh", env);
+    runCommand("cmake", ["--build", buildDir, "--target", "build.ninja"], gameDir, "native test graph refresh", env, options.capture);
     Object.assign(selection, selectTests(catalogue(buildDir), selection));
   }
   for (const [command, ...args] of nativeTestPlan(gameDir, process.platform, configured, selection)) {
-    runCommand(command, args, gameDir, "native game tests", env);
+    runCommand(command, args, gameDir, "native game tests", env, options.capture);
     // CMake regenerates during the build step, so the labels are only settled
     // once it has run.
     if (command === "cmake" && args[0] === "--build") assertTiersLabelled(catalogue(buildDir));
@@ -442,12 +501,14 @@ export async function executeGameCommand(args, dependencies = {}) {
     const only = args.only || [];
     // A focused CTest run is the explicit fast path; the default core gate still
     // runs the complete Node suite before native tests.
-    if (only.length === 0) nodeTest(gameDir);
     const selection = args.all ? { mode: "all" }
       : only.length > 0 ? { mode: "only", names: only }
       : { mode: "tier", tier: args.tier || TEST_TIER_DEFAULT };
-    nativeTest(gameDir, { selection, updateGoldens: args.updateGoldens });
-    return { message: args.updateGoldens ? "goldens recorded" : "game tests passed" };
+    const summary = runTestSuites(gameDir, {
+      nodeTest, nativeTest, selection, updateGoldens: args.updateGoldens, includeNode: only.length === 0, verbose: args.verbose,
+    });
+    const verdict = args.updateGoldens ? "goldens recorded" : "game tests passed";
+    return { message: summary ? `${verdict}: ${summary}` : verdict };
   }
   if (args.command === "playable") {
     prepare(false);
@@ -465,13 +526,10 @@ export async function executeGameCommand(args, dependencies = {}) {
     return { message: `package passed: ${result.zipPath}`, result };
   }
   const metadata = prepare(args.templateProof);
-  if (!args.skipTests) {
-    nodeTest(gameDir);
-    nativeTest(gameDir, { selection: { mode: "all" } });
-  }
+  const summary = args.skipTests ? "" : runTestSuites(gameDir, { nodeTest, nativeTest, selection: { mode: "all" }, verbose: args.verbose });
   const result = await packageGameOwned(args, metadata);
   await smokePackage({ zipPath: result.zipPath, expectedTarget: args.target, mode: "full", frameExpectation: args.templateProof ? "blank" : "rendered" });
-  return { message: `verify passed: ${result.zipPath}`, result };
+  return { message: `verify passed: ${result.zipPath}${summary ? `; tests: ${summary}` : ""}`, result };
 }
 
 // commands: the game's own extra commands, { name: async (argv, { gameDir }) => message }.

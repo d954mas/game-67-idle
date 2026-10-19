@@ -257,7 +257,7 @@ test("local mock observation cannot change between validation and report publica
 
 test("the Studio reporter records the exact package when run from a games/<id> root", (t) => {
   const item = fixture(t);
-  for (const rel of ["portal_evidence.mjs", "package_web.mjs", "lib/studio_root.mjs", "lib/runtime_build.mjs"]) {
+  for (const rel of ["portal_evidence.mjs", "package_web.mjs", "lib/studio_root.mjs", "lib/runtime_build.mjs", "lib/copied_tooling.mjs"]) {
     mkdirSync(dirname(join(item.root, "ai_studio", "game_tools", ...rel.split("/"))), { recursive: true });
     cpSync(join(dirname(reporterScript), ...rel.split("/")), join(item.root, "ai_studio", "game_tools", ...rel.split("/")));
   }
@@ -420,5 +420,5 @@ test("concurrent conflicting publishers create once and never overwrite the winn
 test("reporter CLI rejects missing arguments with usage exit 2", () => {
   const result = spawnSync(process.execPath, [reporterScript], { encoding: "utf8" });
   assert.equal(result.status, 2);
-  assert.match(result.stderr, /^usage: node tools\/portal_evidence\.mjs/m);
+  assert.match(result.stderr, /^usage: node <studio>\/ai_studio\/game_tools\/portal_evidence\.mjs/m);
 });

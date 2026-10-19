@@ -19,6 +19,7 @@ import { hostname } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { hasCopiedGameTooling } from "../game_tools/lib/copied_tooling.mjs";
 import { parseDoc } from "../taskboard/store.mjs";
 import { selectTaskboardStore, validateTaskboardStoresDetailed } from "../taskboard/stores.mjs";
 import { listGameMounts, runPrivateGamePreflight } from "./games.mjs";
@@ -1186,7 +1187,7 @@ function printHuman(command, result) {
     }
     console.log(`Run the agent from: ${result.gameWorktree}`);
     console.log(`Game launch: <game.exe> --devapi ${result.ports.devapi} --fresh-state`);
-    const ownServer = existsSync(join(result.gameWorktree, "tools", "serve_web.mjs"));
+    const ownServer = hasCopiedGameTooling(result.gameWorktree);
     const server = ownServer ? "tools/serve_web.mjs" : relative(result.gameWorktree, join(result.studioWorktree, "ai_studio", "game_tools", "serve_web.mjs")).replaceAll("\\", "/");
     console.log(`Web launch: node ${server} --port ${result.ports.web} --dir <dir>`);
     return;
