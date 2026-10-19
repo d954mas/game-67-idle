@@ -21,7 +21,7 @@ import {
   stagePlatformSdkWebAssets,
 } from "../scripts/artifact_tools.mjs";
 import { scorecardFromNdjson } from "../scripts/scorecard.mjs";
-import { createBuildPlan } from "../../../ai_studio/feature_testing/consumer/tools/build_web.mjs";
+import { createBuildPlan } from "../../../ai_studio/game_tools/build_web.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TargetPlatform = Object.freeze({
