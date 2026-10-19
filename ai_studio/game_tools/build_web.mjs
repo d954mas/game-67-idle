@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -8,11 +8,17 @@ import { spawnSync } from "node:child_process";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { createRuntimeBuildRecord, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 
-const PRESETS = new Set(["wasm-release", "wasm-debug", "wasm-devapi-debug"]);
+// wasm-devapi-perf: DevAPI at an optimised build type, without the analytics and
+// log mirror that cost more than the game in a busy frame; it measures what ships.
+const PRESETS = new Set(["wasm-release", "wasm-debug", "wasm-devapi-debug", "wasm-devapi-perf"]);
+const BUILD_TYPES = { "wasm-release": "Release", "wasm-devapi-perf": "RelWithDebInfo" };
 const TOOLS_DIR = dirname(fileURLToPath(import.meta.url));
-const { compileProfileForTarget, targetNames } = await import(pathToFileURL(join(
-  TOOLS_DIR, "..", "..", "features", "platform-sdk", "publish-targets", "target_config.mjs",
-)).href);
+const STUDIO_ROOT = resolve(TOOLS_DIR, "..", "..");
+const PUBLISH_TARGETS_DIR = join(STUDIO_ROOT, "features", "platform-sdk", "publish-targets");
+// The host options a host tree was configured with, kept beside its cache: CMake
+// keeps a cached option until it is changed or removed, never by omission.
+export const HOST_ARGS_STAMP = "game-host-args.json";
+const { compileProfileForTarget, targetNames } = await import(pathToFileURL(join(PUBLISH_TARGETS_DIR, "target_config.mjs")).href);
 const TARGETS = new Set(targetNames());
 const PREVIEW_SCHEMA = "ai_studio.runtime_build.preview.v1";
 
@@ -59,10 +65,27 @@ export function nativeTreeFor(gameDir, args) {
 export function compileFlagsForArgs(args) {
   return Object.freeze({
     debugUi: args.debugUi === "on",
-    devapi: args.preset === "wasm-devapi-debug",
+    devapi: args.preset === "wasm-devapi-debug" || args.preset === "wasm-devapi-perf",
     analytics: args.preset === "wasm-devapi-debug",
-    eventsLogMirror: args.preset !== "wasm-release",
+    eventsLogMirror: args.preset === "wasm-debug" || args.preset === "wasm-devapi-debug",
   });
+}
+
+// Extra packs the target may ship beside game.ntpack (music, late-loaded fonts);
+// a local build stages what itch would.
+export function optionalPackPaths(target, read = (path) => readFileSync(path, "utf8")) {
+  const manifest = JSON.parse(read(join(PUBLISH_TARGETS_DIR, `${target === "local" ? "itch" : target}.json`)));
+  return (manifest.optional_files || []).filter((path) => /^assets\/[^/]+\.ntpack$/.test(path));
+}
+
+function gameConfigureArgs(options, args) {
+  const extra = options.configureArgs ? options.configureArgs(args) : {};
+  for (const key of ["host", "web"]) {
+    if (extra[key] !== undefined && (!Array.isArray(extra[key]) || extra[key].some((arg) => typeof arg !== "string" || !arg.startsWith("-D")))) {
+      throw new Error(`game configure args.${key} must be a list of -D options`);
+    }
+  }
+  return { host: extra.host || [], web: extra.web || [] };
 }
 
 export function createBuildPlan(options) {
@@ -97,12 +120,23 @@ export function createBuildPlan(options) {
     throw new Error("EMSDK is required on Windows unless an absolute emcmake executable is provided");
   }
   const env = { ...inputEnv, EM_CACHE: inputEnv.EM_CACHE || join(gameDir, "build", "emscripten-cache") };
+  const extra = gameConfigureArgs(options, args);
+  const buildType = BUILD_TYPES[args.preset] || "Debug";
   const steps = [{ kind: "mkdir", path: env.EM_CACHE }];
   if (args.preview) steps.push({ kind: "remove", path: join(webDir, "bin", "runtime-build.json") });
-  if (!options.nativeConfigured) {
+  // Both trees compile the Studio that fingerprints and proves the build.
+  const repoRootArg = `-DGAME_REPO_ROOT=${resolve(options.studioRoot || STUDIO_ROOT).replace(/\\/g, "/")}`;
+  const hostArgs = [repoRootArg, ...extra.host];
+  const recordedHostArgs = options.hostArgsRecord || [];
+  if (!options.nativeConfigured || JSON.stringify(recordedHostArgs) !== JSON.stringify(hostArgs)) {
+    const optionName = (arg) => arg.slice(2).split("=")[0].split(":")[0];
+    const current = new Set(hostArgs.map(optionName));
+    const removed = [...new Set(recordedHostArgs.map(optionName))].filter((name) => !current.has(name)).map((name) => `-U${name}`);
     const nativeArgs = ["-S", gameDir, "-B", nativeDir, "-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Debug"];
     if (platform === "linux") nativeArgs.push("-DCMAKE_EXE_LINKER_FLAGS_DEBUG=-fsanitize=address,undefined");
+    nativeArgs.push(...removed, ...hostArgs);
     steps.push({ kind: "run", command: "cmake", args: nativeArgs });
+    steps.push({ kind: "stamp", path: join(nativeDir, HOST_ARGS_STAMP), value: hostArgs });
   }
   steps.push({ kind: "run", command: "cmake", args: ["--build", nativeDir, "--target", "game_asset_packs"] });
   const configureArgs = ["-S", gameDir, "-B", webDir, "-G", "Ninja"];
@@ -115,7 +149,7 @@ export function createBuildPlan(options) {
     configureCommand = "emcmake";
     configureArgs.unshift("cmake");
   }
-  configureArgs.push(`-DCMAKE_BUILD_TYPE=${args.preset === "wasm-release" ? "Release" : "Debug"}`, `-DGAME_PUBLISH_TARGET=${args.target}`);
+  configureArgs.push(repoRootArg, `-DCMAKE_BUILD_TYPE=${buildType}`, `-DGAME_PUBLISH_TARGET=${args.target}`);
   configureArgs.push(`-DGAME_RUNTIME_BUILD_PROFILE=${compileProfile.preset}`);
   configureArgs.push("-DGAME_AUDIO_BROWSER_SMOKE=OFF");
   // Games that generate code into the build tree read the host's output from here.
@@ -130,10 +164,17 @@ export function createBuildPlan(options) {
   configureArgs.push(`-DGAME_RUNTIME_BUILD_FINGERPRINT=${runtimeBuild ? runtimeBuild.fingerprint : ""}`);
   configureArgs.push(`-DGAME_PLATFORM_SDK_DEBUG_UI=${compileProfile.debugUi ? "ON" : "OFF"}`);
   configureArgs.push(`-DGAME_DEVAPI_ENABLED=${compileProfile.devapi ? "ON" : "OFF"}`);
+  configureArgs.push(...extra.web);
   steps.push({ kind: "run", command: configureCommand, args: configureArgs });
   steps.push({ kind: "run", command: "cmake", args: ["--build", webDir, "--target", "game"] });
+  // A game that links with a symbol map gets it beside the output, but bin/ is
+  // the exact file set the packager allows; the map is kept one level up.
+  steps.push({ kind: "move", from: join(webDir, "bin", "game.js.symbols"), to: join(webDir, "game.js.symbols") });
   steps.push({ kind: "run", command: "cmake", args: ["--build", webDir, "--target", "platform_sdk_web_assets"] });
   steps.push({ kind: "copy", from: join(nativeDir, "bin", "assets", "game.ntpack"), to: join(webDir, "bin", "assets", "game.ntpack") });
+  for (const path of options.optionalPacks || optionalPackPaths(args.target)) {
+    steps.push({ kind: "copy_optional", from: join(nativeDir, "bin", ...path.split("/")), to: join(webDir, "bin", ...path.split("/")) });
+  }
   // Download sizes reach the shell before minification and only once the packs
   // are staged: they exist nowhere but on disk, and no CDN header can replace
   // them once the transfer is compressed.
@@ -159,6 +200,16 @@ export function createBuildPlan(options) {
   };
 }
 
+function readHostArgsStamp(path) {
+  if (!existsSync(path)) return null;
+  try {
+    const value = JSON.parse(readFileSync(path, "utf8"));
+    return Array.isArray(value) && value.every((arg) => typeof arg === "string") ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export function executeBuildPlan(plan, deps = {}) {
   const mkdir = deps.mkdir || ((path) => mkdirSync(path, { recursive: true }));
   const copy = deps.copy || ((from, to) => { mkdir(dirname(to)); copyFileSync(from, to); });
@@ -167,11 +218,19 @@ export function executeBuildPlan(plan, deps = {}) {
     writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
   });
   const remove = deps.remove || ((path) => rmSync(path, { force: true }));
+  const exists = deps.exists || existsSync;
+  // A rebuild that relinks nothing re-emits nothing: a missing source means the
+  // file already sits where it belongs, or the game does not make one.
+  const move = deps.move || ((from, to) => { mkdir(dirname(to)); renameSync(from, to); });
   const run = deps.run || ((command, args, options) => spawnSync(command, args, { ...options, stdio: "inherit", shell: false }));
   for (const step of plan.steps) {
     if (step.kind === "mkdir") mkdir(step.path);
     else if (step.kind === "remove") remove(step.path);
     else if (step.kind === "copy") copy(step.from, step.to);
+    // A pack the host no longer makes must not linger from an earlier build.
+    else if (step.kind === "copy_optional") { if (exists(step.from)) copy(step.from, step.to); else remove(step.to); }
+    else if (step.kind === "move") { if (exists(step.from)) move(step.from, step.to); }
+    else if (step.kind === "stamp") write(step.path, step.value);
     else if (step.kind === "write") {
       (deps.verifyRuntimeBuild || plan.verifyRuntimeBuild)?.();
       write(step.path, step.value);
@@ -184,7 +243,8 @@ export function executeBuildPlan(plan, deps = {}) {
   return plan.message;
 }
 
-export function main(argv = process.argv.slice(2), environment = process.env, { gameDir: requestedGameDir = process.cwd() } = {}) {
+// configureArgs: the game's own CMake options per build, (args) => ({ host, web }).
+export function main(argv = process.argv.slice(2), environment = process.env, { gameDir: requestedGameDir = process.cwd(), configureArgs } = {}) {
   try {
     const gameDir = resolve(requestedGameDir);
     const args = parseBuildArgs(argv);
@@ -200,8 +260,11 @@ export function main(argv = process.argv.slice(2), environment = process.env, { 
       platform: process.platform,
       emcmakePath: resolveEmcmakePath({ ...environment, ...(emsdk ? { EMSDK: emsdk } : {}) }, process.platform),
       nativeConfigured: existsSync(join(nativeTreeFor(gameDir, args), "CMakeCache.txt")),
+      hostArgsRecord: readHostArgsStamp(join(nativeTreeFor(gameDir, args), HOST_ARGS_STAMP)),
+      studioRoot,
       toolchainExists: Boolean(toolchain && existsSync(toolchain)),
       runtimeBuild,
+      configureArgs,
       verifyRuntimeBuild: args.preview ? null : () => {
         const after = createRuntimeBuildRecord({ gameDir, studioRoot, compileProfile });
         if (JSON.stringify(after) !== JSON.stringify(runtimeBuild)) {

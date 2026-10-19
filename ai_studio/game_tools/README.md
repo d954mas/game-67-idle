@@ -10,7 +10,9 @@ game keeps two thin entrypoints:
   documented `node tools/build_web.mjs --preset ...` keeps working.
 
 Both locate the Studio with `tools/lib/studio_root.mjs`, which stays in the game
-because it is what finds this module.
+because it is what finds this module. The CLI then builds and proves against the Studio it
+was loaded from only: a `GAME_REPO_ROOT` that names another Studio is an error,
+and both CMake trees get `-DGAME_REPO_ROOT` set to it.
 
 Games already compile `features/` and the engine from the Studio checkout they
 sit in, so loading the CLI from the same checkout adds no new coupling.
@@ -19,7 +21,7 @@ sit in, so loading the CLI from the same checkout adds no new coupling.
 
 - `game_cli.mjs`: `doctor`, `build`, `run`, `test`, `playable`, `package`,
   `portal-check`, `verify`; test tiers come from CTest labels. `test` and
-  `verify` keep test output in `build/logs/game-test.log` and print one summary
+  `verify` run the Node suite beside the native build and CTest, keep test output in `build/logs/game-test.log` and print one summary
   line, or the failing step's tail and the log path; `--verbose` streams it all.
   `clean` removes build variants and keeps `build/native-debug`; `clean --all`
   removes the whole `build/`.
@@ -48,6 +50,31 @@ process.exitCode = await main(process.argv.slice(2), {
   commands: { dev: async (argv, { gameDir }) => "dev loop stopped" },
 });
 ```
+
+## Game hooks
+
+The shim passes, beside `gameDir` and `commands`, only what the game owns:
+
+- `doctor`: wraps `doctorGame`; `doctorGame({ ..., ciWorkflow: false })` for a
+  game that keeps verification local and ships no CI workflow.
+- `testTiers`: CTest tiers beyond `core|slow|taste` (PLW's `net`).
+- `nativeTest`: usually `runNativeTests(gameDir, options, { settle })`, where
+  `settle(runStep, env)` configures `build/native-debug` the game's way, and
+  `gameTarget` names a playable CMake target other than `game`.
+- A game with its own web layout: `build`, `artifactDir`, `validateArtifact`,
+  `package`, `smoke` and `portalArtifact: { args, replacesFeatureInspect? }`.
+  portal-check runs the feature's `artifact_tools inspect` and then the game's
+  check; the inspect is dropped only with a stated reason, printed on every run.
+- `build_web.mjs` takes `configureArgs: (args) => ({ host, web })`, extra `-D`
+  options for the asset host tree and the web tree of one build.
+
+A build may record `remote_endpoints.json` (`{ "allowedRemoteUrls": [...] }`)
+beside its `bin/`: the packaged smoke then admits only those endpoints, failed
+as if the player were offline. A `game.js.symbols` map the link leaves in `bin/`
+moves one level up and is copied beside the ZIP by a building `package`. A
+`version` in `game.json` names the artifact `<id>-<target>-v<version>-<hash>`.
+`THIRD_PARTY_NOTICES.txt` may ride in any web root. `wasm-devapi-perf` is the
+optimised DevAPI build for performance measurements.
 
 ## Older games
 

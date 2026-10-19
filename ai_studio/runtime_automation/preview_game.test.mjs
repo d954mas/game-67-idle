@@ -129,7 +129,7 @@ test("catalogued private games expose a debug preview plan without a source proo
   if (mounts.length === 0) t.skip("no private games are available in this checkout");
   for (const mount of mounts) {
     const gameDir = resolve(studioRoot, mount.root);
-    const gameBuilder = await import(pathToFileURL(join(gameDir, "tools", "build_web.mjs")).href);
+    const gameBuilder = await import(pathToFileURL(resolveGameModule(gameDir, studioRoot)).href);
     const prepared = createPreviewPlan({
       builder: gameBuilder,
       gameDir,

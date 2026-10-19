@@ -33,12 +33,18 @@ export function injectAssetBytes({ artifactDir, bytes } = {}) {
   return bytes;
 }
 
+// --wasm and --pack name a layout whose runtime and first pack sit elsewhere.
 export function main(argv = process.argv.slice(2)) {
-  const index = argv.indexOf("--artifact");
-  if (index < 0 || !argv[index + 1]) throw new Error("usage: inject_asset_bytes.mjs --artifact <dir>");
-  const artifactDir = argv[index + 1];
-  const bytes = injectAssetBytes({ artifactDir, bytes: assetBytes({ artifactDir }) });
-  return `loading sizes: game.wasm ${bytes.wasm} B, game.ntpack ${bytes.pack} B`;
+  const option = (name) => {
+    const index = argv.indexOf(name);
+    return index >= 0 ? argv[index + 1] : undefined;
+  };
+  const artifactDir = option("--artifact");
+  if (!artifactDir) throw new Error("usage: inject_asset_bytes.mjs --artifact <dir> [--wasm <file>] [--pack <file>]");
+  const wasmName = option("--wasm") ?? "game.wasm";
+  const packName = option("--pack") ?? "assets/game.ntpack";
+  const bytes = injectAssetBytes({ artifactDir, bytes: assetBytes({ artifactDir, wasmName, packName }) });
+  return `loading sizes: ${wasmName} ${bytes.wasm} B, ${packName} ${bytes.pack} B`;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {

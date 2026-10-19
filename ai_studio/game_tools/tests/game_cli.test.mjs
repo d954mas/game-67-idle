@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { cleanBuild, ctestCatalogue, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, runNativeTests, runTestSuites, selectTests, summarizeTestCapture } from "../game_cli.mjs";
+import { archiveSymbolMap, buildRemoteEndpoints, cleanBuild, ctestCatalogue, ctestParallelism, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, runNativeTests, runTestSuites, selectTests, summarizeTestCapture } from "../game_cli.mjs";
 import { findStudioRoot } from "../lib/studio_root.mjs";
 import { createRuntimeBuildRecord, runtimeBuildWitness } from "../lib/runtime_build.mjs";
 
@@ -454,18 +454,18 @@ test("portal-check asks the artifact, the store draft and the SDK proof that exi
   assert.equal(missingDraft.find((step) => step.id === "store").skip.includes("no store draft"), true);
 });
 
-test("a green test run prints one summary line and keeps the output in a log", (t) => {
+test("a green test run prints one summary line and keeps the output in a log", async (t) => {
   const gameDir = mkdtempSync(join(tmpdir(), "game-quiet-"));
   t.after(() => rmSync(gameDir, { recursive: true, force: true }));
   const nodeTest = (_dir, capture) => capture.steps.push({ label: "node", command: "node --test", output: "ok 1\n# pass 6\n# fail 0\n" });
   const nativeTest = (_dir, options) => options.capture.steps.push({ label: "native", command: "ctest", output: "noise\n100% tests passed, 0 tests failed out of 125\n" });
-  const summary = runTestSuites(gameDir, { nodeTest, nativeTest, selection: { mode: "tier", tier: "core" } });
+  const summary = await runTestSuites(gameDir, { nodeTest, nativeTest, selection: { mode: "tier", tier: "core" } });
   assert.match(summary, /^node 6 passed, native 125 passed in [\d.]+s; log: /);
   assert.match(readFileSync(join(gameDir, "build", "logs", "game-test.log"), "utf8"), /\$ ctest\nnoise/);
-  assert.equal(runTestSuites(gameDir, { nodeTest: () => {}, nativeTest: () => {}, selection: {}, verbose: true }), "");
+  assert.equal(await runTestSuites(gameDir, { nodeTest: () => {}, nativeTest: () => {}, selection: {}, verbose: true }), "");
 });
 
-test("a red test run shows the failing step's tail and where the full log is", (t) => {
+test("a red test run shows the failing step's tail and where the full log is", async (t) => {
   const gameDir = mkdtempSync(join(tmpdir(), "game-quiet-fail-"));
   t.after(() => rmSync(gameDir, { recursive: true, force: true }));
   const nativeTest = () => {
@@ -473,8 +473,8 @@ test("a red test run shows the failing step's tail and where the full log is", (
     error.output = `${"earlier line\n".repeat(200)}The following tests FAILED:\n  12 - test_save (Failed)\n`;
     throw error;
   };
-  assert.throws(
-    () => runTestSuites(gameDir, { nodeTest: () => {}, nativeTest, selection: {} }),
+  await assert.rejects(
+    runTestSuites(gameDir, { nodeTest: () => {}, nativeTest, selection: {} }),
     (error) => /exited 8\n[\s\S]*test_save \(Failed\)\nfull log: /.test(error.message) && error.message.split("\n").length < 90,
   );
   assert.deepEqual(summarizeTestCapture({ steps: [{ output: "ℹ pass 3\n" }, { output: "ℹ pass 2\n90% tests passed, 1 tests failed out of 10\n" }] }), { nodePassed: 5, nativePassed: 9 });
@@ -495,4 +495,153 @@ test("clean drops build variants and keeps the native debug tree unless --all", 
 
   assert.equal(parseGameArgs(["clean", "--all"]).all, true);
   assert.throws(() => parseGameArgs(["build", "--all"]), /--all is valid only for test and clean/);
+});
+
+test("a game without CI passes doctor only when it says so", (t) => {
+  const gameDir = mkdtempSync(join(tmpdir(), "game-doctor-"));
+  t.after(() => rmSync(gameDir, { recursive: true, force: true }));
+  for (const rel of ["CMakeLists.txt", "tools/game.mjs", "tools/build_web.mjs", "tools/lib/studio_root.mjs", "release/README.md"]) {
+    write(join(gameDir, rel), "fixture\n");
+  }
+  write(join(gameDir, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: "fixture", title: "Fixture", storageNamespace: "fixture" }));
+  write(join(gameDir, "dependencies.json"), JSON.stringify({
+    schema: "ai_studio.game.dependencies.v3",
+    engine: { source: "external/neotolis-engine", version: "11111111", revision: "1".repeat(40), compatibility: "tested" },
+    features: [], compatibility: "tested",
+  }));
+  assert.throws(() => doctorGame({ gameDir }), /game-verify\.yml/);
+  assert.equal(doctorGame({ gameDir, ciWorkflow: false }).gameId, "fixture");
+});
+
+test("verify admits only the endpoints the build recorded beside the target build", async () => {
+  const reads = [];
+  const read = (path) => { reads.push(path.replaceAll("\\", "/")); return '{ "allowedRemoteUrls": ["https://stats.example.com"] }'; };
+  assert.deepEqual(buildRemoteEndpoints("/repo/games/example", "itch", { read, exists: () => true }), ["https://stats.example.com"]);
+  assert.match(reads[0], /\/build\/wasm-release-itch\/remote_endpoints\.json$/);
+  assert.deepEqual(buildRemoteEndpoints("/g", "itch", { exists: () => false }), []);
+  assert.throws(() => buildRemoteEndpoints("/g", "itch", { exists: () => true, read: () => "{" }), /reconfigure the build/);
+  assert.throws(() => buildRemoteEndpoints("/g", "itch", { exists: () => true, read: () => '{ "allowedRemoteUrls": [1] }' }), /malformed/);
+
+  let seen = null;
+  await executeGameCommand({ command: "verify", target: "itch", build: false, templateProof: false, skipTests: true, outDir: "" }, {
+    gameDir: "/repo/games/example",
+    doctor: () => ({ gameId: "example" }),
+    loadMetadata: () => ({ dependencies: {}, proof: "game" }),
+    verifyDependencies: () => {},
+    package: () => ({ zipPath: "example.zip" }),
+    remoteEndpoints: (gameDir, target) => [`https://${target}.example.com`],
+    smoke: ({ allowedRemoteUrls }) => { seen = allowedRemoteUrls; },
+  });
+  assert.deepEqual(seen, ["https://itch.example.com"]);
+});
+
+test("a built package keeps the link's symbol map beside its ZIP", () => {
+  const copies = [];
+  const target = archiveSymbolMap("/g/build/wasm-release-itch/bin", "/g/release/artifacts/g-itch-abc.zip", {
+    exists: () => true, copy: (from, to) => copies.push([from.replaceAll("\\", "/"), to]),
+  });
+  assert.equal(target, "/g/release/artifacts/g-itch-abc.symbols");
+  assert.deepEqual(copies, [["/g/build/wasm-release-itch/game.js.symbols", "/g/release/artifacts/g-itch-abc.symbols"]]);
+  assert.equal(archiveSymbolMap("/g/build/x/bin", "/g/a.zip", { exists: () => false, copy: () => assert.fail("no map to copy") }), "");
+});
+
+test("the CLI builds and proves against the one Studio it runs from", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "studio-root-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "external", "neotolis-engine"), { recursive: true });
+  const detached = join(root, "a", "b", "c", "game");
+  assert.equal(findStudioRoot(detached, { env: { GAME_REPO_ROOT: root }, ownRoot: root }), root);
+  assert.equal(findStudioRoot(detached, { env: { GAME_REPO_ROOT: studioRoot } }), resolve(studioRoot));
+  // Another Studio, named or found, would split the compiled bytes from their proof.
+  assert.throws(() => findStudioRoot(detached, { env: { GAME_REPO_ROOT: root } }), /not the Studio this game CLI runs from/);
+  assert.throws(() => findStudioRoot(join(root, "games", "x"), { env: {} }), /not the Studio this game CLI runs from/);
+  assert.throws(() => findStudioRoot(detached, { env: { GAME_REPO_ROOT: join(root, "missing") } }), /GAME_REPO_ROOT.*neotolis-engine/);
+  assert.throws(() => findStudioRoot(detached, { env: {} }), /cannot find Studio root/);
+  assert.throws(() => findStudioRoot(detached, { env: { STUDIO_ROOT: root } }), /cannot find Studio root/, "STUDIO_ROOT is not an alias");
+});
+
+test("a game adds its own test tiers without widening the shared ones", () => {
+  assert.equal(parseGameArgs(["test", "--tier", "net"], { tiers: ["net"] }).tier, "net");
+  assert.throws(() => parseGameArgs(["test", "--tier", "net"]), /unknown test tier/);
+});
+
+test("CTest parallelism follows CTEST_PARALLEL_LEVEL when it is set", () => {
+  assert.equal(ctestParallelism({ CTEST_PARALLEL_LEVEL: "3" }), 3);
+  assert.ok(ctestParallelism({}) >= 1);
+  assert.throws(() => ctestParallelism({ CTEST_PARALLEL_LEVEL: "-1" }), /non-negative/);
+});
+
+test("a game that settles its own native tree is not configured a second time", () => {
+  const calls = [];
+  runNativeTests("/repo/games/example", { selection: { mode: "tier", tier: "core" } }, {
+    settle: (runStep) => runStep("cmake", ["-C", "seed.cmake", "-S", "/repo/games/example"], "native configure"),
+    run: (command, args, cwd, label) => calls.push([label, command, args[0]]),
+    catalogue: () => [{ name: "unit", tier: "core", targets: ["unit"] }],
+  });
+  assert.deepEqual(calls.map((call) => call[0]), ["native configure", "native game tests", "native game tests"]);
+  assert.deepEqual(calls.slice(1).map((call) => call[1]), ["cmake", "ctest"]);
+  assert.equal(calls[1][2], "--build");
+});
+
+test("a game with its own web layout names its artifact, validator and portal proof", async () => {
+  let validated = null;
+  await executeGameCommand({ command: "playable", target: "itch", build: false, templateProof: false, skipTests: false, outDir: "" }, {
+    gameDir: gameModuleRoot,
+    doctor: () => ({ gameId: "example" }),
+    loadMetadata: () => ({ dependencies: {}, proof: "game" }),
+    verifyDependencies: () => {},
+    artifactDir: (gameDir, target) => `${gameDir}/build/${target}-site`,
+    validateArtifact: (options) => { validated = options; },
+  });
+  assert.equal(validated.artifactDir, `${resolve(gameModuleRoot)}/build/itch-site`);
+  const steps = portalCheckPlan("/studio", "/repo/games/example", "itch", {
+    exists: () => true,
+    artifactDir: (gameDir, target) => `${gameDir}/build/${target}-site`,
+    gameArtifact: { args: (gameDir, target) => ["game.mjs", "playable", "--target", target, "--no-build"], replacesFeatureInspect: "the site layout has no assets/game.ntpack" },
+  });
+  assert.deepEqual(steps[0].args, ["game.mjs", "playable", "--target", "itch", "--no-build"]);
+  assert.match(steps[0].note, /replaces features\/platform-sdk artifact_tools inspect: the site layout/);
+  // Without a stated reason the feature inspect always runs, and the game's check runs after it.
+  const both = portalCheckPlan("/studio", "/repo/games/example", "itch", {
+    exists: () => true, gameArtifact: { args: () => ["game.mjs", "playable"] },
+  });
+  assert.deepEqual(both.slice(0, 2).map((step) => step.id), ["artifact", "game-artifact"]);
+  assert.match(both[0].args[0].replaceAll("\\", "/"), /artifact_tools\.mjs$/);
+  assert.throws(() => portalCheckPlan("/studio", "/g", "itch", { exists: () => true, gameArtifact: { args: () => [], replacesFeatureInspect: " " } }), /must say why/);
+});
+
+test("focused and non-core CTest runs do not start the unrelated Node suite", async () => {
+  for (const [options, node] of [[{ only: ["sim_movement"] }, false], [{ tier: "slow" }, false], [{ tier: "core" }, true], [{ all: true }, true]]) {
+    const calls = [];
+    await executeGameCommand({ command: "test", only: [], tier: "", all: false, verbose: true, ...options }, {
+      gameDir: "/repo/games/example",
+      doctor: () => ({ gameId: "example" }),
+      loadMetadata: () => ({ dependencies: {}, proof: "game" }),
+      verifyDependencies: () => {},
+      nodeTest: () => calls.push("node"),
+      nativeTest: () => calls.push("native"),
+    });
+    assert.deepEqual(calls, node ? ["node", "native"] : ["native"]);
+  }
+});
+
+test("a game whose playable target has another name builds that one", () => {
+  const catalogue = [{ name: "unit", tier: "core", targets: ["unit"] }];
+  assert.deepEqual(selectTests(catalogue, { mode: "tier", tier: "core" }).targets, ["game", "unit"]);
+  assert.deepEqual(selectTests(catalogue, { mode: "tier", tier: "core" }, { gameTarget: "plw_client" }).targets, ["plw_client", "unit"]);
+});
+
+test("the Node suite runs beside the native checks, and a native failure is reported first", async (t) => {
+  const gameDir = mkdtempSync(join(tmpdir(), "game-beside-"));
+  t.after(() => rmSync(gameDir, { recursive: true, force: true }));
+  const order = [];
+  let finishNode;
+  const nodeTest = () => { order.push("node started"); return new Promise((resolveNode) => { finishNode = resolveNode; }); };
+  const nativeTest = () => { order.push("native ran"); finishNode(); };
+  await runTestSuites(gameDir, { nodeTest, nativeTest, selection: {}, verbose: true });
+  assert.deepEqual(order, ["node started", "native ran"]);
+
+  const nativeFails = () => { throw new Error("native game tests exited 1"); };
+  await assert.rejects(runTestSuites(gameDir, { nodeTest: () => Promise.reject(new Error("game tests exited 1")), nativeTest: nativeFails, selection: {}, verbose: true }), /^Error: native game tests exited 1; also game tests exited 1$/m);
+  await assert.rejects(runTestSuites(gameDir, { nodeTest: () => Promise.reject(new Error("game tests exited 1")), nativeTest: () => {}, selection: {}, verbose: true }), /^Error: game tests exited 1$/m);
 });

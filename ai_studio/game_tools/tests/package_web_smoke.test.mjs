@@ -15,6 +15,7 @@ import {
   findSupportedBrowser,
   PipeTransport,
   registerBrowserIssueCapture,
+  remoteEndpointMatcher,
   smokeProbePlan,
   smokePackagedWebArtifact,
 } from "../package_web_smoke.mjs";
@@ -589,4 +590,82 @@ test("smoke reopens the ZIP and serves only its entries", async (t) => {
     /spawn|EACCES|EFTYPE|UNKNOWN/i,
   );
   assert.deepEqual(profileNames(), beforeProfiles);
+});
+
+test("browser issue capture fails compiled-in endpoints offline and pairs their engine fetch errors", () => {
+  const listeners = new Map();
+  const client = { on(method, listener) { listeners.set(method, listener); } };
+  const issues = [];
+  const capture = registerBrowserIssueCapture(client, issues, [], [], {
+    offlineRemote: remoteEndpointMatcher(["https://stats.example.com/api/"]),
+  });
+  const engineFetchFailed = { type: "error", args: [{ value: "ERROR [http] fetch failed slot=0" }, { description: "TypeError: Failed to fetch" }] };
+
+  listeners.get("Network.requestWillBeSent")({ requestId: "1", request: { url: "https://stats.example.com/api/v1/choices/stats" } });
+  listeners.get("Runtime.consoleAPICalled")(engineFetchFailed);
+  listeners.get("Network.loadingFailed")({ requestId: "1", errorText: "net::ERR_INTERNET_DISCONNECTED" });
+  listeners.get("Log.entryAdded")({ entry: { level: "error", source: "network", text: "Failed to load resource", url: "https://stats.example.com/api/v1/choices/stats" } });
+  listeners.get("Network.requestWillBeSent")({ requestId: "2", request: { url: "https://stats.example.com/api/v1/choices/votes" } });
+  listeners.get("Network.loadingFailed")({ requestId: "2", errorText: "net::ERR_INTERNET_DISCONNECTED" });
+  listeners.get("Runtime.consoleAPICalled")(engineFetchFailed);
+  capture.settle();
+  assert.deepEqual(issues, []);
+
+  listeners.get("Network.requestWillBeSent")({ requestId: "3", request: { url: "https://stats.example.com/other" } });
+  listeners.get("Network.requestWillBeSent")({ requestId: "4", request: { url: "https://stats.example.com.evil.test/api/v1" } });
+  listeners.get("Runtime.consoleAPICalled")(engineFetchFailed);
+  capture.settle();
+  assert.deepEqual(issues.map((issue) => issue.kind), ["resource.remote", "resource.remote", "console.error"]);
+});
+
+test("without compiled-in endpoints an engine fetch error is an ordinary console error", () => {
+  const listeners = new Map();
+  const client = { on(method, listener) { listeners.set(method, listener); } };
+  const issues = [];
+  registerBrowserIssueCapture(client, issues);
+  listeners.get("Runtime.consoleAPICalled")({ type: "error", args: [{ value: "ERROR [http] fetch failed slot=0" }] });
+  listeners.get("Network.requestWillBeSent")({ requestId: "1", request: { url: "https://stats.example.com/api" } });
+  assert.deepEqual(issues.map((issue) => issue.kind), ["console.error", "resource.remote"]);
+});
+
+test("compiled-in endpoints must be plain remote HTTP(S) base URLs and reach the probe", async (t) => {
+  // The base, the base with a query and the paths below it are all failed offline.
+  assert.deepEqual(remoteEndpointMatcher(["https://stats.example.com/api"]).fetchPatterns,
+    ["https://stats.example.com/api", "https://stats.example.com/api\\?*", "https://stats.example.com/api/*"]);
+  const api = remoteEndpointMatcher(["https://stats.example.com/api"]);
+  for (const url of ["https://stats.example.com/api", "https://stats.example.com/api?x=1", "https://stats.example.com/api/v1"]) assert.equal(api(url), true, url);
+  assert.equal(api("https://stats.example.com/apix"), false);
+  for (const raw of ["not a url", "http://127.0.0.1:8080", "ftp://stats.example.com", "https://user:pw@stats.example.com", "https://stats.example.com/?key=1"]) {
+    assert.throws(() => remoteEndpointMatcher([raw]), /allowed remote endpoint/);
+  }
+  const root = mkdtempSync(join(tmpdir(), "packaged-web-smoke-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const zipPath = join(root, "fixture.zip");
+  writeFileSync(zipPath, createStoreZip([
+    { path: "index.html", bytes: Buffer.from("<!doctype html>") },
+    { path: "release.json", bytes: Buffer.from(JSON.stringify({
+      schema: "ai_studio.game.release.v2", target: "itch", entrypoint: "index.html", runtimeBuildFingerprint: FINGERPRINT,
+    })) },
+  ]));
+  let seen = null;
+  await smokePackagedWebArtifact({
+    zipPath, expectedTarget: "itch", allowedRemoteUrls: ["https://stats.example.com"],
+    probe: async ({ url, allowedRemoteUrls }) => { seen = allowedRemoteUrls; return { ...passingObservation(), finalUrl: url }; },
+  });
+  assert.deepEqual(seen, ["https://stats.example.com"]);
+  await assert.rejects(
+    smokePackagedWebArtifact({ zipPath, expectedTarget: "itch", allowedRemoteUrls: ["http://localhost:1"], probe: async () => passingObservation() }),
+    /allowed remote endpoint/,
+  );
+});
+
+test("an offline endpoint that answers went past the interception and fails the smoke", () => {
+  const listeners = new Map();
+  const client = { on(method, listener) { listeners.set(method, listener); } };
+  const issues = [];
+  registerBrowserIssueCapture(client, issues, [], [], { offlineRemote: remoteEndpointMatcher(["https://stats.example.com/api"]) });
+  listeners.get("Network.requestWillBeSent")({ requestId: "1", request: { url: "https://stats.example.com/api?x=1" } });
+  listeners.get("Network.responseReceived")({ requestId: "1", response: { status: 200, url: "https://stats.example.com/api?x=1" } });
+  assert.deepEqual(issues.map((issue) => issue.kind), ["resource.remote"]);
+  assert.match(issues[0].text, /offline endpoint answered/);
 });

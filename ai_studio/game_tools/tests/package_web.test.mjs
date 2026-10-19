@@ -1242,3 +1242,16 @@ test("release config takes portal members as literals, in order, or not at all",
     );
   }
 });
+
+test("a numbered game names its artifact by version and may ship licence notices", (t) => {
+  const item = fixture(t);
+  const gameJson = join(item.gameDir, "game.json");
+  write(gameJson, `${JSON.stringify({ ...JSON.parse(readFileSync(gameJson, "utf8")), version: "1.2.3" })}\n`);
+  write(join(item.artifactDir, "THIRD_PARTY_NOTICES.txt"), "OFL\n");
+  const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "out") });
+  assert.match(result.zipPath.replaceAll("\\", "/"), /\/test-game-itch-v1\.2\.3-[0-9a-f]{16}\.zip$/);
+  assert.equal(readStoreZip(readFileSync(result.zipPath)).get("THIRD_PARTY_NOTICES.txt").toString("utf8"), "OFL\n");
+
+  write(gameJson, `${JSON.stringify({ ...JSON.parse(readFileSync(gameJson, "utf8")), version: "1.2" })}\n`);
+  assert.throws(() => packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "bad") }), /game identity is invalid/);
+});

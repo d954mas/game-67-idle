@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { availableParallelism } from "node:os";
+import { closeSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { availableParallelism, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 import { main as buildWeb } from "./build_web.mjs";
 import {
@@ -38,7 +38,8 @@ function readJson(path, label) {
   return value;
 }
 
-export function parseGameArgs(argv) {
+// tiers: the game's own CTest tiers beyond the shared ones.
+export function parseGameArgs(argv, { tiers = [] } = {}) {
   const command = argv[0] || "";
   if (!COMMANDS.has(command)) throw new Error(USAGE);
   const args = {
@@ -74,7 +75,7 @@ export function parseGameArgs(argv) {
     throw new Error(`--only, --tier and --update-goldens are valid only for test\n${USAGE}`);
   }
   if (args.all && !["test", "clean"].includes(command)) throw new Error(`--all is valid only for test and clean\n${USAGE}`);
-  if (args.tier && !TEST_TIERS.includes(args.tier)) throw new Error(`unknown test tier: ${args.tier}\n${USAGE}`);
+  if (args.tier && !TEST_TIERS.includes(args.tier) && !tiers.includes(args.tier)) throw new Error(`unknown test tier: ${args.tier}\n${USAGE}`);
   if ((args.tier ? 1 : 0) + (args.all ? 1 : 0) + (args.only.length > 0 ? 1 : 0) > 1) {
     throw new Error(`--tier, --all and --only cannot be combined\n${USAGE}`);
   }
@@ -93,14 +94,14 @@ export function parseGameArgs(argv) {
   return args;
 }
 
-function requiredScaffold(gameDir) {
+function requiredScaffold(gameDir, ciWorkflow = true) {
   return [
     "CMakeLists.txt",
     "tools/game.mjs",
     "tools/build_web.mjs",
     "tools/lib/studio_root.mjs",
     "release/README.md",
-    ".github/workflows/game-verify.yml",
+    ...(ciWorkflow ? [".github/workflows/game-verify.yml"] : []),
   ].map((path) => join(gameDir, ...path.split("/")));
 }
 
@@ -123,9 +124,10 @@ function validateTemplateIdentity(value) {
   return value;
 }
 
-export function doctorGame({ gameDir, templateProof = false } = {}) {
+// ciWorkflow: false for a game that keeps verification local and ships no CI.
+export function doctorGame({ gameDir, templateProof = false, ciWorkflow = true } = {}) {
   const root = resolve(gameDir);
-  const missing = requiredScaffold(root).filter((path) => !existsSync(path));
+  const missing = requiredScaffold(root, ciWorkflow).filter((path) => !existsSync(path));
   if (missing.length) throw new Error(`game scaffold is missing: ${missing.map((path) => path.slice(root.length + 1)).join(", ")}`);
   if (templateProof) {
     const template = validateTemplateIdentity(readJson(join(root, "template.json"), "template identity"));
@@ -161,12 +163,33 @@ function run(command, args, cwd, label, env = process.env, capture = null) {
   }
 }
 
+// Runs beside the native build and CTest, which never touch what it reads. Its
+// output goes to a file, not a pipe: the native steps block this process's event
+// loop, and a pipe nobody drains stalls the child once it fills.
 function runNodeTests(gameDir, capture = null) {
   const tools = join(gameDir, "tools");
   const files = readdirSync(tools).filter((name) => name.endsWith(".test.mjs")).sort().map((name) => join("tools", name));
   if (files.length === 0) throw new Error("game scaffold has no Node tests");
   // Concurrency mirrors the studio gate; every heavy fixture is mkdtemp-isolated.
-  run(process.execPath, ["--test", "--test-concurrency=4", ...files], gameDir, "game tests", process.env, capture);
+  const args = ["--test", "--test-concurrency=4", ...files];
+  const logDir = mkdtempSync(join(tmpdir(), "game-node-tests-"));
+  const logPath = join(logDir, "node-tests.log");
+  const log = openSync(logPath, "w");
+  const child = spawn(process.execPath, args, { cwd: gameDir, shell: false, stdio: ["ignore", log, log] });
+  closeSync(log);
+  return new Promise((resolveRun, rejectRun) => {
+    child.on("error", rejectRun);
+    child.on("close", (code) => {
+      const output = readFileSync(logPath, "utf8");
+      rmSync(logDir, { recursive: true, force: true });
+      if (capture) capture.steps.push({ label: "game tests", command: [process.execPath, ...args].join(" "), output });
+      else process.stdout.write(output);
+      if (code === 0) return resolveRun();
+      const error = new Error(`game tests exited ${code ?? 1}`);
+      error.output = output;
+      rejectRun(error);
+    });
+  });
 }
 
 export function summarizeTestCapture(capture) {
@@ -217,12 +240,23 @@ function treeBytes(path) {
 }
 
 // Runs the game's Node and native suites; quiet unless verbose.
-export function runTestSuites(gameDir, { nodeTest, nativeTest, selection, updateGoldens = false, includeNode = true, verbose = false }) {
+// The Node suite starts first and runs while the native build and CTest do; a
+// native failure is reported ahead of a Node one.
+export async function runTestSuites(gameDir, { nodeTest, nativeTest, selection, updateGoldens = false, includeNode = true, verbose = false }) {
   const capture = verbose ? null : { steps: [] };
   const started = Date.now();
   try {
-    if (includeNode) nodeTest(gameDir, capture);
-    nativeTest(gameDir, { selection, updateGoldens, capture });
+    let nodeRun = null;
+    if (includeNode) nodeRun = Promise.resolve(nodeTest(gameDir, capture));
+    let nativeError = null;
+    try { nativeTest(gameDir, { selection, updateGoldens, capture }); } catch (error) { nativeError = error; }
+    let nodeError = null;
+    try { await nodeRun; } catch (error) { nodeError = error; }
+    if (nativeError && nodeError) {
+      nativeError.message = `${nativeError.message}; also ${nodeError.message}`;
+      nativeError.output = [nodeError.output, nativeError.output].filter(Boolean).join("\n");
+    }
+    if (nativeError || nodeError) throw nativeError || nodeError;
   } catch (error) {
     if (capture) {
       const log = writeTestLog(gameDir, capture);
@@ -286,7 +320,8 @@ export function assertTiersLabelled(catalogue) {
 
 // A tier selects tests; the targets those tests need are what gets built. The
 // game target is always built so a failing test can be reproduced by playing.
-export function selectTests(catalogue, selection = {}) {
+// gameTarget: the game's playable CMake target, when it is not named "game".
+export function selectTests(catalogue, selection = {}, { gameTarget = "game" } = {}) {
   const mode = selection.mode || "tier";
   const selected = mode === "all" ? catalogue
     : mode === "only" ? catalogue.filter((entry) => selection.names.includes(entry.name))
@@ -299,8 +334,16 @@ export function selectTests(catalogue, selection = {}) {
     names: selected.map((entry) => entry.name),
     // Running everything builds everything: a narrowed target list would leave
     // out fixture and tool targets that no test names directly.
-    targets: mode === "all" ? [] : ["game", ...new Set(selected.flatMap((entry) => entry.targets))],
+    targets: mode === "all" ? [] : [...new Set([gameTarget, ...selected.flatMap((entry) => entry.targets)])],
   };
+}
+
+export function ctestParallelism(environment = process.env) {
+  const raw = environment.CTEST_PARALLEL_LEVEL;
+  if (raw === undefined || raw === "") return availableParallelism();
+  const jobs = Number(raw);
+  if (!Number.isSafeInteger(jobs) || jobs < 0) throw new Error("CTEST_PARALLEL_LEVEL must be a non-negative integer");
+  return jobs;
 }
 
 export function nativeTestPlan(gameDir, platform = process.platform, configured = false, selection = {}) {
@@ -313,7 +356,7 @@ export function nativeTestPlan(gameDir, platform = process.platform, configured 
         ...(platform === "linux" ? ["-DCMAKE_EXE_LINKER_FLAGS_DEBUG=-fsanitize=address,undefined"] : [])],
     ]),
     ["cmake", "--build", buildDir, ...(targets.length > 0 ? ["--target", ...targets] : [])],
-    ["ctest", "--test-dir", buildDir, "--output-on-failure", "-j", String(availableParallelism()),
+    ["ctest", "--test-dir", buildDir, "--output-on-failure", "-j", String(ctestParallelism()),
       ...(mode === "all" ? []
         : mode === "only" ? ["-R", `^(${selection.names.join("|")})$`]
         : ["-L", `^${selection.tier || TEST_TIER_DEFAULT}$`]),
@@ -330,20 +373,25 @@ export function goldenEnvironment(gameDir, updateGoldens, env = process.env) {
   return next;
 }
 
+// dependencies.settle: a game that owns how its native-debug tree is configured
+// gets it ready itself, through the runner it is handed; the tree is then configured.
 export function runNativeTests(gameDir, options = {}, dependencies = {}) {
   const runCommand = dependencies.run || run;
   const catalogue = dependencies.catalogue || ctestCatalogue;
   const buildDir = join(gameDir, "build", "native-debug");
-  const configured = existsSync(join(buildDir, "CMakeCache.txt")) && existsSync(join(buildDir, "build.ninja"));
   const env = goldenEnvironment(gameDir, options.updateGoldens === true);
   mkdirSync(env.GAME_GOLDENS_DIR, { recursive: true });
   const selection = { ...options.selection };
-  if (configured) {
+  let configured = true;
+  if (dependencies.settle) {
+    dependencies.settle((command, args, label) => runCommand(command, args, gameDir, label, env, options.capture), env);
+  } else {
+    configured = existsSync(join(buildDir, "CMakeCache.txt")) && existsSync(join(buildDir, "build.ninja"));
     // Ninja regenerates the build graph before discovery, so a new test is visible
     // without paying for a second configure process on every iteration.
-    runCommand("cmake", ["--build", buildDir, "--target", "build.ninja"], gameDir, "native test graph refresh", env, options.capture);
-    Object.assign(selection, selectTests(catalogue(buildDir), selection));
+    if (configured) runCommand("cmake", ["--build", buildDir, "--target", "build.ninja"], gameDir, "native test graph refresh", env, options.capture);
   }
+  if (configured) Object.assign(selection, selectTests(catalogue(buildDir), selection, { gameTarget: dependencies.gameTarget }));
   for (const [command, ...args] of nativeTestPlan(gameDir, process.platform, configured, selection)) {
     runCommand(command, args, gameDir, "native game tests", env, options.capture);
     // CMake regenerates during the build step, so the labels are only settled
@@ -361,18 +409,58 @@ function artifactDir(gameDir, target) {
   return join(gameDir, "build", target === "local" ? "wasm-release" : `wasm-release-${target}`, "bin");
 }
 
+/* A game that calls a remote service records the endpoints CMake compiled in
+   beside the build; the smoke admits only those, failed as if offline. No record
+   means no remote endpoint. */
+export function buildRemoteEndpoints(gameDir, target, { read = readFileSync, exists = existsSync, artifactDir: artifactDirFor = artifactDir } = {}) {
+  const path = join(dirname(artifactDirFor(gameDir, target)), "remote_endpoints.json");
+  if (!exists(path)) return [];
+  let record;
+  try { record = JSON.parse(read(path, "utf8")); }
+  catch (error) { throw new Error(`remote endpoint record is unreadable (reconfigure the build): ${path}: ${error.message}`); }
+  const urls = record?.allowedRemoteUrls;
+  if (!Array.isArray(urls) || !urls.every((url) => typeof url === "string")) throw new Error(`remote endpoint record is malformed: ${path}`);
+  return urls;
+}
+
+/* A release crash reports raw wasm offsets, which mean nothing without the map
+   from that exact link, so the map is kept beside the ZIP. Only a build this
+   command ran owns the map; --no-build packages whatever it was handed. */
+export function archiveSymbolMap(releaseArtifactDir, zipPath, { exists = existsSync, copy = copyFileSync } = {}) {
+  const source = join(dirname(releaseArtifactDir), "game.js.symbols");
+  if (!exists(source)) return "";
+  const target = zipPath.replace(/\.zip$/, ".symbols");
+  copy(source, target);
+  return target;
+}
+
 /* One verdict for a portal submission. The three checks belong to three owners
    -- the feature owns the artifact contract and the SDK probe, the studio owns
    the store spec -- and a release is only ready when all three agree, so they
    are asked together rather than remembered separately. */
-export function portalCheckPlan(studioRoot, gameDir, target, { exists = existsSync } = {}) {
+// artifactDir names where a game with its own web layout keeps its artifact.
+// gameArtifact { args(gameDir, target), replacesFeatureInspect? } adds the game's
+// own artifact check after the feature's inspect; it may replace the inspect
+// only by saying why, and the plan carries that as a note the run prints.
+export function portalCheckPlan(studioRoot, gameDir, target, { exists = existsSync, artifactDir: artifactDirFor = artifactDir, gameArtifact = null } = {}) {
   if (!PACKAGE_TARGETS.has(target)) throw new Error("portal-check requires a portal target");
   const steps = [];
-  steps.push({
-    id: "artifact",
-    args: [join(studioRoot, "features", "platform-sdk", "scripts", "artifact_tools.mjs"),
-      "inspect", "--target", target, "--artifact", artifactDir(gameDir, target)],
-  });
+  const replaces = String(gameArtifact?.replacesFeatureInspect || "").trim();
+  if (gameArtifact?.replacesFeatureInspect !== undefined && !replaces) throw new Error("a game artifact check that replaces the feature inspect must say why");
+  if (!replaces) {
+    steps.push({
+      id: "artifact",
+      args: [join(studioRoot, "features", "platform-sdk", "scripts", "artifact_tools.mjs"),
+        "inspect", "--target", target, "--artifact", artifactDirFor(gameDir, target)],
+    });
+  }
+  if (gameArtifact) {
+    steps.push({
+      id: replaces ? "artifact" : "game-artifact",
+      args: gameArtifact.args(gameDir, target),
+      ...(replaces ? { note: `the game's artifact check replaces features/platform-sdk artifact_tools inspect: ${replaces}` } : {}),
+    });
+  }
 
   const spec = join(studioRoot, "ai_studio", "store_kit", `${target}_spec.json`);
   const storeDir = join(gameDir, "release", "store", target);
@@ -392,17 +480,18 @@ export function portalCheckPlan(studioRoot, gameDir, target, { exists = existsSy
   if (exists(probe)) {
     steps.push({
       id: "sdk",
-      args: [probe, "--artifact", artifactDir(gameDir, target)],
-      skip: exists(artifactDir(gameDir, target)) ? null : "no built artifact to drive",
+      args: [probe, "--artifact", artifactDirFor(gameDir, target)],
+      skip: exists(artifactDirFor(gameDir, target)) ? null : "no built artifact to drive",
     });
   }
   return steps;
 }
 
-function portalCheck(gameDir, target) {
+function portalCheck(gameDir, target, layout = {}) {
   const studioRoot = findStudioRoot(gameDir);
   const rows = [];
-  for (const step of portalCheckPlan(studioRoot, gameDir, target)) {
+  for (const step of portalCheckPlan(studioRoot, gameDir, target, layout)) {
+    if (step.note) console.log(`NOTE  ${step.id}: ${step.note}`);
     if (step.skip) {
       rows.push({ id: step.id, ok: false, detail: step.skip });
       continue;
@@ -480,7 +569,7 @@ export async function packageGame(options, dependencies = {}, metadata = null) {
   const assetAuditProof = await (dependencies.assetAudit || auditGameReleaseAssets)({
     gameDir, artifactDir: releaseArtifactDir, studioRoot, dependencies: proof.dependencies, target: options.target,
   });
-  return packageWebArtifact({
+  const packaged = await packageWebArtifact({
     gameDir,
     artifactDir: releaseArtifactDir,
     target: options.target,
@@ -490,6 +579,8 @@ export async function packageGame(options, dependencies = {}, metadata = null) {
     ...proof,
     ...(metadata ? { dependencyVerifier: () => {} } : {}),
   });
+  if (options.build) archiveSymbolMap(releaseArtifactDir, packaged.zipPath);
+  return packaged;
 }
 
 export async function executeGameCommand(args, dependencies = {}) {
@@ -504,6 +595,10 @@ export async function executeGameCommand(args, dependencies = {}) {
     options, { gameDir, assetAudit: dependencies.assetAudit }, metadata,
   ));
   const smokePackage = dependencies.smoke || smokePackagedWebArtifact;
+  const remoteEndpoints = dependencies.remoteEndpoints || buildRemoteEndpoints;
+  // A game whose web build has its own layout names its artifact directory and validator.
+  const artifactDirFor = dependencies.artifactDir || artifactDir;
+  const validateArtifact = dependencies.validateArtifact || validateWebArtifact;
   const prepare = (templateProof = false, proofOptions = undefined) => {
     doctor({ gameDir, templateProof });
     const metadata = loadMetadata(gameDir, templateProof);
@@ -536,13 +631,13 @@ export async function executeGameCommand(args, dependencies = {}) {
     // engine/feature tree only warns here — release lanes still require clean.
     prepare(args.templateProof, { cleanliness: "warn" });
     const only = args.only || [];
-    // A focused CTest run is the explicit fast path; the default core gate still
-    // runs the complete Node suite before native tests.
     const selection = args.all ? { mode: "all" }
       : only.length > 0 ? { mode: "only", names: only }
       : { mode: "tier", tier: args.tier || TEST_TIER_DEFAULT };
-    const summary = runTestSuites(gameDir, {
-      nodeTest, nativeTest, selection, updateGoldens: args.updateGoldens, includeNode: only.length === 0, verbose: args.verbose,
+    // The Node suite is core-tier logic: a focused or a wider-tier run leaves it out.
+    const includeNode = selection.mode === "all" || (selection.mode === "tier" && selection.tier === TEST_TIER_DEFAULT);
+    const summary = await runTestSuites(gameDir, {
+      nodeTest, nativeTest, selection, updateGoldens: args.updateGoldens, includeNode, verbose: args.verbose,
     });
     const verdict = args.updateGoldens ? "goldens recorded" : "game tests passed";
     return { message: summary ? `${verdict}: ${summary}` : verdict };
@@ -550,11 +645,11 @@ export async function executeGameCommand(args, dependencies = {}) {
   if (args.command === "playable") {
     prepare(false);
     if (args.build) (dependencies.build || buildGame)(gameDir, args.target);
-    validateWebArtifact({ gameDir, artifactDir: artifactDir(gameDir, args.target), target: args.target, studioRoot: findStudioRoot(gameDir) });
-    return { message: `playable proof passed (${args.target})` };
+    validateArtifact({ gameDir, artifactDir: artifactDirFor(gameDir, args.target), target: args.target, studioRoot: findStudioRoot(gameDir) });
+    return { message: `playable proof passed (${args.target}${dependencies.validateArtifact ? ", game-owned artifact validator" : ""})` };
   }
   if (args.command === "portal-check") {
-    const rows = portalCheck(gameDir, args.target);
+    const rows = portalCheck(gameDir, args.target, { artifactDir: artifactDirFor, gameArtifact: dependencies.portalArtifact || null });
     return { message: `portal-check passed for ${args.target} (${rows.map((row) => row.id).join(", ")})` };
   }
   if (args.command === "package") {
@@ -563,9 +658,12 @@ export async function executeGameCommand(args, dependencies = {}) {
     return { message: `package passed: ${result.zipPath}`, result };
   }
   const metadata = prepare(args.templateProof);
-  const summary = args.skipTests ? "" : runTestSuites(gameDir, { nodeTest, nativeTest, selection: { mode: "all" }, verbose: args.verbose });
+  const summary = args.skipTests ? "" : await runTestSuites(gameDir, { nodeTest, nativeTest, selection: { mode: "all" }, verbose: args.verbose });
   const result = await packageGameOwned(args, metadata);
-  await smokePackage({ zipPath: result.zipPath, expectedTarget: args.target, mode: "full", frameExpectation: args.templateProof ? "blank" : "rendered" });
+  await smokePackage({
+    zipPath: result.zipPath, expectedTarget: args.target, mode: "full", frameExpectation: args.templateProof ? "blank" : "rendered",
+    allowedRemoteUrls: remoteEndpoints(gameDir, args.target, { artifactDir: artifactDirFor }),
+  });
   return { message: `verify passed: ${result.zipPath}${summary ? `; tests: ${summary}` : ""}`, result };
 }
 
@@ -578,7 +676,7 @@ export async function main(argv = process.argv.slice(2), dependencies = {}) {
       console.log(await custom(argv.slice(1), { gameDir: resolve(dependencies.gameDir) }));
       return 0;
     }
-    const args = parseGameArgs(argv);
+    const args = parseGameArgs(argv, { tiers: dependencies.testTiers });
     const result = await executeGameCommand(args, dependencies);
     console.log(result.message);
     return 0;

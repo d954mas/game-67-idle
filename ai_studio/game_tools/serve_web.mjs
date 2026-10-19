@@ -3,7 +3,7 @@
 // Self-contained on purpose (inline MIME, stdlib http only) so a copied game
 // stays portable if it is ever moved out of the repo -- no ai_studio import.
 //
-//   node <studio>/ai_studio/game_tools/serve_web.mjs (from the game root) [--preset wasm-release|wasm-debug|wasm-devapi-debug] [--target local|itch|poki|yandex|playgama|crazygames|wavedash|pikabu|gamepush] [--port N] [--dir <bin>]
+//   node <studio>/ai_studio/game_tools/serve_web.mjs (from the game root) [--preset wasm-release|wasm-debug|wasm-devapi-debug|wasm-devapi-perf] [--target local|itch|poki|yandex|playgama|crazygames|wavedash|pikabu|gamepush] [--port N] [--dir <bin>]
 //
 // Serves build/<preset>/bin/ over http://127.0.0.1:<port>/. game.wasm is served
 // as application/wasm so emscripten's streaming compile does not fall back.
@@ -30,7 +30,7 @@ const MIME = {
 };
 const mimeType = (p) => MIME[extname(p).toLowerCase()] || "application/octet-stream";
 
-const DEFAULT_PORT = { "wasm-release": 8080, "wasm-debug": 8080, "wasm-devapi-debug": 8081 };
+const DEFAULT_PORT = { "wasm-release": 8080, "wasm-debug": 8080, "wasm-devapi-debug": 8081, "wasm-devapi-perf": 8082 };
 
 function parseArgs(argv) {
   const a = { preset: "wasm-release", target: "local", port: 0, dir: "" };
@@ -67,7 +67,8 @@ function main() {
   const root = resolve(a.dir || join(GAME_DIR, "build", buildName, "bin"));
   const port = a.port || DEFAULT_PORT[a.preset] || 8080;
 
-  if (!existsSync(join(root, "assets", "game.ntpack"))) {
+  // An explicit --dir may hold another layout; only the default one is checked.
+  if (!a.dir && !existsSync(join(root, "assets", "game.ntpack"))) {
     console.warn(`WARN: ${join(root, "assets", "game.ntpack")} missing -- run node tools/build_web.mjs --preset ${a.preset} first`);
   }
 

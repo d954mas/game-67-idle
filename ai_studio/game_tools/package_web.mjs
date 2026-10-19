@@ -90,10 +90,12 @@ function exactKeys(value, keys, label) {
   if (JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([...keys].sort())) throw new Error(`${label} has unexpected fields`);
 }
 
-function validateIdentity(identity) {
-  exactKeys(identity, ["schema", "id", "title", "storageNamespace"], "game identity");
+// version is optional: a game that numbers its releases gets it in the artifact name.
+export function validateIdentity(identity) {
+  exactKeys(identity, ["schema", "id", "title", "storageNamespace", ...("version" in identity ? ["version"] : [])], "game identity");
   if (identity.schema !== "ai_studio.game.v1" || !/^[a-z][a-z0-9-]*$/.test(identity.id)
-      || !String(identity.title || "").trim() || !/^[a-z][a-z0-9-]*$/.test(identity.storageNamespace)) {
+      || !String(identity.title || "").trim() || !/^[a-z][a-z0-9-]*$/.test(identity.storageNamespace)
+      || ("version" in identity && !/^\d+\.\d+\.\d+$/.test(identity.version || ""))) {
     throw new Error("game identity is invalid");
   }
   return identity;
@@ -225,6 +227,8 @@ export function verifyDependencySources({ studioRoot, dependencies, git = defaul
   return { studioRevision, engineRevision };
 }
 
+const NOTICES_FILE = "THIRD_PARTY_NOTICES.txt";
+
 function targetManifest(studioRoot, target) {
   if (!TARGETS.has(target)) throw new Error(`unknown package target: ${target} (use ${[...TARGETS].join("|")})`);
   const path = join(studioRoot, "features", "platform-sdk", "publish-targets", `${target}.json`);
@@ -244,6 +248,8 @@ function targetManifest(studioRoot, target) {
   const required = normalizePaths(value.required_files, "required_files");
   const packagedRequired = normalizePaths(value.packaged_required_files, "packaged_required_files");
   const optional = normalizePaths(value.optional_files, "optional_files");
+  // Licence notices for shipped assets (OFL fonts) may ride in any web root.
+  if (!optional.includes(NOTICES_FILE)) optional.push(NOTICES_FILE);
   if (optional.some((path) => required.includes(path))) throw new Error(`${target} publish manifest optional_files overlap required_files`);
   if (optional.some((path) => packagedRequired.includes(path))) {
     throw new Error(`${target} publish manifest optional_files overlap packaged_required_files`);
@@ -1320,8 +1326,9 @@ export function packageWebArtifact(options) {
   const outDir = resolve(options.outDir || join(gameDir, "release", "artifacts"));
   mkdirSync(outDir, { recursive: true });
   const artifactId = sha256(zipBytes).slice(0, 16);
-  const zipName = `${identity.id}-${target}-${artifactId}.zip`;
-  const manifestName = `${identity.id}-${target}-${artifactId}.manifest.json`;
+  const baseName = `${identity.id}-${target}${identity.version ? `-v${identity.version}` : ""}-${artifactId}`;
+  const zipName = `${baseName}.zip`;
+  const manifestName = `${baseName}.manifest.json`;
   const zipPath = join(outDir, zipName);
   const manifestPath = join(outDir, manifestName);
   const tempDir = join(outDir, `.package-${process.pid}-${randomUUID()}.tmp`);

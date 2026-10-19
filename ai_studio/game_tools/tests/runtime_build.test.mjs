@@ -174,3 +174,19 @@ test("runtime build validation rejects malformed and non-canonical records", (t)
   };
   assert.throws(() => validateRuntimeBuildRecord(wrongSource), /source must be exactly/i);
 });
+
+test("a perf measurement build is a recordable compile profile", () => {
+  const inputs = [
+    { id: "game", source: ".", files: 1, sha256: "1".repeat(64) },
+    { id: "engine", source: "external/neotolis-engine", files: 1, sha256: "2".repeat(64) },
+  ];
+  const profile = { target: "itch", adapter: "mock", preset: "wasm-devapi-perf", debugUi: false, devapi: true, analytics: false, eventsLogMirror: false };
+  const record = {
+    schema: "ai_studio.runtime_build.v2",
+    fingerprint: createHash("sha256").update(JSON.stringify({ inputs, profile })).digest("hex"),
+    inputs,
+    profile,
+  };
+  assert.deepEqual(validateRuntimeBuildRecord(record), record);
+  assert.throws(() => validateRuntimeBuildRecord({ ...record, profile: { ...profile, preset: "wasm-devapi-fast" } }), /profile is invalid/);
+});

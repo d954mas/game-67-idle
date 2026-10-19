@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 
-import { createBuildPlan, executeBuildPlan, parseBuildArgs, resolveEmcmakePath } from "../build_web.mjs";
+import { createBuildPlan, executeBuildPlan, optionalPackPaths, parseBuildArgs, resolveEmcmakePath } from "../build_web.mjs";
 
 const slash = (value) => value.replaceAll("\\", "/").replace(/^[A-Za-z]:/, "");
 
@@ -26,7 +26,7 @@ test("preview plan writes an explicit non-proof record and clears the compiled f
     args: { preset: "wasm-debug", target: "local", debugUi: "on", preview: true },
     env: { EMSDK: "/opt/emsdk" }, platform: "linux", nativeConfigured: true, toolchainExists: true,
   });
-  const configure = plan.steps.find((step) => step.kind === "run" && step.args.includes("-G"));
+  const configure = plan.steps.find((step) => step.kind === "run" && step.args.some((arg) => arg.startsWith("-DGAME_PUBLISH_TARGET=")));
   assert.ok(configure.args.includes("-DGAME_RUNTIME_BUILD_FINGERPRINT="));
   assert.ok(configure.args.includes("-DGAME_RUNTIME_BUILD_PREVIEW=ON"));
   assert.equal(plan.steps[1].kind, "remove");
@@ -70,13 +70,15 @@ test("plan preserves build dirs local cache native pack web targets and final me
     nativeConfigured: false,
     toolchainExists: true,
     runtimeBuild,
+    optionalPacks: [],
   });
   assert.equal(slash(plan.env.EM_CACHE), "/repo/templates/template/build/emscripten-cache");
   assert.equal(slash(plan.nativeDir), "/repo/templates/template/build/wasm-devapi-debug-yandex-host");
   assert.equal(slash(plan.webDir), "/repo/templates/template/build/wasm-devapi-debug-yandex");
-  assert.deepEqual(plan.steps.map((step) => step.kind), ["mkdir", "run", "run", "run", "run", "run", "copy", "run", "write"]);
+  assert.deepEqual(plan.steps.map((step) => step.kind), ["mkdir", "run", "stamp", "run", "run", "run", "move", "run", "copy", "run", "write"]);
   const runSteps = plan.steps.filter((step) => step.kind === "run");
-  assert.equal(runSteps[0].args.slice(-3).join(" "), "-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Debug");
+  assert.equal(runSteps[0].args.slice(-4, -1).join(" "), "-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Debug");
+  assert.match(runSteps[0].args.at(-1), /^-DGAME_REPO_ROOT=/);
   assert.deepEqual(runSteps.slice(1, -1).map((step) => step.args.slice(-2).join(" ")), [
     "--target game_asset_packs",
     "-DGAME_PLATFORM_SDK_DEBUG_UI=ON -DGAME_DEVAPI_ENABLED=ON",
@@ -134,7 +136,8 @@ test("executor rechecks runtime inputs immediately before publishing the build r
 });
 
 test("plan covers every preset across every publish target with exact debug flags", () => {
-  const presets = ["wasm-release", "wasm-debug", "wasm-devapi-debug"];
+  const presets = ["wasm-release", "wasm-debug", "wasm-devapi-debug", "wasm-devapi-perf"];
+  const buildTypes = { "wasm-release": "Release", "wasm-devapi-perf": "RelWithDebInfo" };
   const targets = ["local", "itch", "poki", "yandex", "playgama", "crazygames", "wavedash"];
   for (const preset of presets) {
     for (const target of targets) {
@@ -148,13 +151,13 @@ test("plan covers every preset across every publish target with exact debug flag
       });
       const expectedName = target === "local" ? preset : `${preset}-${target}`;
       assert.ok(slash(plan.webDir).endsWith(`/build/${expectedName}`));
-      const configure = plan.steps.find((step) => step.kind === "run" && step.args.includes("-G"));
-      assert.ok(configure.args.includes(`-DCMAKE_BUILD_TYPE=${preset === "wasm-release" ? "Release" : "Debug"}`));
+      const configure = plan.steps.find((step) => step.kind === "run" && step.args.some((arg) => arg.startsWith("-DGAME_PUBLISH_TARGET=")));
+      assert.ok(configure.args.includes(`-DCMAKE_BUILD_TYPE=${buildTypes[preset] || "Debug"}`));
       assert.ok(configure.args.includes(`-DGAME_PUBLISH_TARGET=${target}`));
       assert.ok(configure.args.includes("-DGAME_AUDIO_BROWSER_SMOKE=OFF"));
       assert.ok(configure.args.includes(`-DGAME_ANALYTICS_ENABLED=${preset === "wasm-devapi-debug" ? "ON" : "OFF"}`));
-      assert.ok(configure.args.includes(`-DGAME_EVENTS_LOG_MIRROR=${preset === "wasm-release" ? "OFF" : "ON"}`));
-      assert.ok(configure.args.includes(`-DGAME_DEVAPI_ENABLED=${preset === "wasm-devapi-debug" ? "ON" : "OFF"}`));
+      assert.ok(configure.args.includes(`-DGAME_EVENTS_LOG_MIRROR=${["wasm-release", "wasm-devapi-perf"].includes(preset) ? "OFF" : "ON"}`));
+      assert.ok(configure.args.includes(`-DGAME_DEVAPI_ENABLED=${preset.startsWith("wasm-devapi") ? "ON" : "OFF"}`));
       assert.ok(configure.args.includes(`-DGAME_PLATFORM_SDK_DEBUG_UI=${preset === "wasm-release" ? "OFF" : "ON"}`));
     }
   }
@@ -250,4 +253,101 @@ test("plan refuses debug UI in a release even when called without CLI parsing", 
     args: { preset: "wasm-release", target: "poki", debugUi: "on" },
     env: { EMSDK: "/opt/emsdk" }, platform: "linux", nativeConfigured: true, toolchainExists: true,
   }), /debug UI is not allowed/i);
+});
+
+test("a game adds its own CMake options to the host and web configure", () => {
+  const plan = createBuildPlan({
+    gameDir: "/repo/games/example",
+    args: { preset: "wasm-devapi-perf", target: "itch", debugUi: "off" },
+    env: { EMSDK: "/opt/emsdk" },
+    platform: "linux",
+    nativeConfigured: false,
+    toolchainExists: true,
+    optionalPacks: [],
+    configureArgs: (args) => (args.preset === "wasm-devapi-perf" ? { host: ["-DGAME_TESTBED=OFF"], web: ["-DNT_ASSERT_MODE=2"] } : {}),
+  });
+  const runs = plan.steps.filter((step) => step.kind === "run");
+  assert.equal(runs[0].args.at(-1), "-DGAME_TESTBED=OFF");
+  const web = runs.find((step) => step.args.includes("-DGAME_PUBLISH_TARGET=itch"));
+  assert.equal(web.args.at(-1), "-DNT_ASSERT_MODE=2");
+  assert.ok(web.args.includes("-DGAME_ANALYTICS_ENABLED=OFF"));
+  assert.throws(() => createBuildPlan({
+    gameDir: "/g", args: { preset: "wasm-release", target: "itch", debugUi: "off" }, env: { EMSDK: "/e" }, platform: "linux",
+    toolchainExists: true, optionalPacks: [], configureArgs: () => ({ web: ["--fresh"] }),
+  }), /-D options/);
+});
+
+test("the target's optional packs are staged only when the host built them", () => {
+  assert.ok(optionalPackPaths("itch").includes("assets/music.ntpack"));
+  assert.ok(optionalPackPaths("local").every((path) => /^assets\/[^/]+\.ntpack$/.test(path)));
+  const plan = createBuildPlan({
+    gameDir: "/repo/games/example",
+    args: { preset: "wasm-release", target: "itch", debugUi: "off" },
+    env: { EMSDK: "/opt/emsdk" },
+    platform: "linux",
+    nativeConfigured: true,
+    toolchainExists: true,
+    optionalPacks: ["assets/music.ntpack"],
+  });
+  const optional = plan.steps.filter((step) => step.kind === "copy_optional");
+  assert.deepEqual(optional.map((step) => slash(step.to)), ["/repo/games/example/build/wasm-release-itch/bin/assets/music.ntpack"]);
+  const events = [];
+  executeBuildPlan({
+    env: {},
+    steps: [
+      { kind: "copy_optional", from: "host/music.ntpack", to: "bin/music.ntpack" },
+      { kind: "copy_optional", from: "host/absent.ntpack", to: "bin/absent.ntpack" },
+      { kind: "move", from: "bin/game.js.symbols", to: "game.js.symbols" },
+      { kind: "move", from: "bin/absent.symbols", to: "absent.symbols" },
+    ],
+    message: "done",
+  }, {
+    mkdir: () => {},
+    exists: (path) => !path.includes("absent"),
+    copy: (from, to) => events.push(["copy", from, to]),
+    move: (from, to) => events.push(["move", from, to]),
+  });
+  assert.deepEqual(events, [["copy", "host/music.ntpack", "bin/music.ntpack"], ["move", "bin/game.js.symbols", "game.js.symbols"]]);
+});
+
+test("both trees build from the Studio that proves them", () => {
+  const plan = createBuildPlan({
+    gameDir: "/repo/games/example", studioRoot: "/repo",
+    args: { preset: "wasm-release", target: "itch", debugUi: "off" },
+    env: { EMSDK: "/opt/emsdk" }, platform: "linux", nativeConfigured: false, toolchainExists: true, optionalPacks: [],
+  });
+  const configures = plan.steps.filter((step) => step.kind === "run" && step.args.includes("-S"));
+  assert.equal(configures.length, 2);
+  for (const configure of configures) assert.ok(configure.args.some((arg) => /^-DGAME_REPO_ROOT=(?:[A-Za-z]:)?\/repo$/.test(arg)), configure.args.join(" "));
+});
+
+test("a host tree is reconfigured when its game options change, and a dropped option is unset", () => {
+  const plan = (hostArgsRecord, host) => createBuildPlan({
+    gameDir: "/repo/games/example", studioRoot: "/repo",
+    args: { preset: "wasm-release", target: "itch", debugUi: "off" },
+    env: { EMSDK: "/opt/emsdk" }, platform: "linux", nativeConfigured: true, toolchainExists: true, optionalPacks: [],
+    hostArgsRecord, configureArgs: () => ({ host }),
+  });
+  const repoRoot = plan([], []).steps.find((step) => step.kind === "stamp").value[0];
+  const hostConfigure = (built) => built.steps.find((step) => step.kind === "run" && step.args.includes("-S") && !step.args.some((arg) => arg.startsWith("-DGAME_PUBLISH_TARGET=")));
+
+  const unchanged = plan([repoRoot, "-DGAME_TESTBED=OFF"], ["-DGAME_TESTBED=OFF"]);
+  assert.equal(hostConfigure(unchanged), undefined);
+  assert.equal(unchanged.steps.some((step) => step.kind === "stamp"), false);
+
+  const added = plan([repoRoot], ["-DGAME_TESTBED=OFF"]);
+  assert.ok(hostConfigure(added).args.includes("-DGAME_TESTBED=OFF"));
+  assert.deepEqual(added.steps.find((step) => step.kind === "stamp").value, [repoRoot, "-DGAME_TESTBED=OFF"]);
+
+  const dropped = plan([repoRoot, "-DGAME_TESTBED=OFF"], []);
+  assert.ok(hostConfigure(dropped).args.includes("-UGAME_TESTBED"));
+  assert.ok(!hostConfigure(dropped).args.includes("-DGAME_TESTBED=OFF"));
+});
+
+test("an optional pack the host no longer makes is removed from the staged build", () => {
+  const events = [];
+  executeBuildPlan({ env: {}, steps: [{ kind: "copy_optional", from: "host/music.ntpack", to: "bin/music.ntpack" }], message: "done" }, {
+    mkdir: () => {}, exists: () => false, copy: () => assert.fail("nothing to copy"), remove: (path) => events.push(["remove", path]),
+  });
+  assert.deepEqual(events, [["remove", "bin/music.ntpack"]]);
 });

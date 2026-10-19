@@ -371,8 +371,44 @@ function loadingFailureText(failure, request) {
   return details.join("; ");
 }
 
+/* The engine's web HTTP backend logs every non-abort fetch failure without the URL. */
+const ENGINE_HTTP_FETCH_FAILED = /^ERROR \[http\] fetch failed slot=\d+(\s|$)/;
+
+/* An endpoint the build compiled in. Each base URL admits itself and the paths
+   below it on the same origin, nothing else. */
+export function remoteEndpointMatcher(allowedRemoteUrls = []) {
+  const bases = allowedRemoteUrls.map((raw) => {
+    let url;
+    try { url = new URL(raw); } catch { throw new Error(`allowed remote endpoint is not a URL: ${raw}`); }
+    if (!["http:", "https:"].includes(url.protocol) || LOCAL_HOSTS.has(url.hostname.toLowerCase())
+        || url.username || url.password || url.search || url.hash) {
+      throw new Error(`allowed remote endpoint must be a plain remote HTTP(S) base URL: ${raw}`);
+    }
+    return { origin: url.origin, path: url.pathname.replace(/\/+$/, "") };
+  });
+  const matches = (raw) => {
+    let url;
+    try { url = new URL(raw); } catch { return false; }
+    return bases.some((base) => url.origin === base.origin && !url.username && !url.password
+      && (url.pathname === base.path || url.pathname.startsWith(`${base.path}/`)));
+  };
+  // The base itself, the base with a query, and every path below it.
+  matches.fetchPatterns = bases.flatMap((base) => {
+    const escaped = `${base.origin}${base.path}`.replace(/[\\*?]/g, "\\$&");
+    return [escaped, `${escaped}\\?*`, `${escaped}/*`];
+  });
+  return matches;
+}
+
+// policy.offlineRemote: a remoteEndpointMatcher whose requests the probe fails as
+// if the player were offline. An engine fetch failure is excused only by a failed
+// request to one of them; settle() reports the ones left unpaired.
 export function registerBrowserIssueCapture(client, issues, allowedRemote = [], toleratedRemote = [], policy = {}) {
   const allowed = (url) => allowedRemote.some((pattern) => pattern.test(url || ""));
+  const offline = policy.offlineRemote || null;
+  const offlineRequestIds = new Set();
+  let unexplainedOfflineFailures = 0;
+  const unexplainedHttpErrors = [];
   // tolerated = the ad stack the platform SDK pulls: the smoke BLOCKS those
   // requests (adblock simulation) and their failures are expected, not issues
   const tolerated = (text) => toleratedRemote.some((pattern) => pattern.test(text || ""));
@@ -386,15 +422,27 @@ export function registerBrowserIssueCapture(client, issues, allowedRemote = [], 
     const text = (args || []).map((arg) => arg?.value ?? arg?.description ?? "error").join(" ");
     if (policy.consumeConsoleError?.(text) === true) return;
     if (tolerated(text)) return;
+    if (offline && ENGINE_HTTP_FETCH_FAILED.test(text)) {
+      if (unexplainedOfflineFailures > 0) unexplainedOfflineFailures -= 1;
+      else unexplainedHttpErrors.push(text);
+      return;
+    }
     addIssue(issues, "console.error", text);
   });
   client.on("Log.entryAdded", ({ entry }) => {
     if (entry?.level !== "error") return;
     if (tolerated(entry?.text) || tolerated(entry?.url)) return;
+    if (offline && entry.source === "network" && offline(entry.url)) return;
     addIssue(issues, entry.source === "network" ? "resource.http" : "log.error", entry.text || entry.url);
   });
   client.on("Network.responseReceived", ({ requestId, response: resource }) => {
     if (requestId && toleratedRequestIds.has(requestId)) return;
+    // An endpoint the probe fails offline must never answer: if it did, it went
+    // past the interception and reached the live network.
+    if (requestId && offlineRequestIds.has(requestId)) {
+      addIssue(issues, "resource.remote", `offline endpoint answered: ${resource?.url}`);
+      return;
+    }
     if (resource?.status >= 400) addIssue(issues, "resource.http", `${resource.status} ${resource.url}`);
     if (!allowed(resource?.url) && remoteNetworkUrl(resource?.url)) {
       addIssue(issues, "resource.remote", resource?.url);
@@ -403,6 +451,12 @@ export function registerBrowserIssueCapture(client, issues, allowedRemote = [], 
   client.on("Network.loadingFailed", (failure) => {
     const request = failure?.requestId ? requestMetadata.get(failure.requestId) : undefined;
     const requestWasTolerated = failure?.requestId && toleratedRequestIds.has(failure.requestId);
+    if (failure?.requestId && offlineRequestIds.delete(failure.requestId)) {
+      requestMetadata.delete(failure.requestId);
+      if (unexplainedHttpErrors.length > 0) unexplainedHttpErrors.shift();
+      else unexplainedOfflineFailures += 1;
+      return;
+    }
     if (failure?.requestId) {
       requestMetadata.delete(failure.requestId);
       toleratedRequestIds.delete(failure.requestId);
@@ -415,6 +469,7 @@ export function registerBrowserIssueCapture(client, issues, allowedRemote = [], 
     if (requestId) {
       requestMetadata.delete(requestId);
       toleratedRequestIds.delete(requestId);
+      offlineRequestIds.delete(requestId);
     }
   });
   client.on("Network.requestWillBeSent", ({ requestId, request, type, initiator }) => {
@@ -435,6 +490,10 @@ export function registerBrowserIssueCapture(client, issues, allowedRemote = [], 
     if (allowed(request?.url)) {
       return;
     }
+    if (offline?.(request?.url)) {
+      if (requestId) offlineRequestIds.add(requestId);
+      return;
+    }
     if (remoteNetworkUrl(request?.url)) addIssue(issues, "resource.remote", request?.url);
   });
   client.on("Network.webSocketCreated", ({ url }) => {
@@ -449,6 +508,11 @@ export function registerBrowserIssueCapture(client, issues, allowedRemote = [], 
   client.on("Network.directUDPSocketCreated", ({ options }) => addIssue(
     issues, "resource.direct", `direct UDP socket: ${options?.remoteAddr || "unconnected"}`,
   ));
+  return {
+    settle() {
+      for (const text of unexplainedHttpErrors.splice(0)) addIssue(issues, "console.error", text);
+    },
+  };
 }
 
 function remoteNetworkUrl(raw) {
@@ -715,7 +779,8 @@ export function analyzePngFrame(bytes) {
   return { width, height, minLuma, maxLuma, variance: Math.max(0, sumSquares / pixels - mean * mean) };
 }
 
-async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chromePath, timeoutMs = 60000, allowedRemote = [], toleratedRemote = [], blockedUrlPatterns = [], profileRoot = tmpdir(), mode = "full" }) {
+async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chromePath, timeoutMs = 60000, allowedRemote = [], toleratedRemote = [], blockedUrlPatterns = [], allowedRemoteUrls = [], profileRoot = tmpdir(), mode = "full" }) {
+  const offlineRemote = remoteEndpointMatcher(allowedRemoteUrls);
   const probePlan = smokeProbePlan(mode);
   const deadline = Date.now() + timeoutMs;
   const browser = findSupportedBrowser({ chromePath });
@@ -729,6 +794,7 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
   let contextLossConsoleAllowance = 0;
   let expectedLossConsoleErrors = 0;
   const issuePolicy = {
+    offlineRemote: allowedRemoteUrls.length > 0 ? offlineRemote : null,
     consumeConsoleError(text) {
       if (text.trim() !== "ERROR [gfx] WebGL context lost" || contextLossConsoleAllowance <= 0) return false;
       contextLossConsoleAllowance -= 1;
@@ -781,7 +847,17 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
     if (!attached.sessionId) throw new Error("Chrome did not attach the package smoke target");
     rootClient.sessionId = attached.sessionId;
     client = rootClient;
-    registerBrowserIssueCapture(client, issues, allowedRemote, toleratedRemote, issuePolicy);
+    const capture = registerBrowserIssueCapture(client, issues, allowedRemote, toleratedRemote, issuePolicy);
+    // Compiled-in endpoints fail as if the player were offline: the smoke stays
+    // hermetic and proves the build reaches readiness without them.
+    client.on("Fetch.requestPaused", ({ requestId }) => {
+      client.call("Fetch.failRequest", { requestId, errorReason: "InternetDisconnected" }, deadline).catch(() => {});
+    });
+    if (offlineRemote.fetchPatterns.length > 0) {
+      await client.call("Fetch.enable", {
+        patterns: offlineRemote.fetchPatterns.map((urlPattern) => ({ urlPattern, requestStage: "Request" })),
+      }, deadline);
+    }
     await Promise.all([
       client.call("Page.enable", {}, deadline),
       client.call("Runtime.enable", {}, deadline),
@@ -817,6 +893,7 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
         awaitPromise: true,
       }, deadline);
     }
+    capture.settle();
     let frame = null;
     let recovery = null;
     if (probePlan.captureFrame && state?.canvas?.width > 0 && state?.canvas?.height > 0) {
@@ -881,8 +958,10 @@ export async function smokePackagedWebArtifact({
   profileRoot = tmpdir(),
   mode = "full",
   frameExpectation = "rendered",
+  allowedRemoteUrls = [],
 }) {
   smokeProbePlan(mode);
+  remoteEndpointMatcher(allowedRemoteUrls);
   validateFrameExpectation(frameExpectation);
   const packagePath = resolve(zipPath);
   const entries = readStoreZip(readFileSync(packagePath));
@@ -928,6 +1007,7 @@ export async function smokePackagedWebArtifact({
       allowedRemote,
       toleratedRemote,
       blockedUrlPatterns,
+      allowedRemoteUrls,
       profileRoot,
       mode,
     });
