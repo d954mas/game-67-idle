@@ -25,6 +25,7 @@ open only its linked check.
 | GDD | [QGDD_001](rules/gdd/checks/QGDD_001_design_source_readiness.md) | a design package must guide implementation, review, or a lead decision | visual clarity, art/assets, runtime behavior, or loop quality |
 | Game Design | [QDES_001](rules/game_design/checks/QDES_001_playable_loop.md) | loop, economy, progression, rewards, or challenge change player action | source-package clarity, presentation, assets, or runtime proof |
 | Technical | [QTECH_001](rules/technical/checks/QTECH_001_behavior_evidence.md) | code, data, build, state, input, packaging, automation, or runtime behavior changes | presentation-only, art/assets, loop design, or source clarity |
+| Technical | [QTECH_002](rules/technical/checks/QTECH_002_shader_position.md) | vertex shaders or shared GLSL sources are added, changed or imported | general shader correctness, driver stability or device-crash certification |
 | Assets | [QASSET_001](rules/assets/checks/QASSET_001_asset_readiness.md) | an asset is accepted, published, copied, or claimed game-use-ready | presentation, art fit, or unrelated runtime behavior |
 | Assets | [QASSET_002](rules/assets/checks/QASSET_002_material_readiness.md) | conversion or preparation can lose textures, UVs, colors, maps, or assignments | non-material assets or unrelated presentation/runtime work |
 

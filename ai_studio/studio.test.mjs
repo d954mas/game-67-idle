@@ -256,9 +256,11 @@ test("an owner domain batches its Node tests into one process", async () => {
       runCommand: async (command, args) => { calls.push([command, ...args]); return { status: 0, tail: "" }; },
     });
     assert.equal(result.status, 0);
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 2);
     assert.equal(calls[0][1], "--test");
     for (const path of files) assert.ok(calls[0].includes(path), path);
+    assert.deepEqual(calls[1], ["node", "ai_studio/quality/check_shader_positions.mjs",
+      "templates", "features", "ai_studio/feature_testing/consumer"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
