@@ -18,9 +18,13 @@ Generated or downloaded data does not belong here.
 ## Commands
 
 ```powershell
-node ai_studio/core_harness/tool_lib/tmp_sweep.mjs --list
+node ai_studio/core_harness/tool_lib/tmp_sweep.mjs --older-than 14 --include-games
+node ai_studio/core_harness/tool_lib/tmp_sweep.mjs --older-than 14 --include-games --apply
 node ai_studio/core_harness/tool_lib/tmp_sweep.mjs --all-scratch --dry-run
 ```
 
 `tmp_sweep.mjs` is opt-in housekeeping for ignored scratch data. It reports by
-default and deletes only with `--all-scratch`.
+default and deletes only with `--apply` (entries untouched for the given number
+of days, judged by the newest file inside) or `--all-scratch`. `--include-games`
+adds every game's `tmp/`. Anything worth keeping belongs in the game's
+`design/knowledge/` or its YandexDisk workspace, not in `tmp/`.

@@ -21,6 +21,8 @@ sit in, so loading the CLI from the same checkout adds no new coupling.
   `portal-check`, `verify`; test tiers come from CTest labels. `test` and
   `verify` keep test output in `build/logs/game-test.log` and print one summary
   line, or the failing step's tail and the log path; `--verbose` streams it all.
+  `clean` removes build variants and keeps `build/native-debug`; `clean --all`
+  removes the whole `build/`.
 - `build_web.mjs`: the web build plan and runtime build fingerprint.
 - `package_web.mjs`, `package_web_smoke.mjs`, `minify_web_release.mjs`,
   `inject_asset_bytes.mjs`: the deterministic portal package and its proof.

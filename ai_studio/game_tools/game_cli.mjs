@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -24,11 +24,11 @@ const TARGET_CONFIG = await import(pathToFileURL(join(
 )).href);
 const PACKAGE_TARGETS = new Set(TARGET_CONFIG.portalTargetNames());
 const BUILD_TARGETS = new Set(TARGET_CONFIG.targetNames());
-const COMMANDS = new Set(["doctor", "build", "run", "test", "playable", "package", "portal-check", "verify"]);
+const COMMANDS = new Set(["doctor", "build", "run", "test", "playable", "package", "portal-check", "verify", "clean"]);
 // The tier vocabulary is shared with cmake/GameTests.cmake; CTest labels carry it.
 export const TEST_TIERS = ["core", "slow", "taste"];
 export const TEST_TIER_DEFAULT = "core";
-const USAGE = "usage: node tools/game.mjs <doctor|build|run|test|playable|package|portal-check|verify> [--target local|itch|poki|yandex|playgama|crazygames|wavedash|pikabu|gamepush] [--no-build] [--out <dir>] [--template-proof] [--skip-tests] [test: --tier core|slow|taste | --all | --only <test>] [--update-goldens] [test|verify: --verbose]";
+const USAGE = "usage: node tools/game.mjs <doctor|build|run|test|playable|package|portal-check|verify|clean>[--target local|itch|poki|yandex|playgama|crazygames|wavedash|pikabu|gamepush] [--no-build] [--out <dir>] [--template-proof] [--skip-tests] [test: --tier core|slow|taste | --all | --only <test>] [--update-goldens] [test|verify: --verbose] [clean: --all]";
 
 function readJson(path, label) {
   let value;
@@ -70,9 +70,10 @@ export function parseGameArgs(argv) {
     else throw new Error(`unknown option: ${arg}\n${USAGE}`);
   }
   if (args.only.some((name) => !/^[A-Za-z0-9_.-]+$/.test(name))) throw new Error(`--only takes CTest names\n${USAGE}`);
-  if ((args.only.length > 0 || args.updateGoldens || args.tier || args.all) && command !== "test") {
-    throw new Error(`--only, --tier, --all and --update-goldens are valid only for test\n${USAGE}`);
+  if ((args.only.length > 0 || args.updateGoldens || args.tier) && command !== "test") {
+    throw new Error(`--only, --tier and --update-goldens are valid only for test\n${USAGE}`);
   }
+  if (args.all && !["test", "clean"].includes(command)) throw new Error(`--all is valid only for test and clean\n${USAGE}`);
   if (args.tier && !TEST_TIERS.includes(args.tier)) throw new Error(`unknown test tier: ${args.tier}\n${USAGE}`);
   if ((args.tier ? 1 : 0) + (args.all ? 1 : 0) + (args.only.length > 0 ? 1 : 0) > 1) {
     throw new Error(`--tier, --all and --only cannot be combined\n${USAGE}`);
@@ -184,6 +185,35 @@ function writeTestLog(gameDir, capture) {
 
 function outputTail(output, lines = 80) {
   return String(output || "").trimEnd().split(/\r?\n/).slice(-lines).join("\n");
+}
+
+// Build variants per portal and preset pile up; native-debug is the iteration
+// tree every test run and capture reuses, so it survives unless --all.
+export function cleanBuild(gameDir, { all = false, remove = (path) => rmSync(path, { recursive: true, force: true }) } = {}) {
+  const buildDir = join(gameDir, "build");
+  if (!existsSync(buildDir)) return [];
+  const removed = [];
+  for (const entry of readdirSync(buildDir, { withFileTypes: true })) {
+    if (!all && entry.name === "native-debug") continue;
+    const path = join(buildDir, entry.name);
+    const bytes = treeBytes(path);
+    remove(path);
+    removed.push({ name: entry.name, bytes });
+  }
+  return removed;
+}
+
+function treeBytes(path) {
+  let bytes = 0;
+  const stack = [path];
+  while (stack.length) {
+    const current = stack.pop();
+    let info;
+    try { info = lstatSync(current); } catch { continue; }
+    if (info.isDirectory()) for (const name of readdirSync(current)) stack.push(join(current, name));
+    else bytes += info.size;
+  }
+  return bytes;
 }
 
 // Runs the game's Node and native suites; quiet unless verbose.
@@ -480,6 +510,13 @@ export async function executeGameCommand(args, dependencies = {}) {
     verifyDependencies(metadata, proofOptions);
     return metadata;
   };
+  if (args.command === "clean") {
+    const removed = (dependencies.clean || cleanBuild)(gameDir, { all: args.all });
+    const megabytes = (bytes) => (bytes / 1024 / 1024).toFixed(0);
+    for (const row of removed) console.log(`removed ${megabytes(row.bytes).padStart(6)} MB  build/${row.name}`);
+    const freed = removed.reduce((sum, row) => sum + row.bytes, 0);
+    return { message: `clean freed ${megabytes(freed)} MB${args.all ? "" : "; kept build/native-debug"}` };
+  }
   if (args.command === "doctor") {
     const result = doctor({ gameDir, templateProof: args.templateProof });
     verifyDependencies(loadMetadata(gameDir, args.templateProof));

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { ctestCatalogue, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, runNativeTests, runTestSuites, selectTests, summarizeTestCapture } from "../game_cli.mjs";
+import { cleanBuild, ctestCatalogue, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, runNativeTests, runTestSuites, selectTests, summarizeTestCapture } from "../game_cli.mjs";
 import { findStudioRoot } from "../lib/studio_root.mjs";
 import { createRuntimeBuildRecord, runtimeBuildWitness } from "../lib/runtime_build.mjs";
 
@@ -478,4 +478,21 @@ test("a red test run shows the failing step's tail and where the full log is", (
     (error) => /exited 8\n[\s\S]*test_save \(Failed\)\nfull log: /.test(error.message) && error.message.split("\n").length < 90,
   );
   assert.deepEqual(summarizeTestCapture({ steps: [{ output: "ℹ pass 3\n" }, { output: "ℹ pass 2\n90% tests passed, 1 tests failed out of 10\n" }] }), { nodePassed: 5, nativePassed: 9 });
+});
+
+test("clean drops build variants and keeps the native debug tree unless --all", (t) => {
+  const gameDir = mkdtempSync(join(tmpdir(), "game-clean-"));
+  t.after(() => rmSync(gameDir, { recursive: true, force: true }));
+  for (const rel of ["native-debug/bin/game.exe", "wasm-release-poki/bin/game.wasm", "wasm-debug/bin/game.wasm", "logs/game-test.log"]) {
+    write(join(gameDir, "build", rel), "x".repeat(10));
+  }
+  const removed = cleanBuild(gameDir);
+  assert.deepEqual(removed.map((row) => row.name).sort(), ["logs", "wasm-debug", "wasm-release-poki"]);
+  assert.equal(removed.every((row) => row.bytes === 10), true);
+  assert.deepEqual(readdirSync(join(gameDir, "build")), ["native-debug"]);
+  assert.deepEqual(cleanBuild(gameDir, { all: true }).map((row) => row.name), ["native-debug"]);
+  assert.deepEqual(cleanBuild(join(gameDir, "missing")), []);
+
+  assert.equal(parseGameArgs(["clean", "--all"]).all, true);
+  assert.throws(() => parseGameArgs(["build", "--all"]), /--all is valid only for test and clean/);
 });
