@@ -3,7 +3,9 @@
 // feature-layer: L2
 /* Единственный публичный хедер фичи settings — вся её публичная поверхность;
    всё остальное в папке static. Слой L2 (surface): зависит только от L0-шелла
-   (ui_runtime / theme / World / game_save), не от других фич. */
+   (ui_runtime / theme / World / game_save) и L0-модуля graphics-quality, не от
+   других фич. */
+#include "features/graphics_quality/graphics_quality.h"
 #include "ui/nt_ui.h"    /* nt_ui_context_t */
 #include "world/world.h" /* World */
 
@@ -52,5 +54,16 @@ void settings_choose_language(int language);
    picked one in the settings keeps it. Portals that watch for the SDK read
    (Yandex, requirement 2.14) see it here, before the string table is chosen. */
 void settings_adopt_platform_language(void);
+
+/* The base graphics settings (features/graphics-quality). Until the player
+   picks a value, settings_adopt_device_graphics() fills it from the device:
+   the game calls it once the save has loaded and the graphics context exists. */
+graphics_quality_t settings_graphics_quality(void);
+bool settings_shadows(void);
+/* The world target's size against the window for the current step and device. */
+float settings_world_scale(void);
+void settings_choose_graphics_quality(graphics_quality_t quality);
+void settings_choose_shadows(bool on);
+void settings_adopt_device_graphics(void);
 
 #endif /* FEATURES_SETTINGS_H */

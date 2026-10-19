@@ -104,6 +104,47 @@ void settings_adopt_platform_language(void) {
     if (language >= 0 && !settings_state.language_chosen) settings_set_language(language);
 }
 
+/* The device as the page reported it at adoption; a computer until then. */
+static graphics_device_t s_device;
+
+graphics_quality_t settings_graphics_quality(void) {
+    return settings_state.graphics_quality == SETTINGS_STATE_GRAPHICS_QUALITY_LOW ? GRAPHICS_QUALITY_LOW
+                                                                                  : GRAPHICS_QUALITY_HIGH;
+}
+
+bool settings_shadows(void) { return settings_state.shadows; }
+
+float settings_world_scale(void) { return graphics_world_scale(settings_graphics_quality(), s_device.mobile); }
+
+static void set_graphics_quality(graphics_quality_t quality) {
+    settings_state.graphics_quality =
+        quality == GRAPHICS_QUALITY_LOW ? SETTINGS_STATE_GRAPHICS_QUALITY_LOW : SETTINGS_STATE_GRAPHICS_QUALITY_HIGH;
+}
+
+void settings_choose_graphics_quality(graphics_quality_t quality) {
+    set_graphics_quality(quality);
+    settings_state.graphics_quality_chosen = true;
+    /* Unpicked shadows go with the step, so Low brings them down and High back. */
+    if (!settings_state.shadows_chosen) settings_state.shadows = graphics_shadows_default(quality);
+    game_save_mark_dirty();
+}
+
+void settings_choose_shadows(bool on) {
+    settings_state.shadows = on;
+    settings_state.shadows_chosen = true;
+    game_save_mark_dirty();
+}
+
+void settings_adopt_device_graphics(void) {
+    graphics_device_query(&s_device);
+    const graphics_quality_t guess = graphics_quality_guess(s_device.mobile, s_device.gpu);
+    /* An unpicked value follows the device on every launch, so a save carried to a
+       stronger device starts it on what that device can afford. Nothing is marked
+       dirty: the guess is not the player's choice and is never stored as one. */
+    if (!settings_state.graphics_quality_chosen) set_graphics_quality(guess);
+    if (!settings_state.shadows_chosen) settings_state.shadows = graphics_shadows_default(settings_graphics_quality());
+}
+
 void settings_set_language(int language) {
     if (language < 0 || language >= SETTINGS_STATE_LANGUAGE_COUNT) {
         return;

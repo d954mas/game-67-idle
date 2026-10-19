@@ -115,6 +115,8 @@ static void game_runtime_apply_pending_cloud_save(World *world) {
     if (game_save_cloud_apply_remote_at_safe_point()) {
         game_runtime_reload_cloud_state();
         settings_apply_language();
+        /* Another device's save carries that device's guess for every unpicked value. */
+        settings_adopt_device_graphics();
         game_runtime_reset_world_transient_state(world);
         settings_close();
     }
@@ -157,6 +159,8 @@ static void game_runtime_try_start(World *world) {
        every launch until the player picks one in the settings. */
     settings_adopt_platform_language();
     settings_apply_language();
+    /* After the save: a value the player picked is kept, the rest follow the device. */
+    settings_adopt_device_graphics();
 #ifdef NT_PLATFORM_WEB
     /* Do not expose pagehide/visibility flush until live fragments contain
        the loaded save. Fresh-state runs are intentionally non-persistent. */

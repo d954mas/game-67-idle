@@ -423,6 +423,12 @@ if(NOT EMSCRIPTEN)
         UNITY audio_unity
         OPTIONS -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
 
+    game_add_c_test(test_graphics_quality
+        SOURCES "${GRAPHICS_QUALITY_DIR}/tests/test_graphics_quality.c" "${GRAPHICS_QUALITY_SRC}/graphics_quality.c"
+        INCLUDES "${GRAPHICS_QUALITY_INC}"
+        UNITY audio_unity
+        OPTIONS -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
+
     add_executable(test_game_storage
         tests/test_game_storage.c
         "${GAME_STATE_SRC}/game_storage.c"
@@ -1163,6 +1169,7 @@ if(NOT EMSCRIPTEN)
         "${GAME_STATE_SRC}/game_state_json.c" "${GAME_EVENTS_SRC}/game_events.c"
         "${GAME_STATE_GENERATED_SOURCE}" "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
         "${SETTINGS_STATE_GENERATED_SOURCE}" src/features/settings/settings.c "${PLATFORM_SDK_SRC}/platform_sdk.c"
+        "${GRAPHICS_QUALITY_SRC}/graphics_quality.c"
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
         "${ITEMS_CORE_SRC}/items_reconcile.c" "${ITEMS_CORE_SRC}/items_containers.c"
         "${PROGRESSION_STATE_GENERATED_SOURCE}" "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"

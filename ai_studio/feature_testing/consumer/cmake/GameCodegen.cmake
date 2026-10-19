@@ -222,6 +222,7 @@ target_sources(${GAME_TARGET} PRIVATE
     src/game_items.c                           # game-owned container refs and seeding
     "${SETTINGS_STATE_GENERATED_SOURCE}"      # generated settings fragment state
     src/features/settings/settings.c          # hand-written settings logic
+    "${GRAPHICS_QUALITY_SRC}/graphics_quality.c" # the Graphics step's device policy the settings read
     "${ITEMS_STATE_GENERATED_SOURCE}"         # generated items fragment state
     "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"  # non-empty items.txn event
     "${ITEMS_CORE_SRC}/items_reconcile.c"    # T0337 M1: reconcile/seq-reseed split out of items_bootstrap.c (in-place module)

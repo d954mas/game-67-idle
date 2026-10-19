@@ -80,6 +80,12 @@
 
     "settings.language": { "en": "Language", "ru": "Язык" },
     "settings.account": { "en": "Account", "ru": "Аккаунт" },
+    "settings.graphics": { "en": "Graphics", "ru": "Графика" },
+    "settings.graphics_high": { "en": "High", "ru": "Высокая" },
+    "settings.graphics_low": { "en": "Low", "ru": "Низкая" },
+    "settings.shadows": { "en": "Shadows", "ru": "Тени" },
+    "settings.shadows_on": { "en": "On", "ru": "Вкл" },
+    "settings.shadows_off": { "en": "Off", "ru": "Выкл" },
     "login.hint": {
       "note": "Next to every login button: the portal requires the benefits stated beside the offer. Only what is true on every portal with a login: the account keeps the progress.",
       "en": "Log in to keep your progress on your account",

@@ -1,0 +1,38 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "graphics-quality",
+  "version": "0.1.0",
+  "title": "Graphics Quality",
+  "status": "reusable",
+  "kind": "presentation",
+  "summary": "In-place L0 policy for the base graphics settings: a High/Low Graphics step, the step a device starts on from its GPU name and form factor, the world render scale per step, and Low starting without shadows.",
+  "copy_model": "in-place",
+  "layer": "L0",
+  "owners": [
+    "features/graphics-quality"
+  ],
+  "dependencies": [],
+  "commands": {
+    "ctest": "ctest --test-dir ai_studio/feature_testing/consumer/build/native-debug -R test_graphics_quality --output-on-failure"
+  },
+  "provides": [
+    "graphics_device_query: the page's unmasked WebGL renderer and phone/tablet flag",
+    "graphics_quality_guess: the starting step for a device",
+    "graphics_world_scale: the world target's size per step",
+    "graphics_shadows_default: shadows start on at High only"
+  ],
+  "manuals": {
+    "install": "features/graphics-quality/INSTALL.md"
+  },
+  "registers": {
+    "target_sources": [
+      "${GRAPHICS_QUALITY_DIR}/src/graphics_quality.c"
+    ],
+    "include_dirs": [
+      "${GRAPHICS_QUALITY_DIR}/include"
+    ],
+    "ctest_targets": [
+      "test_graphics_quality"
+    ]
+  }
+}

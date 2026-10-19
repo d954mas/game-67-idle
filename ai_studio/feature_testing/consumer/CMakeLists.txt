@@ -75,6 +75,11 @@ set(REMOTE_IMAGE_SRC         "${REMOTE_IMAGE_DIR}/src")
 set(REMOTE_IMAGE_SOURCES
     "${REMOTE_IMAGE_SRC}/remote_image.c"
     "${REMOTE_IMAGE_SRC}/remote_image_engine.c")
+set(GRAPHICS_QUALITY_DIR     "${GAME_REPO_ROOT}/features/graphics-quality")
+set(GRAPHICS_QUALITY_INC     "${GRAPHICS_QUALITY_DIR}/include")
+set(GRAPHICS_QUALITY_SRC     "${GRAPHICS_QUALITY_DIR}/src")
+# settings.h names the Graphics step, so every target that sees it needs the module's header.
+include_directories("${GRAPHICS_QUALITY_INC}")
 
 set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
@@ -138,7 +143,7 @@ add_executable(${GAME_TARGET} EXCLUDE_FROM_ALL
     src/scenes/login_confirm_scene.c
     # scene-scaffold:sources
 )
-target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}" "${UI_KIT_INC}" "${LEADERBOARD_INC}" "${REMOTE_IMAGE_INC}" "${PORTAL_METRICS_INC}")
+target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}" "${UI_KIT_INC}" "${LEADERBOARD_INC}" "${REMOTE_IMAGE_INC}" "${PORTAL_METRICS_INC}" "${GRAPHICS_QUALITY_INC}")
 include("${REMOTE_IMAGE_DIR}/cmake/RemoteImage.cmake")
 remote_image_ensure_stb("${ENGINE_DIR}")
 target_link_libraries(${GAME_TARGET} PRIVATE nt_base64 stb_image)

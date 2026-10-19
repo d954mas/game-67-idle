@@ -142,6 +142,44 @@ static void language_row(nt_ui_context_t *ctx, const ui_metrics_t *m, bool inter
     }
 }
 
+// A setting with two named values: the label, then one button per value, the
+// current one filled. Returns the index pressed this frame, or -1.
+static int choice_row(nt_ui_context_t *ctx, const ui_metrics_t *m, LocStr label, const char *const ids[2],
+                      const LocKey0 names[2], int current, bool interactive) {
+    int pressed = -1;
+    CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
+                     .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                     .childGap = (uint16_t)m->gap,
+                     .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
+        CLAY({.layout = {.sizing = {CLAY_SIZING_PERCENT(.36F), CLAY_SIZING_FIT(0)}}}) {
+            loc_kit_label(ctx, label, &g_ui_theme.label);
+        }
+        for (int i = 0; i < 2; ++i) {
+            const bool on = i == current;
+            CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(m)}}}) {
+                ui_kit_button_begin(ctx, nt_ui_id(ids[i]), on ? &g_ui_theme.button_confirm : &g_ui_theme.button,
+                                    interactive, NULL);
+                loc_kit_label(ctx, loc_by_key(names[i]), on ? &g_ui_theme.button_label_action : &g_ui_theme.button_label);
+                if (ui_kit_button_end(ctx) && interactive && !on) pressed = i;
+            }
+        }
+    }
+    return pressed;
+}
+
+static void graphics_rows(nt_ui_context_t *ctx, const ui_metrics_t *m, bool interactive) {
+    static const char *const k_quality_ids[2] = {"settings/quality/high", "settings/quality/low"};
+    static const LocKey0 k_quality_names[2] = {LOC0_SETTINGS_GRAPHICS_HIGH, LOC0_SETTINGS_GRAPHICS_LOW};
+    const int quality = choice_row(ctx, m, loc_settings_graphics(), k_quality_ids, k_quality_names,
+                                   settings_graphics_quality() == GRAPHICS_QUALITY_LOW ? 1 : 0, interactive);
+    if (quality >= 0) settings_choose_graphics_quality(quality == 1 ? GRAPHICS_QUALITY_LOW : GRAPHICS_QUALITY_HIGH);
+    static const char *const k_shadow_ids[2] = {"settings/shadows/on", "settings/shadows/off"};
+    static const LocKey0 k_shadow_names[2] = {LOC0_SETTINGS_SHADOWS_ON, LOC0_SETTINGS_SHADOWS_OFF};
+    const int shadows = choice_row(ctx, m, loc_settings_shadows(), k_shadow_ids, k_shadow_names,
+                                   settings_shadows() ? 0 : 1, interactive);
+    if (shadows >= 0) settings_choose_shadows(shadows == 0);
+}
+
 // The portal account: hidden on a portal without one, the login offer while
 // anonymous, the name once in. No logout -- the portal has no such call.
 static void account_row(nt_ui_context_t *ctx, const ui_metrics_t *m, bool interactive) {
@@ -255,6 +293,7 @@ void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
     volume_row(ctx, &m, LOC0_SETTINGS_MUSIC, "settings/music", &s_music, settings_set_music, interactive);
     volume_row(ctx, &m, LOC0_SETTINGS_SFX, "settings/sfx", &s_sfx, settings_set_sfx, interactive);
     language_row(ctx, &m, interactive);
+    graphics_rows(ctx, &m, interactive);
     account_row(ctx, &m, interactive);
     save_conflict_row(ctx, &m, interactive);
 
