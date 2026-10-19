@@ -51,19 +51,26 @@ function writeClaudeSkill(dir, name, body) {
   writeFileSync(join(skillDir, "SKILL.md"), body, "utf8");
 }
 
-test("skills sync generates thin pointers and check passes", () => {
+test("skills sync inlines canonical bodies with links rebased to the skill folder", () => {
   const dir = tempDir();
   try {
     writeSkill(dir, "sample");
+    const canonical = join(dir, ".codex", "skills", "sample", "SKILL.md");
+    writeFileSync(canonical, readFileSync(canonical, "utf8").replace("Canonical body.",
+      "Canonical body. See [contract](references/contract.md#rules), [kb](../../../ai_studio/kb.md) and [web](https://example.com/x)."), "utf8");
     const generated = run(["--root", dir]);
     assert.equal(generated.status, 0, generated.stderr);
     assert.match(generated.stdout, /done: 1 generated, 0 stale removed, 0 skipped/);
 
-    const out = readFileSync(join(dir, ".claude", "skills", "sample", "SKILL.md"), "utf8");
-    assert.match(out, /\.\.\/\.\.\/\.\.\/\.codex\/skills\/sample\/SKILL.md/);
-    const codex = readFileSync(join(dir, ".agents", "skills", "sample", "SKILL.md"), "utf8");
-    assert.match(codex, /name: sample/);
-    assert.match(codex, /\.codex\/skills\/sample\/SKILL.md/);
+    for (const surface of [".claude", ".agents"]) {
+      const out = readFileSync(join(dir, surface, "skills", "sample", "SKILL.md"), "utf8");
+      assert.match(out, /name: sample/);
+      assert.match(out, /# sample\n\nCanonical body\./);
+      assert.match(out, /\[contract\]\(\.\.\/\.\.\/\.\.\/\.codex\/skills\/sample\/references\/contract\.md#rules\)/);
+      assert.match(out, /\[kb\]\(\.\.\/\.\.\/\.\.\/ai_studio\/kb\.md\)/);
+      assert.match(out, /\[web\]\(https:\/\/example\.com\/x\)/);
+      assert.doesNotMatch(out, /description: Use when testing skill sync\.\n---\n[\s\S]*^---$/m);
+    }
 
     const checked = run(["--root", dir, "--check"]);
     assert.equal(checked.status, 0, checked.stderr);

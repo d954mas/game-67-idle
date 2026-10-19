@@ -1,11 +1,12 @@
-// Both hosts share canonical instructions without duplicating supporting resources.
+// Both hosts receive the canonical instructions inline, so invoking a skill costs no
+// extra read; supporting resources stay in .codex/skills and links are rebased there.
 //
 //   node ai_studio/core_harness/agent_surfaces/skills_sync.mjs
 //
 // The ownership marker prevents overwriting hand-written host skills.
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync, statSync, rmSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const args = process.argv.slice(2);
@@ -61,10 +62,18 @@ function parseFrontmatter(text) {
   return fields;
 }
 
-function listReferences(skillDir) {
-  const refDir = join(skillDir, "references");
-  if (!existsSync(refDir)) return [];
-  return readdirSync(refDir).filter((f) => f.endsWith(".md")).sort();
+// Generated surfaces sit at the same depth as .codex/skills, so links that already
+// climb to the repo root stay valid; only links into the skill folder are rebased.
+function inlineCanonicalBody(text, name) {
+  const body = text.replace(/^﻿/, "").replace(/\r\n/g, "\n").replace(/^---\n[\s\S]*?\n---\n/, "");
+  return body.replace(/\]\(([^)\s]+)\)/g, (match, target) => {
+    if (/^(?:[a-z][a-z0-9+.-]*:|#|\/)/i.test(target)) return match;
+    const hash = target.indexOf("#");
+    const path = hash < 0 ? target : target.slice(0, hash);
+    const fragment = hash < 0 ? "" : target.slice(hash);
+    const canonical = posix.normalize(posix.join(".codex/skills", name, path));
+    return `](${posix.relative(posix.join(".claude/skills", name), canonical)}${fragment})`;
+  });
 }
 
 function allowsImplicitInvocation(yaml) {
@@ -118,7 +127,7 @@ for (const name of readdirSync(srcDir)) {
   } catch (error) {
     invalid.push(`${name}: ${error.message}`);
   }
-  skills.push({ name, skillDir, fields, metadata, implicit });
+  skills.push({ name, fields, metadata, implicit, canonical: readFileSync(skillFile, "utf8") });
 }
 if (invalid.length) {
   console.error(invalid.join("\n"));
@@ -133,7 +142,7 @@ let removed = 0;
 let skipped = 0;
 const drift = [];
 const seen = new Set();
-for (const { name, skillDir, fields, metadata, implicit } of skills) {
+for (const { name, fields, metadata, implicit, canonical } of skills) {
   seen.add(name);
 
   const outDir = join(dstDir, name);
@@ -145,12 +154,6 @@ for (const { name, skillDir, fields, metadata, implicit } of skills) {
     continue;
   }
 
-  const refs = listReferences(skillDir);
-  const refLines = refs.length
-    ? ["", "Reference playbooks (load only when the Codex entrypoint says to):", "",
-       ...refs.map((r) => `- [${r}](../../../.codex/skills/${name}/references/${r})`)]
-    : [];
-
   const body = [
     "---",
     `name: ${fields.name}`,
@@ -158,13 +161,8 @@ for (const { name, skillDir, fields, metadata, implicit } of skills) {
     ...(surface === ".claude" && !implicit ? ["disable-model-invocation: true"] : []),
     "---",
     MARKER,
-    "",
-    `# ${fields.name}`,
-    "",
-    `Read the [canonical instructions](../../../.codex/skills/${name}/SKILL.md) and follow them.`,
-    "Resolve this link relative to this file, and supporting links relative to the canonical file.",
-    ...refLines,
-    "",
+    `<!-- skill folder: .codex/skills/${name}/ -- resolve plain references/, scripts/ and agents/ paths below against it -->`,
+    inlineCanonicalBody(canonical, name).replace(/^\n+/, ""),
   ].join("\n");
 
   const metadataOut = join(outDir, "agents", "openai.yaml");

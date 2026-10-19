@@ -16,10 +16,9 @@ different agent CLIs.
 
 ## Generated Outputs
 
-- `.claude/skills/*/SKILL.md`: generated thin pointers to Codex-discoverable
-  skill entrypoints.
-- `.agents/skills/*/SKILL.md`: generated thin pointers for current Codex local
-  discovery. Supporting files stay with the canonical skill.
+- `.claude/skills/*/SKILL.md` and `.agents/skills/*/SKILL.md`: generated copies
+  of the canonical entrypoint body, so invoking a skill needs no second read.
+  Supporting files stay with the canonical skill; links into it are rebased.
 - `.codex/hooks.json`: generated Codex hook config.
 - `.claude/settings.json`: generated Claude hook config; Claude-only keys are
   preserved.

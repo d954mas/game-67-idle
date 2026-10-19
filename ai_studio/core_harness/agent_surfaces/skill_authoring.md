@@ -18,13 +18,13 @@ linked sources.
 ## Ownership and discovery
 
 Edit the existing canonical `.codex/skills/<name>/SKILL.md` and its supporting
-resources. Run `skills_sync.mjs` in this module to generate discovery pointers
+resources. Run `skills_sync.mjs` in this module to generate discovery copies
 under both `.agents/skills/` for current Codex and `.claude/skills/` for Claude
 Code. The legacy canonical path remains to preserve Studio callers and older
 hosts. Do not maintain independent copies of instructions or references.
 
 Both hosts first discover metadata, then read the selected entrypoint, and read
-conditional references only when needed. A pointer must resolve from the
+conditional references only when needed. A generated copy must resolve from the
 repository root even when a session starts in a game directory. Hand-written
 skills are preserved by the generator; check their names for discovery collisions
 before adding a canonical skill with the same name. Hosts that scan both legacy
@@ -56,13 +56,15 @@ For Claude Code, `disable-model-invocation` controls automatic invocation;
 Claude's `allowed-tools` grants tool pre-approval; it is not a tool restriction.
 Do not copy these provider-specific settings into the other host's metadata.
 
-The Studio generator carries `name` and `description` into pointers, copies
+The Studio generator carries `name`, `description` and the entrypoint body into
+generated copies, copies
 Codex's existing `agents/openai.yaml` into the current Codex discovery folder,
 and maps `allow_implicit_invocation: false` to Claude's
-`disable-model-invocation: true`. Generated links resolve relative to the pointer
-file. A manual file with a canonical name is preserved and reported as a
+`disable-model-invocation: true`. Markdown links into the skill folder are
+rebased to `.codex/skills/<name>/`; links that climb to the repository root stay
+as written because both surfaces sit at the same depth. A manual file with a canonical name is preserved and reported as a
 collision. Other host-specific fields require an explicit generator extension
-with tests before they can govern a generated pointer.
+with tests before they can govern a generated copy.
 
 ## Verify a change
 
