@@ -97,8 +97,16 @@ must declare its exact `CMAKE_CACHEFILE_DIR`, the selected game as
 `CMAKE_BUILD_TYPE=Debug`. When `GAME_REPO_ROOT` is present, it must resolve to
 the Studio root. A missing, foreign, or incompatible cache fails with the
 configure command instead of accepting a previously built executable.
-`--executable` remains available only when it resolves to that exact canonical
-artifact.
+
+A game whose client is a different target may declare it in the catalog's
+`executable` as `build/<dir>/bin/<target>` (`.exe` on Windows); capture then
+rebuilds `build/<dir>`, target `<target>` (the file stem), and launches that
+artifact. The path must stay inside the game's `build/` tree at exactly that
+depth, resolve through no link or junction, and be a regular file after the
+rebuild. Its cache keeps the same contract except the build type, which may be
+any explicit `CMAKE_BUILD_TYPE` and is recorded in `nativeBuild.cacheContract`.
+`--executable` follows the same rules. `launch` (`fresh_state`,
+`autosave_enabled`, `args`) applies to either artifact.
 
 The preflight calls the selected game's `tools/lib/runtime_build.mjs` when the
 game still carries copied tooling, and `ai_studio/game_tools/lib/runtime_build.mjs`

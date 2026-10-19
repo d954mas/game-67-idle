@@ -18,6 +18,7 @@ try:
     from .devapi_client import running_game
     from .native_capture_preflight import (
         canonical_native_executable,
+        native_capture_target,
         prepare_native_capture,
         validate_native_capture_final,
     )
@@ -26,6 +27,7 @@ except ImportError:
     from devapi_client import running_game  # type: ignore[no-redef]
     from native_capture_preflight import (  # type: ignore[no-redef]
         canonical_native_executable,
+        native_capture_target,
         prepare_native_capture,
         validate_native_capture_final,
     )
@@ -59,11 +61,8 @@ def resolve_game_executable(
     requested = override if override is not None else (
         Path(relative_path) if relative_path is not None else canonical_native_executable(game_root)
     )
-    executable = requested if requested.is_absolute() else game_root.resolve() / requested
-    canonical = canonical_native_executable(game_root)
-    if executable.resolve() != canonical:
-        raise RuntimeError(f"capture executable must be the canonical DevAPI artifact: {canonical}")
-    return canonical
+    _build_dir, executable, _target = native_capture_target(game_root, requested)
+    return executable
 
 
 def append_executable_identity(result: dict, native_build: dict[str, object]) -> dict:

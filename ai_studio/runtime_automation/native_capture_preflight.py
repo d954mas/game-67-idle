@@ -35,12 +35,53 @@ def executable_identity(executable: Path) -> dict[str, object]:
     }
 
 
-def _build_instruction(game_root: Path) -> str:
-    build_dir = canonical_native_build_dir(game_root)
+def native_capture_target(
+    game_root: Path, requested_executable: Path | None = None
+) -> tuple[Path, Path, str]:
+    """Return (build directory, executable, CMake target) for a capture artifact.
+
+    The canonical artifact is `build/devapi-debug/bin/game[.exe]`. A game may
+    instead declare `build/<dir>/bin/<target>[.exe]`; the target is the file stem.
+    """
+    game_root = game_root.resolve()
+    canonical = canonical_native_executable(game_root)
+    if requested_executable is None:
+        return canonical_native_build_dir(game_root), canonical, "game"
+    requested = Path(requested_executable)
+    candidate = Path(os.path.abspath(requested if requested.is_absolute() else game_root / requested))
+    suffix = ".exe" if os.name == "nt" else ""
+    rejection = NativeCapturePreflightError(
+        f"capture executable must be the canonical DevAPI artifact {canonical} "
+        f"or a DevAPI build artifact build/<dir>/bin/<target>{suffix} inside the game, "
+        f"without links: {requested}"
+    )
+    try:
+        parts = candidate.relative_to(game_root / "build").parts
+    except ValueError:
+        raise rejection from None
+    if len(parts) != 3 or parts[1] != "bin" or candidate.suffix.lower() != suffix or not candidate.stem:
+        raise rejection
+    # A link or junction anywhere under build/ could point the capture at a foreign binary.
+    if os.path.normcase(str(candidate.resolve())) != os.path.normcase(str(candidate)):
+        raise rejection
+    if candidate.exists() and not candidate.is_file():
+        raise rejection
+    if os.path.normcase(str(candidate)) == os.path.normcase(str(canonical)):
+        return canonical_native_build_dir(game_root), canonical, "game"
+    return candidate.parent.parent, candidate, candidate.stem
+
+
+def _is_canonical(game_root: Path, build_dir: Path) -> bool:
+    return os.path.normcase(str(build_dir)) == os.path.normcase(str(canonical_native_build_dir(game_root)))
+
+
+def _build_instruction(game_root: Path, build_dir: Path | None = None) -> str:
+    build_dir = build_dir or canonical_native_build_dir(game_root)
+    build_type = "Debug" if _is_canonical(game_root.resolve(), build_dir) else "<Debug|Release>"
     return (
-        "configure the canonical DevAPI build first: "
+        "configure the DevAPI build first: "
         f"cmake -G Ninja -S {game_root.resolve()} -B {build_dir} "
-        "-DCMAKE_BUILD_TYPE=Debug -DGAME_DEVAPI_ENABLED=ON"
+        f"-DCMAKE_BUILD_TYPE={build_type} -DGAME_DEVAPI_ENABLED=ON"
     )
 
 
@@ -60,51 +101,50 @@ def _cache_contract(
     studio_root: Path | None,
 ) -> tuple[Path, Path, dict[str, object]]:
     game_root = game_root.resolve()
-    executable = canonical_native_executable(game_root)
-    if requested_executable is not None and requested_executable.resolve() != executable:
-        raise NativeCapturePreflightError(
-            "capture executable must be the canonical DevAPI artifact: "
-            f"{executable}"
-        )
-    build_dir = canonical_native_build_dir(game_root)
+    build_dir, executable, _target = native_capture_target(game_root, requested_executable)
+    canonical = _is_canonical(game_root, build_dir)
+    instruction = _build_instruction(game_root, build_dir)
     cache_path = build_dir / "CMakeCache.txt"
     if not cache_path.is_file():
         raise NativeCapturePreflightError(
-            f"canonical CMake cache is missing: {cache_path}; {_build_instruction(game_root)}"
+            f"capture CMake cache is missing: {cache_path}; {instruction}"
         )
     values = _cache_values(cache_path)
     cache_directory = values.get("CMAKE_CACHEFILE_DIR")
     if cache_directory is None or Path(cache_directory).resolve() != build_dir:
         raise NativeCapturePreflightError(
-            f"CMAKE_CACHEFILE_DIR must be the canonical build directory: {build_dir}; {_build_instruction(game_root)}"
+            f"CMAKE_CACHEFILE_DIR must be the capture build directory: {build_dir}; {instruction}"
         )
     home_value = values.get("CMAKE_HOME_DIRECTORY")
     home = Path(home_value).resolve() if home_value else None
     if home != game_root:
         raise NativeCapturePreflightError(
-            f"canonical CMake cache belongs to a different game: {cache_path}; {_build_instruction(game_root)}"
+            f"capture CMake cache belongs to a different game: {cache_path}; {instruction}"
         )
     if values.get("GAME_DEVAPI_ENABLED") != "ON":
         raise NativeCapturePreflightError(
-            f"GAME_DEVAPI_ENABLED must be ON in {cache_path}; {_build_instruction(game_root)}"
+            f"GAME_DEVAPI_ENABLED must be ON in {cache_path}; {instruction}"
         )
-    if values.get("CMAKE_GENERATOR") != "Ninja" or values.get("CMAKE_BUILD_TYPE") != "Debug":
+    build_type = values.get("CMAKE_BUILD_TYPE")
+    # The canonical artifact is the Debug DevAPI build; a declared artifact names its own build.
+    if values.get("CMAKE_GENERATOR") != "Ninja" or (build_type != "Debug" if canonical else not build_type):
         raise NativeCapturePreflightError(
-            f"canonical DevAPI cache must use Ninja and Debug: {cache_path}; {_build_instruction(game_root)}"
+            "capture DevAPI cache must use Ninja and "
+            f"{'Debug' if canonical else 'an explicit CMAKE_BUILD_TYPE'}: {cache_path}; {instruction}"
         )
     repository = values.get("GAME_REPO_ROOT")
     if repository is not None:
         expected_root = studio_root.resolve() if studio_root is not None else find_studio_root(game_root)
         if Path(repository).resolve() != expected_root:
             raise NativeCapturePreflightError(
-                f"GAME_REPO_ROOT must match the Studio root: {expected_root}; {_build_instruction(game_root)}"
+                f"GAME_REPO_ROOT must match the Studio root: {expected_root}; {instruction}"
             )
     contract = {
         "cacheFileDirectory": str(build_dir),
         "homeDirectory": str(game_root),
         "gameDevapiEnabled": "ON",
         "generator": "Ninja",
-        "buildType": "Debug",
+        "buildType": build_type,
         "gameRepositoryRoot": str(studio_root.resolve()) if repository is not None and studio_root is not None else None,
     }
     return build_dir, executable, contract
@@ -224,8 +264,9 @@ def prepare_native_capture(
     node_executable: str = "node",
     cmake_executable: str = "cmake",
 ) -> dict[str, object]:
-    """Rebuild the canonical native target and bind it to current source inputs."""
+    """Rebuild the capture's native target and bind it to current source inputs."""
     game_root = game_root.resolve()
+    _build_dir, _executable, target = native_capture_target(game_root, requested_executable)
     studio_root = studio_root.resolve() if studio_root is not None else find_studio_root(game_root)
     build_dir, executable, cache_before = _cache_contract(
         game_root, requested_executable, studio_root
@@ -236,14 +277,15 @@ def prepare_native_capture(
         runner=runner, node_executable=node_executable,
     )
     _run_external(
-        [cmake_executable, "--build", str(build_dir), "--target", "game"],
+        [cmake_executable, "--build", str(build_dir), "--target", target],
         cwd=game_root,
         log_path=logs / "02-cmake-build.log",
         runner=runner,
     )
-    if not executable.is_file():
+    if not executable.is_file() or executable.is_symlink():
         raise NativeCapturePreflightError(
-            f"canonical build did not produce its game target: {executable}; {_build_instruction(game_root)}"
+            f"capture build did not produce its {target} target: {executable}; "
+            f"{_build_instruction(game_root, build_dir)}"
         )
     try:
         _build_dir, _executable, cache_after = _cache_contract(
@@ -271,7 +313,7 @@ def prepare_native_capture(
         "studioRoot": str(studio_root),
         "sourceFingerprint": after["fingerprint"],
         "executable": executable_identity(executable),
-        "target": "game",
+        "target": target,
         "buildDirectory": str(build_dir),
         "logDirectory": str(logs),
         "cacheContract": cache_after,
@@ -298,8 +340,11 @@ def validate_native_capture_final(
         raise NativeCapturePreflightError("native capture executable provenance is invalid")
     if not isinstance(expected_cache, Mapping):
         raise NativeCapturePreflightError("native capture cache provenance is invalid")
-    _build_dir, _executable, actual_cache = _cache_contract(
-        game_root, canonical_native_executable(game_root), studio_root
+    executable_path = expected_executable.get("path")
+    if not isinstance(executable_path, str):
+        raise NativeCapturePreflightError("native capture executable provenance is invalid")
+    _build_dir, executable, actual_cache = _cache_contract(
+        game_root, Path(executable_path), studio_root
     )
     if dict(expected_cache) != actual_cache:
         raise NativeCapturePreflightError(
@@ -309,7 +354,7 @@ def validate_native_capture_final(
         game_root, studio_root, log_directory / "04-source-after-recording.log",
         runner=runner, node_executable=node_executable,
     )
-    actual_executable = executable_identity(canonical_native_executable(game_root))
+    actual_executable = executable_identity(executable)
     if actual_record["fingerprint"] != expected_fingerprint or dict(expected_executable) != actual_executable:
         raise NativeCapturePreflightError(
             "source inputs or executable changed during recording; capture proof is invalid"

@@ -29,6 +29,10 @@ def capture_executable_relative() -> str:
     return str(Path("build") / "devapi-debug" / "bin" / ("game.exe" if os.name == "nt" else "game"))
 
 
+def declared_executable_name() -> str:
+    return "plw_client.exe" if os.name == "nt" else "plw_client"
+
+
 def native_build_record(executable: Path) -> dict:
     return {
         "proofKind": "native-rebuilt",
@@ -118,6 +122,104 @@ class CaptureGameCliTest(unittest.TestCase):
 
             with self.assertRaisesRegex(RuntimeError, r"build[\\/]devapi-debug"):
                 resolve_game_executable(root, "out/game.exe")
+
+    def test_catalog_may_declare_its_own_build_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            relative = Path("build") / "native-devapi" / "bin" / declared_executable_name()
+
+            self.assertEqual(resolve_game_executable(root, str(relative)), (root / relative).resolve())
+            self.assertEqual(
+                resolve_game_executable(root, override=root / relative), (root / relative).resolve()
+            )
+
+    def test_declared_artifact_must_stay_in_a_build_bin_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            name = declared_executable_name()
+            for rejected in (
+                f"build/native-devapi/{name}",
+                f"build/native-devapi/bin/tools/{name}",
+                f"build/native-devapi/bin/../../../{name}",
+                f"build/native-devapi/bin/../../../../outside/build/x/bin/{name}",
+                f"build/{name}",
+                f"out/native/bin/{name}",
+                "build/native-devapi/bin/plw_client.txt" if os.name == "nt" else "build/x/bin/plw_client.sh",
+            ):
+                with self.subTest(rejected=rejected):
+                    with self.assertRaisesRegex(RuntimeError, "canonical DevAPI artifact"):
+                        resolve_game_executable(root, rejected)
+
+            directory_artifact = root / "build" / "native-devapi" / "bin" / name
+            directory_artifact.mkdir(parents=True)
+            with self.assertRaisesRegex(RuntimeError, "canonical DevAPI artifact"):
+                resolve_game_executable(root, f"build/native-devapi/bin/{name}")
+
+    def test_declared_artifact_rejects_a_linked_build_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "game"
+            foreign = Path(directory) / "foreign" / "bin"
+            foreign.mkdir(parents=True)
+            (foreign / declared_executable_name()).touch()
+            (root / "build").mkdir(parents=True)
+            link = root / "build" / "linked"
+            try:
+                if os.name == "nt":
+                    import _winapi
+                    _winapi.CreateJunction(str(foreign.parent), str(link))
+                else:
+                    os.symlink(foreign.parent, link, target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"directory links are unavailable: {exc}")
+
+            with self.assertRaisesRegex(RuntimeError, "without links"):
+                resolve_game_executable(root, f"build/linked/bin/{declared_executable_name()}")
+
+    def test_run_launches_the_declared_artifact_with_catalog_launch_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            relative = Path("build") / "native-devapi" / "bin" / declared_executable_name()
+            executable = root / relative
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            (root / "capture").mkdir()
+            (root / "capture" / "catalog.json").write_text(json.dumps({
+                "version": 1, "executable": relative.as_posix(),
+                "launch": {"fresh_state": False, "autosave_enabled": True, "args": ["--solo"]},
+                "defaults": {"size": "1280x720", "fps": 30},
+                "live": {"seconds": 1}, "shots": {"idle": {"seconds": 1}},
+            }), encoding="utf-8")
+            game = FakeGame()
+            game.process_id = 123
+            launch = {}
+
+            class GameContext:
+                def __enter__(self):
+                    return game
+
+                def __exit__(self, *_args):
+                    return None
+
+            def fake_running_game(**kwargs):
+                launch.update(kwargs)
+                return GameContext()
+
+            with patch("ai_studio.runtime_automation.capture_game.running_game", fake_running_game), patch(
+                "ai_studio.runtime_automation.capture_game.record_take",
+                return_value={"edit": root / "edit.mp4", "master": root / "master.mkv"},
+            ), patch(
+                "ai_studio.runtime_automation.capture_game.prepare_native_capture",
+                return_value=native_build_record(executable),
+            ) as prepare, patch(
+                "ai_studio.runtime_automation.capture_game.validate_native_capture_final",
+            ):
+                run(parse_args([str(root), "shot", "idle"]))
+
+            self.assertEqual(prepare.call_args.kwargs["requested_executable"], executable.resolve())
+            self.assertEqual(Path(launch["exe"]), executable.resolve())
+            self.assertFalse(launch["fresh_state"])
+            self.assertTrue(launch["autosave_enabled"])
+            self.assertEqual(launch["extra_args"], ["--no-vsync", "--solo"])
 
     def test_parses_a_deterministic_shot_command(self) -> None:
         args = parse_args(["games/private/example", "shot", "intro"])

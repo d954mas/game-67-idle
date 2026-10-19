@@ -63,6 +63,60 @@ class NativeCapturePreflightTest(unittest.TestCase):
         self.assertEqual(provenance["sourceFingerprint"], "a" * 64)
         self.assertEqual(provenance["executable"]["path"], str(executable.resolve()))
 
+    def _declared_fixture(self, build_type="Release"):
+        directory, root, game, _canonical, output = self._fixture()
+        build = game / "build" / "native-devapi"
+        executable = build / "bin" / ("plw_client.exe" if os.name == "nt" else "plw_client")
+        executable.parent.mkdir(parents=True)
+        executable.write_bytes(b"declared executable")
+        (build / "CMakeCache.txt").write_text(
+            self._cache_text(game, build).replace("Debug", build_type), encoding="utf-8"
+        )
+        return directory, root, game, build, executable, output
+
+    def test_declared_artifact_rebuilds_its_own_target_and_build_type(self):
+        directory, root, game, build, executable, output = self._declared_fixture()
+        with directory:
+            calls = []
+            provenance = prepare_native_capture(
+                game, output, requested_executable=executable, studio_root=root, runner=self._runner(calls)
+            )
+            validate_native_capture_final(provenance, runner=self._runner(calls))
+            executable.write_bytes(b"changed executable")
+            with self.assertRaisesRegex(NativeCapturePreflightError, "changed during recording"):
+                validate_native_capture_final(provenance, runner=self._runner(calls))
+
+        self.assertIn(["cmake", "--build", str(build), "--target", "plw_client"], calls)
+        self.assertEqual(provenance["target"], "plw_client")
+        self.assertEqual(provenance["executable"]["path"], str(executable.resolve()))
+        self.assertEqual(provenance["cacheContract"]["buildType"], "Release")
+
+    def test_declared_artifact_keeps_the_cache_contract(self):
+        directory, root, game, build, executable, output = self._declared_fixture()
+        with directory:
+            cache = build / "CMakeCache.txt"
+            cache.write_text(self._cache_text(game, build, devapi="OFF"), encoding="utf-8")
+            with self.assertRaisesRegex(NativeCapturePreflightError, "GAME_DEVAPI_ENABLED"):
+                prepare_native_capture(game, output, requested_executable=executable,
+                                       studio_root=root, runner=self._runner([]))
+            cache.write_text(self._cache_text(game, game / "build" / "devapi-debug"), encoding="utf-8")
+            with self.assertRaisesRegex(NativeCapturePreflightError, "CMAKE_CACHEFILE_DIR"):
+                prepare_native_capture(game, output, requested_executable=executable,
+                                       studio_root=root, runner=self._runner([]))
+            cache.write_text(self._cache_text(game, build).replace("CMAKE_BUILD_TYPE:STRING=Debug\n", ""),
+                             encoding="utf-8")
+            with self.assertRaisesRegex(NativeCapturePreflightError, "explicit CMAKE_BUILD_TYPE"):
+                prepare_native_capture(game, output, requested_executable=executable,
+                                       studio_root=root, runner=self._runner([]))
+
+    def test_canonical_artifact_still_requires_debug(self):
+        directory, root, game, _executable, output = self._fixture()
+        with directory:
+            cache = game / "build" / "devapi-debug" / "CMakeCache.txt"
+            cache.write_text(self._cache_text(game, cache.parent).replace("Debug", "Release"), encoding="utf-8")
+            with self.assertRaisesRegex(NativeCapturePreflightError, "Ninja and Debug"):
+                prepare_native_capture(game, output, studio_root=root, runner=self._runner([]))
+
     def test_build_failure_stops_before_an_executable_provenance_is_returned(self):
         directory, root, game, _executable, output = self._fixture()
         with directory:
