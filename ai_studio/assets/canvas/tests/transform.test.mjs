@@ -4,8 +4,8 @@
 //   node --test ai_studio/assets/canvas/tests/transform.test.mjs
 //
 // The render-parity test drives the REAL render_group.py through the warm worker
-// (renderGroup) and skips cleanly when the studio venv / Pillow is unavailable
-// (mirrors the other render smoke tests). Every other test here is pure/store-level and never
+// (renderGroup) and requires the studio venv / Pillow (mirrors the other render smoke tests).
+// Every other test here is pure/store-level and never
 // touches Python: the R7 guards all fire BEFORE any disk read/spawn (fail-fast), so the
 // refusal tests are deterministic and always run.
 import test from "node:test";
@@ -320,13 +320,7 @@ test("render parity: a rotated+flipped element renders through render_group.py a
 
   for (const kase of cases) {
     patchElement(root, pid, element.id, kase.patch);
-    let result;
-    try {
-      result = await renderGroup(root, { projectId: pid, groupId: group.id, scale: 1 });
-    } catch (error) {
-      t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-      return;
-    }
+    const result = await renderGroup(root, { projectId: pid, groupId: group.id, scale: 1 });
     const png = decodePng(readFileSync(result.path));
 
     const transformed = transformOffset(sourceCenterOffset.x, sourceCenterOffset.y, kase.rotation, kase.flipH, kase.flipV);

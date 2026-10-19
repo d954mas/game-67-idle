@@ -255,24 +255,36 @@ def prepare_shot(
 ) -> None:
     game.result("time.set_fps", {"fps": output_fps * ticks_per_frame})
     game.result("time.set_scale", {"scale": 1.0})
-    game.result("time.set_mode", {"mode": "manual"})
-    game.result("input.set_player_enabled", {"enabled": False})
     try:
+        game.result("time.set_mode", {"mode": "manual"})
+        game.result("input.set_player_enabled", {"enabled": False})
         for action in shot.get("setup", []):
             game.result(action["method"], action.get("params") or {})
         warmup_ticks = int(shot.get("warmup_ticks", 0))
         if warmup_ticks:
             game.result("time.step", {"count": warmup_ticks})
-    except BaseException:
-        cleanup_shot(game)
+    except BaseException as setup_error:
+        try:
+            cleanup_shot(game)
+        except BaseException as cleanup_error:
+            setup_error.add_note(f"shot cleanup failed: {cleanup_error!r}")
         raise
 
 
 def cleanup_shot(game) -> None:
+    input_error: BaseException | None = None
     try:
         game.result("input.set_player_enabled", {"enabled": True})
-    finally:
+    except BaseException as exc:
+        input_error = exc
+    try:
         game.result("time.set_mode", {"mode": "run"})
+    except BaseException as time_error:
+        if input_error is None:
+            raise
+        input_error.add_note(f"shot cleanup failed: {time_error!r}")
+    if input_error is not None:
+        raise input_error
 
 
 def _dispatch_timeline_event(game, event: dict, *, capture_width: int, capture_height: int) -> None:
@@ -473,6 +485,7 @@ def run(args: argparse.Namespace) -> dict:
                     output_fps=settings.fps,
                 )
 
+        recording_error: BaseException | None = None
         try:
             kwargs = {
                 "pid": game.process_id,
@@ -491,8 +504,16 @@ def run(args: argparse.Namespace) -> dict:
                 result = record_take(**kwargs)
                 validate_native_capture_final(native_build)
                 return append_executable_identity(result, native_build)
+        except BaseException as exc:
+            recording_error = exc
+            raise
         finally:
-            finish_shot()
+            try:
+                finish_shot()
+            except BaseException as cleanup_error:
+                if recording_error is None:
+                    raise
+                recording_error.add_note(f"shot cleanup failed: {cleanup_error!r}")
 
 
 def main(argv: Sequence[str] | None = None) -> int:

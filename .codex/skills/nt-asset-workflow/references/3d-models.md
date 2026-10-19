@@ -50,7 +50,7 @@ Prefer vendor-shipped `.glb` when available. Convert OBJ/MTL/FBX only when the
 source license and material data are clear:
 
 ```powershell
-py -3.12 ai_studio/assets/tools/conversion/obj_to_glb.py ...
+blender --background --python ai_studio/assets/tools/conversion/obj_to_glb.py -- tmp/model_exports tmp/model.obj
 ```
 
 Record the source file, converted output, license, author/source, and any

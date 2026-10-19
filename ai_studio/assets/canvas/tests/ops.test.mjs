@@ -1,9 +1,3 @@
-// Canvas ops tests, incl. the bridged detectRegions op. Run:
-//   node --test ai_studio/assets/canvas/tests/ops.test.mjs
-//
-// detectRegions drives the real raster2d + Python pipeline. When that pipeline
-// (Python / numpy / Pillow) is unavailable the test skips with a clear message
-// instead of failing.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -94,13 +88,7 @@ test("detectRegions bridges raster2d and stores regions + a tool_run", async (t)
   const project = createProject(REPO_ROOT, { title: "Detect" });
   const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
 
-  let result;
-  try {
-    result = await detectRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
-  } catch (error) {
-    t.skip(`raster2d/python pipeline unavailable: ${error.message}`);
-    return;
-  }
+  const result = await detectRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
 
   t.after(() => {
     const sessionId = result.run.result_summary.session_id;
@@ -129,22 +117,10 @@ test("sliceRegions crops detected regions into new elements with provenance; und
   const project = createProject(REPO_ROOT, { title: "Slice" });
   const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
 
-  let detected;
-  try {
-    detected = await detectRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
-  } catch (error) {
-    t.skip(`raster2d/python pipeline unavailable: ${error.message}`);
-    return;
-  }
+  const detected = await detectRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
   const sessions = new Set([detected.run.result_summary.session_id]);
 
-  let sliced;
-  try {
-    sliced = await sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
-  } catch (error) {
-    t.skip(`raster2d/python slicing unavailable: ${error.message}`);
-    return;
-  }
+  const sliced = await sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
   sessions.add(sliced.run.result_summary.session_id);
   t.after(() => {
     for (const sessionId of sessions) {
@@ -204,13 +180,7 @@ test("sliceRegions crops the STORED rects verbatim (edited + hand-drawn regions)
     ],
   });
 
-  let sliced;
-  try {
-    sliced = await sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
-  } catch (error) {
-    t.skip(`crop_regions.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const sliced = await sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
 
   assert.equal(sliced.created.length, 2, "one crop per stored region, in order");
   const [red, green] = sliced.created;
@@ -244,13 +214,7 @@ test("sliceRegions masks alpha outside a polygon region (in-poly opaque, out tra
     regions: [{ id: "tri", name: "Tri", rect: [8, 8, 20, 20], polygon: [[8, 8], [28, 8], [8, 28]] }],
   });
 
-  let sliced;
-  try {
-    sliced = await sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
-  } catch (error) {
-    t.skip(`crop_regions.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const sliced = await sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
 
   assert.equal(sliced.created.length, 1, "one crop for the polygon region");
   const crop = decodePng(readFileSync(resolveProjectFile(REPO_ROOT, project.id, sliced.created[0].src)));
@@ -273,13 +237,7 @@ test("sliceRegions with ONE region mints a loose element - no wrapper group (T02
     regions: [{ id: "only", name: "Hero", rect: [8, 8, 20, 20] }],
   });
 
-  let sliced;
-  try {
-    sliced = await sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
-  } catch (error) {
-    t.skip(`crop_regions.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const sliced = await sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
 
   // One crop, loose on the scene: no group minted, no groupId stamped.
   assert.equal(sliced.created.length, 1);
@@ -311,31 +269,19 @@ test("sliceRegions: perRegionMeta merges onto each crop's meta (index-aligned wi
   const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
   const runGroup = createGroup(REPO_ROOT, { projectId: project.id, name: "Run", x: 500, y: 0, w: 40, h: 40 }).group;
 
-  let detected;
-  try {
-    detected = await detectRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
-  } catch (error) {
-    t.skip(`raster2d/python pipeline unavailable: ${error.message}`);
-    return;
-  }
+  const detected = await detectRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
   assert.equal(detected.regions.length, 2, "precondition: magentaSheetPng's two blobs both detect");
 
   // perRegionMeta[i] <-> the i-th detected region (index-aligned, not id-aligned) —
   // arbitrary extra fields, not just packSlice's own {pack:{...}} shape (sliceRegions
   // itself is pack-agnostic).
   const perRegionMeta = [{ tag: "first" }, { tag: "second" }];
-  let sliced;
-  try {
-    sliced = await sliceRegions(REPO_ROOT, {
-      projectId: project.id,
-      elementId: element.id,
-      perRegionMeta,
-      targetParentId: runGroup.id,
-    });
-  } catch (error) {
-    t.skip(`raster2d/python slicing unavailable: ${error.message}`);
-    return;
-  }
+  const sliced = await sliceRegions(REPO_ROOT, {
+    projectId: project.id,
+    elementId: element.id,
+    perRegionMeta,
+    targetParentId: runGroup.id,
+  });
 
   assert.equal(sliced.created.length, 2);
   assert.equal(sliced.created[0].meta.tag, "first");
@@ -373,13 +319,7 @@ test("sliceRegions: targetParentId on a SINGLE-crop slice (no wrapper group, T02
     regions: [{ id: "only", name: "Hero", rect: [8, 8, 20, 20] }],
   });
 
-  let sliced;
-  try {
-    sliced = await sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id, targetParentId: runGroup.id });
-  } catch (error) {
-    t.skip(`crop_regions.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const sliced = await sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id, targetParentId: runGroup.id });
   assert.equal(sliced.created.length, 1);
   assert.equal(sliced.group, null, "still no wrapper group for a single crop");
   assert.equal(sliced.created[0].groupId, runGroup.id, "the lone crop lands directly in the target group");

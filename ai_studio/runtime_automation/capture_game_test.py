@@ -185,6 +185,10 @@ class CaptureGameCliTest(unittest.TestCase):
             game.process_id = 123
             launch = {}
             recorded = {}
+            clock = FakeClock()
+
+            def drive_timeline(*args, **kwargs):
+                return play_timeline(*args, **kwargs, monotonic=clock.monotonic, sleep=clock.sleep)
 
             class GameContext:
                 def __enter__(self):
@@ -216,6 +220,9 @@ class CaptureGameCliTest(unittest.TestCase):
                 return_value=native_build_record(executable),
             ), patch(
                 "ai_studio.runtime_automation.capture_game.validate_native_capture_final",
+            ), patch(
+                "ai_studio.runtime_automation.capture_game.play_timeline",
+                side_effect=drive_timeline,
             ):
                 result = run(parse_args([str(root), "shot", "intro"]))
 
@@ -232,6 +239,7 @@ class CaptureGameCliTest(unittest.TestCase):
         self.assertTrue(callable(recorded["recording_driver"]))
         self.assertEqual(recorded["max_freeze_seconds"], 2.0)
         self.assertEqual(recorded["settings"].fps, 60)
+        self.assertAlmostEqual(clock.now, recorded["duration_seconds"])
 
         prepare_end = recorded["prepare_end"]
         self.assertEqual(game.calls[:prepare_end], [
@@ -340,6 +348,7 @@ class TimelineTest(unittest.TestCase):
 
     def test_prepare_runs_setup_before_driver_and_cleanup_restores_game(self) -> None:
         game = FakeGame()
+        clock = FakeClock()
         shot = {
             "seconds": 0.1,
             "warmup_ticks": 2,
@@ -351,7 +360,7 @@ class TimelineTest(unittest.TestCase):
 
         prepare_shot(game, shot)
         prepared = list(game.calls)
-        play_timeline(game, shot, output_fps=30)
+        play_timeline(game, shot, output_fps=30, monotonic=clock.monotonic, sleep=clock.sleep)
         after_driver = list(game.calls)
         cleanup_shot(game)
 
@@ -384,6 +393,88 @@ class TimelineTest(unittest.TestCase):
                 cleanup_shot(game)
 
         self.assertEqual(game.calls[-2:], [
+            ("input.set_player_enabled", {"enabled": True}),
+            ("time.set_mode", {"mode": "run"}),
+        ])
+
+    def test_prepare_keeps_setup_error_when_rollback_fails(self) -> None:
+        setup_error = RuntimeError("setup failed")
+
+        class SetupAndRollbackFailingGame:
+            def __init__(self) -> None:
+                self.calls: list[tuple[str, dict]] = []
+
+            def result(self, method: str, params: dict | None = None):
+                payload = params or {}
+                self.calls.append((method, payload))
+                if method == "game.planet.stage_intro":
+                    raise setup_error
+                if method == "input.set_player_enabled" and payload["enabled"]:
+                    raise ConnectionResetError("rollback socket closed")
+                return {}
+
+        game = SetupAndRollbackFailingGame()
+        from ai_studio.runtime_automation.capture_game import prepare_shot
+
+        with self.assertRaises(RuntimeError) as failure:
+            prepare_shot(game, {"setup": [{"method": "game.planet.stage_intro"}]})
+
+        self.assertIs(failure.exception, setup_error)
+        self.assertIn("rollback socket closed", "\n".join(failure.exception.__notes__))
+        self.assertEqual(game.calls[-2:], [
+            ("input.set_player_enabled", {"enabled": True}),
+            ("time.set_mode", {"mode": "run"}),
+        ])
+
+    def test_prepare_rolls_back_when_disabling_input_fails(self) -> None:
+        disable_error = ConnectionResetError("disable socket closed")
+
+        class DisableFailingGame:
+            def __init__(self) -> None:
+                self.calls: list[tuple[str, dict]] = []
+
+            def result(self, method: str, params: dict | None = None):
+                payload = params or {}
+                self.calls.append((method, payload))
+                if method == "input.set_player_enabled" and not payload["enabled"]:
+                    raise disable_error
+                return {}
+
+        game = DisableFailingGame()
+        from ai_studio.runtime_automation.capture_game import prepare_shot
+
+        with self.assertRaises(ConnectionResetError) as failure:
+            prepare_shot(game, {"setup": []})
+
+        self.assertIs(failure.exception, disable_error)
+        self.assertEqual(game.calls[-2:], [
+            ("input.set_player_enabled", {"enabled": True}),
+            ("time.set_mode", {"mode": "run"}),
+        ])
+
+    def test_cleanup_keeps_first_restore_error_and_attempts_second(self) -> None:
+        input_error = ConnectionResetError("input restore closed")
+        time_error = ConnectionResetError("time restore closed")
+
+        class DoubleFailingGame:
+            def __init__(self) -> None:
+                self.calls: list[tuple[str, dict]] = []
+
+            def result(self, method: str, params: dict | None = None):
+                self.calls.append((method, params or {}))
+                if method == "input.set_player_enabled":
+                    raise input_error
+                raise time_error
+
+        game = DoubleFailingGame()
+        from ai_studio.runtime_automation.capture_game import cleanup_shot
+
+        with self.assertRaises(ConnectionResetError) as failure:
+            cleanup_shot(game)
+
+        self.assertIs(failure.exception, input_error)
+        self.assertIn("time restore closed", "\n".join(failure.exception.__notes__))
+        self.assertEqual(game.calls, [
             ("input.set_player_enabled", {"enabled": True}),
             ("time.set_mode", {"mode": "run"}),
         ])
@@ -451,6 +542,86 @@ class CaptureGameAdoptionTest(unittest.TestCase):
 
         self.assertNotEqual(first, second)
         self.assertEqual(first.parent, root / "tmp" / "captures")
+
+    def test_run_keeps_recording_error_when_shot_cleanup_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            executable = canonical_native_executable(root)
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            (root / "capture").mkdir()
+            (root / "capture" / "catalog.json").write_text(json.dumps({
+                "version": 1, "executable": capture_executable_relative(),
+                "defaults": {"size": "1280x720", "fps": 30},
+                "shots": {"intro": {"seconds": 1}},
+            }), encoding="utf-8")
+
+            class CleanupFailingGame:
+                process_id = 123
+
+                def result(self, method: str, _params: dict | None = None):
+                    if method == "input.set_player_enabled":
+                        raise ConnectionResetError("cleanup socket closed")
+                    return {}
+
+            class GameContext:
+                def __enter__(self):
+                    return CleanupFailingGame()
+
+                def __exit__(self, *_args):
+                    return None
+
+            recording_error = RuntimeError("game window did not remain stable for 2 seconds")
+            with patch("ai_studio.runtime_automation.capture_game.running_game", return_value=GameContext()), patch(
+                "ai_studio.runtime_automation.capture_game.record_take",
+                side_effect=recording_error,
+            ), patch(
+                "ai_studio.runtime_automation.capture_game.prepare_native_capture",
+                return_value=native_build_record(executable),
+            ):
+                with self.assertRaises(RuntimeError) as failure:
+                    run(parse_args([str(root), "shot", "intro"]))
+
+        self.assertIs(failure.exception, recording_error)
+        self.assertIn("cleanup socket closed", "\n".join(failure.exception.__notes__))
+
+    def test_run_propagates_shot_cleanup_error_after_successful_recording(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            executable = canonical_native_executable(root)
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            (root / "capture").mkdir()
+            (root / "capture" / "catalog.json").write_text(json.dumps({
+                "version": 1, "executable": capture_executable_relative(),
+                "defaults": {"size": "1280x720", "fps": 30},
+                "shots": {"intro": {"seconds": 1}},
+            }), encoding="utf-8")
+
+            class CleanupFailingGame:
+                process_id = 123
+
+                def result(self, method: str, _params: dict | None = None):
+                    if method == "input.set_player_enabled":
+                        raise ConnectionResetError("cleanup socket closed")
+                    return {}
+
+            class GameContext:
+                def __enter__(self):
+                    return CleanupFailingGame()
+
+                def __exit__(self, *_args):
+                    return None
+
+            with patch("ai_studio.runtime_automation.capture_game.running_game", return_value=GameContext()), patch(
+                "ai_studio.runtime_automation.capture_game.record_take",
+                return_value={"edit": root / "edit.mp4", "master": root / "master.mkv"},
+            ), patch(
+                "ai_studio.runtime_automation.capture_game.prepare_native_capture",
+                return_value=native_build_record(executable),
+            ), patch("ai_studio.runtime_automation.capture_game.validate_native_capture_final"):
+                with self.assertRaisesRegex(ConnectionResetError, "cleanup socket closed"):
+                    run(parse_args([str(root), "shot", "intro"]))
 
     def test_studio_root_resolution_supports_template_and_private_games(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

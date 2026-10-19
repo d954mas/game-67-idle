@@ -6,18 +6,24 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import smoke_bot  # noqa: E402
+from devapi_client import DevApiClient  # noqa: E402
 
 
-class FakeGame:
-    def __init__(self):
+class FakeGame(DevApiClient):
+    def __init__(self, endpoint_listing=None):
         self.open = False
         self.clicks = []
         self.waits = []
+        self.calls = []
         self.render_enabled = True
+        self.endpoint_listing = endpoint_listing if endpoint_listing is not None else {
+            "commands": [{"method": name} for name in smoke_bot.REQUIRED_METHODS]
+        }
 
     def result(self, method, params=None):
+        self.calls.append(method)
         if method == "endpoints":
-            return {"commands": [{"method": name} for name in smoke_bot.REQUIRED_METHODS]}
+            return self.endpoint_listing
         if method == "command.describe":
             return {"method": params["method"], "params_shape": "{}", "result_shape": "{}"}
         if method == "render.info":
@@ -66,13 +72,16 @@ class FakeGame:
 
 
 class SmokeBotTest(unittest.TestCase):
-    def test_extract_endpoint_methods_accepts_engine_shape(self):
-        listing = {"commands": [{"method": "ui.tree"}, {"method": 7}, {"group": "bad"}, "legacy.ping"]}
-        self.assertEqual(smoke_bot.extract_endpoint_methods(listing), {"ui.tree", "legacy.ping"})
-
     def test_missing_required_methods_reports_sorted_names(self):
         missing = smoke_bot.missing_required_methods({"endpoints", "ui.tree"})
         self.assertEqual(missing, sorted(set(smoke_bot.REQUIRED_METHODS) - {"endpoints", "ui.tree"}))
+
+    def test_run_smoke_rejects_malformed_endpoint_listing_before_actions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            game = FakeGame(endpoint_listing=[])
+            with self.assertRaisesRegex(smoke_bot.DevApiError, "invalid command listing"):
+                smoke_bot.run_smoke(game, Path(tmp), audit=False)
+        self.assertEqual(game.calls, ["endpoints"])
 
     def test_find_ui_node_uses_stable_id_string(self):
         tree = {"nodes": [{"id_string": "settings/gear", "label": "Settings"}]}

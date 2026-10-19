@@ -1,7 +1,6 @@
 # image/regions — region detection
 
-Detect isolated regions on a normalized chroma-key source sheet and emit rects
-for slicing.
+Detect isolated regions on a normalized chroma-key sheet for review and slicing.
 
 ## Region rule for chroma-key sheets
 
@@ -12,10 +11,10 @@ when neighboring components would overlap after padding. Tight crop regions brea
 alpha/matte because the keyer has no background samples at anti-aliased borders,
 which causes eaten edges, green spill, or holes after export.
 
-Current tool:
+Run from the repository root:
 
 ```powershell
-py -3.12 ai_studio/assets/tools/image/regions/detect_regions.py `
+node ai_studio/dev_environment/python_run.mjs ai_studio/assets/tools/image/regions/detect_regions.py `
   --source tmp/ai_studio/assets/raster2d/session/background/normalized.png `
   --key-color "#ff00ff" `
   --key-tolerance 0 `
@@ -34,7 +33,7 @@ Each region contains:
   include key background around the component, not hug the visible edge.
 - `area_px`: foreground pixel count used to filter noise.
 
-In the site flow, this runs after `../background/normalize_background.py`. The
+In the site flow, this runs after `../bg_fix/normalize_background.py`. The
 site then lets the user add/delete rects and writes reviewed rect JSON under
 `tmp/`.
 

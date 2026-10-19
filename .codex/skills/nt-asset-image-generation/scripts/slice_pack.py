@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
-"""Phase-2 mapper glue for the pack expander (T0330): slice generated sheets
-back into axis-named assets.
+"""Map generated sheets back into axis-named assets.
 
 expand_jobs.py turns a config into sheet-jobs with a cell manifest (which
 cell holds which axis values); gen_batch.py/generate_image.py turn each job
 into a sheet PNG. Nothing maps the two together -- this script is that
-mapper. It reproduces the REAL production chain used by the image-tool
-bridges (ai_studio/assets/tools/image/regions/api.mjs,
-ai_studio/assets/tools/image/slice/api.mjs), just driven from Python instead
-of the Node bridge:
+mapper. It composes the canonical Python image tools:
 
   bg_fix/normalize_background.py (auto border-key estimate + exact-key clamp)
     -> regions/detect_regions.py (chroma connected-components, row-major)

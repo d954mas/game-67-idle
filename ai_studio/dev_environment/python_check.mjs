@@ -17,11 +17,19 @@ const script = [
   `pins=${JSON.stringify(pins)}`,
   `expected_prefix=${JSON.stringify(venvRoot)}`,
   "bad=[]",
-  "[(bad.append(f'{p}: installed={m.version(p.split(\"==\",1)[0])}') if m.version(p.split('==',1)[0]).lower()!=p.split('==',1)[1].lower() else None) for p in pins]",
+  "for pin in pins:",
+  "    name, wanted = pin.split('==', 1)",
+  "    try:",
+  "        installed = m.version(name)",
+  "    except m.PackageNotFoundError:",
+  "        bad.append(f'{pin}: missing')",
+  "        continue",
+  "    if installed.lower() != wanted.lower():",
+  "        bad.append(f'{pin}: installed={installed}')",
   "prefix_ok=__import__('os').path.normcase(__import__('os').path.realpath(sys.prefix))==__import__('os').path.normcase(__import__('os').path.realpath(expected_prefix))",
   "print(json.dumps({'python':sys.version.split()[0],'executable':sys.executable,'prefix':sys.prefix,'prefix_ok':prefix_ok,'pins':pins,'mismatches':bad}))",
   "raise SystemExit(1 if sys.version_info[:2] != (3,12) or bad or not prefix_ok else 0)",
-].join(";");
+].join("\n");
 const result = spawnSync(python, ["-c", script], { cwd: repoRoot, encoding: "utf8" });
 if (result.stdout) process.stdout.write(result.stdout);
 if (result.stderr) process.stderr.write(result.stderr);

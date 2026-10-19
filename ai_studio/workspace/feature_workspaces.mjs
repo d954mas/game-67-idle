@@ -26,7 +26,9 @@ import { listGameMounts, runPrivateGamePreflight } from "./games.mjs";
 export const FEATURE_WORKSPACE_SCHEMA = "ai_studio.feature_workspace.v1";
 export const FEATURE_WORKSPACE_RECORD_SCHEMA = "ai_studio.feature_workspace_record.v1";
 
-const TASK_ID_PATTERN = /^T\d{4}$/;
+const TASK_ID_PATTERN = /^T\d{4,}$/;
+const PROJECT_ID_PATTERN = /^P\d{3,}$/;
+const EPIC_ID_PATTERN = /^E\d{3,}$/;
 const GAME_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 const WORKSPACE_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
 const ELIGIBLE_TASK_STATUSES = new Set(["backlog", "todo", "doing"]);
@@ -63,7 +65,7 @@ function optionName(raw) {
 
 function normalizeTaskId(value) {
   const id = String(value || "").trim().toUpperCase();
-  if (!TASK_ID_PATTERN.test(id)) throw new Error("task must use the T#### form");
+  if (!TASK_ID_PATTERN.test(id)) throw new Error("task must use the T#### form with its allocator rollover digits");
   return id;
 }
 
@@ -214,7 +216,7 @@ export function inspectCommittedTask(root, commit, rawTaskId, gameId, { requireE
   if (requireEligible && !ELIGIBLE_TASK_STATUSES.has(task.status)) {
     throw new Error(`task ${taskId} status '${task.status || "missing"}' is not eligible for implementation`);
   }
-  if (!/^P\d{3}$/.test(String(task.project || "")) || !/^E\d{3}$/.test(String(task.epic || ""))) {
+  if (!PROJECT_ID_PATTERN.test(String(task.project || "")) || !EPIC_ID_PATTERN.test(String(task.epic || ""))) {
     throw new Error(`task ${taskId} must reference a project and epic`);
   }
   const project = committedDocById(root, commit, ".ai_studio/taskboard/items/projects", task.project, "project").fields;
@@ -549,7 +551,7 @@ function rollbackCreate(manifest, manifestPath, activePath) {
 
 export async function createFeatureWorkspace(input) {
   const name = normalizeWorkspaceName(input.name);
-  // A workspace without a card is for exploration: its branch carries no T#### and
+  // A workspace without a card is for exploration: its branch carries no Taskboard id and
   // nothing merges from it into the integration branch without a card first.
   const taskId = input.task == null ? null : normalizeTaskId(input.task);
   const gameId = normalizeGameId(input.game);
@@ -575,8 +577,8 @@ export async function createFeatureWorkspace(input) {
     ? String(input.branch).trim()
     : taskId ? `agent/${taskId.toLowerCase()}-${name}` : `agent/${name}`;
   if (taskId) {
-    if (!/^agent\/t\d{4}-[a-z0-9][a-z0-9-]{0,63}$/.test(branch)) throw new Error("game branch must use agent/t####-name");
-  } else if (!/^agent\/(?!t\d{4}-)[a-z0-9][a-z0-9-]{0,63}$/.test(branch)) {
+    if (!/^agent\/t\d{4,}-[a-z0-9][a-z0-9-]{0,63}$/.test(branch)) throw new Error("game branch must use agent/t####-name with allocator rollover digits");
+  } else if (!/^agent\/(?!t\d{4,}-)[a-z0-9][a-z0-9-]{0,63}$/.test(branch)) {
     throw new Error("an exploration branch must use agent/name without a task id");
   }
   if (gitSucceeds(sourceGameRoot, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`])) {

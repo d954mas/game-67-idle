@@ -12,9 +12,9 @@ an optional review sheet, and an optional ZIP.
   the per-region alpha policy, optionally mask the crop with a region-level
   `polygon`, write PNG outputs + a manifest, optionally build `review_sheet.png`,
   and optionally write a ZIP archive.
-- Bridge: `api.mjs` -> `reviewImageRegions`, `exportImageRegions`,
-  `exportImageRegion` (thin wrappers over `_bridge`; the composed HTTP handler
-  lives in `../api.mjs`).
+
+Interactive Canvas slicing is owned by `canvas/ops/image_pipeline.mjs` and
+`canvas/tools/crop_regions.py`. This folder owns the batch CLI.
 
 Region `id` is the technical key; optional region `name` is the human export
 label (used for slice filenames and review-sheet labels, de-duplicated with a
@@ -27,7 +27,7 @@ is 8 px. Do not tighten regions to the art edge before slicing: key-matte needs
 background pixels around anti-aliased borders, and too-tight crops produce broken
 edges or leftover key spill.
 
-## Per-region alpha policy (folded in from the old raster2d/alpha)
+## Per-region alpha policy
 
 Alpha is selected per reviewed region:
 
@@ -39,7 +39,7 @@ Alpha is selected per reviewed region:
   "needs_generation"` in the manifest so the region can be regenerated
   deliberately (see `../alpha_dualplate/`).
 
-## Review outputs (folded in from the old raster2d/review)
+## Review outputs
 
 Human/agent review artifacts after detection + slicing: rect-overlay previews and
 labelled contact sheets. The first review sheet is produced by
@@ -51,6 +51,6 @@ Pillow, numpy, scipy (studio `.venv`; key-matte pulls scipy transitively).
 
 ## Tests
 
-`slice_regions_test.py`, `api.test.mjs`
-(`.venv/Scripts/python.exe -m unittest ai_studio.assets.tools.image.slice.slice_regions_test`;
-`node --test ai_studio/assets/tools/image/slice/api.test.mjs`).
+```powershell
+node ai_studio/dev_environment/python_run.mjs ai_studio/assets/tools/image/slice/slice_regions_test.py
+```

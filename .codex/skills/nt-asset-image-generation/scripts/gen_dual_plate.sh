@@ -28,11 +28,13 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$SOURCE" ] || { echo "usage: gen_dual_plate.sh --source SUBJECT.png --name N [--out-dir D] [--size S]" >&2; exit 2; }
 [ -f "$SOURCE" ] || { echo "source not found: $SOURCE" >&2; exit 2; }
+SOURCE="$(cd "$(dirname "$SOURCE")" && pwd)/$(basename "$SOURCE")"
 
 SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SKILL_DIR/../../../.." && pwd)"
 GEN="$SKILL_DIR/generate_image.py"
 mkdir -p "$OUTDIR"
+OUTDIR="$(cd "$OUTDIR" && pwd)"
 WHITE="$OUTDIR/${NAME}_white.png"
 BLACK="$OUTDIR/${NAME}_black.png"
 
@@ -47,7 +49,7 @@ WHITE_PROMPT="Edit the input image: replace its background with solid flat white
 BLACK_PROMPT="This is a BACKGROUND-COLOR SWAP only, not a redraw. The subject is final. Output the EXACT same image pixel-for-pixel, with the ONLY change being the flat background recoloured to solid black #000000. $(flatbg 'black #000000') ${LOCK} Do NOT re-render or re-light the subject for the dark background. Output the same subject on pure black #000000."
 
 echo ">>> [1/3] white plate: edit '$SOURCE' -> '$WHITE'"
-python "$GEN" --input-image "$SOURCE" --prompt "$WHITE_PROMPT" --out "$WHITE" --size "$SIZE" --quality high || {
+node "$REPO_ROOT/ai_studio/dev_environment/python_run.mjs" "$GEN" --input-image "$SOURCE" --prompt "$WHITE_PROMPT" --out "$WHITE" --size "$SIZE" --quality high || {
   echo "white plate generation failed" >&2; exit 1; }
 
 # The generator redraws soft elements (glow/sparkles) between background colours,
@@ -59,9 +61,9 @@ echo ">>> [2/3] black plate: edit the white plate -> black, retry until gate PAS
 best_frac=101; best_file=""
 for try in $(seq 1 "$ATTEMPTS"); do
   cand="$OUTDIR/${NAME}_black_try${try}.png"
-  python "$GEN" --input-image "$WHITE" --prompt "$BLACK_PROMPT" --out "$cand" --size "$SIZE" --quality high || {
+  node "$REPO_ROOT/ai_studio/dev_environment/python_run.mjs" "$GEN" --input-image "$WHITE" --prompt "$BLACK_PROMPT" --out "$cand" --size "$SIZE" --quality high || {
     echo "black plate generation failed" >&2; exit 1; }
-  py -3.12 "$GATE" --light "$WHITE" --dark "$cand" --json-output "$OUTDIR/${NAME}_gate.json" >/dev/null 2>&1
+  node "$REPO_ROOT/ai_studio/dev_environment/python_run.mjs" "$GATE" --light "$WHITE" --dark "$cand" --json-output "$OUTDIR/${NAME}_gate.json" >/dev/null 2>&1
   frac=$(grep -o '"inconsistent_fraction":[ ]*[0-9.]*' "$OUTDIR/${NAME}_gate.json" | grep -o '[0-9.]*$')
   verdict=$(grep -o '"verdict":[ ]*"[a-z]*"' "$OUTDIR/${NAME}_gate.json" | sed 's/.*"\([a-z]*\)"$/\1/')
   echo "    try $try/$ATTEMPTS: gate=${verdict:-?} (${frac:-?} inconsistent)"
@@ -71,14 +73,14 @@ done
 [ -n "$best_file" ] && cp "$best_file" "$BLACK"
 
 echo ">>> [3/3] acceptance gate on the kept best pair"
-py -3.12 "$GATE" --light "$WHITE" --dark "$BLACK" --json-output "$OUTDIR/${NAME}_gate.json"
+node "$REPO_ROOT/ai_studio/dev_environment/python_run.mjs" "$GATE" --light "$WHITE" --dark "$BLACK" --json-output "$OUTDIR/${NAME}_gate.json"
 GATE_RC=$?
 
 echo "================= RESULT ================="
 echo "white: $WHITE"
 echo "black: $BLACK"
 if [ "$GATE_RC" -eq 0 ]; then
-  echo "PAIR OK -> extract: py -3.12 ai_studio/assets/tools/image/alpha_dualplate/dual_plate_alpha.py --light '$WHITE' --dark '$BLACK' --output '$OUTDIR/${NAME}_rgba.png' --alpha-combine proj"
+  echo "PAIR OK -> extract: node ai_studio/dev_environment/python_run.mjs ai_studio/assets/tools/image/alpha_dualplate/dual_plate_alpha.py --light '$WHITE' --dark '$BLACK' --output '$OUTDIR/${NAME}_rgba.png' --alpha-combine proj"
 else
   echo "PAIR REJECTED (see gate above) -> re-run gen_dual_plate.sh to regenerate; do NOT matte this pair."
 fi

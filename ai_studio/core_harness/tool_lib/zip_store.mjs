@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 
 const LOCAL = 0x04034b50;
 const CENTRAL = 0x02014b50;
@@ -193,8 +193,4 @@ export function readStoreZip(input) {
   if (cursor !== end) throw new Error("ZIP central directory entry bounds mismatch");
   if (expectedLocalOffset !== directoryOffset) throw new Error("ZIP has hidden data before its central directory");
   return entries;
-}
-
-export function writeStoreZip(path, entries) {
-  writeFileSync(path, createStoreZip(entries));
 }

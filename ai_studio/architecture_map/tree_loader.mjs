@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 function displayPath(value) {
@@ -33,7 +33,13 @@ export function loadArchitectureTree(repoRoot, mapPath) {
   }
   let tree;
   try {
-    tree = JSON.parse(readFileSync(mapAbs, "utf8"));
+    const physicalRepo = realpathSync.native(resolvedRepo);
+    const physicalMap = realpathSync.native(mapAbs);
+    const physicalRelative = relative(physicalRepo, physicalMap);
+    if (physicalRelative === ".." || physicalRelative.startsWith(`..${sep}`) || isAbsolute(physicalRelative)) {
+      throw new Error(`architecture tree "${displayPath(mapPath)}" escapes repository root`);
+    }
+    tree = JSON.parse(readFileSync(physicalMap, "utf8"));
   } catch (error) {
     if (error?.code === "ENOENT") throw new Error(`architecture tree "${displayPath(mapPath)}": not found`);
     if (error instanceof SyntaxError) throw new Error(`architecture tree "${displayPath(mapPath)}": malformed JSON: ${error.message}`);

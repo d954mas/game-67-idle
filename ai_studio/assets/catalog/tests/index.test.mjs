@@ -96,6 +96,26 @@ test("rebuildAssetIndex persists pack manifest assets and pack summaries", async
   assert.equal(packs[0].covers.length, 2);
 });
 
+test("rebuildAssetIndex reports a missing manifest preview without a thumbnail", async (t) => {
+  const { root, library } = tempLibrary();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const packDir = join(library, "packs", "furniture");
+  writeJsonl(join(packDir, "assets.jsonl"), [{
+    asset_id: "kenney__red-sofa__cc0",
+    title: "Red Sofa",
+    kind: "model",
+    resource: "files/kenney__red-sofa__cc0/sofa.glb",
+    preview: "previews/kenney__red-sofa__cc0/missing.webp",
+  }]);
+
+  await rebuildAssetIndex(root, source(library));
+  const page = await queryIndexedAssets(root, source(library), { q: "sofa", offset: 0, limit: 24 });
+
+  assert.equal(page.total, 1);
+  assert.equal(page.assets[0].previewStatus, "missing");
+  assert.equal(page.assets[0].thumb, "");
+});
+
 test("refreshAssetIndex skips full rebuild when the source signature is unchanged", async (t) => {
   const { root, library } = tempLibrary();
   t.after(() => rmSync(root, { recursive: true, force: true }));

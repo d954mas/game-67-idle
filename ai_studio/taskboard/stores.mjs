@@ -95,8 +95,8 @@ export function selectTaskboardStore(root, options = {}) {
     activeStoreId: storeId || (gameId ? `game:${gameId}` : ""),
   });
   const selected = stores.find((store) =>
-    (storeId && store.storeId === storeId) ||
-    (gameId && store.gameId === gameId)
+    (!storeId || store.storeId === storeId) &&
+    (!gameId || store.gameId === gameId)
   );
   if (!selected) {
     throw new Error(`No Taskboard store found for ${storeId || `game:${gameId}`}`);

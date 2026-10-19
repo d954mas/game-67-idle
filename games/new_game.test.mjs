@@ -298,10 +298,12 @@ function activeCanvasProjectIds(root) {
 
 test("argument contract keeps explicit visibility and strict identities", () => {
   assert.equal(resolveVisibility(parseArgs(["--id", "demo"])), "public");
-  assert.equal(resolveVisibility(parseArgs(["--id", "demo", "--private"])), "private");
+  assert.equal(resolveVisibility(parseArgs(["--id", "demo", "--visibility", "private"])), "private");
+  assert.throws(() => parseArgs(["--id", "demo", "--private"]), /unknown argument/);
   assert.throws(() => resolveVisibility(parseArgs(["--id", "demo", "--require-visibility"])), /missing visibility choice/);
   assert.throws(() => validateRequestedIdentity(parseArgs(["--id", "Bad"])), /lowercase kebab-case/);
   assert.match(usageText(), /--visibility public\|private/);
+  assert.doesNotMatch(usageText(), /--private/);
 });
 
 test("public creation is discovered from its folder and updates public integrations", (t) => {

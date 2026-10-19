@@ -5,8 +5,8 @@
 //   node --test ai_studio/assets/canvas/tests/filters.test.mjs
 //
 // The render-parity tests drive the REAL render_group.py through the warm worker
-// (renderGroup) and skip cleanly when the studio venv / Pillow is unavailable (mirrors
-// transform.test.mjs). Every other test here is pure/store-level
+// (renderGroup) and require the studio venv / Pillow (mirrors transform.test.mjs). Every
+// other test here is pure/store-level
 // and never touches Python — validation/normalization/undo all fire before any disk
 // read/spawn, so those tests are deterministic and always run.
 import test from "node:test";
@@ -289,13 +289,7 @@ async function renderFilteredQuadrants(t, filters) {
   assignToGroup(root, { projectId: pid, elementIds: [element.id], groupId: group.id });
   patchElement(root, pid, element.id, { filters });
 
-  let result;
-  try {
-    result = await renderGroup(root, { projectId: pid, groupId: group.id, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return null;
-  }
+  const result = await renderGroup(root, { projectId: pid, groupId: group.id, scale: 1 });
   const png = decodePng(readFileSync(result.path));
   return { png, TL, TR, BL, BR, W, H };
 }
@@ -303,7 +297,6 @@ async function renderFilteredQuadrants(t, filters) {
 test("render parity: brightness+saturation+contrast+tint match the JS-computed expectation channel-exact within ±1", async (t) => {
   const filters = { brightness: 1.2, saturation: 0.4, contrast: 1.3, tint: { color: "#0000ff", strength: 0.4 } };
   const fixture = await renderFilteredQuadrants(t, filters);
-  if (!fixture) return;
   const { png, TL, TR, W, H } = fixture;
 
   const expectedTL = applyFiltersJs(TL, filters);
@@ -323,7 +316,6 @@ test("render parity: brightness+saturation+contrast+tint match the JS-computed e
 test("render parity: tint respects alpha — a fully transparent pixel stays transparent, a semi-transparent one keeps its exact alpha", async (t) => {
   const filters = { tint: { color: "#00ff00", strength: 0.6 } };
   const fixture = await renderFilteredQuadrants(t, filters);
-  if (!fixture) return;
   const { png, W, H } = fixture;
 
   const actualBL = png.at(W / 4, (3 * H) / 4);
@@ -343,13 +335,7 @@ test("render parity: saturation=0 desaturates via the 0.2126/0.7152/0.0722 luma,
   assignToGroup(root, { projectId: pid, elementIds: [element.id], groupId: group.id });
   patchElement(root, pid, element.id, { filters: { saturation: 0 } });
 
-  let result;
-  try {
-    result = await renderGroup(root, { projectId: pid, groupId: group.id, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await renderGroup(root, { projectId: pid, groupId: group.id, scale: 1 });
   const png = decodePng(readFileSync(result.path));
   const actual = png.at(8, 8);
 
@@ -373,13 +359,7 @@ test("render parity: contrast pivots at 0.5 — a mid-gray pixel stays ~unchange
   assignToGroup(root, { projectId: pid, elementIds: [element.id], groupId: group.id });
   patchElement(root, pid, element.id, { filters: { contrast: 1.8 } });
 
-  let result;
-  try {
-    result = await renderGroup(root, { projectId: pid, groupId: group.id, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await renderGroup(root, { projectId: pid, groupId: group.id, scale: 1 });
   const png = decodePng(readFileSync(result.path));
   const actual = png.at(8, 8);
   for (let c = 0; c < 3; c += 1) {

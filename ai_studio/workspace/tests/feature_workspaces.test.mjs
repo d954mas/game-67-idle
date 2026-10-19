@@ -31,8 +31,8 @@ function write(root, relativePath, contents) {
   writeFileSync(file, contents, "utf8");
 }
 
-function taskDoc(id, status = "backlog") {
-  return `---\nid: ${id}\ntitle: Fixture task\nstatus: ${status}\nproject: P001\nepic: E001\npriority: P2\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\n\n## What\n\nFixture.\n\n## Done when\n\n- [ ] Fixture is complete.\n\n## Log\n\n- 2026-01-01: Fixture created.\n`;
+function taskDoc(id, status = "backlog", { project = "P001", epic = "E001" } = {}) {
+  return `---\nid: ${id}\ntitle: Fixture task\nstatus: ${status}\nproject: ${project}\nepic: ${epic}\npriority: P2\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\n\n## What\n\nFixture.\n\n## Done when\n\n- [ ] Fixture is complete.\n\n## Log\n\n- 2026-01-01: Fixture created.\n`;
 }
 
 function repoFixture() {
@@ -126,6 +126,29 @@ test("CLI contract normalizes creation arguments", () => {
   assert.equal(parsed.options.devapiPort, 17942);
   assert.equal(parsed.options.webPort, 5242);
   assert.equal(parsed.options.json, true);
+});
+
+test("workspace creation accepts taskboard IDs after allocator width rollover", async (t) => {
+  const fixture = pairFixture();
+  t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
+  write(fixture.gameRoot, ".ai_studio/taskboard/items/projects/P1000.md", "---\nid: P1000\ntitle: Rollover project\nstatus: active\nkind: game\ntarget: games/private/fixture-game\npriority: P2\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\n\n## Goal\n\nFixture goal.\n\n## In scope\n\n- Fixture work.\n\n## Out of scope\n\n- Production work.\n");
+  write(fixture.gameRoot, ".ai_studio/taskboard/items/epics/E1000.md", "---\nid: E1000\ntitle: Rollover epic\nstatus: active\nproject: P1000\npriority: P2\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\n\n## Goal\n\nFixture epic goal.\n\n## In scope\n\n- Fixture task.\n\n## Out of scope\n\n- Other tasks.\n");
+  write(fixture.gameRoot, ".ai_studio/taskboard/items/active/T10000.md", taskDoc("T10000", "backlog", { project: "P1000", epic: "E1000" }));
+  write(fixture.gameRoot, ".ai_studio/taskboard/items/.counters.json", '{"P":1000,"E":1000,"T":10000}\n');
+  git(fixture.gameRoot, "add", ".");
+  git(fixture.gameRoot, "commit", "-m", "roll over taskboard ids");
+
+  const parsed = parseCommandLine(["new", "--game", "fixture-game", "--task", "t10000", "--name", "rollover"]);
+  assert.equal(parsed.options.task, "T10000");
+  const created = await createFeatureWorkspace({
+    root: fixture.studioRoot,
+    base: fixture.base,
+    game: "fixture-game",
+    task: parsed.options.task,
+    name: "rollover",
+  });
+  assert.equal(created.taskId, "T10000");
+  assert.equal(created.gameBranch, "agent/t10000-rollover");
 });
 
 test("CLI contract rejects unsafe names and unknown flags", () => {

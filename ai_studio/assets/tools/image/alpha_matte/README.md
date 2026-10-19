@@ -12,7 +12,7 @@ background -> use `../alpha_dualplate/` instead; `../route/` decides which.
   foreground_tolerance=80, max_dim=512, timings=None) -> Image` — run PER CROP.
 - `chroma_key_alpha.py` — the shared keying primitive (spill masks, despill,
   transparent-edge hygiene, premultiplied resize). Imported by `key_matte.py`
-  and cross-imported by `../../source_sheets/audit_intake.py`.
+  and used by the matte and slicing stages.
 
 ## Python deps
 

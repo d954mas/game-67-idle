@@ -11,7 +11,7 @@
 //
 // The two RENDER-PIXEL tests drive the real render_group.py through the warm
 // worker (renderGroup — same harness pattern as transform.test.mjs lines 6-39) and
-// skip cleanly when the studio venv / Pillow is unavailable. Every other test here
+// require the studio venv / Pillow. Every other test here
 // is pure/store-level and never touches Python.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -328,13 +328,7 @@ test("render-pixel parity: an asymmetric 9-color fixture renders with fixed corn
   const rowCenters = [centerOf(dys[0], dys[1]), centerOf(dys[1], dys[2]), centerOf(dys[2], dys[3])];
 
   for (const scale of [1, 2]) {
-    let result;
-    try {
-      result = await renderGroup(root, { projectId: pid, groupId, scale });
-    } catch (error) {
-      t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-      return;
-    }
+    const result = await renderGroup(root, { projectId: pid, groupId, scale });
     const png = decodePng(readFileSync(result.path));
     for (let row = 0; row < 3; row += 1) {
       for (let col = 0; col < 3; col += 1) {
@@ -363,13 +357,7 @@ test("render-pixel parity: slice9.scale=2 fattens corners/edges — sample point
   const patches = slice9Patches(insets, SRC_W, SRC_H, DST_W, DST_H);
   assert.ok(patches.length === 9, "scale=2 still fits without triggering the clamp for this fixture");
 
-  let result;
-  try {
-    result = await renderGroup(root, { projectId: pid, groupId, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await renderGroup(root, { projectId: pid, groupId, scale: 1 });
   const png = decodePng(readFileSync(result.path));
   for (const p of patches) {
     const px = Math.round(p.dx + p.dw / 2);
@@ -391,13 +379,7 @@ test("transform composition: a slice9 element with rotation=90 + flipH renders t
   const { pid, elementId, groupId } = buildFixture(root, INSETS);
   patchElement(root, pid, elementId, { rotation: 90, flipH: true });
 
-  let result;
-  try {
-    result = await renderGroup(root, { projectId: pid, groupId, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await renderGroup(root, { projectId: pid, groupId, scale: 1 });
   const png = decodePng(readFileSync(result.path));
   // A point at the element's own box CENTER is invariant under rotation/flip about
   // that center (rotating/mirroring about a point never moves the point itself) —
@@ -422,8 +404,7 @@ test("transform composition: a slice9 element with rotation=90 + flipH renders t
 // which the warm worker sets to REPO_ROOT — and dumps every fixture case's patches
 // as one JSON array) through the SAME bridge/warm-worker path renderGroup already
 // uses above, so this reuses that already-warm process instead of a second cold
-// spawn. Skips cleanly (t.skip) when the studio venv is unavailable, same as every
-// other Python-backed test in this file.
+// spawn.
 
 // (insets, srcW, srcH, dstW, dstH) fixtures: symmetric, asymmetric, a dst-clamp
 // case, a zero-area-drop case, scale variants (default/2x/0.5x/large), and the
@@ -478,13 +459,7 @@ test("parity golden: slice9.mjs's slice9Patches == tools/slice9.py's slice9_patc
   writeFileSync(scriptPath, PARITY_GOLDEN_PY, "utf8");
   writeFileSync(casesPath, JSON.stringify(PARITY_GOLDEN_CASES), "utf8");
 
-  let stdout;
-  try {
-    stdout = await runPython(REPO_ROOT, [scriptPath, casesPath]);
-  } catch (error) {
-    t.skip(`studio Python venv unavailable: ${error.message}`);
-    return;
-  }
+  const stdout = await runPython(REPO_ROOT, [scriptPath, casesPath]);
   const pyResults = JSON.parse(stdout);
   assert.equal(pyResults.length, PARITY_GOLDEN_CASES.length, "one patch list per fixture case");
 

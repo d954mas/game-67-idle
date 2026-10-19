@@ -11,9 +11,100 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[5]
 SCRIPT = ROOT / "ai_studio/assets/tools/image/slice/slice_regions.py"
+DETECT_REGIONS = ROOT / "ai_studio/assets/tools/image/regions/detect_regions.py"
+NORMALIZE_BACKGROUND = ROOT / "ai_studio/assets/tools/image/bg_fix/normalize_background.py"
 
 
 class SliceRegionsTest(unittest.TestCase):
+    def test_normalize_detect_slice_flow_uses_canonical_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "sheet.png"
+            normalized = root / "normalized.png"
+            detected_regions = root / "detected-regions.json"
+            output_dir = root / "out"
+            manifest = output_dir / "manifest.json"
+            image = Image.new("RGBA", (48, 32), (250, 0, 250, 255))
+            for y in range(10, 18):
+                for x in range(16, 28):
+                    image.putpixel((x, y), (220, 40, 30, 255))
+            image.save(source)
+
+            normalize = subprocess.run(
+                [
+                    sys.executable,
+                    str(NORMALIZE_BACKGROUND),
+                    "--source",
+                    str(source),
+                    "--output",
+                    str(normalized),
+                    "--key-color",
+                    "#ff00ff",
+                    "--key-tolerance",
+                    "16",
+                ],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertEqual(normalize.returncode, 0, normalize.stdout + normalize.stderr)
+
+            detect = subprocess.run(
+                [
+                    sys.executable,
+                    str(DETECT_REGIONS),
+                    "--source",
+                    str(normalized),
+                    "--key-color",
+                    "#ff00ff",
+                    "--key-tolerance",
+                    "0",
+                    "--min-area",
+                    "8",
+                    "--padding",
+                    "2",
+                    "--json-output",
+                    str(detected_regions),
+                ],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertEqual(detect.returncode, 0, detect.stdout + detect.stderr)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--source",
+                    str(normalized),
+                    "--regions",
+                    str(detected_regions),
+                    "--output-dir",
+                    str(output_dir),
+                    "--prefix",
+                    "sheet",
+                    "--manifest-output",
+                    str(manifest),
+                    "--key-color",
+                    "#ff00ff",
+                ],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            self.assertEqual(data["slice_count"], 1)
+            self.assertEqual(data["slices"][0]["rect"], [14, 8, 16, 12])
+            self.assertTrue((output_dir / "slices" / "sheet_region_001.png").exists())
+
     def test_slices_regions_and_builds_review_zip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

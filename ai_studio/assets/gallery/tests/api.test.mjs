@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { listAssetViewerSources, resolveAssetViewerGalleryPath, safeResolve, selectSource } from "../api.mjs";
@@ -156,7 +156,7 @@ test("resolveAssetViewerGalleryPath confines gallery, library, and repo routes",
       join(galleryDir, "viewer.js"),
     );
     assert.equal(
-      resolveAssetViewerGalleryPath(root, "/viewer/gallery/global-library/lib/packs/kit/model.glb"),
+      resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/lib/packs/kit/model.glb"),
       join(libraryRoot, "packs", "kit", "model.glb"),
     );
     assert.equal(
@@ -167,10 +167,92 @@ test("resolveAssetViewerGalleryPath confines gallery, library, and repo routes",
     assert.equal(resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/../secret.txt"), null);
     assert.equal(resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/lib/../../secret.txt"), null);
     assert.equal(resolveAssetViewerGalleryPath(root, "/not-gallery/global-library/viewer.js"), null);
+    assert.equal(resolveAssetViewerGalleryPath(root, "/viewer/gallery/global-library/lib/packs/kit/model.glb"), null);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("resolveAssetViewerGalleryPath rejects physical link escapes while accepting external library roots", () => {
+  const fixtureRoot = tempRoot();
+  const root = join(fixtureRoot, "library-root");
+  try {
+    const galleryDir = join(root, "tmp", "ai-studio-asset-viewer", "global-library");
+    const libraryRoot = join(root, "library");
+    const outside = join(fixtureRoot, "outside");
+    const canary = join(outside, "canary.txt");
+    mkdirSync(root, { recursive: true });
+    mkdirSync(galleryDir, { recursive: true });
+    mkdirSync(libraryRoot, { recursive: true });
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(canary, "CANARY", "utf8");
+    writeFileSync(join(galleryDir, ".asset-viewer-source.json"), JSON.stringify({ libraryRoot }), "utf8");
+
+    const linkType = process.platform === "win32" ? "junction" : "dir";
+    symlinkSync(outside, join(galleryDir, "linked-outside"), linkType);
+    symlinkSync(outside, join(libraryRoot, "linked-outside"), linkType);
+    symlinkSync(outside, join(root, "linked-outside"), linkType);
+
+    assert.equal(
+      resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/lib/linked-outside/canary.txt"),
+      null,
+    );
+    assert.equal(
+      resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/lib/linked-outside/missing.txt"),
+      null,
+    );
+    assert.equal(
+      resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/linked-outside/canary.txt"),
+      null,
+    );
+    assert.equal(
+      resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/repo/linked-outside/canary.txt"),
+      null,
+    );
+
+    const externalLibrary = mkTemp("asset-viewer-external-library-");
+    try {
+      const canonicalFile = join(externalLibrary, "packs", "kit", "model.glb");
+      mkdirSync(dirname(canonicalFile), { recursive: true });
+      writeFileSync(canonicalFile, "model", "utf8");
+      const libraryAlias = join(root, "external-library-alias");
+      symlinkSync(externalLibrary, libraryAlias, process.platform === "win32" ? "junction" : "dir");
+      writeFileSync(join(galleryDir, ".asset-viewer-source.json"), JSON.stringify({ libraryRoot: libraryAlias }), "utf8");
+      assert.equal(
+        resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/lib/packs/kit/model.glb"),
+        join(libraryAlias, "packs", "kit", "model.glb"),
+      );
+    } finally {
+      rmSync(externalLibrary, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+for (const linkedRoot of ["slug", "cache"]) {
+  test(`resolveAssetViewerGalleryPath rejects an escaping ${linkedRoot} root`, () => {
+    const fixtureRoot = tempRoot();
+    try {
+      const root = join(fixtureRoot, "studio");
+      const outside = join(fixtureRoot, "outside");
+      const cacheRoot = join(root, "tmp", "ai-studio-asset-viewer");
+      const link = linkedRoot === "slug" ? join(cacheRoot, "global-library") : cacheRoot;
+      const target = linkedRoot === "slug" ? outside : join(outside, "global-library");
+      mkdirSync(dirname(link), { recursive: true });
+      mkdirSync(target, { recursive: true });
+      writeFileSync(join(target, "canary.txt"), "CANARY", "utf8");
+      symlinkSync(outside, link, process.platform === "win32" ? "junction" : "dir");
+
+      assert.equal(
+        resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/canary.txt"),
+        null,
+      );
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+}
 
 test("resolveAssetViewerGalleryPath ignores unusable gallery meta", () => {
   const root = tempRoot();
@@ -183,6 +265,9 @@ test("resolveAssetViewerGalleryPath ignores unusable gallery meta", () => {
     assert.equal(resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/lib/model.glb"), null);
 
     writeFileSync(metaPath, JSON.stringify({ sourceId: "global-library" }), "utf8");
+    assert.equal(resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/lib/model.glb"), null);
+
+    writeFileSync(metaPath, JSON.stringify({ libraryRoot: join(root, "missing-library") }), "utf8");
     assert.equal(resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/lib/model.glb"), null);
   } finally {
     rmSync(root, { recursive: true, force: true });

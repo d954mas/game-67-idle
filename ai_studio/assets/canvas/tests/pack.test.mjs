@@ -1,19 +1,4 @@
-// Pack MODE tests (T0332 v2: contracts/recipe-pack.md — lead decision "Слить"/
-// "Merge"). Pack mode is NOT a third card type; it is an optional `pack` field on the RECIPE
-// card's own blob (`group.recipe.pack`) plus two now-patchable fields inside `recipe.params`
-// (`bg_key`/`n_candidates`) — see recipe.test.mjs for the single-image (pack === null) path,
-// unchanged by this file. This file covers: patchRecipe's `pack`/`params` validation
-// (transplanted from phase A's now-deleted normalizePackPatch — the per-field rules are
-// byte-for-byte the same, minus background/candidates, which a later lead decision moved OUT
-// of `pack` and into the newly-unfrozen `params`) and packPreview (transplanted from phase A's
-// now-deleted expandPack, reading recipe.* instead of a separate card's own `pack.*`). Unlike
-// recipe/style patches, `pack` REPLACES wholesale (proven below); `params` MERGES partially
-// (mirrors phase A's own `pack.params` precedent) — both are exercised explicitly since they
-// are opposite merge strategies on two fields of the SAME patch call.
-// packPreview is NOT a codex/agy seam — it runs the REAL expand_jobs.py (offline,
-// deterministic, stdlib) through the shared runToolPython warm-worker bridge, so its pipeline
-// tests skip cleanly without the studio venv (alpha.test.mjs:99's precedent) rather than
-// injecting a fake generator.
+// Offline expansion runs through the configured Python worker so pipeline failures remain visible.
 // Run: node --test ai_studio/assets/canvas/tests/pack.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -412,21 +397,7 @@ test("packPreview: its OWN defensive style_ref re-check fires on a hand-edited b
   await assert.rejects(() => packPreview(ROOT, { projectId: project.id, groupId: card.id }), /has a style_ref that is not a style-card group/);
 });
 
-// ---- packPreview pipeline (real expand_jobs.py; skips cleanly without the studio venv) ----
-
-// Try one packPreview call; return the result or null on a venv/interpreter miss (the caller
-// then t.skip's) — mirrors alpha.test.mjs's tryAlpha isolation of "does Python run here".
-async function tryPreview(t, projectId, groupId) {
-  try {
-    return await packPreview(REPO_ROOT, { projectId, groupId });
-  } catch (error) {
-    if (/venv|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-      t.skip(`pack preview pipeline unavailable: ${error.message}`);
-      return null;
-    }
-    throw error;
-  }
-}
+// ---- packPreview pipeline (real expand_jobs.py) ----
 
 test("packPreview (real expand_jobs.py): sheets/jobs/cells shape, no style_ref -> empty style_prefix (not a loud error), no journal entry, blob unchanged", async (t) => {
   tempProjects(t);
@@ -435,8 +406,7 @@ test("packPreview (real expand_jobs.py): sheets/jobs/cells shape, no style_ref -
   seedWellFormedRecipe(project.id, card.id);
   const before = getProject(REPO_ROOT, project.id);
 
-  const result = await tryPreview(t, project.id, card.id);
-  if (!result) return;
+  const result = await packPreview(REPO_ROOT, { projectId: project.id, groupId: card.id });
 
   assert.equal(result.sheets, 2, "2 material values (big axis) x 1 candidate (default n_candidates) = 2 sheets");
   assert.equal(result.style_ref_image, false, "no style_ref -> no ref image");
@@ -464,13 +434,11 @@ test("packPreview (real expand_jobs.py): engine gemini and engine both both pass
   seedWellFormedRecipe(project.id, card.id);
 
   patchRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, patch: { engine: "gemini" } });
-  const onGemini = await tryPreview(t, project.id, card.id);
-  if (!onGemini) return;
+  const onGemini = await packPreview(REPO_ROOT, { projectId: project.id, groupId: card.id });
   assert.equal(onGemini.sheets, 2, "gemini passes the gate — preview works");
 
   patchRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, patch: { engine: "both" } });
-  const onBoth = await tryPreview(t, project.id, card.id);
-  if (!onBoth) return;
+  const onBoth = await packPreview(REPO_ROOT, { projectId: project.id, groupId: card.id });
   assert.equal(onBoth.sheets, 2, "both passes too — the fan-out (2x calls) happens at GENERATE, prompts are engine-independent");
   assert.deepEqual(onBoth.jobs.map((j) => j.prompt), onGemini.jobs.map((j) => j.prompt), "identical prompts across engines");
 });
@@ -481,14 +449,12 @@ test("packPreview (real expand_jobs.py): background is DERIVED from params.bg_ke
   const { group: card } = createRecipeCard(REPO_ROOT, { projectId: project.id, name: "Generators" });
   seedWellFormedRecipe(project.id, card.id);
 
-  const defaultResult = await tryPreview(t, project.id, card.id);
-  if (!defaultResult) return;
+  const defaultResult = await packPreview(REPO_ROOT, { projectId: project.id, groupId: card.id });
   // default bg_key (#ff00ff) -> magenta -> expand_jobs.py's own BACKGROUND_HEX["magenta"].
   assert.ok(defaultResult.jobs.every((job) => job.prompt.includes("Solid uniform #FF00FF background")));
 
   patchRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, patch: { params: { bg_key: "#00ff00", n_candidates: 3 } } });
-  const greenResult = await tryPreview(t, project.id, card.id);
-  if (!greenResult) return;
+  const greenResult = await packPreview(REPO_ROOT, { projectId: project.id, groupId: card.id });
   assert.ok(greenResult.jobs.every((job) => job.prompt.includes("Solid uniform #00FF00 background")));
   assert.equal(greenResult.sheets, 2, "still 2 sheets (2 material values) — candidates is a per-sheet multiplier, not an extra sheet");
   assert.equal(greenResult.jobs.length, 6, "2 sheets x 3 candidates = 6 flat jobs (expand_jobs.py's own job list)");
@@ -515,8 +481,7 @@ test("packPreview (real expand_jobs.py): subject_template is recipe.prompt VERBA
     },
   });
 
-  const result = await tryPreview(t, project.id, card.id);
-  if (!result) return;
+  const result = await packPreview(REPO_ROOT, { projectId: project.id, groupId: card.id });
 
   assert.ok(result.jobs.every((job) => job.prompt.includes("ZZRAWPROMPT")), "the RAW prompt reached the expander");
   assert.ok(result.jobs.every((job) => !job.prompt.includes("ZZEXPANDEDPROMPT")), "expanded/use_expanded never leak into pack mode");
@@ -531,8 +496,7 @@ test("packPreview (real expand_jobs.py): style_ref set with a TEXT-only style ca
   seedWellFormedRecipe(project.id, card.id);
   patchRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, patch: { style_ref: styleCard.id } });
 
-  const result = await tryPreview(t, project.id, card.id);
-  if (!result) return;
+  const result = await packPreview(REPO_ROOT, { projectId: project.id, groupId: card.id });
 
   assert.equal(result.style_ref_image, false, "a style card with no ref image -> no ref image flag");
   assert.ok(result.jobs.every((job) => job.prompt.includes("painterly oil, warm gold")), "style prompt travels verbatim into every sheet's [STYLE] section");
@@ -554,8 +518,7 @@ test("packPreview (real expand_jobs.py): style_ref set with a style card that HA
   seedWellFormedRecipe(project.id, card.id);
   patchRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, patch: { style_ref: styleCard.id } });
 
-  const result = await tryPreview(t, project.id, card.id);
-  if (!result) return;
+  const result = await packPreview(REPO_ROOT, { projectId: project.id, groupId: card.id });
 
   assert.equal(result.style_ref_image, true);
   assert.equal(result.sheets, 2, "the info flag does not fail the preview");
@@ -580,20 +543,12 @@ test("packPreview (real expand_jobs.py): the expander's own SystemExit surfaces 
   } catch (err) {
     error = err;
   }
-  if (error && /venv|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-    t.skip(`pack preview pipeline unavailable: ${error.message}`);
-    return;
-  }
   assert.ok(error, "expected packPreview to reject");
   assert.match(error.message, /only holds 4 cell/);
 });
 
 // ================================================================================
-// generateFromRecipe pack branch (T0332 v2 build-spec §3): sequential per-sheet codex spawns,
-// each minted under its OWN short commit. The generator itself is FAKE (platform seam,
-// dual_generate.test.mjs/recipe.test.mjs's own precedent — codex/agy never spawn in the
-// suite); expand_jobs.py is REAL (same skip-without-venv pattern as the packPreview pipeline
-// tests above, alpha.test.mjs:99's precedent) since it is offline/deterministic/stdlib.
+// Only paid generator calls are faked; offline expansion uses the configured Python worker.
 // ================================================================================
 
 // A fake generator that resolves/rejects ONE prepared outcome per call, in order — lets a test
@@ -629,20 +584,6 @@ function seedPackRecipe(projectId, groupId, materials = ["stone", "wood"]) {
   }).group;
 }
 
-// Try one generateFromRecipe (pack branch) call; return the result or null on a venv/
-// interpreter miss (the caller then t.skip's) — mirrors tryPreview above.
-async function tryGenerate(t, args) {
-  try {
-    return await generateFromRecipe(REPO_ROOT, args);
-  } catch (error) {
-    if (/venv|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-      t.skip(`pack generate pipeline unavailable: ${error.message}`);
-      return null;
-    }
-    throw error;
-  }
-}
-
 test("generateFromRecipe pack branch on engine=both: every job fans out to BOTH engines — two sheets per job with codex/agy-suffixed names, per-engine meta (engine, params_snapshot, job pointer)", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Pack generate both" });
@@ -652,8 +593,7 @@ test("generateFromRecipe pack branch on engine=both: every job fans out to BOTH 
 
   const codex = fakeGenSequence([solidPng(), solidPng()]);
   const gemini = fakeGenSequence([solidPng(), solidPng()]);
-  const result = await tryGenerate(t, { projectId: project.id, groupId: card.id, generators: { codex, gemini } });
-  if (!result) return;
+  const result = await generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, generators: { codex, gemini } });
 
   assert.equal(codex.calls.length, 2, "one codex call per job (2 material values)");
   assert.equal(gemini.calls.length, 2, "one gemini call per job — 'both' = 2x the paid calls, the lead's explicit choice");
@@ -691,18 +631,16 @@ test("generateFromRecipe pack branch on engine=both: resume dedups by (sheet_axe
   patchRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, patch: { engine: "both" } });
 
   // First run: codex lands both jobs; gemini fails the FIRST job (stone), lands the second.
-  const firstRun = await tryGenerate(t, {
+  const firstRun = await generateFromRecipe(REPO_ROOT, {
     projectId: project.id, groupId: card.id,
     generators: { codex: fakeGenSequence([solidPng(), solidPng()]), gemini: fakeGenSequence([new Error("agy exploded"), solidPng()]) },
   });
-  if (!firstRun) return;
   assert.equal(firstRun.last_run.verdict, "partial");
   assert.deepEqual(firstRun.failed, [{ sheet_axes: { material: "stone" }, engine: "gemini", error: "agy exploded" }], "failed[] names the engine, not just the axes");
 
   const codex2 = fakeGenSequence([solidPng()]);
   const gemini2 = fakeGenSequence([solidPng()]);
-  const resumed = await tryGenerate(t, { projectId: project.id, groupId: card.id, runGroupId: firstRun.run_group_id, generators: { codex: codex2, gemini: gemini2 } });
-  if (!resumed) return;
+  const resumed = await generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, runGroupId: firstRun.run_group_id, generators: { codex: codex2, gemini: gemini2 } });
 
   assert.equal(codex2.calls.length, 0, "codex sheets already landed for BOTH jobs — skipped, not repaid");
   assert.equal(gemini2.calls.length, 1, "only the missing (stone, gemini) unit regenerates");
@@ -717,8 +655,7 @@ test("generateFromRecipe pack branch: flipping the card's engine between run and
   const { group: card } = createRecipeCard(REPO_ROOT, { projectId: project.id, name: "Lanterns" });
   seedPackRecipe(project.id, card.id);
 
-  const firstRun = await tryGenerate(t, { projectId: project.id, groupId: card.id, generators: { codex: fakeGenSequence([solidPng(), solidPng()]) } });
-  if (!firstRun) return;
+  const firstRun = await generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, generators: { codex: fakeGenSequence([solidPng(), solidPng()]) } });
 
   // Simulate a LEGACY sheet (minted before engines were recorded): strip engine/job from one
   // sheet's meta.pack directly in the store — no op can produce this state anymore.
@@ -736,16 +673,14 @@ test("generateFromRecipe pack branch: flipping the card's engine between run and
 
   // Resume on codex: BOTH sheets (one modern, one legacy engineless) count as codex — skipped.
   const codex2 = fakeGenSequence([solidPng()]);
-  const resumedSame = await tryGenerate(t, { projectId: project.id, groupId: card.id, runGroupId: firstRun.run_group_id, generators: { codex: codex2 } });
-  if (!resumedSame) return;
+  const resumedSame = await generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, runGroupId: firstRun.run_group_id, generators: { codex: codex2 } });
   assert.equal(codex2.calls.length, 0, "legacy engineless sheet counts as codex — nothing repaid");
 
   // Flip to gemini and resume: no (axes, gemini) sheets exist -> ALL jobs generate on gemini,
   // codex sheets stay put — the cheap "agy versions side by side" gesture.
   patchRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, patch: { engine: "gemini" } });
   const gemini2 = fakeGenSequence([solidPng(), solidPng()]);
-  const resumedFlipped = await tryGenerate(t, { projectId: project.id, groupId: card.id, runGroupId: firstRun.run_group_id, generators: { gemini: gemini2 } });
-  if (!resumedFlipped) return;
+  const resumedFlipped = await generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, runGroupId: firstRun.run_group_id, generators: { gemini: gemini2 } });
   assert.equal(gemini2.calls.length, 2, "every job generates on the NEW engine");
   const after = getProject(REPO_ROOT, project.id);
   const sheets = after.elements.filter((el) => el.groupId === firstRun.run_group_id);
@@ -762,8 +697,7 @@ test("generateFromRecipe pack branch on engine=gemini (real expand_jobs.py, fake
 
   const codex = fakeGenSequence([solidPng()]);
   const gemini = fakeGenSequence([solidPng(), solidPng()]);
-  const result = await tryGenerate(t, { projectId: project.id, groupId: card.id, generators: { codex, gemini } });
-  if (!result) return;
+  const result = await generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, generators: { codex, gemini } });
 
   assert.equal(gemini.calls.length, 2, "one gemini call per sheet (2 material values)");
   assert.equal(codex.calls.length, 0, "codex never runs on a gemini card");
@@ -823,8 +757,7 @@ test("generateFromRecipe pack branch (real expand_jobs.py, fake codex): mints a 
 
   const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
   const codex = fakeGenSequence([solidPng(), solidPng()]);
-  const result = await tryGenerate(t, { projectId: project.id, groupId: card.id, generators: { codex } });
-  if (!result) return;
+  const result = await generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, generators: { codex } });
 
   assert.equal(codex.calls.length, 2, "one generation call per sheet (2 material values)");
   assert.equal(result.results.length, 2);
@@ -873,13 +806,12 @@ test("pack generation refuses unlocked game-owned production before paid work; n
   );
   assert.equal(codex.calls.length, 0, "lock refusal happens before pack expansion/generation");
 
-  const result = await tryGenerate(t, {
+  const result = await generateFromRecipe(REPO_ROOT, {
     projectId: project.id,
     groupId: card.id,
     generators: { codex },
     noLock: true,
   });
-  if (!result) return;
   const sheets = getProject(REPO_ROOT, project.id).elements.filter((element) => element.groupId === result.run_group_id);
   assert.equal(sheets.length, 2);
   for (const sheet of sheets) {
@@ -898,8 +830,7 @@ test("generateFromRecipe pack branch: a mid-run generator failure keeps the earl
   seedPackRecipe(project.id, card.id, ["stone", "wood", "clay"]);
 
   const codex = fakeGenSequence([solidPng(), new Error("codex exploded"), solidPng()]);
-  const result = await tryGenerate(t, { projectId: project.id, groupId: card.id, generators: { codex } });
-  if (!result) return;
+  const result = await generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, generators: { codex } });
 
   assert.equal(codex.calls.length, 3, "the run does not stop after a failure — the third sheet is still attempted");
   assert.equal(result.results.length, 3);
@@ -927,8 +858,7 @@ test("generateFromRecipe pack branch: --run resumes into an existing group and S
   const { group: card } = createRecipeCard(REPO_ROOT, { projectId: project.id, name: "Lanterns" });
   seedPackRecipe(project.id, card.id);
 
-  const firstRun = await tryGenerate(t, { projectId: project.id, groupId: card.id, generators: { codex: fakeGenSequence([solidPng(), new Error("boom")]) } });
-  if (!firstRun) return;
+  const firstRun = await generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, generators: { codex: fakeGenSequence([solidPng(), new Error("boom")]) } });
   assert.equal(firstRun.results[0].status, "ok");
   assert.equal(firstRun.results[1].status, "failed");
   assert.equal(firstRun.last_run.verdict, "partial");
@@ -936,8 +866,7 @@ test("generateFromRecipe pack branch: --run resumes into an existing group and S
   assert.ok(runGroupId, "the first (successful) sheet minted a run group even though the run finished partial");
 
   const codex2 = fakeGenSequence([solidPng()]);
-  const resumed = await tryGenerate(t, { projectId: project.id, groupId: card.id, runGroupId, generators: { codex: codex2 } });
-  if (!resumed) return;
+  const resumed = await generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, runGroupId, generators: { codex: codex2 } });
 
   assert.equal(codex2.calls.length, 1, "only the missing (wood) sheet regenerates — the stone sheet is SKIPPED, not repaid");
   assert.equal(resumed.results.length, 2);
@@ -963,12 +892,11 @@ test("generateFromRecipe pack branch: --sheet REPLACES the old sheet (and its sl
   // in the content-addressed store — so the freshly-minted stone/wood sheets carry REAL
   // detectable regions: this test slices them for real (packSlice) to prove the forced regen
   // also removes the old sheet's slice SUBGROUP, not just the sheet element itself.
-  const firstRun = await tryGenerate(t, {
+  const firstRun = await generateFromRecipe(REPO_ROOT, {
     projectId: project.id,
     groupId: card.id,
     generators: { codex: fakeGenSequence([magentaSheetPng(1), magentaSheetPng(2)]) },
   });
-  if (!firstRun) return;
   const runGroupId = firstRun.run_group_id;
   const stoneRow = firstRun.results.find((r) => r.sheet_axes.material === "stone");
   const woodRow = firstRun.results.find((r) => r.sheet_axes.material === "wood");
@@ -976,8 +904,7 @@ test("generateFromRecipe pack branch: --sheet REPLACES the old sheet (and its sl
   const oldStoneSheetId = stoneRow.elementId;
   const oldWoodSheetId = woodRow.elementId;
 
-  const sliced = await tryPackSlice(t, { projectId: project.id, groupId: card.id, runGroupId });
-  if (!sliced) return;
+  const sliced = await packSlice(REPO_ROOT, { projectId: project.id, groupId: card.id, runGroupId });
   const stoneCutIds = sliced.contract.find((row) => row.sheet_element_id === oldStoneSheetId).cut_ids;
   const woodCutIds = sliced.contract.find((row) => row.sheet_element_id === oldWoodSheetId).cut_ids;
   assert.equal(stoneCutIds.length, 2, "precondition: the stone sheet's two magenta blobs both sliced");
@@ -994,8 +921,7 @@ test("generateFromRecipe pack branch: --sheet REPLACES the old sheet (and its sl
 
   // Force-regen the stone sheet — NO --run passed (FIX 2: resolves recipe.last_run.run_group_id).
   const codex2 = fakeGenSequence([solidPng()]);
-  const forced = await tryGenerate(t, { projectId: project.id, groupId: card.id, sheetSlug: stoneJobName, generators: { codex: codex2 } });
-  if (!forced) return;
+  const forced = await generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, sheetSlug: stoneJobName, generators: { codex: codex2 } });
 
   assert.equal(codex2.calls.length, 1, "the forced sheet regenerates even though its axes already existed in the group");
   assert.equal(forced.results.length, 1);
@@ -1038,10 +964,6 @@ test("generateFromRecipe pack branch: --sheet with no prior pack run at all is l
   } catch (err) {
     error = err;
   }
-  if (error && /venv|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-    t.skip(`pack generate pipeline unavailable: ${error.message}`);
-    return;
-  }
   assert.ok(error, "expected generateFromRecipe to reject");
   assert.match(error.message, /--sheet requires an existing pack run/);
   assert.equal(codex.calls.length, 0, "no generation, no python spawn either");
@@ -1055,8 +977,7 @@ test("generateFromRecipe pack branch: an unknown --sheet slug is loud, no genera
 
   // An unknown slug is only meaningfully distinguishable from "--sheet with no run" once a
   // run actually exists (FIX 2's own gate would otherwise fire first) — establish one.
-  const firstRun = await tryGenerate(t, { projectId: project.id, groupId: card.id, generators: { codex: fakeGenSequence([solidPng(), solidPng()]) } });
-  if (!firstRun) return;
+  const firstRun = await generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, generators: { codex: fakeGenSequence([solidPng(), solidPng()]) } });
 
   const codex = fakeGenSequence([solidPng()]);
   let error;
@@ -1064,10 +985,6 @@ test("generateFromRecipe pack branch: an unknown --sheet slug is loud, no genera
     await generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, sheetSlug: "no-such-sheet", generators: { codex } });
   } catch (err) {
     error = err;
-  }
-  if (error && /venv|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-    t.skip(`pack generate pipeline unavailable: ${error.message}`);
-    return;
   }
   assert.ok(error, "expected generateFromRecipe to reject");
   assert.match(error.message, /does not match any expanded job name/);
@@ -1093,14 +1010,7 @@ test("generateFromRecipe: the single-image branch (recipe.pack === null) is UNCH
 });
 
 // ================================================================================
-// packSlice (T0332 B3, build-spec §4): detectRegions -> hard gate region_count ===
-// cells.length -> sliceRegions per sheet, minimal per-cut meta, reparented into the run
-// group. detectRegions/sliceRegions are REAL (region-detector + crop_regions.py — same
-// skip-without-venv precedent as ops.test.mjs's own sliceRegions tests); no fake seam,
-// since neither is a paid codex/agy call. Fixtures are built directly (createRecipeCard +
-// a hand-built run group + sheet elements carrying meta.pack) rather than through the full
-// generateFromRecipe pack branch, so these tests do not ALSO depend on the expander
-// pipeline — packSlice itself is what is under test here.
+// Locally prepared sheets isolate actual detection and cropping from the generator pipeline.
 // ================================================================================
 
 // A hand-built pack run: a recipe card + a run group carrying pack_run, with one sheet
@@ -1155,35 +1065,6 @@ function seedPackRun(projectId, cardId, sheets) {
   return { runGroup, sheetIds };
 }
 
-// Try one detectRegions call (used ONLY to learn the detector's own region order/geometry
-// for the row-major-zip proof below, a throwaway probe upload — never wired into a pack
-// run itself); returns null on a venv/interpreter miss (the caller then t.skip's).
-async function tryDetectForOrder(t, projectId, elementId) {
-  try {
-    return await detectRegions(REPO_ROOT, { projectId, elementId });
-  } catch (error) {
-    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-      t.skip(`region detector pipeline unavailable: ${error.message}`);
-      return null;
-    }
-    throw error;
-  }
-}
-
-// Try one packSlice call; return the result or null on a venv/interpreter miss (the
-// caller then t.skip's) — mirrors tryPreview/tryGenerate above.
-async function tryPackSlice(t, args) {
-  try {
-    return await packSlice(REPO_ROOT, args);
-  } catch (error) {
-    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-      t.skip(`region detector/crop pipeline unavailable: ${error.message}`);
-      return null;
-    }
-    throw error;
-  }
-}
-
 test("packSlice OK path: region_count === cells.length -> sliced, minimal meta.pack per cut, row-major zip verified by pixel, reparented into the run group", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Pack slice OK" });
@@ -1196,8 +1077,7 @@ test("packSlice OK path: region_count === cells.length -> sliced, minimal meta.p
   // region.content_bbox, not the padded region.rect sliceRegions actually crops from), so
   // content_bbox height alone identifies which source blob a region came from.
   const probe = addImage(REPO_ROOT, project.id, { name: "probe.png", bytes: magentaSheetPng(1) }).element;
-  const detected = await tryDetectForOrder(t, project.id, probe.id);
-  if (!detected) return;
+  const detected = await detectRegions(REPO_ROOT, { projectId: project.id, elementId: probe.id });
   assert.equal(detected.regions.length, 2, "precondition: magentaSheetPng's two blobs both detect");
   const identityOf = (region) => (region.content_bbox[3] >= 22 ? "green" : "red"); // content_bbox = [x,y,w,h], tight
   const cells = detected.regions.map((region, index) => ({ cell: [0, index], axes: { grade: identityOf(region) } }));
@@ -1205,8 +1085,7 @@ test("packSlice OK path: region_count === cells.length -> sliced, minimal meta.p
 
   const { runGroup, sheetIds } = seedPackRun(project.id, card.id, [{ name: "sheet-ok.png", bytesTag: 1, cells }]);
 
-  const result = await tryPackSlice(t, { projectId: project.id, groupId: card.id, runGroupId: runGroup.id });
-  if (!result) return;
+  const result = await packSlice(REPO_ROOT, { projectId: project.id, groupId: card.id, runGroupId: runGroup.id });
 
   assert.equal(result.run_group_id, runGroup.id);
   assert.equal(result.contract.length, 1);
@@ -1267,8 +1146,7 @@ test("packSlice REJECT path: region count mismatch rejects that sheet (got/expec
     { name: "sheet-reject.png", bytesTag: 2, cells: rejectCells },
   ]);
 
-  const result = await tryPackSlice(t, { projectId: project.id, groupId: card.id, runGroupId: runGroup.id });
-  if (!result) return;
+  const result = await packSlice(REPO_ROOT, { projectId: project.id, groupId: card.id, runGroupId: runGroup.id });
 
   assert.equal(result.contract.length, 2, "both sheets get a verdict — the mismatch does not stop the run");
   const okRow = result.contract.find((r) => r.sheet_element_id === sheetIds[0]);
@@ -1303,8 +1181,7 @@ test("packSlice MISSING path: a sheet whose image cannot even be read (corrupt b
   const missingSheet = getProject(REPO_ROOT, project.id).elements.find((el) => el.id === sheetIds[1]);
   writeFileSync(resolveProjectFile(REPO_ROOT, project.id, missingSheet.src), Buffer.from("not a png"));
 
-  const result = await tryPackSlice(t, { projectId: project.id, groupId: card.id, runGroupId: runGroup.id });
-  if (!result) return;
+  const result = await packSlice(REPO_ROOT, { projectId: project.id, groupId: card.id, runGroupId: runGroup.id });
 
   const okRow = result.contract.find((r) => r.sheet_element_id === sheetIds[0]);
   const missingRow = result.contract.find((r) => r.sheet_element_id === sheetIds[1]);
@@ -1377,10 +1254,6 @@ test("CLI recipe-pack-slice: prints one name/verdict/got-expected line per sheet
     stdout = execFileSync(process.execPath, [CLI, "recipe-pack-slice", project.id, "--group", card.id, "--run", runGroup.id], { encoding: "utf8" });
   } catch (error) {
     const message = String((error && error.stderr) || (error && error.message) || "");
-    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(message)) {
-      t.skip(`region detector/crop pipeline unavailable: ${message}`);
-      return;
-    }
     throw error;
   }
   const lines = stdout.trim().split("\n").filter(Boolean);

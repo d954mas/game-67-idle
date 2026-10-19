@@ -84,11 +84,12 @@ export async function rebuildAssetIndex(root, source, options = {}) {
       const modelPath = record.modelPath || modelPathIn(record.filesDir);
       const stats = metadataStats(record.metadataPath);
       const sourceName = record.sourceName || recordSource(record);
-      const cachedPreview = record.preview ? "" : assetPreviewCachePath(root, source, record.asset_id);
-      const previewPath = record.preview || cachedPreview;
+      const explicitPreview = record.preview && existsSync(record.preview) ? record.preview : "";
+      const cachedPreview = explicitPreview ? "" : assetPreviewCachePath(root, source, record.asset_id);
+      const previewPath = explicitPreview || cachedPreview;
       const generatedSourcePath = modelPath || record.metadataPath || "";
       const recordExt = extname(record.metadataPath || record.resource || "").toLowerCase();
-      const previewStatus = record.preview && record.preview !== cachedPreview
+      const previewStatus = explicitPreview && explicitPreview !== cachedPreview
         ? "clean"
         : previewPath === cachedPreview
           ? assetPreviewCacheStatus(root, source, record.asset_id, generatedSourcePath)

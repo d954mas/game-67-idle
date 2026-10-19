@@ -16,7 +16,7 @@ call, but nothing else touches the filesystem. All config problems raise
 SystemExit with a clear message, same idiom as generate_image.py.
 
 Usage:
-  py -3.12 expand_jobs.py --config pack_config.json [--out tmp/packs/x/jobs.json]
+  node ai_studio/dev_environment/python_run.mjs .codex/skills/nt-asset-image-generation/scripts/expand_jobs.py --config pack_config.json [--out tmp/packs/x/jobs.json]
 """
 from __future__ import annotations
 

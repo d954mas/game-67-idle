@@ -33,14 +33,13 @@ function takeValue(argv, index, flag) {
 export function parseArgs(argv) {
   const out = {
     id: "", title: "", storageNamespace: "", template: "", from: "templates/template",
-    root: "", replace: false, private: false, visibility: "", requireVisibility: false,
+    root: "", replace: false, visibility: "", requireVisibility: false,
     publicAlias: "", help: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     if (flag === "--replace") out.replace = true;
     else if (flag === "--force") throw new Error("--force was retired; use explicit --replace");
-    else if (flag === "--private") out.private = true;
     else if (["--id", "--title", "--storage-namespace", "--template", "--from", "--root", "--visibility", "--public-alias"].includes(flag)) {
       const value = takeValue(argv, i, flag);
       i += 1;
@@ -61,11 +60,10 @@ export function parseArgs(argv) {
 
 export function usageText() {
   return [
-    "usage: node games/new_game.mjs [--root <repo>] --id <game-id> [--title <title>] [--storage-namespace <id>] [--visibility public|private] [--template <template-id>|--from <path>] [--private] [--public-alias <safe-name>] [--require-visibility] [--replace]  (lowercase, kebab)",
+    "usage: node games/new_game.mjs [--root <repo>] --id <game-id> [--title <title>] [--storage-namespace <id>] [--visibility public|private] [--template <template-id>|--from <path>] [--public-alias <safe-name>] [--require-visibility] [--replace]  (lowercase, kebab)",
     "",
     "visibility: public registers the game in the parent Studio; private creates a nested private repo.",
     "compatibility: omitting --visibility still creates a public/tracked game; human/Studio flows may require the choice.",
-    "--private is a compatibility alias for --visibility private.",
     "--from accepts a template or an existing private game; game derivatives require private visibility and copy tracked working-tree files only.",
     "--replace atomically replaces an existing destination and rolls it back on failure.",
   ].join("\n");
@@ -75,8 +73,7 @@ export function resolveVisibility(args) {
   if (args.visibility && !["public", "private"].includes(args.visibility)) {
     throw new Error(`invalid --visibility '${args.visibility}' (use public or private)`);
   }
-  if (args.private && args.visibility === "public") throw new Error("--private conflicts with --visibility public");
-  const value = args.private ? "private" : args.visibility;
+  const value = args.visibility;
   if (args.publicAlias && value !== "private") throw new Error("--public-alias is only valid with private visibility");
   if (value) return value;
   if (args.requireVisibility) throw new Error("missing visibility choice: pass --visibility public or --visibility private");

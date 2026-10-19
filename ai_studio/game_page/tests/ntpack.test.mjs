@@ -10,8 +10,6 @@ import { getPackDump, getPackEntryData, getPackEntryDetail } from "../ops.mjs";
 const PACK_HEADER_SIZE = 32;
 const ENTRY_SIZE = 24;
 
-// Synthesizes a v2 pack per shared/include/nt_pack_format.h: header, entry
-// table, then each asset's bytes at its recorded offset.
 function buildPack(assets) {
   const dataStart = PACK_HEADER_SIZE + assets.length * ENTRY_SIZE;
   let cursor = Math.ceil(dataStart / 8) * 8;
@@ -82,6 +80,18 @@ test("parseNtpack rejects wrong magic and wrong version", () => {
   const pack = buildPack([{ id: 1n, type: 4, data: new Uint8Array(4) }]);
   new DataView(pack.buffer).setUint16(8, 9, true);
   assert.throws(() => parseNtpack(pack), /unsupported pack version 9/);
+});
+
+test("parseNtpack identifies animation assets from the current pack format", () => {
+  const pack = buildPack([
+    { id: 1n, type: 7, data: new Uint8Array(4) },
+    { id: 2n, type: 8, data: new Uint8Array(4) },
+    { id: 3n, type: 9, data: new Uint8Array(4) },
+  ]);
+  const dump = parseNtpack(pack, { gzip: false });
+  assert.deepEqual(dump.entries.map((entry) => entry.typeName), ["SKELETON", "SKIN", "CLIP"]);
+  assert.deepEqual(dump.entries.map((entry) => entry.typeTag), ["SKELETON", "SKIN", "CLIP"]);
+  assert.deepEqual(Object.keys(dump.summary), ["SKELETON", "SKIN", "CLIP"]);
 });
 
 test("malformed counts stay inside the buffer instead of throwing", () => {

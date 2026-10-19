@@ -8,8 +8,7 @@
 // previous src + filters + opacity byte-exact, like cleanupApply (both keep the in-place
 // src-swap; alphaCutout since T0336 instead mints a NEW element beside the source). The
 // validation tests (non-image, nothing-to-bake, bad elementId/elementIds shape) need no
-// Python; the pipeline tests run the real warm-worker path and skip cleanly when the
-// studio venv is missing (mirrors alpha.test.mjs/filters.test.mjs).
+// Python; the pipeline tests run the real warm-worker path and require the studio venv.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -168,7 +167,7 @@ test("bakeFilters batch rejects an unknown/non-image element before any write", 
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore, "no journal entry on rejected batch input");
 });
 
-// ---- pipeline (real warm worker; skips without the studio venv) ---------------
+// ---- pipeline (real warm worker) ----------------------------------------------
 
 // Independently-derived (not imported) reimplementation of the SAME canonical formulas
 // filters_math.py's apply_filters implements (README "Image filters") — importing it
@@ -224,7 +223,6 @@ function closeChannel(actual, expected, tol = 1) {
   return Math.abs(actual - expected) <= tol;
 }
 
-const VENV_MISSING = /venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i;
 
 // Create a project with ONE image element carrying the given filters/opacity, and return
 // {projectId, elementId, original, seqBeforeBake} — the shared setup for the pipeline
@@ -269,16 +267,7 @@ test(
     const { projectId, elementId, original, seqBeforeBake } = setupBakeElement(REPO_ROOT, RGBA, { filters, opacity });
     seedAcceptedReview(REPO_ROOT, projectId, [elementId]);
 
-    let result;
-    try {
-      result = await bakeFilters(REPO_ROOT, { projectId, elementId });
-    } catch (error) {
-      if (VENV_MISSING.test(error.message)) {
-        t.skip(`bake pipeline unavailable: ${error.message}`);
-        return;
-      }
-      throw error;
-    }
+    const result = await bakeFilters(REPO_ROOT, { projectId, elementId });
 
     // src swapped to a NEW file; source dims + box preserved (geometry unchanged, regions
     // stay valid — README note).
@@ -324,16 +313,7 @@ test("bakeFilters is ONE journal entry: undo restores previous src + filters + o
     opacity: 0.6,
   });
 
-  let result;
-  try {
-    result = await bakeFilters(REPO_ROOT, { projectId, elementId });
-  } catch (error) {
-    if (VENV_MISSING.test(error.message)) {
-      t.skip(`bake pipeline unavailable: ${error.message}`);
-      return;
-    }
-    throw error;
-  }
+  const result = await bakeFilters(REPO_ROOT, { projectId, elementId });
 
   // The original file is immutable — it still exists on disk with identical bytes.
   const originalAbs = resolveProjectFile(REPO_ROOT, projectId, original.src);
@@ -371,16 +351,7 @@ test("bakeFilters batch (elementIds) bakes 2 images in ONE journal entry; one un
   const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
   const originals = getProject(REPO_ROOT, project.id).elements.map((el) => ({ ...el }));
 
-  let result;
-  try {
-    result = await bakeFilters(REPO_ROOT, { projectId: project.id, elementIds: [e1.id, e2.id] });
-  } catch (error) {
-    if (VENV_MISSING.test(error.message)) {
-      t.skip(`bake pipeline unavailable: ${error.message}`);
-      return;
-    }
-    throw error;
-  }
+  const result = await bakeFilters(REPO_ROOT, { projectId: project.id, elementIds: [e1.id, e2.id] });
 
   // Exactly ONE new journal entry for the WHOLE batch (not one per element).
   const after = getProject(REPO_ROOT, project.id);
@@ -437,25 +408,10 @@ test("render parity: after bake, renderGroup output matches the pre-bake render 
   const filters = { brightness: 1.2, saturation: 0.4, contrast: 1.3, tint: { color: "#0000ff", strength: 0.4 } };
   patchElement(REPO_ROOT, pid, element.id, { filters, opacity: 0.6 });
 
-  let before;
-  try {
-    before = await renderGroup(REPO_ROOT, { projectId: pid, groupId: group.id, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const before = await renderGroup(REPO_ROOT, { projectId: pid, groupId: group.id, scale: 1 });
   const beforePng = decodePng(readFileSync(before.path));
 
-  let baked;
-  try {
-    baked = await bakeFilters(REPO_ROOT, { projectId: pid, elementId: element.id });
-  } catch (error) {
-    if (VENV_MISSING.test(error.message)) {
-      t.skip(`bake pipeline unavailable: ${error.message}`);
-      return;
-    }
-    throw error;
-  }
+  const baked = await bakeFilters(REPO_ROOT, { projectId: pid, elementId: element.id });
   assert.equal("filters" in baked.element, false);
   assert.equal("opacity" in baked.element, false);
 
@@ -475,7 +431,7 @@ test("render parity: after bake, renderGroup output matches the pre-bake render 
   }
 });
 
-// ---- API + CLI parity (real pipeline; skips without the venv) -----------------
+// ---- API + CLI parity (real pipeline) -----------------------------------------
 
 test("filters-bake API route and CLI drive the same op (single)", async (t) => {
   const dir = tempProjects(t);
@@ -493,10 +449,6 @@ test("filters-bake API route and CLI drive the same op (single)", async (t) => {
   };
   const req = mockReq("POST", {});
   await handler(req, res, new URL(`http://x/api/canvas/projects/${project.id}/elements/${element.id}/filters-bake`));
-  if (captured.status === 400 && VENV_MISSING.test(String(captured.body && captured.body.error))) {
-    t.skip(`bake pipeline unavailable: ${captured.body.error}`);
-    return;
-  }
   assert.equal(captured.status, 200, `API filters-bake 200 (got ${captured.status}: ${JSON.stringify(captured.body)})`);
   assert.equal("filters" in captured.body.element, false);
   assert.equal("opacity" in captured.body.element, false);
@@ -535,10 +487,6 @@ test("filters-bake API and CLI both drive elementIds batches, one journal entry 
   };
   const req = mockReq("POST", { elementIds: [e1.id, e2.id] });
   await handler(req, res, new URL(`http://x/api/canvas/projects/${project.id}/filters-bake`));
-  if (captured.status === 400 && VENV_MISSING.test(String(captured.body && captured.body.error))) {
-    t.skip(`bake pipeline unavailable: ${captured.body.error}`);
-    return;
-  }
   assert.equal(captured.status, 200, `API filters-bake batch 200 (got ${captured.status}: ${JSON.stringify(captured.body)})`);
   assert.equal(captured.body.count, 2);
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBeforeApi + 1, "API batch is one journal entry");

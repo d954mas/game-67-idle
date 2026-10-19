@@ -18,6 +18,7 @@ import {
   closeSync,
   existsSync,
   fstatSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -114,8 +115,38 @@ export function projectCachePaths(root, id) {
 
 function writeAtomic(filePath, contents) {
   const tmp = `${filePath}.tmp-${randomUUID().slice(0, 8)}`;
-  writeFileSync(tmp, contents);
-  renameSync(tmp, filePath);
+  const descriptor = openSync(tmp, "wx");
+  let descriptorOpen = true;
+  let identity;
+  try {
+    identity = fstatSync(descriptor, { bigint: true });
+    writeFileSync(descriptor, contents);
+    closeSync(descriptor);
+    descriptorOpen = false;
+    // Windows readers can briefly prevent replacement after the temp write closes.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        renameSync(tmp, filePath);
+        return;
+      } catch (error) {
+        if (!["EACCES", "EBUSY", "EPERM"].includes(error.code) || attempt === 4) throw error;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10 * (attempt + 1));
+      }
+    }
+  } catch (error) {
+    if (descriptorOpen) {
+      try { closeSync(descriptor); } catch {}
+    }
+    try {
+      const remaining = lstatSync(tmp, { bigint: true });
+      if (identity && remaining.dev === identity.dev && remaining.ino === identity.ino) {
+        rmSync(tmp);
+      }
+    } catch {
+      // Cleanup must preserve the original write failure.
+    }
+    throw error;
+  }
 }
 
 function writeProjectFile(root, project) {

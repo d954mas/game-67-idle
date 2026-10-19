@@ -18,10 +18,10 @@ model, or checking a texture. They are not a separate top-level asset group.
 
 - `lib/`: low-level shared Python helpers for asset tools.
 - `image/`: the 2D image pipeline, decomposed per media type over a shared
-  `_bridge` (source intake, background normalization, region detection, slicing,
-  key-matte and dual-plate alpha, routing). Used by agents and the `../canvas/`
-  module: source images in `tmp`, region JSON, sliced images, review sheets, and
-  ZIP/PNG exports.
+  `_bridge` (background normalization, region detection, slicing, key-matte and
+  dual-plate alpha,
+  routing). Used by agents and the `../canvas/` module: source images in `tmp`,
+  region JSON, sliced images, review sheets, and ZIP/PNG exports.
 - `conversion/`: format conversion helpers such as OBJ/MTL to GLB.
 - `model/`: 3D-model preparation and provider integrations. The Meshy client
   under `model/meshy/` is dry-run-first, credit-gated, resumable, and writes
@@ -30,14 +30,6 @@ model, or checking a texture. They are not a separate top-level asset group.
   multiview/texture modes, and records GLB provenance. The local Kimodo adapter
   under `model/kimodo/` generates humanoid motion clips from text and retargets
   them onto a character rig with foot lock.
-- `source_sheets/`: generated UI/icon/sprite source sheet normalization and
-  intake audits before cropping.
-- `crop/`: source-sheet split planning and, later, manual crop-boundary editing.
-- `cutout/`: alpha extraction, key-matte cutout, dual-plate extraction, and
-  transparent-edge cleanup.
-- `review_atlas/`: visual contact-sheet verification helpers used after
-  prepared image outputs exist. This is not engine integration; the engine owns
-  its own asset loading/build pipeline.
 - `textures/`: standalone material texture checks, including 2x2 repeat preview
   generation and seam metrics.
 - `blender/`: fail-closed Blender modeling/lookdev workflow with evaluated-mesh
@@ -46,7 +38,3 @@ model, or checking a texture. They are not a separate top-level asset group.
   holds `vertex_color_bake.py`, the add-on and headless command that bakes a
   sourced model's palette-atlas colour into `COLOR_0` and normalizes it to the
   flat vertex-colour contract games import.
-
-The older `source_sheets/`, `crop/`, `cutout/`, and `review_atlas/` folders
-remain in place until each step is moved into `image/` with tests and callers
-updated.

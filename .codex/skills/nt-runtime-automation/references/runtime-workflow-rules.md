@@ -24,8 +24,9 @@ or changing the local automation helpers.
 ## Shared Helpers
 
 - `ai_studio/runtime_automation/devapi_client.py`: Python client, launch/reuse,
-  frame waits, engine-native screenshot capture, recordings, and convenience
-  helpers.
+  frame waits, engine-native screenshot capture, and convenience helpers.
+- `ai_studio/runtime_automation/capture_game.py`: catalog-selected game capture
+  through the shared OBS recorder.
 - `ai_studio/runtime_automation/devapi_cli.py`: one-shot JSON command client.
 - `ai_studio/runtime_automation/iterate.py`: native visual iteration loop.
 - `ai_studio/runtime_automation/state_capture.py`: multi-state screenshot

@@ -14,7 +14,7 @@ Jobs file: a JSON array (or {"jobs": [...]}) of objects:
    "model"?, "background"?, "input_image"? [paths], "name"? }
 
 Usage:
-  py -3.12 gen_batch.py --jobs jobs.json [--concurrency 3] [--force] [--dry-run]
+  node ai_studio/dev_environment/python_run.mjs .codex/skills/nt-asset-image-generation/scripts/gen_batch.py --jobs jobs.json [--concurrency 3] [--force] [--dry-run]
                         [--generator <path to generate_image.py>]
 """
 from __future__ import annotations

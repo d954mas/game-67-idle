@@ -59,9 +59,9 @@ Python helpers live in `ai_studio/runtime_automation/devapi_client.py`.
 
 ## Capture
 
-Use engine-native `capture.frame` / `capture.region` when available; current
-engine captures return base64 PNG payloads with width, height, and format
-metadata. External capture is a fallback for games without native capture.
+Use engine-native `capture.frame` / `capture.region`. Captures return base64
+PNG payloads with width, height, and format metadata; errors fail the capture.
+Use `capture_window.py` explicitly for operating-system window evidence.
 
 Use the same observe/act/wait rhythm before:
 

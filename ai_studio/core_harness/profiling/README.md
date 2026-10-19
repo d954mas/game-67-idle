@@ -108,7 +108,7 @@ its README owns the required Python 3.12 bootstrap command.
 - `codex_transcript.mjs`: canonical Codex rollout resolver and normalizer.
 - `status.mjs`: lightweight or complete session report renderer.
 - `agent_rollup.mjs`: optional subagent transcript rollup.
-- `profile_lib.mjs`: shared JSONL/profile helpers.
+- `profile_lib.mjs`: session-log readers and CLI argument helpers.
 - `tests/profiling.test.mjs`: focused profiling tests.
 
 Session-retrospective instructions live in

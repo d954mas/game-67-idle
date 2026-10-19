@@ -124,7 +124,6 @@ const CHECKS = Object.freeze([
     ],
   },
   { id: "studio.skills.python", pythonRoots: [".codex/skills"] },
-  { id: "studio.game-page", testRoots: ["ai_studio/game_page"] },
   { id: "studio.dev-environment", testRoots: ["ai_studio/dev_environment"] },
   { id: "studio.quality", testRoots: ["ai_studio/quality"] },
   {
@@ -137,7 +136,7 @@ const CHECKS = Object.freeze([
     commandsByPlatform: { linux: [RUNTIME_LINUX_ITERATE] },
     releaseOnly: true,
   },
-  { id: "studio.shell", testRoots: ["ai_studio/studio_shell"] },
+  { id: "studio.shell", testRoots: ["ai_studio/studio_shell", "ai_studio/game_page"] },
   {
     id: "studio.taskboard",
     testRoots: ["ai_studio/taskboard"],
@@ -260,7 +259,7 @@ function domainForPath(path) {
   if (path.startsWith("ai_studio/assets/")) return "assets";
   if (path.startsWith("ai_studio/game_design/")) return "design";
   if (path.startsWith("ai_studio/runtime_automation/")) return "runtime";
-  if (path.startsWith("ai_studio/studio_shell/")) return "shell";
+  if (path.startsWith("ai_studio/studio_shell/") || path.startsWith("ai_studio/game_page/")) return "shell";
   if (path.startsWith("ai_studio/taskboard/")) return "work-management";
   if (path.startsWith("ai_studio/workspace/")) return "workspace";
   if (path.startsWith("ai_studio/feature_testing/")) return "features";

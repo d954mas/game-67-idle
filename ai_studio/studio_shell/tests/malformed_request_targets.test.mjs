@@ -145,10 +145,14 @@ test("malformed percent-encoded request targets return 400 without killing studi
     assert.equal(rootResponse.status, 200);
     const encodedStaticResponse = parseResponse(await rawGet(port, "/ai_studio/studio_shell/index%2Ehtml", `127.0.0.1:${port}`, deadline));
     assert.equal(encodedStaticResponse.status, 200, "valid encoded static paths must keep working");
-    for (const target of ["/asset_viewer/studio_env.hdr", "/viewer/studio_env.hdr"]) {
+    for (const target of ["/asset_viewer/studio_env.hdr"]) {
       const previewResponse = parseResponse(await rawGet(port, target, `127.0.0.1:${port}`, deadline));
       assert.equal(previewResponse.status, 200, `${target} must use the owned assets/previews store`);
       assert.ok(previewResponse.body.length > 0, `${target} must serve the committed HDR`);
+    }
+    for (const target of ["/viewer", "/viewer/", "/viewer/studio_env.hdr", "/viewer/viewer.js"]) {
+      const retiredResponse = parseResponse(await rawGet(port, target, `127.0.0.1:${port}`, deadline));
+      assert.equal(retiredResponse.status, 404, `${target} is retired`);
     }
     const literalPercentResponse = parseResponse(await rawGet(port, "/%25", `127.0.0.1:${port}`, deadline));
     assert.equal(literalPercentResponse.status, 404, "valid percent encoding must not be rejected as malformed");

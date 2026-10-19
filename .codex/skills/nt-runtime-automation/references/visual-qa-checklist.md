@@ -31,5 +31,7 @@ This checklist only helps collect runtime evidence.
 ```powershell
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/pixel_health.py tmp/captures/screenshot.png
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/ui_readability.py tmp/captures/screenshot.png
-node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/state_capture.py --help
 ```
+
+For multi-state evidence, use the `StateCapture` Python helper in
+`ai_studio/runtime_automation/state_capture.py`.

@@ -3,8 +3,8 @@
 //   node --test ai_studio/assets/canvas/tests/export.test.mjs
 //
 // The pixel/encode assertions drive the real PIL tool (tools/export_images.py) and
-// the screen compositor (tools/render_group.py); those tests skip cleanly with a
-// clear message when the studio Python venv / Pillow is unavailable. The settings
+// the screen compositor (tools/render_group.py); those tests require the studio Python
+// venv and Pillow. The settings
 // op, scale parsing, byte-identical copy, and CLI --to paths need no Python.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -180,26 +180,20 @@ test("exportElements copies a 1x-png export byte-identically (no Python needed)"
   assert.equal(result.manifest.schema, "ai_studio.canvas.export.v1");
 });
 
-test("exportElements scales to the requested pixels per format (skips without Python)", async (t) => {
+test("exportElements scales to the requested pixels per format", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Scale" });
   const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() }); // 64x48
 
-  let result;
-  try {
-    result = await exportElements(REPO_ROOT, {
-      projectId: project.id,
-      elementIds: [element.id],
-      rows: [
-        { scale: "2x", format: "png" },
-        { scale: "0.5x", format: "png" },
-        { scale: "128w", format: "png" },
-      ],
-    });
-  } catch (error) {
-    t.skip(`export_images.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await exportElements(REPO_ROOT, {
+    projectId: project.id,
+    elementIds: [element.id],
+    rows: [
+      { scale: "2x", format: "png" },
+      { scale: "0.5x", format: "png" },
+      { scale: "128w", format: "png" },
+    ],
+  });
 
   // Several rows on one element -> automatic Figma scale markers (T0229): @2x, @0.5x, @128w.
   const base = slugName("sheet.png");
@@ -214,7 +208,7 @@ test("exportElements scales to the requested pixels per format (skips without Py
   assert.deepEqual([byName[`${base}@2x.png`].w, byName[`${base}@2x.png`].h], [128, 96]);
 });
 
-test("exportElements JPEG/WebP quality changes the encoded file size (skips without Python)", async (t) => {
+test("exportElements JPEG/WebP quality changes the encoded file size", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Quality" });
   // Without a suffix column (T0229), distinct file names come from distinct element names;
@@ -226,13 +220,7 @@ test("exportElements JPEG/WebP quality changes the encoded file size (skips with
   setExportSettings(REPO_ROOT, { projectId: project.id, elementId: lo.id, rows: [{ scale: "1x", format: "jpg", quality: 12 }] });
   setExportSettings(REPO_ROOT, { projectId: project.id, elementId: wp.id, rows: [{ scale: "1x", format: "webp", quality: 90 }] });
 
-  let result;
-  try {
-    result = await exportElements(REPO_ROOT, { projectId: project.id, elementIds: [hi.id, lo.id, wp.id] });
-  } catch (error) {
-    t.skip(`export_images.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await exportElements(REPO_ROOT, { projectId: project.id, elementIds: [hi.id, lo.id, wp.id] });
 
   const size = (file) => statSync(join(result.folder, file)).size;
   assert.ok(size(`${slugName("lo.png")}.jpg`) < size(`${slugName("hi.png")}.jpg`), "lower JPEG quality = smaller file");
@@ -299,20 +287,14 @@ test("exportElements: canvas-base on a RESIZED element produces on-canvas pixels
   const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() }); // 64x48 source
   patchElement(REPO_ROOT, project.id, element.id, { w: 32, h: 24 }); // resized on canvas; source_w/h untouched
 
-  let result;
-  try {
-    result = await exportElements(REPO_ROOT, {
-      projectId: project.id,
-      elementIds: [element.id],
-      rows: [
-        { scale: "1x", format: "png" }, // default base "canvas"
-        { scale: "1x", format: "png", base: "source" },
-      ],
-    });
-  } catch (error) {
-    t.skip(`export_images.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await exportElements(REPO_ROOT, {
+    projectId: project.id,
+    elementIds: [element.id],
+    rows: [
+      { scale: "1x", format: "png" }, // default base "canvas"
+      { scale: "1x", format: "png", base: "source" },
+    ],
+  });
 
   const byBase = Object.fromEntries(result.items.map((item) => [item.base, item]));
   assert.deepEqual([byBase.canvas.w, byBase.canvas.h], [32, 24], "canvas base resolves against the resized on-canvas size");
@@ -350,7 +332,7 @@ test("exportElements: a canvas-base row on a zero-size element throws loudly", a
 
 // ---- project-level export ----------------------------------------------------
 
-test("exportProject renders every visible screen into one folder (skips without Python)", async (t) => {
+test("exportProject renders every visible screen into one folder", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Project export" });
   const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
@@ -359,13 +341,7 @@ test("exportProject renders every visible screen into one folder (skips without 
   // created group does not export until ticked (group-set --screen true).
   group = patchGroup(REPO_ROOT, { projectId: project.id, groupId: group.id, screen: true }).group;
 
-  let result;
-  try {
-    result = await exportProject(REPO_ROOT, { projectId: project.id });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await exportProject(REPO_ROOT, { projectId: project.id });
 
   assert.equal(result.manifest.kind, "project");
   assert.equal(result.screens.length, 1);
@@ -378,7 +354,7 @@ test("exportProject renders every visible screen into one folder (skips without 
   await assert.rejects(() => exportProject(REPO_ROOT, { projectId: empty.id }), /no visible screens/);
 });
 
-test("exportProject: T0332 B1 opt-in inversion — a top-level visible group WITHOUT screen:true does not export, even though it has no recipe/style/pack_run blob (skips without Python)", async (t) => {
+test("exportProject: a top-level visible group without screen:true does not export, even though it has no recipe/style/pack_run blob", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Opt-in inversion" });
   const { element: a } = addImage(REPO_ROOT, project.id, { name: "a.png", bytes: magentaSheetPng() });
@@ -387,13 +363,7 @@ test("exportProject: T0332 B1 opt-in inversion — a top-level visible group WIT
   let flagged = createGroup(REPO_ROOT, { projectId: project.id, name: "Flagged", fromElements: [b.id] }).group;
   flagged = patchGroup(REPO_ROOT, { projectId: project.id, groupId: flagged.id, screen: true }).group;
 
-  let result;
-  try {
-    result = await exportProject(REPO_ROOT, { projectId: project.id });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await exportProject(REPO_ROOT, { projectId: project.id });
   assert.equal(result.screens.length, 1, "only the screen:true group exports");
   assert.equal(result.screens[0].groupId, flagged.id);
 

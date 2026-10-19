@@ -1,5 +1,5 @@
 // Studio-side ntpack reader. Mirrors the engine's shared/include/nt_pack_format.h
-// (pack v2) and nt_builder_dump's derived facts (texture format sniff, gzip
+// and nt_builder_dump's derived facts (texture format sniff, gzip
 // size estimate, duplicate detection) without touching the engine.
 import { gzipSync } from "node:zlib";
 
@@ -19,6 +19,9 @@ export const ASSET_TYPE_NAMES = {
   4: "BLOB",
   5: "FONT",
   6: "ATLAS",
+  7: "SKELETON",
+  8: "SKIN",
+  9: "CLIP",
 };
 
 function textureFormatTag(view, offset, size) {

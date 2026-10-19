@@ -3,7 +3,7 @@
 // are work annotations, NOT render content — renderGroup/exportProject skip them and
 // exportElements refuses them. These mirror text.test.mjs: the metadata ops (defaults +
 // validation, patch + undo, export exclusion, CLI parity, copy/paste) need no Python; the
-// render-exclusion test drives render_group.py / PIL and skips cleanly when it is unavailable.
+// render-exclusion test drives render_group.py / PIL.
 // addNote reads the bundled fonts.json from the repo root, so all tests use the REAL repo
 // root as the ops root and only redirect the PROJECTS dir.
 // Run: node --test ai_studio/assets/canvas/tests/note.test.mjs
@@ -206,7 +206,7 @@ test("copy/paste (duplicateNodes) keeps a note's content + style + background", 
   assert.deepEqual(copy.background, { type: "color", color: "#ffd6e0" });
 });
 
-// ---- render exclusion (PIL; skips cleanly without Python) --------------------
+// ---- render exclusion ---------------------------------------------------------
 
 function seedImageScreen(root) {
   const project = createProject(root, { title: "Screen" });
@@ -221,13 +221,7 @@ test("renderGroup excludes notes: a group WITH a note renders pixel-equal to WIT
   tempProjects(t);
   const { projectId, groupId } = seedImageScreen(REPO_ROOT);
 
-  let without;
-  try {
-    without = await renderGroup(REPO_ROOT, { projectId, groupId, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const without = await renderGroup(REPO_ROOT, { projectId, groupId, scale: 1 });
   const pngWithout = decodePng(readFileSync(without.path));
 
   // Add a fully-overlapping note INSIDE the group, then render again.

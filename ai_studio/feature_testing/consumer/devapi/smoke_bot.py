@@ -82,22 +82,6 @@ def default_executable(game_root: Path = GAME_ROOT) -> Path:
     return candidates[0]
 
 
-def extract_endpoint_methods(listing: Any) -> set[str]:
-    methods: set[str] = set()
-    if isinstance(listing, dict) and isinstance(listing.get("commands"), list):
-        items = listing["commands"]
-    elif isinstance(listing, list):
-        items = listing
-    else:
-        return methods
-
-    for item in items:
-        method = item.get("method") if isinstance(item, dict) else item
-        if isinstance(method, str):
-            methods.add(method)
-    return methods
-
-
 def missing_required_methods(methods: set[str]) -> list[str]:
     return sorted(REQUIRED_METHODS - methods)
 
@@ -206,8 +190,7 @@ def wait_for_ui_id(game: Any, element_id: str, *, max_frames: int = 90, stride: 
 def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]:
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    endpoint_listing = game.result("endpoints")
-    methods = extract_endpoint_methods(endpoint_listing)
+    methods = game.endpoint_methods()
     missing = missing_required_methods(methods)
     if missing:
         raise DevApiError(f"missing required DevAPI methods: {', '.join(missing)}")

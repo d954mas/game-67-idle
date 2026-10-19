@@ -14,8 +14,8 @@
 // The public HTTP contract for the frozen viewer keeps the historical
 // `tmp/ai_studio/assets/raster2d/` prefix (see `namespace` default below); new
 // tools may pass a different namespace, but the raster2d endpoints must not move.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { extname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { dirname, extname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 
 import { studioPythonPath } from "../../../../dev_environment/python.mjs";
 import { runPythonScript, shutdownImageWorkers } from "./worker.mjs";
@@ -53,23 +53,113 @@ export function tmpRoot(root, namespace = "raster2d") {
   return join(root, "tmp", "ai_studio", "assets", namespace);
 }
 
+function samePhysicalPath(left, right) {
+  if (process.platform === "win32") return left.toLowerCase() === right.toLowerCase();
+  return left === right;
+}
+
+function isInsidePhysicalPath(base, value) {
+  if (samePhysicalPath(base, value)) return true;
+  const prefix = base.endsWith(sep) ? base : base + sep;
+  return process.platform === "win32"
+    ? value.toLowerCase().startsWith(prefix.toLowerCase())
+    : value.startsWith(prefix);
+}
+
+function physicalTmpNamespace(root, namespace, create) {
+  const lexicalRoot = resolve(root);
+  let physicalRoot;
+  try {
+    physicalRoot = realpathSync.native(lexicalRoot);
+  } catch {
+    throw new Error("repository root must be a physical directory");
+  }
+
+  if (!/^[a-zA-Z0-9_.-]+$/.test(namespace) || namespace === "." || namespace === "..") {
+    throw new Error("invalid asset tool namespace");
+  }
+
+  const physicalAssetsRoot = join(physicalRoot, "tmp", "ai_studio", "assets");
+  const expectedBase = join(physicalAssetsRoot, namespace);
+  if (create) {
+    let current = physicalRoot;
+    for (const part of ["tmp", "ai_studio", "assets", namespace]) {
+      current = join(current, part);
+      if (!existsSync(current)) mkdirSync(current, { recursive: false });
+      let physicalCurrent;
+      try {
+        physicalCurrent = realpathSync.native(current);
+      } catch {
+        throw new Error("asset tool tmp directory cannot be verified");
+      }
+      if (!samePhysicalPath(current, physicalCurrent)) {
+        throw new Error("asset tool tmp directory must be a physical directory");
+      }
+    }
+  }
+
+  const lexicalBase = resolve(tmpRoot(root, namespace));
+  let physicalBase;
+  try {
+    physicalBase = realpathSync.native(lexicalBase);
+  } catch {
+    throw new Error("asset tool tmp directory cannot be verified");
+  }
+  if (!samePhysicalPath(expectedBase, physicalBase)) {
+    throw new Error("asset tool tmp directory must stay inside the physical repository");
+  }
+  return { lexicalBase, physicalBase };
+}
+
+function assertPhysicalPathInside(base, path) {
+  let ancestor = path;
+  while (true) {
+    try {
+      lstatSync(ancestor);
+      break;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw new Error("asset tool path cannot be verified");
+    }
+    const parent = dirname(ancestor);
+    if (parent === ancestor) throw new Error("asset tool path cannot be verified");
+    ancestor = parent;
+  }
+  let physicalAncestor;
+  try {
+    physicalAncestor = realpathSync.native(ancestor);
+  } catch {
+    throw new Error("asset tool path cannot be verified");
+  }
+  if (!isInsidePhysicalPath(base, physicalAncestor)) {
+    throw new Error("asset tool path must stay inside the physical tmp directory");
+  }
+}
+
+export function ensureTmpNamespace(root, namespace = "raster2d") {
+  return physicalTmpNamespace(root, namespace, true).lexicalBase;
+}
+
 export function ensureInsideTmp(root, pathValue, namespace = "raster2d") {
   if (!pathValue) throw new Error("missing tmp path");
   const resolved = safeResolve(root, pathValue);
   if (!resolved) throw new Error("path must stay inside repository");
-  const base = resolve(tmpRoot(root, namespace));
+  const { lexicalBase: base, physicalBase } = physicalTmpNamespace(root, namespace, false);
   if (resolved !== base && !resolved.startsWith(base + sep)) {
     throw new Error(`asset tool files must stay under tmp/ai_studio/assets/${namespace}`);
   }
+  assertPhysicalPathInside(physicalBase, resolved);
   return resolved;
 }
 
 export function sessionDirForPath(root, absPath, namespace = "raster2d") {
-  const base = resolve(tmpRoot(root, namespace));
-  const rel = relative(base, absPath);
+  const abs = ensureInsideTmp(root, absPath, namespace);
+  const { lexicalBase: base, physicalBase } = physicalTmpNamespace(root, namespace, false);
+  const rel = relative(base, abs);
   const [session] = rel.split(sep);
   if (!session || session.startsWith("..")) throw new Error(`invalid ${namespace} session path`);
-  return join(base, session);
+  const sessionDir = join(base, session);
+  assertPhysicalPathInside(physicalBase, sessionDir);
+  return sessionDir;
 }
 
 export function workspaceRel(root, absPath) {

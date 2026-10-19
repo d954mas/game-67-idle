@@ -1,6 +1,5 @@
 // Group (screen) ops tests. The metadata-only ops need no Python; the two render
-// tests drive our render_group.py compositor and skip cleanly when Python/PIL is
-// unavailable. Run:
+// tests drive our render_group.py compositor. Run:
 //   node --test ai_studio/assets/canvas/tests/groups.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -353,19 +352,13 @@ test("fitGroup is one journal entry; undo restores the old frame; works with cli
   assert.equal(g.clip, true, "clip survives undo");
 });
 
-test("renderGroup fills group.background and an explicit arg overrides it (skips without Python)", async (t) => {
+test("renderGroup fills group.background and an explicit arg overrides it", async (t) => {
   tempProjects(t);
   const { projectId, red, green } = seedScreen(REPO_ROOT);
   const { group } = createGroup(REPO_ROOT, { projectId, name: "BG", fromElements: [red.id, green.id] });
   patchGroup(REPO_ROOT, { projectId, groupId: group.id, background: { type: "color", color: "#112233" } });
 
-  let result;
-  try {
-    result = await renderGroup(REPO_ROOT, { projectId, groupId: group.id, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  let result = await renderGroup(REPO_ROOT, { projectId, groupId: group.id, scale: 1 });
   // group.background composited as the bottom fill (no explicit arg). (1,1) is a
   // corner of the padded group box, well outside every member.
   let png = decodePng(readFileSync(result.path));
@@ -377,18 +370,12 @@ test("renderGroup fills group.background and an explicit arg overrides it (skips
   assert.deepEqual(png.at(1, 1), [68, 85, 102, 255], "explicit arg overrides group.background");
 });
 
-test("renderGroup composites members at the right pixels (skips without Python)", async (t) => {
+test("renderGroup composites members at the right pixels", async (t) => {
   tempProjects(t);
   const { projectId, red, green } = seedScreen(REPO_ROOT);
   const { group } = createGroup(REPO_ROOT, { projectId, name: "Main Menu", fromElements: [red.id, green.id] });
 
-  let result;
-  try {
-    result = await renderGroup(REPO_ROOT, { projectId, groupId: group.id, scale: 2, background: "#1a1f2b" });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await renderGroup(REPO_ROOT, { projectId, groupId: group.id, scale: 2, background: "#1a1f2b" });
   assert.equal(result.manifest.kind, "screen");
   assert.deepEqual([result.manifest.width, result.manifest.height], [148, 128]);
 
@@ -400,20 +387,14 @@ test("renderGroup composites members at the right pixels (skips without Python)"
   assert.deepEqual(png.at(92, 72), [40, 180, 60, 255], "green member");
 });
 
-test("renderGroup omits hidden members and honors transparent background (skips without Python)", async (t) => {
+test("renderGroup omits hidden members and honors transparent background", async (t) => {
   tempProjects(t);
   const { projectId, red, green } = seedScreen(REPO_ROOT);
   const { group } = createGroup(REPO_ROOT, { projectId, name: "Screen", fromElements: [red.id, green.id] });
 
   // Hide the green element, render with a transparent background.
   patchElement(REPO_ROOT, projectId, green.id, { visible: false });
-  let result;
-  try {
-    result = await renderGroup(REPO_ROOT, { projectId, groupId: group.id, scale: 2 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await renderGroup(REPO_ROOT, { projectId, groupId: group.id, scale: 2 });
   assert.equal(result.members, 1, "only the visible member is composited");
 
   const png = decodePng(readFileSync(result.path));

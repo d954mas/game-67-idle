@@ -2,7 +2,8 @@
 //   node --test ai_studio/assets/canvas/tests/store.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import fs, { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -36,6 +37,120 @@ function tempProjects(t) {
 }
 
 const ROOT = "C:/unused-repo-root";
+
+function interceptProjectRename(t, replacement) {
+  const original = fs.renameSync;
+  const mocked = t.mock.method(fs, "renameSync", (source, destination) =>
+    String(destination).endsWith("project.json") ? replacement(source, destination, original) : original(source, destination),
+  );
+  syncBuiltinESMExports();
+  t.after(() => {
+    mocked.mock.restore();
+    syncBuiltinESMExports();
+  });
+  t.mock.method(Atomics, "wait", () => "timed-out");
+}
+
+for (const code of ["EPERM", "EACCES", "EBUSY"]) {
+  test(`project writes recover from transient ${code} rename failures`, (t) => {
+    tempProjects(t);
+    const project = createProject(ROOT, { title: "Before" });
+    let calls = 0;
+    interceptProjectRename(t, (source, destination, original) => {
+      if (++calls <= 2) throw Object.assign(new Error("temporary sharing lock"), { code });
+      return original(source, destination);
+    });
+    updateProject(ROOT, project.id, { title: "After" });
+    assert.equal(getProject(ROOT, project.id).title, "After");
+    assert.ok(calls >= 3);
+  });
+}
+
+for (const code of ["EPERM", "EIO"]) {
+  test(`failed ${code} project replacement preserves the prior file and removes its temp`, (t) => {
+    const root = tempProjects(t);
+    const project = createProject(ROOT, { title: "Before" });
+    const failure = Object.assign(new Error("rename refused"), { code });
+    let calls = 0;
+    interceptProjectRename(t, () => { calls += 1; throw failure; });
+    assert.throws(() => updateProject(ROOT, project.id, { title: "After" }), (error) => error === failure);
+    assert.equal(getProject(ROOT, project.id).title, "Before");
+    assert.deepEqual(readdirSync(join(root, project.id)).filter((name) => name.startsWith("project.json.tmp-")), []);
+    if (code === "EIO") assert.equal(calls, 1);
+    else assert.ok(calls > 1 && calls < 20, "transient failure retries must be bounded");
+  });
+}
+
+test("successful project replacement leaves a newly created source path untouched", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Before" });
+  let reusedPath;
+  interceptProjectRename(t, (source, destination, original) => {
+    original(source, destination);
+    reusedPath = source;
+    writeFileSync(source, "another writer");
+  });
+  updateProject(ROOT, project.id, { title: "After" });
+  assert.equal(getProject(ROOT, project.id).title, "After");
+  assert.equal(readFileSync(reusedPath, "utf8"), "another writer");
+});
+
+test("failed project replacement leaves a substituted temp file untouched", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Before" });
+  const failure = Object.assign(new Error("rename refused"), { code: "EIO" });
+  let reusedPath;
+  interceptProjectRename(t, (source, destination, original) => {
+    original(source, `${source}.original`);
+    reusedPath = source;
+    writeFileSync(source, "another writer");
+    throw failure;
+  });
+  assert.throws(() => updateProject(ROOT, project.id, { title: "After" }), (error) => error === failure);
+  assert.equal(getProject(ROOT, project.id).title, "Before");
+  assert.equal(readFileSync(reusedPath, "utf8"), "another writer");
+});
+
+test("failed project writes preserve the prior file and remove their partial temp", (t) => {
+  const root = tempProjects(t);
+  const project = createProject(ROOT, { title: "Before" });
+  const failure = Object.assign(new Error("disk full"), { code: "ENOSPC" });
+  const original = fs.writeFileSync;
+  const mocked = t.mock.method(fs, "writeFileSync", (target, ...args) => {
+    if (typeof target !== "number") return original(target, ...args);
+    original(target, "partial");
+    throw failure;
+  });
+  syncBuiltinESMExports();
+  try {
+    assert.throws(() => updateProject(ROOT, project.id, { title: "After" }), (error) => error === failure);
+    assert.equal(getProject(ROOT, project.id).title, "Before");
+    assert.deepEqual(readdirSync(join(root, project.id)).filter((name) => name.startsWith("project.json.tmp-")), []);
+  } finally {
+    mocked.mock.restore();
+    syncBuiltinESMExports();
+  }
+});
+
+test("failed temp cleanup preserves the original project write error", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Before" });
+  const failure = Object.assign(new Error("rename refused"), { code: "EIO" });
+  interceptProjectRename(t, () => { throw failure; });
+  const original = fs.rmSync;
+  const mocked = t.mock.method(fs, "rmSync", (target, ...args) => {
+    if (String(target).includes("project.json.tmp-")) throw Object.assign(new Error("cleanup refused"), { code: "EPERM" });
+    return original(target, ...args);
+  });
+  syncBuiltinESMExports();
+  try {
+    assert.throws(() => updateProject(ROOT, project.id, { title: "After" }), (error) => error === failure);
+    assert.equal(getProject(ROOT, project.id).title, "Before");
+  } finally {
+    mocked.mock.restore();
+    syncBuiltinESMExports();
+  }
+});
 
 test("imageSize reads PNG header dimensions", () => {
   assert.deepEqual(imageSize(solidPng(7, 5)), { width: 7, height: 5 });

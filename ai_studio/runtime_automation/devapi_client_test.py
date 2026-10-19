@@ -15,7 +15,6 @@ from devapi_client import (
     connect_existing,
     pick_free_port,
     resolve_launch_port,
-    run_capture_screenshot,
     running_game,
     write_engine_capture_payload_png,
 )
@@ -28,7 +27,7 @@ class FakeDevApiClient(DevApiClient):
     def result(self, method, params=None):
         self.calls.append(("result", method, params or {}))
         if method == "endpoints":
-            return {"commands": [{"method": "ui.tree"}, {"method": 42}, {"group": "bad"}, "legacy.ping"]}
+            return {"commands": [{"method": "ui.tree"}, {"method": 42}, {"group": "bad"}, "malformed.command"]}
         if method == "frame.current":
             return {"frame": 12}
         if method == "game.state":
@@ -38,42 +37,6 @@ class FakeDevApiClient(DevApiClient):
     def wait_frames(self, frames=1):
         self.calls.append(("wait_frames", frames, {}))
         return {"frame": 11}
-
-
-class CaptureScreenshotProcessTest(unittest.TestCase):
-    def test_window_capture_has_bounded_timeout(self):
-        with mock.patch("devapi_client.os.name", "nt"), mock.patch(
-            "devapi_client.os.path.exists", return_value=True
-        ), mock.patch(
-            "devapi_client.subprocess.run",
-            side_effect=subprocess.TimeoutExpired(["capture"], 3.0),
-        ) as runner:
-            with self.assertRaisesRegex(DevApiError, "timed out after 3.0s"):
-                run_capture_screenshot(timeout_seconds=3.0)
-
-        self.assertEqual(runner.call_args.kwargs["timeout"], 3.0)
-
-    def test_window_capture_launch_error_is_normalized(self):
-        with mock.patch("devapi_client.os.name", "nt"), mock.patch(
-            "devapi_client.os.path.exists", return_value=True
-        ), mock.patch(
-            "devapi_client.subprocess.run",
-            side_effect=OSError("launch denied"),
-        ):
-            with self.assertRaisesRegex(DevApiError, "could not launch"):
-                run_capture_screenshot()
-
-    def test_powershell_fallback_uses_same_timeout(self):
-        with mock.patch("devapi_client.os.name", "nt"), mock.patch(
-            "devapi_client.os.path.exists", return_value=False
-        ), mock.patch(
-            "devapi_client.subprocess.run",
-            side_effect=subprocess.TimeoutExpired(["powershell"], 4.0),
-        ) as runner:
-            with self.assertRaisesRegex(DevApiError, "timed out after 4.0s"):
-                run_capture_screenshot(timeout_seconds=4.0)
-
-        self.assertEqual(runner.call_args.kwargs["timeout"], 4.0)
 
 
 class DuplexResponseFile:
@@ -208,7 +171,32 @@ class EngineCapturePayloadTest(unittest.TestCase):
 
     def test_endpoint_methods_flattens_engine_command_listing(self):
         client = FakeDevApiClient()
-        self.assertEqual(client.endpoint_methods(), {"ui.tree", "legacy.ping"})
+        self.assertEqual(client.endpoint_methods(), {"ui.tree"})
+
+    def test_endpoint_methods_rejects_non_engine_listing_shapes(self):
+        client = FakeDevApiClient()
+        for listing in ([{"method": "ui.tree"}], {}, {"commands": "ui.tree"}):
+            with self.subTest(listing=listing):
+                with mock.patch.object(client, "result", return_value=listing):
+                    with self.assertRaisesRegex(DevApiError, "invalid command listing"):
+                        client.endpoint_methods()
+
+    def test_capture_screenshot_preserves_engine_failure(self):
+        client = FakeDevApiClient()
+        client.process_id = 123
+        with mock.patch.object(client, "capture_framebuffer", side_effect=DevApiError("engine capture failed")), \
+             mock.patch("devapi_client.subprocess.run") as platform_capture:
+            with self.assertRaisesRegex(DevApiError, "engine capture failed"):
+                client.capture_screenshot(wait_frames=0)
+        platform_capture.assert_not_called()
+
+    def test_capture_framebuffer_preserves_unknown_method_error(self):
+        client = FakeDevApiClient()
+        client.request = mock.Mock(return_value={"ok": False, "error": {"code": "unknown_method"}})
+        with mock.patch("devapi_client.ensure_output_dir", return_value="shot.png"):
+            with self.assertRaisesRegex(DevApiError, "capture.frame failed"):
+                client.capture_framebuffer()
+        client.request.assert_called_once_with("capture.frame", {})
 
     def test_click_ui_defaults_to_engine_owned_frame_observation(self):
         client = FakeDevApiClient()

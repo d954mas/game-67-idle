@@ -16,20 +16,6 @@ const THRESHOLDS = {
   max_empty_margin_ratio: 0.5,
   aspect_ratio: { width: 1, height: 1, max_relative_error: 0.05 },
 };
-const VENV_MISSING = /venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i;
-
-async function runOrSkip(t, args) {
-  try {
-    return await runAssetQualityGate(ROOT, args);
-  } catch (error) {
-    if (VENV_MISSING.test(error.message)) {
-      t.skip(`asset quality gate unavailable: ${error.message}`);
-      return null;
-    }
-    throw error;
-  }
-}
-
 test("Node quality-gate adapter returns PASS and fail reports, preserving only failed thumbnails", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "quality-gate-api-test-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -40,13 +26,11 @@ test("Node quality-gate adapter returns PASS and fail reports, preserving only f
   ), { alpha: true }));
   writeFileSync(brokenPath, solidPng(32, 32, [180, 110, 40]));
 
-  const clean = await runOrSkip(t, { sourcePath: cleanPath, keyColor: "#FF00FF", thresholds: THRESHOLDS });
-  if (!clean) return;
+  const clean = await runAssetQualityGate(ROOT, { sourcePath: cleanPath, keyColor: "#FF00FF", thresholds: THRESHOLDS });
   assert.equal(clean.report.verdict, "pass");
   assert.equal(clean.thumbnailBytes, null);
 
-  const broken = await runOrSkip(t, { sourcePath: brokenPath, keyColor: "#FF00FF", thresholds: THRESHOLDS });
-  if (!broken) return;
+  const broken = await runAssetQualityGate(ROOT, { sourcePath: brokenPath, keyColor: "#FF00FF", thresholds: THRESHOLDS });
   assert.equal(broken.report.verdict, "fail");
   assert.ok(broken.report.problems.some((problem) => problem.code === "no_transparency"));
   assert.ok(Buffer.isBuffer(broken.thumbnailBytes));
@@ -57,8 +41,7 @@ test("Node quality-gate adapter accepts in-memory source bytes without requiring
     x >= 4 && x <= 27 && y >= 4 && y <= 27 ? [180, 110, 40, 255] : [0, 0, 0, 0]
   ), { alpha: true });
 
-  const result = await runOrSkip(t, { sourceBytes, keyColor: "#FF00FF", thresholds: THRESHOLDS });
-  if (!result) return;
+  const result = await runAssetQualityGate(ROOT, { sourceBytes, keyColor: "#FF00FF", thresholds: THRESHOLDS });
   assert.equal(result.report.verdict, "pass");
   assert.equal(result.thumbnailBytes, null);
 });

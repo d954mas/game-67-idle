@@ -1,7 +1,7 @@
 // Canvas TEXT element tests (T0222 increment 1). The metadata ops (addText defaults +
 // validation, patchElement content/style merge + undo, export exclusion, fitGroup box)
-// need no Python; the render tests drive render_group.py / PIL and skip cleanly when it
-// is unavailable. addText/render read the bundled fonts.json from the repo root, so all
+// need no Python; the render tests drive render_group.py / PIL. addText/render read the
+// bundled fonts.json from the repo root, so all
 // tests use the REAL repo root as the ops root and only redirect the PROJECTS dir.
 // Run: node --test ai_studio/assets/canvas/tests/text.test.mjs
 import test from "node:test";
@@ -154,7 +154,7 @@ test("fitGroup includes a text element's box", (t) => {
   assert.ok(fitted.y + fitted.h >= live.y + live.h + 8 - 0.001, "bottom edge covers the text box");
 });
 
-// ---- render parity (PIL; skips cleanly without Python) -----------------------
+// ---- render parity -------------------------------------------------------------
 
 function seedTextScreen(root, { content = "Aa", style } = {}) {
   const project = createProject(root, { title: "Screen" });
@@ -177,13 +177,7 @@ test("a text-bearing group renders a non-empty PNG with the expected dims and DI
     style: { fontFamily: "Rubik", fontWeight: 700, fontSize: 40, color: "#2244aa" },
   });
 
-  let withText;
-  try {
-    withText = await renderGroup(REPO_ROOT, { projectId, groupId, scale: 2 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const withText = await renderGroup(REPO_ROOT, { projectId, groupId, scale: 2 });
   const pngWith = decodePng(readFileSync(withText.path));
   assert.equal(pngWith.width, 400, "200 * scale 2");
   assert.equal(pngWith.height, 200, "100 * scale 2");
@@ -213,13 +207,7 @@ test("stroke + hard offset shadow render distinct colored pixels (smoke)", async
     },
   });
 
-  let result;
-  try {
-    result = await renderGroup(REPO_ROOT, { projectId, groupId, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await renderGroup(REPO_ROOT, { projectId, groupId, scale: 1 });
   const png = decodePng(readFileSync(result.path));
   let blue = 0;
   let red = 0;

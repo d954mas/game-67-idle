@@ -10,7 +10,7 @@ native playable work:
 - DevAPI TCP client and minimal CLI.
 - Native debug launch/reuse helpers.
 - Catalog-selected non-proof web preview through game-owned build plans.
-- Framebuffer, window screenshot, and screen recording helpers.
+- Engine framebuffer screenshots, explicit window screenshots, and OBS game recording.
 - PNG encode/decode utilities used by capture and health checks.
 - Pixel-health checks for blank or flat screenshots.
 - UI readability zoom audit for screenshot evidence.
@@ -30,8 +30,13 @@ node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/itera
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/iterate.py 17890 --reuse --json
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/ui_readability.py tmp/captures/screenshot.png
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/pixel_health.py tmp/captures/screenshot.png
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/capture_window.py --process-id <pid> --output tmp/captures/window.png
 node ai_studio/runtime_automation/web_local_mock_probe.mjs --url http://127.0.0.1:8092/ --cdp http://127.0.0.1:9222 --out games/<game-id>/.ai_studio/evidence/local-mock/<observation>.json
 ```
+
+DevAPI screenshots use the engine's `capture.frame` and `capture.region`
+commands. Capture errors propagate to the caller. Use `capture_window.py`
+explicitly when the required evidence includes the operating-system window.
 
 ## Fast web preview
 
@@ -162,6 +167,16 @@ frame count, dimensions, FPS, video health, audio format, and writes technical
 metadata beside the final MP4. Normal game work uses only `capture.cmd`; do not
 build per-video record or montage scripts.
 
+Shot capture uses an isolated, authenticated OBS WebSocket and a disabled-by-
+default full-frame magenta marker source. The marker covers setup, then OBS
+acknowledges its removal and renders the configured post-ack frame barrier
+before the audio gate and timeline begin. After OBS finalizes the source,
+`obs_marker.py` decodes that marker run and trims at the first decoded game-frame
+PTS after it. Missing, incomplete, or ambiguous marker evidence fails the take;
+the recorder never falls back to packet timestamps or a fixed encoder delay.
+The manifest stores the marker PTS/frame receipt, control barrier receipts, and
+marker-disable-to-audio-gate delay so A/V timing remains inspectable.
+
 ## Local mock web proof
 
 `web_local_mock_probe.mjs` connects to an isolated Chromium/Chrome page through
@@ -277,23 +292,15 @@ with game.player_gated():
 
 ## Build input hashing
 
-`runtime_hash_tree.cjs` provides synchronous, streaming tree hashing through the
-installed Node.js runtime. Migrated game build-record modules load it from their
-resolved Studio root; standalone roots without the module retain a JavaScript
-fallback. Games still own file selection, credential exclusions and record
-schemas. The helper preserves deterministic row serialization and checks
-physical containment, including explicitly selected directories and files.
-
-Build tooling must not compile or run an ad-hoc fingerprint executable. A shared
-cache alone does not solve reputation checks: a source change creates another
-unsigned executable. The former source-versioned helper triggered CyberCapture
-on this host. Avast documents that CyberCapture analyzes rare, suspicious files;
-see its [official FAQ](https://support.avast.com/en-en/article/antivirus-cybercapture-faq/).
-This change removes that helper launch, without changing antivirus settings.
-Game executables and external SDK tools remain subject to normal protection.
+Game-owned `tools/lib/runtime_build.mjs` selects inputs and creates build
+records. Integrated games use `runtime_hash_tree.cjs` for synchronous streaming
+hashing; standalone copies keep their game-owned implementation. Native capture
+validates source proof through `native_capture_fingerprint.mjs`. Fingerprinting
+uses the installed Node.js runtime and must not launch an ad-hoc fingerprint
+executable.
 
 ```powershell
-node --test ai_studio/runtime_automation/runtime_hash_tree.test.mjs
+node --test ai_studio/runtime_automation/runtime_hash_tree.test.mjs ai_studio/runtime_automation/native_capture_fingerprint.test.mjs
 ```
 
 ## Skill

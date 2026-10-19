@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -77,6 +77,26 @@ test("single-file loader rejects missing, malformed, escaping, absolute, and ref
   assert.throws(() => loadArchitectureTree(root, "ai_studio/tree.json"), /single-file.*parts/i);
   write(root, "ai_studio/tree.json", JSON.stringify({ root: { id: "studio", children: [{ id: "nested", ref: "part.json" }] } }));
   assert.throws(() => loadArchitectureTree(root, "ai_studio/tree.json"), /single-file.*ref/i);
+});
+
+test("single-file loader rejects a map reached through an external directory link", (t) => {
+  const root = tempRoot(t, "architecture-tree-links-");
+  const outside = tempRoot(t, "architecture-tree-outside-");
+  write(outside, "tree.json", JSON.stringify({ root: { id: "outside" } }));
+  mkdirSync(join(root, "ai_studio"));
+  symlinkSync(outside, join(root, "ai_studio", "maps"), process.platform === "win32" ? "junction" : "dir");
+  assert.throws(() => loadArchitectureTree(root, "ai_studio/maps/tree.json"), /escapes repository root/i);
+});
+
+test("single-file loader accepts root and map aliases confined to the physical repository", (t) => {
+  const parent = tempRoot(t, "architecture-tree-alias-");
+  const root = join(parent, "repo");
+  const tree = { root: { id: "studio" } };
+  write(root, "ai_studio/maps/tree.json", JSON.stringify(tree));
+  const alias = join(parent, "checkout");
+  symlinkSync(root, alias, process.platform === "win32" ? "junction" : "dir");
+  symlinkSync(join(root, "ai_studio", "maps"), join(root, "ai_studio", "linked-maps"), process.platform === "win32" ? "junction" : "dir");
+  assert.deepEqual(loadArchitectureTree(alias, "ai_studio/linked-maps/tree.json"), tree);
 });
 
 test("GET architecture tree serves the same single-file model", async () => {
