@@ -8,9 +8,10 @@ import { basename, join } from "node:path";
 
 import {
   decodeDataUrl,
+  ensureInsideTmp,
+  ensureTmpNamespace,
   extensionForUpload,
   safeSlug,
-  tmpRoot,
   tmpUrl,
   workspaceRel,
 } from "../_bridge/bridge.mjs";
@@ -19,11 +20,19 @@ export async function uploadImageSource(root, body) {
   const { mime, buffer } = decodeDataUrl(body.dataUrl);
   if (!buffer.length) throw new Error("empty source image");
   const sessionId = `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}`;
-  const outDir = join(tmpRoot(root), sessionId, "sources");
-  mkdirSync(outDir, { recursive: true });
+  const namespaceRoot = ensureTmpNamespace(root);
+  const sessionDir = join(namespaceRoot, sessionId);
+  ensureInsideTmp(root, sessionDir);
+  mkdirSync(sessionDir);
+  ensureInsideTmp(root, sessionDir);
+  const outDir = join(sessionDir, "sources");
+  ensureInsideTmp(root, outDir);
+  mkdirSync(outDir);
+  ensureInsideTmp(root, outDir);
   const ext = extensionForUpload(body.fileName, mime);
   const sourceName = `${safeSlug(basename(String(body.fileName || "source")))}${ext}`;
   const sourcePath = join(outDir, sourceName);
+  ensureInsideTmp(root, sourcePath);
   writeFileSync(sourcePath, buffer);
   return {
     sessionId,

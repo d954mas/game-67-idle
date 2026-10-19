@@ -13,8 +13,8 @@
 // pipeline test injects a fake `generator` (the {inputPngPath, prompt} -> Buffer|path GENERIC
 // seam, reused for both the white-plate and black-plate steps); only the pure prompt/command
 // builders in tools/dual_plate_generate.mjs are exercised for the DEFAULT generator, never
-// spawned. The flat-bg check and the reused alphaDualPlate tool both need the studio venv
-// (numpy/Pillow) — those tests skip cleanly when it is missing.
+// spawned. The flat-bg check and the reused alphaDualPlate tool both require the studio
+// venv (numpy/Pillow).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -35,7 +35,6 @@ const REPO_ROOT = resolve(fileURLToPath(new URL("../../../..", import.meta.url))
 // The pure/validation tests never spawn Python, so any unused root works for them.
 const UNUSED_ROOT = "C:/unused-repo-root";
 const CLI = fileURLToPath(new URL("../cli.mjs", import.meta.url));
-const VENV_MISSING = /venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i;
 
 function tempProjects(t) {
   const dir = mkdtempSync(join(tmpdir(), "canvas-dualgen-"));
@@ -154,18 +153,8 @@ test("check_flat_background.py report mode: flat fixture -> flat_light true, dar
   const { element: flatEl } = addImage(REPO_ROOT, project.id, { name: "white.png", bytes: dualPlatePairPng().white });
   const { element: darkEl } = addImage(REPO_ROOT, project.id, { name: "dark.png", bytes: darkBgPng() });
 
-  let flatReport;
-  let darkReport;
-  try {
-    flatReport = await checkFlatBackgroundReport(resolveProjectFile(REPO_ROOT, project.id, flatEl.src));
-    darkReport = await checkFlatBackgroundReport(resolveProjectFile(REPO_ROOT, project.id, darkEl.src));
-  } catch (error) {
-    if (VENV_MISSING.test(error.message)) {
-      t.skip(`flat-bg report unavailable: ${error.message}`);
-      return;
-    }
-    throw error;
-  }
+  const flatReport = await checkFlatBackgroundReport(resolveProjectFile(REPO_ROOT, project.id, flatEl.src));
+  const darkReport = await checkFlatBackgroundReport(resolveProjectFile(REPO_ROOT, project.id, darkEl.src));
   assert.equal(flatReport.flat_light, true, "flat white-plate fixture reports flat_light: true");
   assert.equal(darkReport.flat_light, false, "dark/busy fixture reports flat_light: false — NOT a thrown refusal");
   assert.ok(typeof flatReport.median_luma === "number" && typeof flatReport.spread === "number");
@@ -196,20 +185,10 @@ test("alphaDualPlateGenerate rejects an unknown element id and a non-image eleme
   assert.equal(generator.calls.length, 0, "the generator is never called before validation passes");
 });
 
-// ---- pipeline (real warm worker; skips without the studio venv) ---------------
+// ---- pipeline (real warm worker) ----------------------------------------------
 
-// Try alphaDualPlateGenerate with a fake generator; return null (after t.skip) on a
-// venv/Pillow miss so the caller returns early. Isolates the "does Python run here" gate.
-async function tryGenerate(t, args) {
-  try {
-    return await alphaDualPlateGenerate(REPO_ROOT, args);
-  } catch (error) {
-    if (VENV_MISSING.test(error.message)) {
-      t.skip(`dual-plate pipeline unavailable: ${error.message}`);
-      return undefined;
-    }
-    throw error;
-  }
+async function tryGenerate(_t, args) {
+  return alphaDualPlateGenerate(REPO_ROOT, args);
 }
 
 test("alphaDualPlateGenerate (happy path): ONE new element, ONE journal entry, placement/meta/prompt/gate/align recorded; source untouched; undo/redo", async (t) => {
@@ -222,7 +201,6 @@ test("alphaDualPlateGenerate (happy path): ONE new element, ONE journal entry, p
 
   const generator = fakeGenerator(black);
   const result = await tryGenerate(t, { projectId: project.id, elementId: source.id, prompt: "angel wings", generator });
-  if (result === undefined) return; // skipped
 
   // ONE new journal entry for the whole gesture (generation itself is outside it).
   const after = getProject(REPO_ROOT, project.id);
@@ -301,7 +279,6 @@ test("alphaDualPlateGenerate: game-owned production refuses before checks/genera
     generator,
     noLock: true,
   });
-  if (result === undefined) return;
   assert.deepEqual(result.element.meta.origin, {
     schema: "ai_studio.asset.generation_origin.v1",
     source: "ai",
@@ -326,7 +303,6 @@ test("alphaDualPlateGenerate (non-flat element, T0248): generates the WHITE plat
 
   const generator = fakeRoutedGenerator({ white, black });
   const result = await tryGenerate(t, { projectId: project.id, elementId: source.id, prompt: "angel wings", generator });
-  if (result === undefined) return; // skipped (no studio venv)
 
   // The SAME injected generator seam is called TWICE: white plate first, dark plate second.
   assert.equal(generator.calls.length, 2, "one call for the white plate, one for the dark plate");
@@ -367,36 +343,27 @@ test("alphaDualPlateGenerate (non-flat element, T0248): a gate refusal retries o
   const original = getProject(REPO_ROOT, project.id).elements.map((el) => ({ ...el }));
 
   const generator = fakeRoutedGenerator({ white, black }); // ALWAYS the misaligned dark plate
-  let venvMissing = false;
   try {
     await alphaDualPlateGenerate(REPO_ROOT, { projectId: project.id, elementId: source.id, generator });
     assert.fail("a pair that never passes the gate must refuse after the retry");
   } catch (error) {
-    if (VENV_MISSING.test(error.message)) {
-      venvMissing = true;
-    } else {
-      // Exactly 3 generator calls: 1 white plate (never retried) + 2 dark (1 initial + 1 retry).
-      assert.equal(generator.calls.length, 3, "1 white call + 2 dark calls");
-      assert.match(error.message, /dark_attempt_1=/);
-      assert.match(error.message, /dark_attempt_2=/);
-      assert.match(error.message, /light=files\//, "names the GENERATED white plate as the light plate");
-      assert.ok(!error.message.includes(`light=${source.src};`), "the non-flat source element itself is never named as the light plate");
-      assert.match(error.message, /alphaDualPlate|alpha-dual/, "names the manual pair-op retry path");
-      assert.ok(!/Traceback|File "/.test(error.message), `traceback leaked to the operator: ${error.message}`);
+    // Exactly 3 generator calls: 1 white plate (never retried) + 2 dark (1 initial + 1 retry).
+    assert.equal(generator.calls.length, 3, "1 white call + 2 dark calls");
+    assert.match(error.message, /dark_attempt_1=/);
+    assert.match(error.message, /dark_attempt_2=/);
+    assert.match(error.message, /light=files\//, "names the GENERATED white plate as the light plate");
+    assert.ok(!error.message.includes(`light=${source.src};`), "the non-flat source element itself is never named as the light plate");
+    assert.match(error.message, /alphaDualPlate|alpha-dual/, "names the manual pair-op retry path");
+    assert.ok(!/Traceback|File "/.test(error.message), `traceback leaked to the operator: ${error.message}`);
 
-      const attemptSrcs = [...error.message.matchAll(/dark_attempt_\d+=([^;]+);/g)].map((m) => m[1]);
-      assert.equal(attemptSrcs.length, 2);
-      for (const src of attemptSrcs) {
-        assert.ok(existsSync(resolveProjectFile(REPO_ROOT, project.id, src)), `preserved dark plate exists: ${src}`);
-      }
-      const lightMatch = /light=(files\/[^;]+);/.exec(error.message);
-      assert.ok(lightMatch, "error names the generated white plate's stored src");
-      assert.ok(existsSync(resolveProjectFile(REPO_ROOT, project.id, lightMatch[1])), "preserved white plate exists on disk");
+    const attemptSrcs = [...error.message.matchAll(/dark_attempt_\d+=([^;]+);/g)].map((m) => m[1]);
+    assert.equal(attemptSrcs.length, 2);
+    for (const src of attemptSrcs) {
+      assert.ok(existsSync(resolveProjectFile(REPO_ROOT, project.id, src)), `preserved dark plate exists: ${src}`);
     }
-  }
-  if (venvMissing) {
-    t.skip("dual-plate pipeline unavailable (studio venv)");
-    return;
+    const lightMatch = /light=(files\/[^;]+);/.exec(error.message);
+    assert.ok(lightMatch, "error names the generated white plate's stored src");
+    assert.ok(existsSync(resolveProjectFile(REPO_ROOT, project.id, lightMatch[1])), "preserved white plate exists on disk");
   }
 
   // Nothing mutated on project.json: no journal entry, source unchanged, no new element (the
@@ -416,34 +383,25 @@ test("alphaDualPlateGenerate: a gate refusal retries EXACTLY once, then a loud e
   const original = getProject(REPO_ROOT, project.id).elements.map((el) => ({ ...el }));
 
   const generator = fakeGenerator(black); // ALWAYS the misaligned dark plate — both attempts fail
-  let venvMissing = false;
   try {
     await alphaDualPlateGenerate(REPO_ROOT, { projectId: project.id, elementId: source.id, generator });
     assert.fail("a pair that never passes the gate must refuse after the retry");
   } catch (error) {
-    if (VENV_MISSING.test(error.message)) {
-      venvMissing = true;
-    } else {
-      // Retry counted exactly 1: the generator ran twice (1 initial + 1 retry), never more.
-      assert.equal(generator.calls.length, 2, "exactly one automatic retry");
-      assert.match(error.message, /dark_attempt_1=/);
-      assert.match(error.message, /dark_attempt_2=/);
-      assert.match(error.message, new RegExp(`light=${source.src.replace(/[/.]/g, "\\$&")};`));
-      assert.match(error.message, /alphaDualPlate|alpha-dual/, "names the manual pair-op retry path");
-      assert.ok(!/Traceback|File "/.test(error.message), `traceback leaked to the operator: ${error.message}`);
+    // Retry counted exactly 1: the generator ran twice (1 initial + 1 retry), never more.
+    assert.equal(generator.calls.length, 2, "exactly one automatic retry");
+    assert.match(error.message, /dark_attempt_1=/);
+    assert.match(error.message, /dark_attempt_2=/);
+    assert.match(error.message, new RegExp(`light=${source.src.replace(/[/.]/g, "\\$&")};`));
+    assert.match(error.message, /alphaDualPlate|alpha-dual/, "names the manual pair-op retry path");
+    assert.ok(!/Traceback|File "/.test(error.message), `traceback leaked to the operator: ${error.message}`);
 
-      // Both preserved dark-plate attempts actually exist on disk (content-addressed;
-      // semicolon-delimited so a ".png" src is never mis-split by the parser).
-      const attemptSrcs = [...error.message.matchAll(/dark_attempt_\d+=([^;]+);/g)].map((m) => m[1]);
-      assert.equal(attemptSrcs.length, 2);
-      for (const src of attemptSrcs) {
-        assert.ok(existsSync(resolveProjectFile(REPO_ROOT, project.id, src)), `preserved dark plate exists: ${src}`);
-      }
+    // Both preserved dark-plate attempts actually exist on disk (content-addressed;
+    // semicolon-delimited so a ".png" src is never mis-split by the parser).
+    const attemptSrcs = [...error.message.matchAll(/dark_attempt_\d+=([^;]+);/g)].map((m) => m[1]);
+    assert.equal(attemptSrcs.length, 2);
+    for (const src of attemptSrcs) {
+      assert.ok(existsSync(resolveProjectFile(REPO_ROOT, project.id, src)), `preserved dark plate exists: ${src}`);
     }
-  }
-  if (venvMissing) {
-    t.skip("dual-plate pipeline unavailable (studio venv)");
-    return;
   }
 
   // Nothing mutated on project.json: no journal entry, source unchanged, no new element.

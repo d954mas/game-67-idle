@@ -6,7 +6,8 @@ duplicated:
 
 - **Python interpreter** — resolved from `ai_studio/studio.config.json`
   -> `pythonPath` ONLY (`.venv/Scripts/python.exe`). No PATH search, no candidate
-  chain. Missing venv or dependency => loud error naming `setup_python.mjs`.
+  chain. Missing venv or dependency => loud error naming
+  `node ai_studio/dev_environment/python_setup.mjs`.
 - **Warm Python worker** (T0202) — `runPython` does not cold-spawn a fresh
   interpreter per call. It routes through a long-lived worker (`worker.py`, managed
   by `worker.mjs`) that pays the interpreter-startup + `numpy`/`scipy`/`PIL` import

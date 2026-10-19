@@ -9,7 +9,9 @@ import json
 import math
 import os
 import re
+import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -34,6 +36,11 @@ from capture.backends.windows_process_loopback import (  # noqa: E402
     query_process_creation_time_100ns,
 )
 from pixel_health import analyze_png, assert_pixel_health  # noqa: E402
+from obs_marker import (  # noqa: E402
+    MARKER_COLOR_ARGB,
+    build_marker_probe_command,
+    parse_marker_receipt,
+)
 
 
 @dataclass(frozen=True)
@@ -74,6 +81,11 @@ PRESETS = {
     "square": CaptureSettings(1080, 1080, 30),
 }
 OBS_DEFAULT = Path(r"C:\Program Files\obs-studio\bin\64bit\obs64.exe")
+OBS_MARKER_SCENE = "Scene"
+OBS_MARKER_ITEM_ID = 2
+OBS_MARKER_SOURCE = "Capture marker"
+OBS_MARKER_ENABLE_RENDER_FRAMES = 3
+OBS_MARKER_DISABLE_RENDER_FRAMES = 1
 
 
 def inspect_master(
@@ -801,6 +813,7 @@ def _source_common(name: str, source_id: str, settings: dict, source_uuid: str) 
 
 def _scene_collection(descriptor: str, settings: CaptureSettings) -> dict:
     game_uuid = str(uuid.uuid4())
+    marker_uuid = str(uuid.uuid4())
     scene_uuid = str(uuid.uuid4())
     video_item = {
         "name": "Game",
@@ -827,13 +840,38 @@ def _scene_collection(descriptor: str, settings: CaptureSettings) -> dict:
         "hide_transition": {"duration": 0},
         "private_settings": {},
     }
+    marker_item = {
+        "name": OBS_MARKER_SOURCE,
+        "source_uuid": marker_uuid,
+        "visible": False,
+        "locked": True,
+        "rot": 0.0,
+        "pos": {"x": 0.0, "y": 0.0},
+        "scale": {"x": 1.0, "y": 1.0},
+        "align": 5,
+        "bounds_type": 2,
+        "bounds_align": 0,
+        "bounds": {"x": float(settings.width), "y": float(settings.height)},
+        "crop_left": 0,
+        "crop_top": 0,
+        "crop_right": 0,
+        "crop_bottom": 0,
+        "id": OBS_MARKER_ITEM_ID,
+        "group_item_backup": False,
+        "scale_filter": "bicubic",
+        "blend_method": "default",
+        "blend_type": "normal",
+        "show_transition": {"duration": 0},
+        "hide_transition": {"duration": 0},
+        "private_settings": {},
+    }
     scene = _source_common(
         "Scene",
         "scene",
         {
-            "id_counter": 1,
+            "id_counter": OBS_MARKER_ITEM_ID,
             "custom_size": False,
-            "items": [video_item],
+            "items": [video_item, marker_item],
         },
         scene_uuid,
     )
@@ -845,12 +883,22 @@ def _scene_collection(descriptor: str, settings: CaptureSettings) -> dict:
         build_window_capture_settings(descriptor),
         game_uuid,
     )
+    marker = _source_common(
+        OBS_MARKER_SOURCE,
+        "color_source_v3",
+        {
+            "color": MARKER_COLOR_ARGB,
+            "width": settings.width,
+            "height": settings.height,
+        },
+        marker_uuid,
+    )
     return {
         "current_scene": "Scene",
         "current_program_scene": "Scene",
         "scene_order": [{"name": "Scene"}],
         "name": "Recorder",
-        "sources": [scene, game],
+        "sources": [scene, game, marker],
         "groups": [],
         "quick_transitions": [],
         "transitions": [],
@@ -882,6 +930,8 @@ def _write_obs_configuration(
     descriptor: str,
     settings: CaptureSettings,
     recording_directory: Path,
+    websocket_port: int,
+    websocket_password: str,
 ) -> None:
     config_root = portable_root / "config" / "obs-studio"
     profile_root = config_root / "basic" / "profiles" / "Recorder"
@@ -889,7 +939,7 @@ def _write_obs_configuration(
     profile_root.mkdir(parents=True, exist_ok=True)
     scenes_root.mkdir(parents=True, exist_ok=True)
     (config_root / "global.ini").write_text(
-        """[General]
+        f"""[General]
 Pre19Defaults=false
 Pre21Defaults=false
 Pre23Defaults=false
@@ -933,9 +983,11 @@ ConfigOnNewProfile=false
 
 [OBSWebSocket]
 FirstLoad=false
-ServerEnabled=false
+ServerEnabled=true
+ServerPort={websocket_port}
 AlertsEnabled=false
 AuthRequired=true
+ServerPassword={websocket_password}
 """,
         encoding="utf-8",
     )
@@ -1113,6 +1165,72 @@ def _require_tool(name: str) -> Path:
     return Path(resolved)
 
 
+def _reserve_loopback_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+
+
+def _set_obs_marker_enabled(
+    node: Path,
+    *,
+    port: int,
+    password: str,
+    enabled: bool,
+    render_frames: int,
+    runner: Callable = subprocess.run,
+    monotonic: Callable[[], float] = time.monotonic,
+) -> dict:
+    helper = RUNTIME_ROOT / "obs_marker_control.mjs"
+    if not helper.is_file():
+        raise RuntimeError("OBS marker control helper is missing")
+    if render_frames < 1:
+        raise ValueError("OBS marker render frame count must be positive")
+    started_at = monotonic()
+    completed = runner(
+        [
+            str(node), str(helper), "--port", str(port),
+            "--scene", OBS_MARKER_SCENE,
+            "--item-id", str(OBS_MARKER_ITEM_ID),
+            "--enabled", "true" if enabled else "false",
+            "--min-render-frames", str(render_frames),
+        ],
+        input=json.dumps({"password": password}),
+        capture_output=True,
+        text=True,
+        shell=False,
+        timeout=10.0,
+    )
+    elapsed_seconds = monotonic() - started_at
+    if completed.returncode != 0:
+        raise RuntimeError("OBS marker control failed")
+    try:
+        receipt = json.loads(completed.stdout)
+        before = receipt["beforeRenderFrames"]
+        after = receipt["afterRenderFrames"]
+        round_trip = receipt["roundTripMilliseconds"]
+        barrier = receipt["renderBarrierMilliseconds"]
+    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("OBS marker control returned an invalid receipt") from exc
+    if (isinstance(before, bool) or not isinstance(before, int)
+            or isinstance(after, bool) or not isinstance(after, int)
+            or after < before + render_frames
+            or isinstance(round_trip, bool) or not isinstance(round_trip, (int, float))
+            or not math.isfinite(round_trip) or round_trip < 0
+            or isinstance(barrier, bool) or not isinstance(barrier, (int, float))
+            or not math.isfinite(barrier) or barrier < 0):
+        raise RuntimeError("OBS marker control returned an invalid receipt")
+    return {
+        "enabled": enabled,
+        "requestedRenderFrames": render_frames,
+        "controlElapsedSeconds": round(elapsed_seconds, 6),
+        "roundTripMilliseconds": round(float(round_trip), 3),
+        "renderBarrierMilliseconds": round(float(barrier), 3),
+        "beforeRenderFrames": before,
+        "afterRenderFrames": after,
+    }
+
+
 def _run_media(command: list[str], timeout_seconds: float) -> subprocess.CompletedProcess:
     completed = subprocess.run(
         command,
@@ -1128,59 +1246,19 @@ def _run_media(command: list[str], timeout_seconds: float) -> subprocess.Complet
     return completed
 
 
-def _sync_qualification(fps: int) -> str:
+def _sync_qualification() -> str:
     return (
-        "measured OBS video packet PTS cut with process-loopback audio "
-        f"start; tolerance {1 / fps:.6f}s (one output frame)"
+        "decoded OBS marker transition trims source video; the receipt records "
+        "the post-ack render barrier and audio gate delay"
     )
 
 
-def _parse_content_marker(value: str, fps: int) -> float:
-    packets: list[float] = []
-    for line in value.splitlines():
-        try:
-            pts = float(line.strip())
-        except ValueError:
-            continue
-        if math.isfinite(pts) and pts >= 0:
-            packets.append(pts)
-    if not packets:
-        raise RuntimeError("could not measure the OBS media marker")
-    return max(packets) + 1 / fps
-
-
-def _measure_content_marker(
-    ffprobe: Path,
-    recording: Path,
-    fps: int,
-    *,
-    retries: int = 20,
-    sleep: Callable[[float], None] = time.sleep,
-) -> float:
-    last_error: RuntimeError | None = None
-    command = [
-        str(ffprobe),
-        "-v",
-        "error",
-        "-select_streams",
-        "v:0",
-        "-show_entries",
-        "packet=pts_time",
-        "-of",
-        "csv=p=0",
-        str(recording),
-    ]
-    for attempt in range(retries):
-        try:
-            return _parse_content_marker(
-                _run_media(command, timeout_seconds=5.0).stdout,
-                fps,
-            )
-        except RuntimeError as exc:
-            last_error = exc
-            if attempt + 1 < retries:
-                sleep(0.1)
-    raise RuntimeError("could not measure the OBS media marker") from last_error
+def _measure_marker_transition(ffmpeg: Path, recording: Path) -> dict:
+    completed = _run_media(
+        build_marker_probe_command(ffmpeg, recording),
+        timeout_seconds=60.0,
+    )
+    return parse_marker_receipt(completed.stdout)
 
 
 def _parse_freezedetect_log(
@@ -1229,17 +1307,6 @@ def _assert_final_temporal_health(
             f"{max_freeze_seconds:.3f}s"
         )
     return {"maxAllowedFreezeSeconds": max_freeze_seconds, **health}
-
-
-def _content_start_offset_after_prepare(
-    recording_detected_at: float,
-    recording_prepare: Callable[[], None] | None,
-    *,
-    monotonic: Callable[[], float] = time.monotonic,
-) -> float:
-    if recording_prepare is not None:
-        recording_prepare()
-    return monotonic() - recording_detected_at
 
 
 def _extract_frame(
@@ -1505,6 +1572,7 @@ def record_take(
     staging = paths.staging()
     ffmpeg = _require_tool("ffmpeg")
     ffprobe = _require_tool("ffprobe")
+    node = _require_tool("node")
     obs = _resolve_obs_executable(obs_override)
     audio_helper = _ensure_audio_helper()
     obs_settings = resolve_obs_capture_settings(settings)
@@ -1516,6 +1584,8 @@ def record_take(
     audio_path = paths.root / ".game.partial.wav"
     tagged_window: int | None = None
     original_window_title: str | None = None
+    websocket_port = _reserve_loopback_port()
+    websocket_password = secrets.token_urlsafe(32)
     audio_path.unlink(missing_ok=True)
     recording_directory.mkdir(exist_ok=False)
     try:
@@ -1537,6 +1607,8 @@ def record_take(
             descriptor=descriptor,
             settings=obs_settings,
             recording_directory=recording_directory,
+            websocket_port=websocket_port,
+            websocket_password=websocket_password,
         )
         for remaining in range(countdown, 0, -1):
             print(f"Recording in {remaining}...", flush=True)
@@ -1635,6 +1707,8 @@ def record_take(
                 ),
                 settings=obs_settings,
                 recording_directory=recording_directory,
+                websocket_port=websocket_port,
+                websocket_password=websocket_password,
             )
             print(f"OBS source rejected ({rejection}); restarting...", flush=True)
         if recorded is None or preflight_health is None:
@@ -1646,16 +1720,35 @@ def record_take(
             background_window=background_window,
         )
         audio_gate = _AudioStartGate()
-        content_start_offset = 0.0
         capture_started_at = 0.0
+        marker_disabled_at = 0.0
+        marker_receipt: dict[str, object] = {}
 
         def begin_content() -> None:
-            nonlocal content_start_offset, capture_started_at
+            nonlocal marker_disabled_at
+            marker_receipt["enabled"] = _set_obs_marker_enabled(
+                node,
+                port=websocket_port,
+                password=websocket_password,
+                enabled=True,
+                render_frames=OBS_MARKER_ENABLE_RENDER_FRAMES,
+            )
             if recording_prepare is not None:
                 recording_prepare()
-            content_start_offset = _measure_content_marker(ffprobe, recorded, settings.fps)
-            capture_started_at = time.monotonic()
+            marker_receipt["disabled"] = _set_obs_marker_enabled(
+                node,
+                port=websocket_port,
+                password=websocket_password,
+                enabled=False,
+                render_frames=OBS_MARKER_DISABLE_RENDER_FRAMES,
+            )
+            marker_disabled_at = time.monotonic()
             print(f"REC | {duration_seconds:g} seconds", flush=True)
+
+        def start_audio() -> None:
+            nonlocal capture_started_at
+            capture_started_at = time.monotonic()
+            audio_gate.start()
 
         try:
             audio_capture = _record_audio_with_driver(
@@ -1671,7 +1764,7 @@ def record_take(
                 recording_driver,
                 wait_audio_ready=audio_gate.wait_ready,
                 before_driver=begin_content,
-                start_audio=audio_gate.start,
+                start_audio=start_audio,
             )
         finally:
             audio_gate.close()
@@ -1682,6 +1775,14 @@ def record_take(
         export_started_at = capture_finished_at
         if not recorded.is_file() or recorded.stat().st_size <= 0:
             raise RuntimeError("OBS stopped without a usable recording file")
+        if marker_disabled_at <= 0.0 or capture_started_at <= 0.0:
+            raise RuntimeError("OBS marker did not reach the audio gate")
+        marker_receipt["audioGateAfterDisableSeconds"] = round(
+            capture_started_at - marker_disabled_at,
+            6,
+        )
+        marker_transition = _measure_marker_transition(ffmpeg, recorded)
+        content_start_offset = float(marker_transition["endSeconds"])
         minimum_master_duration = duration_seconds + content_start_offset
         source_inspection = inspect_master(
             ffprobe,
@@ -1768,14 +1869,14 @@ def record_take(
             "durationSeconds": duration_seconds,
             "sourceTrimSeconds": round(content_start_offset, 6),
             "sourceTrim": {
-                "method": "ffprobe-latest-video-packet",
+                "method": "decoded-obs-marker-transition",
                 "seconds": round(content_start_offset, 6),
-                "toleranceSeconds": round(1 / settings.fps, 6),
+                "marker": marker_transition,
             },
             "width": settings.width,
             "height": settings.height,
             "fps": settings.fps,
-            "syncQualification": _sync_qualification(settings.fps),
+            "syncQualification": _sync_qualification(),
             "master": str(paths.master),
             "edit": str(paths.edit),
             "inspection": {
@@ -1796,6 +1897,7 @@ def record_take(
                 "source": "windows-process-loopback",
                 "sampleFrames": audio_capture["sampleFrames"],
             },
+            "marker": marker_receipt,
             "recordingDriver": recording_driver is not None,
             "recordingPrepare": recording_prepare is not None,
             "phaseTimingSeconds": {

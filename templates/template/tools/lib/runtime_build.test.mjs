@@ -86,18 +86,12 @@ test("runtime build record deterministically binds game and dependency source tr
   assert.notEqual(createRuntimeBuildRecord(item).fingerprint, one.fingerprint);
 });
 
-test("runtime build hashing rejects symbolic links", (t) => {
+test("runtime build hashing rejects linked source paths", (t) => {
   const item = fixture(t);
-  const outside = join(item.studioRoot, "outside.c");
-  write(outside, "outside\n");
-  try {
-    symlinkSync(outside, join(item.gameDir, "src", "linked.c"), "file");
-  } catch (error) {
-    if (["EPERM", "EACCES", "ENOTSUP"].includes(error.code)) return t.skip(`symlink unavailable: ${error.code}`);
-    throw error;
-  }
+  const outside = join(item.studioRoot, "outside");
+  write(join(outside, "linked.c"), "outside\n");
+  symlinkSync(outside, join(item.gameDir, "src", "linked"), process.platform === "win32" ? "junction" : "dir");
   assert.throws(() => createRuntimeBuildRecord(item), /symbolic link|symlink/i);
-
 });
 
 test("runtime build rejects compiled in-place features missing from dependencies", (t) => {

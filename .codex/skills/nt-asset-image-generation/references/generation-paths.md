@@ -63,7 +63,7 @@ readability, and style, not by pixel similarity or file size.
 ## Path C: REST Or Codex Backend Alternative
 
 ```bash
-python .codex/skills/nt-asset-image-generation/scripts/generate_image.py \
+node ai_studio/dev_environment/python_run.mjs .codex/skills/nt-asset-image-generation/scripts/generate_image.py \
   --prompt "<PROMPT>" --out tmp/out.png --size 1536x1024 --quality high
 ```
 

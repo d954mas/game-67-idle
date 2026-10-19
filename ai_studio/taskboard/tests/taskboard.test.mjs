@@ -215,6 +215,17 @@ test("taskboard accepts a game id paired with its derived namespace store id", (
   assert.deepEqual(JSON.parse(result.stdout).stores.map((store) => store.storeId), ["game:secret-store"]);
 });
 
+test("taskboard refuses an unknown game paired with an existing store", (t) => {
+  const root = tempRoot(t);
+  ensurePrivateGameMount(root, "secret-game", "secret-store");
+  for (const storeId of ["studio", "game:secret-store"]) {
+    assert.throws(
+      () => runCliDirect(root, "context", "--game", "missing-game", "--store", storeId, "--json"),
+      /No Taskboard store found/,
+    );
+  }
+});
+
 function explicitPrivateTaskboardStore(root, gameId = "secret-game") {
   return {
     storeId: `game:${gameId}`,
@@ -899,6 +910,101 @@ test("Taskboard API accepts private store scope through headers without query pa
   }, { "x-ai-studio-store": "game:secret-game" });
   assert.equal(mismatch.status, 400);
   assert.match(mismatch.data.error, /mismatch/);
+});
+
+test("Taskboard API rejects conflicting or unknown mutation scope selectors without writing", async (t) => {
+  const root = tempRoot(t);
+  const privateStore = ensurePrivateGameMount(root);
+  const handler = createTaskboardApi(root);
+  const privateStoreId = "game:secret-game";
+
+  const mutationState = () => {
+    const itemsRoots = [join(root, "ai_studio", "taskboard", "items"), privateStore.itemsRoot];
+    return {
+      tasks: [
+        listTasks(root).length,
+        listTasks(root, { itemsRoot: privateStore.itemsRoot }).length,
+      ],
+      counters: itemsRoots.map((itemsRoot) => {
+        const counterPath = join(itemsRoot, ".counters.json");
+        return existsSync(counterPath) ? readFileSync(counterPath, "utf8") : null;
+      }),
+    };
+  };
+  const before = mutationState();
+  const conflicts = [
+    {
+      path: `/api/tasks?store=${encodeURIComponent(privateStoreId)}`,
+      body: { title: "Query and body storeId conflict", status: "backlog", storeId: "studio" },
+    },
+    {
+      path: `/api/tasks?store=${encodeURIComponent(privateStoreId)}`,
+      body: { title: "Query and body store conflict", status: "backlog", store: "studio" },
+    },
+    {
+      path: "/api/tasks",
+      body: { title: "Body store aliases conflict", status: "backlog", store: privateStoreId, storeId: "studio" },
+    },
+    {
+      path: "/api/tasks?store=studio",
+      body: { title: "Header and query conflict", status: "backlog" },
+      headers: { "x-ai-studio-store": privateStoreId },
+    },
+    {
+      path: "/api/tasks",
+      body: { title: "Header and body conflict", status: "backlog", storeId: "studio" },
+      headers: { "x-ai-studio-store": privateStoreId },
+    },
+    {
+      path: `/api/tasks?game=${encodeURIComponent(privateStore.gameId)}`,
+      body: { title: "Query and body game conflict", status: "backlog", game: "other-game" },
+    },
+    {
+      path: "/api/tasks",
+      body: { title: "Body game aliases conflict", status: "backlog", game: privateStore.gameId, gameId: "other-game" },
+    },
+    {
+      path: "/api/tasks?store=studio&game=missing-game",
+      body: { title: "Unknown game with Studio store", status: "backlog" },
+      error: /No Taskboard store found/,
+    },
+    {
+      path: `/api/tasks?store=${encodeURIComponent(privateStoreId)}&game=missing-game`,
+      body: { title: "Unknown game with private store", status: "backlog" },
+      error: /No Taskboard store found/,
+    },
+    {
+      path: `/api/tasks?store=game:missing-store&game=${encodeURIComponent(privateStore.gameId)}`,
+      body: { title: "Unknown store with existing game", status: "backlog" },
+      error: /does not match/,
+    },
+  ];
+
+  for (const { path, body, headers, error = /mismatch/ } of conflicts) {
+    const response = await invokeApi(handler, "POST", path, body, headers);
+    assert.equal(response.status, 400);
+    assert.match(response.data.error, error);
+    assert.deepEqual(mutationState(), before);
+  }
+
+  const fallback = await invokeApi(handler, "POST", "/api/tasks", {
+    title: "Default store task",
+    status: "backlog",
+  });
+  assert.equal(fallback.status, 201);
+  assert.equal(fallback.data.storeId, "studio");
+
+  const agreeing = await invokeApi(handler, "POST", `/api/tasks?store=${encodeURIComponent(privateStoreId)}&game=${encodeURIComponent(privateStore.gameId)}`, {
+    title: "Agreed private store task",
+    status: "backlog",
+    store: privateStoreId,
+    storeId: privateStoreId,
+    game: privateStore.gameId,
+    gameId: privateStore.gameId,
+  }, { "x-ai-studio-store": privateStoreId });
+  assert.equal(agreeing.status, 201);
+  assert.equal(agreeing.data.storeId, privateStoreId);
+  assert.deepEqual(mutationState().tasks, [1, 1]);
 });
 
 test("aggregate validation rejects ambiguous bare cross-store links and accepts qualified links", (t) => {

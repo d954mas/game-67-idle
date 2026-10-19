@@ -1,12 +1,3 @@
-// alphaCutout op + API/CLI parity tests. Run:
-//   node --test ai_studio/assets/canvas/tests/alpha.test.mjs
-//
-// alphaCutout runs an element's CURRENT pixels through the image-tools matte pipeline
-// (route + key_matte, reused unmodified) and mints the cutout as a NEW element beside the
-// source in ONE journaled entry (T0336 — the original element and its pixels are never
-// touched; undo removes the copy and leaves the source byte-identical). The validation tests
-// (non-image, bad method, unknown region) need no Python; the pipeline tests run the real
-// warm-worker path and skip cleanly when the studio venv is missing.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -86,31 +77,20 @@ test("alphaCutout requires projectId and elementId", async () => {
   await assert.rejects(() => alphaCutout(UNUSED_ROOT, { projectId: "p" }), /requires elementId/);
 });
 
-// ---- pipeline (real warm worker; skips without the studio venv) ---------------
+// ---- pipeline (real warm worker) ---------------
 
-// Try one whole-element auto cutout; return {project, element, original} or null on a
-// venv/Pillow miss (the caller then t.skip's). Isolates the "does Python run here" gate.
-async function tryAlpha(t, method = "auto", regions) {
+async function runAlpha(method = "auto", regions) {
   const project = createProject(REPO_ROOT, { title: "Alpha run" });
   const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
   if (regions) setRegions(REPO_ROOT, { projectId: project.id, elementId: element.id, regions });
   const original = getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id);
-  try {
-    const result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method, regions: regions ? regions.map((r) => r.id) : undefined });
-    return { projectId: project.id, elementId: element.id, result, original };
-  } catch (error) {
-    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-      t.skip(`alpha pipeline unavailable: ${error.message}`);
-      return null;
-    }
-    throw error;
-  }
+  const result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method, regions: regions ? regions.map((r) => r.id) : undefined });
+  return { projectId: project.id, elementId: element.id, result, original };
 }
 
 test("alphaCutout (auto) keys the whole element: alpha channel, transparent bg, opaque subject", async (t) => {
   tempProjects(t);
-  const ran = await tryAlpha(t, "auto");
-  if (!ran) return;
+  const ran = await runAlpha("auto");
   const { projectId, elementId, result, original } = ran;
 
   // The cutout is a NEW element beside the source; the source is untouched (T0336 copy semantics).
@@ -142,8 +122,7 @@ test("alphaCutout (auto) keys the whole element: alpha channel, transparent bg, 
 
 test("alphaCutout is ONE journal entry: undo removes the copy (source untouched), redo re-adds it", async (t) => {
   tempProjects(t);
-  const ran = await tryAlpha(t, "matte");
-  if (!ran) return;
+  const ran = await runAlpha("matte");
   const { projectId, elementId, result, original } = ran;
 
   // The original file is immutable — it still exists on disk with identical bytes.
@@ -177,10 +156,6 @@ test("alphaCutout batch (elementIds) mints 2 copies in ONE journal entry; one un
   try {
     result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementIds: [e1.id, e2.id], method: "matte" });
   } catch (error) {
-    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-      t.skip(`alpha pipeline unavailable: ${error.message}`);
-      return;
-    }
     throw error;
   }
 
@@ -223,8 +198,7 @@ test("alphaCutout (regions) keys ONLY inside the region; outside stays untouched
   tempProjects(t);
   // Region [4,4,28,28] covers the red blob (8..28) plus a magenta margin; blob2 (36..56)
   // and the far magenta corner sit OUTSIDE the region and must stay original + opaque.
-  const ran = await tryAlpha(t, "matte", [{ id: "r1", rect: [4, 4, 28, 28] }]);
-  if (!ran) return;
+  const ran = await runAlpha("matte", [{ id: "r1", rect: [4, 4, 28, 28] }]);
   const { projectId, elementId, result, original } = ran;
   // The cut lives on the NEW copy element; the source is byte-identical (T0336).
   assert.deepEqual(getProject(REPO_ROOT, projectId).elements.find((el) => el.id === elementId), original, "source untouched");
@@ -249,10 +223,6 @@ test("alphaCutout (auto) refuses soft art with a CLEAN message — no Python tra
     await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "auto" });
     assert.fail("auto on soft art must refuse (dual-plate guard)");
   } catch (error) {
-    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-      t.skip(`alpha pipeline unavailable: ${error.message}`);
-      return;
-    }
     // The deliberate refusal reaches the operator as the tool's own message...
     assert.match(error.message, /dual_plate|plate PAIR/, `refusal message expected, got: ${error.message}`);
     // ...WITHOUT the worker's crash formatting (raw traceback in the UI toast = bug).
@@ -274,10 +244,6 @@ test("alphaCutout never resurrects pixels hidden by a polygon slice", async (t) 
   try {
     result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "matte" });
   } catch (error) {
-    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-      t.skip(`alpha pipeline unavailable: ${error.message}`);
-      return;
-    }
     throw error;
   }
   const png = decodePng(readFileSync(resolveProjectFile(REPO_ROOT, project.id, result.element.src)));
@@ -302,10 +268,6 @@ test("alphaCutout batch is atomic: one refusing element rejects the WHOLE batch,
     await alphaCutout(REPO_ROOT, { projectId: project.id, elementIds: [good.id, soft.id], method: "auto" });
     assert.fail("a batch containing a soft-art element under auto must refuse (dual-plate guard)");
   } catch (error) {
-    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-      t.skip(`alpha pipeline unavailable: ${error.message}`);
-      return;
-    }
     // The refusal reaches the operator as the tool's own message (that element's message),
     // never a partial-batch summary or a raw traceback.
     assert.match(error.message, /dual_plate|plate PAIR/, `refusal message expected, got: ${error.message}`);
@@ -367,7 +329,7 @@ test("alphaCutout rejects elementId and elementIds together, and an empty elemen
   );
 });
 
-// ---- API + CLI parity (real pipeline; skips without the venv) -----------------
+// ---- API + CLI parity (real pipeline) -----------------
 
 test("alpha API route and CLI drive the same op", async (t) => {
   const dir = tempProjects(t);
@@ -383,10 +345,6 @@ test("alpha API route and CLI drive the same op", async (t) => {
   };
   const req = mockReq("POST", { elementId: element.id, method: "matte" });
   await handler(req, res, new URL(`http://x/api/canvas/projects/${project.id}/alpha`));
-  if (captured.status === 400 && /venv|Pillow|module/i.test(String(captured.body && captured.body.error))) {
-    t.skip(`alpha pipeline unavailable: ${captured.body.error}`);
-    return;
-  }
   assert.equal(captured.status, 200, `API alpha 200 (got ${captured.status}: ${JSON.stringify(captured.body)})`);
   assert.equal(captured.body.method, "matte");
 
@@ -421,10 +379,6 @@ test("alpha API and CLI both drive elementIds batches, one journal entry each (p
   };
   const req = mockReq("POST", { elementIds: [e1.id, e2.id], method: "matte" });
   await handler(req, res, new URL(`http://x/api/canvas/projects/${project.id}/alpha`));
-  if (captured.status === 400 && /venv|Pillow|module/i.test(String(captured.body && captured.body.error))) {
-    t.skip(`alpha pipeline unavailable: ${captured.body.error}`);
-    return;
-  }
   assert.equal(captured.status, 200, `API alpha 200 (got ${captured.status}: ${JSON.stringify(captured.body)})`);
   assert.equal(captured.body.method, "matte");
   assert.equal(captured.body.count, 2);
@@ -693,7 +647,7 @@ test("corridorkey regions (faked GPU run, real compose_regions python) composes 
   assert.deepEqual(undone.elements.find((el) => el.id === element.id), original, "source still byte-identical after undo");
 });
 
-test("corridorkey (real key gate) refuses a NEUTRAL key with a clean message BEFORE any GPU call (skips without the studio venv)", async (t) => {
+test("corridorkey (real key gate) refuses a NEUTRAL key with a clean message BEFORE any GPU call", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "CK neutral reject" });
   const { element } = addImage(REPO_ROOT, project.id, { name: "neutral.png", bytes: darkBgPng() });
@@ -705,10 +659,6 @@ test("corridorkey (real key gate) refuses a NEUTRAL key with a clean message BEF
     await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "corridorkey" });
     assert.fail("corridorkey on a neutral key must refuse (neither green nor magenta)");
   } catch (error) {
-    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-      t.skip(`corridorkey key gate unavailable (studio venv): ${error.message}`);
-      return;
-    }
     assert.match(error.message, /neither/i, `neutral refusal expected, got: ${error.message}`);
     assert.ok(!/Traceback|File "/.test(error.message), `traceback leaked to the operator: ${error.message}`);
   }
@@ -720,7 +670,7 @@ test("corridorkey (real key gate) refuses a NEUTRAL key with a clean message BEF
 // Both real paths spend real GPU/CPU seconds (+ a one-time model download), so the suite NEVER runs
 // them: each inference is an injectable seam (`vitmatte` / `birefnet` on the op — the same
 // `corridorKey` precedent) that tests fake. The vitmatte key gate (route_cutout, shared repo venv,
-// NO GPU) is exercised by the neutral-key refusal test, which skips cleanly without the studio venv.
+// NO GPU) is exercised by the neutral-key refusal test.
 // No live model runs here.
 
 // A fake ViTMatte invocation: writes a valid RGBA PNG to outAbs and returns a canvas alpha report,
@@ -967,7 +917,7 @@ test("birefnet refuses a region-scoped request (whole-element only in v1) before
   assert.equal(bn.calls.n, 0, "the CPU seam is never reached on a region refusal");
 });
 
-test("vitmatte (real key gate) refuses a NEUTRAL key with a clean message BEFORE any GPU call (skips without the studio venv)", async (t) => {
+test("vitmatte (real key gate) refuses a NEUTRAL key with a clean message BEFORE any GPU call", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "vitmatte neutral reject" });
   const { element } = addImage(REPO_ROOT, project.id, { name: "neutral.png", bytes: darkBgPng() });
@@ -978,10 +928,6 @@ test("vitmatte (real key gate) refuses a NEUTRAL key with a clean message BEFORE
     await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "vitmatte" });
     assert.fail("vitmatte on a neutral key must refuse (neither green nor magenta)");
   } catch (error) {
-    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-      t.skip(`vitmatte key gate unavailable (studio venv): ${error.message}`);
-      return;
-    }
     assert.match(error.message, /neither/i, `neutral refusal expected, got: ${error.message}`);
     assert.ok(!/Traceback|File "/.test(error.message), `traceback leaked to the operator: ${error.message}`);
   }
@@ -1032,7 +978,7 @@ test("alphaDualPlate rejects a non-image element and an unknown id, before any p
   );
 });
 
-// ---- pipeline (real warm worker; skips without the studio venv) ---------------
+// ---- pipeline (real warm worker) ---------------
 
 test("alphaDualPlate (happy pair) creates ONE new element in ONE journal entry; plates stay untouched; undo removes it, redo restores it", async (t) => {
   tempProjects(t);
@@ -1047,10 +993,6 @@ test("alphaDualPlate (happy pair) creates ONE new element in ONE journal entry; 
   try {
     result = await alphaDualPlate(REPO_ROOT, { projectId: project.id, elementIds: [plateWhite.id, plateBlack.id] });
   } catch (error) {
-    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-      t.skip(`dual-plate pipeline unavailable: ${error.message}`);
-      return;
-    }
     throw error;
   }
 
@@ -1361,10 +1303,6 @@ test("alphaDualPlate refuses a misaligned pair with the pair gate's own message 
     await alphaDualPlate(REPO_ROOT, { projectId: project.id, elementIds: [plateWhite.id, plateBlack.id] });
     assert.fail("a misaligned dual-plate pair must refuse (pair gate)");
   } catch (error) {
-    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-      t.skip(`dual-plate pipeline unavailable: ${error.message}`);
-      return;
-    }
     // The gate's own message reaches the operator...
     assert.match(error.message, /consistency gate|regenerate|redraw/i, `refusal message expected, got: ${error.message}`);
     // ...WITHOUT the worker's crash formatting (raw traceback in the UI toast = bug).
@@ -1380,7 +1318,7 @@ test("alphaDualPlate refuses a misaligned pair with the pair gate's own message 
   }
 });
 
-// ---- API + CLI parity (real pipeline; skips without the venv) -----------------
+// ---- API + CLI parity (real pipeline) -----------------
 
 test("alpha-dual API route and CLI drive the same op", async (t) => {
   const dir = tempProjects(t);
@@ -1398,10 +1336,6 @@ test("alpha-dual API route and CLI drive the same op", async (t) => {
   };
   const req = mockReq("POST", { elementIds: [plateWhite.id, plateBlack.id] });
   await handler(req, res, new URL(`http://x/api/canvas/projects/${project.id}/alpha-dual`));
-  if (captured.status === 400 && /venv|Pillow|module/i.test(String(captured.body && captured.body.error))) {
-    t.skip(`dual-plate pipeline unavailable: ${captured.body.error}`);
-    return;
-  }
   assert.equal(captured.status, 201, `API alpha-dual 201 (got ${captured.status}: ${JSON.stringify(captured.body)})`);
   assert.equal(captured.body.element.meta.alpha.method, "dual_plate");
   const apiElementId = captured.body.element.id;

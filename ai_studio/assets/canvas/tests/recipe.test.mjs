@@ -293,13 +293,7 @@ test("exportProject never exports a top-level recipe-card group (a card is a wor
   // blocked by exportProject — the flag is the only gate, no recipe-aware special-casing —
   // but that is a deliberate lead choice to leave alone, not this test's concern.
 
-  let result;
-  try {
-    result = await exportProject(REPO_ROOT, { projectId: project.id });
-  } catch (error) {
-    t.skip(`render_group.py / python pipeline unavailable: ${error.message}`);
-    return;
-  }
+  const result = await exportProject(REPO_ROOT, { projectId: project.id });
   assert.equal(result.screens.length, 1, "only the plain group is exported as a screen");
   assert.equal(result.screens[0].name, "Screen");
 });

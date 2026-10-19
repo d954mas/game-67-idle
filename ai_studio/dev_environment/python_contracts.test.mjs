@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -110,4 +110,27 @@ test("canonical Python runner prepends repo imports and preserves ambient PYTHON
     env: { ...process.env, PYTHONPATH: ambient },
   }).trim();
   assert.equal(output, `${root}${delimiter}${ambient}`);
+});
+
+test("Python environment check reports missing distributions and continues checking pins", (t) => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "studio-python-missing-"));
+  t.after(() => rmSync(fixtureRoot, { recursive: true, force: true }));
+  writeFileSync(join(fixtureRoot, "sitecustomize.py"), [
+    "import importlib.metadata as metadata",
+    "def missing_version(name):",
+    "    raise metadata.PackageNotFoundError(name)",
+    "metadata.version = missing_version",
+    "",
+  ].join("\n"));
+
+  const result = spawnSync(process.execPath, [join(root, "ai_studio/dev_environment/python_check.mjs")], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, PYTHONPATH: fixtureRoot },
+  });
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr, "");
+  const report = JSON.parse(result.stdout);
+  assert.ok(report.pins.length > 1);
+  assert.deepEqual(report.mismatches, report.pins.map((pin) => `${pin}: missing`));
 });

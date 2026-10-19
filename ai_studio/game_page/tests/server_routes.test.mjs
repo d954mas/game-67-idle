@@ -3,7 +3,8 @@
 // hard-coded in this public test file.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,7 +45,21 @@ function waitForServer(child) {
   });
 }
 
-test("game page routes serve the games list, page html, and confined game files", async () => {
+test("game page routes serve the games list, page html, and confined game files", async (t) => {
+  const gameId = `route-fixture-${randomUUID().slice(0, 8)}`;
+  const gameRoot = join(repoRoot, "games", gameId);
+  mkdirSync(gameRoot);
+  t.after(() => rmSync(gameRoot, { recursive: true, force: true }));
+  writeFileSync(join(gameRoot, "game.json"), JSON.stringify({
+    schema: "ai_studio.game.v1", id: gameId, title: "HTTP route fixture", storageNamespace: gameId,
+  }));
+  writeFileSync(join(gameRoot, "dependencies.json"), JSON.stringify({
+    schema: "ai_studio.game.dependencies.v3",
+    engine: { source: "external/neotolis-engine", version: "0.1.0", revision: "0".repeat(40), compatibility: "test" },
+    features: [], compatibility: "test",
+  }));
+  mkdirSync(join(gameRoot, "web"));
+  writeFileSync(join(gameRoot, "web", "index.html.in"), "<!doctype html><title>HTTP route fixture</title>");
   const port = await reservePort();
   const pidFile = join(repoRoot, "tmp", "ai_studio", `studio_shell_${port}.pid`);
   const child = spawn(process.execPath, [serverPath, String(port)], {
@@ -61,13 +76,13 @@ test("game page routes serve the games list, page html, and confined game files"
     assert.equal(gamesResponse.status, 200);
     const games = await gamesResponse.json();
     assert.equal(games.schema, "ai_studio.game_page.games.v1");
-    assert.ok(Array.isArray(games.games) && games.games.length > 0, "repo must expose at least one game");
+    assert.ok(Array.isArray(games.games));
+    assert.ok(games.games.some((game) => game.id === gameId), "the fixture game must be discoverable");
 
     const pickerResponse = await fetch(`${base}/games/`);
     assert.equal(pickerResponse.status, 200);
     assert.match(await pickerResponse.text(), /id="gamesList"/);
 
-    const gameId = games.games[0].id;
     const pageResponse = await fetch(`${base}/game/${encodeURIComponent(gameId)}`);
     assert.equal(pageResponse.status, 200);
     assert.match(await pageResponse.text(), /game_page\/site\/game\.js/);
@@ -99,10 +114,10 @@ test("game page routes serve the games list, page html, and confined game files"
 
     // Executable types from inside a game folder must download, not render on
     // the studio origin.
-    const htmlProbe = await fetch(`${base}/game-file/${encodeURIComponent(gameId)}/web/index.html.in`).then(async (r) => r.status === 404
-      ? null
-      : r.headers.get("content-type"));
-    if (htmlProbe != null) assert.equal(htmlProbe, "application/octet-stream");
+    const htmlProbe = await fetch(`${base}/game-file/${encodeURIComponent(gameId)}/web/index.html.in`);
+    assert.equal(htmlProbe.status, 200);
+    assert.equal(htmlProbe.headers.get("content-type"), "application/octet-stream");
+    await htmlProbe.text();
   } finally {
     if (child.exitCode === null && child.signalCode === null) {
       const exited = new Promise((resolveExit) => child.once("exit", resolveExit));

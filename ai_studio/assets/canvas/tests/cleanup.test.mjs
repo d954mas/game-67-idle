@@ -10,7 +10,7 @@
 // content-addressed file + element.src swap + element.meta.cleanup) — undo restores the
 // previous src byte-exact. (Cleanup keeps the in-place src-swap; alphaCutout since T0336
 // instead mints a NEW element beside the source.) The validation tests need no Python;
-// the pipeline tests run the real warm-worker path and skip cleanly when the studio venv
+// the pipeline tests run the real warm-worker path and require the studio venv
 // is missing.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -66,18 +66,9 @@ function filesListing(root, projectId) {
   return existsSync(dir) ? readdirSync(dir).sort() : [];
 }
 
-// Try a whole-element preview or apply; return the op's result or null on a venv/Pillow
-// miss (the caller then t.skip's). Isolates the "does Python run here" gate.
-async function tryCleanup(t, fn, args) {
-  try {
-    return await fn(REPO_ROOT, args);
-  } catch (error) {
-    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
-      t.skip(`cleanup pipeline unavailable: ${error.message}`);
-      return null;
-    }
-    throw error;
-  }
+// Run a whole-element preview or apply through the shared operation.
+async function tryCleanup(_t, fn, args) {
+  return fn(REPO_ROOT, args);
 }
 
 // ---- validation (no Python) --------------------------------------------------
@@ -149,7 +140,7 @@ test("cleanup refuses a rotated/flipped element with the SAME message alphaCutou
   );
 });
 
-// ---- pipeline: preview (real warm worker; skips without the studio venv) ------
+// ---- pipeline: preview (real warm worker) -------------------------------------
 
 test("cleanupPreview (quantize) returns bytes + report and writes NOTHING to the store", async (t) => {
   tempProjects(t);
@@ -164,7 +155,6 @@ test("cleanupPreview (quantize) returns bytes + report and writes NOTHING to the
     tool: "quantize",
     params: { colors: 6 },
   });
-  if (!result) return;
 
   assert.equal(result.tool, "quantize");
   assert.equal(result.params.colors, 6);
@@ -199,7 +189,6 @@ test("cleanupPreview (denoise) returns bytes + report and writes NOTHING to the 
     tool: "denoise",
     params: { strength: 2 },
   });
-  if (!result) return;
 
   assert.equal(result.tool, "denoise");
   assert.equal(result.params.strength, 2);
@@ -214,7 +203,7 @@ test("cleanupPreview (denoise) returns bytes + report and writes NOTHING to the 
   assert.deepEqual(filesListing(REPO_ROOT, project.id), filesBefore, "preview writes no files/ entry");
 });
 
-// ---- pipeline: apply (real warm worker; skips without the studio venv) --------
+// ---- pipeline: apply (real warm worker) ---------------------------------------
 
 test("cleanupApply (quantize) is ONE journal entry: new file, src swap, meta.cleanup shape, undo restores byte-exact", async (t) => {
   tempProjects(t);
@@ -229,7 +218,6 @@ test("cleanupApply (quantize) is ONE journal entry: new file, src swap, meta.cle
     tool: "quantize",
     params: { colors: 8, dither: true },
   });
-  if (!result) return;
 
   // New content-addressed file, src swapped, geometry preserved.
   assert.notEqual(result.element.src, original.src, "element swapped to a new cleaned file");
@@ -276,7 +264,6 @@ test("cleanupApply (denoise) is ONE journal entry: new file, src swap, meta.clea
     tool: "denoise",
     params: { strength: 3 },
   });
-  if (!result) return;
 
   assert.notEqual(result.element.src, original.src);
   assert.equal(result.element.meta.cleanup.tool, "denoise");
@@ -322,7 +309,6 @@ test("cleanupApply preserves an existing alpha meta alongside the new cleanup me
     tool: "quantize",
     params: { colors: 16 },
   });
-  if (!result) return;
 
   assert.equal(result.element.meta.alpha.method, "matte", "pre-existing alpha meta survives");
   assert.equal(result.element.meta.cleanup.tool, "quantize", "cleanup meta added alongside it");
@@ -332,7 +318,7 @@ test("cleanupApply preserves an existing alpha meta alongside the new cleanup me
   assert.equal(result.element.meta.style_decision, undefined);
 });
 
-// ---- API + CLI parity (real pipeline; skips without the venv) -----------------
+// ---- API + CLI parity (real pipeline) -----------------------------------------
 
 test("cleanup-preview API route matches the op (no journal entry)", async (t) => {
   tempProjects(t);
@@ -348,10 +334,6 @@ test("cleanup-preview API route matches the op (no journal entry)", async (t) =>
   };
   const req = mockReq("POST", { tool: "quantize", params: { colors: 6 } });
   await handler(req, res, new URL(`http://x/api/canvas/projects/${project.id}/elements/${element.id}/cleanup-preview`));
-  if (captured.status === 400 && /venv|Pillow|module/i.test(String(captured.body && captured.body.error))) {
-    t.skip(`cleanup pipeline unavailable: ${captured.body.error}`);
-    return;
-  }
   assert.equal(captured.status, 200, `cleanup-preview 200 (got ${captured.status}: ${JSON.stringify(captured.body)})`);
   assert.ok(captured.body.preview_base64 && captured.body.preview_base64.length > 0);
   assert.equal(captured.body.tool, "quantize");
@@ -376,10 +358,6 @@ test("cleanup API route and CLI drive the same apply op (one journal entry each)
   const seqBeforeApi = getProject(REPO_ROOT, project.id).history_seq;
   const req = mockReq("POST", { tool: "quantize", params: { colors: 8 } });
   await handler(req, res, new URL(`http://x/api/canvas/projects/${project.id}/elements/${e1.id}/cleanup`));
-  if (captured.status === 400 && /venv|Pillow|module/i.test(String(captured.body && captured.body.error))) {
-    t.skip(`cleanup pipeline unavailable: ${captured.body.error}`);
-    return;
-  }
   assert.equal(captured.status, 200, `cleanup 200 (got ${captured.status}: ${JSON.stringify(captured.body)})`);
   assert.equal(captured.body.tool, "quantize");
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBeforeApi + 1, "API apply is one journal entry");

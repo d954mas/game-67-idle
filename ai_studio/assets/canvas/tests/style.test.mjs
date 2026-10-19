@@ -222,13 +222,7 @@ test("exportProject never exports a top-level style-card group either (mirrors t
   const { group: card } = createStyleCard(REPO_ROOT, { projectId: project.id, name: "Style card" });
   assert.equal(card.screen, undefined, "createStyleCard never sets screen — unflagged by construction");
 
-  let result;
-  try {
-    result = await exportProject(REPO_ROOT, { projectId: project.id });
-  } catch (error) {
-    t.skip(`render_group.py / python pipeline unavailable: ${error.message}`);
-    return;
-  }
+  const result = await exportProject(REPO_ROOT, { projectId: project.id });
   assert.equal(result.screens.length, 1, "only the plain group is exported as a screen");
   assert.equal(result.screens[0].name, "Screen");
 });

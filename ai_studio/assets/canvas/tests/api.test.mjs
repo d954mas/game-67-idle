@@ -514,7 +514,7 @@ test("canvas API export route writes a folder + manifest", async (t) => {
   assert.equal(payload.manifest.schema, "ai_studio.canvas.export.v1");
 });
 
-test("canvas API slice route creates crop elements (skips without Python)", async (t) => {
+test("canvas API slice route creates crop elements", async (t) => {
   tempProjects(t);
   const handler = createCanvasApi(REPO_ROOT);
   const created = await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Slice API" });
@@ -526,15 +526,9 @@ test("canvas API slice route creates crop elements (skips without Python)", asyn
   const elementId = uploaded.json().element.id;
 
   const detected = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/detect-regions`, { elementId });
-  if (detected.status !== 200) {
-    t.skip(`raster2d/python pipeline unavailable: ${detected.json().error}`);
-    return;
-  }
+  assert.equal(detected.status, 200, `detect-regions 200 (got ${detected.status}: ${JSON.stringify(detected.json())})`);
   const sliced = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/slice`, { elementId });
-  if (sliced.status !== 200) {
-    t.skip(`raster2d/python slicing unavailable: ${sliced.json().error}`);
-    return;
-  }
+  assert.equal(sliced.status, 200, `slice 200 (got ${sliced.status}: ${JSON.stringify(sliced.json())})`);
   t.after(() => {
     const sessionId = sliced.json().run.result_summary.session_id;
     const detectSession = detected.json().run.result_summary.session_id;
@@ -707,7 +701,7 @@ test("canvas API groups fit route resizes the frame to content; empty group is a
   assert.match(bad.json().error, /nothing to fit/);
 });
 
-test("canvas API render-screen route composites a group PNG (skips without Python)", async (t) => {
+test("canvas API render-screen route composites a group PNG", async (t) => {
   tempProjects(t);
   const handler = createCanvasApi(REPO_ROOT);
   const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Render API" })).json().project.id;
@@ -722,10 +716,7 @@ test("canvas API render-screen route composites a group PNG (skips without Pytho
   })).json().group.id;
 
   const rendered = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups/${groupId}/render`, { scale: 1 });
-  if (rendered.status !== 200) {
-    t.skip(`render_group.py / PIL unavailable: ${rendered.json().error}`);
-    return;
-  }
+  assert.equal(rendered.status, 200, `render 200 (got ${rendered.status}: ${JSON.stringify(rendered.json())})`);
   assert.equal(rendered.json().manifest.kind, "screen");
   assert.equal(rendered.json().members, 1);
 });
@@ -1077,8 +1068,7 @@ test("canvas API nodes-duplicate / nodes-paste / nodes-delete parity (one entry 
 //
 // packPreview/packSlice are NOT codex/agy seams (the real expand_jobs.py expander is offline/
 // deterministic/stdlib; region detection/crop_regions.py are the SAME pipeline plain detect-
-// regions/slice already exercise above) so these run for real and skip cleanly without the
-// studio venv, mirroring the existing "canvas API slice route" test's own skip pattern. The
+// regions/slice already exercise above) so these run through the real studio environment. The
 // plain generate route, by contrast, has NO existing HTTP-level test anywhere in this file (no
 // createCanvasApi seam exists to inject a fake generator over HTTP — only the ops-layer tests
 // in recipe.test.mjs/pack.test.mjs do that, by importing generateFromRecipe directly) — the
@@ -1088,7 +1078,7 @@ test("canvas API nodes-duplicate / nodes-paste / nodes-delete parity (one entry 
 // loud "--sheet does not match any expanded job" refusal (which fires strictly AFTER the real,
 // offline expander runs but BEFORE any codex spawn).
 
-test("canvas API POST recipe-cards/<gid>/pack-preview: ephemeral real-expander preview, never journals (skips without the studio venv)", async (t) => {
+test("canvas API POST recipe-cards/<gid>/pack-preview: ephemeral real-expander preview, never journals", async (t) => {
   tempProjects(t);
   const handler = createCanvasApi(REPO_ROOT);
   const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Pack Preview API" })).json().project.id;
@@ -1106,10 +1096,7 @@ test("canvas API POST recipe-cards/<gid>/pack-preview: ephemeral real-expander p
   const beforeSeq = patched.json().project.history_seq;
 
   const preview = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/${card.id}/pack-preview`, {});
-  if (preview.status !== 200) {
-    t.skip(`pack preview pipeline unavailable: ${preview.json().error}`);
-    return;
-  }
+  assert.equal(preview.status, 200, `pack-preview 200 (got ${preview.status}: ${JSON.stringify(preview.json())})`);
   const result = preview.json();
   assert.equal(result.sheets, 2, "2 material values (big axis) x 1 candidate = 2 sheets");
   assert.equal(result.jobs.length, 2);
@@ -1119,7 +1106,7 @@ test("canvas API POST recipe-cards/<gid>/pack-preview: ephemeral real-expander p
   assert.equal(after.history_seq, beforeSeq, "pack-preview never journals/mutates the blob");
 });
 
-test("canvas API POST recipe-cards/<gid>/pack-slice: per-sheet contract, reparented cuts (skips without Python)", async (t) => {
+test("canvas API POST recipe-cards/<gid>/pack-slice: per-sheet contract, reparented cuts", async (t) => {
   tempProjects(t);
   const handler = createCanvasApi(REPO_ROOT);
   const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Pack Slice API" })).json().project.id;
@@ -1161,10 +1148,7 @@ test("canvas API POST recipe-cards/<gid>/pack-slice: per-sheet contract, reparen
   const sliced = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/${card.id}/pack-slice`, {
     runGroupId: runGroup.id,
   });
-  if (sliced.status !== 200) {
-    t.skip(`region detector/crop pipeline unavailable: ${sliced.json().error}`);
-    return;
-  }
+  assert.equal(sliced.status, 200, `pack-slice 200 (got ${sliced.status}: ${JSON.stringify(sliced.json())})`);
   const result = sliced.json();
   assert.equal(result.run_group_id, runGroup.id);
   assert.equal(result.contract.length, 1);
@@ -1173,7 +1157,7 @@ test("canvas API POST recipe-cards/<gid>/pack-slice: per-sheet contract, reparen
   assert.equal(result.contract[0].cut_ids.length, 2);
 });
 
-test("canvas API POST recipe-cards/<gid>/generate forwards body.sheetSlug into the pack branch (loud before any codex call; skips without the studio venv)", async (t) => {
+test("canvas API POST recipe-cards/<gid>/generate forwards body.sheetSlug into the pack branch before any codex call", async (t) => {
   tempProjects(t);
   const handler = createCanvasApi(REPO_ROOT);
   const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Pack Generate Route" })).json().project.id;
@@ -1211,13 +1195,8 @@ test("canvas API POST recipe-cards/<gid>/generate forwards body.sheetSlug into t
   const result = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/${card.id}/generate`, {
     sheetSlug: "no-such-sheet",
   });
-  const errorMessage = (result.json() && result.json().error) || "";
-  if (result.status === 500 || /venv|interpreter|setup_python|No module|ModuleNotFound/i.test(errorMessage)) {
-    t.skip(`pack expander pipeline unavailable: ${errorMessage}`);
-    return;
-  }
-  assert.equal(result.status, 400);
-  assert.match(errorMessage, /--sheet "no-such-sheet" does not match any expanded job name/);
+  assert.equal(result.status, 400, `generate pack rejection 400 (got ${result.status}: ${JSON.stringify(result.json())})`);
+  assert.match(result.json().error, /--sheet "no-such-sheet" does not match any expanded job name/);
 });
 
 test("canvas API POST recipe-cards/<gid>/generate: body.sheetSlug with no prior pack run at all is loud (FIX 2 -- no silent new-group fork)", async (t) => {

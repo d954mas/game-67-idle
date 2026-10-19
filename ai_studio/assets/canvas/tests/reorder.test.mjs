@@ -230,7 +230,7 @@ test("assignToGroup into an explicit scope assigns front order; into an implicit
 
 // ---- render honors the computed order -----------------------------------------
 
-test("renderGroup composites members in the reordered z-order (skips without Python)", async (t) => {
+test("renderGroup composites members in the reordered z-order", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Overlap" });
   const projectId = project.id;
@@ -241,13 +241,7 @@ test("renderGroup composites members in the reordered z-order (skips without Pyt
   patchElement(REPO_ROOT, projectId, green.id, { x: 0, y: 0 });
   const { group } = createGroup(REPO_ROOT, { projectId, name: "Ov", fromElements: [red.id, green.id] });
 
-  let first;
-  try {
-    first = await renderGroup(REPO_ROOT, { projectId, groupId: group.id, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const first = await renderGroup(REPO_ROOT, { projectId, groupId: group.id, scale: 1 });
   // The members sit at world (0,0); the group frame is padded 24px, so (0,0) maps to
   // output (24,24). Sample (26,26) — inside the overlapping 8x8 members.
   // Default order (array): green is painted last -> on top over the overlap.

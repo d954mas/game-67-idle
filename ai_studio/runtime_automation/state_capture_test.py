@@ -63,6 +63,32 @@ class StateCaptureTest(unittest.TestCase):
             self.assertIn("combat", sc.required)
             self.assertEqual(sc.shots_args(), [f"--shot combat:{os.path.join(tmp, 'caps')}/state_combat.png"])
 
+    def test_capture_rejects_path_like_tags_before_side_effects(self):
+        invalid_tags = (
+            "nested/state",
+            "nested\\state",
+            "../outside",
+            "..\\outside",
+            "/absolute",
+            "\\absolute",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            client = FakeClient()
+            sc = StateCapture(client, "demo", out_dir=os.path.join(tmp, "caps"))
+            sc.require("first_screen")
+            sc.capture("already_captured")
+            captured_before = list(client.captured)
+            covered_before = list(sc.covered)
+            required_before = list(sc.required)
+
+            for tag in invalid_tags:
+                with self.subTest(tag=tag):
+                    with self.assertRaisesRegex(ValueError, "single path component"):
+                        sc.capture(tag)
+                    self.assertEqual(client.captured, captured_before)
+                    self.assertEqual(sc.covered, covered_before)
+                    self.assertEqual(sc.required, required_before)
+
     def test_standard_states_present(self):
         for tag in ("first_screen", "transient_stress_state", "reward_active"):
             self.assertIn(tag, STANDARD_STATES)

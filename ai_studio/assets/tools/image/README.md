@@ -1,8 +1,9 @@
 # Image Asset Tools
 
 `ai_studio/assets/tools/image/` is the media-type umbrella for working with
-raster images: sourcing, background normalization, region detection, slicing,
-alpha extraction (key-matte and dual-plate), and routing. It is a peer tier to
+raster images: background normalization, region detection, slicing, alpha
+extraction (key-matte and
+dual-plate), and routing. It is a peer tier to
 future `assets/tools/model3d/`, `assets/tools/audio/`, etc.
 
 Each tool is decomposed into its own folder: its Python entry script, its tests,
@@ -23,13 +24,13 @@ node ai_studio/dev_environment/python_setup.mjs
 The interpreter is resolved from `ai_studio/studio.config.json` -> `pythonPath`
 (`.venv/Scripts/python.exe`) ONLY. There is no PATH search or fallback chain: a
 missing venv or a missing dependency is a loud error naming this setup command.
-Pinned dependency versions live in `requirements.txt`.
+Pinned dependency versions live in `ai_studio/python/requirements.direct.txt`.
 
 ## Tools
 
-- `_bridge/` — shared Node plumbing (interpreter resolution, tmp confinement,
-  session dirs, JSON/image helpers) plus the Python setup script and pinned
-  `requirements.txt`. Not a tool itself; imported by the per-tool bridges.
+- `_bridge/` — shared Node plumbing for interpreter resolution, tmp confinement,
+  session dirs, and JSON/image helpers. Not a tool itself; imported by the
+  per-tool bridges.
 - `alpha_matte/` — single-background known-key cutout (path 1): opaque art and
   flat-key holes. `key_matte.py` + the `chroma_key_alpha.py` keying primitive.
 - `alpha_dualplate/` — fractional alpha from an aligned white/black plate pair
@@ -45,7 +46,7 @@ Pinned dependency versions live in `requirements.txt`.
 - `route/` — decides key-matte vs dual-plate for a flat-key source crop before a
   generation is spent.
 - `bg_fix/` — border-connected background chroma normalization (snap to key).
-- `regions/` — region detection over a normalized source.
+- `regions/` — region detection.
 - `slice/` — slice a source by reviewed regions, apply per-region alpha, build
   review sheets and export ZIPs.
 - `quality_gate/` — deterministic post-cutout spill, halo, alpha-fragment,

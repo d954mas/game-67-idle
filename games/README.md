@@ -49,8 +49,7 @@ fields, so the new game cannot enter the source game's service automatically.
 For backward compatibility, omitting `--visibility` still creates a public
 tracked game. Human-facing, agent-facing, or Studio browser flows should add
 `--require-visibility` so a missing public/private choice fails before any game
-files are copied. `--private` remains a compatibility alias for
-`--visibility private`.
+files are copied.
 
 Each game owns its private design knowledge base under
 `games/<game-id>/design/knowledge/`. Keep accepted game-specific facts, reference

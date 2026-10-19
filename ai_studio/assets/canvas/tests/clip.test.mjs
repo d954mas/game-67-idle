@@ -1,8 +1,7 @@
 // Increment-4 clip-to-bounds tests: the patchGroup `clip` model (validation, journaled
 // set/unset, absent-field normalization) and the recursive render crop (a clipped subgroup
 // crops an overflowing member; a non-clipped subgroup preserves overflow; two nested clips
-// intersect). The render tests drive render_group.py and skip cleanly when Python/PIL is
-// unavailable. Run:
+// intersect). The render tests drive render_group.py. Run:
 //   node --test ai_studio/assets/canvas/tests/clip.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -106,18 +105,12 @@ function seedOverflow(root) {
   return { projectId, screen, box, red };
 }
 
-test("a clip=true subgroup crops the part of a member outside its box (skips without Python)", async (t) => {
+test("a clip=true subgroup crops the part of a member outside its box", async (t) => {
   tempProjects(t);
   const { projectId, screen, box } = seedOverflow(REPO_ROOT);
   patchGroup(REPO_ROOT, { projectId, groupId: box.id, clip: true });
 
-  let result;
-  try {
-    result = await renderGroup(REPO_ROOT, { projectId, groupId: screen.id, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await renderGroup(REPO_ROOT, { projectId, groupId: screen.id, scale: 1 });
   const png = decodePng(readFileSync(result.path));
   assert.deepEqual([png.width, png.height], [40, 40]);
   // Inside the box AND inside the red element (box 10..30, red 25..45 => 25..30) => red shows.
@@ -127,24 +120,18 @@ test("a clip=true subgroup crops the part of a member outside its box (skips wit
   assert.equal(png.at(32, 32)[3], 0, "member cropped outside the clip box");
 });
 
-test("a clip=false subgroup preserves member overflow (existing behavior guard) (skips without Python)", async (t) => {
+test("a clip=false subgroup preserves member overflow (existing behavior guard)", async (t) => {
   tempProjects(t);
   const { projectId, screen } = seedOverflow(REPO_ROOT); // box left unclipped (default)
 
-  let result;
-  try {
-    result = await renderGroup(REPO_ROOT, { projectId, groupId: screen.id, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await renderGroup(REPO_ROOT, { projectId, groupId: screen.id, scale: 1 });
   const png = decodePng(readFileSync(result.path));
   assert.deepEqual(png.at(27, 27), [220, 40, 40, 255], "member drawn inside the box");
   // Overflow preserved: red past the box (but inside the Screen) still paints.
   assert.deepEqual(png.at(32, 32), [220, 40, 40, 255], "member overflow preserved without clip");
 });
 
-test("two nested clip=true subgroups intersect: a member is cropped to the inner∩outer box (skips without Python)", async (t) => {
+test("two nested clip=true subgroups intersect: a member is cropped to the inner∩outer box", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "NestedClip" });
   const projectId = project.id;
@@ -159,13 +146,7 @@ test("two nested clip=true subgroups intersect: a member is cropped to the inner
   patchGroup(REPO_ROOT, { projectId, groupId: a.id, clip: true });
   patchGroup(REPO_ROOT, { projectId, groupId: b.id, clip: true });
 
-  let result;
-  try {
-    result = await renderGroup(REPO_ROOT, { projectId, groupId: screen.id, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await renderGroup(REPO_ROOT, { projectId, groupId: screen.id, scale: 1 });
   const png = decodePng(readFileSync(result.path));
   assert.deepEqual([png.width, png.height], [50, 50]);
   assert.deepEqual(png.at(20, 20), [220, 40, 40, 255], "inside A∩B: member shows");

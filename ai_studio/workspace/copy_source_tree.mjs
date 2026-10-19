@@ -1,9 +1,27 @@
-import { copyFileSync, existsSync, mkdirSync, lstatSync, realpathSync } from "node:fs";
+import { copyFileSync, mkdirSync, lstatSync, realpathSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 
 function toGitPath(value) {
   return value.split(sep).join("/");
+}
+
+function isPhysicalRegularFile(path, errorMessage) {
+  let info;
+  try {
+    info = lstatSync(path);
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+  if (!info.isFile()) throw new Error(errorMessage);
+  try {
+    if (realpathSync(path) !== path) throw new Error(errorMessage);
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+  return true;
 }
 
 export function copyTrackedGameSourceTree(sourceDir, destinationDir) {
@@ -28,10 +46,7 @@ export function copyTrackedGameSourceTree(sourceDir, destinationDir) {
         || name.startsWith("assets/restricted/") || name.startsWith("release/artifacts/")
         || ["assets/PURCHASED_EXPORTS.md", "design/canvas.md"].includes(name)) continue;
     const file = resolve(source, name);
-    if (!existsSync(file)) continue;
-    if (!lstatSync(file).isFile() || realpathSync(file) !== file) {
-      throw new Error(`game source must contain regular files: ${name}`);
-    }
+    if (!isPhysicalRegularFile(file, `game source must contain regular files: ${name}`)) continue;
     const target = resolve(destinationDir, name);
     mkdirSync(dirname(target), { recursive: true });
     copyFileSync(file, target);
@@ -39,8 +54,8 @@ export function copyTrackedGameSourceTree(sourceDir, destinationDir) {
 }
 
 export function copyGitSourceTree(repoRoot, sourceDir, destinationDir) {
-  const root = resolve(repoRoot);
-  const source = resolve(sourceDir);
+  const root = realpathSync(repoRoot);
+  const source = realpathSync(sourceDir);
   const sourceRel = relative(root, source);
   if (!sourceRel || sourceRel === ".." || sourceRel.startsWith(`..${sep}`)) {
     throw new Error("source tree must be inside the Studio Git checkout");
@@ -56,9 +71,9 @@ export function copyGitSourceTree(repoRoot, sourceDir, destinationDir) {
   mkdirSync(destinationDir, { recursive: true });
   for (const repoRel of result.stdout.split("\0").filter(Boolean)) {
     const sourceFile = resolve(root, repoRel);
-    if (!existsSync(sourceFile)) continue;
     const targetRel = relative(source, sourceFile);
     if (!targetRel || targetRel === ".." || targetRel.startsWith(`..${sep}`)) continue;
+    if (!isPhysicalRegularFile(sourceFile, `source tree must contain regular files: ${repoRel}`)) continue;
     const targetFile = resolve(destinationDir, targetRel);
     mkdirSync(dirname(targetFile), { recursive: true });
     copyFileSync(sourceFile, targetFile);

@@ -213,7 +213,7 @@ ui_theme_init(&GAME_TOKENS, &art);
 and the art is redrawn from the matching sheet:
 
 ```
-python features/ui-kit/tools/gen_ui_kit.py --tokens design/ui_tokens.json --out assets/ui
+node ai_studio/dev_environment/python_run.mjs features/ui-kit/tools/gen_ui_kit.py --tokens design/ui_tokens.json --out assets/ui
 ```
 
 Partial overrides work the same way: start from a copy of the default struct,

@@ -6,8 +6,8 @@
 //   node --test ai_studio/assets/canvas/tests/animation.test.mjs
 //
 // The ONE render-pixel test drives the real render_group.py through the warm worker
-// (renderGroup — same harness pattern as slice9.test.mjs / export.test.mjs) and skips
-// cleanly when the studio venv / Pillow is unavailable. Every other test is pure/store/
+// (renderGroup — same harness pattern as slice9.test.mjs / export.test.mjs) and requires
+// the studio venv and Pillow. Every other test is pure/store/
 // API/CLI level and never touches Python.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -433,14 +433,8 @@ test("render-pixel parity: a 0.5-opacity element composites as EL*0.5 + BG*0.5 o
   const translucent = buildOpacityFixture(root, 0.5);
   const expectedBlend = EL.map((c, i) => Math.round(c * 0.5 + BG[i] * 0.5)); // independently derived
 
-  let png;
-  try {
-    const result = await renderGroup(root, { projectId: translucent.pid, groupId: translucent.groupId, scale: 1, background: "#204060" });
-    png = decodePng(readFileSync(result.path));
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await renderGroup(root, { projectId: translucent.pid, groupId: translucent.groupId, scale: 1, background: "#204060" });
+  const png = decodePng(readFileSync(result.path));
   // Element center (world 40,40 -> canvas 40,40): the translucent blend, NOT pure EL.
   assert.ok(closeColor(png.at(40, 40), expectedBlend), `expected blend [${expectedBlend}] at the element center, got [${png.at(40, 40)}]`);
   assert.ok(!closeColor(png.at(40, 40), EL), "the translucent center must have moved off the opaque element color");

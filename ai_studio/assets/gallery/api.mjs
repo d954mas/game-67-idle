@@ -1,6 +1,6 @@
 ﻿import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, join, normalize, resolve, sep } from "node:path";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { listIndexedPacks, queryIndexedAssets, refreshAssetIndex, resolveIndexedModel } from "../catalog/ops.mjs";
 import { refreshPreviewCache } from "../previews/ops.mjs";
@@ -25,6 +25,35 @@ export function safeResolve(base, relativePath) {
   if (/^[A-Za-z]:[/\\]/.test(relativePath) && !/^[A-Za-z]:[/\\]/.test(resolvedBase)) return null;
   const full = resolve(resolvedBase, normalize(relativePath));
   if (full !== resolvedBase && !full.startsWith(resolvedBase + sep)) return null;
+  return full;
+}
+
+function servedPathInside(base, relativePath) {
+  const full = safeResolve(base, relativePath);
+  if (!full) return null;
+
+  let physicalBase;
+  try {
+    physicalBase = realpathSync.native(resolve(base));
+  } catch {
+    return null;
+  }
+
+  // A missing file still needs its lexical path so the static handler can
+  // report 404, but an existing ancestor must remain inside the real root.
+  let ancestor = full;
+  while (!existsSync(ancestor)) {
+    const parent = dirname(ancestor);
+    if (parent === ancestor) return full;
+    ancestor = parent;
+  }
+
+  try {
+    const physicalAncestor = realpathSync.native(ancestor);
+    if (physicalAncestor !== physicalBase && !physicalAncestor.startsWith(physicalBase + sep)) return null;
+  } catch {
+    return null;
+  }
   return full;
 }
 
@@ -508,14 +537,17 @@ export async function resolveAssetViewerModel(root, url) {
 }
 
 export function resolveAssetViewerGalleryPath(root, pathname) {
-  const prefix = pathname.startsWith("/viewer/gallery/") ? "/viewer/gallery/" : "/asset_viewer/gallery/";
+  const prefix = "/asset_viewer/gallery/";
   if (!pathname.startsWith(prefix)) return null;
 
   const rest = pathname.slice(prefix.length);
   const [slug, ...parts] = rest.split("/").filter(Boolean);
   if (!slug) return null;
 
-  const galleryDir = join(galleryBase(root), safeSlug(slug));
+  const galleryRoot = servedPathInside(root, relative(root, galleryBase(root)));
+  if (!galleryRoot) return null;
+  const galleryDir = servedPathInside(galleryRoot, safeSlug(slug));
+  if (!galleryDir) return null;
   const metaPath = join(galleryDir, galleryMetaName);
   const relativeParts = parts.length ? parts : ["index.html"];
 
@@ -523,11 +555,11 @@ export function resolveAssetViewerGalleryPath(root, pathname) {
     if (!existsSync(metaPath)) return null;
     const meta = readGalleryMeta(metaPath);
     if (!meta?.libraryRoot) return null;
-    return safeResolve(meta.libraryRoot, relativeParts.slice(1).join("/"));
+    return servedPathInside(meta.libraryRoot, relativeParts.slice(1).join("/"));
   }
   if (relativeParts[0] === "repo") {
-    return safeResolve(root, relativeParts.slice(1).join("/"));
+    return servedPathInside(root, relativeParts.slice(1).join("/"));
   }
 
-  return safeResolve(galleryDir, relativeParts.join("/"));
+  return servedPathInside(galleryDir, relativeParts.join("/"));
 }

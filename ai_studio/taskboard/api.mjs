@@ -81,15 +81,27 @@ function collectionPayload(root, stores, kind) {
 }
 
 function mutationOptionsFromInput(req, url, input) {
-  const headerStore = headerValue(req, "x-ai-studio-store");
-  const bodyStore = input.store || input.storeId || "";
-  if (headerStore && bodyStore && headerStore !== bodyStore) {
-    throw new Error(`Taskboard store mismatch between header and body: ${headerStore} != ${bodyStore}`);
+  const options = queryOptions(req, url);
+  const bodyStores = [input.store, input.storeId].filter(Boolean);
+  const bodyStore = bodyStores[0] || "";
+  const bodyGames = [input.game, input.gameId].filter(Boolean);
+  const bodyGame = bodyGames[0] || "";
+  if (bodyStores.some((store) => store !== bodyStore)) {
+    throw new Error(`Taskboard store mismatch between body store and storeId: ${input.store} != ${input.storeId}`);
+  }
+  if (bodyGames.some((game) => game !== bodyGame)) {
+    throw new Error(`Taskboard game mismatch between body game and gameId: ${input.game} != ${input.gameId}`);
+  }
+  if (options.store && bodyStore && options.store !== bodyStore) {
+    throw new Error(`Taskboard store mismatch between request and body: ${options.store} != ${bodyStore}`);
+  }
+  if (options.game && bodyGame && options.game !== bodyGame) {
+    throw new Error(`Taskboard game mismatch between request and body: ${options.game} != ${bodyGame}`);
   }
   return {
-    ...queryOptions(req, url),
-    store: bodyStore || headerStore || url.searchParams.get("store") || "",
-    game: input.game || input.gameId || url.searchParams.get("game") || "",
+    ...options,
+    store: bodyStore || options.store,
+    game: bodyGame || options.game,
   };
 }
 

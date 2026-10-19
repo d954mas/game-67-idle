@@ -34,13 +34,11 @@ from ai_studio.runtime_automation.record_game import (
     _extract_health_frame,
     _extract_preflight_frame,
     _assert_final_temporal_health,
-    _content_start_offset_after_prepare,
     _obs_wgc_service_failure,
     _parse_freezedetect_log,
-    _parse_content_marker,
-    _measure_content_marker,
     _sync_qualification,
     _scene_collection,
+    _set_obs_marker_enabled,
     _stop_obs,
     _stop_obs_and_detect_service_failure,
     _wait_for_finalized_recording,
@@ -294,6 +292,8 @@ class ObsContractTest(unittest.TestCase):
                 descriptor="Title:GLFW30:game.exe",
                 settings=CaptureSettings(720, 1280, 30),
                 recording_directory=portable_root / "recordings",
+                websocket_port=46001,
+                websocket_password="a" * 32,
             )
             global_ini = (
                 portable_root / "config" / "obs-studio" / "global.ini"
@@ -303,6 +303,43 @@ class ObsContractTest(unittest.TestCase):
         self.assertIn("LastVersion=503382018", global_ini)
         self.assertIn("SysTrayEnabled=false", global_ini)
         self.assertIn("SysTrayWhenStarted=false", global_ini)
+        self.assertIn("ServerEnabled=true", global_ini)
+        self.assertIn("ServerPort=46001", global_ini)
+        self.assertIn("AuthRequired=true", global_ini)
+        self.assertIn("ServerPassword=" + "a" * 32, global_ini)
+
+    def test_marker_control_keeps_the_password_out_of_its_command_and_requires_post_ack_frames(self) -> None:
+        calls: list[tuple[list[str], dict]] = []
+
+        def runner(command, **kwargs):
+            calls.append((command, kwargs))
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                json.dumps({
+                    "roundTripMilliseconds": 2.0,
+                    "renderBarrierMilliseconds": 12.0,
+                    "beforeRenderFrames": 70,
+                    "afterRenderFrames": 73,
+                }),
+                "",
+            )
+
+        receipt = _set_obs_marker_enabled(
+            Path("node.exe"),
+            port=46001,
+            password="p" * 32,
+            enabled=False,
+            render_frames=1,
+            runner=runner,
+            monotonic=iter((10.0, 10.1)).__next__,
+        )
+
+        command, kwargs = calls[0]
+        self.assertNotIn("p" * 32, command)
+        self.assertEqual(json.loads(kwargs["input"]), {"password": "p" * 32})
+        self.assertEqual(receipt["afterRenderFrames"], 73)
+        self.assertEqual(receipt["controlElapsedSeconds"], 0.1)
 
     def test_obs_starts_in_isolated_portable_mode_without_preview(self) -> None:
         command = build_obs_launch_command(Path("portable/bin/64bit/obs64.exe"))
@@ -386,6 +423,15 @@ class ObsContractTest(unittest.TestCase):
         self.assertEqual(source["id"], "window_capture")
         self.assertEqual(source["settings"]["method"], 2)
         self.assertEqual(source["settings"]["window"], "Title:GLFW30:game.exe")
+        marker = next(
+            item for item in collection["sources"] if item["name"] == "Capture marker"
+        )
+        self.assertEqual(marker["id"], "color_source_v3")
+        self.assertEqual(marker["settings"]["color"], 0xFFFF00FF)
+        scene = next(item for item in collection["sources"] if item["name"] == "Scene")
+        marker_item = scene["settings"]["items"][-1]
+        self.assertEqual(marker_item["id"], 2)
+        self.assertFalse(marker_item["visible"])
 
 class OutputTest(unittest.TestCase):
     def test_recording_health_accepts_a_high_range_pale_game_frame(self) -> None:
@@ -570,37 +616,6 @@ class OutputTest(unittest.TestCase):
         self.assertEqual(result["maxFreezeSeconds"], 5.0)
         self.assertEqual(result["freezeCount"], 2)
 
-    def test_content_marker_uses_the_next_frame_after_the_latest_packet(self) -> None:
-        self.assertAlmostEqual(
-            _parse_content_marker("N/A\n11.500\n11.533\n", 30),
-            11.533 + 1 / 30,
-        )
-        with self.assertRaisesRegex(RuntimeError, "marker"):
-            _parse_content_marker("N/A\n", 30)
-
-    def test_content_marker_retries_packet_probe_then_fails_bounded(self) -> None:
-        successful = subprocess.CompletedProcess(["ffprobe"], 0, "2.000\n", "")
-        with patch(
-            "ai_studio.runtime_automation.record_game._run_media",
-            side_effect=[RuntimeError("not ready"), successful],
-        ), patch("ai_studio.runtime_automation.record_game.time.sleep") as sleep:
-            marker = _measure_content_marker(
-                Path("ffprobe.exe"), Path("recording.mkv"), 30, retries=2
-            )
-
-        self.assertAlmostEqual(marker, 2 + 1 / 30)
-        sleep.assert_not_called()
-        with self.assertRaisesRegex(RuntimeError, "marker"):
-            _measure_content_marker(
-                Path("ffprobe.exe"), Path("recording.mkv"), 30, retries=1
-            )
-
-    def test_sync_qualification_reports_measured_packet_pts_tolerance(self) -> None:
-        qualification = _sync_qualification(30)
-
-        self.assertIn("measured OBS video packet PTS", qualification)
-        self.assertIn("0.033333s", qualification)
-        self.assertNotIn("unmeasured", qualification)
 
     def test_freeze_log_counts_an_unclosed_still_until_media_end(self) -> None:
         result = _parse_freezedetect_log(
@@ -654,18 +669,6 @@ class CliTest(unittest.TestCase):
 
 
 class RecordingDriverTest(unittest.TestCase):
-    def test_prepare_finishes_before_the_content_offset_is_measured(self) -> None:
-        events: list[str] = []
-
-        offset = _content_start_offset_after_prepare(
-            10.0,
-            lambda: events.append("prepare"),
-            monotonic=lambda: events.append("measure") or 12.5,
-        )
-
-        self.assertEqual(events, ["prepare", "measure"])
-        self.assertEqual(offset, 2.5)
-
     def test_audio_warmup_completes_before_the_timeline_starts(self) -> None:
         helper_ready = threading.Event()
         capture_started = threading.Event()

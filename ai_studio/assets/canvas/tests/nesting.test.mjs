@@ -3,7 +3,7 @@
 // patchGroup 2-level move cascade, deleteGroup 2-level subtree, the Ungroup one-level
 // dissolve composition, recursive render (nested background + mixed-sibling order), the
 // top-level-only exportProject filter, and v1 migration. The render/export tests drive
-// render_group.py and skip cleanly when Python/PIL is unavailable. Run:
+// render_group.py and require Python/PIL. Run:
 //   node --test ai_studio/assets/canvas/tests/nesting.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -237,7 +237,7 @@ test("reorderNode reorders a subgroup against a sibling element within a parent 
 
 // ---- recursive render ----------------------------------------------------------
 
-test("renderGroup composites a nested subgroup background + element inside the parent (skips without Python)", async (t) => {
+test("renderGroup composites a nested subgroup background + element inside the parent", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Recursive BG" });
   const projectId = project.id;
@@ -249,13 +249,7 @@ test("renderGroup composites a nested subgroup background + element inside the p
   patchGroup(REPO_ROOT, { projectId, groupId: outer.id, background: { type: "color", color: "#112233" } });
   patchGroup(REPO_ROOT, { projectId, groupId: inner.id, background: { type: "color", color: "#445566" } });
 
-  let result;
-  try {
-    result = await renderGroup(REPO_ROOT, { projectId, groupId: outer.id, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await renderGroup(REPO_ROOT, { projectId, groupId: outer.id, scale: 1 });
   assert.equal(result.members, 1, "one leaf image element in the subtree");
   const png = decodePng(readFileSync(result.path));
   assert.deepEqual([png.width, png.height], [40, 40]);
@@ -264,7 +258,7 @@ test("renderGroup composites a nested subgroup background + element inside the p
   assert.deepEqual(png.at(13, 13), [220, 40, 40, 255], "nested element on top of both backgrounds");
 });
 
-test("renderGroup prunes a hidden nested subtree (skips without Python)", async (t) => {
+test("renderGroup prunes a hidden nested subtree", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Hidden subtree" });
   const projectId = project.id;
@@ -275,13 +269,7 @@ test("renderGroup prunes a hidden nested subtree (skips without Python)", async 
   assignToGroup(REPO_ROOT, { projectId, elementIds: [red.id], groupId: inner.id });
   patchGroup(REPO_ROOT, { projectId, groupId: inner.id, visible: false }); // hide the nested subtree
 
-  let result;
-  try {
-    result = await renderGroup(REPO_ROOT, { projectId, groupId: outer.id, scale: 1 });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await renderGroup(REPO_ROOT, { projectId, groupId: outer.id, scale: 1 });
   assert.equal(result.members, 0, "hidden nested subtree pruned from the render");
   const png = decodePng(readFileSync(result.path));
   assert.equal(png.at(13, 13)[3], 0, "the hidden nested element is absent (transparent)");
@@ -289,19 +277,13 @@ test("renderGroup prunes a hidden nested subtree (skips without Python)", async 
 
 // ---- exportProject: only top-level visible groups ------------------------------
 
-test("exportProject renders only top-level groups; a nested group is not a separate screen (skips without Python)", async (t) => {
+test("exportProject renders only top-level groups; a nested group is not a separate screen", async (t) => {
   tempProjects(t);
   const { projectId, outer } = seedNested(REPO_ROOT); // outer (top-level) + inner (nested)
   // T0332 B1: the export opt-in flag — seedNested's plain groups carry no screen by
   // default, so the outer screen must be ticked explicitly for this export to find it.
   patchGroup(REPO_ROOT, { projectId, groupId: outer.id, screen: true });
-  let result;
-  try {
-    result = await exportProject(REPO_ROOT, { projectId });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await exportProject(REPO_ROOT, { projectId });
   assert.equal(result.screens.length, 1, "only the top-level screen is exported");
   assert.equal(result.screens[0].name, "Screen");
 });
@@ -326,12 +308,6 @@ test("a v1-shaped project (no parentId) treats every group as a top-level screen
   patchGroup(REPO_ROOT, { projectId, groupId: g1.id, screen: true });
   patchGroup(REPO_ROOT, { projectId, groupId: g2.id, screen: true });
 
-  let result;
-  try {
-    result = await exportProject(REPO_ROOT, { projectId });
-  } catch (error) {
-    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
-    return;
-  }
+  const result = await exportProject(REPO_ROOT, { projectId });
   assert.equal(result.screens.length, 2, "both parentId-less groups export as top-level screens");
 });

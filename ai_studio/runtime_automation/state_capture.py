@@ -60,6 +60,8 @@ class StateCapture:
         return self
 
     def capture(self, tag: str, *, audit: bool = True, wait_frames: int = 2) -> str:
+        if "/" in tag or "\\" in tag:
+            raise ValueError("State capture tag must be a single path component")
         path = f"{self.out_dir}/state_{tag}.png"
         self.client.capture_screenshot(path, wait_frames=wait_frames, audit=audit)
         self.covered = [entry for entry in self.covered if entry["tag"] != tag]

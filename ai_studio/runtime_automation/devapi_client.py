@@ -7,13 +7,11 @@ import base64
 import binascii
 import json
 import os
-import shutil
 import socket
 import subprocess
 import sys
 import threading
 import time
-import atexit
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Iterable
@@ -28,10 +26,6 @@ NATIVE_DEBUG_EXE = os.environ.get(
 RUNTIME_AUTOMATION_DIR = os.path.join(ROOT, "ai_studio", "runtime_automation")
 if RUNTIME_AUTOMATION_DIR not in sys.path:
     sys.path.insert(0, RUNTIME_AUTOMATION_DIR)
-CAPTURE_SCREEN_SCRIPT = os.path.join(RUNTIME_AUTOMATION_DIR, "capture_screen.ps1")
-CAPTURE_WINDOW_SCRIPT = os.path.join(RUNTIME_AUTOMATION_DIR, "capture_window.py")
-RECORD_SCREEN_SCRIPT = os.path.join(RUNTIME_AUTOMATION_DIR, "record_screen_ffmpeg.ps1")
-ACTIVE_RECORDINGS: list["DevApiRecording"] = []
 LAUNCH_LOG_DIR = os.path.join(ROOT, "tmp", "ai_studio", "runtime_automation", "logs")
 DEVAPI_RECV_CHUNK_BYTES = 256 * 1024
 
@@ -321,21 +315,14 @@ class DevApiClient:
             self.result("input.set_player_enabled", {"enabled": True})
 
     def endpoint_methods(self) -> set[str]:
-        """Engine `endpoints` returns {commands: [{method, group, ...}]}; flatten to names."""
         listing = self.result("endpoints")
-        methods: set[str] = set()
-        if isinstance(listing, dict) and isinstance(listing.get("commands"), list):
-            for command in listing["commands"]:
-                method = command.get("method") if isinstance(command, dict) else command
-                if isinstance(method, str):
-                    methods.add(method)
-            return methods
-        if isinstance(listing, list):  # tolerate a bare-list transport
-            for command in listing:
-                method = command.get("method") if isinstance(command, dict) else command
-                if isinstance(method, str):
-                    methods.add(method)
-        return methods
+        if not isinstance(listing, dict) or not isinstance(listing.get("commands"), list):
+            raise DevApiError("endpoints returned an invalid command listing")
+        return {
+            command["method"]
+            for command in listing["commands"]
+            if isinstance(command, dict) and isinstance(command.get("method"), str)
+        }
 
     def key_tap(self, key: str, hold_frames: int = 1, wait_frames: int = 1, observe: str | None = "frame.current") -> Any:
         # A tap is "hold": the engine releases the key that many frames later. Omitting it
@@ -366,10 +353,7 @@ class DevApiClient:
     ) -> str:
         if wait_frames > 0:
             self.wait_frames(wait_frames)
-        try:
-            path = self.capture_framebuffer(output=output, x=x, y=y, width=width, height=height)
-        except DevApiError:
-            path = run_capture_screenshot(output=output, x=x, y=y, width=width, height=height, process_id=self.process_id)
+        path = self.capture_framebuffer(output=output, x=x, y=y, width=width, height=height)
         if audit:
             self.audit_screenshot(path)
         return path
@@ -399,106 +383,7 @@ class DevApiClient:
         response = self.request(method, params)
         if response.get("ok") is True:
             return write_engine_capture_payload_png(response.get("result"), path)
-        error = response.get("error") if isinstance(response.get("error"), dict) else {}
-        if error.get("code") != "unknown_method":
-            raise DevApiError(f"{method} failed: {response.get('error', response)}")
-
-        # Legacy game-owned capture fallback for older templates/prototypes.
-        ppm_path = path + ".ppm"
-        if os.path.exists(ppm_path):
-            os.remove(ppm_path)
-        response = self.request("game.capture.framebuffer", {"output": ppm_path})
-        if response.get("ok") is not True:
-            raise DevApiError(f"game.capture.framebuffer failed: {response.get('error', response)}")
-        self.wait_frames(2)
-        if not os.path.exists(ppm_path) or os.path.getsize(ppm_path) <= 0:
-            raise DevApiError(f"framebuffer capture was not written: {ppm_path}")
-        convert_ppm_to_png(ppm_path, path)
-        return path
-
-    def record_gameplay(
-        self,
-        output: str = "tmp/captures/gameplay.mp4",
-        seconds: int = 8,
-        framerate: int = 30,
-        x: int = 0,
-        y: int = 0,
-        width: int = 0,
-        height: int = 0,
-        wait_frames: int = 1,
-    ) -> str:
-        if wait_frames > 0:
-            self.wait_frames(wait_frames)
-        return run_record_gameplay(output=output, seconds=seconds, framerate=framerate, x=x, y=y, width=width, height=height)
-
-    def start_recording(
-        self,
-        output: str = "tmp/captures/gameplay.mp4",
-        framerate: int = 30,
-        x: int = 0,
-        y: int = 0,
-        width: int = 0,
-        height: int = 0,
-        max_seconds: int = 60,
-        max_megabytes: int = 512,
-        wait_frames: int = 1,
-    ) -> "DevApiRecording":
-        if wait_frames > 0:
-            self.wait_frames(wait_frames)
-        return start_recording(output=output, framerate=framerate, x=x, y=y, width=width, height=height, max_seconds=max_seconds, max_megabytes=max_megabytes)
-
-
-@dataclass
-class DevApiRecording:
-    output: str
-    process: subprocess.Popen
-
-    def __enter__(self) -> "DevApiRecording":
-        return self
-
-    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
-        if exc_type is None:
-            self.stop()
-            return
-        try:
-            self.stop()
-        except Exception:
-            pass
-
-    def stop(self, timeout: float = 5.0) -> str:
-        if self.process.poll() is None:
-            try:
-                if self.process.stdin is not None:
-                    self.process.stdin.write(b"q\n")
-                    self.process.stdin.flush()
-                    self.process.stdin.close()
-            except OSError:
-                pass
-            try:
-                self.process.wait(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                self.process.terminate()
-                try:
-                    self.process.wait(timeout=timeout)
-                except subprocess.TimeoutExpired:
-                    self.process.kill()
-                    self.process.wait(timeout=timeout)
-        if self in ACTIVE_RECORDINGS:
-            ACTIVE_RECORDINGS.remove(self)
-        if not os.path.exists(self.output) or os.path.getsize(self.output) <= 0:
-            raise DevApiError(f"recording was not written: {self.output}")
-        return self.output
-
-
-def stop_active_recordings() -> None:
-    for recording in list(ACTIVE_RECORDINGS):
-        try:
-            recording.stop(timeout=2.0)
-        except Exception:
-            pass
-
-
-atexit.register(stop_active_recordings)
+        raise DevApiError(f"{method} failed: {response.get('error', response)}")
 
 
 def resolve_output_path(output: str) -> str:
@@ -540,203 +425,6 @@ def format_launch_log_tail(path: str | None, lines: int = 160) -> str:
 
 def print_launch_log_tail(path: str | None, lines: int = 160) -> None:
     print(format_launch_log_tail(path, lines=lines), file=sys.stderr)
-
-
-def _ppm_token(data: bytes, offset: int) -> tuple[bytes, int]:
-    n = len(data)
-    while offset < n and data[offset] in b" \t\r\n":
-        offset += 1
-    if offset < n and data[offset] == ord("#"):
-        while offset < n and data[offset] not in b"\r\n":
-            offset += 1
-        return _ppm_token(data, offset)
-    start = offset
-    while offset < n and data[offset] not in b" \t\r\n":
-        offset += 1
-    return data[start:offset], offset
-
-
-def convert_ppm_to_png(ppm_path: str, png_path: str) -> None:
-    from png_io import write_png_rgb
-
-    with open(ppm_path, "rb") as handle:
-        data = handle.read()
-    magic, offset = _ppm_token(data, 0)
-    if magic != b"P6":
-        raise DevApiError(f"unsupported framebuffer capture format: {magic!r}")
-    width_b, offset = _ppm_token(data, offset)
-    height_b, offset = _ppm_token(data, offset)
-    max_b, offset = _ppm_token(data, offset)
-    width = int(width_b)
-    height = int(height_b)
-    if int(max_b) != 255:
-        raise DevApiError("unsupported framebuffer capture max value")
-    if offset >= len(data) or data[offset] not in b" \t\r\n":
-        raise DevApiError("bad framebuffer capture header separator")
-    if data[offset : offset + 2] == b"\r\n":
-        offset += 2
-    else:
-        offset += 1
-    rgb = data[offset:]
-    expected = width * height * 3
-    if len(rgb) != expected:
-        raise DevApiError(f"bad framebuffer capture size: {len(rgb)} != {expected}")
-    write_png_rgb(png_path, width, height, rgb)
-
-
-def run_powershell_script(
-    script: str, args: list[str], *, timeout_seconds: float = 15.0
-) -> str:
-    try:
-        completed = subprocess.run(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, *args],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-        )
-    except subprocess.CalledProcessError as exc:
-        detail = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
-        raise DevApiError(f"{os.path.basename(script)} failed: {detail.strip()}") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise DevApiError(
-            f"{os.path.basename(script)} timed out after {timeout_seconds:.1f}s"
-        ) from exc
-    except OSError as exc:
-        raise DevApiError(
-            f"{os.path.basename(script)} could not launch: {exc}"
-        ) from exc
-    return completed.stdout.strip()
-
-
-def run_capture_screenshot(output: str = "tmp/captures/screenshot.png", x: int = 0, y: int = 0, width: int = 0, height: int = 0, process_id: int | None = None, timeout_seconds: float = 15.0) -> str:
-    path = resolve_output_path(output)
-    if os.name == "nt" and os.path.exists(CAPTURE_WINDOW_SCRIPT):
-        args = [sys.executable, CAPTURE_WINDOW_SCRIPT, "--output", path]
-        if process_id is not None:
-            args.extend(["--process-id", str(process_id)])
-        else:
-            args.extend(["--x", str(x), "--y", str(y), "--width", str(width), "--height", str(height)])
-        try:
-            subprocess.run(
-                args,
-                cwd=ROOT,
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-            )
-        except subprocess.CalledProcessError as exc:
-            detail = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
-            raise DevApiError(f"{os.path.basename(CAPTURE_WINDOW_SCRIPT)} failed: {detail.strip()}") from exc
-        except subprocess.TimeoutExpired as exc:
-            raise DevApiError(
-                f"{os.path.basename(CAPTURE_WINDOW_SCRIPT)} timed out "
-                f"after {timeout_seconds:.1f}s"
-            ) from exc
-        except OSError as exc:
-            raise DevApiError(
-                f"{os.path.basename(CAPTURE_WINDOW_SCRIPT)} could not launch: {exc}"
-            ) from exc
-        return path
-
-    args = ["-Output", output, "-X", str(x), "-Y", str(y), "-Width", str(width), "-Height", str(height)]
-    if process_id is not None:
-        args.extend(["-ProcessId", str(process_id)])
-    run_powershell_script(
-        CAPTURE_SCREEN_SCRIPT,
-        args,
-        timeout_seconds=timeout_seconds,
-    )
-    return path
-
-
-def run_record_gameplay(
-    output: str = "tmp/captures/gameplay.mp4",
-    seconds: int = 8,
-    framerate: int = 30,
-    x: int = 0,
-    y: int = 0,
-    width: int = 0,
-    height: int = 0,
-) -> str:
-    run_powershell_script(
-        RECORD_SCREEN_SCRIPT,
-        [
-            "-Output",
-            output,
-            "-Seconds",
-            str(seconds),
-            "-Framerate",
-            str(framerate),
-            "-X",
-            str(x),
-            "-Y",
-            str(y),
-            "-Width",
-            str(width),
-            "-Height",
-            str(height),
-        ],
-        timeout_seconds=max(15.0, seconds + 10.0),
-    )
-    return resolve_output_path(output)
-
-
-def start_recording(
-    output: str = "tmp/captures/gameplay.mp4",
-    framerate: int = 30,
-    x: int = 0,
-    y: int = 0,
-    width: int = 0,
-    height: int = 0,
-    max_seconds: int = 60,
-    max_megabytes: int = 512,
-) -> DevApiRecording:
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg is None:
-        raise DevApiError("ffmpeg is not available in PATH")
-    out_path = ensure_output_dir(output)
-    if width <= 0 or height <= 0:
-        raise DevApiError("start_recording requires explicit x/y/width/height; use record_gameplay for full-screen fixed-duration recording")
-    if max_seconds <= 0:
-        raise DevApiError("start_recording requires max_seconds > 0")
-    if max_megabytes <= 0:
-        raise DevApiError("start_recording requires max_megabytes > 0")
-    max_bytes = max_megabytes * 1024 * 1024
-    process = subprocess.Popen(
-        [
-            ffmpeg,
-            "-y",
-            "-f",
-            "gdigrab",
-            "-framerate",
-            str(framerate),
-            "-offset_x",
-            str(x),
-            "-offset_y",
-            str(y),
-            "-video_size",
-            f"{width}x{height}",
-            "-i",
-            "desktop",
-            "-t",
-            str(max_seconds),
-            "-fs",
-            str(max_bytes),
-            "-pix_fmt",
-            "yuv420p",
-            out_path,
-        ],
-        cwd=ROOT,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    recording = DevApiRecording(output=out_path, process=process)
-    ACTIVE_RECORDINGS.append(recording)
-    return recording
 
 
 def write_engine_capture_payload_png(payload: Any, output: str) -> str:

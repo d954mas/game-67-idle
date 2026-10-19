@@ -24,8 +24,12 @@ export async function detectImageRegions(root, body) {
   const sessionDir = sessionDirForPath(root, sourcePath);
   const backgroundDir = join(sessionDir, "background");
   const regionsDir = join(sessionDir, "regions");
+  ensureInsideTmp(root, backgroundDir);
+  ensureInsideTmp(root, regionsDir);
   mkdirSync(backgroundDir, { recursive: true });
   mkdirSync(regionsDir, { recursive: true });
+  ensureInsideTmp(root, backgroundDir);
+  ensureInsideTmp(root, regionsDir);
 
   const options = body.options || {};
   const explicitKeyColor = typeof options.keyColor === "string" ? color(options.keyColor, "") : "";
@@ -40,6 +44,9 @@ export async function detectImageRegions(root, body) {
   const normalizeReportPath = join(backgroundDir, "normalize_report.json");
   const regionsPath = join(regionsDir, "regions.json");
   const overlayPath = join(regionsDir, "overlay.png");
+  for (const outputPath of [normalizedPath, normalizeReportPath, regionsPath, overlayPath]) {
+    ensureInsideTmp(root, outputPath);
+  }
 
   if (wholeImageMode) {
     copyFileSync(sourcePath, normalizedPath);

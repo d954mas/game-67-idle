@@ -28,8 +28,8 @@ lives in `features/game-state/`, not in this skill.
 5. Run generator tests and the consumer's relevant save/runtime tests.
 
 ```powershell
-py -3.12 features/game-state/scripts/generate_state.py
-py -3.12 features/game-state/scripts/generate_state_test.py
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state_test.py
 ```
 
 Use explicit `--schema` and `--out-dir` for game variants or build-local

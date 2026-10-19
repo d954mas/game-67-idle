@@ -102,6 +102,40 @@ test("changed selection is coarse and unknown shared paths fail ownership", () =
   assert.throws(() => selectChangedDomains(["mystery/shared.txt"]), /unowned shared path: mystery\/shared\.txt/);
 });
 
+test("game page changes select the shell owner", () => {
+  assert.deepEqual(selectChangedDomains(["ai_studio/game_page/ops.mjs"]), ["shell"]);
+});
+
+test("shell owner executes shell and game page tests", async () => {
+  const root = mkdtempSync(join(tmpdir(), "studio-game-page-discovery-"));
+  const files = [
+    "ai_studio/studio_shell/tests/routes.test.mjs",
+    "ai_studio/game_page/tests/pack.test.mjs",
+  ];
+  try {
+    for (const path of files) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), "");
+    }
+    const calls = [];
+    const result = await verifyStudio({ mode: "domain", domain: "shell", root }, {
+      runDomain: (domain) => runOwnedDomain(domain, {
+        root,
+        runCommand: async (command, args) => {
+          calls.push([command, ...args]);
+          return { status: 0, tail: "" };
+        },
+      }),
+    });
+    assert.equal(result.status, "pass");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][1], "--test");
+    for (const path of files) assert.ok(calls[0].includes(path), path);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("feature docs and runtime paths stay in the same owner domain", () => {
   for (const path of ["ai_studio/feature_testing/README.md", "ai_studio/feature_testing/consumer/tests/test_game_events.c"]) {
     assert.deepEqual(selectChangedDomains([path]), ["features"]);
@@ -231,16 +265,34 @@ test("an owner domain batches its Node tests into one process", async () => {
 });
 
 test("asset Python unittests share one interpreter while dot-named files stay explicit", async () => {
-  const calls = [];
-  const result = await runOwnedDomain({ id: "assets", checks: ["studio.assets.python"] }, {
-    runCommand: async (command, args) => { calls.push([command, ...args]); return { status: 0, tail: "" }; },
-  });
-  assert.equal(result.status, 0);
-  assert.equal(calls.length, 4);
-  assert.deepEqual(calls[0].slice(0, 4), ["node", "ai_studio/dev_environment/python_run.mjs", "-m", "unittest"]);
-  assert.equal(calls[0].filter((arg) => arg.endsWith("_test.py")).length, 21);
-  assert.ok(calls[0].includes("ai_studio/assets/tools/image/quality_gate/asset_quality_gate_test.py"));
-  assert.equal(calls.slice(1).every((command) => command.at(-1).endsWith(".test.py")), true);
+  const root = mkdtempSync(join(tmpdir(), "studio-python-batching-"));
+  const files = [
+    "ai_studio/assets/tools/alpha_test.py",
+    "ai_studio/assets/tools/nested/test_beta.py",
+    "ai_studio/assets/tools/nested/gamma.test.py",
+    "ai_studio/assets/tools/zeta.test.py",
+    "ai_studio/assets/tools/tmp/ignored_test.py",
+    "ai_studio/assets/tools/helper.py",
+  ];
+  try {
+    for (const path of files) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), "");
+    }
+    const calls = [];
+    const result = await runOwnedDomain({ id: "assets", checks: ["studio.assets.python"] }, {
+      root,
+      runCommand: async (command, args) => { calls.push([command, ...args]); return { status: 0, tail: "" }; },
+    });
+    assert.equal(result.status, 0);
+    assert.deepEqual(calls, [
+      ["node", "ai_studio/dev_environment/python_run.mjs", "-m", "unittest", files[0], files[1]],
+      ["node", "ai_studio/dev_environment/python_run.mjs", files[2]],
+      ["node", "ai_studio/dev_environment/python_run.mjs", files[3]],
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("assets owner executes the fail-closed tracked binary integrity guard", async () => {

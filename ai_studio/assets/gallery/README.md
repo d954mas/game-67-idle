@@ -15,9 +15,6 @@ Studio Shell hosts the launcher at:
 http://127.0.0.1:8765/asset_viewer/
 ```
 
-`/viewer/` is also served as a short alias, but `/asset_viewer/` remains the
-stable public route.
-
 The gallery header lets the user choose which source to display:
 
 - All Assets: the shared manifest-backed asset library from
