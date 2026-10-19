@@ -24,6 +24,10 @@ change is ready; reserve complete Studio and release proof for their CI/release
 boundaries. Do not repeat whole-Studio, all-tier or packaging checks after each
 game edit. Preview output is not freshness, capture or release evidence.
 
+Live games build the engine and `features/` from this checkout, so a change to
+the engine pin or a shared feature runs `node ai_studio/game_tools/live_games.mjs`
+before it merges, and the games' dependency records move with it.
+
 ## AI Studio
 
 `ai_studio/` is the target home for reviewed AI pipeline architecture: core
