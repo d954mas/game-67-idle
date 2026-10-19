@@ -51,7 +51,11 @@ function confinedRoot(studioRoot, source, label) {
   return actual;
 }
 
-function hashTree(root, ignoredRoots, extraRoots = []) {
+// Generated code is derived from hashed sources; a leftover copy from an older
+// in-source codegen must not shift the fingerprint.
+const GAME_IGNORED_PATHS = new Set(["src/generated"]);
+
+function hashTree(root, ignoredRoots, extraRoots = [], ignoredPaths = new Set()) {
   const realRoot = realpathSync(resolve(root));
   const rows = [];
   function visit(dir, prefix = "") {
@@ -59,6 +63,7 @@ function hashTree(root, ignoredRoots, extraRoots = []) {
       if ((!prefix && ignoredRoots.has(name)) || IGNORED_ANYWHERE.has(name)) continue;
       const path = join(dir, name);
       const rel = prefix ? `${prefix}/${name}` : name;
+      if (ignoredPaths.has(rel)) continue;
       const info = lstatSync(path);
       if (info.isSymbolicLink()) throw new Error(`runtime build input must not contain a symbolic link: ${rel}`);
       const actual = realpathSync(path);
@@ -192,7 +197,7 @@ export function validateRuntimeBuildRecord(record) {
 export function createRuntimeBuildRecord({ gameDir, studioRoot, dependencies = readDependencies(gameDir), compileProfile = null }) {
   const gameRoot = realpathSync(resolve(gameDir));
   const root = realpathSync(resolve(studioRoot));
-  const game = hashTree(gameRoot, GAME_IGNORED_ROOTS, ["design/items"]);
+  const game = hashTree(gameRoot, GAME_IGNORED_ROOTS, ["design/items"], GAME_IGNORED_PATHS);
   const engineSource = safeSource(dependencies?.engine?.source, "engine dependency");
   if (engineSource !== "external/neotolis-engine") {
     throw new Error("engine dependency source must be exactly external/neotolis-engine");

@@ -72,7 +72,7 @@ test("plan preserves build dirs local cache native pack web targets and final me
     runtimeBuild,
   });
   assert.equal(slash(plan.env.EM_CACHE), "/repo/templates/template/build/emscripten-cache");
-  assert.equal(slash(plan.nativeDir), "/repo/templates/template/build/native-debug");
+  assert.equal(slash(plan.nativeDir), "/repo/templates/template/build/wasm-devapi-debug-yandex-host");
   assert.equal(slash(plan.webDir), "/repo/templates/template/build/wasm-devapi-debug-yandex");
   assert.deepEqual(plan.steps.map((step) => step.kind), ["mkdir", "run", "run", "run", "run", "run", "copy", "run", "write"]);
   const runSteps = plan.steps.filter((step) => step.kind === "run");
@@ -85,7 +85,7 @@ test("plan preserves build dirs local cache native pack web targets and final me
   ]);
   assert.equal(plan.steps.at(-1).kind, "write");
   const packCopy = plan.steps.find((step) => step.kind === "copy" && String(step.to).endsWith("game.ntpack"));
-  assert.equal(slash(packCopy.from), "/repo/templates/template/build/native-debug/bin/assets/game.ntpack");
+  assert.equal(slash(packCopy.from), "/repo/templates/template/build/wasm-devapi-debug-yandex-host/bin/assets/game.ntpack");
   assert.equal(slash(packCopy.to), "/repo/templates/template/build/wasm-devapi-debug-yandex/bin/assets/game.ntpack");
   assert.equal(slash(plan.steps.at(-1).path), "/repo/templates/template/build/wasm-devapi-debug-yandex/bin/runtime-build.json");
   assert.deepEqual(plan.steps.at(-1).value, runtimeBuild);

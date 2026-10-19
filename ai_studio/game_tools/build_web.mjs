@@ -44,8 +44,16 @@ export function resolveEmcmakePath(environment = {}, platform = process.platform
   return platform === "win32" ? "" : "emcmake";
 }
 
+export function hostBuildDir(gameDir, name) {
+  return join(gameDir, "build", `${name}-host`);
+}
+
 function buildName(args) {
   return args.target === "local" ? args.preset : `${args.preset}-${args.target}`;
+}
+
+export function nativeTreeFor(gameDir, args) {
+  return hostBuildDir(gameDir, buildName(args));
 }
 
 export function compileFlagsForArgs(args) {
@@ -77,7 +85,9 @@ export function createBuildPlan(options) {
   const platform = options.platform || process.platform;
   const inputEnv = options.env || {};
   const name = buildName(args);
-  const nativeDir = join(gameDir, "build", "native-debug");
+  // Each web build packs assets in its own native host tree, so it never shares
+  // a ninja tree with `game.mjs test` or with a concurrent build of another preset.
+  const nativeDir = hostBuildDir(gameDir, name);
   const webDir = join(gameDir, "build", name);
   const emsdk = inputEnv.EMSDK || "";
   const toolchain = emsdk ? join(emsdk, "upstream", "emscripten", "cmake", "Modules", "Platform", "Emscripten.cmake") : "";
@@ -108,6 +118,8 @@ export function createBuildPlan(options) {
   configureArgs.push(`-DCMAKE_BUILD_TYPE=${args.preset === "wasm-release" ? "Release" : "Debug"}`, `-DGAME_PUBLISH_TARGET=${args.target}`);
   configureArgs.push(`-DGAME_RUNTIME_BUILD_PROFILE=${compileProfile.preset}`);
   configureArgs.push("-DGAME_AUDIO_BROWSER_SMOKE=OFF");
+  // Games that generate code into the build tree read the host's output from here.
+  configureArgs.push(`-DGAME_HOST_GENERATED_DIR=${join(nativeDir, "generated", "game").replace(/\\/g, "/")}`);
   configureArgs.push(`-DGAME_ANALYTICS_ENABLED=${compileProfile.analytics ? "ON" : "OFF"}`);
   configureArgs.push(`-DGAME_EVENTS_LOG_MIRROR=${compileProfile.eventsLogMirror ? "ON" : "OFF"}`);
   configureArgs.push(`-DGAME_RUNTIME_BUILD_DEBUG_UI=${Number(compileProfile.debugUi)}`);
@@ -187,7 +199,7 @@ export function main(argv = process.argv.slice(2), environment = process.env, { 
       env: { ...environment, ...(emsdk ? { EMSDK: emsdk } : {}) },
       platform: process.platform,
       emcmakePath: resolveEmcmakePath({ ...environment, ...(emsdk ? { EMSDK: emsdk } : {}) }, process.platform),
-      nativeConfigured: existsSync(join(gameDir, "build", "native-debug", "CMakeCache.txt")),
+      nativeConfigured: existsSync(join(nativeTreeFor(gameDir, args), "CMakeCache.txt")),
       toolchainExists: Boolean(toolchain && existsSync(toolchain)),
       runtimeBuild,
       verifyRuntimeBuild: args.preview ? null : () => {

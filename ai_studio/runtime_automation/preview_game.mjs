@@ -181,7 +181,9 @@ export async function main(argv = process.argv.slice(2), environment = process.e
         emcmakePath: typeof builder.resolveEmcmakePath === "function"
           ? builder.resolveEmcmakePath({ ...environment, ...(emsdk ? { EMSDK: emsdk } : {}) }, process.platform)
           : undefined,
-        nativeConfigured: existsSync(join(gameDir, "build", "native-debug", "CMakeCache.txt")),
+        nativeConfigured: existsSync(join(typeof builder.nativeTreeFor === "function"
+          ? builder.nativeTreeFor(gameDir, builder.parseBuildArgs(buildArgs))
+          : join(gameDir, "build", "native-debug"), "CMakeCache.txt")),
         toolchainExists: Boolean(toolchain && existsSync(toolchain)),
       },
     });

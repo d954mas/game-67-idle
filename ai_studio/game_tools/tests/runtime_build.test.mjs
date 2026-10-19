@@ -73,6 +73,7 @@ test("runtime build record deterministically binds game and dependency source tr
   write(join(item.gameDir, "tmp", "captures", "draft.png"), "ignored transient capture output");
   write(join(item.gameDir, "README.md"), "ignored documentation\n");
   write(join(item.gameDir, "tools", "runtime.test.mjs"), "ignored test\n");
+  write(join(item.gameDir, "src", "generated", "loc_strings.h"), "ignored generated code\n");
   assert.deepEqual(createRuntimeBuildRecord(item), one);
 
   write(join(item.gameDir, "design", "reference", "mood.png"), "ignored design reference");
