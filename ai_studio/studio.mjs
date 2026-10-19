@@ -190,7 +190,7 @@ const CHECKS = Object.freeze([
     ],
     nativeRoots: ["features/scenes-core/tests"],
   },
-  { id: "reference-template", testRoots: ["templates/template/tools"] },
+  { id: "reference-template", testRoots: ["templates/template/tools", "ai_studio/game_tools/tests"] },
   { id: "reference-template.python", pythonRoots: ["templates/template/devapi"] },
 ]);
 
@@ -267,7 +267,7 @@ function domainForPath(path) {
   if (path.startsWith("ai_studio/workspace/")) return "workspace";
   if (path.startsWith("ai_studio/feature_testing/")) return "features";
   if (path.startsWith("features/")) return "features";
-  if (path.startsWith("templates/")) return "template-release";
+  if (path.startsWith("templates/") || path.startsWith("ai_studio/game_tools/")) return "template-release";
   if (
     path === ".github/workflows/studio-verify.yml"
     || path.startsWith(".vscode/")

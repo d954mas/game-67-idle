@@ -12,13 +12,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import { verifyWebPackage } from "./package_web.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 
-const GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const USAGE = "usage: node tools/portal_evidence.mjs --manifest release/artifacts/<artifact>.manifest.json [--local-mock-observation .ai_studio/evidence/local-mock/<observation>.json]";
 const jsonBytes = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8");
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -179,7 +178,7 @@ export function publishPortalEvidenceReport(reportPath, bytes, options = {}) {
 }
 
 export function createPortalEvidence({
-  gameDir = GAME_DIR,
+  gameDir = process.cwd(),
   manifestPath,
   studioRoot = findStudioRoot(gameDir),
   localMockObservationPath = "",

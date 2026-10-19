@@ -189,7 +189,7 @@ B в точечном режиме строит только target выбран
 Полный Studio gate намеренно не запускает private games. Его прежний PASS
 не означает, что `doctor`, build и gameplay каждой старой игры проходят.
 Исходная граница проверки:
-[verifyDependencySources](../../templates/template/tools/package_web.mjs).
+[verifyDependencySources](../game_tools/package_web.mjs).
 
 ## 5. У локализации есть точный, но меньший источник пересборок
 

@@ -6,7 +6,7 @@ import { PassThrough } from "node:stream";
 import test from "node:test";
 import { deflateSync } from "node:zlib";
 
-import { crc32, createStoreZip } from "./lib/zip_store.mjs";
+import { crc32, createStoreZip } from "../../core_harness/tool_lib/zip_store.mjs";
 import {
   analyzePngFrame,
   assessPackagedWebObservation,
@@ -17,7 +17,7 @@ import {
   registerBrowserIssueCapture,
   smokeProbePlan,
   smokePackagedWebArtifact,
-} from "./package_web_smoke.mjs";
+} from "../package_web_smoke.mjs";
 
 const FINGERPRINT = "1".repeat(64);
 

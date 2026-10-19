@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { inflateSync } from "node:zlib";
 
-import { readStoreZip } from "./lib/zip_store.mjs";
+import { readStoreZip } from "../core_harness/tool_lib/zip_store.mjs";
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);

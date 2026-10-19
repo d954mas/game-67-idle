@@ -90,6 +90,7 @@ test("changed selection hard-excludes games while preserving the new_game root e
 test("changed selection is coarse and unknown shared paths fail ownership", () => {
   assert.deepEqual(selectChangedDomains(["features/platform-sdk/web/platform-sdk.js"]), ["features"]);
   assert.deepEqual(selectChangedDomains(["templates/template/tools/build_web.mjs"]), ["template-release"]);
+  assert.deepEqual(selectChangedDomains(["ai_studio/game_tools/package_web.mjs"]), ["template-release"]);
   assert.deepEqual(selectChangedDomains(["templates/template/devapi/smoke_bot.py"]), ["template-release"]);
   assert.deepEqual(selectChangedDomains(["features/audio-core/src/audio.c"]), ["features"]);
   assert.deepEqual(selectChangedDomains(["ai_studio/assets/canvas/site/workspace.js"]), ["assets"]);

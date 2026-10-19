@@ -6,11 +6,11 @@ import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { ctestCatalogue, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, runNativeTests, selectTests } from "./game.mjs";
-import { findStudioRoot } from "./lib/studio_root.mjs";
-import { createRuntimeBuildRecord, runtimeBuildWitness } from "./lib/runtime_build.mjs";
+import { ctestCatalogue, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, runNativeTests, selectTests } from "../game_cli.mjs";
+import { findStudioRoot } from "../lib/studio_root.mjs";
+import { createRuntimeBuildRecord, runtimeBuildWitness } from "../lib/runtime_build.mjs";
 
-const gameModuleRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const gameModuleRoot = resolve(fileURLToPath(new URL("../../../templates/template", import.meta.url)));
 const studioRoot = findStudioRoot(gameModuleRoot);
 
 /* Read rather than pinned: the fixture asserts that a copied game with a
@@ -102,12 +102,12 @@ test("game CLI exposes game-owned lifecycle commands with fail-closed arguments"
   assert.throws(() => parseGameArgs(["verify", "--skip-tests"]), /template-proof/i);
 });
 
-test("doctor requires the copied game-owned scaffold and exact dependency record", (t) => {
+test("doctor requires the game shim scaffold and exact dependency record", (t) => {
   const gameDir = mkdtempSync(join(tmpdir(), "game-doctor-"));
   t.after(() => rmSync(gameDir, { recursive: true, force: true }));
   assert.throws(() => doctorGame({ gameDir }), /missing/i);
 
-  for (const rel of ["CMakeLists.txt", "tools/game.mjs", "tools/build_web.mjs", "tools/package_web.mjs", "tools/package_web_smoke.mjs", "tools/minify_web_release.mjs", "tools/lib/studio_root.mjs", "tools/lib/zip_store.mjs", "tools/lib/runtime_build.mjs", "tools/serve_web.mjs", "release/README.md", ".github/workflows/game-verify.yml"]) {
+  for (const rel of ["CMakeLists.txt", "tools/game.mjs", "tools/build_web.mjs", "tools/lib/studio_root.mjs", "release/README.md", ".github/workflows/game-verify.yml"]) {
     write(join(gameDir, rel), "fixture\n");
   }
   write(join(gameDir, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: "fixture", title: "Fixture", storageNamespace: "fixture" }));
@@ -317,6 +317,14 @@ test("template test bypass validates identity before the parent proof can skip t
   assert.deepEqual(calls, ["doctor"]);
 });
 
+// A game's tools/game.mjs loads the CLI from the Studio it sits in.
+function copyGameToolsCore(root) {
+  cpSync(join(studioRoot, "ai_studio", "game_tools"), join(root, "ai_studio", "game_tools"), {
+    recursive: true, filter: (source) => !/[\\/]tests([\\/]|$)/.test(source.slice(studioRoot.length)),
+  });
+  cpSync(join(studioRoot, "ai_studio", "core_harness", "tool_lib"), join(root, "ai_studio", "core_harness", "tool_lib"), { recursive: true });
+}
+
 test("copied game CLI executes doctor and final package from a real games/private/<id> dependency layout", (t) => {
   const root = mkdtempSync(join(tmpdir(), "copied-game-cli-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -330,6 +338,7 @@ test("copied game CLI executes doctor and final package from a real games/privat
   mkdirSync(join(gameDir, "release"), { recursive: true });
   cpSync(join(gameModuleRoot, "release", "README.md"), join(gameDir, "release", "README.md"));
   cpSync(join(studioRoot, "features", "platform-sdk"), join(root, "features", "platform-sdk"), { recursive: true });
+  copyGameToolsCore(root);
   write(join(gameDir, "CMakeLists.txt"), [
     "cmake_minimum_required(VERSION 3.25)",
     "add_subdirectory(\"${STUDIO_ROOT}/features/platform-sdk\" platform-sdk)",

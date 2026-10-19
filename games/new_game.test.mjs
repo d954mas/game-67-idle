@@ -98,7 +98,7 @@ function buildBlankBindingFixtureRepo() {
   const root = buildFixtureRepo();
   const source = join(repositoryRoot, "templates", "template");
   const template = "templates/template";
-  for (const rel of ["CMakeLists.txt", "cmake/GameOptions.cmake", "cmake/GameTests.cmake", "src/main.c", "web/index.html.in", "tools/package_web.mjs", "tools/minify_web_release.mjs"]) {
+  for (const rel of ["CMakeLists.txt", "cmake/GameOptions.cmake", "cmake/GameTests.cmake", "src/main.c", "web/index.html.in", "tools/game.mjs", "tools/build_web.mjs", "tools/lib/studio_root.mjs"]) {
     write(root, `${template}/${rel}`, readFileSync(join(source, rel), "utf8"));
   }
   write(root, `${template}/template.json`, readFileSync(join(source, "template.json"), "utf8"));
@@ -225,7 +225,7 @@ test("blank template binds title and autosave namespace without legacy platform 
   assert.match(shell, /storagePrefix: '@GAME_CRASH_STORAGE_PREFIX@'/);
   assert.ok(shell.indexOf('@PLATFORM_SDK_DIAGNOSTICS_JS@') < shell.indexOf("import('./platform-sdk.js')"));
   assert.equal(existsSync(join(source, "web/runtime-diagnostics.js")), false);
-  for (const tool of ["package_web.mjs", "minify_web_release.mjs"]) {
+  for (const tool of ["game.mjs", "build_web.mjs"]) {
     assert.equal(readFileSync(join(source, "tools", tool), "utf8"), readFileSync(join(repositoryRoot, "templates/template/tools", tool), "utf8"));
   }
 

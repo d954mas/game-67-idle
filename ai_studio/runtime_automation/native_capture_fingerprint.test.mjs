@@ -59,3 +59,16 @@ test("native capture rejects a game module that escapes through a directory link
   assert.match(result.stderr, /escapes|inside/i);
   assert.doesNotMatch(result.stderr, /outside module executed/);
 });
+
+test("a game without copied tooling is fingerprinted by the Studio module", (t) => {
+  const studio = mkdtempSync(join(tmpdir(), "capture-fingerprint-studio-"));
+  t.after(() => rmSync(studio, { recursive: true, force: true }));
+  const game = join(studio, "games", "fixture");
+  mkdirSync(join(game, "tools"), { recursive: true });
+  const module = join(studio, "ai_studio", "game_tools", "lib", "runtime_build.mjs");
+  mkdirSync(dirname(module), { recursive: true });
+  writeFileSync(module, `export function createRuntimeSourceRecord() { return { schema: 'studio-module' }; }`);
+  const result = run({ studio, game });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).schema, "studio-module");
+});

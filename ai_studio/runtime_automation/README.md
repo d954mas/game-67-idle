@@ -99,8 +99,9 @@ configure command instead of accepting a previously built executable.
 `--executable` remains available only when it resolves to that exact canonical
 artifact.
 
-The preflight calls the selected game's `tools/lib/runtime_build.mjs`
-`createRuntimeSourceRecord({gameDir, studioRoot})` through a fixed Node script.
+The preflight calls the selected game's `tools/lib/runtime_build.mjs` when the
+game still carries copied tooling, and `ai_studio/game_tools/lib/runtime_build.mjs`
+otherwise, as `createRuntimeSourceRecord({gameDir, studioRoot})` through a fixed Node script.
 Legacy modules retain their `createRuntimeBuildRecord` entrypoint. Source-only
 records do not invent a web compile profile for a native build. Physical game
 and module paths must stay inside their owning roots before the script imports
@@ -292,8 +293,8 @@ with game.player_gated():
 
 ## Build input hashing
 
-Game-owned `tools/lib/runtime_build.mjs` selects inputs and creates build
-records. Integrated games use `runtime_hash_tree.cjs` for synchronous streaming
+`ai_studio/game_tools/lib/runtime_build.mjs` (or an older game's copied
+`tools/lib/runtime_build.mjs`) selects inputs and creates build records. Integrated games use `runtime_hash_tree.cjs` for synchronous streaming
 hashing; standalone copies keep their game-owned implementation. Native capture
 validates source proof through `native_capture_fingerprint.mjs`. Fingerprinting
 uses the installed Node.js runtime and must not launch an ad-hoc fingerprint

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { minifyWebRelease } from "./minify_web_release.mjs";
+import { minifyWebRelease } from "../minify_web_release.mjs";
 
 test("release minifier compacts HTML while preserving executable bootstraps", async (t) => {
   const artifactDir = mkdtempSync(join(tmpdir(), "web-minify-"));

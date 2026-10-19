@@ -9,10 +9,9 @@ STORE ZIP artifacts, and explicit `tmp/` scratch cleanup.
 Do not put domain policy here. Module-specific validation, asset rules, task
 state, browser UI, and runtime automation stay in their owning modules.
 
-`zip_store.mjs` is mirrored byte-for-byte into
-`templates/template/tools/lib/zip_store.mjs` because copied games must remain
-standalone; the template packaging test prevents drift across that delivery
-boundary.
+`zip_store.mjs` is also the ZIP writer of the shared game CLI
+(`ai_studio/game_tools`). Games created before that module still carry their own
+copy in `tools/lib/`.
 
 Generated or downloaded data does not belong here.
 

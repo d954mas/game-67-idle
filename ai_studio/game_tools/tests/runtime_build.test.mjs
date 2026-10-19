@@ -14,7 +14,7 @@ import test from "node:test";
 import {
   createRuntimeBuildRecord,
   validateRuntimeBuildRecord,
-} from "./runtime_build.mjs";
+} from "../lib/runtime_build.mjs";
 
 function write(path, value) {
   mkdirSync(dirname(path), { recursive: true });

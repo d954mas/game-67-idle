@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 
-import { createBuildPlan, executeBuildPlan, parseBuildArgs, resolveEmcmakePath } from "./build_web.mjs";
+import { createBuildPlan, executeBuildPlan, parseBuildArgs, resolveEmcmakePath } from "../build_web.mjs";
 
 const slash = (value) => value.replaceAll("\\", "/").replace(/^[A-Za-z]:/, "");
 
@@ -91,7 +91,7 @@ test("plan preserves build dirs local cache native pack web targets and final me
   assert.deepEqual(plan.steps.at(-1).value, runtimeBuild);
   const configure = plan.steps.find((step) => step.kind === "run" && step.args.includes("-DGAME_PUBLISH_TARGET=yandex"));
   assert.ok(configure.args.includes(`-DGAME_RUNTIME_BUILD_FINGERPRINT=${runtimeBuild.fingerprint}`));
-  assert.equal(plan.message, "built wasm-devapi-debug-yandex (yandex -> platform-sdk); serve with: node tools/serve_web.mjs --preset wasm-devapi-debug --target yandex");
+  assert.match(plan.message, /^built wasm-devapi-debug-yandex \(yandex -> platform-sdk\); serve with: node \S*ai_studio\/game_tools\/serve_web\.mjs --preset wasm-devapi-debug --target yandex$/);
 });
 
 test("executor uses injected filesystem and runner seams", () => {

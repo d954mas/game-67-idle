@@ -126,7 +126,7 @@ No Taskboard items are created by this plan.
    Its deadline wrapper also turns rejected operations into normal failures.
    Fixing only HTTP, or only the innermost callback, leaves reachable holes.
 9. The release packager validates a fixed `__PLATFORM_SDK_CONFIG__` shape and
-   rejects residual SDK module references (`templates/template/tools/package_web.mjs`).
+   rejects residual SDK module references (`ai_studio/game_tools/package_web.mjs`).
    Inline source injection therefore needs packaging proof, not just CMake proof.
 
 ## What other engines do

@@ -82,7 +82,13 @@ function assertArtifactDir(gameDir, artifactDir, requirePhysical) {
   if (!inside(physicalBuild, physicalArtifact)) throw new Error("game web artifact directory escapes its physical build root");
 }
 
-export function resolveGameModule(gameDir) {
+// A game with its own copied packager still carries its own builder; a current
+// game's tools/build_web.mjs is a shim that builds on import, so the Studio
+// builder is loaded instead.
+export function resolveGameModule(gameDir, studioRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")) {
+  if (!existsSync(join(gameDir, "tools", "package_web.mjs"))) {
+    return realpathSync(join(studioRoot, "ai_studio", "game_tools", "build_web.mjs"));
+  }
   const modulePath = realpathSync(join(gameDir, "tools", "build_web.mjs"));
   if (!inside(gameDir, modulePath)) throw new Error("game web build module escapes its catalog mount");
   return modulePath;
@@ -161,7 +167,7 @@ export async function main(argv = process.argv.slice(2), environment = process.e
     const { gameId, buildArgs } = parsePreviewArgs(argv);
     const studioRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
     const gameDir = resolveGameDir(studioRoot, gameId);
-    const builder = await import(pathToFileURL(resolveGameModule(gameDir)).href);
+    const builder = await import(pathToFileURL(resolveGameModule(gameDir, studioRoot)).href);
     supportedBuilder(builder);
     const emsdk = environment.EMSDK || (process.platform === "win32" && existsSync("C:/develop/emsdk") ? "C:/develop/emsdk" : "");
     const toolchain = emsdk ? join(emsdk, "upstream", "emscripten", "cmake", "Modules", "Platform", "Emscripten.cmake") : "";

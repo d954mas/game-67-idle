@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import test from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { runtimeBuildWitness, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
+import { findStudioRoot } from "./lib/studio_root.mjs";
+
+const studioRoot = findStudioRoot(resolve(dirname(fileURLToPath(import.meta.url)), ".."));
+const { runtimeBuildWitness, validateRuntimeBuildRecord } = await import(
+  pathToFileURL(join(studioRoot, "ai_studio", "game_tools", "lib", "runtime_build.mjs")).href,
+);
 
 const inputs = [
   { id: "game", source: ".", files: 1, sha256: "1".repeat(64) },

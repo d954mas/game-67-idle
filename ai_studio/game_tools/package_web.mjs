@@ -17,12 +17,11 @@ import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-import { createStoreZip, readStoreZip } from "./lib/zip_store.mjs";
+import { createStoreZip, readStoreZip } from "../core_harness/tool_lib/zip_store.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { createRuntimeBuildRecord, runtimeBuildWitness, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 
-const GAME_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const DEFAULT_STUDIO_ROOT = findStudioRoot(GAME_DIR);
+const DEFAULT_STUDIO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const { inspectPlatformSdkArtifact } = await import(pathToFileURL(join(
   DEFAULT_STUDIO_ROOT,
   "features",
@@ -1408,6 +1407,6 @@ export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studio
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  console.error("package_web.mjs is owned by tools/game.mjs; use: node tools/game.mjs package --target itch");
+  console.error("package_web.mjs is owned by the game CLI; from a game root use: node tools/game.mjs package --target itch");
   process.exitCode = 2;
 }

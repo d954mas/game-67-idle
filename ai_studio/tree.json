@@ -351,6 +351,17 @@
         "coverage": "subtree"
       },
       {
+        "id": "game-tools",
+        "title": "Game tools",
+        "kind": "module",
+        "path": "ai_studio/game_tools",
+        "owner": "Release Owner",
+        "description": "The shared build, test, package and release CLI that every game loads through thin tools/ entrypoints.",
+        "entry": "ai_studio/game_tools/README.md",
+        "verifyDomain": "template-release",
+        "coverage": "subtree"
+      },
+      {
         "id": "runtime-automation",
         "title": "Runtime automation",
         "kind": "module",

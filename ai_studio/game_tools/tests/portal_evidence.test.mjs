@@ -18,14 +18,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { packageWebArtifact } from "./package_web.mjs";
-import { createPortalEvidence, publishPortalEvidenceReport } from "./portal_evidence.mjs";
-import { findStudioRoot } from "./lib/studio_root.mjs";
-import { runtimeBuildWitness } from "./lib/runtime_build.mjs";
+import { packageWebArtifact } from "../package_web.mjs";
+import { createPortalEvidence, publishPortalEvidenceReport } from "../portal_evidence.mjs";
+import { findStudioRoot } from "../lib/studio_root.mjs";
+import { runtimeBuildWitness } from "../lib/runtime_build.mjs";
 
-const gameModuleRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const gameModuleRoot = resolve(fileURLToPath(new URL("../../../templates/template", import.meta.url)));
 const studioRoot = findStudioRoot(gameModuleRoot);
-const reporterScript = resolve(fileURLToPath(new URL("portal_evidence.mjs", import.meta.url)));
+const reporterScript = resolve(fileURLToPath(new URL("../portal_evidence.mjs", import.meta.url)));
 const RELEASE_WASM = Buffer.from([
   0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
   0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
@@ -255,16 +255,16 @@ test("local mock observation cannot change between validation and report publica
   }), /local mock observation changed/i);
 });
 
-test("copied game-owned reporter records the exact package from a standalone games/<id> layout", (t) => {
+test("the Studio reporter records the exact package when run from a games/<id> root", (t) => {
   const item = fixture(t);
-  const toolsDir = join(item.gameDir, "tools");
-  mkdirSync(join(toolsDir, "lib"), { recursive: true });
-  for (const rel of ["portal_evidence.mjs", "package_web.mjs", "lib/studio_root.mjs", "lib/zip_store.mjs", "lib/runtime_build.mjs"]) {
-    cpSync(join(dirname(reporterScript), ...rel.split("/")), join(toolsDir, ...rel.split("/")));
+  for (const rel of ["portal_evidence.mjs", "package_web.mjs", "lib/studio_root.mjs", "lib/runtime_build.mjs"]) {
+    mkdirSync(dirname(join(item.root, "ai_studio", "game_tools", ...rel.split("/"))), { recursive: true });
+    cpSync(join(dirname(reporterScript), ...rel.split("/")), join(item.root, "ai_studio", "game_tools", ...rel.split("/")));
   }
+  cpSync(join(studioRoot, "ai_studio", "core_harness", "tool_lib"), join(item.root, "ai_studio", "core_harness", "tool_lib"), { recursive: true });
   cpSync(join(studioRoot, "features", "platform-sdk"), join(item.root, "features", "platform-sdk"), { recursive: true });
   mkdirSync(join(item.root, "external", "neotolis-engine"), { recursive: true });
-  const result = spawnSync(process.execPath, ["tools/portal_evidence.mjs", "--manifest", `release/artifacts/${item.manifestPath.split(/[\\/]/).at(-1)}`], {
+  const result = spawnSync(process.execPath, [join(item.root, "ai_studio", "game_tools", "portal_evidence.mjs"), "--manifest", `release/artifacts/${item.manifestPath.split(/[\\/]/).at(-1)}`], {
     cwd: item.gameDir,
     encoding: "utf8",
   });

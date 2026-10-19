@@ -21,10 +21,13 @@ if (!gameArgument || !studioArgument || process.argv.length !== 4) {
   if (!inside(studioRoot, gameRoot)) {
     fail("game root must stay inside the Studio root");
   } else {
-    const modulePath = resolve(gameRoot, "tools", "lib", "runtime_build.mjs");
+    // Games with copied tooling keep their own module; current games use the Studio's.
+    const gameModule = resolve(gameRoot, "tools", "lib", "runtime_build.mjs");
+    const ownModule = existsSync(gameModule);
+    const modulePath = ownModule ? gameModule : resolve(studioRoot, "ai_studio", "game_tools", "lib", "runtime_build.mjs");
     if (!existsSync(modulePath) || !statSync(modulePath).isFile()) {
-      fail(`game-owned runtime build module is missing: ${modulePath}`);
-    } else if (!inside(gameRoot, realpathSync(modulePath))) {
+      fail(`runtime build module is missing: ${modulePath}`);
+    } else if (ownModule && !inside(gameRoot, realpathSync(modulePath))) {
       fail("game-owned runtime build module escapes its game root");
     } else {
       const module = await import(pathToFileURL(modulePath).href);

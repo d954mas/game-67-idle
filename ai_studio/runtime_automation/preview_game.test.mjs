@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 
 import { listWorkspaceMounts } from "../workspace/catalog.mjs";
-import { createPreviewPlan, executePreviewPlan, parsePreviewArgs, resolveGameDir } from "./preview_game.mjs";
+import { createPreviewPlan, executePreviewPlan, parsePreviewArgs, resolveGameDir, resolveGameModule } from "./preview_game.mjs";
 
 const studioRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
@@ -143,4 +143,18 @@ test("catalogued private games expose a debug preview plan without a source proo
     assert.ok(configure.args.includes("-DGAME_RUNTIME_BUILD_FINGERPRINT="));
     assert.equal(prepared.previewRecord.proof, "none");
   }
+});
+
+test("a game with shim tooling previews through the Studio builder, a copied one through its own", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "preview-module-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const game = join(root, "games", "fixture");
+  mkdirSync(join(game, "tools"), { recursive: true });
+  writeFileSync(join(game, "tools", "build_web.mjs"), "throw new Error('a shim builds on import');\n");
+  mkdirSync(join(root, "ai_studio", "game_tools"), { recursive: true });
+  writeFileSync(join(root, "ai_studio", "game_tools", "build_web.mjs"), "export {}\n");
+  assert.equal(resolveGameModule(game, root), realpathSync(join(root, "ai_studio", "game_tools", "build_web.mjs")));
+
+  writeFileSync(join(game, "tools", "package_web.mjs"), "export {}\n");
+  assert.equal(resolveGameModule(game, root), realpathSync(join(game, "tools", "build_web.mjs")));
 });

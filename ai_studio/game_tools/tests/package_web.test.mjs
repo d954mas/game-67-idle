@@ -18,19 +18,19 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
 
-import * as packageWeb from "./package_web.mjs";
+import * as packageWeb from "../package_web.mjs";
 import {
   packageWebArtifact,
   validateWebArtifact,
   verifyDependencySources,
   verifyWebPackage,
-} from "./package_web.mjs";
-import { minifyWebRelease } from "./minify_web_release.mjs";
-import { createStoreZip, readStoreZip } from "./lib/zip_store.mjs";
-import { findStudioRoot } from "./lib/studio_root.mjs";
-import { runtimeBuildWitness } from "./lib/runtime_build.mjs";
+} from "../package_web.mjs";
+import { minifyWebRelease } from "../minify_web_release.mjs";
+import { createStoreZip, readStoreZip } from "../../core_harness/tool_lib/zip_store.mjs";
+import { findStudioRoot } from "../lib/studio_root.mjs";
+import { runtimeBuildWitness } from "../lib/runtime_build.mjs";
 
-const gameModuleRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const gameModuleRoot = resolve(fileURLToPath(new URL("../../../templates/template", import.meta.url)));
 const studioRoot = findStudioRoot(gameModuleRoot);
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -68,11 +68,6 @@ function runtimeBoundWasm(record, base = RELEASE_WASM) {
   return Buffer.concat([base, Buffer.from([0]), uleb(payload.length), payload]);
 }
 
-test("standalone template ZIP helper matches the canonical Studio helper", () => {
-  const canonical = readFileSync(join(studioRoot, "ai_studio", "core_harness", "tool_lib", "zip_store.mjs"));
-  const distributionCopy = readFileSync(join(studioRoot, "templates", "template", "tools", "lib", "zip_store.mjs"));
-  assert.equal(distributionCopy.equals(canonical), true);
-});
 const RELEASE_WASM = Buffer.from([
   0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
   0x01, 0x04, 0x01, 0x60, 0x00, 0x00,

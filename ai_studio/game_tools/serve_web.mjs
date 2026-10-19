@@ -9,13 +9,12 @@
 // as application/wasm so emscripten's streaming compile does not fall back.
 import { createServer } from "node:http";
 import { createReadStream, existsSync, statSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, extname, isAbsolute, join, normalize, resolve, sep } from "node:path";
+import { extname, isAbsolute, join, normalize, resolve, sep } from "node:path";
 
-const GAME_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
+// Run from the game root; the game CLI spawns it there.
+const GAME_DIR = process.cwd();
 
-// Inline MIME table (deliberately NOT importing ai_studio/.../mime.mjs: keeps a
-// copied game self-contained). Unknown -> octet-stream.
+// Inline MIME table; unknown -> octet-stream.
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript",
