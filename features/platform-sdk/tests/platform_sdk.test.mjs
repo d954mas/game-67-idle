@@ -2743,7 +2743,8 @@ test("gamepush ignores later ad callbacks after its first callback fault", async
   fixture.adapter.destroy();
 });
 
-test("gamepush does not assign document visibility faults to a pending ad", async () => {
+test("gamepush does not assign document visibility faults to a pending ad", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const fault = new Error("visibility fault");
   const escaped = [];
   const fixture = createGamePushFixture({ lifecycleOverrides: { audio() { throw fault; } } });
