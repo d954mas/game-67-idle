@@ -85,6 +85,10 @@ set(GAME_SOURCE_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/generated")
 # --- game executable (the conductor + systems) ---
 add_executable(${GAME_TARGET} EXCLUDE_FROM_ALL
     src/main.c
+    src/shell/shell_platform.c
+    src/shell/shell_boot.c
+    src/shell/shell_tick.c
+    src/shell/shell_present.c
     src/game_asset_paths.c
     src/game_input.c
     "${SCENES_CORE_SRC}/scene_manager.c"

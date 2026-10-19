@@ -27,19 +27,21 @@ dumps a whole game into one file. Keep them.
 
 ## Decomposition
 
-- **`main.c` is the conductor, not the game.** It only: init subsystems ->
-  `nt_app_run(frame)` -> teardown. `frame()` only CALLS subsystems in order
-  (input -> game-system updates -> render systems). No gameplay rules in `main.c`.
+- **`main.c` is the conductor, not the game.** It only sequences the shell
+  phases declared in `src/shell/shell.h`: boot -> `nt_app_run(frame)` ->
+  teardown, and `frame()` = platform begin -> tick -> present -> platform end.
+  Each phase owns one file (`src/shell/shell_<phase>.c`); a game grows the
+  phase file that runs its system, never `main.c`. No gameplay rules in the shell.
 - **One system per file.** A system (`systems/sys_*.c`, `render/*.c`, `ui/*.c`,
   `scene/*.c`, root `*_devapi.c`) has a single responsibility. Add a feature by adding a
-  file + registering it in `frame()`, NEVER by growing an existing file.
+  file + calling it from its shell phase, NEVER by growing an existing file.
 - **The World is the source of truth.** Systems read/write the `World`
   (`world/world.{c,h}`): entity handles + per-system SoA state. Systems do not own
   entities and do not call into each other's internals -- they go through the World.
 - **Game-owned C DevAPI commands live as root `src/*_devapi.c` modules**. Engine-owned groups (`ui.*`,
   input/time/frame, obs, capture) stay wired through `nt_devapi`; do not duplicate
   them in the template. The HUD/UI tree lives in `ui/`, render + material
-  setup in `render/` -- never inline in `main.c`.
+  setup in `render/` -- never inline in the shell.
   The in-place `game-state` module owns the hand-written registry dispatcher for
   `game.state.*`; generated fragment code only supplies typed state/schema
   operations. The dispatcher compiles only under `GAME_DEVAPI_ENABLED`.
@@ -53,8 +55,9 @@ dumps a whole game into one file. Keep them.
 
 ## Anti-patterns (do NOT do)
 
-- **God-file:** a monolithic `main.c` with window + assets + all systems + render +
-  rules. (If `main.c` exceeds ~200 lines or contains gameplay logic, decompose.)
+- **God-file:** a monolithic `main.c` or shell phase with window + assets + all
+  systems + render + rules. (If `main.c` exceeds ~200 lines or contains gameplay
+  logic, decompose.)
 - **God-struct:** one fat `Entity`/struct every system reads (AoS). Use per-system
   SoA; an entity is a handle indexing into system data.
 - **Clone-and-own as a strategy:** don't copy a previous game and mutate it. Start

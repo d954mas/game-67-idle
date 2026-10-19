@@ -15,8 +15,11 @@ Before accepting changes to the starter itself, run
 `node tools/game.mjs test --template-proof`. Preview is explicitly non-proof;
 use an ordinary build for capture and release checks.
 
-`src/main.c` owns startup, the frame loop, and shutdown. Game logic belongs in
-feature modules and is sequenced by `src/features/game_features.c`.
+`src/main.c` sequences the shell: startup, one frame, and shutdown. The frame is
+four phases in a fixed order, `platform begin -> tick -> present -> platform end`,
+each in its own `src/shell/shell_<phase>.c`; `src/shell/shell.h` states the
+contract. Game logic belongs in feature modules and is sequenced by
+`src/features/game_features.c`.
 Presentation belongs in renderer or UI modules; it receives state and input but
 does not own game rules. The supplied renderer only clears the frame.
 
@@ -31,7 +34,7 @@ examples, see `ai_studio/feature_testing/consumer`.
 
 `World` holds runtime state. Persistent state is declared in
 `state/game_state.schema.json` and is registered through the save lifecycle in
-`main.c`.
+`src/shell/shell_boot.c` and loaded in `src/shell/shell_tick.c`.
 
 ## Web and release tooling
 

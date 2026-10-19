@@ -1,7 +1,9 @@
 # Foundation conventions
 
-- `main.c` coordinates lifecycle and platform boundaries. It does not contain
-  game rules or presentation details.
+- `main.c` only sequences the shell phases (`src/shell/shell.h`): platform
+  begin, tick, present, platform end. Each phase owns its file; a game grows a
+  phase file, never `main.c`. No phase contains game rules or presentation
+  details that a feature or renderer could own.
 - `World` owns transient game data. State that must survive a restart belongs
   in a schema fragment under `state/`.
 - A feature owns one coherent rule set. `game_features.c` calls its lifecycle

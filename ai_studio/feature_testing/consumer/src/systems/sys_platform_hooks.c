@@ -13,10 +13,16 @@
 #include <emscripten/html5.h>
 #endif
 
-#if !defined(__EMSCRIPTEN__) && NT_DEVAPI_ENABLED
-/* A native dev build has no portal behind the facade, so no video can ever
-   complete and the reward path would be unreachable for a bot. A web build
-   compiles this to false and only a real success pays out. */
+#ifndef PLATFORM_SDK_TARGET_ID
+#define PLATFORM_SDK_TARGET_ID 0
+#endif
+
+#if !defined(__EMSCRIPTEN__) && NT_DEVAPI_ENABLED && PLATFORM_SDK_TARGET_ID != 0
+/* A native dev build of a portal target has no portal behind the facade, so
+   no video can ever complete and the reward path would be unreachable for a
+   bot. The local target (id 0) has the mock portal, whose modal answers
+   success, skip, decline or failure, and a bot must see the declines decline.
+   A web build compiles this to false and only a real success pays out. */
 #define PLATFORM_HOOKS_MOCK_REWARD true
 #else
 #define PLATFORM_HOOKS_MOCK_REWARD false

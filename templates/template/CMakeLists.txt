@@ -20,6 +20,10 @@ endif()
 
 add_executable(${GAME_TARGET}
     src/main.c
+    src/shell/shell_platform.c
+    src/shell/shell_boot.c
+    src/shell/shell_tick.c
+    src/shell/shell_present.c
     src/game_input.c
     src/features/game_features.c
     src/render/blank_renderer.c)

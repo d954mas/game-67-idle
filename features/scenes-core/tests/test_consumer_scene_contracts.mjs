@@ -26,6 +26,8 @@ function assertOrdered(source, earlier, later) {
   );
 }
 
+const shellDir = "ai_studio/feature_testing/consumer/src/shell";
+
 function sliceFromRequired(source, marker) {
   const markerIndex = source.indexOf(marker);
   assert.notEqual(markerIndex, -1, `missing slice marker: ${marker}`);
@@ -41,22 +43,25 @@ test("template gates snapshotted movement through scene and focus eligibility", 
 });
 
 test("template samples focus before scene updates even when root is paused", () => {
-  const source = read("ai_studio/feature_testing/consumer/src/main.c");
-  const frame = sliceFromRequired(source, "game_input_capture(&s_input);");
+  const platform = read(`${shellDir}/shell_platform.c`);
+  const frameBegin = sliceFromRequired(platform, "void shell_platform_frame_begin(");
   assertOrdered(
-    frame,
-    "game_input_capture(&s_input);",
-    "focus_prompt_ui_update(&s_input);",
+    frameBegin,
+    "game_input_capture(input);",
+    "focus_prompt_ui_update(input);",
   );
+  const main = read("ai_studio/feature_testing/consumer/src/main.c");
   assertOrdered(
-    frame,
-    "focus_prompt_ui_update(&s_input);",
-    "game_runtime_update();",
+    main,
+    "shell_platform_frame_begin(&s_input);",
+    "shell_tick(&s_world, &s_input);",
   );
+  const tick = sliceFromRequired(read(`${shellDir}/shell_tick.c`), "shell_tick_status_t shell_tick(");
+  assert.match(tick, /game_runtime_update\(world, input\);/);
 });
 
 test("template gates platform gameplay through focused scene eligibility", () => {
-  const source = read("ai_studio/feature_testing/consumer/src/main.c");
+  const source = read(`${shellDir}/shell_tick.c`);
   assert.match(
     source,
     /platform_lifecycle_update\(\s*playable_shell_ready,\s*!platform_break && game_scenes_can_process_game_input\(\)\s*\)/s,
@@ -92,7 +97,7 @@ test("template proves root scene start succeeds before initialization", () => {
 });
 
 test("template fails startup when scene DevAPI registration is rejected", () => {
-  const source = read("ai_studio/feature_testing/consumer/src/main.c");
+  const source = read(`${shellDir}/shell_platform.c`);
   assert.match(
     source,
     /if\s*\(\s*!scene_manager_register_devapi\(game_scenes_manager\(\)\)\s*\)[\s\S]*return false;/,
@@ -141,13 +146,14 @@ test("core runtime remains fixed-storage and allocation-free", () => {
 });
 
 test("template preserves scene resource and shutdown barriers", () => {
-  const source = read("ai_studio/feature_testing/consumer/src/main.c");
-  assertOrdered(
-    source,
-    "nt_resource_step();",
-    "game_scenes_step(++s_scene_frame_index",
-  );
-  const shutdown = sliceFromRequired(source, "devapi_shutdown_runtime();");
+  const main = read("ai_studio/feature_testing/consumer/src/main.c");
+  const upload = sliceFromRequired(read(`${shellDir}/shell_present.c`), "void shell_present_upload(");
+  assert.match(upload, /nt_resource_step\(\);/);
+  assertOrdered(main, "shell_present_upload();", "shell_tick(&s_world, &s_input);");
+  assert.match(read(`${shellDir}/shell_tick.c`), /game_scenes_step\(\+\+s_scene_frame_index/);
+
+  assertOrdered(main, "shell_tick_shutdown(&s_world);", "shell_boot_shutdown();");
+  const shutdown = sliceFromRequired(read(`${shellDir}/shell_tick.c`), "void shell_tick_shutdown(");
   assertOrdered(
     shutdown,
     "game_scenes_shutdown();",
@@ -156,13 +162,10 @@ test("template preserves scene resource and shutdown barriers", () => {
   assertOrdered(
     shutdown,
     "nt_resource_step();",
-    "game_features_shutdown(&s_world);",
+    "game_features_shutdown(world);",
   );
-  assertOrdered(
-    shutdown,
-    "game_features_shutdown(&s_world);",
-    "nt_resource_shutdown();",
-  );
+  const bootShutdown = sliceFromRequired(read(`${shellDir}/shell_boot.c`), "void shell_boot_shutdown(");
+  assert.match(bootShutdown, /nt_resource_shutdown\(\);/);
 });
 
 test("transition pointer gate is declared after scene and global UI", () => {
@@ -181,10 +184,10 @@ test("transition pointer gate is declared after scene and global UI", () => {
 
 test("template gates world rendering through scene presentation", () => {
   const templateHeader = read("ai_studio/feature_testing/consumer/src/game_scenes.h");
-  const templateMain = read("ai_studio/feature_testing/consumer/src/main.c");
+  const templatePresent = read(`${shellDir}/shell_present.c`);
 
   assert.match(templateHeader, /game_scenes_should_render_world/);
-  assert.match(templateMain, /game_scenes_should_render_world\(\)/);
+  assert.match(templatePresent, /game_scenes_should_render_world\(\)/);
 });
 
 test("template overlay open queries use current presentation", () => {

@@ -81,6 +81,13 @@ set the bar: a prototype should not have to design a UI before it has a game.
   the example a game copies a screen from. Opt-in; nothing in it is compiled
   into a game or the template.
 - `ui_safe_area.h` — the device's own insets, in CSS pixels.
+- `ui_world_anchor.h` and `ui_screen_pack.h` — text standing over the world.
+  `ui_world_to_canvas` and `ui_figure_box` put a world point, or an upright
+  figure's box, on the y-down canvas through the view_proj the frame drew
+  with, and report false behind the camera. `ui_screen_pack_first_free` picks
+  the first of a fixed list of offsets whose box lies inside the bounds and
+  clear of every taken box; a fixed list, not a push, so a crowd spreads into
+  a patch instead of a column. Both are pure arithmetic with no kit state.
 - `ui_shape.h`, `ui_shape_pack.h` and `shaders/ui_uber.vert|frag` — the uber
   sprite material and the shapes it draws without art: rounded panels
   (per-corner radii, two-colour vertical gradient, contour, lip, press, gloss
@@ -139,6 +146,9 @@ becomes a raw pointer and calls the kit from there.
 - `test_ui_shape_pack` — every packed shape field reads back exactly as the
   shader unpacks it, lengths clamp inside their 12-bit field, and a zero style
   is not the plain-sprite block.
+- `test_ui_screen_pack` — however many labels crowd one spot, every one that
+  shows lies inside the bounds and clear of the taken boxes and of each other,
+  and a crowd spreads across instead of into one column.
 - `node --test features/ui-kit/tests/tokens_parity.test.mjs` — the token sheet
   the art generator reads and the tokens compiled into `ui_tokens.c` are the
   same numbers. Without it a repaint lands in the art and not in the styles.
@@ -166,7 +176,9 @@ not be replaced with generated art solely because filenames match.
 
 ## Compatibility
 
-Contract version in `feature.json`. Version 1.7 adds the glyph set
+Contract version in `feature.json`. Version 3.1 adds `ui_world_anchor.h`
+and `ui_screen_pack.h`, two pure helpers for text over the world; nothing
+existing changes. Version 1.7 adds the glyph set
 (`ui_icons.h`, `assets/icons/`, the `icons` art slots and
 `ui_theme_art_bind_icons`), draws the close cross and the dropdown chevron
 from it when bound, and moves the round close to the neutral tile colour.

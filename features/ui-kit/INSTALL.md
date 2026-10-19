@@ -18,7 +18,10 @@ target_sources(${GAME_TARGET} PRIVATE
     "${UI_KIT_SRC}/ui_metrics.c"
     "${UI_KIT_SRC}/ui_kit.c"
     "${UI_KIT_SRC}/ui_reach.c"
-    "${UI_KIT_SRC}/ui_safe_area.c")
+    "${UI_KIT_SRC}/ui_safe_area.c"
+    # Only for text standing over the world:
+    "${UI_KIT_SRC}/ui_world_anchor.c"
+    "${UI_KIT_SRC}/ui_screen_pack.c")
 target_include_directories(${GAME_TARGET} PRIVATE "${UI_KIT_INC}")
 target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_UI_KIT=1)
 ```
