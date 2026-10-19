@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { hostname, tmpdir } from "node:os";
 import { createServer } from "node:net";
@@ -10,6 +10,7 @@ import {
   checkFeatureWorkspace,
   createFeatureWorkspace,
   defaultWorkspaceBase,
+  forgetMissingFeatureWorkspaces,
   inspectCommittedTask,
   inspectRepository,
   normalizeWorkspaceName,
@@ -19,6 +20,7 @@ import {
   reallocateWorkspacePorts,
   recoverFeatureWorkspace,
   removeFeatureWorkspace,
+  removeMergedFeatureWorkspaces,
 } from "../feature_workspaces.mjs";
 
 function git(root, ...args) {
@@ -72,7 +74,7 @@ function pairFixture({ withPython = false } = {}) {
   git(studioRoot, "init", "-b", "main");
   git(studioRoot, "config", "user.name", "Fixture");
   git(studioRoot, "config", "user.email", "fixture@example.invalid");
-  write(studioRoot, ".gitignore", "games/private/\n.vite/\n.venv/\n");
+  write(studioRoot, ".gitignore", "games/private/\n.vite/\n.venv/\n__pycache__/\nbuild/\n**/src/generated/\n**/release/artifacts/\n");
   write(studioRoot, ".gitmodules", '[submodule "external/neotolis-engine"]\n\tpath = external/neotolis-engine\n\turl = https://invalid.example/engine.git\n');
   write(studioRoot, "studio.txt", "studio\n");
   if (withPython) {
@@ -108,7 +110,7 @@ function pairFixture({ withPython = false } = {}) {
   write(gameRoot, ".ai_studio/taskboard/items/active/T0001.md", taskDoc("T0001"));
   write(gameRoot, ".ai_studio/taskboard/items/active/T0002.md", taskDoc("T0002"));
   write(gameRoot, ".ai_studio/taskboard/items/.counters.json", '{"P":1,"E":1,"T":2}\n');
-  write(gameRoot, ".gitignore", "build/\n");
+  write(gameRoot, ".gitignore", "build/\n__pycache__/\nsrc/generated/\nrelease/artifacts/\n.ai_studio/evidence/\nassets/restricted/\n");
   write(gameRoot, "tracked.txt", "committed\n");
   git(gameRoot, "add", ".");
   git(gameRoot, "commit", "-m", "game");
@@ -548,6 +550,227 @@ test("removal refuses unknown ignored data", async (t) => {
   write(created.gameWorktree, "private-cache/keep.txt", "do not delete\n");
   await assert.rejects(removeFeatureWorkspace({ base: fixture.base, name: "ignored-data" }), /unknown ignored data/i);
   assert.equal(readFileSync(join(created.gameWorktree, "private-cache/keep.txt"), "utf8"), "do not delete\n");
+});
+
+function markRemovalInterrupted(base, name) {
+  const activePath = join(base, ".feature-workspaces/active", `${name}.json`);
+  const record = JSON.parse(readFileSync(activePath, "utf8"));
+  record.state = "recovery-required";
+  record.transactionMode = "remove";
+  record.removalStartedAt = new Date().toISOString();
+  writeFileSync(activePath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
+}
+
+function commitInEngine(engineRoot, message) {
+  write(engineRoot, `${message}.txt`, `${message}\n`);
+  git(engineRoot, "add", `${message}.txt`);
+  git(engineRoot, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", message);
+  return git(engineRoot, "rev-parse", "HEAD");
+}
+
+test("removal refuses engine commits that only the workspace clone holds", async (t) => {
+  const fixture = pairFixture();
+  t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
+  const created = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0001", name: "engine-work" });
+  const engineRoot = join(created.studioWorktree, "external/neotolis-engine");
+  commitInEngine(engineRoot, "workspace-engine-change");
+  git(created.studioWorktree, "checkout", "--quiet", "-b", "local-gitlink-bump");
+  git(created.studioWorktree, "add", "external/neotolis-engine");
+  git(created.studioWorktree, "commit", "-m", "bump engine gitlink");
+  await assert.rejects(removeFeatureWorkspace({ base: fixture.base, name: "engine-work" }), /engine HEAD is not in the source engine/);
+
+  git(engineRoot, "branch", "keep-engine-change");
+  git(engineRoot, "checkout", "--quiet", "--detach", fixture.engineCommit);
+  git(created.studioWorktree, "checkout", "--quiet", "--detach", created.sourceStudioCommit);
+  await assert.rejects(removeFeatureWorkspace({ base: fixture.base, name: "engine-work" }), /engine refs\/heads\/keep-engine-change/);
+  assert.equal(existsSync(join(engineRoot, "workspace-engine-change.txt")), false);
+  assert.equal(git(engineRoot, "cat-file", "-t", "keep-engine-change"), "commit");
+});
+
+test("removal never deletes source evidence reached through a junction", { skip: process.platform !== "win32" }, async (t) => {
+  const fixture = pairFixture();
+  t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
+  const created = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0001", name: "evidence-link" });
+  write(fixture.gameRoot, ".ai_studio/evidence/t0001/shot.png", "source evidence\n");
+  mkdirSync(join(created.gameWorktree, ".ai_studio"), { recursive: true });
+  symlinkSync(join(fixture.gameRoot, ".ai_studio/evidence"), join(created.gameWorktree, ".ai_studio/evidence"), "junction");
+  await assert.rejects(removeFeatureWorkspace({ base: fixture.base, name: "evidence-link" }));
+  assert.equal(readFileSync(join(fixture.gameRoot, ".ai_studio/evidence/t0001/shot.png"), "utf8"), "source evidence\n");
+});
+
+test("CLI parses the registry-wide cleanup commands", () => {
+  assert.deepEqual(parseCommandLine(["remove-merged", "--apply", "--json"]), { command: "remove-merged", options: { apply: true, json: true } });
+  assert.deepEqual(parseCommandLine(["forget-missing"]), { command: "forget-missing", options: {} });
+  assert.throws(() => parseCommandLine(["forget-missing", "some-name"]), /unexpected argument/);
+  assert.throws(() => parseCommandLine(["remove", "some-name", "--apply"]), /unknown option/);
+});
+
+test("removal accepts a Studio worktree advanced to a shared commit and refuses a workspace-only commit", async (t) => {
+  const fixture = pairFixture();
+  t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
+  const advanced = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0001", name: "studio-advanced" });
+  const local = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0002", name: "studio-local" });
+  write(fixture.studioRoot, "studio-next.txt", "next\n");
+  git(fixture.studioRoot, "add", "studio-next.txt");
+  git(fixture.studioRoot, "commit", "-m", "advance studio");
+  git(advanced.studioWorktree, "checkout", "--quiet", "--detach", "main");
+  assert.equal((await removeFeatureWorkspace({ base: fixture.base, name: "studio-advanced" })).state, "removed");
+
+  write(local.studioWorktree, "workspace-only.txt", "unpushed\n");
+  git(local.studioWorktree, "add", "workspace-only.txt");
+  git(local.studioWorktree, "commit", "-m", "workspace-only studio work");
+  await assert.rejects(removeFeatureWorkspace({ base: fixture.base, name: "studio-local" }), /not on any source Studio branch/);
+  assert.equal(existsSync(join(local.studioWorktree, "workspace-only.txt")), true);
+});
+
+test("removal deletes generated ignored data and source-mirrored evidence only", async (t) => {
+  const fixture = pairFixture();
+  t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
+  write(fixture.gameRoot, "release/artifacts/README.md", "tracked beside generated output\n");
+  git(fixture.gameRoot, "add", "-f", "release/artifacts/README.md");
+  git(fixture.gameRoot, "commit", "-m", "track an artifacts note");
+  const created = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0001", name: "generated" });
+  write(created.gameWorktree, "devapi/__pycache__/smoke_bot.cpython-312.pyc", "pyc\n");
+  write(created.gameWorktree, "src/generated/game.h", "generated\n");
+  write(created.gameWorktree, "release/artifacts/game.zip", "zip\n");
+  write(created.studioWorktree, "features/ui-kit/example/native/build/ui.o", "object\n");
+  write(created.studioWorktree, "ai_studio/feature_testing/consumer/src/generated/state.h", "generated\n");
+  write(created.studioWorktree, "templates/template/release/artifacts/template.zip", "zip\n");
+  write(created.gameWorktree, ".ai_studio/evidence/t0001/shot.png", "evidence\n");
+  write(created.gameWorktree, "assets/restricted/pack/hero.glb", "glb\n");
+
+  await assert.rejects(removeFeatureWorkspace({ base: fixture.base, name: "generated" }), /unknown ignored data.*\.ai_studio\/evidence/);
+  write(fixture.gameRoot, ".ai_studio/evidence/t0001/shot.png", "different\n");
+  write(fixture.gameRoot, "assets/restricted/pack/hero.glb", "glb\n");
+  await assert.rejects(removeFeatureWorkspace({ base: fixture.base, name: "generated" }), /unknown ignored data.*shot\.png/);
+  assert.equal(readFileSync(join(created.gameWorktree, ".ai_studio/evidence/t0001/shot.png"), "utf8"), "evidence\n");
+
+  write(fixture.gameRoot, ".ai_studio/evidence/t0001/shot.png", "evidence\n");
+  assert.equal((await removeFeatureWorkspace({ base: fixture.base, name: "generated" })).state, "removed");
+  assert.equal(existsSync(join(fixture.base, "generated")), false);
+  assert.equal(readFileSync(join(fixture.gameRoot, ".ai_studio/evidence/t0001/shot.png"), "utf8"), "evidence\n");
+  assert.equal(readFileSync(join(fixture.gameRoot, "assets/restricted/pack/hero.glb"), "utf8"), "glb\n");
+});
+
+test("removal accepts a detached game worktree only at a commit kept by a source branch", async (t) => {
+  const fixture = pairFixture();
+  t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
+  const created = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0001", name: "detached-game" });
+  git(created.gameWorktree, "checkout", "--quiet", "--detach");
+  write(created.gameWorktree, "detached.txt", "unkept\n");
+  git(created.gameWorktree, "add", "detached.txt");
+  git(created.gameWorktree, "commit", "-m", "detached work");
+  await assert.rejects(removeFeatureWorkspace({ base: fixture.base, name: "detached-game" }), /not on any source game branch/);
+
+  git(created.gameWorktree, "checkout", "--quiet", "--detach", "main");
+  const removed = await removeFeatureWorkspace({ base: fixture.base, name: "detached-game" });
+  assert.equal(removed.state, "removed");
+  assert.equal(git(fixture.gameRoot, "show-ref", "--verify", `refs/heads/${created.gameBranch}`).length > 0, true);
+});
+
+test("recovery finishes a removal that Git left half-deleted", async (t) => {
+  const fixture = pairFixture();
+  t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
+  const game = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0001", name: "half-game" });
+  rmSync(join(game.gameWorktree, ".git"));
+  await assert.rejects(removeFeatureWorkspace({ base: fixture.base, name: "half-game" }), /workspace game worktree is not a Git worktree root/);
+  assert.equal(existsSync(join(game.gameWorktree, "tracked.txt")), true);
+  markRemovalInterrupted(fixture.base, "half-game");
+  const activePath = join(fixture.base, ".feature-workspaces/active/half-game.json");
+  const record = JSON.parse(readFileSync(activePath, "utf8"));
+  delete record.removalStartedAt;
+  writeFileSync(activePath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
+  await assert.rejects(recoverFeatureWorkspace({ base: fixture.base, name: "half-game" }), /no start time/);
+  assert.equal(existsSync(join(game.gameWorktree, "tracked.txt")), true);
+  const later = new Date(Date.now() + 60_000);
+  write(game.gameWorktree, "written-after-start.txt", "new work\n");
+  utimesSync(join(game.gameWorktree, "written-after-start.txt"), later, later);
+  await assert.rejects(recoverFeatureWorkspace({ base: fixture.base, name: "half-game" }), /changed after removal started/);
+  assert.equal(existsSync(join(game.gameWorktree, "written-after-start.txt")), true);
+  rmSync(join(game.gameWorktree, "written-after-start.txt"));
+  assert.equal((await recoverFeatureWorkspace({ base: fixture.base, name: "half-game" })).state, "removed");
+  assert.doesNotMatch(git(fixture.gameRoot, "worktree", "list"), /half-game/);
+
+  const studio = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0002", name: "half-studio" });
+  git(fixture.gameRoot, "worktree", "remove", studio.gameWorktree);
+  rmSync(join(studio.studioWorktree, ".git"));
+  markRemovalInterrupted(fixture.base, "half-studio");
+  assert.equal((await recoverFeatureWorkspace({ base: fixture.base, name: "half-studio" })).state, "removed");
+  assert.equal(existsSync(join(fixture.base, "half-studio")), false);
+  assert.doesNotMatch(git(fixture.studioRoot, "worktree", "list"), /half-studio/);
+});
+
+test("creation and removal handle paths longer than the Windows limit", { skip: process.platform !== "win32" }, async (t) => {
+  const fixture = pairFixture();
+  t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
+  const deep = Array.from({ length: 10 }, () => "long-path-segment-xx").join("/");
+  write(fixture.gameRoot, `${deep}/tracked.txt`, "deep\n");
+  git(fixture.gameRoot, "-c", "core.longpaths=true", "add", ".");
+  git(fixture.gameRoot, "-c", "core.longpaths=true", "commit", "-m", "deep path");
+  const created = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0001", name: "long-paths" });
+  assert.ok(join(created.gameWorktree, deep, "tracked.txt").length > 260);
+  write(created.gameWorktree, `${deep}/build/out.o`, "object\n");
+  assert.equal((await removeFeatureWorkspace({ base: fixture.base, name: "long-paths" })).state, "removed");
+  assert.equal(existsSync(join(fixture.base, "long-paths")), false);
+});
+
+test("forget-missing tombstones entries without a folder and prunes stale worktree records", async (t) => {
+  const fixture = pairFixture();
+  t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
+  await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0001", name: "kept" });
+  await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0002", name: "gone" });
+  const engineWork = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: null, name: "gone-engine" });
+  commitInEngine(join(engineWork.studioWorktree, "external/neotolis-engine"), "unpublished-engine-change");
+  const unrelated = join(fixture.fixtureRoot, "unrelated-worktree");
+  git(fixture.studioRoot, "worktree", "add", "--detach", unrelated);
+  for (const folder of [join(fixture.base, "gone"), join(fixture.base, "gone-engine"), unrelated]) {
+    rmSync(folder, { recursive: true, force: true });
+  }
+
+  const dryRun = await forgetMissingFeatureWorkspaces({ base: fixture.base });
+  const byName = Object.fromEntries(dryRun.workspaces.map((row) => [row.name, row]));
+  assert.deepEqual(Object.keys(byName).sort(), ["gone", "gone-engine"]);
+  assert.equal(byName.gone.worktreeRecords.length, 2, JSON.stringify(byName.gone));
+  assert.match(byName["gone-engine"].skipped, /engine HEAD is not in the source engine/);
+  assert.equal(existsSync(join(fixture.base, ".feature-workspaces/active/gone.json")), true);
+
+  await forgetMissingFeatureWorkspaces({ base: fixture.base, apply: true });
+  assert.deepEqual((await listFeatureWorkspaces({ base: fixture.base })).map((row) => row.name).sort(), ["gone-engine", "kept"]);
+  assert.equal((await checkFeatureWorkspace({ base: fixture.base, name: "gone" })).removed, true);
+  const worktrees = git(fixture.studioRoot, "worktree", "list");
+  assert.doesNotMatch(worktrees, /[\\/]gone[\\/]/);
+  assert.match(worktrees, /gone-engine/);
+  assert.match(worktrees, /unrelated-worktree/);
+  assert.match(worktrees, /[\\/]kept[\\/]/);
+  assert.equal((await checkFeatureWorkspace({ base: fixture.base, name: "kept" })).ok, true);
+});
+
+test("remove-merged removes clean merged or patch-equivalent workspaces after a dry run", async (t) => {
+  const fixture = pairFixture();
+  t.after(() => rmSync(fixture.fixtureRoot, { recursive: true, force: true }));
+  const merged = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0001", name: "merged" });
+  const picked = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: "T0002", name: "picked" });
+  const open = await createFeatureWorkspace({ root: fixture.studioRoot, base: fixture.base, game: "fixture-game", task: null, name: "open" });
+  for (const [workspace, file] of [[merged, "merged.txt"], [picked, "picked.txt"], [open, "open.txt"]]) {
+    write(workspace.gameWorktree, file, `${file}\n`);
+    git(workspace.gameWorktree, "add", file);
+    git(workspace.gameWorktree, "commit", "-m", file);
+  }
+  git(fixture.gameRoot, "merge", "--quiet", "--ff-only", merged.gameBranch);
+  git(fixture.gameRoot, "cherry-pick", picked.gameBranch);
+
+  const dryRun = await removeMergedFeatureWorkspaces({ base: fixture.base });
+  const byName = Object.fromEntries(dryRun.workspaces.map((row) => [row.name, row]));
+  assert.equal(byName.merged.merged, "ancestor");
+  assert.equal(byName.picked.merged, "patch-equivalent");
+  assert.equal(byName.open.eligible, false);
+  assert.match(byName.open.reason, /not merged/);
+  assert.equal((await listFeatureWorkspaces({ base: fixture.base })).length, 3);
+
+  const applied = await removeMergedFeatureWorkspaces({ base: fixture.base, apply: true });
+  assert.deepEqual(applied.workspaces.filter((row) => row.removed).map((row) => row.name).sort(), ["merged", "picked"]);
+  assert.deepEqual((await listFeatureWorkspaces({ base: fixture.base })).map((row) => row.name), ["open"]);
+  assert.equal(git(fixture.gameRoot, "show-ref", "--verify", `refs/heads/${picked.gameBranch}`).length > 0, true);
 });
 
 test("recovery refuses a tampered source identity and new dirty work", async (t) => {

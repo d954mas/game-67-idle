@@ -96,6 +96,8 @@ node ai_studio/workspace/feature_workspaces.mjs prepare-python <feature>
 node ai_studio/workspace/feature_workspaces.mjs reallocate-ports <feature>
 node ai_studio/workspace/feature_workspaces.mjs recover <feature>
 node ai_studio/workspace/feature_workspaces.mjs remove <feature>
+node ai_studio/workspace/feature_workspaces.mjs remove-merged [--apply]
+node ai_studio/workspace/feature_workspaces.mjs forget-missing [--apply]
 ```
 
 `--no-task` creates an exploration workspace: the same isolation, a game branch
@@ -115,7 +117,38 @@ process races the advisory lease, stop workspace processes and run
 engine. It retains the game branch, even when unmerged. The registry moves a
 completed removal to a tombstone so `check` can distinguish a removed workspace
 from an unknown name. If creation or removal is interrupted, use `recover`; do
-not delete or prune the worktrees by hand.
+not delete or prune the worktrees by hand. Recovery of an interrupted removal
+also finishes a worktree that Git had begun deleting (its `.git` link gone,
+files left behind).
+
+A worktree may have moved after creation. A Studio `HEAD` that a source branch
+or remote-tracking ref still contains is accepted, as is a detached game
+worktree at such a commit; a commit that exists only in the workspace refuses
+removal. Ignored data is deleted only when it is generated:
+top-level `build`, `tmp`, `out`, `.cache`, `.vite`, `.venv`, `cmake-build-*`,
+and at any depth `__pycache__`, `build`, `src/generated`, `release/artifacts`.
+Every ignored file under any folder named `build` therefore counts as generated
+and is deleted; keep nothing irreplaceable in an ignored `build/`. Deletion
+refuses any path that resolves outside its worktree through a link or junction.
+An engine `HEAD`, branch, tag, or stash commit must already exist in the source
+engine repository, because the workspace engine clone lives in the Studio
+worktree's administration directory and is deleted with it.
+Files under `.ai_studio/evidence/` and `assets/restricted/` refuse removal
+unless the source checkout holds a byte-identical copy at the same path. Any
+other ignored file refuses removal before the workspace changes state. Git runs
+with `core.longpaths=true`, so paths over the Windows 260-character limit work.
+
+`remove-merged` lists ready workspaces whose game branch is merged into the
+integration branch recorded at creation (an ancestor, or every commit
+patch-equivalent by `git cherry`) and that pass the same removal checks. It is a
+dry run; `--apply` removes them one by one through `remove`. `forget-missing`
+lists active registry entries whose workspace folder no longer exists and the
+Git administration records of those vanished worktrees; `--apply` deletes only
+those records and tombstones the entries. It never runs a repository-wide
+`git worktree prune`, and it keeps an entry whose Studio record still holds
+engine commits missing from the source engine. Neither command deletes a
+branch. Recovery of an interrupted removal refuses a half-deleted worktree that
+holds files written after the removal started.
 
 All commands accept `--json`. The implementation suite uses disposable local
 repositories and never needs network access:

@@ -36,7 +36,12 @@ const ELIGIBLE_TASK_STATUSES = new Set(["backlog", "todo", "doing"]);
 
 function git(root, args, { trim = true, ...options } = {}) {
   try {
-    const output = execFileSync("git", ["-c", `safe.directory=${String(resolve(root)).replace(/\\/g, "/")}`, ...args], {
+    // Workspace paths sit deeper than their sources; without long paths Windows checkout and removal fail at MAX_PATH.
+    const output = execFileSync("git", [
+      "-c", `safe.directory=${String(resolve(root)).replace(/\\/g, "/")}`,
+      "-c", "core.longpaths=true",
+      ...args,
+    ], {
       cwd: resolve(root),
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
@@ -102,18 +107,25 @@ export function defaultWorkspaceBase(studioRoot) {
 export function parseCommandLine(argv) {
   const args = [...argv];
   const command = args.shift();
-  const commands = new Set(["new", "list", "check", "prepare-python", "recover", "reallocate-ports", "remove"]);
-  if (!commands.has(command)) throw new Error("command must be new, list, check, prepare-python, recover, reallocate-ports, or remove");
+  const commands = new Set([
+    "new", "list", "check", "prepare-python", "recover", "reallocate-ports", "remove", "remove-merged", "forget-missing",
+  ]);
+  if (!commands.has(command)) {
+    throw new Error("command must be new, list, check, prepare-python, recover, reallocate-ports, remove, remove-merged, or forget-missing");
+  }
+  const registryWide = new Set(["new", "list", "remove-merged", "forget-missing"]);
   const options = {};
-  if (command !== "new" && command !== "list" && args[0] && !args[0].startsWith("--")) {
+  if (!registryWide.has(command) && args[0] && !args[0].startsWith("--")) {
     options.name = normalizeWorkspaceName(args.shift());
   }
-  const booleans = new Set(["json", "noTask"]);
+  const booleans = new Set(["json", "noTask", "apply"]);
   const allowed = new Set(command === "new"
     ? ["game", "task", "noTask", "name", "root", "base", "branch", "devapiPort", "webPort", "json"]
     : command === "reallocate-ports"
       ? ["base", "devapiPort", "webPort", "json"]
-      : ["base", "json"]);
+      : command === "remove-merged" || command === "forget-missing"
+        ? ["base", "json", "apply"]
+        : ["base", "json"]);
   while (args.length) {
     const token = args.shift();
     if (!token.startsWith("--")) throw new Error(`unexpected argument '${token}'`);
@@ -138,7 +150,7 @@ export function parseCommandLine(argv) {
     options.name = normalizeWorkspaceName(options.name);
     if (options.devapiPort !== undefined) options.devapiPort = normalizePort(options.devapiPort, "devapi port");
     if (options.webPort !== undefined) options.webPort = normalizePort(options.webPort, "web port");
-  } else if (command !== "list" && !options.name) {
+  } else if (!registryWide.has(command) && !options.name) {
     throw new Error(`${command} requires a workspace name`);
   }
   if (command === "reallocate-ports") {
@@ -167,13 +179,18 @@ function dirtySummary(porcelain) {
   return dirty;
 }
 
-export function inspectRepository(root, { requireAttached = false } = {}) {
+export function inspectRepository(root, { requireAttached = false, label = "repository" } = {}) {
+  // A directory whose .git link is gone resolves to the enclosing repository; that tree must not be judged in its place.
+  const topLevel = git(root, ["rev-parse", "--show-toplevel"]);
+  if (comparablePath(realpathSync.native(topLevel)) !== comparablePath(realpathSync.native(resolve(root)))) {
+    throw new Error(`${label} is not a Git worktree root: ${resolve(root)}`);
+  }
   const commit = git(root, ["rev-parse", "--verify", "HEAD"]);
   let ref = null;
   try {
     ref = git(root, ["symbolic-ref", "-q", "HEAD"]);
   } catch {
-    if (requireAttached) throw new Error("source game must be on an attached branch");
+    if (requireAttached) throw new Error(`${label} must be on an attached branch`);
   }
   const porcelain = git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching"], { trim: false });
   return { root: resolve(root), commit, ref, dirty: dirtySummary(porcelain) };
@@ -565,8 +582,8 @@ export async function createFeatureWorkspace(input) {
   if (existsSync(workspaceRoot)) throw new Error(`workspace '${name}' already exists`);
 
   const sourceGameRoot = discoverPrivateGame(studioRoot, gameId);
-  const studio = inspectRepository(studioRoot);
-  const game = inspectRepository(sourceGameRoot, { requireAttached: true });
+  const studio = inspectRepository(studioRoot, { label: "source Studio" });
+  const game = inspectRepository(sourceGameRoot, { requireAttached: true, label: "source game" });
   if (taskId) inspectCommittedTask(sourceGameRoot, game.commit, taskId, gameId);
   const engineCommit = engineGitlink(studioRoot, studio.commit);
   const sourceEngineRoot = realpathSync(join(studioRoot, "external/neotolis-engine"));
@@ -786,29 +803,95 @@ function ignoredPaths(root) {
     .map((path) => path.replace(/\\/g, "/"));
 }
 
-function cleanReproducibleIgnored(root, protectedRoots = []) {
-  const allowed = new Set(["build", "tmp", "out", ".cache", ".vite", ".venv"]);
-  const removable = new Set();
-  const unknown = [];
+const REPRODUCIBLE_TOP_LEVEL = new Set(["build", "tmp", "out", ".cache", ".vite", ".venv"]);
+const REPRODUCIBLE_ANY_DEPTH = new Set(["__pycache__", "build"]);
+const REPRODUCIBLE_NESTED = [["src", "generated"], ["release", "artifacts"]];
+// Evidence and restricted assets cannot be regenerated; a workspace copy goes only when the source holds the same bytes.
+const SOURCE_MIRRORED_NESTED = [[".ai_studio", "evidence"], ["assets", "restricted"]];
+
+function nestedDirectoryIndex(segments, pairs) {
+  for (let index = 1; index < segments.length - 1; index += 1) {
+    if (pairs.some(([parent, child]) => segments[index - 1] === parent && segments[index] === child)) return index;
+  }
+  return -1;
+}
+
+function reproducibleDirectoryIndex(segments) {
+  if (REPRODUCIBLE_TOP_LEVEL.has(segments[0]) || segments[0].startsWith("cmake-build-")) return 0;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    if (REPRODUCIBLE_ANY_DEPTH.has(segments[index]) || segments[index].startsWith("cmake-build-")) return index;
+  }
+  return nestedDirectoryIndex(segments, REPRODUCIBLE_NESTED);
+}
+
+function pathWithin(parent, child) {
+  const parentPath = comparablePath(parent);
+  const childPath = comparablePath(child);
+  return childPath === parentPath || childPath.startsWith(`${parentPath}/`);
+}
+
+// lstat checks only the last component; a junctioned parent would let a delete or comparison reach outside the tree.
+function physicallyWithin(root, path) {
+  return pathWithin(realpathSync.native(root), realpathSync.native(path));
+}
+
+function identicalSourceCopy(root, path, sourcePath) {
+  if (!existsSync(sourcePath) || !physicallyWithin(root, path)) return false;
+  if (comparablePath(realpathSync.native(path)) === comparablePath(realpathSync.native(sourcePath))) return false;
+  const copy = lstatSync(path);
+  const source = lstatSync(sourcePath);
+  if (!copy.isFile() || !source.isFile() || copy.size !== source.size) return false;
+  return readFileSync(path).equals(readFileSync(sourcePath));
+}
+
+function assertRemovableTarget(root, target) {
+  if (!physicallyWithin(root, target)) throw new Error(`ignored output resolves outside its worktree: ${target}`);
+}
+
+function planIgnoredCleanup(root, { protectedRoots = [], sourceRoot = null } = {}) {
+  const plan = { root, directories: new Map(), mirroredFiles: [], unknown: [] };
   for (const ignored of ignoredPaths(root)) {
     const absolute = resolve(root, ignored);
     const child = relative(resolve(root), absolute);
     if (!child || child === ".." || child.startsWith(`..${sep}`)) throw new Error("ignored path escapes its repository");
-    const candidate = comparablePath(absolute);
-    if (protectedRoots.some((item) => {
-      const protectedPath = comparablePath(item);
-      return candidate === protectedPath || candidate.startsWith(`${protectedPath}/`) || protectedPath.startsWith(`${candidate}/`);
-    })) continue;
-    const top = child.split(/[\\/]/, 1)[0];
-    if (!allowed.has(top) && !top.startsWith("cmake-build-")) unknown.push(ignored);
-    else removable.add(join(root, top));
+    if (protectedRoots.some((item) => pathWithin(item, absolute) || pathWithin(absolute, item))) continue;
+    const segments = child.split(/[\\/]/);
+    if (nestedDirectoryIndex(segments, SOURCE_MIRRORED_NESTED) >= 0) {
+      if (sourceRoot && identicalSourceCopy(root, absolute, resolve(sourceRoot, child))) plan.mirroredFiles.push(absolute);
+      else plan.unknown.push(ignored);
+      continue;
+    }
+    const index = reproducibleDirectoryIndex(segments);
+    const directory = index < 0 ? null : join(root, ...segments.slice(0, index + 1));
+    if (!directory || protectedRoots.some((item) => pathWithin(directory, item))) {
+      plan.unknown.push(ignored);
+      continue;
+    }
+    if (!plan.directories.has(directory)) plan.directories.set(directory, []);
+    plan.directories.get(directory).push(absolute);
   }
-  if (unknown.length) throw new Error(`unknown ignored data would be removed: ${unknown.slice(0, 3).join(", ")}`);
-  for (const path of removable) {
-    if (!existsSync(path)) continue;
-    if (basename(path) === ".venv") assertPhysicalDirectory(path, "generated .venv");
-    else assertNoLinksRecursively(path);
-    rmSync(path, { recursive: true, force: true });
+  return plan;
+}
+
+function applyIgnoredCleanup(plan) {
+  for (const [directory, files] of plan.directories) {
+    if (!existsSync(directory)) continue;
+    const venv = basename(directory) === ".venv" && dirname(directory) === plan.root;
+    // A generated directory that also holds tracked files keeps them, so a non-forced worktree removal still sees a clean tree.
+    const tracked = git(plan.root, ["ls-files", "-z", "--", relative(plan.root, directory).replace(/\\/g, "/")], { trim: false });
+    if (venv) assertPhysicalDirectory(directory, "generated .venv");
+    for (const target of tracked ? files : [directory]) {
+      if (!lstatSync(target, { throwIfNoEntry: false })) continue;
+      assertRemovableTarget(plan.root, dirname(target));
+      if (!venv) assertNoLinksRecursively(target);
+      assertRemovableTarget(plan.root, target);
+      rmSync(target, { recursive: true, force: true });
+    }
+  }
+  for (const file of plan.mirroredFiles) {
+    assertNoLinksRecursively(file);
+    assertRemovableTarget(plan.root, file);
+    rmSync(file, { force: true });
   }
 }
 
@@ -819,12 +902,50 @@ function assertNoLinksRecursively(path) {
   for (const entry of readdirSync(path)) assertNoLinksRecursively(join(path, entry));
 }
 
-function cleanOwnedIgnored(authority, record, safety) {
-  if (existsSync(safety.gameWorktree)) cleanReproducibleIgnored(safety.gameWorktree);
-  if (existsSync(join(safety.engineRoot, ".git"))) cleanReproducibleIgnored(safety.engineRoot);
-  if (existsSync(authority.studioWorktree)) {
-    cleanReproducibleIgnored(authority.studioWorktree, [safety.gameWorktree, safety.engineRoot]);
+function planOwnedIgnored(authority, record, safety) {
+  const plans = [];
+  if (existsSync(safety.gameWorktree)) {
+    plans.push(planIgnoredCleanup(safety.gameWorktree, { sourceRoot: record.sourceGameRoot }));
   }
+  if (existsSync(join(safety.engineRoot, ".git"))) plans.push(planIgnoredCleanup(safety.engineRoot));
+  if (existsSync(authority.studioWorktree)) {
+    plans.push(planIgnoredCleanup(authority.studioWorktree, {
+      protectedRoots: [safety.gameWorktree, safety.engineRoot],
+      sourceRoot: record.sourceStudioRoot,
+    }));
+  }
+  const unknown = plans.flatMap((plan) => plan.unknown);
+  if (unknown.length) throw new Error(`unknown ignored data would be removed: ${unknown.slice(0, 3).join(", ")}`);
+  return plans;
+}
+
+function cleanOwnedIgnored(authority, record, safety) {
+  for (const plan of planOwnedIgnored(authority, record, safety)) applyIgnoredCleanup(plan);
+}
+
+function reachableFromRefs(repo, commit) {
+  try {
+    return git(repo, ["for-each-ref", "--count=1", "--format=%(refname)", "--contains", commit, "refs/heads", "refs/remotes"]) !== "";
+  } catch {
+    return false;
+  }
+}
+
+// The workspace engine is its own clone whose objects live in the Studio worktree admin directory, which removal
+// deletes; a commit is safe only when the source engine repository already holds it.
+function engineCommitKept(record, commit) {
+  if (commit === record.ownership.engineGitlink) return true;
+  return gitSucceeds(join(record.sourceStudioRoot, "external/neotolis-engine"), ["cat-file", "-e", `${commit}^{commit}`]);
+}
+
+function assertEngineCommitsKept(record, engineRoot, head, gitDirArgs = []) {
+  if (!engineCommitKept(record, head)) throw new Error("engine HEAD is not in the source engine repository; removal refused");
+  const tips = git(engineRoot, [...gitDirArgs, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads", "refs/tags", "refs/stash"])
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => line.split(" "));
+  const lost = tips.find(([object]) => !engineCommitKept(record, git(engineRoot, [...gitDirArgs, "rev-parse", `${object}^{commit}`])));
+  if (lost) throw new Error(`engine ${lost[1]} is not in the source engine repository; removal refused`);
 }
 
 function assertRemovalSafety(authority, record) {
@@ -833,25 +954,42 @@ function assertRemovalSafety(authority, record) {
   const engineRoot = join(authority.studioWorktree, "external/neotolis-engine");
   if (existsSync(authority.studioWorktree)) {
     if (!registeredWorktree(record.sourceStudioRoot, authority.studioWorktree)) throw new Error("Studio worktree ownership mismatch");
-    const studio = inspectRepository(authority.studioWorktree);
-    if (studio.commit !== record.sourceStudioCommit) throw new Error("Studio worktree commit ownership mismatch");
+    const studio = inspectRepository(authority.studioWorktree, { label: "workspace Studio worktree" });
+    // A Studio worktree may move to newer commits; it is safe to drop while every commit stays on a shared branch.
+    if (studio.commit !== record.sourceStudioCommit && !reachableFromRefs(record.sourceStudioRoot, studio.commit)) {
+      throw new Error("Studio worktree commit is not on any source Studio branch; removal refused");
+    }
     if (dirtyCount(studio.dirty)) throw new Error("Studio worktree is dirty; removal refused");
   }
   if (existsSync(gameWorktree)) {
     if (!registeredWorktree(record.sourceGameRoot, gameWorktree)) throw new Error("game worktree ownership mismatch");
-    const game = inspectRepository(gameWorktree, { requireAttached: true });
-    if (game.ref !== `refs/heads/${record.gameBranch}`) throw new Error("game branch ownership mismatch");
-    if (!gitSucceeds(gameWorktree, ["merge-base", "--is-ancestor", record.sourceGameCommit, "HEAD"])) {
-      throw new Error("game worktree no longer descends from its recorded source commit");
+    const game = inspectRepository(gameWorktree, { label: "workspace game worktree" });
+    if (game.ref) {
+      if (game.ref !== `refs/heads/${record.gameBranch}`) throw new Error("game branch ownership mismatch");
+      if (!gitSucceeds(gameWorktree, ["merge-base", "--is-ancestor", record.sourceGameCommit, "HEAD"])) {
+        throw new Error("game worktree no longer descends from its recorded source commit");
+      }
+    } else if (!reachableFromRefs(record.sourceGameRoot, game.commit)) {
+      throw new Error("detached game worktree commit is not on any source game branch; removal refused");
     }
     if (dirtyCount(game.dirty)) throw new Error("game worktree is dirty; removal refused");
   }
   if (existsSync(join(engineRoot, ".git"))) {
-    const engine = inspectRepository(engineRoot);
-    if (engine.commit !== record.ownership.engineGitlink) throw new Error("engine gitlink ownership mismatch");
+    const engine = inspectRepository(engineRoot, { label: "workspace engine" });
+    assertEngineCommitsKept(record, engineRoot, engine.commit);
     if (dirtyCount(engine.dirty)) throw new Error("engine worktree is dirty; removal refused");
   }
   return { gameWorktree, engineRoot };
+}
+
+function branchMerged(repo, branch, integrationRef) {
+  if (gitSucceeds(repo, ["merge-base", "--is-ancestor", branch, integrationRef])) return "ancestor";
+  try {
+    const unmatched = git(repo, ["cherry", integrationRef, branch]).split(/\r?\n/).filter((line) => line.startsWith("+"));
+    return unmatched.length ? null : "patch-equivalent";
+  } catch {
+    return null;
+  }
 }
 
 function assertManifestMatchesRecord(authority, record) {
@@ -1062,12 +1200,81 @@ function deinitializeEngine(studioWorktree) {
   if (existsSync(modulesDir)) rmSync(modulesDir, { recursive: true, force: true });
 }
 
+// Admin directories of this workspace's own vanished worktrees; a repository-wide prune would also drop unrelated
+// worktrees that are only temporarily unreachable.
+function staleWorktreeAdminDirs(repo, worktreePaths) {
+  const adminRoot = join(commonGitDir(repo), "worktrees");
+  if (!existsSync(adminRoot)) return [];
+  const wanted = new Set(worktreePaths
+    .filter((path) => !lstatSync(join(path, ".git"), { throwIfNoEntry: false }))
+    .map(comparablePath));
+  return readdirSync(adminRoot)
+    .map((entry) => join(adminRoot, entry))
+    .filter((dir) => existsSync(join(dir, "gitdir")) && !existsSync(join(dir, "locked")))
+    .filter((dir) => wanted.has(comparablePath(dirname(resolve(dir, readFileSync(join(dir, "gitdir"), "utf8").trim())))));
+}
+
+function assertAdminEngineCommitsKept(record, adminDir) {
+  const engineGitDir = join(adminDir, "modules", "external", "neotolis-engine");
+  if (!existsSync(engineGitDir)) return;
+  // Its core.worktree names the vanished checkout; read-only commands get a work tree that exists.
+  const gitDirArgs = ["--git-dir", engineGitDir, "--work-tree", engineGitDir];
+  const head = git(engineGitDir, [...gitDirArgs, "rev-parse", "--verify", "HEAD"]);
+  assertEngineCommitsKept(record, engineGitDir, head, gitDirArgs);
+}
+
+function removeWorktreeAdminDir(repo, adminDir) {
+  assertPhysicalDirectory(adminDir, "worktree administration directory");
+  if (!physicallyWithin(join(commonGitDir(repo), "worktrees"), adminDir)) {
+    throw new Error(`worktree administration directory resolves outside its repository: ${adminDir}`);
+  }
+  rmSync(adminDir, { recursive: true, force: true });
+}
+
+function newestFileTime(path) {
+  const stat = lstatSync(path);
+  if (!stat.isDirectory()) return stat.mtimeMs;
+  return readdirSync(path).reduce((newest, entry) => Math.max(newest, newestFileTime(join(path, entry))), 0);
+}
+
+// Only a removal transaction calls this: its safety check passed when removal started, so a worktree that Git began
+// deleting (its .git link gone, files left behind) is finished unless something was written there since.
+function finishInterruptedWorktreeRemoval(path, sourceRepo, authority, record) {
+  if (!existsSync(path) || lstatSync(join(path, ".git"), { throwIfNoEntry: false })) return false;
+  assertPhysicalDirectory(path, "interrupted worktree");
+  if (comparablePath(realpathSync.native(path)) !== comparablePath(path) || !physicallyWithin(authority.root, path)) {
+    throw new Error(`interrupted worktree path contains a link or reparse point: ${path}`);
+  }
+  const startedAt = Date.parse(record.removalStartedAt || "");
+  if (!Number.isFinite(startedAt)) {
+    record.removalStartedAt = new Date().toISOString();
+    atomicWriteJson(authority.paths.active, record);
+    throw new Error(`interrupted removal had no start time; inspect ${path}, then run recover again`);
+  }
+  assertNoLinksRecursively(path);
+  if (newestFileTime(path) > startedAt) throw new Error(`files in ${path} changed after removal started; removal refused`);
+  rmSync(path, { recursive: true, force: true });
+  for (const adminDir of staleWorktreeAdminDirs(sourceRepo, [path])) removeWorktreeAdminDir(sourceRepo, adminDir);
+  return true;
+}
+
+function removeWorktree(sourceRepo, path, args, authority, record) {
+  try {
+    git(sourceRepo, ["worktree", "remove", ...args, path]);
+  } catch (error) {
+    if (!finishInterruptedWorktreeRemoval(path, sourceRepo, authority, record)) throw error;
+  }
+}
+
 async function continueRemoval(authority, record, { failAt } = {}) {
-  const safety = assertRemovalSafety(authority, record);
   const gameWorktree = join(authority.studioWorktree, "games", "private", record.gameId);
+  assertOwnedPaths({ ...authority, record }, { allowMissing: true });
+  finishInterruptedWorktreeRemoval(gameWorktree, record.sourceGameRoot, authority, record);
+  if (!existsSync(gameWorktree)) finishInterruptedWorktreeRemoval(authority.studioWorktree, record.sourceStudioRoot, authority, record);
+  const safety = assertRemovalSafety(authority, record);
   cleanOwnedIgnored(authority, record, safety);
   if (existsSync(gameWorktree)) {
-    git(record.sourceGameRoot, ["worktree", "remove", gameWorktree]);
+    removeWorktree(record.sourceGameRoot, gameWorktree, [], authority, record);
     record.completedSteps = [...new Set([...(record.completedSteps || []), "game-worktree-removed"])];
     atomicWriteJson(authority.paths.active, record);
   }
@@ -1075,7 +1282,7 @@ async function continueRemoval(authority, record, { failAt } = {}) {
     deinitializeEngine(authority.studioWorktree);
     record.completedSteps = [...new Set([...(record.completedSteps || []), "engine-deinitialized"])];
     atomicWriteJson(authority.paths.active, record);
-    git(record.sourceStudioRoot, ["worktree", "remove", "--force", authority.studioWorktree]);
+    removeWorktree(record.sourceStudioRoot, authority.studioWorktree, ["--force"], authority, record);
     record.completedSteps = [...new Set([...(record.completedSteps || []), "studio-worktree-removed"])];
     atomicWriteJson(authority.paths.active, record);
   }
@@ -1102,13 +1309,12 @@ export async function removeFeatureWorkspace({ base, name, failAt }) {
     assertManifestMatchesRecord(authority, record);
     if (record.state === "removing") return continueRemoval(authority, record, { failAt });
     if (record.state !== "ready") throw new Error(`workspace is ${record.state}; run recover`);
-    const game = inspectRepository(gameWorktree, { requireAttached: true });
     assertRemovalSafety(authority, record);
+    planOwnedIgnored(authority, record, { gameWorktree, engineRoot: join(authority.studioWorktree, "external/neotolis-engine") });
     if (!(await portAvailable(record.ports.devapi)) || !(await portAvailable(record.ports.web))) {
       throw new Error("workspace ports are occupied; stop its processes before removal");
     }
-    if (game.ref !== `refs/heads/${record.gameBranch}`) throw new Error("game branch ownership mismatch");
-    record.unmergedBranch = !gitSucceeds(record.sourceGameRoot, ["merge-base", "--is-ancestor", record.gameBranch, record.integrationRef]);
+    record.unmergedBranch = !branchMerged(record.sourceGameRoot, record.gameBranch, record.integrationRef);
     record.state = "removing";
     record.transactionMode = "remove";
     record.removalStartedAt = new Date().toISOString();
@@ -1161,7 +1367,115 @@ export async function recoverFeatureWorkspace({ base, name }) {
   }
 }
 
+export async function removeMergedFeatureWorkspaces({ base, apply = false }) {
+  const canonicalBase = canonicalPhysicalPath(base, "workspace base");
+  const rows = liveRecords(canonicalBase).map((record) => {
+    const row = { name: record.name, state: record.state, gameId: record.gameId, gameBranch: record.gameBranch, eligible: false };
+    try {
+      if (record.state !== "ready") throw new Error(`workspace is ${record.state}`);
+      const authority = loadWorkspaceAuthority(canonicalBase, record.name);
+      if (!existsSync(authority.root)) throw new Error("workspace folder is missing; run forget-missing");
+      row.integrationRef = record.integrationRef;
+      row.merged = branchMerged(record.sourceGameRoot, record.gameBranch, record.integrationRef);
+      if (!row.merged) throw new Error(`branch is not merged into ${record.integrationRef}`);
+      const safety = assertRemovalSafety(authority, authority.record);
+      planOwnedIgnored(authority, authority.record, safety);
+      row.eligible = true;
+    } catch (error) {
+      row.reason = error.message;
+    }
+    return row;
+  });
+  if (apply) {
+    for (const row of rows.filter((candidate) => candidate.eligible)) {
+      try {
+        row.state = (await removeFeatureWorkspace({ base: canonicalBase, name: row.name })).state;
+        row.removed = true;
+      } catch (error) {
+        row.removed = false;
+        row.error = error.message;
+      }
+    }
+  }
+  return { apply, workspaces: rows };
+}
+
+function staleWorkspaceAdminDirs(record, derived) {
+  const found = [];
+  for (const [root, owner, worktree] of [
+    [record.sourceStudioRoot, record.ownership?.studioCommonGitDir, derived.studioWorktree],
+    [record.sourceGameRoot, record.ownership?.gameCommonGitDir, join(derived.studioWorktree, "games", "private", record.gameId)],
+  ]) {
+    if (!root || !existsSync(root)) continue;
+    assertPhysicalDirectory(root, "source repository");
+    if (comparablePath(commonGitDir(root)) !== comparablePath(owner)) {
+      throw new Error(`${root}: common Git directory does not match workspace ownership`);
+    }
+    for (const adminDir of staleWorktreeAdminDirs(root, [worktree])) found.push({ repo: root, adminDir });
+  }
+  return found;
+}
+
+export async function forgetMissingFeatureWorkspaces({ base, apply = false }) {
+  const canonicalBase = canonicalPhysicalPath(base, "workspace base");
+  const releaseLock = apply ? await acquireRegistryLock(canonicalBase) : () => {};
+  try {
+    const workspaces = [];
+    for (const record of liveRecords(canonicalBase)) {
+      const derived = derivedWorkspace(canonicalBase, record.name);
+      if (existsSync(derived.root)) continue;
+      const row = { name: record.name, state: record.state, gameId: record.gameId, gameBranch: record.gameBranch, worktreeRecords: [] };
+      workspaces.push(row);
+      let adminDirs;
+      try {
+        adminDirs = staleWorkspaceAdminDirs(record, derived);
+        // The Studio admin directory still holds the workspace engine clone; its commits must survive elsewhere first.
+        for (const { adminDir } of adminDirs) assertAdminEngineCommitsKept(record, adminDir);
+        row.worktreeRecords = adminDirs.map(({ adminDir }) => adminDir);
+      } catch (error) {
+        row.skipped = error.message;
+        continue;
+      }
+      if (!apply) continue;
+      for (const { repo, adminDir } of adminDirs) removeWorktreeAdminDir(repo, adminDir);
+      atomicWriteJson(derived.paths.tombstone, {
+        ...record,
+        schema: "ai_studio.feature_workspace_tombstone.v1",
+        state: "removed",
+        forgottenFromState: record.state,
+        portsReleased: true,
+        removedAt: new Date().toISOString(),
+        forgotten: true,
+      });
+      rmSync(derived.paths.active);
+      row.forgotten = true;
+    }
+    return { apply, workspaces };
+  } finally {
+    releaseLock();
+  }
+}
+
 function printHuman(command, result) {
+  if (command === "remove-merged") {
+    for (const row of result.workspaces) {
+      const outcome = !row.eligible
+        ? `kept: ${row.reason}`
+        : !result.apply ? `would remove (${row.merged})` : row.removed ? "removed" : `failed: ${row.error}`;
+      console.log(`${row.name}\t${row.gameBranch}\t${outcome}`);
+    }
+    if (!result.apply) console.log("Dry run; pass --apply to remove the eligible workspaces.");
+    return;
+  }
+  if (command === "forget-missing") {
+    for (const row of result.workspaces) {
+      const outcome = row.skipped ? `kept: ${row.skipped}` : result.apply ? "forgotten" : "would forget";
+      console.log(`${row.name}\t${row.state}\t${outcome}; ${row.worktreeRecords.length} stale worktree records`);
+    }
+    if (!result.workspaces.length) console.log("No registry entries without a workspace folder.");
+    if (!result.apply) console.log("Dry run; pass --apply to tombstone these entries and delete their stale worktree records.");
+    return;
+  }
   if (command === "list") {
     if (!result.length) {
       console.log("No active feature workspaces.");
@@ -1215,10 +1529,13 @@ export async function main(argv = process.argv.slice(2)) {
   else if (parsed.command === "prepare-python") result = await prepareFeatureWorkspacePython({ base, name: parsed.options.name });
   else if (parsed.command === "recover") result = await recoverFeatureWorkspace({ base, name: parsed.options.name });
   else if (parsed.command === "reallocate-ports") result = await reallocateWorkspacePorts({ ...parsed.options, base });
+  else if (parsed.command === "remove-merged") result = await removeMergedFeatureWorkspaces({ base, apply: parsed.options.apply === true });
+  else if (parsed.command === "forget-missing") result = await forgetMissingFeatureWorkspaces({ base, apply: parsed.options.apply === true });
   else result = await removeFeatureWorkspace({ base, name: parsed.options.name });
   if (parsed.options.json) console.log(JSON.stringify(result, null, 2));
   else printHuman(parsed.command, result);
   if (parsed.command === "check" && result.ok === false) process.exitCode = 1;
+  if (parsed.command === "remove-merged" && result.workspaces.some((row) => row.removed === false)) process.exitCode = 1;
   return result;
 }
 
