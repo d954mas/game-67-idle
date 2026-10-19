@@ -307,7 +307,7 @@ renderer feature set (S19 links it; panel names read from the site bundle).
   `movePill(0, 24)`, cannot go below 50 % of the game area (S4). Keep that top
   strip free of critical HUD. The Pill sits at the left edge of the frame; its
   default rect at both breakpoints is data in `publish-targets/poki.json`
-  (`metadata.reserved_zones`), and `devapi/responsive_viewports.py --portal poki`
+  (`metadata.reserved_zones`), and `ai_studio/runtime_automation/responsive_viewports.py --portal poki`
   fails when a visible HUD leaf overlaps it.
 - **Fullscreen is not granted by default.** It is case-by-case; the usual
   criteria are multiplayer, open world, or hidden-object games. "If a game does

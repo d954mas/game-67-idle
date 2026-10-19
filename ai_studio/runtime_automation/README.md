@@ -15,6 +15,7 @@ native playable work:
 - Pixel-health checks for blank or flat screenshots.
 - UI readability zoom audit for screenshot evidence.
 - Live-state screenshot coverage and acceptance-matrix helper.
+- QCLR_002 responsive viewport capture and portal reserved-zone check for any game.
 
 This module does not own engine DevAPI implementation, game-specific commands,
 game state schemas, quality rules, or task state. The engine owns DevAPI
@@ -177,6 +178,49 @@ PTS after it. Missing, incomplete, or ambiguous marker evidence fails the take;
 the recorder never falls back to packet timestamps or a fixed encoder delay.
 The manifest stores the marker PTS/frame receipt, control barrier receipts, and
 marker-disable-to-audio-gate delay so A/V timing remains inspectable.
+
+## Responsive viewport evidence
+
+`responsive_viewports.py` captures QCLR_002 evidence for any live game: one
+launch per viewport (`--window-size`), an engine screenshot, `ui.tree` bounds,
+a contact sheet and `summary.json`.
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/responsive_viewports.py --game <game-id> --portal poki
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/responsive_viewports.py --game <game-id> --viewport 640x360 --viewport phone=390x844
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/responsive_viewports.py --exe <path/to/game.exe> --cwd <launch dir>
+```
+
+- `--game <id>` resolves the game through the workspace catalog
+  (`ai_studio/workspace/games.mjs list --include-private`) and launches what
+  its `capture/catalog.json` names: `executable` (default
+  `build/devapi-debug/bin/game.exe`) and `launch.fresh_state`,
+  `launch.autosave_enabled`, `launch.args` -- the same block
+  `capture_game.py` reads. A game whose CLI rejects `--fresh-state` or
+  `--disable-autosave` (the PLW clients, which also need `--solo`) declares
+  that in its catalog; there is no per-game code here. It launches in the game
+  root and writes to `<game root>/build/quality/qclr_002_responsive/`.
+- `--exe` overrides the executable; `--cwd` the launch directory (default: the
+  game root, else the current directory). `--fresh-state/--no-fresh-state`,
+  `--autosave/--no-autosave` and repeatable `--launch-arg=--no-vsync` override
+  or extend the catalog launch block. `--port` pins the DevAPI port (default: a
+  free port per launch).
+- `--viewport NAME=WxH` (repeatable) replaces the default 4:3, 16:9 and
+  19.5:9 landscape/portrait matrix; `--landscape-only` filters it.
+- `--portal <target>` checks visible `ui.tree` leaves against the target's
+  `metadata.reserved_zones` (`portal_zones.py`; the Poki Pill) and exits 1 on
+  overlap; `--zone-ignore <id-glob>` (repeatable) exempts full-screen
+  decorative leaves such as a root shell.
+- `--scenario MODULE:FUNCTION` or `PATH.py:FUNCTION` runs
+  `prepare(game, viewport)` after warmup and before capture, to reach a menu or
+  game moment. Relative paths and modules also resolve against the game root,
+  so hooks stay in the game (`--scenario devapi/scenarios.py:open_shop`).
+- `--audit` adds the pixel-health audit (off by default: quiet valid UI can fail
+  its generic thresholds).
+
+A bot can drive the same matrix in-process: `run_matrix(factory, viewports,
+out_dir, prepare=..., portal=...)` with `devapi_client.running_game` as the
+factory.
 
 ## Local mock web proof
 

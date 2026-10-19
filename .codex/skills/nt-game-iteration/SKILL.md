@@ -57,7 +57,8 @@ unfamiliar one), wait a frame, and capture with `capture.frame` or
 with the previous accepted screenshot when there is one. Use
 `pixel_health.py` and `ui_readability.py` from `ai_studio/runtime_automation/`
 when a blank frame or unreadable text is plausible. Layout work also loads
-`nt-game-ui-layout`.
+`nt-game-ui-layout`; its viewport matrix is one command,
+`responsive_viewports.py --game <id> --viewport 640x360`.
 
 Keep scratch captures under the game's ignored `build/` or `tmp/`; anything
 cited later as evidence goes to `design/knowledge/` or `.ai_studio/evidence/`.

@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Capture QCLR_002 responsive viewport evidence for a copied game.
+"""Capture QCLR_002 responsive viewport evidence for any Studio game.
 
-This script is intentionally game-local. It launches the game once per viewport,
-captures engine-native screenshots, records ui.tree bounds metadata, optionally
-checks visible ui leaves against a portal's reserved zones (--portal), and writes
-review-ready evidence for ai_studio/quality/rules/player_clarity/QCLR_002.
+Launches the game's native DevAPI build once per viewport, captures an
+engine-native screenshot, records ui.tree bounds, optionally checks visible ui
+leaves against a portal's reserved zones (--portal), and writes review-ready
+evidence for ai_studio/quality/rules/player_clarity/checks/QCLR_002.
+
+`--game <id>` resolves the game through the workspace catalog and takes the
+executable and launch flags from the game's capture/catalog.json, the same
+contract capture_game.py reads; `--exe` (+ `--cwd`) runs any other build.
 """
 
 from __future__ import annotations
@@ -14,21 +18,28 @@ import importlib
 import importlib.util
 import json
 import math
+import os
 import re
+import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-import smoke_bot
-from smoke_bot import DEFAULT_DEVAPI_PORT, DevApiError, REPO_ROOT, default_executable, running_game  # noqa: E402
+HERE = Path(__file__).resolve().parent
+STUDIO_ROOT = HERE.parents[1]
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
 
+from devapi_client import DevApiError, running_game  # noqa: E402
+from native_capture_preflight import canonical_native_executable  # noqa: E402
 from png_io import COLOR_TYPE_RGB, bytes_per_pixel, read_png, write_png_rgb  # noqa: E402
 import portal_zones  # noqa: E402
 
 
 RULE_ID = "QCLR_002"
 RULE_PATH = "ai_studio/quality/rules/player_clarity/checks/QCLR_002_responsive_viewports.md"
+OUT_SUBDIR = Path("build") / "quality" / "qclr_002_responsive"
 
 
 @dataclass(frozen=True)
@@ -83,8 +94,157 @@ def selected_viewports(custom: list[ViewportCase], *, landscape_only: bool) -> l
     return viewports
 
 
+# --- launch resolution -------------------------------------------------------
+
+@dataclass(frozen=True)
+class LaunchPlan:
+    exe: Path
+    cwd: Path
+    out: Path
+    fresh_state: bool = True
+    autosave_enabled: bool = False
+    extra_args: tuple[str, ...] = field(default_factory=tuple)
+    game_root: Path | None = None
+
+
+def list_game_mounts(studio_root: Path = STUDIO_ROOT) -> list[dict[str, Any]]:
+    """Game mounts from the workspace catalog (public and private games)."""
+    proc = subprocess.run(
+        ["node", str(studio_root / "ai_studio" / "workspace" / "games.mjs"), "list",
+         "--root", str(studio_root), "--include-private", "--json"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
+    )
+    if proc.returncode != 0:
+        raise ValueError(f"workspace game catalog failed: {proc.stderr.strip() or proc.stdout.strip()}")
+    mounts = json.loads(proc.stdout).get("mounts")
+    if not isinstance(mounts, list):
+        raise ValueError("workspace game catalog returned no mounts list")
+    return mounts
+
+
+def resolve_game_root(
+    game_id: str,
+    studio_root: Path = STUDIO_ROOT,
+    list_mounts: Callable[[Path], list[dict[str, Any]]] = list_game_mounts,
+) -> Path:
+    matches = [
+        mount for mount in list_mounts(studio_root)
+        if mount.get("gameId") == game_id or game_id in (mount.get("aliases") or [])
+    ]
+    if len(matches) != 1:
+        raise ValueError(f"game {game_id} has no unique catalog mount")
+    return (studio_root / matches[0]["root"]).resolve()
+
+
+def read_launch_catalog(game_root: Path) -> dict[str, Any]:
+    """The executable/launch part of capture/catalog.json; {} when the game has none."""
+    path = game_root / "capture" / "catalog.json"
+    if not path.is_file():
+        return {}
+    catalog = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(catalog, dict):
+        raise ValueError(f"{path}: catalog must be an object")
+    executable = catalog.get("executable")
+    if executable is not None and (not isinstance(executable, str) or not executable):
+        raise ValueError(f"{path}: executable must be a non-empty string")
+    launch = catalog.get("launch", {})
+    if not isinstance(launch, dict) or set(launch) - {"fresh_state", "autosave_enabled", "args"}:
+        raise ValueError(f"{path}: launch must contain only fresh_state, autosave_enabled, and args")
+    for key in ("fresh_state", "autosave_enabled"):
+        if key in launch and not isinstance(launch[key], bool):
+            raise ValueError(f"{path}: launch {key} must be a boolean")
+    if "args" in launch and (not isinstance(launch["args"], list)
+                             or any(not isinstance(arg, str) or not arg for arg in launch["args"])):
+        raise ValueError(f"{path}: launch args must be a list of non-empty strings")
+    return {"executable": executable, "launch": launch}
+
+
+def resolve_launch(
+    args: argparse.Namespace,
+    *,
+    resolve_game: Callable[[str], Path] = resolve_game_root,
+    invocation_dir: Path | None = None,
+) -> LaunchPlan:
+    here = (invocation_dir or Path.cwd()).resolve()
+    game_root = resolve_game(args.game) if args.game else None
+    catalog = read_launch_catalog(game_root) if game_root else {}
+    launch = catalog.get("launch", {})
+
+    if args.exe is not None:
+        exe = args.exe if args.exe.is_absolute() else here / args.exe
+    elif game_root is not None:
+        relative = catalog.get("executable")
+        exe = game_root / relative if relative else canonical_native_executable(game_root)
+    else:
+        raise ValueError("pass --game <id> or --exe <path>")
+
+    cwd = args.cwd if args.cwd is not None else (game_root or here)
+    if not cwd.is_absolute():
+        cwd = here / cwd
+    out = args.out if args.out is not None else (game_root or cwd) / OUT_SUBDIR
+    if not out.is_absolute():
+        out = here / out
+
+    return LaunchPlan(
+        exe=exe.resolve(),
+        cwd=cwd.resolve(),
+        out=out.resolve(),
+        fresh_state=args.fresh_state if args.fresh_state is not None else launch.get("fresh_state", True),
+        autosave_enabled=args.autosave if args.autosave is not None else launch.get("autosave_enabled", False),
+        extra_args=(*launch.get("args", []), *args.launch_arg),
+        game_root=game_root,
+    )
+
+
+# --- scenario hook -------------------------------------------------------------
+
+PrepareFn = Callable[[Any, ViewportCase], Any]
+
+
+def load_prepare(spec: str | None, *, search_roots: list[Path] | None = None) -> PrepareFn | None:
+    """Load MODULE:FUNCTION or PATH.py:FUNCTION; relative paths and modules also
+    resolve against search_roots (the game root), so game-owned hooks stay in the game."""
+    if not spec:
+        return None
+    if ":" not in spec:
+        raise argparse.ArgumentTypeError("scenario must be MODULE:FUNCTION or PATH.py:FUNCTION")
+    module_name, function_name = spec.rsplit(":", 1)
+    if not function_name:
+        raise argparse.ArgumentTypeError("scenario function name is empty")
+    roots = list(search_roots or [])
+
+    module_path = Path(module_name)
+    if module_path.suffix == ".py":
+        candidates = [module_path] if module_path.is_absolute() else [Path.cwd() / module_path, *(root / module_path for root in roots)]
+        found = next((candidate for candidate in candidates if candidate.is_file()), None)
+        if found is None:
+            raise argparse.ArgumentTypeError(f"scenario file does not exist: {module_path}")
+        module_dir = str(found.resolve().parent)
+        if module_dir not in sys.path:
+            sys.path.insert(0, module_dir)
+        module_spec = importlib.util.spec_from_file_location(f"_responsive_scenario_{found.stem}", found)
+        if module_spec is None or module_spec.loader is None:
+            raise argparse.ArgumentTypeError(f"could not load scenario file: {found}")
+        module = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(module)
+    else:
+        for root in reversed(roots):
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
+        module = importlib.import_module(module_name)
+
+    fn = getattr(module, function_name, None)
+    if not callable(fn):
+        raise argparse.ArgumentTypeError(f"scenario target is not callable: {spec}")
+    return fn
+
+
+# --- capture -------------------------------------------------------------------
+
 def ui_nodes(tree: Any) -> list[dict[str, Any]]:
-    return smoke_bot.ui_nodes(tree)
+    if isinstance(tree, dict) and isinstance(tree.get("nodes"), list):
+        return [node for node in tree["nodes"] if isinstance(node, dict)]
+    return []
 
 
 def wait_for_ui_tree(game: Any, *, max_frames: int = 90, stride: int = 3) -> dict[str, Any]:
@@ -107,40 +267,6 @@ def safe_result(game: Any, method: str) -> Any:
         return game.result(method)
     except DevApiError as exc:
         return {"error": str(exc)}
-
-
-PrepareFn = Callable[[Any, ViewportCase], Any]
-
-
-def load_prepare(spec: str | None) -> PrepareFn | None:
-    if not spec:
-        return None
-    if ":" not in spec:
-        raise argparse.ArgumentTypeError("scenario must be MODULE:FUNCTION or PATH.py:FUNCTION")
-    module_name, function_name = spec.rsplit(":", 1)
-    if not function_name:
-        raise argparse.ArgumentTypeError("scenario function name is empty")
-
-    module_path = Path(module_name)
-    if module_path.suffix == ".py" or module_path.exists():
-        if not module_path.exists():
-            raise argparse.ArgumentTypeError(f"scenario file does not exist: {module_path}")
-        module_dir = str(module_path.resolve().parent)
-        if module_dir not in sys.path:
-            sys.path.insert(0, module_dir)
-        loaded_name = f"_template_responsive_scenario_{module_path.stem}"
-        module_spec = importlib.util.spec_from_file_location(loaded_name, module_path)
-        if module_spec is None or module_spec.loader is None:
-            raise argparse.ArgumentTypeError(f"could not load scenario file: {module_path}")
-        module = importlib.util.module_from_spec(module_spec)
-        module_spec.loader.exec_module(module)
-    else:
-        module = importlib.import_module(module_name)
-
-    fn = getattr(module, function_name, None)
-    if not callable(fn):
-        raise argparse.ArgumentTypeError(f"scenario target is not callable: {spec}")
-    return fn
 
 
 def capture_viewport(
@@ -255,7 +381,7 @@ def run_matrix(
     contact_sheet = make_contact_sheet(entries, out_dir / "contact_sheet.png")
     summary_path = out_dir / "summary.json"
     summary = {
-        "schema": "template.qclr_002_responsive.v1",
+        "schema": "ai_studio.qclr_002_responsive.v1",
         "quality_rule": RULE_ID,
         "rule_path": RULE_PATH,
         "evidence": "screenshots + runtime ui.tree bounds",
@@ -277,16 +403,27 @@ def run_matrix(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Capture QCLR_002 responsive viewport screenshots.")
-    parser.add_argument("--exe", type=Path, default=default_executable(), help="Native debug executable to launch.")
-    parser.add_argument("--port", type=int, default=DEFAULT_DEVAPI_PORT, help="DevAPI TCP port.")
-    parser.add_argument("--out", type=Path, default=REPO_ROOT / "tmp" / "quality" / "qclr_002_responsive", help="Evidence output directory.")
+    parser = argparse.ArgumentParser(
+        description="Capture QCLR_002 responsive viewport screenshots for a Studio game.",
+        epilog="Pass launch flags that start with a dash as --launch-arg=--no-vsync.",
+    )
+    target = parser.add_argument_group("game")
+    target.add_argument("--game", help="Game id from the workspace catalog; reads executable and launch from its capture/catalog.json.")
+    target.add_argument("--exe", type=Path, help="Native DevAPI executable; overrides the catalog executable.")
+    target.add_argument("--cwd", type=Path, help="Launch directory (default: the game root, else the current directory).")
+    target.add_argument("--launch-arg", action="append", default=[], help="Extra game argument appended after the catalog's launch args; may be repeated.")
+    target.add_argument("--fresh-state", action=argparse.BooleanOptionalAction, default=None,
+                        help="Append --fresh-state (default: catalog launch.fresh_state, else on). Off for games whose CLI rejects it.")
+    target.add_argument("--autosave", action=argparse.BooleanOptionalAction, default=None,
+                        help="Leave autosave on; off appends --disable-autosave (default: catalog launch.autosave_enabled, else off).")
+    target.add_argument("--port", type=int, help="DevAPI TCP port (default: a free port per launch).")
+    parser.add_argument("--out", type=Path, help=f"Evidence directory (default: <game root>/{OUT_SUBDIR.as_posix()}).")
     parser.add_argument("--viewport", type=parse_viewport, action="append", default=[], help="Viewport as NAME=WIDTHxHEIGHT; may be repeated.")
     parser.add_argument("--landscape-only", action="store_true", help="Use only landscape entries from the selected matrix.")
-    parser.add_argument("--warmup-frames", type=int, default=5, help="Frames to wait before reading ui.tree in each viewport.")
+    parser.add_argument("--warmup-frames", type=int, default=5, help="Frames to wait before the scenario hook and ui.tree in each viewport.")
     parser.add_argument(
         "--scenario",
-        help="Optional MODULE:FUNCTION or PATH.py:FUNCTION hook called as prepare(game, viewport) before each screenshot.",
+        help="MODULE:FUNCTION or PATH.py:FUNCTION called as prepare(game, viewport) before each screenshot; relative paths also resolve against the game root.",
     )
     parser.add_argument("--audit", action="store_true", help="Run pixel-health audit for each captured screenshot.")
     parser.add_argument("--portal", help="Publish target whose reserved zones (e.g. the Poki Pill) visible ui leaves must avoid.")
@@ -301,9 +438,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    exe = args.exe.resolve()
-    if not exe.exists():
-        print(f"build native Debug first or pass --exe: {exe}", file=sys.stderr)
+    try:
+        plan = resolve_launch(args)
+    except (ValueError, json.JSONDecodeError) as exc:
+        print(f"responsive viewport capture failed: {exc}", file=sys.stderr)
+        return 2
+    if not plan.exe.exists():
+        print(f"build the native DevAPI executable first or pass --exe: {plan.exe}", file=sys.stderr)
         return 2
 
     try:
@@ -312,17 +453,18 @@ def main(argv: list[str] | None = None) -> int:
         def game_factory(viewport: ViewportCase):
             return running_game(
                 port=args.port,
-                exe=str(exe),
-                cwd=str(REPO_ROOT),
+                exe=str(plan.exe),
+                cwd=str(plan.cwd),
                 reuse_existing=False,
-                fresh_state=True,
-                autosave_enabled=False,
+                fresh_state=plan.fresh_state,
+                autosave_enabled=plan.autosave_enabled,
                 window_size=viewport.window_size,
+                extra_args=list(plan.extra_args),
             )
 
-        prepare = load_prepare(args.scenario)
+        prepare = load_prepare(args.scenario, search_roots=[plan.game_root] if plan.game_root else [])
         summary = run_matrix(
-            game_factory, viewports, args.out, audit=args.audit, warmup_frames=max(0, args.warmup_frames), prepare=prepare,
+            game_factory, viewports, plan.out, audit=args.audit, warmup_frames=max(0, args.warmup_frames), prepare=prepare,
             portal=args.portal, zone_ignore=args.zone_ignore,
         )
     except (DevApiError, ValueError, argparse.ArgumentTypeError, ImportError) as exc:

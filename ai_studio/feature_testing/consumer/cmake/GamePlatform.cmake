@@ -246,11 +246,10 @@ if(GAME_DEVAPI_ENABLED AND NOT EMSCRIPTEN)
             VERBATIM
         )
         add_custom_target(quality_responsive
-            COMMAND ${CMAKE_COMMAND} -E env
-                "AI_STUDIO_GAME_EXE=$<TARGET_FILE:${GAME_TARGET}>"
-                "${Python3_EXECUTABLE}"
-                "${CMAKE_CURRENT_SOURCE_DIR}/devapi/responsive_viewports.py"
+            COMMAND "${Python3_EXECUTABLE}"
+                "${GAME_REPO_ROOT}/ai_studio/runtime_automation/responsive_viewports.py"
                 "--exe" "$<TARGET_FILE:${GAME_TARGET}>"
+                "--out" "${CMAKE_BINARY_DIR}/quality/qclr_002_responsive"
             DEPENDS ${GAME_TARGET}
             WORKING_DIRECTORY "${GAME_REPO_ROOT}"
             COMMENT "Capturing QCLR_002 responsive viewport evidence"

@@ -1,12 +1,17 @@
+#!/usr/bin/env python3
+"""Tests for the Studio responsive viewport capture."""
+
+from __future__ import annotations
+
+import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import responsive_viewports as rv  # noqa: E402
-
-sys.path.insert(0, str(rv.RUNTIME_AUTOMATION if hasattr(rv, "RUNTIME_AUTOMATION") else rv.REPO_ROOT / "ai_studio" / "runtime_automation"))
 from png_io import read_png, write_png_rgb  # noqa: E402
 
 
@@ -43,7 +48,11 @@ class FakeGame:
         return output
 
 
-class ResponsiveViewportsTest(unittest.TestCase):
+def parse(argv):
+    return rv.build_parser().parse_args(argv)
+
+
+class ViewportMatrixTest(unittest.TestCase):
     def test_parse_viewport_accepts_named_size(self):
         viewport = rv.parse_viewport("phone=390x844")
         self.assertEqual((viewport.name, viewport.width, viewport.height, viewport.orientation), ("phone", 390, 844, "portrait"))
@@ -83,11 +92,9 @@ class ResponsiveViewportsTest(unittest.TestCase):
             return {"prepared": viewport.window_size}
 
         with tempfile.TemporaryDirectory() as tmp:
-            viewports = [rv.ViewportCase("wide", 640, 360)]
-            summary = rv.run_matrix(lambda viewport: FakeGame(viewport), viewports, Path(tmp), audit=False, warmup_frames=2, prepare=prepare)
+            summary = rv.run_matrix(lambda viewport: FakeGame(viewport), [rv.ViewportCase("wide", 640, 360)], Path(tmp), audit=False, warmup_frames=2, prepare=prepare)
             self.assertEqual(calls, [("wide", [2])])
             self.assertEqual(summary["viewports"][0]["scenario_result"], {"prepared": "640x360"})
-
 
     def test_run_matrix_reports_poki_pill_overlap(self):
         class PillGame(FakeGame):
@@ -102,8 +109,7 @@ class ResponsiveViewportsTest(unittest.TestCase):
                 return tree
 
         with tempfile.TemporaryDirectory() as tmp:
-            viewports = [rv.ViewportCase("wide", 640, 360)]
-            summary = rv.run_matrix(lambda viewport: PillGame(viewport), viewports, Path(tmp), audit=False, warmup_frames=0, portal="poki", zone_ignore=["bg/*"])
+            summary = rv.run_matrix(lambda viewport: PillGame(viewport), [rv.ViewportCase("wide", 640, 360)], Path(tmp), audit=False, warmup_frames=0, portal="poki", zone_ignore=["bg/*"])
             check = summary["viewports"][0]["portal_zones"]
             self.assertEqual([violation["id_string"] for violation in check["violations"]], ["hud/coins"])
             self.assertEqual(summary["portal_zones"]["failures"], 1)
@@ -113,6 +119,77 @@ class ResponsiveViewportsTest(unittest.TestCase):
             summary = rv.run_matrix(lambda viewport: FakeGame(viewport), [rv.ViewportCase("wide", 640, 360)], Path(tmp), audit=False, warmup_frames=0)
             self.assertNotIn("portal_zones", summary)
             self.assertNotIn("portal_zones", summary["viewports"][0])
+
+
+class LaunchResolutionTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.game = self.root / "games" / "demo"
+        (self.game / "capture").mkdir(parents=True)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write_catalog(self, value):
+        (self.game / "capture" / "catalog.json").write_text(json.dumps(value), encoding="utf-8")
+
+    def resolve(self, argv):
+        return rv.resolve_launch(parse(argv), resolve_game=lambda _id: self.game, invocation_dir=self.root)
+
+    def test_game_takes_executable_and_launch_flags_from_capture_catalog(self):
+        self.write_catalog({
+            "version": 1,
+            "executable": "build/native-devapi/bin/client.exe",
+            "launch": {"fresh_state": False, "autosave_enabled": True, "args": ["--solo"]},
+        })
+        plan = self.resolve(["--game", "demo", "--launch-arg=--no-vsync"])
+        self.assertEqual(plan.exe, (self.game / "build/native-devapi/bin/client.exe").resolve())
+        self.assertEqual(plan.cwd, self.game.resolve())
+        self.assertEqual((plan.fresh_state, plan.autosave_enabled), (False, True))
+        self.assertEqual(plan.extra_args, ("--solo", "--no-vsync"))
+        self.assertEqual(plan.out, (self.game / rv.OUT_SUBDIR).resolve())
+
+    def test_game_without_catalog_uses_canonical_devapi_build_and_fresh_state(self):
+        plan = self.resolve(["--game", "demo"])
+        self.assertEqual(plan.exe.parent, (self.game / "build" / "devapi-debug" / "bin").resolve())
+        self.assertEqual((plan.fresh_state, plan.autosave_enabled, plan.extra_args), (True, False, ()))
+
+    def test_cli_overrides_catalog(self):
+        self.write_catalog({"version": 1, "launch": {"fresh_state": False, "autosave_enabled": True}})
+        plan = self.resolve(["--game", "demo", "--exe", "other.exe", "--cwd", "work", "--fresh-state", "--no-autosave", "--out", "ev"])
+        self.assertEqual(plan.exe, (self.root / "other.exe").resolve())
+        self.assertEqual(plan.cwd, (self.root / "work").resolve())
+        self.assertEqual(plan.out, (self.root / "ev").resolve())
+        self.assertEqual((plan.fresh_state, plan.autosave_enabled), (True, False))
+
+    def test_exe_without_game_defaults_cwd_and_out_to_invocation_dir(self):
+        plan = rv.resolve_launch(parse(["--exe", "bin/game.exe"]), invocation_dir=self.root)
+        self.assertEqual(plan.cwd, self.root.resolve())
+        self.assertEqual(plan.out, (self.root / rv.OUT_SUBDIR).resolve())
+        self.assertIsNone(plan.game_root)
+
+    def test_neither_game_nor_exe_is_an_error(self):
+        with self.assertRaises(ValueError):
+            rv.resolve_launch(parse([]), invocation_dir=self.root)
+
+    def test_malformed_catalog_launch_is_rejected(self):
+        self.write_catalog({"version": 1, "launch": {"fresh_state": "no"}})
+        with self.assertRaises(ValueError):
+            self.resolve(["--game", "demo"])
+
+    def test_resolve_game_root_matches_id_or_alias_uniquely(self):
+        mounts = [{"gameId": "demo", "root": "games/demo", "aliases": ["old-demo"]}, {"gameId": "other", "root": "games/other"}]
+        list_mounts = lambda _root: mounts  # noqa: E731
+        self.assertEqual(rv.resolve_game_root("old-demo", self.root, list_mounts), self.game.resolve())
+        with self.assertRaises(ValueError):
+            rv.resolve_game_root("missing", self.root, list_mounts)
+
+    def test_scenario_path_resolves_against_game_root(self):
+        (self.game / "devapi").mkdir()
+        (self.game / "devapi" / "hooks.py").write_text("def prepare(game, viewport):\n    return 'ok'\n", encoding="utf-8")
+        prepare = rv.load_prepare("devapi/hooks.py:prepare", search_roots=[self.game])
+        self.assertEqual(prepare(None, None), "ok")
 
 
 if __name__ == "__main__":

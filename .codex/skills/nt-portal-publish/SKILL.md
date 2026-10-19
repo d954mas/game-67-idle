@@ -68,7 +68,7 @@ code was read and nothing in it settles the question; it is not a synonym for
 failure, and saying which is which is the point of the file.
 
 Keep HUD out of the target's reserved zones (the Poki Pill); prove it with
-`devapi/responsive_viewports.py --portal <target>` and file the result in the
+`ai_studio/runtime_automation/responsive_viewports.py --game <id> --portal <target>` and file the result in the
 checklist.
 
 ### 4. Produce the store asset set

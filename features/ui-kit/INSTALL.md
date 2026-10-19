@@ -178,7 +178,7 @@ Then shoot the consumer's own layout evidence at phone sizes — a canvas rule i
 proven by frames, not by asserts:
 
 ```
-node ai_studio/dev_environment/python_run.mjs <consumer>/devapi/responsive_viewports.py --exe <exe> --out tmp/ui
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/responsive_viewports.py --exe <exe> --out tmp/ui
 ```
 
 The call above selects Studio B for a new UI polygon/example. Existing template

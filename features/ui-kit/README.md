@@ -157,7 +157,7 @@ becomes a raw pointer and calls the kit from there.
   table name the same theme folders. `lab.mjs build` and `lab.mjs shots` are
   the kit's own consumer proof: every widget in the real renderer.
 - A consumer proves the rest with frames, not asserts: layout and readability
-  are judged by looking (`devapi/responsive_viewports.py`).
+  are judged by looking (`ai_studio/runtime_automation/responsive_viewports.py`).
 
 ## Source antialiasing and alpha contract
 

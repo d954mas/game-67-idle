@@ -163,62 +163,20 @@ Use it as the pattern for real game bots:
 
 ## Responsive Viewport Evidence
 
-Use this when a QCLR_002 responsive-viewport check needs screenshots:
+QCLR_002 screenshots come from the Studio tool
+`ai_studio/runtime_automation/responsive_viewports.py`; its options
+(`--viewport`, `--portal`, `--zone-ignore`, `--scenario`, `--audit`) are in
+`ai_studio/runtime_automation/README.md#responsive-viewport-evidence`.
 
 ```powershell
 cmake --build ai_studio/feature_testing/consumer/build/devapi-debug --target quality_responsive
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/responsive_viewports.py `
+  --exe ai_studio/feature_testing/consumer/build/devapi-debug/bin/game.exe --portal poki
 ```
 
-That default target captures the first screen in:
-
-- 4:3 landscape + portrait;
-- 16:9 landscape + portrait;
-- tall-phone 19.5:9 portrait + landscape.
-
-For a portal build, add `--portal <target>` (for example `--portal poki`). Each
-viewport then checks visible `ui.tree` leaves against the target's
-`metadata.reserved_zones` from `features/platform-sdk/publish-targets/<target>.json`
-(the Poki Pill in the top-left corner), records overlaps as `portal_zones` in the
-viewport entry and `summary.json`, and exits non-zero when any leaf overlaps.
-Exempt full-screen decorative leaves with a repeatable `--zone-ignore <id-glob>`.
-
-For a specific game state, call the helper from a bot or pass a scenario hook:
-
-```powershell
-node ai_studio/dev_environment/python_run.mjs ai_studio/feature_testing/consumer/devapi/responsive_viewports.py `
-  --exe ai_studio/feature_testing/consumer/build/devapi-debug/bin/game.exe `
-  --scenario games/my-game/devapi/scenarios.py:prepare_upgrade_menu
-```
-
-The hook is called as `prepare(game, viewport)` after launch and warmup but
-before `ui.tree` and screenshot capture. Use it to open menus, trigger combat,
-advance tutorial state, or otherwise reach the moment that needs QCLR_002
-evidence.
-
-From a game bot, the same helper can be used directly:
-
-```python
-from pathlib import Path
-from responsive_viewports import DEFAULT_VIEWPORTS, run_matrix
-from devapi_client import running_game
-
-def prepare_upgrade_menu(game, viewport):
-    game.result("time.step", {"frames": 5})
-    game.click_ui("settings/gear", observe=None)
-    game.wait_frames(2)
-    return {"state": "upgrade_menu", "viewport": viewport.window_size}
-
-run_matrix(
-    lambda viewport: running_game(window_size=viewport.window_size),
-    DEFAULT_VIEWPORTS,
-    Path("tmp/quality/qclr_002_upgrade_menu"),
-    prepare=prepare_upgrade_menu,
-)
-```
-
-Pixel-health audit is opt-in for this helper (`--audit`), because QCLR_002 needs
-layout evidence and some valid UI states are visually quiet enough to fail a
-generic contrast/variance threshold.
+The `quality_responsive` target runs the tool against this build's executable.
+Scenario hooks for a specific game moment stay in this folder: write
+`prepare(game, viewport)` here and pass `--scenario devapi/<file>.py:<function>`.
 
 ## Tests
 
