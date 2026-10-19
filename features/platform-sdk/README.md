@@ -31,6 +31,10 @@ game-specific screens, economy, items, progression, or content.
 | `gamepush` | `gamepush` | GamePush publisher SDK; one build is re-served to many platforms, so the host is unknown at build time. |
 
 `publish-targets/targets.json` is the canonical mapping and static policy source.
+Per-target manifests (`publish-targets/<target>.json`) may declare
+`metadata.reserved_zones`: portal overlays the HUD must avoid, such as the Poki
+Pill. The responsive viewport capture checks them with `--portal <target>`; see
+[publish-targets.md](references/publish-targets.md).
 CMake and JavaScript build tools consume the same descriptors. The runtime,
 storage and release boundaries are described in [architecture.md](references/architecture.md).
 

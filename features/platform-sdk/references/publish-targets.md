@@ -33,7 +33,14 @@ Each manifest declares:
 - `packaged_required_files`: files expected in the final upload root;
 - `zip_layout`: archive shape;
 - `metadata`: portal/account/config metadata that cannot be inferred from the
-  build artifact;
+  build artifact. Optional `metadata.reserved_zones` lists persistent portal
+  overlays drawn over the game frame, in CSS px of the frame:
+  `{id, anchor: top-left|top-right, top_px, sizes: [{min_frame_width_px?,
+  max_frame_width_px?, width_px, height_px}], source}`; `sizes` cover every
+  frame width once, in order. Only Poki declares one (the Pill); other portals
+  show only loading and ad overlays. `target_config.mjs#reservedZonesForTarget`
+  validates it, and `devapi/responsive_viewports.py --portal <target>` checks
+  HUD bounds against it;
 - `sdk_policy`: selected adapter, SDK/placeholder policy, forbidden markers,
   and unsupported/no-op behavior;
 - `validation_command`: the local artifact inspection command.

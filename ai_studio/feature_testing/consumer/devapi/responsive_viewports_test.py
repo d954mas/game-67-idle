@@ -89,5 +89,31 @@ class ResponsiveViewportsTest(unittest.TestCase):
             self.assertEqual(summary["viewports"][0]["scenario_result"], {"prepared": "640x360"})
 
 
+    def test_run_matrix_reports_poki_pill_overlap(self):
+        class PillGame(FakeGame):
+            def result(self, method, params=None):
+                tree = super().result(method, params)
+                if method == "ui.tree":
+                    height = self.viewport.height
+                    tree["nodes"] = [
+                        {"id": 1, "id_string": "hud/coins", "child_count": 0, "visible": True, "bounds": {"x": 4, "y": height - 60, "w": 40, "h": 30}},
+                        {"id": 2, "id_string": "bg/full", "child_count": 0, "visible": True, "bounds": {"x": 0, "y": 0, "w": self.viewport.width, "h": height}},
+                    ]
+                return tree
+
+        with tempfile.TemporaryDirectory() as tmp:
+            viewports = [rv.ViewportCase("wide", 640, 360)]
+            summary = rv.run_matrix(lambda viewport: PillGame(viewport), viewports, Path(tmp), audit=False, warmup_frames=0, portal="poki", zone_ignore=["bg/*"])
+            check = summary["viewports"][0]["portal_zones"]
+            self.assertEqual([violation["id_string"] for violation in check["violations"]], ["hud/coins"])
+            self.assertEqual(summary["portal_zones"]["failures"], 1)
+
+    def test_run_matrix_without_portal_skips_zone_check(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = rv.run_matrix(lambda viewport: FakeGame(viewport), [rv.ViewportCase("wide", 640, 360)], Path(tmp), audit=False, warmup_frames=0)
+            self.assertNotIn("portal_zones", summary)
+            self.assertNotIn("portal_zones", summary["viewports"][0])
+
+
 if __name__ == "__main__":
     unittest.main()

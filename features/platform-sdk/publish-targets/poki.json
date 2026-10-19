@@ -37,7 +37,19 @@
     "requires_account": true,
     "submission_tool": "https://inspector.poki.dev",
     "orientation": "game-owned",
-    "viewport": "responsive canvas"
+    "viewport": "responsive canvas",
+    "reserved_zones": [
+      {
+        "id": "poki-pill",
+        "anchor": "top-left",
+        "top_px": 24,
+        "sizes": [
+          { "max_frame_width_px": 1210, "width_px": 46, "height_px": 62 },
+          { "min_frame_width_px": 1211, "width_px": 92, "height_px": 64 }
+        ],
+        "source": "features/platform-sdk/references/portals/poki.md (S4): the Poki Pill overlays the game frame at its left edge; default movePill(0, 24); it may move down, never below 50% of the game area."
+      }
+    ]
   },
   "sdk_policy": {
     "adapter": "poki",

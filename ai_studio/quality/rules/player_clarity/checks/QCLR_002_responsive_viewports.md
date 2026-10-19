@@ -34,7 +34,11 @@ If virtual controls affect layout or safe space, also use
 - 16:9 layout is usable in landscape and portrait;
 - tall-phone 19.5:9 layout is usable in landscape and portrait;
 - important HUD, text, state, feedback, or danger are not cropped or pushed off-screen;
-- player-facing actions are not hidden, overlapped, or misplaced.
+- player-facing actions are not hidden, overlapped, or misplaced;
+- for a portal build, no visible HUD leaf sits under the target's reserved
+  zones (the Poki Pill): `responsive_viewports.py --portal <target>` checks
+  `ui.tree` bounds against `metadata.reserved_zones` in
+  `features/platform-sdk/publish-targets/<target>.json` and fails on overlap.
 
 For a local surface change, check only the affected surface and the supported
 targets that can break. Use the full 4:3, 16:9, and tall-phone 19.5:9

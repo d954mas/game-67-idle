@@ -82,3 +82,53 @@ export function compileProfileForTarget(target, preset, flags = {}) {
   }
   return Object.freeze({ target: descriptor.target, adapter: descriptor.adapter, preset, ...profileFlags });
 }
+
+const ZONE_ANCHORS = ["top-left", "top-right"];
+const ZONE_KEYS = ["anchor", "id", "sizes", "source", "top_px"];
+const isPx = (value) => Number.isSafeInteger(value) && value >= 0;
+
+// Reserved zones are portal overlays drawn over the game frame, in CSS px of that frame.
+// Each zone's sizes must cover every frame width exactly once, ordered by width.
+export function validateReservedZones(zones, label) {
+  if (!Array.isArray(zones)) throw new Error(`${label} reserved_zones must be an array`);
+  const ids = new Set();
+  for (const zone of zones) {
+    const where = `${label} reserved zone ${zone?.id ?? "?"}`;
+    if (!zone || typeof zone !== "object"
+        || JSON.stringify(Object.keys(zone).sort()) !== JSON.stringify(ZONE_KEYS)
+        || !/^[a-z][a-z0-9-]*$/.test(zone.id || "") || ids.has(zone.id)
+        || !ZONE_ANCHORS.includes(zone.anchor) || !isPx(zone.top_px)
+        || typeof zone.source !== "string" || !zone.source.trim()
+        || !Array.isArray(zone.sizes) || zone.sizes.length === 0) {
+      throw new Error(`${where} is invalid`);
+    }
+    ids.add(zone.id);
+    zone.sizes.forEach((size, index) => {
+      const keys = Object.keys(size || {});
+      const first = index === 0;
+      const last = index === zone.sizes.length - 1;
+      if (keys.some((key) => !["width_px", "height_px", "min_frame_width_px", "max_frame_width_px"].includes(key))
+          || !isPx(size.width_px) || size.width_px === 0 || !isPx(size.height_px) || size.height_px === 0
+          || ("min_frame_width_px" in size) === first || ("max_frame_width_px" in size) === last
+          || (!first && !isPx(size.min_frame_width_px)) || (!last && !isPx(size.max_frame_width_px))
+          || (!first && size.min_frame_width_px !== zone.sizes[index - 1].max_frame_width_px + 1)
+          || (!first && !last && size.max_frame_width_px < size.min_frame_width_px)) {
+        throw new Error(`${where} sizes must cover every frame width once, in order`);
+      }
+    });
+  }
+  return Object.freeze(zones.map((zone) => Object.freeze({ ...zone, sizes: Object.freeze(zone.sizes.map((size) => Object.freeze({ ...size }))) })));
+}
+
+export function reservedZonesForTarget(target) {
+  descriptorForTarget(target);
+  const path = join(HERE, `${target}.json`);
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") return Object.freeze([]);
+    throw error;
+  }
+  return validateReservedZones(manifest?.metadata?.reserved_zones ?? [], `${target} publish manifest`);
+}

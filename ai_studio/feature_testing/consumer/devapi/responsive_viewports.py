@@ -2,7 +2,8 @@
 """Capture QCLR_002 responsive viewport evidence for a copied game.
 
 This script is intentionally game-local. It launches the game once per viewport,
-captures engine-native screenshots, records ui.tree bounds metadata, and writes
+captures engine-native screenshots, records ui.tree bounds metadata, optionally
+checks visible ui leaves against a portal's reserved zones (--portal), and writes
 review-ready evidence for ai_studio/quality/rules/player_clarity/QCLR_002.
 """
 
@@ -23,6 +24,7 @@ import smoke_bot
 from smoke_bot import DEFAULT_DEVAPI_PORT, DevApiError, REPO_ROOT, default_executable, running_game  # noqa: E402
 
 from png_io import COLOR_TYPE_RGB, bytes_per_pixel, read_png, write_png_rgb  # noqa: E402
+import portal_zones  # noqa: E402
 
 
 RULE_ID = "QCLR_002"
@@ -149,6 +151,9 @@ def capture_viewport(
     audit: bool,
     warmup_frames: int,
     prepare: PrepareFn | None = None,
+    portal: str | None = None,
+    zones: list[dict[str, Any]] | None = None,
+    zone_ignore: list[str] | None = None,
 ) -> dict[str, Any]:
     if warmup_frames > 0:
         game.wait_frames(warmup_frames)
@@ -157,7 +162,7 @@ def capture_viewport(
     view = safe_result(game, "view")
     screenshot = game.capture_screenshot(str(out_dir / f"{viewport.name}.png"), wait_frames=2, audit=audit)
     nodes = ui_nodes(tree)
-    return {
+    entry: dict[str, Any] = {
         "name": viewport.name,
         "window_size": viewport.window_size,
         "orientation": viewport.orientation,
@@ -172,6 +177,15 @@ def capture_viewport(
         "scenario_result": scenario_result,
         "screenshot": screenshot,
     }
+    if portal:
+        check = portal_zones.check_tree(tree, zones or [], viewport.width, viewport.height, ignore=zone_ignore or [])
+        entry["portal_zones"] = {"target": portal, **check}
+    return entry
+
+
+def portal_zone_failures(entries: list[dict[str, Any]]) -> int:
+    """Violations plus viewports whose tree could not be mapped onto the window."""
+    return sum(len(entry["portal_zones"]["violations"]) + (1 if "error" in entry["portal_zones"] else 0) for entry in entries if "portal_zones" in entry)
 
 
 def png_to_rgb(path: str) -> tuple[int, int, bytes]:
@@ -225,12 +239,18 @@ def run_matrix(
     audit: bool = True,
     warmup_frames: int = 5,
     prepare: PrepareFn | None = None,
+    portal: str | None = None,
+    zone_ignore: list[str] | None = None,
 ) -> dict[str, Any]:
     out_dir.mkdir(parents=True, exist_ok=True)
+    zones = portal_zones.load_target_zones(portal) if portal else None
     entries = []
     for viewport in viewports:
         with game_factory(viewport) as game:
-            entries.append(capture_viewport(game, viewport, out_dir, audit=audit, warmup_frames=warmup_frames, prepare=prepare))
+            entries.append(capture_viewport(
+                game, viewport, out_dir, audit=audit, warmup_frames=warmup_frames, prepare=prepare,
+                portal=portal, zones=zones, zone_ignore=zone_ignore,
+            ))
 
     contact_sheet = make_contact_sheet(entries, out_dir / "contact_sheet.png")
     summary_path = out_dir / "summary.json"
@@ -243,6 +263,13 @@ def run_matrix(
         "contact_sheet": contact_sheet,
         "summary": str(summary_path),
     }
+    if portal:
+        summary["portal_zones"] = {
+            "target": portal,
+            "zone_ids": [zone.get("id") for zone in zones or []],
+            "ignore": list(zone_ignore or []),
+            "failures": portal_zone_failures(entries),
+        }
     with summary_path.open("w", encoding="utf-8") as handle:
         json.dump(summary, handle, indent=2)
         handle.write("\n")
@@ -262,6 +289,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional MODULE:FUNCTION or PATH.py:FUNCTION hook called as prepare(game, viewport) before each screenshot.",
     )
     parser.add_argument("--audit", action="store_true", help="Run pixel-health audit for each captured screenshot.")
+    parser.add_argument("--portal", help="Publish target whose reserved zones (e.g. the Poki Pill) visible ui leaves must avoid.")
+    parser.add_argument(
+        "--zone-ignore",
+        action="append",
+        default=[],
+        help="Glob over ui id_string exempt from the --portal check (full-screen decorative leaves); may be repeated.",
+    )
     return parser
 
 
@@ -287,12 +321,19 @@ def main(argv: list[str] | None = None) -> int:
             )
 
         prepare = load_prepare(args.scenario)
-        summary = run_matrix(game_factory, viewports, args.out, audit=args.audit, warmup_frames=max(0, args.warmup_frames), prepare=prepare)
+        summary = run_matrix(
+            game_factory, viewports, args.out, audit=args.audit, warmup_frames=max(0, args.warmup_frames), prepare=prepare,
+            portal=args.portal, zone_ignore=args.zone_ignore,
+        )
     except (DevApiError, ValueError, argparse.ArgumentTypeError, ImportError) as exc:
         print(f"responsive viewport capture failed: {exc}", file=sys.stderr)
         return 1
 
     print(json.dumps(summary, indent=2))
+    failures = summary.get("portal_zones", {}).get("failures", 0)
+    if failures:
+        print(f"portal reserved zones of {args.portal} are covered: {failures} failure(s); see portal_zones in {summary['summary']}", file=sys.stderr)
+        return 1
     return 0
 
 

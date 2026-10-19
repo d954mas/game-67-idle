@@ -21,6 +21,7 @@ import {
   stagePlatformSdkWebAssets,
 } from "../scripts/artifact_tools.mjs";
 import { scorecardFromNdjson } from "../scripts/scorecard.mjs";
+import { reservedZonesForTarget, targetNames, validateReservedZones } from "../publish-targets/target_config.mjs";
 import { createBuildPlan } from "../../../ai_studio/game_tools/build_web.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1909,6 +1910,34 @@ test("publish manifests distinguish staged modules from single-JS release packag
     assert.equal(manifest.required_files.includes("platform-sdk.js"), true, target);
     assert.equal(manifest.packaged_required_files.includes("game.js"), true, target);
     assert.equal(manifest.packaged_required_files.some((path) => path.startsWith("platform-sdk")), false, target);
+  }
+});
+
+test("publish manifests declare valid reserved zones and Poki reserves its top-left Pill", () => {
+  for (const target of targetNames()) reservedZonesForTarget(target);
+  const pill = reservedZonesForTarget(TargetPlatform.POKI).find((zone) => zone.id === "poki-pill");
+  assert.ok(pill);
+  assert.equal(pill.anchor, "top-left");
+  assert.ok(pill.sizes.length >= 2, "Pill changes size at a frame-width breakpoint");
+  assert.ok(pill.sizes.at(-1).width_px > pill.sizes[0].width_px, "wide frames get the larger Pill");
+});
+
+test("reserved zone validation rejects gaps, overlaps and unknown keys", () => {
+  const zone = (sizes, extra = {}) => [{ id: "pill", anchor: "top-left", top_px: 24, sizes, source: "S", ...extra }];
+  const narrow = { max_frame_width_px: 1210, width_px: 46, height_px: 62 };
+  assert.equal(validateReservedZones(zone([{ width_px: 10, height_px: 10 }]), "t").length, 1);
+  assert.equal(validateReservedZones(zone([narrow, { min_frame_width_px: 1211, width_px: 92, height_px: 64 }]), "t").length, 1);
+  for (const [label, zones] of [
+    ["gap", zone([narrow, { min_frame_width_px: 1300, width_px: 92, height_px: 64 }])],
+    ["overlap", zone([narrow, { min_frame_width_px: 1200, width_px: 92, height_px: 64 }])],
+    ["open first", zone([{ min_frame_width_px: 0, max_frame_width_px: 10, width_px: 1, height_px: 1 }, { min_frame_width_px: 11, width_px: 1, height_px: 1 }])],
+    ["unbounded middle", zone([narrow])],
+    ["zero size", zone([{ width_px: 0, height_px: 10 }])],
+    ["unknown anchor", zone([{ width_px: 10, height_px: 10 }], { anchor: "center" })],
+    ["unknown key", zone([{ width_px: 10, height_px: 10 }], { left_px: 3 })],
+    ["duplicate id", [...zone([{ width_px: 1, height_px: 1 }]), ...zone([{ width_px: 1, height_px: 1 }])]],
+  ]) {
+    assert.throws(() => validateReservedZones(zones, "t"), /reserved/, label);
   }
 });
 

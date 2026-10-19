@@ -175,6 +175,13 @@ That default target captures the first screen in:
 - 16:9 landscape + portrait;
 - tall-phone 19.5:9 portrait + landscape.
 
+For a portal build, add `--portal <target>` (for example `--portal poki`). Each
+viewport then checks visible `ui.tree` leaves against the target's
+`metadata.reserved_zones` from `features/platform-sdk/publish-targets/<target>.json`
+(the Poki Pill in the top-left corner), records overlaps as `portal_zones` in the
+viewport entry and `summary.json`, and exits non-zero when any leaf overlaps.
+Exempt full-screen decorative leaves with a repeatable `--zone-ignore <id-glob>`.
+
 For a specific game state, call the helper from a bot or pass a scenario hook:
 
 ```powershell

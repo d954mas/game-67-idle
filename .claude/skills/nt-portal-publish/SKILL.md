@@ -68,6 +68,10 @@ checklist. A row without evidence is a row nobody checked. `UNPROVEN` means the
 code was read and nothing in it settles the question; it is not a synonym for
 failure, and saying which is which is the point of the file.
 
+Keep HUD out of the target's reserved zones (the Poki Pill); prove it with
+`devapi/responsive_viewports.py --portal <target>` and file the result in the
+checklist.
+
 ### 4. Produce the store asset set
 
 Everything goes to `games/<id>/release/store/<portal>/` and is validated by the
