@@ -144,14 +144,14 @@ artifacts unless linked.
 
 ## Done And Validation
 
-A new task transition to `done` is guarded by the closure and quality-decision
-contract in `task-store-reference.md`, then waits under ignored
+A new task transition to `done` is guarded by the closure contract (and the
+quality contract when quality is recorded) in `task-store-reference.md`, then waits under ignored
 `archive/pending/` until the next seal. Existing `done` history is
 grandfathered.
 Use the guide for lifecycle, evidence, CLI options, and canonical log formats.
-Every applicable Quality assignment must be `pass`; `block`, `review`, and
-`unverified` keep the task open. Use `--quality-not-applicable "reason"` when
-no Quality rule applies. New `skip` assignments are rejected.
+Quality is optional at closeout: record it when a Quality rule matches the
+change. Every recorded assignment must be `pass`; `block`, `review`, and
+`unverified` keep the task open. New `skip` assignments are rejected.
 
 Validation by change type: `ai_studio/quality/README.md`.
 Repeated quality failures should be visible in task logs and summarized with

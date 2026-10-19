@@ -99,3 +99,29 @@ Quality: QART_001=block; evidence: bare example.
   assert.equal(profile.entries, 2);
   assert.deepEqual(profile.rules.map((item) => item.rule), ["QCLR_001", "QTECH_001"]);
 });
+
+test("quality profile reads closed tasks by default, where closeout records quality", (t) => {
+  const root = tempRoot(t);
+  const pending = join(root, "ai_studio", "taskboard", "items", "archive", "pending", "unassigned");
+  mkdirSync(pending, { recursive: true });
+  writeFileSync(join(pending, "T0009.md"), `---
+id: T0009
+title: Closed
+status: done
+priority: P1
+created: 2026-06-26
+updated: 2026-06-26
+---
+
+## Done when
+
+- [x] done
+
+## Log
+
+- 2026-06-26: Quality: QCLR_001=pass; evidence: closeout.
+`, "utf8");
+
+  assert.equal(JSON.parse(run(root, "--json").stdout).entries, 1);
+  assert.equal(JSON.parse(run(root, "--active-only", "--json").stdout).entries, 0);
+});

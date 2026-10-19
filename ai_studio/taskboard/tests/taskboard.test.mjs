@@ -1073,7 +1073,7 @@ test("updateDoc rejects invalid status", (t) => {
   assert.throws(() => updateDoc(root, "T0001", { fields: { status: "dropped" } }), /Invalid status/);
 });
 
-test("updateDoc requires truthful closure and an explicit quality decision for a new done task", (t) => {
+test("updateDoc requires truthful closure and treats quality as optional for a new done task", (t) => {
   const root = tempRoot(t);
   const task = createTask(root, {
     title: "Close truthfully",
@@ -1092,14 +1092,12 @@ test("updateDoc requires truthful closure and an explicit quality decision for a
   );
   assert.equal(readFileSync(task.file, "utf8"), original, "rejected close must not write or archive");
 
-  assert.throws(
-    () => updateDoc(root, "T0001", {
-      fields: { status: "done" },
-      body: task.body.replace("- [ ] behavior is proven", "- [x] behavior is proven"),
-    }),
-    (error) => error.problem.code === "task_quality_decision_required",
-  );
-  assert.equal(readFileSync(task.file, "utf8"), original, "missing Quality must not write or archive");
+  const closed = updateDoc(root, "T0001", {
+    fields: { status: "done" },
+    body: task.body.replace("- [ ] behavior is proven", "- [x] behavior is proven"),
+  });
+  assert.equal(closed.fields.status, "done");
+  assert.equal(Object.hasOwn(closed.fields, "quality"), false);
 });
 
 test("updateDoc accepts checked criteria plus passing canonical quality evidence", (t) => {
@@ -1175,10 +1173,7 @@ test("updateDoc requires a non-empty canonical checked Done when list unless wai
 test("historical Quality logs never satisfy current state and closure examples stay inert", (t) => {
   const historyRoot = tempRoot(t);
   createTask(historyRoot, { title: "Historical quality", status: "review", body: "## Done when\n\n- [x] done\n\n## Log\n\n- 2026-07-11: Quality: QTECH_001=pass; evidence: old cycle\n" });
-  assert.throws(
-    () => updateDoc(historyRoot, "T0001", { fields: { status: "done" } }),
-    (error) => error.problem.code === "task_quality_decision_required",
-  );
+  assert.equal(Object.hasOwn(updateDoc(historyRoot, "T0001", { fields: { status: "done" } }).fields, "quality"), false);
 
   const closureVariants = [
     "Closure: waived; reason: bare; evidence: example",
@@ -1319,22 +1314,40 @@ test("updateDoc accepts canonical closure waiver and quality not-applicable deci
   assert.equal(updateDoc(root, "T0001", { fields: { status: "done", quality: { notApplicable: { reason: "planning-only replacement" } } } }).fields.status, "done");
 });
 
-test("updateDoc rejects malformed or missing quality decisions with a machine problem", (t) => {
-  const root = tempRoot(t);
-  createTask(root, {
-    title: "Bad quality close",
-    status: "review",
-    body: "## Done when\n\n- [x] done\n\n## Log\n\n- 2026-07-11: Quality: QCLR_001=maybe; evidence: unsupported outcome\n",
-  });
+test("updateDoc keeps a task open while a recorded quality check does not pass", (t) => {
+  const root = tempRoot(t, { qualityCatalog: true });
+  createTask(root, { title: "Blocked quality close", status: "review", body: "## Done when\n\n- [x] done\n\n## Log\n" });
 
   assert.throws(
-    () => updateDoc(root, "T0001", { fields: { status: "done" } }),
+    () => updateDoc(root, "T0001", { fields: { status: "done", quality: { checks: [{ id: "QCLR_001", outcome: "block", evidence: "copy unreadable" }] } } }),
     (error) => {
-      assert.equal(error.problem.code, "task_quality_decision_required");
-      assert.equal(error.problem.details.allowedOutcomes.includes("pass"), true);
+      assert.equal(error.problem.code, "task_quality_blocked");
+      assert.equal(error.problem.details.allowedOutcome, "pass");
       return true;
     },
   );
+  assert.equal(findDoc(root, "T0001").fields.status, "review");
+});
+
+test("quality evidence must outlive the session", (t) => {
+  const ephemeral = [
+    "tmp/capture/shot.png", "see ./tmp\\run.log", "log at /tmp/out.log", "games/x/tmp/shot.png",
+    "C:/projects/studio/tmp/x.png", "C:\\Users\\x\\AppData\\Local\\Temp\\claude\\s\\scratchpad\\a.png",
+    "%TEMP%\\x.png", "$TMPDIR/x",
+  ];
+  for (const evidence of ephemeral) {
+    const root = tempRoot(t, { qualityCatalog: true });
+    createTask(root, { title: "Ephemeral evidence", status: "review", body: "## Done when\n\n- [x] done\n\n## Log\n" });
+    assert.throws(
+      () => updateDoc(root, "T0001", { fields: { status: "done", quality: { checks: [{ id: "QTECH_001", outcome: "pass", evidence }] } } }),
+      (error) => error.problem.code === "task_quality_invalid",
+      evidence,
+    );
+  }
+  const root = tempRoot(t, { qualityCatalog: true });
+  createTask(root, { title: "Durable evidence", status: "review", body: "## Done when\n\n- [x] done\n\n## Log\n" });
+  const durable = "node --test features/x; games/x/tmp_build.log; https://e.com/tmp/a; design/knowledge/attempts/shot.png";
+  assert.equal(updateDoc(root, "T0001", { fields: { status: "done", quality: { checks: [{ id: "QTECH_001", outcome: "pass", evidence: durable }] } } }).fields.status, "done");
 });
 
 test("structured quality rejects empty, duplicate, and evidence-free check state", (t) => {
@@ -1374,16 +1387,13 @@ test("updateDoc grandfathers existing done tasks and leaves other document trans
   assert.equal(updateDoc(root, "E001", { fields: { status: "done" } }).fields.status, "done");
 });
 
-test("reopening a task clears its structured quality and requires a new decision", (t) => {
+test("reopening a task clears its structured quality", (t) => {
   const root = tempRoot(t, { qualityCatalog: true });
   createTask(root, { title: "Reopen", status: "review", body: "## Done when\n\n- [x] done\n\n## Log\n" });
   updateDoc(root, "T0001", { fields: { status: "done", quality: { checks: [{ id: "QTECH_001", outcome: "pass", evidence: "first cycle" }] } } });
   const reopened = updateDoc(root, "T0001", { fields: { status: "review" } }, { includeArchive: true });
   assert.equal(Object.hasOwn(reopened.fields, "quality"), false);
-  assert.throws(
-    () => updateDoc(root, "T0001", { fields: { status: "done" } }),
-    (error) => error.problem.code === "task_quality_decision_required",
-  );
+  assert.equal(Object.hasOwn(updateDoc(root, "T0001", { fields: { status: "done" } }).fields, "quality"), false);
 });
 
 test("taskboard cli appends passing structured closeout log lines before updateDoc", (t) => {
@@ -1416,10 +1426,6 @@ test("taskboard cli rejects skip and unions coarse suggestions for multi-domain 
   const problem = JSON.parse(result.stdout).problem;
   assert.equal(problem.code, "quality_input_invalid");
   assert.deepEqual(problem.details.suggestedGroups, ["QART", "QASSET", "QTECH", "QCLR"]);
-
-  const close = runCliDirect(root, "set", "T0001", "--status", "done", "--json");
-  assert.notEqual(close.status, 0);
-  assert.deepEqual(JSON.parse(close.stdout).problem.details.suggestedGroups, ["QART", "QASSET", "QTECH", "QCLR"]);
 });
 
 test("taskboard cli rejects incomplete or conflicting structured closeout inputs early", (t) => {
@@ -1432,6 +1438,10 @@ test("taskboard cli rejects incomplete or conflicting structured closeout inputs
   const conflicting = runCliDirect(root, "set", "T0001", "--quality", "QCLR_001=pass", "--quality-evidence", "proof", "--quality-not-applicable", "docs only", "--json");
   assert.notEqual(conflicting.status, 0);
   assert.equal(JSON.parse(conflicting.stdout).problem.code, "quality_input_conflict");
+
+  const ephemeralWaiver = runCliDirect(root, "set", "T0001", "--waiver-reason", "because", "--closure-evidence", "tmp/run.log", "--json");
+  assert.notEqual(ephemeralWaiver.status, 0);
+  assert.equal(JSON.parse(ephemeralWaiver.stdout).problem.code, "closure_input_invalid");
 
   const duplicateEvidence = runCliDirect(root, "set", "T0001", "--quality", "QCLR_001=pass; QTECH_001=pass", "--quality-evidence", "QCLR_001=one; QCLR_001=two; QTECH_001=tests", "--json");
   assert.notEqual(duplicateEvidence.status, 0);
@@ -1455,11 +1465,11 @@ test("Taskboard API guards raw final task body and returns the machine problem",
   const handler = createTaskboardApi(root);
 
   const response = await invokeApi(handler, "PATCH", "/api/tasks/T0001", {
-    fields: { status: "done" },
+    fields: { status: "done", quality: { checks: [{ id: "QTECH_001", outcome: "unverified", evidence: "not run yet" }] } },
   });
 
   assert.equal(response.status, 400);
-  assert.equal(response.data.problem.code, "task_quality_decision_required");
+  assert.equal(response.data.problem.code, "task_quality_blocked");
   assert.equal(findDoc(root, "T0001").fields.status, "review");
 
   const accepted = await invokeApi(handler, "PATCH", "/api/tasks/T0001", {

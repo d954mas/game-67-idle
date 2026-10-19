@@ -70,10 +70,12 @@ Summarize rule usage with:
 
 ```powershell
 node ai_studio/quality/profile.mjs
-node ai_studio/quality/profile.mjs --include-archive --json
+node ai_studio/quality/profile.mjs --include-private --json
 ```
 
-The profile uses Taskboard's canonical dated-log scanner. It ignores bare,
+Closed tasks are included by default (`--active-only` narrows it);
+`--include-private` adds game stores. The profile uses Taskboard's canonical
+dated-log scanner. It ignores bare,
 fenced, commented, and post-section examples, and does not count outcomes
 recorded only in final responses, PR/review comments, or other artifacts.
 

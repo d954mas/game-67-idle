@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
 import { canonicalTaskLogPayloads, findRoot, listTasks } from "../taskboard/store.mjs";
+import { listTaskboardStores, storeOptions } from "../taskboard/stores.mjs";
 
 const OUTCOMES = ["pass", "block", "review", "skip", "unverified"];
 const GROUPS = {
@@ -14,7 +15,10 @@ const GROUPS = {
 
 function usage() {
   console.error(`usage:
-  node ai_studio/quality/profile.mjs [--root <repo>] [--include-archive] [--json]
+  node ai_studio/quality/profile.mjs [--root <repo>] [--active-only] [--include-private] [--json]
+
+Closed tasks are included by default because quality is recorded at closeout;
+--include-archive is accepted for older callers and changes nothing.
 
 Scans task logs for lines like:
   Quality: QCLR_001=pass; QART_001=block; QTECH_001=unverified; evidence: screenshot + visual target mismatch`);
@@ -22,11 +26,13 @@ Scans task logs for lines like:
 }
 
 function parseArgs(argv) {
-  const out = { root: null, includeArchive: false, json: false };
+  const out = { root: null, includeArchive: true, includePrivate: false, json: false };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--help" || arg === "-h") usage();
     if (arg === "--include-archive") out.includeArchive = true;
+    else if (arg === "--active-only") out.includeArchive = false;
+    else if (arg === "--include-private") out.includePrivate = true;
     else if (arg === "--json") out.json = true;
     else if (arg === "--root") {
       const value = argv[++index];
@@ -70,13 +76,16 @@ function createEmptyRule(rule) {
 }
 
 function buildProfile(root, options = {}) {
-  const tasks = listTasks(root, { includeArchive: options.includeArchive });
+  const stores = listTaskboardStores(root, { includePrivate: options.includePrivate });
+  const tasks = stores.flatMap((store) => listTasks(root, storeOptions(store, { includeArchive: options.includeArchive }))
+    .map((task) => ({ task, storeId: store.storeId })));
   const byRule = new Map();
   let scannedLines = 0;
   let matchedEntries = 0;
 
-  for (const task of tasks) {
-    const taskId = String(task.fields.id || task.name || "");
+  for (const { task, storeId } of tasks) {
+    const localId = String(task.fields.id || task.name || "");
+    const taskId = stores.length > 1 ? `${storeId}:${localId}` : localId;
     for (const line of qualityLines(task.body)) {
       scannedLines += 1;
       for (const entry of parseQualityLine(line)) {
@@ -96,6 +105,7 @@ function buildProfile(root, options = {}) {
     report_kind: "advisory-task-log-summary",
     root,
     include_archive: Boolean(options.includeArchive),
+    stores_scanned: stores.length,
     tasks_scanned: tasks.length,
     quality_lines: scannedLines,
     entries: matchedEntries,

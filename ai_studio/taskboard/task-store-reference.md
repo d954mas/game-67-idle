@@ -80,14 +80,19 @@ references and task project/epic mismatches.
 
 ## Done And Evidence
 
-A transition of a task from any non-`done` status to `done` must satisfy both
-checks below through the final document passed to `updateDoc`:
+A transition of a task from any non-`done` status to `done` must satisfy the
+closure check below, and the quality check when quality is recorded, through the
+final document passed to `updateDoc`:
 
 1. `## Done when` contains at least one nonblank canonical `- [x] criterion`,
    every checkbox there is canonical and checked, or `## Log` contains:
    `Closure: waived; reason: <non-empty>; evidence: <non-empty>`.
-2. Frontmatter has one structured `quality` decision: non-empty `checks` with
-   per-check `id`, `outcome`, and `evidence`, or `notApplicable.reason`.
+2. Quality is optional. Record it when a Quality rule matches the change
+   (player-facing UI, art, assets, copy, design); a logic task closes on its
+   checked criteria and logged test evidence. When recorded, frontmatter holds
+   one structured `quality` decision: non-empty `checks` with per-check `id`,
+   `outcome`, and `evidence`, or `notApplicable.reason`. Evidence must outlive
+   the session: paths under `tmp/`, `/tmp/` or an agent scratchpad are rejected.
 
 A closure waiver counts only as a canonical dated bullet outside fenced code
 blocks. Quality log bullets are history only; bare lines and documentation
@@ -96,7 +101,7 @@ examples satisfy neither gate.
 Only `pass` checks can close a task. `block`, `review`, and `unverified` remain
 valid current decisions but keep it open; new `skip` state is rejected. Check
 IDs must exist in the Quality catalog when the catalog is mounted. Reopening a
-done task removes its old decision so the next close needs fresh evidence.
+done task removes its old decision; a new one is recorded only if it applies.
 Existing archived tasks without structured state are grandfathered.
 
 Closed task Markdown is temporary storage, not permanent working context. It is
@@ -120,7 +125,8 @@ sidecar or second store:
 quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"node --test ..."}]}
 ```
 
-For work to which no Quality rule applies:
+Older closes may carry an explicit not-applicable decision; new closes omit the
+field instead:
 
 ```yaml
 quality: {"notApplicable":{"reason":"planning-only task"}}
@@ -130,7 +136,7 @@ The CLI can append canonical dated lines before calling the same `updateDoc`
 path:
 
 ```powershell
-node ai_studio/taskboard/cli.mjs set T0001 --status done --waiver-reason "superseded" --closure-evidence "E001 decision" --quality-not-applicable "planning-only" --json
+node ai_studio/taskboard/cli.mjs set T0001 --status done --waiver-reason "superseded" --closure-evidence "E001 decision" --json
 node ai_studio/taskboard/cli.mjs set T0001 --status done --quality "QCLR_001=pass; QTECH_001=pass" --quality-evidence "QCLR_001=browser review; QTECH_001=node --test" --json
 ```
 
@@ -140,9 +146,9 @@ cannot leak across judgment groups. `--quality-not-applicable` is mutually
 exclusive with those options. The CLI also appends a dated log summary for
 history/profiling, but logs do not satisfy the transition gate. Missing,
 malformed, or conflicting input fails before write/archive with a concise
-machine-readable problem. When quality is missing, CLI JSON suggests coarse
-groups from task/project tags and ownership metadata; it never selects or
-waives a rule automatically.
+machine-readable problem. When `--quality` is malformed, CLI JSON suggests
+coarse groups from task/project tags and ownership metadata; it never selects
+or waives a rule automatically.
 
 Smallest reliable validation by change type starts from the Quality rules:
 `ai_studio/quality/README.md`.

@@ -678,6 +678,10 @@ export function updateDoc(root, id, patch = {}, options = {}) {
   if (doc.kind === "task" && Object.hasOwn(fields, "quality")) {
     fields.quality = validatedQualityDecision(root, fields.quality);
   }
+  const ephemeral = (patch.fields?.quality?.checks || []).filter((check) => ephemeralEvidencePath(check?.evidence)).map((check) => check?.id);
+  if (ephemeral.length) {
+    throw closeoutError("task_quality_invalid", "quality evidence must not point at tmp/ or scratch paths; keep it in the repo or cite the command", { ids: ephemeral });
+  }
   fields.updated = todayStamp();
   const body = patch.body !== undefined ? patch.body : doc.body;
   if (doc.kind === "task" && doc.fields.status !== "done" && fields.status === "done") {
@@ -819,8 +823,15 @@ export function parseQualityAssignments(value) {
 function hasClosureWaiver(body) {
   return canonicalLogPayloads(body, "Closure").some((line) => {
     const match = line.match(/^Closure: waived; reason: (.+); evidence: (.+)$/);
-    return Boolean(match && match[1].trim() && match[2].trim());
+    return Boolean(match && match[1].trim() && match[2].trim() && !ephemeralEvidencePath(match[2]));
   });
+}
+
+// Evidence outlives the session; tmp/ and agent scratch directories are swept.
+const EPHEMERAL_EVIDENCE = /(?:^|[\s"'`(=:;,\\/])(?:\.[\\/])?tmp[\\/]|[\\/]scratchpad[\\/]|[\\/]AppData[\\/]Local[\\/]Temp[\\/]|%TEMP%|\$TMPDIR|\$env:TEMP/i;
+
+export function ephemeralEvidencePath(text) {
+  return EPHEMERAL_EVIDENCE.test(String(text || "").replace(/https?:\/\/\S+/gi, " "));
 }
 
 function qualityCheckIds(root) {
@@ -888,14 +899,7 @@ function assertTaskCloseout(id, fields, body) {
       { unchecked, malformed, canonicalCriteria: criteria.length },
     );
   }
-  if (!fields.quality) {
-    throw closeoutError(
-      "task_quality_decision_required",
-      `${id} cannot move to done: set structured quality checks or a notApplicable reason`,
-      { allowedOutcomes: QUALITY_OUTCOMES },
-    );
-  }
-  if (fields.quality.checks) {
+  if (fields.quality?.checks) {
     const outcomes = Object.fromEntries(fields.quality.checks.map(({ id: ruleId, outcome }) => [ruleId, outcome]));
     const blocking = fields.quality.checks.filter(({ outcome }) => outcome !== "pass");
     if (blocking.length) {

@@ -18,7 +18,7 @@ import {
   agentEpicRow, agentProjectRow, agentTaskRow,
   findRoot, listTasks, listEpics, listProjects, findDoc, createTask, createEpic, createProject,
   sealTaskArchive, updateDoc, canonicalQualityAssignments, CURRENT_TASK_STATUSES,
-  parseQualityAssignments, rankTaskEntries, READY_QUEUE_LIMIT, TASK_STATUSES,
+  parseQualityAssignments, rankTaskEntries, READY_QUEUE_LIMIT, TASK_STATUSES, ephemeralEvidencePath,
 } from "./store.mjs";
 import {
   agentContextPayloadForStores,
@@ -430,6 +430,9 @@ export function main(argv, {
     if (closureInputPresent && (!waiverReason || !closureEvidence)) {
       failProblem(args, "closure_input_invalid", "--waiver-reason and --closure-evidence must be provided together");
     }
+    if (ephemeralEvidencePath(closureEvidence)) {
+      failProblem(args, "closure_input_invalid", "--closure-evidence must not point at tmp/ or scratch paths; keep it in the repo or cite the command");
+    }
     const qualityInputPresent = args.quality !== undefined || args["quality-evidence"] !== undefined;
     const quality = textOption(args.quality);
     const qualityEvidence = textOption(args["quality-evidence"]);
@@ -485,10 +488,8 @@ export function main(argv, {
       patch.body = `${doc.body.replace(/\s+$/, "")}\n${logEntries.map((entry) => `- ${stamp}: ${entry}`).join("\n")}\n`;
     }
     if (!Object.keys(fields).length && !patch.body) failCommand("nothing to set");
-    let resolvedForUpdate = null;
     try {
       const resolved = resolvedForLog || findTaskboardDoc(root, id, storeQueryArgs(args));
-      resolvedForUpdate = resolved;
       if (!resolved) failCommand(`no doc with id ${id}`);
       const doc = updateDoc(root, resolved.id, patch, storeOptions(resolved.store));
       if (args.json) {
@@ -498,12 +499,6 @@ export function main(argv, {
       }
     } catch (err) {
       if (err instanceof CliExit) throw err;
-      if (err.problem?.code === "task_quality_decision_required" && resolvedForUpdate?.doc) {
-        err.problem.details = {
-          ...err.problem.details,
-          suggestedGroups: suggestedQualityGroups(root, resolvedForUpdate.doc, fields, storeOptions(resolvedForUpdate.store)),
-        };
-      }
       if (args.json) {
         writeJson({ ok: false, problem: err.problem || { code: "taskboard_error", message: err.message } });
         exit(1);

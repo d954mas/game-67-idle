@@ -62,7 +62,7 @@ quality logging.
 ## Profiling Commands
 
 - Usage summary: `node ai_studio/quality/profile.mjs`.
-- Archived usage summary: `node ai_studio/quality/profile.mjs --include-archive --json`.
+- Usage across game stores: `node ai_studio/quality/profile.mjs --include-private --json`.
 - Profiler tests: `node --test ai_studio/quality/tests/profile.test.mjs`.
 
 Profiling only summarizes recorded quality-check usage. It does not prove that
