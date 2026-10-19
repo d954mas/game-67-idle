@@ -40,6 +40,11 @@ sit in, so loading the CLI from the same checkout adds no new coupling.
 
 ZIP writing comes from `ai_studio/core_harness/tool_lib/zip_store.mjs`.
 
+`live_games.mjs` runs every live (non-frozen) game's `game.mjs test` against
+this checkout after checking its dependency record (`version_drift`), and fails
+if any game drifts or fails. Run it before merging an engine move or a shared
+feature change.
+
 ## Game-specific commands
 
 A game adds commands in its shim; they are tried before the shared ones:
