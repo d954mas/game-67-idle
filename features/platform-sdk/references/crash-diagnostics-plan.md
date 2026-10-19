@@ -2,7 +2,8 @@
 
 Status: implemented in reviewed pull requests; release integration awaits the
 engine master pin. The plan passed independent subagent and Claude reviews.
-HTTP samples remain supported; retirement requires a separate lead decision.
+The lead approved retiring low-level HTTP samples; engine logs, fatal pack
+failure reports and graphics signals remain supported.
 Research date: 2026-10-19. Engine baseline: `8eb37192`; local Emscripten: `4.0.19`.
 
 ## Implementation evidence
@@ -11,7 +12,8 @@ The selected architecture is implemented in [Studio PR #33](https://github.com/d
 and [engine PR #696](https://github.com/d954mas/neotolis-engine/pull/696), which addresses
 issues #691 and #694. The engine candidate is `4e6b453d`; official consumer pins
 remain on `8eb37192` until the candidate is merged to engine `master`. The Studio
-and game migration PRs are drafts pending that pin update and integrated proof.
+and game migrations are merged; installing the engine fix still requires that
+pin update and integrated proof.
 
 - Two independent engine reviewers approved the capture/HTTP changes. Engine
   `format_and_check` and `check --push` passed; 7 source regressions and 5 optimized
@@ -378,9 +380,8 @@ network history, GPU caps or heap data. Use fixed storage and no hot-path heap.
 
 Remove the game's second engine log sink/ring, special Clay report, diagnostic-only
 WASM refresh export and game-local pending-report implementation. Remove the
-console.error scraper and fetch/stream monkeypatches only after the HTTP report
-retirement/parity decision below. Port their real crash/transport regression
-cases into the shared tests before deleting them. Keep game-specific tests of
+console.error scraper and fetch/stream monkeypatches under the approved HTTP
+sample retirement. Keep shared crash/transport regression coverage and game-specific tests of
 its context and existing fatal/loading UI. Preserve explicit fatal asset-load
 reporting through the common operation. Preserve unexpected WebGL context loss
 and context-creation status with shared browser listeners and bounded nonfatal
@@ -388,18 +389,16 @@ reports; retain the deliberate context-loss test exclusion. A recovered context
 loss is a diagnostic signal, not a fatal engine record.
 Nonfatal reports use at most two additional pending entries, one per context-loss
 or creation kind, one attempt each per session and lower priority than all fatal
-slots. They are not persisted and cannot evict a fatal record. Legacy per-request
-samples remain outside this new queue until their separate migration decision.
+slots. They are not persisted and cannot evict a fatal record. Retired per-request
+samples do not move into this queue.
 
-The existing low-level `http.status_failed`, `http.engine_fetch`,
-`http.engine_stream` and `pack.failed` reports are not all duplicates of a crash.
-Before deleting their scraper/instrumentation, inventory each trigger and its
-structured replacement. Fatal pack failure stays covered at the loading failure
-site. Retiring recoverable per-request portal samples is a separate proposed
-scope reduction requiring the lead's decision; keep that cleanup blocked if
-parity is unavailable. Do not add an engine telemetry API merely to copy those
-samples into another ring. Per-request timelines/heap/pack snapshots are excluded
-from the common crash recorder.
+The lead approved retiring low-level HTTP status, fetch and stream samples,
+including their engine-console copies. The separate scraped `pack.failed` sample
+also disappears with the console interceptor: fatal pack failure stays covered
+at its explicit loading failure site, and recoverable later-pack errors stay in
+the engine journal. This is an intentional reduction in portal sampling, not a
+replacement telemetry API. Per-request timelines/heap/pack snapshots remain
+excluded from the common crash recorder.
 
 ## Installation and migration
 
@@ -516,8 +515,6 @@ Claude's final nonblocking clarifications (immediate rejection and the synchrono
 callback-fault check) are included above. These are plan verdicts, not evidence
 that the future implementation or a new device build has passed testing.
 
-Remaining lead decision before cleanup: retire recoverable per-request portal
-samples, or retain their current implementation until structured parity exists.
-Recommended scope is to retain fatal pack failures and browser graphics signals,
-and retire per-request portal sampling; ordinary HTTP logs remain in the engine
-journal. This recommendation is not authorization to delete those report kinds.
+The lead approved the cleanup on 2026-10-19: retire recoverable per-request portal
+samples and their game-local interceptors. Fatal pack failures and browser graphics
+signals remain; ordinary HTTP and recoverable pack errors stay in the engine journal.
