@@ -243,7 +243,9 @@ value, extra)`, `fetchEntries(boardId, scope)` and `showLeaderboard(boardId)`,
 each resolving `{ status }` with `status` one of
 `ok | unsupported | needs_login | rate_limited | failed`; a fetch adds
 `top`, `around` (rows `{ value, rank, you, name, avatarUrl, extra }`) and
-`player` (`{ rank, value }` or `null`). A rejected promise is `failed`.
+`player` (`{ rank, value }` or `null`). The adapter converts a portal's rejection
+into `failed` at the vendor boundary. A fault in first-party result processing
+rejects instead and must not invoke a fallback C completion.
 
 ## Build Inclusion Rule
 
@@ -334,9 +336,11 @@ Implementation rules:
   answers `false` and ignores the call. A game's volume control pulled to zero
   flips the switch instead of storing a zero, and a muted channel is shown and
   mixed as silent while the stored volume is kept for the unmute.
-- A page's crash reporter is the game's, every portal alike; `errorSink()` names where a portal takes
-  those reports itself. Poki answers its SDK object once `captureError` exists; every other adapter
-  answers `null`, and the reporter keeps the report in the console.
+- Web crash delivery belongs to the shared `web/runtime-diagnostics.js` source.
+  The engine owns its single journal and raw record; game code supplies the build
+  identity and bounded context. `errorSink()` returns an object with
+  `captureError(error)` when ready, or `null`. Poki owns readiness and pacing;
+  other adapters keep console delivery. SDK handoff is not delivery acknowledgement.
 - Rewarded ads grant rewards only when the SDK confirms reward completion:
   Poki returns a success boolean, Yandex uses `onRewarded`, Playgama uses the
   `rewarded` state.

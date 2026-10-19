@@ -36,6 +36,12 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
     return (host && host.document) || (windowRef() && windowRef().document);
   }
 
+  function ignoreVendorFailure(callback) {
+    try {
+      Promise.resolve(callback()).catch(() => {});
+    } catch {}
+  }
+
   function loadScript() {
     const root = windowRef();
     if (root.CrazyGames && root.CrazyGames.SDK) return Promise.resolve(root.CrazyGames.SDK);
@@ -76,11 +82,26 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
     const game = instance.game;
     if (!game || !game.settings) return;
     const apply = () => {
-      try { lifecycle.audio(!game.settings.muteAudio); } catch { /* the facade is not up */ }
+      lifecycle.audio(!game.settings.muteAudio);
     };
     apply();
     if (typeof game.addSettingsChangeListener === "function") {
-      try { game.addSettingsChangeListener(apply); } catch { /* the portal is not listening */ }
+      let callbackFault;
+      let didFault = false;
+      const listener = () => {
+        try {
+          apply();
+        } catch (error) {
+          didFault = true;
+          callbackFault = error;
+          throw error;
+        }
+      };
+      try { game.addSettingsChangeListener(listener); } catch (error) {
+        if (didFault) throw callbackFault;
+        /* The portal does not require this optional notification channel. */
+      }
+      if (didFault) throw callbackFault;
     }
   }
 
@@ -90,15 +111,16 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
       loadingStarted = true;
       /* The portal measures the load, and the only handle it offers is the
          interval: there is no progress fraction to report. */
-      try { instance.game.loadingStart(); } catch { /* the portal is not listening */ }
+      ignoreVendorFailure(() => instance.game.loadingStart());
       followPortalAudio(instance);
     }
     return Boolean(instance);
   }
 
   function adOperation(start, timeoutResult, failedResult = timeoutResult) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       let settled = false;
+      let faulted = false;
       const root = windowRef();
       const timer = (root.setTimeout || setTimeout)(() => settle(timeoutResult), AD_TIMEOUT_MS);
 
@@ -109,12 +131,49 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
         resolve(result);
       }
 
+      function fault(error) {
+        if (faulted) return;
+        faulted = true;
+        if (settled) {
+          reportLateFault(error);
+          return;
+        }
+        settled = true;
+        (root.clearTimeout || clearTimeout)(timer);
+        reject(error);
+      }
+
+      function bridge(callback) {
+        if (faulted) return false;
+        try {
+          callback();
+        } catch (error) {
+          fault(error);
+          return false;
+        }
+        return !faulted;
+      }
+
       try {
-        start(settle);
+        start(settle, bridge);
       } catch {
-        settle(failedResult);
+        if (!faulted) settle(failedResult);
       }
     });
+  }
+
+  function reportLateFault(error) {
+    const root = windowRef();
+    const throwFault = () => { throw error; };
+    if (typeof root.queueMicrotask === "function") {
+      root.queueMicrotask(throwFault);
+      return;
+    }
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(throwFault);
+      return;
+    }
+    Promise.resolve().then(throwFault);
   }
 
   function adErrorReason(error) {
@@ -125,7 +184,7 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
   async function gameLoadingFinished() {
     const instance = await sdk();
     if (!instance) return;
-    try { instance.game.loadingStop(); } catch { /* the portal is not listening */ }
+    ignoreVendorFailure(() => instance.game.loadingStop());
   }
 
   async function gameReady() {
@@ -136,13 +195,13 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
   async function gameplayStart() {
     const instance = await sdk();
     if (!instance) return;
-    try { instance.game.gameplayStart(); } catch { /* the portal is not listening */ }
+    ignoreVendorFailure(() => instance.game.gameplayStart());
   }
 
   async function gameplayStop() {
     const instance = await sdk();
     if (!instance) return;
-    try { instance.game.gameplayStop(); } catch { /* the portal is not listening */ }
+    ignoreVendorFailure(() => instance.game.gameplayStop());
   }
 
   async function showInterstitial(placement, requestId) {
@@ -153,12 +212,25 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
 
     const failed = { supported: true, shown: false, reason: "failed" };
     const timeout = { ...failed, reason: "timeout" };
-    return adOperation((settle) => {
+    return adOperation((settle, bridge) => {
       let started = false;
       instance.ad.requestAd("midgame", {
-        adStarted: () => { started = true; if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true); },
-        adFinished: () => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); settle({ supported: true, shown: started }); },
-        adError: (error) => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); settle({ supported: true, shown: started, reason: adErrorReason(error) }); },
+        adStarted: () => bridge(() => {
+          started = true;
+          if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true);
+        }),
+        adFinished: () => {
+          if (!bridge(() => {
+            if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
+          })) return;
+          settle({ supported: true, shown: started });
+        },
+        adError: (error) => {
+          if (!bridge(() => {
+            if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
+          })) return;
+          settle({ supported: true, shown: started, reason: adErrorReason(error) });
+        },
       });
     }, timeout, failed);
   }
@@ -173,17 +245,30 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
 
     const failed = { supported: true, shown: false, rewarded: false, reason: "failed" };
     const timeout = { ...failed, reason: "timeout" };
-    return adOperation((settle) => {
+    return adOperation((settle, bridge) => {
       let started = false;
       instance.ad.requestAd("rewarded", {
-        adStarted: () => { started = true; if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true); },
-        adFinished: () => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); settle({ supported: true, shown: true, rewarded: true }); },
-        adError: (error) => { if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false); settle({
-          supported: true,
-          shown: started,
-          rewarded: false,
-          reason: adErrorReason(error),
-        }); },
+        adStarted: () => bridge(() => {
+          started = true;
+          if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, true);
+        }),
+        adFinished: () => {
+          if (!bridge(() => {
+            if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
+          })) return;
+          settle({ supported: true, shown: true, rewarded: true });
+        },
+        adError: (error) => {
+          if (!bridge(() => {
+            if (lifecycle && typeof lifecycle.adVisible === "function") lifecycle.adVisible(requestId, false);
+          })) return;
+          settle({
+            supported: true,
+            shown: started,
+            rewarded: false,
+            reason: adErrorReason(error),
+          });
+        },
       });
     }, timeout, failed);
   }
@@ -198,7 +283,7 @@ export function createCrazygamesPlatformAdapter({ host, lifecycle, sdkUrl = CRAZ
   async function hideBanner() {
     const instance = await sdk();
     if (!instance || !instance.banner || typeof instance.banner.clearAllBanners !== "function") return;
-    try { instance.banner.clearAllBanners(); } catch { /* nothing was drawn */ }
+    ignoreVendorFailure(() => instance.banner.clearAllBanners());
   }
 
   /* Portal storage is a synchronous localStorage stand-in, and its writes are

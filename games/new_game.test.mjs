@@ -30,8 +30,8 @@ function buildFixtureRepo() {
     schema: "ai_studio.template.v1", id: "template", title: "Template", storageNamespace: "template",
   }));
   write(root, `${template}/game-dependencies.json`, JSON.stringify({
-    schema: "ai_studio.game.dependencies.seed.v2",
-    engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
+    schema: "ai_studio.game.dependencies.seed.v3",
+    engine: { source: "external/neotolis-engine", compatibility: "tested" },
     features: [{ id: "game-state", source: "features/game-state", version: "1.0.0", compatibility: "tested" }],
     compatibility: "tested template seed",
   }));
@@ -79,9 +79,6 @@ function buildFixtureRepo() {
   write(root, "features/game-state/README.md", "# game-state\n");
 
   const engine = join(root, "external", "neotolis-engine");
-  write(engine, "engine/core/nt_core.h", [
-    "#define NT_VERSION_MAJOR 0", "#define NT_VERSION_MINOR 1", "#define NT_VERSION_PATCH 0", "",
-  ].join("\n"));
   write(engine, "README.md", "# engine\n");
   execFileSync("git", ["init"], { cwd: engine, stdio: "ignore" });
   execFileSync("git", ["config", "user.email", "tests@example.invalid"], { cwd: engine });
@@ -101,7 +98,7 @@ function buildBlankBindingFixtureRepo() {
   const root = buildFixtureRepo();
   const source = join(repositoryRoot, "templates", "template");
   const template = "templates/template";
-  for (const rel of ["CMakeLists.txt", "cmake/GameOptions.cmake", "cmake/GameTests.cmake", "src/main.c"]) {
+  for (const rel of ["CMakeLists.txt", "cmake/GameOptions.cmake", "cmake/GameTests.cmake", "src/main.c", "web/index.html.in", "tools/package_web.mjs", "tools/minify_web_release.mjs"]) {
     write(root, `${template}/${rel}`, readFileSync(join(source, rel), "utf8"));
   }
   write(root, `${template}/template.json`, readFileSync(join(source, "template.json"), "utf8"));
@@ -221,7 +218,19 @@ test("blank template binds title and autosave namespace without legacy platform 
   const sourceMain = readFileSync(join(source, "src/main.c"), "utf8");
   assert.match(sourceMain, /\.app_name = GAME_APP_NAME/);
   assert.match(sourceMain, /g_nt_window\.title = GAME_WINDOW_TITLE/);
+  assert.match(sourceMain, /nt_crash_init\(\s*GAME_CRASH_STORAGE_KEY,\s*GAME_RUNTIME_BUILD_FINGERPRINT\[0\]\s*\?\s*GAME_RUNTIME_BUILD_FINGERPRINT\s*:\s*"preview"\s*\)/);
+  assert.match(readFileSync(join(source, "CMakeLists.txt"), "utf8"), /platform_sdk_crash\(\$\{GAME_TARGET\}\)/);
+  const shell = readFileSync(join(source, "web/index.html.in"), "utf8");
+  assert.match(shell, /@PLATFORM_SDK_DIAGNOSTICS_JS@/);
+  assert.match(shell, /storagePrefix: '@GAME_CRASH_STORAGE_PREFIX@'/);
+  assert.ok(shell.indexOf('@PLATFORM_SDK_DIAGNOSTICS_JS@') < shell.indexOf("import('./platform-sdk.js')"));
+  assert.equal(existsSync(join(source, "web/runtime-diagnostics.js")), false);
+  for (const tool of ["package_web.mjs", "minify_web_release.mjs"]) {
+    assert.equal(readFileSync(join(source, "tools", tool), "utf8"), readFileSync(join(repositoryRoot, "templates/template/tools", tool), "utf8"));
+  }
 
+  execFileSync("git", ["config", "user.email", "tests@example.invalid"], { cwd: source });
+  execFileSync("git", ["config", "user.name", "Tests"], { cwd: source });
   execFileSync("git", ["add", "."], { cwd: source });
   execFileSync("git", ["commit", "-m", "blank source"], { cwd: source, stdio: "ignore" });
   create(root, "blank-derived", "private", [
@@ -242,7 +251,7 @@ test("private derivative rejects incompatible locks and replacing its own source
   const lock = JSON.parse(readFileSync(lockPath, "utf8"));
   const invoke = (extra = []) => invokeNewGame(["--root", root, "--id", "derived-game", "--visibility", "private",
     "--from", "games/private/source-game", ...extra]);
-  writeFileSync(lockPath, JSON.stringify({ ...lock, engine: { ...lock.engine, revision: "0".repeat(40) } }));
+  writeFileSync(lockPath, JSON.stringify({ ...lock, engine: { ...lock.engine, version: "00000000", revision: "0".repeat(40) } }));
   assert.match(invoke().stderr, /source game engine lock must match/);
   writeFileSync(lockPath, JSON.stringify({ ...lock, features: [{ ...lock.features[0], version: "99.0.0" }] }));
   assert.match(invoke().stderr, /dependency seed version 99.0.0 does not match/);

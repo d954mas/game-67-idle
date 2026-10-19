@@ -1,8 +1,7 @@
 {
-  "schema": "ai_studio.game.dependencies.seed.v2",
+  "schema": "ai_studio.game.dependencies.seed.v3",
   "engine": {
     "source": "external/neotolis-engine",
-    "version": "0.1.0",
     "compatibility": "validated by the template build and test suite"
   },
   "features": [
@@ -15,7 +14,7 @@
     {
       "id": "platform-sdk",
       "source": "features/platform-sdk",
-      "version": "2.4.0",
+      "version": "3.0.0",
       "compatibility": "web bootstrap and selected target adapter; no gameplay, ads, or native SDK composition is installed"
     }
   ],

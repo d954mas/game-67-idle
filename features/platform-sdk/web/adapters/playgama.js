@@ -19,6 +19,29 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
     return (host && host.document) || (windowRef() && windowRef().document);
   }
 
+  function ignoreVendorFailure(callback) {
+    try {
+      Promise.resolve(callback()).catch(() => {});
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function reportLateFault(error) {
+    const root = windowRef();
+    const throwFault = () => { throw error; };
+    if (typeof root.queueMicrotask === "function") {
+      root.queueMicrotask(throwFault);
+      return;
+    }
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(throwFault);
+      return;
+    }
+    Promise.resolve().then(throwFault);
+  }
+
   /* A late-arriving result can depend on state the ad flow collected while it
      ran, so the fallback is asked for its value at settle time instead of being
      captured when the operation starts. */
@@ -69,19 +92,24 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
 
   function fullscreenAdOperation(requestId, start, timeoutResult, failedResult, busyResult) {
     if (activeFullscreenAd != null) return Promise.resolve(busyResult);
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       let cleanup = null;
       let settled = false;
+      let faulted = false;
       let visible = false;
       const root = windowRef();
       const operation = {};
       const timer = (root.setTimeout || setTimeout)(() => settle(adResult(timeoutResult)), AD_TIMEOUT_MS);
 
       function setCleanup(next) { cleanup = next; }
-      function setVisible(next) {
-        if (visible === next) return;
+      function setVisible(next, force = false) {
+        if (faulted || (!force && visible === next)) return;
         visible = next;
-        notifyLifecycle("adVisible", requestId, next);
+        try {
+          notifyLifecycle("adVisible", requestId, next);
+        } catch (error) {
+          fault(error);
+        }
       }
       function release() {
         if (activeFullscreenAd === operation) activeFullscreenAd = null;
@@ -92,14 +120,28 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
         }
       }
       function settle(result) {
-        if (settled) return;
+        if (settled || faulted) return;
         settled = true;
         (root.clearTimeout || clearTimeout)(timer);
         resolve(result);
       }
+      function fault(error) {
+        if (faulted) return;
+        faulted = true;
+        if (settled) {
+          reportLateFault(error);
+        } else {
+          settled = true;
+          (root.clearTimeout || clearTimeout)(timer);
+          reject(error);
+        }
+        release();
+      }
       function terminal(result) {
+        if (faulted) return;
         if (visible) setVisible(false);
-        else notifyLifecycle("adVisible", requestId, false);
+        else setVisible(false, true);
+        if (faulted) return;
         settle(adResult(result));
         release();
       }
@@ -107,7 +149,7 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
 
       activeFullscreenAd = operation;
       pendingAds.add(cancel);
-      try { start(terminal, setCleanup, setVisible); } catch { terminal(failedResult); }
+      try { start(terminal, setCleanup, setVisible); } catch { if (!faulted) terminal(failedResult); }
     });
   }
 
@@ -132,9 +174,7 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
 
   function notifyLifecycle(method, ...args) {
     if (!lifecycle || typeof lifecycle[method] !== "function") return;
-    try {
-      lifecycle[method](...args);
-    } catch {}
+    lifecycle[method](...args);
   }
 
   /* Subscribing is not enough for audio: the event fires only on later changes,
@@ -151,11 +191,29 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
   function subscribePortalState() {
     const platform = bridge && bridge.platform;
     if (!platform || typeof platform.on !== "function") return;
-    platform.on(eventName("PAUSE_STATE_CHANGED", "pause_state_changed"), (isPaused) => {
+    function subscribe(name, callback) {
+      let callbackFault;
+      let didFault = false;
+      const guarded = (...args) => {
+        try {
+          callback(...args);
+        } catch (error) {
+          didFault = true;
+          callbackFault = error;
+          throw error;
+        }
+      };
+      try { platform.on(name, guarded); } catch (error) {
+        if (didFault) throw callbackFault;
+        /* The portal can omit either optional state stream. */
+      }
+      if (didFault) throw callbackFault;
+    }
+    subscribe(eventName("PAUSE_STATE_CHANGED", "pause_state_changed"), (isPaused) => {
       if (destroyed) return;
       notifyLifecycle(isPaused ? "pause" : "resume");
     });
-    platform.on(eventName("AUDIO_STATE_CHANGED", "audio_state_changed"), (isEnabled) => {
+    subscribe(eventName("AUDIO_STATE_CHANGED", "audio_state_changed"), (isEnabled) => {
       if (destroyed) return;
       applyAudioState(isEnabled);
     });
@@ -175,9 +233,7 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
       }
       if (destroyed) return false;
 
-      try {
-        subscribePortalState();
-      } catch {}
+      subscribePortalState();
       sendLoadingProgress();
       return true;
     })();
@@ -192,9 +248,7 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
   function sendLoadingProgress() {
     if (destroyed || loadingPercent === null) return;
     if (!bridge || typeof bridge.setGameLoadingProgress !== "function") return;
-    try {
-      bridge.setGameLoadingProgress(loadingPercent);
-    } catch {}
+    ignoreVendorFailure(() => bridge.setGameLoadingProgress(loadingPercent));
   }
 
   /* Bridge owns the loading overlay and hides it 700 ms after init unless the
@@ -216,24 +270,19 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
 
   async function gameReady() {
     if (!(await ready())) return;
-    try {
-      bridge.platform.sendMessage("game_ready");
-    } catch {}
+    ignoreVendorFailure(() => bridge.platform.sendMessage("game_ready"));
   }
 
   async function gameplayStart() {
     if (!(await ready())) return;
-    try {
-      bridge.platform.sendMessage(hasStartedGameplay ? "level_resumed" : "level_started");
+    if (ignoreVendorFailure(() => bridge.platform.sendMessage(hasStartedGameplay ? "level_resumed" : "level_started"))) {
       hasStartedGameplay = true;
-    } catch {}
+    }
   }
 
   async function gameplayStop() {
     if (!(await ready())) return;
-    try {
-      bridge.platform.sendMessage("level_paused");
-    } catch {}
+    ignoreVendorFailure(() => bridge.platform.sendMessage("level_paused"));
   }
 
   async function showInterstitial(placement, requestId) {
@@ -252,7 +301,7 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
       };
       bridge.advertisement.on(name, handler);
       setCleanup(() => { if (typeof bridge.advertisement.off === "function") bridge.advertisement.off(name, handler); });
-      bridge.advertisement.showInterstitial(placement || undefined);
+      Promise.resolve(bridge.advertisement.showInterstitial(placement || undefined)).catch(() => terminal(failed));
     }, timeout, failed, busy);
   }
 
@@ -276,7 +325,7 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
       };
       bridge.advertisement.on(name, handler);
       setCleanup(() => { if (typeof bridge.advertisement.off === "function") bridge.advertisement.off(name, handler); });
-      bridge.advertisement.showRewarded(placement || undefined);
+      Promise.resolve(bridge.advertisement.showRewarded(placement || undefined)).catch(() => terminal(failed));
     }, timeout, failed, busy);
   }
 
@@ -301,15 +350,13 @@ export function createPlaygamaPlatformAdapter({ host, lifecycle }) {
       setCleanup(() => {
         if (typeof bridge.advertisement.off === "function") bridge.advertisement.off(name, handler);
       });
-      bridge.advertisement.showBanner(BANNER_POSITION, placement || undefined);
+      Promise.resolve(bridge.advertisement.showBanner(BANNER_POSITION, placement || undefined)).catch(() => settle(failed));
     }, failed);
   }
 
   async function hideBanner() {
     if (!(await ready()) || !bridge.advertisement || typeof bridge.advertisement.hideBanner !== "function") return;
-    try {
-      bridge.advertisement.hideBanner();
-    } catch {}
+    ignoreVendorFailure(() => bridge.advertisement.hideBanner());
   }
 
   async function loadData(key) {

@@ -6,7 +6,7 @@
 // makes it the context's base sprite material gets icons, Clay rectangles,
 // panels and radials into one draw per text-free run:
 //
-//   nt_material_t uber = <create from ui_kit_uber_material_desc(atlas page)>;
+//   nt_material_t uber = <create from ui_kit_uber_material_desc()>;
 //   nt_ui_set_sprite_material(ctx, uber);
 //   ui_kit_shape_bind(uber, atlas);
 //
@@ -26,9 +26,8 @@
 #define UI_KIT_UBER_BLOCK_FLOATS 16U
 #define UI_KIT_UBER_BLOCK_BYTES 64U
 
-// Blend, depth and attribute map of the uber material over the UI atlas page;
-// the game creates it with its own shader resources (ui_uber.vert/.frag).
-nt_material_create_desc_t ui_kit_uber_material_desc(nt_resource_t atlas_texture);
+// The sprite renderer owns the atlas page binding; the game supplies the shader program.
+nt_material_create_desc_t ui_kit_uber_material_desc(void);
 
 // The material and atlas every shape below draws with.
 void ui_kit_shape_bind(nt_material_t uber, nt_resource_t atlas);

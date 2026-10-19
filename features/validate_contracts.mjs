@@ -26,17 +26,6 @@ function exactKeys(value, keys, label) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${label}: unexpected fields`);
 }
 
-export function readEngineSemVer(root = DEFAULT_ROOT) {
-  const rel = "external/neotolis-engine/engine/core/nt_core.h";
-  const header = requireText(resolve(root), rel, "engine version");
-  const component = (name) => {
-    const match = new RegExp(`^#define\\s+NT_VERSION_${name}\\s+(0|[1-9]\\d*)\\s*$`, "m").exec(header);
-    if (!match) throw new Error(`engine version: missing NT_VERSION_${name} in ${rel}`);
-    return match[1];
-  };
-  return `${component("MAJOR")}.${component("MINOR")}.${component("PATCH")}`;
-}
-
 function requireText(root, rel, label) {
   if (!existsSync(join(root, rel))) throw new Error(`${label}: missing ${rel}`);
   const text = readFileSync(join(root, rel), "utf8");
@@ -102,13 +91,13 @@ function validateSeed(root, rootContracts, template) {
   if (typeof seed.compatibility !== "string" || !seed.compatibility.trim()) {
     throw new Error(`${rel}: compatibility must be nonempty text`);
   }
-  if (seed.schema !== "ai_studio.game.dependencies.seed.v2") throw new Error(`${rel}: unsupported schema`);
+  if (seed.schema !== "ai_studio.game.dependencies.seed.v3") throw new Error(`${rel}: unsupported schema`);
   if (!seed.engine || typeof seed.engine !== "object" || Array.isArray(seed.engine)) throw new Error(`${rel}: invalid engine contract`);
-  exactKeys(seed.engine, ["source", "version", "compatibility"], `${rel}.engine`);
-  const engineVersion = readEngineSemVer(root);
-  if (seed.engine.source !== "external/neotolis-engine" || seed.engine.version !== engineVersion
+  // No engine version: the gitlink pins the engine, and a game records its revision prefix at creation.
+  exactKeys(seed.engine, ["source", "compatibility"], `${rel}.engine`);
+  if (seed.engine.source !== "external/neotolis-engine"
       || typeof seed.engine.compatibility !== "string" || !seed.engine.compatibility.trim()) {
-    throw new Error(`${rel}: engine version ${seed.engine.version || "<missing>"} does not match nt_core.h ${engineVersion}`);
+    throw new Error(`${rel}: invalid engine contract`);
   }
   if (!Array.isArray(seed.features)) throw new Error(`${rel}: features must be an array`);
   const declared = new Map();

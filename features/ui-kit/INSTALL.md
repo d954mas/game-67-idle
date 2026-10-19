@@ -87,6 +87,9 @@ ui_theme_init(ui_tokens_studio_b(), &art);
 
 The supplied sprite shader expects a premultiplied atlas and premultiplies
 vertex tint alpha. Bind its material with `nt_blend_alpha_premultiplied()`.
+For the uber material, use `ui_kit_uber_material_desc()` and supply its program.
+The sprite renderer binds `u_texture` from each draw's atlas page; do not add
+that sampler to the material's texture list.
 The Slug text shader also outputs premultiplied RGB, so screen text and world
 text materials need that blend state too. Applying straight-alpha blending to
 these outputs multiplies coverage twice and darkens edges and faded states.

@@ -1115,6 +1115,12 @@ if(NOT EMSCRIPTEN)
         game_add_node_test(platform_sdk_web_test
             SCRIPTS features/platform-sdk/tests/platform_sdk_web.test.mjs
             TIER slow)
+        game_add_node_test(runtime_diagnostics_test
+            SCRIPTS features/platform-sdk/tests/runtime_diagnostics.test.mjs
+            TIER core)
+        game_add_node_test(runtime_diagnostics_install_test
+            SCRIPTS features/platform-sdk/tests/runtime_diagnostics_install.test.mjs
+            TIER slow)
     endif()
 
     # T0327 tail: 4-fragment composition test -- lifts settings/items/progression/game

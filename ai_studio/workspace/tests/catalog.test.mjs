@@ -215,7 +215,7 @@ test("dependency writer validates before replacing an existing record", (t) => {
   assert.equal(readFileSync(path, "utf8"), before);
 });
 
-test("dependency records require exact engine and feature SemVer", (t) => {
+test("dependency records require exact versions", (t) => {
   const root = fixture(t);
   const engine = { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "tested" };
   assert.throws(() => writeGameDependencies(root, "stable-game", {
@@ -226,6 +226,23 @@ test("dependency records require exact engine and feature SemVer", (t) => {
       id: "game-state", source: "features/game-state", compatibility: "tested",
     }],
   }), /version.*exact SemVer/i);
+});
+
+test("engine Git versions must name the pinned revision while feature versions stay SemVer", (t) => {
+  const root = fixture(t);
+  const engine = { source: "engine", version: "12345678", revision: "12345678" + "0".repeat(32), compatibility: "tested" };
+  const record = { engine, features: [], compatibility: "tested" };
+  writeGameDependencies(root, "stable-game", record);
+  const path = join(root, "games", "stable-game", "dependencies.json");
+  const before = readFileSync(path, "utf8");
+  assert.equal(JSON.parse(before).engine.version, engine.version);
+  assert.throws(() => writeGameDependencies(root, "stable-game", {
+    ...record, engine: { ...engine, version: "87654321" },
+  }), /version.*revision/i);
+  assert.throws(() => writeGameDependencies(root, "stable-game", {
+    ...record, features: [{ id: "ui-kit", source: "features/ui-kit", version: "12345678", compatibility: "tested" }],
+  }), /version.*SemVer/i);
+  assert.equal(readFileSync(path, "utf8"), before);
 });
 
 test("a malformed folder is skipped with a warning instead of failing the scan", (t) => {

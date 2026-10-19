@@ -36,7 +36,7 @@ static NT_UI_DECLARE_ARENA(s_ui_arena, UI_ARENA_SIZE);
 static nt_ui_context_t *s_ctx;
 static nt_ui_scale_t s_scale;
 
-static nt_resource_t s_sprite_vs, s_sprite_fs, s_atlas, s_atlas_tex;
+static nt_resource_t s_sprite_vs, s_sprite_fs, s_atlas;
 static nt_material_t s_sprite_material;
 static nt_material_t s_text_material; // owned by main; reused for UI text
 static nt_font_t s_font;              // owned by main
@@ -65,11 +65,8 @@ void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t 
     s_sprite_vs = nt_resource_request(rid("assets/shaders/sprite.vert"), NT_ASSET_SHADER_CODE);
     s_sprite_fs = nt_resource_request(rid("assets/shaders/sprite.frag"), NT_ASSET_SHADER_CODE);
     s_atlas = nt_resource_request(ASSET_ATLAS_UI, NT_ASSET_ATLAS);
-    s_atlas_tex = nt_resource_request(ASSET_TEXTURE_UI_TEX0, NT_ASSET_TEXTURE);
 
     s_sprite_material = shader_program_material(s_sprite_vs, s_sprite_fs, &(nt_material_create_desc_t){
-        .textures = {{.name = "u_texture", .resource = s_atlas_tex}},
-        .texture_count = 1,
         .blend = nt_blend_alpha_premultiplied(),
         .depth_test = false,
         .depth_write = false,
@@ -77,7 +74,7 @@ void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t 
         .label = "ui_sprite",
     });
     nt_ui_set_sprite_material(s_ctx, s_sprite_material);
-    nt_ui_set_text_material(s_ctx, s_text_material, 0.0F);
+    nt_ui_set_text_material(s_ctx, s_text_material);
 
     theme_init(s_atlas);
 }

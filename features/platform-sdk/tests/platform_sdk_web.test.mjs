@@ -74,7 +74,11 @@ function writePage() {
 <meta charset="utf-8">
 <script>
   globalThis.__platformSdkLifecycleState = { paused: true, audioEnabled: false, soundMuted: [false, true, false] };
-  globalThis.__fixture = { ads: [], loads: [], stores: [], sounds: [] };
+  globalThis.__fixture = { ads: [], loads: [], stores: [], sounds: [], rejections: 0 };
+  globalThis.addEventListener("unhandledrejection", (event) => {
+    globalThis.__fixture.rejections += 1;
+    event.preventDefault();
+  });
   globalThis.__platformSdkInternalBackend = {
     ready: () => Promise.resolve(true),
     getLocale: () => "en-US",
@@ -223,6 +227,16 @@ test("web bridge replays lifecycle and rejects stale ads and storage completions
     await waitFor(client, "globalThis.__fixture.stores.length === 2", deadline);
     await evaluate(client, `globalThis.__fixture.stores[1].reject(new Error("quota"))`, deadline);
     await waitFor(client, "fixtureModule._fixture_cloud_write_status() === 4", deadline);
+
+    const rejectedAd = await evaluate(client, `(() => {
+      const m = globalThis.fixtureModule;
+      m._fixture_show_interstitial();
+      return [m._fixture_active_interstitial_id(), globalThis.__fixture.ads.length];
+    })()`, deadline);
+    assert.equal(rejectedAd[1], 3);
+    await evaluate(client, `globalThis.__fixture.ads[2].reject(new Error("bridge callback fault"))`, deadline);
+    await waitFor(client, "globalThis.__fixture.rejections === 1", deadline);
+    assert.equal(await evaluate(client, "fixtureModule._fixture_interstitial_completions()", deadline), 2);
   } catch (error) {
     if (error?.code === "MISSING_WEB_TEST_TOOL") context.skip(error.message);
     else throw error;

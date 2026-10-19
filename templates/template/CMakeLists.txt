@@ -26,7 +26,7 @@ add_executable(${GAME_TARGET}
 target_include_directories(${GAME_TARGET} PRIVATE src "${GAME_STATE_INC}")
 target_link_libraries(${GAME_TARGET} PRIVATE
     cjson
-    nt_app nt_basisu_transcoder nt_core nt_gfx nt_hash nt_input nt_log
+    nt_app nt_core nt_gfx nt_basisu_transcoder nt_hash nt_input nt_log
     nt_meshwire nt_time nt_window)
 target_compile_definitions(${GAME_TARGET} PRIVATE
     _CRT_SECURE_NO_WARNINGS
@@ -53,6 +53,8 @@ endif()
 
 if(EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_platform_web)
+    include("${GAME_REPO_ROOT}/features/platform-sdk/cmake/PlatformSdk.cmake")
+    platform_sdk_crash(${GAME_TARGET})
     target_sources(${GAME_TARGET} PRIVATE src/runtime_build_marker.c)
     target_compile_definitions(${GAME_TARGET} PRIVATE
         GAME_RUNTIME_BUILD_FINGERPRINT="${GAME_RUNTIME_BUILD_FINGERPRINT}"

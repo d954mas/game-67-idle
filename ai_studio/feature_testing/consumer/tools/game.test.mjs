@@ -19,6 +19,22 @@ const studioRoot = findStudioRoot(gameModuleRoot);
 function platformSdkVersion() {
   return JSON.parse(readFileSync(join(studioRoot, "features", "platform-sdk", "feature.json"), "utf8")).version;
 }
+
+function diagnosticsReporter(studio, storageNamespace, runtimeScript = "game.js") {
+  const source = readFileSync(join(studio, "features", "platform-sdk", "web", "runtime-diagnostics.js"), "utf8").trimEnd();
+  return `${source}\nwindow.__platformDiagnostics = installPlatformDiagnostics(window, { storagePrefix: '${storageNamespace}.crash', runtimeScript: '${runtimeScript}' });`;
+}
+
+function diagnosticsBootstrap() {
+  return [
+    '<script type="module">',
+    "function startRuntime() {}",
+    "function failLocalBootstrap(error) { window.__platformDiagnostics.report('boot.sdk_failed', error); window.__showRuntimeFatal(); }",
+    "import('./platform-sdk.js').then(startRuntime, failLocalBootstrap);",
+    "</script>",
+  ].join("");
+}
+
 const RELEASE_WASM = Buffer.from([
   0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
   0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
@@ -97,7 +113,7 @@ test("doctor requires the copied game-owned scaffold and exact dependency record
   write(join(gameDir, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: "fixture", title: "Fixture", storageNamespace: "fixture" }));
   write(join(gameDir, "dependencies.json"), JSON.stringify({
     schema: "ai_studio.game.dependencies.v3",
-    engine: { source: "external/neotolis-engine", version: "0.1.0", revision: "1".repeat(40), compatibility: "tested" },
+    engine: { source: "external/neotolis-engine", version: "11111111", revision: "1".repeat(40), compatibility: "tested" },
     features: [], compatibility: "tested",
   }));
   assert.equal(doctorGame({ gameDir }).gameId, "fixture");
@@ -105,7 +121,7 @@ test("doctor requires the copied game-owned scaffold and exact dependency record
   rmSync(join(gameDir, "game.json"), { force: true });
   rmSync(join(gameDir, "dependencies.json"), { force: true });
   write(join(gameDir, "template.json"), JSON.stringify({ schema: "ai_studio.template.v1", id: "Bad ID", title: "Template", storageNamespace: "template" }));
-  write(join(gameDir, "game-dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.seed.v2" }));
+  write(join(gameDir, "game-dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.seed.v3" }));
   assert.throws(() => doctorGame({ gameDir, templateProof: true }), /template identity is invalid/i);
 });
 
@@ -319,9 +335,7 @@ test("copied game CLI executes doctor and final package from a real games/privat
   write(join(gameDir, "src", "build_packs.c"), "/* copied release fixture has no binary asset inputs */\n");
 
   const engineRoot = join(root, "external", "neotolis-engine");
-  write(join(engineRoot, "engine", "core", "nt_core.h"), [
-    "#define NT_VERSION_MAJOR 0", "#define NT_VERSION_MINOR 1", "#define NT_VERSION_PATCH 0", "",
-  ].join("\n"));
+  write(join(engineRoot, "engine", "version", "nt_version.h"), "const char *nt_version_engine(void);\n");
   for (const cwd of [engineRoot, root]) {
     git(cwd, ["init", "-q"]);
   }
@@ -341,7 +355,7 @@ test("copied game CLI executes doctor and final package from a real games/privat
   write(join(gameDir, "game.json"), `${JSON.stringify({ schema: "ai_studio.game.v1", id: "copied-game", title: "Copied Game", storageNamespace: "copied-game" }, null, 2)}\n`);
   write(join(gameDir, "dependencies.json"), `${JSON.stringify({
     schema: "ai_studio.game.dependencies.v3",
-    engine: { source: "external/neotolis-engine", version: "0.1.0", revision: engineRevision, compatibility: "tested" },
+    engine: { source: "external/neotolis-engine", version: engineRevision.slice(0, 8), revision: engineRevision, compatibility: "tested" },
     features: [{ id: "platform-sdk", source: "features/platform-sdk", version: platformSdkVersion(), compatibility: "tested" }],
     compatibility: "copied layout fixture",
   }, null, 2)}\n`);
@@ -352,7 +366,7 @@ test("copied game CLI executes doctor and final package from a real games/privat
     compileProfile: { target: "itch", adapter: "mock", preset: "wasm-release", debugUi: false, devapi: false, analytics: false, eventsLogMirror: false },
   });
   const artifact = join(gameDir, "build", "wasm-release-itch", "bin");
-  write(join(artifact, "index.html"), `<!doctype html><script>window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: 'itch', platformSdk: 'mock', release: true, runtimeBuildFingerprint: '${runtimeBuild.fingerprint}' });</script><script src='game.js'></script>\n`);
+  write(join(artifact, "index.html"), `<!doctype html><script>window.__PLATFORM_SDK_CONFIG__ = Object.freeze({ target: 'itch', platformSdk: 'mock', release: true, runtimeBuildFingerprint: '${runtimeBuild.fingerprint}' });</script><script id="platform-diagnostics">${diagnosticsReporter(root, "copied-game")}</script>${diagnosticsBootstrap()}<script src="game.js"></script>\n`);
   write(join(artifact, "game.js"), [
     "var wasmBinaryFile;",
     "function findWasmBinary() { return locateFile('game.wasm'); }",
