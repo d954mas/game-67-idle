@@ -209,8 +209,10 @@ node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/respo
   19.5:9 landscape/portrait matrix; `--landscape-only` filters it.
 - `--portal <target>` checks visible `ui.tree` leaves against the target's
   `metadata.reserved_zones` (`portal_zones.py`; the Poki Pill) and exits 1 on
-  overlap; `--zone-ignore <id-glob>` (repeatable) exempts full-screen
-  decorative leaves such as a root shell.
+  overlap. Leaves at least 90% of the window wide are counted as backdrops
+  (root shell, scrims) and skipped; the text and controls over them are leaves
+  of their own and still checked. `--zone-ignore <id-glob>` (repeatable)
+  exempts any other decorative leaf.
 - `--scenario MODULE:FUNCTION` or `PATH.py:FUNCTION` runs
   `prepare(game, viewport)` after warmup and before capture, to reach a menu or
   game moment. Relative paths and modules also resolve against the game root,

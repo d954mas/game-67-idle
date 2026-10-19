@@ -94,9 +94,16 @@ def node_window_rect(bounds: dict[str, Any], tree: dict[str, Any]) -> Rect | Non
     y0, y1 = oy + (lh - (y + h)) * sy, oy + (lh - y) * sy
     return (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
 
+BACKDROP_WIDTH_SHARE = 0.9
+
+
+# Overlaps thinner than half a pixel are float noise at a shared edge, not a covered element.
+TOUCH_TOLERANCE_PX = 0.5
+
 
 def intersects(a: Rect, b: Rect) -> bool:
-    return min(a[2], b[2]) > max(a[0], b[0]) and min(a[3], b[3]) > max(a[1], b[1])
+    return (min(a[2], b[2]) - max(a[0], b[0]) > TOUCH_TOLERANCE_PX
+            and min(a[3], b[3]) - max(a[1], b[1]) > TOUCH_TOLERANCE_PX)
 
 
 def _is_visible_leaf(node: dict[str, Any]) -> bool:
@@ -125,7 +132,7 @@ def check_tree(
     """Report visible ui leaves whose window rect overlaps a reserved zone."""
     patterns = list(ignore)
     zone_rects = [{"id": zone.get("id"), "rect": list(zone_rect(zone, window_w, window_h))} for zone in zones]
-    result: dict[str, Any] = {"zones": zone_rects, "violations": [], "checked_leaves": 0}
+    result: dict[str, Any] = {"zones": zone_rects, "violations": [], "checked_leaves": 0, "backdrops": 0}
     if zones and layout_to_window(tree) is None:
         result["error"] = "ui.tree has no 2D viewport block; zone overlap cannot be mapped"
         return result
@@ -135,6 +142,11 @@ def check_tree(
             continue
         rect = node_window_rect(node["bounds"], tree)
         if rect is None:
+            continue
+        # A leaf spanning the window is a backdrop (root panel, scrim); the
+        # text and controls drawn over it are leaves of their own and are checked.
+        if rect[2] - rect[0] >= BACKDROP_WIDTH_SHARE * window_w:
+            result["backdrops"] += 1
             continue
         result["checked_leaves"] += 1
         for zone in zone_rects:
