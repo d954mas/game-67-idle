@@ -80,7 +80,9 @@ count.
   `../README.md`.
 - Writes stay serial unless files are clearly disjoint.
 - Reuse a fitting existing agent before creating another one.
-- Prefer event-driven completion or one long wait; do not tight-loop poll.
+- Wait for the host's completion notification or one long blocking wait; never
+  poll agent lists or status (`list_agents`, task output) in a loop. Each poll
+  re-reads the whole transcript.
 - An external wait over ten minutes becomes a checkpoint: record the external
   identifier and resume by bounded polling instead of holding an approval or
   tool call open indefinitely.

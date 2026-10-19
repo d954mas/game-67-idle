@@ -155,28 +155,15 @@ the lead approves it.
 
 ## Transcript Cost
 
-Every tool result is re-read on every later request, so output volume is a
-recurring charge, not a one-off. A host caps what the model sees, not what a
-command produces: in one measured week 59M Codex tokens were generated and cut
-before anyone read them.
+Every tool result is re-read on every later request; output volume is a
+recurring charge. Most bytes come from the shell, not from studio commands:
 
-The bytes come from the shell, not from studio commands -- of 196 MB in that
-week, taskboard, `game.mjs`, devapi and the rest of the studio produced 21 MB
-together. Three habits carry the remainder:
+- Do not walk a tree by naming it (`rg --files tmp` overrides ignore rules);
+  search with a glob and a limit, or `git ls-files <dir> | head -50`.
+- Read the range, not the file.
+- Build and test through `tools/game.mjs`, never raw `cmake --build`.
 
-- Do not walk a tree by naming it. `rg --files tmp` lists 70k files even though
-  `tmp/` is ignored, because an explicit path overrides ignore rules. Search
-  with a glob and a limit, or list with `git ls-files <dir> | head -50`.
-- Read the range, not the file. Ten lines answer most questions that a
-  whole-file dump is charged for.
-- Build through `tools/game.mjs`, which keeps compiler chatter out of the
-  transcript. Raw `cmake --build` put 30 MB into it in that same week.
-
-Keep binaries out of the transcript, patch through the harness edit tool rather
-than shell-escaped strings, and when a result comes back truncated, narrow the
-query instead of re-running it wider.
-
-`ai_studio/core_harness/profiling/iteration_report.mjs` reports what this costs per week.
+Measurements and the weekly report: `ai_studio/core_harness/profiling/README.md`.
 
 ## Source Comments
 
@@ -201,42 +188,9 @@ it — never to narrate a change. If a block needs more than that to be understo
 the knowledge belongs in `games/<game-id>/design/knowledge/` or the owning
 `ai_studio/` module, and the comment should point there.
 
-## Pi Skill Chain
-
-Fixed order for feature work in pi. Each step consumes the previous step's
-output; skipping a step means the next one invents what it was not told.
-
-1. `/grill-me` — interview until shared understanding. Produces no file; it
-   settles the design tree. Never jump to step 3 from an unfinished grilling.
-2. `research` — model-invoked when a step needs facts. Writes findings as
-   Markdown, every claim cited to a primary source.
-3. `/to-spec` — synthesize the conversation into a spec and create it as an
-   **epic** under the owning project. No interview here; the only question is
-   confirming the test seams.
-4. `/to-tickets` — split that epic into tracer-bullet tickets in the
-   **Taskboard**, blockers first, each declaring its `Blocked by` edges.
-   Never `.scratch/` or any other parallel store — the Taskboard is the single
-   source of truth for current work.
-5. `/implement` — take a ticket from the frontier (blockers all closed), build
-   it through `tdd`, then `code-review`, then commit.
-
-Run pi from the studio root, not from a game folder: `.pi/settings.json` is
-read from the current directory only and does not search parent folders, so a
-session started inside `games/<id>` silently loses these skills and the project
-permission rules.
-
-Taskboard commands take `--game <game-id>` for game work; private game stores
-are invisible without it.
-
-`to-spec` and `to-tickets` here are local overrides in `.pi/skills/`, retargeted
-from the upstream `.scratch/` and GitHub-issue layouts to the Taskboard CLI.
-Both upstream copies are excluded from the package filter so they never collide.
-
-Skills are declared in `.pi/settings.json`. The clone under `.pi/git/` is
-gitignored; `.pi/settings.json` is committed.
-
 ## Context Routing
 
+- Pi feature-work chain (grill, spec, tickets, implement): `.pi/APPEND_SYSTEM.md`.
 - Workflow and commands: `ai_studio/README.md`.
 - Reusable agent roles: the active harness catalog, such as `.codex/agents/`
   or `.claude/agents/`.
