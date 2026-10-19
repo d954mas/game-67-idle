@@ -547,7 +547,9 @@ const WEBGL_RECOVERY_STATE = `new Promise((resolve) => {
     };
     requestAnimationFrame(waitForReadyFrame);
   }, { once: true });
-  try { extension.loseContext(); }
+  // The loss is the probe's own: without the mark the page reports it to the
+  // platform as a real GPU failure.
+  try { window.__platformDiagnostics?.intentionalLoss?.(); extension.loseContext(); }
   catch (error) { fail(error); }
 })`;
 
