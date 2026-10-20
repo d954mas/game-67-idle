@@ -9,8 +9,10 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const feature = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const emcc = process.env.EMCC || "C:/develop/emsdk/upstream/emscripten/emcc.py";
-const chrome = process.env.CHROME_PATH || "C:/Program Files/Google/Chrome/Application/chrome.exe";
+const windows = process.platform === "win32";
+const emsdk = process.env.EMSDK || (windows ? "C:/develop/emsdk" : "");
+const emcc = process.env.EMCC || (emsdk && join(emsdk, "upstream/emscripten/emcc.py"));
+const chrome = process.env.CHROME_PATH || (windows ? "C:/Program Files/Google/Chrome/Application/chrome.exe" : "google-chrome");
 
 function frame(payload) { return Buffer.concat([Buffer.from([0x82, payload.length]), payload]); }
 function build(dir) {
@@ -24,7 +26,7 @@ function build(dir) {
   assert.ok(existsSync(join(dir, "web_order.wasm")), result.stderr || result.stdout);
 }
 
-test("browser client drains 64 records before slow close", async () => {
+test("browser client drains 64 records before slow close", { skip: !emcc && "needs EMSDK or EMCC" }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "nt-web-order-"));
   build(dir);
   const server = createServer((request, response) => {

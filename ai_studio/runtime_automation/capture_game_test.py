@@ -53,14 +53,14 @@ class CaptureGameCliTest(unittest.TestCase):
 
     def test_resolves_the_standard_debug_executable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             executable = canonical_native_executable(root)
 
             self.assertEqual(resolve_game_executable(root), executable.resolve())
 
     def test_executable_override_accepts_only_the_canonical_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             executable = canonical_native_executable(root)
 
             self.assertEqual(
@@ -76,7 +76,7 @@ class CaptureGameCliTest(unittest.TestCase):
 
     def test_missing_executable_override_fails_before_launch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             executable = canonical_native_executable(root)
             executable.parent.mkdir(parents=True)
             executable.touch()
@@ -95,7 +95,7 @@ class CaptureGameCliTest(unittest.TestCase):
 
     def test_preflight_build_failure_prevents_launch_and_recorder(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             (root / "capture").mkdir()
             (root / "capture" / "catalog.json").write_text(json.dumps({
                 "version": 1,
@@ -118,14 +118,14 @@ class CaptureGameCliTest(unittest.TestCase):
 
     def test_noncanonical_catalog_executable_reports_the_build_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
 
             with self.assertRaisesRegex(RuntimeError, r"build[\\/]devapi-debug"):
                 resolve_game_executable(root, "out/game.exe")
 
     def test_catalog_may_declare_its_own_build_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             relative = Path("build") / "native-devapi" / "bin" / declared_executable_name()
 
             self.assertEqual(resolve_game_executable(root, str(relative)), (root / relative).resolve())
@@ -135,7 +135,7 @@ class CaptureGameCliTest(unittest.TestCase):
 
     def test_declared_artifact_must_stay_in_a_build_bin_directory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             name = declared_executable_name()
             for rejected in (
                 f"build/native-devapi/{name}",
@@ -157,8 +157,8 @@ class CaptureGameCliTest(unittest.TestCase):
 
     def test_declared_artifact_rejects_a_linked_build_directory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / "game"
-            foreign = Path(directory) / "foreign" / "bin"
+            root = Path(directory).resolve() / "game"
+            foreign = Path(directory).resolve() / "foreign" / "bin"
             foreign.mkdir(parents=True)
             (foreign / declared_executable_name()).touch()
             (root / "build").mkdir(parents=True)
@@ -177,7 +177,7 @@ class CaptureGameCliTest(unittest.TestCase):
 
     def test_run_launches_the_declared_artifact_with_catalog_launch_flags(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             relative = Path("build") / "native-devapi" / "bin" / declared_executable_name()
             executable = root / relative
             executable.parent.mkdir(parents=True)
@@ -229,7 +229,7 @@ class CaptureGameCliTest(unittest.TestCase):
 
     def test_loads_the_game_owned_capture_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             capture = root / "capture"
             capture.mkdir()
             (capture / "catalog.json").write_text(
@@ -261,7 +261,7 @@ class CaptureGameCliTest(unittest.TestCase):
 
     def test_run_uses_catalog_settings_and_a_driver_for_shots(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             executable = canonical_native_executable(root)
             executable.parent.mkdir(parents=True)
             executable.touch()
@@ -588,7 +588,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
 
     def test_missing_shot_lists_available_ids_before_build_lookup(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             capture = root / "capture"
             capture.mkdir()
             (capture / "catalog.json").write_text(
@@ -601,7 +601,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
 
     def test_shot_rejects_seconds_override_before_a_game_is_launched(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             capture = root / "capture"
             capture.mkdir()
             (capture / "catalog.json").write_text(
@@ -638,7 +638,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
             })
     def test_default_output_roots_do_not_collide(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             first = default_output_root(root)
             second = default_output_root(root)
 
@@ -647,7 +647,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
 
     def test_run_keeps_recording_error_when_shot_cleanup_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             executable = canonical_native_executable(root)
             executable.parent.mkdir(parents=True)
             executable.touch()
@@ -689,7 +689,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
 
     def test_run_propagates_shot_cleanup_error_after_successful_recording(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             executable = canonical_native_executable(root)
             executable.parent.mkdir(parents=True)
             executable.touch()
@@ -727,7 +727,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
 
     def test_studio_root_resolution_supports_template_and_private_games(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             (root / "ai_studio" / "runtime_automation").mkdir(parents=True)
             (root / "ai_studio" / "runtime_automation" / "capture_game.py").touch()
             self.assertEqual(resolve_studio_root(root / "templates" / "template"), root)
@@ -739,7 +739,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
 
     def test_live_uses_saved_state_autosave_and_fifteen_second_default(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             executable = canonical_native_executable(root)
             executable.parent.mkdir(parents=True)
             executable.touch()
@@ -793,7 +793,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
 
     def test_catalog_launch_options_override_template_flags(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             executable = canonical_native_executable(root)
             executable.parent.mkdir(parents=True)
             executable.touch()
@@ -839,7 +839,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
 
     def test_shot_can_keep_vsync_for_a_heavy_capture(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             executable = canonical_native_executable(root)
             executable.parent.mkdir(parents=True)
             executable.touch()

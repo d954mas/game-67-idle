@@ -25,11 +25,11 @@ function isPhysicalRegularFile(path, errorMessage) {
 }
 
 export function copyTrackedGameSourceTree(sourceDir, destinationDir) {
-  const source = realpathSync(sourceDir);
+  const source = realpathSync.native(sourceDir);
   const top = spawnSync("git", ["-C", source, "rev-parse", "--show-toplevel"], {
     encoding: "utf8", shell: false, windowsHide: true,
   });
-  if (top.status !== 0 || realpathSync(top.stdout.trim()) !== source) {
+  if (top.status !== 0 || realpathSync.native(top.stdout.trim()) !== source) {
     throw new Error("game source must own a nested Git repository");
   }
   const result = spawnSync("git", ["-C", source, "ls-files", "-z", "--cached"], {
@@ -54,8 +54,8 @@ export function copyTrackedGameSourceTree(sourceDir, destinationDir) {
 }
 
 export function copyGitSourceTree(repoRoot, sourceDir, destinationDir) {
-  const root = realpathSync(repoRoot);
-  const source = realpathSync(sourceDir);
+  const root = realpathSync.native(repoRoot);
+  const source = realpathSync.native(sourceDir);
   const sourceRel = relative(root, source);
   if (!sourceRel || sourceRel === ".." || sourceRel.startsWith(`..${sep}`)) {
     throw new Error("source tree must be inside the Studio Git checkout");

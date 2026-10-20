@@ -59,8 +59,8 @@ function fakeDependencies() {
 
 test("config defaults the install under LOCALAPPDATA and honours overrides", async (t) => {
   const { root } = await fixture(t);
-  const config = loadKimodoConfig(root, { LOCALAPPDATA: "C:\\Local" });
-  assert.equal(config.home, join("C:\\Local", "AIStudio", "tools", "kimodo"));
+  const config = loadKimodoConfig(root, { LOCALAPPDATA: join(root, "Local") });
+  assert.equal(config.home, join(root, "Local", "AIStudio", "tools", "kimodo"));
   assert.equal(config.workRoot, join(root, "tmp", "kimodo"));
   assert.equal(loadKimodoConfig(root, { KIMODO_HOME: "D:\\k", KIMODO_WORK_ROOT: "tmp/other" }).workRoot, join(root, "tmp", "other"));
 });
