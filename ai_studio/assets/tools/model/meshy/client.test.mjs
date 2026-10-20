@@ -87,6 +87,21 @@ test("paid run refuses before any network call without exact approval", async (t
   assert.equal(calls, 0);
 });
 
+test("textured image plans omit unsupported lighting removal for smart topology", async (t) => {
+  const root = await fixture(t);
+  const image = join(root, "ref.png");
+  await writeFile(image, Buffer.from("png fixture"));
+  const smart = await buildPlan("image", { image, profile: "game" });
+  assert.equal(smart.request.model_type, "smart-topology");
+  assert.equal(smart.request.should_texture, true);
+  assert.equal(smart.request.enable_pbr, true);
+  assert.equal(Object.hasOwn(smart.payload, "remove_lighting"), false);
+  assert.equal(Object.hasOwn(smart.request, "remove_lighting"), false);
+  const standard = await buildPlan("image", { image, profile: "quality" });
+  assert.equal(standard.request.model_type, "standard");
+  assert.equal(standard.request.remove_lighting, true);
+});
+
 test("reserve gate blocks before paid POST", async (t) => {
   const root = await fixture(t);
   const calls = [];

@@ -166,7 +166,7 @@ export async function buildPlan(kind, options = {}) {
     if (profile.shouldTexture) {
       payload.enable_pbr = true;
       payload.texture_resolution = profile.textureResolution;
-      payload.remove_lighting = true;
+      if (profile.modelType === "standard") payload.remove_lighting = true;
       if (options.texturePrompt) payload.texture_prompt = requiredText(options.texturePrompt, "--texture-prompt", 600);
     }
     if (profile.modelType === "standard") {
