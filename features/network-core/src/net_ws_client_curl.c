@@ -583,3 +583,12 @@ bool net_ws_client_send(net_ws_client_t *client, const uint8_t *data, size_t siz
     if (queued) { wake_kick(client->wake); }
     return queued;
 }
+
+/* Test seam, not transport API: lets a test wait until the socket thread
+   has queued what it expects before replaying callbacks. */
+uint32_t net_ws_client_test_queued_messages(net_ws_client_t *client) {
+    net_mutex_lock(&client->lock);
+    const uint32_t count = (uint32_t)client->rx.count;
+    net_mutex_unlock(&client->lock);
+    return count;
+}

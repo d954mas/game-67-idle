@@ -10,7 +10,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 #if defined(_WIN32)
 #include <winsock2.h>
@@ -18,6 +17,7 @@
 typedef SOCKET raw_socket_t;
 #define RAW_INVALID INVALID_SOCKET
 #define raw_close closesocket
+#define sleep_ms(ms) Sleep(ms)
 #else
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -26,6 +26,7 @@ typedef SOCKET raw_socket_t;
 typedef int raw_socket_t;
 #define RAW_INVALID (-1)
 #define raw_close close
+#define sleep_ms(ms) usleep((ms) * 1000U)
 #endif
 
 #define CHECK(condition) \
@@ -39,6 +40,7 @@ typedef int raw_socket_t;
 void net_ws_server_test_fail_next_write(net_ws_server_t *server);
 void net_ws_server_test_hold_writes(net_ws_server_t *server, bool hold);
 void net_ws_server_test_partial_buffered(net_ws_server_t *server, bool buffered);
+uint32_t net_ws_client_test_queued_messages(net_ws_client_t *client);
 typedef struct server_log_t {
     net_ws_server_t *server;
     uint32_t connects;
@@ -167,17 +169,41 @@ static bool raw_peer_send_hello(raw_socket_t sock, uint32_t version) {
     return send(sock, (const char *)frame, frame_size, 0) == frame_size;
 }
 
-static void pump(net_ws_server_t *server, net_ws_client_t *client, int rounds) {
-    for (int round = 0; round < rounds; ++round) {
-        net_ws_server_service(server, 5U);
-        if (client != NULL) { net_ws_client_service(client, 5U); }
-    }
+static void pump(net_ws_server_t *server, net_ws_client_t *client) {
+    net_ws_server_service(server, 1U);
+    if (client != NULL) { net_ws_client_service(client, 0U); }
 }
 
-/* Pumps until the conditions the following CHECKs assert hold, at most the
-   50 rounds a plain pump would spend, so a check never sees less settling
-   time than before; it only stops waiting once the outcome is in. */
-#define pump_until(server, client, condition)     do { for (int pump_round_ = 0; pump_round_ < 50 && !(condition); ++pump_round_) { pump((server), (client), 1); } } while (0)
+/* Waits on the outcome against the monotonic clock, never a round count: a
+   service call lasts as long as the OS timer granularity makes it (1 to
+   16 ms on Windows), and the client's socket thread runs on wall time. */
+#define WAIT_S 3.0
+#define wait_until(condition, step) do { const double wait_end_ = net_ws_client_clock() + WAIT_S; while (!(condition) && net_ws_client_clock() < wait_end_) { step; } } while (0)
+#define pump_until(server, client, condition) wait_until((condition), pump((server), (client)))
+
+/* A window for checks that something did NOT happen; no event can end it. */
+static void pump_for(net_ws_server_t *server, net_ws_client_t *client, double seconds) {
+    const double end = net_ws_client_clock() + seconds;
+    while (net_ws_client_clock() < end) { pump(server, client); }
+}
+
+/* Until the client is open and the server has run on_connect for it, so
+   slog->last_client names this client. */
+static void pump_open(net_ws_server_t *server, const server_log_t *slog, net_ws_client_t *client,
+    const client_log_t *clog) {
+    const uint32_t connects = slog->connects;
+    pump_until(server, client, clog->opens == 1U && slog->connects == connects + 1U);
+    CHECK(clog->opens == 1U && slog->connects == connects + 1U);
+}
+
+/* Every server here admits max_clients (2) new sockets a second and closes
+   the rest at accept, so dials are spaced to stay inside that budget. */
+static void pace_dial(void) {
+    static double last_dial = 0.0;
+    const double wait = last_dial + 0.5 - net_ws_client_clock();
+    if (wait > 0.0) { sleep_ms((unsigned)(wait * 1000.0) + 1U); }
+    last_dial = net_ws_client_clock();
+}
 
 static net_ws_client_t *connect_client_sized(uint16_t port, uint32_t version, client_log_t *log,
     uint32_t send_queue, uint32_t max_message) {
@@ -190,6 +216,7 @@ static net_ws_client_t *connect_client_sized(uint16_t port, uint32_t version, cl
         .receive_queue_bytes = 1024U, .send_queue_bytes = send_queue, .user = log,
         .on_open = client_open, .on_message = client_message, .on_close = client_close,
     };
+    pace_dial();
     net_ws_client_t *client = net_ws_client_create(&config);
     CHECK(client != NULL);
     return client;
@@ -210,6 +237,7 @@ static net_ws_client_t *connect_client_limits(uint16_t port, uint32_t version, c
         .service_message_limit = service_limit, .send_queue_bytes = 256U, .user = log,
         .on_open = client_open, .on_message = client_message, .on_close = client_close,
     };
+    pace_dial();
     net_ws_client_t *client = net_ws_client_create(&config);
     CHECK(client != NULL);
     return client;
@@ -460,36 +488,37 @@ int main(void) {
        all-queued-callback behavior. */
     memset(&clog, 0, sizeof clog);
     client = connect_client_limits(port, VERSION, &clog, 0U, 0U);
-    pump(server, client, 50);
+    pump_open(server, &slog, client, &clog);
     send_numbered(server, slog.last_client, 17U);
-    pump(server, NULL, 50);
+    pump_until(server, NULL, net_ws_client_test_queued_messages(client) == 17U);
     net_ws_client_service(client, 0U);
     CHECK(clog.messages == 17U && clog.last[1] == 16U && clog.closes == 0U);
     net_ws_client_destroy(client);
-    pump(server, NULL, 20);
+    pump_until(server, NULL, net_ws_server_client_count(server) == 0U);
 
     /* A bounded service pass leaves the FIFO tail for later frames. */
     memset(&clog, 0, sizeof clog);
     client = connect_client_limits(port, VERSION, &clog, 64U, 16U);
-    pump(server, client, 50);
+    pump_open(server, &slog, client, &clog);
     send_numbered(server, slog.last_client, 64U);
-    pump(server, NULL, 50);
+    pump_until(server, NULL, net_ws_client_test_queued_messages(client) == 64U);
     for (uint32_t batch = 1U; batch <= 4U; ++batch) {
         net_ws_client_service(client, 0U);
         CHECK(clog.messages == batch * 16U && clog.last[1] == batch * 16U - 1U);
         CHECK(clog.closes == 0U);
     }
     net_ws_client_destroy(client);
-    pump(server, NULL, 20);
+    pump_until(server, NULL, net_ws_server_client_count(server) == 0U);
 
     /* The 65th tiny message reaches the independent record cap. The valid
        64-message prefix still arrives before close, including a destroy in
        that delayed close callback. */
     memset(&clog, 0, sizeof clog);
     client = connect_client_limits(port, VERSION, &clog, 64U, 16U);
-    pump(server, client, 50);
+    pump_open(server, &slog, client, &clog);
     send_numbered(server, slog.last_client, 65U);
-    pump(server, NULL, 50);
+    pump_until(server, NULL, net_ws_client_test_queued_messages(client) == 64U &&
+        net_ws_client_state(client) == NET_WS_CLIENT_CLOSED);
     for (uint32_t batch = 1U; batch <= 4U; ++batch) {
         net_ws_client_service(client, 0U);
         CHECK(clog.messages == batch * 16U && clog.last[1] == batch * 16U - 1U);
@@ -498,13 +527,13 @@ int main(void) {
     clog.destroy_on_close = client;
     net_ws_client_service(client, 0U);
     CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW && clog.destroy_on_close == NULL);
-    pump(server, NULL, 20);
+    pump_until(server, NULL, net_ws_server_client_count(server) == 0U);
 
     /* A terminal slow close overrides an application close before its
        queued output can become visible. */
     memset(&clog, 0, sizeof clog);
     client = connect_client(port, VERSION, &clog, 256U);
-    pump(server, client, 50);
+    pump_open(server, &slog, client, &clog);
     const uint32_t slow_client = slog.last_client;
     const uint32_t slow_disconnects = slog.disconnects;
     CHECK(net_ws_server_send_ready(server, slow_client));
@@ -528,7 +557,7 @@ int main(void) {
        terminal before the later close lifecycle callback. */
     memset(&clog, 0, sizeof clog);
     client = connect_client(port, VERSION, &clog, 256U);
-    pump(server, client, 50);
+    pump_open(server, &slog, client, &clog);
     const uint32_t failed_client = slog.last_client;
     const uint32_t failed_disconnects = slog.disconnects;
     CHECK(net_ws_server_send_ready(server, failed_client));
@@ -550,7 +579,7 @@ int main(void) {
     /* Admission can succeed before a later writable callback fails. */
     memset(&clog, 0, sizeof clog);
     client = connect_client(port, VERSION, &clog, 256U);
-    pump(server, client, 50);
+    pump_open(server, &slog, client, &clog);
     const uint32_t delayed_client = slog.last_client;
     net_ws_server_test_hold_writes(server, true);
     CHECK(net_ws_server_send(server, delayed_client, ping, sizeof ping));
@@ -565,7 +594,7 @@ int main(void) {
     /* A failing drain escalates a pending application close to SLOW. */
     memset(&clog, 0, sizeof clog);
     client = connect_client(port, VERSION, &clog, 256U);
-    pump(server, client, 50);
+    pump_open(server, &slog, client, &clog);
     const uint32_t app_failed_client = slog.last_client;
     net_ws_server_test_hold_writes(server, true);
     CHECK(net_ws_server_send(server, app_failed_client, farewell, sizeof farewell));
@@ -580,14 +609,11 @@ int main(void) {
     memset(&clog, 0, sizeof clog);
     client = connect_client(port, VERSION, &clog, 256U);
     clog.destroy_on_close = client;
-    pump(server, client, 50);
+    pump_open(server, &slog, client, &clog);
     net_ws_server_close(server, slog.last_client, NET_CLOSE_APP);
-    for (int round = 0; round < 50 && clog.closes == 0U; ++round) {
-        net_ws_server_service(server, 5U);
-        net_ws_client_service(client, 5U);
-    }
+    pump_until(server, client, clog.closes != 0U);
     CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_APP && clog.destroy_on_close == NULL);
-    pump(server, NULL, 10);
+    pump_until(server, NULL, net_ws_server_client_count(server) == 0U);
 
     /* A refused connection reports through on_close, never from create. */
     memset(&clog, 0, sizeof clog);
@@ -595,8 +621,8 @@ int main(void) {
     CHECK(clog.closes == 0U);
     {
         /* The client's service returns at once; the refusal comes from its thread. */
-        const time_t started = time(NULL);
-        while (clog.closes == 0U && time(NULL) - started < 5) { net_ws_client_service(client, 5U); }
+        const double started = net_ws_client_clock();
+        while (clog.closes == 0U && net_ws_client_clock() - started < 5.0) { net_ws_client_service(client, 0U); }
     }
     CHECK(clog.closes == 1U && clog.close_code == 0U);
     CHECK(net_ws_client_state(client) == NET_WS_CLIENT_CLOSED);
@@ -605,10 +631,11 @@ int main(void) {
     /* A message above the client's own limit closes with FORMAT. */
     memset(&clog, 0, sizeof clog);
     client = connect_client_sized(port, VERSION, &clog, 256U, 8U);
-    pump(server, client, 50);
+    pump_open(server, &slog, client, &clog);
+    const uint32_t format_disconnects = slog.disconnects;
     uint8_t nine[9] = {NET_MSG_APP_FIRST};
     CHECK(net_ws_server_send(server, slog.last_client, nine, sizeof nine));
-    pump_until(server, client, (clog.closes == 1U && clog.close_code == NET_CLOSE_FORMAT) && (slog.last_reason == NET_WS_CLOSE_PEER));
+    pump_until(server, client, (clog.closes == 1U && clog.close_code == NET_CLOSE_FORMAT) && (slog.disconnects == format_disconnects + 1U && slog.last_reason == NET_WS_CLOSE_PEER));
     CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_FORMAT);
     CHECK(slog.last_reason == NET_WS_CLOSE_PEER);
     net_ws_client_destroy(client);
@@ -623,13 +650,14 @@ int main(void) {
             .receive_queue_bytes = 1024U, .send_queue_bytes = NET_HELLO_BASE_SIZE + 4U, .user = &clog,
             .on_open = client_open, .on_message = client_message, .on_close = client_close,
         };
+        pace_dial();
         client = net_ws_client_create(&bare);
         CHECK(client != NULL);
         slog.last_ticket_size = 99U;
         pump_until(server, client, (clog.opens == 1U && slog.last_ticket_size == 0U));
         CHECK(clog.opens == 1U && slog.last_ticket_size == 0U);
         net_ws_client_destroy(client);
-        pump(server, NULL, 20);
+        pump_until(server, NULL, net_ws_server_client_count(server) == 0U);
     }
 
     /* Version mismatch is refused before on_connect. */
@@ -645,7 +673,7 @@ int main(void) {
     /* Oversize and reserved-type messages close the session, not the room. */
     memset(&clog, 0, sizeof clog);
     client = connect_client(port, VERSION, &clog, 256U);
-    pump(server, client, 50);
+    pump_open(server, &slog, client, &clog);
     uint8_t big[MAX_MESSAGE + 1U];
     memset(big, NET_MSG_APP_FIRST, sizeof big);
     CHECK(net_ws_client_send(client, big, sizeof big));
@@ -656,7 +684,7 @@ int main(void) {
 
     memset(&clog, 0, sizeof clog);
     client = connect_client(port, VERSION, &clog, 256U);
-    pump(server, client, 50);
+    pump_open(server, &slog, client, &clog);
     const uint8_t reserved[] = {NET_MSG_HELLO, 0U};
     CHECK(net_ws_client_send(client, reserved, sizeof reserved));
     pump_until(server, client, (clog.closes == 1U && clog.close_code == NET_CLOSE_FORMAT));
@@ -693,14 +721,18 @@ int main(void) {
     slog.echo = false;
     memset(&clog, 0, sizeof clog);
     client = connect_client(port, VERSION, &clog, 256U);
-    pump(server, client, 50);
+    pump_open(server, &slog, client, &clog);
     bool refused = false;
     for (int index = 0; index < 50000 && !refused; ++index) {
         refused = !net_ws_server_send(server, slog.last_client, big, MAX_MESSAGE);
         if (index % 100 == 99) { net_ws_server_service(server, 1U); }
     }
     CHECK(refused);
-    pump_until(server, client, (clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW) && (slog.last_reason == NET_WS_CLOSE_PEER || slog.last_reason == NET_WS_CLOSE_SLOW));
+    /* Servicing the client here would drain the receive queue whose
+       overflow this case is about; the close replays afterwards. */
+    pump_until(server, NULL, net_ws_client_state(client) == NET_WS_CLIENT_CLOSED &&
+        net_ws_server_client_count(server) == 0U);
+    net_ws_client_service(client, 0U);
     CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW);
     CHECK(slog.last_reason == NET_WS_CLOSE_PEER || slog.last_reason == NET_WS_CLOSE_SLOW);
     net_ws_client_destroy(client);
@@ -720,16 +752,16 @@ int main(void) {
         bool upgraded = false;
         char response[512];
         int got = 0;
-        for (int round = 0; round < 100 && !upgraded; ++round) {
-            net_ws_server_service(live, 5U);
+        wait_until(upgraded, {
+            net_ws_server_service(live, 1U);
             upgraded = raw_peer_upgraded(quiet, response, sizeof response, &got);
-        }
+        });
         CHECK(upgraded && raw_peer_send_hello(quiet, VERSION));
         pump_until(live, NULL, (llog.connects == 1U));
         CHECK(llog.connects == 1U);
         /* Service calls return early on any event, so count time, not rounds. */
-        const time_t started = time(NULL);
-        while (llog.disconnects == 0U && time(NULL) - started < 6) { net_ws_server_service(live, 50U); }
+        const double started = net_ws_client_clock();
+        while (llog.disconnects == 0U && net_ws_client_clock() - started < 6.0) { net_ws_server_service(live, 50U); }
         CHECK(llog.disconnects == 1U && llog.last_reason == NET_WS_CLOSE_PEER);
         raw_close(quiet);
         net_ws_server_destroy(live);
@@ -758,7 +790,7 @@ int main(void) {
         for (uint32_t index = 0U; index < 2U * pconfig.max_clients + 2U; ++index) {
             raw_socket_t sock = socket(AF_INET, SOCK_STREAM, 0);
             CHECK(sock != RAW_INVALID && connect(sock, (struct sockaddr *)&addr, sizeof addr) == 0);
-            pump(plain, NULL, 10);
+            pump_for(plain, NULL, 0.1);
             raw_close(sock);
             const double closed_at = net_ws_client_clock();
             while (net_ws_client_clock() - closed_at < 0.6) { net_ws_server_service(plain, 50U); }
@@ -769,11 +801,11 @@ int main(void) {
         client_log_t elog = {0};
         net_ws_client_t *entrant = connect_client(net_ws_server_port(plain), VERSION, &elog, 256U);
         const double dialed_at = net_ws_client_clock();
-        while (elog.opens == 0U && elog.closes == 0U && net_ws_client_clock() - dialed_at < 8.0) { pump(plain, entrant, 1); }
-        pump(plain, entrant, 20);
+        while (elog.opens == 0U && elog.closes == 0U && net_ws_client_clock() - dialed_at < 8.0) { pump(plain, entrant); }
+        pump_for(plain, entrant, 0.2);
         CHECK(elog.opens == 1U && elog.closes == 0U && plog.connects == 1U);
         net_ws_client_destroy(entrant);
-        pump(plain, NULL, 20);
+        pump_until(plain, NULL, net_ws_server_client_count(plain) == 0U);
         net_ws_server_destroy(plain);
     }
 
@@ -783,25 +815,29 @@ int main(void) {
     client_log_t clog2 = {0};
     net_ws_client_t *a = connect_client(port, VERSION, &alog, 256U);
     net_ws_client_t *b = connect_client(port, VERSION, &blog, 256U);
-    for (int round = 0; round < 50; ++round) {
-        net_ws_server_service(server, 5U);
-        net_ws_client_service(a, 5U);
-        net_ws_client_service(b, 5U);
-    }
+    wait_until(alog.opens == 1U && blog.opens == 1U && net_ws_server_client_count(server) == 2U, {
+        pump(server, a);
+        net_ws_client_service(b, 0U);
+    });
     CHECK(net_ws_server_client_count(server) == 2U);
     net_ws_client_t *c = connect_client(port, VERSION, &clog2, 256U);
-    for (int round = 0; round < 50; ++round) {
-        net_ws_server_service(server, 5U);
-        net_ws_client_service(a, 5U);
-        net_ws_client_service(b, 5U);
-        net_ws_client_service(c, 5U);
-    }
+    wait_until(clog2.closes == 1U, {
+        pump(server, a);
+        net_ws_client_service(b, 0U);
+        net_ws_client_service(c, 0U);
+    });
     CHECK(clog2.closes == 1U && clog2.close_code == NET_CLOSE_FULL);
+    /* The refusal must not have closed the seated clients: watch them a while. */
+    const double watch_until = net_ws_client_clock() + 0.2;
+    while (net_ws_client_clock() < watch_until) {
+        pump(server, a);
+        net_ws_client_service(b, 0U);
+    }
     CHECK(alog.closes == 0U && blog.closes == 0U);
     net_ws_client_destroy(c);
     net_ws_client_destroy(a);
     net_ws_client_destroy(b);
-    pump(server, NULL, 20);
+    pump_until(server, NULL, net_ws_server_client_count(server) == 0U);
     CHECK(net_ws_server_client_count(server) == 0U);
 
     net_ws_server_destroy(server);

@@ -71,8 +71,10 @@ uint16_t net_ws_server_port(const net_ws_server_t *server);
 /* Connections that completed HELLO. */
 uint32_t net_ws_server_client_count(const net_ws_server_t *server);
 
-/* Runs accept, reads, writes and callbacks, returning after `timeout_ms`
-   at the latest so a fixed tick can share the thread. */
+/* Runs accept, reads, writes and callbacks, waiting at most `timeout_ms`
+   for events so a fixed tick can share the thread. The call may still
+   overrun it by the OS timer granularity (about 15 ms on Windows by
+   default) and by the work it runs. */
 void net_ws_server_service(net_ws_server_t *server, uint32_t timeout_ms);
 
 /* Queues one non-empty binary message. True means immutable local
