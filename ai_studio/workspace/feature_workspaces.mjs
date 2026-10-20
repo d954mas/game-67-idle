@@ -289,7 +289,15 @@ function canonicalPhysicalPath(path, label) {
     cursor = parent;
   }
   assertPhysicalDirectory(requested, label);
-  return existsSync(requested) ? realpathSync.native(requested) : requested;
+  return nativeLongPath(requested);
+}
+
+// A path that does not exist yet still gets its existing ancestor's long form,
+// so it compares equal to the same path once created (8.3 short names differ).
+function nativeLongPath(path) {
+  if (existsSync(path)) return realpathSync.native(path);
+  const parent = dirname(path);
+  return parent === path ? path : join(nativeLongPath(parent), basename(path));
 }
 
 function assertDirectChild(base, target, label) {

@@ -39,7 +39,7 @@ export function taskDoc(id, status = "backlog", { project = "P001", epic = "E001
 }
 
 export function repoFixture() {
-  const root = mkdtempSync(join(tmpdir(), "feature-workspace-contract-"));
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), "feature-workspace-contract-")));
   git(root, "init", "-b", "main");
   git(root, "config", "user.name", "Fixture");
   git(root, "config", "user.email", "fixture@example.invalid");
@@ -54,7 +54,7 @@ export function repoFixture() {
 }
 
 export function pairFixture({ withPython = false } = {}) {
-  const fixtureRoot = mkdtempSync(join(tmpdir(), "feature-workspace-create-"));
+  const fixtureRoot = realpathSync.native(mkdtempSync(join(tmpdir(), "feature-workspace-create-")));
   const engineRoot = join(fixtureRoot, "engine-source");
   mkdirSync(engineRoot);
   git(engineRoot, "init", "-b", "main");

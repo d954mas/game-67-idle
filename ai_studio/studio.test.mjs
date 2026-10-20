@@ -609,7 +609,7 @@ test("CLI contract returns stable JSON usage and setup envelopes", async () => {
 
 test("CI runs every verification domain exactly once", () => {
   const workflow = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../.github/workflows/studio-verify.yml"), "utf8");
-  const entries = JSON.parse(/^\s+domains: (\[.*\])\s*$/m.exec(workflow)[1]);
-  const scheduled = entries.flatMap((entry) => entry.split(","));
+  const scheduled = [...workflow.matchAll(/^\s+- \{ name: [a-z-]+, domains: "([a-z,-]+)" \}\s*$/gm)]
+    .flatMap((match) => match[1].split(","));
   assert.deepEqual([...scheduled].sort(), describeStudio().verification.domains.map((domain) => domain.id).sort());
 });
