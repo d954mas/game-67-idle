@@ -8,7 +8,9 @@ import { spawn, spawnSync } from "node:child_process";
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const slash = (value) => String(value || "").replaceAll("\\", "/");
 const NODE_TEST_CONCURRENCY = 4;
+const PYTHON_TEST_CONCURRENCY = 4;
 const DOMAIN_CONCURRENCY = 3;
+const NETWORK_INTEGRATION_TEST = "features/network-core/tests/integration.test.mjs";
 const PYTHON_RUN = ["node", "ai_studio/dev_environment/python_run.mjs"];
 const pythonCommands = (files, options = {}) => {
   if (!options.batchUnittest) return files.map((file) => [...PYTHON_RUN, file]);
@@ -148,7 +150,9 @@ const CHECKS = Object.freeze([
   { id: "studio.workspace", testRoots: ["ai_studio/workspace"] },
   { id: "workspace.game-create", testFiles: ["games/new_game.test.mjs"] },
   { id: "features.contracts", testFiles: ["features/validate_contracts.test.mjs"], commands: [["node", "features/validate_contracts.mjs"]] },
-  { id: "features.node", testRoots: ["features"] },
+  { id: "features.node", testRoots: ["features"], except: [NETWORK_INTEGRATION_TEST] },
+  // Builds a bare consumer with engine curl and runs the timed wire checks (about 90 s): CI, not every edit.
+  { id: "features.network-integration", testFiles: [NETWORK_INTEGRATION_TEST], releaseOnly: true },
   { id: "features.audio.web", testFiles: ["features/audio-core/tests/test_audio_web_library.mjs"] },
   {
     id: "features.native",
@@ -203,7 +207,7 @@ const DOMAINS = Object.freeze([
   { id: "work-management", checks: ["studio.taskboard"] },
   { id: "design", checks: [] },
   { id: "runtime", checks: ["studio.runtime-automation", "studio.runtime-automation.live"] },
-  { id: "features", checks: ["features.contracts", "features.node", "features.consumer", "features.audio.web", "features.native", "features.audio.linux", "features.platform-sdk", "features.game-state", "features.items-core", "features.progression-core", "features.scenes-core", "features.localization", "features.software-cursor", "features.test-goldens"] },
+  { id: "features", checks: ["features.contracts", "features.node", "features.network-integration", "features.consumer", "features.audio.web", "features.native", "features.audio.linux", "features.platform-sdk", "features.game-state", "features.items-core", "features.progression-core", "features.scenes-core", "features.localization", "features.software-cursor", "features.test-goldens"] },
   { id: "template-release", checks: ["reference-template", "reference-template.python", "reference-template.native", "reference-template.web"] },
 ]);
 
@@ -319,7 +323,7 @@ function nodeTestsForCheck(root, check) {
   return [
     ...(check.testFiles || []),
     ...(check.testRoots || []).flatMap((path) => walkMatchingFiles(root, path, (name) => name.endsWith(".test.mjs"))),
-  ].filter((path) => existsSync(resolve(root, path)));
+  ].filter((path) => existsSync(resolve(root, path)) && !(check.except || []).includes(path));
 }
 
 function pythonTestsForCheck(root, check) {
@@ -440,9 +444,23 @@ export async function runOwnedDomain(domain, options = {}) {
     }
     return null;
   };
+  // Python steps are separate processes, one per test file or batch: run them side by side.
+  const runPool = async (steps, limit) => {
+    let next = 0;
+    let failure = null;
+    const worker = async () => {
+      while (!failure && next < steps.length) {
+        const step = steps[next++];
+        const result = await runCommand(step.command, step.args, { root });
+        if (result.status !== 0 && !failure) failure = { step, result };
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(limit, steps.length) }, worker));
+    return failure;
+  };
   const [nodeFailure, pythonFailure] = await Promise.all([
     runSteps(nodeSteps),
-    runSteps(pythonSteps),
+    runPool(pythonSteps, PYTHON_TEST_CONCURRENCY),
   ]);
   const failure = nodeFailure || pythonFailure || await runSteps(commandSteps);
   if (failure) {

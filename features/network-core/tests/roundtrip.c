@@ -174,6 +174,11 @@ static void pump(net_ws_server_t *server, net_ws_client_t *client, int rounds) {
     }
 }
 
+/* Pumps until the conditions the following CHECKs assert hold, at most the
+   50 rounds a plain pump would spend, so a check never sees less settling
+   time than before; it only stops waiting once the outcome is in. */
+#define pump_until(server, client, condition)     do { for (int pump_round_ = 0; pump_round_ < 50 && !(condition); ++pump_round_) { pump((server), (client), 1); } } while (0)
+
 static net_ws_client_t *connect_client_sized(uint16_t port, uint32_t version, client_log_t *log,
     uint32_t send_queue, uint32_t max_message) {
     char url[64];
@@ -403,13 +408,13 @@ int main(void) {
     /* Echo round trip. */
     client_log_t clog = {0};
     net_ws_client_t *client = connect_client(port, VERSION, &clog, 256U);
-    pump(server, client, 50);
+    pump_until(server, client, (clog.opens == 1U && slog.connects == 1U && net_ws_server_client_count(server) == 1U));
     CHECK(clog.opens == 1U && slog.connects == 1U && net_ws_server_client_count(server) == 1U);
     /* The HELLO ticket reaches the application with the connect. */
     CHECK(slog.last_ticket_size == 4U && memcmp(slog.last_ticket, "seat", 4U) == 0);
     const uint8_t ping[] = {NET_MSG_APP_FIRST, 1U, 2U, 3U};
     CHECK(net_ws_client_send(client, ping, sizeof ping));
-    pump(server, client, 50);
+    pump_until(server, client, (slog.messages == 1U && clog.messages == 1U) && (clog.last_size == sizeof ping && memcmp(clog.last, ping, sizeof ping) == 0));
     CHECK(slog.messages == 1U && clog.messages == 1U);
     CHECK(clog.last_size == sizeof ping && memcmp(clog.last, ping, sizeof ping) == 0);
     /* The echo is one message each way: HELLO is a frame, not a message. */
@@ -435,7 +440,7 @@ int main(void) {
     CHECK(net_ws_server_needs_events(server));
     net_ws_server_test_hold_writes(server, false);
     CHECK(net_ws_server_send(server, slog.last_client, ping, sizeof ping));
-    pump(server, client, 50);
+    pump_until(server, client, (clog.messages == 3U && !net_ws_server_needs_events(server)));
     CHECK(clog.messages == 3U && !net_ws_server_needs_events(server));
 
     /* An application close delivers what was queued before it, then the
@@ -443,7 +448,7 @@ int main(void) {
     const uint8_t farewell[] = {NET_MSG_APP_FIRST, 9U};
     CHECK(net_ws_server_send(server, slog.last_client, farewell, sizeof farewell));
     net_ws_server_close(server, slog.last_client, 4123U);
-    pump(server, client, 50);
+    pump_until(server, client, (clog.closes == 1U && clog.close_code == 4123U) && (clog.messages == 4U && clog.last_size == sizeof farewell && clog.last[1] == 9U) && (slog.disconnects == 1U && slog.last_reason == NET_WS_CLOSE_APP) && (net_ws_server_client_count(server) == 0U));
     CHECK(clog.closes == 1U && clog.close_code == 4123U);
     CHECK(clog.messages == 4U && clog.last_size == sizeof farewell && clog.last[1] == 9U);
     CHECK(slog.disconnects == 1U && slog.last_reason == NET_WS_CLOSE_APP);
@@ -513,7 +518,7 @@ int main(void) {
     CHECK(!net_ws_server_send_ready(server, slow_client));
     CHECK(!net_ws_server_send(server, slow_client, ping, sizeof ping));
     CHECK(!net_ws_server_send_latest(server, slow_client, ping, sizeof ping, NULL));
-    pump(server, client, 50);
+    pump_until(server, client, (clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW) && (clog.messages == 0U) && (slog.disconnects == slow_disconnects + 1U && slog.last_reason == NET_WS_CLOSE_SLOW));
     CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW);
     CHECK(clog.messages == 0U);
     CHECK(slog.disconnects == slow_disconnects + 1U && slog.last_reason == NET_WS_CLOSE_SLOW);
@@ -537,7 +542,7 @@ int main(void) {
     CHECK(!net_ws_server_send_ready(server, failed_client));
     CHECK(!net_ws_server_send(server, failed_client, ping, sizeof ping));
     CHECK(!net_ws_server_send_latest(server, failed_client, ping, sizeof ping, NULL));
-    pump(server, client, 50);
+    pump_until(server, client, (clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW) && (slog.disconnects == failed_disconnects + 1U && slog.last_reason == NET_WS_CLOSE_SLOW));
     CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW);
     CHECK(slog.disconnects == failed_disconnects + 1U && slog.last_reason == NET_WS_CLOSE_SLOW);
     net_ws_client_destroy(client);
@@ -551,7 +556,7 @@ int main(void) {
     CHECK(net_ws_server_send(server, delayed_client, ping, sizeof ping));
     net_ws_server_test_fail_next_write(server);
     net_ws_server_test_hold_writes(server, false);
-    pump(server, client, 50);
+    pump_until(server, client, (clog.messages == 0U && clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW) && (!net_ws_server_send_ready(server, delayed_client)));
     CHECK(clog.messages == 0U && clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW);
     CHECK(!net_ws_server_send_ready(server, delayed_client));
     CHECK(!net_ws_server_send(server, delayed_client, ping, sizeof ping));
@@ -567,7 +572,7 @@ int main(void) {
     net_ws_server_close(server, app_failed_client, 4123U);
     net_ws_server_test_fail_next_write(server);
     net_ws_server_test_hold_writes(server, false);
-    pump(server, client, 50);
+    pump_until(server, client, (clog.messages == 0U && clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW));
     CHECK(clog.messages == 0U && clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW);
     net_ws_client_destroy(client);
 
@@ -603,7 +608,7 @@ int main(void) {
     pump(server, client, 50);
     uint8_t nine[9] = {NET_MSG_APP_FIRST};
     CHECK(net_ws_server_send(server, slog.last_client, nine, sizeof nine));
-    pump(server, client, 50);
+    pump_until(server, client, (clog.closes == 1U && clog.close_code == NET_CLOSE_FORMAT) && (slog.last_reason == NET_WS_CLOSE_PEER));
     CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_FORMAT);
     CHECK(slog.last_reason == NET_WS_CLOSE_PEER);
     net_ws_client_destroy(client);
@@ -621,7 +626,7 @@ int main(void) {
         client = net_ws_client_create(&bare);
         CHECK(client != NULL);
         slog.last_ticket_size = 99U;
-        pump(server, client, 50);
+        pump_until(server, client, (clog.opens == 1U && slog.last_ticket_size == 0U));
         CHECK(clog.opens == 1U && slog.last_ticket_size == 0U);
         net_ws_client_destroy(client);
         pump(server, NULL, 20);
@@ -632,7 +637,7 @@ int main(void) {
     const uint32_t connects_before = slog.connects;
     const uint32_t disconnects_before = slog.disconnects;
     client = connect_client(port, VERSION + 1U, &clog, 256U);
-    pump(server, client, 50);
+    pump_until(server, client, (clog.closes == 1U && clog.close_code == NET_CLOSE_VERSION) && (slog.connects == connects_before && slog.disconnects == disconnects_before));
     CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_VERSION);
     CHECK(slog.connects == connects_before && slog.disconnects == disconnects_before);
     net_ws_client_destroy(client);
@@ -644,7 +649,7 @@ int main(void) {
     uint8_t big[MAX_MESSAGE + 1U];
     memset(big, NET_MSG_APP_FIRST, sizeof big);
     CHECK(net_ws_client_send(client, big, sizeof big));
-    pump(server, client, 50);
+    pump_until(server, client, (clog.closes == 1U && clog.close_code == NET_CLOSE_FORMAT) && (slog.last_reason == NET_WS_CLOSE_PROTOCOL));
     CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_FORMAT);
     CHECK(slog.last_reason == NET_WS_CLOSE_PROTOCOL);
     net_ws_client_destroy(client);
@@ -654,7 +659,7 @@ int main(void) {
     pump(server, client, 50);
     const uint8_t reserved[] = {NET_MSG_HELLO, 0U};
     CHECK(net_ws_client_send(client, reserved, sizeof reserved));
-    pump(server, client, 50);
+    pump_until(server, client, (clog.closes == 1U && clog.close_code == NET_CLOSE_FORMAT));
     CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_FORMAT);
     net_ws_client_destroy(client);
 
@@ -669,11 +674,11 @@ int main(void) {
     rlog.server = rated;
     memset(&clog, 0, sizeof clog);
     client = connect_client(net_ws_server_port(rated), VERSION, &clog, 256U);
-    pump(rated, client, 50);
+    pump_until(rated, client, (clog.opens == 1U));
     CHECK(clog.opens == 1U);
     CHECK(net_ws_client_send(client, ping, sizeof ping));
     CHECK(net_ws_client_send(client, ping, sizeof ping));
-    pump(rated, client, 50);
+    pump_until(rated, client, (clog.closes == 1U && clog.close_code == NET_CLOSE_RATE) && (rlog.last_reason == NET_WS_CLOSE_RATE && rlog.messages == 1U));
     CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_RATE);
     CHECK(rlog.last_reason == NET_WS_CLOSE_RATE && rlog.messages == 1U);
     net_ws_client_destroy(client);
@@ -695,7 +700,7 @@ int main(void) {
         if (index % 100 == 99) { net_ws_server_service(server, 1U); }
     }
     CHECK(refused);
-    pump(server, client, 50);
+    pump_until(server, client, (clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW) && (slog.last_reason == NET_WS_CLOSE_PEER || slog.last_reason == NET_WS_CLOSE_SLOW));
     CHECK(clog.closes == 1U && clog.close_code == NET_CLOSE_SLOW);
     CHECK(slog.last_reason == NET_WS_CLOSE_PEER || slog.last_reason == NET_WS_CLOSE_SLOW);
     net_ws_client_destroy(client);
@@ -720,7 +725,7 @@ int main(void) {
             upgraded = raw_peer_upgraded(quiet, response, sizeof response, &got);
         }
         CHECK(upgraded && raw_peer_send_hello(quiet, VERSION));
-        pump(live, NULL, 50);
+        pump_until(live, NULL, (llog.connects == 1U));
         CHECK(llog.connects == 1U);
         /* Service calls return early on any event, so count time, not rounds. */
         const time_t started = time(NULL);

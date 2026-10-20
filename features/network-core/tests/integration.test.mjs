@@ -15,8 +15,9 @@ function run(command, args, cwd) {
   return result.stdout;
 }
 
-test("a bare consumer builds the transport and passes roundtrip and idle-ping wire checks", () => {
+test("a bare consumer builds the transport and passes roundtrip and idle-ping wire checks", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "nt-network-core-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(join(dir, "CMakeLists.txt"), [
     "cmake_minimum_required(VERSION 3.25)",
     "project(consumer LANGUAGES C CXX)",
