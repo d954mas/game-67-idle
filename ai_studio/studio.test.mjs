@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
@@ -605,11 +604,4 @@ test("CLI contract returns stable JSON usage and setup envelopes", async () => {
     console.log = log;
     console.error = error;
   }
-});
-
-test("CI runs every verification domain exactly once", () => {
-  const workflow = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../.github/workflows/studio-verify.yml"), "utf8");
-  const scheduled = [...workflow.matchAll(/^\s+- \{ name: [a-z-]+, domains: "([a-z,-]+)" \}\s*$/gm)]
-    .flatMap((match) => match[1].split(","));
-  assert.deepEqual([...scheduled].sort(), describeStudio().verification.domains.map((domain) => domain.id).sort());
 });

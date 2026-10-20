@@ -47,9 +47,10 @@ test("browser client drains 64 records before slow close", { skip: !emcc && "nee
   const port = server.address().port;
   const url = `http://127.0.0.1:${port}/web_order.html?ws=${encodeURIComponent(`ws://127.0.0.1:${port}/room`)}`;
   const profile = mkdtempSync(join(tmpdir(), "nt-web-order-profile-"));
+  // Ubuntu's AppArmor denies Chrome's sandbox the namespaces it needs; the page is a local fixture.
   const browser = spawn(chrome, ["--headless=new", "--disable-gpu", "--no-first-run",
     "--disable-background-networking", "--remote-debugging-address=127.0.0.1", "--remote-debugging-port=0",
-    `--user-data-dir=${profile}`, "about:blank"], { windowsHide: true, stdio: "ignore" });
+    ...(windows ? [] : ["--no-sandbox"]), `--user-data-dir=${profile}`, "about:blank"], { windowsHide: true, stdio: "ignore" });
   let ws;
   const pending = new Map();
   let nextId = 1;
@@ -58,7 +59,9 @@ test("browser client drains 64 records before slow close", { skip: !emcc && "nee
     let cdpPort;
     for (let attempt = 0; attempt < 100; ++attempt) {
       const active = join(profile, "DevToolsActivePort");
-      if (existsSync(active)) { cdpPort = Number(readFileSync(active, "utf8").split(/\r?\n/)[0]); break; }
+      // Chrome may still hold the file open (EBUSY on Windows) or have written only part of it.
+      try { cdpPort = Number(readFileSync(active, "utf8").split(/\r?\n/)[0]); } catch {}
+      if (cdpPort > 0) break;
       await pause(100);
     }
     assert.ok(cdpPort > 0, "Chrome did not publish DevToolsActivePort");

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { describeStudio } from "./studio.mjs";
+
 const workflow = readFileSync(new URL("../.github/workflows/studio-verify.yml", import.meta.url), "utf8");
 
 function eventBlock(name, nextMarker) {
@@ -80,8 +82,11 @@ test("Studio CI is a Windows Ubuntu matrix with pinned current setup contracts",
   assert.match(workflow, /-DCMAKE_CXX_COMPILER_LAUNCHER=ccache/);
 });
 
-test("blocking full verification does not repeat decision-free advisory timing", () => {
-  assert.match(workflow, /name: Blocking Studio verification[\s\S]*node ai_studio\/studio\.mjs verify --full/);
+test("blocking verification runs every domain exactly once without advisory timing", () => {
+  assert.match(workflow, /name: Blocking Studio verification[\s\S]*node ai_studio\/studio\.mjs verify --domain "\$\{\{ matrix\.group\.domains \}\}"/);
+  const scheduled = [...workflow.matchAll(/^\s+- \{ name: [a-z-]+, domains: "([a-z,-]+)" \}\s*$/gm)]
+    .flatMap((match) => match[1].split(","));
+  assert.deepEqual([...scheduled].sort(), describeStudio().verification.domains.map((domain) => domain.id).sort());
   assert.doesNotMatch(workflow, /Build real reference-template wasm release|Assert wasm release artifact/);
   assert.doesNotMatch(workflow, /Advisory Canvas worker timing|AI_STUDIO_ASSERT_TIMING|worker_warm\.test\.mjs/);
   assert.doesNotMatch(workflow, /continue-on-error: true/);
