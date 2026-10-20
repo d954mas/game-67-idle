@@ -18,10 +18,11 @@ RESULT = Path(__file__).resolve().parent / "results" / "windows-pipeline-2026-10
 
 class ItemsPipelineBenchmarkTests(unittest.TestCase):
     def test_runner_records_wall_memory_and_exact_context_bytes(self):
+        # The child outlives a full /proc scan on a busy host, which reads its pid last.
         measured = BENCHMARK.measure_command([
             sys.executable,
             "-c",
-            "import sys, time; print('ready'); print('note', file=sys.stderr); time.sleep(0.05)",
+            "import sys, time; print('ready'); print('note', file=sys.stderr); time.sleep(0.5)",
         ])
         self.assertEqual(measured["exit_code"], 0)
         self.assertGreater(measured["wall_ms"], 0)
