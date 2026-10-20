@@ -1,0 +1,209 @@
+// Package admin is the operator console: its own login (password, TOTP),
+// read-only views of the metaserver and its database, and the owner's
+// bootstrap and recovery ceremonies.
+package admin
+
+import (
+	"context"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// Brand names the game on the console page and on the owner's TOTP entry.
+type Brand struct {
+	Name string // "Example Game"
+	Mark string // two letters for the badge
+}
+
+type adminConfig struct {
+	addr         string
+	origin       string
+	dbURL        string
+	dbPassword   string
+	metaURL      string
+	metaToken    string
+	totpKey      []byte
+	totpRequired bool
+}
+
+func parseTOTPRequired() (bool, error) {
+	switch os.Getenv("ADMIN_TOTP_REQUIRED") {
+	case "", "1":
+		return true, nil
+	case "0":
+		return false, nil
+	default:
+		return false, errors.New("ADMIN_TOTP_REQUIRED must be 0 or 1")
+	}
+}
+
+func loadAdminConfig() (adminConfig, error) {
+	var cfg adminConfig
+	if os.Getenv("ADMIN_ENABLED") != "1" {
+		return cfg, errors.New("admin service is disabled")
+	}
+	var err error
+	cfg.totpRequired, err = parseTOTPRequired()
+	if err != nil {
+		return cfg, err
+	}
+	cfg.origin = strings.TrimRight(os.Getenv("ADMIN_ORIGIN"), "/")
+	origin, err := url.Parse(cfg.origin)
+	if err != nil || origin.Scheme != "https" || origin.Host == "" || origin.Path != "" ||
+		origin.RawQuery != "" || origin.Fragment != "" || origin.User != nil {
+		return cfg, errors.New("ADMIN_ORIGIN must be an https origin")
+	}
+	cfg.dbURL = os.Getenv("ADMIN_DATABASE_URL")
+	if cfg.dbURL == "" {
+		return cfg, errors.New("ADMIN_DATABASE_URL is required")
+	}
+	passwordFile := os.Getenv("ADMIN_DATABASE_PASSWORD_FILE")
+	if passwordFile == "" {
+		return cfg, errors.New("ADMIN_DATABASE_PASSWORD_FILE is required")
+	}
+	password, err := os.ReadFile(passwordFile)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.dbPassword = strings.TrimSpace(string(password))
+	if len(cfg.dbPassword) < 32 || len(cfg.dbPassword) > 256 {
+		return cfg, errors.New("ADMIN_DATABASE_PASSWORD_FILE must contain a 32..256 character password")
+	}
+	cfg.addr = os.Getenv("ADMIN_ADDR")
+	if cfg.addr == "" {
+		cfg.addr = ":8082"
+	}
+	cfg.metaURL = os.Getenv("ADMIN_META_URL")
+	if cfg.metaURL == "" {
+		cfg.metaURL = "http://meta:8081"
+	}
+	metaURL, err := url.Parse(cfg.metaURL)
+	if err != nil || (metaURL.Scheme != "http" && metaURL.Scheme != "https") || metaURL.Host == "" ||
+		metaURL.User != nil || metaURL.Path != "" || metaURL.RawQuery != "" || metaURL.Fragment != "" {
+		return cfg, errors.New("ADMIN_META_URL must be an http(s) origin")
+	}
+	keyFile := os.Getenv("ADMIN_TOTP_KEY_FILE")
+	tokenFile := os.Getenv("ADMIN_META_TOKEN_FILE")
+	if keyFile == "" || tokenFile == "" {
+		return cfg, errors.New("ADMIN_TOTP_KEY_FILE and ADMIN_META_TOKEN_FILE are required")
+	}
+	encodedKey, err := os.ReadFile(keyFile)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.totpKey, err = hex.DecodeString(strings.TrimSpace(string(encodedKey)))
+	if err != nil || len(cfg.totpKey) != 32 {
+		return cfg, errors.New("ADMIN_TOTP_KEY_FILE must contain 64 hex characters")
+	}
+	token, err := os.ReadFile(tokenFile)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.metaToken = strings.TrimSpace(string(token))
+	if len(cfg.metaToken) < 32 {
+		return cfg, errors.New("ADMIN_META_TOKEN_FILE must contain at least 32 characters")
+	}
+	return cfg, nil
+}
+
+func runAdmin(brand Brand) error {
+	cfg, err := loadAdminConfig()
+	if err != nil {
+		return err
+	}
+	poolConfig, err := pgxpool.ParseConfig(cfg.dbURL)
+	if err != nil {
+		return err
+	}
+	if poolConfig.ConnConfig.User != "meta_admin_service" {
+		return fmt.Errorf("admin database role %q is not meta_admin_service", poolConfig.ConnConfig.User)
+	}
+	if poolConfig.ConnConfig.Password != "" {
+		return errors.New("ADMIN_DATABASE_URL must not contain a password")
+	}
+	poolConfig.ConnConfig.Password = cfg.dbPassword
+	poolConfig.MaxConns = 4
+	poolConfig.ConnConfig.RuntimeParams["statement_timeout"] = "1000"
+	poolConfig.ConnConfig.RuntimeParams["lock_timeout"] = "500"
+	poolConfig.ConnConfig.RuntimeParams["search_path"] = "ops,pg_catalog"
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	var role string
+	var superuser, createRole, createDB, bypassRLS bool
+	if err := pool.QueryRow(ctx, `SELECT current_user, rolsuper, rolcreaterole, rolcreatedb, rolbypassrls
+		FROM pg_roles WHERE rolname = current_user`).Scan(&role, &superuser, &createRole, &createDB,
+		&bypassRLS); err != nil {
+		return err
+	}
+	if role != "meta_admin_service" {
+		return fmt.Errorf("admin database role %q is not meta_admin_service", role)
+	}
+	var directPlayers, changeAudit, changeCredentials bool
+	if err := pool.QueryRow(ctx, `SELECT
+		has_table_privilege(current_user, 'public.players', 'SELECT'),
+		has_table_privilege(current_user, 'ops.audit_actions', 'UPDATE, DELETE, TRUNCATE'),
+		has_column_privilege(current_user, 'ops.admin_users', 'role', 'UPDATE') OR
+		has_column_privilege(current_user, 'ops.admin_users', 'password_hash', 'UPDATE') OR
+		has_column_privilege(current_user, 'ops.admin_users', 'totp_secret', 'UPDATE') OR
+		has_column_privilege(current_user, 'ops.admin_users', 'disabled', 'UPDATE')`).Scan(
+		&directPlayers, &changeAudit, &changeCredentials); err != nil {
+		return err
+	}
+	if superuser || createRole || createDB || bypassRLS || directPlayers || changeAudit || changeCredentials {
+		return errors.New("admin database role has excessive privileges")
+	}
+	dummy, err := hashPassword("unavailable account")
+	if err != nil {
+		return err
+	}
+	store := &adminStore{pool: pool, totpKey: cfg.totpKey, totpRequired: cfg.totpRequired, dummyHash: dummy}
+	app := &adminServer{brand: brand, store: store, meta: metaClient{baseURL: cfg.metaURL, token: cfg.metaToken},
+		origin: cfg.origin, totpRequired: cfg.totpRequired}
+	server := &http.Server{Addr: cfg.addr, Handler: app.handler(), ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: time.Minute,
+		MaxHeaderBytes: 16 << 10}
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		server.Shutdown(shutdownCtx)
+	}()
+	err = server.ListenAndServe()
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+
+// Main runs the operator console as the process: no argument serves,
+// `bootstrap-owner` and `recover-owner` are the owner's terminal ceremonies.
+func Main(brand Brand) {
+	var err error
+	switch {
+	case len(os.Args) == 1:
+		err = runAdmin(brand)
+	case len(os.Args) == 2 && (os.Args[1] == "bootstrap-owner" || os.Args[1] == "recover-owner"):
+		err = runOwnerCeremony(os.Args[1], brand)
+	default:
+		err = errors.New("usage: admin [bootstrap-owner|recover-owner]")
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "admin:", err)
+		os.Exit(1)
+	}
+}

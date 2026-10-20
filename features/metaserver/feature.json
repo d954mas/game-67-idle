@@ -1,0 +1,35 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "metaserver",
+  "version": "1.0.0",
+  "title": "Metaserver",
+  "status": "opt-in",
+  "kind": "server",
+  "summary": "Go library for a room-based game's online back end: guest identity, accounts, room registry, entry tickets, profile documents, heartbeat probe, minute history and the operator console. A game owns its main, routes, brand and deploy.",
+  "copy_model": "in-place",
+  "layer": "L1",
+  "owners": [
+    "features/metaserver"
+  ],
+  "dependencies": [
+    "Go 1.27",
+    "PostgreSQL 18"
+  ],
+  "provides": [
+    "metaserver.Main(mount)",
+    "Server player and room handlers, Player and Timed wrappers",
+    "admin.Main(Brand)",
+    "schema version 1 with meta_* roles",
+    "testdata room contract fixtures"
+  ],
+  "commands": {
+    "vet": "go -C features/metaserver vet ./...",
+    "test": "go -C features/metaserver test ./..."
+  },
+  "manuals": {
+    "contract": "features/metaserver/README.md",
+    "install": "features/metaserver/INSTALL.md"
+  },
+  "art_needs": [],
+  "test_consumer": false
+}

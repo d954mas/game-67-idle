@@ -132,6 +132,12 @@ possibility, not a feature.
   measurement over `game-events` and `platform-sdk`. The consumer owns its
   event mapper. See `portal-metrics/README.md` and `portal-metrics/INSTALL.md`.
 
+- `metaserver/` (`L1`, opt-in): Go library for a room-based game's online back
+  end (identity, room registry, entry tickets, profiles, operator console). A
+  game's `metaserver/` module calls `metaserver.Main` with its routes and
+  `admin.Main` with its brand. See `metaserver/README.md` and
+  `metaserver/INSTALL.md`.
+
 - `box3d/` (`L1`, opt-in): pinned MIT 3D rigid-body physics, shared in-place
   through `box3d_enable(target)` for native and WASM. Games own their worlds,
   shapes, timing and collision rules. See `box3d/README.md` and `box3d/INSTALL.md`.

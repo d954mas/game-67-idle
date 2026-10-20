@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>{{.Name}} · сервер</title>
+  <link rel="stylesheet" href="/vendor/uPlot.min.css">
+  <link rel="stylesheet" href="/app.css">
+  <script src="/vendor/uPlot.iife.min.js" defer></script>
+  <script src="/app.js" defer></script>
+  <script src="/capacity.js" defer></script>
+  <script src="/overview.js" defer></script>
+  <script src="/incidents.js" defer></script>
+  <script src="/rooms.js" defer></script>
+</head>
+<body>
+  <div class="app-shell" id="app" hidden>
+    <aside class="sidebar" aria-label="Навигация">
+      <a class="brand" href="/?page=overview" aria-label="{{.Name}}, обзор">
+        <span class="brand-mark" aria-hidden="true">{{.Mark}}</span>
+        <span><strong>{{.Name}}</strong><small>SERVER CONSOLE</small></span>
+      </a>
+      <div class="sidebar-label">РАЗДЕЛЫ</div>
+      <nav class="nav" id="nav">
+        <a href="/?page=overview" data-page-link="overview">Обзор</a>
+        <a href="/?page=players" data-page-link="players">Игроки</a>
+        <a href="/?page=rooms" data-page-link="rooms">Комнаты</a>
+        <a href="/?page=capacity" data-page-link="capacity">Мощность</a>
+        <a href="/?page=incidents" data-page-link="incidents">Сбои</a>
+        <a href="/?page=system" data-page-link="system">Система</a>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="environment">PROD</span>
+        <span id="operator-name">Оператор</span>
+        <button id="logout" class="text-button" type="button">Выйти</button>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div class="mobile-brand">{{.Name}} <span>сервер</span></div>
+        <span id="source-state" class="source-state" role="status">Источник не проверен</span>
+        <time id="utc-clock" class="clock"></time>
+        <button id="mobile-logout" class="text-button mobile-logout" type="button">Выйти</button>
+      </header>
+      <main id="main" tabindex="-1">
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow" id="page-eyebrow">ОПЕРАЦИИ / ОБЗОР</div>
+            <h1 id="page-title">Обзор</h1>
+            <p id="page-description">Состояние сервера и игроков по подтвержденным данным.</p>
+          </div>
+          <button id="refresh" class="button secondary" type="button">Обновить</button>
+        </div>
+        <div id="page-status" class="notice" role="status" aria-live="polite"></div>
+
+        <section id="page-overview" class="page" data-page="overview">
+          <div class="state-grid" id="overview-state"></div>
+          <div class="content-grid">
+            <section class="panel chart-panel">
+              <div class="panel-head"><h2>Онлайн за сутки</h2><a href="/?page=capacity">Мощность подробно</a></div>
+              <div class="chart" id="overview-online"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><h2>Источники данных</h2></div>
+              <dl class="fact-list" id="overview-sources"></dl>
+            </section>
+          </div>
+          <section class="panel">
+            <div class="panel-head"><h2>Комнаты, требующие внимания</h2><span id="overview-rooms-note" class="muted"></span><a href="/?page=rooms">Все комнаты</a></div>
+            <div class="table-scroll"><table><thead><tr><th scope="col">Комната</th><th scope="col">Состояние</th><th scope="col">Онлайн / места</th><th scope="col">Самый долгий тик</th><th scope="col">Статус получен</th></tr></thead><tbody id="overview-rooms"></tbody></table></div>
+          </section>
+        </section>
+
+        <section id="page-players" class="page" data-page="players" hidden>
+          <form id="player-search" class="search-form" role="search">
+            <label for="player-query">ID или начало логина</label>
+            <div class="search-row"><input id="player-query" name="q" type="search" maxlength="64" autocomplete="off" placeholder="Например, 142 или player"><button class="button" type="submit">Найти</button></div>
+          </form>
+          <div class="content-grid players-grid">
+            <section class="panel">
+              <div class="panel-head"><h2>Игроки</h2><span id="players-count" class="muted"></span></div>
+              <div class="table-scroll"><table><thead><tr><th scope="col">ID</th><th scope="col">Логин</th><th scope="col">Создан</th><th scope="col">Сохранение</th></tr></thead><tbody id="players-list"></tbody></table></div>
+              <button id="players-more" class="button secondary more" type="button" hidden>Показать еще</button>
+            </section>
+            <section class="panel detail-panel" aria-labelledby="player-detail-title">
+              <div class="panel-head"><h2 id="player-detail-title">Карточка игрока</h2></div>
+              <div id="player-detail" class="empty">Выберите игрока в списке.</div>
+            </section>
+          </div>
+        </section>
+
+        <section id="page-rooms" class="page" data-page="rooms" hidden>
+          <div class="state-grid" id="rooms-fleet"></div>
+          <section class="panel chart-panel">
+              <div class="panel-head"><h2>Тик флота за сутки</h2><span class="muted">Пунктир: бюджет тика 33 мс</span></div>
+              <div class="chart" id="rooms-tick-chart"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><h2>Машины сейчас</h2><span class="muted">Последнее окно замера</span></div>
+              <div class="table-scroll"><table><thead><tr><th scope="col">Машина</th><th scope="col">Комнаты по плану</th><th scope="col">CPU</th><th scope="col">user / system / softirq</th><th scope="col">steal</th><th scope="col">Мбит/с</th><th scope="col">Пакетов/с</th><th scope="col">Замер</th></tr></thead><tbody id="rooms-machines"></tbody></table></div>
+            </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Комнаты</h2><span id="rooms-count" class="muted"></span></div>
+            <div class="room-filters">
+              <label>Машина <select id="rooms-host"></select></label>
+              <label class="check"><input id="rooms-problems" type="checkbox"> Только требующие внимания</label>
+              <label>Комната <input id="rooms-query" type="search" inputmode="numeric" maxlength="12" placeholder="ID" autocomplete="off"></label>
+            </div>
+            <div class="table-scroll"><table class="clickable"><thead><tr id="rooms-head"></tr></thead><tbody id="rooms-list"></tbody></table></div>
+          </section>
+          <section class="panel" id="room-detail-panel" hidden>
+            <div class="panel-head"><h2 id="room-detail-title">Комната</h2><button id="room-detail-close" class="text-button" type="button">Закрыть</button></div>
+            <div id="room-detail" class="room-detail"></div>
+          </section>
+        </section>
+
+        <section id="page-capacity" class="page" data-page="capacity" hidden>
+          <div class="capacity-toolbar">
+            <div class="segmented" role="group" aria-label="Период">
+              <button type="button" data-range="24h" aria-pressed="true">24 часа</button>
+              <button type="button" data-range="7d" aria-pressed="false">7 дней</button>
+              <button type="button" data-range="30d" aria-pressed="false">30 дней</button>
+            </div>
+            <span id="capacity-host" class="host-chip" hidden></span>
+            <span id="capacity-collecting" class="muted"></span>
+          </div>
+          <div class="state-grid" id="capacity-state"></div>
+          <div class="chart-grid">
+            <section class="panel chart-panel">
+              <div class="panel-head"><h2>Онлайн</h2><span class="muted">Игроки в комнатах против мест</span></div>
+              <div class="chart" id="chart-online"></div>
+            </section>
+            <section class="panel chart-panel">
+              <div class="panel-head"><h2>Нагрузка CPU</h2><span class="muted">Пунктир: норма 80% и перегрузка 90%</span></div>
+              <div class="chart" id="chart-cpu"></div>
+            </section>
+            <section class="panel chart-panel">
+              <div class="panel-head"><h2>Трафик</h2><span class="muted">Все интерфейсы машин, Мбит/с</span></div>
+              <div class="chart" id="chart-traffic"></div>
+            </section>
+            <section class="panel chart-panel">
+              <div class="panel-head"><h2>Запросы и ошибки API</h2><span class="muted" id="errors-unit">Запросы в секунду; ошибки — штук за точку</span></div>
+              <div class="chart" id="chart-errors"></div>
+            </section>
+          </div>
+          <section class="panel">
+            <div class="panel-head"><h2>Машины</h2><span class="muted">Сначала перегруженные. Нажмите строку, чтобы показать графики одной машины.</span></div>
+            <div class="table-scroll"><table class="clickable"><thead><tr><th scope="col">Состояние</th><th scope="col">Машина</th><th scope="col">Онлайн / места</th><th scope="col">CPU сейчас</th><th scope="col">CPU за период: p95 / макс</th><th scope="col">Трафик сейчас, Мбит/с</th><th scope="col">Последняя минута</th></tr></thead><tbody id="capacity-machines"></tbody></table></div>
+          </section>
+          <div class="content-grid even">
+            <section class="panel">
+              <div class="panel-head"><h2>Трафик за месяц</h2><span id="traffic-plan" class="muted"></span></div>
+              <div class="table-scroll"><table><thead><tr><th scope="col">Машина</th><th scope="col">Сегодня, ГБ</th><th scope="col">Месяц, ГБ</th><th scope="col">Тарифа</th></tr></thead><tbody id="capacity-traffic"></tbody></table></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><h2>API за период</h2><span class="muted">Запросы к метасерверу</span></div>
+              <div class="table-scroll"><table><thead><tr><th scope="col">Запрос</th><th scope="col">Всего</th><th scope="col">5xx</th><th scope="col">4xx</th><th scope="col">429</th><th scope="col">Сред. / макс, мс</th></tr></thead><tbody id="capacity-endpoints"></tbody></table></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="page-incidents" class="page" data-page="incidents" hidden>
+          <div class="state-grid" id="incidents-state"></div>
+          <section class="panel">
+            <div class="panel-head"><h2>Алерты</h2><span class="muted">Сработавшие уходят в heartbeat и будят оператора</span></div>
+            <div class="table-scroll"><table><thead><tr><th scope="col">Состояние</th><th scope="col">Условие</th><th scope="col">С какого времени</th></tr></thead><tbody id="incidents-alerts"></tbody></table></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Группы ошибок за 24 часа</h2><span class="muted">Нажмите строку, чтобы увидеть подробности</span></div>
+            <div class="table-scroll"><table><thead><tr><th scope="col">Ошибка</th><th scope="col">Уровень</th><th scope="col">Сколько раз</th><th scope="col">Впервые</th><th scope="col">Последний раз</th></tr></thead><tbody id="incidents-groups"></tbody></table></div>
+          </section>
+          <div class="content-grid even">
+            <section class="panel">
+              <div class="panel-head"><h2>API за 24 часа</h2><span class="muted">Сред. / макс. время, мс</span></div>
+              <div class="table-scroll"><table><thead><tr><th scope="col">Запрос</th><th scope="col">Всего</th><th scope="col">5xx</th><th scope="col">4xx</th><th scope="col">429</th><th scope="col">Время</th></tr></thead><tbody id="incidents-routes"></tbody></table></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><h2>База и API комнат</h2><span id="incidents-backends-note" class="muted"></span></div>
+              <dl class="fact-list" id="incidents-backends"></dl>
+            </section>
+          </div>
+          <section class="panel">
+            <div class="panel-head"><h2>Последние события</h2><span class="muted">Новые сверху, до 50 за 24 часа</span></div>
+            <div class="table-scroll"><table><thead><tr><th scope="col">Время</th><th scope="col">Уровень</th><th scope="col">Событие</th></tr></thead><tbody id="incidents-events"></tbody></table></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Сертификаты комнат</h2><span class="muted">Проверяются раз в час</span></div>
+            <div class="table-scroll"><table><thead><tr><th scope="col">Состояние</th><th scope="col">Хост</th><th scope="col">Действует до</th><th scope="col">Проверен</th></tr></thead><tbody id="incidents-certs"></tbody></table></div>
+          </section>
+        </section>
+
+        <section id="page-system" class="page" data-page="system" hidden>
+          <div class="content-grid">
+            <section class="panel"><div class="panel-head"><h2>Метасервер</h2></div><dl id="system-meta" class="fact-list"></dl></section>
+            <section class="panel"><div class="panel-head"><h2>Резервные копии и выпуск</h2></div><div id="system-ops" class="empty">Источник состояния еще не подключен.</div></section>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <main id="login-screen" class="login-screen">
+    <div class="login-card">
+      <div class="brand compact"><span class="brand-mark" aria-hidden="true">{{.Mark}}</span><span><strong>{{.Name}}</strong><small>SERVER CONSOLE</small></span></div>
+      <p class="eyebrow">ДОСТУП К СЕРВЕРУ</p>
+      <h1>Вход для оператора</h1>
+      <p class="muted">Используйте отдельную учетную запись админки.</p>
+      <form id="login-form">
+        <label for="login-user">Имя</label><input id="login-user" name="username" autocomplete="username" required maxlength="64">
+        <label for="login-password">Пароль</label><input id="login-password" name="password" type="password" autocomplete="current-password" required>
+        <div id="login-totp-field" hidden><label for="login-totp">Код подтверждения</label><input id="login-totp" name="totp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"></div>
+        <button class="button full" type="submit" disabled>Войти</button>
+      </form>
+      <p id="login-error" class="login-error" role="alert" hidden></p>
+    </div>
+  </main>
+</body>
+</html>

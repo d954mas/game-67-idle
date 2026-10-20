@@ -1,0 +1,23 @@
+# Local PostgreSQL for `go test ./...` and a bare `go run`. A server already
+# on 5432 can serve the tests instead: point META_TEST_DATABASE_URL at it.
+# `docker compose down -v` wipes the data.
+name: metaserver-stand
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: metaserver
+      POSTGRES_PASSWORD: metaserver
+      POSTGRES_DB: metaserver
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metaserver -d metaserver"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+volumes:
+  pgdata:
