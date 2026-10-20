@@ -114,6 +114,10 @@ func (s *adminStore) login(ctx context.Context, username, password string, now t
 		return nil, user, err
 	}
 	defer tx.Rollback(ctx)
+	// Owner recovery holds this lock exclusively, so a session cannot be issued from a hash it replaced.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock_shared($1)`, int64(ownerLockKey)); err != nil {
+		return nil, user, err
+	}
 	var passwordHash string
 	var disabled bool
 	err = tx.QueryRow(ctx, `SELECT id, username, role, password_hash, disabled
@@ -126,7 +130,8 @@ func (s *adminStore) login(ctx context.Context, username, password string, now t
 	if err != nil {
 		return nil, user, err
 	}
-	if disabled || !verifyPassword(passwordHash, password) {
+	// Verify before the disabled check so timing does not reveal a disabled account.
+	if !verifyPassword(passwordHash, password) || disabled {
 		return nil, adminUser{}, auditDenied(ctx, tx, username)
 	}
 	cookie, err := newSessionSecret()

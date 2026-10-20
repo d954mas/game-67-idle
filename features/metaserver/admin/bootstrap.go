@@ -13,6 +13,9 @@ import (
 	"golang.org/x/term"
 )
 
+// ownerLockKey serializes owner bootstrap and recovery against logins.
+const ownerLockKey = 7454134
+
 func validOwnerPassword(password string) bool {
 	return utf8.ValidString(password) && utf8.RuneCountInString(password) >= 10 && len(password) <= 1024
 }
@@ -30,7 +33,7 @@ func bootstrapOwner(ctx context.Context, pool *pgxpool.Pool, username, password 
 		return err
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(7454134)`); err != nil {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, int64(ownerLockKey)); err != nil {
 		return err
 	}
 	var ownerExists bool
@@ -66,7 +69,7 @@ func recoverOwner(ctx context.Context, pool *pgxpool.Pool, username, password st
 		return err
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(7454134)`); err != nil {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, int64(ownerLockKey)); err != nil {
 		return err
 	}
 	var id int64
