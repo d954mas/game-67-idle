@@ -23,7 +23,7 @@ import (
 var schemaSQL string
 
 // SchemaVersion is the newest migration; the server refuses a database
-// that has not reached it.
+// at any other version.
 const SchemaVersion = 1
 
 var migrations = []struct {
@@ -131,12 +131,14 @@ func (s *store) migrate(ctx context.Context) error {
 }
 
 func (s *store) checkSchema(ctx context.Context) error {
-	var applied int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM schema_migrations WHERE version = $1`, SchemaVersion).Scan(&applied); err != nil {
+	// Equal, not at least: an older image on a newer schema must stop, not
+	// write rows that schema no longer means; that is what refuses a rollback.
+	var newest int
+	if err := s.pool.QueryRow(ctx, `SELECT coalesce(max(version), 0) FROM schema_migrations`).Scan(&newest); err != nil {
 		return err
 	}
-	if applied != 1 {
-		return fmt.Errorf("schema migration %d is missing", SchemaVersion)
+	if newest != SchemaVersion {
+		return fmt.Errorf("database schema is %d, this server runs schema %d", newest, SchemaVersion)
 	}
 	return nil
 }

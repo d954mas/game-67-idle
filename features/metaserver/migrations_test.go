@@ -318,3 +318,15 @@ func TestSchemaIsOneVersionWithItsRoles(t *testing.T) {
 		t.Fatalf("roles found %d of %d: %v", found, len(roles), err)
 	}
 }
+
+// An older image started on a newer schema fails loudly instead of serving.
+func TestServerRefusesANewerSchema(t *testing.T) {
+	st, _ := freshStore(t)
+	ctx := t.Context()
+	if _, err := st.pool.Exec(ctx, `INSERT INTO schema_migrations (version, checksum) VALUES ($1, 'newer')`, SchemaVersion+1); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.checkSchema(ctx); err == nil {
+		t.Fatal("a schema newer than the server's was accepted")
+	}
+}
