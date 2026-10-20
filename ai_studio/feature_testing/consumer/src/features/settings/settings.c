@@ -104,8 +104,8 @@ void settings_adopt_platform_language(void) {
     if (language >= 0 && !settings_state.language_chosen) settings_set_language(language);
 }
 
-/* The device as the page reported it at adoption; a computer until then. */
-static graphics_device_t s_device;
+/* Whether the page reported a phone at adoption; a computer until then. */
+static bool s_mobile;
 
 graphics_quality_t settings_graphics_quality(void) {
     return settings_state.graphics_quality == SETTINGS_STATE_GRAPHICS_QUALITY_LOW ? GRAPHICS_QUALITY_LOW
@@ -114,7 +114,7 @@ graphics_quality_t settings_graphics_quality(void) {
 
 bool settings_shadows(void) { return settings_state.shadows; }
 
-float settings_world_scale(void) { return graphics_world_scale(settings_graphics_quality(), s_device.mobile); }
+float settings_world_scale(void) { return graphics_world_scale(settings_graphics_quality(), s_mobile); }
 
 static void set_graphics_quality(graphics_quality_t quality) {
     settings_state.graphics_quality =
@@ -136,8 +136,8 @@ void settings_choose_shadows(bool on) {
 }
 
 void settings_adopt_device_graphics(void) {
-    graphics_device_query(&s_device);
-    const graphics_quality_t guess = graphics_quality_guess(s_device.mobile, s_device.gpu);
+    s_mobile = graphics_device_mobile();
+    const graphics_quality_t guess = graphics_quality_guess(s_mobile, graphics_device_gpu());
     /* An unpicked value follows the device on every launch, so a save carried to a
        stronger device starts it on what that device can afford. Nothing is marked
        dirty: the guess is not the player's choice and is never stored as one. */

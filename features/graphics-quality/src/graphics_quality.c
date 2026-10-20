@@ -6,6 +6,8 @@
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
+
+#include "graphics/nt_gfx.h"
 #endif
 
 #define GPU_NAME_MAX 256U
@@ -17,19 +19,7 @@ static const char *const k_names[GRAPHICS_QUALITY_COUNT] = {"high", "low"};
 
 #ifdef __EMSCRIPTEN__
 /* clang-format off */
-EM_JS(int, graphics_quality_page_device, (char *gpu, int gpu_size), {
-    var name = "";
-    try {
-        var canvas = Module["canvas"] || document.getElementById("canvas");
-        var gl = canvas ? (canvas.getContext("webgl2") || canvas.getContext("webgl")) : null;
-        if (gl) {
-            var info = gl.getExtension("WEBGL_debug_renderer_info");
-            name = String(gl.getParameter(info ? info["UNMASKED_RENDERER_WEBGL"] : gl.RENDERER) || "");
-        }
-    } catch (e) {
-        name = "";
-    }
-    stringToUTF8(name, gpu, gpu_size);
+EM_JS(int, graphics_quality_page_mobile, (void), {
     var agent = navigator["userAgentData"];
     if (agent && typeof agent["mobile"] === "boolean" && agent["mobile"]) { return 1; }
     var ua = String(navigator.userAgent || "");
@@ -39,12 +29,19 @@ EM_JS(int, graphics_quality_page_device, (char *gpu, int gpu_size), {
 /* clang-format on */
 #endif
 
-void graphics_device_query(graphics_device_t *out) {
-    out->gpu[0] = '\0';
+bool graphics_device_mobile(void) {
 #ifdef __EMSCRIPTEN__
-    out->mobile = graphics_quality_page_device(out->gpu, (int)sizeof out->gpu) != 0;
+    return graphics_quality_page_mobile() != 0;
 #else
-    out->mobile = false;
+    return false;
+#endif
+}
+
+const char *graphics_device_gpu(void) {
+#ifdef __EMSCRIPTEN__
+    return nt_gfx_device_info()->renderer;
+#else
+    return "";
 #endif
 }
 

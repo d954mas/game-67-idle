@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "graphics-quality",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "title": "Graphics Quality",
   "status": "reusable",
   "kind": "presentation",
@@ -11,13 +11,17 @@
   "owners": [
     "features/graphics-quality"
   ],
-  "dependencies": [],
+  "dependencies": [
+    "engine nt_gfx: the renderer name, web builds only"
+  ],
   "commands": {
     "ctest": "ctest --test-dir ai_studio/feature_testing/consumer/build/native-debug -R test_graphics_quality --output-on-failure"
   },
   "provides": [
-    "graphics_device_query: the page's unmasked WebGL renderer and phone/tablet flag",
+    "graphics_device_mobile: the page's phone/tablet flag",
+    "graphics_device_gpu: the engine's renderer name on the web",
     "graphics_quality_guess: the starting step for a device",
+    "graphics_quality_name / graphics_quality_parse: stable names for saves and command lines",
     "graphics_world_scale: the world target's size per step",
     "graphics_shadows_default: shadows start on at High only"
   ],

@@ -14,17 +14,14 @@ typedef enum graphics_quality_t {
     GRAPHICS_QUALITY_COUNT,
 } graphics_quality_t;
 
-// What the page says about the device: a phone (or tablet) and the GPU's name,
-// unmasked where the browser allows it. Native builds report a computer with an
-// empty name, which guesses High.
-typedef struct graphics_device_t {
-    bool mobile;
-    char gpu[160];
-} graphics_device_t;
+// Whether the page runs on a phone or a tablet, from the user agent. Native
+// builds are a computer.
+bool graphics_device_mobile(void);
 
-// Web: reads the canvas's WebGL renderer and the user agent. Call it after the
-// graphics context exists, or the GPU name comes back empty.
-void graphics_device_query(graphics_device_t *out);
+// The GPU's name as the engine's graphics context reports it (unmasked where the
+// browser allows it); empty natively, which guesses High. Call it after the
+// graphics context exists, or the name comes back empty.
+const char *graphics_device_gpu(void);
 
 // The setting a device starts on until the player picks one. Phones get Low
 // unless their GPU is a recent flagship; computers get High unless their GPU is

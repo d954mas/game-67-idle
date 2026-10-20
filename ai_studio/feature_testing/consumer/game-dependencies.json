@@ -36,6 +36,12 @@
       "compatibility": "validated by the template build and test suite"
     },
     {
+      "id": "limb-ik",
+      "source": "features/limb-ik",
+      "version": "0.1.0",
+      "compatibility": "validated by the focused CTests in this consumer"
+    },
+    {
       "id": "localization",
       "source": "features/localization",
       "version": "1.4.0",
@@ -62,7 +68,7 @@
     {
       "id": "graphics-quality",
       "source": "features/graphics-quality",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "compatibility": "validated by test_graphics_quality and the settings composition tests"
     },
     {
@@ -76,6 +82,18 @@
       "source": "features/scenes-core",
       "version": "0.3.0",
       "compatibility": "validated by the template scene-manager CTests, scaffold/consumer tests, and native/web builds"
+    },
+    {
+      "id": "software-cursor",
+      "source": "features/software-cursor",
+      "version": "0.1.0",
+      "compatibility": "validated by the focused CTests in this consumer"
+    },
+    {
+      "id": "test-goldens",
+      "source": "features/test-goldens",
+      "version": "1.0.0",
+      "compatibility": "validated by the focused CTests in this consumer"
     },
     {
       "id": "ui-kit",

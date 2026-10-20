@@ -65,10 +65,8 @@ static void test_names_round_trip_and_reject_strangers(void) {
 }
 
 static void test_native_device_is_a_computer_without_a_name(void) {
-    graphics_device_t device = {.mobile = true, .gpu = "stale"};
-    graphics_device_query(&device);
-    TEST_ASSERT_FALSE(device.mobile);
-    TEST_ASSERT_EQUAL_STRING("", device.gpu);
+    TEST_ASSERT_FALSE(graphics_device_mobile());
+    TEST_ASSERT_EQUAL_STRING("", graphics_device_gpu());
 }
 
 int main(void) {

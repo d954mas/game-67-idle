@@ -1255,3 +1255,35 @@ test("a numbered game names its artifact by version and may ship licence notices
   write(gameJson, `${JSON.stringify({ ...JSON.parse(readFileSync(gameJson, "utf8")), version: "1.2" })}\n`);
   assert.throws(() => packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "bad") }), /game identity is invalid/);
 });
+
+test("dependency proof requires every feature the game's CMake compiles to be declared", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "dependency-cmake-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const engineRevision = "1".repeat(40);
+  write(join(root, "external", "neotolis-engine", "engine", "version", "nt_version.h"), "const char *nt_version_engine(void);\n");
+  for (const id of ["platform-sdk", "test-goldens"]) write(join(root, "features", id, "feature.json"), JSON.stringify({ id, version: "1.0.0" }));
+  const gameDir = join(root, "game");
+  write(join(gameDir, "CMakeLists.txt"), 'set(SDK_DIR "${GAME_REPO_ROOT}/features/platform-sdk")\n  # set(GOLDENS "${GAME_REPO_ROOT}/features/test-goldens")\nset(X "a#b") # features/test-goldens\n#[[\nfeatures/test-goldens\n]]\n');
+  const declare = (...ids) => ({
+    schema: "ai_studio.game.dependencies.v3",
+    engine: { source: "external/neotolis-engine", version: engineRevision.slice(0, 8), revision: engineRevision, compatibility: "tested" },
+    features: ids.map((id) => ({ id, source: `features/${id}`, version: "1.0.0", compatibility: "tested" })),
+    compatibility: "tested",
+  });
+  const git = (cwd, args) => {
+    const key = args.join(" ");
+    if (key === "rev-parse HEAD") return { status: 0, stdout: cwd.includes("neotolis-engine") ? engineRevision : "2".repeat(40) };
+    if (key.startsWith("ls-tree HEAD")) return { status: 0, stdout: `160000 commit ${engineRevision}\texternal/neotolis-engine` };
+    return { status: 0, stdout: "" };
+  };
+  const verify = (dependencies) => verifyDependencySources({ studioRoot: root, gameDir, dependencies, git });
+
+  assert.doesNotThrow(() => verify(declare("platform-sdk")), "a commented-out use is not a use");
+  write(join(gameDir, "cmake", "GameTests.cmake"), 'set(GOLDENS_DIR "${GAME_REPO_ROOT}/features/test-goldens")\n');
+  assert.throws(() => verify(declare("platform-sdk")), /cmake\/GameTests\.cmake uses test-goldens/);
+  assert.doesNotThrow(() => verify(declare("platform-sdk", "test-goldens")));
+  // The template proof verifies the seed's rows, so the seed must declare what the template compiles.
+  write(join(root, "features", "software-cursor", "feature.json"), JSON.stringify({ id: "software-cursor", version: "1.0.0" }));
+  write(join(gameDir, "CMakeLists.txt"), 'add_subdirectory("${GAME_REPO_ROOT}/features/software-cursor" "${CMAKE_BINARY_DIR}/_cursor")\n');
+  assert.throws(() => verify(declare("platform-sdk", "test-goldens")), /CMakeLists\.txt uses software-cursor/);
+});

@@ -17,9 +17,10 @@ module is the policy both read.
 
 `include/features/graphics_quality/graphics_quality.h`:
 
-- `graphics_device_query()` — on the web, the canvas's unmasked WebGL renderer
-  and whether the page runs on a phone or tablet; natively, a computer with no
-  name.
+- `graphics_device_mobile()` — on the web, whether the page runs on a phone or
+  tablet; natively, a computer.
+- `graphics_device_gpu()` — the engine's renderer name on the web; natively, an
+  empty name.
 - `graphics_quality_guess(mobile, gpu)` — the starting step: phones Low unless a
   recent flagship GPU (Apple, Immortalis, Xclipse, Mali-G710 and later, Adreno
   730 and later); computers High unless a software renderer or an old Intel HD.
@@ -30,7 +31,7 @@ module is the policy both read.
 
 ## Layer
 
-L0: pure C plus one `EM_JS` page read. No engine, UI or save dependency; the
+L0: pure C plus one `EM_JS` page read and, on the web only, the engine's `nt_gfx_device_info()`. No UI or save dependency; the
 game applies the scale and the shadows to its own renderer.
 
 ## Validation
