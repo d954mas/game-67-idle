@@ -360,7 +360,7 @@ uses the installed Node.js runtime and must not launch an ad-hoc fingerprint
 executable.
 
 ```powershell
-node --test ai_studio/runtime_automation/runtime_hash_tree.test.mjs ai_studio/runtime_automation/native_capture_fingerprint.test.mjs
+node --test ai_studio/game_tools/tests/runtime_hash_tree.test.mjs ai_studio/runtime_automation/native_capture_fingerprint.test.mjs
 ```
 
 ## Skill

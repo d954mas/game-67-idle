@@ -145,15 +145,6 @@
     },
     {
       "path": "ai_studio/feature_testing/consumer/assets/audio/music/demo_jingle.mp3",
-      "game_id": "punch-legend-world",
-      "private_path": "tests/fixtures/audio/demo_jingle.mp3",
-      "sha256": "fb2542970639f83f3d05556308a69a5c373dbc7a972196f3d5efa3b2c28d1e7c",
-      "reason": "Existing public starter asset from templates/template/assets/audio/music/demo_jingle.mp3, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
-      "approved_by": "lead (Studio maintenance request)",
-      "approved_on": "2026-10-18"
-    },
-    {
-      "path": "ai_studio/feature_testing/consumer/assets/audio/music/demo_jingle.mp3",
       "game_id": "robot-smash",
       "private_path": "assets/audio/music/demo_jingle.mp3",
       "sha256": "fb2542970639f83f3d05556308a69a5c373dbc7a972196f3d5efa3b2c28d1e7c",
@@ -165,15 +156,6 @@
       "path": "ai_studio/feature_testing/consumer/assets/audio/music/demo_jingle.mp3",
       "game_id": "slime-eater-evolution",
       "private_path": "assets/audio/music/demo_jingle.mp3",
-      "sha256": "fb2542970639f83f3d05556308a69a5c373dbc7a972196f3d5efa3b2c28d1e7c",
-      "reason": "Existing public starter asset from templates/template/assets/audio/music/demo_jingle.mp3, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
-      "approved_by": "lead (Studio maintenance request)",
-      "approved_on": "2026-10-18"
-    },
-    {
-      "path": "ai_studio/feature_testing/consumer/assets/audio/music/demo_jingle.mp3",
-      "game_id": "speed-legend-world",
-      "private_path": "tests/fixtures/audio/demo_jingle.mp3",
       "sha256": "fb2542970639f83f3d05556308a69a5c373dbc7a972196f3d5efa3b2c28d1e7c",
       "reason": "Existing public starter asset from templates/template/assets/audio/music/demo_jingle.mp3, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
       "approved_by": "lead (Studio maintenance request)",
@@ -226,15 +208,6 @@
     },
     {
       "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
-      "game_id": "punch-legend-world",
-      "private_path": "tests/fixtures/audio/ui_click.wav",
-      "sha256": "35aced7b6594bb2b10ae9564b7f0a58e438c5e744c7c5f288d28728c40c6b599",
-      "reason": "Existing public starter asset from templates/template/assets/audio/sfx/ui_click.wav, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
-      "approved_by": "lead (Studio maintenance request)",
-      "approved_on": "2026-10-18"
-    },
-    {
-      "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
       "game_id": "robot-smash",
       "private_path": "assets/audio/sfx/ui_click.wav",
       "sha256": "35aced7b6594bb2b10ae9564b7f0a58e438c5e744c7c5f288d28728c40c6b599",
@@ -246,15 +219,6 @@
       "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
       "game_id": "slime-eater-evolution",
       "private_path": "assets/audio/sfx/ui_click.wav",
-      "sha256": "35aced7b6594bb2b10ae9564b7f0a58e438c5e744c7c5f288d28728c40c6b599",
-      "reason": "Existing public starter asset from templates/template/assets/audio/sfx/ui_click.wav, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
-      "approved_by": "lead (Studio maintenance request)",
-      "approved_on": "2026-10-18"
-    },
-    {
-      "path": "ai_studio/feature_testing/consumer/assets/audio/sfx/ui_click.wav",
-      "game_id": "speed-legend-world",
-      "private_path": "tests/fixtures/audio/ui_click.wav",
       "sha256": "35aced7b6594bb2b10ae9564b7f0a58e438c5e744c7c5f288d28728c40c6b599",
       "reason": "Existing public starter asset from templates/template/assets/audio/sfx/ui_click.wav, retained byte-for-byte in the independent feature consumer. The game copy and consumer share the same starter/source asset; the Studio maintenance request relocates its public owner.",
       "approved_by": "lead (Studio maintenance request)",

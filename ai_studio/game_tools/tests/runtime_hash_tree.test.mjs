@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { hashRuntimeBuildTree } from "./runtime_hash_tree.cjs";
+import { hashRuntimeBuildTree } from "../lib/runtime_hash_tree.cjs";
 
 function write(path, value) {
   mkdirSync(dirname(path), { recursive: true });

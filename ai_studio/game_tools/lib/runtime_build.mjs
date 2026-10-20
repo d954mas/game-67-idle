@@ -11,7 +11,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { hasCopiedGameTooling } from "./copied_tooling.mjs";
 
-const { hashRuntimeBuildTree } = createRequire(import.meta.url)("../../runtime_automation/runtime_hash_tree.cjs");
+const { hashRuntimeBuildTree } = createRequire(import.meta.url)("./runtime_hash_tree.cjs");
 
 const SCHEMA_V1 = "ai_studio.runtime_build.v1";
 const SCHEMA_V2 = "ai_studio.runtime_build.v2";
