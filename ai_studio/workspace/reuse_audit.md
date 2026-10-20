@@ -27,7 +27,6 @@ opportunities; they do not by themselves establish the correct public API.
 | Items and progression | Existing `items-core` and `progression-core`; content, seed, verbs and balance remain local. |
 | Platform, networking, scenes, audio, localization | Extend the existing feature owner before adding a parallel abstraction. |
 | Planar limb solving | New opt-in `features/limb-ik`; rigs, animation, collision, levels and art stay local. |
-| Event-to-portal measurement | New opt-in `features/portal-metrics`; the game owns event mapping and placement vocabulary. |
 | Settings and resource panel | Optional copy-then-own references in `ai_studio/feature_testing/consumer`; no default HUD or settings screen. |
 | Shared shell and integration fixtures | The independent feature-testing module preserves the integration consumer and existing tests. |
 | Touch controls and board drag | Candidates after separation of action semantics, picking and world data; inspect engine APIs first. |

@@ -29,8 +29,7 @@ or UI requirement imposed on a game created from the blank starter.
 Settings and resource-panel source folders are optional copy-then-own reference
 examples. Their INSTALL files declare schemas, theme, localization and scene
 dependencies. Shared invariant implementations live in `features/`, not in this
-fixture. The consumer compiles portal metrics from its shared owner and runs the
-header-only limb solver's own invariant test.
+fixture. The consumer runs the header-only limb solver's own invariant test.
 
 ## Validation and boundaries
 

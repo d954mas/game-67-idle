@@ -218,18 +218,6 @@
                 "coverage": "subtree"
               },
               {
-                "id": "feature-portal-metrics",
-                "title": "Portal metrics",
-                "kind": "module",
-                "path": "features/portal-metrics",
-                "owner": "Platform Feature Owner",
-                "description": "Optional frame-event drain to portal analytics through a consumer-owned event mapper.",
-                "entry": "features/portal-metrics/README.md",
-                "contract": "features/portal-metrics/feature.json",
-                "verifyDomain": "features",
-                "coverage": "subtree"
-              },
-              {
                 "id": "feature-progression-core",
                 "title": "Progression core",
                 "kind": "module",

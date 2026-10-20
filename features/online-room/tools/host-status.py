@@ -24,12 +24,10 @@ def diagnostic_error(error):
 SAMPLE_SECONDS = 1.0
 
 # Processes read as groups, by their command name: the rooms, a TLS proxy in
-# front of them, the container machinery around them, and the WebSocket
-# stack benchmark's rooms (tools/wsbench). runc lives a moment per
+# front of them, and the container machinery around them. runc lives a moment per
 # healthcheck exec, so forks per second show it better than its CPU does.
 PROCESS_GROUPS = {"plw_room_server": "rooms", "dockerd": "dockerd", "containerd": "containerd",
-                  "containerd-shim": "containerd_shim", "runc": "runc", "haproxy": "haproxy",
-                  "wsbench_nc": "wsbench", "wsbench_uws": "wsbench"}
+                  "containerd-shim": "containerd_shim", "runc": "runc", "haproxy": "haproxy"}
 
 
 def process_group(comm):

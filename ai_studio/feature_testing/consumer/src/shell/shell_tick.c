@@ -13,7 +13,6 @@
 #include "render/render_mesh.h"
 #include "systems/sys_cloud_save.h"
 #include "systems/sys_platform_hooks.h"
-#include "systems/sys_portal_metrics.h"
 #include "ui/ui_runtime.h"
 
 #include <stdio.h>
@@ -172,7 +171,6 @@ static void game_runtime_try_start(World *world) {
     game_scenes_init(world);
     platform_lifecycle_init();
     platform_hooks_init();
-    sys_portal_metrics_init(NULL, NULL); /* a game hands in its own funnel mapper */
     s_game_runtime_initialized = true;
 
     if (!shell_platform_start(world)) {
@@ -203,7 +201,6 @@ static void game_runtime_update(World *world, const game_input_frame_t *input) {
     } while (game_events_react_progressed());
     game_events_set_phase(GAME_EVENT_PHASE_RECORD);
     game_features_record(world);
-    sys_portal_metrics_record(); /* last reader of the frame log */
     if (!s_disable_autosave) {
         game_save_tick();
         game_save_cloud_tick();

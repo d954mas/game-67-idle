@@ -40,9 +40,6 @@ set(PLATFORM_SDK_WEB         "${PLATFORM_SDK_DIR}/web")
 set(GAME_EVENTS_DIR          "${GAME_REPO_ROOT}/features/game-events")
 set(GAME_EVENTS_INC          "${GAME_EVENTS_DIR}/include")
 set(GAME_EVENTS_SRC          "${GAME_EVENTS_DIR}/src")
-set(PORTAL_METRICS_DIR       "${GAME_REPO_ROOT}/features/portal-metrics")
-set(PORTAL_METRICS_INC       "${PORTAL_METRICS_DIR}/include")
-set(PORTAL_METRICS_SRC       "${PORTAL_METRICS_DIR}/src")
 set(SCENES_CORE_DIR          "${GAME_REPO_ROOT}/features/scenes-core")
 set(SCENES_CORE_INC          "${SCENES_CORE_DIR}/include")
 set(SCENES_CORE_SRC          "${SCENES_CORE_DIR}/src")
@@ -128,7 +125,6 @@ add_executable(${GAME_TARGET} EXCLUDE_FROM_ALL
     src/game_save_policy.c
     src/game_save_policy_validator.c
     src/systems/sys_cloud_save.c                     # portal transport binding for shared save synchronization
-    "${PORTAL_METRICS_SRC}/sys_portal_metrics.c"    # frame events -> the portal's funnel, through a game mapper
     src/features/settings/settings_screen.c
     "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c" # И3a: const progression track/curve tables (content codegen)
     src/game_format.c                                # И3b: L0 int64-abbrev formatter
@@ -143,11 +139,11 @@ add_executable(${GAME_TARGET} EXCLUDE_FROM_ALL
     src/scenes/login_confirm_scene.c
     # scene-scaffold:sources
 )
-target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}" "${UI_KIT_INC}" "${LEADERBOARD_INC}" "${REMOTE_IMAGE_INC}" "${PORTAL_METRICS_INC}" "${GRAPHICS_QUALITY_INC}")
+target_include_directories(${GAME_TARGET} PRIVATE "${SCENES_CORE_INC}" "${UI_KIT_INC}" "${LEADERBOARD_INC}" "${REMOTE_IMAGE_INC}" "${GRAPHICS_QUALITY_INC}")
 include("${REMOTE_IMAGE_DIR}/cmake/RemoteImage.cmake")
 remote_image_ensure_stb("${ENGINE_DIR}")
 target_link_libraries(${GAME_TARGET} PRIVATE nt_base64 stb_image)
-target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_SCENES_CORE=1 FEATURE_UI_KIT=1 FEATURE_PORTAL_METRICS=1)
+target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_SCENES_CORE=1 FEATURE_UI_KIT=1)
 if(GAME_DEBUG_SCENES_ENABLED)
     target_compile_definitions(${GAME_TARGET} PRIVATE
         GAME_DEBUG_SCENES_ENABLED=1)

@@ -128,9 +128,6 @@ possibility, not a feature.
 - `limb-ik/` (`L1`, opt-in): header-only planar two-link solver. The consumer
   owns rigs, animation and rendering. See `limb-ik/README.md` and
   `limb-ik/INSTALL.md`.
-- `portal-metrics/` (`L1`, opt-in): once-per-frame event drain and direct portal
-  measurement over `game-events` and `platform-sdk`. The consumer owns its
-  event mapper. See `portal-metrics/README.md` and `portal-metrics/INSTALL.md`.
 
 - `online-room/` (`L1`, opt-in): the C half of the room-metaserver contract:
   tickets, the profile store and status calls, the client's entry ladder and

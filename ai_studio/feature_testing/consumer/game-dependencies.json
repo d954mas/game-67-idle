@@ -48,12 +48,6 @@
       "compatibility": "validated by the template build and test suite"
     },
     {
-      "id": "portal-metrics",
-      "source": "features/portal-metrics",
-      "version": "0.1.0",
-      "compatibility": "validated by the focused portal metrics CTest in this consumer"
-    },
-    {
       "id": "progression-core",
       "source": "features/progression-core",
       "version": "8.0.0",

@@ -1099,9 +1099,6 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_platform_hooks COMMAND test_platform_hooks)
     set_tests_properties(test_platform_hooks PROPERTIES LABELS "core")
 
-    include("${PORTAL_METRICS_DIR}/cmake/PortalMetricsTests.cmake")
-    portal_metrics_add_core_test()
-
     add_executable(test_platform_sdk_events
         tests/test_platform_sdk_events.c
         "${PLATFORM_SDK_SRC}/platform_sdk.c"
