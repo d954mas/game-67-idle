@@ -34,8 +34,14 @@ cflags=(
   -o "$build/test_audio_resource"
 "$build/test_audio_resource"
 
+consumer="$repo_root/ai_studio/feature_testing/consumer"
+"$cc" "${cflags[@]}" "$consumer/tests/fixtures/audio/write_ui_click_mp3.c" -o "$build/write_ui_click_mp3"
+"$build/write_ui_click_mp3" "$build/ui_click.mp3"
+
 "$cc" "${cflags[@]}" -DAUDIO_MINIAUDIO_TEST_NO_DEVICE=1 \
-  -DAUDIO_TEST_MP3_PATH=\"$repo_root/templates/template/assets/audio/music/demo_jingle.mp3\" \
+  -DAUDIO_TEST_MP3_PATH=\"$consumer/assets/audio/music/demo_jingle.mp3\" \
+  -DAUDIO_TEST_CUE_WAV_PATH=\"$consumer/assets/audio/sfx/ui_click.wav\" \
+  -DAUDIO_TEST_CUE_MP3_PATH=\"$build/ui_click.mp3\" \
   "$audio/tests/test_audio_backend_native.c" \
   "$audio/src/audio_backend_miniaudio.c" \
   "$audio/src/audio_miniaudio_impl.c" \
