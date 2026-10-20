@@ -69,8 +69,12 @@ function installPlatformDiagnostics(root, options) {
       .replace(/((?:token|password|session)\s*[=:]\s*)[^\s,;]+/gi, "$1[redacted]");
   }
 
-  function createError(stack) {
-    var error = new Error("platform diagnostics");
+  function validKind(value) {
+    return typeof value === "string" && /^[a-z0-9_.-]{1,64}$/.test(value);
+  }
+
+  function createError(kind, stack) {
+    var error = new Error(kind);
     error.name = "PlatformDiagnostic";
     error.stack = capBytes(clean(stack), MAX_OUTGOING, true);
     return error;
@@ -118,13 +122,13 @@ function installPlatformDiagnostics(root, options) {
 
   function addEngine(text, slot) {
     if (!engineEnvelope(text)) return false;
-    return add(slot, { raw: text, error: createError(engineStack(text)), fatal: true });
+    return add(slot, { raw: text, error: createError("engine.crash", engineStack(text)), fatal: true });
   }
 
   function addWeb(kind, cause, slot, persist) {
     var stack = webStack(kind, cause);
     var causeText = cause && cause.stack ? cause.stack : cause && cause.message ? cause.message : "platform failure";
-    if (!add(slot, { raw: String(kind) + "\n" + clean(causeText), error: createError(stack), fatal: slot === "currentWeb" || slot === "previousWeb" })) return false;
+    if (!add(slot, { raw: String(kind) + "\n" + clean(causeText), error: createError(kind, stack), fatal: slot === "currentWeb" || slot === "previousWeb" })) return false;
     if (persist) storeWeb(kind, stack);
     return true;
   }
@@ -137,8 +141,8 @@ function installPlatformDiagnostics(root, options) {
       var saved = JSON.parse(raw);
       var age = Date.now() - saved.at;
       if (saved.version !== 1 || !Number.isFinite(age) || age < 0 || age > WEB_TTL_MS ||
-          typeof saved.kind !== "string" || typeof saved.stack !== "string") return;
-      add("previousWeb", { raw: raw, error: createError(saved.stack), fatal: true });
+          !validKind(saved.kind) || typeof saved.stack !== "string") return;
+      add("previousWeb", { raw: raw, error: createError(saved.kind, saved.stack), fatal: true });
     } catch (_) {}
   }
 
@@ -257,10 +261,10 @@ function installPlatformDiagnostics(root, options) {
 
   function report(kind, cause) {
     var label = String(kind || "");
-    if (!/^[a-z0-9_.-]{1,64}$/.test(label)) return;
+    if (!validKind(label)) return;
     if (/^gfx\.context_(?:lost|creation)$/.test(label)) {
       add(label === "gfx.context_lost" ? "contextLoss" : "contextCreation", {
-        raw: label + "\n" + webStack(label, cause), error: createError(webStack(label, cause)), fatal: false,
+        raw: label + "\n" + webStack(label, cause), error: createError(label, webStack(label, cause)), fatal: false,
       });
       return;
     }

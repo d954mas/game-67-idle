@@ -99,6 +99,10 @@ test("replays bounded previous slots and delivers current fatal slots in engine-
   fixture.runTimers();
 
   assert.equal(received.length, 4);
+  assert.equal(received[0].message, "engine.crash");
+  assert.equal(received[1].message, "loader.failed");
+  assert.equal(received[2].message, "engine.crash");
+  assert.equal(received[3].message, "loader.failed");
   assert.match(received[0].stack, /build-live/);
   assert.match(received[1].stack, /loader\.failed/);
   assert.match(received[2].stack, /build-old/);
@@ -148,6 +152,7 @@ test("bounds and redacts web reports and records only unexpected graphics signal
   fixture.runTimers();
 
   assert.equal(received.length, 3);
+  assert.deepEqual(received.map((error) => error.message), ["loader.failed", "gfx.context_creation", "gfx.context_lost"]);
   for (const error of received) assert.ok(new TextEncoder().encode(error.stack).length <= 12000);
   assert.doesNotMatch(received[0].stack, /secret-token|password|token=raw/);
   assert.match(received[0].stack, /\[redacted/);
@@ -169,6 +174,18 @@ test("retains malformed and oversized stored records without queuing them", () =
   assert.deepEqual(received, []);
   assert.equal(fixture.storage.get("demo.crash.v1"), oversized);
   assert.equal(fixture.storage.get("demo.crash.pending.v1"), malformedWeb);
+});
+
+test("does not promote a replayed web record with an invalid kind", () => {
+  const invalid = JSON.stringify({ version: 1, at: Date.now(), kind: "loader failed", stack: "stored failure" });
+  const fixture = makeRoot({ pendingRecord: invalid });
+  const received = [];
+  install(fixture);
+  fixture.root.__platformSdkInternalBackend = { errorSink() { return { captureError(error) { received.push(error); } }; } };
+  fixture.runTimers();
+
+  assert.deepEqual(received, []);
+  assert.equal(fixture.storage.get("demo.crash.pending.v1"), invalid);
 });
 
 test("stops readiness polling after ten attempts and preserves an unconfirmed web record", () => {

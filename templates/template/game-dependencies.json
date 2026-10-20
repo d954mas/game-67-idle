@@ -14,7 +14,7 @@
     {
       "id": "platform-sdk",
       "source": "features/platform-sdk",
-      "version": "3.0.0",
+      "version": "3.0.1",
       "compatibility": "web bootstrap and selected target adapter; no gameplay, ads, or native SDK composition is installed"
     }
   ],
