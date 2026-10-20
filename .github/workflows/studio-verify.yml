@@ -18,15 +18,24 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same ref makes the older run's result moot.
+concurrency:
+  group: studio-verify-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   EMSDK_VERSION: '4.0.10'
 
 jobs:
   verify:
+    name: verify (${{ matrix.os }}, ${{ matrix.domains }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        # Every Studio domain exactly once (studio.test.mjs checks); each entry
+        # gets its own runner so the slow domains stop sharing four cores.
+        domains: ["harness,architecture,shell,work-management,design", "workspace", "assets", "runtime", "features", "template-release"]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -45,10 +54,11 @@ jobs:
       - name: Restore native compiler cache
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
-          key: ${{ runner.os }}-${{ steps.native-cache-key.outputs.engine_revision }}-${{ hashFiles('templates/template/CMakeLists.txt') }}
+          key: ${{ runner.os }}-${{ matrix.domains }}-${{ steps.native-cache-key.outputs.engine_revision }}-${{ hashFiles('templates/template/CMakeLists.txt') }}
           restore-keys: |
-            ${{ runner.os }}-${{ steps.native-cache-key.outputs.engine_revision }}-
-            ${{ runner.os }}-
+            ${{ runner.os }}-${{ matrix.domains }}-${{ steps.native-cache-key.outputs.engine_revision }}
+            ${{ runner.os }}-${{ matrix.domains }}
+            ${{ runner.os }}
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
@@ -123,7 +133,7 @@ jobs:
           -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Debug
           -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
       - name: Blocking Studio verification
-        run: node ai_studio/studio.mjs verify --full
+        run: node ai_studio/studio.mjs verify --domain "${{ matrix.domains }}"
 
   metaserver:
     runs-on: ubuntu-latest

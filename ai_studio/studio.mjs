@@ -464,15 +464,16 @@ function changedPaths(root) {
 
 export async function verifyStudio(options = {}, dependencies = {}) {
   const mode = options.mode;
-  if (!["changed", "domain", "full"].includes(mode)) throw new Error("verify requires --changed, --domain <id>, or --full");
+  if (!["changed", "domain", "full"].includes(mode)) throw new Error("verify requires --changed, --domain <id[,id...]>, or --full");
   const root = resolve(options.root || ROOT);
   const readChangedPaths = dependencies.changedPaths || changedPaths;
   const ids = mode === "full"
     ? FULL_IDS
     : mode === "domain"
-      ? [options.domain]
+      ? [...new Set(String(options.domain || "").split(","))]
       : selectChangedDomains(options.paths || readChangedPaths(root));
-  if (mode === "domain" && !FULL_IDS.includes(options.domain)) throw new Error(`unknown verification domain: ${options.domain || "<missing>"}`);
+  const unknown = mode === "domain" ? ids.filter((id) => !FULL_IDS.includes(id)) : [];
+  if (unknown.length > 0) throw new Error(`unknown verification domain: ${unknown.map((id) => id || "<missing>").join(", ")}`);
   const results = new Array(ids.length);
   let cursor = 0;
   const run = dependencies.runDomain || ((entry) => runOwnedDomain(entry, {
@@ -523,7 +524,7 @@ function parseCli(argv) {
   if (command === "describe" && args.length === 0) return { command, json };
   if (command === "verify" && args.length === 1 && ["--changed", "--full"].includes(args[0])) return { command, json, mode: args[0].slice(2) };
   if (command === "verify" && args.length === 2 && args[0] === "--domain") return { command, json, mode: "domain", domain: args[1] };
-  throw new Error("usage: node ai_studio/studio.mjs describe [--json] | verify (--changed|--domain <id>|--full) [--json]");
+  throw new Error("usage: node ai_studio/studio.mjs describe [--json] | verify (--changed|--domain <id[,id...]>|--full) [--json]");
 }
 
 function printText(result) {

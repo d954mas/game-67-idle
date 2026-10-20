@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
@@ -569,7 +570,7 @@ test("CLI contract returns stable JSON usage and setup envelopes", async () => {
     assert.deepEqual(JSON.parse(lines.at(-1)), {
       schema: "ai_studio.studio.error.v1",
       ok: false,
-      error: { code: "usage", message: "usage: node ai_studio/studio.mjs describe [--json] | verify (--changed|--domain <id>|--full) [--json]" },
+      error: { code: "usage", message: "usage: node ai_studio/studio.mjs describe [--json] | verify (--changed|--domain <id[,id...]>|--full) [--json]" },
       exitCode: 2,
     });
     lines.length = 0;
@@ -587,6 +588,13 @@ test("CLI contract returns stable JSON usage and setup envelopes", async () => {
     assert.deepEqual(domainCalls, ["assets"]);
     assert.equal(JSON.parse(lines.at(-1)).domain, "assets");
     lines.length = 0;
+    domainCalls.length = 0;
+    assert.equal(await main(["verify", "--domain", "shell,design"], {
+      runDomain: async (domain) => { domainCalls.push(domain.id); return { status: 0 }; },
+    }), 0);
+    assert.deepEqual(domainCalls.sort(), ["design", "shell"]);
+    assert.equal(await main(["verify", "--domain", "shell,nope"]), 2);
+    lines.length = 0;
     assert.equal(await main(["verify", "--changed"], {
       changedPaths: () => ["ai_studio/taskboard/store.mjs"],
       runDomain: async () => ({ status: 1, stderr: "assertion context\nexact failure" }),
@@ -597,4 +605,11 @@ test("CLI contract returns stable JSON usage and setup envelopes", async () => {
     console.log = log;
     console.error = error;
   }
+});
+
+test("CI runs every verification domain exactly once", () => {
+  const workflow = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../.github/workflows/studio-verify.yml"), "utf8");
+  const entries = JSON.parse(/^\s+domains: (\[.*\])\s*$/m.exec(workflow)[1]);
+  const scheduled = entries.flatMap((entry) => entry.split(","));
+  assert.deepEqual([...scheduled].sort(), describeStudio().verification.domains.map((domain) => domain.id).sort());
 });
