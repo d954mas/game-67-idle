@@ -262,6 +262,7 @@ test("the Studio reporter records the exact package when run from a games/<id> r
     cpSync(join(dirname(reporterScript), ...rel.split("/")), join(item.root, "ai_studio", "game_tools", ...rel.split("/")));
   }
   cpSync(join(studioRoot, "ai_studio", "core_harness", "tool_lib"), join(item.root, "ai_studio", "core_harness", "tool_lib"), { recursive: true });
+  cpSync(join(studioRoot, "ai_studio", "runtime_automation", "runtime_hash_tree.cjs"), join(item.root, "ai_studio", "runtime_automation", "runtime_hash_tree.cjs"));
   cpSync(join(studioRoot, "features", "platform-sdk"), join(item.root, "features", "platform-sdk"), { recursive: true });
   mkdirSync(join(item.root, "external", "neotolis-engine"), { recursive: true });
   const result = spawnSync(process.execPath, [join(item.root, "ai_studio", "game_tools", "portal_evidence.mjs"), "--manifest", `release/artifacts/${item.manifestPath.split(/[\\/]/).at(-1)}`], {

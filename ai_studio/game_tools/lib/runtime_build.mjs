@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import {
   existsSync,
   lstatSync,
@@ -9,6 +10,8 @@ import {
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { hasCopiedGameTooling } from "./copied_tooling.mjs";
+
+const { hashRuntimeBuildTree } = createRequire(import.meta.url)("../../runtime_automation/runtime_hash_tree.cjs");
 
 const SCHEMA_V1 = "ai_studio.runtime_build.v1";
 const SCHEMA_V2 = "ai_studio.runtime_build.v2";
@@ -55,38 +58,12 @@ function confinedRoot(studioRoot, source, label) {
 // in-source codegen must not shift the fingerprint.
 const GAME_IGNORED_PATHS = new Set(["src/generated"]);
 
+// One confined tree walk for every runtime record (games, capture, package).
 function hashTree(root, ignoredRoots, extraRoots = [], ignoredPaths = new Set()) {
-  const realRoot = realpathSync(resolve(root));
-  const rows = [];
-  function visit(dir, prefix = "") {
-    for (const name of readdirSync(dir).sort()) {
-      if ((!prefix && ignoredRoots.has(name)) || IGNORED_ANYWHERE.has(name)) continue;
-      const path = join(dir, name);
-      const rel = prefix ? `${prefix}/${name}` : name;
-      if (ignoredPaths.has(rel)) continue;
-      const info = lstatSync(path);
-      if (info.isSymbolicLink()) throw new Error(`runtime build input must not contain a symbolic link: ${rel}`);
-      const actual = realpathSync(path);
-      const confined = relative(realRoot, actual);
-      if (confined === ".." || confined.startsWith(`..${sep}`) || isAbsolute(confined)) {
-        throw new Error(`runtime build input escapes its root: ${rel}`);
-      }
-      if (info.isDirectory()) visit(path, rel);
-      else if (info.isFile()) {
-        if (/\.md$/i.test(name) || /(?:\.test\.mjs|_test\.py|\.pyc)$/i.test(name)) continue;
-        const bytes = readFileSync(path);
-        rows.push({ path: rel, size: bytes.length, sha256: sha256(bytes) });
-      } else throw new Error(`unsupported runtime build input: ${rel}`);
-    }
-  }
-  visit(realRoot);
-  for (const relRoot of extraRoots) {
-    const path = join(realRoot, ...relRoot.split("/"));
-    if (existsSync(path)) visit(path, relRoot);
-  }
-  const digest = createHash("sha256");
-  for (const row of rows) digest.update(row.path).update("\0").update(String(row.size)).update("\0").update(row.sha256).update("\n");
-  return { files: rows.length, sha256: digest.digest("hex") };
+  return hashRuntimeBuildTree({
+    root, ignoredRoots, ignoredAnywhere: IGNORED_ANYWHERE, extraRoots,
+    shouldIgnoreEntry: ({ prefix, name }) => ignoredPaths.has(prefix ? `${prefix}/${name}` : name),
+  });
 }
 
 function hashFiles(root, names) {

@@ -350,6 +350,7 @@ function copyGameToolsCore(root) {
     recursive: true, filter: (source) => !/[\\/]tests([\\/]|$)/.test(source.slice(studioRoot.length)),
   });
   cpSync(join(studioRoot, "ai_studio", "core_harness", "tool_lib"), join(root, "ai_studio", "core_harness", "tool_lib"), { recursive: true });
+  cpSync(join(studioRoot, "ai_studio", "runtime_automation", "runtime_hash_tree.cjs"), join(root, "ai_studio", "runtime_automation", "runtime_hash_tree.cjs"));
 }
 
 test("copied game CLI executes doctor and final package from a real games/private/<id> dependency layout", (t) => {
