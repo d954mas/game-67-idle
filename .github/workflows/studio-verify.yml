@@ -124,3 +124,35 @@ jobs:
           -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
       - name: Blocking Studio verification
         run: node ai_studio/studio.mjs verify --full
+
+  metaserver:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: metaserver
+          POSTGRES_PASSWORD: metaserver
+          POSTGRES_DB: metaserver
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U metaserver -d metaserver"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 30
+    env:
+      META_TEST_DATABASE_URL: postgres://metaserver:metaserver@127.0.0.1:5432/metaserver
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: features/metaserver/go.mod
+          cache-dependency-path: features/metaserver/go.sum
+      - name: Vet and test the metaserver library
+        working-directory: features/metaserver
+        run: go vet ./... && go test ./...

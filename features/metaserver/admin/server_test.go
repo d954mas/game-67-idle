@@ -43,14 +43,14 @@ func TestAdminAPIRequiresSessionAndCSRF(t *testing.T) {
 		t.Fatal(err)
 	}
 	viewerReq := httptest.NewRequest("GET", "/admin-api/v1/players?q=ann", nil)
-	viewerReq.AddCookie(&http.Cookie{Name: adminCookie, Value: base64.RawURLEncoding.EncodeToString(viewerSecret)})
+	viewerReq.AddCookie(&http.Cookie{Name: api.brand.sessionCookie(), Value: base64.RawURLEncoding.EncodeToString(viewerSecret)})
 	viewer := httptest.NewRecorder()
 	h.ServeHTTP(viewer, viewerReq)
 	if viewer.Code != http.StatusForbidden {
 		t.Fatalf("viewer reached player list: %d", viewer.Code)
 	}
 	occupancyReq := httptest.NewRequest("GET", "/admin-api/v1/audience/occupancy", nil)
-	occupancyReq.AddCookie(&http.Cookie{Name: adminCookie, Value: base64.RawURLEncoding.EncodeToString(viewerSecret)})
+	occupancyReq.AddCookie(&http.Cookie{Name: api.brand.sessionCookie(), Value: base64.RawURLEncoding.EncodeToString(viewerSecret)})
 	occupancy := httptest.NewRecorder()
 	h.ServeHTTP(occupancy, occupancyReq)
 	if occupancy.Code != http.StatusOK || !bytes.Contains(occupancy.Body.Bytes(), []byte(`"hours":[]`)) {
@@ -62,7 +62,7 @@ func TestAdminAPIRequiresSessionAndCSRF(t *testing.T) {
 		"/admin-api/v1/rooms/x": http.StatusBadRequest, "/admin-api/v1/rooms/0": http.StatusBadRequest,
 		"/admin-api/v1/rooms/5": http.StatusServiceUnavailable} {
 		req := httptest.NewRequest("GET", target, nil)
-		req.AddCookie(&http.Cookie{Name: adminCookie, Value: base64.RawURLEncoding.EncodeToString(viewerSecret)})
+		req.AddCookie(&http.Cookie{Name: api.brand.sessionCookie(), Value: base64.RawURLEncoding.EncodeToString(viewerSecret)})
 		got := httptest.NewRecorder()
 		h.ServeHTTP(got, req)
 		if got.Code != want {
@@ -84,7 +84,7 @@ func TestAdminAPIRequiresSessionAndCSRF(t *testing.T) {
 		t.Fatalf("login: %d %s", login.Code, login.Body.String())
 	}
 	cookies := login.Result().Cookies()
-	if len(cookies) != 1 || cookies[0].Name != "__Host-admin" || !cookies[0].Secure || !cookies[0].HttpOnly ||
+	if len(cookies) != 1 || cookies[0].Name != api.brand.sessionCookie() || !cookies[0].Secure || !cookies[0].HttpOnly ||
 		cookies[0].SameSite != http.SameSiteStrictMode || cookies[0].Path != "/" || cookies[0].Domain != "" {
 		t.Fatalf("session cookie: %+v", cookies)
 	}

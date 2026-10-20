@@ -12,7 +12,8 @@ import (
 )
 
 // The entry ticket a room verifies with the key it shares with this
-// service; ticket_test.go pins the same bytes the room's C test pins.
+// service. The room's C verifier reads the same bytes, so the layout below
+// changes only together with it.
 //
 // version u8 (2) | kind u8 | subject u64 | room_id u32 | expires_at u32 | mac[16]
 //

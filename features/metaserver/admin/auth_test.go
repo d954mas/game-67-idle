@@ -64,8 +64,24 @@ func TestSessionSecretAndCSRFAreBoundToSameCookie(t *testing.T) {
 	if bytes.Equal(sessionHash(one), sessionHash(two)) || bytes.Equal(sessionHash(one), sha256.New().Sum(nil)) {
 		t.Fatal("session secret was not random")
 	}
-	if csrfToken(one) == csrfToken(two) || !validCSRF(one, csrfToken(one)) || validCSRF(two, csrfToken(one)) {
+	brand := Brand{Name: "Example Game"}
+	if csrfToken(brand, one) == csrfToken(brand, two) || !validCSRF(brand, one, csrfToken(brand, one)) ||
+		validCSRF(brand, two, csrfToken(brand, one)) {
 		t.Fatal("CSRF token did not bind to its session")
+	}
+}
+
+func TestBrandsOnOneHostnameKeepSeparateSessions(t *testing.T) {
+	one, two := Brand{Name: "Example Game", Mark: "EG"}, Brand{Name: "Other Game", Mark: "EG"}
+	if one.sessionCookie() == two.sessionCookie() || one.sessionCookie() != "__Host-example-game-admin" {
+		t.Fatalf("session cookies: %q %q", one.sessionCookie(), two.sessionCookie())
+	}
+	secret, err := newSessionSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if validCSRF(two, secret, csrfToken(one, secret)) {
+		t.Fatal("CSRF token crossed brands")
 	}
 }
 

@@ -25,6 +25,30 @@ type Brand struct {
 	Mark string // two letters for the badge
 }
 
+// slug names the console's session cookie and CSRF label: cookies are scoped
+// by host, not port, so two games' consoles on one hostname must not share them.
+func (b Brand) slug() string {
+	var out strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(b.Name) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			if dash && out.Len() > 0 {
+				out.WriteByte('-')
+			}
+			out.WriteRune(r)
+			dash = false
+		} else {
+			dash = true
+		}
+	}
+	if out.Len() == 0 {
+		return "game"
+	}
+	return out.String()
+}
+
+func (b Brand) sessionCookie() string { return "__Host-" + b.slug() + "-admin" }
+
 type adminConfig struct {
 	addr         string
 	origin       string

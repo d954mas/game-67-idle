@@ -134,14 +134,14 @@ func sessionHash(secret []byte) []byte {
 	return hash[:]
 }
 
-func csrfToken(secret []byte) string {
+func csrfToken(brand Brand, secret []byte) string {
 	mac := hmac.New(sha256.New, secret)
-	mac.Write([]byte("admin-csrf"))
+	mac.Write([]byte(brand.slug() + "-admin-csrf"))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-func validCSRF(secret []byte, token string) bool {
-	expected := csrfToken(secret)
+func validCSRF(brand Brand, secret []byte, token string) bool {
+	expected := csrfToken(brand, secret)
 	return subtle.ConstantTimeCompare([]byte(expected), []byte(token)) == 1
 }
 

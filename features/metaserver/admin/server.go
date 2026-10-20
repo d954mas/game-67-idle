@@ -19,8 +19,6 @@ import (
 	"time"
 )
 
-const adminCookie = "__Host-admin"
-
 //go:embed web/index.html web/app.css web/app.js web/capacity.js web/overview.js web/incidents.js web/rooms.js web/vendor/uPlot.iife.min.js web/vendor/uPlot.min.css
 var webFiles embed.FS
 
@@ -222,10 +220,10 @@ func (s *adminServer) login(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusServiceUnavailable, "login unavailable")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: adminCookie, Value: base64.RawURLEncoding.EncodeToString(secret),
+	http.SetCookie(w, &http.Cookie{Name: s.brand.sessionCookie(), Value: base64.RawURLEncoding.EncodeToString(secret),
 		Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode,
 		Expires: now.Add(12 * time.Hour), MaxAge: 12 * 60 * 60})
-	apiJSON(w, http.StatusOK, map[string]any{"user": user, "csrf": csrfToken(secret)})
+	apiJSON(w, http.StatusOK, map[string]any{"user": user, "csrf": csrfToken(s.brand, secret)})
 }
 
 type authorizedHandler func(http.ResponseWriter, *http.Request, adminUser, []byte)
@@ -237,7 +235,7 @@ func (s *adminServer) authorized(next authorizedHandler) http.HandlerFunc {
 // authorizedWithin gives the session check and the handler one deadline.
 func (s *adminServer) authorizedWithin(budget time.Duration, next authorizedHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(adminCookie)
+		cookie, err := r.Cookie(s.brand.sessionCookie())
 		if err != nil {
 			apiError(w, http.StatusUnauthorized, "admin session required")
 			return
@@ -263,11 +261,11 @@ func (s *adminServer) authorizedWithin(budget time.Duration, next authorizedHand
 }
 
 func (s *adminServer) session(w http.ResponseWriter, _ *http.Request, user adminUser, secret []byte) {
-	apiJSON(w, http.StatusOK, map[string]any{"user": user, "csrf": csrfToken(secret)})
+	apiJSON(w, http.StatusOK, map[string]any{"user": user, "csrf": csrfToken(s.brand, secret)})
 }
 
 func (s *adminServer) logout(w http.ResponseWriter, r *http.Request, _ adminUser, secret []byte) {
-	if !validOrigin(r, s.origin) || !validCSRF(secret, r.Header.Get("X-CSRF-Token")) {
+	if !validOrigin(r, s.origin) || !validCSRF(s.brand, secret, r.Header.Get("X-CSRF-Token")) {
 		apiError(w, http.StatusForbidden, "request confirmation rejected")
 		return
 	}
@@ -275,7 +273,7 @@ func (s *adminServer) logout(w http.ResponseWriter, r *http.Request, _ adminUser
 		apiError(w, http.StatusServiceUnavailable, "logout unavailable")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: adminCookie, Path: "/", Secure: true, HttpOnly: true,
+	http.SetCookie(w, &http.Cookie{Name: s.brand.sessionCookie(), Path: "/", Secure: true, HttpOnly: true,
 		SameSite: http.SameSiteStrictMode, MaxAge: -1})
 	w.WriteHeader(http.StatusNoContent)
 }
