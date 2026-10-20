@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { fail, isMain } from "../core_harness/tool_lib/cli.mjs";
@@ -33,6 +34,18 @@ function lastLine(text) {
   return String(text || "").trimEnd().split(/\r?\n/).at(-1) || "";
 }
 
+// A game listing the metaserver library builds its own main against it; a
+// library API change breaks the game here, before it merges. Empty = passed.
+function metaserverCheck(gameDir, spawn) {
+  const dependencies = JSON.parse(readFileSync(join(gameDir, "dependencies.json"), "utf8").replace(/^\uFEFF/, ""));
+  if (!dependencies.features?.some((feature) => feature.id === "metaserver")) return null;
+  for (const step of ["vet", "build"]) {
+    const result = spawn("go", [step, "./..."], { cwd: join(gameDir, "metaserver"), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    if (result.error || result.status !== 0) return `go ${step}: ${result.error?.message || lastLine(`${result.stdout || ""}${result.stderr || ""}`)}`;
+  }
+  return "";
+}
+
 export function checkLiveGames(root, { games = [], tier = "", spawn = spawnSync, engineRevision } = {}) {
   const revision = engineRevision ?? studioEngineRevision(root);
   const mounts = listGameMounts(root, { includePrivate: true })
@@ -49,6 +62,7 @@ export function checkLiveGames(root, { games = [], tier = "", spawn = spawnSync,
     return {
       game: mount.gameId,
       drift,
+      metaserver: metaserverCheck(gameDir, spawn),
       testsPassed: !result.error && result.status === 0,
       seconds: Number(((Date.now() - started) / 1000).toFixed(1)),
       summary: result.error ? String(result.error.message) : lastLine(output),
@@ -59,13 +73,15 @@ export function checkLiveGames(root, { games = [], tier = "", spawn = spawnSync,
 if (isMain(import.meta.url)) {
   const args = parseArgs(process.argv.slice(2));
   const rows = checkLiveGames(STUDIO_ROOT, args);
-  const ok = rows.every((row) => row.testsPassed && row.drift.length === 0);
+  const ok = rows.every((row) => row.testsPassed && row.drift.length === 0 && !row.metaserver);
   if (args.json) {
     console.log(JSON.stringify({ ok, games: rows }, null, 2));
   } else {
     for (const row of rows) {
       const drift = row.drift.length ? `drift ${row.drift.map((d) => `${d.id} ${d.recorded}->${d.current}`).join(", ")}` : "record current";
-      console.log(`${row.testsPassed ? "PASS" : "FAIL"}  ${row.game}  (${row.seconds}s; ${drift})\n      ${row.summary}`);
+      const passed = row.testsPassed && !row.metaserver;
+      const meta = row.metaserver === null ? "" : `; metaserver ${row.metaserver || "builds"}`;
+      console.log(`${passed ? "PASS" : "FAIL"}  ${row.game}  (${row.seconds}s; ${drift}${meta})\n      ${row.summary}`);
     }
     console.log(ok ? `all ${rows.length} live games pass` : "live games need attention before this change merges");
   }
