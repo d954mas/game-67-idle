@@ -16,7 +16,7 @@ function isPhysicalRegularFile(path, errorMessage) {
   }
   if (!info.isFile()) throw new Error(errorMessage);
   try {
-    if (realpathSync(path) !== path) throw new Error(errorMessage);
+    if (realpathSync.native(path) !== path) throw new Error(errorMessage);
   } catch (error) {
     if (error?.code === "ENOENT") return false;
     throw error;

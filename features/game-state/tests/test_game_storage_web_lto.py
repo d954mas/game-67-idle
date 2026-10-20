@@ -18,7 +18,7 @@ def find_emcc() -> str | None:
         return configured
     emsdk = os.environ.get("EMSDK")
     if emsdk:
-        candidate = Path(emsdk) / "upstream/emscripten/emcc.bat"
+        candidate = Path(emsdk) / "upstream/emscripten" / ("emcc.bat" if os.name == "nt" else "emcc")
         if candidate.is_file():
             return str(candidate)
     if os.name == "nt":

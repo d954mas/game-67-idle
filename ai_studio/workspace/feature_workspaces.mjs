@@ -289,7 +289,7 @@ function canonicalPhysicalPath(path, label) {
     cursor = parent;
   }
   assertPhysicalDirectory(requested, label);
-  return existsSync(requested) ? realpathSync(requested) : requested;
+  return existsSync(requested) ? realpathSync.native(requested) : requested;
 }
 
 function assertDirectChild(base, target, label) {
@@ -449,7 +449,7 @@ function discoverPrivateGame(studioRoot, gameId) {
   const mounts = listGameMounts(studioRoot, { activeGameId: gameId, warnings: [] });
   const mount = mounts.find((candidate) => candidate.id === gameId && candidate.visibility === "private");
   if (!mount) throw new Error(`private game '${gameId}' is not mounted in this Studio`);
-  return realpathSync(join(studioRoot, mount.root));
+  return realpathSync.native(join(studioRoot, mount.root));
 }
 
 function validateCreatedWorkspace(studioWorktree, gameId, taskId, { requireEligible = true } = {}) {
@@ -486,7 +486,7 @@ function sourcePythonBootstrap(studioRoot) {
   ].filter(Boolean).map((candidate) => resolve(candidate));
   const basePython = candidates.find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
   if (!basePython) throw new Error(`source Studio Python base executable is unavailable: ${configPath}`);
-  return { basePython: realpathSync(basePython) };
+  return { basePython: realpathSync.native(basePython) };
 }
 
 function pythonCommandError(error) {
@@ -573,7 +573,7 @@ export async function createFeatureWorkspace(input) {
   // nothing merges from it into the integration branch without a card first.
   const taskId = input.task == null ? null : normalizeTaskId(input.task);
   const gameId = normalizeGameId(input.game);
-  const studioRoot = realpathSync(resolve(input.root || process.cwd()));
+  const studioRoot = realpathSync.native(resolve(input.root || process.cwd()));
   const base = canonicalPhysicalPath(input.base || defaultWorkspaceBase(studioRoot), "workspace base");
   if (base === studioRoot) throw new Error("workspace base cannot be the Studio root");
   mkdirSync(base, { recursive: true });
@@ -586,7 +586,7 @@ export async function createFeatureWorkspace(input) {
   const game = inspectRepository(sourceGameRoot, { requireAttached: true, label: "source game" });
   if (taskId) inspectCommittedTask(sourceGameRoot, game.commit, taskId, gameId);
   const engineCommit = engineGitlink(studioRoot, studio.commit);
-  const sourceEngineRoot = realpathSync(join(studioRoot, "external/neotolis-engine"));
+  const sourceEngineRoot = realpathSync.native(join(studioRoot, "external/neotolis-engine"));
   if (!gitSucceeds(sourceEngineRoot, ["cat-file", "-e", `${engineCommit}^{commit}`])) {
     throw new Error(`engine object ${engineCommit} is unavailable locally`);
   }
@@ -788,7 +788,7 @@ function lockDiagnostics(base) {
 }
 
 function commonGitDir(root) {
-  return realpathSync(resolve(root, git(root, ["rev-parse", "--git-common-dir"])));
+  return realpathSync.native(resolve(root, git(root, ["rev-parse", "--git-common-dir"])));
 }
 
 function assertSourceIdentity(record) {

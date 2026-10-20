@@ -227,7 +227,7 @@ function gitError(result, fallback) {
 
 function physicalGitRoot(root, spawnGit) {
   let physical;
-  try { physical = realpathSync(root); }
+  try { physical = realpathSync.native(root); }
   catch { throw new Error("private worktree path is invalid"); }
   const result = git(physical, ["rev-parse", "--is-inside-work-tree", "--show-toplevel", "--git-common-dir"], spawnGit);
   const error = gitError(result, "git rev-parse");
@@ -264,7 +264,7 @@ function verifyPrivateWorktreeAlias(root, canonical, alias, options) {
     if (!line.startsWith("worktree ")) continue;
     const listed = resolve(canonicalGit.physical, line.slice("worktree ".length));
     if (slash(listed) !== aliasPath) continue;
-    try { registered = slash(realpathSync(listed)) === aliasPath; }
+    try { registered = slash(realpathSync.native(listed)) === aliasPath; }
     catch { registered = false; }
     if (registered) break;
   }
