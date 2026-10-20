@@ -220,12 +220,19 @@ test("golden banks are addressed absolutely and recorded only on request", () =>
   assert.equal(goldenEnvironment(gameDir, true, {}).GAME_UPDATE_GOLDENS, "1");
 });
 
-test("verify composes doctor tests and one package without discovering workspace games", async () => {
+// A quiet test run writes its log and goldens dir under the game, so seams need a disposable one.
+function scratchGameDir(t) {
+  const dir = mkdtempSync(join(tmpdir(), "game-cli-seam-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+test("verify composes doctor tests and one package without discovering workspace games", async (t) => {
   const calls = [];
   const result = await executeGameCommand({
     command: "verify", target: "local", build: false, templateProof: true, skipTests: false, outDir: "",
   }, {
-    gameDir: "/repo/templates/template",
+    gameDir: scratchGameDir(t),
     doctor: () => { calls.push("doctor"); return { gameId: "template" }; },
     loadMetadata: () => ({ dependencies: {}, proof: "reference-template" }),
     verifyDependencies: () => { calls.push("dependencies"); },
@@ -244,13 +251,14 @@ test("verify composes doctor tests and one package without discovering workspace
   assert.match(result.message, /template-local\.zip/);
 });
 
-test("game test and plain verify require dependency proof plus Node and native CTest gates", async () => {
+test("game test and plain verify require dependency proof plus Node and native CTest gates", async (t) => {
+  const gameDir = scratchGameDir(t);
   for (const command of ["test", "verify"]) {
     const calls = [];
     await executeGameCommand({
       command, target: "itch", build: false, templateProof: false, skipTests: false, outDir: "",
     }, {
-      gameDir: "/repo/games/example",
+      gameDir,
       doctor: () => ({ gameId: "example" }),
       loadMetadata: () => ({ dependencies: {}, proof: "game" }),
       verifyDependencies: (metadata, opts) => calls.push(opts?.cleanliness === "warn" ? "dependencies:warn" : "dependencies"),
@@ -268,13 +276,14 @@ test("game test and plain verify require dependency proof plus Node and native C
   }
 });
 
-test("template test uses reference metadata while retaining both test gates", async () => {
+test("template test uses reference metadata while retaining both test gates", async (t) => {
   const calls = [];
+  const gameDir = scratchGameDir(t);
   await executeGameCommand({
     command: "test", target: "local", build: true, templateProof: true, skipTests: false, outDir: "",
     only: [], tier: "", all: false, updateGoldens: false,
   }, {
-    gameDir: "/repo/templates/template",
+    gameDir,
     doctor: ({ templateProof }) => { calls.push(templateProof ? "template-doctor" : "game-doctor"); return { gameId: "template" }; },
     loadMetadata: (_gameDir, templateProof) => ({ dependencies: {}, proof: templateProof ? "reference-template" : "game" }),
     verifyDependencies: (_metadata, opts) => calls.push(opts?.cleanliness === "warn" ? "dependencies:warn" : "dependencies"),
@@ -284,13 +293,14 @@ test("template test uses reference metadata while retaining both test gates", as
   assert.deepEqual(calls, ["template-doctor", "dependencies:warn", "node", "native"]);
 });
 
-test("focused native test skips unrelated Node suites", async () => {
+test("focused native test skips unrelated Node suites", async (t) => {
   const calls = [];
+  const gameDir = scratchGameDir(t);
   await executeGameCommand({
     command: "test", target: "local", build: false, templateProof: true, skipTests: false, outDir: "",
     only: ["test_game_save"], tier: "", all: false, updateGoldens: false,
   }, {
-    gameDir: "/repo/templates/template",
+    gameDir,
     doctor: () => ({ gameId: "template" }),
     loadMetadata: () => ({ dependencies: {}, proof: "reference-template" }),
     verifyDependencies: () => calls.push("dependencies"),
@@ -571,9 +581,9 @@ test("CTest parallelism follows CTEST_PARALLEL_LEVEL when it is set", () => {
   assert.throws(() => ctestParallelism({ CTEST_PARALLEL_LEVEL: "-1" }), /non-negative/);
 });
 
-test("a game that settles its own native tree is not configured a second time", () => {
+test("a game that settles its own native tree is not configured a second time", (t) => {
   const calls = [];
-  runNativeTests("/repo/games/example", { selection: { mode: "tier", tier: "core" } }, {
+  runNativeTests(scratchGameDir(t), { selection: { mode: "tier", tier: "core" } }, {
     settle: (runStep) => runStep("cmake", ["-C", "seed.cmake", "-S", "/repo/games/example"], "native configure"),
     run: (command, args, cwd, label) => calls.push([label, command, args[0]]),
     catalogue: () => [{ name: "unit", tier: "core", targets: ["unit"] }],

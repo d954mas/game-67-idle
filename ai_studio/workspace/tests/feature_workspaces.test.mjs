@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { hostname, tmpdir } from "node:os";
 import { createServer } from "node:net";
 
@@ -175,7 +175,7 @@ test("CLI accepts Python preparation for an existing workspace", () => {
 });
 
 test("default workspace base is a sibling of the Studio checkout", () => {
-  const root = join("C:\\projects", "game-67-idle");
+  const root = resolve("/projects/game-67-idle");
   assert.equal(defaultWorkspaceBase(root), join(dirname(root), `${basename(root)}-workspaces`));
 });
 

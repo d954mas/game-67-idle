@@ -110,6 +110,18 @@
                 "coverage": "subtree"
               },
               {
+                "id": "feature-graphics-quality",
+                "title": "Graphics quality",
+                "kind": "module",
+                "path": "features/graphics-quality",
+                "owner": "Graphics Feature Owner",
+                "description": "Graphics quality step policy: device default step, render scale and shadows per step.",
+                "entry": "features/graphics-quality/README.md",
+                "contract": "features/graphics-quality/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
                 "id": "feature-items-core",
                 "title": "Items core",
                 "kind": "module",
@@ -154,6 +166,18 @@
                 "description": "Data-only localization capability shared across games.",
                 "entry": "features/localization/README.md",
                 "contract": "features/localization/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
+                "id": "feature-metaserver",
+                "title": "Metaserver",
+                "kind": "module",
+                "path": "features/metaserver",
+                "owner": "Network Feature Owner",
+                "description": "Go library for the online back end of room-based games: identity, rooms, tickets, profiles and the operator console.",
+                "entry": "features/metaserver/README.md",
+                "contract": "features/metaserver/feature.json",
                 "verifyDomain": "features",
                 "coverage": "subtree"
               },
