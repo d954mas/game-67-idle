@@ -205,10 +205,13 @@ test("features owner runs a real isolated native configure build and CTest lane"
     },
   });
   assert.equal(result.status, 0);
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 6);
   assert.ok(calls[0].includes("ai_studio/feature_testing/consumer/build/feature-verify"));
   assert.deepEqual(calls[1].slice(0, 3), ["cmake", "--build", "ai_studio/feature_testing/consumer/build/feature-verify"]);
   assert.deepEqual(calls[2].slice(0, 3), ["ctest", "--test-dir", "ai_studio/feature_testing/consumer/build/feature-verify"]);
+  // A second tree with DevAPI on runs the DevAPI scene tests, and fails if none match.
+  assert.ok(calls[3].includes("ai_studio/feature_testing/consumer/build/feature-verify-devapi") && calls[3].includes("-DGAME_DEVAPI_ENABLED=ON"));
+  assert.ok(calls[5].includes("--no-tests=error"));
 });
 
 test("template proof builds only the blank starter", async () => {
@@ -235,7 +238,7 @@ test("full verification tests shared features through their independent consumer
     },
   });
   assert.equal(result.status, 0);
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 6);
   assert.ok(calls[0].includes("ai_studio/feature_testing/consumer"));
 });
 

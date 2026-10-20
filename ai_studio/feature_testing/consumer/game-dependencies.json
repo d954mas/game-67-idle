@@ -38,7 +38,7 @@
     {
       "id": "localization",
       "source": "features/localization",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "compatibility": "validated by the template build and test suite"
     },
     {

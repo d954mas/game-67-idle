@@ -944,6 +944,15 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_loc_e2e COMMAND test_loc_e2e)
     set_tests_properties(test_loc_e2e PROPERTIES LABELS "core")
 
+    add_executable(test_loc "${LOCALIZATION_DIR}/tests/test_loc.c" "${LOCALIZATION_SRC}/loc.c")
+    target_link_libraries(test_loc PRIVATE unity nt_mem_scratch nt_log nt_core)
+    target_include_directories(test_loc PRIVATE "${LOCALIZATION_INC}" "${ENGINE_DIR}/engine")
+    target_compile_definitions(test_loc PRIVATE _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_loc)
+    set_target_properties(test_loc PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_loc COMMAND test_loc)
+    set_tests_properties(test_loc PROPERTIES LABELS "core")
+
     add_executable(test_platform_sdk
         tests/test_platform_sdk.c
         "${PLATFORM_SDK_SRC}/platform_sdk.c")
@@ -1228,7 +1237,7 @@ if(NOT EMSCRIPTEN)
         test_game_events_log_mirror test_items_api_core_only
         test_items_api
         test_items_fragment test_items_fragment_assert_off test_progression test_progression_curve
-        test_game_format test_loc_e2e test_platform_sdk test_game_input test_platform_lifecycle
+        test_game_format test_loc_e2e test_loc test_platform_sdk test_game_input test_platform_lifecycle
         test_platform_sdk_events test_template_composition
         test_scenes_core_catalog test_scenes_core_lifecycle
         test_scenes_core_navigation test_scenes_core_ordering

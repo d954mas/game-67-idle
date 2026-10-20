@@ -75,6 +75,11 @@ const FEATURE_NATIVE_COMMANDS = [
   nativeConfigureCommand(process.platform, "ai_studio/feature_testing/consumer", "feature-verify"),
   ["cmake", "--build", "ai_studio/feature_testing/consumer/build/feature-verify"],
   ["ctest", "--test-dir", "ai_studio/feature_testing/consumer/build/feature-verify", "--output-on-failure"],
+  // The DevAPI scene tests need the engine's DevAPI layer, which the plain build leaves out.
+  [...nativeConfigureCommand(process.platform, "ai_studio/feature_testing/consumer", "feature-verify-devapi"), "-DGAME_DEVAPI_ENABLED=ON"],
+  ["cmake", "--build", "ai_studio/feature_testing/consumer/build/feature-verify-devapi", "--target", "test_scenes_core_devapi"],
+  ["ctest", "--test-dir", "ai_studio/feature_testing/consumer/build/feature-verify-devapi", "--output-on-failure",
+    "--no-tests=error", "-R", "^(test_scenes_core_devapi|scenes_core_devapi_runtime_schema)$"],
 ];
 const WEB_COMMANDS = [
   ["node", "templates/template/tools/build_web.mjs", "--preset", "wasm-release", "--target", "itch", "--no-debug-ui"],
