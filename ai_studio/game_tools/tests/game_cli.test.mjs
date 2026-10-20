@@ -161,6 +161,8 @@ test("native game test plan configures, builds, and runs CTest without a clean r
   assert.deepEqual(windows[1].slice(0, 2), ["cmake", "--build"]);
   assert.ok(windows[2].includes("--output-on-failure"));
   assert.ok(windows[2].includes("-j"));
+  assert.deepEqual(windows[2].slice(windows[2].indexOf("--timeout"), windows[2].indexOf("--timeout") + 2), ["--timeout", "600"]);
+  assert.equal(windows[2].includes("--no-tests=error"), true);
   const configured = nativeTestPlan(gameDir, "win32", true);
   assert.deepEqual(configured.map((command) => command[0]), ["cmake", "ctest"]);
   assert.deepEqual(configured[0].slice(0, 2), ["cmake", "--build"]);
@@ -177,6 +179,10 @@ test("native game test plan configures, builds, and runs CTest without a clean r
   // Without a tier every test runs, so nothing narrows the build either.
   assert.deepEqual(nativeTestPlan(gameDir, "win32", true, { mode: "all" })[0].slice(-1),
     [join(gameDir, "build", "native-debug")]);
+  // --all runs every tier, so an empty one is not an error.
+  assert.equal(nativeTestPlan(gameDir, "win32", true, { mode: "all" })[1].includes("--no-tests=error"), false);
+  assert.equal(focused[1].includes("--no-tests=error"), true);
+  assert.equal(tiered[1].includes("--no-tests=error"), true);
 });
 
 test("every executable a test runs from the build tree is a target it needs built", () => {

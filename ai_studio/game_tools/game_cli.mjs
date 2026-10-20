@@ -171,7 +171,7 @@ function runNodeTests(gameDir, capture = null) {
   const files = readdirSync(tools).filter((name) => name.endsWith(".test.mjs")).sort().map((name) => join("tools", name));
   if (files.length === 0) throw new Error("game scaffold has no Node tests");
   // Concurrency mirrors the studio gate; every heavy fixture is mkdtemp-isolated.
-  const args = ["--test", "--test-concurrency=4", ...files];
+  const args = ["--test", `--test-timeout=${TEST_TIMEOUT_SECONDS * 1000}`, "--test-concurrency=4", ...files];
   const logDir = mkdtempSync(join(tmpdir(), "game-node-tests-"));
   const logPath = join(logDir, "node-tests.log");
   const log = openSync(logPath, "w");
@@ -344,6 +344,10 @@ export function selectTests(catalogue, selection = {}, { gameTarget = "game" } =
   };
 }
 
+// The generated game has no include(CTest), so a hung test would otherwise
+// wait forever; a test's own TIMEOUT property still wins.
+const TEST_TIMEOUT_SECONDS = 600;
+
 export function ctestParallelism(environment = process.env) {
   const raw = environment.CTEST_PARALLEL_LEVEL;
   if (raw === undefined || raw === "") return availableParallelism();
@@ -363,9 +367,11 @@ export function nativeTestPlan(gameDir, platform = process.platform, configured 
     ]),
     ["cmake", "--build", buildDir, ...(targets.length > 0 ? ["--target", ...targets] : [])],
     ["ctest", "--test-dir", buildDir, "--output-on-failure", "-j", String(ctestParallelism()),
+      "--timeout", String(TEST_TIMEOUT_SECONDS),
+      // A named tier or test that matches nothing is a typo or a lost label, not a pass.
       ...(mode === "all" ? []
-        : mode === "only" ? ["-R", `^(${selection.names.join("|")})$`]
-        : ["-L", `^${selection.tier || TEST_TIER_DEFAULT}$`]),
+        : mode === "only" ? ["--no-tests=error", "-R", `^(${selection.names.join("|")})$`]
+        : ["--no-tests=error", "-L", `^${selection.tier || TEST_TIER_DEFAULT}$`]),
     ],
   ];
 }
