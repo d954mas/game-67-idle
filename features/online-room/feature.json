@@ -1,0 +1,60 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "online-room",
+  "version": "0.1.0",
+  "title": "Online Room",
+  "status": "opt-in",
+  "kind": "gameplay-infrastructure",
+  "summary": "In-place C half of the room-metaserver contract: version 2 tickets and replay memory, the metaserver profile store and status calls, the profile store contract with an in-memory store, the client's connection ladder, metaserver entry and account calls, round trip, room close codes, and nt_http transports.",
+  "copy_model": "in-place",
+  "layer": "L1",
+  "owners": [
+    "features/online-room"
+  ],
+  "dependencies": [
+    "features/network-core codec (nt::network_core_codec) for the ticket layout and HMAC",
+    "the engine's vendored cJSON for the metaserver's JSON answers",
+    "the engine's nt_http for the transport sources the consumer compiles",
+    "features/metaserver as the other half of CONTRACT.md"
+  ],
+  "commands": {
+    "ctest": "ctest --test-dir games/<game-id>/build/<preset> -L core -R ^online_room_ --output-on-failure",
+    "contracts": "node features/validate_contracts.mjs"
+  },
+  "provides": [
+    "online_room CMake target with PUBLIC ONLINE_ROOM_PLAYERS_MAX, ONLINE_ROOM_PARTING_MAX, ONLINE_ROOM_PROFILE_TEXT_MAX",
+    "online_room/ticket.h: online_ticket_encode/verify/check/remember/admit/bearer/key_parse",
+    "online_room/meta.h: online_meta_init/store/status_send/status_poll, online_meta_url_allowed/loggable",
+    "online_room/profile_store.h and memory_store.h: online_profile_store contract, online_memory_store",
+    "online_room/entry.h, meta_entry.h, meta_account.h, rtt.h: the client's ladder, entry, account calls and round trip",
+    "online_room/close.h: ONLINE_ROOM_CLOSE_* codes",
+    "ONLINE_ROOM_META_NT_HTTP_SOURCE and ONLINE_ROOM_META_ENTRY_NT_HTTP_SOURCE transport sources"
+  ],
+  "registers": {
+    "link_libraries": [
+      "online_room"
+    ],
+    "target_sources": [
+      "${ONLINE_ROOM_META_NT_HTTP_SOURCE}",
+      "${ONLINE_ROOM_META_ENTRY_NT_HTTP_SOURCE}"
+    ],
+    "ctest_targets": [
+      "online_room_ticket",
+      "online_room_meta",
+      "online_room_meta_url",
+      "online_room_entry_ladder",
+      "online_room_rtt",
+      "online_room_meta_entry",
+      "online_room_meta_account"
+    ]
+  },
+  "flags": {
+    "runtime": "none; sizes come from the consumer's CMake"
+  },
+  "manuals": {
+    "install": "features/online-room/INSTALL.md",
+    "contract": "features/online-room/CONTRACT.md"
+  },
+  "art_needs": [],
+  "test_consumer": false
+}

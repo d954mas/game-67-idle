@@ -132,6 +132,9 @@ possibility, not a feature.
   measurement over `game-events` and `platform-sdk`. The consumer owns its
   event mapper. See `portal-metrics/README.md` and `portal-metrics/INSTALL.md`.
 
+- `online-room/` (`L1`, opt-in): the C half of the room-metaserver contract:
+  tickets, the profile store and status calls, the client's entry ladder and
+  account calls. See `online-room/README.md` and `online-room/INSTALL.md`.
 - `metaserver/` (`L1`, opt-in): Go library for a room-based game's online back
   end (identity, room registry, entry tickets, profiles, operator console). A
   game's `metaserver/` module calls `metaserver.Main` with its routes and

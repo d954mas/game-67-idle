@@ -194,6 +194,18 @@
                 "coverage": "subtree"
               },
               {
+                "id": "feature-online-room",
+                "title": "Online room",
+                "kind": "module",
+                "path": "features/online-room",
+                "owner": "Network Feature Owner",
+                "description": "C half of the room-metaserver contract: tickets, the profile store, status calls, and the client's entry ladder.",
+                "entry": "features/online-room/README.md",
+                "contract": "features/online-room/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
                 "id": "feature-platform-sdk",
                 "title": "Platform SDK",
                 "kind": "module",
