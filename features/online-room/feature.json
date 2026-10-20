@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "online-room",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "title": "Online Room",
   "status": "opt-in",
   "kind": "gameplay-infrastructure",
@@ -19,7 +19,9 @@
   ],
   "commands": {
     "ctest": "ctest --test-dir games/<game-id>/build/<preset> -L core -R ^online_room_ --output-on-failure",
-    "contracts": "node features/validate_contracts.mjs"
+    "contracts": "node features/validate_contracts.mjs",
+    "netproxy": "node features/online-room/tools/netproxy/netproxy.mjs --target <host:port> --rtt <ms> --jitter <ms> [--listen <port>] [--seed <n>] (latency/jitter WebSocket proxy for dev loops and benches)",
+    "host-status": "python features/online-room/tools/host-status.py (room host snapshot: rooms, CPU, memory, disk, plw_room_stats; a game's ops tool runs it over SSH)"
   },
   "provides": [
     "online_room CMake target with PUBLIC ONLINE_ROOM_PLAYERS_MAX, ONLINE_ROOM_PARTING_MAX, ONLINE_ROOM_PROFILE_TEXT_MAX",

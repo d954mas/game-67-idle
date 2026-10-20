@@ -11,6 +11,7 @@ const NODE_TEST_CONCURRENCY = 4;
 const PYTHON_TEST_CONCURRENCY = 4;
 const DOMAIN_CONCURRENCY = 3;
 const NETWORK_INTEGRATION_TEST = "features/network-core/tests/integration.test.mjs";
+const NETPROXY_TEST = "features/online-room/tools/netproxy/netproxy.test.mjs";
 const PYTHON_RUN = ["node", "ai_studio/dev_environment/python_run.mjs"];
 const pythonCommands = (files, options = {}) => {
   if (!options.batchUnittest) return files.map((file) => [...PYTHON_RUN, file]);
@@ -155,9 +156,12 @@ const CHECKS = Object.freeze([
   { id: "studio.workspace", testRoots: ["ai_studio/workspace"] },
   { id: "workspace.game-create", testFiles: ["games/new_game.test.mjs"] },
   { id: "features.contracts", testFiles: ["features/validate_contracts.test.mjs"], commands: [["node", "features/validate_contracts.mjs"]] },
-  { id: "features.node", testRoots: ["features"], except: [NETWORK_INTEGRATION_TEST] },
+  { id: "features.node", testRoots: ["features"], except: [NETWORK_INTEGRATION_TEST, NETPROXY_TEST] },
   // Builds a bare consumer with engine curl and runs the timed wire checks (about 90 s): CI, not every edit.
   { id: "features.network-integration", testFiles: [NETWORK_INTEGRATION_TEST], releaseOnly: true },
+  // Measures RTT medians on real timers: CI, not every edit.
+  { id: "features.online-room-netproxy", testFiles: [NETPROXY_TEST], releaseOnly: true },
+  { id: "features.online-room-tools", pythonRoots: ["features/online-room/tools"] },
   { id: "features.audio.web", testFiles: ["features/audio-core/tests/test_audio_web_library.mjs"] },
   {
     id: "features.native",
@@ -212,7 +216,7 @@ const DOMAINS = Object.freeze([
   { id: "work-management", checks: ["studio.taskboard"] },
   { id: "design", checks: [] },
   { id: "runtime", checks: ["studio.runtime-automation", "studio.runtime-automation.live"] },
-  { id: "features", checks: ["features.contracts", "features.node", "features.network-integration", "features.consumer", "features.audio.web", "features.native", "features.audio.linux", "features.platform-sdk", "features.game-state", "features.items-core", "features.progression-core", "features.scenes-core", "features.localization", "features.software-cursor", "features.test-goldens"] },
+  { id: "features", checks: ["features.contracts", "features.node", "features.network-integration", "features.online-room-netproxy", "features.online-room-tools", "features.consumer", "features.audio.web", "features.native", "features.audio.linux", "features.platform-sdk", "features.game-state", "features.items-core", "features.progression-core", "features.scenes-core", "features.localization", "features.software-cursor", "features.test-goldens"] },
   { id: "template-release", checks: ["reference-template", "reference-template.python", "reference-template.native", "reference-template.web"] },
 ]);
 
