@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "online-room",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "title": "Online Room",
   "status": "opt-in",
   "kind": "gameplay-infrastructure",
@@ -21,6 +21,7 @@
     "ctest": "ctest --test-dir games/<game-id>/build/<preset> -L core -R ^online_room_ --output-on-failure",
     "contracts": "node features/validate_contracts.mjs",
     "netproxy": "node features/online-room/tools/netproxy/netproxy.mjs --target <host:port> --rtt <ms> --jitter <ms> [--listen <port>] [--seed <n>] (latency/jitter WebSocket proxy for dev loops and benches)",
+    "room-monitor": "node --test features/online-room/tools/room_monitor.test.mjs (localRoom: the packaged web smoke's live hook that plays against a loopback room)",
     "host-status": "python features/online-room/tools/host-status.py (room host snapshot: rooms, CPU, memory, disk, plw_room_stats; a game's ops tool runs it over SSH)"
   },
   "provides": [
@@ -30,7 +31,8 @@
     "online_room/profile_store.h and memory_store.h: online_profile_store contract, online_memory_store",
     "online_room/entry.h, meta_entry.h, meta_account.h, rtt.h: the client's ladder, entry, account calls and round trip",
     "online_room/close.h: ONLINE_ROOM_CLOSE_* codes",
-    "ONLINE_ROOM_META_NT_HTTP_SOURCE and ONLINE_ROOM_META_ENTRY_NT_HTTP_SOURCE transport sources"
+    "ONLINE_ROOM_META_NT_HTTP_SOURCE and ONLINE_ROOM_META_ENTRY_NT_HTTP_SOURCE transport sources",
+    "tools/room_monitor.mjs: localRoom({ binary }), the live hook of smokePackagedWebArtifact that starts a loopback room and checks it at every capture"
   ],
   "registers": {
     "link_libraries": [

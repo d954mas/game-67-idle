@@ -25,6 +25,11 @@ profile documents and savers, its wire, perf and sample reports.
   (`online_room/meta_nt_http.h`) and `ONLINE_ROOM_META_ENTRY_NT_HTTP_SOURCE`
   (`online_room/meta_entry_nt_http.h`), compiled into the consumer's own
   targets beside the `nt_http` build it sizes.
+- `tools/room_monitor.mjs`: `localRoom({ binary })`, the `live` hook a room
+  game passes to the Studio packaged web smoke. It starts the room on loopback,
+  points the page at it with `?room=`, and at every capture requires a live
+  room process, an open page WebSocket and a seated player in the newest
+  `plw_room_stats` line (`node --test features/online-room/tools/room_monitor.test.mjs`).
 
 ## Validation
 

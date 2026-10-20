@@ -7,7 +7,7 @@ import {
   rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { inflateSync } from "node:zlib";
 
 import { readStoreZip } from "../core_harness/tool_lib/zip_store.mjs";
@@ -265,11 +265,20 @@ export class CdpClient {
   close() { this.socket.close(); }
 }
 
+// The cap fits an 8K UHD RGBA screenshot as base64 (~169 MiB) and bounds an
+// unterminated pipe response.
+const PIPE_MESSAGE_LIMIT = 256 * 1024 * 1024;
+
 export class PipeTransport {
-  constructor(input, output) {
+  constructor(input, output, { maxMessageBytes = PIPE_MESSAGE_LIMIT } = {}) {
+    if (!Number.isSafeInteger(maxMessageBytes) || maxMessageBytes <= 0 || maxMessageBytes > PIPE_MESSAGE_LIMIT) {
+      throw new Error(`Chrome CDP pipe message limit must be 1..${PIPE_MESSAGE_LIMIT} bytes`);
+    }
     this.input = input;
     this.output = output;
-    this.buffer = Buffer.alloc(0);
+    this.maxMessageBytes = maxMessageBytes;
+    this.buffer = Buffer.allocUnsafe(Math.min(4096, maxMessageBytes));
+    this.used = 0;
     this.listeners = new Map();
     this.closed = false;
     output.on("data", (bytes) => this.feed(bytes));
@@ -289,11 +298,32 @@ export class PipeTransport {
     for (const listener of listeners) listener.callback(event);
   }
 
+  append(bytes, start, end) {
+    const required = this.used + end - start;
+    if (required > this.maxMessageBytes) {
+      this.fail();
+      return false;
+    }
+    // Geometric growth keeps prefix copying linear across many pipe fragments.
+    if (required > this.buffer.length) {
+      let capacity = this.buffer.length;
+      while (capacity < required) capacity = Math.min(capacity * 2, this.maxMessageBytes);
+      const grown = Buffer.allocUnsafe(capacity);
+      this.buffer.copy(grown, 0, 0, this.used);
+      this.buffer = grown;
+    }
+    bytes.copy(this.buffer, this.used, start, end);
+    this.used = required;
+    return true;
+  }
+
   feed(bytes) {
-    this.buffer = Buffer.concat([this.buffer, bytes]);
-    for (let end = this.buffer.indexOf(0); end >= 0; end = this.buffer.indexOf(0)) {
-      const message = this.buffer.subarray(0, end).toString("utf8");
-      this.buffer = this.buffer.subarray(end + 1);
+    for (let start = 0; start < bytes.length && !this.closed;) {
+      const end = bytes.indexOf(0, start);
+      if (!this.append(bytes, start, end < 0 ? bytes.length : end) || end < 0) return;
+      const message = this.buffer.toString("utf8", 0, this.used);
+      this.used = 0;
+      start = end + 1;
       if (message) this.emit("message", { data: message });
     }
   }
@@ -315,6 +345,92 @@ export class PipeTransport {
     this.input.end();
     this.output.destroy();
   }
+}
+
+// Site directory i is served at /i/, so arms built apart share one origin.
+export async function serveSites(dirs, port = 0) {
+  const roots = dirs.map((dir) => resolve(dir));
+  const server = createServer((request, response) => {
+    let bytes = null;
+    let file = "";
+    try {
+      const [, index, ...rest] = decodeURIComponent(new URL(request.url || "/", "http://127.0.0.1").pathname).split("/");
+      const root = /^\d+$/.test(index) ? roots[Number(index)] : undefined;
+      const path = root && resolve(root, ...rest);
+      const inside = path && relative(root, path);
+      if (root && !inside.startsWith("..") && !isAbsolute(inside)) {
+        file = path === root ? join(root, "index.html") : path;
+        bytes = readFileSync(file);
+      }
+    } catch {
+      bytes = null;
+    }
+    if (!bytes) {
+      response.writeHead(404, { "cache-control": "no-store" }).end();
+      return;
+    }
+    response.writeHead(200, {
+      "content-type": CONTENT_TYPES.get(extension(file)) || "application/octet-stream",
+      "content-length": bytes.length,
+      "cache-control": "no-store",
+    });
+    response.end(bytes);
+  });
+  await new Promise((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(port, "127.0.0.1", resolveListen);
+  });
+  return {
+    origin: `http://127.0.0.1:${server.address().port}/`,
+    async close() {
+      server.closeAllConnections?.();
+      await new Promise((resolveClose) => server.close(resolveClose));
+    },
+  };
+}
+
+// Headless Chrome with one blank page attached over a CDP pipe; `args` go
+// before the page URL.
+export async function launchHeadlessChrome({ args = [], deadline, profilePrefix = "ai-studio-chrome-" }) {
+  const browser = findSupportedBrowser();
+  const profileDir = mkdtempSync(join(tmpdir(), profilePrefix));
+  let child = null;
+  let client = null;
+  const close = async () => {
+    try { client?.close(); } catch { /* the pipe may already be gone */ }
+    if (child) await closeChild(child, Date.now() + 3000);
+    await removeBrowserProfile(profileDir).catch(() => {});
+  };
+  try {
+    child = spawn(browser, [
+      "--headless=new",
+      "--remote-debugging-pipe",
+      `--user-data-dir=${profileDir}`,
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--mute-audio",
+      ...browserSandboxArgs(),
+      ...args,
+      "about:blank",
+    ], {
+      stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"],
+      windowsHide: true,
+      detached: process.platform !== "win32",
+    });
+    client = new CdpClient(new PipeTransport(child.stdio[3], child.stdio[4]));
+    await new Promise((resolveSpawn, rejectSpawn) => {
+      child.once("spawn", resolveSpawn);
+      child.once("error", rejectSpawn);
+    });
+    const { targetId } = await client.callBrowser("Target.createTarget", { url: "about:blank" }, deadline);
+    client.sessionId = (await client.callBrowser("Target.attachToTarget", { targetId, flatten: true }, deadline)).sessionId;
+  } catch (error) {
+    await close();
+    throw error;
+  }
+  return { client, close };
 }
 
 function addIssue(issues, kind, text) {
@@ -540,7 +656,7 @@ const PAGE_STATE = `(() => {
   };
 })()`;
 
-const WEBGL_RECOVERY_STATE = `new Promise((resolve) => {
+const webglRecoveryScript = (timeoutMs) => `new Promise((resolve) => {
   const canvas = document.getElementById("canvas");
   const overlay = document.getElementById("runtime-overlay");
   const gl = canvas?.getContext("webgl2");
@@ -585,7 +701,7 @@ const WEBGL_RECOVERY_STATE = `new Promise((resolve) => {
     return Reflect.apply(clearRuntimeRecovery, globalThis, args);
   };
   globalThis.__clearRuntimeRecovery = wrappedClearRuntimeRecovery;
-  timeout = setTimeout(() => fail("recovery timed out"), 10000);
+  timeout = setTimeout(() => fail("recovery timed out"), ${timeoutMs});
   canvas.addEventListener("webglcontextlost", () => {
     evidence.lostEvent = true;
     evidence.contextLostDuringLoss = gl.isContextLost();
@@ -642,7 +758,11 @@ async function captureCanvasFrame(client, canvas, deadline) {
     },
   }, deadline);
   const bytes = Buffer.from(screenshot.data, "base64");
-  return { bytes, frame: analyzePngFrame(bytes) };
+  const frame = analyzePngFrame(bytes);
+  // The analysis blocks the event loop; yield so output a live service printed
+  // meanwhile is read before the next checkpoint takes its baseline.
+  await new Promise((resolveTick) => setTimeout(resolveTick, 0));
+  return { bytes, frame };
 }
 
 function recoveryCyclePassed(evidence) {
@@ -779,10 +899,13 @@ export function analyzePngFrame(bytes) {
   return { width, height, minLuma, maxLuma, variance: Math.max(0, sumSquares / pixels - mean * mean) };
 }
 
-async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chromePath, timeoutMs = 60000, allowedRemote = [], toleratedRemote = [], blockedUrlPatterns = [], allowedRemoteUrls = [], profileRoot = tmpdir(), mode = "full" }) {
+async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chromePath, timeoutMs = 60000, webglRecoveryTimeoutMs = 10000, chromeArgs = [], live = null, allowedRemote = [], toleratedRemote = [], blockedUrlPatterns = [], allowedRemoteUrls = [], profileRoot = tmpdir(), mode = "full" }) {
   const offlineRemote = remoteEndpointMatcher(allowedRemoteUrls);
   const probePlan = smokeProbePlan(mode);
-  const deadline = Date.now() + timeoutMs;
+  const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
+  let phase = "browser startup";
+  let state = null;
   const browser = findSupportedBrowser({ chromePath });
   let profileDir = "";
   let child = null;
@@ -818,6 +941,7 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
       "--disable-component-update",
       "--disable-sync",
       ...browserSandboxArgs(),
+      ...chromeArgs,
       "--use-angle=swiftshader",
       // Chrome 151+ refuses software WebGL without this opt-in; the smoke
       // renders trusted local content only
@@ -848,6 +972,7 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
     rootClient.sessionId = attached.sessionId;
     client = rootClient;
     const capture = registerBrowserIssueCapture(client, issues, allowedRemote, toleratedRemote, issuePolicy);
+    live?.attach(client);
     // Compiled-in endpoints fail as if the player were offline: the smoke stays
     // hermetic and proves the build reaches readiness without them.
     client.on("Fetch.requestPaused", ({ requestId }) => {
@@ -870,13 +995,18 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
       // must still reach readiness (Poki requires adblocked players playable)
       await client.call("Network.setBlockedURLs", { urls: blockedUrlPatterns }, deadline);
     }
+    // A background target may throttle its frames, which a live connection would
+    // not survive.
+    phase = "target activation";
+    await client.call("Page.bringToFront", {}, deadline);
+    phase = "page navigation";
     const navigation = await client.call("Page.navigate", { url: localUrl(url, "package page URL").href }, deadline);
     if (navigation.errorText) addIssue(issues, "resource.load", navigation.errorText);
-    let state = null;
     // half the budget waits for readiness, half is reserved for the evidence
     // capture, so a game that never comes up is still diagnosed as not ready
     // instead of exhausting the deadline and reporting a bare timeout
     const readinessDeadline = Math.min(deadline, Date.now() + Math.floor(timeoutMs / 2));
+    phase = "runtime readiness";
     while (Date.now() < readinessDeadline) {
       const evaluated = await client.call("Runtime.evaluate", { expression: PAGE_STATE, returnByValue: true }, readinessDeadline);
       state = evaluated.result?.value || null;
@@ -888,6 +1018,7 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
       await new Promise((resolveWait) => setTimeout(resolveWait, Math.min(100, remaining(readinessDeadline))));
     }
     if (state?.ready) {
+      phase = "first presented frames";
       await client.call("Runtime.evaluate", {
         expression: "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
         awaitPromise: true,
@@ -896,15 +1027,28 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
     capture.settle();
     let frame = null;
     let recovery = null;
+    // Each capture is bracketed by live checkpoints: the connection must survive
+    // the screenshot stall, not merely exist before it.
+    const checkpoint = async (name) => {
+      phase = `live checkpoint ${name}`;
+      await live?.checkpoint(name, deadline);
+    };
     if (probePlan.captureFrame && state?.canvas?.width > 0 && state?.canvas?.height > 0) {
+      await checkpoint("initial-before");
+      phase = "initial canvas capture";
       const initialCapture = await captureCanvasFrame(client, state.canvas, deadline);
       frame = initialCapture.frame;
+      await checkpoint("initial");
       if (state.ready) {
         const cycles = [];
         for (let cycle = 0; cycle < probePlan.recoveryCycles; cycle += 1) {
           contextLossConsoleAllowance += 1;
-          const cycleEvidence = await evaluateByValue(client, WEBGL_RECOVERY_STATE, deadline);
+          phase = `WebGL recovery ${cycle + 1}`;
+          const cycleEvidence = await evaluateByValue(client, webglRecoveryScript(webglRecoveryTimeoutMs), deadline);
+          await checkpoint(`recovery-${cycle + 1}-before`);
+          phase = `WebGL recovery ${cycle + 1} capture`;
           const cycleCapture = await captureCanvasFrame(client, state.canvas, deadline);
+          await checkpoint(`recovery-${cycle + 1}`);
           const evidenceWithFrame = {
             ...(cycleEvidence || { failure: "recovery result is missing" }),
             frame: cycleCapture.frame,
@@ -923,10 +1067,15 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
         };
       }
     }
+    if (!probePlan.captureFrame) await checkpoint("ready");
+    // Released while the page is still open: closing the browser below ends the
+    // live connection on purpose.
+    live?.release();
     return { ...state, frame, recovery, issues: [...issues] };
   } catch (error) {
-    operationError = error;
-    throw error;
+    operationError = new Error(`packaged browser smoke at ${phase} after ${Date.now() - startedAt}ms: ${error.message}; `
+      + `last readiness=${state?.ready ?? "unknown"}; issues=${JSON.stringify(issues)}`, { cause: error });
+    throw operationError;
   } finally {
     if (targetId && rootClient && Date.now() < deadline) {
       try {
@@ -959,6 +1108,10 @@ export async function smokePackagedWebArtifact({
   mode = "full",
   frameExpectation = "rendered",
   allowedRemoteUrls = [],
+  webglRecoveryTimeoutMs = 10000,
+  chromeArgs = [],
+  requiredEntries = [],
+  live = null,
 }) {
   smokeProbePlan(mode);
   remoteEndpointMatcher(allowedRemoteUrls);
@@ -970,7 +1123,7 @@ export async function smokePackagedWebArtifact({
   catch (error) { throw new Error(`reopened package release.json is invalid: ${error.message}`); }
   if (!release || release.schema !== "ai_studio.game.release.v2" || release.target !== expectedTarget
       || release.entrypoint !== "index.html" || !SHA256.test(release.runtimeBuildFingerprint || "")
-      || !entries.has(release.entrypoint)) {
+      || !entries.has(release.entrypoint) || !requiredEntries.every((path) => entries.has(path))) {
     throw new Error(`reopened package release contract is invalid: ${basename(packagePath)}`);
   }
   const server = await serveEntries(entries, release.entrypoint);
@@ -998,12 +1151,21 @@ export async function smokePackagedWebArtifact({
        /cdn\.jsdelivr\.net\/gh\/prebid/] : [];
   const blockedUrlPatterns = expectedTarget === "poki"
     ? [...AD_STACK_HOSTS.map((host) => `*${host}*`), "*cdn.jsdelivr.net/gh/prebid*"] : [];
+  let session = null;
   try {
+    // live: { prepare(pageUrl) -> { url, attach(client), checkpoint(name, deadline),
+    // release(), finish(mode) -> failures, stop(), diagnose() -> text } } keeps a
+    // service the page talks to alive through the probe and judges it at each
+    // capture; finish() runs after browser teardown, which it must also survive.
+    session = live ? await live.prepare(server.url) : null;
     const observation = await probe({
-      url: server.url,
+      url: session?.url ?? server.url,
       expectedRuntimeBuildFingerprint: release.runtimeBuildFingerprint,
       chromePath,
       timeoutMs,
+      webglRecoveryTimeoutMs,
+      chromeArgs,
+      live: session,
       allowedRemote,
       toleratedRemote,
       blockedUrlPatterns,
@@ -1012,9 +1174,14 @@ export async function smokePackagedWebArtifact({
       mode,
     });
     const failures = assessPackagedWebObservation(observation, release.runtimeBuildFingerprint, { mode, frameExpectation });
+    if (session) failures.push(...session.finish(mode));
     if (failures.length > 0) throw new Error(`packaged web smoke failed: ${failures.join("; ")}`);
     return observation;
+  } catch (error) {
+    if (!session) throw error;
+    throw new Error(`${error.message}; ${session.diagnose()}`, { cause: error });
   } finally {
-    await server.close();
+    try { await session?.stop(); }
+    finally { await server.close(); }
   }
 }

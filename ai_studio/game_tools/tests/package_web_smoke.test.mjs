@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -16,6 +16,7 @@ import {
   PipeTransport,
   registerBrowserIssueCapture,
   remoteEndpointMatcher,
+  serveSites,
   smokeProbePlan,
   smokePackagedWebArtifact,
 } from "../package_web_smoke.mjs";
@@ -221,6 +222,125 @@ test("CDP pipe routes flattened session commands events and deadlines", async ()
   brokenInput.destroy(new Error("broken pipe"));
   await assert.rejects(pending, /CDP connection closed/);
   broken.close();
+});
+
+function pipeFixture(options) {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const transport = new PipeTransport(input, output, options);
+  const messages = [];
+  let closes = 0;
+  transport.addEventListener("message", ({ data }) => messages.push(data));
+  transport.addEventListener("close", () => { closes += 1; });
+  return { input, output, transport, messages, closes: () => closes };
+}
+
+function referencePipeMessages(chunks) {
+  let pending = Buffer.alloc(0);
+  const messages = [];
+  for (const chunk of chunks) {
+    pending = Buffer.concat([pending, chunk]);
+    for (let end = pending.indexOf(0); end >= 0; end = pending.indexOf(0)) {
+      const message = pending.subarray(0, end).toString("utf8");
+      pending = pending.subarray(end + 1);
+      if (message) messages.push(message);
+    }
+  }
+  return messages;
+}
+
+test("CDP pipe preserves NUL framing and UTF-8 bytes at every split boundary", () => {
+  const wire = Buffer.concat([
+    Buffer.from('\0{"text":"награда 🪙 café"}\0\0{"ok":true}\0'),
+    Buffer.from([0xe2, 0x28, 0xa1, 0]), // malformed UTF-8 keeps its replacement behaviour
+    Buffer.from("unfinished"),
+  ]);
+  for (let split = 0; split <= wire.length; split += 1) {
+    const chunks = [wire.subarray(0, split), wire.subarray(split)];
+    const { transport, messages } = pipeFixture();
+    for (const chunk of chunks) transport.feed(chunk);
+    assert.deepEqual(messages, referencePipeMessages(chunks), `split ${split}`);
+    transport.feed(Buffer.from(" tail\0\0next\0"));
+    assert.deepEqual(messages.slice(-2), ["unfinished tail", "next"]);
+    transport.close();
+  }
+});
+
+test("CDP pipe assembles screenshot-sized bytewise fragments in a bounded buffer", () => {
+  const message = JSON.stringify({ id: 1, result: { data: "A".repeat(500 * 1024) } });
+  const wire = Buffer.from(`${message}\0`);
+  for (const chunkBytes of [1, 64, 4096, 65536]) {
+    const { transport, messages } = pipeFixture();
+    for (let start = 0; start < wire.length; start += chunkBytes) {
+      transport.feed(wire.subarray(start, Math.min(start + chunkBytes, wire.length)));
+    }
+    assert.deepEqual(messages, [message]);
+    assert.ok(transport.buffer.length < wire.length * 2);
+    transport.close();
+  }
+});
+
+test("CDP pipe default limit accommodates 8K screenshot responses and rejects invalid bounds", () => {
+  const { transport } = pipeFixture();
+  // 8K UHD RGBA with PNG row markers, 1% container overhead, base64 and 1 MiB of JSON.
+  assert.ok(transport.maxMessageBytes > Math.ceil((7680 * 4320 * 4 + 4320) * 1.01 * 4 / 3) + 1024 * 1024);
+  transport.close();
+  for (const maxMessageBytes of [0, -1, 1.5, NaN, Infinity, 256 * 1024 * 1024 + 1]) {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    assert.throws(() => new PipeTransport(input, output, { maxMessageBytes }), /pipe message limit/);
+    assert.equal(output.listenerCount("data"), 0);
+  }
+});
+
+test("CDP pipe enforces its per-message bound without rejecting a batch of valid frames", () => {
+  const { transport, messages, closes } = pipeFixture({ maxMessageBytes: 8 });
+  transport.feed(Buffer.from("12345678\0abcdefgh\0"));
+  assert.deepEqual(messages, ["12345678", "abcdefgh"]);
+  transport.feed(Buffer.from("12345678"));
+  assert.equal(closes(), 0);
+  transport.feed(Buffer.from("9\0unread\0"));
+  transport.feed(Buffer.from("also unread\0"));
+  transport.fail();
+  assert.equal(closes(), 1);
+  assert.deepEqual(messages, ["12345678", "abcdefgh"]);
+  assert.throws(() => transport.send("{}"), /pipe is closed/);
+});
+
+test("CDP pipe intentional close is silent and transport failure emits close only once", () => {
+  const { input, output, transport, messages, closes } = pipeFixture();
+  transport.close();
+  transport.close();
+  transport.fail();
+  transport.feed(Buffer.from("unread\0"));
+  assert.equal(closes(), 0);
+  assert.equal(input.writableEnded, true);
+  assert.equal(output.destroyed, true);
+  assert.deepEqual(messages, []);
+
+  const failed = pipeFixture();
+  failed.input.emit("error", new Error("broken input"));
+  failed.output.emit("error", new Error("broken output"));
+  failed.transport.fail();
+  assert.equal(failed.closes(), 1);
+});
+
+test("site server maps directory i to /i/ and refuses paths outside it", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "serve-sites-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const first = join(root, "first");
+  const second = join(root, "second");
+  for (const [dir, text] of [[first, "one"], [second, "two"]]) {
+    mkdirSync(dir);
+    writeFileSync(join(dir, "index.html"), text);
+  }
+  writeFileSync(join(root, "secret.txt"), "secret");
+  const server = await serveSites([first, second]);
+  t.after(() => server.close());
+  assert.equal(await (await fetch(new URL("0/", server.origin))).text(), "one");
+  assert.equal(await (await fetch(new URL("1/index.html", server.origin))).text(), "two");
+  assert.equal((await fetch(new URL("0/%2E%2E/secret.txt", server.origin))).status, 404);
+  assert.equal((await fetch(new URL("2/", server.origin))).status, 404);
 });
 
 test("browser issue capture rejects remote socket and direct transport side channels", () => {
@@ -668,4 +788,68 @@ test("an offline endpoint that answers went past the interception and fails the 
   listeners.get("Network.responseReceived")({ requestId: "1", response: { status: 200, url: "https://stats.example.com/api?x=1" } });
   assert.deepEqual(issues.map((issue) => issue.kind), ["resource.remote"]);
   assert.match(issues[0].text, /offline endpoint answered/);
+});
+
+function fixtureZip(t, extra = []) {
+  const root = mkdtempSync(join(tmpdir(), "packaged-web-smoke-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const zipPath = join(root, "fixture.zip");
+  writeFileSync(zipPath, createStoreZip([
+    { path: "index.html", bytes: Buffer.from("<!doctype html>") },
+    ...extra,
+    { path: "release.json", bytes: Buffer.from(JSON.stringify({
+      schema: "ai_studio.game.release.v2", target: "itch", entrypoint: "index.html", runtimeBuildFingerprint: FINGERPRINT,
+    })) },
+  ]));
+  return zipPath;
+}
+
+test("required entries and probe options reach the release contract and the probe", async (t) => {
+  const zipPath = fixtureZip(t, [{ path: "game.wasm", bytes: Buffer.from("wasm") }]);
+  let seen = null;
+  await smokePackagedWebArtifact({
+    zipPath, expectedTarget: "itch", requiredEntries: ["game.wasm"], webglRecoveryTimeoutMs: 45000, chromeArgs: ["--use-gl=angle"],
+    probe: async (options) => { seen = options; return { ...passingObservation(), finalUrl: options.url }; },
+  });
+  assert.equal(seen.webglRecoveryTimeoutMs, 45000);
+  assert.deepEqual(seen.chromeArgs, ["--use-gl=angle"]);
+  assert.equal(seen.live, null);
+  await assert.rejects(
+    smokePackagedWebArtifact({ zipPath, expectedTarget: "itch", requiredEntries: ["missing.wasm"], probe: async () => passingObservation() }),
+    /release contract is invalid/,
+  );
+});
+
+test("a live service steers the page URL, is judged after the probe and is always stopped", async (t) => {
+  const zipPath = fixtureZip(t);
+  const events = [];
+  const live = (finishFailures, stop = async () => {}) => ({
+    async prepare(pageUrl) {
+      events.push("prepare");
+      return {
+        url: `${pageUrl}?room=ws%3A%2F%2F127.0.0.1%3A7199`,
+        attach() {}, async checkpoint() {}, release() { events.push("release"); },
+        finish: (mode) => { events.push(`finish ${mode}`); return finishFailures; },
+        async stop() { events.push("stop"); await stop(); },
+        diagnose: () => "room output=[bye]",
+      };
+    },
+  });
+  const probe = async ({ url, live: session }) => {
+    assert.equal(new URL(url).searchParams.get("room"), "ws://127.0.0.1:7199");
+    session.release();
+    return { ...passingObservation(), finalUrl: url };
+  };
+  await smokePackagedWebArtifact({ zipPath, expectedTarget: "itch", live: live([]), probe });
+  assert.deepEqual(events.splice(0), ["prepare", "release", "finish full", "stop"]);
+  await assert.rejects(smokePackagedWebArtifact({ zipPath, expectedTarget: "itch", live: live(["room exited during teardown"]), probe }),
+    /packaged web smoke failed: room exited during teardown; room output=\[bye\]/);
+  assert.deepEqual(events.splice(0), ["prepare", "release", "finish full", "stop"]);
+  // A failing stop still closes the package server.
+  let url = "";
+  await assert.rejects(smokePackagedWebArtifact({
+    zipPath, expectedTarget: "itch", live: live([], async () => { throw new Error("stop failed"); }),
+    probe: async (options) => { url = options.url; return probe(options); },
+  }), /stop failed/);
+  await assert.rejects(fetch(url));
 });
