@@ -122,6 +122,18 @@
                 "coverage": "subtree"
               },
               {
+                "id": "feature-shadow-cascades",
+                "title": "Shadow cascades",
+                "kind": "module",
+                "path": "features/shadow-cascades",
+                "owner": "Graphics Feature Owner",
+                "description": "Cascaded shadow map fitting, frustum planes and caster volumes for a directional sun.",
+                "entry": "features/shadow-cascades/README.md",
+                "contract": "features/shadow-cascades/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
                 "id": "feature-items-core",
                 "title": "Items core",
                 "kind": "module",

@@ -60,6 +60,12 @@
       "compatibility": "validated by test_graphics_quality and the settings composition tests"
     },
     {
+      "id": "shadow-cascades",
+      "source": "features/shadow-cascades",
+      "version": "0.1.0",
+      "compatibility": "validated by test_csm and test_frustum"
+    },
+    {
       "id": "remote-image",
       "source": "features/remote-image",
       "version": "0.1.0",

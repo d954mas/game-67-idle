@@ -1,0 +1,44 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "shadow-cascades",
+  "version": "0.1.0",
+  "title": "Shadow Cascades",
+  "status": "reusable",
+  "kind": "presentation",
+  "summary": "In-place L0 math for a directional sun's cascaded shadow maps and for culling against them: stable cascade fitting with texel snapping, frustum planes, and the caster volume of a camera slice.",
+  "copy_model": "in-place",
+  "layer": "L0",
+  "owners": [
+    "features/shadow-cascades"
+  ],
+  "dependencies": [
+    "engine nt_math: cglm vector, matrix and frustum helpers"
+  ],
+  "commands": {
+    "ctest": "ctest --test-dir ai_studio/feature_testing/consumer/build/native-debug -R \"test_(csm|frustum)\" --output-on-failure"
+  },
+  "provides": [
+    "csm_compute: light matrices, atlas tiles and texel sizes of each cascade, snapped so edges do not shimmer",
+    "csm_slice_sphere: the sphere around a view slice",
+    "csm_config_valid / csm_atlas_width / csm_atlas_height: the config check and the atlas size",
+    "frustum_from_view_proj / frustum_from_light_view_proj: normalized clip planes",
+    "frustum_sees_box / frustum_box_to_world: box tests against the planes",
+    "shadow_volume_from_camera_slice / shadow_volume_sees_box / shadow_volume_bounds_in_box: the region that can shadow a camera slice"
+  ],
+  "manuals": {
+    "install": "features/shadow-cascades/INSTALL.md"
+  },
+  "registers": {
+    "target_sources": [
+      "${SHADOW_CASCADES_DIR}/src/csm.c",
+      "${SHADOW_CASCADES_DIR}/src/frustum.c"
+    ],
+    "include_dirs": [
+      "${SHADOW_CASCADES_DIR}/include"
+    ],
+    "ctest_targets": [
+      "test_csm",
+      "test_frustum"
+    ]
+  }
+}

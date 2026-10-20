@@ -197,6 +197,11 @@ possibility, not a feature.
   a text bank beside the test and is re-recorded with one command, so an
   intended design change costs a diff instead of hand-edited test source.
   Reference: `test-goldens/README.md` + `test-goldens/INSTALL.md`.
+- `shadow-cascades/` (`L0`, `0.1.0`): pure math of a directional sun's cascaded
+  shadow maps (texel-snapped cascade fitting), frustum planes and the caster
+  volume of a camera slice. The game owns the depth atlas, the passes and the
+  knobs (cascade count, splits, resolution, PCF margin). Reference:
+  `shadow-cascades/README.md` + `shadow-cascades/INSTALL.md`.
 
 ## Optional reference examples
 

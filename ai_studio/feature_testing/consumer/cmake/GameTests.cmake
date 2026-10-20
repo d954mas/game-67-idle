@@ -423,6 +423,20 @@ if(NOT EMSCRIPTEN)
         UNITY audio_unity
         OPTIONS -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
 
+    game_add_c_test(test_csm TIER core
+        SOURCES "${SHADOW_CASCADES_DIR}/tests/test_csm.c" "${SHADOW_CASCADES_SRC}/csm.c" "${SHADOW_CASCADES_SRC}/frustum.c"
+        INCLUDES "${SHADOW_CASCADES_INC}"
+        LIBS nt_core nt_math
+        UNITY audio_unity
+        OPTIONS -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
+
+    game_add_c_test(test_frustum TIER core
+        SOURCES "${SHADOW_CASCADES_DIR}/tests/test_frustum.c" "${SHADOW_CASCADES_SRC}/frustum.c"
+        INCLUDES "${SHADOW_CASCADES_INC}"
+        LIBS nt_core nt_math
+        UNITY audio_unity
+        OPTIONS -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
+
     game_add_c_test(test_graphics_quality
         SOURCES "${GRAPHICS_QUALITY_DIR}/tests/test_graphics_quality.c" "${GRAPHICS_QUALITY_SRC}/graphics_quality.c"
         INCLUDES "${GRAPHICS_QUALITY_INC}"
