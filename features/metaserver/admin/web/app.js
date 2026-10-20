@@ -8,7 +8,7 @@ const pages = {
 };
 
 const pageTitles = { overview: "Обзор", players: "Игроки", rooms: "Комнаты", capacity: "Мощность", incidents: "Сбои", system: "Система" };
-const state = { page: "overview", csrf: "", playerQuery: "", playerCursor: 0, totpRequired: true };
+const state = { page: "overview", csrf: "", playerQuery: "", playerCursor: 0 };
 const $ = (id) => document.getElementById(id);
 const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
 
@@ -75,7 +75,6 @@ function showLogin(message = "") {
   $("login-error").textContent = message;
   $("login-error").hidden = !message;
   $("login-password").value = "";
-  $("login-totp").value = "";
 }
 
 function showApp(user, csrf) {
@@ -94,7 +93,6 @@ async function login(event) {
   $("login-error").hidden = true;
   try {
     const credentials = { username: $("login-user").value.trim(), password: $("login-password").value };
-    if (state.totpRequired) credentials.totp = $("login-totp").value.trim();
     const data = await api("/admin-api/v1/login", { method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(credentials) });
@@ -276,21 +274,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
   addEventListener("popstate", () => navigate(new URLSearchParams(location.search).get("page") || "overview", false));
-  let authReady = false;
-  try {
-    const auth = await api("/admin-api/v1/auth-config");
-    state.totpRequired = auth.totp_required === true;
-    $("login-totp-field").hidden = !state.totpRequired;
-    $("login-totp").required = state.totpRequired;
-    $("login-form").querySelector("button").disabled = false;
-    authReady = true;
-  } catch {
-    showLogin("Настройки входа недоступны. Обновите страницу.");
-  }
   try {
     const session = await api("/admin-api/v1/session");
     showApp(session.user, session.csrf);
   } catch {
-    showLogin(authReady ? "" : "Настройки входа недоступны. Обновите страницу.");
+    showLogin();
   }
 });

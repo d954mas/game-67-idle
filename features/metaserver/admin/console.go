@@ -1,11 +1,10 @@
-// Package admin is the operator console: its own login (password, TOTP),
+// Package admin is the operator console: its own login (password),
 // read-only views of the metaserver and its database, and the owner's
 // bootstrap and recovery ceremonies.
 package admin
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -19,7 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Brand names the game on the console page and on the owner's TOTP entry.
+// Brand names the game on the console page.
 type Brand struct {
 	Name string // "Example Game"
 	Mark string // two letters for the badge
@@ -50,36 +49,18 @@ func (b Brand) slug() string {
 func (b Brand) sessionCookie() string { return "__Host-" + b.slug() + "-admin" }
 
 type adminConfig struct {
-	addr         string
-	origin       string
-	dbURL        string
-	dbPassword   string
-	metaURL      string
-	metaToken    string
-	totpKey      []byte
-	totpRequired bool
-}
-
-func parseTOTPRequired() (bool, error) {
-	switch os.Getenv("ADMIN_TOTP_REQUIRED") {
-	case "", "1":
-		return true, nil
-	case "0":
-		return false, nil
-	default:
-		return false, errors.New("ADMIN_TOTP_REQUIRED must be 0 or 1")
-	}
+	addr       string
+	origin     string
+	dbURL      string
+	dbPassword string
+	metaURL    string
+	metaToken  string
 }
 
 func loadAdminConfig() (adminConfig, error) {
 	var cfg adminConfig
 	if os.Getenv("ADMIN_ENABLED") != "1" {
 		return cfg, errors.New("admin service is disabled")
-	}
-	var err error
-	cfg.totpRequired, err = parseTOTPRequired()
-	if err != nil {
-		return cfg, err
 	}
 	cfg.origin = strings.TrimRight(os.Getenv("ADMIN_ORIGIN"), "/")
 	origin, err := url.Parse(cfg.origin)
@@ -116,18 +97,9 @@ func loadAdminConfig() (adminConfig, error) {
 		metaURL.User != nil || metaURL.Path != "" || metaURL.RawQuery != "" || metaURL.Fragment != "" {
 		return cfg, errors.New("ADMIN_META_URL must be an http(s) origin")
 	}
-	keyFile := os.Getenv("ADMIN_TOTP_KEY_FILE")
 	tokenFile := os.Getenv("ADMIN_META_TOKEN_FILE")
-	if keyFile == "" || tokenFile == "" {
-		return cfg, errors.New("ADMIN_TOTP_KEY_FILE and ADMIN_META_TOKEN_FILE are required")
-	}
-	encodedKey, err := os.ReadFile(keyFile)
-	if err != nil {
-		return cfg, err
-	}
-	cfg.totpKey, err = hex.DecodeString(strings.TrimSpace(string(encodedKey)))
-	if err != nil || len(cfg.totpKey) != 32 {
-		return cfg, errors.New("ADMIN_TOTP_KEY_FILE must contain 64 hex characters")
+	if tokenFile == "" {
+		return cfg, errors.New("ADMIN_META_TOKEN_FILE is required")
 	}
 	token, err := os.ReadFile(tokenFile)
 	if err != nil {
@@ -183,7 +155,6 @@ func runAdmin(brand Brand) error {
 		has_table_privilege(current_user, 'ops.audit_actions', 'UPDATE, DELETE, TRUNCATE'),
 		has_column_privilege(current_user, 'ops.admin_users', 'role', 'UPDATE') OR
 		has_column_privilege(current_user, 'ops.admin_users', 'password_hash', 'UPDATE') OR
-		has_column_privilege(current_user, 'ops.admin_users', 'totp_secret', 'UPDATE') OR
 		has_column_privilege(current_user, 'ops.admin_users', 'disabled', 'UPDATE')`).Scan(
 		&directPlayers, &changeAudit, &changeCredentials); err != nil {
 		return err
@@ -195,9 +166,9 @@ func runAdmin(brand Brand) error {
 	if err != nil {
 		return err
 	}
-	store := &adminStore{pool: pool, totpKey: cfg.totpKey, totpRequired: cfg.totpRequired, dummyHash: dummy}
+	store := &adminStore{pool: pool, dummyHash: dummy}
 	app := &adminServer{brand: brand, store: store, meta: metaClient{baseURL: cfg.metaURL, token: cfg.metaToken},
-		origin: cfg.origin, totpRequired: cfg.totpRequired}
+		origin: cfg.origin}
 	server := &http.Server{Addr: cfg.addr, Handler: app.handler(), ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: time.Minute,
 		MaxHeaderBytes: 16 << 10}

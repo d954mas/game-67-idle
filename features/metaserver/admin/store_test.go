@@ -51,42 +51,38 @@ func freshAdminStore(t *testing.T) *adminStore {
 		checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())`); err != nil {
 		t.Fatal(err)
 	}
-	script, err := os.ReadFile("../schema.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, string(script)); err != nil {
-		t.Fatalf("apply schema: %v", err)
+	for _, file := range []string{"../schema.sql", "../migration_2.sql"} {
+		script, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, string(script)); err != nil {
+			t.Fatalf("apply %s: %v", file, err)
+		}
 	}
 	dummy, err := hashPassword("dummy password")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &adminStore{pool: pool, totpKey: bytes.Repeat([]byte{0x4a}, 32), totpRequired: true, dummyHash: dummy}
+	return &adminStore{pool: pool, dummyHash: dummy}
 }
 
-func TestLoginCreatesRevocableSessionAndRejectsTOTPReplay(t *testing.T) {
+func TestLoginCreatesRevocableSession(t *testing.T) {
 	store := freshAdminStore(t)
 	ctx := t.Context()
 	password := "owner password for testing"
 	hash, _ := hashPassword(password)
-	secret := []byte("12345678901234567890")
-	encrypted, _ := encryptSecret(store.totpKey, secret)
-	if _, err := store.pool.Exec(ctx, `INSERT INTO ops.admin_users (username, password_hash, totp_secret, role)
-		VALUES ('owner', $1, $2, 'owner')`, hash, encrypted); err != nil {
+	if _, err := store.pool.Exec(ctx, `INSERT INTO ops.admin_users (username, password_hash, role)
+		VALUES ('owner', $1, 'owner')`, hash); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Unix(1_780_000_000, 0).UTC()
-	code := totpCode(secret, now.Unix()/30)
-	if _, _, err := store.login(ctx, "owner", "wrong", code, now); err != errInvalidCredentials {
+	if _, _, err := store.login(ctx, "owner", "wrong", now); err != errInvalidCredentials {
 		t.Fatalf("wrong password: %v", err)
 	}
-	cookie, user, err := store.login(ctx, "owner", password, code, now)
+	cookie, user, err := store.login(ctx, "owner", password, now)
 	if err != nil || user.Username != "owner" || user.Role != "owner" {
 		t.Fatalf("login: %+v %v", user, err)
-	}
-	if _, _, err := store.login(ctx, "owner", password, code, now); err != errInvalidCredentials {
-		t.Fatalf("TOTP replay: %v", err)
 	}
 	active, err := store.session(ctx, cookie, now.Add(time.Minute))
 	if err != nil || active.ID != user.ID {
@@ -100,32 +96,8 @@ func TestLoginCreatesRevocableSessionAndRejectsTOTPReplay(t *testing.T) {
 	}
 	var allowed, denied int
 	if err := store.pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE result='allowed'),
-		count(*) FILTER (WHERE result='denied') FROM ops.audit_actions WHERE action='login'`).Scan(&allowed, &denied); err != nil || allowed != 1 || denied != 2 {
+		count(*) FILTER (WHERE result='denied') FROM ops.audit_actions WHERE action='login'`).Scan(&allowed, &denied); err != nil || allowed != 1 || denied != 1 {
 		t.Fatalf("audit: allowed=%d denied=%d err=%v", allowed, denied, err)
-	}
-}
-
-func TestPasswordOnlyLoginKeepsPasswordCheckAndSession(t *testing.T) {
-	store := freshAdminStore(t)
-	store.totpRequired = false
-	ctx := t.Context()
-	password := "owner password for testing"
-	hash, _ := hashPassword(password)
-	encrypted, _ := encryptSecret(store.totpKey, []byte("12345678901234567890"))
-	if _, err := store.pool.Exec(ctx, `INSERT INTO ops.admin_users (username, password_hash, totp_secret, role)
-		VALUES ('owner', $1, $2, 'owner')`, hash, encrypted); err != nil {
-		t.Fatal(err)
-	}
-	now := time.Unix(1_780_000_000, 0).UTC()
-	if _, _, err := store.login(ctx, "owner", "wrong password", "", now); err != errInvalidCredentials {
-		t.Fatalf("wrong password accepted: %v", err)
-	}
-	cookie, user, err := store.login(ctx, "owner", password, "", now)
-	if err != nil || user.Username != "owner" {
-		t.Fatalf("password-only login: %+v %v", user, err)
-	}
-	if _, err := store.session(ctx, cookie, now.Add(time.Minute)); err != nil {
-		t.Fatalf("password-only session: %v", err)
 	}
 }
 

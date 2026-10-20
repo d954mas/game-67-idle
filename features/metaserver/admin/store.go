@@ -18,10 +18,8 @@ var (
 )
 
 type adminStore struct {
-	pool         *pgxpool.Pool
-	totpKey      []byte
-	totpRequired bool
-	dummyHash    string
+	pool      *pgxpool.Pool
+	dummyHash string
 }
 
 type adminUser struct {
@@ -109,7 +107,7 @@ func (s *adminStore) occupancyHistory(ctx context.Context, now time.Time) ([]occ
 	return hours, rows.Err()
 }
 
-func (s *adminStore) login(ctx context.Context, username, password, code string, now time.Time) ([]byte, adminUser, error) {
+func (s *adminStore) login(ctx context.Context, username, password string, now time.Time) ([]byte, adminUser, error) {
 	var user adminUser
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -117,12 +115,10 @@ func (s *adminStore) login(ctx context.Context, username, password, code string,
 	}
 	defer tx.Rollback(ctx)
 	var passwordHash string
-	var encrypted []byte
-	var lastStep int64
 	var disabled bool
-	err = tx.QueryRow(ctx, `SELECT id, username, role, password_hash, totp_secret, last_totp_step, disabled
-		FROM ops.admin_users WHERE username = $1 FOR UPDATE`, username).Scan(
-		&user.ID, &user.Username, &user.Role, &passwordHash, &encrypted, &lastStep, &disabled)
+	err = tx.QueryRow(ctx, `SELECT id, username, role, password_hash, disabled
+		FROM ops.admin_users WHERE username = $1`, username).Scan(
+		&user.ID, &user.Username, &user.Role, &passwordHash, &disabled)
 	if errors.Is(err, pgx.ErrNoRows) {
 		verifyPassword(s.dummyHash, password)
 		return nil, user, auditDenied(ctx, tx, username)
@@ -132,19 +128,6 @@ func (s *adminStore) login(ctx context.Context, username, password, code string,
 	}
 	if disabled || !verifyPassword(passwordHash, password) {
 		return nil, adminUser{}, auditDenied(ctx, tx, username)
-	}
-	if s.totpRequired {
-		secret, err := decryptSecret(s.totpKey, encrypted)
-		if err != nil {
-			return nil, adminUser{}, err
-		}
-		step, ok := verifyTOTP(secret, code, now, lastStep)
-		if !ok {
-			return nil, adminUser{}, auditDenied(ctx, tx, username)
-		}
-		if _, err := tx.Exec(ctx, `UPDATE ops.admin_users SET last_totp_step = $2 WHERE id = $1`, user.ID, step); err != nil {
-			return nil, adminUser{}, err
-		}
 	}
 	cookie, err := newSessionSecret()
 	if err != nil {

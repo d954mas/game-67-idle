@@ -210,8 +210,7 @@
       <form id="login-form">
         <label for="login-user">Имя</label><input id="login-user" name="username" autocomplete="username" required maxlength="64">
         <label for="login-password">Пароль</label><input id="login-password" name="password" type="password" autocomplete="current-password" required>
-        <div id="login-totp-field" hidden><label for="login-totp">Код подтверждения</label><input id="login-totp" name="totp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"></div>
-        <button class="button full" type="submit" disabled>Войти</button>
+        <button class="button full" type="submit">Войти</button>
       </form>
       <p id="login-error" class="login-error" role="alert" hidden></p>
     </div>

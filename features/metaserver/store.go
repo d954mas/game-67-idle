@@ -22,14 +22,17 @@ import (
 //go:embed schema.sql
 var schemaSQL string
 
+//go:embed migration_2.sql
+var migration2SQL string
+
 // SchemaVersion is the newest migration; the server refuses a database
 // at any other version.
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 var migrations = []struct {
 	version int
 	sql     string
-}{{1, schemaSQL}}
+}{{1, schemaSQL}, {2, migration2SQL}}
 
 // store is the only game API code that talks to PostgreSQL: plain SQL over a small pool.
 type store struct {

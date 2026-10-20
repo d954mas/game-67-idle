@@ -243,7 +243,7 @@ func TestOccupancyRetentionPrunesOldRunsAndTheirRoomRows(t *testing.T) {
 func TestAdminRolesReadOnlyViewsAndAppendOnlyAudit(t *testing.T) {
 	st, _ := freshStore(t)
 	ctx := context.Background()
-	var viewRead, profileRead, profileTableRead, tableRead, auditInsert, auditDelete, credentialUpdate, totpFenceUpdate bool
+	var viewRead, profileRead, profileTableRead, tableRead, auditInsert, auditDelete, credentialUpdate bool
 	err := st.pool.QueryRow(ctx, `SELECT
 		has_table_privilege('meta_admin_read', 'ops.v_players', 'SELECT'),
 		has_table_privilege('meta_admin_read', 'ops.v_player_profiles', 'SELECT'),
@@ -251,18 +251,17 @@ func TestAdminRolesReadOnlyViewsAndAppendOnlyAudit(t *testing.T) {
 		has_table_privilege('meta_admin_read', 'public.players', 'SELECT'),
 		has_table_privilege('meta_audit_writer', 'ops.audit_actions', 'INSERT'),
 		has_table_privilege('meta_audit_writer', 'ops.audit_actions', 'DELETE'),
-		has_column_privilege('meta_admin_service', 'ops.admin_users', 'role', 'UPDATE'),
-		has_column_privilege('meta_admin_service', 'ops.admin_users', 'last_totp_step', 'UPDATE')`).Scan(
-		&viewRead, &profileRead, &profileTableRead, &tableRead, &auditInsert, &auditDelete, &credentialUpdate, &totpFenceUpdate)
+		has_any_column_privilege('meta_admin_service', 'ops.admin_users', 'UPDATE')`).Scan(
+		&viewRead, &profileRead, &profileTableRead, &tableRead, &auditInsert, &auditDelete, &credentialUpdate)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !profileRead || profileTableRead {
 		t.Fatalf("admin profile read: view=%v table=%v", profileRead, profileTableRead)
 	}
-	if !viewRead || tableRead || !auditInsert || auditDelete || credentialUpdate || !totpFenceUpdate {
-		t.Fatalf("admin privileges: view=%v table=%v audit_insert=%v audit_delete=%v credential_update=%v totp_update=%v",
-			viewRead, tableRead, auditInsert, auditDelete, credentialUpdate, totpFenceUpdate)
+	if !viewRead || tableRead || !auditInsert || auditDelete || credentialUpdate {
+		t.Fatalf("admin privileges: view=%v table=%v audit_insert=%v audit_delete=%v credential_update=%v",
+			viewRead, tableRead, auditInsert, auditDelete, credentialUpdate)
 	}
 }
 

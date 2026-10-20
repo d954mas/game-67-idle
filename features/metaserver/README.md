@@ -98,7 +98,7 @@ Configuration is `META_*` (`config.go`): `META_ADDR`, `META_DATABASE_URL`,
 
 ### Database
 
-`schema.sql` is version 1. `migrate` records each migration's checksum and
+`schema.sql` is version 1 and `migration_2.sql` version 2. `migrate` records each migration's checksum and
 refuses a changed one; it runs as the database's owner (checked against
 `pg_database.datdba`), whatever the game names it. With
 `META_RUNTIME_DB_PASSWORD_FILE`, `META_ADMIN_DB_PASSWORD_FILE` and

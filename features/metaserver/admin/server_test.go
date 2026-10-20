@@ -15,21 +15,19 @@ func TestAdminAPIRequiresSessionAndCSRF(t *testing.T) {
 	store := freshAdminStore(t)
 	password := "owner password for API test"
 	hash, _ := hashPassword(password)
-	secret := []byte("12345678901234567890")
-	encrypted, _ := encryptSecret(store.totpKey, secret)
 	if _, err := store.pool.Exec(t.Context(), `INSERT INTO ops.admin_users
-		(username, password_hash, totp_secret, role) VALUES ('owner', $1, $2, 'owner')`, hash, encrypted); err != nil {
+		(username, password_hash, role) VALUES ('owner', $1, 'owner')`, hash); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.pool.Exec(t.Context(), `INSERT INTO ops.admin_users
-		(username, password_hash, totp_secret, role) VALUES ('viewer', $1, $2, 'viewer')`, hash, encrypted); err != nil {
+		(username, password_hash, role) VALUES ('viewer', $1, 'viewer')`, hash); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.pool.Exec(t.Context(), `INSERT INTO players (login) VALUES ('ann')`); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Unix(1_780_000_000, 0).UTC()
-	api := &adminServer{store: store, origin: "https://admin.example.test", totpRequired: true,
+	api := &adminServer{store: store, origin: "https://admin.example.test",
 		now: func() time.Time { return now }}
 	h := api.handler()
 
@@ -38,7 +36,7 @@ func TestAdminAPIRequiresSessionAndCSRF(t *testing.T) {
 	if unauthorized.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated players: %d", unauthorized.Code)
 	}
-	viewerSecret, _, err := store.login(t.Context(), "viewer", password, totpCode(secret, now.Unix()/30), now)
+	viewerSecret, _, err := store.login(t.Context(), "viewer", password, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,8 +71,7 @@ func TestAdminAPIRequiresSessionAndCSRF(t *testing.T) {
 			t.Fatalf("empty capacity: %s", got.Body.String())
 		}
 	}
-	loginBody, _ := json.Marshal(map[string]string{"username": "owner", "password": password,
-		"totp": totpCode(secret, now.Unix()/30)})
+	loginBody, _ := json.Marshal(map[string]string{"username": "owner", "password": password})
 	loginReq := httptest.NewRequest("POST", "/admin-api/v1/login", bytes.NewReader(loginBody))
 	loginReq.Header.Set("Origin", "https://admin.example.test")
 	loginReq.Header.Set("Content-Type", "application/json")
@@ -128,7 +125,7 @@ func TestAdminAPIRequiresSessionAndCSRF(t *testing.T) {
 
 func TestLoginRejectsOversizedBody(t *testing.T) {
 	h := (&adminServer{origin: "https://admin.example.test"}).handler()
-	body := []byte(`{"username":"owner","password":"password","totp":"123456"}`)
+	body := []byte(`{"username":"owner","password":"password"}`)
 	body = append(body, bytes.Repeat([]byte(" "), 4096)...)
 	r := httptest.NewRequest("POST", "/admin-api/v1/login", bytes.NewReader(body))
 	r.Header.Set("Origin", "https://admin.example.test")
@@ -137,34 +134,6 @@ func TestLoginRejectsOversizedBody(t *testing.T) {
 	h.ServeHTTP(w, r)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("oversized login body accepted: %d", w.Code)
-	}
-}
-
-func TestPasswordOnlyLoginAPIHasNoCodeField(t *testing.T) {
-	store := freshAdminStore(t)
-	store.totpRequired = false
-	password := "owner password for API test"
-	hash, _ := hashPassword(password)
-	encrypted, _ := encryptSecret(store.totpKey, []byte("12345678901234567890"))
-	if _, err := store.pool.Exec(t.Context(), `INSERT INTO ops.admin_users
-		(username, password_hash, totp_secret, role) VALUES ('owner', $1, $2, 'owner')`, hash, encrypted); err != nil {
-		t.Fatal(err)
-	}
-	api := &adminServer{store: store, origin: "https://admin.example.test", totpRequired: false}
-	h := api.handler()
-	config := httptest.NewRecorder()
-	h.ServeHTTP(config, httptest.NewRequest("GET", "/admin-api/v1/auth-config", nil))
-	if config.Code != http.StatusOK || !bytes.Contains(config.Body.Bytes(), []byte(`"totp_required":false`)) {
-		t.Fatalf("auth config: %d %s", config.Code, config.Body.String())
-	}
-	body, _ := json.Marshal(map[string]string{"username": "owner", "password": password})
-	r := httptest.NewRequest("POST", "/admin-api/v1/login", bytes.NewReader(body))
-	r.Header.Set("Origin", "https://admin.example.test")
-	r.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, r)
-	if w.Code != http.StatusOK || len(w.Result().Cookies()) != 1 {
-		t.Fatalf("password-only API login: %d %s", w.Code, w.Body.String())
 	}
 }
 

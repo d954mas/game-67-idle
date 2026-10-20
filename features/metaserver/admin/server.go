@@ -32,7 +32,6 @@ type adminServer struct {
 	store          *adminStore
 	meta           metaClient
 	origin         string
-	totpRequired   bool
 	now            func() time.Time
 	mu             sync.Mutex
 	tries          map[string]loginCount
@@ -62,9 +61,6 @@ func (s *adminServer) handler() http.Handler {
 		http.FileServer(http.FS(assets)).ServeHTTP(w, r)
 	}))
 	mux.HandleFunc("POST /admin-api/v1/login", s.login)
-	mux.HandleFunc("GET /admin-api/v1/auth-config", func(w http.ResponseWriter, _ *http.Request) {
-		apiJSON(w, http.StatusOK, map[string]bool{"totp_required": s.totpRequired})
-	})
 	mux.HandleFunc("POST /admin-api/v1/logout", s.authorized(s.logout))
 	mux.HandleFunc("GET /admin-api/v1/session", s.authorized(s.session))
 	mux.HandleFunc("GET /admin-api/v1/overview", s.authorized(s.overview))
@@ -178,17 +174,12 @@ func (s *adminServer) login(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
-		TOTP     string `json:"totp"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 	decoder.DisallowUnknownFields()
 	decodeErr := decoder.Decode(&input)
-	validCode := input.TOTP == ""
-	if s.totpRequired {
-		validCode = len(input.TOTP) == 6
-	}
 	if decodeErr != nil || len(input.Username) == 0 || len(input.Username) > 64 ||
-		len(input.Password) > 1024 || !validCode || decoder.Decode(new(any)) != io.EOF {
+		len(input.Password) > 1024 || decoder.Decode(new(any)) != io.EOF {
 		apiError(w, http.StatusBadRequest, "invalid login request")
 		return
 	}
@@ -211,7 +202,7 @@ func (s *adminServer) login(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
-	secret, user, err := s.store.login(ctx, input.Username, input.Password, input.TOTP, now)
+	secret, user, err := s.store.login(ctx, input.Username, input.Password, now)
 	if errors.Is(err, errInvalidCredentials) {
 		apiError(w, http.StatusUnauthorized, "invalid credentials")
 		return
