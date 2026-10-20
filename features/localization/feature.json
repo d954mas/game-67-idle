@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "localization",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "title": "Localization",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -23,7 +23,8 @@
     "generate": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc.py generate --strings <game>/content/loc/strings.json --out-dir <generated-dir>",
     "index": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc.py generate --index-only --strings <game>/content/loc/strings.json --out-dir <tmp-dir>",
     "test": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc_test.py",
-    "plural-cases": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc.py plural-cases --out-dir <test-generated-dir>"
+    "plural-cases": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc.py plural-cases --out-dir <test-generated-dir>",
+    "merge-glyphs": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/merge_font_glyphs.py --base <font> --out <font> (fills a font's missing glyphs; games run it from CMake)"
   },
   "manuals": {
     "install": "features/localization/INSTALL.md"
