@@ -197,6 +197,23 @@ test("every executable a test runs from the build tree is a target it needs buil
     [["test_fresh"], ["test_built"], [], ["stand"], ["stand"], [], ["test_linked"]]);
 });
 
+test("a binary handed to a test through its environment is a target; a build-tree directory is not", () => {
+  const buildDir = mkdtempSync(join(tmpdir(), "ctest-env-"));
+  mkdirSync(join(buildDir, "generated"));
+  const root = buildDir.replace(/\\/g, "/");
+  const spawn = () => ({ status: 0, stdout: JSON.stringify({ tests: [
+    { name: "replay_contract", command: ["node", "tests/r.mjs", `${root}/generated`], properties: [
+      { name: "LABELS", value: ["slow"] },
+      { name: "ENVIRONMENT", value: [`REPLAY=${root}/bin/sim_replay`, `PROBE=${root}/bin/probe.exe`, `GENERATED=${root}/generated`, "MODE=fast"] },
+    ] },
+  ] }) });
+  try {
+    assert.deepEqual(ctestCatalogue(buildDir, spawn)[0].targets, ["sim_replay", "probe"]);
+  } finally {
+    rmSync(buildDir, { recursive: true, force: true });
+  }
+});
+
 test("a tier selects its tests and only the targets they need", () => {
   const catalogue = [
     { name: "test_logic", tier: "core", targets: ["test_logic"] },

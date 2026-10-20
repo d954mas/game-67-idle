@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { closeSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -271,6 +271,8 @@ export async function runTestSuites(gameDir, { nodeTest, nativeTest, selection, 
   return `node ${nodePassed} passed, native ${nativePassed} passed in ${seconds}s; log: ${log}`;
 }
 
+const isDirectory = (path) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false;
+
 // CTest labels are the only record of which tier a test belongs to, so the
 // runner reads them back instead of keeping a second list that drifts.
 export function ctestCatalogue(buildDir, spawn = spawnSync) {
@@ -281,15 +283,19 @@ export function ctestCatalogue(buildDir, spawn = spawnSync) {
   if (result.status !== 0) throw new Error(`CTest discovery exited ${result.status ?? 1}`);
   const buildRoot = `${buildDir.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()}/`;
   const catalogue = JSON.parse(result.stdout).tests.map((entry) => {
-    const labels = (entry.properties || []).find((property) => property.name === "LABELS");
+    const property = (name) => [].concat((entry.properties || []).find((item) => item.name === name)?.value ?? []);
+    const labels = property("LABELS");
     const argv = Array.isArray(entry.command) ? entry.command : [];
     // Every executable a test runs out of the build tree is a target it needs
     // built: its own, a tool it drives under another name, or the binary a Node
-    // or Python contract is handed. The interpreter itself is not, and neither
-    // is a pack or data file read out of the tree.
-    const targets = argv
+    // or Python contract is handed in argv or ENVIRONMENT. The interpreter itself
+    // is not, and neither is a pack, data file or existing directory read out of
+    // the tree (a binary dir exists from configure on; an executable may not yet).
+    const environment = property("ENVIRONMENT").map(String).filter((pair) => pair.includes("="))
+      .map((pair) => pair.slice(pair.indexOf("=") + 1));
+    const targets = [...argv, ...environment]
       .map((arg) => String(arg).replace(/\\/g, "/"))
-      .filter((arg) => arg.toLowerCase().startsWith(buildRoot))
+      .filter((arg) => arg.toLowerCase().startsWith(buildRoot) && !isDirectory(arg))
       .map((arg) => arg.split("/").pop() || "")
       .filter((name) => /\.exe$/i.test(name) || (name !== "" && !name.includes(".")))
       .map((name) => name.replace(/\.exe$/i, ""));
@@ -301,7 +307,7 @@ export function ctestCatalogue(buildDir, spawn = spawnSync) {
     if (argv.length === 0 || own === entry.name) targets.push(entry.name);
     return {
       name: entry.name,
-      tier: labels ? String([].concat(labels.value)[0] || "") : "",
+      tier: String(labels[0] || ""),
       targets: [...new Set(targets)],
     };
   });
