@@ -60,9 +60,7 @@ func runMigration() error {
 	if err := st.checkOwner(ctx); err != nil {
 		return err
 	}
-	if err := st.migrate(ctx); err != nil {
-		return err
-	}
+	var logins []roleLogin
 	for _, item := range []struct{ role, variable string }{
 		{RoleAdminService, "META_ADMIN_DB_PASSWORD_FILE"},
 		{RoleRuntime, "META_RUNTIME_DB_PASSWORD_FILE"},
@@ -73,12 +71,10 @@ func runMigration() error {
 			if err != nil {
 				return fmt.Errorf("%s: %w", item.variable, err)
 			}
-			if err := st.provisionRole(ctx, item.role, password); err != nil {
-				return err
-			}
+			logins = append(logins, roleLogin{item.role, password})
 		}
 	}
-	return nil
+	return st.migrate(ctx, logins...)
 }
 
 // checkOwner refuses a migration run by anyone but the database's owner:

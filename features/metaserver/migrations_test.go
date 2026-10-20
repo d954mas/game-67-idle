@@ -27,6 +27,28 @@ func TestMigrationIsRepeatableAndRejectsDrift(t *testing.T) {
 	}
 }
 
+func TestMigrationCommitsNoSchemaWithoutItsLogins(t *testing.T) {
+	st, _ := emptyStore(t)
+	ctx := t.Context()
+	if err := st.migrate(ctx, roleLogin{"meta_unknown", "login-test-password-123456789012"}); err == nil {
+		t.Fatal("a login that could not be set was accepted")
+	}
+	var missing bool
+	if err := st.pool.QueryRow(ctx, `SELECT to_regclass('public.schema_migrations') IS NULL`).Scan(&missing); err != nil {
+		t.Fatal(err)
+	}
+	if !missing {
+		t.Fatal("the schema was committed without its logins")
+	}
+	if err := st.migrate(ctx, roleLogin{RoleBackup, "backup-test-password-12345678901"}); err != nil {
+		t.Fatalf("rerun: %v", err)
+	}
+	var login bool
+	if err := st.pool.QueryRow(ctx, `SELECT rolcanlogin FROM pg_roles WHERE rolname = $1`, RoleBackup).Scan(&login); err != nil || !login {
+		t.Fatalf("backup login after rerun: login=%v err=%v", login, err)
+	}
+}
+
 func TestRuntimeAndBackupRolesCannotChangeOperatorData(t *testing.T) {
 	st, _ := freshStore(t)
 	ctx := t.Context()

@@ -93,7 +93,13 @@ func readDBPassword(path string) (string, error) {
 
 func (s *store) close() { s.pool.Close() }
 
-func (s *store) migrate(ctx context.Context) error {
+// A login role and the password migrate gives it.
+type roleLogin struct{ role, password string }
+
+// migrate applies the schema and sets the logins' passwords in one
+// transaction: a schema committed without them would leave the backup role
+// unable to take the dump the next release needs before it migrates.
+func (s *store) migrate(ctx context.Context, logins ...roleLogin) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -127,6 +133,11 @@ func (s *store) migrate(ctx context.Context) error {
 			return fmt.Errorf("schema migration %d checksum mismatch", migration.version)
 		}
 	}
+	for _, login := range logins {
+		if err := provisionRole(ctx, tx, login.role, login.password); err != nil {
+			return err
+		}
+	}
 	return tx.Commit(ctx)
 }
 
@@ -144,14 +155,24 @@ func (s *store) checkSchema(ctx context.Context) error {
 }
 
 func (s *store) provisionRole(ctx context.Context, role, password string) error {
+	return provisionRole(ctx, s.pool, role, password)
+}
+
+// The pool or a transaction.
+type querier interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+func provisionRole(ctx context.Context, q querier, role, password string) error {
 	if role != RoleAdminService && role != RoleRuntime && role != RoleBackup {
 		return errors.New("unsupported database role")
 	}
 	var statement string
-	if err := s.pool.QueryRow(ctx, `SELECT format('ALTER ROLE %I LOGIN PASSWORD %L', $1::text, $2::text)`, role, password).Scan(&statement); err != nil {
+	if err := q.QueryRow(ctx, `SELECT format('ALTER ROLE %I LOGIN PASSWORD %L', $1::text, $2::text)`, role, password).Scan(&statement); err != nil {
 		return err
 	}
-	_, err := s.pool.Exec(ctx, statement)
+	_, err := q.Exec(ctx, statement)
 	return err
 }
 

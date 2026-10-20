@@ -29,6 +29,16 @@ import (
 // is nothing without its database.
 func freshStore(t *testing.T) (*store, string) {
 	t.Helper()
+	st, databaseURL := emptyStore(t)
+	if err := st.migrate(context.Background()); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	return st, databaseURL
+}
+
+// emptyStore is a new database with no schema yet.
+func emptyStore(t *testing.T) (*store, string) {
+	t.Helper()
 	adminURL := envOr("META_TEST_DATABASE_URL", defaultDatabaseURL)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -50,11 +60,7 @@ func freshStore(t *testing.T) (*store, string) {
 	})
 	parsed, _ := url.Parse(adminURL)
 	parsed.Path = "/" + name
-	st := openTestStore(t, parsed.String())
-	if err := st.migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return st, parsed.String()
+	return openTestStore(t, parsed.String()), parsed.String()
 }
 
 func openTestStore(t *testing.T, databaseURL string) *store {
