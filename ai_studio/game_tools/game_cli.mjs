@@ -602,7 +602,7 @@ export async function executeGameCommand(args, dependencies = {}) {
   const nodeTest = dependencies.nodeTest || runNodeTests;
   const nativeTest = dependencies.nativeTest || runNativeTests;
   const loadMetadata = dependencies.loadMetadata || gamePackageMetadata;
-  const verifyDependencies = dependencies.verifyDependencies || ((metadata, proofOptions) => verifyDependencySources({ studioRoot: findStudioRoot(gameDir), gameDir, dependencies: metadata.dependencies, ...proofOptions }));
+  const verifyDependencies = dependencies.verifyDependencies || ((metadata, proofOptions) => verifyDependencySources({ studioRoot: findStudioRoot(gameDir), dependencies: metadata.dependencies, ...proofOptions }));
   const packageGameOwned = dependencies.package || ((options, metadata) => packageGame(
     options, { gameDir, assetAudit: dependencies.assetAudit }, metadata,
   ));

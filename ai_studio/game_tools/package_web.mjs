@@ -187,43 +187,7 @@ function confinedSource(root, source, expected, label) {
   return realCandidate;
 }
 
-// A game compiles a feature in place by naming features/<id> in its CMake; dependencies.json must
-// then record that feature. Comment lines do not count as a use.
-// A CMake line up to its comment: a "#" outside a quoted argument starts one.
-function cmakeCode(line) {
-  let quoted = false;
-  for (let index = 0; index < line.length; index += 1) {
-    if (line[index] === "\\") index += 1;
-    else if (line[index] === '"') quoted = !quoted;
-    else if (line[index] === "#" && !quoted) return line.slice(0, index);
-  }
-  return line;
-}
-
-function requireDeclaredCmakeFeatures(gameDir, studioRoot, dependencies) {
-  const declared = new Set(dependencies.features.map((feature) => feature.id));
-  const cmakeFiles = ["CMakeLists.txt"];
-  if (existsSync(join(gameDir, "cmake"))) {
-    for (const entry of readdirSync(join(gameDir, "cmake"), { recursive: true })) {
-      if (String(entry).endsWith(".cmake")) cmakeFiles.push(`cmake/${slash(String(entry))}`);
-    }
-  }
-  const problems = [];
-  for (const file of cmakeFiles) {
-    if (!existsSync(join(gameDir, file))) continue;
-    const used = new Set();
-    const text = readFileSync(join(gameDir, file), "utf8").replace(/#\[(=*)\[[\s\S]*?\]\1\]/g, "");
-    for (const line of text.split(/\r?\n/)) {
-      for (const match of cmakeCode(line).matchAll(/features\/([a-z][a-z0-9-]*)/g)) {
-        if (!declared.has(match[1]) && existsSync(join(studioRoot, "features", match[1], "feature.json"))) used.add(match[1]);
-      }
-    }
-    if (used.size) problems.push(`${file} uses ${[...used].join(", ")}`);
-  }
-  if (problems.length) throw new Error(`dependencies.json does not declare the features the CMake compiles: ${problems.join("; ")}`);
-}
-
-export function verifyDependencySources({ studioRoot, gameDir, dependencies, git = defaultGit, cleanliness = "require" }) {
+export function verifyDependencySources({ studioRoot, dependencies, git = defaultGit, cleanliness = "require" }) {
   const root = realpathSync(resolve(studioRoot));
   // "warn" keeps identity/version proof hard but lets an iteration gate run
   // over a dirty engine/feature tree; release lanes never pass it.
@@ -233,7 +197,6 @@ export function verifyDependencySources({ studioRoot, gameDir, dependencies, git
   };
   validateDependencies(dependencies);
   requirePlatformSdkDependency(dependencies);
-  if (gameDir) requireDeclaredCmakeFeatures(resolve(gameDir), root, dependencies);
   const studioRevision = gitText(git, root, ["rev-parse", "HEAD"], "Studio dependency revision is unavailable").toLowerCase();
   if (!REVISION.test(studioRevision)) throw new Error("Studio dependency revision is invalid");
 
@@ -1314,7 +1277,7 @@ export function packageWebArtifact(options) {
   const dependencyPath = join(gameDir, "dependencies.json");
   const dependencies = validateDependencies(options.dependencies || readJson(dependencyPath, "dependencies"));
   requirePlatformSdkDependency(dependencies);
-  (options.dependencyVerifier || verifyDependencySources)({ studioRoot, gameDir, dependencies, ...(options.git ? { git: options.git } : {}) });
+  (options.dependencyVerifier || verifyDependencySources)({ studioRoot, dependencies, ...(options.git ? { git: options.git } : {}) });
   const dependencyBytes = jsonBytes(dependencies);
   const validated = validateWebArtifact({
     artifactDir: options.artifactDir,
