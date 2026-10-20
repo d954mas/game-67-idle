@@ -53,6 +53,10 @@ def parse(argv):
 
 
 class ViewportMatrixTest(unittest.TestCase):
+    def test_startup_timeout_can_be_overridden_without_changing_default(self):
+        self.assertEqual(parse(["--startup-timeout", "30"]).startup_timeout, 30.0)
+        self.assertEqual(parse([]).startup_timeout, 8.0)
+
     def test_parse_viewport_accepts_named_size(self):
         viewport = rv.parse_viewport("phone=390x844")
         self.assertEqual((viewport.name, viewport.width, viewport.height, viewport.orientation), ("phone", 390, 844, "portrait"))

@@ -22,6 +22,11 @@ game state schemas, quality rules, or task state. The engine owns DevAPI
 runtime behavior; games own the commands they expose; `ai_studio/quality/`
 owns acceptance rules; `ai_studio/taskboard/` owns durable work state.
 
+Native launch helpers wait eight seconds for DevAPI by default. A scenario may
+pass `running_game(startup_timeout=30.0)` for slower shader or asset startup;
+the responsive viewport CLI exposes the same setting as `--startup-timeout`.
+This does not change the per-request timeout after connection.
+
 ## Commands
 
 ```powershell

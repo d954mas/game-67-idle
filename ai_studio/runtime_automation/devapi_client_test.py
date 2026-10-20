@@ -259,6 +259,29 @@ class EngineCapturePayloadTest(unittest.TestCase):
 
 
 class LaunchPortResolutionTest(unittest.TestCase):
+    def test_launch_forwards_explicit_startup_timeout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            exe = os.path.join(directory, "game.exe")
+            open(exe, "wb").close()
+            client = mock.Mock()
+            child = mock.Mock(pid=123)
+            with mock.patch("devapi_client.connect_existing", side_effect=[None, client]) as connect, \
+                 mock.patch("devapi_client.make_launch_log_path", return_value=os.path.join(directory, "launch.log")), \
+                 mock.patch("devapi_client.subprocess.Popen", return_value=child), \
+                 mock.patch("devapi_client.stop_game_process"):
+                with running_game(port=19001, exe=exe, cwd=directory, startup_timeout=30.0):
+                    pass
+            self.assertEqual(connect.call_args_list[0].kwargs["timeout"], 0.1)
+            self.assertEqual(connect.call_args_list[1].kwargs["timeout"], 30.0)
+
+    def test_invalid_startup_timeout_fails_before_launch(self):
+        for value in (0, -1, float("inf"), float("nan")):
+            with self.subTest(value=value), mock.patch("devapi_client.subprocess.Popen") as popen:
+                with self.assertRaises(ValueError):
+                    with running_game(startup_timeout=value):
+                        pass
+                popen.assert_not_called()
+
     def test_launch_scopes_storage_override_to_child_environment(self):
         with tempfile.TemporaryDirectory() as directory:
             original_storage_root = os.environ.get("GAME_STORAGE_ROOT")

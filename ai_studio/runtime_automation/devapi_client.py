@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import math
 import os
 import socket
 import subprocess
@@ -559,7 +560,10 @@ def running_game(
     window_size: str | None = None,
     extra_args: list[str] | None = None,
     env_overrides: dict[str, str] | None = None,
+    startup_timeout: float = 8.0,
 ):
+    if not math.isfinite(startup_timeout) or startup_timeout <= 0:
+        raise ValueError("startup_timeout must be finite and positive")
     # No explicit port: pick a fresh ephemeral port (see resolve_launch_port) so
     # concurrent launches never collide on the fixed default. Everything below
     # uses this single resolved value for both the launch args and the connect.
@@ -598,7 +602,7 @@ def running_game(
         proc = subprocess.Popen(args, cwd=cwd, env=env, stdout=launch_log, stderr=subprocess.STDOUT)
         print(f"launch log: {launch_log_path}", file=sys.stderr)
         try:
-            client = connect_existing(port=port, process=proc, launch_log_path=launch_log_path)
+            client = connect_existing(port=port, timeout=startup_timeout, process=proc, launch_log_path=launch_log_path)
         except DevApiError:
             # Dead child detected mid-retry (see _dead_child_error): reap the
             # already-exited process and close the log before re-raising the

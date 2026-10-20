@@ -417,6 +417,7 @@ def build_parser() -> argparse.ArgumentParser:
     target.add_argument("--autosave", action=argparse.BooleanOptionalAction, default=None,
                         help="Leave autosave on; off appends --disable-autosave (default: catalog launch.autosave_enabled, else off).")
     target.add_argument("--port", type=int, help="DevAPI TCP port (default: a free port per launch).")
+    target.add_argument("--startup-timeout", type=float, default=8.0, help="Seconds to wait for each native launch (default: 8).")
     parser.add_argument("--out", type=Path, help=f"Evidence directory (default: <game root>/{OUT_SUBDIR.as_posix()}).")
     parser.add_argument("--viewport", type=parse_viewport, action="append", default=[], help="Viewport as NAME=WIDTHxHEIGHT; may be repeated.")
     parser.add_argument("--landscape-only", action="store_true", help="Use only landscape entries from the selected matrix.")
@@ -460,6 +461,7 @@ def main(argv: list[str] | None = None) -> int:
                 autosave_enabled=plan.autosave_enabled,
                 window_size=viewport.window_size,
                 extra_args=list(plan.extra_args),
+                startup_timeout=args.startup_timeout,
             )
 
         prepare = load_prepare(args.scenario, search_roots=[plan.game_root] if plan.game_root else [])
