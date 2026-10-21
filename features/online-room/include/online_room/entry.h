@@ -17,16 +17,18 @@
 // entered again at once, but only once per re-enter window: a second 4100
 // inside it is a failed try. A refusal for the protocol version, or a profile
 // a newer build wrote, means this build is out of date: the player is asked
-// to reload. A room that says the account plays on elsewhere, or that its
-// profile does not read, is not tried again by itself: the player picks.
+// to reload. A room that is full, says the account plays on elsewhere, or
+// that its profile does not read, is not tried again by itself: the player
+// picks.
 
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "online_room/close.h"
 
-// network-core's version refusal; the room's own codes are in online_room/close.h.
+// network-core's version and seat refusals; the room's own codes are in online_room/close.h.
 #define ONLINE_ENTRY_CLOSE_VERSION 4002U
+#define ONLINE_ENTRY_CLOSE_FULL 4006U
 
 // The ladder's tuning, which a game keeps with its content.
 typedef struct online_entry_knobs {

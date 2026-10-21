@@ -69,8 +69,8 @@ online_entry_action online_entry_closed(online_entry *entry, uint16_t code, doub
         return ONLINE_ENTRY_KEEP;
     }
     // Coming again by itself would only take the account back from where it
-    // plays, or meet the same unreadable profile.
-    if (code == ONLINE_ROOM_CLOSE_SUPERSEDED || code == ONLINE_ROOM_CLOSE_PROFILE_BROKEN) {
+    // plays, meet the same unreadable profile, or knock on the same full room.
+    if (code == ONLINE_ROOM_CLOSE_SUPERSEDED || code == ONLINE_ROOM_CLOSE_PROFILE_BROKEN || code == ONLINE_ENTRY_CLOSE_FULL) {
         entry->state = ONLINE_ENTRY_ASKING;
         return ONLINE_ENTRY_KEEP;
     }
