@@ -74,9 +74,12 @@ online_entry_action online_entry_closed(online_entry *entry, uint16_t code, doub
         entry->state = ONLINE_ENTRY_ASKING;
         return ONLINE_ENTRY_KEEP;
     }
-    // Asked to come again: at once, and once per window, so a room that keeps
-    // sending the client away turns into ordinary failed tries.
-    if (code == ONLINE_ROOM_CLOSE_REENTER &&
+    // Asked to come again by a room that let the client in: at once, and once
+    // per window, so a room that keeps sending it away turns into ordinary
+    // failed tries. A 4100 before the room opened (a metaserver with no seat,
+    // a draining room refusing the try) is a failed try, or a refusal that
+    // lasts would restart the ladder every window and never ask the player.
+    if (code == ONLINE_ROOM_CLOSE_REENTER && entry->state == ONLINE_ENTRY_ONLINE &&
         (entry->reenter_at < 0.0 || now - entry->reenter_at >= (double)entry->knobs.reenter_window_seconds)) {
         entry->reenter_at = now;
         entry->attempt = 0U;

@@ -13,9 +13,10 @@
 // to the knobs' attempts in a row; then the player is asked to retry or, when
 // solo is built in, play solo, and nothing is chosen for them. A connection
 // that stood the stable span and drops starts the ladder over. A room that
-// closes with ONLINE_ROOM_CLOSE_REENTER (full, or draining to shut down) is
-// entered again at once, but only once per re-enter window: a second 4100
-// inside it is a failed try. A refusal for the protocol version, or a profile
+// let the client in and closes with ONLINE_ROOM_CLOSE_REENTER (full, or
+// draining to shut down) is entered again at once, but only once per re-enter
+// window: a second 4100 inside it is a failed try, and so is a 4100 before
+// the room opened. A refusal for the protocol version, or a profile
 // a newer build wrote, means this build is out of date: the player is asked
 // to reload. A room that is full, says the account plays on elsewhere, or
 // that its profile does not read, is not tried again by itself: the player

@@ -158,25 +158,36 @@ static void test_an_unreachable_room_asks_with_no_code(void) {
     TEST_ASSERT_EQUAL(k_knobs.connect_attempts, entry.attempt);
 }
 
-// A metaserver with no seat to sell sends the try away as a busy room does:
-// entered again at once, then ordinary failed tries that keep the busy code.
-static void test_a_busy_room_keeps_retrying_with_its_code(void) {
-    online_entry entry;
-    (void)start(&entry, true, true, 0.0);
-    TEST_ASSERT_EQUAL(ONLINE_ENTRY_CONNECT, online_entry_closed(&entry, ONLINE_ROOM_CLOSE_REENTER, 0.0));
-    TEST_ASSERT_EQUAL(ONLINE_ENTRY_KEEP, online_entry_closed(&entry, ONLINE_ROOM_CLOSE_REENTER, 0.1));
-    TEST_ASSERT_EQUAL(ONLINE_ENTRY_WAITING, entry.state);
-    TEST_ASSERT_EQUAL(ONLINE_ROOM_CLOSE_REENTER, entry.close_code);
-    (void)online_entry_step(&entry, entry.retry_at);
-    (void)exhaust(&entry, ONLINE_ROOM_CLOSE_REENTER, entry.attempt_at);
-}
-
 // A ladder long enough to wait out a restart: the room drains its seats with
 // 4100 for up to 8 s, then is gone until its container starts again.
 static const online_entry_knobs k_restart_knobs = {
     .connect_attempts = 6U, .connect_timeout_seconds = 5.0F, .retry_seconds = 1.0F, .retry_max_seconds = 8.0F,
     .stable_online_seconds = 10.0F, .reenter_window_seconds = 30.0F,
 };
+
+// A metaserver with no seat to sell refuses before any room opens: ordinary
+// failed tries that keep the busy code, never a re-entry, so a refusal that
+// lasts past the re-enter window still ends with the player asked.
+static void test_a_busy_room_keeps_retrying_with_its_code(void) {
+    online_entry entry;
+    (void)online_entry_start(&entry, k_restart_knobs, true, true, draw, NULL, 0.0);
+    TEST_ASSERT_EQUAL(ONLINE_ENTRY_KEEP, online_entry_closed(&entry, ONLINE_ROOM_CLOSE_REENTER, 0.0));
+    TEST_ASSERT_EQUAL(ONLINE_ENTRY_WAITING, entry.state);
+    TEST_ASSERT_EQUAL(ONLINE_ROOM_CLOSE_REENTER, entry.close_code);
+    // Each refusal takes the metaserver a few seconds, so the ladder outlasts
+    // the re-enter window.
+    double now = 0.0;
+    while (entry.state != ONLINE_ENTRY_ASKING) {
+        TEST_ASSERT_EQUAL(ONLINE_ENTRY_WAITING, entry.state);
+        now = entry.retry_at;
+        TEST_ASSERT_EQUAL(ONLINE_ENTRY_CONNECT, online_entry_step(&entry, now));
+        now += 4.0;
+        (void)online_entry_closed(&entry, ONLINE_ROOM_CLOSE_REENTER, now);
+    }
+    TEST_ASSERT_TRUE(now > (double)k_restart_knobs.reenter_window_seconds);
+    TEST_ASSERT_EQUAL(k_restart_knobs.connect_attempts, entry.attempt);
+    TEST_ASSERT_EQUAL(ONLINE_ROOM_CLOSE_REENTER, entry.close_code);
+}
 
 static void test_a_restart_is_waited_out(void) {
     const double drain = 8.0;
