@@ -106,6 +106,41 @@ refuses a changed one; it runs as the database's owner (checked against
 `meta_admin_service` and `meta_backup`. The server refuses a database below
 `SchemaVersion`; with a password file it insists on `meta_runtime`.
 
+## Backup
+
+`backup/` is the database's backup image (postgres:18-alpine with rclone and
+curl). The game builds it from that directory with its own tag and
+`--label studio.commit=<studio commit>`, and runs it as a compose service on
+the database's network:
+
+- `loop` (the default command): every hour a custom-format dump by
+  `meta_backup` into `/backups/<BACKUP_NAME>-<UTC stamp>-<random>.dump`;
+  dumps older than 25 hours are deleted. With `BACKUP_REMOTE` (an rclone
+  remote and path in `/run/secrets/rclone.conf`) each dump goes to its
+  `hourly/` prefix. The UTC day's first dump is restore-checked, then copied
+  to `daily/`. Every hour ends in a ping to `BACKUP_HEARTBEAT_URL`, or its
+  `/fail` with the reason when a dump, check or copy failed.
+- `once`: one dump and its check; stdout is exactly
+  `<schema version> <file name>`. A release runs it with
+  `compose run --rm --no-deps -T backup once` before admin starts.
+- `check FILE`: restores FILE into a throwaway server in the container
+  (unix socket only, deleted on exit), with `--exit-on-error
+  --single-transaction --no-owner --no-acl`, and prints the schema version and
+  every table's row count. A failed restore reports only pg_restore's exit
+  code: its messages can quote rows.
+
+Environment: `BACKUP_NAME` (lowercase, names the files), `PGHOST`, `PGUSER`
+(`meta_backup`), `PGDATABASE`, `PGPASSWORD_FILE` (32..256 characters),
+optional `BACKUP_REMOTE` and `BACKUP_HEARTBEAT_URL`; secret `rclone.conf`
+(may be empty without a remote); volume `/backups`. A lock in `/backups`
+serialises dumps and checks across containers. The bucket's lifecycle and
+lock rules expire the copies, so the token needs only Object Read & Write on
+that one bucket and never deletes.
+
+Restore, with every writer stopped: `pg_restore -d <db> --single-transaction
+--clean --if-exists <file>` as the database owner, then the game's `migrate`
+job, which restores grants and any later migration.
+
 ## Validation
 
 ```text
@@ -118,6 +153,10 @@ Every test creates and drops its own database on the PostgreSQL named by
 `META_TEST_DATABASE_URL` (default: this stand) and fails, not skips, without
 one. `node ai_studio/game_tools/live_games.mjs` vets and builds the
 `metaserver/` of every live game that lists this feature.
+`META_BACKUP_DOCKER=1 go -C features/metaserver test -run TestBackup .`
+(slow tier, release lane) builds `backup/`, runs `once` on the stand's Docker
+network, restores the dump into a second database and checks a truncated
+dump fails without printing rows; the core run skips it.
 `testdata/` is the room contract: the games' C tests read the same files.
 
 ## Compatibility

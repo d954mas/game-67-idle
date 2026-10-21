@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "metaserver",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "title": "Metaserver",
   "status": "opt-in",
   "kind": "server",
@@ -20,11 +20,13 @@
     "Server player and room handlers, Player and Timed wrappers",
     "admin.Main(Brand)",
     "schema version 1 with meta_* roles",
-    "testdata room contract fixtures"
+    "testdata room contract fixtures",
+    "backup/ image: hourly dump, daily restore check, bucket copy and heartbeat"
   ],
   "commands": {
     "vet": "go -C features/metaserver vet ./...",
-    "test": "go -C features/metaserver test ./..."
+    "test": "go -C features/metaserver test ./...",
+    "test_slow": "META_BACKUP_DOCKER=1 go -C features/metaserver test -run TestBackup ."
   },
   "manuals": {
     "contract": "features/metaserver/README.md",

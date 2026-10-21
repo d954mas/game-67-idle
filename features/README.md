@@ -135,7 +135,8 @@ possibility, not a feature.
 - `metaserver/` (`L1`, opt-in): Go library for a room-based game's online back
   end (identity, room registry, entry tickets, profiles, operator console). A
   game's `metaserver/` module calls `metaserver.Main` with its routes and
-  `admin.Main` with its brand. See `metaserver/README.md` and
+  `admin.Main` with its brand; `metaserver/backup/` is its database's backup
+  image. See `metaserver/README.md` and
   `metaserver/INSTALL.md`.
 
 - `box3d/` (`L1`, opt-in): pinned MIT 3D rigid-body physics, shared in-place
