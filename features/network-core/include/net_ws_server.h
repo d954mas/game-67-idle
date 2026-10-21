@@ -143,8 +143,12 @@ const char *net_ws_library_version(void);
 const char *net_ws_tls_library_version(void);
 
 /* Flushes what is queued, then closes with the application's code
-   (NET_CLOSE_APP, or a game-defined 4100-4999). on_disconnect fires from a
-   later service call with NET_WS_CLOSE_APP. */
+   (NET_CLOSE_APP, or a game-defined 4100-4999). The seat comes free and
+   on_disconnect fires with NET_WS_CLOSE_APP once the close frame is sent,
+   not when the peer acknowledges it: in the service step after this call,
+   which for a close from a callback (a ticket refused in on_connect) is
+   the end of the same service. Only queued output the peer does not drain
+   holds the seat longer, up to handshake_timeout_ms. */
 void net_ws_server_close(net_ws_server_t *server, uint32_t client, uint16_t code);
 /* Ends a terminal stream as NET_CLOSE_SLOW without draining application
    output. Ordinary application closes retain their drain-first behavior. */

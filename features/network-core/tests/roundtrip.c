@@ -41,6 +41,7 @@ typedef int raw_socket_t;
 void net_ws_server_test_fail_next_write(net_ws_server_t *server);
 void net_ws_server_test_hold_writes(net_ws_server_t *server, bool hold);
 void net_ws_server_test_partial_buffered(net_ws_server_t *server, bool buffered);
+size_t net_ws_server_test_address_key(const uint8_t *raw, size_t size, uint8_t *out);
 uint32_t net_ws_client_test_queued_messages(net_ws_client_t *client);
 typedef struct server_log_t {
     net_ws_server_t *server;
@@ -52,6 +53,7 @@ typedef struct server_log_t {
     uint32_t messages;
     net_ws_close_reason_t last_reason;
     bool echo;
+    uint16_t reject_ticketless; /* close a HELLO without a ticket from on_connect with this code */
 } server_log_t;
 
 typedef struct client_log_t {
@@ -73,6 +75,7 @@ static void server_connect(void *user, uint32_t client, const uint8_t *ticket, s
     if (ticket_size > 0U && ticket_size <= sizeof log->last_ticket) {
         memcpy(log->last_ticket, ticket, ticket_size);
     }
+    if (ticket_size == 0U && log->reject_ticketless != 0U) { net_ws_server_close(log->server, client, log->reject_ticketless); }
 }
 
 static void server_message(void *user, uint32_t client, const uint8_t *data, size_t size) {
@@ -276,13 +279,17 @@ static void pump_open(net_ws_server_t *server, const server_log_t *slog, net_ws_
     CHECK(clog->opens == 1U && slog->connects == connects + 1U);
 }
 
-/* Every server here admits max_clients (2) new sockets a second and closes
-   the rest at accept, so dials are spaced to stay inside that budget. */
+/* Every server here gives one address max_clients (2) accepts at once and
+   then one a second, and closes the rest at accept, so dials keep to a model
+   of that bucket, with a margin for a dial the client thread opens late. */
 static void pace_dial(void) {
-    static double last_dial = 0.0;
-    const double wait = last_dial + 0.5 - net_ws_client_clock();
+    static double tokens = 2.0;
+    static double at = 0.0;
+    const double wait = 1.1 - fmin(2.0, tokens + net_ws_client_clock() - at);
     if (wait > 0.0) { sleep_ms((unsigned)(wait * 1000.0) + 1U); }
-    last_dial = net_ws_client_clock();
+    const double now = net_ws_client_clock();
+    tokens = fmin(2.0, tokens + now - at) - 1.0;
+    at = now;
 }
 
 static net_ws_client_t *connect_client_sized(uint16_t port, uint32_t version, client_log_t *log,
@@ -539,11 +546,14 @@ static void test_waiting_room_bound(const net_ws_server_config_t *base) {
     CHECK(server != NULL);
     log.server = server;
     const uint16_t port = net_ws_server_port(server);
-    /* A's five and B's three spend the accept burst (2 x max_clients); B's
-       fourth and C each wait for a token, which refills every 1 / max_clients
-       seconds. */
+    /* A's four spend its accept burst (max_clients); A's fifth waits for a
+       token, which refills every 2 / max_clients seconds, and so do B's
+       fourth and C behind the global burst of 2 x max_clients. */
     raw_peer_t peers[10];
-    raw_peers_open(peers, 5U, port, INADDR_LOOPBACK);
+    raw_peers_open(peers, 4U, port, INADDR_LOOPBACK);
+    CHECK(raw_peers_pump(server, peers, 4U, WAIT_S, true));
+    raw_peers_pump(server, peers, 4U, 0.6, false);
+    raw_peers_open(peers + 4, 1U, port, INADDR_LOOPBACK);
     raw_peers_open(peers + 5, 3U, port, INADDR_LOOPBACK + 1U);
     CHECK(raw_peers_pump(server, peers, 8U, WAIT_S, true));
     raw_peers_pump(server, peers, 8U, 0.4, false);
@@ -613,10 +623,108 @@ static void test_burst_enters(const net_ws_server_config_t *base) {
     net_ws_server_destroy(server);
 }
 
+/* An application that refuses a HELLO from its own on_connect gives the
+   seat back once the close frame is out, not when the peer acknowledges
+   it: peers that never answer must not keep an honest client out. */
+static void test_rejected_hello_frees_seat(const net_ws_server_config_t *base) {
+    server_log_t log = {0};
+    net_ws_server_config_t config = *base;
+    config.max_clients = 2U;
+    config.handshake_timeout_ms = 10000U;
+    config.ping_idle_s = 0U;
+    config.user = &log;
+    log.reject_ticketless = 4100U;
+    net_ws_server_t *server = net_ws_server_create(&config);
+    CHECK(server != NULL);
+    log.server = server;
+    const uint16_t port = net_ws_server_port(server);
+    raw_peer_t peers[2];
+    raw_peers_open(peers, 2U, port, INADDR_LOOPBACK);
+    CHECK(raw_peers_pump(server, peers, 2U, WAIT_S, true));
+    for (uint32_t index = 0U; index < 2U; ++index) { CHECK(raw_peer_send_hello(peers[index].sock, VERSION)); }
+    pump_until(server, NULL, log.connects == 2U);
+    CHECK(log.connects == 2U);
+    wait_until(raw_peer_close_code(peers[0].response, peers[0].got) == 4100U &&
+        raw_peer_close_code(peers[1].response, peers[1].got) == 4100U,
+        raw_peers_pump(server, peers, 2U, 0.01, false));
+    for (uint32_t index = 0U; index < 2U; ++index) {
+        CHECK(raw_peer_close_code(peers[index].response, peers[index].got) == 4100U);
+    }
+    CHECK(net_ws_server_client_count(server) == 0U);
+    CHECK(log.disconnects == 2U && log.last_reason == NET_WS_CLOSE_APP);
+    /* The address's accept tokens refill. */
+    pump_for(server, NULL, 1.1);
+    client_log_t clog = {0};
+    net_ws_client_t *client = connect_client(port, VERSION, &clog, 256U);
+    pump_open(server, &log, client, &clog);
+    /* The rejected sockets' late ends must not touch the seat the client now holds. */
+    raw_peers_close(peers, 2U);
+    pump_for(server, client, 0.2);
+    CHECK(log.disconnects == 2U && net_ws_server_client_count(server) == 1U && clog.closes == 0U);
+    log.echo = true;
+    const uint8_t ping[] = {NET_MSG_APP_FIRST, 5U};
+    CHECK(net_ws_client_send(client, ping, sizeof ping));
+    pump_until(server, client, clog.messages == 1U);
+    CHECK(clog.messages == 1U && clog.last_size == sizeof ping && clog.last[1] == 5U);
+    net_ws_client_destroy(client);
+    net_ws_server_destroy(server);
+}
+
+/* Every per-address bound keys IPv4 as is, an IPv4-mapped IPv6 address as
+   its IPv4, and other IPv6 by its /64. */
+static void test_address_key(void) {
+    uint8_t key[16];
+    const uint8_t v4[4] = {127U, 0U, 0U, 2U};
+    CHECK(net_ws_server_test_address_key(v4, sizeof v4, key) == 4U && memcmp(key, v4, 4U) == 0);
+    const uint8_t mapped[16] = {0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0xFFU, 0xFFU, 127U, 0U, 0U, 2U};
+    CHECK(net_ws_server_test_address_key(mapped, sizeof mapped, key) == 4U && memcmp(key, v4, 4U) == 0);
+    uint8_t v6[16] = {0x20U, 0x01U, 0x0DU, 0xB8U, 0U, 1U, 0U, 2U, 0xAAU, 0U, 0U, 0U, 0U, 0U, 0U, 1U};
+    CHECK(net_ws_server_test_address_key(v6, sizeof v6, key) == 8U && memcmp(key, v6, 8U) == 0);
+    v6[8] = 0xBBU;
+    v6[15] = 9U;
+    uint8_t same[16];
+    CHECK(net_ws_server_test_address_key(v6, sizeof v6, same) == 8U && memcmp(key, same, 8U) == 0);
+    v6[7] = 3U;
+    CHECK(net_ws_server_test_address_key(v6, sizeof v6, same) == 8U && memcmp(key, same, 8U) != 0);
+}
+
+/* One address that connects and drops as fast as it can spends only its own
+   share of the accept budget: a second address still enters at once. With
+   no bind address the listener is dual-stack, and its IPv4 peers must still
+   key apart. */
+static void test_one_address_cannot_drain_accepts(const net_ws_server_config_t *base, const char *bind,
+    uint32_t churner, uint32_t entrant) {
+    if (!loopback_alias_available(churner) || !loopback_alias_available(entrant)) {
+        printf("accept share skipped: no 127.0.0.2/127.0.0.3 on this host\n");
+        return;
+    }
+    server_log_t log = {0};
+    net_ws_server_config_t config = *base;
+    config.bind_address = bind;
+    config.max_clients = 4U;
+    config.user = &log;
+    net_ws_server_t *server = net_ws_server_create(&config);
+    CHECK(server != NULL);
+    log.server = server;
+    const uint16_t port = net_ws_server_port(server);
+    const double churn_end = net_ws_client_clock() + 1.0;
+    while (net_ws_client_clock() < churn_end) {
+        const raw_socket_t sock = raw_peer_connect_from(port, churner);
+        net_ws_server_service(server, 1U);
+        if (sock != RAW_INVALID) { raw_close(sock); }
+    }
+    raw_peer_t peers[4];
+    raw_peers_open(peers, 4U, port, entrant);
+    CHECK(raw_peers_pump(server, peers, 4U, WAIT_S, true));
+    raw_peers_close(peers, 4U);
+    net_ws_server_destroy(server);
+}
+
 int main(void) {
     test_codec();
     test_quantized();
     test_hmac();
+    test_address_key();
 
     server_log_t slog = {0};
     const net_ws_server_config_t sconfig = {
@@ -987,14 +1095,14 @@ int main(void) {
         addr.sin_port = htons(net_ws_server_port(plain));
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         /* Past the per-address cap (2 x max_clients), paced under the
-           accept budget (max_clients a second). */
+           address's accept rate (max_clients / 2 a second). */
         for (uint32_t index = 0U; index < 2U * pconfig.max_clients + 2U; ++index) {
             raw_socket_t sock = socket(AF_INET, SOCK_STREAM, 0);
             CHECK(sock != RAW_INVALID && connect(sock, (struct sockaddr *)&addr, sizeof addr) == 0);
             pump_for(plain, NULL, 0.1);
             raw_close(sock);
             const double closed_at = net_ws_client_clock();
-            while (net_ws_client_clock() - closed_at < 0.6) { net_ws_server_service(plain, 50U); }
+            while (net_ws_client_clock() - closed_at < 0.95) { net_ws_server_service(plain, 50U); }
         }
         /* The accept budget refills; only a leaked share could still refuse. */
         const double settled_at = net_ws_client_clock();
@@ -1013,6 +1121,9 @@ int main(void) {
     test_one_address_reconnects(&sconfig);
     test_waiting_room_bound(&sconfig);
     test_burst_enters(&sconfig);
+    test_rejected_hello_frees_seat(&sconfig);
+    test_one_address_cannot_drain_accepts(&sconfig, "127.0.0.1", INADDR_LOOPBACK, INADDR_LOOPBACK + 1U);
+    test_one_address_cannot_drain_accepts(&sconfig, NULL, INADDR_LOOPBACK + 1U, INADDR_LOOPBACK + 2U);
 
     /* Room capacity is enforced per connection. */
     client_log_t alog = {0};

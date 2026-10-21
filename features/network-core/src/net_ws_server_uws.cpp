@@ -54,7 +54,7 @@ struct Peer {
     double close_at = 0.0;
     double heard_at = 0.0;     /* the last frame of any kind from the peer */
     double pinged_at = 0.0;
-    std::string address;
+    std::string address;       /* address_key() */
 };
 
 template <bool SSL> using Socket = uWS::WebSocket<SSL, true, Peer>;
@@ -102,8 +102,8 @@ struct net_ws_server_t {
     std::vector<Slot> slots;
     /* Sockets upgraded but not yet past HELLO: they hold no slot, so a crowd
        of them cannot take the seats. The room is 2 x max_clients and one
-       address holds at most max_clients of it, so every seat behind one NAT
-       can reconnect at once while that address alone cannot fill the room. */
+       address key holds at most max_clients of it, so every seat behind one
+       NAT can reconnect at once while that key alone cannot fill the room. */
     std::vector<Peer *> pending;
     std::vector<Peer *> closing;
     uint32_t client_count = 0U;
@@ -111,9 +111,16 @@ struct net_ws_server_t {
     double timeout_seconds = 10.0;
     double accept_tokens = 0.0;
     double accept_at = 0.0;
-    /* Every socket from accept on, the handshake included, and per address. */
+    /* Every socket from accept on, the handshake included, and per address
+       key with that key's accept bucket. A key without sockets stays until
+       its bucket is full again, or reconnecting would refill it. */
+    struct Address {
+        uint32_t sockets;
+        double tokens;
+        double at;
+    };
     uint32_t sockets = 0U;
-    std::unordered_map<std::string, uint32_t> per_address;
+    std::unordered_map<std::string, Address> per_address;
     /* Sockets before their upgrade, and the address each was counted under. */
     std::unordered_map<us_socket_t *, std::string> http_sockets;
     std::vector<uint8_t> scratch;
@@ -133,11 +140,19 @@ uint32_t address_limit(const net_ws_server_t *server) {
     return server->config.max_clients > 32767U ? 65535U : 2U * server->config.max_clients;
 }
 
+/* One key per address for every per-address bound: IPv4 as is, an
+   IPv4-mapped IPv6 address (a dual-stack listener's IPv4 peer) as its IPv4,
+   any other IPv6 address by its /64, which one host commonly holds whole. */
+std::string address_key(std::string_view raw) {
+    static const char mapped[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '\xff', '\xff'};
+    if (raw.size() != 16U) { return std::string(raw); }
+    return std::string(std::memcmp(raw.data(), mapped, sizeof mapped) == 0 ? raw.substr(12U) : raw.substr(0U, 8U));
+}
+
 /* Accepts are budgeted before any TLS or HTTP work is done for a socket:
    every seat may reconnect at once, and a connect flood costs one handshake
    per seat per second on the service thread, never more. */
-bool accept_allowed(net_ws_server_t *server) {
-    const double now = now_seconds();
+bool accept_allowed(net_ws_server_t *server, double now) {
     const double rate = static_cast<double>(server->config.max_clients);
     server->accept_tokens = std::min(2.0 * rate, server->accept_tokens + (now - server->accept_at) * rate);
     server->accept_at = now;
@@ -146,15 +161,35 @@ bool accept_allowed(net_ws_server_t *server) {
     return true;
 }
 
-void count_socket(net_ws_server_t *server, const std::string &address, int delta) {
-    if (delta > 0) {
-        server->sockets += 1U;
-        server->per_address[address] += 1U;
-        return;
-    }
+/* One address key's share of that budget: a full room at once, then half
+   the global rate, so one churning key always leaves the others max_clients
+   of burst and half the rate. A key spent empty is full again after 2 s. */
+void address_refill(const net_ws_server_t *server, net_ws_server_t::Address &entry, double now) {
+    const double burst = static_cast<double>(server->config.max_clients);
+    entry.tokens = std::min(burst, entry.tokens + (now - entry.at) * burst / 2.0);
+    entry.at = now;
+}
+
+net_ws_server_t::Address &count_socket(net_ws_server_t *server, const std::string &address, double now) {
+    server->sockets += 1U;
+    auto &entry = server->per_address.try_emplace(address,
+        net_ws_server_t::Address{0U, static_cast<double>(server->config.max_clients), now}).first->second;
+    entry.sockets += 1U;
+    return entry;
+}
+
+void uncount_socket(net_ws_server_t *server, const std::string &address) {
     server->sockets -= 1U;
     auto found = server->per_address.find(address);
-    if (found != server->per_address.end() && --found->second == 0U) { server->per_address.erase(found); }
+    if (found != server->per_address.end()) { found->second.sockets -= 1U; }
+}
+
+void forget_idle_addresses(net_ws_server_t *server, double now) {
+    const double burst = static_cast<double>(server->config.max_clients);
+    for (auto it = server->per_address.begin(); it != server->per_address.end();) {
+        if (it->second.sockets == 0U) { address_refill(server, it->second, now); }
+        it = it->second.sockets == 0U && it->second.tokens >= burst ? server->per_address.erase(it) : std::next(it);
+    }
 }
 
 void pending_remove(net_ws_server_t *server, const Peer *peer) {
@@ -306,15 +341,22 @@ template <bool SSL> void on_filter(net_ws_server_t *server, uWS::HttpResponse<SS
     if (delta < 0) {
         auto found = server->http_sockets.find(socket);
         if (found == server->http_sockets.end()) { return; }
-        count_socket(server, found->second, -1);
+        uncount_socket(server, found->second);
         server->http_sockets.erase(found);
         return;
     }
-    std::string address(res->getRemoteAddressAsText());
-    count_socket(server, address, 1);
-    const bool over = server->sockets > socket_limit(server) || server->per_address[address] > address_limit(server);
+    const double now = now_seconds();
+    std::string address = address_key(res->getRemoteAddress());
+    auto &entry = count_socket(server, address, now);
+    const bool over = server->sockets > socket_limit(server) || entry.sockets > address_limit(server);
     server->http_sockets.emplace(socket, std::move(address));
-    if (server->destroying || over || !accept_allowed(server)) { us_socket_close(SSL, socket, 0, nullptr); }
+    address_refill(server, entry, now);
+    /* The address pays only for a socket the global budget admits. */
+    if (server->destroying || over || entry.tokens < 1.0 || !accept_allowed(server, now)) {
+        us_socket_close(SSL, socket, 0, nullptr);
+        return;
+    }
+    entry.tokens -= 1.0;
 }
 
 template <bool SSL> void on_open(net_ws_server_t *server, Socket<SSL> *ws) {
@@ -327,7 +369,7 @@ template <bool SSL> void on_open(net_ws_server_t *server, Socket<SSL> *ws) {
     peer->pinged_at = now;
     peer->rate_at = now;
     peer->tokens = static_cast<double>(server->config.max_messages_per_second);
-    if (peer->address.empty()) { peer->address = std::string(ws->getRemoteAddressAsText()); }
+    if (peer->address.empty()) { peer->address = address_key(ws->getRemoteAddress()); }
     if (!net_queue_init(&peer->tx, server->config.send_queue_bytes)) {
         request_close(server, peer, NET_CLOSE_FULL, NET_WS_CLOSE_PEER);
         return;
@@ -426,7 +468,7 @@ template <bool SSL> void on_close(net_ws_server_t *server, Socket<SSL> *ws) {
         }
     }
     net_queue_free(&peer->tx);
-    count_socket(server, peer->address, -1);
+    uncount_socket(server, peer->address);
 }
 
 /* Deadlines: a socket that never says HELLO, a close the peer never
@@ -565,6 +607,7 @@ template <bool SSL> void close_app(net_ws_server_t *server) {
 void sweep_timer(us_timer_t *timer) {
     net_ws_server_t *server = *static_cast<net_ws_server_t **>(us_timer_ext(timer));
     if (server->destroying) { return; }
+    forget_idle_addresses(server, now_seconds());
     if (server->tls) {
         sweep<true>(server);
     } else {
@@ -786,6 +829,12 @@ extern "C" void net_ws_server_test_fail_next_write(net_ws_server_t *server) {
 
 extern "C" void net_ws_server_test_hold_writes(net_ws_server_t *server, bool hold) {
     if (server != nullptr) { server->test_hold_writes = hold; }
+}
+
+extern "C" size_t net_ws_server_test_address_key(const uint8_t *raw, size_t size, uint8_t *out) {
+    const std::string key = address_key(std::string_view(reinterpret_cast<const char *>(raw), size));
+    std::memcpy(out, key.data(), key.size());
+    return key.size();
 }
 
 extern "C" void net_ws_server_test_partial_buffered(net_ws_server_t *server, bool buffered) {

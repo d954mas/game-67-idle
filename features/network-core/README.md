@@ -51,14 +51,25 @@ consumer.
   stalls in the TLS or HTTP handshake. Accepts are budgeted at `max_clients`
   per second (burst of twice that) and sockets short of a seat at
   `4 * max_clients + 8`, so a connect flood costs the service thread one
-  handshake per seat per second and never the process's fd limit. A slot
+  handshake per seat per second and never the process's fd limit. One
+  address key gets at most `max_clients` of that burst and `max_clients / 2`
+  per second, so one address that connects and drops in a loop cannot shut
+  the others out; two keys together still can take the whole refill
+  (stopping that is the edge's job). A key that spent its burst is full
+  again after about 2 s, so a NAT venue reconnects a full room at once only
+  with its bucket replenished. Every per-address bound keys IPv4 as is, an
+  IPv4-mapped IPv6 peer of a dual-stack listener as its IPv4, and other
+  IPv6 by its /64. A slot
   (and the client id) is earned by HELLO: sockets upgraded but not yet past
   HELLO wait in a room of `2 * max_clients`, at most `max_clients` of them
   from one address, so holding open connections without HELLO takes no
   seat, every seat behind one NAT can reconnect at once, and one address
   alone cannot fill the waiting room (a few addresses together still can;
   stopping that is the edge's job). A socket that closes before its
-  upgrade gives its address's share back at once. Client ids are never
+  upgrade gives its address's share back at once. An application close
+  frees the seat when the close frame goes out, not when the peer
+  acknowledges it, so a HELLO refused from `on_connect` gives its seat back
+  within the same service. Client ids are never
   reused within a
   server lifetime. HELLO may carry a ticket of up to
   `NET_HELLO_TICKET_MAX` opaque bytes (a seat to resume, a join code); the
