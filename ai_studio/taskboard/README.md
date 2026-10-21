@@ -12,6 +12,9 @@ shell's cwd is; a feature workspace therefore logs to its own copy. Set
 `set` is the agent's half of the board — status, log, closure evidence, quality —
 and is how finished work gets reported. The invariant is in `AGENTS.md`.
 
+`reopen` brings an archived task back to the board, so it is the lead's call too:
+an agent runs it only on the lead's request.
+
 - Projects: `ai_studio/taskboard/items/projects/`; epics:
   `ai_studio/taskboard/items/epics/`; active tasks:
   `ai_studio/taskboard/items/active/`.
@@ -55,6 +58,8 @@ Prefer JSON when an agent needs task state:
   `node ai_studio/taskboard/cli.mjs show T0001 --archive --json`.
 - Seal pending history into a new immutable batch:
   `node ai_studio/taskboard/cli.mjs archive seal --name 2026-07-closeout --json`.
+- Reopen an archived task, on the lead's request only:
+  `node ai_studio/taskboard/cli.mjs reopen T0001 [--status todo] [--log "why"] --json`.
 - Help: `node ai_studio/taskboard/cli.mjs help`.
 - Change: `node ai_studio/taskboard/cli.mjs new project --title "..." --kind game --target games/<id>`,
   `node ai_studio/taskboard/cli.mjs new epic --title "..." --project P001`,

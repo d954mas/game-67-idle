@@ -79,7 +79,7 @@ export function sealArchiveBatch({ archiveRoot, name, entries, sourceFiles }) {
   };
 }
 
-export function findSealedTask(archiveRoot, id) {
+export function findSealedTasks(archiveRoot, id) {
   const matches = [];
   for (const archivePath of sealedArchiveFiles(archiveRoot)) {
     const entries = readStoreZip(archivePath);
@@ -89,8 +89,7 @@ export function findSealedTask(archiveRoot, id) {
       }
     }
   }
-  if (matches.length > 1) throw new Error(`${id} appears in multiple sealed Taskboard archives`);
-  return matches[0] || null;
+  return matches;
 }
 
 export function listSealedTasks(archiveRoot) {

@@ -8,7 +8,7 @@
 import { closeSync, existsSync, ftruncateSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
-import { findSealedTask, listSealedTasks, sealArchiveBatch } from "./archive.mjs";
+import { findSealedTasks, listSealedTasks, sealArchiveBatch } from "./archive.mjs";
 
 export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "done"];
 export const EPIC_STATUSES = ["idea", "active", "done"];
@@ -314,22 +314,56 @@ function docFromArchiveEntry(entry) {
     body,
     archived: true,
     sealed: true,
+    batch: basename(entry.archivePath, ".zip"),
     rev: `${statSync(entry.archivePath).mtimeMs}:${entry.entryPath}`,
   };
 }
 
-function findArchivedTask(root, id, options = {}) {
-  for (const dir of pendingArchiveGroupDirs(root, options)) {
-    if (!statSync(dir).isDirectory()) {
-      continue;
-    }
-    const doc = findDocInDir(dir, "task", id, { archived: true });
-    if (doc) {
-      return doc;
-    }
+// Archived copies of one id form a linear chain: a copy reopened from a sealed
+// batch names that batch in `reopened_from`, and the head is the copy no other
+// copy names. Anything else (fork, cycle, second pending copy) is an error.
+function archiveHead(id, copies) {
+  if (!copies.length) return null;
+  const fail = (reason) => { throw new Error(`${id} archive history is invalid: ${reason}`); };
+  if (copies.filter((doc) => !doc.sealed).length > 1) fail("more than one pending copy");
+  const byBatch = new Map();
+  for (const doc of copies.filter((copy) => copy.sealed)) {
+    if (byBatch.has(doc.batch)) fail(`batch ${doc.batch} holds it twice`);
+    byBatch.set(doc.batch, doc);
   }
-  const sealed = findSealedTask(archiveRootDir(root, options), id);
-  return sealed ? docFromArchiveEntry(sealed) : null;
+  const named = new Set();
+  for (const doc of copies) {
+    const from = doc.fields.reopened_from;
+    if (!from) continue;
+    if (from === doc.batch) fail(`batch ${from} names itself in reopened_from`);
+    if (!byBatch.has(from)) fail(`reopened_from names ${from}, which does not hold it`);
+    if (named.has(from)) fail(`more than one copy is reopened from ${from}`);
+    named.add(from);
+  }
+  const heads = copies.filter((doc) => !doc.sealed || !named.has(doc.batch));
+  if (heads.length !== 1) fail(`${heads.length} copies claim to be the latest`);
+  // No fork and a single head mean the walk cannot loop; a short walk means a detached cycle.
+  let reached = 1;
+  for (let doc = heads[0]; doc.fields.reopened_from; doc = byBatch.get(doc.fields.reopened_from)) reached++;
+  if (reached !== copies.length) fail("reopened_from forms a cycle");
+  return heads[0];
+}
+
+function archivedCopies(root, id, options = {}) {
+  const copies = [];
+  for (const dir of pendingArchiveGroupDirs(root, options)) {
+    const doc = findDocInDir(dir, "task", id, { archived: true });
+    if (doc) copies.push(doc);
+  }
+  for (const entry of findSealedTasks(archiveRootDir(root, options), id)) {
+    const doc = docFromArchiveEntry(entry);
+    if (doc.fields.id === id) copies.push(doc);
+  }
+  return copies;
+}
+
+function findArchivedTask(root, id, options = {}) {
+  return archiveHead(id, archivedCopies(root, id, options));
 }
 
 function listPendingArchiveTasks(root, options = {}) {
@@ -342,8 +376,12 @@ function listPendingArchiveTasks(root, options = {}) {
 }
 
 function listArchiveTasks(root, options = {}) {
-  const docs = [...listPendingArchiveTasks(root, options)];
-  docs.push(...listSealedTasks(archiveRootDir(root, options)).map(docFromArchiveEntry));
+  const copiesById = new Map();
+  for (const doc of [...listPendingArchiveTasks(root, options), ...listSealedTasks(archiveRootDir(root, options)).map(docFromArchiveEntry)]) {
+    const id = String(doc.fields.id || doc.name);
+    copiesById.set(id, [...(copiesById.get(id) || []), doc]);
+  }
+  const docs = [...copiesById].map(([id, copies]) => archiveHead(id, copies));
   docs.sort((a, b) => String(a.fields.id || a.name).localeCompare(String(b.fields.id || b.name)));
   return docs;
 }
@@ -380,16 +418,10 @@ export function findDoc(root, id, options = {}) {
 export function sealTaskArchive(root, { name, ...options } = {}) {
   const docs = listPendingArchiveTasks(root, options);
   if (!docs.length) throw new Error("no pending Taskboard history to seal");
-  const sealedIds = new Set();
-  for (const entry of listSealedTasks(archiveRootDir(root, options))) {
-    const sealedId = docFromArchiveEntry(entry).fields.id;
-    if (sealedIds.has(sealedId)) throw new Error(`${sealedId} appears in multiple sealed Taskboard archives`);
-    sealedIds.add(sealedId);
-  }
   for (const doc of docs) {
     if (doc.fields.status !== "done") throw new Error(`${doc.fields.id || doc.name} is not done and cannot be sealed`);
-    if (sealedIds.has(doc.fields.id)) {
-      throw new Error(`${doc.fields.id} already exists in a sealed Taskboard archive`);
+    if (archiveHead(doc.fields.id, archivedCopies(root, doc.fields.id, options))?.file !== doc.file) {
+      throw new Error(`${doc.fields.id} is not the latest copy of its archive history`);
     }
   }
   const ordered = docs.sort((left, right) => String(left.fields.id).localeCompare(String(right.fields.id)));
@@ -725,6 +757,31 @@ function overwriteExistingFile(file, contents) {
   } finally {
     closeSync(handle);
   }
+}
+
+// Moves the latest archived copy back to active/: a pending file moves as is, a
+// sealed entry is copied (the ZIP stays immutable) and remembers its batch.
+export function reopenTask(root, id, { status = "backlog", log = "", ...options } = {}) {
+  if (!ACTIVE_TASK_STATUSES.includes(status)) {
+    throw closeoutError("task_status_invalid", `Invalid reopen status "${status}" (allowed: ${ACTIVE_TASK_STATUSES.join(", ")})`);
+  }
+  if (findDocInDir(activeTaskDir(root, options), "task", id)) {
+    throw closeoutError("task_already_active", `${id} is already active`);
+  }
+  const doc = findArchivedTask(root, id, options);
+  if (!doc) throw closeoutError("task_not_archived", `no archived task ${id}`);
+  const reopenedFrom = doc.sealed ? doc.batch : "pending";
+  const stamp = todayStamp();
+  const body = `${doc.body.replace(/\s+$/, "")}\n- ${stamp}: Reopened from ${reopenedFrom}${log ? `; ${log}` : ""}\n`;
+  if (!doc.sealed) {
+    return { ...updateDoc(root, id, { fields: { status }, body }, { ...options, includeArchive: true }), reopenedFrom };
+  }
+  const fields = { ...doc.fields, status, updated: stamp, reopened_from: doc.batch };
+  delete fields.quality;
+  const file = join(activeTaskDir(root, options), doc.name);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, serializeDoc(fields, body), { flag: "wx" });
+  return { ...docFromFile(file, "task"), reopenedFrom };
 }
 
 const QUALITY_OUTCOMES = ["pass", "block", "review", "unverified"];

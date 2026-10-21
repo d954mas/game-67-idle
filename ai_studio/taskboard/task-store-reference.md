@@ -118,6 +118,22 @@ global archive index; ZIP entry names are searched only by explicit archive
 commands. `.counters.json` remains the monotonic ID authority after loose task
 files are removed.
 
+The lead may ask to reopen an archived task; it keeps its id:
+
+```powershell
+node ai_studio/taskboard/cli.mjs reopen T0001 --status todo --log "regression in X" --json
+```
+
+A pending copy moves back to `items/active/`; a sealed copy is copied there and
+records its batch as `reopened_from: <batch>`, leaving the ZIP untouched. Status
+defaults to `backlog`, `quality` is dropped, and one `Reopened from
+<pending|batch>` log line is appended. Copies of one id form a single chain: the
+latest is the one no other copy names in `reopened_from`. Lookup, `list
+--archive` and reopen use only that latest copy, and `archive seal` accepts a
+reopened task only when it names the current latest batch. Forks, cycles, or two
+pending copies are errors, never resolved by order. A reopened body may fail
+`validate` (missing parent or sections); fix it by hand.
+
 The persisted form is a compact JSON object in the existing frontmatter, not a
 sidecar or second store:
 

@@ -10,7 +10,7 @@ import { URL } from "node:url";
 import vm from "node:vm";
 import {
   createTask, createEpic, createProject, listTasks,
-  listEpics, listProjects, updateDoc, findDoc, sealTaskArchive, validateStore, validateStoreDetailed, isStaleReview,
+  listEpics, listProjects, updateDoc, findDoc, reopenTask, sealTaskArchive, validateStore, validateStoreDetailed, isStaleReview,
 } from "../store.mjs";
 import { createStoreZip, readStoreZip } from "../../core_harness/tool_lib/zip_store.mjs";
 import { boardPayload, parseDoc, serializeDoc } from "../store.mjs";
@@ -1032,7 +1032,7 @@ test("taskboard cli help exits successfully and documents commands", () => {
   ]) {
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /usage: cli\.mjs <list\|context\|show\|archive\|new\|set\|validate\|help>/);
+    assert.match(result.stdout, /usage: cli\.mjs <list\|context\|show\|archive\|new\|reopen\|set\|validate\|help>/);
     assert.match(result.stdout, /new project --title/);
     assert.match(result.stdout, /context \[--json\]/);
     assert.doesNotMatch(result.stdout, /summary/);
@@ -1044,7 +1044,7 @@ test("taskboard cli rejects removed and unrelated commands", () => {
   for (const command of ["profile", "summary", "workflow-run"]) {
     const result = runCliDirect(process.cwd(), command);
     assert.notEqual(result.status, 0);
-    assert.match(result.stdout, /usage: cli\.mjs <list\|context\|show\|archive\|new\|set\|validate\|help>/);
+    assert.match(result.stdout, /usage: cli\.mjs <list\|context\|show\|archive\|new\|reopen\|set\|validate\|help>/);
     assert.doesNotMatch(result.stdout, /profile|summary|workflow-run/);
   }
 });
@@ -1734,4 +1734,196 @@ test("context flags review cards nobody has touched for a week", (t) => {
   assert.match(text, /stale_review: 1 in review over 7 days/);
   assert.match(text, /T0001 .*\(updated 2026-07-09\)/);
   assert.equal(JSON.parse(runCliDirect(root, "context", "--game", "live-game", "--json").stdout).counts.staleReview, 1);
+});
+
+function closedTask(root, title, options = {}) {
+  const doc = createTask(root, { title, status: "todo", body: "## What\n\nFixture.\n\n## Done when\n\n- [x] shipped\n\n## Log\n" }, options);
+  return updateDoc(root, doc.fields.id, { fields: { status: "done", quality: { notApplicable: { reason: "fixture" } } } }, options);
+}
+
+function closeAgain(root, id, options = {}) {
+  return updateDoc(root, id, { fields: { status: "done", quality: { notApplicable: { reason: "fixture" } } } }, options);
+}
+
+function treeSnapshot(dir) {
+  return readdirSync(dir, { recursive: true, withFileTypes: true })
+    .map((entry) => ({ entry, path: join(entry.parentPath, entry.name) }))
+    .filter(({ path }) => !path.slice(dir.length).split(/[\\/]/).includes(".git"))
+    .map(({ entry, path }) => `${path.slice(dir.length)}:${entry.isFile() ? readFileSync(path, "utf8") : ""}`)
+    .sort();
+}
+
+function sealedZip(root, batch, entries) {
+  const archiveRoot = join(root, "ai_studio", "taskboard", "items", "archive");
+  mkdirSync(archiveRoot, { recursive: true });
+  writeFileSync(join(archiveRoot, `${batch}.zip`), createStoreZip([
+    ...entries.map(([path, text]) => ({ path, bytes: Buffer.from(text) })),
+    { path: "MANIFEST.md", bytes: Buffer.from("# Sealed\n") },
+  ]));
+}
+
+function archivedTaskText(id, extra = "") {
+  return `---\nid: ${id}\ntitle: Fixture\nstatus: done\n${extra}created: 2026-07-01\nupdated: 2026-07-01\n---\n\n## Log\n`;
+}
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+test("reopen moves a pending task back to active with its id, history and a log line", (t) => {
+  const root = tempRoot(t);
+  const closed = closedTask(root, "Pending history");
+  assert.match(closed.file, /pending[\\/]unassigned[\\/]T0001\.md$/);
+
+  const result = runCliDirect(root, "reopen", "T0001", "--log", "regression found", "--json");
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout).doc, {
+    id: "T0001", storeId: "studio", qualifiedId: "studio:T0001", status: "backlog",
+    file: "ai_studio/taskboard/items/active/T0001.md", reopenedFrom: "pending",
+  });
+  assert.equal(existsSync(closed.file), false, "the pending file moved, not copied");
+  const doc = findDoc(root, "T0001");
+  assert.equal(doc.fields.created, closed.fields.created);
+  assert.equal(doc.fields.updated, today());
+  assert.equal(doc.fields.quality, undefined);
+  assert.equal(doc.fields.reopened_from, undefined);
+  assert.match(doc.body, /## What\n\nFixture\./);
+  assert.equal(doc.body.match(/Reopened from/g).length, 1);
+  assert.match(doc.body, new RegExp(`- ${today()}: Reopened from pending; regression found\\n$`));
+
+  assert.equal(JSON.parse(runCliDirect(root, "show", "T0001", "--json").stdout).doc.status, "backlog");
+  assert.deepEqual(JSON.parse(runCliDirect(root, "list", "--json").stdout).tasks.map((row) => row.id), ["T0001"]);
+  assert.deepEqual(JSON.parse(runCliDirect(root, "list", "--archive", "--json").stdout).tasks, []);
+  assert.match(runCliDirect(root, "context", "--json").stdout, /T0001/);
+});
+
+test("reopen copies the sealed head without touching ZIPs and re-closed copies chain through new batches", (t) => {
+  const root = tempRoot(t);
+  closedTask(root, "Sealed history");
+  assert.equal(runCliDirect(root, "archive", "seal", "--name", "b1", "--json").status, 0);
+  const archiveRoot = join(root, "ai_studio", "taskboard", "items", "archive");
+  const b1 = readFileSync(join(archiveRoot, "b1.zip"));
+
+  const first = runCliDirect(root, "reopen", "T0001", "--status", "todo", "--json");
+  assert.equal(first.status, 0, first.stderr);
+  assert.equal(JSON.parse(first.stdout).doc.reopenedFrom, "b1");
+  assert.deepEqual(readFileSync(join(archiveRoot, "b1.zip")), b1);
+  const active = findDoc(root, "T0001");
+  assert.equal(active.fields.status, "todo");
+  assert.equal(active.fields.reopened_from, "b1");
+  assert.equal(active.fields.quality, undefined);
+  assert.match(active.body, new RegExp(`- ${today()}: Reopened from b1\\n$`));
+  const archiveRows = JSON.parse(runCliDirect(root, "list", "--archive", "--json").stdout).tasks;
+  assert.deepEqual(archiveRows.map((row) => row.id), ["T0001"], "the active copy is not an archive row");
+
+  closeAgain(root, "T0001");
+  assert.equal(runCliDirect(root, "archive", "seal", "--name", "b2", "--json").status, 0);
+  assert.equal(findDoc(root, "T0001", { includeArchive: true }).batch, "b2");
+  assert.equal(JSON.parse(runCliDirect(root, "reopen", "T0001", "--json").stdout).doc.reopenedFrom, "b2");
+  assert.equal(findDoc(root, "T0001").fields.reopened_from, "b2");
+  closeAgain(root, "T0001");
+  assert.equal(runCliDirect(root, "archive", "seal", "--name", "b3", "--json").status, 0);
+
+  const head = findDoc(root, "T0001", { includeArchive: true });
+  assert.equal(head.batch, "b3");
+  assert.equal(head.body.match(/Reopened from/g).length, 2);
+  assert.deepEqual(JSON.parse(runCliDirect(root, "list", "--archive", "--json").stdout).tasks.map((row) => row.id), ["T0001"]);
+  assert.deepEqual(readFileSync(join(archiveRoot, "b1.zip")), b1);
+});
+
+test("archive history rejects forks, cycles, and two pending copies instead of picking one", (t) => {
+  const forked = tempRoot(t);
+  sealedZip(forked, "a", [["unassigned/T0001.md", archivedTaskText("T0001")]]);
+  sealedZip(forked, "b", [["unassigned/T0001.md", archivedTaskText("T0001", "reopened_from: a\n")]]);
+  sealedZip(forked, "c", [["unassigned/T0001.md", archivedTaskText("T0001", "reopened_from: a\n")]]);
+  assert.throws(() => findDoc(forked, "T0001", { includeArchive: true }), /more than one copy is reopened from a/);
+  assert.throws(() => listTasks(forked, { includeArchive: true }), /invalid/);
+
+  const cycle = tempRoot(t);
+  sealedZip(cycle, "a", [["unassigned/T0001.md", archivedTaskText("T0001")]]);
+  sealedZip(cycle, "x", [["unassigned/T0001.md", archivedTaskText("T0001", "reopened_from: y\n")]]);
+  sealedZip(cycle, "y", [["unassigned/T0001.md", archivedTaskText("T0001", "reopened_from: x\n")]]);
+  assert.throws(() => findDoc(cycle, "T0001", { includeArchive: true }), /cycle/);
+
+  const self = tempRoot(t);
+  sealedZip(self, "a", [["unassigned/T0001.md", archivedTaskText("T0001", "reopened_from: a\n")]]);
+  assert.throws(() => findDoc(self, "T0001", { includeArchive: true }), /names itself/);
+
+  const twoPending = tempRoot(t);
+  for (const group of ["E001", "unassigned"]) {
+    const dir = join(twoPending, "ai_studio", "taskboard", "items", "archive", "pending", group);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "T0001.md"), archivedTaskText("T0001"));
+  }
+  assert.throws(() => findDoc(twoPending, "T0001", { includeArchive: true }), /more than one pending copy/);
+  const reopen = runCliDirect(twoPending, "reopen", "T0001", "--json");
+  assert.equal(reopen.status, 1);
+  assert.match(JSON.parse(reopen.stdout).problem.message, /more than one pending copy/);
+});
+
+test("archive seal accepts a reopened copy only when it names the current sealed head", (t) => {
+  const root = tempRoot(t);
+  closedTask(root, "Chained");
+  sealTaskArchive(root, { name: "b1" });
+  runCliDirect(root, "reopen", "T0001");
+  closeAgain(root, "T0001");
+  sealTaskArchive(root, { name: "b2" });
+
+  const pendingDir = join(root, "ai_studio", "taskboard", "items", "archive", "pending", "unassigned");
+  mkdirSync(pendingDir, { recursive: true });
+  const stale = join(pendingDir, "T0001.md");
+  writeFileSync(stale, archivedTaskText("T0001", "reopened_from: b1\n"));
+  assert.throws(() => sealTaskArchive(root, { name: "b3" }), /more than one copy is reopened from b1/);
+  writeFileSync(stale, archivedTaskText("T0001"));
+  assert.throws(() => sealTaskArchive(root, { name: "b3" }), /2 copies claim to be the latest/);
+  assert.equal(existsSync(stale), true, "a refused seal keeps the pending source");
+  assert.equal(existsSync(join(root, "ai_studio", "taskboard", "items", "archive", "b3.zip")), false);
+});
+
+test("reopen errors write nothing", (t) => {
+  const root = tempRoot(t);
+  closedTask(root, "Archived");
+  createTask(root, { title: "Live", status: "todo" });
+  const before = treeSnapshot(root);
+  const cases = [
+    [["reopen", "T0999", "--json"], "task_not_found"],
+    [["reopen", "T0002", "--json"], "task_already_active"],
+    [["reopen", "T0001", "--status", "done", "--json"], "task_status_invalid"],
+    [["reopen", "T0001", "--status", "--json"], "task_status_invalid"],
+  ];
+  for (const [args, code] of cases) {
+    const result = runCliDirect(root, ...args);
+    assert.equal(result.status, 1, args.join(" "));
+    assert.equal(JSON.parse(result.stdout).problem.code, code, args.join(" "));
+  }
+  assert.deepEqual(treeSnapshot(root), before);
+  assert.throws(() => reopenTask(root, "T0999"), (err) => err.problem.code === "task_not_archived");
+});
+
+test("reopen routes to the store that holds the archived task", (t) => {
+  const root = tempRoot(t);
+  const privateStore = ensurePrivateGameMount(root);
+  const privateOptions = { itemsRoot: privateStore.itemsRoot };
+  closedTask(root, "Studio twin");
+  closedTask(root, "Private twin", privateOptions);
+  const before = treeSnapshot(root);
+  const ambiguous = runCliDirect(root, "reopen", "T0001", "--include-private", "--json");
+  assert.equal(ambiguous.status, 1);
+  assert.match(JSON.parse(ambiguous.stdout).problem.message, /ambiguous/);
+  assert.deepEqual(treeSnapshot(root), before);
+
+  const qualified = runCliDirect(root, "reopen", "game:secret-game:T0001", "--json");
+  assert.equal(qualified.status, 0, qualified.stderr);
+  assert.match(JSON.parse(qualified.stdout).doc.file, /^games\/private\/secret-game\/\.ai_studio\/taskboard\/items\/active\/T0001\.md$/);
+  assert.equal(findDoc(root, "T0001"), null, "the Studio twin stays archived");
+  assert.equal(findDoc(root, "T0001", { includeArchive: true }).fields.title, "Studio twin");
+
+  closedTask(root, "Second private", privateOptions);
+  sealTaskArchive(root, { ...privateOptions, name: "p1" });
+  const byGame = runCliDirect(root, "reopen", "T0002", "--game", "secret-game", "--json");
+  assert.equal(byGame.status, 0, byGame.stderr);
+  assert.equal(JSON.parse(byGame.stdout).doc.reopenedFrom, "p1");
+  closeAgain(root, "T0002", privateOptions);
+  const byStore = runCliDirect(root, "reopen", "T0002", "--store", "game:secret-game", "--json");
+  assert.equal(byStore.status, 0, byStore.stderr);
+  assert.equal(JSON.parse(byStore.stdout).doc.qualifiedId, "game:secret-game:T0002");
+  assert.equal(JSON.parse(byStore.stdout).doc.reopenedFrom, "pending");
 });

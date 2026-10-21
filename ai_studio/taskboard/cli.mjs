@@ -7,6 +7,7 @@
 //   node ai_studio/taskboard/cli.mjs new project --title "..." [--kind ai-studio|game|template|tooling|research|other] [--target ai_studio]
 //   node ai_studio/taskboard/cli.mjs new epic --title "..." [--project P001] [--status active]
 //   node ai_studio/taskboard/cli.mjs new task --title "..." [--project P001] [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
+//   node ai_studio/taskboard/cli.mjs reopen T0001 [--status backlog|todo|doing|review] [--log "why"] [--json]
 //   node ai_studio/taskboard/cli.mjs set T0001 --status doing [--project P001] [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
 //   node ai_studio/taskboard/cli.mjs context [--json] [--tasks-limit 5]
 //   node ai_studio/taskboard/cli.mjs validate [--json]
@@ -17,7 +18,7 @@
 import {
   agentEpicRow, agentProjectRow, agentTaskRow,
   findRoot, listTasks, listEpics, listProjects, findDoc, createTask, createEpic, createProject,
-  sealTaskArchive, updateDoc, canonicalQualityAssignments, CURRENT_TASK_STATUSES,
+  reopenTask, sealTaskArchive, updateDoc, canonicalQualityAssignments, CURRENT_TASK_STATUSES,
   parseQualityAssignments, rankTaskEntries, READY_QUEUE_LIMIT, TASK_STATUSES, ephemeralEvidencePath,
   isStaleReview, STALE_REVIEW_DAYS,
 } from "./store.mjs";
@@ -34,7 +35,7 @@ import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMain } from "../core_harness/tool_lib/cli.mjs";
 
-const USAGE = `usage: cli.mjs <list|context|show|archive|new|set|validate|help> ...
+const USAGE = `usage: cli.mjs <list|context|show|archive|new|reopen|set|validate|help> ...
 
 Commands:
   list [--json] [--store studio|game:<id>] [--game <id>] [--include-private [--include-frozen]] [--status s] [--project P001] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
@@ -44,6 +45,7 @@ Commands:
   new project --title "..." [--store studio|game:<id>] [--game <id>] [--kind ai-studio|game|template|tooling|research|other] [--target path] [--tags a,b]
   new epic --title "..." [--store studio|game:<id>] [--game <id>] [--project P001] [--status active] [--tags a,b]
   new task --title "..." [--store studio|game:<id>] [--game <id>] [--project P001] [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
+  reopen <T####|store:T####> [--store studio|game:<id>] [--game <id>] [--status backlog|todo|doing|review] [--log "..."] [--json]
   set <id|store:id> [--store studio|game:<id>] [--game <id>] [--status s] [--project P001] [--epic E001] [--priority P1] [--title "..."] [--log "..."] [--waiver-reason "..."] [--closure-evidence "..."] [--quality "QCLR_001=pass; ..."] [--quality-evidence "..."] [--quality-not-applicable "reason"] [--json]
   validate [--json]
 `;
@@ -420,6 +422,34 @@ export function main(argv, {
       writeJson({ ok: true, doc: row });
     } else {
       writeLine(`created ${doc.fields.id}: ${relative(root, doc.file)}`);
+    }
+    break;
+  }
+  case "reopen": {
+    const id = args._[0] || failCommand("usage: reopen <id> [--status s] [--log \"...\"]");
+    let resolved;
+    try {
+      resolved = findTaskboardDoc(root, id, { ...storeQueryArgs(args), includeArchive: true });
+    } catch (err) {
+      failProblem(args, "taskboard_error", err.message);
+    }
+    if (!resolved || resolved.doc.kind !== "task") failProblem(args, "task_not_found", `no task with id ${id}`);
+    if (!resolved.doc.archived) failProblem(args, "task_already_active", `${resolved.id} is already active`);
+    let doc;
+    try {
+      doc = reopenTask(root, resolved.id, {
+        ...storeOptions(resolved.store),
+        ...(args.status !== undefined ? { status: args.status } : {}),
+        log: textOption(args.log),
+      });
+    } catch (err) {
+      failProblem(args, err.problem?.code || "taskboard_error", err.message);
+    }
+    const qualifiedId = `${resolved.store.storeId}:${doc.fields.id}`;
+    if (args.json) {
+      writeJson({ ok: true, doc: { id: doc.fields.id, storeId: resolved.store.storeId, qualifiedId, status: doc.fields.status, file: relative(root, doc.file).replaceAll("\\", "/"), reopenedFrom: doc.reopenedFrom } });
+    } else {
+      writeLine(`reopened ${id} from ${doc.reopenedFrom}: ${shortRow(doc, resolved.store)}`);
     }
     break;
   }
