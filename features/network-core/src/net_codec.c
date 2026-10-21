@@ -219,3 +219,27 @@ bool net_hello_decode(const uint8_t *data, size_t size, uint32_t *protocol_versi
     *ticket_size = size - NET_HELLO_BASE_SIZE;
     return true;
 }
+
+size_t net_varint_put(uint8_t *out, uint32_t value) {
+    size_t count = 0U;
+    while (value >= 0x80U) {
+        out[count++] = (uint8_t)(value | 0x80U);
+        value >>= 7U;
+    }
+    out[count++] = (uint8_t)value;
+    return count;
+}
+
+size_t net_varint_get(const uint8_t *in, size_t len, uint32_t *value) {
+    uint32_t result = 0U;
+    for (size_t count = 0U; count < len && count < NET_VARINT_MAX; ++count) {
+        if (count == 4U && in[count] > 0x0FU) { return 0U; }
+        result |= (uint32_t)(in[count] & 0x7FU) << (7U * count);
+        if ((in[count] & 0x80U) == 0U) {
+            if (count > 0U && in[count] == 0U) { return 0U; }
+            *value = result;
+            return count + 1U;
+        }
+    }
+    return 0U;
+}

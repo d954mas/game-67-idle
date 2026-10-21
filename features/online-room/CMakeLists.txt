@@ -10,7 +10,7 @@ endforeach()
 
 add_library(online_room STATIC
     src/ticket.c src/meta.c src/memory_store.c
-    src/entry.c src/rtt.c src/meta_entry.c src/meta_account.c)
+    src/entry.c src/rtt.c src/meta_entry.c src/meta_account.c src/perf.c src/schedule.c)
 target_include_directories(online_room PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_compile_definitions(online_room PUBLIC
     ONLINE_ROOM_PLAYERS_MAX=${ONLINE_ROOM_PLAYERS_MAX}U

@@ -67,6 +67,14 @@ float net_quantize_angle16(float radians);
 void net_write_angle16(net_writer_t *writer, float radians);
 float net_read_angle16(net_reader_t *reader);
 
+/* Unsigned LEB128 for 32-bit values: 1 to 5 bytes, low group first.
+   net_varint_put writes into at least NET_VARINT_MAX bytes and returns the
+   count. net_varint_get reads one canonical encoding (no zero-padded tail, no
+   bits past 32) from at most `len` bytes; 0 when malformed or truncated. */
+#define NET_VARINT_MAX 5U
+size_t net_varint_put(uint8_t *out, uint32_t value);
+size_t net_varint_get(const uint8_t *in, size_t len, uint32_t *value);
+
 /* Message type 0 is owned by network-core: the first frame of every
    connection carries the magic, the protocol version and an optional
    ticket, opaque bytes the application handed the client (a session to

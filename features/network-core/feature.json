@@ -1,11 +1,11 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "network-core",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "title": "Network Core",
   "status": "opt-in",
   "kind": "gameplay-infrastructure",
-  "summary": "In-place WebSocket transport for authoritative rooms: single-threaded server on uWebSockets (epoll on Linux, libuv on Windows), a native client on libcurl's WebSocket, a browser client on the Emscripten WebSocket API, a bounded little-endian codec, and the HELLO version gate, message and queue limits, and rate limit every room shares.",
+  "summary": "In-place WebSocket transport for authoritative rooms: single-threaded server on uWebSockets (epoll on Linux, libuv on Windows), a native client on libcurl's WebSocket, a browser client on the Emscripten WebSocket API, a bounded little-endian codec with varints, the room's replication outbox and packet framing, and the HELLO version gate, message and queue limits, and rate limit every room shares.",
   "copy_model": "in-place",
   "layer": "L1",
   "owners": [
@@ -23,10 +23,11 @@
   },
   "provides": [
     "nt::network_core CMake target (server + client natively, client on web)",
-    "nt::network_core_codec CMake target (codec only, every platform)",
+    "nt::network_core_codec CMake target (codec and replication, every platform)",
     "net_ws_server.h: net_ws_server_create/service/send/close, net_ws_server_take_stats workload counters, library versions",
     "net_ws_client.h: net_ws_client_create/service/send on native and web",
-    "net_codec.h: bounded reader/writer, fixed-point grids and 16-bit headings, HELLO, NET_CLOSE_* codes"
+    "net_codec.h: bounded reader/writer, net_varint_put/get, fixed-point grids and 16-bit headings, HELLO, NET_CLOSE_* codes",
+    "net_repl.h: net_repl_* per-viewer audience filter, bounded reliable outbox, packet build, sent/refused acknowledgement"
   ],
   "registers": {
     "link_libraries": [

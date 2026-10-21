@@ -5,7 +5,7 @@
 The C half of a room-based game's online layer: both sides of the
 room-metaserver contract (`CONTRACT.md`; the Go half is `features/metaserver`).
 The game keeps everything that knows its world: the room loop and host policy,
-profile documents and savers, its wire, perf and sample reports.
+profile documents and savers, its wire and sample reports.
 
 ## Public surface
 
@@ -21,6 +21,12 @@ profile documents and savers, its wire, perf and sample reports.
   metaserver (`online_room/meta_entry.h`), account calls
   (`online_room/meta_account.h`), the round trip (`online_room/rtt.h`).
 - The room's close codes (`online_room/close.h`).
+- The room's perf window (`online_room/perf.h`): log2 microsecond histograms,
+  per-stage timings, replication and input counters, and the status's `perf`
+  object in the shape of `features/metaserver/testdata/room_perf_v1.json`.
+  The game fills `window.clients` from its own client report.
+- The tick schedule (`online_room/schedule.h`): tick n due at
+  `start + n / hz`, a catch-up cap, and late and dropped tick counts.
 - Transports over the engine's `nt_http`: `ONLINE_ROOM_META_NT_HTTP_SOURCE`
   (`online_room/meta_nt_http.h`) and `ONLINE_ROOM_META_ENTRY_NT_HTTP_SOURCE`
   (`online_room/meta_entry_nt_http.h`), compiled into the consumer's own

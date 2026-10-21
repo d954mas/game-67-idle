@@ -11,7 +11,8 @@ set(NETWORK_CORE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
 add_library(network_core_codec STATIC
     "${NETWORK_CORE_DIR}/src/net_codec.c"
-    "${NETWORK_CORE_DIR}/src/net_hmac.c")
+    "${NETWORK_CORE_DIR}/src/net_hmac.c"
+    "${NETWORK_CORE_DIR}/src/net_repl.c")
 target_include_directories(network_core_codec PUBLIC "${NETWORK_CORE_DIR}/include")
 # Both sides of a wire replay the quantizer's arithmetic bit for bit; a fused
 # multiply-add on one of them would put the same value on different grid

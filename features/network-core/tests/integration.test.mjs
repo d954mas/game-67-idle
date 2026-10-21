@@ -15,7 +15,7 @@ function run(command, args, cwd) {
   return result.stdout;
 }
 
-test("a bare consumer builds the transport and passes roundtrip and idle-ping wire checks", (t) => {
+test("a bare consumer builds the transport and passes roundtrip, idle-ping and replication wire checks", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "nt-network-core-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(join(dir, "CMakeLists.txt"), [
@@ -37,8 +37,14 @@ test("a bare consumer builds the transport and passes roundtrip and idle-ping wi
     "target_link_libraries(idle_ping PRIVATE nt::network_core)",
     "target_compile_options(idle_ping PRIVATE -Wall -Wextra -Werror)",
     "nt_set_sanitizer_flags(idle_ping)",
+    `add_executable(repl "${feature}/tests/repl.c")`,
+    "target_link_libraries(repl PRIVATE nt::network_core_codec)",
+    "target_compile_options(repl PRIVATE -Wall -Wextra -Werror)",
+    "nt_set_sanitizer_flags(repl)",
     "enable_testing()",
     "add_test(NAME roundtrip COMMAND roundtrip)",
+    "add_test(NAME repl COMMAND repl)",
+    "set_tests_properties(repl PROPERTIES LABELS core)",
     "set_tests_properties(roundtrip PROPERTIES LABELS core)",
     "add_test(NAME idle_ping COMMAND idle_ping)",
     "set_tests_properties(idle_ping PROPERTIES LABELS core TIMEOUT 15)",

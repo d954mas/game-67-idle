@@ -40,7 +40,17 @@ consumer.
   its state after every step holds the wire's numbers exactly and a correct
   prediction is never a correction. Headings go as 16 bits of a turn
   (`net_write_angle16`). A power-of-two step with `min` on the grid keeps
-  every point exact in float.
+  every point exact in float. Varints (`net_varint_put`, `net_varint_get`)
+  are unsigned LEB128 of 32 bits; the reader takes only the canonical
+  encoding and returns 0 on anything else.
+- **Replication** (`net_repl.h`): the room's per-viewer half of snapshot
+  delivery. It filters events by audience (owner, nearby in a district and
+  radius, all), keeps reliable events in a bounded outbox until a sent
+  packet carries them (an overflow asks for a resync), spends the byte
+  budget left after them on cosmetic events, and frames the packet: header
+  varints, the game's row section whole, then the events with their tick
+  offsets. `net_repl_sent` acknowledges what a packet carried;
+  `net_repl_refused` keeps the outbox and baseline for the next tick.
 - **Session rules every room inherits**: the first frame must be HELLO with
   the configured protocol version; text frames, oversize messages, reserved
   message types, a flooding sender and a client that cannot drain its queue
@@ -94,8 +104,8 @@ consumer.
 - Both ends may be destroyed from inside their own callbacks; the pump
   finishes the pass and frees afterwards.
 
-Message payloads, snapshots, prediction and everything game-shaped stay in the
-game. The feature carries transport and limits only.
+Event and row encodings, districts, prediction and everything game-shaped stay
+in the game. The feature carries transport, limits and the packet framing.
 
 ## Performance choices
 
@@ -134,11 +144,12 @@ ready socket still ends it at once.
 
 ```text
 include/      public headers
-src/          net_codec.c, net_ws_server_uws.cpp, net_us_loop.c (a bounded
+src/          net_codec.c, net_repl.c, net_ws_server_uws.cpp, net_us_loop.c (a bounded
               uSockets pass), net_ws_client_curl.c, net_ws_client_web.c,
               net_queue.h (internal ring)
 tests/        roundtrip.c (server + native client in one process),
               idle_ping.c (raw-wire empty PING, PONG and idle disconnect),
+              repl.c (varint bounds, outbox acknowledgement and refusal),
               curl.cmake (a bare consumer's libcurl from the engine's deps),
               integration.test.mjs (builds a bare consumer, checks the
               UPSTREAM.*.json records)
@@ -182,8 +193,8 @@ targets. `src/net_queue.h` and the vendored library are private.
 ## Validation
 
 Run `node --test features/network-core/tests/integration.test.mjs` from the
-Studio root (it builds a bare consumer, runs `tests/roundtrip.c` and
-`tests/idle_ping.c` with UBSan on supported non-Windows compilers, and checks
+Studio root (it builds a bare consumer, runs `tests/roundtrip.c`,
+`tests/idle_ping.c` and `tests/repl.c` with UBSan on supported non-Windows compilers, and checks
 the `UPSTREAM.*.json` records against the vendored bytes), then
 `node features/validate_contracts.mjs`, then the consuming game's
 `node tools/game.mjs test`.
