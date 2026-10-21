@@ -45,7 +45,7 @@ if(NOT EMSCRIPTEN)
     set_target_properties(build_game_packs PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}")
 
     add_custom_command(
-        OUTPUT "${GAME_PACK_DIR}/game.ntpack" "${CMAKE_CURRENT_SOURCE_DIR}/src/generated/game_assets.h"
+        OUTPUT "${GAME_PACK_DIR}/game.ntpack" "${CMAKE_CURRENT_SOURCE_DIR}/src/generated/game.h"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_PACK_DIR}"
         COMMAND $<TARGET_FILE:build_game_packs>
             "${GAME_PACK_DIR}" "${GAME_FONT_SOURCE}"

@@ -1,6 +1,6 @@
 #include "game_audio.h"
 
-#include <generated/game_assets.h>
+#include <generated/game.h>
 
 #include "features/audio/audio.h"
 #include "features/platform_sdk/platform_sdk.h"

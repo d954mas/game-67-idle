@@ -315,8 +315,6 @@ int main(int argc, char *argv[]) {
         (void)fprintf(stderr, "game pack failed: %d\n", r);
         return 1;
     }
-    const char *headers[] = {HEADER_DIR "/game.h"};
-    nt_builder_merge_headers(headers, 1, HEADER_DIR "/game_assets.h");
     (void)printf("Built game.ntpack\n");
     return 0;
 }
