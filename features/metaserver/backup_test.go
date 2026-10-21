@@ -24,9 +24,16 @@ func TestBackupDumpRestoresIntoAnotherDatabase(t *testing.T) {
 	if os.Getenv(backupGate) != "1" {
 		t.Skip(backupGate + "=1 runs the backup image in Docker against the local stand")
 	}
-	admin, err := url.Parse(envOr("META_TEST_DATABASE_URL", defaultDatabaseURL))
-	if err != nil || (admin.Hostname() != "127.0.0.1" && admin.Hostname() != "localhost") {
-		t.Fatal("the backup test runs only against a local stand database")
+	// The effective config, not the URL's host: a host= parameter or a
+	// fallback would otherwise point the test at another server.
+	admin, err := pgx.ParseConfig(envOr("META_TEST_DATABASE_URL", defaultDatabaseURL))
+	if err != nil {
+		t.Fatal("META_TEST_DATABASE_URL does not parse")
+	}
+	for _, host := range append([]string{admin.Host}, fallbackHosts(admin)...) {
+		if host != "127.0.0.1" && host != "localhost" {
+			t.Fatal("the backup test runs only against a local stand database")
+		}
 	}
 	network := envOr("META_BACKUP_DOCKER_NETWORK", "metaserver-stand_default")
 	ctx := t.Context()
@@ -88,11 +95,11 @@ func TestBackupDumpRestoresIntoAnotherDatabase(t *testing.T) {
 	}
 
 	dst, dstURL := emptyStore(t)
-	ownerPassword, _ := admin.User.Password()
-	if _, logs, err := run([]string{"PGHOST=db", "PGUSER=" + admin.User.Username(), "PGPASSWORD=" + ownerPassword},
+	// pg_restore's stderr can quote rows, so a failure reports its exit only.
+	if _, _, err := run([]string{"PGHOST=db", "PGUSER=" + admin.User, "PGPASSWORD=" + admin.Password},
 		"--entrypoint", "pg_restore", "metaserver-backup:test",
 		"-d", dbName(t, dstURL), "--exit-on-error", "--single-transaction", "--no-owner", "--no-acl", "/backups/"+dump); err != nil {
-		t.Fatalf("restore into the second database: %v\n%s", err, logs)
+		t.Fatalf("restore into the second database: %v", err)
 	}
 	if want, got := tableCounts(t, src), tableCounts(t, dst); want != got {
 		t.Fatalf("restored counts differ:\nsource   %s\nrestored %s", want, got)
@@ -116,6 +123,14 @@ func TestBackupDumpRestoresIntoAnotherDatabase(t *testing.T) {
 	if strings.Contains(out+logs, login) || !strings.Contains(logs, "did not restore") {
 		t.Fatalf("truncated dump check output: %s", logs)
 	}
+}
+
+func fallbackHosts(config *pgx.ConnConfig) []string {
+	var hosts []string
+	for _, fallback := range config.Fallbacks {
+		hosts = append(hosts, fallback.Host)
+	}
+	return hosts
 }
 
 func docker(t *testing.T, args ...string) {

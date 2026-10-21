@@ -44,7 +44,7 @@ func emptyStore(t *testing.T) (*store, string) {
 	defer cancel()
 	admin, err := pgx.Connect(ctx, adminURL)
 	if err != nil {
-		t.Fatalf("connect %s: %v", adminURL, err)
+		t.Fatalf("connect to the test database: %v", err)
 	}
 	var suffix [4]byte
 	rand.Read(suffix[:])

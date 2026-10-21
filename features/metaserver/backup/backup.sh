@@ -26,7 +26,8 @@ load_password() {
 }
 
 # One dump or check at a time per directory, across containers.
-lock() { exec 9> "$dir/.lock" && flock 9; }
+# `command` keeps a failed redirection from exiting the shell.
+lock() { command exec 9> "$dir/.lock" && flock 9 || { echo "backup: no lock on $dir" >&2; return 1; }; }
 unlock() { exec 9>&-; }
 
 # Sets $file. A file with the final name is always whole; a .part left
@@ -39,7 +40,7 @@ dump() {
         echo "backup: dump failed" >&2
         return 1
     fi
-    mv "$file.part" "$file"
+    mv "$file.part" "$file" || { rm -f "$file.part"; echo "backup: dump failed" >&2; return 1; }
     find "$dir" -maxdepth 1 -name "$name-*.dump" -mmin +1500 -delete
     echo "backup: ${file##*/}" >&2
 }
@@ -97,22 +98,27 @@ copy() { # $1 = the dump, $2 = the prefix in the bucket
 
 # A day is marked only once its dump restored and every copy landed; a
 # restart checks and copies the day again, which costs one more daily/ file.
+# hourly/ gets every dump, so a broken check still leaves offsite copies;
+# only a restored dump becomes the day's daily/ copy.
 hour() {
-    lock
+    lock || { ping /fail "no lock"; return; }
     if ! dump; then unlock; ping /fail "dump failed"; return; fi
     base=${file##*/}
     day=$(date -u +%Y%m%d)
     daily=""
+    restored=1
     if [ "$day" != "$done_day" ]; then
-        if ! check "$file" >/dev/null; then unlock; ping /fail "$base did not restore"; return; fi
-        daily=1
+        if check "$file" >/dev/null; then daily=1; else restored=""; fi
     fi
     unlock
-    if [ -n "${BACKUP_REMOTE:-}" ]; then
-        if ! copy "$file" hourly || { [ -n "$daily" ] && ! copy "$file" daily; }; then
-            ping /fail "copy of $base to $BACKUP_REMOTE failed"
-            return
-        fi
+    if [ -n "${BACKUP_REMOTE:-}" ] && ! copy "$file" hourly; then
+        ping /fail "copy of $base to $BACKUP_REMOTE failed"
+        return
+    fi
+    [ -n "$restored" ] || { ping /fail "$base did not restore"; return; }
+    if [ -n "$daily" ] && [ -n "${BACKUP_REMOTE:-}" ] && ! copy "$file" daily; then
+        ping /fail "copy of $base to $BACKUP_REMOTE failed"
+        return
     fi
     [ -z "$daily" ] || done_day=$day
     ping "" "$base${daily:+ restore-checked}${BACKUP_REMOTE:+ copied to $BACKUP_REMOTE}"
@@ -129,13 +135,13 @@ loop)
     ;;
 once)
     load_password
-    lock
+    lock || exit 1
     dump || exit 1
     check "$file"
     ;;
 check)
     [ $# -eq 2 ] || { echo "usage: backup.sh check FILE" >&2; exit 2; }
-    lock
+    lock || exit 1
     check "$2"
     ;;
 *)

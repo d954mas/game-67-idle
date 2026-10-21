@@ -154,7 +154,8 @@ Every test creates and drops its own database on the PostgreSQL named by
 one. `node ai_studio/game_tools/live_games.mjs` vets and builds the
 `metaserver/` of every live game that lists this feature.
 `META_BACKUP_DOCKER=1 go -C features/metaserver test -run TestBackup .`
-(slow tier, release lane) builds `backup/`, runs `once` on the stand's Docker
+(slow tier; no runner calls it, so run it by hand before a game release
+that changes `backup/`) builds `backup/`, runs `once` on the stand's Docker
 network, restores the dump into a second database and checks a truncated
 dump fails without printing rows; the core run skips it.
 `testdata/` is the room contract: the games' C tests read the same files.
