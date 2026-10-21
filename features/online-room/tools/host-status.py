@@ -26,7 +26,7 @@ SAMPLE_SECONDS = 1.0
 # Processes read as groups, by their command name: the rooms, a TLS proxy in
 # front of them, and the container machinery around them. runc lives a moment per
 # healthcheck exec, so forks per second show it better than its CPU does.
-PROCESS_GROUPS = {"plw_room_server": "rooms", "dockerd": "dockerd", "containerd": "containerd",
+PROCESS_GROUPS = {"plw_room_server": "rooms", "slw_room_server": "rooms", "dockerd": "dockerd", "containerd": "containerd",
                   "containerd-shim": "containerd_shim", "runc": "runc", "haproxy": "haproxy"}
 
 
@@ -318,7 +318,7 @@ def collect():
             versions = re.search(r'(?:ws_library|lws)="([^"]*)" tls_library="([^"]*)"', line)
             if versions:
                 result["room_versions"] = {"ws_library": versions[1], "tls_library": versions[2]}
-            if line.startswith("plw_room_stats "):
+            if re.match(r"[a-z]+_room_stats ", line):
                 fields = r"t|ticks|late|dropped|refused|seated|host_tick_avg_ms|host_tick_max_ms|replication_avg_ms|replication_max_ms"
                 counters = {k: float(v) for k, v in re.findall(r"\b(" + fields + r")=(\d+(?:\.\d+)?)\b", line)}
                 close = re.search(r"closes=([\w:,]+)", line)

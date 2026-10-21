@@ -77,7 +77,7 @@ class HostStatusTests(unittest.TestCase):
             "2026-09-27T18:01:00.123Z plw_room_stats t=60 ticks=1800 late=1 dropped=0 seated=2 "
             "closes=peer:1,protocol:0,rate:0,slow:2,app:0,other:0 "
             "slow_sources=outbox:1,transport:1\n"
-            "2026-09-27T18:02:00.123Z plw_room_stats t=120 ticks=3600 late=1 dropped=0 seated=1 "
+            "2026-09-27T18:02:00.123Z slw_room_stats t=120 ticks=3600 late=1 dropped=0 seated=1 "
             "closes=peer:2,protocol:0,rate:1,slow:3,app:0,other:0 "
             "slow_sources=outbox:1,transport:2\n"
         )

@@ -5,8 +5,9 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 
 const ROOM_ARGS = ["--bind", "127.0.0.1", "--port", "0", "--stats-seconds", "1"];
-const LISTENING = /^plw_room_listening port=(\d+)/;
-const SEATED = /^plw_room_stats\b.*\bseated=(\d+)\b/;
+// Each game prefixes its room lines with its own id (plw_, slw_).
+const LISTENING = /^[a-z]+_room_listening port=(\d+)/;
+const SEATED = /^[a-z]+_room_stats\b.*\bseated=(\d+)\b/;
 const CHECKPOINT_WAIT_MS = 15000;
 const STOP_WAIT_MS = 3000;
 // The packaged smoke's checkpoints, in the order its probe takes them.

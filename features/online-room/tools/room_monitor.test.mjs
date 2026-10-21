@@ -50,7 +50,7 @@ test("latest unseated telemetry cannot be masked by an earlier seated line", asy
   const { monitor, emit, child } = attachedMonitor();
   openSocket(emit);
   await freshCheckpoint(monitor, child, "initial");
-  setTimeout(() => child.lines.push("plw_room_stats t=2 seated=1", "plw_room_stats t=3 seated=0"), 2);
+  setTimeout(() => child.lines.push("plw_room_stats t=2 seated=1", "slw_room_stats t=3 seated=0"), 2);
   await assert.rejects(monitor.checkpoint("recovery-1", Date.now() + 1000), /lost its seated player/);
 });
 
