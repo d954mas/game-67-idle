@@ -1857,6 +1857,15 @@ test("archive history rejects forks, cycles, and two pending copies instead of p
   const reopen = runCliDirect(twoPending, "reopen", "T0001", "--json");
   assert.equal(reopen.status, 1);
   assert.match(JSON.parse(reopen.stdout).problem.message, /more than one pending copy/);
+
+  const sameGroup = tempRoot(t);
+  const groupDir = join(sameGroup, "ai_studio", "taskboard", "items", "archive", "pending", "unassigned");
+  mkdirSync(groupDir, { recursive: true });
+  for (const name of ["T0001-a.md", "T0001-b.md"]) writeFileSync(join(groupDir, name), archivedTaskText("T0001"));
+  assert.throws(() => findDoc(sameGroup, "T0001", { includeArchive: true }), /more than one pending copy/);
+  assert.throws(() => reopenTask(sameGroup, "T0001"), /more than one pending copy/);
+  assert.deepEqual(readdirSync(groupDir).sort(), ["T0001-a.md", "T0001-b.md"]);
+  assert.equal(existsSync(join(sameGroup, "ai_studio", "taskboard", "items", "active")), false);
 });
 
 test("archive seal accepts a reopened copy only when it names the current sealed head", (t) => {

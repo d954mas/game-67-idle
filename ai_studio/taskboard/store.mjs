@@ -5,7 +5,8 @@
 // frontmatter parsing, paths, templates, mutation, and validation. Keep the
 // public contract here; do not add a second facade without a real need.
 
-import { closeSync, existsSync, ftruncateSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { closeSync, existsSync, ftruncateSync, linkSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
 import { findSealedTasks, listSealedTasks, sealArchiveBatch } from "./archive.mjs";
@@ -352,8 +353,7 @@ function archiveHead(id, copies) {
 function archivedCopies(root, id, options = {}) {
   const copies = [];
   for (const dir of pendingArchiveGroupDirs(root, options)) {
-    const doc = findDocInDir(dir, "task", id, { archived: true });
-    if (doc) copies.push(doc);
+    copies.push(...listDocs(dir, "task", { archived: true, rejectLinks: true }).filter((doc) => doc.fields.id === id));
   }
   for (const entry of findSealedTasks(archiveRootDir(root, options), id)) {
     const doc = docFromArchiveEntry(entry);
@@ -780,7 +780,14 @@ export function reopenTask(root, id, { status = "backlog", log = "", ...options 
   delete fields.quality;
   const file = join(activeTaskDir(root, options), doc.name);
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, serializeDoc(fields, body), { flag: "wx" });
+  // Publish through a temp file so a failed write never leaves a partial copy shadowing the archive.
+  const temporary = join(dirname(file), `.${doc.name}.${randomUUID()}.tmp`);
+  try {
+    writeFileSync(temporary, serializeDoc(fields, body), { flag: "wx" });
+    linkSync(temporary, file);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
   return { ...docFromFile(file, "task"), reopenedFrom };
 }
 
