@@ -613,10 +613,27 @@ function dynamicallyLoadsGameStatements(tokens, sequenceOffset) {
   return false;
 }
 
+function capabilityGatedGameLoader(tokens) {
+  const depths = braceDepths(tokens);
+  for (let offset = 0; offset < tokens.length; offset += 1) {
+    if (depths[offset] !== 0 || !tokenValuesAt(tokens, offset, ["if", "(", "window", "."])) continue;
+    const before = tokens[offset - 1]?.value;
+    if (before !== undefined && before !== ";" && before !== "}") continue;
+    const capability = tokens[offset + 4];
+    if (capability?.type !== "identifier" || !tokenValuesAt(tokens, offset + 5, ["(", ")", ")", "{"])) continue;
+    const open = offset + 8;
+    const close = matchingDelimiter(tokens, open, "{", "}");
+    if (close !== -1 && dynamicallyLoadsGameStatements(tokens.slice(open + 1, close), liveTopLevelSequenceOffset)) return true;
+  }
+  return false;
+}
+
 function dynamicallyLoadsGame(tokens, isModule = false) {
   if (dynamicallyLoadsGameStatements(tokens, liveIifeAwareTopLevelSequenceOffset)) return true;
   const startRuntime = topLevelFunctionDefinitions(tokens).get("startRuntime");
-  if (!startRuntime || !dynamicallyLoadsGameStatements(startRuntime.body, liveTopLevelSequenceOffset)) return false;
+  // Minification can fold a browser capability guard around the entire runtime injection.
+  if (!startRuntime || (!dynamicallyLoadsGameStatements(startRuntime.body, liveTopLevelSequenceOffset)
+      && !capabilityGatedGameLoader(startRuntime.body))) return false;
   for (let offset = liveIifeAwareTopLevelSequenceOffset(tokens, ["startRuntime", "(", ")"]);
     offset !== -1;
     offset = liveIifeAwareTopLevelSequenceOffset(tokens, ["startRuntime", "(", ")"], offset + 1)) {

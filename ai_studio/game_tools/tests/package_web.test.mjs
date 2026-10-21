@@ -574,6 +574,26 @@ test("platform-sdk 3.0.0 validates the canonical diagnostics caught bootstrap af
   assert.doesNotMatch(html, /\bimport\s*\(\s*["']\.\/platform-sdk\.js/);
 });
 
+test("caught bootstrap permits a capability-gated runtime loader but rejects dead branches", (t) => {
+  const original = "function startRuntime() { var gameScript = document.createElement('script'); gameScript.src = 'game.js'; document.body.appendChild(gameScript); }";
+  for (const [prefix, accepted] of [
+    ["if (window.graphicsAvailable())", true],
+    ["if (false)", false],
+    ["if (0)", false],
+    ["if (0) if (window.graphicsAvailable())", false],
+    ["while (false) if (window.graphicsAvailable())", false],
+    ["for (; false;) if (window.graphicsAvailable())", false],
+  ]) {
+    const item = diagnosticsFixture(t);
+    const guarded = "function startRuntime() { " + prefix + " { var gameScript = document.createElement('script'); gameScript.src = 'game.js'; document.body.appendChild(gameScript); } }";
+    const source = readFileSync(item.htmlPath, "utf8");
+    assert.ok(source.includes(original));
+    write(item.htmlPath, source.replace(original, guarded));
+    if (accepted) assert.doesNotThrow(() => validateWebArtifact({ ...item, studioRoot }));
+    else assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /entrypoint.*game\.js/i);
+  }
+});
+
 test("caught bootstrap requires an executable standalone startRuntime call", (t) => {
   const bootstrap = "import('./platform-sdk.js').then(startRuntime, failLocalBootstrap);";
   for (const [label, replacement] of [
