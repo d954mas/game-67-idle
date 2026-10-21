@@ -167,7 +167,8 @@ static uint16_t raw_peer_close_code(const char *response, int got) {
     const char *end = strstr(response, "\r\n\r\n");
     if (end == NULL) { return 0U; }
     const uint8_t *frame = (const uint8_t *)end + 4;
-    if ((const char *)frame + 4 > response + got || frame[0] != 0x88U) { return 0U; }
+    /* An unmasked close with at least the two-byte code. */
+    if ((const char *)frame + 4 > response + got || frame[0] != 0x88U || frame[1] < 2U || frame[1] > 125U) { return 0U; }
     return (uint16_t)((frame[2] << 8) | frame[3]);
 }
 
@@ -211,6 +212,10 @@ static void raw_peers_close(raw_peer_t *peers, uint32_t count) {
 /* False only when the host has no such loopback alias (127.0.0.2 is not
    local on every OS); any other failure is a real one. */
 static bool loopback_alias_available(uint32_t host) {
+#if defined(_WIN32)
+    WSADATA wsa;
+    WSAStartup(MAKEWORD(2, 2), &wsa);
+#endif
     raw_socket_t sock = socket(AF_INET, SOCK_STREAM, 0);
     CHECK(sock != RAW_INVALID);
     struct sockaddr_in addr;
@@ -514,44 +519,53 @@ static void test_one_address_reconnects(const net_ws_server_config_t *base) {
 }
 
 /* One address holds at most max_clients of the 2 x max_clients waiting
-   room: a second address fills the rest, a third is refused, and silent
-   sockets leave at the handshake timeout. */
+   room: its next socket is refused while the room still has space, a
+   second address fills the rest, a third is refused, and silent sockets
+   leave at the handshake timeout. */
 static void test_waiting_room_bound(const net_ws_server_config_t *base) {
     if (!loopback_alias_available(INADDR_LOOPBACK + 1U) || !loopback_alias_available(INADDR_LOOPBACK + 2U)) {
         printf("waiting-room bound skipped: no 127.0.0.2/127.0.0.3 on this host\n");
         return;
     }
+    enum { TIMEOUT_MS = 6000 };
     server_log_t log = {0};
     net_ws_server_config_t config = *base;
     config.max_clients = 4U;
-    config.handshake_timeout_ms = 2000U;
+    /* Longer than every setup wait below, so no silent socket expires
+       before the last refusal is checked. */
+    config.handshake_timeout_ms = TIMEOUT_MS;
     config.user = &log;
     net_ws_server_t *server = net_ws_server_create(&config);
     CHECK(server != NULL);
     log.server = server;
     const uint16_t port = net_ws_server_port(server);
-    /* A and B spend the whole accept burst (2 x max_clients); C waits for a
-       token, which refills every 1 / max_clients seconds. */
-    raw_peer_t peers[9];
-    raw_peers_open(peers, 4U, port, INADDR_LOOPBACK);
-    raw_peers_open(peers + 4, 4U, port, INADDR_LOOPBACK + 1U);
+    /* A's five and B's three spend the accept burst (2 x max_clients); B's
+       fourth and C each wait for a token, which refills every 1 / max_clients
+       seconds. */
+    raw_peer_t peers[10];
+    raw_peers_open(peers, 5U, port, INADDR_LOOPBACK);
+    raw_peers_open(peers + 5, 3U, port, INADDR_LOOPBACK + 1U);
     CHECK(raw_peers_pump(server, peers, 8U, WAIT_S, true));
     raw_peers_pump(server, peers, 8U, 0.4, false);
-    raw_peers_open(peers + 8, 1U, port, INADDR_LOOPBACK + 2U);
+    raw_peers_open(peers + 8, 1U, port, INADDR_LOOPBACK + 1U);
     CHECK(raw_peers_pump(server, peers, 9U, WAIT_S, true));
-    raw_peers_pump(server, peers, 9U, 0.3, false);
-    for (uint32_t index = 0U; index < 8U; ++index) {
-        CHECK(raw_peer_close_code(peers[index].response, peers[index].got) == 0U);
+    raw_peers_pump(server, peers, 9U, 0.4, false);
+    raw_peers_open(peers + 9, 1U, port, INADDR_LOOPBACK + 2U);
+    CHECK(raw_peers_pump(server, peers, 10U, WAIT_S, true));
+    raw_peers_pump(server, peers, 10U, 0.3, false);
+    for (uint32_t index = 0U; index < 9U; ++index) {
+        const uint16_t want = index == 4U ? NET_CLOSE_FULL : 0U;
+        CHECK(raw_peer_close_code(peers[index].response, peers[index].got) == want);
     }
-    CHECK(raw_peer_close_code(peers[8].response, peers[8].got) == NET_CLOSE_FULL);
+    CHECK(raw_peer_close_code(peers[9].response, peers[9].got) == NET_CLOSE_FULL);
     /* The handshake timeout, one sweep, and slack. */
-    pump_for(server, NULL, 2.0 + 0.25 + 0.5);
+    pump_for(server, NULL, TIMEOUT_MS / 1000.0 + 0.25 + 0.5);
     client_log_t clog = {0};
     net_ws_client_t *client = connect_client(port, VERSION, &clog, 256U);
     pump_open(server, &log, client, &clog);
     CHECK(clog.closes == 0U);
     net_ws_client_destroy(client);
-    raw_peers_close(peers, 9U);
+    raw_peers_close(peers, 10U);
     net_ws_server_destroy(server);
 }
 
