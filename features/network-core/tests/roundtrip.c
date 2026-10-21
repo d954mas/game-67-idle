@@ -288,7 +288,9 @@ static void pace_dial(void) {
     const double wait = 1.1 - fmin(2.0, tokens + net_ws_client_clock() - at);
     if (wait > 0.0) { sleep_ms((unsigned)(wait * 1000.0) + 1U); }
     const double now = net_ws_client_clock();
-    tokens = fmin(2.0, tokens + now - at) - 1.0;
+    /* Charging the margin too keeps it when dials land back to back on a
+       full bucket, which the server caps. */
+    tokens = fmin(2.0, tokens + now - at) - 1.1;
     at = now;
 }
 
@@ -547,8 +549,7 @@ static void test_waiting_room_bound(const net_ws_server_config_t *base) {
     log.server = server;
     const uint16_t port = net_ws_server_port(server);
     /* A's four spend its accept burst (max_clients); A's fifth waits for a
-       token, which refills every 2 / max_clients seconds, and so do B's
-       fourth and C behind the global burst of 2 x max_clients. */
+       token, which refills every 2 / max_clients seconds. */
     raw_peer_t peers[10];
     raw_peers_open(peers, 4U, port, INADDR_LOOPBACK);
     CHECK(raw_peers_pump(server, peers, 4U, WAIT_S, true));
@@ -704,6 +705,10 @@ static void test_one_address_cannot_drain_accepts(const net_ws_server_config_t *
     config.max_clients = 4U;
     config.user = &log;
     net_ws_server_t *server = net_ws_server_create(&config);
+    if (server == NULL && bind != NULL && strchr(bind, ':') != NULL) {
+        printf("dual-stack accept budget skipped: no IPv6 listener on this host\n");
+        return;
+    }
     CHECK(server != NULL);
     log.server = server;
     const uint16_t port = net_ws_server_port(server);
@@ -1123,7 +1128,9 @@ int main(void) {
     test_burst_enters(&sconfig);
     test_rejected_hello_frees_seat(&sconfig);
     test_one_address_cannot_drain_accepts(&sconfig, "127.0.0.1", INADDR_LOOPBACK, INADDR_LOOPBACK + 1U);
-    test_one_address_cannot_drain_accepts(&sconfig, NULL, INADDR_LOOPBACK + 1U, INADDR_LOOPBACK + 2U);
+    /* A v6 socket on the v4 loopback alone: peers arrive v4-mapped, and no
+       other interface listens. */
+    test_one_address_cannot_drain_accepts(&sconfig, "::ffff:127.0.0.1", INADDR_LOOPBACK + 1U, INADDR_LOOPBACK + 2U);
 
     /* Room capacity is enforced per connection. */
     client_log_t alog = {0};

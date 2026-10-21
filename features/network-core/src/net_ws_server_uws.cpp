@@ -369,7 +369,12 @@ template <bool SSL> void on_open(net_ws_server_t *server, Socket<SSL> *ws) {
     peer->pinged_at = now;
     peer->rate_at = now;
     peer->tokens = static_cast<double>(server->config.max_messages_per_second);
-    if (peer->address.empty()) { peer->address = address_key(ws->getRemoteAddress()); }
+    /* A socket the filter never saw is counted here, so on_close's uncount
+       stays balanced. */
+    if (peer->address.empty()) {
+        peer->address = address_key(ws->getRemoteAddress());
+        count_socket(server, peer->address, now);
+    }
     if (!net_queue_init(&peer->tx, server->config.send_queue_bytes)) {
         request_close(server, peer, NET_CLOSE_FULL, NET_WS_CLOSE_PEER);
         return;

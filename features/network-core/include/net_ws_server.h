@@ -144,7 +144,7 @@ const char *net_ws_tls_library_version(void);
 
 /* Flushes what is queued, then closes with the application's code
    (NET_CLOSE_APP, or a game-defined 4100-4999). The seat comes free and
-   on_disconnect fires with NET_WS_CLOSE_APP once the close frame is sent,
+   on_disconnect fires with NET_WS_CLOSE_APP once the close frame is queued,
    not when the peer acknowledges it: in the service step after this call,
    which for a close from a callback (a ticket refused in on_connect) is
    the end of the same service. Only queued output the peer does not drain

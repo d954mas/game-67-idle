@@ -66,8 +66,8 @@ consumer.
   seat, every seat behind one NAT can reconnect at once, and one address
   alone cannot fill the waiting room (a few addresses together still can;
   stopping that is the edge's job). A socket that closes before its
-  upgrade gives its address's share back at once. An application close
-  frees the seat when the close frame goes out, not when the peer
+  upgrade gives its address's socket count back at once. An application close
+  frees the seat when the close frame is queued, not when the peer
   acknowledges it, so a HELLO refused from `on_connect` gives its seat back
   within the same service. Client ids are never
   reused within a
