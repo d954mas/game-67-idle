@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "ui-kit",
-  "version": "3.1.0",
+  "version": "4.0.0",
   "title": "UI Kit",
   "status": "reusable",
   "kind": "presentation",
@@ -33,7 +33,7 @@
     "ui_reach touch-or-pointer flag for composition, deliberately outside the sizing path",
     "ui_frame_begin proportional frames and ui_metrics",
     "ui_theme_init token-driven engine styles in g_ui_theme, dropdown included",
-    "ui_kit panel/tile/scrim/label/button/meter widgets and the UI_LAYER_* order",
+    "ui_kit panel/tile/scrim/label/button/meter widgets and the UI_LAYER_* order (one surface layer, then icon, text shadow, text)",
     "ui_kit composites: labelled and icon buttons by role, counter, captioned meter, badge, sheet (engine modal + panel), toggle/checkbox/radio/slider rows in the kit's own art",
     "counter and on_world label roles",
     "example/native: the UI Lab, a standalone engine consumer with six scenes and four themes",

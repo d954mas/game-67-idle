@@ -101,10 +101,10 @@ void ui_kit_panel_begin(nt_ui_context_t *ctx, const Clay_ElementDeclaration *dec
     if (shapes()) {
         const ui_tokens_t *t = ui_theme_tokens();
         const ui_kit_panel_style_t s = flat_plate(or_default(t->r_panel, 14.0F), t->panel, t->shell, t->rim);
-        ui_kit_panel_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_BG), &s, decl);
+        ui_kit_panel_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &s, decl);
         return;
     }
-    nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_BG), &g_ui_theme.art.panel, &g_ui_theme.plate_img, decl);
+    nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &g_ui_theme.art.panel, &g_ui_theme.plate_img, decl);
 }
 
 void ui_kit_panel_end(nt_ui_context_t *ctx) {
@@ -119,10 +119,10 @@ void ui_kit_tile_begin(nt_ui_context_t *ctx, const Clay_ElementDeclaration *decl
     if (shapes()) {
         const ui_tokens_t *t = ui_theme_tokens();
         const ui_kit_panel_style_t s = flat_plate(or_default(t->r_tile, 12.0F), t->tile, t->tile_rim, t->rim);
-        ui_kit_panel_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_BG), &s, decl);
+        ui_kit_panel_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &s, decl);
         return;
     }
-    nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_BG), &g_ui_theme.art.tile, &g_ui_theme.plate_img, decl);
+    nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &g_ui_theme.art.tile, &g_ui_theme.plate_img, decl);
 }
 
 void ui_kit_tile_end(nt_ui_context_t *ctx) { ui_kit_panel_end(ctx); }
@@ -205,7 +205,7 @@ static void button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t
     const bool shape = shapes() && style->idle.bg.atlas.id == 0U;
     s_button_shape[s_button_depth++] = !shape ? BUTTON_ART : round ? BUTTON_RADIAL : BUTTON_PANEL;
     if (!shape) {
-        nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), id, style, &fill, enabled, cfg);
+        nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), id, style, &fill, enabled, cfg);
         return;
     }
     // The engine button draws nothing here but still eases the scale and the
@@ -217,14 +217,14 @@ static void button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t
     motion.hover.bg_tint = 0xFFFFFFFFU;
     motion.pressed.bg_tint = 0xFFFFFFFFU;
     motion.disabled.bg_tint = 0xFFFFFFFFU;
-    nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), id, &motion, &fill, enabled, cfg);
+    nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), id, &motion, &fill, enabled, cfg);
     const uint32_t tint = state_tint(ctx, id, style, enabled);
     if (round) {
         const ui_kit_radial_style_t s = disc_plate(tint, ui_metrics().hit);
-        ui_kit_radial_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), &s, &fill);
+        ui_kit_radial_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &s, &fill);
     } else {
         const ui_kit_panel_style_t s = button_plate(tint);
-        ui_kit_panel_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), &s, &fill);
+        ui_kit_panel_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &s, &fill);
     }
 }
 
@@ -257,10 +257,10 @@ void ui_kit_meter(nt_ui_context_t *ctx, float w, float h, float ratio, uint32_t 
         .layout = {.sizing = {CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(h)}}};
     if (shapes()) {
         const ui_kit_panel_style_t s = flat_plate(or_default(t->r_bar, 11.0F), t->inset, t->inset_rim, t->rim);
-        ui_kit_panel(ctx, NT_UI_DATA_LAYER(UI_LAYER_BG), &s, &track);
+        ui_kit_panel(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &s, &track);
     } else {
         nt_ui_image_style_t art = g_ui_theme.plate_img;
-        nt_ui_image(ctx, NT_UI_DATA_LAYER(UI_LAYER_BG), &g_ui_theme.art.slider_track, &art, &track);
+        nt_ui_image(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &g_ui_theme.art.slider_track, &art, &track);
     }
 
     // The pill rides inside the track's own rim, so the recess stays visible at
@@ -278,12 +278,12 @@ void ui_kit_meter(nt_ui_context_t *ctx, float w, float h, float ratio, uint32_t 
     if (shapes()) {
         // slider_fill.png: the white pill inside the track's rim, tinted.
         const ui_kit_panel_style_t s = flat_plate(or_default(t->r_bar, 11.0F) - t->rim, fill_tint, fill_tint, 0.0F);
-        ui_kit_panel(ctx, NT_UI_DATA_LAYER(UI_LAYER_FILL), &s, &pill);
+        ui_kit_panel(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &s, &pill);
         return;
     }
     nt_ui_image_style_t fill = g_ui_theme.plate_img;
     fill.color_packed = fill_tint;
-    nt_ui_image(ctx, NT_UI_DATA_LAYER(UI_LAYER_FILL), &g_ui_theme.art.slider_fill, &fill, &pill);
+    nt_ui_image(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &g_ui_theme.art.slider_fill, &fill, &pill);
 }
 
 nt_ui_slider_style_t *ui_kit_slider_style(const ui_metrics_t *m) {
@@ -452,13 +452,13 @@ static void tinted_begin(nt_ui_context_t *ctx, nt_atlas_region_ref_t *region, co
                          uint32_t tint) {
     nt_ui_image_style_t art = g_ui_theme.plate_img;
     art.color_packed = tint;
-    nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), region, &art, decl);
+    nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), region, &art, decl);
 }
 
 void ui_kit_plate_begin(nt_ui_context_t *ctx, const Clay_ElementDeclaration *decl, uint32_t tint) {
     if (shapes()) {
         const ui_kit_panel_style_t s = button_plate(tint);
-        ui_kit_panel_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), &s, decl);
+        ui_kit_panel_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &s, decl);
         return;
     }
     tinted_begin(ctx, &g_ui_theme.art.button, decl, tint);
@@ -475,7 +475,7 @@ void ui_kit_plate_end(nt_ui_context_t *ctx) {
 void ui_kit_disc_begin(nt_ui_context_t *ctx, const Clay_ElementDeclaration *decl, uint32_t tint) {
     if (shapes()) {
         const ui_kit_radial_style_t s = disc_plate(tint, fixed_side(decl));
-        ui_kit_radial_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), &s, decl);
+        ui_kit_radial_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &s, decl);
         return;
     }
     tinted_begin(ctx, &g_ui_theme.art.thumb, decl, tint);
@@ -560,11 +560,11 @@ bool ui_kit_dialog_begin(nt_ui_context_t *ctx, const char *id, const char *title
             const float r = or_default(t->r_header, or_default(t->r_panel, 14.0F) - t->rim);
             const ui_kit_panel_style_t s = {.radius = {r, r, 0.0F, 0.0F}, .top_rgb = rgb_of(fill),
                 .bottom_rgb = rgb_of(fill), .alpha = alpha_of(fill)};
-            ui_kit_panel_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_FILL), &s, &band);
+            ui_kit_panel_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &s, &band);
             ui_kit_label(ctx, title, &g_ui_theme.header_title);
             ui_kit_panel_styled_end(ctx);
         } else {
-            nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_FILL), &g_ui_theme.art.header, &g_ui_theme.plate_img, &band);
+            nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &g_ui_theme.art.header, &g_ui_theme.plate_img, &band);
             ui_kit_label(ctx, title, &g_ui_theme.header_title);
             nt_ui_panel_end(ctx);
         }
@@ -645,7 +645,7 @@ bool ui_kit_toggle_row(nt_ui_context_t *ctx, const char *id, const char *label, 
     bool changed = false;
     UI_KIT_ROW(id, &m) {
         row_label(ctx, label, enabled);
-        changed = nt_ui_toggle(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), UI_LAYER_TEXT, nt_ui_child_id(nt_ui_id(id), "toggle"),
+        changed = nt_ui_toggle(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), UI_LAYER_TEXT, nt_ui_child_id(nt_ui_id(id), "toggle"),
                                NULL, value, style, &FIT_DECL, enabled);
     }
     return changed;
@@ -656,7 +656,7 @@ bool ui_kit_checkbox_row(nt_ui_context_t *ctx, const char *id, const char *label
     nt_ui_checkbox_style_t *style = ui_kit_checkbox_style();
     bool changed = false;
     UI_KIT_ROW(id, &m) {
-        changed = nt_ui_checkbox(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), UI_LAYER_TEXT, nt_ui_child_id(nt_ui_id(id), "box"),
+        changed = nt_ui_checkbox(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), UI_LAYER_TEXT, nt_ui_child_id(nt_ui_id(id), "box"),
                                  NULL, value, style, &FIT_DECL, enabled);
         row_label(ctx, label, enabled);
     }
@@ -668,7 +668,7 @@ bool ui_kit_radio_row(nt_ui_context_t *ctx, const char *id, const char *label, i
     nt_ui_checkbox_style_t *style = ui_kit_radio_style();
     bool changed = false;
     UI_KIT_ROW(id, &m) {
-        changed = nt_ui_radio(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), UI_LAYER_TEXT, nt_ui_child_id(nt_ui_id(id), "radio"),
+        changed = nt_ui_radio(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), UI_LAYER_TEXT, nt_ui_child_id(nt_ui_id(id), "radio"),
                               NULL, selected, my_value, style, &FIT_DECL, enabled);
         row_label(ctx, label, enabled);
     }
@@ -693,7 +693,7 @@ bool ui_kit_slider_row(nt_ui_context_t *ctx, const char *id, const char *caption
         }
         // The row is the touch target: the track is thin, and the thumb alone
         // is not something a thumb can find.
-        (void)nt_ui_slider_float(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), UI_LAYER_TEXT, nt_ui_child_id(nt_ui_id(id), "slider"),
+        (void)nt_ui_slider_float(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), UI_LAYER_TEXT, nt_ui_child_id(nt_ui_id(id), "slider"),
                                  NULL, value, 0.0F, 1.0F, 0.0F, slider,
                                  &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(&m)}}},
                                  enabled);
@@ -720,7 +720,7 @@ bool ui_kit_dropdown_row(nt_ui_context_t *ctx, const char *id, const char *label
     style.max_visible_rows = (uint16_t)count;
     UI_KIT_ROW(id, &m) {
         row_label(ctx, label, true);
-        nt_ui_combo_preview_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), UI_LAYER_TEXT, nt_ui_child_id(base, "trigger"),
+        nt_ui_combo_preview_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), UI_LAYER_TEXT, nt_ui_child_id(base, "trigger"),
                                   &style, open);
         CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
             ui_kit_label(ctx, options[*selected], &g_ui_theme.button_label);

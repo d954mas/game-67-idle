@@ -29,19 +29,19 @@
 
 #include <stdbool.h>
 
-// Z-order inside one Clay zIndex: the walker batches rects and images first,
-// then text, so a lower layer draws behind. Every surface uses THESE numbers;
+// Z-order inside one Clay zIndex: the walker sorts by layer, then by
+// declaration, so a lower layer draws behind. Every surface uses THESE numbers;
 // a screen with its own layer constants sorts against a different scale and
 // cannot be stacked predictably against one that uses the kit's.
+//
+// All surfaces share one layer so tree order stacks them: a surface nested in
+// another draws over it at any depth. Icons keep their own layer because they
+// use the sprite material, and interleaving them with surfaces splits batches.
 #define UI_LAYER_SCRIM 0
-#define UI_LAYER_BG 1
-#define UI_LAYER_FILL 2
-#define UI_LAYER_IMG 3
-#define UI_LAYER_TEXT_SHADOW 4
-#define UI_LAYER_TEXT 5
-// An icon sits between the plate and the label, sharing the shadow slot: a
-// button's art order is plate, icon, text without a second Clay zIndex.
-#define UI_LAYER_ICON UI_LAYER_TEXT_SHADOW
+#define UI_LAYER_SURFACE 1
+#define UI_LAYER_ICON 2
+#define UI_LAYER_TEXT_SHADOW 3
+#define UI_LAYER_TEXT 4
 
 // ---- primitives -----------------------------------------------------------
 

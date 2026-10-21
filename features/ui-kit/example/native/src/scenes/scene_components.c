@@ -121,7 +121,7 @@ static void counters(nt_ui_context_t *ctx, const ui_metrics_t *m) {
     nt_ui_progress_style_t progress = g_ui_theme.progress;
     progress.track_w = meter_w;
     progress.track_h = ui_css(progress.track_h);
-    nt_ui_progress(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), UI_LAYER_IMG, nt_ui_id("components/progress"), s_progress, &progress,
+    nt_ui_progress(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), UI_LAYER_SURFACE, nt_ui_id("components/progress"), s_progress, &progress,
                    &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(meter_w), CLAY_SIZING_FIXED(progress.track_h)}}});
 }
 

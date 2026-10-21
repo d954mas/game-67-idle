@@ -58,7 +58,8 @@ set the bar: a prototype should not have to design a UI before it has a game.
   pack builder and generated asset ids.
 - `ui_kit.h` — the widgets in two tiers. Primitives: panel, tile, scrim, label,
   shadowed label, button plate, meter, slider style, touch-target height, and
-  the `UI_LAYER_*` order every surface sorts on. Composites: a labelled or icon
+  the `UI_LAYER_*` order (one surface layer, so nested surfaces stack by tree
+  order; then icon, text shadow, text). Composites: a labelled or icon
   button by role (`ui_kit_button`, `ui_kit_icon_button`), the round close
   (`ui_kit_close_button`, the thumb art on the neutral tile with the close
   glyph in ink), the tinted
@@ -176,7 +177,12 @@ not be replaced with generated art solely because filenames match.
 
 ## Compatibility
 
-Contract version in `feature.json`. Version 3.1 adds `ui_world_anchor.h`
+Contract version in `feature.json`. Version 4.0 folds `UI_LAYER_BG`,
+`UI_LAYER_FILL` and `UI_LAYER_IMG` into one `UI_LAYER_SURFACE` and renumbers
+`UI_LAYER_ICON` (now its own layer under the text shadow), `UI_LAYER_TEXT_SHADOW`
+and `UI_LAYER_TEXT`. A surface nested in another kit surface now draws over it at
+any depth; a consumer that relied on a later, lower-layer sibling drawing
+under an earlier one orders them by declaration instead. Version 3.1 adds `ui_world_anchor.h`
 and `ui_screen_pack.h`, two pure helpers for text over the world; nothing
 existing changes. Version 1.7 adds the glyph set
 (`ui_icons.h`, `assets/icons/`, the `icons` art slots and
