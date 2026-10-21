@@ -430,6 +430,13 @@ if(NOT EMSCRIPTEN)
         UNITY audio_unity
         OPTIONS -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
 
+    game_add_c_test(test_shader_programs TIER core
+        SOURCES "${SHADER_PROGRAMS_DIR}/tests/test_shader_programs.c" "${SHADER_PROGRAMS_DIR}/src/shader_programs.c"
+        INCLUDES "${SHADER_PROGRAMS_DIR}/include"
+        LIBS nt_core nt_gfx_interface
+        WARNINGS
+        OPTIONS -UNT_ASSERT_MODE -DNT_ASSERT_MODE=2) # the hookable handler proves the pool-full assert
+
     game_add_c_test(test_frustum TIER core
         SOURCES "${SHADOW_CASCADES_DIR}/tests/test_frustum.c" "${SHADOW_CASCADES_SRC}/frustum.c"
         INCLUDES "${SHADOW_CASCADES_INC}"

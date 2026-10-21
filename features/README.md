@@ -203,6 +203,10 @@ possibility, not a feature.
   volume of a camera slice. The game owns the depth atlas, the passes and the
   knobs (cascade count, splits, resolution, PCF margin). Reference:
   `shadow-cascades/README.md` + `shadow-cascades/INSTALL.md`.
+- `shader-programs/` (`L0`, `0.1.0`): one linked program per vertex/fragment
+  shader-resource pair, shared by the materials made through it, linked when
+  both stages are ready and relinked after a context loss. Reference:
+  `shader-programs/README.md` + `shader-programs/INSTALL.md`.
 
 ## Optional reference examples
 

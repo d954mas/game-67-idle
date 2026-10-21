@@ -66,6 +66,12 @@
       "compatibility": "validated by test_csm and test_frustum"
     },
     {
+      "id": "shader-programs",
+      "source": "features/shader-programs",
+      "version": "0.1.0",
+      "compatibility": "validated by test_shader_programs"
+    },
+    {
       "id": "remote-image",
       "source": "features/remote-image",
       "version": "0.1.0",

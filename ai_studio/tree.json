@@ -134,6 +134,18 @@
                 "coverage": "subtree"
               },
               {
+                "id": "feature-shader-programs",
+                "title": "Shader programs",
+                "kind": "module",
+                "path": "features/shader-programs",
+                "owner": "Graphics Feature Owner",
+                "description": "One linked program per shader pair, shared by its materials and relinked after a context loss.",
+                "entry": "features/shader-programs/README.md",
+                "contract": "features/shader-programs/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
                 "id": "feature-items-core",
                 "title": "Items core",
                 "kind": "module",

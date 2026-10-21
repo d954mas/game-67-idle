@@ -78,6 +78,7 @@ set(GRAPHICS_QUALITY_SRC     "${GRAPHICS_QUALITY_DIR}/src")
 set(SHADOW_CASCADES_DIR       "${GAME_REPO_ROOT}/features/shadow-cascades")
 set(SHADOW_CASCADES_INC       "${SHADOW_CASCADES_DIR}/include")
 set(SHADOW_CASCADES_SRC       "${SHADOW_CASCADES_DIR}/src")
+set(SHADER_PROGRAMS_DIR       "${GAME_REPO_ROOT}/features/shader-programs")
 # settings.h names the Graphics step, so every target that sees it needs the module's header.
 include_directories("${GRAPHICS_QUALITY_INC}")
 

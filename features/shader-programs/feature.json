@@ -1,0 +1,41 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "shader-programs",
+  "version": "0.1.0",
+  "title": "Shader Programs",
+  "status": "reusable",
+  "kind": "presentation",
+  "summary": "In-place L0 program cache: one linked GPU program per vertex/fragment shader-resource pair, shared by the materials made through it, linked when both stages are ready and relinked after a context loss.",
+  "copy_model": "in-place",
+  "layer": "L0",
+  "owners": [
+    "features/shader-programs"
+  ],
+  "dependencies": [
+    "engine material/nt_program_ref.h: links one pair and drops it on context loss",
+    "engine nt_material: materials borrow the cached program"
+  ],
+  "commands": {
+    "ctest": "ctest --test-dir ai_studio/feature_testing/consumer/build/native-debug -R test_shader_programs --output-on-failure"
+  },
+  "provides": [
+    "shader_program_material: a material bound to its pair's shared program",
+    "shader_program_ready: whether a material's program can draw",
+    "shader_programs_update: links ready pairs and re-points their materials",
+    "shader_programs_restore_gpu / shader_programs_shutdown: drop the programs after a context loss or before gfx shutdown"
+  ],
+  "manuals": {
+    "install": "features/shader-programs/INSTALL.md"
+  },
+  "registers": {
+    "target_sources": [
+      "${SHADER_PROGRAMS_DIR}/src/shader_programs.c"
+    ],
+    "include_dirs": [
+      "${SHADER_PROGRAMS_DIR}/include"
+    ],
+    "ctest_targets": [
+      "test_shader_programs"
+    ]
+  }
+}
