@@ -1,13 +1,16 @@
 # UI Lab (native)
 
-A standalone Neotolis Engine consumer of the studio UI kit: six scenes, four
+A standalone Neotolis Engine consumer of the studio UI kit: seven scenes, five
 themes, the real renderer. It is where the kit's components and themes are
 tried before a game takes them, and it is the example a game copies from,
 one screen at a time. It is not a game and not a second UI runtime.
 
 The visual direction is Studio B: white plates, dark blue-grey contours, a
 green primary action, a short hard ledge under buttons, large game
-typography. The other three themes are repaints of the same geometry.
+typography. Forest, Ember and Night are repaints of the same geometry; `shape`
+is Studio B drawn by the kit's SDF shapes with no art at all, the look a game
+gets from `ui_theme_art_t.shapes`. The lab's base sprite material is the kit's
+uber material, so every theme draws plain sprites and shapes in one batch.
 
 Buttons are picked by role, never by colour, and the roles are the ones the
 portals taught: neutral (white tile) for a regular action, close and cancel;
@@ -53,7 +56,7 @@ viewport conversion, so a tap proves the real hit-test.
 ## Evidence
 
 ```powershell
-node features/ui-kit/example/native/tools/lab.mjs shots          # six scenes x desktop/phone
+node features/ui-kit/example/native/tools/lab.mjs shots          # seven scenes x desktop/phone
 node features/ui-kit/example/native/tools/lab.mjs shot upgrade-buy --scene upgrade --size 390x844 --tap 278,289
 ```
 

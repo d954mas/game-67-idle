@@ -110,6 +110,19 @@ int main(int argc, char *argv[]) {
     /* The SDF disc behind the kit's round close: crisp at any size, no art. */
     nt_builder_add_shader(ctx, "assets/shaders/sprite_radial.vert", NT_BUILD_SHADER_VERTEX);
     nt_builder_add_shader(ctx, "assets/shaders/radial.frag", NT_BUILD_SHADER_FRAGMENT);
+    /* The kit's uber program, the base sprite material: it lives with the kit,
+     * includes the engine's common/ shaders, and is requested under the same
+     * resource name every kit consumer uses. */
+    (void)nt_builder_add_asset_root(ctx, "assets/shaders");
+    static const char *const UBER[2][2] = {{"vert", "assets/shaders/ui_uber.vert"}, {"frag", "assets/shaders/ui_uber.frag"}};
+    for (int i = 0; i < 2; ++i) {
+        char rel[256];
+        (void)snprintf(rel, sizeof rel, STUDIO_FROM_LAB "/features/ui-kit/shaders/ui_uber.%s", UBER[i][0]);
+        static char source[1024];
+        (void)snprintf(source, sizeof source, "%s", path_join(lab_dir, rel));
+        nt_builder_add_shader(ctx, source, i == 0 ? NT_BUILD_SHADER_VERTEX : NT_BUILD_SHADER_FRAGMENT);
+        nt_builder_rename(ctx, source, UBER[i][1]);
+    }
 
     nt_builder_add_font(ctx, FONT_PATH,
                         &(nt_font_opts_t){.charset = NT_CHARSET_ASCII CHARSET_CYRILLIC CHARSET_SYMBOLS,
@@ -182,12 +195,6 @@ int main(int argc, char *argv[]) {
         (void)fprintf(stderr, "ui_lab.ntpack failed: %d\n", r);
         return 1;
     }
-    static char base_hdr[1024];
-    static char merged_hdr[1024];
-    (void)snprintf(base_hdr, sizeof base_hdr, "%s/ui_lab.h", header_dir);
-    (void)snprintf(merged_hdr, sizeof merged_hdr, "%s/ui_lab_assets.h", header_dir);
-    const char *headers[] = {base_hdr};
-    nt_builder_merge_headers(headers, 1, merged_hdr);
     (void)printf("Built ui_lab.ntpack\n");
     return 0;
 }

@@ -10,7 +10,7 @@
 #include "window/nt_window.h"
 
 #include "features/ui_kit/ui_metrics.h"
-#include "ui_lab_assets.h"
+#include "ui_lab.h"
 
 #include <string.h>
 

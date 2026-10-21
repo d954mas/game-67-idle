@@ -107,6 +107,7 @@ test("the pack builder's slice9 macros are Studio B's art tokens times its expor
 test("the pack builder and the theme table name the same theme folders", () => {
   const builder = readFileSync(join(LAB, "src", "build_packs.c"), "utf8");
   const packed = /THEMES\[\] = \{([^}]*)\}/.exec(builder)[1].match(/"([a-z]+)"/g).map((s) => s.replaceAll('"', ""));
-  const table = [...source.matchAll(/\{"([a-z]+)", "[^"]+", /g)].map((m) => m[1]);
+  // The shape theme draws the kit's SDF shapes and packs no art folder.
+  const table = [...source.matchAll(/\{"([a-z]+)", "[^"]+", /g)].map((m) => m[1]).filter((id) => id !== "shape");
   assert.deepEqual(packed, table);
 });

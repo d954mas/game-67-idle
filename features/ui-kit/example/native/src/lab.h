@@ -17,6 +17,7 @@ typedef enum {
     LAB_SCENE_SETTINGS,
     LAB_SCENE_COMPONENTS,
     LAB_SCENE_THEMES,
+    LAB_SCENE_LOOKS,
     LAB_SCENE_COUNT
 } lab_scene_id_t;
 

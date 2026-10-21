@@ -69,16 +69,33 @@ set the bar: a prototype should not have to design a UI before it has a game.
   (`ui_kit_dialog_begin`: the header band, the title on it, the close on the
   corner, the body), a sheet (that plate inside the engine modal), settings
   rows (toggle, checkbox, radio, slider, dropdown) that express the engine's
-  stateful widgets in the kit's own art, the theme's scroll bar, and
+  stateful widgets in the kit's own art, a segmented pick-one row with every
+  option on the line (`ui_kit_choice_row`), the theme's scroll bar, and
   `ui_kit_color`.
+- Looks: the theme's default shapes as styles a game starts from
+  (`ui_kit_look_panel`, `_tile`, `_button`, `_header`, `_track`, `_fill`,
+  `_disc`) and composes with `ui_kit_panel_begin_styled` /
+  `ui_kit_radial_begin_styled`. `ui_kit_button_begin_styled(look)` is the
+  button plate in such a look; its states come from `ui_kit_look_state`
+  (pressed sinks an outside lip as one shape, or darkens the bottom when the
+  lip is inside; disabled is the theme's `off` fill). `ui_kit_dialog_look()`
+  plus `ui_kit_dialog_begin_styled` / `ui_kit_sheet_begin_styled` give a
+  dialog its own plate, a header band (gradient, `checker_px`) and a round or
+  square close; that body scrolls under the band when last frame's content is
+  taller than the safe area leaves it, with half a touch height of hysteresis
+  so the scissor never flickers. Looks draw as shapes under either theme, so
+  they need the uber material and `ui_kit_shape_bind`.
 - `ui_icons.h` and `assets/icons/` — the glyph set: white masks (CC0, see
   `assets/icons/README.md`) named once in an X-macro, so the enum, the pack
   builder's region names and `ui_theme_art_bind_icons` cannot drift. A game
   packs the files under one prefix and binds them in one call; a game with its
   own glyphs replaces any file with a same-named mask. `ui_kit_icon_ref` and
-  `ui_kit_icon_tinted` draw one in any colour.
-- `example/native/` — the UI Lab: a standalone engine consumer with six scenes
-  and four themes where every widget above is tried in the real renderer, and
+  `ui_kit_icon_tinted` draw one in any colour; `ui_kit_icon_rotated` also turns
+  it by a Y-up counter-clockwise angle in radians, as the radial style measures
+  angles.
+- `example/native/` — the UI Lab: a standalone engine consumer with seven
+  scenes and five themes (one of them the shape theme with no art) where every
+  widget above is tried in the real renderer, and
   the example a game copies a screen from. Opt-in; nothing in it is compiled
   into a game or the template.
 - `ui_safe_area.h` — the device's own insets, in CSS pixels.
@@ -119,7 +136,12 @@ set the bar: a prototype should not have to design a UI before it has a game.
   state tint without its easing, and the engine still moves and scales it.
   Engine widgets that take only atlas regions -- `nt_ui_slider`,
   `nt_ui_progress`, the switches and the dropdown -- keep drawing the art,
-  and their kit style accessors assert when it is not bound. With `art.white`
+  and their kit style accessors assert when it is not bound. The kit's rows
+  do not need it: without the art the toggle, checkbox and radio are kit
+  buttons holding shapes, the slider row keeps the engine slider for input and
+  draws track, fill and thumb at `nt_ui_slider_thumb_pos`, and the dropdown
+  trigger is the neutral button look over the engine's flat baseline. With the
+  art packed, the rows keep it. With `art.white`
   set to the atlas's white pixel the scroll thumb draws from it, tinted: a
   flat bar rather than the pill. `ui_kit_disc_begin` needs a FIXED width. The shapes are flat: a sheet's gloss and rivets (Studio B)
   are not drawn, so that sheet keeps its art.
@@ -146,7 +168,10 @@ becomes a raw pointer and calls the kit from there.
   still yields a finite canvas.
 - `test_ui_shape_pack` — every packed shape field reads back exactly as the
   shader unpacks it, lengths clamp inside their 12-bit field, and a zero style
-  is not the plain-sprite block.
+  is not the plain-sprite block. It also holds the rules the widgets derive:
+  a pressed look differs from idle for every lip, disabled is the off fill,
+  a body near the scroll limit does not flip its scissor frame to frame, and
+  a choice row's padded touch zones never overlap.
 - `test_ui_screen_pack` — however many labels crowd one spot, every one that
   shows lies inside the bounds and clear of the taken boxes and of each other,
   and a crowd spreads across instead of into one column.
@@ -177,7 +202,11 @@ not be replaced with generated art solely because filenames match.
 
 ## Compatibility
 
-Contract version in `feature.json`. Version 4.0 folds `UI_LAYER_BG`,
+Contract version in `feature.json`. Version 4.1 adds looks
+(`ui_kit_look_*`, `ui_kit_look_state`, `ui_kit_button_begin_styled`, the dialog
+look with its scrolling body), `ui_kit_icon_rotated`, `ui_kit_choice_row` and
+shape-drawn settings rows under a shape theme without switch or slider art,
+where those rows asserted before; nothing existing changes. Version 4.0 folds `UI_LAYER_BG`,
 `UI_LAYER_FILL` and `UI_LAYER_IMG` into one `UI_LAYER_SURFACE` and renumbers
 `UI_LAYER_ICON` (now its own layer under the text shadow), `UI_LAYER_TEXT_SHADOW`
 and `UI_LAYER_TEXT`. A surface nested in another kit surface now draws over it at

@@ -24,7 +24,7 @@ const SHOTS = join(STUDIO, "tmp", "ui-lab");
 const PYTHON = join(STUDIO, "ai_studio", "dev_environment", "python_run.mjs");
 const GEN = join(STUDIO, "features", "ui-kit", "tools", "gen_ui_kit.py");
 const THEMES = ["b", "forest", "ember", "night"];
-const SCENES = ["hud", "upgrade", "result", "settings", "components", "themes"];
+const SCENES = ["hud", "upgrade", "result", "settings", "components", "themes", "looks"];
 
 function run(cmd, args, { cwd = LAB, log } = {}) {
   const r = spawnSync(cmd, args, { cwd, encoding: "utf8" });

@@ -1,4 +1,4 @@
-/* UI Lab: the studio UI kit in the real renderer. Six scenes, four themes, a
+/* UI Lab: the studio UI kit in the real renderer. Seven scenes, five themes, a
  * command line that can open any of them at any window size, drive a scripted
  * pointer through them and write the framebuffer out, so a review is a set of
  * frames rather than a description. */
@@ -23,12 +23,13 @@
 #include "ui/nt_ui_modal.h"
 #include "window/nt_window.h"
 
+#include "features/ui_kit/ui_shape.h"
 #include "features/ui_kit/ui_theme.h"
 
 #include "lab.h"
 #include "lab_theme.h"
 #include "lab_ui_runtime.h"
-#include "ui_lab_assets.h"
+#include "ui_lab.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -87,8 +88,8 @@ static int s_exit_code; // set by a frame-loop failure; nt_app_quit() alone cann
 // Mirrors lab_theme.c's THEMES[] and lab.c's SCENES[] ids. Kept as a literal
 // copy (like this file's own usage() string already was) so an unknown id is
 // rejected before nt_engine_init, rather than after a window/GL/pack is open.
-static const char *const LAB_THEME_IDS[] = {"b", "forest", "ember", "night"};
-static const char *const LAB_SCENE_IDS[] = {"hud", "upgrade", "result", "settings", "components", "themes"};
+static const char *const LAB_THEME_IDS[] = {"b", "forest", "ember", "night", "shape"};
+static const char *const LAB_SCENE_IDS[] = {"hud", "upgrade", "result", "settings", "components", "themes", "looks"};
 
 static bool id_known(const char *id, const char *const *ids, size_t count) {
     for (size_t i = 0; i < count; ++i) {
@@ -101,9 +102,9 @@ static bool id_known(const char *id, const char *const *ids, size_t count) {
 
 static void usage(void) {
     (void)printf("Exit codes: 0 ok, 2 usage, 3 runtime failure.\n"
-                 "ui_lab [--scene hud|upgrade|result|settings|components|themes] [--theme b|forest|ember|night]\n"
+                 "ui_lab [--scene hud|upgrade|result|settings|components|themes|looks] [--theme b|forest|ember|night|shape]\n"
                  "       [--size WxH] [--frames N] [--shot file.ppm] [--tap X,Y]... [--hover X,Y] [--wheel N]\n"
-                 "Keys: 1-6 scenes, T next theme, Esc closes a sheet or returns to the HUD.\n");
+                 "Keys: 1-7 scenes, T next theme, Esc closes a sheet or returns to the HUD.\n");
 }
 
 static bool parse_pair(const char *text, char sep, float *a, float *b) {
@@ -289,7 +290,7 @@ static void handle_keys(nt_ui_context_t *ctx) {
     if (nt_ui_modal_active(ctx)) {
         return;
     }
-    static const nt_key_t SCENE_KEYS[LAB_SCENE_COUNT] = {NT_KEY_1, NT_KEY_2, NT_KEY_3, NT_KEY_4, NT_KEY_5, NT_KEY_6};
+    static const nt_key_t SCENE_KEYS[LAB_SCENE_COUNT] = {NT_KEY_1, NT_KEY_2, NT_KEY_3, NT_KEY_4, NT_KEY_5, NT_KEY_6, NT_KEY_7};
     for (int i = 0; i < LAB_SCENE_COUNT; ++i) {
         if (nt_input_key_is_pressed(SCENE_KEYS[i])) {
             lab_goto((lab_scene_id_t)i);
@@ -402,7 +403,6 @@ int main(int argc, char *argv[]) {
 
     nt_engine_config_t config = {0};
     config.app_name = "ui_lab";
-    config.version = 1;
     if (nt_engine_init(&config) != NT_OK) {
         return 1;
     }
@@ -439,8 +439,10 @@ int main(int argc, char *argv[]) {
         return 3;
     }
 
-    s_sprite_program.vs = nt_resource_request(ASSET_SHADER_ASSETS_SHADERS_SPRITE_VERT, NT_ASSET_SHADER_CODE);
-    s_sprite_program.fs = nt_resource_request(ASSET_SHADER_ASSETS_SHADERS_SPRITE_FRAG, NT_ASSET_SHADER_CODE);
+    // The kit's uber program draws every plain sprite as sprite.frag does and
+    // the kit's SDF shapes in the same batch, so it is the base material.
+    s_sprite_program.vs = nt_resource_request(ASSET_SHADER_ASSETS_SHADERS_UI_UBER_VERT, NT_ASSET_SHADER_CODE);
+    s_sprite_program.fs = nt_resource_request(ASSET_SHADER_ASSETS_SHADERS_UI_UBER_FRAG, NT_ASSET_SHADER_CODE);
     s_text_program.vs = nt_resource_request(ASSET_SHADER_ASSETS_SHADERS_SLUG_TEXT_VERT, NT_ASSET_SHADER_CODE);
     s_text_program.fs = nt_resource_request(ASSET_SHADER_ASSETS_SHADERS_SLUG_TEXT_FRAG, NT_ASSET_SHADER_CODE);
     s_radial_program.vs = nt_resource_request(ASSET_SHADER_ASSETS_SHADERS_SPRITE_RADIAL_VERT, NT_ASSET_SHADER_CODE);
@@ -450,13 +452,8 @@ int main(int argc, char *argv[]) {
 
     // Premultiplied atlas and premultiplied text output: the kit's alpha contract.
     // The sprite renderer binds the atlas page as u_texture on every draw.
-    s_sprite_material = nt_material_create(&(nt_material_create_desc_t){
-        .blend = nt_blend_alpha_premultiplied(),
-        .depth_test = false,
-        .depth_write = false,
-        .cull_mode = NT_CULL_NONE,
-        .label = "ui_lab_sprite",
-    });
+    const nt_material_create_desc_t uber = ui_kit_uber_material_desc();
+    s_sprite_material = nt_material_create(&uber);
     s_text_material = nt_material_create(&(nt_material_create_desc_t){
         .blend = nt_blend_alpha_premultiplied(),
         .depth_test = false,
@@ -483,6 +480,7 @@ int main(int argc, char *argv[]) {
     nt_resource_set_activate_time_budget(0);
 
     lab_ui_runtime_init(s_sprite_material, s_text_material, s_font, s_font_resource, s_atlas);
+    ui_kit_shape_bind(s_sprite_material, s_atlas);
     lab_theme_bind(s_atlas, s_radial_material);
     lab_init();
     // The id itself was already validated pre-init; a failure here means the

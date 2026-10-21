@@ -68,6 +68,7 @@ add_executable(${LAB_TARGET}
     src/scenes/scene_settings.c
     src/scenes/scene_components.c
     src/scenes/scene_themes.c
+    src/scenes/scene_looks.c
     "${UI_KIT_SRC}/ui_tokens.c"
     "${UI_KIT_SRC}/ui_theme.c"
     "${UI_KIT_SRC}/ui_metrics.c"
@@ -106,7 +107,7 @@ endif()
 
 # Inputs src/build_packs.c reads but that CONFIGURE_DEPENDS above cannot see,
 # because they sit outside assets/*.png: the five consumer icons, the engine
-# font, and the six shaders. Listed by hand so a change to any of them
+# font, and the shaders. Listed by hand so a change to any of them
 # invalidates the pack instead of leaving it stale.
 set(LAB_PACK_ICONS "")
 foreach(icon gold xp energy sword potion)
@@ -119,7 +120,10 @@ set(LAB_PACK_SHADERS
     "${ENGINE_DIR}/assets/shaders/slug_text.vert"
     "${ENGINE_DIR}/assets/shaders/slug_text.frag"
     "${ENGINE_DIR}/assets/shaders/sprite_radial.vert"
-    "${ENGINE_DIR}/assets/shaders/radial.frag")
+    "${ENGINE_DIR}/assets/shaders/radial.frag"
+    "${UI_KIT_DIR}/shaders/ui_uber.vert"
+    "${UI_KIT_DIR}/shaders/ui_uber.frag"
+    "${ENGINE_DIR}/assets/shaders/common/globals.glsl")
 
 add_executable(build_ui_lab_packs src/build_packs.c)
 target_include_directories(build_ui_lab_packs PRIVATE "${UI_KIT_INC}")
@@ -134,7 +138,7 @@ set_target_properties(build_ui_lab_packs PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${
 # ones every other consumer requests; the example's own files are addressed
 # absolutely through the third argument.
 add_custom_command(
-    OUTPUT "${LAB_PACK_DIR}/ui_lab.ntpack" "${LAB_GENERATED_DIR}/ui_lab_assets.h"
+    OUTPUT "${LAB_PACK_DIR}/ui_lab.ntpack" "${LAB_GENERATED_DIR}/ui_lab.h"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${LAB_PACK_DIR}" "${LAB_GENERATED_DIR}"
     COMMAND $<TARGET_FILE:build_ui_lab_packs>
         "${LAB_PACK_DIR}" "${LAB_GENERATED_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}"

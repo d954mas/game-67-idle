@@ -50,3 +50,44 @@ uint32_t ui_kit_shape_tint(uint32_t rgb, float alpha) {
     // one unit of red at zero alpha still draws nothing.
     return packed != 0U ? packed : 1U;
 }
+
+static uint32_t scale_rgb(uint32_t rgb, float k) {
+    uint32_t out = 0U;
+    for (uint32_t shift = 0U; shift < 24U; shift += 8U) {
+        const float c = (float)((rgb >> shift) & 0xFFU) * k;
+        out |= (uint32_t)(c + 0.5F) << shift;
+    }
+    return out;
+}
+
+ui_kit_panel_style_t ui_kit_look_state(const ui_kit_panel_style_t *look, ui_kit_look_state_t state, uint32_t off_rgb) {
+    ui_kit_panel_style_t s = *look;
+    if (state == UI_KIT_LOOK_PRESSED) {
+        if (s.lip_h > 0.0F && !s.lip_inside) {
+            s.press = 1.0F;
+        } else {
+            s.bottom_rgb = scale_rgb(s.bottom_rgb, 0.88F);
+        }
+    } else if (state == UI_KIT_LOOK_DISABLED) {
+        s.top_rgb = off_rgb;
+        s.bottom_rgb = off_rgb;
+        s.lip_rgb = scale_rgb(off_rgb, 0.72F);
+        s.press = 0.0F;
+    }
+    return s;
+}
+
+bool ui_kit_scroll_engaged(bool was, float content_h, float room, float band) {
+    return was ? content_h > room - band : content_h > room;
+}
+
+float ui_kit_choice_cells(int count, float width, float gap, float hit_pad, ui_kit_cell_t *out) {
+    if (count <= 0) { return 0.0F; }
+    const float w = (width - gap * (float)(count - 1)) / (float)count;
+    for (int i = 0; i < count; ++i) {
+        out[i] = (ui_kit_cell_t){.x = (w + gap) * (float)i, .w = w > 0.0F ? w : 0.0F};
+    }
+    const float half = gap * 0.5F;
+    const float pad = hit_pad < half ? hit_pad : half;
+    return pad > 0.0F ? floorf(pad) : 0.0F;
+}

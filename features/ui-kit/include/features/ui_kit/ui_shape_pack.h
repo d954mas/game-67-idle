@@ -2,8 +2,9 @@
 #define FEATURES_UI_KIT_UI_SHAPE_PACK_H
 
 // The styles of the kit's SDF shapes and their packing into the uber shader's
-// per-vertex block. Pure arithmetic with no engine types, so the packing is
-// testable without a window. The drawing half is ui_shape.h.
+// per-vertex block, plus the few layout rules the widgets derive from them.
+// Pure arithmetic with no engine types, so all of it is testable without a
+// window. The drawing half is ui_shape.h.
 //
 // Sizes are UI units, the same units a Clay layout is in; colours are 0xRRGGBB
 // and opaque, the shape's opacity being `alpha` alone, so a fade stays one
@@ -71,5 +72,36 @@ void ui_kit_pack_panel(const ui_kit_panel_style_t *style, ui_kit_shape_block_t *
 void ui_kit_pack_radial(const ui_kit_radial_style_t *style, ui_kit_shape_block_t *out);
 // The top colour at the style's alpha as the engine's packed tint (0xAABBGGRR).
 uint32_t ui_kit_shape_tint(uint32_t top_rgb, float alpha);
+
+// ---- rules the ui_kit.h widgets build on, kept here to stay testable ----
+
+typedef enum {
+    UI_KIT_LOOK_IDLE = 0,
+    UI_KIT_LOOK_HOVER,
+    UI_KIT_LOOK_PRESSED,
+    UI_KIT_LOOK_DISABLED
+} ui_kit_look_state_t;
+
+// A button's look in one state, derived from its idle look. Pressed sinks the
+// face onto a lip drawn outside it (one shape, no second plate); with the lip
+// inside, or none, the engine button moves the box and the bottom colour drops
+// 12%. Disabled is the flat `off_rgb` (0xRRGGBB) with its lip a step darker.
+// Hover is the idle look: the engine button eases the scale.
+ui_kit_panel_style_t ui_kit_look_state(const ui_kit_panel_style_t *look, ui_kit_look_state_t state, uint32_t off_rgb);
+
+// Whether a body scrolls this frame, from its content height of the last one.
+// It starts past `room` and stops only below `room - band`: a scroll bar or a
+// rewrap that moves the content by less than `band` cannot flip the scissor
+// on and off every frame.
+bool ui_kit_scroll_engaged(bool was, float content_h, float room, float band);
+
+// The cells of a segmented row: `count` equal cells across `width`, `gap`
+// apart. Returns the horizontal hit padding each cell may keep, `hit_pad` at
+// most, so no cell's touch zone reaches into its neighbour's.
+typedef struct {
+    float x;
+    float w;
+} ui_kit_cell_t;
+float ui_kit_choice_cells(int count, float width, float gap, float hit_pad, ui_kit_cell_t *out);
 
 #endif

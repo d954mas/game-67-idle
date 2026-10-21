@@ -90,7 +90,11 @@ static const lab_theme_desc_t THEMES[] = {
     {"forest", "Forest", &FOREST},
     {"ember", "Ember", &EMBER},
     {"night", "Night", &NIGHT},
+    // Studio B again, drawn as the kit's SDF shapes with none of the art: the
+    // look a game gets from ui_theme_art_t.shapes.
+    {"shape", "Shapes", NULL},
 };
+#define SHAPE_THEME 4
 #define THEME_COUNT ((int)(sizeof THEMES / sizeof THEMES[0]))
 
 static const char *const REGIONS[] = {"panel",           "button",         "tile",         "slider_track", "slider_fill",
@@ -122,8 +126,14 @@ void lab_theme_bind(nt_resource_t ui_atlas, nt_material_t radial) {
     s_ui_atlas = ui_atlas;
     memcpy(s_themes, THEMES, sizeof THEMES);
     s_themes[0].tokens = ui_tokens_studio_b();
+    s_themes[SHAPE_THEME].tokens = ui_tokens_studio_b();
     for (int i = 0; i < THEME_COUNT; ++i) {
         const char *id = s_themes[i].id;
+        if (i == SHAPE_THEME) {
+            s_art[i] = (ui_theme_art_t){.radial = radial, .shapes = true, .white = nt_atlas_ref(ui_atlas, nt_hash64_str("_white").value)};
+            ui_theme_art_bind_icons(&s_art[i], ui_atlas, "kit");
+            continue;
+        }
         s_art[i] = (ui_theme_art_t){
             .panel = region_ref(id, "panel"),
             .button = region_ref(id, "button"),
@@ -160,7 +170,7 @@ bool lab_theme_regions_ready(void) {
     s_checked = true;
     s_regions_ok = true;
     for (int t = 0; t < THEME_COUNT; ++t) {
-        for (int r = 0; r < REGION_COUNT; ++r) {
+        for (int r = 0; r < REGION_COUNT && t != SHAPE_THEME; ++r) {
             if (nt_atlas_find_region(s_ui_atlas, region_hash(s_themes[t].id, REGIONS[r])) == NT_ATLAS_INVALID_REGION) {
                 nt_log_error("ui_lab: atlas has no region ui/%s/%s", s_themes[t].id, REGIONS[r]);
                 s_regions_ok = false;

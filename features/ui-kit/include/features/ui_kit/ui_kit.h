@@ -25,6 +25,7 @@
 #include "ui/nt_ui_slider.h"
 
 #include "features/ui_kit/ui_metrics.h"
+#include "features/ui_kit/ui_shape_pack.h"
 #include "features/ui_kit/ui_theme.h"
 
 #include <stdbool.h>
@@ -91,6 +92,33 @@ void ui_kit_button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t
                          const nt_ui_events_cfg_t *cfg);
 bool ui_kit_button_end(nt_ui_context_t *ctx);
 
+// The same plate in a look of the caller's, drawn as a shape under either
+// theme (needs ui_kit_shape_bind). The state looks come from
+// ui_kit_look_state: a press sinks an outside lip in place of the engine's
+// offset, a disabled button takes the theme's off fill. Close with
+// ui_kit_button_end.
+void ui_kit_button_begin_styled(nt_ui_context_t *ctx, uint32_t id, const ui_kit_panel_style_t *look, bool enabled,
+                                const nt_ui_events_cfg_t *cfg);
+
+// ---- looks ----------------------------------------------------------------
+
+// The shapes the kit draws its own surfaces with under the shape theme, as
+// styles a game starts from and changes (a gradient, a gloss, a checker, a
+// radius) before handing them to ui_kit_panel_begin_styled,
+// ui_kit_radial_begin_styled or ui_kit_button_begin_styled. They read the
+// current theme, so they follow a repaint; tints are 0xAABBGGRR.
+ui_kit_panel_style_t ui_kit_look_panel(void);
+ui_kit_panel_style_t ui_kit_look_tile(void);
+// The button plate, which is also ui_kit_plate_begin's.
+ui_kit_panel_style_t ui_kit_look_button(uint32_t tint);
+// The band across the top of a titled plate: round on top only.
+ui_kit_panel_style_t ui_kit_look_header(void);
+// The meter's recessed track and the pill inside it.
+ui_kit_panel_style_t ui_kit_look_track(void);
+ui_kit_panel_style_t ui_kit_look_fill(uint32_t tint);
+// The disc `size` UI units across: its rim grows with it.
+ui_kit_radial_style_t ui_kit_look_disc(uint32_t tint, float size);
+
 // A meter: the kit's recessed track with a tinted pill riding inside it, drawn
 // to fill the element the caller has open. `ratio` is clamped to 0..1,
 // `fill_tint` is 0xAABBGGRR, and the two sizes are UI units.
@@ -154,6 +182,10 @@ void ui_kit_icon(nt_ui_context_t *ctx, nt_atlas_region_ref_t *icon, float size);
 // The same in a colour: the kit's glyphs are white masks, so ink on a light
 // plate and white on an action fill are one region.
 void ui_kit_icon_tinted(nt_ui_context_t *ctx, nt_atlas_region_ref_t *icon, float size, uint32_t tint);
+// The same in a colour and turned by `angle`: Y-up radians, counter-clockwise,
+// about the icon's centre, as the radial style measures it. 0xFFFFFFFF = the
+// glyph as drawn. The turn is render-only; the layout box stays square.
+void ui_kit_icon_rotated(nt_ui_context_t *ctx, nt_atlas_region_ref_t *icon, float size, uint32_t tint, float angle);
 // The theme's glyph by name, for `ui_kit_icon*` and the icon button. The
 // pointer is into g_ui_theme, where the engine memoizes the resolved region.
 nt_atlas_region_ref_t *ui_kit_icon_ref(ui_icon_t icon);
@@ -179,6 +211,31 @@ bool ui_kit_dialog_begin(nt_ui_context_t *ctx, const char *id, const char *title
                          Clay_SizingAxis w, Clay_SizingAxis h);
 void ui_kit_dialog_end(nt_ui_context_t *ctx);
 
+// A dialog in looks of the caller's, drawn as shapes under either theme.
+// `header.checker_px` lays the checker over the band. `close` NULL is the round
+// neutral close on the corner; set, the close is a square button in that look
+// inside the band's right end, its glyph in the title colour. `title` NULL is
+// the theme's header_title.
+typedef struct {
+    ui_kit_panel_style_t panel;
+    ui_kit_panel_style_t header;
+    const ui_kit_panel_style_t *close;
+    const nt_ui_label_style_t *title;
+} ui_kit_dialog_look_t;
+
+// The theme's own dialog as a look to change: panel, header band, round close.
+ui_kit_dialog_look_t ui_kit_dialog_look(void);
+
+// ui_kit_dialog_begin in `look`. Its body also scrolls when its content of the
+// last frame is taller than the safe area leaves for it, under the header,
+// whose close stays put; a body that fits has no scissor. The decision holds
+// within half a touch height of the limit, so the scissor never flickers.
+// Close with ui_kit_dialog_end. An engine slider in a scrolling body inside a
+// sheet trips the walker (see ui_kit_scrim): keep a slider dialog a scrimmed
+// panel, not a sheet.
+bool ui_kit_dialog_begin_styled(nt_ui_context_t *ctx, const char *id, const char *title, const char *close_label,
+                                Clay_SizingAxis w, Clay_SizingAxis h, const ui_kit_dialog_look_t *look);
+
 // A sheet: the engine modal (backdrop, occluder, Esc and backdrop close,
 // open/close tween) carrying the kit's panel with a title row. Declare it at
 // ROOT level, never inside a scroll or clip. `open` is the caller's bool; the
@@ -190,19 +247,26 @@ void ui_kit_dialog_end(nt_ui_context_t *ctx);
 bool ui_kit_sheet_begin(nt_ui_context_t *ctx, const char *id, const char *title, const char *close_label, bool *open,
                         float w, float h);
 void ui_kit_sheet_end(nt_ui_context_t *ctx);
+// The sheet with its dialog in `look` (ui_kit_dialog_begin_styled); close it
+// with ui_kit_sheet_end.
+bool ui_kit_sheet_begin_styled(nt_ui_context_t *ctx, const char *id, const char *title, const char *close_label,
+                               bool *open, float w, float h, const ui_kit_dialog_look_t *look);
 // Drops the sheet's tween state after it closed for good (a screen transition).
 void ui_kit_sheet_clear(nt_ui_context_t *ctx, const char *id);
 
 // The engine toggle, checkbox and radio in the kit's own art (theme fields
 // `toggle`, `checkbox`, `radio`). Pointers, not copies: the engine memoizes
-// the resolved atlas regions into the style it is handed.
+// the resolved atlas regions into the style it is handed. A shape theme that
+// packs no switch art has no such style; its rows below draw shapes instead.
 nt_ui_checkbox_style_t *ui_kit_toggle_style(void);
 nt_ui_checkbox_style_t *ui_kit_checkbox_style(void);
 nt_ui_checkbox_style_t *ui_kit_radio_style(void);
 
 // Settings rows, one touch height each. The label fills the row; the control
 // sits at its end (toggle) or its start (checkbox, radio). Each returns true
-// the frame its value changed.
+// the frame its value changed. Under a shape theme without the switch art the
+// controls are kit buttons holding shapes: a pill with its knob, a box with
+// the check glyph, a ring with a dot.
 bool ui_kit_toggle_row(nt_ui_context_t *ctx, const char *id, const char *label, bool *value, bool enabled);
 bool ui_kit_checkbox_row(nt_ui_context_t *ctx, const char *id, const char *label, bool *value, bool enabled);
 bool ui_kit_radio_row(nt_ui_context_t *ctx, const char *id, const char *label, int *selected, int my_value, bool enabled);
@@ -210,15 +274,25 @@ bool ui_kit_radio_row(nt_ui_context_t *ctx, const char *id, const char *label, i
 // A slider row the way the studio's settings screens lay it out: caption
 // beside the track across a desk, above it in a hand. The caller formats the
 // caption ("Музыка: 70%"); `row_width` is the row's own width in UI units.
-// Returns true the frame the value changed.
+// Returns true the frame the value changed. Under a shape theme without the
+// slider art the engine slider keeps the input and the kit draws the track,
+// the fill and the thumb, the thumb where the engine reports it.
 bool ui_kit_slider_row(nt_ui_context_t *ctx, const char *id, const char *caption, float *value, bool enabled,
                        float row_width);
 
 // A pick-one row: the label fills the row, the trigger names the current
 // option and opens the list of all of them. `open` is the caller's bool for the
 // list; `list_width` is the trigger's width in UI units. Returns true the frame
-// `*selected` changed.
+// `*selected` changed. Under a shape theme without the button art the trigger
+// is the neutral button look with the down glyph; the list stays the engine's
+// flat panel.
 bool ui_kit_dropdown_row(nt_ui_context_t *ctx, const char *id, const char *label, const char *const *options,
                          int count, int *selected, bool *open, float list_width);
+
+// A pick-one row with every option on the line: the label, then `count`
+// equal segments, the picked one in the confirm look. Segments keep their touch
+// zones apart (ui_kit_choice_cells). Returns true the frame `*selected` changed.
+bool ui_kit_choice_row(nt_ui_context_t *ctx, const char *id, const char *label, const char *const *options, int count,
+                       int *selected, bool enabled);
 
 #endif /* FEATURE_UI_KIT_WIDGETS_H */

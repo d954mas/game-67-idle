@@ -3,7 +3,9 @@
 #include "unity.h"
 
 #include <math.h>
+#include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -112,6 +114,83 @@ static void test_clear_black_is_not_untinted(void) {
     TEST_ASSERT_EQUAL_UINT32(0U, tint >> 24U);
 }
 
+static bool same_look(const ui_kit_panel_style_t *a, const ui_kit_panel_style_t *b) {
+    ui_kit_shape_block_t pa;
+    ui_kit_shape_block_t pb;
+    ui_kit_pack_panel(a, &pa);
+    ui_kit_pack_panel(b, &pb);
+    return memcmp(&pa, &pb, sizeof pa) == 0 && a->top_rgb == b->top_rgb && a->alpha == b->alpha;
+}
+
+/* A press has to show on every look a game can hand the button, and a
+   disabled one is the off fill whatever colour it started in. */
+static void test_look_states(void) {
+    const uint32_t off = 0x8A8F96U;
+    const ui_kit_panel_style_t looks[] = {
+        {.radius = {12, 12, 12, 12}, .top_rgb = 0x66CC33U, .bottom_rgb = 0x449922U, .lip_h = 6.0F, .lip_rgb = 0x225511U,
+         .alpha = 1.0F},
+        {.radius = {16, 16, 16, 16}, .top_rgb = 0xFFFFFFU, .bottom_rgb = 0xFFFFFFU, .lip_h = 4.0F, .lip_inside = true,
+         .outline_w = 3.0F, .alpha = 1.0F},
+        {.radius = {8, 8, 8, 8}, .top_rgb = 0x3377FFU, .bottom_rgb = 0x3377FFU, .gloss_h = 6.0F, .gloss_a = 0.3F,
+         .alpha = 1.0F},
+    };
+    for (size_t i = 0; i < sizeof looks / sizeof looks[0]; ++i) {
+        const ui_kit_panel_style_t idle = ui_kit_look_state(&looks[i], UI_KIT_LOOK_IDLE, off);
+        const ui_kit_panel_style_t hover = ui_kit_look_state(&looks[i], UI_KIT_LOOK_HOVER, off);
+        const ui_kit_panel_style_t pressed = ui_kit_look_state(&looks[i], UI_KIT_LOOK_PRESSED, off);
+        const ui_kit_panel_style_t disabled = ui_kit_look_state(&looks[i], UI_KIT_LOOK_DISABLED, off);
+        TEST_ASSERT_TRUE(same_look(&idle, &looks[i]));
+        TEST_ASSERT_TRUE(same_look(&hover, &idle));
+        TEST_ASSERT_FALSE(same_look(&pressed, &idle));
+        TEST_ASSERT_EQUAL_HEX32(off, disabled.top_rgb);
+        TEST_ASSERT_EQUAL_HEX32(off, disabled.bottom_rgb);
+        TEST_ASSERT_TRUE(disabled.press == 0.0F);
+    }
+    /* An outside lip presses as one shape: the face sinks, the colours stay. */
+    const ui_kit_panel_style_t sunk = ui_kit_look_state(&looks[0], UI_KIT_LOOK_PRESSED, off);
+    TEST_ASSERT_TRUE(sunk.press == 1.0F);
+    TEST_ASSERT_EQUAL_HEX32(looks[0].bottom_rgb, sunk.bottom_rgb);
+}
+
+/* Content that sits inside the hysteresis band keeps whatever it had, so a
+   body near the limit never flips its scissor from frame to frame. */
+static void test_scroll_hysteresis(void) {
+    const float room = 300.0F;
+    const float band = 20.0F;
+    TEST_ASSERT_FALSE(ui_kit_scroll_engaged(false, 299.0F, room, band));
+    TEST_ASSERT_TRUE(ui_kit_scroll_engaged(false, 301.0F, room, band));
+    TEST_ASSERT_TRUE(ui_kit_scroll_engaged(true, 290.0F, room, band));
+    TEST_ASSERT_FALSE(ui_kit_scroll_engaged(true, 279.0F, room, band));
+    bool on = false;
+    for (int frame = 0; frame < 16; ++frame) {
+        const float content = (frame % 2 == 0) ? 305.0F : 288.0F;
+        const bool next = ui_kit_scroll_engaged(on, content, room, band);
+        if (frame > 0) { TEST_ASSERT_TRUE(next); }
+        on = next;
+    }
+}
+
+/* Every cell keeps a positive width, the row spans the whole width, and no
+   cell's padded touch zone reaches its neighbour's. */
+static void test_choice_cells_do_not_overlap(void) {
+    const float gaps[] = {0.0F, 3.0F, 8.0F, 15.0F, 40.0F};
+    for (int count = 1; count <= 6; ++count) {
+        for (size_t g = 0; g < sizeof gaps / sizeof gaps[0]; ++g) {
+            ui_kit_cell_t cells[6];
+            const float width = 360.0F;
+            const float pad = ui_kit_choice_cells(count, width, gaps[g], 8.0F, cells);
+            TEST_ASSERT_TRUE(pad >= 0.0F && pad <= 8.0F);
+            for (int i = 0; i < count; ++i) {
+                TEST_ASSERT_TRUE(cells[i].w > 0.0F);
+                if (i + 1 < count) {
+                    TEST_ASSERT_TRUE(cells[i].x + cells[i].w + pad <= cells[i + 1].x - pad + 0.001F);
+                }
+            }
+            TEST_ASSERT_TRUE(fabsf(cells[count - 1].x + cells[count - 1].w - width) < 0.01F);
+        }
+    }
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_panel_fields_round_trip);
@@ -120,5 +199,8 @@ int main(void) {
     RUN_TEST(test_zero_style_is_not_a_sprite);
     RUN_TEST(test_clear_black_is_not_untinted);
     RUN_TEST(test_flags_pack_as_bits);
+    RUN_TEST(test_look_states);
+    RUN_TEST(test_scroll_hysteresis);
+    RUN_TEST(test_choice_cells_do_not_overlap);
     return UNITY_END();
 }

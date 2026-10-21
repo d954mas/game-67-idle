@@ -29,4 +29,7 @@ void scene_components_leave(nt_ui_context_t *ctx);
 void scene_themes_build(nt_ui_context_t *ctx);
 void scene_themes_leave(nt_ui_context_t *ctx);
 
+void scene_looks_build(nt_ui_context_t *ctx);
+void scene_looks_leave(nt_ui_context_t *ctx);
+
 #endif /* UI_LAB_SCENES_H */
