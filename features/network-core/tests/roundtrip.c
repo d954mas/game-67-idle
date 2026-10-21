@@ -20,6 +20,7 @@ typedef SOCKET raw_socket_t;
 #define sleep_ms(ms) Sleep(ms)
 #else
 #include <arpa/inet.h>
+#include <errno.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -111,7 +112,7 @@ static void client_close(void *user, uint16_t code) {
 /* A peer made of a bare socket: it completes the upgrade and HELLO like a
    real client and then answers nothing, which no library client will do
    for us since every one of them pongs by itself. */
-static raw_socket_t raw_peer_connect(uint16_t port) {
+static raw_socket_t raw_peer_connect_from(uint16_t port, uint32_t source) {
 #if defined(_WIN32)
     WSADATA wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
@@ -121,6 +122,11 @@ static raw_socket_t raw_peer_connect(uint16_t port) {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof addr);
     addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(source);
+    if (bind(sock, (struct sockaddr *)&addr, sizeof addr) != 0) {
+        raw_close(sock);
+        return RAW_INVALID;
+    }
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if (connect(sock, (struct sockaddr *)&addr, sizeof addr) != 0) {
@@ -138,6 +144,8 @@ static raw_socket_t raw_peer_connect(uint16_t port) {
     return sock;
 }
 
+static raw_socket_t raw_peer_connect(uint16_t port) { return raw_peer_connect_from(port, INADDR_LOOPBACK); }
+
 /* True once the 101 has arrived, however it was split; the server must be
    serviced between calls. `response`/`got` accumulate across calls. */
 static bool raw_peer_upgraded(raw_socket_t sock, char *response, size_t capacity, int *got) {
@@ -151,6 +159,73 @@ static bool raw_peer_upgraded(raw_socket_t sock, char *response, size_t capacity
     *got += part;
     response[*got] = '\0';
     return strstr(response, " 101 ") != NULL;
+}
+
+/* The code of the first frame after the 101 if it is a close, else 0: a
+   refused socket hears nothing else before it, and both may share a read. */
+static uint16_t raw_peer_close_code(const char *response, int got) {
+    const char *end = strstr(response, "\r\n\r\n");
+    if (end == NULL) { return 0U; }
+    const uint8_t *frame = (const uint8_t *)end + 4;
+    if ((const char *)frame + 4 > response + got || frame[0] != 0x88U) { return 0U; }
+    return (uint16_t)((frame[2] << 8) | frame[3]);
+}
+
+typedef struct raw_peer_t {
+    raw_socket_t sock;
+    char response[512];
+    int got;
+    bool upgraded;
+} raw_peer_t;
+
+static void raw_peers_open(raw_peer_t *peers, uint32_t count, uint16_t port, uint32_t source) {
+    for (uint32_t index = 0U; index < count; ++index) {
+        memset(&peers[index], 0, sizeof peers[index]);
+        peers[index].sock = raw_peer_connect_from(port, source);
+        CHECK(peers[index].sock != RAW_INVALID);
+    }
+}
+
+/* Services the server and reads every peer for `seconds`, or until all are upgraded. */
+static bool raw_peers_pump(net_ws_server_t *server, raw_peer_t *peers, uint32_t count, double seconds,
+    bool until_upgraded) {
+    const double end = net_ws_client_clock() + seconds;
+    bool all = false;
+    while (net_ws_client_clock() < end && !(until_upgraded && all)) {
+        net_ws_server_service(server, 1U);
+        all = true;
+        for (uint32_t index = 0U; index < count; ++index) {
+            raw_peer_t *peer = &peers[index];
+            peer->upgraded = raw_peer_upgraded(peer->sock, peer->response, sizeof peer->response, &peer->got) ||
+                peer->upgraded;
+            all = all && peer->upgraded;
+        }
+    }
+    return all;
+}
+
+static void raw_peers_close(raw_peer_t *peers, uint32_t count) {
+    for (uint32_t index = 0U; index < count; ++index) { raw_close(peers[index].sock); }
+}
+
+/* False only when the host has no such loopback alias (127.0.0.2 is not
+   local on every OS); any other failure is a real one. */
+static bool loopback_alias_available(uint32_t host) {
+    raw_socket_t sock = socket(AF_INET, SOCK_STREAM, 0);
+    CHECK(sock != RAW_INVALID);
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof addr);
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(host);
+    const int bound = bind(sock, (struct sockaddr *)&addr, sizeof addr);
+#if defined(_WIN32)
+    const bool missing = bound != 0 && WSAGetLastError() == WSAEADDRNOTAVAIL;
+#else
+    const bool missing = bound != 0 && errno == EADDRNOTAVAIL;
+#endif
+    raw_close(sock);
+    CHECK(bound == 0 || missing);
+    return !missing;
 }
 
 static bool raw_peer_send_hello(raw_socket_t sock, uint32_t version) {
@@ -410,6 +485,118 @@ static void test_hmac(void) {
     CHECK(net_read_u64(&reader) == 0x0102030405060708ULL && net_reader_complete(&reader));
     net_reader_init(&reader, buffer, 7U);
     CHECK(net_read_u64(&reader) == 0U && !reader.ok);
+}
+
+/* A venue behind one NAT reconnects every seat at once (a room restart
+   sends them all back together): sockets from one address that have not
+   yet said HELLO wait their turn instead of being refused as full. */
+static void test_one_address_reconnects(const net_ws_server_config_t *base) {
+    server_log_t log = {0};
+    net_ws_server_config_t config = *base;
+    config.max_clients = 8U;
+    config.handshake_timeout_ms = 5000U;
+    config.user = &log;
+    net_ws_server_t *server = net_ws_server_create(&config);
+    CHECK(server != NULL);
+    log.server = server;
+    raw_peer_t peers[5];
+    raw_peers_open(peers, 5U, net_ws_server_port(server), INADDR_LOOPBACK);
+    CHECK(raw_peers_pump(server, peers, 5U, WAIT_S, true));
+    raw_peers_pump(server, peers, 5U, 0.3, false);
+    for (uint32_t index = 0U; index < 5U; ++index) {
+        CHECK(raw_peer_close_code(peers[index].response, peers[index].got) == 0U);
+        CHECK(raw_peer_send_hello(peers[index].sock, VERSION));
+    }
+    pump_until(server, NULL, log.connects == 5U);
+    CHECK(log.connects == 5U && net_ws_server_client_count(server) == 5U);
+    raw_peers_close(peers, 5U);
+    net_ws_server_destroy(server);
+}
+
+/* One address holds at most max_clients of the 2 x max_clients waiting
+   room: a second address fills the rest, a third is refused, and silent
+   sockets leave at the handshake timeout. */
+static void test_waiting_room_bound(const net_ws_server_config_t *base) {
+    if (!loopback_alias_available(INADDR_LOOPBACK + 1U) || !loopback_alias_available(INADDR_LOOPBACK + 2U)) {
+        printf("waiting-room bound skipped: no 127.0.0.2/127.0.0.3 on this host\n");
+        return;
+    }
+    server_log_t log = {0};
+    net_ws_server_config_t config = *base;
+    config.max_clients = 4U;
+    config.handshake_timeout_ms = 2000U;
+    config.user = &log;
+    net_ws_server_t *server = net_ws_server_create(&config);
+    CHECK(server != NULL);
+    log.server = server;
+    const uint16_t port = net_ws_server_port(server);
+    /* A and B spend the whole accept burst (2 x max_clients); C waits for a
+       token, which refills every 1 / max_clients seconds. */
+    raw_peer_t peers[9];
+    raw_peers_open(peers, 4U, port, INADDR_LOOPBACK);
+    raw_peers_open(peers + 4, 4U, port, INADDR_LOOPBACK + 1U);
+    CHECK(raw_peers_pump(server, peers, 8U, WAIT_S, true));
+    raw_peers_pump(server, peers, 8U, 0.4, false);
+    raw_peers_open(peers + 8, 1U, port, INADDR_LOOPBACK + 2U);
+    CHECK(raw_peers_pump(server, peers, 9U, WAIT_S, true));
+    raw_peers_pump(server, peers, 9U, 0.3, false);
+    for (uint32_t index = 0U; index < 8U; ++index) {
+        CHECK(raw_peer_close_code(peers[index].response, peers[index].got) == 0U);
+    }
+    CHECK(raw_peer_close_code(peers[8].response, peers[8].got) == NET_CLOSE_FULL);
+    /* The handshake timeout, one sweep, and slack. */
+    pump_for(server, NULL, 2.0 + 0.25 + 0.5);
+    client_log_t clog = {0};
+    net_ws_client_t *client = connect_client(port, VERSION, &clog, 256U);
+    pump_open(server, &log, client, &clog);
+    CHECK(clog.closes == 0U);
+    net_ws_client_destroy(client);
+    raw_peers_close(peers, 9U);
+    net_ws_server_destroy(server);
+}
+
+/* A full room of real clients dialing from one address at the same
+   instant all get in. */
+static void test_burst_enters(const net_ws_server_config_t *base) {
+    enum { BURST = 32 };
+    server_log_t log = {0};
+    net_ws_server_config_t config = *base;
+    config.max_clients = BURST;
+    config.user = &log;
+    net_ws_server_t *server = net_ws_server_create(&config);
+    CHECK(server != NULL);
+    log.server = server;
+    char url[64];
+    snprintf(url, sizeof url, "ws://127.0.0.1:%u/", (unsigned)net_ws_server_port(server));
+    client_log_t logs[BURST];
+    net_ws_client_t *clients[BURST];
+    memset(logs, 0, sizeof logs);
+    for (uint32_t index = 0U; index < BURST; ++index) {
+        const net_ws_client_config_t cconfig = {
+            .url = url, .protocol_version = VERSION, .max_message_bytes = MAX_MESSAGE,
+            .receive_queue_bytes = 1024U, .send_queue_bytes = 256U, .user = &logs[index],
+            .on_open = client_open, .on_message = client_message, .on_close = client_close,
+        };
+        clients[index] = net_ws_client_create(&cconfig);
+        CHECK(clients[index] != NULL);
+    }
+    uint32_t opens = 0U;
+    uint32_t closes = 0U;
+    const double end = net_ws_client_clock() + 10.0;
+    while ((opens < BURST || log.connects < BURST) && closes == 0U && net_ws_client_clock() < end) {
+        net_ws_server_service(server, 1U);
+        opens = 0U;
+        closes = 0U;
+        for (uint32_t index = 0U; index < BURST; ++index) {
+            net_ws_client_service(clients[index], 0U);
+            opens += logs[index].opens;
+            closes += logs[index].closes;
+        }
+    }
+    CHECK(opens == BURST && closes == 0U && log.connects == BURST);
+    CHECK(net_ws_server_client_count(server) == BURST);
+    for (uint32_t index = 0U; index < BURST; ++index) { net_ws_client_destroy(clients[index]); }
+    net_ws_server_destroy(server);
 }
 
 int main(void) {
@@ -808,6 +995,10 @@ int main(void) {
         pump_until(plain, NULL, net_ws_server_client_count(plain) == 0U);
         net_ws_server_destroy(plain);
     }
+
+    test_one_address_reconnects(&sconfig);
+    test_waiting_room_bound(&sconfig);
+    test_burst_enters(&sconfig);
 
     /* Room capacity is enforced per connection. */
     client_log_t alog = {0};

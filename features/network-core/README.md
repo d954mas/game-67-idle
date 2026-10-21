@@ -53,9 +53,11 @@ consumer.
   `4 * max_clients + 8`, so a connect flood costs the service thread one
   handshake per seat per second and never the process's fd limit. A slot
   (and the client id) is earned by HELLO: sockets upgraded but not yet past
-  HELLO wait in a room of `max_clients`, at most four of them from one
-  address, so holding open connections without HELLO takes no seat and
-  one machine cannot fill the waiting room. A socket that closes before its
+  HELLO wait in a room of `2 * max_clients`, at most `max_clients` of them
+  from one address, so holding open connections without HELLO takes no
+  seat, every seat behind one NAT can reconnect at once, and one address
+  alone cannot fill the waiting room (a few addresses together still can;
+  stopping that is the edge's job). A socket that closes before its
   upgrade gives its address's share back at once. Client ids are never
   reused within a
   server lifetime. HELLO may carry a ticket of up to

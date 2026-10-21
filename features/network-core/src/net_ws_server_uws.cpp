@@ -64,8 +64,6 @@ double now_seconds() {
     return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-/* Sockets one address may hold in the waiting room before HELLO. */
-constexpr uint32_t PENDING_PER_PEER = 4U;
 /* The sweep that runs handshake, close and liveness deadlines. */
 constexpr int SWEEP_MS = 250;
 
@@ -103,8 +101,9 @@ struct net_ws_server_t {
     };
     std::vector<Slot> slots;
     /* Sockets upgraded but not yet past HELLO: they hold no slot, so a crowd
-       of them cannot take the seats, and no more than a few come from one
-       address, so one machine cannot fill the waiting room. */
+       of them cannot take the seats. The room is 2 x max_clients and one
+       address holds at most max_clients of it, so every seat behind one NAT
+       can reconnect at once while that address alone cannot fill the room. */
     std::vector<Peer *> pending;
     std::vector<Peer *> closing;
     uint32_t client_count = 0U;
@@ -164,10 +163,10 @@ void pending_remove(net_ws_server_t *server, const Peer *peer) {
 }
 
 bool pending_admit(net_ws_server_t *server, Peer *peer) {
-    if (server->pending.size() >= server->config.max_clients) { return false; }
+    if (server->pending.size() >= size_t{2} * server->config.max_clients) { return false; }
     uint32_t same = 0U;
     for (const Peer *other : server->pending) { same += other->address == peer->address ? 1U : 0U; }
-    if (same >= PENDING_PER_PEER) { return false; }
+    if (same >= server->config.max_clients) { return false; }
     server->pending.push_back(peer);
     return true;
 }
@@ -617,7 +616,7 @@ net_ws_server_t *net_ws_server_create(const net_ws_server_config_t *config) {
     server->accept_tokens = 2.0 * static_cast<double>(config->max_clients);
     server->accept_at = now_seconds();
     server->slots.assign(config->max_clients, {nullptr, nullptr, 0U});
-    server->pending.reserve(config->max_clients);
+    server->pending.reserve(size_t{2} * config->max_clients);
     server->scratch.resize(config->send_queue_bytes);
     struct us_loop_t *loop = thread_loop();
     const bool built = tls ? build<true>(server) : build<false>(server);
