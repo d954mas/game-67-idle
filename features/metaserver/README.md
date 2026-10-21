@@ -135,7 +135,8 @@ optional `BACKUP_REMOTE` and `BACKUP_HEARTBEAT_URL`; secret `rclone.conf`
 (may be empty without a remote); volume `/backups`. A lock in `/backups`
 serialises dumps and checks across containers. The bucket's lifecycle and
 lock rules expire the copies, so the token needs only Object Read & Write on
-that one bucket and never deletes.
+that one bucket and never deletes. Such a token cannot create buckets, so its
+rclone remote sets `no_check_bucket = true`, or every copy fails with 403.
 
 Restore, with every writer stopped: `pg_restore -d <db> --single-transaction
 --clean --if-exists <file>` as the database owner, then the game's `migrate`
