@@ -34,9 +34,9 @@ void scene_settings_leave(nt_ui_context_t *ctx) {
 }
 
 static void volume_row(nt_ui_context_t *ctx, const char *id, const char *name, float *value, float row_width) {
-    char caption[64];
-    (void)snprintf(caption, sizeof caption, "%s: %d%%", name, (int)(*value * 100.0F + 0.5F));
-    (void)ui_kit_slider_row(ctx, id, caption, value, true, row_width);
+    char percent[16];
+    (void)snprintf(percent, sizeof percent, "%d%%", (int)(*value * 100.0F + 0.5F));
+    (void)ui_kit_slider_row(ctx, id, name, percent, value, true, row_width, NULL);
 }
 
 // The destructive action is two steps: a small red button here, sized to its
@@ -108,7 +108,7 @@ void scene_settings_build(nt_ui_context_t *ctx) {
         volume_row(ctx, "settings/music", "Музыка", &g_lab.volume_music, row_width);
         volume_row(ctx, "settings/sfx", "Звуки", &g_lab.volume_sfx, row_width);
         (void)ui_kit_dropdown_row(ctx, "settings/language", "Язык", LANGUAGES, LANGUAGE_COUNT, &g_lab.language,
-                                  &s_language_open, row_width * 0.56F);
+                                  &s_language_open, true, row_width * 0.56F);
         reset_row(ctx, &m);
         if (ui_kit_button(ctx, "settings/close", "ЗАКРЫТЬ", UI_KIT_BUTTON_NEUTRAL, true, CLAY_SIZING_GROW(0), ui_kit_hit_height(&m))) {
             g_lab.sheet_open = false;

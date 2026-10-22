@@ -64,8 +64,8 @@ static void caption(nt_ui_context_t *ctx, const char *text) { ui_kit_label(ctx, 
 
 static void button_states(nt_ui_context_t *ctx, const ui_metrics_t *m) {
     const ui_tokens_t *t = ui_theme_tokens();
-    const ui_kit_panel_style_t look = raised(t->go);
-    const ui_kit_panel_style_t pressed = ui_kit_look_state(&look, UI_KIT_LOOK_PRESSED, rgb(t->off));
+    const ui_kit_button_look_t look = {.idle = raised(t->go)};
+    const ui_kit_panel_style_t pressed = ui_kit_look_state(&look.idle, UI_KIT_LOOK_PRESSED, rgb(t->off));
     caption(ctx, "Кнопка в облике: обычная, нажатая, выключенная");
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
                      .layoutDirection = CLAY_LEFT_TO_RIGHT,
@@ -81,7 +81,7 @@ static void button_states(nt_ui_context_t *ctx, const ui_metrics_t *m) {
             ui_kit_panel_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &pressed,
                                       &(Clay_ElementDeclaration){
                                           .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
-                                                     .padding = {.top = (uint16_t)look.lip_h},
+                                                     .padding = {.top = (uint16_t)look.idle.lip_h},
                                                      .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}});
             ui_kit_label(ctx, "Вперед", &g_ui_theme.button_label_action);
             ui_kit_panel_styled_end(ctx);
@@ -125,7 +125,7 @@ void scene_looks_build(nt_ui_context_t *ctx) {
     look.header.bottom_rgb = rgb(t->go);
     look.header.checker_px = 7.0F;
     look.header.checker_a = 0.14F;
-    const ui_kit_panel_style_t close = ui_kit_look_button(t->danger);
+    const ui_kit_button_look_t close = {.idle = ui_kit_look_button(t->danger)};
     look.close = &close;
 
     // A scrimmed panel, not a sheet: the body holds a slider and may scroll.
@@ -148,11 +148,11 @@ void scene_looks_build(nt_ui_context_t *ctx) {
         (void)ui_kit_radio_row(ctx, "looks/left", "Левая рука", &s_hand, 0, true);
         (void)ui_kit_radio_row(ctx, "looks/right", "Правая рука", &s_hand, 1, true);
         char volume[48];
-        (void)snprintf(volume, sizeof volume, "Громкость: %d%%", (int)(s_volume * 100.0F + 0.5F));
-        (void)ui_kit_slider_row(ctx, "looks/volume", volume, &s_volume, true, row_width);
-        (void)ui_kit_choice_row(ctx, "looks/size", "Размер", SIZES, 3, &s_size, true);
-        (void)ui_kit_choice_row(ctx, "looks/locked", "Режим", SIZES, 3, &s_size, false);
-        (void)ui_kit_dropdown_row(ctx, "looks/quality", "Качество", QUALITY, 3, &s_quality, &s_quality_open,
+        (void)snprintf(volume, sizeof volume, "%d%%", (int)(s_volume * 100.0F + 0.5F));
+        (void)ui_kit_slider_row(ctx, "looks/volume", "Громкость", volume, &s_volume, true, row_width, NULL);
+        (void)ui_kit_choice_row(ctx, "looks/size", "Размер", SIZES, 3, &s_size, true, NULL);
+        (void)ui_kit_choice_row(ctx, "looks/locked", "Режим", SIZES, 3, &s_size, false, NULL);
+        (void)ui_kit_dropdown_row(ctx, "looks/quality", "Качество", QUALITY, 3, &s_quality, &s_quality_open, true,
                                   row_width * 0.56F);
         ui_kit_dialog_end(ctx);
     }

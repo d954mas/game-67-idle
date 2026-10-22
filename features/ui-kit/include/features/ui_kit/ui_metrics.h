@@ -59,6 +59,8 @@ typedef struct {
 // input: the same window yields the same interface on any device.
 // Everything below reads the frame this stored.
 UiScaleFit ui_frame_begin(float fb_w, float fb_h, float dpr);
+// Counts ui_frame_begin calls: what the kit keys per-frame bookkeeping on.
+uint32_t ui_frame_serial(void);
 
 ui_metrics_t ui_metrics(void);
 

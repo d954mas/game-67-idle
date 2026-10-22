@@ -75,16 +75,27 @@ set the bar: a prototype should not have to design a UI before it has a game.
 - Looks: the theme's default shapes as styles a game starts from
   (`ui_kit_look_panel`, `_tile`, `_button`, `_header`, `_track`, `_fill`,
   `_disc`) and composes with `ui_kit_panel_begin_styled` /
-  `ui_kit_radial_begin_styled`. `ui_kit_button_begin_styled(look)` is the
-  button plate in such a look; its states come from `ui_kit_look_state`
-  (pressed sinks an outside lip as one shape, or darkens the bottom when the
-  lip is inside; disabled is the theme's `off` fill). `ui_kit_dialog_look()`
-  plus `ui_kit_dialog_begin_styled` / `ui_kit_sheet_begin_styled` give a
-  dialog its own plate, a header band (gradient, `checker_px`) and a round or
-  square close; that body scrolls under the band when last frame's content is
-  taller than the safe area leaves it, with half a touch height of hysteresis
-  so the scissor never flickers. Looks draw as shapes under either theme, so
-  they need the uber material and `ui_kit_shape_bind`.
+  `ui_kit_radial_begin_styled`. `ui_kit_button_begin_styled` takes a
+  `ui_kit_button_look_t`: the idle plate, an optional disabled plate (else the
+  theme's `off` fill) and a `reach` the hit box grows to, so a short plate
+  meets a finger; pressed comes from `ui_kit_look_state` (an outside lip sinks
+  as one shape and the content sinks with it, or the bottom darkens when the
+  lip is inside). `ui_kit_dialog_look()` plus `ui_kit_dialog_begin_styled` /
+  `ui_kit_sheet_begin_styled` give a dialog its own plate, a header band
+  (height, gradient, `checker_px`, dropped while the body scrolls with
+  `calm_scroll`), a title inset, a round close or a square one sized and placed
+  in the band, and a rule under the band; that body scrolls under the band when
+  last frame's content is taller than the safe area leaves it, with half a
+  touch height of hysteresis so the scissor never flickers, and a body that
+  fits neither scrolls nor clips. The rows take looks too:
+  `ui_kit_slider_look_t` (track, fill, knob, caption and value columns),
+  `ui_kit_choice_look_t` (option and picked buttons, label column, option
+  height) and `ui_kit_dropdown_look_t` for `ui_kit_dropdown_row_styled`
+  (trigger, arrow plate, list plate and rows, a mark on the picked row, a list
+  that opens above). Choice segments and
+  dropdown rows are named `<id>/<i>` and the dropdown trigger `<id>/current`,
+  so a DevAPI bot clicks them by name. Looks draw as shapes under either theme,
+  so they need the uber material and `ui_kit_shape_bind`.
 - `ui_icons.h` and `assets/icons/` — the glyph set: white masks (CC0, see
   `assets/icons/README.md`) named once in an X-macro, so the enum, the pack
   builder's region names and `ui_theme_art_bind_icons` cannot drift. A game
@@ -202,7 +213,16 @@ not be replaced with generated art solely because filenames match.
 
 ## Compatibility
 
-Contract version in `feature.json`. Version 4.1 adds looks
+Contract version in `feature.json`. Version 5.0 breaks the looks for a game
+that draws its windows and rows in its own look: `ui_kit_button_begin_styled`
+takes a `ui_kit_button_look_t` (disabled plate and reach), the dialog look
+gains band height, title and close placement, a rule and `calm_scroll`, its
+square close is a `ui_kit_button_look_t`, and the dialog's scroll room no
+longer subtracts the body's top padding twice. `ui_kit_slider_row` takes a
+separate value text and a look, `ui_kit_choice_row` a look, and
+`ui_kit_dropdown_row` an enabled flag, and `ui_kit_dropdown_row_styled` draws
+it in a look; segments, list rows and the trigger carry string names. A settings row is at least a touch height tall
+instead of exactly one. Version 4.1 adds looks
 (`ui_kit_look_*`, `ui_kit_look_state`, `ui_kit_button_begin_styled`, the dialog
 look with its scrolling body), `ui_kit_icon_rotated`, `ui_kit_choice_row` and
 shape-drawn settings rows under a shape theme without switch or slider art,

@@ -17,6 +17,7 @@ static struct {
     float insets_css[4];
     bool open;
     bool in_hand;
+    uint32_t serial;
 } s_frame;
 
 UiScaleFit ui_frame_begin(float fb_w, float fb_h, float dpr) {
@@ -27,8 +28,11 @@ UiScaleFit ui_frame_begin(float fb_w, float fb_h, float dpr) {
                                insets[0] + insets[1], insets[2] + insets[3]);
     s_frame.dpr = dpr > 0.0F ? dpr : 1.0F;
     s_frame.open = true;
+    ++s_frame.serial;
     return s_frame.fit;
 }
+
+uint32_t ui_frame_serial(void) { return s_frame.serial; }
 
 float ui_reference_short(void) {
     const float reference = ui_theme_tokens()->ref_short;

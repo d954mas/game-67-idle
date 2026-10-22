@@ -92,12 +92,21 @@ void ui_kit_button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t
                          const nt_ui_events_cfg_t *cfg);
 bool ui_kit_button_end(nt_ui_context_t *ctx);
 
-// The same plate in a look of the caller's, drawn as a shape under either
-// theme (needs ui_kit_shape_bind). The state looks come from
-// ui_kit_look_state: a press sinks an outside lip in place of the engine's
-// offset, a disabled button takes the theme's off fill. Close with
-// ui_kit_button_end.
-void ui_kit_button_begin_styled(nt_ui_context_t *ctx, uint32_t id, const ui_kit_panel_style_t *look, bool enabled,
+// A button in a look of the caller's. `idle` is the plate; a press comes from
+// ui_kit_look_state (an outside lip sinks in place of the engine's offset).
+typedef struct {
+    ui_kit_panel_style_t idle;
+    // The disabled plate; NULL = `idle` in the theme's flat off fill.
+    const ui_kit_panel_style_t *disabled;
+    // The hit box grows to at least this many UI units each way about the
+    // plate's centre, so a short plate stays short and still meets a finger;
+    // 0 = the plate itself.
+    float reach;
+} ui_kit_button_look_t;
+
+// The plate in `look`, drawn as a shape under either theme (needs
+// ui_kit_shape_bind). Close with ui_kit_button_end.
+void ui_kit_button_begin_styled(nt_ui_context_t *ctx, uint32_t id, const ui_kit_button_look_t *look, bool enabled,
                                 const nt_ui_events_cfg_t *cfg);
 
 // ---- looks ----------------------------------------------------------------
@@ -214,13 +223,21 @@ void ui_kit_dialog_end(nt_ui_context_t *ctx);
 // A dialog in looks of the caller's, drawn as shapes under either theme.
 // `header.checker_px` lays the checker over the band. `close` NULL is the round
 // neutral close on the corner; set, the close is a square button in that look
-// inside the band's right end, its glyph in the title colour. `title` NULL is
-// the theme's header_title.
+// at the band's right end, centred on its height, its glyph in the title
+// colour. `title` NULL is the theme's header_title. Sizes are UI units; 0 takes
+// the kit's.
 typedef struct {
     ui_kit_panel_style_t panel;
     ui_kit_panel_style_t header;
-    const ui_kit_panel_style_t *close;
+    const ui_kit_button_look_t *close;
     const nt_ui_label_style_t *title;
+    float header_h;    // the band; 0 = the touch height
+    float title_inset; // the title from the band's left end; 0 = the body's side padding
+    float close_size;  // the square close's face, its lip added under it; 0 = 0.82 of the band
+    float close_inset; // the square close from the band's right end; 0 = as far as from its top
+    float rule_h;      // a line across the plate under the band; 0 = none
+    uint32_t rule_rgb; // 0xRRGGBB
+    bool calm_scroll;  // a body that scrolls drops the band's checker
 } ui_kit_dialog_look_t;
 
 // The theme's own dialog as a look to change: panel, header band, round close.
@@ -228,11 +245,11 @@ ui_kit_dialog_look_t ui_kit_dialog_look(void);
 
 // ui_kit_dialog_begin in `look`. Its body also scrolls when its content of the
 // last frame is taller than the safe area leaves for it, under the header,
-// whose close stays put; a body that fits has no scissor. The decision holds
-// within half a touch height of the limit, so the scissor never flickers.
-// Close with ui_kit_dialog_end. An engine slider in a scrolling body inside a
-// sheet trips the walker (see ui_kit_scrim): keep a slider dialog a scrimmed
-// panel, not a sheet.
+// whose close stays put; a body that fits has no scroll and no scissor. The
+// decision holds within half a touch height of the limit, so the scissor
+// never flickers. Close with ui_kit_dialog_end. An engine slider in a
+// scrolling body inside a sheet trips the walker (see ui_kit_scrim): keep a
+// slider dialog a scrimmed panel, not a sheet.
 bool ui_kit_dialog_begin_styled(nt_ui_context_t *ctx, const char *id, const char *title, const char *close_label,
                                 Clay_SizingAxis w, Clay_SizingAxis h, const ui_kit_dialog_look_t *look);
 
@@ -271,28 +288,82 @@ bool ui_kit_toggle_row(nt_ui_context_t *ctx, const char *id, const char *label, 
 bool ui_kit_checkbox_row(nt_ui_context_t *ctx, const char *id, const char *label, bool *value, bool enabled);
 bool ui_kit_radio_row(nt_ui_context_t *ctx, const char *id, const char *label, int *selected, int my_value, bool enabled);
 
+// A slider row in shapes of the caller's. Sizes are UI units; 0 takes the
+// kit's. The track and the thumb take their heights from the theme slider.
+typedef struct {
+    ui_kit_panel_style_t track;
+    ui_kit_panel_style_t fill;  // rides inside the track's contour
+    ui_kit_panel_style_t knob;  // a radius of half its height draws a disc
+    const nt_ui_label_style_t *text; // caption and value; NULL = the theme label
+    float caption_w; // the caption's column; set, the row is one line in a hand too
+    float value_w;   // the value's column, right-aligned after the track
+    float gap;       // between the columns
+} ui_kit_slider_look_t;
+
+// The theme's own slider shapes as a look to change.
+ui_kit_slider_look_t ui_kit_slider_look(void);
+
 // A slider row the way the studio's settings screens lay it out: caption
-// beside the track across a desk, above it in a hand. The caller formats the
-// caption ("Музыка: 70%"); `row_width` is the row's own width in UI units.
-// Returns true the frame the value changed. Under a shape theme without the
-// slider art the engine slider keeps the input and the kit draws the track,
-// the fill and the thumb, the thumb where the engine reports it.
-bool ui_kit_slider_row(nt_ui_context_t *ctx, const char *id, const char *caption, float *value, bool enabled,
-                       float row_width);
+// beside the track across a desk, above it in a hand, and `value_text` ("70%",
+// NULL for none) in its own column after the track. `row_width` is the row's
+// own width in UI units. Returns true the frame the value changed. The engine
+// slider keeps the input; with `look`, or under a shape theme without the
+// slider art, the kit draws the track, the fill and the thumb, the thumb where
+// the engine reports it.
+bool ui_kit_slider_row(nt_ui_context_t *ctx, const char *id, const char *caption, const char *value_text,
+                       float *value, bool enabled, float row_width, const ui_kit_slider_look_t *look);
+
+// A pick-one row in looks of the caller's. Sizes are UI units; 0 takes the
+// kit's.
+typedef struct {
+    ui_kit_button_look_t option;     // an option not picked
+    ui_kit_button_look_t picked;     // the picked option
+    const nt_ui_label_style_t *text; // the options' text; NULL = the button labels
+    float label_w;  // the label's column with its space after it; set, the row is one line in a hand too
+    float gap;      // between the options
+    float option_h; // an option's height; 0 = the touch height
+} ui_kit_choice_look_t;
+
+// A pick-one row with every option on the line: the label, then `count`
+// equal segments, the picked one in the confirm look (or `look->picked`).
+// Segment `i` is named "<id>/<i>" in the ui.tree. Segments keep their touch
+// zones apart (ui_kit_choice_cells). Returns true the frame `*selected` changed.
+bool ui_kit_choice_row(nt_ui_context_t *ctx, const char *id, const char *label, const char *const *options, int count,
+                       int *selected, bool enabled, const ui_kit_choice_look_t *look);
+
+// A dropdown in looks of the caller's. Sizes are UI units; 0 takes the kit's.
+typedef struct {
+    ui_kit_button_look_t trigger;
+    float trigger_h;                         // 0 = the touch height
+    const ui_kit_panel_style_t *arrow_plate; // a square plate `arrow_box` across under the arrow; NULL = the bare glyph
+    float arrow_box;
+    float arrow;                             // the glyph's side
+    uint32_t arrow_tint;                     // 0xAABBGGRR; 0 = the theme ink, 0xFFFFFFFF = as drawn
+    float inset;                             // the text from the trigger's left end
+    ui_kit_panel_style_t list;               // the open list's plate
+    float list_pad;                          // inside the list; rows sit half of it apart
+    ui_kit_button_look_t row, picked;
+    float row_h;
+    const nt_ui_label_style_t *text;         // NULL = the neutral button label
+    const char *mark;                        // after the picked row's text; NULL = none
+    const nt_ui_label_style_t *mark_style;
+    bool above;                              // the list opens above the trigger (it flips at the screen's edge)
+} ui_kit_dropdown_look_t;
 
 // A pick-one row: the label fills the row, the trigger names the current
 // option and opens the list of all of them. `open` is the caller's bool for the
-// list; `list_width` is the trigger's width in UI units. Returns true the frame
-// `*selected` changed. Under a shape theme without the button art the trigger
-// is the neutral button look with the down glyph; the list stays the engine's
-// flat panel.
+// list; a disabled row closes it and opens nothing. `list_width` is the
+// trigger's width in UI units. The trigger is named "<id>/current" and row `i`
+// "<id>/<i>" in the ui.tree. Returns true the frame `*selected` changed. The
+// list is the engine's flat combo; under a shape theme without the button art
+// the trigger is the neutral button look with the down glyph.
 bool ui_kit_dropdown_row(nt_ui_context_t *ctx, const char *id, const char *label, const char *const *options,
-                         int count, int *selected, bool *open, float list_width);
-
-// A pick-one row with every option on the line: the label, then `count`
-// equal segments, the picked one in the confirm look. Segments keep their touch
-// zones apart (ui_kit_choice_cells). Returns true the frame `*selected` changed.
-bool ui_kit_choice_row(nt_ui_context_t *ctx, const char *id, const char *label, const char *const *options, int count,
-                       int *selected, bool enabled);
+                         int count, int *selected, bool *open, bool enabled, float list_width);
+// The same in `look`: the trigger and the rows are kit buttons and the list is
+// a light-dismiss popup in `look->list`. A game that only calls this one links
+// none of the engine combo.
+bool ui_kit_dropdown_row_styled(nt_ui_context_t *ctx, const char *id, const char *label, const char *const *options,
+                                int count, int *selected, bool *open, bool enabled, float list_width,
+                                const ui_kit_dropdown_look_t *look);
 
 #endif /* FEATURE_UI_KIT_WIDGETS_H */

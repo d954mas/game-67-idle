@@ -128,8 +128,8 @@ static void counters(nt_ui_context_t *ctx, const ui_metrics_t *m) {
 static void controls(nt_ui_context_t *ctx, const ui_metrics_t *m) {
     lab_section(ctx, "Ползунки и переключатели");
     const float width = m->panel_w - m->pad * 2.0F;
-    (void)ui_kit_slider_row(ctx, "components/slider", "Ползунок", &s_slider, true, width);
-    (void)ui_kit_slider_row(ctx, "components/slider_off", "Выключен", &s_slider, false, width);
+    (void)ui_kit_slider_row(ctx, "components/slider", "Ползунок", NULL, &s_slider, true, width, NULL);
+    (void)ui_kit_slider_row(ctx, "components/slider_off", "Выключен", NULL, &s_slider, false, width, NULL);
     (void)ui_kit_toggle_row(ctx, "components/toggle_on", "Тумблер включен", &s_toggle_on, true);
     (void)ui_kit_toggle_row(ctx, "components/toggle_off", "Тумблер выключен", &s_toggle_off, true);
     (void)ui_kit_toggle_row(ctx, "components/toggle_disabled", "Тумблер недоступен", &s_toggle_on, false);
@@ -143,7 +143,7 @@ static void controls(nt_ui_context_t *ctx, const ui_metrics_t *m) {
 
 static void picker(nt_ui_context_t *ctx, const ui_metrics_t *m) {
     lab_section(ctx, "Выпадающий список");
-    (void)ui_kit_dropdown_row(ctx, "components/pick", "Размер", PICKS, 3, &s_pick, &s_pick_open,
+    (void)ui_kit_dropdown_row(ctx, "components/pick", "Размер", PICKS, 3, &s_pick, &s_pick_open, true,
                               (m->panel_w - m->pad * 2.0F) * 0.56F);
 }
 
