@@ -20,6 +20,7 @@ import { defaultLibrarySourceRoot } from "../sources/ops.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..", "..");
 const BLENDERS = [
+  "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe",
   "C:\\Program Files\\Blender Foundation\\Blender 4.3\\blender.exe",
   "C:\\Program Files\\Blender Foundation\\Blender 4.2\\blender.exe",
   "C:\\Program Files\\Blender Foundation\\Blender 3.2\\blender.exe",

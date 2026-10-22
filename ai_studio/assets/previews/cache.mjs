@@ -15,6 +15,7 @@ const previewCacheVersion = 1;
 const imageExt = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
 const modelExt = new Set([".glb", ".gltf"]);
 const blenders = [
+  "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe",
   "C:\\Program Files\\Blender Foundation\\Blender 4.3\\blender.exe",
   "C:\\Program Files\\Blender Foundation\\Blender 4.2\\blender.exe",
   "C:\\Program Files\\Blender Foundation\\Blender 3.2\\blender.exe",

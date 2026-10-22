@@ -80,7 +80,8 @@ for item in glbs:
     setup_render()
     bpy.ops.import_scene.gltf(filepath=glb)
     scene = bpy.context.scene
-    meshes = [o for o in scene.objects if o.type == "MESH"]
+    # visible_get() drops the bone-shape Icosphere the glTF importer parks in an excluded collection.
+    meshes = [o for o in scene.objects if o.type == "MESH" and o.visible_get()]
     if not meshes:
         continue
     mn, mx = world_bounds(meshes)
@@ -94,7 +95,8 @@ for item in glbs:
     cam = bpy.data.objects.new("cam", cam_data)
     scene.collection.objects.link(cam)
     scene.camera = cam
-    az, el = math.radians(45), math.radians(30)
+    # glTF front (+Z) imports as Blender -Y, so the front three-quarter view sits at negative azimuth.
+    az, el = math.radians(-45), math.radians(30)
     d = mathutils.Vector((math.cos(el) * math.cos(az), math.cos(el) * math.sin(az), math.sin(el)))
     cam.location = center + d * maxd * 3.0
     look = (center - cam.location).normalized()
@@ -121,12 +123,12 @@ for item in glbs:
         key.angle = math.radians(15)
         ko = bpy.data.objects.new("key", key)
         scene.collection.objects.link(ko)
-        ko.rotation_euler = (math.radians(40), math.radians(6), math.radians(35))
+        ko.rotation_euler = (math.radians(40), math.radians(6), math.radians(-55))
         fill = bpy.data.lights.new("fill", "SUN")
         fill.energy = 0.6
         fo = bpy.data.objects.new("fill", fill)
         scene.collection.objects.link(fo)
-        fo.rotation_euler = (math.radians(62), 0, math.radians(215))
+        fo.rotation_euler = (math.radians(62), 0, math.radians(125))
         bg.inputs[1].default_value = 0.5
 
     name = stem or os.path.splitext(os.path.basename(glb))[0]
