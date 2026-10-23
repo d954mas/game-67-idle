@@ -42,3 +42,9 @@ and CMake registration.
 Assets retain their existing provenance, license, origin and hashes. Private
 game examples stay in private repositories. This fixture owns integration
 evidence, not game design, engine internals, or release approval.
+
+The [deferred music check](evidence/deferred_music_2026-10-23.json) records the
+template's zero-track path, an independently created consumer with a licensed
+track, delayed/failed browser delivery and removal of the last track. The
+audio catalog has separate focused native checks. Browser preview observations
+prove those runtime contracts; they are not release or portal certification.

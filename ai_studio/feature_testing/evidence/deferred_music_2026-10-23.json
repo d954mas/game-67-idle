@@ -1,0 +1,109 @@
+{
+  "scope": "template optional music delivery and audio catalog regression; no portal upload",
+  "template_runtime": "blank unless game authors tracks; delivery only, audio-core playback remains explicit",
+  "browser": "isolated headless Chrome/SwiftShader, 390x844 viewport; local SDK mock; NON-PROOF preview builds, not release certification",
+  "source_template_commit": "4ffc79ed23c3deba29fdbfb9b30892e59c929c60",
+  "source_sha256": {
+    "src/game_music_pack.c": "4556a7a7157b324566e814ff3c00c751da4e45c7539af00c86656e11cc14417e",
+    "src/build_packs.c": "9704beda8d5425ed520cc0956743ff092b2f1193cf43ab04077368ec337a60a5",
+    "cmake/GameAssets.cmake": "5d1d961ed47ad6bf1650f9a898302d09ac154cbd3b7b0c5aaf95d7d6801d4f59"
+  },
+  "browser_scenarios": {
+    "blank": {
+      "policy": "ok",
+      "music": false,
+      "clears_before": 2,
+      "clears_after": 93,
+      "ready_ms": 1208.3999999985099,
+      "music_requests": 0,
+      "uncaught": 0,
+      "capture_sha256": "220eb12ac2db2ad9e59d051a0cb9b43dbe868fa233d9371e1cd8ed4c73aa4bec"
+    },
+    "held": {
+      "policy": "hold",
+      "music": true,
+      "clears_before": 13,
+      "clears_after": 177,
+      "ready_ms": 191.10000000149012,
+      "music_requests": 1,
+      "uncaught": 0,
+      "timing": [
+        {
+          "start": 194.89999999850988,
+          "bytes": 28948
+        }
+      ],
+      "capture_sha256": "220eb12ac2db2ad9e59d051a0cb9b43dbe868fa233d9371e1cd8ed4c73aa4bec"
+    },
+    "failed": {
+      "policy": "fail",
+      "music": true,
+      "clears_before": 143,
+      "clears_after": 304,
+      "ready_ms": 198.39999999850988,
+      "music_requests": 3,
+      "uncaught": 0,
+      "timing": [
+        {
+          "start": 201.19999999552965,
+          "bytes": 0
+        },
+        {
+          "start": 710,
+          "bytes": 0
+        }
+      ],
+      "capture_sha256": "220eb12ac2db2ad9e59d051a0cb9b43dbe868fa233d9371e1cd8ed4c73aa4bec"
+    },
+    "removed": {
+      "policy": "ok",
+      "music": false,
+      "clears_before": 2,
+      "clears_after": 90,
+      "ready_ms": 1240.8999999985099,
+      "music_requests": 0,
+      "uncaught": 0,
+      "capture_sha256": "220eb12ac2db2ad9e59d051a0cb9b43dbe868fa233d9371e1cd8ed4c73aa4bec"
+    }
+  },
+  "checks": {
+    "template_core_node": 4,
+    "template_core_ctest": 4,
+    "template_music_unity_cases": 7,
+    "consumer_audio_ctest": 5,
+    "consumer_catalog_unity_cases": 13,
+    "web_staging_node": 17,
+    "copied_game_node": 3,
+    "copied_game_ctest": 4,
+    "existing_live_games_passed": 4,
+    "disposable_consumer_passed": true
+  },
+  "last_track_removed": {
+    "native-debug": {
+      "absent": [
+        "pack/music.ntpack",
+        "bin/assets/music.ntpack",
+        "generated/game/music.h"
+      ]
+    },
+    "wasm-debug-host": {
+      "absent": [
+        "pack/music.ntpack",
+        "bin/assets/music.ntpack",
+        "generated/game/music.h"
+      ]
+    },
+    "wasm-debug": {
+      "absent": [
+        "pack/music.ntpack",
+        "bin/assets/music.ntpack",
+        "generated/game/music.h"
+      ]
+    }
+  },
+  "review": "one independent code reviewer; muted-failure retry defect reproduced RED and fixed GREEN, re-reviewed; final copied-game portability test reviewed",
+  "limitations": [
+    "The full feature-consumer sample UI executable was not validated: existing UI-kit API drift blocks it. Focused audio targets passed.",
+    "Browser viewport emulation is not a physical phone. HTTP 503 errors in fault injection are expected."
+  ]
+}

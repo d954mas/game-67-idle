@@ -1,16 +1,19 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { runInNewContext } from "node:vm";
 import test from "node:test";
+import { findStudioRoot } from "./lib/studio_root.mjs";
 
 const templateRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-const studioRoot = dirname(dirname(templateRoot));
+const studioRoot = findStudioRoot(templateRoot);
 
-test("blank starter declares state without gameplay feature defaults", () => {
+test("blank starter declares state without gameplay feature defaults", {
+  skip: !existsSync(join(templateRoot, "game-dependencies.json")),
+}, () => {
   const dependencies = JSON.parse(readFileSync(join(templateRoot, "game-dependencies.json"), "utf8"));
 
   const ids = dependencies.features.map(({ id }) => id);
