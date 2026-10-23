@@ -10,8 +10,8 @@
 //
 // Uses render_thumbs.py with a @manifest (avoids the Windows command line
 // length limit) and glb::assetId stems (avoids basename collisions).
-import { existsSync, readdirSync, mkdirSync, writeFileSync, copyFileSync, rmSync } from "node:fs";
-import { join, dirname, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync, copyFileSync, rmSync } from "node:fs";
+import { join, dirname, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { scanPackManifestSource } from "../manifests/ops.mjs";
@@ -49,6 +49,36 @@ const glbIn = (dir) => {
   return f ? join(dir, f) : "";
 };
 
+const previewDirOf = (r) => (r.preview ? dirname(r.preview) : join(dirname(r.metadataPath), "previews", r.asset_id));
+
+// Placing preview.<ext> deletes other preview.* files, so a row that named one of
+// them must now name the rendered file, or the catalog shows a dead image.
+function repointPreviews(targets, ext) {
+  const byManifest = new Map();
+  for (const r of targets) {
+    if (!r.preview) continue;
+    const file = join(previewDirOf(r), "preview." + ext);
+    if (r.preview === file || existsSync(r.preview) || !existsSync(file)) continue;
+    if (!byManifest.has(r.metadataPath)) byManifest.set(r.metadataPath, new Map());
+    byManifest.get(r.metadataPath).set(r.asset_id, relative(dirname(r.metadataPath), file).replace(/\\/g, "/"));
+  }
+  let changed = 0;
+  for (const [path, fixes] of byManifest) {
+    const lines = readFileSync(path, "utf8").split("\n");
+    const out = lines.map((line) => {
+      if (!line.trim()) return line;
+      const row = JSON.parse(line);
+      const next = fixes.get(row.asset_id || row.id);
+      if (!next || row.preview === next || row.source_preview) return line;
+      row.preview = next;
+      changed += 1;
+      return JSON.stringify(row);
+    });
+    writeFileSync(path, out.join("\n"), "utf8");
+  }
+  return changed;
+}
+
 async function main() {
   const a = parseArgs(process.argv.slice(2));
   const blender = a.blender || BLENDERS.find((p) => existsSync(p));
@@ -71,13 +101,16 @@ async function main() {
   for (const r of targets) {
     const glb = r.modelPath || glbIn(r.filesDir);
     if (!glb) { missing += 1; continue; }
-    const prevDir = r.preview ? dirname(r.preview) : join(dirname(r.metadataPath), "previews", r.asset_id);
-    if (!a.force && existsSync(join(prevDir, "preview." + ext))) continue; // resumable
+    if (!a.force && existsSync(join(previewDirOf(r), "preview." + ext))) continue; // resumable
     items.push(glb.replace(/\\/g, "/") + "::" + r.asset_id);
   }
   if (a.limit) items.length = Math.min(items.length, a.limit);
   console.log(`targets: ${targets.length} | to render: ${items.length} | missing glb: ${missing} | ext: ${ext}`);
-  if (!items.length) { console.log("nothing to render (all previews exist; use --force to redo)"); return; }
+  if (!items.length) {
+    console.log("nothing to render (all previews exist; use --force to redo)");
+    console.log(`repointed previews: ${repointPreviews(targets, ext)}`);
+    return;
+  }
 
   // Render in chunks, each a FRESH Blender process: isolates a crash/leak to one
   // chunk (a single process over thousands of imports can OOM or die on a bad glb)
@@ -104,7 +137,7 @@ async function main() {
       const src = join(outDir, id + "." + ext);
       if (!existsSync(src)) continue;
       const record = targets.find((target) => target.asset_id === id);
-      const prevDir = record?.preview ? dirname(record.preview) : join(dirname(record?.metadataPath || a.library), "previews", id);
+      const prevDir = previewDirOf(record);
       mkdirSync(prevDir, { recursive: true });
       for (const old of (existsSync(prevDir) ? readdirSync(prevDir) : [])) {
         if (/^preview\.(png|jpg|jpeg|webp|gif)$/i.test(old) && old !== "preview." + ext) rmSync(join(prevDir, old), { force: true });
@@ -115,6 +148,7 @@ async function main() {
     process.stdout.write(`placed ${cp}${res.status !== 0 ? " (blender rc=" + res.status + ")" : ""}\n`);
   }
   console.log(`placed previews: ${placed}/${items.length}`);
+  console.log(`repointed previews: ${repointPreviews(targets, ext)}`);
 }
 
 main().catch((e) => { console.error(e.message); process.exit(1); });

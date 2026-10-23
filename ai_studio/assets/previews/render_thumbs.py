@@ -78,7 +78,12 @@ for item in glbs:
     glb, _, stem = item.partition("::")        # "glb" or "glb::outstem"
     bpy.ops.wm.read_factory_settings(use_empty=True)
     setup_render()
-    bpy.ops.import_scene.gltf(filepath=glb)
+    # One unreadable glb must not abort the rest of the batch.
+    try:
+        bpy.ops.import_scene.gltf(filepath=glb)
+    except RuntimeError as e:
+        print("import failed: %s: %s" % (glb, e))
+        continue
     scene = bpy.context.scene
     # visible_get() drops the bone-shape Icosphere the glTF importer parks in an excluded collection.
     meshes = [o for o in scene.objects if o.type == "MESH" and o.visible_get()]
@@ -92,6 +97,9 @@ for item in glbs:
     cam_data = bpy.data.cameras.new("cam")
     cam_data.type = "ORTHO"
     cam_data.ortho_scale = maxd * 1.45
+    # The camera sits 3*maxd out; the default 100 m clip_end cuts centimetre-scale models.
+    cam_data.clip_start = maxd * 0.01
+    cam_data.clip_end = maxd * 10.0
     cam = bpy.data.objects.new("cam", cam_data)
     scene.collection.objects.link(cam)
     scene.camera = cam
