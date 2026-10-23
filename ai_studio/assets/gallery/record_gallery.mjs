@@ -10,6 +10,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { isMain } from "../../core_harness/tool_lib/cli.mjs";
+import { createChromeProfile } from "../../runtime_automation/chrome_profile.mjs";
 
 function parseArgs(argv) {
   const a = { url: "http://localhost:8910", out: "tmp/gallery.mp4", port: 9222, gallery: "tmp/lib-gallery",
@@ -85,14 +86,18 @@ async function cdp(port) {
 }
 
 let spawnedChrome = null;
+let chromeProfile = null;
 
-function stopSpawnedChrome() {
-  if (!spawnedChrome?.pid) return;
-  try {
-    spawnSync("taskkill", ["/PID", String(spawnedChrome.pid), "/T", "/F"], { stdio: "ignore" });
-  } catch {
-    /* ignore cleanup failure */
+async function stopSpawnedChrome() {
+  if (spawnedChrome?.pid) {
+    try {
+      spawnSync("taskkill", ["/PID", String(spawnedChrome.pid), "/T", "/F"], { stdio: "ignore" });
+    } catch {
+      /* ignore cleanup failure */
+    }
   }
+  await chromeProfile?.dispose(spawnedChrome);
+  chromeProfile = null;
 }
 
 async function main(argv = process.argv.slice(2)) {
@@ -104,10 +109,9 @@ async function main(argv = process.argv.slice(2)) {
   rmSync(framesDir, { recursive: true, force: true });
   mkdirSync(framesDir, { recursive: true });
 
-  const userDir = resolve("tmp/chrome_rec_profile");
-  rmSync(userDir, { recursive: true, force: true });
+  chromeProfile = createChromeProfile("gallery-rec");
   spawnedChrome = spawn(a.chrome, [
-    `--remote-debugging-port=${a.port}`, `--user-data-dir=${userDir}`,
+    `--remote-debugging-port=${a.port}`, `--user-data-dir=${chromeProfile.dir}`,
     "--no-first-run", "--no-default-browser-check", "--new-window",
     `--window-size=${a.w},${a.h}`, "--window-position=40,40", "--hide-scrollbars",
     "--autoplay-policy=no-user-gesture-required",
@@ -163,7 +167,7 @@ async function main(argv = process.argv.slice(2)) {
   c.close();
   // Kill ONLY the chrome instance we spawned (its own PID tree) - never the
   // user's Chrome, which is showing the gallery.
-  stopSpawnedChrome();
+  await stopSpawnedChrome();
 
   console.log("captured frames:", frames.length);
   if (frames.length < 5) throw new Error("too few frames captured");
@@ -189,9 +193,9 @@ async function main(argv = process.argv.slice(2)) {
 }
 
 if (isMain(import.meta.url)) {
-  main().catch((e) => {
+  main().catch(async (e) => {
     console.error("FATAL:", e.message);
-    stopSpawnedChrome();
+    await stopSpawnedChrome();
     process.exit(1);
   });
 }

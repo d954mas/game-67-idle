@@ -422,7 +422,7 @@ async function main() {
     console.log(report.ok ? "yandex sdk probe passed" : "yandex sdk probe failed");
     if (!report.ok) process.exitCode = 1;
   } finally {
-    if (browser) browser.close();
+    if (browser) await browser.close();
     if (proxy) killTree(proxy.child);
   }
 }

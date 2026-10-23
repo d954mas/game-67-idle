@@ -203,10 +203,17 @@ export async function launchHeadlessBrowser({ deadline, chromePath, extraArgs = 
 
   return {
     client,
-    close() {
+    async close() {
+      const exited = child.exitCode !== null || child.signalCode !== null
+        ? Promise.resolve()
+        : new Promise((done) => child.once("exit", done));
       try { client.close(); } catch { /* the pipe is already gone */ }
       try { child.kill(); } catch { /* the browser already exited */ }
-      try { rmSync(profileDir, { recursive: true, force: true }); } catch { /* a locked profile is not a probe failure */ }
+      // Windows will not delete a profile while Chrome still holds it, and kill() does not wait for the exit.
+      await Promise.race([exited, new Promise((done) => setTimeout(done, 5000).unref())]);
+      try {
+        rmSync(profileDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+      } catch { /* a locked profile is not a probe failure */ }
     },
   };
 }

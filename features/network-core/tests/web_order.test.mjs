@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { spawn, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -107,5 +107,7 @@ test("browser client drains 64 records before slow close", { skip: !emcc && "nee
     }
     for (const socket of sockets) socket.destroy();
     await new Promise(resolveClose => server.close(resolveClose));
+    // Only after the exit: Windows refuses to delete profile files a live Chrome holds.
+    rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });

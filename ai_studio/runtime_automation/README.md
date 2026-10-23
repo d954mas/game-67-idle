@@ -237,6 +237,31 @@ A bot can drive the same matrix in-process: `run_matrix(factory, viewports,
 out_dir, prepare=..., portal=...)` with `devapi_client.running_game` as the
 factory.
 
+## Headless Chrome profiles
+
+Every headless Chrome run gets its `--user-data-dir` from `chrome_profile.mjs`
+or `chrome_profile.py`. Profiles live under `<temp>/ai-studio-chrome/`; creating
+one also sweeps profiles older than a day, so a run that crashed before cleanup
+does not leak for good.
+
+```js
+import { createChromeProfile } from "<studio>/ai_studio/runtime_automation/chrome_profile.mjs";
+const profile = createChromeProfile("shots");
+const chrome = spawn(chromePath, ["--headless=new", `--user-data-dir=${profile.dir}`, ...]);
+try { /* drive the page */ } finally { await profile.dispose(chrome); }
+```
+
+```python
+from chrome_profile import chrome_profile, remove_profile
+with chrome_profile("shots") as profile:
+    proc = subprocess.Popen([chrome, "--headless=new", f"--user-data-dir={profile}", ...])
+    try: ...  # drive the page
+    finally: remove_profile(profile, proc)
+```
+
+`dispose` / `remove_profile` stop Chrome and wait for the exit before deleting:
+Windows refuses to delete files a live process holds, and `kill()` does not wait.
+
 ## Local mock web proof
 
 `web_local_mock_probe.mjs` connects to an isolated Chromium/Chrome page through

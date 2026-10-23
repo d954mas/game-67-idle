@@ -111,6 +111,11 @@ heads; source working-tree changes are intentionally not transferred.
   game-ready exports of purchased packs (re-coloured GLBs, atlases, retargeted
   clips), and only those the game ships. Source archives (zip, FBX, .blend) and
   unused pack content never enter any repository.
+- A script that launches headless Chrome takes its `--user-data-dir` from
+  `ai_studio/runtime_automation/chrome_profile.{mjs,py}` and disposes it in
+  `finally`; never a bare `mkdtemp`. Each profile grows to 50-200 MB and Windows
+  will not delete it until Chrome has exited, so a hand-rolled cleanup leaks one
+  profile per run into the system temp folder.
 - Heavy authoring workfiles that are not themselves shipping game assets live
   under the synchronized `<YandexDisk>/gamedev/games/<game-id>/` workspace;
   game repositories keep their scripts, provenance, manifests and hashes.

@@ -66,9 +66,12 @@ import tempfile
 import threading
 import time
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+from pathlib import Path
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.dirname(TESTS_DIR)
+sys.path.insert(0, str(Path(TEMPLATE_DIR).parents[1] / "runtime_automation"))
+from chrome_profile import PROFILE_ROOT, remove_profile, sweep_stale_profiles  # noqa: E402
 # The raw localStorage key game_storage.c resolves: "<GAME_STORAGE_APP_ID>/save/<slot>"
 # with APP_ID "template" (CMakeLists) and the fixed autosave slot. Read directly
 # in session 2 (before the game boots) to classify a failure as "browser did not
@@ -473,7 +476,9 @@ def run(build_dir, chrome_path, http_port, cdp_port, keep_profile):
         raise Skip("no Chrome/Chromium binary found (pass --chrome or set CHROME_PATH)")
 
     httpd = serve_dir(bin_dir, http_port)
-    profile_dir = tempfile.mkdtemp(prefix="game67_web_persistence_")
+    PROFILE_ROOT.mkdir(parents=True, exist_ok=True)
+    sweep_stale_profiles()
+    profile_dir = tempfile.mkdtemp(prefix="game67_web_persistence_", dir=PROFILE_ROOT)
     url = f"http://127.0.0.1:{http_port}/{html_name}"
     chrome_proc = None
     cdp = None
@@ -542,7 +547,7 @@ def run(build_dir, chrome_path, http_port, cdp_port, keep_profile):
         quit_chrome(chrome_proc)
         httpd.shutdown()
         if not keep_profile:
-            shutil.rmtree(profile_dir, ignore_errors=True)
+            remove_profile(Path(profile_dir), chrome_proc)
 
 
 def main():

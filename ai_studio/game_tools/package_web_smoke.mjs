@@ -2,15 +2,14 @@ import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import {
   existsSync,
-  mkdtempSync,
   readFileSync,
   rmSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { inflateSync } from "node:zlib";
 
 import { readStoreZip } from "../core_harness/tool_lib/zip_store.mjs";
+import { PROFILE_ROOT, createChromeProfile } from "../runtime_automation/chrome_profile.mjs";
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
@@ -391,9 +390,9 @@ export async function serveSites(dirs, port = 0) {
 
 // Headless Chrome with one blank page attached over a CDP pipe; `args` go
 // before the page URL.
-export async function launchHeadlessChrome({ args = [], deadline, profilePrefix = "ai-studio-chrome-" }) {
+export async function launchHeadlessChrome({ args = [], deadline, profilePrefix = "ai-studio-chrome" }) {
   const browser = findSupportedBrowser();
-  const profileDir = mkdtempSync(join(tmpdir(), profilePrefix));
+  const profileDir = createChromeProfile(profilePrefix).dir;
   let child = null;
   let client = null;
   const close = async () => {
@@ -899,7 +898,7 @@ export function analyzePngFrame(bytes) {
   return { width, height, minLuma, maxLuma, variance: Math.max(0, sumSquares / pixels - mean * mean) };
 }
 
-async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chromePath, timeoutMs = 60000, webglRecoveryTimeoutMs = 10000, chromeArgs = [], live = null, allowedRemote = [], toleratedRemote = [], blockedUrlPatterns = [], allowedRemoteUrls = [], profileRoot = tmpdir(), mode = "full" }) {
+async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chromePath, timeoutMs = 60000, webglRecoveryTimeoutMs = 10000, chromeArgs = [], live = null, allowedRemote = [], toleratedRemote = [], blockedUrlPatterns = [], allowedRemoteUrls = [], profileRoot = PROFILE_ROOT, mode = "full" }) {
   const offlineRemote = remoteEndpointMatcher(allowedRemoteUrls);
   const probePlan = smokeProbePlan(mode);
   const startedAt = Date.now();
@@ -926,7 +925,7 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
     },
   };
   try {
-    profileDir = mkdtempSync(join(profileRoot, "ai-studio-package-smoke-"));
+    profileDir = createChromeProfile("ai-studio-package-smoke", { root: profileRoot }).dir;
     child = spawn(browser, [
       "--headless=new",
       "--remote-debugging-pipe",
@@ -1104,7 +1103,7 @@ export async function smokePackagedWebArtifact({
   chromePath,
   timeoutMs = 60000,
   probe = defaultBrowserProbe,
-  profileRoot = tmpdir(),
+  profileRoot = PROFILE_ROOT,
   mode = "full",
   frameExpectation = "rendered",
   allowedRemoteUrls = [],
