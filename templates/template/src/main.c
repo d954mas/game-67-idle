@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
         return args_status;
     }
 
-    const nt_engine_config_t config = {.app_name = GAME_APP_NAME, .version = 1};
+    const nt_engine_config_t config = {.app_name = GAME_APP_NAME};
     if (nt_engine_init(&config) != NT_OK) {
         return 1;
     }

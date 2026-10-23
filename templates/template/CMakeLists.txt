@@ -25,6 +25,7 @@ add_executable(${GAME_TARGET}
     src/shell/shell_tick.c
     src/shell/shell_present.c
     src/game_input.c
+    src/game_music_pack.c
     src/features/game_features.c
     src/render/blank_renderer.c)
 target_include_directories(${GAME_TARGET} PRIVATE src "${GAME_STATE_INC}")

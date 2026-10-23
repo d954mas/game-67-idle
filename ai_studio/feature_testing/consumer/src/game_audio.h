@@ -34,6 +34,7 @@ typedef struct GameAudioStatus {
 bool game_audio_init(void);
 void game_audio_shutdown(void);
 void game_audio_update(void);
+void game_audio_on_game_ready(void);
 void game_audio_on_user_gesture(void);
 
 bool game_audio_play_cue(GameAudioCue cue);

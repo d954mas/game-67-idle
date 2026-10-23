@@ -131,8 +131,7 @@ int main(int argc, char *argv[]) {
 
     // Audio stays an opaque game-owned blob. The runtime chooses the decoder;
     // the resource ID intentionally contains no codec or file extension.
-    if (!add_blob_file(ctx, "assets/audio/sfx/ui_click.wav", "audio/sfx/ui_click") ||
-        !add_blob_file(ctx, "assets/audio/music/demo_jingle.mp3", "audio/music/demo_jingle")) {
+    if (!add_blob_file(ctx, "assets/audio/sfx/ui_click.wav", "audio/sfx/ui_click")) {
         nt_builder_free_pack(ctx);
         return 1;
     }
@@ -316,5 +315,19 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     (void)printf("Built game.ntpack\n");
+    ctx = nt_builder_start_pack(pack_path(out_dir, "music.ntpack"));
+    if (ctx == NULL) return 1;
+    nt_builder_set_header_dir(ctx, HEADER_DIR);
+    if (!add_blob_file(ctx, "assets/audio/music/demo_jingle.mp3", "audio/music/demo_jingle")) {
+        nt_builder_free_pack(ctx);
+        return 1;
+    }
+    r = nt_builder_finish_pack(ctx);
+    nt_builder_free_pack(ctx);
+    if (r != NT_BUILD_OK) {
+        (void)fprintf(stderr, "music pack failed: %d\n", r);
+        return 1;
+    }
+    (void)printf("Built music.ntpack\n");
     return 0;
 }

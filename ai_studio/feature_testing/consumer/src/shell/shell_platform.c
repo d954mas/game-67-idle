@@ -353,6 +353,7 @@ void shell_platform_frame_end(shell_shown_t shown, bool playable) {
             game_report_gfx_recovery_complete();
         }
         platform_lifecycle_after_frame_present(playable);
+        if (playable) game_audio_on_game_ready();
     }
     devapi_sample_metrics(s_frame_begin);
 }

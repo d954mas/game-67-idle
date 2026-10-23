@@ -12,6 +12,7 @@
 #endif
 #endif
 #include "game_save.h"
+#include "game_music_pack.h"
 #include "graphics/nt_gfx.h"
 #include "input/nt_input.h"
 #include "window/nt_window.h"
@@ -141,12 +142,13 @@ void shell_platform_frame_end(shell_shown_t shown) {
         return;
     }
     nt_window_swap_buffers();
+    if (shown.complete) { game_music_pack_after_present(); }
 #if defined(NT_PLATFORM_WEB)
     // The shell may clear recovery only after a restored frame is presented.
     if (shown.recovered) {
         game_clear_runtime_recovery();
     }
-    if (!s_presented_first_frame) {
+    if (shown.complete && !s_presented_first_frame) {
         runtime_build_marker_present_ready();
         s_presented_first_frame = true;
     }

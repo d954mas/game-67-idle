@@ -84,5 +84,12 @@ Shared-feature integration coverage belongs in `ai_studio/feature_testing/` or t
 own test consumer. Removing a module from default startup must not silently
 remove that module's test coverage.
 
+The starter's optional music delivery uses a separate `music.ntpack` only
+when the game supplies `assets/audio/music/*.mp3` tracks (including nested
+folders). The first complete presented frame releases its network gate.
+Music is never part of startup readiness. A zero-track starter has no music
+pack or resource/HTTP/FS runtime installation. Audio playback remains an
+explicit installation; see the template README and audio-core INSTALL.
+
 Release and portal behavior use the owning platform/package contracts and are
 verified separately from the blank-screen claim.

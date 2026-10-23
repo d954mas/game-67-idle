@@ -3,6 +3,7 @@
 #include "app/nt_app.h"
 #include "features/game_features.h"
 #include "game_save.h"
+#include "game_music_pack.h"
 
 void shell_tick_init(World *world) {
     game_save_load_result_t load_result;
@@ -11,6 +12,10 @@ void shell_tick_init(World *world) {
 }
 
 void shell_tick(World *world, const game_input_frame_t *input) {
+#if GAME_MUSIC_PACK_ENABLED
+    nt_resource_step();
+    game_music_pack_update(true);
+#endif
     game_features_update(world, g_nt_app.dt);
     game_features_update_root(world, g_nt_app.dt, input);
     game_features_react(world);

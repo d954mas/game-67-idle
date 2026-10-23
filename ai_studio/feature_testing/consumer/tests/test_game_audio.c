@@ -1,5 +1,7 @@
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "unity.h"
 
@@ -7,6 +9,7 @@
 #include "features/platform_sdk/platform_sdk.h"
 #include "game_audio.h"
 #include "generated/game.h"
+#include "generated/music.h"
 #include "nt_pack_format.h"
 #include "resource/nt_resource.h"
 
@@ -26,6 +29,13 @@ static unsigned s_audio_init_count;
 static unsigned s_audio_update_count;
 static unsigned s_audio_shutdown_count;
 static unsigned s_clip_load_count[2];
+static unsigned s_clip_stream_count;
+static nt_pack_state_t s_pack_state;
+static nt_result_t s_mount_result;
+static nt_result_t s_load_result;
+static unsigned s_mount_count;
+static unsigned s_load_count;
+static unsigned s_unmount_count;
 static audio_clip_state_t s_clip_state[2];
 static play_call_t s_play_calls[8];
 static unsigned s_play_count;
@@ -64,6 +74,13 @@ void setUp(void) {
     s_audio_shutdown_count = 0;
     s_clip_load_count[0] = 0;
     s_clip_load_count[1] = 0;
+    s_clip_stream_count = 0;
+    s_pack_state = NT_PACK_STATE_NONE;
+    s_mount_result = NT_OK;
+    s_load_result = NT_OK;
+    s_mount_count = 0;
+    s_load_count = 0;
+    s_unmount_count = 0;
     s_clip_state[0] = AUDIO_CLIP_STATE_LOADING;
     s_clip_state[1] = AUDIO_CLIP_STATE_LOADING;
     s_play_count = 0;
@@ -103,6 +120,33 @@ uint8_t nt_resource_get_state(nt_resource_t handle) {
     return nt_resource_is_ready(handle) ? 3U : 0U;
 }
 
+nt_result_t nt_resource_mount(nt_hash32_t pack_id, int16_t priority) {
+    (void)priority;
+    TEST_ASSERT_EQUAL_UINT32(nt_hash32_str("music").value, pack_id.value);
+    ++s_mount_count;
+    return s_mount_result;
+}
+
+void nt_resource_unmount(nt_hash32_t pack_id) {
+    TEST_ASSERT_EQUAL_UINT32(nt_hash32_str("music").value, pack_id.value);
+    TEST_ASSERT_TRUE(s_pack_state == NT_PACK_STATE_FAILED || s_audio_shutdown_count > 0);
+    ++s_unmount_count;
+    s_pack_state = NT_PACK_STATE_NONE;
+}
+
+nt_result_t nt_resource_load_auto(nt_hash32_t pack_id, const char *path) {
+    TEST_ASSERT_EQUAL_UINT32(nt_hash32_str("music").value, pack_id.value);
+    TEST_ASSERT_NOT_NULL(strstr(path, "assets/music.ntpack"));
+    ++s_load_count;
+    s_pack_state = s_load_result == NT_OK ? NT_PACK_STATE_REQUESTED : NT_PACK_STATE_FAILED;
+    return s_load_result;
+}
+
+nt_pack_state_t nt_resource_pack_state(nt_hash32_t pack_id) {
+    TEST_ASSERT_EQUAL_UINT32(nt_hash32_str("music").value, pack_id.value);
+    return s_pack_state;
+}
+
 bool audio_init(void) {
     ++s_audio_init_count;
     return s_backend_available;
@@ -121,6 +165,12 @@ audio_clip_t audio_clip_load(nt_hash64_t ready_blob_id) {
     TEST_ASSERT_LESS_THAN_UINT32(2, index);
     ++s_clip_load_count[index];
     return (audio_clip_t){index + 1};
+}
+
+audio_clip_t audio_clip_stream(nt_hash64_t ready_blob_id) {
+    TEST_ASSERT_TRUE(same_hash(ready_blob_id, ASSET_BLOB_AUDIO_MUSIC_DEMO_JINGLE));
+    ++s_clip_stream_count;
+    return (audio_clip_t){2};
 }
 
 audio_clip_state_t audio_clip_state(audio_clip_t clip) {
@@ -197,6 +247,9 @@ float settings_music(void) { return s_music; }
 float settings_sfx(void) { return s_sfx; }
 
 static void make_catalog_ready(void) {
+    game_audio_on_game_ready();
+    game_audio_update();
+    s_pack_state = NT_PACK_STATE_READY;
     s_resource_ready[0] = true;
     s_resource_ready[1] = true;
     game_audio_update();
@@ -205,15 +258,55 @@ static void make_catalog_ready(void) {
     game_audio_update();
 }
 
-void test_init_requests_both_blob_resources_and_waits_for_pack_readiness(void) {
+void test_music_is_not_requested_during_startup_or_an_input_gesture(void) {
+    TEST_ASSERT_TRUE(game_audio_init());
+    game_audio_on_user_gesture();
+    game_audio_update();
+    TEST_ASSERT_EQUAL_UINT32(1, s_request_count);
+    TEST_ASSERT_EQUAL_UINT32(0, s_mount_count);
+    TEST_ASSERT_TRUE(same_hash(ASSET_BLOB_AUDIO_SFX_UI_CLICK, s_requested_ids[0]));
+}
+
+void test_transient_pack_retry_does_not_remount_or_request_the_blob_early(void) {
+    TEST_ASSERT_TRUE(game_audio_init());
+    game_audio_on_game_ready();
+    game_audio_update();
+    s_pack_state = NT_PACK_STATE_NONE;
+    game_audio_update();
+    game_audio_update();
+    TEST_ASSERT_EQUAL_UINT32(1, s_mount_count);
+    TEST_ASSERT_EQUAL_UINT32(1, s_load_count);
+    TEST_ASSERT_EQUAL_UINT32(1, s_request_count);
+    TEST_ASSERT_EQUAL(GAME_AUDIO_LOAD_LOADING, game_audio_status().music_state);
+    s_pack_state = NT_PACK_STATE_READY;
+    game_audio_update();
+    TEST_ASSERT_EQUAL_UINT32(2, s_request_count);
+}
+
+void test_immediate_load_failure_is_optional_and_can_be_retried_after_audio_is_enabled(void) {
+    TEST_ASSERT_TRUE(game_audio_init());
+    game_audio_on_game_ready();
+    s_load_result = NT_ERR_INVALID_ARG;
+    game_audio_update();
+    game_audio_update();
+    TEST_ASSERT_EQUAL(GAME_AUDIO_LOAD_FAILED, game_audio_status().music_state);
+    TEST_ASSERT_EQUAL_UINT32(1, s_load_count);
+    game_audio_set_enabled(false);
+    game_audio_update();
+    s_load_result = NT_OK;
+    game_audio_set_enabled(true);
+    game_audio_update();
+    TEST_ASSERT_EQUAL_UINT32(2, s_load_count);
+    TEST_ASSERT_EQUAL_UINT32(1, s_unmount_count);
+}
+
+void test_init_requests_only_cues_and_music_waits_for_its_pack(void) {
     TEST_ASSERT_TRUE(game_audio_init());
 
     TEST_ASSERT_EQUAL_UINT32(1, s_audio_init_count);
-    TEST_ASSERT_EQUAL_UINT32(2, s_request_count);
+    TEST_ASSERT_EQUAL_UINT32(1, s_request_count);
     TEST_ASSERT_TRUE(same_hash(ASSET_BLOB_AUDIO_SFX_UI_CLICK, s_requested_ids[0]));
-    TEST_ASSERT_TRUE(same_hash(ASSET_BLOB_AUDIO_MUSIC_DEMO_JINGLE, s_requested_ids[1]));
     TEST_ASSERT_EQUAL_UINT8(NT_ASSET_BLOB, s_requested_types[0]);
-    TEST_ASSERT_EQUAL_UINT8(NT_ASSET_BLOB, s_requested_types[1]);
 
     game_audio_update();
     TEST_ASSERT_EQUAL_UINT32(0, s_clip_load_count[0]);
@@ -225,11 +318,20 @@ void test_init_requests_both_blob_resources_and_waits_for_pack_readiness(void) {
     TEST_ASSERT_EQUAL_UINT32(1, s_clip_load_count[0]);
     TEST_ASSERT_EQUAL_UINT32(0, s_clip_load_count[1]);
 
+    game_audio_on_game_ready();
+    game_audio_update();
+    TEST_ASSERT_EQUAL_UINT32(1, s_load_count);
+    TEST_ASSERT_EQUAL_UINT32(1, s_request_count);
+    s_pack_state = NT_PACK_STATE_READY;
     s_resource_ready[1] = true;
     game_audio_update();
     game_audio_update();
     TEST_ASSERT_EQUAL_UINT32(1, s_clip_load_count[0]);
-    TEST_ASSERT_EQUAL_UINT32(1, s_clip_load_count[1]);
+    TEST_ASSERT_EQUAL_UINT32(0, s_clip_load_count[1]);
+    TEST_ASSERT_EQUAL_UINT32(1, s_clip_stream_count);
+    TEST_ASSERT_EQUAL_UINT32(2, s_request_count);
+    TEST_ASSERT_TRUE(same_hash(ASSET_BLOB_AUDIO_MUSIC_DEMO_JINGLE, s_requested_ids[1]));
+    TEST_ASSERT_EQUAL_UINT8(NT_ASSET_BLOB, s_requested_types[1]);
 }
 
 void test_update_applies_settings_only_when_values_change_and_polls_clip_state(void) {
@@ -292,7 +394,10 @@ void test_music_play_replaces_the_previous_voice_and_stop_is_idempotent(void) {
 void test_controls_are_forwarded_and_unavailable_backend_is_reported(void) {
     s_backend_available = false;
     TEST_ASSERT_FALSE(game_audio_init());
-    TEST_ASSERT_EQUAL_UINT32(2, s_request_count);
+    game_audio_on_game_ready();
+    game_audio_update();
+    TEST_ASSERT_EQUAL_UINT32(1, s_request_count);
+    TEST_ASSERT_EQUAL_UINT32(0, s_mount_count);
     TEST_ASSERT_TRUE(game_audio_status().initialized);
     TEST_ASSERT_FALSE(game_audio_status().available);
     TEST_ASSERT_FALSE(game_audio_play_cue(GAME_AUDIO_CUE_UI_CLICK));
@@ -307,6 +412,92 @@ void test_controls_are_forwarded_and_unavailable_backend_is_reported(void) {
     TEST_ASSERT_EQUAL_UINT32(1, s_gesture_count);
     TEST_ASSERT_FALSE(game_audio_status().enabled);
     TEST_ASSERT_TRUE(game_audio_status().paused);
+}
+
+void test_muted_music_waits_after_game_ready_and_pending_load_is_unmounted_after_audio_shutdown(void) {
+    s_music = 0.0f;
+    TEST_ASSERT_TRUE(game_audio_init());
+    game_audio_on_game_ready();
+    game_audio_update();
+    TEST_ASSERT_EQUAL_UINT32(0, s_mount_count);
+    s_music = 0.7f;
+    game_audio_update();
+    TEST_ASSERT_EQUAL_UINT32(1, s_load_count);
+    TEST_ASSERT_EQUAL(GAME_AUDIO_LOAD_LOADING, game_audio_status().music_state);
+    game_audio_shutdown();
+    TEST_ASSERT_EQUAL_UINT32(1, s_audio_shutdown_count);
+    TEST_ASSERT_EQUAL_UINT32(1, s_unmount_count);
+    game_audio_update();
+    TEST_ASSERT_EQUAL_UINT32(1, s_load_count);
+}
+
+void test_music_failure_preserves_cues_and_retries_only_after_mute_unmute(void) {
+    TEST_ASSERT_TRUE(game_audio_init());
+    game_audio_on_game_ready();
+    s_resource_ready[0] = true;
+    s_clip_state[0] = AUDIO_CLIP_STATE_READY;
+    game_audio_update();
+    s_pack_state = NT_PACK_STATE_FAILED;
+    game_audio_update();
+    TEST_ASSERT_EQUAL(GAME_AUDIO_LOAD_FAILED, game_audio_status().music_state);
+    TEST_ASSERT_TRUE(game_audio_play_cue(GAME_AUDIO_CUE_UI_CLICK));
+    game_audio_update();
+    TEST_ASSERT_EQUAL_UINT32(1, s_load_count);
+    TEST_ASSERT_EQUAL_UINT32(0, s_unmount_count);
+    s_music = 0.0f;
+    game_audio_update();
+    s_music = 0.7f;
+    game_audio_update();
+    TEST_ASSERT_EQUAL_UINT32(2, s_load_count);
+    TEST_ASSERT_EQUAL_UINT32(1, s_unmount_count);
+    s_pack_state = NT_PACK_STATE_READY;
+    s_resource_ready[1] = true;
+    s_clip_state[1] = AUDIO_CLIP_STATE_READY;
+    game_audio_update();
+    TEST_ASSERT_EQUAL(GAME_AUDIO_LOAD_READY, game_audio_status().music_state);
+    TEST_ASSERT_TRUE(game_audio_play_music(GAME_MUSIC_TRACK_DEMO_JINGLE, true));
+}
+
+void test_music_mount_failure_is_bounded_until_music_is_requested_again(void) {
+    TEST_ASSERT_TRUE(game_audio_init());
+    game_audio_on_game_ready();
+    s_mount_result = NT_ERR_INVALID_ARG;
+    game_audio_update();
+    game_audio_update();
+    TEST_ASSERT_EQUAL_UINT32(1, s_mount_count);
+    TEST_ASSERT_EQUAL_UINT32(0, s_load_count);
+    TEST_ASSERT_EQUAL(GAME_AUDIO_LOAD_FAILED, game_audio_status().music_state);
+    s_music = 0.0f;
+    game_audio_update();
+    s_mount_result = NT_OK;
+    s_music = 0.7f;
+    game_audio_update();
+    TEST_ASSERT_EQUAL_UINT32(2, s_mount_count);
+    TEST_ASSERT_EQUAL_UINT32(1, s_load_count);
+}
+
+static bool pack_has_blob(const char *path, nt_hash64_t id) {
+    FILE *file = fopen(path, "rb");
+    TEST_ASSERT_NOT_NULL(file);
+    NtPackHeader header;
+    TEST_ASSERT_EQUAL_UINT32(1, fread(&header, sizeof header, 1, file));
+    TEST_ASSERT_EQUAL_UINT32(NT_PACK_MAGIC, header.magic);
+    TEST_ASSERT_EQUAL_UINT16(NT_PACK_VERSION, header.version);
+    bool found = false;
+    for (uint16_t i = 0; i < header.asset_count; ++i) {
+        NtAssetEntry entry;
+        TEST_ASSERT_EQUAL_UINT32(1, fread(&entry, sizeof entry, 1, file));
+        if (entry.resource_id == id.value && entry.asset_type == NT_ASSET_BLOB) found = true;
+    }
+    TEST_ASSERT_EQUAL_INT(0, fclose(file));
+    return found;
+}
+
+void test_music_and_cues_ship_in_separate_packs(void) {
+    TEST_ASSERT_TRUE(pack_has_blob(GAME_AUDIO_CORE_PACK_PATH, ASSET_BLOB_AUDIO_SFX_UI_CLICK));
+    TEST_ASSERT_FALSE(pack_has_blob(GAME_AUDIO_CORE_PACK_PATH, ASSET_BLOB_AUDIO_MUSIC_DEMO_JINGLE));
+    TEST_ASSERT_TRUE(pack_has_blob(GAME_AUDIO_MUSIC_PACK_PATH, ASSET_BLOB_AUDIO_MUSIC_DEMO_JINGLE));
+    TEST_ASSERT_FALSE(pack_has_blob(GAME_AUDIO_MUSIC_PACK_PATH, ASSET_BLOB_AUDIO_SFX_UI_CLICK));
 }
 
 void test_platform_pause_and_resume_are_bound_and_removed_with_the_catalog(void) {
@@ -325,11 +516,18 @@ void test_platform_pause_and_resume_are_bound_and_removed_with_the_catalog(void)
 
 int main(void) {
     UNITY_BEGIN();
-    RUN_TEST(test_init_requests_both_blob_resources_and_waits_for_pack_readiness);
+    RUN_TEST(test_music_is_not_requested_during_startup_or_an_input_gesture);
+    RUN_TEST(test_transient_pack_retry_does_not_remount_or_request_the_blob_early);
+    RUN_TEST(test_immediate_load_failure_is_optional_and_can_be_retried_after_audio_is_enabled);
+    RUN_TEST(test_init_requests_only_cues_and_music_waits_for_its_pack);
     RUN_TEST(test_update_applies_settings_only_when_values_change_and_polls_clip_state);
     RUN_TEST(test_play_cue_uses_the_catalog_sfx_bus_and_gain);
     RUN_TEST(test_music_play_replaces_the_previous_voice_and_stop_is_idempotent);
     RUN_TEST(test_controls_are_forwarded_and_unavailable_backend_is_reported);
     RUN_TEST(test_platform_pause_and_resume_are_bound_and_removed_with_the_catalog);
+    RUN_TEST(test_muted_music_waits_after_game_ready_and_pending_load_is_unmounted_after_audio_shutdown);
+    RUN_TEST(test_music_failure_preserves_cues_and_retries_only_after_mute_unmute);
+    RUN_TEST(test_music_mount_failure_is_bounded_until_music_is_requested_again);
+    RUN_TEST(test_music_and_cues_ship_in_separate_packs);
     return UNITY_END();
 }

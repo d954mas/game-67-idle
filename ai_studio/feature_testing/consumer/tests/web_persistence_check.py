@@ -268,10 +268,11 @@ class Cdp:
 # ---- build + serve ----------------------------------------------------------
 
 def ensure_web_pack(wasm_bin_dir):
-    """Copy the native-built pack flat next to index.html. The pack builder is
-    native-only, so the wasm build never produces game.ntpack; the engine streams
-    it over HTTP relative to the page URL (GAME_ASSET_PACK_PATH="assets/game.ntpack"
-    on web). Mirrors tools/build_web.mjs pack-copy step."""
+    """Stage native-built packs for HTTP loading relative to the page URL.
+
+    The wasm build cannot run the native pack builder. This mirrors the
+    required and optional pack staging in tools/build_web.mjs.
+    """
     native_dir = os.path.join(TEMPLATE_DIR, "build", "native-debug")
     if not os.path.isfile(os.path.join(native_dir, "CMakeCache.txt")):
         configure = [
@@ -285,12 +286,13 @@ def ensure_web_pack(wasm_bin_dir):
     print("+ " + " ".join(build))
     if subprocess.run(build, cwd=TEMPLATE_DIR).returncode != 0:
         raise CheckFailure("native pack build failed")
-    src_pack = os.path.join(native_dir, "bin", "assets", "game.ntpack")
-    if not os.path.isfile(src_pack):
-        raise CheckFailure(f"native pack not found at {src_pack}")
     dst_assets = os.path.join(wasm_bin_dir, "assets")
     os.makedirs(dst_assets, exist_ok=True)
-    shutil.copyfile(src_pack, os.path.join(dst_assets, "game.ntpack"))
+    for name in ("game.ntpack", "music.ntpack"):
+        src_pack = os.path.join(native_dir, "bin", "assets", name)
+        if not os.path.isfile(src_pack):
+            raise CheckFailure(f"native pack not found at {src_pack}")
+        shutil.copyfile(src_pack, os.path.join(dst_assets, name))
 
 
 def build_wasm_devapi(build_dir="build/wasm-devapi-debug"):

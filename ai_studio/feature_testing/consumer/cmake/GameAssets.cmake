@@ -46,6 +46,7 @@ if(NOT EMSCRIPTEN)
 
     add_custom_command(
         OUTPUT "${GAME_PACK_DIR}/game.ntpack" "${CMAKE_CURRENT_SOURCE_DIR}/src/generated/game.h"
+            "${GAME_PACK_DIR}/music.ntpack" "${CMAKE_CURRENT_SOURCE_DIR}/src/generated/music.h"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_PACK_DIR}"
         COMMAND $<TARGET_FILE:build_game_packs>
             "${GAME_PACK_DIR}" "${GAME_FONT_SOURCE}"
@@ -62,12 +63,13 @@ if(NOT EMSCRIPTEN)
         VERBATIM
     )
     add_custom_command(
-        OUTPUT "${GAME_ASSETS_DIR}/game.ntpack"
+        OUTPUT "${GAME_ASSETS_DIR}/game.ntpack" "${GAME_ASSETS_DIR}/music.ntpack"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_ASSETS_DIR}"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GAME_PACK_DIR}/game.ntpack" "${GAME_ASSETS_DIR}/game.ntpack"
-        DEPENDS "${GAME_PACK_DIR}/game.ntpack"
-        COMMENT "Copying game.ntpack -> bin/assets/"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GAME_PACK_DIR}/music.ntpack" "${GAME_ASSETS_DIR}/music.ntpack"
+        DEPENDS "${GAME_PACK_DIR}/game.ntpack" "${GAME_PACK_DIR}/music.ntpack"
+        COMMENT "Copying asset packs -> bin/assets/"
         VERBATIM
     )
-    add_custom_target(game_asset_packs DEPENDS "${GAME_ASSETS_DIR}/game.ntpack")
+    add_custom_target(game_asset_packs DEPENDS "${GAME_ASSETS_DIR}/game.ntpack" "${GAME_ASSETS_DIR}/music.ntpack")
 endif()

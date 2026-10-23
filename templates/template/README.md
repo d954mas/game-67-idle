@@ -48,3 +48,38 @@ The template proof requires an empty frame and two WebGL context-loss/recovery
 cycles. Normal game verification requires rendered content. The foundation has
 no persistent GPU resources; after recovery it acknowledges the first presented
 frame so the web bootstrap can clear its recovery overlay.
+
+## Optional music delivery
+
+Place licensed, game-owned MP3 tracks under `assets/audio/music/`. The native
+pack builder discovers them recursively, writes `assets/music.ntpack` beside
+`game.ntpack`, and generates typed IDs in the build's `generated/game/music.h`.
+For example, `assets/audio/music/town.mp3` becomes `audio/music/town` and
+`ASSET_BLOB_AUDIO_MUSIC_TOWN`. Short cues belong in the core game pack.
+
+`game_music_pack` starts the optional request on an update after the first
+complete frame has been swapped to the screen. Never add music readiness to
+the startup barrier. Slow delivery, HTTP retry or invalid music cannot stop
+the world. Once audio/settings are installed, pass their enabled and nonzero
+master/music mix to `game_music_pack_update(wanted)` instead of the starter's
+`true`; muted music then waits. After terminal failure, changing wanted from
+false to true remounts and tries again. HTTP failures retain the engine's
+normal backoff. Shut audio down before the shell unmounts the pack.
+
+This is delivery infrastructure, not a music player. Install `audio-core`
+following `features/audio-core/INSTALL.md`, request track BLOBs only after
+`game_music_pack_state() == NT_PACK_STATE_READY`, and decode long MP3 tracks
+with `audio_clip_stream`. Playback also needs a real browser gesture and the
+game's pause/attention policy. The integration consumer demonstrates that
+catalog wiring without putting demonstration audio into this blank starter.
+
+Without tracks, the starter links no resource HTTP/FS loader, downloads no
+music and emits no music pack. Removing the last track removes stale staged
+music and its generated header. Web export already stages the optional pack;
+the copied game owns its music files, licenses and later catalog changes.
+
+Focused checks from this folder:
+
+```text
+node tools/game.mjs test --template-proof --only test_game_music_pack --only music_packaging
+```

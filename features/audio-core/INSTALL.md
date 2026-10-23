@@ -39,12 +39,24 @@ local copy cannot shadow the shared public header.
    remove: the cue fires late and a loop gaps. ffmpeg writes the header by
    seeking back, so encode to a file: an MP3 written to a pipe has none.
    Open music with `audio_clip_stream` and short cues with `audio_clip_load`.
-2. Add each file to `build_packs.c` as `NT_ASSET_BLOB` under a codec-neutral ID.
+2. Add short cues to `game.ntpack` and music to a separate `music.ntpack`,
+   as `NT_ASSET_BLOB` under codec-neutral IDs. `audio_clip_stream` changes
+   decoding, not network delivery: music inside the core pack still delays
+   startup. The blank template automatically packs authored tracks under
+   `assets/audio/music/`; its README documents generated IDs and opt-in delivery.
 3. Add source files to the pack target's `DEPENDS` list.
 4. Regenerate the game's asset hashes before compiling code that uses them.
 5. Keep cue/music enums and the hash-to-cue mapping in game code.
 6. Call init/update/shutdown from the game shell, forward persisted mix values,
    platform pause/resume, and a real browser input gesture.
+7. Permit the music request only after the first complete playable frame was
+   presented (`swap_buffers` completed). Do not request its BLOB at audio init
+   or include it in startup readiness. Load it in the background when music is
+   wanted; request the track BLOB and stream it once the music pack is ready.
+   A slow or failed request must leave gameplay and core cues working. Keep
+   engine HTTP retries with backoff; after a terminal error, provide an
+   explicit retry, such as switching music off and on. Stop audio before
+   unmounting the music pack, including a pending request during shutdown.
 
 The feature-test consumer reference is `ai_studio/feature_testing/consumer/src/game_audio.c`.
 

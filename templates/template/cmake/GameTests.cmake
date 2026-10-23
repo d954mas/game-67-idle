@@ -15,6 +15,14 @@ if(NOT EMSCRIPTEN)
     game_add_c_test(test_game_input
         SOURCES tests/test_game_input.c src/game_input.c
         LIBS nt_input_stub INCLUDES src)
+    game_add_c_test(test_game_music_pack
+        SOURCES tests/test_game_music_pack.c src/game_music_pack.c
+        LIBS nt_hash INCLUDES src
+        DEFINES GAME_MUSIC_PACK_ENABLED=1)
+    add_test(NAME music_packaging
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_music_packaging.py"
+            --builder $<TARGET_FILE:build_game_packs>)
+    set_tests_properties(music_packaging PROPERTIES LABELS "core")
     game_add_c_test(test_game_state_roundtrip
         SOURCES tests/test_game_state_roundtrip.c "${GAME_STATE_GENERATED_SOURCE}"
                 "${GAME_STATE_SRC}/game_state_json.c"

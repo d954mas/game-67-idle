@@ -271,12 +271,15 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_audio_backend_native COMMAND test_audio_backend_native)
     set_tests_properties(test_audio_backend_native PROPERTIES LABELS "core")
 
-    add_executable(test_game_audio tests/test_game_audio.c src/game_audio.c)
-    target_link_libraries(test_game_audio PRIVATE audio_unity nt_ui_interface nt_shared nt_log)
+    add_executable(test_game_audio tests/test_game_audio.c src/game_audio.c src/game_asset_paths.c)
+    target_link_libraries(test_game_audio PRIVATE audio_unity nt_ui_interface nt_shared nt_log nt_hash)
     target_include_directories(test_game_audio PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/audio"
         "${AUDIO_CORE_INC}" "${PLATFORM_SDK_INC}" src "${ENGINE_DIR}/engine")
-    target_compile_definitions(test_game_audio PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_definitions(test_game_audio PRIVATE _CRT_SECURE_NO_WARNINGS
+        GAME_AUDIO_CORE_PACK_PATH="${GAME_ASSETS_DIR}/game.ntpack"
+        GAME_AUDIO_MUSIC_PACK_PATH="${GAME_ASSETS_DIR}/music.ntpack")
+    add_dependencies(test_game_audio game_asset_packs)
     target_compile_options(test_game_audio PRIVATE -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
     nt_set_warning_flags(test_game_audio)
     set_target_properties(test_game_audio PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")

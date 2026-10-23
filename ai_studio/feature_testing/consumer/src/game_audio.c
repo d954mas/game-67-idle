@@ -1,6 +1,9 @@
 #include "game_audio.h"
 
 #include <generated/game.h>
+#include <generated/music.h>
+
+#include "game_asset_paths.h"
 
 #include "features/audio/audio.h"
 #include "features/platform_sdk/platform_sdk.h"
@@ -15,6 +18,7 @@ typedef struct game_audio_asset_t {
     audio_clip_t clip;
     GameAudioLoadState state;
     bool load_attempted;
+    bool streamed;
     uint8_t resource_state;
     const char *name;
 } game_audio_asset_t;
@@ -28,6 +32,10 @@ static game_audio_asset_t s_ui_click;
 static game_audio_asset_t s_demo_jingle;
 static audio_voice_t s_music_voice;
 static bool s_initialized;
+static bool s_music_load_allowed;
+static bool s_music_pack_mounted;
+static bool s_music_wanted;
+static nt_hash32_t s_music_pack;
 static bool s_mix_applied;
 static float s_master;
 static float s_music;
@@ -69,6 +77,7 @@ static void asset_init(game_audio_asset_t *asset, nt_hash64_t id, const char *na
 }
 
 static void asset_update(game_audio_asset_t *asset, bool backend_available) {
+    if (asset->resource.id == NT_RESOURCE_INVALID.id) return;
     const uint8_t resource_state = nt_resource_get_state(asset->resource);
     if (resource_state != asset->resource_state) {
         asset->resource_state = resource_state;
@@ -76,7 +85,7 @@ static void asset_update(game_audio_asset_t *asset, bool backend_available) {
     }
     if (!asset->load_attempted && backend_available && nt_resource_is_ready(asset->resource)) {
         asset->load_attempted = true;
-        asset->clip = audio_clip_load(asset->id);
+        asset->clip = asset->streamed ? audio_clip_stream(asset->id) : audio_clip_load(asset->id);
         asset->state = clip_is_valid(asset->clip) ? GAME_AUDIO_LOAD_LOADING : GAME_AUDIO_LOAD_FAILED;
         if (!clip_is_valid(asset->clip)) nt_log_error("[audio] failed to start decode: %s", asset->name);
     }
@@ -98,6 +107,38 @@ static void asset_update(game_audio_asset_t *asset, bool backend_available) {
     }
 }
 
+static void music_update(bool wanted) {
+    const bool newly_wanted = wanted && !s_music_wanted;
+    if (s_music_pack_mounted && newly_wanted && nt_resource_pack_state(s_music_pack) == NT_PACK_STATE_FAILED) {
+        nt_resource_unmount(s_music_pack);
+        s_music_pack_mounted = false;
+        s_demo_jingle.state = GAME_AUDIO_LOAD_WAITING;
+    }
+    s_music_wanted = wanted;
+    if (!s_music_load_allowed || !wanted) return;
+    if (!s_music_pack_mounted) {
+        if (s_demo_jingle.state == GAME_AUDIO_LOAD_FAILED && !newly_wanted) return;
+        char path[GAME_ASSET_PATH_MAX];
+        if (!game_asset_paths_resolve("assets/music.ntpack", path, sizeof path) ||
+            nt_resource_mount(s_music_pack, 100) != NT_OK) {
+            s_demo_jingle.state = GAME_AUDIO_LOAD_FAILED;
+            return;
+        }
+        s_music_pack_mounted = true;
+        if (nt_resource_load_auto(s_music_pack, path) != NT_OK) {
+            s_demo_jingle.state = GAME_AUDIO_LOAD_FAILED;
+            return;
+        }
+        s_demo_jingle.state = GAME_AUDIO_LOAD_LOADING;
+    }
+    const nt_pack_state_t state = nt_resource_pack_state(s_music_pack);
+    if (state == NT_PACK_STATE_FAILED) {
+        s_demo_jingle.state = GAME_AUDIO_LOAD_FAILED;
+    } else if (state == NT_PACK_STATE_READY && s_demo_jingle.resource.id == NT_RESOURCE_INVALID.id) {
+        s_demo_jingle.resource = nt_resource_request(s_demo_jingle.id, NT_ASSET_BLOB);
+    }
+}
+
 static void update_mix(void) {
     const float master = settings_master();
     const float music = settings_music();
@@ -115,8 +156,20 @@ bool game_audio_init(void) {
 
     s_music_voice = AUDIO_VOICE_INVALID;
     s_mix_applied = false;
+    s_music_load_allowed = false;
+    s_music_pack_mounted = false;
+    s_music_wanted = false;
+    s_music_pack = nt_hash32_str("music");
     asset_init(&s_ui_click, ASSET_BLOB_AUDIO_SFX_UI_CLICK, "audio/sfx/ui_click");
-    asset_init(&s_demo_jingle, ASSET_BLOB_AUDIO_MUSIC_DEMO_JINGLE, "audio/music/demo_jingle");
+    s_demo_jingle = (game_audio_asset_t){
+        .id = ASSET_BLOB_AUDIO_MUSIC_DEMO_JINGLE,
+        .resource = NT_RESOURCE_INVALID,
+        .clip = AUDIO_CLIP_INVALID,
+        .state = GAME_AUDIO_LOAD_WAITING,
+        .streamed = true,
+        .resource_state = UINT8_MAX,
+        .name = "audio/music/demo_jingle",
+    };
     const bool available = audio_init();
     s_pause_listener = platform_sdk_on_pause(on_platform_pause, NULL);
     s_resume_listener = platform_sdk_on_resume(on_platform_resume, NULL);
@@ -136,10 +189,13 @@ void game_audio_shutdown(void) {
     }
     game_audio_stop_music();
     audio_shutdown();
+    if (s_music_pack_mounted) nt_resource_unmount(s_music_pack);
     s_ui_click = (game_audio_asset_t){0};
     s_demo_jingle = (game_audio_asset_t){0};
     s_music_voice = AUDIO_VOICE_INVALID;
     s_initialized = false;
+    s_music_load_allowed = false;
+    s_music_pack_mounted = false;
     s_mix_applied = false;
 }
 
@@ -147,12 +203,17 @@ void game_audio_update(void) {
     if (!s_initialized) return;
     audio_update();
     update_mix();
-    const bool available = audio_status().available;
-    asset_update(&s_ui_click, available);
-    asset_update(&s_demo_jingle, available);
+    const audio_status_t current = audio_status();
+    music_update(current.available && current.enabled && settings_master() > 0.0F && settings_music() > 0.0F);
+    asset_update(&s_ui_click, current.available);
+    asset_update(&s_demo_jingle, current.available);
     if (voice_is_valid(s_music_voice) && !audio_voice_is_playing(s_music_voice)) {
         s_music_voice = AUDIO_VOICE_INVALID;
     }
+}
+
+void game_audio_on_game_ready(void) {
+    if (s_initialized) s_music_load_allowed = true;
 }
 
 void game_audio_on_user_gesture(void) {
