@@ -101,6 +101,12 @@ class MediaInspectionTest(unittest.TestCase):
 
 
 class CaptureSettingsTest(unittest.TestCase):
+    def test_game_backend_survives_obs_resolution_alignment(self) -> None:
+        settings = resolve_capture_settings('landscape', '534x960', 60, backend='game')
+        self.assertEqual(resolve_obs_capture_settings(settings).backend, 'game')
+        with self.assertRaisesRegex(ValueError, 'backend'):
+            resolve_capture_settings('landscape', None, None, backend='desktop')
+
     def test_social_is_the_default_vertical_editing_preset(self) -> None:
         settings = resolve_capture_settings("social", None, None)
 
@@ -139,6 +145,28 @@ class ObsAlignedResolutionTest(unittest.TestCase):
 
 
 class ObsContractTest(unittest.TestCase):
+    def test_game_hook_targets_only_the_declared_window(self) -> None:
+        collection = _scene_collection(
+            'Title:GLFW30:game.exe', CaptureSettings(1920, 1080, 60, backend='game')
+        )
+        source = next(item for item in collection['sources'] if item['name'] == 'Game')
+        self.assertEqual(source['id'], 'game_capture')
+        self.assertEqual(source['settings']['capture_mode'], 'window')
+        self.assertEqual(source['settings']['window'], 'Title:GLFW30:game.exe')
+        self.assertFalse(source['settings']['capture_cursor'])
+        self.assertFalse(source['settings']['limit_framerate'])
+
+    def test_foreground_capture_keeps_the_game_visible_during_rec(self) -> None:
+        events: list[object] = []
+        _settle_game_capture(
+            123,
+            hide_game_window=False,
+            bring_window_forward=lambda hwnd: events.append(("foreground", hwnd)),
+            background_window=lambda hwnd: events.append(("background", hwnd)),
+            sleep=lambda seconds: events.append(("sleep", seconds)),
+        )
+        self.assertEqual(events, [("foreground", 123), ("sleep", 0.25)])
+
     def test_hidden_capture_settles_with_the_game_in_background(self) -> None:
         events: list[object] = []
 

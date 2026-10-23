@@ -117,7 +117,7 @@ def _validate_capture_fields(values: dict, label: str) -> None:
     fps = values.get("fps")
     if fps is not None and (not isinstance(fps, int) or isinstance(fps, bool)):
         raise ValueError(f"{label} fps must be an integer")
-    resolve_capture_settings(preset, size, fps)
+    resolve_capture_settings(preset, size, fps, backend=values.get("backend", "window"))
     if "ticks_per_frame" in values:
         _positive_int(values["ticks_per_frame"], f"{label} ticks_per_frame")
 
@@ -125,7 +125,7 @@ def _validate_capture_fields(values: dict, label: str) -> None:
 def _capture_options(defaults: dict, shot: dict | None, args: argparse.Namespace | None = None) -> tuple:
     values = dict(defaults)
     if shot is not None:
-        for key in ("preset", "size", "fps", "ticks_per_frame"):
+        for key in ("preset", "size", "fps", "ticks_per_frame", "backend"):
             if key in shot:
                 values[key] = shot[key]
     if args is not None:
@@ -135,7 +135,8 @@ def _capture_options(defaults: dict, shot: dict | None, args: argparse.Namespace
                 values[key] = value
     _validate_capture_fields(values, "capture")
     settings = resolve_capture_settings(
-        values.get("preset", "landscape"), values.get("size"), values.get("fps")
+        values.get("preset", "landscape"), values.get("size"), values.get("fps"),
+        backend=values.get("backend", "window"),
     )
     return settings, _positive_int(values.get("ticks_per_frame", 2), "capture ticks_per_frame")
 
@@ -495,7 +496,8 @@ def run(args: argparse.Namespace) -> dict:
                 "countdown": args.countdown,
                 "recording_prepare": recording_prepare,
                 "recording_driver": recording_driver,
-                "hide_game_window": shot is not None,
+                # Keep presentation active while OBS samples the game.
+                "hide_game_window": False,
             }
             if shot is not None:
                 kwargs["max_freeze_seconds"] = float(shot.get("max_freeze_seconds", 2.0))

@@ -48,6 +48,7 @@ class CaptureSettings:
     width: int
     height: int
     fps: int
+    backend: str = "window"
 
 
 @dataclass(frozen=True)
@@ -233,7 +234,11 @@ def resolve_capture_settings(
     preset: str,
     size: str | None,
     fps: int | None,
+    *,
+    backend: str = "window",
 ) -> CaptureSettings:
+    if backend not in ("window", "game"):
+        raise ValueError("capture backend must be window or game")
     settings = PRESETS[preset]
     width = settings.width
     height = settings.height
@@ -247,12 +252,12 @@ def resolve_capture_settings(
         raise ValueError("capture width and height must be positive even numbers")
     if resolved_fps not in (24, 25, 30, 50, 60):
         raise ValueError("fps must be one of 24, 25, 30, 50, or 60")
-    return CaptureSettings(width, height, resolved_fps)
+    return CaptureSettings(width, height, resolved_fps, backend)
 
 
 def resolve_obs_capture_settings(settings: CaptureSettings) -> CaptureSettings:
     # OBS rounds output width down to four pixels; center padding preserves the requested view.
-    return CaptureSettings((settings.width+3)//4*4, settings.height, settings.fps)
+    return CaptureSettings((settings.width+3)//4*4, settings.height, settings.fps, settings.backend)
 
 
 def build_master_command(
@@ -877,10 +882,25 @@ def _scene_collection(descriptor: str, settings: CaptureSettings) -> dict:
     )
     scene["mixers"] = 0
     scene["hotkeys"] = {"OBSBasic.SelectScene": []}
+    source_settings = build_window_capture_settings(descriptor)
+    source_id = "window_capture"
+    if settings.backend == "game":
+        source_id = "game_capture"
+        source_settings = {
+            "capture_mode": "window",
+            "window": descriptor,
+            "priority": 0,
+            "capture_cursor": False,
+            # A separate hook clock can repeat frames at the output sampling boundary.
+            "limit_framerate": False,
+            "capture_overlays": False,
+            "anti_cheat_hook": False,
+            "hook_rate": 1,
+        }
     game = _source_common(
         "Game",
-        "window_capture",
-        build_window_capture_settings(descriptor),
+        source_id,
+        source_settings,
         game_uuid,
     )
     marker = _source_common(
@@ -1864,7 +1884,7 @@ def record_take(
         completed_at = time.monotonic()
         result = {
             "status": "captured",
-            "backend": "obs-window-capture-wgc",
+            "backend": "obs-game-capture-hook" if settings.backend == "game" else "obs-window-capture-wgc",
             "pid": pid,
             "durationSeconds": duration_seconds,
             "sourceTrimSeconds": round(content_start_offset, 6),

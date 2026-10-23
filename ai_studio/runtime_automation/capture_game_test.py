@@ -278,7 +278,7 @@ class CaptureGameCliTest(unittest.TestCase):
                             "fps": 30,
                             "ticks_per_frame": 2,
                         },
-                        "shots": {"intro": {"seconds": 0.1, "preset": "social", "size": "1080x1920", "fps": 60, "ticks_per_frame": 1, "setup": [{"method": "game.planet.stage_intro"}], "events": []}},
+                        "shots": {"intro": {"seconds": 0.1, "preset": "social", "size": "1080x1920", "fps": 60, "backend": "game", "ticks_per_frame": 1, "setup": [{"method": "game.planet.stage_intro"}], "events": []}},
                     }
                 ),
                 encoding="utf-8",
@@ -336,11 +336,12 @@ class CaptureGameCliTest(unittest.TestCase):
         self.assertEqual(launch["window_size"], "1080x1920")
         self.assertEqual(recorded["duration_seconds"], 0.1)
         self.assertEqual(recorded["countdown"], 0)
-        self.assertTrue(recorded["hide_game_window"])
+        self.assertFalse(recorded["hide_game_window"])
         self.assertTrue(callable(recorded["recording_prepare"]))
         self.assertTrue(callable(recorded["recording_driver"]))
         self.assertEqual(recorded["max_freeze_seconds"], 2.0)
         self.assertEqual(recorded["settings"].fps, 60)
+        self.assertEqual(recorded["settings"].backend, "game")
         self.assertAlmostEqual(clock.now, recorded["duration_seconds"])
 
         prepare_end = recorded["prepare_end"]

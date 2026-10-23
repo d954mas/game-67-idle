@@ -1,4 +1,6 @@
 tmp/
+# Local run evidence and browser profiles may contain private project data.
+/.ai_studio/
 .wrangler/
 *.stackdump
 .serena/
