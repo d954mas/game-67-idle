@@ -50,7 +50,7 @@ function fixture(t) {
   write(join(gameDir, "dependencies.json"), `${JSON.stringify(dependencies, null, 2)}\n`);
   write(join(studioRoot, "external", "neotolis-engine", "engine", "core.c"), "void engine(void) {}\n");
   write(join(studioRoot, "features", "platform-sdk", "src", "sdk.c"), "void sdk(void) {}\n");
-  for (const name of ["build_web.mjs", "inject_asset_bytes.mjs", "minify_web_release.mjs"]) {
+  for (const name of ["build_web.mjs", "inject_asset_bytes.mjs", "minify_web_release.mjs", "lib/game_asset_packs.mjs"]) {
     write(join(studioRoot, "ai_studio", "game_tools", name), `// ${name}\n`);
   }
   return { studioRoot, gameDir, dependencies };
@@ -100,6 +100,24 @@ test("the Studio tooling that shapes an artifact is an input unless the game car
 
   write(join(item.gameDir, "tools", "package_web.mjs"), "// copied tooling\n");
   assert.deepEqual(createRuntimeBuildRecord(item).inputs.map((input) => input.id), ["game", "engine", "feature:platform-sdk"]);
+});
+
+test("runtime fingerprint binds the game pack declaration and the shared pack helper", (t) => {
+  const item = fixture(t);
+  const initial = createRuntimeBuildRecord(item);
+  write(join(item.gameDir, "assets", "runtime-packs.json"), JSON.stringify({ schema: "ai_studio.game.asset_packs.v1", packs: ["assets/forest.ntpack"] }));
+  const declared = createRuntimeBuildRecord(item);
+  assert.notEqual(initial.fingerprint, declared.fingerprint);
+  assert.deepEqual(declared.assetPacks, { schema: "ai_studio.game.asset_packs.v1", packs: ["assets/forest.ntpack"] });
+  assert.deepEqual(validateRuntimeBuildRecord(declared), declared);
+  const changedDeclaration = structuredClone(declared);
+  changedDeclaration.assetPacks.packs[0] = "assets/ruins.ntpack";
+  assert.throws(() => validateRuntimeBuildRecord(changedDeclaration), /fingerprint/i);
+  const removedDeclaration = structuredClone(declared);
+  delete removedDeclaration.assetPacks;
+  assert.throws(() => validateRuntimeBuildRecord(removedDeclaration), /fingerprint/i);
+  write(join(item.studioRoot, "ai_studio", "game_tools", "lib", "game_asset_packs.mjs"), "export const changed = true;\n");
+  assert.notEqual(declared.fingerprint, createRuntimeBuildRecord(item).fingerprint);
 });
 
 test("runtime build hashing rejects linked source paths", (t) => {

@@ -10,6 +10,7 @@ import {
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { hasCopiedGameTooling } from "./copied_tooling.mjs";
+import { gameAssetPackDeclaration, readGameAssetPacks, validateGameAssetPacks } from "./game_asset_packs.mjs";
 
 const { hashRuntimeBuildTree } = createRequire(import.meta.url)("./runtime_hash_tree.cjs");
 
@@ -23,7 +24,7 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 // The Studio files that change the bytes of a web artifact. A game with copied
 // tooling hashes its own copies as part of the game tree instead.
 const TOOLING_SOURCE = "ai_studio/game_tools";
-const TOOLING_FILES = ["build_web.mjs", "inject_asset_bytes.mjs", "minify_web_release.mjs"];
+const TOOLING_FILES = ["build_web.mjs", "inject_asset_bytes.mjs", "minify_web_release.mjs", "lib/game_asset_packs.mjs"];
 
 function exactKeys(value, keys, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)
@@ -136,7 +137,13 @@ export function runtimeBuildWitness(record) {
 
 export function validateRuntimeBuildRecord(record) {
   const v2 = record?.schema === SCHEMA_V2;
-  exactKeys(record, v2 ? ["schema", "fingerprint", "inputs", "profile"] : ["schema", "fingerprint", "inputs"], "runtime build record");
+  const keys = v2 ? ["schema", "fingerprint", "inputs", "profile"] : ["schema", "fingerprint", "inputs"];
+  const hasAssetPacks = record && Object.hasOwn(record, "assetPacks");
+  if (hasAssetPacks) keys.push("assetPacks");
+  exactKeys(record, keys, "runtime build record");
+  if (hasAssetPacks && !validateGameAssetPacks(record.assetPacks).length) {
+    throw new Error("runtime build asset pack declaration must not be empty");
+  }
   if (!([SCHEMA_V1, SCHEMA_V2].includes(record.schema)) || !Array.isArray(record.inputs) || record.inputs.length < 2) {
     throw new Error("runtime build record schema/inputs are invalid");
   }
@@ -164,7 +171,9 @@ export function validateRuntimeBuildRecord(record) {
     throw new Error("runtime build inputs are not canonically ordered");
   }
   const profile = v2 ? validateCompileProfile(record.profile) : null;
-  const expected = sha256(Buffer.from(JSON.stringify(v2 ? { inputs: record.inputs, profile } : record.inputs), "utf8"));
+  const boundInputs = v2 ? { inputs: record.inputs, profile } : hasAssetPacks ? { inputs: record.inputs } : record.inputs;
+  if (hasAssetPacks) boundInputs.assetPacks = record.assetPacks;
+  const expected = sha256(Buffer.from(JSON.stringify(boundInputs), "utf8"));
   if (!SHA256.test(record.fingerprint || "") || record.fingerprint !== expected) {
     throw new Error("runtime build fingerprint does not match its inputs");
   }
@@ -215,8 +224,16 @@ export function createRuntimeBuildRecord({ gameDir, studioRoot, dependencies = r
     inputs.push({ id: "tooling", source: TOOLING_SOURCE, ...hashFiles(confinedRoot(root, TOOLING_SOURCE, "game tooling"), TOOLING_FILES) });
   }
   const profile = compileProfile ? validateCompileProfile(compileProfile) : null;
-  const record = profile
-    ? { schema: SCHEMA_V2, fingerprint: sha256(Buffer.from(JSON.stringify({ inputs, profile }), "utf8")), inputs, profile }
-    : { schema: SCHEMA_V1, fingerprint: sha256(Buffer.from(JSON.stringify(inputs), "utf8")), inputs };
+  const packs = readGameAssetPacks(gameRoot);
+  const assetPacks = packs.length ? gameAssetPackDeclaration(packs) : null;
+  const boundInputs = profile ? { inputs, profile } : assetPacks ? { inputs } : inputs;
+  if (assetPacks) boundInputs.assetPacks = assetPacks;
+  const record = {
+    schema: profile ? SCHEMA_V2 : SCHEMA_V1,
+    fingerprint: sha256(Buffer.from(JSON.stringify(boundInputs), "utf8")),
+    inputs,
+    ...(profile ? { profile } : {}),
+    ...(assetPacks ? { assetPacks } : {}),
+  };
   return validateRuntimeBuildRecord(record);
 }

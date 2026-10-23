@@ -1,10 +1,36 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
 import { createBuildPlan, executeBuildPlan, optionalPackPaths, parseBuildArgs, resolveEmcmakePath } from "../build_web.mjs";
 
 const slash = (value) => value.replaceAll("\\", "/").replace(/^[A-Za-z]:/, "");
+
+test("game-declared packs stage through the build plan and disappear after declaration removal", (t) => {
+  const gameDir = mkdtempSync(join(tmpdir(), "build-pack-plan-"));
+  t.after(() => rmSync(gameDir, { recursive: true, force: true }));
+  const write = (path, value) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, value); };
+  const options = {
+    gameDir, args: { preset: "wasm-debug", target: "local", debugUi: "on", preview: true },
+    env: { EMSDK: "/opt/emsdk" }, platform: "linux", nativeConfigured: true, toolchainExists: true,
+  };
+  write(join(gameDir, "assets", "runtime-packs.json"), JSON.stringify({ schema: "ai_studio.game.asset_packs.v1", packs: ["assets/forest.ntpack"] }));
+  let plan = createBuildPlan(options);
+  write(join(plan.nativeDir, "bin", "assets", "game.ntpack"), "core");
+  write(join(plan.nativeDir, "bin", "assets", "forest.ntpack"), "forest");
+  executeBuildPlan(plan, { run: () => ({ status: 0 }) });
+  assert.ok(existsSync(join(plan.webDir, "bin", "assets", "forest.ntpack")));
+  assert.ok(existsSync(join(plan.webDir, "game-asset-packs.json")));
+  assert.ok(!existsSync(join(plan.webDir, "bin", "game-asset-packs.json")));
+  rmSync(join(gameDir, "assets", "runtime-packs.json"));
+  plan = createBuildPlan(options);
+  executeBuildPlan(plan, { run: () => ({ status: 0 }) });
+  assert.ok(!existsSync(join(plan.webDir, "bin", "assets", "forest.ntpack")));
+  assert.ok(existsSync(join(plan.webDir, "bin", "assets", "game.ntpack")));
+});
 
 test("build web arguments preserve preset target and release debug validation", () => {
   assert.deepEqual(parseBuildArgs([]), { preset: "wasm-release", target: "local", debugUi: "default", preview: false });

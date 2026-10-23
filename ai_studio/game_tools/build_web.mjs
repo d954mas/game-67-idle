@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { createRuntimeBuildRecord, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
+import { readGameAssetPacks, stageGameAssetPacks } from "./lib/game_asset_packs.mjs";
 
 // wasm-devapi-perf: DevAPI at an optimised build type, without the analytics and
 // log mirror that cost more than the game in a busy frame; it measures what ships.
@@ -172,7 +173,12 @@ export function createBuildPlan(options) {
   steps.push({ kind: "move", from: join(webDir, "bin", "game.js.symbols"), to: join(webDir, "game.js.symbols") });
   steps.push({ kind: "run", command: "cmake", args: ["--build", webDir, "--target", "platform_sdk_web_assets"] });
   steps.push({ kind: "copy", from: join(nativeDir, "bin", "assets", "game.ntpack"), to: join(webDir, "bin", "assets", "game.ntpack") });
+  const declaredPacks = readGameAssetPacks(gameDir);
+  if (declaredPacks.length || existsSync(join(webDir, "game-asset-packs.json"))) {
+    steps.push({ kind: "stage_game_packs", sourceDir: join(nativeDir, "bin"), artifactDir: join(webDir, "bin"), packs: declaredPacks });
+  }
   for (const path of options.optionalPacks || optionalPackPaths(args.target)) {
+    if (declaredPacks.includes(path)) continue;
     steps.push({ kind: "copy_optional", from: join(nativeDir, "bin", ...path.split("/")), to: join(webDir, "bin", ...path.split("/")) });
   }
   // Download sizes reach the shell before minification and only once the packs
@@ -229,6 +235,7 @@ export function executeBuildPlan(plan, deps = {}) {
     else if (step.kind === "copy") copy(step.from, step.to);
     // A pack the host no longer makes must not linger from an earlier build.
     else if (step.kind === "copy_optional") { if (exists(step.from)) copy(step.from, step.to); else remove(step.to); }
+    else if (step.kind === "stage_game_packs") (deps.stageGamePacks || stageGameAssetPacks)(step);
     else if (step.kind === "move") { if (exists(step.from)) move(step.from, step.to); }
     else if (step.kind === "stamp") write(step.path, step.value);
     else if (step.kind === "write") {

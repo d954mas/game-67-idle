@@ -165,6 +165,97 @@ function fixture(t, target = "itch") {
   };
 }
 
+function declareFixturePacks(item, packs) {
+  const declaration = { schema: "ai_studio.game.asset_packs.v1", packs };
+  write(join(item.gameDir, "assets", "runtime-packs.json"), JSON.stringify(declaration));
+  const record = item.runtimeBuild;
+  const previous = record.fingerprint;
+  record.assetPacks = declaration;
+  record.fingerprint = sha256(Buffer.from(JSON.stringify({ inputs: record.inputs, profile: record.profile, assetPacks: declaration })));
+  write(join(item.artifactDir, "runtime-build.json"), `${JSON.stringify(record, null, 2)}\n`);
+  write(join(item.artifactDir, "game.wasm"), runtimeBoundWasm(record));
+  const htmlPath = join(item.artifactDir, "index.html");
+  write(htmlPath, readFileSync(htmlPath, "utf8").replace(previous, record.fingerprint));
+  item.assetAuditProof.runtimeFingerprint = record.fingerprint;
+}
+
+test("game-owned deferred packs are required in artifacts and reopen with the same declaration", (t) => {
+  const item = fixture(t, "poki");
+  const packs = ["assets/forest.ntpack", "assets/ruins.ntpack"];
+  declareFixturePacks(item, packs);
+  assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /missing/i);
+  for (const path of packs) write(join(item.artifactDir, path), `content of ${path}`);
+  const result = packageWebArtifact({ ...item, studioRoot });
+  const entries = readStoreZip(readFileSync(result.zipPath));
+  assert.deepEqual(JSON.parse(entries.get("release.json")).assetPacks.packs, packs);
+  assert.ok(entries.has(packs[0]) && entries.has(packs[1]));
+  assert.ok(!entries.has("assets/runtime-packs.json"));
+  assert.deepEqual(verifyWebPackage({ ...result, studioRoot }), result.manifest);
+  write(join(item.artifactDir, "assets", "undeclared.ntpack"), "extra");
+  assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /unexpected|allowlist/i);
+});
+
+test("reopened ZIP rejects removed, extra, empty and invalidly declared deferred packs even with updated hashes", (t) => {
+  for (const corruption of ["missing", "extra", "empty", "duplicate", "traversal", "undeclared", "coherent-remove", "coherent-remove-field"]) {
+    const item = fixture(t);
+    declareFixturePacks(item, ["assets/forest.ntpack"]);
+    write(join(item.artifactDir, "assets", "forest.ntpack"), "forest");
+    const result = packageWebArtifact({ ...item, studioRoot });
+    const entries = readStoreZip(readFileSync(result.zipPath));
+    const release = JSON.parse(entries.get("release.json"));
+    if (corruption === "missing") entries.delete("assets/forest.ntpack");
+    if (corruption === "extra") entries.set("assets/extra.ntpack", Buffer.from("extra"));
+    if (corruption === "empty") entries.set("assets/forest.ntpack", Buffer.alloc(0));
+    if (corruption === "duplicate") release.assetPacks.packs.push("assets/forest.ntpack");
+    if (corruption === "traversal") release.assetPacks.packs.push("assets/../outside.ntpack");
+    if (corruption === "undeclared") delete release.assetPacks;
+    if (corruption.startsWith("coherent-remove")) {
+      entries.delete("assets/forest.ntpack");
+      if (corruption === "coherent-remove") release.assetPacks.packs = [];
+      else delete release.assetPacks;
+    }
+    entries.set("release.json", Buffer.from(`${JSON.stringify(release, null, 2)}\n`));
+    const zipBytes = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
+    writeFileSync(result.zipPath, zipBytes);
+    const manifest = result.manifest;
+    manifest.artifact.size = zipBytes.length;
+    manifest.artifact.sha256 = sha256(zipBytes);
+    manifest.releaseMetadataSha256 = sha256(entries.get("release.json"));
+    manifest.entries = [...entries].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) }));
+    writeFileSync(result.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    assert.throws(() => verifyWebPackage({ ...result, studioRoot }), /allowlist|payload is empty|asset pack/i, corruption);
+  }
+});
+
+test("reopened ZIP rejects coherent removal of one pack while another declared pack remains", (t) => {
+  const item = fixture(t);
+  declareFixturePacks(item, ["assets/forest.ntpack", "assets/ruins.ntpack"]);
+  for (const name of ["forest", "ruins"]) write(join(item.artifactDir, "assets", `${name}.ntpack`), name);
+  const result = packageWebArtifact({ ...item, studioRoot });
+  const entries = readStoreZip(readFileSync(result.zipPath));
+  entries.delete("assets/forest.ntpack");
+  const release = JSON.parse(entries.get("release.json"));
+  release.assetPacks.packs = ["assets/ruins.ntpack"];
+  entries.set("release.json", Buffer.from(`${JSON.stringify(release, null, 2)}\n`));
+  const zipBytes = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
+  writeFileSync(result.zipPath, zipBytes);
+  const manifest = result.manifest;
+  manifest.artifact.size = zipBytes.length;
+  manifest.artifact.sha256 = sha256(zipBytes);
+  manifest.releaseMetadataSha256 = sha256(entries.get("release.json"));
+  manifest.entries = [...entries].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) }));
+  writeFileSync(result.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  assert.throws(() => verifyWebPackage({ ...result, studioRoot }), /asset pack declaration does not match.*fingerprint/i);
+});
+
+test("artifact declaration must match the WASM-witnessed runtime declaration", (t) => {
+  const item = fixture(t);
+  declareFixturePacks(item, ["assets/forest.ntpack"]);
+  write(join(item.artifactDir, "assets", "forest.ntpack"), "forest");
+  write(join(item.artifactDir, "runtime-build.json"), JSON.stringify(runtimeBuildRecord(item.target)));
+  assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /asset pack declaration does not match.*fingerprint/i);
+});
+
 test("package rejects a missing or stale asset audit before creating output", (t) => {
   const item = fixture(t);
   const outDir = join(item.root, "rejected");

@@ -35,6 +35,9 @@ sit in, so loading the CLI from the same checkout adds no new coupling.
 - `lib/runtime_build.mjs`: runtime source and build records. For a game without
   copied tooling the record includes a `tooling` input: the files here that
   change artifact bytes (`build_web`, `inject_asset_bytes`, `minify_web_release`).
+- `lib/game_asset_packs.mjs`: validates game-owned deferred pack declarations,
+  stages required packs and extends the package allowlist. Its source is also
+  part of the runtime tooling fingerprint.
 - `lib/copied_tooling.mjs`: the one test for a game that still carries copied
   tooling (`tools/package_web.mjs` present).
 
@@ -80,6 +83,40 @@ moves one level up and is copied beside the ZIP by a building `package`. A
 `version` in `game.json` names the artifact `<id>-<target>-v<version>-<hash>`.
 `THIRD_PARTY_NOTICES.txt` may ride in any web root. `wasm-devapi-perf` is the
 optimised DevAPI build for performance measurements.
+
+## Deferred game packs
+
+A game may declare required shipping packs in `assets/runtime-packs.json`:
+
+```json
+{
+  "schema": "ai_studio.game.asset_packs.v1",
+  "packs": ["assets/forest.ntpack", "assets/ruins.ntpack"]
+}
+```
+
+The native `game_asset_packs` target must produce each file in `bin/assets/`.
+The web builder copies every declared pack and fails when one is missing or
+empty. Declarations allow at most 64 unique, flat, lower-case pack names;
+`assets/game.ntpack`, traversal, wildcards and symbolic links are forbidden.
+The game owns when to fetch and mount these packs; declaring them does not
+preload them. Portal manifests stay game-independent.
+
+The builder keeps `game-asset-packs.json` beside web `bin/`, outside the shipped
+artifact. This bounded record lets rebuilds remove only formerly declared packs
+that are no longer needed. Target-optional packs such as music retain their
+existing behavior. Games without a declaration retain the existing file set.
+
+Packaging requires every declared pack, records the declaration in
+`release.json.assetPacks`, and rechecks the same exact allowlist and nonempty
+payloads after reopening the ZIP. Nonempty declarations are also recorded as
+`runtime-build.json.assetPacks`, inside the canonical fingerprint carried by the
+compiled WASM witness. Packaging compares this witnessed list with the source
+declaration; reopening compares it with `release.json.assetPacks`, so removing a
+pack and rewriting ordinary ZIP/sidecar hashes cannot erase the requirement.
+The declaration copy and pack bytes also participate in the release metadata
+and artifact hashes. The source declaration and staging
+record are not shipped as separate files.
 
 ## Older games
 

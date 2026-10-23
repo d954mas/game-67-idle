@@ -20,6 +20,7 @@ import { spawnSync } from "node:child_process";
 import { createStoreZip, readStoreZip } from "../core_harness/tool_lib/zip_store.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { createRuntimeBuildRecord, runtimeBuildWitness, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
+import { gameAssetPackDeclaration, readGameAssetPacks, validateGameAssetPackFiles, validateGameAssetPacks } from "./lib/game_asset_packs.mjs";
 
 const DEFAULT_STUDIO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const { inspectPlatformSdkArtifact } = await import(pathToFileURL(join(
@@ -1099,9 +1100,11 @@ function fileBytes(artifactDir, paths) {
 export function validateWebArtifact({ artifactDir, target, studioRoot = DEFAULT_STUDIO_ROOT, gameDir, dependencies, identity, crashStoragePrefix, runtimeScript }) {
   const root = resolve(artifactDir);
   if (!existsSync(root) || !statSync(root).isDirectory()) throw new Error(`web artifact directory is missing: ${root}`);
-  const contract = targetManifest(resolve(studioRoot), target);
+  const assetPacks = readGameAssetPacks(gameDir);
+  const contract = withGameAssetPacks(targetManifest(resolve(studioRoot), target), assetPacks);
   const actual = collectFiles(root);
   exactAllowlist(actual, contract.required_files, contract.optional_files);
+  validateGameAssetPackFiles(root, assetPacks);
 
   const html = readFileSync(join(root, "index.html"), "utf8");
   const config = parseReleaseConfig(html);
@@ -1114,6 +1117,9 @@ export function validateWebArtifact({ artifactDir, target, studioRoot = DEFAULT_
   const runtimeRecord = readJson(join(root, "runtime-build.json"), "runtime build record");
   if (runtimeRecord.schema === "ai_studio.runtime_build.preview.v1") throw new Error("preview web artifacts cannot be packaged or released");
   const runtimeBuild = validateRuntimeBuildRecord(runtimeRecord);
+  if (JSON.stringify(assetPacks) !== JSON.stringify(runtimeBuild.assetPacks?.packs || [])) {
+    throw new Error("game asset pack declaration does not match the runtime build fingerprint");
+  }
   if (config.target !== target) throw new Error(`release target mismatch: expected ${target}, found ${config.target || "missing"}`);
   if (config.platformAdapter !== contract.platform_sdk) {
     throw new Error(`release adapter mismatch: expected ${contract.platform_sdk}, found ${config.platformAdapter || "missing"}`);
@@ -1155,7 +1161,16 @@ export function validateWebArtifact({ artifactDir, target, studioRoot = DEFAULT_
   }
   const presentOptional = contract.optional_files.filter(
     (path) => existsSync(join(root, ...path.split("/"))));
-  return { artifactDir: root, contract, runtimeBuild, files: fileBytes(root, [...contract.required_files, ...presentOptional]) };
+  return { artifactDir: root, contract, runtimeBuild, assetPacks, files: fileBytes(root, [...contract.required_files, ...presentOptional]) };
+}
+
+function withGameAssetPacks(contract, packs) {
+  return {
+    ...contract,
+    required_files: [...new Set([...contract.required_files, ...packs])],
+    packaged_required_files: [...new Set([...contract.packaged_required_files, ...packs])],
+    optional_files: contract.optional_files.filter((path) => !packs.includes(path)),
+  };
 }
 
 function compactDependencies(dependencies, bytes) {
@@ -1194,8 +1209,8 @@ function manifestFromZip({ zipBytes, zipPath, entries, release, dependencies, ru
   };
 }
 
-function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuild = true, dependencies, identity, crashStoragePrefix, runtimeScript) {
-  const contract = targetManifest(studioRoot, target);
+function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuild = true, dependencies, identity, crashStoragePrefix, runtimeScript, assetPacks = []) {
+  const contract = withGameAssetPacks(targetManifest(studioRoot, target), assetPacks);
   const actual = [...entries.keys()];
   const required = requireRuntimeBuild
     ? contract.packaged_required_files
@@ -1205,7 +1220,7 @@ function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuil
   const actualLessOptional = actual.filter((path) => !optionalSet.has(path)).sort();
   if (JSON.stringify(actualLessOptional) !== JSON.stringify(expected)) throw new Error("reopened ZIP exact allowlist mismatch");
   for (const path of actual) {
-    if (optionalSet.has(path) && !entries.get(path)?.length) throw new Error(`reopened ZIP optional payload is empty: ${path}`);
+    if ((optionalSet.has(path) || assetPacks.includes(path)) && !entries.get(path)?.length) throw new Error(`reopened ZIP pack/optional payload is empty: ${path}`);
   }
   const html = entries.get("index.html")?.toString("utf8") || "";
   const config = parseReleaseConfig(html, requireRuntimeBuild);
@@ -1332,6 +1347,7 @@ export function packageWebArtifact(options) {
     validated.runtimeBuild.fingerprint,
     options.proof || "game",
   );
+  if (validated.assetPacks.length) release.assetPacks = gameAssetPackDeclaration(validated.assetPacks);
   const releaseFiles = packagedWebFiles(
     validated.files,
     studioRoot,
@@ -1399,9 +1415,13 @@ export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studio
   const releaseBytes = entries.get("release.json");
   if (!releaseBytes) throw new Error("release metadata is missing from ZIP");
   const release = JSON.parse(releaseBytes.toString("utf8"));
-  exactKeys(release, runtimeBuildRequired
+  const releaseKeys = runtimeBuildRequired
     ? ["schema", "game", "target", "platformAdapter", "entrypoint", "dependenciesSha256", "runtimeBuildFingerprint", "build", "proof"]
-    : ["schema", "game", "target", "platformAdapter", "entrypoint", "dependenciesSha256", "build", "proof"], "ZIP release metadata");
+    : ["schema", "game", "target", "platformAdapter", "entrypoint", "dependenciesSha256", "build", "proof"];
+  const assetPacks = runtimeBuildRequired && Object.hasOwn(release, "assetPacks")
+    ? validateGameAssetPacks(release.assetPacks) : [];
+  if (Object.hasOwn(release, "assetPacks") && runtimeBuildRequired) releaseKeys.push("assetPacks");
+  exactKeys(release, releaseKeys, "ZIP release metadata");
   validateManifestGame(release.game, "ZIP release game");
   exactKeys(release.build, ["preset", "devapi", "debug"], "ZIP release build");
   if (release.schema !== `ai_studio.game.release.${runtimeBuildRequired ? "v2" : "v1"}` || release.target !== manifest.target
@@ -1415,6 +1435,9 @@ export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studio
   if (manifest.releaseMetadataSha256 !== sha256(releaseBytes)) throw new Error("release metadata hash mismatch");
   const dependencies = validateDependencies(manifest.dependencies?.record);
   const runtimeBuild = runtimeBuildRequired ? validateRuntimeBuildRecord(manifest.runtimeBuild) : null;
+  if (JSON.stringify(assetPacks) !== JSON.stringify(runtimeBuild?.assetPacks?.packs || [])) {
+    throw new Error("ZIP asset pack declaration does not match the runtime build fingerprint");
+  }
   requirePlatformSdkDependency(dependencies);
   if (manifest.dependencies.sha256 !== sha256(jsonBytes(dependencies))) throw new Error("dependency record hash mismatch");
   if (runtimeBuildRequired && !entries.get("runtime-build.json")?.equals(jsonBytes(runtimeBuild))) {
@@ -1422,7 +1445,7 @@ export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studio
   }
   validateReopenedPayload(
     entries, manifest.target, resolve(studioRoot), runtimeBuildRequired, dependencies, release.game,
-    crashStoragePrefix, runtimeScript,
+    crashStoragePrefix, runtimeScript, assetPacks,
   );
   const rows = [...entries].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) }));
   if (JSON.stringify(manifest.entries) !== JSON.stringify(rows)) throw new Error("artifact entry hash/size/path manifest mismatch");
