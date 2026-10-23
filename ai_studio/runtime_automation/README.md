@@ -262,6 +262,9 @@ with chrome_profile("shots") as profile:
 `dispose` / `remove_profile` stop Chrome and wait for the exit before deleting:
 Windows refuses to delete files a live process holds, and `kill()` does not wait.
 
+Browser GPU-process profiling (trace, sampler, stack folding):
+[`browser_gpu_profiling.md`](browser_gpu_profiling.md).
+
 ## Local mock web proof
 
 `web_local_mock_probe.mjs` connects to an isolated Chromium/Chrome page through
