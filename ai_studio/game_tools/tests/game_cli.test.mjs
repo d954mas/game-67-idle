@@ -6,9 +6,10 @@ import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { archiveSymbolMap, buildRemoteEndpoints, cleanBuild, ctestCatalogue, ctestParallelism, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, runNativeTests, runTestSuites, selectTests, summarizeTestCapture } from "../game_cli.mjs";
+import { buildRemoteEndpoints, cleanBuild, ctestCatalogue, ctestParallelism, doctorGame, executeGameCommand, goldenEnvironment, nativeTestPlan, parseGameArgs, portalCheckPlan, runNativeTests, runTestSuites, selectTests, summarizeTestCapture } from "../game_cli.mjs";
 import { findStudioRoot } from "../lib/studio_root.mjs";
 import { createRuntimeBuildRecord, runtimeBuildWitness } from "../lib/runtime_build.mjs";
+import { retainWasmSymbols } from "../lib/wasm_symbol_artifact.mjs";
 
 const gameModuleRoot = resolve(fileURLToPath(new URL("../../../templates/template", import.meta.url)));
 const studioRoot = findStudioRoot(gameModuleRoot);
@@ -356,6 +357,8 @@ function copyGameToolsCore(root) {
     recursive: true, filter: (source) => !/[\\/]tests([\\/]|$)/.test(source.slice(studioRoot.length)),
   });
   cpSync(join(studioRoot, "ai_studio", "core_harness", "tool_lib"), join(root, "ai_studio", "core_harness", "tool_lib"), { recursive: true });
+  const chromeProfile = join(root, "ai_studio", "runtime_automation", "chrome_profile.mjs");
+  write(chromeProfile, readFileSync(join(studioRoot, "ai_studio", "runtime_automation", "chrome_profile.mjs")));
 }
 
 test("copied game CLI executes doctor and final package from a real games/private/<id> dependency layout", (t) => {
@@ -430,6 +433,10 @@ test("copied game CLI executes doctor and final package from a real games/privat
     "",
   ].join("\n"));
   write(join(artifact, "game.wasm"), runtimeBoundWasm(runtimeBuild));
+  const emittedPath = join(artifact, "game.js.symbols");
+  write(emittedPath, "0:main\n");
+  retainWasmSymbols({ emittedPath, retainedPath: join(dirname(artifact), "game.js.symbols"),
+    wasmPath: join(artifact, "game.wasm"), digestPath: join(dirname(artifact), "game.js.symbols.wasm.sha256") });
   write(join(artifact, "assets", "game.ntpack"), "pack");
   write(join(artifact, "runtime-build.json"), `${JSON.stringify(runtimeBuild, null, 2)}\n`);
   for (const [from, to] of [
@@ -566,16 +573,6 @@ test("verify admits only the endpoints the build recorded beside the target buil
     smoke: ({ allowedRemoteUrls }) => { seen = allowedRemoteUrls; },
   });
   assert.deepEqual(seen, ["https://itch.example.com"]);
-});
-
-test("a built package keeps the link's symbol map beside its ZIP", () => {
-  const copies = [];
-  const target = archiveSymbolMap("/g/build/wasm-release-itch/bin", "/g/release/artifacts/g-itch-abc.zip", {
-    exists: () => true, copy: (from, to) => copies.push([from.replaceAll("\\", "/"), to]),
-  });
-  assert.equal(target, "/g/release/artifacts/g-itch-abc.symbols");
-  assert.deepEqual(copies, [["/g/build/wasm-release-itch/game.js.symbols", "/g/release/artifacts/g-itch-abc.symbols"]]);
-  assert.equal(archiveSymbolMap("/g/build/x/bin", "/g/a.zip", { exists: () => false, copy: () => assert.fail("no map to copy") }), "");
 });
 
 test("the CLI builds and proves against the one Studio it runs from", (t) => {

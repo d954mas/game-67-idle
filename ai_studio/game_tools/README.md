@@ -28,6 +28,13 @@ sit in, so loading the CLI from the same checkout adds no new coupling.
 - `build_web.mjs`: the web build plan and runtime build fingerprint.
 - `package_web.mjs`, `package_web_smoke.mjs`, `minify_web_release.mjs`,
   `inject_asset_bytes.mjs`: the deterministic portal package and its proof.
+- `lib/release_package.mjs` publishes the ZIP, manifest and exact WASM symbol
+  map for both standard games and games with custom site validation. A game may
+  declare client filenames, pack manifest location and symbol paths in
+  `release/web-package.json`; omitted configuration uses `game.*` and
+  `assets/game.ntpack`. A custom runtime still supplies its own site and
+  loader validator to the CLI; ZIP construction, manifest and publication stay
+  in Studio.
 - `portal_evidence.mjs`: release evidence for a packaged artifact. Run it from
   the game root.
 - `serve_web.mjs`: a loopback server for a built artifact. Run it from the game
@@ -79,7 +86,9 @@ The shim passes, beside `gameDir` and `commands`, only what the game owns:
 A build may record `remote_endpoints.json` (`{ "allowedRemoteUrls": [...] }`)
 beside its `bin/`: the packaged smoke then admits only those endpoints, failed
 as if the player were offline. A `game.js.symbols` map the link leaves in `bin/`
-moves one level up and is copied beside the ZIP by a building `package`. A
+moves one level up with a digest of its linked WASM. The shared release build
+asks Emscripten to emit the map; packaging requires it, checks the digest and
+keeps the map beside the ZIP, including with `--no-build`. A
 `version` in `game.json` names the artifact `<id>-<target>-v<version>-<hash>`.
 `THIRD_PARTY_NOTICES.txt` may ride in any web root. `wasm-devapi-perf` is the
 optimised DevAPI build for performance measurements.

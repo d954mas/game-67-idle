@@ -101,7 +101,7 @@ test("plan preserves build dirs local cache native pack web targets and final me
   assert.equal(slash(plan.env.EM_CACHE), "/repo/templates/template/build/emscripten-cache");
   assert.equal(slash(plan.nativeDir), "/repo/templates/template/build/wasm-devapi-debug-yandex-host");
   assert.equal(slash(plan.webDir), "/repo/templates/template/build/wasm-devapi-debug-yandex");
-  assert.deepEqual(plan.steps.map((step) => step.kind), ["mkdir", "run", "stamp", "run", "run", "run", "move", "run", "copy", "run", "write"]);
+  assert.deepEqual(plan.steps.map((step) => step.kind), ["mkdir", "run", "stamp", "run", "run", "run", "retain_symbols", "run", "copy", "run", "write"]);
   const runSteps = plan.steps.filter((step) => step.kind === "run");
   assert.equal(runSteps[0].args.slice(-4, -1).join(" "), "-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Debug");
   assert.match(runSteps[0].args.at(-1), /^-DGAME_REPO_ROOT=/);
@@ -185,6 +185,7 @@ test("plan covers every preset across every publish target with exact debug flag
       assert.ok(configure.args.includes(`-DGAME_EVENTS_LOG_MIRROR=${["wasm-release", "wasm-devapi-perf"].includes(preset) ? "OFF" : "ON"}`));
       assert.ok(configure.args.includes(`-DGAME_DEVAPI_ENABLED=${preset.startsWith("wasm-devapi") ? "ON" : "OFF"}`));
       assert.ok(configure.args.includes(`-DGAME_PLATFORM_SDK_DEBUG_UI=${preset === "wasm-release" ? "OFF" : "ON"}`));
+      assert.equal(configure.args.includes("-DCMAKE_EXE_LINKER_FLAGS=--emit-symbol-map"), preset === "wasm-release");
     }
   }
 });
@@ -323,17 +324,16 @@ test("the target's optional packs are staged only when the host built them", () 
     steps: [
       { kind: "copy_optional", from: "host/music.ntpack", to: "bin/music.ntpack" },
       { kind: "copy_optional", from: "host/absent.ntpack", to: "bin/absent.ntpack" },
-      { kind: "move", from: "bin/game.js.symbols", to: "game.js.symbols" },
-      { kind: "move", from: "bin/absent.symbols", to: "absent.symbols" },
+      { kind: "retain_symbols", emittedPath: "bin/game.js.symbols", retainedPath: "game.js.symbols", wasmPath: "bin/game.wasm", digestPath: "game.js.symbols.wasm.sha256" },
     ],
     message: "done",
   }, {
     mkdir: () => {},
     exists: (path) => !path.includes("absent"),
     copy: (from, to) => events.push(["copy", from, to]),
-    move: (from, to) => events.push(["move", from, to]),
+    retainSymbols: ({ emittedPath, retainedPath }) => events.push(["retain", emittedPath, retainedPath]),
   });
-  assert.deepEqual(events, [["copy", "host/music.ntpack", "bin/music.ntpack"], ["move", "bin/game.js.symbols", "game.js.symbols"]]);
+  assert.deepEqual(events, [["copy", "host/music.ntpack", "bin/music.ntpack"], ["retain", "bin/game.js.symbols", "game.js.symbols"]]);
 });
 
 test("both trees build from the Studio that proves them", () => {

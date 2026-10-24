@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { closeSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -435,17 +435,6 @@ export function buildRemoteEndpoints(gameDir, target, { read = readFileSync, exi
   return urls;
 }
 
-/* A release crash reports raw wasm offsets, which mean nothing without the map
-   from that exact link, so the map is kept beside the ZIP. Only a build this
-   command ran owns the map; --no-build packages whatever it was handed. */
-export function archiveSymbolMap(releaseArtifactDir, zipPath, { exists = existsSync, copy = copyFileSync } = {}) {
-  const source = join(dirname(releaseArtifactDir), "game.js.symbols");
-  if (!exists(source)) return "";
-  const target = zipPath.replace(/\.zip$/, ".symbols");
-  copy(source, target);
-  return target;
-}
-
 /* One verdict for a portal submission. The three checks belong to three owners
    -- the feature owns the artifact contract and the SDK probe, the studio owns
    the store spec -- and a release is only ready when all three agree, so they
@@ -591,7 +580,6 @@ export async function packageGame(options, dependencies = {}, metadata = null) {
     ...proof,
     ...(metadata ? { dependencyVerifier: () => {} } : {}),
   });
-  if (options.build) archiveSymbolMap(releaseArtifactDir, packaged.zipPath);
   return packaged;
 }
 

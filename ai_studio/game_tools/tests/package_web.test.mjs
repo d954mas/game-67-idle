@@ -29,6 +29,7 @@ import { minifyWebRelease } from "../minify_web_release.mjs";
 import { createStoreZip, readStoreZip } from "../../core_harness/tool_lib/zip_store.mjs";
 import { findStudioRoot } from "../lib/studio_root.mjs";
 import { runtimeBuildWitness } from "../lib/runtime_build.mjs";
+import { retainWasmSymbols } from "../lib/wasm_symbol_artifact.mjs";
 
 const gameModuleRoot = resolve(fileURLToPath(new URL("../../../templates/template", import.meta.url)));
 const studioRoot = findStudioRoot(gameModuleRoot);
@@ -144,6 +145,10 @@ function fixture(t, target = "itch") {
     "",
   ].join("\n"));
   write(join(artifactDir, "game.wasm"), runtimeBoundWasm(runtimeBuild));
+  const emittedPath = join(artifactDir, "game.js.symbols");
+  write(emittedPath, "0:main\n");
+  retainWasmSymbols({ emittedPath, retainedPath: join(dirname(artifactDir), "game.js.symbols"),
+    wasmPath: join(artifactDir, "game.wasm"), digestPath: join(dirname(artifactDir), "game.js.symbols.wasm.sha256") });
   write(join(artifactDir, "assets", "game.ntpack"), Buffer.from("pack"));
   write(join(artifactDir, "runtime-build.json"), `${JSON.stringify(runtimeBuild, null, 2)}\n`);
   for (const [from, to] of [
@@ -174,6 +179,10 @@ function declareFixturePacks(item, packs) {
   record.fingerprint = sha256(Buffer.from(JSON.stringify({ inputs: record.inputs, profile: record.profile, assetPacks: declaration })));
   write(join(item.artifactDir, "runtime-build.json"), `${JSON.stringify(record, null, 2)}\n`);
   write(join(item.artifactDir, "game.wasm"), runtimeBoundWasm(record));
+  const emittedPath = join(item.artifactDir, "game.js.symbols");
+  write(emittedPath, "0:main\n");
+  retainWasmSymbols({ emittedPath, retainedPath: join(dirname(item.artifactDir), "game.js.symbols"),
+    wasmPath: join(item.artifactDir, "game.wasm"), digestPath: join(dirname(item.artifactDir), "game.js.symbols.wasm.sha256") });
   const htmlPath = join(item.artifactDir, "index.html");
   write(htmlPath, readFileSync(htmlPath, "utf8").replace(previous, record.fingerprint));
   item.assetAuditProof.runtimeFingerprint = record.fingerprint;
@@ -311,6 +320,16 @@ test("final package is deterministic and binds the reopened ZIP to exact depende
   assert.deepEqual(JSON.parse(zip.get("runtime-build.json").toString("utf8")), item.runtimeBuild);
   assert.equal(JSON.parse(zip.get("release.json").toString("utf8")).dependenciesSha256.length, 64);
   assert.equal(JSON.parse(zip.get("release.json").toString("utf8")).runtimeBuildFingerprint, item.runtimeBuild.fingerprint);
+});
+
+test("shared package retains exact linked WASM symbols beside the ZIP", (t) => {
+  const item = fixture(t);
+  const buildDir = dirname(item.artifactDir);
+  const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
+  assert.equal(readFileSync(result.symbolsPath, "utf8"), "0:main\n");
+  assert.equal(readStoreZip(readFileSync(result.zipPath)).has("game.js.symbols"), false);
+  write(join(buildDir, "game.js.symbols.wasm.sha256"), "0".repeat(64));
+  assert.throws(() => packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "stale") }), /digest/i);
 });
 
 test("Poki release embeds the selected platform backend into game.js", (t) => {
@@ -1124,6 +1143,16 @@ test("artifact inventory rejects symlinks before reading payloads", (t) => {
   assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /symlink is forbidden/i);
 });
 
+test("release output rejects a redirected directory", (t) => {
+  const item = fixture(t, "poki");
+  const external = join(item.root, "external-output");
+  mkdirSync(external);
+  const redirect = join(item.root, "redirected-output");
+  symlinkSync(external, redirect, process.platform === "win32" ? "junction" : "dir");
+  assert.throws(() => packageWebArtifact({ ...item, studioRoot, outDir: redirect }), /output directory redirects/i);
+  assert.deepEqual(readdirSync(external), []);
+});
+
 test("STORE ZIP parser rejects unsafe names, case collisions, descriptors, hidden gaps, and trailing bytes", () => {
   for (const path of ["/absolute", "C:/drive", "../escape", "a/../escape", "a\\b", "a\0b"]) {
     assert.throws(() => createStoreZip([{ path, bytes: Buffer.from("x") }]), /invalid ZIP entry path/i, path);
@@ -1185,7 +1214,7 @@ test("a conflicting sidecar is detected before publish and cannot orphan the ZIP
     },
   }), /injected ZIP publish failure/);
   assert.equal(readdirSync(failedOut).some((name) => name.endsWith(".zip")), false);
-  assert.equal(readdirSync(failedOut).some((name) => name.endsWith(".manifest.json")), true);
+  assert.equal(readdirSync(failedOut).some((name) => name.endsWith(".manifest.json")), false);
   const retried = packageWebArtifact({ ...item, studioRoot, outDir: failedOut });
   assert.equal(existsSync(retried.zipPath), true);
   assert.equal(existsSync(retried.manifestPath), true);
@@ -1197,23 +1226,16 @@ test("a conflicting sidecar is detected before publish and cannot orphan the ZIP
   }));
 
   const interleavedOut = join(item.root, "interleaved");
-  let nested;
-  let outerPublishes = 0;
   assert.throws(() => packageWebArtifact({
     ...item,
     studioRoot,
     outDir: interleavedOut,
     publisher: (temp, final) => {
-      outerPublishes += 1;
-      if (outerPublishes === 1) {
-        renameSync(temp, final);
-        nested = packageWebArtifact({ ...item, studioRoot, outDir: interleavedOut });
-        return true;
-      }
-      throw new Error("outer ZIP publication failed after concurrent writer");
+      renameSync(temp, final);
+      packageWebArtifact({ ...item, studioRoot, outDir: interleavedOut });
     },
-  }), /outer ZIP publication failed/);
-  assert.ok(nested);
+  }), /already being published/);
+  const nested = packageWebArtifact({ ...item, studioRoot, outDir: interleavedOut });
   assert.equal(existsSync(nested.zipPath), true);
   assert.equal(existsSync(nested.manifestPath), true);
   assert.doesNotThrow(() => verifyWebPackage({

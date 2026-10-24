@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { createRuntimeBuildRecord, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 import { readGameAssetPacks, stageGameAssetPacks } from "./lib/game_asset_packs.mjs";
+import { retainWasmSymbols } from "./lib/wasm_symbol_artifact.mjs";
 
 // wasm-devapi-perf: DevAPI at an optimised build type, without the analytics and
 // log mirror that cost more than the game in a busy frame; it measures what ships.
@@ -165,12 +166,15 @@ export function createBuildPlan(options) {
   configureArgs.push(`-DGAME_RUNTIME_BUILD_FINGERPRINT=${runtimeBuild ? runtimeBuild.fingerprint : ""}`);
   configureArgs.push(`-DGAME_PLATFORM_SDK_DEBUG_UI=${compileProfile.debugUi ? "ON" : "OFF"}`);
   configureArgs.push(`-DGAME_DEVAPI_ENABLED=${compileProfile.devapi ? "ON" : "OFF"}`);
+  if (args.preset === "wasm-release") configureArgs.push("-DCMAKE_EXE_LINKER_FLAGS=--emit-symbol-map");
   configureArgs.push(...extra.web);
   steps.push({ kind: "run", command: configureCommand, args: configureArgs });
   steps.push({ kind: "run", command: "cmake", args: ["--build", webDir, "--target", "game"] });
   // A game that links with a symbol map gets it beside the output, but bin/ is
   // the exact file set the packager allows; the map is kept one level up.
-  steps.push({ kind: "move", from: join(webDir, "bin", "game.js.symbols"), to: join(webDir, "game.js.symbols") });
+  steps.push({ kind: "retain_symbols", emittedPath: join(webDir, "bin", "game.js.symbols"),
+    retainedPath: join(webDir, "game.js.symbols"), wasmPath: join(webDir, "bin", "game.wasm"),
+    digestPath: join(webDir, "game.js.symbols.wasm.sha256") });
   steps.push({ kind: "run", command: "cmake", args: ["--build", webDir, "--target", "platform_sdk_web_assets"] });
   steps.push({ kind: "copy", from: join(nativeDir, "bin", "assets", "game.ntpack"), to: join(webDir, "bin", "assets", "game.ntpack") });
   const declaredPacks = readGameAssetPacks(gameDir);
@@ -227,7 +231,7 @@ export function executeBuildPlan(plan, deps = {}) {
   const exists = deps.exists || existsSync;
   // A rebuild that relinks nothing re-emits nothing: a missing source means the
   // file already sits where it belongs, or the game does not make one.
-  const move = deps.move || ((from, to) => { mkdir(dirname(to)); renameSync(from, to); });
+  const retainSymbols = deps.retainSymbols || retainWasmSymbols;
   const run = deps.run || ((command, args, options) => spawnSync(command, args, { ...options, stdio: "inherit", shell: false }));
   for (const step of plan.steps) {
     if (step.kind === "mkdir") mkdir(step.path);
@@ -236,7 +240,7 @@ export function executeBuildPlan(plan, deps = {}) {
     // A pack the host no longer makes must not linger from an earlier build.
     else if (step.kind === "copy_optional") { if (exists(step.from)) copy(step.from, step.to); else remove(step.to); }
     else if (step.kind === "stage_game_packs") (deps.stageGamePacks || stageGameAssetPacks)(step);
-    else if (step.kind === "move") { if (exists(step.from)) move(step.from, step.to); }
+    else if (step.kind === "retain_symbols") retainSymbols(step);
     else if (step.kind === "stamp") write(step.path, step.value);
     else if (step.kind === "write") {
       (deps.verifyRuntimeBuild || plan.verifyRuntimeBuild)?.();

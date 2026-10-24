@@ -3,16 +3,12 @@
 import {
   existsSync,
   lstatSync,
-  mkdirSync,
   readFileSync,
   readdirSync,
   realpathSync,
-  renameSync,
-  rmSync,
   statSync,
-  writeFileSync,
 } from "node:fs";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -20,6 +16,7 @@ import { spawnSync } from "node:child_process";
 import { createStoreZip, readStoreZip } from "../core_harness/tool_lib/zip_store.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { createRuntimeBuildRecord, runtimeBuildWitness, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
+import { publishWebRelease } from "./lib/release_package.mjs";
 import { gameAssetPackDeclaration, readGameAssetPacks, validateGameAssetPackFiles, validateGameAssetPacks } from "./lib/game_asset_packs.mjs";
 
 const DEFAULT_STUDIO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -1173,42 +1170,6 @@ function withGameAssetPacks(contract, packs) {
   };
 }
 
-function compactDependencies(dependencies, bytes) {
-  return {
-    sha256: sha256(bytes),
-    record: dependencies,
-  };
-}
-
-function releaseMetadata(identity, dependenciesHash, target, adapter, runtimeBuildFingerprint, proof = "game") {
-  return {
-    schema: "ai_studio.game.release.v2",
-    game: { id: identity.id, title: identity.title, storageNamespace: identity.storageNamespace },
-    target,
-    platformAdapter: adapter,
-    entrypoint: "index.html",
-    dependenciesSha256: dependenciesHash,
-    runtimeBuildFingerprint,
-    build: { preset: "wasm-release", devapi: false, debug: false },
-    proof,
-  };
-}
-
-function manifestFromZip({ zipBytes, zipPath, entries, release, dependencies, runtimeBuild }) {
-  return {
-    schema: "ai_studio.game.artifact_manifest.v2",
-    game: release.game,
-    target: release.target,
-    platformAdapter: release.platformAdapter,
-    artifact: { file: basename(zipPath), size: zipBytes.length, sha256: sha256(zipBytes) },
-    entrypoint: release.entrypoint,
-    releaseMetadataSha256: sha256(entries.get("release.json")),
-    dependencies,
-    runtimeBuild,
-    entries: [...entries].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) })),
-  };
-}
-
 function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuild = true, dependencies, identity, crashStoragePrefix, runtimeScript, assetPacks = []) {
   const contract = withGameAssetPacks(targetManifest(studioRoot, target), assetPacks);
   const actual = [...entries.keys()];
@@ -1276,31 +1237,6 @@ function validateReopenedPayload(entries, target, studioRoot, requireRuntimeBuil
   return contract;
 }
 
-function publishVerified(tempPath, finalPath) {
-  if (existsSync(finalPath)) {
-    if (!readFileSync(finalPath).equals(readFileSync(tempPath))) throw new Error(`refusing to replace a different deterministic artifact: ${finalPath}`);
-    rmSync(tempPath, { force: true });
-    return false;
-  }
-  try {
-    renameSync(tempPath, finalPath);
-    return true;
-  } catch (error) {
-    if (existsSync(finalPath) && readFileSync(finalPath).equals(readFileSync(tempPath))) {
-      rmSync(tempPath, { force: true });
-      return false;
-    }
-    throw error;
-  }
-}
-
-function preflightVerified(tempPath, finalPath) {
-  if (existsSync(finalPath) && !readFileSync(finalPath).equals(readFileSync(tempPath))) {
-    throw new Error(`refusing to replace a different deterministic artifact: ${finalPath}`);
-  }
-  return existsSync(finalPath);
-}
-
 export function packageWebArtifact(options) {
   const gameDir = resolve(options.gameDir);
   const target = options.target || "itch";
@@ -1310,7 +1246,6 @@ export function packageWebArtifact(options) {
   const dependencies = validateDependencies(options.dependencies || readJson(dependencyPath, "dependencies"));
   requirePlatformSdkDependency(dependencies);
   (options.dependencyVerifier || verifyDependencySources)({ studioRoot, dependencies, ...(options.git ? { git: options.git } : {}) });
-  const dependencyBytes = jsonBytes(dependencies);
   const validated = validateWebArtifact({
     artifactDir: options.artifactDir,
     target,
@@ -1338,57 +1273,23 @@ export function packageWebArtifact(options) {
       || assetAuditProof.assetPackSha256 !== sha256(assetPack)) {
     throw new Error("package requires a successful asset audit for the current runtime fingerprint");
   }
-  const compact = compactDependencies(dependencies, dependencyBytes);
-  const release = releaseMetadata(
-    identity,
-    compact.sha256,
-    target,
-    validated.contract.platform_sdk,
-    validated.runtimeBuild.fingerprint,
-    options.proof || "game",
-  );
-  if (validated.assetPacks.length) release.assetPacks = gameAssetPackDeclaration(validated.assetPacks);
   const releaseFiles = packagedWebFiles(
     validated.files,
     studioRoot,
     validated.contract.platform_sdk,
     requiresPlatformDiagnostics(dependencies),
   );
-  const entries = [...releaseFiles, { path: "release.json", bytes: jsonBytes(release) }];
-  const zipBytes = createStoreZip(entries);
-  const outDir = resolve(options.outDir || join(gameDir, "release", "artifacts"));
-  mkdirSync(outDir, { recursive: true });
-  const artifactId = sha256(zipBytes).slice(0, 16);
-  const baseName = `${identity.id}-${target}${identity.version ? `-v${identity.version}` : ""}-${artifactId}`;
-  const zipName = `${baseName}.zip`;
-  const manifestName = `${baseName}.manifest.json`;
-  const zipPath = join(outDir, zipName);
-  const manifestPath = join(outDir, manifestName);
-  const tempDir = join(outDir, `.package-${process.pid}-${randomUUID()}.tmp`);
-  mkdirSync(tempDir);
-  const tempZip = join(tempDir, zipName);
-  const tempManifest = join(tempDir, manifestName);
-  try {
-    writeFileSync(tempZip, zipBytes);
-    const reopened = readStoreZip(readFileSync(tempZip));
-    const manifest = manifestFromZip({
-      zipBytes: readFileSync(tempZip), zipPath: tempZip, entries: reopened, release,
-      dependencies: compact, runtimeBuild: validated.runtimeBuild,
-    });
-    writeFileSync(tempManifest, jsonBytes(manifest));
-    verifyWebPackage({
-      zipPath: tempZip, manifestPath: tempManifest, expectedTarget: target, studioRoot,
+  return publishWebRelease({
+    gameDir, identity, target, adapter: validated.contract.platform_sdk,
+    dependencies, runtimeBuild: validated.runtimeBuild, releaseFiles,
+    siteFiles: validated.files, artifactDir: validated.artifactDir,
+    outDir: options.outDir, publisher: options.publisher, proof: options.proof || "game",
+    assetPacks: validated.assetPacks.length ? gameAssetPackDeclaration(validated.assetPacks) : null,
+    verifyPackage: ({ zipPath, manifestPath, expectedTarget }) => verifyWebPackage({
+      zipPath, manifestPath, expectedTarget, studioRoot,
       crashStoragePrefix: options.crashStoragePrefix, runtimeScript: options.runtimeScript,
-    });
-    const publisher = options.publisher || publishVerified;
-    preflightVerified(tempManifest, manifestPath);
-    preflightVerified(tempZip, zipPath);
-    publisher(tempManifest, manifestPath);
-    publisher(tempZip, zipPath);
-    return { zipPath, manifestPath, manifest };
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
+    }),
+  });
 }
 
 export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studioRoot = DEFAULT_STUDIO_ROOT, crashStoragePrefix, runtimeScript }) {
