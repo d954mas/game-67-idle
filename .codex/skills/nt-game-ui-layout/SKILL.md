@@ -60,9 +60,9 @@ covers the changed surface. For retained state, loop open/close/reopen and
 confirm used slots return to the intended baseline. Record evidence paths before
 marking work done.
 
-For every window, maintain the game's `design/ui_window_contracts.json` and
+For every active game's window, maintain `design/ui_window_contracts.json` and
 run the Studio-wide contract inventory (`window_layout_contract.py --studio-root .`)
-to expose missing game declarations. Then
+to expose missing active-game declarations; frozen games are skipped. Then
 run `ai_studio/runtime_automation/window_layout_capture.py --game <id>` after
 a native DevAPI build. The shared checker must cover every declared window and
 modal scene; review its screenshots. See

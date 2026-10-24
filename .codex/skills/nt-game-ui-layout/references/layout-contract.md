@@ -55,7 +55,7 @@ non-floating content plus floating text/caret/selection using
 ## Window Composition Check
 
 The game owns `design/ui_window_contracts.json`: one entry per window with a
-stable `/window` root ID, source draw function and scene or DevAPI open
+stable semantic root ID (`/window` for new windows), source draw function and scene or DevAPI open
 commands. `single` layout and no scroll are the defaults. An adaptive layout
 or named scroll region needs a content reason. Settings cannot opt out of
 single-layout/no-scroll. See the

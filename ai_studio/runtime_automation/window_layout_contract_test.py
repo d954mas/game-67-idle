@@ -50,6 +50,8 @@ class WindowLayoutContractTest(unittest.TestCase):
             self.assertTrue(check_source_no_scroll(path, "settings_draw"))
             path.write_text("void settings_draw(void) { /* nt_ui_scroll_begin() */ draw_rows(); }", encoding="utf-8")
             self.assertEqual(check_source_no_scroll(path, "settings_draw"), [])
+            path.write_text('void settings_draw(void) { body.scroll_id = "settings/scroll"; }', encoding="utf-8")
+            self.assertTrue(check_source_no_scroll(path, "settings_draw"))
 
     def test_function_extraction_ignores_literal_braces(self):
         body = function_body('void settings_draw(void) { label("}"); if (ok) { draw(); } }', "settings_draw")
@@ -113,11 +115,16 @@ class WindowLayoutContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as folder:
             game = Path(folder) / "games" / "private" / "one-game"
             (game / "src").mkdir(parents=True)
+            (game / "game.json").write_text('{"schema":"ai_studio.game.v1","id":"one-game"}', encoding="utf-8")
             self.assertTrue(any("one-game: missing" in error for error in check_studio_games(Path(folder))))
             (game / "design").mkdir()
             (game / "design" / "ui_window_contracts.json").write_text(
                 '{"schema":"ai_studio.ui_window_contracts.v1","windows":[],"no_windows_reason":"No UI windows"}',
                 encoding="utf-8")
+            self.assertEqual(check_studio_games(Path(folder)), [])
+            (game / "design" / "ui_window_contracts.json").unlink()
+            (game / "game.json").write_text(
+                '{"schema":"ai_studio.game.v1","id":"one-game","lifecycle":{"state":"frozen"}}', encoding="utf-8")
             self.assertEqual(check_studio_games(Path(folder)), [])
 
     def test_contract_rejects_fake_root_and_malformed_open_wait(self):
@@ -132,6 +139,20 @@ class WindowLayoutContractTest(unittest.TestCase):
             errors = check_contract(contract, root)
             self.assertTrue(any("root ID literal is absent" in error for error in errors))
             self.assertTrue(any("open must contain" in error for error in errors))
+
+    def test_non_window_source_id_needs_explicit_exclusion(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as folder:
+            root = Path(folder)
+            (root / "src").mkdir()
+            (root / "src" / "ui.c").write_text(
+                'void draw(void) { window("settings/sheet"); window("hud/counter/window"); }', encoding="utf-8")
+            contract = {"schema": "ai_studio.ui_window_contracts.v1", "windows": [{
+                "id": "settings/sheet", "purpose": "settings", "scene": "settings",
+                "source": {"file": "src/ui.c", "function": "draw"},
+            }]}
+            self.assertTrue(any("hud/counter/window" in error for error in check_contract(contract, root)))
+            contract["non_window_roots"] = [{"id": "hud/counter/window", "reason": "HUD counter"}]
+            self.assertEqual(check_contract(contract, root), [])
 
 
 if __name__ == "__main__":

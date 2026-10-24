@@ -12,7 +12,7 @@ from typing import Any
 
 SCROLL_CALL = re.compile(
     r"\b(?:nt_ui_scroll_begin|nt_ui_vlist_begin|hud_content_begin|CLAY_SCROLL_CONFIG)\s*\(|"
-    r"\bscrollContainer\b|\.scroll\s*=|\bCLAY_SCROLL_\w+\b"
+    r"\bscrollContainer\b|\.scroll(?:_id)?\s*=|\bCLAY_SCROLL_\w+\b"
 )
 
 
@@ -195,8 +195,6 @@ def check_contract(
             errors.append("window entry needs a semantic id")
             continue
         root_id = entry["id"]
-        if not root_id.endswith("/window"):
-            errors.append(f"{root_id}: window root ID must end in /window")
         if root_id in ids:
             errors.append(f"duplicate window {root_id}")
         ids.add(root_id)
@@ -251,7 +249,16 @@ def check_contract(
     if not source_root.is_dir():
         errors.append(f"missing game source directory: {source_root}")
     else:
-        undeclared = discovered_windows(source_root) - ids
+        ignored_roots = contract.get("non_window_roots", [])
+        if not isinstance(ignored_roots, list) or any(
+            not isinstance(item, dict) or not item.get("id") or not item.get("reason") for item in ignored_roots
+        ):
+            errors.append("non_window_roots entries need id and reason")
+            ignored_roots = []
+        excluded_roots = {item["id"] for item in ignored_roots}
+        if ids & excluded_roots:
+            errors.append(f"window roots cannot also be excluded: {sorted(ids & excluded_roots)}")
+        undeclared = discovered_windows(source_root) - ids - excluded_roots
         if undeclared:
             errors.append(f"window roots without contracts: {sorted(undeclared)}")
     if scene_list is not None:
@@ -316,11 +323,23 @@ def check_contract(
 
 def check_studio_games(studio_root: Path) -> list[str]:
     errors: list[str] = []
-    games_root = studio_root / "games" / "private"
+    games_root = studio_root / "games"
     if not games_root.is_dir():
-        return [f"missing private games directory: {games_root}"]
-    for game_root in sorted(games_root.iterdir()):
-        if not game_root.is_dir() or not (game_root / "src").is_dir():
+        return [f"missing games directory: {games_root}"]
+    candidates = [*games_root.iterdir()]
+    private_root = games_root / "private"
+    if private_root.is_dir():
+        candidates.extend(private_root.iterdir())
+    for game_root in sorted(candidates):
+        identity_path = game_root / "game.json"
+        if not game_root.is_dir() or not (game_root / "src").is_dir() or not identity_path.is_file():
+            continue
+        try:
+            identity = json.loads(identity_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            errors.append(f"{game_root.name}: {exc}")
+            continue
+        if identity.get("lifecycle", {}).get("state") == "frozen":
             continue
         contract_path = game_root / "design" / "ui_window_contracts.json"
         if not contract_path.is_file():
@@ -357,7 +376,7 @@ def main() -> int:
     parser.add_argument("--game-root", type=Path, help="game root for contract source paths")
     parser.add_argument("--proof", type=Path, help="optional complete portrait/landscape ui.tree proof")
     parser.add_argument("--scene-list", type=Path, help="optional game.scene.list result for modal coverage")
-    parser.add_argument("--studio-root", type=Path, help="check contracts for every private game with src/")
+    parser.add_argument("--studio-root", type=Path, help="check contracts for every active game with src/")
     args = parser.parse_args()
     if args.studio_root:
         if args.contract or args.root or args.portrait or args.landscape:
@@ -367,7 +386,7 @@ def main() -> int:
             for error in errors:
                 print(f"FAIL: {error}", file=sys.stderr)
             return 1
-        print("PASS: every private game with src/ has a valid window contract")
+        print("PASS: every active game with src/ has a valid window contract")
         return 0
     if args.contract:
         if not args.game_root or args.root or args.portrait or args.landscape:

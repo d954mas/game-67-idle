@@ -37,23 +37,24 @@ window root ID before the next command (for example, before `ui.click`).
 `context` optionally names its UI
 context for `ui.tree` and `ui.scroll`.
 
-The window root has a stable semantic ID ending in `/window`. The checker
-compares those literals found under `src/` with the contract, and compares
+The window root has a stable semantic ID; new windows use a `/window` suffix.
+The checker compares those literals found under `src/` with the contract, and compares
 the contract's scene IDs with `game.scene.list` during capture. A modal scene
 that does not produce a window must be listed in `non_window_scenes` with a
-reason. Dynamic windows inside gameplay scenes still need explicit entries;
+reason. A source ID ending in `/window` that names a HUD element rather than a
+window goes in `non_window_roots` with a reason. Dynamic windows inside gameplay scenes still need explicit entries;
 the source scan cannot discover IDs assembled at runtime.
 
 An empty `windows` array requires `no_windows_reason`; only use it after
-inspecting a game that truly has no windows. Check every private game with
-`src/` in one pass:
+inspecting a game that truly has no windows. Check every active game with
+`src/` in one pass; games frozen in `game.json` are skipped:
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/window_layout_contract.py --studio-root .
 ```
 
-This check fails on every missing contract. Existing games need their own
-inventories before it can become a blocking Studio gate. The static pass
+This check fails on every missing active-game contract. Active games need their
+own inventories before it can become a blocking Studio gate. The static pass
 cannot prove a game's window appearance or discover dynamically assembled
 root IDs; the runtime scene catalog and capture complete that check.
 
