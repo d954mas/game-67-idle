@@ -106,7 +106,7 @@ clear is borrowed from the app world: at `ref_hand`, the `hit` token must still
 be 44 CSS pixels on a 390-pixel phone (Apple/WCAG's number), which a test
 asserts.
 
-Two known gaps, both numbers rather than layouts:
+Known gaps:
 
 - **A tablet is a coarse pointer on a big screen.** It currently gets the hand
   reference, so the interface is larger than it needs to be. Unreal's answer is
@@ -114,8 +114,30 @@ Two known gaps, both numbers rather than layouts:
   two points across the short edge in CSS pixels for touch screens only, leaving
   mouse screens on `ref_desk`.
 - **Arrangement is still per-game.** `ui_metrics()` reports `portrait` and
-  `in_hand`; what the app world does with them — one breakpoint where a row
-  becomes a column — is not yet a kit-level pattern.
+  `in_hand`; the game decides which content-heavy window needs an alternate
+  arrangement.
+
+## Window composition rule
+
+Author one window composition, then scale it to fit portrait, landscape, and
+desktop. Orientation alone is not a reason to create another arrangement.
+Backpack, chest, and shop windows are examples where item grids and adjacent
+details can justify separate portrait and landscape compositions. Record the
+content constraint before adding the exception; reuse the same components and
+interaction states in both.
+
+Settings are a fixed-content window: keep the same rows and order everywhere,
+scale the complete panel to fit, and do not add scrolling. If the contents no
+longer fit or touch targets become too small, reduce optional spacing or copy,
+or revisit the content. A scroll container or orientation branch does not
+resolve that design problem.
+
+Each game declares its windows, allowed scroll regions and justified layout
+exceptions in its [window contract](../../../runtime_automation/window_layout_contract.md).
+The shared capture script opens every declared window in both orientations and
+checks actual `ui.tree` geometry and scroll behavior. Inspect the screenshots
+for text, touch targets and safe-area clearance; geometry checks do not
+replace visual review.
 
 ## Sources
 

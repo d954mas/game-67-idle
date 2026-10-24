@@ -47,7 +47,30 @@ non-floating content plus floating text/caret/selection using
   close, or all state on a full transition, unless survival is intentional.
   Raise slot/probe limits only after an ID/lifetime audit.
 - Prefer semantic IDs and state assertions over coordinate-only bots.
-- Use one adaptive PC/phone component contract unless design requires two.
+- Scale one window composition across PC and phone orientations by default.
+  Backpack, chest, and shop windows may rearrange when the content needs the
+  extra width; record the reason for each exception. Settings stay in one
+  composition and fit without scrolling.
+
+## Window Composition Check
+
+The game owns `design/ui_window_contracts.json`: one entry per window with a
+stable `/window` root ID, source draw function and scene or DevAPI open
+commands. `single` layout and no scroll are the defaults. An adaptive layout
+or named scroll region needs a content reason. Settings cannot opt out of
+single-layout/no-scroll. See the
+[contract schema and proof procedure](../../../../ai_studio/runtime_automation/window_layout_contract.md).
+
+After a native DevAPI build, run:
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/window_layout_capture.py --game <game-id>
+```
+
+The script opens each declared window in portrait and landscape, checks modal
+scene coverage, composition, clipping and scroll behavior, and saves
+screenshots. It cannot judge readability or touch-target quality, so inspect
+both captures and exercise the controls.
 
 ## Verification
 

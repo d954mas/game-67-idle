@@ -38,6 +38,8 @@ node tools/game.mjs test
 node tools/game.mjs package --target <portal>
 ```
 
+For a portal playtest, use `node tools/game.mjs package --target <portal> --assert-text`. This keeps Release optimization and records FULL assertion text in crash reports. After playtesting, package the final release without `--assert-text`; its TRAP assertions contain no text. Do not start Poki playtests: the human lead runs them.
+
 `package` runs the asset audit, the artifact contract and a browser smoke over
 the packaged archive. It refuses a build whose feature sources are dirty, so
 commit first.

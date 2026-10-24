@@ -16,6 +16,8 @@ native playable work:
 - UI readability zoom audit for screenshot evidence.
 - Live-state screenshot coverage and acceptance-matrix helper.
 - QCLR_002 responsive viewport capture and portal reserved-zone check for any game.
+- Game-owned window contract capture: all declared windows in portrait and
+  landscape, with scene coverage and scroll-policy checks.
 
 This module does not own engine DevAPI implementation, game-specific commands,
 game state schemas, quality rules, or task state. The engine owns DevAPI
@@ -38,7 +40,11 @@ node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/ui_re
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/pixel_health.py tmp/captures/screenshot.png
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/capture_window.py --process-id <pid> --output tmp/captures/window.png
 node ai_studio/runtime_automation/web_local_mock_probe.mjs --url http://127.0.0.1:8092/ --cdp http://127.0.0.1:9222 --out games/<game-id>/.ai_studio/evidence/local-mock/<observation>.json
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/window_layout_capture.py --game <game-id>
 ```
+
+The game-owned contract format and proof limits are in
+[window_layout_contract.md](window_layout_contract.md).
 
 DevAPI screenshots use the engine's `capture.frame` and `capture.region`
 commands. Capture errors propagate to the caller. Use `capture_window.py`

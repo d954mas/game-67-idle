@@ -35,6 +35,11 @@ If virtual controls affect layout or safe space, also use
 - tall-phone 19.5:9 layout is usable in landscape and portrait;
 - important HUD, text, state, feedback, or danger are not cropped or pushed off-screen;
 - player-facing actions are not hidden, overlapped, or misplaced;
+- every game window has a game-owned contract and follows one scaled
+  composition without scroll by default; alternate compositions and scroll
+  regions are named exceptions with reasons. Run
+  `ai_studio/runtime_automation/window_layout_capture.py --game <id>` for
+  changed windows and inspect its portrait/landscape screenshots;
 - for a portal build, no visible HUD leaf sits under the target's reserved
   zones (the Poki Pill): `ai_studio/runtime_automation/responsive_viewports.py
   --game <id> --portal <target>` checks

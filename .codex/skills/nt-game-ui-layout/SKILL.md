@@ -45,6 +45,10 @@ commands. Load only the sections the current surface needs.
 - Clear owned transient `nt_ui_state` on close; raise capacity only after an
   ID/lifetime audit.
 - Prefer semantic UI IDs and one adaptive PC/phone contract.
+- Scale one window composition across desktop, portrait, and landscape by
+  default. Change the arrangement only when the content genuinely needs it
+  (for example, backpack, chest, or shop); record that exception. Settings
+  keep one composition and fit without scrolling.
 - Inspect `ui.tree` and matching examples before tuning broken geometry.
 - Keep HUD out of the publish target's reserved zones (the Poki Pill, top-left);
   prove it with `ai_studio/runtime_automation/responsive_viewports.py --game <id> --portal <target>`.
@@ -55,3 +59,11 @@ Pick the smallest native test plus desktop/phone runtime or visual evidence that
 covers the changed surface. For retained state, loop open/close/reopen and
 confirm used slots return to the intended baseline. Record evidence paths before
 marking work done.
+
+For every window, maintain the game's `design/ui_window_contracts.json` and
+run the Studio-wide contract inventory (`window_layout_contract.py --studio-root .`)
+to expose missing game declarations. Then
+run `ai_studio/runtime_automation/window_layout_capture.py --game <id>` after
+a native DevAPI build. The shared checker must cover every declared window and
+modal scene; review its screenshots. See
+[`references/layout-contract.md`](references/layout-contract.md#window-composition-check).
