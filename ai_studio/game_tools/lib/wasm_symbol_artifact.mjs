@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { uptime } from "node:os";
 import { isAbsolute, join, relative, sep } from "node:path";
@@ -157,7 +157,8 @@ export function publishArtifactSet(files, publisher = publishVerified) {
       throw error;
     }
   } finally {
-    rmSync(join(lockPath, "owner.json"), { force: true });
-    rmdirSync(lockPath);
+    const closingPath = `${lockPath}.closing-${process.pid}-${randomUUID()}`;
+    renameSync(lockPath, closingPath);
+    rmSync(closingPath, { recursive: true, force: true });
   }
 }

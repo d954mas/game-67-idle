@@ -14,6 +14,10 @@ const DEFAULT_LAYOUT = Object.freeze({
   symbolDigest: "game.js.symbols.wasm.sha256", requireSymbols: true,
 });
 
+export function validReleaseProof(proof) {
+  return proof === "game" || proof === "reference-template";
+}
+
 function safeRelativePath(value, label) {
   if (typeof value !== "string" || !value || isAbsolute(value) || value.includes("\\")
       || value.split("/").some((part) => !/^[A-Za-z0-9._-]+$/.test(part) || part === "." || part === "..")) {
@@ -22,7 +26,7 @@ function safeRelativePath(value, label) {
   return value;
 }
 
-function rejectRedirectedDirectory(path) {
+export function assertUnredirectedPath(path) {
   let current = resolve(path);
   while (current !== parse(current).root) {
     const stat = lstatSync(current, { throwIfNoEntry: false });
@@ -58,6 +62,7 @@ export function loadWebPackageLayout(gameDir) {
 export function publishWebRelease({ gameDir, identity, target, adapter, dependencies, runtimeBuild,
   releaseFiles, siteFiles, artifactDir, layout = loadWebPackageLayout(gameDir), outDir,
   verifyPackage, publisher, proof = "game", assetPacks = null }) {
+  if (!validReleaseProof(proof)) throw new Error(`invalid web release proof: ${proof}`);
   const compactDependencies = { sha256: sha256(jsonBytes(dependencies)), record: dependencies };
   const release = {
     schema: "ai_studio.game.release.v2",
@@ -75,6 +80,8 @@ export function publishWebRelease({ gameDir, identity, target, adapter, dependen
   const entries = [...releaseFiles, { path: "release.json", bytes: jsonBytes(release) }];
   const zipBytes = createStoreZip(entries);
   const buildDir = dirname(resolve(artifactDir));
+  for (const source of [join(buildDir, layout.symbolMap), join(buildDir, layout.linkedWasm),
+    ...(layout.symbolDigest ? [join(buildDir, layout.symbolDigest)] : [])]) assertUnredirectedPath(source);
   const symbolMap = readWasmSymbols({
     symbolPath: join(buildDir, layout.symbolMap),
     linkedWasmPath: join(buildDir, layout.linkedWasm),
@@ -84,9 +91,9 @@ export function publishWebRelease({ gameDir, identity, target, adapter, dependen
     required: layout.requireSymbols,
   });
   const outputDir = resolve(outDir || join(gameDir, "release", "artifacts"));
-  rejectRedirectedDirectory(outputDir);
+  assertUnredirectedPath(outputDir);
   mkdirSync(outputDir, { recursive: true });
-  rejectRedirectedDirectory(outputDir);
+  assertUnredirectedPath(outputDir);
   const baseName = `${identity.id}-${target}${identity.version ? `-v${identity.version}` : ""}-${sha256(zipBytes).slice(0, 16)}`;
   const zipName = `${baseName}.zip`;
   const manifestName = `${baseName}.manifest.json`;
