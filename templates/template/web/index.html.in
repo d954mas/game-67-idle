@@ -133,6 +133,10 @@
     color: #b7c4cd;
     font-size: 16px;
     line-height: 1.45;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    max-height: 40vh;
+    overflow-y: auto;
   }
 
   #runtime-reload {
@@ -202,6 +206,7 @@
     var runtimeReload = document.getElementById('runtime-reload');
     var canvas = document.getElementById('canvas');
     var runtimeState = 'ready';
+    var graphicsReasons = [];
 
     function clamp(value) {
       value = Number(value);
@@ -306,12 +311,18 @@
       if (runtimeReload) runtimeReload.focus({ preventScroll: true });
     }
 
-    function showGraphicsUnavailable() {
-      if (runtimeState !== 'ready') return;
+    function showGraphicsUnavailable(event) {
+      if (runtimeState !== 'ready' && runtimeState !== 'unavailable') return;
+      var reason = event && typeof event.statusMessage === 'string'
+        ? event.statusMessage.replace(/\s+/g, ' ').trim() : '';
+      if (reason && graphicsReasons.indexOf(reason) < 0) graphicsReasons.push(reason);
       runtimeState = 'unavailable';
       setRuntimeMessage(
-        'WebGL 2 required',
-        'Your browser could not start WebGL 2. Close other game tabs or enable graphics acceleration, then reload. If it still fails, try another browser or device.'
+        'WebGL 2 could not start',
+        'This game requires WebGL 2.\n' +
+        (graphicsReasons.length ? 'Browser reason: ' + graphicsReasons.join(' | ')
+          : 'The browser did not provide a reason.') +
+        '\nCheck browser graphics settings or try another browser or device.'
       );
       setRuntimeSemantics('alertdialog', 'assertive', true);
       if (runtimeOverlay) runtimeOverlay.hidden = false;

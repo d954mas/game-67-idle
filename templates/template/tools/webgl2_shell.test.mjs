@@ -40,9 +40,12 @@ test("WebGL2 creation failure keeps its explanation after the runtime aborts", (
   const onCreationError = listeners.get("canvas:webglcontextcreationerror");
   assert.equal(typeof onCreationError, "function");
   onCreationError({ statusMessage: "disabled by enterprise policy or commandline switch" });
+  onCreationError({ statusMessage: "Web page caused context loss and was blocked" });
   window.__showRuntimeFatal();
   assert.equal(elements.get("runtime-overlay").hidden, false);
   assert.match(elements.get("runtime-title").textContent, /WebGL 2/);
-  assert.match(elements.get("runtime-message").textContent, /browser/);
+  assert.match(elements.get("runtime-message").textContent, /disabled by enterprise policy or commandline switch/);
+  assert.match(elements.get("runtime-message").textContent, /Web page caused context loss and was blocked/);
   assert.doesNotMatch(elements.get("runtime-message").textContent, /Something went wrong/);
+  assert.doesNotMatch(elements.get("runtime-message").textContent, /Close other game tabs/);
 });
