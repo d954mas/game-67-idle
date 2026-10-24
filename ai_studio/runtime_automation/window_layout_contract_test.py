@@ -29,6 +29,16 @@ class WindowLayoutContractTest(unittest.TestCase):
     def test_uniform_scaled_window_passes(self):
         self.assertEqual(compare_windows(tree(), tree(0.7), "settings/window"), [])
 
+    def test_floating_named_controls_inside_window_are_checked(self):
+        portrait = tree()
+        landscape = tree(0.7)
+        portrait["nodes"][2]["parent"] = 0
+        landscape["nodes"][2]["parent"] = 0
+        self.assertEqual(compare_windows(portrait, landscape, "settings/window"), [])
+        landscape["nodes"][2]["bounds"]["x"] += 90
+        self.assertTrue(any("settings/music changes" in error for error in
+                            compare_windows(portrait, landscape, "settings/window")))
+
     def test_rearrangement_fails(self):
         errors = compare_windows(tree(), tree(0.7, rearrange=True), "settings/window")
         self.assertTrue(any("settings/music changes" in error for error in errors))

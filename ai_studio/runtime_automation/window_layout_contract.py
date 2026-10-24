@@ -60,13 +60,15 @@ def window_snapshot(
     if rw <= 0 or rh <= 0:
         raise ValueError(f"{root_id} has zero size")
     width, height = float(tree["width"]), float(tree["height"])
-    margin = min(rw, rh) * 0.01
-    if rx < -margin or ry < -margin or rx + rw > width + margin or ry + rh > height + margin:
+    root_margin = min(rw, rh) * 0.01
+    margin = min(rw, rh) * 0.06
+    if rx < -root_margin or ry < -root_margin or rx + rw > width + root_margin or ry + rh > height + root_margin:
         raise ValueError(f"{root_id} extends outside the UI viewport")
     by_id = {node.get("id"): node for node in nodes}
     result: dict[str, tuple[float, float, float, float]] = {}
     scroll_ids = scroll_ids or set()
     found_scroll: set[str] = set()
+    namespace = root_id.rsplit("/", 1)[0] + "/" if "/" in root_id else root_id + "/"
     for node in nodes:
         name = node.get("id_string")
         if not name or name == root_id or not node.get("visible", True):
@@ -74,16 +76,19 @@ def window_snapshot(
         parent = node.get("parent")
         seen: set[Any] = set()
         under_scroll = False
+        under_root = False
         while parent in by_id and parent not in seen:
             if parent == root.get("id"):
+                under_root = True
                 break
             seen.add(parent)
             if by_id[parent].get("id_string") in scroll_ids:
                 under_scroll = True
             parent = by_id[parent].get("parent")
-        else:
-            continue
         x, y, w, h = _rect(node)
+        inside_root = rx - margin <= x + w * 0.5 <= rx + rw + margin and ry - margin <= y + h * 0.5 <= ry + rh + margin
+        if not under_root and (not name.startswith(namespace) or not inside_root or w > rw + margin or h > rh + margin):
+            continue
         if w <= 0 or h <= 0:
             raise ValueError(f"{name} has zero size")
         if re.search(r"(?:^|/)scroll(?:/|$)", name) and name not in scroll_ids:

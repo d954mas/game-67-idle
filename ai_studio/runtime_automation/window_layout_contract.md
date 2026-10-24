@@ -75,6 +75,11 @@ locale, content and platform state in both orientations; use game-owned `open`
 commands to set that state. Inspect the saved screenshots for legibility,
 touch targets, and visual overlap, which `ui.tree` cannot judge.
 
+Clay can place window controls in floating containers outside the window's
+probe-tree ancestry. The checker includes same-namespace named controls whose
+centers lie inside the window, and allows small edge overlap for floating
+buttons. Full-screen backdrops are not treated as window children.
+
 For a static contract check or a saved capture, run
 `window_layout_contract.py --contract <path> --game-root <path>` and add
 `--proof <proof.json> --scene-list <scene-list.json>` for the full check.
