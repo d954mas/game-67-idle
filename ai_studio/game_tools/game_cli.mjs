@@ -28,7 +28,7 @@ const COMMANDS = new Set(["doctor", "build", "run", "test", "playable", "package
 // The tier vocabulary is shared with cmake/GameTests.cmake; CTest labels carry it.
 export const TEST_TIERS = ["core", "slow", "taste"];
 export const TEST_TIER_DEFAULT = "core";
-const USAGE = "usage: node tools/game.mjs <doctor|build|run|test|playable|package|portal-check|verify|clean>[--target local|itch|poki|yandex|playgama|crazygames|wavedash|pikabu|gamepush] [--no-build] [--out <dir>] [--template-proof] [--skip-tests] [test: --tier core|slow|taste | --all | --only <test>] [--update-goldens] [test|verify: --verbose] [clean: --all]";
+const USAGE = "usage: node tools/game.mjs <doctor|build|run|test|playable|package|portal-check|verify|clean>[--target local|itch|poki|yandex|playgama|crazygames|wavedash|pikabu|gamepush] [--assert-text] [--no-build] [--out <dir>] [--template-proof] [--skip-tests] [test: --tier core|slow|taste | --all | --only <test>] [--update-goldens] [test|verify: --verbose] [clean: --all]";
 
 function readJson(path, label) {
   let value;
@@ -47,6 +47,7 @@ export function parseGameArgs(argv, { tiers = [] } = {}) {
     target: ["playable", "package", "verify"].includes(command) ? "itch" : "local",
     targetSpecified: false,
     build: true,
+    assertText: false,
     templateProof: false,
     skipTests: false,
     outDir: "",
@@ -59,6 +60,7 @@ export function parseGameArgs(argv, { tiers = [] } = {}) {
   for (let index = 1; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--target") { args.target = argv[++index] || ""; args.targetSpecified = true; }
+    else if (arg === "--assert-text") args.assertText = true;
     else if (arg === "--no-build") args.build = false;
     else if (arg === "--template-proof") args.templateProof = true;
     else if (arg === "--skip-tests") args.skipTests = true;
@@ -90,6 +92,9 @@ export function parseGameArgs(argv, { tiers = [] } = {}) {
   if (args.skipTests && !args.templateProof) throw new Error("--skip-tests is valid only with --template-proof");
   if (args.outDir && !["package", "verify"].includes(command)) throw new Error(`--out is not valid for ${command}`);
   if (args.verbose && !["test", "verify"].includes(command)) throw new Error(`--verbose is not valid for ${command}`);
+  if (args.assertText && !["build", "run", "playable", "package", "portal-check", "verify"].includes(command)) {
+    throw new Error(`--assert-text is not valid for ${command}`);
+  }
   delete args.targetSpecified;
   return args;
 }
@@ -412,13 +417,16 @@ export function runNativeTests(gameDir, options = {}, dependencies = {}) {
   }
 }
 
-function buildGame(gameDir, target) {
-  const code = buildWeb(["--preset", "wasm-release", "--target", target, "--no-debug-ui"], process.env, { gameDir });
+const releasePreset = (assertText) => assertText ? "wasm-release-asserts" : "wasm-release";
+
+function buildGame(gameDir, target, assertText = false) {
+  const code = buildWeb(["--preset", releasePreset(assertText), "--target", target, "--no-debug-ui"], process.env, { gameDir });
   if (code !== 0) throw new Error(`web build exited ${code}`);
 }
 
-function artifactDir(gameDir, target) {
-  return join(gameDir, "build", target === "local" ? "wasm-release" : `wasm-release-${target}`, "bin");
+function artifactDir(gameDir, target, assertText = false) {
+  const preset = releasePreset(assertText);
+  return join(gameDir, "build", target === "local" ? preset : `${preset}-${target}`, "bin");
 }
 
 /* A game that calls a remote service records the endpoints CMake compiled in
@@ -443,7 +451,7 @@ export function buildRemoteEndpoints(gameDir, target, { read = readFileSync, exi
 // gameArtifact { args(gameDir, target), replacesFeatureInspect? } adds the game's
 // own artifact check after the feature's inspect; it may replace the inspect
 // only by saying why, and the plan carries that as a note the run prints.
-export function portalCheckPlan(studioRoot, gameDir, target, { exists = existsSync, artifactDir: artifactDirFor = artifactDir, gameArtifact = null } = {}) {
+export function portalCheckPlan(studioRoot, gameDir, target, { exists = existsSync, artifactDir: artifactDirFor = artifactDir, gameArtifact = null, assertText = false } = {}) {
   if (!PACKAGE_TARGETS.has(target)) throw new Error("portal-check requires a portal target");
   const steps = [];
   const replaces = String(gameArtifact?.replacesFeatureInspect || "").trim();
@@ -458,7 +466,7 @@ export function portalCheckPlan(studioRoot, gameDir, target, { exists = existsSy
   if (gameArtifact) {
     steps.push({
       id: replaces ? "artifact" : "game-artifact",
-      args: gameArtifact.args(gameDir, target),
+      args: gameArtifact.args(gameDir, target, assertText),
       ...(replaces ? { note: `the game's artifact check replaces features/platform-sdk artifact_tools inspect: ${replaces}` } : {}),
     });
   }
@@ -544,12 +552,12 @@ function gamePackageMetadata(gameDir, templateProof) {
   return { dependencies: validateDependencies(readJson(join(gameDir, "dependencies.json"), "dependencies")), proof: "game" };
 }
 
-async function auditGameReleaseAssets({ gameDir, artifactDir: releaseArtifactDir, studioRoot, dependencies, target }) {
+async function auditGameReleaseAssets({ gameDir, artifactDir: releaseArtifactDir, studioRoot, dependencies, target, assertText = false }) {
   const modulePath = join(studioRoot, "ai_studio", "assets", "manifests", "game_release.mjs");
   const { assertGameReleaseAssets } = await import(pathToFileURL(modulePath).href);
   const result = assertGameReleaseAssets(gameDir);
   const runtimeBuild = createRuntimeBuildRecord({
-    gameDir, studioRoot, dependencies, compileProfile: TARGET_CONFIG.compileProfileForTarget(target, "wasm-release"),
+    gameDir, studioRoot, dependencies, compileProfile: TARGET_CONFIG.compileProfileForTarget(target, releasePreset(assertText)),
   });
   const assetPack = readFileSync(join(releaseArtifactDir, "assets", "game.ntpack"));
   return {
@@ -563,12 +571,12 @@ async function auditGameReleaseAssets({ gameDir, artifactDir: releaseArtifactDir
 
 export async function packageGame(options, dependencies = {}, metadata = null) {
   const gameDir = resolve(dependencies.gameDir);
-  if (options.build) (dependencies.build || buildGame)(gameDir, options.target);
+  if (options.build) (dependencies.build || buildGame)(gameDir, options.target, options.assertText);
   const proof = metadata || gamePackageMetadata(gameDir, options.templateProof);
   const studioRoot = findStudioRoot(gameDir);
-  const releaseArtifactDir = artifactDir(gameDir, options.target);
+  const releaseArtifactDir = artifactDir(gameDir, options.target, options.assertText);
   const assetAuditProof = await (dependencies.assetAudit || auditGameReleaseAssets)({
-    gameDir, artifactDir: releaseArtifactDir, studioRoot, dependencies: proof.dependencies, target: options.target,
+    gameDir, artifactDir: releaseArtifactDir, studioRoot, dependencies: proof.dependencies, target: options.target, assertText: options.assertText,
   });
   const packaged = await packageWebArtifact({
     gameDir,
@@ -576,6 +584,7 @@ export async function packageGame(options, dependencies = {}, metadata = null) {
     target: options.target,
     studioRoot,
     assetAuditProof,
+    compileProfile: TARGET_CONFIG.compileProfileForTarget(options.target, releasePreset(options.assertText)),
     ...(options.outDir ? { outDir: resolve(gameDir, options.outDir) } : {}),
     ...proof,
     ...(metadata ? { dependencyVerifier: () => {} } : {}),
@@ -619,11 +628,11 @@ export async function executeGameCommand(args, dependencies = {}) {
   }
   if (args.command === "build") {
     prepare(false);
-    (dependencies.build || buildGame)(gameDir, args.target);
-    return { message: `built wasm-release-${args.target}` };
+    (dependencies.build || buildGame)(gameDir, args.target, args.assertText);
+    return { message: `built ${releasePreset(args.assertText)}-${args.target}` };
   }
   if (args.command === "run") {
-    run(process.execPath, [join(TOOLS_DIR, "serve_web.mjs"), "--preset", "wasm-release", "--target", args.target], gameDir, "game server");
+    run(process.execPath, [join(TOOLS_DIR, "serve_web.mjs"), "--preset", releasePreset(args.assertText), "--target", args.target], gameDir, "game server");
     return { message: "game server stopped" };
   }
   if (args.command === "test") {
@@ -644,12 +653,12 @@ export async function executeGameCommand(args, dependencies = {}) {
   }
   if (args.command === "playable") {
     prepare(false);
-    if (args.build) (dependencies.build || buildGame)(gameDir, args.target);
-    validateArtifact({ gameDir, artifactDir: artifactDirFor(gameDir, args.target), target: args.target, studioRoot: findStudioRoot(gameDir) });
+    if (args.build) (dependencies.build || buildGame)(gameDir, args.target, args.assertText);
+    validateArtifact({ gameDir, artifactDir: artifactDirFor(gameDir, args.target, args.assertText), target: args.target, studioRoot: findStudioRoot(gameDir) });
     return { message: `playable proof passed (${args.target}${dependencies.validateArtifact ? ", game-owned artifact validator" : ""})` };
   }
   if (args.command === "portal-check") {
-    const rows = portalCheck(gameDir, args.target, { artifactDir: artifactDirFor, gameArtifact: dependencies.portalArtifact || null });
+    const rows = portalCheck(gameDir, args.target, { artifactDir: (dir, target) => artifactDirFor(dir, target, args.assertText), gameArtifact: dependencies.portalArtifact || null, assertText: args.assertText });
     return { message: `portal-check passed for ${args.target} (${rows.map((row) => row.id).join(", ")})` };
   }
   if (args.command === "package") {
@@ -662,7 +671,7 @@ export async function executeGameCommand(args, dependencies = {}) {
   const result = await packageGameOwned(args, metadata);
   await smokePackage({
     zipPath: result.zipPath, expectedTarget: args.target, mode: "full", frameExpectation: args.templateProof ? "blank" : "rendered",
-    allowedRemoteUrls: remoteEndpoints(gameDir, args.target, { artifactDir: artifactDirFor }),
+    allowedRemoteUrls: remoteEndpoints(gameDir, args.target, { artifactDir: (dir, target) => artifactDirFor(dir, target, args.assertText) }),
   });
   return { message: `verify passed: ${result.zipPath}${summary ? `; tests: ${summary}` : ""}`, result };
 }

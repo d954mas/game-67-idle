@@ -44,6 +44,30 @@ test("build web arguments preserve preset target and release debug validation", 
   assert.throws(() => parseBuildArgs(["--target", "bad"]), /unknown target/);
   assert.throws(() => parseBuildArgs(["--debug-ui"]), /not allowed in wasm-release/);
   assert.throws(() => parseBuildArgs(["--preview"]), /preview requires wasm-debug or wasm-devapi-debug/);
+  assert.equal(parseBuildArgs(["--preset", "wasm-release-asserts", "--target", "poki", "--no-debug-ui"]).preset, "wasm-release-asserts");
+  assert.throws(() => parseBuildArgs(["--preset", "wasm-release-asserts", "--debug-ui"]), /debug UI is not allowed/);
+});
+
+test("assert-text release keeps optimization and captures full assertions in a distinct tree", () => {
+  const plan = createBuildPlan({
+    gameDir: "/repo/templates/template",
+    args: { preset: "wasm-release-asserts", target: "poki", debugUi: "off" },
+    env: { EMSDK: "/opt/emsdk" }, platform: "linux", nativeConfigured: true, toolchainExists: true,
+  });
+  assert.match(slash(plan.webDir), /build\/wasm-release-asserts-poki$/);
+  const configure = plan.steps.find((step) => step.kind === "run" && step.args.includes("-DGAME_PUBLISH_TARGET=poki"));
+  assert.ok(configure.args.includes("-DCMAKE_BUILD_TYPE=Release"));
+  assert.ok(configure.args.includes("-DNT_ASSERT_MODE=2"));
+  assert.ok(configure.args.includes("-DCMAKE_EXE_LINKER_FLAGS=--emit-symbol-map"));
+  assert.ok(plan.steps.some((step) => step.kind === "run" && step.args?.some((arg) => String(arg).endsWith("minify_web_release.mjs"))));
+  assert.deepEqual(plan.steps.find((step) => step.kind === "check_assert_mode").expected, 2);
+  assert.throws(() => executeBuildPlan({ env: {}, steps: [{ kind: "check_assert_mode", path: "CMakeCache.txt", expected: 2 }] },
+    { read: () => "NT_ASSERT_MODE:STRING=1\n" }), /assert mode mismatch/);
+  assert.throws(() => createBuildPlan({
+    gameDir: "/repo/templates/template", args: { preset: "wasm-release-asserts", target: "poki", debugUi: "off" },
+    env: { EMSDK: "/opt/emsdk" }, platform: "linux", nativeConfigured: true, toolchainExists: true,
+    configureArgs: () => ({ web: ["-DNT_ASSERT_MODE=1"] }),
+  }), /assert mode is owned/);
 });
 
 test("preview plan writes an explicit non-proof record and clears the compiled fingerprint", () => {
@@ -162,14 +186,14 @@ test("executor rechecks runtime inputs immediately before publishing the build r
 });
 
 test("plan covers every preset across every publish target with exact debug flags", () => {
-  const presets = ["wasm-release", "wasm-debug", "wasm-devapi-debug", "wasm-devapi-perf"];
-  const buildTypes = { "wasm-release": "Release", "wasm-devapi-perf": "RelWithDebInfo" };
+  const presets = ["wasm-release", "wasm-release-asserts", "wasm-debug", "wasm-devapi-debug", "wasm-devapi-perf"];
+  const buildTypes = { "wasm-release": "Release", "wasm-release-asserts": "Release", "wasm-devapi-perf": "RelWithDebInfo" };
   const targets = ["local", "itch", "poki", "yandex", "playgama", "crazygames", "wavedash"];
   for (const preset of presets) {
     for (const target of targets) {
       const plan = createBuildPlan({
         gameDir: "/repo/templates/template",
-        args: { preset, target, debugUi: preset === "wasm-release" ? "off" : "on" },
+        args: { preset, target, debugUi: preset.startsWith("wasm-release") ? "off" : "on" },
         env: { EMSDK: "/opt/emsdk" },
         platform: "linux",
         nativeConfigured: true,
@@ -182,10 +206,11 @@ test("plan covers every preset across every publish target with exact debug flag
       assert.ok(configure.args.includes(`-DGAME_PUBLISH_TARGET=${target}`));
       assert.ok(configure.args.includes("-DGAME_AUDIO_BROWSER_SMOKE=OFF"));
       assert.ok(configure.args.includes(`-DGAME_ANALYTICS_ENABLED=${preset === "wasm-devapi-debug" ? "ON" : "OFF"}`));
-      assert.ok(configure.args.includes(`-DGAME_EVENTS_LOG_MIRROR=${["wasm-release", "wasm-devapi-perf"].includes(preset) ? "OFF" : "ON"}`));
+      assert.ok(configure.args.includes(`-DGAME_EVENTS_LOG_MIRROR=${["wasm-release", "wasm-release-asserts", "wasm-devapi-perf"].includes(preset) ? "OFF" : "ON"}`));
       assert.ok(configure.args.includes(`-DGAME_DEVAPI_ENABLED=${preset.startsWith("wasm-devapi") ? "ON" : "OFF"}`));
-      assert.ok(configure.args.includes(`-DGAME_PLATFORM_SDK_DEBUG_UI=${preset === "wasm-release" ? "OFF" : "ON"}`));
-      assert.equal(configure.args.includes("-DCMAKE_EXE_LINKER_FLAGS=--emit-symbol-map"), preset === "wasm-release");
+      assert.ok(configure.args.includes(`-DGAME_PLATFORM_SDK_DEBUG_UI=${preset.startsWith("wasm-release") ? "OFF" : "ON"}`));
+      assert.equal(configure.args.includes("-DCMAKE_EXE_LINKER_FLAGS=--emit-symbol-map"), preset.startsWith("wasm-release"));
+      if (preset.startsWith("wasm-release")) assert.ok(configure.args.includes(`-DNT_ASSERT_MODE=${preset === "wasm-release-asserts" ? 2 : 1}`));
     }
   }
 });

@@ -121,7 +121,7 @@ function validateCompileProfile(profile) {
   exactKeys(profile, ["target", "adapter", "preset", "debugUi", "devapi", "analytics", "eventsLogMirror"], "runtime build profile");
   if (!/^[a-z][a-z0-9-]*$/.test(profile.target || "")
       || !/^[a-z][a-z0-9-]*$/.test(profile.adapter || "")
-      || !["wasm-release", "wasm-debug", "wasm-devapi-debug", "wasm-devapi-perf"].includes(profile.preset)
+      || !["wasm-release", "wasm-release-asserts", "wasm-debug", "wasm-devapi-debug", "wasm-devapi-perf"].includes(profile.preset)
       || typeof profile.debugUi !== "boolean" || typeof profile.devapi !== "boolean"
       || typeof profile.analytics !== "boolean" || typeof profile.eventsLogMirror !== "boolean") {
     throw new Error("runtime build profile is invalid");

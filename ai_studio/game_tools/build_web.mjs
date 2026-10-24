@@ -12,8 +12,9 @@ import { retainWasmSymbols } from "./lib/wasm_symbol_artifact.mjs";
 
 // wasm-devapi-perf: DevAPI at an optimised build type, without the analytics and
 // log mirror that cost more than the game in a busy frame; it measures what ships.
-const PRESETS = new Set(["wasm-release", "wasm-debug", "wasm-devapi-debug", "wasm-devapi-perf"]);
-const BUILD_TYPES = { "wasm-release": "Release", "wasm-devapi-perf": "RelWithDebInfo" };
+const PRESETS = new Set(["wasm-release", "wasm-release-asserts", "wasm-debug", "wasm-devapi-debug", "wasm-devapi-perf"]);
+const BUILD_TYPES = { "wasm-release": "Release", "wasm-release-asserts": "Release", "wasm-devapi-perf": "RelWithDebInfo" };
+const isReleasePreset = (preset) => preset === "wasm-release" || preset === "wasm-release-asserts";
 const TOOLS_DIR = dirname(fileURLToPath(import.meta.url));
 const STUDIO_ROOT = resolve(TOOLS_DIR, "..", "..");
 const PUBLISH_TARGETS_DIR = join(STUDIO_ROOT, "features", "platform-sdk", "publish-targets");
@@ -37,7 +38,7 @@ export function parseBuildArgs(argv) {
   }
   if (!PRESETS.has(args.preset)) throw new Error(`unknown preset: ${args.preset} (use ${[...PRESETS].join("|")})`);
   if (!TARGETS.has(args.target)) throw new Error(`unknown target: ${args.target} (use ${[...TARGETS].join("|")})`);
-  if (args.preset === "wasm-release" && args.debugUi === "on") {
+  if (isReleasePreset(args.preset) && args.debugUi === "on") {
     throw new Error("debug UI is not allowed in wasm-release artifacts; use wasm-debug or --no-debug-ui");
   }
   if (args.preview && !["wasm-debug", "wasm-devapi-debug"].includes(args.preset)) {
@@ -93,7 +94,7 @@ function gameConfigureArgs(options, args) {
 export function createBuildPlan(options) {
   const gameDir = resolve(options.gameDir);
   const args = options.args;
-  if (args.preset === "wasm-release" && args.debugUi === "on") {
+  if (isReleasePreset(args.preset) && args.debugUi === "on") {
     throw new Error("debug UI is not allowed in wasm-release artifacts; use wasm-debug or --no-debug-ui");
   }
   if (args.preview && !["wasm-debug", "wasm-devapi-debug"].includes(args.preset)) {
@@ -123,6 +124,9 @@ export function createBuildPlan(options) {
   }
   const env = { ...inputEnv, EM_CACHE: inputEnv.EM_CACHE || join(gameDir, "build", "emscripten-cache") };
   const extra = gameConfigureArgs(options, args);
+  if (isReleasePreset(args.preset) && extra.web.some((arg) => /^-DNT_ASSERT_MODE(?::[^=]+)?=/.test(arg))) {
+    throw new Error("release assert mode is owned by the Studio preset");
+  }
   const buildType = BUILD_TYPES[args.preset] || "Debug";
   const steps = [{ kind: "mkdir", path: env.EM_CACHE }];
   if (args.preview) steps.push({ kind: "remove", path: join(webDir, "bin", "runtime-build.json") });
@@ -166,9 +170,15 @@ export function createBuildPlan(options) {
   configureArgs.push(`-DGAME_RUNTIME_BUILD_FINGERPRINT=${runtimeBuild ? runtimeBuild.fingerprint : ""}`);
   configureArgs.push(`-DGAME_PLATFORM_SDK_DEBUG_UI=${compileProfile.debugUi ? "ON" : "OFF"}`);
   configureArgs.push(`-DGAME_DEVAPI_ENABLED=${compileProfile.devapi ? "ON" : "OFF"}`);
-  if (args.preset === "wasm-release") configureArgs.push("-DCMAKE_EXE_LINKER_FLAGS=--emit-symbol-map");
+  if (isReleasePreset(args.preset)) {
+    configureArgs.push(`-DNT_ASSERT_MODE=${args.preset === "wasm-release-asserts" ? 2 : 1}`);
+    configureArgs.push("-DCMAKE_EXE_LINKER_FLAGS=--emit-symbol-map");
+  }
   configureArgs.push(...extra.web);
   steps.push({ kind: "run", command: configureCommand, args: configureArgs });
+  if (isReleasePreset(args.preset)) {
+    steps.push({ kind: "check_assert_mode", path: join(webDir, "CMakeCache.txt"), expected: args.preset === "wasm-release-asserts" ? 2 : 1 });
+  }
   steps.push({ kind: "run", command: "cmake", args: ["--build", webDir, "--target", "game"] });
   // A game that links with a symbol map gets it beside the output, but bin/ is
   // the exact file set the packager allows; the map is kept one level up.
@@ -193,7 +203,7 @@ export function createBuildPlan(options) {
     command: process.execPath,
     args: [join(TOOLS_DIR, "inject_asset_bytes.mjs"), "--artifact", join(webDir, "bin")],
   });
-  if (args.preset === "wasm-release") {
+  if (isReleasePreset(args.preset)) {
     steps.push({
       kind: "run",
       command: process.execPath,
@@ -229,6 +239,7 @@ export function executeBuildPlan(plan, deps = {}) {
   });
   const remove = deps.remove || ((path) => rmSync(path, { force: true }));
   const exists = deps.exists || existsSync;
+  const read = deps.read || readFileSync;
   // A rebuild that relinks nothing re-emits nothing: a missing source means the
   // file already sits where it belongs, or the game does not make one.
   const retainSymbols = deps.retainSymbols || retainWasmSymbols;
@@ -241,6 +252,12 @@ export function executeBuildPlan(plan, deps = {}) {
     else if (step.kind === "copy_optional") { if (exists(step.from)) copy(step.from, step.to); else remove(step.to); }
     else if (step.kind === "stage_game_packs") (deps.stageGamePacks || stageGameAssetPacks)(step);
     else if (step.kind === "retain_symbols") retainSymbols(step);
+    else if (step.kind === "check_assert_mode") {
+      const match = /^NT_ASSERT_MODE:STRING=([12])$/m.exec(read(step.path, "utf8"));
+      if (!match || Number(match[1]) !== step.expected) {
+        throw new Error(`release assert mode mismatch: expected ${step.expected} in ${step.path}`);
+      }
+    }
     else if (step.kind === "stamp") write(step.path, step.value);
     else if (step.kind === "write") {
       (deps.verifyRuntimeBuild || plan.verifyRuntimeBuild)?.();

@@ -90,7 +90,7 @@ set(GAME_RUNTIME_BUILD_DEVAPI "" CACHE STRING "DevAPI flag bound into the runtim
 set(GAME_RUNTIME_BUILD_ANALYTICS "" CACHE STRING "Analytics flag bound into the runtime build witness.")
 set(GAME_RUNTIME_BUILD_EVENTS_LOG_MIRROR "" CACHE STRING "Event log mirror flag bound into the runtime build witness.")
 set(GAME_RUNTIME_BUILD_PREVIEW OFF CACHE BOOL "Allow an explicit non-proof developer web preview.")
-if(EMSCRIPTEN AND (NOT GAME_RUNTIME_BUILD_PROFILE MATCHES "^(wasm-release|wasm-debug|wasm-devapi-debug|wasm-devapi-perf)$"
+if(EMSCRIPTEN AND (NOT GAME_RUNTIME_BUILD_PROFILE MATCHES "^(wasm-release|wasm-release-asserts|wasm-debug|wasm-devapi-debug|wasm-devapi-perf)$"
         OR NOT GAME_RUNTIME_BUILD_DEBUG_UI MATCHES "^[01]$"
         OR NOT GAME_RUNTIME_BUILD_DEVAPI MATCHES "^[01]$"
         OR NOT GAME_RUNTIME_BUILD_ANALYTICS MATCHES "^[01]$"

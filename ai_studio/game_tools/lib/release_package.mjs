@@ -69,7 +69,7 @@ export function publishWebRelease({ gameDir, identity, target, adapter, dependen
     game: { id: identity.id, title: identity.title, storageNamespace: identity.storageNamespace },
     target, platformAdapter: adapter, entrypoint: "index.html",
     dependenciesSha256: compactDependencies.sha256, runtimeBuildFingerprint: runtimeBuild.fingerprint,
-    build: { preset: "wasm-release", devapi: false, debug: false }, proof,
+    build: { preset: runtimeBuild.profile.preset, devapi: false, debug: false }, proof,
   };
   if (assetPacks) release.assetPacks = assetPacks;
   for (const path of [layout.clientJs, layout.clientWasm, layout.primaryPack]) {
@@ -94,7 +94,7 @@ export function publishWebRelease({ gameDir, identity, target, adapter, dependen
   assertUnredirectedPath(outputDir);
   mkdirSync(outputDir, { recursive: true });
   assertUnredirectedPath(outputDir);
-  const baseName = `${identity.id}-${target}${identity.version ? `-v${identity.version}` : ""}-${sha256(zipBytes).slice(0, 16)}`;
+  const baseName = `${identity.id}-${target}${runtimeBuild.profile.preset === "wasm-release-asserts" ? "-asserts" : ""}${identity.version ? `-v${identity.version}` : ""}-${sha256(zipBytes).slice(0, 16)}`;
   const zipName = `${baseName}.zip`;
   const manifestName = `${baseName}.manifest.json`;
   const symbolsName = `${baseName}.js.symbols`;

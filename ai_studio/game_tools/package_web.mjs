@@ -67,7 +67,7 @@ const PLATFORM_DIAGNOSTICS_VERSION = [3, 0, 0];
 
 function isSelectedReleaseProfile(profile, target, adapter) {
   return profile?.target === target && profile.adapter === adapter
-    && profile.preset === "wasm-release" && profile.debugUi === false
+    && ["wasm-release", "wasm-release-asserts"].includes(profile.preset) && profile.debugUi === false
     && profile.devapi === false && profile.analytics === false
     && profile.eventsLogMirror === false;
 }
@@ -1327,7 +1327,8 @@ export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studio
   exactKeys(release.build, ["preset", "devapi", "debug"], "ZIP release build");
   if (release.schema !== `ai_studio.game.release.${runtimeBuildRequired ? "v2" : "v1"}` || release.target !== manifest.target
       || release.platformAdapter !== manifest.platformAdapter || release.entrypoint !== "index.html"
-      || release.dependenciesSha256 !== manifest.dependencies.sha256 || release.build?.preset !== "wasm-release"
+      || release.dependenciesSha256 !== manifest.dependencies.sha256
+      || !(release.build?.preset === "wasm-release" || (runtimeBuildRequired && release.build?.preset === "wasm-release-asserts"))
       || (runtimeBuildRequired && release.runtimeBuildFingerprint !== manifest.runtimeBuild?.fingerprint)
       || release.build?.devapi !== false || release.build?.debug !== false
       || !["game", "reference-template"].includes(release.proof)
@@ -1336,6 +1337,9 @@ export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studio
   if (manifest.releaseMetadataSha256 !== sha256(releaseBytes)) throw new Error("release metadata hash mismatch");
   const dependencies = validateDependencies(manifest.dependencies?.record);
   const runtimeBuild = runtimeBuildRequired ? validateRuntimeBuildRecord(manifest.runtimeBuild) : null;
+  if (runtimeBuildRequired && release.build.preset !== runtimeBuild.profile?.preset) {
+    throw new Error("ZIP release build preset does not match runtime build profile");
+  }
   if (JSON.stringify(assetPacks) !== JSON.stringify(runtimeBuild?.assetPacks?.packs || [])) {
     throw new Error("ZIP asset pack declaration does not match the runtime build fingerprint");
   }

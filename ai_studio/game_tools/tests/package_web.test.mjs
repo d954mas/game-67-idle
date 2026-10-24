@@ -35,14 +35,14 @@ const gameModuleRoot = resolve(fileURLToPath(new URL("../../../templates/templat
 const studioRoot = findStudioRoot(gameModuleRoot);
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
-function runtimeBuildRecord(target = "itch") {
+function runtimeBuildRecord(target = "itch", preset = "wasm-release") {
   const inputs = [
     { id: "game", source: ".", files: 3, sha256: "1".repeat(64) },
     { id: "engine", source: "external/neotolis-engine", files: 5, sha256: "2".repeat(64) },
     { id: "feature:platform-sdk", source: "features/platform-sdk", files: 7, sha256: "3".repeat(64) },
   ];
   const adapter = target === "local" || target === "itch" ? "mock" : target;
-  const profile = { target, adapter, preset: "wasm-release", debugUi: false, devapi: false, analytics: false, eventsLogMirror: false };
+  const profile = { target, adapter, preset, debugUi: false, devapi: false, analytics: false, eventsLogMirror: false };
   return {
     schema: "ai_studio.runtime_build.v2",
     fingerprint: sha256(Buffer.from(JSON.stringify({ inputs, profile }))),
@@ -103,13 +103,13 @@ function wasmCustomSection(name, payload = "") {
   ]);
 }
 
-function fixture(t, target = "itch") {
+function fixture(t, target = "itch", preset = "wasm-release") {
   const root = mkdtempSync(join(tmpdir(), "game-package-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const gameDir = join(root, "games", "test-game");
-  const artifactDir = join(gameDir, "build", target === "local" ? "wasm-release" : `wasm-release-${target}`, "bin");
+  const artifactDir = join(gameDir, "build", target === "local" ? preset : `${preset}-${target}`, "bin");
   const adapter = target === "local" || target === "itch" ? "mock" : target;
-  const runtimeBuild = runtimeBuildRecord(target);
+  const runtimeBuild = runtimeBuildRecord(target, preset);
   write(join(gameDir, "game.json"), `${JSON.stringify({
     schema: "ai_studio.game.v1", id: "test-game", title: "Test Game", storageNamespace: "test-game",
   }, null, 2)}\n`);
@@ -355,6 +355,28 @@ test("Poki release embeds the selected platform backend into game.js", (t) => {
   assert.notEqual(sdkOffset, -1);
   assert.ok(loaderOffset > sdkOffset);
   assert.doesNotMatch(gameJs, /^\s*(?:import|export)\b/m);
+});
+
+test("assert-text release is named and bound to its recorded preset", (t) => {
+  const item = fixture(t, "poki", "wasm-release-asserts");
+  const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
+  assert.match(result.zipPath, /test-game-poki-asserts-[0-9a-f]{16}\.zip$/);
+  const entries = readStoreZip(readFileSync(result.zipPath));
+  const release = JSON.parse(entries.get("release.json").toString("utf8"));
+  assert.equal(release.build.preset, "wasm-release-asserts");
+  assert.equal(verifyWebPackage({ zipPath: result.zipPath, manifestPath: result.manifestPath, expectedTarget: "poki" }).runtimeBuild.profile.preset,
+    "wasm-release-asserts");
+  release.build.preset = "wasm-release";
+  entries.set("release.json", Buffer.from(`${JSON.stringify(release, null, 2)}\n`));
+  const zipBytes = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
+  writeFileSync(result.zipPath, zipBytes);
+  const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));
+  manifest.artifact.size = zipBytes.length;
+  manifest.artifact.sha256 = sha256(zipBytes);
+  manifest.releaseMetadataSha256 = sha256(entries.get("release.json"));
+  manifest.entries = [...entries].map(([path, bytes]) => ({ path, size: bytes.length, sha256: sha256(bytes) }));
+  writeFileSync(result.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  assert.throws(() => verifyWebPackage({ zipPath: result.zipPath, manifestPath: result.manifestPath, expectedTarget: "poki" }), /preset/i);
 });
 
 test("release SDK evaluation failure reports and shows the fatal shell before rethrowing", () => {

@@ -93,6 +93,14 @@ keeps the map beside the ZIP, including with `--no-build`. A
 `THIRD_PARTY_NOTICES.txt` may ride in any web root. `wasm-devapi-perf` is the
 optimised DevAPI build for performance measurements.
 
+## Portal builds with and without assert text
+
+Use `node tools/game.mjs package --target <portal> --assert-text` for a portal playtest, then `node tools/game.mjs package --target <portal>` for the final release. The assert-text release uses `wasm-release-asserts`: Release optimization and minification, `NT_ASSERT_MODE=2`, and a shared platform-sdk assert reporter that writes the failed expression, file, and line into the engine crash log before trapping. The final release uses `wasm-release` with `NT_ASSERT_MODE=1` and no assert text. An assert-text archive has `-asserts-` in its filename; both its ZIP metadata and compiled WASM witness identify the preset. Separate build directories and runtime fingerprints keep the two variants apart. `--assert-text` also works with `build`, `run`, `playable`, `portal-check`, and `verify`. Only the human lead starts Poki playtests.
+
+Games using a copied `cmake/GameOptions.cmake` must allow `wasm-release-asserts` as a runtime profile. The shared `platform_sdk_crash()` CMake helper installs the assert reporter automatically in FULL web builds; games that do not use that helper still get FULL assertions on stderr but do not get the assertion text in the crash report. Capture starts after the game calls `nt_crash_init`.
+
+The Studio template and live games support this mode. Frozen games retain their copied build tools until they are reopened and migrated.
+
 ## Deferred game packs
 
 A game may declare required shipping packs in `assets/runtime-packs.json`:

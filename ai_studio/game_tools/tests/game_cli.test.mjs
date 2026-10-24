@@ -80,7 +80,7 @@ function git(cwd, args) {
 
 test("game CLI exposes game-owned lifecycle commands with fail-closed arguments", () => {
   assert.deepEqual(parseGameArgs(["verify", "--target", "poki", "--no-build", "--template-proof", "--skip-tests"]), {
-    command: "verify", target: "poki", build: false, templateProof: true, skipTests: true, outDir: "",
+    command: "verify", target: "poki", build: false, assertText: false, templateProof: true, skipTests: true, outDir: "",
     only: [], tier: "", all: false, updateGoldens: false, verbose: false,
   });
   assert.deepEqual(parseGameArgs(["test", "--only", "test_game_save", "--update-goldens"]).only, ["test_game_save"]);
@@ -101,6 +101,8 @@ test("game CLI exposes game-owned lifecycle commands with fail-closed arguments"
   assert.throws(() => parseGameArgs(["portal-check", "--target", "local"]), /portal target/);
   assert.throws(() => parseGameArgs(["doctor", "--no-build"]), /not valid/i);
   assert.throws(() => parseGameArgs(["verify", "--skip-tests"]), /template-proof/i);
+  assert.equal(parseGameArgs(["package", "--target", "poki", "--assert-text"]).assertText, true);
+  assert.throws(() => parseGameArgs(["test", "--assert-text"]), /not valid/);
 });
 
 test("doctor requires the game shim scaffold and exact dependency record", (t) => {
@@ -573,6 +575,18 @@ test("verify admits only the endpoints the build recorded beside the target buil
     smoke: ({ allowedRemoteUrls }) => { seen = allowedRemoteUrls; },
   });
   assert.deepEqual(seen, ["https://itch.example.com"]);
+
+  let selectedArtifact = "";
+  await executeGameCommand({ command: "verify", target: "poki", assertText: true, build: false, templateProof: false, skipTests: true, outDir: "" }, {
+    gameDir: "/repo/games/example",
+    doctor: () => ({ gameId: "example" }),
+    loadMetadata: () => ({ dependencies: {}, proof: "game" }),
+    verifyDependencies: () => {},
+    package: () => ({ zipPath: "example-test.zip" }),
+    remoteEndpoints: (gameDir, target, { artifactDir }) => { selectedArtifact = artifactDir(gameDir, target); return []; },
+    smoke: () => {},
+  });
+  assert.match(selectedArtifact.replaceAll("\\", "/"), /build\/wasm-release-asserts-poki\/bin$/);
 });
 
 test("the CLI builds and proves against the one Studio it runs from", (t) => {
