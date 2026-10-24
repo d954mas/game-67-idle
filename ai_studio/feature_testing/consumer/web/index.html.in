@@ -295,11 +295,23 @@
     }
 
     function showRuntimeFatal() {
-      if (runtimeState === 'fatal') return;
+      if (runtimeState === 'fatal' || runtimeState === 'unavailable') return;
       runtimeState = 'fatal';
       setRuntimeMessage(
         'Game stopped',
         'Something went wrong. Reload to try again.'
+      );
+      setRuntimeSemantics('alertdialog', 'assertive', true);
+      if (runtimeOverlay) runtimeOverlay.hidden = false;
+      if (runtimeReload) runtimeReload.focus({ preventScroll: true });
+    }
+
+    function showGraphicsUnavailable() {
+      if (runtimeState !== 'ready') return;
+      runtimeState = 'unavailable';
+      setRuntimeMessage(
+        'WebGL 2 required',
+        'Your browser could not start WebGL 2. Close other game tabs or enable graphics acceleration, then reload. If it still fails, try another browser or device.'
       );
       setRuntimeSemantics('alertdialog', 'assertive', true);
       if (runtimeOverlay) runtimeOverlay.hidden = false;
@@ -322,6 +334,7 @@
     }
 
     if (canvas) {
+      canvas.addEventListener('webglcontextcreationerror', showGraphicsUnavailable);
       // Without preventDefault the browser never offers the context back.
       canvas.addEventListener('webglcontextlost', function (event) {
         event.preventDefault();
