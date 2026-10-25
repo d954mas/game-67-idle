@@ -48,6 +48,11 @@ function passingObservation() {
     compiledRuntimeBuildFingerprint: FINGERPRINT,
     canvas: { width: 1280, height: 720 },
     frame: { width: 1280, height: 720, minLuma: 2, maxLuma: 241, variance: 812.5 },
+    viewport: {
+      collapsed: { width: 1, height: 1, ready: true },
+      restored: { width: 1280, height: 720, ready: true, canvas: { width: 1280, height: 720 } },
+      frame: { width: 1280, height: 720, minLuma: 2, maxLuma: 241, variance: 812.5 },
+    },
     recovery: {
       ...cycles[1],
       completedCycles: 2,
@@ -89,10 +94,32 @@ test("packaged browser observation accepts a ready rendered release frame", () =
   assert.deepEqual(assessPackagedWebObservation(passingObservation(), FINGERPRINT), []);
 });
 
+test("full packaged browser observation requires collapsed viewport and restored frame", () => {
+  const observation = passingObservation();
+  observation.viewport = null;
+  assert.deepEqual(assessPackagedWebObservation(observation, FINGERPRINT), ["viewport recovery evidence is missing"]);
+  observation.viewport = passingObservation().viewport;
+  observation.viewport.collapsed.width = 2;
+  observation.viewport.collapsed.ready = false;
+  observation.viewport.restored.width = 1279;
+  observation.viewport.restored.ready = false;
+  observation.viewport.restored.canvas.width = 0;
+  observation.viewport.frame = null;
+  assert.deepEqual(assessPackagedWebObservation(observation, FINGERPRINT), [
+    "viewport did not collapse to 1x1",
+    "runtime was not ready in collapsed viewport",
+    "viewport was not restored to 1280x720",
+    "runtime was not ready after viewport restoration",
+    "restored viewport canvas has no visible area",
+    "restored viewport frame evidence is missing",
+  ]);
+});
+
 test("blank foundation proof accepts empty frames and still requires recovery acknowledgements", () => {
   const observation = passingObservation();
   const frame = { width: 1280, height: 720, minLuma: 20, maxLuma: 20, variance: 0 };
   observation.frame = frame;
+  observation.viewport.frame = frame;
   for (const cycle of observation.recovery.cycles) cycle.frame = frame;
   assert.deepEqual(assessPackagedWebObservation(observation, FINGERPRINT, { frameExpectation: "blank" }), []);
   observation.recovery.cycles[0].runtimePresentedFrameAck = false;
@@ -118,6 +145,7 @@ test("blank foundation proof rejects sparse content in initial and recovered fra
   const observation = passingObservation();
   const blank = { width: 1280, height: 720, minLuma: 19, maxLuma: 19, variance: 0 };
   const sparse = { ...blank, maxLuma: 255, variance: 0.05 };
+  observation.viewport.frame = blank;
   for (const cycle of observation.recovery.cycles) cycle.frame = blank;
   observation.frame = sparse;
   assert.deepEqual(assessPackagedWebObservation(observation, FINGERPRINT, { frameExpectation: "blank" }), [
@@ -133,6 +161,7 @@ test("blank foundation proof rejects sparse content in initial and recovered fra
 test("quick packaged browser observation skips PNG and WebGL recovery evidence", () => {
   const observation = passingObservation();
   observation.frame = null;
+  observation.viewport = null;
   observation.recovery = null;
   assert.deepEqual(assessPackagedWebObservation(observation, FINGERPRINT, { mode: "quick" }), []);
 });

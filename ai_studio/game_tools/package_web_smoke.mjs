@@ -91,6 +91,23 @@ export function assessPackagedWebObservation(observation, expectedRuntimeBuildFi
   }
   if (mode === "quick") return failures;
   assessRenderedFrame(failures, observation?.frame, "first frame", frameExpectation);
+  const viewport = observation?.viewport;
+  if (!viewport) {
+    failures.push("viewport recovery evidence is missing");
+  } else {
+    if (viewport.collapsed?.width !== 1 || viewport.collapsed?.height !== 1) {
+      failures.push("viewport did not collapse to 1x1");
+    }
+    if (viewport.collapsed?.ready !== true) failures.push("runtime was not ready in collapsed viewport");
+    if (viewport.restored?.width !== 1280 || viewport.restored?.height !== 720) {
+      failures.push("viewport was not restored to 1280x720");
+    }
+    if (viewport.restored?.ready !== true) failures.push("runtime was not ready after viewport restoration");
+    if (!(viewport.restored?.canvas?.width > 0) || !(viewport.restored?.canvas?.height > 0)) {
+      failures.push("restored viewport canvas has no visible area");
+    }
+    assessRenderedFrame(failures, viewport.frame, "restored viewport frame", frameExpectation);
+  }
   const recovery = observation?.recovery;
   if (!recovery) {
     failures.push("WebGL recovery evidence is missing");
@@ -651,6 +668,7 @@ const PAGE_STATE = `(() => {
     ready: document.readyState === "complete" && overlayHidden && Boolean(compiled) && compiled === configured,
     runtimeBuildFingerprint: configured,
     compiledRuntimeBuildFingerprint: compiled,
+    viewport: { width: innerWidth, height: innerHeight },
     canvas: { x: rect?.x || 0, y: rect?.y || 0, width: rect?.width || 0, height: rect?.height || 0 }
   };
 })()`;
@@ -1025,6 +1043,7 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
     }
     capture.settle();
     let frame = null;
+    let viewport = null;
     let recovery = null;
     // Each capture is bracketed by live checkpoints: the connection must survive
     // the screenshot stall, not merely exist before it.
@@ -1039,6 +1058,24 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
       frame = initialCapture.frame;
       await checkpoint("initial");
       if (state.ready) {
+        phase = "collapsed viewport";
+        await client.call("Emulation.setDeviceMetricsOverride", { width: 1, height: 1, deviceScaleFactor: 1, mobile: false }, deadline);
+        await evaluateByValue(client, "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))", deadline);
+        const collapsed = await evaluateByValue(client, PAGE_STATE, deadline);
+        await checkpoint("viewport-collapsed");
+        phase = "restored viewport";
+        await client.call("Emulation.setDeviceMetricsOverride", { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false }, deadline);
+        await evaluateByValue(client, "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))", deadline);
+        const restored = await evaluateByValue(client, PAGE_STATE, deadline);
+        await checkpoint("viewport-restored-before");
+        phase = "restored viewport capture";
+        const restoredCapture = await captureCanvasFrame(client, restored?.canvas, deadline);
+        await checkpoint("viewport-restored");
+        viewport = {
+          collapsed: { width: collapsed?.viewport?.width, height: collapsed?.viewport?.height, ready: collapsed?.ready },
+          restored: { width: restored?.viewport?.width, height: restored?.viewport?.height, ready: restored?.ready, canvas: restored?.canvas },
+          frame: restoredCapture.frame,
+        };
         const cycles = [];
         for (let cycle = 0; cycle < probePlan.recoveryCycles; cycle += 1) {
           contextLossConsoleAllowance += 1;
@@ -1070,7 +1107,7 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
     // Released while the page is still open: closing the browser below ends the
     // live connection on purpose.
     live?.release();
-    return { ...state, frame, recovery, issues: [...issues] };
+    return { ...state, frame, viewport, recovery, issues: [...issues] };
   } catch (error) {
     operationError = new Error(`packaged browser smoke at ${phase} after ${Date.now() - startedAt}ms: ${error.message}; `
       + `last readiness=${state?.ready ?? "unknown"}; issues=${JSON.stringify(issues)}`, { cause: error });
