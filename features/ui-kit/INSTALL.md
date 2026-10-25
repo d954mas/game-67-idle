@@ -127,6 +127,32 @@ screen reads `ui_metrics()`: text, hits and spacing are authored units, and
 spelling for "this number is an authored size" and converts nothing. Safe-area
 insets stay physical CSS pixels and are converted separately.
 
+### Web safe area
+
+The web shell must use `viewport-fit=cover` and define
+`window.__gameSafeAreaInsets()` before the runtime starts. It returns
+`[left, right, top, bottom]` in CSS pixels, read from the computed padding of a
+hidden element using `env(safe-area-inset-*, 0px)`. The starter shell contains
+this bridge. Keep the read live: browser chrome, orientation and fullscreen
+can change the values without a matching canvas resize.
+
+`ui_frame_begin()` samples the bridge once per frame; `ui_metrics()` converts
+the insets into authored coordinates using the same frame scale. All HUD,
+dialogs and touch controls must use those metrics. Do not add a second inset
+or scale in individual screens, infer a notch from a phone model, or replace
+the reported values with a fixed top margin. Backgrounds may fill the canvas.
+
+The browser reports a safe rectangle, not the cutout's contour. Zero is valid
+when the browser already constrains the viewport. An embedded portal/WebView
+must expose correct insets for the game's viewport; the bridge cannot discover
+physical occlusion hidden by its host. Verify target browsers on devices in
+portrait, landscape and fullscreen. Desktop emulation proves plumbing, not
+the device's reported values. For native layout evidence, set
+`UI_KIT_SAFE_AREA_CSS=left,right,top,bottom`.
+
+Run `node --test templates/template/tools/webgl2_shell.test.mjs` from the Studio
+root to check the bridge's ordering, units and live updates.
+
 Pick `ref_short` from the hand: at that reference the `hit` token has to stay 44
 CSS pixels on a 390-pixel phone, which is what `test_ui_scale` checks. Nothing
 else enters the size — a window of a given size draws the same interface on a
