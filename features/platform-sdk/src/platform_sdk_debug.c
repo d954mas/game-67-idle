@@ -8,7 +8,7 @@
 #endif
 
 #ifndef PLATFORM_SDK_TARGET_ID
-#define PLATFORM_SDK_TARGET_ID 0
+#error "PLATFORM_SDK_TARGET_ID must come from the build: a default would install the local mock on a portal target"
 #endif
 
 #define PLATFORM_SDK_DEBUG_LOCAL (PLATFORM_SDK_TARGET_ID == 0)

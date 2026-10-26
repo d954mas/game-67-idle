@@ -1126,7 +1126,7 @@ if(NOT EMSCRIPTEN)
             "${PLATFORM_SDK_SRC}/platform_sdk_mock.c"
             "${PLATFORM_SDK_SRC}/platform_sdk.c"
         INCLUDES "${PLATFORM_SDK_INC}"
-        DEFINES PLATFORM_SDK_TESTING=1
+        DEFINES PLATFORM_SDK_TARGET_ID=0 PLATFORM_SDK_CURRENT_ID=0 PLATFORM_SDK_TESTING=1
         TIER core WARNINGS)
 
     add_executable(test_platform_sdk_events

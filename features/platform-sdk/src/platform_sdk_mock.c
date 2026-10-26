@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 #ifndef PLATFORM_SDK_TARGET_ID
-#define PLATFORM_SDK_TARGET_ID 0
+#error "PLATFORM_SDK_TARGET_ID must come from the build: a default would install the local mock on a portal target"
 #endif
 
 #if PLATFORM_SDK_TARGET_ID == 0 && !defined(__EMSCRIPTEN__)

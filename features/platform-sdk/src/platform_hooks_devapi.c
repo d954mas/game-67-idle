@@ -1,4 +1,3 @@
-
 #include "features/platform_sdk/platform_hooks.h"
 
 #include "app/nt_app.h"
