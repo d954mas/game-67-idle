@@ -1818,17 +1818,9 @@ test("loading shell does not rewrite DOM for progress inside the same whole perc
 });
 
 test("template web runtime keeps the installed web backend for local mock", () => {
-  const debugUi = readFileSync(
-    join(HERE, "../../../ai_studio/feature_testing/consumer/src/ui/platform_sdk_debug.c"),
-    "utf8",
-  );
+  const mockPortal = readFileSync(join(HERE, "../src/platform_sdk_mock.c"), "utf8");
 
-  assert.equal(
-    debugUi.includes(
-      "#if PLATFORM_SDK_TARGET_ID == PLATFORM_SDK_TEMPLATE_TARGET_LOCAL && !defined(__EMSCRIPTEN__)",
-    ),
-    true,
-  );
+  assert.equal(mockPortal.includes("#if PLATFORM_SDK_TARGET_ID == 0 && !defined(__EMSCRIPTEN__)"), true);
 });
 
 test("production staged artifacts exclude debug labels and unused SDK URLs", () => {

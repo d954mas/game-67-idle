@@ -31,8 +31,8 @@
 #include "game_events_devapi.h"
 #include "game_items.h"
 #include "iteration_proof_devapi.h"
-#include "platform_sdk_devapi.h"
-#include "systems/sys_platform_hooks.h"
+#include "features/platform_sdk/platform_sdk_devapi.h"
+#include "features/platform_sdk/platform_hooks.h"
 #include "ui/ui_runtime.h"
 #endif
 
@@ -40,7 +40,7 @@
 #include "game_save.h"
 #include "game_scenes.h"
 #include "game_storage.h"
-#include "platform_lifecycle.h"
+#include "features/platform_sdk/platform_lifecycle.h"
 #include "ui/focus_prompt_ui.h"
 
 #include <stdio.h>
@@ -173,7 +173,7 @@ bool shell_platform_start(World *world) {
     }
     game_iteration_proof_register_devapi();
     game_items_register_devapi();
-    game_platform_sdk_register_devapi();
+    platform_sdk_register_devapi();
     platform_hooks_register_devapi();
     game_save_register_devapi(game_runtime_on_devapi_state_change, NULL);
     game_events_register_devapi(); // also arms the recorder game.events.tail reads

@@ -145,9 +145,14 @@ progress comparison and runtime loading:
     Expose only the internal progress/hide hooks used by `platform_sdk_web.c`,
     and let the C lifecycle hide only after the first playable frame.
 
-11. If the template/game wants the built-in debug controls, compile the
-    consumer-local C/Clay UI module (`src/ui/platform_sdk_debug.c`) and pass
-    `GAME_PLATFORM_SDK_DEBUG_UI=1` only in non-release builds. Release builds
+11. Compile the portal layer from `${PLATFORM_SDK_SRC}`: `platform_lifecycle.c`,
+    `platform_hooks.c`, `platform_sdk_mock.c`, and `platform_sdk_debug.c` when
+    the game draws with `features/ui-kit`; add `platform_sdk_devapi.c` and
+    `platform_hooks_devapi.c` to DevAPI builds. Call `platform_lifecycle_init`
+    and `platform_hooks_init(&(platform_hooks_config_t){...})` once the runtime
+    starts, `platform_hooks_update` then `platform_lifecycle_update` each tick,
+    and `platform_lifecycle_after_frame_present` after present. Pass
+    `GAME_PLATFORM_SDK_DEBUG_UI=1` only in non-release builds; release builds
     must keep that define off.
 
 ## Web diagnostics (3.0)

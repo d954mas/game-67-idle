@@ -88,9 +88,23 @@ JavaScript backend adapter as `platform-sdk-adapter.js`; release packaging embed
 the source-hash-bound minified SDK bundle into `game.js` so the upload has one
 local JavaScript file. Editable sources stay readable; release bundles are
 regenerated with the Terser version shipped by Emscripten.
-The feature-test consumer's debug/test controls are C/Clay UI in
-`ai_studio/feature_testing/consumer/src/ui/platform_sdk_debug.c`; they are not staged as a web
-JavaScript artifact.
+
+Above the facade the pack carries the portal layer every game wires the same
+way, so a game keeps only its placements and its own composition:
+
+- `platform_lifecycle.h` turns the frame's input edge, tick and first presented
+  frame into the portal's loading, ready and gameplay start/stop signals.
+- `platform_hooks.h` freezes the app clock and mutes the mixer while the tab is
+  hidden or an ad plays, and owns the two ad points (`commercial_break`,
+  `rewarded`). The game passes its mixer edge and log line as callbacks.
+- `platform_sdk_mock.h` is the hand-answered portal of a native local build.
+- `platform_sdk_debug.h` draws that portal's modal and the probe panel with
+  `features/ui-kit`; a game on another UI stack draws the mock itself.
+- `platform_sdk_devapi.c` and `platform_hooks_devapi.c` register
+  `game.platform_sdk.state` and `platform.*` in DevAPI builds.
+
+The debug controls are C/Clay UI; they are not staged as a web JavaScript
+artifact.
 
 ## What It Owns
 

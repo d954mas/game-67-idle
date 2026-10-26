@@ -1,4 +1,4 @@
-#include "platform_lifecycle.h"
+#include "features/platform_sdk/platform_lifecycle.h"
 
 #include "features/platform_sdk/platform_sdk.h"
 

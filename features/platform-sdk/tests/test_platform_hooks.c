@@ -1,18 +1,21 @@
-#include "systems/sys_platform_hooks.h"
+#include "features/platform_sdk/platform_hooks.h"
 
 #include "app/nt_app.h"
 #include "features/platform_sdk/platform_sdk.h"
-#include "game_audio.h"
-#include "game_events.h"
 #include "unity.h"
 
 #include <string.h>
 
-/* The real game_audio drags the engine mixer in; the hook only needs the edge. */
+/* The hooks reach the mixer only through this edge. */
 static int g_audio_paused_calls;
 static bool g_audio_paused;
+static char g_last_log[96];
 
-void game_audio_set_paused(bool paused) {
+static void log_line(const char *line) {
+    strncpy(g_last_log, line, sizeof g_last_log - 1);
+}
+
+static void set_audio_paused(bool paused) {
     g_audio_paused_calls++;
     g_audio_paused = paused;
 }
@@ -20,6 +23,7 @@ void game_audio_set_paused(bool paused) {
 typedef struct hooks_backend_state_t {
     int interstitial_calls;
     int rewarded_calls;
+    int gameplay_stop_calls;
     char last_placement[64];
 } hooks_backend_state_t;
 
@@ -33,6 +37,7 @@ static bool backend_init(void *userdata) {
 /* The portal answers on its own schedule: the backend only accepts, and the
    test completes the video the way the JavaScript adapter would. */
 static platform_sdk_result_t backend_show_interstitial(const char *placement, void *userdata) {
+    TEST_ASSERT_FALSE(platform_sdk_gameplay_active());
     hooks_backend_state_t *state = (hooks_backend_state_t *)userdata;
     state->interstitial_calls++;
     strncpy(state->last_placement, placement ? placement : "", sizeof state->last_placement - 1);
@@ -40,10 +45,15 @@ static platform_sdk_result_t backend_show_interstitial(const char *placement, vo
 }
 
 static platform_sdk_result_t backend_show_rewarded(const char *placement, void *userdata) {
+    TEST_ASSERT_FALSE(platform_sdk_gameplay_active());
     hooks_backend_state_t *state = (hooks_backend_state_t *)userdata;
     state->rewarded_calls++;
     strncpy(state->last_placement, placement ? placement : "", sizeof state->last_placement - 1);
     return PLATFORM_SDK_RESULT_OK;
+}
+
+static void backend_gameplay_stop(void *userdata) {
+    ((hooks_backend_state_t *)userdata)->gameplay_stop_calls++;
 }
 
 static int g_reward_calls;
@@ -60,24 +70,24 @@ void setUp(void) {
         .init = backend_init,
         .show_interstitial = backend_show_interstitial,
         .show_rewarded = backend_show_rewarded,
+        .gameplay_stop = backend_gameplay_stop,
     };
     memset(&g_backend_state, 0, sizeof g_backend_state);
     g_audio_paused_calls = 0;
     g_audio_paused = false;
     g_reward_calls = 0;
+    memset(g_last_log, 0, sizeof g_last_log);
     g_reward_placement[0] = '\0';
     g_nt_app.paused = false;
-    game_events_init();
     platform_sdk_reset_for_tests();
     platform_sdk_set_backend(&sdk_backend, &g_backend_state);
     (void)platform_sdk_init();
-    platform_hooks_init();
+    platform_hooks_init(&(platform_hooks_config_t){.set_audio_paused = set_audio_paused, .log = log_line});
 }
 
 void tearDown(void) {
     platform_hooks_shutdown();
     platform_sdk_reset_for_tests();
-    game_events_shutdown();
 }
 
 static void test_hidden_tab_freezes_the_clock_and_mutes(void) {
@@ -90,11 +100,23 @@ static void test_hidden_tab_freezes_the_clock_and_mutes(void) {
     TEST_ASSERT_FALSE(platform_hooks_gameplay_allowed());
     TEST_ASSERT_TRUE(g_nt_app.paused);
     TEST_ASSERT_TRUE(g_audio_paused);
+    TEST_ASSERT_EQUAL_STRING("platform.sim frozen", g_last_log);
 
     platform_hooks_set_page_visible(true);
     platform_hooks_update(true);
     TEST_ASSERT_FALSE(g_nt_app.paused);
     TEST_ASSERT_FALSE(g_audio_paused);
+    TEST_ASSERT_EQUAL_STRING("platform.sim running", g_last_log);
+}
+
+static void test_hooks_freeze_without_audio_or_log_callbacks(void) {
+    platform_hooks_shutdown();
+    platform_hooks_init(NULL);
+    platform_hooks_set_page_visible(false);
+    platform_hooks_update(true);
+    TEST_ASSERT_TRUE(g_nt_app.paused);
+    TEST_ASSERT_EQUAL_INT(0, g_audio_paused_calls);
+    TEST_ASSERT_EQUAL_STRING("", g_last_log);
 }
 
 static void test_window_blur_keeps_a_visible_game_running(void) {
@@ -178,6 +200,28 @@ static void test_the_freeze_edge_is_reported_once(void) {
     platform_hooks_update(true);
     platform_hooks_update(true);
     TEST_ASSERT_EQUAL_INT(1, g_audio_paused_calls);
+}
+
+static void test_commercial_break_stops_active_gameplay_before_the_backend(void) {
+    platform_sdk_mark_input();
+    TEST_ASSERT_TRUE(platform_sdk_gameplay_start().started);
+    TEST_ASSERT_TRUE(platform_hooks_commercial_break("town_exit"));
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.gameplay_stop_calls);
+}
+
+static void test_rewarded_stops_active_gameplay_before_the_backend(void) {
+    platform_sdk_mark_input();
+    TEST_ASSERT_TRUE(platform_sdk_gameplay_start().started);
+    TEST_ASSERT_TRUE(platform_hooks_rewarded("chest", on_reward, NULL));
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.gameplay_stop_calls);
+}
+
+static void test_break_does_not_repeat_an_existing_gameplay_stop(void) {
+    platform_sdk_mark_input();
+    TEST_ASSERT_TRUE(platform_sdk_gameplay_start().started);
+    (void)platform_sdk_gameplay_stop();
+    TEST_ASSERT_TRUE(platform_hooks_commercial_break("town_exit"));
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.gameplay_stop_calls);
 }
 
 static void test_commercial_break_freezes_until_the_video_ends(void) {
@@ -298,6 +342,7 @@ static void test_shutdown_thaws_a_frozen_clock(void) {
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_hidden_tab_freezes_the_clock_and_mutes);
+    RUN_TEST(test_hooks_freeze_without_audio_or_log_callbacks);
     RUN_TEST(test_window_blur_keeps_a_visible_game_running);
     RUN_TEST(test_a_blurred_game_goes_silent_but_keeps_running);
     RUN_TEST(test_the_portal_pause_stops_the_clock_and_the_mixer);
@@ -306,6 +351,9 @@ int main(void) {
     RUN_TEST(test_freeze_waits_for_a_ready_runtime);
     RUN_TEST(test_the_freeze_edge_is_reported_once);
     RUN_TEST(test_commercial_break_freezes_until_the_video_ends);
+    RUN_TEST(test_commercial_break_stops_active_gameplay_before_the_backend);
+    RUN_TEST(test_rewarded_stops_active_gameplay_before_the_backend);
+    RUN_TEST(test_break_does_not_repeat_an_existing_gameplay_stop);
     RUN_TEST(test_a_refused_video_still_unmutes);
     RUN_TEST(test_an_empty_placement_is_refused);
     RUN_TEST(test_reward_pays_out_only_on_success);

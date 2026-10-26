@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "platform-sdk",
-  "version": "3.0.2",
+  "version": "3.1.0",
   "title": "Platform SDK",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -14,6 +14,7 @@
   "dependencies": [
     "browser web build target",
     "target-specific portal SDK documentation",
+    "features/ui-kit for src/platform_sdk_debug.c only (the mock portal modal and probe panel)",
     "features/game-events L0 event/analytics spine for SDK event bridging",
     "Node.js for platform-sdk tests and scorecard/artifact CLIs"
   ],
@@ -43,7 +44,11 @@
     "local NDJSON scorecard CLI",
     "request-correlated storage transport with explicit outcomes and native backend injection",
     "canonical target descriptors and compilation-profile-bound release artifacts",
-    "Closure externs of the web bridge names and platform_sdk_closure_externs(<target>) to link them"
+    "Closure externs of the web bridge names and platform_sdk_closure_externs(<target>) to link them",
+    "portal lifecycle signals from the frame's input edge, tick and first presented frame (platform_lifecycle.h)",
+    "attention/ad clock freeze, mixer mute edge and the two ad points with one-video-one-reward (platform_hooks.h, game audio and log as callbacks)",
+    "the hand-answered mock portal of a native local build (platform_sdk_mock.h) and its ui-kit modal and probe panel (platform_sdk_debug.h)",
+    "DevAPI game.platform_sdk.state and platform.state/attention/break/reward"
   ],
   "flags": {
     "target": "local|itch|poki|yandex|playgama|crazygames|wavedash",
@@ -67,7 +72,12 @@
       "${PLATFORM_SDK_SRC}/platform_sdk.c",
       "${PLATFORM_SDK_SRC}/platform_sdk_web.c (Emscripten only)",
       "${PLATFORM_SDK_SRC}/platform_sdk_storage.c",
-      "${PLATFORM_SDK_SRC}/platform_sdk_cloud.c"
+      "${PLATFORM_SDK_SRC}/platform_sdk_cloud.c",
+      "${PLATFORM_SDK_SRC}/platform_lifecycle.c",
+      "${PLATFORM_SDK_SRC}/platform_hooks.c",
+      "${PLATFORM_SDK_SRC}/platform_sdk_mock.c",
+      "${PLATFORM_SDK_SRC}/platform_sdk_debug.c (games drawing with features/ui-kit)",
+      "${PLATFORM_SDK_SRC}/platform_sdk_devapi.c and platform_hooks_devapi.c (DevAPI builds only)"
     ],
     "include_dirs": [
       "${PLATFORM_SDK_INC}"
@@ -76,13 +86,15 @@
       "platform-sdk.js",
       "platform-sdk-adapter.js"
     ],
-    "consumer_debug_ui": "ai_studio/feature_testing/consumer/src/ui/platform_sdk_debug.c (C/Clay, debug builds only)",
     "ctest_targets": [
       "test_platform_sdk",
       "test_platform_sdk_events",
       "platform_sdk_node_test",
       "test_platform_storage",
-      "platform_sdk_web_test"
+      "platform_sdk_web_test",
+      "test_platform_lifecycle",
+      "test_platform_hooks",
+      "test_platform_sdk_mock"
     ]
   },
   "test_consumer": {

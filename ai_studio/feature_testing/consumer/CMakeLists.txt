@@ -99,14 +99,12 @@ add_executable(${GAME_TARGET} EXCLUDE_FROM_ALL
     src/game_input.c
     "${SCENES_CORE_SRC}/scene_manager.c"
     src/game_scenes.c
-    src/platform_lifecycle.c
     "${GAME_EVENTS_SRC}/game_events.c" # E1
     src/game_log.c               # E4.B: built-in "log" event type (unconditional leaf)
     src/features/game_features.c # E1
     src/ui/hud.c
     src/ui/focus_prompt_ui.c
     src/ui/login_prompt.c                            # the portal login offer: benefits + button, and its confirm modal
-    src/ui/platform_sdk_debug.c
     src/ui/ui_runtime.c
     src/ui/theme.c                                   # binds THIS game's atlas to the ui-kit feature
     "${UI_KIT_SRC}/ui_tokens.c"
@@ -123,7 +121,6 @@ add_executable(${GAME_TARGET} EXCLUDE_FROM_ALL
     src/render/shader_programs.c
     src/render/capture.c
     src/systems/sys_move.c
-    src/systems/sys_platform_hooks.c                 # attention/ad freeze, mixer mute, ad points as API
     "${GAME_STATE_SRC}/game_save_sync.c"
     "${GAME_STATE_SRC}/game_save_cloud.c"
     src/game_save_policy.c
@@ -135,6 +132,10 @@ add_executable(${GAME_TARGET} EXCLUDE_FROM_ALL
     "${PLATFORM_SDK_SRC}/platform_sdk.c"             # T0339: target/sdk identity + policy capabilities
     "${PLATFORM_SDK_SRC}/platform_sdk_storage.c"
     "${PLATFORM_SDK_SRC}/platform_sdk_cloud.c"       # portal player storage: the account's copy of the save
+    "${PLATFORM_SDK_SRC}/platform_lifecycle.c"
+    "${PLATFORM_SDK_SRC}/platform_hooks.c"           # attention/ad freeze, mixer mute, ad points as API
+    "${PLATFORM_SDK_SRC}/platform_sdk_mock.c"
+    "${PLATFORM_SDK_SRC}/platform_sdk_debug.c"
     src/features/resource_panel/resource_panel.c     # И3b: generic counter/bar widget (zero feature headers)
     src/ui/demo_hud.c                                # И3b: game composition (resource_panel over items/progression)
     src/ui/loc_widgets.c                             # the ONLY caller of the raw text entry points

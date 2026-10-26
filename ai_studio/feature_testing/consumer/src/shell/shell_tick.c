@@ -4,15 +4,17 @@
 #include "features/game_features.h"
 #include "features/platform_sdk/platform_sdk.h"
 #include "features/settings/settings.h"
+#include "game_audio.h"
 #include "game_events.h"
 #include "game_items.h"
+#include "game_log.h"
 #include "game_save.h"
 #include "game_scenes.h"
 #include "game_storage.h"
-#include "platform_lifecycle.h"
+#include "features/platform_sdk/platform_lifecycle.h"
 #include "render/render_mesh.h"
 #include "systems/sys_cloud_save.h"
-#include "systems/sys_platform_hooks.h"
+#include "features/platform_sdk/platform_hooks.h"
 #include "ui/ui_runtime.h"
 
 #include <stdio.h>
@@ -121,6 +123,10 @@ static void game_runtime_apply_pending_cloud_save(World *world) {
     }
 }
 
+static void log_platform_line(const char *line) {
+    (void)game_log_emit(line);
+}
+
 static void game_runtime_try_start(World *world) {
     if (s_game_runtime_ready || s_game_runtime_failed) {
         return;
@@ -170,7 +176,10 @@ static void game_runtime_try_start(World *world) {
     game_features_init(world);
     game_scenes_init(world);
     platform_lifecycle_init();
-    platform_hooks_init();
+    platform_hooks_init(&(platform_hooks_config_t){
+        .set_audio_paused = game_audio_set_paused,
+        .log = log_platform_line,
+    });
     s_game_runtime_initialized = true;
 
     if (!shell_platform_start(world)) {

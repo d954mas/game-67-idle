@@ -1,5 +1,5 @@
-#ifndef GAME_SYS_PLATFORM_HOOKS_H
-#define GAME_SYS_PLATFORM_HOOKS_H
+#ifndef FEATURES_PLATFORM_SDK_PLATFORM_HOOKS_H
+#define FEATURES_PLATFORM_SDK_PLATFORM_HOOKS_H
 
 #include <stdbool.h>
 
@@ -11,7 +11,16 @@
 
 typedef void (*platform_reward_fn)(const char *placement, void *userdata);
 
-void platform_hooks_init(void);
+/* The two things the hooks reach outside the facade for. Either may be NULL. */
+typedef struct platform_hooks_config_t {
+    /* Called on each edge of "the game must be silent", never once a frame. */
+    void (*set_audio_paused)(bool paused);
+    /* One line per freeze, break and reward decision, for bots reading the
+       game's log. */
+    void (*log)(const char *line);
+} platform_hooks_config_t;
+
+void platform_hooks_init(const platform_hooks_config_t *config);
 void platform_hooks_shutdown(void);
 
 /* Attention, split in two because the browser reports it twice and either half
@@ -52,6 +61,8 @@ bool platform_hooks_rewarded_supported(void);
 unsigned int platform_hooks_break_count(void);
 unsigned int platform_hooks_reward_grant_count(void);
 
+/* DevAPI builds only (src/platform_hooks_devapi.c): platform.state,
+   platform.attention, platform.break and platform.reward. */
 void platform_hooks_register_devapi(void);
 
-#endif /* GAME_SYS_PLATFORM_HOOKS_H */
+#endif /* FEATURES_PLATFORM_SDK_PLATFORM_HOOKS_H */

@@ -1046,11 +1046,11 @@ if(NOT EMSCRIPTEN)
     set_tests_properties(test_game_asset_paths PROPERTIES LABELS "core")
 
     add_executable(test_platform_lifecycle
-        tests/test_platform_lifecycle.c
-        src/platform_lifecycle.c
+        "${PLATFORM_SDK_DIR}/tests/test_platform_lifecycle.c"
+        "${PLATFORM_SDK_SRC}/platform_lifecycle.c"
         "${PLATFORM_SDK_SRC}/platform_sdk.c")
     target_link_libraries(test_platform_lifecycle PRIVATE unity)
-    target_include_directories(test_platform_lifecycle PRIVATE src "${PLATFORM_SDK_INC}")
+    target_include_directories(test_platform_lifecycle PRIVATE "${PLATFORM_SDK_INC}")
     target_compile_definitions(test_platform_lifecycle PRIVATE
         PLATFORM_SDK_TARGET_ID=${GAME_PLATFORM_TARGET_ID}
         PLATFORM_SDK_CURRENT_ID=${GAME_PLATFORM_SDK_ID}
@@ -1101,14 +1101,11 @@ if(NOT EMSCRIPTEN)
     # nt_app_stub carries the real g_nt_app clock the freeze acts on, so the
     # test asserts the engine's own pause flag, not a mirror of it.
     add_executable(test_platform_hooks
-        tests/test_platform_hooks.c
-        src/systems/sys_platform_hooks.c
-        src/game_log.c
-        "${PLATFORM_SDK_SRC}/platform_sdk.c"
-        "${GAME_EVENTS_SRC}/game_events.c")
-    target_link_libraries(test_platform_hooks PRIVATE unity nt_app_stub nt_hash nt_log nt_core)
-    target_include_directories(test_platform_hooks PRIVATE
-        src "${PLATFORM_SDK_INC}" "${GAME_EVENTS_INC}")
+        "${PLATFORM_SDK_DIR}/tests/test_platform_hooks.c"
+        "${PLATFORM_SDK_SRC}/platform_hooks.c"
+        "${PLATFORM_SDK_SRC}/platform_sdk.c")
+    target_link_libraries(test_platform_hooks PRIVATE unity nt_app_stub nt_core)
+    target_include_directories(test_platform_hooks PRIVATE "${PLATFORM_SDK_INC}")
     target_compile_definitions(test_platform_hooks PRIVATE
         PLATFORM_SDK_TARGET_ID=${GAME_PLATFORM_TARGET_ID}
         PLATFORM_SDK_CURRENT_ID=${GAME_PLATFORM_SDK_ID}
@@ -1117,11 +1114,20 @@ if(NOT EMSCRIPTEN)
         PLATFORM_SDK_REWARDED_SUPPORTED=${GAME_PLATFORM_REWARDED_SUPPORTED}
         PLATFORM_SDK_STORAGE_SUPPORTED=${GAME_PLATFORM_STORAGE_SUPPORTED}
         PLATFORM_SDK_TESTING=1
-        FEATURE_GAME_EVENTS=1
         _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_platform_hooks PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_platform_hooks COMMAND test_platform_hooks)
     set_tests_properties(test_platform_hooks PROPERTIES LABELS "core")
+
+    # The hand-answered portal exists only on a native local mock build, so
+    # the test pins that target instead of following the configured one.
+    game_add_c_test(test_platform_sdk_mock
+        SOURCES "${PLATFORM_SDK_DIR}/tests/test_platform_sdk_mock.c"
+            "${PLATFORM_SDK_SRC}/platform_sdk_mock.c"
+            "${PLATFORM_SDK_SRC}/platform_sdk.c"
+        INCLUDES "${PLATFORM_SDK_INC}"
+        DEFINES PLATFORM_SDK_TESTING=1
+        TIER core WARNINGS)
 
     add_executable(test_platform_sdk_events
         tests/test_platform_sdk_events.c

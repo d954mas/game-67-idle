@@ -15,8 +15,7 @@
 // to nt_ui_label or nt_text_renderer_draw is the thing to look for.
 //
 // Deliberately unlocalized text still compiles, through the explicit and
-// greppable loc_raw() -- src/ui/platform_sdk_debug.c is the template's only
-// user, because a developer diagnostic is not player text.
+// greppable loc_raw().
 //
 // NOT WRAPPED: the engine's other text-taking entry points (nt_ui_checkbox,
 // nt_ui_slider_float's label, the combo/menu family, rich text, tooltips,

@@ -252,8 +252,8 @@ if(GAME_DEVAPI_ENABLED)
     target_sources(${GAME_TARGET} PRIVATE
         src/iteration_proof_devapi.c
         src/game_items_devapi.c
-        src/platform_sdk_devapi.c
-        src/platform_hooks_devapi.c
+        "${PLATFORM_SDK_SRC}/platform_sdk_devapi.c"
+        "${PLATFORM_SDK_SRC}/platform_hooks_devapi.c"
         "${GAME_STATE_SRC}/game_save_devapi.c"
         "${GAME_EVENTS_SRC}/game_events_devapi.c" # event-log tail ring + game.events.tail
         "${GAME_EVENTS_SRC}/game_event_render.c") # descriptor-driven JSON renderer

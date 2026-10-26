@@ -1,9 +1,7 @@
-#include "systems/sys_platform_hooks.h"
+#include "features/platform_sdk/platform_hooks.h"
 
 #include "app/nt_app.h"
 #include "features/platform_sdk/platform_sdk.h"
-#include "game_audio.h"
-#include "game_log.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -31,6 +29,7 @@
 #define PLATFORM_HOOKS_PLACEMENT_MAX 64
 
 static bool s_initialized;
+static platform_hooks_config_t s_config;
 static bool s_page_visible = true;
 static bool s_window_focused = true;
 static bool s_audio_muted = false;
@@ -41,6 +40,18 @@ static unsigned int s_reward_grant_count;
 static platform_reward_fn s_reward_callback;
 static void *s_reward_userdata;
 static char s_reward_placement[PLATFORM_HOOKS_PLACEMENT_MAX];
+
+static void hooks_log(const char *line) {
+    if (s_config.log != NULL) {
+        s_config.log(line);
+    }
+}
+
+static void hooks_set_audio_paused(bool paused) {
+    if (s_config.set_audio_paused != NULL) {
+        s_config.set_audio_paused(paused);
+    }
+}
 
 bool platform_hooks_rewarded_supported(void) {
     /* The facade remembers a portal's refusal; this layer only adds that the
@@ -73,11 +84,12 @@ static void install_web_attention_events(void) {
 }
 #endif
 
-void platform_hooks_init(void) {
+void platform_hooks_init(const platform_hooks_config_t *config) {
     if (s_initialized) {
         return;
     }
     s_initialized = true;
+    s_config = config != NULL ? *config : (platform_hooks_config_t){0};
     s_page_visible = true;
     s_window_focused = true;
     s_sim_frozen = false;
@@ -95,10 +107,9 @@ void platform_hooks_set_window_focused(bool focused) {
     s_window_focused = focused;
 }
 
-/* Sound follows FOCUS, the clock follows VISIBILITY. A portal requires silence
-   from a game that lost focus (Yandex requirement 1.3), and a player who
-   clicked another window does not want the game frozen mid-move. A portal's
-   own mute switch is a third input: it silences without freezing. */
+/* Sound follows FOCUS, the platform hold follows VISIBILITY. A portal requires
+   silence from a game that lost focus (Yandex requirement 1.3). A portal's own
+   mute switch is a third input: it silences without freezing. */
 bool platform_hooks_audible(void) {
     return s_page_visible && s_window_focused && !platform_sdk_break_active() &&
            platform_sdk_portal_audio_enabled();
@@ -106,10 +117,10 @@ bool platform_hooks_audible(void) {
 
 bool platform_hooks_attention(void) {
     /* VISIBILITY, not focus. A hidden tab must freeze -- nobody is watching and
-       the portal expects it. A blurred canvas must NOT: the game is still on
-       screen, and a player who clicked a bookmark bar or another window comes
-       back to a game that kept going. Focus is still tracked for input, it just
-       no longer stops the clock. */
+       the portal expects it. Lost focus is not a platform hold: where it
+       matters (a mouse on the web) the click-to-focus prompt covers the world
+       and the world clock holds for the prompt instead; a touch device never
+       prompts, so it keeps going. */
     return s_page_visible;
 }
 
@@ -133,7 +144,7 @@ void platform_hooks_update(bool runtime_ready) {
         const bool muted = runtime_ready && !platform_hooks_audible();
         if (muted != s_audio_muted) {
             s_audio_muted = muted;
-            game_audio_set_paused(muted);
+            hooks_set_audio_paused(muted);
         }
     }
     frozen = runtime_ready && !platform_hooks_gameplay_allowed();
@@ -146,7 +157,7 @@ void platform_hooks_update(bool runtime_ready) {
     } else {
         nt_app_resume();
     }
-    (void)game_log_emit(frozen ? "platform.sim frozen" : "platform.sim running");
+    hooks_log(frozen ? "platform.sim frozen" : "platform.sim running");
 }
 
 static bool placement_ok(const char *placement) {
@@ -161,7 +172,10 @@ bool platform_hooks_commercial_break(const char *placement) {
         return false;
     }
     (void)snprintf(message, sizeof message, "platform.break %s", placement);
-    (void)game_log_emit(message);
+    hooks_log(message);
+    if (platform_sdk_gameplay_active()) {
+        (void)platform_sdk_gameplay_stop();
+    }
     result = platform_sdk_show_interstitial(placement, NULL, NULL);
     if (result == PLATFORM_SDK_RESULT_OK) {
         s_break_count += 1u;
@@ -181,11 +195,11 @@ static void on_rewarded(platform_sdk_rewarded_result_t result, void *userdata) {
     s_reward_callback = NULL;
     s_reward_userdata = NULL;
     if (!granted || callback == NULL) {
-        (void)game_log_emit("platform.reward denied");
+        hooks_log("platform.reward denied");
         return;
     }
     s_reward_grant_count += 1u;
-    (void)game_log_emit("platform.reward granted");
+    hooks_log("platform.reward granted");
     callback(placement, reward_userdata);
 }
 
@@ -196,11 +210,14 @@ bool platform_hooks_rewarded(const char *placement, platform_reward_fn on_reward
         return false; /* one video, one reward: no chaining, no double payout */
     }
     (void)snprintf(message, sizeof message, "platform.reward %s", placement);
-    (void)game_log_emit(message);
+    hooks_log(message);
 
     (void)snprintf(s_reward_placement, sizeof s_reward_placement, "%s", placement);
     s_reward_callback = on_reward;
     s_reward_userdata = userdata;
+    if (platform_sdk_gameplay_active()) {
+        (void)platform_sdk_gameplay_stop();
+    }
     result = platform_sdk_show_rewarded(placement, on_rewarded, NULL);
     if (result != PLATFORM_SDK_RESULT_OK && s_reward_callback != NULL) {
         s_reward_callback = NULL;
@@ -224,7 +241,7 @@ void platform_hooks_shutdown(void) {
     }
     if (s_sim_frozen) {
         nt_app_resume();
-        game_audio_set_paused(false);
+        hooks_set_audio_paused(false);
     }
     s_initialized = false;
     s_page_visible = true;
@@ -235,4 +252,5 @@ void platform_hooks_shutdown(void) {
     s_reward_grant_count = 0u;
     s_reward_callback = NULL;
     s_reward_userdata = NULL;
+    s_config = (platform_hooks_config_t){0};
 }

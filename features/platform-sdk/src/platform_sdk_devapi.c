@@ -1,9 +1,8 @@
 /* The developer-facing view of the platform SDK. It exists so the probe panel
    does not have to: a panel that reports state has to occupy the player's
    screen to do it, and this reports the same state to the agent that asked. */
-#if NT_DEVAPI_ENABLED
 
-#include "platform_sdk_devapi.h"
+#include "features/platform_sdk/platform_sdk_devapi.h"
 
 #include "cJSON.h"
 #include "devapi/nt_devapi.h"
@@ -41,7 +40,7 @@ static bool platform_sdk_state(const cJSON *params, cJSON *result_obj, nt_devapi
     return true;
 }
 
-void game_platform_sdk_register_devapi(void) {
+void platform_sdk_register_devapi(void) {
     static const nt_devapi_command_desc desc = {
         "game.platform_sdk.state",
         "game",
@@ -53,5 +52,3 @@ void game_platform_sdk_register_devapi(void) {
     };
     (void)nt_devapi_register(&desc, platform_sdk_state, NULL);
 }
-
-#endif

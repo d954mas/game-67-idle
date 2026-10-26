@@ -8,7 +8,7 @@
 #include "features/progression/progression.h" /* И3a: progression_update() tick (auto/threshold level-ups) */
 #include "ui/demo_hud.h" /* И3b: demo composition (resource_panel over items/progression) */
 #include "ui/focus_prompt_ui.h"
-#include "ui/platform_sdk_debug.h"
+#include "features/platform_sdk/platform_sdk_debug.h"
 #include "ui/ui_runtime.h"
 #include "game_audio.h"
 #include "app/nt_app.h" /* g_nt_app.dt */

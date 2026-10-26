@@ -1,6 +1,5 @@
-#if NT_DEVAPI_ENABLED
 
-#include "systems/sys_platform_hooks.h"
+#include "features/platform_sdk/platform_hooks.h"
 
 #include "app/nt_app.h"
 #include "cJSON.h"
@@ -146,5 +145,3 @@ void platform_hooks_register_devapi(void) {
     (void)nt_devapi_register(&break_desc, hooks_break, NULL);
     (void)nt_devapi_register(&reward_desc, hooks_reward, NULL);
 }
-
-#endif /* NT_DEVAPI_ENABLED */

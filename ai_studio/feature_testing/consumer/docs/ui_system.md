@@ -113,7 +113,7 @@ in the bottom-right corner of the first screen.
 
 The state it reported is available without taking the screen:
 `game.platform_sdk.state` over DevAPI returns target, backend, boot status and
-capabilities (`src/platform_sdk_devapi.c`). The panel itself still builds behind
+capabilities (`features/platform-sdk/src/platform_sdk_devapi.c`). The panel itself still builds behind
 `-DGAME_PLATFORM_SDK_DEBUG_UI=ON` for clicking the mock ad flows by hand; the
 mock ad modal is not behind that flag, because a game that calls for an
 interstitial locally still has to show one.
