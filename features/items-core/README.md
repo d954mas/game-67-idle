@@ -205,8 +205,10 @@ schema beside the core's (`entry_id`, `slot`, `def_id`, `count`, `level`,
 `quarantined`) and writes them through `items_entry_instance(entry)`, then
 marks the save dirty. Items-core zeroes them when it creates an entry, keeps
 them through whole moves and from an ephemeral container into a persistent one,
-and never reads them; zero must therefore be a valid value of each. A consumer
-with no instance data declares none.
+and never reads them; zero must therefore be a valid value of each. They mean
+something only on unique entries: on a stack, an add, merge or split does not
+keep them consistent. A caller writes only the fields its own schema declares, never the
+core's. A consumer with no instance data declares none.
 
 Bounded runtime inspection uses caller-owned buffers. Container listing filters
 policy, lifetime, and empty rows, then paginates persistent IDs followed by

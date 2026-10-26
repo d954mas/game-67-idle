@@ -246,8 +246,10 @@ items_entry_view_t items_entry_view(item_entry_ref_t entry);
 /* The entry's record, for the instance fields the consumer's ItemEntry schema
    declares beside items-core's own (entry_id, slot, def_id, count, level,
    quarantined). Items-core zeroes them on create, keeps them through whole
-   moves and never reads them, so zero must be a valid value for each. Write
-   only those fields, then mark the save dirty. */
+   moves and never reads them, so zero must be a valid value for each. They
+   mean something only on unique entries: on a stack, an add, merge or split
+   does not keep them consistent. Write only the fields your schema declares, never the core's,
+   then mark the save dirty. */
 struct ItemsItemEntry;
 struct ItemsItemEntry *items_entry_instance(item_entry_ref_t entry);
 
