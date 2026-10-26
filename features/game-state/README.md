@@ -404,6 +404,11 @@ copies in that order before giving up. `game_storage.h` adds
 `game_storage_premigration_exists` and `game_storage_write_save`; a consumer
 that fakes `game_storage` must supply them. Rules: `references/contract.md`.
 
+Version `4.12.1` runs the conflict policy once more when the boot adoption of
+the account document is refused (the import or the local write failed). Before,
+the policy had already run while adoption was still possible, so the refused
+document sat as a conflict until the first local change.
+
 ## Extension points
 
 Extend through game-owned schemas, migrations, hooks, and DevAPI adapters;

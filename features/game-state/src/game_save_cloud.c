@@ -460,7 +460,14 @@ bool game_save_cloud_start(bool local_is_fresh) {
     consume_remote_result();
     consider_auto_resolution();
     const bool adopted = adopt_remote();
-    if (adopted) clear_auto_remote();
+    if (adopted) {
+        clear_auto_remote();
+    } else {
+        /* A refused boot adoption leaves a conflict the policy has not seen
+           (it ran while adoption was still possible); give it one look now. */
+        s_cloud.policy_pending = true;
+        consider_auto_resolution();
+    }
     s_cloud.started = true;
     game_save_sync_disallow_remote_adoption(&s_cloud.sync);
     return adopted;
