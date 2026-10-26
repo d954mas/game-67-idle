@@ -30,6 +30,16 @@ examples, see `ai_studio/feature_testing/consumer`.
 
 ## Lifecycle
 
+The web shell exposes effective safe-area insets to UI Kit through
+`window.__gameSafeAreaInsets()`. Phone-sized screens with a coarse primary
+pointer reserve at least 32 CSS pixels at the top in portrait and at both sides
+in landscape. Larger browser insets win; they are never added to this minimum.
+Desktop and larger touch screens use the browser values unchanged. Screen
+orientation takes precedence over viewport aspect ratio so an opened keyboard
+does not rotate the protected edges. This minimum is a defensive layout margin,
+not a measurement of the physical cutout. Keep the world canvas full-screen and
+use the effective insets for UI placement and hit regions.
+
 `init -> update -> update_root -> react -> record -> draw_world -> draw_ui -> shutdown`
 
 `World` holds runtime state. Persistent state is declared in

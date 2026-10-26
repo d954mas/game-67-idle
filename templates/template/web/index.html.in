@@ -22,6 +22,18 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  #safe-area-probe {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    visibility: hidden;
+    pointer-events: none;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+      env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+
   canvas {
     display: block;
     width: 100vw;
@@ -158,6 +170,39 @@
 </style>
 </head>
 <body>
+<div id="safe-area-probe" aria-hidden="true"></div>
+<script id="safe-area-bridge">
+  (function () {
+    var probe = document.getElementById('safe-area-probe');
+    window.__gameSafeAreaInsets = function () {
+      // Read live values: fullscreen, rotation and browser chrome can change them.
+      var style = probe ? getComputedStyle(probe) : null;
+      var insets = style ? [style.paddingLeft, style.paddingRight, style.paddingTop, style.paddingBottom]
+        .map(function (value) {
+          var n = parseFloat(value);
+          return Number.isFinite(n) && n > 0 ? n : 0;
+        }) : [0, 0, 0, 0];
+      var screen = window.screen || {};
+      var width = Number(screen.width) || Number(window.innerWidth) || 0;
+      var height = Number(screen.height) || Number(window.innerHeight) || 0;
+      var phone = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches &&
+        Math.min(width, height) > 0 && Math.min(width, height) <= 600;
+      if (phone) {
+        // Screen orientation avoids treating an opened keyboard as device rotation.
+        var orientation = screen.orientation && screen.orientation.type;
+        var portrait = typeof orientation === 'string' && /^(portrait|landscape)-/.test(orientation)
+          ? orientation.indexOf('portrait') === 0 : window.innerHeight >= window.innerWidth;
+        if (portrait) {
+          insets[2] = Math.max(insets[2], 32);
+        } else {
+          insets[0] = Math.max(insets[0], 32);
+          insets[1] = Math.max(insets[1], 32);
+        }
+      }
+      return insets;
+    };
+  })();
+</script>
 <!-- Not "loading-overlay": Playgama Bridge gives its own overlay that id, hides
      the first element with that id at 100% and would leave its own on screen. -->
 <div id="game-loading-overlay" role="status" aria-live="polite">
@@ -497,3 +542,4 @@ window.__platformDiagnostics = installPlatformDiagnostics(window, { storagePrefi
 </script>
 </body>
 </html>
+
