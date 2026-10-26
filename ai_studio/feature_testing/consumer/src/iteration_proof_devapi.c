@@ -16,25 +16,20 @@ static bool iteration_proof(
     nt_devapi_error *err,
     void *user
 ) {
-    (void)params;
-    (void)err;
-    (void)user;
     cJSON_AddStringToObject(result_obj, "cFixture", GAME_ITERATION_C_FIXTURE);
     cJSON_AddStringToObject(result_obj, "schemaFixture", GAME_STATE_TEST_LABEL_TEXT_DEFAULT);
     return true;
 }
 
 void game_iteration_proof_register_devapi(void) {
-    static const nt_devapi_command_desc desc = {
-        "game.iteration.proof",
-        "game",
-        "Return exact template leaf-C and generated-schema iteration fixtures.",
-        "none",
-        "cFixture, schemaFixture",
-        "immediate",
-        "none",
+    static const nt_devapi_command cmds[] = {
+        {.method = "game.iteration.proof",
+            .summary = "Return exact template leaf-C and generated-schema iteration fixtures.",
+            .params_shape = "none",
+            .result_shape = "cFixture, schemaFixture",
+            .fn = iteration_proof},
     };
-    (void)nt_devapi_register(&desc, iteration_proof, NULL);
+    nt_devapi_register(cmds, NT_COUNTOF(cmds), NULL);
 }
 
 #endif

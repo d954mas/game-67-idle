@@ -137,6 +137,13 @@ static void game_runtime_on_devapi_state_change(
     }
 }
 
+// A bot that drops mid-step would leave the game frozen; the engine resets only its own state.
+static void recover_on_client_reset(void) {
+    g_nt_app.mode = NT_APP_MODE_RUN;
+    g_nt_app.paused = false;
+    g_nt_app.pending_steps = 0;
+}
+
 bool shell_platform_start(World *world) {
     (void)world;
     if (!s_options->devapi_requested) {
@@ -162,15 +169,8 @@ bool shell_platform_start(World *world) {
     fprintf(stderr, "DevAPI listening on 127.0.0.1:%u\n", (unsigned)s_options->devapi_port);
 #endif
     nt_devapi_register_default();
-    if (!scene_manager_register_devapi(game_scenes_manager())) {
-        fprintf(stderr, "failed to register scene DevAPI\n");
-#ifndef NT_PLATFORM_WEB
-        nt_devapi_net_stop();
-#endif
-        nt_devapi_shutdown();
-        s_devapi_running = false;
-        return false;
-    }
+    nt_devapi_register_reset(recover_on_client_reset);
+    scene_manager_register_devapi(game_scenes_manager());
     game_iteration_proof_register_devapi();
     game_items_register_devapi();
     platform_sdk_register_devapi();
@@ -178,7 +178,9 @@ bool shell_platform_start(World *world) {
     game_save_register_devapi(game_runtime_on_devapi_state_change, NULL);
     game_events_register_devapi(); // also arms the recorder game.events.tail reads
 #ifdef NT_DEVAPI_GROUP_UI
-    nt_devapi_ui_register_context("hud", ui_runtime_ctx());
+    static nt_devapi_ui_context s_ui_contexts[1];
+    s_ui_contexts[0] = (nt_devapi_ui_context){.name = "hud", .ctx = ui_runtime_ctx()};
+    nt_devapi_ui_set_contexts(s_ui_contexts, NT_COUNTOF(s_ui_contexts));
 #endif
 #ifdef NT_PLATFORM_WEB
     nt_devapi_web_install_shim();
@@ -197,16 +199,6 @@ static void devapi_update_frame(void) {
         return;
     }
     nt_devapi_update();
-#ifndef NT_PLATFORM_WEB
-    static bool was_connected;
-    bool now_connected = nt_devapi_net_has_client();
-    if (was_connected && !now_connected) {
-        g_nt_app.mode = NT_APP_MODE_RUN;
-        g_nt_app.paused = false;
-        g_nt_app.pending_steps = 0;
-    }
-    was_connected = now_connected;
-#endif
 }
 
 static void devapi_sample_metrics(double frame_begin) {

@@ -5,17 +5,6 @@
 #include "devapi/nt_devapi.h"
 #include "features/platform_sdk/platform_sdk.h"
 
-#include <stdio.h>
-
-static char s_error[128];
-
-static bool hooks_fail(nt_devapi_error *error, const char *code, const char *message) {
-    (void)snprintf(s_error, sizeof s_error, "%s", message);
-    error->code = code;
-    error->message = s_error;
-    return false;
-}
-
 static bool optional_bool(const cJSON *params, const char *name, bool *out) {
     const cJSON *value = cJSON_GetObjectItemCaseSensitive(params, name);
     if (!cJSON_IsBool(value)) {
@@ -48,9 +37,6 @@ static void add_state(cJSON *result_obj) {
 
 static bool hooks_state(
     const cJSON *params, cJSON *result_obj, nt_devapi_error *error, void *user) {
-    (void)params;
-    (void)error;
-    (void)user;
     add_state(result_obj);
     return true;
 }
@@ -60,7 +46,6 @@ static bool hooks_attention(
     bool visible = false;
     bool focused = false;
     bool touched = false;
-    (void)user;
 
     if (optional_bool(params, "visible", &visible)) {
         platform_hooks_set_page_visible(visible);
@@ -71,7 +56,7 @@ static bool hooks_attention(
         touched = true;
     }
     if (!touched) {
-        return hooks_fail(error, "bad_params", "pass visible and/or focused as booleans");
+        return nt_devapi_fail(error, "pass visible and/or focused as booleans");
     }
     add_state(result_obj);
     return true;
@@ -80,9 +65,8 @@ static bool hooks_attention(
 static bool hooks_break(
     const cJSON *params, cJSON *result_obj, nt_devapi_error *error, void *user) {
     const char *placement = required_string(params, "placement");
-    (void)user;
     if (placement == NULL) {
-        return hooks_fail(error, "bad_params", "placement must be a non-empty string");
+        return nt_devapi_fail(error, "placement must be a non-empty string");
     }
     cJSON_AddBoolToObject(result_obj, "requested", platform_hooks_commercial_break(placement));
     add_state(result_obj);
@@ -102,9 +86,8 @@ static void devapi_reward(const char *placement, void *userdata) {
 static bool hooks_reward(
     const cJSON *params, cJSON *result_obj, nt_devapi_error *error, void *user) {
     const char *placement = required_string(params, "placement");
-    (void)user;
     if (placement == NULL) {
-        return hooks_fail(error, "bad_params", "placement must be a non-empty string");
+        return nt_devapi_fail(error, "placement must be a non-empty string");
     }
     cJSON_AddBoolToObject(
         result_obj, "requested", platform_hooks_rewarded(placement, devapi_reward, NULL));
@@ -114,33 +97,28 @@ static bool hooks_reward(
 }
 
 void platform_hooks_register_devapi(void) {
-    static const nt_devapi_command_desc state_desc = {
-        "platform.state", "game",
-        "Read attention, ad and app-clock state behind the portal lifecycle.",
-        "none",
-        "attention, gameplay_allowed, ad_active, sim_paused, app_frame, app_time, "
-        "gameplay_active, breaks, rewards",
-        "immediate", "none"};
-    static const nt_devapi_command_desc attention_desc = {
-        "platform.attention", "game",
-        "Simulate the browser losing or regaining attention (tab hidden, window blur).",
-        "visible, focused",
-        "attention, gameplay_allowed, sim_paused, app_frame, app_time, gameplay_active",
-        "immediate", "state"};
-    static const nt_devapi_command_desc break_desc = {
-        "platform.break", "game",
-        "Ask the portal for a commercial break at one of the game's placements.",
-        "placement",
-        "requested, ad_active, breaks",
-        "immediate", "state"};
-    static const nt_devapi_command_desc reward_desc = {
-        "platform.reward", "game",
-        "Ask the portal for a rewarded video at a placement and report whether it paid out.",
-        "placement",
-        "requested, callbacks, ad_active, rewards",
-        "immediate", "state"};
-    (void)nt_devapi_register(&state_desc, hooks_state, NULL);
-    (void)nt_devapi_register(&attention_desc, hooks_attention, NULL);
-    (void)nt_devapi_register(&break_desc, hooks_break, NULL);
-    (void)nt_devapi_register(&reward_desc, hooks_reward, NULL);
+    static const nt_devapi_command cmds[] = {
+        {.method = "platform.state",
+            .summary = "Read attention, ad and app-clock state behind the portal lifecycle.",
+            .params_shape = "none",
+            .result_shape = "attention, gameplay_allowed, ad_active, sim_paused, app_frame, app_time, "
+                            "gameplay_active, breaks, rewards",
+            .fn = hooks_state},
+        {.method = "platform.attention",
+            .summary = "Simulate the browser losing or regaining attention (tab hidden, window blur).",
+            .params_shape = "visible, focused",
+            .result_shape = "attention, gameplay_allowed, sim_paused, app_frame, app_time, gameplay_active",
+            .fn = hooks_attention},
+        {.method = "platform.break",
+            .summary = "Ask the portal for a commercial break at one of the game's placements.",
+            .params_shape = "placement",
+            .result_shape = "requested, ad_active, breaks",
+            .fn = hooks_break},
+        {.method = "platform.reward",
+            .summary = "Ask the portal for a rewarded video at a placement and report whether it paid out.",
+            .params_shape = "placement",
+            .result_shape = "requested, callbacks, ad_active, rewards",
+            .fn = hooks_reward},
+    };
+    nt_devapi_register(cmds, NT_COUNTOF(cmds), NULL);
 }

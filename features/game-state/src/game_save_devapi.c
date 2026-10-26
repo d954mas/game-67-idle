@@ -126,9 +126,6 @@ static const char *load_status_string(game_save_load_status_t status) {
    descriptive strings live only in err->message. ---- */
 
 static bool ep_state_schema(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
-    (void)params;
-    (void)user;
-    (void)err;
     const int n = game_save_fragment_count();
     for (int i = 0; i < n; i++) {
         const GameSaveFragment *f = game_save_fragment_at(i);
@@ -144,7 +141,6 @@ static bool ep_state_schema(const cJSON *params, cJSON *result_obj, nt_devapi_er
 }
 
 static bool ep_state_get(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
-    (void)user;
     const cJSON *path = cJSON_GetObjectItemCaseSensitive(params, "path");
     const char *state_path = cJSON_IsString(path) ? path->valuestring : "";
     cJSON *value = NULL;
@@ -181,7 +177,6 @@ static bool ep_state_get(const cJSON *params, cJSON *result_obj, nt_devapi_error
 }
 
 static bool ep_state_set(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
-    (void)user;
     const cJSON *path = cJSON_GetObjectItemCaseSensitive(params, "path");
     const cJSON *value = cJSON_GetObjectItemCaseSensitive(params, "value");
     if (!cJSON_IsString(path) || path->valuestring[0] == '\0' || !value) {
@@ -242,7 +237,6 @@ static bool ep_state_set(const cJSON *params, cJSON *result_obj, nt_devapi_error
 /* Patch groups still report per-key results, but successful groups retain their
    snapshots until the game-owned document invariant accepts the whole write. */
 static bool ep_state_patch(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
-    (void)user;
     const cJSON *values = cJSON_GetObjectItemCaseSensitive(params, "values");
     if (!cJSON_IsObject(values)) {
         return state_fail(err, "bad_params", "values object is required");
@@ -335,8 +329,6 @@ static bool ep_state_patch(const cJSON *params, cJSON *result_obj, nt_devapi_err
 }
 
 static bool ep_state_save(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
-    (void)params;
-    (void)user;
     if (!game_save_flush(s_state_err, (int)sizeof s_state_err)) {
         return state_fail_buf(err, "internal");
     }
@@ -345,8 +337,6 @@ static bool ep_state_save(const cJSON *params, cJSON *result_obj, nt_devapi_erro
 }
 
 static bool ep_state_load(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
-    (void)params;
-    (void)user;
     game_save_load_result_t result;
     game_save_load(&result);
     if (result.status == GAME_SAVE_LOAD_CORRUPT_RESET) {
@@ -370,8 +360,6 @@ static bool ep_state_load(const cJSON *params, cJSON *result_obj, nt_devapi_erro
 }
 
 static bool ep_state_reset(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
-    (void)params;
-    (void)user;
     /* Р10: reset all fragments + on_new_game (starting content) + save + resume autosave. */
     const game_save_transition_result_t transition =
         game_save_new_game(s_state_err, (int)sizeof s_state_err);
@@ -385,22 +373,16 @@ void game_save_register_devapi(
     game_save_devapi_change_fn on_change, void *user) {
     s_on_change = on_change;
     s_on_change_user = user;
-    static const nt_devapi_command_desc descs[] = {
-        {"game.state.schema", "game", "Return per-fragment state schemas.", "none", "{<fragment>: schema}", "immediate", "none"},
-        {"game.state.get", "game", "Get state by path (\"\"=all fragments).", "path", "path, value", "immediate", "none"},
-        {"game.state.set", "game", "Set a state value by path (<fragment>.<sub>).", "path, value", "path, value", "immediate", "mutates state"},
-        {"game.state.patch", "game", "Patch multiple paths.", "values", "results", "immediate", "mutates state"},
-        {"game.state.save", "game", "Flush state to storage.", "none", "saved", "immediate", "writes file"},
-        {"game.state.load", "game", "Reload state from storage.", "none", "status, value", "immediate", "mutates state"},
-        {"game.state.reset", "game", "New game: reset all fragments + starting content.", "none", "reset", "immediate", "mutates state"},
+    static const nt_devapi_command cmds[] = {
+        {.method = "game.state.schema", .summary = "Return per-fragment state schemas.", .params_shape = "none", .result_shape = "{<fragment>: schema}", .fn = ep_state_schema},
+        {.method = "game.state.get", .summary = "Get state by path (\"\"=all fragments).", .params_shape = "path", .result_shape = "path, value", .fn = ep_state_get},
+        {.method = "game.state.set", .summary = "Set a state value by path (<fragment>.<sub>).", .params_shape = "path, value", .result_shape = "path, value", .fn = ep_state_set},
+        {.method = "game.state.patch", .summary = "Patch multiple paths.", .params_shape = "values", .result_shape = "results", .fn = ep_state_patch},
+        {.method = "game.state.save", .summary = "Flush state to storage (writes the save file).", .params_shape = "none", .result_shape = "saved", .fn = ep_state_save},
+        {.method = "game.state.load", .summary = "Reload state from storage.", .params_shape = "none", .result_shape = "status, value", .fn = ep_state_load},
+        {.method = "game.state.reset", .summary = "New game: reset all fragments + starting content.", .params_shape = "none", .result_shape = "reset", .fn = ep_state_reset},
     };
-    const nt_devapi_handler_fn fns[] = {
-        ep_state_schema, ep_state_get, ep_state_set, ep_state_patch,
-        ep_state_save, ep_state_load, ep_state_reset,
-    };
-    for (size_t i = 0; i < sizeof(fns) / sizeof(fns[0]); ++i) {
-        (void)nt_devapi_register(&descs[i], fns[i], NULL);
-    }
+    nt_devapi_register(cmds, NT_COUNTOF(cmds), NULL);
 }
 
 #endif /* NT_DEVAPI_ENABLED */

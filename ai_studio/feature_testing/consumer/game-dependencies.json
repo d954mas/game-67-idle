@@ -14,13 +14,13 @@
     {
       "id": "game-events",
       "source": "features/game-events",
-      "version": "3.1.0",
+      "version": "3.1.1",
       "compatibility": "validated by the template build and test suite"
     },
     {
       "id": "game-state",
       "source": "features/game-state",
-      "version": "4.12.1",
+      "version": "4.12.2",
       "compatibility": "validated by the template build and test suite"
     },
     {
@@ -44,7 +44,7 @@
     {
       "id": "platform-sdk",
       "source": "features/platform-sdk",
-      "version": "3.1.0",
+      "version": "3.1.1",
       "compatibility": "validated by the template build and test suite"
     },
     {
@@ -80,7 +80,7 @@
     {
       "id": "scenes-core",
       "source": "features/scenes-core",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "compatibility": "validated by the template scene-manager CTests, scaffold/consumer tests, and native/web builds"
     },
     {

@@ -109,7 +109,7 @@ void setUp(void) {
             &operation_id, NULL));
     scene_manager_step(&s_manager, 1, 0.016F);
     TEST_ASSERT_EQUAL(NT_OK, nt_devapi_init());
-    TEST_ASSERT_TRUE(scene_manager_register_devapi(&s_manager));
+    scene_manager_register_devapi(&s_manager);
 }
 
 void tearDown(void) {
@@ -369,39 +369,6 @@ static void test_operation_polling_and_busy_blocker_are_deterministic(void) {
     cJSON_Delete(root);
 }
 
-static void test_duplicate_registration_reports_failure(void) {
-    TEST_ASSERT_FALSE(scene_manager_register_devapi(&s_manager));
-}
-
-static void test_mid_registration_failure_requires_full_registry_reset(void) {
-    const nt_devapi_command_desc conflict = {
-        "game.scene.status", "test", "conflict", "{}", "{}",
-        "immediate", "none",
-    };
-    cJSON *root;
-
-    nt_devapi_shutdown();
-    TEST_ASSERT_EQUAL(NT_OK, nt_devapi_init());
-    TEST_ASSERT_EQUAL(
-        NT_OK, nt_devapi_register(&conflict, dummy_endpoint, NULL));
-    TEST_ASSERT_FALSE(scene_manager_register_devapi(&s_manager));
-
-    root = submit(
-        "{\"method\":\"game.scene.list\",\"params\":{}}");
-    TEST_ASSERT_TRUE(cJSON_IsTrue(
-        cJSON_GetObjectItemCaseSensitive(root, "ok")));
-    cJSON_Delete(root);
-
-    nt_devapi_shutdown();
-    TEST_ASSERT_EQUAL(NT_OK, nt_devapi_init());
-    TEST_ASSERT_TRUE(scene_manager_register_devapi(&s_manager));
-    root = submit(
-        "{\"method\":\"game.scene.status\",\"params\":{}}");
-    TEST_ASSERT_TRUE(cJSON_IsTrue(
-        cJSON_GetObjectItemCaseSensitive(root, "ok")));
-    cJSON_Delete(root);
-}
-
 static void test_list_and_empty_status_response_shapes(void) {
     cJSON *root = submit(
         "{\"method\":\"game.scene.list\",\"params\":{}}");
@@ -651,10 +618,10 @@ static int dump_schema_fixtures(void) {
         return 2;
     }
     scene_manager_step(&s_manager, 1, 0.016F);
-    if (nt_devapi_init() != NT_OK ||
-        !scene_manager_register_devapi(&s_manager)) {
+    if (nt_devapi_init() != NT_OK) {
         return 3;
     }
+    scene_manager_register_devapi(&s_manager);
     for (i = 0; i < sizeof requests / sizeof requests[0]; ++i) {
         const char *response = nt_devapi_submit(requests[i]);
         if (response == NULL) {
@@ -683,8 +650,6 @@ int main(int argc, char **argv) {
     RUN_TEST(test_reload_before_start_returns_bad_operation);
     RUN_TEST(test_strict_param_type_range_and_unknown_key_matrix);
     RUN_TEST(test_operation_polling_and_busy_blocker_are_deterministic);
-    RUN_TEST(test_duplicate_registration_reports_failure);
-    RUN_TEST(test_mid_registration_failure_requires_full_registry_reset);
     RUN_TEST(test_list_and_empty_status_response_shapes);
     RUN_TEST(test_navigation_and_preload_result_matrix);
     RUN_TEST(test_every_navigation_endpoint_reports_busy_blocker);

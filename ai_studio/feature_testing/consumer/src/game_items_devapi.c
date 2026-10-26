@@ -140,7 +140,6 @@ static bool inspection_result(
 
 static bool container_list(
     const cJSON *params, cJSON *result_obj, nt_devapi_error *error, void *user) {
-    (void)user;
     uint32_t offset = 0;
     uint32_t limit = 32;
     if (!optional_u32(params, "offset", 0, &offset, error) ||
@@ -232,7 +231,6 @@ static bool resolve_container(
 
 static bool container_inspect(
     const cJSON *params, cJSON *result_obj, nt_devapi_error *error, void *user) {
-    (void)user;
     items_container_ref_t container = ITEMS_CONTAINER_REF_NONE;
     uint32_t slot_begin = 0;
     uint32_t slot_end = 0;
@@ -319,20 +317,19 @@ static bool container_inspect(
 }
 
 void game_items_register_devapi(void) {
-    static const nt_devapi_command_desc list_desc = {
-        "game.items.container.list", "game",
-        "List Items containers with bounded filtered pagination.",
-        "offset?, limit?, policy?, lifetime?, include_empty?",
-        "containers, next_offset, has_more, projected_bytes, context_rows",
-        "immediate", "none"};
-    static const nt_devapi_command_desc inspect_desc = {
-        "game.items.container.inspect", "game",
-        "Inspect one Items container over an explicit bounded slot range.",
-        "container_id|ref, slot_begin, slot_end, offset?, limit?, def_id?, quarantined?",
-        "container, entries, next_offset, has_more, projected_bytes, context_rows",
-        "immediate", "none"};
-    (void)nt_devapi_register(&list_desc, container_list, NULL);
-    (void)nt_devapi_register(&inspect_desc, container_inspect, NULL);
+    static const nt_devapi_command cmds[] = {
+        {.method = "game.items.container.list",
+            .summary = "List Items containers with bounded filtered pagination.",
+            .params_shape = "offset?, limit?, policy?, lifetime?, include_empty?",
+            .result_shape = "containers, next_offset, has_more, projected_bytes, context_rows",
+            .fn = container_list},
+        {.method = "game.items.container.inspect",
+            .summary = "Inspect one Items container over an explicit bounded slot range.",
+            .params_shape = "container_id|ref, slot_begin, slot_end, offset?, limit?, def_id?, quarantined?",
+            .result_shape = "container, entries, next_offset, has_more, projected_bytes, context_rows",
+            .fn = container_inspect},
+    };
+    nt_devapi_register(cmds, NT_COUNTOF(cmds), NULL);
 }
 
 #endif /* NT_DEVAPI_ENABLED */

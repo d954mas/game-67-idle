@@ -25,9 +25,6 @@ static const char *boot_status_name(void) {
 }
 
 static bool platform_sdk_state(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
-    (void)params;
-    (void)err;
-    (void)user;
     const platform_sdk_capabilities_t caps = platform_sdk_capabilities();
     cJSON_AddStringToObject(result_obj, "target", platform_sdk_target_name());
     cJSON_AddStringToObject(result_obj, "sdk", platform_sdk_current_name());
@@ -41,14 +38,12 @@ static bool platform_sdk_state(const cJSON *params, cJSON *result_obj, nt_devapi
 }
 
 void platform_sdk_register_devapi(void) {
-    static const nt_devapi_command_desc desc = {
-        "game.platform_sdk.state",
-        "game",
-        "Report the platform SDK target, backend, boot status and capabilities.",
-        "none",
-        "target, sdk, status, capabilities",
-        "immediate",
-        "none",
+    static const nt_devapi_command cmds[] = {
+        {.method = "game.platform_sdk.state",
+            .summary = "Report the platform SDK target, backend, boot status and capabilities.",
+            .params_shape = "none",
+            .result_shape = "target, sdk, status, capabilities",
+            .fn = platform_sdk_state},
     };
-    (void)nt_devapi_register(&desc, platform_sdk_state, NULL);
+    nt_devapi_register(cmds, NT_COUNTOF(cmds), NULL);
 }

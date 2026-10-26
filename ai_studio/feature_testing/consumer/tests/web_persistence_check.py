@@ -249,7 +249,7 @@ class Cdp:
         # Debug wasm carries ASan and boots slowly -> generous default (MED-5).
         deadline = time.time() + timeout
         while time.time() < deadline:
-            ready = self.eval_js("(typeof window.__devapi !== 'undefined' && window.__devapi.ready) ? 1 : 0")
+            ready = self.eval_js("(typeof window.__devapi !== 'undefined') ? 1 : 0")
             if ready:
                 return
             time.sleep(0.25)

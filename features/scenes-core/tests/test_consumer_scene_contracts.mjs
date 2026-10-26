@@ -96,12 +96,9 @@ test("template proves root scene start succeeds before initialization", () => {
   );
 });
 
-test("template fails startup when scene DevAPI registration is rejected", () => {
+test("template registers the scene DevAPI", () => {
   const source = read(`${shellDir}/shell_platform.c`);
-  assert.match(
-    source,
-    /if\s*\(\s*!scene_manager_register_devapi\(game_scenes_manager\(\)\)\s*\)[\s\S]*return false;/,
-  );
+  assert.match(source, /scene_manager_register_devapi\(game_scenes_manager\(\)\);/);
 });
 
 test("template links the shared scenes-core implementation", () => {

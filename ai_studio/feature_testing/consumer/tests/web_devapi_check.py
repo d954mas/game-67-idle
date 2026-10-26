@@ -17,11 +17,11 @@ Flow:
      configure_file bakes `Module.arguments=['--devapi','17890']` into the shell,
      so main() sees `--devapi` in argv and installs window.__devapi (src/shell/shell_platform.c: the
      web shim installs ONLY when --devapi was parsed).
-  2. Serve bin/ and load index.html headless; wait for window.__devapi.ready
+  2. Serve bin/ and load index.html headless; wait for window.__devapi
      (set SYNCHRONOUSLY at shim install -- proves the transport is live, not that
      the pack loaded; the pack-over-HTTP render is the human G1's job).
   3. `endpoints {}` -> result.commands is non-empty (the command list).
-  4. `command.describe {"method":"endpoints"}` -> the 7-field descriptor. Both go
+  4. `command.describe {"method":"endpoints"}` -> the 4-field descriptor. Both go
      through window.__devapi.submit (the same transport poll drains) -> the shim
      round-trip is proven. This is literally the card's "command.describe answers".
   5. Cheap secondary signal: scan the browser log for a 404/file:// on the pack
@@ -58,9 +58,8 @@ from web_persistence_check import (
 
 BOOT_TIMEOUT_S = 90.0  # wasm-devapi-debug carries ASan -> slow boot (MED-5)
 
-# 7-field self-describing contract of command.describe (nt_devapi_discovery.c).
-DESCRIBE_FIELDS = ("method", "group", "summary", "params_shape",
-                   "result_shape", "frame_behavior", "side_effects")
+# 4-field self-describing contract of command.describe (nt_devapi_discovery.c).
+DESCRIBE_FIELDS = ("method", "summary", "params_shape", "result_shape")
 
 
 def detect_pack_fetch_error(cdp, seconds=2.5):
@@ -126,7 +125,7 @@ def run(chrome_path, http_port, cdp_port):
             print(f"FAIL: endpoints returned no commands: {r1}")
             return 1
 
-        # (2) command.describe {method: endpoints} -> full 7-field descriptor.
+        # (2) command.describe {method: endpoints} -> full 4-field descriptor.
         r2 = cdp.devapi_submit("command.describe", {"method": "endpoints"})
         if r2.get("ok") is not True:
             print(f"FAIL: command.describe did not return ok=true: {r2}")
@@ -147,7 +146,7 @@ def run(chrome_path, http_port, cdp_port):
             return 1
 
         print(f"PASS: endpoints -> {len(commands)} commands; "
-              f"command.describe{{method:endpoints}} -> 7-field descriptor, "
+              f"command.describe{{method:endpoints}} -> 4-field descriptor, "
               f"both over window.__devapi.submit (shim round-trip proven).")
         return 0
     finally:

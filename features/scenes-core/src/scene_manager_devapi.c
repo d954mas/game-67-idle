@@ -9,12 +9,8 @@
 #include <math.h>
 #include <string.h>
 
-static bool fail(nt_devapi_error *error,
-                 const char *code,
-                 const char *message) {
-    error->code = code;
-    error->message = message;
-    return false;
+static bool fail(nt_devapi_error *error, const char *code, const char *message) {
+    return nt_devapi_fail_code(error, code, message);
 }
 
 static bool strict_keys(const cJSON *params,
@@ -461,48 +457,24 @@ static bool ep_back_to(const cJSON *params,
     return true;
 }
 
-bool scene_manager_register_devapi(scene_manager_t *manager) {
-    static const nt_devapi_command_desc descriptions[] = {
-        {"game.scene.list", "game.scene", "List scene catalog and residency.",
-         "{}", "{scenes:[...]}", "immediate", "none"},
-        {"game.scene.status", "game.scene", "Return scene history and input gate.",
-         "{}", "{history:[...],top,inputGated}", "immediate", "none"},
-        {"game.scene.operation_status", "game.scene", "Poll a navigation operation.",
-         "{operationId:uint}", "{operationId,kind,state,scene}", "immediate", "none"},
-        {"game.scene.preload", "game.scene", "Hint that a scene will be needed.",
-         "{scene:string}", "{result}", "deferred", "starts scene load"},
-        {"game.scene.show", "game.scene", "Show a parameterless scene.",
-         "{scene:string}", "{result,operationId?}", "deferred", "navigation"},
-        {"game.scene.replace", "game.scene", "Replace top with a parameterless same-kind scene.",
-         "{scene:string}", "{result,operationId?}", "deferred", "navigation"},
-        {"game.scene.reload", "game.scene", "Fully unload and load the top scene.",
-         "{}", "{result,operationId?}", "deferred", "navigation"},
-        {"game.scene.back", "game.scene", "Atomically remove count history entries.",
-         "{count:uint}", "{result,operationId?}", "deferred", "navigation"},
-        {"game.scene.back_to", "game.scene", "Return to nearest named scene below top.",
-         "{scene:string}", "{result,operationId?}", "deferred", "navigation"},
-        {"game.scene.close_modals", "game.scene", "Atomically close the modal suffix.",
-         "{}", "{result,operationId?}", "deferred", "navigation"},
+void scene_manager_register_devapi(scene_manager_t *manager) {
+    static const nt_devapi_command cmds[] = {
+        {.method = "game.scene.list", .summary = "List scene catalog and residency.", .params_shape = "{}", .result_shape = "{scenes:[...]}", .fn = ep_list},
+        {.method = "game.scene.status", .summary = "Return scene history and input gate.", .params_shape = "{}", .result_shape = "{history:[...],top,inputGated}", .fn = ep_status},
+        {.method = "game.scene.operation_status", .summary = "Poll a navigation operation.", .params_shape = "{operationId:uint}", .result_shape = "{operationId,kind,state,scene}", .fn = ep_operation_status},
+        {.method = "game.scene.preload", .summary = "Hint that a scene will be needed; starts the scene load.", .params_shape = "{scene:string}", .result_shape = "{result}", .fn = ep_preload},
+        {.method = "game.scene.show", .summary = "Show a parameterless scene; starts navigation, poll game.scene.operation_status.", .params_shape = "{scene:string}", .result_shape = "{result,operationId?}", .fn = ep_show},
+        {.method = "game.scene.replace", .summary = "Replace top with a parameterless same-kind scene; starts navigation, poll game.scene.operation_status.", .params_shape = "{scene:string}", .result_shape = "{result,operationId?}", .fn = ep_replace},
+        {.method = "game.scene.reload", .summary = "Fully unload and load the top scene; starts navigation, poll game.scene.operation_status.", .params_shape = "{}", .result_shape = "{result,operationId?}", .fn = ep_reload},
+        {.method = "game.scene.back", .summary = "Atomically remove count history entries; starts navigation, poll game.scene.operation_status.", .params_shape = "{count:uint}", .result_shape = "{result,operationId?}", .fn = ep_back},
+        {.method = "game.scene.back_to", .summary = "Return to nearest named scene below top; starts navigation, poll game.scene.operation_status.", .params_shape = "{scene:string}", .result_shape = "{result,operationId?}", .fn = ep_back_to},
+        {.method = "game.scene.close_modals", .summary = "Atomically close the modal suffix; starts navigation, poll game.scene.operation_status.", .params_shape = "{}", .result_shape = "{result,operationId?}", .fn = ep_close_modals},
     };
-    static const nt_devapi_handler_fn handlers[] = {
-        ep_list, ep_status, ep_operation_status, ep_preload, ep_show,
-        ep_replace, ep_reload, ep_back, ep_back_to, ep_close_modals,
-    };
-    size_t i;
-    for (i = 0; i < sizeof handlers / sizeof handlers[0]; ++i) {
-        if (nt_devapi_register(
-                &descriptions[i], handlers[i], manager) != NT_OK) {
-            return false;
-        }
-    }
-    return true;
+    nt_devapi_register(cmds, NT_COUNTOF(cmds), manager);
 }
 
 #else
 
-bool scene_manager_register_devapi(scene_manager_t *manager) {
-    (void)manager;
-    return true;
-}
+void scene_manager_register_devapi(scene_manager_t *manager) { (void)manager; }
 
 #endif

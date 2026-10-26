@@ -34,17 +34,6 @@
 #define GAME_EVENTS_DESC_REG_CAP 64
 #endif
 
-/* Dev-only, single-threaded static buffer for handler error messages (must outlive the
-   call). Local copy of the game_save_devapi.c helper -- not shared across TUs. */
-static char s_events_err[256];
-
-static bool state_fail(nt_devapi_error *err, const char *code, const char *message) {
-    (void)snprintf(s_events_err, sizeof s_events_err, "%s", message);
-    err->code = code;
-    err->message = s_events_err;
-    return false;
-}
-
 /* ---- registry: type-hash -> descriptor ---- */
 typedef struct {
     uint64_t hash;
@@ -118,7 +107,6 @@ void game_events_devapi_record(void) {
 
 /* ---- command: game.events.tail ---- */
 static bool ep_events_tail(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
-    (void)user;
     /* MED-4: absent param -> default; provided-but-malformed -> bad_params (strictness
        aligned with game.state.*). */
     uint64_t since = 0;
@@ -126,25 +114,25 @@ static bool ep_events_tail(const cJSON *params, cJSON *result_obj, nt_devapi_err
     const cJSON *ps = cJSON_GetObjectItemCaseSensitive(params, "since_seq");
     if (ps) {
         if (!cJSON_IsNumber(ps) || ps->valuedouble < 0.0) {
-            return state_fail(err, "bad_params", "since_seq must be a non-negative number");
+            return nt_devapi_fail(err, "since_seq must be a non-negative number");
         }
         since = (uint64_t)ps->valuedouble;
     }
     const cJSON *pl = cJSON_GetObjectItemCaseSensitive(params, "limit");
     if (pl) {
         if (!cJSON_IsNumber(pl)) {
-            return state_fail(err, "bad_params", "limit must be a number");
+            return nt_devapi_fail(err, "limit must be a number");
         }
         const int v = (int)pl->valuedouble;
         if (v < 1 || v > GAME_EVENTS_TAIL_RING_CAP) { /* [1,256] inclusive */
-            return state_fail(err, "bad_params", "limit out of range [1,256]");
+            return nt_devapi_fail(err, "limit out of range [1,256]");
         }
         limit = v;
     }
 
     cJSON *events = cJSON_AddArrayToObject(result_obj, "events");
     if (!events) {
-        return state_fail(err, "internal", "failed to build events array");
+        return nt_devapi_fail_code(err, "internal", "failed to build events array");
     }
     /* Offset cursor (amended): since_seq is an INCLUSIVE lower bound (seq >=
        since) and next_seq = last_returned_seq + 1 (the next offset to request); empty ->
@@ -175,11 +163,14 @@ static bool ep_events_tail(const cJSON *params, cJSON *result_obj, nt_devapi_err
 }
 
 void game_events_register_devapi(void) {
-    static const nt_devapi_command_desc desc = {
-        "game.events.tail", "game",
-        "Tail the per-frame feature event log (render-at-copy ring).",
-        "since_seq?, limit?", "events, next_seq, dropped, evicted", "immediate", "none"};
-    (void)nt_devapi_register(&desc, ep_events_tail, NULL);
+    static const nt_devapi_command cmds[] = {
+        {.method = "game.events.tail",
+            .summary = "Tail the per-frame feature event log (render-at-copy ring).",
+            .params_shape = "since_seq?, limit?",
+            .result_shape = "events, next_seq, dropped, evicted",
+            .fn = ep_events_tail},
+    };
+    nt_devapi_register(cmds, NT_COUNTOF(cmds), NULL);
     s_enabled = true; /* enable the recorder only once devapi actually started */
 }
 
