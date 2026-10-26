@@ -12,6 +12,7 @@
 #ifdef _WIN32
 #include <direct.h>
 #include <io.h>
+#include <windows.h> /* the refused-write tests hold a real handle on the primary */
 #else
 #include <dirent.h>
 #include <sys/stat.h>
@@ -24,6 +25,7 @@
 #include "game_state_json.h"
 #include "game_storage.h"
 #include "cJSON.h"
+#include "log/nt_log.h"
 #include "unity.h"
 
 #ifndef GAME_STORAGE_NATIVE_ROOT
@@ -293,6 +295,17 @@ static char *xf_toggle_case(const char *in, char *err, int cap) {
     return out;
 }
 static const game_save_transform_t k_xf = {.id = "case", .encode = xf_toggle_case, .decode = xf_toggle_case};
+
+/* Fails and says NOTHING about why. A transform is allowed to: `error` is an
+   out-parameter it MAY fill, and returning NULL is the whole contract. */
+static char *xf_mute_failure(const char *in, char *err, int cap) {
+    (void)in;
+    (void)err;
+    (void)cap;
+    return NULL;
+}
+static const game_save_transform_t k_xf_mute = {
+    .id = "mute", .encode = xf_mute_failure, .decode = xf_toggle_case};
 
 /* ---- file helpers ---- */
 static int sweep_corrupt(bool do_delete) {
@@ -1689,6 +1702,221 @@ void test_import_rejects_oversized_text_before_decode(void) {
     free(oversized);
 }
 
+/* The in-frame tick alone lands a dirty save, with no flush behind it. Bounded
+   rather than one tick: a real on-access scanner may refuse a write, and the
+   tick's promise is to keep trying until it lands. */
+void test_the_autosave_tick_persists_without_a_flush_behind_it(void) {
+    char err[128] = {0};
+    fake_reset();
+    s_frag_coins = 31;
+    TEST_ASSERT_TRUE_MESSAGE(game_save_flush(err, (int)sizeof err), err);
+    const int64_t before = primary_save_seq();
+
+    s_frag_coins = 32;
+    game_save_mark_dirty();
+
+    bool landed = false;
+    for (int attempt = 0; attempt < 8 && !landed; ++attempt) {
+        g_mono_ms += (int64_t)GAME_SAVE_DEBOUNCE_MS;
+        game_save_tick(); /* raw: the helper's flush would answer for it */
+        landed = !game_save_is_unpersisted() && primary_save_seq() > before;
+    }
+    TEST_ASSERT_TRUE_MESSAGE(landed, "the in-frame autosave never persisted on its own");
+
+    /* and it wrote the NEW value, not a re-stamp of the old document */
+    s_frag_coins = 0;
+    game_save_load_result_t r;
+    game_save_load(&r);
+    TEST_ASSERT_EQUAL_INT(32, s_frag_coins);
+}
+
+/* game_save_is_unpersisted reports only a failed write; a paused save refuses
+   every write while leaving it clear, so persistence() is the honest answer. */
+void test_persistence_reports_paused_not_ok(void) {
+    char err[128] = {0};
+    fake_reset();
+    s_frag_coins = 9;
+    TEST_ASSERT_TRUE_MESSAGE(game_save_flush(err, (int)sizeof err), err);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_PERSISTENCE_OK, game_save_persistence());
+
+    /* CORRUPT_RESET is the one state that still pauses, and only until the
+       shell's New Game a beat later -- the player never lives in it. */
+    write_raw(PRIMARY_PATH, "THIS-IS-NOT-JSON");
+    write_raw(BAK_PATH, "ALSO-NOT-JSON");
+    game_save_load_result_t r;
+    game_save_load(&r);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_CORRUPT_RESET, r.status);
+
+    /* Every write is refused here, yet the failed-write flag stays clear. */
+    TEST_ASSERT_FALSE(game_save_is_unpersisted());
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_PERSISTENCE_PAUSED, game_save_persistence());
+    TEST_ASSERT_FALSE(game_save_flush(err, (int)sizeof err)); /* not a cosmetic label */
+
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err).persisted);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_PERSISTENCE_OK, game_save_persistence());
+}
+
+/* A refused write is a different answer from a paused save: it recovers by
+   itself, so it is not the same thing to report. */
+void test_persistence_reports_retrying_while_a_write_keeps_failing(void) {
+    char err[128] = {0};
+    fake_reset();
+    s_frag_coins = 4;
+    TEST_ASSERT_TRUE_MESSAGE(game_save_flush(err, (int)sizeof err), err);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_PERSISTENCE_OK, game_save_persistence());
+
+    game_save_set_transforms(&k_xf_mute, 1); /* every encode fails from here */
+    s_frag_coins = 5;
+    TEST_ASSERT_FALSE(game_save_flush(err, (int)sizeof err));
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_PERSISTENCE_RETRYING, game_save_persistence());
+
+    game_save_set_transforms(NULL, 0);
+    TEST_ASSERT_TRUE_MESSAGE(game_save_flush(err, (int)sizeof err), err);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_PERSISTENCE_OK, game_save_persistence());
+}
+
+#ifdef _WIN32
+/* The storage layer refuses a held rename at once instead of waiting, because
+   the tick runs inside the frame; the debounce retry is then the whole
+   recovery. The handle is held the way an on-access scanner holds it. */
+void test_autosave_recovers_from_a_refused_write_on_the_next_tick(void) {
+    char err[128] = {0};
+    fake_reset();
+    s_frag_coins = 11;
+    TEST_ASSERT_TRUE(game_save_flush(err, (int)sizeof err));
+    const int64_t before = primary_save_seq();
+
+    /* No sharing at all: the replace cannot land while this handle lives. */
+    HANDLE held = CreateFileA(PRIMARY_PATH, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+    TEST_ASSERT_TRUE(held != INVALID_HANDLE_VALUE);
+
+    s_frag_coins = 12;
+    game_save_mark_dirty();
+    g_mono_ms += (int64_t)GAME_SAVE_DEBOUNCE_MS;
+    const ULONGLONG tick_started = GetTickCount64();
+    game_save_tick(); /* raw, NOT save_tick(): this test wants the refusal */
+    const ULONGLONG tick_elapsed = GetTickCount64() - tick_started;
+    /* Capture, do not assert, while the exclusive handle is held: a failed
+       assertion would leave the primary locked for every later test. */
+    const bool knew_it_was_unpersisted = game_save_is_unpersisted();
+
+    (void)CloseHandle(held);
+
+    /* The tick may not wait on a refused write. 60 ms is well above a normal
+       write and well below the blocking backoff (~465 ms). */
+    TEST_ASSERT_TRUE_MESSAGE(tick_elapsed < 60,
+                             "the autosave tick blocked the frame on a refused write");
+
+    /* Refused, and the game KNOWS it rather than believing it saved. */
+    TEST_ASSERT_TRUE(knew_it_was_unpersisted);
+
+    /* Nothing landed while it was held -- the refused replace left the previous
+       save byte-for-byte intact. */
+    TEST_ASSERT_EQUAL_INT64(before, primary_save_seq());
+
+    /* A later tick lands it. Not necessarily the next one: a recovery tick is
+       non-blocking too, so a real outside holder can refuse it as well. */
+    bool recovered = false;
+    for (int attempt = 0; attempt < 8 && !recovered; ++attempt) {
+        g_mono_ms += (int64_t)GAME_SAVE_DEBOUNCE_MS;
+        game_save_tick();
+        recovered = !game_save_is_unpersisted();
+    }
+    TEST_ASSERT_TRUE_MESSAGE(recovered && primary_save_seq() > before,
+                             "the debounce retry did not recover a refused write");
+    TEST_ASSERT_FALSE(game_save_is_unpersisted());
+    TEST_ASSERT_EQUAL_INT(12, s_frag_coins);
+}
+
+/* Applying a deferred New Game also runs inside a frame: with the primary held,
+   the reset lands in memory, the frame comes back promptly, and a later tick
+   writes it. */
+void test_applying_a_deferred_new_game_does_not_block_the_frame(void) {
+    char err[128] = {0};
+    fake_reset();
+    s_frag_coins = 5;
+    TEST_ASSERT_TRUE_MESSAGE(game_save_flush(err, (int)sizeof err), err);
+
+    HANDLE held = CreateFileA(PRIMARY_PATH, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+    TEST_ASSERT_TRUE(held != INVALID_HANDLE_VALUE);
+
+    game_save_request_new_game(NULL);
+    const ULONGLONG started = GetTickCount64();
+    const game_save_transition_result_t transition = game_save_apply_pending_new_game();
+    const ULONGLONG elapsed = GetTickCount64() - started;
+    /* Capture while held, judge after release -- see the note above. */
+    const int coins_after_reset = s_frag_coins;
+
+    (void)CloseHandle(held);
+
+    TEST_ASSERT_TRUE_MESSAGE(
+        elapsed < 60, "applying a deferred New Game blocked the frame on a refused write");
+    TEST_ASSERT_TRUE(transition.state_changed); /* the reset happened in memory */
+    TEST_ASSERT_FALSE(transition.persisted);    /* and it honestly says it is unwritten */
+    TEST_ASSERT_EQUAL_INT(100, coins_after_reset);
+    TEST_ASSERT_TRUE(game_save_is_unpersisted());
+
+    /* The retry is the whole reason refusing was allowed. */
+    bool landed = false;
+    for (int attempt = 0; attempt < 8 && !landed; ++attempt) {
+        g_mono_ms += (int64_t)GAME_SAVE_DEBOUNCE_MS;
+        game_save_tick();
+        landed = !game_save_is_unpersisted();
+    }
+    TEST_ASSERT_TRUE_MESSAGE(landed, "the New Game write was never retried onto disk");
+}
+#endif /* _WIN32 */
+
+/* A failed save is logged once per distinct cause, an empty reason included,
+   and its recovery is logged too; the log sink is the only observable. */
+static int g_log_failed;
+static int g_log_recovered;
+
+static void count_save_lines(nt_log_level_t level, const char *domain, const char *msg, void *user) {
+    (void)level;
+    (void)domain;
+    (void)user;
+    if (msg == NULL) {
+        return;
+    }
+    if (strstr(msg, "save failed") != NULL) {
+        g_log_failed += 1;
+    } else if (strstr(msg, "save recovered") != NULL) {
+        g_log_recovered += 1;
+    }
+}
+
+void test_a_failure_with_no_reason_is_still_reported_once(void) {
+    char err[128] = {0};
+    fake_reset();
+    s_frag_coins = 3;
+    TEST_ASSERT_TRUE_MESSAGE(game_save_flush(err, (int)sizeof err), err);
+
+    g_log_failed = 0;
+    g_log_recovered = 0;
+    nt_log_add_sink(count_save_lines, NULL);
+
+    game_save_set_transforms(&k_xf_mute, 1);
+    s_frag_coins = 4;
+    TEST_ASSERT_FALSE(game_save_flush(err, (int)sizeof err));
+    TEST_ASSERT_EQUAL_INT_MESSAGE(1, g_log_failed,
+                                  "a save failure that reported no reason was never logged");
+    TEST_ASSERT_TRUE(game_save_is_unpersisted());
+
+    /* Same cause again: still one line, not one per attempt. */
+    TEST_ASSERT_FALSE(game_save_flush(err, (int)sizeof err));
+    TEST_ASSERT_EQUAL_INT(1, g_log_failed);
+
+    game_save_set_transforms(NULL, 0);
+    TEST_ASSERT_TRUE_MESSAGE(game_save_flush(err, (int)sizeof err), err);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(1, g_log_recovered,
+                                  "the save recovered and nobody was told");
+
+    nt_log_remove_sink(count_save_lines, NULL);
+    TEST_ASSERT_FALSE(game_save_is_unpersisted());
+    TEST_ASSERT_EQUAL_INT(4, s_frag_coins);
+}
+
 int main(void) {
     game_save_register_fragment(&s_extra_fragment);
     game_save_register_fragment(&s_third_fragment);
@@ -1747,5 +1975,13 @@ int main(void) {
     RUN_TEST(test_reset_with_older_droppable_keeps_both_bytes);
     RUN_TEST(test_later_incident_replaces_only_the_latest_copy);
     RUN_TEST(test_unkept_lost_data_keeps_the_droppable_copy);
+    RUN_TEST(test_the_autosave_tick_persists_without_a_flush_behind_it);
+#ifdef _WIN32
+    RUN_TEST(test_autosave_recovers_from_a_refused_write_on_the_next_tick);
+    RUN_TEST(test_applying_a_deferred_new_game_does_not_block_the_frame);
+#endif
+    RUN_TEST(test_persistence_reports_paused_not_ok);
+    RUN_TEST(test_persistence_reports_retrying_while_a_write_keeps_failing);
+    RUN_TEST(test_a_failure_with_no_reason_is_still_reported_once);
     return UNITY_END();
 }

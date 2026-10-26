@@ -571,7 +571,7 @@ if(NOT EMSCRIPTEN)
     set_tests_properties(test_game_save_web_quota PROPERTIES LABELS "core")
 
     add_executable(test_game_save
-        tests/test_game_save.c
+        "${GAME_REPO_ROOT}/features/game-state/tests/test_game_save.c"
         "${GAME_STATE_SRC}/game_save.c" "${GAME_STATE_SRC}/game_save_writer.c" "${GAME_STATE_SRC}/game_storage.c"
         "${GAME_STATE_SRC}/game_storage_backend_native.c"
         "${GAME_STATE_SRC}/game_state_json.c")
