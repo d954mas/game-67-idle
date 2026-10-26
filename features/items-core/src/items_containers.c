@@ -504,7 +504,6 @@ static items_result_t ephemeral_stack_add(
     (void)snprintf(entry->def_id, sizeof(entry->def_id), "%s", def_id);
     entry->count = applied;
     entry->level = ITEMS_STATE_ITEM_ENTRY_LEVEL_DEFAULT;
-    entry->durability = ITEMS_STATE_ITEM_ENTRY_DURABILITY_DEFAULT;
     s_ephemeral_entry_generation[index] = next_generation(s_ephemeral_entry_generation[index]);
     if (out_entry != NULL) { *out_entry = ephemeral_entry_ref(index); }
     if (out_applied != NULL) { *out_applied = applied; }
@@ -584,7 +583,6 @@ static items_result_t ephemeral_unique_create(
     (void)snprintf(entry->def_id, sizeof(entry->def_id), "%s", def_id);
     entry->count = 1;
     entry->level = ITEMS_STATE_ITEM_ENTRY_LEVEL_DEFAULT;
-    entry->durability = ITEMS_STATE_ITEM_ENTRY_DURABILITY_DEFAULT;
     s_ephemeral_entry_generation[index] = next_generation(s_ephemeral_entry_generation[index]);
     *out_entry = ephemeral_entry_ref(index);
     return ITEMS_RESULT_OK;
@@ -765,7 +763,6 @@ items_result_t items_try_stack_add(
     (void)snprintf(entry->def_id, sizeof(entry->def_id), "%s", def_id);
     entry->count = applied;
     entry->level = ITEMS_STATE_ITEM_ENTRY_LEVEL_DEFAULT;
-    entry->durability = ITEMS_STATE_ITEM_ENTRY_DURABILITY_DEFAULT;
     s_entry_generation[index] = next_generation(s_entry_generation[index]);
     bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
@@ -898,7 +895,6 @@ items_result_t items_try_unique_create(
     (void)snprintf(entry->def_id, sizeof(entry->def_id), "%s", def_id);
     entry->count = 1;
     entry->level = ITEMS_STATE_ITEM_ENTRY_LEVEL_DEFAULT;
-    entry->durability = ITEMS_STATE_ITEM_ENTRY_DURABILITY_DEFAULT;
     s_entry_generation[index] = next_generation(s_entry_generation[index]);
     bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
@@ -937,6 +933,19 @@ static ItemsItemEntry *entry_at_slot(uint32_t parent_index, uint32_t slot) {
     return NULL;
 }
 
+// A unique entry leaving an ephemeral container keeps its level and every
+// instance field the consumer's schema declares; only its identity is new.
+static void copy_instance(ItemsItemEntry *persistent, const ItemsItemEntry *source) {
+    ItemsItemEntry kept = *persistent;
+    *persistent = *source;
+    persistent->used = kept.used;
+    persistent->parent_index = kept.parent_index;
+    persistent->entry_id = kept.entry_id;
+    persistent->slot = kept.slot;
+    persistent->count = kept.count;
+    persistent->quarantined = kept.quarantined;
+}
+
 static items_result_t ephemeral_entry_move(
     item_entry_ref_t source_ref, items_container_ref_t destination_ref,
     int64_t count, uint32_t requested_slot, const char *reason,
@@ -961,9 +970,7 @@ static items_result_t ephemeral_entry_move(
             result = items_try_unique_create(
                 destination_ref, source->def_id, requested_slot, reason, &acquired);
             if (result != ITEMS_RESULT_OK) { return result; }
-            ItemsItemEntry *persistent = require_entry(acquired);
-            persistent->level = source->level;
-            persistent->durability = source->durability;
+            copy_instance(require_entry(acquired), source);
         } else {
             if (count > limit) { return ITEMS_RESULT_CAPACITY; }
             uint32_t target_slot = requested_slot;
@@ -1515,7 +1522,6 @@ items_result_t items_try_acquire(
         (void)snprintf(acquired->def_id, sizeof(acquired->def_id), "%s", def_id);
         acquired->count = 1;
         acquired->level = ITEMS_STATE_ITEM_ENTRY_LEVEL_DEFAULT;
-        acquired->durability = ITEMS_STATE_ITEM_ENTRY_DURABILITY_DEFAULT;
         items_state.last_entry_id = new_id;
         s_entry_generation[new_index] = next_generation(s_entry_generation[new_index]);
     }
@@ -1710,6 +1716,10 @@ items_container_ref_t items_entry_container(item_entry_ref_t ref) {
     return container_ref((uint32_t)entry->parent_index);
 }
 
+struct ItemsItemEntry *items_entry_instance(item_entry_ref_t ref) {
+    return ephemeral_ref(ref.index) ? require_ephemeral_entry(ref) : require_entry(ref);
+}
+
 items_entry_view_t items_entry_view(item_entry_ref_t ref) {
     if (ephemeral_ref(ref.index)) {
         ItemsItemEntry *entry = require_ephemeral_entry(ref);
@@ -1719,7 +1729,6 @@ items_entry_view_t items_entry_view(item_entry_ref_t ref) {
             .def_id = entry->def_id,
             .count = entry->count,
             .level = entry->level,
-            .durability = entry->durability,
             .quarantined = false,
             .lifetime = ITEMS_LIFETIME_EPHEMERAL,
         };
@@ -1731,7 +1740,6 @@ items_entry_view_t items_entry_view(item_entry_ref_t ref) {
         .def_id = entry->def_id,
         .count = entry->count,
         .level = entry->level,
-        .durability = entry->durability,
         .quarantined = entry->quarantined,
         .lifetime = ITEMS_LIFETIME_PERSISTENT,
     };
@@ -1996,7 +2004,6 @@ items_inspection_result_t items_inspect_container_entries(
                 .def_id = entry->def_id,
                 .count = entry->count,
                 .level = entry->level,
-                .durability = entry->durability,
                 .quarantined = entry->quarantined,
                 .lifetime = lifetime,
             },

@@ -116,7 +116,6 @@ typedef struct items_entry_view_t {
     const char *def_id;
     int64_t count;
     int level;
-    float durability;
     bool quarantined;
     items_lifetime_t lifetime;
 } items_entry_view_t;
@@ -244,6 +243,13 @@ bool items_entry_try_from_id(uint32_t entry_id, item_entry_ref_t *out_entry);
 uint32_t items_entry_id(item_entry_ref_t entry);
 items_container_ref_t items_entry_container(item_entry_ref_t entry);
 items_entry_view_t items_entry_view(item_entry_ref_t entry);
+/* The entry's record, for the instance fields the consumer's ItemEntry schema
+   declares beside items-core's own (entry_id, slot, def_id, count, level,
+   quarantined). Items-core zeroes them on create, keeps them through whole
+   moves and never reads them, so zero must be a valid value for each. Write
+   only those fields, then mark the save dirty. */
+struct ItemsItemEntry;
+struct ItemsItemEntry *items_entry_instance(item_entry_ref_t entry);
 
 items_inspection_result_t items_inspect_container_list(
     const items_container_list_query_t *query,

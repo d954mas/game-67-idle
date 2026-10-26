@@ -199,6 +199,15 @@ fixed at create time. Persistent containers and entries live in generated
 nested state pools, while separately bounded ephemeral pools never enter a
 save. The reusable core has no global backpack, purse, or hidden payment scope.
 
+What one copy of an item rolled -- a rarity, its lines -- is instance data in
+the entry itself. The consumer declares those fields in its own `ItemEntry`
+schema beside the core's (`entry_id`, `slot`, `def_id`, `count`, `level`,
+`quarantined`) and writes them through `items_entry_instance(entry)`, then
+marks the save dirty. Items-core zeroes them when it creates an entry, keeps
+them through whole moves and from an ephemeral container into a persistent one,
+and never reads them; zero must therefore be a valid value of each. A consumer
+with no instance data declares none.
+
 Bounded runtime inspection uses caller-owned buffers. Container listing filters
 policy, lifetime, and empty rows, then paginates persistent IDs followed by
 ephemeral runtime refs. One-container entry inspection requires an explicit
@@ -274,6 +283,12 @@ The feature manifest uses exact SemVer. PATCH releases preserve behavior and
 wire/API contracts, MINOR releases add backward-compatible surface, and MAJOR
 releases may remove or change public commands, APIs, or catalog contracts.
 Consumers pin both the version and repository revision.
+
+9.0.0 moves per-instance data into the entry: `items_entry_instance` exposes the
+record for the fields a consumer's `ItemEntry` declares, so a game no longer
+keeps a side table keyed by entry id. Items-core no longer names `durability`:
+`items_entry_view_t` loses it, and a consumer that still wants it declares it
+as its own instance field (it then starts at zero, not one).
 
 8.1.0 adds `studio.export(name, value)`: plain, checked data carried into an
 `exports` Snapshot section and the content hash, for catalogs a game types

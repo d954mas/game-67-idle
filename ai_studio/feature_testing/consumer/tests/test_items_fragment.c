@@ -161,10 +161,26 @@ void test_unique_instances_keep_independent_fields(void) {
         ITEMS_RESULT_OK,
         items_try_unique_create(equipment, "tmpl.sword", 1, "loot:test", &second));
     items_state.containers_entries[first.index].level = 2;
-    items_state.containers_entries[first.index].durability = 0.5F;
+    TEST_ASSERT_TRUE(items_entry_instance(first)->durability == 0.0F);
+    items_entry_instance(first)->durability = 0.5F;
     TEST_ASSERT_EQUAL_INT(2, items_entry_view(first).level);
-    TEST_ASSERT_TRUE(items_entry_view(first).durability != items_entry_view(second).durability);
+    TEST_ASSERT_TRUE(items_entry_instance(first)->durability != items_entry_instance(second)->durability);
     TEST_ASSERT_TRUE(items_entry_id(first) != items_entry_id(second));
+
+    item_entry_ref_t moved = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_entry_move(first, equipment, 1, 3, "loot:test", &moved));
+    TEST_ASSERT_TRUE(items_entry_instance(moved)->durability == 0.5F);
+    TEST_ASSERT_EQUAL_INT(2, items_entry_view(moved).level);
+
+    items_container_ref_t chest = create_ephemeral_container(1, ITEMS_CONTAINER_POLICY_EQUIPMENT);
+    item_entry_ref_t found = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_unique_create(chest, "tmpl.sword", 0, "loot:test", &found));
+    items_entry_instance(found)->durability = 0.25F;
+    item_entry_ref_t taken = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_entry_destroy(second, "loot:test"));
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_entry_move(found, equipment, 1, 1, "loot:test", &taken));
+    TEST_ASSERT_TRUE(items_entry_instance(taken)->durability == 0.25F);
+    TEST_ASSERT_TRUE(items_entry_id(taken) != ITEMS_ID_NONE);
 }
 
 void test_whole_split_and_merge_identity(void) {

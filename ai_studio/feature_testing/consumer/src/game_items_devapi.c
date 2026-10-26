@@ -307,7 +307,6 @@ static bool container_inspect(
         (void)snprintf(count, sizeof(count), "%" PRId64, row->view.count);
         cJSON_AddStringToObject(object, "count", count);
         cJSON_AddNumberToObject(object, "level", (double)row->view.level);
-        cJSON_AddNumberToObject(object, "durability", (double)row->view.durability);
         cJSON_AddBoolToObject(object, "quarantined", row->view.quarantined);
         cJSON_AddStringToObject(object, "lifetime", lifetime_name(row->view.lifetime));
         cJSON_AddItemToArray(entries, object);
