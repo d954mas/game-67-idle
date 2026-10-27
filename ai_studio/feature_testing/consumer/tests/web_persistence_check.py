@@ -332,6 +332,11 @@ def serve_dir(directory, port):
 
 
 def launch_chrome(chrome_path, url, cdp_port, user_data_dir):
+    # A browser left on the port by an earlier run would answer CDP in place of this one,
+    # and the run would wait out its boot timeout on the wrong page.
+    with socket.socket() as probe:
+        if probe.connect_ex(("127.0.0.1", cdp_port)) == 0:
+            raise CheckFailure(f"CDP port {cdp_port} is already in use (a Chrome left by an earlier run?)")
     args = [
         chrome_path,
         "--headless=new",
