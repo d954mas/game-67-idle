@@ -774,6 +774,17 @@
         ]
       },
       {
+        "id": "shaders",
+        "title": "Shader analysis",
+        "kind": "module",
+        "path": "ai_studio/shaders",
+        "owner": "Graphics Tooling Owner",
+        "description": "Shared offline shader preparation and compiler evidence, separate from game sources and runtime captures.",
+        "entry": "ai_studio/shaders/README.md",
+        "verifyDomain": "harness",
+        "coverage": "subtree"
+      },
+      {
         "id": "quality",
         "title": "Quality",
         "kind": "module",

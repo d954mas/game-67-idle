@@ -1,6 +1,8 @@
 # Shader checker
 
 Agent instructions: [QTECH_002](rules/technical/checks/QTECH_002_shader_rules.md).
+For reference compilation, linking, and vendor metrics, use the shared
+[Shader analysis](../shaders/README.md) entry point.
 
 ## Usage
 

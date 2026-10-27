@@ -45,6 +45,7 @@ const ROUTES = Object.freeze({
   },
   canvas: { owner: "ai_studio/assets/canvas", surface: "/canvas/", cli: ["node", "ai_studio/assets/canvas/cli.mjs"] },
   taskboard: { owner: "ai_studio/taskboard", surface: "/taskboard/", cli: ["node", "ai_studio/taskboard/cli.mjs"] },
+  shaders: { owner: "ai_studio/shaders", cli: ["node", "ai_studio/shaders/cli.mjs"] },
   assets: {
     owner: "ai_studio/assets",
     surface: "/asset_viewer/",
@@ -137,6 +138,7 @@ const CHECKS = Object.freeze([
     id: "studio.quality", testRoots: ["ai_studio/quality"],
     commands: [["node", "ai_studio/quality/check_shaders.mjs", "templates", "features", "ai_studio/feature_testing/consumer"]],
   },
+  { id: "studio.shaders", testRoots: ["ai_studio/shaders"] },
   {
     id: "studio.runtime-automation",
     pythonRoots: ["ai_studio/runtime_automation"],
@@ -208,7 +210,7 @@ const CHECKS = Object.freeze([
 ]);
 
 const DOMAINS = Object.freeze([
-  { id: "harness", checks: ["studio.facade", "studio.config", "studio.core-harness", "studio.skills.python", "studio.dev-environment", "studio.quality"] },
+  { id: "harness", checks: ["studio.facade", "studio.config", "studio.core-harness", "studio.skills.python", "studio.dev-environment", "studio.quality", "studio.shaders"] },
   { id: "workspace", checks: ["studio.workspace", "workspace.game-create"] },
   { id: "architecture", checks: ["studio.architecture-map"] },
   { id: "shell", checks: ["studio.shell"] },
@@ -291,6 +293,7 @@ function domainForPath(path) {
     || path.startsWith("ai_studio/dev_environment/")
     || path.startsWith("ai_studio/python/")
     || path.startsWith("ai_studio/quality/")
+    || path.startsWith("ai_studio/shaders/")
     || path.startsWith(".codex/")
     || path.startsWith(".agents/")
     || path.startsWith(".claude/")

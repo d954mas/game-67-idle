@@ -79,6 +79,7 @@ public surface, internals, and validation path.
 - `dev_environment/`: local developer-environment generators such as VS Code
   task and launch file generation.
 - `quality/`: reviewed small quality rules for selecting evidence and checks.
+- `shaders/`: shared offline shader preparation, reference linking, and optional vendor profiling.
 - `feature_testing/`: independent shared-feature test consumer, separate from
   the blank game starter.
 - `taskboard/`: reviewed durable task state module.
