@@ -84,6 +84,12 @@ consumer.
   server lifetime. HELLO may carry a ticket of up to
   `NET_HELLO_TICKET_MAX` opaque bytes (a seat to resume, a join code); the
   transport hands it to `on_connect` and attaches no meaning to it.
+- **Inbound rate budget**: `max_messages_per_second` sets sustained refill;
+  `max_message_burst` sets independent token capacity for delayed batches.
+  A zero burst keeps the original one-second capacity; a zero rate disables
+  the limiter. A larger burst does not increase sustained throughput. Games
+  must also bound their command queues and retain retryable actions under
+  movement pressure: transport admission alone does not promise execution.
 - **Liveness is the server's**, because browsers cannot send pings: with
   `ping_idle_s` set, a peer silent for `ping_idle_s` gets a protocol ping
   (again every `ping_idle_s` while it stays silent), and a peer silent for

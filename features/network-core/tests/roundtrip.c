@@ -1026,6 +1026,29 @@ int main(void) {
     net_ws_client_destroy(client);
     net_ws_server_destroy(rated);
 
+    /* A larger capacity admits a delayed batch without changing refill. */
+    memset(&rlog, 0, sizeof rlog);
+    rconfig.max_message_burst = 8U;
+    rated = net_ws_server_create(&rconfig);
+    CHECK(rated != NULL);
+    rlog.server = rated;
+    memset(&clog, 0, sizeof clog);
+    client = connect_client(net_ws_server_port(rated), VERSION, &clog, 256U);
+    pump_open(rated, &rlog, client, &clog);
+    sleep_ms(1200U);
+    for (uint32_t i = 0U; i < rconfig.max_message_burst; ++i) {
+        CHECK(net_ws_client_send(client, ping, sizeof ping));
+    }
+    pump_until(rated, client, rlog.messages == rconfig.max_message_burst || clog.closes != 0U);
+    CHECK(rlog.messages == rconfig.max_message_burst && clog.closes == 0U);
+    sleep_ms(1200U);
+    CHECK(net_ws_client_send(client, ping, sizeof ping));
+    CHECK(net_ws_client_send(client, ping, sizeof ping));
+    pump_until(rated, client, clog.closes == 1U && rlog.last_reason == NET_WS_CLOSE_RATE);
+    CHECK(clog.close_code == NET_CLOSE_RATE && rlog.messages == rconfig.max_message_burst + 1U);
+    net_ws_client_destroy(client);
+    net_ws_server_destroy(rated);
+
     /* A client that cannot drain its queue is dropped as slow: its own
        receive queue is the first to fill when its game thread never
        services it, and the server, once it has heard the close, refuses

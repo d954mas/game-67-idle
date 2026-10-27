@@ -17,7 +17,7 @@
 2. Add to the consuming game's `dependencies.json` features array:
 
    ```json
-   {"id":"network-core","source":"features/network-core","version":"0.7.0","compatibility":"..."}
+   {"id":"network-core","source":"features/network-core","version":"0.9.0","compatibility":"..."}
    ```
 
 3. Write the game's messages on top of the codec. Message type `0` is HELLO
@@ -29,7 +29,9 @@
 4. Size the limits from the contract, not from guesses: `max_message_bytes`
    is the largest legal inbound message, `send_queue_bytes` how far a slow
    peer may fall behind before it is dropped, `max_messages_per_second` a
-   multiple of the client's send cadence.
+   multiple of the client's send cadence. Set `max_message_burst` separately
+   to admit buffered traffic after a delivery pause; zero retains a capacity
+   equal to the rate. Keep both bounded and test the game's ingress queue.
 
 5. Verify from the Studio root:
 

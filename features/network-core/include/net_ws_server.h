@@ -39,9 +39,10 @@ typedef struct net_ws_server_config_t {
     uint32_t max_clients;
     uint32_t max_message_bytes;       /* inbound, after fragment reassembly */
     uint32_t send_queue_bytes;        /* outbound per client, incl. 4-byte prefixes */
-    /* Inbound per client, token bucket: burst capacity equals the rate, so
-       one second of silence buys one second of messages. 0 = unlimited. */
+    /* Inbound per client, token refill per second. 0 = unlimited. */
     uint32_t max_messages_per_second;
+    /* Token capacity for delayed network batches. 0 uses the refill rate. */
+    uint32_t max_message_burst;
     /* A connection that has not sent HELLO, or a close the peer does not
        acknowledge, is dropped after this long. 0 = 10 s. */
     uint32_t handshake_timeout_ms;

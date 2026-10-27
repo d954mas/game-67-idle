@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "network-core",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "title": "Network Core",
   "status": "opt-in",
   "kind": "gameplay-infrastructure",

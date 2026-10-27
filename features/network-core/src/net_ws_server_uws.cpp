@@ -368,7 +368,8 @@ template <bool SSL> void on_open(net_ws_server_t *server, Socket<SSL> *ws) {
     peer->heard_at = now;
     peer->pinged_at = now;
     peer->rate_at = now;
-    peer->tokens = static_cast<double>(server->config.max_messages_per_second);
+    peer->tokens = static_cast<double>(server->config.max_message_burst ?
+        server->config.max_message_burst : server->config.max_messages_per_second);
     /* A socket the filter never saw is counted here, so on_close's uncount
        stays balanced. */
     if (peer->address.empty()) {
@@ -385,7 +386,8 @@ template <bool SSL> void on_open(net_ws_server_t *server, Socket<SSL> *ws) {
 bool rate_allows(net_ws_server_t *server, Peer *peer, double now) {
     const double rate = static_cast<double>(server->config.max_messages_per_second);
     if (rate <= 0.0) { return true; }
-    peer->tokens = std::min(rate, peer->tokens + (now - peer->rate_at) * rate);
+    const double capacity = server->config.max_message_burst ? server->config.max_message_burst : rate;
+    peer->tokens = std::min(capacity, peer->tokens + (now - peer->rate_at) * rate);
     peer->rate_at = now;
     if (peer->tokens < 1.0) { return false; }
     peer->tokens -= 1.0;
