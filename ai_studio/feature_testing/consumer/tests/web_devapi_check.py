@@ -39,12 +39,13 @@ Exit codes: 0 = the discovery round-trip answered over the shim (PASS).
 import argparse
 import json
 import os
-import shutil
 import sys
 import tempfile
 import time
+from pathlib import Path
 
 from web_persistence_check import (
+    PROFILE_ROOT,
     Cdp,
     CheckFailure,
     Skip,
@@ -53,7 +54,9 @@ from web_persistence_check import (
     find_chrome,
     launch_chrome,
     quit_chrome,
+    remove_profile,
     serve_dir,
+    sweep_stale_profiles,
 )
 
 BOOT_TIMEOUT_S = 90.0  # wasm-devapi-debug carries ASan -> slow boot (MED-5)
@@ -106,7 +109,9 @@ def run(chrome_path, http_port, cdp_port):
         raise Skip("no Chrome/Chromium binary found (pass --chrome or set CHROME_PATH)")
 
     httpd = serve_dir(bin_dir, http_port)
-    profile_dir = tempfile.mkdtemp(prefix="game67_web_devapi_")
+    PROFILE_ROOT.mkdir(parents=True, exist_ok=True)
+    sweep_stale_profiles()
+    profile_dir = tempfile.mkdtemp(prefix="game67_web_devapi_", dir=PROFILE_ROOT)
     url = f"http://127.0.0.1:{http_port}/index.html"
     chrome_proc = None
     cdp = None
@@ -154,7 +159,7 @@ def run(chrome_path, http_port, cdp_port):
             cdp.close()
         quit_chrome(chrome_proc)
         httpd.shutdown()
-        shutil.rmtree(profile_dir, ignore_errors=True)
+        remove_profile(Path(profile_dir), chrome_proc)
 
 
 def main():

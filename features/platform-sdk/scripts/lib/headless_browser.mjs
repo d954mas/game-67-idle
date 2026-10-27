@@ -7,9 +7,10 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
+
+import { createChromeProfile } from "../../../../ai_studio/runtime_automation/chrome_profile.mjs";
 
 function browserCandidates(env = process.env, platform = process.platform) {
   const candidates = [env.CHROME_PATH];
@@ -158,11 +159,11 @@ export class CdpClient {
    makes, and a machine without a GPU must reach the same verdict. */
 export async function launchHeadlessBrowser({ deadline, chromePath, extraArgs = [], viewport = { width: 1280, height: 720 } }) {
   const browser = findSupportedBrowser({ chromePath });
-  const profileDir = mkdtempSync(join(tmpdir(), "platform-sdk-probe-"));
+  const profile = createChromeProfile("platform-sdk-probe");
   const child = spawn(browser, [
     "--headless=new",
     "--remote-debugging-pipe",
-    `--user-data-dir=${profileDir}`,
+    `--user-data-dir=${profile.dir}`,
     "--no-first-run",
     "--no-default-browser-check",
     "--disable-extensions",
@@ -204,16 +205,8 @@ export async function launchHeadlessBrowser({ deadline, chromePath, extraArgs = 
   return {
     client,
     async close() {
-      const exited = child.exitCode !== null || child.signalCode !== null
-        ? Promise.resolve()
-        : new Promise((done) => child.once("exit", done));
       try { client.close(); } catch { /* the pipe is already gone */ }
-      try { child.kill(); } catch { /* the browser already exited */ }
-      // Windows will not delete a profile while Chrome still holds it, and kill() does not wait for the exit.
-      await Promise.race([exited, new Promise((done) => setTimeout(done, 5000).unref())]);
-      try {
-        rmSync(profileDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
-      } catch { /* a locked profile is not a probe failure */ }
+      await profile.dispose(child);
     },
   };
 }

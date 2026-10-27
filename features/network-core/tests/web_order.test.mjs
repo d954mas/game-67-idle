@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { spawn, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+
+import { createChromeProfile } from "../../../ai_studio/runtime_automation/chrome_profile.mjs";
 
 const feature = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const windows = process.platform === "win32";
@@ -46,11 +48,11 @@ test("browser client drains 64 records before slow close", { skip: !emcc && "nee
   await new Promise(resolveListen => server.listen(0, "127.0.0.1", resolveListen));
   const port = server.address().port;
   const url = `http://127.0.0.1:${port}/web_order.html?ws=${encodeURIComponent(`ws://127.0.0.1:${port}/room`)}`;
-  const profile = mkdtempSync(join(tmpdir(), "nt-web-order-profile-"));
+  const profile = createChromeProfile("nt-web-order");
   // Ubuntu's AppArmor denies Chrome's sandbox the namespaces it needs; the page is a local fixture.
   const browser = spawn(chrome, ["--headless=new", "--disable-gpu", "--no-first-run",
     "--disable-background-networking", "--remote-debugging-address=127.0.0.1", "--remote-debugging-port=0",
-    ...(windows ? [] : ["--no-sandbox"]), `--user-data-dir=${profile}`, "about:blank"], { windowsHide: true, stdio: "ignore" });
+    ...(windows ? [] : ["--no-sandbox"]), `--user-data-dir=${profile.dir}`, "about:blank"], { windowsHide: true, stdio: "ignore" });
   let ws;
   const pending = new Map();
   let nextId = 1;
@@ -58,7 +60,7 @@ test("browser client drains 64 records before slow close", { skip: !emcc && "nee
   try {
     let cdpPort;
     for (let attempt = 0; attempt < 100; ++attempt) {
-      const active = join(profile, "DevToolsActivePort");
+      const active = join(profile.dir, "DevToolsActivePort");
       // Chrome may still hold the file open (EBUSY on Windows) or have written only part of it.
       try { cdpPort = Number(readFileSync(active, "utf8").split(/\r?\n/)[0]); } catch {}
       if (cdpPort > 0) break;
@@ -102,12 +104,8 @@ test("browser client drains 64 records before slow close", { skip: !emcc && "nee
   } finally {
     if (ws) ws.close();
     for (const request of pending.values()) request.reject(new Error("CDP closed"));
-    if (browser.exitCode === null && browser.signalCode === null) {
-      await new Promise(resolveExit => {browser.once("exit", resolveExit);browser.kill();});
-    }
+    await profile.dispose(browser);
     for (const socket of sockets) socket.destroy();
     await new Promise(resolveClose => server.close(resolveClose));
-    // Only after the exit: Windows refuses to delete profile files a live Chrome holds.
-    rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
