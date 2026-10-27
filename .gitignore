@@ -93,3 +93,4 @@ output/
 
 # Local DeepSeek harness launcher (dsh web); studio tooling lives under ai_studio/.
 /tools/
+/.tmp/
