@@ -22,6 +22,18 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  #safe-area-probe {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    visibility: hidden;
+    pointer-events: none;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+      env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+
   canvas {
     display: block;
     width: 100vw;
@@ -158,6 +170,22 @@
 </style>
 </head>
 <body>
+<div id="safe-area-probe" aria-hidden="true"></div>
+<script id="safe-area-bridge">
+  (function () {
+    var probe = document.getElementById('safe-area-probe');
+    window.__gameSafeAreaInsets = function () {
+      // Browser chrome can change the safe area without a resize event.
+      var style = probe ? getComputedStyle(probe) : null;
+      if (!style) return [0, 0, 0, 0];
+      return [style.paddingLeft, style.paddingRight, style.paddingTop, style.paddingBottom]
+        .map(function (value) {
+          var n = parseFloat(value);
+          return Number.isFinite(n) && n > 0 ? n : 0;
+        });
+    };
+  })();
+</script>
 <!-- Not "loading-overlay": Playgama Bridge gives its own overlay that id, hides
      the first element with that id at 100% and would leave its own on screen. -->
 <div id="game-loading-overlay" role="status" aria-live="polite">

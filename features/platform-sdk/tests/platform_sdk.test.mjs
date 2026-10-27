@@ -1751,7 +1751,7 @@ test("template web shell loads selected platform backend before game.js", () => 
 
 test("loading shell does not rewrite DOM for progress inside the same whole percent", () => {
   const shell = readFileSync(join(HERE, "../../../ai_studio/feature_testing/consumer/web/index.html.in"), "utf8");
-  const start = shell.indexOf("(function () {");
+  const start = shell.lastIndexOf("(function () {", shell.indexOf("getElementById('game-loading-overlay')"));
   const end = shell.indexOf("window.__PLATFORM_SDK_CONFIG__", start);
   assert.notEqual(start, -1);
   assert.notEqual(end, -1);

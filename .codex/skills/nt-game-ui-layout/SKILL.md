@@ -45,6 +45,12 @@ commands. Load only the sections the current surface needs.
 - Clear owned transient `nt_ui_state` on close; raise capacity only after an
   ID/lifetime audit.
 - Prefer semantic UI IDs and one adaptive PC/phone contract.
+- All HUD, windows and touch controls respect `ui_metrics()` safe insets.
+  Web shells supply live CSS `env(safe-area-inset-*)` values through the UI Kit
+  bridge; see `features/ui-kit/INSTALL.md#web-safe-area`. Do not bypass the
+  common conversion with per-screen scaling, guessed device margins or a
+  second safe-area inset. Verify nonzero top, side and bottom insets as well
+  as zero; emulation does not prove physical-device browser reporting.
 - Scale one window composition across desktop, portrait, and landscape by
   default. Change the arrangement only when the content genuinely needs it
   (for example, backpack, chest, or shop); record that exception. Settings
