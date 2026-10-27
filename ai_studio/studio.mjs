@@ -377,8 +377,12 @@ export function unassignedDeterministicTests(root = ROOT) {
   if (result.error || result.status !== 0) throw new Error(result.error?.message || result.stderr || "git ls-files failed");
   const trackedPaths = result.stdout.split("\0").map(slash).filter(Boolean);
   const cmakeSources = cmakeSourceCorpus(repoRoot, trackedPaths);
+  // A Python test under a native root counts as native only when CTest runs it.
+  const ctestPython = (path) => /\/tests\/test_[^/]+\.py$/.test(path)
+    && CHECKS.some((check) => check.nativeRoots?.some((nativeRoot) => path.startsWith(`${nativeRoot}/`)))
+    && cmakeMentionsNativeTest(cmakeSources, path);
   return trackedPaths.filter(isDeterministicTestPath).filter((path) => (
-    !CHECKS.some((check) => suiteOwnsTest(check, path))
+    (!CHECKS.some((check) => suiteOwnsTest(check, path)) && !ctestPython(path))
     || (/\/tests\/test_[^/]+\.c$/.test(path) && !cmakeMentionsNativeTest(cmakeSources, path))
   ));
 }
