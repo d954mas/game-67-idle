@@ -125,6 +125,11 @@ possibility, not a feature.
 
 ## Current Packs
 
+- `game-recording/` (`L0`, opt-in): Windows native development recording of
+  presented frames and the actual audio-core mix. Shared `game.record.*`
+  lifecycle, bounded clock drift and failure reporting. See
+  `game-recording/README.md` and `game-recording/INSTALL.md`.
+
 - `limb-ik/` (`L1`, opt-in): header-only planar two-link solver. The consumer
   owns rigs, animation and rendering. See `limb-ik/README.md` and
   `limb-ik/INSTALL.md`.
@@ -172,7 +177,7 @@ possibility, not a feature.
   (`game.events.tail`), and the local `game_analytics` NDJSON writer. Higher
   features emit through this pack; analytics subscribes to it. Reference:
   `game-events/README.md` + `game-events/INSTALL.md`.
-- `audio-core/` (`L1`, `1.2.2`): versioned fixed-pool playback contract with
+- `audio-core/` (`L1`, `1.3.0`): versioned fixed-pool playback contract with
   generation-safe clip/voice handles, streamed long tracks, native miniaudio
   and browser WebAudio backends. Games own cue/music catalogs, source assets, codec-neutral BLOB IDs,
   settings and lifecycle composition. Its contract version records the public

@@ -7,10 +7,24 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(AUDIO_CORE_CAPTURE_ENABLED) && AUDIO_CORE_CAPTURE_ENABLED
+#include <stdatomic.h>
+#include "features/audio/capture.h"
+#endif
+
 #define AUDIO_NATIVE_CLIPS 64u
 #define AUDIO_NATIVE_VOICES 32u
 #define AUDIO_NATIVE_CHANNELS 2u
 #define AUDIO_NATIVE_SAMPLE_RATE 48000u
+#if defined(AUDIO_CORE_CAPTURE_ENABLED) && AUDIO_CORE_CAPTURE_ENABLED
+#define AUDIO_CAPTURE_FRAMES (1u << 18)
+static float s_capture_pcm[AUDIO_CAPTURE_FRAMES * AUDIO_NATIVE_CHANNELS];
+static atomic_uint s_capture_read;
+static atomic_uint s_capture_write;
+static atomic_bool s_capture_overflow;
+static atomic_bool s_capture_mix;
+static bool s_capture_active;
+#endif
 #define AUDIO_NATIVE_MAX_DECODED_BYTES_PER_CLIP (UINT64_C(128) * UINT64_C(1024) * UINT64_C(1024))
 #define AUDIO_NATIVE_MAX_DECODED_BYTES_TOTAL (UINT64_C(256) * UINT64_C(1024) * UINT64_C(1024))
 
@@ -146,8 +160,45 @@ static bool decoded_pcm_budget_allows(uint64_t decoded_bytes) {
     return s_decoded_pcm_bytes <= s_decoded_pcm_total_limit - decoded_bytes;
 }
 
+#if defined(AUDIO_CORE_CAPTURE_ENABLED) && AUDIO_CORE_CAPTURE_ENABLED
+static void capture_push(const float *pcm, ma_uint32 count) {
+    if (!s_capture_active || atomic_load_explicit(&s_capture_overflow, memory_order_relaxed)) return;
+    const unsigned write = atomic_load_explicit(&s_capture_write, memory_order_relaxed);
+    const unsigned read = atomic_load_explicit(&s_capture_read, memory_order_acquire);
+    if (count > AUDIO_CAPTURE_FRAMES - (write - read)) {
+        atomic_store_explicit(&s_capture_overflow, true, memory_order_release);
+        return;
+    }
+    for (unsigned i = 0; i < count; ++i) {
+        const unsigned at = (write + i) & (AUDIO_CAPTURE_FRAMES - 1u);
+        s_capture_pcm[at * 2u] = pcm[i * 2u];
+        s_capture_pcm[at * 2u + 1u] = pcm[i * 2u + 1u];
+    }
+    atomic_store_explicit(&s_capture_write, write + count, memory_order_release);
+}
+
+static void capture_callback(ma_device *device, void *output, const void *input, ma_uint32 count) {
+    (void)device;
+    (void)input;
+    if (atomic_load_explicit(&s_capture_mix, memory_order_acquire)) {
+        if (ma_engine_read_pcm_frames(&s_engine, output, count, NULL) != MA_SUCCESS) {
+            memset(output, 0, (size_t)count * AUDIO_NATIVE_CHANNELS * sizeof(float));
+            atomic_store_explicit(&s_capture_overflow, true, memory_order_release);
+        }
+    } else {
+        // Keep silence on the capture clock without advancing paused voices.
+        memset(output, 0, (size_t)count * AUDIO_NATIVE_CHANNELS * sizeof(float));
+    }
+    capture_push((const float *)output, count);
+}
+#endif
+
 static void apply_run_state(void) {
     ma_bool32 should_run = s_available && s_unlocked && s_enabled && !s_paused;
+#if defined(AUDIO_CORE_CAPTURE_ENABLED) && AUDIO_CORE_CAPTURE_ENABLED
+    atomic_store_explicit(&s_capture_mix, should_run != MA_FALSE, memory_order_release);
+    should_run = should_run || s_capture_active;
+#endif
 #if defined(AUDIO_MINIAUDIO_TEST_NO_DEVICE)
     s_started = should_run;
 #else
@@ -160,7 +211,60 @@ static void apply_run_state(void) {
 #endif
 }
 
+#if defined(AUDIO_CORE_CAPTURE_ENABLED) && AUDIO_CORE_CAPTURE_ENABLED
+static bool capture_quiesce(void) {
+#if !defined(AUDIO_MINIAUDIO_TEST_NO_DEVICE)
+    if (s_started && ma_engine_stop(&s_engine) != MA_SUCCESS) return false;
+#endif
+    s_started = MA_FALSE;
+    return true;
+}
+
+bool audio_capture_begin(void) {
+    if (!s_available || s_capture_active || !capture_quiesce()) return false;
+    atomic_store_explicit(&s_capture_read, 0u, memory_order_relaxed);
+    atomic_store_explicit(&s_capture_write, 0u, memory_order_relaxed);
+    atomic_store_explicit(&s_capture_overflow, false, memory_order_relaxed);
+    s_capture_active = true;
+    apply_run_state();
+    if (s_started) return true;
+    s_capture_active = false;
+    return false;
+}
+
+bool audio_capture_end(void) {
+    if (!s_capture_active) return true;
+    if (!capture_quiesce()) return false;
+    s_capture_active = false;
+    apply_run_state();
+    return true;
+}
+
+uint32_t audio_capture_read(float *stereo, uint32_t capacity_frames) {
+    if (stereo == NULL || capacity_frames == 0u) return 0u;
+    const unsigned read = atomic_load_explicit(&s_capture_read, memory_order_relaxed);
+    const unsigned write = atomic_load_explicit(&s_capture_write, memory_order_acquire);
+    const unsigned available = write - read;
+    const unsigned count = capacity_frames < available ? capacity_frames : available;
+    for (unsigned i = 0; i < count; ++i) {
+        const unsigned at = (read + i) & (AUDIO_CAPTURE_FRAMES - 1u);
+        stereo[i * 2u] = s_capture_pcm[at * 2u];
+        stereo[i * 2u + 1u] = s_capture_pcm[at * 2u + 1u];
+    }
+    atomic_store_explicit(&s_capture_read, read + count, memory_order_release);
+    return count;
+}
+
+bool audio_capture_failed(void) { return atomic_load_explicit(&s_capture_overflow, memory_order_acquire); }
+#endif
+
 static void backend_reset(void) {
+#if defined(AUDIO_CORE_CAPTURE_ENABLED) && AUDIO_CORE_CAPTURE_ENABLED
+    s_capture_active = false;
+    atomic_store_explicit(&s_capture_read, 0u, memory_order_relaxed);
+    atomic_store_explicit(&s_capture_write, 0u, memory_order_relaxed);
+    atomic_store_explicit(&s_capture_overflow, false, memory_order_relaxed);
+#endif
     memset(s_clips, 0, sizeof(s_clips));
     memset(s_voices, 0, sizeof(s_voices));
     s_context_initialized = MA_FALSE;
@@ -196,6 +300,9 @@ static ma_bool32 engine_and_groups_init(ma_context *context, ma_bool32 no_device
     config.noDevice = no_device;
     config.channels = AUDIO_NATIVE_CHANNELS;
     config.sampleRate = AUDIO_NATIVE_SAMPLE_RATE;
+#if defined(AUDIO_CORE_CAPTURE_ENABLED) && AUDIO_CORE_CAPTURE_ENABLED
+    config.dataCallback = capture_callback;
+#endif
     config.allocationCallbacks.onMalloc = audio_malloc;
     config.allocationCallbacks.onRealloc = audio_realloc;
     config.allocationCallbacks.onFree = audio_free;
@@ -498,6 +605,12 @@ uint64_t audio_miniaudio_test_render(uint64_t frames) {
     while (rendered < frames) {
         const ma_uint64 step = frames - rendered < 512 ? frames - rendered : 512;
         ma_uint64 read = 0;
+#if defined(AUDIO_CORE_CAPTURE_ENABLED) && AUDIO_CORE_CAPTURE_ENABLED
+        if (s_capture_active) {
+            capture_callback(NULL, block, NULL, (ma_uint32)step);
+            read = step;
+        } else
+#endif
         if (ma_engine_read_pcm_frames(&s_engine, block, step, &read) != MA_SUCCESS || read == 0) break;
         rendered += read;
     }

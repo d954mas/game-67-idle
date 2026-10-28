@@ -35,3 +35,12 @@ node --input-type=module -e "import {runNativeTests} from './ai_studio/game_tool
 
 Run this from the Studio root. The test checks the actual built pack boundary,
 the first-frame request gate, mute and retry behavior, and shutdown ordering.
+
+## Native audiovisual recording
+
+The sample host integrates [game-recording](../../../features/game-recording/README.md)
+in Windows DevAPI builds. Unlock audio through normal input before using
+`game.record.start` and `game.record.stop`; check `valid` and the saved media.
+Production and web builds omit the capture code. The native DevAPI sample host
+and `test_game_recording` build and pass together through `runNativeTests` with
+`gameTarget: "game"`; the log is `build/logs/recorder-build.log`.

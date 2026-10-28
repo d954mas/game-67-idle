@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "audio-core",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "title": "Audio Core",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -27,7 +27,8 @@
     "fixed 64-clip and 32-voice pools",
     "master, music, and SFX mix buses",
     "pause, enable, and browser unlock policy",
-    "replaceable private native and web backend boundary"
+    "replaceable private native and web backend boundary",
+    "optional native development post-mix PCM capture with bounded queue and overflow reporting"
   ],
   "manuals": {
     "contract": "features/audio-core/README.md",

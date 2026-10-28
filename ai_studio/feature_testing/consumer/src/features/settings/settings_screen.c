@@ -76,7 +76,7 @@ static void volume_row(nt_ui_context_t *ctx, const ui_metrics_t *m, LocKey0 name
         // The slider's own label is NULL here, so no text reaches the engine
         // through an unwrapped entry point. The row is a full touch target: the
         // track is thin, and the thumb alone is not something a thumb can find.
-        (void)nt_ui_slider_float(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), UI_LAYER_TEXT, nt_ui_id(id), NULL, value,
+        (void)nt_ui_slider_float(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), UI_LAYER_TEXT, nt_ui_id(id), NULL, value,
                                  0.0F, 1.0F, 0.0F, &slider,
                                  &(Clay_ElementDeclaration){
                                      .layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(m)}}},
@@ -121,7 +121,7 @@ static void language_row(nt_ui_context_t *ctx, const ui_metrics_t *m, bool inter
         CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
             loc_kit_label(ctx, loc_settings_language(), &g_ui_theme.label);
         }
-        nt_ui_combo_preview_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_IMG), UI_LAYER_TEXT,
+        nt_ui_combo_preview_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), UI_LAYER_TEXT,
                                   nt_ui_id("settings/language/trigger"), &dropdown, &s_language_open);
         CLAY({.id = CLAY_ID("settings/language/current"), .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
             loc_kit_label(ctx, loc_by_key(LANGUAGE_NAMES[current]), &g_ui_theme.button_label);

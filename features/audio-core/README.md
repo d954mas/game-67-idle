@@ -18,6 +18,21 @@ MUSIC/SFX buses, mix controls, pause/enable state, and browser
 user-gesture unlock. Its fixed limits are 64 clips and 32 voices.
 Backend types, file paths, codecs, and JavaScript handles stay private.
 
+## Native development capture
+
+`AUDIO_CORE_CAPTURE_ENABLED=1` adds `features/audio/capture.h` to the native
+miniaudio backend. Begin/read/end expose the actual post-mix float32 stereo
+48 kHz stream on the main thread while the device continues normal playback.
+The audio callback only mixes and copies into a fixed SPSC queue; encoding
+never runs on the audio thread. Pause/disable emit silence without advancing
+voices. Master and bus gains remain part of the captured samples.
+
+Begin/end quiesce the device before changing producer state. End preserves the
+queued tail for draining before the encoder closes. A full queue sets a sticky
+failure; consumers must reject that take, not discard samples and claim sync.
+The flag is off by default and has no web implementation. The feature supplies
+PCM only; games own recorder lifecycle, presentation clock and file paths.
+
 ## Streamed clips
 
 `audio_clip_load` decodes a clip whole: right for short cues, which then start
@@ -153,6 +168,9 @@ See `INSTALL.md` for wiring, validation, and removal.
 
 ## Version history
 
+- `1.3.0`: optional native development PCM capture after mix gains, with a
+  bounded SPSC queue, pause silence, stable tail drain and overflow reporting.
+  Disabled production/web builds retain their previous playback path.
 - `1.2.2`: `audio_set_mix` and `audio_voice_set_gain` skip the backend when
   the clamped value repeats the one it already has, so a game may set them
   every frame; the web bridge writes its bus nodes directly again.

@@ -8,8 +8,8 @@
     {
       "id": "audio-core",
       "source": "features/audio-core",
-      "version": "1.2.2",
-      "compatibility": "validated by the template build and test suite"
+      "version": "1.3.0",
+      "compatibility": "Native DevAPI post-mix capture; validation is recorded in README.md."
     },
     {
       "id": "game-events",
@@ -86,8 +86,14 @@
     {
       "id": "ui-kit",
       "source": "features/ui-kit",
-      "version": "3.1.0",
-      "compatibility": "validated by the template build and test suite"
+      "version": "5.0.0",
+      "compatibility": "Native DevAPI sample host builds with current surface/icon UI layers."
+    },
+    {
+      "id": "game-recording",
+      "source": "features/game-recording",
+      "version": "0.1.0",
+      "compatibility": "Windows native DevAPI audiovisual recorder; validation is recorded in README.md."
     }
   ],
   "compatibility": "seed for exact game-owned dependency records created from this template"

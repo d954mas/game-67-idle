@@ -65,6 +65,11 @@ function(game_add_c_test name)
     set_tests_properties(${name} PROPERTIES LABELS "${T_TIER}")
 endfunction()
 
+if(NOT EMSCRIPTEN)
+    include("${GAME_REPO_ROOT}/features/game-recording/cmake/GameRecordingTests.cmake")
+    game_recording_add_tests()
+endif()
+
 # Every plain logic test in tests/plain: one file, no build-system edit. A test
 # lands here when it needs nothing but Unity, the game's headers and the golden
 # bank; anything that must link a subsystem gets its own game_add_c_test call
@@ -258,8 +263,10 @@ if(NOT EMSCRIPTEN)
         "${AUDIO_CORE_SRC}/audio_miniaudio_impl.c")
     target_link_libraries(test_audio_backend_native PRIVATE unity)
     target_include_directories(test_audio_backend_native PRIVATE "${AUDIO_CORE_SRC}" "${AUDIO_CORE_VENDOR}")
+    target_include_directories(test_audio_backend_native PRIVATE "${AUDIO_CORE_INC}")
     target_compile_definitions(test_audio_backend_native PRIVATE
         AUDIO_MINIAUDIO_TEST_NO_DEVICE=1
+        AUDIO_CORE_CAPTURE_ENABLED=1
         AUDIO_TEST_MP3_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/music/demo_jingle.mp3"
         AUDIO_TEST_CUE_WAV_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/sfx/ui_click.wav"
         AUDIO_TEST_CUE_MP3_PATH="${TEMPLATE_AUDIO_CUE_MP3}"

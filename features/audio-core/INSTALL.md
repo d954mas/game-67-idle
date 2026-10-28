@@ -30,6 +30,15 @@ needs no other source.
 Put `${AUDIO_CORE_INC}` before the game `src` include directory so a stale
 local copy cannot shadow the shared public header.
 
+For native development recording only, define `AUDIO_CORE_CAPTURE_ENABLED=1`
+on the audio library and its consuming host. Include `features/audio/capture.h`.
+Start the encoder first, then `audio_capture_begin`; drain with
+`audio_capture_read` on the main thread before presenting a recorded frame.
+At stop, call `audio_capture_end`, drain the tail, then close the encoder.
+Check every lifecycle result and `audio_capture_failed`. Use a presentation
+timestamp matching the drained PCM and validate drift. Do not compile this flag
+into production or web builds.
+
 ## Game-owned integration
 
 1. Add audio files to the game's asset tree with license/provenance metadata.

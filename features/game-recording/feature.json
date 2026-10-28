@@ -1,0 +1,20 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "game-recording",
+  "version": "0.1.0",
+  "title": "Game Recording",
+  "status": "opt-in",
+  "kind": "development-tooling",
+  "summary": "Native development MP4 capture of presented frames and the actual post-mix game audio, with bounded drift and failure reporting.",
+  "copy_model": "in-place",
+  "layer": "L0",
+  "owners": ["features/game-recording"],
+  "dependencies": ["audio-core 1.3.0 native capture", "engine nt_recorder, nt_devapi, nt_time and cJSON"],
+  "provides": ["game_recording_register", "game_recording_frame", "game_recording_shutdown", "game.record.start", "game.record.stop"],
+  "manuals": {"contract": "features/game-recording/README.md", "install": "features/game-recording/INSTALL.md"},
+  "registers": {
+    "target_sources": ["features/game-recording/src/recording.c"],
+    "include_dirs": ["features/game-recording/include"],
+    "ctest_targets": ["test_game_recording"]
+  }
+}

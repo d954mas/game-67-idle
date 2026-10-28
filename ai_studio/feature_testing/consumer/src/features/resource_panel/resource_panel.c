@@ -37,9 +37,9 @@ static int64_t rp_i64_abs(int64_t v) { return v < 0 ? (int64_t)(0ULL - (uint64_t
 
 /* Layer order is the kit's, not this widget's: two surfaces sorting on two
    different scales cannot be stacked predictably. */
-#define LAYER_BG UI_LAYER_BG
-#define LAYER_FILL UI_LAYER_FILL
-#define LAYER_IMG UI_LAYER_IMG
+#define LAYER_BG UI_LAYER_SURFACE
+#define LAYER_FILL UI_LAYER_SURFACE
+#define LAYER_IMG UI_LAYER_ICON
 #define LAYER_TEXT_SHADOW UI_LAYER_TEXT_SHADOW
 #define LAYER_TEXT UI_LAYER_TEXT
 

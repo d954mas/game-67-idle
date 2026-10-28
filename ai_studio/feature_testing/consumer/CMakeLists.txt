@@ -165,6 +165,9 @@ endif()
 # state is impossible"); the former on/off CMake axis is gone (И2-0).
 
 include(cmake/GameCodegen.cmake)
+include("${GAME_REPO_ROOT}/features/game-recording/recording.cmake")
+game_recording_attach(${GAME_TARGET})
+
 include(cmake/GameAssets.cmake)
 if(NOT EMSCRIPTEN)
     add_dependencies(${GAME_TARGET} game_asset_packs)

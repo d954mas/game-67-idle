@@ -143,6 +143,9 @@ bool shell_boot_init(const shell_options_t *options, World *world) {
     nt_gfx_desc_t gfx_desc = nt_gfx_desc_defaults();
     gfx_desc.depth = true;
     gfx_desc.max_buffers = 256;
+#ifdef NT_DEVAPI_GROUP_RECORDER
+    gfx_desc.max_buffers += 5;
+#endif
     gfx_desc.frame_capacity[NT_GFX_FRAME_VERTEX] = FRAME_VERTEX_BYTES;
     gfx_desc.frame_capacity[NT_GFX_FRAME_INDEX] = FRAME_INDEX_BYTES;
     gfx_desc.frame_capacity[NT_GFX_FRAME_UNIFORM] = FRAME_UNIFORM_BYTES;

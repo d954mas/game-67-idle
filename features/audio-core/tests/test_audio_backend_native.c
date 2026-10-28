@@ -7,6 +7,7 @@
 #include "unity.h"
 
 #include "audio_backend.h"
+#include "features/audio/capture.h"
 
 static const uint8_t k_wav[] = {
     'R','I','F','F', 44,0,0,0, 'W','A','V','E',
@@ -466,8 +467,53 @@ void test_stream_loop_repeats_the_master_length_exactly(void) {
     audio_core_backend_clip_destroy(master.clip);
 }
 
+void test_capture_preserves_pcm_gain_pause_and_restart(void) {
+    uint32_t clip = audio_core_backend_decode_begin(k_wav, (uint32_t)sizeof(k_wav));
+    TEST_ASSERT_TRUE(audio_core_backend_user_gesture());
+    TEST_ASSERT_NOT_EQUAL_UINT32(0, audio_core_backend_voice_play(clip, 1, 1.0f, true));
+    TEST_ASSERT_TRUE(audio_capture_begin());
+    TEST_ASSERT_FALSE(audio_capture_begin());
+    float pcm[1024];
+    TEST_ASSERT_EQUAL_UINT64(512, audio_miniaudio_test_render(512));
+    TEST_ASSERT_EQUAL_UINT32(512, audio_capture_read(pcm, 512));
+    float peak = 0;
+    for (unsigned i = 0; i < 1024; ++i) if (fabsf(pcm[i]) > peak) peak = fabsf(pcm[i]);
+    TEST_ASSERT_TRUE(peak > 0.001f);
+    audio_core_backend_set_mix(0.0f, 1.0f, 1.0f);
+    (void)audio_miniaudio_test_render(512);
+    TEST_ASSERT_EQUAL_UINT32(512, audio_capture_read(pcm, 512));
+    for (unsigned i = 0; i < 1024; ++i) TEST_ASSERT_TRUE(fabsf(pcm[i]) < 0.000001f);
+    audio_core_backend_set_mix(1.0f, 1.0f, 1.0f);
+    audio_core_backend_set_paused(true);
+    (void)audio_miniaudio_test_render(512);
+    TEST_ASSERT_EQUAL_UINT32(512, audio_capture_read(pcm, 512));
+    for (unsigned i = 0; i < 1024; ++i) TEST_ASSERT_TRUE(fabsf(pcm[i]) < 0.000001f);
+    TEST_ASSERT_TRUE(audio_capture_end());
+    TEST_ASSERT_TRUE(audio_capture_begin());
+    TEST_ASSERT_EQUAL_UINT32(0, audio_capture_read(pcm, 512));
+    audio_core_backend_set_paused(false);
+    for (unsigned block = 0; block < 600; ++block) {
+        (void)audio_miniaudio_test_render(512);
+        TEST_ASSERT_EQUAL_UINT32(512, audio_capture_read(pcm, 512));
+    }
+    TEST_ASSERT_FALSE(audio_capture_failed());
+    TEST_ASSERT_TRUE(audio_capture_end());
+}
+
+void test_capture_overflow_invalidates_take_without_overwrite(void) {
+    TEST_ASSERT_TRUE(audio_capture_begin());
+    (void)audio_miniaudio_test_render(48000 * 6);
+    TEST_ASSERT_TRUE(audio_capture_failed());
+    TEST_ASSERT_TRUE(audio_capture_end());
+    TEST_ASSERT_TRUE(audio_capture_begin());
+    TEST_ASSERT_FALSE(audio_capture_failed());
+    TEST_ASSERT_TRUE(audio_capture_end());
+}
+
 int main(void) {
     UNITY_BEGIN();
+    RUN_TEST(test_capture_preserves_pcm_gain_pause_and_restart);
+    RUN_TEST(test_capture_overflow_invalidates_take_without_overwrite);
     RUN_TEST(test_wav_decode_is_synchronous_and_reports_ready);
     RUN_TEST(test_committed_mp3_decodes_with_the_native_backend);
     RUN_TEST(test_bad_decode_owns_a_failed_slot_until_destroyed);

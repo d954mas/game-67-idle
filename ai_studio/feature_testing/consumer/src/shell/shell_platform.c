@@ -3,6 +3,7 @@
 #include "app/nt_app.h"
 #include "core/nt_core.h"
 #include "core/nt_platform.h"
+#include "features/recording/recording.h"
 #include "graphics/nt_gfx.h"
 #include "input/nt_input.h"
 #include "log/nt_log.h"
@@ -169,6 +170,7 @@ bool shell_platform_start(World *world) {
     fprintf(stderr, "DevAPI listening on 127.0.0.1:%u\n", (unsigned)s_options->devapi_port);
 #endif
     nt_devapi_register_default();
+    game_recording_register();
     nt_devapi_register_reset(recover_on_client_reset);
     scene_manager_register_devapi(game_scenes_manager());
     game_iteration_proof_register_devapi();
@@ -230,6 +232,7 @@ static void devapi_sample_metrics(double frame_begin) {
 }
 
 void shell_platform_shutdown(void) {
+    game_recording_shutdown();
 #ifndef NT_PLATFORM_WEB
     if (!s_devapi_running) {
         return;
@@ -339,6 +342,12 @@ void shell_platform_frame_end(shell_shown_t shown, bool playable) {
     if (!shown.presented) {
         return;
     }
+#ifdef NT_DEVAPI_GROUP_RECORDER
+    static double last_presented;
+    const double now = nt_time_now();
+    game_recording_frame(now, (float)(now - last_presented));
+    last_presented = now;
+#endif
     nt_window_swap_buffers();
     if (shown.complete) {
         if (shown.recovered) {
