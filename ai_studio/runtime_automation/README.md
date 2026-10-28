@@ -10,7 +10,8 @@ native playable work:
 - DevAPI TCP client and minimal CLI.
 - Native debug launch/reuse helpers.
 - Catalog-selected non-proof web preview through game-owned build plans.
-- Engine framebuffer screenshots, explicit window screenshots, and OBS game recording.
+- Engine framebuffer screenshots, explicit window screenshots, and native game
+  audiovisual recording through DevAPI.
 - PNG encode/decode utilities used by capture and health checks.
 - Pixel-health checks for blank or flat screenshots.
 - UI readability zoom audit for screenshot evidence.
@@ -94,9 +95,24 @@ Run one command from a game root:
 `live` opens a normal controllable game and writes one MP4. `shot` launches a
 fresh unsaved game, then applies the catalog setup and event schedule. REC
 playback is realtime at 1×. Both print the final `tmp/captures/<take-id>/edit.mp4`
-path. The fresh state, setup, and event schedule are deterministic; rendering,
-OBS encoding, and the MP4 are not byte- or frame-identical between takes. There
-is no montage, retiming, x4 mode, or preroll in the result.
+path. The recorder is the running game's `game.record.start`/`game.record.stop`
+DevAPI pair; stop returns video/audio cadence and A/V drift evidence in
+`capture.json`. The catalog owns the initial fixture and event schedule;
+realtime execution and the MP4 are not frame-exact or byte-identical between takes. There is no
+montage, retiming, x4 mode, or preroll in the result.
+
+Relative `--out` paths belong to the selected game, independent of the Studio
+runner's working directory. A take directory containing `edit.mp4` or
+`capture.json` is refused; choose a new directory so a failed retry cannot
+pair an old success receipt with newly overwritten video.
+
+Before recording, the helper sends a player-gated ordinary `input.key` event
+and waits three game frames so runtime audio can unlock. The default gesture is
+`W` held for two frames; a catalog default or shot may supply an `audio_unlock`
+action with `method` and `params`. Unlock runs before the shot fixture, and
+player input stays gated through the whole scenario. Authored shots
+remain realtime: setup or warmup `time.step` actions become host-wallclock waits,
+and an explicit `time.set_mode` to `manual` fails with a migration diagnostic.
 
 ### Native capture provenance
 
@@ -165,30 +181,37 @@ in Hz: `fps * ticks_per_frame` before REC. It is not an exact tick count for
 each encoded frame. During REC the game runs normally;
 `events` are scheduled at their output-frame wall times and `frame` is an
 output-frame index. `setup` and `warmup_ticks` run before REC. A shot can
-override `preset`, `size`, `fps`, `ticks_per_frame`, or `max_freeze_seconds`
-(default `2.0`) from defaults. Its `seconds * fps` must be a whole number.
+override `preset`, `size`, `fps`, `ticks_per_frame`, `audio_unlock`,
+`expect_motion`, `expect_audio`, or `max_freeze_seconds` from defaults.
+Activity expectations default to false so intentional still/muted takes remain
+possible. Set them true for a combat or sound demonstration: motion requires at
+least 80% distinct decoded frames, and expected sound must have meaningful peak
+and RMS levels. An explicit `max_freeze_seconds` bounds the longest identical
+frame run. Every take reports those measurements regardless of expectations.
+Its `seconds * fps` must be a whole number.
 ### Windows host-execution boundary
 
-OBS-backed capture depends on the active Windows console user's per-user
-`CaptureService`. On a managed host, launch `capture live` and `capture shot`
-through the approved interactive host execution broker on the first attempt. In
-Codex this means running the game-owned capture command with
-`sandbox_permissions: "require_escalated"`. A process started as an isolated
-sandbox account can be in the same console session yet still fail WGC with
-`CreateForWindow (0x80070424)` and encode uniform black frames. That error is a
-Windows capture-service failure; on a managed host, first keep the canonical WGC
-backend and rerun the unchanged command as the active interactive user instead
-of cycling OBS or adding an alternate backend. If the command already has that
-identity, inspect the user's `CaptureService` availability.
+Native DevAPI recording does not depend on OBS or the Windows Graphics Capture
+service. It still requires a visible, non-minimized game window with a non-zero
+framebuffer; a zero-size framebuffer is a launch/readiness failure and must be
+reported with a restore-window diagnostic. Use the approved interactive host
+execution path when the game itself requires an active desktop token.
 
 ## Recorder maintenance
 
-`record_game.py` is the shared OBS backend used by `capture.cmd`. It validates
-frame count, dimensions, FPS, video health, audio format, and writes technical
-metadata beside the final MP4. Normal game work uses only `capture.cmd`; do not
-build per-video record or montage scripts.
+`capture_game.py` is the default native audiovisual recorder used by
+`capture.cmd`. It validates the engine receipt's frame count, audio frame count,
+validity, and A/V timing, then fully decodes the saved video and audio through
+`native_record_media.py`. It checks H.264/AAC, requested dimensions/rate, stereo
+48 kHz, decoded frame/sample counts, track start timestamps, timestamp cadence and optional activity
+expectations. Live command boundaries allow up to 100 ms plus one output frame
+of requested-duration difference; the actual duration is recorded separately.
+Metadata marks the take as a draft, not a release or safe-area approval.
+`record_game.py` remains an explicit OBS desktop-capture tool for legacy or
+non-game-window use; it is not a fallback for game capture. Normal game work
+uses only `capture.cmd`; do not build per-video record or montage scripts.
 
-Shot capture uses an isolated, authenticated OBS WebSocket and a disabled-by-
+The explicit legacy OBS tool uses an isolated, authenticated OBS WebSocket and a disabled-by-
 default full-frame magenta marker source. The marker covers setup, then OBS
 acknowledges its removal and renders the configured post-ack frame barrier
 before the audio gate and timeline begin. After OBS finalizes the source,

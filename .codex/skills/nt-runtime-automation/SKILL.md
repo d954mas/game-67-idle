@@ -21,35 +21,42 @@ the reviewed AI Studio module.
 
 ## Game Video Capture
 
-For routine game video, start in the game root and use only:
+For routine game video, start in the game root and use:
 
 ```text
 capture live
 capture shot <id>
 ```
 
-Read the game-owned `capture/catalog.json` before choosing an id. `live` runs
-the catalog's approved continuous presentation without a deterministic event
-timeline. `shot` resets and host-paces the referenced deterministic scenario
-while the existing OBS recorder observes real game pixels and process audio.
+Read the game-owned `capture/catalog.json` before choosing an id. The shared
+`capture_game.py` route uses `game.record.start` and `game.record.stop` from
+`features/game-recording`, combining engine framebuffer capture with audio-core's
+actual post-mix stereo samples. OBS is not required for this route. Keep the
+legacy `record_game.py` tool only for explicitly requested desktop/OBS work;
+do not silently fall back to it when a game lacks the native recording module.
 
-On managed Windows hosts, run these OBS-backed commands through the approved
-interactive host execution path on the first attempt. In Codex, invoke the
-game-owned capture command with `sandbox_permissions: "require_escalated"` so
-OBS inherits the active console user's desktop token. Do not probe video capture
-inside the managed command sandbox first: its isolated account can share the
-console session while lacking the active user's per-user `CaptureService`, which
-causes OBS WGC `CreateForWindow (0x80070424)` and uniform black frames. Keep the
-canonical WGC backend; rerun the unchanged command in the correct host context.
+Use Windows native DevAPI builds and the approved host execution path. In Codex,
+launch the game-owned capture command with `sandbox_permissions: "require_escalated"`
+when the managed command sandbox cannot access the interactive game's window,
+audio device or build metadata. Production and web builds exclude this native
+integration. Discover the live command contract first, require a nonzero
+framebuffer, and unlock audio through ordinary player input before recording.
 
-Treat every completed take as a draft first. A shot becomes a true master only
-when recorder validation, scenario completion, and the applicable universal
-safe-area gate all pass. An incomplete safe-area policy is guidance only and
-must keep the take in `draft/`.
+`live` records continuous play. `shot` runs the catalog's authored scenario on
+the live wall clock; setup frame waits are host-paced. Do not claim deterministic
+or frame-exact simulation from a realtime recording. Do not substitute raw
+engine `record.*` commands: those do not attach the game's audio mixer.
 
-Run the game's documented local audiovisual E2E after capture workflow changes.
-Use `record_game.py` directly only when maintaining or diagnosing the recorder;
-do not add a backend selector, job, queue, or alternate routine capture path.
+Treat every completed take as a draft first. Check the recorder receipt and
+fully decode the saved media: codec, dimensions, cadence, audio stream and
+sample count. Inspect distinct frames and audio level; static or muted takes
+need an appropriate scenario expectation. FPS metadata alone does not prove
+smooth motion. Check an observable audiovisual event when proving sync, and
+exercise mute, pause, restart and shutdown after capture workflow changes.
+
+A shot becomes a true master only when recording validation, scenario completion,
+and the applicable universal safe-area gate all pass. An incomplete safe-area
+policy remains guidance and keeps the take in `draft/`.
 
 ## Default Workflow
 

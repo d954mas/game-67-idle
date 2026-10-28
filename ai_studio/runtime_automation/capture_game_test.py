@@ -18,6 +18,7 @@ from ai_studio.runtime_automation.capture_game import (
     validate_catalog,
     default_output_root,
     resolve_studio_root,
+    resolve_output_root,
 )
 from ai_studio.runtime_automation.native_capture_preflight import (
     canonical_native_executable,
@@ -42,6 +43,13 @@ def native_build_record(executable: Path) -> dict:
 
 
 class CaptureGameCliTest(unittest.TestCase):
+    def test_relative_output_stays_in_selected_game_despite_studio_runner_cwd(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            game = Path(directory) / "selected-game"
+            self.assertEqual(resolve_output_root(game, Path("evidence/take")), (game / "evidence/take").resolve())
+            absolute = Path(directory).resolve() / "explicit-output"
+            self.assertEqual(resolve_output_root(game, absolute), absolute)
+
     def test_catalog_controls_live_capture_defaults(self) -> None:
         args = parse_args(["games/private/example"])
 
@@ -108,7 +116,7 @@ class CaptureGameCliTest(unittest.TestCase):
                 "ai_studio.runtime_automation.capture_game.prepare_native_capture",
                 side_effect=RuntimeError("native build failed"),
             ), patch("ai_studio.runtime_automation.capture_game.running_game") as launch, patch(
-                "ai_studio.runtime_automation.capture_game.record_take"
+                "ai_studio.runtime_automation.capture_game.record_native_take"
             ) as recorder:
                 with self.assertRaisesRegex(RuntimeError, "native build failed"):
                     run(parse_args([str(root), "live"]))
@@ -205,7 +213,7 @@ class CaptureGameCliTest(unittest.TestCase):
                 return GameContext()
 
             with patch("ai_studio.runtime_automation.capture_game.running_game", fake_running_game), patch(
-                "ai_studio.runtime_automation.capture_game.record_take",
+                "ai_studio.runtime_automation.capture_game.record_native_take",
                 return_value={"edit": root / "edit.mp4", "master": root / "master.mkv"},
             ), patch(
                 "ai_studio.runtime_automation.capture_game.prepare_native_capture",
@@ -303,7 +311,7 @@ class CaptureGameCliTest(unittest.TestCase):
                 launch.update(kwargs)
                 return GameContext()
 
-            def fake_record_take(**kwargs):
+            def fake_record_native_take(**kwargs):
                 recorded.update(kwargs)
                 kwargs["recording_prepare"]()
                 recorded["prepare_end"] = len(game.calls)
@@ -315,8 +323,8 @@ class CaptureGameCliTest(unittest.TestCase):
                 "ai_studio.runtime_automation.capture_game.running_game",
                 fake_running_game,
             ), patch(
-                "ai_studio.runtime_automation.capture_game.record_take",
-                fake_record_take,
+                "ai_studio.runtime_automation.capture_game.record_native_take",
+                fake_record_native_take,
             ), patch(
                 "ai_studio.runtime_automation.capture_game.prepare_native_capture",
                 return_value=native_build_record(executable),
@@ -335,20 +343,20 @@ class CaptureGameCliTest(unittest.TestCase):
         self.assertEqual(launch["exe"], str(executable.resolve()))
         self.assertEqual(launch["window_size"], "1080x1920")
         self.assertEqual(recorded["duration_seconds"], 0.1)
-        self.assertEqual(recorded["countdown"], 0)
-        self.assertFalse(recorded["hide_game_window"])
+        self.assertEqual(recorded["width"], 1080)
+        self.assertEqual(recorded["height"], 1920)
         self.assertTrue(callable(recorded["recording_prepare"]))
         self.assertTrue(callable(recorded["recording_driver"]))
-        self.assertEqual(recorded["max_freeze_seconds"], 2.0)
-        self.assertEqual(recorded["settings"].fps, 60)
-        self.assertEqual(recorded["settings"].backend, "game")
+        self.assertIsNone(recorded["max_freeze_seconds"])
+        self.assertEqual(recorded["fps"], 60)
         self.assertAlmostEqual(clock.now, recorded["duration_seconds"])
 
         prepare_end = recorded["prepare_end"]
-        self.assertEqual(game.calls[:prepare_end], [
+        preparation = [call for call in game.calls[:prepare_end] if call[0] not in ("endpoints", "command.describe")]
+        self.assertEqual(preparation, [
             ("time.set_fps", {"fps": 60}),
             ("time.set_scale", {"scale": 1.0}),
-            ("time.set_mode", {"mode": "manual"}),
+            ("time.set_mode", {"mode": "run"}),
             ("input.set_player_enabled", {"enabled": False}),
             ("game.planet.stage_intro", {}),
         ])
@@ -472,10 +480,9 @@ class TimelineTest(unittest.TestCase):
         self.assertEqual(prepared, [
             ("time.set_fps", {"fps": 60}),
             ("time.set_scale", {"scale": 1.0}),
-            ("time.set_mode", {"mode": "manual"}),
+            ("time.set_mode", {"mode": "run"}),
             ("input.set_player_enabled", {"enabled": False}),
             ("game.planet.stage_intro", {}),
-            ("time.step", {"count": 2}),
         ])
         self.assertNotIn(("game.planet.stage_intro", {}), game.calls[len(prepared):])
         self.assertEqual(game.calls[-2:], [
@@ -676,7 +683,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
 
             recording_error = RuntimeError("game window did not remain stable for 2 seconds")
             with patch("ai_studio.runtime_automation.capture_game.running_game", return_value=GameContext()), patch(
-                "ai_studio.runtime_automation.capture_game.record_take",
+                "ai_studio.runtime_automation.capture_game.record_native_take",
                 side_effect=recording_error,
             ), patch(
                 "ai_studio.runtime_automation.capture_game.prepare_native_capture",
@@ -717,7 +724,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
                     return None
 
             with patch("ai_studio.runtime_automation.capture_game.running_game", return_value=GameContext()), patch(
-                "ai_studio.runtime_automation.capture_game.record_take",
+                "ai_studio.runtime_automation.capture_game.record_native_take",
                 return_value={"edit": root / "edit.mp4", "master": root / "master.mkv"},
             ), patch(
                 "ai_studio.runtime_automation.capture_game.prepare_native_capture",
@@ -766,13 +773,13 @@ class CaptureGameAdoptionTest(unittest.TestCase):
                 launch.update(kwargs)
                 return GameContext()
 
-            def fake_record_take(**kwargs):
+            def fake_record_native_take(**kwargs):
                 print("backend progress")
                 recorded.update(kwargs)
                 return {"edit": root / "edit.mp4", "master": root / "master.mkv"}
 
             with patch("ai_studio.runtime_automation.capture_game.running_game", fake_running_game), patch(
-                "ai_studio.runtime_automation.capture_game.record_take", fake_record_take
+                "ai_studio.runtime_automation.capture_game.record_native_take", fake_record_native_take
             ), patch(
                 "ai_studio.runtime_automation.capture_game.prepare_native_capture",
                 return_value=native_build_record(executable),
@@ -789,7 +796,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
         self.assertFalse(launch["fresh_state"])
         self.assertTrue(launch["autosave_enabled"])
         self.assertIsNone(recorded["recording_driver"])
-        self.assertNotIn("max_freeze_seconds", recorded)
+        self.assertIsNone(recorded["max_freeze_seconds"])
         self.assertEqual(recorded["duration_seconds"], 4.0)
 
     def test_catalog_launch_options_override_template_flags(self) -> None:
@@ -821,7 +828,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
                 return GameContext()
 
             with patch("ai_studio.runtime_automation.capture_game.running_game", fake_running_game), patch(
-                "ai_studio.runtime_automation.capture_game.record_take",
+                "ai_studio.runtime_automation.capture_game.record_native_take",
                 return_value={"edit": root / "edit.mp4", "master": root / "master.mkv"},
             ), patch(
                 "ai_studio.runtime_automation.capture_game.prepare_native_capture",
@@ -866,7 +873,7 @@ class CaptureGameAdoptionTest(unittest.TestCase):
                 return GameContext()
 
             with patch("ai_studio.runtime_automation.capture_game.running_game", fake_running_game), patch(
-                "ai_studio.runtime_automation.capture_game.record_take",
+                "ai_studio.runtime_automation.capture_game.record_native_take",
                 return_value={"edit": root / "edit.mp4", "master": root / "master.mkv"},
             ), patch(
                 "ai_studio.runtime_automation.capture_game.prepare_native_capture",
