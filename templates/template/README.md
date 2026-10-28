@@ -28,6 +28,12 @@ It installs no ad points, economy, or portal gameplay policy. Add dependencies o
 when the game uses them. For a fuller integration reference with optional
 examples, see `ai_studio/feature_testing/consumer`.
 
+Native audiovisual recording is optional. The blank starter keeps
+`NT_DEVAPI_GROUP_RECORDER=OFF` because it has no audio device. Once a game installs
+audio-core, follow [game-recording installation](../../features/game-recording/INSTALL.md)
+to enable recording in Windows DevAPI builds. Production and web builds keep it
+disabled; recording uses the game's ordinary audio gesture and pause lifecycle.
+
 ## Lifecycle
 
 The web shell exposes effective safe-area insets to UI Kit through

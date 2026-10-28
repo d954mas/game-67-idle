@@ -177,6 +177,9 @@ if(GAME_DEVAPI_ENABLED)
     set(NT_LOG_RING_ENABLED ON CACHE BOOL "Build log ring data for engine DevAPI obs commands." FORCE)
     set(NT_METRICS_ENABLED ON CACHE BOOL "Build metrics data for engine DevAPI obs commands." FORCE)
     set(NT_INTROSPECT_ENABLED ON CACHE BOOL "Build entity introspection for engine DevAPI obs commands." FORCE)
+    foreach(_grp CORE TIME INPUT DISCOVERY)
+        set(NT_DEVAPI_GROUP_${_grp} ON CACHE BOOL "Build engine development automation commands." FORCE)
+    endforeach()
     set(NT_DEVAPI_GROUP_UI ON CACHE BOOL "Build engine DevAPI ui.* commands." FORCE)
     set(NT_DEVAPI_GROUP_OBS ON CACHE BOOL "Build engine DevAPI log/perf/entity/resource commands." FORCE)
     set(NT_DEVAPI_GROUP_CAPTURE ON CACHE BOOL "Build engine DevAPI capture.frame/capture.region commands." FORCE)
@@ -230,3 +233,6 @@ if(EMSCRIPTEN AND ((GAME_RUNTIME_BUILD_DEBUG_UI AND NOT GAME_PLATFORM_SDK_DEBUG_
         OR (GAME_EVENTS_LOG_MIRROR AND NOT GAME_RUNTIME_BUILD_EVENTS_LOG_MIRROR)))
     message(FATAL_ERROR "Runtime build profile flags do not match the configured compiler flags.")
 endif()
+
+# Recording requires an audio-core device, which the blank starter does not install.
+set(NT_DEVAPI_GROUP_RECORDER OFF CACHE BOOL "Install game-recording after audio-core." FORCE)
