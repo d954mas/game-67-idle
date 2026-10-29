@@ -304,16 +304,15 @@ export function ctestCatalogue(buildDir, spawn = spawnSync) {
       .map((arg) => arg.split("/").pop() || "")
       .filter((name) => /\.exe$/i.test(name) || (name !== "" && !name.includes(".")))
       .map((name) => name.replace(/\.exe$/i, ""));
-    // CTest omits the command while the executable is still unbuilt, and a
-    // checkout reached through a link can report a path outside the tree it was
-    // asked about: either way a test named after its own executable still names
-    // that target.
+    // A checkout reached through a link can report an executable outside the
+    // queried tree; a matching test name still identifies that target.
     const own = (String(argv[0] || "").replace(/\\/g, "/").split("/").pop() || "").replace(/\.exe$/i, "");
-    if (argv.length === 0 || own === entry.name) targets.push(entry.name);
+    if (own === entry.name) targets.push(entry.name);
     return {
       name: entry.name,
       tier: String(labels[0] || ""),
-      targets: [...new Set(targets)],
+      // CTest omits unbuilt commands; the test name need not name a build target.
+      targets: argv.length === 0 ? null : [...new Set(targets)],
     };
   });
   return catalogue;
@@ -343,9 +342,9 @@ export function selectTests(catalogue, selection = {}, { gameTarget = "game" } =
   }
   return {
     names: selected.map((entry) => entry.name),
-    // Running everything builds everything: a narrowed target list would leave
-    // out fixture and tool targets that no test names directly.
-    targets: mode === "all" ? [] : [...new Set([gameTarget, ...selected.flatMap((entry) => entry.targets)])],
+    // Default targets cover unresolved executables without widening the test selection.
+    targets: mode === "all" || selected.some((entry) => entry.targets === null)
+      ? [] : [...new Set([gameTarget, ...selected.flatMap((entry) => entry.targets)])],
   };
 }
 

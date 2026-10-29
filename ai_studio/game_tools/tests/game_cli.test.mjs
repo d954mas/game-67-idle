@@ -203,7 +203,51 @@ test("every executable a test runs from the build tree is a target it needs buil
     { name: "test_linked", command: ["D:/real/b/tests/test_linked.exe"], properties: [{ name: "LABELS", value: ["core"] }] },
   ] }) });
   assert.deepEqual(ctestCatalogue("C:/b", spawn).map((entry) => entry.targets),
-    [["test_fresh"], ["test_built"], [], ["stand"], ["stand"], [], ["test_linked"]]);
+    [null, ["test_built"], [], ["stand"], ["stand"], [], ["test_linked"]]);
+});
+
+test("an unbuilt executable with a different test name leaves its build target unresolved", () => {
+  const tests = [
+    { name: "sample_dump_smoke", properties: [{ name: "LABELS", value: ["core"] }] },
+    { name: "resolved_unit", command: ["C:/b/tests/resolved_unit.exe"], properties: [{ name: "LABELS", value: ["core"] }] },
+    { name: "unbuilt_taste", properties: [{ name: "LABELS", value: ["taste"] }] },
+  ];
+  const catalogue = ctestCatalogue("C:/b", () => ({ status: 0, stdout: JSON.stringify({ tests }) }));
+  assert.equal(catalogue[0].targets, null);
+  assert.deepEqual(selectTests(catalogue, { mode: "tier", tier: "core" }),
+    { names: ["sample_dump_smoke", "resolved_unit"], targets: [] });
+  assert.deepEqual(selectTests(catalogue, { mode: "only", names: ["resolved_unit"] }),
+    { names: ["resolved_unit"], targets: ["game", "resolved_unit"] });
+  const focused = { mode: "only", ...selectTests(catalogue, { mode: "only", names: ["sample_dump_smoke"] }) };
+  const plan = nativeTestPlan("C:/example", "win32", true, focused);
+  assert.equal(plan[0].includes("--target"), false);
+  assert.deepEqual(plan[1].slice(-2), ["-R", "^(sample_dump_smoke)$"]);
+});
+
+test("mixed unresolved and resolved core tests build defaults without widening CTest, then narrow after build", t => {
+  const gameDir = scratchGameDir(t);
+  const buildDir = join(gameDir, "build", "native-debug");
+  let built = false;
+  const calls = [];
+  const catalogue = () => ctestCatalogue(buildDir, () => ({ status: 0, stdout: JSON.stringify({ tests: [
+    { name: "sample_dump_smoke", ...(built ? { command: [join(buildDir, "tools", "dump_samples.exe")] } : {}),
+      properties: [{ name: "LABELS", value: ["core"] }] },
+    { name: "resolved_unit", command: [join(buildDir, "tests", "resolved_unit.exe")], properties: [{ name: "LABELS", value: ["core"] }] },
+    { name: "long_simulation", properties: [{ name: "LABELS", value: ["slow"] }] },
+    { name: "render_golden", properties: [{ name: "LABELS", value: ["taste"] }] },
+  ] }) }));
+  const dependencies = { settle: () => {}, catalogue, run: (command, args) => {
+    calls.push([command, ...args]);
+    if (command === "cmake" && args[0] === "--build") built = true;
+  } };
+  runNativeTests(gameDir, { selection: { mode: "tier", tier: "core" } }, dependencies);
+  assert.deepEqual(calls[0], ["cmake", "--build", buildDir]);
+  assert.deepEqual(calls[1].slice(-2), ["-L", "^core$"]);
+  assert.ok(calls[1].includes("--no-tests=error"));
+  calls.length = 0;
+  runNativeTests(gameDir, { selection: { mode: "tier", tier: "core" } }, dependencies);
+  assert.deepEqual(calls[0], ["cmake", "--build", buildDir, "--target", "game", "dump_samples", "resolved_unit"]);
+  assert.deepEqual(calls[1].slice(-2), ["-L", "^core$"]);
 });
 
 test("a binary handed to a test through its environment is a target; a build-tree directory is not", () => {
