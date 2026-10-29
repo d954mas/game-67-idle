@@ -266,6 +266,36 @@ A bot can drive the same matrix in-process: `run_matrix(factory, viewports,
 out_dir, prepare=..., portal=...)` with `devapi_client.running_game` as the
 factory.
 
+## UI monkey
+
+`ui_monkey.py` hunts UI faults that only transitions expose: a tab clicked
+twice, a window opened over a half-built HUD, the first finger after keyboard
+play. Screenshots and happy-path probes pass these; players hit them.
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/ui_monkey.py --game <game-id> --exe <debug devapi exe> --in-hand-env UI_KIT_IN_HAND --steps 200 --runs 3
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/ui_monkey.py --game <game-id> --scenario tools/proof/monkey_scenarios.py:at_trainer --viewport desktop=1280x720
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/ui_monkey.py --game <game-id> --replay <out>/report.json
+```
+
+- One launch per viewport x scenario x seed; default viewports are a phone in
+  portrait and landscape (`:hand`, which sets `--in-hand-env` to 1) and a
+  1280x720 desktop. Launch flags come from `capture/catalog.json` as in the
+  responsive sweep.
+- A run is a chain of episodes: each opens the next modal scene of a seeded
+  round (`game.scene.list`) or returns to the bare screen, then presses visible
+  enabled `nt_button`s by mouse or finger, taps empty screen, taps keys and
+  idles. Every window is visited and its buttons revisited within one stay.
+- A run fails when the process exits, the DevAPI link drops, or a new
+  launch-log line matches `--fail-pattern` (`NT_ASSERT` and `ERROR [ui]`).
+  Use a debug build: its asserts print their expression.
+- `report.json` keeps every step with concrete coordinates; `--replay` re-runs
+  the first failed trace without the random source. A replay is close, not
+  exact: the game runs in real time between steps.
+- `--scenario` hooks (`prepare(game, viewport)`, as in the responsive sweep)
+  put the game in a state the monkey would not reach alone: a trainer entered
+  by key before any finger, a full inventory. Each scenario is its own run.
+
 ## Headless Chrome profiles
 
 Every headless Chrome run gets its `--user-data-dir` from `chrome_profile.mjs`
