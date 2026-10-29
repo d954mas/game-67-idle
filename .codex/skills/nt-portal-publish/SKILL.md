@@ -39,6 +39,12 @@ node tools/game.mjs package --target <portal>
 
 For a portal playtest, use `node tools/game.mjs package --target <portal> --assert-text`. This keeps Release optimization and records FULL assertion text in crash reports. After playtesting, package the final release without `--assert-text`; its TRAP assertions contain no text. Do not start Poki playtests: the human lead runs them.
 
+Poki: a Player Fit test (or playtest) can be created for a version only after
+the checkboxes on that version's preview page in the dashboard are ticked.
+Until then `poki player-fit-tests create` answers `401 AUTH_REQUIRED`, which
+reads like a login problem and is not one: do not re-login, ask the lead to
+tick the preview checkboxes, then retry.
+
 `package` runs the asset audit, the artifact contract and a browser smoke over
 the packaged archive. It refuses a build whose feature sources are dirty, so
 commit first.

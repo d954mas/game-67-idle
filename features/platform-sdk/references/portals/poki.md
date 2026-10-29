@@ -436,6 +436,11 @@ The funnel (S19, S7–S11):
 | 5 | Final Poki Review — 1–2 weeks; checks content against Quality Guidelines and "your game is unique enough among the category/categories your game falls into". | — |
 | Release | Optional Technical Test (~5k gameplays/day, new-games category only), then Soft Release (scheduling 1–2 weeks, running 2–3 weeks, cannot be skipped), then Global Release (usually 2–3 weeks later, ~2-week discoverability push). | during soft release Poki expects "at least 1 Ad per DAU (with a nice split between Midroll and Rewarded videos)" |
 
+A Player Fit test or playtest for a version needs the checkboxes on that
+version's preview page ticked first. Before that the API (and `poki
+player-fit-tests create`) rejects the request with `401 AUTH_REQUIRED`, not
+with a checklist error: the session is fine, the preview is unconfirmed.
+
 Monetization events are **not** required for the Web Fit Test —
 `commercialBreak()`/`rewardedBreak()` "can be saved for after the testing
 phases", and placeholder ads run with no revenue (S9). `gameplayStart()` *is*
