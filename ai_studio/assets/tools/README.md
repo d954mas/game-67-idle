@@ -30,6 +30,8 @@ model, or checking a texture. They are not a separate top-level asset group.
   multiview/texture modes, and records GLB provenance. The local Kimodo adapter
   under `model/kimodo/` generates humanoid motion clips from text and retargets
   them onto a character rig with foot lock.
+- `audio/`: local zero-shot SFX tagging (`tag_audio.py`, CLAP) that writes
+  tag proposals for a pack's audio records; applying them is a storage step.
 - `textures/`: standalone material texture checks, including 2x2 repeat preview
   generation and seam metrics.
 - `blender/`: fail-closed Blender modeling/lookdev workflow with evaluated-mesh

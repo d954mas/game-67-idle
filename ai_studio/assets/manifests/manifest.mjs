@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 
 const modelExt = new Set([".glb", ".gltf"]);
@@ -180,6 +180,28 @@ export async function scanPackManifestSource(sourceRoot, { packIds = [] } = {}) 
     for (const asset of assets) records.push(normalizeAsset(sourceRoot, packDir, pack, asset));
   }
   return { records, packs };
+}
+
+// Rewrites one asset row in place. Other rows keep their exact text, so a review
+// edit does not reformat a pack written by another tool.
+export async function updatePackAssetRecord(assetsPath, assetId, patch) {
+  const text = await readFile(assetsPath, "utf8");
+  const lines = text.split(/\r?\n/);
+  let updated = null;
+  for (const [index, raw] of lines.entries()) {
+    const line = raw.replace(/^﻿/, "").trim();
+    if (!line || line.startsWith("#")) continue;
+    const row = JSON.parse(line);
+    if ((row.asset_id || row.id) !== assetId) continue;
+    updated = { ...row, ...patch };
+    lines[index] = JSON.stringify(updated);
+    break;
+  }
+  if (!updated) throw new Error(`${assetsPath}: no asset row ${assetId}`);
+  const temp = `${assetsPath}.${process.pid}.tmp`;
+  await writeFile(temp, lines.join("\n"), "utf8");
+  await rename(temp, assetsPath);
+  return updated;
 }
 
 export function hasPackManifestSource(sourceRoot) {

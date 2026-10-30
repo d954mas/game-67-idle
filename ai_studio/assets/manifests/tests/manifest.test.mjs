@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { scanPackManifestSource } from "../manifest.mjs";
+import { scanPackManifestSource, updatePackAssetRecord } from "../manifest.mjs";
 
 test("scanPackManifestSource reads pack.json and assets.jsonl records", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "pack-manifest-"));
@@ -128,4 +128,20 @@ test("pack license_file is inherited by normalized asset records", async (t) => 
   writeFileSync(join(packDir, "assets.jsonl"), `${JSON.stringify({ asset_id: "owned-a", resource: "a.png" })}\n`);
   const { records } = await scanPackManifestSource(root);
   assert.equal(records[0].license_file, "LICENSE.md");
+});
+
+test("updatePackAssetRecord rewrites only the edited row", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "manifest-update-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const path = join(dir, "assets.jsonl");
+  const untouched = '{ "asset_id": "b",  "tags": ["keep"] }';
+  writeFileSync(path, `{"asset_id":"a","title":"A","tags":["auto-tagged"]}\n${untouched}\n`, "utf8");
+
+  const updated = await updatePackAssetRecord(path, "a", { tags: ["click", "reviewed"], title: "A (click)" });
+
+  assert.deepEqual(updated, { asset_id: "a", title: "A (click)", tags: ["click", "reviewed"] });
+  const lines = readFileSync(path, "utf8").split("\n");
+  assert.deepEqual(JSON.parse(lines[0]), updated);
+  assert.equal(lines[1], untouched);
+  await assert.rejects(updatePackAssetRecord(path, "missing", {}), /no asset row missing/);
 });

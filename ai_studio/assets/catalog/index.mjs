@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { extname, join } from "node:path";
 import { decideLicense } from "../licenses/ops.mjs";
+import { scanPackManifestSource } from "../manifests/ops.mjs";
 import { assetPreviewCachePath, assetPreviewCacheStatus } from "../previews/status.mjs";
 import {
   buildSourceSnapshot,
@@ -30,6 +31,23 @@ import {
   schemaVersion,
 } from "./store.mjs";
 import { hashKey, imageExt, jsonList, modelPathIn, sourceKey } from "./shared.mjs";
+
+function searchText(record, sourceName) {
+  return [
+    record.title,
+    record.asset_id,
+    record.description,
+    record.pack,
+    recordPacks(record).join(" "),
+    record.kind,
+    record.license,
+    record.origin,
+    sourceName,
+    (record.tags || []).join(" "),
+    (record.genre || []).join(" "),
+    (record.style || []).join(" "),
+  ].join(" ");
+}
 
 export async function rebuildAssetIndex(root, source, options = {}) {
   const profile = process.env.AI_STUDIO_ASSET_INDEX_PROFILE === "1";
@@ -132,20 +150,7 @@ export async function rebuildAssetIndex(root, source, options = {}) {
       addFacetCounts(facetCounts, terms);
       for (const [key, value] of terms) insertTerm.run(source.id, record.asset_id, key, value);
       for (const pack of recordPacks(record)) insertPackMembership.run(source.id, record.asset_id, pack, pack === record.pack ? 1 : 0);
-      insertFts.run(source.id, record.asset_id, [
-        record.title,
-        record.asset_id,
-        record.description,
-        record.pack,
-        recordPacks(record).join(" "),
-        record.kind,
-        record.license,
-        record.origin,
-        sourceName,
-        (record.tags || []).join(" "),
-        (record.genre || []).join(" "),
-        (record.style || []).join(" "),
-      ].join(" "));
+      insertFts.run(source.id, record.asset_id, searchText(record, sourceName));
     }
 
     const insertFacetCount = db.prepare("INSERT INTO asset_facet_counts (source_id, key, value, count) VALUES (?, ?, ?, ?)");
@@ -216,6 +221,54 @@ export async function rebuildAssetIndex(root, source, options = {}) {
     path: assetIndexPath(root, source),
     snapshotDiff: options.snapshotDiff || null,
   };
+}
+
+// Re-reads one manifest-backed asset after its row was edited and updates only its
+// title, description, tags, and search text, so a review save is visible at once
+// instead of after a full rebuild. Facet counts for tags move with it.
+export async function reindexAssetRecord(root, source, assetId) {
+  const db = openIndex(root, source);
+  initSchema(db);
+  try {
+    const row = db.prepare("SELECT pack FROM assets WHERE source_id = ? AND id = ?").get(source.id, assetId);
+    if (!row) throw new Error(`asset ${assetId} is not indexed in ${source.id}`);
+    const { records } = await scanPackManifestSource(source.path, { packIds: [row.pack] });
+    const record = records.find((item) => item.asset_id === assetId);
+    if (!record) throw new Error(`asset ${assetId} is missing from pack ${row.pack}`);
+    const stats = metadataStats(record.metadataPath);
+    const oldTags = db.prepare("SELECT value FROM asset_terms WHERE source_id = ? AND asset_id = ? AND key = 'tags'").all(source.id, assetId).map((term) => term.value);
+    const newTags = [...new Set((record.tags || []).filter(Boolean).map(String))];
+    const decrement = db.prepare("UPDATE asset_facet_counts SET count = count - 1 WHERE source_id = ? AND key = 'tags' AND value = ?");
+    const increment = db.prepare(`
+      INSERT INTO asset_facet_counts (source_id, key, value, count) VALUES (?, 'tags', ?, 1)
+      ON CONFLICT (source_id, key, value) DO UPDATE SET count = count + 1
+    `);
+    const insertTerm = db.prepare("INSERT INTO asset_terms (source_id, asset_id, key, value) VALUES (?, ?, 'tags', ?)");
+    db.exec("BEGIN");
+    try {
+      db.prepare(`
+        UPDATE assets SET title = ?, description = ?, tags_json = ?, metadata_mtime_ms = ?, metadata_size = ?
+        WHERE source_id = ? AND id = ?
+      `).run(record.title || assetId, record.description || "", jsonList(newTags), stats.mtimeMs, stats.size, source.id, assetId);
+      for (const tag of oldTags) decrement.run(source.id, tag);
+      db.prepare("DELETE FROM asset_facet_counts WHERE source_id = ? AND key = 'tags' AND count <= 0").run(source.id);
+      db.prepare("DELETE FROM asset_terms WHERE source_id = ? AND asset_id = ? AND key = 'tags'").run(source.id, assetId);
+      for (const tag of newTags) {
+        insertTerm.run(source.id, assetId, tag);
+        increment.run(source.id, tag);
+      }
+      db.prepare("DELETE FROM asset_search_fts WHERE source_id = ? AND asset_id = ?").run(source.id, assetId);
+      db.prepare("INSERT INTO asset_search_fts (source_id, asset_id, text) VALUES (?, ?, ?)")
+        .run(source.id, assetId, searchText(record, record.sourceName || recordSource(record)));
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    return { id: assetId, title: record.title, description: record.description, tags: newTags };
+  } finally {
+    db.close();
+  }
 }
 
 export async function refreshAssetIndex(root, source) {

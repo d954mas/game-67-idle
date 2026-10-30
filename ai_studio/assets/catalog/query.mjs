@@ -83,9 +83,11 @@ function rowToAsset(row, root, sourceRoot) {
     sourceId: row.source_asset_id || "",
     genre: parseJsonList(row.genre_json),
     style: parseJsonList(row.style_json),
+    description: row.description || "",
     relpath: row.resource_path || "",
     thumb: mediaRef(root, sourceRoot, row.preview_path),
     model: "",
+    audio: row.kind === "audio" && row.resource_path ? mediaRef(root, sourceRoot, resolve(sourceRoot, row.resource_path)) : "",
     previewStatus: row.preview_status || "missing",
   };
 }
@@ -297,6 +299,26 @@ export async function resolveIndexedModel(root, source, assetId) {
     const row = db.prepare("SELECT id, model_path FROM assets WHERE source_id = ? AND id = ?").get(source.id, assetId);
     if (!row || !row.model_path) throw new Error(`model file is missing for: ${assetId}`);
     return { id: row.id, model: mediaRef(root, source.path, row.model_path) };
+  } finally {
+    db.close();
+  }
+}
+
+// The Pack Manifest file that owns an indexed asset, for edits that must go back
+// to the source of truth. Raw folder sources have no manifest and are refused.
+export async function resolveIndexedAssetManifest(root, source, assetId) {
+  await ensureAssetIndex(root, source);
+  const db = openIndex(root, source);
+  initSchema(db);
+  try {
+    const row = db.prepare("SELECT id, pack, metadata_path FROM assets WHERE source_id = ? AND id = ?").get(source.id, assetId);
+    if (!row) throw new Error(`asset is not indexed: ${assetId}`);
+    const manifest = row.metadata_path ? resolve(row.metadata_path) : "";
+    const base = resolve(source.path);
+    if (!manifest.endsWith(`${sep}assets.jsonl`) || !manifest.startsWith(base + sep)) {
+      throw new Error(`asset ${assetId} is not backed by a Pack Manifest in this source`);
+    }
+    return { id: row.id, pack: row.pack, manifest };
   } finally {
     db.close();
   }

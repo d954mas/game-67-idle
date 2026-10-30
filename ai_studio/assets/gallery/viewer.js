@@ -32,6 +32,33 @@
   }
   const icon = (k) => (k === "model" ? "◫" : k === "font" ? "A" : k === "audio" ? "♪" : "▦");
 
+  // one shared player for card play buttons, so starting a sound stops the last one.
+  let player = null;
+  let playingId = "";
+  function syncPlayButtons() {
+    document.querySelectorAll("[data-play]").forEach((b) => {
+      const on = b.dataset.play === playingId;
+      b.classList.toggle("on", on);
+      b.textContent = on ? "■" : "▶";
+    });
+  }
+  function stopAudio() {
+    if (player) player.pause();
+    playingId = "";
+    syncPlayButtons();
+  }
+  function toggleAudio(asset) {
+    if (playingId === asset.id) { stopAudio(); return; }
+    if (!player) {
+      player = new Audio();
+      player.addEventListener("ended", () => { playingId = ""; syncPlayButtons(); });
+    }
+    player.src = asset.audio;
+    playingId = asset.id;
+    player.play().catch(() => { playingId = ""; syncPlayButtons(); });
+    syncPlayButtons();
+  }
+
   let active = {};
   let q = "";
   let sort = "name";
@@ -309,7 +336,10 @@
     }).join("") + "</div>";
   }
   function assetCard(a) {
-    const t = a.thumb ? '<div class="thumb"><img loading="lazy" decoding="async" src="' + esc(a.thumb) + '"></div>' : '<div class="thumb"><span class="ph">' + icon(a.kind) + "</span></div>";
+    const playing = a.id === playingId;
+    const t = a.thumb ? '<div class="thumb"><img loading="lazy" decoding="async" src="' + esc(a.thumb) + '"></div>'
+      : a.audio ? '<div class="thumb"><button class="play' + (playing ? " on" : "") + '" type="button" data-play="' + esc(a.id) + '" aria-label="Play ' + esc(a.name) + '">' + (playing ? "■" : "▶") + "</button></div>"
+        : '<div class="thumb"><span class="ph">' + icon(a.kind) + "</span></div>";
     let foot = "";
     const isUnregistered = a.origin === "unregistered";
     const creditRequired = a.attributionRequired === "true";
@@ -356,12 +386,13 @@
     return chips.length ? '<div class="active-bar">' + chips.join("") + "</div>" : "";
   }
 
-  function closeModal() { const m = $("modal"); m.classList.remove("on"); m.innerHTML = ""; }
+  function closeModal() { const m = $("modal"); m.classList.remove("on"); m.innerHTML = ""; review = null; }
   function openAsset(id) {
     const a = byId.get(id);
     const m = $("modal");
     if (!a) { closeModal(); return; }
-    const view3d = modelPreviewHtml(a, a.model);
+    stopAudio();
+    const view3d = a.audio ? '<div class="audio-view"><span class="ph" style="font-size:60px">♪</span><audio controls autoplay src="' + esc(a.audio) + '"></audio></div>' : modelPreviewHtml(a, a.model);
     const kv = (k, v) => v ? '<div class="kv"><b>' + esc(k) + ":</b> " + v + "</div>" : "";
     const ins = "<h3>" + esc(a.name) + "</h3>" +
       kv("kind", esc(a.kind)) +
@@ -385,7 +416,114 @@
     const ci = $("copyId"); if (ci) ci.onclick = () => navigator.clipboard && navigator.clipboard.writeText(a.id);
     const pb = $("pickBtn"); if (pb) pb.onclick = () => { picked.has(a.id) ? picked.delete(a.id) : picked.add(a.id); syncSel(); pb.textContent = picked.has(a.id) ? "unpick" : "pick"; };
     if (DYNAMIC && a.kind === "model" && !a.model && OPTS.sourceId) loadModelForAsset(a);
+    if (DYNAMIC && a.kind === "audio" && OPTS.sourceId) openReview(a);
   }
+
+  // Tag review for audio: the lead listens, toggles current and proposed tags, and
+  // saves straight to the Pack Manifest. Saving drops "auto-tagged" and moves on.
+  const AUTO_TAG = "auto-tagged";
+  const proposalLoads = new Map();
+  let review = null;
+  function loadProposals(pack) {
+    if (!pack) return Promise.resolve({});
+    if (!proposalLoads.has(pack)) {
+      proposalLoads.set(pack, readJson(`/api/asset-viewer/tag-proposals?pack=${encodeURIComponent(pack)}`).catch(() => ({})));
+    }
+    return proposalLoads.get(pack);
+  }
+  function chip(tag, on) {
+    return '<button type="button" class="rvchip' + (on ? " on" : "") + '" data-rvtag="' + esc(tag) + '">' + esc(tag) + "</button>";
+  }
+  function renderReview() {
+    const box = document.querySelector("#modal .review");
+    if (!box || !review) return;
+    const { asset, selected, proposals } = review;
+    const known = new Set(asset.tags || []);
+    const suggestions = proposals.map((p) => {
+      const extra = (p.tags || []).filter((tag) => !known.has(tag));
+      return '<div class="rvmodel"><div class="k"><b>' + esc(p.model.split("/").pop()) + ":</b> " + esc(p.description || p.summary) + "</div>" +
+        '<div class="rvchips">' + extra.map((tag) => chip(tag, selected.has(tag))).join("") + "</div></div>";
+    }).join("");
+    const added = [...selected].filter((tag) => !known.has(tag) && !proposals.some((p) => (p.tags || []).includes(tag)));
+    box.innerHTML = "<h4>Review tags" + (known.has(AUTO_TAG) ? ' <span class="warnchip">' + AUTO_TAG + "</span>" : "") + "</h4>" +
+      '<input id="rvTitle" aria-label="Title" value="' + esc(review.title) + '">' +
+      '<div class="rvchips">' + [...known].filter((tag) => tag !== AUTO_TAG).concat(added).map((tag) => chip(tag, selected.has(tag))).join("") + "</div>" +
+      suggestions +
+      '<input id="rvAdd" placeholder="add tag, Enter">' +
+      '<div class="row" style="margin-top:8px"><button id="rvSave" type="button">Save ↵</button><button class="ghost" id="rvSkip" type="button">Skip →</button></div>' +
+      '<div class="k" id="rvStatus">Space replay · Enter save &amp; next · → skip</div>';
+    box.querySelectorAll("[data-rvtag]").forEach((el) => el.onclick = () => {
+      const tag = el.dataset.rvtag;
+      selected.has(tag) ? selected.delete(tag) : selected.add(tag);
+      el.classList.toggle("on", selected.has(tag));
+    });
+    $("rvTitle").oninput = (e) => { review.title = e.target.value; };
+    $("rvSave").onclick = saveReview;
+    $("rvSkip").onclick = nextReview;
+  }
+  async function openReview(asset) {
+    const box = document.createElement("div");
+    box.className = "review";
+    const ins = document.querySelector("#modal .ins");
+    if (!ins) return;
+    ins.appendChild(box);
+    review = { asset, title: asset.name, selected: new Set((asset.tags || []).filter((tag) => tag !== AUTO_TAG)), proposals: [] };
+    renderReview();
+    const all = await loadProposals(asset.pack);
+    if (!review || review.asset !== asset) return;
+    review.proposals = all[asset.id] || [];
+    renderReview();
+  }
+  function nextReview() {
+    if (!review) return;
+    const ids = DATA.filter((a) => a.kind === "audio" && (a.pack === review.asset.pack)).map((a) => a.id);
+    const at = ids.indexOf(review.asset.id);
+    const pending = ids.slice(at + 1).find((id) => (byId.get(id).tags || []).includes(AUTO_TAG));
+    review = null;
+    if (pending) go("#/asset/" + encodeURIComponent(pending));
+    else history.back();
+  }
+  async function saveReview() {
+    if (!review) return;
+    const { asset, selected } = review;
+    const status = $("rvStatus");
+    if (status) status.textContent = "Saving...";
+    const tags = [...selected].filter((tag) => tag !== AUTO_TAG);
+    if (!tags.includes("reviewed")) tags.push("reviewed");
+    try {
+      const saved = await readJson("/api/asset-viewer/asset-review", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sourceId: OPTS.sourceId, includePrivate: true, id: asset.id, title: review.title, tags }),
+      });
+      asset.tags = saved.tags;
+      asset.name = saved.title;
+      asset.description = saved.description;
+      nextReview();
+    } catch (error) {
+      if (status) status.textContent = error.message;
+    }
+  }
+  document.addEventListener("keydown", (e) => {
+    if (!review || !document.querySelector("#modal .review")) return;
+    const inAdd = e.target && e.target.id === "rvAdd";
+    const inTitle = e.target && e.target.id === "rvTitle";
+    if (e.key === "Enter" && inAdd && e.target.value.trim()) {
+      e.preventDefault();
+      review.selected.add(e.target.value.trim().toLowerCase().replace(/\s+/g, "-"));
+      renderReview();
+      $("rvAdd").focus();
+      return;
+    }
+    if (e.key === "Enter") { e.preventDefault(); saveReview(); return; }
+    if (inAdd || inTitle) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); nextReview(); return; }
+    if (e.key === " ") {
+      e.preventDefault();
+      const player = document.querySelector("#modal audio");
+      if (player) { player.currentTime = 0; player.play(); }
+    }
+  });
 
   async function ensureModelForAsset(asset) {
     if (!asset || asset.kind !== "model") return "";
@@ -642,6 +780,11 @@
     if (grid) {
       grid.querySelectorAll("[data-pack]").forEach((el) => el.onclick = (e) => { if (e.target.classList.contains("gchip")) { toggleFacet(e.target.dataset.facet, e.target.dataset.val); return; } go("#/pack/" + encodeURIComponent(el.dataset.pack)); });
       grid.querySelectorAll("[data-pack-link]").forEach((el) => el.onclick = (e) => { e.stopPropagation(); });
+      grid.querySelectorAll("[data-play]").forEach((el) => el.onclick = (e) => {
+        e.stopPropagation();
+        const a = byId.get(el.dataset.play);
+        if (a) toggleAudio(a);
+      });
       grid.querySelectorAll("[data-asset]").forEach((el) => {
         el.onclick = () => go("#/asset/" + encodeURIComponent(el.dataset.asset));
         const a = byId.get(el.dataset.asset);

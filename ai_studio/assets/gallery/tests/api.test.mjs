@@ -4,7 +4,8 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { listAssetViewerSources, resolveAssetViewerGalleryPath, safeResolve, selectSource } from "../api.mjs";
+import { Readable } from "node:stream";
+import { createAssetViewerApi, listAssetViewerSources, readTagProposals, resolveAssetViewerGalleryPath, safeResolve, saveAssetReview, selectSource } from "../api.mjs";
 
 function tempRoot() {
   return mkTemp("asset-viewer-api-");
@@ -277,4 +278,74 @@ test("resolveAssetViewerGalleryPath ignores unusable gallery meta", () => {
 test("asset viewer shell does not require external scripts", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.doesNotMatch(html, /<script[^>]+src=["']https?:\/\//i);
+});
+
+function reviewLibrary(root) {
+  const pack = join(root, "shared-library", "packs", "sfx");
+  mkdirSync(join(pack, "files"), { recursive: true });
+  writeFileSync(join(pack, "files", "click.wav"), "wav", "utf8");
+  writeJson(join(pack, "pack.json"), { pack: "sfx", kind: "audio", license: "CC0", origin: "sourced", tags: ["sfx"] });
+  writeFileSync(join(pack, "assets.jsonl"), `${JSON.stringify({ asset_id: "sfx__click", title: "UI 001", kind: "audio", resource: "files/click.wav", tags: ["ui", "auto-tagged"] })}\n`, "utf8");
+  writeJson(join(root, "ai_studio", "assets", "sources", "libraries.json"), {
+    schema: "ai_studio.assets.libraries.v1",
+    libraries: [{ id: "global-library", title: "All Assets", assets: "shared-library", status: "active" }],
+  });
+  return join(pack, "assets.jsonl");
+}
+
+test("saveAssetReview writes the manifest row and the index without a rebuild", async () => {
+  const root = tempRoot();
+  try {
+    const manifest = reviewLibrary(root);
+    const saved = await saveAssetReview(root, { sourceId: "global-library", id: "sfx__click", title: "UI 001 (click)", tags: ["sfx", "ui", "Button Click", "ui", "reviewed"] });
+
+    assert.deepEqual(saved.tags, ["sfx", "ui", "button-click", "reviewed"], "the index still merges pack tags");
+    const row = JSON.parse(readFileSync(manifest, "utf8").trim());
+    assert.equal(row.title, "UI 001 (click)");
+    assert.deepEqual(row.tags, ["ui", "button-click", "reviewed"], "pack tags are not copied onto the row");
+    assert.equal(row.resource, "files/click.wav", "fields the review does not own are kept");
+    await assert.rejects(saveAssetReview(root, { sourceId: "global-library", id: "sfx__click", tags: "ui" }), /tags must be a list/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("asset review only accepts same-origin JSON requests", async () => {
+  const root = tempRoot();
+  try {
+    reviewLibrary(root);
+    const api = createAssetViewerApi(root);
+    const call = async (headers) => {
+      const req = Readable.from([JSON.stringify({ sourceId: "global-library", id: "sfx__click", tags: ["ui"] })]);
+      Object.assign(req, { method: "POST", headers: { host: "127.0.0.1:8765", ...headers } });
+      let status = 0;
+      let body = "";
+      const res = { writeHead(code) { status = code; }, end(text) { body = text; } };
+      await api(req, res, new URL("http://127.0.0.1:8765/api/asset-viewer/asset-review"));
+      return { status, body: JSON.parse(body) };
+    };
+
+    assert.match((await call({ "content-type": "text/plain" })).body.error, /JSON request/);
+    assert.match((await call({ "content-type": "application/json", origin: "https://evil.test" })).body.error, /same-origin/);
+    assert.equal((await call({ "content-type": "application/json", origin: "http://127.0.0.1:8765" })).status, 200);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("readTagProposals merges every model run for a pack and ignores other packs", () => {
+  const root = tempRoot();
+  try {
+    const dir = join(root, "tmp", "ai_studio", "assets", "audio_tags");
+    writeJson(join(dir, "sfx.json"), { model: "clap", assets: [{ asset_id: "a", summary: "click", tags: ["button-click"] }] });
+    writeJson(join(dir, "sfx.qwen.json"), { model: "qwen", assets: [{ asset_id: "a", description: "a soft UI click", tags: ["click"] }] });
+    writeJson(join(dir, "sfx-other.json"), { model: "clap", assets: [{ asset_id: "a", tags: ["wrong"] }] });
+
+    const proposals = readTagProposals(root, "sfx");
+
+    assert.deepEqual(proposals.a.map((p) => [p.model, p.tags]), [["clap", ["button-click"]], ["qwen", ["click"]]]);
+    assert.deepEqual(readTagProposals(root, "../sfx"), {});
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

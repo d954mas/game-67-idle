@@ -1,8 +1,9 @@
 ﻿import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { listIndexedPacks, queryIndexedAssets, refreshAssetIndex, resolveIndexedModel } from "../catalog/ops.mjs";
+import { listIndexedPacks, queryIndexedAssets, refreshAssetIndex, reindexAssetRecord, resolveIndexedAssetManifest, resolveIndexedModel } from "../catalog/ops.mjs";
+import { updatePackAssetRecord } from "../manifests/ops.mjs";
 import { refreshPreviewCache } from "../previews/ops.mjs";
 import { listRegisteredLibraries, listRegisteredTemplates, resolveRegisteredSourcePath } from "../sources/ops.mjs";
 import { listGameMounts } from "../../workspace/games.mjs";
@@ -130,6 +131,7 @@ function prefixViewerMedia(viewer, galleryUrl) {
   for (const asset of viewer.assets || []) {
     asset.thumb = prefixRelativeUrl(asset.thumb, galleryUrl);
     asset.model = prefixRelativeUrl(asset.model, galleryUrl);
+    asset.audio = prefixRelativeUrl(asset.audio, galleryUrl);
   }
   for (const pack of viewer.packs || []) {
     pack.coverImg = prefixRelativeUrl(pack.coverImg, galleryUrl);
@@ -482,6 +484,16 @@ export function createAssetViewerApi(root) {
         writeJson(res, 200, await resolveAssetViewerAssets(root, url));
         return true;
       }
+      if (req.method === "GET" && url.pathname === "/api/asset-viewer/tag-proposals") {
+        writeJson(res, 200, readTagProposals(root, url.searchParams.get("pack") || ""));
+        return true;
+      }
+      if (req.method === "POST" && url.pathname === "/api/asset-viewer/asset-review") {
+        assertSameOriginJson(req);
+        const body = await readJsonBody(req);
+        writeJson(res, 200, await saveAssetReview(root, body));
+        return true;
+      }
       return false;
     } catch (error) {
       writeJson(res, 400, { error: error.message });
@@ -516,6 +528,72 @@ export async function resolveAssetViewerAssets(root, url) {
   });
   payload.assets = prefixViewerMedia({ assets: payload.assets, packs: [] }, galleryUrl).assets;
   return payload;
+}
+
+// Writes reach the Pack Manifest, so a page on another origin must not be able to
+// trigger them: a JSON content type forces a CORS preflight the shell never grants.
+function assertSameOriginJson(req) {
+  if (!String(req.headers["content-type"] || "").toLowerCase().startsWith("application/json")) {
+    throw new Error("asset review requires a JSON request");
+  }
+  const origin = req.headers.origin;
+  if (origin && origin !== `http://${req.headers.host}`) throw new Error("asset review is same-origin only");
+}
+
+function reviewTags(value) {
+  if (!Array.isArray(value)) throw new Error("tags must be a list");
+  const tags = [];
+  for (const raw of value) {
+    const tag = String(raw).trim().toLowerCase().replace(/\s+/g, "-");
+    if (tag && !tags.includes(tag)) tags.push(tag);
+  }
+  return tags;
+}
+
+// Saves a lead's tag review: the row in assets.jsonl is the source of truth, then
+// only that asset is re-read into the index so the viewer shows it at once.
+export async function saveAssetReview(root, body) {
+  const assetId = String(body.id || "");
+  if (!assetId) throw new Error("missing asset id");
+  const { sources } = await listAssetViewerSources(root, { includePrivate: boolValue(body.includePrivate) });
+  const source = selectSource(sources, { sourceId: body.sourceId || "global-library" }, root);
+  const { manifest } = await resolveIndexedAssetManifest(root, source, assetId);
+  // The viewer shows pack tags merged in; they stay on the pack, not on the row.
+  const packPath = join(dirname(manifest), "pack.json");
+  const packTags = new Set(existsSync(packPath) ? JSON.parse(readFileSync(packPath, "utf8").replace(/^﻿/, "")).tags || [] : []);
+  const patch = { tags: reviewTags(body.tags).filter((tag) => !packTags.has(tag)) };
+  if (typeof body.title === "string" && body.title.trim()) patch.title = body.title.trim();
+  await updatePackAssetRecord(manifest, assetId, patch);
+  return reindexAssetRecord(root, source, assetId);
+}
+
+// Tag proposals are tool output under tmp/, one JSON per model run, named
+// <pack>.json or <pack>.<model>.json. They are suggestions, never asset metadata.
+export function readTagProposals(root, pack) {
+  const out = {};
+  if (!pack || pack !== safeSlug(pack)) return out;
+  const dir = join(root, "tmp", "ai_studio", "assets", "audio_tags");
+  if (!existsSync(dir)) return out;
+  for (const name of readdirSync(dir).sort()) {
+    if (!(name === `${pack}.json` || (name.startsWith(`${pack}.`) && name.endsWith(".json")))) continue;
+    let run;
+    try {
+      run = JSON.parse(readFileSync(join(dir, name), "utf8"));
+    } catch {
+      continue;
+    }
+    const model = run.model || name;
+    for (const asset of run.assets || []) {
+      if (!asset.asset_id) continue;
+      (out[asset.asset_id] ||= []).push({
+        model,
+        summary: asset.summary || "",
+        description: asset.description || "",
+        tags: asset.tags || [],
+      });
+    }
+  }
+  return out;
 }
 
 export async function resolveAssetViewerModel(root, url) {

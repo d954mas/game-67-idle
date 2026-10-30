@@ -62,6 +62,9 @@ const mime = {
   ".mp4": "video/mp4",
   ".webm": "video/webm",
   ".mkv": "video/x-matroska",
+  ".wav": "audio/wav",
+  ".mp3": "audio/mpeg",
+  ".ogg": "audio/ogg",
 };
 
 function safeResolve(base, relativePath) {
@@ -174,6 +177,23 @@ function serveStatic(req, res, decodedPathname) {
     headers["content-type"] = "application/octet-stream";
     headers["content-disposition"] = "attachment";
   }
+  // Media elements need byte ranges to learn a duration and to seek.
+  const size = statSync(full).size;
+  headers["accept-ranges"] = "bytes";
+  const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || "");
+  if (range && (range[1] || range[2])) {
+    const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+    const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+    if (start > end || start >= size) {
+      res.writeHead(416, { "content-range": `bytes */${size}` });
+      res.end();
+      return;
+    }
+    res.writeHead(206, { ...headers, "content-range": `bytes ${start}-${end}/${size}`, "content-length": end - start + 1 });
+    createReadStream(full, { start, end }).pipe(res);
+    return;
+  }
+  headers["content-length"] = size;
   res.writeHead(200, headers);
   createReadStream(full).pipe(res);
 }

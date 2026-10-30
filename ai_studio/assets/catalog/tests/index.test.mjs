@@ -10,6 +10,7 @@ import {
   queryIndexedAssets,
   rebuildAssetIndex,
   refreshAssetIndex,
+  reindexAssetRecord,
   resolveIndexedModel,
 } from "../ops.mjs";
 
@@ -114,6 +115,48 @@ test("rebuildAssetIndex reports a missing manifest preview without a thumbnail",
   assert.equal(page.total, 1);
   assert.equal(page.assets[0].previewStatus, "missing");
   assert.equal(page.assets[0].thumb, "");
+});
+
+test("audio assets expose a playable source-relative file and other kinds do not", async (t) => {
+  const { root, library } = tempLibrary();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const packDir = join(library, "packs", "sfx");
+  mkdirSync(join(packDir, "files"), { recursive: true });
+  writeFileSync(join(packDir, "files", "click.wav"), "wav", "utf8");
+  writeJson(join(packDir, "pack.json"), { pack: "sfx", kind: "audio", license: "CC0", origin: "sourced" });
+  writeJsonl(join(packDir, "assets.jsonl"), [{ asset_id: "sfx__click", title: "Click", kind: "audio", resource: "files/click.wav" }]);
+
+  await rebuildAssetIndex(root, source(library));
+  const audio = await queryIndexedAssets(root, source(library), { q: "click", offset: 0, limit: 24 });
+  const model = await queryIndexedAssets(root, source(library), { q: "sofa", offset: 0, limit: 24 });
+
+  assert.equal(audio.assets[0].audio, "lib/packs/sfx/files/click.wav");
+  assert.equal(model.assets[0].audio, "");
+});
+
+test("reindexAssetRecord picks up an edited row without a rebuild", async (t) => {
+  const { root, library } = tempLibrary();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const src = source(library);
+  await rebuildAssetIndex(root, src);
+  writeJsonl(join(library, "packs", "furniture", "assets.jsonl"), [
+    { asset_id: "kenney__red-sofa__cc0", title: "Red Sofa (velvet)", kind: "model", resource: "files/kenney__red-sofa__cc0/sofa.glb", tags: ["velvet"] },
+    { asset_id: "kenney__blue-chair__cc0", title: "Blue Chair", kind: "model", resource: "files/kenney__blue-chair__cc0/chair.glb", tags: ["chair", "furniture"] },
+  ]);
+
+  const result = await reindexAssetRecord(root, src, "kenney__red-sofa__cc0");
+
+  assert.equal(result.title, "Red Sofa (velvet)");
+  assert.deepEqual(result.tags.sort(), ["furniture", "interior", "velvet"]);
+  const page = await queryIndexedAssets(root, src, { q: "velvet", offset: 0, limit: 24 });
+  assert.deepEqual(page.assets.map((asset) => asset.id), ["kenney__red-sofa__cc0"]);
+  assert.equal(page.assets[0].name, "Red Sofa (velvet)");
+  const facets = (await queryIndexedAssets(root, src, { offset: 0, limit: 24 })).facets.tags;
+  const count = (value) => facets.find((row) => row.value === value)?.count || 0;
+  assert.equal(count("sofa"), 0, "a tag nobody carries leaves the facet list");
+  assert.equal(count("velvet"), 1);
+  assert.equal(count("furniture"), 2, "pack tags stay counted once per asset");
+  await assert.rejects(reindexAssetRecord(root, src, "missing"), /not indexed/);
 });
 
 test("refreshAssetIndex skips full rebuild when the source signature is unchanged", async (t) => {

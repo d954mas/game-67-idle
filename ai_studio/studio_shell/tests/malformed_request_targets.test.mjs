@@ -63,7 +63,7 @@ function waitForServer(child, deadline) {
   });
 }
 
-function rawGet(port, target, host, deadline) {
+function rawGet(port, target, host, deadline, extraHeaders = {}) {
   return new Promise((resolveResponse, reject) => {
     let response = "";
     const request = httpRequest({
@@ -71,7 +71,7 @@ function rawGet(port, target, host, deadline) {
       port,
       method: "GET",
       path: target,
-      headers: { Host: host, Connection: "close" },
+      headers: { Host: host, Connection: "close", ...extraHeaders },
     }, (incoming) => {
       response = `HTTP/${incoming.httpVersion} ${incoming.statusCode} ${incoming.statusMessage || ""}\r\n`;
       for (let index = 0; index < incoming.rawHeaders.length; index += 2) {
@@ -157,6 +157,44 @@ test("malformed percent-encoded request targets return 400 without killing studi
     const literalPercentResponse = parseResponse(await rawGet(port, "/%25", `127.0.0.1:${port}`, deadline));
     assert.equal(literalPercentResponse.status, 404, "valid percent encoding must not be rejected as malformed");
     assert.equal(child.exitCode, null, "the same studio shell process must remain alive");
+  } finally {
+    await stopServer(child, pidFile);
+  }
+});
+
+test("static files answer byte ranges so media elements can read duration and seek", { timeout: INTEGRATION_BUDGET_MS }, async () => {
+  const deadline = Date.now() + INTEGRATION_BUDGET_MS;
+  const port = await reservePort();
+  const pidFile = join(repoRoot, "tmp", "ai_studio", `studio_shell_${port}.pid`);
+  const child = spawn(process.execPath, [serverPath, String(port)], {
+    cwd: repoRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  const host = `127.0.0.1:${port}`;
+  const target = "/asset_viewer/studio_env.hdr";
+
+  try {
+    await waitForServer(child, deadline);
+
+    const whole = parseResponse(await rawGet(port, target, host, deadline));
+    assert.equal(whole.status, 200);
+    assert.match(whole.head.toLowerCase(), /accept-ranges: bytes/);
+    const size = Number(/content-length: (\d+)/i.exec(whole.head)?.[1]);
+    assert.ok(size > 16, "the full response must declare its length");
+
+    const head = parseResponse(await rawGet(port, target, host, deadline, { Range: "bytes=0-9" }));
+    assert.equal(head.status, 206);
+    assert.match(head.head.toLowerCase(), new RegExp(`content-range: bytes 0-9/${size}`));
+    assert.equal(head.body, whole.body.slice(0, 10));
+
+    const suffix = parseResponse(await rawGet(port, target, host, deadline, { Range: "bytes=-4" }));
+    assert.equal(suffix.status, 206);
+    assert.match(suffix.head.toLowerCase(), new RegExp(`content-range: bytes ${size - 4}-${size - 1}/${size}`));
+
+    const beyond = parseResponse(await rawGet(port, target, host, deadline, { Range: `bytes=${size}-` }));
+    assert.equal(beyond.status, 416);
+    assert.ok(beyond.head.toLowerCase().includes(`content-range: bytes */${size}`), beyond.head);
   } finally {
     await stopServer(child, pidFile);
   }

@@ -1,0 +1,13 @@
+{
+  "ui": ["button click", "menu select", "hover tick", "dialog advance chirp", "confirm chime", "error buzz", "notification ping", "purchase alert", "coin pickup", "item pickup", "item equip", "quest start jingle", "level up fanfare", "reward jingle", "pop", "swoosh transition", "typing beep", "toggle switch", "countdown tick", "power up"],
+  "footsteps": ["footsteps on grass", "footsteps on dirt", "footsteps on gravel", "footsteps on concrete", "footsteps on wood", "footsteps on stone", "footsteps on snow", "footsteps on metal grating", "footsteps in water", "puddle splash", "running footsteps", "jump landing"],
+  "foley": ["cloth rustle", "door open", "door close", "drawer slide", "paper rustle", "bag of items", "chain rattle", "glass clink", "wooden knock", "body fall", "page turn", "zipper"],
+  "combat": ["sword swing", "sword clash", "sword slash", "blade parry", "blunt club thud", "punch hit", "kick hit", "body impact", "arrow shot", "bow release", "shield block", "armor clank", "pistol shot", "pistol hammer click", "assault rifle burst", "sniper rifle shot", "rifle bolt slide", "shotgun blast", "shotgun pump", "gun reload", "magazine reload", "shell casing drop", "explosion", "grenade blast", "bullet impact", "ricochet", "whoosh"],
+  "gore": ["flesh impact", "bone snap", "blood splatter", "squelch"],
+  "scifi": ["laser gun", "laser pistol blast", "plasma cannon discharge", "energy shield hum", "hydraulic servo", "robot movement", "robotic telemetry bleep", "holographic interface notification", "sci-fi computer beep", "teleport"],
+  "magic": ["magic spell cast", "fireball", "fire burst", "frost ice crystallization", "ice spell", "lightning crackle", "lightning strike", "electric zap", "holy healing aura", "magic sparkle", "portal open", "dark necromancy curse", "mana drain hum", "rune activation", "wind gust spell", "shimmering chime", "energy charge", "magic shield", "summoning"],
+  "creatures": ["monster growl", "monster roar", "creature screech", "dragon roar", "zombie groan", "slime squelch", "insect buzz", "bird chirp", "forest morning birds", "bird flapping wings", "wolf howl", "dog bark", "cat meow", "horse neigh", "frog croak", "snake hiss"],
+  "nature": ["rain", "distant thunder", "thunder", "wind", "howling wind gust", "river stream", "water stream", "ocean waves", "water splash", "fire crackle", "leaves rustle", "rock fall", "earthquake rumble", "deep cavern drone", "ice crack", "bubbles"],
+  "human": ["grunt", "pain scream", "laugh", "gasp", "breathing", "cheer"],
+  "mechanical": ["engine", "machine hum", "gears turning", "alarm", "beep", "metal hit", "metal scrape", "wood break", "glass break", "crash"]
+}
