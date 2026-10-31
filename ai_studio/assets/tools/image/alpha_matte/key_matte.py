@@ -207,7 +207,10 @@ def key_matte_cutout(
     )
     # Sharp limit despill so the kept-original edge pixels can't carry a key halo
     # (e.g. green specks on the inner rim of a ring hole) without blurring detail.
-    foreground_full = _limit_despill(foreground_full, key)
+    # Only the edge band can carry spill: an opaque interior in a hue near the
+    # key (saturated red or violet on magenta) would otherwise be clamped grey.
+    edge_band = ndimage.binary_dilation(alpha_full < 0.98, iterations=3)[..., None]
+    foreground_full = np.where(edge_band, _limit_despill(foreground_full, key), foreground_full)
 
     output_array = np.zeros((original_size[1], original_size[0], 4), dtype=np.uint8)
     output_array[..., :3] = np.rint(np.clip(foreground_full, 0.0, 255.0)).astype(np.uint8)

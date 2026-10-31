@@ -105,6 +105,22 @@ class KeyMatteTests(unittest.TestCase):
         self.assertEqual(int(np.count_nonzero(weak & spill)), 0)
 
 
+    def test_magenta_key_keeps_saturated_red_and_violet_interior(self) -> None:
+        # Saturated red (blue a hair above green) and violet sit close to the
+        # magenta key's hue; the despill must not clamp their opaque interiors.
+        size = 96
+        image = np.zeros((size, size, 4), dtype=np.uint8)
+        image[..., :3] = (255, 0, 255)
+        image[..., 3] = 255
+        image[16:80, 16:48, :3] = (245, 1, 2)
+        image[16:80, 48:80, :3] = (128, 40, 230)
+        result = np.asarray(key_matte_cutout(Image.fromarray(image, "RGBA"), key=(255, 0, 255)))
+        red = result[30:66, 26:40, :3].reshape(-1, 3)
+        violet = result[30:66, 58:72, :3].reshape(-1, 3)
+        self.assertTrue(np.all(result[30:66, 26:72, 3] == 255))
+        self.assertLessEqual(int(np.abs(red.astype(int) - (245, 1, 2)).max()), 2)
+        self.assertLessEqual(int(np.abs(violet.astype(int) - (128, 40, 230)).max()), 2)
+
     def test_no_key_halo_on_dark_art(self) -> None:
         import numpy as np
 
