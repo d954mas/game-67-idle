@@ -733,3 +733,24 @@ test("the Node suite runs beside the native checks, and a native failure is repo
   await assert.rejects(runTestSuites(gameDir, { nodeTest: () => Promise.reject(new Error("game tests exited 1")), nativeTest: nativeFails, selection: {}, verbose: true }), /^Error: native game tests exited 1; also game tests exited 1$/m);
   await assert.rejects(runTestSuites(gameDir, { nodeTest: () => Promise.reject(new Error("game tests exited 1")), nativeTest: () => {}, selection: {}, verbose: true }), /^Error: game tests exited 1$/m);
 });
+
+test("verify hands the game's memory budget to the smoke and reports what it measured", async () => {
+  const budget = { viewport: "390x844@2", limits: { gpu_bytes: 64 * 1048576 } };
+  let seen = "unset";
+  const run = (memoryBudget, memory) => executeGameCommand({ command: "verify", target: "itch", build: false, templateProof: false, skipTests: true, outDir: "" }, {
+    gameDir: "/repo/games/example",
+    doctor: () => ({ gameId: "example" }),
+    loadMetadata: () => ({ dependencies: {}, proof: "game" }),
+    verifyDependencies: () => {},
+    package: () => ({ zipPath: "example.zip" }),
+    remoteEndpoints: () => [],
+    memoryBudget: () => memoryBudget,
+    smoke: (options) => { seen = options.memoryBudget; return { memory }; },
+  });
+  const result = await run(budget, { wasm_bytes: 80 * 1048576, wasm_grows: 1, gpu_bytes: 60 * 1048576, programs: 31 });
+  assert.equal(seen, budget);
+  assert.match(result.message, /memory: wasm 80\.0 MB \(1 grow\), gpu 60\.0 MB, programs 31/);
+  const plain = await run(null, null);
+  assert.equal(seen, undefined);
+  assert.doesNotMatch(plain.message, /memory:/);
+});

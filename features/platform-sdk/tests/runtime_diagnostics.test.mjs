@@ -442,3 +442,45 @@ test("reports unknown memory sources as absent, not zero", () => {
   fixture.runTimers();
   assert.match(received[0].stack, /memory: wasm_bytes=- device_gb=- js_used_bytes=- js_limit_bytes=-\n/);
 });
+
+test("reports the first WebAssembly memory grows with sizes, time, stage and device memory", async () => {
+  class Memory {
+    constructor(bytes) { this.buffer = { byteLength: bytes }; }
+    grow(pages) { const old = this.buffer.byteLength / 65536; this.buffer = { byteLength: this.buffer.byteLength + pages * 65536 }; return old; }
+  }
+  const memory = new Memory(64 * 1048576);
+  const fixture = makeRoot();
+  fixture.root.WebAssembly = {
+    Memory,
+    instantiateStreaming() { return Promise.resolve({ instance: { exports: { memory } }, module: {} }); },
+  };
+  fixture.root.navigator.deviceMemory = 2;
+  const backend = { gameLoadingFinished() { return "finished"; } };
+  const received = [];
+  install(fixture);
+  await fixture.root.WebAssembly.instantiateStreaming("game.wasm", { env: {} });
+  await Promise.resolve();
+  fixture.tick(250);
+  assert.equal(memory.grow(16), 1024, "the wrapped grow returns the old page count");
+  fixture.root.__platformSdkInternalBackend = backend;
+  fixture.root.dispatch("platform-diagnostics-ready");
+  assert.equal(backend.gameLoadingFinished(), "finished");
+  for (let index = 0; index < 6; index += 1) memory.grow(16);
+  backend.errorSink = () => ({ captureError(error) { received.push(error); } });
+  fixture.runTimers();
+
+  const grows = received.filter((error) => error.message === "memory.grow");
+  assert.equal(grows.length, 4, "only the first grows are reported");
+  const packets = grows.map((error) => JSON.parse(error.stack.slice(error.stack.indexOf("PLATFORM_DIAGNOSTICS ") + 21)));
+  assert.deepEqual(packets[0].grow, { from_bytes: 64 * 1048576, to_bytes: 65 * 1048576, since_start_ms: 250, stage: "loading", count: 1 });
+  assert.equal(packets[1].grow.stage, "loaded");
+  assert.equal(packets[0].memory.device_gb, 2);
+  assert.match(grows[0].stack, /WebAssembly memory grew from 67108864 to 68157440 bytes/);
+});
+
+test("a memory without grow and a page without WebAssembly install cleanly", () => {
+  const fixture = makeRoot();
+  fixture.root.WebAssembly = { Memory: class {} };
+  assert.doesNotThrow(() => install(fixture));
+  fixture.runTimers();
+});

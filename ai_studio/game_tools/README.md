@@ -41,8 +41,13 @@ sit in, so loading the CLI from the same checkout adds no new coupling.
   root, or through `node tools/game.mjs run`.
 - `web_memory_census.mjs`: a page script installed before the game loads that
   keeps a ledger of live WebGL resources (estimated bytes by kind, programs) and
-  the WebAssembly memory size; needs no DevAPI. The intended consumer is a
-  memory budget beside `wasm_raw`, read by the verify browser smoke.
+  the WebAssembly memory size and grows; needs no DevAPI.
+- `web_memory_budget.mjs`: reads the `memory` object of a game's
+  `content/web_budget.json` and checks a census against it; `verify` measures the
+  packaged release at startup on the budget viewport and fails on overflow. As a
+  CLI it measures any site or package (`--site`/`--zip`, `--play 60`). Rule:
+  `ai_studio/quality/rules/technical/checks/QTECH_003_memory_budget.md`.
+- `web_memory_soak.mjs`: a 30-60 minute memory soak; see "Memory soak" below.
 - `lib/runtime_build.mjs`: runtime source and build records. For a game without
   copied tooling the record includes a `tooling` input: the files here that
   change artifact bytes (`build_web`, `inject_asset_bytes`, `minify_web_release`).
@@ -154,3 +159,38 @@ node --test --test-concurrency=4 ai_studio/game_tools/tests/*.test.mjs
 ```
 
 They run in the Studio `template-release` domain, not in each game's `test`.
+
+## Memory soak
+
+`node ai_studio/game_tools/web_memory_soak.mjs --site <dir>|--url <url> [--driver <module.mjs>] [--minutes 30] [--warmup 10] [--sample 10] [--seed 1] [--viewport 390x844@2] [--out <dir>]`
+
+The soak opens the page in headless Chrome with the census installed, runs a
+seeded driver, samples every `--sample` seconds and judges the post-warm-up
+peaks: the last third may not exceed the first by more than each series'
+tolerance (WASM heap 1 MiB, heap grows 0, GPU ledger 2 MiB, GL objects 64,
+programs 2; the JS heap is reported, not judged). Output: `soak.json` and
+`soak.md`; the exit code is non-zero on growth or a page exception.
+
+Without `--driver` the UI monkey taps, drags and presses keys anywhere. A game
+plugs in its own transitions with a driver module in the game:
+
+```js
+export function createSoakDriver(options) {
+  return {
+    openPage: async ({ url, viewport }) => page,   // optional; default openCensusPage
+    ready: async (page) => {},                     // optional; default: a GL context and the WASM memory exist
+    tick: ["name", async (ctx) => {}],             // optional; runs before every action
+    actions: [["name", async ({ page, rand, pick, sleep }) => {}]],
+    sample: async (page) => ({ my_bytes: 0 }),     // optional extra series
+    tolerance: { my_bytes: 1048576 },              // judges the extra series
+    fatal: /DevAPI unavailable/,                   // optional; an action error that ends the soak
+    pauseMs: [2000, 8000],
+    columns: ["wasm_bytes", "my_bytes", "gpu_bytes"],
+  };
+}
+```
+
+A page from `openCensusPage` has `call(method, params)` (CDP), `evaluate`,
+`census()`, `errors` and `viewport`; a DevAPI game wraps it with its own calls.
+From code, `runMemorySoak({ site, driver, minutes, warmup, sample, seed, out })`
+returns the report, so a game's `slow`-tier test asserts `report.verdict.pass`.

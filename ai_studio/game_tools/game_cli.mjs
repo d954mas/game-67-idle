@@ -13,6 +13,7 @@ import {
   verifyDependencySources,
 } from "./package_web.mjs";
 import { smokePackagedWebArtifact } from "./package_web_smoke.mjs";
+import { memorySummary, readMemoryBudget } from "./web_memory_budget.mjs";
 import { createRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 
@@ -666,13 +667,16 @@ export async function executeGameCommand(args, dependencies = {}) {
     return { message: `package passed: ${result.zipPath}`, result };
   }
   const metadata = prepare(args.templateProof);
+  const memoryBudget = (dependencies.memoryBudget || readMemoryBudget)(gameDir);
   const summary = args.skipTests ? "" : await runTestSuites(gameDir, { nodeTest, nativeTest, selection: { mode: "all" }, verbose: args.verbose });
   const result = await packageGameOwned(args, metadata);
-  await smokePackage({
+  const observation = await smokePackage({
     zipPath: result.zipPath, expectedTarget: args.target, mode: "full", frameExpectation: args.templateProof ? "blank" : "rendered",
     allowedRemoteUrls: remoteEndpoints(gameDir, args.target, { artifactDir: (dir, target) => artifactDirFor(dir, target, args.assertText) }),
+    ...(memoryBudget ? { memoryBudget } : {}),
   });
-  return { message: `verify passed: ${result.zipPath}${summary ? `; tests: ${summary}` : ""}`, result };
+  const memory = memorySummary(observation?.memory);
+  return { message: `verify passed: ${result.zipPath}${summary ? `; tests: ${summary}` : ""}${memory ? `; memory: ${memory}` : ""}`, result };
 }
 
 // commands: the game's own extra commands, { name: async (argv, { gameDir }) => message }.

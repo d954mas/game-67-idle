@@ -10,6 +10,8 @@ import { inflateSync } from "node:zlib";
 
 import { readStoreZip } from "../core_harness/tool_lib/zip_store.mjs";
 import { PROFILE_ROOT, createChromeProfile } from "../runtime_automation/chrome_profile.mjs";
+import { assessMemoryBudget, measureStartupMemory } from "./web_memory_budget.mjs";
+import { MEMORY_CENSUS_HOOK } from "./web_memory_census.mjs";
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
@@ -916,7 +918,7 @@ export function analyzePngFrame(bytes) {
   return { width, height, minLuma, maxLuma, variance: Math.max(0, sumSquares / pixels - mean * mean) };
 }
 
-async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chromePath, timeoutMs = 60000, webglRecoveryTimeoutMs = 10000, chromeArgs = [], live = null, allowedRemote = [], toleratedRemote = [], blockedUrlPatterns = [], allowedRemoteUrls = [], profileRoot = PROFILE_ROOT, mode = "full" }) {
+async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chromePath, timeoutMs = 60000, webglRecoveryTimeoutMs = 10000, chromeArgs = [], live = null, allowedRemote = [], toleratedRemote = [], blockedUrlPatterns = [], allowedRemoteUrls = [], profileRoot = PROFILE_ROOT, mode = "full", memory = null }) {
   const offlineRemote = remoteEndpointMatcher(allowedRemoteUrls);
   const probePlan = smokeProbePlan(mode);
   const startedAt = Date.now();
@@ -1014,6 +1016,7 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
     }
     // A background target may throttle its frames, which a live connection would
     // not survive.
+    if (memory) await client.call("Page.addScriptToEvaluateOnNewDocument", { source: MEMORY_CENSUS_HOOK }, deadline);
     phase = "target activation";
     await client.call("Page.bringToFront", {}, deadline);
     phase = "page navigation";
@@ -1040,6 +1043,20 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
         expression: "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
         awaitPromise: true,
       }, deadline);
+    }
+    // Measured before any WebGL loss: a lost context frees its resources
+    // without the delete calls the ledger counts.
+    let memoryCensus = null;
+    if (memory && state?.ready) {
+      phase = "memory census";
+      memoryCensus = await measureStartupMemory({
+        call: (method, params) => client.call(method, params, deadline),
+        evaluate: (expression) => evaluateByValue(client, expression, deadline),
+        viewport: memory.viewport,
+      });
+      await client.call("Emulation.setDeviceMetricsOverride", { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false }, deadline);
+      await evaluateByValue(client, "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))", deadline);
+      state = await evaluateByValue(client, PAGE_STATE, deadline) || state;
     }
     capture.settle();
     let frame = null;
@@ -1107,7 +1124,7 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
     // Released while the page is still open: closing the browser below ends the
     // live connection on purpose.
     live?.release();
-    return { ...state, frame, viewport, recovery, issues: [...issues] };
+    return { ...state, frame, viewport, recovery, memory: memoryCensus, issues: [...issues] };
   } catch (error) {
     operationError = new Error(`packaged browser smoke at ${phase} after ${Date.now() - startedAt}ms: ${error.message}; `
       + `last readiness=${state?.ready ?? "unknown"}; issues=${JSON.stringify(issues)}`, { cause: error });
@@ -1148,6 +1165,7 @@ export async function smokePackagedWebArtifact({
   chromeArgs = [],
   requiredEntries = [],
   live = null,
+  memoryBudget = null,
 }) {
   smokeProbePlan(mode);
   remoteEndpointMatcher(allowedRemoteUrls);
@@ -1198,7 +1216,8 @@ export async function smokePackagedWebArtifact({
       url: session?.url ?? server.url,
       expectedRuntimeBuildFingerprint: release.runtimeBuildFingerprint,
       chromePath,
-      timeoutMs,
+      // The memory census waits up to 20 s for startup to settle.
+      timeoutMs: memoryBudget ? timeoutMs + 30000 : timeoutMs,
       webglRecoveryTimeoutMs,
       chromeArgs,
       live: session,
@@ -1208,8 +1227,10 @@ export async function smokePackagedWebArtifact({
       allowedRemoteUrls,
       profileRoot,
       mode,
+      memory: memoryBudget ? { viewport: memoryBudget.viewport } : null,
     });
     const failures = assessPackagedWebObservation(observation, release.runtimeBuildFingerprint, { mode, frameExpectation });
+    if (memoryBudget && observation.ready) failures.push(...assessMemoryBudget(observation.memory, memoryBudget));
     if (session) failures.push(...session.finish(mode));
     if (failures.length > 0) throw new Error(`packaged web smoke failed: ${failures.join("; ")}`);
     return observation;

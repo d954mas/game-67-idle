@@ -9,7 +9,7 @@ const GL = {
   ARRAY_BUFFER: 0x8892, ELEMENT_ARRAY_BUFFER: 0x8893, UNIFORM_BUFFER: 0x8a11,
 };
 
-function page() {
+function page({ growable = false } = {}) {
   class FakeGl {
     constructor() { Object.assign(this, GL, { drawingBufferWidth: 100, drawingBufferHeight: 50 }); }
     getContextAttributes() { return { depth: true, stencil: false, antialias: false }; }
@@ -22,6 +22,7 @@ function page() {
   }
   class HTMLCanvasElement { getContext() { return new FakeGl(); } }
   class Memory { constructor(bytes) { this.buffer = { byteLength: bytes }; } }
+  if (growable) Memory.prototype.grow = function (pages) { this.buffer = { byteLength: this.buffer.byteLength + pages * 65536 }; return 0; };
   const window = { HTMLCanvasElement, WebAssembly: { Memory, instantiate: async () => ({ instance: { exports: { memory: new Memory(1 << 20) } } }) },
     performance: {} };
   window.window = window;
@@ -64,4 +65,15 @@ test("ledgers live GL resources by kind and counts heap-view uploads by their le
 
 test("refuses a page that loaded without the hook", async () => {
   await assert.rejects(readMemoryCensus(async () => null), /did not install/);
+});
+
+test("counts each WebAssembly memory grow with its old and new size", async () => {
+  const window = page({ growable: true });
+  const { instance } = await window.WebAssembly.instantiate(new Uint8Array(0), { env: {} });
+  instance.exports.memory.grow(16);
+  instance.exports.memory.grow(16);
+  const census = await readMemoryCensus(async (expression) => runInNewContext(expression, window));
+  assert.equal(census.wasm_initial_bytes, 1 << 20);
+  assert.equal(census.wasm_grows, 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(census.wasm_grow_events.map((g) => [g.from_bytes, g.to_bytes]))), [[1 << 20, (1 << 20) + (1 << 20)], [2 << 20, 3 << 20]]);
 });

@@ -12,6 +12,7 @@ function installPlatformDiagnostics(root, options) {
   var MAX_OUTGOING = 12000;
   var MAX_STORED = 20000;
   var WEB_TTL_MS = 86400000;
+  var MAX_GROW_REPORTS = 4;
   var records = {
     currentEngine: null,
     currentWeb: null,
@@ -19,6 +20,7 @@ function installPlatformDiagnostics(root, options) {
     previousWeb: null,
     contextCreation: null,
     contextLoss: null,
+    memoryGrows: [],
   };
   var seenRaw = Object.create(null);
   var liveEngine = false;
@@ -26,6 +28,10 @@ function installPlatformDiagnostics(root, options) {
   var readinessPolls = 0;
   var intentionalLossUntil = -Infinity;
   var wasmMemory = null;
+  var wasmSeenBytes = null;
+  var wasmGrows = 0;
+  var stage = "loading";
+  var startedAt = monotonicNow();
   var expectedRuntime = runtimeUrl(runtimeScript);
   var ownedScripts = [expectedRuntime, runtimeUrl("platform-sdk.js"), runtimeUrl("platform-sdk-adapter.js")];
 
@@ -97,8 +103,68 @@ function installPlatformDiagnostics(root, options) {
   function keepWasmMemory(values) {
     if (wasmMemory || !values || typeof root.WebAssembly !== "object") return;
     for (var key in values) {
-      if (values[key] instanceof root.WebAssembly.Memory) { wasmMemory = values[key]; return; }
+      if (values[key] instanceof root.WebAssembly.Memory) { wasmMemory = values[key]; noteWasmSize(); return; }
     }
+  }
+
+  // A grow allocates a new, larger block and copies the heap into it, the
+  // likeliest allocation to fail on a phone; the first few are reported.
+  function noteWasmSize() {
+    if (!wasmMemory) return;
+    var bytes = wasmMemory.buffer.byteLength;
+    if (wasmSeenBytes === null || bytes === wasmSeenBytes) { wasmSeenBytes = bytes; return; }
+    var from = wasmSeenBytes;
+    wasmSeenBytes = bytes;
+    wasmGrows += 1;
+    if (wasmGrows > MAX_GROW_REPORTS) return;
+    var grow = { from_bytes: from, to_bytes: bytes, since_start_ms: Math.round(monotonicNow() - startedAt), stage: stage, count: wasmGrows };
+    var stack = webStack("memory.grow", { message: "WebAssembly memory grew from " + from + " to " + bytes + " bytes" }, { grow: grow });
+    var record = { raw: "memory.grow " + wasmGrows, error: createError("memory.grow", stack), fatal: false };
+    if (seenRaw[record.raw]) return;
+    seenRaw[record.raw] = true;
+    records.memoryGrows.push(record);
+    schedule(0);
+  }
+
+  // Emscripten grows from JS (emscripten_resize_heap), so the hook sees it at
+  // once; the frame check catches a grow made by the module's own memory.grow.
+  function watchWasmGrowth() {
+    var api = root.WebAssembly;
+    var proto = api && api.Memory && api.Memory.prototype;
+    if (proto && typeof proto.grow === "function") {
+      var grow = proto.grow;
+      proto.grow = function () {
+        var result = grow.apply(this, arguments);
+        try {
+          if (!wasmMemory) { wasmMemory = this; wasmSeenBytes = null; }
+          if (this === wasmMemory) noteWasmSize();
+        } catch (_) {}
+        return result;
+      };
+    }
+    if (typeof root.requestAnimationFrame !== "function") return;
+    var frame = function () {
+      try { noteWasmSize(); } catch (_) {}
+      root.requestAnimationFrame(frame);
+    };
+    root.requestAnimationFrame(frame);
+  }
+
+  // The SDK lifecycle the game drives names the stage a grow happened in.
+  function watchStage() {
+    var backend = root.__platformSdkInternalBackend;
+    if (!backend || backend.__diagnosticsStage) return;
+    try {
+      backend.__diagnosticsStage = true;
+      [["gameLoadingFinished", "loaded"], ["gameplayStart", "gameplay"], ["gameplayStop", "paused"]].forEach(function (pair) {
+        var original = backend[pair[0]];
+        if (typeof original !== "function") return;
+        backend[pair[0]] = function () {
+          stage = pair[1];
+          return original.apply(this, arguments);
+        };
+      });
+    } catch (_) {}
   }
 
   function watchWasmMemory() {
@@ -143,15 +209,17 @@ function installPlatformDiagnostics(root, options) {
     }).join(" ");
   }
 
-  function webStack(kind, cause) {
+  function webStack(kind, cause, extra) {
     var stack = cause && cause.stack ? cause.stack : cause && cause.message ? cause.message : "platform failure";
-    var packet = JSON.stringify({
+    var fields = {
       version: 1,
       at: Date.now(),
       kind: String(kind),
       build: String(config.runtimeBuildFingerprint || ""),
       memory: memoryState(),
-    });
+    };
+    for (var key in extra || {}) fields[key] = extra[key];
+    var packet = JSON.stringify(fields);
     return capBytes(clean(stack) + "\nPLATFORM_DIAGNOSTICS " + packet, MAX_STORED - 512, true);
   }
 
@@ -207,7 +275,7 @@ function installPlatformDiagnostics(root, options) {
 
   function orderedRecords() {
     return [records.currentEngine, records.currentWeb, records.previousEngine, records.previousWeb,
-      records.contextCreation, records.contextLoss].filter(Boolean);
+      records.contextCreation, records.contextLoss].concat(records.memoryGrows).filter(Boolean);
   }
 
   function fallback(record) {
@@ -326,12 +394,17 @@ function installPlatformDiagnostics(root, options) {
     else addWeb(label, cause, "currentWeb", true);
   }
 
-  if (!prefix) return { report: report, intentionalLoss: function () {} };
+  function setStage(name) {
+    if (validKind(name)) stage = name;
+  }
+
+  if (!prefix) return { report: report, intentionalLoss: function () {}, stage: setStage };
   watchWasmMemory();
+  watchWasmGrowth();
   previousEngine();
   previousWeb();
   if (typeof root.addEventListener === "function") {
-    root.addEventListener("platform-diagnostics-ready", function () { schedule(0); });
+    root.addEventListener("platform-diagnostics-ready", function () { watchStage(); schedule(0); });
     root.addEventListener("nt-crash", function (event) {
       var text = event && event.detail && event.detail.text;
       if (!engineEnvelope(text)) return;
@@ -359,5 +432,6 @@ function installPlatformDiagnostics(root, options) {
   return {
     report: report,
     intentionalLoss: function () { intentionalLossUntil = monotonicNow() + 2000; },
+    stage: setStage,
   };
 }

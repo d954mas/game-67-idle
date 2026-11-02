@@ -882,3 +882,22 @@ test("a live service steers the page URL, is judged after the probe and is alway
   }), /stop failed/);
   await assert.rejects(fetch(url));
 });
+
+test("a memory budget is measured on its viewport and fails the smoke when a limit is passed", async (t) => {
+  const zipPath = fixtureZip(t);
+  const budget = { viewport: "390x844@2", limits: { wasm_bytes: 80 * 1048576, gpu_bytes: 64 * 1048576 } };
+  let seen = null;
+  const probe = (gpu) => async (options) => {
+    seen = options;
+    return { ...passingObservation(), finalUrl: options.url, memory: { wasm_bytes: 76 * 1048576, gpu_bytes: gpu, programs: 30 } };
+  };
+  const observation = await smokePackagedWebArtifact({ zipPath, expectedTarget: "itch", memoryBudget: budget, probe: probe(60 * 1048576) });
+  assert.deepEqual(seen.memory, { viewport: "390x844@2" });
+  assert.equal(observation.memory.gpu_bytes, 60 * 1048576);
+  await assert.rejects(
+    smokePackagedWebArtifact({ zipPath, expectedTarget: "itch", memoryBudget: budget, probe: probe(70 * 1048576) }),
+    /memory gpu_bytes 70\.0 MB is over its limit 64\.0 MB/,
+  );
+  await smokePackagedWebArtifact({ zipPath, expectedTarget: "itch", probe: probe(70 * 1048576) });
+  assert.equal(seen.memory, null, "a game without a budget is not measured");
+});

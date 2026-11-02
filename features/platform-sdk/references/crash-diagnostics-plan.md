@@ -313,6 +313,17 @@ A replayed previous record keeps only what it stored, since this launch's memory
 says nothing about the crash. The engine exposes no resident GPU-memory counter,
 so reports carry no GPU estimate until it does.
 
+Every WebAssembly memory grow is its own non-fatal report, `memory.grow`, sent
+through the same sink: a grow allocates a new, larger block and copies the heap,
+the allocation likeliest to fail on a phone. Its `PLATFORM_DIAGNOSTICS` packet
+adds `grow` (`from_bytes`, `to_bytes`, `since_start_ms`, `stage`, `count`) to the
+usual `memory`. Detection hooks `WebAssembly.Memory.prototype.grow` (Emscripten
+grows from JS) and compares the captured memory's size once per animation frame
+(a grow from inside the module). Only the first four grows are reported. `stage`
+is `loading` until the SDK lifecycle moves it (`gameLoadingFinished` -> `loaded`,
+`gameplayStart` -> `gameplay`, `gameplayStop` -> `paused`); a game may name its
+own with `window.__platformDiagnostics.stage("<name>")`.
+
 Read the raw engine value once with storage exceptions contained. Use a 65,536
 UTF-16-code-unit input ceiling for stored engine text; it exceeds this baseline's
 8,192-byte ring plus bounded header/stack/context. Treat a larger configured ring

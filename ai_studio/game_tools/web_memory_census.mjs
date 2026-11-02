@@ -32,13 +32,31 @@ export const MEMORY_CENSUS_HOOK = `(() => {
 if (window.__memoryCensus) return;
 const FORMAT_BYTES = ${JSON.stringify(FORMAT_BYTES)}, BLOCK_BYTES = ${JSON.stringify(BLOCK_BYTES)};
 const census = window.__memoryCensus = { textures: new Map(), buffers: new Map(), renderbuffers: new Map(),
-  programs: 0, shaders: 0, framebuffers: 0, peak_gpu: 0, peak_wasm: 0, memory: null, contexts: [], unknown_formats: {} };
+  programs: 0, shaders: 0, framebuffers: 0, peak_gpu: 0, peak_wasm: 0, memory: null, contexts: [], unknown_formats: {},
+  wasm_initial: null, wasm_seen: null, grows: [] };
+const now = () => Math.round(performance.now ? performance.now() : 0);
+// Each change of the heap size is one grow: the runtime allocated a larger block and copied the heap.
+const noteWasm = () => {
+  if (!census.memory) return;
+  const bytes = census.memory.buffer.byteLength;
+  if (census.wasm_initial === null) census.wasm_initial = bytes;
+  else if (bytes !== census.wasm_seen) census.grows.push({ from_bytes: census.wasm_seen, to_bytes: bytes, at_ms: now() });
+  census.wasm_seen = bytes;
+};
 const levelBytes = (format, w, h, d) => {
   if (BLOCK_BYTES[format]) return Math.ceil(w / 4) * Math.ceil(h / 4) * BLOCK_BYTES[format] * d;
   if (!FORMAT_BYTES[format]) census.unknown_formats[format] = 1;
   return w * h * d * (FORMAT_BYTES[format] || 4);
 };
-const keep = (values) => { for (const v of Object.values(values || {})) if (v instanceof WebAssembly.Memory) census.memory = v; };
+const keep = (values) => {
+  for (const v of Object.values(values || {})) if (!census.memory && v instanceof WebAssembly.Memory) { census.memory = v; noteWasm(); }
+};
+const grow = WebAssembly.Memory.prototype.grow;
+if (grow) WebAssembly.Memory.prototype.grow = function (...args) {
+  const r = grow.apply(this, args);
+  try { if (!census.memory) census.memory = this; if (this === census.memory) noteWasm(); } catch (e) {}
+  return r;
+};
 for (const name of ["instantiate", "instantiateStreaming"]) {
   const original = WebAssembly[name];
   if (original) WebAssembly[name] = function (...args) {
@@ -55,6 +73,7 @@ const gpuTotal = () => {
 };
 const notePeak = () => {
   census.peak_gpu = Math.max(census.peak_gpu, gpuTotal());
+  noteWasm();
   if (census.memory) census.peak_wasm = Math.max(census.peak_wasm, census.memory.buffer.byteLength);
 };
 function wrap(gl) {
@@ -166,6 +185,7 @@ window.__memoryCensusRead = (topN = 12) => {
   const heap = performance.memory || {};
   return {
     wasm_bytes: census.memory ? census.memory.buffer.byteLength : null, wasm_peak_bytes: census.peak_wasm || null,
+    wasm_initial_bytes: census.wasm_initial, wasm_grows: census.memory ? census.grows.length : null, wasm_grow_events: census.grows.slice(0, 16),
     gpu_bytes: gpuTotal() + framebuffer, gpu_peak_bytes: census.peak_gpu + framebuffer, default_framebuffer: { ...canvas, bytes: framebuffer },
     kinds, programs: census.programs, shaders: census.shaders, framebuffers: census.framebuffers,
     top_textures: textures.slice(0, topN), texture_sizes: histogram,

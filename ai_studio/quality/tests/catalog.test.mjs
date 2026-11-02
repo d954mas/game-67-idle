@@ -6,7 +6,7 @@ test("quality catalog exposes rule groups and numbered checks", () => {
   const catalog = loadQualityCatalog(process.cwd());
 
   assert.equal(catalog.groups.length, 6);
-  assert.equal(catalog.totalChecks, 10);
+  assert.equal(catalog.totalChecks, 11);
 
   const clarity = catalog.groups.find((group) => group.slug === "player_clarity");
   assert.equal(clarity.title, "Player Clarity Rules");

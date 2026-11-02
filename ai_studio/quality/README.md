@@ -29,6 +29,7 @@ open only its linked check.
 | Game Design | [QDES_001](rules/game_design/checks/QDES_001_playable_loop.md) | loop, economy, progression, rewards, or challenge change player action | source-package clarity, presentation, assets, or runtime proof |
 | Technical | [QTECH_001](rules/technical/checks/QTECH_001_behavior_evidence.md) | code, data, build, state, input, packaging, automation, or runtime behavior changes | presentation-only, art/assets, loop design, or source clarity |
 | Technical | [QTECH_002](rules/technical/checks/QTECH_002_shader_rules.md) | shaders are written, changed, imported or reviewed; consult shared practices, prohibitions and automated checks | general shader correctness, driver stability or device-crash certification |
+| Technical | [QTECH_003](rules/technical/checks/QTECH_003_memory_budget.md) | a web game ships, changes what it loads or keeps, changes link memory flags, or crashes or loses WebGL on weak phones: memory limits in web_budget.json, measured at startup, after a minute of play and in a bot soak | games without a web build, download size, or frame time |
 | Assets | [QASSET_001](rules/assets/checks/QASSET_001_asset_readiness.md) | an asset is accepted, published, copied, or claimed game-use-ready | presentation, art fit, or unrelated runtime behavior |
 | Assets | [QASSET_002](rules/assets/checks/QASSET_002_material_readiness.md) | conversion or preparation can lose textures, UVs, colors, maps, or assignments | non-material assets or unrelated presentation/runtime work |
 
