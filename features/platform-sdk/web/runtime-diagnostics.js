@@ -25,6 +25,7 @@ function installPlatformDiagnostics(root, options) {
   var timerActive = false;
   var readinessPolls = 0;
   var intentionalLossUntil = -Infinity;
+  var wasmMemory = null;
   var expectedRuntime = runtimeUrl(runtimeScript);
   var ownedScripts = [expectedRuntime, runtimeUrl("platform-sdk.js"), runtimeUrl("platform-sdk-adapter.js")];
 
@@ -87,8 +88,59 @@ function installPlatformDiagnostics(root, options) {
       /\r?\nstack:\r?\n/.test(text) && /\r?\nlog:\r?\n/.test(text);
   }
 
-  function engineStack(text) {
-    return capBytes(clean(text), MAX_OUTGOING, true);
+  function engineStack(text, memoryLine) {
+    var stamped = memoryLine ? text.replace(/(\r?\nengine: [^\r\n]*)/, "$1\n" + memoryLine) : text;
+    return capBytes(clean(stamped), MAX_OUTGOING, true);
+  }
+
+  // Only a reference to the module's memory is kept; reading its size never calls into WASM.
+  function keepWasmMemory(values) {
+    if (wasmMemory || !values || typeof root.WebAssembly !== "object") return;
+    for (var key in values) {
+      if (values[key] instanceof root.WebAssembly.Memory) { wasmMemory = values[key]; return; }
+    }
+  }
+
+  function watchWasmMemory() {
+    var api = root.WebAssembly;
+    if (!api || typeof api.Memory !== "function") return;
+    ["instantiate", "instantiateStreaming"].forEach(function (name) {
+      var original = api[name];
+      if (typeof original !== "function") return;
+      api[name] = function (source, imports) {
+        try { keepWasmMemory(imports && imports.env); } catch (_) {}
+        var pending = original.apply(this, arguments);
+        if (pending && typeof pending.then === "function") {
+          pending.then(function (result) {
+            try { keepWasmMemory((result && result.instance || result).exports); } catch (_) {}
+          }, function () {});
+        }
+        return pending;
+      };
+    });
+  }
+
+  // Values at the moment of the event; an absent source stays null, so "unknown" never reads as zero.
+  function memoryState() {
+    var state = { wasm_bytes: null, device_gb: null, js_used_bytes: null, js_limit_bytes: null };
+    try { if (wasmMemory) state.wasm_bytes = wasmMemory.buffer.byteLength; } catch (_) {}
+    try {
+      var device = root.navigator && root.navigator.deviceMemory;
+      if (typeof device === "number" && Number.isFinite(device)) state.device_gb = device;
+    } catch (_) {}
+    try {
+      var heap = root.performance && root.performance.memory;
+      if (heap && Number.isFinite(heap.usedJSHeapSize)) state.js_used_bytes = heap.usedJSHeapSize;
+      if (heap && Number.isFinite(heap.jsHeapSizeLimit)) state.js_limit_bytes = heap.jsHeapSizeLimit;
+    } catch (_) {}
+    return state;
+  }
+
+  function memoryLine() {
+    var state = memoryState();
+    return "memory: " + Object.keys(state).map(function (key) {
+      return key + "=" + (state[key] === null ? "-" : state[key]);
+    }).join(" ");
   }
 
   function webStack(kind, cause) {
@@ -98,6 +150,7 @@ function installPlatformDiagnostics(root, options) {
       at: Date.now(),
       kind: String(kind),
       build: String(config.runtimeBuildFingerprint || ""),
+      memory: memoryState(),
     });
     return capBytes(clean(stack) + "\nPLATFORM_DIAGNOSTICS " + packet, MAX_STORED - 512, true);
   }
@@ -120,9 +173,9 @@ function installPlatformDiagnostics(root, options) {
     return true;
   }
 
-  function addEngine(text, slot) {
+  function addEngine(text, slot, memory) {
     if (!engineEnvelope(text)) return false;
-    return add(slot, { raw: text, error: createError("engine.crash", engineStack(text)), fatal: true });
+    return add(slot, { raw: text, error: createError("engine.crash", engineStack(text, memory)), fatal: true });
   }
 
   function addWeb(kind, cause, slot, persist) {
@@ -263,8 +316,9 @@ function installPlatformDiagnostics(root, options) {
     var label = String(kind || "");
     if (!validKind(label)) return;
     if (/^gfx\.context_(?:lost|creation)$/.test(label)) {
+      var stack = webStack(label, cause);
       add(label === "gfx.context_lost" ? "contextLoss" : "contextCreation", {
-        raw: label + "\n" + webStack(label, cause), error: createError(label, webStack(label, cause)), fatal: false,
+        raw: label + "\n" + stack, error: createError(label, stack), fatal: false,
       });
       return;
     }
@@ -273,6 +327,7 @@ function installPlatformDiagnostics(root, options) {
   }
 
   if (!prefix) return { report: report, intentionalLoss: function () {} };
+  watchWasmMemory();
   previousEngine();
   previousWeb();
   if (typeof root.addEventListener === "function") {
@@ -281,7 +336,7 @@ function installPlatformDiagnostics(root, options) {
       var text = event && event.detail && event.detail.text;
       if (!engineEnvelope(text)) return;
       liveEngine = true;
-      addEngine(text, "currentEngine");
+      addEngine(text, "currentEngine", memoryLine());
     });
     root.addEventListener("error", function (event) {
       observeError(event && event.error || { message: event && event.message }, event && event.filename, "runtime.error");

@@ -401,3 +401,44 @@ test("keeps crash namespaces isolated on one origin", () => {
   assert.equal(fixture.storage.get("alpha.crash.v1"), engineRecord("alpha-build"));
   assert.equal(fixture.storage.get("beta.crash.v1"), engineRecord("beta-build"));
 });
+
+test("stamps WASM, device and JS heap memory at the event into live engine and graphics reports", async () => {
+  class Memory { constructor(bytes) { this.buffer = { byteLength: bytes }; } }
+  const memory = new Memory(64 * 1048576);
+  const fixture = makeRoot({ engineRecord: engineRecord("build-old", "old tail") });
+  fixture.root.WebAssembly = {
+    Memory,
+    instantiateStreaming(source, imports) { return Promise.resolve({ instance: { exports: { memory, main() {} } }, module: {} }); },
+  };
+  fixture.root.navigator.deviceMemory = 2;
+  fixture.root.performance.memory = { usedJSHeapSize: 5000, jsHeapSizeLimit: 9000 };
+  const received = [];
+  const api = install(fixture);
+  const result = await fixture.root.WebAssembly.instantiateStreaming("game.wasm", { env: {} });
+  assert.equal(result.instance.exports.memory, memory, "the wrapped call returns the runtime's own result");
+  await Promise.resolve();
+  memory.buffer.byteLength = 96 * 1048576;
+
+  fixture.root.dispatch("nt-crash", { detail: { text: engineRecord("build-live", "live tail") } });
+  api.report("gfx.context_lost", { message: "lost" });
+  fixture.root.__platformSdkInternalBackend = { errorSink() { return { captureError(error) { received.push(error); } }; } };
+  fixture.runTimers();
+
+  const live = received.find((error) => /build-live/.test(error.stack));
+  const replayed = received.find((error) => /build-old/.test(error.stack));
+  assert.match(live.stack, /\nengine: nt web\nmemory: wasm_bytes=100663296 device_gb=2 js_used_bytes=5000 js_limit_bytes=9000\n/);
+  assert.doesNotMatch(replayed.stack, /memory:/, "a replayed record's memory belongs to another launch");
+  const loss = received.find((error) => error.message === "gfx.context_lost");
+  const packet = JSON.parse(loss.stack.slice(loss.stack.indexOf("PLATFORM_DIAGNOSTICS ") + 21));
+  assert.deepEqual(packet.memory, { wasm_bytes: 100663296, device_gb: 2, js_used_bytes: 5000, js_limit_bytes: 9000 });
+});
+
+test("reports unknown memory sources as absent, not zero", () => {
+  const fixture = makeRoot();
+  const received = [];
+  install(fixture);
+  fixture.root.dispatch("nt-crash", { detail: { text: engineRecord("no-sources") } });
+  fixture.root.__platformSdkInternalBackend = { errorSink() { return { captureError(error) { received.push(error); } }; } };
+  fixture.runTimers();
+  assert.match(received[0].stack, /memory: wasm_bytes=- device_gb=- js_used_bytes=- js_limit_bytes=-\n/);
+});

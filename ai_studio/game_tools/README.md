@@ -39,6 +39,10 @@ sit in, so loading the CLI from the same checkout adds no new coupling.
   the game root.
 - `serve_web.mjs`: a loopback server for a built artifact. Run it from the game
   root, or through `node tools/game.mjs run`.
+- `web_memory_census.mjs`: a page script installed before the game loads that
+  keeps a ledger of live WebGL resources (estimated bytes by kind, programs) and
+  the WebAssembly memory size; needs no DevAPI. The intended consumer is a
+  memory budget beside `wasm_raw`, read by the verify browser smoke.
 - `lib/runtime_build.mjs`: runtime source and build records. For a game without
   copied tooling the record includes a `tooling` input: the files here that
   change artifact bytes (`build_web`, `inject_asset_bytes`, `minify_web_release`).

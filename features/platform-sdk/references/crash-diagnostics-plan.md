@@ -301,6 +301,18 @@ record. SDK absence/failure falls back to console
 without recursively feeding the collector. Other adapters keep console behavior;
 do not invent unsupported upload services.
 
+Memory at the event goes into every current report: the module's WebAssembly
+memory size (`wasm_bytes`; the installer keeps a reference to the `Memory` that
+`WebAssembly.instantiate`/`instantiateStreaming` import or export, and never
+calls WASM), `navigator.deviceMemory` (`device_gb`) and Chrome's
+`performance.memory` (`js_used_bytes`, `js_limit_bytes`). An unavailable source
+is `-` or `null`, never zero. A live engine record gets one `memory:` line right
+after its `engine:` header line, inside the preserved head; a web or graphics
+report carries the same object as `memory` in its `PLATFORM_DIAGNOSTICS` packet.
+A replayed previous record keeps only what it stored, since this launch's memory
+says nothing about the crash. The engine exposes no resident GPU-memory counter,
+so reports carry no GPU estimate until it does.
+
 Read the raw engine value once with storage exceptions contained. Use a 65,536
 UTF-16-code-unit input ceiling for stored engine text; it exceeds this baseline's
 8,192-byte ring plus bounded header/stack/context. Treat a larger configured ring
