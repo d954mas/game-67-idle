@@ -484,3 +484,22 @@ test("a memory without grow and a page without WebAssembly install cleanly", () 
   assert.doesNotThrow(() => install(fixture));
   fixture.runTimers();
 });
+
+test("a memory first seen by its own grow reports that grow under its own diagnostic name", () => {
+  class Memory {
+    constructor(bytes) { this.buffer = { byteLength: bytes }; }
+    grow(pages) { this.buffer = { byteLength: this.buffer.byteLength + pages * 65536 }; return 0; }
+  }
+  const fixture = makeRoot();
+  fixture.root.WebAssembly = { Memory };
+  const received = [];
+  install(fixture);
+  new Memory(64 * 1048576).grow(16);
+  fixture.root.__platformSdkInternalBackend = { errorSink() { return { captureError(error) { received.push(error); } }; } };
+  fixture.runTimers();
+  assert.equal(received.length, 1);
+  assert.equal(received[0].name, "PlatformDiagnostic");
+  assert.equal(received[0].message, "memory.grow");
+  const packet = JSON.parse(received[0].stack.slice(received[0].stack.indexOf("PLATFORM_DIAGNOSTICS ") + 21));
+  assert.deepEqual([packet.kind, packet.grow.from_bytes, packet.grow.to_bytes], ["memory.grow", 64 * 1048576, 65 * 1048576]);
+});

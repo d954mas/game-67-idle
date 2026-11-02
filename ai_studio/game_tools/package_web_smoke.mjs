@@ -10,7 +10,7 @@ import { inflateSync } from "node:zlib";
 
 import { readStoreZip } from "../core_harness/tool_lib/zip_store.mjs";
 import { PROFILE_ROOT, createChromeProfile } from "../runtime_automation/chrome_profile.mjs";
-import { assessMemoryBudget, measureStartupMemory } from "./web_memory_budget.mjs";
+import { assessMemoryBudget, measureMemoryPoints } from "./web_memory_budget.mjs";
 import { MEMORY_CENSUS_HOOK } from "./web_memory_census.mjs";
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -1049,10 +1049,11 @@ async function defaultBrowserProbe({ url, expectedRuntimeBuildFingerprint, chrom
     let memoryCensus = null;
     if (memory && state?.ready) {
       phase = "memory census";
-      memoryCensus = await measureStartupMemory({
+      memoryCensus = await measureMemoryPoints({
         call: (method, params) => client.call(method, params, deadline),
         evaluate: (expression) => evaluateByValue(client, expression, deadline),
         viewport: memory.viewport,
+        afterSeconds: memory.afterSeconds || 0,
       });
       await client.call("Emulation.setDeviceMetricsOverride", { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false }, deadline);
       await evaluateByValue(client, "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))", deadline);
@@ -1216,8 +1217,8 @@ export async function smokePackagedWebArtifact({
       url: session?.url ?? server.url,
       expectedRuntimeBuildFingerprint: release.runtimeBuildFingerprint,
       chromePath,
-      // The memory census waits up to 20 s for startup to settle.
-      timeoutMs: memoryBudget ? timeoutMs + 30000 : timeoutMs,
+      // Each memory point waits up to 20 s to settle, the second after its wait.
+      timeoutMs: memoryBudget ? timeoutMs + 60000 + (memoryBudget.afterSeconds || 0) * 1000 : timeoutMs,
       webglRecoveryTimeoutMs,
       chromeArgs,
       live: session,
@@ -1227,7 +1228,7 @@ export async function smokePackagedWebArtifact({
       allowedRemoteUrls,
       profileRoot,
       mode,
-      memory: memoryBudget ? { viewport: memoryBudget.viewport } : null,
+      memory: memoryBudget ? { viewport: memoryBudget.viewport, afterSeconds: memoryBudget.afterSeconds || 0 } : null,
     });
     const failures = assessPackagedWebObservation(observation, release.runtimeBuildFingerprint, { mode, frameExpectation });
     if (memoryBudget && observation.ready) failures.push(...assessMemoryBudget(observation.memory, memoryBudget));

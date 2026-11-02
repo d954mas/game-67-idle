@@ -749,7 +749,7 @@ test("verify hands the game's memory budget to the smoke and reports what it mea
   });
   const result = await run(budget, { wasm_bytes: 80 * 1048576, wasm_grows: 1, gpu_bytes: 60 * 1048576, programs: 31 });
   assert.equal(seen, budget);
-  assert.match(result.message, /memory: wasm 80\.0 MB \(1 grow\), gpu 60\.0 MB, programs 31/);
+  assert.match(result.message, /memory: wasm 80\.0 MiB \(1 grow\), gpu 60\.0 MiB, programs 31/);
   const plain = await run(null, null);
   assert.equal(seen, undefined);
   assert.doesNotMatch(plain.message, /memory:/);

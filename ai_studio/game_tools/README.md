@@ -44,7 +44,7 @@ sit in, so loading the CLI from the same checkout adds no new coupling.
   the WebAssembly memory size and grows; needs no DevAPI.
 - `web_memory_budget.mjs`: reads the `memory` object of a game's
   `content/web_budget.json` and checks a census against it; `verify` measures the
-  packaged release at startup on the budget viewport and fails on overflow. As a
+  packaged release at startup and, with `after_seconds`, once streamed content is in, on the budget viewport; it fails on overflow or an unsettled point. As a
   CLI it measures any site or package (`--site`/`--zip`, `--play 60`). Rule:
   `ai_studio/quality/rules/technical/checks/QTECH_003_memory_budget.md`.
 - `web_memory_soak.mjs`: a 30-60 minute memory soak; see "Memory soak" below.

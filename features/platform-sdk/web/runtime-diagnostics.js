@@ -133,10 +133,13 @@ function installPlatformDiagnostics(root, options) {
     var proto = api && api.Memory && api.Memory.prototype;
     if (proto && typeof proto.grow === "function") {
       var grow = proto.grow;
+      // A memory first seen by its own grow takes its size before that grow as the baseline.
       proto.grow = function () {
+        var before = null;
+        try { before = this.buffer.byteLength; } catch (_) {}
         var result = grow.apply(this, arguments);
         try {
-          if (!wasmMemory) { wasmMemory = this; wasmSeenBytes = null; }
+          if (!wasmMemory) { wasmMemory = this; wasmSeenBytes = before; }
           if (this === wasmMemory) noteWasmSize();
         } catch (_) {}
         return result;

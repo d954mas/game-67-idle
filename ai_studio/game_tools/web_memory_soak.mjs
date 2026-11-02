@@ -164,11 +164,11 @@ export function soakMarkdown(report) {
   "| series | early peak | late peak | growth | slope /h | ok |", "|---|---|---|---|---|---|"];
   for (const [key, s] of Object.entries(report.verdict.series)) {
     if (!s) continue;
-    const show = (v) => (/bytes/.test(key) ? `${(v / MB).toFixed(2)} MB` : v.toFixed(2));
+    const show = (v) => (/bytes/.test(key) ? `${(v / MB).toFixed(2)} MiB` : v.toFixed(2));
     lines.push(`| ${key} | ${show(s.early_peak)} | ${show(s.late_peak)} | ${show(s.growth)} | ${show(s.slope_per_hour)} | ${s.ok ? "yes" : "NO"} |`);
   }
   const columns = report.columns;
-  lines.push("", `| t min | ${columns.map((key) => key.replace(/_bytes$/, " MB")).join(" | ")} | actions |`, `|---|${columns.map(() => "---|").join("")}---|`);
+  lines.push("", `| t min | ${columns.map((key) => key.replace(/_bytes$/, " MiB")).join(" | ")} | actions |`, `|---|${columns.map(() => "---|").join("")}---|`);
   const every = Math.max(1, Math.round(report.samples.length / 24));
   report.samples.forEach((s, i) => {
     if (i % every !== 0 && i !== report.samples.length - 1) return;
@@ -205,8 +205,8 @@ export async function runMemorySoak({ url, site, driver = uiMonkeyDriver(), driv
     const row = { t: Math.round((Date.now() - start) / 1000), ...censusSample(await page.census(4)),
       ...(driver.sample ? await driver.sample(page) : {}), actions: actions.length, action_errors: actions.filter((a) => a.error).length };
     samples.push(row);
-    log(`t=${row.t}s wasm ${mb(row.wasm_bytes)} (${row.wasm_grows} grows) gpu ${mb(row.gpu_bytes)} objects ${row.gpu_objects} `
-      + `programs ${row.programs} js ${mb(row.js_heap_used_bytes)} actions ${row.actions}`);
+    log(`t=${row.t}s wasm ${mb(row.wasm_bytes)} MiB (${row.wasm_grows} grows) gpu ${mb(row.gpu_bytes)} MiB objects ${row.gpu_objects} `
+      + `programs ${row.programs} js ${mb(row.js_heap_used_bytes)} MiB actions ${row.actions}`);
   };
   try {
     await (driver.ready ? driver.ready(page) : waitForCensus(page));

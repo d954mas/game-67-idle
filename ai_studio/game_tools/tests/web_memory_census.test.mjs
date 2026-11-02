@@ -77,3 +77,12 @@ test("counts each WebAssembly memory grow with its old and new size", async () =
   assert.equal(census.wasm_grows, 2);
   assert.deepEqual(JSON.parse(JSON.stringify(census.wasm_grow_events.map((g) => [g.from_bytes, g.to_bytes]))), [[1 << 20, (1 << 20) + (1 << 20)], [2 << 20, 3 << 20]]);
 });
+
+test("a memory first seen by its own grow keeps the size before it as the baseline", async () => {
+  const window = page({ growable: true });
+  const memory = new window.WebAssembly.Memory(1 << 20);
+  memory.grow(16);
+  const census = await readMemoryCensus(async (expression) => runInNewContext(expression, window));
+  assert.equal(census.wasm_initial_bytes, 1 << 20);
+  assert.equal(census.wasm_grows, 1);
+});

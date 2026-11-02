@@ -892,11 +892,11 @@ test("a memory budget is measured on its viewport and fails the smoke when a lim
     return { ...passingObservation(), finalUrl: options.url, memory: { wasm_bytes: 76 * 1048576, gpu_bytes: gpu, programs: 30 } };
   };
   const observation = await smokePackagedWebArtifact({ zipPath, expectedTarget: "itch", memoryBudget: budget, probe: probe(60 * 1048576) });
-  assert.deepEqual(seen.memory, { viewport: "390x844@2" });
+  assert.deepEqual(seen.memory, { viewport: "390x844@2", afterSeconds: 0 });
   assert.equal(observation.memory.gpu_bytes, 60 * 1048576);
   await assert.rejects(
     smokePackagedWebArtifact({ zipPath, expectedTarget: "itch", memoryBudget: budget, probe: probe(70 * 1048576) }),
-    /memory gpu_bytes 70\.0 MB is over its limit 64\.0 MB/,
+    /memory gpu_bytes 70\.0 MiB is over its limit 64\.0 MiB/,
   );
   await smokePackagedWebArtifact({ zipPath, expectedTarget: "itch", probe: probe(70 * 1048576) });
   assert.equal(seen.memory, null, "a game without a budget is not measured");

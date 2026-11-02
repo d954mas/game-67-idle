@@ -52,9 +52,15 @@ const keep = (values) => {
   for (const v of Object.values(values || {})) if (!census.memory && v instanceof WebAssembly.Memory) { census.memory = v; noteWasm(); }
 };
 const grow = WebAssembly.Memory.prototype.grow;
+// A memory first seen by its own grow takes its size before that grow as the baseline.
 if (grow) WebAssembly.Memory.prototype.grow = function (...args) {
+  let before = null;
+  try { before = this.buffer.byteLength; } catch (e) {}
   const r = grow.apply(this, args);
-  try { if (!census.memory) census.memory = this; if (this === census.memory) noteWasm(); } catch (e) {}
+  try {
+    if (!census.memory) { census.memory = this; census.wasm_initial = before; census.wasm_seen = before; }
+    if (this === census.memory) noteWasm();
+  } catch (e) {}
   return r;
 };
 for (const name of ["instantiate", "instantiateStreaming"]) {

@@ -22,11 +22,15 @@ reports crashes or WebGL context losses on weak phones.
   `ai_studio/game_tools/web_memory_budget.mjs`.
 
   ```json
-  "memory": { "viewport": "390x844@2", "limits": { "wasm_bytes": 100663296, "gpu_bytes": 83886080, "wasm_grows": 0 } }
+  "memory": { "viewport": "390x844@2", "after_seconds": 60,
+              "limits": { "wasm_bytes": 100663296, "gpu_bytes": 83886080, "wasm_grows": 0 } }
   ```
 
-- Limits come from measurement, not from a wish: the startup value on the
-  budget viewport plus about 20% headroom, rounded up to 4 MiB. The target is a
+- Limits come from measurement, not from a wish: the peak on the budget
+  viewport over startup, the point where streamed (deferred) content is
+  resident, and the busiest normal scene (a full crowd, effects), plus about 20%
+  headroom, rounded up to 4 MiB. All sizes are bytes; reports print MiB
+  (1 MiB = 1,048,576 bytes). The target is a
   phone with 2 GB of RAM, where the WASM heap, the GPU resources (unified memory)
   and the browser share what Android leaves to one tab. Studio ceilings for that
   phone: `wasm_bytes` at most 128 MiB, `gpu_bytes` at most 96 MiB. A limit above
@@ -34,8 +38,10 @@ reports crashes or WebGL context losses on weak phones.
 - The web release sets its initial memory from measurement, so a normal session
   does not grow the heap: every grow allocates a new, larger block and copies
   the heap, the allocation likeliest to fail on a phone. The budget sets
-  `wasm_grows: 0` once the initial size is measured; until then it records the
-  measured count and the note says why.
+  `wasm_grows: 0`, and the count covers the whole startup including streamed
+  packs (it counts every grow since instantiation). A game that still grows
+  fails verify until its initial size is raised; the limit is not raised to
+  hide it.
 - Nothing keeps growing in a long session: after warm-up the WASM heap, its grow
   count, the GPU ledger, GL object and program counts are flat.
 
@@ -47,15 +53,18 @@ without DevAPI, so a release build measures like a DevAPI build. GPU bytes are
 what the page asked GL to allocate (drivers pad); they compare builds on one
 machine and check a budget measured the same way, not an absolute device figure.
 
-1. Startup: `node tools/game.mjs verify --target <portal>` measures the packaged
-   release on the budget viewport once the game is ready and startup settles
-   (heap, GPU and programs still for 4 s, at most 20 s), before any WebGL loss,
-   and fails on overflow. Its last line prints `memory: wasm ... (N grows), gpu
-   ...`. Without a game build to verify:
-   `node ai_studio/game_tools/web_memory_budget.mjs --site <dir>|--zip <package.zip>`.
-2. One minute of play: the same tool with `--play 60` keeps the page running;
-   for real play use the game's own driver (a DevAPI census tool or the soak
-   below for one minute).
+1. Startup and streamed content: `node tools/game.mjs verify --target <portal>`
+   measures the packaged release on the budget viewport once the game is ready
+   and startup settles (heap, GPU and programs still for 4 s, at most 20 s),
+   before any WebGL loss, and again `after_seconds` later when the budget sets
+   it (deferred packs in). It fails on overflow at either point, and a point that
+   never settles fails too. Its last line prints `memory: startup: wasm ... MiB
+   (N grows), gpu ... MiB; after 60 s: ...`. Without a game build to verify:
+   `node ai_studio/game_tools/web_memory_budget.mjs --site <dir>|--zip <package.zip> [--play 60]`.
+2. The busiest normal scene and a minute of play: a release build has no
+   driver, so the game's own DevAPI census tool (or the soak below for one
+   minute) reaches it; the budget note records that peak, and the limits cover
+   it.
 3. Bot soak, 30-60 minutes:
    `node ai_studio/game_tools/web_memory_soak.mjs --site <dir> [--driver <module.mjs>]`.
    A game driver plays its transitions (room bots, windows, world changes);
