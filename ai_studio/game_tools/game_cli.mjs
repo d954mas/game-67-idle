@@ -14,6 +14,7 @@ import {
 } from "./package_web.mjs";
 import { smokePackagedWebArtifact } from "./package_web_smoke.mjs";
 import { memorySummary, readMemoryBudget } from "./web_memory_budget.mjs";
+import { assertReleaseBuild, assertReleaseSources } from "./release_opt_flags.mjs";
 import { createRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 
@@ -592,9 +593,13 @@ export async function packageGame(options, dependencies = {}, metadata = null) {
   return packaged;
 }
 
-export async function executeGameCommand(args, dependencies = {}) {
+// gates: test seams only. main() never passes them, so a game's shim cannot
+// replace the release optimization gate through its dependencies.
+export async function executeGameCommand(args, dependencies = {}, gates = {}) {
   if (!dependencies.gameDir) throw new Error("the game CLI needs the game directory");
   const gameDir = resolve(dependencies.gameDir);
+  const releaseSources = gates.releaseSources || assertReleaseSources;
+  const releaseBuild = gates.releaseBuild || assertReleaseBuild;
   const doctor = dependencies.doctor || doctorGame;
   const nodeTest = dependencies.nodeTest || runNodeTests;
   const nativeTest = dependencies.nativeTest || runNativeTests;
@@ -608,11 +613,25 @@ export async function executeGameCommand(args, dependencies = {}) {
   // A game whose web build has its own layout names its artifact directory and validator.
   const artifactDirFor = dependencies.artifactDir || artifactDir;
   const validateArtifact = dependencies.validateArtifact || validateWebArtifact;
+  // The release tree is the parent of the artifact directory, whichever layout the game uses.
+  const checkReleaseBuild = (target, assertText) => releaseBuild(dirname(artifactDirFor(gameDir, target, assertText)));
   const prepare = (templateProof = false, proofOptions = undefined) => {
     doctor({ gameDir, templateProof });
+    releaseSources({ gameDir, studioRoot: resolve(TOOLS_DIR, "..", "..") });
     const metadata = loadMetadata(gameDir, templateProof);
     verifyDependencies(metadata, proofOptions);
     return metadata;
+  };
+  // A game may package its own way; the archive is removed when its build fails the gate.
+  const packageReleased = async (options, metadata) => {
+    const result = await packageGameOwned(options, metadata);
+    try {
+      checkReleaseBuild(options.target, options.assertText);
+    } catch (error) {
+      if (result?.zipPath) rmSync(resolve(gameDir, result.zipPath), { force: true });
+      throw error;
+    }
+    return result;
   };
   if (args.command === "clean") {
     const removed = (dependencies.clean || cleanBuild)(gameDir, { all: args.all });
@@ -629,6 +648,7 @@ export async function executeGameCommand(args, dependencies = {}) {
   if (args.command === "build") {
     prepare(false);
     (dependencies.build || buildGame)(gameDir, args.target, args.assertText);
+    checkReleaseBuild(args.target, args.assertText);
     return { message: `built ${releasePreset(args.assertText)}-${args.target}` };
   }
   if (args.command === "run") {
@@ -654,6 +674,7 @@ export async function executeGameCommand(args, dependencies = {}) {
   if (args.command === "playable") {
     prepare(false);
     if (args.build) (dependencies.build || buildGame)(gameDir, args.target, args.assertText);
+    checkReleaseBuild(args.target, args.assertText);
     validateArtifact({ gameDir, artifactDir: artifactDirFor(gameDir, args.target, args.assertText), target: args.target, studioRoot: findStudioRoot(gameDir) });
     return { message: `playable proof passed (${args.target}${dependencies.validateArtifact ? ", game-owned artifact validator" : ""})` };
   }
@@ -663,13 +684,13 @@ export async function executeGameCommand(args, dependencies = {}) {
   }
   if (args.command === "package") {
     const metadata = prepare(args.templateProof);
-    const result = await packageGameOwned(args, metadata);
+    const result = await packageReleased(args, metadata);
     return { message: `package passed: ${result.zipPath}`, result };
   }
   const metadata = prepare(args.templateProof);
   const memoryBudget = (dependencies.memoryBudget || readMemoryBudget)(gameDir);
   const summary = args.skipTests ? "" : await runTestSuites(gameDir, { nodeTest, nativeTest, selection: { mode: "all" }, verbose: args.verbose });
-  const result = await packageGameOwned(args, metadata);
+  const result = await packageReleased(args, metadata);
   const observation = await smokePackage({
     zipPath: result.zipPath, expectedTarget: args.target, mode: "full", frameExpectation: args.templateProof ? "blank" : "rendered",
     allowedRemoteUrls: remoteEndpoints(gameDir, args.target, { artifactDir: (dir, target) => artifactDirFor(dir, target, args.assertText) }),
@@ -685,6 +706,9 @@ export async function main(argv = process.argv.slice(2), dependencies = {}) {
   try {
     const custom = dependencies.commands?.[argv[0]];
     if (custom) {
+      // A game's own command may build or ship a release (a deploy, a publish);
+      // the source half of the optimization gate runs before it too.
+      assertReleaseSources({ gameDir: resolve(dependencies.gameDir), studioRoot: resolve(TOOLS_DIR, "..", "..") });
       console.log(await custom(argv.slice(1), { gameDir: resolve(dependencies.gameDir) }));
       return 0;
     }
