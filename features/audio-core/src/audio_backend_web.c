@@ -6,7 +6,9 @@
 
 /* The streamed-track decoder: miniaudio built without devices, threads or
    engine. It lives in this translation unit so the web build keeps its one
-   source file and consumers need no new wiring. */
+   source file and consumers need no new wiring. Tracks decode through dr_mp3
+   directly: the browser takes PCM at the track's own rate and channels, so
+   ma_decoder's format, channel and rate converters would only pass it through. */
 #include "audio_miniaudio_impl.c"
 
 #include <emscripten.h>
@@ -74,7 +76,8 @@ typedef struct audio_web_stream_clip_t {
 typedef struct audio_web_stream_voice_t {
     uint32_t voice;
     uint32_t clip;
-    ma_decoder decoder;
+    ma_dr_mp3 decoder;
+    bool loop;
     float carry[2];
     bool primed;
     bool ended;
@@ -110,7 +113,7 @@ static audio_web_stream_voice_t **stream_voice(uint32_t voice) {
 }
 
 static void stream_voice_release(audio_web_stream_voice_t **entry) {
-    (void)ma_decoder_uninit(&(*entry)->decoder);
+    ma_dr_mp3_uninit(&(*entry)->decoder);
     free(*entry);
     *entry = NULL;
 }
@@ -127,13 +130,11 @@ static bool stream_voice_start(uint32_t voice, const audio_web_stream_clip_t *cl
     }
     audio_web_stream_voice_t *stream = slot != NULL ? calloc(1, sizeof(*stream)) : NULL;
     if (stream == NULL) return false;
-    ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 0, 0);
-    if (ma_decoder_init_memory(clip->encoded, clip->size, &config, &stream->decoder) != MA_SUCCESS) {
+    if (!ma_dr_mp3_init_memory(&stream->decoder, clip->encoded, clip->size, NULL)) {
         free(stream);
         return false;
     }
-    /* The loop wraps inside the decoder, so the seam is one more join. */
-    (void)ma_data_source_set_looping((ma_data_source *)&stream->decoder, loop ? MA_TRUE : MA_FALSE);
+    stream->loop = loop;
     stream->voice = voice;
     stream->clip = clip->clip;
     stream->muted_since = gain > 0.0f ? -1.0 : audio_web_now();
@@ -145,21 +146,27 @@ static bool stream_voice_start(uint32_t voice, const audio_web_stream_clip_t *cl
 }
 
 static uint32_t stream_read(audio_web_stream_voice_t *stream, float *out, uint32_t frames) {
-    const uint32_t channels = stream->decoder.outputChannels;
+    const uint32_t channels = stream->decoder.channels;
     uint32_t total = 0;
+    bool wrapped = false;
     while (total < frames) {
-        ma_uint64 got = 0;
-        (void)ma_data_source_read_pcm_frames((ma_data_source *)&stream->decoder, out + total * channels,
-            frames - total, &got);
-        if (got == 0) break;
+        const ma_uint64 got = ma_dr_mp3_read_pcm_frames_f32(&stream->decoder, frames - total, out + total * channels);
         total += (uint32_t)got;
+        if (got != 0) {
+            wrapped = false;
+            continue;
+        }
+        /* The loop wraps here, so the seam is one more join; a track that
+           decodes nothing after a rewind ends instead of spinning. */
+        if (!stream->loop || wrapped || !ma_dr_mp3_seek_to_pcm_frame(&stream->decoder, 0)) break;
+        wrapped = true;
     }
     return total;
 }
 
 /* Decodes the next chunk and hands it over; false once the stream is done. */
 static bool stream_push_chunk(audio_web_stream_voice_t *stream, bool fade_in) {
-    const uint32_t channels = stream->decoder.outputChannels;
+    const uint32_t channels = stream->decoder.channels;
     if (!stream->primed) {
         if (stream_read(stream, stream->carry, 1) == 0) return false;
         stream->primed = true;
@@ -174,7 +181,7 @@ static bool stream_push_chunk(audio_web_stream_voice_t *stream, bool fade_in) {
     if (last) memcpy(s_interleaved + frames * channels, s_interleaved + (frames - 1u) * channels, sizeof(float) * channels);
     memcpy(stream->carry, s_interleaved + frames * channels, sizeof(float) * channels);
     if (fade_in) {
-        uint32_t ramp = (uint32_t)(AUDIO_WEB_STREAM_GAP_FADE_SECONDS * (double)stream->decoder.outputSampleRate);
+        uint32_t ramp = (uint32_t)(AUDIO_WEB_STREAM_GAP_FADE_SECONDS * (double)stream->decoder.sampleRate);
         if (ramp > frames) ramp = frames;
         for (uint32_t i = 0; i < ramp; ++i) {
             for (uint32_t c = 0; c < channels; ++c) s_interleaved[i * channels + c] *= (float)i / (float)ramp;
@@ -184,7 +191,7 @@ static bool stream_push_chunk(audio_web_stream_voice_t *stream, bool fade_in) {
         for (uint32_t i = 0; i <= frames; ++i) s_planes[c * (frames + 1u) + i] = s_interleaved[i * channels + c];
     }
     const bool pushed = audio_web_stream_push(stream->voice, s_planes, frames, channels,
-        stream->decoder.outputSampleRate) != 0;
+        stream->decoder.sampleRate) != 0;
     return pushed && !last;
 }
 
@@ -206,7 +213,7 @@ static bool stream_needs(audio_web_stream_voice_t *stream, bool *gap) {
             stream->filling = true;
         }
     }
-    const int target = (int)(stream->ahead_seconds * (double)stream->decoder.outputSampleRate);
+    const int target = (int)(stream->ahead_seconds * (double)stream->decoder.sampleRate);
     if (ahead >= target) {
         stream->filling = false;
         return false;
@@ -311,12 +318,11 @@ uint32_t audio_core_backend_stream_open(const void *bytes, uint32_t size) {
         if (s_stream_clips[i].clip == 0) entry = &s_stream_clips[i];
     }
     if (entry == NULL || bytes == NULL || size == 0) return 0;
-    ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 0, 0);
-    ma_decoder probe;
-    bool decodable = ma_decoder_init_memory(bytes, size, &config, &probe) == MA_SUCCESS;
+    ma_dr_mp3 probe;
+    bool decodable = ma_dr_mp3_init_memory(&probe, bytes, size, NULL) != 0;
     if (decodable) {
-        decodable = probe.outputChannels <= 2u;
-        (void)ma_decoder_uninit(&probe);
+        decodable = probe.channels <= 2u;
+        ma_dr_mp3_uninit(&probe);
     }
     void *encoded = decodable ? malloc(size) : NULL;
     const uint32_t clip = audio_web_stream_open(encoded != NULL ? 1 : 0);
