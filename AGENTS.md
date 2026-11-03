@@ -104,6 +104,10 @@ heads; source working-tree changes are intentionally not transferred.
 - SVG/vector/procedurally drawn art is a direction mockup only. It never becomes a
   game asset unless the lead explicitly asked for or approved it; real game art
   goes through the asset pipeline (source-first, then raster generation).
+- Release code is optimized for speed: never compiled or linked with `-Os`/`-Oz`
+  or below `-O2`. A size budget is met by removing code or data. The game CLI
+  fails any build, test, package or verify that breaks this
+  (`ai_studio/game_tools/README.md#release-optimization-gate`).
 - Every committed asset must have license, provenance, integrity, and `origin`.
 - Paid or non-redistributable binaries never enter git. One exception, granted
   by the lead per game: a private game repository whose

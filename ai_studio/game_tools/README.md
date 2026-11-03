@@ -144,6 +144,39 @@ The declaration copy and pack bytes also participate in the release metadata
 and artifact hashes. The source declaration and staging
 record are not shipped as separate files.
 
+## Release optimization gate
+
+Release code is compiled and linked for speed. `-Os`, `-Oz` and a
+`MinSizeRel` build type are forbidden, and so is a release compile or link below
+`-O2`. A size budget is met by removing code or data, never by these flags.
+There is no per-target exception.
+
+`release_opt_flags.mjs` enforces it in two layers:
+
+- Source scan: CMake files (and `CMakePresets.json`) anywhere in the game and in
+  `templates/`, `features/`, `ai_studio/game_tools/`, plus build-tool code in a
+  game's `tools/`. Comments are ignored; untracked files count. It runs in every
+  `build`, `test`, `playable`, `package` and `verify`, and before every
+  game-owned command, before anything else.
+- Effective flags: `ninja -t compdb -x` on the release tree beside the
+  artifact (`dirname(artifactDir)`), response files expanded. Any `-Os`/`-Oz`
+  token in any command fails (environment, launcher, a `wasm-opt` step), and so
+  does a compile or link whose last `-O` is not `-O2`, `-O3` or `-Ofast`. This
+  catches flags from any source: game, feature, template, engine or toolchain.
+  It runs after `build` and `playable`, and after `package` and `verify` build
+  the archive; a failing package's ZIP is deleted.
+
+A game's shim cannot replace the gate: `executeGameCommand` takes its test seams
+in a third argument that `main` never passes. The Studio runs the source scan in
+`features.contracts` and `reference-template`, and the effective check through
+the reference template's `verify` in `reference-template.web`.
+
+```powershell
+node ai_studio/game_tools/release_opt_flags.mjs                    # Studio sources
+node ai_studio/game_tools/release_opt_flags.mjs --game <game-dir>  # a game's sources
+node ai_studio/game_tools/release_opt_flags.mjs --build <tree>     # a configured release tree
+```
+
 ## Older games
 
 Games created before this module still carry their own copies in `tools/`.

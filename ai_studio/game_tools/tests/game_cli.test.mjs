@@ -290,6 +290,10 @@ test("golden banks are addressed absolutely and recorded only on request", () =>
   assert.equal(goldenEnvironment(gameDir, true, {}).GAME_UPDATE_GOLDENS, "1");
 });
 
+// These seams fake the build, so there is no release Ninja tree to inspect;
+// release_opt_flags.test.mjs proves the gate itself.
+const NO_RELEASE_TREE = { releaseBuild: () => {} };
+
 // A quiet test run writes its log and goldens dir under the game, so seams need a disposable one.
 function scratchGameDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "game-cli-seam-"));
@@ -313,7 +317,7 @@ test("verify composes doctor tests and one package without discovering workspace
       assert.equal(frameExpectation, "blank");
       calls.push(["smoke", zipPath, expectedTarget]);
     },
-  });
+  }, NO_RELEASE_TREE);
   assert.deepEqual(calls, [
     "doctor", "dependencies", "node", "native",
     ["package", false, "local"], ["smoke", "release/template-local.zip", "local"],
@@ -339,7 +343,7 @@ test("game test and plain verify require dependency proof plus Node and native C
         assert.equal(frameExpectation, "rendered");
         calls.push("smoke");
       },
-    });
+    }, NO_RELEASE_TREE);
     assert.deepEqual(calls, command === "test"
       ? ["dependencies:warn", "node", "native"]
       : ["dependencies", "node", "native", "package", "smoke"]);
@@ -391,7 +395,7 @@ test("template test bypass validates identity before the parent proof can skip t
       loadMetadata: () => ({ dependencies: {}, proof: "reference-template" }),
       verifyDependencies: () => calls.push("dependencies"),
       package: () => { calls.push("package"); return { zipPath: "template.zip" }; },
-    }),
+    }, NO_RELEASE_TREE),
     /template identity is invalid/,
   );
   assert.deepEqual(calls, ["doctor"]);
@@ -479,6 +483,13 @@ test("copied game CLI executes doctor and final package from a real games/privat
     "",
   ].join("\n"));
   write(join(artifact, "game.wasm"), runtimeBoundWasm(runtimeBuild));
+  // The release optimization gate reads the commands of the tree beside bin/.
+  write(join(dirname(artifact), "build.ninja"), [
+    "rule cc", "  command = emcc -O3 -DNDEBUG -o $out -c $in",
+    "rule link", "  command = emcc -O3 $in -o $out",
+    "build CMakeFiles/game.dir/src/main.c.o: cc src/main.c",
+    "build bin/game.js: link CMakeFiles/game.dir/src/main.c.o", "",
+  ].join("\n"));
   const emittedPath = join(artifact, "game.js.symbols");
   write(emittedPath, "0:main\n");
   retainWasmSymbols({ emittedPath, retainedPath: join(dirname(artifact), "game.js.symbols"),
@@ -617,7 +628,7 @@ test("verify admits only the endpoints the build recorded beside the target buil
     package: () => ({ zipPath: "example.zip" }),
     remoteEndpoints: (gameDir, target) => [`https://${target}.example.com`],
     smoke: ({ allowedRemoteUrls }) => { seen = allowedRemoteUrls; },
-  });
+  }, NO_RELEASE_TREE);
   assert.deepEqual(seen, ["https://itch.example.com"]);
 
   let selectedArtifact = "";
@@ -629,7 +640,7 @@ test("verify admits only the endpoints the build recorded beside the target buil
     package: () => ({ zipPath: "example-test.zip" }),
     remoteEndpoints: (gameDir, target, { artifactDir }) => { selectedArtifact = artifactDir(gameDir, target); return []; },
     smoke: () => {},
-  });
+  }, NO_RELEASE_TREE);
   assert.match(selectedArtifact.replaceAll("\\", "/"), /build\/wasm-release-asserts-poki\/bin$/);
 });
 
@@ -680,7 +691,7 @@ test("a game with its own web layout names its artifact, validator and portal pr
     verifyDependencies: () => {},
     artifactDir: (gameDir, target) => `${gameDir}/build/${target}-site`,
     validateArtifact: (options) => { validated = options; },
-  });
+  }, NO_RELEASE_TREE);
   assert.equal(validated.artifactDir, `${resolve(gameModuleRoot)}/build/itch-site`);
   const steps = portalCheckPlan("/studio", "/repo/games/example", "itch", {
     exists: () => true,
@@ -746,7 +757,7 @@ test("verify hands the game's memory budget to the smoke and reports what it mea
     remoteEndpoints: () => [],
     memoryBudget: () => memoryBudget,
     smoke: (options) => { seen = options.memoryBudget; return { memory }; },
-  });
+  }, NO_RELEASE_TREE);
   const result = await run(budget, { wasm_bytes: 80 * 1048576, wasm_grows: 1, gpu_bytes: 60 * 1048576, programs: 31 });
   assert.equal(seen, budget);
   assert.match(result.message, /memory: wasm 80\.0 MiB \(1 grow\), gpu 60\.0 MiB, programs 31/);

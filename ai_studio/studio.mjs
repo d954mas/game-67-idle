@@ -83,6 +83,9 @@ const FEATURE_NATIVE_COMMANDS = [
   ["ctest", "--test-dir", "ai_studio/feature_testing/consumer/build/feature-verify-devapi", "--output-on-failure",
     "--no-tests=error", "-R", "^(test_scenes_core_devapi|scenes_core_devapi_runtime_schema)$"],
 ];
+// Release code is optimized for speed; a size flag in a template, feature or
+// game tool fails here before any game builds it.
+const RELEASE_OPT_FLAGS_COMMAND = ["node", "ai_studio/game_tools/release_opt_flags.mjs"];
 const WEB_COMMANDS = [
   ["node", "templates/template/tools/build_web.mjs", "--preset", "wasm-release", "--target", "itch", "--no-debug-ui"],
   ["node", "-e", "const fs=require('node:fs'); for (const p of ['templates/template/build/wasm-release-itch/bin/game.js','templates/template/build/wasm-release-itch/bin/game.wasm','templates/template/build/wasm-release-itch/bin/assets/game.ntpack']) if (!fs.existsSync(p)) throw new Error('missing artifact '+p)"],
@@ -157,7 +160,7 @@ const CHECKS = Object.freeze([
   },
   { id: "studio.workspace", testRoots: ["ai_studio/workspace"] },
   { id: "workspace.game-create", testFiles: ["games/new_game.test.mjs"] },
-  { id: "features.contracts", testFiles: ["features/validate_contracts.test.mjs"], commands: [["node", "features/validate_contracts.mjs"]] },
+  { id: "features.contracts", testFiles: ["features/validate_contracts.test.mjs"], commands: [["node", "features/validate_contracts.mjs"], RELEASE_OPT_FLAGS_COMMAND] },
   { id: "features.node", testRoots: ["features"], except: [NETWORK_INTEGRATION_TEST, NETPROXY_TEST] },
   // Builds a bare consumer with engine curl and runs the timed wire checks (about 90 s): CI, not every edit.
   { id: "features.network-integration", testFiles: [NETWORK_INTEGRATION_TEST], releaseOnly: true },
@@ -205,7 +208,7 @@ const CHECKS = Object.freeze([
     ],
     nativeRoots: ["features/scenes-core/tests"],
   },
-  { id: "reference-template", testRoots: ["templates/template/tools", "ai_studio/game_tools/tests"] },
+  { id: "reference-template", testRoots: ["templates/template/tools", "ai_studio/game_tools/tests"], commands: [RELEASE_OPT_FLAGS_COMMAND] },
   { id: "reference-template.python", pythonRoots: ["templates/template/devapi"] },
 ]);
 
