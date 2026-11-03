@@ -109,6 +109,17 @@ bool game_storage_write_save(
 bool game_storage_read(
     const char *slot, char **out, game_storage_read_status_t *status,
     char *error, int error_cap) {
+    const bool ok = game_storage_read_with_availability(slot, out, status, error, error_cap);
+    /* Legacy consumers do not opt into playable, non-writing sessions. */
+    if (status != NULL && *status == GAME_STORAGE_READ_UNAVAILABLE) {
+        *status = GAME_STORAGE_READ_ERROR_PRESERVED;
+    }
+    return ok;
+}
+
+bool game_storage_read_with_availability(
+    const char *slot, char **out, game_storage_read_status_t *status,
+    char *error, int error_cap) {
     if (status != NULL) {
         *status = GAME_STORAGE_READ_ERROR;
     }

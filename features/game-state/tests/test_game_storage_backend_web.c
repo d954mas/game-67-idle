@@ -338,8 +338,22 @@ void test_web_backup_is_noop_but_still_validates_slot(void) {
     TEST_ASSERT_EQUAL_STRING("web has no backup slot", error);
 }
 
+static void test_web_backend_preserves_unavailable_status(void) {
+    s_load_status = GAME_STORAGE_READ_UNAVAILABLE;
+    s_reason = "exception SecurityError";
+    char *out = NULL;char error[256] = {0};
+    game_storage_read_status_t status = GAME_STORAGE_READ_OK;
+    TEST_ASSERT_FALSE(game_storage_read_with_availability("autosave", &out, &status, error, sizeof error));
+    TEST_ASSERT_NULL(out);
+    TEST_ASSERT_EQUAL(GAME_STORAGE_READ_UNAVAILABLE, status);
+    TEST_ASSERT_NOT_NULL(strstr(error, "SecurityError"));
+    TEST_ASSERT_EQUAL_STRING("", s_corrupt_key);
+    TEST_ASSERT_FALSE(game_storage_read("autosave", &out, &status, error, sizeof error));
+    TEST_ASSERT_EQUAL(GAME_STORAGE_READ_ERROR_PRESERVED, status);
+}
 int main(void) {
     UNITY_BEGIN();
+    RUN_TEST(test_web_backend_preserves_unavailable_status);
     RUN_TEST(test_web_backend_scopes_keys_and_round_trips);
     RUN_TEST(test_web_backend_reports_write_and_probe_failures);
     RUN_TEST(test_web_backend_separates_a_full_store_from_a_blocked_one);

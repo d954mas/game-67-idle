@@ -28,16 +28,6 @@ static const scene_api_t k_api = {
     .load_step = load_step,
 };
 
-static bool dummy_endpoint(
-    const cJSON *params, cJSON *result,
-    nt_devapi_error *error, void *user) {
-    (void)params;
-    (void)result;
-    (void)error;
-    (void)user;
-    return true;
-}
-
 static const scene_descriptor_t k_catalog[] = {
     {.id = "root", .kind = SCENE_KIND_SCREEN,
      .instance = &s_root, .api = &k_api},

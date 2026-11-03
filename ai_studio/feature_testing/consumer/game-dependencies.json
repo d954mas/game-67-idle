@@ -8,7 +8,7 @@
     {
       "id": "audio-core",
       "source": "features/audio-core",
-      "version": "1.3.0",
+      "version": "1.3.1",
       "compatibility": "Native DevAPI post-mix capture; validation is recorded in README.md."
     },
     {
@@ -20,7 +20,7 @@
     {
       "id": "game-state",
       "source": "features/game-state",
-      "version": "4.12.2",
+      "version": "4.13.0",
       "compatibility": "validated by the template build and test suite"
     },
     {
@@ -44,7 +44,7 @@
     {
       "id": "platform-sdk",
       "source": "features/platform-sdk",
-      "version": "3.1.1",
+      "version": "3.3.0",
       "compatibility": "validated by the template build and test suite"
     },
     {

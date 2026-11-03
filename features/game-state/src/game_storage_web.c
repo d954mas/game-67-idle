@@ -40,6 +40,7 @@ EM_JS(char *, game_storage_web_load,
     var ptr = 0;
     var key = null;
     var data = null;
+    var readingStorage = false;
     var quarantineCopy = function(k, raw) {
         if (k === null || raw === null) { return false; }
         try {
@@ -52,9 +53,19 @@ EM_JS(char *, game_storage_web_load,
     };
     try {
         key = UTF8ToString(key_ptr);
+        readingStorage = true;
         data = window.localStorage.getItem(key);
+        readingStorage = false;
         if (data === null) {
             if (status_ptr) { HEAP32[status_ptr >> 2] = 1; }
+            return 0;
+        }
+        if (data.indexOf('\0') !== -1) {
+            var copied = quarantineCopy(key, data);
+            if (status_ptr) { HEAP32[status_ptr >> 2] = copied ? 2 : 3; }
+            if (reason_ptr && reason_cap > 0) {
+                stringToUTF8("stored document contains an embedded NUL", reason_ptr, reason_cap);
+            }
             return 0;
         }
         var dataBytes = lengthBytesUTF8(data);
@@ -82,7 +93,7 @@ EM_JS(char *, game_storage_web_load,
     } catch (e) {
         if (ptr) { _free(ptr); }
         var copied = quarantineCopy(key, data);
-        if (status_ptr) { HEAP32[status_ptr >> 2] = copied ? 2 : 3; }
+        if (status_ptr) { HEAP32[status_ptr >> 2] = readingStorage ? 4 : (copied ? 2 : 3); }
         if (reason_ptr && reason_cap > 0) {
             stringToUTF8("exception " + ((e && e.name) ? e.name : "unknown"), reason_ptr, reason_cap);
         }

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { fail, isMain } from "../core_harness/tool_lib/cli.mjs";
@@ -39,6 +39,8 @@ function lastLine(text) {
 function metaserverCheck(gameDir, spawn) {
   const dependencies = JSON.parse(readFileSync(join(gameDir, "dependencies.json"), "utf8").replace(/^\uFEFF/, ""));
   if (!dependencies.features?.some((feature) => feature.id === "metaserver")) return null;
+  // A game may link only the C admission half and ship no Go main of its own.
+  if (!existsSync(join(gameDir, "metaserver", "go.mod"))) return null;
   for (const step of ["vet", "build"]) {
     const result = spawn("go", [step, "./..."], { cwd: join(gameDir, "metaserver"), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     if (result.error || result.status !== 0) return `go ${step}: ${result.error?.message || lastLine(`${result.stdout || ""}${result.stderr || ""}`)}`;

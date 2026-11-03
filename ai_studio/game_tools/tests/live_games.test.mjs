@@ -49,8 +49,12 @@ test("a game listing the metaserver library vets and builds its metaserver modul
   const root = mkdtempSync(join(tmpdir(), "live-games-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   writeJson(root, "features/metaserver/feature.json", { id: "metaserver", version: "1.0.0" });
-  for (const id of ["online-game", "broken-game"]) {
+  for (const id of ["online-game", "broken-game", "admission-only-game"]) {
     game(root, id);
+    if (id !== "admission-only-game") {
+      mkdirSync(join(root, "games", id, "metaserver"), { recursive: true });
+      writeFileSync(join(root, "games", id, "metaserver", "go.mod"), "module test\n");
+    }
     writeJson(root, `games/${id}/dependencies.json`, {
       schema: "ai_studio.game.dependencies.v3",
       engine: { source: "external/neotolis-engine", version: ENGINE.slice(0, 8), revision: ENGINE, compatibility: "test" },
@@ -66,7 +70,7 @@ test("a game listing the metaserver library vets and builds its metaserver modul
   const rows = checkLiveGames(root, { spawn, engineRevision: ENGINE });
 
   assert.deepEqual(rows.map((row) => [row.game, row.testsPassed, row.metaserver]),
-    [["broken-game", true, "go build: main.go:7: undefined: metaserver.Gone"], ["online-game", true, ""]]);
+    [["admission-only-game", true, null], ["broken-game", true, "go build: main.go:7: undefined: metaserver.Gone"], ["online-game", true, ""]]);
   const online = calls.filter((call) => call[0] === "go" && call.at(-1).includes("online-game"));
   assert.deepEqual(online.map((call) => call.slice(1, 3)), [["vet", "./..."], ["build", "./..."]]);
   assert.match(online[0].at(-1), /online-game[\\/]metaserver$/);

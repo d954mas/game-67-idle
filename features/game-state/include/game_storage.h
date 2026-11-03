@@ -64,6 +64,7 @@ typedef enum {
     GAME_STORAGE_READ_ABSENT = 1,  /* слота нет (return false) */
     GAME_STORAGE_READ_ERROR = 2,   /* чтение упало; проверенная quarantine-копия существует (return false) */
     GAME_STORAGE_READ_ERROR_PRESERVED = 3, /* чтение упало; primary сохранён, но quarantine-копии нет (return false) */
+    GAME_STORAGE_READ_UNAVAILABLE = 4, /* access failed before reading; never overwrite unseen data */
 } game_storage_read_status_t;
 
 /* Чтение primary. *out — malloc'нутая NUL-строка (владелец вызывающий, free()).
@@ -75,6 +76,12 @@ typedef enum {
    в слот до явного решения пользователя.
    false: ABSENT или ERROR; true: OK. */
 bool game_storage_read(const char *slot, char **out, game_storage_read_status_t *status, char *error, int error_cap);
+
+/* Opt-in read contract: UNAVAILABLE means access failed before reading bytes.
+   The caller must never write this session over the unseen slot. Other statuses
+   match game_storage_read, which maps UNAVAILABLE to ERROR_PRESERVED. */
+bool game_storage_read_with_availability(const char *slot, char **out,
+    game_storage_read_status_t *status, char *error, int error_cap);
 
 /* true если primary слота существует и читаем. */
 bool game_storage_exists(const char *slot);

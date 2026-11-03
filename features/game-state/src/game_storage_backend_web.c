@@ -132,6 +132,11 @@ bool game_storage_backend_read(
         set_error(error, error_cap, "browser storage has no such slot");
         return false;
     }
+    if (web_status == GAME_STORAGE_READ_UNAVAILABLE) {
+        if (status != NULL) { *status = GAME_STORAGE_READ_UNAVAILABLE; }
+        set_error_reason(error, error_cap, "browser storage unavailable", reason, "stored data untouched");
+        return false;
+    }
     const game_storage_read_status_t read_status =
         web_status == GAME_STORAGE_READ_ERROR
             ? GAME_STORAGE_READ_ERROR

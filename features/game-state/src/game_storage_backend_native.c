@@ -538,6 +538,11 @@ static bool read_file_bytes(
         set_error(error, error_cap, "failed to read storage file");
         return false;
     }
+    if (memchr(data, '\0', bytes_read) != NULL) {
+        free(data);
+        set_error(error, error_cap, "stored document contains an embedded NUL");
+        return false;
+    }
     data[size] = '\0';
     *out = data;
     if (status != NULL) {
