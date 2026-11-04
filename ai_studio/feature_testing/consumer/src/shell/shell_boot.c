@@ -49,6 +49,7 @@
 #include "ui/ui_runtime.h"
 
 #include <stdio.h>
+_Alignas(max_align_t) static uint8_t s_scratch_mem[(size_t)512U * 1024U];
 
 #ifndef GAME_ASSET_PACK_PATH
 #define GAME_ASSET_PACK_PATH "assets/game.ntpack"
@@ -165,7 +166,7 @@ bool shell_boot_init(const shell_options_t *options, World *world) {
     nt_resource_register_type(NT_ASSET_TEXTURE, &(nt_resource_type_desc_t){
         .activate = nt_gfx_activate_texture, .deactivate = nt_gfx_deactivate_texture}); // mesh texture + UI atlas page
     nt_atlas_init(); // resource types register before the first mount
-    nt_mem_scratch_init((size_t)512U * 1024U); // per-frame arena nt_ui builds element data from
+    nt_arena_init(&g_nt_mem_scratch, s_scratch_mem, sizeof s_scratch_mem); // per-frame arena nt_ui builds element data from
     loc_init(); // after the scratch arena: formatted strings allocate from it
 
     nt_font_init(&(nt_font_desc_t){.max_fonts = 2});
@@ -235,7 +236,6 @@ void shell_boot_shutdown(void) {
     game_analytics_shutdown(); // final flush and close, before the event infrastructure goes
 #endif
     game_events_shutdown();
-    nt_mem_scratch_shutdown();
     nt_text_renderer_shutdown();
     nt_font_destroy(s_text.font);
     nt_font_shutdown();

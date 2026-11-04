@@ -10,7 +10,7 @@
 /* Universal localization runtime. Knows nothing about any game: the language
  * list, the key vocabulary, and every string live in the generated table this
  * module is handed through loc_bind_table(). Links against the engine
- * (nt_mem_scratch, nt_log, nt_assert) and generated code only.
+ * (nt_memory, nt_log, nt_assert) and generated code only.
  *
  * Game code calls the GENERATED accessors (loc_<key>()), never the entry
  * points below -- those are the codegen's ABI.

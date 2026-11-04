@@ -19,7 +19,6 @@
 #include "devapi/nt_devapi_net.h"
 #endif
 #ifdef NT_DEVAPI_GROUP_CAPTURE
-#include "devapi/nt_devapi_capture.h"
 #endif
 #ifdef NT_DEVAPI_GROUP_OBS
 #include "log/nt_log_ring.h"
@@ -187,9 +186,6 @@ bool shell_platform_start(World *world) {
 #ifdef NT_PLATFORM_WEB
     nt_devapi_web_install_shim();
 #endif
-#ifdef NT_DEVAPI_GROUP_CAPTURE
-    nt_devapi_capture_install_seam();
-#endif
 #ifndef NT_PLATFORM_WEB
     (void)nt_devapi_net_wait_for_client(2000);
 #endif
@@ -222,8 +218,8 @@ static void devapi_sample_metrics(double frame_begin) {
         .gpu_ms = -1.0F,
         .draw_calls = nt_gfx_draw_calls(&g_nt_gfx.counters),
         .mem_used = mem_used,
-        .scratch_hwm = (uint32_t)nt_mem_scratch_high_water_mark(),
-        .scratch_used = (uint32_t)nt_mem_scratch_used(),
+        .scratch_hwm = (uint32_t)g_nt_mem_scratch.high_water,
+        .scratch_used = (uint32_t)g_nt_mem_scratch.used,
     };
     nt_metrics_sample(&frame);
 #else
@@ -347,6 +343,9 @@ void shell_platform_frame_end(shell_shown_t shown, bool playable) {
     const double now = nt_time_now();
     game_recording_frame(now, (float)(now - last_presented));
     last_presented = now;
+#endif
+#if NT_DEVAPI_ENABLED
+    nt_devapi_frame_rendered();
 #endif
     nt_window_swap_buffers();
     if (shown.complete) {

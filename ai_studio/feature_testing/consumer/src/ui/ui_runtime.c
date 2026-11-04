@@ -134,7 +134,7 @@ bool ui_runtime_begin(float dt, const game_input_frame_t *input) {
     u.near_far[1] = 1.0F;
     nt_gfx_bind_uniform_block(NT_GFX_SLOT_GLOBALS, &u, sizeof u);
 
-    nt_mem_scratch_reset();
+    nt_arena_reset(&g_nt_mem_scratch);
     // Feed ALL pointer slots in raw device coordinates: a DevAPI-injected
     // click lands in the first FREE slot, which is not 0 when a real mouse
     // already holds slot 0. The context viewport performs the one canonical
@@ -165,7 +165,7 @@ bool ui_runtime_begin(float dt, const game_input_frame_t *input) {
         pointer.buttons[NT_BUTTON_MIDDLE].is_released = source->middle_released;
         pointers[i] = pointer;
     }
-    nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, pointers, NT_INPUT_MAX_POINTERS);
+    nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, pointers, NT_INPUT_MAX_POINTERS, g_nt_input.primary);
     nt_ui_set_viewport(s_ctx, nt_ui_viewport_from_scale(&s_scale));
     return true;
 }

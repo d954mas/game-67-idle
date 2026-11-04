@@ -42,7 +42,7 @@ void game_recording_shutdown(void) {
         else s_failed = true;
         s_owned = false;
     }
-    s_video_frames = nt_recorder_stop();
+    s_video_frames = nt_recorder_stop().frames;
 }
 
 void game_recording_frame(double now, float dt) {

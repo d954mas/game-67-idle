@@ -13,8 +13,7 @@ void tearDown(void) {
 
 static void test_capture_builds_one_semantic_frame_snapshot(void) {
     nt_input_set_key(NT_KEY_W, true);
-    nt_input_pointer_down(
-        1U, 320.0F, 240.0F, 1.0F, NT_POINTER_MOUSE, 3U);
+    nt_input_mouse_move(320.0F, 240.0F, 3U);
     nt_input_wheel(0.0F, 1.0F);
 
     game_input_frame_t input;

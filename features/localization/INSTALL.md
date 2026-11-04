@@ -8,7 +8,7 @@ games, and `games/private/<id>`.
 
 ## Dependencies
 
-The engine only: `nt_mem_scratch` (formatted strings), `nt_log` (the fallback
+The engine only: `nt_memory` (formatted strings), `nt_log` (the fallback
 warning), and `nt_core` (`NT_ASSERT` — the contracts in `loc.h` are asserts). No feature edges — in particular, digit grouping comes from
 the language block in the data, never from a game-side number formatter.
 
@@ -61,7 +61,7 @@ target_include_directories(${GAME_TARGET} PRIVATE "${LOCALIZATION_INC}")
 ```
 
 `${GAME_SOURCE_GENERATED_DIR}` must already be on the include path (it is, for
-the other generators). Link `nt_mem_scratch`, `nt_log`, and `nt_core` — most games already do.
+the other generators). Link `nt_memory`, `nt_log`, and `nt_core` — most games already do.
 
 ## The font charset follows the corpus
 
@@ -139,7 +139,7 @@ name instead of a heuristic over string contents.
 
 ```cmake
 add_executable(test_loc tests/test_loc.c "${LOCALIZATION_SRC}/loc.c")
-target_link_libraries(test_loc PRIVATE unity nt_mem_scratch nt_log nt_core)
+target_link_libraries(test_loc PRIVATE unity nt_memory nt_log nt_core)
 target_include_directories(test_loc PRIVATE "${LOCALIZATION_INC}" "${ENGINE_DIR}/engine")
 add_test(NAME test_loc COMMAND test_loc)
 

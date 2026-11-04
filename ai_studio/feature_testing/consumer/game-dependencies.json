@@ -38,7 +38,7 @@
     {
       "id": "localization",
       "source": "features/localization",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "compatibility": "validated by the template build and test suite"
     },
     {
@@ -86,13 +86,13 @@
     {
       "id": "ui-kit",
       "source": "features/ui-kit",
-      "version": "5.0.0",
+      "version": "5.0.1",
       "compatibility": "Native DevAPI sample host builds with current surface/icon UI layers."
     },
     {
       "id": "game-recording",
       "source": "features/game-recording",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "compatibility": "Windows native DevAPI audiovisual recorder; validation is recorded in README.md."
     }
   ],

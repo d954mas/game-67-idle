@@ -4,7 +4,6 @@
 #include "core/nt_core.h"
 #include "devapi/nt_devapi.h"
 #if NT_DEVAPI_ENABLED
-#include "devapi/nt_devapi_capture.h"
 #ifndef NT_PLATFORM_WEB
 #include "devapi/nt_devapi_net.h"
 #else
@@ -57,7 +56,6 @@ static bool devapi_start(const shell_options_t *options) {
 #ifdef NT_PLATFORM_WEB
     nt_devapi_web_install_shim();
 #endif
-    nt_devapi_capture_install_seam();
     s_devapi_running = true;
     return true;
 }
@@ -141,6 +139,9 @@ void shell_platform_frame_end(shell_shown_t shown) {
     if (!shown.presented) {
         return;
     }
+#if NT_DEVAPI_ENABLED
+    nt_devapi_frame_rendered();
+#endif
     nt_window_swap_buffers();
     if (shown.complete) { game_music_pack_after_present(); }
 #if defined(NT_PLATFORM_WEB)

@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <string.h>
+_Alignas(max_align_t) static uint8_t s_scratch_mem[64u * 1024u];
 
 /* End-to-end: e2e_strings.json -> loc.py -> THIS compiles against the real
  * generated header and calls the real generated accessors.
@@ -21,11 +22,11 @@
  * Everything asserted here therefore goes through generated code. */
 
 void setUp(void) {
-    nt_mem_scratch_init(64u * 1024u);
+    nt_arena_init(&g_nt_mem_scratch, s_scratch_mem, sizeof s_scratch_mem);
     loc_init();
 }
 
-void tearDown(void) { nt_mem_scratch_shutdown(); }
+void tearDown(void) {}
 
 /* --- the table the generator built ------------------------------------- */
 

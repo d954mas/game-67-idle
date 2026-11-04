@@ -967,7 +967,7 @@ if(NOT EMSCRIPTEN)
         "${LOC_E2E_DIR}/loc_strings.gen.c"
         "${LOC_E2E_DIR}/loc_plural_cases.gen.c"
         "${LOCALIZATION_SRC}/loc.c")
-    target_link_libraries(test_loc_e2e PRIVATE unity nt_mem_scratch nt_log nt_core)
+    target_link_libraries(test_loc_e2e PRIVATE unity nt_memory nt_log nt_core)
     target_include_directories(test_loc_e2e PRIVATE
         "${LOCALIZATION_INC}" "${LOC_E2E_DIR}" "${ENGINE_DIR}/engine")
     target_compile_definitions(test_loc_e2e PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -976,7 +976,7 @@ if(NOT EMSCRIPTEN)
     set_tests_properties(test_loc_e2e PROPERTIES LABELS "core")
 
     add_executable(test_loc "${LOCALIZATION_DIR}/tests/test_loc.c" "${LOCALIZATION_SRC}/loc.c")
-    target_link_libraries(test_loc PRIVATE unity nt_mem_scratch nt_log nt_core)
+    target_link_libraries(test_loc PRIVATE unity nt_memory nt_log nt_core)
     target_include_directories(test_loc PRIVATE "${LOCALIZATION_INC}" "${ENGINE_DIR}/engine")
     target_compile_definitions(test_loc PRIVATE _CRT_SECURE_NO_WARNINGS)
     nt_set_warning_flags(test_loc)
@@ -1227,7 +1227,7 @@ if(NOT EMSCRIPTEN)
     # nt_ui_interface (review #1 smoke-check): settings.h pulls ui/nt_ui.h for
     # nt_ui_context_t; header-only include-root + NT_UI_DEBUG_TOOLS define, no
     # Clay/impl chain -- draw_ui is never called in this TU, only declared.
-    target_link_libraries(test_template_composition PRIVATE cjson unity nt_hash nt_log nt_core nt_ui_interface nt_mem_scratch)
+    target_link_libraries(test_template_composition PRIVATE cjson unity nt_hash nt_log nt_core nt_ui_interface nt_memory)
     if(GAME_DEVAPI_ENABLED)
         target_sources(test_template_composition PRIVATE "${GAME_STATE_SRC}/game_save_devapi.c")
         target_link_libraries(test_template_composition PRIVATE nt_devapi_default nt_app_stub)

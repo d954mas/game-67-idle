@@ -74,7 +74,7 @@ bool lab_ui_runtime_ready(void) {
     return s_atlas_bound && s_font_bound && material_ready(s_sprite_material) && material_ready(s_text_material);
 }
 
-bool lab_ui_runtime_begin(float dt, const nt_pointer_t *pointers, uint32_t count) {
+bool lab_ui_runtime_begin(float dt, const nt_pointer_t *pointers, uint32_t count, uint32_t primary) {
     if (!lab_ui_runtime_ready()) {
         return false;
     }
@@ -105,7 +105,7 @@ bool lab_ui_runtime_begin(float dt, const nt_pointer_t *pointers, uint32_t count
     u.near_far[1] = 1.0F;
     nt_gfx_bind_uniform_block(NT_GFX_SLOT_GLOBALS, &u, sizeof u);
 
-    nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, pointers, count);
+    nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, pointers, count, primary);
     nt_ui_set_viewport(s_ctx, nt_ui_viewport_from_scale(&s_scale));
     return true;
 }

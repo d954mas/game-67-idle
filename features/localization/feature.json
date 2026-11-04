@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "localization",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "title": "Localization",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -9,7 +9,7 @@
   "copy_model": "in-place",
   "layer": "L1",
   "dependencies": [
-    "Neotolis nt_mem_scratch (per-frame arena)",
+    "Neotolis nt_memory (per-frame arena)",
     "Neotolis nt_log",
     "Neotolis nt_core (NT_ASSERT: the contracts in loc.h are asserts)",
     "Python 3.12 + jsonschema (studio venv)",

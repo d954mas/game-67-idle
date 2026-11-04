@@ -13,7 +13,7 @@
 // (ui_frame_begin), this feeds nt_ui the pointers and walks the tree. main owns
 // the materials, the font and the resources and hands them in once.
 //
-//   if (lab_ui_runtime_begin(dt, pointers, count)) { lab_build(lab_ui_runtime_ctx()); lab_ui_runtime_end(); }
+//   if (lab_ui_runtime_begin(dt, pointers, count, primary)) { lab_build(lab_ui_runtime_ctx()); lab_ui_runtime_end(); }
 void lab_ui_runtime_init(nt_material_t sprite_material, nt_material_t text_material, nt_font_t font,
                          nt_resource_t font_resource, nt_resource_t ui_atlas);
 
@@ -22,7 +22,7 @@ bool lab_ui_runtime_ready(void);
 
 // Pointers are raw device pixels; the context converts them through the
 // viewport, so a synthetic pointer takes the same path as the mouse.
-bool lab_ui_runtime_begin(float dt, const nt_pointer_t *pointers, uint32_t count);
+bool lab_ui_runtime_begin(float dt, const nt_pointer_t *pointers, uint32_t count, uint32_t primary);
 void lab_ui_runtime_end(void);
 
 void lab_ui_runtime_restore_gpu(void);

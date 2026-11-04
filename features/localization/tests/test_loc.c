@@ -6,6 +6,7 @@
 
 #include <setjmp.h>
 #include <string.h>
+_Alignas(max_align_t) static uint8_t s_scratch_mem[64u * 1024u];
 
 /* Runtime contract for features/localization/src/loc.c. The fixture table is
    hand-written here on purpose: this proves the RUNTIME, so it must not depend
@@ -103,11 +104,11 @@ static const loc_table_t k_table = {
 };
 
 void setUp(void) {
-    nt_mem_scratch_init(64u * 1024u);
+    nt_arena_init(&g_nt_mem_scratch, s_scratch_mem, sizeof s_scratch_mem);
     loc_bind_table(&k_table);
 }
 
-void tearDown(void) { nt_mem_scratch_shutdown(); }
+void tearDown(void) {}
 
 /* Contract violations are NT_ASSERT, so proving them needs the engine's own
    hookable handler (nt_assert.h: "Always defined so tests can link against it
@@ -373,9 +374,9 @@ void test_loc_number_groups_for_the_active_language(void) {
 }
 
 void test_loc_number_is_exactly_sized_and_does_not_alias(void) {
-    const size_t before = nt_mem_scratch_used();
+    const size_t before = g_nt_mem_scratch.used;
     LocStr first = loc_number(10000);
-    const size_t after = nt_mem_scratch_used();
+    const size_t after = g_nt_mem_scratch.used;
     TEST_ASSERT_EQUAL_UINT((unsigned)(strlen(first.s) + 1u), (unsigned)(after - before));
     LocStr second = loc_number(7);
     TEST_ASSERT_EQUAL_STRING("10 000", first.s);
@@ -449,9 +450,9 @@ void test_a_runaway_slot_index_stays_literal(void) {
 }
 
 void test_formatted_result_is_exactly_sized(void) {
-    const size_t before = nt_mem_scratch_used();
+    const size_t before = g_nt_mem_scratch.used;
     const char *text = coins(5);
-    const size_t after = nt_mem_scratch_used();
+    const size_t after = g_nt_mem_scratch.used;
     TEST_ASSERT_EQUAL_UINT((unsigned)(strlen(text) + 1u), (unsigned)(after - before));
 }
 

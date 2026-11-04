@@ -136,13 +136,13 @@ int main(int argc, char *argv[]) {
     ui_opts.padding = 8;
     ui_opts.margin = 8;
     ui_opts.extrude = 2;
-    ui_opts.premultiplied = true;
+    ui_opts.process.alpha = NT_TEX_ALPHA_PREMULTIPLIED;
     ui_opts.compress = (nt_basisu_encode_opts_t){0}; /* raw RGBA page */
     ui_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR_MIPMAP_LINEAR;
     ui_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     ui_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
     ui_opts.wrap_v = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
-    ui_opts.gen_mipmaps = true;
+    ui_opts.mips = NT_TEX_MIPS_RUNTIME;
     NtAtlasBuild *ui = nt_atlas_begin(ctx, "ui", &ui_opts);
 
     static const uint8_t white_pixel[4] = {255, 255, 255, 255};

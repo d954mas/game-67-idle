@@ -108,7 +108,7 @@ into, and lays out on the canvas it gets back:
 
 ```c
 const UiScaleFit fit = ui_frame_begin(fb_w, fb_h, g_nt_window.dpr);
-nt_ui_begin(ctx, fit.logical_w, fit.logical_h, dt, pointers, NT_INPUT_MAX_POINTERS);
+nt_ui_begin(ctx, fit.logical_w, fit.logical_h, dt, pointers, NT_INPUT_MAX_POINTERS, g_nt_input.primary);
 ```
 
 Build the tree and `nt_ui_walk` inside the pass: the walk records sprite and text

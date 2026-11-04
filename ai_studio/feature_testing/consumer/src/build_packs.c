@@ -191,13 +191,13 @@ int main(int argc, char *argv[]) {
     atlas_opts.padding = 8;
     atlas_opts.margin = 8;
     atlas_opts.extrude = 2;
-    atlas_opts.premultiplied = true;
+    atlas_opts.process.alpha = NT_TEX_ALPHA_PREMULTIPLIED;
     atlas_opts.compress = (nt_basisu_encode_opts_t){0};
     atlas_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR_MIPMAP_LINEAR;
     atlas_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     atlas_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
     atlas_opts.wrap_v = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
-    atlas_opts.gen_mipmaps = true; // UI art is drawn below native size: without mips it aliases
+    atlas_opts.mips = NT_TEX_MIPS_RUNTIME; // UI art is drawn below native size: without mips it aliases
     NtAtlasBuild *ui_atlas = nt_atlas_begin(ctx, "ui", &atlas_opts);
 
     // 1x1 white pixel: UI rect fill + nt_ui's required white region.
@@ -282,7 +282,7 @@ int main(int argc, char *argv[]) {
     icons_opts.padding = 2;
     icons_opts.margin = 2;
     icons_opts.extrude = 1;               // outline lands in the extrude gutter
-    icons_opts.premultiplied = true;      // affects ONLY the packed texture (ui parity);
+    icons_opts.process.alpha = NT_TEX_ALPHA_PREMULTIPLIED;      // affects ONLY the packed texture (ui parity);
                                           // debug-PNG is copied BEFORE premultiply -> straight alpha
     icons_opts.compress = (nt_basisu_encode_opts_t){0};   // parity with ui atlas (raw RGBA page)
     icons_opts.debug_png = true;          // -> <CMAKE_BINARY_DIR>/pack/icons_page0.png
@@ -290,7 +290,7 @@ int main(int argc, char *argv[]) {
     icons_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     icons_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
     icons_opts.wrap_v = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
-    icons_opts.gen_mipmaps = false;
+    icons_opts.mips = NT_TEX_MIPS_NONE;
     NtAtlasBuild *icons_atlas = nt_atlas_begin(ctx, "icons", &icons_opts);
     static const char *icon_names[] = {"gold","xp","energy","potion","sword","wood"};
     static const char *icon_paths[] = {

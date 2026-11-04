@@ -35,7 +35,7 @@ features/localization/
 
 ## Layer
 
-L1 — depends on the engine only (`nt_mem_scratch` for per-frame allocation,
+L1 — depends on the engine only (`nt_memory` for per-frame allocation,
 `nt_log` for the fallback warning). It never includes a game's `src/`, which is
 what keeps digit grouping in the language block instead of routing through some
 game's number formatter.

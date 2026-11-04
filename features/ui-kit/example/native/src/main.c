@@ -40,6 +40,7 @@
 #endif
 
 #define SCRATCH_ARENA_SIZE ((size_t)512U * 1024U)
+_Alignas(max_align_t) static uint8_t s_scratch_mem[SCRATCH_ARENA_SIZE];
 // Quads and glyphs per frame: vertex = quads x 4 x (20 B sprite + 64 B custom attrs) + glyphs x 4 x 48 B; index = (quads + glyphs) x 6 x 4 B.
 #define FRAME_QUADS 4096U
 #define FRAME_VERTEX_BYTES (FRAME_QUADS * 4U * (84U + 48U))
@@ -317,7 +318,7 @@ static void frame(void) {
         lab_ui_runtime_restore_gpu();
     }
     nt_input_poll();
-    nt_mem_scratch_reset();
+    nt_arena_reset(&g_nt_mem_scratch);
 
     nt_ui_context_t *ctx = lab_ui_runtime_ctx();
     handle_keys(ctx);
@@ -352,7 +353,7 @@ static void frame(void) {
         } else {
             memcpy(pointers, g_nt_input.pointers, sizeof pointers);
         }
-        if (lab_ui_runtime_begin(g_nt_app.dt, pointers, NT_INPUT_MAX_POINTERS)) {
+        if (lab_ui_runtime_begin(g_nt_app.dt, pointers, NT_INPUT_MAX_POINTERS, scripted() ? 0U : g_nt_input.primary)) {
             lab_build(ctx);
             lab_ui_runtime_end();
             drew = true;
@@ -423,7 +424,7 @@ int main(int argc, char *argv[]) {
     nt_fs_init();
     nt_hash_init(&(nt_hash_desc_t){0});
     nt_resource_init(&(nt_resource_desc_t){0});
-    nt_mem_scratch_init(SCRATCH_ARENA_SIZE);
+    nt_arena_init(&g_nt_mem_scratch, s_scratch_mem, sizeof s_scratch_mem);
     nt_resource_register_type(NT_ASSET_TEXTURE, &(nt_resource_type_desc_t){.activate = nt_gfx_activate_texture, .deactivate = nt_gfx_deactivate_texture});
     nt_resource_register_type(NT_ASSET_SHADER_CODE, &(nt_resource_type_desc_t){.activate = nt_gfx_activate_shader, .deactivate = nt_gfx_deactivate_shader});
     nt_atlas_init();
@@ -514,7 +515,6 @@ int main(int argc, char *argv[]) {
     nt_program_ref_drop(&s_text_program);
     nt_program_ref_drop(&s_radial_program);
     nt_material_shutdown();
-    nt_mem_scratch_shutdown();
     // Releases the pins the destroys above queued, so the pack unmounts clean.
     nt_resource_step();
     nt_resource_shutdown();

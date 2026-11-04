@@ -64,12 +64,12 @@ static void leaf(nt_ui_context_t *ctx, const nt_ui_element_data_t *data, const u
 static void open(const nt_ui_element_data_t *data, const ui_kit_shape_block_t *b, uint32_t rgb, float alpha,
     const Clay_ElementDeclaration *decl) {
     NT_ASSERT(s_uber.id != 0U && "ui_kit shapes: call ui_kit_shape_bind first");
-    nt_ui_image_custom_block_t *blk = NT_MEM_SCRATCH_ALLOC(nt_ui_image_custom_block_t);
+    nt_ui_image_custom_block_t *blk = NT_ARENA_ALLOC(&g_nt_mem_scratch, nt_ui_image_custom_block_t);
     NT_ASSERT(blk != NULL && "ui_kit shapes: scratch alloc failed");
     *blk = (nt_ui_image_custom_block_t){.custom_bytes = (uint8_t)UI_KIT_UBER_BLOCK_BYTES,
         .geom_mode = NT_UI_IMAGE_GEOM_GEOMETRY};
     block_floats(b, blk->custom_attrs);
-    nt_ui_image_payload_t *p = NT_MEM_SCRATCH_ALLOC(nt_ui_image_payload_t);
+    nt_ui_image_payload_t *p = NT_ARENA_ALLOC(&g_nt_mem_scratch, nt_ui_image_payload_t);
     NT_ASSERT(p != NULL && "ui_kit shapes: scratch alloc failed");
     *p = (nt_ui_image_payload_t){.atlas = s_atlas, .slice9_scale = 1.0F, .material = s_uber, .custom = blk};
     Clay_ElementDeclaration final = decl != NULL ? *decl : (Clay_ElementDeclaration){0};

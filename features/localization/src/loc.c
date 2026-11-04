@@ -419,7 +419,7 @@ LocStr loc_number(int64_t value) {
     char buf[LOC_NUMBER_BUF];
     render_grouped(buf, sizeof buf, value, &s_table->langs[s_lang]);
     const size_t len = strlen(buf);
-    char *out = (char *)nt_mem_scratch_alloc(len + 1u, 1u);
+    char *out = (char *)nt_arena_alloc(&g_nt_mem_scratch, len + 1u, 1u);
     memcpy(out, buf, len + 1u);
     return loc_raw(out);
 }
@@ -634,7 +634,7 @@ LocStr loc_format(int key_index, int plural_arg, const loc_arg_t *args, int arg_
     }
 
     const size_t needed = expand(tpl, values, lengths, arg_count, NULL);
-    char *out = (char *)nt_mem_scratch_alloc(needed + 1u, 1u);
+    char *out = (char *)nt_arena_alloc(&g_nt_mem_scratch, needed + 1u, 1u);
     (void)expand(tpl, values, lengths, arg_count, out);
     out[needed] = '\0';
     return loc_raw(out);
