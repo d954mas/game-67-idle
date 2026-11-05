@@ -108,6 +108,10 @@ heads; source working-tree changes are intentionally not transferred.
   or below `-O2`. A size budget is met by removing code or data. The game CLI
   fails any build, test, package or verify that breaks this
   (`ai_studio/game_tools/README.md#release-optimization-gate`).
+- DPR is never a performance lever: no agent lowers or caps device pixel ratio or
+  the canvas resolution to meet a performance target, or proposes it as a fallback.
+  Performance is met by removing rendering work; if that is not enough, report it
+  to the lead.
 - Every committed asset must have license, provenance, integrity, and `origin`.
 - Paid or non-redistributable binaries never enter git. One exception, granted
   by the lead per game: a private game repository whose
