@@ -117,6 +117,10 @@ add_executable(${GAME_TARGET} EXCLUDE_FROM_ALL
     "${UI_KIT_SRC}/ui_shape_pack.c"
     "${UI_KIT_SRC}/ui_screen_pack.c"
     "${UI_KIT_SRC}/ui_world_anchor.c"
+    "${UI_KIT_SRC}/ui_world_label.c"
+    "${UI_KIT_SRC}/ui_look.c"
+    "${UI_KIT_SRC}/ui_ad.c"
+    "${UI_KIT_SRC}/ui_hint.c"
     src/render/render_mesh.c
     src/render/shader_programs.c
     src/render/capture.c

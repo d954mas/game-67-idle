@@ -117,6 +117,38 @@ set the bar: a prototype should not have to design a UI before it has a game.
   the first of a fixed list of offsets whose box lies inside the bounds and
   clear of every taken box; a fixed list, not a push, so a crowd spreads into
   a patch instead of a column. Both are pure arithmetic with no kit state.
+  `ui_world_project` is the stricter form for a depth-tested anchor: inside the
+  frustum on every axis, with a clip depth moved 0.2 m toward the eye for
+  `ui_world_depth_offset`; `ui_world_billboard` gives a plate's canvas place and
+  scale at a distance, clipped by a near limit and a margin past the canvas.
+- `ui_world_label.h` — the two ways a plate stands in the world, and what can
+  hide each. `ui_world_label_begin` opens a billboard: laid out at the canvas's
+  centre so layout culling never pops it, carried by a render transform, in a
+  zIndex band under the HUD that sinks with distance, and hidden by nothing in
+  the scene. `ui_world_depth_data` is element data for an anchored element under
+  a depth-testing UI material; pass whether this frame's scene depth is live,
+  since without it the element would show through walls.
+- `ui_look.h` and `ui_rgb.h` — a game's face in data. `ui_look_family_t` is one
+  family of corners a consumer keeps a table of; `ui_look_face`, `ui_look_framed`
+  and `ui_look_disc` turn it and colours into styles, squeezing a face shorter
+  than its corners. `ui_kit_lifted_begin` and `ui_kit_lifted_disc_begin` stand a
+  plate on its lift so a fixed height is the face; `ui_kit_arc`, `ui_kit_well` and
+  `ui_kit_bar` are the round and long pieces; `ui_kit_text_button_styled` is a
+  labelled button in a look. `ui_text_outlined`, `ui_text_fade` and
+  `ui_text_fit_width` carry the text those need.
+- `ui_ad.h` and `ui_ad_policy.h` — rewarded-ad buttons with the portals' rule
+  built in. `ui_kit_ad_button` is the blue button with the video icon, the reward
+  and the tag; `ui_kit_ad_choice` is one row with the standard button beside the
+  ad button at the same size, or above it where halves would fall below `min_w`,
+  and takes its button ids from the row with `nt_ui_child_id`. A non-blue ad
+  plate or a blue standard one asserts. Copy, styles and art are the consumer's,
+  and so is whether a screen offers a standard button at all: a screen that shows
+  the ad button alone puts its own larger standard button above it.
+- `ui_hint.h` — first-minute hints, drawing only: `ui_hint_move_keys`,
+  `ui_hint_stick_drag` and `ui_hint_click_prompt`. `ui_hint_defaults()` holds the
+  sizes, beats and colours; the consumer sets this frame's fade and clock, its
+  hand art, its families and its ink, and decides when a hint shows and where the
+  hero and the stick stand.
 - `ui_shape.h`, `ui_shape_pack.h` and `shaders/ui_uber.vert|frag` — the uber
   sprite material and the shapes it draws without art: rounded panels
   (per-corner radii, two-colour vertical gradient, contour, lip, press, gloss
@@ -183,6 +215,13 @@ becomes a raw pointer and calls the kit from there.
   a pressed look differs from idle for every lip, disabled is the off fill,
   a body near the scroll limit does not flip its scissor frame to frame, and
   a choice row's padded touch zones never overlap.
+- `test_ui_world_anchor` — an on-screen projection rejects what is outside the
+  frustum and leaves its outputs, agrees with the canvas projection, its biased
+  depth is nearer and keeps order, the depth offset stops at the near plane, and a
+  billboard scales with distance and clips at its near limit and margin.
+- `test_ui_look_policy` — 0xRRGGBB arithmetic stays in its channels, the ad split
+  gives both buttons one width at every row width, and a finger target stays a
+  share of the reference.
 - `test_ui_screen_pack` — however many labels crowd one spot, every one that
   shows lies inside the bounds and clear of the taken boxes and of each other,
   and a crowd spreads across instead of into one column.
@@ -213,7 +252,11 @@ not be replaced with generated art solely because filenames match.
 
 ## Compatibility
 
-Contract version in `feature.json`. Version 5.0 breaks the looks for a game
+Contract version in `feature.json`. Version 5.1 adds `ui_look.h`, `ui_rgb.h`,
+`ui_ad.h`, `ui_hint.h`, `ui_world_label.h`, `ui_world_project`,
+`ui_world_depth_offset`, `ui_world_billboard` and `ui_scale_tap_units`, with new
+sources a consumer lists only when it calls them; nothing existing changes.
+Version 5.0 breaks the looks for a game
 that draws its windows and rows in its own look: `ui_kit_button_begin_styled`
 takes a `ui_kit_button_look_t` (disabled plate and reach), the dialog look
 gains band height, title and close placement, a rule and `calm_scroll`, its

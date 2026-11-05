@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "ui-kit",
-  "version": "5.0.1",
+  "version": "5.1.0",
   "title": "UI Kit",
   "status": "reusable",
   "kind": "presentation",
@@ -25,7 +25,9 @@
     "lab_build": "node features/ui-kit/example/native/tools/lab.mjs build",
     "icons": "node --test features/ui-kit/tests/icons_manifest.test.mjs",
     "ctest_shape": "ctest --test-dir <consumer build dir> -R test_ui_shape_pack --output-on-failure",
-    "ctest_screen_pack": "ctest --test-dir <consumer build dir> -R test_ui_screen_pack --output-on-failure"
+    "ctest_screen_pack": "ctest --test-dir <consumer build dir> -R test_ui_screen_pack --output-on-failure",
+    "ctest_world_anchor": "ctest --test-dir <consumer build dir> -R test_ui_world_anchor --output-on-failure",
+    "ctest_look_policy": "ctest --test-dir <consumer build dir> -R test_ui_look_policy --output-on-failure"
   },
   "provides": [
     "ui_tokens_t design tokens with legacy Studio Default and opt-in Studio B sheets",
@@ -43,7 +45,12 @@
     "gen_ui_kit.py slice9 art generator driven by a token sheet",
     "assets/icons: the kit's CC0 glyph set as white masks, named by ui_icons.h and bound in one call (ui_theme_art_bind_icons)",
     "ui_screen_pack: a free spot among fixed offsets for text standing over the world, clear of taken boxes and inside bounds",
-    "ui_world_anchor: a world point or an upright figure's box on the canvas through a view_proj, false behind the camera",
+    "ui_world_anchor: a world point or an upright figure's box on the canvas through a view_proj, false behind the camera; an on-screen projection with a biased depth for a depth-tested anchor, and a billboard's place and scale",
+    "ui_world_label: plates standing in the world, a billboard under the HUD (ui_world_label_begin) or an anchored element shown only while scene depth is live (ui_world_depth_data)",
+    "ui_look: 0xRRGGBB arithmetic (ui_rgb.h), outlined text, width fit, corner families, plates on a lift, arc, well, bar and a labelled button in a look",
+    "ui_ad: the rewarded-ad button and the ad-or-standard row, carrying the portals' rule (ui_ad_policy.h): blue with a video icon, the standard button equal or larger, beside or above",
+    "ui_hint: first-minute hints as drawing only: the move keys, a finger on the stick and the click-to-focus prompt, with the game's art, fade and positions passed in",
+    "ui_scale_tap_units: the smallest finger target in authored units at a reference short edge",
     "ui_shape: the uber sprite material (shaders/ui_uber.*) and SDF panels and radials (ui_kit_panel*, ui_kit_radial*) that batch with plain sprites when it is the context's base material"
   ],
   "flags": {
@@ -63,7 +70,11 @@
       "${UI_KIT_SRC}/ui_shape.c",
       "${UI_KIT_SRC}/ui_shape_pack.c",
       "${UI_KIT_SRC}/ui_screen_pack.c",
-      "${UI_KIT_SRC}/ui_world_anchor.c"
+      "${UI_KIT_SRC}/ui_world_anchor.c",
+      "${UI_KIT_SRC}/ui_world_label.c",
+      "${UI_KIT_SRC}/ui_look.c",
+      "${UI_KIT_SRC}/ui_ad.c",
+      "${UI_KIT_SRC}/ui_hint.c"
     ],
     "include_dirs": [
       "${UI_KIT_INC}"
@@ -75,7 +86,9 @@
     "ctest_targets": [
       "test_ui_scale",
       "test_ui_shape_pack",
-      "test_ui_screen_pack"
+      "test_ui_screen_pack",
+      "test_ui_world_anchor",
+      "test_ui_look_policy"
     ]
   },
   "assets_tag": "feature=ui-kit",

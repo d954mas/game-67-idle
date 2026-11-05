@@ -57,4 +57,8 @@ static inline float ui_scale_css_unit(float scale, float dpr) {
     return dpr / scale;
 }
 
+// The smallest finger target in authored units: 44 CSS pixels on a 390-pixel
+// phone, at this reference short edge.
+static inline float ui_scale_tap_units(float reference_short) { return 44.0F * reference_short / 390.0F; }
+
 #endif /* FEATURE_UI_KIT_SCALE_POLICY_H */

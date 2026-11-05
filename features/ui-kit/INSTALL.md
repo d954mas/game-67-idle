@@ -20,7 +20,14 @@ target_sources(${GAME_TARGET} PRIVATE
     "${UI_KIT_SRC}/ui_reach.c"
     "${UI_KIT_SRC}/ui_safe_area.c"
     "${UI_KIT_SRC}/ui_world_anchor.c"
-    "${UI_KIT_SRC}/ui_screen_pack.c")
+    "${UI_KIT_SRC}/ui_screen_pack.c"
+    # Only for the headers that need them; each of the last four needs ui_shape.c.
+    "${UI_KIT_SRC}/ui_shape.c"
+    "${UI_KIT_SRC}/ui_shape_pack.c"
+    "${UI_KIT_SRC}/ui_look.c"        # ui_look.h, and ui_ad.h and ui_hint.h build on it
+    "${UI_KIT_SRC}/ui_ad.c"
+    "${UI_KIT_SRC}/ui_hint.c"
+    "${UI_KIT_SRC}/ui_world_label.c")
 target_include_directories(${GAME_TARGET} PRIVATE "${UI_KIT_INC}")
 target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_UI_KIT=1)
 ```
@@ -181,7 +188,35 @@ engine slider inside a scroll inside a sheet trips a walker assert (its thumb's
 clip marker resolves before the sheet's root is laid out), which is why the
 studio's settings screen is a scrimmed panel with a scroll and not a sheet.
 
-## 7. Localized text
+## 7. Ad buttons, world labels and hints
+
+An ad row in a few calls; the looks, styles and art are the game's:
+
+```c
+ui_ad_look_t ad = {.button = blue_look, .video = &video_icon, .reward_style = &big,
+    .tag = text_of(loc_ad_tag()), .tag_style = &small, .video_size = h * 0.62F, .reward_icon_size = h * 0.5F, .gap = 6.0F};
+ui_ad_choice_t row = {.ad = &ad, .reward_icon = &gem, .reward = "+50", .video = can_show_video,
+    .standard_look = &green_look, .standard = text_of(loc_close()), .standard_style = label,
+    .standard_min_size = 12.0F, .pad = 8.0F, .fit_inset = 20.0F, .gap = 10.0F, .min_w = 150.0F};
+switch (ui_kit_ad_choice(ctx, "shop/ad", width, h, &row)) { /* UI_AD_STANDARD, UI_AD_VIDEO */ }
+```
+
+A billboard over a world point, under the HUD:
+
+```c
+const ui_world_label_t label = {.near_m = 1.5F, .focus_m = camera_focus, .margin = 200.0F, .z_near = -2000, .z_per_m = 8.0F, .z_span = 8000.0F};
+if (ui_world_label_begin(&m, view_proj, at, &label)) { /* the plate */ ui_world_label_end(); }
+```
+
+A depth-tested anchor sets its HUD view_proj's `[14]` to
+`UI_WORLD_SCREEN_NEAR_NDC` and declares `.userData = ui_world_depth_data(depth, scene_depth_live)`
+with the depth from `ui_world_project`.
+
+A hint is drawn while the game says so, from `ui_hint_defaults()` with this frame's
+`alpha`, `clock`, `device_per_unit` and `desktop`, and its `hand`, `label_family`,
+`key_family` and `ink`.
+
+## 8. Localized text
 
 The kit's text entry points take `const char *`. A consumer with a localization
 wrapper adds the bridge to that wrapper's own file, keeping one place where its
@@ -219,6 +254,6 @@ Copy `tokens/studio_b.json` or `tokens/studio_default.json`, edit it, pass the m
 
 ## Uninstall
 
-Drop the six sources and the include directory from the consumer's CMake,
+Drop the kit's sources and the include directory from the consumer's CMake,
 delete its `theme.c` binding, and remove the nine PNGs and their manifest rows.
 Nothing else in the feature reaches into a consumer.

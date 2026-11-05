@@ -1027,6 +1027,16 @@ if(NOT EMSCRIPTEN)
         INCLUDES "${UI_KIT_INC}"
         WARNINGS)
 
+    game_add_c_test(test_ui_world_anchor
+        SOURCES "${UI_KIT_DIR}/tests/test_ui_world_anchor.c" "${UI_KIT_SRC}/ui_world_anchor.c"
+        INCLUDES "${UI_KIT_INC}"
+        WARNINGS)
+
+    game_add_c_test(test_ui_look_policy
+        SOURCES "${UI_KIT_DIR}/tests/test_ui_look_policy.c"
+        INCLUDES "${UI_KIT_INC}"
+        WARNINGS)
+
     add_executable(test_game_input
         tests/test_game_input.c
         src/game_input.c)

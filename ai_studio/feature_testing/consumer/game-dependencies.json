@@ -86,7 +86,7 @@
     {
       "id": "ui-kit",
       "source": "features/ui-kit",
-      "version": "5.0.1",
+      "version": "5.1.0",
       "compatibility": "Native DevAPI sample host builds with current surface/icon UI layers."
     },
     {
