@@ -15,12 +15,11 @@
 //
 // --play keeps the page running that many seconds without input and reads the
 // census again; a game's own driver is needed for a real minute of play.
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { readStoreZip } from "../core_harness/tool_lib/zip_store.mjs";
+import { unpackStoreZip } from "./lib/web_page_plan.mjs";
 import { MEMORY_CENSUS_HOOK, readMemoryCensus } from "./web_memory_census.mjs";
 
 const MB = 1024 * 1024;
@@ -144,14 +143,7 @@ async function measureCli(argv) {
   const { launchHeadlessChrome, serveSites } = await import("./package_web_smoke.mjs");
   let site = opt.site ? resolve(opt.site) : "";
   let unpacked = "";
-  if (opt.zip) {
-    unpacked = site = mkdtempSync(join(tmpdir(), "memory-budget-"));
-    for (const [path, bytes] of readStoreZip(readFileSync(resolve(opt.zip)))) {
-      if (path.endsWith("/")) continue;
-      mkdirSync(dirname(join(site, path)), { recursive: true });
-      writeFileSync(join(site, path), bytes);
-    }
-  }
+  if (opt.zip) unpacked = site = unpackStoreZip(opt.zip, "memory-budget-");
   const server = await serveSites([site]);
   const deadline = () => Date.now() + 120000;
   const chrome = await launchHeadlessChrome({ deadline: deadline(), profilePrefix: "ai-studio-memory-budget",

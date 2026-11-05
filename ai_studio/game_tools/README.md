@@ -41,12 +41,18 @@ sit in, so loading the CLI from the same checkout adds no new coupling.
   root, or through `node tools/game.mjs run`.
 - `web_memory_census.mjs`: a page script installed before the game loads that
   keeps a ledger of live WebGL resources (estimated bytes by kind, programs) and
-  the WebAssembly memory size and grows; needs no DevAPI.
+  the WebAssembly memory size and grows; needs no DevAPI. As a CLI it writes a GL
+  inventory of a package; see "GL inventory" below.
 - `web_memory_budget.mjs`: reads the `memory` object of a game's
   `content/web_budget.json` and checks a census against it; `verify` measures the
   packaged release at startup and, with `after_seconds`, once streamed content is in, on the budget viewport; it fails on overflow or an unsettled point. As a
   CLI it measures any site or package (`--site`/`--zip`, `--play 60`). Rule:
   `ai_studio/quality/rules/technical/checks/QTECH_003_memory_budget.md`.
+- `web_budget.mjs`: the download budget, the `limits` object of the same
+  `content/web_budget.json`; see "Download budget" below.
+- `web_shot.mjs`: screenshots and frame times of a packaged ZIP from a plan of
+  input steps, no DevAPI; see "Screenshots from a package" below. Its driver is
+  `lib/web_page_plan.mjs`.
 - `web_memory_soak.mjs`: a 30-60 minute memory soak; see "Memory soak" below.
 - `lib/runtime_build.mjs`: runtime source and build records. For a game without
   copied tooling the record includes a `tooling` input: the files here that
@@ -192,6 +198,63 @@ node --test --test-concurrency=4 ai_studio/game_tools/tests/*.test.mjs
 ```
 
 They run in the Studio `template-release` domain, not in each game's `test`.
+
+## Download budget
+
+`node ai_studio/game_tools/web_budget.mjs --site <dir> --budget <web_budget.json> [--first <path in site>]... [--enforce] [--assert-text]`
+
+Measures a staged site and writes `size-report.json` beside it. The first download
+is the page and runtime at the site's root plus every `--first` file, the files
+play waits for. Which files those are is the game's knowledge, so a game wraps the
+tool: it reads its pack manifests and passes each boot pack with `--first`, and its
+web build runs the wrapper. `--enforce` fails on a limit passed; release builds use it.
+
+A `limits` entry names any `measured` field of the report: `first_download_raw`,
+`_gzip`, `_brotli`, `_zstd`, `_served` (the least compressing host: gzip for page and
+runtime, packs raw), `all_raw`, `all_gzip`, `wasm_raw`, `wasm_gzip`. The file's
+`memory` object belongs to `web_memory_budget.mjs`; an optional `profile` is copied to
+the report.
+
+## Screenshots from a package
+
+`node ai_studio/game_tools/web_shot.mjs --zip <package.zip> --out <dir> [--mode desktop|phone|phone-land] [--lang <code>] [--save <file> --save-key <slot>] [--storage '{"key":"value"}'] [--plan '<json>'|<file>] [--tag name]`
+
+Works on a release ZIP with no DevAPI: it serves the unpacked site, waits for the
+load, taps the canvas centre once, then runs the plan. `--save` writes a file's text
+to the storage slot `--save-key` once per tab; `--storage` writes full keys on every
+load. A game's wrapper supplies its slot and picks its newest ZIP. Plan steps:
+
+```json
+[["wait", 500], ["shot", "name"], ["burst", "name", 3, 100], ["hold", "w", 800], ["key", "e", 80],
+ ["walkburst", "w", "name", 3, 100], ["keys", ["w", "d"], 800], ["click", 195, 400], ["move", 195, 400],
+ ["perf", 3000, "name"], ["blur"]]
+```
+
+Keys are lower-case letters, `" "` and `"Escape"`. `perf` prints the mean and p95
+frame gap. A wrong step or key is refused before Chrome starts.
+
+## GL inventory
+
+`node ai_studio/game_tools/web_memory_census.mjs --zip <package.zip> --out <report.json> [--places <file.json>] [--symbols <file.js.symbols>] [--shaders <dir,dir>] [--mode phone|phone-land|desktop] [--lang <code>] [--save <file> --save-key <slot>] [--storage '{"key":"value"}']`
+
+Answers what a build really uses: every texture, buffer, renderbuffer, framebuffer
+and program with the wasm call stack that made it (`owner`, through `--symbols`),
+what each program's samplers read, how far each stream buffer was written, and
+median per-frame GL calls at named places. `--shaders` names programs by matching
+their compiled source against the shader files in those folders.
+
+Places are the game's scenario, plan steps from the section above:
+
+```json
+[{ "name": "spawn", "plan": [["wait", 14000]] },
+ { "name": "shop", "plan": [["hold", "d", 1400]] },
+ { "name": "roam", "reload": false, "plan": [["hold", "w", 5000]] }]
+```
+
+Each place loads the page anew unless `"reload": false`; the report's resources are
+those of the last place. Without `--places` the page is measured once after load.
+The wrapper on every GL call costs frame time, so it stays out of the plain
+`MEMORY_CENSUS_HOOK` that `verify` measures budgets with; read frame times from `web_shot.mjs`.
 
 ## Memory soak
 
