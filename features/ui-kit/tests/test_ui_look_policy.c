@@ -3,6 +3,8 @@
 #include "features/ui_kit/ui_scale_policy.h"
 #include "unity.h"
 
+#include <math.h>
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -26,9 +28,9 @@ static void test_ad_split_keeps_the_standard_button_no_smaller(void) {
         const ui_ad_split_t split = ui_ad_split(width, 10.0F, 150.0F);
         if (split.row) {
             TEST_ASSERT_TRUE(split.each >= 150.0F);
-            TEST_ASSERT_FLOAT_WITHIN(0.01F, width, split.each * 2.0F + 10.0F);
+            TEST_ASSERT_TRUE(fabsf((width) - (split.each * 2.0F + 10.0F)) <= 0.01F);
         } else {
-            TEST_ASSERT_EQUAL_FLOAT(width, split.each);
+            TEST_ASSERT_TRUE(width == split.each);
         }
     }
 }
@@ -41,7 +43,7 @@ static void test_ad_blue_reads_the_strongest_channel(void) {
 
 // A finger target stays a fixed share of the reference: 44 of a 390 short edge.
 static void test_tap_units_scale_with_the_reference(void) {
-    TEST_ASSERT_FLOAT_WITHIN(0.01F, 44.0F, ui_scale_tap_units(390.0F));
+    TEST_ASSERT_TRUE(fabsf((44.0F) - (ui_scale_tap_units(390.0F))) <= 0.01F);
     TEST_ASSERT_TRUE(ui_scale_tap_units(520.0F) > ui_scale_tap_units(390.0F));
 }
 
