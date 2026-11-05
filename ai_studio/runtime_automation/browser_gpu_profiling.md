@@ -95,3 +95,35 @@ Run every command from the Studio repo root.
 - Sampling suspends the GPU thread, so absolute fps under the sampler is lower;
   compare shares, not frame rates.
 - Do not load symbols inside the sampling loop: a multi-GB `chrome.dll.pdb` stalls it.
+
+## Render resource audit
+
+Answers a different question: which GL objects the game creates and never needs.
+Use it when GPU memory, shader compile time or per-frame GL calls are above what
+the scene shows, typically in a game that inherited another game's renderer.
+
+1. Inventory the packaged release, never a preview, on the budget viewport, with
+   a save that reaches the heaviest normal content. Hook WebGL2 before the module
+   starts. `ai_studio/game_tools/web_memory_census.mjs` gives the ledger by kind.
+   For owners, record the wasm stack at each create call and resolve it through
+   the build's `.js.symbols` map. Check the byte counts first: compressed storage,
+   `bindBufferRange` and a VAO's element binding are easy to miscount.
+2. Walk a real route through every scene and window. At each place record draw
+   calls, programs, binds, triangles and upload bytes. For the whole run record
+   which programs drew, which texture each sampler read, and how many bytes each
+   buffer's high-water mark reached.
+3. Classify each object: never drawn, drawn to nothing (a target nothing samples),
+   bound but skipped by the shader, or capacity far above its high-water mark. A
+   size alone is a guess: confirm the owner by its stack before cutting.
+4. Cut whole passes and programs first, then their sources in the pack, then
+   shrink capacities to the high-water mark of the busiest scene with margin.
+   Stream overflow can be fatal, so run that scene before accepting a smaller size.
+5. Unread in one run does not mean unused. Check what waits for its moment
+   (late content, tiers, lower graphics settings), and measure a suspect program
+   by painting it a flat colour and counting its pixels.
+6. Verify on the real build: a before and after table (GPU bytes, programs linked
+   and drawn, draws, wasm, first download, heap), shots at the same places with a
+   pixel diff for scenes that hold still, a run at each graphics setting, and
+   `node tools/game.mjs verify`. Rerun the busiest scene and the context recovery.
+7. Record what stays and why. An engine constant behind a large remainder goes to
+   the engine as an issue, per the root-cause rule in `AGENTS.md`.

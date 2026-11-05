@@ -38,6 +38,7 @@
     "submission_tool": "https://inspector.poki.dev",
     "orientation": "game-owned",
     "viewport": "responsive canvas",
+    "initial_download_target": "Poki states a time, not a size: players leave if loading takes more than 10 seconds. No MB figure on the requirements page since the 2026-11-05 re-read; the earlier text said under 8 MB. See references/portals/poki.md 3.1.",
     "reserved_zones": [
       {
         "id": "poki-pill",

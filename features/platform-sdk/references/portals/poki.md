@@ -5,6 +5,7 @@ description: Poki publishing requirements, SDK contract, QA gates and rejection 
 tags: [game-knowledge, poki, web-release, sdk, qa]
 status: research
 sources_checked: 2026-08-24
+requirements_rechecked: 2026-11-05
 ---
 
 # Poki release guidelines — primary-source packet
@@ -16,7 +17,7 @@ than Poki's text, it is marked **[inference]**.
 
 Source index:
 
-- S1 `https://sdk.poki.com/new-requirements.html` — Requirements (the checklist Developer Support runs)
+- S1 `https://sdk.poki.com/new-requirements.html` — Requirements (the checklist Developer Support runs); now redirects to `https://developers.poki.com/guide/requirements-quality`, re-read 2026-11-05
 - S2 `https://sdk.poki.com/requirements.html` — older Requirements page (still live, same core rules)
 - S3 `https://sdk.poki.com/sdk-documentation.html` — SDK general info, event definitions, full HTML example
 - S4 `https://sdk.poki.com/html5.html` — HTML5 integration, code snippets, final steps
@@ -174,6 +175,17 @@ PokiSDK.commercialBreak(() => { /* mute + pause here */ })
   possible; no double-rewarding; "when ad blockers are detected, do not follow
   through and provide rewards"; and "avoid displaying custom 'ad blocked'
   messages — Poki manages this communication."
+- Re-read of S1 on 2026-11-05. The rules above still stand, with these
+  differences: the standard button goes "next to or above" the rewarded one, and
+  "Your game must stay playable with an ad blocker active." The page now says
+  only "rewarded buttons cannot use green color" and no longer asks for a green
+  standard button. **[inference]** Keep it green: that satisfies both readings.
+- **[inference]** "there must always be a standard continue button as an
+  alternative to a 🎬 rewarded one" has no exception for an offer the player can
+  simply ignore. A pop-up that expires or a floor zone entered by standing has
+  no standard button, so show it to the lead as a QA risk; do not call it compliant.
+- **[inference]** `measure` is an SDK event, so 1.2's "no SDK events during
+  rewarded" covers it: hold analytics until the break ends.
 - Rewarded videos "should never block content of the core gameplay" — they are
   an optional perk (S23).
 - Infinite rewarded views are allowed but you own the balance consequences (S23).
@@ -245,6 +257,14 @@ covers "must work offline in the Inspector / local file test".
 - "Target an initial download size under 8 MB." (S1)
 - The developer guide is slightly looser: "try to keep your game's file size as
   small as possible. Around 8 to 10MB is the size to aim for!" (S21)
+- Re-read 2026-11-05: neither S1 nor S21 gives a size in MB any more, so the two
+  figures above are the earlier text (checked 2026-08-24). S1 now gives a time:
+  "Players tend to move to another game if loading takes more than 10 seconds,
+  and they load from everywhere in the world." Then: "Keep the initial download
+  even smaller with progressive loading." **[inference]** The target is the
+  time on a slow connection; 8 MB is a ceiling, not a goal. A game sets its own
+  first-download limit in `content/web_budget.json`, in brotli, the encoding Poki
+  was observed serving for page, runtime and packs.
 - Loading is called "one of the most important topics for success on the web ...
   The amount of players who drop off during loading shouldn't be
   underestimated." (S21)
