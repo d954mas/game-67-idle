@@ -140,6 +140,10 @@ upload calls, and how to read back the draft and an automatic rejection.
   an unmarked rewarded button as a broken ad. After the video the button is gone and the reward is
   shown being paid, not silently added. The rule is in
   `features/platform-sdk/references/contract.md`.
+- **A rewarded offer reports its whole path.** Count `offered`, `requested`,
+  `watched` (only when the portal confirmed the reward), `ad-<reason>`, `granted`,
+  `grant-failed` and `declined`. Counting the tap as a view hides every failed
+  video. A failed video spends nothing: not the offer, its cap or its schedule.
 
 ## Per-portal notes
 
@@ -163,7 +167,9 @@ Only what changes the procedure. Everything else is in the packets.
   ships with placements named but unfilled, and the Bridge falls back to the
   platform's own unit.
 - **Poki** — a staged funnel with hard playtime and retention gates rather than
-  a one-shot moderation queue. Read the packet before promising a date.
+  a one-shot moderation queue. Read the packet before promising a date. Its
+  rewarded layout rule (1.4) has no exception for an offer the player can ignore,
+  and its first-load target (3.1) is a time rather than a published size.
 - **itch** — no portal SDK and no store spec; the artifact contract is the whole
   check.
 

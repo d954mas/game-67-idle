@@ -53,6 +53,24 @@ rhythm, palette, light, detail hierarchy, originality and completion. Label
 observations and inferences separately. Convert every rejection into a durable
 validator, checklist, regression case or source rule.
 
+## Character Models
+
+- Judge a character in the game's own pose, light and camera, on game frames. A
+  bind-pose render proves nothing about how it reads in play.
+- Build proportions for a person, not for the camera. Do not enlarge, raise or
+  tilt a face to survive a high camera (the lead's rule, after every attempt read
+  as frightening).
+- For a small face on screen, use a picture on a flat face region: an RGBA texture
+  at low resolution, with fully transparent pixels holding the skin colour so GPU
+  filtering cannot darken the edges.
+- Bend the face's custom normals towards one up-and-forward direction, fading out
+  at the sides, chin and neck. Otherwise hemisphere ambient darkens the lower face
+  and a mouth reads as a beard.
+- Zero holes and zero poke-through, checked first in every round, in motion too.
+- Compare each round with the previous round and the last approved look, not only
+  with the reference. Local fixes per critic point can make the whole worse; when
+  they do, rebuild from a clean model rather than deforming the old one again.
+
 ## Reviewer Roles
 
 Keep building coherent and local. Use fresh read-only reviewers only at the

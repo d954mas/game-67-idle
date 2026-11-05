@@ -3,7 +3,7 @@ type: Game Design Knowledge
 title: Balance Tuning
 description: Reusable pacing and economy checks for game balance.
 tags: [balance, economy, progression]
-timestamp: 2026-06-13T00:00:00Z
+timestamp: 2026-11-05T00:00:00Z
 ---
 
 # Balance Tuning
@@ -61,6 +61,27 @@ effects, tuning knobs, and validation evidence.
 - Flag impossible purchases, dead-end states, runaway growth, and unused resources.
 - Compare simulation output against the GDD target timeline.
 - Re-run after every economy-affecting change.
+
+## First-Session Bot Report
+
+A deterministic bot that plays a fresh save answers pacing questions a playtest
+cannot repeat. It plays faster than a person, so its times are a lower bound; a
+person's gaps stretch by roughly the same factor, so judge the shape.
+
+- Report by time window: purchases made, median and longest gap between
+  purchases. A long gap is where the player has nothing to want.
+- Report when everything is bought: the minute of the last purchase, the share of
+  the run's total content banked at that moment, and unspent currency at the end.
+- With a repeating run (rebirth, new world), print the same for each run, and save
+  and reload between runs so the ledger is checked too.
+- Compare before and after every price change: same route seed, same policy, one
+  knob, in one table. Read the first window on its own. A retune can fix the end
+  of the run and ruin the opening, and the totals will not show it.
+- Keep optional rewards out of the baseline: the bot watches no ads. Measure a
+  reward's uplift in a separate report-only run, and never assert it.
+- A bot stall is a bot limit until a person confirms it. Do not read it as a
+  design fact.
+- These numbers are design knobs: print them, do not pin them in tests.
 
 ## Anti-Patterns
 

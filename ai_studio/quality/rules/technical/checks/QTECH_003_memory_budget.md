@@ -72,6 +72,26 @@ machine and check a budget measured the same way, not an absolute device figure.
    the post-warm-up peaks and writes `soak.json` and `soak.md`. A game runs it
    as a `slow`-tier test. Driver contract: `ai_studio/game_tools/README.md`.
 
+## Diagnosing A Crash At Graphics Start
+
+An `engine.crash` at graphics start, or a `gfx.context_creation` report
+(`features/platform-sdk/web/runtime-diagnostics.js`), right after a session that
+lost its WebGL context may not be a defect in the new build. Chrome can refuse
+WebGL2 to a page after a context loss, so every reload fails the same way. Before
+touching the game:
+
+1. In the failing tab's console, run
+   `document.createElement("canvas").getContext("webgl2")`. `null` means the
+   browser refuses the context and the game has not been reached.
+2. Load the same build in a new `--user-data-dir` from
+   `ai_studio/runtime_automation/chrome_profile.mjs`. If it starts there, the
+   refusal is the browser's; the earlier context loss is what needs explaining.
+3. Treat that context loss as the finding: read its report for memory at the
+   event and every heap grow, then measure as above.
+
+How long the refusal lasts and how far it reaches has not been measured; do not
+state either as fact.
+
 ## Evidence
 
 - The budget diff with the measured startup values (WASM, grows, GPU) and the
