@@ -18,6 +18,7 @@ static const lab_scene_t SCENES[LAB_SCENE_COUNT] = {
     [LAB_SCENE_COMPONENTS] = {"components", "Компоненты", scene_components_build, NULL, scene_components_leave},
     [LAB_SCENE_THEMES] = {"themes", "Темы", scene_themes_build, NULL, scene_themes_leave},
     [LAB_SCENE_LOOKS] = {"looks", "Облики", scene_looks_build, NULL, scene_looks_leave},
+    [LAB_SCENE_ADS] = {"ads", "Реклама", scene_ads_build, NULL, NULL},
 };
 
 static lab_scene_id_t s_current = LAB_SCENE_HUD;

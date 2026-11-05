@@ -90,7 +90,7 @@ static int s_exit_code; // set by a frame-loop failure; nt_app_quit() alone cann
 // copy (like this file's own usage() string already was) so an unknown id is
 // rejected before nt_engine_init, rather than after a window/GL/pack is open.
 static const char *const LAB_THEME_IDS[] = {"b", "forest", "ember", "night", "shape"};
-static const char *const LAB_SCENE_IDS[] = {"hud", "upgrade", "result", "settings", "components", "themes", "looks"};
+static const char *const LAB_SCENE_IDS[] = {"hud", "upgrade", "result", "settings", "components", "themes", "looks", "ads"};
 
 static bool id_known(const char *id, const char *const *ids, size_t count) {
     for (size_t i = 0; i < count; ++i) {

@@ -40,7 +40,7 @@
     "ui_kit looks: the theme's default shapes as styles (ui_kit_look_*), a button look with derived press, its own disabled plate and a hit reach (ui_kit_button_begin_styled, ui_kit_look_state), a dialog look with band height, gradient/checker, title inset, round or placed square close, a rule and a body that scrolls past the safe area, and slider, choice and dropdown row looks",
     "ui_kit_icon_rotated: a tinted glyph turned by a Y-up counter-clockwise angle",
     "counter and on_world label roles",
-    "example/native: the UI Lab, a standalone engine consumer with seven scenes and five themes, the uber material as its base",
+    "example/native: the UI Lab, a standalone engine consumer with eight scenes and five themes, the uber material as its base",
     "ui_safe_area device insets",
     "gen_ui_kit.py slice9 art generator driven by a token sheet",
     "assets/icons: the kit's CC0 glyph set as white masks, named by ui_icons.h and bound in one call (ui_theme_art_bind_icons)",

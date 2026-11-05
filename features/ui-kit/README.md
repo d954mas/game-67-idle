@@ -104,7 +104,7 @@ set the bar: a prototype should not have to design a UI before it has a game.
   `ui_kit_icon_tinted` draw one in any colour; `ui_kit_icon_rotated` also turns
   it by a Y-up counter-clockwise angle in radians, as the radial style measures
   angles.
-- `example/native/` — the UI Lab: a standalone engine consumer with seven
+- `example/native/` — the UI Lab: a standalone engine consumer with eight
   scenes and five themes (one of them the shape theme with no art) where every
   widget above is tried in the real renderer, and
   the example a game copies a screen from. Opt-in; nothing in it is compiled

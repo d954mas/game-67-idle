@@ -69,6 +69,7 @@ add_executable(${LAB_TARGET}
     src/scenes/scene_components.c
     src/scenes/scene_themes.c
     src/scenes/scene_looks.c
+    src/scenes/scene_ads.c
     "${UI_KIT_SRC}/ui_tokens.c"
     "${UI_KIT_SRC}/ui_theme.c"
     "${UI_KIT_SRC}/ui_metrics.c"
@@ -76,7 +77,12 @@ add_executable(${LAB_TARGET}
     "${UI_KIT_SRC}/ui_safe_area.c"
     "${UI_KIT_SRC}/ui_reach.c"
     "${UI_KIT_SRC}/ui_shape.c"
-    "${UI_KIT_SRC}/ui_shape_pack.c")
+    "${UI_KIT_SRC}/ui_shape_pack.c"
+    "${UI_KIT_SRC}/ui_world_anchor.c"
+    "${UI_KIT_SRC}/ui_world_label.c"
+    "${UI_KIT_SRC}/ui_look.c"
+    "${UI_KIT_SRC}/ui_ad.c"
+    "${UI_KIT_SRC}/ui_hint.c")
 target_include_directories(${LAB_TARGET} PRIVATE src "${UI_KIT_INC}" "${LAB_GENERATED_DIR}")
 target_compile_definitions(${LAB_TARGET} PRIVATE
     FEATURE_UI_KIT=1
