@@ -1,65 +1,37 @@
-﻿# Verification And Prompts
+# Verification And Prompts
 
-Load this reference before retrying a failed generation, writing prompts for
-game-use assets, or diagnosing fake/code-drawn output.
+Use for game-use prompts, image acceptance or failed generation diagnosis.
 
-## Force Real Generation
+## Establish Real Output
 
-Weak prompts can make an agentic CLI fake the image by writing code-drawn output
-with SVG, PIL, ImageMagick, System.Drawing, shapes, or vectors. The wrapper bakes
-in the required forcing prompt:
+Require an actual image-generation tool result. An agentic CLI must return a real
+image or state that generation is unavailable; code-drawn SVG, shapes, PIL or
+similar substitutes do not satisfy a raster-art request.
 
-1. Actually invoke the image generation tool and decode its returned image.
-2. Do not draw with code, SVG, PIL, ImageMagick, System.Drawing, shapes, or
-   vectors; code-drawn output is a failure.
-3. If imagegen is unavailable, print `IMAGEGEN UNAVAILABLE` and stop.
-4. Report the exact tool used.
+Inspect the delivered file rather than trusting the transcript. Confirm it
+opens, has the expected dimensions and channels, and matches the task visually.
+Keep tool/provider provenance and the source hash. Compressed size varies with
+content and transparency; neither a size threshold nor appearance proves origin.
 
-The user-facing prompt should still include: "real raster image (not
-code-drawn)" and "Do not write or run any drawing code".
+## Composable Game Assets
 
-## Verify By Size Plus Eyeball
+- For runtime bars, generate the empty frame and implement the fill in-engine.
+- For slots, panels and buttons, keep dynamic content and text separate.
+- For keyed character art, use a flat key color to the outline and omit unwanted
+  drop/contact shadows that would contaminate the cutout.
+- For style comparison, hold composition steady and vary the intended dimension.
+  Choose candidate count from the requested scope and spending limit.
 
-Do not trust transcript text. A delegated CLI can claim it used imagegen even
-when it generated a fake.
+Request genuine transparency when the selected tool supports it. Preserve valid
+alpha and inspect the edges on contrasting backgrounds. For opaque output,
+select a preparation method from
+`ai_studio/assets/canvas/contracts/alpha-and-cleanup.md`; an aligned dual plate
+is one option, not a requirement for every cutout.
 
-Rules:
+## Recovery
 
-- Read or inspect the PNG yourself.
-- Real gpt-image-2 output is usually around 1-2.5 MB.
-- A code-drawn fake is often around 20-50 KB.
-- The wrapper flags anything below about 200 KB as a suspected fake.
-- `~/.codex/generated_images` not growing is normal for `codex exec`; the image
-  can arrive inline and be decoded to the requested file.
-- File size is a fake detector only. It does not prove art quality.
-
-## Prompt Game-Use Assets As Composable Parts
-
-For game-use art, generate composable parts, not baked composites:
-
-- Chroma-keyed characters: use a flat key colour up to the outline and say
-  `NO drop/contact shadow` to avoid cutout fringes.
-- Health, XP, and progress bars: generate the EMPTY frame only; fill in-engine.
-- Slots, cells, panels, and buttons: generate EMPTY surfaces with
-  `NO icon/content inside`; draw icons and labels in-engine.
-- For style comparison, keep one composition and vary only the art style.
-- Limit a style gate to at most three generations before user choice.
-
-Transparency note: codex image paths do not reliably produce alpha. Generate on
-a flat key colour and chroma-key in post, or use the official REST path where
-transparent output is required and supported.
-
-## Dead-Ends
-
-Do not retry these paths unless the environment has materially changed:
-
-- Weak prompts to codex: it can code-draw a fake and claim success. Use the
-  forcing wrapper; it works when forced.
-- gemini CLI: no real image tool here. It returns `CANNOT_GENERATE` or writes a
-  Python drawing script. Pinning image model variants does not fix function
-  calling here.
-- Stale `GEMINI_API_KEY` or `GOOGLE_API_KEY`: can hijack gemini auth. Neutralize
-  per call if needed.
-- Node TLS behind Avast HTTPS scanning: use `NODE_OPTIONS=--use-system-ca` for
-  node export tools; do not disable strict SSL. Go/agy and Rust/codex generally
-  do not need this workaround.
+Distinguish unavailable tools, authentication failures, transport errors and poor
+art direction. Retry only when a prompt or environment change addresses the
+observed failure. Use current tool documentation for setup; keep TLS validation
+and host permissions intact. Report unresolved gaps instead of substituting a
+code-drawn image or claiming an uninspected result is ready.

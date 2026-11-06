@@ -6,35 +6,32 @@ description: "Change schema-first game state, generated APIs, saves, migrations,
 <!-- skill folder: .codex/skills/nt-game-state-management/ -- resolve plain references/, scripts/ and agents/ paths below against it -->
 # NT Game State Management
 
-Workflow router for the reusable Game State module. Its canonical contract
-lives in `features/game-state/`, not in this skill.
+Use the schema-first contract owned by `features/game-state/`.
 
 ## Start
 
-1. Read `features/game-state/README.md` for the public surface, validation,
-   compatibility, and extension boundaries.
-2. Read `features/game-state/INSTALL.md` for wiring, generation, verification,
-   and removal.
-3. Read `features/game-state/feature.json` for the versioned machine contract.
-4. Inspect the owning `state/*.schema.json` before changing call sites, then
-   inspect `features/game-state/scripts/generate_state.py` before changing
-   generated APIs.
+Identify the owning schema and affected callers. Read relevant
+`features/game-state/README.md` sections for contracts, `INSTALL.md` for wiring,
+and `feature.json` for versions/dependencies. Inspect the generator when its
+output or behavior must change.
 
 ## Change workflow
 
-1. Change the schema or generator first.
-2. Add migration and fixture coverage when persisted shape changes.
-3. Regenerate outputs; do not hand-edit generated `game_state.*` files.
-4. Update callers through domain actions rather than raw state mutations.
-5. Run generator tests and the consumer's relevant save/runtime tests.
+- For storage/API changes, edit the schema or generator and regenerate; never
+  hand-edit generated state files. Add migrations and fixtures for persisted
+  shape changes.
+- For gameplay or semantic DevAPI behavior, change domain actions and callers;
+  change the schema only when the state contract needs it.
+- Verify affected save/runtime behavior. Run generator tests when generator or
+  generated-output behavior changes; complete the owner's applicable checks.
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py
 node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state_test.py
 ```
 
-Use explicit `--schema` and `--out-dir` for game variants or build-local
-outputs.
+Use explicit `--schema` and `--out-dir` for game variants or build-local outputs.
+Report changed contracts, checks, and any unverified migration/runtime behavior.
 
 ## Routing
 

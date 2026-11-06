@@ -6,73 +6,58 @@ description: "Run repeated building and independent criticism when the user asks
 <!-- skill folder: .codex/skills/nt-gauntlet-loop/ -- resolve plain references/, scripts/ and agents/ paths below against it -->
 # NT Gauntlet Loop
 
-Turn one ambitious game-quality goal into parallel builder loops with independent critics.
+Improve the requested game-quality goal against concrete references, using
+independent criticism to judge the result.
 
 ## Set the bar
 
-1. Read the repository instructions and the relevant game sources.
-2. Restate the goal in one sentence.
-3. Select the strongest concrete references available: shipped games, supplied images or video, accepted project targets, and current runtime captures.
-4. Reuse a current matched capture when one exists. Capture a new baseline only
-   when player-visible output is in scope and existing evidence is stale or
-   incomparable.
-5. Define success as an observable comparison, not “looks good for AI.”
+Use the request, accepted project targets, and relevant sources to define the
+scope and an observable quality bar. References may be shipped games, supplied
+images/video, or accepted captures. Reuse current matched evidence; capture a
+new baseline when existing evidence is stale or incomparable.
 
 Do not start from a vague quality claim when no artifact can be inspected. Obtain or create comparable evidence first.
 
 ## Preserve the rules
 
-Create one invariant packet and include it verbatim in every builder and critic assignment:
-
-```text
-Goal:
-Reference bar:
-Player-visible success:
-Hard project rules:
-Owned scope:
-Evidence to produce:
-```
-
-Include applicable `AGENTS.md` rules and the exact reference paths. Subagents do not inherit unstated assumptions. Re-read this skill and the invariant packet after any context reset.
+Give builders and critics the goal, reference paths, acceptance criteria,
+applicable project rules, owned scope, and evidence required. Preserve this
+working state across context resets; recover missing constraints before
+continuing.
 
 Never invoke ultracode or a GSD workflow as part of this skill.
 
-## Fan out
+## Choose the work split
 
-Break the goal into the smallest independently improvable parts. Prefer player-visible seams such as composition, environment, characters, animation, interaction feel, effects, UI, audio, performance, or a specific gameplay beat.
-
-Spawn builder subagents only for parts that can progress independently. Give each builder explicit file or subsystem ownership. Tell every builder that other agents share the repository, to preserve unrelated changes, and to return:
-
-- what changed;
-- runnable or viewable evidence;
-- checks run;
-- remaining weaknesses.
-
-Keep coupled work with one builder. Do not split merely to increase agent count.
+Keep coupled work with one builder, which may be the lead agent. Delegate
+independent parts when parallel work reduces time or review risk. Give each
+builder file/subsystem ownership and tell it to preserve other agents' changes.
+Require changes, runnable/viewable evidence, checks, and remaining weaknesses
+in its return.
 
 ## Run each gauntlet
 
-For every part:
-
-1. Let the builder produce the strongest version it can. Require a new capture
-   only for player-visible changes; internal work returns targeted checks.
-2. Spawn a separate fresh critic with read-only responsibility. Do not give it the builder’s rationale or self-review.
-3. Give the critic the reference and current result under matched conditions. For visual work, require side-by-side inspection at the same viewport, camera, state, and scale. Use neutral labels when practical.
-4. Require the critic to return:
-   - which result wins and why;
-   - the largest visible or experiential gap;
-   - concrete evidence, not taste-only language;
-   - the next smallest change most likely to close the gap.
-5. If the project result loses, send the finding to the builder. Recapture only
-   when the next change affects the judged pixels or interaction, then ask a
-   fresh critic to judge the new evidence.
-6. Continue until the project result matches or beats the reference for that part, the user stops the run, or a genuine blocker requires the user.
+1. Build the scoped result. Capture changed player-visible output; use targeted
+   checks for internal changes.
+2. Use a separate read-only critic to inspect the reference and current result.
+   Keep the builder's rationale and self-review out of the critic's packet.
+   Compare visuals side by side at matching viewport, camera, state, and scale;
+   use neutral labels when practical.
+3. Ask which result wins, the largest gap, concrete evidence, and the smallest
+   change likely to close it.
+4. Address the gap and obtain a fresh judgment of changed evidence. Recapture
+   when the change affects the judged pixels or interaction. If attempts stop
+   improving the result, revise the approach rather than repeat unchanged work.
+5. Continue toward the agreed bar within the user's scope and any supplied
+   budget. Report an unmet bar honestly if the budget ends or a blocker remains.
 
 A builder cannot approve its own work. Tests cannot substitute for seeing player-facing output. A critic cannot pass work it did not inspect.
 
 ## Integrate the wave
 
-After independently improved parts land, inspect the whole experience. Use one fresh integration critic to find inconsistencies, regressions, and seams between individually strong parts. Fix those without redesigning accepted work.
+When independently changed parts are combined, use an independent integration
+critic to inspect the whole experience for inconsistencies and regressions.
+Fix those while preserving accepted work.
 
 Run the game’s fast gate and the targeted checks for changed subsystems. Replay
 and capture the target experience only for player-visible work. Run the full
@@ -86,13 +71,8 @@ Do not stop because the work is merely better, the diff is large, or a builder s
 - the integrated experience still holds together;
 - required runtime and mechanical checks pass;
 - evidence is current;
-- or the user stops the run or must resolve a real blocker.
+- or the user stops the run, a supplied budget ends, or a real blocker needs
+  the user's decision.
 
 Report the achieved result, evidence, critic verdicts, and any surviving gap. Never call an uninspected result “perfect.”
-
-## Invocation example
-
-```text
-Use $nt-gauntlet-loop on the trolley game’s first five minutes. Fan out builders by independent player-facing seam, compare runtime captures against the accepted references, use a separate harsh visual critic after every attempt, and keep iterating until the critics prefer our result. Do not use ultracode or GSD.
-```
 

@@ -47,14 +47,16 @@ fresh-hash final gate
 user review / propagation / handoff
 ```
 
-Run the loop after each material geometry change, not only at the end. Fix the
-first failing modifier or design layer before adding more detail. After three
-failed correction cycles on the same cause, stop patching and redesign that
-construction.
+During construction, run the technical and visual checks affected by each
+material geometry change. Fix the failing modifier or design layer before
+adding detail; change the construction when repeated corrections miss the cause.
+Final review, propagation and handoff still require the complete applicable
+profile and fresh evidence for the exact saved scene.
 
 ## Stage 0 — Reference Lock
 
-Before editing Blender, record:
+Before scene production, establish or reuse a valid reference lock. Update the
+affected fields when scope or accepted design changes:
 
 - source `.blend` and immutable hash;
 - separate output scene path and version;

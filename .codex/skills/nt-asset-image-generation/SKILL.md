@@ -1,77 +1,56 @@
 ---
 name: nt-asset-image-generation
-description: "Generate raster game art only after shared-library and free-source searches find no fit. Use nt-asset-workflow for intake and provenance."
+description: "Generate raster game art after source search, or when explicitly requested. Use nt-asset-workflow for intake and provenance."
 ---
 
 # NT Asset Image Generation
 
-Use when the agent must create real raster game art for an asset workflow but
-has no native image model. Generate, verify the PNG, then hand off to
-`nt-asset-workflow`.
+Create real raster source art, inspect the result, then hand off accepted work
+through Canvas and `nt-asset-workflow`.
 
-## Load Only What Applies
+## Source And Route
 
-- `references/generation-paths.md`: Path A `codex exec`, Path B `agy`, compare
-  mode, Path C REST/backend, `START=$(date +%s)`, exact commands.
-- `references/verification-and-prompts.md`: real raster forcing, size/eyeball
-  checks, composable prompts, Dead-ends, gemini CLI, `GEMINI_API_KEY`,
-  `NODE_OPTIONS=--use-system-ca`.
-- `references/throughput-and-handoff.md`: batches, source-sheet workflow,
-  declarative pack configs (expand_jobs -> gen_batch -> slice_pack for
-  axis/grade families), sidecars, `nt-asset-workflow` handoff, and quality
-  evidence.
+Search the shared library and practical free CC0/OFL sources before generation
+unless the user explicitly directs generation. Record the source decision in
+existing task or game-owned asset notes.
 
-## Source First (before generating)
+Prefer the available official native image tool. Choose a documented CLI/API
+fallback only when it supplies a needed capability or the native tool is absent;
+follow `references/generation-paths.md`. Preserve the host's permission boundary.
+Use supported transparency when required and inspect its edges; a tool-specific
+opaque-placeholder contract does not prohibit importing a genuine RGBA result.
 
-Generation is the last resort. First run
-`node ai_studio/assets/catalog/search.mjs --query <need>`: reuse a library hit,
-or search free CC0/OFL sources and intake one. Only generate what you could not
-source, and record the source decision in the task or game-owned asset notes.
+## Conditional References
 
-## Default Route
+- Tool selection and fallback prerequisites: `references/generation-paths.md`.
+- Prompting, output validation and failed attempts:
+  `references/verification-and-prompts.md`.
+- Batch/sheet work and asset handoff: `references/throughput-and-handoff.md`.
 
-1. Use Path A first: `codex_imagegen.sh`.
-2. If Path A is unavailable or suspect, read verification guidance before
-   retrying or falling back.
-3. Use Path B `agy` only as fallback or comparison.
-4. Use Path C only when Path A is broken or REST features/high volume are
-   explicitly needed.
-5. Pick the PNG off disk; keep raw generations in `tmp/`; move only accepted
-   assets into durable folders.
+## Verification
 
-## Non-Negotiables
+- Use real image generation, not code-drawn SVG/shapes or rasterized substitutes.
+- Inspect the actual image and tool provenance; validate decoding, dimensions,
+  transparency and visual fit. File size alone proves neither origin nor quality.
+- Produce composable runtime parts unless the requested output is a fake shot.
+- Retry with a changed prompt or route only when evidence supports it. Respect
+  the requested scope and spending limits; report unavailable capabilities.
+- Judge assembled game screens with applicable quality evidence before claiming
+  integration; a clean source image only proves the source-art step.
 
-- Generate a real raster image; do not write/run drawing code, SVG, PIL,
-  ImageMagick, System.Drawing, shapes, or vectors.
-- Never trust the delegated CLI transcript. Verify size and look at the PNG.
-- Treat file size only as a fake detector, not as quality proof.
-- Do not retry known dead-ends; use documented wrappers and gotchas.
-- Generate composable runtime parts unless the task asks for a fake shot/review.
-- Clean source images are not enough: assembled screens still need selected
-  quality-rule evidence.
+## Canvas Handoff
 
-## Canvas Handoff (mandatory)
+Every accepted generation belongs in the task's Canvas project through its
+CLI/ops facade. Reuse the relevant project or create one when none fits.
+Preserve `{origin: "ai", tool, prompt, refs, generated, license}` and source
+integrity in durable provenance. Raw rejects remain in `tmp/`.
 
-Every ACCEPTED generation lands on a canvas project (`ai_studio/assets/canvas/`
-ops — CLI or direct import), never only in loose files:
+Use Canvas's real review states and promotion gates; do not stamp a result as
+accepted or game-ready merely because generation succeeded. Keep valid source
+alpha. If an opaque source needs cleanup, select the matching method from
+`ai_studio/assets/canvas/contracts/alpha-and-cleanup.md`. Canvas AI generation,
+including `alpha-dual-generate`, also requires a permitted generation adapter;
+otherwise generate through the native tool and import the source for preparation.
 
-- Pick the task-appropriate canvas: the current game's draft canvas, or the
-  canvas the task names. If none fits, CREATE a new canvas project titled
-  after the task (`cli.mjs create --title "<task>"`).
-- Add with full provenance `meta`: `{origin: "ai", tool, prompt, refs,
-  generated, license}`. Sourced (non-generated) images get `{origin:
-  "sourced", source: <url/path>, license}` instead. The prompt must never be
-  lost — the canvas element is its durable home.
-- Raw rejects stay in `tmp/`; only accepted results go onto the canvas.
-- Generation placeholders land with NO alpha (raw art only). If the accepted
-  result needs a transparent background and it is on a flat light backdrop,
-  do NOT hand-build a white/black plate pair yourself — run the canvas op
-  `alpha-dual-generate <projectId> --element <eid>` (T0238): it generates the
-  missing dark plate via a codex edit, gates the pair, and mints one new cut
-  element beside the source in one call. See
-  `ai_studio/assets/canvas/README.md` ("Automatic dual-plate generation").
-
-## Minimal Report
-
-State path used, output PNG, size/fake check, visual judgment, canvas project
-and element id, handoff path, and rejected attempts or fallbacks.
+Report output, tool, visual/technical evidence, Canvas reference and handoff
+status, including failed attempts that affect readiness.

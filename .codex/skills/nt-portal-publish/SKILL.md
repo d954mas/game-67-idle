@@ -5,180 +5,73 @@ description: "Prepare portal builds, SDK evidence, store assets, uploads, and mo
 
 # NT Portal Publish
 
-Use the portal's current official documentation for requirements and review
-timings. This skill owns workflow order and console operation; the owning
-modules below hold requirements, artifact contracts, and store specifications.
+Work on the requested portal and deliverable. Use current official requirements
+and the live console for changing limits, review timings, and submission rules.
 
-## Where a portal's facts live
+## Choose Scope And Sources
 
-Four files per portal, four owners. Read them; do not restate them here.
+For a store edit or moderation fix, inspect the affected requirement and reuse
+still-valid build, capture, and checklist evidence. For a complete release,
+establish build/SDK readiness before producing the store set. Load the relevant
+owners rather than every portal's documentation:
 
 | What | Where |
 | --- | --- |
-| Requirements, cited to the portal's own docs | `features/platform-sdk/references/portals/<portal>.md` |
-| Artifact contract: files, layout, forbidden and required markers | `features/platform-sdk/publish-targets/<portal>.json` |
-| Store asset sizes, counts and text limits | `ai_studio/store_kit/<portal>_spec.json` |
-| This game's verdict on each requirement | `games/<id>/design/knowledge/<portal>_release_checklist.md` |
+| Requirements and official sources | `features/platform-sdk/references/portals/<portal>.md` |
+| Artifact files and markers | `features/platform-sdk/publish-targets/<portal>.json` |
+| Store sizes, counts, text limits | `ai_studio/store_kit/<portal>_spec.json` |
+| Game-specific evidence | `games/<id>/design/knowledge/<portal>_release_checklist.md` |
 
-A packet is studio knowledge and never names a private game. A checklist is the
-opposite: one game's verdicts, one row per requirement, each row carrying the
-file and line that proves it or the reason no code settles it.
+Keep private game facts in the game's checklist. Record evidence for changed
+requirements; a complete release needs every requirement accounted for.
+Use `UNPROVEN` when available evidence cannot settle a requirement.
 
-## Order of work
+## Build And Verification
 
-Build and SDK first, store assets second. A beautiful draft attached to a build
-that never signals it is ready is rejected on a technical requirement, and the
-clock starts again.
+Use the game's own commands and release lane. Run focused checks during fixes;
+complete all required test tiers and release checks before final handoff.
+From the game root, the standard package and portal checks are:
 
-### 1. Build the target
-
-```
-node tools/game.mjs test
+```powershell
 node tools/game.mjs package --target <portal>
-```
-
-For a portal playtest, use `node tools/game.mjs package --target <portal> --assert-text`. This keeps Release optimization and records FULL assertion text in crash reports. After playtesting, package the final release without `--assert-text`; its TRAP assertions contain no text. Do not start Poki playtests: the human lead runs them.
-
-Poki: a Player Fit test (or playtest) can be created for a version only after
-the checkboxes on that version's preview page in the dashboard are ticked.
-Until then `poki player-fit-tests create` answers `401 AUTH_REQUIRED`, which
-reads like a login problem and is not one: do not re-login, ask the lead to
-tick the preview checkboxes, then retry.
-
-`package` runs the asset audit, the artifact contract and a browser smoke over
-the packaged archive. It refuses a build whose feature sources are dirty, so
-commit first.
-
-### 2. Check everything mechanical, in one command
-
-```
 node tools/game.mjs portal-check --target <portal>
 ```
 
-Three rows, one verdict: the artifact against the publish manifest, the store
-folder against the portal's spec, and the portal's own SDK proof where one
-exists. A row is absent rather than silently passing when the portal offers no
-local proof.
+Packaging checks assets, the artifact contract, and packaged browser behavior;
+feature sources must be clean. Resolve source ownership before committing,
+keeping unrelated changes out. For playtest packages, use `--assert-text`;
+repackage the final release without it. Only the lead starts Poki playtests.
+See `ai_studio/game_tools/README.md` for these contracts.
 
-Only Yandex ships a dev server a game can be driven inside, and the probe
-starts it, drives the artifact in headless Chrome and reports what the SDK
-itself saw. It prints the calling stack frame beside every call, because the
-portal's own `sdk.js` registers some of the listeners and a verdict that cannot
-tell them apart would pass a game that handles nothing. It refuses to run when
-the port is already held: a proxy left behind by an earlier run serves an older
-artifact, and the verdict would be about a build nobody asked about.
+Inspect each applicable `portal-check` result: artifact, store, and SDK proof.
+An unavailable local SDK probe is an evidence gap, not a passing check. Cover
+portal-only behavior in the official preview/console when authorized. Prove HUD
+reserved zones with `responsive_viewports.py --game <id> --portal <target>`
+from `ai_studio/runtime_automation/` when the layout or target changes.
 
-### 3. Walk the requirement list and write the verdicts down
+## Store And Console
 
-Read the portal's packet, and record one row per requirement in the game's
-checklist. A row without evidence is a row nobody checked. `UNPROVEN` means the
-code was read and nothing in it settles the question; it is not a synonym for
-failure, and saying which is which is the point of the file.
+- Put store materials in `games/<id>/release/store/<portal>/`; follow
+  `ai_studio/store_kit/README.md` for capture and validation.
+- Capture screenshots/video from the running game through its own capture bot.
+  Icons/covers use game art through the asset pipeline, not screenshots.
+- Produce required shapes and language variants. Switch language as a player
+  does and verify it in the running game before assigning a capture to a slot.
+- Upload or edit drafts only within explicit authorization. Before an upload,
+  read [console-upload.md](references/console-upload.md) for applicable transport
+  limits and console pitfalls. Read back saved fields and automatic verdicts;
+  retry only after identifying and correcting the cause.
+- Leave submission, age ratings, categories, platform flags, and video slots to
+  the lead. Prepare the files and identify their destinations.
 
-Keep HUD out of the target's reserved zones (the Poki Pill); prove it with
-`ai_studio/runtime_automation/responsive_viewports.py --game <id> --portal <target>` and file the result in the
-checklist.
+## Invariants And Handoff
 
-### 4. Produce the store asset set
-
-Everything goes to `games/<id>/release/store/<portal>/` and is validated by the
-`store` row of `portal-check`. `ai_studio/store_kit/README.md` says who captures
-what and what a capture bot must prove.
-
-**Screenshots and video come from the game**, never from a mockup, through the
-game's own capture bot in `games/<id>/devapi/`. **Icon and cover may not be
-screenshots**; they come from the game's own art through the asset pipeline and
-carry licence, provenance and hashes like every other asset here.
-
-**Every material is filmed once per language the draft declares.** A draft keeps
-its own set per language and mirrors one into the others until the box beside
-the field is cleared, so the default outcome is a card in one language showing
-another language's interface. The language is chosen when the string table
-loads, not when a setting is flipped, so a bot switches it through the picker a
-player uses and proves the language off the running game before filing a frame
-under it.
-
-### 5. Fill the draft and read the portal's own pre-check
-
-Most consoles run an automated check on every archive and print the verdict
-above the form. It is free, it is where moderation starts, and it answers in
-minutes: upload, read it, fix, upload again.
-
-How to get a file into the form is its own section: **Uploading into a console**,
-below.
-
-### 6. Hand over
-
-The reply to the lead names: the archive path, the `portal-check` result, the
-checklist rows that are NOT closed and what each would take, and the store
-folder. When videos are part of the delivery, name the files and the slot each
-belongs to. Uploading the draft, the age rating, the categories and the platform
-flags are the lead's; the console is theirs.
-
-## Uploading into a console
-
-Load [references/console-upload.md](references/console-upload.md) before putting
-any file into a console form or calling a console API: the 10 MB browser-bridge
-cap that silently truncates files, silent widgets, the Yandex and CrazyGames
-upload calls, and how to read back the draft and an automatic rejection.
-
-## Rules that do not vary
-
-- **The form wins.** When a console form disagrees with a spec file, the form is
-  right and the spec is corrected in the same commit that finds it.
-- **Never invent a number.** Some portals publish their sizes and some publish
-  nothing. Where a portal publishes nothing, the spec says so under
-  `undocumented` and the number is read off the form, not guessed. Where it
-  does publish, the spec cites the page.
-- **Never press submit.** Filling the draft is work; sending it is the lead's
-  word, once per submission.
-- **Requirement numbers move.** Read them off the live list on the day and fix
-  any number in a packet that has drifted.
-- **A rewarded offer looks like a video before the tap.** The button is blue
-  (Poki's ad rule, kept on every portal so one build serves all) and carries
-  an ad mark (video/play icon or an AD label); every portal's moderation reads
-  an unmarked rewarded button as a broken ad. After the video the button is gone and the reward is
-  shown being paid, not silently added. The rule is in
-  `features/platform-sdk/references/contract.md`.
-- **A rewarded offer reports its whole path.** Count `offered`, `requested`,
-  `watched` (only when the portal confirmed the reward), `ad-<reason>`, `granted`,
-  `grant-failed` and `declined`. Counting the tap as a view hides every failed
-  video. A failed video spends nothing: not the offer, its cap or its schedule.
-
-## Per-portal notes
-
-Only what changes the procedure. Everything else is in the packets.
-
-- **Yandex Games** — the one portal with a local proof, so the SDK row is real
-  here and nowhere else. Its sizes are documented rather than form-only, and at
-  most two categories are allowed. Ads need a registered advertising account;
-  whether that blocks submission or only earnings is a console question the
-  packet marks open. Requirement 1.3 is judged by minimizing the window and
-  switching tabs, with a two-second grace, so a blur handler alone does not
-  answer it. Its video widget is silent for an agent and its draft is filled
-  through the console API; both are in **Uploading into a console** above.
-- **CrazyGames** — the build is graded before it is published: a Basic Launch of
-  7 to 21 days with monetization off, so rewarded offers report unsupported for
-  that whole window by design. Its checks live in the portal's own Preview tool,
-  which needs the account. Its three covers must share one visual style.
-- **Playgama** — a single-language English draft form, with the game's own
-  languages declared as a separate tag list. Native placement, leaderboard and
-  product ids come from the console and cannot be guessed; the bridge config
-  ships with placements named but unfilled, and the Bridge falls back to the
-  platform's own unit.
-- **Poki** — a staged funnel with hard playtime and retention gates rather than
-  a one-shot moderation queue. Read the packet before promising a date. Its
-  rewarded layout rule (1.4) has no exception for an offer the player can ignore,
-  and its first-load target (3.1) is a time rather than a published size.
-- **itch** — no portal SDK and no store spec; the artifact contract is the whole
-  check.
-
-## What this skill does not do
-
-- It does not press "submit". That is the lead's word.
-- It does not invent sizes. Numbers come from the form or from a spec file.
-- It does not make screenshots out of promotional art, and does not make an icon
-  out of a screenshot. Both are refusals.
-- It does not put video into a draft. It films the clips, checks them and hands
-  them over; the slots are filled by hand.
-- It does not hold portal facts. Those belong to the four files above.
+- Take dimensions and limits from cited official docs or the live form; record
+  verified drift in the owning spec. Do not invent undocumented values.
+- Keep rewarded offer presentation compliant with
+  `features/platform-sdk/references/contract.md`. Count `offered`, `requested`,
+  `watched` only after confirmed reward, `ad-<reason>`, `granted`, `grant-failed`,
+  and `declined`. Show payment; failure consumes no offer, cap, or schedule.
+- Inspect captures; mechanical checks do not establish visual quality.
+- Report delivered paths, verification, open checklist rows, and what remains
+  for the lead. Do not claim release readiness from a partial check.

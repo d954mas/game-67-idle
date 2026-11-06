@@ -5,17 +5,14 @@ description: "Extract or integrate reusable game capabilities; choose shared mod
 
 # NT Game Feature
 
-Workflow router for reusable modules and template feature-pointers. Canonical
-feature contracts live with their owners, not in this skill.
+Use the owning feature's contract for extraction, integration, or maintenance.
 
 ## Start
 
-1. Read `features/README.md` for category selection and current modules.
-2. Read `ai_studio/feature_testing/consumer/src/features/README.md` for optional reference
-   conventions, layers, lifecycle, state, and asset boundaries.
-3. For every existing owner being changed, read its local `README.md`,
-   `INSTALL.md`, and `feature.json`. Those files own its public surface,
-   wiring, validation, compatibility, and extension rules.
+Use `features/README.md` to select an owner or find existing modules. Read the
+owner's relevant `README.md` sections; consult `INSTALL.md` for wiring and
+`feature.json` for versions/dependencies. For copyable references, use
+`ai_studio/feature_testing/consumer/src/features/README.md`.
 
 ## Choose the owner
 
@@ -30,29 +27,31 @@ registries, or hooks without a real consumer need.
 
 ## Workflow
 
-1. Follow the closest owner's local contract instead of copying it here.
-2. For a new owner, create local contract files and register it through
-   `features/README.md`; synchronize its version with dependency records.
-3. Keep layer edges downward and declare dependencies in `feature.json`.
-4. For relocation, preserve byte identity and public include spelling, change
-   only paths/wiring, verify generated-output identity, then run consumer tests.
-5. Prove a root module through a throwaway `games/new_game.mjs` consumer.
-6. Keep each increment buildable.
+- For a new owner, create local contract files and register it through
+  `features/README.md`. Keep versions and consumer dependency records aligned.
+- Keep layer edges downward and declare dependencies in `feature.json`.
+- For relocation, preserve byte identity and public include spelling; verify
+  generated-output identity and run the affected consumer checks.
+- Prove a new or changed root-module contract through an isolated consumer;
+  reuse a suitable fixture or create one with `games/new_game.mjs`.
+- Keep increments buildable. Before merging shared-feature changes, run
+  `node ai_studio/game_tools/live_games.mjs` and update dependency records.
 
-For extraction from an existing game, inventory its lifecycle, logic, view,
-state/save, content, assets, tooling, and platform bindings first. Compare the
-candidate with existing engine APIs and feature packs before creating an owner.
+For extraction, identify the candidate's dependencies and ownership across
+lifecycle, state, content, assets, tooling, and platform bindings. Compare
+existing engine APIs and feature packs before creating an owner.
 Extract a concrete invariant API, not the game's composition or balance.
 Record source provenance inside the private game; keep private identifiers and
 restricted assets out of tracked Studio files. Prove the shared module with an
 isolated consumer and the source game's focused checks before claiming it has
 been integrated there.
 
-Name the included files and explicit exclusions before moving them. Keep a
+Define the files being moved and excluded. Keep a
 compatibility adapter when changing a source game's include/API boundary.
 For a renamed or parameterized API, prove behavioral equivalence and invariants;
-byte identity alone applies only to relocation. Land the shared module first,
-adapt the source consumer, verify it, then remove the replaced implementation.
+byte identity alone applies only to relocation. Verify the shared module and
+adapted source consumer before removing the replaced implementation.
+Run the owner's relevant checks and report integration evidence and gaps.
 
 ## Routing
 

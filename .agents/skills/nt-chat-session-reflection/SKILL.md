@@ -6,60 +6,42 @@ description: "Review an AI work session when the user requests a retrospective o
 <!-- skill folder: .codex/skills/nt-chat-session-reflection/ -- resolve plain references/, scripts/ and agents/ paths below against it -->
 # NT Chat Session Reflection
 
-Produce a full retrospective of an AI work session. The goal is to understand
-what happened, where time or context was wasted, why quality suffered, and what
-should change in the harness, workflow, tools, or agent behavior.
+Explain the requested session problems and the changes most likely to help.
+Match the depth to the question: a specific delay does not require a full audit.
 
-This is not a normal status report. Be direct, evidence-based, and practical.
+## Evidence
 
-## Evidence Order
+Prefer recorded events and artifacts to recollection. Select sources that answer
+the question; follow links or inspect specific tasks only when needed.
 
-Use durable evidence before memory or chat recollection:
-
-1. Complete Codex profiling:
-   `node ai_studio/core_harness/profiling/status.mjs --complete --verbose`.
-   This reads the canonical rollout by `CODEX_THREAD_ID`, including sessions
-   that cross midnight; do not use the disposable hook profile for a full
-   Codex retrospective.
-2. For a non-Codex harness, use the lightweight hook profile:
-   `node ai_studio/core_harness/profiling/status.mjs --verbose`.
-3. Task state when relevant:
-   `node ai_studio/taskboard/cli.mjs context --json`
-4. Changed durable artifacts:
-   `git status --short`
-5. Relevant task logs, validation output, reports, screenshots, or generated
-   artifacts.
-6. Conversation context last.
-
-Avoid broad reads. Open a specific task only when the context row is not enough.
+- For a full Codex retrospective, run
+  `node ai_studio/core_harness/profiling/status.mjs --complete --verbose`.
+  It reads the canonical rollout by `CODEX_THREAD_ID`, including midnight
+  crossings. Use `--transcript <path>` for another explicitly selected session.
+- For a non-Codex harness, use
+  `node ai_studio/core_harness/profiling/status.mjs --verbose` and report coverage.
+- Inspect relevant task logs, validation output, diffs, screenshots, and
+  conversation context to connect events to the resulting work.
 
 ## Review Shape
 
-Write the review in this order:
+State the scope, inspected evidence and its gaps, actual result, and important
+findings. Explain each material finding through its observed symptom, supported
+cause, and a better approach. Prioritize concrete improvements by expected
+benefit; include only those supported by the evidence.
 
-1. Scope and evidence inspected.
-2. Evidence quality: profile file, record count, unresolved/recovered failures,
-   wall-clock coverage, largest gaps, slowest work, repeated commands.
-3. What was actually accomplished.
-4. Where time/context was wasted.
-5. Major bottlenecks and problems. For each major problem, use:
-   `symptom`, `cause`, `faster path`.
-6. Tool/subagent use audit.
-7. Context management audit.
-8. Planning and validation audit.
-9. Product/result quality audit.
-10. Better workflow for the next similar session.
-11. Top 10 concrete improvements, ordered by leverage.
-
-When useful, split problems into product, pipeline, and agent behavior.
+For a full review, cover relevant tool/subagent use, context management,
+planning, validation, and product quality. Distinguish product, pipeline, and
+agent behavior problems where that helps assign the fix.
 
 ## Durable Changes
 
 Do not edit files by default. If the user asks to preserve lessons, update the
 owning `ai_studio/` module README or the focused reusable knowledge page,
 depending on whether the lesson is workflow/tooling or game-development
-knowledge. If the reflection creates project work, create or update Taskboard
-tasks instead of burying work only in the retrospective.
+knowledge. Update an existing lead-owned task when appropriate; propose new
+work unless the lead explicitly requests item creation. A retrospective alone
+does not authorize implementing its recommendations.
 
 ## Non-Negotiables
 
@@ -68,7 +50,6 @@ tasks instead of burying work only in the retrospective.
   intervals clearly.
 - Do not infer time spent from memory when profiler coverage is broken; mark it
   `partial`, `likely`, or `unknown`.
-- Distinguish product, pipeline, and agent behavior problems.
 - Do not mark the project goal complete from a retrospective.
 - Keep raw telemetry and generated reflection artifacts in `tmp/session_profiles`
   unless the lead asks to preserve them.

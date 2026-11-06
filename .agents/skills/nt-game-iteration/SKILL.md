@@ -6,21 +6,17 @@ description: "Change a game and see it work: pick the game's own build/run/test 
 <!-- skill folder: .codex/skills/nt-game-iteration/ -- resolve plain references/, scripts/ and agents/ paths below against it -->
 # NT Game Iteration
 
-The everyday loop for a game under `games/<id>/` or `games/private/<id>/`:
-edit, build, check, look. Each game owns its commands; this skill routes to
-them and keeps the loop short. Portal packaging and release gates belong to
-`nt-portal-publish`; deep runtime evidence belongs to `nt-runtime-automation`.
+Use the game's own edit/build/check loop. Portal packaging belongs to
+`nt-portal-publish`; advanced runtime proof belongs to `nt-runtime-automation`.
 
 ## Before the first edit
 
-1. Read the game's `README.md` "work from here" section (or its runbook) and
-   `AGENTS.md` when present. Commands, presets and the `dev` loop differ per
-   game; never assume another game's.
-2. Read the game's accepted decisions in `design/knowledge/` that touch the
-   change (latest `playtest_*.md`, rules the lead already settled). A build that
-   breaks an agreed rule is the most common rejected result.
-3. Check the game's Git state: games are nested repositories, and another agent
-   may hold uncommitted work there. Do not mix your change into it.
+- Use the game's runbook and applicable `AGENTS.md` for commands and presets.
+- Consult accepted decisions in `design/knowledge/` relevant to the change;
+  reuse context already established in the session.
+- Identify the owning repository and check its Git state. Public games may be
+  tracked by Studio; private games use nested repositories. Preserve unrelated
+  work and keep private game identifiers and evidence out of tracked Studio files.
 
 Run game commands from the game root; run Studio commands from the Studio root.
 
@@ -34,40 +30,30 @@ Run game commands from the game root; run Studio commands from the Studio root.
 | Anything a player sees: UI, layout, art, feel | a run plus a screenshot (below); a unit test does not prove it |
 | Browser-only behaviour | `node ai_studio/runtime_automation/preview_game.mjs --game <id> --preset wasm-devapi-debug` from the Studio root; preview output is never release evidence |
 
-Build through `tools/game.mjs`, never raw `cmake --build`: it keeps compiler
-output out of the transcript. A green `test` prints one line and a red one the
-failing tail plus the log path; read the log rather than rerunning with
-`--verbose`. Do not run Studio `verify --full` or every tier
-after each edit; that is the release and CI boundary.
+Build through `tools/game.mjs`, never raw `cmake --build`. Read a failed check's
+log instead of rerunning with `--verbose`. Reserve Studio `verify --full` and
+all-tier checks for their CI/release boundary or an explicit request.
 
 Tests follow the Game Test Policy in `AGENTS.md`: cover saves, schema, economy
 math and catalogs; never pin a design knob.
 
 ## Look at it
 
-For a visible change, launch the native debug build with DevAPI the way the
-game's runbook says, then:
-
-```powershell
-node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/devapi_cli.py 17890 endpoints
-```
-
-Drive the scene with the game's own commands (`command.describe` before an
-unfamiliar one), wait a frame, and capture with `capture.frame` or
-`capture.region`. Check the image yourself before reporting it, and compare
-with the previous accepted screenshot when there is one. Use
+For a visible change, launch or reuse the runbook's DevAPI build, discover
+`endpoints`, and use `command.describe` for unfamiliar commands. Drive the
+affected scene, wait a frame, and capture with `capture.frame` or
+`capture.region`. Inspect the image and compare against accepted evidence
+when available. Use
 `pixel_health.py` and `ui_readability.py` from `ai_studio/runtime_automation/`
-when a blank frame or unreadable text is plausible. Layout work also loads
-`nt-game-ui-layout`; its viewport matrix is one command,
-`responsive_viewports.py --game <id> --viewport 640x360`.
+when a blank frame or unreadable text is plausible. Use `nt-game-ui-layout`
+for layout changes and its targeted desktop/phone proof.
 
 Keep scratch captures under the game's ignored `build/` or `tmp/`; anything
 cited later as evidence goes to `design/knowledge/` or `.ai_studio/evidence/`.
 
 ## Finish
 
-- Commit inside the game repository, not the Studio one; the Studio pre-commit
-  hook rejects private game names in Studio files.
+- When committing, use the owning repository identified above.
 - Report what was checked and how: the test selection, the screenshot path,
   and anything not verified.
 - A suspected engine defect follows the engine boundary in `AGENTS.md`: prove

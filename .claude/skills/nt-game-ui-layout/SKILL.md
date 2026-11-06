@@ -6,38 +6,22 @@ description: "Build or fix game HUDs, screens, menus, and responsive layouts usi
 <!-- skill folder: .codex/skills/nt-game-ui-layout/ -- resolve plain references/, scripts/ and agents/ paths below against it -->
 # NT Game UI Layout
 
-Use this skill as the pre-edit gate for product-facing game UI layout. The goal
-is not to memorize the whole engine UI surface; the goal is to discover the
-relevant widgets, modes, examples, and proof tools before touching layout code.
+Build the requested UI change with existing engine widgets and game wrappers.
 
-## Required Gate
+## Approach
 
-Fast path: for a pure copy, color, image, or obvious one-file tweak that does
-not change layout structure, skip the full inventory. Name the adjacent wrapper
-or primitive being reused and run proportionate verification.
+Use the request and existing design to identify the game, affected surfaces,
+and expected behavior. Inspect nearby implementations and relevant engine APIs
+as needed; choose the implementation and reading order to fit the change.
 
-For non-trivial layout work, produce this short inventory in working notes or
-the task log before editing:
+Before adding a reusable wrapper, custom renderer, manual scissor, or layout
+primitive, establish why existing engine/game primitives do not fit. Raw Clay
+composition within an existing surface may follow its current wrappers and
+engine contract. Record non-obvious choices and design exceptions.
 
-- Game/surface: explicit game id plus HUD, screen, modal/sheet, overlay, menu,
-  list, text, etc.
-- Existing analogs: nearby `games/<game-id>/src/ui/` files, tests, DevAPI
-  scenarios, task logs, or accepted screenshots/handoffs.
-- Primitives found: engine widgets, modes, wrappers, or examples that fit.
-- Decision: reuse path, or why existing primitives do not fit.
-- Proof: smallest native plus desktop/phone visual/runtime evidence.
-
-Do not add a new reusable UI wrapper, custom renderer, manual scissor, or layout
-primitive until this inventory shows the existing engine/game primitives do not
-fit. Raw Clay composition inside an existing surface is fine when it follows the
-engine contract and current game wrappers.
-
-## Reference
-
-After the inventory, load
-[`references/layout-contract.md`](../../../.codex/skills/nt-game-ui-layout/references/layout-contract.md) for the source
-map, widget/mode checklist, retained-state rules, clipping pitfall, and proof
-commands. Load only the sections the current surface needs.
+Load relevant sections of
+[`references/layout-contract.md`](../../../.codex/skills/nt-game-ui-layout/references/layout-contract.md) for unfamiliar
+widgets, retained state, clipping, or window-composition proof.
 
 ## Invariants
 
@@ -50,27 +34,28 @@ commands. Load only the sections the current surface needs.
   Web shells supply live CSS `env(safe-area-inset-*)` values through the UI Kit
   bridge; see `features/ui-kit/INSTALL.md#web-safe-area`. Do not bypass the
   common conversion with per-screen scaling, guessed device margins or a
-  second safe-area inset. Verify nonzero top, side and bottom insets as well
-  as zero; emulation does not prove physical-device browser reporting.
+  second safe-area inset. For inset handling or layout at screen edges, verify
+  zero and nonzero top, side and bottom insets; emulation does not prove
+  physical-device browser reporting.
 - Scale one window composition across desktop, portrait, and landscape by
   default. Change the arrangement only when the content genuinely needs it
   (for example, backpack, chest, or shop); record that exception. Settings
   keep one composition and fit without scrolling.
 - Inspect `ui.tree` and matching examples before tuning broken geometry.
-- Keep HUD out of the publish target's reserved zones (the Poki Pill, top-left);
-  prove it with `ai_studio/runtime_automation/responsive_viewports.py --game <id> --portal <target>`.
+- Keep HUD out of the publish target's reserved zones (the Poki Pill, top-left).
+  For affected HUD or portal layouts, use
+  `ai_studio/runtime_automation/responsive_viewports.py --game <id> --portal <target>`.
 
 ## Verification
 
-Pick the smallest native test plus desktop/phone runtime or visual evidence that
-covers the changed surface. For retained state, loop open/close/reopen and
-confirm used slots return to the intended baseline. Record evidence paths before
-marking work done.
+Run the smallest relevant native check for changed logic and inspect runtime
+screenshots of the changed UI on desktop and phone. Exercise affected controls;
+for retained state, loop open/close/reopen and check the intended slot baseline.
 
-For every active game's window, maintain `design/ui_window_contracts.json` and
-run the Studio-wide contract inventory (`window_layout_contract.py --studio-root .`)
-to expose missing active-game declarations; frozen games are skipped. Then
-run `ai_studio/runtime_automation/window_layout_capture.py --game <id>` after
-a native DevAPI build. The shared checker must cover every declared window and
-modal scene; review its screenshots. See
-[`references/layout-contract.md`](../../../.codex/skills/nt-game-ui-layout/references/layout-contract.md#window-composition-check).
+Keep `design/ui_window_contracts.json` complete as windows or modal scenes change.
+For a local edit, prove the affected surface; for shared layout changes, cover
+affected consumers. Use the full game capture for game-wide acceptance and the
+Studio-wide inventory for inventory/schema work or Studio/release checks. See
+[`references/layout-contract.md`](../../../.codex/skills/nt-game-ui-layout/references/layout-contract.md#window-composition-check)
+for commands and coverage. Report evidence paths and gaps; repeat or broaden
+checks when changes, failures, or unresolved concerns require it.

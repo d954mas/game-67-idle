@@ -6,13 +6,9 @@ description: "Select and record Studio quality checks for changed game output, a
 <!-- skill folder: .codex/skills/nt-quality-checks/ -- resolve plain references/, scripts/ and agents/ paths below against it -->
 # NT Quality Checks
 
-Use this as a thin router to `ai_studio/quality/`. Do not duplicate rule text
-or create project-local quality rule IDs here.
-
-Use it for explicit quality-check requests and for self-checking substantial
-completed work. Do not trigger it for every changed file; trigger it when the
-work created a player-facing, asset, design, gameplay, technical, or quality-rule
-claim that needs evidence.
+Select evidence for the requested quality claim. Use the catalog in
+`ai_studio/quality/README.md`; do not create project-local rule IDs or treat
+every file change as a reason for a full review.
 
 ## Sources
 
@@ -20,64 +16,51 @@ claim that needs evidence.
 - Rule groups: `ai_studio/quality/rules/*/README.md`.
 - Rule files: `ai_studio/quality/rules/*/checks/Q*_NNN_*.md`.
 
-## Workflow
+## Approach
 
-1. Start with `ai_studio/quality/README.md`.
-2. Pick one or more groups from the changed work, claim, or risk.
-3. Open only the matching group README files.
-4. Open only rule files whose `Use When` section matches the task.
-5. Use a group's `001` rule only when its `Use When` matches.
-6. Gather the evidence requested by the selected rule files.
-7. Record `pass`, `block`, `review`, `skip`, or `unverified` where the work is reported.
+Choose checks by the changed behavior, claim, or risk. Open the matching rule
+directly from the catalog; read a group README only when its context is needed.
+A group's `001` check applies only when its `Use When` matches.
 
-Do not run every rule. A single change can need multiple groups, but one green
-rule is not acceptance for unrelated quality dimensions.
-
-## Group Routing
-
-- Player Clarity: visible player understanding, feedback, responsive viewports,
-  virtual controls, and player-facing presentation.
-- Art: art direction, generated art, visual target fit, polish, and avoiding
-  debug/placeholder defaults.
-- Assets: asset source, provenance, origin, license, integrity, runtime
-  readiness, and material data.
-- GDD: design source packages, source order, file roles, contradictions,
-  requirements, and acceptance criteria.
-- Game Design: playable loop, player motivation, economy, progression, feature
-  fit, and playable-slice strength.
-- Technical: changed code, scripts, generated data, runtime behavior,
-  build/run proof, state, packaging, and automation.
+Gather the selected rules' evidence, reusing current applicable proof. Repeat
+or expand checks when changes, failures, or unresolved concerns require it.
+One change can need multiple groups; one green rule cannot prove unrelated
+quality dimensions.
 
 ## Outcome
 
-When a task exists, write stable quality lines in task `## Log`:
+Record `pass`, `block`, `review`, or `unverified` with evidence for each check.
+When a task exists, use its structured `quality` state through the Taskboard CLI:
 
-```text
-- YYYY-MM-DD: Quality: QCLR_001=pass; QTECH_001=review; evidence: <short proof or artifact>.
+```powershell
+node ai_studio/taskboard/cli.mjs set <id> --quality "QCLR_001=pass" --quality-evidence "QCLR_001=<durable proof>" --json
 ```
 
-When no task exists, record the same outcome in the final response, PR/review
-comment, or another durable artifact. Do not create a task only to satisfy
-quality logging.
+Use the task's owning store (`--game <game-id>` for private games). For multiple
+checks, supply per-check evidence. The CLI appends history to the
+log; log-only records do not satisfy closure. New `skip` decisions are rejected.
+Only `pass` checks permit closure; omit quality when no rule applies. Follow
+`ai_studio/taskboard/task-store-reference.md#done-and-evidence` for storage,
+durable evidence, and lifecycle details.
+
+Without a task, report outcomes and evidence in the response or requested
+durable artifact. Do not create a task just for quality logging.
 
 ## Profiling Commands
 
 - Usage summary: `node ai_studio/quality/profile.mjs`.
 - Usage across game stores: `node ai_studio/quality/profile.mjs --include-private --json`.
-- Profiler tests: `node --test ai_studio/quality/tests/profile.test.mjs`.
 
-Profiling only summarizes recorded quality-check usage. It does not prove that
-the current work passed a quality check. It scans task logs only; outcomes
-recorded only in final responses, PR/review comments, or other non-task
-artifacts are not counted.
+Run profiling for a usage audit, not as an acceptance check. It counts task-log
+history, including legacy outcomes, rather than proving current quality.
 
 ## Maintenance Commands
 
-Use these only when changing quality docs, rule files, skill surfaces, or the
-architecture tree:
+Use owner checks only when their inputs change:
 
 - Map validation: `node ai_studio/architecture_map/validate_map.mjs`.
 - Harness doc reference check: `node ai_studio/core_harness/validation/doc_reference_check.mjs`.
+- Profiler tests when profiler behavior changes: `node --test ai_studio/quality/tests/profile.test.mjs`.
 
 ## Boundaries
 

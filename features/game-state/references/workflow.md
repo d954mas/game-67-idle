@@ -5,18 +5,23 @@ runtime actions, DevAPI commands, fixtures, or save behavior.
 
 ## Workflow
 
-1. Read the version-2 fragment schema and installed save/storage headers.
-2. Edit path-keyed `fields`, types, hooks, enums, or `reserved` tombstones in
-   the schema; never introduce numeric field ids.
-3. Regenerate and inspect all five `<id>_state*` outputs. Do not hand-edit them.
-4. Keep generated storage/serialization separate from hand-written domain
+For domain-action or DevAPI behavior changes, inspect the owning schema and
+relevant save/storage contract, then update the affected hand-written code.
+For storage or generated-API changes:
+
+1. Edit path-keyed `fields`, types, hooks, enums, or `reserved` tombstones in
+   the version-2 fragment schema; never introduce numeric field ids.
+2. Regenerate and inspect all five `<id>_state*` outputs. Do not hand-edit them.
+3. Keep generated storage/serialization separate from hand-written domain
    actions and the hand-written registry DevAPI dispatch.
-5. Register every fragment before `game_save_init()` in deterministic order.
+4. Register every fragment before `game_save_init()` in deterministic order.
    The template order is `settings`, `items`, `progression`, then `game` last.
-6. Add deterministic migrations and fixtures for renamed, deleted, moved, or
+5. Add deterministic migrations and fixtures for renamed, deleted, moved, or
    compensated data.
-7. Run generator tests, native save/storage tests, and relevant DevAPI/runtime
-   scenarios.
+
+Verify affected native save/storage behavior and relevant DevAPI/runtime
+scenarios. Run generator tests when generator or generated-output behavior
+changes, and complete the owner's applicable validation before handoff.
 
 For a nested aggregate, keep `order_by` explicit at both levels. Treat each
 `max_count` as the fixed pool budget (the nested budget is global, not

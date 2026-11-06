@@ -5,91 +5,52 @@ description: "Create, render, audit, or hand off Blender scenes and models with 
 
 # NT Blender Production
 
-Use the canonical pipeline at
-`ai_studio/assets/tools/blender/README.md`. Read it completely before changing a
-Blender scene. It owns the audit scripts, proof packet, feedback loop and stop
-rules.
+Use relevant sections of `ai_studio/assets/tools/blender/README.md`, which owns
+the audit scripts, proof profiles and review gates. A tool-only task such as
+vertex-color baking follows that tool's contract; scene production uses the
+applicable production stages.
 
-## Required Sequence
+## Production Approach
 
-1. Write a reference lock: immutable source scene, output version, approved
-   spec/refs, camera, scope, style constraints, proof renders and done condition.
-2. Build one thin coherent slice in a separate `.blend`.
-3. Run `blender_scene_audit.py` before surface polish and after every risky
-   geometry/modifier change.
-4. Fix the first failing technical stage; rerun until no technical block remains.
-5. Render clay, color, three-quarter depth, master frame, grayscale and
-   silhouette evidence from the exact saved scene.
-6. Open and compare current renders with every approved reference. Record a
-   dimension-by-dimension art-direction mismatch audit.
-7. Fix all critical/high style, completion and technical findings; repeat the
-   loop from step 3.
-8. Obtain independent visual and technical review when the reference controls
-   final art, after user rejection, before propagation, or before handoff.
-9. Validate a fresh-hash review bundle with `gate.py`.
-10. Show the user only genuine design choices after the bundle passes. Keep
-    propagation and handoff blocked otherwise.
+- Establish scope, done condition, source/output scenes and applicable reference
+  lock. Reuse an existing valid lock; update it when the requested design changes.
+- Work in a separate versioned scene and keep source scenes immutable. Choose
+  the smallest coherent change that can prove the decision.
+- Audit affected geometry/modifier stages before polish and after risky changes.
+  Resolve the failing construction before adding detail. Reconsider the method
+  when repeated fixes do not address the cause.
+- Inspect current target-camera renders and diagnostic views against approved
+  references. Run affected technical/visual checks during iteration; assemble
+  the complete applicable proof packet for final review, propagation or handoff.
+- Use the owner's independent visual and technical review gate when required:
+  final named-reference work, rejected results, complex topology, propagation
+  or handoff. Reviewers receive evidence and return findings, not builder claims.
+- Validate `gate.py` with a fresh-hash bundle before declaring review readiness,
+  promoting a baseline, propagating a module or handing off the scene.
 
-## Non-Negotiable Gates
+## Invariants
 
-- A successful render is not a topology pass.
-- A topology pass is not a style pass.
-- An approved color is not approval of geometry, architecture or lighting.
-- Close-up beauty does not replace three-quarter diagnostics or the approved
-  camera.
-- Do not hide known defects with camera, materials, AO, bevel or post effects.
-- Do not call a requested component complete when any requested part is absent
-  or visibly provisional.
-- Any save after audit/render invalidates previous scene-hash evidence.
-- Never propagate a bay/module/style while a critical/high mismatch is open.
+- Render success, topology integrity, style fidelity and completion are separate
+  claims. Required components and critical/high findings cannot be omitted.
+- Do not hide defects with the camera, materials, AO, bevel or post effects.
+  Preserve target-camera and three-quarter diagnostics where the profile needs them.
+- Audits and renders must identify the exact saved scene hash. A later save
+  invalidates previous scene-hash evidence; final proof must be refreshed.
+- Never propagate or hand off with an unresolved critical/high mismatch or a
+  failing mechanical gate. Reviewers cannot override mechanical blocks.
 
-## Style Fidelity
+## Conditional Detail
 
-When a named style or reference drives the work, also use
-`nt-design-knowledge`. Compare the native render against the durable reference
-contract for composition, silhouette, architecture/form genealogy, proportions,
-rhythm, palette, light, detail hierarchy, originality and completion. Label
-observations and inferences separately. Convert every rejection into a durable
-validator, checklist, regression case or source rule.
+- Named-reference style: use `nt-design-knowledge` and the owner's art-direction
+  dimensions. Keep observations separate from inferences; preserve useful
+  rejection findings in the game-owned reference contract or regression evidence.
+- Character models: use [character guidance](references/characters.md) for
+  gameplay-camera proof, anatomy, face shading and motion defects.
+- Independent review: keep visual and technical lanes distinct, read-only and
+  evidence-bound; report reduced independence when separate reviewers are unavailable.
 
-## Character Models
+## Completion
 
-- Judge a character in the game's own pose, light and camera, on game frames. A
-  bind-pose render proves nothing about how it reads in play.
-- Build proportions for a person, not for the camera. Do not enlarge, raise or
-  tilt a face to survive a high camera (the lead's rule, after every attempt read
-  as frightening).
-- For a small face on screen, use a picture on a flat face region: an RGBA texture
-  at low resolution, with fully transparent pixels holding the skin colour so GPU
-  filtering cannot darken the edges.
-- Bend the face's custom normals towards one up-and-forward direction, fading out
-  at the sides, chin and neck. Otherwise hemisphere ambient darkens the lower face
-  and a mouth reads as a beard.
-- Zero holes and zero poke-through, checked first in every round, in motion too.
-- Compare each round with the previous round and the last approved look, not only
-  with the reference. Local fixes per critic point can make the whole worse; when
-  they do, rebuild from a clean model rather than deforming the old one again.
-
-## Reviewer Roles
-
-Keep building coherent and local. Use fresh read-only reviewers only at the
-independent gate:
-
-- visual verifier: approved refs/spec plus native evidence packet;
-- technical verifier: `.blend`, audit report and construction scripts;
-- lead: integrate findings, fix the scene, rerun all affected gates.
-
-Reviewers cannot approve missing evidence or override a mechanical block.
-
-## Completion Report
-
-Report:
-
-- source and output scene paths/hashes;
-- reference/spec paths;
-- technical audit status and blockers fixed;
-- art-direction matches and remaining mismatches;
-- independent-review result;
-- evidence render paths;
-- `QART`, `QASSET`, and `QTECH` outcomes where applicable;
-- whether user review, propagation, or handoff is unlocked.
+Report scene paths/hashes, reference contract, technical and art status, review
+results, evidence paths and remaining blockers. State applicable QART/QASSET/QTECH
+outcomes and whether user review, propagation or handoff is actually ready.

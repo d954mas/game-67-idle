@@ -1,76 +1,50 @@
-﻿# Generation Paths
+# Generation Paths
 
-Load this reference when you need exact image-generation commands or must choose
-between codex, agy, compare mode, or REST/backend alternatives.
+Read when selecting a tool or recovering from a failed image-generation route.
+Use current tool capabilities and documentation rather than a fixed model name,
+price assumption or machine-specific recipe.
 
-Paths verified on this machine (Windows, 2026-06-17):
+## Default Route
 
-- Path A: official codex CLI `imagegen` via `codex exec` (PRIMARY). This is
-  codex's documented image feature (gpt-image-2), sanctioned, no ToS gray zone,
-  free on the ChatGPT plan, and counts toward Codex limits.
-- Path B: agy (Antigravity) CLI (FALLBACK). Separate product and credentials;
-  fast enough for fallback or style comparison.
-- Path C: gpt-image-2 through official REST with an `sk-` key, or through the
-  codex backend HTTP path. Use only when Path A breaks or REST/high-volume
-  features are required.
+Use the host's official native image tool when available. Supply the requested
+subject, composition, output constraints and references; preserve the returned
+image and tool provenance. Use its supported transparent-background option for
+cutouts and inspect the result. Follow the host's image-editing requirements.
 
-## Path A: Official Codex Imagegen
+If the native tool is unavailable, choose an official CLI or API only when its
+current capabilities, credentials and execution permissions cover the task.
+Use normal sandbox/approval settings and explicit output paths. Existing task
+authorization carries forward, but does not grant access to a different account,
+paid service or execution boundary.
 
-```bash
-bash .codex/skills/nt-asset-image-generation/scripts/codex_imagegen.sh \
-  --prompt "<DETAILED PROMPT>: real raster game art, thick outline, plain dark slate background" \
-  --out tmp/out.png --size 1024x1024
-```
+For API work, use the provider's documented endpoint and configured API-key
+route. Do not infer API billing permission from a chat subscription, read browser
+or CLI credential stores, or use an undocumented backend as an automatic fallback.
+If no supported authorized path exists, report the specific missing capability.
 
-The wrapper runs `codex exec`, forces a real `imagegen` call, writes the PNG,
-and verifies the result. Prefer it over hand-written calls.
+## Existing Adapter Limitations
 
-Notes:
+The bundled scripts have legacy defaults; their presence is not a safe fallback:
 
-- The wrapper uses `codex_imagegen.sh`.
-- `codex exec` may need
-  `--dangerously-bypass-approvals-and-sandbox --skip-git-repo-check` for
-  headless decode/write. If the target is inside the repo, tighten to
-  `-s workspace-write -a never` when possible.
-- The Codex desktop app is not required; `exec` is enough.
+- `scripts/codex_imagegen.sh` unconditionally disables sandbox and approvals.
+- `scripts/gen_both.sh` invokes that wrapper and bypasses agy permissions.
+- `scripts/generate_image.py` can fall back to CLI OAuth/raw backend access,
+  pins provider details and changes TLS revocation behavior.
+- `scripts/gen_batch.py` uses `generate_image.py` unless an adapter is supplied.
+- Canvas recipe/pack and AI dual-plate defaults also delegate to legacy
+  generators; a Canvas command does not remove the adapter restriction.
 
-## Path B: Agy Fallback
+Do not run these default generation routes under this skill. A maintained
+adapter must preserve the current host permissions and use a supported official
+transport before it can be selected. Deterministic preparation tools remain
+available independently of generation. Until a permitted Canvas generation
+adapter is available, generate with the native tool and import the source
+through Canvas's supported operations.
 
-```bash
-AGY="${AGY_COMMAND:-agy.exe}"
-START=$(date +%s)
-"$AGY" --dangerously-skip-permissions -p "Use your built-in image generation to create one real raster image (not code-drawn), <ASPECT>: <PROMPT>. Save the PNG to C:/abs/path/out.png . Do not write or run any drawing code." \
-  < /dev/null > /dev/null 2>&1
-test -f C:/abs/path/out.png && echo OK \
-  || find . "$HOME/.gemini/antigravity" -name '*.png' -newermt "@$START" 2>/dev/null
-```
+## Comparison And Recovery
 
-Use `--dangerously-skip-permissions` for headless runs. Confirm by file, not
-stdout; agy can be quiet under non-TTY.
-
-## Compare Mode
-
-Use compare mode for important hero art when two model styles are useful.
-
-```bash
-bash .codex/skills/nt-asset-image-generation/scripts/gen_both.sh \
-  --prompt "<DETAILED PROMPT>" --name shipicon --out-dir tmp/gen --size 1024x1024
-```
-
-This writes `<name>_codex.png` and `<name>_agy.png`. Pick by visual fit, mood,
-readability, and style, not by pixel similarity or file size.
-
-## Path C: REST Or Codex Backend Alternative
-
-```bash
-node ai_studio/dev_environment/python_run.mjs .codex/skills/nt-asset-image-generation/scripts/generate_image.py \
-  --prompt "<PROMPT>" --out tmp/out.png --size 1536x1024 --quality high
-```
-
-`generate_image.py` auto-detects credentials:
-
-- `$OPENAI_API_KEY = sk-...`: official REST `/v1/images/generations`; billed,
-  sanctioned, and preferred for REST features or high volume.
-- Codex OAuth JWT from `~/.codex/auth.json`: raw codex backend HTTP with an
-  `image_generation` tool. This is a ToS gray zone and should stay manual,
-  low-volume, and alternative-only.
+Compare providers or candidates only when the requested style decision needs
+it and the generation scope covers the extra calls. Keep composition comparable.
+Inspect failed output and provider errors before retrying; change the prompt,
+references or supported route based on the failure. Preserve certificate checks
+and do not weaken execution permissions to make a route work.

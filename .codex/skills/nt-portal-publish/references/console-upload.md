@@ -1,17 +1,16 @@
 # Uploading into a console
 
-A console form is not a file system. Everything below is observed behaviour of
-the live consoles and of the agent's browser bridge, re-verified on 2026-09-08
-against the Yandex console; when a console changes, correct this section in the
-same session that discovers it.
+Use only for an authorized draft upload. These are observed console and browser
+bridge behaviors, not universal API contracts. Check the current tool's upload
+capabilities and applicable console fields; use only the workaround needed for
+the observed failure. Video slots and submission remain lead-owned.
 
 ## The 10 MB bridge cap, and the file it silently ruins
 
-One `file_upload` call carries at most 10 MB in total, across every file in that
-call. Nothing raises it. The danger is not the refusal — there is none: a form
-accepts a truncated file, the console stores it, and the failure surfaces days
-later as an automatic rejection naming a file id (`VIDEO.INVALID`) that the field
-no longer even contains.
+The legacy `file_upload` bridge capped each call at 10 MB total and could
+silently truncate files. If the current host has this cap, use a supported
+whole-file transport or the reconstruction below. Do not split files when the
+current upload tool accepts them intact; verify uploaded size/integrity.
 
 So a file over the cap goes in whole or not at all:
 
@@ -41,16 +40,16 @@ usually running a client-side validator that never settles. Yandex's video
 widget measures the clip's height through a `<video>` element on a blob URL; the
 agent's Chrome decodes no mp4 at all — even a clip Yandex itself has already
 transcoded fails with `MEDIA_ERR_SRC_NOT_SUPPORTED` — so the promise never
-resolves and the handler returns having done nothing. Do not re-encode the clip
-to chase this: the file is fine, the renderer is not. Use the console's own API.
+resolves and the handler returns having done nothing. When diagnostics establish
+this renderer failure, do not re-encode a valid clip to chase it. Hand the
+validated clip and slot information to the lead.
 
 ## Driving the console API
 
-Read the console's own calls before inventing any: hook `window.fetch`, make one
-harmless change in the form, press its Save, and read the URL, the headers and
-the body shape it sent. The bundle is the second source — it is minified but the
-payload builders are readable, and they settle field names the API only answers
-with `Invalid value`.
+Inspect the console's current requests during an authorized edit, or its payload
+builders, before using an undocumented call. Do not change draft fields merely
+to discover the API. Use the browser/connector's supported authenticated flow;
+these examples do not authorize extra writes or credential extraction.
 
 Every write needs the console's CSRF header. On Yandex it is `x-csrf-token`; a
 token an SPA has held for hours goes stale and the answer is a bare 403, while
@@ -88,9 +87,9 @@ dialog, then restore the prototype. Its video inputs take a file directly.
 Video is transcoded server-side and appears in the slot only when it is done.
 A clip of about 7 MB carrying an audio track was ready in roughly four minutes;
 the same footage at 13–20 MB and with no audio track at all had not appeared
-hours later and is what an automatic rejection called invalid. Keep clips small
-and give them a track, even a silent one, and watch `embed_url` fill in rather
-than guessing from the form.
+hours later and is what an automatic rejection called invalid. Watch current
+processing status rather than guessing from the form. Change encoding only
+when current validation or diagnostics support it.
 
 An automatic rejection is not a moderator: `GET /console/api/moderation-history/
 <app-id>` answering `was_moderated: false` means no human ever saw the draft, so

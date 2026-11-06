@@ -1,7 +1,7 @@
 # Game UI Layout Reference
 
-Load this after the short inventory in `../SKILL.md` when the change affects
-layout structure, retained UI state, clipping, overflow, or responsive proof.
+Read the sections needed for layout structure, retained UI state, clipping,
+overflow, or responsive proof.
 
 ## Source Map
 
@@ -61,25 +61,29 @@ or named scroll region needs a content reason. Settings cannot opt out of
 single-layout/no-scroll. See the
 [contract schema and proof procedure](../../../../ai_studio/runtime_automation/window_layout_contract.md).
 
-After a native DevAPI build, run:
+For local edits, use game-local DevAPI scenarios to exercise and capture the
+affected windows and related modal scenes. Shared layout changes need coverage
+of affected consumers. Keep the contract's complete catalog regardless of the
+current check scope.
+
+For full game acceptance, after a native DevAPI build run:
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/window_layout_capture.py --game <game-id>
 ```
 
-The script opens each declared window in portrait and landscape, checks modal
+This command checks the whole game; it has no per-window filter. It opens each
+declared window in portrait and landscape, checks modal
 scene coverage, composition, clipping and scroll behavior, and saves
 screenshots. It cannot judge readability or touch-target quality, so inspect
 both captures and exercise the controls.
 
-## Verification
+## Targeted Verification
 
-- Run the narrow native/unit test for layout math, UI state, or helpers.
-- Loop open/close/reopen for retained state and verify used slots return to the
-  intended baseline.
-- Capture desktop and phone through `quality_responsive` or the game-local
-  responsive scenario.
-- Inspect `ui.tree` bounds and stable hit IDs.
-- Use `pixel_health.py` for blank/flat captures and `ui_readability.py` when
-  text readability matters.
-- Record evidence paths in the task log.
+- For changed layout math, UI state, or helpers, run the relevant native test.
+- For retained state, loop open/close/reopen and check the intended slot baseline.
+- Capture affected layouts on desktop and phone with a game-local responsive
+  scenario or `quality_responsive`; inspect images and exercise the controls.
+- Use `ui.tree` for geometry/hit IDs, `pixel_health.py` for blank/flat captures,
+  and `ui_readability.py` when text readability needs checking.
+- Report evidence paths and gaps; use an existing task log when applicable.

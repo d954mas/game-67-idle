@@ -5,9 +5,7 @@ description: "Maintain cited game-design sources and reusable knowledge; route g
 
 # NT Design Knowledge
 
-Use this skill to route design sources and reusable game-design knowledge.
-
-Canonical workflow docs live in `ai_studio/game_design/knowledge/`.
+Maintain the requested design evidence or knowledge in its owning location.
 
 ## Load Only What Applies
 
@@ -22,17 +20,17 @@ Canonical workflow docs live in `ai_studio/game_design/knowledge/`.
   substantially rewriting source notes, knowledge pages, project notes, or
   review reports.
 
-## Default Workflow
+## Approach And Evidence
 
-1. Read `ai_studio/game_design/knowledge/README.md`.
-2. Route before editing: reusable source shelf, reusable knowledge, private game
-   knowledge, task state, or temp scratch.
-3. Add or update source notes before conclusions when external evidence matters.
-4. Keep reusable principles in `ai_studio/game_design/knowledge_base/knowledge/`; current-game facts
-   stay in `games/<game-id>/design/knowledge/` or other focused files under
-   `games/<game-id>/design/`.
-5. Link conclusions back to source notes, update index/log files when
-   discoverability changes, and state evidence gaps.
+Use existing notes and accepted evidence when they cover the request. Consult
+`ai_studio/game_design/knowledge/README.md` when ownership is unclear. Load only
+references needed for the current routing or evidence decision.
+
+Keep reusable principles in `ai_studio/game_design/knowledge_base/knowledge/`
+and game-specific findings in `games/<game-id>/design/knowledge/`. When external
+evidence supports a new conclusion, record its source before promoting it.
+For a focused correction, update the affected notes and links; update indexes
+when discoverability changes. Verify citations support the claims and report gaps.
 
 ## Rules
 

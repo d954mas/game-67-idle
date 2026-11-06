@@ -5,76 +5,52 @@ description: "Source, import, prepare, promote, or validate game assets and lice
 
 # NT Asset Workflow
 
-Use this as the main asset skill. Keep the source, prepared files, library,
-game-local copy, generated preview/index, and engine integration as separate
-decisions.
+Keep source art, prepared outputs, library storage, game-local copies, previews,
+and engine integration distinct. Choose the work needed for the requested target.
 
-## Pick The Path
+## Workflow
 
-- **Find/reuse an existing asset**: search storage first, browse viewer if needed,
-  then pull the selected asset into the game.
-- **Add an asset to the global library**: intake or prepare it, record license and
-  provenance, add/promote it into storage, then refresh the index/preview.
-- **Add an asset only to the current game**: place it under the game asset root,
-  keep manifest/source metadata, and let storage show unregistered files until
-  the metadata is added.
-- **3D models or meshes**: load `references/3d-models.md` for source-first model
-  reuse, conversion, texture dedup, and engine pack/load integration.
-- **Animation clips for a character** (walk, jump, attack, gesture): load
-  `references/animation.md` for library-first search and Kimodo text-to-motion
-  generation with retargeting onto the character rig.
-- **Standalone textures or materials**: load `references/textures-and-materials.md`
-  for tiling, material maps, downloaded texture provenance, and seam checks.
-- **Paid or non-redistributable asset**: load
-  `references/restricted-assets.md` before moving binaries.
-- **Generated art, source sheets, cutouts, slice9, or atlas crops**: load
+- For reuse, search the library, then practical free CC0/OFL sources before
+  generation. Use `node ai_studio/assets/catalog/search.mjs --query "<need>"
+  --kind <kind> --json`; add `--refresh` only when changed files must be included.
+- For library intake or promotion, preserve source metadata and refresh affected
+  indexes/previews after changes. Existing valid metadata can be reused.
+- For game-only intake, use the game's asset root and manifests. Games consume
+  local copies, never runtime dependencies on global library paths.
+- Verify the changed claim: license/provenance for intake, prepared output for
+  conversion, viewer preview for discovery, and runtime evidence for game use.
+
+## Conditional References
+
+- 3D reuse, conversion and engine loading: `references/3d-models.md`.
+- Character clips and retargeting: `references/animation.md`.
+- Textures, materials and seam checks: `references/textures-and-materials.md`.
+- Paid, account-gated or unknown licenses: `references/restricted-assets.md`
+  before moving binaries.
+- Generated art, alpha, source sheets, slice9 and crops:
   `references/generated-assets-and-cutouts.md`.
-- **Need to create raster source art after source search fails**: use
-  `nt-asset-image-generation`, then return here for prep, storage, license,
-  and project/library handoff.
-- **Library search, license gate, pull/promote commands**: load
+- Search, license gates, pull/promote commands:
   `references/source-library-and-license.md`.
+- Raster creation after source search, or when explicitly requested:
+  `nt-asset-image-generation`; return here for preparation and acceptance.
 
-## Default Workflow
+## Asset Contract
 
-1. Identify the target: global library, template, or a specific game source.
-2. Search before creating:
-   `node ai_studio/assets/catalog/search.mjs --query "<need>" --kind <kind> --json`.
-3. If reusing, pull from the library into the game:
-   `node ai_studio/assets/gallery/pull.mjs --ids <asset-id> --to <game>/assets --apply`.
-4. If adding/promoting, record `origin`, license, source page/path, author/vendor
-   when known, and enough description/tags for future search.
-5. Refresh the selected source from Asset Viewer or CLI so new/unregistered files
-   are visible.
-6. Verify the asset where it matters: viewer preview, prepared files, game
-   runtime, or license guard depending on the task.
+- Accepted assets need license, provenance, integrity/hash, `origin`, and useful
+  searchable metadata. Custom/unknown licenses remain non-publishable until
+  the license registry supports a publishable decision.
+- Restricted binaries stay out of git except the explicit per-game grant in a
+  private game's `assets/PURCHASED_EXPORTS.md`. That grant covers only shipped
+  game-ready purchased exports, never source archives or unused pack content.
+- Heavy non-shipping authoring files belong in synchronized
+  `<YandexDisk>/gamedev/games/<game-id>/`; follow
+  `ai_studio/assets/external_game_workfiles.md` and retain logical paths/hashes.
+- Generated indexes/previews belong in `tmp/ai_studio/assets/`.
+- Source-first and the Studio restriction on procedural final art still apply.
 
-## Hard Rules
+## Handoff
 
-- Do not load game code from the global library path. Games use local copies.
-- Heavy authoring workfiles that are not shipping game assets live under the
-  synchronized `<YandexDisk>/gamedev/games/<game-id>/` workspace. Follow
-  `ai_studio/assets/external_game_workfiles.md` and commit a logical-path/hash
-  manifest in the game repository.
-- Do not commit paid, unknown-license, or non-redistributable binaries.
-- Every accepted asset needs license, provenance, `origin`, and searchable
-  metadata.
-- Custom/unknown licenses default to non-publishable. Use the license registry
-  decision before setting `publish=true`.
-- Keep Markdown notes human-readable; generated indexes/previews live under
-  `tmp/ai_studio/assets/`.
-- Do not generate new art until the shared library and practical free sources
-  have been checked or the user explicitly asks for generation.
-
-## Useful Commands
-
-```powershell
-node ai_studio/assets/catalog/search.mjs --query "wood crate" --kind model --json
-node ai_studio/assets/gallery/pull.mjs --ids <asset-id> --to <game>/assets --apply
-node ai_studio/assets/gallery/promote.mjs --manifest <review-manifest.json> --ids <ids> --source <source> --license <license> --origin <mine|ai|sourced> --apply
-node ai_studio/assets/previews/render_library_previews.mjs --pack <pack>
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
-```
-
-Add `--refresh` to search only after files or manifests changed and the query
-must include those changes.
+Report the accepted files, provenance/license status, verification evidence,
+and remaining preparation or integration gaps. Canvas-to-game promotion uses
+Canvas's acceptance and promotion operations; a preview/export alone is not
+asset acceptance.

@@ -52,8 +52,9 @@ report note, PR/review comment, or another durable artifact.
 
 ## Profiling
 
-When a task file exists, record applied rules in task `## Log` using a stable
-line:
+When a task exists, record applied rules in structured Taskboard `quality`
+state through `cli.mjs set --quality ... --quality-evidence ...`. Supply durable
+evidence for each check. The CLI appends a stable history line to `## Log`:
 
 ```text
 - YYYY-MM-DD: Quality: QCLR_001=pass; QART_001=block; evidence: <short proof or artifact>.

@@ -5,8 +5,7 @@ description: "Inspect, plan, update, or close Studio Taskboard work. Create item
 
 # NT Taskboard Manager
 
-Use this as a thin router to `ai_studio/taskboard/`. Do not duplicate the
-Taskboard data contract here.
+Inspect or update the requested work using the Taskboard's owning contract.
 
 ## Sources
 
@@ -21,33 +20,30 @@ Taskboard data contract here.
 - Read one current item: `node ai_studio/taskboard/cli.mjs show <P###|E###|T####> --json`.
 - Read one historical task only when explicitly needed:
   `node ai_studio/taskboard/cli.mjs show T#### --archive --json`.
-- Seal pending closed history periodically:
+- For requested archive maintenance, seal pending closed history:
   `node ai_studio/taskboard/cli.mjs archive seal --name <immutable-batch-name> --json`.
 - Help: `node ai_studio/taskboard/cli.mjs help`.
-- Create project: `node ai_studio/taskboard/cli.mjs new project --title "..." --kind <ai-studio|game|template|tooling|research|other> --target <path>`.
-- Create epic: `node ai_studio/taskboard/cli.mjs new epic --title "..." --project P###`.
-- Create task: `node ai_studio/taskboard/cli.mjs new task --title "..." --project P### --epic E### --priority P1`.
 - Update item: `node ai_studio/taskboard/cli.mjs set <id> --status <status> --log "..." --json`.
-- Validate after mutations: `node ai_studio/taskboard/cli.mjs validate --json`.
-- Board: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Open`, then open `/taskboard/`.
-  Run it with host-process permission outside the managed sandbox; never use WSL.
+- Validate the affected store after updates: `node ai_studio/taskboard/cli.mjs validate --json`.
+- For board UI work: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Open`, then open `/taskboard/`.
+  Use the Windows host with its required permissions, never WSL.
 
 ## Workflow
 
-1. Start with `context --json`; open a specific item only when needed.
-2. Use projects as top-level owners, epics as grouped slices, and tasks as
-   actionable cards.
-3. Create items only when the human lead requests creation or invokes the
-   designated creation workflow. Otherwise propose deferred work in the reply.
-   Use `--game <game-id>` for private game stores; do not duplicate their work
-   into the shared board.
-4. Load `task-store-reference.md` only when changing project/task fields,
-   statuses, epics, lifecycle rules, or markdown format.
-5. For authorized creation, use `status: idea` for unrefined work and `backlog` only after scope and
-   checkable done criteria are clear.
-6. Mark `done` only when `## Done when` is checked and `## Log` has evidence.
-7. Do not search archive ZIPs during normal routing; sealed history is explicit
-   evidence, not working context.
+Read a named item directly; use `context` or `list` when routing is needed.
+Load `task-store-reference.md` for unfamiliar fields, lifecycle transitions, or
+Markdown changes. Use `--game <game-id>` for private stores; keep their work off
+the shared board. Read sealed history only when the task needs it.
+
+Create items only at the human lead's request or through the designated creation
+workflow. Otherwise propose new work in the reply. For authorized creation,
+use `help` for commands, preserve project/epic ownership, and use `idea` until
+scope and checkable done criteria justify `backlog`.
+
+Mark `done` only after satisfying the contract's closure and applicable quality
+requirements. Record evidence, validate the affected store, and report the changed item
+and remaining blockers. Do not add confirmation steps for already authorized
+updates.
 
 ## Boundary
 

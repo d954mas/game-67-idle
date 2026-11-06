@@ -6,37 +6,29 @@ description: "Maintain item catalogs, ownership operations, reason tags, reconci
 <!-- skill folder: .codex/skills/nt-game-items/ -- resolve plain references/, scripts/ and agents/ paths below against it -->
 # NT Game Items
 
-Workflow router for the split items feature. The invariant core lives in
-`features/items-core/`; content, state, reasons, and seed remain consumer-owned.
+The invariant core lives in `features/items-core/`; content, state, reasons,
+and seed remain consumer-owned.
 
 ## Start
 
-1. Read `features/items-core/README.md` for the public surface, tools,
-   validation, compatibility, and extension boundaries.
-2. Read `features/items-core/INSTALL.md` for wiring, verification, and removal.
-3. Read `features/items-core/feature.json` for the versioned machine contract.
-4. Read the consumer's `src/features/items/README.md`, then inspect its Lua
-   manifest/modules, release lock, and state schema as relevant.
+Use the consumer's `src/features/items/README.md` and affected content/state
+files. Read relevant `features/items-core/README.md` sections for core contracts,
+`INSTALL.md` for wiring changes, and `feature.json` for versions/dependencies.
 
 ## Catalog workflow
 
-For single-source Lua catalogs, use the focused semantic CLI. It always takes
-an explicit game root and delegates evaluation/validation to the canonical
-sandbox and Snapshot:
+For single-source Lua catalogs, use the semantic CLI with an explicit game
+root. It delegates evaluation/validation to the canonical sandbox and Snapshot:
 
 ```powershell
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> list
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> inspect --item <item-id> --level-from <n> --level-to <n>
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> dependencies --item <item-id>
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> source --item <item-id>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> validate
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> validate --affected <item-id>
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> build --out-dir <build-dir>
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> seal-receipt
 ```
 
-Use `chart` and `requirements` for bounded reports; inspect command help for
-their filters instead of loading the full Snapshot.
+Add `--affected <item-id>` for an item dependency report; omit it for catalog-wide
+validation, including tracks or exports. Choose `list`, `inspect`, `dependencies`,
+or `source` for discovery; `chart` and `requirements` provide bounded reports.
+Use command help for filters. Run
+`build --out-dir <build-dir>` when generated output is needed.
 
 For a supported existing literal, get the hash from `source`, preview a
 `level-set`, `curve-set`, `override-set`, `max-level-append`, or
@@ -54,18 +46,12 @@ history write path; run it only after the matching migration and checks pass.
 
 ## Runtime and state workflow
 
-1. Use the public ownership API; do not mutate raw items state.
-2. Keep reason tags and new-game seed in the consumer.
-3. Route save-shape and migrations through `nt-game-state-management`.
-4. The generated catalog is compiled in; there is no bind step to sequence.
-5. Run module validation and the consumer's relevant runtime/save tests.
+- Use the public ownership API, never raw items-state mutations. Keep reason
+  tags and new-game seed in the consumer.
+- Route save-shape changes and migrations through `nt-game-state-management`.
+- The generated catalog is compiled in; no bind step is needed.
+- Validate affected catalog changes and run relevant consumer runtime/save tests
+  for changed ownership or persistence behavior. Core changes need module checks.
 
-## Routing
-
-- Core behavior and validation: `features/items-core/README.md`.
-- Installation and test wiring: `features/items-core/INSTALL.md`.
-- Version and dependencies: `features/items-core/feature.json`.
-- Content, lock, quarantine, reasons, and migrations: the consumer's local
-  items README and owned content/state files.
-- Live proof: `nt-runtime-automation`.
-- Acceptance evidence: `nt-quality-checks`.
+Report the changed contracts, checks, and gaps. Use `nt-runtime-automation` for
+live proof and `nt-quality-checks` for acceptance evidence when applicable.

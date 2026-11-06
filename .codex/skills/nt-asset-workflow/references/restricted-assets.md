@@ -12,6 +12,12 @@ Partition by publishability:
 - **Restricted**: paid/commercial/unknown assets keep binaries out of git. Only
   metadata, license notes, and reconstruction instructions may be committed.
 
+The Studio exception is an explicit lead grant recorded in a private game's
+`assets/PURCHASED_EXPORTS.md`: only that game's shipped, game-ready purchased
+exports may be tracked there. Source archives and unused pack content stay out
+of every repository. This does not make the source pack publicly redistributable
+or authorize promotion through a public-license-only tool.
+
 The shared decision registry and guard live in
 `ai_studio/assets/licenses/`.
 
@@ -42,10 +48,9 @@ Expected result:
 - manifest/license metadata under committed game asset metadata;
 - pack/build code points at the local restricted path only when the file exists.
 
-If the asset is described and the binary is missing from git because it is
-restricted/local, that is not an error. It is an error only when a restricted or
-unknown-license binary is tracked in git, or when a committed binary has no
-publishable metadata.
+An intentionally local restricted binary may be absent from git. Tracking a
+restricted binary requires the narrow private-game export grant above; every
+committed asset still needs license, provenance, integrity and `origin`.
 
 CC-BY is publishable but attribution-bearing. It may be used during development
 without final credit metadata, but release validation must fail until the asset
@@ -57,5 +62,6 @@ Custom licenses are restricted by default. Mark `publish: true` only with
 explicit `redistribution_allowed: true`, `commercial_use: true`,
 `modification_allowed: true`, and license evidence.
 
-If the guard fails, either record the binary in a manifest with a publishable
-license or move the binary to the restricted path and untrack it.
+If the guard fails, resolve the license/ownership finding against its contract.
+Do not relabel a restricted export as public or bypass the guard. Report a
+missing supported path when the private-game grant cannot be represented.
