@@ -520,5 +520,32 @@ class GeneratedOutput(unittest.TestCase):
         self.assertEqual((self.out_dir / "loc_strings.gen.c").stat().st_mtime_ns, before)
 
 
+class CommonFontCharset(unittest.TestCase):
+    """A codepoint lost from the common face draws a box in a language list; CJK copy kept in it costs every player."""
+
+    def table(self, directory: str) -> "loc.Table":
+        block = {"group_separator": " ", "group_min_digits": 4}
+        path = Path(directory) / "strings.json"
+        path.write_text(json.dumps({"languages": {"en": block, "ja": block}, "fallback": "en", "strings": {
+            "settings.lang_ja": {"en": "\u65e5\u672c\u8a9e", "ja": "\u65e5\u672c\u8a9e"},
+            "a.b": {"en": "Gold", "ja": "\u91d1"}}}), encoding="utf-8")
+        return loc.load_table(path)
+
+    def test_split_keeps_latin_and_endonyms_and_drops_cjk_copy(self) -> None:
+        import font_charset
+
+        with tempfile.TemporaryDirectory() as directory:
+            codepoints = font_charset.common_codepoints(self.table(directory), "settings.lang_", True)
+        self.assertIn(ord("G"), codepoints)
+        self.assertIn(0x65E5, codepoints)
+        self.assertNotIn(0x91D1, codepoints)
+
+    def test_without_a_split_the_whole_corpus_stays(self) -> None:
+        import font_charset
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertIn(0x91D1, font_charset.common_codepoints(self.table(directory), "settings.lang_", False))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -341,3 +341,20 @@ A game extends through data only: new keys, new languages (see *Adding a
 language*), and an explicit `plural_rule` for a language code the generator does
 not know. A new argument type, a new return-storage policy, or a change to the
 fallback chain is a module change and belongs here, not in a game's tree.
+
+## Languages in their own font pack
+
+A language with thousands of letters costs the first download more than its players are worth to the
+others, so its glyphs can live in a pack fetched when it is chosen (`loc_font_packs.h`). One rule: while a
+language's font is not here the fallback language shows, and when it lands the screen switches. The choice
+is kept from the moment it is made, so a settings pick saves at once. A failed fetch stays on the fallback
+and retries; nothing is ever drawn from a font that is missing.
+
+A pack language gets its own `nt_font`: its face first, then the common face. Its face comes first because
+the common face keeps the endonyms so a language list can name a language before its pack lands
+(`scripts/font_charset.py --split-cjk`), and those can be the same codepoints in another hand.
+
+`scripts/gen_cjk_fonts.py` makes the faces: an OTF per language cut to that language's copy, converted to
+the quadratic outlines the engine stores and given the common face's metrics, which sources of one
+`nt_font` must share. Japanese and Simplified Chinese draw some codepoints differently, so they do not
+share a face. It writes `provenance.json` beside them.

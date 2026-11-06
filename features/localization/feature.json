@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "localization",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "title": "Localization",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -24,6 +24,8 @@
     "index": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc.py generate --index-only --strings <game>/content/loc/strings.json --out-dir <tmp-dir>",
     "test": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc_test.py",
     "plural-cases": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/loc.py plural-cases --out-dir <test-generated-dir>",
+    "font-charset": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/font_charset.py --strings <merged strings.json> --out <file> --split-cjk",
+    "cjk-fonts": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/gen_cjk_fonts.py --loc-dir <dir> --out-dir <dir> --family <name> --metrics-from <common face> --source-dir <dir> --source-root <logical dir> --face <language>=<file>",
     "merge-glyphs": "node ai_studio/dev_environment/python_run.mjs features/localization/scripts/merge_font_glyphs.py --base <font> --out <font> (fills a font's missing glyphs; games run it from CMake)"
   },
   "manuals": {
@@ -41,13 +43,15 @@
     "note": "Describes the wiring a consuming game performs in its own CMakeLists/GameCodegen.cmake -- localization is an in-place module (precedent features/progression-core), not an install-script target. This section documents the provisioning, it does not perform it. The consuming game additionally owns tests/test_loc.c (the runtime contract suite) and src/ui/loc_widgets.c; only the two targets listed here are built purely from module sources.",
     "target_sources": [
       "${LOCALIZATION_SRC}/loc.c",
-      "${GAME_SOURCE_GENERATED_DIR}/loc_strings.gen.c"
+      "${GAME_SOURCE_GENERATED_DIR}/loc_strings.gen.c",
+      "${LOCALIZATION_SRC}/loc_font_packs.c (only a game with a language in its own font pack)"
     ],
     "include_dirs": [
       "${LOCALIZATION_INC}"
     ],
     "ctest_targets": [
       "test_loc_e2e",
+      "test_loc_font_packs",
       "loc_generator_test"
     ]
   },
