@@ -18,6 +18,11 @@ own outlines rather than copied out of another typeface. The one mark the base
 owns nowhere is the ogonek, mirrored from its own cedilla -- same hand, same
 weight, no foreign curve.
 
+Vietnamese is rebuilt the same way: the base carries every letter, but the
+stacked ones came from a lighter typeface too. Its tones are this font's own
+grave, acute and tilde; the hook above is its question mark without the dot, the
+dot below its i dot, the horn its comma, the bar of d its hyphen.
+
 Ё is the one that cannot be written around: Russian copy in this studio spells
 е (features/localization), but a portal hands back player names that carry ё.
 
@@ -35,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import unicodedata
 from pathlib import Path
 
 from fontTools.ttLib import TTFont
@@ -239,6 +245,98 @@ REPLACEMENTS = (
 )
 
 
+# --- Vietnamese ---------------------------------------------------------------
+
+MARK_GAP = 24         # between a tone and the mark it stacks over
+STACKED_TONE = 0.8    # a tone over another mark, so the pair stays inside the line
+SIDE_TONE_SHIFT = 0.5  # an acute, grave or hook beside a circumflex, in circumflex widths
+HORN_SCALE = 0.62     # the comma, down to the height of a horn
+HORN_BITE = 34        # how far a horn sinks into the letter's shoulder
+DOT_DROP = 40         # the dot below the baseline
+BAR_W, BAR_H = 280, 96  # the bar of đ and Đ, the font's hyphen stretched
+
+# Rebuilt by decomposition: U+1EA0..U+1EF9 and the bases they stack on that the
+# donor typeface drew. Precomposed Latin-1 (à á ã â ê ô ...) is already this font's.
+VIETNAMESE = (*range(0x1EA0, 0x1EFA), 0x0102, 0x0103, 0x0128, 0x0129, 0x0168, 0x0169, 0x01A0, 0x01A1, 0x01AF, 0x01B0, 0x0110, 0x0111)
+
+
+def vietnamese_marks(font: TTFont) -> dict:
+    question = contours_of(font, glyph_for(font, 0x003F))
+    hook = max(question, key=lambda contour: bounds([contour])[3] - bounds([contour])[1])
+    comma = contours_of(font, glyph_for(font, 0x002C))
+    marks = {
+        "grave_upper": mark_from(font, 0x00D3 - 1, 0x004F), "grave_lower": mark_from(font, 0x00F2, 0x006F),  # Ò ò
+        "tilde_upper": mark_from(font, 0x00D5, 0x004F), "tilde_lower": mark_from(font, 0x00F5, 0x006F),  # Õ õ
+        "circumflex_upper": mark_from(font, 0x00D4, 0x004F), "circumflex_lower": mark_from(font, 0x00F4, 0x006F),  # Ô ô
+        "dot": dot_from(font, 0x0069, CAP_TOP - 200),
+        "horn": scaled(comma, HORN_SCALE),
+    }
+    for case in ("upper", "lower"):
+        # The hook takes the acute's place: same floor, same height.
+        acute = bounds(mark_from(font, 0x00D3 if case == "upper" else 0x00F3, 0x004F if case == "upper" else 0x006F))
+        small = scaled([hook], (acute[3] - acute[1]) / (bounds([hook])[3] - bounds([hook])[1]))
+        marks[f"hook_{case}"] = translated(small, 0, acute[1] - bounds(small)[1])
+    return marks
+
+
+def compose_vietnamese(font: TTFont, codepoint: int, marks: dict) -> tuple[str, list]:
+    if codepoint in (0x0110, 0x0111):
+        base_name = glyph_for(font, 0x0044 if codepoint == 0x0110 else 0x0064)
+        base = contours_of(font, base_name)
+        bx0, by0, bx1, by1 = bounds(base)
+        # The bar crosses the stem: left and mid-height on D, right and high on d.
+        centre_x, centre_y = (bx0 + 130, (by0 + by1) // 2) if codepoint == 0x0110 else (bx1 - 110, by1 - 170)
+        bar = contours_of(font, glyph_for(font, 0x002D))
+        hx0, hy0, hx1, hy1 = bounds(bar)
+        stretched = [[(round((x - hx0) * BAR_W / (hx1 - hx0)) + centre_x - BAR_W // 2,
+                       round((y - hy0) * BAR_H / (hy1 - hy0)) + centre_y - BAR_H // 2, on) for x, y, on in contour] for contour in bar]
+        return base_name, base + stretched
+    letters = unicodedata.normalize("NFD", chr(codepoint))
+    base_char = letters[0]
+    case = "upper" if base_char.isupper() else "lower"
+    if base_char == "i":
+        base_char = "\u0131"  # a mark above an i takes the dot's place, except the dot below
+        if "\u0323" in letters:
+            base_char = "i"
+    base_name = glyph_for(font, ord(base_char))
+    base = contours_of(font, base_name)
+    contours = list(base)
+    top = None
+    if "\u0302" in letters or "\u0306" in letters:
+        key = "circumflex" if "\u0302" in letters else "breve"
+        top = place(base, marks[f"{key}_{case}"], ABOVE)
+        contours += top
+    if "\u031b" in letters:
+        horn = marks["horn"]
+        bx0, by0, bx1, by1 = bounds(base)
+        hx0, hy0, hx1, hy1 = bounds(horn)
+        contours += translated(horn, bx1 - HORN_BITE - hx0, by1 - HORN_BITE - hy0 + HORN_BITE // 2)
+    if "\u0323" in letters:
+        bx0, by0, bx1, by1 = bounds(base)
+        dx0, dy0, dx1, dy1 = bounds(marks["dot"])
+        contours += translated(marks["dot"], round(((bx0 + bx1) - (dx0 + dx1)) / 2), by0 - DOT_DROP - dy1)
+    tone = next((name for mark, name in (("\u0300", "grave"), ("\u0301", "acute"), ("\u0303", "tilde"), ("\u0309", "hook"))
+                 if mark in letters), None)
+    if tone is not None:
+        mark = marks[f"{tone}_{case}"]
+        if top is None:
+            contours += place(base, mark, ABOVE)
+        else:
+            small = scaled(mark, STACKED_TONE)
+            tx0, ty0, tx1, ty1 = bounds(small)
+            mx0, my0, mx1, my1 = bounds(top)
+            beside = "\u0302" in letters and tone != "tilde"
+            if beside:
+                # Beside the circumflex's slope, as Vietnamese type sets it: a
+                # stack this tall would leave the line, and the tone still reads.
+                side = -1 if tone == "grave" else 1
+                dx = round(((mx0 + mx1) - (tx0 + tx1)) / 2 + side * (mx1 - mx0) * SIDE_TONE_SHIFT)
+                contours += translated(small, dx, my0 + (my1 - my0) // 2 - ty0)
+            else:
+                contours += translated(small, round(((mx0 + mx1) - (tx0 + tx1)) / 2), my1 + MARK_GAP - ty0)
+    return base_name, contours
+
+
 def merge(base_path: Path, out_path: Path, family: str = DEFAULT_FAMILY_NAME,
           postscript: str = DEFAULT_POSTSCRIPT_NAME) -> list[str]:
     font = TTFont(base_path, recalcTimestamp=False)
@@ -282,6 +380,18 @@ def merge(base_path: Path, out_path: Path, family: str = DEFAULT_FAMILY_NAME,
         hmtx.metrics[name] = (hmtx.metrics[base_name][0], glyph.xMin)
         report.append(f"U+{codepoint:04X} {name}: redrawn as {base_name} + {mark_key} "
                       f"adv={hmtx.metrics[name][0]} bbox=({glyph.xMin},{glyph.yMin},{glyph.xMax},{glyph.yMax})")
+
+    vietnamese = {**marks, **vietnamese_marks(font)}
+    for codepoint in VIETNAMESE:
+        name = cmap.get(codepoint)
+        if name is None:
+            raise MergeError(f"U+{codepoint:04X} is not in the base font")
+        base_name, contours = compose_vietnamese(font, codepoint, vietnamese)
+        glyph = make_glyph(font, contours)
+        glyf.glyphs[name] = glyph
+        hmtx.metrics[name] = (hmtx.metrics[base_name][0], glyph.xMin)
+        report.append(f"U+{codepoint:04X} {name}: redrawn from {base_name} adv={hmtx.metrics[name][0]} "
+                      f"bbox=({glyph.xMin},{glyph.yMin},{glyph.xMax},{glyph.yMax})")
 
     font.setGlyphOrder(order)
     glyf.glyphOrder = order
