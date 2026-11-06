@@ -65,10 +65,23 @@ static void test_billboard_scales_with_distance_and_clips(void) {
     TEST_ASSERT_TRUE(near_b.x > 200.0F);
 }
 
+static void test_project_any_keeps_a_point_off_the_side(void) {
+    const float beside[3] = {20.0F, 0.0F, -10.0F};
+    float x = 0.0F, y = 0.0F, depth = 0.0F, on_x = 0.0F, on_y = 0.0F, on_depth = 0.0F;
+    TEST_ASSERT_FALSE(ui_world_project(k_vp, beside, 200.0F, 100.0F, &x, &y, &depth));
+    TEST_ASSERT_TRUE(ui_world_project_any(k_vp, beside, 200.0F, 100.0F, &x, &y, &depth));
+    TEST_ASSERT_TRUE(x > 200.0F);
+    // Same distance, same depth: being off the side changes neither.
+    TEST_ASSERT_TRUE(ui_world_project(k_vp, (const float[3]){0.0F, 0.0F, -10.0F}, 200.0F, 100.0F, &on_x, &on_y, &on_depth));
+    TEST_ASSERT_FLOAT_WITHIN(1e-5F, on_depth, depth);
+    TEST_ASSERT_FALSE(ui_world_project_any(k_vp, (const float[3]){0.0F, 0.0F, 10.0F}, 200.0F, 100.0F, &x, &y, &depth));
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_project_rejects_outside_the_frustum_and_leaves_outputs);
     RUN_TEST(test_project_agrees_with_canvas_projection);
+    RUN_TEST(test_project_any_keeps_a_point_off_the_side);
     RUN_TEST(test_biased_depth_is_nearer_and_ordered);
     RUN_TEST(test_depth_offset_is_guarded_at_the_near_plane);
     RUN_TEST(test_billboard_scales_with_distance_and_clips);

@@ -21,6 +21,10 @@ bool ui_figure_box(const float view_proj[16], float x, float z, float height, fl
 // toward the eye, for ui_world_depth_offset.
 bool ui_world_project(const float view_proj[16], const float point[3], float view_w, float view_h, float *out_x,
     float *out_y, float *ui_depth);
+// The same for a point that may lie off to a side of the frame, as the anchor of an object still partly on screen does;
+// false only behind the eye or outside the depth range.
+bool ui_world_project_any(const float view_proj[16], const float point[3], float view_w, float view_h, float *out_x,
+    float *out_y, float *ui_depth);
 
 // The clip depth the screen view projection puts fixed HUD on, just inside the
 // near plane; a depth-testing HUD view_proj sets its [14] to this.

@@ -52,8 +52,8 @@ static float biased_depth(const float vp[16], float ndc_depth, float clip_w) {
     return isfinite(biased) ? biased : ndc_depth - WORLD_DEPTH_FALLBACK_NDC;
 }
 
-bool ui_world_project(const float vp[16], const float point[3], float view_w, float view_h, float *out_x, float *out_y,
-    float *ui_depth) {
+static bool project(const float vp[16], const float point[3], float view_w, float view_h, bool whole_frustum, float *out_x,
+    float *out_y, float *ui_depth) {
     const float cx = vp[0] * point[0] + vp[4] * point[1] + vp[8] * point[2] + vp[12];
     const float cy = vp[1] * point[0] + vp[5] * point[1] + vp[9] * point[2] + vp[13];
     const float cz = vp[2] * point[0] + vp[6] * point[1] + vp[10] * point[2] + vp[14];
@@ -62,13 +62,22 @@ bool ui_world_project(const float vp[16], const float point[3], float view_w, fl
     const float nx = cx / cw;
     const float ny = cy / cw;
     const float nz = cz / cw;
-    if (!isfinite(nx) || !isfinite(ny) || !isfinite(nz) || fabsf(nx) > 1.0F || fabsf(ny) > 1.0F || nz < -1.0F || nz > 1.0F) {
-        return false;
-    }
+    if (!isfinite(nx) || !isfinite(ny) || !isfinite(nz) || nz < -1.0F || nz > 1.0F) { return false; }
+    if (whole_frustum && (fabsf(nx) > 1.0F || fabsf(ny) > 1.0F)) { return false; }
     *out_x = (nx * 0.5F + 0.5F) * view_w;
     *out_y = (0.5F - ny * 0.5F) * view_h;
     *ui_depth = biased_depth(vp, nz, cw);
     return true;
+}
+
+bool ui_world_project(const float vp[16], const float point[3], float view_w, float view_h, float *out_x, float *out_y,
+    float *ui_depth) {
+    return project(vp, point, view_w, view_h, true, out_x, out_y, ui_depth);
+}
+
+bool ui_world_project_any(const float vp[16], const float point[3], float view_w, float view_h, float *out_x, float *out_y,
+    float *ui_depth) {
+    return project(vp, point, view_w, view_h, false, out_x, out_y, ui_depth);
 }
 
 float ui_world_depth_offset(float ui_depth) {
