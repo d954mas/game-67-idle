@@ -977,7 +977,7 @@ if(NOT EMSCRIPTEN)
 
     # The engine calls are faked by the test, so no pack or font runs.
     add_executable(test_loc_font_packs "${LOCALIZATION_DIR}/tests/test_loc_font_packs.c" "${LOCALIZATION_SRC}/loc_font_packs.c")
-    target_link_libraries(test_loc_font_packs PRIVATE unity nt_hash nt_core)
+    target_link_libraries(test_loc_font_packs PRIVATE unity nt_hash nt_core nt_gfx_interface)
     target_include_directories(test_loc_font_packs PRIVATE "${LOCALIZATION_INC}" "${ENGINE_DIR}/engine")
     target_compile_definitions(test_loc_font_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_loc_font_packs PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
