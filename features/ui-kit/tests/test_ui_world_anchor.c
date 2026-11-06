@@ -73,7 +73,7 @@ static void test_project_any_keeps_a_point_off_the_side(void) {
     TEST_ASSERT_TRUE(x > 200.0F);
     // Same distance, same depth: being off the side changes neither.
     TEST_ASSERT_TRUE(ui_world_project(k_vp, (const float[3]){0.0F, 0.0F, -10.0F}, 200.0F, 100.0F, &on_x, &on_y, &on_depth));
-    TEST_ASSERT_FLOAT_WITHIN(1e-5F, on_depth, depth);
+    TEST_ASSERT_TRUE(fabsf(on_depth - depth) <= 1e-5F);
     TEST_ASSERT_FALSE(ui_world_project_any(k_vp, (const float[3]){0.0F, 0.0F, 10.0F}, 200.0F, 100.0F, &x, &y, &depth));
 }
 
