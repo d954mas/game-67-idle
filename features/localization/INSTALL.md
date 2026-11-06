@@ -163,24 +163,23 @@ loc.py generate --index-only --strings content/loc/strings.json --out-dir <tmp>
 enumerator, the `LocKey0` enumerator (or `null` when the key takes arguments),
 the declared argument list, and which languages carry text.
 
-## A language in its own font pack
+## Languages in a second font pack
 
 Optional. Add `${LOCALIZATION_SRC}/loc_font_packs.c` and link `nt_resource`, `nt_font` and `nt_hash`.
 
 ```c
-static const loc_font_pack_t k_font_packs[] = {
-    {"ja", "font_ja", "game/font_ja"}, {"zh", "font_zh", "game/font_zh"}, {"ko", "font_ko", "game/font_ko"}};
+static const char *const k_pack_languages[] = {"ja", "zh", "ko"};
 
-loc_font_packs_init(&(loc_font_packs_desc_t){.packs = k_font_packs, .count = 3, .fallback = "en",
-    .common_font = font, .common_face = face, .font = {.max_glyphs = 256, .measure_cache_size = 256},
-    .priority = 95, .path = pack_path, .user = NULL});
+loc_font_packs_init(&(loc_font_packs_desc_t){.languages = k_pack_languages, .count = 3,
+    .font_resource = "game/font_cjk", .fallback = "en", .common_font = font, .common_face = face,
+    .font = {.max_glyphs = 256, .measure_cache_size = 256}});
 (void)loc_font_packs_set_language(saved_or_device_language);
 ```
 
-Once a frame call `loc_font_packs_step(now)`, then bind `loc_font_packs_font()` when it changes. Save
-`loc_font_packs_language()`, not `loc_lang_index()`: the screen may still show the fallback. The feature
-mounts the packs, so keep them out of whatever loads the game's other packs.
+Once a frame call `loc_font_packs_step()`, then bind `loc_font_packs_font()` when it changes. Save
+`loc_font_packs_language()`, not `loc_lang_index()`: the screen may still show the fallback.
 
-Cut the common face with `font_charset.py --split-cjk`, make the rest with `gen_cjk_fonts.py`, and give
-each language a pack holding its face. A browser in one of those languages can preload its pack so the
-switch comes sooner. Clay wraps only at spaces: long CJK lines need the engine's rich text.
+Cut the common face with `font_charset.py --split-cjk`, make the pack's face with `gen_cjk_fonts.py`, and put
+it in a pack the game loads for every player right after its first. A browser in one of those languages can
+preload that pack. Clay wraps only at spaces: long CJK lines need the engine's rich text.
+

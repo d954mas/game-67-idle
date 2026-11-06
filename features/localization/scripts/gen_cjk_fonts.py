@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build one quadratic subset per CJK language from an OTF of that language, holding only what its copy uses.
+"""Build one quadratic face for the CJK languages from their OTFs, holding only what their copy uses.
 
-Run it after copy in one of those languages changes. Each language keeps its own face because Japanese
-and Simplified Chinese draw the same codepoint differently. Writes the faces, a charset per language and
-a provenance manifest into --out-dir; its fonts' metrics come from --metrics-from, the common face they
-share one nt_font with.
+Run it after copy in one of those languages changes. A character takes its outline from the first source
+that has it, so the order settles the few codepoints Japanese and Simplified Chinese draw differently.
+Writes the face, its charset and a provenance manifest into --out-dir; its metrics come from
+--metrics-from, the common face it shares one nt_font with.
 
     python gen_cjk_fonts.py --loc-dir content/loc --out-dir assets/fonts/cjk --family "Dig CJK"
         --metrics-from <common face> --source-dir <dir> --source-root <logical dir>
@@ -45,26 +45,29 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def build(language: str, source: Path, args, common: TTFont) -> dict:
-    font = TTFont(source)
+def build(faces: list[tuple[str, Path]], args, common: TTFont) -> dict:
+    fonts = [TTFont(source) for _, source in faces]
     upm, hhea = common["head"].unitsPerEm, common["hhea"]
     ascent, descent, line_gap = hhea.ascent, hhea.descent, hhea.lineGap
-    if font["head"].unitsPerEm != upm:
-        raise SystemExit(f"{source.name} has {font['head'].unitsPerEm} units per em, the common face {upm}")
-    wanted = copy_characters(language, args.loc_dir)
+    for font, (_, source) in zip(fonts, faces):
+        if font["head"].unitsPerEm != upm:
+            raise SystemExit(f"{source.name} has {font['head'].unitsPerEm} units per em, the common face {upm}")
+    wanted = set().union(*(copy_characters(language, args.loc_dir) for language, _ in faces))
     glyphs = {".notdef": TTGlyphPen(None).glyph()}
     metrics = {".notdef": (upm, 0)}
     cmap = {}
+    maps = [font.getBestCmap() for font in fonts]
     for char in sorted(wanted):
-        name = font.getBestCmap().get(ord(char))
-        if name is None:
-            raise SystemExit(f"{source.name} has no {char} U+{ord(char):04X}")
+        holder = next((index for index, table in enumerate(maps) if ord(char) in table), None)
+        if holder is None:
+            raise SystemExit(f"no source has {char} U+{ord(char):04X}")
+        name = maps[holder][ord(char)]
         pen = TTGlyphPen(None)
         # The engine stores only lines and quadratic contours.
-        font.getGlyphSet()[name].draw(Cu2QuPen(pen, max_err=1.0, reverse_direction=True))
+        fonts[holder].getGlyphSet()[name].draw(Cu2QuPen(pen, max_err=1.0, reverse_direction=True))
         glyph_name = f"u{ord(char):05X}"
         glyphs[glyph_name] = pen.glyph()
-        metrics[glyph_name] = font["hmtx"][name]
+        metrics[glyph_name] = fonts[holder]["hmtx"][name]
         cmap[ord(char)] = glyph_name
     builder = FontBuilder(upm, isTTF=True)
     builder.setupGlyphOrder(list(glyphs))
@@ -72,28 +75,28 @@ def build(language: str, source: Path, args, common: TTFont) -> dict:
     builder.setupGlyf(glyphs)
     builder.setupHorizontalMetrics(metrics)
     builder.setupHorizontalHeader(ascent=ascent, descent=descent, lineGap=line_gap)
-    family = f"{args.family} {language}"
+    family = args.family
     builder.setupNameTable({"familyName": family, "styleName": "Regular", "uniqueFontIdentifier": f"{family} 1.0",
         "fullName": family, "psName": family.replace(" ", ""), "version": "Version 1.0",
-        "copyright": font["name"].getDebugName(0), "licenseDescription": "SIL Open Font License 1.1",
+        "copyright": fonts[0]["name"].getDebugName(0), "licenseDescription": "SIL Open Font License 1.1",
         "licenseInfoURL": "https://openfontlicense.org/"})
     builder.setupOS2(sTypoAscender=ascent, sTypoDescender=descent, sTypoLineGap=line_gap, usWinAscent=ascent,
-        usWinDescent=-descent, usWeightClass=font["OS/2"].usWeightClass)
+        usWinDescent=-descent, usWeightClass=fonts[0]["OS/2"].usWeightClass)
     builder.setupPost()
     builder.setupMaxp()
     builder.font["head"].created = 2082844800
     builder.font["head"].modified = 2082844800
     builder.font.recalcTimestamp = False
-    target = args.out_dir / f"{args.family.replace(' ', '')}-{language}.ttf"
+    target = args.out_dir / f"{args.family.replace(' ', '')}.ttf"
     builder.save(target)
-    charset = args.out_dir / f"charset-{language}.txt"
+    charset = args.out_dir / "charset.txt"
     charset.write_text("".join(sorted(wanted)), encoding="utf-8", newline="")
     print(f"{target.name}: {len(wanted)} codepoints, {target.stat().st_size} bytes")
-    return {"file": target.name, "language": language, "sha256": sha256(target), "bytes": target.stat().st_size,
-        "codepoints": len(wanted), "charset": charset.name, "origin": "derived", "license": "OFL-1.1",
-        "source": {"logical_path": f"{args.source_root}/{source.name}",
-            "family": font["name"].getDebugName(1), "version": font["name"].getDebugName(5),
-            "bytes": source.stat().st_size, "sha256": sha256(source)}}
+    return {"file": target.name, "languages": [language for language, _ in faces], "sha256": sha256(target),
+        "bytes": target.stat().st_size, "codepoints": len(wanted), "charset": charset.name, "origin": "derived", "license": "OFL-1.1",
+        "sources": [{"logical_path": f"{args.source_root}/{source.name}", "family": font["name"].getDebugName(1),
+            "version": font["name"].getDebugName(5), "bytes": source.stat().st_size, "sha256": sha256(source)}
+            for font, (_, source) in zip(fonts, faces)]}
 
 
 def main() -> None:
@@ -109,10 +112,8 @@ def main() -> None:
     args = parser.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
     common = TTFont(args.metrics_from)
-    assets = []
-    for face in args.face:
-        language, _, file_name = face.partition("=")
-        assets.append(build(language, args.source_dir / file_name, args, common))
+    faces = [(face.partition("=")[0], args.source_dir / face.partition("=")[2]) for face in args.face]
+    assets = [build(faces, args, common)]
     manifest = {"schema": "ai_studio.localization.cjk_fonts.v1", "origin": "derived", "license": "OFL-1.1", "license_file": "OFL.txt",
         "upstream": args.upstream, "tool": "features/localization/scripts/gen_cjk_fonts.py",
         "fonttools_version": fontTools.__version__,
