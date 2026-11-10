@@ -43,11 +43,29 @@ python ai_studio/assets/tools/audio/describe_audio.py --pack <pack-dir> --out tm
 The two tools disagree often, so neither is ground truth: applied tags stay
 `auto-tagged` until a review in the Asset Viewer saves them.
 
-Requirements: `torch`, `transformers`, `soundfile`, `scipy`; descriptions also
+## Importing audio packs
+
+`import_audio_pack.py` turns a plan JSON (pack fields plus a list of source
+files with their asset id, title, and tags) into Pack Manifest packs. It
+converts each file with ffmpeg to at most 48 kHz, 16-bit, stereo (soxr
+resampling, triangular dither; lower rates and mono stay as they are), copies
+the pack's license fields into every row, and writes `pack.json` and
+`assets.jsonl`. Converted files that already exist are reused, so a stopped
+run resumes; a file that fails to convert is reported and left out.
+
+```powershell
+python ai_studio/assets/tools/audio/import_audio_pack.py --plan <plan.json> --jobs 8
+```
+
+The module docstring holds the plan shape. Building the plan (which libraries
+to keep, how to title them) is per-source work and stays outside the tool.
+
+Requirements: `ffmpeg` and `ffprobe` on `PATH` for imports; `torch`, `transformers`, `soundfile`, `scipy` for tagging; descriptions also
 need a CUDA build of `torch`, `bitsandbytes`, and `accelerate`. The Qwen weights
 take about 16 GB in the Hugging Face cache. Models download into that cache on
 first run. CLAP is fine on CPU (500 short clips in a few minutes); Qwen needs
 the GPU and takes about 4 seconds per clip.
 
-Tests: `python -I ai_studio/assets/tools/audio/test_tag_audio.py` and
-`python -I ai_studio/assets/tools/audio/test_describe_audio.py`.
+Tests: `python -I ai_studio/assets/tools/audio/test_tag_audio.py`,
+`python -I ai_studio/assets/tools/audio/test_describe_audio.py`, and
+`python -I ai_studio/assets/tools/audio/test_import_audio_pack.py`.

@@ -32,6 +32,8 @@ model, or checking a texture. They are not a separate top-level asset group.
   them onto a character rig with foot lock.
 - `audio/`: local zero-shot SFX tagging (`tag_audio.py`, CLAP) that writes
   tag proposals for a pack's audio records; applying them is a storage step.
+  Also `import_audio_pack.py`: converts source audio to 48 kHz 16-bit WAV and
+  writes a Pack Manifest pack from a plan.
 - `textures/`: standalone material texture checks, including 2x2 repeat preview
   generation and seam metrics.
 - `blender/`: fail-closed Blender modeling/lookdev workflow with evaluated-mesh
