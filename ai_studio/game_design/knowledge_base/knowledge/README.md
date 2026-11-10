@@ -27,6 +27,8 @@ database, SDK, or required pipeline.
 
 ## Entry Points
 
+- [Steam Marketing](steam_marketing.md) - sources, measurement methods, and
+  reusable lessons for marketing and promoting Steam games.
 - [GDD Application](gdd_application.md) - how to turn reusable rules into a
   concrete project spec.
 - [Reference Deconstruction](reference_deconstruction.md) - how to study a
