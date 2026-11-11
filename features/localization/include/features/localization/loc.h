@@ -228,6 +228,26 @@ int loc_fallback_log_count(void);
  * (loc_format takes `other` for it). */
 loc_plural_cat_t loc_plural_category(loc_plural_rule_t rule, int64_t count);
 
+/* Width of the `bytes` of UTF-8 at `utf8`, in the units the caller's line
+ * width is in. loc_wrap asks one code point at a time, so kerning between
+ * neighbours is not seen; a line may come out a pair's kerning off. */
+typedef float (*loc_measure_fn)(const char *utf8, size_t bytes, void *user);
+
+/* `text` with a '\n' wherever a line must end so that none measures wider than
+ * `width`. For a label whose layout breaks only at spaces and newlines, which
+ * leaves Japanese and Chinese in one unbreakable line.
+ *
+ * A line ends at a space (the space becomes the newline), or between two
+ * characters when either is an ideograph, a kana or a full-width form -- but
+ * never so that closing punctuation or a small kana starts a line, or an
+ * opening bracket ends one. Hangul breaks at its spaces, as Latin does. A run
+ * with no such place and wider than `width` is cut where it overflows.
+ * Newlines already in `text` are kept and start a line.
+ *
+ * Returns `text` itself when nothing had to be broken; otherwise a string from
+ * the per-frame arena, valid until its next reset, like loc_format(). */
+LocStr loc_wrap(LocStr text, float width, loc_measure_fn measure, void *user);
+
 /* Explicit escape hatch: text that is deliberately not localized. */
 static inline LocStr loc_raw(const char *s) {
     LocStr out;

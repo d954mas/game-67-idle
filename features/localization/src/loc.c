@@ -414,6 +414,147 @@ const char *loc_decimal_separator(void) {
     return (sep != NULL) ? sep : ".";
 }
 
+/* One code point at `s` and its byte length. A malformed lead or a sequence cut
+ * short by the terminator is one byte, so the walk always advances and never
+ * steps over the NUL. */
+static uint32_t wrap_decode(const char *s, size_t *bytes) {
+    const unsigned char lead = (unsigned char)s[0];
+    size_t need = 1u;
+    uint32_t cp = lead;
+    if (lead >= 0xF0u && lead < 0xF8u) {
+        need = 4u;
+        cp = lead & 0x07u;
+    } else if (lead >= 0xE0u && lead < 0xF0u) {
+        need = 3u;
+        cp = lead & 0x0Fu;
+    } else if (lead >= 0xC0u && lead < 0xE0u) {
+        need = 2u;
+        cp = lead & 0x1Fu;
+    }
+    for (size_t i = 1u; i < need; ++i) {
+        const unsigned char next = (unsigned char)s[i];
+        if ((next & 0xC0u) != 0x80u) {
+            *bytes = 1u;
+            return lead;
+        }
+        cp = (cp << 6) | (next & 0x3Fu);
+    }
+    *bytes = need;
+    return cp;
+}
+
+/* Scripts written without spaces, where a line may end between any two
+ * characters: CJK radicals through the unified ideographs (kana and CJK
+ * punctuation lie inside that span), the compatibility ideographs, and the
+ * full-width forms. Hangul is left out: Korean spaces its words. */
+static bool wrap_is_spaceless(uint32_t cp) {
+    return (cp >= 0x2E80u && cp <= 0x9FFFu) || (cp >= 0xF900u && cp <= 0xFAFFu) || (cp >= 0xFF00u && cp <= 0xFFEFu);
+}
+
+static bool wrap_in_set(uint32_t cp, const uint16_t *set, size_t count) {
+    for (size_t i = 0u; i < count; ++i) {
+        if (set[i] == cp) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Closing punctuation, the prolonged sound mark, iteration marks and small
+ * kana: none of them may start a line. */
+static bool wrap_cannot_start(uint32_t cp) {
+    static const uint16_t k_set[] = {
+        '!',     ')',     ',',     '.',     ':',     ';',     '?',     ']',     '}',     0x00BBu, 0x2019u, 0x201Du, 0x2026u,
+        0x3001u, 0x3002u, 0x3005u, 0x3009u, 0x300Bu, 0x300Du, 0x300Fu, 0x3011u, 0x3015u, 0x3017u, 0x3019u, 0x301Fu, 0x3041u,
+        0x3043u, 0x3045u, 0x3047u, 0x3049u, 0x3063u, 0x3083u, 0x3085u, 0x3087u, 0x308Eu, 0x309Bu, 0x309Cu, 0x309Du, 0x309Eu,
+        0x30A1u, 0x30A3u, 0x30A5u, 0x30A7u, 0x30A9u, 0x30C3u, 0x30E3u, 0x30E5u, 0x30E7u, 0x30EEu, 0x30FBu, 0x30FCu, 0x30FDu,
+        0x30FEu, 0xFF01u, 0xFF09u, 0xFF0Cu, 0xFF0Eu, 0xFF1Au, 0xFF1Bu, 0xFF1Fu, 0xFF3Du, 0xFF5Du, 0xFF60u,
+    };
+    return wrap_in_set(cp, k_set, sizeof k_set / sizeof k_set[0]);
+}
+
+/* Opening brackets and quotes: none of them may end a line. */
+static bool wrap_cannot_end(uint32_t cp) {
+    static const uint16_t k_set[] = {
+        '(',     '[',     '{',     0x00ABu, 0x2018u, 0x201Cu, 0x3008u, 0x300Au, 0x300Cu, 0x300Eu,
+        0x3010u, 0x3014u, 0x3016u, 0x3018u, 0x301Du, 0xFF08u, 0xFF3Bu, 0xFF5Bu, 0xFF5Fu,
+    };
+    return wrap_in_set(cp, k_set, sizeof k_set / sizeof k_set[0]);
+}
+
+LocStr loc_wrap(LocStr text, float width, loc_measure_fn measure, void *user) {
+    NT_ASSERT(measure != NULL && "loc_wrap: a measure function is required");
+    if (text.s == NULL) {
+        return text;
+    }
+    const size_t len = strlen(text.s);
+    /* One code point adds at most two newlines: one opened behind it, one cut in front of it. */
+    char *out = (char *)nt_arena_alloc(&g_nt_mem_scratch, 3u * len + 1u, 1u);
+    const size_t none = (size_t)-1;
+    size_t n = 0u;
+    float line = 0.0F;         /* width of the line being filled */
+    size_t brk = none;         /* offset in `out` where this line may end */
+    bool brk_is_space = false; /* that place holds a space to overwrite, not a gap to open */
+    float after_brk = 0.0F;    /* width of what follows that place */
+    uint32_t prev = 0u;        /* previous code point on this line; 0 at a line start */
+    bool broken = false;
+    for (const char *p = text.s; *p != '\0';) {
+        size_t bytes = 0u;
+        const uint32_t cp = wrap_decode(p, &bytes);
+        if (cp == '\n') {
+            out[n++] = '\n';
+            line = 0.0F;
+            brk = none;
+            prev = 0u;
+            ++p;
+            continue;
+        }
+        if (prev != 0u && prev != ' ' && cp != ' ' && (wrap_is_spaceless(prev) || wrap_is_spaceless(cp)) && !wrap_cannot_start(cp) &&
+            !wrap_cannot_end(prev)) {
+            brk = n;
+            brk_is_space = false;
+            after_brk = 0.0F;
+        }
+        const float w = measure(p, bytes, user);
+        /* A space past the edge stays on its line: it is where the line ends. */
+        if (cp != ' ' && line > 0.0F && line + w > width) {
+            if (brk != none) {
+                if (brk_is_space) {
+                    out[brk] = '\n';
+                } else {
+                    memmove(out + brk + 1u, out + brk, n - brk);
+                    out[brk] = '\n';
+                    ++n;
+                }
+                line = after_brk;
+            }
+            /* No place to end the line, or what follows it is still too wide. */
+            if (brk == none || (line > 0.0F && line + w > width)) {
+                out[n++] = '\n';
+                line = 0.0F;
+            }
+            brk = none;
+            broken = true;
+        }
+        if (cp == ' ') {
+            brk = n;
+            brk_is_space = true;
+            after_brk = -w;
+        }
+        memcpy(out + n, p, bytes);
+        n += bytes;
+        line += w;
+        after_brk += w;
+        prev = cp;
+        p += bytes;
+    }
+    if (!broken) {
+        return text;
+    }
+    out[n] = '\0';
+    return loc_raw(out);
+}
+
 LocStr loc_number(int64_t value) {
     NT_ASSERT(s_table != NULL && "loc_number: call loc_init() first");
     char buf[LOC_NUMBER_BUF];

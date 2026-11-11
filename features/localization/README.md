@@ -230,6 +230,21 @@ price is the whole string and has no text around it, so it has no key —
 Reach for it instead of a game-side thousands formatter, which is one
 language's typography applied to all of them.
 
+## Line ends for text without spaces
+
+A label that breaks only at spaces and newlines leaves a Japanese or Chinese
+sentence in one line. `loc_wrap(text, width, measure, user)` returns the text
+with a newline wherever a line must end, so such a label needs nothing else.
+The caller supplies the measure function, so the module stays free of fonts and
+UI: it asks for one code point at a time.
+
+A line ends at a space, or between two characters when either is an ideograph,
+a kana or a full-width form. Closing punctuation and small kana never start a
+line; an opening bracket never ends one. Hangul breaks at its spaces. A run
+with no such place that is wider than the line is cut where it overflows. The
+result comes from the per-frame arena, as `loc_format`'s does; text that
+already fits is returned as it was given.
+
 ## Fallback
 
 `active language → fallback language → the key itself`. The fallback language
@@ -328,6 +343,7 @@ Run the ctest targets named in `feature.json.registers.ctest_targets`
 `feature.json.version` is exact SemVer. Patch preserves the public contract,
 minor adds backward-compatible surface, and major permits breaking changes.
 Consumers pin both this version and an exact repository revision.
+Version `1.8.0` adds `loc_wrap`.
 Version `1.3.0` keeps translated copy in `loc_strings.gen.txt` instead of API
 header comments. C signatures and key indices stay unchanged; grep tools should
 use the text companion to avoid recompilation on copy edits.

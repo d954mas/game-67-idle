@@ -464,6 +464,64 @@ void test_two_formatted_strings_do_not_alias(void) {
     TEST_ASSERT_EQUAL_STRING("нужно 5 монет", second);
 }
 
+/* Every code point is one unit wide, so a width reads as characters per line. */
+static float one_per_code_point(const char *utf8, size_t bytes, void *user) {
+    (void)utf8;
+    (void)bytes;
+    (void)user;
+    return 1.0F;
+}
+
+static const char *wrapped(const char *text, float width) { return loc_wrap(loc_raw(text), width, one_per_code_point, NULL).s; }
+
+void test_wrap_returns_the_text_itself_when_it_fits(void) {
+    const char *text = "two\nlines";
+    TEST_ASSERT_EQUAL_PTR(text, wrapped(text, 5.0F));
+    TEST_ASSERT_EQUAL_PTR(NULL, loc_wrap(loc_raw(NULL), 5.0F, one_per_code_point, NULL).s);
+}
+
+void test_wrap_ends_a_line_at_a_space(void) {
+    TEST_ASSERT_EQUAL_STRING("aaa bbb\nccc", wrapped("aaa bbb ccc", 7.0F));
+    /* The space that overflows is where the line ends, not the start of the next. */
+    TEST_ASSERT_EQUAL_STRING("aaa\nbbb", wrapped("aaa bbb", 3.0F));
+}
+
+void test_wrap_breaks_between_ideographs_and_kana(void) {
+    TEST_ASSERT_EQUAL_STRING("日本語\nのテキ\nスト", wrapped("日本語のテキスト", 3.0F));
+}
+
+void test_wrap_keeps_closing_punctuation_off_a_line_start(void) {
+    TEST_ASSERT_EQUAL_STRING("日本\n語。日\n本", wrapped("日本語。日本", 3.0F));
+    /* A small kana stays with the syllable it modifies. */
+    TEST_ASSERT_EQUAL_STRING("きっ\nぷを", wrapped("きっぷを", 2.0F));
+}
+
+void test_wrap_keeps_an_opening_bracket_off_a_line_end(void) {
+    TEST_ASSERT_EQUAL_STRING("日本\n「語」", wrapped("日本「語」", 3.0F));
+}
+
+void test_wrap_cuts_a_run_that_has_no_place_to_break(void) {
+    TEST_ASSERT_EQUAL_STRING("abc\ndef\ngh", wrapped("abcdefgh", 3.0F));
+    /* A width under one character still puts one on every line. */
+    TEST_ASSERT_EQUAL_STRING("a\nb\nc", wrapped("abc", 0.5F));
+}
+
+void test_wrap_breaks_hangul_at_its_spaces(void) {
+    TEST_ASSERT_EQUAL_STRING("한국어\n텍스트", wrapped("한국어 텍스트", 4.0F));
+}
+
+void test_wrap_mixes_latin_words_into_a_spaceless_line(void) {
+    TEST_ASSERT_EQUAL_STRING("金を\nGold\nに", wrapped("金をGoldに", 4.0F));
+}
+
+void test_wrap_starts_over_at_a_newline_in_the_text(void) {
+    TEST_ASSERT_EQUAL_STRING("ab\ncd\nef", wrapped("ab\ncd ef", 3.0F));
+}
+
+void test_wrap_survives_a_sequence_cut_short(void) {
+    TEST_ASSERT_EQUAL_STRING("a\n\xE6\n\x97", wrapped("a\xE6\x97", 1.0F));
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_binding_defaults_to_the_fallback_language);
@@ -503,5 +561,15 @@ int main(void) {
     RUN_TEST(test_a_runaway_slot_index_stays_literal);
     RUN_TEST(test_formatted_result_is_exactly_sized);
     RUN_TEST(test_two_formatted_strings_do_not_alias);
+    RUN_TEST(test_wrap_returns_the_text_itself_when_it_fits);
+    RUN_TEST(test_wrap_ends_a_line_at_a_space);
+    RUN_TEST(test_wrap_breaks_between_ideographs_and_kana);
+    RUN_TEST(test_wrap_keeps_closing_punctuation_off_a_line_start);
+    RUN_TEST(test_wrap_keeps_an_opening_bracket_off_a_line_end);
+    RUN_TEST(test_wrap_cuts_a_run_that_has_no_place_to_break);
+    RUN_TEST(test_wrap_breaks_hangul_at_its_spaces);
+    RUN_TEST(test_wrap_mixes_latin_words_into_a_spaceless_line);
+    RUN_TEST(test_wrap_starts_over_at_a_newline_in_the_text);
+    RUN_TEST(test_wrap_survives_a_sequence_cut_short);
     return UNITY_END();
 }
