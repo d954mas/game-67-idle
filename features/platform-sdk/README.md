@@ -191,7 +191,7 @@ run `node features/validate_contracts.mjs`.
 minor adds backward-compatible surface, and major permits breaking changes.
 Consumers pin both this version and an exact repository revision.
 
-Version `3.4.0` splits the web backend into parts (`platform_sdk_web.h`): core,
+Version `4.0.0` splits the web backend into parts (`platform_sdk_web.h`): core,
 social (login, player, leaderboards), banner and interstitial, installed with
 `platform_sdk_install_web()`, or the core alone with
 `platform_sdk_install_web_backend_core()`. The optional parts and the account
@@ -201,14 +201,15 @@ still installs everything; `_platform_sdk_web_complete_interstitial` is no longe
 exported by itself, so a link that names it in `EXPORTED_FUNCTIONS` keeps working
 and one that does not loses nothing.
 
-A consumer names no `_platform_sdk_*` function in `EXPORTED_FUNCTIONS`: the core
+It is a major version because of the export list. A consumer need not name any
+`_platform_sdk_*` function in `EXPORTED_FUNCTIONS`: the core
 completions export themselves (`EMSCRIPTEN_KEEPALIVE`) and everything else is a
 function-table entry. A link that still lists `_platform_sdk_web_read_player`,
 `_platform_sdk_cloud_web_complete_load` or `_platform_sdk_cloud_web_complete_store`
 fails with "undefined exported symbol": the first is gone, the other two are no
 longer external symbols. Drop them from the list.
 
-Version `3.5.0` ships the crash reporter minified: `generate_release_bundles.mjs`
+The same version ships the crash reporter minified: `generate_release_bundles.mjs`
 also writes `web/release/runtime-diagnostics.min.js` with its hashes under
 `diagnostics` in the manifest, `platform_sdk_crash()` inlines it in Release
 builds, and the packagers compare a release page's reporter with it.
