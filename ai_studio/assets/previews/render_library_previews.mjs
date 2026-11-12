@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { scanPackManifestSource } from "../manifests/ops.mjs";
 import { defaultLibrarySourceRoot } from "../sources/ops.mjs";
+import { thumbItem } from "./cache.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..", "..");
@@ -102,7 +103,7 @@ async function main() {
     const glb = r.modelPath || glbIn(r.filesDir);
     if (!glb) { missing += 1; continue; }
     if (!a.force && existsSync(join(previewDirOf(r), "preview." + ext))) continue; // resumable
-    items.push(glb.replace(/\\/g, "/") + "::" + r.asset_id);
+    items.push(thumbItem(glb, r.asset_id, r.texturePath));
   }
   if (a.limit) items.length = Math.min(items.length, a.limit);
   console.log(`targets: ${targets.length} | to render: ${items.length} | missing glb: ${missing} | ext: ${ext}`);

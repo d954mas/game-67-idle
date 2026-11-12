@@ -13,7 +13,7 @@ import mathutils
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 if len(argv) < 3:
-    print("usage: -- <outdir> <size> [--webp] <a.glb|a.glb::stem|@manifest.txt> ...")
+    print("usage: -- <outdir> <size> [--webp] <a.glb|a.glb::stem|a.glb::stem::texture.png|@manifest.txt> ...")
     sys.exit(1)
 # Shared studio environment (same file the web model-viewer uses), so the PNG
 # preview and the live 3D are lit by one source. Falls back to suns if missing.
@@ -24,8 +24,10 @@ outdir = os.path.abspath(argv[0])
 size = int(argv[1])
 
 # Items may be a glb path, "glb::outstem" (explicit output name - avoids basename
-# collisions when packs reuse names), or "@file" listing such items one per line
-# (avoids the Windows command-line length limit for thousands of models).
+# collisions when packs reuse names), "glb::outstem::texture" (the image the model's
+# UVs sample when its GLB carries none: a palette or atlas the game binds in code),
+# or "@file" listing such items one per line (avoids the Windows command-line
+# length limit for thousands of models).
 items = []
 for tok in argv[2:]:
     if tok.startswith("@"):
@@ -73,9 +75,41 @@ def world_bounds(objs):
     return mn, mx
 
 
+def has_image(obj):
+    for slot in obj.material_slots:
+        mat = slot.material
+        if mat and mat.use_nodes and any(n.type == "TEX_IMAGE" and n.image for n in mat.node_tree.nodes):
+            return True
+    return False
+
+
+def apply_texture(meshes, path):
+    """Give UV-mapped meshes without an image of their own the declared base-colour texture."""
+    targets = [o for o in meshes if o.data.uv_layers and not has_image(o)]
+    if not targets:
+        return
+    image = bpy.data.images.load(path, check_existing=True)
+    mat = bpy.data.materials.new("declared_texture")
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    tex = nodes.new("ShaderNodeTexImage")
+    tex.image = image
+    # A small image is a palette: each texel is a flat colour cell, and a UV on a cell edge must
+    # neither wrap nor blend into its neighbour. A larger one may tile, as glTF's default sampler
+    # does. Alpha is not wired: palettes reuse it as data.
+    palette = min(image.size) <= 128
+    tex.extension = "EXTEND" if palette else "REPEAT"
+    tex.interpolation = "Closest" if palette else "Linear"
+    mat.node_tree.links.new(tex.outputs["Color"], nodes["Principled BSDF"].inputs["Base Color"])
+    for o in targets:
+        o.data.materials.clear()
+        o.data.materials.append(mat)
+
+
 ok = 0
 for item in glbs:
-    glb, _, stem = item.partition("::")        # "glb" or "glb::outstem"
+    glb, _, rest = item.partition("::")        # "glb", "glb::outstem" or "glb::outstem::texture"
+    stem, _, texture = rest.partition("::")
     bpy.ops.wm.read_factory_settings(use_empty=True)
     setup_render()
     # One unreadable glb must not abort the rest of the batch.
@@ -89,6 +123,11 @@ for item in glbs:
     meshes = [o for o in scene.objects if o.type == "MESH" and o.visible_get()]
     if not meshes:
         continue
+    if texture:
+        if not os.path.exists(texture):
+            print("texture missing: %s: %s" % (glb, texture))
+            continue
+        apply_texture(meshes, texture)
     mn, mx = world_bounds(meshes)
     center = (mn + mx) * 0.5
     dim = mx - mn

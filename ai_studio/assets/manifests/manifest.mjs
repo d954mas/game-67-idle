@@ -95,6 +95,7 @@ function resolveAssetPath(sourceRoot, packDir, value = "", sourceRelative = fals
 export function assetRowFiles(sourceRoot, packDir, asset) {
   const resourcePath = asset.source_resource || asset.resource || asset.path || "";
   const previewPath = asset.source_preview || asset.preview || "";
+  const texturePath = asset.source_texture || asset.texture || "";
   const resourceSourceRelative = Boolean(asset.source_resource);
   const previewSourceRelative = Boolean(asset.source_preview);
   const modelPath = asset.model || (modelExt.has(extname(resourcePath).toLowerCase()) ? resourcePath : "");
@@ -105,6 +106,7 @@ export function assetRowFiles(sourceRoot, packDir, asset) {
   return {
     resource,
     preview: resolveAssetPath(sourceRoot, packDir, previewPath, previewSourceRelative),
+    texture: resolveAssetPath(sourceRoot, packDir, texturePath, Boolean(asset.source_texture)),
     model: asset.source_model
       ? resolveAssetPath(sourceRoot, packDir, asset.source_model, true)
       : modelPath
@@ -120,6 +122,7 @@ function normalizeAsset(sourceRoot, packDir, pack, asset) {
   const {
     resource: resolvedResource,
     preview: resolvedPreview,
+    texture: resolvedTexture,
     model: resolvedModel,
   } = assetRowFiles(sourceRoot, packDir, asset);
   const filesDir = resolvedResource ? dirname(resolvedResource) : "";
@@ -157,6 +160,7 @@ function normalizeAsset(sourceRoot, packDir, pack, asset) {
     resource: resolvedResource ? relPosix(sourceRoot, resolvedResource) : "",
     filesDir,
     modelPath: resolvedModel,
+    texturePath: resolvedTexture,
     preview: resolvedPreview,
     metadataPath: join(packDir, "assets.jsonl"),
     sourceName: pack.source || "",

@@ -43,6 +43,13 @@ The command reads Pack Manifest asset records, finds GLB files, skips existing
 library previews unless `--force` is passed, and runs Blender headlessly in
 chunks.
 
+A palette-indexed model ships without a material: the game binds its palette or
+atlas in code, so the GLB alone renders grey. Its asset row names that image in
+`texture` (see `../manifests/README.md`); both the batch command and `Refresh
+previews` pass it to `render_thumbs.py`, which gives every UV-mapped mesh without
+an image of its own that texture: an image up to 128 px is a palette (clamped,
+nearest texel), a larger one repeats with linear filtering.
+
 ## Boundary
 
 - Asset Viewer displays prepared previews and may request explicit refresh or

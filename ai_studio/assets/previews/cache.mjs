@@ -116,7 +116,7 @@ async function collectManifestPreviewTargets(root, source, force) {
         continue;
       }
       if (status === "stale") stats.staleModels += 1;
-      models.push({ assetId: record.asset_id, path: model });
+      models.push({ assetId: record.asset_id, path: model, texture: record.texturePath });
     }
   }
   return { images, models, ...stats };
@@ -162,6 +162,13 @@ function copyImagePreviews(root, source, images) {
   return copied;
 }
 
+// One render_thumbs.py item: "glb::stem", plus "::texture" when the row names the
+// image its UVs sample (a palette or atlas the GLB does not embed).
+export function thumbItem(glb, stem, texture = "") {
+  const slash = (path) => path.replace(/\\/g, "/");
+  return `${slash(glb)}::${stem}${texture ? `::${slash(texture)}` : ""}`;
+}
+
 function renderModelPreviews(root, source, models, { blender = "", size = 512 } = {}) {
   if (!models.length) return { rendered: 0, skipped: 0, reason: "" };
   const blenderPath = findBlender(blender);
@@ -173,7 +180,7 @@ function renderModelPreviews(root, source, models, { blender = "", size = 512 } 
   mkdirSync(workDir, { recursive: true });
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
-  writeFileSync(manifest, models.map((model) => model.path.replace(/\\/g, "/") + "::" + safeSlug(model.assetId)).join("\n"), "utf8");
+  writeFileSync(manifest, models.map((model) => thumbItem(model.path, safeSlug(model.assetId), model.texture)).join("\n"), "utf8");
 
   const args = ["--background", "--python", join(here, "render_thumbs.py"), "--", outDir, String(size), "--webp", "@" + manifest];
   const result = spawnSync(blenderPath, args, { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });

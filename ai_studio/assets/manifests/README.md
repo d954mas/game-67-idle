@@ -82,6 +82,14 @@ source-root fields instead of escaping the pack directory:
 source root, not the pack directory. Use them only when the file intentionally
 stays in a game/template path such as `ui/`, `meshes/`, `audio/`, or `fonts/`.
 
+A model whose GLB carries no material image but samples a palette or atlas by UV
+names that image in `texture` (pack-relative, often another row's file) or
+`source_texture`, so previews render it in colour:
+
+```jsonl
+{"asset_id":"kit__bag__own","kind":"model","resource":"files/kit__bag__own/bag.glb","texture":"files/kit__bag-palette__own/bag-palette.png"}
+```
+
 For CC-BY or any `attribution_required: true` asset, `credit_text` or
 `author_vendor` plus `source_page` are required before the asset is considered
 ready for project use. For notice-bearing licenses such as OFL, keep
