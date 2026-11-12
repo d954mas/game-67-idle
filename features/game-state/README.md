@@ -416,6 +416,10 @@ it never writes such copies, so a game moving to it from the full shell leaves t
 old shell's copies in place (change `GAME_STORAGE_APP_ID`, as `4.5.0` advises).
 The full shell is unchanged.
 
+Version `4.14.1` hands the web page-hide handlers to the page as function-table
+entries instead of exports, so a game that never calls
+`game_save_install_web_flush` links neither handler. Behaviour is unchanged.
+
 ## Extension points
 
 Extend through game-owned schemas, migrations, hooks, and DevAPI adapters;
