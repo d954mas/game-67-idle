@@ -201,6 +201,13 @@ still installs everything; `_platform_sdk_web_complete_interstitial` is no longe
 exported by itself, so a link that names it in `EXPORTED_FUNCTIONS` keeps working
 and one that does not loses nothing.
 
+A consumer names no `_platform_sdk_*` function in `EXPORTED_FUNCTIONS`: the core
+completions export themselves (`EMSCRIPTEN_KEEPALIVE`) and everything else is a
+function-table entry. A link that still lists `_platform_sdk_web_read_player`,
+`_platform_sdk_cloud_web_complete_load` or `_platform_sdk_cloud_web_complete_store`
+fails with "undefined exported symbol": the first is gone, the other two are no
+longer external symbols. Drop them from the list.
+
 Version `3.5.0` ships the crash reporter minified: `generate_release_bundles.mjs`
 also writes `web/release/runtime-diagnostics.min.js` with its hashes under
 `diagnostics` in the manifest, `platform_sdk_crash()` inlines it in Release
