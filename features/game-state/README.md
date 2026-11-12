@@ -409,6 +409,13 @@ the account document is refused (the import or the local write failed). Before,
 the policy had already run while adoption was still possible, so the refused
 document sat as a conflict until the first local change.
 
+Version `4.14.0` adds `game_storage_write_document`, the save write without the
+quota fallback that removes pre-migration copies. The `GAME_SAVE_TEXT_ONLY` shell
+writes through it and no longer removes the droppable copy after a clean load:
+it never writes such copies, so a game moving to it from the full shell leaves the
+old shell's copies in place (change `GAME_STORAGE_APP_ID`, as `4.5.0` advises).
+The full shell is unchanged.
+
 ## Extension points
 
 Extend through game-owned schemas, migrations, hooks, and DevAPI adapters;

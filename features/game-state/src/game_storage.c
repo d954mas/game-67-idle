@@ -66,6 +66,12 @@ bool game_storage_write_blocking(
            game_storage_backend_write(slot, text, error, error_cap, true);
 }
 
+bool game_storage_write_document(
+    const char *slot, const char *text, bool may_wait, char *error, int error_cap) {
+    return validate_write(slot, text, error, error_cap) &&
+           game_storage_backend_write(slot, text, error, error_cap, may_wait);
+}
+
 bool game_storage_write_save(
     const char *slot, const char *text, bool may_wait, char *error, int error_cap) {
     if (!validate_write(slot, text, error, error_cap)) {

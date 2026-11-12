@@ -146,8 +146,9 @@ when a full store removes it.
 
 When a save write fails with `QuotaExceededError`, `game_storage_write_save`
 removes the droppable copy, then the latest, then the kept one, retrying after
-each; both save shells write through it. Other write failures leave every copy
-alone. Read a copy with `game_storage_read_premigration` for support or manual
+each; the full shell writes through it. The text-only shell writes no copies
+and saves through `game_storage_write_document`, which has no such fallback.
+Other write failures leave every copy alone. Read a copy with `game_storage_read_premigration` for support or manual
 recovery; the loader never restores one on its own.
 
 An absent fragment resets independently. A fragment parse or migration failure

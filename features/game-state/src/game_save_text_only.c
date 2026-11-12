@@ -203,7 +203,7 @@ static bool save_current(char *error, int error_cap, bool may_wait) {
         if (!write_document(&writer, saved_at, save_seq)) {
             set_error(reason, (int)sizeof reason, "save snapshot exceeds configured capacity");
         } else {
-            const bool written = game_storage_write_save(
+            const bool written = game_storage_write_document(
                 GAME_SAVE_AUTOSAVE_SLOT, game_save_text_writer_data(&writer), may_wait,
                 reason, (int)sizeof reason);
             if (written) {
@@ -605,13 +605,7 @@ void game_save_load(game_save_load_result_t *result) {
         s_autosave_paused = false;
         result->status = GAME_SAVE_LOAD_LOADED;
         set_result_message(result, "loaded");
-        /* This shell has no migrations, so every load it accepts is clean at
-           the current version: the full shell's droppable copy is spent. */
-        if (game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, error, (int)sizeof error) &&
-            result->reset_fragment_count == 0) {
-            (void)game_storage_remove_premigration(
-                GAME_SAVE_AUTOSAVE_SLOT, GAME_STORAGE_PREMIGRATION_DROPPABLE, error, (int)sizeof error);
-        }
+        (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, error, (int)sizeof error);
         s_last_save_mono = mono_now();
         return;
     }

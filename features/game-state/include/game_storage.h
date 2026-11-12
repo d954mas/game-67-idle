@@ -121,6 +121,11 @@ typedef enum {
 bool game_storage_write_save(
     const char *slot, const char *text, bool may_wait, char *error, int error_cap);
 
+/* The save write without making room: for a shell that never writes
+   pre-migration copies, so a full store has none of its own to give up. */
+bool game_storage_write_document(
+    const char *slot, const char *text, bool may_wait, char *error, int error_cap);
+
 bool game_storage_write_premigration(
     const char *slot, game_storage_premigration_t kind, const char *text, char *error, int error_cap);
 bool game_storage_read_premigration(
