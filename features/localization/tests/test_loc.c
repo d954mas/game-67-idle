@@ -100,7 +100,7 @@ static uint8_t s_seen[(K_COUNT + 7) / 8];
 
 static const loc_table_t k_table = {
     k_langs, LANG_COUNT, k_strings, K_COUNT, LANG_RU, s_logged, sizeof s_logged,
-    s_seen, sizeof s_seen,
+    s_seen, sizeof s_seen, loc_plural_category,
 };
 
 void setUp(void) {
@@ -218,11 +218,11 @@ void test_malformed_table_asserts_at_bind(void) {
     /* Checked once, here, so every accessor can trust the table afterwards. */
     EXPECT_ASSERT(loc_bind_table(NULL));
     static const loc_table_t no_langs = {k_langs,   0,          k_strings,    K_COUNT, 0,
-                                         s_logged, sizeof s_logged, s_seen, sizeof s_seen};
+                                         s_logged, sizeof s_logged, s_seen, sizeof s_seen, loc_plural_category};
     EXPECT_ASSERT(loc_bind_table(&no_langs));
     static const loc_table_t bad_fallback = {
         k_langs, LANG_COUNT, k_strings, K_COUNT, LANG_COUNT, s_logged, sizeof s_logged,
-        s_seen, sizeof s_seen,
+        s_seen, sizeof s_seen, loc_plural_category,
     };
     EXPECT_ASSERT(loc_bind_table(&bad_fallback));
 
@@ -233,12 +233,13 @@ void test_malformed_table_asserts_at_bind(void) {
        as the rest -- so every reader of loc_key_was_seen can trust the answer. */
     static const loc_table_t no_seen = {
         k_langs, LANG_COUNT, k_strings, K_COUNT, LANG_RU, s_logged, sizeof s_logged,
-        NULL, 0,
+        NULL, 0, loc_plural_category,
     };
     EXPECT_ASSERT(loc_bind_table(&no_seen));
     static const loc_table_t short_seen = {
         k_langs, LANG_COUNT, k_strings, K_COUNT, LANG_RU, s_logged, sizeof s_logged,
         s_seen, sizeof s_seen - 1u, /* one byte short: loses the tail keys only */
+        loc_plural_category,
     };
     EXPECT_ASSERT(loc_bind_table(&short_seen));
 }

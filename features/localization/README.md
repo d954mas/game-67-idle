@@ -343,6 +343,9 @@ Run the ctest targets named in `feature.json.registers.ctest_targets`
 `feature.json.version` is exact SemVer. Patch preserves the public contract,
 minor adds backward-compatible surface, and major permits breaking changes.
 Consumers pin both this version and an exact repository revision.
+Version `1.9.0` adds `loc_table_t.plural_category`: the generated table names
+`loc_plural_category` only when a key is plural, so a corpus without plural keys
+links no plural rules. A hand-built table with plural keys sets it.
 Version `1.8.0` adds `loc_wrap`.
 Version `1.3.0` keeps translated copy in `loc_strings.gen.txt` instead of API
 header comments. C signatures and key indices stay unchanged; grep tools should
