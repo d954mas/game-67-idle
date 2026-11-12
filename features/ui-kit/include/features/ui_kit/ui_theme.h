@@ -116,6 +116,13 @@ void ui_theme_art_bind_icons(ui_theme_art_t *art, nt_resource_t atlas, const cha
 // the process (a static, which is what ui_tokens_studio_default returns).
 // Calling it again repaints: a game may swap themes at runtime.
 void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art);
+// ui_theme_init in two halves, for a game that draws its own controls: the
+// core binds the tokens and art and builds the plate, button and label styles;
+// forms builds the slider, dropdown, scroll, progress and switch styles from
+// the bound tokens. A game that never draws the kit's form widgets calls the
+// core alone, and their styles stay zero.
+void ui_theme_init_core(const ui_tokens_t *tokens, const ui_theme_art_t *art);
+void ui_theme_init_forms(void);
 
 // Mutable on purpose: the engine resolves an atlas region lazily and MEMOIZES
 // the index back into the style it was handed, so a const copy would re-resolve

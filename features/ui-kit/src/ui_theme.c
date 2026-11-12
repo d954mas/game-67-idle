@@ -99,7 +99,7 @@ const ui_tokens_t *ui_theme_tokens(void) {
     return g_ui_theme.tokens != NULL ? g_ui_theme.tokens : ui_tokens_studio_default();
 }
 
-void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
+static void core_styles(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     const ui_tokens_t *t = tokens != NULL ? tokens : ui_tokens_studio_default();
     const uint32_t action_text = t->on_action != 0U ? t->on_action : t->on_panel;
     g_ui_theme.tokens = t;
@@ -154,6 +154,31 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     g_ui_theme.button_close.hover.bg_tint = 0xFFFFFFFFU;
     g_ui_theme.button_close.pressed.bg_tint = t->tile_dim;
 
+    g_ui_theme.title = label_style(t->t_display, t->on_panel, CLAY_TEXT_WRAP_WORDS);
+    g_ui_theme.heading = label_style(t->t_title, t->on_panel, CLAY_TEXT_WRAP_WORDS);
+    g_ui_theme.label = label_style(t->t_body, t->on_panel, CLAY_TEXT_WRAP_WORDS);
+    g_ui_theme.button_label = label_style(t->t_body, t->ink, CLAY_TEXT_WRAP_WORDS);
+    g_ui_theme.button_label_action = label_style(t->t_body, action_text, CLAY_TEXT_WRAP_WORDS);
+    // White on a colour reads at any size with the contour around the glyphs.
+    g_ui_theme.button_label_action.outline_w = 0.09F;
+    g_ui_theme.button_label_action.outline_color = t->shell;
+    g_ui_theme.button_label_disabled = label_style(t->t_body, t->ink_soft, CLAY_TEXT_WRAP_WORDS);
+    g_ui_theme.header_title = label_style(t->t_title, action_text, CLAY_TEXT_WRAP_NONE);
+    g_ui_theme.header_title.outline_w = 0.09F;
+    g_ui_theme.header_title.outline_color = t->shell;
+    g_ui_theme.hint = label_style(t->t_badge, t->on_panel_soft, CLAY_TEXT_WRAP_WORDS);
+    g_ui_theme.amount = label_style(t->t_num, t->coin, CLAY_TEXT_WRAP_NONE);
+    g_ui_theme.row_title = label_style(t->t_row, t->ink, CLAY_TEXT_WRAP_NONE);
+    g_ui_theme.row_sub = label_style(t->t_row_sub, t->ink_soft, CLAY_TEXT_WRAP_NONE);
+    g_ui_theme.counter = label_style(t->t_num, t->ink, CLAY_TEXT_WRAP_NONE);
+    g_ui_theme.on_world = label_style(t->t_title, 0xFFFFFFFFU, CLAY_TEXT_WRAP_WORDS);
+    // The outline is in em so it keeps its share of the glyph at every scale.
+    g_ui_theme.on_world.outline_w = 0.09F;
+    g_ui_theme.on_world.outline_color = t->shell;
+}
+
+static void form_styles(void) {
+    const ui_tokens_t *t = ui_theme_tokens();
     // Slider sizes are CSS pixels; ui_kit_slider_style converts them per frame.
     nt_ui_slider_style_t s = nt_ui_slider_style_defaults();
     s.track_h = 18.0F;
@@ -234,27 +259,20 @@ void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
     g_ui_theme.toggle.text_base = label_style(t->t_body, t->on_panel, CLAY_TEXT_WRAP_NONE);
     g_ui_theme.checkbox.text_base = g_ui_theme.toggle.text_base;
     g_ui_theme.radio.text_base = g_ui_theme.toggle.text_base;
+}
 
-    g_ui_theme.title = label_style(t->t_display, t->on_panel, CLAY_TEXT_WRAP_WORDS);
-    g_ui_theme.heading = label_style(t->t_title, t->on_panel, CLAY_TEXT_WRAP_WORDS);
-    g_ui_theme.label = label_style(t->t_body, t->on_panel, CLAY_TEXT_WRAP_WORDS);
-    g_ui_theme.button_label = label_style(t->t_body, t->ink, CLAY_TEXT_WRAP_WORDS);
-    g_ui_theme.button_label_action = label_style(t->t_body, action_text, CLAY_TEXT_WRAP_WORDS);
-    // White on a colour reads at any size with the contour around the glyphs.
-    g_ui_theme.button_label_action.outline_w = 0.09F;
-    g_ui_theme.button_label_action.outline_color = t->shell;
-    g_ui_theme.button_label_disabled = label_style(t->t_body, t->ink_soft, CLAY_TEXT_WRAP_WORDS);
-    g_ui_theme.header_title = label_style(t->t_title, action_text, CLAY_TEXT_WRAP_NONE);
-    g_ui_theme.header_title.outline_w = 0.09F;
-    g_ui_theme.header_title.outline_color = t->shell;
-    g_ui_theme.hint = label_style(t->t_badge, t->on_panel_soft, CLAY_TEXT_WRAP_WORDS);
-    g_ui_theme.amount = label_style(t->t_num, t->coin, CLAY_TEXT_WRAP_NONE);
-    g_ui_theme.row_title = label_style(t->t_row, t->ink, CLAY_TEXT_WRAP_NONE);
-    g_ui_theme.row_sub = label_style(t->t_row_sub, t->ink_soft, CLAY_TEXT_WRAP_NONE);
-    g_ui_theme.counter = label_style(t->t_num, t->ink, CLAY_TEXT_WRAP_NONE);
-    g_ui_theme.on_world = label_style(t->t_title, 0xFFFFFFFFU, CLAY_TEXT_WRAP_WORDS);
-    // The outline is in em so it keeps its share of the glyph at every scale.
-    g_ui_theme.on_world.outline_w = 0.09F;
-    g_ui_theme.on_world.outline_color = t->shell;
+void ui_theme_init_core(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
+    core_styles(tokens, art);
+    g_ui_theme.generation++;
+}
+
+void ui_theme_init_forms(void) {
+    form_styles();
+    g_ui_theme.generation++;
+}
+
+void ui_theme_init(const ui_tokens_t *tokens, const ui_theme_art_t *art) {
+    core_styles(tokens, art);
+    form_styles();
     g_ui_theme.generation++;
 }

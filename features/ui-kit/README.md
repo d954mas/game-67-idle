@@ -252,7 +252,9 @@ not be replaced with generated art solely because filenames match.
 
 ## Compatibility
 
-Contract version in `feature.json`. Version 5.1 adds `ui_look.h`, `ui_rgb.h`,
+Contract version in `feature.json`. Version 5.3 adds `ui_theme_init_core` and
+`ui_theme_init_forms`, the two halves of `ui_theme_init`, which builds the same
+styles as before. Version 5.1 adds `ui_look.h`, `ui_rgb.h`,
 `ui_ad.h`, `ui_hint.h`, `ui_world_label.h`, `ui_world_project`,
 `ui_world_depth_offset`, `ui_world_billboard` and `ui_scale_tap_units`, with new
 sources a consumer lists only when it calls them; nothing existing changes.
