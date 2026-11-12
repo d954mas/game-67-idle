@@ -11,8 +11,9 @@ Use the schema-first contract owned by `features/game-state/`.
 ## Start
 
 Identify the owning schema and affected callers. Read relevant
-`features/game-state/README.md` sections for contracts, `INSTALL.md` for wiring,
-and `feature.json` for versions/dependencies. Inspect the generator when its
+`features/game-state/README.md` sections for contracts,
+`features/game-state/INSTALL.md` for wiring, and
+`features/game-state/feature.json` for versions/dependencies. Inspect the generator when its
 output or behavior must change.
 
 ## Change workflow

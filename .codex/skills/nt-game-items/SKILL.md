@@ -12,7 +12,8 @@ and seed remain consumer-owned.
 
 Use the consumer's `src/features/items/README.md` and affected content/state
 files. Read relevant `features/items-core/README.md` sections for core contracts,
-`INSTALL.md` for wiring changes, and `feature.json` for versions/dependencies.
+`features/items-core/INSTALL.md` for wiring changes, and
+`features/items-core/feature.json` for versions/dependencies.
 
 ## Catalog workflow
 
