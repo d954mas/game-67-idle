@@ -741,9 +741,8 @@ LocStr loc_format(int key_index, int plural_arg, const loc_arg_t *args, int arg_
 
     int lang = s_lang;
     loc_plural_cat_t cat = LOC_PLURAL_OTHER;
-    NT_ASSERT((!def->is_plural || s_table->plural_category != NULL) && "loc_format: plural key in a table without plural rules");
     if (def->is_plural && !fractional) {
-        cat = s_table->plural_category(s_table->langs[lang].plural_rule, plural_value);
+        cat = loc_plural_category(s_table->langs[lang].plural_rule, plural_value);
     }
     bool degraded = false;
     const char *tpl = form_for(def, lang, cat, &degraded);
@@ -754,7 +753,7 @@ LocStr loc_format(int key_index, int plural_arg, const loc_arg_t *args, int arg_
         if (def->is_plural && !fractional) {
             /* Categories are per language: ru's rule and en's disagree, so the
                form must be reselected under the language actually used. */
-            cat = s_table->plural_category(s_table->langs[lang].plural_rule, plural_value);
+            cat = loc_plural_category(s_table->langs[lang].plural_rule, plural_value);
         }
         degraded = false;
         tpl = form_for(def, lang, cat, &degraded);

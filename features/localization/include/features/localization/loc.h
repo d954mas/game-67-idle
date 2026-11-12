@@ -121,9 +121,6 @@ typedef struct loc_table {
      * to read it". A key no surface reaches is a finding about the game. */
     uint8_t *seen;
     size_t seen_bytes;
-    /* loc_plural_category when any key is plural, NULL otherwise: a corpus
-     * without plural keys leaves the rules out of the link. */
-    loc_plural_cat_t (*plural_category)(loc_plural_rule_t rule, int64_t count);
 } loc_table_t;
 
 /* Argument kinds mirror the `args` types in strings.json. */

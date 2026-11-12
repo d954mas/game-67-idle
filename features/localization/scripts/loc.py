@@ -985,7 +985,6 @@ def render_source(table: Table) -> str:
     lines.append("    sizeof s_loc_fallback_logged,")
     lines.append("    s_loc_seen,")
     lines.append("    sizeof s_loc_seen,")
-    lines.append("    loc_plural_category," if any(entry.is_plural for entry in table.entries) else "    NULL,")
     lines.append("};")
     lines.append("")
     lines.append("void loc_init(void) { loc_bind_table(&k_loc_table); }")
