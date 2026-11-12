@@ -19,6 +19,9 @@ var __platformSdkPortalAudio;
 var __platformSdkPortalSound;
 var __platformSdkAdVisible;
 
+// The completions the client's optional web parts bind for their own EM_JS code.
+var __platformSdkWeb;
+
 /** The backend every adapter returns. @record */
 function PlatformSdkBackend() {}
 PlatformSdkBackend.prototype.ready;

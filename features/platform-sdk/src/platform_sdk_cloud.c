@@ -5,19 +5,27 @@
 #include <emscripten/emscripten.h>
 #include <stdlib.h>
 
-EMSCRIPTEN_KEEPALIVE
-void platform_sdk_cloud_web_complete_load(uint32_t id, int status, char *text) {
+static void web_loaded(uint32_t id, int status, char *text) {
     platform_sdk_cloud_complete_load(id, (platform_sdk_cloud_status_t)status, text);
     free(text);
 }
 
-EMSCRIPTEN_KEEPALIVE
-void platform_sdk_cloud_web_complete_store(uint32_t id, int status) {
+static void web_stored(uint32_t id, int status) {
     platform_sdk_cloud_complete_store(id, (platform_sdk_cloud_write_status_t)status);
 }
 
+typedef void (*platform_sdk_cloud_web_fn)(void);
+
 /* clang-format off */
-EM_JS_DEPS(platform_sdk_cloud, "$UTF8ToString,$stringToNewUTF8,malloc,free")
+EM_JS_DEPS(platform_sdk_cloud, "$UTF8ToString,$stringToNewUTF8,$getWasmTableEntry,malloc,free")
+
+/* The completions reach the page as function-table entries, not exports, so a
+   game that never installs this backend links none of it. */
+EM_JS(void, web_bind, (platform_sdk_cloud_web_fn loaded, platform_sdk_cloud_web_fn stored), {
+    var web = globalThis.__platformSdkWeb || (globalThis.__platformSdkWeb = {});
+    web.cloudLoaded = getWasmTableEntry(loaded);
+    web.cloudStored = getWasmTableEntry(stored);
+})
 
 EM_JS(int, web_supported, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
@@ -33,19 +41,19 @@ EM_JS(void, web_load, (uint32_t id, const char *key_ptr), {
     }).then(function (result) {
         if (!result) throw new Error("Missing storage result");
         if (result.status === "missing") {
-            _platform_sdk_cloud_web_complete_load(id, 3, 0);
+            globalThis.__platformSdkWeb.cloudLoaded(id, 3, 0);
         } else if (result.status === "unavailable") {
-            _platform_sdk_cloud_web_complete_load(id, 4, 0);
+            globalThis.__platformSdkWeb.cloudLoaded(id, 4, 0);
         } else if (result.status === "found") {
             var text = typeof result.value === "string" ? result.value : JSON.stringify(result.value);
             if (typeof text !== "string") throw new Error("Invalid storage value");
             var pointer = stringToNewUTF8(text);
             if (!pointer) throw new Error("Storage allocation failed");
-            _platform_sdk_cloud_web_complete_load(id, 2, pointer);
+            globalThis.__platformSdkWeb.cloudLoaded(id, 2, pointer);
         } else {
-            _platform_sdk_cloud_web_complete_load(id, 5, 0);
+            globalThis.__platformSdkWeb.cloudLoaded(id, 5, 0);
         }
-    }).catch(function () { _platform_sdk_cloud_web_complete_load(id, 5, 0); });
+    }).catch(function () { globalThis.__platformSdkWeb.cloudLoaded(id, 5, 0); });
 })
 
 EM_JS(void, web_store, (uint32_t id, const char *key_ptr, const char *text_ptr), {
@@ -55,8 +63,8 @@ EM_JS(void, web_store, (uint32_t id, const char *key_ptr, const char *text_ptr),
     Promise.resolve().then(function () { return backend.saveData(key, text); }).then(function (result) {
         var status = result && result.status === "acknowledged" ? 2 :
             result && result.status === "unavailable" ? 3 : 4;
-        _platform_sdk_cloud_web_complete_store(id, status);
-    }).catch(function () { _platform_sdk_cloud_web_complete_store(id, 4); });
+        globalThis.__platformSdkWeb.cloudStored(id, status);
+    }).catch(function () { globalThis.__platformSdkWeb.cloudStored(id, 4); });
 })
 /* clang-format on */
 
@@ -73,6 +81,7 @@ static void store(uint32_t id, const char *key, const char *text, void *context)
     web_store(id, key, text);
 }
 void platform_sdk_cloud_install_web_backend(void) {
+    web_bind((platform_sdk_cloud_web_fn)web_loaded, (platform_sdk_cloud_web_fn)web_stored);
     const platform_sdk_cloud_backend_t backend = { .supported = supported, .load = load, .store = store };
     platform_sdk_cloud_set_backend(&backend, NULL);
 }

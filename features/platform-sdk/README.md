@@ -190,6 +190,16 @@ run `node features/validate_contracts.mjs`.
 minor adds backward-compatible surface, and major permits breaking changes.
 Consumers pin both this version and an exact repository revision.
 
+Version `3.4.0` splits the web backend into parts (`platform_sdk_web.h`): core,
+social (login, player, leaderboards), banner and interstitial, installed with
+`platform_sdk_install_web()`, or the core alone with
+`platform_sdk_install_web_backend_core()`. The optional parts and the account
+storage reach the page through function-table entries instead of exports, so a
+game that does not install one links none of it. `platform_sdk_install_web_backend()`
+still installs everything; `_platform_sdk_web_complete_interstitial` is no longer
+exported by itself, so a link that names it in `EXPORTED_FUNCTIONS` keeps working
+and one that does not loses nothing.
+
 ## Extension points
 
 Add target mappings, adapters, and explicit capabilities at the documented

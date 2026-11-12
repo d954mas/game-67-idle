@@ -279,11 +279,15 @@ test("extracted web bridge faults never synthesize a fallback C completion", () 
     board_id_ptr: 1,
     scope: 0,
     UTF8ToString: () => "board",
-    globalThis: { __platformSdkInternalBackend: { fetchEntries: () => ({ status: "ok", top: [{ name: "Ada" }] }) } },
-    _platform_sdk_web_leaderboard_generation: () => 1,
-    _platform_sdk_web_leaderboard_begin: () => {},
-    _platform_sdk_web_leaderboard_row: () => {},
-    _platform_sdk_web_complete_leaderboard_fetch: () => { leaderboardCompletions += 1; },
+    globalThis: {
+      __platformSdkInternalBackend: { fetchEntries: () => ({ status: "ok", top: [{ name: "Ada" }] }) },
+      __platformSdkWeb: {
+        leaderboardGeneration: () => 1,
+        leaderboardBegin: () => {},
+        leaderboardRow: () => {},
+        completeLeaderboardFetch: () => { leaderboardCompletions += 1; },
+      },
+    },
     stringToNewUTF8: () => { throw allocationFault; },
     Array,
     Number,
@@ -301,10 +305,14 @@ test("extracted web bridge faults never synthesize a fallback C completion", () 
     placement_ptr: 1,
     request_id: 71,
     UTF8ToString: () => "break",
-    globalThis: { __platformSdkInternalBackend: { showInterstitial: () => ({ supported: true, shown: true, reason: "completed" }) } },
-    _platform_sdk_web_complete_interstitial: () => {
-      completions += 1;
-      throw completionFault;
+    globalThis: {
+      __platformSdkInternalBackend: { showInterstitial: () => ({ supported: true, shown: true, reason: "completed" }) },
+      __platformSdkWeb: {
+        completeInterstitial: () => {
+          completions += 1;
+          throw completionFault;
+        },
+      },
     },
   };
   const adResult = runInNewContext(`(function () {${extractedWebBridge(source, "platform_sdk_web_backend_show_interstitial")} })()`, adContext);
@@ -1279,11 +1287,13 @@ for (const operation of ["submit", "fetch"]) {
         __platformSdkInternalBackend: backend,
         UTF8ToString: (value) => value,
         stringToNewUTF8: (value) => value,
-        _platform_sdk_web_leaderboard_generation: () => generation,
-        _platform_sdk_web_complete_leaderboard_submit: (...args) => completed.push(args),
-        _platform_sdk_web_leaderboard_begin: () => rows.push("begin"),
-        _platform_sdk_web_leaderboard_row: (...args) => rows.push(args),
-        _platform_sdk_web_complete_leaderboard_fetch: (...args) => completed.push(args),
+        __platformSdkWeb: {
+          leaderboardGeneration: () => generation,
+          completeLeaderboardSubmit: (...args) => completed.push(args),
+          leaderboardBegin: () => rows.push("begin"),
+          leaderboardRow: (...args) => rows.push(args),
+          completeLeaderboardFetch: (...args) => completed.push(args),
+        },
         Promise: {
           resolve(value) {
             return {

@@ -18,7 +18,6 @@ void platform_sdk_web_complete_rewarded(unsigned int request_id, int supported, 
 void platform_sdk_web_complete_init(int ready);
 void platform_sdk_web_complete_login(int supported, int authorized, int reason, char *name, char *avatar_url);
 void platform_sdk_web_set_player(int authorized, char *name, char *avatar_url);
-void platform_sdk_web_read_player(void);
 void platform_sdk_web_portal_pause(void);
 void platform_sdk_web_ad_visible(unsigned int request_id, int visible);
 void platform_sdk_web_portal_resume(void);
@@ -32,8 +31,10 @@ void platform_sdk_web_leaderboard_row(int around, double value, int rank, int yo
 void platform_sdk_web_complete_leaderboard_fetch(char *board_id, int scope, int status,
                                                  int has_player, int player_rank, double player_value);
 
+typedef void (*platform_sdk_web_fn)(void);
+
 /* clang-format off */
-EM_JS_DEPS(platform_sdk_web_backend, "$UTF8ToString,$stringToNewUTF8")
+EM_JS_DEPS(platform_sdk_web_backend, "$UTF8ToString,$stringToNewUTF8,$getWasmTableEntry")
 
 /* The selected adapter is a plain ES module and cannot reach the wasm exports,
    so the pause path is published as two globals the moment the backend is
@@ -75,20 +76,6 @@ EM_JS(char *, platform_sdk_web_backend_locale, (void), {
     return stringToNewUTF8(String(tag));
 })
 
-/* A player who is already signed in to the portal is known the moment the SDK
-   answers; the facade learns it right after init so no screen has to ask. */
-EM_JS(void, platform_sdk_web_backend_read_player, (void), {
-    var backend = globalThis.__platformSdkInternalBackend;
-    if (!backend || typeof backend.getPlayer !== "function") return;
-    Promise.resolve(backend.getPlayer()).then(function (player) {
-        player = player || {};
-        _platform_sdk_web_set_player(
-            player.authorized ? 1 : 0,
-            stringToNewUTF8(String(player.name || "")),
-            stringToNewUTF8(String(player.avatarUrl || "")));
-    });
-})
-
 EM_JS(int, platform_sdk_web_backend_init, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.ready !== "function") {
@@ -97,7 +84,8 @@ EM_JS(int, platform_sdk_web_backend_init, (void), {
     }
     Promise.resolve(backend.ready()).then(function (ready) {
         _platform_sdk_web_complete_init(ready ? 1 : 0);
-        if (ready) _platform_sdk_web_read_player();
+        var web = globalThis.__platformSdkWeb;
+        if (ready && web && web.readPlayer) web.readPlayer();
     });
     return 0;
 })
@@ -191,7 +179,7 @@ EM_JS(int, platform_sdk_web_backend_show_interstitial, (const char *placement_pt
     var placement = placement_ptr ? UTF8ToString(placement_ptr) : "";
     Promise.resolve(backend.showInterstitial(placement, request_id)).then(function (result) {
         result = result || {};
-        _platform_sdk_web_complete_interstitial(
+        globalThis.__platformSdkWeb.completeInterstitial(
             request_id, result.supported ? 1 : 0,
             result.shown ? 1 : 0,
             reasonCode(result.reason, result.shown));
@@ -241,7 +229,7 @@ EM_JS(int, platform_sdk_web_backend_login, (void), {
     if (!backend || typeof backend.login !== "function") return 0;
     Promise.resolve(backend.login()).then(function (result) {
         result = result || {};
-        _platform_sdk_web_complete_login(
+        globalThis.__platformSdkWeb.completeLogin(
             result.supported ? 1 : 0,
             result.authorized ? 1 : 0,
             reasonCode(result.reason),
@@ -273,12 +261,12 @@ EM_JS(int, platform_sdk_web_backend_leaderboard_submit,
 
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.submitScore !== "function") return 0;
-    var generation = _platform_sdk_web_leaderboard_generation();
+    var generation = globalThis.__platformSdkWeb.leaderboardGeneration();
     var boardId = board_id_ptr ? UTF8ToString(board_id_ptr) : "";
     var extra = extra_ptr ? UTF8ToString(extra_ptr) : "";
     function settle(status) {
-        if (generation !== _platform_sdk_web_leaderboard_generation()) return;
-        _platform_sdk_web_complete_leaderboard_submit(stringToNewUTF8(boardId), scope, status);
+        if (generation !== globalThis.__platformSdkWeb.leaderboardGeneration()) return;
+        globalThis.__platformSdkWeb.completeLeaderboardSubmit(stringToNewUTF8(boardId), scope, status);
     }
     Promise.resolve(backend.submitScore(boardId, scope, value, extra)).then(function (result) {
         settle(statusCode((result || {}).status));
@@ -298,7 +286,7 @@ EM_JS(int, platform_sdk_web_backend_leaderboard_fetch, (const char *board_id_ptr
         if (!Array.isArray(rows)) return;
         for (var i = 0; i < rows.length; i++) {
             var row = rows[i] || {};
-            _platform_sdk_web_leaderboard_row(
+            globalThis.__platformSdkWeb.leaderboardRow(
                 around ? 1 : 0,
                 Number(row.value) || 0,
                 Number(row.rank) | 0,
@@ -311,20 +299,20 @@ EM_JS(int, platform_sdk_web_backend_leaderboard_fetch, (const char *board_id_ptr
 
     var backend = globalThis.__platformSdkInternalBackend;
     if (!backend || typeof backend.fetchEntries !== "function") return 0;
-    var generation = _platform_sdk_web_leaderboard_generation();
+    var generation = globalThis.__platformSdkWeb.leaderboardGeneration();
     var boardId = board_id_ptr ? UTF8ToString(board_id_ptr) : "";
     /* Rows are staged and settled inside one synchronous handler, so two
        boards answering in the same tick cannot interleave their rows. */
     function settle(status, page) {
-        if (generation !== _platform_sdk_web_leaderboard_generation()) return;
+        if (generation !== globalThis.__platformSdkWeb.leaderboardGeneration()) return;
         page = page || {};
         var player = page.player || null;
-        _platform_sdk_web_leaderboard_begin();
+        globalThis.__platformSdkWeb.leaderboardBegin();
         if (status === 0) {
             pushRows(page.top, false);
             pushRows(page.around, true);
         }
-        _platform_sdk_web_complete_leaderboard_fetch(
+        globalThis.__platformSdkWeb.completeLeaderboardFetch(
             stringToNewUTF8(boardId), scope, status,
             player ? 1 : 0,
             player ? (Number(player.rank) | 0) : 0,
@@ -350,6 +338,39 @@ EM_JS(void, platform_sdk_web_backend_destroy, (void), {
     if (!backend || typeof backend.destroy !== "function") return;
     backend.destroy();
 })
+
+/* The optional parts' completions reach the page as function-table entries,
+   not exports: a game that installs none of a part links none of its code. */
+EM_JS(void, platform_sdk_web_bind_social,
+      (platform_sdk_web_fn login, platform_sdk_web_fn player, platform_sdk_web_fn generation,
+       platform_sdk_web_fn begin, platform_sdk_web_fn row, platform_sdk_web_fn submit, platform_sdk_web_fn fetch), {
+    var web = globalThis.__platformSdkWeb || (globalThis.__platformSdkWeb = {});
+    web.completeLogin = getWasmTableEntry(login);
+    web.setPlayer = getWasmTableEntry(player);
+    web.leaderboardGeneration = getWasmTableEntry(generation);
+    web.leaderboardBegin = getWasmTableEntry(begin);
+    web.leaderboardRow = getWasmTableEntry(row);
+    web.completeLeaderboardSubmit = getWasmTableEntry(submit);
+    web.completeLeaderboardFetch = getWasmTableEntry(fetch);
+    /* A player already signed in to the portal is known the moment the SDK
+       answers, so no screen has to ask. */
+    web.readPlayer = function () {
+        var backend = globalThis.__platformSdkInternalBackend;
+        if (!backend || typeof backend.getPlayer !== "function") return;
+        Promise.resolve(backend.getPlayer()).then(function (player) {
+            player = player || {};
+            web.setPlayer(
+                player.authorized ? 1 : 0,
+                stringToNewUTF8(String(player.name || "")),
+                stringToNewUTF8(String(player.avatarUrl || "")));
+        });
+    };
+})
+
+EM_JS(void, platform_sdk_web_bind_interstitial, (platform_sdk_web_fn complete), {
+    var web = globalThis.__platformSdkWeb || (globalThis.__platformSdkWeb = {});
+    web.completeInterstitial = getWasmTableEntry(complete);
+})
 /* clang-format on */
 
 static platform_sdk_ad_reason_t reason_from_int(int reason) {
@@ -359,7 +380,6 @@ static platform_sdk_ad_reason_t reason_from_int(int reason) {
     return (platform_sdk_ad_reason_t)reason;
 }
 
-EMSCRIPTEN_KEEPALIVE
 void platform_sdk_web_complete_interstitial(unsigned int request_id, int supported, int shown, int reason) {
     platform_sdk_backend_complete_interstitial_request(request_id, (platform_sdk_ad_result_t){
         .supported = supported != 0,
@@ -391,7 +411,6 @@ static platform_sdk_auth_reason_t auth_reason_from_int(int reason) {
 }
 
 /* The strings are minted on the JS side for this call alone. */
-EMSCRIPTEN_KEEPALIVE
 void platform_sdk_web_complete_login(int supported, int authorized, int reason, char *name, char *avatar_url) {
     platform_sdk_backend_complete_login((platform_sdk_auth_result_t){
         .supported = supported != 0,
@@ -404,18 +423,12 @@ void platform_sdk_web_complete_login(int supported, int authorized, int reason, 
     free(avatar_url);
 }
 
-EMSCRIPTEN_KEEPALIVE
 void platform_sdk_web_set_player(int authorized, char *name, char *avatar_url) {
     platform_sdk_backend_set_player(authorized != 0, name, avatar_url);
     free(name);
     free(avatar_url);
 }
 
-/* Exported so the init promise can reach it by its wasm export name. */
-EMSCRIPTEN_KEEPALIVE
-void platform_sdk_web_read_player(void) {
-    platform_sdk_web_backend_read_player();
-}
 
 static platform_sdk_leaderboard_status_t leaderboard_status_from_int(int status) {
     if (status < PLATFORM_SDK_LEADERBOARD_OK || status > PLATFORM_SDK_LEADERBOARD_FAILED) {
@@ -430,12 +443,10 @@ static uint32_t leaderboard_value_from_double(double value) {
     return (uint32_t)value;
 }
 
-EMSCRIPTEN_KEEPALIVE
 uint32_t platform_sdk_web_leaderboard_generation(void) {
     return platform_sdk_backend_leaderboard_generation();
 }
 
-EMSCRIPTEN_KEEPALIVE
 void platform_sdk_web_complete_leaderboard_submit(char *board_id, int scope, int status) {
     platform_sdk_backend_complete_leaderboard_submit(board_id, scope, leaderboard_status_from_int(status));
     free(board_id);
@@ -463,7 +474,6 @@ static struct {
     int around_count;
 } g_web_lb_page;
 
-EMSCRIPTEN_KEEPALIVE
 void platform_sdk_web_leaderboard_begin(void) {
     g_web_lb_page.top_count = 0;
     g_web_lb_page.around_count = 0;
@@ -477,7 +487,6 @@ static void copy_or_drop(char *dst, size_t cap, const char *src) {
     }
 }
 
-EMSCRIPTEN_KEEPALIVE
 void platform_sdk_web_leaderboard_row(int around, double value, int rank, int you,
                                       char *name, char *avatar_url, char *extra) {
     platform_sdk_leaderboard_entry_t *entry = NULL;
@@ -507,7 +516,6 @@ void platform_sdk_web_leaderboard_row(int around, double value, int rank, int yo
     free(extra);
 }
 
-EMSCRIPTEN_KEEPALIVE
 void platform_sdk_web_complete_leaderboard_fetch(char *board_id, int scope, int status,
                                                  int has_player, int player_rank, double player_value) {
     const platform_sdk_leaderboard_page_t page = {
@@ -673,42 +681,87 @@ static platform_sdk_result_t web_backend_leaderboard_open(const char *board_id, 
         : PLATFORM_SDK_RESULT_UNSUPPORTED;
 }
 
+static void web_backend_destroy_core(void *userdata) {
+    (void)userdata;
+    platform_sdk_web_backend_destroy();
+}
+
 static void web_backend_destroy(void *userdata) {
     (void)userdata;
     platform_sdk_web_backend_destroy();
     platform_sdk_cloud_reset();
 }
 
+void platform_sdk_web_backend_core(platform_sdk_backend_t *backend) {
+    backend->init = web_backend_init;
+    backend->locale = web_backend_locale;
+    backend->game_loading_progress = web_backend_game_loading_progress;
+    backend->game_loading_finished = web_backend_game_loading_finished;
+    backend->game_ready = web_backend_game_ready;
+    backend->gameplay_start = web_backend_gameplay_start;
+    backend->gameplay_stop = web_backend_gameplay_stop;
+    backend->measure = web_backend_measure;
+    backend->sound_switches = web_backend_sound_switches;
+    backend->set_sound_muted = web_backend_set_sound_muted;
+    backend->show_rewarded = web_backend_show_rewarded;
+    backend->destroy = web_backend_destroy_core;
+}
+
+void platform_sdk_web_backend_social(platform_sdk_backend_t *backend) {
+    platform_sdk_web_bind_social(
+        (platform_sdk_web_fn)platform_sdk_web_complete_login, (platform_sdk_web_fn)platform_sdk_web_set_player,
+        (platform_sdk_web_fn)platform_sdk_web_leaderboard_generation, platform_sdk_web_leaderboard_begin,
+        (platform_sdk_web_fn)platform_sdk_web_leaderboard_row,
+        (platform_sdk_web_fn)platform_sdk_web_complete_leaderboard_submit,
+        (platform_sdk_web_fn)platform_sdk_web_complete_leaderboard_fetch);
+    backend->login = web_backend_login;
+    backend->leaderboard_caps = web_backend_leaderboard_caps;
+    backend->leaderboard_submit = web_backend_leaderboard_submit;
+    backend->leaderboard_fetch = web_backend_leaderboard_fetch;
+    backend->leaderboard_open = web_backend_leaderboard_open;
+}
+
+void platform_sdk_web_backend_banner(platform_sdk_backend_t *backend) {
+    backend->show_banner = web_backend_show_banner;
+    backend->hide_banner = web_backend_hide_banner;
+}
+
+void platform_sdk_web_backend_interstitial(platform_sdk_backend_t *backend) {
+    platform_sdk_web_bind_interstitial((platform_sdk_web_fn)platform_sdk_web_complete_interstitial);
+    backend->show_interstitial = web_backend_show_interstitial;
+}
+
+void platform_sdk_install_web(const platform_sdk_backend_t *backend) {
+    platform_sdk_web_install_portal_hooks();
+    platform_sdk_set_backend(backend, NULL);
+}
+
+void platform_sdk_install_web_backend_core(void) {
+    platform_sdk_backend_t backend = {0};
+    platform_sdk_web_backend_core(&backend);
+    platform_sdk_install_web(&backend);
+}
+
 void platform_sdk_install_web_backend(void) {
     platform_sdk_web_install_portal_hooks();
     platform_sdk_cloud_install_web_backend();
-    platform_sdk_backend_t backend = {
-        .init = web_backend_init,
-        .locale = web_backend_locale,
-        .game_loading_progress = web_backend_game_loading_progress,
-        .game_loading_finished = web_backend_game_loading_finished,
-        .game_ready = web_backend_game_ready,
-        .gameplay_start = web_backend_gameplay_start,
-        .gameplay_stop = web_backend_gameplay_stop,
-        .measure = web_backend_measure,
-        .show_banner = web_backend_show_banner,
-        .hide_banner = web_backend_hide_banner,
-        .sound_switches = web_backend_sound_switches,
-        .set_sound_muted = web_backend_set_sound_muted,
-        .show_interstitial = web_backend_show_interstitial,
-        .show_rewarded = web_backend_show_rewarded,
-        .login = web_backend_login,
-        .leaderboard_caps = web_backend_leaderboard_caps,
-        .leaderboard_submit = web_backend_leaderboard_submit,
-        .leaderboard_fetch = web_backend_leaderboard_fetch,
-        .leaderboard_open = web_backend_leaderboard_open,
-        .destroy = web_backend_destroy,
-    };
+    platform_sdk_backend_t backend = {0};
+    platform_sdk_web_backend_core(&backend);
+    platform_sdk_web_backend_social(&backend);
+    platform_sdk_web_backend_banner(&backend);
+    platform_sdk_web_backend_interstitial(&backend);
+    backend.destroy = web_backend_destroy;
     platform_sdk_set_backend(&backend, NULL);
 }
 
 #else
 
 void platform_sdk_install_web_backend(void) {}
+void platform_sdk_install_web_backend_core(void) {}
+void platform_sdk_web_backend_core(platform_sdk_backend_t *backend) { (void)backend; }
+void platform_sdk_web_backend_social(platform_sdk_backend_t *backend) { (void)backend; }
+void platform_sdk_web_backend_banner(platform_sdk_backend_t *backend) { (void)backend; }
+void platform_sdk_web_backend_interstitial(platform_sdk_backend_t *backend) { (void)backend; }
+void platform_sdk_install_web(const platform_sdk_backend_t *backend) { (void)backend; }
 
 #endif
