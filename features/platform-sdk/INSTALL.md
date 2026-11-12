@@ -164,7 +164,9 @@ Keep engine crash fixes installed and verified before removing a game's fallback
 For Web targets, include `cmake/PlatformSdk.cmake` and call
 `platform_sdk_crash(target)` before configuring the HTML. It links `nt_crash`,
 derives `GAME_CRASH_STORAGE_KEY` from `game.json` (or `template.json`), and reads
-the shared source into `PLATFORM_SDK_DIAGNOSTICS_JS`. Set
+the shared source into `PLATFORM_SDK_DIAGNOSTICS_JS`: a Release build reads its
+minified copy, `web/release/runtime-diagnostics.min.js`, which packaging checks
+against the hash record. Set
 `GAME_CRASH_STORAGE_PREFIX` before this call only to retain an existing storage
 namespace. The same prefix must reach the C definition and HTML installation.
 
@@ -212,8 +214,8 @@ cmake --build <build-dir> --target test_platform_sdk test_platform_sdk_events
 ctest --test-dir <build-dir> -R platform_sdk --output-on-failure
 ```
 
-After any change under `web/adapters/` or `web/platform-sdk.js`, regenerate the
-release bundles, or the pinned hashes in `web/release/manifest.json` stop
+After any change under `web/adapters/`, `web/platform-sdk.js` or
+`web/runtime-diagnostics.js`, regenerate the release bundles, or the pinned hashes in `web/release/manifest.json` stop
 describing what ships:
 
 ```powershell

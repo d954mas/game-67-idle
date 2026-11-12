@@ -654,7 +654,7 @@ function diagnosticsFixture(t) {
   dependencies.features[0].version = "3.0.0";
   write(dependencyPath, `${JSON.stringify(dependencies, null, 2)}\n`);
   const reporter = [
-    readFileSync(join(studioRoot, "features", "platform-sdk", "web", "runtime-diagnostics.js"), "utf8").trimEnd(),
+    readFileSync(join(studioRoot, "features", "platform-sdk", "web", "release", "runtime-diagnostics.min.js"), "utf8").trimEnd(),
     "window.__platformDiagnostics = installPlatformDiagnostics(window, { storagePrefix: 'test-game.crash', runtimeScript: 'game.js' });",
   ].join("\n");
   const htmlPath = join(item.artifactDir, "index.html");
@@ -747,7 +747,7 @@ test("platform diagnostics accepts CMake CRLF substitution without accepting a c
   const item = diagnosticsFixture(t);
   write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace(item.reporter, item.reporter.replace(/\r?\n/g, "\r\n")));
   assert.doesNotThrow(() => validateWebArtifact({ ...item, studioRoot }));
-  write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace("MAX_OUTGOING = 12000", "MAX_OUTGOING = 12001"));
+  write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace("platform-diagnostics-ready", "platform-diagnostics-readz"));
   assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /diagnostics reporter.*shared source/i);
 });
 
@@ -787,7 +787,7 @@ test("platform diagnostics accepts an explicit CMake crash prefix and runtime sc
 test("platform-sdk 3.0.0 rejects missing, stale, duplicate, and late executable reporters", (t) => {
   const cases = [
     ["missing", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace(`<script id=\"platform-diagnostics\">${item.reporter}</script>`, "")), /platform diagnostics/i],
-    ["stale", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace("MAX_OUTGOING = 12000", "MAX_OUTGOING = 12001")), /diagnostics reporter.*shared source/i],
+    ["stale", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace("platform-diagnostics-ready", "platform-diagnostics-readz")), /diagnostics reporter.*shared source/i],
     ["duplicate", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace("<script type=\"module\">", `<script>${item.reporter}</script><script type=\"module\">`)), /platform diagnostics reporter/i],
     ["late", (item) => write(item.htmlPath, `${readFileSync(item.htmlPath, "utf8").replace(`<script id=\"platform-diagnostics\">${item.reporter}</script>\n`, "")}<script id=\"platform-diagnostics\">${item.reporter}</script>`), /platform diagnostics reporter must precede/i],
     ["module", (item) => write(item.htmlPath, readFileSync(item.htmlPath, "utf8").replace('<script id="platform-diagnostics">', '<script id="platform-diagnostics" type="module">')), /classic inline JavaScript/i],
@@ -844,7 +844,7 @@ test("platform-sdk 3.0.0 release verification rechecks diagnostics and permits i
     },
   });
   const entries = readStoreZip(readFileSync(result.zipPath));
-  entries.set("index.html", Buffer.from(entries.get("index.html").toString("utf8").replace("MAX_OUTGOING = 12000", "MAX_OUTGOING = 12001")));
+  entries.set("index.html", Buffer.from(entries.get("index.html").toString("utf8").replace("platform-diagnostics-ready", "platform-diagnostics-readz")));
   const zipBytes = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
   writeFileSync(result.zipPath, zipBytes);
   const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));

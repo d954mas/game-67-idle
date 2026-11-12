@@ -22,7 +22,7 @@ function platformSdkVersion() {
 }
 
 function diagnosticsReporter(studio, storageNamespace, runtimeScript = "game.js") {
-  const source = readFileSync(join(studio, "features", "platform-sdk", "web", "runtime-diagnostics.js"), "utf8").trimEnd();
+  const source = readFileSync(join(studio, "features", "platform-sdk", "web", "release", "runtime-diagnostics.min.js"), "utf8").trimEnd();
   return `${source}\nwindow.__platformDiagnostics = installPlatformDiagnostics(window, { storagePrefix: '${storageNamespace}.crash', runtimeScript: '${runtimeScript}' });`;
 }
 

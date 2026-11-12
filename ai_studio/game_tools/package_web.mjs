@@ -849,10 +849,20 @@ function diagnosticReporterArguments(storageNamespace, crashStoragePrefix, runti
   return { storagePrefix, runtimeScript };
 }
 
-function diagnosticReporterBody(studioRoot, storageNamespace, crashStoragePrefix, runtimeScript = "game.js") {
+function diagnosticReporterSource(studioRoot) {
   const sourcePath = join(studioRoot, "features", "platform-sdk", "web", "runtime-diagnostics.js");
   if (!existsSync(sourcePath)) throw new Error("platform diagnostics shared source is missing");
-  const source = readFileSync(sourcePath, "utf8").trimEnd();
+  const releaseDir = join(studioRoot, "features", "platform-sdk", "web", "release");
+  const manifest = readJson(join(releaseDir, "manifest.json"), "platform SDK release bundle manifest");
+  const record = manifest.schema === "ai_studio.platform_sdk.release_bundles.v1" ? manifest.diagnostics : null;
+  if (!record || record.sourceSha256 !== sha256(readFileSync(sourcePath))) throw new Error("stale release platform diagnostics bundle source");
+  const bundle = readFileSync(join(releaseDir, "runtime-diagnostics.min.js"));
+  if (record.bundleSha256 !== sha256(bundle)) throw new Error("invalid release platform diagnostics bundle bytes");
+  return bundle.toString("utf8").trimEnd();
+}
+
+function diagnosticReporterBody(studioRoot, storageNamespace, crashStoragePrefix, runtimeScript = "game.js") {
+  const source = diagnosticReporterSource(studioRoot);
   const args = diagnosticReporterArguments(storageNamespace, crashStoragePrefix, runtimeScript);
   return `${source}\nwindow.__platformDiagnostics = installPlatformDiagnostics(window, { storagePrefix: '${args.storagePrefix}', runtimeScript: '${args.runtimeScript}' });`;
 }

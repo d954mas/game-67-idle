@@ -63,6 +63,7 @@ features/platform-sdk/
     release/
       manifest.json
       <adapter>.min.js
+      runtime-diagnostics.min.js
   scripts/
     artifact_tools.mjs
     generate_release_bundles.mjs
@@ -199,6 +200,11 @@ game that does not install one links none of it. `platform_sdk_install_web_backe
 still installs everything; `_platform_sdk_web_complete_interstitial` is no longer
 exported by itself, so a link that names it in `EXPORTED_FUNCTIONS` keeps working
 and one that does not loses nothing.
+
+Version `3.5.0` ships the crash reporter minified: `generate_release_bundles.mjs`
+also writes `web/release/runtime-diagnostics.min.js` with its hashes under
+`diagnostics` in the manifest, `platform_sdk_crash()` inlines it in Release
+builds, and the packagers compare a release page's reporter with it.
 
 ## Extension points
 

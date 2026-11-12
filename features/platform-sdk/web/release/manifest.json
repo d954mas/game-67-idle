@@ -56,5 +56,11 @@
       "sourceBytes": 29240,
       "bundleBytes": 10802
     }
+  },
+  "diagnostics": {
+    "sourceSha256": "7d737fb78d88b1e78c8af7a72b899d33bb9739e501b3258cccfc4e2651975e6f",
+    "bundleSha256": "8927579981c7a53672c9093348ff68bc49b3e5b49cca8279b26f28df72983d7e",
+    "sourceBytes": 16939,
+    "bundleBytes": 8362
   }
 }
