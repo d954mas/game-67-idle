@@ -64,8 +64,7 @@ to keep, how to title them) is per-source work and stays outside the tool.
 
 `export_mp3.py` turns a source sound into the file a game ships. A game imports
 it (`decode`, `shape_effect` or `shape_music`, then `choose_rate` or
-`export_at`) and keeps only its own spec and provenance rows; Dig a Million's
-`tools/audio/build_audio_exports.py` is the worked example. One file by hand:
+`export_at`) and keeps only its own spec and provenance rows. One file by hand:
 
 ```powershell
 python ai_studio/assets/tools/audio/export_mp3.py <source> <out.mp3> [--music] [--rate HZ]
