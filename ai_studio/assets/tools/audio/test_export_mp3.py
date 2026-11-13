@@ -75,6 +75,19 @@ class GaplessTest(unittest.TestCase):
             self.assertTrue(mp3.gapless_header(result.data))
             self.assertEqual(len(mp3.decode_mp3(result.data, rate)), result.samples)
 
+    def test_padding_is_exact_on_both_sides_of_the_muxer_window(self):
+        # libavformat records the padding one frame short when len mod frame size is 1..46.
+        noise = np.random.default_rng(4)
+        for rate, frame in ((24000, 576), (RATE, 1152)):
+            for remainder in (0, 1, 46, 47):
+                with self.subTest(rate=rate, remainder=remainder):
+                    samples = frame * 16 + remainder
+                    data = mp3.encode((0.3 * noise.standard_normal(samples)).astype(np.float32), rate, 9)
+                    self.assertEqual(len(mp3.decode_mp3(data, rate)), samples)
+                    tag = mp3._info_tag(data)
+                    stored = int.from_bytes(data[tag["lame"] + 34:tag["lame"] + 36], "big")
+                    self.assertEqual(stored, mp3._crc16(data[tag["frame"]:tag["lame"] + 34]))
+
     def test_plain_mp3_has_no_header(self):
         with tempfile.TemporaryDirectory() as scratch:
             out = Path(scratch) / "plain.mp3"

@@ -107,9 +107,13 @@ python ai_studio/assets/tools/audio/export_mp3.py <source> <out.mp3> [--music] [
   mask its artefacts. `-q:a 7` for music: the lead heard no difference at
   24 kHz `-q:a 7` nor at 32 kHz `-q:a 8`.
 - **Gapless.** `encode` writes to a file so the muxer can seek back and fill
-  the Xing/LAME header with the encoder delay and padding, and it refuses an
-  output without that header. A loop then decodes to exactly its length; music
-  is also resampled as a periodic signal, so the seam stays continuous.
+  the Xing/LAME header with the encoder delay and padding. ffmpeg's muxer
+  records the padding one frame short when the length modulo the frame size
+  (576 samples at 24 kHz, 1152 at 32 and 44.1 kHz) is 1 to 46, and such a file
+  decodes up to 46 samples long. `encode` therefore rewrites the padding from
+  the frame count and delay, recomputes the tag CRC, and refuses an output that
+  does not decode to exactly its input length. Music is also resampled as a
+  periodic signal, so a loop's seam stays continuous.
 - **Listen to new kinds of sound.** The rule is calibrated on one game's
   effects and one music loop. For a new type of sound (voice, ambience, a
   bright synth lead), compare the chosen file with the 44.1 kHz encode by ear
