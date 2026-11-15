@@ -24,7 +24,7 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 // The Studio files that change the bytes of a web artifact. A game with copied
 // tooling hashes its own copies as part of the game tree instead.
 const TOOLING_SOURCE = "ai_studio/game_tools";
-const TOOLING_FILES = ["build_web.mjs", "inject_asset_bytes.mjs", "minify_web_release.mjs", "lib/game_asset_packs.mjs"];
+const TOOLING_FILES = ["build_web.mjs", "inject_asset_bytes.mjs", "minify_web_release.mjs", "lib/game_asset_packs.mjs", "lib/game_release_input_receipt.mjs"];
 
 function exactKeys(value, keys, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)

@@ -50,7 +50,7 @@ function fixture(t) {
   write(join(gameDir, "dependencies.json"), `${JSON.stringify(dependencies, null, 2)}\n`);
   write(join(studioRoot, "external", "neotolis-engine", "engine", "core.c"), "void engine(void) {}\n");
   write(join(studioRoot, "features", "platform-sdk", "src", "sdk.c"), "void sdk(void) {}\n");
-  for (const name of ["build_web.mjs", "inject_asset_bytes.mjs", "minify_web_release.mjs", "lib/game_asset_packs.mjs"]) {
+  for (const name of ["build_web.mjs", "inject_asset_bytes.mjs", "minify_web_release.mjs", "lib/game_asset_packs.mjs", "lib/game_release_input_receipt.mjs"]) {
     write(join(studioRoot, "ai_studio", "game_tools", name), `// ${name}\n`);
   }
   return { studioRoot, gameDir, dependencies };

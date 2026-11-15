@@ -1,9 +1,15 @@
 import { readFileSync } from "node:fs";
+import { deflateRawSync, inflateRawSync } from "node:zlib";
 
 const LOCAL = 0x04034b50;
 const CENTRAL = 0x02014b50;
 const END = 0x06054b50;
 const UTF8 = 0x0800;
+const STORE = 0;
+const DEFLATE = 8;
+// Keep decompression bounded by the itch.io HTML5 extraction limits.
+const MAX_DEFLATE_ENTRY_BYTES = 200 * 1024 ** 2;
+const MAX_DEFLATE_TOTAL_BYTES = 500 * 1024 ** 2;
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -44,35 +50,35 @@ function assertUniquePaths(paths) {
   }
 }
 
-function localHeader(name, bytes, crc) {
+function localHeader(name, entry) {
   const out = Buffer.alloc(30 + name.length);
   out.writeUInt32LE(LOCAL, 0);
   out.writeUInt16LE(20, 4);
   out.writeUInt16LE(UTF8, 6);
-  out.writeUInt16LE(0, 8);
+  out.writeUInt16LE(entry.method, 8);
   out.writeUInt16LE(0, 10);
   out.writeUInt16LE(0, 12);
-  out.writeUInt32LE(crc, 14);
-  out.writeUInt32LE(bytes.length, 18);
-  out.writeUInt32LE(bytes.length, 22);
+  out.writeUInt32LE(entry.crc, 14);
+  out.writeUInt32LE(entry.compressed, 18);
+  out.writeUInt32LE(entry.size, 22);
   out.writeUInt16LE(name.length, 26);
   out.writeUInt16LE(0, 28);
   name.copy(out, 30);
   return out;
 }
 
-function centralHeader(name, bytes, crc, offset) {
+function centralHeader(name, entry, offset) {
   const out = Buffer.alloc(46 + name.length);
   out.writeUInt32LE(CENTRAL, 0);
   out.writeUInt16LE(20, 4);
   out.writeUInt16LE(20, 6);
   out.writeUInt16LE(UTF8, 8);
-  out.writeUInt16LE(0, 10);
+  out.writeUInt16LE(entry.method, 10);
   out.writeUInt16LE(0, 12);
   out.writeUInt16LE(0, 14);
-  out.writeUInt32LE(crc, 16);
-  out.writeUInt32LE(bytes.length, 20);
-  out.writeUInt32LE(bytes.length, 24);
+  out.writeUInt32LE(entry.crc, 16);
+  out.writeUInt32LE(entry.compressed, 20);
+  out.writeUInt32LE(entry.size, 24);
   out.writeUInt16LE(name.length, 28);
   out.writeUInt16LE(0, 30);
   out.writeUInt16LE(0, 32);
@@ -84,7 +90,15 @@ function centralHeader(name, bytes, crc, offset) {
   return out;
 }
 
-export function createStoreZip(entries) {
+function checkDeflateSize(name, size, total) {
+  if (size > MAX_DEFLATE_ENTRY_BYTES || total > MAX_DEFLATE_TOTAL_BYTES) {
+    throw new Error(`ZIP extracted size limit exceeded: ${name}`);
+  }
+}
+
+export function createZip(entries, { compression = "store" } = {}) {
+  if (compression !== "store" && compression !== "deflate") throw new Error(`unsupported ZIP compression: ${compression}`);
+  const method = compression === "deflate" ? DEFLATE : STORE;
   const sorted = [...entries].map((entry) => ({
     path: normalizedPath(entry.path),
     bytes: Buffer.isBuffer(entry.bytes) ? Buffer.from(entry.bytes) : Buffer.from(entry.bytes),
@@ -95,14 +109,19 @@ export function createStoreZip(entries) {
   const bodies = [];
   const directory = [];
   let offset = 0;
+  let total = 0;
   for (const entry of sorted) {
-    if (entry.bytes.length > 0xffffffff) throw new Error(`ZIP entry is too large: ${entry.path}`);
+    const size = entry.bytes.length;
+    if (size > 0xffffffff) throw new Error(`ZIP entry is too large: ${entry.path}`);
+    total += size;
+    if (method === DEFLATE) checkDeflateSize(entry.path, size, total);
     const name = Buffer.from(entry.path, "utf8");
-    const crc = crc32(entry.bytes);
-    const header = localHeader(name, entry.bytes, crc);
-    bodies.push(header, entry.bytes);
-    directory.push(centralHeader(name, entry.bytes, crc, offset));
-    offset += header.length + entry.bytes.length;
+    const data = method === DEFLATE ? deflateRawSync(entry.bytes, { level: 9 }) : entry.bytes;
+    const fields = { method, size, compressed: data.length, crc: crc32(entry.bytes) };
+    const header = localHeader(name, fields);
+    bodies.push(header, data);
+    directory.push(centralHeader(name, fields, offset));
+    offset += header.length + data.length;
   }
   const directoryBytes = Buffer.concat(directory);
   const end = Buffer.alloc(22);
@@ -117,13 +136,30 @@ export function createStoreZip(entries) {
   return Buffer.concat([...bodies, directoryBytes, end]);
 }
 
+export function createStoreZip(entries) {
+  return createZip(entries);
+}
+
 function requireRange(buffer, offset, length, label) {
   if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0 || offset + length > buffer.length) {
     throw new Error(`truncated ZIP ${label}`);
   }
 }
 
-export function readStoreZip(input) {
+function inflateDeflateChunk(data, size, name) {
+  let inflated;
+  try {
+    inflated = inflateRawSync(data, { info: true, maxOutputLength: Math.max(size, 1) });
+  } catch (error) {
+    throw new Error(`invalid ZIP DEFLATE data: ${name}`, { cause: error });
+  }
+  if (inflated.engine.bytesWritten !== data.length || inflated.buffer.length !== size) {
+    throw new Error(`ZIP DEFLATE size or stream bounds mismatch: ${name}`);
+  }
+  return inflated.buffer;
+}
+
+export function readZip(input, { allowDeflate = false } = {}) {
   const buffer = Buffer.isBuffer(input) ? input : readFileSync(input);
   if (buffer.length < 22 || buffer.readUInt32LE(buffer.length - 22) !== END) throw new Error("ZIP end record is missing or commented");
   const end = buffer.length - 22;
@@ -142,6 +178,8 @@ export function readStoreZip(input) {
   let expectedLocalOffset = 0;
   let previousName = "";
   let cursor = directoryOffset;
+  let compression;
+  let total = 0;
   for (let index = 0; index < count; index += 1) {
     requireRange(buffer, cursor, 46, "central header");
     if (buffer.readUInt32LE(cursor) !== CENTRAL) throw new Error("ZIP central header signature mismatch");
@@ -155,9 +193,13 @@ export function readStoreZip(input) {
     const commentLength = buffer.readUInt16LE(cursor + 32);
     const disk = buffer.readUInt16LE(cursor + 34);
     const localOffset = buffer.readUInt32LE(cursor + 42);
-    if (flags !== UTF8 || method !== 0 || compressed !== size || extraLength !== 0 || commentLength !== 0 || disk !== 0) {
-      throw new Error("ZIP must use deterministic UTF-8 STORE entries without extras");
+    const validMethod = method === STORE ? compressed === size : allowDeflate && method === DEFLATE;
+    if (flags !== UTF8 || !validMethod || extraLength !== 0 || commentLength !== 0 || disk !== 0) {
+      throw new Error(`ZIP must use deterministic UTF-8 ${allowDeflate ? "STORE or DEFLATE" : "STORE"} entries without extras`);
     }
+    const entryCompression = method === DEFLATE ? "deflate" : "store";
+    if (compression && compression !== entryCompression) throw new Error("ZIP entries must use one compression method");
+    compression = entryCompression;
     requireRange(buffer, cursor + 46, nameLength, "central name");
     const name = normalizedPath(buffer.subarray(cursor + 46, cursor + 46 + nameLength).toString("utf8"));
     if (previousName && previousName >= name) throw new Error("ZIP entries must be in deterministic path order");
@@ -183,14 +225,22 @@ export function readStoreZip(input) {
     const localName = buffer.subarray(localOffset + 30, localOffset + 30 + localNameLength).toString("utf8");
     if (localName !== name) throw new Error(`ZIP local/central path mismatch: ${name}`);
     const dataOffset = localOffset + 30 + localNameLength;
-    requireRange(buffer, dataOffset, size, `data for ${name}`);
-    const bytes = Buffer.from(buffer.subarray(dataOffset, dataOffset + size));
+    requireRange(buffer, dataOffset, compressed, `data for ${name}`);
+    if (dataOffset + compressed > directoryOffset) throw new Error(`ZIP data overlaps its central directory: ${name}`);
+    const data = buffer.subarray(dataOffset, dataOffset + compressed);
+    total += size;
+    if (method === DEFLATE) checkDeflateSize(name, size, total);
+    const bytes = method === DEFLATE ? inflateDeflateChunk(data, size, name) : Buffer.from(data);
     if (crc32(bytes) !== crc) throw new Error(`ZIP CRC mismatch: ${name}`);
     entries.set(name, bytes);
-    expectedLocalOffset = dataOffset + size;
+    expectedLocalOffset = dataOffset + compressed;
     cursor += 46 + nameLength;
   }
   if (cursor !== end) throw new Error("ZIP central directory entry bounds mismatch");
   if (expectedLocalOffset !== directoryOffset) throw new Error("ZIP has hidden data before its central directory");
-  return entries;
+  return { entries, compression: compression || "store" };
+}
+
+export function readStoreZip(input) {
+  return readZip(input).entries;
 }

@@ -26,7 +26,7 @@ import {
   verifyWebPackage,
 } from "../package_web.mjs";
 import { minifyWebRelease } from "../minify_web_release.mjs";
-import { createStoreZip, readStoreZip } from "../../core_harness/tool_lib/zip_store.mjs";
+import { createStoreZip, createZip, readStoreZip, readZip } from "../../core_harness/tool_lib/zip_store.mjs";
 import { findStudioRoot } from "../lib/studio_root.mjs";
 import { runtimeBuildWitness } from "../lib/runtime_build.mjs";
 import { retainWasmSymbols } from "../lib/wasm_symbol_artifact.mjs";
@@ -34,6 +34,7 @@ import { retainWasmSymbols } from "../lib/wasm_symbol_artifact.mjs";
 const gameModuleRoot = resolve(fileURLToPath(new URL("../../../templates/template", import.meta.url)));
 const studioRoot = findStudioRoot(gameModuleRoot);
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+const readPackageZip = (bytes) => readZip(bytes, { allowDeflate: true }).entries;
 
 function runtimeBuildRecord(target = "itch", preset = "wasm-release") {
   const inputs = [
@@ -195,7 +196,7 @@ test("game-owned deferred packs are required in artifacts and reopen with the sa
   assert.throws(() => validateWebArtifact({ ...item, studioRoot }), /missing/i);
   for (const path of packs) write(join(item.artifactDir, path), `content of ${path}`);
   const result = packageWebArtifact({ ...item, studioRoot });
-  const entries = readStoreZip(readFileSync(result.zipPath));
+  const entries = readPackageZip(readFileSync(result.zipPath));
   assert.deepEqual(JSON.parse(entries.get("release.json")).assetPacks.packs, packs);
   assert.ok(entries.has(packs[0]) && entries.has(packs[1]));
   assert.ok(!entries.has("assets/runtime-packs.json"));
@@ -210,7 +211,7 @@ test("reopened ZIP rejects removed, extra, empty and invalidly declared deferred
     declareFixturePacks(item, ["assets/forest.ntpack"]);
     write(join(item.artifactDir, "assets", "forest.ntpack"), "forest");
     const result = packageWebArtifact({ ...item, studioRoot });
-    const entries = readStoreZip(readFileSync(result.zipPath));
+    const entries = readPackageZip(readFileSync(result.zipPath));
     const release = JSON.parse(entries.get("release.json"));
     if (corruption === "missing") entries.delete("assets/forest.ntpack");
     if (corruption === "extra") entries.set("assets/extra.ntpack", Buffer.from("extra"));
@@ -241,7 +242,7 @@ test("reopened ZIP rejects coherent removal of one pack while another declared p
   declareFixturePacks(item, ["assets/forest.ntpack", "assets/ruins.ntpack"]);
   for (const name of ["forest", "ruins"]) write(join(item.artifactDir, "assets", `${name}.ntpack`), name);
   const result = packageWebArtifact({ ...item, studioRoot });
-  const entries = readStoreZip(readFileSync(result.zipPath));
+  const entries = readPackageZip(readFileSync(result.zipPath));
   entries.delete("assets/forest.ntpack");
   const release = JSON.parse(entries.get("release.json"));
   release.assetPacks.packs = ["assets/ruins.ntpack"];
@@ -301,6 +302,7 @@ test("final package is deterministic and binds the reopened ZIP to exact depende
   const two = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "two") });
 
   assert.deepEqual(readFileSync(one.zipPath), readFileSync(two.zipPath));
+  assert.equal(readFileSync(one.zipPath).readUInt16LE(8), 8);
   const manifestOne = JSON.parse(readFileSync(one.manifestPath, "utf8"));
   const manifestTwo = JSON.parse(readFileSync(two.manifestPath, "utf8"));
   assert.deepEqual(manifestOne, manifestTwo);
@@ -314,7 +316,7 @@ test("final package is deterministic and binds the reopened ZIP to exact depende
   assert.equal(Object.hasOwn(manifestOne, "timestamp"), false);
   assert.deepEqual(verifyWebPackage({ zipPath: one.zipPath, manifestPath: one.manifestPath, expectedTarget: "itch" }), manifestOne);
 
-  const zip = readStoreZip(readFileSync(one.zipPath));
+  const zip = readPackageZip(readFileSync(one.zipPath));
   assert.deepEqual([...zip.keys()], [...zip.keys()].toSorted());
   assert.ok(zip.has("release.json"));
   assert.deepEqual(JSON.parse(zip.get("runtime-build.json").toString("utf8")), item.runtimeBuild);
@@ -327,7 +329,7 @@ test("shared package retains exact linked WASM symbols beside the ZIP", (t) => {
   const buildDir = dirname(item.artifactDir);
   const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
   assert.equal(readFileSync(result.symbolsPath, "utf8"), "0:main\n");
-  assert.equal(readStoreZip(readFileSync(result.zipPath)).has("game.js.symbols"), false);
+  assert.equal(readPackageZip(readFileSync(result.zipPath)).has("game.js.symbols"), false);
   write(join(buildDir, "game.js.symbols.wasm.sha256"), "0".repeat(64));
   assert.throws(() => packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "stale") }), /digest/i);
 });
@@ -343,7 +345,7 @@ test("Poki release embeds the selected platform backend into game.js", (t) => {
       return true;
     },
   });
-  const zip = readStoreZip(readFileSync(result.zipPath));
+  const zip = readPackageZip(readFileSync(result.zipPath));
 
   assert.equal(zip.has("platform-sdk.js"), false);
   assert.equal(zip.has("platform-sdk-core.js"), false);
@@ -361,7 +363,7 @@ test("assert-text release is named and bound to its recorded preset", (t) => {
   const item = fixture(t, "poki", "wasm-release-asserts");
   const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
   assert.match(result.zipPath, /test-game-poki-asserts-[0-9a-f]{16}\.zip$/);
-  const entries = readStoreZip(readFileSync(result.zipPath));
+  const entries = readPackageZip(readFileSync(result.zipPath));
   const release = JSON.parse(entries.get("release.json").toString("utf8"));
   assert.equal(release.build.preset, "wasm-release-asserts");
   assert.equal(verifyWebPackage({ zipPath: result.zipPath, manifestPath: result.manifestPath, expectedTarget: "poki" }).runtimeBuild.profile.preset,
@@ -410,7 +412,7 @@ test("release packaging accepts a minified platform SDK module bootstrap", (t) =
       return true;
     },
   });
-  const html = readStoreZip(readFileSync(result.zipPath)).get("index.html").toString("utf8");
+  const html = readPackageZip(readFileSync(result.zipPath)).get("index.html").toString("utf8");
   assert.equal(html.includes("platform-sdk.js"), false);
 });
 
@@ -424,7 +426,7 @@ test("release packaging accepts a same-line import immediately followed by the d
   ));
 
   const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
-  const html = readStoreZip(readFileSync(result.zipPath)).get("index.html").toString("utf8");
+  const html = readPackageZip(readFileSync(result.zipPath)).get("index.html").toString("utf8");
   assert.equal(html.includes("platform-sdk.js"), false);
 });
 
@@ -453,7 +455,7 @@ test("bundled platform backend executes before the game loader for every adapter
 test("reopened Poki package rejects a substituted embedded adapter", (t) => {
   const item = fixture(t, "poki");
   const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
-  const entries = readStoreZip(readFileSync(result.zipPath));
+  const entries = readPackageZip(readFileSync(result.zipPath));
   entries.set("game.js", Buffer.from(entries.get("game.js").toString("utf8").replace(
     "https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
     "https://cdn.example/substituted-sdk.js",
@@ -480,7 +482,7 @@ test("reopened Poki package rejects a substituted embedded adapter", (t) => {
 test("upgraded verifier retains read compatibility with pre-fingerprint v1 packages", (t) => {
   const item = fixture(t);
   const current = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "current") });
-  const entries = readStoreZip(readFileSync(current.zipPath));
+  const entries = readPackageZip(readFileSync(current.zipPath));
   for (const path of ["game.js", "index.html", "platform-sdk.js", "platform-sdk-adapter.js"]) {
     entries.set(path, readFileSync(join(item.artifactDir, path)));
   }
@@ -537,9 +539,11 @@ test("reopened ZIP rejects CRC corruption and sidecar target mismatch", (t) => {
   const item = fixture(t);
   const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
   const corrupted = Buffer.from(readFileSync(result.zipPath));
-  const marker = corrupted.indexOf(Buffer.from("instantiateStreaming"));
-  assert.notEqual(marker, -1);
-  corrupted[marker] ^= 1;
+  const central = corrupted.readUInt32LE(corrupted.length - 6);
+  const wrongCrc = (corrupted.readUInt32LE(14) ^ 1) >>> 0;
+  corrupted.writeUInt32LE(wrongCrc, 14);
+  corrupted.writeUInt32LE(wrongCrc, central + 16);
+  assert.throws(() => readPackageZip(corrupted), /CRC mismatch/i);
   writeFileSync(result.zipPath, corrupted);
   assert.throws(
     () => verifyWebPackage({ zipPath: result.zipPath, manifestPath: result.manifestPath, expectedTarget: "itch" }),
@@ -557,7 +561,7 @@ test("reopened verification re-derives the portal allowlist and dependency recor
   const item = fixture(t);
   const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
   const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));
-  const entries = readStoreZip(readFileSync(result.zipPath));
+  const entries = readPackageZip(readFileSync(result.zipPath));
   entries.set("unexpected.txt", Buffer.from("hidden"));
   const repacked = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
   writeFileSync(result.zipPath, repacked);
@@ -687,7 +691,7 @@ test("platform-sdk 3.0.0 validates the canonical diagnostics caught bootstrap af
       return true;
     },
   });
-  const entries = readStoreZip(readFileSync(result.zipPath));
+  const entries = readPackageZip(readFileSync(result.zipPath));
   const minifiedArtifact = join(item.root, "minified-release");
   mkdirSync(minifiedArtifact);
   write(join(minifiedArtifact, "index.html"), entries.get("index.html"));
@@ -810,7 +814,7 @@ test("reopened ZIP rejects a non-classic diagnostics reporter", (t) => {
       return true;
     },
   });
-  const entries = readStoreZip(readFileSync(result.zipPath));
+  const entries = readPackageZip(readFileSync(result.zipPath));
   entries.set("index.html", Buffer.from(entries.get("index.html").toString("utf8").replace(
     '<script id="platform-diagnostics">', '<script id="platform-diagnostics" type="module">',
   )));
@@ -843,7 +847,7 @@ test("platform-sdk 3.0.0 release verification rechecks diagnostics and permits i
       return true;
     },
   });
-  const entries = readStoreZip(readFileSync(result.zipPath));
+  const entries = readPackageZip(readFileSync(result.zipPath));
   entries.set("index.html", Buffer.from(entries.get("index.html").toString("utf8").replace("platform-diagnostics-ready", "platform-diagnostics-readz")));
   const zipBytes = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
   writeFileSync(result.zipPath, zipBytes);
@@ -984,7 +988,7 @@ test("game.js must be an executable Emscripten-like loader before packaging and 
 
   const reopened = fixture(t);
   const result = packageWebArtifact({ ...reopened, studioRoot, outDir: join(reopened.root, "reopened-loader") });
-  const entries = readStoreZip(readFileSync(result.zipPath));
+  const entries = readPackageZip(readFileSync(result.zipPath));
   entries.set("game.js", Buffer.from("console.log('placeholder');\n"));
   const zipBytes = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
   writeFileSync(result.zipPath, zipBytes);
@@ -1013,7 +1017,7 @@ test("game.js must be an executable Emscripten-like loader before packaging and 
 
   const deadReopened = fixture(t);
   const deadResult = packageWebArtifact({ ...deadReopened, studioRoot, outDir: join(deadReopened.root, "dead-reopened-loader") });
-  const deadEntries = readStoreZip(readFileSync(deadResult.zipPath));
+  const deadEntries = readPackageZip(readFileSync(deadResult.zipPath));
   deadEntries.set("game.js", Buffer.from(deadLoader));
   const deadZipBytes = createStoreZip([...deadEntries].map(([path, bytes]) => ({ path, bytes })));
   writeFileSync(deadResult.zipPath, deadZipBytes);
@@ -1123,7 +1127,7 @@ test("web packaging requires exactly one canonical platform-sdk dependency", (t)
   manifest.dependencies.record.features = [];
   const dependencyBytes = Buffer.from(`${JSON.stringify(manifest.dependencies.record, null, 2)}\n`, "utf8");
   manifest.dependencies.sha256 = sha256(dependencyBytes);
-  const entries = readStoreZip(readFileSync(result.zipPath));
+  const entries = readPackageZip(readFileSync(result.zipPath));
   const release = JSON.parse(entries.get("release.json").toString("utf8"));
   release.dependenciesSha256 = manifest.dependencies.sha256;
   entries.set("release.json", Buffer.from(`${JSON.stringify(release, null, 2)}\n`, "utf8"));
@@ -1191,6 +1195,67 @@ test("STORE ZIP parser rejects unsafe names, case collisions, descriptors, hidde
   const hidden = Buffer.concat([Buffer.from([0]), clean]);
   assert.throws(() => readStoreZip(hidden), /bounds|missing|hidden|signature/i);
   assert.throws(() => readStoreZip(Buffer.concat([clean, Buffer.from([0])])), /end record/i);
+});
+
+test("DEFLATE ZIP checks extraction size and consumes each compressed stream exactly", () => {
+  const raw = Buffer.from("repeat ".repeat(300));
+  const clean = createZip([{ path: "a.txt", bytes: raw }], { compression: "deflate" });
+  assert.deepEqual(readPackageZip(clean).get("a.txt"), raw);
+  assert.throws(() => readStoreZip(clean), /deterministic UTF-8 STORE/i);
+  const central = clean.readUInt32LE(clean.length - 6);
+  for (const [declaredSize, expected] of [[200 * 1024 ** 2 + 1, /extracted size limit/i], [1, /invalid ZIP DEFLATE data/i]]) {
+    const lying = Buffer.from(clean);
+    lying.writeUInt32LE(declaredSize, 22);
+    lying.writeUInt32LE(declaredSize, central + 24);
+    assert.throws(() => readPackageZip(lying), expected);
+  }
+  const trailing = Buffer.concat([clean.subarray(0, central), Buffer.from([0]), clean.subarray(central)]);
+  const compressed = clean.readUInt32LE(18);
+  trailing.writeUInt32LE(compressed + 1, 18);
+  trailing.writeUInt32LE(compressed + 1, central + 1 + 20);
+  trailing.writeUInt32LE(central + 1, trailing.length - 6);
+  assert.throws(() => readPackageZip(trailing), /stream bounds mismatch/i);
+});
+
+test("reopening web packages accepts historical STORE itch archives and keeps other targets STORE", (t) => {
+  for (const target of ["itch", "poki"]) {
+    const item = fixture(t, target);
+    const result = packageWebArtifact({ ...item, studioRoot });
+    const zipBytes = readFileSync(result.zipPath);
+    assert.equal(zipBytes.readUInt16LE(8), target === "itch" ? 8 : 0);
+    const files = [...readPackageZip(zipBytes)].map(([path, bytes]) => ({ path, bytes }));
+    const archive = createZip(files, { compression: target === "itch" ? "store" : "deflate" });
+    writeFileSync(result.zipPath, archive);
+    const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));
+    manifest.artifact.size = archive.length;
+    manifest.artifact.sha256 = sha256(archive);
+    writeFileSync(result.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    if (target === "itch") assert.deepEqual(verifyWebPackage({ ...result, studioRoot, expectedTarget: target }), manifest);
+    else assert.throws(() => verifyWebPackage({ ...result, studioRoot, expectedTarget: target }), /deterministic UTF-8 STORE/i);
+  }
+});
+
+test("release packaging preserves escaped notices for adapted CC BY 3.0 assets", (t) => {
+  const item = fixture(t);
+  write(join(item.gameDir, "assets/release_inputs.json"), JSON.stringify({ schema: "ai_studio.game_release_assets.v2" }));
+  write(join(item.gameDir, "assets/release-provenance.json"), JSON.stringify({
+    schema: "ai_studio.game_release_provenance.v1",
+    records: [{
+      asset: "assets/models/cabinet.glb",
+      license: "CC-BY-3.0",
+      credit_text: "File Cabinet by A & B at https://example.org/model",
+      license_url: "https://creativecommons.org/licenses/by/3.0/",
+      transform: "Recolored <red> and </pre></template> changed the pivot.",
+    }],
+  }));
+  const staged = readFileSync(join(item.artifactDir, "index.html"));
+  const result = packageWebArtifact({ ...item, studioRoot });
+  const entry = readPackageZip(readFileSync(result.zipPath)).get("index.html").toString("utf8");
+  assert.match(entry, /<template id="asset-notices"><pre>[\s\S]*File Cabinet by A &amp; B at https:\/\/example\.org\/model/);
+  assert.match(entry, /https:\/\/creativecommons\.org\/licenses\/by\/3\.0\//);
+  assert.match(entry, /Recolored &lt;red&gt; and &lt;\/pre&gt;&lt;\/template&gt; changed the pivot\./);
+  assert.deepEqual(readFileSync(join(item.artifactDir, "index.html")), staged);
+  assert.deepEqual(verifyWebPackage({ ...result, studioRoot }), result.manifest);
 });
 
 test("package verification requires byte-canonical ZIP headers after reopen", (t) => {
@@ -1343,7 +1408,7 @@ test("release artifact rejects an explicit non-proof preview record", (t) => {
 test("reopened ZIP rejects a matching witness with debug compiler flags", (t) => {
   const item = fixture(t);
   const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "release") });
-  const entries = readStoreZip(readFileSync(result.zipPath));
+  const entries = readPackageZip(readFileSync(result.zipPath));
   const profile = { ...item.runtimeBuild.profile, debugUi: true };
   const runtimeBuild = {
     ...item.runtimeBuild, profile,
@@ -1405,7 +1470,7 @@ test("a numbered game names its artifact by version and may ship licence notices
   write(join(item.artifactDir, "THIRD_PARTY_NOTICES.txt"), "OFL\n");
   const result = packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "out") });
   assert.match(result.zipPath.replaceAll("\\", "/"), /\/test-game-itch-v1\.2\.3-[0-9a-f]{16}\.zip$/);
-  assert.equal(readStoreZip(readFileSync(result.zipPath)).get("THIRD_PARTY_NOTICES.txt").toString("utf8"), "OFL\n");
+  assert.equal(readPackageZip(readFileSync(result.zipPath)).get("THIRD_PARTY_NOTICES.txt").toString("utf8"), "OFL\n");
 
   write(gameJson, `${JSON.stringify({ ...JSON.parse(readFileSync(gameJson, "utf8")), version: "1.2" })}\n`);
   assert.throws(() => packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "bad") }), /game identity is invalid/);

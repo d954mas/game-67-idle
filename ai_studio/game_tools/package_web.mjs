@@ -13,8 +13,9 @@ import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-import { createStoreZip, readStoreZip } from "../core_harness/tool_lib/zip_store.mjs";
+import { createZip, readZip } from "../core_harness/tool_lib/zip_store.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
+import { usesPackInputReceipt } from "./lib/game_release_input_receipt.mjs";
 import { createRuntimeBuildRecord, runtimeBuildWitness, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 import { publishWebRelease } from "./lib/release_package.mjs";
 import { gameAssetPackDeclaration, readGameAssetPacks, validateGameAssetPackFiles, validateGameAssetPacks } from "./lib/game_asset_packs.mjs";
@@ -1050,7 +1051,21 @@ function hasExecutablePlatformModuleReference(html) {
   return false;
 }
 
-function bundledReleaseHtml(input, useDiagnosticsBootstrap = false) {
+function releaseAssetNotices(gameDir) {
+  if (!usesPackInputReceipt(gameDir)) return "";
+  const provenance = readJson(join(gameDir, "assets", "release-provenance.json"), "release provenance");
+  if (provenance?.schema !== "ai_studio.game_release_provenance.v1" || !Array.isArray(provenance.records)) {
+    throw new Error("game release provenance is invalid");
+  }
+  const notices = provenance.records.filter((row) => row.license === "CC-BY-3.0")
+    .map((row) => [row.credit_text, row.license_url, `Changes to ${row.asset}`, row.transform].join("\n"))
+    .sort().join("\n\n");
+  if (!notices) return "";
+  const escaped = notices.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  return `<template id="asset-notices"><pre>${escaped}</pre></template>`;
+}
+
+function bundledReleaseHtml(input, useDiagnosticsBootstrap = false, assetNotices = "") {
   let replacements = 0;
   const html = String(input).replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi, (whole, rawAttributes, body) => {
     const attributes = scriptAttributes(rawAttributes);
@@ -1080,15 +1095,16 @@ function bundledReleaseHtml(input, useDiagnosticsBootstrap = false) {
   if (hasExecutablePlatformModuleReference(html)) {
     throw new Error("release HTML contains an unsupported platform SDK bootstrap");
   }
-  return Buffer.from(html, "utf8");
+  const end = html.search(/(?:<\/body\s*>\s*)?(?:<\/html\s*>\s*)?$/i);
+  return Buffer.from(html.slice(0, end) + assetNotices + html.slice(end), "utf8");
 }
 
-function packagedWebFiles(files, studioRoot, adapter, useDiagnosticsBootstrap = false) {
+function packagedWebFiles(files, studioRoot, adapter, useDiagnosticsBootstrap = false, assetNotices = "") {
   return files
     .filter(({ path }) => !PLATFORM_MODULE_PATHS.includes(path))
     .map(({ path, bytes }) => {
       if (path === "game.js") return { path, bytes: bundlePlatformIntoGame(bytes, studioRoot, adapter) };
-      if (path === "index.html") return { path, bytes: bundledReleaseHtml(bytes.toString("utf8"), useDiagnosticsBootstrap) };
+      if (path === "index.html") return { path, bytes: bundledReleaseHtml(bytes.toString("utf8"), useDiagnosticsBootstrap, assetNotices) };
       return { path, bytes };
     });
 }
@@ -1288,6 +1304,7 @@ export function packageWebArtifact(options) {
     studioRoot,
     validated.contract.platform_sdk,
     requiresPlatformDiagnostics(dependencies),
+    releaseAssetNotices(gameDir),
   );
   return publishWebRelease({
     gameDir, identity, target, adapter: validated.contract.platform_sdk,
@@ -1304,9 +1321,6 @@ export function packageWebArtifact(options) {
 
 export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studioRoot = DEFAULT_STUDIO_ROOT, crashStoragePrefix, runtimeScript }) {
   const zipBytes = readFileSync(zipPath);
-  const entries = readStoreZip(zipBytes);
-  const canonical = createStoreZip([...entries].map(([path, bytes]) => ({ path, bytes })));
-  if (!canonical.equals(zipBytes)) throw new Error("artifact is not a byte-canonical ZIP after reopen");
   const manifest = readJson(manifestPath, "artifact manifest");
   const runtimeBuildRequired = manifest.schema === "ai_studio.game.artifact_manifest.v2";
   if (!runtimeBuildRequired && manifest.schema !== "ai_studio.game.artifact_manifest.v1") {
@@ -1323,6 +1337,9 @@ export function verifyWebPackage({ zipPath, manifestPath, expectedTarget, studio
   if (manifest.artifact.file !== basename(zipPath) || manifest.artifact.size !== zipBytes.length || manifest.artifact.sha256 !== sha256(zipBytes)) {
     throw new Error("artifact ZIP hash/size/name mismatch");
   }
+  const { entries, compression } = readZip(zipBytes, { allowDeflate: manifest.target === "itch" });
+  const canonical = createZip([...entries].map(([path, bytes]) => ({ path, bytes })), { compression });
+  if (!canonical.equals(zipBytes)) throw new Error("artifact is not a byte-canonical ZIP after reopen");
   const releaseBytes = entries.get("release.json");
   if (!releaseBytes) throw new Error("release metadata is missing from ZIP");
   const release = JSON.parse(releaseBytes.toString("utf8"));

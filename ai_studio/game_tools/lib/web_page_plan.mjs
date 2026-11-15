@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-import { readStoreZip } from "../../core_harness/tool_lib/zip_store.mjs";
+import { readZip } from "../../core_harness/tool_lib/zip_store.mjs";
 
 export const VIEWPORTS = Object.freeze({
   desktop: { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false },
@@ -145,8 +145,12 @@ export function createPlanRunner({ call, viewport, shot, sleep = defaultSleep })
 }
 
 export function unpackStoreZip(zip, prefix = "web-plan-site-") {
+  const { entries, compression } = readZip(readFileSync(resolve(zip)), { allowDeflate: true });
+  if (compression === "deflate" && JSON.parse(entries.get("release.json")?.toString("utf8") || "null")?.target !== "itch") {
+    throw new Error("DEFLATE support is limited to itch web packages");
+  }
   const site = mkdtempSync(join(tmpdir(), prefix));
-  for (const [path, bytes] of readStoreZip(readFileSync(resolve(zip)))) {
+  for (const [path, bytes] of entries) {
     if (path.endsWith("/")) continue;
     mkdirSync(dirname(join(site, path)), { recursive: true });
     writeFileSync(join(site, path), bytes);

@@ -183,6 +183,19 @@ node ai_studio/game_tools/release_opt_flags.mjs --game <game-dir>  # a game's so
 node ai_studio/game_tools/release_opt_flags.mjs --build <tree>     # a configured release tree
 ```
 
+## Release ZIPs and pack inputs
+
+New itch.io packages use lossless Deflate. Verification also opens earlier
+canonical STORE itch.io archives. Other targets continue to use STORE.
+
+Games whose pack builders resolve binary paths from manifests can use
+`ai_studio.game_release_assets.v2` in `assets/release_inputs.json`. The native
+build writes `bin/pack-inputs.txt` after completing its packs. The web build
+binds those paths, hashes of the input files and staged packs, and the runtime
+fingerprint in `pack-input-receipt.json` beside `bin/`. The packager checks the
+receipt against the release input and provenance lists. This runner keeps the
+receipt outside the upload ZIP.
+
 ## Older games
 
 Games created before this module still carry their own copies in `tools/`.

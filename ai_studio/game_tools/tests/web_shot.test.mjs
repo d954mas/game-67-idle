@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
 
-import { createStoreZip } from "../../core_harness/tool_lib/zip_store.mjs";
+import { createStoreZip, createZip } from "../../core_harness/tool_lib/zip_store.mjs";
 import { checkPlan, createPlanRunner, frameStats, keyEvent, parseFlags, readJsonInput, storageScripts, unpackStoreZip, viewportFor, VIEWPORTS } from "../lib/web_page_plan.mjs";
 import { webShot } from "../web_shot.mjs";
 
@@ -110,6 +110,24 @@ test("a store zip unpacks with its folders", () => {
     rmSync(site, { recursive: true, force: true });
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("web capture extracts lossless DEFLATE itch packages", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "web-plan-zip-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const zip = join(dir, "game.zip");
+  const pack = Buffer.from([0x00, 0x80, 0xFF]);
+  const asset = { path: "assets/game.ntpack", bytes: pack };
+  const deflate = (target) => createZip([
+    asset,
+    { path: "release.json", bytes: Buffer.from(JSON.stringify({ target })) },
+  ], { compression: "deflate" });
+  writeFileSync(zip, deflate("itch"));
+  const site = unpackStoreZip(zip);
+  t.after(() => rmSync(site, { recursive: true, force: true }));
+  assert.deepEqual(readFileSync(join(site, asset.path)), pack);
+  writeFileSync(zip, deflate("poki"));
+  assert.throws(() => unpackStoreZip(zip), /limited to itch/i);
 });
 
 test("the CLI refuses a bad call before unpacking or starting Chrome", async () => {

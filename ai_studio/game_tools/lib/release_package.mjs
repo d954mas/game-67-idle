@@ -2,7 +2,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, parse, resolve } from "node:path";
 
-import { createStoreZip, readStoreZip } from "../../core_harness/tool_lib/zip_store.mjs";
+import { createZip, readZip } from "../../core_harness/tool_lib/zip_store.mjs";
 import { publishArtifactSet, readWasmSymbols } from "./wasm_symbol_artifact.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -78,7 +78,8 @@ export function publishWebRelease({ gameDir, identity, target, adapter, dependen
     }
   }
   const entries = [...releaseFiles, { path: "release.json", bytes: jsonBytes(release) }];
-  const zipBytes = createStoreZip(entries);
+  const allowDeflate = target === "itch";
+  const zipBytes = createZip(entries, { compression: allowDeflate ? "deflate" : "store" });
   const buildDir = dirname(resolve(artifactDir));
   for (const source of [join(buildDir, layout.symbolMap), join(buildDir, layout.linkedWasm),
     ...(layout.symbolDigest ? [join(buildDir, layout.symbolDigest)] : [])]) assertUnredirectedPath(source);
@@ -109,7 +110,7 @@ export function publishWebRelease({ gameDir, identity, target, adapter, dependen
   try {
     writeFileSync(tempZip, zipBytes);
     if (symbolMap) writeFileSync(tempSymbols, symbolMap);
-    const reopened = readStoreZip(readFileSync(tempZip));
+    const { entries: reopened } = readZip(readFileSync(tempZip), { allowDeflate });
     const manifest = {
       schema: "ai_studio.game.artifact_manifest.v2",
       game: release.game, target, platformAdapter: adapter,

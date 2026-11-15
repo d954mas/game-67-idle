@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import { createRuntimeBuildRecord, validateRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 import { readGameAssetPacks, stageGameAssetPacks } from "./lib/game_asset_packs.mjs";
+import { stagePackInputReceipt, usesPackInputReceipt } from "./lib/game_release_input_receipt.mjs";
 import { retainWasmSymbols } from "./lib/wasm_symbol_artifact.mjs";
 
 // wasm-devapi-perf: DevAPI at an optimised build type, without the analytics and
@@ -210,6 +211,12 @@ export function createBuildPlan(options) {
       args: [join(TOOLS_DIR, "minify_web_release.mjs"), "--artifact", join(webDir, "bin")],
     });
   }
+  if (runtimeBuild && isReleasePreset(args.preset) && usesPackInputReceipt(gameDir)) {
+    steps.push({
+      kind: "pack_input_receipt", gameDir, studioRoot: resolve(options.studioRoot || STUDIO_ROOT), artifactDir: join(webDir, "bin"),
+      trace: join(nativeDir, "bin", "pack-inputs.txt"), fingerprint: runtimeBuild.fingerprint,
+    });
+  }
   const previewRecord = args.preview
     ? { schema: PREVIEW_SCHEMA, proof: "none", preset: args.preset, target: args.target }
     : null;
@@ -251,6 +258,7 @@ export function executeBuildPlan(plan, deps = {}) {
     // A pack the host no longer makes must not linger from an earlier build.
     else if (step.kind === "copy_optional") { if (exists(step.from)) copy(step.from, step.to); else remove(step.to); }
     else if (step.kind === "stage_game_packs") (deps.stageGamePacks || stageGameAssetPacks)(step);
+    else if (step.kind === "pack_input_receipt") (deps.stagePackInputReceipt || stagePackInputReceipt)(step);
     else if (step.kind === "retain_symbols") retainSymbols(step);
     else if (step.kind === "check_assert_mode") {
       const match = /^NT_ASSERT_MODE:STRING=([12])$/m.exec(read(step.path, "utf8"));

@@ -440,3 +440,59 @@ test("pack builder art behind a DevAPI guard is not a release input", (t) => {
     ok: true, packed: 1, issues: [],
   });
 });
+
+test("receipt-backed assets verify dynamic inputs and staged WebP against release metadata", (t) => {
+  const item = fixture(t);
+  const webp = "web/loading-title.webp";
+  const metadata = "assets/release-provenance.json";
+  const bytes = Buffer.from("loading-art");
+  write(join(item.root, "assets/release_inputs.json"), JSON.stringify({
+    schema: "ai_studio.game_release_assets.v2", inputs: [item.path], standalone_inputs: [webp], metadata,
+  }));
+  write(join(item.root, "src/build_packs.c"), 'snprintf(path, sizeof path, "assets/ui/%s.png", name);\n');
+  write(join(item.root, "CMakeLists.txt"), 'configure_file(web/loading-title.webp "${GAME_OUTPUT_DIR}/loading-title.webp" COPYONLY)\n');
+  write(join(item.root, webp), bytes);
+  const buildRecord = { ...item.record, schema: "fixture", source: { manifest: "reference.json" } };
+  write(join(item.root, metadata), JSON.stringify({
+    schema: "ai_studio.game_release_provenance.v1",
+    records: [
+      { ...buildRecord, asset: item.path },
+      { ...buildRecord, asset: webp, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") },
+    ],
+  }));
+  const options = { trackedPaths: [...item.tracked, metadata, webp, "CMakeLists.txt"] };
+  assert.throws(() => auditGameReleaseAssets(item.root, options), /verified pack input receipt/);
+  assert.deepEqual(auditGameReleaseAssets(item.root, { ...options, receiptPaths: [item.path] }), { ok: true, packed: 1, issues: [] });
+  assert.match(auditGameReleaseAssets(item.root, { ...options, receiptPaths: [item.path, "assets/ui/unlisted.png"] }).issues.join("\n"), /missing from release input contract/);
+  write(join(item.root, "assets/release_inputs.json"), JSON.stringify({
+    schema: "ai_studio.game_release_assets.v2", inputs: [item.path], standalone_inputs: [], metadata,
+  }));
+  assert.match(auditGameReleaseAssets(item.root, { ...options, receiptPaths: [item.path] }).issues.join("\n"), /staged standalone asset is missing/);
+});
+
+test("receipt audit accepts documented embedded game use for packed assets only", (t) => {
+  const item = fixture(t);
+  const metadata = "assets/release-provenance.json";
+  const contract = { schema: "ai_studio.game_release_assets.v2", inputs: [item.path], metadata };
+  write(join(item.root, "assets/release_inputs.json"), JSON.stringify(contract));
+  write(join(item.root, "CMakeLists.txt"), "# no standalone assets\n");
+  const record = {
+    ...item.record, asset: item.path, schema: "fixture", source: { manifest: "reference.json" },
+    license: "Restricted vendor game license", license_kind: "custom", license_url: "https://example.com/terms",
+    publish: false, redistribution_allowed: false, game_distribution_allowed: true, distribution_scope: "embedded-game",
+  };
+  const writeRecord = () => write(join(item.root, metadata), JSON.stringify({
+    schema: "ai_studio.game_release_provenance.v1", records: [record],
+  }));
+  writeRecord();
+  const trackedPaths = [...item.tracked, metadata];
+  assert.equal(auditGameReleaseAssets(item.root, { trackedPaths, receiptPaths: [item.path] }).ok, true);
+  record.game_distribution_allowed = false;
+  writeRecord();
+  assert.match(auditGameReleaseAssets(item.root, { trackedPaths, receiptPaths: [item.path] }).issues.join("\n"), /explicit game distribution rights/);
+  record.game_distribution_allowed = true;
+  writeRecord();
+  write(join(item.root, "assets/release_inputs.json"), JSON.stringify({ ...contract, inputs: [], standalone_inputs: [item.path] }));
+  write(join(item.root, "CMakeLists.txt"), 'configure_file(assets/ui/panel.png "${GAME_OUTPUT_DIR}/panel.png" COPYONLY)\n');
+  assert.match(auditGameReleaseAssets(item.root, { trackedPaths, receiptPaths: [] }).issues.join("\n"), /redistribution_allowed=true/);
+});

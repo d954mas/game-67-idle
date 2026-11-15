@@ -30,6 +30,17 @@ export const KNOWN_LICENSES = {
     modificationAllowed: true,
     redistributionAllowed: true,
   },
+  "CC-BY-3.0": {
+    aliases: ["cc-by-3.0", "cc by 3.0", "creativecommons.org/licenses/by/3.0"],
+    url: "https://creativecommons.org/licenses/by/3.0/",
+    licenseKind: "cc",
+    publishable: true,
+    attributionRequired: true,
+    noticeRequired: true,
+    commercialUse: true,
+    modificationAllowed: true,
+    redistributionAllowed: true,
+  },
   "CC-BY-SA-4.0": {
     aliases: ["cc-by-sa", "cc by sa", "cc-by-sa-4.0", "creativecommons.org/licenses/by-sa/4.0"],
     url: "https://creativecommons.org/licenses/by-sa/4.0/",
@@ -130,12 +141,17 @@ function textOf(record = {}) {
 export function findKnownLicense(record = {}) {
   const text = textOf(record);
   if (!text) return null;
+  let match = null;
+  let specificity = 0;
   for (const [id, info] of Object.entries(KNOWN_LICENSES)) {
-    if (info.aliases.some((alias) => text.includes(alias.toLowerCase()))) {
-      return { id, ...info };
+    for (const alias of info.aliases) {
+      if (alias.length > specificity && text.includes(alias.toLowerCase())) {
+        match = { id, ...info };
+        specificity = alias.length;
+      }
     }
   }
-  return null;
+  return match;
 }
 
 export function hasLicenseEvidence(record = {}) {
@@ -239,6 +255,7 @@ export function boolText(value, fallback = "unknown") {
 export function validateLicenseRecord(record = {}, {
   forPublicBinary = false,
   forDistribution = false,
+  forEmbeddedGame = false,
   forRelease = false,
 } = {}) {
   const issues = [];
@@ -273,9 +290,12 @@ export function validateLicenseRecord(record = {}, {
     warnings.push("notice-required asset needs author/vendor or credit_text plus license_url/license_file before release");
   }
   if (forRelease) issues.push(...warnings);
-  if (forDistribution) {
+  if (forDistribution || forEmbeddedGame) {
     if (decision.licenseKind === "unknown") issues.push("distributed asset requires a known license or custom license evidence");
-    if (decision.redistributionAllowed !== true) issues.push("distributed asset requires redistribution_allowed=true");
+    if (forDistribution && decision.redistributionAllowed !== true) issues.push("distributed asset requires redistribution_allowed=true");
+    if (forEmbeddedGame && (record.game_distribution_allowed !== true || record.distribution_scope !== "embedded-game")) {
+      issues.push("embedded game distribution requires explicit game distribution rights");
+    }
     if (decision.commercialUse !== true) issues.push("distributed game asset requires commercial_use=true");
     if (decision.modificationAllowed !== true) issues.push("packed asset requires modification_allowed=true");
     if (decision.licenseKind === "custom" && !hasLicenseEvidence(record)) {

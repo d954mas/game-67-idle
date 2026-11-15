@@ -17,6 +17,7 @@ import { memorySummary, readMemoryBudget } from "./web_memory_budget.mjs";
 import { assertReleaseBuild, assertReleaseSources } from "./release_opt_flags.mjs";
 import { createRuntimeBuildRecord } from "./lib/runtime_build.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
+import { readPackInputReceipt, usesPackInputReceipt } from "./lib/game_release_input_receipt.mjs";
 
 // One CLI for every game. A game keeps a thin tools/game.mjs that passes its
 // directory and, when it needs them, its own extra commands.
@@ -556,10 +557,12 @@ function gamePackageMetadata(gameDir, templateProof) {
 async function auditGameReleaseAssets({ gameDir, artifactDir: releaseArtifactDir, studioRoot, dependencies, target, assertText = false }) {
   const modulePath = join(studioRoot, "ai_studio", "assets", "manifests", "game_release.mjs");
   const { assertGameReleaseAssets } = await import(pathToFileURL(modulePath).href);
-  const result = assertGameReleaseAssets(gameDir);
   const runtimeBuild = createRuntimeBuildRecord({
     gameDir, studioRoot, dependencies, compileProfile: TARGET_CONFIG.compileProfileForTarget(target, releasePreset(assertText)),
   });
+  const receiptPaths = usesPackInputReceipt(gameDir)
+    ? readPackInputReceipt({ gameDir, studioRoot, artifactDir: releaseArtifactDir, fingerprint: runtimeBuild.fingerprint }) : undefined;
+  const result = assertGameReleaseAssets(gameDir, { receiptPaths });
   const assetPack = readFileSync(join(releaseArtifactDir, "assets", "game.ntpack"));
   return {
     schema: "ai_studio.game_release_asset_audit.v1",

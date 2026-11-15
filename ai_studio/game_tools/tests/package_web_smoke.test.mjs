@@ -6,7 +6,7 @@ import { PassThrough } from "node:stream";
 import test from "node:test";
 import { deflateSync } from "node:zlib";
 
-import { crc32, createStoreZip } from "../../core_harness/tool_lib/zip_store.mjs";
+import { crc32, createStoreZip, createZip } from "../../core_harness/tool_lib/zip_store.mjs";
 import {
   analyzePngFrame,
   assessPackagedWebObservation,
@@ -685,11 +685,11 @@ test("packaged browser observation rejects blank and black first frames", () => 
   assert.deepEqual(assessPackagedWebObservation(black, FINGERPRINT), ["first frame is black"]);
 });
 
-test("smoke reopens the ZIP and serves only its entries", async (t) => {
+test("smoke reopens the DEFLATE itch ZIP and serves only its entries", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "packaged-web-smoke-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const zipPath = join(root, "fixture.zip");
-  writeFileSync(zipPath, createStoreZip([
+  writeFileSync(zipPath, createZip([
     { path: "index.html", bytes: Buffer.from("<!doctype html><script src='game.js'></script>") },
     { path: "game.js", bytes: Buffer.from("globalThis.fixture = true;") },
     { path: "release.json", bytes: Buffer.from(JSON.stringify({
@@ -698,7 +698,7 @@ test("smoke reopens the ZIP and serves only its entries", async (t) => {
       entrypoint: "index.html",
       runtimeBuildFingerprint: FINGERPRINT,
     })) },
-  ]));
+  ], { compression: "deflate" }));
 
   const observation = await smokePackagedWebArtifact({
     zipPath,

@@ -8,7 +8,7 @@ import {
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { inflateSync } from "node:zlib";
 
-import { readStoreZip } from "../core_harness/tool_lib/zip_store.mjs";
+import { readZip } from "../core_harness/tool_lib/zip_store.mjs";
 import { PROFILE_ROOT, createChromeProfile } from "../runtime_automation/chrome_profile.mjs";
 import { assessMemoryBudget, measureMemoryPoints } from "./web_memory_budget.mjs";
 import { MEMORY_CENSUS_HOOK } from "./web_memory_census.mjs";
@@ -1172,7 +1172,7 @@ export async function smokePackagedWebArtifact({
   remoteEndpointMatcher(allowedRemoteUrls);
   validateFrameExpectation(frameExpectation);
   const packagePath = resolve(zipPath);
-  const entries = readStoreZip(readFileSync(packagePath));
+  const { entries } = readZip(readFileSync(packagePath), { allowDeflate: expectedTarget === "itch" });
   let release;
   try { release = JSON.parse(entries.get("release.json")?.toString("utf8") || "null"); }
   catch (error) { throw new Error(`reopened package release.json is invalid: ${error.message}`); }

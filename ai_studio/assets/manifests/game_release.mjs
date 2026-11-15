@@ -7,6 +7,7 @@ import { validateLicenseRecord } from "../licenses/ops.mjs";
 import { assetRowFiles } from "./manifest.mjs";
 
 const PACKED_EXTENSIONS = /\.(?:glb|mp3|png|wav)$/i;
+const RECEIPT_EXTENSIONS = /\.(?:glb|jpe?g|mp3|png|ttf|wav|webp)$/i;
 const SAFE_ASSET_PATH = /^assets\/[A-Za-z0-9_./-]+$/;
 const ORIGINS = new Set(["mine", "ai", "sourced"]);
 
@@ -14,17 +15,32 @@ const slash = (value) => String(value || "").replaceAll("\\", "/");
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const isSafeAssetPath = (path) => SAFE_ASSET_PATH.test(path)
   && path.split("/").every((segment) => segment && segment !== "." && segment !== "..");
+const isSafeStandalonePath = (path) => isSafeAssetPath(path)
+  || (/^web\/[A-Za-z0-9_-]+\.webp$/.test(path));
 
-export function packedAssetPaths(gameDir) {
+function releaseAssetContract(gameDir) {
   const contractPath = join(resolve(gameDir), "assets", "release_inputs.json");
   if (!existsSync(contractPath)) throw new Error("game release asset input contract is missing");
   const contract = JSON.parse(readFileSync(contractPath, "utf8").replace(/^\uFEFF/, ""));
-  if (contract.schema !== "ai_studio.game_release_assets.v1" || !Array.isArray(contract.inputs)) {
+  if (!["ai_studio.game_release_assets.v1", "ai_studio.game_release_assets.v2"].includes(contract?.schema)
+      || !Array.isArray(contract.inputs)) {
     throw new Error("game release asset input contract is invalid");
   }
+  if (contract.schema.endsWith(".v2") && contract.metadata !== "assets/release-provenance.json") {
+    throw new Error("receipt-backed release assets require assets/release-provenance.json");
+  }
+  if (contract.schema.endsWith(".v1") && Object.hasOwn(contract, "metadata")) {
+    throw new Error("release provenance tables require a v2 asset input contract");
+  }
+  return contract;
+}
+
+export function packedAssetPaths(gameDir) {
+  const contract = releaseAssetContract(gameDir);
+  const extensions = contract.metadata ? RECEIPT_EXTENSIONS : PACKED_EXTENSIONS;
   const inputs = contract.inputs.map(slash);
   if (new Set(inputs).size !== inputs.length || inputs.some((path) => (
-    !isSafeAssetPath(path) || !PACKED_EXTENSIONS.test(path)
+    !isSafeAssetPath(path) || !extensions.test(path)
   ))) {
     throw new Error("game release asset inputs must be unique safe binary asset paths");
   }
@@ -32,19 +48,15 @@ export function packedAssetPaths(gameDir) {
 }
 
 export function standaloneAssetPaths(gameDir) {
-  const contractPath = join(resolve(gameDir), "assets", "release_inputs.json");
-  if (!existsSync(contractPath)) throw new Error("game release asset input contract is missing");
-  const contract = JSON.parse(readFileSync(contractPath, "utf8").replace(/^\uFEFF/, ""));
-  if (contract.schema !== "ai_studio.game_release_assets.v1" || !Array.isArray(contract.inputs)) {
-    throw new Error("game release asset input contract is invalid");
-  }
+  const contract = releaseAssetContract(gameDir);
+  const extensions = contract.metadata ? RECEIPT_EXTENSIONS : PACKED_EXTENSIONS;
   if (contract.standalone_inputs === undefined) return [];
   if (!Array.isArray(contract.standalone_inputs)) {
     throw new Error("game release standalone inputs must be an array");
   }
   const inputs = contract.standalone_inputs.map(slash);
   if (new Set(inputs).size !== inputs.length || inputs.some((path) => (
-    !isSafeAssetPath(path) || !PACKED_EXTENSIONS.test(path)
+    !(contract.metadata ? isSafeStandalonePath(path) : isSafeAssetPath(path)) || !extensions.test(path)
   ))) {
     throw new Error("game release standalone inputs must be unique safe binary asset paths");
   }
@@ -58,14 +70,15 @@ export function standaloneAssetPaths(gameDir) {
 function stagedAssetPath(token, variables) {
   const variable = String(token).trim().match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/);
   const value = slash(variable ? variables.get(variable[1]) || "" : token);
-  const match = value.match(/(?:^|\/)(assets\/[A-Za-z0-9_./-]+\.(?:glb|mp3|png|wav))$/i);
-  return match && isSafeAssetPath(match[1]) ? match[1] : "";
+  const match = value.match(/(?:^|\/)((?:assets|web)\/[A-Za-z0-9_./-]+)$/);
+  return match && isSafeStandalonePath(match[1]) && RECEIPT_EXTENSIONS.test(match[1]) ? match[1] : "";
 }
 
 export function webStagedAssetPaths(gameDir) {
-  const sourcePath = join(resolve(gameDir), "cmake", "GamePlatform.cmake");
-  if (!existsSync(sourcePath)) throw new Error("game web staging source is missing");
-  const source = readFileSync(sourcePath, "utf8").replace(/#.*$/gm, "");
+  const root = resolve(gameDir);
+  const sources = [join(root, "cmake", "GamePlatform.cmake"), join(root, "CMakeLists.txt")].filter(existsSync);
+  if (!sources.length) throw new Error("game web staging source is missing");
+  const source = sources.map((path) => readFileSync(path, "utf8")).join("\n").replace(/#.*$/gm, "");
   const variables = new Map();
   for (const match of source.matchAll(/^\s*set\(\s*([A-Za-z_][A-Za-z0-9_]*)\s+"([^"]+)"\s*\)\s*$/gm)) {
     const path = stagedAssetPath(match[2], variables);
@@ -73,12 +86,12 @@ export function webStagedAssetPaths(gameDir) {
   }
   const staged = new Set();
   const calls = [
-    /configure_file\s*\(\s*"([^"]+)"\s+"[^"]+"\s+COPYONLY\s*\)/gi,
+    /configure_file\s*\(\s*(?:"([^"]+)"|([^\s)]+))\s+"[^"]+"\s+COPYONLY\s*\)/gi,
     /COMMAND\s+\$\{CMAKE_COMMAND\}\s+-E\s+copy_if_different\s+"([^"]+)"\s+"[^"]+"/gi,
   ];
   for (const expression of calls) {
     for (const match of source.matchAll(expression)) {
-      const path = stagedAssetPath(match[1], variables);
+      const path = stagedAssetPath(match[1] || match[2], variables);
       if (path) staged.add(path);
     }
   }
@@ -214,6 +227,23 @@ function loadSourceSidecars(gameDir, paths, records) {
   }
 }
 
+function loadReleaseRecords(gameDir, metadataPath, records, duplicates) {
+  const file = join(gameDir, ...metadataPath.split("/"));
+  if (!lstatSync(file).isFile()) throw new Error("release provenance must be a regular file");
+  const value = JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
+  if (value?.schema !== "ai_studio.game_release_provenance.v1" || !Array.isArray(value.records)) {
+    throw new Error("game release provenance is invalid");
+  }
+  for (const row of value.records) {
+    const path = row?.asset;
+    if (typeof path !== "string" || !isSafeStandalonePath(path) || !RECEIPT_EXTENSIONS.test(path)) {
+      throw new Error(`unsafe release provenance path: ${path}`);
+    }
+    if (records.has(path)) duplicates.add(path);
+    records.set(path, { ...row, metadataPath, sidecar: true });
+  }
+}
+
 function trackedPaths(gameDir) {
   const safe = slash(resolve(gameDir));
   const result = spawnSync("git", ["-c", `safe.directory=${safe}`, "ls-files", "-z"], {
@@ -228,19 +258,25 @@ function trackedPaths(gameDir) {
 export function auditGameReleaseAssets(gameDir, options = {}) {
   const root = resolve(gameDir);
   const realRoot = realpathSync(root);
+  const contract = releaseAssetContract(root);
   const packed = options.packedPaths || packedAssetPaths(root);
   const standalone = options.standalonePaths || standaloneAssetPaths(root);
-  const staged = standalone.length === 0
+  const staged = standalone.length === 0 && !contract.metadata
     ? []
     : (options.stagedPaths || webStagedAssetPaths(root));
-  const builderInputs = options.builderPaths
-    ? [...new Set(options.builderPaths.map(slash))].sort()
-    : builderAssetPaths(root);
+  if (contract.metadata && !Array.isArray(options.receiptPaths)) {
+    throw new Error("release assets require a verified pack input receipt");
+  }
+  const declaredBuilderPaths = contract.metadata ? options.receiptPaths : options.builderPaths;
+  const builderInputs = declaredBuilderPaths ? [...new Set(declaredBuilderPaths.map(slash))].sort() : builderAssetPaths(root);
   const tracked = options.trackedPaths ? new Set(options.trackedPaths.map(slash)) : trackedPaths(root);
   const records = new Map();
   const duplicates = new Set();
-  loadPackRecords(root, records, duplicates);
-  loadSourceSidecars(root, [...packed, ...standalone], records);
+  if (contract.metadata) loadReleaseRecords(root, contract.metadata, records, duplicates);
+  else {
+    loadPackRecords(root, records, duplicates);
+    loadSourceSidecars(root, [...packed, ...standalone], records);
+  }
   const issues = [];
   if (!tracked.has("assets/release_inputs.json")) {
     issues.push("assets/release_inputs.json: release input contract is not tracked");
@@ -257,6 +293,11 @@ export function auditGameReleaseAssets(gameDir, options = {}) {
   }
   for (const path of standalone) {
     if (!stagedSet.has(path)) issues.push(`${path}: standalone input is not staged by the local web build`);
+  }
+  if (contract.metadata) {
+    for (const path of staged) {
+      if (!standalone.includes(path)) issues.push(`${path}: staged standalone asset is missing from release input contract`);
+    }
   }
   for (const path of duplicates) {
     if (releaseSet.has(path)) issues.push(`${path}: duplicate asset metadata`);
@@ -323,7 +364,8 @@ export function auditGameReleaseAssets(gameDir, options = {}) {
         issues.push(`${path}: missing provenance`);
       }
     }
-    const license = validateLicenseRecord(record, { forDistribution: true, forRelease: true });
+    const embedded = Boolean(contract.metadata && packedSet.has(path) && record.distribution_scope === "embedded-game");
+    const license = validateLicenseRecord(record, { forDistribution: !embedded, forEmbeddedGame: embedded, forRelease: true });
     if (!license.ok) issues.push(`${path}: ${license.issues.join("; ")}`);
     const recordedSha256 = String(record.sha256 || "").toLowerCase();
     if (!/^[0-9a-f]{64}$/.test(recordedSha256)) issues.push(`${path}: missing or malformed sha256`);
