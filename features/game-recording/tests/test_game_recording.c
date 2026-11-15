@@ -87,11 +87,11 @@ void nt_recorder_frame(double now, double dt) {
     s_fake.frame_dt = dt;
 }
 
-uint32_t nt_recorder_stop(void) {
+nt_recorder_stats_t nt_recorder_stop(void) {
     ++s_fake.stop_calls;
     const uint32_t frames = s_fake.encoder_active ? s_fake.encoded_frames : 0;
     s_fake.encoder_active = false;
-    return frames;
+    return (nt_recorder_stats_t){.frames = frames};
 }
 
 static bool invoke(const char *method, const cJSON *params) {
