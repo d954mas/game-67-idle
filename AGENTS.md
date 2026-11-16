@@ -124,6 +124,12 @@ heads; source working-tree changes are intentionally not transferred.
   `finally`; never a bare `mkdtemp`. Each profile grows to 50-200 MB and Windows
   will not delete it until Chrome has exited, so a hand-rolled cleanup leaks one
   profile per run into the system temp folder.
+- Frame sequences (per-frame PNG, raw `.bgra`/`.yuv`, `.etl` traces) are
+  intermediate. Once a take is encoded to video or its verdict is recorded, the
+  agent that produced it deletes the frames in the same task; only the accepted
+  take keeps its frames, and its doc names that folder. A rejected or superseded
+  take keeps at most its video, recipe and receipt. One 1080p take is 1-3 GB of
+  frames, and leftovers have filled the disk several times.
 - Heavy authoring workfiles that are not themselves shipping game assets live
   under the synchronized `<YandexDisk>/gamedev/games/<game-id>/` workspace;
   game repositories keep their scripts, provenance, manifests and hashes.
