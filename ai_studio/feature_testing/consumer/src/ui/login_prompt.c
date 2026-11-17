@@ -39,7 +39,7 @@ void login_prompt_row(nt_ui_context_t *ctx, const ui_metrics_t *m, const char *r
         // One dialog at a time: the button waits while the portal's is open.
         const bool can_tap = interactive && !platform_sdk_login_pending();
         CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(m)}}}) {
-            ui_kit_button_begin(ctx, nt_ui_id(button_id), &g_ui_theme.button_confirm, can_tap, NULL);
+            ui_kit_button_begin(ctx, nt_ui_id(button_id), &g_ui_theme.button_confirm, can_tap);
             loc_kit_label(ctx, loc_login_button(), &g_ui_theme.button_label_action);
             if (ui_kit_button_end(ctx) && can_tap) {
                 s_source = source;
@@ -54,8 +54,7 @@ static bool confirm_button(nt_ui_context_t *ctx, const ui_metrics_t *m, const ch
     bool tapped = false;
     // Equal halves: neither answer is the one the thumb is steered to.
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(m)}}}) {
-        ui_kit_button_begin(ctx, nt_ui_id(id), primary ? &g_ui_theme.button_confirm : &g_ui_theme.button, interactive,
-                            NULL);
+        ui_kit_button_begin(ctx, nt_ui_id(id), primary ? &g_ui_theme.button_confirm : &g_ui_theme.button, interactive);
         loc_kit_label(ctx, text, primary ? &g_ui_theme.button_label_action : &g_ui_theme.button_label);
         tapped = ui_kit_button_end(ctx) && interactive;
     }

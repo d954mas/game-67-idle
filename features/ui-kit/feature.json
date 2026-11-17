@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "ui-kit",
-  "version": "5.3.0",
+  "version": "6.0.0",
   "title": "UI Kit",
   "status": "reusable",
   "kind": "presentation",

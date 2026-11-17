@@ -1049,7 +1049,7 @@ if(NOT EMSCRIPTEN)
     add_executable(test_game_input
         tests/test_game_input.c
         src/game_input.c)
-    target_link_libraries(test_game_input PRIVATE unity nt_input_stub)
+    target_link_libraries(test_game_input PRIVATE unity nt_input)
     target_include_directories(test_game_input PRIVATE src)
     target_compile_definitions(test_game_input PRIVATE
         _CRT_SECURE_NO_WARNINGS)

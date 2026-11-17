@@ -253,17 +253,15 @@ static int s_button_depth;
 
 // The state the engine shows a button in this frame: hover counts the hit
 // padding, and a press dragged off the button shows idle.
-static ui_kit_look_state_t button_state(nt_ui_context_t *ctx, uint32_t id, const nt_ui_button_style_t *style,
-                                        bool enabled) {
+static ui_kit_look_state_t button_state(const nt_ui_interaction_t *in, bool enabled) {
     if (!enabled) { return UI_KIT_LOOK_DISABLED; }
-    const nt_ui_interaction_t in = nt_ui_query_interaction_padded(ctx, id, style->hit_padding_lrtb);
-    if (in.pressed && in.hovered) { return UI_KIT_LOOK_PRESSED; }
-    return in.hovered ? UI_KIT_LOOK_HOVER : UI_KIT_LOOK_IDLE;
+    if (in->pressed && in->hovered) { return UI_KIT_LOOK_PRESSED; }
+    return in->hovered ? UI_KIT_LOOK_HOVER : UI_KIT_LOOK_IDLE;
 }
 
 // The tint the engine would put on the art for that state.
-static uint32_t state_tint(nt_ui_context_t *ctx, uint32_t id, const nt_ui_button_style_t *style, bool enabled) {
-    switch (button_state(ctx, id, style, enabled)) {
+static uint32_t state_tint(const nt_ui_interaction_t *in, const nt_ui_button_style_t *style, bool enabled) {
+    switch (button_state(in, enabled)) {
     case UI_KIT_LOOK_DISABLED: return style->disabled.bg_tint;
     case UI_KIT_LOOK_PRESSED: return style->pressed.bg_tint;
     case UI_KIT_LOOK_HOVER: return style->hover.bg_tint;
@@ -287,21 +285,18 @@ static nt_ui_button_style_t motion_of(const nt_ui_button_style_t *style) {
 static const Clay_ElementDeclaration BUTTON_FILL = {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                                                                .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}};
 
-static void button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t *style, bool enabled,
-                         const nt_ui_events_cfg_t *cfg, bool round) {
+static nt_ui_interaction_t button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t *style, bool enabled,
+                                        bool round) {
     const Clay_ElementDeclaration fill = {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                                                      .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}};
     NT_ASSERT(s_button_depth < UI_KIT_BUTTON_DEPTH && "ui_kit_button_begin: buttons nest too deep");
     const bool shape = shapes() && style->idle.bg.atlas.id == 0U;
     s_button_shape[s_button_depth++] = !shape ? BUTTON_ART : round ? BUTTON_RADIAL : BUTTON_PANEL;
-    if (!shape) {
-        nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), id, style, &fill, enabled, cfg);
-        return;
-    }
+    if (!shape) { return nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), id, style, &fill, enabled); }
     // The state colours go to the shape.
     nt_ui_button_style_t motion = motion_of(style);
-    nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), id, &motion, &fill, enabled, cfg);
-    const uint32_t tint = state_tint(ctx, id, style, enabled);
+    const nt_ui_interaction_t in = nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), id, &motion, &fill, enabled);
+    const uint32_t tint = state_tint(&in, style, enabled);
     if (round) {
         const ui_kit_radial_style_t s = disc_plate(tint, ui_metrics().hit);
         ui_kit_radial_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &s, &fill);
@@ -309,11 +304,11 @@ static void button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t
         const ui_kit_panel_style_t s = button_plate(tint);
         ui_kit_panel_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &s, &fill);
     }
+    return in;
 }
 
-void ui_kit_button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t *style, bool enabled,
-                         const nt_ui_events_cfg_t *cfg) {
-    button_begin(ctx, id, style, enabled, cfg, false);
+nt_ui_interaction_t ui_kit_button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t *style, bool enabled) {
+    return button_begin(ctx, id, style, enabled, false);
 }
 
 // The engine button under a look: the theme's ease, and hit padding that grows
@@ -335,9 +330,9 @@ static nt_ui_button_style_t look_motion(nt_ui_context_t *ctx, uint32_t id, float
 
 // A button in the caller's look: one panel or one radial, whichever is given.
 // `disabled` NULL derives the disabled plate from `panel`.
-static void look_button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t motion,
-                              const ui_kit_panel_style_t *panel, const ui_kit_panel_style_t *disabled,
-                              const ui_kit_radial_style_t *radial, bool enabled, const nt_ui_events_cfg_t *cfg) {
+static nt_ui_interaction_t look_button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t motion,
+                                             const ui_kit_panel_style_t *panel, const ui_kit_panel_style_t *disabled,
+                                             const ui_kit_radial_style_t *radial, bool enabled) {
     NT_ASSERT(s_button_depth < UI_KIT_BUTTON_DEPTH && "ui_kit_button_begin_styled: buttons nest too deep");
     s_button_shape[s_button_depth++] = panel != NULL ? BUTTON_PANEL : BUTTON_RADIAL;
     // An outside lip is the press: the face sinks inside the shape, so the box
@@ -348,8 +343,8 @@ static void look_button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_st
         motion.pressed.offset_y = 0.0F;
         motion.pressed.scale = g_ui_theme.button_close.pressed.scale;
     }
-    nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), id, &motion, &BUTTON_FILL, enabled, cfg);
-    const ui_kit_look_state_t state = button_state(ctx, id, &motion, enabled);
+    const nt_ui_interaction_t in = nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), id, &motion, &BUTTON_FILL, enabled);
+    const ui_kit_look_state_t state = button_state(&in, enabled);
     const uint32_t off = rgb_of(ui_theme_tokens()->off);
     if (panel != NULL) {
         const ui_kit_panel_style_t s =
@@ -362,7 +357,7 @@ static void look_button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_st
             face.layout.padding.bottom = (uint16_t)lip;
         }
         ui_kit_panel_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &s, &face);
-        return;
+        return in;
     }
     ui_kit_radial_style_t s = *radial;
     if (state == UI_KIT_LOOK_PRESSED) {
@@ -372,13 +367,13 @@ static void look_button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_st
         s.bottom_rgb = off;
     }
     ui_kit_radial_begin_styled(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &s, &BUTTON_FILL);
+    return in;
 }
 
-void ui_kit_button_begin_styled(nt_ui_context_t *ctx, uint32_t id, const ui_kit_button_look_t *look, bool enabled,
-                                const nt_ui_events_cfg_t *cfg) {
+nt_ui_interaction_t ui_kit_button_begin_styled(nt_ui_context_t *ctx, uint32_t id, const ui_kit_button_look_t *look, bool enabled) {
     NT_ASSERT(look != NULL && "ui_kit_button_begin_styled: look is required");
-    look_button_begin(ctx, id, look_motion(ctx, id, look->reach, INFINITY, INFINITY, 0.0F, enabled), &look->idle, look->disabled, NULL, enabled,
-                      cfg);
+    return look_button_begin(ctx, id, look_motion(ctx, id, look->reach, INFINITY, INFINITY, 0.0F, enabled), &look->idle, look->disabled, NULL,
+                             enabled);
 }
 
 bool ui_kit_button_end(nt_ui_context_t *ctx) {
@@ -496,7 +491,7 @@ static bool button_with(nt_ui_context_t *ctx, const char *id, nt_atlas_region_re
     const uint32_t base = nt_ui_id(id);
     bool clicked = false;
     CLAY({.id = element_id(id), .layout = {.sizing = {w, h}}}) {
-        ui_kit_button_begin(ctx, nt_ui_child_id(base, "plate"), ui_kit_button_style(kind), enabled, NULL);
+        ui_kit_button_begin(ctx, nt_ui_child_id(base, "plate"), ui_kit_button_style(kind), enabled);
         // The content keeps its own side room, so a button sized to its label
         // never sets the glyphs against the rim.
         CLAY({.layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0)},
@@ -540,7 +535,7 @@ bool ui_kit_close_button(nt_ui_context_t *ctx, const char *id, const char *label
                        .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER, .parent = CLAY_ATTACH_POINT_RIGHT_TOP},
                        .offset = {-inset, inset}},
           .layout = {.sizing = {CLAY_SIZING_FIXED(m.hit), CLAY_SIZING_FIXED(m.hit)}}}) {
-        button_begin(ctx, nt_ui_child_id(nt_ui_id(id), "plate"), &g_ui_theme.button_close, true, NULL, true);
+        button_begin(ctx, nt_ui_child_id(nt_ui_id(id), "plate"), &g_ui_theme.button_close, true, true);
         if (icon->atlas.id != 0U) {
             ui_kit_icon_tinted(ctx, icon, m.hit * 0.42F, ui_theme_tokens()->ink);
         } else {
@@ -723,7 +718,7 @@ static bool square_close(nt_ui_context_t *ctx, const char *id, const char *label
     glyph.wrap_mode = CLAY_TEXT_WRAP_NONE;
     bool clicked = false;
     CLAY({.id = element_id(id), .layout = {.sizing = {CLAY_SIZING_FIXED(side), CLAY_SIZING_FIXED(side + lip)}}}) {
-        ui_kit_button_begin_styled(ctx, nt_ui_child_id(nt_ui_id(id), "plate"), look, true, NULL);
+        ui_kit_button_begin_styled(ctx, nt_ui_child_id(nt_ui_id(id), "plate"), look, true);
         if (icon->atlas.id != 0U) {
             ui_kit_icon_tinted(ctx, icon, side * 0.5F, title->color);
         } else {
@@ -944,7 +939,7 @@ static bool toggle_shape(nt_ui_context_t *ctx, uint32_t id, bool *value, bool en
     const ui_kit_radial_style_t disc = disc_plate(0xFFFFFFFFU, knob);
     bool clicked = false;
     CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(h)}}}) {
-        look_button_begin(ctx, id, motion_of(&g_ui_theme.button), &pill, NULL, NULL, enabled, NULL);
+        look_button_begin(ctx, id, motion_of(&g_ui_theme.button), &pill, NULL, NULL, enabled);
         CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                          .padding = {.left = inset, .right = inset},
                          .childAlignment = {*value ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
@@ -965,7 +960,7 @@ static bool checkbox_shape(nt_ui_context_t *ctx, uint32_t id, bool *value, bool 
     const uint32_t mark = t->on_action != 0U ? t->on_action : t->on_panel;
     bool clicked = false;
     CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(side), CLAY_SIZING_FIXED(side)}}}) {
-        look_button_begin(ctx, id, motion_of(&g_ui_theme.button), &box, NULL, NULL, enabled, NULL);
+        look_button_begin(ctx, id, motion_of(&g_ui_theme.button), &box, NULL, NULL, enabled);
         if (*value && check->atlas.id != 0U) {
             ui_kit_icon_tinted(ctx, check, side * 0.7F, mark);
         } else if (*value) {
@@ -987,7 +982,7 @@ static bool radio_shape(nt_ui_context_t *ctx, uint32_t id, int *selected, int my
         .alpha = 1.0F};
     bool clicked = false;
     CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(side), CLAY_SIZING_FIXED(side)}}}) {
-        look_button_begin(ctx, id, motion_of(&g_ui_theme.button), NULL, NULL, &ring, enabled, NULL);
+        look_button_begin(ctx, id, motion_of(&g_ui_theme.button), NULL, NULL, &ring, enabled);
         if (*selected == my_value) {
             ui_kit_radial(ctx, NT_UI_DATA_LAYER(UI_LAYER_SURFACE), &dot, fixed_box(side * 0.5F, side * 0.5F));
         }
@@ -1167,7 +1162,7 @@ static void dropdown_styled(nt_ui_context_t *ctx, const char *id, const char *co
     if (!enabled) { *open = false; }
     CLAY({.id = element_id(current), .layout = {.sizing = {CLAY_SIZING_FIXED(list_width), CLAY_SIZING_FIXED(face_h + lip)}}}) {
         look_button_begin(ctx, trigger, look_motion(ctx, trigger, look->trigger.reach, INFINITY, INFINITY, 0.0F, enabled), &look->trigger.idle,
-                          look->trigger.disabled, NULL, enabled, NULL);
+                          look->trigger.disabled, NULL, enabled);
         CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                          .padding = {.left = (uint16_t)inset, .right = (uint16_t)arrow_inset},
                          .childGap = (uint16_t)(m.gap * 0.4F),
@@ -1228,7 +1223,7 @@ static void dropdown_styled(nt_ui_context_t *ctx, const char *id, const char *co
                 CLAY({.id = element_id(name),
                       .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED((look->row_h > 0.0F ? look->row_h : m.hit) + row_lip)}}}) {
                     look_button_begin(ctx, plate, look_motion(ctx, plate, row->reach, INFINITY, look->list_pad * 0.25F, 0.0F, true), &row->idle,
-                                      row->disabled, NULL, true, NULL);
+                                      row->disabled, NULL, true);
                     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                                      .padding = {(uint16_t)row_inset, (uint16_t)row_inset, 0, 0},
                                      .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}}}) {
@@ -1390,12 +1385,12 @@ bool ui_kit_choice_row(nt_ui_context_t *ctx, const char *id, const char *label, 
                                             CLAY_SIZING_FIXED(cell_h + lip)}}}) {
                     if (cell_look != NULL) {
                         look_button_begin(ctx, plate, look_motion(ctx, plate, cell_look->reach, pad, INFINITY, pad, enabled), &cell_look->idle,
-                                          cell_look->disabled, NULL, enabled, NULL);
+                                          cell_look->disabled, NULL, enabled);
                     } else {
                         nt_ui_button_style_t style = *ui_kit_button_style(kind);
                         style.hit_padding_lrtb[0] = (int16_t)pad;
                         style.hit_padding_lrtb[1] = (int16_t)pad;
-                        ui_kit_button_begin(ctx, plate, &style, enabled, NULL);
+                        ui_kit_button_begin(ctx, plate, &style, enabled);
                     }
                     ui_kit_label(ctx, options[i], text);
                     if (ui_kit_button_end(ctx)) { *selected = i; }

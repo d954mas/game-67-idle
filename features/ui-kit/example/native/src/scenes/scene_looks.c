@@ -71,7 +71,7 @@ static void button_states(nt_ui_context_t *ctx, const ui_metrics_t *m) {
                      .layoutDirection = CLAY_LEFT_TO_RIGHT,
                      .childGap = (uint16_t)m->gap}}) {
         CLAY({.id = CLAY_ID("looks/go"), .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(m->hit)}}}) {
-            ui_kit_button_begin_styled(ctx, nt_ui_id("looks/go/plate"), &look, true, NULL);
+            ui_kit_button_begin_styled(ctx, nt_ui_id("looks/go/plate"), &look, true);
             ui_kit_label(ctx, "Вперед", &g_ui_theme.button_label_action);
             (void)ui_kit_button_end(ctx);
         }
@@ -87,7 +87,7 @@ static void button_states(nt_ui_context_t *ctx, const ui_metrics_t *m) {
             ui_kit_panel_styled_end(ctx);
         }
         CLAY({.id = CLAY_ID("looks/off"), .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(m->hit)}}}) {
-            ui_kit_button_begin_styled(ctx, nt_ui_id("looks/off/plate"), &look, false, NULL);
+            ui_kit_button_begin_styled(ctx, nt_ui_id("looks/off/plate"), &look, false);
             ui_kit_label(ctx, "Вперед", &g_ui_theme.button_label_disabled);
             (void)ui_kit_button_end(ctx);
         }

@@ -87,9 +87,9 @@ nt_ui_label_style_t ui_text_scaled(const nt_ui_label_style_t *kit_style, float f
 
 // The button plate. The caller owns the outer element that carries the stable
 // ui.tree id and the outer size; this fills it, centres the content, and is the
-// one place the press feel lives. Emit the label between begin and end.
-void ui_kit_button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t *style, bool enabled,
-                         const nt_ui_events_cfg_t *cfg);
+// one place the press feel lives. Emit the label between begin and end. Returns
+// this frame's interaction (hold and double-click come from it).
+nt_ui_interaction_t ui_kit_button_begin(nt_ui_context_t *ctx, uint32_t id, nt_ui_button_style_t *style, bool enabled);
 bool ui_kit_button_end(nt_ui_context_t *ctx);
 
 // A button in a look of the caller's. `idle` is the plate; a press comes from
@@ -106,8 +106,7 @@ typedef struct {
 
 // The plate in `look`, drawn as a shape under either theme (needs
 // ui_kit_shape_bind). Close with ui_kit_button_end.
-void ui_kit_button_begin_styled(nt_ui_context_t *ctx, uint32_t id, const ui_kit_button_look_t *look, bool enabled,
-                                const nt_ui_events_cfg_t *cfg);
+nt_ui_interaction_t ui_kit_button_begin_styled(nt_ui_context_t *ctx, uint32_t id, const ui_kit_button_look_t *look, bool enabled);
 
 // ---- looks ----------------------------------------------------------------
 

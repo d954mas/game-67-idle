@@ -19,7 +19,7 @@ static bool ad_button(nt_ui_context_t *ctx, Clay_ElementId element, uint32_t pla
     NT_ASSERT(ui_ad_rgb_is_blue(look->button.idle.bottom_rgb) && "ui_kit_ad: the ad button is blue");
     bool clicked = false;
     CLAY({.id = element, .layout = {.sizing = {CLAY_SIZING_FIXED(width), CLAY_SIZING_FIXED(height)}}}) {
-        ui_kit_button_begin_styled(ctx, plate, &look->button, true, NULL);
+        ui_kit_button_begin_styled(ctx, plate, &look->button, true);
         ad_face(ctx, look, reward_icon, reward);
         clicked = ui_kit_button_end(ctx);
     }
@@ -39,7 +39,7 @@ static bool standard_button(nt_ui_context_t *ctx, uint32_t element, float width,
     const float lip = look->idle.lip_inside ? 0.0F : look->idle.lip_h;
     bool clicked = false;
     CLAY({.id = {.id = element}, .layout = {.sizing = {CLAY_SIZING_FIXED(width), CLAY_SIZING_FIXED(height + lip)}}}) {
-        ui_kit_button_begin_styled(ctx, nt_ui_child_id(element, "plate"), look, true, NULL);
+        ui_kit_button_begin_styled(ctx, nt_ui_child_id(element, "plate"), look, true);
         CLAY({.layout = {.padding = {(uint16_t)c->pad, (uint16_t)c->pad, 0, 0}}}) {
             nt_ui_label(ctx, NT_UI_DATA_LAYER(UI_LAYER_TEXT), c->standard != NULL ? c->standard : "", &style);
         }

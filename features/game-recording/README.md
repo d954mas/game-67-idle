@@ -21,6 +21,9 @@ Discover commands first. Unlock audio through normal player input before
 `game.record.start` with `{"name":"C:/existing/folder/take.mp4","fps":60}`.
 The file path must be writable and its directory must exist. Existing files
 are overwritten by the engine. FPS must be an integer from 1 through 120.
+Optional `bitrate_bps` is the target video bitrate, an integer from 1 through
+2147483647; without it the take gets 0.1 bit per framebuffer pixel per frame
+(12.4 Mbit/s at 1080p60). Pass it for masters where thin lines must survive.
 
 Play on the live wall clock, then call `game.record.stop`. Its result contains
 `frames`, `audio_frames`, `max_drift_ms`, `tail_delta_ms`, and `valid`. Repeated

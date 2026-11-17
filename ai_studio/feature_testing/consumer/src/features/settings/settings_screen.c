@@ -158,7 +158,7 @@ static int choice_row(nt_ui_context_t *ctx, const ui_metrics_t *m, LocStr label,
             const bool on = i == current;
             CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(m)}}}) {
                 ui_kit_button_begin(ctx, nt_ui_id(ids[i]), on ? &g_ui_theme.button_confirm : &g_ui_theme.button,
-                                    interactive, NULL);
+                                    interactive);
                 loc_kit_label(ctx, loc_by_key(names[i]), on ? &g_ui_theme.button_label_action : &g_ui_theme.button_label);
                 if (ui_kit_button_end(ctx) && interactive && !on) pressed = i;
             }
@@ -213,7 +213,7 @@ static void save_conflict_row(nt_ui_context_t *ctx, const ui_metrics_t *m, bool 
         CLAY({.id = CLAY_ID("settings/cloud/keep_local"),
               .layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(m)}}}) {
             ui_kit_button_begin(ctx, nt_ui_id("settings/cloud/keep_local/button"),
-                                &g_ui_theme.button, interactive, NULL);
+                                &g_ui_theme.button, interactive);
             loc_kit_label(ctx, loc_settings_cloud_keep_local(), &g_ui_theme.button_label);
             if (ui_kit_button_end(ctx) && interactive) {
                 s_save_conflict_choice = GAME_SAVE_KEEP_LOCAL;
@@ -223,7 +223,7 @@ static void save_conflict_row(nt_ui_context_t *ctx, const ui_metrics_t *m, bool 
             CLAY({.id = CLAY_ID("settings/cloud/keep_remote"),
                   .layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(m)}}}) {
                 ui_kit_button_begin(ctx, nt_ui_id("settings/cloud/keep_remote/button"),
-                                    &g_ui_theme.button, interactive, NULL);
+                                    &g_ui_theme.button, interactive);
                 loc_kit_label(ctx, loc_settings_cloud_keep_remote(), &g_ui_theme.button_label);
                 if (ui_kit_button_end(ctx) && interactive) {
                     s_save_conflict_choice = GAME_SAVE_KEEP_REMOTE;
@@ -246,7 +246,7 @@ void settings_draw_launcher(nt_ui_context_t *ctx, bool interactive) {
                      .childAlignment = {CLAY_ALIGN_X_RIGHT, CLAY_ALIGN_Y_TOP}}}) {
         CLAY({.id = CLAY_ID("settings/gear"),
               .layout = {.sizing = {CLAY_SIZING_FIXED(m.hit * 2.4F), ui_kit_hit_height(&m)}}}) {
-            ui_kit_button_begin(ctx, nt_ui_id("settings/gear/button"), &g_ui_theme.button, interactive, NULL);
+            ui_kit_button_begin(ctx, nt_ui_id("settings/gear/button"), &g_ui_theme.button, interactive);
             loc_kit_label(ctx, loc_settings_open(), &g_ui_theme.button_label);
             if (ui_kit_button_end(ctx) && interactive) {
                 settings_open();
@@ -305,15 +305,14 @@ void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
         CLAY({.id = CLAY_ID("settings/reset"),
               .layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(&m)}}}) {
             const uint32_t reset_id = nt_ui_id("settings/reset/button");
-            const nt_ui_events_cfg_t hold = {.long_press_secs = RESET_HOLD_SECONDS, .double_click = false};
-            ui_kit_button_begin(ctx, reset_id, &g_ui_theme.button_danger, interactive, &hold);
-            const nt_ui_events_t re = nt_ui_query_events(ctx, reset_id);
-            const bool holding = re.hold_progress > 0.0F && re.hold_progress < 1.0F;
-            const LocStr rlabel = holding ? loc_settings_reset_holding((int64_t)(re.hold_progress * 100.0F))
+            const nt_ui_interaction_t re = ui_kit_button_begin(ctx, reset_id, &g_ui_theme.button_danger, interactive);
+            const float hold = nt_ui_hold_progress(&re, RESET_HOLD_SECONDS);
+            const bool holding = hold > 0.0F && hold < 1.0F;
+            const LocStr rlabel = holding ? loc_settings_reset_holding((int64_t)(hold * 100.0F))
                                           : loc_settings_reset();
             loc_kit_label(ctx, rlabel, &g_ui_theme.button_label_action);
             (void)ui_kit_button_end(ctx);
-            if (interactive && re.long_pressed) {
+            if (interactive && nt_ui_hold_crossed(&re, RESET_HOLD_SECONDS)) {
                 // New Game is one composition-level transition. The UI records
                 // intent only; main applies persistent and transient resets together
                 // at the nearest safe frame boundary.
@@ -327,7 +326,7 @@ void settings_draw_panel(nt_ui_context_t *ctx, World *w, bool interactive) {
     nt_ui_scroll_end(ctx);
     CLAY({.id = CLAY_ID("settings/close"),
           .layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(&m)}}}) {
-            ui_kit_button_begin(ctx, nt_ui_id("settings/close/button"), &g_ui_theme.button, interactive, NULL);
+            ui_kit_button_begin(ctx, nt_ui_id("settings/close/button"), &g_ui_theme.button, interactive);
             loc_kit_label(ctx, loc_settings_close(), &g_ui_theme.button_label);
             if (ui_kit_button_end(ctx) && interactive) {
                 settings_close();

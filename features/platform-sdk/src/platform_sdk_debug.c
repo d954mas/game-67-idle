@@ -146,7 +146,7 @@ static bool button(nt_ui_context_t *ctx, const char *id, const char *label, bool
     // own text: the labels are developer sentences, not player copy.
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), ui_kit_hit_height(&m)},
                      .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}) {
-        ui_kit_button_begin(ctx, nt_ui_id(id), &g_ui_theme.button, enabled, NULL);
+        ui_kit_button_begin(ctx, nt_ui_id(id), &g_ui_theme.button, enabled);
         ui_kit_label(ctx, label, &g_ui_theme.row_title);
         clicked = ui_kit_button_end(ctx);
     }

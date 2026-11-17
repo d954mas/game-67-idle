@@ -14,7 +14,7 @@ if(NOT EMSCRIPTEN)
     endfunction()
     game_add_c_test(test_game_input
         SOURCES tests/test_game_input.c src/game_input.c
-        LIBS nt_input_stub INCLUDES src)
+        LIBS nt_input INCLUDES src)
     game_add_c_test(test_game_music_pack
         SOURCES tests/test_game_music_pack.c src/game_music_pack.c
         LIBS nt_hash INCLUDES src

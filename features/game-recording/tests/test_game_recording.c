@@ -11,13 +11,14 @@
 #include "features/recording/recording.h"
 #include "recorder/nt_recorder.h"
 #include "time/nt_time.h"
+#include "window/nt_window.h"
 
 static struct {
     audio_status_t audio;
     bool begin_ok, end_ok, encoder_ok, capture_active, encoder_active, capture_failed;
     bool pcm_changed, frame_before_audio;
     uint32_t begin_calls, end_calls, start_calls, stop_calls, frame_calls;
-    uint32_t pending, pushed, encoded_frames, fps;
+    uint32_t pending, pushed, encoded_frames, fps, bitrate;
     double now, frame_time, frame_dt, first_origin;
 } s_fake;
 static const nt_devapi_command *s_commands;
@@ -59,10 +60,13 @@ uint32_t audio_capture_read(float *stereo, uint32_t capacity_frames) {
 
 bool audio_capture_failed(void) { return s_fake.capture_failed; }
 
-bool nt_recorder_start(const char *name, uint32_t fps) {
+nt_window_t g_nt_window = {.fb_width = 1920, .fb_height = 1080};
+
+bool nt_recorder_start(const char *name, uint32_t fps, uint32_t bitrate_bps) {
     (void)name;
     ++s_fake.start_calls;
     s_fake.fps = fps;
+    s_fake.bitrate = bitrate_bps;
     s_fake.encoder_active = s_fake.encoder_ok;
     return s_fake.encoder_ok;
 }
@@ -163,7 +167,9 @@ static void test_rejects_bad_start_parameters_before_touching_devices(void) {
     static const char *cases[] = {
         "{}", "{\"name\":\"\",\"fps\":60}", "{\"name\":\"take\"}",
         "{\"name\":\"take\",\"fps\":0}", "{\"name\":\"take\",\"fps\":121}",
-        "{\"name\":\"take\",\"fps\":59.5}", "{\"name\":\"take\",\"fps\":\"60\"}"
+        "{\"name\":\"take\",\"fps\":59.5}", "{\"name\":\"take\",\"fps\":\"60\"}",
+        "{\"name\":\"take\",\"fps\":60,\"bitrate_bps\":0}", "{\"name\":\"take\",\"fps\":60,\"bitrate_bps\":1.5}",
+        "{\"name\":\"take\",\"fps\":60,\"bitrate_bps\":\"8000000\"}", "{\"name\":\"take\",\"fps\":60,\"bitrate_bps\":4294967295}"
     };
     for (size_t i = 0; i < sizeof cases / sizeof cases[0]; ++i) TEST_ASSERT_FALSE(start_json(cases[i]));
     cJSON *params = cJSON_CreateObject();
@@ -173,6 +179,14 @@ static void test_rejects_bad_start_parameters_before_touching_devices(void) {
     cJSON_Delete(params);
     TEST_ASSERT_EQUAL_UINT32(0, s_fake.start_calls);
     TEST_ASSERT_EQUAL_UINT32(0, s_fake.begin_calls);
+}
+
+static void test_bitrate_is_the_callers_or_a_tenth_of_a_bit_per_pixel(void) {
+    TEST_ASSERT_TRUE(start_json("{\"name\":\"take\",\"fps\":60,\"bitrate_bps\":40000000}"));
+    TEST_ASSERT_EQUAL_UINT32(40000000U, s_fake.bitrate);
+    TEST_ASSERT_TRUE(stop_take());
+    TEST_ASSERT_TRUE(start_json("{\"name\":\"take\",\"fps\":60}"));
+    TEST_ASSERT_EQUAL_UINT32(12441600U, s_fake.bitrate);
 }
 
 static void test_requires_available_unlocked_audio(void) {
@@ -315,7 +329,7 @@ static void test_shutdown_finalizes_later_raw_recording_without_losing_take_resu
     start_take();
     present_half_second();
     TEST_ASSERT_TRUE(stop_take());
-    TEST_ASSERT_TRUE(nt_recorder_start("raw.mp4", 30));
+    TEST_ASSERT_TRUE(nt_recorder_start("raw.mp4", 30, 1000000U));
     s_fake.encoded_frames = 7;
     game_recording_frame(101.0, 0.25F);
     TEST_ASSERT_TRUE(fabs(s_fake.frame_time - 101.0) < 0.00001);
@@ -330,6 +344,7 @@ static void test_shutdown_finalizes_later_raw_recording_without_losing_take_resu
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_rejects_bad_start_parameters_before_touching_devices);
+    RUN_TEST(test_bitrate_is_the_callers_or_a_tenth_of_a_bit_per_pixel);
     RUN_TEST(test_requires_available_unlocked_audio);
     RUN_TEST(test_encoder_start_failure_does_not_start_audio);
     RUN_TEST(test_capture_start_failure_closes_encoder);

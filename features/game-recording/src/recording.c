@@ -8,6 +8,7 @@
 #include "features/audio/capture.h"
 #include "recorder/nt_recorder.h"
 #include "time/nt_time.h"
+#include "window/nt_window.h"
 
 static bool s_owned;
 static bool s_has_take;
@@ -70,6 +71,15 @@ void game_recording_frame(double now, float dt) {
     nt_recorder_frame(now, (double)dt);
 }
 
+// Media Foundation takes twice the target as its peak, in a UINT32.
+#define MAX_BITRATE_BPS (UINT32_MAX / 2U)
+
+// Without bitrate_bps: 0.1 bit per pixel per frame of the framebuffer (12.4 Mbit/s at 1080p60).
+static uint32_t default_bitrate(uint32_t fps) {
+    const double bps = 0.1 * (double)g_nt_window.fb_width * (double)g_nt_window.fb_height * (double)fps;
+    return bps < 1.0 ? 1U : (uint32_t)fmin(bps, (double)MAX_BITRATE_BPS);
+}
+
 static bool start(const cJSON *params, cJSON *result, nt_devapi_error *error, void *user) {
     (void)result;
     (void)user;
@@ -79,10 +89,16 @@ static bool start(const cJSON *params, cJSON *result, nt_devapi_error *error, vo
         !isfinite(fps->valuedouble) || fps->valuedouble < 1 || fps->valuedouble > 120 || floor(fps->valuedouble) != fps->valuedouble) {
         return nt_devapi_fail(error, "name and integer fps in [1,120] are required");
     }
+    const cJSON *bitrate = cJSON_GetObjectItemCaseSensitive(params, "bitrate_bps");
+    if (bitrate != NULL && (!cJSON_IsNumber(bitrate) || !isfinite(bitrate->valuedouble) || bitrate->valuedouble < 1 ||
+                            bitrate->valuedouble > (double)MAX_BITRATE_BPS || floor(bitrate->valuedouble) != bitrate->valuedouble)) {
+        return nt_devapi_fail(error, "bitrate_bps must be an integer in [1,2147483647]");
+    }
     if (s_owned || nt_recorder_active()) return nt_devapi_fail(error, "a recording is already active");
     const audio_status_t audio = audio_status();
     if (!audio.available || !audio.unlocked) return nt_devapi_fail(error, "audio device must be available and unlocked by player input");
-    if (!nt_recorder_start(name->valuestring, (uint32_t)fps->valuedouble)) return nt_devapi_fail(error, "video encoder refused to start");
+    if (!nt_recorder_start(name->valuestring, (uint32_t)fps->valuedouble,
+                           bitrate != NULL ? (uint32_t)bitrate->valuedouble : default_bitrate((uint32_t)fps->valuedouble))) return nt_devapi_fail(error, "video encoder refused to start");
     if (!audio_capture_begin()) {
         (void)nt_recorder_stop();
         return nt_devapi_fail(error, "audio capture refused to start");
@@ -116,7 +132,7 @@ static bool stop(const cJSON *params, cJSON *result, nt_devapi_error *error, voi
 void game_recording_register(void) {
     static const nt_devapi_command commands[] = {
         {.method = "game.record.start", .summary = "Record live framebuffer and the actual stereo mix; requires unlocked audio.",
-         .params_shape = "{name:string,fps:int}", .result_shape = "{}", .fn = start},
+         .params_shape = "{name:string,fps:int,bitrate_bps?:int}", .result_shape = "{}", .fn = start},
         {.method = "game.record.stop", .summary = "Drain audio and finalize the MP4. Invalid takes must not be published.",
          .params_shape = "{}", .result_shape = "{frames:int,audio_frames:int,max_drift_ms:number,tail_delta_ms:number,valid:bool}", .fn = stop},
     };

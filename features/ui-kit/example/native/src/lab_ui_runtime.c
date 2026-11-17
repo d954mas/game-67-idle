@@ -105,8 +105,14 @@ bool lab_ui_runtime_begin(float dt, const nt_pointer_t *pointers, uint32_t count
     u.near_far[1] = 1.0F;
     nt_gfx_bind_uniform_block(NT_GFX_SLOT_GLOBALS, &u, sizeof u);
 
-    nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, pointers, count, primary);
-    nt_ui_set_viewport(s_ctx, nt_ui_viewport_from_scale(&s_scale));
+    nt_ui_begin(s_ctx, &(nt_ui_frame_desc_t){
+        .layout_w = s_scale.logical_w,
+        .layout_h = s_scale.logical_h,
+        .dt = dt,
+        .pointers = pointers,
+        .pointer_count = count,
+        .primary = primary,
+        .viewport = nt_ui_viewport_from_scale(&s_scale, g_nt_window.dpr)});
     return true;
 }
 

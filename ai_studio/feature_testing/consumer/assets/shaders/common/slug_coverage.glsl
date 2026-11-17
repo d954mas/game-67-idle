@@ -1,11 +1,18 @@
 #pragma once
 
-// Slug GPU vector text coverage, shared by slug_text.frag and slug_text_depth.frag.
+// Slug GPU vector text coverage, shared by slug_text.frag and game text shader variants.
 // Ported from HLSL reference (github.com/EricLengyel/Slug, MIT license)
 // Uses CalcRootCode and CalcCoverage verbatim; the solvers use a cancellation-free root form (below).
 
 // RGBA16F; row = glyph band_row: band_count header texels (y_start, y_count, x_start, x_count), then curves.
-uniform sampler2D u_curve_texture;
+// mediump, not the lowp sampler default: band offsets and counts are read back as integers.
+uniform mediump sampler2D u_curve_texture;
+
+// The varyings SlugVertex() writes (common/slug_vertex.glsl).
+in highp vec2 v_texcoord;
+flat in highp uvec2 v_glyph;         // band_row, band_count
+flat in highp vec4 v_band_transform; // bbox x0, y0, band_count / width, band_count / height (em)
+in vec4 v_color;
 
 // Linear fallback for truly degenerate (a.y == 0) curves; near-tangential
 // cases are handled by the Citardauq stable form in the solvers below.
@@ -158,3 +165,6 @@ float SlugRender(vec2 coord, uvec2 glyph, vec4 band_transform) {
 
     return CalcCoverage(xcov, ycov, xwgt, ywgt);
 }
+
+// Coverage of this fragment from the text varyings.
+float SlugCoverage() { return SlugRender(v_texcoord, v_glyph, v_band_transform); }

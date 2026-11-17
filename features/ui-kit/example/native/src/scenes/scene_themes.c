@@ -24,7 +24,7 @@ static void theme_row(nt_ui_context_t *ctx, int index, const ui_metrics_t *m) {
     (void)snprintf(id, sizeof id, "themes/pick/%s", theme->id);
     CLAY({.id = (Clay_ElementId){.id = nt_ui_id(id)},
           .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(m->hit * 1.2F)}}}) {
-        ui_kit_button_begin(ctx, nt_ui_child_id(nt_ui_id(id), "plate"), ui_kit_button_style(active ? UI_KIT_BUTTON_CONFIRM : UI_KIT_BUTTON_NEUTRAL), true, NULL);
+        ui_kit_button_begin(ctx, nt_ui_child_id(nt_ui_id(id), "plate"), ui_kit_button_style(active ? UI_KIT_BUTTON_CONFIRM : UI_KIT_BUTTON_NEUTRAL), true);
         CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
                          .padding = {.left = (uint16_t)m->gap, .right = (uint16_t)m->gap},
                          .layoutDirection = CLAY_LEFT_TO_RIGHT,

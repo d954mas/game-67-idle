@@ -184,7 +184,7 @@ bool ui_kit_text_button_styled(nt_ui_context_t *ctx, const char *id, const ui_ki
     bool clicked = false;
     const float lip = look->idle.lip_inside ? 0.0F : look->idle.lip_h;
     CLAY({.id = named(id), .layout = {.sizing = {w, CLAY_SIZING_FIXED(h + lip)}}}) {
-        ui_kit_button_begin_styled(ctx, nt_ui_child_id(nt_ui_id(id), "plate"), look, enabled, NULL);
+        ui_kit_button_begin_styled(ctx, nt_ui_child_id(nt_ui_id(id), "plate"), look, enabled);
         CLAY({.layout = {.padding = {(uint16_t)pad, (uint16_t)pad, 0, 0}}}) {
             const bool off = !enabled && disabled_style != NULL && style->outline_w > 0.0F;
             nt_ui_label(ctx, NT_UI_DATA_LAYER(UI_LAYER_TEXT), text != NULL ? text : "", off ? disabled_style : style);
