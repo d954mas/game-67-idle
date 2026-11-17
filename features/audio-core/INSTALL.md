@@ -39,6 +39,10 @@ Check every lifecycle result and `audio_capture_failed`. Use a presentation
 timestamp matching the drained PCM and validate drift. Do not compile this flag
 into production or web builds.
 
+A take on a game clock (MANUAL time) uses `audio_capture_begin_lockstep`
+instead: call `audio_capture_render` once per game step for exactly the frames
+that step covers, then `audio_capture_end`. No tail drain is needed.
+
 ## Game-owned integration
 
 1. Add audio files to the game's asset tree with license/provenance metadata.

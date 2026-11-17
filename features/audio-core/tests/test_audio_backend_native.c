@@ -500,6 +500,32 @@ void test_capture_preserves_pcm_gain_pause_and_restart(void) {
     TEST_ASSERT_TRUE(audio_capture_end());
 }
 
+/* Offline takes advance the mix only when the game steps: nothing plays on the device meanwhile. */
+void test_lockstep_capture_mixes_on_the_callers_clock(void) {
+    uint32_t clip = audio_core_backend_decode_begin(k_wav, (uint32_t)sizeof(k_wav));
+    TEST_ASSERT_TRUE(audio_capture_begin_lockstep());
+    TEST_ASSERT_FALSE(audio_capture_begin_lockstep());
+    TEST_ASSERT_FALSE(audio_capture_begin());
+    (void)audio_core_backend_user_gesture();
+    TEST_ASSERT_TRUE(audio_core_backend_is_unlocked());
+    TEST_ASSERT_NOT_EQUAL_UINT32(0, audio_core_backend_voice_play(clip, 1, 1.0f, true));
+    float pcm[1600];
+    TEST_ASSERT_TRUE(audio_capture_render(pcm, 800));
+    float peak = 0;
+    for (unsigned i = 0; i < 1600; ++i) if (fabsf(pcm[i]) > peak) peak = fabsf(pcm[i]);
+    TEST_ASSERT_TRUE(peak > 0.001f);
+    audio_core_backend_set_paused(true);
+    TEST_ASSERT_TRUE(audio_capture_render(pcm, 800));
+    for (unsigned i = 0; i < 1600; ++i) TEST_ASSERT_TRUE(fabsf(pcm[i]) < 0.000001f);
+    audio_core_backend_set_paused(false);
+    TEST_ASSERT_EQUAL_UINT32(0, audio_capture_read(pcm, 800));
+    TEST_ASSERT_FALSE(audio_capture_failed());
+    TEST_ASSERT_TRUE(audio_capture_end());
+    TEST_ASSERT_FALSE(audio_capture_render(pcm, 800));
+    for (unsigned i = 0; i < 1600; ++i) TEST_ASSERT_TRUE(pcm[i] == 0.0f);
+    audio_core_backend_clip_destroy(clip);
+}
+
 void test_capture_overflow_invalidates_take_without_overwrite(void) {
     TEST_ASSERT_TRUE(audio_capture_begin());
     (void)audio_miniaudio_test_render(48000 * 6);
@@ -514,6 +540,7 @@ int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_capture_preserves_pcm_gain_pause_and_restart);
     RUN_TEST(test_capture_overflow_invalidates_take_without_overwrite);
+    RUN_TEST(test_lockstep_capture_mixes_on_the_callers_clock);
     RUN_TEST(test_wav_decode_is_synchronous_and_reports_ready);
     RUN_TEST(test_committed_mp3_decodes_with_the_native_backend);
     RUN_TEST(test_bad_decode_owns_a_failed_slot_until_destroyed);

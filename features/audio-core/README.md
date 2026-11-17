@@ -33,6 +33,13 @@ failure; consumers must reject that take, not discard samples and claim sync.
 The flag is off by default and has no web implementation. The feature supplies
 PCM only; games own recorder lifecycle, presentation clock and file paths.
 
+`audio_capture_begin_lockstep` is the offline variant for a take on a game
+clock (MANUAL time). The device stops, and the main thread mixes exactly the
+frames each step covers with `audio_capture_render`; the voices advance only
+then, so the track follows the steps whatever the wall clock does. Unlocked
+playback does not wait for the device meanwhile. `audio_capture_end` ends it
+and restarts the device if playback should run.
+
 ## Streamed clips
 
 `audio_clip_load` decodes a clip whole: right for short cues, which then start
@@ -168,6 +175,9 @@ See `INSTALL.md` for wiring, validation, and removal.
 
 ## Version history
 
+- `1.4.0`: `audio_capture_begin_lockstep` and `audio_capture_render` capture a
+  take on a game clock: the device stops and the main thread mixes the frames
+  each step covers. Realtime capture and playback are unchanged.
 - `1.3.0`: optional native development PCM capture after mix gains, with a
   bounded SPSC queue, pause silence, stable tail drain and overflow reporting.
   Disabled production/web builds retain their previous playback path.

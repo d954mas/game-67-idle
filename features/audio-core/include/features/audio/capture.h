@@ -13,6 +13,14 @@ bool audio_capture_begin(void);
 bool audio_capture_end(void);
 uint32_t audio_capture_read(float *stereo, uint32_t capacity_frames);
 bool audio_capture_failed(void);
+/* Lockstep capture for offline recording on a game clock (MANUAL time): the device stops and the
+   main thread mixes exactly the frames each step covers with audio_capture_render, so the track
+   follows the steps, not the wall clock. Unlocked playback does not need the device meanwhile.
+   audio_capture_end ends it and restarts the device when playback should run. */
+bool audio_capture_begin_lockstep(void);
+/* Lockstep only: the next `frames` of the post-mix stream into `stereo`. Pause, disable and lock
+   give silence without advancing voices. False (and silence) outside lockstep or on a mix error. */
+bool audio_capture_render(float *stereo, uint32_t frames);
 #endif
 
 #endif

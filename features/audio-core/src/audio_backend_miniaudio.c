@@ -24,6 +24,7 @@ static atomic_uint s_capture_write;
 static atomic_bool s_capture_overflow;
 static atomic_bool s_capture_mix;
 static bool s_capture_active;
+static bool s_capture_lockstep; /* the main thread mixes; the device stays stopped */
 #endif
 #define AUDIO_NATIVE_MAX_DECODED_BYTES_PER_CLIP (UINT64_C(128) * UINT64_C(1024) * UINT64_C(1024))
 #define AUDIO_NATIVE_MAX_DECODED_BYTES_TOTAL (UINT64_C(256) * UINT64_C(1024) * UINT64_C(1024))
@@ -197,7 +198,7 @@ static void apply_run_state(void) {
     ma_bool32 should_run = s_available && s_unlocked && s_enabled && !s_paused;
 #if defined(AUDIO_CORE_CAPTURE_ENABLED) && AUDIO_CORE_CAPTURE_ENABLED
     atomic_store_explicit(&s_capture_mix, should_run != MA_FALSE, memory_order_release);
-    should_run = should_run || s_capture_active;
+    should_run = (should_run || s_capture_active) && !s_capture_lockstep;
 #endif
 #if defined(AUDIO_MINIAUDIO_TEST_NO_DEVICE)
     s_started = should_run;
@@ -236,7 +237,40 @@ bool audio_capture_end(void) {
     if (!s_capture_active) return true;
     if (!capture_quiesce()) return false;
     s_capture_active = false;
+    s_capture_lockstep = false;
     apply_run_state();
+    return true;
+}
+
+bool audio_capture_begin_lockstep(void) {
+    if (!s_available || s_capture_active || !capture_quiesce()) return false;
+    atomic_store_explicit(&s_capture_read, 0u, memory_order_relaxed);
+    atomic_store_explicit(&s_capture_write, 0u, memory_order_relaxed);
+    atomic_store_explicit(&s_capture_overflow, false, memory_order_relaxed);
+    s_capture_active = true;
+    s_capture_lockstep = true;
+    apply_run_state();
+    return true;
+}
+
+bool audio_capture_render(float *stereo, uint32_t frames) {
+    if (stereo == NULL || frames == 0u) return s_capture_lockstep;
+    const size_t bytes = (size_t)frames * AUDIO_NATIVE_CHANNELS * sizeof(float);
+    if (!s_capture_lockstep) {
+        memset(stereo, 0, bytes);
+        return false;
+    }
+    if (!(s_available && s_unlocked && s_enabled && !s_paused)) {
+        memset(stereo, 0, bytes);
+        return true;
+    }
+    ma_uint64 read = 0;
+    if (ma_engine_read_pcm_frames(&s_engine, stereo, frames, &read) != MA_SUCCESS) {
+        memset(stereo, 0, bytes);
+        atomic_store_explicit(&s_capture_overflow, true, memory_order_release);
+        return false;
+    }
+    if (read < frames) memset(stereo + read * AUDIO_NATIVE_CHANNELS, 0, (size_t)(frames - read) * AUDIO_NATIVE_CHANNELS * sizeof(float));
     return true;
 }
 
@@ -261,6 +295,7 @@ bool audio_capture_failed(void) { return atomic_load_explicit(&s_capture_overflo
 static void backend_reset(void) {
 #if defined(AUDIO_CORE_CAPTURE_ENABLED) && AUDIO_CORE_CAPTURE_ENABLED
     s_capture_active = false;
+    s_capture_lockstep = false;
     atomic_store_explicit(&s_capture_read, 0u, memory_order_relaxed);
     atomic_store_explicit(&s_capture_write, 0u, memory_order_relaxed);
     atomic_store_explicit(&s_capture_overflow, false, memory_order_relaxed);
@@ -579,6 +614,9 @@ bool audio_core_backend_user_gesture(void) {
 }
 
 bool audio_core_backend_is_unlocked(void) {
+#if defined(AUDIO_CORE_CAPTURE_ENABLED) && AUDIO_CORE_CAPTURE_ENABLED
+    if (s_capture_lockstep) return s_unlocked == MA_TRUE;
+#endif
     return s_unlocked == MA_TRUE && s_started == MA_TRUE;
 }
 
