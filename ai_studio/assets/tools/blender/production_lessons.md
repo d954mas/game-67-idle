@@ -195,6 +195,17 @@ not appear in Studio files is named by a short description instead.
 
 ## Tooling
 
+### 0. Hash text the way git stores it
+- **What happened:** Clip fixes recorded the hashes of the tool scripts they ran. The scripts
+  had been written by Python on Windows, which writes CRLF, while the repositories store and
+  check out LF (`.gitattributes eol=lf`); every recorded hash was of bytes no clone would ever
+  have.
+- **Tip:** Hash text files by their LF content (replace `
+` with `
+` before hashing), or
+  hash only after a fresh checkout. Binary assets hash as they are.
+
+
 ### 16. Every game rewrote the same plumbing
 - **What happened:** Six games hold about 900 `bpy` scripts: ~320 own render setups, ~115 GLB
   parsers, ~90 contact-sheet builders, camera setup in 68 files of one game alone, four
