@@ -85,11 +85,15 @@ def paste_on_cell(card, image_path, origin, cell):
     card.paste(base, origin)
 
 
-def describe_size(bounds):
+def describe_size(bounds, scale=1.0):
+    """Size as the game shows it; the file size follows when the runtime scales the mesh."""
     if not bounds:
         return ""
     size = [hi - lo for lo, hi in zip(bounds["min"], bounds["max"])]
-    return "size {:.3f} x {:.3f} x {:.3f} m (x, y up, z)".format(*size)
+    text = "size {:.3f} x {:.3f} x {:.3f} m (x, y up, z)".format(*(s * scale for s in size))
+    if scale != 1.0:
+        text += " in game, x{:g} of {:.3f} x {:.3f} x {:.3f} in the file".format(scale, *size)
+    return text
 
 
 def fit_text(draw, text, width, typeface):
@@ -173,7 +177,7 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
     if stats.get("animations"):
         facts.append(f"{len(stats['animations'])} clips")
     draw.text((margin, margin + 38), "   ".join(facts), fill=TEXT, font=font(17))
-    sub = [describe_size(stats.get("bounds")), f"Blender {views.get('blender', '?')}",
+    sub = [describe_size(stats.get("bounds"), float(views.get("model_scale") or 1.0)), f"Blender {views.get('blender', '?')}",
            f"sha {str(views.get('sha256', ''))[:12]}"]
     draw.text((margin, margin + 64), "   ".join(s for s in sub if s), fill=MUTED, font=font(15))
     if views.get("error"):

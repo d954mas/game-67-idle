@@ -10,7 +10,7 @@ tiptoe. Local rotations are never copied: generator rigs' local frames differ by
 
 Hips translation is the source's displacement from its rest, turned into the target frame and scaled
 by the ratio of hips heights over the ankles. Unmapped target joints keep their rest local transform.
-Space is glTF's (Y up, metres); `lib/motion` (Z up) is called through from_gltf / to_gltf.
+Space is glTF's file space (metres); `lib/motion` gets points in the target body frame, up as z.
 """
 import json
 import re
@@ -41,24 +41,30 @@ def _limb_chain():
         def n(x):
             return f"{s}_{x}"
         out[n("shoulder")] = (None, [n("upper_arm")], None)
-        out[n("upper_arm")] = (n("shoulder"), [n("lower_arm")], "thumb")
+        out[n("upper_arm")] = (n("shoulder"), [n("lower_arm")], "elbow")
         out[n("lower_arm")] = (n("upper_arm"), [n("hand")], "thumb")
         out[n("hand")] = (n("lower_arm"), [n("middle1"), n("hand_end")], "thumb")
         for f in FINGERS:
             for k in (1, 2, 3):
                 out[n(f"{f}{k}")] = (n(f"{f}{k - 1}") if k > 1 else n("hand"),
                                      [n(f"{f}{k + 1}")] if k < 3 else [], None)
-        out[n("upper_leg")] = (None, [n("lower_leg")], "foot")
-        out[n("lower_leg")] = (n("upper_leg"), [n("foot")], "foot")
+        out[n("upper_leg")] = (None, [n("lower_leg")], "knee")
+        out[n("lower_leg")] = (n("upper_leg"), [n("foot")], None)
     return out
 
 
 CHAIN = _limb_chain()
 
 
+# Smallest rest bend (sine of the angle) at which a roll reference counts; a straighter limb takes its
+# roll from the parent alignment instead.
+MIN_BEND = {"thumb": 0.2, "elbow": 0.26, "knee": 0.26}
+
+
 def secondary(kind, side, pos, both, up):
-    """Roll reference of a limb at rest, or None when one rig lacks the landmarks: the thumb side for
-    arm joints (palms follow the source's palms), the foot's heading for leg joints (knees follow it)."""
+    """Roll reference of a limb at rest, or None when one rig lacks the landmarks. Forearm and hand
+    follow the thumb side, so a rest palm that differs becomes forearm twist, never shoulder roll;
+    upper arm and thigh follow their elbow or knee bend plane, only when both rests bend it."""
     def has(*names):
         return all(f"{side}_{n}" in both for n in names)
 
@@ -70,8 +76,10 @@ def secondary(kind, side, pos, both, up):
             return at("thumb1") - at("hand")
         if has("index1", "little1"):
             return at("index1") - at("little1")
-    if kind == "foot" and has("foot", "toe"):
-        return flat(at("toe") - at("foot"), up)
+    if kind == "elbow" and has("lower_arm", "hand"):
+        return at("hand") - at("lower_arm")
+    if kind == "knee" and has("lower_leg", "foot"):
+        return at("foot") - at("lower_leg")
     return None
 
 
@@ -266,11 +274,6 @@ def remove_twist(q, axis):
     return out
 
 
-def to_gltf(p):
-    """lib/motion Z-up point back to glTF Y-up."""
-    return np.array([p[0], p[2], -p[1]], float)
-
-
 # --- rigs -------------------------------------------------------------------------------------
 
 class Rig:
@@ -339,6 +342,7 @@ class Retargeter:
         self.t_rot = {c: orthonormal(self.t_rest[i][:3, :3]) for c, i in t.joints.items()}
         self.t_body = body_frame(self.t_pos, t.joints)
         self.up = self.t_body[:, 1]
+        self.motion_axes = self.t_body[:, [2, 0, 1]]
         self.keyed = {t.joints[c] for c in self.pairs}
 
     # source side ---------------------------------------------------------------------------
@@ -406,7 +410,7 @@ class Retargeter:
                 sec_t, sec_s = secondary(kind, side, t_pos, both, up), secondary(kind, side, s_pos, both, up)
                 if sec_t is not None and sec_s is not None and min(
                         np.linalg.norm(np.cross(_unit(a_t), _unit(sec_t))),
-                        np.linalg.norm(np.cross(_unit(a_s), _unit(sec_s)))) > 0.2:
+                        np.linalg.norm(np.cross(_unit(a_s), _unit(sec_s)))) > MIN_BEND.get(kind, 0.2):
                     out[c] = frame(a_s, sec_s) @ frame(a_t, sec_t).T
                 else:
                     out[c] = swing(base @ a_t, a_s) @ base
@@ -455,8 +459,11 @@ class Retargeter:
         started = time.perf_counter()
         anim = clip.animation_index(anim)
         duration = clip.duration(anim)
-        n = max(2, int(round(duration * fps)) + 1)
-        times = np.linspace(0.0, duration, n)
+        if duration > 1e-6:
+            n = max(2, int(round(duration * fps)) + 1)
+            times = np.linspace(0.0, duration, n)
+        else:  # a pose: one key, since glTF sampler input must strictly increase
+            n, times = 1, np.zeros(1)
         worlds, rest = self._source(clip, anim, times)
         sj = self.src.joints
         s_pos_raw = {c: rest[i][:3, 3] for c, i in sj.items()}
@@ -501,6 +508,10 @@ class Retargeter:
                   "scale": round(scale, 4), "root": root, "travel_removed_m": round(float(np.linalg.norm(travel)), 4)}
         if speed:
             report["speed_mps"] = speed
+        warnings = []
+        if clip is self.src.glb and self._rest_is_first_frame(worlds, rest):
+            warnings.append("the file's rest equals its first frame, so the rest may be a pose, not the bind "
+                            "pose; pass --source-rig with the skeleton's real rest if the result looks off")
 
         local_r, hips_t, tw = self._solve(world_rot, hips_pos, n)
         twisted = [c for c in untwist if c in self.pairs]
@@ -533,7 +544,7 @@ class Retargeter:
                 weight = np.zeros(n)
                 for f, (w, anchor) in enumerate(plan["plan"]):
                     if anchor is not None and w > 0:
-                        goal[f] = to_gltf((anchor[0], anchor[1], plan["ankles"][f][2])) - travel_t[f]
+                        goal[f] = self._from_motion((anchor[0], anchor[1], plan["ankles"][f][2])) - travel_t[f]
                         weight[f] = w
                 self._reach({side: chains[side]}, {side: goal}, weight, world_rot, tw)
             local_r, hips_t, tw = self._solve(world_rot, hips_pos, n)
@@ -545,14 +556,39 @@ class Retargeter:
                           default=0.0)
                 feet[side]["slide_after_m"] = round(motion.foot_slide(plan["ankles"], plan["flags"]), 4)
                 feet[side]["max_pin_error_m"] = round(err, 4)
+        if foot_lock and plans and not any(f["planted_frames"] for f in feet.values()):
+            warnings.append("foot lock found no planted frames; a clip authored in place needs its ground "
+                            "speed (--speed m/s)" if root == "keep" and not speed else
+                            "foot lock found no planted frames")
         report["foot_lock"] = bool(foot_lock)
         report["feet"] = feet
+        report["warnings"] = warnings
         rotations = {i: continuous(quats(r)) for i, r in local_r.items()}
         translations = {self.tgt.joints["hips"]: hips_t}
         report["seconds"] = round(time.perf_counter() - started, 3)
         return ClipResult(report["clip"], times, rotations, translations, report)
 
+    def _rest_is_first_frame(self, worlds, rest, tolerance_deg=0.5):
+        """True when every mapped source joint sits at its rest rotation on frame 0 while the clip moves:
+        exporters that bake the first frame into the node TRS leave no bind pose to align with."""
+        moved, first = 0.0, 0.0
+        for i in self.src.joints.values():
+            r0 = orthonormal(rest[i][:3, :3])
+            r = orthonormal(worlds[i][:, :3, :3])
+            cos = np.clip((np.trace(np.swapaxes(r, 1, 2) @ r0, axis1=1, axis2=2) - 1) / 2, -1, 1)
+            angle = np.degrees(np.arccos(cos))
+            first, moved = max(first, float(angle[0])), max(moved, float(angle.max()))
+        return first < tolerance_deg < moved
+
     # passes ----------------------------------------------------------------------------------
+    def _to_motion(self, p):
+        """Target-world point to lib/motion's frame: (forward, left, up), so up is z whatever axis the
+        file stands on."""
+        return tuple(float(v) for v in self.motion_axes.T @ p)
+
+    def _from_motion(self, p):
+        return self.motion_axes @ np.asarray(p, float)
+
     def _low_joints(self):
         return [self.tgt.joints[c] for s in SIDES for c in (f"{s}_foot", f"{s}_toe", f"{s}_toe_end")
                 if c in self.tgt.joints]
@@ -595,7 +631,7 @@ class Retargeter:
         """Per side: ankles (motion's Z-up, ground travel restored), plant flags and lock plan."""
         out = {}
         for side, (_, _, ft_i, l1, l2) in chains.items():
-            ankles = [motion.from_gltf(p) for p in tw[ft_i][:, :3, 3] + travel_t]
+            ankles = [self._to_motion(p) for p in tw[ft_i][:, :3, 3] + travel_t]
             fl = flags[side] if flags else motion.detect_contacts(ankles, fps, l1 + l2)
             out[side] = {"ankles": ankles, "flags": fl, "plan": motion.lock_plan(ankles, fl)}
         return out
@@ -613,9 +649,9 @@ class Retargeter:
                 target = ankle0 + (goal[f] - ankle0) * weight[f]
                 if np.linalg.norm(target - ankle0) < 1e-4 * (l1 + l2):
                     continue  # already there: the solver's reach margin would bend a straight knee
-                knee, ankle = motion.two_bone_ik(motion.from_gltf(hip), motion.from_gltf(knee0),
-                                                 motion.from_gltf(target), l1, l2)
-                knee, ankle = to_gltf(knee), to_gltf(ankle)
+                knee, ankle = motion.two_bone_ik(self._to_motion(hip), self._to_motion(knee0),
+                                                 self._to_motion(target), l1, l2)
+                knee, ankle = self._from_motion(knee), self._from_motion(ankle)
                 s1 = swing(knee0 - hip, knee - hip)
                 s2 = swing(s1 @ (ankle0 - knee0), ankle - knee)
                 new_up[f] = s1 @ world_rot[up_i][f]
@@ -681,6 +717,13 @@ def write(target, results, path, mode="full", keep_animations=False):
         builder.json["scenes"] = [{"nodes": list(target.roots())}]
     else:
         raise ValueError(f"mode must be full or clip, not {mode!r}")
+    animated = {int(i) for r in results for tracks in (r.rotations, r.translations) for i in tracks}
+    for i in animated:
+        node = builder.json["nodes"][i]
+        if "matrix" in node:  # glTF forbids animating a node that holds a matrix
+            t, r, s = target.local_trs(i)
+            del node["matrix"]
+            node.update(translation=t.tolist(), rotation=r.tolist(), scale=s.tolist())
     taken = {a.get("name") for a in builder.json.get("animations", [])}
     for r in results:
         name = r.name

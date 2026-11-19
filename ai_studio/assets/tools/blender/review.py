@@ -89,7 +89,8 @@ def preset_path(value, base):
 def beside_entry(value, base):
     """A reference: a path, `path@scale`, or {"path", "scale", ...}; the path made absolute."""
     if isinstance(value, dict):
-        return {**value, "path": preset_path(value.get("path"), base)}
+        return {**value, "path": preset_path(value.get("path"), base),
+                **({"atlas": preset_path(value["atlas"], base)} if value.get("atlas") else {})}
     path, _, rest = str(value).partition("@")
     return preset_path(path, base) + (f"@{rest}" if rest else "")
 

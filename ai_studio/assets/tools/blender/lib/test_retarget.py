@@ -222,6 +222,102 @@ class RetargetTests(unittest.TestCase):
                 for n in names:
                     self.assertLess(float(np.abs(worlds[target.by_name[n]][:, :3, 3] - want[n]).max()), 1e-5)
 
+    def test_single_key_pose_writes_one_key(self):
+        builder, nodes = build_rig(positions())
+        doc = builder.json["nodes"]
+        rotations = {i: np.array([doc[i]["rotation"]]) for i in nodes.values()}
+        hips = nodes["Hips"]
+        RT.add_animation(builder, RT.ClipResult("pose", np.zeros(1), rotations,
+                                                {hips: np.array([doc[hips]["translation"]])}, {}))
+        source = loaded(builder)
+        target = self.target(a_pose=30.0)
+        result = RT.Retargeter(source, target).clip(source, 0, foot_lock=True)
+        self.assertEqual(result.times.tolist(), [0.0])
+        with tempfile.TemporaryDirectory() as tmp:
+            out = G.Glb.load(RT.write(target, [result], Path(tmp) / "pose.glb", "clip"))
+            for times, _, _ in out.channels(0).values():
+                self.assertEqual(len(times), 1)
+
+    def test_rest_differences_stay_below_the_shoulder_and_hip(self):
+        pos = positions()
+        for side, x in (("Left", 1.0), ("Right", -1.0)):
+            pos[f"{side}HandThumb1"] = np.array([0.73 * x, 1.49, 0.0])  # palms forward: thumbs up
+            ankle = pos[f"{side}Foot"].copy()
+            for j in ("Foot", "ToeBase", "Toe_End"):  # feet toed out 30 degrees
+                pos[f"{side}{j}"] = ankle + rot((0, 1, 0), 30.0 * x) @ (pos[f"{side}{j}"] - ankle)
+        target = loaded(build_rig(pos, seed=7)[0])
+        builder, nodes = build_rig(positions())
+        doc = builder.json["nodes"]
+        rotations = {i: np.repeat([doc[i]["rotation"]], 2, axis=0) for i in nodes.values()}
+        RT.add_animation(builder, RT.ClipResult("rest", np.array([0.0, 1.0]), rotations, {}, {}))
+        source = loaded(builder)
+        result = RT.Retargeter(source, target).clip(source, 0, legs=False)
+        for joint in ("LeftArm", "RightArm", "LeftUpLeg", "RightUpLeg", "LeftLeg"):
+            i = target.by_name[f"mixamorig:{joint}"]
+            self.assertLess(G.quat_angle_deg(result.rotations[i][0], target.local_trs(i)[1]), 1.0, joint)
+        thumb = joint_paths(target, result, ["mixamorig:LeftHand", "mixamorig:LeftHandThumb1"])
+        side = thumb["mixamorig:LeftHandThumb1"][0] - thumb["mixamorig:LeftHand"][0]
+        self.assertGreater(side[2], abs(side[1]))  # the source's palms-down thumb points forward
+
+    def test_z_up_target_finds_its_plants(self):
+        builder, nodes = build_rig(positions())
+        add_motion(builder, nodes, travel=0.2, legs=0.05)
+        source = loaded(builder)
+        z_up = {n: rot((1, 0, 0), 90.0) @ p for n, p in positions().items()}
+        target = loaded(build_rig(z_up, seed=5)[0])
+        report = RT.Retargeter(source, target).clip(source, 0, foot_lock=True).report
+        for side in ("left", "right"):
+            self.assertGreater(report["feet"][side]["planted_frames"], 10)
+            self.assertLess(report["feet"][side]["slide_after_m"], 0.2 * report["feet"][side]["slide_before_m"])
+
+    def test_animated_matrix_nodes_are_written_as_trs(self):
+        builder, nodes = build_rig(positions(), seed=4)
+        for n in ("Hips", "LeftArm"):
+            node = builder.json["nodes"][nodes[n]]
+            m = G.trs_matrix(node.pop("translation"), node.pop("rotation"), [1.0, 1.0, 1.0])
+            node["matrix"] = m.T.reshape(-1).tolist()
+        target = loaded(builder)
+        result = RT.Retargeter(self.source, target).clip(self.source, 0)
+        names = [f"mixamorig:{n}" for n in SKELETON]
+        want = joint_paths(target, result, names)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = G.Glb.load(RT.write(target, [result], Path(tmp) / "out.glb", "clip"))
+            animated = {c["target"]["node"] for c in out.json["animations"][0]["channels"]}
+            self.assertFalse(any("matrix" in out.nodes[i] for i in animated))
+            worlds = out.posed_worlds(out.channels(0, by_index=True), result.times)
+            for n in names:
+                self.assertLess(float(np.abs(worlds[out.by_name[n]][:, :3, 3] - want[n]).max()), 1e-5)
+
+    def test_warnings_for_a_lock_without_plants_and_a_posed_rest(self):
+        builder, nodes = build_rig(positions())
+        add_motion(builder, nodes, travel=3.0, legs=0.05)
+        source = loaded(builder)
+        report = RT.Retargeter(source, self.target()).clip(source, 0, root="in_place", foot_lock=True).report
+        self.assertTrue(any("no planted frames" in w for w in report["warnings"]))
+        self.assertFalse(any("rest equals its first frame" in w for w in report["warnings"]))
+        builder, nodes = build_rig(positions())
+        add_motion(builder, nodes)
+        for (i, path), (_, values, _) in loaded(builder).channels(0, by_index=True).items():
+            builder.json["nodes"][i][path] = values[0].tolist()  # frame 0 baked into the rest
+        posed = loaded(builder)
+        report = RT.Retargeter(posed, self.target()).clip(posed, 0).report
+        self.assertTrue(any("rest equals its first frame" in w for w in report["warnings"]))
+
+    def test_out_dir_names_sources_that_share_a_name_apart(self):
+        from ai_studio.assets.tools.blender import retarget as cli
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            for folder in ("a", "b"):
+                (tmp / folder).mkdir()
+                builder, nodes = build_rig(positions())
+                add_motion(builder, nodes, seed=3 if folder == "a" else 4)
+                builder.write(tmp / folder / "walk.glb")
+            builder, _ = build_rig(positions(a_pose=30.0), seed=7)
+            builder.write(tmp / "body.glb")
+            cli.run(cli.parse(["--source", str(tmp / "a" / "walk.glb"), str(tmp / "b" / "walk.glb"),
+                               "--target", str(tmp / "body.glb"), "--out-dir", str(tmp / "out"), "--no-check"]))
+            self.assertEqual(sorted(p.name for p in (tmp / "out").iterdir()), ["a__walk.glb", "b__walk.glb"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -33,7 +33,10 @@ def expand(patterns):
             out += sorted(Path(x) for x in glob.glob(p))
         else:
             out.append(path)
-    return out
+    unique = {}
+    for path in out:
+        unique.setdefault(path.resolve(), path)
+    return list(unique.values())
 
 
 def parse(argv=None):
@@ -42,7 +45,8 @@ def parse(argv=None):
     parser.add_argument("--source-rig", help="skeleton the clip files are keyed against (by node name)")
     parser.add_argument("--target", help="target rig or skinned body GLB")
     parser.add_argument("--out", help="one GLB with every clip")
-    parser.add_argument("--out-dir", help="one GLB per source file, named after it")
+    parser.add_argument("--out-dir", help="one GLB per source file, named after it (parent folders "
+                        "prefixed when two sources share a name)")
     parser.add_argument("--output", choices=("auto", "full", "clip"), default="auto")
     parser.add_argument("--map", default="auto", help="source map id or JSON (default: auto)")
     parser.add_argument("--target-map", default="auto", help="target map id or JSON (default: auto)")
@@ -126,7 +130,13 @@ def run(args):
     if args.out:
         outputs.append((Path(args.out), [r for _, rs, _ in groups for r in rs]))
     else:
-        outputs += [(Path(args.out_dir) / path.name, rs) for path, rs, _ in groups if rs]
+        from ai_studio.assets.tools.blender.review import output_names
+        names = output_names([path for path, rs, _ in groups if rs])
+        for path, rs, _ in groups:
+            if rs:
+                if names[path] != path.stem:
+                    print(f"{path.as_posix()}: another source has the same name; writing {names[path]}.glb")
+                outputs.append((Path(args.out_dir) / f"{names[path]}.glb", rs))
     every = []
     for out, results in outputs:
         RT.write(target, results, out, mode)
@@ -143,6 +153,8 @@ def run(args):
             print(f"{r.name:24} {rep['mapped']:2}/{rep['target_joints']} joints ({rep['source_map']} -> "
                   f"{rep['target_map']})  scale {rep['scale']:.3f}  {fmt_feet(rep['feet'])}{drift}{low}  "
                   f"{rep['seconds']:.2f} s")
+            for warning in rep.get("warnings", []):
+                print(f"  [warning] {r.name}: {warning}")
         for f in findings:
             print(f"  [{f['severity']}] {f['message']}")
         print(f"wrote {out} ({mode}, {len(results)} clips)")

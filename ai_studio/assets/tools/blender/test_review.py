@@ -213,13 +213,15 @@ class PresetPaths(unittest.TestCase):
             preset = folder / "blender_review.json"
             preset.write_text(json.dumps({
                 "glb_check": {"reference_rig": "../rigs/hero.glb"}, "contract": "contacts.json",
-                "beside": ["a.glb@0.5", {"path": "b.glb", "tint": "#ff0000"}]}), encoding="utf-8")
+                "beside": ["a.glb@0.5", {"path": "b.glb", "tint": "#ff0000", "atlas": "pal.png"}]}),
+                encoding="utf-8")
             options, tools, _ = review.read_preset(preset)
         root = Path(tmp).resolve()
         self.assertEqual(Path(tools["glb_check"]["reference_rig"]), root / "rigs" / "hero.glb")
         self.assertEqual(Path(tools["contract"]), root / "looks" / "contacts.json")
         self.assertEqual(options["beside"][0], str(root / "looks" / "a.glb") + "@0.5")
         self.assertEqual(Path(options["beside"][1]["path"]), root / "looks" / "b.glb")
+        self.assertEqual(Path(options["beside"][1]["atlas"]), root / "looks" / "pal.png")
 
 
 if __name__ == "__main__":

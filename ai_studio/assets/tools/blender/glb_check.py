@@ -3,7 +3,7 @@ formats, vertex colour encoding, node transforms, pivot, joint count and skin we
 rig against a reference rig.
 
     python glb_check.py model.glb [--pivot floor|floor-center|center|top|any] [--textures any|none|png]
-        [--color-encoding any|float|u8|u16|normalized] [--color-components any|3|4] [--identity-nodes] [--max-joints N] [--reference-rig rig.glb]
+        [--color-encoding any|float|u8|u16|normalized] [--color-components any|3|4] [--identity-nodes] [--max-joints N] [--reference-rig rig.glb [--reference-rig-mode exact|subset|superset]]
 
 The bounds and the bounds centre are reported separately from the origin: a consumer that places a
 model by its bounds or collider centre instead of its origin floats or sinks it.
@@ -22,7 +22,7 @@ TOOL = "glb_check"
 DEFAULTS = {"normal_tolerance": 0.01, "jpeg": "low", "textures": "any", "color_encoding": "any", "color_components": "any",
             "identity_nodes": False, "pivot": "any", "pivot_tolerance": 0.001, "max_joints": None,
             "max_influences": 4, "influence_epsilon": 1e-3, "weight_sum_tolerance": 1e-3,
-            "bind_tolerance": 1e-4, "seam_weight_tolerance": 1e-3, "weld": 1e-6, "reference_rig": None,
+            "bind_tolerance": 1e-4, "seam_weight_tolerance": 1e-3, "weld": 1e-6, "reference_rig": None, "reference_rig_mode": "exact",
             "rig_translation_tolerance": 1e-4, "rig_rotation_tolerance_deg": 0.01}
 SAMPLES = 5
 PIVOTS = ("floor", "floor-center", "center", "top", "any")
@@ -366,12 +366,15 @@ def check_reference_rig(glb, opts, out, metrics):
     ref = ref if isinstance(ref, G.Glb) else G.Glb.load(ref)
     missing, parents, moved = [], [], []
     worst_t = worst_r = 0.0
-    for i in sorted(_rig_nodes(ref)):
-        name = ref.name(i)
-        if name not in glb.by_name:
+    # exact and superset: every reference joint must be in the model; subset: every model joint must
+    # be in the reference (a look that skins fewer joints). Shared joints must match either way.
+    subset = opts["reference_rig_mode"] == "subset"
+    for k in sorted(_rig_nodes(glb if subset else ref)):
+        name = (glb if subset else ref).name(k)
+        if name not in (ref if subset else glb).by_name:
             missing.append(name)
             continue
-        j = glb.by_name[name]
+        i, j = (ref.by_name[name], k) if subset else (k, glb.by_name[name])
         parent_ref = ref.name(ref.parent[i]) if i in ref.parent else None
         parent_own = glb.name(glb.parent[j]) if j in glb.parent else None
         if parent_ref != parent_own:
@@ -384,7 +387,8 @@ def check_reference_rig(glb, opts, out, metrics):
     metrics["reference_rig"] = {"asset": ref.label, "max_translation_m": round(worst_t, 7),
                                 "max_rotation_deg": round(worst_r, 5)}
     for check, items, message, hint in (
-            ("rig_missing", missing, "reference joints missing", "export the full reference armature"),
+            ("rig_missing", missing, "joints not in the reference rig" if subset else "reference joints missing",
+             "use the reference armature's joints only" if subset else "export the full reference armature"),
             ("rig_parent", parents, "joints hang from a different parent", "match the reference hierarchy"),
             ("rig_rest", moved, "joints differ from the reference rest pose",
              "rebuild on the reference armature; clips made for it will not fit otherwise")):
@@ -397,7 +401,8 @@ def check(path_or_glb, **options):
     opts = R.resolve_options(TOOL, DEFAULTS, overrides=options)
     for key, allowed in (("pivot", PIVOTS), ("textures", ("any", "none", "png")),
                          ("color_encoding", ("any",) + tuple(COLOR_ENCODINGS)), ("jpeg", R.SEVERITIES + ("off",)),
-                         ("color_components", ("any", "3", "4"))):
+                         ("color_components", ("any", "3", "4")),
+                         ("reference_rig_mode", ("exact", "subset", "superset"))):
         if (str(opts[key]) if key == "color_components" else opts[key]) not in allowed:
             raise ValueError(f"{TOOL}: {key} must be one of {allowed}, not {opts[key]!r}")
     try:
@@ -435,6 +440,9 @@ def _configure(parser):
     parser.add_argument("--max-influences", type=int)
     parser.add_argument("--bind-tolerance", type=float)
     parser.add_argument("--reference-rig", help="GLB whose skin joints this rig must match")
+    parser.add_argument("--reference-rig-mode", choices=("exact", "subset", "superset"),
+                        help="subset: the model's joints must be in the reference; superset/exact: every "
+                             "reference joint must be in the model (default exact)")
     parser.add_argument("--rig-translation-tolerance", type=float)
     parser.add_argument("--rig-rotation-tolerance-deg", type=float)
 

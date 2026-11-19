@@ -138,6 +138,30 @@ class Skins(unittest.TestCase):
         self.assertIn("rig_rest", found(report, "high"))
         self.assertNotIn("rig_rest", found(glb_check.check(reference, reference_rig=reference)))
 
+    def test_reference_rig_modes(self):
+        joints = np.tile([0, 1, 0, 0], (8, 1))
+        weights = np.tile([0.5, 0.5, 0, 0], (8, 1))
+        small = skinned(joints, weights).to_glb()
+        b = skinned(joints, weights)
+        head = b.add_node("Head", translation=(0, 0.3, 0), parent=b.json["nodes"].index(
+            next(n for n in b.json["nodes"] if n["name"] == "Spine")))
+        ibm = [np.linalg.inv(G.trs_matrix((0, y, 0), (0, 0, 0, 1), (1, 1, 1))).T.reshape(-1) for y in (1, 1.5, 1.8)]
+        b.json["skins"] = [{"joints": [0, 1, head], "inverseBindMatrices": b.add_accessor(np.array(ibm), kind="MAT4")}]
+        full = b.to_glb()
+        rig = {"rig_missing", "rig_parent", "rig_rest"}
+        # A look skinning fewer joints than the reference.
+        self.assertIn("rig_missing", found(glb_check.check(small, reference_rig=full)))
+        self.assertIn("rig_missing", found(glb_check.check(small, reference_rig=full, reference_rig_mode="superset")))
+        self.assertEqual(found(glb_check.check(small, reference_rig=full, reference_rig_mode="subset")) & rig, set())
+        # A look with a joint the reference lacks.
+        self.assertEqual(found(glb_check.check(full, reference_rig=small)) & rig, set())
+        self.assertEqual(found(glb_check.check(full, reference_rig=small, reference_rig_mode="superset")) & rig, set())
+        self.assertIn("rig_missing", found(glb_check.check(full, reference_rig=small, reference_rig_mode="subset")))
+        moved = skinned(joints, weights, bind_offset=0.01).to_glb()
+        self.assertIn("rig_rest", found(glb_check.check(moved, reference_rig=full, reference_rig_mode="subset")))
+        with self.assertRaises(ValueError):
+            glb_check.check(small, reference_rig=full, reference_rig_mode="loose")
+
     def test_seam_twins_with_different_weights(self):
         points = np.vstack([CUBE, CUBE[:1]])
         faces = np.vstack([FACES, [[8, 1, 2]]])

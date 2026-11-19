@@ -856,17 +856,24 @@ def dress_materials(state, meshes, atlas=None, tint=None):
     if atlas:
         image = bpy.data.images.load(str(Path(atlas).resolve()), check_existing=True)
         image.colorspace_settings.name = "sRGB"
-    copies = {}
+    copies, bare = {}, None
     for obj in meshes:
+        if not obj.material_slots and obj.data not in copies:
+            # A mesh without a material, whose colour the runtime binds: give it a white one to dress.
+            bare = bare or bpy.data.materials.new("review_bare")
+            obj.data.materials.append(bare)
+            state.undo.append(lambda mesh=obj.data: mesh.materials.pop())
+            copies[obj.data] = None
         for i, slot in enumerate(obj.material_slots):
             original = slot.material
             if original is None:
-                continue
-            if original not in copies:
-                copies[original] = _dressed(original, image, tint)
+                bare = bare or bpy.data.materials.new("review_bare")
+            source = original or bare
+            if source not in copies:
+                copies[source] = _dressed(source, image, tint)
             state.undo.append(lambda obj=obj, i=i, original=original:
                               setattr(obj.material_slots[i], "material", original))
-            slot.material = copies[original]
+            slot.material = copies[source]
 
 
 def _dressed(material, image, tint):

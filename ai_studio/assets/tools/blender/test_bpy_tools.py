@@ -275,6 +275,10 @@ class RenderViews(BlenderCase):
             b.write(path)
             return path
         model, ref = white_cube(self.tmp / "prop.glb"), white_cube(self.tmp / "ref.glb")
+        # The model carries UVs but no glTF material at all; the runtime binds the atlas.
+        b = G.GlbBuilder()
+        b.add_node("cube", mesh=b.add_mesh("cube", CUBE, CUBE_FACES, extra={"TEXCOORD_0": uv}))
+        b.write(model)
         atlas = self.tmp / "palette.png"
         Image.new("RGB", (4, 4), (20, 200, 20)).save(atlas)
         out = self.tmp / "atlas"
@@ -285,7 +289,7 @@ class RenderViews(BlenderCase):
         report = json.loads((out / "views.json").read_text(encoding="utf-8"))
         self.assertEqual(Path(report["atlas"]), atlas.resolve())
         self.assertEqual(report["lineup"]["members"][1]["tint"], "#2020ff")
-        self.assertEqual(report["stats"]["materials"], ["white"])
+        self.assertEqual(report["stats"]["materials"], [])
         r, g, b, _ = pixels(out / "front_beauty.png")[32, 32]
         self.assertGreater(g, 2 * max(r, b))
         lineup = pixels(out / "lineup_front_beauty.png")

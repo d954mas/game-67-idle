@@ -167,9 +167,10 @@ lowest sole, and seconds (tens of milliseconds per clip). `--report r.json` keep
 Method (`lib/retarget.py`, numpy only, also importable inside Blender): each mapped target joint
 takes its source joint's world rotation change from the source rest, after a constant rest
 alignment. Both rests are put in one body frame (left, up, forward), so facing and Z-up exports do
-not matter. The torso aligns rest to rest; arm joints align bone direction plus thumb side, leg
-joints bone direction plus foot heading, feet and toes their horizontal heading only, which keeps
-the target's own foot pitch. A constant translation key on a non-root joint is taken as that joint's
+not matter. The torso aligns rest to rest; upper arms and thighs align bone direction plus the
+elbow/knee bend plane (or the parent's roll when a rest limb is nearly straight), forearms and hands
+add the thumb side, so a different rest palm becomes forearm twist rather than a rolled shoulder;
+feet and toes align their horizontal heading only, which keeps the target's own foot pitch. A constant translation key on a non-root joint is taken as that joint's
 true rest. Hips move by the source displacement times the hips-height ratio; the legs then reach
 the source ankles mapped the same way (`--no-leg-ik` copies rotations only), which matters for
 cartoon legs. `--foot-lock` pins planted ankles with `lib/motion` (contacts, ramped plan, two-bone
