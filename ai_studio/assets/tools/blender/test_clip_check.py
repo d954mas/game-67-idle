@@ -149,6 +149,65 @@ class ClipCheck(unittest.TestCase):
         floating = next(f for f in plain["findings"] if f["check"] == "sole_float")
         self.assertRegex(floating["message"], r"within 0\.\d{3} m ")
 
+    def test_sink_reports_duration_part_and_game_metres(self):
+        report = clip_check.check(character(Sink={"Hips": hips(-0.15)}))
+        sink = next(f for f in report["findings"] if f["check"] == "sole_sink")
+        self.assertEqual((sink["severity"], sink["where"]["part"]), ("medium", "sole"))
+        self.assertAlmostEqual(sink["where"]["duration"], 1.0 + 1 / FPS, places=3)
+        self.assertAlmostEqual(sink["value"], 0.15, places=3)
+        scaled = clip_check.check(character(Sink={"Hips": hips(-0.15)}), model_scale=2.0)
+        sink = next(f for f in scaled["findings"] if f["check"] == "sole_sink")
+        self.assertAlmostEqual(sink["value"], 0.3, places=3)
+        self.assertIn("game m", sink["message"])
+        self.assertEqual(scaled["metrics"]["units"], "game m")
+
+    def test_short_deep_dip_is_low(self):
+        dip = np.zeros(len(T))
+        dip[10:16] = -0.3  # 0.2 s: a foot flicks through the floor mid-stride
+        sink = next(f for f in clip_check.check(character(Dodge={"Hips": hips(dip)}))["findings"]
+                    if f["check"] == "sole_sink")
+        self.assertEqual(sink["severity"], "low")
+
+    def test_brief_shallow_dip_is_low(self):
+        dip = np.zeros(len(T))
+        dip[15:17] = -0.025
+        report = clip_check.check(character(Land={"Hips": hips(dip)}))
+        sink = next(f for f in report["findings"] if f["check"] == "sole_sink")
+        self.assertEqual(sink["severity"], "low")
+        self.assertLess(sink["where"]["duration"], 0.1)
+
+    def test_sink_against_a_baseline_clip(self):
+        clips = {"Idle": {"Hips": hips(-0.05)}, "Crouch": {"Hips": hips(-0.08)}}
+        report = clip_check.check(character(**clips), baseline="Idle")
+        rows = {r["animation"]: r for r in report["metrics"]["per_animation"]}
+        self.assertAlmostEqual(rows["Crouch"]["dip_m"], 0.03, places=3)
+        self.assertAlmostEqual(rows["Idle"]["dip_m"], 0.05, places=3)  # the baseline itself meets the floor
+        sink = next(f for f in report["findings"] if f["check"] == "sole_sink")
+        crouch = next(i for i in sink["where"]["items"] if i["animation"] == "Crouch")
+        self.assertIn("Idle baseline", crouch["message"])
+        missing = clip_check.check(character(**clips), baseline="Stand")
+        self.assertIn("baseline", found(missing, "info"))
+
+    def test_toe_spike_at_a_foot_contact_is_not_a_pop(self):
+        b = G.GlbBuilder()
+        add_rig(b)
+        foot = next(i for i, n in enumerate(b.json["nodes"]) if n["name"] == "LeftFoot")
+        toe = b.add_node("LeftToeBase", translation=(0, -0.05, 0.1), parent=foot)
+        b.add_node("LeftToe_End", translation=(0, 0, 0.05), parent=toe)
+        spike = np.tile([0, -0.05, 0.1], (len(T), 1)).astype(float)
+        spike[15, 1] += 0.2
+        add_clip(b, "Stomp", {"LeftToeBase": spike})
+        report = clip_check.check(b.to_glb())
+        self.assertNotIn("pop", found(report))
+        self.assertIn("pop", serious(clip_check.check(character(Pop={"Hips": hips(np.where(np.arange(len(T)) == 15, 0.2, 0))}))))
+
+    def test_short_clip_pop_limit_grows(self):
+        row = {}
+        times = np.arange(7) / FPS
+        clip_check.check_pops(["Hips"], np.zeros((7, 1, 3)), times, {"pop_accel": 180.0, "pop_window": 6,
+                                                                       "pop_ratio": 4.0}, "Jab", [], row)
+        self.assertAlmostEqual(row["pop_limit_mps2"], 180.0 * (0.4 / 0.2) ** 2, places=1)
+
     def test_popping_joint(self):
         spike = np.zeros(len(T))
         spike[15] = 0.2
@@ -157,7 +216,7 @@ class ClipCheck(unittest.TestCase):
     def test_teleport_and_sink(self):
         jump = np.where(T > 0.5, 1.0, 0.0)
         self.assertIn("teleport", found(clip_check.check(character(Jump={"Hips": hips(dx=jump)})), "high"))
-        self.assertIn("sole_sink", serious(clip_check.check(character(Sink={"Hips": hips(-0.1)}))))
+        self.assertIn("sole_sink", serious(clip_check.check(character(Sink={"Hips": hips(-0.15)}))))
         self.assertNotIn("sole_sink", found(clip_check.check(character(Sink={"Hips": hips(-0.1)}), sink=0.2)))
 
     def test_nan_keys(self):

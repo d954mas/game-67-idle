@@ -224,5 +224,28 @@ class PresetPaths(unittest.TestCase):
         self.assertEqual(Path(options["beside"][1]["atlas"]), root / "looks" / "pal.png")
 
 
+class Shipped(unittest.TestCase):
+    def test_only_files_named_by_the_build_lists_are_checked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            game = Path(tmp)
+            (game / "game.json").write_text("{}", encoding="utf-8")
+            models = game / "assets" / "models"
+            models.mkdir(parents=True)
+            packed = clip_only(models / "packed.glb")
+            loose = clip_only(models / "loose.glb")
+            plans = game / "build" / "packs"
+            plans.mkdir(parents=True)
+            (plans / "a.plan").write_text("clip\tassets/models/packed.glb\tIdle\n", encoding="utf-8")
+            (game / "blender_review.json").write_text(json.dumps({"shipped": "build/packs/*.plan"}),
+                                                     encoding="utf-8")
+            args = argparse.Namespace(no_render=True, out=str(game / "out"))
+            results, _ = review.review([packed, loose], args, {})
+            self.assertEqual([Path(s["asset"]).name for s, _ in results], ["packed.glb"])
+            self.assertEqual([m.name for m in review.review.skipped], ["loose.glb"])
+            args.all_files = True
+            results, _ = review.review([packed, loose], args, {})
+            self.assertEqual(len(results), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

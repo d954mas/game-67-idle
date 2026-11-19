@@ -26,6 +26,7 @@ import fnmatch
 import glob
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -47,7 +48,7 @@ OPTIONS = {"views": None, "passes": None, "size": 768, "light": "studio_hdr", "g
            "turntable": 0, "beside": [], "lineup_views": None, "animation": None, "time": 0.0,
            "pose_views": None, "max_poses": 4, "filmstrip": 8, "max_filmstrips": 3, "pose_size": 384, "profile": None, "pivot": None, "contacts": None,
            "floating": False, "clip_model": None, "game_crop": None, "model_scale": None, "atlas": None,
-           "tint": None}
+           "tint": None, "shipped": None}
 PATH_OPTIONS = ("contacts", "clip_model", "game_crop", "atlas")
 RENDER_OPTIONS = ("views", "passes", "size", "light", "game_camera", "turntable", "beside",
                   "lineup_views", "animation", "time", "pose_views", "pose_size", "model_scale", "atlas",
@@ -106,6 +107,8 @@ def parse_layer(data, base):
                 value = preset_path(value, base)
             elif key == "beside":
                 value = [beside_entry(v, base) for v in ([value] if isinstance(value, (str, dict)) else value)]
+            elif key == "shipped":
+                value = [preset_path(v, base) for v in ([value] if isinstance(value, str) else value)]
             options[key] = value
         elif key in TOOLS and isinstance(value, dict):
             tools[key] = {k: preset_path(v, base) if k in TOOL_PATH_OPTIONS else v for k, v in value.items()}
@@ -431,6 +434,16 @@ def review(models, args, config):
     """Checks per model, batched renders, one card per model. Returns ([(summary, reports)], s)."""
     started = time.monotonic()
     models = [Path(m).resolve() for m in models]
+    skipped = []
+    if not getattr(args, "all_files", False):
+        kept = []
+        for model in models:
+            opts, _ = model_options(model, args, config)
+            if opts.shipped and not shipped_paths(opts.shipped):
+                raise SystemExit(f"preset `shipped` lists {opts.shipped} name no .glb; build the game first "
+                                 "or pass --all-files")
+            (kept if not opts.shipped or is_shipped(model, opts.shipped) else skipped).append(model)
+        models = kept
     names = output_names(models)
     root = Path(args.out).resolve() if getattr(args, "out", None) else Path.cwd() / "tmp" / "review"
     settings, checked, poses, marks = {}, {}, {}, {}
@@ -479,10 +492,38 @@ def review(models, args, config):
                    "checks": {r["tool"]: {"status": r["status"], "counts": r["counts"]} for r in reports}}
         write_json(out / "review.json", summary)
         results.append((summary, reports))
+    review.skipped = skipped
     return results, round(time.monotonic() - started, 2)
 
 
 # --- command line -----------------------------------------------------------------------------
+
+# Linear-time on large depfiles (no nested quantifiers); paths with spaces are not matched.
+GLB_REFERENCE = re.compile(r"([A-Za-z0-9_.\-/\\]+\.glb)", re.I)
+_SHIPPED_CACHE = {}
+
+
+def shipped_paths(patterns):
+    """Every *.glb path named in the build's own lists (pack inputs, pack plans): the files the
+    game actually loads. Patterns are files or globs; paths are kept as posix suffixes."""
+    key = tuple(patterns)
+    if key not in _SHIPPED_CACHE:
+        found = set()
+        for pattern in patterns:
+            files = [Path(p) for p in glob.glob(pattern, recursive=True)] or [Path(pattern)]
+            for file in files:
+                if file.is_file():
+                    text = file.read_text(encoding="utf-8", errors="replace")
+                    found.update(m.group(1).replace("\\", "/").lstrip("/").lower()
+                                 for m in GLB_REFERENCE.finditer(text))
+        _SHIPPED_CACHE[key] = found
+    return _SHIPPED_CACHE[key]
+
+
+def is_shipped(model, patterns):
+    posix = Path(model).as_posix().lower()
+    return any(posix.endswith("/" + ref) or posix == ref for ref in shipped_paths(patterns))
+
 
 def caller_path(value):
     """Paths on the command line are relative to where the caller stands, even when a wrapper
@@ -528,6 +569,8 @@ def parser():
     p.add_argument("models", nargs="+", help="GLB files, folders or globs")
     p.add_argument("--out", help="output folder (default: ./tmp/review)")
     p.add_argument("-r", "--recursive", action="store_true", help="folders include their subfolders")
+    p.add_argument("--all-files", action="store_true",
+                   help="also check files the preset's `shipped` build lists do not name")
     p.add_argument("--views", nargs="+", help="front back left right top three_quarter game")
     p.add_argument("--passes", nargs="+", help="beauty clay wire silhouette")
     p.add_argument("--size", type=int, help="image height in px (default 768)")
@@ -591,6 +634,9 @@ def main(argv=None):
         elif not args.no_render:
             print(f"card: not rendered ({summary['render_error']})")
         failed |= args.strict and any(R.fails(r, args.fail_on) for r in reports)
+    skipped = getattr(review, "skipped", [])
+    if skipped:
+        print(f"skipped {len(skipped)} file(s) the game's build lists do not ship (--all-files to check them)")
     print(f"{len(results)} model(s) in {seconds} s")
     return 1 if failed else 0
 

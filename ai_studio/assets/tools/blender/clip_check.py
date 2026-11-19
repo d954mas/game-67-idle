@@ -31,11 +31,20 @@ DEFAULTS = {"model": None, "animations": None, "fps": 30.0, "feet": None, "floor
             "pop_accel": 180.0, "pop_ratio": 4.0, "pop_window": 6, "teleport_speed": 18.0,
             "slide": 0.05, "sink": 0.03, "float": 0.03, "loop": False, "loop_seam": 0.02,
             "skinned_soles": True, "in_place": "auto", "body_scale": "auto", "plant_height": 0.01,
-            "airborne": []}
-SCALED = ("pop_accel", "teleport_speed", "slide", "sink", "float", "loop_seam", "plant_height")
+            "airborne": [], "model_scale": None, "baseline": None,
+            "pop_stray": 0.02}
+SCALED = ("pop_accel", "teleport_speed", "slide", "sink", "float", "loop_seam", "plant_height", "pop_stray")
 HUMAN_HEIGHT = 1.75
 SAMPLES = 5
 SIDE = {"left": ("left", "l"), "right": ("right", "r")}
+# A part under the floor is noticed when it is gone long enough to register (s) and deep enough to
+# hide a foot (game m); a shorter or shallower dip reads as motion in a fast action. Calibrated on
+# reviewed clips: every sink players saw lasted 0.4 s or more at 0.4 m or more.
+VISIBLE_DIP = (0.3, 0.1)
+SHORT_CLIP = 0.4  # s: pop limits grow as (SHORT_CLIP / duration)^2 below it, as a strike packs its swing
+PARTS = (("toe", ("toe",)), ("sole", ("foot", "ankle", "heel")),
+         ("knee", ("knee", "calf", "shin", "leg", "thigh")),
+         ("hand", ("hand", "finger", "thumb", "wrist", "palm", "index", "middle", "ring", "pinky", "arm", "elbow")))
 # Per-model facts, so one loaded model checked against many clip files is measured once.
 _MODEL_FACTS = weakref.WeakKeyDictionary()
 
@@ -109,36 +118,47 @@ def check_keys(clip, anim, name, out):
     return not bad
 
 
-def check_pops(names, positions, times, opts, anim, out, row, leaves=()):
+def check_pops(names, positions, times, opts, anim, out, row, leaves=(), planted=None):
     """Second-difference spikes on joints that carry other joints: a chain's tip (finger, toe end)
-    multiplies every rotation above it into speed, so a fast swing reads as a pop there."""
+    multiplies every rotation above it into speed, so a fast swing reads as a pop there. `planted`
+    ({joint: per-frame bool}) names foot and toe joints whose spikes at a foot contact are the
+    landing itself, not a pop."""
     worst, hits = 0.0, []
     floor = 0.36  # m/s^2: 1e-4 m/frame^2 at 60 fps keeps a perfectly smooth stretch from dividing by zero
     w = opts["pop_window"]
+    duration = float(times[-1] - times[0]) if len(times) else 0.0
+    limit = opts["pop_accel"] * max(1.0, (SHORT_CLIP / max(duration, 1e-3)) ** 2)
+    row["pop_limit_mps2"] = round(limit, 1)
     every = np.linalg.norm(_accel(positions, times), axis=2)
     for j, joint in enumerate(names):
         if joint in leaves:
             continue
         acc = every[:, j]
         worst = max(worst, float(acc.max(initial=0)))
-        for k in np.flatnonzero(acc > opts["pop_accel"]):
+        contact = (planted or {}).get(joint)
+        for k in np.flatnonzero(acc > limit):
+            if contact is not None and contact[max(0, k - 1):k + 2].any():
+                continue
             local = float(np.median(acc[max(1, k - w):k + w + 1]))
             # A pop goes out and comes back: the sample strays from the chord of its neighbours by more
             # than the chord is long. A fast swing or a strike travels through, however hard it accelerates.
             p = positions[:, j]
-            out_and_back = np.linalg.norm(p[k] - (p[k - 1] + p[k + 1]) / 2) > np.linalg.norm(p[k + 1] - p[k - 1])
-            if acc[k] > opts["pop_ratio"] * max(local, floor) and out_and_back:
-                hits.append((float(acc[k]), joint, float(times[k])))
+            stray = float(np.linalg.norm(p[k] - (p[k - 1] + p[k + 1]) / 2))
+            if acc[k] > opts["pop_ratio"] * max(local, floor) and stray > np.linalg.norm(p[k + 1] - p[k - 1]):
+                hits.append((float(acc[k]), joint, float(times[k]), stray))
     row["max_accel_mps2"] = round(worst, 1)
     if hits:
         hits.sort(reverse=True)
         joints = sorted({h[1] for h in hits})
-        out.append(R.finding("pop", "medium", f"{anim}: {len(hits)} pops on {len(joints)} joints "
-                             f"(worst {hits[0][0]:.0f} m/s^2 on {hits[0][1]} at {hits[0][2]:.3f} s)",
+        # A one-frame stray under a couple of centimetres (a toe flick) is a pixel or two in game.
+        seen = max(h[3] for h in hits) >= opts["pop_stray"]
+        out.append(R.finding("pop", "medium" if seen else "low", f"{anim}: {len(hits)} pops on {len(joints)} "
+                             f"joints (worst {hits[0][0]:.0f} m/s^2 on {hits[0][1]} at {hits[0][2]:.3f} s, "
+                             f"strays up to {max(h[3] for h in hits):.3f} {opts.get('units', 'm')})",
                              "smooth or re-key the spike (a flipped quaternion or a stray key)",
-                             {"animation": anim, "pops": [{"joint": j, "time": round(t, 3), "accel": round(a)}
-                                                          for a, j, t in hits[:SAMPLES]]},
-                             round(hits[0][0], 1), opts["pop_accel"]))
+                             {"animation": anim, "pops": [{"joint": j, "time": round(t, 3), "accel": round(a),
+                                                           "stray": round(d, 4)} for a, j, t, d in hits[:SAMPLES]]},
+                             round(hits[0][0], 1), round(limit, 1)))
 
 
 def check_teleport(roots, names, positions, times, opts, anim, out):
@@ -241,11 +261,11 @@ def check_feet(model, feet, names, positions, times, opts, anim, out, row, soles
     lunge is not a plant, and a plant slides by its least-moving spot (see plant_slide). An in-place clip (feet end where they started) is judged in the frame of
     the treadmill it implies: the median velocity of the feet while they are low."""
     if len(times) < 4 or not feet:
-        return
+        return {}
     t = times - times[0]
     fps = (len(times) - 1) / max(t[-1], 1e-9)
     tracks = {f: np.array([motion.from_gltf(p) for p in positions[:, names.index(f)]]) for f in feet}
-    legs = {f: leg_length(model, f) for f in feet}
+    legs = {f: leg_length(model, f) * opts["unit"] for f in feet}
     travel = max(float(np.linalg.norm(tr[-1, :2] - tr[0, :2])) for tr in tracks.values())
     in_place = opts["in_place"] == "yes" or opts["in_place"] == "auto" and travel < 0.25 * min(legs.values())
     ground = np.zeros(2)
@@ -262,6 +282,7 @@ def check_feet(model, feet, names, positions, times, opts, anim, out, row, soles
             for tr in tracks.values():
                 tr[:, :2] -= ground * t[:, None]
     row.update(in_place=bool(in_place), ground_speed=round(float(np.linalg.norm(ground)), 3), feet={})
+    contacts = {}
     for foot, tr in tracks.items():
         if soles and foot in soles:
             points = [np.array([motion.from_gltf(q) for q in soles[foot][:, k]]) for k in range(soles[foot].shape[1])]
@@ -277,6 +298,7 @@ def check_feet(model, feet, names, positions, times, opts, anim, out, row, soles
                                                  floor=floor) for p in points], bool)
         flat = np.stack([p[:, :2] for p in points], axis=1)
         planted = flags.any(axis=0)
+        contacts[foot] = planted
         drift, at, total = 0.0, None, 0.0
         for start, end in motion.contact_runs(planted.tolist()):
             # The sole points down for most of the plant carry it; a heel or toe that only touches at
@@ -290,11 +312,12 @@ def check_feet(model, feet, names, positions, times, opts, anim, out, row, soles
         row["feet"][foot] = {"planted_frames": int(planted.sum()), "max_drift_m": round(drift, 4),
                              "slide_total_m": round(total, 4), "points": "sole" if points[0] is not tr else "ankle"}
         if drift > opts["slide"]:
-            out.append(R.finding("foot_slide", "medium", f"{anim}: planted {foot} slides {drift:.3f} m "
+            out.append(R.finding("foot_slide", "medium", f"{anim}: planted {foot} slides {drift:.3f} {opts['units']} "
                                  f"(plant from {at:.3f} s)", "lock the foot during the plant (foot IK / "
                                  "foot lock), or match root speed to the stride",
                                  {"animation": anim, "joint": foot, "time": round(at, 3)},
                                  round(drift, 4), round(opts["slide"], 4)))
+    return contacts
 
 
 def body_height(model):
@@ -317,7 +340,39 @@ def lowest_points(model, worlds, use_skin):
     return model.lowest_skinned_y(worlds, nodes) if nodes else None
 
 
-def check_soles(model, feet, names, positions, worlds, times, opts, anim, out, row):
+def lowest_part(model, worlds, frame):
+    """(part, joint) of the lowest skinned vertex in one pose: toe, sole, knee, hand or body."""
+    nodes = [i for i, n in enumerate(model.nodes) if "skin" in n and "mesh" in n]
+    owner = model.skin_vertex_joints(nodes) if nodes else None
+    if owner is None:
+        return None, None
+    pose = {i: m[frame:frame + 1] for i, m in worlds.items()}
+    joint = model.name(int(owner[int(np.argmin(model.skinned_points(pose, nodes, np.arange(len(owner)))[0, :, 1]))]))
+    return _part(joint), joint
+
+
+def _part(joint):
+    key = _key(joint)
+    return next((part for part, words in PARTS if any(w in key for w in words)), "body")
+
+
+def baseline_low(clip, model, opts, lim):
+    """Lowest point of the baseline animation (from the clip file, else the model), or None."""
+    name = opts["baseline"]
+    source = clip if name in clip.animation_names() else model if name in model.animation_names() else None
+    if source is None:
+        return None
+    channels = source.channels(name, by_index=True) if source is model else source.channels(name)
+    worlds = model.posed_worlds(channels, _times(source, name, opts["fps"]))
+    lows = lowest_points(model, worlds, lim["skinned_soles"])
+    if lows is None:
+        return None
+    return float(np.min(lows)) * lim["unit"]
+
+
+def check_soles(model, feet, names, positions, worlds, times, opts, anim, out, row, reference=None):
+    """Lowest point per frame against the floor, or against `reference` (the baseline clip's lowest
+    point) when given. A sink reports how long it lasts and which part goes lowest."""
     lows = lowest_points(model, worlds, opts["skinned_soles"])
     source = "skinned mesh"
     if lows is None:
@@ -325,19 +380,37 @@ def check_soles(model, feet, names, positions, worlds, times, opts, anim, out, r
             return
         source = "foot joints"
         lows = positions[:, [names.index(f) for f in feet], 1].min(axis=1)
+    else:
+        lows = np.asarray(lows, float) * opts["unit"]
     lows = np.asarray(lows, float)
     k = int(np.argmin(lows))
     row.update(lowest_y=round(float(lows[k]), 4), lowest_source=source)
-    depth = opts["floor_y"] - lows[k]
+    level = opts["floor_y"] if reference is None else reference
+    below = "the floor" if reference is None else f"the {opts['baseline']} baseline's lowest point"
+    depth = level - lows[k]
     if depth > opts["sink"]:
-        out.append(R.finding("sole_sink", "medium", f"{anim}: {source} goes {depth:.3f} m below the floor at "
-                             f"{times[k]:.3f} s", "raise the root/hips or fix the foot keys so soles stay on "
-                             "the floor", {"animation": anim, "time": round(float(times[k]), 3)},
+        deep = (level - lows) > opts["sink"]
+        start = end = k
+        while start > 0 and deep[start - 1]:
+            start -= 1
+        while end < len(lows) - 1 and deep[end + 1]:
+            end += 1
+        step = float(np.median(np.diff(times))) if len(times) > 1 else 0.0
+        duration = float(times[end] - times[start]) + step
+        part, joint = lowest_part(model, worlds, k) if source == "skinned mesh" else ("sole", feet[0])
+        brief = duration < VISIBLE_DIP[0] or depth < VISIBLE_DIP[1]
+        row.update(dip_m=round(float(depth), 4), dip_s=round(duration, 3), dip_part=part)
+        out.append(R.finding("sole_sink", "low" if brief else "medium",
+                             f"{anim}: {part} ({joint}) goes {depth:.3f} {opts['units']} below {below} at "
+                             f"{times[k]:.3f} s, for {duration:.2f} s", "raise the root/hips or fix the foot keys so "
+                             "soles stay on the floor", {"animation": anim, "time": round(float(times[k]), 3),
+                                                         "duration": round(duration, 3), "part": part, "joint": joint},
                              round(float(depth), 4), opts["sink"]))
     if source == "skinned mesh" and lows[k] - opts["floor_y"] > opts["float"]:
-        out.append(R.finding("sole_float", "low", f"{anim}: the mesh never comes within {opts['float']:.3f} m of the "
-                             f"floor (lowest {lows[k] - opts['floor_y']:+.3f} m)", "lower the root, unless the "
-                             "clip is airborne by design", {"animation": anim}, round(float(lows[k]), 4)))
+        out.append(R.finding("sole_float", "low", f"{anim}: the mesh never comes within {opts['float']:.3f} "
+                             f"{opts['units']} of the floor (lowest {lows[k] - opts['floor_y']:+.3f} {opts['units']})",
+                             "lower the root, unless the clip is airborne by design", {"animation": anim},
+                             round(float(lows[k]), 4)))
 
 
 def check_loop(names, positions, roots, opts, anim, out, row):
@@ -381,7 +454,7 @@ def _skin_findings(model):
     return R.guarded(notes, "skin", _skin_usable, model, notes), notes
 
 
-def check_animation(clip, model, anim, joint_ids, opts, lim, findings, row):
+def check_animation(clip, model, anim, joint_ids, opts, lim, findings, row, reference=None):
     row["duration"] = round(clip.duration(anim), 4)
     if not check_keys(clip, anim, anim, findings):
         return
@@ -416,7 +489,7 @@ def check_animation(clip, model, anim, joint_ids, opts, lim, findings, row):
         ids = [i for i in ids if i in worlds]
     names = [model.name(i) for i in ids]
     roots = {model.name(i) for i in ids if model.parent.get(i) not in ids}
-    positions = np.stack([worlds[i][:, :3, 3] for i in ids], axis=1) if ids else np.zeros((len(times), 0, 3))
+    positions = (np.stack([worlds[i][:, :3, 3] for i in ids], axis=1) if ids else np.zeros((len(times), 0, 3))) * lim["unit"]
     row["samples"] = len(times)
     if not len(ids):
         return
@@ -424,8 +497,7 @@ def check_animation(clip, model, anim, joint_ids, opts, lim, findings, row):
     feet = [f for f in feet if f in names]
     row["foot_joints"] = feet
     leaves = {model.name(i) for i in ids if not any(c in ids for c in model.nodes[i].get("children", []))}
-    check_pops(names, positions, times, lim, anim, findings, row, leaves)
-    check_teleport(roots, names, positions, times, lim, anim, findings)
+    planted = {}
     if any(fnmatch.fnmatchcase(anim, glob) for glob in opts["airborne"] or ()):
         # Held, carried or thrown by another actor: the floor and the plants say nothing about the clip.
         findings.append(R.finding("airborne", "info", f"{anim}: skipped: airborne clip (foot slide and floor "
@@ -436,9 +508,18 @@ def check_animation(clip, model, anim, joint_ids, opts, lim, findings, row):
             nodes = [i for i, n in enumerate(model.nodes) if "skin" in n and "mesh" in n]
             picks = _model_fact(model, ("soles", tuple(feet), lim["plant_height"]),
                                 lambda: sole_vertices(model, feet, lim["plant_height"]))
-            soles = {f: model.skinned_points(worlds, nodes, idx) for f, idx in picks.items()}
-        check_feet(model, feet, names, positions, times, lim, anim, findings, row, soles)
-        check_soles(model, feet, names, positions, worlds, times, lim, anim, findings, row)
+            soles = {f: model.skinned_points(worlds, nodes, idx) * lim["unit"] for f, idx in picks.items()}
+        contacts = check_feet(model, feet, names, positions, times, lim, anim, findings, row, soles)
+        for foot, flags in contacts.items():
+            # A foot near the floor is landing or pushing off: its snap into place is the step itself.
+            height = positions[:, names.index(foot), 1]
+            low = flags | (height <= height.min() + 10 * lim["plant_height"])
+            for j in _descendants(model, model.by_name[foot]):
+                planted[model.name(j)] = low
+        check_soles(model, feet, names, positions, worlds, times, lim, anim, findings, row,
+                    None if anim == opts["baseline"] else reference)
+    check_pops(names, positions, times, lim, anim, findings, row, leaves, planted)
+    check_teleport(roots, names, positions, times, lim, anim, findings)
     if opts["loop"]:
         check_loop(names, positions, roots, lim, anim, findings, row)
     if not feet:
@@ -484,11 +565,14 @@ def check(path_or_glb, **options):
     except Exception as error:  # noqa: BLE001 - reported as a finding
         return R.unreadable(TOOL, opts["model"], error)
     findings, rows = [], []
+    # With model_scale every length (limits, floor_y, reports) is in game metres.
+    unit = float(opts["model_scale"]) if opts["model_scale"] else 1.0
     scale = opts["body_scale"]
     if scale == "auto":
         height = _model_fact(model, "height", lambda: body_height(model))
-        scale = height / HUMAN_HEIGHT if height and height > 1e-3 else 1.0
-    lim = {**opts, **{k: opts[k] * float(scale) for k in SCALED}}
+        scale = height * unit / HUMAN_HEIGHT if height and height > 1e-3 else 1.0
+    lim = {**opts, **{k: opts[k] * float(scale) for k in SCALED},
+           "unit": unit, "units": "game m" if opts["model_scale"] else "m"}
     skins = model.json.get("skins", [])
     if opts["skinned_soles"]:
         usable, notes = _model_fact(model, "skin", lambda: _skin_findings(model))
@@ -497,6 +581,12 @@ def check(path_or_glb, **options):
     else:
         lim["skinned_soles"] = opts["skinned_soles"]
     joint_ids = sorted({j for s in skins for j in s["joints"] if 0 <= j < len(model.nodes)})
+    reference = None
+    if opts["baseline"]:
+        reference = R.guarded(findings, "baseline", baseline_low, clip, model, opts, lim)
+        if reference is None:
+            findings.append(R.finding("baseline", "info", f"baseline animation {opts['baseline']!r} not found in the "
+                                      "clip or the model; sinks are measured against the floor"))
     anims = opts["animations"] or clip.animation_names()
     if not anims:
         findings.append(R.finding("animations", "info", "no animations in the file"))
@@ -504,10 +594,13 @@ def check(path_or_glb, **options):
         row = {"animation": anim}
         rows.append(row)
         R.guarded(findings, f"animation {anim}", check_animation, clip, model, anim, joint_ids, opts, lim,
-                  findings, row)
+                  findings, row, reference)
     findings = group_by_cause(findings)
     shown = {k: (v.label if isinstance(v, G.Glb) else v) for k, v in opts.items()}
-    metrics = {"animations": len(rows), "body_scale": round(float(scale), 3), "per_animation": rows}
+    metrics = {"animations": len(rows), "body_scale": round(float(scale), 3), "units": lim["units"],
+               "per_animation": rows}
+    if reference is not None:
+        metrics["baseline_lowest_y"] = round(reference, 4)
     return R.make_report(TOOL, clip.label, findings, metrics, shown,
                          G.sha256(clip.path) if clip.path else None)
 
@@ -533,6 +626,9 @@ def _configure(parser):
                         help="use foot joints instead of skinned vertices for the floor and slide tests")
     parser.add_argument("--plant-height", type=float,
                         help="a sole point within this of its lowest height may be planted (default 0.01 m)")
+    parser.add_argument("--model-scale", type=float,
+                        help="display scale the game applies to the model: lengths become game metres")
+    parser.add_argument("--baseline", help="animation (e.g. Idle) whose lowest point sinks are measured against")
     parser.add_argument("--airborne", nargs="+", metavar="GLOB",
                         help="animation names held/carried/thrown by another actor: no slide or floor findings")
 

@@ -141,6 +141,21 @@ Checks print findings with a fix hint and exit 0; `--strict --fail-on
 high|medium|low` turns them into a gate. Every threshold is a flag or a
 `--config` JSON key (flat, or nested under the tool name).
 
+Severity follows what a player can see, not geometric purity: medium and high are kept for
+defects that change pixels in the game (winding measured as the share of the silhouette lost to
+back-face culling from game-like views, duplicates that can z-fight, clips that sink or slide
+for long enough at the game's scale). Topology that produces no pixels (non-manifold edges,
+zero-area faces, exact duplicates, reversed twin faces) is low or info. A tool finding is a
+hint: confirm it on the card before changing an asset.
+
+Check only what the game ships: a root preset key `"shipped"` names the build's own lists
+(pack inputs, pack plans, depfiles, or the source that lists packed assets), and `review.py`
+skips every `.glb` they do not mention (`--all-files` checks everything):
+
+```json
+{"shipped": "build/native-debug/*/packs/*.plan"}
+```
+
 A game script that runs inside Blender imports the library directly:
 
 ```python

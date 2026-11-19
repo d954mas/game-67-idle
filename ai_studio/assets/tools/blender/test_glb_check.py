@@ -56,7 +56,8 @@ class Contract(unittest.TestCase):
     def test_bad_pivot_reports_height_and_bounds_centre_separately(self):
         glb = cube(offset=(0.39, 0.53, 0)).to_glb()
         report = glb_check.check(glb, pivot="floor-center")
-        self.assertTrue({"pivot", "pivot_horizontal"} <= found(report, "medium"))
+        self.assertIn("pivot", found(report, "medium"))
+        self.assertIn("pivot_horizontal", found(report, "info"))
         floor = glb_check.check(glb, pivot="floor")
         self.assertEqual(found(floor, "medium"), {"pivot"})
         self.assertIn("origin_offset", found(floor, "info"))
@@ -85,11 +86,29 @@ class Contract(unittest.TestCase):
         self.assertIn("jpeg", found(glb_check.check(b.to_glb(), jpeg="info"), "info"))
         self.assertIn("textures", found(glb_check.check(b.to_glb(), textures="none")))
 
+    def test_pivot_offset_into_the_mount_is_judged_by_what_is_buried(self):
+        # 2 cm below the floor: a whole box buried shows, a plug prong under a long cable does not.
+        sunk = glb_check.check(cube(offset=(0, -0.02, 0)).to_glb(), pivot="floor")
+        self.assertIn("pivot", found(sunk, "medium"))
+        b = G.GlbBuilder()
+        links = [CUBE * [0.3, 0.05, 0.05] + [0.3 * k, 0, 0] for k in range(10)]
+        cable = np.vstack(links + [[[1.5, -0.02, 0.0], [1.6, -0.02, 0.0], [1.5, -0.02, 0.01]]])
+        faces = np.vstack([FACES + 8 * k for k in range(10)] + [[[80, 81, 82]]])
+        b.add_node("cable", mesh=b.add_mesh("cable", cable, faces))
+        prong = glb_check.check(b.to_glb(), pivot="floor")
+        self.assertIn("pivot", found(prong, "low"))
+        floats = glb_check.check(cube(offset=(0, 0.004, 0)).to_glb(), pivot="floor")
+        self.assertIn("pivot", found(floats, "low"))  # 4 mm of air: a pixel at game distance
+
     def test_colour_encoding_and_identity_nodes(self):
         b = G.GlbBuilder()
         b.add_node("box", mesh=b.add_mesh("box", CUBE, FACES, colors=np.ones((8, 4))), translation=(1, 0, 0))
+        b.add_node("socket_hand", translation=(0, 1, 0))
         report = glb_check.check(b.to_glb(), color_encoding="u8", identity_nodes=True)
-        self.assertTrue({"color_encoding", "node_transform"} <= serious(report))
+        self.assertEqual(serious(report), {"color_encoding"})
+        moved = next(f for f in report["findings"] if f["check"] == "node_transform")
+        self.assertEqual((moved["severity"], moved["where"]["nodes"]), ("low", ["box"]))
+        self.assertIn("drop node transforms", moved["message"])
         self.assertEqual(serious(glb_check.check(b.to_glb(), color_encoding="float")), set())
 
     def test_colour_components(self):
@@ -190,8 +209,7 @@ class Robustness(unittest.TestCase):
         report = glb_check.check(b.to_glb(), pivot="floor", identity_nodes=True)
         self.assertAlmostEqual(report["metrics"]["size"][1], 1.8, places=4)
         self.assertNotIn("pivot", found(report))
-        moved = next(f for f in report["findings"] if f["check"] == "node_transform")
-        self.assertEqual(moved["where"]["nodes"], ["Armature"])
+        self.assertNotIn("node_transform", found(report))  # the armature carries no mesh
 
     def test_truncated_accessor_is_a_finding_not_a_crash(self):
         b = cube()

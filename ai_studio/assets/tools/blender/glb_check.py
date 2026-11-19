@@ -26,6 +26,7 @@ DEFAULTS = {"normal_tolerance": 0.01, "jpeg": "low", "textures": "any", "color_e
             "rig_translation_tolerance": 1e-4, "rig_rotation_tolerance_deg": 0.01}
 SAMPLES = 5
 PIVOTS = ("floor", "floor-center", "center", "top", "any")
+VISIBLE_OFFSET = 0.01  # m
 # glTF allows COLOR_0 as float or normalized unsigned byte/short; `normalized` accepts either integer form.
 COLOR_ENCODINGS = {"float": {(G.FLOAT, False)}, "u8": {(G.UNSIGNED_BYTE, True)}, "u16": {(G.UNSIGNED_SHORT, True)},
                    "normalized": {(G.UNSIGNED_BYTE, True), (G.UNSIGNED_SHORT, True)}}
@@ -181,15 +182,17 @@ def check_nodes(glb, opts, out):
     joints = {j for skin in glb.json.get("skins", []) for j in skin.get("joints", [])}
     for i, node in enumerate(glb.nodes):
         t, r, s = glb.local_trs(i)
-        if opts["identity_nodes"] and i not in joints and not (np.allclose(t, 0, atol=1e-7) and np.allclose(s, 1, atol=1e-7)
-                                           and G.quat_angle_deg(r, [0, 0, 0, 1]) < 1e-4):
+        # Sockets and anchors (nodes without a mesh) exist to carry a transform.
+        if opts["identity_nodes"] and i not in joints and "mesh" in node and not (
+                np.allclose(t, 0, atol=1e-7) and np.allclose(s, 1, atol=1e-7) and G.quat_angle_deg(r, [0, 0, 0, 1]) < 1e-4):
             moved.append(glb.name(i))
         if np.any(np.abs(s) < 1e-12):
             collapsed.append(glb.name(i))
         elif np.prod(np.sign(s)) < 0:  # two negative axes are a rotation, not a mirror
             flipped.append(glb.name(i))
     if moved:
-        out.append(R.finding("node_transform", "medium", f"{len(moved)} nodes carry a transform",
+        out.append(R.finding("node_transform", "low", f"{len(moved)} mesh nodes carry a transform; many engines "
+                             "drop node transforms when they load a static mesh, so check it draws where intended",
                              "apply transforms before export (Blender: Ctrl+A > All Transforms)",
                              {"nodes": moved[:SAMPLES]}, len(moved), 0))
     if collapsed:
@@ -201,8 +204,8 @@ def check_nodes(glb, opts, out):
                              {"nodes": flipped[:SAMPLES]}))
 
 
-def bounds(glb):
-    points = np.vstack([p.positions for p in glb.parts()] or [np.zeros((0, 3))])
+def bounds(glb, points=None):
+    points = np.vstack([p.positions for p in glb.parts()] or [np.zeros((0, 3))]) if points is None else points
     if not len(points):
         return None
     lo, hi = points.min(axis=0), points.max(axis=0)
@@ -210,7 +213,8 @@ def bounds(glb):
 
 
 def check_pivot(glb, opts, out, metrics):
-    box = bounds(glb)
+    points = np.vstack([p.positions for p in glb.parts()] or [np.zeros((0, 3))])
+    box = bounds(glb, points)
     if box is None:
         return
     lo, hi, centre = box
@@ -223,14 +227,21 @@ def check_pivot(glb, opts, out, metrics):
               "bounds or collider centre")
     if rule != "any" and abs(vertical) > tol:
         edge = {"floor": "bottom", "floor-center": "bottom", "top": "top", "center": "bounds centre"}[rule]
-        out.append(R.finding("pivot", "medium", f"{edge} is at y {vertical:+.4f}, the {rule} pivot wants 0",
+        # Under a centimetre a prop floats or sinks by a pixel or two at game distance. Past its mount
+        # (below the floor, above the ceiling) only a buried share of the model shows: a plug prong
+        # under the floor or a hook in the ceiling does not.
+        into = {"floor": -1, "floor-center": -1, "top": 1}.get(rule, 0) * vertical > 0
+        buried = float(np.mean(points[:, 1] * (1 if rule == "top" else -1) > VISIBLE_OFFSET / 2)) if into else 0.0
+        seen = abs(vertical) >= VISIBLE_OFFSET and (not into or buried > 0.1)
+        out.append(R.finding("pivot", "medium" if seen else "low",
+                             f"{edge} is at y {vertical:+.4f}, the {rule} pivot wants 0",
                              f"move the origin to the {rule} point (set origin, apply) or move the mesh",
                              {"bounds_min": _r(lo), "bounds_max": _r(hi)}, round(float(vertical), 4), tol))
     # Only floor-center and center promise a centred origin; an asymmetric model (a cart, a wall
     # lamp) is centred by its maker's choice, so elsewhere the offset is a placement note.
     judged = rule in ("floor-center", "center")
     if horizontal > tol and judged:
-        out.append(R.finding("pivot_horizontal", "medium",
+        out.append(R.finding("pivot_horizontal", "info",
                              f"origin is {centre[0]:+.4f} x, {centre[2]:+.4f} z from the bounds centre",
                              hint_h, {"bounds_centre": _r(centre)}, round(horizontal, 4), tol))
     elif horizontal > tol or rule == "any" and abs(lo[1]) > tol:
