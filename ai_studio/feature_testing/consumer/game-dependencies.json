@@ -66,6 +66,12 @@
       "compatibility": "validated by test_csm and test_frustum"
     },
     {
+      "id": "garment-cloth",
+      "source": "features/garment-cloth",
+      "version": "0.3.0",
+      "compatibility": "validated with independent hinge, pinned seam, capsule contact, shape-limit and pose-driven mask fixtures"
+    },
+    {
       "id": "shader-programs",
       "source": "features/shader-programs",
       "version": "0.1.0",

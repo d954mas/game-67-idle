@@ -208,6 +208,10 @@ possibility, not a feature.
   volume of a camera slice. The game owns the depth atlas, the passes and the
   knobs (cascade count, splits, resolution, PCF margin). Reference:
   `shadow-cascades/README.md` + `shadow-cascades/INSTALL.md`.
+- [Garment cloth](garment-cloth/README.md) (`L0`, `0.3.0`) simulates an
+  authored triangle proxy with XPBD stretch and signed bending, skeletal
+  motion limits and capsule contacts. Optional masks apply local corrections
+  from live joint angles or distances. [Install and cook a mesh](garment-cloth/INSTALL.md).
 - `shader-programs/` (`L0`, `0.1.0`): one linked program per vertex/fragment
   shader-resource pair, shared by the materials made through it, linked when
   both stages are ready and relinked after a context loss. Reference:

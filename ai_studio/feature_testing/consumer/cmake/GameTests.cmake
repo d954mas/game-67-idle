@@ -104,6 +104,10 @@ endfunction()
 if(NOT EMSCRIPTEN)
     enable_testing()
 
+    set(GARMENT_CLOTH_DIR "${GAME_REPO_ROOT}/features/garment-cloth")
+    add_subdirectory("${GARMENT_CLOTH_DIR}" "${CMAKE_BINARY_DIR}/_garment_cloth")
+    add_subdirectory("${GARMENT_CLOTH_DIR}/tests" "${CMAKE_BINARY_DIR}/_garment_cloth_tests")
+
     set(TEST_GOLDENS_DIR "${GAME_REPO_ROOT}/features/test-goldens")
     set(TEST_GOLDENS_INC "${TEST_GOLDENS_DIR}/include")
     set(TEST_GOLDENS_SRC "${TEST_GOLDENS_DIR}/src")
