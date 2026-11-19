@@ -30,9 +30,20 @@ flipped face shows red from outside.
 
 Views use glTF axes: +Z is the model's front, so `front` looks at it along -Z and `right`
 sees its +X side (Blender's numpad views). front/back/left/right/top are orthographic and fitted
-to the vertices; three_quarter and turntable are perspective and fitted; `game` reproduces an
+to the vertices; three_quarter and turntable are perspective and fitted; `game_angle` looks
+along the game camera (pitch, yaw, FOV or ortho) but is fitted to the model; `game` reproduces an
 engine follow camera (yaw 0 = behind the model, looking along +Z) and is not fitted, except in
-the lineup, where it keeps the camera's pitch, yaw and FOV and fits the whole group.
+the lineup, where it keeps the camera's pitch, yaw and FOV and fits the whole group. A game
+camera with "ortho": true and "ortho_half_height" (metres) projects orthographically.
+
+--model-scale S scales the model about the origin in every view, as a game that scales the mesh
+at runtime shows it; stats and pose bounds stay in file units and views.json records the scale.
+--beside entries take a scale too: crown.glb@0.5.
+
+Runtime looks the GLB does not carry: --atlas palette.png is bound as base colour (UV0, nearest,
+sRGB) to every material without an image texture, --tint "#rrggbb" multiplies the base colour;
+both apply to the beauty pass. For references, --beside takes a JSON list instead of paths:
+'[{"path": "a.glb", "scale": 0.5, "atlas": "pal.png", "tint": "#c08040"}]'.
 
 In-process use (a build script, a long-lived Blender): `main(argv)` returns the report and
 raises instead of exiting; `render_objects(objects, job)` renders objects already in the
@@ -58,13 +69,14 @@ from ai_studio.assets.tools.blender.lib import bpy_scene as S
 from ai_studio.assets.tools.blender.lib.color import as_linear, linear_to_srgb, write_png
 from ai_studio.assets.tools.blender.lib.glb import Glb
 
-VIEWS = ("front", "back", "left", "right", "top", "three_quarter", "game", "turntable")
+VIEWS = ("front", "back", "left", "right", "top", "three_quarter", "game", "game_angle", "turntable")
+GAME_VIEWS = ("game", "game_angle")
 PASSES = ("beauty", "clay", "wire", "silhouette", "facing")
 DEFAULTS = {"views": ["front", "right", "three_quarter"], "passes": ["beauty", "clay", "wire"],
             "size": 768, "light": "studio_hdr", "background": "transparent", "samples": 16,
             "beside": [], "lineup_views": None, "lineup_passes": ["beauty"],
             "poses": [], "pose_views": ["three_quarter"], "pose_passes": ["beauty"], "pose_size": None,
-            "floor": None}
+            "floor": None, "model_scale": 1.0, "atlas": None, "tint": None}
 FLOOR_MODES = ("poses", "all")
 # Direction from the model toward the camera, Blender axes (glTF +Z front = Blender -Y).
 ORTHO = {"front": (0, -1, 0), "back": (0, 1, 0), "right": (1, 0, 0), "left": (-1, 0, 0), "top": (0, 0, 1)}
@@ -120,7 +132,10 @@ def parse(argv):
     p.add_argument("--turntable-frames", type=int)
     p.add_argument("--no-sheet", action="store_true", help="skip the sheet.png contact sheet")
     p.add_argument("--eevee-passes", action="store_true", help="clay and silhouette in EEVEE under the HDR")
-    p.add_argument("--beside", nargs="+", help="reference GLBs for a true-scale lineup")
+    p.add_argument("--beside", nargs="+", help="reference GLBs for a true-scale lineup; path@scale scales one")
+    p.add_argument("--model-scale", type=float, help="uniform display scale of the model, as the game applies it")
+    p.add_argument("--atlas", help="palette PNG bound as base colour to materials without an image")
+    p.add_argument("--tint", help="#rrggbb multiplied into the model's base colour")
     p.add_argument("--lineup-views", nargs="+")
     p.add_argument("--lineup-passes", nargs="+")
     p.add_argument("--poses", nargs="+", help="Clip@seconds ...")
@@ -139,7 +154,7 @@ def parse(argv):
     if args.eevee_passes:
         job["eevee_passes"] = True
     for key in ("model", "out", "size", "light", "background", "animation", "time", "samples", "beside",
-                "clip_source", "poses", "pose_size", "floor"):
+                "clip_source", "poses", "pose_size", "floor", "model_scale", "atlas", "tint"):
         if getattr(args, key) is not None:
             job[key] = getattr(args, key)
     for key in ("views", "passes", "lineup_views", "lineup_passes", "pose_views", "pose_passes"):
@@ -164,7 +179,7 @@ def _view_specs(views, game, turntable_frames):
     for view in views:
         view = dict(view) if isinstance(view, dict) else {"view": view}
         view["view"] = view.get("view") or view.get("name")
-        if view["view"] == "game" and game:
+        if view["view"] in GAME_VIEWS and game:
             view = {**game, **view}
         if view["view"] == "turntable" and turntable_frames:
             view.setdefault("frames", turntable_frames)
@@ -195,12 +210,18 @@ def normalize(job):
     lineup = job["lineup_views"]
     if lineup is None:
         lineup = ["front", "three_quarter"]
-        lineup += [v for v in job["views"] if v["view"] == "game"][:1]
+        lineup += [{**v, "view": "game"} for v in job["views"] if v["view"] in GAME_VIEWS][:1]
     job["lineup_views"] = _view_specs(lineup, game, frames)
     job["pose_views"] = _view_specs(job["pose_views"], game, frames)
     job["poses"] = [_pose_spec(p) for p in job["poses"]]
     views = job["views"] + job["lineup_views"] + job["pose_views"]
     passes = job["passes"] + job["lineup_passes"] + job["pose_passes"]
+    beside = job["beside"]
+    if len(beside) == 1 and isinstance(beside[0], str) and beside[0].lstrip().startswith("["):
+        job["beside"] = json.loads(beside[0])
+    job["model_scale"] = float(job["model_scale"] or 1.0)
+    if job["model_scale"] <= 0:
+        raise ValueError(f"render_views: model_scale must be positive, not {job['model_scale']}")
     if job["floor"] not in (None, False, *FLOOR_MODES):
         raise ValueError(f"render_views: floor must be one of {FLOOR_MODES}, not {job['floor']!r}")
     bad = [v["view"] for v in views if v["view"] not in VIEWS] + [x for x in passes if x not in PASSES]
@@ -255,6 +276,8 @@ class SceneState:
         self.camera, self.world, self.override = sc.camera, sc.world, layer.material_override
         self.frame = (sc.frame_current, sc.frame_subframe)
         self.hidden = {o: o.hide_render for o in sc.objects}
+        self.parents = {o: (o.parent, o.matrix_parent_inverse.copy()) for o in sc.objects}
+        self.undo = []
         self.selected = {o: o.select_get() for o in layer.objects}
         self.active = layer.objects.active
         self.basis = {o: o.matrix_basis.copy() for o in sc.objects}
@@ -291,6 +314,8 @@ class SceneState:
 
     def __exit__(self, *exc):
         sc = self.scene
+        for undo in reversed(self.undo):
+            undo()
         for owner, values in self.values:
             for key, value in values.items():
                 setattr(owner, key, value)
@@ -298,6 +323,10 @@ class SceneState:
         self.layer.material_override = self.override
         for obj, hidden in self.hidden.items():
             obj.hide_render = hidden
+        for obj, (parent, inverse) in self.parents.items():
+            if obj.parent is not parent:
+                obj.parent = parent
+                obj.matrix_parent_inverse = inverse
         self.restore_pose()
         for name in self.DATA:
             pool = getattr(bpy.data, name)
@@ -607,9 +636,15 @@ def _game_rig(spec):
 
 def game_camera(cam, spec):
     """Engine follow camera: `behind` the target along -Z (glTF), `height` up, `offset` on X,
-    pitched down by `pitch`, vertical FOV `fov_y`; `yaw` turns the rig about the target."""
+    pitched down by `pitch`, vertical FOV `fov_y`; `yaw` turns the rig about the target. With
+    `ortho`, the same rig projects orthographically, `ortho_half_height` metres above and below."""
     g, eye, forward = _game_rig(spec)
-    set_perspective(cam, math.radians(g["fov_y"]))
+    if g.get("ortho"):
+        cam.data.type = "ORTHO"
+        cam.data.sensor_fit = "VERTICAL"
+        cam.data.ortho_scale = 2.0 * float(g["ortho_half_height"])
+    else:
+        set_perspective(cam, math.radians(g["fov_y"]))
     d, _, u = basis(-forward)
     place(cam, eye, d, u)
     cam.data.clip_start, cam.data.clip_end = 0.05, 500.0
@@ -617,10 +652,14 @@ def game_camera(cam, spec):
 
 
 def fit_game(cam, points, spec):
-    """The game camera's direction and FOV, distance and aim fitted to `points`: the lineup's game
-    view, where the hero target would cut the references off."""
+    """The game camera's direction and FOV (or ortho projection), distance, aim and ortho scale
+    fitted to `points`: `game_angle`, and the lineup's game view, where the hero target would
+    cut the references off."""
     g, _, forward = _game_rig(spec)
-    fit_perspective(cam, points, -forward, g["aspect"], g["fov_y"])
+    if g.get("ortho"):
+        fit_ortho(cam, points, -forward, g["aspect"])
+    else:
+        fit_perspective(cam, points, -forward, g["aspect"], g["fov_y"])
     return g
 
 
@@ -742,7 +781,7 @@ def shots(views, points, prefix="", fitted_game=False):
             dr = orbit(spec.get("azimuth", 35.0), spec.get("elevation", 25.0))
             yield (prefix + view, lambda cam, dr=dr, fov=fov: fit_perspective(cam, points, dr, 1.0, fov) and 1.0,
                    {"view": view})
-        elif view == "game" and fitted_game:
+        elif view == "game_angle" or view == "game" and fitted_game:
             yield prefix + view, lambda cam, sp=spec: fit_game(cam, points, sp)["aspect"], {"view": view}
         elif view == "game":
             yield prefix + view, lambda cam, sp=spec: game_camera(cam, sp)["aspect"], {"view": view}
@@ -791,25 +830,112 @@ def _visible_meshes(objects):
     return [o for o in objects if o.type == "MESH" and o.visible_get()]
 
 
-def lineup(candidate_points, references):
+def reference_spec(entry):
+    """{"path", "scale", "atlas", "tint"} from 'ref.glb', 'ref.glb@0.5' or a dict of those keys."""
+    if isinstance(entry, dict):
+        return {"path": Path(entry["path"]).resolve(), "scale": float(entry.get("scale", 1.0)),
+                "atlas": str(Path(entry["atlas"]).resolve()) if entry.get("atlas") else None,
+                "tint": entry.get("tint")}
+    text = str(entry)
+    head, sep, tail = text.rpartition("@")
+    path, scale = Path(text), 1.0
+    if sep:
+        try:
+            path, scale = Path(head), float(tail)
+        except ValueError:
+            pass
+    return {"path": path.resolve(), "scale": scale, "atlas": None, "tint": None}
+
+
+def dress_materials(state, meshes, atlas=None, tint=None):
+    """Bind a runtime palette atlas and tint the GLB does not carry, on copies of the materials so
+    the scene's own materials stay untouched; `state` puts the originals back on exit."""
+    if not atlas and not tint:
+        return
+    image = None
+    if atlas:
+        image = bpy.data.images.load(str(Path(atlas).resolve()), check_existing=True)
+        image.colorspace_settings.name = "sRGB"
+    copies = {}
+    for obj in meshes:
+        for i, slot in enumerate(obj.material_slots):
+            original = slot.material
+            if original is None:
+                continue
+            if original not in copies:
+                copies[original] = _dressed(original, image, tint)
+            state.undo.append(lambda obj=obj, i=i, original=original:
+                              setattr(obj.material_slots[i], "material", original))
+            slot.material = copies[original]
+
+
+def _dressed(material, image, tint):
+    mat = material.copy()
+    tree = S.node_tree(mat)
+    bsdf = S.find_node(tree, "BSDF_PRINCIPLED")
+    if bsdf is None:
+        return mat
+    base = bsdf.inputs["Base Color"]
+    if image is not None and S.find_node(tree, "TEX_IMAGE") is None:
+        # No vector input: the texture reads the first (render) UV map, glTF TEXCOORD_0.
+        texture = tree.nodes.new("ShaderNodeTexImage")
+        texture.image = image
+        texture.interpolation = "Closest"
+        tree.links.new(texture.outputs["Color"], base)
+    if tint:
+        mix = tree.nodes.new("ShaderNodeMixRGB")
+        mix.blend_type = "MULTIPLY"
+        mix.inputs["Fac"].default_value = 1.0
+        if base.is_linked:
+            tree.links.new(base.links[0].from_socket, mix.inputs["Color1"])
+        else:
+            mix.inputs["Color1"].default_value = base.default_value
+        mix.inputs["Color2"].default_value = (*as_linear(tint)[:3], 1.0)
+        tree.links.new(mix.outputs["Color"], base)
+    return mat
+
+
+def apply_model_scale(scene, objects, scale):
+    """Scale `objects` about the origin through a parent empty: the poses reset the objects' own
+    transforms between frames, and the empty keeps the scale through that."""
+    pivot = bpy.data.objects.new("review_model_scale", None)
+    scene.collection.objects.link(pivot)
+    pivot.scale = (scale, scale, scale)
+    for root in _roots(objects):
+        world = root.matrix_world.copy()
+        root.parent = pivot
+        root.matrix_parent_inverse = world @ root.matrix_basis.inverted()
+    bpy.context.view_layer.update()
+    return pivot
+
+
+def lineup(candidate_points, references, state):
     """Import each reference GLB and stand it to the candidate's +X at true scale: bottoms on the
     candidate's bottom, depth centres aligned, gaps of LINEUP_GAP x the widest member."""
     lo, hi = candidate_points.min(axis=0), candidate_points.max(axis=0)
     members, imported = [], []
-    for path in references:
-        objects, nodes = bpy_io.import_glb_nodes(Path(path).resolve())
+    for entry in references:
+        spec = reference_spec(entry)
+        path, scale = spec["path"], spec["scale"]
+        objects, nodes = bpy_io.import_glb_nodes(path)
         rest_pose(objects)
-        file_rest(nodes, Path(path).resolve())
+        file_rest(nodes, path)
+        if scale != 1.0:
+            for root in _roots(objects):
+                root.matrix_basis = Matrix.Scale(scale, 4) @ root.matrix_basis
+            bpy.context.view_layer.update()
         meshes = _visible_meshes(objects)
         if not meshes:
-            members.append({"name": Path(path).stem, "path": str(path), "error": "no visible mesh"})
+            members.append({"name": path.stem, "path": str(path), "error": "no visible mesh"})
             continue
-        imported.append((path, objects, S.evaluated_points(meshes)))
+        dress_materials(state, meshes, spec["atlas"], spec["tint"])
+        imported.append((spec, objects, S.evaluated_points(meshes)))
     widest = max([hi[0] - lo[0]] + [float(np.ptp(p[:, 0])) for _, _, p in imported])
     gap = LINEUP_GAP * widest
     cursor = hi[0] + gap
     objects_all, points_all = [], [candidate_points]
-    for path, objects, points in imported:
+    for spec, objects, points in imported:
+        path, scale = spec["path"], spec["scale"]
         plo, phi = points.min(axis=0), points.max(axis=0)
         shift = Vector((cursor - plo[0], (lo[1] + hi[1] - plo[1] - phi[1]) / 2, lo[2] - plo[2]))
         for root in _roots(objects):
@@ -817,7 +943,8 @@ def lineup(candidate_points, references):
         cursor += float(phi[0] - plo[0]) + gap
         points_all.append(points + np.array(shift))
         objects_all += objects
-        members.append({"name": Path(path).stem, "path": str(Path(path).resolve()),
+        members.append({"name": path.stem, "path": str(path), "scale": scale,
+                        **{k: spec[k] for k in ("atlas", "tint") if spec[k]},
                         "offset_gltf": [round(v, 5) for v in S.blender_to_gltf(shift)],
                         "size_gltf": [round(abs(float(v)), 5) for v in S.blender_to_gltf(phi - plo)]})
     bpy.context.view_layer.update()
@@ -860,9 +987,14 @@ def render_objects(objects, job, asset=None, name=None, rest=False):
             posed = "rest"
         if job.get("animation"):
             posed = pose(members, job["animation"], job.get("time"), fps)
+        # Stats name the model's own materials, so they are taken before the dressed copies.
+        stats = model_stats(members, meshes, [], fps)
+        atlas = str(Path(job["atlas"]).resolve()) if job["atlas"] else None
+        dress_materials(state, meshes, atlas, job["tint"])
+        stats["textures"] = textures = save_textures(out, material_images(meshes))
+        if job["model_scale"] != 1.0:
+            apply_model_scale(scene, members, job["model_scale"])
         points = S.evaluated_points(meshes)
-        textures = save_textures(out, material_images(meshes))
-        stats = model_stats(members, meshes, textures, fps)
         passes = Passes(scene, int(job["samples"]), job.get("eevee_passes", False))
         cam = make_camera(scene)
         size = int(job["size"])
@@ -874,7 +1006,7 @@ def render_objects(objects, job, asset=None, name=None, rest=False):
 
         lineup_report = None
         if job["beside"]:
-            refs, group_points, ref_members, gap = lineup(points, job["beside"])
+            refs, group_points, ref_members, gap = lineup(points, job["beside"], state)
             for obj in refs:
                 obj.hide_render = False
             lineup_shots = [(f"lineup_{stem}", setup, {"view": "lineup", "base_view": extra["view"],
@@ -910,6 +1042,12 @@ def render_objects(objects, job, asset=None, name=None, rest=False):
         report["lineup"] = lineup_report
     if job["poses"]:
         report["poses"] = pose_report
+    if job["model_scale"] != 1.0:
+        report["model_scale"] = job["model_scale"]
+    if job["atlas"]:
+        report["atlas"] = str(Path(job["atlas"]).resolve())
+    if job["tint"]:
+        report["tint"] = job["tint"]
     if job["floor"]:
         report["floor"] = {"views": job["floor"], "passes": ["beauty"], "grid_m": FLOOR_GRID}
     (out / "views.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -965,7 +1103,7 @@ def render_poses(state, members, meshes, job, scene, cam, passes, size, out, fps
             continue
         points = S.evaluated_points(meshes)
         posed.append((len(report), (spec, label, points)))
-        lo, hi = points.min(axis=0), points.max(axis=0)
+        lo, hi = points.min(axis=0) / job["model_scale"], points.max(axis=0) / job["model_scale"]
         report.append({**spec, "pose": label,
                        "bounds": {"min": [round(float(v), 5) for v in (lo[0], lo[2], -hi[1])],
                                   "max": [round(float(v), 5) for v in (hi[0], hi[2], -lo[1])]}})

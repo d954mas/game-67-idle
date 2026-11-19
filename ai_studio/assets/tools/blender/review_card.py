@@ -145,7 +145,7 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
     cols = max(1, len(present_views))
     grid_w = cols * cell + (cols - 1) * 8
     # Filmstrips need room even when a clip review renders a single view.
-    content_w = max(grid_w, 4 * cell + 3 * 8) if poses else grid_w
+    content_w = max(grid_w, 4 * cell + 3 * 8) if poses or lineup else grid_w
     side_w = 420
     width = margin * 3 + content_w + side_w
     grid_h = len(present_passes) * (cell + label_h + 8)
@@ -183,11 +183,12 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
     y = header_h
     if lineup:
         # The comparison is the first thing to judge: style misses cost more than any defect.
-        width_each = (grid_w - 8 * (len(lineup) - 1)) // len(lineup)
+        width_each = (content_w - 8 * (len(lineup) - 1)) // len(lineup)
         for k, image in enumerate(lineup):
             x = margin + k * (width_each + 8)
             members = " | ".join(image.get("members", []))
-            draw.text((x, y), f"beside · {image.get('base_view', '')} · {members}"[:70], fill=TEXT, font=font(14))
+            label = fit_text(draw, f"beside · {image.get('base_view', '')} · {members}", width_each, font(14))
+            draw.text((x, y), label, fill=TEXT, font=font(14))
             paste_on_cell(card, base_dir / image["file"], (x, y + label_h - 6), (width_each, cell))
         y += cell + label_h + 8
     for render_pass in present_passes:

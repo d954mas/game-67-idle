@@ -1,0 +1,27 @@
+{
+  "schema": "ai_studio.assets.retarget_map.v1",
+  "id": "rgpoly",
+  "description": "RG Poly Cartoon City characters (CharacterArmature, T-pose, facing -X).",
+  "joints": {
+    "hips": ["Hips"],
+    "chest": ["Torso"],
+    "neck": ["Neck"],
+    "head": ["Head"],
+    "left_shoulder": ["Shoulder.L"],
+    "left_upper_arm": ["Arm.L"],
+    "left_lower_arm": ["ForeArm.L"],
+    "left_hand": ["Hand.L"],
+    "right_shoulder": ["Shoulder.R"],
+    "right_upper_arm": ["Arm.R"],
+    "right_lower_arm": ["ForeArm.R"],
+    "right_hand": ["Hand.R"],
+    "left_upper_leg": ["UpperLeg.L"],
+    "left_lower_leg": ["Leg.L"],
+    "left_foot": ["Foot.L"],
+    "left_toe": ["Toes.L"],
+    "right_upper_leg": ["UpperLeg.R"],
+    "right_lower_leg": ["Leg.R"],
+    "right_foot": ["Foot.R"],
+    "right_toe": ["Toes.R"]
+  }
+}

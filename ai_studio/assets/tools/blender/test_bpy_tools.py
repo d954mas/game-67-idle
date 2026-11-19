@@ -67,10 +67,11 @@ IN_PROCESS = textwrap.dedent("""
         return {"engine": scene.render.engine, "res": [scene.render.resolution_x, scene.render.resolution_y],
                 "camera": scene.camera.name if scene.camera else None, "frame": scene.frame_current,
                 "world": scene.world.name if scene.world else None, "hidden": crate.hide_render,
+                "material": crate.material_slots[0].material.name,
                 "counts": {k: len(getattr(bpy.data, k)) for k in ("objects", "materials", "worlds", "cameras",
                                                                   "images", "meshes", "lights")}}
     before = state()
-    live = review_live.review_scene(out / "live", name="crate", job={"size": 64, "views": ["front"]})
+    live = review_live.review_scene(out / "live", name="crate", job={"size": 64, "views": ["front"], "tint": "#ff0000"})
     after = state()
     # An assembly root: the GLB the checks read must hold the meshes the images show.
     root = bpy.data.objects.new("assembly_root", None)
@@ -235,16 +236,74 @@ class RenderViews(BlenderCase):
         self.assertGreater(len(rows), 0)
         self.assertGreater(rows.max() - rows.min(), 0.75 * game["size"][1])
 
+    def test_ortho_game_camera_model_scale_and_game_angle(self):
+        model = cube_glb(self.tmp / "cube.glb")
+        tall = cube_glb(self.tmp / "tall.glb", height=3.0)
+        out = self.tmp / "ortho"
+        # Level ortho camera, 2 m of view height centred at y=0.5: an unscaled 1 m cube fills half
+        # the image height, the cube at --model-scale 0.5 a quarter.
+        game = {"ortho": True, "ortho_half_height": 1.0, "pitch": 0, "height": 0.5, "behind": 5,
+                "target": [0, 0.5, 0]}
+        self.blender(HERE / "render_views.py", "--model", model, "--out", out, "--size", 64,
+                     "--views", "game", "game_angle", "--passes", "silhouette", "--game", json.dumps(game),
+                     "--model-scale", 0.5, "--beside", f"{tall}@0.5", "--lineup-views", "front",
+                     "--lineup-passes", "silhouette", "--no-sheet")
+        report = json.loads((out / "views.json").read_text(encoding="utf-8"))
+
+        def rows(view):
+            image = next(i for i in report["images"] if i["view"] == view)
+            filled = np.nonzero(pixels(out / image["file"])[..., 3].max(axis=1) > 0)[0]
+            return filled.max() - filled.min() + 1
+        self.assertAlmostEqual(rows("game"), 16, delta=2)
+        # Fitted along the game angle, the small model fills the frame instead of a dot.
+        self.assertGreater(rows("game_angle"), 0.8 * 64)
+        self.assertEqual(report["model_scale"], 0.5)
+        np.testing.assert_allclose(report["stats"]["bounds"]["max"], CUBE.max(axis=0), atol=1e-4)
+        ref = report["lineup"]["members"][1]
+        self.assertEqual((ref["name"], ref["scale"]), ("tall", 0.5))
+        np.testing.assert_allclose(ref["size_gltf"], [0.5, 1.5, 0.25], atol=1e-4)
+
+    def test_atlas_and_tint_colour_the_beauty_pass(self):
+        from PIL import Image
+        uv = (np.full((len(CUBE), 2), 0.5), G.FLOAT)
+
+        def white_cube(path):
+            b = G.GlbBuilder()
+            b.add_node("cube", mesh=b.add_mesh("cube", CUBE, CUBE_FACES, extra={"TEXCOORD_0": uv}))
+            b.json["materials"] = [{"name": "white", "pbrMetallicRoughness": {"baseColorFactor": [1, 1, 1, 1]}}]
+            b.json["meshes"][0]["primitives"][0]["material"] = 0
+            b.write(path)
+            return path
+        model, ref = white_cube(self.tmp / "prop.glb"), white_cube(self.tmp / "ref.glb")
+        atlas = self.tmp / "palette.png"
+        Image.new("RGB", (4, 4), (20, 200, 20)).save(atlas)
+        out = self.tmp / "atlas"
+        beside = json.dumps([{"path": str(ref), "tint": "#2020ff"}])
+        self.blender(HERE / "render_views.py", "--model", model, "--out", out, "--size", 64, "--views", "front",
+                     "--passes", "beauty", "--atlas", atlas, "--beside", beside, "--lineup-views", "front",
+                     "--no-sheet")
+        report = json.loads((out / "views.json").read_text(encoding="utf-8"))
+        self.assertEqual(Path(report["atlas"]), atlas.resolve())
+        self.assertEqual(report["lineup"]["members"][1]["tint"], "#2020ff")
+        self.assertEqual(report["stats"]["materials"], ["white"])
+        r, g, b, _ = pixels(out / "front_beauty.png")[32, 32]
+        self.assertGreater(g, 2 * max(r, b))
+        lineup = pixels(out / "lineup_front_beauty.png")
+        tinted = lineup[:, 40:][lineup[:, 40:, 3] > 200]
+        self.assertGreater(len(tinted), 20)
+        self.assertGreater(float(np.median(tinted[:, 2])), 2 * float(np.median(tinted[:, 0])))
+
     def test_clip_source_poses_a_body_by_node_name(self):
         # The body carries its own "Rise" (to 3.0); the clip file's "Rise" (to 1.5) must win.
         body = cube_glb(self.tmp / "body.glb", clip=("Rise", [0.0, 1.0], [0.0, 3.0]))
         clip = cube_glb(self.tmp / "clip.glb", height=None, clip=("Rise", [0.0, 1.0], [0.0, 1.5]))
         out = self.tmp / "clip_pose"
         self.blender(HERE / "render_views.py", "--model", body, "--out", out, "--size", 64,
-                     "--clip-source", clip, "--poses", "Rise@1.0", "Rise@0.5", "--views", "front",
+                     "--clip-source", clip, "--poses", "Rise@1.0", "Rise@0.5", "--views", "front", "--model-scale", 2,
                      "--passes", "silhouette", "--pose-passes", "silhouette")
         report = json.loads((out / "views.json").read_text(encoding="utf-8"))
         self.assertEqual(report["clip_source"], {"animations": ["Rise"], "replaced": ["Rise"], "unmatched_nodes": []})
+        # Pose bounds stay in file units while the model renders at twice the size.
         lows = {p["time"]: p["bounds"]["min"][1] for p in report["poses"]}
         self.assertAlmostEqual(lows[1.0], 1.5, places=3)
         self.assertAlmostEqual(lows[0.5], 0.75, places=3)

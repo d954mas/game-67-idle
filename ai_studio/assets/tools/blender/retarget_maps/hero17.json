@@ -1,0 +1,24 @@
+{
+  "schema": "ai_studio.assets.retarget_map.v1",
+  "id": "hero17",
+  "description": "17-joint hero rig (Pelvis, Spine, Chest, Neck, Head, UpperArm/Forearm/Hand, Thigh/Calf/Foot with _L/_R); Volume_ joints stay unkeyed.",
+  "joints": {
+    "hips": ["Pelvis"],
+    "spine": ["Spine"],
+    "chest": ["Chest"],
+    "neck": ["Neck"],
+    "head": ["Head"],
+    "left_upper_arm": ["UpperArm_L"],
+    "left_lower_arm": ["Forearm_L"],
+    "left_hand": ["Hand_L"],
+    "right_upper_arm": ["UpperArm_R"],
+    "right_lower_arm": ["Forearm_R"],
+    "right_hand": ["Hand_R"],
+    "left_upper_leg": ["Thigh_L"],
+    "left_lower_leg": ["Calf_L"],
+    "left_foot": ["Foot_L"],
+    "right_upper_leg": ["Thigh_R"],
+    "right_lower_leg": ["Calf_R"],
+    "right_foot": ["Foot_R"]
+  }
+}

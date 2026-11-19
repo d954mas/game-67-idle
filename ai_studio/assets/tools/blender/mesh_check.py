@@ -6,7 +6,10 @@ faces, shells and inside-out volume, per mesh node, each finding with a fix hint
 Profiles: `volume` expects closed solids (openings are high findings); `surface` allows openings
 (reported as info); `auto` (default) treats a node that is closed after welding as a volume.
 Positions are welded first, so hard-edge and UV splits are not counted as openings.
+Parts drawn without back-face culling (--double-sided [GLOB...], or a glTF material with doubleSided)
+report winding findings (miswound, inside-out, inverted shells, inward faces) as info only.
 """
+import fnmatch
 import sys
 from collections import Counter
 from pathlib import Path
@@ -21,7 +24,9 @@ from ai_studio.assets.tools.blender.lib import glb as G, rays, report as R  # no
 
 TOOL = "mesh_check"
 DEFAULTS = {"profile": "auto", "weld": 1e-6, "area_epsilon": 1e-10, "tri_budget": None,
-            "inward": False, "inward_max_faces": 20000, "scope": "node", "include": None}
+            "inward": False, "inward_max_faces": 20000, "scope": "node", "include": None, "double_sided": False}
+# Findings about which way faces point; a part drawn without back-face culling shows both sides.
+WINDING = ("miswound", "inside_out", "inverted_shell", "inward")
 SEVERITY = {
     "volume": {"boundary": "high", "non_manifold": "high", "touching": "medium", "miswound": "high",
                "inside_out": "high", "inverted_shell": "medium", "degenerate": "medium", "duplicate": "medium",
@@ -143,7 +148,18 @@ def _inside_rest(t, k):
                                rays.triangles(t["points"], rest))[0] % 2)
 
 
-def _groups(glb, scope, include):
+def _double_sided(glb, part, option):
+    """'option' or 'material' when the part is drawn without back-face culling, else None."""
+    if option is True or option and any(fnmatch.fnmatchcase(n, g) for g in option
+                                        for n in (part.name, glb.json["meshes"][part.mesh].get("name", ""))):
+        return "option"
+    material = glb.json["meshes"][part.mesh]["primitives"][part.primitive].get("material")
+    if material is not None and glb.json.get("materials", [{}] * (material + 1))[material].get("doubleSided"):
+        return "material"
+    return None
+
+
+def _groups(glb, scope, include, double_sided=False):
     parts = glb.parts(include=include)
     groups = {}
     for part in parts:
@@ -156,11 +172,14 @@ def _groups(glb, scope, include):
             mirrored = np.linalg.det(part.world[:3, :3]) < 0
             faces.append((part.faces[:, ::-1] if mirrored else part.faces) + base)
             base += len(part.positions)
-        out.append((name, np.vstack([p.positions for p in members]), np.vstack(faces)))
+        # A group is double-sided only when every part of it is; one culled part shows its winding.
+        sides = [_double_sided(glb, p, double_sided) for p in members]
+        double = None if None in sides else "option" if "option" in sides else "material"
+        out.append((name, np.vstack([p.positions for p in members]), np.vstack(faces), double))
     return out
 
 
-def check_part(name, points, faces, opts):
+def check_part(name, points, faces, opts, double=None):
     findings = []
     t = M.triangle_topology(points, faces, weld_tolerance=opts["weld"], area_epsilon=opts["area_epsilon"])
     closed = t["boundary_edges"] == 0 and t["triangles"] > 0
@@ -244,6 +263,13 @@ def check_part(name, points, faces, opts):
     if t["components"] > 1:
         findings.append(R.finding("components", "info", f"{name}: {t['components']} separate shells", "", where,
                                   t["components"]))
+    if double:
+        row["double_sided"] = double
+        source = "the material's doubleSided flag" if double == "material" else "the double_sided option"
+        for f in findings:
+            if f["check"] in WINDING:
+                f.update(severity="info", message=f"double-sided ({source}): winding not visible; {f['message']}")
+                f.pop("hint", None)
     return findings, row
 
 
@@ -256,8 +282,9 @@ def check(path_or_glb, **options):
     except Exception as error:  # noqa: BLE001 - reported as a finding
         return R.unreadable(TOOL, path_or_glb, error)
     findings, rows = [], []
-    for name, points, faces in R.guarded(findings, "geometry", _groups, glb, opts["scope"], opts["include"]) or []:
-        result = R.guarded(findings, f"part {name}", check_part, name, points, faces, opts)
+    groups = R.guarded(findings, "geometry", _groups, glb, opts["scope"], opts["include"], opts["double_sided"])
+    for name, points, faces, double in groups or []:
+        result = R.guarded(findings, f"part {name}", check_part, name, points, faces, opts, double)
         if result:
             findings += result[0]
             rows.append(result[1])
@@ -284,9 +311,14 @@ def _configure(parser):
     parser.add_argument("--inward-max-faces", type=int)
     parser.add_argument("--scope", choices=("node", "file"), help="measure each mesh node, or the file as one mesh")
     parser.add_argument("--include", nargs="+", help="only these node names")
+    parser.add_argument("--double-sided", nargs="*", metavar="GLOB",
+                        help="parts drawn without back-face culling (all, or node/mesh name globs): "
+                             "winding findings become info")
 
 
 def _run(args, config):
+    if args.double_sided == []:
+        args.double_sided = True
     opts = R.resolve_options(TOOL, DEFAULTS, config, R.cli_overrides(args, DEFAULTS))
     return [check(path, **opts) for path in args.models]
 

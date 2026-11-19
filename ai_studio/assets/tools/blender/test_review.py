@@ -180,5 +180,47 @@ class Poses(unittest.TestCase):
         self.assertEqual(review.finding_poses(nested, 4), ["Run@1.25", "Run@1.5"])
 
 
+class Names(unittest.TestCase):
+    def test_clashing_stems_get_parent_prefixed_folders(self):
+        models = [Path("/g/a/body/hero.glb"), Path("/g/b/body/hero.glb"), Path("/g/a/crate.glb")]
+        names = review.output_names(models)
+        self.assertEqual(names[models[2]], "crate")
+        self.assertEqual({names[models[0]], names[models[1]]}, {"a__body__hero", "b__body__hero"})
+
+    def test_recursive_folders_and_self_reference_are_handled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "sub").mkdir()
+            top = clip_only(tmp / "top.glb")
+            clip_only(tmp / "sub" / "deep.glb")
+            with unittest.mock.patch.dict("os.environ", {"NT_CALLER_CWD": str(tmp)}):
+                self.assertEqual([m.name for m in review.expand_models(["."])], ["top.glb"])
+                self.assertEqual(sorted(m.name for m in review.expand_models(["."], True)),
+                                 ["deep.glb", "top.glb"])
+            (tmp / "blender_review.json").write_text(json.dumps({"beside": ["top.glb", "sub/deep.glb"]}),
+                                                     encoding="utf-8")
+            (tmp / "game.json").write_text("{}", encoding="utf-8")
+            args = argparse.Namespace(no_render=True, out=str(tmp / "out"))
+            results, _ = review.review([top], args, {})
+            self.assertEqual(len(results), 1)
+
+
+class PresetPaths(unittest.TestCase):
+    def test_tool_file_options_are_relative_to_the_preset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "looks"
+            folder.mkdir()
+            preset = folder / "blender_review.json"
+            preset.write_text(json.dumps({
+                "glb_check": {"reference_rig": "../rigs/hero.glb"}, "contract": "contacts.json",
+                "beside": ["a.glb@0.5", {"path": "b.glb", "tint": "#ff0000"}]}), encoding="utf-8")
+            options, tools, _ = review.read_preset(preset)
+        root = Path(tmp).resolve()
+        self.assertEqual(Path(tools["glb_check"]["reference_rig"]), root / "rigs" / "hero.glb")
+        self.assertEqual(Path(tools["contract"]), root / "looks" / "contacts.json")
+        self.assertEqual(options["beside"][0], str(root / "looks" / "a.glb") + "@0.5")
+        self.assertEqual(Path(options["beside"][1]["path"]), root / "looks" / "b.glb")
+
+
 if __name__ == "__main__":
     unittest.main()

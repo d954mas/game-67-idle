@@ -1,0 +1,31 @@
+{
+  "schema": "ai_studio.assets.retarget_map.v1",
+  "id": "soma",
+  "description": "SOMA-30 (Kimodo output): LeftLeg is the thigh and LeftShin the shin, unlike Mixamo.",
+  "joints": {
+    "hips": ["Hips"],
+    "spine": ["Spine1"],
+    "chest": ["Chest"],
+    "spine_mid": ["Spine2"],
+    "neck": ["Neck1"],
+    "head": ["Head"],
+    "left_shoulder": ["LeftShoulder"],
+    "left_upper_arm": ["LeftArm"],
+    "left_lower_arm": ["LeftForeArm"],
+    "left_hand": ["LeftHand"],
+    "left_hand_end": ["LeftHandMiddleEnd"],
+    "right_shoulder": ["RightShoulder"],
+    "right_upper_arm": ["RightArm"],
+    "right_lower_arm": ["RightForeArm"],
+    "right_hand": ["RightHand"],
+    "right_hand_end": ["RightHandMiddleEnd"],
+    "left_upper_leg": ["LeftLeg"],
+    "left_lower_leg": ["LeftShin"],
+    "left_foot": ["LeftFoot"],
+    "left_toe": ["LeftToeBase"],
+    "right_upper_leg": ["RightLeg"],
+    "right_lower_leg": ["RightShin"],
+    "right_foot": ["RightFoot"],
+    "right_toe": ["RightToeBase"]
+  }
+}

@@ -59,6 +59,22 @@ class MeshCheck(unittest.TestCase):
     def test_inside_out_cube(self):
         self.assertIn("inside_out", checks(mesh_check.check(scene(FACES[:, ::-1])), "high"))
 
+    def test_double_sided_parts_report_winding_as_info(self):
+        flipped = scene(FACES[:, ::-1], name="hoop")
+        for option in (True, ["ho*"]):
+            report = mesh_check.check(flipped, double_sided=option)
+            self.assertEqual(serious(report), set())
+            note = next(f for f in report["findings"] if f["check"] == "inside_out")
+            self.assertIn("double-sided (the double_sided option)", note["message"])
+        self.assertIn("inside_out", checks(mesh_check.check(flipped, double_sided=["pet*"]), "high"))
+        b = G.GlbBuilder()
+        b.add_node("pet", mesh=b.add_mesh("pet", CUBE, FACES[:, ::-1]))
+        b.json["materials"] = [{"name": "glow", "doubleSided": True}]
+        b.json["meshes"][0]["primitives"][0]["material"] = 0
+        report = mesh_check.check(b.to_glb())
+        self.assertEqual(serious(report), set())
+        self.assertIn("material's doubleSided", next(f for f in report["findings"] if f["check"] == "inside_out")["message"])
+
     def test_flipped_face_is_miswound_and_inward(self):
         faces = FACES.copy()
         faces[0] = faces[0][::-1]

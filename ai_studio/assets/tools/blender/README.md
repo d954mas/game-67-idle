@@ -49,6 +49,14 @@ What it shows beyond the plain views:
   `--game-crop shot.png` puts the in-game screenshot on the card; `--turntable 8`;
   `--animation Walk --time 0.4` poses the model; a clip-only file plays on its body with
   `--clip-model body.glb`.
+- With a game camera the grid gets `game_angle`: the game's pitch, yaw and FOV fitted to the
+  model (the literal `game` view, where a small prop is a dot, is available via `--views`).
+  The camera may be orthographic: `{"ortho": true, "ortho_half_height": 10.27, ...}`.
+- Match what the runtime does to the mesh: `--model-scale 0.5`, `--atlas palette.png` (a
+  palette the game binds at runtime), `--tint "#c03020"`; references take `path@scale` or
+  `{"path", "scale", "atlas", "tint"}` entries in `beside`.
+- `-r` walks folders recursively; files with the same name from different folders get
+  parent-prefixed output folders.
 - Checks: `--pivot floor|floor-center|center|top`, `--contacts contract.json`,
   `--floating`, `--profile volume`; `--no-render` for checks only; `--strict` to exit 1 on
   high findings.
@@ -85,6 +93,11 @@ preset; later rules win:
 }
 ```
 
+Check options that name files (`reference_rig`, `contract`, `model`) are relative to the
+preset too. Parts a game draws without back-face culling can be declared with
+`"mesh_check": {"double_sided": ["*hoop*"]}` (materials with glTF `doubleSided` count
+automatically), so their winding is reported as info.
+
 Order: presets < `--config` < flags. `--preset file` or `--no-preset` override the lookup.
 Clip presets can mark clips where the body is held by someone else:
 `"clip_check": {"airborne": ["carried*", "thrown*"]}`.
@@ -117,6 +130,7 @@ print(review_live.review_scene("tmp/review/crate", name="crate"))  # GLB, render
 | `glb_check.py` | Export contract: finite data, unit normals, triangles, URIs, JPEG, texture policy, COLOR_0 encoding, pivot rule with bounds and bounds centre, joint limit, skin weights (≤ 4 influences, sums, unweighted vertices, inverse binds), `--reference-rig`. |
 | `contact_check.py` | Contract pairs (`moving`, `receiver`, `direction`, `window`) with an automatic negative control per pair, ground supports, or `--floating` for parts hanging in the air. |
 | `clip_check.py` | Per clip: non-finite or non-positive keys, pops, teleports, planted-foot slide, soles under the floor, optional loop seam; limits scale with model height. `--model` plays clip-only files on a model. |
+| `retarget.py` | Humanoid clips onto another skeleton without Blender: maps detected from joint names (`retarget_maps/`), world-space rotation transfer that holds for T-pose, A-pose and turned rigs, hips scaled by hips height, leg IK onto the source ankles, optional `--foot-lock`, `--in-place`, `--untwist`, `--ground`; writes the target with the clips or a clip-only file and runs `clip_check` on it. Core: `lib/retarget.py`. |
 | `lib/glb.py` | Read, pose, skin and write GLB with numpy, no Blender: `Glb.load`, `parts`, `posed_world`, `skinned_positions`, `GlbBuilder`. |
 | `lib/color.py` | sRGB/linear/hex conversion; `PaletteAtlas` rows that raise when full and keep alpha above the engine refill threshold; PNG writer for Blender. |
 | `lib/bpy_scene.py`, `lib/bpy_io.py` | Inside Blender: scene reset, palette and vertex-colour materials, closed bmesh primitives, axis helpers, bounds, 4.x/5.x compatibility; GLB import and export presets (`static`, `skinned`, `animated`) with pivot rules and an export report. |
@@ -136,6 +150,41 @@ S.reset_scene()
 crate = S.box("Crate", size=(1, 1, 1), anchor="bottom", material=S.palette_material("Wood", "#8a5a33"))
 print(bpy_io.export_glb("tmp/crate.glb", [crate], preset="static"))
 ```
+
+## Retarget
+
+```powershell
+python retarget.py --source clips/*.glb --target body.glb --out body_clips.glb --foot-lock
+python retarget.py --source walk.glb run.glb --source-rig rig.glb --target body.glb --out-dir out --output clip
+python retarget.py --list-maps --target body.glb      # which map names the rig, and what it misses
+```
+
+A clip file that carries its skeleton (Mixamo, Meshy, most exports) is its own source rig;
+`--source-rig` covers clip files keyed by node name against a separate rig. One line per clip
+reports mapped joints, scale, foot slide before and after the lock, the `clip_check` drift and
+lowest sole, and seconds (tens of milliseconds per clip). `--report r.json` keeps it all.
+
+Method (`lib/retarget.py`, numpy only, also importable inside Blender): each mapped target joint
+takes its source joint's world rotation change from the source rest, after a constant rest
+alignment. Both rests are put in one body frame (left, up, forward), so facing and Z-up exports do
+not matter. The torso aligns rest to rest; arm joints align bone direction plus thumb side, leg
+joints bone direction plus foot heading, feet and toes their horizontal heading only, which keeps
+the target's own foot pitch. A constant translation key on a non-root joint is taken as that joint's
+true rest. Hips move by the source displacement times the hips-height ratio; the legs then reach
+the source ankles mapped the same way (`--no-leg-ik` copies rotations only), which matters for
+cartoon legs. `--foot-lock` pins planted ankles with `lib/motion` (contacts, ramped plan, two-bone
+IK); for clips authored in place pass `--speed` so plants are found in the moving frame. Unmapped
+target joints keep their rest and are not keyed.
+
+Maps are data: `retarget_maps/<id>.json` lists canonical joints (`hips`, `spine`, `chest`,
+`spine_mid`, `neck`, `head`, `<side>_shoulder|upper_arm|lower_arm|hand|upper_leg|lower_leg|foot|toe`,
+optional fingers `<side>_<thumb|index|middle|ring|little><1-3>`, and the landmarks `head_end`,
+`<side>_hand_end`, `<side>_toe_end`) with node-name aliases; the first alias a rig has wins,
+namespaces such as `mixamorig:` are ignored. Detection picks the map that misses fewest core joints,
+then names most. Bundled: `mixamo`, `npc35`, `hero17`, `rgpoly`, `soma`, `ual`, `rigify`. A new rig
+family needs one JSON file and a look at its card.
+
+Check the result on a card: `python review.py out.glb` (clip-only: `--clip-model body.glb`).
 
 ## Full Gate
 

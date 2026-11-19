@@ -3,7 +3,7 @@ formats, vertex colour encoding, node transforms, pivot, joint count and skin we
 rig against a reference rig.
 
     python glb_check.py model.glb [--pivot floor|floor-center|center|top|any] [--textures any|none|png]
-        [--color-encoding any|float|u8|u16|normalized] [--identity-nodes] [--max-joints N] [--reference-rig rig.glb]
+        [--color-encoding any|float|u8|u16|normalized] [--color-components any|3|4] [--identity-nodes] [--max-joints N] [--reference-rig rig.glb]
 
 The bounds and the bounds centre are reported separately from the origin: a consumer that places a
 model by its bounds or collider centre instead of its origin floats or sinks it.
@@ -19,7 +19,7 @@ import numpy as np  # noqa: E402
 from ai_studio.assets.tools.blender.lib import glb as G, report as R  # noqa: E402
 
 TOOL = "glb_check"
-DEFAULTS = {"normal_tolerance": 0.01, "jpeg": "low", "textures": "any", "color_encoding": "any",
+DEFAULTS = {"normal_tolerance": 0.01, "jpeg": "low", "textures": "any", "color_encoding": "any", "color_components": "any",
             "identity_nodes": False, "pivot": "any", "pivot_tolerance": 0.001, "max_joints": None,
             "max_influences": 4, "influence_epsilon": 1e-3, "weight_sum_tolerance": 1e-3,
             "bind_tolerance": 1e-4, "seam_weight_tolerance": 1e-3, "weld": 1e-6, "reference_rig": None,
@@ -166,6 +166,14 @@ def check_primitives(glb, opts, out, unreadable=frozenset()):
                                          f"COLOR_0 is componentType {acc['componentType']}, the contract wants "
                                          f"{opts['color_encoding']}", "re-export the colour attribute in the "
                                          "contract's encoding", where))
+            if "COLOR_0" in attrs and str(opts["color_components"]) != "any":
+                kind = doc["accessors"][attrs["COLOR_0"]]["type"]
+                if kind != f"VEC{opts['color_components']}":
+                    out.append(R.finding("color_components", "medium",
+                                         f"COLOR_0 is {kind}, the contract wants {opts['color_components']} components",
+                                         "re-export the colour attribute with alpha (RGBA)"
+                                         if str(opts["color_components"]) == "4" else
+                                         "re-export the colour attribute as RGB", where))
 
 
 def check_nodes(glb, opts, out):
@@ -388,8 +396,9 @@ def check_reference_rig(glb, opts, out, metrics):
 def check(path_or_glb, **options):
     opts = R.resolve_options(TOOL, DEFAULTS, overrides=options)
     for key, allowed in (("pivot", PIVOTS), ("textures", ("any", "none", "png")),
-                         ("color_encoding", ("any",) + tuple(COLOR_ENCODINGS)), ("jpeg", R.SEVERITIES + ("off",))):
-        if opts[key] not in allowed:
+                         ("color_encoding", ("any",) + tuple(COLOR_ENCODINGS)), ("jpeg", R.SEVERITIES + ("off",)),
+                         ("color_components", ("any", "3", "4"))):
+        if (str(opts[key]) if key == "color_components" else opts[key]) not in allowed:
             raise ValueError(f"{TOOL}: {key} must be one of {allowed}, not {opts[key]!r}")
     try:
         glb = path_or_glb if isinstance(path_or_glb, G.Glb) else G.Glb.load(path_or_glb)
@@ -419,6 +428,7 @@ def _configure(parser):
     parser.add_argument("--textures", choices=("any", "none", "png"))
     parser.add_argument("--jpeg", choices=R.SEVERITIES + ("off",), help="severity of JPEG images (default low)")
     parser.add_argument("--color-encoding", choices=("any",) + tuple(COLOR_ENCODINGS))
+    parser.add_argument("--color-components", choices=("any", "3", "4"), help="COLOR_0 width (default any)")
     parser.add_argument("--identity-nodes", action="store_true", default=None)
     parser.add_argument("--normal-tolerance", type=float)
     parser.add_argument("--max-joints", type=int)

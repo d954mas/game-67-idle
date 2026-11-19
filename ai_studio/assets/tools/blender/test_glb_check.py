@@ -92,6 +92,15 @@ class Contract(unittest.TestCase):
         self.assertTrue({"color_encoding", "node_transform"} <= serious(report))
         self.assertEqual(serious(glb_check.check(b.to_glb(), color_encoding="float")), set())
 
+    def test_colour_components(self):
+        b = G.GlbBuilder()
+        b.add_node("box", mesh=b.add_mesh("box", CUBE, FACES, colors=np.ones((8, 3))))
+        self.assertIn("color_components", found(glb_check.check(b.to_glb(), color_components=4)))
+        for want in (3, "3", "any"):
+            self.assertNotIn("color_components", found(glb_check.check(b.to_glb(), color_components=want)))
+        with self.assertRaises(ValueError):
+            glb_check.check(b.to_glb(), color_components=2)
+
     def test_colour_encoding_u16(self):
         b = G.GlbBuilder()
         colors = np.full((8, 4), 65535, np.uint16)

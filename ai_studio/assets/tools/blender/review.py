@@ -46,10 +46,12 @@ DEFAULT_VIEWS = ("front", "right", "three_quarter")
 OPTIONS = {"views": None, "passes": None, "size": 768, "light": "studio_hdr", "game_camera": None,
            "turntable": 0, "beside": [], "lineup_views": None, "animation": None, "time": 0.0,
            "pose_views": None, "max_poses": 4, "filmstrip": 8, "max_filmstrips": 3, "pose_size": 384, "profile": None, "pivot": None, "contacts": None,
-           "floating": False, "clip_model": None, "game_crop": None}
-PATH_OPTIONS = ("contacts", "clip_model", "game_crop")
+           "floating": False, "clip_model": None, "game_crop": None, "model_scale": None, "atlas": None,
+           "tint": None}
+PATH_OPTIONS = ("contacts", "clip_model", "game_crop", "atlas")
 RENDER_OPTIONS = ("views", "passes", "size", "light", "game_camera", "turntable", "beside",
-                  "lineup_views", "animation", "time", "pose_views", "pose_size")
+                  "lineup_views", "animation", "time", "pose_views", "pose_size", "model_scale", "atlas",
+                  "tint")
 FACING_CHECKS = ("inverted_shell", "inside_out", "miswound")
 TOOLS = {"mesh_check": mesh_check, "glb_check": glb_check, "contact_check": contact_check,
          "clip_check": clip_check}
@@ -76,6 +78,22 @@ def find_presets(model):
     return list(reversed(found))
 
 
+# Check options that name files; in a preset they are relative to the preset file.
+TOOL_PATH_OPTIONS = ("reference_rig", "contract", "model")
+
+
+def preset_path(value, base):
+    return str((base / value).resolve()) if isinstance(value, str) and value else value
+
+
+def beside_entry(value, base):
+    """A reference: a path, `path@scale`, or {"path", "scale", ...}; the path made absolute."""
+    if isinstance(value, dict):
+        return {**value, "path": preset_path(value.get("path"), base)}
+    path, _, rest = str(value).partition("@")
+    return preset_path(path, base) + (f"@{rest}" if rest else "")
+
+
 def parse_layer(data, base):
     """(options, tool config) of one preset layer, its paths made absolute against `base`."""
     options, tools = {}, {}
@@ -84,12 +102,14 @@ def parse_layer(data, base):
             continue
         if key in OPTIONS:
             if key in PATH_OPTIONS and value:
-                value = str((base / value).resolve())
+                value = preset_path(value, base)
             elif key == "beside":
-                value = [str((base / v).resolve()) for v in ([value] if isinstance(value, str) else value)]
+                value = [beside_entry(v, base) for v in ([value] if isinstance(value, (str, dict)) else value)]
             options[key] = value
+        elif key in TOOLS and isinstance(value, dict):
+            tools[key] = {k: preset_path(v, base) if k in TOOL_PATH_OPTIONS else v for k, v in value.items()}
         else:
-            tools[key] = value
+            tools[key] = preset_path(value, base) if key in TOOL_PATH_OPTIONS else value
     return options, tools
 
 
@@ -299,8 +319,9 @@ def render_command(models, out, opts, poses, clip_source=None):
                "--light", opts.light, "--no-sheet"]
     # A clip-only file needs the motion, not twelve views of the body at rest.
     views = list(opts.views or (["three_quarter"] if clip_source else DEFAULT_VIEWS))
-    if opts.game_camera and "game" not in views and not clip_source:
-        views.append("game")
+    # The literal game view shows a prop as a dot; game_angle keeps the game's angle, fitted.
+    if opts.game_camera and not {"game", "game_angle"} & set(views) and not clip_source:
+        views.append("game_angle")
     if opts.turntable and "turntable" not in views:
         views.append("turntable")
     command += ["--views", *views]
@@ -319,22 +340,34 @@ def render_command(models, out, opts, poses, clip_source=None):
     if opts.animation:
         command += ["--animation", opts.animation, "--time", str(opts.time)]
     if opts.beside:
-        command += ["--beside", *map(str, opts.beside)]
+        if any(isinstance(b, dict) for b in opts.beside):
+            entries = [b if isinstance(b, dict) else {"path": str(b)} for b in opts.beside]
+            command += ["--beside", json.dumps(entries)]
+        else:
+            command += ["--beside", *map(str, opts.beside)]
         if opts.lineup_views:
             command += ["--lineup-views", *opts.lineup_views]
     if poses:
         command += ["--poses", *poses, "--floor", "--pose-size", str(opts.pose_size)]
         if opts.pose_views:
             command += ["--pose-views", *opts.pose_views]
+    if opts.model_scale not in (None, 1, 1.0):
+        command += ["--model-scale", str(opts.model_scale)]
+    if opts.atlas:
+        command += ["--atlas", str(opts.atlas)]
+    if opts.tint:
+        command += ["--tint", str(opts.tint)]
     if clip_source:
         command += ["--clip-source", str(clip_source)]
     return command
 
 
-def render(models, root, opts, poses, blender=None, timeout=900, server=True):
+def render(models, root, opts, poses, blender=None, timeout=900, server=True, names=None):
     """Render models that share settings in one Blender run; returns ({model: views}, result).
-    A clip-only file is rendered on its body (`clip_model`), one file per run."""
-    out = root if len(models) > 1 else root / models[0].stem
+    A clip-only file is rendered on its body (`clip_model`), one file per run. A batch writes
+    <root>/<stem>/, so only a single model may use a `names` folder other than its stem."""
+    names = names or {m: m.stem for m in models}
+    out = root if len(models) > 1 else root / names[models[0]]
     if opts.clip_model:
         command = render_command([opts.clip_model], out, opts, poses, clip_source=models[0])
     else:
@@ -344,7 +377,7 @@ def render(models, root, opts, poses, blender=None, timeout=900, server=True):
                              timeout=timeout, server=server)
     rendered = {}
     for model in models:
-        views_file = root / model.stem / "views.json"
+        views_file = root / names[model] / "views.json"
         if views_file.is_file():
             rendered[model] = json.loads(views_file.read_text(encoding="utf-8"))
     if result["code"] != 0 or len(rendered) != len(models):
@@ -353,16 +386,38 @@ def render(models, root, opts, poses, blender=None, timeout=900, server=True):
     return rendered, result
 
 
-def render_groups(models, settings, poses):
-    """Models whose render settings and pose lists match share one Blender run."""
+def render_groups(models, settings, poses, names=None):
+    """Models whose render settings and pose lists match share one Blender run; a model whose
+    output folder is not its stem (a name clash) renders alone."""
+    names = names or {m: m.stem for m in models}
     groups = {}
     for model in models:
         opts = settings[model]
+        alone = opts.clip_model or names[model] != model.stem
         key = json.dumps([[getattr(opts, k) for k in RENDER_OPTIONS], opts.facing, poses[model],
-                          str(model) if opts.clip_model else None],
+                          str(model) if alone else None],
                          sort_keys=True, default=str)
         groups.setdefault(key, []).append(model)
     return list(groups.values())
+
+
+def output_names(models):
+    """Folder name per model: its stem, or with parent folders prefixed until unique."""
+    names = {m: m.stem for m in models}
+    depth = 0
+    while True:
+        counts = {}
+        for name in names.values():
+            counts[name] = counts.get(name, 0) + 1
+        clashing = [m for m, n in names.items() if counts[n] > 1]
+        if not clashing:
+            return names
+        depth += 1
+        for m in clashing:
+            parents = [q.name for q in m.parents][:depth][::-1]
+            if len(parents) < depth:
+                raise SystemExit(f"cannot give {m} a unique output folder")
+            names[m] = "__".join(parents + [m.stem])
 
 
 # --- review -----------------------------------------------------------------------------------
@@ -375,16 +430,16 @@ def review(models, args, config):
     """Checks per model, batched renders, one card per model. Returns ([(summary, reports)], s)."""
     started = time.monotonic()
     models = [Path(m).resolve() for m in models]
-    stems = [m.stem for m in models]
-    clashes = sorted({s for s in stems if stems.count(s) > 1})
-    if clashes:
-        raise SystemExit(f"several models share the name {clashes}; review them in separate calls")
+    names = output_names(models)
     root = Path(args.out).resolve() if getattr(args, "out", None) else Path.cwd() / "tmp" / "review"
     settings, checked, poses, marks = {}, {}, {}, {}
     for model in models:
         opts, tools = model_options(model, args, config)
+        # A model listed among its own references would stand twice in the lineup.
+        opts.beside = [b for b in (opts.beside or [])
+                       if Path(b["path"] if isinstance(b, dict) else str(b).split("@")[0]).resolve() != model]
         settings[model] = opts
-        out = root / model.stem
+        out = root / names[model]
         out.mkdir(parents=True, exist_ok=True)
         checked[model] = run_checks(model, opts, tools)
         poses[model], marks[model] = pose_plan(model, opts, checked[model])
@@ -396,18 +451,19 @@ def review(models, args, config):
         f["check"] == "unreadable" for r in checked[m] for f in r["findings"])]
     rendered, results_by_model, errors = {}, {}, {}
     if not getattr(args, "no_render", False):
-        for group in render_groups(renderable, settings, poses):
+        for group in render_groups(renderable, settings, poses, names):
             try:
                 views, result = render(group, root, settings[group[0]], poses[group[0]],
                                        getattr(args, "blender", None), getattr(args, "timeout", 900),
-                                       server=False if getattr(args, "cold", False) else True)
+                                       server=False if getattr(args, "cold", False) else True,
+                                       names=names)
                 rendered.update(views)
                 results_by_model.update({m: result for m in group})
             except (RuntimeError, FileNotFoundError) as error:
                 errors.update({m: str(error) for m in group})
     results = []
     for model in models:
-        out, reports, views, opts = root / model.stem, checked[model], rendered.get(model), settings[model]
+        out, reports, views, opts = root / names[model], checked[model], rendered.get(model), settings[model]
         card = None
         if views:
             title = f"{model.name} on {Path(opts.clip_model).name}" if opts.clip_model else None
@@ -436,13 +492,14 @@ def caller_path(value):
     return path if path.is_absolute() else Path(os.environ.get("NT_CALLER_CWD", os.getcwd())) / path
 
 
-def expand_models(items):
-    """Files, folders (their *.glb) and globs; PowerShell and cmd pass `*.glb` through unexpanded."""
+def expand_models(items, recursive=False):
+    """Files, folders (their *.glb; with `recursive` also subfolders) and globs; PowerShell and
+    cmd pass `*.glb` through unexpanded."""
     models = []
     for item in items:
         path = caller_path(item)
         if path.is_dir():
-            models += sorted(path.glob("*.glb"))
+            models += sorted(path.rglob("*.glb") if recursive else path.glob("*.glb"))
         elif any(ch in item for ch in "*?["):
             models += sorted(Path(p) for p in glob.glob(str(path)))
         else:
@@ -469,6 +526,7 @@ def parser():
     p = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
     p.add_argument("models", nargs="+", help="GLB files, folders or globs")
     p.add_argument("--out", help="output folder (default: ./tmp/review)")
+    p.add_argument("-r", "--recursive", action="store_true", help="folders include their subfolders")
     p.add_argument("--views", nargs="+", help="front back left right top three_quarter game")
     p.add_argument("--passes", nargs="+", help="beauty clay wire silhouette")
     p.add_argument("--size", type=int, help="image height in px (default 768)")
@@ -487,6 +545,9 @@ def parser():
     p.add_argument("--max-filmstrips", type=int, help="animations that get a filmstrip (default 3)")
     p.add_argument("--pose-size", type=int, help="pose frame height in px (default 384)")
     p.add_argument("--game-crop", help="screenshot crop of the asset in the game, shown on the card")
+    p.add_argument("--model-scale", type=float, help="display scale the game applies to this mesh")
+    p.add_argument("--atlas", help="palette atlas PNG the game binds at runtime (beauty pass)")
+    p.add_argument("--tint", help="#rrggbb tint the game applies at runtime (beauty pass)")
     p.add_argument("--profile", help="mesh_check profile: auto (default), volume or surface")
     p.add_argument("--pivot", help="glb_check pivot rule: floor, floor-center, center, top or any")
     p.add_argument("--contacts", help="contact_check contract JSON")
@@ -508,7 +569,7 @@ def parser():
 
 def main(argv=None):
     args = parser().parse_args(argv)
-    for name in ("out", "config", "contacts", "clip_model", "game_crop", "preset"):
+    for name in ("out", "config", "contacts", "clip_model", "game_crop", "preset", "atlas"):
         if getattr(args, name):
             setattr(args, name, str(caller_path(getattr(args, name))))
     if args.beside:
@@ -517,7 +578,7 @@ def main(argv=None):
         args.out = str(caller_path("tmp/review"))
     config = R.load_config(args.config)
     validate_config(config)
-    results, seconds = review(expand_models(args.models), args, config)
+    results, seconds = review(expand_models(args.models, args.recursive), args, config)
     failed = False
     for summary, reports in results:
         print(f"== {Path(summary['asset']).name}" + (f"  (preset: {', '.join(Path(p).parent.name + '/' + Path(p).name for p in summary['presets'])})"
