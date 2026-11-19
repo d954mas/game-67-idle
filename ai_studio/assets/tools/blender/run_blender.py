@@ -8,6 +8,10 @@ versions newest first. The script runs with --factory-startup, so user add-ons a
 never change the result, and with the Studio root on sys.path, so it can
 `from ai_studio.assets.tools.blender.lib import bpy_scene, glb`.
 
+A warm server (`blender_server.py start`) takes the job when one is running for the same Blender
+and Studio root and is free; otherwise Blender starts cold, with the same result. `--cold` or
+NT_BLENDER_SERVER=0 skips the server, `--server` starts one first.
+
 The Codex/Claude sandbox blocks launching .exe files; run this command outside the sandbox.
 """
 import argparse
@@ -76,13 +80,20 @@ def blender_command(blender, script, script_args=(), studio_root=None, factory_s
     return command
 
 
-def run(script, script_args=(), blender=None, log=None, timeout=3600, factory_startup=True, quiet=False):
-    """Run `script` in Blender; returns {"code", "seconds", "blender", "version", "log"}.
+def run(script, script_args=(), blender=None, log=None, timeout=3600, factory_startup=True, quiet=False,
+        server="auto"):
+    """Run `script` in Blender; returns {"code", "seconds", "blender", "version", "log", "via"}.
 
-    Output streams to the terminal unless `log` is given (then it goes only to the file).
-    A hung Blender is killed after `timeout` seconds.
+    Output goes to the terminal unless `log` is given (then only to the file); a server job
+    prints it when the job ends. A hung Blender is killed after `timeout` seconds (code -9).
+    `server`: "auto" uses a live warm server, True starts one first, False always runs cold.
     """
     exe = find_blender(blender)
+    if server and factory_startup and os.environ.get("NT_BLENDER_SERVER", "").strip() != "0":
+        from ai_studio.assets.tools.blender import blender_server
+        result = blender_server.try_run(exe, script, script_args, log, timeout, quiet, start=server is True)
+        if result:
+            return result
     command = blender_command(exe, script, script_args, factory_startup=factory_startup)
     started = time.monotonic()
     log_path = Path(log) if log else None
@@ -106,7 +117,7 @@ def run(script, script_args=(), blender=None, log=None, timeout=3600, factory_st
         match = re.search(r"Blender (\d+\.\d+\.\d+)", log_path.read_text(encoding="utf-8", errors="replace")[:4000])
         version = match.group(1) if match else None
     return {"code": code, "seconds": round(time.monotonic() - started, 2), "blender": str(exe),
-            "version": version, "log": str(log_path) if log_path else None}
+            "version": version, "log": str(log_path) if log_path else None, "via": "cold"}
 
 
 def main(argv=None):
@@ -122,6 +133,9 @@ def main(argv=None):
     parser.add_argument("--timeout", type=float, default=3600)
     parser.add_argument("--keep-user-prefs", action="store_true", help="skip --factory-startup")
     parser.add_argument("--which", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--cold", action="store_true", help="never use a warm server")
+    mode.add_argument("--server", action="store_true", help="start a warm server if none runs")
     args = parser.parse_args(argv)
     if args.which:
         print(find_blender(args.blender))
@@ -129,7 +143,7 @@ def main(argv=None):
     if not args.script:
         parser.error("script is required")
     result = run(args.script, script_args, args.blender, args.log, args.timeout,
-                 not args.keep_user_prefs)
+                 not args.keep_user_prefs, server=False if args.cold else (True if args.server else "auto"))
     if result["code"] != 0:
         where = f", see {result['log']}" if result["log"] else ""
         print(f"blender exited {result['code']} after {result['seconds']} s{where}", file=sys.stderr)

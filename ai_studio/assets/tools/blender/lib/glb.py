@@ -80,23 +80,35 @@ def write_glb(path, document, binary):
 
 # --- math -------------------------------------------------------------------------------------
 
+def quat_matrices(q):
+    """(n, 3, 3) rotations of (n, 4) glTF (x, y, z, w) quaternions; normalises, since files drift off unit."""
+    q = np.asarray(q, float).reshape(-1, 4)
+    n = np.linalg.norm(q, axis=1)
+    unit = n >= 1e-12
+    x, y, z, w = (q / np.where(unit, n, 1.0)[:, None]).T
+    m = np.stack([1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w),
+                  2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w),
+                  2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)], axis=1).reshape(-1, 3, 3)
+    m[~unit] = np.eye(3)
+    return m
+
+
 def quat_matrix(q):
-    """3x3 rotation of a glTF (x, y, z, w) quaternion; normalises, since files drift off unit."""
-    q = np.asarray(q, float)
-    n = np.linalg.norm(q)
-    if n < 1e-12:
-        return np.eye(3)
-    x, y, z, w = q / n
-    return np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
-                     [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
-                     [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+    return quat_matrices(q)[0]
+
+
+def trs_matrices(t, r, s):
+    """(n, 4, 4) from per-row translation, rotation and scale; a single (3,) or (4,) value broadcasts."""
+    t, r, s = (np.atleast_2d(np.asarray(v, float)) for v in (t, r, s))
+    m = np.zeros((max(len(t), len(r), len(s)), 4, 4))
+    m[:, :3, :3] = quat_matrices(r) * s[:, None, :]
+    m[:, :3, 3] = t
+    m[:, 3, 3] = 1.0
+    return m
 
 
 def trs_matrix(t, r, s):
-    m = np.eye(4)
-    m[:3, :3] = quat_matrix(r) * np.asarray(s, float)
-    m[:3, 3] = t
-    return m
+    return trs_matrices(t, r, s)[0]
 
 
 def quat_angle_deg(a, b):
@@ -121,36 +133,46 @@ def transform_normals(matrix, normals):
 def sample_channel(times, values, t, path, interpolation="LINEAR"):
     """Sample one glTF channel the way an engine does: LINEAR (slerp-free nlerp for rotations),
     STEP, or CUBICSPLINE (values stored as in-tangent, value, out-tangent triplets)."""
+    return sample_channel_at(times, values, [t], path, interpolation)[0]
+
+
+def sample_channel_at(times, values, ts, path, interpolation="LINEAR"):
+    """sample_channel at every time in `ts`: (len(ts), width)."""
     times = np.asarray(times, float)
+    ts = np.asarray(ts, float).reshape(-1)
     rotation = path == "rotation"
     cubic = interpolation == "CUBICSPLINE"
-    keys = values.reshape(len(times), 3, -1)[:, 1] if cubic else values
-    if t <= times[0] or len(times) == 1:
-        out = keys[0]
-    elif t >= times[-1]:
-        out = keys[-1]
+    n = len(times)
+    triplets = values.reshape(n, 3, -1) if cubic else None
+    keys = triplets[:, 1] if cubic else values
+    out = np.empty((len(ts), keys.shape[1]))
+    if n == 1:
+        out[:] = keys[0]
     else:
-        k = int(np.searchsorted(times, t, side="right")) - 1
-        dt = max(1e-12, times[k + 1] - times[k])
-        u = (t - times[k]) / dt
+        k = np.clip(np.searchsorted(times, ts, side="right") - 1, 0, n - 2)
+        dt = np.maximum(1e-12, times[k + 1] - times[k])
+        u = ((ts - times[k]) / dt)[:, None]
         if interpolation == "STEP":
-            out = keys[k]
+            out[:] = keys[k]
         elif cubic:
-            triplets = values.reshape(len(times), 3, -1)
-            p0, m0 = triplets[k, 1], triplets[k, 2] * dt
-            p1, m1 = triplets[k + 1, 1], triplets[k + 1, 0] * dt
+            p0, m0 = triplets[k, 1], triplets[k, 2] * dt[:, None]
+            p1, m1 = triplets[k + 1, 1], triplets[k + 1, 0] * dt[:, None]
             u2, u3 = u * u, u * u * u
-            out = ((2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0
-                   + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1)
+            out[:] = ((2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0
+                      + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1)
         else:
             a, b = keys[k], keys[k + 1]
-            if rotation and np.dot(a, b) < 0:
-                b = -b
-            out = a + (b - a) * u
+            if rotation:
+                b = np.where((a * b).sum(axis=1, keepdims=True) < 0, -b, b)
+            out[:] = a + (b - a) * u
+        out[ts >= times[-1]] = keys[-1]
+        out[ts <= times[0]] = keys[0]
     if rotation:
-        n = np.linalg.norm(out)
-        out = out / n if n > 1e-12 else np.array([0.0, 0.0, 0.0, 1.0])
-    return np.asarray(out, float)
+        length = np.linalg.norm(out, axis=1)
+        unit = length > 1e-12
+        out[unit] /= length[unit, None]
+        out[~unit] = (0.0, 0.0, 0.0, 1.0)
+    return out
 
 
 # --- reader -----------------------------------------------------------------------------------
@@ -182,6 +204,8 @@ class Glb:
         self.by_name = {}
         for i, n in enumerate(self.nodes):
             self.by_name.setdefault(n.get("name"), i)
+        # Decoded data keyed by what produced it; the document and binary are treated as immutable.
+        self._cache = {}
         compressed = sorted(COMPRESSED & set(document.get("extensionsUsed", []) + document.get("extensionsRequired", [])))
         if compressed:
             # Their accessors have no plain bufferView, so reading them would silently yield zeros.
@@ -198,9 +222,26 @@ class Glb:
     def label(self):
         return self.path.as_posix() if self.path else "glb"
 
+    def _cached(self, key, build):
+        """Read-only result of build(), computed once per key: a caller that writes into it fails loudly
+        instead of corrupting every later reader."""
+        if key not in self._cache:
+            value = build()
+            for array in value if isinstance(value, tuple) else (value,):
+                if isinstance(array, np.ndarray):
+                    array.flags.writeable = False
+            self._cache[key] = value
+        return self._cache[key]
+
     # accessors -------------------------------------------------------------------------------
     def accessor(self, index, normalize=True):
         """(count, width) array: float64 for float or normalised data, int64 otherwise."""
+        return self._accessor(index, normalize).copy()
+
+    def _accessor(self, index, normalize=True):
+        return self._cached(("accessor", index, bool(normalize)), lambda: self._decode(index, normalize))
+
+    def _decode(self, index, normalize):
         acc = self.json["accessors"][index]
         fmt = COMPONENT_FORMAT[acc["componentType"]]
         width = COMPONENT_COUNT[acc["type"]]
@@ -292,19 +333,28 @@ class Glb:
         return out
 
     def world_rest(self, scene=None):
-        return self.walk(self.local_matrix, scene)
+        return {i: m.copy() for i, m in self._world_rest(scene).items()}
+
+    def _world_rest(self, scene=None):
+        key = ("world_rest", scene)
+        if key not in self._cache:
+            world = self.walk(self.local_matrix, scene)
+            for m in world.values():
+                m.flags.writeable = False
+            self._cache[key] = world
+        return self._cache[key]
 
     # geometry --------------------------------------------------------------------------------
     def primitive_faces(self, primitive):
         mode = primitive.get("mode", TRIANGLES)
         if "indices" in primitive:
-            flat = self.accessor(primitive["indices"], normalize=False)[:, 0]
+            flat = self._accessor(primitive["indices"], normalize=False)[:, 0]
         else:
             flat = np.arange(self.accessor_info(primitive["attributes"]["POSITION"])["count"])
         if mode == TRIANGLES:
             if len(flat) % 3:
                 raise GlbError(f"{self.label}: triangle index count {len(flat)} is not a multiple of 3")
-            return flat.reshape(-1, 3)
+            return flat.reshape(-1, 3).copy()
         if mode == 5:
             tris = [(flat[k], flat[k + 1], flat[k + 2]) if k % 2 == 0 else (flat[k + 1], flat[k], flat[k + 2])
                     for k in range(len(flat) - 2)]
@@ -321,7 +371,7 @@ class Glb:
         Skinned meshes are skinned by the joints in `world`, as glTF ignores their node transform;
         a skin that cannot be evaluated (joint outside the scene, bad index) falls back to the node.
         """
-        world = world if world is not None else self.world_rest()
+        world = world if world is not None else self._world_rest()
         out = []
         for i, matrix in world.items():
             node = self.nodes[i]
@@ -347,9 +397,9 @@ class Glb:
                         positions = None
                 placed = positions is not None
                 if not placed:
-                    positions = transform_points(matrix, self.accessor(prim["attributes"]["POSITION"]))
+                    positions = transform_points(matrix, self._accessor(prim["attributes"]["POSITION"]))
                 out.append(Part(name, i, node["mesh"], p, positions, self.primitive_faces(prim),
-                                np.eye(4) if placed else matrix, prim["attributes"]))
+                                np.eye(4) if placed else np.array(matrix), prim["attributes"]))
         return out
 
     def merged(self, world=None, include=None):
@@ -370,23 +420,24 @@ class Glb:
         return [self.name(j) for j in self.json["skins"][skin]["joints"]]
 
     def inverse_binds(self, skin=0):
+        """Read-only (joints, 4, 4)."""
         s = self.json["skins"][skin]
         if "inverseBindMatrices" not in s:
-            return np.repeat(np.eye(4)[None], len(s["joints"]), axis=0)
-        return self.accessor(s["inverseBindMatrices"]).reshape(-1, 4, 4).transpose(0, 2, 1)
+            return self._cached(("identity_binds", len(s["joints"])),
+                                lambda: np.repeat(np.eye(4)[None], len(s["joints"]), axis=0))
+        return self._accessor(s["inverseBindMatrices"]).reshape(-1, 4, 4).transpose(0, 2, 1)
 
     def skin_streams(self, primitive):
-        """(joints, weights) concatenated over every JOINTS_n/WEIGHTS_n set: (count, 4*sets)."""
+        """Read-only (joints, weights) concatenated over every JOINTS_n/WEIGHTS_n set: (count, 4*sets)."""
         attrs = primitive["attributes"]
-        joints, weights = [], []
-        k = 0
-        while f"JOINTS_{k}" in attrs and f"WEIGHTS_{k}" in attrs:
-            joints.append(self.accessor(attrs[f"JOINTS_{k}"], normalize=False))
-            weights.append(self.accessor(attrs[f"WEIGHTS_{k}"]))
-            k += 1
-        if not joints:
+        sets = []
+        while f"JOINTS_{len(sets)}" in attrs and f"WEIGHTS_{len(sets)}" in attrs:
+            sets.append((attrs[f"JOINTS_{len(sets)}"], attrs[f"WEIGHTS_{len(sets)}"]))
+        if not sets:
             return None, None
-        return np.hstack(joints), np.hstack(weights)
+        return self._cached(("skin_streams", tuple(sets)), lambda: (
+            np.hstack([self._accessor(j, normalize=False) for j, _ in sets]),
+            np.hstack([self._accessor(w) for _, w in sets])))
 
     def skin_palette(self, world, skin=0):
         """Joint world x inverse bind per joint; GlbError when a joint is outside `world`."""
@@ -401,19 +452,23 @@ class Glb:
 
     def skin_primitive(self, palette, primitive):
         """Linear-blend-skinned positions of one primitive; GlbError on missing streams or bad indices."""
-        pos = self.accessor(primitive["attributes"]["POSITION"])
-        joints, weights = self.skin_streams(primitive)
-        if joints is None:
-            raise GlbError(f"{self.label}: skinned primitive has no JOINTS_0/WEIGHTS_0")
-        outside = (joints >= len(palette)) | (joints < 0)
-        if len(joints) != len(pos) or (outside & (weights > 0)).any():
-            raise GlbError(f"{self.label}: joint indices outside the skin's {len(palette)} joints")
-        joints = np.where(outside, 0, joints)  # zero-weight padding lanes may hold any index
+        pos, joints, weights = self._skin_inputs(primitive, len(palette))
         hom = np.c_[pos, np.ones(len(pos))]
         res = np.zeros((len(pos), 3))
         for lane in range(joints.shape[1]):
             res += weights[:, lane:lane + 1] * np.einsum("nij,nj->ni", palette[joints[:, lane]], hom)[:, :3]
         return res
+
+    def _skin_inputs(self, primitive, joint_count):
+        """(positions, joint lanes, weights) of a skinned primitive, padding lanes clamped to joint 0."""
+        pos = self._accessor(primitive["attributes"]["POSITION"])
+        joints, weights = self.skin_streams(primitive)
+        if joints is None:
+            raise GlbError(f"{self.label}: skinned primitive has no JOINTS_0/WEIGHTS_0")
+        outside = (joints >= joint_count) | (joints < 0)
+        if len(joints) != len(pos) or (outside & (weights > 0)).any():
+            raise GlbError(f"{self.label}: joint indices outside the skin's {joint_count} joints")
+        return pos, np.where(outside, 0, joints), weights  # zero-weight padding lanes may hold any index
 
     def skinned_positions(self, world, mesh_node):
         """Linear-blend-skinned world positions of one skinned mesh node's primitives."""
@@ -421,6 +476,123 @@ class Glb:
         palette = self.skin_palette(world, node["skin"])
         return [self.skin_primitive(palette, prim) for prim in self.json["meshes"][node["mesh"]]["primitives"]
                 if "POSITION" in prim.get("attributes", {})]
+
+    def lowest_skinned_y(self, worlds, mesh_nodes):
+        """Lowest skinned-vertex height per pose of `worlds` ({node: (poses, 4, 4)}, see posed_worlds)
+        over the skinned `mesh_nodes`: (poses,) array, or None when they hold no vertices.
+
+        Exact, but only the vertices that can be lowest get skinned. Each joint's vertices are kept in
+        small bind-space boxes; a box whose posed bottom (through that joint) is above the pose's
+        lowest point so far cannot hold the minimum, because a blended vertex is never lower than
+        its lowest influence scaled by its weight sum. GlbError when a skin cannot be evaluated."""
+        soup = self._skin_soup(tuple(self.node_index(n) for n in mesh_nodes))
+        if soup is None:
+            return None
+        slots, binds, pos, lanes, weights, boxes = soup
+        missing = [self.name(j) for j in slots if j not in worlds]
+        if missing:
+            raise GlbError(f"{self.label}: skin joints outside the scene: {missing[:5]}")
+        rows = np.einsum("fsk,skm->fsm", np.stack([worlds[j][:, 1, :] for j in slots], axis=1), binds)
+        hom = np.c_[pos, np.ones(len(pos))]
+
+        def heights(row, idx):
+            y = np.zeros(len(idx))
+            for lane in range(lanes.shape[1]):
+                y += weights[idx, lane] * np.einsum("nj,nj->n", row[lanes[idx, lane]], hom[idx])
+            return y
+
+        out = np.empty(len(rows))
+        if boxes is None:
+            every = np.arange(len(pos))
+            for f, row in enumerate(rows):
+                out[f] = heights(row, every).min()
+            return out
+        slot, lo, hi, members, owner, start, floor, low_sum, high_sum = boxes
+        lin = rows[:, slot]
+        bottom = lin[..., 3] + np.minimum(lin[..., :3] * lo, lin[..., :3] * hi).sum(axis=-1)
+        bottom = np.minimum(low_sum * bottom, high_sum * bottom)
+        for f, row in enumerate(rows):
+            seed = int(np.argmin(bottom[f]))
+            best = min(floor, float(heights(row, members[start[seed]:start[seed + 1]]).min()))
+            # Rounding slack: bounds and heights are computed in different orders.
+            near = bottom[f] <= best + 1e-6 * (1.0 + abs(best))
+            out[f] = min(floor, float(heights(row, members[near[owner]]).min()))
+        return out
+
+    def _skin_soup(self, mesh_nodes):
+        """Vertices of skinned mesh nodes in one array, their joint lanes pointing into one list of
+        (joint node, inverse bind) slots, plus the bind-space boxes lowest_skinned_y prunes with."""
+        key = ("skin_soup", mesh_nodes)
+        if key in self._cache:
+            return self._cache[key]
+        slots, binds, base_of, parts = [], [], {}, []
+        for i in mesh_nodes:
+            node = self.nodes[i]
+            skin = node["skin"]
+            joints = self.json["skins"][skin]["joints"]
+            if skin not in base_of:
+                ibm = self.inverse_binds(skin)
+                if len(ibm) < len(joints):
+                    raise GlbError(f"{self.label}: skin {skin} has {len(ibm)} inverse binds for {len(joints)} joints")
+                base_of[skin] = len(slots)
+                slots.extend(joints)
+                binds.extend(ibm[:len(joints)])
+            for prim in self.json["meshes"][node["mesh"]]["primitives"]:
+                if "POSITION" in prim.get("attributes", {}):
+                    pos, lanes, weights = self._skin_inputs(prim, len(joints))
+                    parts.append((pos, lanes + base_of[skin], weights))
+        parts = [p for p in parts if len(p[0])]
+        if not parts:
+            self._cache[key] = None
+            return None
+        width = max(p[1].shape[1] for p in parts)
+        pos = np.vstack([p[0] for p in parts])
+        lanes = np.vstack([np.pad(p[1], ((0, 0), (0, width - p[1].shape[1]))) for p in parts])
+        weights = np.vstack([np.pad(p[2], ((0, 0), (0, width - p[2].shape[1]))) for p in parts])
+        soup = (slots, np.array(binds), pos, lanes, weights, self._skin_boxes(pos, lanes, weights))
+        self._cache[key] = soup
+        return soup
+
+    @staticmethod
+    def _skin_boxes(pos, lanes, weights, size=128):
+        """(slot, lo, hi, members, owner, start, floor, low_sum, high_sum): boxes of at most `size`
+        vertices per joint slot, split along their longest side. None when weights are negative,
+        which breaks the lower bound."""
+        if (weights < 0).any():
+            return None
+        total = weights.sum(axis=1)
+        live = total > 0
+        # A vertex without weight skins to the origin: its height is exactly 0.
+        floor = 0.0 if not live.all() else np.inf
+        used = (weights > 0) & live[:, None]
+        vertex = np.broadcast_to(np.arange(len(pos))[:, None], lanes.shape)[used]
+        slot_of = lanes[used]
+        order = np.argsort(slot_of, kind="stable")
+        vertex, slot_of = vertex[order], slot_of[order]
+        cuts = np.r_[0, np.flatnonzero(np.diff(slot_of)) + 1, len(slot_of)]
+        slot, lo, hi, members = [], [], [], []
+        for a, b in zip(cuts[:-1], cuts[1:]):
+            stack = [vertex[a:b]]
+            while stack:
+                group = stack.pop()
+                pts = pos[group]
+                low, high = pts.min(axis=0), pts.max(axis=0)
+                if len(group) <= size:
+                    slot.append(slot_of[a])
+                    lo.append(low)
+                    hi.append(high)
+                    members.append(group)
+                    continue
+                half = len(group) // 2
+                split = np.argpartition(pts[:, int(np.argmax(high - low))], half)
+                stack += [group[split[:half]], group[split[half:]]]
+        if not members:
+            return None
+        sizes = np.array([len(m) for m in members])
+        start = np.r_[0, np.cumsum(sizes)]
+        return (np.array(slot), np.array(lo), np.array(hi), np.concatenate(members),
+                np.repeat(np.arange(len(members)), sizes), start, floor,
+                float(total[live].min()), float(total[live].max()))
 
     # animation -------------------------------------------------------------------------------
     def animation_names(self):
@@ -436,7 +608,8 @@ class Glb:
 
     def channels(self, anim=0, by_index=False):
         """{(node name, path): (times, values, interpolation)} of one animation; keyed by node index
-        with `by_index`, which keeps two nodes of the same name apart (use it within one file)."""
+        with `by_index`, which keeps two nodes of the same name apart (use it within one file).
+        The arrays are read-only."""
         a = self.json["animations"][self.animation_index(anim)]
         out = {}
         for c in a["channels"]:
@@ -446,7 +619,7 @@ class Glb:
             s = a["samplers"][c["sampler"]]
             key = target["node"] if by_index else self.name(target["node"])
             out[(key, target["path"])] = (
-                self.accessor(s["input"])[:, 0], self.accessor(s["output"]), s.get("interpolation", "LINEAR"))
+                self._accessor(s["input"])[:, 0], self._accessor(s["output"]), s.get("interpolation", "LINEAR"))
         return out
 
     def duplicate_names(self, nodes=None):
@@ -466,22 +639,41 @@ class Glb:
         """World matrices with `channels` applied at time t; nodes the clip does not animate keep their
         rest. Channels keyed by node index (this file) hit that node; keyed by name (another file)
         they hit the first node of that name only, so duplicated names never move several nodes."""
+        return {i: m[0].copy() for i, m in self.posed_worlds(channels, [t], scene).items()}
+
+    def posed_worlds(self, channels, times, scene=None):
+        """posed_world at every time in `times` at once: {node: (len(times), 4, 4)}, read-only
+        (nodes nothing animates above share one broadcast matrix)."""
+        times = np.asarray(times, float).reshape(-1)
+        paths = ("translation", "rotation", "scale")
+
         def local(i):
             nm = self.name(i)
             first = self.by_name.get(nm) == i
             found = {}
-            for path in ("translation", "rotation", "scale"):
+            for path in paths:
                 if (i, path) in channels:
                     found[path] = channels[(i, path)]
                 elif first and (nm, path) in channels:
                     found[path] = channels[(nm, path)]
             if not found:
-                return self.local_matrix(i)
-            trs = dict(zip(("translation", "rotation", "scale"), self.local_trs(i)))
-            for path, (times, values, interp) in found.items():
-                trs[path] = sample_channel(times, values, t, path, interp)
-            return trs_matrix(trs["translation"], trs["rotation"], trs["scale"])
-        return self.walk(local, scene)
+                return self._rest_local(i)
+            trs = dict(zip(paths, self.local_trs(i)))
+            for path, (keys, values, interp) in found.items():
+                trs[path] = sample_channel_at(keys, values, times, path, interp)
+            return trs_matrices(trs["translation"], trs["rotation"], trs["scale"])
+
+        out = {}
+        stack = [(r, np.eye(4)) for r in self.roots(scene)]
+        while stack:
+            i, parent = stack.pop()
+            out[i] = parent @ local(i)
+            stack.extend((c, out[i]) for c in self.nodes[i].get("children", []))
+        shape = (len(times), 4, 4)
+        return {i: m if m.ndim == 3 else np.broadcast_to(m, shape) for i, m in out.items()}
+
+    def _rest_local(self, i):
+        return self._cached(("local", i), lambda: self.local_matrix(i))
 
 
 def matrix_to_quat(m):

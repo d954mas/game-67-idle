@@ -1,4 +1,5 @@
 import argparse
+import json
 import tempfile
 import unittest
 import unittest.mock
@@ -70,6 +71,45 @@ class Batch(unittest.TestCase):
         with self.assertRaises(SystemExit):
             review.validate_config({"pivot_tolerence": 0.01})
         review.validate_config({"pivot_tolerance": 0.01, "mesh_check": {"profile": "volume"}})
+
+
+class Presets(unittest.TestCase):
+    def test_nearest_preset_wins_and_paths_are_relative_to_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            game = Path(tmp) / "game"
+            props = game / "assets" / "props"
+            props.mkdir(parents=True)
+            (game / "game.json").write_text("{}", encoding="utf-8")
+            (game / "blender_review.json").write_text(json.dumps(
+                {"pivot": "floor", "size": 512, "mesh_check": {"profile": "volume"}}), encoding="utf-8")
+            (props / "blender_review.json").write_text(json.dumps(
+                {"size": 384, "beside": ["approved.glb"], "mesh_check": {"weld": 1e-5}}), encoding="utf-8")
+            model = clip_only(props / "crate.glb")
+            args = argparse.Namespace(size=None, pivot="top")
+            opts, tools = review.model_options(model, args, {"jpeg": "off"})
+        self.assertEqual(opts.size, 384)
+        self.assertEqual(opts.pivot, "top")
+        self.assertEqual(Path(opts.beside[0]).name, "approved.glb")
+        self.assertEqual(Path(opts.beside[0]).parent.name, "props")
+        self.assertEqual(tools["mesh_check"], {"profile": "volume", "weld": 1e-5})
+        self.assertEqual(tools["jpeg"], "off")
+        self.assertEqual(len(opts.presets), 2)
+
+
+class Poses(unittest.TestCase):
+    def test_clip_findings_become_pose_moments(self):
+        reports = [{"tool": "clip_check", "findings": [
+            {"check": "foot_slide", "severity": "medium", "where": {"animation": "Walk", "time": 0.4}},
+            {"check": "pop", "severity": "medium", "where": {"animation": "Run", "pops": [
+                {"joint": "Head", "time": 1.25}]}},
+            {"check": "pop", "severity": "medium", "where": {"clips": [{"animation": "Run", "time": 1.25}]}},
+            {"check": "feet", "severity": "info", "where": {"animation": "Idle", "time": 0}}]}]
+        self.assertEqual(review.finding_poses(reports, 4), ["Walk@0.4", "Run@1.25"])
+        self.assertEqual(review.finding_poses(reports, 1), ["Walk@0.4"])
+        nested = [{"tool": "clip_check", "findings": [
+            {"check": "pop", "severity": "medium", "where": {"animation": "Run", "time": 1.25,
+                                                             "pops": [{"time": 1.5}]}}]}]
+        self.assertEqual(review.finding_poses(nested, 4), ["Run@1.25", "Run@1.5"])
 
 
 if __name__ == "__main__":

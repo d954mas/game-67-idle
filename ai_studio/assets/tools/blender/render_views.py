@@ -8,22 +8,38 @@ Run inside Blender through the runner:
 Flags: --views front right three_quarter game turntable (or comma-separated), --passes beauty
 clay wire silhouette, --size 768, --light studio_hdr|flat, --background transparent|#hex,
 --animation NAME --time SECONDS, --samples 16, --game '{"height": 1.8, ...}',
---turntable-frames 8, --no-sheet. Several --model files render in one Blender start into
-<out>/<model stem>/ each, which saves the start-up and first-frame cost per model. `--job job.json` takes the same keys as JSON; a view there may be an
-object such as {"view": "game", "height": 1.8, "behind": 2.0, "offset": 0, "pitch": 16,
-"fov_y": 55, "yaw": 0, "target": [0, 0, 0], "aspect": 1.78} or {"view": "turntable", "frames": 8}.
+--turntable-frames 8, --no-sheet, --eevee-passes (clay/silhouette lit by the HDR in EEVEE
+instead of the about 3x faster Workbench). Several --model files render in one Blender start into
+<out>/<model stem>/ each, which saves the start-up and first-frame cost per model. `--job job.json`
+takes the same keys as JSON; a view there may be an object such as {"view": "game",
+"height": 1.8, "behind": 2.0, "offset": 0, "pitch": 16, "fov_y": 55, "yaw": 0,
+"target": [0, 0, 0], "aspect": 1.78} or {"view": "turntable", "frames": 8}.
+
+Scale lineup: --beside ref1.glb ref2.glb puts the references next to the model along +X at true
+scale (bottoms level, gap 15% of the widest member) and renders the group with --lineup-views
+(default front three_quarter, plus game when a game view is asked for) and --lineup-passes
+(default beauty). Poses: --poses Walk@0.4 Run@1.25 (glTF seconds) renders each with
+--pose-views (default three_quarter) and --pose-passes (default beauty) at one framing shared
+by all poses; --clip-source clips.glb plays a clip-only GLB on the model's nodes by name, as
+the engine does.
 
 Views use glTF axes: +Z is the model's front, so `front` looks at it along -Z and `right`
 sees its +X side (Blender's numpad views). front/back/left/right/top are orthographic and fitted
 to the vertices; three_quarter and turntable are perspective and fitted; `game` reproduces an
 engine follow camera (yaw 0 = behind the model, looking along +Z) and is not fitted.
+
+In-process use (a build script, a long-lived Blender): `main(argv)` returns the report and
+raises instead of exiting; `render_objects(objects, job)` renders objects already in the
+scene and puts the scene back as it found it (see lib/review_live.py).
 """
 import argparse
+import copy
 import hashlib
 import json
 import math
 import re
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -34,22 +50,51 @@ from mathutils import Matrix, Vector
 from ai_studio.assets.tools.blender.lib import bpy_io
 from ai_studio.assets.tools.blender.lib import bpy_scene as S
 from ai_studio.assets.tools.blender.lib.color import as_linear, linear_to_srgb, write_png
+from ai_studio.assets.tools.blender.lib.glb import Glb
 
 VIEWS = ("front", "back", "left", "right", "top", "three_quarter", "game", "turntable")
 PASSES = ("beauty", "clay", "wire", "silhouette")
 DEFAULTS = {"views": ["front", "right", "three_quarter"], "passes": ["beauty", "clay", "wire"],
-            "size": 768, "light": "studio_hdr", "background": "transparent", "samples": 16}
+            "size": 768, "light": "studio_hdr", "background": "transparent", "samples": 16,
+            "beside": [], "lineup_views": None, "lineup_passes": ["beauty"],
+            "poses": [], "pose_views": ["three_quarter"], "pose_passes": ["beauty"]}
 # Direction from the model toward the camera, Blender axes (glTF +Z front = Blender -Y).
 ORTHO = {"front": (0, -1, 0), "back": (0, 1, 0), "right": (1, 0, 0), "left": (-1, 0, 0), "top": (0, 0, 1)}
 GAME = {"height": 1.8, "behind": 2.0, "offset": 0.0, "pitch": 16.0, "fov_y": 55.0, "yaw": 0.0,
         "target": [0.0, 0.0, 0.0], "aspect": 16 / 9}
 MARGIN = 1.08
+LINEUP_GAP = 0.15
 TEXTURE_PREVIEW = 512
 CLAY = (0.55, 0.55, 0.55)
+# Workbench draws a 768 px image in about 10 ms against EEVEE's 80 ms; for flat-grey form and
+# outline that is the same picture. Camera-space studio light keeps every view lit alike.
+WORKBENCH = {
+    "clay": {"type": "SOLID", "light": "STUDIO", "studio_light": "studio.sl", "use_world_space_lighting": False,
+             "color_type": "SINGLE", "single_color": CLAY, "show_cavity": True, "cavity_type": "WORLD",
+             "show_specular_highlight": False, "show_shadows": False, "show_object_outline": False,
+             "show_xray": False, "show_backface_culling": False},
+    "silhouette": {"type": "SOLID", "light": "FLAT", "color_type": "SINGLE", "single_color": (0.0, 0.0, 0.0),
+                   "show_cavity": False, "show_specular_highlight": False, "show_shadows": False,
+                   "show_object_outline": False, "show_xray": False, "show_backface_culling": False},
+}
+
+
+class Skip(Exception):
+    """A model this run cannot render; the batch records why and goes on with the next one."""
+
+
+class _Parser(argparse.ArgumentParser):
+    """Raises instead of exiting, so a long-lived Blender survives a bad command line."""
+
+    def error(self, message):
+        raise ValueError(f"render_views: {message}")
+
+    def exit(self, status=0, message=None):
+        raise ValueError(f"render_views: {message or 'exit'}")
 
 
 def parse(argv):
-    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p = _Parser(description=__doc__.splitlines()[0])
     p.add_argument("--job")
     p.add_argument("--model", nargs="+", help="one or more GLBs; several share one Blender start")
     p.add_argument("--out")
@@ -64,33 +109,88 @@ def parse(argv):
     p.add_argument("--game", help="JSON object of game camera fields")
     p.add_argument("--turntable-frames", type=int)
     p.add_argument("--no-sheet", action="store_true", help="skip the sheet.png contact sheet")
+    p.add_argument("--eevee-passes", action="store_true", help="clay and silhouette in EEVEE under the HDR")
+    p.add_argument("--beside", nargs="+", help="reference GLBs for a true-scale lineup")
+    p.add_argument("--lineup-views", nargs="+")
+    p.add_argument("--lineup-passes", nargs="+")
+    p.add_argument("--poses", nargs="+", help="Clip@seconds ...")
+    p.add_argument("--pose-views", nargs="+")
+    p.add_argument("--pose-passes", nargs="+")
+    p.add_argument("--clip-source", help="clip-only GLB to play on the model by node name")
     args = p.parse_args(argv)
-    job = dict(DEFAULTS)
+    job = {}
     if args.job:
         job.update(json.loads(Path(args.job).read_text(encoding="utf-8")))
     if args.no_sheet:
         job["sheet"] = False
-    for key in ("model", "out", "size", "light", "background", "animation", "time", "samples"):
+    if args.eevee_passes:
+        job["eevee_passes"] = True
+    for key in ("model", "out", "size", "light", "background", "animation", "time", "samples", "beside",
+                "clip_source", "poses"):
         if getattr(args, key) is not None:
             job[key] = getattr(args, key)
-    for key in ("views", "passes"):
+    for key in ("views", "passes", "lineup_views", "lineup_passes", "pose_views", "pose_passes"):
         if getattr(args, key):
-            job[key] = [v for item in getattr(args, key) for v in item.split(",") if v]
-    views = []
-    for view in job["views"]:
-        view = dict(view) if isinstance(view, dict) else {"view": view}
-        view["view"] = view.get("view") or view.get("name")
-        if view["view"] == "game" and args.game:
-            view = {**json.loads(args.game), **view}
-        if view["view"] == "turntable" and args.turntable_frames:
-            view.setdefault("frames", args.turntable_frames)
-        views.append(view)
-    job["views"] = views
-    bad = [v["view"] for v in views if v["view"] not in VIEWS] + [x for x in job["passes"] if x not in PASSES]
-    if bad:
-        p.error(f"unknown view/pass {bad}; views: {VIEWS}, passes: {PASSES}")
+            job[key] = split_list(getattr(args, key))
+    if args.game:
+        job["game"] = json.loads(args.game)
+    if args.turntable_frames:
+        job["turntable_frames"] = args.turntable_frames
+    job = normalize(job)
     if not job.get("model") or not job.get("out"):
         p.error("--model and --out (or a job with both) are required")
+    return job
+
+
+def split_list(items):
+    return [v for item in items for v in str(item).split(",") if v]
+
+
+def _view_specs(views, game, turntable_frames):
+    specs = []
+    for view in views:
+        view = dict(view) if isinstance(view, dict) else {"view": view}
+        view["view"] = view.get("view") or view.get("name")
+        if view["view"] == "game" and game:
+            view = {**game, **view}
+        if view["view"] == "turntable" and turntable_frames:
+            view.setdefault("frames", turntable_frames)
+        specs.append(view)
+    return specs
+
+
+def _pose_spec(item):
+    if isinstance(item, dict):
+        return {"animation": item["animation"], "time": float(item.get("time", 0.0))}
+    name, _, seconds = str(item).rpartition("@")
+    if not name:
+        name, seconds = seconds, "0"
+    return {"animation": name, "time": float(seconds)}
+
+
+def normalize(job):
+    """Defaults filled, view names turned into specs, poses parsed, unknown names refused."""
+    job = {**copy.deepcopy(DEFAULTS), **job}
+    game = job.get("game")
+    if isinstance(game, str):
+        game = json.loads(game)
+    frames = job.get("turntable_frames")
+    for key in ("views", "passes", "lineup_passes", "pose_views", "pose_passes", "beside", "poses"):
+        if isinstance(job[key], str):
+            job[key] = [job[key]]
+    job["views"] = _view_specs(job["views"], game, frames)
+    lineup = job["lineup_views"]
+    if lineup is None:
+        lineup = ["front", "three_quarter"]
+        lineup += [v for v in job["views"] if v["view"] == "game"][:1]
+    job["lineup_views"] = _view_specs(lineup, game, frames)
+    job["pose_views"] = _view_specs(job["pose_views"], game, frames)
+    job["poses"] = [_pose_spec(p) for p in job["poses"]]
+    views = job["views"] + job["lineup_views"] + job["pose_views"]
+    passes = job["passes"] + job["lineup_passes"] + job["pose_passes"]
+    bad = [v["view"] for v in views if v["view"] not in VIEWS] + [x for x in passes if x not in PASSES]
+    if bad:
+        raise ValueError(f"render_views: unknown view/pass {bad}; views: {VIEWS}, passes: {PASSES}")
     return job
 
 
@@ -103,6 +203,8 @@ def setup_render(scene, samples):
     scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGBA"
     scene.render.image_settings.color_depth = "8"
+    scene.render.film_transparent = True
+    scene.display.render_aa = "8"
     # AgX/Filmic shift palette colours; Standard keeps an authored '#hex' looking like itself.
     scene.view_settings.view_transform = "Standard"
     scene.view_settings.look = "None"
@@ -110,36 +212,149 @@ def setup_render(scene, samples):
     scene.view_settings.gamma = 1.0
 
 
-class Skip(Exception):
-    """A model this run cannot render; the batch records why and goes on with the next one."""
+class SceneState:
+    """What a review changes in a scene, put back on exit, and every datablock it created removed,
+    so a build script's scene (and file) comes out of a review as it went in."""
+
+    RENDER = ("engine", "resolution_x", "resolution_y", "resolution_percentage", "filepath", "film_transparent")
+    IMAGE = ("file_format", "color_mode", "color_depth", "compression")
+    VIEW = ("view_transform", "look", "exposure", "gamma")
+    SHADING = sorted({k for opts in WORKBENCH.values() for k in opts})
+    DATA = ("objects", "cameras", "lights", "meshes", "armatures", "curves", "materials", "node_groups",
+            "worlds", "images", "actions", "textures", "collections")
+
+    def __init__(self, scene):
+        self.scene = scene
+
+    def __enter__(self):
+        sc, layer = self.scene, bpy.context.view_layer
+        self.layer = layer
+        grab = lambda owner, keys: {k: _plain(getattr(owner, k)) for k in keys}
+        shading = sc.display.shading
+        self.values = [(sc.render, grab(sc.render, self.RENDER)),
+                       (sc.render.image_settings, grab(sc.render.image_settings, self.IMAGE)),
+                       (sc.view_settings, grab(sc.view_settings, self.VIEW)),
+                       (sc.eevee, grab(sc.eevee, ("taa_render_samples", "use_shadows"))),
+                       (sc.display, {"render_aa": sc.display.render_aa}),
+                       (shading, grab(shading, self.SHADING))]
+        self.camera, self.world, self.override = sc.camera, sc.world, layer.material_override
+        self.frame = (sc.frame_current, sc.frame_subframe)
+        self.hidden = {o: o.hide_render for o in sc.objects}
+        self.selected = {o: o.select_get() for o in layer.objects}
+        self.active = layer.objects.active
+        self.basis = {o: o.matrix_basis.copy() for o in sc.objects}
+        self.bones = {(o, b.name): b.matrix_basis.copy() for o in sc.objects if o.type == "ARMATURE"
+                      for b in o.pose.bones}
+        self.animation = {o: (o.animation_data.action, getattr(o.animation_data, "action_slot", None),
+                              [(t, t.mute) for t in o.animation_data.nla_tracks])
+                          for o in sc.objects if o.animation_data}
+        self.data = {name: set(getattr(bpy.data, name)) for name in self.DATA}
+        return self
+
+    def restore_pose(self):
+        """Back to the transforms and clips the scene had on entry (between poses, and at exit)."""
+        for obj, (action, slot, tracks) in self.animation.items():
+            data = obj.animation_data
+            if data is None:
+                continue
+            data.action = action
+            if slot is not None and hasattr(data, "action_slot"):
+                data.action_slot = slot
+            for track, mute in tracks:
+                track.mute = mute
+        for obj in list(self.scene.objects):
+            if obj.animation_data and obj not in self.animation:
+                obj.animation_data.action = None
+        for obj, basis in self.basis.items():
+            obj.matrix_basis = basis
+        for (obj, bone), basis in self.bones.items():
+            obj.pose.bones[bone].matrix_basis = basis
+        self.scene.frame_set(self.frame[0], subframe=self.frame[1])
+
+    def __exit__(self, *exc):
+        sc = self.scene
+        for owner, values in self.values:
+            for key, value in values.items():
+                setattr(owner, key, value)
+        sc.camera, sc.world = self.camera, self.world
+        self.layer.material_override = self.override
+        for obj, hidden in self.hidden.items():
+            obj.hide_render = hidden
+        self.restore_pose()
+        for name in self.DATA:
+            pool = getattr(bpy.data, name)
+            for block in [b for b in pool if b not in self.data[name]]:
+                pool.remove(block)
+        for obj, selected in self.selected.items():
+            obj.select_set(selected)
+        self.layer.objects.active = self.active
+        return False
+
+
+def _plain(value):
+    """Detach a vector/colour property value from the struct it was read from."""
+    return tuple(value) if hasattr(value, "__len__") and not isinstance(value, str) else value
+
+
+def file_rest(objects, path):
+    """Animated objects back to their node's rest TRS from the GLB. The importer makes a clip
+    active and its first evaluation overwrites the object transform, so Blender no longer knows
+    the rest the engine shows when no clip plays."""
+    doc = Glb.load(path)
+    for obj in objects:
+        i = doc.by_name.get(obj.name) if obj.animation_data else None
+        if i is None:
+            continue
+        t, r, s = doc.local_trs(i)
+        obj.rotation_mode = "QUATERNION"
+        obj.location = S.gltf_to_blender(t)
+        obj.rotation_quaternion = (r[3], r[0], -r[2], r[1])
+        obj.scale = (s[0], s[2], s[1])
+
+
+def rest_pose(objects):
+    """Bind pose: no active clip, every pose bone at rest."""
+    for obj in objects:
+        if obj.animation_data:
+            obj.animation_data.action = None
+            for track in obj.animation_data.nla_tracks:
+                track.mute = True
+        if obj.type == "ARMATURE":
+            for bone in obj.pose.bones:
+                bone.matrix_basis.identity()
+    bpy.context.view_layer.update()
+
+
+def clips(objects):
+    """{clip name: [(object, action, slot)]} from the objects' NLA strips (how glTF imports clips)."""
+    found = {}
+    for obj in objects:
+        data = obj.animation_data
+        if not data:
+            continue
+        for track in data.nla_tracks:
+            for strip in track.strips:
+                if strip.action:
+                    entry = (obj, strip.action, getattr(strip, "action_slot", None))
+                    for name in dict.fromkeys((track.name, strip.action.name)):
+                        found.setdefault(name, []).append(entry)
+    return found
 
 
 def pose(objects, animation, seconds, fps):
-    """Bind pose by default; otherwise the named clip at `seconds`. Returns a description."""
-    animated = [o for o in objects if o.animation_data]
-    if not animation:
-        for obj in animated:
-            obj.animation_data.action = None
-        for obj in objects:
-            if obj.type == "ARMATURE":
-                for bone in obj.pose.bones:
-                    bone.matrix_basis.identity()
-        bpy.context.view_layer.update()
-        return "rest"
-    hits = 0
-    for obj in animated:
-        data = obj.animation_data
-        for track in data.nla_tracks:
-            track.mute = True
-            strip = next((s for s in track.strips if animation in (track.name, s.action and s.action.name)), None)
-            if strip and strip.action:
-                data.action = strip.action
-                if hasattr(data, "action_slot") and getattr(strip, "action_slot", None):
-                    data.action_slot = strip.action_slot
-                hits += 1
+    """The named clip at glTF time `seconds` on every object that carries it; others keep rest."""
+    hits = clips(objects).get(animation)
     if not hits:
-        names = sorted({t.name for o in animated for t in o.animation_data.nla_tracks})
-        raise Skip(f"animation {animation!r} not found; the model has {names}")
+        raise Skip(f"animation {animation!r} not found; the model has {sorted(clips(objects))}")
+    for obj in objects:
+        if obj.animation_data:
+            obj.animation_data.action = None
+            for track in obj.animation_data.nla_tracks:
+                track.mute = True
+    for obj, action, slot in hits:
+        obj.animation_data.action = action
+        if slot is not None and hasattr(obj.animation_data, "action_slot"):
+            obj.animation_data.action_slot = slot
     # The glTF importer keys time t at frame t * fps, with no +1 offset.
     frame = (seconds or 0.0) * fps
     bpy.context.scene.frame_set(int(math.floor(frame)), subframe=frame - math.floor(frame))
@@ -155,7 +370,8 @@ def override_materials():
     tree = S.node_tree(wire)
     bsdf = S.find_node(tree, "BSDF_PRINCIPLED")
     bsdf.inputs["Roughness"].default_value = 1.0
-    # The Wireframe node draws the triangles the GPU gets, which is what a GLB ships.
+    # The Wireframe node draws the triangles the GPU gets, which is what a GLB ships. Workbench
+    # cannot do this: its wireframe shading renders nothing in a final render.
     edge = tree.nodes.new("ShaderNodeWireframe")
     edge.use_pixel_size = True
     ramp = tree.nodes.new("ShaderNodeValToRGB")
@@ -167,6 +383,32 @@ def override_materials():
     tree.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
     black = S.emission_material("review_silhouette", (0.0, 0.0, 0.0))
     return {"beauty": None, "clay": clay, "wire": wire, "silhouette": black}, edge
+
+
+class Passes:
+    """Switches the scene between passes: EEVEE with a material override, or Workbench."""
+
+    def __init__(self, scene, samples, eevee_only=False):
+        self.scene, self.samples = scene, samples
+        self.overrides, self.edge = override_materials()
+        self.workbench = {} if eevee_only else WORKBENCH
+
+    def engine(self, name):
+        return "workbench" if name in self.workbench else "eevee"
+
+    def apply(self, name, size):
+        scene, layer = self.scene, bpy.context.view_layer
+        if name in self.workbench:
+            scene.render.engine = "BLENDER_WORKBENCH"
+            layer.material_override = None
+            for key, value in self.workbench[name].items():
+                setattr(scene.display.shading, key, value)
+            return
+        scene.render.engine = S.eevee_engine()
+        scene.eevee.taa_render_samples = self.samples
+        layer.material_override = self.overrides[name]
+        # A one-pixel wire vanishes in a large image and floods a thumbnail; scale with it.
+        self.edge.inputs["Size"].default_value = max(1.0, size / 768)
 
 
 # --- cameras ----------------------------------------------------------------------------------
@@ -319,10 +561,27 @@ def contact_sheet(out, images, cell=320, backdrop=(0.82, 0.82, 0.84)):
     return {"file": "sheet.png", "rows": rows, "columns": cols}
 
 
-def save_textures(out, skip):
+def material_images(meshes):
+    """Images the meshes' materials sample (node groups included), in first-use order."""
+    found = {}
+
+    def walk(tree):
+        for node in tree.nodes:
+            if node.type == "TEX_IMAGE" and node.image:
+                found.setdefault(node.image, None)
+            elif node.type == "GROUP" and node.node_tree:
+                walk(node.node_tree)
+    for obj in meshes:
+        for slot in obj.material_slots:
+            if slot.material and slot.material.node_tree:
+                walk(slot.material.node_tree)
+    return list(found)
+
+
+def save_textures(out, images):
     textures = []
-    for image in bpy.data.images:
-        if image.source != "FILE" or image in skip or not image.size[0]:
+    for image in images:
+        if not image.size[0]:
             continue
         file = Path("textures") / f"{safe(image.name)}.png"
         pixels = read_pixels(image)
@@ -343,28 +602,32 @@ def model_stats(objects, meshes, textures, fps):
         vertices += len(evaluated.to_mesh().vertices)
         evaluated.to_mesh_clear()
     materials = sorted({s.material.name for o in meshes for s in o.material_slots if s.material})
+    actions = list(dict.fromkeys(a for entries in clips(objects).values() for _, a, _ in entries))
+    actions += [o.animation_data.action for o in objects if o.animation_data and o.animation_data.action
+                and o.animation_data.action not in actions]
     return {"objects": len(objects), "meshes": len(meshes), "vertices": vertices,
             "triangles": S.tri_count(meshes), "materials": materials, "textures": textures,
             "bounds": {"min": [round(float(v), 5) for v in (lo[0], lo[2], -hi[1])],
                        "max": [round(float(v), 5) for v in (hi[0], hi[2], -lo[1])]},
             "armatures": [{"name": o.name, "bones": len(o.data.bones)} for o in objects if o.type == "ARMATURE"],
             "animations": [{"name": a.name, "seconds": round((a.frame_range[1] - a.frame_range[0]) / fps, 4)}
-                           for a in bpy.data.actions]}
+                           for a in actions]}
 
 
-def shots(views, points):
+def shots(views, points, prefix=""):
     """(file stem, camera setup returning the image aspect, image record fields) per position."""
     centre = (points.min(axis=0) + points.max(axis=0)) / 2
     for spec in views:
         view = spec["view"]
         fov = spec.get("fov_y", 30.0)
         if view in ORTHO:
-            yield view, lambda cam, v=view: fit_ortho(cam, points, ORTHO[v], 1.0) or 1.0, {"view": view}
+            yield prefix + view, lambda cam, v=view: fit_ortho(cam, points, ORTHO[v], 1.0) or 1.0, {"view": view}
         elif view == "three_quarter":
             dr = orbit(spec.get("azimuth", 35.0), spec.get("elevation", 25.0))
-            yield view, lambda cam, dr=dr, fov=fov: fit_perspective(cam, points, dr, 1.0, fov) and 1.0, {"view": view}
+            yield (prefix + view, lambda cam, dr=dr, fov=fov: fit_perspective(cam, points, dr, 1.0, fov) and 1.0,
+                   {"view": view})
         elif view == "game":
-            yield view, lambda cam, sp=spec: game_camera(cam, sp)["aspect"], {"view": view}
+            yield prefix + view, lambda cam, sp=spec: game_camera(cam, sp)["aspect"], {"view": view}
         else:
             frames = int(spec.get("frames", 8))
             directions = [orbit(i * 360.0 / frames, spec.get("elevation", 20.0)) for i in range(frames)]
@@ -372,72 +635,263 @@ def shots(views, points):
             distance = max(perspective_distance(points, centre, *basis(dr), math.radians(fov), 1.0)[0]
                            for dr in directions)
             for i, dr in enumerate(directions):
-                yield (f"turntable_{i:02d}",
+                yield (f"{prefix}turntable_{i:02d}",
                        lambda cam, dr=dr, fov=fov: fit_perspective(cam, points, dr, 1.0, fov, distance) and 1.0,
                        {"view": "turntable", "frame": i, "azimuth": round(i * 360.0 / frames, 3)})
 
 
-def main(argv):
-    job = parse(argv)
-    models = job["model"] if isinstance(job["model"], list) else [job["model"]]
-    out = Path(job["out"])
-    for model in models:
-        target = out / Path(model).stem if len(models) > 1 else out
-        try:
-            render_one({**job, "model": model, "out": target})
-        except Skip as reason:
-            target.mkdir(parents=True, exist_ok=True)
-            (target / "views.json").write_text(json.dumps(
-                {"tool": "render_views", "asset": str(Path(model).resolve()), "error": str(reason),
-                 "blender": bpy.app.version_string, "stats": {}, "images": []}, indent=2), encoding="utf-8")
-            print(f"render_views: skipped {model}: {reason}")
+# --- rendering --------------------------------------------------------------------------------
+
+def _descendants(objects):
+    """The objects, their children, and the rigs that deform them (a clip lives on the rig)."""
+    out = {}
+    for obj in objects:
+        for member in (obj, *obj.children_recursive):
+            out.setdefault(member, None)
+    for obj in list(out):
+        for mod in getattr(obj, "modifiers", []):
+            if mod.type == "ARMATURE" and mod.object:
+                out.setdefault(mod.object, None)
+    return list(out)
 
 
-def render_one(job):
+def _roots(objects):
+    roots = {}
+    for obj in objects:
+        while obj.parent in objects:
+            obj = obj.parent
+        roots.setdefault(obj, None)
+    return list(roots)
+
+
+def _visible_meshes(objects):
+    return [o for o in objects if o.type == "MESH" and o.visible_get()]
+
+
+def lineup(candidate_points, references):
+    """Import each reference GLB and stand it to the candidate's +X at true scale: bottoms on the
+    candidate's bottom, depth centres aligned, gaps of LINEUP_GAP x the widest member."""
+    lo, hi = candidate_points.min(axis=0), candidate_points.max(axis=0)
+    members, imported = [], []
+    for path in references:
+        objects = bpy_io.import_glb(Path(path).resolve())
+        rest_pose(objects)
+        file_rest(objects, Path(path).resolve())
+        meshes = _visible_meshes(objects)
+        if not meshes:
+            members.append({"name": Path(path).stem, "path": str(path), "error": "no visible mesh"})
+            continue
+        imported.append((path, objects, S.evaluated_points(meshes)))
+    widest = max([hi[0] - lo[0]] + [float(np.ptp(p[:, 0])) for _, _, p in imported])
+    gap = LINEUP_GAP * widest
+    cursor = hi[0] + gap
+    objects_all, points_all = [], [candidate_points]
+    for path, objects, points in imported:
+        plo, phi = points.min(axis=0), points.max(axis=0)
+        shift = Vector((cursor - plo[0], (lo[1] + hi[1] - plo[1] - phi[1]) / 2, lo[2] - plo[2]))
+        for root in _roots(objects):
+            root.location += shift
+        cursor += float(phi[0] - plo[0]) + gap
+        points_all.append(points + np.array(shift))
+        objects_all += objects
+        members.append({"name": Path(path).stem, "path": str(Path(path).resolve()),
+                        "offset_gltf": [round(v, 5) for v in S.blender_to_gltf(shift)],
+                        "size_gltf": [round(abs(float(v)), 5) for v in S.blender_to_gltf(phi - plo)]})
+    bpy.context.view_layer.update()
+    return objects_all, np.vstack(points_all), members, gap
+
+
+def render_objects(objects, job, asset=None, name=None, rest=False):
+    """Render `objects` (and their children) of the current scene per `job` (render_views keys,
+    `out` required) and write views.json; returns the report. Nothing is imported for the model
+    and the scene is not reset: references and clip poses are added, rendered and removed, and
+    render settings, camera, world, visibility, poses and selection are put back afterwards.
+    `rest` renders the bind pose instead of the scene's current pose (when no `animation`)."""
     started = time.monotonic()
-    model, out = Path(job["model"]).resolve(), Path(job["out"]).resolve()
+    job = normalize(job)
+    out = Path(job["out"]).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    scene = S.reset_scene()
-    setup_render(scene, int(job["samples"]))
-    light = S.studio_world(scene, job["light"])
-    skip = set(bpy.data.images)
-    objects = bpy_io.import_glb(model)
-    meshes = [o for o in objects if o.type == "MESH" and o.visible_get()]
+    scene = bpy.context.scene
+    members = _descendants(objects)
+    meshes = _visible_meshes(members)
     if not meshes:
-        raise Skip(f"{model.name} has no visible mesh to render (an animation-only clip?)")
+        raise Skip("no visible mesh to render (an animation-only clip?)")
+    name = name or (Path(asset).stem if asset else "model")
     fps = scene.render.fps / scene.render.fps_base
-    posed = pose(objects, job.get("animation"), job.get("time"), fps)
-    points = S.evaluated_points(meshes)
-    textures = save_textures(out, skip)
-    overrides, wire_edge = override_materials()
-    cam = make_camera(scene)
-    size = int(job["size"])
-    background = job["background"]
-    images = []
-    for name, setup, extra in shots(job["views"], points):
-        aspect = float(setup(cam) or 1.0)
-        scene.render.resolution_x, scene.render.resolution_y = round(size * aspect), size
-        # A one-pixel wire vanishes in a large image and floods a thumbnail; scale with it.
-        wire_edge.inputs["Size"].default_value = max(1.0, size / 768)
-        for pass_name in job["passes"]:
-            bpy.context.view_layer.material_override = overrides[pass_name]
-            scene.render.film_transparent = True
-            file = out / f"{name}_{pass_name}.png"
+    timing = {}
+    with SceneState(scene) as state:
+        member_set = set(members)
+        for obj in scene.objects:
+            if obj not in member_set:
+                obj.hide_render = True
+        setup_render(scene, int(job["samples"]))
+        scene.world = bpy.data.worlds.new("review_world")
+        light = S.studio_world(scene, job["light"])
+        # With only the HDR world nothing casts a shadow, yet the shadow system costs EEVEE about
+        # half of every image; it runs only when a lamp renders (the no-HDR fallback suns).
+        scene.world.use_sun_shadow = False
+        scene.eevee.use_shadows = any(o.type == "LIGHT" and not o.hide_render for o in scene.objects)
+        posed = "current"
+        if rest:
+            rest_pose(members)
+            posed = "rest"
+        if job.get("animation"):
+            posed = pose(members, job["animation"], job.get("time"), fps)
+        points = S.evaluated_points(meshes)
+        textures = save_textures(out, material_images(meshes))
+        stats = model_stats(members, meshes, textures, fps)
+        passes = Passes(scene, int(job["samples"]), job.get("eevee_passes", False))
+        cam = make_camera(scene)
+        size = int(job["size"])
+        timing["setup"] = round(time.monotonic() - started, 3)
+        render_started = time.monotonic()
+        images = render_shots(scene, cam, passes, list(shots(job["views"], points)), job["passes"], size,
+                              job["background"], out)
+
+        lineup_report = None
+        if job["beside"]:
+            refs, group_points, ref_members, gap = lineup(points, job["beside"])
+            for obj in refs:
+                obj.hide_render = False
+            lineup_shots = [(f"lineup_{stem}", setup, {"view": "lineup", "base_view": extra["view"],
+                                                       **{k: v for k, v in extra.items() if k != "view"}})
+                            for stem, setup, extra in shots(job["lineup_views"], group_points)]
+            group = [name] + [m["name"] for m in ref_members if "error" not in m]
+            for record in render_shots(scene, cam, passes, lineup_shots, job["lineup_passes"], size,
+                                       job["background"], out):
+                images.append({**record, "members": group})
+            for obj in refs:
+                obj.hide_render = True
+            lineup_report = {"members": [{"name": name}] + ref_members, "gap": round(float(gap), 5)}
+
+        pose_report = []
+        if job["poses"]:
+            pose_report, pose_images = render_poses(state, members, meshes, job, scene, cam, passes, size, out, fps)
+            images += pose_images
+        timing["render"] = round(time.monotonic() - render_started, 3)
+        timing["images"] = len(images)
+        timing["per_image"] = round(timing["render"] / max(1, len(images)), 4)
+
+    sheet = contact_sheet(out, images) if job.get("sheet", True) and images else None
+    asset_path = Path(asset).resolve() if asset else None
+    report = {"tool": "render_views", "asset": str(asset_path) if asset_path else name,
+              "sha256": hashlib.sha256(asset_path.read_bytes()).hexdigest() if asset_path else None,
+              "blender": bpy.app.version_string, "seconds": round(time.monotonic() - started, 2),
+              "timing": timing, "light": light, "pose": posed, "background": job["background"],
+              "engines": {p: passes.engine(p) for p in dict.fromkeys(
+                  job["passes"] + job["lineup_passes"] * bool(job["beside"]) + job["pose_passes"] * bool(job["poses"]))},
+              "stats": stats, "images": images, "sheet": sheet}
+    if lineup_report:
+        report["lineup"] = lineup_report
+    if job["poses"]:
+        report["poses"] = pose_report
+    (out / "views.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    return report
+
+
+def render_shots(scene, cam, passes, shot_list, pass_names, size, background, out):
+    """Pass-major, so the engine switches once per pass instead of once per image; the records
+    come back view-major, the order the sheet and card read them."""
+    records = {}
+    for k, pass_name in enumerate(pass_names):
+        passes.apply(pass_name, size)
+        for i, (stem, setup, extra) in enumerate(shot_list):
+            aspect = float(setup(cam) or 1.0)
+            scene.render.resolution_x, scene.render.resolution_y = round(size * aspect), size
+            file = out / f"{stem}_{pass_name}.png"
             scene.render.filepath = str(file)
             bpy.ops.render.render(write_still=True)
             if background != "transparent" and pass_name != "silhouette":
                 composite_background(file, background)
-            images.append({**extra, "pass": pass_name, "file": file.name,
-                           "size": [scene.render.resolution_x, scene.render.resolution_y]})
-    bpy.context.view_layer.material_override = None
-    sheet = contact_sheet(out, images) if job.get("sheet", True) else None
-    report = {"tool": "render_views", "asset": str(model),
-              "sha256": hashlib.sha256(model.read_bytes()).hexdigest(),
-              "blender": bpy.app.version_string, "seconds": round(time.monotonic() - started, 2),
-              "light": light, "pose": posed, "background": background,
-              "stats": model_stats(objects, meshes, textures, fps), "images": images, "sheet": sheet}
-    (out / "views.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print(f"render_views: {len(images)} images in {report['seconds']} s -> {out}")
+            records[(i, k)] = {**extra, "pass": pass_name, "file": file.name,
+                               "size": [scene.render.resolution_x, scene.render.resolution_y]}
+    return [records[key] for key in sorted(records)]
+
+
+def render_poses(state, members, meshes, job, scene, cam, passes, size, out, fps):
+    """Every pose framed alike (the union of all posed vertices), so poses compare at one scale."""
+    report, posed = [], []
+    for spec in job["poses"]:
+        state.restore_pose()
+        # Nodes a clip does not key stay at rest, as in the engine, not where the last pose left them.
+        rest_pose(members)
+        try:
+            label = pose(members, spec["animation"], spec["time"], fps)
+        except Skip as reason:
+            report.append({**spec, "error": str(reason)})
+            continue
+        points = S.evaluated_points(meshes)
+        posed.append((spec, label, points))
+        lo, hi = points.min(axis=0), points.max(axis=0)
+        report.append({**spec, "pose": label,
+                       "bounds": {"min": [round(float(v), 5) for v in (lo[0], lo[2], -hi[1])],
+                                  "max": [round(float(v), 5) for v in (hi[0], hi[2], -lo[1])]}})
+    images = []
+    if not posed:
+        return report, images
+    union = np.vstack([p for _, _, p in posed])
+    for spec, label, _ in posed:
+        state.restore_pose()
+        rest_pose(members)
+        pose(members, spec["animation"], spec["time"], fps)
+        prefix = f"pose_{safe(spec['animation'])}_{spec['time']:g}_"
+        pose_shots = [(stem, setup, {"view": "pose", "base_view": extra["view"],
+                                     **{k: v for k, v in extra.items() if k != "view"},
+                                     "animation": spec["animation"], "time": spec["time"]})
+                      for stem, setup, extra in shots(job["pose_views"], union, prefix)]
+        images += render_shots(scene, cam, passes, pose_shots, job["pose_passes"], size, job["background"], out)
+    state.restore_pose()
+    return report, images
+
+
+def render_one(job):
+    """Fresh scene, import the model (with grafted clips when `clip_source` is given), render."""
+    model, out = Path(job["model"]).resolve(), Path(job["out"]).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    S.reset_scene()
+    source, graft = model, None
+    if job.get("clip_source"):
+        graft = Path(tempfile.mkdtemp(prefix="render_views_")) / f"{model.stem}_clips.glb"
+        grafted = bpy_io.graft_clips(model, Path(job["clip_source"]).resolve(), graft)
+        source = graft
+    try:
+        objects = bpy_io.import_glb(source)
+        rest_pose(objects)
+        file_rest(objects, source)
+    finally:
+        if graft:
+            graft.unlink(missing_ok=True)
+            graft.parent.rmdir()
+    if not _visible_meshes(objects):
+        raise Skip(f"{model.name} has no visible mesh to render (an animation-only clip?)")
+    report = render_objects(_roots(objects), {**job, "out": out}, asset=model, rest=True)
+    if graft:
+        report["clip_source"] = {k: v for k, v in grafted.items() if k != "path"}
+        (out / "views.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    print(f"render_views: {len(report['images'])} images in {report['seconds']} s -> {out}")
+    return report
+
+
+def main(argv):
+    """Render every --model; returns {"tool", "seconds", "models": [views.json report, ...]}.
+    Safe to call repeatedly in one Blender: each model starts from a factory-empty scene."""
+    started = time.monotonic()
+    job = parse(argv)
+    models = job["model"] if isinstance(job["model"], list) else [job["model"]]
+    out = Path(job["out"])
+    reports = []
+    for model in models:
+        target = out / Path(model).stem if len(models) > 1 else out
+        try:
+            reports.append(render_one({**job, "model": model, "out": target}))
+        except Skip as reason:
+            target.mkdir(parents=True, exist_ok=True)
+            report = {"tool": "render_views", "asset": str(Path(model).resolve()), "error": str(reason),
+                      "blender": bpy.app.version_string, "stats": {}, "images": []}
+            (target / "views.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+            reports.append(report)
+            print(f"render_views: skipped {model}: {reason}")
+    return {"tool": "render_views", "seconds": round(time.monotonic() - started, 2), "models": reports}
 
 
 if __name__ == "__main__":

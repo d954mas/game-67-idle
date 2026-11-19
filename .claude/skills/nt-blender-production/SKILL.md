@@ -22,7 +22,15 @@ Then open `tmp/review/<stem>/card.png` with Read: views, triangle counts, textur
 findings on one image. The terminal already lists every finding with a fix hint.
 
 - Rendering starts Blender, which the agent sandbox blocks: run it outside the sandbox, or add
-  `--no-render` to get the checks alone in milliseconds.
+  `--no-render` to get the checks alone in milliseconds. The first render starts a warm Blender
+  server; after that a review takes about 2 s.
+- `--beside approved.glb neighbour.glb` puts the model next to references at true scale as the
+  card's first row: judge style there first. Clip findings show up as pose frames.
+- A `blender_review.json` in the game or asset folder holds the game's camera, references,
+  pivot rule and check settings, so `review.py model.glb` needs no flags; add one when a game
+  has none.
+- In your own build script, end with `review_live.review_scene("tmp/review/<name>")` to get the
+  GLB, renders, checks and card from the same Blender run.
 - `--game-camera '{"height":1.8,"behind":2,"pitch":16,"fov_y":55}'` adds the game's view,
   `--game-crop shot.png` puts the in-game screenshot on the card, `--turntable 8`,
   `--animation Walk --time 0.4`, `--pivot floor`, `--floating`, `--contacts c.json`.

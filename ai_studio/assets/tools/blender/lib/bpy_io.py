@@ -4,6 +4,7 @@ The report measures the GLB itself (not the Blender scene), so it states what th
 load: triangles, bounds in glTF axes, and the bounds centre kept apart from the origin, because
 a generator that read the centre as the origin once left props floating above the floor.
 """
+import json
 import os
 from pathlib import Path
 
@@ -105,6 +106,43 @@ def export_glb(path, objects=None, preset="static", **overrides):
     report.update(preset=preset, objects=[o.name for o in objects],
                   pivot=pivots[0] if len(pivots) == 1 else (pivots or None), dropped_options=dropped)
     return report
+
+
+def graft_clips(model, clips, out):
+    """Write `model` with the animations of `clips` (a clip-only GLB) retargeted by node name.
+
+    Blender cannot import a skinless clip file as a rig, but it imports one GLB that carries both
+    the body and the clips like any animated model; matching nodes by name is also what the
+    engine does when it plays a clip file on a body. Returns {"path", "animations",
+    "unmatched_nodes"}; unmatched clip nodes (renamed bones, a different rig) are left out.
+    """
+    body, clip = G.Glb.load(model), G.Glb.load(clips)
+    builder = G.GlbBuilder(json.loads(json.dumps(body.json)), body.bin)
+    animations = builder.json.setdefault("animations", [])
+    grafted, unmatched = [], set()
+    for k, anim in enumerate(clip.json.get("animations", [])):
+        samplers, channels = [], []
+        for channel in anim["channels"]:
+            target = channel["target"]
+            if "node" not in target:
+                continue
+            node = body.by_name.get(clip.name(target["node"]))
+            if node is None:
+                unmatched.add(clip.name(target["node"]))
+                continue
+            sampler = anim["samplers"][channel["sampler"]]
+            samplers.append({"input": builder.add_accessor(clip.accessor(sampler["input"])[:, 0], bounds=True),
+                             "output": builder.add_accessor(clip.accessor(sampler["output"])),
+                             "interpolation": sampler.get("interpolation", "LINEAR")})
+            channels.append({"sampler": len(samplers) - 1, "target": {"node": node, "path": target["path"]}})
+        if channels:
+            name = anim.get("name", f"animation{k}")
+            animations.append({"name": name, "samplers": samplers, "channels": channels})
+            grafted.append(name)
+    if not animations:
+        builder.json.pop("animations")
+    builder.write(out)
+    return {"path": str(out), "animations": grafted, "unmatched_nodes": sorted(unmatched)}
 
 
 def glb_report(path):

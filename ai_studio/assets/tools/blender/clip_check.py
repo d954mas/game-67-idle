@@ -11,6 +11,7 @@ motion are judged in world space; an in-place locomotion clip shows its stride a
 """
 import re
 import sys
+import weakref
 from pathlib import Path
 
 if __package__ in (None, ""):
@@ -31,6 +32,8 @@ SCALED = ("pop_accel", "teleport_speed", "slide", "sink", "float", "loop_seam")
 HUMAN_HEIGHT = 1.75
 SAMPLES = 5
 SIDE = {"left": ("left", "l"), "right": ("right", "r")}
+# Per-model facts, so one loaded model checked against many clip files is measured once.
+_MODEL_FACTS = weakref.WeakKeyDictionary()
 
 
 def _key(name):
@@ -58,14 +61,15 @@ def detect_feet(names):
 
 
 def _accel(p, times):
-    """Second derivative per sample of (frames, 3) positions on a possibly uneven time grid, m/s^2."""
+    """Second derivative per sample of (frames, ..., 3) positions on a possibly uneven time grid, m/s^2."""
     out = np.zeros_like(p)
     if len(p) < 3:
         return out
-    h0, h1 = np.diff(times)[:-1], np.diff(times)[1:]
-    v0 = (p[1:-1] - p[:-2]) / h0[:, None]
-    v1 = (p[2:] - p[1:-1]) / h1[:, None]
-    out[1:-1] = 2 * (v1 - v0) / (h0 + h1)[:, None]
+    shape = (-1,) + (1,) * (p.ndim - 1)
+    h0, h1 = np.diff(times)[:-1].reshape(shape), np.diff(times)[1:].reshape(shape)
+    v0 = (p[1:-1] - p[:-2]) / h0
+    v1 = (p[2:] - p[1:-1]) / h1
+    out[1:-1] = 2 * (v1 - v0) / (h0 + h1)
     return out
 
 
@@ -107,11 +111,11 @@ def check_pops(names, positions, times, opts, anim, out, row, leaves=()):
     worst, hits = 0.0, []
     floor = 0.36  # m/s^2: 1e-4 m/frame^2 at 60 fps keeps a perfectly smooth stretch from dividing by zero
     w = opts["pop_window"]
+    every = np.linalg.norm(_accel(positions, times), axis=2)
     for j, joint in enumerate(names):
         if joint in leaves:
             continue
-        vec = _accel(positions[:, j], times)
-        acc = np.linalg.norm(vec, axis=1)
+        acc = every[:, j]
         worst = max(worst, float(acc.max(initial=0)))
         for k in np.flatnonzero(acc > opts["pop_accel"]):
             local = float(np.median(acc[max(1, k - w):k + w + 1]))
@@ -218,17 +222,16 @@ def body_height(model):
     return None
 
 
-def lowest_points(model, world, use_skin):
+def lowest_points(model, worlds, use_skin):
+    """Lowest skinned vertex per pose of posed_worlds, or None without skinned vertices."""
     nodes = [i for i, n in enumerate(model.nodes) if "skin" in n and "mesh" in n] if use_skin else []
-    if nodes:
-        return min(float(np.min(p[:, 1])) for i in nodes for p in model.skinned_positions(world, i) if len(p))
-    return None
+    return model.lowest_skinned_y(worlds, nodes) if nodes else None
 
 
 def check_soles(model, feet, names, positions, worlds, times, opts, anim, out, row):
-    lows = [lowest_points(model, w, opts["skinned_soles"]) for w in worlds]
+    lows = lowest_points(model, worlds, opts["skinned_soles"])
     source = "skinned mesh"
-    if any(v is None for v in lows):
+    if lows is None:
         if not feet:
             return
         source = "foot joints"
@@ -276,6 +279,19 @@ def _skin_usable(model, out):
     return True
 
 
+def _model_fact(model, name, compute):
+    facts = _MODEL_FACTS.setdefault(model, {})
+    if name not in facts:
+        facts[name] = compute()
+    return facts[name]
+
+
+def _skin_findings(model):
+    """(usable, findings) of _skin_usable, run once per model."""
+    notes = []
+    return R.guarded(notes, "skin", _skin_usable, model, notes), notes
+
+
 def check_animation(clip, model, anim, joint_ids, opts, lim, findings, row):
     row["duration"] = round(clip.duration(anim), 4)
     if not check_keys(clip, anim, anim, findings):
@@ -302,16 +318,16 @@ def check_animation(clip, model, anim, joint_ids, opts, lim, findings, row):
         targets = {model.by_name[n] for n in targeted if n in model.by_name}
     ids = joint_ids or sorted(targets)
     times = _times(clip, anim, opts["fps"])
-    worlds = [model.posed_world(channels, t) for t in times]
-    missing = [model.name(i) for i in ids if i not in worlds[0]]
+    worlds = model.posed_worlds(channels, times)
+    missing = [model.name(i) for i in ids if i not in worlds]
     if missing:
         findings.append(R.finding("joints_in_scene", "high", f"{anim}: {len(missing)} joints are not in the scene; "
                                   "they are left out", "export the whole armature", {"animation": anim,
                                                                                      "joints": missing[:SAMPLES]}))
-        ids = [i for i in ids if i in worlds[0]]
+        ids = [i for i in ids if i in worlds]
     names = [model.name(i) for i in ids]
     roots = {model.name(i) for i in ids if model.parent.get(i) not in ids}
-    positions = np.array([[w[i][:3, 3] for i in ids] for w in worlds]).reshape(len(times), len(ids), 3)
+    positions = np.stack([worlds[i][:, :3, 3] for i in ids], axis=1) if ids else np.zeros((len(times), 0, 3))
     row["samples"] = len(times)
     if not len(ids):
         return
@@ -370,11 +386,16 @@ def check(path_or_glb, **options):
     findings, rows = [], []
     scale = opts["body_scale"]
     if scale == "auto":
-        height = body_height(model)
+        height = _model_fact(model, "height", lambda: body_height(model))
         scale = height / HUMAN_HEIGHT if height and height > 1e-3 else 1.0
     lim = {**opts, **{k: opts[k] * float(scale) for k in SCALED}}
     skins = model.json.get("skins", [])
-    lim["skinned_soles"] = opts["skinned_soles"] and R.guarded(findings, "skin", _skin_usable, model, findings)
+    if opts["skinned_soles"]:
+        usable, notes = _model_fact(model, "skin", lambda: _skin_findings(model))
+        findings.extend(notes)
+        lim["skinned_soles"] = usable
+    else:
+        lim["skinned_soles"] = opts["skinned_soles"]
     joint_ids = sorted({j for s in skins for j in s["joints"] if 0 <= j < len(model.nodes)})
     anims = opts["animations"] or clip.animation_names()
     if not anims:
@@ -418,6 +439,12 @@ def _scale(text):
 
 def _run(args, config):
     opts = R.resolve_options(TOOL, DEFAULTS, config, R.cli_overrides(args, DEFAULTS))
+    if opts["model"] is not None:
+        # One model for every clip keeps its decoded skin and pruning boxes across files.
+        try:
+            opts["model"] = G.Glb.load(opts["model"])
+        except Exception:  # noqa: BLE001 - check() reports the unreadable model per clip
+            pass
     return [check(path, **opts) for path in args.clips]
 
 

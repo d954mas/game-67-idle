@@ -25,24 +25,72 @@ From a game repo the same command works with paths relative to that repo (folder
 One call renders front, right and ¾ views (beauty, clay, wire), runs every
 applicable check and writes `tmp/review/<stem>/card.png` per model: views,
 triangle/vertex/material/texture counts, size, and the check findings; the terminal
-prints each finding with a fix hint. All
-models render in one Blender start (about 4 s for the first, about 1–2 s for each
-next one); checks take milliseconds.
+prints each finding with a fix hint.
 
-Useful flags: `--game-camera '{"height":1.8,"behind":2,"pitch":16,"fov_y":55}'`
-adds the game's view; `--game-crop shot.png` puts the in-game screenshot on the
-card; `--turntable 8`; `--animation Walk --time 0.4` poses the model;
-`--pivot floor`, `--contacts contract.json`, `--floating`; `--no-render` for
-checks only; `--strict` to exit 1 on high findings.
+Speed: the first render starts a warm Blender server (`blender_server.py`) that later
+renders reuse; it exits after 30 idle minutes, and `--cold` skips it. One model is about
+2 s warm (8–9 s for the very first call, which starts the server); each extra model in
+the same call adds about 1 s; checks take milliseconds, clip checks about 1 s for 50+
+clips.
+
+What it shows beyond the plain views:
+
+- `--beside approved.glb shipped_neighbour.glb` renders the model next to references at
+  true scale and shared framing, as the first row of the card. Style misses cost more
+  than any technical defect, so this is the row to judge first.
+- Clip findings (foot slide, pops, soles under the floor) become pose frames on the card,
+  rendered at the exact moment the check reports (`--max-poses`, default 4).
+- `--game-camera '{"height":1.8,"behind":2,"pitch":16,"fov_y":55}'` adds the game's view;
+  `--game-crop shot.png` puts the in-game screenshot on the card; `--turntable 8`;
+  `--animation Walk --time 0.4` poses the model; a clip-only file plays on its body with
+  `--clip-model body.glb`.
+- Checks: `--pivot floor|floor-center|center|top`, `--contacts contract.json`,
+  `--floating`, `--profile volume`; `--no-render` for checks only; `--strict` to exit 1 on
+  high findings.
+
+### Game presets
+
+Put a `blender_review.json` in the game root or any asset folder; the nearest one wins, and
+`review.py model.glb` then reviews "the way this game looks" without flags. Any option above
+plus check settings, paths relative to the file:
+
+```json
+{
+  "game_camera": {"height": 1.8, "behind": 2.0, "pitch": 16, "fov_y": 55},
+  "beside": ["approved/crate_v3.glb", "../env/barrel.glb"],
+  "pivot": "floor",
+  "size": 512,
+  "mesh_check": {"profile": "volume"},
+  "clip_check": {"slide": 0.04}
+}
+```
+
+Order: presets < `--config` < flags. `--preset file` or `--no-preset` override the lookup.
+
+### Review from a build script
+
+A build script running in Blender can review what it just built without a second Blender
+start or a re-import:
+
+```python
+from ai_studio.assets.tools.blender.lib import bpy_scene as S, review_live
+
+S.reset_scene()
+S.box("Crate", size=(1, 1, 1), anchor="bottom", material=S.palette_material("Wood", "#8a5a33"))
+print(review_live.review_scene("tmp/review/crate", name="crate"))  # GLB, renders, checks, card
+```
 
 ## Tools
 
 | Tool | What it does |
 |---|---|
 | `run_blender.py <script.py> -- <args>` | Finds Blender (`--blender`, `$BLENDER`, PATH, installed versions with 5.2 first), runs the script headless with `--factory-startup`, the Studio root on `sys.path`, exit code on Python errors, timeout and optional `--log`. `--which` prints the executable. |
-| `render_views.py` (inside Blender) | Views `front back left right top three_quarter game turntable` × passes `beauty clay wire silhouette`, fitted framing, shared studio HDR or flat light, `views.json` with model stats; several `--model` files in one start. |
+| `render_views.py` (inside Blender) | Views `front back left right top three_quarter game turntable` × passes `beauty clay wire silhouette` (clay and silhouette in Workbench for speed, `--eevee-passes` for the HDR look), fitted framing, `--beside` lineup, `--poses Clip@seconds`, `--clip-source` to play a clip file on the model, `views.json` with model stats; several `--model` files in one run. `render_objects(objects, job)` renders the current scene in-process. |
 | `review_card.py` | Composes the card from `views.json` and check reports (Pillow, no Blender). |
-| `review.py` | Checks + one batched render + cards, as above. |
+| `review.py` | Checks + batched renders + cards, presets, lineup, pose frames, as above. |
+| `blender_server.py start\|status\|stop` | Warm Blender for `run_blender.py`: about 0.05 s per script instead of 1.6 s, fresh factory scene per job, Studio and game modules reloaded per job, exits after `--idle-minutes` (30). `run_blender.py --server` starts it, `--cold` bypasses it, `NT_BLENDER_SERVER=0` disables it. Busy or stale servers fall back to a cold start. |
+| `lib/review_live.py` | Inside Blender: `review_scene(out, objects=None, name, job, export_preset)` exports, renders, checks and composes the card in the running Blender. |
+| `bench_checks.py` | Times every check over GLB files or folders (`--json-dir` to diff reports, `--profile N` for hotspots). |
 | `mesh_check.py` | Welded topology: open edges, non-manifold, miswound and degenerate faces, duplicates, components, inside-out shells, optional `--tri-budget`. Profiles `auto`, `volume`, `surface`. |
 | `glb_check.py` | Export contract: finite data, unit normals, triangles, URIs, JPEG, texture policy, COLOR_0 encoding, pivot rule with bounds and bounds centre, joint limit, skin weights (≤ 4 influences, sums, unweighted vertices, inverse binds), `--reference-rig`. |
 | `contact_check.py` | Contract pairs (`moving`, `receiver`, `direction`, `window`) with an automatic negative control per pair, ground supports, or `--floating` for parts hanging in the air. |

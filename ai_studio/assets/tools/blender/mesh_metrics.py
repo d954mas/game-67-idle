@@ -40,23 +40,33 @@ def weld(points, tolerance):
 
 
 def face_components(faces, count):
-    """Component label per face: faces sharing a vertex are connected."""
+    """Component label per face: faces sharing a vertex are connected. Labels follow the order of
+    each component's union-find root (unions of (a, b) then (b, c) per face, in face order)."""
+    faces = np.asarray(faces, np.int64).reshape(-1, 3)
+    if not len(faces):
+        return np.zeros(0, np.int64)
+    pairs = np.stack([faces[:, :2], faces[:, 1:]], axis=1).reshape(-1, 2)
+    pairs = pairs[pairs[:, 0] != pairs[:, 1]]
+    # A pair seen before (either way round) is already joined; dropping it leaves every root as it was.
+    key = np.minimum(pairs[:, 0], pairs[:, 1]) * count + np.maximum(pairs[:, 0], pairs[:, 1])
+    pairs = pairs[np.sort(np.unique(key, return_index=True)[1])]
     parent = list(range(count))
-
-    def find(x):
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
-    rows = np.asarray(faces, np.int64).reshape(-1, 3).tolist()
-    for a, b, c in rows:
-        for u, v in ((a, b), (b, c)):
-            ru, rv = find(u), find(v)
-            if ru != rv:
-                parent[ru] = rv
-    roots = np.array([find(row[0]) for row in rows], np.int64)
-    return np.unique(roots, return_inverse=True)[1].reshape(-1) if rows else roots
+    for u, v in pairs.tolist():
+        while parent[u] != u:
+            parent[u] = parent[parent[u]]
+            u = parent[u]
+        while parent[v] != v:
+            parent[v] = parent[parent[v]]
+            v = parent[v]
+        if u != v:
+            parent[u] = v
+    root = np.array(parent, np.int64)
+    while True:
+        jumped = root[root]
+        if (jumped == root).all():
+            break
+        root = jumped
+    return np.unique(root[faces[:, 0]], return_inverse=True)[1].reshape(-1)
 
 
 def triangle_topology(points, faces, *, weld_tolerance=0.0, area_epsilon=1.0e-10):

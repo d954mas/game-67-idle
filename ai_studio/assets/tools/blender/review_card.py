@@ -33,6 +33,17 @@ def font(size, bold=False):
         return ImageFont.load_default()
 
 
+SPECIAL_VIEWS = ("lineup", "pose")
+
+
+def pick_pass(images):
+    """One pass of a special row: beauty when rendered, else the first pass present."""
+    if not images:
+        return []
+    chosen = next((p for p in PASS_ORDER if any(i["pass"] == p for i in images)), images[0]["pass"])
+    return [i for i in images if i["pass"] == chosen]
+
+
 def checkerboard(size, step=12):
     tile = Image.new("RGB", size, CHECKER[0])
     draw = ImageDraw.Draw(tile)
@@ -66,6 +77,15 @@ def describe_size(bounds):
     return "size {:.3f} x {:.3f} x {:.3f} m (x, y up, z)".format(*size)
 
 
+def fit_text(draw, text, width, typeface):
+    """Shorten `text` with an ellipsis until it fits `width` pixels."""
+    if draw.textlength(text, font=typeface) <= width:
+        return text
+    while text and draw.textlength(text + "…", font=typeface) > width:
+        text = text[:-1]
+    return text + "…"
+
+
 def wrap(draw, text, width, typeface):
     words, lines, line = text.split(), [], ""
     for word in words:
@@ -89,11 +109,14 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
     else:
         base_dir = Path(views.get("out_dir", "."))
     images = views.get("images", [])
-    present_views = [v for v in VIEW_ORDER if any(i["view"] == v for i in images)]
-    present_views += sorted({i["view"] for i in images} - set(present_views) - {"turntable"})
-    present_passes = [p for p in PASS_ORDER if any(i["pass"] == p for i in images)]
-    present_passes += sorted({i["pass"] for i in images} - set(present_passes))
-    lookup = {(i["view"], i["pass"]): base_dir / i["file"] for i in images}
+    grid_images = [i for i in images if i["view"] not in SPECIAL_VIEWS and not i["view"].startswith("turntable")]
+    present_views = [v for v in VIEW_ORDER if any(i["view"] == v for i in grid_images)]
+    present_views += sorted({i["view"] for i in grid_images} - set(present_views))
+    present_passes = [p for p in PASS_ORDER if any(i["pass"] == p for i in grid_images)]
+    present_passes += sorted({i["pass"] for i in grid_images} - set(present_passes))
+    lookup = {(i["view"], i["pass"]): base_dir / i["file"] for i in grid_images}
+    lineup = pick_pass([i for i in images if i["view"] == "lineup"])
+    poses = pick_pass([i for i in images if i["view"] == "pose"])
     spin = [i for i in images if i["view"].startswith("turntable")]
     spin_pass = next((p for p in PASS_ORDER if any(i["pass"] == p for i in spin)), None)
     turntable = [(base_dir / i["file"], f"{i.get('azimuth', i.get('frame', ''))}°")
@@ -108,9 +131,10 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
     width = margin * 3 + grid_w + side_w
     grid_h = len(present_passes) * (cell + label_h + 8)
     textures = [t for t in textures if t.get("file")]
-    strip_rows = int(bool(turntable)) + int(bool(textures))
-    strip_h = strip_rows * (cell // 2 + label_h + 8)
-    height = header_h + grid_h + strip_h + margin * 2
+    strip_rows = int(bool(turntable)) + int(bool(textures)) + int(bool(poses))
+    strip_h = strip_rows * (cell // 2 + label_h + 8 + 18)
+    lineup_h = (cell + label_h + 8) if lineup else 0
+    height = header_h + lineup_h + grid_h + strip_h + margin * 2
     card = Image.new("RGB", (width, max(height, header_h + 480)), BACKGROUND)
     draw = ImageDraw.Draw(card)
 
@@ -132,6 +156,15 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
                   font=font(15))
 
     y = header_h
+    if lineup:
+        # The comparison is the first thing to judge: style misses cost more than any defect.
+        width_each = (grid_w - 8 * (len(lineup) - 1)) // len(lineup)
+        for k, image in enumerate(lineup):
+            x = margin + k * (width_each + 8)
+            members = " | ".join(image.get("members", []))
+            draw.text((x, y), f"beside · {image.get('base_view', '')} · {members}"[:70], fill=TEXT, font=font(14))
+            paste_on_cell(card, base_dir / image["file"], (x, y + label_h - 6), (width_each, cell))
+        y += cell + label_h + 8
     for render_pass in present_passes:
         for c, view in enumerate(present_views):
             x = margin + c * (cell + 8)
@@ -143,15 +176,20 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
     fits = max(1, (grid_w + 8) // (small + 8))
     texture_items = [(base_dir / t["file"], f"{t.get('name', '')} {'x'.join(map(str, t.get('size', [])))}")
                      for t in textures]
-    for items, title in ((turntable, f"turntable · {spin_pass}"), (texture_items, "textures")):
+    pose_items = [(base_dir / i["file"], f"{i.get('animation', '')} @{float(i.get('time', 0)):.2f}s")
+                  for i in poses]
+    for items, title in ((pose_items, "clip findings"), (turntable, f"turntable · {spin_pass}"),
+                         (texture_items, "textures")):
         if not items:
             continue
         # Spread the frames over the row instead of cutting the spin off after the first few.
         step = max(1, -(-len(items) // fits))
         shown = items[::step][:fits]
+        draw.text((margin, y), title, fill=TEXT, font=font(13))
+        y += 18
         for k, (path, label) in enumerate(shown):
             x = margin + k * (small + 8)
-            draw.text((x, y), (title if k == 0 else label)[:26], fill=MUTED, font=font(12))
+            draw.text((x, y), fit_text(draw, label, small, font(12)), fill=MUTED, font=font(12))
             paste_on_cell(card, path, (x, y + label_h - 6), (small, small))
         y += small + label_h + 8
 
