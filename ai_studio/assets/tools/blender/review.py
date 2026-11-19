@@ -93,7 +93,19 @@ def parse_layer(data, base):
     return options, tools
 
 
+_PRESET_CACHE = {}
+
+
 def read_preset(path):
+    """Cached per file and modification time: a batch of hundreds of models shares one parse."""
+    path = Path(path).resolve()
+    key = (path, path.stat().st_mtime_ns)
+    if key not in _PRESET_CACHE:
+        _PRESET_CACHE[key] = _read_preset(path)
+    return _PRESET_CACHE[key]
+
+
+def _read_preset(path):
     """(options, tool config, file rules) of one preset file. `files` holds per-glob overrides,
     e.g. {"match": "*_glow*.glb", "floating": false}, matched against the file name or its path
     relative to the preset; later rules win."""
@@ -111,9 +123,9 @@ def read_preset(path):
 
 
 def rule_applies(matches, model, base):
-    model = Path(model)
+    """`model` and `base` are already resolved: this runs once per rule per model."""
     try:
-        relative = model.resolve().relative_to(base.resolve()).as_posix()
+        relative = model.relative_to(base).as_posix()
     except ValueError:
         relative = None
     return any(fnmatch.fnmatch(model.name, m) or (relative and fnmatch.fnmatch(relative, m)) for m in matches)
@@ -144,12 +156,14 @@ def model_options(model, args, config):
     options, tools = dict(OPTIONS), {}
     presets = [] if getattr(args, "no_preset", False) else (
         [Path(args.preset)] if getattr(args, "preset", None) else find_presets(model))
+    resolved = Path(model).resolve()
     for path in presets:
         preset_options, preset_tools, rules = read_preset(path)
         options.update(preset_options)
         merge_tools(tools, preset_tools)
+        base = Path(path).resolve().parent
         for matches, rule_options, rule_tools in rules:
-            if rule_applies(matches, model, Path(path).parent):
+            if rule_applies(matches, resolved, base):
                 options.update(rule_options)
                 merge_tools(tools, rule_tools)
     merge_tools(tools, config)
@@ -263,7 +277,8 @@ def pose_plan(model, opts, reports):
                 marks[key].append(check)
     poses = list(marks)
     frames = int(opts.filmstrip or 0)
-    if frames:
+    # Only files the clip check looked at have animations worth a filmstrip.
+    if frames and any(r["tool"] == "clip_check" for r in reports):
         try:
             glb = Glb.load(model)
             names = glb.animation_names()

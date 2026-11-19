@@ -153,9 +153,11 @@ class Poses(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = clip_only(Path(tmp) / "idle.glb")
             opts = argparse.Namespace(max_poses=4, filmstrip=5, max_filmstrips=3)
-            poses, marks = review.pose_plan(path, opts, [])
+            poses, marks = review.pose_plan(path, opts, [{"tool": "clip_check", "findings": []}])
             self.assertEqual(poses, ["Idle@0", "Idle@0.25", "Idle@0.5", "Idle@0.75", "Idle@1"])
             self.assertEqual(marks, {})
+            # A static prop has no clip report, so no filmstrip and no GLB reload.
+            self.assertEqual(review.pose_plan(path, opts, []), ([], {}))
             reports = [{"tool": "clip_check", "findings": [
                 {"check": "foot_slide", "severity": "medium", "where": {"animation": "Idle", "time": 0.4}}]}]
             poses, marks = review.pose_plan(path, opts, reports)

@@ -11,6 +11,7 @@ of the whole run by own time.
 import argparse
 import cProfile
 import json
+import os
 import pstats
 import sys
 import time
@@ -32,8 +33,10 @@ CHECKS = {
 
 
 def _files(paths):
+    # python_run.mjs starts Python in the Studio root; paths are the caller's.
+    caller = Path(os.environ.get("NT_CALLER_CWD", os.getcwd()))
     out = []
-    for path in map(Path, paths):
+    for path in (p if p.is_absolute() else caller / p for p in map(Path, paths)):
         out.extend(sorted(path.glob("*.glb")) if path.is_dir() else [path])
     return out
 
