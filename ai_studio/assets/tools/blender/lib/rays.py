@@ -45,18 +45,25 @@ def first_hit(origins, directions, tris, t_min=0.0, t_max=np.inf):
     if not len(origins) or not len(tris[0]):
         return out
     for block, t in _blocks(origins, directions, tris):
-        t = np.where((t >= t_min) & (t <= t_max), t, np.inf)
-        out[block] = np.min(np.nan_to_num(t, nan=np.inf), axis=1)
+        t = np.where(np.isnan(t) | (t < t_min) | (t > t_max), np.inf, t)
+        out[block] = np.min(t, axis=1)
     return out
 
 
-def crossings(origins, directions, tris, t_min=0.0):
-    """Number of surfaces each ray crosses beyond t_min: odd means the origin is inside a closed shell."""
+def crossings(origins, directions, tris, t_min=0.0, tolerance=1e-9):
+    """Number of surfaces each ray crosses beyond t_min: odd means the origin is inside a closed shell.
+    Hits at the same distance count once: a ray through an edge or vertex shared by several
+    triangles of one surface crosses that surface once."""
     origins = np.asarray(origins, float).reshape(-1, 3)
     directions = np.asarray(directions, float)
     out = np.zeros(len(origins), np.int64)
     if not len(origins) or not len(tris[0]):
         return out
     for block, t in _blocks(origins, directions, tris):
-        out[block] = np.sum(np.nan_to_num(t, nan=-np.inf) > t_min, axis=1)
+        t = np.sort(np.where(np.isnan(t) | (t <= t_min), np.inf, t), axis=1)
+        finite = np.isfinite(t)
+        with np.errstate(invalid="ignore"):
+            gap = np.diff(t, axis=1, prepend=-np.inf)
+        new = finite & (gap > tolerance * np.maximum(1.0, np.abs(t)))
+        out[block] = new.sum(axis=1)
     return out

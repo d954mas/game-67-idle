@@ -154,5 +154,42 @@ class Malformed(unittest.TestCase):
         self.assertIn("skin", found(clip_check.check(broken), "high"))
 
 
+class Channels(unittest.TestCase):
+    def test_cubic_scale_tangents_are_not_values(self):
+        b = G.GlbBuilder()
+        add_rig(b)
+        times = b.add_accessor(np.array([0.0, 1.0]), kind="SCALAR", bounds=True)
+        keys = np.array([[0, 0, 0], [1, 1, 1], [0, 0, 0]] * 2, float)
+        out = b.add_accessor(keys)
+        b.json["animations"] = [{"name": "Hold", "samplers": [{"input": times, "output": out,
+                                                              "interpolation": "CUBICSPLINE"}],
+                                 "channels": [{"sampler": 0, "target": {"node": 0, "path": "scale"}}]}]
+        self.assertNotIn("scale", found(clip_check.check(b.to_glb())))
+
+    def test_duplicate_names_move_only_the_target(self):
+        b = G.GlbBuilder()
+        first = b.add_node("Object", translation=(0, 0, 0))
+        second = b.add_node("Object", translation=(5, 0, 0))
+        times = b.add_accessor(np.array([0.0, 1.0]), kind="SCALAR", bounds=True)
+        moves = b.add_accessor(np.array([[5, 0, 0], [5, 3, 0]], float))
+        b.json["animations"] = [{"name": "Lift", "samplers": [{"input": times, "output": moves}],
+                                 "channels": [{"sampler": 0, "target": {"node": second, "path": "translation"}}]}]
+        glb = b.to_glb()
+        world = glb.posed_world(glb.channels("Lift", by_index=True), 1.0)
+        np.testing.assert_allclose(world[first][:3, 3], [0, 0, 0])
+        np.testing.assert_allclose(world[second][:3, 3], [5, 3, 0])
+        model = G.GlbBuilder()
+        model.add_node("Object")
+        model.add_node("Object")
+        report = clip_check.check(glb, model=model.to_glb())
+        self.assertIn("ambiguous_targets", found(report, "medium"))
+
+    def test_findings_group_by_cause_across_clips(self):
+        report = clip_check.check(character(SlideA=SLIDE, SlideB=SLIDE))
+        slides = [f for f in report["findings"] if f["check"] == "foot_slide"]
+        self.assertEqual(len(slides), 1)
+        self.assertEqual(slides[0]["where"]["clips"], ["SlideA", "SlideB"])
+
+
 if __name__ == "__main__":
     unittest.main()

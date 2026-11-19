@@ -1,6 +1,7 @@
 import argparse
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 import numpy as np
@@ -39,6 +40,36 @@ class ClipOnly(unittest.TestCase):
         self.assertNotIn("mesh_check", tools)
         self.assertEqual(tools["clip_check"]["findings"][0]["check"], "clip_only")
         self.assertFalse(any(f["severity"] == "high" for r in reports for f in r["findings"]))
+
+
+class Batch(unittest.TestCase):
+    def args(self, out):
+        return argparse.Namespace(profile=None, pivot=None, contacts=None, floating=False, clip_model=None,
+                                  no_render=True, out=str(out), game_crop=None)
+
+    def test_unreadable_file_is_a_finding_and_the_batch_goes_on(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "broken.glb").write_bytes(b"glTF not really")
+            good = clip_only(tmp / "idle.glb")
+            results, _ = review.review([tmp / "broken.glb", good], self.args(tmp / "out"), {})
+        by_name = {Path(s["asset"]).name: reports for s, reports in results}
+        self.assertEqual(by_name["broken.glb"][0]["findings"][0]["check"], "unreadable")
+        self.assertIn("idle.glb", by_name)
+
+    def test_folders_and_globs_expand_relative_to_the_caller(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            for name in ("a.glb", "b.glb"):
+                clip_only(tmp / name)
+            with unittest.mock.patch.dict("os.environ", {"NT_CALLER_CWD": str(tmp)}):
+                self.assertEqual([m.name for m in review.expand_models(["."])], ["a.glb", "b.glb"])
+                self.assertEqual([m.name for m in review.expand_models(["b*.glb"])], ["b.glb"])
+
+    def test_config_typo_is_refused(self):
+        with self.assertRaises(SystemExit):
+            review.validate_config({"pivot_tolerence": 0.01})
+        review.validate_config({"pivot_tolerance": 0.01, "mesh_check": {"profile": "volume"}})
 
 
 if __name__ == "__main__":

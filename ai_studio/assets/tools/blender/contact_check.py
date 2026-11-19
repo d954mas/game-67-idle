@@ -95,20 +95,62 @@ def _receiver_near(receiver, points, direction):
     return a[keep], b[keep], c[keep]
 
 
+def _surface_points(piece):
+    """Vertices plus face centres: a contact under the middle of a big face still has samples."""
+    a, b, c = piece.tris
+    return np.vstack([piece.points, (a + b + c) / 3.0])
+
+
+def contact_gap(points, tris, receiver, direction, band, limit):
+    """Signed gap from a moving part (surface points, triangles) to its receiver along `direction`.
+
+    Only the moving part's leading layer (within `band` of its extreme along `direction`) and the
+    receiver's geometry within that layer or ahead of it take part, so a board above a book or a
+    pedestal narrower than the top it carries is judged by the faces that actually meet. Rays go
+    both ways: moving points onto the receiver, and receiver points back onto the moving part."""
+    along = points @ direction
+    lead = float(along.max())
+    # Never look back past the part's own far side: a board above a book is not the book's support.
+    band = min(band, float(np.ptp(along)))
+    back = band + 1e-3
+    near = points[along >= lead - band]
+    gaps = []
+    layer = min(band, max(0.005, 0.05 * float(np.ptp(along))))
+    forward = _samples(points[along >= lead - layer], direction, limit)
+    g = signed_gap(forward, direction, _receiver_near(receiver, forward, direction), back)
+    if g is not None:
+        gaps.append(g)
+    rpoints = _surface_points(receiver)
+    axes = np.linalg.svd(direction[None])[2][1:]
+    lo, hi = (near @ axes.T).min(axis=0), (near @ axes.T).max(axis=0)
+    proj = rpoints @ axes.T
+    keep = (proj >= lo - 1e-6).all(axis=1) & (proj <= hi + 1e-6).all(axis=1) & (rpoints @ direction >= lead - band)
+    reverse = _samples(rpoints[keep], -direction, limit)
+    if len(reverse):
+        moving = Piece.__new__(Piece)
+        moving.tris = tris
+        g = signed_gap(reverse, -direction, _receiver_near(moving, reverse, -direction), back)
+        if g is not None:
+            gaps.append(g)
+    return min(gaps) if gaps else None
+
+
 def measure_pair(moving, receiver, direction, window, opts):
     direction = np.asarray(direction, float)
     direction = direction / np.linalg.norm(direction)
-    samples = _samples(moving.points, direction, opts["max_samples"])
-    depth = abs(window[0]) + opts["margin"]
-    back = max(0.2, 2.0 * depth)
-    tris = _receiver_near(receiver, samples, direction)
-    gap = signed_gap(samples, direction, tris, back)
+    points = _surface_points(moving)
+    band = 2.0 * (abs(window[0]) + opts["margin"])  # twice the deepest overlap the window or a control needs
+
+    def gap_at(shift):
+        offset = direction * shift
+        tris = tuple(corner + offset for corner in moving.tris)
+        return contact_gap(points + offset, tris, receiver, direction, band, opts["max_samples"])
 
     def passes(shift):
-        g = signed_gap(samples + direction * shift, direction, _receiver_near(receiver, samples + direction * shift,
-                                                                               direction), back)
+        g = gap_at(shift)
         return g is not None and window[0] <= g <= window[1]
 
+    gap = gap_at(0.0)
     controls = None
     if gap is not None:
         out_shift = gap - (window[1] + opts["margin"])

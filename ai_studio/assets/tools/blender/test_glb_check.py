@@ -31,8 +31,8 @@ def skinned(joints, weights, bind_offset=0.0):
                                                     **({"JOINTS_1": (joints[:, 4:], G.UNSIGNED_BYTE),
                                                         "WEIGHTS_1": (weights[:, 4:], G.FLOAT)}
                                                        if joints.shape[1] > 4 else {})})
-    root = b.add_node("Hips", translation=(0, 1 + bind_offset, 0))
-    b.add_node("Spine", translation=(0, 0.5, 0), parent=root)
+    root = b.add_node("Hips", translation=(0, 1, 0))
+    b.add_node("Spine", translation=(0, 0.5 + bind_offset, 0), parent=root)
     ibm = [np.linalg.inv(G.trs_matrix((0, y, 0), (0, 0, 0, 1), (1, 1, 1))).T.reshape(-1) for y in (1, 1.5)]
     b.json["skins"] = [{"joints": [0, 1], "inverseBindMatrices": b.add_accessor(np.array(ibm), kind="MAT4")}]
     b.add_node("body", mesh=mesh, skin=0)
@@ -55,8 +55,11 @@ class Contract(unittest.TestCase):
 
     def test_bad_pivot_reports_height_and_bounds_centre_separately(self):
         glb = cube(offset=(0.39, 0.53, 0)).to_glb()
-        report = glb_check.check(glb, pivot="floor")
+        report = glb_check.check(glb, pivot="floor-center")
         self.assertTrue({"pivot", "pivot_horizontal"} <= found(report, "medium"))
+        floor = glb_check.check(glb, pivot="floor")
+        self.assertEqual(found(floor, "medium"), {"pivot"})
+        self.assertIn("origin_offset", found(floor, "info"))
         advisory = glb_check.check(glb)
         self.assertEqual(found(advisory), {"origin_offset"})
         self.assertEqual(serious(glb_check.check(cube(offset=(0, -0.5, 0)).to_glb(), pivot="center")), set())
@@ -77,7 +80,7 @@ class Contract(unittest.TestCase):
         b.json["bufferViews"].append({"buffer": 0, "byteOffset": len(b.payload) - len(jpeg), "byteLength": len(jpeg)})
         b.json["images"] = [{"bufferView": len(b.json["bufferViews"]) - 1}, {"uri": "wood.png"}]
         report = glb_check.check(b.to_glb())
-        self.assertIn("jpeg", found(report, "medium"))
+        self.assertIn("jpeg", found(report, "low"))
         self.assertIn("uri", found(report, "high"))
         self.assertIn("jpeg", found(glb_check.check(b.to_glb(), jpeg="info"), "info"))
         self.assertIn("textures", found(glb_check.check(b.to_glb(), textures="none")))
@@ -107,8 +110,8 @@ class Skins(unittest.TestCase):
         self.assertTrue({"influences", "unweighted", "weight_sum", "joint_index"} <= serious(report))
 
     def test_rest_off_bind_and_reference_rig(self):
-        joints = np.tile([0, 0, 0, 0], (8, 1))
-        weights = np.tile([1.0, 0, 0, 0], (8, 1))
+        joints = np.tile([0, 1, 0, 0], (8, 1))
+        weights = np.tile([0.5, 0.5, 0, 0], (8, 1))
         moved = skinned(joints, weights, bind_offset=0.01).to_glb()
         self.assertIn("bind_pose", serious(glb_check.check(moved)))
         reference = skinned(joints, weights).to_glb()
@@ -169,6 +172,22 @@ class Robustness(unittest.TestCase):
             b = G.GlbBuilder()
             b.add_node("box", mesh=b.add_mesh("box", CUBE, FACES), scale=scale)
             self.assertEqual("node_scale" in found(glb_check.check(b.to_glb())), mirrored, scale)
+
+
+class BindAndPivot(unittest.TestCase):
+    def test_centimetre_mesh_under_scaled_armature_is_bound(self):
+        b = G.GlbBuilder()
+        n = len(CUBE)
+        mesh = b.add_mesh("body", CUBE * [50, 170, 50], FACES, extra={
+            "JOINTS_0": (np.zeros((n, 4)), G.UNSIGNED_BYTE), "WEIGHTS_0": (np.tile([1.0, 0, 0, 0], (n, 1)), G.FLOAT)})
+        armature = b.add_node("Armature", scale=(0.01, 0.01, 0.01))
+        hips = b.add_node("Hips", parent=armature)
+        b.json["skins"] = [{"joints": [hips], "inverseBindMatrices": b.add_accessor(np.eye(4).reshape(1, 16),
+                                                                                    kind="MAT4")}]
+        b.add_node("body", mesh=mesh, parent=armature, skin=0)
+        report = glb_check.check(b.to_glb())
+        self.assertNotIn("bind_pose", found(report))
+        self.assertAlmostEqual(report["metrics"]["size"][1], 1.7, places=4)
 
 
 if __name__ == "__main__":

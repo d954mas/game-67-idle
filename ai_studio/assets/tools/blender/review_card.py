@@ -94,7 +94,10 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
     present_passes = [p for p in PASS_ORDER if any(i["pass"] == p for i in images)]
     present_passes += sorted({i["pass"] for i in images} - set(present_passes))
     lookup = {(i["view"], i["pass"]): base_dir / i["file"] for i in images}
-    turntable = [base_dir / i["file"] for i in images if i["view"].startswith("turntable")]
+    spin = [i for i in images if i["view"].startswith("turntable")]
+    spin_pass = next((p for p in PASS_ORDER if any(i["pass"] == p for i in spin)), None)
+    turntable = [(base_dir / i["file"], f"{i.get('azimuth', i.get('frame', ''))}°")
+                 for i in sorted(spin, key=lambda i: i.get("frame", 0)) if i["pass"] == spin_pass]
 
     stats = views.get("stats", {})
     textures = stats.get("textures", [])
@@ -104,7 +107,9 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
     side_w = 420
     width = margin * 3 + grid_w + side_w
     grid_h = len(present_passes) * (cell + label_h + 8)
-    strip_h = (cell // 2 + label_h + 8) if turntable or textures else 0
+    textures = [t for t in textures if t.get("file")]
+    strip_rows = int(bool(turntable)) + int(bool(textures))
+    strip_h = strip_rows * (cell // 2 + label_h + 8)
     height = header_h + grid_h + strip_h + margin * 2
     card = Image.new("RGB", (width, max(height, header_h + 480)), BACKGROUND)
     draw = ImageDraw.Draw(card)
@@ -134,18 +139,21 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
             paste_on_cell(card, lookup.get((view, render_pass)), (x, y + label_h - 6), (cell, cell))
         y += cell + label_h + 8
 
-    if strip_h:
-        small = cell // 2
-        x = margin
-        items = [(p, p.stem) for p in turntable] + [(base_dir / t["file"], f"tex {t.get('name', '')} "
-                                                     f"{'x'.join(map(str, t.get('size', [])))}")
-                                                    for t in textures if t.get("file")]
-        for path, label in items:
-            if x + small > margin + grid_w:
-                break
-            draw.text((x, y), label[:24], fill=MUTED, font=font(12))
+    small = cell // 2
+    fits = max(1, (grid_w + 8) // (small + 8))
+    texture_items = [(base_dir / t["file"], f"{t.get('name', '')} {'x'.join(map(str, t.get('size', [])))}")
+                     for t in textures]
+    for items, title in ((turntable, f"turntable · {spin_pass}"), (texture_items, "textures")):
+        if not items:
+            continue
+        # Spread the frames over the row instead of cutting the spin off after the first few.
+        step = max(1, -(-len(items) // fits))
+        shown = items[::step][:fits]
+        for k, (path, label) in enumerate(shown):
+            x = margin + k * (small + 8)
+            draw.text((x, y), (title if k == 0 else label)[:26], fill=MUTED, font=font(12))
             paste_on_cell(card, path, (x, y + label_h - 6), (small, small))
-            x += small + 8
+        y += small + label_h + 8
 
     sx, sy = margin * 2 + grid_w, header_h
     if game_crop and Path(game_crop).is_file():
@@ -173,15 +181,18 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
                      if f["severity"] != "info"]
     ty += 8
     order = {"high": 0, "medium": 1, "low": 2}
+    drawn = 0
     for f in sorted(findings, key=lambda f: order.get(f["severity"], 3))[:max_findings]:
-        for k, line in enumerate(wrap(draw, f"{f['check']}: {f['message']}", side_w - 40, font(13))[:3]):
+        lines = wrap(draw, f"{f['check']}: {f['message']}", side_w - 40, font(13))[:3]
+        if ty + 18 * len(lines) > card.height - margin - 40:
+            break
+        for k, line in enumerate(lines):
             draw.text((sx + 12, ty), "●" if k == 0 else " ", fill=SEVERITY_COLOUR[f["severity"]], font=font(13))
             draw.text((sx + 28, ty), line, fill=TEXT, font=font(13))
             ty += 18
         ty += 4
-        if ty > card.height - margin - 40:
-            break
-    hidden = len(findings) - max_findings
+        drawn += 1
+    hidden = len(findings) - drawn
     if hidden > 0:
         draw.text((sx + 12, ty), f"+{hidden} more in the JSON reports", fill=MUTED, font=font(13))
 

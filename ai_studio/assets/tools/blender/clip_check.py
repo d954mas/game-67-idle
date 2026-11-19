@@ -81,10 +81,14 @@ def _times(clip, anim, fps):
 
 def check_keys(clip, anim, name, out):
     bad, scale = [], []
-    for (node, path), (times, values, _) in clip.channels(anim).items():
+    for (index, path), (times, values, interp) in clip.channels(anim, by_index=True).items():
+        node = clip.name(index)
         if not (np.isfinite(times).all() and np.isfinite(values).all()):
             bad.append(f"{node}.{path}")
-        elif path == "scale" and (values <= 0).any():
+            continue
+        if interp == "CUBICSPLINE":  # in-tangent, value, out-tangent triplets: tangents may be zero
+            values = values.reshape(len(times), 3, -1)[:, 1]
+        if path == "scale" and (values <= 0).any():
             scale.append(f"{node}: {values.min():.3g}")
     if bad:
         out.append(R.finding("finite", "high", f"{name}: {len(bad)} channels hold NaN or infinity",
@@ -276,12 +280,27 @@ def check_animation(clip, model, anim, joint_ids, opts, lim, findings, row):
     row["duration"] = round(clip.duration(anim), 4)
     if not check_keys(clip, anim, anim, findings):
         return
-    channels = clip.channels(anim)
-    stray = sorted({n for n, _ in channels if n not in model.by_name})
-    if stray:
-        findings.append(R.finding("targets", "info", f"{anim}: {len(stray)} channels target nodes the model "
-                                  "lacks", "", {"animation": anim, "nodes": stray[:SAMPLES]}, len(stray)))
-    ids = joint_ids or sorted({model.by_name[n] for n, _ in channels if n in model.by_name})
+    if clip is model:
+        channels = clip.channels(anim, by_index=True)
+        targets = {i for i, _ in channels}
+    else:
+        channels = clip.channels(anim)
+        stray = sorted({n for n, _ in channels if n not in model.by_name})
+        if stray:
+            findings.append(R.finding("targets", "info", f"{anim}: {len(stray)} channels target nodes the model "
+                                      "lacks", "", {"animation": anim, "nodes": stray[:SAMPLES]}, len(stray)))
+        targeted = {n for n, _ in channels}
+        clip_nodes = {c["target"]["node"] for c in clip.json["animations"][clip.animation_index(anim)]["channels"]
+                      if "node" in c["target"]}
+        ambiguous = sorted(set(model.duplicate_names()) & targeted | set(clip.duplicate_names(clip_nodes)))
+        if ambiguous:
+            findings.append(R.finding("ambiguous_targets", "medium", f"{anim}: {len(ambiguous)} channel targets "
+                                      "share their name with another node; only the first node of each name "
+                                      "is animated", "give every animated node a unique name in the clip and "
+                                      "the model", {"animation": anim, "nodes": ambiguous[:SAMPLES]},
+                                      len(ambiguous), 0))
+        targets = {model.by_name[n] for n in targeted if n in model.by_name}
+    ids = joint_ids or sorted(targets)
     times = _times(clip, anim, opts["fps"])
     worlds = [model.posed_world(channels, t) for t in times]
     missing = [model.name(i) for i in ids if i not in worlds[0]]
@@ -309,6 +328,32 @@ def check_animation(clip, model, anim, joint_ids, opts, lim, findings, row):
     if not feet:
         findings.append(R.finding("feet", "info", f"{anim}: no foot joints found; slide not measured",
                                   "pass --feet LeftFoot RightFoot", {"animation": anim}))
+
+
+def group_by_cause(findings):
+    """One finding per check and severity, naming every clip it hit, worst clip first; a file of 50
+    clips then reads as a few causes instead of 50 lines."""
+    groups, out = {}, []
+    for f in findings:
+        anim = (f.get("where") or {}).get("animation")
+        if anim is None:
+            out.append(f)
+        else:
+            groups.setdefault((f["check"], f["severity"]), []).append(f)
+    for (check, severity), items in groups.items():
+        clips = list(dict.fromkeys(f["where"]["animation"] for f in items))
+        if len(clips) == 1:
+            out.extend(items)
+            continue
+        items.sort(key=lambda f: -f["value"] if isinstance(f.get("value"), (int, float)) else 0)
+        clips = list(dict.fromkeys(f["where"]["animation"] for f in items))
+        worst = items[0]
+        out.append(R.finding(check, severity, f"{len(clips)} clips: {', '.join(clips[:8])}"
+                             f"{' ...' if len(clips) > 8 else ''}; worst {worst['message']}", worst.get("hint", ""),
+                             {"animation": worst["where"]["animation"], "clips": clips,
+                              "items": [{**f["where"], "message": f["message"]} for f in items]},
+                             worst.get("value"), worst.get("limit")))
+    return out
 
 
 def check(path_or_glb, **options):
@@ -339,6 +384,7 @@ def check(path_or_glb, **options):
         rows.append(row)
         R.guarded(findings, f"animation {anim}", check_animation, clip, model, anim, joint_ids, opts, lim,
                   findings, row)
+    findings = group_by_cause(findings)
     shown = {k: (v.label if isinstance(v, G.Glb) else v) for k, v in opts.items()}
     metrics = {"animations": len(rows), "body_scale": round(float(scale), 3), "per_animation": rows}
     return R.make_report(TOOL, clip.label, findings, metrics, shown,

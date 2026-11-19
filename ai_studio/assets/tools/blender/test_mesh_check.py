@@ -129,5 +129,22 @@ class NonManifold(unittest.TestCase):
         out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
         self.assertEqual(out.split(), ["3", "1", "0"])
 
+class Winding(unittest.TestCase):
+    def test_mirrored_node_flips_winding_back(self):
+        b = G.GlbBuilder()
+        b.add_node("box", mesh=b.add_mesh("box", CUBE, FACES), scale=(-1, 1, 1))
+        self.assertNotIn("inside_out", checks(mesh_check.check(b.to_glb())))
+        b = G.GlbBuilder()
+        b.add_node("box", mesh=b.add_mesh("box", CUBE, FACES[:, ::-1]), scale=(-1, 1, 1))
+        self.assertIn("inside_out", checks(mesh_check.check(b.to_glb()), "high"))
+
+    def test_reversed_twin_is_double_sided_not_z_fighting(self):
+        plane = np.array([[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], float)
+        faces = np.array([[0, 2, 1], [0, 3, 2], [0, 1, 2], [0, 2, 3]])
+        report = mesh_check.check(scene(faces, plane))
+        self.assertIn("double_sided", checks(report, "info"))
+        self.assertNotIn("duplicate", checks(report))
+
+
 if __name__ == "__main__":
     unittest.main()

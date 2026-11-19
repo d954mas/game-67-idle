@@ -10,23 +10,31 @@ command). They exist to save time: use what helps, write your own when it does n
 
 ## Ready Tools
 
-- `run_blender.py <script.py> -- <args>` runs headless Blender 5.2 with the Studio
-  library importable (`from ai_studio.assets.tools.blender.lib import bpy_scene,
-  bpy_io, glb, color`). Run it outside the sandbox: the sandbox blocks `.exe`.
-- `review.py <model.glb>` renders front/side/¾ views (beauty, clay, wire), runs every
-  applicable check and writes one review card per asset. Add `--game-camera` for the
-  game's view, `--game-crop` for the in-game screenshot, `--contacts` or `--floating`
-  for attachment checks.
-- Single checks, all advisory by default (`--strict` makes them a gate):
-  `mesh_check.py` (holes, flips, unwelded seams), `glb_check.py` (pivot, bounds,
-  normals, textures, skin, `--reference-rig`), `contact_check.py` (parts touch, nothing
-  floats), `clip_check.py` (foot slide, soles under the floor, pops).
-- `lib/color.py` `PaletteAtlas` for palette textures; `lib/glb.py` to read, pose and
-  write GLB without Blender.
+Look at and check any GLB in one call, from the Studio root or a game repo (paths resolve
+against the folder you call from; folders and `*.glb` globs expand):
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs ai_studio/assets/tools/blender/review.py assets/models/crate.glb
+```
+
+Then open `tmp/review/<stem>/card.png` with Read: views, triangle counts, textures and
+findings on one image. The terminal already lists every finding with a fix hint.
+
+- Rendering starts Blender, which the agent sandbox blocks: run it outside the sandbox, or add
+  `--no-render` to get the checks alone in milliseconds.
+- `--game-camera '{"height":1.8,"behind":2,"pitch":16,"fov_y":55}'` adds the game's view,
+  `--game-crop shot.png` puts the in-game screenshot on the card, `--turntable 8`,
+  `--animation Walk --time 0.4`, `--pivot floor`, `--floating`, `--contacts c.json`.
+- Single checks (`mesh_check.py`, `glb_check.py`, `contact_check.py`, `clip_check.py`) take
+  the same paths; they advise by default and `--strict` turns any of them into a gate.
+- `run_blender.py <script.py> -- <args>` runs your own build script in headless Blender 5.2
+  with `from ai_studio.assets.tools.blender.lib import bpy_scene, bpy_io, glb, color`.
+- `lib/glb.py` reads, poses and writes GLB without Blender; `lib/color.py` `PaletteAtlas`
+  allocates palette rows and refuses to overflow.
 
 ## What Has Helped Before
 
-From `ai_studio/assets/tools/blender/production_lessons.md`:
+Suggestions from `ai_studio/assets/tools/blender/production_lessons.md`; use what fits the asset:
 
 - Show a cheap fake shot from the game camera before building; style misses cost more
   than any technical defect.
@@ -36,7 +44,8 @@ From `ai_studio/assets/tools/blender/production_lessons.md`:
   base rather than sculpting a pack mesh locally.
 - Keep shape recipes in the game and import the shared library instead of copying
   scripts between games.
-- Run contact and clip checks before showing animation or attachments to the lead.
+- Contact and clip checks catch floating parts, foot slide and broken seated poses before the
+  lead sees them.
 
 ## Full Gate (When Wanted)
 

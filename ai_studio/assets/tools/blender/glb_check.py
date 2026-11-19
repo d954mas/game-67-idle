@@ -2,7 +2,7 @@
 formats, vertex colour encoding, node transforms, pivot, joint count and skin weights; optionally the
 rig against a reference rig.
 
-    python glb_check.py model.glb [--pivot floor|center|top|any] [--textures any|none|png]
+    python glb_check.py model.glb [--pivot floor|floor-center|center|top|any] [--textures any|none|png]
         [--color-encoding any|float|u8] [--identity-nodes] [--max-joints N] [--reference-rig rig.glb]
 
 The bounds and the bounds centre are reported separately from the origin: a consumer that places a
@@ -19,12 +19,13 @@ import numpy as np  # noqa: E402
 from ai_studio.assets.tools.blender.lib import glb as G, report as R  # noqa: E402
 
 TOOL = "glb_check"
-DEFAULTS = {"normal_tolerance": 0.01, "jpeg": "medium", "textures": "any", "color_encoding": "any",
+DEFAULTS = {"normal_tolerance": 0.01, "jpeg": "low", "textures": "any", "color_encoding": "any",
             "identity_nodes": False, "pivot": "any", "pivot_tolerance": 0.001, "max_joints": None,
             "max_influences": 4, "influence_epsilon": 1e-3, "weight_sum_tolerance": 1e-3,
             "bind_tolerance": 1e-4, "seam_weight_tolerance": 1e-3, "weld": 1e-6, "reference_rig": None,
             "rig_translation_tolerance": 1e-4, "rig_rotation_tolerance_deg": 0.01}
 SAMPLES = 5
+PIVOTS = ("floor", "floor-center", "center", "top", "any")
 
 
 def _r(values, digits=4):
@@ -206,25 +207,26 @@ def check_pivot(glb, opts, out, metrics):
     metrics.update(bounds_min=_r(lo), bounds_max=_r(hi), bounds_centre=_r(centre), size=_r(hi - lo))
     rule = opts["pivot"]
     horizontal = float(np.hypot(centre[0], centre[2]))
-    vertical = {"floor": lo[1], "top": hi[1], "center": centre[1]}.get(rule)
+    vertical = {"floor": lo[1], "floor-center": lo[1], "top": hi[1], "center": centre[1]}.get(rule)
     hint_h = ("centre the origin under the model, or place it by its origin everywhere: never by the "
               "bounds or collider centre")
-    if rule == "any":
-        if horizontal > tol or abs(lo[1]) > tol:
-            out.append(R.finding("origin_offset", "info",
-                                 f"bounds centre sits at ({centre[0]:+.3f}, {centre[1]:+.3f}, {centre[2]:+.3f}) "
-                                 f"from the origin; bottom at y {lo[1]:+.3f}", hint_h,
-                                 {"bounds_centre": _r(centre), "bounds_min": _r(lo)}))
-        return
-    if abs(vertical) > tol:
-        edge = {"floor": "bottom", "top": "top", "center": "bounds centre"}[rule]
+    if rule != "any" and abs(vertical) > tol:
+        edge = {"floor": "bottom", "floor-center": "bottom", "top": "top", "center": "bounds centre"}[rule]
         out.append(R.finding("pivot", "medium", f"{edge} is at y {vertical:+.4f}, the {rule} pivot wants 0",
                              f"move the origin to the {rule} point (set origin, apply) or move the mesh",
                              {"bounds_min": _r(lo), "bounds_max": _r(hi)}, round(float(vertical), 4), tol))
-    if horizontal > tol:
+    # Only floor-center and center promise a centred origin; an asymmetric model (a cart, a wall
+    # lamp) is centred by its maker's choice, so elsewhere the offset is a placement note.
+    judged = rule in ("floor-center", "center")
+    if horizontal > tol and judged:
         out.append(R.finding("pivot_horizontal", "medium",
                              f"origin is {centre[0]:+.4f} x, {centre[2]:+.4f} z from the bounds centre",
                              hint_h, {"bounds_centre": _r(centre)}, round(horizontal, 4), tol))
+    elif horizontal > tol or rule == "any" and abs(lo[1]) > tol:
+        out.append(R.finding("origin_offset", "info",
+                             f"bounds centre sits at ({centre[0]:+.3f}, {centre[1]:+.3f}, {centre[2]:+.3f}) "
+                             f"from the origin; bottom at y {lo[1]:+.3f}", hint_h,
+                             {"bounds_centre": _r(centre), "bounds_min": _r(lo)}))
 
 
 def _seam_tears(positions, joints, weights, weld, tolerance):
@@ -248,6 +250,23 @@ def _seam_tears(positions, joints, weights, weld, tolerance):
     return int(np.sum(diff > tolerance)), float(diff.max())
 
 
+def _bind_spread(glb, skin, world):
+    """(metres, joint) of the largest disagreement between joints about the mesh-to-world transform
+    at rest. Rest equals bind when every joint world x inverse bind is one and the same matrix; that
+    matrix need not be identity (a centimetre mesh under a 0.01 armature carries the scale in it)."""
+    palette = glb.skin_palette(world, skin)
+    points = [glb.accessor(prim["attributes"]["POSITION"])
+              for node in glb.nodes if node.get("skin") == skin and "mesh" in node
+              for prim in glb.json["meshes"][node["mesh"]]["primitives"] if "POSITION" in prim["attributes"]]
+    points = np.vstack(points) if points else np.zeros((1, 3))
+    lo, hi = points.min(axis=0), points.max(axis=0)
+    corners = np.array([[x, y, z, 1.0] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])])
+    placed = np.einsum("jab,cb->jca", palette, corners)[..., :3]
+    spread = np.linalg.norm(placed - np.median(placed, axis=0), axis=2).max(axis=1)
+    worst = int(np.argmax(spread))
+    return float(spread[worst]), glb.name(glb.json["skins"][skin]["joints"][worst])
+
+
 def check_skins(glb, opts, out, metrics):
     doc = glb.json
     skins = doc.get("skins", [])
@@ -265,14 +284,14 @@ def check_skins(glb, opts, out, metrics):
             out.append(R.finding("joints_in_scene", "high", f"skin {k}: {len(missing)} joints not in the scene",
                                  "export the armature with the mesh", {"joints": missing[:SAMPLES]}))
             continue
-        ibm = glb.inverse_binds(k)
-        error = max(float(np.abs(world[j] @ ibm[p] - np.eye(4)).max()) for p, j in enumerate(skin["joints"]))
-        metrics.setdefault("bind_error", []).append(round(error, 7))
+        error, joint = _bind_spread(glb, k, world)
+        metrics.setdefault("bind_error_m", []).append(round(error, 7))
         if error > opts["bind_tolerance"]:
             out.append(R.finding("bind_pose", "medium",
-                                 f"skin {k}: rest pose differs from the bind pose by {error:.2e}",
-                                 "apply the rest pose as bind pose before export, or check the armature "
-                                 "object transform", {"skin": k}, round(error, 7), opts["bind_tolerance"]))
+                                 f"skin {k}: at rest the joints disagree on where the mesh is by {error:.2e} m "
+                                 f"(worst {joint}); the unanimated model deforms",
+                                 "apply the rest pose as bind pose before export", {"skin": k, "joint": joint},
+                                 round(error, 7), opts["bind_tolerance"]))
     for i, node in enumerate(glb.nodes):
         if "skin" not in node or "mesh" not in node:
             continue
@@ -365,7 +384,7 @@ def check_reference_rig(glb, opts, out, metrics):
 
 def check(path_or_glb, **options):
     opts = R.resolve_options(TOOL, DEFAULTS, overrides=options)
-    for key, allowed in (("pivot", ("floor", "center", "top", "any")), ("textures", ("any", "none", "png")),
+    for key, allowed in (("pivot", PIVOTS), ("textures", ("any", "none", "png")),
                          ("color_encoding", ("any", "float", "u8")), ("jpeg", R.SEVERITIES + ("off",))):
         if opts[key] not in allowed:
             raise ValueError(f"{TOOL}: {key} must be one of {allowed}, not {opts[key]!r}")
@@ -391,10 +410,11 @@ def check(path_or_glb, **options):
 
 def _configure(parser):
     parser.add_argument("models", nargs="+", help="GLB files")
-    parser.add_argument("--pivot", choices=("floor", "center", "top", "any"))
+    parser.add_argument("--pivot", choices=PIVOTS, help="floor and top judge height only; floor-center and "
+                        "center also want the origin on the bounds centre")
     parser.add_argument("--pivot-tolerance", type=float, help="metres (default 0.001)")
     parser.add_argument("--textures", choices=("any", "none", "png"))
-    parser.add_argument("--jpeg", choices=R.SEVERITIES + ("off",), help="severity of JPEG images (default medium)")
+    parser.add_argument("--jpeg", choices=R.SEVERITIES + ("off",), help="severity of JPEG images (default low)")
     parser.add_argument("--color-encoding", choices=("any", "float", "u8"))
     parser.add_argument("--identity-nodes", action="store_true", default=None)
     parser.add_argument("--normal-tolerance", type=float)

@@ -117,8 +117,8 @@ class PaletteAtlas:
         return Path(path)
 
 
-def write_png(path, rgba):
-    """Minimal RGBA8 PNG writer: Blender's Python has no PIL."""
+def write_png(path, rgba, level=6):
+    """Minimal RGBA8 PNG writer: Blender's Python has no PIL. `level` is zlib 0-9."""
     rgba = np.ascontiguousarray(rgba, np.uint8)
     height, width = rgba.shape[:2]
     raw = b"".join(b"\0" + rgba[y].tobytes() for y in range(height))
@@ -128,7 +128,7 @@ def write_png(path, rgba):
                 + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF))
 
     png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
-           + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+           + chunk(b"IDAT", zlib.compress(raw, level)) + chunk(b"IEND", b""))
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(png)

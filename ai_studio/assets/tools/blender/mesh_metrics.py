@@ -78,7 +78,19 @@ def triangle_topology(points, faces, *, weld_tolerance=0.0, area_epsilon=1.0e-10
     two_face = np.isin(pair, keys[counts == 2])
     cross = np.cross(points[faces[:, 1]] - points[faces[:, 0]], points[faces[:, 2]] - points[faces[:, 0]])
     degenerate = 0.5 * np.linalg.norm(cross, axis=1) <= area_epsilon
-    duplicate = f - len(np.unique(np.sort(faces, axis=1), axis=0)) if f else 0
+    duplicate = double_sided = 0
+    if f:
+        # Repeats with the same winding z-fight; a reversed copy is a back face (double-sided sheet).
+        _, group = np.unique(np.sort(faces, axis=1), axis=0, return_inverse=True)
+        group = group.reshape(-1)
+        start = np.argmin(faces, axis=1)
+        rolled = faces[np.arange(f)[:, None], (start[:, None] + np.arange(3)) % 3]
+        orient = (rolled[:, 1] < rolled[:, 2]).astype(np.int64)
+        _, same = np.unique(group * 2 + orient, return_counts=True)
+        duplicate = int(np.sum(same - 1))
+        sides = np.zeros((group.max() + 1, 2), bool)
+        sides[group, orient] = True
+        double_sided = int(np.sum(sides.all(axis=1)))
     component = face_components(faces, n) if f else np.zeros(0, np.int64)
     occurrence_face = np.tile(np.arange(f), 3)[real]
     open_face = occurrence_face[counts[inverse] == 1]
@@ -97,6 +109,7 @@ def triangle_topology(points, faces, *, weld_tolerance=0.0, area_epsilon=1.0e-10
         "miswound_edges": int(np.sum((directed > 1) & two_face)),
         "degenerate_faces": int(np.sum(degenerate)),
         "duplicate_faces": int(duplicate),
+        "double_sided_faces": double_sided,
         "components": components,
         "open_components": int(len(open_components)),
         "signed_volume": float(volume_per_face.sum()),

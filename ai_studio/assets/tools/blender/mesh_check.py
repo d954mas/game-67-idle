@@ -152,7 +152,9 @@ def _groups(glb, scope, include):
     for name, members in groups.items():
         base, faces = 0, []
         for part in members:
-            faces.append(part.faces + base)
+            # glTF reverses the winding of a node whose transform mirrors (negative determinant).
+            mirrored = np.linalg.det(part.world[:3, :3]) < 0
+            faces.append((part.faces[:, ::-1] if mirrored else part.faces) + base)
             base += len(part.positions)
         out.append((name, np.vstack([p.positions for p in members]), np.vstack(faces)))
     return out
@@ -167,7 +169,8 @@ def check_part(name, points, faces, opts):
     where = {"part": name}
     loops = boundary_loops(t["points"], t["boundary"])
     row = {k: t[k] for k in ("triangles", "vertices", "welded_vertices", "boundary_edges", "non_manifold_edges",
-                             "miswound_edges", "degenerate_faces", "duplicate_faces", "components",
+                             "miswound_edges", "degenerate_faces", "duplicate_faces", "double_sided_faces",
+                             "components",
                              "open_components")}
     row.update(part=name, profile=profile, boundary_loops=len(loops),
                signed_volume=round(t["signed_volume"], 6) if closed else None)
@@ -216,6 +219,10 @@ def check_part(name, points, faces, opts):
             "degenerate", sev["degenerate"], f"{name}: {t['degenerate_faces']} zero-area faces",
             f"dissolve degenerate faces on {name} (Mesh > Clean Up > Degenerate Dissolve)", where,
             t["degenerate_faces"], 0))
+    if t["double_sided_faces"]:
+        findings.append(R.finding(
+            "double_sided", "info", f"{name}: {t['double_sided_faces']} faces have a reversed twin (double-sided)",
+            "", where, t["double_sided_faces"]))
     if t["duplicate_faces"]:
         findings.append(R.finding(
             "duplicate", sev["duplicate"], f"{name}: {t['duplicate_faces']} faces repeat another face (z-fighting)",

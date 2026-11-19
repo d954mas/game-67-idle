@@ -19,9 +19,13 @@ node ai_studio/dev_environment/python_run.mjs ai_studio/assets/tools/blender/rev
   <game>/assets/models/crate.glb <game>/assets/models/lamp.glb --out tmp/review
 ```
 
+From a game repo the same command works with paths relative to that repo (folders and
+`*.glb` globs expand). In the agent sandbox, which blocks Blender, add `--no-render`.
+
 One call renders front, right and ¾ views (beauty, clay, wire), runs every
 applicable check and writes `tmp/review/<stem>/card.png` per model: views,
-triangle/vertex/material/texture counts, size, and the check findings. All
+triangle/vertex/material/texture counts, size, and the check findings; the terminal
+prints each finding with a fix hint. All
 models render in one Blender start (about 4 s for the first, about 1–2 s for each
 next one); checks take milliseconds.
 

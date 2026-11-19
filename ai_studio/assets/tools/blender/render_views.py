@@ -44,6 +44,7 @@ ORTHO = {"front": (0, -1, 0), "back": (0, 1, 0), "right": (1, 0, 0), "left": (-1
 GAME = {"height": 1.8, "behind": 2.0, "offset": 0.0, "pitch": 16.0, "fov_y": 55.0, "yaw": 0.0,
         "target": [0.0, 0.0, 0.0], "aspect": 16 / 9}
 MARGIN = 1.08
+TEXTURE_PREVIEW = 512
 CLAY = (0.55, 0.55, 0.55)
 
 
@@ -324,7 +325,10 @@ def save_textures(out, skip):
         if image.source != "FILE" or image in skip or not image.size[0]:
             continue
         file = Path("textures") / f"{safe(image.name)}.png"
-        write_png(out / file, np.round(np.clip(read_pixels(image), 0, 1) * 255).astype(np.uint8))
+        pixels = read_pixels(image)
+        # The card shows a thumbnail; a full 4K dump through Python zlib costs seconds and tens of MB.
+        step = max(1, -(-max(image.size) // TEXTURE_PREVIEW))
+        write_png(out / file, np.round(np.clip(pixels[::step, ::step], 0, 1) * 255).astype(np.uint8), level=1)
         textures.append({"name": image.name, "size": list(image.size), "file": file.as_posix()})
     return textures
 

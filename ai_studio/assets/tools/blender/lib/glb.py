@@ -434,8 +434,9 @@ class Glb:
             raise GlbError(f"{self.label}: no animation {name_or_index!r}; have {names}")
         return names.index(name_or_index)
 
-    def channels(self, anim=0):
-        """{(node name, path): (times, values, interpolation)} of one animation."""
+    def channels(self, anim=0, by_index=False):
+        """{(node name, path): (times, values, interpolation)} of one animation; keyed by node index
+        with `by_index`, which keeps two nodes of the same name apart (use it within one file)."""
         a = self.json["animations"][self.animation_index(anim)]
         out = {}
         for c in a["channels"]:
@@ -443,35 +444,43 @@ class Glb:
             if "node" not in target:
                 continue
             s = a["samplers"][c["sampler"]]
-            out[(self.name(target["node"]), target["path"])] = (
+            key = target["node"] if by_index else self.name(target["node"])
+            out[(key, target["path"])] = (
                 self.accessor(s["input"])[:, 0], self.accessor(s["output"]), s.get("interpolation", "LINEAR"))
         return out
 
+    def duplicate_names(self, nodes=None):
+        """Names carried by more than one node (optionally only among `nodes`)."""
+        names = [self.name(i) for i in (range(len(self.nodes)) if nodes is None else nodes)]
+        every = [self.name(i) for i in range(len(self.nodes))]
+        return sorted({n for n in names if every.count(n) > 1})
+
     def duration(self, anim=0):
-        return max((float(times[-1]) for times, _, _ in self.channels(anim).values()), default=0.0)
+        return max((float(times[-1]) for times, _, _ in self.channels(anim, True).values()), default=0.0)
 
     def key_times(self, anim=0):
-        times = [t for t, _, _ in self.channels(anim).values()]
+        times = [t for t, _, _ in self.channels(anim, True).values()]
         return np.unique(np.concatenate(times)) if times else np.zeros(0)
 
     def posed_world(self, channels, t, scene=None):
-        """World matrices with `channels` (from this or another file, keyed by node name)
-        applied at time t; nodes the clip does not animate keep their rest."""
+        """World matrices with `channels` applied at time t; nodes the clip does not animate keep their
+        rest. Channels keyed by node index (this file) hit that node; keyed by name (another file)
+        they hit the first node of that name only, so duplicated names never move several nodes."""
         def local(i):
             nm = self.name(i)
-            if not any((nm, p) in channels for p in ("translation", "rotation", "scale")):
+            first = self.by_name.get(nm) == i
+            found = {}
+            for path in ("translation", "rotation", "scale"):
+                if (i, path) in channels:
+                    found[path] = channels[(i, path)]
+                elif first and (nm, path) in channels:
+                    found[path] = channels[(nm, path)]
+            if not found:
                 return self.local_matrix(i)
-            t0, r0, s0 = self.local_trs(i)
-            if (nm, "translation") in channels:
-                times, values, interp = channels[(nm, "translation")]
-                t0 = sample_channel(times, values, t, "translation", interp)
-            if (nm, "rotation") in channels:
-                times, values, interp = channels[(nm, "rotation")]
-                r0 = sample_channel(times, values, t, "rotation", interp)
-            if (nm, "scale") in channels:
-                times, values, interp = channels[(nm, "scale")]
-                s0 = sample_channel(times, values, t, "scale", interp)
-            return trs_matrix(t0, r0, s0)
+            trs = dict(zip(("translation", "rotation", "scale"), self.local_trs(i)))
+            for path, (times, values, interp) in found.items():
+                trs[path] = sample_channel(times, values, t, path, interp)
+            return trs_matrix(trs["translation"], trs["rotation"], trs["scale"])
         return self.walk(local, scene)
 
 
