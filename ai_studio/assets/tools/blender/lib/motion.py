@@ -40,18 +40,18 @@ def _horizontal_distance(a, b):
     return math.hypot(a[0] - b[0], a[1] - b[1])
 
 
-def detect_contacts(ankles, fps, leg_length, height_frac=0.12, speed_frac=0.8, min_run=3, max_gap=2):
+def detect_contacts(ankles, fps, leg_length, height_frac=0.12, speed_frac=0.8, min_run=3, max_gap=2, floor=None):
     """Per-frame planted flags for one foot.
 
-    A frame is planted when the ankle is within height_frac*leg_length of its lowest
-    point in the clip and moves horizontally slower than speed_frac*leg_length per
+    A frame is planted when the ankle is within height_frac*leg_length of `floor` (default: its
+    lowest point in the clip) and moves horizontally slower than speed_frac*leg_length per
     second. Gaps up to max_gap frames inside a plant are filled, then plants shorter
     than min_run frames are dropped, so single-frame flicker never pins a foot.
     """
     count = len(ankles)
     if count == 0:
         return []
-    floor = min(p[2] for p in ankles)
+    floor = min(p[2] for p in ankles) if floor is None else floor
     height_limit = height_frac * leg_length
     speed_limit = speed_frac * leg_length
     flags = []
@@ -67,6 +67,12 @@ def detect_contacts(ankles, fps, leg_length, height_frac=0.12, speed_frac=0.8, m
         if start_b - end_a - 1 <= max_gap:
             for i in range(end_a + 1, start_b):
                 flags[i] = True
+    return drop_short_runs(flags, min_run)
+
+
+def drop_short_runs(flags, min_run=3):
+    """`flags` with True runs shorter than min_run frames cleared, so flicker never pins a foot."""
+    flags = list(flags)
     for start, end in contact_runs(flags):
         if end - start + 1 < min_run:
             for i in range(start, end + 1):

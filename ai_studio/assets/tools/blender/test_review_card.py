@@ -62,5 +62,14 @@ class PoseRows(unittest.TestCase):
             self.assertGreaterEqual(heights[1] - heights[0], 3 * 72)
 
 
+class Strips(unittest.TestCase):
+    def test_each_view_gets_its_own_strip(self):
+        frames = [{"animation": "Walk", "base_view": view, "time": t, "file": "x.png"}
+                  for t in (0.2, 0.0) for view in ("front", "three_quarter")]
+        strips = review_card.filmstrips(frames)
+        self.assertEqual([label for label, _ in strips], ["Walk · front", "Walk · three_quarter"])
+        self.assertEqual([f["time"] for f in strips[0][1]], [0.0, 0.2])
+
+
 if __name__ == "__main__":
     unittest.main()

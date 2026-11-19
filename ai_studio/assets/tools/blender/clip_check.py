@@ -8,8 +8,8 @@ Thresholds are physical (m/s, m/s^2), so the sampling rate does not move them, a
 the model's height against a 1.75 m human (--body-scale 1 keeps them absolute). Foot joints come from
 --feet, else common names (mixamorig:LeftFoot, foot_l, LeftFoot, *Foot*) are detected. Clips with root
 motion are judged in world space; an in-place locomotion clip shows its stride as slide.
-Slide is measured on skinned sole points (heel, middle, toe), each planted only while near its lowest
-height and slow. --airborne GLOB... names clips held or thrown by another actor: no slide or floor findings.
+Slide is measured on a grid of skinned sole points, each planted while near the sole's lowest height
+and slow; a plant slides by its least-moving spot, so a pivot on the heel or ball is not a slide. --airborne GLOB... names clips held or thrown by another actor: no slide or floor findings.
 """
 import fnmatch
 import re
@@ -179,9 +179,9 @@ def _descendants(model, i):
 
 
 def sole_vertices(model, feet, height):
-    """{foot: vertex indices}: per foot the lowest rest vertex of the heel, middle and toe thirds of
-    its sole (skinned vertices led by the foot joint or a joint below it, within `height` of the
-    lowest). Feet without such vertices are left out."""
+    """{foot: vertex indices}: per foot the lowest rest vertex of each cell of a 4 x 3 (heel to toe,
+    side to side) grid over its sole (skinned vertices led by the foot joint or a joint below it,
+    within `height` of the lowest). Feet without such vertices are left out."""
     nodes = [i for i, n in enumerate(model.nodes) if "skin" in n and "mesh" in n]
     owner = model.skin_vertex_joints(nodes) if nodes else None
     if owner is None:
@@ -197,21 +197,48 @@ def sole_vertices(model, feet, height):
         led, pts = led[low], pts[low]
         flat = pts[:, [0, 2]] - pts[:, [0, 2]].mean(axis=0)
         axis = np.linalg.svd(flat, full_matrices=False)[2][0] if len(pts) > 1 else np.array([1.0, 0.0])
-        along = flat @ axis
-        edges = np.linspace(along.min(), along.max(), 4)
+        cell = []
+        for v, bins in ((flat @ axis, 4), (flat @ (axis[1], -axis[0]), 3)):
+            cell.append(np.minimum((bins * (v - v.min()) / max(float(np.ptp(v)), 1e-9)).astype(int), bins - 1))
         picks = []
-        for a, b in zip(edges[:-1], edges[1:]):
-            third = np.flatnonzero((along >= a) & (along <= b))
-            if len(third):
-                picks.append(int(led[third[np.argmin(pts[third, 1])]]))
+        for key in set(zip(cell[0].tolist(), cell[1].tolist())):
+            members = np.flatnonzero((cell[0] == key[0]) & (cell[1] == key[1]))
+            picks.append(int(led[members[np.argmin(pts[members, 1])]]))
         out[foot] = sorted(set(picks))
     return out
 
 
+def plant_slide(points):
+    """(slide, path) of one plant from (frames, points, 2) horizontal planted sole points.
+
+    A foot pivoting on its heel or ball keeps that spot still; a slide moves all of it. So the sole
+    is followed as a rigid 2D motion from the plant's first frame, and the slide is the travel of its
+    least-moving spot: the sole points, their midpoints and centre."""
+    first = points[0]
+    spots = first
+    if len(first) > 1:
+        pairs = (spots[:, None] + spots[None]) / 2
+        spots = np.vstack([pairs.reshape(-1, 2), first.mean(axis=0)[None]])
+    centre0 = first.mean(axis=0)
+    a = first - centre0
+    moved = []
+    for frame in points:
+        centre = frame.mean(axis=0)
+        b = frame - centre
+        angle = np.arctan2((a[:, 0] * b[:, 1] - a[:, 1] * b[:, 0]).sum(), (a * b).sum()) if len(a) > 1 else 0.0
+        c, s = np.cos(angle), np.sin(angle)
+        rel = spots - centre0
+        moved.append(np.c_[c * rel[:, 0] - s * rel[:, 1], s * rel[:, 0] + c * rel[:, 1]] + centre)
+    moved = np.array(moved)
+    travel = np.linalg.norm(moved - spots, axis=2).max(axis=0)
+    best = int(np.argmin(travel))
+    return float(travel[best]), float(np.linalg.norm(np.diff(moved[:, best], axis=0), axis=1).sum())
+
+
 def check_feet(model, feet, names, positions, times, opts, anim, out, row, soles=None):
-    """Planted-foot drift of sole points (heel, middle, toe; the ankle joint without a skinned mesh),
-    each judged planted while it is near its lowest height and slow: a heel that lifts in a lunge or
-    a pivot is not a plant. An in-place clip (feet end where they started) is judged in the frame of
+    """Planted-foot drift of sole points (a grid over the sole; the ankle joint without a skinned mesh),
+    each judged planted while it is near the sole's lowest height and slow: a heel that lifts in a
+    lunge is not a plant, and a plant slides by its least-moving spot (see plant_slide). An in-place clip (feet end where they started) is judged in the frame of
     the treadmill it implies: the median velocity of the feet while they are low."""
     if len(times) < 4 or not feet:
         return
@@ -243,16 +270,23 @@ def check_feet(model, feet, names, positions, times, opts, anim, out, row, soles
             height = opts["plant_height"] / legs[foot]
         else:
             points, height = [tr], 0.12
-        drift, at, planted, total = 0.0, None, np.zeros(len(times), bool), 0.0
-        for p in points:
-            track = [tuple(q) for q in p]
-            flags = motion.detect_contacts(track, fps, legs[foot], height_frac=height)
-            planted |= np.array(flags, bool)
-            total = max(total, motion.foot_slide(track, flags))
-            for start, end in motion.contact_runs(flags):
-                d = np.linalg.norm(p[start:end + 1, :2] - p[start, :2], axis=1)
-                if d.max() > drift:
-                    drift, at = float(d.max()), float(times[start])
+        # Sole points are judged against the sole's lowest point, so an edge vertex that sits higher
+        # never counts as down; the ankle alone is judged against its own lowest point.
+        floor = min(float(p[:, 2].min()) for p in points) if len(points) > 1 else None
+        flags = np.array([motion.detect_contacts([tuple(q) for q in p], fps, legs[foot], height_frac=height,
+                                                 floor=floor) for p in points], bool)
+        flat = np.stack([p[:, :2] for p in points], axis=1)
+        planted = flags.any(axis=0)
+        drift, at, total = 0.0, None, 0.0
+        for start, end in motion.contact_runs(planted.tolist()):
+            # The sole points down for most of the plant carry it; a heel or toe that only touches at
+            # its ends rolls in or out of it and is not followed.
+            share = flags[:, start:end + 1].mean(axis=1)
+            core = share >= min(0.5, share.max())
+            d, path = plant_slide(flat[start:end + 1, core])
+            total += path
+            if d > drift:
+                drift, at = d, float(times[start])
         row["feet"][foot] = {"planted_frames": int(planted.sum()), "max_drift_m": round(drift, 4),
                              "slide_total_m": round(total, 4), "points": "sole" if points[0] is not tr else "ankle"}
         if drift > opts["slide"]:

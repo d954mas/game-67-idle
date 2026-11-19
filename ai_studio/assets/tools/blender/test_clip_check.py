@@ -117,6 +117,27 @@ class ClipCheck(unittest.TestCase):
         self.assertNotIn("foot_slide", found(report))
         self.assertEqual(report["metrics"]["per_animation"][0]["feet"]["LeftFoot"]["points"], "sole")
 
+    def test_foot_pivoting_on_its_toe_is_not_a_slide(self):
+        b = G.GlbBuilder()
+        add_rig(b)
+        model = b.to_glb()
+        toe = clip_check.sole_vertices(model, ["LeftFoot"], 0.01)["LeftFoot"][-1]
+        pivot = model.skinned_points({i: m[None] for i, m in model.world_rest().items()},
+                                     [model.by_name["body"]], [toe])[0, 0]
+        angle = np.radians(60) * T
+        rotation = np.c_[np.zeros(len(T)), np.sin(angle / 2), np.zeros(len(T)), np.cos(angle / 2)]
+        offset = pivot - (np.array(JOINTS["Hips"]) + JOINTS["LeftFoot"])
+        turned = np.einsum("fij,j->fi", G.quat_matrices(rotation), -offset)
+        translation = pivot + turned - np.array(JOINTS["Hips"])
+        add_clip(b, "Pivot", {"LeftFoot": translation})
+        anim = b.json["animations"][0]
+        anim["samplers"].append({"input": anim["samplers"][0]["input"], "output": b.add_accessor(rotation)})
+        anim["channels"].append({"sampler": 1, "target": {"node": model.by_name["LeftFoot"], "path": "rotation"}})
+        report = clip_check.check(b.to_glb())
+        self.assertNotIn("foot_slide", found(report))
+        self.assertGreater(report["metrics"]["per_animation"][0]["feet"]["LeftFoot"]["planted_frames"], 20)
+        self.assertIn("foot_slide", serious(clip_check.check(character(Slide=SLIDE))))
+
     def test_airborne_clips_skip_floor_and_slide(self):
         held = {"Carried": {"Hips": hips(0.5)}, "Dropped": {"Hips": hips(-0.2)}, "Slide": SLIDE}
         report = clip_check.check(character(**held), airborne=["Carr*", "Drop*"])

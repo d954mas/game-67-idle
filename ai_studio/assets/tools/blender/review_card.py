@@ -37,11 +37,14 @@ SPECIAL_VIEWS = ("lineup", "pose")
 
 
 def filmstrips(poses):
-    """[(animation, frames sorted by time)] in first-seen animation order."""
+    """[(label, frames sorted by time)], one strip per animation and view, in first-seen order;
+    mixing two views in one strip would show every moment twice."""
     groups = {}
     for frame in poses:
-        groups.setdefault(frame.get("animation", ""), []).append(frame)
-    return [(anim, sorted(frames, key=lambda f: float(f.get("time", 0)))) for anim, frames in groups.items()]
+        groups.setdefault((frame.get("animation", ""), frame.get("base_view", "")), []).append(frame)
+    views = {view for _, view in groups}
+    return [(anim if len(views) < 2 else f"{anim} · {view}", sorted(frames, key=lambda f: float(f.get("time", 0))))
+            for (anim, view), frames in groups.items()]
 
 
 def pose_marks(marks, frame):
