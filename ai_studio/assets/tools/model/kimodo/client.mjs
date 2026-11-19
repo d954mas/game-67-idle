@@ -28,6 +28,7 @@ export const LICENSES = Object.freeze({
 
 const TOOL_DIR = dirname(fileURLToPath(import.meta.url));
 const BLENDER_SCRIPT = join(TOOL_DIR, "blender_kimodo.py");
+const MOTION_MATH = join(TOOL_DIR, "..", "..", "blender", "lib", "motion.py");
 const MAPS_DIR = join(TOOL_DIR, "maps");
 const DEFAULTS = Object.freeze({ frames: 150, steps: 100, seed: 1, transition: 5, model: "soma-rp-v1.1", backend: "auto" });
 const BACKENDS = ["auto", "cpu", "vulkan"];
@@ -332,7 +333,7 @@ export async function retarget(options = {}, dependencies = {}) {
     character: { name: basename(character), sha256: await sha256File(character) },
     map: { id: rigMap.id, sha256: await sha256File(mapPath) },
     // The retarget code is part of the input: an improved pass must not reuse old output.
-    tool_sha256: sha256Hex(Buffer.concat([await readFile(BLENDER_SCRIPT), await readFile(join(TOOL_DIR, "motion_math.py"))])),
+    tool_sha256: sha256Hex(Buffer.concat([await readFile(BLENDER_SCRIPT), await readFile(MOTION_MATH)])),
     clip_name: clipName,
     offsets,
     foot_lock: footLock,

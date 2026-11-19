@@ -1,16 +1,74 @@
-# Blender Production Feedback Loop
+# Blender Tools
 
-Canonical AI Studio workflow for building, reviewing, and handing off Blender
-scenes. It prevents a successful render from being mistaken for a technically
-clean or art-direction-complete result.
+Shared Blender and GLB tooling for every game: a headless runner, a `bpy`/GLB
+library, review renders and cards, and advisory checks. The tools exist to make
+iteration faster; use what helps and write game code only for the shapes
+themselves. What six games learned, and which tool answers each lesson:
+[production_lessons.md](production_lessons.md).
 
-The repository skill surface is
-`.codex/skills/nt-blender-production/SKILL.md`. This module owns the executable
-gates and the detailed contract.
+The repository skill surface is `.codex/skills/nt-blender-production/SKILL.md`.
+Commands below run from the Studio root with the Studio venv
+(`node ai_studio/dev_environment/python_run.mjs <script> ...`; plain `python`
+works too when numpy and Pillow are installed). Anything that starts Blender must
+run outside the agent sandbox, which blocks `.exe` launches.
 
-The module also holds the Blender tools that sit outside that gate. See
-[Vertex Colour Bake](#vertex-colour-bake) for turning a sourced, texture-painted
-model into the flat `COLOR_0` form a game imports.
+## Quick Path
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs ai_studio/assets/tools/blender/review.py `
+  <game>/assets/models/crate.glb <game>/assets/models/lamp.glb --out tmp/review
+```
+
+One call renders front, right and ¾ views (beauty, clay, wire), runs every
+applicable check and writes `tmp/review/<stem>/card.png` per model: views,
+triangle/vertex/material/texture counts, size, and the check findings. All
+models render in one Blender start (about 4 s for the first, about 1–2 s for each
+next one); checks take milliseconds.
+
+Useful flags: `--game-camera '{"height":1.8,"behind":2,"pitch":16,"fov_y":55}'`
+adds the game's view; `--game-crop shot.png` puts the in-game screenshot on the
+card; `--turntable 8`; `--animation Walk --time 0.4` poses the model;
+`--pivot floor`, `--contacts contract.json`, `--floating`; `--no-render` for
+checks only; `--strict` to exit 1 on high findings.
+
+## Tools
+
+| Tool | What it does |
+|---|---|
+| `run_blender.py <script.py> -- <args>` | Finds Blender (`--blender`, `$BLENDER`, PATH, installed versions with 5.2 first), runs the script headless with `--factory-startup`, the Studio root on `sys.path`, exit code on Python errors, timeout and optional `--log`. `--which` prints the executable. |
+| `render_views.py` (inside Blender) | Views `front back left right top three_quarter game turntable` × passes `beauty clay wire silhouette`, fitted framing, shared studio HDR or flat light, `views.json` with model stats; several `--model` files in one start. |
+| `review_card.py` | Composes the card from `views.json` and check reports (Pillow, no Blender). |
+| `review.py` | Checks + one batched render + cards, as above. |
+| `mesh_check.py` | Welded topology: open edges, non-manifold, miswound and degenerate faces, duplicates, components, inside-out shells, optional `--tri-budget`. Profiles `auto`, `volume`, `surface`. |
+| `glb_check.py` | Export contract: finite data, unit normals, triangles, URIs, JPEG, texture policy, COLOR_0 encoding, pivot rule with bounds and bounds centre, joint limit, skin weights (≤ 4 influences, sums, unweighted vertices, inverse binds), `--reference-rig`. |
+| `contact_check.py` | Contract pairs (`moving`, `receiver`, `direction`, `window`) with an automatic negative control per pair, ground supports, or `--floating` for parts hanging in the air. |
+| `clip_check.py` | Per clip: non-finite or non-positive keys, pops, teleports, planted-foot slide, soles under the floor, optional loop seam; limits scale with model height. `--model` plays clip-only files on a model. |
+| `lib/glb.py` | Read, pose, skin and write GLB with numpy, no Blender: `Glb.load`, `parts`, `posed_world`, `skinned_positions`, `GlbBuilder`. |
+| `lib/color.py` | sRGB/linear/hex conversion; `PaletteAtlas` rows that raise when full and keep alpha above the engine refill threshold; PNG writer for Blender. |
+| `lib/bpy_scene.py`, `lib/bpy_io.py` | Inside Blender: scene reset, palette and vertex-colour materials, closed bmesh primitives, axis helpers, bounds, 4.x/5.x compatibility; GLB import and export presets (`static`, `skinned`, `animated`) with pivot rules and an export report. |
+| `lib/motion.py` | Foot contacts, foot lock, slide, twist removal, two-bone IK (shared with Kimodo). |
+| `lib/studio_root.py` | Finds the Studio checkout from any game repo or feature workspace (`NT_STUDIO_ROOT` overrides). |
+
+Checks print findings with a fix hint and exit 0; `--strict --fail-on
+high|medium|low` turns them into a gate. Every threshold is a flag or a
+`--config` JSON key (flat, or nested under the tool name).
+
+A game script that runs inside Blender imports the library directly:
+
+```python
+from ai_studio.assets.tools.blender.lib import bpy_io, bpy_scene as S
+
+S.reset_scene()
+crate = S.box("Crate", size=(1, 1, 1), anchor="bottom", material=S.palette_material("Wood", "#8a5a33"))
+print(bpy_io.export_glb("tmp/crate.glb", [crate], preset="static"))
+```
+
+## Full Gate
+
+The stages below are a fail-closed review loop for hero scenes, named-reference
+work, propagation and handoff, where fresh-hash evidence and independent review
+lanes matter. Use it when that level of proof is wanted; it is not a step every
+asset has to pass.
 
 ## Outcome
 
@@ -313,45 +371,8 @@ Do not show a packet as finished when:
 User review should contain genuine choices of taste or direction, not defects
 the pipeline already knows how to find and fix.
 
-## Incident Regression — City Square M02 v002
-
-This pipeline exists because M02 v002 passed a render/count/modifier-order
-check while deeper inspection found 208 degenerate faces after bevel, 76 open
-boundary edges across volumetric arch pieces, six dirty modifier stages, 13
-bevel policies, and a dormer visually overlaid on the roof.
-
-`blender_scene_audit.py` reproduces that failure and returns `block`. Keep this
-scene report as a regression example; never weaken the gates merely to make the
-old artifact pass.
-
-## Incident Regression — City Square M02 v004 r15
-
-M02 v004 r15 had assigned material families and Noise/Bump nodes, but the Pale
-Ochre facade still read as a uniform fill in the master frame. A roof-focused
-review packet omitted a fitted facade material view and a dedicated material
-review lane, so `QART_001` and `QASSET_002` were incorrectly reported as pass.
-
-Keep the M02 v004 gate regression: it must require explicit material-surface
-and material-scale art checks, fitted facade and colored-oblique renders, a
-distinct material reviewer with named claims, and evidence-bearing quality
-records. Technical shader construction cannot substitute for visual proof.
-
-## Incident Regression — City Square M02 v004 r16
-
-M02 v004 r16 passed topology and three independent report lanes, but the lead
-still found two visible failures: the side roof read as disconnected planes and
-the plaster/stone response disappeared in the approved master frame. The full-
-depth roof had preserved a shallow front-only ridge position, leaving one rear
-plane visually dominant from three-quarter views. The material reviewer judged
-close-up construction without separately proving master, 640-pixel and
-front-versus-side consistency.
-
-Keep this regression fail-closed. A completed architectural roof needs dedicated
-left/right colored side evidence and explicit reviewer claims for continuous
-side planes plus intact eave/ridge read. Finished facade materials need fitted,
-oblique, master-crop and 640-crop evidence, with explicit claims for target-
-camera visibility and front/side consistency. A close-up PASS cannot override a
-flat target frame, and a watertight roof cannot override a broken silhouette.
+Incident history behind these gates lives in
+[production_lessons.md](production_lessons.md#full-gate-incidents).
 
 ## Vertex Colour Bake
 
@@ -433,10 +454,14 @@ and no images, textures or external URIs.
 ## Validation
 
 ```powershell
-python -m unittest discover ai_studio/assets/tools/blender -p "test_*.py"
 node ai_studio/studio.mjs verify --domain assets
 node ai_studio/architecture_map/validate_map.mjs --strict
 ```
+
+`verify --domain assets` runs every `test_*.py` here and in `lib/`. A single file:
+`node ai_studio/dev_environment/python_run.mjs -m unittest ai_studio.assets.tools.blender.test_glb_check`.
+The library, check and card tests need no Blender. `test_bpy_tools.py` and the bake
+tests start Blender and skip when none is found.
 
 The bake tests build their own palette-atlas model, so they need Blender: set
 `BLENDER` when it is not in `C:\Program Files\Blender Foundation` or on `PATH`.

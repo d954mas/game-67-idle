@@ -1,9 +1,14 @@
-"""Blender-free math for Kimodo retargeting: foot-contact detection and two-bone IK.
+"""Blender-free motion math: foot-contact detection, foot lock, slide, twist removal, two-bone IK.
 
-Positions are (x, y, z) tuples in metres, Z up. Kept free of bpy/mathutils so the
-contact and IK rules are unit-testable outside Blender.
+Shared by retargeting (Kimodo) and clip checks. Positions are (x, y, z) tuples in metres,
+Z up; glTF callers convert with `from_gltf`. Free of bpy/mathutils so it runs anywhere.
 """
 import math
+
+
+def from_gltf(point):
+    """glTF Y-up point to this module's Z-up convention."""
+    return (float(point[0]), -float(point[2]), float(point[1]))
 
 
 def _sub(a, b):

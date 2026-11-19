@@ -280,9 +280,14 @@ class BakeTests(unittest.TestCase):
         colours, _ = accessor_rows(document, binary,
                                    document["meshes"][0]["primitives"][0]["attributes"]["COLOR_0"])
         baked = {tuple(round(channel, 4) for channel in colour[:3]) for colour in colours}
-        expected = {tuple(round(srgb_to_linear(channel / 255), 4) for channel in entry)
-                    for entry in PALETTE}
-        self.assertEqual(baked, expected)
+        expected = [tuple(srgb_to_linear(channel / 255) for channel in entry) for entry in PALETTE]
+        # COLOR_0 is float32, so a value near a rounding boundary may land on either side.
+        matched = {min(range(len(expected)), key=lambda k: max(abs(a - b) for a, b in zip(colour, expected[k])))
+                   for colour in baked}
+        self.assertEqual(len(baked), len(expected))
+        self.assertEqual(matched, set(range(len(expected))))
+        for colour in baked:
+            self.assertLess(min(max(abs(a - b) for a, b in zip(colour, e)) for e in expected), 5e-4, colour)
         self.assertTrue(all(colour[3] == 1 for colour in colours))
 
     def test_the_export_passes_the_contract(self):

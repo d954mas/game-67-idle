@@ -18,8 +18,9 @@ import bpy
 import numpy as np
 from mathutils import Euler, Matrix, Quaternion, Vector
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from motion_math import detect_contacts, foot_slide, lock_plan, remove_twist, two_bone_ik  # noqa: E402
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), *[os.pardir] * 5)))
+from ai_studio.assets.tools.blender.lib.motion import (  # noqa: E402
+    detect_contacts, foot_slide, lock_plan, remove_twist, two_bone_ik)
 
 FPS = 30
 SOMA_FACING = {"left": "LeftArm", "right": "RightArm", "foot": "LeftFoot", "toe": "LeftToeBase"}

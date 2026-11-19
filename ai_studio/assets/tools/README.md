@@ -36,9 +36,11 @@ model, or checking a texture. They are not a separate top-level asset group.
   writes a Pack Manifest pack from a plan.
 - `textures/`: standalone material texture checks, including 2x2 repeat preview
   generation and seam metrics.
-- `blender/`: fail-closed Blender modeling/lookdev workflow with evaluated-mesh
-  topology audits, reference/style mismatch review, fresh-hash evidence packets,
-  independent verification, and completion gates before rollout or handoff. Also
-  holds `vertex_color_bake.py`, the add-on and headless command that bakes a
-  sourced model's palette-atlas colour into `COLOR_0` and normalizes it to the
-  flat vertex-colour contract games import.
+- `blender/`: shared Blender and GLB tooling for every game. `review.py` renders
+  views and runs every check into one review card per model; `run_blender.py`
+  runs headless Blender with the Studio library importable; `lib/` reads, poses
+  and writes GLB without Blender and holds `bpy` scene, export and palette
+  helpers; `mesh_check.py`, `glb_check.py`, `contact_check.py` and
+  `clip_check.py` are advisory checks with an opt-in `--strict` gate. Also holds
+  `vertex_color_bake.py` (palette-atlas colour into `COLOR_0`), the optional
+  fail-closed gate for hero scenes, and `production_lessons.md`.

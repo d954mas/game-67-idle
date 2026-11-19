@@ -1,11 +1,7 @@
 import math
-import os
-import sys
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from motion_math import contact_runs, detect_contacts, foot_slide, lock_plan, remove_twist, two_bone_ik
+from ai_studio.assets.tools.blender.lib.motion import contact_runs, detect_contacts, foot_slide, lock_plan, remove_twist, two_bone_ik
 
 
 def distance(a, b):

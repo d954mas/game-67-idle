@@ -1,0 +1,158 @@
+import unittest
+
+import numpy as np
+
+from ai_studio.assets.tools.blender import clip_check
+from ai_studio.assets.tools.blender.lib import glb as G
+
+UNIT = np.array([[x, y, z] for x in (0, 1) for y in (0, 1) for z in (0, 1)], float)
+FACES = np.array([[1, 2, 0], [3, 2, 1], [6, 5, 4], [6, 7, 5], [4, 1, 0], [4, 5, 1],
+                  [3, 6, 2], [7, 6, 3], [2, 4, 0], [6, 4, 2], [5, 3, 1], [5, 7, 3]])
+JOINTS = {"Hips": (0, 0.9, 0), "LeftFoot": (0.1, -0.82, 0), "RightFoot": (-0.1, -0.82, 0)}
+FPS = 30
+T = np.arange(FPS + 1) / FPS
+
+
+def box(lo, hi):
+    return np.asarray(lo, float) + UNIT * (np.asarray(hi, float) - lo)
+
+
+def add_rig(b, skinned=True):
+    hips = b.add_node("Hips", translation=JOINTS["Hips"])
+    feet = [b.add_node(n, translation=JOINTS[n], parent=hips) for n in ("LeftFoot", "RightFoot")]
+    if not skinned:
+        return
+    world = {"Hips": np.array(JOINTS["Hips"]), "LeftFoot": np.array([0.1, 0.08, 0]),
+             "RightFoot": np.array([-0.1, 0.08, 0])}
+    points = np.vstack([box((-0.15, 0.6, -0.1), (0.15, 1.2, 0.1)), box((0.05, 0, -0.05), (0.15, 0.1, 0.12)),
+                        box((-0.15, 0, -0.05), (-0.05, 0.1, 0.12))])
+    joints = np.repeat([[0, 0, 0, 0], [1, 0, 0, 0], [2, 0, 0, 0]], 8, axis=0)
+    weights = np.tile([1.0, 0, 0, 0], (24, 1))
+    mesh = b.add_mesh("body", points, np.vstack([FACES, FACES + 8, FACES + 16]),
+                      extra={"JOINTS_0": (joints, G.UNSIGNED_BYTE), "WEIGHTS_0": (weights, G.FLOAT)})
+    ibm = [np.linalg.inv(G.trs_matrix(world[n], (0, 0, 0, 1), (1, 1, 1))).T.reshape(-1) for n in JOINTS]
+    b.json["skins"] = [{"joints": [hips] + feet, "inverseBindMatrices": b.add_accessor(np.array(ibm), kind="MAT4")}]
+    b.add_node("body", mesh=mesh, skin=0)
+
+
+def add_clip(b, name, tracks):
+    """tracks: {node name: values (len(T), 3)} of translation keys at 30 fps."""
+    times = b.add_accessor(T, kind="SCALAR", bounds=True)
+    anim = {"name": name, "samplers": [], "channels": []}
+    for node, values in tracks.items():
+        anim["samplers"].append({"input": times, "output": b.add_accessor(np.asarray(values, float))})
+        anim["channels"].append({"sampler": len(anim["samplers"]) - 1,
+                                 "target": {"node": b.json["nodes"].index(next(
+                                     n for n in b.json["nodes"] if n["name"] == node)), "path": "translation"}})
+    b.json.setdefault("animations", []).append(anim)
+
+
+def hips(dy=0.0, dx=None):
+    values = np.tile(JOINTS["Hips"], (len(T), 1)).astype(float)
+    values[:, 1] += dy
+    if dx is not None:
+        values[:, 0] += dx
+    return values
+
+
+def character(**clips):
+    b = G.GlbBuilder()
+    add_rig(b)
+    for name, tracks in clips.items():
+        add_clip(b, name, tracks)
+    return b.to_glb()
+
+
+def found(report, severity=None):
+    return {f["check"] for f in report["findings"] if severity is None or f["severity"] == severity}
+
+
+def serious(report):
+    return found(report, "medium") | found(report, "high")
+
+
+BOB = {"Hips": hips(0.01 * np.sin(2 * np.pi * T)[:, None][:, 0])}
+SLIDE = {"LeftFoot": np.c_[np.linspace(0.1, 0.3, len(T)), np.full(len(T), -0.82), np.zeros(len(T))]}
+
+
+class ClipCheck(unittest.TestCase):
+    def test_idle_is_clean_and_loops(self):
+        report = clip_check.check(character(Idle=BOB), loop=True)
+        self.assertEqual(serious(report), set())
+        row = report["metrics"]["per_animation"][0]
+        self.assertEqual(row["foot_joints"], ["LeftFoot", "RightFoot"])
+        self.assertEqual(row["lowest_source"], "skinned mesh")
+
+    def test_sliding_foot(self):
+        report = clip_check.check(character(Slide=SLIDE), loop=True)
+        self.assertTrue({"foot_slide", "loop_seam"} <= serious(report))
+
+    def test_in_place_walk_is_judged_on_its_treadmill(self):
+        # Both feet glide back at 0.4 m/s while low and swing forward while lifted: a treadmill stride.
+        def foot(x0, offset):
+            p = (T + offset) % 1.0
+            z = np.where(p < 0.5, 0.1 - 0.4 * p, -0.1 + 0.4 * (p - 0.5))
+            y = np.where(p < 0.5, -0.82, -0.82 + 0.15 * np.sin((p - 0.5) * 2 * np.pi))
+            return np.c_[np.full(len(T), x0), y, z]
+        walk = {"LeftFoot": foot(0.1, 0.0), "RightFoot": foot(-0.1, 0.5)}
+        report = clip_check.check(character(Walk=walk))
+        self.assertNotIn("foot_slide", found(report))
+        self.assertTrue(report["metrics"]["per_animation"][0]["in_place"])
+        self.assertIn("foot_slide", found(clip_check.check(character(Walk=walk), in_place="no")))
+
+    def test_popping_joint(self):
+        spike = np.zeros(len(T))
+        spike[15] = 0.2
+        self.assertIn("pop", serious(clip_check.check(character(Pop={"Hips": hips(spike)}))))
+
+    def test_teleport_and_sink(self):
+        jump = np.where(T > 0.5, 1.0, 0.0)
+        self.assertIn("teleport", found(clip_check.check(character(Jump={"Hips": hips(dx=jump)})), "high"))
+        self.assertIn("sole_sink", serious(clip_check.check(character(Sink={"Hips": hips(-0.1)}))))
+        self.assertNotIn("sole_sink", found(clip_check.check(character(Sink={"Hips": hips(-0.1)}), sink=0.2)))
+
+    def test_nan_keys(self):
+        bad = hips()
+        bad[3, 1] = np.nan
+        self.assertIn("finite", found(clip_check.check(character(Broken={"Hips": bad})), "high"))
+
+    def test_clip_file_on_model(self):
+        clip = G.GlbBuilder()
+        add_rig(clip, skinned=False)
+        add_clip(clip, "Slide", SLIDE)
+        model = character()
+        report = clip_check.check(clip.to_glb(), model=model)
+        self.assertIn("foot_slide", serious(report))
+
+    def test_foot_names(self):
+        self.assertEqual(clip_check.detect_feet(["mixamorig:LeftFoot", "mixamorig:LeftToeBase",
+                                                 "mixamorig:RightFoot", "mixamorig:Hips"]),
+                         ["mixamorig:LeftFoot", "mixamorig:RightFoot"])
+        self.assertEqual(clip_check.detect_feet(["foot_l", "foot_r", "ball_l", "ik_foot_l"]), ["foot_l", "foot_r"])
+        self.assertEqual(clip_check.detect_feet(["Bip01 L Foot", "Bip01 R Foot"]), ["Bip01 L Foot", "Bip01 R Foot"])
+        self.assertEqual(clip_check.detect_feet(["DEF-foot.L", "DEF-foot.R", "DEF-toe.L"]), ["DEF-foot.L", "DEF-foot.R"])
+
+
+class Malformed(unittest.TestCase):
+    def test_joint_outside_scene_or_bad_index_is_a_finding(self):
+        glb = character(Idle=BOB)
+        glb.json["scenes"][0]["nodes"] = [n for n in glb.json["scenes"][0]["nodes"]
+                                          if glb.json["nodes"][n]["name"] != "Hips"]
+        report = clip_check.check(glb)
+        self.assertTrue({"skin", "joints_in_scene"} <= found(report, "high"))
+        glb = character(Idle=BOB)
+        glb.json["skins"][0]["joints"].append(99)
+        self.assertIn("high", {f["severity"] for f in clip_check.check(glb)["findings"]})
+        broken = character(Idle=BOB)
+        joints = broken.accessor(broken.json["meshes"][0]["primitives"][0]["attributes"]["JOINTS_0"])
+        view = broken.json["bufferViews"][broken.json["accessors"][
+            broken.json["meshes"][0]["primitives"][0]["attributes"]["JOINTS_0"]]["bufferView"]]
+        data = bytearray(broken.bin)
+        data[view["byteOffset"]] = 9  # first vertex weighted to joint 9 of 3
+        broken.bin = bytes(data)
+        self.assertEqual(len(joints), 24)
+        self.assertIn("skin", found(clip_check.check(broken), "high"))
+
+
+if __name__ == "__main__":
+    unittest.main()
