@@ -19,6 +19,9 @@ const IMAGE_MIME = new Map([
 ]);
 
 const PROFILES = Object.freeze({
+  rig: Object.freeze({ draft: { credits: 5 } }),
+  // Animation is billed per library action; one request carries 1-10 actions.
+  animate: Object.freeze({ draft: { credits: 3 } }),
   "text-preview": Object.freeze({
     draft: { credits: 5, aiModel: "meshy-5", targetPolycount: 15_000 },
     game: { credits: 20, aiModel: "latest", targetPolycount: 15_000 },
@@ -58,9 +61,22 @@ function positiveInteger(value, fallback, label) {
   return number;
 }
 
+function actionIds(value) {
+  const list = (Array.isArray(value) ? value : String(value ?? "").split(","))
+    .map((item) => String(item).trim()).filter(Boolean);
+  if (list.length < 1 || list.length > 10) throw new Error("--action-ids must list 1 to 10 library action ids");
+  const ids = list.map((item) => {
+    const number = Number(item);
+    if (!Number.isInteger(number) || number < 0 || String(number) !== item) throw new Error(`--action-ids contains an invalid id: ${item}`);
+    return number;
+  });
+  if (new Set(ids).size !== ids.length) throw new Error("--action-ids must be unique");
+  return ids;
+}
+
 function profileFor(kind, name) {
   const profiles = PROFILES[kind];
-  if (!profiles) throw new Error(`kind must be text-preview, text-refine, or image (got ${JSON.stringify(kind)})`);
+  if (!profiles) throw new Error(`kind must be text-preview, text-refine, image, rig, or animate (got ${JSON.stringify(kind)})`);
   const fallback = "draft";
   const profileName = name || fallback;
   const profile = profiles[profileName];
@@ -107,8 +123,23 @@ export async function buildPlan(kind, options = {}) {
   let taskEndpoint;
   let payload;
   let input = null;
+  let credits = profile.credits;
 
-  if (kind === "text-preview") {
+  if (kind === "animate") {
+    endpoint = "/openapi/v1/animations";
+    taskEndpoint = endpoint;
+    const ids = actionIds(options.actionIds);
+    payload = { rig_task_id: taskId(options.rigTaskId, "--rig-task-id"), action_ids: ids };
+    credits = profile.credits * ids.length;
+  } else if (kind === "rig") {
+    endpoint = "/openapi/v1/rigging";
+    taskEndpoint = endpoint;
+    payload = {
+      input_task_id: taskId(options.inputTaskId, "--input-task-id"),
+      height_meters: 1.7,
+      skeleton_template: "mixamo",
+    };
+  } else if (kind === "text-preview") {
     const prompt = requiredText(options.prompt, "--prompt", 600);
     const targetPolycount = positiveInteger(options.targetPolycount, profile.targetPolycount, "--target-polycount");
     endpoint = "/openapi/v2/text-to-3d";
@@ -188,7 +219,7 @@ export async function buildPlan(kind, options = {}) {
     payload,
     request: publicPayload(payload),
     input,
-    estimated_credits: profile.credits,
+    estimated_credits: credits,
     pricing_source: PRICING_SOURCE,
     pricing_verified_at: PRICING_VERIFIED_AT,
     fingerprint,
@@ -287,6 +318,19 @@ export async function getBalance({ root = process.cwd(), env = process.env, fetc
   return { balance: Number(data.balance), reserve_credits: config.reserveCredits };
 }
 
+// Library listing is free; it never passes the paid gate.
+export async function listAnimationLibrary(filters = {}, { root = process.cwd(), env = process.env, fetchImpl = fetch } = {}) {
+  const config = loadMeshyConfig(root, env);
+  const url = new URL(`${MESHY_BASE_URL}/openapi/v1/animations/library`);
+  for (const key of ["search", "category", "sub_category"]) {
+    if (filters[key]) url.searchParams.set(key, String(filters[key]));
+  }
+  const data = await apiJson(fetchImpl, url.href, { apiKey: config.apiKey });
+  const list = Array.isArray(data) ? data : data.result;
+  if (!Array.isArray(list)) throw new Error("Meshy animation library response is not a list");
+  return list.map(({ action_id, name, key, category, sub_category }) => ({ action_id, name, key, category, sub_category }));
+}
+
 async function downloadGlb(fetchImpl, url) {
   let parsed;
   try {
@@ -333,9 +377,13 @@ export async function runGeneration(kind, options = {}, dependencies = {}) {
     throw new Error(`Meshy job record does not match the planned request: ${jobPath}`);
   }
   if (job?.status === "SUCCEEDED" && existsSync(outputPath) && existsSync(provenancePath)) {
-    return { cached: true, resumed: true, task_id: job.task_id, run_dir: runDir, model: outputPath, provenance: provenancePath, plan: printablePlan(plan) };
+    const saved = await readJson(provenancePath);
+    const outputs = [saved.output, ...(saved.animations || [])];
+    const intact = outputs.every((entry) => entry?.file && existsSync(entry.file))
+      && (await Promise.all(outputs.map(async (entry) => (await sha256File(entry.file)) === entry.sha256))).every(Boolean);
+    if (intact) return { cached: true, resumed: true, task_id: job.task_id, run_dir: runDir, model: outputPath, provenance: provenancePath, plan: printablePlan(plan) };
   }
-  if (job?.status === "SUBMISSION_UNKNOWN" && !job.task_id) {
+  if (["SUBMITTING", "SUBMISSION_UNKNOWN"].includes(job?.status) && !job.task_id) {
     throw new Error(`previous Meshy submission outcome is unknown; reconcile account tasks before retrying: ${jobPath}`);
   }
 
@@ -397,13 +445,27 @@ export async function runGeneration(kind, options = {}, dependencies = {}) {
     const message = task?.task_error?.message || `task ended with ${job.status}`;
     throw new Error(`Meshy task ${job.task_id} failed: ${message}`);
   }
-  const glbUrl = task?.model_urls?.glb;
+  const glbUrl = kind === "rig" ? task?.result?.rigged_character_glb_url
+    : kind === "animate" ? task?.result?.animation_glb_url : task?.model_urls?.glb;
   if (!glbUrl) throw new Error(`Meshy task ${job.task_id} succeeded without a GLB URL`);
   const glb = await downloadGlb(fetchImpl, glbUrl);
   await mkdir(runDir, { recursive: true });
   const outputTemp = `${outputPath}.${process.pid}.tmp`;
   await writeFile(outputTemp, glb);
   await rename(outputTemp, outputPath);
+  const animations = [];
+  if (kind === "rig") {
+    for (const action of ["walking", "running"]) {
+      const url = task.result?.basic_animations?.[`${action}_glb_url`];
+      if (!url) continue;
+      const bytes = await downloadGlb(fetchImpl, url);
+      const path = join(runDir, `${action}.glb`);
+      const temporary = `${path}.${process.pid}.tmp`;
+      await writeFile(temporary, bytes);
+      await rename(temporary, path);
+      animations.push({ file: path, sha256: sha256Hex(bytes), bytes: bytes.length });
+    }
+  }
 
   let balanceAfter = null;
   try {
@@ -426,12 +488,14 @@ export async function runGeneration(kind, options = {}, dependencies = {}) {
     input: plan.input,
     cost: {
       estimated_credits: plan.estimated_credits,
+      ...(task?.consumed_credits !== undefined ? { consumed_credits: task.consumed_credits } : {}),
       balance_before: balanceBefore,
       balance_after: balanceAfter,
       pricing_source: PRICING_SOURCE,
       pricing_verified_at: PRICING_VERIFIED_AT,
     },
     output: { file: outputPath, format: "glb", bytes: glb.length, sha256: sha256Hex(glb) },
+    ...(animations.length ? { animations } : {}),
   };
   await atomicJson(provenancePath, provenance);
   job = { ...job, status: "SUCCEEDED", output: outputPath, provenance: provenancePath, balance_after: balanceAfter, updated_at: now().toISOString() };

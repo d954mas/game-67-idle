@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
-import { buildPlan, runGeneration } from "./client.mjs";
+import { buildPlan, listAnimationLibrary, runGeneration } from "./client.mjs";
 import { parseArgs } from "./cli.mjs";
 
 function glbFixture() {
@@ -51,6 +51,57 @@ function jsonResponse(body, status = 200) {
     arrayBuffer: async () => Buffer.from(text),
   };
 }
+
+test("rigging uses the existing paid gate and preserves optional animation outputs", async (t) => {
+  const root = await fixture(t);
+  const options = { inputTaskId: "source-character", execute: true, confirmCredits: 5, maxCredits: 5 };
+  const plan = await buildPlan("rig", options);
+  assert.equal(plan.endpoint, "/openapi/v1/rigging");
+  assert.equal(plan.estimated_credits, 5);
+  let posts = 0;
+  const fetchImpl = async (url, request = {}) => {
+    if (url.endsWith("/balance")) return jsonResponse({ balance: 100 });
+    if (request.method === "POST") {
+      posts++;
+      assert.equal(JSON.parse(request.body).input_task_id, "source-character");
+      return jsonResponse({ result: "rig-result" });
+    }
+    if (url.endsWith("/rig-result")) return jsonResponse({ status: "SUCCEEDED", result: {
+      rigged_character_glb_url: "https://assets.meshy.ai/rig.glb",
+      basic_animations: { walking_glb_url: "https://assets.meshy.ai/walk.glb" },
+    }});
+    return { ok: true, arrayBuffer: async () => glbFixture() };
+  };
+  const dependencies = { root, env: { MESHY_API_KEY: "msy_test" }, fetchImpl };
+  await assert.rejects(runGeneration("rig", { inputTaskId: "source-character" }, dependencies), /paid generation blocked/);
+  assert.equal(posts, 0);
+  const result = await runGeneration("rig", options, dependencies);
+  assert.equal(posts, 1);
+  const provenance = JSON.parse(await readFile(result.provenance, "utf8"));
+  assert.equal(provenance.animations.length, 1);
+  assert.ok(existsSync(join(result.run_dir, "walking.glb")));
+  await runGeneration("rig", options, dependencies);
+  assert.equal(posts, 1);
+  await writeFile(join(result.run_dir, "walking.glb"), "damaged");
+  const restored = await runGeneration("rig", options, dependencies);
+  assert.equal(restored.cached, false);
+  assert.equal(posts, 1);
+  assert.deepEqual(await readFile(join(result.run_dir, "walking.glb")), glbFixture());
+});
+
+test("a crashed submitting job cannot issue another paid request", async (t) => {
+  const root = await fixture(t);
+  const options = { inputTaskId: "source-character", execute: true, confirmCredits: 5, maxCredits: 5 };
+  const plan = await buildPlan("rig", options);
+  const directory = join(root, "tmp/meshy", plan.fingerprint);
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, "job.json"), JSON.stringify({
+    schema: "ai_studio.asset.meshy_job.v1", fingerprint: plan.fingerprint, status: "SUBMITTING",
+  }));
+  await assert.rejects(runGeneration("rig", options, { root, env: { MESHY_API_KEY: "msy_test" },
+    fetchImpl: async () => { assert.fail("must reconcile before network"); },
+  }), /reconcile account tasks/);
+});
 
 test("plans default to cheap previews and redact image bytes", async (t) => {
   const root = await fixture(t);
@@ -252,4 +303,45 @@ test("ambiguous submission is persisted and never auto-retried", async (t) => {
   );
   assert.equal(postCalls, 1);
   assert.equal(existsSync(join(root, "tmp", "meshy")), true);
+});
+
+test("animation bills per library action behind the exact paid gate", async (t) => {
+  const root = await fixture(t);
+  await assert.rejects(buildPlan("animate", { rigTaskId: "rig-1", actionIds: "4,4" }), /unique/);
+  await assert.rejects(buildPlan("animate", { rigTaskId: "rig-1", actionIds: "1,2,3,4,5,6,7,8,9,10,11" }), /1 to 10/);
+  await assert.rejects(buildPlan("animate", { rigTaskId: "rig-1", actionIds: "4,x" }), /invalid id/);
+  const plan = await buildPlan("animate", { rigTaskId: "rig-1", actionIds: "214,179" });
+  assert.equal(plan.endpoint, "/openapi/v1/animations");
+  assert.equal(plan.estimated_credits, 6);
+  assert.deepEqual(plan.payload, { rig_task_id: "rig-1", action_ids: [214, 179] });
+  let posts = 0;
+  const fetchImpl = async (url, request = {}) => {
+    if (url.endsWith("/balance")) return jsonResponse({ balance: 100 });
+    if (request.method === "POST") { posts++; return jsonResponse({ result: "anim-1" }); }
+    if (url.endsWith("/animations/anim-1")) return jsonResponse({ status: "SUCCEEDED", consumed_credits: 6,
+      result: { animation_glb_url: "https://assets.meshy.ai/anim.glb" } });
+    return { ok: true, arrayBuffer: async () => glbFixture() };
+  };
+  const dependencies = { root, env: { MESHY_API_KEY: "msy_test" }, fetchImpl, pollIntervalMs: 0 };
+  await assert.rejects(runGeneration("animate", { rigTaskId: "rig-1", actionIds: "214,179", execute: true, confirmCredits: 3, maxCredits: 3 }, dependencies), /must equal the estimated 6/);
+  assert.equal(posts, 0);
+  const result = await runGeneration("animate", { rigTaskId: "rig-1", actionIds: "214,179", execute: true, confirmCredits: 6, maxCredits: 6 }, dependencies);
+  assert.equal(posts, 1);
+  const provenance = JSON.parse(await readFile(result.provenance, "utf8"));
+  assert.equal(provenance.cost.consumed_credits, 6);
+  assert.deepEqual(provenance.request.action_ids, [214, 179]);
+});
+
+test("animation library listing is free and returns compact rows", async (t) => {
+  const root = await fixture(t);
+  const seen = [];
+  const fetchImpl = async (url, request = {}) => {
+    seen.push([url, request.method || "GET"]);
+    return jsonResponse({ result: [{ action_id: 4, name: "Attack", key: "attack", category: "Fighting", sub_category: "X", preview_url: "https://x/y.gif" }] });
+  };
+  const rows = await listAnimationLibrary({ category: "Fighting" }, { root, env: { MESHY_API_KEY: "msy_test" }, fetchImpl });
+  assert.deepEqual(rows, [{ action_id: 4, name: "Attack", key: "attack", category: "Fighting", sub_category: "X" }]);
+  assert.deepEqual(seen, [["https://api.meshy.ai/openapi/v1/animations/library?category=Fighting", "GET"]]);
+  assert.deepEqual(parseArgs(["library", "--search", "punch"]), { command: "library", filters: { search: "punch" } });
+  assert.deepEqual(parseArgs(["run", "animate", "--rig-task-id", "r", "--action-ids", "1,2"]).options, { rigTaskId: "r", actionIds: "1,2" });
 });

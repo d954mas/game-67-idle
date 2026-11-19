@@ -68,6 +68,17 @@ more expensive latest standard model and should be requested explicitly.
 node ai_studio/assets/tools/model/meshy/cli.mjs plan image --image tmp/reference.png --profile game
 ```
 
+A succeeded Mixamo rig (`rig`, 5 credits, also downloads walking/running) can
+take clips from Meshy's animation library. Listing the library is free; each
+action costs 3 credits and one request carries 1-10 actions, returned as one GLB
+with one clip per action:
+
+```powershell
+node ai_studio/assets/tools/model/meshy/cli.mjs library --category Fighting
+node ai_studio/assets/tools/model/meshy/cli.mjs plan animate --rig-task-id <id> --action-ids 192,179
+node ai_studio/assets/tools/model/meshy/cli.mjs run animate --rig-task-id <id> --action-ids 192,179 --execute --confirm-credits 6 --max-credits 6
+```
+
 Every successful run writes `model.glb`, `job.json`, and `provenance.json` under
 its fingerprint directory. Promotion still needs license/terms review and the
 normal `origin=ai`, integrity, metadata, preview, and runtime checks.
