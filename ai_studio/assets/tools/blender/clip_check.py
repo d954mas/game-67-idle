@@ -32,7 +32,7 @@ DEFAULTS = {"model": None, "animations": None, "fps": 30.0, "feet": None, "floor
             "slide": 0.05, "sink": 0.03, "float": 0.03, "loop": False, "loop_seam": 0.02,
             "skinned_soles": True, "in_place": "auto", "body_scale": "auto", "plant_height": 0.01,
             "airborne": [], "model_scale": None, "baseline": None,
-            "pop_stray": 0.02}
+            "pop_stray": 0.02, "accept": []}
 SCALED = ("pop_accel", "teleport_speed", "slide", "sink", "float", "loop_seam", "plant_height", "pop_stray")
 HUMAN_HEIGHT = 1.75
 SAMPLES = 5
@@ -527,6 +527,23 @@ def check_animation(clip, model, anim, joint_ids, opts, lim, findings, row, refe
                                   "pass --feet LeftFoot RightFoot", {"animation": anim}))
 
 
+def accept_findings(findings, rules):
+    """Turn findings a lead has accepted into info, keeping the reason: an intended strike or
+    footwork stays visible in the report without asking for a fix every run.
+    A rule is {"animation": glob, "check": name, "reason": text}."""
+    if not rules:
+        return findings
+    out = []
+    for f in findings:
+        anim = (f.get("where") or {}).get("animation")
+        rule = next((r for r in rules if anim is not None and f["check"] == r.get("check")
+                     and fnmatch.fnmatch(anim, r.get("animation", "*"))), None)
+        if rule and f["severity"] != "info":
+            f = {**f, "severity": "info", "message": f"accepted ({rule.get('reason', 'by preset')}): {f['message']}"}
+        out.append(f)
+    return out
+
+
 def group_by_cause(findings):
     """One finding per check and severity, naming every clip it hit, worst clip first; a file of 50
     clips then reads as a few causes instead of 50 lines."""
@@ -595,7 +612,7 @@ def check(path_or_glb, **options):
         rows.append(row)
         R.guarded(findings, f"animation {anim}", check_animation, clip, model, anim, joint_ids, opts, lim,
                   findings, row, reference)
-    findings = group_by_cause(findings)
+    findings = group_by_cause(accept_findings(findings, opts["accept"]))
     shown = {k: (v.label if isinstance(v, G.Glb) else v) for k, v in opts.items()}
     metrics = {"animations": len(rows), "body_scale": round(float(scale), 3), "units": lim["units"],
                "per_animation": rows}

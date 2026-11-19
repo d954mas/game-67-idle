@@ -100,7 +100,9 @@ automatically), so their winding is reported as info.
 
 Order: presets < `--config` < flags. `--preset file` or `--no-preset` override the lookup.
 Clip presets can mark clips where the body is held by someone else:
-`"clip_check": {"airborne": ["carried*", "thrown*"]}`.
+`"clip_check": {"airborne": ["carried*", "thrown*"]}`, and record accepted motion with its
+reason so it stays in the report as info instead of asking for a fix every run:
+`"clip_check": {"accept": [{"animation": "PunchCharged", "check": "pop", "reason": "the strike"}]}`.
 
 ### Review from a build script
 

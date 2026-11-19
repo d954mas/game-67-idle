@@ -299,5 +299,15 @@ class Channels(unittest.TestCase):
         self.assertEqual(slides[0]["where"]["clips"], ["SlideA", "SlideB"])
 
 
+class Accept(unittest.TestCase):
+    def test_accepted_findings_become_info_with_reason(self):
+        findings = [{"check": "pop", "severity": "medium", "message": "2 pops", "where": {"animation": "PunchCharged"}},
+                    {"check": "pop", "severity": "medium", "message": "1 pop", "where": {"animation": "Run"}}]
+        rules = [{"animation": "Punch*", "check": "pop", "reason": "intended strike"}]
+        out = clip_check.accept_findings(findings, rules)
+        self.assertEqual([f["severity"] for f in out], ["info", "medium"])
+        self.assertIn("intended strike", out[0]["message"])
+
+
 if __name__ == "__main__":
     unittest.main()
