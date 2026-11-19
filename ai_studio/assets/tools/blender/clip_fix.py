@@ -28,6 +28,11 @@ def parse(argv=None):
     p.add_argument("--ground", action="store_true", help="lift sinking clips onto the floor")
     p.add_argument("--foot-lock", action="store_true", help="pin planted feet with two-bone IK")
     p.add_argument("--map", default="auto", help="retarget map naming the legs for --foot-lock (default: auto)")
+    p.add_argument("--lock-space", choices=("world", "in_place"), default="world",
+                   help="in_place: pin feet where a game playing the clip in place shows them (it removes the "
+                        "root's start-to-end horizontal travel linearly)")
+    p.add_argument("--lock-pin", choices=("ankle", "toe"), default="ankle",
+                   help="toe: the toe joint is the planted point (stance on the ball of the foot)")
     p.add_argument("--model", help="skinned body the clips play on (default: the clip file)")
     p.add_argument("--clips", nargs="+", help="only these animations (default: all)")
     p.add_argument("--floor", type=float, default=0.0, help="floor height in metres (default 0)")
@@ -52,7 +57,8 @@ def one_pass(clip, model, args, source):
         clip = G.Glb(document, binary, clip.path)
     if args.foot_lock:
         document, binary, report["foot_lock"] = CL.foot_lock(clip, model, args.clips, args.ramp, rig_map=args.map,
-                                                             loop=args.loop)
+                                                             loop=args.loop, space=args.lock_space,
+                                                             pin=args.lock_pin)
     return document, binary, report
 
 

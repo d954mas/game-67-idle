@@ -47,6 +47,26 @@ def _rotation_samplers(clip, anim, names):
     return found
 
 
+def in_place_shift(clip, anim, model, worlds, keys, up):
+    """(keys, 3) world offset a game takes away when it plays the clip in place: the root's local
+    translation from the first to the last key, scaled by time / duration, turned into world space
+    by the root's parent and stripped of its vertical part. Zero without a root translation track."""
+    try:
+        _, node = CG.root_channel(clip, anim)
+    except CG.GroundError:
+        return np.zeros((len(keys), 3))
+    times, values, interp = clip.channels(anim, by_index=True)[(node, "translation")]
+    duration = clip.duration(anim)
+    ends = G.sample_channel_at(times, values, [0.0, duration], "translation", interp)
+    travel = ends[1] - ends[0]
+    target = node if model is clip else model.by_name.get(clip.name(node))
+    parent = model.parent.get(target) if target is not None else None
+    phase = (np.asarray(keys, float) / duration)[:, None] if duration > 0 else np.zeros((len(keys), 1))
+    local = phase * travel
+    world = local if parent is None else np.einsum("fij,fj->fi", worlds[parent][:, :3, :3], local)
+    return world - (world @ up)[:, None] * up
+
+
 def _contacts(ankles, fps, leg, height_frac, speed_frac, ramp, loop):
     """(flags, plan) per key; a loop is read as three repeats and the middle one kept, so plants that
     run through the seam are found whole and the last key gets the same pin as the first."""
@@ -61,7 +81,7 @@ def _contacts(ankles, fps, leg, height_frac, speed_frac, ramp, loop):
 
 
 def foot_lock(clip, model=None, animations=None, ramp=3, height_frac=0.12, speed_frac=0.8, rig_map="auto",
-              min_slide_frac=0.02, loop=False):
+              min_slide_frac=0.02, loop=False, space="world", pin="ankle"):
     """(document, binary, report) with planted feet pinned in the named animations (default: all).
 
     clip: Glb with the animations; model: skinned body or rig Glb they play on (default: the clip).
@@ -69,6 +89,10 @@ def foot_lock(clip, model=None, animations=None, ramp=3, height_frac=0.12, speed
     locked clip run through again comes back unchanged. A clip whose leg keys do not share one key
     time list is skipped with its reason in the report. With `loop` the clip is read as a cycle, so a
     plant running through the seam keeps one anchor and the last pose still meets the first.
+    space "in_place": feet are pinned where a game that plays the clip in place shows them, after it
+    removes the root's start-to-end horizontal travel linearly over the clip (see in_place_shift).
+    pin "toe": the toe joint is the planted point (a stance on the ball of the foot); the ankle goal
+    follows it, since the foot keeps its world rotation.
     """
     model = model or clip
     rig = RT.Rig(model, rig_map)
@@ -85,6 +109,8 @@ def foot_lock(clip, model=None, animations=None, ramp=3, height_frac=0.12, speed
 
     lengths = {side: (float(np.linalg.norm(rest[k][:3, 3] - rest[t][:3, 3])),
                       float(np.linalg.norm(rest[f][:3, 3] - rest[k][:3, 3]))) for side, (t, k, f) in legs.items()}
+    pins = {side: rig.joints.get(f"{side}_toe", nodes[2]) if pin == "toe" else nodes[2]
+            for side, nodes in legs.items()}
     document = copy.deepcopy(clip.json)
     binary = bytearray(clip.bin)
     builder = None
@@ -112,11 +138,17 @@ def foot_lock(clip, model=None, animations=None, ramp=3, height_frac=0.12, speed
             continue
         channels = clip.channels(anim, by_index=clip is model)
         worlds = model.posed_worlds(channels, keys)
+        if space not in ("world", "in_place") or pin not in ("ankle", "toe"):
+            raise LockError(f"space must be world or in_place and pin ankle or toe, not {space!r}, {pin!r}")
+        shift = (in_place_shift(clip, anim, model, worlds, keys, axes[:, 2]) if space == "in_place"
+                 else np.zeros((len(keys), 3)))
+        row["space"], row["pin"] = space, pin
         fps = 1.0 / float(np.median(np.diff(keys))) if len(keys) > 1 else 30.0
         new = {}
         for side, (t, k, f) in legs.items():
             l1, l2 = lengths[side]
-            ankles = [to_motion(p) for p in worlds[f][:, :3, 3]]
+            point = pins[side]
+            ankles = [to_motion(p) for p in worlds[point][:, :3, 3] - shift]
             flags, plan = _contacts(ankles, fps, l1 + l2, height_frac, speed_frac, ramp, loop)
             slide = motion.foot_slide(ankles, flags)
             row["feet"][side] = {"planted_keys": int(sum(flags)), "slide_before": round(slide, 4), "_flags": flags,
@@ -128,7 +160,7 @@ def foot_lock(clip, model=None, animations=None, ramp=3, height_frac=0.12, speed
                 if anchor is None or weight <= 0:
                     continue
                 hip, knee0, ankle0 = (worlds[j][i, :3, 3] for j in (t, k, f))
-                goal = from_motion((anchor[0], anchor[1], ankles[i][2]))
+                goal = from_motion((anchor[0], anchor[1], ankles[i][2])) + shift[i] + ankle0 - worlds[point][i, :3, 3]
                 target = ankle0 + (goal - ankle0) * weight
                 if np.linalg.norm(target - ankle0) < 1e-4 * (l1 + l2):
                     continue
@@ -152,8 +184,10 @@ def foot_lock(clip, model=None, animations=None, ramp=3, height_frac=0.12, speed
             if changed:
                 builder = CG.store_output(document, binary, sampler, q, builder)
         row["keys"], row["_keys"] = len(keys), keys
+        row["_space"] = space
         # Locked plants change what reads as planted, so a second lock would move them again.
-        document["animations"][anim].setdefault("extras", {})[STAMP] = {"ramp": ramp, "loop": bool(loop)}
+        document["animations"][anim].setdefault("extras", {})[STAMP] = {"ramp": ramp, "loop": bool(loop), "space": space,
+                                                                       "pin": pin}
     if builder is not None:
         document, binary = builder.json, builder.payload
     fixed = G.Glb(copy.deepcopy(document), bytes(binary))
@@ -163,8 +197,10 @@ def foot_lock(clip, model=None, animations=None, ramp=3, height_frac=0.12, speed
         if keys is None:
             continue
         worlds = body.posed_worlds(fixed.channels(name, by_index=body is fixed), keys)
-        for side, (_, _, f) in legs.items():
+        shift = (in_place_shift(fixed, fixed.animation_index(name), body, worlds, keys, axes[:, 2])
+                 if row.pop("_space") == "in_place" else 0.0)
+        for side in legs:
             flags = row["feet"][side].pop("_flags")
-            ankles = [to_motion(p) for p in worlds[f][:, :3, 3]]
+            ankles = [to_motion(p) for p in worlds[pins[side]][:, :3, 3] - shift]
             row["feet"][side]["slide_after"] = round(motion.foot_slide(ankles, flags), 4)
     return document, bytes(binary), report

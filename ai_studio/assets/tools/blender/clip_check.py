@@ -281,7 +281,7 @@ def check_feet(model, feet, names, positions, times, opts, anim, out, row, soles
             ground = mean
             for tr in tracks.values():
                 tr[:, :2] -= ground * t[:, None]
-    row.update(in_place=bool(in_place), ground_speed=round(float(np.linalg.norm(ground)), 3), feet={})
+    row.update(in_place=opts["in_place"] if opts["in_place"] == "linear_drift" else bool(in_place), ground_speed=round(float(np.linalg.norm(ground)), 3), feet={})
     contacts = {}
     for foot, tr in tracks.items():
         if soles and foot in soles:
@@ -490,6 +490,13 @@ def check_animation(clip, model, anim, joint_ids, opts, lim, findings, row, refe
     names = [model.name(i) for i in ids]
     roots = {model.name(i) for i in ids if model.parent.get(i) not in ids}
     positions = (np.stack([worlds[i][:, :3, 3] for i in ids], axis=1) if ids else np.zeros((len(times), 0, 3))) * lim["unit"]
+    drift = None
+    if opts["in_place"] == "linear_drift":
+        # Judged where the game shows it: the root's start-to-end ground travel taken away linearly.
+        from ai_studio.assets.tools.blender.lib import clip_lock
+        drift = clip_lock.in_place_shift(clip, clip.animation_index(anim), model, worlds, times,
+                                         np.array([0.0, 1.0, 0.0])) * lim["unit"]
+        positions = positions - drift[:, None, :]
     row["samples"] = len(times)
     if not len(ids):
         return
@@ -509,6 +516,8 @@ def check_animation(clip, model, anim, joint_ids, opts, lim, findings, row, refe
             picks = _model_fact(model, ("soles", tuple(feet), lim["plant_height"]),
                                 lambda: sole_vertices(model, feet, lim["plant_height"]))
             soles = {f: model.skinned_points(worlds, nodes, idx) * lim["unit"] for f, idx in picks.items()}
+            if drift is not None:
+                soles = {f: pts - drift[:, None, :] for f, pts in soles.items()}
         contacts = check_feet(model, feet, names, positions, times, lim, anim, findings, row, soles)
         for foot, flags in contacts.items():
             # A foot near the floor is landing or pushing off: its snap into place is the step itself.
@@ -636,8 +645,10 @@ def _configure(parser):
     parser.add_argument("--sink", type=float, help="metres below the floor (default 0.03)")
     parser.add_argument("--loop", action="store_true", default=None, help="compare the first and last pose")
     parser.add_argument("--loop-seam", type=float)
-    parser.add_argument("--in-place", choices=("auto", "yes", "no"),
-                        help="judge foot slide against the treadmill an in-place clip implies (default auto)")
+    parser.add_argument("--in-place", choices=("auto", "yes", "no", "linear_drift"),
+                        help="judge foot slide against the treadmill an in-place clip implies (default auto); "
+                             "linear_drift: as a game shows a clip after removing the root's start-to-end ground "
+                             "travel linearly")
     parser.add_argument("--body-scale", type=_scale, help="threshold multiplier, or auto: model height / 1.75 m")
     parser.add_argument("--no-skinned-soles", dest="skinned_soles", action="store_false", default=None,
                         help="use foot joints instead of skinned vertices for the floor and slide tests")

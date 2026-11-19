@@ -61,6 +61,49 @@ class FootLockTests(unittest.TestCase):
         worlds = fixed.posed_worlds(fixed.channels(0, by_index=True), [times[0], times[-1]])
         self.assertLess(float(np.linalg.norm(worlds[foot][0, :3, 3] - worlds[foot][1, :3, 3])), 1e-3)
 
+    def test_in_place_space_follows_the_games_drift_removal(self):
+        # The hips travel 0.2 m and the legs ride along: in world the feet glide, but a game that
+        # removes the root's start-to-end travel linearly shows them standing still.
+        clip = gliding_clip(legs=0.0)
+        keys = clip.channels("move")[("mixamorig:LeftUpLeg", "rotation")][0]
+        worlds = clip.posed_worlds(clip.channels("move", by_index=True), keys)
+        shift = CL.in_place_shift(clip, 0, clip, worlds, keys, np.array([0.0, 1.0, 0.0]))
+        hips = worlds[clip.by_name["mixamorig:Hips"]][:, :3, 3]
+        self.assertAlmostEqual(float(shift[-1, 2]), float(hips[-1, 2] - hips[0, 2]), places=5)
+        self.assertAlmostEqual(float(np.abs(shift[:, 1]).max()), 0.0, places=6)  # height is never taken away
+        world = CL.foot_lock(clip)[2]["clips"]["move"]["feet"]
+        in_place = CL.foot_lock(clip, space="in_place")
+        feet = in_place[2]["clips"]["move"]["feet"]
+        self.assertTrue(all(f["locked"] for f in world.values()))
+        for side in feet:
+            self.assertLess(feet[side]["slide_before"], 0.25 * world[side]["slide_before"])
+
+    def test_toe_pin_keeps_the_toe_still(self):
+        clip = gliding_clip()
+        document, binary, report = CL.foot_lock(clip, pin="toe")
+        fixed = G.Glb(document, binary)
+        keys = fixed.channels("move")[("mixamorig:LeftUpLeg", "rotation")][0]
+        worlds = fixed.posed_worlds(fixed.channels("move", by_index=True), keys)
+        toe = worlds[fixed.by_name["mixamorig:LeftToeBase"]][:, :3, 3]
+        self.assertEqual(report["clips"]["move"]["pin"], "toe")
+        self.assertLess(float(np.ptp(toe[:, [0, 2]], axis=0).max()), 0.01)
+
+    def test_clip_check_linear_drift_judges_the_games_space(self):
+        import tempfile
+        from pathlib import Path
+        from ai_studio.assets.tools.blender import clip_check
+        builder, nodes = build_rig(positions())
+        add_motion(builder, nodes, travel=0.4, legs=0.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = builder.write(Path(tmp) / "clip.glb")
+
+            def slides(mode):
+                report = clip_check.check(str(path), in_place=mode, skinned_soles=False)
+                return [f for f in report["findings"] if f["check"] == "foot_slide"]
+
+            self.assertTrue(slides("no"))  # in root-motion space the riding feet glide with the hips
+            self.assertFalse(slides("linear_drift"))  # in place, as the game plays it, they stand still
+
 
 if __name__ == "__main__":
     unittest.main()
