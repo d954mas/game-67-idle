@@ -109,6 +109,13 @@ def cube_glb(path, height=1.0, clip=None):
     return path
 
 
+def pixels(path):
+    """(h, w, 4) uint8 of a PNG; Pillow lives in the Studio venv, not in Blender."""
+    from PIL import Image
+    with Image.open(path) as image:
+        return np.asarray(image.convert("RGBA")).astype(np.int32)
+
+
 def setUpModule():
     try:
         run_blender.find_blender()
@@ -183,6 +190,50 @@ class RenderViews(BlenderCase):
         self.assertEqual([m["name"] for m in members], ["anim1", "anim2"])
         for member in members:
             self.assertAlmostEqual(member["offset_gltf"][1], 0.0, places=5, msg=member)
+
+    def test_facing_pass_shows_an_inside_out_shell_red(self):
+        model = self.tmp / "shells.glb"
+        b = G.GlbBuilder()
+        b.add_node("outward", mesh=b.add_mesh("outward", CUBE, CUBE_FACES), translation=[-1, 0, 0])
+        b.add_node("inward", mesh=b.add_mesh("inward", CUBE, CUBE_FACES[:, ::-1]), translation=[1, 0, 0])
+        b.write(model)
+        out = self.tmp / "facing"
+        self.blender(HERE / "render_views.py", "--model", model, "--out", out, "--size", 96,
+                     "--views", "front", "--passes", "facing", "--no-sheet")
+        rgba = pixels(out / "front_facing.png")
+        opaque = rgba[..., 3] > 200
+        half = rgba.shape[1] // 2
+        red = (rgba[..., 0] - rgba[..., 1]) * opaque
+        outward, inward = red[:, :half][opaque[:, :half]], red[:, half:][opaque[:, half:]]
+        self.assertGreater(len(outward), 100)
+        self.assertGreater(len(inward), 100)
+        self.assertLess(float(np.median(outward)), 20)
+        self.assertGreater(float(np.median(inward)), 150)
+
+    def test_floor_pose_size_and_fitted_lineup_game_view(self):
+        model = cube_glb(self.tmp / "lid.glb", clip=("Rise", [0.0, 1.0], [0.0, 1.5]))
+        tall = cube_glb(self.tmp / "tall.glb", height=3.0)
+        out = self.tmp / "floor"
+        # A game target far from the group: hero framing would show nothing of it.
+        self.blender(HERE / "render_views.py", "--model", model, "--out", out, "--size", 48, "--views", "front",
+                     "--passes", "beauty", "--poses", "Rise@0", "Rise@1", "--pose-size", 96, "--floor",
+                     "--beside", tall, "--lineup-views", "game", "--game", '{"target": [40, 0, 40]}', "--no-sheet")
+        report = json.loads((out / "views.json").read_text(encoding="utf-8"))
+        np.testing.assert_allclose(report["stats"]["bounds"]["min"], CUBE.min(axis=0), atol=1e-4)
+        self.assertEqual(report["floor"]["views"], "poses")
+        # The main view has no floor: the band under the cube stays transparent.
+        main = pixels(out / "front_beauty.png")
+        self.assertEqual(int(main[-1, :, 3].max()), 0)
+        poses = [i for i in report["images"] if i["view"] == "pose"]
+        self.assertEqual({tuple(i["size"]) for i in poses}, {(96, 96)})
+        for image in poses:
+            self.assertGreater(int(pixels(out / image["file"])[-1, :, 3].max()), 0, image["file"])
+        game = next(i for i in report["images"] if i["view"] == "lineup" and i["base_view"] == "game")
+        self.assertEqual(game["size"], [round(48 * 16 / 9), 48])
+        # Fitted to the group, the tall reference fills the frame height instead of a tiny tile.
+        rows = np.nonzero(pixels(out / game["file"])[..., 3].max(axis=1) > 0)[0]
+        self.assertGreater(len(rows), 0)
+        self.assertGreater(rows.max() - rows.min(), 0.75 * game["size"][1])
 
     def test_clip_source_poses_a_body_by_node_name(self):
         # The body carries its own "Rise" (to 3.0); the clip file's "Rise" (to 1.5) must win.

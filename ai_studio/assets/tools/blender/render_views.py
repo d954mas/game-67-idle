@@ -6,7 +6,7 @@ Run inside Blender through the runner:
         ai_studio/assets/tools/blender/render_views.py -- --model m.glb --out tmp/review
 
 Flags: --views front right three_quarter game turntable (or comma-separated), --passes beauty
-clay wire silhouette, --size 768, --light studio_hdr|flat, --background transparent|#hex,
+clay wire silhouette facing, --size 768, --light studio_hdr|flat, --background transparent|#hex,
 --animation NAME --time SECONDS, --samples 16, --game '{"height": 1.8, ...}',
 --turntable-frames 8, --no-sheet, --eevee-passes (clay/silhouette lit by the HDR in EEVEE
 instead of the about 3x faster Workbench). Several --model files render in one Blender start into
@@ -21,12 +21,18 @@ scale (bottoms level, gap 15% of the widest member) and renders the group with -
 (default beauty). Poses: --poses Walk@0.4 Run@1.25 (glTF seconds) renders each with
 --pose-views (default three_quarter) and --pose-passes (default beauty) at one framing shared
 by all poses; --clip-source clips.glb plays a clip-only GLB on the model's nodes by name, as
-the engine does.
+the engine does. --pose-size PX sizes pose images (default --size). --floor puts a ground at
+glTF y=0 (faint 0.5 m grid, contact shadow) under the pose views' beauty pass; --floor all
+puts it under every view's beauty pass. The floor never enters stats or bounds.
+
+Pass `facing`: front faces grey, back faces red and nothing culled, so an inside-out shell or a
+flipped face shows red from outside.
 
 Views use glTF axes: +Z is the model's front, so `front` looks at it along -Z and `right`
 sees its +X side (Blender's numpad views). front/back/left/right/top are orthographic and fitted
 to the vertices; three_quarter and turntable are perspective and fitted; `game` reproduces an
-engine follow camera (yaw 0 = behind the model, looking along +Z) and is not fitted.
+engine follow camera (yaw 0 = behind the model, looking along +Z) and is not fitted, except in
+the lineup, where it keeps the camera's pitch, yaw and FOV and fits the whole group.
 
 In-process use (a build script, a long-lived Blender): `main(argv)` returns the report and
 raises instead of exiting; `render_objects(objects, job)` renders objects already in the
@@ -53,11 +59,13 @@ from ai_studio.assets.tools.blender.lib.color import as_linear, linear_to_srgb, 
 from ai_studio.assets.tools.blender.lib.glb import Glb
 
 VIEWS = ("front", "back", "left", "right", "top", "three_quarter", "game", "turntable")
-PASSES = ("beauty", "clay", "wire", "silhouette")
+PASSES = ("beauty", "clay", "wire", "silhouette", "facing")
 DEFAULTS = {"views": ["front", "right", "three_quarter"], "passes": ["beauty", "clay", "wire"],
             "size": 768, "light": "studio_hdr", "background": "transparent", "samples": 16,
             "beside": [], "lineup_views": None, "lineup_passes": ["beauty"],
-            "poses": [], "pose_views": ["three_quarter"], "pose_passes": ["beauty"]}
+            "poses": [], "pose_views": ["three_quarter"], "pose_passes": ["beauty"], "pose_size": None,
+            "floor": None}
+FLOOR_MODES = ("poses", "all")
 # Direction from the model toward the camera, Blender axes (glTF +Z front = Blender -Y).
 ORTHO = {"front": (0, -1, 0), "back": (0, 1, 0), "right": (1, 0, 0), "left": (-1, 0, 0), "top": (0, 0, 1)}
 GAME = {"height": 1.8, "behind": 2.0, "offset": 0.0, "pitch": 16.0, "fov_y": 55.0, "yaw": 0.0,
@@ -66,6 +74,8 @@ MARGIN = 1.08
 LINEUP_GAP = 0.15
 TEXTURE_PREVIEW = 512
 CLAY = (0.55, 0.55, 0.55)
+BACKFACE = (0.9, 0.02, 0.02)
+FLOOR_GRID = 0.5
 # Workbench draws a 768 px image in about 10 ms against EEVEE's 80 ms; for flat-grey form and
 # outline that is the same picture. Camera-space studio light keeps every view lit alike.
 WORKBENCH = {
@@ -117,6 +127,9 @@ def parse(argv):
     p.add_argument("--pose-views", nargs="+")
     p.add_argument("--pose-passes", nargs="+")
     p.add_argument("--clip-source", help="clip-only GLB to play on the model by node name")
+    p.add_argument("--pose-size", type=int, help="pose image height in px (default: --size)")
+    p.add_argument("--floor", nargs="?", const="poses", choices=FLOOR_MODES,
+                   help="ground plane under the pose views (default) or all views, beauty pass")
     args = p.parse_args(argv)
     job = {}
     if args.job:
@@ -126,7 +139,7 @@ def parse(argv):
     if args.eevee_passes:
         job["eevee_passes"] = True
     for key in ("model", "out", "size", "light", "background", "animation", "time", "samples", "beside",
-                "clip_source", "poses"):
+                "clip_source", "poses", "pose_size", "floor"):
         if getattr(args, key) is not None:
             job[key] = getattr(args, key)
     for key in ("views", "passes", "lineup_views", "lineup_passes", "pose_views", "pose_passes"):
@@ -188,6 +201,8 @@ def normalize(job):
     job["poses"] = [_pose_spec(p) for p in job["poses"]]
     views = job["views"] + job["lineup_views"] + job["pose_views"]
     passes = job["passes"] + job["lineup_passes"] + job["pose_passes"]
+    if job["floor"] not in (None, False, *FLOOR_MODES):
+        raise ValueError(f"render_views: floor must be one of {FLOOR_MODES}, not {job['floor']!r}")
     bad = [v["view"] for v in views if v["view"] not in VIEWS] + [x for x in passes if x not in PASSES]
     if bad:
         raise ValueError(f"render_views: unknown view/pass {bad}; views: {VIEWS}, passes: {PASSES}")
@@ -385,7 +400,91 @@ def override_materials():
     tree.links.new(edge.outputs["Fac"], ramp.inputs["Fac"])
     tree.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
     black = S.emission_material("review_silhouette", (0.0, 0.0, 0.0))
-    return {"beauty": None, "clay": clay, "wire": wire, "silhouette": black}, edge
+    return {"beauty": None, "clay": clay, "wire": wire, "silhouette": black, "facing": facing_material()}, edge
+
+
+def facing_material():
+    """Lit grey where the camera sees a face's front, flat red where it sees the back. Nothing is
+    culled, so a shell wound inside-out reads red from outside, which a double-sided beauty or
+    clay render hides."""
+    mat = bpy.data.materials.new("review_facing")
+    tree = S.node_tree(mat)
+    bsdf = S.find_node(tree, "BSDF_PRINCIPLED")
+    bsdf.inputs["Base Color"].default_value = (*CLAY, 1.0)
+    bsdf.inputs["Roughness"].default_value = 1.0
+    geometry = tree.nodes.new("ShaderNodeNewGeometry")
+    red = tree.nodes.new("ShaderNodeEmission")
+    red.inputs["Color"].default_value = (*BACKFACE, 1.0)
+    mix = tree.nodes.new("ShaderNodeMixShader")
+    tree.links.new(geometry.outputs["Backfacing"], mix.inputs[0])
+    tree.links.new(bsdf.outputs[0], mix.inputs[1])
+    tree.links.new(red.outputs[0], mix.inputs[2])
+    tree.links.new(mix.outputs[0], S.find_node(tree, "OUTPUT_MATERIAL").inputs["Surface"])
+    mat.use_backface_culling = False
+    return mat
+
+
+class Floor:
+    """Ground at glTF y=0 under the beauty pass: a 0.5 m grid and an overhead sun that, through
+    light linking, lights only the floor, so the model keeps its studio look while its contact
+    shadow shows whether it stands, floats or sinks. Created inside SceneState, which removes it."""
+
+    def __init__(self, scene, points):
+        lo, hi = points.min(axis=0), points.max(axis=0)
+        centre = (lo + hi) / 2
+        half = float(max(hi[0] - lo[0], hi[1] - lo[1])) * 1.5 + FLOOR_GRID
+        # A thin slab, not a plane: front/right/left views look along the ground, where a plane
+        # would vanish edge-on; the slab leaves a ground line to read sinking or floating against.
+        thickness = max(0.01 * float(max(hi - lo)), 0.005)
+        coll = bpy.data.collections.new("review_floor")
+        scene.collection.children.link(coll)
+        self.object = S.box("review_floor", (2 * half, 2 * half, thickness), location=(centre[0], centre[1], -thickness),
+                            anchor="bottom", material=self._material(), coll=coll)
+        self.sun = bpy.data.objects.new("review_floor_sun", bpy.data.lights.new("review_floor_sun", "SUN"))
+        self.sun.data.energy = 2.0
+        self.sun.data.angle = math.radians(4.0)
+        self.sun.light_linking.receiver_collection = coll
+        scene.collection.objects.link(self.sun)
+        self.scene = scene
+        self.show(False)
+
+    @staticmethod
+    def _material():
+        mat = bpy.data.materials.new("review_floor")
+        tree = S.node_tree(mat)
+        bsdf = S.find_node(tree, "BSDF_PRINCIPLED")
+        bsdf.inputs["Roughness"].default_value = 1.0
+        coords = tree.nodes.new("ShaderNodeNewGeometry")
+        xyz = tree.nodes.new("ShaderNodeSeparateXYZ")
+        tree.links.new(coords.outputs["Position"], xyz.inputs[0])
+
+        def math_node(op, a, b=None):
+            node = tree.nodes.new("ShaderNodeMath")
+            node.operation = op
+            for socket, value in zip(node.inputs, (a, b)):
+                if value is None:
+                    continue
+                if isinstance(value, (int, float)):
+                    socket.default_value = value
+                else:
+                    tree.links.new(value, socket)
+            return node.outputs[0]
+        # Distance in metres to the nearest grid line along x and y, then a thin line mask.
+        lines = []
+        for axis in ("X", "Y"):
+            cell = math_node("FRACT", math_node("ADD", math_node("DIVIDE", xyz.outputs[axis], FLOOR_GRID), 0.5))
+            lines.append(math_node("ABSOLUTE", math_node("SUBTRACT", cell, 0.5)))
+        near = math_node("MINIMUM", *lines)
+        mask = math_node("LESS_THAN", math_node("MULTIPLY", near, FLOOR_GRID), 0.006)
+        # Dark enough that the studio light plus the floor sun does not wash it out to white.
+        tree.links.new(math_node("SUBTRACT", 0.3, math_node("MULTIPLY", mask, 0.08)), bsdf.inputs["Base Color"])
+        return mat
+
+    def show(self, visible):
+        self.object.hide_render = self.sun.hide_render = not visible
+        # Only the floor's contact shadow needs the shadow system.
+        self.scene.eevee.use_shadows = visible or any(
+            o.type == "LIGHT" and not o.hide_render for o in self.scene.objects)
 
 
 class Passes:
@@ -495,20 +594,33 @@ def orbit(azimuth_deg, elevation_deg):
     return (math.sin(az) * math.cos(el), -math.cos(az) * math.cos(el), math.sin(el))
 
 
-def game_camera(cam, spec):
-    """Engine follow camera: `behind` the target along -Z (glTF), `height` up, `offset` on X,
-    pitched down by `pitch`, vertical FOV `fov_y`; `yaw` turns the rig about the target."""
+def _game_rig(spec):
+    """(merged spec, eye, forward) of the engine follow camera, Blender axes."""
     g = {**GAME, **{k: v for k, v in spec.items() if k != "view"}}
     target = Vector(S.gltf_to_blender(g["target"]))
     yaw = math.radians(g["yaw"])
     rot = lambda v: Vector((v[0] * math.cos(yaw) - v[1] * math.sin(yaw), v[0] * math.sin(yaw) + v[1] * math.cos(yaw), v[2]))
     eye = target + rot(S.gltf_to_blender((g["offset"], g["height"], -g["behind"])))
     pitch = math.radians(g["pitch"])
-    forward = rot((0.0, -math.cos(pitch), -math.sin(pitch)))
+    return g, eye, rot((0.0, -math.cos(pitch), -math.sin(pitch)))
+
+
+def game_camera(cam, spec):
+    """Engine follow camera: `behind` the target along -Z (glTF), `height` up, `offset` on X,
+    pitched down by `pitch`, vertical FOV `fov_y`; `yaw` turns the rig about the target."""
+    g, eye, forward = _game_rig(spec)
     set_perspective(cam, math.radians(g["fov_y"]))
     d, _, u = basis(-forward)
     place(cam, eye, d, u)
     cam.data.clip_start, cam.data.clip_end = 0.05, 500.0
+    return g
+
+
+def fit_game(cam, points, spec):
+    """The game camera's direction and FOV, distance and aim fitted to `points`: the lineup's game
+    view, where the hero target would cut the references off."""
+    g, _, forward = _game_rig(spec)
+    fit_perspective(cam, points, -forward, g["aspect"], g["fov_y"])
     return g
 
 
@@ -617,8 +729,9 @@ def model_stats(objects, meshes, textures, fps):
                            for a in actions]}
 
 
-def shots(views, points, prefix=""):
-    """(file stem, camera setup returning the image aspect, image record fields) per position."""
+def shots(views, points, prefix="", fitted_game=False):
+    """(file stem, camera setup returning the image aspect, image record fields) per position.
+    `fitted_game` frames the game view on `points` instead of the game's own target."""
     centre = (points.min(axis=0) + points.max(axis=0)) / 2
     for spec in views:
         view = spec["view"]
@@ -629,6 +742,8 @@ def shots(views, points, prefix=""):
             dr = orbit(spec.get("azimuth", 35.0), spec.get("elevation", 25.0))
             yield (prefix + view, lambda cam, dr=dr, fov=fov: fit_perspective(cam, points, dr, 1.0, fov) and 1.0,
                    {"view": view})
+        elif view == "game" and fitted_game:
+            yield prefix + view, lambda cam, sp=spec: fit_game(cam, points, sp)["aspect"], {"view": view}
         elif view == "game":
             yield prefix + view, lambda cam, sp=spec: game_camera(cam, sp)["aspect"], {"view": view}
         else:
@@ -753,8 +868,9 @@ def render_objects(objects, job, asset=None, name=None, rest=False):
         size = int(job["size"])
         timing["setup"] = round(time.monotonic() - started, 3)
         render_started = time.monotonic()
+        floor = Floor(scene, framing_with_floor(points)) if job["floor"] else None
         images = render_shots(scene, cam, passes, list(shots(job["views"], points)), job["passes"], size,
-                              job["background"], out)
+                              job["background"], out, floor if job["floor"] == "all" else None)
 
         lineup_report = None
         if job["beside"]:
@@ -763,7 +879,7 @@ def render_objects(objects, job, asset=None, name=None, rest=False):
                 obj.hide_render = False
             lineup_shots = [(f"lineup_{stem}", setup, {"view": "lineup", "base_view": extra["view"],
                                                        **{k: v for k, v in extra.items() if k != "view"}})
-                            for stem, setup, extra in shots(job["lineup_views"], group_points)]
+                            for stem, setup, extra in shots(job["lineup_views"], group_points, fitted_game=True)]
             group = [name] + [m["name"] for m in ref_members if "error" not in m]
             for record in render_shots(scene, cam, passes, lineup_shots, job["lineup_passes"], size,
                                        job["background"], out):
@@ -774,7 +890,8 @@ def render_objects(objects, job, asset=None, name=None, rest=False):
 
         pose_report = []
         if job["poses"]:
-            pose_report, pose_images = render_poses(state, members, meshes, job, scene, cam, passes, size, out, fps)
+            pose_report, pose_images = render_poses(state, members, meshes, job, scene, cam, passes,
+                                                    int(job["pose_size"] or size), out, fps, floor)
             images += pose_images
         timing["render"] = round(time.monotonic() - render_started, 3)
         timing["images"] = len(images)
@@ -793,16 +910,21 @@ def render_objects(objects, job, asset=None, name=None, rest=False):
         report["lineup"] = lineup_report
     if job["poses"]:
         report["poses"] = pose_report
+    if job["floor"]:
+        report["floor"] = {"views": job["floor"], "passes": ["beauty"], "grid_m": FLOOR_GRID}
     (out / "views.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     return report
 
 
-def render_shots(scene, cam, passes, shot_list, pass_names, size, background, out):
+def render_shots(scene, cam, passes, shot_list, pass_names, size, background, out, floor=None):
     """Pass-major, so the engine switches once per pass instead of once per image; the records
-    come back view-major, the order the sheet and card read them."""
+    come back view-major, the order the sheet and card read them. A floor shows in beauty only:
+    the other passes override every material, the floor's included."""
     records = {}
     for k, pass_name in enumerate(pass_names):
         passes.apply(pass_name, size)
+        if floor:
+            floor.show(pass_name == "beauty")
         for i, (stem, setup, extra) in enumerate(shot_list):
             aspect = float(setup(cam) or 1.0)
             scene.render.resolution_x, scene.render.resolution_y = round(size * aspect), size
@@ -813,11 +935,24 @@ def render_shots(scene, cam, passes, shot_list, pass_names, size, background, ou
                 composite_background(file, background)
             records[(i, k)] = {**extra, "pass": pass_name, "file": file.name,
                                "size": [scene.render.resolution_x, scene.render.resolution_y]}
+    if floor:
+        floor.show(False)
     return [records[key] for key in sorted(records)]
 
 
-def render_poses(state, members, meshes, job, scene, cam, passes, size, out, fps):
-    """Every pose framed alike (the union of all posed vertices), so poses compare at one scale."""
+def framing_with_floor(points):
+    """`points` plus the floor patch under them (a margin past the footprint and below y=0), so a
+    framing fitted to them shows where the model meets the ground."""
+    lo, hi = points.min(axis=0), points.max(axis=0)
+    margin = 0.08 * float(max(hi - lo)) or 0.05
+    z = min(float(lo[2]), 0.0) - margin
+    corners = [(x, y, z) for x in (lo[0] - margin, hi[0] + margin) for y in (lo[1] - margin, hi[1] + margin)]
+    return np.vstack([points, np.array(corners)])
+
+
+def render_poses(state, members, meshes, job, scene, cam, passes, size, out, fps, floor=None):
+    """Every pose framed alike (the union of all posed vertices, plus the ground patch under them
+    with a floor), so poses and filmstrip frames compare at one scale."""
     report, posed = [], []
     for spec in job["poses"]:
         state.restore_pose()
@@ -838,6 +973,8 @@ def render_poses(state, members, meshes, job, scene, cam, passes, size, out, fps
     if not posed:
         return report, images
     union = np.vstack([p for _, (_, _, p) in posed])
+    if floor:
+        union = framing_with_floor(union)
     for k, (spec, label, _) in posed:
         state.restore_pose()
         rest_pose(members)
@@ -848,7 +985,8 @@ def render_poses(state, members, meshes, job, scene, cam, passes, size, out, fps
                                      **{k: v for k, v in extra.items() if k != "view"},
                                      "animation": spec["animation"], "time": spec["time"]})
                       for stem, setup, extra in shots(job["pose_views"], union, prefix)]
-        images += render_shots(scene, cam, passes, pose_shots, job["pose_passes"], size, job["background"], out)
+        images += render_shots(scene, cam, passes, pose_shots, job["pose_passes"], size, job["background"], out,
+                               floor)
     state.restore_pose()
     return report, images
 

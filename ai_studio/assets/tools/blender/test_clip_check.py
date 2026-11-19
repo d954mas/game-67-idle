@@ -107,6 +107,27 @@ class ClipCheck(unittest.TestCase):
         self.assertTrue(report["metrics"]["per_animation"][0]["in_place"])
         self.assertIn("foot_slide", found(clip_check.check(character(Walk=walk), in_place="no")))
 
+    def test_lifted_foot_moving_low_is_a_step_not_a_slide(self):
+        # The foot drifts 20 cm while 5 cm up (a lunge's back foot), then sets down: its ankle stays
+        # within the old ankle-height plant band, its sole does not touch.
+        lift = np.where(T < 0.6, 0.05, 0.0)
+        drift = np.minimum(T, 0.6) / 0.6 * 0.2
+        lunge = {"LeftFoot": np.c_[0.1 + drift, -0.82 + lift, np.zeros(len(T))]}
+        report = clip_check.check(character(Lunge=lunge))
+        self.assertNotIn("foot_slide", found(report))
+        self.assertEqual(report["metrics"]["per_animation"][0]["feet"]["LeftFoot"]["points"], "sole")
+
+    def test_airborne_clips_skip_floor_and_slide(self):
+        held = {"Carried": {"Hips": hips(0.5)}, "Dropped": {"Hips": hips(-0.2)}, "Slide": SLIDE}
+        report = clip_check.check(character(**held), airborne=["Carr*", "Drop*"])
+        self.assertIn("airborne", found(report, "info"))
+        self.assertEqual(found(report) & {"sole_float", "sole_sink"}, set())
+        self.assertIn("foot_slide", serious(report))
+        plain = clip_check.check(character(**held))
+        self.assertTrue({"sole_float", "sole_sink"} <= found(plain))
+        floating = next(f for f in plain["findings"] if f["check"] == "sole_float")
+        self.assertRegex(floating["message"], r"within 0\.\d{3} m ")
+
     def test_popping_joint(self):
         spike = np.zeros(len(T))
         spike[15] = 0.2

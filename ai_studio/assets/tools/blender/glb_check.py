@@ -3,7 +3,7 @@ formats, vertex colour encoding, node transforms, pivot, joint count and skin we
 rig against a reference rig.
 
     python glb_check.py model.glb [--pivot floor|floor-center|center|top|any] [--textures any|none|png]
-        [--color-encoding any|float|u8] [--identity-nodes] [--max-joints N] [--reference-rig rig.glb]
+        [--color-encoding any|float|u8|u16|normalized] [--identity-nodes] [--max-joints N] [--reference-rig rig.glb]
 
 The bounds and the bounds centre are reported separately from the origin: a consumer that places a
 model by its bounds or collider centre instead of its origin floats or sinks it.
@@ -26,6 +26,9 @@ DEFAULTS = {"normal_tolerance": 0.01, "jpeg": "low", "textures": "any", "color_e
             "rig_translation_tolerance": 1e-4, "rig_rotation_tolerance_deg": 0.01}
 SAMPLES = 5
 PIVOTS = ("floor", "floor-center", "center", "top", "any")
+# glTF allows COLOR_0 as float or normalized unsigned byte/short; `normalized` accepts either integer form.
+COLOR_ENCODINGS = {"float": {(G.FLOAT, False)}, "u8": {(G.UNSIGNED_BYTE, True)}, "u16": {(G.UNSIGNED_SHORT, True)},
+                   "normalized": {(G.UNSIGNED_BYTE, True), (G.UNSIGNED_SHORT, True)}}
 
 
 def _r(values, digits=4):
@@ -157,8 +160,8 @@ def check_primitives(glb, opts, out, unreadable=frozenset()):
                                          int(off.sum()), 0))
             if "COLOR_0" in attrs and opts["color_encoding"] != "any":
                 acc = doc["accessors"][attrs["COLOR_0"]]
-                want = {"float": (G.FLOAT, False), "u8": (G.UNSIGNED_BYTE, True)}[opts["color_encoding"]]
-                if (acc["componentType"], bool(acc.get("normalized"))) != want:
+                want = COLOR_ENCODINGS[opts["color_encoding"]]
+                if (acc["componentType"], bool(acc.get("normalized"))) not in want:
                     out.append(R.finding("color_encoding", "medium",
                                          f"COLOR_0 is componentType {acc['componentType']}, the contract wants "
                                          f"{opts['color_encoding']}", "re-export the colour attribute in the "
@@ -385,7 +388,7 @@ def check_reference_rig(glb, opts, out, metrics):
 def check(path_or_glb, **options):
     opts = R.resolve_options(TOOL, DEFAULTS, overrides=options)
     for key, allowed in (("pivot", PIVOTS), ("textures", ("any", "none", "png")),
-                         ("color_encoding", ("any", "float", "u8")), ("jpeg", R.SEVERITIES + ("off",))):
+                         ("color_encoding", ("any",) + tuple(COLOR_ENCODINGS)), ("jpeg", R.SEVERITIES + ("off",))):
         if opts[key] not in allowed:
             raise ValueError(f"{TOOL}: {key} must be one of {allowed}, not {opts[key]!r}")
     try:
@@ -415,7 +418,7 @@ def _configure(parser):
     parser.add_argument("--pivot-tolerance", type=float, help="metres (default 0.001)")
     parser.add_argument("--textures", choices=("any", "none", "png"))
     parser.add_argument("--jpeg", choices=R.SEVERITIES + ("off",), help="severity of JPEG images (default low)")
-    parser.add_argument("--color-encoding", choices=("any", "float", "u8"))
+    parser.add_argument("--color-encoding", choices=("any",) + tuple(COLOR_ENCODINGS))
     parser.add_argument("--identity-nodes", action="store_true", default=None)
     parser.add_argument("--normal-tolerance", type=float)
     parser.add_argument("--max-joints", type=int)

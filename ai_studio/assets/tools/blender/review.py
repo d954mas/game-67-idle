@@ -22,6 +22,7 @@ Per model it writes <out>/<stem>/: PNG views, views.json, one JSON report per ch
 and review.json. Checks advise: the command exits 0 unless --strict is given.
 """
 import argparse
+import fnmatch
 import glob
 import json
 import os
@@ -44,11 +45,12 @@ DEFAULT_VIEWS = ("front", "right", "three_quarter")
 # Every option a preset, --config or a flag can set; None/False/[] mean "not set here".
 OPTIONS = {"views": None, "passes": None, "size": 768, "light": "studio_hdr", "game_camera": None,
            "turntable": 0, "beside": [], "lineup_views": None, "animation": None, "time": 0.0,
-           "pose_views": None, "max_poses": 4, "profile": None, "pivot": None, "contacts": None,
+           "pose_views": None, "max_poses": 4, "filmstrip": 8, "max_filmstrips": 3, "pose_size": 384, "profile": None, "pivot": None, "contacts": None,
            "floating": False, "clip_model": None, "game_crop": None}
 PATH_OPTIONS = ("contacts", "clip_model", "game_crop")
 RENDER_OPTIONS = ("views", "passes", "size", "light", "game_camera", "turntable", "beside",
-                  "lineup_views", "animation", "time", "pose_views")
+                  "lineup_views", "animation", "time", "pose_views", "pose_size")
+FACING_CHECKS = ("inverted_shell", "inside_out", "miswound")
 TOOLS = {"mesh_check": mesh_check, "glb_check": glb_check, "contact_check": contact_check,
          "clip_check": clip_check}
 
@@ -74,13 +76,12 @@ def find_presets(model):
     return list(reversed(found))
 
 
-def read_preset(path):
-    """(options, tool config) of one preset file, its paths made absolute."""
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    validate_config(data, f"{path}: ")
-    base = Path(path).parent
+def parse_layer(data, base):
+    """(options, tool config) of one preset layer, its paths made absolute against `base`."""
     options, tools = {}, {}
     for key, value in data.items():
+        if key in ("files", "match"):
+            continue
         if key in OPTIONS:
             if key in PATH_OPTIONS and value:
                 value = str((base / value).resolve())
@@ -90,6 +91,32 @@ def read_preset(path):
         else:
             tools[key] = value
     return options, tools
+
+
+def read_preset(path):
+    """(options, tool config, file rules) of one preset file. `files` holds per-glob overrides,
+    e.g. {"match": "*_glow*.glb", "floating": false}, matched against the file name or its path
+    relative to the preset; later rules win."""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    validate_config(data, f"{path}: ")
+    base = Path(path).parent
+    rules = []
+    for k, rule in enumerate(data.get("files", [])):
+        if not isinstance(rule, dict) or not rule.get("match"):
+            raise SystemExit(f"{path}: files[{k}] needs a \"match\" glob")
+        validate_config(rule, f"{path}: files[{k}]: ")
+        matches = [rule["match"]] if isinstance(rule["match"], str) else list(rule["match"])
+        rules.append((matches, *parse_layer(rule, base)))
+    return (*parse_layer(data, base), rules)
+
+
+def rule_applies(matches, model, base):
+    model = Path(model)
+    try:
+        relative = model.resolve().relative_to(base.resolve()).as_posix()
+    except ValueError:
+        relative = None
+    return any(fnmatch.fnmatch(model.name, m) or (relative and fnmatch.fnmatch(relative, m)) for m in matches)
 
 
 def layer_tools(layer):
@@ -118,9 +145,13 @@ def model_options(model, args, config):
     presets = [] if getattr(args, "no_preset", False) else (
         [Path(args.preset)] if getattr(args, "preset", None) else find_presets(model))
     for path in presets:
-        preset_options, preset_tools = read_preset(path)
+        preset_options, preset_tools, rules = read_preset(path)
         options.update(preset_options)
         merge_tools(tools, preset_tools)
+        for matches, rule_options, rule_tools in rules:
+            if rule_applies(matches, model, Path(path).parent):
+                options.update(rule_options)
+                merge_tools(tools, rule_tools)
     merge_tools(tools, config)
     options.update({k: v for k, v in config.items() if k in OPTIONS})
     for key in OPTIONS:
@@ -134,7 +165,7 @@ def model_options(model, args, config):
 def validate_config(config, where=""):
     """A key no tool and no option knows is a typo: refuse it rather than keep the default."""
     known = set(OPTIONS).union(*(module.DEFAULTS for module in TOOLS.values()))
-    unknown = sorted(k for k in config if k not in TOOLS and k not in known)
+    unknown = sorted(k for k in config if k not in TOOLS and k not in known and k not in ("files", "match"))
     for tool in TOOLS:
         if isinstance(config.get(tool), dict):
             unknown += sorted(f"{tool}.{k}" for k in config[tool] if k not in TOOLS[tool].DEFAULTS)
@@ -180,9 +211,9 @@ def run_checks(model, opts, config):
     return reports
 
 
-def finding_poses(reports, limit):
-    """Distinct (animation, seconds) moments named by clip findings, worst first."""
-    poses = []
+def clip_moments(reports):
+    """(animation, seconds, check) moments named by clip findings above info, in report order."""
+    moments = []
 
     def walk(value, anim=None):
         # clip_check nests moments (pops, clips) under the finding's animation.
@@ -200,13 +231,50 @@ def finding_poses(reports, limit):
         if report["tool"] != "clip_check":
             continue
         for f in report["findings"]:
-            if f["severity"] == "info":
-                continue
-            for anim, seconds in walk(f.get("where")):
-                pose = f"{anim}@{seconds:g}"
-                if pose not in poses:
-                    poses.append(pose)
+            if f["severity"] != "info":
+                moments += [(anim, seconds, f["check"]) for anim, seconds in walk(f.get("where"))]
+    return moments
+
+
+def pose_key(anim, seconds):
+    return f"{anim}@{round(float(seconds), 3):g}"
+
+
+def finding_poses(reports, limit):
+    """Distinct `anim@seconds` moments named by clip findings, worst first."""
+    poses = []
+    for anim, seconds, _ in clip_moments(reports):
+        key = pose_key(anim, seconds)
+        if key not in poses:
+            poses.append(key)
     return poses[:limit]
+
+
+def pose_plan(model, opts, reports):
+    """Pose frames for the card: every finding moment (marked with its checks) plus an even
+    filmstrip over each animation that has findings, or over the first one when all are clean,
+    so a clip is always seen moving and on the floor."""
+    marks = {}
+    for anim, seconds, check in clip_moments(reports):
+        key = pose_key(anim, seconds)
+        if key in marks or len(marks) < int(opts.max_poses or 0):
+            marks.setdefault(key, [])
+            if check not in marks[key]:
+                marks[key].append(check)
+    poses = list(marks)
+    frames = int(opts.filmstrip or 0)
+    if frames:
+        try:
+            glb = Glb.load(model)
+            names = glb.animation_names()
+        except (GlbError, OSError, ValueError, KeyError, IndexError):
+            names = []
+        flagged = [a for a in names if any(k.startswith(f"{a}@") for k in marks)]
+        for anim in (flagged or names[:1])[:int(opts.max_filmstrips or 0)]:
+            duration = glb.duration(anim)
+            times = [duration * i / (frames - 1) for i in range(frames)] if frames > 1 else [0.0]
+            poses += [k for k in (pose_key(anim, s) for s in times) if k not in poses]
+    return poses, marks
 
 
 # --- render -----------------------------------------------------------------------------------
@@ -214,14 +282,20 @@ def finding_poses(reports, limit):
 def render_command(models, out, opts, poses, clip_source=None):
     command = ["--model", *map(str, models), "--out", str(out), "--size", str(opts.size),
                "--light", opts.light, "--no-sheet"]
-    views = list(opts.views or DEFAULT_VIEWS)
-    if opts.game_camera and "game" not in views:
+    # A clip-only file needs the motion, not twelve views of the body at rest.
+    views = list(opts.views or (["three_quarter"] if clip_source else DEFAULT_VIEWS))
+    if opts.game_camera and "game" not in views and not clip_source:
         views.append("game")
     if opts.turntable and "turntable" not in views:
         views.append("turntable")
     command += ["--views", *views]
-    if opts.passes:
-        command += ["--passes", *opts.passes]
+    passes = list(opts.passes or (["beauty"] if clip_source else []))
+    if getattr(opts, "facing", False) and passes and "facing" not in passes:
+        passes.append("facing")
+    elif getattr(opts, "facing", False) and not passes:
+        passes = ["beauty", "clay", "wire", "facing"]
+    if passes:
+        command += ["--passes", *passes]
     if opts.game_camera:
         game = opts.game_camera if isinstance(opts.game_camera, str) else json.dumps(opts.game_camera)
         command += ["--game", game]
@@ -234,7 +308,7 @@ def render_command(models, out, opts, poses, clip_source=None):
         if opts.lineup_views:
             command += ["--lineup-views", *opts.lineup_views]
     if poses:
-        command += ["--poses", *poses]
+        command += ["--poses", *poses, "--floor", "--pose-size", str(opts.pose_size)]
         if opts.pose_views:
             command += ["--pose-views", *opts.pose_views]
     if clip_source:
@@ -269,7 +343,7 @@ def render_groups(models, settings, poses):
     groups = {}
     for model in models:
         opts = settings[model]
-        key = json.dumps([[getattr(opts, k) for k in RENDER_OPTIONS], poses[model],
+        key = json.dumps([[getattr(opts, k) for k in RENDER_OPTIONS], opts.facing, poses[model],
                           str(model) if opts.clip_model else None],
                          sort_keys=True, default=str)
         groups.setdefault(key, []).append(model)
@@ -291,14 +365,16 @@ def review(models, args, config):
     if clashes:
         raise SystemExit(f"several models share the name {clashes}; review them in separate calls")
     root = Path(args.out).resolve() if getattr(args, "out", None) else Path.cwd() / "tmp" / "review"
-    settings, checked, poses = {}, {}, {}
+    settings, checked, poses, marks = {}, {}, {}, {}
     for model in models:
         opts, tools = model_options(model, args, config)
         settings[model] = opts
         out = root / model.stem
         out.mkdir(parents=True, exist_ok=True)
         checked[model] = run_checks(model, opts, tools)
-        poses[model] = finding_poses(checked[model], int(opts.max_poses or 0))
+        poses[model], marks[model] = pose_plan(model, opts, checked[model])
+        # Inverted shells look fine in a double-sided render; the facing pass shows them red.
+        opts.facing = any(f["check"] in FACING_CHECKS for r in checked[model] for f in r["findings"])
         for report in checked[model]:
             write_json(out / f"{report['tool']}.json", report)
     renderable = [m for m in models if not any(
@@ -320,7 +396,8 @@ def review(models, args, config):
         card = None
         if views:
             title = f"{model.name} on {Path(opts.clip_model).name}" if opts.clip_model else None
-            card = review_card.compose(out / "views.json", reports, out / "card.png", opts.game_crop, title)
+            card = review_card.compose(out / "views.json", reports, out / "card.png", opts.game_crop, title,
+                                       marks=marks[model])
         result = results_by_model.get(model)
         summary = {"asset": model.as_posix(), "out": out.as_posix(), "card": card.as_posix() if card else None,
                    "render_error": errors.get(model) if model in renderable else "file not readable",
@@ -391,6 +468,9 @@ def parser():
     p.add_argument("--time", type=float, help="seconds into --animation")
     p.add_argument("--max-poses", type=int, help="pose frames taken from clip findings (default 4, 0 = none)")
     p.add_argument("--pose-views", nargs="+", help="views for pose frames (default three_quarter)")
+    p.add_argument("--filmstrip", type=int, help="even frames per animation on the card (default 8, 0 = none)")
+    p.add_argument("--max-filmstrips", type=int, help="animations that get a filmstrip (default 3)")
+    p.add_argument("--pose-size", type=int, help="pose frame height in px (default 384)")
     p.add_argument("--game-crop", help="screenshot crop of the asset in the game, shown on the card")
     p.add_argument("--profile", help="mesh_check profile: auto (default), volume or surface")
     p.add_argument("--pivot", help="glb_check pivot rule: floor, floor-center, center, top or any")

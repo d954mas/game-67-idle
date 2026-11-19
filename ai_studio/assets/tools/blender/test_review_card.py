@@ -48,7 +48,7 @@ class PoseRows(unittest.TestCase):
             Image.new("RGBA", (64, 64), (200, 80, 40, 255)).save(tmp / "front.png")
             images = [{"view": "front", "pass": "beauty", "file": "front.png", "size": [64, 64]}]
             heights = []
-            for count in (6, 8):
+            for count in (10, 30):
                 for k in range(count):
                     Image.new("RGBA", (64, 64), (40, 80, 200, 255)).save(tmp / f"pose{k}.png")
                 poses = [{"view": "pose", "base_view": "front", "pass": "beauty", "animation": "Walk",
@@ -58,8 +58,8 @@ class PoseRows(unittest.TestCase):
                 card = review_card.compose(tmp / "views.json", [], tmp / f"card{count}.png", cell=96)
                 with Image.open(card) as image:
                     heights.append(image.height)
-            # one view column fits one 48 px frame per row: two more poses add two rows
-            self.assertGreaterEqual(heights[1] - heights[0], 2 * 48)
+            # filmstrips wrap at five 72 px frames per row: 20 more frames add four rows
+            self.assertGreaterEqual(heights[1] - heights[0], 3 * 72)
 
 
 if __name__ == "__main__":

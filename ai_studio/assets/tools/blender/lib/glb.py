@@ -520,6 +520,28 @@ class Glb:
             out[f] = min(floor, float(heights(row, near).min())) if len(near) else best
         return out
 
+    def skin_vertex_joints(self, mesh_nodes):
+        """Joint node carrying the largest weight of each vertex of the skinned `mesh_nodes`, in the
+        vertex order skinned_points uses; None without vertices."""
+        soup = self._skin_soup(tuple(self.node_index(n) for n in mesh_nodes))
+        if soup is None:
+            return None
+        slots, _, _, lanes, weights, _ = soup
+        return np.asarray(slots)[lanes[np.arange(len(lanes)), np.argmax(weights, axis=1)]]
+
+    def skinned_points(self, worlds, mesh_nodes, index):
+        """(poses, len(index), 3) skinned world positions of the chosen vertices (see skin_vertex_joints)
+        in every pose of `worlds` ({node: (poses, 4, 4)})."""
+        slots, binds, pos, lanes, weights, _ = self._skin_soup(tuple(self.node_index(n) for n in mesh_nodes))
+        index = np.asarray(index, np.int64)
+        palette = np.stack([worlds[j] for j in slots], axis=1) @ binds
+        hom = np.c_[pos[index], np.ones(len(index))]
+        out = np.zeros((len(palette), len(index), 3))
+        for lane in range(lanes.shape[1]):
+            out += weights[index, lane][None, :, None] * np.einsum(
+                "fnij,nj->fni", palette[:, lanes[index, lane]], hom)[..., :3]
+        return out
+
     def _skin_soup(self, mesh_nodes):
         """Vertices of skinned mesh nodes in one array, their joint lanes pointing into one list of
         (joint node, inverse bind) slots, plus the bind-space boxes lowest_skinned_y prunes with."""

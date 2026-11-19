@@ -36,6 +36,18 @@ def font(size, bold=False):
 SPECIAL_VIEWS = ("lineup", "pose")
 
 
+def filmstrips(poses):
+    """[(animation, frames sorted by time)] in first-seen animation order."""
+    groups = {}
+    for frame in poses:
+        groups.setdefault(frame.get("animation", ""), []).append(frame)
+    return [(anim, sorted(frames, key=lambda f: float(f.get("time", 0)))) for anim, frames in groups.items()]
+
+
+def pose_marks(marks, frame):
+    return marks.get(f"{frame.get('animation', '')}@{round(float(frame.get('time', 0)), 3):g}", [])
+
+
 def pick_pass(images):
     """One pass of a special row: beauty when rendered, else the first pass present."""
     if not images:
@@ -100,8 +112,10 @@ def wrap(draw, text, width, typeface):
     return lines
 
 
-def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, max_findings=14):
-    """views: views.json dict (or path); reports: check report dicts. Returns the card path."""
+def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, max_findings=14, marks=None):
+    """views: views.json dict (or path); reports: check report dicts; marks: {"anim@seconds":
+    [check, ...]} pose frames to outline as findings. Returns the card path."""
+    marks = marks or {}
     if not isinstance(views, dict):
         views_path = Path(views)
         views = json.loads(views_path.read_text(encoding="utf-8"))
@@ -127,17 +141,20 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
     margin, label_h, header_h = 16, 26, 112
     cols = max(1, len(present_views))
     grid_w = cols * cell + (cols - 1) * 8
+    # Filmstrips need room even when a clip review renders a single view.
+    content_w = max(grid_w, 4 * cell + 3 * 8) if poses else grid_w
     side_w = 420
-    width = margin * 3 + grid_w + side_w
+    width = margin * 3 + content_w + side_w
     grid_h = len(present_passes) * (cell + label_h + 8)
     textures = [t for t in textures if t.get("file")]
     small = cell // 2
     fits = max(1, (grid_w + 8) // (small + 8))
-    # Pose frames each show a finding, so they wrap onto more rows; spins and textures sample.
-    pose_rows = -(-len(poses) // fits)
-    strip_rows = int(bool(turntable)) + int(bool(textures)) + pose_rows
-    strip_h = strip_rows * (small + label_h + 8) + (int(bool(turntable)) + int(bool(textures))
-                                                    + int(bool(poses))) * 18
+    pose_cell = cell * 3 // 4
+    pose_fits = max(1, (content_w + 8) // (pose_cell + 8))
+    strips = filmstrips(poses)
+    pose_h = sum(18 + -(-len(frames) // pose_fits) * (pose_cell + label_h + 8) for _, frames in strips)
+    strip_rows = int(bool(turntable)) + int(bool(textures))
+    strip_h = strip_rows * (small + label_h + 8 + 18) + pose_h
     lineup_h = (cell + label_h + 8) if lineup else 0
     height = header_h + lineup_h + grid_h + strip_h + margin * 2
     card = Image.new("RGB", (width, max(height, header_h + 480)), BACKGROUND)
@@ -179,28 +196,39 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
 
     texture_items = [(base_dir / t["file"], f"{t.get('name', '')} {'x'.join(map(str, t.get('size', [])))}")
                      for t in textures]
-    pose_items = [(base_dir / i["file"], f"{i.get('animation', '')} @{float(i.get('time', 0)):.2f}s")
-                  for i in poses]
-    for items, title in ((pose_items, "clip findings"), (turntable, f"turntable · {spin_pass}"),
-                         (texture_items, "textures")):
+    for anim, frames in strips:
+        flagged = [f for f in frames if pose_marks(marks, f)]
+        heading = f"{anim}: " + (f"{len(flagged)} frame(s) with findings, outlined" if flagged else "no findings")
+        draw.text((margin, y), heading, fill=TEXT, font=font(13))
+        y += 18
+        for row_start in range(0, len(frames), pose_fits):
+            for k, frame in enumerate(frames[row_start:row_start + pose_fits]):
+                x = margin + k * (pose_cell + 8)
+                checks = pose_marks(marks, frame)
+                label = f"{float(frame.get('time', 0)):.2f}s" + (f" · {', '.join(checks)}" if checks else "")
+                colour = SEVERITY_COLOUR["high"] if checks else MUTED
+                draw.text((x, y), fit_text(draw, label, pose_cell, font(12)), fill=colour, font=font(12))
+                paste_on_cell(card, base_dir / frame["file"], (x, y + label_h - 6), (pose_cell, pose_cell))
+                if checks:
+                    top = y + label_h - 6
+                    draw.rectangle([x - 2, top - 2, x + pose_cell + 1, top + pose_cell + 1],
+                                   outline=SEVERITY_COLOUR["high"], width=3)
+            y += pose_cell + label_h + 8
+    for items, title in ((turntable, f"turntable · {spin_pass}"), (texture_items, "textures")):
         if not items:
             continue
-        if items is pose_items:
-            rows = [items[k:k + fits] for k in range(0, len(items), fits)]
-        else:
-            # Spread the frames over the row instead of cutting the spin off after the first few.
-            step = max(1, -(-len(items) // fits))
-            rows = [items[::step][:fits]]
+        # Spread the frames over the row instead of cutting the spin off after the first few.
+        step = max(1, -(-len(items) // fits))
+        shown = items[::step][:fits]
         draw.text((margin, y), title, fill=TEXT, font=font(13))
         y += 18
-        for shown in rows:
-            for k, (path, label) in enumerate(shown):
-                x = margin + k * (small + 8)
-                draw.text((x, y), fit_text(draw, label, small, font(12)), fill=MUTED, font=font(12))
-                paste_on_cell(card, path, (x, y + label_h - 6), (small, small))
-            y += small + label_h + 8
+        for k, (path, label) in enumerate(shown):
+            x = margin + k * (small + 8)
+            draw.text((x, y), fit_text(draw, label, small, font(12)), fill=MUTED, font=font(12))
+            paste_on_cell(card, path, (x, y + label_h - 6), (small, small))
+        y += small + label_h + 8
 
-    sx, sy = margin * 2 + grid_w, header_h
+    sx, sy = margin * 2 + content_w, header_h
     if game_crop and Path(game_crop).is_file():
         draw.text((sx, sy), "in game", fill=MUTED, font=font(14))
         with Image.open(game_crop) as source:

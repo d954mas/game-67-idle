@@ -74,6 +74,16 @@ class Floating(unittest.TestCase):
         rows = {r["part"]: r for r in report["metrics"]["floating"]}
         self.assertAlmostEqual(rows["Cup"]["gap_below"], 0.15, places=4)
 
+    def test_ignored_overlay_is_skipped_with_a_note(self):
+        parts = scene(Slab=SLAB, Lamp_glow=((-0.05, 0.85, -0.05), (0.05, 0.95, 0.05)),
+                      Cup=((0.5, 0.85, 0.5), (0.6, 0.95, 0.6)))
+        report = contact_check.check(parts, floating=True, ignore=["*_glow"])
+        hits = {f["where"].get("part") for f in report["findings"]
+                if f["check"] == "floating" and f["severity"] != "info"}
+        self.assertEqual(hits, {"Cup"})
+        note = next(f for f in report["findings"] if f["check"] == "floating" and f["severity"] == "info")
+        self.assertEqual(note["where"]["skipped"], ["Lamp_glow"])
+
     def test_wall_mount_and_embedded_parts_are_held(self):
         report = contact_check.check(scene(Wall=((0, 0, 0), (0.1, 3, 2)),
                                            Shelf=((0.1, 1.5, 0.5), (0.4, 1.55, 1.5)),

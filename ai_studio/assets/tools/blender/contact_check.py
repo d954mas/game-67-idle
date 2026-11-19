@@ -3,6 +3,7 @@ or (contract-free) no part may hang in the air.
 
     python contact_check.py scene.glb --contract contacts.json
     python contact_check.py scene.glb --floating [--tolerance 0.01] [--floor-y 0] [--split-components]
+        [--ignore '*_glow' '*_glass']
 
 Contract (glTF space, Y up, metres):
   {"pairs": [{"moving": "Leg", "receiver": "Deck", "direction": [0, -1, 0], "window": [-0.08, 0.001]}],
@@ -12,6 +13,7 @@ positive is air, negative is overlap. Every contact also gets negative controls:
 --margin, moved out past the window, and pushed into the receiver past it must each fail the same
 measurement; a contract that still passes is not testing anything.
 """
+import fnmatch
 import json
 import sys
 from pathlib import Path
@@ -25,7 +27,7 @@ from ai_studio.assets.tools.blender import mesh_metrics as M  # noqa: E402
 from ai_studio.assets.tools.blender.lib import glb as G, rays, report as R  # noqa: E402
 
 TOOL = "contact_check"
-DEFAULTS = {"contract": None, "floating": False, "floor_y": None, "tolerance": 0.01, "margin": 0.05,
+DEFAULTS = {"contract": None, "floating": False, "floor_y": None, "tolerance": 0.01, "margin": 0.05, "ignore": [],
             "max_samples": 2000, "split_components": False}
 DOWN = np.array([0.0, -1.0, 0.0])
 SIDEWAYS = (np.array([1.0, 0, 0]), np.array([-1.0, 0, 0]), np.array([0, 0, 1.0]), np.array([0, 0, -1.0]),
@@ -249,6 +251,11 @@ def _gap_below(piece, other, sink, max_samples):
     return min(gaps) if gaps else None
 
 
+def _ignored(name, globs):
+    """Whether `name` (or the node it was split from, `node#k`) matches an ignore glob."""
+    return any(fnmatch.fnmatchcase(n, g) for g in globs or () for n in {name, name.split("#")[0]})
+
+
 def check_floating(parts, opts, out, rows):
     """A part is held when the floor or a held part is under it within tolerance, or when it is
     attached (beside, above, embedded) to a held part. Parts that only hold each other float together."""
@@ -285,12 +292,16 @@ def check_floating(parts, opts, out, rows):
             if n not in held and (below_of[n] & held or attached_to[n] & held):
                 held.add(n)
                 grew = True
+    skipped = []
     for name in names:
         piece = parts[name]
         support, gap = best[name]
         rows.append({"part": name, "gap_below": round(gap, 5), "support": support, "held": name in held,
                      "attached": sorted(attached_to[name])})
         if name in held:
+            continue
+        if _ignored(name, opts["ignore"]):
+            skipped.append(name)
             continue
         if len(parts) == 1:
             # A lone part has only the origin floor to rest on; overlay layers and wall or ceiling
@@ -304,6 +315,11 @@ def check_floating(parts, opts, out, rows):
                              f"above the floor{chain}", f"lower {name} or its assembly onto a support; check the "
                              "origin if it is placed by code", {"part": name, "bottom": _r(piece.lo)},
                              round(float(piece.lo[1] - floor_y), 4), tol))
+    if skipped:
+        # Ignored parts still count as geometry (beside or under others); only their own verdict is dropped.
+        out.append(R.finding("floating", "info", f"{len(skipped)} unsupported parts skipped by ignore: "
+                             f"{', '.join(skipped[:8])}{' ...' if len(skipped) > 8 else ''}", "",
+                             {"skipped": skipped, "ignore": list(opts["ignore"])}))
 
 
 def check(path_or_glb, **options):
@@ -342,6 +358,8 @@ def _configure(parser):
     parser.add_argument("--max-samples", type=int, help="leading points cast per part (default 2000)")
     parser.add_argument("--split-components", action="store_true", default=None,
                         help="treat each connected shell of a mesh node as its own part")
+    parser.add_argument("--ignore", nargs="+", metavar="GLOB",
+                        help="--floating: node names that hang by design (glow, glass, LED overlays)")
 
 
 def _run(args, config):

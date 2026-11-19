@@ -8,7 +8,10 @@ Thresholds are physical (m/s, m/s^2), so the sampling rate does not move them, a
 the model's height against a 1.75 m human (--body-scale 1 keeps them absolute). Foot joints come from
 --feet, else common names (mixamorig:LeftFoot, foot_l, LeftFoot, *Foot*) are detected. Clips with root
 motion are judged in world space; an in-place locomotion clip shows its stride as slide.
+Slide is measured on skinned sole points (heel, middle, toe), each planted only while near its lowest
+height and slow. --airborne GLOB... names clips held or thrown by another actor: no slide or floor findings.
 """
+import fnmatch
 import re
 import sys
 import weakref
@@ -27,8 +30,9 @@ TOOL = "clip_check"
 DEFAULTS = {"model": None, "animations": None, "fps": 30.0, "feet": None, "floor_y": 0.0,
             "pop_accel": 180.0, "pop_ratio": 4.0, "pop_window": 6, "teleport_speed": 18.0,
             "slide": 0.05, "sink": 0.03, "float": 0.03, "loop": False, "loop_seam": 0.02,
-            "skinned_soles": True, "in_place": "auto", "body_scale": "auto"}
-SCALED = ("pop_accel", "teleport_speed", "slide", "sink", "float", "loop_seam")
+            "skinned_soles": True, "in_place": "auto", "body_scale": "auto", "plant_height": 0.01,
+            "airborne": []}
+SCALED = ("pop_accel", "teleport_speed", "slide", "sink", "float", "loop_seam", "plant_height")
 HUMAN_HEIGHT = 1.75
 SAMPLES = 5
 SIDE = {"left": ("left", "l"), "right": ("right", "r")}
@@ -165,8 +169,49 @@ def leg_length(model, foot):
     return length if length > 1e-3 else 0.9
 
 
-def check_feet(model, feet, names, positions, times, opts, anim, out, row):
-    """Planted-foot drift. An in-place clip (feet end where they started) is judged in the frame of
+def _descendants(model, i):
+    out, stack = set(), [i]
+    while stack:
+        n = stack.pop()
+        out.add(n)
+        stack.extend(model.nodes[n].get("children", []))
+    return out
+
+
+def sole_vertices(model, feet, height):
+    """{foot: vertex indices}: per foot the lowest rest vertex of the heel, middle and toe thirds of
+    its sole (skinned vertices led by the foot joint or a joint below it, within `height` of the
+    lowest). Feet without such vertices are left out."""
+    nodes = [i for i, n in enumerate(model.nodes) if "skin" in n and "mesh" in n]
+    owner = model.skin_vertex_joints(nodes) if nodes else None
+    if owner is None:
+        return {}
+    rest = {i: m[None] for i, m in model.world_rest().items()}
+    out = {}
+    for foot in feet:
+        led = np.flatnonzero(np.isin(owner, list(_descendants(model, model.by_name[foot]))))
+        if not len(led):
+            continue
+        pts = model.skinned_points(rest, nodes, led)[0]
+        low = pts[:, 1] <= pts[:, 1].min() + height
+        led, pts = led[low], pts[low]
+        flat = pts[:, [0, 2]] - pts[:, [0, 2]].mean(axis=0)
+        axis = np.linalg.svd(flat, full_matrices=False)[2][0] if len(pts) > 1 else np.array([1.0, 0.0])
+        along = flat @ axis
+        edges = np.linspace(along.min(), along.max(), 4)
+        picks = []
+        for a, b in zip(edges[:-1], edges[1:]):
+            third = np.flatnonzero((along >= a) & (along <= b))
+            if len(third):
+                picks.append(int(led[third[np.argmin(pts[third, 1])]]))
+        out[foot] = sorted(set(picks))
+    return out
+
+
+def check_feet(model, feet, names, positions, times, opts, anim, out, row, soles=None):
+    """Planted-foot drift of sole points (heel, middle, toe; the ankle joint without a skinned mesh),
+    each judged planted while it is near its lowest height and slow: a heel that lifts in a lunge or
+    a pivot is not a plant. An in-place clip (feet end where they started) is judged in the frame of
     the treadmill it implies: the median velocity of the feet while they are low."""
     if len(times) < 4 or not feet:
         return
@@ -191,15 +236,25 @@ def check_feet(model, feet, names, positions, times, opts, anim, out, row):
                 tr[:, :2] -= ground * t[:, None]
     row.update(in_place=bool(in_place), ground_speed=round(float(np.linalg.norm(ground)), 3), feet={})
     for foot, tr in tracks.items():
-        ankles = [tuple(p) for p in tr]
-        flags = motion.detect_contacts(ankles, fps, legs[foot])
-        drift, at = 0.0, None
-        for start, end in motion.contact_runs(flags):
-            d = np.linalg.norm(tr[start:end + 1, :2] - tr[start, :2], axis=1)
-            if d.max() > drift:
-                drift, at = float(d.max()), float(times[start])
-        row["feet"][foot] = {"planted_frames": int(sum(flags)), "max_drift_m": round(drift, 4),
-                             "slide_total_m": round(motion.foot_slide(ankles, flags), 4)}
+        if soles and foot in soles:
+            points = [np.array([motion.from_gltf(q) for q in soles[foot][:, k]]) for k in range(soles[foot].shape[1])]
+            for p in points:
+                p[:, :2] -= ground * t[:, None]
+            height = opts["plant_height"] / legs[foot]
+        else:
+            points, height = [tr], 0.12
+        drift, at, planted, total = 0.0, None, np.zeros(len(times), bool), 0.0
+        for p in points:
+            track = [tuple(q) for q in p]
+            flags = motion.detect_contacts(track, fps, legs[foot], height_frac=height)
+            planted |= np.array(flags, bool)
+            total = max(total, motion.foot_slide(track, flags))
+            for start, end in motion.contact_runs(flags):
+                d = np.linalg.norm(p[start:end + 1, :2] - p[start, :2], axis=1)
+                if d.max() > drift:
+                    drift, at = float(d.max()), float(times[start])
+        row["feet"][foot] = {"planted_frames": int(planted.sum()), "max_drift_m": round(drift, 4),
+                             "slide_total_m": round(total, 4), "points": "sole" if points[0] is not tr else "ankle"}
         if drift > opts["slide"]:
             out.append(R.finding("foot_slide", "medium", f"{anim}: planted {foot} slides {drift:.3f} m "
                                  f"(plant from {at:.3f} s)", "lock the foot during the plant (foot IK / "
@@ -246,7 +301,7 @@ def check_soles(model, feet, names, positions, worlds, times, opts, anim, out, r
                              "the floor", {"animation": anim, "time": round(float(times[k]), 3)},
                              round(float(depth), 4), opts["sink"]))
     if source == "skinned mesh" and lows[k] - opts["floor_y"] > opts["float"]:
-        out.append(R.finding("sole_float", "low", f"{anim}: the mesh never comes within {opts['float']} m of the "
+        out.append(R.finding("sole_float", "low", f"{anim}: the mesh never comes within {opts['float']:.3f} m of the "
                              f"floor (lowest {lows[k] - opts['floor_y']:+.3f} m)", "lower the root, unless the "
                              "clip is airborne by design", {"animation": anim}, round(float(lows[k]), 4)))
 
@@ -337,8 +392,19 @@ def check_animation(clip, model, anim, joint_ids, opts, lim, findings, row):
     leaves = {model.name(i) for i in ids if not any(c in ids for c in model.nodes[i].get("children", []))}
     check_pops(names, positions, times, lim, anim, findings, row, leaves)
     check_teleport(roots, names, positions, times, lim, anim, findings)
-    check_feet(model, feet, names, positions, times, lim, anim, findings, row)
-    check_soles(model, feet, names, positions, worlds, times, lim, anim, findings, row)
+    if any(fnmatch.fnmatchcase(anim, glob) for glob in opts["airborne"] or ()):
+        # Held, carried or thrown by another actor: the floor and the plants say nothing about the clip.
+        findings.append(R.finding("airborne", "info", f"{anim}: skipped: airborne clip (foot slide and floor "
+                                  "contact not judged)", "", {"animation": anim}))
+    else:
+        soles = None
+        if feet and lim["skinned_soles"]:
+            nodes = [i for i, n in enumerate(model.nodes) if "skin" in n and "mesh" in n]
+            picks = _model_fact(model, ("soles", tuple(feet), lim["plant_height"]),
+                                lambda: sole_vertices(model, feet, lim["plant_height"]))
+            soles = {f: model.skinned_points(worlds, nodes, idx) for f, idx in picks.items()}
+        check_feet(model, feet, names, positions, times, lim, anim, findings, row, soles)
+        check_soles(model, feet, names, positions, worlds, times, lim, anim, findings, row)
     if opts["loop"]:
         check_loop(names, positions, roots, lim, anim, findings, row)
     if not feet:
@@ -430,7 +496,11 @@ def _configure(parser):
                         help="judge foot slide against the treadmill an in-place clip implies (default auto)")
     parser.add_argument("--body-scale", type=_scale, help="threshold multiplier, or auto: model height / 1.75 m")
     parser.add_argument("--no-skinned-soles", dest="skinned_soles", action="store_false", default=None,
-                        help="use foot joints instead of skinned vertices for the floor test")
+                        help="use foot joints instead of skinned vertices for the floor and slide tests")
+    parser.add_argument("--plant-height", type=float,
+                        help="a sole point within this of its lowest height may be planted (default 0.01 m)")
+    parser.add_argument("--airborne", nargs="+", metavar="GLOB",
+                        help="animation names held/carried/thrown by another actor: no slide or floor findings")
 
 
 def _scale(text):

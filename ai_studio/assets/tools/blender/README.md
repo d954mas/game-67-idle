@@ -30,16 +30,21 @@ prints each finding with a fix hint.
 Speed: the first render starts a warm Blender server (`blender_server.py`) that later
 renders reuse; it exits after 30 idle minutes, and `--cold` skips it. One model is about
 2 s warm (8–9 s for the very first call, which starts the server); each extra model in
-the same call adds about 1 s; checks take milliseconds, clip checks about 1 s for 50+
-clips.
+the same call adds about 1–1.6 s (nine 768 px images; less with `--size 512`); checks take
+milliseconds, clip checks about 1 s for 50+ clips.
 
 What it shows beyond the plain views:
 
 - `--beside approved.glb shipped_neighbour.glb` renders the model next to references at
   true scale and shared framing, as the first row of the card. Style misses cost more
   than any technical defect, so this is the row to judge first.
-- Clip findings (foot slide, pops, soles under the floor) become pose frames on the card,
-  rendered at the exact moment the check reports (`--max-poses`, default 4).
+- Animations get a filmstrip on a floor with a grid and contact shadow: 8 even frames over
+  each animation that has findings (or the first one when all are clean), plus a frame at
+  every moment a clip check reports (foot slide, pops, soles under the floor), outlined red
+  with the check name. `--filmstrip N`, `--max-filmstrips`, `--max-poses`, `--pose-size`.
+  A clip-only file (`--clip-model body.glb`) skips the rest-pose grid and shows the motion.
+- When `mesh_check` finds inverted shells or flipped faces, a `facing` pass is added: back
+  faces render red, so the defect is visible on the card, not only listed.
 - `--game-camera '{"height":1.8,"behind":2,"pitch":16,"fov_y":55}'` adds the game's view;
   `--game-crop shot.png` puts the in-game screenshot on the card; `--turntable 8`;
   `--animation Walk --time 0.4` poses the model; a clip-only file plays on its body with
@@ -65,7 +70,24 @@ plus check settings, paths relative to the file:
 }
 ```
 
+Per-file rules go in `files`, matched against the file name or its path relative to the
+preset; later rules win:
+
+```json
+{
+  "pivot": "floor-center",
+  "floating": true,
+  "contact_check": {"ignore": ["*_glow*", "*_glass*"]},
+  "files": [
+    {"match": ["door_*.glb", "gate_*.glb"], "pivot": "floor"},
+    {"match": "*_glow*.glb", "floating": false}
+  ]
+}
+```
+
 Order: presets < `--config` < flags. `--preset file` or `--no-preset` override the lookup.
+Clip presets can mark clips where the body is held by someone else:
+`"clip_check": {"airborne": ["carried*", "thrown*"]}`.
 
 ### Review from a build script
 

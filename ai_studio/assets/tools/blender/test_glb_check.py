@@ -92,6 +92,16 @@ class Contract(unittest.TestCase):
         self.assertTrue({"color_encoding", "node_transform"} <= serious(report))
         self.assertEqual(serious(glb_check.check(b.to_glb(), color_encoding="float")), set())
 
+    def test_colour_encoding_u16(self):
+        b = G.GlbBuilder()
+        colors = np.full((8, 4), 65535, np.uint16)
+        b.add_node("box", mesh=b.add_mesh("box", CUBE, FACES, extra={"COLOR_0": (colors, G.UNSIGNED_SHORT)}))
+        b.json["accessors"][b.json["meshes"][0]["primitives"][0]["attributes"]["COLOR_0"]]["normalized"] = True
+        for encoding in ("u16", "normalized", "any"):
+            self.assertNotIn("color_encoding", found(glb_check.check(b.to_glb(), color_encoding=encoding)))
+        for encoding in ("u8", "float"):
+            self.assertIn("color_encoding", found(glb_check.check(b.to_glb(), color_encoding=encoding)))
+
 
 class Skins(unittest.TestCase):
     def test_clean_skin(self):

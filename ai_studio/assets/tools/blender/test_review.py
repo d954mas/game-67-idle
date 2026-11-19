@@ -125,7 +125,44 @@ class Precedence(unittest.TestCase):
                 review.read_preset(preset)
 
 
+class FileRules(unittest.TestCase):
+    def test_glob_rules_override_the_folder_preset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = Path(tmp) / "env"
+            env.mkdir()
+            (env / "game.json").write_text("{}", encoding="utf-8")
+            (env / "blender_review.json").write_text(json.dumps({
+                "floating": True, "pivot": "floor-center",
+                "files": [{"match": "*_glow*.glb", "floating": False},
+                          {"match": ["door_*.glb"], "pivot": "floor", "mesh_check": {"profile": "surface"}}]}),
+                encoding="utf-8")
+            glow = clip_only(env / "lamp_glow.glb")
+            door = clip_only(env / "door_a.glb")
+            plain = clip_only(env / "desk.glb")
+            opts_glow, _ = review.model_options(glow, argparse.Namespace(), {})
+            opts_door, tools_door = review.model_options(door, argparse.Namespace(), {})
+            opts_plain, _ = review.model_options(plain, argparse.Namespace(), {})
+        self.assertFalse(opts_glow.floating)
+        self.assertTrue(opts_plain.floating)
+        self.assertEqual((opts_door.pivot, opts_plain.pivot), ("floor", "floor-center"))
+        self.assertEqual(tools_door["mesh_check"], {"profile": "surface"})
+
+
 class Poses(unittest.TestCase):
+    def test_clean_clip_still_gets_a_filmstrip_and_findings_are_marked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = clip_only(Path(tmp) / "idle.glb")
+            opts = argparse.Namespace(max_poses=4, filmstrip=5, max_filmstrips=3)
+            poses, marks = review.pose_plan(path, opts, [])
+            self.assertEqual(poses, ["Idle@0", "Idle@0.25", "Idle@0.5", "Idle@0.75", "Idle@1"])
+            self.assertEqual(marks, {})
+            reports = [{"tool": "clip_check", "findings": [
+                {"check": "foot_slide", "severity": "medium", "where": {"animation": "Idle", "time": 0.4}}]}]
+            poses, marks = review.pose_plan(path, opts, reports)
+            self.assertEqual(poses[0], "Idle@0.4")
+            self.assertEqual(marks, {"Idle@0.4": ["foot_slide"]})
+            self.assertEqual(len(poses), 6)
+
     def test_clip_findings_become_pose_moments(self):
         reports = [{"tool": "clip_check", "findings": [
             {"check": "foot_slide", "severity": "medium", "where": {"animation": "Walk", "time": 0.4}},
