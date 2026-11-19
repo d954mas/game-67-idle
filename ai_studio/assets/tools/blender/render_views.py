@@ -252,7 +252,9 @@ class SceneState:
         return self
 
     def restore_pose(self):
-        """Back to the transforms and clips the scene had on entry (between poses, and at exit)."""
+        """Back to the transforms and clips the scene had on entry (between poses, and at exit).
+        The frame is set before the transforms: evaluating the clips at it would otherwise
+        replace a transform the scene held off its keys (moved by a script after keying)."""
         for obj, (action, slot, tracks) in self.animation.items():
             data = obj.animation_data
             if data is None:
@@ -265,11 +267,12 @@ class SceneState:
         for obj in list(self.scene.objects):
             if obj.animation_data and obj not in self.animation:
                 obj.animation_data.action = None
+        self.scene.frame_set(self.frame[0], subframe=self.frame[1])
         for obj, basis in self.basis.items():
             obj.matrix_basis = basis
         for (obj, bone), basis in self.bones.items():
             obj.pose.bones[bone].matrix_basis = basis
-        self.scene.frame_set(self.frame[0], subframe=self.frame[1])
+        bpy.context.view_layer.update()
 
     def __exit__(self, *exc):
         sc = self.scene
@@ -296,14 +299,14 @@ def _plain(value):
     return tuple(value) if hasattr(value, "__len__") and not isinstance(value, str) else value
 
 
-def file_rest(objects, path):
-    """Animated objects back to their node's rest TRS from the GLB. The importer makes a clip
-    active and its first evaluation overwrites the object transform, so Blender no longer knows
-    the rest the engine shows when no clip plays."""
+def file_rest(nodes, path):
+    """Animated objects back to their node's rest TRS from the GLB (`nodes`: node index ->
+    object, from bpy_io.import_glb_nodes). The importer makes a clip active and its first
+    evaluation overwrites the object transform, so Blender no longer knows the rest the engine
+    shows when no clip plays."""
     doc = Glb.load(path)
-    for obj in objects:
-        i = doc.by_name.get(obj.name) if obj.animation_data else None
-        if i is None:
+    for i, obj in nodes.items():
+        if not obj.animation_data:
             continue
         t, r, s = doc.local_trs(i)
         obj.rotation_mode = "QUATERNION"
@@ -642,6 +645,11 @@ def shots(views, points, prefix=""):
 
 # --- rendering --------------------------------------------------------------------------------
 
+def review_set(objects):
+    """What a review covers for `objects`: render, export and checks all use this one set."""
+    return _descendants(objects)
+
+
 def _descendants(objects):
     """The objects, their children, and the rigs that deform them (a clip lives on the rig)."""
     out = {}
@@ -674,9 +682,9 @@ def lineup(candidate_points, references):
     lo, hi = candidate_points.min(axis=0), candidate_points.max(axis=0)
     members, imported = [], []
     for path in references:
-        objects = bpy_io.import_glb(Path(path).resolve())
+        objects, nodes = bpy_io.import_glb_nodes(Path(path).resolve())
         rest_pose(objects)
-        file_rest(objects, Path(path).resolve())
+        file_rest(nodes, Path(path).resolve())
         meshes = _visible_meshes(objects)
         if not meshes:
             members.append({"name": Path(path).stem, "path": str(path), "error": "no visible mesh"})
@@ -821,7 +829,7 @@ def render_poses(state, members, meshes, job, scene, cam, passes, size, out, fps
             report.append({**spec, "error": str(reason)})
             continue
         points = S.evaluated_points(meshes)
-        posed.append((spec, label, points))
+        posed.append((len(report), (spec, label, points)))
         lo, hi = points.min(axis=0), points.max(axis=0)
         report.append({**spec, "pose": label,
                        "bounds": {"min": [round(float(v), 5) for v in (lo[0], lo[2], -hi[1])],
@@ -829,12 +837,13 @@ def render_poses(state, members, meshes, job, scene, cam, passes, size, out, fps
     images = []
     if not posed:
         return report, images
-    union = np.vstack([p for _, _, p in posed])
-    for spec, label, _ in posed:
+    union = np.vstack([p for _, (_, _, p) in posed])
+    for k, (spec, label, _) in posed:
         state.restore_pose()
         rest_pose(members)
         pose(members, spec["animation"], spec["time"], fps)
-        prefix = f"pose_{safe(spec['animation'])}_{spec['time']:g}_"
+        # The ordinal keeps files apart when names sanitise alike or times print alike under :g.
+        prefix = f"pose{k:02d}_{safe(spec['animation'])}_{spec['time']:g}_"
         pose_shots = [(stem, setup, {"view": "pose", "base_view": extra["view"],
                                      **{k: v for k, v in extra.items() if k != "view"},
                                      "animation": spec["animation"], "time": spec["time"]})
@@ -855,9 +864,9 @@ def render_one(job):
         grafted = bpy_io.graft_clips(model, Path(job["clip_source"]).resolve(), graft)
         source = graft
     try:
-        objects = bpy_io.import_glb(source)
+        objects, nodes = bpy_io.import_glb_nodes(source)
         rest_pose(objects)
-        file_rest(objects, source)
+        file_rest(nodes, source)
     finally:
         if graft:
             graft.unlink(missing_ok=True)

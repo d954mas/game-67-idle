@@ -131,8 +131,13 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
     width = margin * 3 + grid_w + side_w
     grid_h = len(present_passes) * (cell + label_h + 8)
     textures = [t for t in textures if t.get("file")]
-    strip_rows = int(bool(turntable)) + int(bool(textures)) + int(bool(poses))
-    strip_h = strip_rows * (cell // 2 + label_h + 8 + 18)
+    small = cell // 2
+    fits = max(1, (grid_w + 8) // (small + 8))
+    # Pose frames each show a finding, so they wrap onto more rows; spins and textures sample.
+    pose_rows = -(-len(poses) // fits)
+    strip_rows = int(bool(turntable)) + int(bool(textures)) + pose_rows
+    strip_h = strip_rows * (small + label_h + 8) + (int(bool(turntable)) + int(bool(textures))
+                                                    + int(bool(poses))) * 18
     lineup_h = (cell + label_h + 8) if lineup else 0
     height = header_h + lineup_h + grid_h + strip_h + margin * 2
     card = Image.new("RGB", (width, max(height, header_h + 480)), BACKGROUND)
@@ -172,8 +177,6 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
             paste_on_cell(card, lookup.get((view, render_pass)), (x, y + label_h - 6), (cell, cell))
         y += cell + label_h + 8
 
-    small = cell // 2
-    fits = max(1, (grid_w + 8) // (small + 8))
     texture_items = [(base_dir / t["file"], f"{t.get('name', '')} {'x'.join(map(str, t.get('size', [])))}")
                      for t in textures]
     pose_items = [(base_dir / i["file"], f"{i.get('animation', '')} @{float(i.get('time', 0)):.2f}s")
@@ -182,16 +185,20 @@ def compose(views, reports=(), out=None, game_crop=None, title=None, cell=320, m
                          (texture_items, "textures")):
         if not items:
             continue
-        # Spread the frames over the row instead of cutting the spin off after the first few.
-        step = max(1, -(-len(items) // fits))
-        shown = items[::step][:fits]
+        if items is pose_items:
+            rows = [items[k:k + fits] for k in range(0, len(items), fits)]
+        else:
+            # Spread the frames over the row instead of cutting the spin off after the first few.
+            step = max(1, -(-len(items) // fits))
+            rows = [items[::step][:fits]]
         draw.text((margin, y), title, fill=TEXT, font=font(13))
         y += 18
-        for k, (path, label) in enumerate(shown):
-            x = margin + k * (small + 8)
-            draw.text((x, y), fit_text(draw, label, small, font(12)), fill=MUTED, font=font(12))
-            paste_on_cell(card, path, (x, y + label_h - 6), (small, small))
-        y += small + label_h + 8
+        for shown in rows:
+            for k, (path, label) in enumerate(shown):
+                x = margin + k * (small + 8)
+                draw.text((x, y), fit_text(draw, label, small, font(12)), fill=MUTED, font=font(12))
+                paste_on_cell(card, path, (x, y + label_h - 6), (small, small))
+            y += small + label_h + 8
 
     sx, sy = margin * 2 + grid_w, header_h
     if game_crop and Path(game_crop).is_file():

@@ -6,6 +6,8 @@ a generator that read the centre as the origin once left props floating above th
 """
 import json
 import os
+import shutil
+import tempfile
 from pathlib import Path
 
 import bpy
@@ -53,6 +55,37 @@ def import_glb(path, drop_bone_shapes=True, **options):
     return created
 
 
+NODE_PROP = "nt_gltf_node"
+
+
+def import_glb_nodes(path, **options):
+    """Import a GLB; returns (objects, {glTF node index: object}).
+
+    Blender renames an object whose node name is already taken ('Cube' -> 'Cube.001'), so names
+    cannot find a node again; the index rides in through the node extras of a temporary copy
+    and is removed from the objects afterwards. Joint nodes become bones and are not mapped.
+    """
+    doc = G.Glb.load(path)
+    tagged = json.loads(json.dumps(doc.json))
+    for i, node in enumerate(tagged.get("nodes", [])):
+        extras = node.get("extras")
+        if extras is None or isinstance(extras, dict):
+            node["extras"] = {**(extras or {}), NODE_PROP: i}
+    folder = Path(tempfile.mkdtemp(prefix="nt_import_"))
+    copy = folder / Path(path).name
+    try:
+        G.write_glb(copy, tagged, doc.bin)
+        objects = import_glb(copy, import_scene_extras=True, **options)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    nodes = {}
+    for obj in objects:
+        if NODE_PROP in obj:
+            nodes[int(obj[NODE_PROP])] = obj
+            del obj[NODE_PROP]
+    return objects, nodes
+
+
 def _operator_options(op):
     return {p.identifier for p in op.get_rna_type().properties}
 
@@ -68,6 +101,27 @@ def _with_rig(objects):
             parent = parent.parent
         out += [r for r in rigs if r not in out]
     return out
+
+
+class _kept_transforms:
+    """The exporter re-evaluates animation at the current frame, which replaces any transform a
+    script set off its keys; put object and pose-bone transforms back as they were."""
+
+    def __enter__(self):
+        scene = bpy.context.scene
+        self.frame = (scene.frame_current, scene.frame_subframe)
+        self.objects = {o: o.matrix_basis.copy() for o in scene.objects}
+        self.bones = {(o, b.name): b.matrix_basis.copy() for o in scene.objects if o.type == "ARMATURE"
+                      for b in o.pose.bones}
+
+    def __exit__(self, *exc):
+        bpy.context.scene.frame_set(self.frame[0], subframe=self.frame[1])
+        for obj, basis in self.objects.items():
+            obj.matrix_basis = basis
+        for (obj, bone), basis in self.bones.items():
+            obj.pose.bones[bone].matrix_basis = basis
+        bpy.context.view_layer.update()
+        return False
 
 
 def export_glb(path, objects=None, preset="static", **overrides):
@@ -100,7 +154,8 @@ def export_glb(path, objects=None, preset="static", **overrides):
     for obj in layer.objects:
         obj.select_set(obj in objects)
     layer.objects.active = next((o for o in objects if o.type == "ARMATURE"), objects[0] if objects else None)
-    bpy.ops.export_scene.gltf(filepath=str(path), **options)
+    with _kept_transforms():
+        bpy.ops.export_scene.gltf(filepath=str(path), **options)
     pivots = sorted({str(o.get(PIVOT_PROP)) for o in objects if o.get(PIVOT_PROP)})
     report = glb_report(path)
     report.update(preset=preset, objects=[o.name for o in objects],
@@ -113,12 +168,15 @@ def graft_clips(model, clips, out):
 
     Blender cannot import a skinless clip file as a rig, but it imports one GLB that carries both
     the body and the clips like any animated model; matching nodes by name is also what the
-    engine does when it plays a clip file on a body. Returns {"path", "animations",
-    "unmatched_nodes"}; unmatched clip nodes (renamed bones, a different rig) are left out.
+    engine does when it plays a clip file on a body. A body animation with a clip's name is
+    dropped: the clip file is what was asked for, and two same-named clips would make the pose
+    depend on import order. Returns {"path", "animations", "replaced", "unmatched_nodes"};
+    unmatched clip nodes (renamed bones, a different rig) are left out.
     """
     body, clip = G.Glb.load(model), G.Glb.load(clips)
     builder = G.GlbBuilder(json.loads(json.dumps(body.json)), body.bin)
     animations = builder.json.setdefault("animations", [])
+    own = len(animations)
     grafted, unmatched = [], set()
     for k, anim in enumerate(clip.json.get("animations", [])):
         samplers, channels = [], []
@@ -139,10 +197,12 @@ def graft_clips(model, clips, out):
             name = anim.get("name", f"animation{k}")
             animations.append({"name": name, "samplers": samplers, "channels": channels})
             grafted.append(name)
+    replaced = [a.get("name") for a in animations[:own] if a.get("name") in grafted]
+    animations[:own] = [a for a in animations[:own] if a.get("name") not in grafted]
     if not animations:
         builder.json.pop("animations")
     builder.write(out)
-    return {"path": str(out), "animations": grafted, "unmatched_nodes": sorted(unmatched)}
+    return {"path": str(out), "animations": grafted, "replaced": replaced, "unmatched_nodes": sorted(unmatched)}
 
 
 def glb_report(path):

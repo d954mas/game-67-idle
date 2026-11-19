@@ -41,5 +41,26 @@ class Card(unittest.TestCase):
                 self.assertLess(image.width, 3 * 96 + 600)
 
 
+class PoseRows(unittest.TestCase):
+    def test_every_pose_frame_is_shown_even_with_one_view_column(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            Image.new("RGBA", (64, 64), (200, 80, 40, 255)).save(tmp / "front.png")
+            images = [{"view": "front", "pass": "beauty", "file": "front.png", "size": [64, 64]}]
+            heights = []
+            for count in (6, 8):
+                for k in range(count):
+                    Image.new("RGBA", (64, 64), (40, 80, 200, 255)).save(tmp / f"pose{k}.png")
+                poses = [{"view": "pose", "base_view": "front", "pass": "beauty", "animation": "Walk",
+                          "time": k / 10, "file": f"pose{k}.png", "size": [64, 64]} for k in range(count)]
+                views = {"asset": "a.glb", "stats": {}, "images": images + poses}
+                (tmp / "views.json").write_text(json.dumps(views), encoding="utf-8")
+                card = review_card.compose(tmp / "views.json", [], tmp / f"card{count}.png", cell=96)
+                with Image.open(card) as image:
+                    heights.append(image.height)
+            # one view column fits one 48 px frame per row: two more poses add two rows
+            self.assertGreaterEqual(heights[1] - heights[0], 2 * 48)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -26,7 +26,7 @@ class Options(unittest.TestCase):
         config = {"pivot": "floor", "profile": "volume", "glb_check": {"jpeg": "off"}}
         self.assertEqual(review.tool_options("mesh_check", config, profile=None), {"profile": "volume"})
         self.assertEqual(review.tool_options("mesh_check", config, profile="surface"), {"profile": "surface"})
-        # A nested section replaces the flat keys for that tool.
+        # A nested section adds to and overrides the flat keys for that tool.
         self.assertEqual(review.tool_options("glb_check", config, pivot="top"), {"jpeg": "off", "pivot": "top"})
 
 
@@ -92,8 +92,37 @@ class Presets(unittest.TestCase):
         self.assertEqual(Path(opts.beside[0]).name, "approved.glb")
         self.assertEqual(Path(opts.beside[0]).parent.name, "props")
         self.assertEqual(tools["mesh_check"], {"profile": "volume", "weld": 1e-5})
-        self.assertEqual(tools["jpeg"], "off")
+        self.assertEqual(tools["glb_check"], {"jpeg": "off"})
         self.assertEqual(len(opts.presets), 2)
+
+
+class Precedence(unittest.TestCase):
+    def test_zero_is_a_value_and_flat_nearer_keys_beat_farther_nested_ones(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            game = Path(tmp) / "game"
+            props = game / "props"
+            props.mkdir(parents=True)
+            (game / "game.json").write_text("{}", encoding="utf-8")
+            (game / "blender_review.json").write_text(json.dumps(
+                {"max_poses": 4, "turntable": 8, "clip_check": {"slide": 0.1}}), encoding="utf-8")
+            (props / "blender_review.json").write_text(json.dumps({"slide": 0.2}), encoding="utf-8")
+            model = clip_only(props / "a.glb")
+            opts, tools = review.model_options(model, argparse.Namespace(max_poses=0, turntable=0), {})
+            self.assertEqual((opts.max_poses, opts.turntable), (0, 0))
+            self.assertEqual(tools["clip_check"]["slide"], 0.2)
+            _, tools = review.model_options(model, argparse.Namespace(), {"slide": 0.3})
+            self.assertEqual(tools["clip_check"]["slide"], 0.3)
+
+    def test_preset_typos_are_refused_with_the_file_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            preset = Path(tmp) / "blender_review.json"
+            preset.write_text(json.dumps({"besides": ["a.glb"]}), encoding="utf-8")
+            with self.assertRaises(SystemExit) as raised:
+                review.read_preset(preset)
+            self.assertIn("besides", str(raised.exception))
+            preset.write_text(json.dumps({"mesh_check": {"wled": 1}}), encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                review.read_preset(preset)
 
 
 class Poses(unittest.TestCase):

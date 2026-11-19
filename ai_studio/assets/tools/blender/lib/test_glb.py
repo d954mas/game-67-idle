@@ -91,6 +91,47 @@ class Animation(unittest.TestCase):
         moved = g.skinned_positions(world, "body")[0]
         np.testing.assert_allclose(moved[:, 1], [2.5, 2.5, 3.5])
 
+    def test_lowest_skinned_y_matches_skinning_every_vertex(self):
+        rng = np.random.default_rng(7)
+        for trial in range(40):
+            b = G.GlbBuilder()
+            count = int(rng.integers(1, 5))
+            bones = [b.add_node("root", translation=rng.normal(0, 0.3, 3))]
+            for k in range(1, count):
+                bones.append(b.add_node(f"b{k}", translation=rng.normal(0, 0.3, 3), parent=bones[-1]))
+            n = int(rng.integers(3, 300))
+            joints = rng.integers(0, count, (n, 4))
+            weights = rng.random((n, 4)) * (rng.random((n, 4)) < 0.6)
+            weights[rng.random(n) < 0.1] = 0.0  # some vertices carry no weight at all
+            if trial % 10 == 0:
+                weights[:] = 0.0
+            if trial % 2:
+                sums = weights.sum(axis=1, keepdims=True)
+                weights = np.where(sums > 0, weights / np.where(sums > 0, sums, 1), 0)
+            mesh = b.add_mesh("skin", rng.normal(0, 0.5, (n, 3)), np.arange(n - n % 3).reshape(-1, 3),
+                              extra={"JOINTS_0": (joints, G.UNSIGNED_BYTE), "WEIGHTS_0": (weights, G.FLOAT)})
+            ibm = [np.linalg.inv(G.trs_matrix(rng.normal(0, 0.3, 3), rng.normal(size=4), (1, 1, 1))).T.reshape(-1)
+                   for _ in bones]
+            b.json["skins"] = [{"joints": bones, "inverseBindMatrices": b.add_accessor(np.array(ibm), kind="MAT4")}]
+            b.add_node("body", mesh=mesh, skin=0)
+            times = b.add_accessor(np.array([0.0, 1.0]), kind="SCALAR", bounds=True)
+            b.json["animations"] = [{"name": "a", "samplers": [], "channels": []}]
+            for k, bone in enumerate(bones):
+                for path, width in (("translation", 3), ("rotation", 4)):
+                    # Every third trial lifts the whole body above y = 0, past any unweighted vertex.
+                    lift = [[0, 3.0 * (k == 0 and trial % 3 == 0 and path == "translation"), 0, 0][:width]]
+                    keys = b.add_accessor(rng.normal(0, 1.0, (2, width)) + lift)
+                    b.json["animations"][0]["samplers"].append({"input": times, "output": keys})
+                    b.json["animations"][0]["channels"].append(
+                        {"sampler": len(b.json["animations"][0]["samplers"]) - 1, "target": {"node": bone, "path": path}})
+            g = b.to_glb()
+            channels = g.channels("a")
+            ts = np.linspace(0, 1, 7)
+            body = g.by_name["body"]
+            fast = g.lowest_skinned_y(g.posed_worlds(channels, ts), [body])
+            brute = [g.skinned_positions(g.posed_world(channels, t), body)[0][:, 1].min() for t in ts]
+            np.testing.assert_allclose(fast, brute, rtol=0, atol=1e-9, err_msg=f"trial {trial}")
+
 
 if __name__ == "__main__":
     unittest.main()

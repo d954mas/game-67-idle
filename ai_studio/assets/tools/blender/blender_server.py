@@ -11,9 +11,12 @@ starts one unless asked (`server=True`, or `ensure_server()`). `NT_BLENDER_SERVE
 Each job runs a script file through runpy with the same sys.argv a cold run sees, its output in
 the job log, then the server answers and resets to factory settings. Pure-Python modules the job
 imported (Studio library, game helpers) are dropped after every job, so edits apply on the next
-job; an edit to this file makes the server exit. One job at a time: a second caller runs cold
-instead of waiting. The server listens on 127.0.0.1 only, requires the token from
-`<studio root>/tmp/blender_server.json`, and exits after `--idle-minutes` without a job.
+job; an edit to this file makes the server exit. The job sees the caller's environment and cwd.
+One job at a time: a second caller runs cold instead of waiting. The server listens on 127.0.0.1
+only, requires the token from `<studio root>/tmp/blender_server.json`, exits after
+`--idle-minutes` without a job, and exits when a job outlives the caller's timeout or the caller
+disconnects. The state file also records the process creation time, so a recycled pid is never
+mistaken for the server or killed.
 
 The Codex/Claude sandbox blocks launching .exe files; start it outside the sandbox.
 """
@@ -23,10 +26,12 @@ import json
 import os
 import re
 import secrets
+import select
 import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -41,7 +46,12 @@ SERVER_LOG = Path("tmp") / "blender_server.log"
 # An idle server answers in a millisecond, but it resets the scene right after replying to the
 # previous job (30-60 ms), so a tighter ping would send back-to-back jobs to a cold Blender.
 PING_SECONDS = 0.5
+# Before replacing a server, give a slow scene reset ample time to finish.
+HUNG_SECONDS = 5.0
 CONNECT_SECONDS = 0.2
+WATCHDOG_MARGIN = 2.0
+# Read once at Blender start-up; a job asking for other values must run cold.
+STARTUP_ENV = ("BLENDER_", "OCIO")
 
 
 # ---------------------------------------------------------------- shared wire protocol
@@ -77,54 +87,65 @@ def read_state(root):
         return None
 
 
-def _alive(pid):
-    if os.name == "nt":
-        import ctypes
-        kernel = ctypes.windll.kernel32
-        handle = kernel.OpenProcess(0x1000, False, int(pid))  # PROCESS_QUERY_LIMITED_INFORMATION
-        if not handle:
-            return False
-        code = ctypes.c_ulong()
-        ok = kernel.GetExitCodeProcess(handle, ctypes.byref(code))
-        kernel.CloseHandle(handle)
-        return bool(ok) and code.value == 259  # STILL_ACTIVE
+def process_created(pid):
+    """Creation time of a running `pid` as an opaque string; None when gone or unreadable.
+
+    Client and server must compute it the same way, so no optional package (psutil) is used:
+    Blender's Python would lack it while the caller's has it.
+    """
     try:
-        os.kill(int(pid), 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def _image(pid):
-    """Executable of `pid`, or None when unknown; guards kills against a recycled pid."""
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return None
+    if pid <= 0:
+        return None
     if os.name == "nt":
         import ctypes
-        kernel = ctypes.windll.kernel32
-        handle = kernel.OpenProcess(0x1000, False, int(pid))
+        from ctypes import wintypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.OpenProcess.restype = wintypes.HANDLE
+        handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
         if not handle:
             return None
-        buffer, size = ctypes.create_unicode_buffer(1024), ctypes.c_ulong(1024)
-        ok = kernel.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size))
-        kernel.CloseHandle(handle)
-        return buffer.value if ok else None
+        try:
+            code = wintypes.DWORD()
+            if not kernel.GetExitCodeProcess(handle, ctypes.byref(code)) or code.value != 259:
+                return None  # 259 = STILL_ACTIVE
+            times = [wintypes.FILETIME() for _ in range(4)]
+            if not kernel.GetProcessTimes(handle, *(ctypes.byref(t) for t in times)):
+                return None
+            return str(times[0].dwHighDateTime << 32 | times[0].dwLowDateTime)
+        finally:
+            kernel.CloseHandle(handle)
     try:
-        return os.readlink(f"/proc/{int(pid)}/exe")
-    except OSError:
+        stat = Path(f"/proc/{pid}/stat").read_text()
+        boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        return f"{boot}:{stat.rsplit(')', 1)[1].split()[19]}"
+    except (OSError, IndexError):
+        pass
+    try:
+        out = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True,
+                             timeout=5).stdout.strip()
+        return out or None
+    except (OSError, subprocess.SubprocessError):
         return None
 
 
+def is_server(state):
+    """True only when the state's pid is still the very process that wrote it."""
+    created = (state or {}).get("created")
+    return bool(created) and process_created(state.get("pid")) == created
+
+
 def _kill(state, root):
-    pid = state.get("pid")
-    image = _image(pid) if pid else None
-    if pid and _alive(pid) and (image is None or "blender" in Path(image).name.lower()):
+    """Kill the server `state` describes; a pid whose identity does not match is left alone."""
+    if is_server(state):
         try:
-            os.kill(int(pid), 9 if os.name != "nt" else 15)
+            os.kill(int(state["pid"]), 9 if os.name != "nt" else 15)
         except OSError:
             pass
         for _ in range(50):
-            if not _alive(pid):
+            if not is_server(state):
                 break
             time.sleep(0.1)
     _forget(root, state)
@@ -134,7 +155,8 @@ def _forget(root, state=None):
     """Remove the state file, but only if it still describes `state` (a newer server may own it)."""
     path = Path(root) / STATE
     current = read_state(root)
-    if current is not None and state is not None and current.get("pid") != state.get("pid"):
+    if current is not None and state is not None and (
+            (current.get("pid"), current.get("created")) != (state.get("pid"), state.get("created"))):
         return
     try:
         path.unlink()
@@ -150,11 +172,11 @@ def _request(state, message, timeout):
 
 
 def live_state(root):
-    """State of a server that is alive for `root`, else None; a dead server's file is removed."""
+    """State of a server that is alive for `root`, else None; a stale file is removed."""
     state = read_state(root)
     if not state:
         return None
-    if not _alive(state.get("pid", 0)):
+    if not is_server(state):
         _forget(root, state)
         return None
     return state
@@ -224,13 +246,13 @@ def try_run(blender, script, script_args=(), log=None, timeout=3600, quiet=False
     root = Path(studio or studio_root(script.parent))
     if start:
         ensure_server(blender, root=root)
-    state = live_state(root)
-    if not state or not _same_file(state.get("blender", ""), blender):
-        return None
     lock = _Lock(root)
     if not lock.acquire():
         return None
     try:
+        state = live_state(root)
+        if not state or not _same_file(state.get("blender", ""), blender):
+            return None
         return _run_locked(state, root, blender, script, script_args, log, timeout, quiet)
     finally:
         lock.release()
@@ -252,7 +274,7 @@ def _run_locked(state, root, blender, script, script_args, log, timeout, quiet):
         log_path = Path(temp_log)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     job = {"op": "job", "script": str(script), "argv": [str(a) for a in script_args],
-           "log": str(log_path), "cwd": os.getcwd()}
+           "log": str(log_path), "cwd": os.getcwd(), "env": dict(os.environ), "timeout": timeout}
     try:
         with socket.create_connection(("127.0.0.1", int(state["port"])), timeout=CONNECT_SECONDS) as conn:
             _send(conn, {**job, "token": state["token"]})
@@ -284,51 +306,72 @@ def _run_locked(state, root, blender, script, script_args, log, timeout, quiet):
             "log": str(log_path) if log else None, "via": "server"}
 
 
-def start_server(blender=None, root=None, idle_minutes=30, wait=60):
-    """Launch a detached warm Blender for `root`; returns its live state or None."""
+def start_server(blender=None, root=None, idle_minutes=30, wait=60, lock_wait=None):
+    """Launch a detached warm Blender for `root`; returns its live state or None.
+
+    Runs under the per-root lock, so it never replaces a server that is serving a job and two
+    starters never launch two servers. When the lock stays taken for `lock_wait` seconds
+    (default `wait`), the current server's state is returned as is (None if there is none).
+    """
     from ai_studio.assets.tools.blender import run_blender
     root = Path(root or studio_root())
-    current = ping(root)
-    if current:
-        return current
-    exe = run_blender.find_blender(blender)
     (root / "tmp").mkdir(parents=True, exist_ok=True)
-    _forget(root)
-    command = run_blender.blender_command(exe, SOURCE, ["serve", "--root", str(root), "--idle-minutes",
-                                                        str(idle_minutes)], studio_root=root)
-    sink = open(root / SERVER_LOG, "w", encoding="utf-8", errors="replace")
-    options = {"stdin": subprocess.DEVNULL, "stdout": sink, "stderr": subprocess.STDOUT,
-               "cwd": str(root), "close_fds": True}
-    try:
-        if os.name == "nt":
-            detached = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-            try:
-                # Outlive a tool runner that kills its job object when the command returns.
-                process = subprocess.Popen(command, creationflags=detached | subprocess.CREATE_BREAKAWAY_FROM_JOB,
-                                           **options)
-            except OSError:
-                process = subprocess.Popen(command, creationflags=detached, **options)
-        else:
-            process = subprocess.Popen(command, start_new_session=True, **options)
-    finally:
-        sink.close()
-    deadline = time.monotonic() + wait
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            return None
-        state = read_state(root)
-        if state and state.get("pid") == process.pid:
-            process.returncode = 0  # detached on purpose; keeps Popen from warning it still runs
-            return ping(root) or state
+    lock = _Lock(root)
+    give_up = time.monotonic() + (wait if lock_wait is None else lock_wait)
+    while not lock.acquire():
+        if time.monotonic() >= give_up:
+            return live_state(root)
         time.sleep(0.1)
-    process.kill()
-    return None
+    try:
+        state = live_state(root)
+        if state:
+            try:
+                reply = _request(state, {"op": "ping"}, HUNG_SECONDS)
+            except (OSError, ValueError):
+                reply = {}
+            if reply.get("ok"):
+                return {**state, **reply}
+            _kill(state, root)  # nobody holds the lock, yet it does not answer: hung or stale
+        exe = run_blender.find_blender(blender)
+        _forget(root)
+        command = run_blender.blender_command(exe, SOURCE, ["serve", "--root", str(root), "--idle-minutes",
+                                                            str(idle_minutes)], studio_root=root)
+        sink = open(root / SERVER_LOG, "w", encoding="utf-8", errors="replace")
+        options = {"stdin": subprocess.DEVNULL, "stdout": sink, "stderr": subprocess.STDOUT,
+                   "cwd": str(root), "close_fds": True}
+        try:
+            if os.name == "nt":
+                detached = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+                try:
+                    # Outlive a tool runner that kills its job object when the command returns.
+                    process = subprocess.Popen(
+                        command, creationflags=detached | subprocess.CREATE_BREAKAWAY_FROM_JOB, **options)
+                except OSError:
+                    process = subprocess.Popen(command, creationflags=detached, **options)
+            else:
+                process = subprocess.Popen(command, start_new_session=True, **options)
+        finally:
+            sink.close()
+        deadline = time.monotonic() + wait
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                return None
+            state = read_state(root)
+            if state and state.get("pid") == process.pid:
+                process.returncode = 0  # detached on purpose; keeps Popen from warning it still runs
+                return ping(root) or state
+            time.sleep(0.1)
+        process.kill()
+        return None
+    finally:
+        lock.release()
 
 
 def ensure_server(blender=None, root=None, idle_minutes=30):
     """A live server for `root`, started if needed; None when it cannot start (callers go cold)."""
     try:
-        return start_server(blender, root, idle_minutes)
+        # A held lock means a job or another start is under way: run cold now rather than wait.
+        return start_server(blender, root, idle_minutes, lock_wait=0)
     except Exception as error:  # a helper must never turn a working cold run into a failure
         print(f"blender_server: not started ({error})", file=sys.stderr)
         return None
@@ -343,13 +386,12 @@ def stop_server(root=None):
     try:
         _request(state, {"op": "stop"}, 3.0)
         for _ in range(50):
-            if not _alive(state["pid"]):
+            if not is_server(state):
                 break
             time.sleep(0.1)
     except (OSError, ValueError):
         pass
-    if _alive(state["pid"]):
-        _kill(state, root)
+    _kill(state, root)
     _forget(root, state)
     return state["pid"]
 
@@ -394,6 +436,7 @@ class Server:
         self.jobs = 0
         self.failed = 0
         self.warm_seconds = None
+        self.launch_env = dict(os.environ)
 
     def serve(self):
         import bpy
@@ -409,13 +452,15 @@ class Server:
         listener.listen(8)
         listener.settimeout(1.0)
         self.token = secrets.token_hex(16)
-        self.state = {"pid": os.getpid(), "port": listener.getsockname()[1], "token": self.token,
+        self.state = {"pid": os.getpid(), "created": process_created(os.getpid()),
+                      "port": listener.getsockname()[1], "token": self.token,
                       "blender": bpy.app.binary_path, "version": bpy.app.version_string,
                       "started": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(self.started)),
                       "root": str(self.root), "idle_minutes": self.idle_seconds / 60}
         state_path = self.root / STATE
-        temp = state_path.with_suffix(".tmp")
-        temp.write_text(json.dumps(self.state, indent=2), encoding="utf-8")
+        handle, temp = tempfile.mkstemp(prefix="blender_server.", suffix=".tmp", dir=state_path.parent)
+        with os.fdopen(handle, "w", encoding="utf-8") as file:
+            json.dump(self.state, file, indent=2)
         os.replace(temp, state_path)
         print(f"blender_server: pid {os.getpid()} port {self.state['port']} warm in {self.warm_seconds} s",
               flush=True)
@@ -429,16 +474,24 @@ class Server:
                         break
                     continue
                 with conn:
-                    if not self.handle(conn):
+                    try:
+                        keep = self.handle(conn)
+                    except Exception as error:  # a bad request must not take the server down
+                        self._reply(conn, {"error": f"{type(error).__name__}: {error}"})
+                        keep = True
+                    if not keep:
                         break
         finally:
             listener.close()
-            current = read_state(self.root)
-            if current and current.get("pid") == os.getpid():
-                try:
-                    state_path.unlink()
-                except OSError:
-                    pass
+            self.forget()
+
+    def forget(self):
+        current = read_state(self.root)
+        if current and current.get("pid") == os.getpid():
+            try:
+                (self.root / STATE).unlink()
+            except OSError:
+                pass
 
     def handle(self, conn):
         """Serve one request; False stops the server."""
@@ -447,7 +500,9 @@ class Server:
             request = _receive(conn)
         except (OSError, ValueError):
             return True
-        if not hmac.compare_digest(str(request.get("token", "")), self.token):
+        token = request.get("token") if isinstance(request, dict) else None
+        if not isinstance(token, str) or not hmac.compare_digest(token.encode("utf-8"),
+                                                                 self.token.encode("utf-8")):
             self._reply(conn, {"error": "bad token"})
             return True
         if SOURCE.stat().st_mtime_ns != self.source_mtime:
@@ -467,12 +522,17 @@ class Server:
         if op != "job":
             self._reply(conn, {"error": f"unknown op {op!r}"})
             return True
-        script, cwd = Path(str(request.get("script", ""))), Path(str(request.get("cwd", "")))
-        if not (script.is_absolute() and script.is_file() and script.suffix == ".py" and cwd.is_dir()):
-            self._reply(conn, {"error": "script must be an existing .py file and cwd a folder"})
+        job, error = self.parse_job(request)
+        if error:
+            self._reply(conn, {"error": error})
             return True
-        code = self.run_job(script, [str(a) for a in request.get("argv", [])],
-                            Path(request["log"]), cwd)
+        done = threading.Event()
+        threading.Thread(target=self.watch, args=(conn, time.monotonic() + job.pop("timeout"), done),
+                         daemon=True).start()
+        try:
+            code = self.run_job(**job)
+        finally:
+            done.set()
         self.jobs += 1
         self.failed += code != 0
         self._reply(conn, {"code": code, "jobs": self.jobs})
@@ -484,6 +544,50 @@ class Server:
             return False
         return True
 
+    def parse_job(self, request):
+        """(job kwargs, None) or (None, why it is refused); a refused job runs cold."""
+        script, cwd, log = request.get("script"), request.get("cwd"), request.get("log")
+        argv, env, timeout = request.get("argv", []), request.get("env"), request.get("timeout", 3600)
+        if not all(isinstance(v, str) and v for v in (script, cwd, log)):
+            return None, "script, cwd and log must be paths"
+        if not (isinstance(argv, list) and all(isinstance(a, str) for a in argv)):
+            return None, "argv must be a list of strings"
+        if not (isinstance(env, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in env.items())):
+            return None, "env must map strings to strings"
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0:
+            return None, "timeout must be a positive number"
+        script, cwd = Path(script), Path(cwd)
+        if not (script.is_absolute() and script.is_file() and script.suffix == ".py" and cwd.is_dir()):
+            return None, "script must be an existing .py file and cwd a folder"
+        differs = sorted(k for k, v in env.items() if k.upper().startswith(STARTUP_ENV)
+                         and self.launch_env.get(k) != v)
+        if differs:
+            return None, f"start-up environment differs: {differs}"
+        return {"script": script, "argv": argv, "log": Path(log), "cwd": cwd, "env": env,
+                "timeout": timeout + WATCHDOG_MARGIN}, None
+
+    def watch(self, conn, deadline, done):
+        """Exit the process when the job outlives its caller's timeout or the caller is gone.
+
+        The main thread is inside the job and cannot notice either; without this a hung or
+        orphaned job would keep Blender alive past any idle timeout.
+        """
+        while not done.wait(0.5):
+            reason = None
+            if time.monotonic() > deadline:
+                reason = "job outlived the caller's timeout"
+            else:
+                try:
+                    readable, _, _ = select.select([conn], [], [], 0)
+                    if readable and not conn.recv(1, socket.MSG_PEEK):
+                        reason = "caller disconnected mid-job"
+                except (OSError, ValueError):
+                    reason = "caller disconnected mid-job"
+            if reason and not done.is_set():
+                print(f"blender_server: {reason}, exiting", flush=True)
+                self.forget()
+                os._exit(1)
+
     @staticmethod
     def _reply(conn, message):
         try:
@@ -492,7 +596,7 @@ class Server:
         except OSError:
             pass
 
-    def run_job(self, script, argv, log, cwd):
+    def run_job(self, script, argv, log, cwd, env):
         import runpy
         import traceback
         import bpy
@@ -513,6 +617,8 @@ class Server:
         code = 0
         try:
             os.chdir(cwd)
+            os.environ.clear()
+            os.environ.update(env)
             # Exactly what a cold run_blender start shows the script.
             sys.argv = [bpy.app.binary_path, "--background", "--factory-startup", "--python-expr",
                         f"import sys; sys.path.insert(0, {str(self.root)!r})", "--python-exit-code", "1",
@@ -548,14 +654,28 @@ class Server:
         for name, items in self.handlers.items():
             getattr(bpy.app.handlers, name)[:] = items
         install = Path(bpy.app.binary_path).resolve().parent
-        for name in [n for n in sys.modules if n not in self.baseline]:
-            module = sys.modules.get(name)
-            file = getattr(module, "__file__", None) or ""
-            # Only pure-Python files outside Blender and site-packages: compiled extensions
-            # (numpy and the like) cannot be imported twice in one process.
-            if (file.endswith(".py") and "site-packages" not in Path(file).parts
-                    and install not in Path(file).resolve().parents):
-                del sys.modules[name]
+        doomed = {name: module for name, module in list(sys.modules.items())
+                  if name not in self.baseline and _reloadable(module, install)}
+        for name in doomed:
+            del sys.modules[name]
+        # `from package import module` reads the package attribute before sys.modules, so a
+        # surviving parent must not keep pointing at the dropped module.
+        for name, module in doomed.items():
+            parent, _, child = name.rpartition(".")
+            if parent in sys.modules and getattr(sys.modules[parent], child, None) is module:
+                delattr(sys.modules[parent], child)
+
+
+def _reloadable(module, install):
+    """Pure-Python code outside Blender and site-packages, including namespace packages (the
+    Studio's have no __init__.py). Compiled extensions such as numpy cannot load twice."""
+    file = getattr(module, "__file__", None)
+    if file:
+        places = [file] if file.endswith(".py") else []
+    else:
+        places = list(getattr(module, "__path__", None) or [])
+    return bool(places) and all("site-packages" not in Path(p).parts and install not in Path(p).resolve().parents
+                                for p in places)
 
 
 def _flush_all():

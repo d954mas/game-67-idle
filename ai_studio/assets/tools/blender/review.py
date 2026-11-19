@@ -56,7 +56,10 @@ TOOLS = {"mesh_check": mesh_check, "glb_check": glb_check, "contact_check": cont
 # --- options ----------------------------------------------------------------------------------
 
 def is_set(value):
-    return value not in (None, False, [], (), "")
+    """Absent means None, an unset switch (False) or an empty list; 0 is a real value."""
+    if value is None or value is False:
+        return False
+    return not (isinstance(value, (list, tuple, str)) and len(value) == 0)
 
 
 def find_presets(model):
@@ -74,6 +77,7 @@ def find_presets(model):
 def read_preset(path):
     """(options, tool config) of one preset file, its paths made absolute."""
     data = json.loads(Path(path).read_text(encoding="utf-8"))
+    validate_config(data, f"{path}: ")
     base = Path(path).parent
     options, tools = {}, {}
     for key, value in data.items():
@@ -88,12 +92,23 @@ def read_preset(path):
     return options, tools
 
 
-def merge_tools(into, extra):
-    for key, value in extra.items():
-        if isinstance(value, dict) and isinstance(into.get(key), dict):
-            into[key] = {**into[key], **value}
-        else:
-            into[key] = value
+def layer_tools(layer):
+    """One config layer as {tool: options}: flat keys go to every tool that knows them, a
+    nested `{tool: {...}}` section overrides them for that tool."""
+    out = {}
+    for tool, module in TOOLS.items():
+        options = {k: v for k, v in layer.items() if k in module.DEFAULTS and not isinstance(v, dict)}
+        if isinstance(layer.get(tool), dict):
+            options.update(layer[tool])
+        if options:
+            out[tool] = options
+    return out
+
+
+def merge_tools(into, layer):
+    """Merge one layer on top, per tool, so a nearer flat key beats a farther nested one."""
+    for tool, options in layer_tools(layer).items():
+        into[tool] = {**into.get(tool, {}), **options}
     return into
 
 
@@ -106,7 +121,7 @@ def model_options(model, args, config):
         preset_options, preset_tools = read_preset(path)
         options.update(preset_options)
         merge_tools(tools, preset_tools)
-    merge_tools(tools, {k: v for k, v in config.items() if k not in OPTIONS})
+    merge_tools(tools, config)
     options.update({k: v for k, v in config.items() if k in OPTIONS})
     for key in OPTIONS:
         value = getattr(args, key, None)
@@ -116,20 +131,21 @@ def model_options(model, args, config):
     return SimpleNamespace(**options), tools
 
 
-def validate_config(config):
-    """A flat key no tool and no option knows is a typo: refuse it rather than keep the default."""
+def validate_config(config, where=""):
+    """A key no tool and no option knows is a typo: refuse it rather than keep the default."""
     known = set(OPTIONS).union(*(module.DEFAULTS for module in TOOLS.values()))
     unknown = sorted(k for k in config if k not in TOOLS and k not in known)
+    for tool in TOOLS:
+        if isinstance(config.get(tool), dict):
+            unknown += sorted(f"{tool}.{k}" for k in config[tool] if k not in TOOLS[tool].DEFAULTS)
     if unknown:
-        raise SystemExit(f"unknown option(s) {unknown}; known: {sorted(known)}")
+        raise SystemExit(f"{where}unknown option(s) {unknown}; known: {sorted(known)}")
 
 
 def tool_options(tool, config, **flags):
-    """Tool config (nested under the tool name, or flat keys this tool knows), then flags."""
-    nested = config.get(tool) if isinstance(config.get(tool), dict) else None
-    known = TOOLS[tool].DEFAULTS
-    base = dict(nested) if nested is not None else {
-        k: v for k, v in config.items() if k in known and not isinstance(v, dict)}
+    """This tool's options from a config layer (flat keys it knows, then its nested section),
+    then the flags given on the command line."""
+    base = layer_tools(config).get(tool, {})
     base.update({k: v for k, v in flags.items() if is_set(v)})
     return base
 

@@ -83,6 +83,8 @@ def review_scene(out_dir, objects=None, name="model", job=None, export_preset="s
     objects = list(objects) if objects is not None else _default_objects()
     if not objects:
         raise ValueError("review_scene: nothing to review (no objects given and none visible)")
+    # One set for the GLB and the images, so an assembly root is checked with the meshes it shows.
+    objects = RV.review_set(objects)
     layer = bpy.context.view_layer
     selected = {o: o.select_get() for o in layer.objects}
     active = layer.objects.active

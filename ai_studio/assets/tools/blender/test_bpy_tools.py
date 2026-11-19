@@ -72,8 +72,24 @@ IN_PROCESS = textwrap.dedent("""
     before = state()
     live = review_live.review_scene(out / "live", name="crate", job={"size": 64, "views": ["front"]})
     after = state()
-    json.dump({"first": first, "second": second, "live": live, "before": before, "after": after},
-              open(out / "in_process.json", "w"))
+    # An assembly root: the GLB the checks read must hold the meshes the images show.
+    root = bpy.data.objects.new("assembly_root", None)
+    scene.collection.objects.link(root)
+    part = S.box("part", 1.0, location=(0, 0, 3))
+    part.parent = root
+    assembly = review_live.review_scene(out / "assembly", objects=[root], name="assembly",
+                                        job={"size": 64, "views": ["front"], "passes": ["silhouette"]})
+    # A keyed object moved off its keys by the script must come out of a review where it was.
+    lid = S.box("lid", 0.5, location=(4, 0, 0))
+    for frame, z in ((1, 0.0), (25, 2.0)):
+        lid.location.z = z
+        lid.keyframe_insert("location", index=2, frame=frame)
+    scene.frame_set(1)
+    lid.location.z = 5.0
+    review_live.review_scene(out / "lid", objects=[lid], name="lid", checks=False, card=False,
+                             job={"size": 64, "views": ["front"], "passes": ["silhouette"]})
+    json.dump({"first": first, "second": second, "live": live, "before": before, "after": after,
+               "assembly": assembly, "lid_z": lid.location.z}, open(out / "in_process.json", "w"))
 """)
 
 
@@ -107,7 +123,7 @@ class BlenderCase(unittest.TestCase):
 
     def blender(self, script, *args):
         log = self.tmp / f"{Path(script).stem}.log"
-        result = run_blender.run(script, [str(a) for a in args], log=log, timeout=600)
+        result = run_blender.run(script, [str(a) for a in args], log=log, timeout=600, server=False)
         if result["code"] != 0:
             self.fail(f"blender exited {result['code']}:\n" + log.read_text(errors="replace")[-3000:])
         return result
@@ -154,15 +170,30 @@ class RenderViews(BlenderCase):
         self.assertEqual({i["view"] for i in report["images"]} - {"lineup"}, {"front"})
         np.testing.assert_allclose(report["stats"]["bounds"]["max"], CUBE.max(axis=0), atol=1e-4)
 
+    def test_lineup_rests_references_whose_names_collide(self):
+        # Model and both references name their node "cube", so Blender imports the references
+        # as cube.001 and cube.002; each must still stand at its file's rest, not at its clip.
+        model = cube_glb(self.tmp / "cube.glb")
+        refs = [cube_glb(self.tmp / f"anim{k}.glb", clip=("Rise", [0.0, 1.0], [0.0, 1.5])) for k in (1, 2)]
+        out = self.tmp / "lineup_names"
+        self.blender(HERE / "render_views.py", "--model", model, "--out", out, "--size", 48, "--beside", *refs,
+                     "--views", "front", "--passes", "silhouette", "--lineup-views", "front",
+                     "--lineup-passes", "silhouette")
+        members = json.loads((out / "views.json").read_text(encoding="utf-8"))["lineup"]["members"][1:]
+        self.assertEqual([m["name"] for m in members], ["anim1", "anim2"])
+        for member in members:
+            self.assertAlmostEqual(member["offset_gltf"][1], 0.0, places=5, msg=member)
+
     def test_clip_source_poses_a_body_by_node_name(self):
-        body = cube_glb(self.tmp / "body.glb")
+        # The body carries its own "Rise" (to 3.0); the clip file's "Rise" (to 1.5) must win.
+        body = cube_glb(self.tmp / "body.glb", clip=("Rise", [0.0, 1.0], [0.0, 3.0]))
         clip = cube_glb(self.tmp / "clip.glb", height=None, clip=("Rise", [0.0, 1.0], [0.0, 1.5]))
         out = self.tmp / "clip_pose"
         self.blender(HERE / "render_views.py", "--model", body, "--out", out, "--size", 64,
                      "--clip-source", clip, "--poses", "Rise@1.0", "Rise@0.5", "--views", "front",
                      "--passes", "silhouette", "--pose-passes", "silhouette")
         report = json.loads((out / "views.json").read_text(encoding="utf-8"))
-        self.assertEqual(report["clip_source"], {"animations": ["Rise"], "unmatched_nodes": []})
+        self.assertEqual(report["clip_source"], {"animations": ["Rise"], "replaced": ["Rise"], "unmatched_nodes": []})
         lows = {p["time"]: p["bounds"]["min"][1] for p in report["poses"]}
         self.assertAlmostEqual(lows[1.0], 1.5, places=3)
         self.assertAlmostEqual(lows[0.5], 0.75, places=3)
@@ -184,7 +215,7 @@ class InProcess(unittest.TestCase):
         script = cls.root / "in_process.py"
         script.write_text(IN_PROCESS, encoding="utf-8")
         log = cls.root / "in_process.log"
-        result = run_blender.run(script, [str(model), str(cls.root)], log=log, timeout=600)
+        result = run_blender.run(script, [str(model), str(cls.root)], log=log, timeout=600, server=False)
         if result["code"] != 0:
             tail = log.read_text(errors="replace")[-3000:]
             shutil.rmtree(cls.root, True)
@@ -220,6 +251,15 @@ class InProcess(unittest.TestCase):
         else:
             self.assertIn("venv", live["card_note"])
         self.assertEqual(self.data["before"], self.data["after"])
+
+    def test_review_live_covers_an_assembly_root_with_its_children(self):
+        assembly = self.data["assembly"]
+        self.assertEqual(assembly["glb"]["triangles"], 12)
+        self.assertIn("mesh_check", assembly["checks"])
+        self.assertEqual(assembly["stats"]["triangles"], 12)
+
+    def test_review_keeps_a_transform_set_off_the_keys(self):
+        self.assertAlmostEqual(self.data["lid_z"], 5.0, places=5)
 
 
 class SceneAndExport(BlenderCase):
@@ -257,15 +297,18 @@ class SceneAndExport(BlenderCase):
         # --poses reads the same glTF time; the main views stay in the bind pose.
         out = self.tmp / "poses"
         self.blender(HERE / "render_views.py", "--model", self.tmp / "anim.glb", "--out", out, "--views", "front",
-                     "--passes", "silhouette", "--size", 64, "--poses", f"Rise@{end}", "Rise@0")
+                     "--passes", "silhouette", "--size", 64, "--poses", f"Rise@{end}", "Rise@0",
+                     "Rise@0.1234567", "Rise@0.1234568")
         report = json.loads((out / "views.json").read_text(encoding="utf-8"))
         self.assertEqual(report["pose"], "rest")
         lows = [p["bounds"]["min"][1] for p in report["poses"]]
         self.assertAlmostEqual(lows[0], 1.5, places=3)
         self.assertAlmostEqual(lows[1], -0.5, places=3)
         poses = [i for i in report["images"] if i["view"] == "pose"]
-        self.assertEqual([(i["animation"], i["time"], i["base_view"], i["pass"]) for i in poses],
+        self.assertEqual([(i["animation"], i["time"], i["base_view"], i["pass"]) for i in poses][:2],
                          [("Rise", end, "three_quarter", "beauty"), ("Rise", 0.0, "three_quarter", "beauty")])
+        # Times that print alike under :g still get their own files.
+        self.assertEqual(len({i["file"] for i in poses}), 4)
         for image in poses:
             self.assertTrue((out / image["file"]).is_file(), image)
 

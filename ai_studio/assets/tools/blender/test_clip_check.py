@@ -17,7 +17,7 @@ def box(lo, hi):
     return np.asarray(lo, float) + UNIT * (np.asarray(hi, float) - lo)
 
 
-def add_rig(b, skinned=True):
+def add_rig(b, skinned=True, unweighted=0):
     hips = b.add_node("Hips", translation=JOINTS["Hips"])
     feet = [b.add_node(n, translation=JOINTS[n], parent=hips) for n in ("LeftFoot", "RightFoot")]
     if not skinned:
@@ -28,6 +28,7 @@ def add_rig(b, skinned=True):
                         box((-0.15, 0, -0.05), (-0.05, 0.1, 0.12))])
     joints = np.repeat([[0, 0, 0, 0], [1, 0, 0, 0], [2, 0, 0, 0]], 8, axis=0)
     weights = np.tile([1.0, 0, 0, 0], (24, 1))
+    weights[:unweighted] = 0.0
     mesh = b.add_mesh("body", points, np.vstack([FACES, FACES + 8, FACES + 16]),
                       extra={"JOINTS_0": (joints, G.UNSIGNED_BYTE), "WEIGHTS_0": (weights, G.FLOAT)})
     ibm = [np.linalg.inv(G.trs_matrix(world[n], (0, 0, 0, 1), (1, 1, 1))).T.reshape(-1) for n in JOINTS]
@@ -55,9 +56,9 @@ def hips(dy=0.0, dx=None):
     return values
 
 
-def character(**clips):
+def character(unweighted=0, **clips):
     b = G.GlbBuilder()
-    add_rig(b)
+    add_rig(b, unweighted=unweighted)
     for name, tracks in clips.items():
         add_clip(b, name, tracks)
     return b.to_glb()
@@ -76,6 +77,12 @@ SLIDE = {"LeftFoot": np.c_[np.linspace(0.1, 0.3, len(T)), np.full(len(T), -0.82)
 
 
 class ClipCheck(unittest.TestCase):
+    def test_unweighted_vertex_stays_at_origin_while_body_lifts(self):
+        report = clip_check.check(character(unweighted=1, Lift={"Hips": hips(0.5)}))
+        self.assertNotIn("check_error", found(report))
+        row = report["metrics"]["per_animation"][0]
+        self.assertEqual((row["lowest_y"], row["lowest_source"]), (0.0, "skinned mesh"))
+
     def test_idle_is_clean_and_loops(self):
         report = clip_check.check(character(Idle=BOB), loop=True)
         self.assertEqual(serious(report), set())

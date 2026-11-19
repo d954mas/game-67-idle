@@ -515,8 +515,9 @@ class Glb:
             seed = int(np.argmin(bottom[f]))
             best = min(floor, float(heights(row, members[start[seed]:start[seed + 1]]).min()))
             # Rounding slack: bounds and heights are computed in different orders.
-            near = bottom[f] <= best + 1e-6 * (1.0 + abs(best))
-            out[f] = min(floor, float(heights(row, members[near[owner]]).min()))
+            near = members[(bottom[f] <= best + 1e-6 * (1.0 + abs(best)))[owner]]
+            # No box under `best` means it came from an unweighted vertex: nothing weighted is lower.
+            out[f] = min(floor, float(heights(row, near).min())) if len(near) else best
         return out
 
     def _skin_soup(self, mesh_nodes):
@@ -567,6 +568,8 @@ class Glb:
         used = (weights > 0) & live[:, None]
         vertex = np.broadcast_to(np.arange(len(pos))[:, None], lanes.shape)[used]
         slot_of = lanes[used]
+        if not len(slot_of):
+            return None
         order = np.argsort(slot_of, kind="stable")
         vertex, slot_of = vertex[order], slot_of[order]
         cuts = np.r_[0, np.flatnonzero(np.diff(slot_of)) + 1, len(slot_of)]
