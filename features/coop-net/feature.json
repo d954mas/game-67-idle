@@ -1,0 +1,37 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "coop-net",
+  "version": "0.1.0",
+  "title": "Coop Net",
+  "status": "opt-in",
+  "kind": "gameplay-infrastructure",
+  "summary": "Authoritative co-op rooms and their clients on top of network-core: seats, per-seat input mailboxes with sequence numbers and acknowledgements, a fixed tick that calls the game's step, snapshot fan-out with a game-defined payload, and a client that sends input at its own sequence and hands snapshots back to the game.",
+  "copy_model": "in-place",
+  "layer": "L2",
+  "owners": [
+    "features/coop-net"
+  ],
+  "dependencies": [
+    "features/network-core (WebSocket server and client, codec, session limits)"
+  ],
+  "commands": {
+    "contracts": "node features/validate_contracts.mjs"
+  },
+  "provides": [
+    "coop_net CMake target",
+    "coop_net.h: coop_room_start/pump/stop, coop_client_connect/service/send_input"
+  ],
+  "registers": {
+    "link_libraries": [
+      "coop_net"
+    ]
+  },
+  "flags": {
+    "runtime": "none"
+  },
+  "manuals": {
+    "install": "features/coop-net/INSTALL.md"
+  },
+  "art_needs": [],
+  "test_consumer": false
+}
