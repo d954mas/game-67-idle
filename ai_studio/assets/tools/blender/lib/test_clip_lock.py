@@ -1,0 +1,66 @@
+import unittest
+
+import numpy as np
+
+from ai_studio.assets.tools.blender.lib import clip_lock as CL, glb as G
+from ai_studio.assets.tools.blender.lib.test_retarget import add_motion, build_rig, loaded, positions
+
+LEGS = {f"mixamorig:{s}{j}" for s in ("Left", "Right") for j in ("UpLeg", "Leg", "Foot")}
+
+
+def gliding_clip(travel=0.2, frames=31, legs=0.05):
+    """Hips drift forward while the legs barely move: both feet glide while planted."""
+    builder, nodes = build_rig(positions())
+    add_motion(builder, nodes, frames=frames, travel=travel, legs=legs)
+    return loaded(builder)
+
+
+class FootLockTests(unittest.TestCase):
+    def test_lock_pins_feet_and_changes_only_leg_rotations(self):
+        clip = gliding_clip()
+        document, binary, report = CL.foot_lock(clip)
+        row = report["clips"]["move"]
+        for side in ("left", "right"):
+            self.assertTrue(row["feet"][side]["locked"])
+            self.assertGreater(row["feet"][side]["slide_before"], 0.03)
+            self.assertLess(row["feet"][side]["slide_after"], 0.1 * row["feet"][side]["slide_before"])
+        fixed = G.Glb(document, binary)
+        self.assertEqual(len(binary), len(clip.bin))  # rewritten in place
+        before, after = clip.channels("move"), fixed.channels("move")
+        changed = {name for (name, path) in before if not np.array_equal(before[(name, path)][1], after[(name, path)][1])}
+        self.assertTrue(changed)
+        self.assertLessEqual(changed, LEGS)
+
+    def test_a_locked_clip_is_stamped_and_left_alone(self):
+        document, binary, _ = CL.foot_lock(gliding_clip())
+        again = G.Glb(document, binary)
+        self.assertIn(CL.STAMP, again.json["animations"][0]["extras"])
+        document2, binary2, report = CL.foot_lock(again)
+        self.assertIn("already locked", report["clips"]["move"]["skipped"])
+        self.assertEqual(bytes(binary2), bytes(binary))
+
+    def test_small_drift_is_left_alone(self):
+        report = CL.foot_lock(gliding_clip(travel=0.005, legs=0.0))[2]
+        self.assertFalse(any(f["locked"] for f in report["clips"]["move"]["feet"].values()))
+
+    def test_loop_keeps_the_seam_closed(self):
+        builder, nodes = build_rig(positions())
+        times = add_motion(builder, nodes, frames=31, legs=0.05)
+        # Close the loop and make the feet glide back and forth: a plant that runs through the seam.
+        doc = builder.json
+        out = doc["animations"][0]["samplers"][doc["animations"][0]["channels"][-1]["sampler"]]["output"]
+        clip = loaded(builder)
+        hips = clip.accessor(out)
+        hips[:, 2] = hips[0, 2] + 0.05 * np.sin(2 * np.pi * times / times[-1])
+        start = doc["bufferViews"][doc["accessors"][out]["bufferView"]]["byteOffset"]
+        builder.payload[start:start + hips.size * 4] = hips.astype("<f4").tobytes()
+        clip = loaded(builder)
+        document, binary, _ = CL.foot_lock(clip, loop=True)
+        fixed = G.Glb(document, binary)
+        foot = fixed.by_name["mixamorig:LeftFoot"]
+        worlds = fixed.posed_worlds(fixed.channels(0, by_index=True), [times[0], times[-1]])
+        self.assertLess(float(np.linalg.norm(worlds[foot][0, :3, 3] - worlds[foot][1, :3, 3])), 1e-3)
+
+
+if __name__ == "__main__":
+    unittest.main()

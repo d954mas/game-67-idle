@@ -136,7 +136,7 @@ def ground(clip, model=None, animations=None, floor=0.0, baseline=None, toleranc
                 new_values = new_values.reshape(-1, 3)
             else:
                 new_values = new_points
-            appended = _store(document, binary, sampler, new_values, appended)
+            appended = store_output(document, binary, sampler, new_values, appended)
         report["clips"][name] = row
     if appended is not None:
         document, binary = appended.json, appended.payload
@@ -150,29 +150,30 @@ def ground(clip, model=None, animations=None, floor=0.0, baseline=None, toleranc
     return document, bytes(binary), report
 
 
-def _exclusive(document, accessor):
+def _exclusive(document, accessor, width):
     users = sum(s["output"] == accessor or s["input"] == accessor
                 for a in document.get("animations", []) for s in a["samplers"])
     acc = document["accessors"][accessor]
     view = acc.get("bufferView")
     shared_view = sum(a.get("bufferView") == view for a in document["accessors"]) > 1
     plain = (acc["componentType"] == G.FLOAT and "sparse" not in acc and view is not None
-             and document["bufferViews"][view].get("byteStride", 12) == 12
+             and document["bufferViews"][view].get("byteStride", 4 * width) == 4 * width
              and document["bufferViews"][view].get("buffer", 0) == 0)
     return users == 1 and not shared_view and plain
 
 
-def _store(document, binary, sampler, values, builder):
-    """Rewrite the sampler's output in place when it owns its bytes, else append a new accessor."""
+def store_output(document, binary, sampler, values, builder):
+    """Rewrite a sampler's output in place when it owns its bytes, else append a new accessor; returns
+    the GlbBuilder once one exists (its json is `document`, its payload replaces `binary`)."""
     values = np.asarray(values, "<f4")
     index = sampler["output"]
-    if builder is None and _exclusive(document, index):
+    if builder is None and _exclusive(document, index, values.shape[1]):
         acc = document["accessors"][index]
         view = document["bufferViews"][acc["bufferView"]]
         start = view.get("byteOffset", 0) + acc.get("byteOffset", 0)
         data = values.tobytes()
-        if len(data) != acc["count"] * 12:
-            raise GroundError("root translation accessor size changed")
+        if len(data) != acc["count"] * values.shape[1] * 4:
+            raise GroundError("animation accessor size changed")
         binary[start:start + len(data)] = data
         if "min" in acc:
             acc["min"], acc["max"] = values.min(0).tolist(), values.max(0).tolist()
