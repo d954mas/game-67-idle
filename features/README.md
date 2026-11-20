@@ -223,6 +223,13 @@ possibility, not a feature.
   simulator with per-direction delay, jitter, loss, duplicates, reorder, rate
   and cuts, a capture file for any transport, and a contract suite a new
   transport runs unchanged. [Install](net-link/INSTALL.md).
+- [Coop net](coop-net/README.md) (`L1`, `0.2.0`, opt-in, depends on
+  `net-link` and `net-bits`): a co-op session on any link: seats and a
+  handshake that refuses another protocol, build or world with a reason,
+  numbered state packets with a 32-bit acknowledgement mask and packet fates,
+  reliable records stamped with the tick, baselines on a low-priority lane,
+  RTT and per-peer tick estimates. The game owns the loop; peer bytes are
+  untrusted. [Install](coop-net/INSTALL.md).
 - `shader-programs/` (`L0`, `0.1.0`): one linked program per vertex/fragment
   shader-resource pair, shared by the materials made through it, linked when
   both stages are ready and relinked after a context loss. Reference:

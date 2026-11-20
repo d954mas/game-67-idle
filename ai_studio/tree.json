@@ -218,6 +218,18 @@
                 "coverage": "subtree"
               },
               {
+                "id": "feature-coop-net",
+                "title": "Coop net",
+                "kind": "module",
+                "path": "features/coop-net",
+                "owner": "Network Feature Owner",
+                "description": "Co-op session on net-link: seats, handshake refusals, acknowledged state packets, tick-stamped records, baselines, RTT and per-peer tick estimates.",
+                "entry": "features/coop-net/README.md",
+                "contract": "features/coop-net/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
                 "id": "feature-net-link",
                 "title": "Net link",
                 "kind": "module",

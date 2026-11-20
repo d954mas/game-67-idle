@@ -1,0 +1,10 @@
+foreach(test_name test_coop_wire test_coop_session test_coop_traffic test_coop_hostile)
+    add_executable(${test_name} ${test_name}.c coop_test_world.c)
+    # The wire parser is internal; its tests feed it bytes directly and craft illegal ones with net-bits.
+    target_include_directories(${test_name} PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../src")
+    target_link_libraries(${test_name} PRIVATE coop_net net_bits unity)
+    nt_set_warning_flags(${test_name})
+    nt_set_sanitizer_flags(${test_name})
+    add_test(NAME ${test_name} COMMAND ${test_name})
+endforeach()
+set_tests_properties(test_coop_wire test_coop_session test_coop_traffic test_coop_hostile PROPERTIES LABELS "core")

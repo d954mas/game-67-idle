@@ -116,6 +116,11 @@ if(NOT EMSCRIPTEN)
     add_subdirectory("${NET_BITS_DIR}" "${CMAKE_BINARY_DIR}/_net_bits")
     add_subdirectory("${NET_BITS_DIR}/tests" "${CMAKE_BINARY_DIR}/_net_bits_tests")
 
+    # Session on net-link and net-bits, so it comes after both.
+    set(COOP_NET_DIR "${GAME_REPO_ROOT}/features/coop-net")
+    add_subdirectory("${COOP_NET_DIR}" "${CMAKE_BINARY_DIR}/_coop_net")
+    add_subdirectory("${COOP_NET_DIR}/tests" "${CMAKE_BINARY_DIR}/_coop_net_tests")
+
     set(TEST_GOLDENS_DIR "${GAME_REPO_ROOT}/features/test-goldens")
     set(TEST_GOLDENS_INC "${TEST_GOLDENS_DIR}/include")
     set(TEST_GOLDENS_SRC "${TEST_GOLDENS_DIR}/src")

@@ -84,6 +84,12 @@
       "compatibility": "validated by the transport contract suite on the simulator, simulator condition cases and capture round trips"
     },
     {
+      "id": "coop-net",
+      "source": "features/coop-net",
+      "version": "0.2.0",
+      "compatibility": "validated on the simulator: seats and refusals, exactly-once records and packet fates under loss, reorder and the 16-bit wrap, RTT and per-peer tick bands, empty state packets with a silent game, baselines under a rate limit and on Steam-sized limits, and hostile peers on every lane"
+    },
+    {
       "id": "shader-programs",
       "source": "features/shader-programs",
       "version": "0.1.0",

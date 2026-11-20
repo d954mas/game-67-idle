@@ -1,37 +1,27 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "coop-net",
-  "version": "0.1.0",
-  "title": "Coop Net",
+  "version": "0.2.0",
+  "title": "Coop net",
   "status": "opt-in",
-  "kind": "gameplay-infrastructure",
-  "summary": "Authoritative co-op rooms and their clients on top of network-core: seats, per-seat input mailboxes with sequence numbers and acknowledgements, a fixed tick that calls the game's step, snapshot fan-out with a game-defined payload, and a client that sends input at its own sequence and hands snapshots back to the game.",
+  "kind": "network-foundation",
+  "summary": "A co-op session on any net-link transport: seats and a handshake that refuses another protocol, build or world with a reason, numbered state packets with a 32-bit acknowledgement mask and packet fates, reliable records stamped with the tick, baselines of any size on a low-priority lane, RTT and per-peer tick estimates. The game owns the loop; peer bytes are untrusted.",
   "copy_model": "in-place",
-  "layer": "L2",
-  "owners": [
-    "features/coop-net"
-  ],
-  "dependencies": [
-    "features/network-core (WebSocket server and client, codec, session limits)"
-  ],
-  "commands": {
-    "contracts": "node features/validate_contracts.mjs"
-  },
+  "layer": "L1",
+  "owners": ["features/coop-net"],
+  "dependencies": ["features/net-link", "features/net-bits"],
   "provides": [
-    "coop_net CMake target",
-    "coop_net.h: coop_room_start/pump/stop, coop_client_connect/service/send_input"
+    "coop_session_lanes / coop_session_host / coop_session_join / coop_session_destroy: a session on a net_link",
+    "coop_session_seat / seats / tick_hz / seated / set_open / kick / set_world_key: seats and the handshake",
+    "coop_session_set_time / tick / end_tick / peer_tick: the game's clock, empty state packets that keep acknowledgements flowing, each peer's tick on both roles",
+    "coop_session_poll: WELCOME, SEAT_JOINED, SEAT_LEFT, CLOSED, STATE, RECORD, BASELINE with records_before",
+    "coop_session_send_state / send_record / send_baseline / baseline_progress / packet_fate / state_max / record_max",
+    "coop_session_seat_stats / coop_session_peer / coop_close_name"
   ],
-  "registers": {
-    "link_libraries": [
-      "coop_net"
-    ]
+  "manuals": {"install": "features/coop-net/INSTALL.md"},
+  "commands": {
+    "owner": "node ai_studio/feature_testing/run.mjs",
+    "test_core": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"^test_coop\" --output-on-failure"
   },
-  "flags": {
-    "runtime": "none"
-  },
-  "manuals": {
-    "install": "features/coop-net/INSTALL.md"
-  },
-  "art_needs": [],
-  "test_consumer": false
+  "registers": {"cmake_targets": ["coop_net"], "ctest_targets": ["test_coop_wire", "test_coop_session", "test_coop_traffic", "test_coop_hostile"]}
 }
