@@ -22,6 +22,10 @@ and the module stays stopped, so every other call is inert.
 | Built without the SDK (`STEAMWORKS_SDK_DIR` empty) | `NO_SDK` |
 | Built with the SDK, Steam not running or not reachable | `NO_CLIENT` |
 | Built with the SDK, Steam's runtime library missing beside the executable (Windows) | `FAILED`, the message names the file |
+| Built with the SDK, no Steam installed on the machine | `FAILED` with Steam's text (seen on Linux: Steam cannot load its client module) |
+
+The status follows Steam's own init result, so a game treats every answer but
+`READY` and `RESTARTING` as solo and does not tell `NO_CLIENT` from `FAILED`.
 
 Anything else (an outdated client, an account that may not run the app, a
 `steam_appid.txt` naming another app than `config.app_id`) is `FAILED` with
@@ -70,7 +74,10 @@ from the executable's folder before the first Steam call: without it the game
 still reaches `main` and `start` answers `FAILED` naming the file, with no
 system dialog. On Linux and macOS `steam_platform_deploy` sets an `$ORIGIN`
 (`@executable_path`) run path, and the system loader needs the library before
-the program runs. Only 64-bit Windows has been built and run.
+the program runs. 64-bit Windows was built and run against a Steam client.
+Linux x86-64 was built with gcc and clang and started on a machine without
+Steam, where the library was found beside the executable and `start` answered
+`FAILED`. macOS was not built.
 
 ### Development on AppID 480
 

@@ -44,7 +44,7 @@ linked:
   executable; the game needs it there (on Windows `start` answers `FAILED`
   naming the file when it is missing; on Linux and macOS the system loader
   refuses to start the program, and the function sets an `$ORIGIN` /
-  `@executable_path` run path; only 64-bit Windows has been built and run);
+  `@executable_path` run path; macOS has not been built);
 - with `APP_ID` it writes `steam_appid.txt` there, for development only;
 - without `APP_ID` it removes a `steam_appid.txt` left there by an earlier
   development build, because a release folder with that file never restarts

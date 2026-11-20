@@ -16,9 +16,9 @@
 #include <stdio.h>
 #include <string.h>
 
-static_assert(STEAM_PLATFORM_INTERNAL_INIT_FAILED_GENERIC == k_ESteamAPIInitResult_FailedGeneric, "init result mismatch");
-static_assert(STEAM_PLATFORM_INTERNAL_INIT_NO_STEAM_CLIENT == k_ESteamAPIInitResult_NoSteamClient, "init result mismatch");
-static_assert(STEAM_PLATFORM_INTERNAL_INIT_VERSION_MISMATCH == k_ESteamAPIInitResult_VersionMismatch, "init result mismatch");
+static_assert(int{STEAM_PLATFORM_INTERNAL_INIT_FAILED_GENERIC} == int{k_ESteamAPIInitResult_FailedGeneric}, "init result mismatch");
+static_assert(int{STEAM_PLATFORM_INTERNAL_INIT_NO_STEAM_CLIENT} == int{k_ESteamAPIInitResult_NoSteamClient}, "init result mismatch");
+static_assert(int{STEAM_PLATFORM_INTERNAL_INIT_VERSION_MISMATCH} == int{k_ESteamAPIInitResult_VersionMismatch}, "init result mismatch");
 static_assert(sizeof(SteamAPICall_t) == sizeof(uint64_t), "call handle width");
 
 namespace {

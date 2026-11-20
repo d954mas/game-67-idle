@@ -30,8 +30,9 @@ extern "C" {
 typedef enum steam_platform_status {
     STEAM_PLATFORM_READY = 0,
     STEAM_PLATFORM_NO_SDK,     /* this build has no Steamworks SDK */
-    /* Steam is not running or cannot be reached. An account that may not run the app is
-       FAILED: Steam reports it only as text, in the message. */
+    /* Steam is not running or cannot be reached. A machine with no Steam installed may answer
+       FAILED instead, and so does an account that may not run the app: Steam reports those
+       only as text, in the message. */
     STEAM_PLATFORM_NO_CLIENT,
     /* The game was not started by Steam and Steam is starting it again: this process must
        exit now, without opening a window. */
