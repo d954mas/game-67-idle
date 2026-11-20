@@ -112,6 +112,10 @@ if(NOT EMSCRIPTEN)
     add_subdirectory("${NET_LINK_DIR}" "${CMAKE_BINARY_DIR}/_net_link")
     add_subdirectory("${NET_LINK_DIR}/tests" "${CMAKE_BINARY_DIR}/_net_link_tests")
 
+    set(NET_BITS_DIR "${GAME_REPO_ROOT}/features/net-bits")
+    add_subdirectory("${NET_BITS_DIR}" "${CMAKE_BINARY_DIR}/_net_bits")
+    add_subdirectory("${NET_BITS_DIR}/tests" "${CMAKE_BINARY_DIR}/_net_bits_tests")
+
     set(TEST_GOLDENS_DIR "${GAME_REPO_ROOT}/features/test-goldens")
     set(TEST_GOLDENS_INC "${TEST_GOLDENS_DIR}/include")
     set(TEST_GOLDENS_SRC "${TEST_GOLDENS_DIR}/src")

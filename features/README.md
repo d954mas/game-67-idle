@@ -212,6 +212,11 @@ possibility, not a feature.
   authored triangle proxy with XPBD stretch and signed bending, skeletal
   motion limits and capsule contacts. Optional masks apply local corrections
   from live joint angles or distances. [Install and cook a mesh](garment-cloth/INSTALL.md).
+- [Net bits](net-bits/README.md) (`L0`, `0.1.0`, opt-in): a bit-level codec
+  for game state from untrusted peers: whole numbers in a range, reals on a
+  grid within half a step, smallest-three rotations with a stated error bound,
+  and record tables whose hash names the wire format for a session handshake.
+  [Install](net-bits/INSTALL.md).
 - [Net link](net-link/README.md) (`L0`, `0.1.0`, opt-in): a message transport
   contract shaped like `ISteamNetworkingSockets` (peers, lanes, reliable and
   unreliable sends, close reasons, stats), a seeded in-process network

@@ -72,6 +72,12 @@
       "compatibility": "validated with independent hinge, pinned seam, capsule contact, shape-limit and pose-driven mask fixtures"
     },
     {
+      "id": "net-bits",
+      "source": "features/net-bits",
+      "version": "0.1.0",
+      "compatibility": "validated by half-step and rotation-bound sweeps, grid fixed points, garbage and truncated packets through every reader, and record hash cases"
+    },
+    {
       "id": "net-link",
       "source": "features/net-link",
       "version": "0.1.0",

@@ -206,6 +206,18 @@
                 "coverage": "subtree"
               },
               {
+                "id": "feature-net-bits",
+                "title": "Net bits",
+                "kind": "module",
+                "path": "features/net-bits",
+                "owner": "Network Feature Owner",
+                "description": "Bit-level codec for untrusted game state: ranged numbers, grid reals, smallest-three rotations, hashed record tables.",
+                "entry": "features/net-bits/README.md",
+                "contract": "features/net-bits/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
                 "id": "feature-net-link",
                 "title": "Net link",
                 "kind": "module",

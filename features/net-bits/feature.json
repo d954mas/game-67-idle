@@ -1,0 +1,26 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "net-bits",
+  "version": "0.1.0",
+  "title": "Net bits",
+  "status": "opt-in",
+  "kind": "network-foundation",
+  "summary": "A bit-level codec for game state from untrusted peers: ranged whole numbers, reals on a grid within half a step, smallest-three rotations with a stated error bound, and record tables whose hash names the wire format.",
+  "copy_model": "in-place",
+  "layer": "L0",
+  "owners": ["features/net-bits"],
+  "dependencies": ["libc and libm only"],
+  "provides": [
+    "net_bits_writer_* / net_bits_reader_* / net_bits_write / net_bits_read / net_bits_reader_done: the bit stream, low bit first",
+    "net_bits_width / net_bits_write_int / net_bits_read_int: whole numbers in a range",
+    "net_bits_range_t / net_bits_range_width / net_bits_quantize / net_bits_write_ranged / net_bits_read_ranged: reals on a grid",
+    "net_bits_write_quat / net_bits_read_quat / net_bits_quat_error: smallest-three rotations",
+    "NET_BITS_BOOL / UINT / INT / RANGED / QUAT, net_bits_layout_init, net_bits_write_record / net_bits_read_record, net_bits_hash_mix: record tables and their hash"
+  ],
+  "manuals": {"install": "features/net-bits/INSTALL.md"},
+  "commands": {
+    "owner": "node ai_studio/feature_testing/run.mjs",
+    "test_core": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"^test_net_bits\" --output-on-failure"
+  },
+  "registers": {"cmake_targets": ["net_bits"], "ctest_targets": ["test_net_bits", "test_net_bits_record"]}
+}
