@@ -84,6 +84,12 @@
       "compatibility": "validated by the transport contract suite on the simulator, simulator condition cases and capture round trips"
     },
     {
+      "id": "steam-platform",
+      "source": "features/steam-platform",
+      "version": "0.1.0",
+      "compatibility": "validated without the SDK (stub answers NO_SDK, every call inert, argument errors, the event queue) and, with STEAMWORKS_SDK_DIR on 64-bit Windows, by raw callbacks fed through the dispatch and a live probe on AppID 480: start rules, callbacks and call results through manual dispatch, stop inside a handler, restarts, skip without a Steam client"
+    },
+    {
       "id": "coop-net",
       "source": "features/coop-net",
       "version": "0.2.0",

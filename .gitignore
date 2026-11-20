@@ -94,3 +94,15 @@ output/
 # Local DeepSeek harness launcher (dsh web); studio tooling lives under ai_studio/.
 /tools/
 /.tmp/
+
+# Steamworks SDK files never enter git (features/steam-platform/README.md): the runtime
+# library and a development steam_appid.txt are copied beside built executables only, and
+# the SDK itself is unpacked outside every repository.
+steam_appid.txt
+steam_api*.dll
+steam_api*.lib
+libsteam_api.*
+steamworks_sdk*/
+isteam*.h
+steam_api*.h
+steam_api*.json

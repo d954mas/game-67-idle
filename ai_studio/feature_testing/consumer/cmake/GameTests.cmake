@@ -121,6 +121,16 @@ if(NOT EMSCRIPTEN)
     add_subdirectory("${COOP_NET_DIR}" "${CMAKE_BINARY_DIR}/_coop_net")
     add_subdirectory("${COOP_NET_DIR}/tests" "${CMAKE_BINARY_DIR}/_coop_net_tests")
 
+    # Without STEAMWORKS_SDK_DIR this builds the stub and its test; with it, also the live
+    # probe and the overlay example (never built by default).
+    set(STEAM_PLATFORM_DIR "${GAME_REPO_ROOT}/features/steam-platform")
+    if(STEAMWORKS_SDK_DIR OR NOT "$ENV{STEAMWORKS_SDK_DIR}" STREQUAL "")
+        enable_language(CXX)
+    endif()
+    add_subdirectory("${STEAM_PLATFORM_DIR}" "${CMAKE_BINARY_DIR}/_steam_platform")
+    add_subdirectory("${STEAM_PLATFORM_DIR}/tests" "${CMAKE_BINARY_DIR}/_steam_platform_tests")
+    add_subdirectory("${STEAM_PLATFORM_DIR}/example" "${CMAKE_BINARY_DIR}/_steam_platform_example")
+
     set(TEST_GOLDENS_DIR "${GAME_REPO_ROOT}/features/test-goldens")
     set(TEST_GOLDENS_INC "${TEST_GOLDENS_DIR}/include")
     set(TEST_GOLDENS_SRC "${TEST_GOLDENS_DIR}/src")

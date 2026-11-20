@@ -1,0 +1,27 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "steam-platform",
+  "version": "0.1.0",
+  "title": "Steam platform",
+  "status": "opt-in",
+  "kind": "platform-integration",
+  "summary": "The process's connection to Steam behind a pure C header: start with an optional restart through Steam, a per-frame pump with manual callback dispatch, typed events the game pulls, stop. Builds without the Steamworks SDK and runs without a Steam client, both as silent solo.",
+  "copy_model": "in-place",
+  "layer": "L0",
+  "owners": ["features/steam-platform"],
+  "dependencies": ["libc", "Steamworks SDK through STEAMWORKS_SDK_DIR (optional, outside git; only redistributable_bin ships)"],
+  "provides": [
+    "steam_platform_start / steam_platform_stop / steam_platform_ready: one connection per process, statuses READY, NO_SDK, NO_CLIENT, RESTARTING, FAILED",
+    "steam_platform_run_frame / steam_platform_next_event: manual dispatch into a fixed event queue (OVERLAY)",
+    "steam_platform_user / steam_platform_overlay_ready / steam_platform_open_overlay",
+    "steam_platform_deploy(<target> [APP_ID <id>]): the runtime library beside an executable, a development steam_appid.txt with APP_ID, its removal without",
+    "src/steam_platform_internal.h: raw callbacks by id, awaited and cancelled call results, counters and test hooks for the feature's own targets"
+  ],
+  "manuals": {"install": "features/steam-platform/INSTALL.md"},
+  "commands": {
+    "owner": "node ai_studio/feature_testing/run.mjs",
+    "test_core": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"^test_steam\" --output-on-failure",
+    "test_with_sdk": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify-steam -R \"steam\" -L \"core|slow\" --output-on-failure"
+  },
+  "registers": {"cmake_targets": ["steam_platform"], "ctest_targets": ["test_steam_platform", "test_steam_platform_dispatch", "steam_platform_probe"]}
+}
