@@ -1,0 +1,13 @@
+cmake_minimum_required(VERSION 3.25)
+
+add_library(net_link STATIC src/net_link.c src/net_link_capture.c src/net_link_sim.c src/net_link_sim_fate.c)
+target_include_directories(net_link PUBLIC include)
+target_compile_features(net_link PUBLIC c_std_11)
+if(COMMAND nt_set_warning_flags)
+    nt_set_warning_flags(net_link)
+elseif(NOT MSVC)
+    target_compile_options(net_link PRIVATE -Wall -Wextra -Werror)
+endif()
+if(COMMAND nt_set_sanitizer_flags)
+    nt_set_sanitizer_flags(net_link)
+endif()

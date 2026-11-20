@@ -206,6 +206,18 @@
                 "coverage": "subtree"
               },
               {
+                "id": "feature-net-link",
+                "title": "Net link",
+                "kind": "module",
+                "path": "features/net-link",
+                "owner": "Network Feature Owner",
+                "description": "Message transport contract with a seeded in-process network simulator and packet capture.",
+                "entry": "features/net-link/README.md",
+                "contract": "features/net-link/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
                 "id": "feature-network-core",
                 "title": "Network core",
                 "kind": "module",

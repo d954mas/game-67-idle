@@ -1,0 +1,27 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "net-link",
+  "version": "0.1.0",
+  "title": "Net link",
+  "status": "opt-in",
+  "kind": "network-foundation",
+  "summary": "A message transport contract shaped like ISteamNetworkingSockets (peers, lanes, reliable and unreliable sends, close reasons, stats), a seeded in-process network simulator for tests and a packet capture that works on any transport.",
+  "copy_model": "in-place",
+  "layer": "L0",
+  "owners": ["features/net-link"],
+  "dependencies": ["libc only"],
+  "provides": [
+    "net_link_send / net_link_poll / net_link_flush / net_link_close / net_link_destroy: the calls every transport answers",
+    "net_link_max_unreliable / net_link_max_reliable / net_link_lane_count / net_link_stats / net_link_identity",
+    "net_link_init + net_link_ops_t: the table a transport fills",
+    "net_link_sim_create / net_link_sim_host / net_link_sim_guest / net_link_sim_advance / net_link_sim_set_conditions / net_link_sim_set_cut: the seeded in-process network",
+    "net_link_capture_open / net_link_capture_attach / net_link_capture_set_time / net_link_capture_reader_*: the capture file and its reader",
+    "tests/net_link_contract.h: the transport-agnostic contract suite"
+  ],
+  "manuals": {"install": "features/net-link/INSTALL.md"},
+  "commands": {
+    "owner": "node ai_studio/feature_testing/run.mjs",
+    "test_core": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"^test_net_link\" --output-on-failure"
+  },
+  "registers": {"cmake_targets": ["net_link"], "ctest_targets": ["test_net_link_sim", "test_net_link_capture"]}
+}

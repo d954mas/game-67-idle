@@ -72,6 +72,12 @@
       "compatibility": "validated with independent hinge, pinned seam, capsule contact, shape-limit and pose-driven mask fixtures"
     },
     {
+      "id": "net-link",
+      "source": "features/net-link",
+      "version": "0.1.0",
+      "compatibility": "validated by the transport contract suite on the simulator, simulator condition cases and capture round trips"
+    },
+    {
       "id": "shader-programs",
       "source": "features/shader-programs",
       "version": "0.1.0",

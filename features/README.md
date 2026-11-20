@@ -212,6 +212,12 @@ possibility, not a feature.
   authored triangle proxy with XPBD stretch and signed bending, skeletal
   motion limits and capsule contacts. Optional masks apply local corrections
   from live joint angles or distances. [Install and cook a mesh](garment-cloth/INSTALL.md).
+- [Net link](net-link/README.md) (`L0`, `0.1.0`, opt-in): a message transport
+  contract shaped like `ISteamNetworkingSockets` (peers, lanes, reliable and
+  unreliable sends, close reasons, stats), a seeded in-process network
+  simulator with per-direction delay, jitter, loss, duplicates, reorder, rate
+  and cuts, a capture file for any transport, and a contract suite a new
+  transport runs unchanged. [Install](net-link/INSTALL.md).
 - `shader-programs/` (`L0`, `0.1.0`): one linked program per vertex/fragment
   shader-resource pair, shared by the materials made through it, linked when
   both stages are ready and relinked after a context loss. Reference:
