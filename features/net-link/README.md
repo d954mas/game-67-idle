@@ -37,12 +37,19 @@ Behaviour every transport keeps:
   (`1001..1999`) or `REMOTE_CLOSE`. This holds when the closing side destroys
   its link right after. The range is Steam's without its generic code 1000,
   which Steam sends for a close without a reason.
+  A transport bounds how long it lingers and says what must keep running
+  meanwhile (the simulator: its clock; Steam: frames before the platform stops).
+- `net_link_max_unreliable` is the largest message the transport sends in one
+  packet on its own. A transport that packs several messages into packets may
+  still split one that shares a flush with others (Steam does), so a sender
+  that cares about loss keeps its packets below the limit.
 - `net_link_destroy` does not linger for peers it was not asked to close.
 - A peer handle is never handed out twice by a link; a stale or foreign handle
   gives `NO_PEER`, `false` or `0`.
 - Each event carries the peer's identity. It is zero when the other side never
-  answered (`UNREACHABLE`, `TIMEOUT` while connecting); `REFUSED` carries the
-  host's.
+  answered (`UNREACHABLE`, `TIMEOUT` while connecting). `REFUSED` carries the
+  host's where the transport learns it (the simulator does) and zero where a
+  refusal names nobody (Steam).
 - Identity is not a player. A returning guest has the same identity as before,
   and two windows of one account share one identity too (Steam IP mode on one
   PC). A session must not take identity alone as "the same player came back".
@@ -119,7 +126,10 @@ reads version 1 only.
 ## Extension points
 
 A new transport fills `net_link_ops_t` and passes `tests/net_link_contract.h`
-with its own environment: `step_s`, `settle_s`, `fail_s`, how many guest links
+(the static library `net_link_contract`, linked from another feature's test
+unchanged) with its own environment: `step_s`, `settle_s`, `fail_s`, the shorter
+`quiet_s` (what was sent has landed) and `silence_s` (nothing more comes, so it
+outlasts the transport's own timers) of a real-time transport, how many guest links
 it holds at once, and an optional cut hook with its timeout. A game sets the lane
 count and priorities, its own close codes in the app range, queue sizes and
 conditions per guest. Install: [INSTALL.md](INSTALL.md).

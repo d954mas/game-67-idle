@@ -3,6 +3,10 @@
 
 #include "features/net_link/net_link.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* For the author of a transport. A transport embeds net_link_t as the first member of its
    own state, fills it with net_link_init and returns the pointer; users of a link include
    only net_link.h.
@@ -34,5 +38,9 @@ struct net_link {
 };
 
 void net_link_init(net_link_t *link, const net_link_ops_t *ops, uint8_t lane_count, uint32_t max_unreliable, uint32_t max_reliable);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

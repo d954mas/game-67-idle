@@ -5,6 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* A link is one endpoint of a message transport: a host that accepts peers, or a guest that
    reaches one host. It moves opaque bytes on numbered lanes; seats, sessions and game data
    live above it. The shape is ISteamNetworkingSockets', so a Steam link is a thin mapping.
@@ -32,8 +36,10 @@ typedef struct net_link_lanes {
 } net_link_lanes_t;
 
 enum {
-    /* May be lost, doubled or overtaken, and is never larger than net_link_max_unreliable:
-       a message that would be split loses everything with one fragment. */
+    /* May be lost, doubled or overtaken, and is never larger than net_link_max_unreliable,
+       the largest message the transport sends in one packet on its own: a message split
+       over packets is lost with any one of them. A transport that packs several messages
+       into packets may still split one that shares a flush with others. */
     NET_LINK_SEND_UNRELIABLE = 0U,
     /* Arrives once and in the order sent on its lane, or the peer disconnects. */
     NET_LINK_SEND_RELIABLE = 1U << 0,
@@ -72,7 +78,8 @@ typedef enum net_link_event_type {
 /* CONNECTED comes before any message of its peer and DISCONNECTED is the peer's last event;
    a guest whose connection fails sees only DISCONNECTED. The handle may be dead by the time a
    batch is read, so each event carries the peer's identity: zero when the other side never
-   answered (UNREACHABLE, TIMEOUT while connecting); REFUSED carries the host's. */
+   answered (UNREACHABLE, TIMEOUT while connecting). REFUSED carries the host's where the
+   transport learns it and zero where a refusal names nobody. */
 typedef struct net_link_event {
     net_link_event_type_t type;
     net_link_peer_t peer;
@@ -107,8 +114,10 @@ void net_link_flush(net_link_t *link);
 /* Ends a peer from this side and sends what is queued for it, as a flush would. Reliable
    messages sent before the call still reach it, then it sees DISCONNECTED with `reason` when
    that is an app code, REMOTE_CLOSE otherwise. The linger belongs to the connection: it holds
-   when this side destroys its link right after. This side gets no event and nothing more from
-   the peer. */
+   when this side destroys its link right after. A transport bounds how long it lingers and
+   says what must keep running meanwhile; past that bound the rest is lost, and the peer reads
+   the reason all the same or, where the transport cannot deliver it then, one of its own.
+   This side gets no event and nothing more from the peer. */
 void net_link_close(net_link_t *link, net_link_peer_t peer, uint32_t reason);
 
 /* Closes every peer with REMOTE_CLOSE and releases the link. For peers it was not asked to
@@ -125,5 +134,9 @@ bool net_link_stats(const net_link_t *link, net_link_peer_t peer, net_link_stats
 /* Who the peer is beyond this connection: a SteamID on Steam, the number its link was opened
    with in the simulator. Zero when `peer` is not connected. */
 uint64_t net_link_identity(const net_link_t *link, net_link_peer_t peer);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

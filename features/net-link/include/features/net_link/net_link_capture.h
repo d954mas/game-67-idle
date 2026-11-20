@@ -3,6 +3,10 @@
 
 #include "features/net_link/net_link.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* A capture is a file with one record per message a link sent or polled: when, which way,
    to or from whom, the lane, the kind and the size, and the bytes themselves when asked.
    It is for measuring traffic and for collecting a corpus on a developer's machine. It works
@@ -63,5 +67,9 @@ bool net_link_capture_reader_next(net_link_capture_reader_t *reader, net_link_ca
 
 /* True when the last `next` stopped on a bad record, not on the end of the file. */
 bool net_link_capture_reader_failed(const net_link_capture_reader_t *reader);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

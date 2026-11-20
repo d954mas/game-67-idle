@@ -136,6 +136,9 @@ static bool tick_until(condition_fn condition, double limit_s) {
     return condition();
 }
 
+static double quiet_s(void) { return env->quiet_s > 0.0 ? env->quiet_s : env->settle_s; }
+static double silence_s(void) { return env->silence_s > 0.0 ? env->silence_s : env->settle_s; }
+
 static void tick_for(double seconds) {
     for (double waited = 0.0; waited < seconds; waited += env->step_s) {
         tick();
@@ -298,7 +301,7 @@ static void contract_unreliable_arrives_whole_or_not_at_all(void) {
         send_ok(host_t->link, peer_of(host_t), 0, NET_LINK_SEND_UNRELIABLE, 7, seq);
         send_ok(guest_t->link, peer_of(guest_t), 0, NET_LINK_SEND_UNRELIABLE, 7, seq);
     }
-    tick_for(env->settle_s);
+    tick_for(quiet_s());
     const tracked_t *ends[2] = {host_t, guest_t};
     for (int side = 0; side < 2; side++) {
         bool seen[COUNT] = {false};
@@ -332,7 +335,7 @@ static void contract_size_limits_hold_for_each_kind(void) {
     TEST_ASSERT_EQUAL_INT(NET_LINK_SEND_OK, net_link_send(host_t->link, peer, 0, NET_LINK_SEND_RELIABLE, big, max_r));
     make_message(big, max_u, 4, 2);
     TEST_ASSERT_EQUAL_INT(NET_LINK_SEND_OK, net_link_send(host_t->link, peer, 0, NET_LINK_SEND_UNRELIABLE, big, max_u));
-    tick_for(env->settle_s);
+    tick_for(quiet_s());
     bool reliable_in = false, unreliable_in = false;
     for (uint32_t i = 0; i < guest_t->count; i++) {
         const logged_t *e = &guest_t->log[i];
@@ -385,7 +388,7 @@ static void contract_bad_arguments_are_refused_without_harm(void) {
     net_link_close(host, NET_LINK_PEER_NONE, NET_LINK_REASON_APP_FIRST);
     /* None of that touched the real connection. */
     send_ok(host, to_guest, 0, NET_LINK_SEND_RELIABLE, 9, 1);
-    tick_for(env->settle_s);
+    tick_for(silence_s());
     TEST_ASSERT_EQUAL_UINT32(1, count_type(guest_t, NET_LINK_EVENT_MESSAGE));
     TEST_ASSERT_NULL(find(guest_t, NET_LINK_EVENT_DISCONNECTED, 0));
     case_end();
@@ -443,7 +446,7 @@ static void contract_close_delivers_reliable_first_then_the_reason(void) {
     TEST_ASSERT_EQUAL_UINT64(0, net_link_identity(host_t->link, to_first));
     net_link_close(guest2_t->link, peer_of(guest2_t), 7); /* not an app code: the host reads REMOTE_CLOSE */
     TEST_ASSERT_TRUE_MESSAGE(tick_until(close_reported, env->settle_s * 2), "close not reported");
-    tick_for(env->settle_s);
+    tick_for(silence_s());
     uint32_t got = 0;
     for (uint32_t i = 0; i < guest_t->count; i++) {
         const logged_t *e = &guest_t->log[i];
@@ -476,8 +479,13 @@ static void contract_full_host_refuses_the_next_guest(void) {
     guest_t = track(env->open_guest(env->context, 300));
     TEST_ASSERT_TRUE_MESSAGE(tick_until(guest_failed, env->fail_s), "no refusal within fail_s");
     TEST_ASSERT_EQUAL_UINT32(NET_LINK_REASON_REFUSED, find(guest_t, NET_LINK_EVENT_DISCONNECTED, 0)->reason);
-    if (env->exact_identity) {
-        TEST_ASSERT_EQUAL_UINT64(100, find(guest_t, NET_LINK_EVENT_DISCONNECTED, 0)->identity);
+    const uint64_t refused_by = find(guest_t, NET_LINK_EVENT_DISCONNECTED, 0)->identity;
+    if (!env->refused_names_host) {
+        TEST_ASSERT_EQUAL_UINT64(0, refused_by);
+    } else if (env->exact_identity) {
+        TEST_ASSERT_EQUAL_UINT64(100, refused_by);
+    } else {
+        TEST_ASSERT_NOT_EQUAL_UINT64(0, refused_by);
     }
     TEST_ASSERT_NULL(find(guest_t, NET_LINK_EVENT_CONNECTED, 0));
     TEST_ASSERT_EQUAL_UINT32(1, count_type(host_t, NET_LINK_EVENT_CONNECTED));
@@ -491,9 +499,7 @@ static void contract_nobody_hosting_is_unreachable(void) {
     guest_t = track(env->open_guest(env->context, 200));
     TEST_ASSERT_TRUE_MESSAGE(tick_until(guest_failed, env->fail_s), "no failure within fail_s");
     TEST_ASSERT_EQUAL_UINT32(NET_LINK_REASON_UNREACHABLE, find(guest_t, NET_LINK_EVENT_DISCONNECTED, 0)->reason);
-    if (env->exact_identity) {
-        TEST_ASSERT_EQUAL_UINT64(0, find(guest_t, NET_LINK_EVENT_DISCONNECTED, 0)->identity);
-    }
+    TEST_ASSERT_EQUAL_UINT64(0, find(guest_t, NET_LINK_EVENT_DISCONNECTED, 0)->identity);
     TEST_ASSERT_EQUAL_UINT32(1, guest_t->count);
     case_end();
 }
@@ -689,21 +695,33 @@ static void contract_a_short_cut_loses_nothing_reliable(void) {
     case_end();
 }
 
-void net_link_contract_run_all(void) {
-    RUN_TEST(contract_connect_reports_identities_on_both_ends);
-    RUN_TEST(contract_reliable_lanes_keep_order_and_arrive_once);
-    RUN_TEST(contract_unreliable_arrives_whole_or_not_at_all);
-    RUN_TEST(contract_size_limits_hold_for_each_kind);
-    RUN_TEST(contract_bad_arguments_are_refused_without_harm);
-    RUN_TEST(contract_close_delivers_reliable_first_then_the_reason);
-    RUN_TEST(contract_full_host_refuses_the_next_guest);
-    RUN_TEST(contract_nobody_hosting_is_unreachable);
-    RUN_TEST(contract_host_leaving_closes_every_guest);
-    RUN_TEST(contract_returning_guest_is_a_new_peer);
-    RUN_TEST(contract_batch_payloads_stay_readable_until_the_next_poll);
-    RUN_TEST(contract_guest_close_lingers_past_destroy);
-    RUN_TEST(contract_host_close_lingers_past_destroy);
-    RUN_TEST(contract_codes_outside_the_app_range_read_as_remote_close);
-    RUN_TEST(contract_a_long_cut_times_out_both_ends);
-    RUN_TEST(contract_a_short_cut_loses_nothing_reliable);
+static const char *only_matching;
+
+#define RUN_CASE(case_fn) \
+    do { \
+        if (only_matching == NULL || strstr(#case_fn, only_matching) != NULL) { \
+            RUN_TEST(case_fn); \
+        } \
+    } while (0)
+
+void net_link_contract_run_matching(const char *name_part) {
+    only_matching = name_part;
+    RUN_CASE(contract_connect_reports_identities_on_both_ends);
+    RUN_CASE(contract_reliable_lanes_keep_order_and_arrive_once);
+    RUN_CASE(contract_unreliable_arrives_whole_or_not_at_all);
+    RUN_CASE(contract_size_limits_hold_for_each_kind);
+    RUN_CASE(contract_bad_arguments_are_refused_without_harm);
+    RUN_CASE(contract_close_delivers_reliable_first_then_the_reason);
+    RUN_CASE(contract_full_host_refuses_the_next_guest);
+    RUN_CASE(contract_nobody_hosting_is_unreachable);
+    RUN_CASE(contract_host_leaving_closes_every_guest);
+    RUN_CASE(contract_returning_guest_is_a_new_peer);
+    RUN_CASE(contract_batch_payloads_stay_readable_until_the_next_poll);
+    RUN_CASE(contract_guest_close_lingers_past_destroy);
+    RUN_CASE(contract_host_close_lingers_past_destroy);
+    RUN_CASE(contract_codes_outside_the_app_range_read_as_remote_close);
+    RUN_CASE(contract_a_long_cut_times_out_both_ends);
+    RUN_CASE(contract_a_short_cut_loses_nothing_reliable);
 }
+
+void net_link_contract_run_all(void) { net_link_contract_run_matching(NULL); }

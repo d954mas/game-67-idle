@@ -80,7 +80,7 @@
     {
       "id": "net-link",
       "source": "features/net-link",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "compatibility": "validated by the transport contract suite on the simulator, simulator condition cases and capture round trips"
     },
     {

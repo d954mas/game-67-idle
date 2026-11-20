@@ -29,7 +29,9 @@ game's `dependencies.json`.
 
 ## Test a new transport
 
-Link `tests/net_link_contract.c` into the transport's test, fill a
+Add `features/net-link/tests` to the build (the feature-test consumer does) and
+link its static library `net_link_contract` (it brings `net_link` and `unity`)
+into the transport's test; the header also builds as C++. Fill a
 `net_link_contract_env_t` and call `net_link_contract_run_all` between
 `UNITY_BEGIN` and `UNITY_END`. The env opens the host and guests and lets time
 pass, and it gives the settle and fail times. It also says how many guest links

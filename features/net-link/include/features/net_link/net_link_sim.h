@@ -3,6 +3,10 @@
 
 #include "features/net_link/net_link.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* A network inside the process, for tests and stands: one host link, guest links, and
    between the host and each guest a path with its own conditions in each direction. With
    conditions left at zero it is a plain loopback.
@@ -85,5 +89,9 @@ void net_link_sim_set_conditions(net_link_sim_t *sim, const net_link_t *guest, n
    arrive in order when the cut ends before the timeout. The cut stops transmissions; a packet
    already on the wire when it starts still arrives. */
 void net_link_sim_set_cut(net_link_sim_t *sim, const net_link_t *guest, bool cut);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "net-link",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "title": "Net link",
   "status": "opt-in",
   "kind": "network-foundation",
@@ -23,5 +23,5 @@
     "owner": "node ai_studio/feature_testing/run.mjs",
     "test_core": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"^test_net_link\" --output-on-failure"
   },
-  "registers": {"cmake_targets": ["net_link"], "ctest_targets": ["test_net_link_sim", "test_net_link_capture"]}
+  "registers": {"cmake_targets": ["net_link", "net_link_contract"], "ctest_targets": ["test_net_link_sim", "test_net_link_capture"]}
 }

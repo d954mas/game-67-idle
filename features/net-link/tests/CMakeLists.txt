@@ -1,5 +1,12 @@
-add_executable(test_net_link_sim test_net_link_sim.c net_link_contract.c)
-target_link_libraries(test_net_link_sim PRIVATE net_link unity)
+# The transport-agnostic contract cases, as a library another transport's test links unchanged.
+add_library(net_link_contract STATIC net_link_contract.c)
+target_include_directories(net_link_contract PUBLIC "${CMAKE_CURRENT_LIST_DIR}")
+target_link_libraries(net_link_contract PUBLIC net_link unity)
+nt_set_warning_flags(net_link_contract)
+nt_set_sanitizer_flags(net_link_contract)
+
+add_executable(test_net_link_sim test_net_link_sim.c)
+target_link_libraries(test_net_link_sim PRIVATE net_link_contract)
 nt_set_warning_flags(test_net_link_sim)
 nt_set_sanitizer_flags(test_net_link_sim)
 add_test(NAME test_net_link_sim COMMAND test_net_link_sim)

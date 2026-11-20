@@ -217,7 +217,7 @@ possibility, not a feature.
   grid within half a step, smallest-three rotations with a stated error bound,
   and record tables whose hash names the wire format for a session handshake.
   [Install](net-bits/INSTALL.md).
-- [Net link](net-link/README.md) (`L0`, `0.1.0`, opt-in): a message transport
+- [Net link](net-link/README.md) (`L0`, `0.2.0`, opt-in): a message transport
   contract shaped like `ISteamNetworkingSockets` (peers, lanes, reliable and
   unreliable sends, close reasons, stats), a seeded in-process network
   simulator with per-direction delay, jitter, loss, duplicates, reorder, rate
