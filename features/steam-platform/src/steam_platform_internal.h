@@ -10,7 +10,7 @@
    callback id, while run_frame dispatches. A handler runs on the game's thread inside
    run_frame; `data` is Steam's struct and lives until the handler returns. A handler may stop
    listening or stop the module; stopping takes effect after the current callback.
-   steam_platform_stop forgets every listener and pending call.
+   steam_platform_stop forgets every listener, hook and pending call.
 
    The networking library's callbacks (SteamNetConnectionStatusChangedCallback_t,
    SteamRelayNetworkStatus_t) reach this queue like any other once its interface exists, and
@@ -46,6 +46,24 @@ bool steam_platform_internal_await_call(uint64_t api_call, int expected_callback
 /* Forgets an awaited call, for an owner that goes away first; its result is then unhandled.
    False when the handle is not awaited. */
 bool steam_platform_internal_cancel_call(uint64_t api_call);
+
+#define STEAM_PLATFORM_INTERNAL_MAX_HOOKS 4
+
+typedef enum steam_platform_moment {
+    /* End of every run_frame, after the callbacks: for work that runs on time, not on a
+       callback (deadlines, keepalives). Skipped when a callback stopped the module. */
+    STEAM_PLATFORM_MOMENT_FRAME = 1,
+    /* Inside steam_platform_stop, before Steam shuts down: Steam is still callable, so an owner
+       can release what Steam allocated for it and reset what it set process-wide. */
+    STEAM_PLATFORM_MOMENT_STOPPING,
+} steam_platform_moment_t;
+
+typedef void (*steam_platform_hook_fn)(void *user, steam_platform_moment_t moment);
+
+/* Hears both moments until stop, which calls STOPPING and then forgets every hook: a hook lasts
+   one start. False when not ready, `fn` is NULL, the same (fn, user) is hooked, or the table is
+   full. */
+bool steam_platform_internal_hook(steam_platform_hook_fn fn, void *user);
 
 typedef struct steam_platform_internal_counters {
     uint64_t callbacks;    /* every callback taken from Steam or fed */

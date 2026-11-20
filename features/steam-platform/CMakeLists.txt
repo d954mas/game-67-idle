@@ -76,6 +76,33 @@ if(COMMAND nt_set_sanitizer_flags)
     nt_set_sanitizer_flags(steam_platform)
 endif()
 
+# The second target, a net-link transport, exists where the consumer added features/net-link
+# before this feature; a game without it links steam_platform alone.
+if(TARGET net_link)
+    if(STEAM_PLATFORM_HAS_SDK)
+        add_library(steam_net_link STATIC src/steam_net_link.cpp src/steam_net_link_module.cpp src/steam_net_link_closing.cpp src/steam_net_link_common.c src/steam_net_link_closes.c)
+        target_compile_features(steam_net_link PRIVATE cxx_std_17)
+        target_link_libraries(steam_net_link PRIVATE steam_platform_steam_api)
+    else()
+        add_library(steam_net_link STATIC src/steam_net_link_stub.c src/steam_net_link_common.c src/steam_net_link_closes.c)
+    endif()
+    target_link_libraries(steam_net_link PUBLIC steam_platform net_link)
+    target_include_directories(steam_net_link PRIVATE src)
+    if(NOT WIN32)
+        target_link_libraries(steam_net_link PRIVATE m)
+    endif()
+    if(COMMAND nt_set_warning_flags)
+        nt_set_warning_flags(steam_net_link)
+    elseif(NOT MSVC)
+        target_compile_options(steam_net_link PRIVATE -Wall -Wextra -Werror)
+    endif()
+    if(COMMAND nt_set_sanitizer_flags)
+        nt_set_sanitizer_flags(steam_net_link)
+    endif()
+else()
+    message(STATUS "steam-platform: steam_net_link is not built: the target net_link does not exist yet (add features/net-link before this feature)")
+endif()
+
 # steam_platform_deploy(<target> [APP_ID <id>])
 # Copies Steam's runtime library beside the target's executable after each build and lets the
 # executable find it there. APP_ID also writes steam_appid.txt there, which lets a development

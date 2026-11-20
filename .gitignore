@@ -106,3 +106,14 @@ steamworks_sdk*/
 isteam*.h
 steam_api*.h
 steam_api*.json
+steamworks_sdk*.zip
+steamnetworking*.h
+steamclientpublic.h
+steamtypes.h
+steamuniverse.h
+matchmakingtypes.h
+steam_gameserver.h
+steamencryptedappticket.h
+steamhttpenums.h
+steamps3params.h
+*sdkencryptedappticket*

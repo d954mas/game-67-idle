@@ -86,8 +86,8 @@
     {
       "id": "steam-platform",
       "source": "features/steam-platform",
-      "version": "0.1.0",
-      "compatibility": "validated without the SDK (stub answers NO_SDK, every call inert, argument errors, the event queue) and, with STEAMWORKS_SDK_DIR on 64-bit Windows, by raw callbacks fed through the dispatch and a live probe on AppID 480: start rules, callbacks and call results through manual dispatch, stop inside a handler, restarts, skip without a Steam client"
+      "version": "0.2.0",
+      "compatibility": "validated without the SDK (stub answers NO_SDK, every call inert, argument errors, the event queue; every Steam link open NULL, lingering false, and the link's Steam-free rules: config, reasons, peer handles, what a received message may be, the keepalive allowance, the event ledger, the table of closes in hand, the dial decision; the same tests under ASan and UBSan with gcc and clang on Linux) and, with STEAMWORKS_SDK_DIR on 64-bit Windows, by raw callbacks fed through the dispatch and live runs on AppID 480 with STEAM_PLATFORM_REQUIRE_CLIENT=1: start rules, callbacks and call results, hooks, stop inside a handler, restarts; the Steam link passes net-link's contract cases over 127.0.0.1 in one process, Steam-specific cases (unreliable limit sent alone by packet trace, largest reliable, full buffer, stats, event order and hostile input against raw peers, a keepalive flood, timeouts, idle traffic, fake network across a stop, a link outliving the stop), the closes in hand (acknowledged close in either role, close under loss, the acknowledgement deadline, a peer leaving first, two closes on one destroyed host, the kept listen socket, hosting again, a stop) and two-process cases of one account (every lane, an app close code, bursts delivered by the documented shutdown from a guest and from a host, a lost close packet, a stop with the link open, a killed guest's TIMEOUT, a fresh process's connect deadline before and after its certificate, local_without_proof); builds with gcc and clang on Linux, where a machine without Steam answers FAILED"
     },
     {
       "id": "coop-net",

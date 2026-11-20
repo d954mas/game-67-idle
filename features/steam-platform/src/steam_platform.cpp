@@ -36,6 +36,11 @@ struct pending_call {
     void *user;
 };
 
+struct hook {
+    steam_platform_hook_fn fn;
+    void *user;
+};
+
 struct state {
     bool ready;
     bool in_frame;
@@ -45,6 +50,7 @@ struct state {
     HSteamPipe pipe;
     listener listeners[STEAM_PLATFORM_INTERNAL_MAX_LISTENERS];
     pending_call calls[STEAM_PLATFORM_INTERNAL_MAX_CALLS];
+    hook hooks[STEAM_PLATFORM_INTERNAL_MAX_HOOKS];
 };
 
 struct simulated_failure {
@@ -127,6 +133,21 @@ void forget_everything() {
     steam_platform_queue_reset(&s_queue);
     memset(s_state.listeners, 0, sizeof s_state.listeners);
     memset(s_state.calls, 0, sizeof s_state.calls);
+    memset(s_state.hooks, 0, sizeof s_state.hooks);
+}
+
+/* By index and re-read each time: a hook may stop the module, which calls STOPPING and empties
+   the table. FRAME then ends at once; STOPPING runs with the module already marked stopped. */
+void call_hooks(steam_platform_moment_t moment) {
+    for (unsigned i = 0; i < STEAM_PLATFORM_INTERNAL_MAX_HOOKS; i++) {
+        if (moment == STEAM_PLATFORM_MOMENT_FRAME && !s_state.ready) {
+            return;
+        }
+        const hook entry = s_state.hooks[i];
+        if (entry.fn != nullptr) {
+            entry.fn(entry.user, moment);
+        }
+    }
 }
 
 bool deliver_call_result(const CallbackMsg_t &msg) {
@@ -268,6 +289,7 @@ void steam_platform_stop(void) {
         return;
     }
     s_state.ready = false;
+    call_hooks(STEAM_PLATFORM_MOMENT_STOPPING);
     forget_everything();
     if (s_state.in_frame) {
         s_state.shutdown_pending = true;
@@ -289,6 +311,7 @@ void steam_platform_run_frame(void) {
         take(msg);
         SteamAPI_ManualDispatch_FreeLastCallback(s_state.pipe);
     }
+    call_hooks(STEAM_PLATFORM_MOMENT_FRAME);
     /* Under manual dispatch nothing else frees the per-thread memory Steam calls allocate. */
     SteamAPI_ReleaseCurrentThreadMemory();
     s_state.in_frame = false;
@@ -369,6 +392,26 @@ bool steam_platform_internal_cancel_call(uint64_t api_call) {
         }
     }
     return false;
+}
+
+bool steam_platform_internal_hook(steam_platform_hook_fn fn, void *user) {
+    if (!s_state.ready || fn == nullptr) {
+        return false;
+    }
+    hook *free_slot = nullptr;
+    for (hook &entry : s_state.hooks) {
+        if (entry.fn == fn && entry.user == user) {
+            return false;
+        }
+        if (entry.fn == nullptr && free_slot == nullptr) {
+            free_slot = &entry;
+        }
+    }
+    if (free_slot == nullptr) {
+        return false;
+    }
+    *free_slot = hook{fn, user};
+    return true;
 }
 
 void steam_platform_internal_counters(steam_platform_internal_counters_t *out) {

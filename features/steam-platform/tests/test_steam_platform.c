@@ -27,6 +27,13 @@ static steam_platform_status_t expected_failure(void) {
 #endif
 }
 
+static int s_moments;
+static void count_moment(void *user, steam_platform_moment_t moment) {
+    (void)user;
+    (void)moment;
+    s_moments++;
+}
+
 static void assert_inert(void) {
     steam_platform_internal_counters_t before;
     steam_platform_internal_counters(&before);
@@ -46,6 +53,9 @@ static void assert_inert(void) {
     TEST_ASSERT_FALSE(steam_platform_ready());
 
     TEST_ASSERT_FALSE(steam_platform_internal_listen(1281, NULL, NULL));
+    TEST_ASSERT_FALSE(steam_platform_internal_hook(count_moment, NULL));
+    TEST_ASSERT_FALSE(steam_platform_internal_hook(NULL, NULL));
+    TEST_ASSERT_EQUAL_INT(0, s_moments);
     TEST_ASSERT_FALSE(steam_platform_internal_await_call(1, 703, NULL, NULL));
     TEST_ASSERT_FALSE(steam_platform_internal_cancel_call(1));
     steam_platform_internal_unlisten(1281, NULL, NULL);

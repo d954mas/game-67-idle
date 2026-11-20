@@ -223,12 +223,15 @@ possibility, not a feature.
   simulator with per-direction delay, jitter, loss, duplicates, reorder, rate
   and cuts, a capture file for any transport, and a contract suite a new
   transport runs unchanged. [Install](net-link/INSTALL.md).
-- [Steam platform](steam-platform/README.md) (`L0`, `0.1.0`, opt-in): the
+- [Steam platform](steam-platform/README.md) (`L0`, `0.2.0`, opt-in): the
   process's connection to Steam behind a pure C header: start with an optional
   restart through Steam, a per-frame pump with manual callback dispatch, an
-  overlay event and the overlay call, the signed-in SteamID, stop. Builds
-  without the Steamworks SDK (`STEAMWORKS_SDK_DIR`, never in git) and runs
-  without a Steam client, both as silent solo. [Install](steam-platform/INSTALL.md).
+  overlay event and the overlay call, the signed-in SteamID, stop. Its second
+  target, `steam_net_link`, is a `net-link` transport on Steam's networking
+  sockets in IP mode (two windows on one PC, a LAN), built where `net-link` is
+  added first. Builds without the Steamworks SDK (`STEAMWORKS_SDK_DIR`, never
+  in git) and runs without a Steam client, both as silent solo.
+  [Install](steam-platform/INSTALL.md).
 - [Coop net](coop-net/README.md) (`L1`, `0.2.0`, opt-in, depends on
   `net-link` and `net-bits`): a co-op session on any link: seats and a
   handshake that refuses another protocol, build or world with a reason,

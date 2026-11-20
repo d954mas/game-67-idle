@@ -4,6 +4,7 @@
    Exit 0 passed, 1 failed, 77 skipped (Steam is not running).
    --simulate-no-client takes the skip path without touching Steam. */
 
+#include "steam_live.hpp"
 #include "steam_platform_internal.h"
 
 #include <steam/steam_api.h>
@@ -15,7 +16,6 @@
 
 namespace {
 
-constexpr int EXIT_SKIP = 77;
 constexpr uint32_t SPACEWAR = 480;
 
 struct relay_log {
@@ -118,8 +118,7 @@ int start_ready(const steam_platform_config_t &config, const char *label) {
     char message[256];
     const steam_platform_status_t status = steam_platform_start(&config, message, sizeof message);
     if (status == STEAM_PLATFORM_NO_CLIENT) {
-        printf("SKIP: no Steam client: %s\n", message);
-        return EXIT_SKIP;
+        return steam_live::no_client(message);
     }
     if (status != STEAM_PLATFORM_READY) {
         printf("FAIL: %s answered %d: %s\n", label, static_cast<int>(status), message);
@@ -265,6 +264,83 @@ int last_cycle(const char *self_path) {
     return 0;
 }
 
+struct moments {
+    int frame;
+    int stopping;
+    bool steam_alive_at_stop;
+};
+
+void count_moment(void *user, steam_platform_moment_t moment) {
+    auto *seen = static_cast<moments *>(user);
+    if (moment == STEAM_PLATFORM_MOMENT_FRAME) {
+        seen->frame++;
+    } else {
+        seen->stopping++;
+        /* STOPPING comes while Steam can still be called. */
+        seen->steam_alive_at_stop = SteamUtils() != nullptr && SteamUtils()->GetAppID() == SPACEWAR;
+    }
+}
+
+void stop_in_frame(void *user, steam_platform_moment_t moment) {
+    count_moment(user, moment);
+    if (moment == STEAM_PLATFORM_MOMENT_FRAME) {
+        steam_platform_stop();
+    }
+}
+
+/* Hooks: refused twice and past the table, each moment once per hook, STOPPING with Steam alive. */
+int hook_table() {
+    moments seen[STEAM_PLATFORM_INTERNAL_MAX_HOOKS + 1] = {};
+    if (steam_platform_internal_hook(nullptr, &seen[0])) {
+        return fail("a NULL hook was taken");
+    }
+    /* The duplicate while the table still has room, so only the duplicate rule can refuse it. */
+    if (!steam_platform_internal_hook(count_moment, &seen[0]) || steam_platform_internal_hook(count_moment, &seen[0])) {
+        return fail("the first hook refused, or the same hook taken twice");
+    }
+    for (int i = 1; i < STEAM_PLATFORM_INTERNAL_MAX_HOOKS; i++) {
+        if (!steam_platform_internal_hook(count_moment, &seen[i])) {
+            return fail("a hook was refused with room in the table");
+        }
+    }
+    if (steam_platform_internal_hook(count_moment, &seen[STEAM_PLATFORM_INTERNAL_MAX_HOOKS])) {
+        return fail("a hook was taken past a full table");
+    }
+    frame();
+    frame();
+    steam_platform_stop();
+    for (int i = 0; i < STEAM_PLATFORM_INTERNAL_MAX_HOOKS; i++) {
+        if (seen[i].frame != 2 || seen[i].stopping != 1 || !seen[i].steam_alive_at_stop) {
+            printf("FAIL: hook %d heard %d frames and %d stops (Steam alive at stop %d)\n", i, seen[i].frame, seen[i].stopping, seen[i].steam_alive_at_stop ? 1 : 0);
+            return 1;
+        }
+    }
+    if (seen[STEAM_PLATFORM_INTERNAL_MAX_HOOKS].frame != 0 || seen[STEAM_PLATFORM_INTERNAL_MAX_HOOKS].stopping != 0) {
+        return fail("the refused hook was called");
+    }
+    printf("hooks: NULL, duplicate and fifth refused; each heard 2 frames and 1 stop, Steam alive\n");
+    return 0;
+}
+
+/* A FRAME hook that stops the module: the hooks after it hear STOPPING, never that FRAME. */
+int hook_stops_inside() {
+    moments first = {}, second = {};
+    if (!steam_platform_internal_hook(stop_in_frame, &first) || !steam_platform_internal_hook(count_moment, &second)) {
+        return fail("hooks refused after a start");
+    }
+    frame();
+    if (steam_platform_ready() || first.frame != 1 || first.stopping != 1 || second.frame != 0 || second.stopping != 1) {
+        printf("FAIL: stop inside a FRAME hook: ready %d, first %d/%d, second %d/%d\n", steam_platform_ready() ? 1 : 0, first.frame, first.stopping, second.frame, second.stopping);
+        return 1;
+    }
+    frame();
+    if (second.frame != 0) {
+        return fail("a hook ran after the stop");
+    }
+    printf("stop inside a FRAME hook: later hooks heard only STOPPING, module stopped\n");
+    return 0;
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -279,8 +355,7 @@ int main(int argc, char **argv) {
     char message[256];
     const steam_platform_status_t refused = steam_platform_start(&wrong, message, sizeof message);
     if (refused == STEAM_PLATFORM_NO_CLIENT) {
-        printf("SKIP: no Steam client: %s\n", message);
-        return EXIT_SKIP;
+        return steam_live::no_client(message);
     }
     if (refused != STEAM_PLATFORM_FAILED || steam_platform_ready()) {
         printf("FAIL: start as app 481 answered %d: %s\n", static_cast<int>(refused), message);
@@ -313,9 +388,15 @@ int main(int argc, char **argv) {
         return result;
     }
     steam_platform_stop();
+    if ((result = start_ready(config, "start 4")) != 0 || (result = hook_table()) != 0) {
+        return result;
+    }
+    if ((result = start_ready(config, "start 5")) != 0 || (result = hook_stops_inside()) != 0) {
+        return result;
+    }
     if (steam_platform_ready()) {
         return fail("module ready after the last stop");
     }
-    printf("PASS: refused app, start rules, callbacks, call results, stop inside run_frame, restart\n");
+    printf("PASS: refused app, start rules, callbacks, call results, stop inside run_frame, restart, hooks\n");
     return 0;
 }

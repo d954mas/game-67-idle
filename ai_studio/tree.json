@@ -235,7 +235,7 @@
                 "kind": "module",
                 "path": "features/steam-platform",
                 "owner": "Network Feature Owner",
-                "description": "Steam start, restart and stop behind a pure C header, manual callback dispatch into pulled events, overlay, silent solo without the SDK or a Steam client.",
+                "description": "Steam start, restart and stop behind a pure C header, manual callback dispatch into pulled events, overlay, a net-link transport on Steam networking sockets in IP mode, silent solo without the SDK or a Steam client.",
                 "entry": "features/steam-platform/README.md",
                 "contract": "features/steam-platform/feature.json",
                 "verifyDomain": "features",

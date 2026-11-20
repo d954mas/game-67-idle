@@ -55,6 +55,12 @@ bool steam_platform_internal_cancel_call(uint64_t api_call) {
     return false;
 }
 
+bool steam_platform_internal_hook(steam_platform_hook_fn fn, void *user) {
+    (void)fn;
+    (void)user;
+    return false;
+}
+
 void steam_platform_internal_counters(steam_platform_internal_counters_t *out) {
     if (out != NULL) {
         *out = (steam_platform_internal_counters_t){0};
