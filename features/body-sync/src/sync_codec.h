@@ -10,16 +10,20 @@
    carries the packet number, the tick and the acknowledgements, so the seam adds no header.
 
    One record:
-     head       slot 10 bits, generation low SYNC_GEN_BITS, sim 1, rest 1, rare 1
+     head       slot 10 bits, generation low SYNC_GEN_BITS, sim 1, rest 1, rare 1, relayed 1
+     origin     relayed only: the owner seat 2, the age SYNC_RELAY_AGE_BITS (host ticks between taking
+                that owner's state and this packet's tick: the record plays on the owner's
+                timeline at packet tick - age; an older state is not relayed)
      pose       copy: position on a 1/512 m grid, rotation smallest three at 9 bits
                 sim:  position on a 1/4096 m grid, rotation smallest three at 15 bits
      motion     sim and not at rest: velocity on a 1/32 m/s grid in [-max_speed, max_speed],
                 spin on a 1/16 rad/s grid in [-max_spin, max_spin]; absent at rest (zero)
-     rare       when the rare bit is set: a 4-bit group mask, then each group present in order
+     rare       when the rare bit is set: a 5-bit group mask, then each group present in order
                   motion     kinematic 1, motion locks 6
                   flags      the caller's BODY_SYNC_FLAG_BITS
                   authority  seat 2, number 16, hold 1
                   holder     present 1, then slot 10 and generation low SYNC_GEN_BITS
+                  data       size 4 (0..SYNC_DATA_MAX), then that many bytes: the caller's
    A position grid starts at the box's low edge and ends at its last point inside the high
    edge; a velocity grid is symmetric with zero on it and no point past the limit. The writer
    puts every value on its grid and keeps a velocity or spin vector no longer than its limit,
@@ -47,8 +51,11 @@ enum {
        read after it could pass. */
     SYNC_GEN_BITS = 4,
     SYNC_GEN_MASK = (1 << SYNC_GEN_BITS) - 1,
-    SYNC_RARE_GROUPS = 4,
-    SYNC_PROTOCOL = 1,
+    SYNC_RARE_GROUPS = 5,
+    SYNC_PROTOCOL = 2,
+    SYNC_RELAY_AGE_BITS = 6, /* up to 63 ticks */
+    SYNC_RELAY_AGE_MAX = (1 << SYNC_RELAY_AGE_BITS) - 1,
+    SYNC_DATA_MAX = BODY_SYNC_DATA_MAX,
 };
 /* Macros, not enum members: gcc warns when one anonymous enum is compared with net-bits' own. */
 #define SYNC_COPY_QUAT_BITS 9
@@ -63,7 +70,8 @@ typedef enum sync_rare_group {
     SYNC_RARE_FLAGS = 1u << 1,
     SYNC_RARE_AUTHORITY = 1u << 2,
     SYNC_RARE_HOLDER = 1u << 3,
-    SYNC_RARE_ALL = 0x0Fu,
+    SYNC_RARE_DATA = 1u << 4,
+    SYNC_RARE_ALL = 0x1Fu,
 } sync_rare_group_t;
 
 /* The seam's limits, as body_sync_config_t gives them. */
@@ -84,9 +92,19 @@ typedef struct sync_rare {
     uint8_t hold; /* body_sync_hold_t */
     uint16_t holder_slot; /* BODY_SYNC_BODIES_MAX: no holder */
     uint8_t holder_generation_low;
+    uint8_t data_size; /* 0..SYNC_DATA_MAX */
+    uint8_t data[SYNC_DATA_MAX];
 } sync_rare_t;
 
+/* Where a record plays: its sender's own timeline, or (relayed by the host) its owner's. */
+typedef struct sync_origin {
+    bool relayed;
+    uint8_t seat; /* the owner whose timeline the record plays on */
+    uint8_t age;  /* host ticks between taking the state and this packet's tick */
+} sync_origin_t;
+
 typedef struct sync_record {
+    sync_origin_t origin;
     uint16_t slot;
     uint8_t generation_low; /* the id's generation & SYNC_GEN_MASK */
     bool sim;               /* velocities follow unless at_rest */
@@ -101,9 +119,9 @@ typedef struct sync_record {
 /* The tables of one seam, built once at create from its limits. */
 typedef struct sync_codec {
     sync_limits_t limits;
-    net_bits_field_t head_fields[5], copy_fields[4], sim_fields[4], motion_fields[6];
+    net_bits_field_t head_fields[6], origin_fields[2], copy_fields[4], sim_fields[4], motion_fields[6];
     net_bits_field_t mask_fields[1], rmotion_fields[2], rflags_fields[1], rauthority_fields[3], rholder_fields[3];
-    net_bits_layout_t head, copy_pose, sim_pose, motion, rare_mask, rare_motion, rare_flags, rare_authority, rare_holder;
+    net_bits_layout_t head, origin, copy_pose, sim_pose, motion, rare_mask, rare_motion, rare_flags, rare_authority, rare_holder;
     uint32_t record_bits_max; /* a sim record in motion with every rare group, its "more" bit included */
     uint32_t record_bits_min; /* a copy record with no rare group */
     uint64_t hash;            /* every table, the generation width and the protocol */
@@ -118,6 +136,9 @@ bool sync_codec_init(sync_codec_t *codec, const sync_limits_t *limits);
    position clamped to the box, a velocity or spin scaled down to its limit, a velocity that is
    not a number sent as rest, and false (do not send) when the pose is not a number. */
 bool sync_codec_limit(const sync_codec_t *codec, sync_record_t *record);
+
+/* Bits the rare groups of `rare` named in its groups take, the mask included; 0 without any. */
+uint32_t sync_codec_rare_bits(const sync_codec_t *codec, const sync_rare_t *rare);
 
 /* Bits the record takes on the wire, its "more" bit included. */
 uint32_t sync_codec_record_bits(const sync_codec_t *codec, const sync_record_t *record);

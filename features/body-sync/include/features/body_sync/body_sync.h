@@ -61,6 +61,20 @@ typedef struct body_sync_config {
     /* Bytes a state packet may hold, before the capacity of each body_sync_write_state: zero
        takes the implementation's default (the real sender's is 1000). The stub ignores it. */
     uint32_t state_budget;
+    /* The Box3D category bits of this endpoint's own characters, 0 for none. When a body of
+       class LIGHT becomes a copy, the seam takes these bits off the collision mask of each of
+       its shapes, so a light copy never blocks this endpoint's character (another's character
+       pushes it on the endpoint that simulates it). It puts back exactly the bits it took, on
+       the same shapes, when the body is local again, unbound or the seam destroyed. Meanwhile
+       the caller may change anything else of a copy's filters and add or remove shapes (one
+       added is left as the caller made it), but must not set those bits on a copy. Other
+       classes keep their masks. A body with more than BODY_SYNC_SHAPES_MAX shapes is refused
+       at bind while this is set. */
+    uint64_t character_category;
+    /* The real seam's playback delay bounds, in ticks: 0 takes 4 and 15; 1..60, min <= max.
+       The stub ignores them. */
+    uint32_t delay_min;
+    uint32_t delay_max;
 } body_sync_config_t;
 
 /* NULL when the config is out of range, its limits are too wide for the implementation's wire
@@ -68,14 +82,16 @@ typedef struct body_sync_config {
    262144 m/s, max_spin below 524288 rad/s), its state_budget has no room for one widest record
    per seat and one more (the real one's staleness bound needs a record after the characters,
    counted as one a seat: more characters a seat need a budget with room for them),
-   or memory is short. All memory is taken here: the real seam about 1.25 MB, the stub about
+   or memory is short. All memory is taken here: the real seam about 2.7 MB, the stub about
    400 KB. */
 body_sync_t *body_sync_create(const body_sync_config_t *config);
-/* Leaves every bound body as it is; destroy the seam before its world. */
+/* Puts back the mask bits it took off LIGHT copies (character_category); everything else a
+   copy has stays as the seam set it: its pose, velocities, motion type and locks as a copy.
+   Destroy the seam before its world. */
 void body_sync_destroy(body_sync_t *sync);
 
-/* The linked implementation and its version, for logs and metrics: "real 0.5.0" or
-   "stub 0.5.0". */
+/* The linked implementation and its version, for logs and metrics: "real 0.6.0" or
+   "stub 0.6.0". */
 const char *body_sync_implementation(void);
 
 /* Text of the last INVALID or FORMAT this seam returned, "" before any. */
@@ -118,6 +134,13 @@ body_sync_result_t body_sync_unbind(body_sync_t *sync, body_sync_id_t id);
 
 /* b3_nullBodyId when nothing is bound under `id`. */
 b3BodyId body_sync_body(const body_sync_t *sync, body_sync_id_t id);
+
+/* A local body's opaque bytes (an animation state): up to BODY_SYNC_DATA_MAX, travelling with
+   its state until acknowledged, as flags do. INVALID when not local or too long. On a copy,
+   body_sync_data reads them as of the copy's playback time (the stub: as last received).
+   Returns the size written to `out`, at most `capacity`; 0 when none or nothing bound. */
+body_sync_result_t body_sync_set_data(body_sync_t *sync, body_sync_id_t id, const void *data, uint32_t size);
+uint32_t body_sync_data(const body_sync_t *sync, body_sync_id_t id, void *out, uint32_t capacity);
 
 /* ---- authority ---- */
 
@@ -244,10 +267,18 @@ void body_sync_pop_record(body_sync_t *sync, uint8_t seat);
 
 /* ---- what is drawn ---- */
 
-/* The offset of a copy's drawn pose from its physics pose: smoothing of a correction that only
-   the eye sees. False when nothing is bound; identity for local bodies and for the stub.
-   rotation is x, y, z, w and applies before the offset. */
+/* The offset of a body's drawn pose from its physics pose: smoothing of a move that only the
+   eye sees. False when nothing is bound; identity for the stub. rotation is x, y, z, w and
+   applies before the offset. The real seam hands it a copy's placement and a body's change
+   between copy and local, so the drawn pose does not jump, and decays it every apply toward
+   identity; a body that turned local keeps it until it has decayed. A local body never gains
+   a new one; physics never sees it. */
 bool body_sync_render_offset(const body_sync_t *sync, body_sync_id_t id, float position[3], float rotation[4]);
+
+/* Measurement: the owner's tick a copy shows now, in that owner's tick count; for a local body
+   the endpoint's own last collect tick. False when unknown. The stub reports the tick of the
+   newest state received. */
+bool body_sync_playback(const body_sync_t *sync, body_sync_id_t id, double *owner_tick);
 
 /* ---- measurements ---- */
 

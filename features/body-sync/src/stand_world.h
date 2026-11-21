@@ -67,7 +67,9 @@ void stand_world_remove(stand_world_t *world, body_sync_id_t id);
 void stand_world_pose(const stand_world_t *world, uint32_t slot, float position[3], float rotation[4]);
 float stand_world_speed(const stand_world_t *world, uint32_t slot);
 /* Carried bodies touch nothing, on every endpoint, like the game's. */
-void stand_world_set_held(stand_world_t *world, uint32_t slot, bool held);
+/* The held filter (collides with nothing), and the mask bits `clear` kept off: the seam clears
+   the character category from a LIGHT copy's masks, and the stand's own filter must agree. */
+void stand_world_set_held(stand_world_t *w, uint32_t slot, bool held, uint64_t clear);
 void stand_world_knock(stand_world_t *world, uint32_t slot, const float from[3], float speed);
 void stand_world_push(stand_world_t *world, uint32_t slot, const float from[3], float speed);
 /* Host: walking mannequins one step along their routes. */

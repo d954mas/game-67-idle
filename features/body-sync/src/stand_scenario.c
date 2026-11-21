@@ -21,6 +21,7 @@ typedef struct parser {
     uint32_t line;
     bool seen_scenario, seen_scene, seen_seed, seen_guests, seen_settle, seen_end;
     uint32_t guests_line;
+    uint32_t rate_line[1 + BODY_SYNC_GUESTS_MAX];
     uint32_t settle_line;
 } parser_t;
 
@@ -533,6 +534,18 @@ static bool expect(parser_t *p, const line_words_t *w) {
         if (w->count != 2) {
             return refuse(p, "%s takes nothing more", what);
         }
+    } else if (strcmp(what, "moved") == 0) {
+        e.kind = BODY_SYNC_EXPECT_MOVED;
+        if (w->count != 5 || !name_word(w->word[2], BODY_SYNC_NAME_MAX - 1) || (strcmp(w->word[3], "<=") != 0 && strcmp(w->word[3], ">=") != 0)) {
+            return refuse(p, "moved reads: expect moved <body> <=|>= <length>%s", "");
+        }
+        float m;
+        if (!length_word(p, w->word[4], &m)) {
+            return false;
+        }
+        copy_text(e.body, sizeof(e.body), w->word[2]);
+        e.at_least = w->word[3][0] == '>';
+        e.limit = (double)m;
     } else if (strcmp(what, "left") == 0) {
         e.kind = BODY_SYNC_EXPECT_LEFT;
         if (w->count != 3 || !guest_word(w->word[2], &e.endpoint)) {
@@ -698,6 +711,23 @@ static bool statement(parser_t *p, const line_words_t *w) {
         s->seed = seed;
         return true;
     }
+    if (strcmp(head, "rate") == 0) {
+        uint8_t who;
+        double hz;
+        const char *unit;
+        if (w->count != 3 || !endpoint_word(w->word[1], &who)) {
+            return refuse(p, "rate reads: rate <host|g1..g3> <rate>hz%s", "");
+        }
+        if (!quantity(w->word[2], &hz, &unit) || strcmp(unit, "hz") != 0 || !(hz >= 20.0 && hz <= 240.0)) {
+            return refuse(p, "'%s' is not a rate in 20hz..240hz (59.5hz)", w->word[2]);
+        }
+        if (s->rate_mhz[who] != 0) {
+            return refuse(p, "the rate of '%s' is set twice", w->word[1]);
+        }
+        s->rate_mhz[who] = (uint32_t)llround(hz * 1000.0);
+        p->rate_line[who] = p->line;
+        return true;
+    }
     if (strcmp(head, "guests") == 0) {
         if (!header_once(p, &p->seen_guests, head)) {
             return false;
@@ -779,6 +809,12 @@ static bool finish(parser_t *p) {
         if (s->actions[i].player > s->guests) {
             p->line = s->actions[i].line;
             return refuse(p, "this player has no endpoint: raise 'guests'%s", "");
+        }
+    }
+    for (uint32_t i = 0; i < 1u + BODY_SYNC_GUESTS_MAX; i++) {
+        if (s->rate_mhz[i] != 0 && i > s->guests) {
+            p->line = p->rate_line[i];
+            return refuse(p, "this guest is not in the run: raise 'guests'%s", "");
         }
     }
     for (uint32_t i = 0; i < s->net_count; i++) {

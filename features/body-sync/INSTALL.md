@@ -36,7 +36,12 @@ the source and version of each feature from its `feature.json` in the game's
    peer's pose outside them is refused, so give a margin past the level's
    bounds). Bind every moving body that both sides build with the same id
    (`body_sync_id_make(slot, generation)`), the same starting authority and
-   the same number (0 for a body of the level).
+   the same number (0 for a body of the level). Set `character_category` to
+   the Box3D category bits of this endpoint's own characters, so a LIGHT copy
+   does not block them (the host's simulation moves it); the seam then owns
+   those mask bits of a LIGHT copy's shapes and gives the masks back exactly
+   when the body is local. `delay_min` and `delay_max` (ticks, 0 for 4 and 15)
+   bound the playback delay.
 2. Each tick, in this order: `body_sync_set_peer_tick` for each seat (from
    `coop_session_peer_tick`), `body_sync_receive_state` and
    `body_sync_receive_record` for what the session delivered, `body_sync_apply`,
@@ -56,10 +61,17 @@ the source and version of each feature from its `feature.json` in the game's
    `body_sync_set_holder(id, 0)` then
    `body_sync_claim(id, BODY_SYNC_HOLD_UNTIL_SETTLED)`. Shapes of bound bodies
    need contact events on for the settled hold to see contacts.
-5. A body that becomes local continues its last owner's state, motion type
+5. Draw a body at its physics pose plus `body_sync_render_offset`: a copy is
+   placed rather than driven past `max_speed`, and a take-over continues from
+   the newest state; the offset keeps the drawn pose still through both and
+   gives the move back over a few ticks. Physics never sees it.
+6. Animation state and other small per-body data go in `body_sync_set_data`
+   (8 bytes, local bodies) and read with `body_sync_data`, on a copy as of its
+   playback time; flag bits stay for game state.
+7. A body that becomes local continues its last owner's state, motion type
    included. When a seat leaves, its bodies come back to the host still naming
    their carrier: drop what that player carried by the game's own rule.
-6. A FORMAT result means the peer's bytes broke the format: close that peer
+8. A FORMAT result means the peer's bytes broke the format: close that peer
    (`coop_session_kick` on the host).
 
 ## Add a scene and a stand target

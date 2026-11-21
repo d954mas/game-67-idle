@@ -1,0 +1,21 @@
+# The host's path to the guest delays 1.5 s, then 50 ms from 5 s on: every sample after the drop
+# lies far ahead of the guest's clock line. The first is dropped as a lone outlier; 8 that agree
+# restart the clock on them, and the copies catch up by a jump the render offset absorbs.
+# Bounds, derived: the worlds agree at rest (the copy caught up); behind_ticks.max is delay_max
+# (15) plus the 1.5 s one way (90 ticks) plus 2 for the arrival and read ticks: 107.
+scenario latency_drop
+scene two_chars_item
+seed 7
+guests 1
+settle 4s
+
+net g1 to_guest delay 1500ms
+at 5s net g1 to_guest delay 50ms
+
+at 7s p0 walk 2 1 as a
+p0 walk -2 0 as b
+p0 walk 2 -1 as c
+
+expect result c done
+expect agree_at_rest 5cm
+expect behind_ticks.max <= 107t

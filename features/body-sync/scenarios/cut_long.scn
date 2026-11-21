@@ -1,0 +1,32 @@
+# Three seconds of cut, past the playback's jump: the timeline jumps when packets come back,
+# the offset takes the move, and a body that went further than 2 m is a counted snap.
+scenario cut_long
+scene two_chars_item
+seed 44
+guests 1
+settle 6s
+
+net g1 rtt 100ms jitter 10ms loss 1%
+
+p0 walk box
+p0 grab box as lift
+p0 wait 300ms
+p0 throw 1.6 0.6 0.4 speed 6 as throw
+p1 walk -1 -1 speed 2.5
+p1 walk 1 1 as p1_back
+at 1200ms cut g1 for 3s
+
+expect result lift granted
+expect result throw done
+expect agree_at_rest 5cm 5deg
+expect no_stuck
+expect jump.max <= 0.45m
+# behind_ticks: a copy plays at most delay_max (15 ticks, before the clock knows the path)
+# behind its owner's newest, plus the one-way delay and the jitter in ticks, plus 2 for the
+# tick the packet arrives in and the tick the owner's newest is read after its step:
+# 21, plus the 180-tick cut: 201. Derived.
+expect behind_ticks.max <= 201t
+expect behind_ticks.p95 <= 201t
+# lag_divergence.p95: measured (0.126 m), with a margin: a copy that holds its last snapshot or
+# draws a stale moment reads several times that.
+expect lag_divergence.p95 <= 0.25m

@@ -241,7 +241,7 @@ static void test_the_world_hash_sees_what_it_names(void) {
             b3Body_SetMotionLocks(crate, (b3MotionLocks){.angularX = true});
             break;
         case 5:
-            stand_world_set_held(b, 2, true);
+            stand_world_set_held(b, 2, true, 0);
             break;
         }
         char message[64];

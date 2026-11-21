@@ -49,6 +49,13 @@ static sync_record_t random_record(void) {
     r.rare.hold = (uint8_t)(next() & 1u);
     r.rare.holder_slot = (next() & 1u) ? (uint16_t)(next() % BODY_SYNC_BODIES_MAX) : BODY_SYNC_BODIES_MAX;
     r.rare.holder_generation_low = r.rare.holder_slot < BODY_SYNC_BODIES_MAX ? (uint8_t)(next() & SYNC_GEN_MASK) : 0;
+    r.rare.data_size = (uint8_t)(next() % (SYNC_DATA_MAX + 1u));
+    for (uint8_t i = 0; i < r.rare.data_size; i++) {
+        r.rare.data[i] = (uint8_t)next();
+    }
+    if (next() & 1u) {
+        r.origin = (sync_origin_t){.relayed = true, .seat = (uint8_t)(next() % SEATS), .age = (uint8_t)(next() % (SYNC_RELAY_AGE_MAX + 1u))};
+    }
     return r;
 }
 
@@ -173,6 +180,8 @@ static void test_a_record_never_splits(void) {
     big.sim = true;
     big.at_rest = false;
     big.rare.groups = SYNC_RARE_ALL;
+    big.rare.data_size = SYNC_DATA_MAX;
+    big.origin = (sync_origin_t){.relayed = true, .seat = 2, .age = 9};
     TEST_ASSERT_TRUE(sync_codec_limit(&codec, &big));
     TEST_ASSERT_EQUAL_UINT32(codec.record_bits_max, sync_codec_record_bits(&codec, &big));
     uint32_t exact = (codec.record_bits_max + 1u + 7u) / 8u; /* one record and the end bit */
@@ -227,6 +236,7 @@ static void test_the_reader_refuses_malformed_packets(void) {
     net_bits_write(&w, 0, 1);
     net_bits_write(&w, 0, 1);
     net_bits_write(&w, 1, 1);
+    net_bits_write(&w, 0, 1); /* not relayed */
     float pose[4] = {0, 0, 0, 1};
     net_bits_write_ranged(&w, codec.copy_fields[0].range, 0.0f);
     net_bits_write_ranged(&w, codec.copy_fields[1].range, 0.0f);
@@ -244,6 +254,7 @@ static void test_the_reader_refuses_malformed_packets(void) {
     net_bits_write(&w, 1, 1);
     net_bits_write(&w, 0, 1);
     net_bits_write(&w, 0, 1);
+    net_bits_write(&w, 0, 1); /* not relayed */
     for (int i = 0; i < 3; i++) {
         net_bits_write_ranged(&w, codec.sim_fields[i].range, 0.0f);
     }
@@ -255,6 +266,38 @@ static void test_the_reader_refuses_malformed_packets(void) {
     size = (uint32_t)net_bits_writer_finish(&w);
     TEST_ASSERT_FALSE(read_packet(size, &count));
     TEST_ASSERT_FALSE(read_packet(0, &count));
+    /* A relayed record's owner seat must be a seat of the session. */
+    sync_record_t o = random_record();
+    o.rare.groups = 0;
+    o.origin = (sync_origin_t){.relayed = true, .seat = 2, .age = 5};
+    TEST_ASSERT_TRUE(sync_codec_limit(&codec, &o));
+    size = write_packet(&o, 1, sizeof(packet));
+    TEST_ASSERT_TRUE(sync_packet_read(&codec, 3, packet, size, out, MAX, &count, why, sizeof(why)));
+    TEST_ASSERT_TRUE(out[0].origin.relayed && out[0].origin.seat == 2 && out[0].origin.age == 5);
+    TEST_ASSERT_FALSE(sync_packet_read(&codec, 2, packet, size, out, MAX, &count, why, sizeof(why)));
+    /* A data group longer than SYNC_DATA_MAX, by hand: the writer clamps and never sends one. */
+    for (uint32_t bytes = SYNC_DATA_MAX; bytes <= SYNC_DATA_MAX + 1; bytes++) {
+        net_bits_writer_init(&w, packet, sizeof(packet));
+        net_bits_write(&w, 1, 1);
+        net_bits_write(&w, 5, SYNC_SLOT_BITS);
+        net_bits_write(&w, 1, SYNC_GEN_BITS);
+        net_bits_write(&w, 0, 1);
+        net_bits_write(&w, 0, 1);
+        net_bits_write(&w, 1, 1);
+        net_bits_write(&w, 0, 1);
+        for (int i = 0; i < 3; i++) {
+            net_bits_write_ranged(&w, codec.copy_fields[i].range, 0.0f);
+        }
+        net_bits_write_quat(&w, pose, SYNC_COPY_QUAT_BITS);
+        net_bits_write(&w, SYNC_RARE_DATA, SYNC_RARE_GROUPS);
+        net_bits_write(&w, bytes, 4);
+        for (uint32_t i = 0; i < bytes; i++) {
+            net_bits_write(&w, 0xA5, 8);
+        }
+        net_bits_write(&w, 0, 1);
+        size = (uint32_t)net_bits_writer_finish(&w);
+        TEST_ASSERT_EQUAL(bytes <= SYNC_DATA_MAX, read_packet(size, &count));
+    }
 }
 
 /* Bit flips and random bytes: the reader answers, never reads outside the bytes, and every
@@ -376,6 +419,7 @@ static void test_room_holder_bits_and_the_empty_packet(void) {
     net_bits_write(&w, 0, 1);
     net_bits_write(&w, 0, 1);
     net_bits_write(&w, 1, 1);
+    net_bits_write(&w, 0, 1); /* not relayed */
     float pose[4] = {0, 0, 0, 1};
     for (int i = 0; i < 3; i++) {
         net_bits_write_ranged(&w, codec.copy_fields[i].range, 0.0f);

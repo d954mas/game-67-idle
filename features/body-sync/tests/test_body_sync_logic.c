@@ -373,7 +373,7 @@ static void test_json_is_complete_and_repeatable(void) {
     TEST_ASSERT_TRUE(stand_json_write(r, m, true, b, need + 1, &sb));
     TEST_ASSERT_EQUAL_size_t(sa, sb);
     TEST_ASSERT_EQUAL_MEMORY(a, b, sa);
-    TEST_ASSERT_NOT_NULL(strstr(a, "\"schema\":\"body_sync.metrics.v1\""));
+    TEST_ASSERT_NOT_NULL(strstr(a, "\"schema\":\"body_sync.metrics.v2\""));
     TEST_ASSERT_NOT_NULL(strstr(a, "\"x\\\"y\""));
     TEST_ASSERT_NOT_NULL(strstr(a, "\"rtt_ms\":null"));
     int depth = 0;

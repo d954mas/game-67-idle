@@ -31,6 +31,7 @@ add_test(NAME test_body_sync_seam_real COMMAND test_body_sync_seam_real WORKING_
 body_sync_test(test_body_sync_codec LIBS body_sync_parts)
 body_sync_test(test_body_sync_sender LIBS body_sync_parts)
 body_sync_test(test_body_sync_authority LIBS body_sync_parts)
+body_sync_test(test_body_sync_playback LIBS body_sync_parts)
 body_sync_test(test_body_sync_real LIBS body_sync net_bits)
 body_sync_test(test_body_sync_stand LIBS body_sync_stand body_sync)
 body_sync_test(test_body_sync_free_step LIBS body_sync_stand body_sync)
@@ -43,10 +44,16 @@ box3d_enable(test_body_sync_free_step)
 # checks are its invariants. The real seam's cases keep the plain names; the stub's say stub.
 set(BODY_SYNC_CORE_SCENARIOS two_walk)
 set(BODY_SYNC_SLOW_SCENARIOS stack_punch pile_throw cabinet_carry mannequin_hits grab_dispute breakables_break load_four
-    edge_throw_cut edge_stall edge_deaf load_overflow pile_settle_loss10 throw_catch)
+    edge_throw_cut edge_stall edge_deaf load_overflow pile_settle_loss10 throw_catch
+    bounce_wall cut_short cut_long hitch_guest hitch_host rate_mismatch rate_rough two_ping latency_drop)
+# What only the real seam does: a guest's character held dynamic on the host. The stub's case
+# of it is a must-fail below, the naive receiver's kinematic copy shoving the cabinet.
+set(BODY_SYNC_REAL_SCENARIOS char_push)
+# One seed, two processes, byte-equal metrics: the core case and the playback's edges.
+set(BODY_SYNC_TWICE_SCENARIOS two_walk bounce_wall cut_short cut_long hitch_guest hitch_host rate_mismatch rate_rough two_ping)
 set(BODY_SYNC_IMPLS "body_sync_stand_cli|" "body_sync_stand_cli_stub|stub_")
 
-set(core_tests test_body_sync_logic test_body_sync_wire test_body_sync_stub test_body_sync_seam_real test_body_sync_codec test_body_sync_sender test_body_sync_authority test_body_sync_real
+set(core_tests test_body_sync_logic test_body_sync_playback test_body_sync_wire test_body_sync_stub test_body_sync_seam_real test_body_sync_codec test_body_sync_sender test_body_sync_authority test_body_sync_real
     test_body_sync_stand test_body_sync_checks)
 set(slow_tests test_body_sync_free_step)
 foreach(impl IN LISTS BODY_SYNC_IMPLS)
@@ -67,12 +74,30 @@ foreach(impl IN LISTS BODY_SYNC_IMPLS)
     foreach(scn IN LISTS BODY_SYNC_SLOW_SCENARIOS)
         list(APPEND slow_tests test_body_sync_${tag}scn_${scn})
     endforeach()
-    # One seed, two processes, byte-equal metrics.
-    add_test(NAME test_body_sync_${tag}two_processes
-        COMMAND "${CMAKE_COMMAND}" -DCLI=$<TARGET_FILE:${cli}> -DSCENARIO=${BODY_SYNC_SCENARIOS}/two_walk.scn
-                -DOUT=${CMAKE_CURRENT_BINARY_DIR} -DTAG=${tag} -P "${CMAKE_CURRENT_LIST_DIR}/run_twice.cmake")
-    list(APPEND core_tests test_body_sync_${tag}two_processes)
+    foreach(scn IN LISTS BODY_SYNC_TWICE_SCENARIOS)
+        set(twice test_body_sync_${tag}two_processes_${scn})
+        if(scn STREQUAL "two_walk")
+            set(twice test_body_sync_${tag}two_processes)
+        endif()
+        add_test(NAME ${twice}
+            COMMAND "${CMAKE_COMMAND}" -DCLI=$<TARGET_FILE:${cli}> -DSCENARIO=${BODY_SYNC_SCENARIOS}/${scn}.scn
+                    -DOUT=${CMAKE_CURRENT_BINARY_DIR} -DTAG=${tag} -P "${CMAKE_CURRENT_LIST_DIR}/run_twice.cmake")
+        if(scn STREQUAL "two_walk")
+            list(APPEND core_tests ${twice})
+        else()
+            list(APPEND slow_tests ${twice})
+        endif()
+    endforeach()
 endforeach()
+foreach(scn IN LISTS BODY_SYNC_REAL_SCENARIOS)
+    add_test(NAME test_body_sync_scn_${scn}
+        COMMAND body_sync_stand_cli "${BODY_SYNC_SCENARIOS}/${scn}.scn" --out "${CMAKE_CURRENT_BINARY_DIR}/${scn}.json" --quiet)
+    list(APPEND slow_tests test_body_sync_scn_${scn})
+endforeach()
+add_test(NAME test_body_sync_stub_contrast_char_push
+    COMMAND "${CMAKE_COMMAND}" -DCLI=$<TARGET_FILE:body_sync_stand_cli_stub> -DSCENARIO=${BODY_SYNC_SCENARIOS}/char_push.scn
+            -DOUT=${CMAKE_CURRENT_BINARY_DIR} -DTAG=stub_ -DRC=1 "-DEXPECT=FAIL line 22 moved~cabinet moved" -P "${CMAKE_CURRENT_LIST_DIR}/expect_fail.cmake")
+list(APPEND slow_tests test_body_sync_stub_contrast_char_push)
 set_tests_properties(${core_tests} PROPERTIES LABELS "core")
 set_tests_properties(${slow_tests} PROPERTIES LABELS "slow")
 
@@ -108,3 +133,5 @@ body_sync_must_fail(mf_knock_unseen 1 "FAIL line 9 effects_once~shown 0 times")
 body_sync_must_fail(mf_left_not 1 "FAIL line 6 left~g1 stayed")
 body_sync_must_fail(mf_guests0 2 "mf_guests0.scn:6: this check needs a guest")
 body_sync_must_fail(mf_angle_zero 1 "FAIL line 9 agree_at_rest~turned")
+body_sync_must_fail(mf_no_copy 1 "FAIL line 8 metric~no copy was measured")
+body_sync_must_fail(mf_behind 1 "FAIL line 9 metric~behind_ticks.max")

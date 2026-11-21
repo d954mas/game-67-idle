@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+
 enum {
     STUB_WIRE_VERSION = 0xB7,
     STUB_HEADER_BYTES = 3, /* version, body count */
@@ -16,14 +17,16 @@ enum {
     STUB_SIM_BYTES = 24,
     STUB_AUTHORITY_BYTES = 4,
     STUB_HELD_BYTES = 4,
-    STUB_BODY_BYTES = STUB_COPY_BYTES + STUB_SIM_BYTES + STUB_AUTHORITY_BYTES + STUB_HELD_BYTES,
+    STUB_DATA_MAX = 8, /* BODY_SYNC_DATA_MAX; asserted in the stub */
+    STUB_DATA_BYTES = 1 + STUB_DATA_MAX, /* the caller's opaque bytes: a size, then all eight */
+    STUB_BODY_BYTES = STUB_COPY_BYTES + STUB_SIM_BYTES + STUB_AUTHORITY_BYTES + STUB_HELD_BYTES + STUB_DATA_BYTES,
     /* The flags byte: the owner's four bits, then these; bits 5 and 6 are reserved and refused. */
     STUB_FLAG_KINEMATIC = 0x10,
     STUB_FLAG_ASLEEP = 0x80,
     STUB_FLAG_RESERVED = 0x60,
     /* The locks byte: linear x y z, angular x y z from bit 0; bits 6 and 7 are refused. */
     STUB_LOCKS_ALL = 0x3F,
-    STUB_RECORD_BYTES_MAX = 18,
+    STUB_RECORD_BYTES_MAX = 27,
     STUB_SLOTS = 1024, /* BODY_SYNC_BODIES_MAX; asserted in the stub */
 };
 
@@ -45,6 +48,8 @@ typedef struct stub_body_state {
     bool kinematic;
     bool asleep;
     uint8_t locks; /* STUB_LOCKS_ALL bits: the owner's motion locks */
+    uint8_t data_size;
+    uint8_t data[STUB_DATA_MAX];
     float position[3];
     float rotation[4]; /* unit: the reader normalises what passed the tolerance */
     float velocity[3];
@@ -88,6 +93,8 @@ typedef struct stub_record {
     bool motion_known;
     bool kinematic;
     uint8_t locks;
+    uint8_t data_size; /* the body's opaque bytes, as flags travel */
+    uint8_t data[STUB_DATA_MAX];
 } stub_record_t;
 
 uint32_t stub_wire_put_record(const stub_record_t *record, uint8_t *buffer, uint32_t capacity);

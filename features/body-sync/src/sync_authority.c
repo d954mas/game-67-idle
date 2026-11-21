@@ -56,7 +56,10 @@ static void take_local(sync_authority_body_t *b, bool keep_holder) {
     if (b->has_in) {
         b->flags = b->in_flags;
         b->hold = b->in_hold;
+        b->data_size = b->in_data_size;
+        memcpy(b->data, b->in_data, sizeof(b->data));
     }
+    b->data_mine = false;
     b->holder = keep_holder && b->has_in ? b->in_holder : BODY_SYNC_ID_NONE;
     b->holder_mine = false;
     b->flags_mine = 0;
@@ -77,11 +80,17 @@ static void take_record(sync_authority_body_t *b, const stub_record_t *r, bool k
     }
     uint8_t own = keep_own ? b->flags_mine : 0u;
     b->flags = (uint8_t)((r->flags & ~own) | (b->flags & own));
+    if (!(keep_own && b->data_mine)) {
+        b->data_size = r->data_size;
+        memcpy(b->data, r->data, sizeof(b->data));
+    }
 }
 
 static void record_body(const sync_authority_t *a, const sync_authority_body_t *b, stub_record_t *r) {
     bool mine = sync_authority_local(a, b);
     r->flags = mine || !b->has_in ? b->flags : b->in_flags;
+    r->data_size = mine || !b->has_in ? b->data_size : b->in_data_size;
+    memcpy(r->data, mine || !b->has_in ? b->data : b->in_data, sizeof(r->data));
     r->motion_known = b->motion_known;
     r->kinematic = b->kinematic;
     r->locks = b->locks;
@@ -389,6 +398,40 @@ uint8_t sync_authority_flags(const sync_authority_t *a, body_sync_id_t id) {
     return sync_authority_local(a, b) || !b->has_in ? b->flags : b->in_flags;
 }
 
+body_sync_result_t sync_authority_set_data(sync_authority_t *a, body_sync_id_t id, const void *data, uint32_t size) {
+    sync_authority_body_t *b = sync_authority_body(a, id);
+    if (!b) {
+        return BODY_SYNC_UNKNOWN;
+    }
+    if (!sync_authority_local(a, b) || size > STUB_DATA_MAX || (size && !data)) {
+        return invalid(a, "set_data: not local, or more than BODY_SYNC_DATA_MAX bytes");
+    }
+    b->data_size = (uint8_t)size;
+    memset(b->data, 0, sizeof(b->data));
+    if (size) {
+        memcpy(b->data, data, size);
+    }
+    b->data_mine = true;
+    return BODY_SYNC_OK;
+}
+
+uint32_t sync_authority_data(const sync_authority_t *a, body_sync_id_t id, void *out, uint32_t capacity) {
+    const sync_authority_body_t *b = sync_authority_body_const(a, id);
+    if (!b || !out) {
+        return 0;
+    }
+    bool mine = sync_authority_local(a, b) || !b->has_in;
+    uint32_t size = mine ? b->data_size : b->in_data_size;
+    size = size < capacity ? size : capacity;
+    memcpy(out, mine ? b->data : b->in_data, size);
+    return size;
+}
+
+void sync_authority_received_data(sync_authority_body_t *b, uint8_t size, const uint8_t *data) {
+    b->in_data_size = size > STUB_DATA_MAX ? (uint8_t)STUB_DATA_MAX : size;
+    memcpy(b->in_data, data, sizeof(b->in_data));
+}
+
 void sync_authority_received(sync_authority_body_t *b, uint8_t hold, body_sync_id_t holder, uint8_t flags) {
     b->has_in = true;
     b->in_hold = hold;
@@ -519,6 +562,10 @@ uint8_t sync_authority_route(const sync_authority_t *a, uint32_t slot, bool have
 }
 
 bool sync_authority_sends_sim(const sync_authority_t *a) { return !sync_authority_is_host(a); }
+
+bool sync_authority_holds_dynamic(const sync_authority_t *a, const sync_authority_body_t *b, bool owner_kinematic) {
+    return sync_authority_is_host(a) && !sync_authority_local(a, b) && b->seat != BODY_SYNC_SEAT_HOST && !owner_kinematic;
+}
 
 bool sync_authority_settle(sync_authority_t *a, body_sync_id_t id, bool asleep, bool touched_moving) {
     sync_authority_body_t *b = sync_authority_body(a, id);

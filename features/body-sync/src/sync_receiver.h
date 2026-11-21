@@ -17,7 +17,7 @@ typedef struct sync_received {
     bool has;
     bool fresh;    /* not applied yet */
     uint8_t from;  /* the sender: a new sender's ticks are not comparable with the old one's */
-    uint32_t tick; /* the sender's, of the packet */
+    uint32_t tick; /* the sender's, of the packet, or the owner's sample tick when relayed */
     bool ordered;  /* `tick` orders the sender's next records: one session of that seat */
     sync_record_t newest;
     /* A sim record's own; for a copy record, estimated from its pose and the one before it

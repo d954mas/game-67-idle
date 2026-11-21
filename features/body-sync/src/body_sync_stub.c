@@ -6,6 +6,7 @@
 #include "features/body_sync/body_sync.h"
 #include "stub_wire.h"
 #include "sync_authority.h"
+#include "sync_masks.h"
 
 /* The naive seam: every bound body's raw pose, velocities and motion type to every seat, every
    tick, in as many packets as it takes; copies are kinematic bodies driven to the newest pose.
@@ -13,6 +14,7 @@
    measured against, so it is plain rather than clever. Authority is the shared part's. */
 
 _Static_assert(BODY_SYNC_BODIES_MAX == STUB_SLOTS, "stub_wire.c checks slots against STUB_SLOTS");
+_Static_assert(BODY_SYNC_DATA_MAX == STUB_DATA_MAX, "the stub writes BODY_SYNC_DATA_MAX bytes of data");
 _Static_assert(BODY_SYNC_TRAFFIC_COUNT == 5, "body_sync_metrics.h repeats the seam's kind count");
 
 /* A copy farther than this from its new pose jumps there instead of being driven at speed. */
@@ -33,12 +35,14 @@ typedef struct entry {
     uint32_t in_tick;
     bool in_ordered; /* in_tick orders that sender's next states: one session of the seat */
     stub_body_state_t in;
+    sync_masks_t masks;
 } entry_t;
 
 struct body_sync {
     body_sync_config_t config;
     stub_limits_t limits;
     float dt;
+    uint32_t now; /* the last apply's or collect's tick */
     sync_authority_t authority;
     entry_t entries[BODY_SYNC_BODIES_MAX];
     bool joined[BODY_SYNC_SEATS_MAX];
@@ -49,7 +53,7 @@ struct body_sync {
     char error[128];
 };
 
-const char *body_sync_implementation(void) { return "stub 0.5.0"; }
+const char *body_sync_implementation(void) { return "stub 0.6.0"; }
 
 const char *body_sync_traffic_kind_name(body_sync_traffic_kind_t kind) {
     static const char *names[] = {"header", "copy", "sim", "held", "authority"};
@@ -104,7 +108,18 @@ body_sync_t *body_sync_create(const body_sync_config_t *config) {
     return s;
 }
 
-void body_sync_destroy(body_sync_t *sync) { free(sync); }
+void body_sync_destroy(body_sync_t *sync) {
+    if (!sync) {
+        return;
+    }
+    for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
+        entry_t *e = &sync->entries[slot];
+        if (sync->authority.bodies[slot].bound && b3Body_IsValid(e->body)) {
+            sync_masks_restore(&e->masks, e->body);
+        }
+    }
+    free(sync);
+}
 
 static bool seat_ok(const body_sync_t *s, uint8_t seat) { return seat < s->config.seats && seat != s->config.seat; }
 
@@ -144,8 +159,9 @@ void body_sync_seat_left(body_sync_t *s, uint8_t seat) {
 body_sync_result_t body_sync_bind(body_sync_t *s, body_sync_id_t id, const body_sync_bind_t *bind) {
     uint32_t slot = body_sync_id_slot(id);
     if (!bind || slot >= BODY_SYNC_BODIES_MAX || body_sync_id_generation(id) == 0 || !b3Body_IsValid(bind->body) ||
-        b3Body_GetType(bind->body) == b3_staticBody || bind->body_class > BODY_SYNC_CLASS_CHARACTER || bind->authority >= s->config.seats) {
-        return invalid(s, "bind: id, body, class or authority out of range");
+        b3Body_GetType(bind->body) == b3_staticBody || bind->body_class > BODY_SYNC_CLASS_CHARACTER || bind->authority >= s->config.seats ||
+        (s->config.character_category && sync_masks_shapes(bind->body) > BODY_SYNC_SHAPES_MAX)) {
+        return invalid(s, "bind: id, body, class, authority or shape count out of range");
     }
     body_sync_result_t r = sync_authority_bind(&s->authority, id, bind->authority, bind->number);
     if (r != BODY_SYNC_OK) {
@@ -160,7 +176,13 @@ body_sync_result_t body_sync_bind(body_sync_t *s, body_sync_id_t id, const body_
     return BODY_SYNC_OK;
 }
 
-body_sync_result_t body_sync_unbind(body_sync_t *s, body_sync_id_t id) { return sync_authority_unbind(&s->authority, id); }
+body_sync_result_t body_sync_unbind(body_sync_t *s, body_sync_id_t id) {
+    entry_t *e = entry_for(s, id);
+    if (e && b3Body_IsValid(e->body)) {
+        sync_masks_restore(&e->masks, e->body); /* the caller gets its body back as it bound it */
+    }
+    return sync_authority_unbind(&s->authority, id);
+}
 
 b3BodyId body_sync_body(const body_sync_t *s, body_sync_id_t id) {
     const entry_t *e = entry_const(s, id);
@@ -211,6 +233,14 @@ body_sync_result_t body_sync_set_holder(body_sync_t *s, body_sync_id_t id, body_
 body_sync_result_t body_sync_set_flags(body_sync_t *s, body_sync_id_t id, uint8_t flags) { return sync_authority_set_flags(&s->authority, id, flags); }
 uint8_t body_sync_flags(const body_sync_t *s, body_sync_id_t id) { return sync_authority_flags(&s->authority, id); }
 
+body_sync_result_t body_sync_set_data(body_sync_t *s, body_sync_id_t id, const void *data, uint32_t size) {
+    return sync_authority_set_data(&s->authority, id, data, size);
+}
+
+uint32_t body_sync_data(const body_sync_t *s, body_sync_id_t id, void *out, uint32_t capacity) {
+    return sync_authority_data(&s->authority, id, out, capacity);
+}
+
 void body_sync_set_peer_tick(body_sync_t *s, uint8_t seat, double tick) {
     (void)s;
     (void)seat;
@@ -237,6 +267,7 @@ static void store_in(body_sync_t *s, uint32_t slot, uint8_t from, uint32_t tick,
     e->in_tick = tick;
     e->in_ordered = true;
     sync_authority_received(auth_of(s, slot), b->hold, b->holder, b->flags);
+    sync_authority_received_data(auth_of(s, slot), b->data_size, b->data);
     sync_authority_received_motion(auth_of(s, slot), true, b->kinematic, b->locks);
 }
 
@@ -303,7 +334,7 @@ static b3MotionLocks locks_of(uint8_t bits) {
 }
 
 void body_sync_apply(body_sync_t *s, uint32_t tick) {
-    (void)tick;
+    s->now = tick;
     for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
         sync_authority_body_t *a = auth_of(s, slot);
         entry_t *e = &s->entries[slot];
@@ -324,6 +355,7 @@ void body_sync_apply(body_sync_t *s, uint32_t tick) {
                     b3Body_SetMotionLocks(e->body, locks_of(locks));
                     sync_authority_applied(a, kinematic, locks);
                 }
+                sync_masks_restore(&e->masks, e->body);
                 if (e->has_in) {
                     b3Body_SetLinearVelocity(e->body, (b3Vec3){e->in.velocity[0], e->in.velocity[1], e->in.velocity[2]});
                     b3Body_SetAngularVelocity(e->body, (b3Vec3){e->in.angular[0], e->in.angular[1], e->in.angular[2]});
@@ -338,6 +370,9 @@ void body_sync_apply(body_sync_t *s, uint32_t tick) {
             /* A lock would drop the angular velocity that turns a copy to its owner's rotation
                (a character's facing); the owner's locks travel in its state instead. */
             b3Body_SetMotionLocks(e->body, (b3MotionLocks){0});
+            if (e->body_class == BODY_SYNC_CLASS_LIGHT) {
+                sync_masks_clear(&e->masks, e->body, s->config.character_category);
+            }
         }
         if (e->has_in && e->in_fresh) {
             e->in_fresh = false;
@@ -392,7 +427,7 @@ static bool touched_moving(const b3ContactEvents *events, b3BodyId body, b3BodyI
 }
 
 void body_sync_collect(body_sync_t *s, uint32_t tick) {
-    (void)tick;
+    s->now = tick;
     b3ContactEvents events = b3World_GetContactEvents(s->config.world);
     for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
         sync_authority_body_t *a = auth_of(s, slot);
@@ -423,6 +458,8 @@ void body_sync_collect(body_sync_t *s, uint32_t tick) {
         o->asleep = !b3Body_IsAwake(e->body);
         o->locks = locks_bits(b3Body_GetMotionLocks(e->body));
         sync_authority_note_motion(&s->authority, a, o->kinematic, o->locks);
+        o->data_size = a->data_size;
+        memcpy(o->data, a->data, sizeof(o->data));
         o->flags = a->flags;
         o->holder = a->holder;
         o->hold = a->hold;
@@ -555,6 +592,22 @@ void body_sync_pop_record(body_sync_t *s, uint8_t seat) {
         s->traffic[seat].sent_bytes[BODY_SYNC_TRAFFIC_AUTHORITY] += size;
         s->traffic[seat].records_sent++;
     }
+}
+
+bool body_sync_playback(const body_sync_t *s, body_sync_id_t id, double *owner_tick) {
+    const entry_t *e = entry_const(s, id);
+    if (!e) {
+        return false;
+    }
+    if (local_slot(s, body_sync_id_slot(id))) {
+        *owner_tick = (double)s->now;
+        return true;
+    }
+    if (!e->has_in) {
+        return false;
+    }
+    *owner_tick = (double)e->in_tick;
+    return true;
 }
 
 bool body_sync_render_offset(const body_sync_t *s, body_sync_id_t id, float position[3], float rotation[4]) {

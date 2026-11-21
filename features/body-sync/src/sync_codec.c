@@ -11,7 +11,13 @@ typedef struct w_head {
     bool sim;
     bool rest;
     bool rare;
+    bool relayed;
 } w_head_t;
+
+typedef struct w_origin {
+    uint32_t seat;
+    uint32_t age;
+} w_origin_t;
 
 typedef struct w_pose {
     float x, y, z;
@@ -94,7 +100,9 @@ bool sync_codec_init(sync_codec_t *c, const sync_limits_t *limits) {
     const float *lo = limits->bounds_min, *hi = limits->bounds_max;
     const net_bits_range_t v = symmetric(limits->max_speed, SYNC_VELOCITY_STEP), w = symmetric(limits->max_spin, SYNC_SPIN_STEP);
     const net_bits_field_t head[] = {NET_BITS_UINT(w_head_t, slot, SYNC_SLOT_BITS), NET_BITS_UINT(w_head_t, gen, SYNC_GEN_BITS),
-                                     NET_BITS_BOOL(w_head_t, sim), NET_BITS_BOOL(w_head_t, rest), NET_BITS_BOOL(w_head_t, rare)};
+                                     NET_BITS_BOOL(w_head_t, sim), NET_BITS_BOOL(w_head_t, rest), NET_BITS_BOOL(w_head_t, rare),
+                                     NET_BITS_BOOL(w_head_t, relayed)};
+    const net_bits_field_t origin[] = {NET_BITS_UINT(w_origin_t, seat, 2), NET_BITS_UINT(w_origin_t, age, SYNC_RELAY_AGE_BITS)};
     net_bits_range_t cp[3], sp[3];
     for (int i = 0; i < 3; i++) {
         cp[i] = inside(lo[i], hi[i], SYNC_COPY_POSITION_STEP);
@@ -117,6 +125,7 @@ bool sync_codec_init(sync_codec_t *c, const sync_limits_t *limits) {
     const net_bits_field_t rholder[] = {NET_BITS_BOOL(w_rholder_t, present), NET_BITS_UINT(w_rholder_t, slot, SYNC_SLOT_BITS),
                                         NET_BITS_UINT(w_rholder_t, gen, SYNC_GEN_BITS)};
     memcpy(c->head_fields, head, sizeof(head));
+    memcpy(c->origin_fields, origin, sizeof(origin));
     memcpy(c->copy_fields, copy, sizeof(copy));
     memcpy(c->sim_fields, sim, sizeof(sim));
     memcpy(c->motion_fields, motion, sizeof(motion));
@@ -125,8 +134,8 @@ bool sync_codec_init(sync_codec_t *c, const sync_limits_t *limits) {
     memcpy(c->rflags_fields, rflags, sizeof(rflags));
     memcpy(c->rauthority_fields, rauthority, sizeof(rauthority));
     memcpy(c->rholder_fields, rholder, sizeof(rholder));
-    uint64_t hash = net_bits_hash_mix(SYNC_PROTOCOL, SYNC_GEN_BITS);
-    if (!layout(&c->head, c->head_fields, 5, sizeof(w_head_t), &hash) || !layout(&c->copy_pose, c->copy_fields, 4, sizeof(w_pose_t), &hash) ||
+    uint64_t hash = net_bits_hash_mix(net_bits_hash_mix(SYNC_PROTOCOL, SYNC_GEN_BITS), SYNC_DATA_MAX);
+    if (!layout(&c->head, c->head_fields, 6, sizeof(w_head_t), &hash) || !layout(&c->origin, c->origin_fields, 2, sizeof(w_origin_t), &hash) || !layout(&c->copy_pose, c->copy_fields, 4, sizeof(w_pose_t), &hash) ||
         !layout(&c->sim_pose, c->sim_fields, 4, sizeof(w_pose_t), &hash) || !layout(&c->motion, c->motion_fields, 6, sizeof(w_motion_t), &hash) ||
         !layout(&c->rare_mask, c->mask_fields, 1, sizeof(w_mask_t), &hash) ||
         !layout(&c->rare_motion, c->rmotion_fields, 2, sizeof(w_rmotion_t), &hash) ||
@@ -136,8 +145,8 @@ bool sync_codec_init(sync_codec_t *c, const sync_limits_t *limits) {
         return false;
     }
     c->hash = hash;
-    c->record_bits_max = 1 + c->head.bits + c->sim_pose.bits + c->motion.bits + c->rare_mask.bits + c->rare_motion.bits + c->rare_flags.bits +
-                         c->rare_authority.bits + c->rare_holder.bits;
+    c->record_bits_max = 1 + c->head.bits + c->origin.bits + c->sim_pose.bits + c->motion.bits + c->rare_mask.bits + c->rare_motion.bits +
+                         c->rare_flags.bits + c->rare_authority.bits + c->rare_holder.bits + 4u + 8u * SYNC_DATA_MAX;
     c->record_bits_min = 1 + c->head.bits + c->copy_pose.bits;
     return c->record_bits_max <= BODY_SYNC_RECORD_MAX * 8u;
 }
@@ -184,6 +193,9 @@ bool sync_codec_limit(const sync_codec_t *c, sync_record_t *r) {
         }
     }
     r->rare.groups &= SYNC_RARE_ALL;
+    r->rare.data_size = r->rare.data_size > SYNC_DATA_MAX ? SYNC_DATA_MAX : r->rare.data_size;
+    r->origin.seat &= 3u;
+    r->origin.age = r->origin.age > SYNC_RELAY_AGE_MAX ? (uint8_t)SYNC_RELAY_AGE_MAX : r->origin.age;
     r->rare.flags &= (uint8_t)((1u << BODY_SYNC_FLAG_BITS) - 1u);
     r->rare.locks &= 0x3Fu;
     r->rare.seat &= 3u;
@@ -195,23 +207,33 @@ bool sync_codec_limit(const sync_codec_t *c, sync_record_t *r) {
 
 static bool has_motion(const sync_record_t *r) { return r->sim && !r->at_rest; }
 
-uint32_t sync_codec_record_bits(const sync_codec_t *c, const sync_record_t *r) {
-    uint32_t bits = 1 + c->head.bits + (r->sim ? c->sim_pose.bits : c->copy_pose.bits) + (has_motion(r) ? c->motion.bits : 0);
-    uint8_t g = r->rare.groups & SYNC_RARE_ALL;
-    if (g) {
-        bits += c->rare_mask.bits;
-        bits += (g & SYNC_RARE_MOTION) ? c->rare_motion.bits : 0;
-        bits += (g & SYNC_RARE_FLAGS) ? c->rare_flags.bits : 0;
-        bits += (g & SYNC_RARE_AUTHORITY) ? c->rare_authority.bits : 0;
-        bits += (g & SYNC_RARE_HOLDER) ? c->rare_holder.bits : 0;
+uint32_t sync_codec_rare_bits(const sync_codec_t *c, const sync_rare_t *rare) {
+    uint8_t g = rare->groups & SYNC_RARE_ALL;
+    if (!g) {
+        return 0;
     }
+    uint32_t bits = c->rare_mask.bits;
+    bits += (g & SYNC_RARE_MOTION) ? c->rare_motion.bits : 0;
+    bits += (g & SYNC_RARE_FLAGS) ? c->rare_flags.bits : 0;
+    bits += (g & SYNC_RARE_AUTHORITY) ? c->rare_authority.bits : 0;
+    bits += (g & SYNC_RARE_HOLDER) ? c->rare_holder.bits : 0;
+    bits += (g & SYNC_RARE_DATA) ? 4u + 8u * (rare->data_size > SYNC_DATA_MAX ? SYNC_DATA_MAX : rare->data_size) : 0;
     return bits;
+}
+
+uint32_t sync_codec_record_bits(const sync_codec_t *c, const sync_record_t *r) {
+    return 1 + c->head.bits + (r->origin.relayed ? c->origin.bits : 0) + (r->sim ? c->sim_pose.bits : c->copy_pose.bits) +
+           (has_motion(r) ? c->motion.bits : 0) + sync_codec_rare_bits(c, &r->rare);
 }
 
 static void write_body(net_bits_writer_t *wr, const sync_codec_t *c, const sync_record_t *r) {
     uint8_t g = r->rare.groups & SYNC_RARE_ALL;
-    w_head_t head = {.slot = r->slot, .gen = r->generation_low, .sim = r->sim, .rest = r->at_rest, .rare = g != 0};
+    w_head_t head = {.slot = r->slot, .gen = r->generation_low, .sim = r->sim, .rest = r->at_rest, .rare = g != 0, .relayed = r->origin.relayed};
     net_bits_write_record(wr, &c->head, &head);
+    if (r->origin.relayed) {
+        w_origin_t o = {r->origin.seat, r->origin.age};
+        net_bits_write_record(wr, &c->origin, &o);
+    }
     w_pose_t pose = {r->position[0], r->position[1], r->position[2], {r->rotation[0], r->rotation[1], r->rotation[2], r->rotation[3]}};
     net_bits_write_record(wr, r->sim ? &c->sim_pose : &c->copy_pose, &pose);
     if (has_motion(r)) {
@@ -239,6 +261,13 @@ static void write_body(net_bits_writer_t *wr, const sync_codec_t *c, const sync_
         bool present = r->rare.holder_slot < BODY_SYNC_BODIES_MAX;
         w_rholder_t h = {present, present ? r->rare.holder_slot : 0u, present ? (uint32_t)(r->rare.holder_generation_low & SYNC_GEN_MASK) : 0u};
         net_bits_write_record(wr, &c->rare_holder, &h);
+    }
+    if (g & SYNC_RARE_DATA) {
+        uint8_t size = r->rare.data_size > SYNC_DATA_MAX ? (uint8_t)SYNC_DATA_MAX : r->rare.data_size;
+        net_bits_write(wr, size, 4);
+        for (uint8_t i = 0; i < size; i++) {
+            net_bits_write(wr, r->rare.data[i], 8);
+        }
     }
 }
 
@@ -323,6 +352,16 @@ bool sync_packet_read(const sync_codec_t *c, uint8_t seats, const uint8_t *data,
         r->generation_low = (uint8_t)head.gen;
         r->sim = head.sim;
         r->at_rest = head.rest;
+        if (head.relayed) {
+            w_origin_t o;
+            if (!net_bits_read_record(&rd, &c->origin, &o)) {
+                return fail(error, error_size, "origin cut short");
+            }
+            if (o.seat >= seats) {
+                return fail(error, error_size, "origin names a seat out of range");
+            }
+            r->origin = (sync_origin_t){.relayed = true, .seat = (uint8_t)o.seat, .age = (uint8_t)o.age};
+        }
         if (!net_bits_read_record(&rd, head.sim ? &c->sim_pose : &c->copy_pose, &pose)) {
             return fail(error, error_size, "pose cut short or off its grid");
         }
@@ -389,6 +428,19 @@ bool sync_packet_read(const sync_codec_t *c, uint8_t seats, const uint8_t *data,
                     r->rare.holder_generation_low = (uint8_t)h.gen;
                 } else if (h.slot || h.gen) {
                     return fail(error, error_size, "holder group names no holder but carries one");
+                }
+            }
+            if (mask.mask & SYNC_RARE_DATA) {
+                uint32_t bytes = net_bits_read(&rd, 4);
+                if (!rd.ok || bytes > SYNC_DATA_MAX) {
+                    return fail(error, error_size, "data group cut short or too long");
+                }
+                r->rare.data_size = (uint8_t)bytes;
+                for (uint32_t i = 0; i < bytes; i++) {
+                    r->rare.data[i] = (uint8_t)net_bits_read(&rd, 8);
+                }
+                if (!rd.ok) {
+                    return fail(error, error_size, "data group cut short");
                 }
             }
         }

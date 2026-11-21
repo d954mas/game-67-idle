@@ -25,12 +25,16 @@ enum {
     STUCK_TICKS = 120,        /* 2 s */
     CONNECT_TICKS_MAX = 600,  /* 10 s for each guest to be seated */
     KNOCK_FLAG = 1u << 0,     /* seam flag bit the stand gives a knocked mannequin */
-    ACTIVITY_SHIFT = 1,       /* a character's body_sync_activity_t in the seam flags' bits 1..3 */
-    ACTIVITY_MASK = 0x7u << ACTIVITY_SHIFT,
+    /* An owner's poses kept per body for the playback measures: the deepest a copy plays
+       behind (a second before it jumps, the delay, one way) plus the path window. */
+    RING_TICKS = 128,
+    PATH_TICKS = 30,
 };
-_Static_assert(BODY_SYNC_ACTIVITY_PUNCH <= 7 && (ACTIVITY_MASK >> BODY_SYNC_FLAG_BITS) == 0, "activity fits the seam's flag bits");
+_Static_assert(BODY_SYNC_ACTIVITY_PUNCH <= 255, "a character's activity is one data byte");
 #define REST_SPEED 0.05f
+#define REST_OFFSET_M 0.001f
 #define MOVED_M 0.05f
+#define OWNER_JUMP_M 0.5f /* an owner's move in one tick past any throw: it was set there */
 
 typedef struct out_queue {
     uint8_t data[QUEUE_MAX][STAND_RECORD_MAX];
@@ -44,6 +48,24 @@ typedef struct pending_claim {
     stand_record_t record;
 } pending_claim_t;
 
+/* One body's positions on the endpoint that owned it, by that endpoint's tick. */
+typedef struct owner_ring {
+    body_sync_id_t id;
+    uint32_t tag[RING_TICKS]; /* tick + 1 of the entry; 0 empty */
+    float position[RING_TICKS][3];
+} owner_ring_t;
+
+/* A copy's last playback sample, for its move between two ticks. */
+typedef struct copy_track {
+    body_sync_id_t id;
+    bool valid;
+    uint8_t owner;
+    bool offset; /* a render offset was set */
+    double played; /* owner tick */
+    float drawn[3];
+    float owner_at[3];
+} copy_track_t;
+
 typedef struct endpoint {
     bool built;
     bool active; /* seated and its session alive */
@@ -54,6 +76,11 @@ typedef struct endpoint {
     coop_session_t *session;
     stand_character_t character; /* the player this endpoint controls */
     uint32_t ticks_run;
+    uint32_t rate_mhz; /* steps per second of virtual time, millihertz */
+    owner_ring_t *rings; /* STAND_BODIES_MAX */
+    bool ring_any;
+    uint32_t ring_newest; /* the session tick of its last recorded step */
+    copy_track_t tracks[STAND_BODIES_MAX];
     uint32_t stall_until, deaf_until;
     out_queue_t queues[BODY_SYNC_ENDPOINTS_MAX];
     uint16_t view[STAND_BODIES_MAX];
@@ -128,6 +155,8 @@ struct body_sync_stand {
     uint32_t flush_over[BODY_SYNC_ENDPOINTS_MAX]; /* per guest, both directions */
     uint32_t rest_run;
     uint32_t rest_tick;
+    bool started;
+    float start_position[STAND_BODIES_MAX][3]; /* the host's, at the first tick: `expect moved` */
     stand_metrics_t metrics;
     body_sync_report_t report;
     uint8_t packet[PACKET_MAX];
@@ -557,8 +586,8 @@ static void character_tick(body_sync_stand_t *st, endpoint_t *ep) {
     }
     stand_char_status_t status = stand_character_tick(c, ep->world);
     body_sync_id_t me = stand_world_id(ep->world, c->slot);
-    uint8_t flags = (uint8_t)(body_sync_flags(ep->sync, me) & ~ACTIVITY_MASK);
-    body_sync_set_flags(ep->sync, me, (uint8_t)(flags | (stand_character_activity(c) << ACTIVITY_SHIFT)));
+    uint8_t activity = (uint8_t)stand_character_activity(c);
+    body_sync_set_data(ep->sync, me, &activity, 1);
     int32_t index = stand_schedule_active(&st->schedule, ep->index);
     if (index < 0) {
         return;
@@ -676,7 +705,7 @@ static void drop_carried_of(body_sync_stand_t *st, uint8_t seat) {
             body_sync_set_holder(host->sync, id, BODY_SYNC_ID_NONE);
             body_sync_release(host->sync, id);
             b3Body_SetType(host->world->slots[slot].body, b3_dynamicBody);
-            stand_world_set_held(host->world, slot, false);
+            stand_world_set_held(host->world, slot, false, 0);
         }
     }
 }
@@ -863,8 +892,10 @@ static void after_apply(body_sync_stand_t *st, endpoint_t *ep) {
             continue;
         }
         body_sync_authority_t a;
-        if (body_sync_authority(ep->sync, stand_world_id(w, slot), &a)) {
-            stand_world_set_held(w, slot, a.holder != BODY_SYNC_ID_NONE);
+        body_sync_id_t id = stand_world_id(w, slot);
+        if (body_sync_authority(ep->sync, id, &a)) {
+            bool light_copy = !body_sync_is_local(ep->sync, id) && !(s->desc.flags & BODY_SYNC_BODY_HEAVY);
+            stand_world_set_held(w, slot, a.holder != BODY_SYNC_ID_NONE, light_copy ? (uint64_t)STAND_CAT_CHARACTER : 0u);
         }
         if ((body_sync_flags(ep->sync, stand_world_id(w, slot)) & KNOCK_FLAG) != 0) {
             s->knocked = true;
@@ -876,6 +907,31 @@ static void after_apply(body_sync_stand_t *st, endpoint_t *ep) {
         c->held_heavy = false;
     }
     (void)st;
+}
+
+/* The poses this endpoint simulated this tick, after its step, under the session tick k its
+   state packets carry: the units of the copies' playback ticks. */
+static void record_owner(endpoint_t *ep, uint32_t k) {
+    ep->ring_any = true;
+    ep->ring_newest = k;
+    for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
+        stand_slot_t *s = &ep->world->slots[slot];
+        if (!s->live || s->desc.motion == BODY_SYNC_MOTION_STATIC) {
+            continue;
+        }
+        body_sync_id_t id = stand_world_id(ep->world, slot);
+        owner_ring_t *r = &ep->rings[slot];
+        if (r->id != id) {
+            memset(r, 0, sizeof(*r));
+            r->id = id;
+        }
+        if (!body_sync_is_local(ep->sync, id)) {
+            continue;
+        }
+        float rot[4];
+        pose_of(ep, slot, r->position[k % RING_TICKS], rot);
+        r->tag[k % RING_TICKS] = k + 1u;
+    }
 }
 
 static void endpoint_tick(body_sync_stand_t *st, endpoint_t *ep) {
@@ -902,6 +958,7 @@ static void endpoint_tick(body_sync_stand_t *st, endpoint_t *ep) {
     }
     character_tick(st, ep);
     stand_world_step(ep->world);
+    record_owner(ep, coop_session_tick(ep->session)); /* the tick its state packets carry */
     impacts(st, ep);
     body_sync_collect(ep->sync, k);
     send_all(st, ep);
@@ -1072,9 +1129,148 @@ static void track_actions(body_sync_stand_t *st) {
 
 static float delta_length(const float a[3], const float b[3]) { return stand_distance3(a, b); }
 
+static bool ring_at(const owner_ring_t *r, int64_t k, float out[3]) {
+    if (k < 0 || r->tag[(uint64_t)k % RING_TICKS] != (uint32_t)k + 1u) {
+        return false;
+    }
+    memcpy(out, r->position[(uint64_t)k % RING_TICKS], sizeof(float) * 3);
+    return true;
+}
+
+/* The owner's position at owner tick `played`, between its two ticks. */
+static bool owner_at(const owner_ring_t *r, double played, float out[3]) {
+    double base = floor(played);
+    float a[3], b[3];
+    if (!ring_at(r, (int64_t)base, a)) {
+        return false;
+    }
+    float f = (float)(played - base);
+    if (f <= 0.0f) {
+        memcpy(out, a, sizeof(a));
+        return true;
+    }
+    if (!ring_at(r, (int64_t)base + 1, b)) {
+        return false;
+    }
+    for (int i = 0; i < 3; i++) {
+        out[i] = a[i] + (b[i] - a[i]) * f;
+    }
+    return true;
+}
+
+static double segment_distance(const float p[3], const float a[3], const float b[3]) {
+    double ab[3], ap[3], dot = 0.0, len = 0.0;
+    for (int i = 0; i < 3; i++) {
+        ab[i] = (double)b[i] - (double)a[i];
+        ap[i] = (double)p[i] - (double)a[i];
+        dot += ab[i] * ap[i];
+        len += ab[i] * ab[i];
+    }
+    double u = len > 0.0 ? dot / len : 0.0;
+    u = u < 0.0 ? 0.0 : u > 1.0 ? 1.0 : u;
+    double d = 0.0;
+    for (int i = 0; i < 3; i++) {
+        double e = ap[i] - ab[i] * u;
+        d += e * e;
+    }
+    return sqrt(d);
+}
+
+/* The distance from `at` to the owner's path over [played - PATH_TICKS, played + PATH_TICKS]. */
+static double path_error(const owner_ring_t *r, double played, const float at[3]) {
+    int64_t mid = (int64_t)floor(played);
+    double best = (double)INFINITY;
+    float prev[3], cur[3];
+    bool have = false;
+    for (int64_t k = mid - PATH_TICKS; k <= mid + PATH_TICKS; k++) {
+        if (!ring_at(r, k, cur)) {
+            have = false;
+            continue;
+        }
+        double d = have ? segment_distance(at, prev, cur) : segment_distance(at, cur, cur);
+        best = d < best ? d : best;
+        memcpy(prev, cur, sizeof(cur));
+        have = true;
+    }
+    return best;
+}
+
+/* The owner's move over owner ticks [from, to]. Across a tick where the owner itself jumped
+   (a grab sets a body in the hands) the interpolated move understates it: the move is then
+   that of the whole ticks around the interval, so a copy that shows the owner's own jump at
+   another fraction of a tick is not counted as one. */
+static double owner_move(const owner_ring_t *r, double from, double to, const float a[3], const float b[3]) {
+    double d = (double)stand_distance3(a, b);
+    int64_t k0 = (int64_t)floor(from), k1 = (int64_t)ceil(to);
+    float first[3], prev[3], cur[3];
+    bool have = false, jumped = false;
+    for (int64_t k = k0; k <= k1; k++) {
+        if (!ring_at(r, k, cur)) {
+            continue;
+        }
+        if (!have) {
+            memcpy(first, cur, sizeof(cur));
+        }
+        jumped = jumped || (have && stand_distance3(prev, cur) > OWNER_JUMP_M);
+        memcpy(prev, cur, sizeof(cur));
+        have = true;
+    }
+    double whole = have ? (double)stand_distance3(first, prev) : 0.0;
+    return jumped && whole > d ? whole : d;
+}
+
+/* Every copy that its owner sends to directly, against that owner's own path. */
+static void sample_playback(body_sync_stand_t *st) {
+    for (uint32_t e = 0; e < st->endpoints; e++) {
+        endpoint_t *ep = &st->ep[e];
+        if (!ep->built || !ep->active) {
+            continue;
+        }
+        for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
+            copy_track_t *t = &ep->tracks[slot];
+            stand_slot_t *s = &ep->world->slots[slot];
+            body_sync_id_t id = stand_world_id(ep->world, slot);
+            body_sync_authority_t a;
+            double played = 0.0;
+            bool counts = s->live && s->desc.motion != BODY_SYNC_MOTION_STATIC && !body_sync_is_local(ep->sync, id) &&
+                          body_sync_authority(ep->sync, id, &a) && a.seat < st->endpoints && (e == 0) != (a.seat == 0) &&
+                          st->ep[a.seat].built && body_sync_playback(ep->sync, id, &played);
+            float drawn[3], rot[4], truth[3];
+            const owner_ring_t *ring = counts ? &st->ep[a.seat].rings[slot] : NULL;
+            if (!counts || ring->id != id || !owner_at(ring, played, truth)) {
+                t->valid = false;
+                continue;
+            }
+            drawn_pose(ep, slot, drawn, rot);
+            float offset[3], turn[4];
+            body_sync_render_offset(ep->sync, id, offset, turn);
+            bool offset_now = offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2] > REST_OFFSET_M * REST_OFFSET_M;
+            uint32_t gi = e == 0 ? (uint32_t)a.seat - 1u : e - 1u;
+            bool moved = t->valid && t->id == id && t->owner == a.seat && played >= t->played;
+            const endpoint_t *owner = &st->ep[a.seat];
+            double behind = owner->ring_any ? (double)owner->ring_newest - played : 0.0;
+            stand_metrics_playback(&st->metrics, gi, (double)stand_distance3(drawn, truth), path_error(ring, played, drawn), behind, moved,
+                                   moved ? (double)stand_distance3(drawn, t->drawn) : 0.0, moved ? owner_move(ring, t->played, played, t->owner_at, truth) : 0.0,
+                                   moved && (offset_now || t->offset));
+            *t = (copy_track_t){.id = id, .valid = true, .owner = a.seat, .offset = offset_now, .played = played};
+            memcpy(t->drawn, drawn, sizeof(drawn));
+            memcpy(t->owner_at, truth, sizeof(truth));
+        }
+    }
+}
+
 static void sample(body_sync_stand_t *st) {
     stand_metrics_begin_tick(&st->metrics);
     endpoint_t *host = &st->ep[0];
+    if (!st->started) {
+        st->started = true;
+        for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
+            float rot[4];
+            if (host->world->slots[slot].live) {
+                pose_of(host, slot, st->start_position[slot], rot);
+            }
+        }
+    }
     /* The host's own motion this tick, so a frozen copy can be told from a body at rest. */
     for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
         stand_slot_t *s = &host->world->slots[slot];
@@ -1135,6 +1331,7 @@ static void sample(body_sync_stand_t *st) {
             ep->hist_n[slot] = ep->hist_n[slot] >= 2 ? 2 : (uint8_t)(ep->hist_n[slot] + 1);
         }
     }
+    sample_playback(st);
     stand_metrics_end_tick(&st->metrics);
 
     for (uint32_t g = 1; g < st->endpoints; g++) {
@@ -1169,8 +1366,8 @@ static void sample(body_sync_stand_t *st) {
         }
         for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
             stand_slot_t *s = &ep->world->slots[slot];
-            /* The rules never knock a character, and a character's flag bits are its owner's to
-               set (they carry its activity), so they say nothing about a knockdown. */
+            /* The rules never knock a character, and a character's flag bits are its owner's
+               game state, so they say nothing about a knockdown. */
             if (!s->live || s->character) {
                 continue;
             }
@@ -1211,8 +1408,21 @@ static bool world_at_rest(const stand_world_t *w) {
     return true;
 }
 
-/* Every player idle and every endpoint's world still: a guest still simulating its own throw
-   is not rest, though the host's copy of it may stand frozen. */
+/* A copy whose render offset still slides it is still moving on screen. */
+static bool drawn_at_rest(const endpoint_t *ep) {
+    for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
+        const stand_slot_t *s = &ep->world->slots[slot];
+        float offset[3], turn[4];
+        if (s->live && s->desc.motion != BODY_SYNC_MOTION_STATIC && body_sync_render_offset(ep->sync, stand_world_id(ep->world, slot), offset, turn) &&
+            offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2] > REST_OFFSET_M * REST_OFFSET_M) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Every player idle and every endpoint's world still, drawn poses included: a guest still
+   simulating its own throw is not rest, though the host's copy of it may stand frozen. */
 static bool all_at_rest(const body_sync_stand_t *st) {
     for (uint32_t p = 0; p < BODY_SYNC_PLAYERS_MAX; p++) {
         if (stand_schedule_active(&st->schedule, (uint8_t)p) >= 0) {
@@ -1220,11 +1430,16 @@ static bool all_at_rest(const body_sync_stand_t *st) {
         }
     }
     for (uint32_t e = 0; e < st->endpoints; e++) {
-        if (st->ep[e].built && st->ep[e].active && !world_at_rest(st->ep[e].world)) {
+        if (st->ep[e].built && st->ep[e].active && (!world_at_rest(st->ep[e].world) || !drawn_at_rest(&st->ep[e]))) {
             return false;
         }
     }
     return true;
+}
+
+/* Ticks an endpoint has run once the stand has run `stand_ticks`: its own rate, on virtual time. */
+static uint32_t due(const endpoint_t *ep, uint32_t stand_ticks) {
+    return ep->rate_mhz == 0 ? stand_ticks : (uint32_t)(((uint64_t)stand_ticks * ep->rate_mhz) / (BODY_SYNC_TICK_HZ * 1000ull));
 }
 
 static bool items_over(const body_sync_stand_t *st) {
@@ -1233,7 +1448,7 @@ static bool items_over(const body_sync_stand_t *st) {
     }
     for (uint32_t e = 0; e < st->endpoints; e++) {
         const endpoint_t *ep = &st->ep[e];
-        if (st->now < ep->stall_until || st->now < ep->deaf_until || st->cut_until[e] != 0 || (ep->active && ep->ticks_run < st->now)) {
+        if (st->now < ep->stall_until || st->now < ep->deaf_until || st->cut_until[e] != 0 || (ep->active && ep->ticks_run < due(ep, st->now))) {
             return false;
         }
     }
@@ -1266,7 +1481,7 @@ bool body_sync_stand_tick(body_sync_stand_t *st) {
         if (!ep->active || t < ep->stall_until) {
             continue;
         }
-        for (uint32_t n = 0; n < CATCH_UP_MAX && ep->active && ep->ticks_run <= t; n++) {
+        for (uint32_t n = 0; n < CATCH_UP_MAX && ep->active && ep->ticks_run < due(ep, t + 1u); n++) {
             endpoint_tick(st, ep);
         }
     }
@@ -1641,6 +1856,21 @@ static void evaluate(body_sync_stand_t *st) {
             snprintf(c->detail, sizeof(c->detail), "%s%s%s", x->metric, why[0] ? ": " : "", why);
             break;
         }
+        case BODY_SYNC_EXPECT_MOVED: {
+            body_sync_id_t id = body_id_by_name(st, host, x->body);
+            stand_slot_t *s = id != BODY_SYNC_ID_NONE ? stand_world_slot(host->world, id) : NULL;
+            float at[3], rot[4];
+            double d = -1.0;
+            if (s) {
+                pose_of(host, body_sync_id_slot(id), at, rot);
+                d = (double)stand_distance3(at, st->start_position[body_sync_id_slot(id)]);
+            }
+            c->value = d;
+            c->limit = x->limit;
+            c->passed = d >= 0.0 && (x->at_least ? d >= x->limit : d <= x->limit);
+            snprintf(c->detail, sizeof(c->detail), "%s moved %.3g m on the host, expected %s %.3g m", x->body, d, x->at_least ? ">=" : "<=", x->limit);
+            break;
+        }
         case BODY_SYNC_EXPECT_LEFT: {
             bool gone = st->left[x->endpoint];
             c->passed = gone;
@@ -1691,6 +1921,15 @@ static bool check_scenario(const body_sync_stand_t *st, body_sync_error_t *error
             return false;
         }
     }
+    for (uint32_t i = 0; i < s->expect_count; i++) {
+        const body_sync_expect_t *x = &s->expects[i];
+        if (x->kind == BODY_SYNC_EXPECT_MOVED && body_sync_scene_find_body(&st->scene, x->body) == UINT32_MAX) {
+            char text[BODY_SYNC_ERROR_TEXT_MAX];
+            snprintf(text, sizeof(text), "the scene has no body '%s'", x->body);
+            error_text(error, x->line, text);
+            return false;
+        }
+    }
     return true;
 }
 
@@ -1705,6 +1944,7 @@ void body_sync_stand_destroy(body_sync_stand_t *st) {
             net_link_destroy(ep->link);
         }
         body_sync_destroy(ep->sync);
+        free(ep->rings);
         if (ep->world) {
             stand_world_destroy(ep->world);
             free(ep->world);
@@ -1758,8 +1998,10 @@ body_sync_stand_t *body_sync_stand_create(const body_sync_stand_config_t *config
     for (uint32_t i = 0; i < st->endpoints; i++) {
         endpoint_t *ep = &st->ep[i];
         ep->index = (uint8_t)i;
+        ep->rate_mhz = st->scenario.rate_mhz[i];
         ep->world = calloc(1, sizeof(*ep->world));
-        if (!ep->world || !stand_world_build(ep->world, &st->scene, st->endpoints, error)) {
+        ep->rings = calloc(STAND_BODIES_MAX, sizeof(*ep->rings));
+        if (!ep->world || !ep->rings || !stand_world_build(ep->world, &st->scene, st->endpoints, error)) {
             if (error && !error->text[0]) {
                 error_text(error, 0, "out of memory");
             }
@@ -1771,7 +2013,8 @@ body_sync_stand_t *body_sync_stand_create(const body_sync_stand_config_t *config
                                  .seats = st->endpoints,
                                  .tick_hz = BODY_SYNC_TICK_HZ,
                                  .max_speed = st->limits.max_speed,
-                                 .max_spin = st->limits.max_spin};
+                                 .max_spin = st->limits.max_spin,
+                                 .character_category = STAND_CAT_CHARACTER};
         memcpy(sc.bounds_min, st->limits.bounds_min, sizeof(sc.bounds_min));
         memcpy(sc.bounds_max, st->limits.bounds_max, sizeof(sc.bounds_max));
         ep->sync = body_sync_create(&sc);
@@ -1907,7 +2150,8 @@ bool body_sync_stand_body(const body_sync_stand_t *st, uint32_t endpoint, uint32
     }
     if (s->character) {
         /* Before its owner's first record a copy has no activity yet: it stands. */
-        uint32_t activity = (body_sync_flags(ep->sync, id) & ACTIVITY_MASK) >> ACTIVITY_SHIFT;
+        uint8_t activity = 0;
+        body_sync_data(ep->sync, id, &activity, 1);
         out->activity = activity >= BODY_SYNC_ACTIVITY_IDLE && activity <= BODY_SYNC_ACTIVITY_PUNCH ? (body_sync_activity_t)activity
                                                                                                     : BODY_SYNC_ACTIVITY_IDLE;
     }

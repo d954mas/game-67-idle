@@ -42,7 +42,7 @@ one process or in two.
 | `features/body_sync/body_sync.h` | The seam: `create` with the box and speeds a peer's numbers must stay in, seats joined and left, `bind`/`unbind` an id to a `b3BodyId` with its starting authority and number, authority (`claim`, `release`, `poll_claim`, `answer`, `assign`, `set_holder`, `set_flags`), the tick (`set_peer_tick`, `receive_state`, `receive_record`, `apply`, `collect`, `write_state`, `state_sent`, `unresolved`/`resolve`, `peek_record`/`pop_record`), `render_offset`, `traffic` by kind. Includes Box3D. |
 | `features/body_sync/body_sync_scene.h` | Scenes as C data: body descriptors (shape, size, mass or density, friction, restitution, linear and angular damping, pose, motion, role, flags, model tag, routes, breakable templates), player spawns, the character's tuning, `validate`, the 8-scene catalog and lookup in it or in a caller's table. |
 | `features/body_sync/body_sync_scenario.h` | The scenario grammar (top comment), the parsed struct, `parse` and `load`, which refuse with a line and a reason. |
-| `features/body_sync/body_sync_metrics.h` | Metric definitions and names, the report structs, schema `body_sync.metrics.v1`. |
+| `features/body_sync/body_sync_metrics.h` | Metric definitions and names, the report structs, schema `body_sync.metrics.v2`. |
 | `features/body_sync/body_sync_stand.h` | `create`, `tick`, `run`, `report`, world hashes, the view a drawer walks (`body_count`, `body`: shape, size, drawn pose, model tag, flags, a character's activity), JSON, `print_report` (the command line's text report), the host rules, the checks and `body_sync_stand_main`. |
 
 What a caller of the seam relies on:
@@ -96,7 +96,7 @@ left carried falls where it is.
 
 ## The real seam
 
-Four parts decide; the Box3D shell (`src/body_sync_real.c`) only reads bodies,
+Five parts decide; the Box3D shell (`src/body_sync_real.c`) only reads bodies,
 calls them and moves bodies as they say. None of the parts includes Box3D
 (`body_sync_types.h` holds the seam's plain types), so their tests run alone.
 
@@ -106,11 +106,12 @@ calls them and moves bodies as they say. None of the parts includes Box3D
   the packet number, tick and acknowledgements, so the seam adds no header.
 - **Sender** (`sync_sender`): per seat, priorities, the budget, what was sent
   and acknowledged.
-- **Receiver** (`sync_receiver`): naive: the newest record per body, newest
-  wins per sender tick; a copy is driven to its pose, placed when far
-  (2 m), new or at rest, held still without news. A copy record has no
-  velocities: a body taken over from a copy continues with a velocity
-  estimated from its last two poses.
+- **Receiver** (`sync_receiver`): the newest record per body, newest wins per
+  sender tick: what a take-over continues from and what the host relays. A
+  copy record has no velocities: a body taken over from a copy continues with
+  a velocity estimated from its last two poses.
+- **Playback** (`sync_playback`): where each copy is drawn and how it is held;
+  see "Playback" below.
 - **Authority** (`sync_authority`): claims, answers, releases, forced moves,
   the reliable records, shared with the stub; also where each body's state
   goes and in which record kind, when a settled hold ends, what a holder
@@ -123,18 +124,21 @@ One record, bits:
 
 | Part | Fields | Range and precision |
 |---|---|---|
-| head | slot 10, generation 4, sim 1, rest 1, rare 1 | slot below 1024 |
+| head | slot 10, generation 4, sim 1, rest 1, rare 1, relayed 1 | slot below 1024 |
+| origin (relayed only) | owner seat 2, age 6 | host ticks since the host took the owner's state, 0..63 |
 | copy pose | position x y z, rotation | 1/512 m over the limits' box; smallest three at 9 bits |
 | sim pose | position x y z, rotation | 1/4096 m over the box; smallest three at 15 bits |
 | motion (sim, not at rest) | velocity, spin | 1/32 m/s in ±max_speed; 1/16 rad/s in ±max_spin |
-| rare (when its bit is set) | 4-bit group mask, then the groups present | |
+| rare (when its bit is set) | 5-bit group mask, then the groups present | |
 | - motion | kinematic 1, locks 6 | |
 | - flags | the caller's 4 bits | |
 | - authority | seat 2, number 16, hold 1 | |
 | - holder | present 1, slot 10, generation 4 | |
+| - data | size 4, then that many bytes | 0..8 bytes, the caller's |
 
-On the stand's limits (box 80 x 65 x 80 m, 100 m/s, 200 rad/s) a copy is 95
-bits, a moving sim record 200, a rest record 122, every rare group 49 more.
+On the stand's limits (box 80 x 65 x 80 m, 100 m/s, 200 rad/s) a copy is 96
+bits, a moving sim record 201, a rest record 123, a relayed record 8 more,
+every rare group 50 more and the data group 4 plus 8 a byte.
 The generation goes as its low **4 bits**: a stale record whose generation
 matches modulo 16 reads as current; records are newest-wins per sender, so
 only a pose sent before a respawn and read after it could pass. The grids hold while every coordinate of the box is below 2048 m in
@@ -199,7 +203,8 @@ with more characters a seat sets a budget with room for them) and one more:
 the staleness bound
 needs room for at least one record after the characters, and that minimum
 gives it. A guest's bodies reach the other guests one tick after the host took
-them. One real seam takes about 1.25 MB and a stub about 400 KB, fixed at create. The capacity a caller passes is what the transport carries
+them, stamped with their age. One real seam takes about 2.7 MB (1.4 MB of it the
+playback buffer) and a stub about 400 KB, fixed at create. The capacity a caller passes is what the transport carries
 after its own prefix: `coop_session_state_max`, which is the link's
 `max_unreliable` minus the session's header. The seam's reliable records go
 on their own lane and are not in the budget; on the stand's heaviest scenes a
@@ -214,6 +219,110 @@ the only carried body here is the guest's own, which the host does not send back
 / 117; 245 KB/s in 4 packets a tick against 10.6 KB/s in one, divergence p95
 0.0096 m against 0.0126 m.
 
+## Playback
+
+A copy is drawn at a playback time behind its owner, from a buffer of what the
+owner sent, so a late or reordered packet within the delay changes nothing
+drawn, and a lost one costs at most a chord across its gap (a lost snapshot at
+a sudden change of motion starts that change a tick early); a cut, a hitch or a
+starved body shows as a catch-up the render offset or a dynamic hold smooths
+(`src/sync_playback.h` holds every rule and constant).
+
+- **Timelines.** One per owner seat: on a guest the host's bodies play on the
+  host's, another guest's (relayed) on that guest's, so a character, what it
+  carries and what it threw move together. A relayed record carries its owner
+  seat and an age; its sample tick is the packet's tick less the age, the tick
+  at which the owner's state lay on the host's clock line for that owner, so
+  the first leg's jitter does not reach the second. A state older than 63 host
+  ticks is not relayed. Only the host relays: a relayed record from a guest, or
+  one naming the host or the receiving seat, is FORMAT.
+- **What feeds the clock.** Only records the seam takes (a stale, rejected or
+  unknown body's record moves no timeline), and on a guest the host's records of
+  a body it still simulates, which are buffered for when it is a copy again: a
+  claimant refused plays the owner's states from before and during its claim,
+  while a body whose take was confirmed drops the snapshots from before it (it
+  simulated on since) and stays where it is until the owner's next state.
+- **The far rule.** From a timeline's first sample on, a sample further ahead of
+  the clock line than 75 ticks (`delay_max` 15 plus the jump's 60) disagrees with
+  it. Alone it is dropped and counted (`rejected`): a forged or corrupt tick would
+  otherwise move every copy of that owner. Eight consecutive far samples that
+  agree with each other (within `delay_max`) restart the clock on them: an
+  owner's time that really moved (a latency drop, a skipped tick, the end of a
+  silence) is followed within 133 ms, and the copies catch up by a jump the
+  render offset absorbs (`latency_drop`: 1.5 s of delay dropping to 50 ms).
+  Time is counted from each timeline's base with
+  wrap-aware differences, so the owner's 32-bit tick may wrap.
+- **The clock.** Over the last 64 new samples of a timeline: the rate (the
+  least-squares slope of sample ticks over local ticks, in [0.5, 2], 1 until
+  32 local ticks of samples), the sender's "now" on the line of the fastest
+  arrivals, and the jitter as the 95th percentile of the lag behind it. The
+  delay is ceil(jitter) + 1 ticks within [`delay_min`, `delay_max`] (4 and 15
+  by default, 1..60 in the config). Each tick playback moves by rate x pace,
+  pace = 1 + (target - playback - rate) / 20 in [0.9, 1.25], and never passes
+  the newest sample: it waits there, it never extrapolates. A duplicate sample
+  changes nothing, not even the jitter; a reordered one counts for the jitter.
+- **Before the delay is known.** From a timeline's first sample until 16 have
+  arrived the delay is `delay_max`: playback starts at newest - 15 and the
+  copy holds its first snapshot's pose until playback reaches it. A seat that
+  rejoins starts a new timeline the same way, its old snapshots forgotten (a
+  seat that leaves keeps them; its clock starts over).
+- **Bounds.** Playback never decreases, never passes the newest sample, and
+  grows at most rate x 1.25 a tick, except at a jump: more than 60 ticks behind
+  its target it jumps to the target (a cut, a long hitch) and says so. A body
+  whose newest snapshot is 8 ticks behind playback freezes there until its next
+  snapshot comes, then plays on.
+- **The buffer.** 16 snapshots a body. Position by cubic Hermite between two sim
+  snapshots (their velocities as tangents), linearly otherwise; rotation by
+  normalized lerp on the shorter arc; a Hermite point stays inside the box of
+  its two snapshots, so a fast body that stopped dead between them (a wall) is
+  never drawn past where it stopped. A rest snapshot gives its pose to the bit.
+  A full buffer drops the oldest once the next one is played, else thins its
+  densest stretch, so a long delay plays coarser, never shorter. Rare groups
+  (flags, motion, authority, holder, data) take effect at their snapshot's time
+  and stay; a late record keeps only groups newer than those played.
+- **Two ways a copy is held.** On a guest, and the host's own bodies anywhere:
+  kinematic, driven to the playback pose. On the host, a guest's body that its
+  owner simulates dynamically (its character, what it carries or threw): dynamic,
+  its velocity the owner's plus the error closed over 3 ticks, at most 5 m/s and
+  10 rad/s, so it pushes what the guest's body would push and is held by what
+  would hold it; an error past 2 m is a placement. It keeps its owner's locks as
+  they change (a character cannot tip over); the part of its owner's rotation
+  about its locked axes is set once it is off by half a degree (a spin cannot
+  turn them), and the free axes follow the spin. It is kinematic while its owner made the body
+  kinematic. The correction on top of the owner's velocity lets it run about
+  20 % faster than its owner while it closes an error (2.43 against 2.0 m/s
+  measured); the pushes it gives match a local character's (a light box pushed
+  to 4.61 m against 4.54 m, a heavy one stopping the character at 0.70 m
+  against 0.69 m). A body local again continues from the newest state received;
+  one already local keeps its own velocities.
+- **The speed cap.** A copy is never driven faster than `max_speed` or turned
+  faster than `max_spin`: a pose it cannot reach in one step (a teleport, a
+  jump of the timeline, a starved body whose next snapshot is many ticks ahead)
+  is a placement, and the render offset takes the move.
+- **The render offset.** The drawn pose is physics plus the offset
+  (`body_sync_render_offset`); physics never sees it. A placement, a take-over
+  and a local body turning back into a copy hand it the jump so the drawn pose
+  stays; a body that turned local keeps it until it has decayed. It gives the move back
+  at 0.95 a tick up to 25 cm and 0.85 from 1 m, by distance between; past 2 m
+  it is cleared and the body is seen to jump.
+- **Data and characters.** `body_sync_set_data` gives a local body up to 8
+  opaque bytes (the stand's character activity), sent as the fifth rare group
+  until acknowledged; `body_sync_data` reads them, on a copy as of its playback
+  time; the handover records (grant, forced move, release) carry them as they
+  carry flags. With `character_category` set, a LIGHT copy's shapes stop
+  colliding with that category (this endpoint's own characters): the seam takes
+  those bits off each shape once and puts back exactly the bits it took, by
+  shape id, when the body is local again, unbound or the seam destroyed; the
+  caller may change the rest of a copy's filters and add shapes meanwhile.
+  Bind refuses a body of more than 4 shapes then. `body_sync_playback` reports the owner tick a copy shows,
+  for measurement.
+
+The stand's host rule grants a guest's grab within the reach plus 1 m of slack
+(`STAND_CLAIM_SLACK_M`): the host sees the claimant's character one way plus the
+playback delay late, and 1 m covers 280 ms at walking speed. A game's own rule
+should judge the reach at the claimant's tick instead (from the claim, or the
+claimant's state at that tick), not on the host's late copy.
+
 ## Running the stand
 
 The feature consumer builds the stand on each implementation, and its tests;
@@ -226,7 +335,7 @@ ai_studio/feature_testing/consumer/build/feature-verify/_body_sync/body_sync_sta
 ```
 
 `body_sync_stand` runs the real seam, `body_sync_stand_stub` the stub; the
-metrics name which (`implementation`: "real 0.5.0" or "stub 0.5.0"), so one
+metrics name which (`implementation`: "real 0.6.0" or "stub 0.6.0"), so one
 scenario and seed compare the two. A game's own stand target links
 `body_sync_stand` (the real seam) or `body_sync_stand_stub`.
 
@@ -254,6 +363,7 @@ scene <name>                         # required: a catalog scene or a caller's
 seed <n>                             # default 1
 guests <0..3>                        # default 1; player p belongs to endpoint p, p0 to the host
 settle <time> | end <time>           # default settle 5s
+rate <host|gN> <x>hz                 # that endpoint steps x times a second of virtual time; its seam keeps 60
 
 [at <time>] <p0..p3> walk <x> <z> [speed <v>] | walk <body> [as <label>]
 [at <time>] <player> grab <body> | throw <x> <y> <z> [speed <v>] | throw <body> | drop | punch [<body>] | wait <time>
@@ -265,6 +375,7 @@ at <time> deaf <host|gN> for <time>  # steps and sends, reads nothing
 expect agree_at_rest <length> [<angle>] | no_stuck | effects_once | left <guest>
 expect result <label> <done|granted|refused|hit|missed|rejected|failed>
 expect one_of <outcome> <label> <label> ...
+expect moved <body> <=|>= <length>  # the body's travel on the host, first tick to last
 expect <metric> <= <value>
 ```
 
@@ -387,8 +498,33 @@ passed, value, limit and the first offender.
 **Divergence includes the copy's latency.** It compares what a guest draws
 with the host's physics at the same tick, so a moving body diverges by its
 speed times the path's delay however good the sync is; read it as what the
-player sees, not as an error of the sync. A lag-aligned divergence comes with
-the receiver's playback buffer. The definitions are in `body_sync_metrics.h`.
+player sees, not as an error of the sync. The definitions are in
+`body_sync_metrics.h`.
+
+**Same-tick divergence grows with the playback delay, by design.** A copy now
+plays 4 to 15 ticks behind its newest snapshot, so a body moving at v diverges
+by v times that delay more than under the old receiver: on `two_walk` (walking
+at up to 3.6 m/s, 100 ms) the p95 went from 0.24 m on the stub to 0.58 m on the
+real seam, 0.34 m, which is 3.6 m/s over 5 or 6 ticks. It is not a regression:
+the playback measures take the delay out. Per guest, for each copy its owner
+sends to directly, at the owner tick P the copy shows (`body_sync_playback`):
+`lag_divergence` (max, p95: the copy against the owner's own position at P),
+`path_error` (max, p95: the distance to the owner's path over [P - 30, P + 30],
+a cut corner free of any time shift), `step.count` (ticks where the drawn move
+exceeds 1.25 times the owner's move over the same playback interval plus
+1 cm, counted in body-ticks; those while the copy's render offset gives a
+move back are `offset_step.count`, a slide by design), `jump.max` (the drawn
+move less the owner's, largest), `snap.count` (drawn moves past 2 m, the
+offset's reach, not counted as jumps) and `behind_ticks` (max, p95: how many
+owner ticks a copy plays behind its owner's newest; a frozen or late clock shows
+here). A check of a playback metric on a guest with no copy measured fails: no
+sample is no evidence. Each scenario says which of its bounds are derived and
+from what, and which were measured. Most of `step.count` on the real seam is a
+dynamic hold on the host closing its error at its correction speed (after a cut
+in `cut_short`, at a walk's start in `two_walk`). On the stub
+P is its newest received tick, so those read near zero there: its stutter is
+in time and shows in `jerk`. A guest's body relayed to another guest plays on
+a clock the stand cannot map back and is left out of them.
 
 A guest whose session ended fails `agree_at_rest`, `no_stuck` and
 `effects_once` with "gN left at tick T" unless the scenario says `expect left
@@ -398,14 +534,20 @@ Network situations covered by the shipped scenarios: a same-tick grab dispute
 (`grab_dispute`), a throw with the thrower's path cut in flight
 (`edge_throw_cut`), a 200 ms frame on a guest and on the host (`edge_stall`),
 four throws into one heap from three guests at 50, 100 and 200 ms
-(`load_four`), a guest that stops reading for 3 s (`edge_deaf`), and hostile
+(`load_four`), a guest that stops reading for 3 s (`edge_deaf`), a throw at a
+wall played from snapshots (`bounce_wall`), a guest's character pushing a brick
+and pressing a cabinet (`char_push`, real seam; the stub's kinematic copy
+shoving the cabinet is its must-fail contrast), cuts of 0.5 s and 3 s
+(`cut_short`, `cut_long`), a 1.5 s delay dropping to 50 ms (`latency_drop`), 200 ms hitches on a guest and on the host
+(`hitch_guest`, `hitch_host`), a guest stepping at 59.5 Hz and at 50 Hz
+(`rate_mismatch`, `rate_rough`), two guests at 30 and 250 ms (`two_ping`), and hostile
 bytes on every parser (seeded fuzz in the tests). Not yet covered: a grab of
 a body flying under another guest's authority, a revoke in flight with late
 packets, a removal under a guest's authority, a sleeping body moved by the
 host, a reused slot meeting an old packet, more moving bodies than a budget
 allows, a record over the unfragmented limit, a reader that stalls for 10 s,
-reconnects, joins and the host leaving (the seam has no baseline yet), a
-tick-rate mismatch, the 16-bit packet number wrapping, a guest pushing a stack
+reconnects, joins and the host leaving (the seam has no baseline yet), the
+16-bit packet number wrapping, a guest pushing a stack
 or standing on a host's body, a hit on a target that already moved on the
 host, and a host whose window is minimised.
 
@@ -414,8 +556,15 @@ host, and a host whose window is minimised.
 `test_body_sync_codec` (core) round-trips every record kind and rare mask
 within half a step, keeps every value readable through the writer's limit,
 never splits a record, refuses truncations, padding, out-of-range codes,
-seats and speeds, an empty rare mask and too many records, and fuzzes the
-reader. `test_body_sync_sender` (core) runs the sender against a lossy pure-C
+seats and speeds, an empty rare mask, a relayed record's seat out of range, a
+data group past 8 bytes and too many records, and fuzzes the reader.
+`test_body_sync_playback` (core) runs the playback receiver alone: playback
+time monotone, never past the newest sample and within its pace over loss,
+duplicates, reordering and a 30-tick gap; a duplicate is no jitter; the delay
+before the clock knows and after a rejoin; freeze and a single jump; Hermite
+against linear, the shorter arc, the exact rest pose; rare groups on time, late
+ones and a thinned buffer; the drive limits; the render offset; the rate of a
+59.5 Hz endpoint and the line a relay ages by. `test_body_sync_sender` (core) runs the sender against a lossy pure-C
 peer: no moving body starves when the budget overflows; a slow body goes out
 by the age limit; a rest pose arrives at 10 % loss and then goes quiet; a
 packet never exceeds the capacity up to the link's limit; ten seconds of
@@ -426,7 +575,9 @@ nothing; a rest on the acknowledged pose is not resent; the receiver.
 agree and go quiet, a guest's body comes back moving, an old grant's pose is
 rejected, flags, type, holder and locks move with authority, both receive
 calls are fuzzed through apply, a step and collect with Box3D's asserts
-counted, and limits too wide refuse create. Every scenario, must-fail case and
+counted, limits too wide refuse create, a take-over keeps the drawn pose while
+physics continues from the newest state, a copy is never driven past
+`max_speed`, and a relayed state carries its age and stops past 63 ticks. Every scenario, must-fail case and
 the two-process run is a test on each implementation (`test_body_sync_stub_*`
 for the stub). `test_body_sync_logic` (core) parses every shipped scenario, refuses a corpus
 of broken lines with their line numbers, fuzzes the parser (truncations, bit
@@ -440,8 +591,9 @@ over bytes: driven copies, stale ticks, claims and answers, a release that
 crosses a grant, withdrawn claims, every claim polled, forced moves that keep
 the velocity, poses of an old grant rejected, flags, motion type and holder
 moving with authority, settled holds ending at a contact and at rest, queues
-that never drop, and fuzz of both receive calls through apply, a step and
-collect with Box3D's own asserts counted. `test_body_sync_stand` (core) builds
+that never drop, opaque data both ways, a LIGHT copy its own character walks
+through with its mask restored exactly at the take, and fuzz of both receive
+calls through apply, a step and collect with Box3D's own asserts counted. `test_body_sync_stand` (core) builds
 every catalog scene on four endpoints with equal world hashes, walks the view,
 and runs `two_walk` twice in one process for byte-equal JSON.
 `test_body_sync_checks` (core) plants a defect after a clean run (a body only
@@ -450,7 +602,8 @@ body under a seat that left, a knock applied twice, a broken body back, a
 spawn missing, a break that lost its spawns) and requires the check to fail,
 and checks that the world hash sees what it names.
 `test_body_sync_two_processes` (core) runs `two_walk` in two processes and
-compares the files. `test_body_sync_mf_*` (core) are scenarios that must end
+compares the files; `test_body_sync_two_processes_<name>` (slow) does the same
+for the playback's edge scenarios, on both implementations. `test_body_sync_mf_*` (core) are scenarios that must end
 with exit 1 on a named check, or 2 for refused input.
 `test_body_sync_free_step` (slow) steps two worlds of every scene, all bodies
 awake, for 180 ticks and requires equal hashes every tick: Box3D stays
@@ -476,7 +629,11 @@ config, the bind's number, claim sequences with `body_sync_answer`, and
 `body_sync_assign` with a hold; 0.3.0 changed what the seam promises (writes
 clamped to the limits, no inherited holder, stale releases); 0.4.0 added a
 body's damping, a character's facing and activity, motion locks that travel
-with the state, the report printer and the viewer's drawer hook. A MAJOR changes a call, a struct layout, the
+with the state, the report printer and the viewer's drawer hook; 0.6.0 the
+playback receiver: opaque data, `character_category`, `delay_min` and
+`delay_max`, `body_sync_playback`, the relayed origin on the wire, the scenario
+words `rate` and `expect moved`, the playback metrics and schema
+`body_sync.metrics.v2`. A MAJOR changes a call, a struct layout, the
 meaning of a result, a scenario statement or the metrics schema name.
 The real seam and the stub keep one contract and differ in
 `body_sync_implementation()`; neither one's wire format is a compatibility

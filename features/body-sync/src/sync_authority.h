@@ -55,6 +55,13 @@ typedef struct sync_authority_body {
     bool applied_kinematic;
     uint8_t applied_locks;
     uint8_t flags_mine; /* the flag bits set_flags changed since this endpoint became local */
+    /* The opaque bytes: a local body's, and the newest received; a new owner keeps its own
+       once it set them since its claim, as with flags. */
+    uint8_t data_size;
+    uint8_t data[STUB_DATA_MAX];
+    uint8_t in_data_size;
+    uint8_t in_data[STUB_DATA_MAX];
+    bool data_mine;
     bool kinematic_mine; /* the owner changed the motion type since the last resume */
     bool locks_mine;     /* the owner changed the locks since the last resume */
 } sync_authority_body_t;
@@ -118,9 +125,14 @@ body_sync_result_t sync_authority_assign(sync_authority_t *a, body_sync_id_t id,
 body_sync_result_t sync_authority_set_holder(sync_authority_t *a, body_sync_id_t id, body_sync_id_t holder);
 body_sync_result_t sync_authority_set_flags(sync_authority_t *a, body_sync_id_t id, uint8_t flags);
 uint8_t sync_authority_flags(const sync_authority_t *a, body_sync_id_t id);
+body_sync_result_t sync_authority_set_data(sync_authority_t *a, body_sync_id_t id, const void *data, uint32_t size);
+/* A local body's bytes, or a copy's newest received. */
+uint32_t sync_authority_data(const sync_authority_t *a, body_sync_id_t id, void *out, uint32_t capacity);
 
 /* The shell stored a newer state of the body: what a take inherits from it. */
 void sync_authority_received(sync_authority_body_t *b, uint8_t hold, body_sync_id_t holder, uint8_t flags);
+/* The newest data bytes received for a copy. */
+void sync_authority_received_data(sync_authority_body_t *b, uint8_t size, const uint8_t *data);
 /* A copy's motion as received (known false: never received). */
 void sync_authority_received_motion(sync_authority_body_t *b, bool known, bool kinematic, uint8_t locks);
 
@@ -136,6 +148,12 @@ void sync_authority_applied(sync_authority_body_t *b, bool kinematic, uint8_t lo
    to the host; the host sends each joined guest every body that guest does not simulate, a
    guest's own body only when it has a state of it to relay. */
 uint8_t sync_authority_route(const sync_authority_t *a, uint32_t slot, bool have_state);
+/* How a copy is held here: on the host a body a guest simulates stays dynamic with its own
+   mass, its velocity corrected toward the guest's state, so it pushes light bodies and is held
+   by heavy ones; unless the owner holds it kinematic (carried), and everywhere else, a copy is
+   kinematic and driven to its playback pose. */
+bool sync_authority_holds_dynamic(const sync_authority_t *a, const sync_authority_body_t *b, bool owner_kinematic);
+
 /* Whether this side's packets carry moving bodies as sim records: a guest's do, since the host
    may take any of them back at any tick; the host's go to guests as copies. */
 bool sync_authority_sends_sim(const sync_authority_t *a);

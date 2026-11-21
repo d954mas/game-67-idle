@@ -1,0 +1,9 @@
+# A second's cut leaves every copy a second behind its owner: behind_ticks must see it.
+scenario mf_behind
+scene two_chars_item
+guests 1
+settle 4s
+net g1 rtt 60ms
+p0 walk -2 -1
+at 500ms cut g1 for 1s
+expect behind_ticks.max <= 30t

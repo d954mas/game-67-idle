@@ -10,7 +10,7 @@
 extern "C" {
 #endif
 
-/* What a stand run measured, as a struct for tests and as JSON (schema "body_sync.metrics.v1",
+/* What a stand run measured, as a struct for tests and as JSON (schema "body_sync.metrics.v2",
    written by body_sync_stand_write_json). The JSON holds nothing that differs between two runs
    of one scenario with one seed on one build: no clock, no path, no address, so two such runs
    give byte-equal files.
@@ -19,8 +19,29 @@ extern "C" {
    - divergence: for each guest and each body bound in both worlds, the distance between the
      guest's drawn position and the host's physics position at the same tick. It includes the
      copy's latency by design (what that guest sees against the truth), so a moving body shows
-     divergence however good the sync is: it is not the sync's error. A lag-aligned divergence
-     comes with the receiver's playback buffer.
+     divergence however good the sync is: it is not the sync's error, and it grows with the
+     receiver's playback delay by design (a body at speed v shows v times the delay more).
+   - the playback measures, for each copy whose owner sends to it directly (the host's bodies
+     on a guest, a guest's on the host; a guest's body relayed to another guest plays on a
+     clock the stand cannot map back and is left out), at the owner tick P the copy shows
+     (body_sync_playback):
+       lag-aligned divergence  |drawn(t) - owner(P)|, the owner's own position at P: what the
+                               sync gets wrong once its latency is taken out
+       path error              the distance from drawn(t) to the polyline of the owner's
+                               positions over owner ticks [P - 30, P + 30]: a cut corner, free of
+                               any time shift
+       behind                  the owner's newest tick less P, in ticks: how late a copy
+                               plays (a frozen or stuck clock shows here)
+       steps                   body-ticks where the drawn move exceeds 1.25 times the owner's
+                               move over the same playback interval plus 1 cm; those while the
+                               copy's render offset is giving a move back are offset steps,
+                               counted apart (a slide by design)
+       jump                    the drawn move less the owner's move over that interval, largest;
+                               a move past 2 m (the render offset's reach) is a snap, counted
+                               apart and not a jump
+     Each is attributed to the guest on the path: the copy's endpoint, or the owner when the
+     copy is on the host. A check of any of them on a guest with no copy measured fails: no
+     sample is no evidence.
    - jerk: for each copy the guest draws, |d(t) - d(t-1)| where d(t) is the drawn position's
      move over tick t: a sudden change of motion. Bodies at rest on both ticks are skipped.
    - own delay: ticks from a player's action on its own endpoint until the host's world shows
@@ -48,11 +69,13 @@ extern "C" {
      stale_ticks.max [ticks]: the most ticks an awake body went between two state packets
        that carried it, either direction (a budgeted sender's starvation; 0 for the stub)
      deferred.count [records]: records due that a packet's budget left out, both directions
+     lag_divergence.max lag_divergence.p95 path_error.max path_error.p95 jump.max [m]
+     step.count offset_step.count snap.count [body-ticks]   behind_ticks.max behind_ticks.p95 [ticks]
    - flush_over_limit: ticks where one path's state packet and that tick's seam records
      together pass the session's largest state payload: a transport that packs one flush into
      one datagram would split them there. */
 
-#define BODY_SYNC_METRICS_SCHEMA "body_sync.metrics.v1"
+#define BODY_SYNC_METRICS_SCHEMA "body_sync.metrics.v2"
 /* A drawn move that changes by more than this between two ticks counts in jerk.frames_over. */
 #define BODY_SYNC_JERK_OVER_M 0.05f
 
@@ -88,6 +111,12 @@ typedef struct body_sync_guest_metrics {
     double rotation_max_deg;
     double jerk_max_m, jerk_p95_m;
     uint32_t jerk_frames_over;
+    double lag_divergence_max_m, lag_divergence_p95_m;
+    double path_error_max_m, path_error_p95_m;
+    uint32_t step_count, offset_step_count, snap_count;
+    double jump_max_m;
+    double behind_max_ticks, behind_p95_ticks;
+    uint64_t playback_samples; /* copy-ticks the playback measures saw */
     body_sync_bytes_t to_guest; /* the host's sends to this seat */
     body_sync_bytes_t to_host;  /* this seat's sends to the host */
     double rtt_ms, loss;        /* the session's last estimate on the host, negative unknown */

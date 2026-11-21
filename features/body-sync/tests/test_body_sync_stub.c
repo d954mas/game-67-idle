@@ -13,6 +13,7 @@
    bodies. Each case names the behaviour it pins, so a stub that loses it fails here. */
 
 enum { BODIES = 300, SEATS = 3, GUEST = 1, OTHER = 2 };
+#define CAT_CHARACTER (1ull << 5) /* this endpoint's own characters, as the config names them */
 
 typedef struct side {
     b3WorldId world;
@@ -53,7 +54,11 @@ static body_sync_config_t config_for(b3WorldId world, uint8_t seat) {
                                 .bounds_max = {100.0f, 60.0f, 100.0f},
                                 .max_speed = 100.0f,
                                 .max_spin = 200.0f,
-                                .state_budget = CAPACITY};
+                                .state_budget = CAPACITY,
+                                /* The shortest playback delay: the suite delivers every packet in its tick. */
+                                .delay_min = 1,
+                                .delay_max = 1,
+                                .character_category = CAT_CHARACTER};
 }
 
 static void build(side_t *s, uint8_t seat) {
@@ -78,7 +83,12 @@ static void build(side_t *s, uint8_t seat) {
         d.position = (b3Vec3){(float)(i % 20) * 1.0f, 0.2f, (float)(i / 20) * 1.0f};
         s->bodies[i] = b3CreateBody(s->world, &d);
         b3CreateHullShape(s->bodies[i], &shape, &cube.base);
-        body_sync_bind_t bind = {.body = s->bodies[i], .body_class = BODY_SYNC_CLASS_LIGHT, .authority = BODY_SYNC_SEAT_HOST};
+        if (i == 12) { /* two shapes: the masks are kept per shape */
+            b3BoxHull tall = b3MakeBoxHull(0.1f, 0.3f, 0.1f);
+            b3CreateHullShape(s->bodies[i], &shape, &tall.base);
+        }
+        body_sync_bind_t bind = {.body = s->bodies[i], .body_class = i == 11 ? BODY_SYNC_CLASS_HEAVY : BODY_SYNC_CLASS_LIGHT,
+                                 .authority = BODY_SYNC_SEAT_HOST};
         TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(s->sync, body_sync_id_make(i, 1), &bind));
     }
 }
@@ -224,12 +234,19 @@ static void test_copy_is_driven_over_one_step(void) {
     step(&host);
     state(&host, &guest);
     b3Vec3 target = b3Body_GetPosition(host.bodies[0]);
+#ifdef SEAM_REAL
+    /* A playback delay of one tick: the copy shows this pose a tick later. */
+    step(&guest);
+    tick_no++;
+    step(&host);
+    state(&host, &guest);
+#endif
     body_sync_apply(guest.sync, tick_no);
     TEST_ASSERT_TRUE_MESSAGE(speed_of(guest.bodies[0]) > 1.0f, "the copy was snapped, not driven");
     b3World_Step(guest.world, 1.0f / 60.0f, 4);
     b3Vec3 at = b3Body_GetPosition(guest.bodies[0]);
 #ifdef SEAM_REAL
-    const float miss = SYNC_COPY_POSITION_STEP; /* the copy's grid */
+    const float miss = 0.06f; /* the copy's grid, and playback between two ticks: one tick of motion */
 #else
     const float miss = 1e-4f;
 #endif
@@ -1090,6 +1107,11 @@ static void test_a_copy_stops_without_news_and_after_a_jump(void) {
     b3Body_SetLinearVelocity(host.bodies[0], (b3Vec3){0.0f, 0.0f, 0.0f});
     tick_all();
     tick_all(); /* the copy jumps, and steps once from there */
+#ifdef SEAM_REAL
+    for (int i = 0; i < 6; i++) {
+        tick_all(); /* playback delay, and the pace catching up the dark ticks */
+    }
+#endif
     TEST_ASSERT_TRUE_MESSAGE(fabsf(b3Body_GetPosition(guest.bodies[0]).x - 12.0f) < 0.02f, "a placed copy drifted on its old velocity");
 }
 
@@ -1245,6 +1267,148 @@ static void test_a_claimant_keeps_its_own_flag_bits_only(void) {
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, body_sync_flags(guest.sync, ID0), "the claimant's own bit or the host's knock was lost");
 }
 
+static uint64_t mask_of(b3BodyId body) {
+    b3ShapeId shape;
+    TEST_ASSERT_EQUAL_INT(1, b3Body_GetShapes(body, &shape, 1));
+    return b3Shape_GetFilter(shape).maskBits;
+}
+
+/* Opaque data goes out from the owner and reads at the copy; a LIGHT copy stops colliding with
+   this endpoint's own characters, and its mask comes back exactly when it is taken. */
+static void test_data_travels_and_a_light_copy_lets_the_own_character_pass(void) {
+    const body_sync_id_t id = body_sync_id_make(5, 1);
+    b3ShapeId shape;
+    b3Body_GetShapes(guest.bodies[5], &shape, 1);
+    b3Filter own = b3Shape_GetFilter(shape);
+    own.maskBits = 0x00FF00FF000000F0ull | CAT_CHARACTER;
+    b3Shape_SetFilter(shape, own, false);
+    tick_all();
+    TEST_ASSERT_TRUE(mask_of(guest.bodies[5]) == (own.maskBits & ~CAT_CHARACTER));
+    TEST_ASSERT_TRUE(mask_of(host.bodies[5]) == B3_DEFAULT_MASK_BITS); /* local: untouched */
+    const uint8_t bytes[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_data(host.sync, id, bytes, 3));
+    TEST_ASSERT_EQUAL(BODY_SYNC_INVALID, body_sync_set_data(guest.sync, id, bytes, 3));
+    TEST_ASSERT_EQUAL(BODY_SYNC_INVALID, body_sync_set_data(host.sync, id, bytes, BODY_SYNC_DATA_MAX + 1));
+    for (int i = 0; i < 4; i++) {
+        b3Body_SetLinearVelocity(host.bodies[5], (b3Vec3){0.5f, 0.0f, 0.0f});
+        tick_all();
+    }
+    uint8_t got[BODY_SYNC_DATA_MAX] = {0};
+    TEST_ASSERT_EQUAL_UINT32(3, body_sync_data(guest.sync, id, got, sizeof(got)));
+    TEST_ASSERT_EQUAL_MEMORY(bytes, got, 3);
+    TEST_ASSERT_EQUAL_UINT32(2, body_sync_data(guest.sync, id, got, 2));
+    /* The guest's own character walks through the light copy; the host simulates the box. */
+    b3BodyDef d = b3DefaultBodyDef();
+    d.type = b3_dynamicBody;
+    d.gravityScale = 0.0f;
+    b3Vec3 at = b3Body_GetPosition(guest.bodies[5]);
+    d.position = (b3Vec3){at.x - 0.8f, 0.3f, at.z};
+    b3BodyId walker = b3CreateBody(guest.world, &d);
+    b3ShapeDef sd = b3DefaultShapeDef();
+    sd.filter.categoryBits = CAT_CHARACTER;
+    b3BoxHull cube = b3MakeBoxHull(0.2f, 0.2f, 0.2f);
+    b3CreateHullShape(walker, &sd, &cube.base);
+    for (int i = 0; i < 45; i++) {
+        b3Body_SetLinearVelocity(walker, (b3Vec3){2.0f, 0.0f, 0.0f});
+        tick_all();
+    }
+    TEST_ASSERT_TRUE_MESSAGE(b3Body_GetPosition(walker).x > at.x + 0.5f, "the own character was blocked by a light copy");
+    b3DestroyBody(walker);
+    grant(&guest, id, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    TEST_ASSERT_TRUE_MESSAGE(mask_of(guest.bodies[5]) == own.maskBits, "the mask did not come back exactly");
+    TEST_ASSERT_EQUAL_UINT32(3, body_sync_data(guest.sync, id, got, sizeof(got))); /* the owner's bytes carry on */
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_data(guest.sync, id, bytes + 4, 2));
+    for (int i = 0; i < 3; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL_UINT32(2, body_sync_data(host.sync, id, got, sizeof(got)));
+    TEST_ASSERT_EQUAL_UINT8(5, got[0]);
+    double owner_tick = -1.0;
+    TEST_ASSERT_TRUE(body_sync_playback(host.sync, id, &owner_tick) && owner_tick >= 0.0);
+    TEST_ASSERT_TRUE(body_sync_playback(guest.sync, id, &owner_tick) && owner_tick == (double)tick_no);
+}
+
+static uint64_t mask_at(b3BodyId body, int index) {
+    b3ShapeId shapes[4];
+    TEST_ASSERT_TRUE(b3Body_GetShapes(body, shapes, 4) > index);
+    return b3Shape_GetFilter(shapes[index]).maskBits;
+}
+
+/* The seam takes the character bits off a LIGHT copy's shapes, each one, and puts back exactly
+   those bits: what the caller did to the filter meanwhile stays, a shape added meanwhile is
+   the caller's, a HEAVY copy keeps its masks, and unbind and a second copy entry do the same.
+   Shapes are named by id: Box3D lists a new shape first. */
+static uint64_t mask_of_shape(b3ShapeId shape) { return b3Shape_GetFilter(shape).maskBits; }
+
+static void set_shape_mask(b3ShapeId shape, uint64_t mask) {
+    b3Filter f = b3Shape_GetFilter(shape);
+    f.maskBits = mask;
+    b3Shape_SetFilter(shape, f, false);
+}
+
+static void test_mask_bits_are_taken_and_given_back_exactly(void) {
+    const body_sync_id_t two = body_sync_id_make(12, 1), carried = body_sync_id_make(14, 1);
+    b3ShapeId pair[2], held;
+    TEST_ASSERT_EQUAL_INT(2, b3Body_GetShapes(guest.bodies[12], pair, 2));
+    TEST_ASSERT_EQUAL_INT(1, b3Body_GetShapes(guest.bodies[14], &held, 1));
+    set_shape_mask(held, 0); /* the caller's held filter when the copy starts */
+    tick_all();
+    TEST_ASSERT_TRUE(mask_of_shape(pair[0]) == (B3_DEFAULT_MASK_BITS & ~CAT_CHARACTER));
+    TEST_ASSERT_TRUE(mask_of_shape(pair[1]) == (B3_DEFAULT_MASK_BITS & ~CAT_CHARACTER));
+    TEST_ASSERT_TRUE_MESSAGE(mask_at(guest.bodies[11], 0) == B3_DEFAULT_MASK_BITS, "a heavy copy lost its character bit");
+    /* Meanwhile the caller changes other bits, adds a shape and drops its held filter. */
+    set_shape_mask(pair[0], (B3_DEFAULT_MASK_BITS & ~CAT_CHARACTER) & ~1ull);
+    b3ShapeDef sd = b3DefaultShapeDef();
+    sd.filter.maskBits = 0x0Full;
+    b3BoxHull small = b3MakeBoxHull(0.05f, 0.05f, 0.05f);
+    b3ShapeId added = b3CreateHullShape(guest.bodies[12], &sd, &small.base);
+    set_shape_mask(held, B3_DEFAULT_MASK_BITS & ~CAT_CHARACTER);
+    grant(&guest, two, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    grant(&guest, carried, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    TEST_ASSERT_TRUE_MESSAGE(mask_of_shape(pair[0]) == (B3_DEFAULT_MASK_BITS & ~1ull), "the caller's change was overwritten");
+    TEST_ASSERT_TRUE(mask_of_shape(pair[1]) == B3_DEFAULT_MASK_BITS);
+    TEST_ASSERT_TRUE_MESSAGE(mask_of_shape(added) == 0x0Full, "a shape added during the copy was changed");
+    /* It had no character bit when the copy began: the seam took none and gives none back. */
+    TEST_ASSERT_TRUE_MESSAGE(mask_of_shape(held) == (B3_DEFAULT_MASK_BITS & ~CAT_CHARACTER), "an old snapshot of the held filter came back");
+    /* Released, it is a copy again: the bits go again; unbind gives them back. */
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, two));
+    records(&guest, &host);
+    tick_all();
+    tick_all();
+    TEST_ASSERT_TRUE_MESSAGE((mask_of_shape(pair[1]) & CAT_CHARACTER) == 0, "a second copy entry kept the bit");
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(guest.sync, two));
+    TEST_ASSERT_TRUE_MESSAGE(mask_of_shape(pair[1]) == B3_DEFAULT_MASK_BITS, "unbind kept the bit off");
+}
+
+/* With character_category set, a body of more shapes than the seam keeps masks for is refused. */
+static void test_bind_refuses_too_many_shapes(void) {
+    b3BodyDef d = b3DefaultBodyDef();
+    d.type = b3_dynamicBody;
+    d.position = (b3Vec3){-20.0f, 0.5f, -20.0f};
+    b3BodyId many = b3CreateBody(guest.world, &d);
+    b3ShapeDef sd = b3DefaultShapeDef();
+    b3BoxHull cube = b3MakeBoxHull(0.1f, 0.1f, 0.1f);
+    for (int i = 0; i < BODY_SYNC_SHAPES_MAX + 1; i++) {
+        b3CreateHullShape(many, &sd, &cube.base);
+    }
+    body_sync_bind_t bind = {.body = many, .body_class = BODY_SYNC_CLASS_LIGHT, .authority = BODY_SYNC_SEAT_HOST};
+    TEST_ASSERT_EQUAL(BODY_SYNC_INVALID, body_sync_bind(guest.sync, body_sync_id_make(BODIES + 5, 1), &bind));
+}
+
+/* Destroying the seam gives the bits back too. */
+static void test_destroy_gives_the_mask_bits_back(void) {
+    tick_all();
+    TEST_ASSERT_TRUE((mask_at(guest.bodies[20], 0) & CAT_CHARACTER) == 0);
+    body_sync_destroy(guest.sync);
+    uint64_t after = mask_at(guest.bodies[20], 0);
+    body_sync_config_t config = config_for(guest.world, GUEST);
+    guest.sync = body_sync_create(&config); /* tearDown destroys it, whatever the checks find */
+    TEST_ASSERT_NOT_NULL(guest.sync);
+    TEST_ASSERT_TRUE_MESSAGE(after == B3_DEFAULT_MASK_BITS, "destroy kept the character bit off");
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_every_body_reaches_the_guest_within_the_packet_limit);
@@ -1289,5 +1453,9 @@ int main(void) {
     RUN_TEST(test_a_slot_bound_again_starts_over);
     RUN_TEST(test_a_grant_carries_the_hosts_change_of_that_tick);
     RUN_TEST(test_a_claimant_keeps_its_own_flag_bits_only);
+    RUN_TEST(test_data_travels_and_a_light_copy_lets_the_own_character_pass);
+    RUN_TEST(test_mask_bits_are_taken_and_given_back_exactly);
+    RUN_TEST(test_destroy_gives_the_mask_bits_back);
+    RUN_TEST(test_bind_refuses_too_many_shapes);
     return UNITY_END();
 }

@@ -25,6 +25,10 @@ enum {
     /* A guest's claims and releases queued and not yet popped; past it they answer FULL. The
        host's records never fill: what it owes a seat is kept per body and the newest is sent. */
     BODY_SYNC_RECORDS_QUEUED = 256,
+    /* Opaque bytes a caller attaches to a body (body_sync_set_data). */
+    BODY_SYNC_DATA_MAX = 8,
+    /* Shapes per body whose collision mask a copy's class may change (character_category). */
+    BODY_SYNC_SHAPES_MAX = 4,
 };
 
 /* A body's network number: slot in the low 16 bits (below BODY_SYNC_BODIES_MAX), generation in

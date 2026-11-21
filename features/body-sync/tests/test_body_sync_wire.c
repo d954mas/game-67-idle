@@ -200,9 +200,10 @@ static void test_each_field_is_bounded(void) {
 static void test_records_round_trip_and_keep_their_direction(void) {
     const stub_record_t records[] = {
         {.type = STUB_REC_CLAIM, .id = 5u | (1u << 16), .hold = 1, .sequence = 9},
-        {.type = STUB_REC_RELEASE, .id = 6u | (2u << 16), .flags = 9, .motion_known = true, .kinematic = true, .locks = 0x2A},
+        {.type = STUB_REC_RELEASE, .id = 6u | (2u << 16), .flags = 9, .motion_known = true, .kinematic = true, .locks = 0x2A, .data_size = 3,
+         .data = {7, 8, 9}},
         {.type = STUB_REC_ASSIGN, .id = 7u | (3u << 16), .seat = 2, .number = 900, .hold = 1, .sequence = 4, .flags = 5, .motion_known = true,
-         .locks = 0x15},
+         .locks = 0x15, .data_size = 8, .data = {1, 2, 3, 4, 5, 6, 7, 8}},
     };
     uint8_t buffer[STUB_RECORD_BYTES_MAX];
     stub_record_t out;
@@ -223,14 +224,23 @@ static void test_records_round_trip_and_keep_their_direction(void) {
         TEST_ASSERT_EQUAL(records[i].kinematic, out.kinematic);
         TEST_ASSERT_EQUAL_UINT8(records[i].locks, out.locks);
         if (records[i].type != STUB_REC_CLAIM) {
-            /* the body's reserved bits: the top two of the flags byte and of the locks byte */
-            for (uint32_t back = 1; back <= 2; back++) {
+            TEST_ASSERT_EQUAL_UINT8(records[i].data_size, out.data_size);
+            TEST_ASSERT_EQUAL_MEMORY(records[i].data, out.data, STUB_DATA_MAX);
+            /* The body's eleven bytes end the record: flags, locks, data size, data. Their
+               reserved bits (the top two of the flags and of the locks) and a size past
+               STUB_DATA_MAX are refused. */
+            uint32_t body = size - (3u + STUB_DATA_MAX);
+            for (uint32_t at = body; at <= body + 1; at++) {
                 for (uint8_t bit = 0x40; bit; bit = (uint8_t)(bit << 1)) {
-                    buffer[size - back] ^= bit;
+                    buffer[at] ^= bit;
                     TEST_ASSERT_FALSE(stub_wire_read_record(buffer, size, SEATS, from_host, &out, why, sizeof(why)));
-                    buffer[size - back] ^= bit;
+                    buffer[at] ^= bit;
                 }
             }
+            uint8_t keep = buffer[body + 2];
+            buffer[body + 2] = STUB_DATA_MAX + 1;
+            TEST_ASSERT_FALSE(stub_wire_read_record(buffer, size, SEATS, from_host, &out, why, sizeof(why)));
+            buffer[body + 2] = keep;
         }
         TEST_ASSERT_FALSE(stub_wire_read_record(buffer, size, SEATS, !from_host, &out, why, sizeof(why)));
         for (uint32_t cut = 0; cut < size; cut++) {

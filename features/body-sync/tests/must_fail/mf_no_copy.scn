@@ -1,0 +1,8 @@
+# Nothing reaches the guest: no copy is measured, and a playback bound must not pass on nothing.
+scenario mf_no_copy
+scene two_chars_item
+guests 1
+end 2s
+net g1 loss 100%
+p0 walk -2 -1
+expect lag_divergence.p95 <= 1m

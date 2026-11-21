@@ -142,7 +142,7 @@ static void test_two_walk_runs_on_the_stub_and_writes_metrics(void) {
     fseek(file, 0, SEEK_END);
     TEST_ASSERT_EQUAL_INT64((long)size, ftell(file));
     fclose(file);
-    TEST_ASSERT_NOT_NULL(strstr(json, "\"schema\":\"body_sync.metrics.v1\""));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"schema\":\"body_sync.metrics.v2\""));
     body_sync_stand_destroy(stand);
     free(json);
 }

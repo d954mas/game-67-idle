@@ -72,6 +72,10 @@ static void keep_rare(sync_received_t *b, const sync_rare_t *in) {
         b->rare.holder_slot = in->holder_slot;
         b->rare.holder_generation_low = in->holder_generation_low;
     }
+    if (in->groups & SYNC_RARE_DATA) {
+        b->rare.data_size = in->data_size;
+        memcpy(b->rare.data, in->data, sizeof(b->rare.data));
+    }
     b->known |= in->groups;
     b->rare.groups = b->known;
 }

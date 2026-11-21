@@ -255,18 +255,22 @@ float stand_world_speed(const stand_world_t *w, uint32_t slot) {
     return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 
-void stand_world_set_held(stand_world_t *w, uint32_t slot, bool held) {
+void stand_world_set_held(stand_world_t *w, uint32_t slot, bool held, uint64_t clear) {
     stand_slot_t *s = &w->slots[slot];
-    if (!s->live || s->held_filter == held) {
+    if (!s->live) {
         return;
     }
     s->held_filter = held;
     b3ShapeId shapes[1];
     if (b3Body_GetShapes(s->body, shapes, 1) == 1) {
         b3Filter filter = b3Shape_GetFilter(shapes[0]);
-        filter.categoryBits = held ? STAND_CAT_HELD : category_of(s);
-        filter.maskBits = held ? 0 : B3_DEFAULT_MASK_BITS;
-        b3Shape_SetFilter(shapes[0], filter, true);
+        uint64_t category = held ? STAND_CAT_HELD : category_of(s), mask = (held ? 0 : B3_DEFAULT_MASK_BITS) & ~clear;
+        /* Compared with the shape, not a cached state: the seam restores a mask on its own. */
+        if (filter.categoryBits != category || filter.maskBits != mask) {
+            filter.categoryBits = category;
+            filter.maskBits = mask;
+            b3Shape_SetFilter(shapes[0], filter, true);
+        }
     }
 }
 
@@ -600,7 +604,7 @@ void stand_character_attach(stand_character_t *c, stand_world_t *w, body_sync_id
         return;
     }
     b3Body_SetType(s->body, b3_kinematicBody);
-    stand_world_set_held(w, body_sync_id_slot(id), true);
+    stand_world_set_held(w, body_sync_id_slot(id), true, 0);
     c->held = id;
     c->held_heavy = (s->desc.flags & BODY_SYNC_BODY_HEAVY) != 0;
 }
@@ -614,7 +618,7 @@ body_sync_id_t stand_character_release(stand_character_t *c, stand_world_t *w, c
         return BODY_SYNC_ID_NONE;
     }
     b3Body_SetType(s->body, b3_dynamicBody);
-    stand_world_set_held(w, body_sync_id_slot(id), false);
+    stand_world_set_held(w, body_sync_id_slot(id), false, 0);
     if (velocity) {
         b3Body_SetLinearVelocity(s->body, (b3Vec3){velocity[0], velocity[1], velocity[2]});
         b3Body_SetAngularVelocity(s->body, (b3Vec3){2.5f, 3.0f, 1.5f});

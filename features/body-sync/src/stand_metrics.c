@@ -87,6 +87,33 @@ void stand_metrics_jerk(stand_metrics_t *metrics, uint32_t guest, double jerk_m)
     }
 }
 
+void stand_metrics_playback(stand_metrics_t *metrics, uint32_t guest, double lag_m, double path_m, double behind_ticks, bool moved,
+                            double drawn_move_m, double owner_move_m, bool offset_active) {
+    if (guest >= metrics->guests || !isfinite(lag_m) || !isfinite(path_m) || !isfinite(behind_ticks)) {
+        return;
+    }
+    stand_hist_add(&metrics->lag[guest], lag_m);
+    stand_hist_add(&metrics->path[guest], path_m);
+    stand_hist_add(&metrics->behind[guest], behind_ticks > 0.0 ? behind_ticks : 0.0);
+    if (!moved || !isfinite(drawn_move_m) || !isfinite(owner_move_m)) {
+        return;
+    }
+    if (drawn_move_m > 1.25 * owner_move_m + 0.01) {
+        /* The render offset giving a move back is a slide by design, counted apart. */
+        if (offset_active) {
+            metrics->offset_steps[guest]++;
+        } else {
+            metrics->steps[guest]++;
+        }
+    }
+    if (drawn_move_m > 2.0) {
+        metrics->snaps[guest]++;
+        return;
+    }
+    double jump = drawn_move_m - owner_move_m;
+    metrics->jump_max[guest] = jump > metrics->jump_max[guest] ? jump : metrics->jump_max[guest];
+}
+
 void stand_metrics_end_tick(stand_metrics_t *metrics) {
     if (metrics->ticks >= BODY_SYNC_STAND_TICKS_MAX) {
         return;
@@ -167,6 +194,17 @@ void stand_metrics_summarize(const stand_metrics_t *metrics, body_sync_report_t 
         out->jerk_max_m = metrics->jerk[g].max;
         out->jerk_p95_m = stand_hist_quantile(&metrics->jerk[g], 0.95);
         out->jerk_frames_over = metrics->jerk_over[g];
+        out->lag_divergence_max_m = metrics->lag[g].max;
+        out->lag_divergence_p95_m = stand_hist_quantile(&metrics->lag[g], 0.95);
+        out->path_error_max_m = metrics->path[g].max;
+        out->path_error_p95_m = stand_hist_quantile(&metrics->path[g], 0.95);
+        out->step_count = metrics->steps[g];
+        out->offset_step_count = metrics->offset_steps[g];
+        out->behind_max_ticks = metrics->behind[g].max;
+        out->behind_p95_ticks = stand_hist_quantile(&metrics->behind[g], 0.95);
+        out->playback_samples = metrics->lag[g].count;
+        out->snap_count = metrics->snaps[g];
+        out->jump_max_m = metrics->jump_max[g];
         summarize_bytes(metrics, g, STAND_DIR_TO_GUEST, &out->to_guest);
         summarize_bytes(metrics, g, STAND_DIR_TO_HOST, &out->to_host);
     }
@@ -184,6 +222,10 @@ static const struct {
     {"seen_ticks.max", STAND_UNIT_TICKS},        {"bytes_per_s.to_guest", STAND_UNIT_RATE},    {"bytes_per_s.to_host", STAND_UNIT_RATE},
     {"peak_bytes_per_s.to_guest", STAND_UNIT_RATE}, {"peak_bytes_per_s.to_host", STAND_UNIT_RATE},
     {"stale_ticks.max", STAND_UNIT_TICKS},       {"deferred.count", STAND_UNIT_COUNT},
+    {"lag_divergence.max", STAND_UNIT_LENGTH},   {"lag_divergence.p95", STAND_UNIT_LENGTH},    {"path_error.max", STAND_UNIT_LENGTH},
+    {"path_error.p95", STAND_UNIT_LENGTH},       {"jump.max", STAND_UNIT_LENGTH},              {"step.count", STAND_UNIT_COUNT},
+    {"snap.count", STAND_UNIT_COUNT},         {"offset_step.count", STAND_UNIT_COUNT},     {"behind_ticks.max", STAND_UNIT_TICKS},
+    {"behind_ticks.p95", STAND_UNIT_TICKS},
 };
 
 bool stand_metric_unit(const char *name, stand_metric_unit_t *unit) {
@@ -261,6 +303,35 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             v = (double)m->stale_max_ticks;
         } else if (strcmp(name, "deferred.count") == 0) {
             v = (double)m->deferred;
+        } else if (m->playback_samples == 0 && (strncmp(name, "lag_divergence", 14) == 0 || strncmp(name, "path_error", 10) == 0 ||
+                                                strcmp(name, "jump.max") == 0 || strcmp(name, "step.count") == 0 || strcmp(name, "snap.count") == 0 ||
+                                                strcmp(name, "offset_step.count") == 0 || strncmp(name, "behind_ticks", 12) == 0)) {
+            /* No copy measured is no evidence: the bound cannot hold. */
+            if (detail && detail_size) {
+                snprintf(detail, detail_size, "g%u: no copy was measured", (unsigned)m->seat);
+            }
+            *value = (double)INFINITY;
+            return true;
+        } else if (strcmp(name, "behind_ticks.max") == 0) {
+            v = m->behind_max_ticks;
+        } else if (strcmp(name, "behind_ticks.p95") == 0) {
+            v = m->behind_p95_ticks;
+        } else if (strcmp(name, "offset_step.count") == 0) {
+            v = (double)m->offset_step_count;
+        } else if (strcmp(name, "lag_divergence.max") == 0) {
+            v = m->lag_divergence_max_m;
+        } else if (strcmp(name, "lag_divergence.p95") == 0) {
+            v = m->lag_divergence_p95_m;
+        } else if (strcmp(name, "path_error.max") == 0) {
+            v = m->path_error_max_m;
+        } else if (strcmp(name, "path_error.p95") == 0) {
+            v = m->path_error_p95_m;
+        } else if (strcmp(name, "jump.max") == 0) {
+            v = m->jump_max_m;
+        } else if (strcmp(name, "step.count") == 0) {
+            v = (double)m->step_count;
+        } else if (strcmp(name, "snap.count") == 0) {
+            v = (double)m->snap_count;
         } else if (strncmp(name, "bytes_per_s.", 12) == 0) {
             const body_sync_bytes_t *b = strcmp(name + 12, "to_guest") == 0 ? &m->to_guest : &m->to_host;
             for (uint32_t k = 0; k < BODY_SYNC_KINDS_ALL; k++) {
@@ -488,6 +559,41 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         put(&j, ",");
         key(&j, "over_m");
         number(&j, (double)BODY_SYNC_JERK_OVER_M);
+        put(&j, "},");
+        key(&j, "playback");
+        put(&j, "{\"unit\":\"m\",");
+        key(&j, "lag_divergence_max");
+        number(&j, gm->lag_divergence_max_m);
+        put(&j, ",");
+        key(&j, "lag_divergence_p95");
+        number(&j, gm->lag_divergence_p95_m);
+        put(&j, ",");
+        key(&j, "path_error_max");
+        number(&j, gm->path_error_max_m);
+        put(&j, ",");
+        key(&j, "path_error_p95");
+        number(&j, gm->path_error_p95_m);
+        put(&j, ",");
+        key(&j, "jump_max");
+        number(&j, gm->jump_max_m);
+        put(&j, ",");
+        key(&j, "steps");
+        putf(&j, "%u", gm->step_count);
+        put(&j, ",");
+        key(&j, "snaps");
+        putf(&j, "%u", gm->snap_count);
+        put(&j, ",");
+        key(&j, "offset_steps");
+        putf(&j, "%u", gm->offset_step_count);
+        put(&j, ",");
+        key(&j, "behind_ticks_max");
+        number(&j, gm->behind_max_ticks);
+        put(&j, ",");
+        key(&j, "behind_ticks_p95");
+        number(&j, gm->behind_p95_ticks);
+        put(&j, ",");
+        key(&j, "samples");
+        putf(&j, "%llu", (unsigned long long)gm->playback_samples);
         put(&j, "},");
         key(&j, "to_guest");
         bytes_object(&j, &gm->to_guest);

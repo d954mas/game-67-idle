@@ -29,6 +29,8 @@ extern "C" {
                                 player idle, every cut, stall and deaf over) the run may wait
                                 for every endpoint's world to come to rest before it ends
      end <time>                 a hard end instead; the run stops there, rest or not
+     rate <host|gN> <x>hz       that endpoint steps x times a second of virtual time, 20..240
+                                (59.5hz); its seam keeps BODY_SYNC_TICK_HZ; once per endpoint
 
    Player actions, `[at <time>] <player> <verb> <args> [as <label>]`; `speed` is a bare
    number in m/s, (0, 50]:
@@ -73,6 +75,8 @@ extern "C" {
                                                 which a guest that left fails otherwise
      expect result <label> <result>             done granted refused hit missed rejected failed
      expect one_of <result> <label> <label> ... exactly one of 2..4 distinct labels ends so
+     expect moved <body> <=|>= <length>         the scene body's travel on the host from the
+                                                first tick to the last
      expect <metric> <= <value>                 metric names of body_sync_metrics.h, the
                                                 worst guest counts
    With `guests 0` the checks that compare a guest (agree_at_rest, left, and every metric but
@@ -181,6 +185,7 @@ typedef enum body_sync_expect_kind {
     BODY_SYNC_EXPECT_ONE_OF,
     BODY_SYNC_EXPECT_METRIC_AT_MOST,
     BODY_SYNC_EXPECT_LEFT,
+    BODY_SYNC_EXPECT_MOVED, /* a body's travel on the host from the first tick to the last */
 } body_sync_expect_kind_t;
 
 typedef struct body_sync_expect {
@@ -193,7 +198,9 @@ typedef struct body_sync_expect {
     uint32_t label_count;        /* RESULT: 1; ONE_OF: 2..BODY_SYNC_EXPECT_LABELS_MAX */
     char labels[BODY_SYNC_EXPECT_LABELS_MAX][BODY_SYNC_LABEL_MAX];
     char metric[BODY_SYNC_METRIC_NAME_MAX]; /* METRIC_AT_MOST */
-    double limit; /* METRIC_AT_MOST, in the metric's unit: m, deg, ticks or bytes/s */
+    double limit; /* METRIC_AT_MOST, in the metric's unit: m, deg, ticks or bytes/s; MOVED in m */
+    char body[BODY_SYNC_NAME_MAX]; /* MOVED: the scene body */
+    bool at_least;                 /* MOVED: >= rather than <= */
 } body_sync_expect_t;
 
 typedef struct body_sync_scenario {
@@ -202,6 +209,9 @@ typedef struct body_sync_scenario {
     uint64_t seed;
     uint8_t guests;
     uint32_t settle_ticks;
+    /* Steps per second of virtual time each endpoint runs, in millihertz; 0 is BODY_SYNC_TICK_HZ.
+       Its seam keeps tick_hz: the case of a fixed-step game that cannot keep up, or runs ahead. */
+    uint32_t rate_mhz[1 + BODY_SYNC_GUESTS_MAX];
     bool has_end;
     uint32_t end_tick;
     uint32_t action_count;

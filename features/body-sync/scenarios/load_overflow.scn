@@ -25,3 +25,17 @@ expect result a1 granted
 expect stale_ticks.max <= 40t
 expect agree_at_rest 5cm
 expect no_stuck
+# A body the budget starved plays linearly across the ticks it missed; where that gap hid an
+# impact the copy shows a step there, one per hit body. step.count <= 16 is measured (8 to 12
+# seen), twice that with a margin, not derived. A
+# body that waited and then gets a snapshot many ticks ahead past the seam's speed is placed
+# there and the render offset takes the move: no drawn move past its decay of 0.15 x 2 m a
+# tick plus a 12 m/s throw's 0.2 m: jump.max is derived.
+expect step.count <= 16
+expect jump.max <= 0.5m
+# behind_ticks: a copy plays at most delay_max (15 ticks, before the clock knows the path)
+# behind its owner's newest, plus the one-way delay and the jitter in ticks, plus 2 for the
+# tick the packet arrives in and the tick the owner's newest is read after its step:
+# rtt 80 ms (3), 10 ms jitter (1): 21. Derived, on the p95: the stub's naive sender saturates
+# the path here and its queue adds to the one-way delay (28 ticks at worst).
+expect behind_ticks.p95 <= 21t

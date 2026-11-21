@@ -1,0 +1,32 @@
+# The catalog's case: a guest whose fixed step runs at 59.5 Hz against the host's 60. Its
+# clock sees the host's ticks come 1 % fast and plays them at that rate, and the host plays the
+# guest's 1 % slow: no drift of the delay, no steps.
+scenario rate_mismatch
+scene two_chars_item
+seed 47
+guests 1
+settle 6s
+rate g1 59.5hz
+
+net g1 rtt 100ms jitter 10ms loss 1%
+
+p0 walk box
+p0 grab box as lift
+p0 wait 300ms
+p0 throw 1.6 0.6 0.4 speed 6 as throw
+p1 walk -1 -1 speed 2.5
+p1 walk 1 1 as p1_back
+
+expect result lift granted
+expect result throw done
+expect agree_at_rest 5cm 5deg
+expect no_stuck
+expect jump.max <= 0.45m
+# behind_ticks: a copy plays at most delay_max (15 ticks, before the clock knows the path)
+# behind its owner's newest, plus the one-way delay and the jitter in ticks, plus 2 for the
+# tick the packet arrives in and the tick the owner's newest is read after its step:
+# 21; at 59.5 Hz the rate is measured within 32 ticks, under a tick of drift. Derived.
+expect behind_ticks.max <= 22t
+# lag_divergence.p95: measured (0.058 m), with a margin: a copy that holds its last snapshot or
+# draws a stale moment reads several times that.
+expect lag_divergence.p95 <= 0.1m

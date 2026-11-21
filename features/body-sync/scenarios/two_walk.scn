@@ -1,4 +1,8 @@
 # Two characters walk past each other and back; the sync carries both.
+# Same-tick divergence includes the latency and the playback delay by design: at walking speed
+# 3.6 m/s times one way (50 ms) plus the longest delay (15 ticks, 250 ms) is 1.1 m. The
+# lag-aligned divergence takes that out: what is left is the sync's own error. 1.1 m is
+# derived; lag_divergence.p95 <= 0.1m is measured (0.056 m), with a margin.
 scenario two_walk
 scene two_chars_item
 seed 7
@@ -20,4 +24,10 @@ expect result p1_box done
 expect agree_at_rest 5cm 3deg
 expect no_stuck
 expect host_ticks.max <= 30t
-expect divergence.p95 <= 0.5m
+expect divergence.p95 <= 1.1m
+expect lag_divergence.p95 <= 0.1m
+# behind_ticks: a copy plays at most delay_max (15 ticks, before the clock knows the path)
+# behind its owner's newest, plus the one-way delay and the jitter in ticks, plus 2 for the
+# tick the packet arrives in and the tick the owner's newest is read after its step:
+# rtt 100 ms (3) and 10 ms jitter (1): 15 + 3 + 1 + 2 = 21. Derived.
+expect behind_ticks.max <= 21t

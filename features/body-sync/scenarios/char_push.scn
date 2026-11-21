@@ -1,0 +1,30 @@
+# A guest's character walks a brick along and then presses against the heavy cabinet. On the
+# host its copy is dynamic (the guest simulates it), so it pushes the 3 kg brick with its 60 kg
+# and is held by the 80 kg cabinet's friction (0.6 x 80 kg x g = 470 N) like the guest's own
+# character: the cabinet and the mug on it move under 2 cm. On the guest the brick is a LIGHT
+# copy its own character passes (character_category); the host's simulation moves it. The 2 cm
+# bounds are derived from that friction (no push of 60 kg at walking speed overcomes it); the
+# brick's 0.3 m is a tenth of the walk.
+scenario char_push
+scene cabinet_mug
+seed 5
+guests 1
+settle 3s
+
+net g1 rtt 100ms jitter 10ms loss 1%
+
+p1 walk 1.0 0.6 as push
+p1 walk 1.45 0 as press
+p1 wait 1s
+
+expect result push done
+expect moved brick >= 0.3m
+expect moved cabinet <= 0.02m
+expect moved mug <= 0.02m
+expect agree_at_rest 5cm
+expect no_stuck
+# behind_ticks: a copy plays at most delay_max (15 ticks, before the clock knows the path)
+# behind its owner's newest, plus the one-way delay and the jitter in ticks, plus 2 for the
+# tick the packet arrives in and the tick the owner's newest is read after its step:
+# rtt 100 ms (3), 10 ms jitter (1): 21. Derived.
+expect behind_ticks.max <= 21t

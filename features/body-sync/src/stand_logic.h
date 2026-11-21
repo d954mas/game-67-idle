@@ -34,8 +34,9 @@ stand_limits_t stand_limits_of(const body_sync_scene_t *scene);
 #define STAND_DT (1.0f / 60.0f)
 /* The game's upward lift that makes a throw at a point arc onto it. */
 #define STAND_THROW_LIFT 1.2f
-/* Slack the host grants a claim measured on its own, older, world. */
-#define STAND_CLAIM_SLACK_M 0.5f
+/* Slack the host grants a claim measured on its own, older, world: it shows a guest's
+   character one way plus the playback delay late, and 1 m is 280 ms at walking speed. */
+#define STAND_CLAIM_SLACK_M 1.0f
 
 /* ---- random draws (splitmix64: tiny, seedable, the same on every platform) ---- */
 
@@ -195,6 +196,9 @@ typedef struct stand_metrics {
     float series_div_max[BODY_SYNC_GUESTS_MAX][BODY_SYNC_STAND_TICKS_MAX];
     float series_div_mean[BODY_SYNC_GUESTS_MAX][BODY_SYNC_STAND_TICKS_MAX];
     float series_jerk_max[BODY_SYNC_GUESTS_MAX][BODY_SYNC_STAND_TICKS_MAX];
+    stand_hist_t lag[BODY_SYNC_GUESTS_MAX], path[BODY_SYNC_GUESTS_MAX], behind[BODY_SYNC_GUESTS_MAX];
+    uint32_t steps[BODY_SYNC_GUESTS_MAX], offset_steps[BODY_SYNC_GUESTS_MAX], snaps[BODY_SYNC_GUESTS_MAX];
+    double jump_max[BODY_SYNC_GUESTS_MAX];
     uint32_t bytes_second[BODY_SYNC_GUESTS_MAX][2][BODY_SYNC_KINDS_ALL][BODY_SYNC_TIME_MAX_S];
     uint64_t bytes_total[BODY_SYNC_GUESTS_MAX][2][BODY_SYNC_KINDS_ALL];
     double link_rate_sum[BODY_SYNC_GUESTS_MAX][2];
@@ -208,6 +212,11 @@ void stand_metrics_begin_tick(stand_metrics_t *metrics);
 /* guest is 0-based (seat - 1). */
 void stand_metrics_divergence(stand_metrics_t *metrics, uint32_t guest, double distance_m, double rotation_deg);
 void stand_metrics_jerk(stand_metrics_t *metrics, uint32_t guest, double jerk_m);
+/* One copy at one tick against its owner (body_sync_metrics.h): the lag-aligned distance, the
+   path error and how many owner ticks it plays behind; with `moved`, the drawn and the owner's
+   move since the last tick, and whether a render offset was giving a move back meanwhile. */
+void stand_metrics_playback(stand_metrics_t *metrics, uint32_t guest, double lag_m, double path_m, double behind_ticks, bool moved,
+                            double drawn_move_m, double owner_move_m, bool offset_active);
 void stand_metrics_end_tick(stand_metrics_t *metrics);
 void stand_metrics_bytes(stand_metrics_t *metrics, uint32_t guest, int direction, uint32_t kind, uint64_t bytes, uint32_t tick);
 void stand_metrics_link(stand_metrics_t *metrics, uint32_t guest, int direction, double bytes_per_s);
@@ -231,7 +240,7 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
 
 /* ---- JSON ---- */
 
-/* Writes the report as schema body_sync.metrics.v1. `metrics` adds the closed seats and, when
+/* Writes the report as schema body_sync.metrics.v2. `metrics` adds the closed seats and, when
    `series`, the per-tick and per-second series. False when `capacity` is short; *size then
    holds the size needed. */
 bool stand_json_write(const body_sync_report_t *report, const stand_metrics_t *metrics, bool series, char *buffer, size_t capacity,

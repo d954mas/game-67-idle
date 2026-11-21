@@ -66,6 +66,8 @@ static bool same_value(const sync_rare_t *a, const sync_rare_t *b, uint8_t group
         return a->flags == b->flags;
     case SYNC_RARE_AUTHORITY:
         return a->seat == b->seat && a->number == b->number && a->hold == b->hold;
+    case SYNC_RARE_DATA:
+        return a->data_size == b->data_size && memcmp(a->data, b->data, a->data_size) == 0;
     default:
         return a->holder_slot == b->holder_slot && a->holder_generation_low == b->holder_generation_low;
     }
@@ -192,12 +194,7 @@ static int by_rank(const void *pa, const void *pb) {
 
 static void count_bits(sync_sender_stats_t *st, const sync_codec_t *c, const sync_record_t *r, bool held) {
     uint32_t total = sync_codec_record_bits(c, r);
-    uint32_t rare = 0;
-    if (r->rare.groups) {
-        rare = c->rare_mask.bits + ((r->rare.groups & SYNC_RARE_MOTION) ? c->rare_motion.bits : 0) +
-               ((r->rare.groups & SYNC_RARE_FLAGS) ? c->rare_flags.bits : 0) + ((r->rare.groups & SYNC_RARE_AUTHORITY) ? c->rare_authority.bits : 0) +
-               ((r->rare.groups & SYNC_RARE_HOLDER) ? c->rare_holder.bits : 0);
-    }
+    uint32_t rare = sync_codec_rare_bits(c, &r->rare);
     st->bits[BODY_SYNC_TRAFFIC_HEADER] += 1;
     st->bits[BODY_SYNC_TRAFFIC_AUTHORITY] += rare;
     body_sync_traffic_kind_t kind = held ? BODY_SYNC_TRAFFIC_HELD : r->sim ? BODY_SYNC_TRAFFIC_SIM : BODY_SYNC_TRAFFIC_COPY;

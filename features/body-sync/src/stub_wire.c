@@ -96,6 +96,8 @@ void stub_wire_put_body(uint8_t *p, const stub_body_state_t *b) {
     put_u16(p + 1, b->number);
     p[3] = b->hold;
     put_u32(p + 4, b->holder);
+    p[8] = b->data_size;
+    memcpy(p + 9, b->data, STUB_DATA_MAX);
 }
 
 static bool length_within(const float v[3], float limit) {
@@ -180,29 +182,39 @@ bool stub_wire_read_state(const uint8_t *data, uint32_t size, uint32_t seats, co
         if (b->seat >= seats || b->hold > 1 || (b->holder != 0 && !id_ok(b->holder))) {
             return fail(error, error_size, "authority out of range");
         }
+        b->data_size = f[8];
+        memcpy(b->data, f + 9, STUB_DATA_MAX);
+        if (b->data_size > STUB_DATA_MAX) {
+            return fail(error, error_size, "data longer than STUB_DATA_MAX");
+        }
     }
     *count = n;
     return true;
 }
 
 static uint32_t record_size(stub_record_type_t type) {
-    return type == STUB_REC_CLAIM ? 8u : type == STUB_REC_RELEASE ? 11u : type == STUB_REC_ASSIGN ? 18u : 0u;
+    return type == STUB_REC_CLAIM ? 8u : type == STUB_REC_RELEASE ? 20u : type == STUB_REC_ASSIGN ? 27u : 0u;
 }
 
-/* Two bytes: flags in bits 0..3, kinematic in 4, motion known in 5; then the locks. */
+/* Eleven bytes: flags in bits 0..3, kinematic in 4, motion known in 5; the locks; the data's
+   size and all STUB_DATA_MAX bytes. */
 static void put_body(uint8_t *at, const stub_record_t *r) {
     at[0] = (uint8_t)((r->flags & 0x0Fu) | (r->kinematic ? 0x10u : 0u) | (r->motion_known ? 0x20u : 0u));
     at[1] = (uint8_t)(r->locks & STUB_LOCKS_ALL);
+    at[2] = r->data_size > STUB_DATA_MAX ? (uint8_t)STUB_DATA_MAX : r->data_size;
+    memcpy(at + 3, r->data, STUB_DATA_MAX);
 }
 
 static bool get_body(const uint8_t *at, stub_record_t *out) {
-    if ((at[0] & 0xC0u) || (at[1] & ~STUB_LOCKS_ALL)) {
+    if ((at[0] & 0xC0u) || (at[1] & ~STUB_LOCKS_ALL) || at[2] > STUB_DATA_MAX) {
         return false;
     }
     out->flags = at[0] & 0x0Fu;
     out->kinematic = (at[0] & 0x10u) != 0;
     out->motion_known = (at[0] & 0x20u) != 0;
     out->locks = at[1];
+    out->data_size = at[2];
+    memcpy(out->data, at + 3, STUB_DATA_MAX);
     return true;
 }
 
