@@ -239,6 +239,13 @@ possibility, not a feature.
   reliable records stamped with the tick, baselines on a low-priority lane,
   RTT and per-peer tick estimates. The game owns the loop; peer bytes are
   untrusted. [Install](coop-net/INSTALL.md).
+- [Body sync](body-sync/README.md) (`L2`, `0.3.0`, opt-in, depends on `box3d`
+  and `coop-net`): the seam through which one endpoint's Box3D bodies become
+  bytes and back (ids with generations, optimistic claims answered by the
+  host, holders, settled holds), with a naive stub; and the network-physics
+  stand: up to four worlds in one process over `net_link_sim`, scenes as data,
+  text scenarios of actions and network conditions, metrics as JSON and
+  end-of-run invariants. [Install](body-sync/INSTALL.md).
 - `shader-programs/` (`L0`, `0.1.0`): one linked program per vertex/fragment
   shader-resource pair, shared by the materials made through it, linked when
   both stages are ready and relinked after a context loss. Reference:

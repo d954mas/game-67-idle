@@ -1,0 +1,9 @@
+# The host knocks the dummy down, but the guest hears nothing: the knockdown is never shown.
+scenario mf_knock_unseen
+scene mannequin
+guests 1
+end 5s
+net g1 to_guest loss 100%
+p0 walk 1 0
+p0 punch dummy as hit
+expect effects_once

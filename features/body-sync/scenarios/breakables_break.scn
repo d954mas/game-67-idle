@@ -1,0 +1,20 @@
+# The host punches a crate open; a guest breaks glass with a thrown rock (an impact claim).
+scenario breakables_break
+scene breakables
+seed 17
+guests 1
+settle 10s
+
+net g1 rtt 100ms jitter 20ms loss 2%
+
+p0 punch crate as crate
+p1 grab rock as rock
+p1 wait 400ms
+p1 throw glass speed 7 as throw
+
+expect result crate hit
+expect result rock granted
+expect result throw done
+expect effects_once
+expect agree_at_rest 5cm
+expect no_stuck

@@ -1,0 +1,35 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "body-sync",
+  "version": "0.3.0",
+  "title": "Body sync",
+  "status": "opt-in",
+  "kind": "network-foundation",
+  "summary": "The sync seam through which one endpoint's Box3D bodies are written to bytes and applied from bytes (ids with generations, authority with optimistic claims and host assignments, holders, settled holds), with a naive stub implementation; and a network-physics stand: up to four worlds in one process over net_link_sim and coop-net, scenes as data, text scenarios of actions and network conditions, metrics as JSON and end-of-run invariants.",
+  "copy_model": "in-place",
+  "layer": "L2",
+  "owners": ["features/body-sync"],
+  "dependencies": ["features/box3d", "features/coop-net", "features/net-link", "features/net-bits"],
+  "provides": [
+    "body_sync_create / bind / unbind / body / seat_joined / seat_left: the seam on one endpoint's world",
+    "body_sync_claim / release / poll_claim / answer / assign / authority / is_local / set_holder / set_flags: authority with claim sequences",
+    "body_sync_receive_state / receive_record / apply / collect / write_state / state_sent / unresolved / resolve / peek_record / pop_record: the tick",
+    "body_sync_render_offset / traffic / implementation: what is drawn and measured",
+    "body_sync_scene_* and body_sync_scene_catalog: scenes as data and the 8-scene catalog",
+    "body_sync_scenario_parse / load: the scenario text format",
+    "body_sync_stand_create / tick / run / report / world_hash / body_count / body / write_json / save_json / main: the stand"
+  ],
+  "manuals": {"install": "features/body-sync/INSTALL.md"},
+  "commands": {
+    "owner": "node ai_studio/feature_testing/run.mjs",
+    "test_core": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"body_sync\" -L core --output-on-failure",
+    "test_slow": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"body_sync\" -L slow --output-on-failure"
+  },
+  "registers": {
+    "cmake_targets": ["body_sync", "body_sync_stand_logic", "body_sync_stand", "body_sync_stand_cli"],
+    "ctest_targets": [
+      "test_body_sync_logic", "test_body_sync_wire", "test_body_sync_stub", "test_body_sync_stand", "test_body_sync_checks", "test_body_sync_two_processes", "test_body_sync_mf_*",
+      "test_body_sync_free_step", "test_body_sync_scn_*"
+    ]
+  }
+}

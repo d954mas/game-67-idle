@@ -1,0 +1,6 @@
+# A grab out of reach fails, so a result of granted does not happen.
+scenario mf_result
+scene floor_wall
+guests 1
+p0 grab crate as g
+expect result g granted

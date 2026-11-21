@@ -1,0 +1,23 @@
+# A guest throws a brick at a heavy cabinet with a mug on top; the host carries the cabinet away.
+scenario cabinet_carry
+scene cabinet_mug
+seed 9
+guests 1
+settle 8s
+
+net g1 rtt 80ms jitter 10ms loss 1%
+
+p1 grab brick as brick
+p1 wait 300ms
+p1 throw cabinet speed 9 as throw
+at 4s p0 walk cabinet
+p0 grab cabinet as lift
+p0 walk -1 -1.5
+p0 drop as put
+
+expect result brick granted
+expect result throw done
+expect result lift granted
+expect result put done
+expect agree_at_rest 5cm 5deg
+expect no_stuck

@@ -1,0 +1,18 @@
+# A guest punches a standing mannequin; the host punches one that walks a route.
+scenario mannequin_hits
+scene mannequin
+seed 13
+guests 1
+settle 8s
+
+net g1 rtt 120ms jitter 20ms loss 2%
+
+p1 punch dummy as dummy
+at 1400ms p0 punch walker as walker
+
+expect result dummy hit
+expect result walker hit
+expect echo_ticks.max <= 120t
+expect effects_once
+expect agree_at_rest 5cm 5deg
+expect no_stuck

@@ -1,0 +1,22 @@
+# A frame of 200 ms on the guest, then on the host, while the guest carries a box.
+scenario edge_stall
+scene two_chars_item
+seed 31
+guests 1
+settle 5s
+
+net g1 rtt 100ms jitter 10ms loss 1%
+
+p1 walk box
+p1 grab box as grab
+p1 walk 2 2
+p1 walk -1 2
+p1 drop as put
+p0 walk -2 -2
+at 1500ms stall g1 for 200ms
+at 2500ms stall host for 200ms
+
+expect result grab granted
+expect result put done
+expect agree_at_rest 5cm 5deg
+expect no_stuck

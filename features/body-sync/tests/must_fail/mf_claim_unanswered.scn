@@ -1,0 +1,9 @@
+# The guest's claim never reaches the host.
+scenario mf_claim_unanswered
+scene two_chars_item
+guests 1
+end 6s
+net g1 to_host loss 100%
+p1 walk box
+p1 grab box
+expect no_stuck

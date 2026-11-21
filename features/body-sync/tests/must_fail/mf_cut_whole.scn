@@ -1,0 +1,10 @@
+# The guest's path is cut for longer than the timeout: it leaves, and the checks say so.
+scenario mf_cut_whole
+scene floor_wall
+guests 1
+settle 3s
+p1 walk 2 1
+at 0s cut g1 for 12s
+expect agree_at_rest 5cm
+expect no_stuck
+expect effects_once

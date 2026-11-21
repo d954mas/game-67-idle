@@ -1,0 +1,19 @@
+# A guest throws a heavy ball into a pile of sixty light boxes: chain hits, many moving bodies.
+scenario pile_throw
+scene pile60
+seed 5
+guests 1
+settle 10s
+
+net g1 rtt 100ms jitter 20ms loss 2%
+
+p1 grab ball as grab
+p1 wait 500ms
+p1 throw pile30 speed 7 as throw
+p0 walk -2 2
+
+expect result grab granted
+expect result throw done
+expect echo_ticks.max <= 120t
+expect agree_at_rest 5cm
+expect no_stuck

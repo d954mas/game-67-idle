@@ -1,0 +1,18 @@
+# A guest punches the bottom box of a stack of ten; the stack falls on both worlds.
+scenario stack_punch
+scene stack10
+seed 3
+guests 1
+settle 8s
+
+net g1 rtt 60ms jitter 10ms loss 1%
+
+p1 walk 1 0
+p1 punch box0 as hit
+p0 wait 1s
+p0 walk -1.5 1
+
+expect result hit hit
+expect agree_at_rest 5cm 5deg
+expect no_stuck
+expect effects_once

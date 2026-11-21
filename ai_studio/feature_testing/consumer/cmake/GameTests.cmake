@@ -121,6 +121,11 @@ if(NOT EMSCRIPTEN)
     add_subdirectory("${COOP_NET_DIR}" "${CMAKE_BINARY_DIR}/_coop_net")
     add_subdirectory("${COOP_NET_DIR}/tests" "${CMAKE_BINARY_DIR}/_coop_net_tests")
 
+    # Box3D worlds synced over a session, so it comes after coop-net.
+    set(BODY_SYNC_DIR "${GAME_REPO_ROOT}/features/body-sync")
+    add_subdirectory("${BODY_SYNC_DIR}" "${CMAKE_BINARY_DIR}/_body_sync")
+    add_subdirectory("${BODY_SYNC_DIR}/tests" "${CMAKE_BINARY_DIR}/_body_sync_tests")
+
     # Without STEAMWORKS_SDK_DIR this builds the stub and its test; with it, also the live
     # probe and the overlay example (never built by default).
     set(STEAM_PLATFORM_DIR "${GAME_REPO_ROOT}/features/steam-platform")

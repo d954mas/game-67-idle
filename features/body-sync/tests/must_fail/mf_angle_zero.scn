@@ -1,0 +1,9 @@
+# The guest hears nothing while the host throws the box: positions are within 1000 m, rotations are not 0deg apart.
+scenario mf_angle_zero
+scene two_chars_item
+guests 1
+net g1 to_guest loss 100%
+p0 walk box
+p0 grab box
+p0 throw 3 0 0 speed 5
+expect agree_at_rest 1000m 0deg

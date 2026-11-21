@@ -1,0 +1,8 @@
+# The guest hears nothing while the host's player walks on: its copy stands frozen.
+scenario mf_frozen_copy
+scene two_chars_item
+guests 1
+end 4s
+net g1 to_guest loss 100%
+p0 walk 0 -20
+expect no_stuck

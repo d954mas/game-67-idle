@@ -1,0 +1,19 @@
+# The guest keeps stepping and sending but reads nothing for 3 s, and throws meanwhile.
+scenario edge_deaf
+scene floor_wall
+seed 37
+guests 1
+settle 6s
+
+net g1 rtt 100ms jitter 20ms loss 2%
+
+p1 grab crate as grab
+p1 walk 2 1
+at 2s deaf g1 for 3s
+at 3s p1 throw wall speed 9 as throw
+p0 walk -1 -1
+
+expect result grab granted
+expect result throw done
+expect agree_at_rest 5cm 5deg
+expect no_stuck

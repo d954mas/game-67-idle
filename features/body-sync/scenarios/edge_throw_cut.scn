@@ -1,0 +1,20 @@
+# A guest throws, and its link is cut while the body flies.
+scenario edge_throw_cut
+scene floor_wall
+seed 11
+guests 1
+settle 6s
+
+net g1 rtt 100ms jitter 20ms loss 2%
+
+p1 walk crate
+p1 grab crate as grab
+at 3s p1 throw wall speed 9 as throw
+at 3050ms cut g1 for 3s
+
+expect result grab granted
+expect result throw done
+expect agree_at_rest 5cm 5deg
+expect no_stuck
+expect effects_once
+expect host_ticks.max <= 120t

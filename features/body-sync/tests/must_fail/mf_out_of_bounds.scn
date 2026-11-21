@@ -1,0 +1,9 @@
+# The host throws the crate off the floor: it falls out of the scene's bounds.
+scenario mf_out_of_bounds
+scene floor_wall
+guests 0
+settle 3s
+p0 walk crate
+p0 grab crate
+p0 throw -200 0 0 speed 45
+expect no_stuck

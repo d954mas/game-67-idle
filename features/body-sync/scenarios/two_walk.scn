@@ -1,0 +1,23 @@
+# Two characters walk past each other and back; the sync carries both.
+scenario two_walk
+scene two_chars_item
+seed 7
+guests 1
+settle 3s
+
+net g1 rtt 100ms jitter 10ms loss 2%
+
+p0 walk 2 1
+p0 wait 500ms
+p0 walk -2 0 as p0_home
+p1 walk -2 -1 speed 2.5
+p1 walk 2 0 as p1_home
+at 6s p1 walk box as p1_box
+
+expect result p0_home done
+expect result p1_home done
+expect result p1_box done
+expect agree_at_rest 5cm 3deg
+expect no_stuck
+expect host_ticks.max <= 30t
+expect divergence.p95 <= 0.5m

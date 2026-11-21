@@ -1,0 +1,9 @@
+# A hard end while a thrown crate is in the air: the worlds agree loosely but never rested.
+scenario mf_hard_end_moving
+scene floor_wall
+guests 1
+end 1s
+p1 walk crate
+p1 grab crate
+p1 throw wall speed 9
+expect agree_at_rest 50cm

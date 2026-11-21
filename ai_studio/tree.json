@@ -230,6 +230,18 @@
                 "coverage": "subtree"
               },
               {
+                "id": "feature-body-sync",
+                "title": "Body sync",
+                "kind": "module",
+                "path": "features/body-sync",
+                "owner": "Network Feature Owner",
+                "description": "The sync seam for Box3D bodies (ids with generations, authority, holders) with a naive stub, and the network-physics stand: worlds in one process over net_link_sim and coop-net, text scenarios, JSON metrics, end-of-run invariants.",
+                "entry": "features/body-sync/README.md",
+                "contract": "features/body-sync/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
                 "id": "feature-steam-platform",
                 "title": "Steam platform",
                 "kind": "module",

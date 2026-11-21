@@ -1,0 +1,76 @@
+set(BODY_SYNC_DIR "${CMAKE_CURRENT_LIST_DIR}/..")
+set(BODY_SYNC_SCENARIOS "${BODY_SYNC_DIR}/scenarios")
+
+function(body_sync_test name)
+    cmake_parse_arguments(T "" "" "LIBS" ${ARGN})
+    add_executable(${name} ${name}.c)
+    # Internal headers: the tests reach the wire codec, the logic and the world directly.
+    target_include_directories(${name} PRIVATE "${BODY_SYNC_DIR}/src")
+    target_compile_definitions(${name} PRIVATE BODY_SYNC_SCENARIOS_DIR="${BODY_SYNC_SCENARIOS}")
+    target_link_libraries(${name} PRIVATE ${T_LIBS} unity)
+    nt_set_warning_flags(${name})
+    nt_set_sanitizer_flags(${name})
+    add_test(NAME ${name} COMMAND ${name} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+endfunction()
+
+body_sync_test(test_body_sync_logic LIBS body_sync_stand_logic)
+body_sync_test(test_body_sync_wire)
+target_sources(test_body_sync_wire PRIVATE "${BODY_SYNC_DIR}/src/stub_wire.c")
+if(UNIX)
+    target_link_libraries(test_body_sync_wire PRIVATE m)
+endif()
+body_sync_test(test_body_sync_stub LIBS body_sync)
+body_sync_test(test_body_sync_stand LIBS body_sync_stand body_sync)
+body_sync_test(test_body_sync_free_step LIBS body_sync_stand body_sync)
+body_sync_test(test_body_sync_checks LIBS body_sync_stand body_sync)
+box3d_enable(test_body_sync_checks)
+box3d_enable(test_body_sync_stand)
+box3d_enable(test_body_sync_free_step)
+
+# Every shipped scenario is a named case of the command line; its checks are its invariants.
+set(BODY_SYNC_CORE_SCENARIOS two_walk)
+set(BODY_SYNC_SLOW_SCENARIOS stack_punch pile_throw cabinet_carry mannequin_hits grab_dispute breakables_break load_four
+    edge_throw_cut edge_stall edge_deaf)
+foreach(scn IN LISTS BODY_SYNC_CORE_SCENARIOS BODY_SYNC_SLOW_SCENARIOS)
+    add_test(NAME test_body_sync_scn_${scn}
+        COMMAND body_sync_stand_cli "${BODY_SYNC_SCENARIOS}/${scn}.scn" --out "${CMAKE_CURRENT_BINARY_DIR}/${scn}.json" --quiet)
+endforeach()
+
+# One seed, two processes, byte-equal metrics.
+add_test(NAME test_body_sync_two_processes
+    COMMAND "${CMAKE_COMMAND}" -DCLI=$<TARGET_FILE:body_sync_stand_cli> -DSCENARIO=${BODY_SYNC_SCENARIOS}/two_walk.scn
+            -DOUT=${CMAKE_CURRENT_BINARY_DIR} -P "${CMAKE_CURRENT_LIST_DIR}/run_twice.cmake")
+
+set(core_tests test_body_sync_logic test_body_sync_wire test_body_sync_stub test_body_sync_stand test_body_sync_checks test_body_sync_two_processes)
+foreach(scn IN LISTS BODY_SYNC_CORE_SCENARIOS)
+    list(APPEND core_tests test_body_sync_scn_${scn})
+endforeach()
+set(slow_tests test_body_sync_free_step)
+foreach(scn IN LISTS BODY_SYNC_SLOW_SCENARIOS)
+    list(APPEND slow_tests test_body_sync_scn_${scn})
+endforeach()
+set_tests_properties(${core_tests} PROPERTIES LABELS "core")
+set_tests_properties(${slow_tests} PROPERTIES LABELS "slow")
+
+# Scenarios that must not pass, each on a named check: a check that cannot fail proves nothing.
+set(BODY_SYNC_MUST_FAIL "${CMAKE_CURRENT_LIST_DIR}/must_fail")
+function(body_sync_must_fail name rc expect)
+    add_test(NAME test_body_sync_mf_${name}
+        COMMAND "${CMAKE_COMMAND}" -DCLI=$<TARGET_FILE:body_sync_stand_cli> -DSCENARIO=${BODY_SYNC_MUST_FAIL}/${name}.scn
+                -DOUT=${CMAKE_CURRENT_BINARY_DIR} -DRC=${rc} "-DEXPECT=${expect}" -P "${CMAKE_CURRENT_LIST_DIR}/expect_fail.cmake")
+    set_tests_properties(test_body_sync_mf_${name} PROPERTIES LABELS "core")
+endfunction()
+body_sync_must_fail(mf_cut_whole 1 "FAIL line 8 agree_at_rest~g1 left at tick|FAIL line 9 no_stuck~g1 left at tick|FAIL line 10 effects_once~g1 left at tick")
+body_sync_must_fail(mf_cut_delay 1 "FAIL line 7 metric~host_ticks.max")
+body_sync_must_fail(mf_result 1 "FAIL line 6 result~g: failed, expected granted")
+body_sync_must_fail(mf_metric 1 "FAIL line 7 metric~divergence.max")
+body_sync_must_fail(mf_hard_end_moving 1 "FAIL line 9 agree_at_rest~came to rest")
+body_sync_must_fail(mf_one_of 1 "FAIL line 8 one_of~0 of 2 ended granted")
+body_sync_must_fail(mf_loss_agree 1 "FAIL line 7 agree_at_rest~off by")
+body_sync_must_fail(mf_out_of_bounds 1 "FAIL line 9 no_stuck~outside the bounds")
+body_sync_must_fail(mf_claim_unanswered 1 "FAIL line 9 no_stuck~a claim unanswered")
+body_sync_must_fail(mf_frozen_copy 1 "FAIL line 8 no_stuck~frozen")
+body_sync_must_fail(mf_knock_unseen 1 "FAIL line 9 effects_once~shown 0 times")
+body_sync_must_fail(mf_left_not 1 "FAIL line 6 left~g1 stayed")
+body_sync_must_fail(mf_guests0 2 "mf_guests0.scn:6: this check needs a guest")
+body_sync_must_fail(mf_angle_zero 1 "FAIL line 9 agree_at_rest~turned")

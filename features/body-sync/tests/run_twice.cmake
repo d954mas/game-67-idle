@@ -1,0 +1,11 @@
+# Runs one scenario in two separate processes and fails unless the metrics files are byte-equal.
+foreach(run a b)
+    execute_process(COMMAND "${CLI}" "${SCENARIO}" --out "${OUT}/twice_${run}.json" --quiet RESULT_VARIABLE status)
+    if(NOT status EQUAL 0)
+        message(FATAL_ERROR "run ${run} of ${SCENARIO} exited with ${status}")
+    endif()
+endforeach()
+execute_process(COMMAND "${CMAKE_COMMAND}" -E compare_files "${OUT}/twice_a.json" "${OUT}/twice_b.json" RESULT_VARIABLE differ)
+if(NOT differ EQUAL 0)
+    message(FATAL_ERROR "two runs of ${SCENARIO} with one seed wrote different metrics")
+endif()

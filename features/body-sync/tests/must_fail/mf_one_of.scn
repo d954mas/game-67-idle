@@ -1,0 +1,8 @@
+# Both grabs are out of reach: none is granted.
+scenario mf_one_of
+scene two_chars_item
+guests 1
+end 1s
+at 0s p0 grab box as a
+at 0s p1 grab box as b
+expect one_of granted a b

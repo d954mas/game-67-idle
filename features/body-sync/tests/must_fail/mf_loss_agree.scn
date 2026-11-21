@@ -1,0 +1,7 @@
+# Nothing reaches the guest: its world disagrees with the host's at rest.
+scenario mf_loss_agree
+scene two_chars_item
+guests 1
+net g1 to_guest loss 100%
+p0 walk 0 -2
+expect agree_at_rest 5cm

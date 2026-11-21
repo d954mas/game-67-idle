@@ -1,0 +1,7 @@
+# A delay bound while the path is cut: the host sees the walk only after the cut.
+scenario mf_cut_delay
+scene two_chars_item
+guests 1
+p1 walk -2 -1 as w
+at 0s cut g1 for 8s
+expect host_ticks.max <= 30t

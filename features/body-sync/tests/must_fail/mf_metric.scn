@@ -1,0 +1,7 @@
+# No guest's copy of a walking player can match the host to the bit.
+scenario mf_metric
+scene two_chars_item
+guests 1
+net g1 rtt 60ms
+p1 walk -2 -1
+expect divergence.max <= 0m

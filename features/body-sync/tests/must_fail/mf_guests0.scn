@@ -1,0 +1,6 @@
+# Refused as input: with no guest this check would compare nothing.
+scenario mf_guests0
+scene floor_wall
+guests 0
+p0 walk crate
+expect agree_at_rest 5cm

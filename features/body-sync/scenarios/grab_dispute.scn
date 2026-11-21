@@ -1,0 +1,19 @@
+# Both players grab one box in the same tick: the first claim wins, the other is refused.
+scenario grab_dispute
+scene two_chars_item
+seed 21
+guests 1
+settle 6s
+
+net g1 rtt 100ms jitter 10ms
+
+p0 walk box
+p1 walk box
+at 3s p0 grab box as g0
+at 3s p1 grab box as g1
+at 4s p0 throw 2 1 0 speed 6 as pass
+
+expect one_of granted g0 g1
+expect one_of refused g0 g1
+expect agree_at_rest 5cm 5deg
+expect no_stuck

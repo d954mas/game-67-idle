@@ -1,0 +1,6 @@
+# The guest stays the whole run.
+scenario mf_left_not
+scene two_chars_item
+guests 1
+p1 walk -2 -1
+expect left g1
