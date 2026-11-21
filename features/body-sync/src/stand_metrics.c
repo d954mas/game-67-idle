@@ -183,6 +183,7 @@ static const struct {
     {"jerk.frames_over", STAND_UNIT_COUNT},      {"host_ticks.max", STAND_UNIT_TICKS},         {"echo_ticks.max", STAND_UNIT_TICKS},
     {"seen_ticks.max", STAND_UNIT_TICKS},        {"bytes_per_s.to_guest", STAND_UNIT_RATE},    {"bytes_per_s.to_host", STAND_UNIT_RATE},
     {"peak_bytes_per_s.to_guest", STAND_UNIT_RATE}, {"peak_bytes_per_s.to_host", STAND_UNIT_RATE},
+    {"stale_ticks.max", STAND_UNIT_TICKS},       {"deferred.count", STAND_UNIT_COUNT},
 };
 
 bool stand_metric_unit(const char *name, stand_metric_unit_t *unit) {
@@ -256,6 +257,10 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             v = m->jerk_p95_m;
         } else if (strcmp(name, "jerk.frames_over") == 0) {
             v = (double)m->jerk_frames_over;
+        } else if (strcmp(name, "stale_ticks.max") == 0) {
+            v = (double)m->stale_max_ticks;
+        } else if (strcmp(name, "deferred.count") == 0) {
+            v = (double)m->deferred;
         } else if (strncmp(name, "bytes_per_s.", 12) == 0) {
             const body_sync_bytes_t *b = strcmp(name + 12, "to_guest") == 0 ? &m->to_guest : &m->to_host;
             for (uint32_t k = 0; k < BODY_SYNC_KINDS_ALL; k++) {
@@ -499,7 +504,8 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         number(&j, gm->loss);
         put(&j, "},");
         key(&j, "seam");
-        putf(&j, "{\"refused\":%u,\"stale\":%u,\"rejected\":%u}", gm->refused, gm->stale, gm->rejected);
+        putf(&j, "{\"refused\":%u,\"stale\":%u,\"rejected\":%u,\"deferred\":%llu,\"stale_max_ticks\":%u,\"flush_over_limit\":%u,\"packets_to_guest\":%u}",
+             gm->refused, gm->stale, gm->rejected, (unsigned long long)gm->deferred, gm->stale_max_ticks, gm->flush_over_limit, gm->packets_to_guest);
         if (with_series && m) {
             series(&j, m, g);
         }

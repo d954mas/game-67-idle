@@ -1,7 +1,9 @@
 # Runs one scenario that must not pass: the command line must exit with RC (1: a check failed,
 # 2: the input was refused) and its output must match every regular expression of EXPECT
 # (separated by |), so the reason is pinned, not only the line.
-execute_process(COMMAND "${CLI}" "${SCENARIO}" --out "${OUT}/must_fail.json" --quiet
+# One file per scenario and implementation: the cases run side by side.
+get_filename_component(stem "${SCENARIO}" NAME_WE)
+execute_process(COMMAND "${CLI}" "${SCENARIO}" --out "${OUT}/${TAG}${stem}.json" --quiet
     RESULT_VARIABLE status OUTPUT_VARIABLE out ERROR_VARIABLE err)
 set(text "${out}${err}")
 if(NOT status EQUAL RC)

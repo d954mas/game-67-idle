@@ -4,6 +4,9 @@
 
 #include "features/body_sync/body_sync.h"
 #include "stub_wire.h"
+#ifdef SEAM_REAL
+#include "sync_codec.h"
+#endif
 #include "unity.h"
 
 /* The stub on three seams that pass bytes by hand: the contract, case by case, on real Box3D
@@ -19,7 +22,17 @@ typedef struct side {
 } side_t;
 
 static side_t host, guest, other;
-static uint8_t packet[4096];
+/* The seam suite runs on both implementations: built once with each (SEAM_REAL for the real
+   seam). The real one gets a budget that holds every body, so one packet a tick carries what
+   the stub's several do; its fates are answered at once. */
+#ifdef SEAM_REAL
+enum { CAPACITY = 16000 };
+#else
+enum { CAPACITY = 1200 };
+#endif
+static uint8_t packet[CAPACITY + 64];
+static uint16_t numbers[SEATS][SEATS];
+static uint32_t tick_back[SEATS]; /* a seat whose session restarted stamps fewer ticks */
 static uint32_t tick_no = 100;
 static int box3d_asserts;
 
@@ -39,7 +52,8 @@ static body_sync_config_t config_for(b3WorldId world, uint8_t seat) {
                                 .bounds_min = {-100.0f, -20.0f, -100.0f},
                                 .bounds_max = {100.0f, 60.0f, 100.0f},
                                 .max_speed = 100.0f,
-                                .max_spin = 200.0f};
+                                .max_spin = 200.0f,
+                                .state_budget = CAPACITY};
 }
 
 static void build(side_t *s, uint8_t seat) {
@@ -70,6 +84,7 @@ static void build(side_t *s, uint8_t seat) {
 }
 
 void setUp(void) {
+    memset(tick_back, 0, sizeof(tick_back));
     b3SetAssertFcn(count_assert);
     box3d_asserts = 0;
     build(&host, BODY_SYNC_SEAT_HOST);
@@ -92,10 +107,12 @@ void tearDown(void) {
 
 static uint32_t state(side_t *from, side_t *to) {
     uint32_t size = 0, packets = 0;
-    while (body_sync_write_state(from->sync, to->seat, packet, 1200, &size)) {
-        TEST_ASSERT_TRUE(size <= 1200 && size > 0);
-        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_state(to->sync, from->seat, tick_no, packet, size));
-        body_sync_state_sent(from->sync, to->seat, (uint16_t)packets);
+    while (body_sync_write_state(from->sync, to->seat, packet, CAPACITY, &size)) {
+        TEST_ASSERT_TRUE(size <= CAPACITY && size > 0);
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_state(to->sync, from->seat, tick_no - tick_back[from->seat], packet, size));
+        uint16_t n = numbers[from->seat][to->seat]++;
+        body_sync_state_sent(from->sync, to->seat, n);
+        body_sync_resolve(from->sync, to->seat, n, true);
         packets++;
     }
     return packets;
@@ -151,13 +168,48 @@ static float speed_of(b3BodyId body) {
 
 static const body_sync_id_t ID0 = 1u << 16;
 
+/* One host state of one body naming `seat` and `number`, in the linked implementation's bytes. */
+static uint32_t one_state(body_sync_id_t id, uint8_t seat, uint16_t number, float x, float y, float z) {
+#ifdef SEAM_REAL
+    body_sync_config_t c = config_for(host.world, 0);
+    sync_limits_t limits = {{c.bounds_min[0], c.bounds_min[1], c.bounds_min[2]}, {c.bounds_max[0], c.bounds_max[1], c.bounds_max[2]}, c.max_speed, c.max_spin};
+    sync_codec_t codec;
+    TEST_ASSERT_TRUE(sync_codec_init(&codec, &limits));
+    sync_record_t r;
+    memset(&r, 0, sizeof(r));
+    r.slot = (uint16_t)body_sync_id_slot(id);
+    r.generation_low = (uint8_t)(body_sync_id_generation(id) & SYNC_GEN_MASK);
+    r.position[0] = x;
+    r.position[1] = y;
+    r.position[2] = z;
+    r.rotation[3] = 1.0f;
+    r.rare.groups = SYNC_RARE_AUTHORITY;
+    r.rare.seat = seat;
+    r.rare.number = number;
+    TEST_ASSERT_TRUE(sync_codec_limit(&codec, &r));
+    sync_packet_writer_t w;
+    sync_packet_begin(&w, packet, sizeof(packet));
+    TEST_ASSERT_TRUE(sync_packet_add(&w, &codec, &r));
+    return sync_packet_finish(&w);
+#else
+    stub_body_state_t b = {.id = id, .seat = seat, .number = number, .position = {x, y, z}, .rotation = {0, 0, 0, 1}};
+    stub_wire_put_body(packet + STUB_HEADER_BYTES, &b);
+    stub_wire_put_header(packet, 1);
+    return STUB_HEADER_BYTES + STUB_BODY_BYTES;
+#endif
+}
+
 static void test_every_body_reaches_the_guest_within_the_packet_limit(void) {
     step(&host);
     uint32_t packets = state(&host, &guest);
+#ifdef SEAM_REAL
+    TEST_ASSERT_EQUAL_UINT32(1, packets); /* a budgeted sender: one packet a tick */
+#else
     TEST_ASSERT_EQUAL_UINT32((BODIES + stub_wire_bodies_fit(1200) - 1) / stub_wire_bodies_fit(1200), packets);
     body_sync_traffic_t t;
     TEST_ASSERT_TRUE(body_sync_traffic(host.sync, GUEST, &t));
     TEST_ASSERT_EQUAL_UINT64((uint64_t)BODIES * STUB_COPY_BYTES, t.sent_bytes[BODY_SYNC_TRAFFIC_COPY]);
+#endif
     step(&guest);
     TEST_ASSERT_FALSE(body_sync_is_local(guest.sync, body_sync_id_make(7, 1)));
     TEST_ASSERT_EQUAL(b3_kinematicBody, b3Body_GetType(guest.bodies[7]));
@@ -176,13 +228,19 @@ static void test_copy_is_driven_over_one_step(void) {
     TEST_ASSERT_TRUE_MESSAGE(speed_of(guest.bodies[0]) > 1.0f, "the copy was snapped, not driven");
     b3World_Step(guest.world, 1.0f / 60.0f, 4);
     b3Vec3 at = b3Body_GetPosition(guest.bodies[0]);
-    TEST_ASSERT_TRUE_MESSAGE(fabsf(at.x - target.x) < 1e-4f && fabsf(at.y - target.y) < 1e-4f, "the copy missed its pose in one step");
+#ifdef SEAM_REAL
+    const float miss = SYNC_COPY_POSITION_STEP; /* the copy's grid */
+#else
+    const float miss = 1e-4f;
+#endif
+    TEST_ASSERT_TRUE_MESSAGE(fabsf(at.x - target.x) < miss && fabsf(at.y - target.y) < miss, "the copy missed its pose in one step");
 }
 
 /* An older state from the same sender never replaces a newer one. */
 static void test_an_older_state_is_stale(void) {
     tick_all();
     b3Body_SetTransform(host.bodies[0], (b3Vec3){5.0f, 0.2f, 5.0f}, b3Quat_identity);
+    b3Body_SetLinearVelocity(host.bodies[0], (b3Vec3){4.0f, 0.0f, 0.0f}); /* due at once on a budgeted sender too */
     body_sync_collect(host.sync, tick_no);
     tick_no += 10;
     state(&host, &guest);
@@ -308,7 +366,26 @@ static void test_the_host_does_not_echo_a_guests_bodies(void) {
     step(&host);
     state(&host, &guest);
     body_sync_traffic(host.sync, GUEST, &after);
+#ifdef SEAM_REAL
+    (void)before;
+    (void)after;
+    tick_no++;
+    b3Body_SetLinearVelocity(host.bodies[5], (b3Vec3){3.0f, 0.0f, 0.0f}); /* something to send */
+    step(&host);
+    uint32_t size = 0, count = 0;
+    TEST_ASSERT_TRUE(body_sync_write_state(host.sync, GUEST, packet, CAPACITY, &size));
+    body_sync_config_t c = config_for(host.world, 0);
+    sync_limits_t limits = {{c.bounds_min[0], c.bounds_min[1], c.bounds_min[2]}, {c.bounds_max[0], c.bounds_max[1], c.bounds_max[2]}, c.max_speed, c.max_spin};
+    static sync_codec_t codec;
+    static sync_record_t got[BODIES];
+    TEST_ASSERT_TRUE(sync_codec_init(&codec, &limits));
+    TEST_ASSERT_TRUE(sync_packet_read(&codec, SEATS, packet, size, got, BODIES, &count, NULL, 0));
+    for (uint32_t i = 0; i < count; i++) {
+        TEST_ASSERT_TRUE_MESSAGE(got[i].slot != 0, "the host sent a guest its own body");
+    }
+#else
     TEST_ASSERT_EQUAL_UINT64((uint64_t)(BODIES - 1) * STUB_COPY_BYTES, after.sent_bytes[BODY_SYNC_TRAFFIC_COPY] - before.sent_bytes[BODY_SYNC_TRAFFIC_COPY]);
+#endif
 }
 
 /* An honest body past the box or the speeds is written at the limits, so the peer accepts it
@@ -506,10 +583,8 @@ static void test_authority_moves_only_by_newer_announcements(void) {
     uint32_t size = stub_wire_put_record(&same, packet, sizeof(packet));
     TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_record(guest.sync, BODY_SYNC_SEAT_HOST, tick_no, packet, size));
     TEST_ASSERT_FALSE_MESSAGE(body_sync_is_local(guest.sync, ID0), "an equal number moved authority");
-    stub_body_state_t b = {.id = ID0, .seat = GUEST, .number = 50, .position = {0.0f, 0.2f, 0.0f}, .rotation = {0, 0, 0, 1}};
-    stub_wire_put_body(packet + STUB_HEADER_BYTES, &b);
-    stub_wire_put_header(packet, 1);
-    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_state(guest.sync, BODY_SYNC_SEAT_HOST, tick_no + 1, packet, STUB_HEADER_BYTES + STUB_BODY_BYTES));
+    size = one_state(ID0, GUEST, 50, 0.0f, 0.2f, 0.0f);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_state(guest.sync, BODY_SYNC_SEAT_HOST, tick_no + 1, packet, size));
     TEST_ASSERT_FALSE_MESSAGE(body_sync_is_local(guest.sync, ID0), "a host state made the guest local");
     same.number = 1;
     size = stub_wire_put_record(&same, packet, sizeof(packet));
@@ -598,15 +673,22 @@ static void test_a_pose_of_an_old_grant_is_rejected(void) {
     grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
     tick_all();
     b3Body_SetTransform(guest.bodies[0], (b3Vec3){5.0f, 5.0f, 5.0f}, b3Quat_identity);
+    b3Body_SetLinearVelocity(guest.bodies[0], (b3Vec3){4.0f, 0.0f, 0.0f}); /* due at once on a budgeted sender too */
     body_sync_collect(guest.sync, tick_no);
     uint32_t old_size = 0;
     body_sync_write_state(guest.sync, BODY_SYNC_SEAT_HOST, packet, 1200, &old_size);
     uint8_t old[1200];
     memcpy(old, packet, old_size);
     uint32_t old_tick = ++tick_no;
+    uint32_t first = old_size;
     while (body_sync_write_state(guest.sync, BODY_SYNC_SEAT_HOST, packet, 1200, &old_size)) {
     }
+#ifdef SEAM_REAL
+    old_size = first;
+#else
+    (void)first;
     old_size = STUB_HEADER_BYTES + STUB_BODY_BYTES;
+#endif
     body_sync_assign(host.sync, ID0, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE);
     body_sync_assign(host.sync, ID0, GUEST, BODY_SYNC_HOLD_UNTIL_RELEASE);
     body_sync_traffic_t t0, t1;
@@ -672,6 +754,22 @@ static void test_a_revoke_seen_by_state_first_clears_the_holder(void) {
 
 /* One judge of contacts: a thrown body goes back to the host on its first contact with a
    moving body, long before it would sleep. */
+/* The character that let a body go is no contact that ends its settled hold. */
+static void test_a_settled_hold_ignores_its_last_holder(void) {
+    tick_all();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    body_sync_set_holder(guest.sync, ID0, body_sync_id_make(1, 1));
+    body_sync_set_holder(guest.sync, ID0, BODY_SYNC_ID_NONE);
+    body_sync_apply(guest.sync, tick_no);
+    b3Body_SetLinearVelocity(guest.bodies[0], (b3Vec3){6.0f, 0.0f, 0.0f}); /* into body 1 */
+    for (int ticks = 0; ticks < 20; ticks++) {
+        tick_no++;
+        b3World_Step(guest.world, 1.0f / 60.0f, 4);
+        body_sync_collect(guest.sync, tick_no);
+    }
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_is_local(guest.sync, ID0), "a touch of the last holder ended the hold");
+}
+
 static void test_a_settled_hold_ends_at_the_first_contact(void) {
     tick_all();
     grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED);
@@ -780,6 +878,7 @@ static void test_receive_fuzz(void) {
             step(&guest);
         }
     }
+#ifndef SEAM_REAL /* the stub's own byte layout: the codec's suite covers the real one */
     /* rotations at the edge of the tolerance reach Box3D unit */
     for (int i = 0; i < 64; i++) {
         memcpy(buffer, valid, size);
@@ -789,6 +888,7 @@ static void test_receive_fuzz(void) {
         b3Body_SetTransform(guest.bodies[0], (b3Vec3){30.0f, 5.0f, 30.0f}, b3Quat_identity);
         step(&guest);
     }
+#endif
     for (int i = 0; i < 3000; i++) {
         seed = seed * 6364136223846793005ull + 1442695040888963407ull;
         uint32_t n = (uint32_t)((seed >> 33) % sizeof(buffer));
@@ -884,7 +984,6 @@ static void test_locks_follow_the_last_owner_on_a_forced_move(void) {
     tick_all();
     b3Body_SetMotionLocks(guest.bodies[0], (b3MotionLocks){0});
     tick_all();
-    tick_all(); /* the host relays the guest's state to the other guest a tick later */
     TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_assign(host.sync, ID0, OTHER, BODY_SYNC_HOLD_UNTIL_RELEASE));
     records(&host, &guest);
     records(&host, &other);
@@ -892,6 +991,258 @@ static void test_locks_follow_the_last_owner_on_a_forced_move(void) {
     tick_all();
     TEST_ASSERT_TRUE(body_sync_is_local(other.sync, ID0));
     TEST_ASSERT_EQUAL_INT(0, angular_locks(&other));
+}
+
+/* Steps every world with no state packet delivered: only reliable records move. */
+static void tick_dark(void) {
+    tick_no++;
+    step(&host);
+    step(&guest);
+    step(&other);
+}
+
+/* A handover does not wait for the state that would carry the body's flags, type and locks:
+   the grant and the release carry them. */
+static void test_a_handover_carries_flags_type_and_locks(void) {
+    tick_all();
+    tick_all();
+    body_sync_set_flags(host.sync, ID0, 6);
+    b3Body_SetType(host.bodies[0], b3_kinematicBody);
+    b3Body_SetMotionLocks(host.bodies[0], (b3MotionLocks){.angularY = true});
+    tick_dark();
+    tick_dark();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_dark();
+    TEST_ASSERT_TRUE(body_sync_is_local(guest.sync, ID0));
+    TEST_ASSERT_EQUAL_UINT8(6, body_sync_flags(guest.sync, ID0));
+    TEST_ASSERT_EQUAL(b3_kinematicBody, b3Body_GetType(guest.bodies[0]));
+    b3MotionLocks l = b3Body_GetMotionLocks(guest.bodies[0]);
+    TEST_ASSERT_TRUE(l.angularY && !l.angularX && !l.angularZ);
+    /* and back: the guest changes them and releases before any state of it reaches the host */
+    body_sync_set_flags(guest.sync, ID0, 9);
+    b3Body_SetType(guest.bodies[0], b3_dynamicBody);
+    b3Body_SetMotionLocks(guest.bodies[0], (b3MotionLocks){.angularX = true, .angularZ = true});
+    tick_dark();
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    records(&guest, &host);
+    tick_dark();
+    TEST_ASSERT_TRUE(body_sync_is_local(host.sync, ID0));
+    TEST_ASSERT_EQUAL_UINT8(9, body_sync_flags(host.sync, ID0));
+    TEST_ASSERT_EQUAL(b3_dynamicBody, b3Body_GetType(host.bodies[0]));
+    l = b3Body_GetMotionLocks(host.bodies[0]);
+    TEST_ASSERT_TRUE(l.angularX && l.angularZ && !l.angularY);
+}
+
+/* A late state packet arriving after a newer one changes nothing: it neither counts as a pose
+   nor moves back the authority number its sender declared. */
+static void test_a_late_packet_changes_nothing(void) {
+    tick_all();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    b3Body_SetLinearVelocity(guest.bodies[0], (b3Vec3){2.0f, 0.0f, 0.0f});
+    tick_no++;
+    step(&host);
+    step(&guest);
+    uint32_t old_size = 0;
+    TEST_ASSERT_TRUE(body_sync_write_state(guest.sync, BODY_SYNC_SEAT_HOST, packet, CAPACITY, &old_size));
+    static uint8_t old[CAPACITY];
+    memcpy(old, packet, old_size);
+    uint32_t old_tick = tick_no;
+    body_sync_assign(host.sync, ID0, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    body_sync_assign(host.sync, ID0, GUEST, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    records(&host, &guest);
+    tick_all(); /* the guest declares the new number */
+    tick_all();
+    body_sync_traffic_t t0, t1;
+    body_sync_receive_state(host.sync, GUEST, old_tick, old, old_size); /* itself stale or rejected */
+    body_sync_traffic(host.sync, GUEST, &t0);
+    for (int i = 0; i < 6; i++) {
+        b3Body_SetLinearVelocity(guest.bodies[0], (b3Vec3){2.0f + (float)(i % 2), 0.0f, 0.0f});
+        tick_all();
+    }
+    body_sync_traffic(host.sync, GUEST, &t1);
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(t0.rejected, t1.rejected, "a late packet made the host reject the owner's poses");
+    b3Vec3 g = b3Body_GetPosition(guest.bodies[0]), h = b3Body_GetPosition(host.bodies[0]);
+    TEST_ASSERT_TRUE_MESSAGE(fabsf(g.x - h.x) < 0.2f, "the host's copy froze");
+}
+
+/* A copy holds still without news, and one placed far away does not drift on the velocity it
+   was driven with before. */
+static void test_a_copy_stops_without_news_and_after_a_jump(void) {
+    tick_all();
+    tick_all();
+    for (int i = 0; i < 3; i++) {
+        b3Body_SetLinearVelocity(host.bodies[0], (b3Vec3){3.0f, 0.0f, 0.0f});
+        tick_all();
+    }
+    TEST_ASSERT_TRUE(speed_of(guest.bodies[0]) > 1.0f); /* driven */
+    b3Vec3 last = b3Body_GetPosition(guest.bodies[0]);
+    tick_dark();
+    tick_dark();
+    b3Vec3 now = b3Body_GetPosition(guest.bodies[0]);
+    TEST_ASSERT_TRUE_MESSAGE(fabsf(now.x - last.x) < 0.06f, "a copy without news coasted");
+    tick_dark();
+    TEST_ASSERT_TRUE_MESSAGE(fabsf(b3Body_GetPosition(guest.bodies[0]).x - now.x) < 1e-5f, "a copy without news coasted");
+    for (int i = 0; i < 3; i++) {
+        b3Body_SetLinearVelocity(host.bodies[0], (b3Vec3){3.0f, 0.0f, 0.0f});
+        tick_all();
+    }
+    b3Body_SetTransform(host.bodies[0], (b3Vec3){12.0f, 0.2f, 12.0f}, b3Quat_identity);
+    b3Body_SetLinearVelocity(host.bodies[0], (b3Vec3){0.0f, 0.0f, 0.0f});
+    tick_all();
+    tick_all(); /* the copy jumps, and steps once from there */
+    TEST_ASSERT_TRUE_MESSAGE(fabsf(b3Body_GetPosition(guest.bodies[0]).x - 12.0f) < 0.02f, "a placed copy drifted on its old velocity");
+}
+
+/* A guest that leaves and comes back with its tick count started over is heard again. */
+static void test_a_rejoined_guest_with_new_ticks_is_heard(void) {
+    tick_all();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    for (int i = 0; i < 4; i++) {
+        b3Body_SetLinearVelocity(guest.bodies[0], (b3Vec3){1.0f, 0.0f, 0.0f});
+        tick_all();
+    }
+    body_sync_seat_left(host.sync, GUEST);
+    body_sync_seat_joined(host.sync, GUEST);
+    body_sync_destroy(guest.sync);
+    body_sync_config_t config = config_for(guest.world, GUEST);
+    guest.sync = body_sync_create(&config);
+    TEST_ASSERT_NOT_NULL(guest.sync);
+    for (uint32_t i = 0; i < BODIES; i++) {
+        body_sync_bind_t bind = {.body = guest.bodies[i], .body_class = BODY_SYNC_CLASS_LIGHT, .authority = BODY_SYNC_SEAT_HOST};
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(guest.sync, body_sync_id_make(i, 1), &bind));
+    }
+    body_sync_seat_joined(guest.sync, BODY_SYNC_SEAT_HOST);
+    tick_back[GUEST] = 90; /* its new session counts from far below the old one */
+    numbers[GUEST][BODY_SYNC_SEAT_HOST] = 0;
+    numbers[BODY_SYNC_SEAT_HOST][GUEST] = 0;
+    tick_all();
+    tick_all();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    body_sync_traffic_t t0, t1;
+    body_sync_traffic(host.sync, GUEST, &t0);
+    for (int i = 0; i < 8; i++) {
+        b3Body_SetLinearVelocity(guest.bodies[0], (b3Vec3){-1.5f, 0.0f, 0.0f});
+        tick_all();
+    }
+    body_sync_traffic(host.sync, GUEST, &t1);
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(t0.stale, t1.stale, "the rejoined guest's packets read as stale");
+    b3Vec3 g = b3Body_GetPosition(guest.bodies[0]), h = b3Body_GetPosition(host.bodies[0]);
+    TEST_ASSERT_TRUE_MESSAGE(fabsf(g.x - h.x) < 0.1f, "the host froze the rejoined guest's body");
+}
+
+/* A claimant keeps the motion type it set itself, and takes the locks the host changed. */
+static void test_a_claimant_keeps_its_own_type_and_takes_the_hosts_locks(void) {
+    b3Body_SetMotionLocks(host.bodies[0], ANGULAR_LOCKED);
+    tick_all();
+    tick_all();
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_claim(guest.sync, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    records(&guest, &host);
+    tick_no++;
+    step(&guest); /* the take resumes */
+    b3Body_SetType(guest.bodies[0], b3_kinematicBody); /* it carries the body */
+    body_sync_collect(guest.sync, tick_no);
+    b3Body_SetMotionLocks(host.bodies[0], (b3MotionLocks){0}); /* the host knocks it */
+    step(&host);
+    body_sync_claim_event_t c;
+    TEST_ASSERT_TRUE(body_sync_poll_claim(host.sync, &c));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_answer(host.sync, &c, true));
+    records(&host, &guest);
+    tick_no++;
+    step(&guest);
+    TEST_ASSERT_EQUAL_MESSAGE(b3_kinematicBody, b3Body_GetType(guest.bodies[0]), "the grant took the claimant's own type");
+    b3MotionLocks l = b3Body_GetMotionLocks(guest.bodies[0]);
+    TEST_ASSERT_FALSE_MESSAGE(l.angularX || l.angularY || l.angularZ, "the claimant kept locks the host had freed");
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    records(&guest, &host);
+    tick_no++;
+    step(&host);
+    l = b3Body_GetMotionLocks(host.bodies[0]);
+    TEST_ASSERT_FALSE_MESSAGE(l.angularX || l.angularY || l.angularZ, "the host's body came back locked");
+}
+
+/* A copy's hold is the owner's, from its state; a holder is named only by a body of that
+   generation. */
+static void test_a_copy_reads_hold_and_holder_from_its_owner(void) {
+    tick_all();
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_claim(host.sync, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_holder(host.sync, ID0, body_sync_id_make(5, 2))); /* slot 5 holds generation 1 */
+    b3Body_SetLinearVelocity(host.bodies[0], (b3Vec3){0.0f, 3.0f, 0.0f});
+    tick_all();
+    tick_all();
+    body_sync_authority_t a;
+    TEST_ASSERT_TRUE(body_sync_authority(guest.sync, ID0, &a));
+    TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_HOLD_UNTIL_SETTLED, a.hold, "a copy's hold did not come from its owner");
+    TEST_ASSERT_TRUE_MESSAGE(a.holder == BODY_SYNC_ID_NONE || a.holder == body_sync_id_make(5, 2), "a holder of another generation was taken");
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_holder(host.sync, ID0, body_sync_id_make(5, 1)));
+    tick_all();
+    tick_all();
+    TEST_ASSERT_TRUE(body_sync_authority(guest.sync, ID0, &a));
+    TEST_ASSERT_EQUAL_UINT32(body_sync_id_make(5, 1), a.holder);
+}
+
+/* A slot bound again starts over: the new body's rest pose goes out though the old body's was
+   acknowledged at a pose the new one does not have. */
+static void test_a_slot_bound_again_starts_over(void) {
+    for (int i = 0; i < 60; i++) {
+        tick_all();
+    }
+    body_sync_id_t old = body_sync_id_make(7, 1), young = body_sync_id_make(7, 2);
+    side_t *sides[] = {&host, &guest, &other};
+    for (int k = 0; k < 3; k++) {
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(sides[k]->sync, old));
+    }
+    b3Body_SetTransform(host.bodies[7], (b3Vec3){7.0f, 0.2f, 9.0f}, b3Quat_identity);
+    b3Body_SetAwake(host.bodies[7], false);
+    for (int k = 0; k < 3; k++) {
+        body_sync_bind_t bind = {.body = sides[k]->bodies[7], .body_class = BODY_SYNC_CLASS_LIGHT, .authority = BODY_SYNC_SEAT_HOST};
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(sides[k]->sync, young, &bind));
+    }
+    for (int i = 0; i < 4; i++) {
+        tick_all();
+    }
+    b3Vec3 g = b3Body_GetPosition(guest.bodies[7]);
+    TEST_ASSERT_TRUE_MESSAGE(fabsf(g.x - 7.0f) < 0.01f && fabsf(g.z - 9.0f) < 0.01f, "the new body was never sent: the slot kept the old one's memory");
+}
+
+/* What the host changes in the tick it answers or moves goes with the record. */
+static void test_a_grant_carries_the_hosts_change_of_that_tick(void) {
+    b3Body_SetMotionLocks(host.bodies[0], ANGULAR_LOCKED);
+    tick_all();
+    tick_all();
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_claim(guest.sync, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    records(&guest, &host);
+    b3Body_SetMotionLocks(host.bodies[0], (b3MotionLocks){0}); /* freed, then answered, no collect between */
+    body_sync_claim_event_t c;
+    TEST_ASSERT_TRUE(body_sync_poll_claim(host.sync, &c));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_answer(host.sync, &c, true));
+    records(&host, &guest);
+    tick_no++;
+    step(&guest);
+    b3MotionLocks l = b3Body_GetMotionLocks(guest.bodies[0]);
+    TEST_ASSERT_FALSE_MESSAGE(l.angularX || l.angularY || l.angularZ, "the grant carried the locks of the last collect");
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    records(&guest, &host);
+    tick_all();
+    b3Body_SetType(host.bodies[0], b3_kinematicBody); /* changed, then moved by force at once */
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_assign(host.sync, ID0, GUEST, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    records(&host, &guest);
+    tick_no++;
+    step(&guest);
+    TEST_ASSERT_EQUAL_MESSAGE(b3_kinematicBody, b3Body_GetType(guest.bodies[0]), "the forced move carried the type of the last collect");
+}
+
+/* A claimant keeps the flag bits it set itself; the others come from the grant. */
+static void test_a_claimant_keeps_its_own_flag_bits_only(void) {
+    tick_all();
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_claim(guest.sync, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_flags(guest.sync, ID0, (uint8_t)(body_sync_flags(guest.sync, ID0) | 2u)));
+    records(&guest, &host);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_flags(host.sync, ID0, (uint8_t)(body_sync_flags(host.sync, ID0) | 1u))); /* a knock */
+    body_sync_claim_event_t c;
+    TEST_ASSERT_TRUE(body_sync_poll_claim(host.sync, &c));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_answer(host.sync, &c, true));
+    records(&host, &guest);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, body_sync_flags(guest.sync, ID0), "the claimant's own bit or the host's knock was lost");
 }
 
 int main(void) {
@@ -928,5 +1279,15 @@ int main(void) {
     RUN_TEST(test_locks_follow_the_last_owner_when_a_settled_hold_returns);
     RUN_TEST(test_locks_follow_the_last_owner_when_its_seat_leaves);
     RUN_TEST(test_locks_follow_the_last_owner_on_a_forced_move);
+    RUN_TEST(test_a_handover_carries_flags_type_and_locks);
+    RUN_TEST(test_a_late_packet_changes_nothing);
+    RUN_TEST(test_a_copy_stops_without_news_and_after_a_jump);
+    RUN_TEST(test_a_settled_hold_ignores_its_last_holder);
+    RUN_TEST(test_a_rejoined_guest_with_new_ticks_is_heard);
+    RUN_TEST(test_a_claimant_keeps_its_own_type_and_takes_the_hosts_locks);
+    RUN_TEST(test_a_copy_reads_hold_and_holder_from_its_owner);
+    RUN_TEST(test_a_slot_bound_again_starts_over);
+    RUN_TEST(test_a_grant_carries_the_hosts_change_of_that_tick);
+    RUN_TEST(test_a_claimant_keeps_its_own_flag_bits_only);
     return UNITY_END();
 }

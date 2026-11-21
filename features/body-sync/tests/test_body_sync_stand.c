@@ -171,7 +171,7 @@ static void test_facing_and_activity_travel_to_the_other_endpoint(void) {
     body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
     TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
     uint32_t seen[2][2] = {{0, 0}, {0, 0}}; /* [endpoint][player]: a bit per activity */
-    float yaw_y[2] = {0.0f, 0.0f};          /* p0's rotation.y on each endpoint at the end */
+    float turn[2][4] = {{0}};               /* p0's rotation on each endpoint at the end */
     bool more = true;
     for (uint32_t tick = 0; more && tick < 1200; tick++) {
         more = body_sync_stand_tick(stand);
@@ -186,7 +186,7 @@ static void test_facing_and_activity_travel_to_the_other_endpoint(void) {
                 TEST_ASSERT_TRUE(v.activity >= BODY_SYNC_ACTIVITY_IDLE && v.activity <= BODY_SYNC_ACTIVITY_PUNCH);
                 seen[e][v.player] |= 1u << v.activity;
                 if (v.player == 0) {
-                    yaw_y[e] = v.rotation[1];
+                    memcpy(turn[e], v.rotation, sizeof(turn[e]));
                 }
             }
         }
@@ -198,8 +198,10 @@ static void test_facing_and_activity_travel_to_the_other_endpoint(void) {
     TEST_ASSERT_TRUE(seen[0][1] & (1u << BODY_SYNC_ACTIVITY_THROW));
     TEST_ASSERT_TRUE(seen[0][1] & (1u << BODY_SYNC_ACTIVITY_PUNCH));
     /* p0 started facing +X and walked to -X: a yaw of -90 degrees, the same on both. */
-    TEST_ASSERT_TRUE(fabsf(yaw_y[0] + 0.7071f) < 0.02f);
-    TEST_ASSERT_TRUE(fabsf(yaw_y[0] - yaw_y[1]) < 0.02f);
+    /* q and -q are one rotation (a smallest-three reader may return either): compare by the dot. */
+    TEST_ASSERT_TRUE(fabsf(fabsf(turn[0][1]) - 0.7071f) < 0.02f && turn[0][1] * turn[0][3] < 0.0f);
+    float dot = turn[0][0] * turn[1][0] + turn[0][1] * turn[1][1] + turn[0][2] * turn[1][2] + turn[0][3] * turn[1][3];
+    TEST_ASSERT_TRUE(fabsf(dot) > 0.9995f);
     body_sync_stand_destroy(stand);
 }
 

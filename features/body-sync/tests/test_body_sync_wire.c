@@ -200,10 +200,11 @@ static void test_each_field_is_bounded(void) {
 static void test_records_round_trip_and_keep_their_direction(void) {
     const stub_record_t records[] = {
         {.type = STUB_REC_CLAIM, .id = 5u | (1u << 16), .hold = 1, .sequence = 9},
-        {.type = STUB_REC_RELEASE, .id = 6u | (2u << 16)},
-        {.type = STUB_REC_ASSIGN, .id = 7u | (3u << 16), .seat = 2, .number = 900, .hold = 1, .sequence = 4},
+        {.type = STUB_REC_RELEASE, .id = 6u | (2u << 16), .flags = 9, .motion_known = true, .kinematic = true, .locks = 0x2A},
+        {.type = STUB_REC_ASSIGN, .id = 7u | (3u << 16), .seat = 2, .number = 900, .hold = 1, .sequence = 4, .flags = 5, .motion_known = true,
+         .locks = 0x15},
     };
-    uint8_t buffer[16];
+    uint8_t buffer[STUB_RECORD_BYTES_MAX];
     stub_record_t out;
     char why[96];
     for (int i = 0; i < 3; i++) {
@@ -217,6 +218,20 @@ static void test_records_round_trip_and_keep_their_direction(void) {
         TEST_ASSERT_EQUAL_UINT8(records[i].hold, out.hold);
         TEST_ASSERT_EQUAL_UINT16(records[i].sequence, out.sequence);
         TEST_ASSERT_EQUAL_UINT8(records[i].seat, out.seat);
+        TEST_ASSERT_EQUAL_UINT8(records[i].flags, out.flags);
+        TEST_ASSERT_EQUAL(records[i].motion_known, out.motion_known);
+        TEST_ASSERT_EQUAL(records[i].kinematic, out.kinematic);
+        TEST_ASSERT_EQUAL_UINT8(records[i].locks, out.locks);
+        if (records[i].type != STUB_REC_CLAIM) {
+            /* the body's reserved bits: the top two of the flags byte and of the locks byte */
+            for (uint32_t back = 1; back <= 2; back++) {
+                for (uint8_t bit = 0x40; bit; bit = (uint8_t)(bit << 1)) {
+                    buffer[size - back] ^= bit;
+                    TEST_ASSERT_FALSE(stub_wire_read_record(buffer, size, SEATS, from_host, &out, why, sizeof(why)));
+                    buffer[size - back] ^= bit;
+                }
+            }
+        }
         TEST_ASSERT_FALSE(stub_wire_read_record(buffer, size, SEATS, !from_host, &out, why, sizeof(why)));
         for (uint32_t cut = 0; cut < size; cut++) {
             TEST_ASSERT_FALSE(stub_wire_read_record(buffer, cut, SEATS, from_host, &out, why, sizeof(why)));

@@ -19,7 +19,19 @@ target_sources(test_body_sync_wire PRIVATE "${BODY_SYNC_DIR}/src/stub_wire.c")
 if(UNIX)
     target_link_libraries(test_body_sync_wire PRIVATE m)
 endif()
-body_sync_test(test_body_sync_stub LIBS body_sync)
+body_sync_test(test_body_sync_stub LIBS body_sync_stub)
+# The same seam suite on the real implementation.
+add_executable(test_body_sync_seam_real test_body_sync_stub.c)
+target_include_directories(test_body_sync_seam_real PRIVATE "${BODY_SYNC_DIR}/src")
+target_compile_definitions(test_body_sync_seam_real PRIVATE SEAM_REAL=1)
+target_link_libraries(test_body_sync_seam_real PRIVATE body_sync net_bits unity)
+nt_set_warning_flags(test_body_sync_seam_real)
+nt_set_sanitizer_flags(test_body_sync_seam_real)
+add_test(NAME test_body_sync_seam_real COMMAND test_body_sync_seam_real WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+body_sync_test(test_body_sync_codec LIBS body_sync_parts)
+body_sync_test(test_body_sync_sender LIBS body_sync_parts)
+body_sync_test(test_body_sync_authority LIBS body_sync_parts)
+body_sync_test(test_body_sync_real LIBS body_sync net_bits)
 body_sync_test(test_body_sync_stand LIBS body_sync_stand body_sync)
 body_sync_test(test_body_sync_free_step LIBS body_sync_stand body_sync)
 body_sync_test(test_body_sync_checks LIBS body_sync_stand body_sync)
@@ -27,38 +39,60 @@ box3d_enable(test_body_sync_checks)
 box3d_enable(test_body_sync_stand)
 box3d_enable(test_body_sync_free_step)
 
-# Every shipped scenario is a named case of the command line; its checks are its invariants.
+# Every shipped scenario is a named case of the command line, on each implementation: its
+# checks are its invariants. The real seam's cases keep the plain names; the stub's say stub.
 set(BODY_SYNC_CORE_SCENARIOS two_walk)
 set(BODY_SYNC_SLOW_SCENARIOS stack_punch pile_throw cabinet_carry mannequin_hits grab_dispute breakables_break load_four
-    edge_throw_cut edge_stall edge_deaf)
-foreach(scn IN LISTS BODY_SYNC_CORE_SCENARIOS BODY_SYNC_SLOW_SCENARIOS)
-    add_test(NAME test_body_sync_scn_${scn}
-        COMMAND body_sync_stand_cli "${BODY_SYNC_SCENARIOS}/${scn}.scn" --out "${CMAKE_CURRENT_BINARY_DIR}/${scn}.json" --quiet)
-endforeach()
+    edge_throw_cut edge_stall edge_deaf load_overflow pile_settle_loss10 throw_catch)
+set(BODY_SYNC_IMPLS "body_sync_stand_cli|" "body_sync_stand_cli_stub|stub_")
 
-# One seed, two processes, byte-equal metrics.
-add_test(NAME test_body_sync_two_processes
-    COMMAND "${CMAKE_COMMAND}" -DCLI=$<TARGET_FILE:body_sync_stand_cli> -DSCENARIO=${BODY_SYNC_SCENARIOS}/two_walk.scn
-            -DOUT=${CMAKE_CURRENT_BINARY_DIR} -P "${CMAKE_CURRENT_LIST_DIR}/run_twice.cmake")
-
-set(core_tests test_body_sync_logic test_body_sync_wire test_body_sync_stub test_body_sync_stand test_body_sync_checks test_body_sync_two_processes)
-foreach(scn IN LISTS BODY_SYNC_CORE_SCENARIOS)
-    list(APPEND core_tests test_body_sync_scn_${scn})
-endforeach()
+set(core_tests test_body_sync_logic test_body_sync_wire test_body_sync_stub test_body_sync_seam_real test_body_sync_codec test_body_sync_sender test_body_sync_authority test_body_sync_real
+    test_body_sync_stand test_body_sync_checks)
 set(slow_tests test_body_sync_free_step)
-foreach(scn IN LISTS BODY_SYNC_SLOW_SCENARIOS)
-    list(APPEND slow_tests test_body_sync_scn_${scn})
+foreach(impl IN LISTS BODY_SYNC_IMPLS)
+    string(REPLACE "|" ";" parts "${impl}")
+    list(GET parts 0 cli)
+    list(LENGTH parts n)
+    set(tag "")
+    if(n GREATER 1)
+        list(GET parts 1 tag)
+    endif()
+    foreach(scn IN LISTS BODY_SYNC_CORE_SCENARIOS BODY_SYNC_SLOW_SCENARIOS)
+        add_test(NAME test_body_sync_${tag}scn_${scn}
+            COMMAND ${cli} "${BODY_SYNC_SCENARIOS}/${scn}.scn" --out "${CMAKE_CURRENT_BINARY_DIR}/${tag}${scn}.json" --quiet)
+    endforeach()
+    foreach(scn IN LISTS BODY_SYNC_CORE_SCENARIOS)
+        list(APPEND core_tests test_body_sync_${tag}scn_${scn})
+    endforeach()
+    foreach(scn IN LISTS BODY_SYNC_SLOW_SCENARIOS)
+        list(APPEND slow_tests test_body_sync_${tag}scn_${scn})
+    endforeach()
+    # One seed, two processes, byte-equal metrics.
+    add_test(NAME test_body_sync_${tag}two_processes
+        COMMAND "${CMAKE_COMMAND}" -DCLI=$<TARGET_FILE:${cli}> -DSCENARIO=${BODY_SYNC_SCENARIOS}/two_walk.scn
+                -DOUT=${CMAKE_CURRENT_BINARY_DIR} -DTAG=${tag} -P "${CMAKE_CURRENT_LIST_DIR}/run_twice.cmake")
+    list(APPEND core_tests test_body_sync_${tag}two_processes)
 endforeach()
 set_tests_properties(${core_tests} PROPERTIES LABELS "core")
 set_tests_properties(${slow_tests} PROPERTIES LABELS "slow")
 
-# Scenarios that must not pass, each on a named check: a check that cannot fail proves nothing.
+# Scenarios that must not pass, each on a named check and on each implementation: a check that
+# cannot fail proves nothing.
 set(BODY_SYNC_MUST_FAIL "${CMAKE_CURRENT_LIST_DIR}/must_fail")
 function(body_sync_must_fail name rc expect)
-    add_test(NAME test_body_sync_mf_${name}
-        COMMAND "${CMAKE_COMMAND}" -DCLI=$<TARGET_FILE:body_sync_stand_cli> -DSCENARIO=${BODY_SYNC_MUST_FAIL}/${name}.scn
-                -DOUT=${CMAKE_CURRENT_BINARY_DIR} -DRC=${rc} "-DEXPECT=${expect}" -P "${CMAKE_CURRENT_LIST_DIR}/expect_fail.cmake")
-    set_tests_properties(test_body_sync_mf_${name} PROPERTIES LABELS "core")
+    foreach(impl IN LISTS BODY_SYNC_IMPLS)
+        string(REPLACE "|" ";" parts "${impl}")
+        list(GET parts 0 cli)
+        list(LENGTH parts n)
+        set(tag "")
+        if(n GREATER 1)
+            list(GET parts 1 tag)
+        endif()
+        add_test(NAME test_body_sync_${tag}mf_${name}
+            COMMAND "${CMAKE_COMMAND}" -DCLI=$<TARGET_FILE:${cli}> -DSCENARIO=${BODY_SYNC_MUST_FAIL}/${name}.scn
+                    -DOUT=${CMAKE_CURRENT_BINARY_DIR} -DTAG=${tag} -DRC=${rc} "-DEXPECT=${expect}" -P "${CMAKE_CURRENT_LIST_DIR}/expect_fail.cmake")
+        set_tests_properties(test_body_sync_${tag}mf_${name} PROPERTIES LABELS "core")
+    endforeach()
 endfunction()
 body_sync_must_fail(mf_cut_whole 1 "FAIL line 8 agree_at_rest~g1 left at tick|FAIL line 9 no_stuck~g1 left at tick|FAIL line 10 effects_once~g1 left at tick")
 body_sync_must_fail(mf_cut_delay 1 "FAIL line 7 metric~host_ticks.max")

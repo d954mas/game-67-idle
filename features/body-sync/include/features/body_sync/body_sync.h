@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "box3d/box3d.h"
+#include "features/body_sync/body_sync_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,44 +37,6 @@ extern "C" {
 
 typedef struct body_sync body_sync_t;
 
-enum {
-    BODY_SYNC_SEATS_MAX = 4,
-    BODY_SYNC_SEAT_HOST = 0,
-    BODY_SYNC_SEAT_NONE = 0xFF,
-    /* Slots of bound bodies per endpoint; the copy record names a slot in 10 bits. */
-    BODY_SYNC_BODIES_MAX = 1024,
-    /* Low bits of body_sync_set_flags that travel with a body's pose; higher bits are refused. */
-    BODY_SYNC_FLAG_BITS = 4,
-    /* The largest record the seam writes; a capacity below it gets no record. */
-    BODY_SYNC_RECORD_MAX = 64,
-    /* A guest's claims and releases queued and not yet popped; past it they answer FULL. The
-       host's records never fill: what it owes a seat is kept per body and the newest is sent. */
-    BODY_SYNC_RECORDS_QUEUED = 256,
-};
-
-/* A body's network number: slot in the low 16 bits (below BODY_SYNC_BODIES_MAX), generation in
-   the high 16 bits (1..65535; a slot taken again takes the next one). Zero is no body. Every
-   endpoint binds the same number to its own copy of the same body. An implementation may send
-   fewer generation bits; it names how many in its README, since a stale packet whose
-   generation matches modulo that width reads as current. */
-typedef uint32_t body_sync_id_t;
-#define BODY_SYNC_ID_NONE 0u
-
-static inline body_sync_id_t body_sync_id_make(uint32_t slot, uint32_t generation) {
-    return (slot & 0xFFFFu) | (generation << 16);
-}
-static inline uint32_t body_sync_id_slot(body_sync_id_t id) { return id & 0xFFFFu; }
-static inline uint32_t body_sync_id_generation(body_sync_id_t id) { return id >> 16; }
-
-typedef enum body_sync_result {
-    BODY_SYNC_OK = 0,
-    BODY_SYNC_INVALID, /* a call outside the contract: id, seat or role out of range; nothing changed */
-    BODY_SYNC_TAKEN,   /* bind: the slot already holds a body */
-    BODY_SYNC_UNKNOWN, /* no body under that id, or no such claim pending; nothing changed */
-    BODY_SYNC_FULL,    /* a guest's record queue is full: retry after popping; nothing changed */
-    BODY_SYNC_FORMAT,  /* peer bytes refused whole; close that peer */
-} body_sync_result_t;
-
 typedef struct body_sync_config {
     /* The endpoint's world. The seam reads and moves its bound bodies, never creates or
        destroys one, and never touches unbound bodies. */
@@ -95,14 +58,24 @@ typedef struct body_sync_config {
     float bounds_max[3];
     float max_speed;
     float max_spin;
+    /* Bytes a state packet may hold, before the capacity of each body_sync_write_state: zero
+       takes the implementation's default (the real sender's is 1000). The stub ignores it. */
+    uint32_t state_budget;
 } body_sync_config_t;
 
-/* NULL when the config is out of range or memory is short. All memory is taken here. */
+/* NULL when the config is out of range, its limits are too wide for the implementation's wire
+   (the real one: every coordinate of the box below 2048 m in magnitude, max_speed below
+   262144 m/s, max_spin below 524288 rad/s), its state_budget has no room for one widest record
+   per seat and one more (the real one's staleness bound needs a record after the characters,
+   counted as one a seat: more characters a seat need a budget with room for them),
+   or memory is short. All memory is taken here: the real seam about 1.25 MB, the stub about
+   400 KB. */
 body_sync_t *body_sync_create(const body_sync_config_t *config);
 /* Leaves every bound body as it is; destroy the seam before its world. */
 void body_sync_destroy(body_sync_t *sync);
 
-/* The linked implementation and its version, for logs and metrics: "stub 0.4.0". */
+/* The linked implementation and its version, for logs and metrics: "real 0.5.0" or
+   "stub 0.5.0". */
 const char *body_sync_implementation(void);
 
 /* Text of the last INVALID or FORMAT this seam returned, "" before any. */
@@ -110,7 +83,10 @@ const char *body_sync_last_error(const body_sync_t *sync);
 
 /* ---- seats ---- */
 
-/* A seat that is not joined gets no state and no records, and its bytes are INVALID. */
+/* A seat that is not joined gets no state and no records, and its bytes are INVALID. The
+   order of a seat's state ticks holds within one session of it: a seat that joins again counts
+   anew, and what it sent before is forgotten. The seam relies on the session's order: nothing
+   of a seat arrives after its leave, and its join comes before the new session's packets. */
 void body_sync_seat_joined(body_sync_t *sync, uint8_t seat);
 /* On the host every body under that seat's authority returns to the host at once (its number
    grows), starting from the newest state that seat sent: pose, velocity, motion type, flags,
@@ -120,14 +96,6 @@ void body_sync_seat_joined(body_sync_t *sync, uint8_t seat);
 void body_sync_seat_left(body_sync_t *sync, uint8_t seat);
 
 /* ---- bodies ---- */
-
-/* A hint to the receiver about the body; how it is honoured is the implementation's. The stub
-   ignores it. */
-typedef enum body_sync_class {
-    BODY_SYNC_CLASS_LIGHT = 0, /* a copy need not block this endpoint's own character */
-    BODY_SYNC_CLASS_HEAVY,     /* a copy blocks */
-    BODY_SYNC_CLASS_CHARACTER, /* a player's capsule: sent in every packet, its seat's timeline */
-} body_sync_class_t;
 
 typedef struct body_sync_bind {
     b3BodyId body; /* dynamic or kinematic; static bodies are never bound */
@@ -153,21 +121,6 @@ b3BodyId body_sync_body(const body_sync_t *sync, body_sync_id_t id);
 
 /* ---- authority ---- */
 
-typedef enum body_sync_hold {
-    BODY_SYNC_HOLD_UNTIL_RELEASE = 0, /* carried: authority stays until body_sync_release */
-    /* Thrown or punched by its owner: the seam itself returns it to the host on its first
-       contact with a non-static body other than its last holder, or when it falls asleep, so
-       one side judges its contacts. Contacts are seen only on shapes with contact events on. */
-    BODY_SYNC_HOLD_UNTIL_SETTLED,
-} body_sync_hold_t;
-
-typedef struct body_sync_authority {
-    uint8_t seat;    /* the seat that simulates the body */
-    uint16_t number; /* grows on every change the host makes; older numbers lose */
-    body_sync_hold_t hold;
-    body_sync_id_t holder; /* the character carrying it, BODY_SYNC_ID_NONE when free */
-} body_sync_authority_t;
-
 /* False when nothing is bound under `id`. */
 bool body_sync_authority(const body_sync_t *sync, body_sync_id_t id, body_sync_authority_t *out);
 
@@ -176,9 +129,12 @@ bool body_sync_authority(const body_sync_t *sync, body_sync_id_t id, body_sync_a
    type, transform, velocity and motion locks (a copy is unlocked, so it turns to its owner's
    rotation), and the caller must not write them.
 
-   An endpoint that becomes local for a body continues it from the newest state it received
-   for it: pose, velocities, motion type, motion locks, flags and hold are the last owner's,
-   not this endpoint's own earlier values (the values at bind only when nothing was received). The holder is not inherited: a claim, a grant and a forced move start with no
+   An endpoint that becomes local for a body continues it from what the last owner left: its
+   flags, motion type and motion locks from the record that moved authority (a grant, a forced
+   move, a release), else from the newest state received, else from the bind; pose, velocities
+   and hold from the newest state received; the host's records carry the body as it is when
+   it answers or moves it. A claimant keeps on top what it changed itself since its claim: the
+   flags bit by bit, the motion type and the locks, each apart. The holder is not inherited: a claim, a grant and a forced move start with no
    holder (the new owner sets its own; a claimant that set one before the grant keeps it), and
    only a seat that left hands its bodies back still naming their carrier. The owner changes a
    local body's motion type through Box3D; the seam reads it at collect and sends it.
@@ -207,16 +163,6 @@ body_sync_result_t body_sync_claim(body_sync_t *sync, body_sync_id_t id, body_sy
    withdraws its seat's pending claim of the body, whatever else it does. */
 body_sync_result_t body_sync_release(body_sync_t *sync, body_sync_id_t id);
 
-/* A claim that reached the host, in arrival order. Host only; false when none waits. Every
-   claim is polled exactly once unless its claimant released the body or claimed it again
-   first (only its newest claim of a body counts), or left, or the body was unbound. */
-typedef struct body_sync_claim_event {
-    body_sync_id_t id;
-    uint8_t seat;
-    uint16_t sequence; /* the claimant's own count of its claims, never 0 */
-    uint32_t tick;     /* the claimant's tick when it claimed */
-    body_sync_hold_t hold;
-} body_sync_claim_event_t;
 bool body_sync_poll_claim(body_sync_t *sync, body_sync_claim_event_t *out);
 
 /* Host only: the answer to a polled claim. Granted: the claimant simulates the body from now
@@ -269,9 +215,16 @@ void body_sync_apply(body_sync_t *sync, uint32_t tick);
 void body_sync_collect(body_sync_t *sync, uint32_t tick);
 
 /* One state packet for `seat`: writes at most `capacity` bytes, sets *size and returns true;
-   false when this tick has nothing more for that seat. An implementation may write one packet
-   a tick (a budgeted sender) or several (the stub writes every body). A capacity below 64
-   writes nothing. */
+   false when this tick has nothing more for that seat. A budgeted sender writes at most one
+   packet per seat between two body_sync_collect calls; the stub writes as many as every body
+   takes. A capacity below 64 writes nothing. The capacity is what the transport carries after
+   its own prefix (coop_session_state_max).
+
+   The real seam relays a guest's bodies to the other guests from what the host decoded, one
+   tick after the host took them. It needs the fates: without body_sync_unresolved and
+   body_sync_resolve nothing is acknowledged, so sleeping bodies stay due at half a packet a
+   tick each and every changed rare field rides every packet (about 1 KB a tick for 200
+   sleeping bodies, against nothing once acknowledged). */
 bool body_sync_write_state(body_sync_t *sync, uint8_t seat, uint8_t *buffer, uint32_t capacity, uint32_t *size);
 
 /* The packet last written for `seat` left with this session number (coop_session_send_state);
@@ -298,29 +251,6 @@ bool body_sync_render_offset(const body_sync_t *sync, body_sync_id_t id, float p
 
 /* ---- measurements ---- */
 
-typedef enum body_sync_traffic_kind {
-    BODY_SYNC_TRAFFIC_HEADER = 0, /* the seam's own bytes in a packet: counts, ticks, acks */
-    BODY_SYNC_TRAFFIC_COPY,       /* poses for interpolated copies */
-    BODY_SYNC_TRAFFIC_SIM,        /* poses with velocities a receiver simulates from */
-    BODY_SYNC_TRAFFIC_HELD,       /* carried bodies riding their holder's record */
-    BODY_SYNC_TRAFFIC_AUTHORITY,  /* claims, releases, announcements, authority numbers */
-    BODY_SYNC_TRAFFIC_COUNT,
-} body_sync_traffic_kind_t;
-
-/* A JSON key: "header", "copy", "sim", "held", "authority"; "unknown" past the last kind. */
-const char *body_sync_traffic_kind_name(body_sync_traffic_kind_t kind);
-
-/* Counts since create on the path to and from one seat. The host asks about each guest seat,
-   a guest about BODY_SYNC_SEAT_HOST. */
-typedef struct body_sync_traffic {
-    uint64_t sent_bytes[BODY_SYNC_TRAFFIC_COUNT];
-    uint64_t received_bytes[BODY_SYNC_TRAFFIC_COUNT];
-    uint32_t packets_sent;
-    uint32_t records_sent;
-    uint32_t stale;    /* records naming an unbound id, an old generation, an old tick or number */
-    uint32_t rejected; /* poses of bodies the sender had no authority over */
-    uint32_t refused;  /* packets and records refused with FORMAT */
-} body_sync_traffic_t;
 bool body_sync_traffic(const body_sync_t *sync, uint8_t seat, body_sync_traffic_t *out);
 
 #ifdef __cplusplus

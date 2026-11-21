@@ -18,12 +18,27 @@ function(body_sync_flags target)
     endif()
 endfunction()
 
-# The sync seam a game links. Its header names b3BodyId, so Box3D's include goes with it.
-add_library(body_sync STATIC src/body_sync_stub.c src/stub_wire.c)
-target_include_directories(body_sync PUBLIC include)
-box3d_enable(body_sync)
-target_link_libraries(body_sync PUBLIC nt::box3d)
-body_sync_flags(body_sync)
+# The parts that decide without touching a body: the codec, the sender, the naive receiver,
+# authority and the stub's record bytes. No Box3D, so their tests run alone.
+add_library(body_sync_parts STATIC src/sync_codec.c src/sync_sender.c src/sync_receiver.c src/sync_authority.c src/stub_wire.c)
+target_include_directories(body_sync_parts PUBLIC include src)
+target_link_libraries(body_sync_parts PUBLIC net_bits)
+body_sync_flags(body_sync_parts)
+
+# The two implementations of body_sync.h; a program links one. body_sync is the real seam a
+# game links; body_sync_stub is the naive baseline the stand measures it against. The header
+# names b3BodyId, so Box3D's include goes with either.
+foreach(impl body_sync body_sync_stub)
+    if(impl STREQUAL "body_sync")
+        add_library(${impl} STATIC src/body_sync_real.c)
+    else()
+        add_library(${impl} STATIC src/body_sync_stub.c)
+    endif()
+    target_include_directories(${impl} PUBLIC include)
+    box3d_enable(${impl})
+    target_link_libraries(${impl} PUBLIC nt::box3d PRIVATE body_sync_parts)
+    body_sync_flags(${impl})
+endforeach()
 
 # The stand's decisions without physics: scenes as data, the catalog, the scenario parser, the
 # schedule, the host rules, metrics and JSON. No Box3D, so its tests run alone.
@@ -37,13 +52,22 @@ target_include_directories(body_sync_stand_logic PUBLIC include)
 target_link_libraries(body_sync_stand_logic PUBLIC net_link)
 body_sync_flags(body_sync_stand_logic)
 
-# The stand: worlds, the test character, the runner over net_link_sim and coop-net, the CLI.
-add_library(body_sync_stand STATIC src/stand_world.c src/stand_runner.c src/stand_main.c)
-target_link_libraries(body_sync_stand PUBLIC body_sync_stand_logic PRIVATE body_sync coop_net net_link)
-box3d_enable(body_sync_stand)
-body_sync_flags(body_sync_stand)
-
-add_executable(body_sync_stand_cli cli/main.c)
-set_target_properties(body_sync_stand_cli PROPERTIES OUTPUT_NAME body_sync_stand)
-target_link_libraries(body_sync_stand_cli PRIVATE body_sync_stand)
-body_sync_flags(body_sync_stand_cli)
+# The stand: worlds, the test character, the runner over net_link_sim and coop-net, the CLI,
+# once on each implementation so one scenario and seed compare the two.
+foreach(impl body_sync body_sync_stub)
+    if(impl STREQUAL "body_sync")
+        set(stand body_sync_stand)
+        set(cli body_sync_stand_cli)
+    else()
+        set(stand body_sync_stand_stub)
+        set(cli body_sync_stand_cli_stub)
+    endif()
+    add_library(${stand} STATIC src/stand_world.c src/stand_runner.c src/stand_main.c)
+    target_link_libraries(${stand} PUBLIC body_sync_stand_logic ${impl} PRIVATE coop_net net_link)
+    box3d_enable(${stand})
+    body_sync_flags(${stand})
+    add_executable(${cli} cli/main.c)
+    set_target_properties(${cli} PROPERTIES OUTPUT_NAME ${stand})
+    target_link_libraries(${cli} PRIVATE ${stand})
+    body_sync_flags(${cli})
+endforeach()

@@ -125,6 +125,7 @@ struct body_sync_stand {
     bool ended;
     bool items_done;
     uint32_t done_tick;
+    uint32_t flush_over[BODY_SYNC_ENDPOINTS_MAX]; /* per guest, both directions */
     uint32_t rest_run;
     uint32_t rest_tick;
     stand_metrics_t metrics;
@@ -807,9 +808,10 @@ static void send_all(body_sync_stand_t *st, endpoint_t *ep) {
         }
         int guest = guest_of(ep, seat);
         int direction = is_host_ep(ep) ? STAND_DIR_TO_GUEST : STAND_DIR_TO_HOST;
-        uint32_t size = 0;
+        uint32_t size = 0, flushed = 0;
         while (body_sync_write_state(ep->sync, seat, st->packet, cap_state, &size)) {
             uint16_t number = 0;
+            flushed += size;
             if (coop_session_send_state(ep->session, seat, st->packet, size, &number) == COOP_SEND_OK) {
                 body_sync_state_sent(ep->sync, seat, number);
             }
@@ -828,6 +830,7 @@ static void send_all(body_sync_stand_t *st, endpoint_t *ep) {
                 break;
             }
             body_sync_pop_record(ep->sync, seat);
+            flushed += size + 1;
             if (guest >= 0) {
                 stand_metrics_bytes(&st->metrics, (uint32_t)guest, direction, BODY_SYNC_TRAFFIC_AUTHORITY, 1, st->now);
             }
@@ -837,11 +840,15 @@ static void send_all(body_sync_stand_t *st, endpoint_t *ep) {
             if (coop_session_send_record(ep->session, seat, q->data[q->head], q->size[q->head]) != COOP_SEND_OK) {
                 break;
             }
+            flushed += q->size[q->head];
             if (guest >= 0) {
                 stand_metrics_bytes(&st->metrics, (uint32_t)guest, direction, BODY_SYNC_SEAM_KINDS + q->kind[q->head], q->size[q->head], st->now);
             }
             q->head = (q->head + 1) % QUEUE_MAX;
             q->count--;
+        }
+        if (guest >= 0 && flushed > cap_state) {
+            st->flush_over[guest]++;
         }
     }
 }
@@ -1560,6 +1567,10 @@ static void evaluate(body_sync_stand_t *st) {
         gm->refused = a.refused + b.refused;
         gm->stale = a.stale + b.stale;
         gm->rejected = a.rejected + b.rejected;
+        gm->deferred = a.deferred + b.deferred;
+        gm->stale_max_ticks = a.stale_max_ticks > b.stale_max_ticks ? a.stale_max_ticks : b.stale_max_ticks;
+        gm->flush_over_limit = st->flush_over[g - 1];
+        gm->packets_to_guest = a.packets_sent;
     }
     r->action_count = st->scenario.action_count;
     for (uint32_t i = 0; i < st->scenario.action_count; i++) {

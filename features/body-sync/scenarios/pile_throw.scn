@@ -14,6 +14,6 @@ p0 walk -2 2
 
 expect result grab granted
 expect result throw done
-expect echo_ticks.max <= 120t
+expect echo_ticks.max <= 20t
 expect agree_at_rest 5cm
 expect no_stuck

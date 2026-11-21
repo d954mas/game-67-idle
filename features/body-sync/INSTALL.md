@@ -18,9 +18,14 @@ target_link_libraries(game PRIVATE body_sync)
 ```
 
 `body_sync` brings Box3D through `features/box3d/cmake/Box3D.cmake` and links
-`nt::box3d` publicly, since its header names `b3BodyId`. A game that ships the
-seam links only `body_sync`; the stand (`body_sync_stand`,
-`body_sync_stand_logic`, `body_sync_stand_cli`) is for tests and tools. Record
+`nt::box3d` publicly, since its header names `b3BodyId`. `body_sync` is the
+real seam; `body_sync_stub` is the naive baseline with the same header, and a
+program links one of them, never both. A game that ships the seam links only
+`body_sync`; the stand (`body_sync_stand` on the real seam,
+`body_sync_stand_stub` on the stub, `body_sync_stand_logic`, and the command
+lines `body_sync_stand_cli` and `body_sync_stand_cli_stub`) is for tests and
+tools. Pass `body_sync_write_state` the session's `coop_session_state_max` as
+the capacity: the link's limit less the session's own header. Record
 the source and version of each feature from its `feature.json` in the game's
 `dependencies.json`.
 

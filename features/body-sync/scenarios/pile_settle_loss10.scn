@@ -1,0 +1,18 @@
+# A throw into the pile of light bodies on a path that loses one packet in ten: every body
+# that falls asleep must reach the guest at its rest pose.
+scenario pile_settle_loss10
+scene pile60
+seed 13
+guests 1
+settle 10s
+
+net g1 rtt 100ms jitter 10ms loss 10%
+
+p1 grab ball as grab
+p1 wait 500ms
+p1 throw pile30 speed 8 as throw
+
+expect result grab granted
+expect result throw done
+expect agree_at_rest 5cm 3deg
+expect no_stuck

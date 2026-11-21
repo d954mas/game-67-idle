@@ -9,12 +9,19 @@ Two things for co-op physics on Box3D, both without any game in them:
   network ids with a generation, an authority (the seat that simulates them)
   with a number that grows on every change, an optional holder and a few state
   bits. The game moves the bytes, usually over `coop-net`, and keeps the
-  policy: what may be grabbed, who wins a dispute. The implementation in this
-  version is the **stub**: every bound body's raw pose, velocities and motion
-  type to every seat, every tick, in as many packets as it takes; optimistic
-  claims, each with the claimant's sequence, answered one by one by the host.
-  It is the reference for the contract and the baseline the real sender,
-  receiver and authority are measured against.
+  policy: what may be grabbed, who wins a dispute. Two implementations keep
+  the one contract, and a program links one:
+  - **`body_sync`, the real seam**: one bit-packed state packet per tick and
+    seat under a byte budget, bodies picked by priority, rest poses and rare
+    fields held until acknowledged, and a naive receiver that applies the
+    newest pose (see "The real seam" below);
+  - **`body_sync_stub`, the baseline**: every bound body's raw pose,
+    velocities and motion type to every seat, every tick, in as many packets
+    as it takes. It is the reference for the contract and what the stand
+    measures the real seam against.
+
+  Both decide authority with the same code (optimistic claims, each with the
+  claimant's sequence, answered one by one by the host).
 - **The stand** (`body_sync_stand`): a host and up to three guests in one
   process, each with its own Box3D world built from one scene, its own seam and
   its own `coop-net` session, joined by a seeded `net_link_sim`. A text
@@ -87,15 +94,141 @@ simulates a flying body breaks what it hit; breaking removes the body and
 spawns its contents and debris from the host's random draws; what a player who
 left carried falls where it is.
 
+## The real seam
+
+Four parts decide; the Box3D shell (`src/body_sync_real.c`) only reads bodies,
+calls them and moves bodies as they say. None of the parts includes Box3D
+(`body_sync_types.h` holds the seam's plain types), so their tests run alone.
+
+- **Codec** (`sync_codec`): record tables on `net-bits`, ranges from the
+  seam's limits, precisions fixed. A packet is a run of records, each after a
+  1 "more" bit, then a 0 and zero padding; the session's own prefix carries
+  the packet number, tick and acknowledgements, so the seam adds no header.
+- **Sender** (`sync_sender`): per seat, priorities, the budget, what was sent
+  and acknowledged.
+- **Receiver** (`sync_receiver`): naive: the newest record per body, newest
+  wins per sender tick; a copy is driven to its pose, placed when far
+  (2 m), new or at rest, held still without news. A copy record has no
+  velocities: a body taken over from a copy continues with a velocity
+  estimated from its last two poses.
+- **Authority** (`sync_authority`): claims, answers, releases, forced moves,
+  the reliable records, shared with the stub; also where each body's state
+  goes and in which record kind, when a settled hold ends, what a holder
+  names, and which motion a take continues with.
+
+The shell decides nothing that needs no Box3D; the seam suite
+(`test_body_sync_stub.c`) runs against both implementations.
+
+One record, bits:
+
+| Part | Fields | Range and precision |
+|---|---|---|
+| head | slot 10, generation 4, sim 1, rest 1, rare 1 | slot below 1024 |
+| copy pose | position x y z, rotation | 1/512 m over the limits' box; smallest three at 9 bits |
+| sim pose | position x y z, rotation | 1/4096 m over the box; smallest three at 15 bits |
+| motion (sim, not at rest) | velocity, spin | 1/32 m/s in ±max_speed; 1/16 rad/s in ±max_spin |
+| rare (when its bit is set) | 4-bit group mask, then the groups present | |
+| - motion | kinematic 1, locks 6 | |
+| - flags | the caller's 4 bits | |
+| - authority | seat 2, number 16, hold 1 | |
+| - holder | present 1, slot 10, generation 4 | |
+
+On the stand's limits (box 80 x 65 x 80 m, 100 m/s, 200 rad/s) a copy is 95
+bits, a moving sim record 200, a rest record 122, every rare group 49 more.
+The generation goes as its low **4 bits**: a stale record whose generation
+matches modulo 16 reads as current; records are newest-wins per sender, so
+only a pose sent before a respawn and read after it could pass. The grids hold while every coordinate of the box is below 2048 m in
+magnitude (a float cannot keep 1/4096 m apart past it), max_speed below
+262144 m/s and max_spin below 524288 rad/s; `body_sync_create` refuses limits
+past them. A position grid ends at its last point inside the box and a
+velocity grid has no point past its limit; the writer keeps a velocity or spin
+vector no longer than its limit on the grid, and a reader refuses a longer one,
+so nothing decoded lies outside the limits. Decoded and encoded again,
+positions, velocities and rare groups give the same bits and a rotation the same
+rotation within its step (near a tie of its two largest components the dropped
+one may change). A packet of the end bit alone is legal and empty.
+
+Which record: a guest sends what it simulates as sim records (the host may
+take any of them back at any tick, with velocities); the host sends each
+guest every body that guest does not simulate as copy records, relaying other
+guests' bodies from what it decoded. A rest pose goes out as the precise
+record (sim at rest, no velocities) both ways: it is what the worlds agree on
+and where a new owner starts. A guest declares its authority number in the
+authority group; the host takes its poses only under the current number, and
+a guest's records count in that guest's tick order: a late packet neither
+counts nor moves the declared number back. The reliable records that move
+authority (a grant, a forced move, a release) carry the body's flags, motion
+type and locks, so a handover never waits for the state that would carry
+them; a new owner that changed them itself since its claim keeps its own.
+
+Priority, per seat: each tick `acc += rate`; a body is due at `acc >= 1` and
+a sent body's `acc` goes to 0. A packet takes, within min(budget, capacity):
+characters, every packet; bodies unsent for 30 ticks or more, oldest first;
+due bodies by `acc`. A record that does not fit is left out whole and counted
+(`deferred`); nothing is split.
+
+| Body | rate |
+|---|---|
+| held, flying (hold until settled), just hit (speed changed by 1 m/s in a tick), or a rare group unacknowledged | 1 |
+| any other awake body | 0.25 + 0.75 min(1, (abs(v) + 0.25 m abs(w)) / 2 m/s) |
+| asleep, its rest pose not acknowledged | 0.5 |
+| asleep and acknowledged | 0, not sent until it wakes |
+
+Staleness bound: with M awake bodies and room for N records a packet after
+the characters, an awake body goes at most max(4, 30 + ceil(M / N)) ticks
+between two packets that carry it, overflow or not. `stale_ticks.max` and
+`deferred.count` measure it in a scenario.
+
+Acknowledgement: a packet's rest poses and rare groups are kept for 64
+packets per seat under the session's 16-bit number. ARRIVED acknowledges a
+rest pose while the body is still in that sleep, and a rare group while it
+still has the version the packet carried; LOST, a packet never handed to the
+session (no `body_sync_state_sent` before the next write) and one that leaves
+the window acknowledge nothing. Numbers match exactly inside the window, far
+shorter than the wrap. "Changed" is on the wire: a body that sleeps again on
+the quantized pose already acknowledged is not sent again, unless a moving
+record of it went out since. A body's priority and age reset when its packet
+is handed to the session, not when it is written. Without fates (no
+`body_sync_resolve`) nothing is acknowledged: 200 sleeping bodies then cost
+about 1 KB a tick for ever, against nothing once acknowledged.
+
+The budget is 1000 bytes (`state_budget`, 0 takes it), clamped by each
+write's capacity. `body_sync_create` refuses a budget without room for one
+widest record per seat (one character each, the rule's assumption: a game
+with more characters a seat sets a budget with room for them) and one more:
+the staleness bound
+needs room for at least one record after the characters, and that minimum
+gives it. A guest's bodies reach the other guests one tick after the host took
+them. One real seam takes about 1.25 MB and a stub about 400 KB, fixed at create. The capacity a caller passes is what the transport carries
+after its own prefix: `coop_session_state_max`, which is the link's
+`max_unreliable` minus the session's header. The seam's reliable records go
+on their own lane and are not in the budget; on the stand's heaviest scenes a
+state packet and its tick's records together never passed that capacity
+(`flush_over_limit` 0), which matters on a transport that splits a message
+sharing a flush with others.
+
+Measured on `pile_throw` (60 light bodies and a ball, one guest, seed 5), mean
+bytes a second to the guest, stub then real: copy 125 899 / 6 210, sim 88 870
+/ 3 387, held 14 812 / 0 (the stub books a fixed share of every record as held;
+the only carried body here is the guest's own, which the host does not send back), authority 14 823 / 843, header 720
+/ 117; 245 KB/s in 4 packets a tick against 10.6 KB/s in one, divergence p95
+0.0096 m against 0.0126 m.
+
 ## Running the stand
 
-The feature consumer builds the stand and its tests; run the owner command,
-then a scenario with the command line it built:
+The feature consumer builds the stand on each implementation, and its tests;
+run the owner command, then a scenario with the command line it built:
 
 ```powershell
 node ai_studio/feature_testing/run.mjs
 ai_studio/feature_testing/consumer/build/feature-verify/_body_sync/body_sync_stand.exe features/body-sync/scenarios/two_walk.scn --out two_walk.json
+ai_studio/feature_testing/consumer/build/feature-verify/_body_sync/body_sync_stand_stub.exe features/body-sync/scenarios/two_walk.scn --out two_walk_stub.json
 ```
+
+`body_sync_stand` runs the real seam, `body_sync_stand_stub` the stub; the
+metrics name which (`implementation`: "real 0.5.0" or "stub 0.5.0"), so one
+scenario and seed compare the two. A game's own stand target links
+`body_sync_stand` (the real seam) or `body_sync_stand_stub`.
 
 `body_sync_stand <scenario> [--seed N] [--out metrics.json] [--no-series] [--quiet]`
 prints a line per guest and per check, writes the metrics (default
@@ -278,14 +411,31 @@ host, and a host whose window is minimised.
 
 ## Validation
 
-`test_body_sync_logic` (core) parses every shipped scenario, refuses a corpus
+`test_body_sync_codec` (core) round-trips every record kind and rare mask
+within half a step, keeps every value readable through the writer's limit,
+never splits a record, refuses truncations, padding, out-of-range codes,
+seats and speeds, an empty rare mask and too many records, and fuzzes the
+reader. `test_body_sync_sender` (core) runs the sender against a lossy pure-C
+peer: no moving body starves when the budget overflows; a slow body goes out
+by the age limit; a rest pose arrives at 10 % loss and then goes quiet; a
+packet never exceeds the capacity up to the link's limit; ten seconds of
+overflow; a record larger than the room is left out whole; the 16-bit number
+wraps; an unsent packet, a lost packet and an older version acknowledge
+nothing; a rest on the acknowledged pose is not resent; the receiver.
+`test_body_sync_real` (core) runs three real seams with Box3D: rest poses
+agree and go quiet, a guest's body comes back moving, an old grant's pose is
+rejected, flags, type, holder and locks move with authority, both receive
+calls are fuzzed through apply, a step and collect with Box3D's asserts
+counted, and limits too wide refuse create. Every scenario, must-fail case and
+the two-process run is a test on each implementation (`test_body_sync_stub_*`
+for the stub). `test_body_sync_logic` (core) parses every shipped scenario, refuses a corpus
 of broken lines with their line numbers, fuzzes the parser (truncations, bit
 flips, random bytes), and checks the schedule, the host rules' verdicts, the
 stand's records (round trip, direction, truncation, bounds, random bytes),
 unbounded delays, histogram quantiles, the JSON's completeness and
 repeatability, and the scene validator (bounds, spawn points inside bodies,
 spawns per break). `test_body_sync_wire` (core) checks every field's limit of
-the stub's codec and fuzzes it. `test_body_sync_stub` (core) runs three seams
+the stub's codec and fuzzes it. `test_body_sync_stub` (core) runs three stub seams
 over bytes: driven copies, stale ticks, claims and answers, a release that
 crosses a grant, withdrawn claims, every claim polled, forced moves that keep
 the velocity, poses of an old grant rejected, flags, motion type and holder
@@ -328,9 +478,10 @@ clamped to the limits, no inherited holder, stale releases); 0.4.0 added a
 body's damping, a character's facing and activity, motion locks that travel
 with the state, the report printer and the viewer's drawer hook. A MAJOR changes a call, a struct layout, the
 meaning of a result, a scenario statement or the metrics schema name.
-Replacing the stub with the real sender, receiver and authority keeps the
-seam's contract and changes `body_sync_implementation()`; the stub's wire
-format belongs to the stub and is not a compatibility promise.
+The real seam and the stub keep one contract and differ in
+`body_sync_implementation()`; neither one's wire format is a compatibility
+promise: the codec's hash (`sync_codec_t.hash`) names the real one for a
+handshake.
 
 ## Extension points
 

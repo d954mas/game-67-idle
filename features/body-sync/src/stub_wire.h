@@ -23,7 +23,7 @@ enum {
     STUB_FLAG_RESERVED = 0x60,
     /* The locks byte: linear x y z, angular x y z from bit 0; bits 6 and 7 are refused. */
     STUB_LOCKS_ALL = 0x3F,
-    STUB_RECORD_BYTES_MAX = 16,
+    STUB_RECORD_BYTES_MAX = 18,
     STUB_SLOTS = 1024, /* BODY_SYNC_BODIES_MAX; asserted in the stub */
 };
 
@@ -82,6 +82,12 @@ typedef struct stub_record {
     uint16_t sequence; /* CLAIM: the claim's; RELEASE: the last claim's; ASSIGN: the answered claim's, 0 when none */
     uint32_t holder;   /* ASSIGN */
     uint8_t forced;    /* ASSIGN: the move answers no claim */
+    /* RELEASE and ASSIGN: the body as its owner left it, so a handover never waits for the
+       unreliable state that would carry them. motion_known false: the sender never saw it. */
+    uint8_t flags;
+    bool motion_known;
+    bool kinematic;
+    uint8_t locks;
 } stub_record_t;
 
 uint32_t stub_wire_put_record(const stub_record_t *record, uint8_t *buffer, uint32_t capacity);

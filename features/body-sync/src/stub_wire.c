@@ -186,7 +186,24 @@ bool stub_wire_read_state(const uint8_t *data, uint32_t size, uint32_t seats, co
 }
 
 static uint32_t record_size(stub_record_type_t type) {
-    return type == STUB_REC_CLAIM ? 8u : type == STUB_REC_RELEASE ? 9u : type == STUB_REC_ASSIGN ? 16u : 0u;
+    return type == STUB_REC_CLAIM ? 8u : type == STUB_REC_RELEASE ? 11u : type == STUB_REC_ASSIGN ? 18u : 0u;
+}
+
+/* Two bytes: flags in bits 0..3, kinematic in 4, motion known in 5; then the locks. */
+static void put_body(uint8_t *at, const stub_record_t *r) {
+    at[0] = (uint8_t)((r->flags & 0x0Fu) | (r->kinematic ? 0x10u : 0u) | (r->motion_known ? 0x20u : 0u));
+    at[1] = (uint8_t)(r->locks & STUB_LOCKS_ALL);
+}
+
+static bool get_body(const uint8_t *at, stub_record_t *out) {
+    if ((at[0] & 0xC0u) || (at[1] & ~STUB_LOCKS_ALL)) {
+        return false;
+    }
+    out->flags = at[0] & 0x0Fu;
+    out->kinematic = (at[0] & 0x10u) != 0;
+    out->motion_known = (at[0] & 0x20u) != 0;
+    out->locks = at[1];
+    return true;
 }
 
 uint32_t stub_wire_put_record(const stub_record_t *r, uint8_t *buffer, uint32_t capacity) {
@@ -202,6 +219,7 @@ uint32_t stub_wire_put_record(const stub_record_t *r, uint8_t *buffer, uint32_t 
     } else if (r->type == STUB_REC_RELEASE) {
         put_u16(buffer + 5, r->number);
         put_u16(buffer + 7, r->sequence);
+        put_body(buffer + 9, r);
     } else if (r->type == STUB_REC_ASSIGN) {
         buffer[5] = r->seat;
         put_u16(buffer + 6, r->number);
@@ -209,6 +227,7 @@ uint32_t stub_wire_put_record(const stub_record_t *r, uint8_t *buffer, uint32_t 
         put_u16(buffer + 9, r->sequence);
         put_u32(buffer + 11, r->holder);
         buffer[15] = r->forced;
+        put_body(buffer + 16, r);
     }
     return size;
 }
@@ -241,6 +260,9 @@ bool stub_wire_read_record(const uint8_t *data, uint32_t size, uint32_t seats, b
     } else if (out->type == STUB_REC_RELEASE) {
         out->number = get_u16(data + 5);
         out->sequence = get_u16(data + 7);
+        if (!get_body(data + 9, out)) {
+            return fail(error, error_size, "reserved body bits in a release");
+        }
     } else if (out->type == STUB_REC_ASSIGN) {
         out->seat = data[5];
         out->number = get_u16(data + 6);
@@ -248,6 +270,9 @@ bool stub_wire_read_record(const uint8_t *data, uint32_t size, uint32_t seats, b
         out->sequence = get_u16(data + 9);
         out->holder = get_u32(data + 11);
         out->forced = data[15];
+        if (!get_body(data + 16, out)) {
+            return fail(error, error_size, "reserved body bits in an announcement");
+        }
         if (out->seat >= seats) {
             return fail(error, error_size, "seat out of range");
         }

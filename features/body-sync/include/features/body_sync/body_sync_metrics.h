@@ -44,7 +44,13 @@ extern "C" {
      jerk.max jerk.p95 [m]                                jerk.frames_over [frames]
      host_ticks.max echo_ticks.max seen_ticks.max [ticks]
      bytes_per_s.to_guest bytes_per_s.to_host [bytes/s, mean, all kinds]
-     peak_bytes_per_s.to_guest peak_bytes_per_s.to_host [bytes/s] */
+     peak_bytes_per_s.to_guest peak_bytes_per_s.to_host [bytes/s]
+     stale_ticks.max [ticks]: the most ticks an awake body went between two state packets
+       that carried it, either direction (a budgeted sender's starvation; 0 for the stub)
+     deferred.count [records]: records due that a packet's budget left out, both directions
+   - flush_over_limit: ticks where one path's state packet and that tick's seam records
+     together pass the session's largest state payload: a transport that packs one flush into
+     one datagram would split them there. */
 
 #define BODY_SYNC_METRICS_SCHEMA "body_sync.metrics.v1"
 /* A drawn move that changes by more than this between two ticks counts in jerk.frames_over. */
@@ -86,6 +92,10 @@ typedef struct body_sync_guest_metrics {
     body_sync_bytes_t to_host;  /* this seat's sends to the host */
     double rtt_ms, loss;        /* the session's last estimate on the host, negative unknown */
     uint32_t refused, stale, rejected; /* the seam's counts on both ends of this path */
+    uint64_t deferred;                 /* both ends: due records the budget left out */
+    uint32_t stale_max_ticks;          /* the worse end */
+    uint32_t flush_over_limit;         /* ticks, both directions */
+    uint32_t packets_to_guest;         /* state packets the host's seam wrote to this seat */
 } body_sync_guest_metrics_t;
 
 typedef struct body_sync_action_metrics {

@@ -1,0 +1,24 @@
+# The host throws, the guest catches: the guest takes a body it only ever saw as a copy, so it
+# continues from the receiver's estimate of its velocity. Measured, not judged, beyond rest.
+scenario throw_catch
+scene two_chars_item
+seed 17
+guests 1
+settle 6s
+
+net g1 rtt 100ms jitter 10ms loss 1%
+
+p0 walk box
+p0 grab box as lift
+p0 wait 300ms
+p0 throw 1.6 0.6 0.4 speed 5 as throw
+at 550ms p1 walk box speed 4
+p1 grab box as catch
+p1 wait 500ms
+p1 drop as put
+
+expect result lift granted
+expect result throw done
+expect result catch granted
+expect agree_at_rest 5cm
+expect no_stuck

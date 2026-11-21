@@ -1,0 +1,27 @@
+# Two throws into the pile of 300: hundreds of bodies awake at once, far more than one state
+# packet holds. stale_ticks.max is the sender's own promise, not a sync check: it holds with no
+# network at all. Its bound is max(4, 30 + ceil(M / N)) ticks; here M is about 300 awake bodies
+# and N at least 55 records of a 1000-byte packet (a copy with every rare group), so 36, read
+# as 40 with a margin. The stub sends everything every tick and reads 0.
+scenario load_overflow
+scene load300
+seed 31
+guests 1
+settle 10s
+
+net g1 rtt 80ms jitter 10ms loss 2%
+
+p0 walk load200
+p0 grab load200 as a0
+p0 wait 300ms
+p0 throw 0 0.5 0 speed 12
+p1 walk load299
+p1 grab load299 as a1
+p1 wait 300ms
+p1 throw 0 0.5 0 speed 12
+
+expect result a0 granted
+expect result a1 granted
+expect stale_ticks.max <= 40t
+expect agree_at_rest 5cm
+expect no_stuck
