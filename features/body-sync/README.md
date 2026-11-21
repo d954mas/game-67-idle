@@ -33,16 +33,16 @@ one process or in two.
 | Header | What it gives |
 |---|---|
 | `features/body_sync/body_sync.h` | The seam: `create` with the box and speeds a peer's numbers must stay in, seats joined and left, `bind`/`unbind` an id to a `b3BodyId` with its starting authority and number, authority (`claim`, `release`, `poll_claim`, `answer`, `assign`, `set_holder`, `set_flags`), the tick (`set_peer_tick`, `receive_state`, `receive_record`, `apply`, `collect`, `write_state`, `state_sent`, `unresolved`/`resolve`, `peek_record`/`pop_record`), `render_offset`, `traffic` by kind. Includes Box3D. |
-| `features/body_sync/body_sync_scene.h` | Scenes as C data: body descriptors (shape, size, mass or density, pose, motion, role, flags, model tag, routes, breakable templates), player spawns, the character's tuning, `validate`, the 8-scene catalog and lookup in it or in a caller's table. |
+| `features/body_sync/body_sync_scene.h` | Scenes as C data: body descriptors (shape, size, mass or density, friction, restitution, linear and angular damping, pose, motion, role, flags, model tag, routes, breakable templates), player spawns, the character's tuning, `validate`, the 8-scene catalog and lookup in it or in a caller's table. |
 | `features/body_sync/body_sync_scenario.h` | The scenario grammar (top comment), the parsed struct, `parse` and `load`, which refuse with a line and a reason. |
 | `features/body_sync/body_sync_metrics.h` | Metric definitions and names, the report structs, schema `body_sync.metrics.v1`. |
-| `features/body_sync/body_sync_stand.h` | `create`, `tick`, `run`, `report`, world hashes, the view a drawer walks (`body_count`, `body`: shape, size, drawn pose, model tag, flags), JSON, the host rules, the checks and `body_sync_stand_main`. |
+| `features/body_sync/body_sync_stand.h` | `create`, `tick`, `run`, `report`, world hashes, the view a drawer walks (`body_count`, `body`: shape, size, drawn pose, model tag, flags, a character's activity), JSON, `print_report` (the command line's text report), the host rules, the checks and `body_sync_stand_main`. |
 
 What a caller of the seam relies on:
 
 - An endpoint that becomes local for a body continues it from the newest state
-  it received: pose, velocities, motion type, flags and hold are the last
-  owner's. A claim, a grant and a forced move start with no holder; only a seat
+  it received: pose, velocities, motion type, motion locks, flags and hold are
+  the last owner's. A claim, a grant and a forced move start with no holder; only a seat
   that left hands its bodies back still naming their carrier. The owner changes
   a body's motion type through Box3D; the seam reads it at collect and sends it.
 - A claim is told apart by its sequence. The host polls every claim once,
@@ -58,6 +58,9 @@ What a caller of the seam relies on:
   event to handle.
 - The tick order is: peer ticks, receive, apply, the game's actions, the step,
   the game's contact judging, collect (which ends settled holds), sends.
+- While a body is a copy the seam owns its type, transform, velocity and
+  motion locks: a copy is unlocked, so a rotation-locked body (a character)
+  still turns to its owner's rotation.
 - How a copy is held and how a body's class is honoured are the
   implementation's; the stub drives kinematic copies and ignores the class.
 
@@ -72,7 +75,9 @@ Scene catalog: `floor_wall`, `stack10`, `pile60`, `cabinet_mug`, `mannequin`
 a crate with contents), `load300` (300 bodies, four players).
 
 The test character mirrors a game's mechanics: a dynamic capsule moved by
-setting its velocity, rotation locked; carrying makes the body kinematic with
+setting its velocity, rotation locked, its facing written into its rotation
+as a yaw (so it travels with the pose) and its activity into the seam flags'
+bits 1..3 (bit 0 is the knock); carrying makes the body kinematic with
 collision mask 0 and teleports it to the hold point each step; a throw makes it
 dynamic again with a ballistic velocity and a settled hold; a punch is a cone
 test in front, with no physics shape. Host rules stand in for a game's: first
@@ -163,6 +168,73 @@ expect effects_once
 expect host_ticks.max <= 120t
 ```
 
+## The viewer
+
+`example/` holds the stand in an engine window, on debug shapes: the
+"guest's view". It is never built by default and never runs in CTest; it is
+skipped, with a status line, where the engine's window and renderer are
+absent. In the Studio's feature consumer the program is the target
+`body_sync_stand_view`, outside the default build; a game adds its own target
+(INSTALL.md) and builds it with its own `node tools/game.mjs build`.
+
+`body_sync_stand_view <scenario> [--view host|g1|g2|g3] [--ghost] [--seed N] [--frames N] [--camera ex,ey,ez,tx,ty,tz[,fov]] [--record file.mp4] [--shot file.png] [--shot-tick N] [--hash-every N]`
+draws one endpoint's world (default g1) from `body_sync_stand_body` alone,
+with a camera that frames the scene's bodies from outside and above, or the
+one `--camera` places (eye, target, vertical field of view in degrees, 50 by
+default). `--ghost` draws the host's
+bodies as red outlines over a guest's view, so the copy's lag and any
+divergence show. Keys: Space pauses, V cycles the view, R restarts, Esc quits;
+during a recording only Esc works, so a take is one view from tick 1 to its
+end. The window title names the scenario and the view; the console prints the
+tick each second. A bad argument is named with what it accepts.
+
+Pace: the stand keeps its own clock. Viewing runs the ticks the wall clock
+has reached, 60 a second, several in one frame when a frame came late (a stall
+over a second is dropped), and prints the measured rate after the first tick's
+frame at the end; recording runs one tick per frame, as fast as the encoder
+takes frames. A tick that `--hash-every` or `--shot` asks for is drawn on its
+own frame either way, so its pixels, and its hash, are the same in both.
+
+End: a run that reaches the scenario's end prints the report as the command
+line does and exits as it does (0 passed, 1 a check failed, 2 refused). A run
+cut short (`--frames` before the end, Esc, the window closed) prints
+`cut at N ticks`, evaluates no check and exits 4; a `--shot` it never reached
+says `never taken: cut at N ticks`. 3 (it wins over 4) means a
+recording or a screenshot could not be written, or a full run ended before
+`--shot-tick`.
+
+Colours: dark grey static, with a light outline, and a floor shows a line every
+metre over its top face, a heavier one every five; green a body this endpoint
+simulates; blue a copy; yellow carried; magenta flying (thrown, its hold not
+yet settled); orange knocked down; a darker shade of any of them asleep.
+Characters have a white outline, items a dark one.
+
+`--record` writes an MP4 through the engine's recorder (`nt_recorder`,
+Windows Media Foundation) on the stand's own clock: one frame per tick,
+whatever the machine's speed, with a silent audio track. Frames go straight to
+the encoder, so no frame files are ever written. A take whose recorder started
+but wrote nothing is removed; a file the recorder never opened is left alone.
+The take of a cut run is kept as `<name>.partial.mp4` (an older one of that
+name is replaced), so a full-length name never holds a short run. Keep
+recordings outside the repository (a scratch folder). `--shot` saves one PNG
+at `--shot-tick`; `--hash-every N` prints a hash of every N-th frame's pixels,
+which is how two takes are compared: the pixels repeat exactly, the MP4 bytes
+do not (the encoder's output differs between takes).
+
+A game draws the same views with its models from its own target: it links
+`body_sync_view` and calls `body_sync_view_main` (`example/stand_view.h`) with
+its scenes and a `body_sync_view_drawer_t` of its own. The viewer owns the
+window, camera, stepping and present; the drawer owns its passes, lights and
+shaders between `begin_frame` and `end_frame`, and the first pass it begins
+clears. `configure_gfx` edits the renderer's description before it starts;
+`ready` holds tick 0, the recording and `--shot-tick` until the game's packs
+are loaded (30 s at most, then the run is refused); `camera` may move the
+viewer's proposal each frame, for example behind the viewed endpoint's own
+character, which it is handed; `shutdown` runs whenever `init` was called. The frame carries the view
+and projection matrices and the camera's eye, target, vertical field of view,
+near and far. A character's view carries its facing in its rotation and its
+`activity` (idle, walk, carry, throw, punch) on every endpoint.
+
 ## Metrics
 
 Per guest: divergence from the host's world per tick (max, p95, mean, the
@@ -249,7 +321,9 @@ statements, metric names, catalog scenes or JSON fields with a compatible
 default, or (before 1.0) changes the seam's calls, as 0.2.0 did: limits in the
 config, the bind's number, claim sequences with `body_sync_answer`, and
 `body_sync_assign` with a hold; 0.3.0 changed what the seam promises (writes
-clamped to the limits, no inherited holder, stale releases). A MAJOR changes a call, a struct layout, the
+clamped to the limits, no inherited holder, stale releases); 0.4.0 added a
+body's damping, a character's facing and activity, motion locks that travel
+with the state, the report printer and the viewer's drawer hook. A MAJOR changes a call, a struct layout, the
 meaning of a result, a scenario statement or the metrics schema name.
 Replacing the stub with the real sender, receiver and authority keeps the
 seam's contract and changes `body_sync_implementation()`; the stub's wire

@@ -79,6 +79,10 @@ const body_sync_report_t *body_sync_stand_run(body_sync_stand_t *stand);
    later call evaluates again. The pointer lives as long as the stand. */
 const body_sync_report_t *body_sync_stand_report(body_sync_stand_t *stand);
 
+/* The report as the command line prints it, to stdout: the run, each guest, each check. With
+   `failures_only` only the failed checks. */
+void body_sync_stand_print_report(const body_sync_report_t *report, bool failures_only);
+
 /* The scenario tick about to run: 0 before the first body_sync_stand_tick. */
 uint32_t body_sync_stand_now(const body_sync_stand_t *stand);
 uint32_t body_sync_stand_endpoint_count(const body_sync_stand_t *stand);
@@ -103,16 +107,28 @@ enum {
     BODY_SYNC_VIEW_KNOCKED = 1u << 6,
 };
 
+/* What a character is doing, for its animation. It travels in the seam's flags beside the
+   pose, so a guest reads it for every character, its own and the others'. */
+typedef enum body_sync_activity {
+    BODY_SYNC_ACTIVITY_NONE = 0, /* not a character */
+    BODY_SYNC_ACTIVITY_IDLE,
+    BODY_SYNC_ACTIVITY_WALK,
+    BODY_SYNC_ACTIVITY_CARRY, /* holding a body, standing or walking */
+    BODY_SYNC_ACTIVITY_THROW, /* from the release for 0.3 s */
+    BODY_SYNC_ACTIVITY_PUNCH, /* from the wind-up to the end of the recovery */
+} body_sync_activity_t;
+
 typedef struct body_sync_body_view {
     uint32_t id; /* body_sync_id_t */
     const char *name; /* the scene's name, "" for spawned bodies and unnamed ones */
     body_sync_shape_t shape;
     float size[3];
     float position[3]; /* the drawn pose: the physics pose with the seam's render offset */
-    float rotation[4];
+    float rotation[4]; /* a character's is its facing: a yaw about +Y, identity faces +Z */
     uint32_t model_tag;
     body_sync_role_t role;
     uint32_t flags;    /* BODY_SYNC_VIEW_* */
+    body_sync_activity_t activity;
     uint8_t authority; /* the seat that simulates it */
     uint8_t player;    /* for a character; BODY_SYNC_PLAYERS_MAX otherwise */
 } body_sync_body_view_t;

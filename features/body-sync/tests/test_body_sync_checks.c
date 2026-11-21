@@ -135,6 +135,30 @@ static void test_effects_fail_on_a_knock_shown_twice_on_a_guest(void) {
     body_sync_stand_destroy(stand);
 }
 
+/* A character's flag bits are its owner's: a guest toggling bit 0 on its own character is no
+   knockdown, so effects_once does not count it. */
+static void test_effects_ignore_a_characters_own_flag_bits(void) {
+    const char *text = "scenario planted\nscene two_chars_item\nguests 1\nend 4s\np1 walk -2 -1\nexpect effects_once\n";
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(text, strlen(text), &scenario, &error), error.text);
+    scene_named(scenario.scene)->build(&scene);
+    body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+    body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
+    TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
+    body_sync_t *sync = stand_testing_sync(stand, 1);
+    body_sync_id_t me = stand_world_id(stand_testing_world(stand, 1), scene.body_count + 1u);
+    while (body_sync_stand_tick(stand)) {
+        uint32_t now = body_sync_stand_now(stand);
+        if (now % 20u == 0) {
+            body_sync_set_flags(sync, me, (uint8_t)(body_sync_flags(sync, me) ^ 1u));
+        }
+    }
+    const body_sync_report_t *report = body_sync_stand_report(stand);
+    TEST_ASSERT_EQUAL_UINT32(1, report->check_count);
+    TEST_ASSERT_TRUE_MESSAGE(report->checks[0].passed, report->checks[0].detail);
+    body_sync_stand_destroy(stand);
+}
+
 static void test_effects_fail_on_a_knock_applied_twice(void) {
     body_sync_stand_t *stand = run("scenario planted\nscene mannequin\nguests 1\np0 walk 1 0\np0 punch dummy as hit\n"
                                    "expect result hit hit\nexpect effects_once\n");
@@ -245,6 +269,7 @@ int main(void) {
     RUN_TEST(test_no_stuck_fails_on_a_holder_that_holds_nothing);
     RUN_TEST(test_no_stuck_fails_on_a_body_under_a_seat_that_left);
     RUN_TEST(test_effects_fail_on_a_knock_shown_twice_on_a_guest);
+    RUN_TEST(test_effects_ignore_a_characters_own_flag_bits);
     RUN_TEST(test_effects_fail_on_a_knock_applied_twice);
     RUN_TEST(test_effects_fail_on_a_broken_body_back_on_a_guest);
     RUN_TEST(test_effects_fail_on_a_spawn_missing_on_a_guest);

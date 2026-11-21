@@ -72,6 +72,8 @@ typedef struct body_sync_body_desc {
     float density;
     float friction;    /* 0..2 */
     float restitution; /* 0..1 */
+    float linear_damping;  /* 1/s, >= 0, as Box3D's body damping; 0 by default */
+    float angular_damping; /* 1/s, >= 0 */
     float position[3]; /* a template's is relative to the breakable that spawns it */
     float rotation[4];
     body_sync_motion_t motion;

@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "body-sync",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "title": "Body sync",
   "status": "opt-in",
   "kind": "network-foundation",
@@ -26,7 +26,7 @@
     "test_slow": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"body_sync\" -L slow --output-on-failure"
   },
   "registers": {
-    "cmake_targets": ["body_sync", "body_sync_stand_logic", "body_sync_stand", "body_sync_stand_cli"],
+    "cmake_targets": ["body_sync", "body_sync_stand_logic", "body_sync_stand", "body_sync_stand_cli", "body_sync_view", "body_sync_stand_view"],
     "ctest_targets": [
       "test_body_sync_logic", "test_body_sync_wire", "test_body_sync_stub", "test_body_sync_stand", "test_body_sync_checks", "test_body_sync_two_processes", "test_body_sync_mf_*",
       "test_body_sync_free_step", "test_body_sync_scn_*"

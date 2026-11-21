@@ -33,6 +33,7 @@ static uint32_t valid_packet(uint32_t count) {
         b->flags = (uint8_t)(i & 0x0Fu);
         b->kinematic = (i & 4u) != 0;
         b->asleep = (i & 2u) != 0;
+        b->locks = (uint8_t)((i * 11u) & STUB_LOCKS_ALL);
         b->position[0] = (float)i * 0.5f;
         b->position[1] = 1.0f;
         b->rotation[3] = 1.0f;
@@ -50,7 +51,7 @@ static bool read_one(uint32_t size, stub_body_state_t *out) {
 }
 
 /* Field offsets inside the first body of a packet. */
-enum { AT_FLAGS = STUB_HEADER_BYTES + 4, AT_ROT = AT_FLAGS + 1 + 12, AT_VEL = AT_ROT + 16, AT_SEAT = AT_VEL + 24, AT_HOLD = AT_SEAT + 3, AT_HOLDER = AT_SEAT + 4 };
+enum { AT_FLAGS = STUB_HEADER_BYTES + 4, AT_LOCKS = AT_FLAGS + 1, AT_ROT = AT_LOCKS + 1 + 12, AT_VEL = AT_ROT + 16, AT_SEAT = AT_VEL + 24, AT_HOLD = AT_SEAT + 3, AT_HOLDER = AT_SEAT + 4 };
 
 static void put_f32(uint8_t *p, float f) { memcpy(p, &f, 4); }
 
@@ -71,6 +72,7 @@ static void test_state_round_trips(void) {
         TEST_ASSERT_EQUAL_UINT8(bodies[i].flags, out[i].flags);
         TEST_ASSERT_EQUAL(bodies[i].kinematic, out[i].kinematic);
         TEST_ASSERT_EQUAL(bodies[i].asleep, out[i].asleep);
+        TEST_ASSERT_EQUAL_UINT8(bodies[i].locks, out[i].locks);
         TEST_ASSERT_EQUAL_MEMORY(bodies[i].position, out[i].position, sizeof(out[i].position));
         TEST_ASSERT_EQUAL_MEMORY(bodies[i].velocity, out[i].velocity, sizeof(out[i].velocity));
     }
@@ -136,6 +138,15 @@ static void test_each_field_is_bounded(void) {
         TEST_ASSERT_FALSE(read_one(size, out));
     }
     valid_packet(1);
+    packet[AT_LOCKS] = STUB_LOCKS_ALL;
+    TEST_ASSERT_TRUE(read_one(size, out));
+    TEST_ASSERT_EQUAL_UINT8(STUB_LOCKS_ALL, out[0].locks);
+    for (uint8_t bit = 0x40; bit; bit = (uint8_t)(bit << 1)) {
+        valid_packet(1);
+        packet[AT_LOCKS] |= bit; /* reserved */
+        TEST_ASSERT_FALSE(read_one(size, out));
+    }
+    valid_packet(1);
     packet[AT_SEAT] = SEATS - 1;
     TEST_ASSERT_TRUE(read_one(size, out));
     packet[AT_SEAT] = SEATS; /* one past the last seat */
@@ -167,11 +178,11 @@ static void test_each_field_is_bounded(void) {
 
     /* The config's box and speeds, not a fixed constant. */
     valid_packet(1);
-    put_f32(packet + AT_FLAGS + 1, 39.9f);
+    put_f32(packet + AT_LOCKS + 1, 39.9f);
     TEST_ASSERT_TRUE(read_one(size, out));
-    put_f32(packet + AT_FLAGS + 1, 40.1f);
+    put_f32(packet + AT_LOCKS + 1, 40.1f);
     TEST_ASSERT_FALSE(read_one(size, out));
-    put_f32(packet + AT_FLAGS + 1, NAN);
+    put_f32(packet + AT_LOCKS + 1, NAN);
     TEST_ASSERT_FALSE(read_one(size, out));
     valid_packet(1);
     put_f32(packet + AT_VEL, 100.0f); /* exactly the limit is still inside */

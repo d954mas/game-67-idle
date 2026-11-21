@@ -40,6 +40,30 @@ static bool parse_seed(const char *text, uint64_t *out) {
     return true;
 }
 
+void body_sync_stand_print_report(const body_sync_report_t *report, bool failures_only) {
+    if (!failures_only) {
+        printf("%s on %s, seed %llu, %u ticks, %s\n", report->scenario, report->scene, (unsigned long long)report->seed, report->ticks,
+               report->implementation);
+        for (uint32_t g = 0; g < report->guest_count; g++) {
+            const body_sync_guest_metrics_t *m = &report->guests[g];
+            double down = 0.0, up = 0.0;
+            for (uint32_t k = 0; k < BODY_SYNC_KINDS_ALL; k++) {
+                down += m->to_guest.mean_bytes_per_s[k];
+                up += m->to_host.mean_bytes_per_s[k];
+            }
+            printf("  g%u: divergence p95 %.3g m max %.3g m, jerk p95 %.3g m, %.0f B/s down, %.0f B/s up\n", (unsigned)m->seat,
+                   m->divergence_p95_m, m->divergence_max_m, m->jerk_p95_m, down, up);
+        }
+    }
+    for (uint32_t i = 0; i < report->check_count; i++) {
+        const body_sync_check_metrics_t *c = &report->checks[i];
+        if (!failures_only || !c->passed) {
+            printf("  %s line %u %s: %.4g (limit %.4g) %s\n", c->passed ? "PASS" : "FAIL", c->line, stand_expect_name(c->kind), c->value, c->limit,
+                   c->detail);
+        }
+    }
+}
+
 int body_sync_stand_main(int argc, char **argv, const body_sync_scene_entry_t *extra, uint32_t extra_count) {
     const char *scenario_path = NULL;
     const char *out_path = NULL;
@@ -110,27 +134,7 @@ int body_sync_stand_main(int argc, char **argv, const body_sync_scene_entry_t *e
         goto done;
     }
     const body_sync_report_t *report = body_sync_stand_run(stand);
-    if (!quiet) {
-        printf("%s on %s, seed %llu, %u ticks, %s\n", report->scenario, report->scene, (unsigned long long)report->seed, report->ticks,
-               report->implementation);
-        for (uint32_t g = 0; g < report->guest_count; g++) {
-            const body_sync_guest_metrics_t *m = &report->guests[g];
-            double down = 0.0, up = 0.0;
-            for (uint32_t k = 0; k < BODY_SYNC_KINDS_ALL; k++) {
-                down += m->to_guest.mean_bytes_per_s[k];
-                up += m->to_host.mean_bytes_per_s[k];
-            }
-            printf("  g%u: divergence p95 %.3g m max %.3g m, jerk p95 %.3g m, %.0f B/s down, %.0f B/s up\n", (unsigned)m->seat,
-                   m->divergence_p95_m, m->divergence_max_m, m->jerk_p95_m, down, up);
-        }
-    }
-    for (uint32_t i = 0; i < report->check_count; i++) {
-        const body_sync_check_metrics_t *c = &report->checks[i];
-        if (!quiet || !c->passed) {
-            printf("  %s line %u %s: %.4g (limit %.4g) %s\n", c->passed ? "PASS" : "FAIL", c->line, stand_expect_name(c->kind), c->value, c->limit,
-                   c->detail);
-        }
-    }
+    body_sync_stand_print_report(report, quiet);
     char default_path[BODY_SYNC_NAME_MAX + 16];
     if (!out_path) {
         snprintf(default_path, sizeof(default_path), "%s.json", report->scenario);

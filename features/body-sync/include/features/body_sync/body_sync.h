@@ -102,7 +102,7 @@ body_sync_t *body_sync_create(const body_sync_config_t *config);
 /* Leaves every bound body as it is; destroy the seam before its world. */
 void body_sync_destroy(body_sync_t *sync);
 
-/* The linked implementation and its version, for logs and metrics: "stub 0.3.0". */
+/* The linked implementation and its version, for logs and metrics: "stub 0.4.0". */
 const char *body_sync_implementation(void);
 
 /* Text of the last INVALID or FORMAT this seam returned, "" before any. */
@@ -173,11 +173,12 @@ bool body_sync_authority(const body_sync_t *sync, body_sync_id_t id, body_sync_a
 
 /* True when this endpoint simulates the body now: its own pose goes out, nothing received
    moves it, and the caller may move it. While false the body is a copy: the seam owns its
-   type, transform and velocity, and the caller must not write them.
+   type, transform, velocity and motion locks (a copy is unlocked, so it turns to its owner's
+   rotation), and the caller must not write them.
 
    An endpoint that becomes local for a body continues it from the newest state it received
-   for it: pose, velocities, motion type, flags and hold are the last owner's, not the values
-   at bind. The holder is not inherited: a claim, a grant and a forced move start with no
+   for it: pose, velocities, motion type, motion locks, flags and hold are the last owner's,
+   not this endpoint's own earlier values (the values at bind only when nothing was received). The holder is not inherited: a claim, a grant and a forced move start with no
    holder (the new owner sets its own; a claimant that set one before the grant keeps it), and
    only a seat that left hands its bodies back still naming their carrier. The owner changes a
    local body's motion type through Box3D; the seam reads it at collect and sends it.

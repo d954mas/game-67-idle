@@ -25,7 +25,10 @@ enum {
     STUCK_TICKS = 120,        /* 2 s */
     CONNECT_TICKS_MAX = 600,  /* 10 s for each guest to be seated */
     KNOCK_FLAG = 1u << 0,     /* seam flag bit the stand gives a knocked mannequin */
+    ACTIVITY_SHIFT = 1,       /* a character's body_sync_activity_t in the seam flags' bits 1..3 */
+    ACTIVITY_MASK = 0x7u << ACTIVITY_SHIFT,
 };
+_Static_assert(BODY_SYNC_ACTIVITY_PUNCH <= 7 && (ACTIVITY_MASK >> BODY_SYNC_FLAG_BITS) == 0, "activity fits the seam's flag bits");
 #define REST_SPEED 0.05f
 #define MOVED_M 0.05f
 
@@ -470,6 +473,7 @@ static void start_action(body_sync_stand_t *st, endpoint_t *ep, int32_t index) {
                 c->yaw = atan2f(dx, dz);
             }
             stand_character_release(c, ep->world, velocity);
+            stand_character_threw(c);
         } else {
             stand_character_release(c, ep->world, NULL);
         }
@@ -551,6 +555,9 @@ static void character_tick(body_sync_stand_t *st, endpoint_t *ep) {
         return;
     }
     stand_char_status_t status = stand_character_tick(c, ep->world);
+    body_sync_id_t me = stand_world_id(ep->world, c->slot);
+    uint8_t flags = (uint8_t)(body_sync_flags(ep->sync, me) & ~ACTIVITY_MASK);
+    body_sync_set_flags(ep->sync, me, (uint8_t)(flags | (stand_character_activity(c) << ACTIVITY_SHIFT)));
     int32_t index = stand_schedule_active(&st->schedule, ep->index);
     if (index < 0) {
         return;
@@ -1155,7 +1162,9 @@ static void sample(body_sync_stand_t *st) {
         }
         for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
             stand_slot_t *s = &ep->world->slots[slot];
-            if (!s->live) {
+            /* The rules never knock a character, and a character's flag bits are its owner's to
+               set (they carry its activity), so they say nothing about a knockdown. */
+            if (!s->live || s->character) {
                 continue;
             }
             body_sync_id_t id = stand_world_id(ep->world, slot);
@@ -1884,6 +1893,12 @@ bool body_sync_stand_body(const body_sync_stand_t *st, uint32_t endpoint, uint32
     }
     if (s->knocked) {
         out->flags |= BODY_SYNC_VIEW_KNOCKED;
+    }
+    if (s->character) {
+        /* Before its owner's first record a copy has no activity yet: it stands. */
+        uint32_t activity = (body_sync_flags(ep->sync, id) & ACTIVITY_MASK) >> ACTIVITY_SHIFT;
+        out->activity = activity >= BODY_SYNC_ACTIVITY_IDLE && activity <= BODY_SYNC_ACTIVITY_PUNCH ? (body_sync_activity_t)activity
+                                                                                                    : BODY_SYNC_ACTIVITY_IDLE;
     }
     return true;
 }

@@ -9,10 +9,10 @@
 #include <stdint.h>
 
 enum {
-    STUB_WIRE_VERSION = 0xB6,
+    STUB_WIRE_VERSION = 0xB7,
     STUB_HEADER_BYTES = 3, /* version, body count */
-    /* id 4, flags 1, position 12, rotation 16 | velocities 24 | seat 1, number 2, hold 1 | holder 4 */
-    STUB_COPY_BYTES = 33,
+    /* id 4, flags 1, locks 1, position 12, rotation 16 | velocities 24 | seat 1, number 2, hold 1 | holder 4 */
+    STUB_COPY_BYTES = 34,
     STUB_SIM_BYTES = 24,
     STUB_AUTHORITY_BYTES = 4,
     STUB_HELD_BYTES = 4,
@@ -21,6 +21,8 @@ enum {
     STUB_FLAG_KINEMATIC = 0x10,
     STUB_FLAG_ASLEEP = 0x80,
     STUB_FLAG_RESERVED = 0x60,
+    /* The locks byte: linear x y z, angular x y z from bit 0; bits 6 and 7 are refused. */
+    STUB_LOCKS_ALL = 0x3F,
     STUB_RECORD_BYTES_MAX = 16,
     STUB_SLOTS = 1024, /* BODY_SYNC_BODIES_MAX; asserted in the stub */
 };
@@ -42,6 +44,7 @@ typedef struct stub_body_state {
     uint8_t flags; /* the owner's low bits */
     bool kinematic;
     bool asleep;
+    uint8_t locks; /* STUB_LOCKS_ALL bits: the owner's motion locks */
     float position[3];
     float rotation[4]; /* unit: the reader normalises what passed the tolerance */
     float velocity[3];

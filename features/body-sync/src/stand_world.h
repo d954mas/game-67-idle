@@ -106,6 +106,7 @@ typedef struct stand_character {
     uint32_t punch_land, punch_end, now;
     body_sync_id_t punch_target;
     uint32_t wait_left;
+    uint32_t throw_shown_until; /* character tick */
 } stand_character_t;
 
 void stand_character_init(stand_character_t *c, const stand_world_t *world, uint8_t player);
@@ -123,5 +124,9 @@ void stand_character_attach(stand_character_t *c, stand_world_t *world, body_syn
 /* Lets go: `velocity` NULL drops in place. Returns the id let go. */
 body_sync_id_t stand_character_release(stand_character_t *c, stand_world_t *world, const float velocity[3]);
 void stand_character_position(const stand_character_t *c, const stand_world_t *world, float out[3]);
+/* Marks the throw that was just released, so the activity shows it. */
+void stand_character_threw(stand_character_t *c);
+/* A body_sync_activity_t: what the character is doing after its tick. */
+uint8_t stand_character_activity(const stand_character_t *c);
 
 #endif

@@ -84,6 +84,18 @@ target_link_libraries(game_stand PRIVATE body_sync_stand)
 refusal names the body. The drawing side reads `body_sync_stand_body` for one
 endpoint each frame; `model_tag` is the game's to map.
 
+For a window that draws the stand with the game's models, link `body_sync_view`
+(added by `example/CMakeLists.txt` where the engine's window and renderer exist)
+and call `body_sync_view_main(argc, argv, scenes, count, &drawer)` with a
+`body_sync_view_drawer_t` whose `draw_body` draws one `body_sync_body_view_t`.
+The library links no engine codec: the game's executable links its own
+transcoder and mesh codec, or the engine's stubs as the example does:
+
+```cmake
+add_executable(game_stand_view EXCLUDE_FROM_ALL stand_view_main.c)
+target_link_libraries(game_stand_view PRIVATE body_sync_view game_render nt_basisu_transcoder nt_meshwire)
+```
+
 ## Verify
 
 ```powershell

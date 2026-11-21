@@ -35,6 +35,7 @@ typedef struct entry {
     bool holder_mine;     /* guest: the caller set the holder since this endpoint became local */
     uint16_t granted_seq; /* host: the claim the current owner was granted, 0 after any other move */
     bool copy_mode;
+    b3MotionLocks bound_locks; /* restored when a copy turns local with no state received */
     bool placed;
     bool resume; /* became local: continue from the newest state at the next apply */
     bool has_out;
@@ -85,7 +86,7 @@ struct body_sync {
     char error[128];
 };
 
-const char *body_sync_implementation(void) { return "stub 0.3.0"; }
+const char *body_sync_implementation(void) { return "stub 0.4.0"; }
 
 const char *body_sync_traffic_kind_name(body_sync_traffic_kind_t kind) {
     static const char *names[] = {"header", "copy", "sim", "held", "authority"};
@@ -272,6 +273,7 @@ body_sync_result_t body_sync_bind(body_sync_t *s, body_sync_id_t id, const body_
     e->body = bind->body;
     e->body_class = bind->body_class;
     e->bound_type = b3Body_GetType(bind->body);
+    e->bound_locks = b3Body_GetMotionLocks(bind->body);
     e->seat = bind->authority;
     e->number = bind->number;
     return BODY_SYNC_OK;
@@ -613,6 +615,15 @@ body_sync_result_t body_sync_receive_record(body_sync_t *s, uint8_t seat, uint32
 
 static b3Quat quat_of(const float q[4]) { return (b3Quat){{q[0], q[1], q[2]}, q[3]}; }
 
+static uint8_t locks_bits(b3MotionLocks l) {
+    return (uint8_t)(l.linearX | l.linearY << 1 | l.linearZ << 2 | l.angularX << 3 | l.angularY << 4 | l.angularZ << 5);
+}
+
+static b3MotionLocks locks_of(uint8_t bits) {
+    return (b3MotionLocks){.linearX = (bits & 1u) != 0, .linearY = (bits & 2u) != 0, .linearZ = (bits & 4u) != 0,
+                           .angularX = (bits & 8u) != 0, .angularY = (bits & 16u) != 0, .angularZ = (bits & 32u) != 0};
+}
+
 void body_sync_apply(body_sync_t *s, uint32_t tick) {
     (void)tick;
     for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
@@ -627,10 +638,12 @@ void body_sync_apply(body_sync_t *s, uint32_t tick) {
                 e->resume = false;
                 if (e->has_in) {
                     b3Body_SetType(e->body, e->in.kinematic ? b3_kinematicBody : b3_dynamicBody);
+                    b3Body_SetMotionLocks(e->body, locks_of(e->in.locks));
                     b3Body_SetLinearVelocity(e->body, (b3Vec3){e->in.velocity[0], e->in.velocity[1], e->in.velocity[2]});
                     b3Body_SetAngularVelocity(e->body, (b3Vec3){e->in.angular[0], e->in.angular[1], e->in.angular[2]});
                 } else if (was_copy) {
                     b3Body_SetType(e->body, e->bound_type);
+                    b3Body_SetMotionLocks(e->body, e->bound_locks);
                 }
             }
             continue;
@@ -639,6 +652,9 @@ void body_sync_apply(body_sync_t *s, uint32_t tick) {
             e->copy_mode = true;
             e->placed = false;
             b3Body_SetType(e->body, b3_kinematicBody);
+            /* A lock would drop the angular velocity that turns a copy to its owner's rotation
+               (a character's facing); the owner's locks travel in its state instead. */
+            b3Body_SetMotionLocks(e->body, (b3MotionLocks){0});
         }
         if (e->has_in && e->in_fresh) {
             e->in_fresh = false;
@@ -721,6 +737,7 @@ void body_sync_collect(body_sync_t *s, uint32_t tick) {
         o->angular[2] = w.z;
         o->kinematic = b3Body_GetType(e->body) == b3_kinematicBody;
         o->asleep = !b3Body_IsAwake(e->body);
+        o->locks = locks_bits(b3Body_GetMotionLocks(e->body));
         o->flags = e->flags;
         o->holder = e->holder;
         o->hold = e->hold;

@@ -158,7 +158,8 @@ static bool body_ok(const body_sync_scene_t *scene, const body_sync_body_desc_t 
         return fail_body(error, is_template, line, "unknown shape", b);
     }
     if (!finite3(b->size) || !finite3(b->position) || !isfinite(b->mass) || !isfinite(b->density) || !isfinite(b->friction) ||
-        !isfinite(b->restitution) || !isfinite(b->debris_speed) || !isfinite(b->break_speed)) {
+        !isfinite(b->restitution) || !isfinite(b->linear_damping) || !isfinite(b->angular_damping) || !isfinite(b->debris_speed) ||
+        !isfinite(b->break_speed)) {
         return fail_body(error, is_template, line, "a number is not finite", b);
     }
     int sized = b->shape == BODY_SYNC_SHAPE_BOX ? 3 : b->shape == BODY_SYNC_SHAPE_SPHERE ? 1 : 2;
@@ -192,6 +193,9 @@ static bool body_ok(const body_sync_scene_t *scene, const body_sync_body_desc_t 
     }
     if (!(b->friction >= 0.0f && b->friction <= 2.0f) || !(b->restitution >= 0.0f && b->restitution <= 1.0f)) {
         return fail_body(error, is_template, line, "friction must be 0..2 and restitution 0..1", b);
+    }
+    if (!(b->linear_damping >= 0.0f) || !(b->angular_damping >= 0.0f)) {
+        return fail_body(error, is_template, line, "damping must not be negative", b);
     }
     if (b->motion == BODY_SYNC_MOTION_STATIC && (b->role != BODY_SYNC_ROLE_PROP || (b->flags & BODY_SYNC_BODY_GRABBABLE))) {
         return fail_body(error, is_template, line, "a static body must be a plain prop", b);

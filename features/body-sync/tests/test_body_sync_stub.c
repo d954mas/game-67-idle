@@ -784,7 +784,7 @@ static void test_receive_fuzz(void) {
     for (int i = 0; i < 64; i++) {
         memcpy(buffer, valid, size);
         float w = 1.0f + 0.0099f * ((float)(i % 3) - 1.0f);
-        memcpy(buffer + STUB_HEADER_BYTES + 5 + 12 + 12, &w, 4);
+        memcpy(buffer + STUB_HEADER_BYTES + 6 + 12 + 12, &w, 4); /* id, flags, locks, position, rotation xyz */
         TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_state(guest.sync, BODY_SYNC_SEAT_HOST, tick_no + 5000u + (uint32_t)i, buffer, size));
         b3Body_SetTransform(guest.bodies[0], (b3Vec3){30.0f, 5.0f, 30.0f}, b3Quat_identity);
         step(&guest);
@@ -814,6 +814,84 @@ static void test_receive_fuzz(void) {
     body_sync_traffic_t t;
     body_sync_traffic(guest.sync, BODY_SYNC_SEAT_HOST, &t);
     TEST_ASSERT_TRUE(t.refused >= size);
+}
+
+/* Motion locks travel with the pose: whoever simulates a body next continues the last owner's
+   locks, never ones this endpoint held before the body was a copy. */
+static const b3MotionLocks ANGULAR_LOCKED = {.angularX = true, .angularY = true, .angularZ = true};
+
+static int angular_locks(const side_t *s) {
+    b3MotionLocks l = b3Body_GetMotionLocks(s->bodies[0]);
+    return l.angularX + l.angularY + l.angularZ;
+}
+
+static void lock_everywhere(void) {
+    b3Body_SetMotionLocks(host.bodies[0], ANGULAR_LOCKED);
+    b3Body_SetMotionLocks(guest.bodies[0], ANGULAR_LOCKED);
+    b3Body_SetMotionLocks(other.bodies[0], ANGULAR_LOCKED);
+    tick_all();
+}
+
+static void test_locks_follow_the_last_owner_on_a_grant(void) {
+    lock_everywhere();
+    TEST_ASSERT_EQUAL_INT(0, angular_locks(&guest)); /* a copy turns freely to its owner's rotation */
+    b3Body_SetMotionLocks(host.bodies[0], (b3MotionLocks){0}); /* the host frees them: a knock */
+    tick_all();
+    tick_all();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    TEST_ASSERT_TRUE(body_sync_is_local(guest.sync, ID0));
+    TEST_ASSERT_EQUAL_INT(0, angular_locks(&guest));
+    b3Body_SetMotionLocks(guest.bodies[0], ANGULAR_LOCKED);
+    tick_all();
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    tick_all();
+    tick_all();
+    TEST_ASSERT_TRUE(body_sync_is_local(host.sync, ID0));
+    TEST_ASSERT_EQUAL_INT(3, angular_locks(&host));
+}
+
+static void test_locks_follow_the_last_owner_when_a_settled_hold_returns(void) {
+    lock_everywhere();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    tick_all();
+    b3Body_SetMotionLocks(guest.bodies[0], (b3MotionLocks){0});
+    tick_all();
+    for (int i = 0; i < 300 && body_sync_is_local(guest.sync, ID0); i++) {
+        tick_all();
+    }
+    tick_all();
+    TEST_ASSERT_TRUE(body_sync_is_local(host.sync, ID0));
+    TEST_ASSERT_EQUAL_INT(0, angular_locks(&host));
+}
+
+static void test_locks_follow_the_last_owner_when_its_seat_leaves(void) {
+    lock_everywhere();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    b3Body_SetMotionLocks(guest.bodies[0], (b3MotionLocks){0});
+    tick_all();
+    body_sync_seat_left(host.sync, GUEST);
+    tick_no++;
+    step(&host); /* the guest is gone: nothing more from it */
+    TEST_ASSERT_TRUE(body_sync_is_local(host.sync, ID0));
+    TEST_ASSERT_EQUAL_INT(0, angular_locks(&host));
+}
+
+static void test_locks_follow_the_last_owner_on_a_forced_move(void) {
+    lock_everywhere();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    b3Body_SetMotionLocks(guest.bodies[0], (b3MotionLocks){0});
+    tick_all();
+    tick_all(); /* the host relays the guest's state to the other guest a tick later */
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_assign(host.sync, ID0, OTHER, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    records(&host, &guest);
+    records(&host, &other);
+    tick_all();
+    tick_all();
+    TEST_ASSERT_TRUE(body_sync_is_local(other.sync, ID0));
+    TEST_ASSERT_EQUAL_INT(0, angular_locks(&other));
 }
 
 int main(void) {
@@ -846,5 +924,9 @@ int main(void) {
     RUN_TEST(test_stale_generations_left_seats_and_refusals);
     RUN_TEST(test_queues_never_drop);
     RUN_TEST(test_receive_fuzz);
+    RUN_TEST(test_locks_follow_the_last_owner_on_a_grant);
+    RUN_TEST(test_locks_follow_the_last_owner_when_a_settled_hold_returns);
+    RUN_TEST(test_locks_follow_the_last_owner_when_its_seat_leaves);
+    RUN_TEST(test_locks_follow_the_last_owner_on_a_forced_move);
     return UNITY_END();
 }

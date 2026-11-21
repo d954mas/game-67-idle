@@ -125,6 +125,8 @@ if(NOT EMSCRIPTEN)
     set(BODY_SYNC_DIR "${GAME_REPO_ROOT}/features/body-sync")
     add_subdirectory("${BODY_SYNC_DIR}" "${CMAKE_BINARY_DIR}/_body_sync")
     add_subdirectory("${BODY_SYNC_DIR}/tests" "${CMAKE_BINARY_DIR}/_body_sync_tests")
+    # The stand's window, never built by default and never in CTest.
+    add_subdirectory("${BODY_SYNC_DIR}/example" "${CMAKE_BINARY_DIR}/_body_sync_example")
 
     # Without STEAMWORKS_SDK_DIR this builds the stub and its test; with it, also the live
     # probe and the overlay example (never built by default).

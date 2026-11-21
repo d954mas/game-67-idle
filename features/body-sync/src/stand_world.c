@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "features/body_sync/body_sync_stand.h"
 #include "stand_world.h"
 
 static b3Quat quat_of(const float q[4]) { return (b3Quat){{q[0], q[1], q[2]}, q[3]}; }
@@ -30,6 +31,8 @@ static bool create_body(stand_world_t *w, uint32_t slot, uint16_t generation, co
     def.rotation = quat_of(rotation);
     def.linearVelocity = (b3Vec3){velocity[0], velocity[1], velocity[2]};
     def.angularVelocity = (b3Vec3){angular[0], angular[1], angular[2]};
+    def.linearDamping = desc->linear_damping;
+    def.angularDamping = desc->angular_damping;
     def.userData = (void *)(uintptr_t)(slot + 1u);
     def.isAwake = def.type != b3_dynamicBody || awake;
     /* The game's capsule never tips; a standing mannequin keeps upright until it is knocked. */
@@ -187,6 +190,8 @@ uint64_t stand_world_hash(const stand_world_t *w) {
         fnv(&h, &s->desc.shape, sizeof(s->desc.shape));
         fnv(&h, s->desc.size, sizeof(s->desc.size));
         fnv(&h, &s->desc.mass, sizeof(s->desc.mass));
+        float damping[2] = {b3Body_GetLinearDamping(s->body), b3Body_GetAngularDamping(s->body)};
+        fnv(&h, damping, sizeof(damping));
         fnv(&h, &t, sizeof(t));
         fnv(&h, &v, sizeof(v));
         fnv(&h, &a, sizeof(a));
@@ -395,6 +400,21 @@ void stand_character_walk(stand_character_t *c, const stand_world_t *w, float x,
     c->stall = 0;
 }
 
+void stand_character_threw(stand_character_t *c) { c->throw_shown_until = c->now + 1u + (uint32_t)lroundf(0.3f * (float)BODY_SYNC_TICK_HZ); }
+
+uint8_t stand_character_activity(const stand_character_t *c) {
+    if (c->mode == STAND_CHAR_PUNCH) {
+        return BODY_SYNC_ACTIVITY_PUNCH;
+    }
+    if (c->now < c->throw_shown_until) {
+        return BODY_SYNC_ACTIVITY_THROW;
+    }
+    if (c->held) {
+        return BODY_SYNC_ACTIVITY_CARRY;
+    }
+    return c->mode == STAND_CHAR_WALK ? BODY_SYNC_ACTIVITY_WALK : BODY_SYNC_ACTIVITY_IDLE;
+}
+
 void stand_character_wait(stand_character_t *c, uint32_t ticks) {
     c->mode = STAND_CHAR_WAIT;
     c->wait_left = ticks;
@@ -510,6 +530,16 @@ stand_char_status_t stand_character_tick(stand_character_t *c, stand_world_t *w)
         break;
     }
     b3Body_SetLinearVelocity(me->body, (b3Vec3){vx, v.y, vz});
+    /* The facing is the body's rotation, so it travels with the pose; the angular lock keeps
+       physics from turning it, and a yaw does not change what an upright capsule collides with. */
+    if (!me->knocked) {
+        float facing[4];
+        stand_quat_yaw(c->yaw, facing);
+        b3Quat q = b3Body_GetRotation(me->body);
+        if (fabsf(q.v.y - facing[1]) > 1e-6f || fabsf(q.s - facing[3]) > 1e-6f || q.v.x != 0.0f || q.v.z != 0.0f) {
+            b3Body_SetTransform(me->body, b3Body_GetPosition(me->body), quat_of(facing));
+        }
+    }
     if (c->held) {
         stand_slot_t *held = stand_world_slot(w, c->held);
         if (!held) {

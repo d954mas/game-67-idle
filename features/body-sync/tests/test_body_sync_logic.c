@@ -472,6 +472,17 @@ static void test_catalog_validates_and_broken_scenes_are_refused(void) {
     catalog[0].build(&scene);
     scene.bodies[1].flags = BODY_SYNC_BODY_GRABBABLE;
     TEST_ASSERT_FALSE(body_sync_scene_validate(&scene, &error));
+    catalog[0].build(&scene);
+    TEST_ASSERT_TRUE(scene.bodies[2].linear_damping == 0.0f && scene.bodies[2].angular_damping == 0.0f);
+    scene.bodies[2].linear_damping = 0.1f;
+    scene.bodies[2].angular_damping = 0.3f;
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_scene_validate(&scene, &error), error.text);
+    scene.bodies[2].angular_damping = -0.1f;
+    TEST_ASSERT_FALSE(body_sync_scene_validate(&scene, &error));
+    TEST_ASSERT_NOT_NULL(strstr(error.text, "damping"));
+    scene.bodies[2].angular_damping = 0.0f;
+    scene.bodies[2].linear_damping = INFINITY;
+    TEST_ASSERT_FALSE(body_sync_scene_validate(&scene, &error));
     catalog[6].build(&scene);
     scene.template_count = 1;
     TEST_ASSERT_FALSE(body_sync_scene_validate(&scene, &error));

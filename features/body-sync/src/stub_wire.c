@@ -78,7 +78,8 @@ void stub_wire_put_header(uint8_t *buffer, uint16_t count) {
 void stub_wire_put_body(uint8_t *p, const stub_body_state_t *b) {
     put_u32(p, b->id);
     p[4] = (uint8_t)((b->flags & 0x0F) | (b->kinematic ? STUB_FLAG_KINEMATIC : 0) | (b->asleep ? STUB_FLAG_ASLEEP : 0));
-    p += 5;
+    p[5] = (uint8_t)(b->locks & STUB_LOCKS_ALL);
+    p += 6;
     for (int i = 0; i < 3; i++, p += 4) {
         put_f32(p, b->position[i]);
     }
@@ -130,10 +131,14 @@ bool stub_wire_read_state(const uint8_t *data, uint32_t size, uint32_t seats, co
         if (flags & STUB_FLAG_RESERVED) {
             return fail(error, error_size, "reserved body flag bits");
         }
+        if (p[5] & ~STUB_LOCKS_ALL) {
+            return fail(error, error_size, "reserved lock bits");
+        }
+        b->locks = p[5];
         b->flags = flags & 0x0F;
         b->kinematic = (flags & STUB_FLAG_KINEMATIC) != 0;
         b->asleep = (flags & STUB_FLAG_ASLEEP) != 0;
-        const uint8_t *f = p + 5;
+        const uint8_t *f = p + 6;
         for (int k = 0; k < 3; k++, f += 4) {
             b->position[k] = get_f32(f);
         }
