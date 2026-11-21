@@ -56,8 +56,10 @@ typedef struct body_sync_view_drawer {
     /* Before each frame: the viewer's proposal (its framing of the scene, or --camera). The
        drawer may change it, for example to follow the viewed endpoint's own character as the
        game's camera does. `own` is that character's view, NULL for an endpoint without one.
-       A camera that breaks the ranges above is replaced by the proposal, with one warning. */
-    void (*camera)(body_sync_view_camera_t *camera, const body_sync_body_view_t *own, uint32_t endpoint, void *ctx);
+       `dt_s` is the simulated time since the previous frame: 0 when no tick ran (paused, a
+       redraw), one tick's 1/60 s, or more when a late frame ran several. A camera that breaks
+       the ranges above is replaced by the proposal, with one warning. */
+    void (*camera)(body_sync_view_camera_t *camera, const body_sync_body_view_t *own, uint32_t endpoint, float dt_s, void *ctx);
     void (*begin_frame)(const body_sync_view_frame_t *frame, void *ctx);
     void (*draw_body)(const body_sync_body_view_t *body, bool ghost, void *ctx);
     void (*end_frame)(const body_sync_view_frame_t *frame, void *ctx);
@@ -75,7 +77,7 @@ enum {
 };
 
 /* body_sync_stand_view <scenario> [--view host|g1|g2|g3] [--ghost] [--seed N] [--frames N]
-                        [--camera ex,ey,ez,tx,ty,tz[,fov]] [--record file.mp4] [--shot file.png]
+                        [--size WxH] [--camera ex,ey,ez,tx,ty,tz[,fov]] [--record file.mp4] [--shot file.png]
                         [--shot-tick N] [--hash-every N]
    Scenes are the catalog's and then `extra`'s, as for body_sync_stand_main. */
 int body_sync_view_main(int argc, char **argv, const body_sync_scene_entry_t *extra, uint32_t extra_count, const body_sync_view_drawer_t *drawer);

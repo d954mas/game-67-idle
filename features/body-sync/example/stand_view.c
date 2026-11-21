@@ -25,6 +25,7 @@
    far longer than a refresh) would set the pace instead of the clock. */
 
 enum { WINDOW_W = 800, WINDOW_H = 450, STATUS_EVERY = 60, CATCH_UP_MAX = 60 };
+enum { SIZE_MIN_W = 320, SIZE_MIN_H = 180, SIZE_MAX_W = 1920, SIZE_MAX_H = 1080 }; /* window points */
 #define STEP (1.0f / 60.0f)
 #define IDLE_DT (1.0f / 240.0f) /* the cap on a frame's rate while viewing or waiting for ready */
 #define READY_WAIT_S 30.0
@@ -65,6 +66,7 @@ typedef struct view {
     bool shot_taken;
     bool shot_failed;
     uint32_t hash_every;
+    uint32_t window_w, window_h;
     bool cli_camera_set;
     body_sync_view_camera_t cli_camera;
     bool camera_warned;
@@ -79,7 +81,7 @@ static view_t s_view;
 
 static int usage(void) {
     fprintf(stderr, "usage: body_sync_stand_view <scenario.scn> [--view host|g1|g2|g3] [--ghost] [--seed N] [--frames N]\n"
-                    "                            [--camera ex,ey,ez,tx,ty,tz[,fov]] [--record file.mp4] [--shot file.png]\n"
+                    "                            [--size WxH] [--camera ex,ey,ez,tx,ty,tz[,fov]] [--record file.mp4] [--shot file.png]\n"
                     "                            [--shot-tick N] [--hash-every N]\n");
     return 2;
 }
@@ -189,13 +191,13 @@ static bool own_character(const view_t *v, body_sync_body_view_t *out) {
     return false;
 }
 
-static void camera(view_t *v, uint32_t w, uint32_t h, body_sync_view_frame_t *f) {
+static void camera(view_t *v, uint32_t w, uint32_t h, float dt_s, body_sync_view_frame_t *f) {
     body_sync_view_camera_t proposal, c;
     propose_camera(v, &proposal);
     c = proposal;
     if (v->drawer->camera) {
         body_sync_body_view_t own;
-        v->drawer->camera(&c, own_character(v, &own) ? &own : NULL, v->endpoint, v->drawer->ctx);
+        v->drawer->camera(&c, own_character(v, &own) ? &own : NULL, v->endpoint, dt_s, v->drawer->ctx);
         if (!camera_ok(&c)) {
             if (!v->camera_warned) {
                 fprintf(stderr, "body_sync_stand_view: the drawer's camera is out of range; the proposal is used\n");
@@ -410,9 +412,12 @@ static void frame(void) {
     }
     uint32_t due = ticks_due(v);
     bool stepped = due > 0;
+    uint32_t ran = 0;
     for (uint32_t i = 0; i < due; i++) {
+        bool more = tick_once(v);
+        ran++;
         /* The first tick's frame and every captured tick are drawn on their own. */
-        if (!tick_once(v) || v->ticks == 1 || capture_tick(v)) {
+        if (!more || v->ticks == 1 || capture_tick(v)) {
             break;
         }
     }
@@ -427,7 +432,7 @@ static void frame(void) {
     nt_gfx_begin_frame();
     int w = (int)g_nt_window.fb_width, h = (int)g_nt_window.fb_height;
     body_sync_view_frame_t f;
-    camera(v, (uint32_t)w, (uint32_t)h, &f);
+    camera(v, (uint32_t)w, (uint32_t)h, (float)ran * STEP, &f);
     const body_sync_view_drawer_t *d = v->drawer;
     if (d->begin_frame) {
         d->begin_frame(&f, d->ctx);
@@ -516,6 +521,23 @@ static void keep_partial(const char *path) {
     }
 }
 
+static bool parse_size(const char *text, uint32_t *w, uint32_t *h) {
+    char copy[32];
+    const char *x = strchr(text, 'x');
+    if (!x || (size_t)(x - text) >= sizeof(copy) || strlen(x + 1) >= sizeof(copy)) {
+        return false;
+    }
+    memcpy(copy, text, (size_t)(x - text));
+    copy[x - text] = '\0';
+    uint64_t a = 0, b = 0;
+    if (!parse_u64(copy, &a) || !parse_u64(x + 1, &b) || a < SIZE_MIN_W || a > SIZE_MAX_W || b < SIZE_MIN_H || b > SIZE_MAX_H) {
+        return false;
+    }
+    *w = (uint32_t)a;
+    *h = (uint32_t)b;
+    return true;
+}
+
 static bool parse_camera(const char *text, body_sync_view_camera_t *c) {
     float n[7];
     int count = 0;
@@ -569,6 +591,8 @@ int body_sync_view_main(int argc, char **argv, const body_sync_scene_entry_t *ex
     }
     v->endpoint = 1;
     v->shot_tick = 180;
+    v->window_w = WINDOW_W;
+    v->window_h = WINDOW_H;
     const char *scenario_path = NULL;
     bool view_named = false;
     for (int i = 1; i < argc; i++) {
@@ -604,6 +628,14 @@ int body_sync_view_main(int argc, char **argv, const body_sync_scene_entry_t *ex
             i++;
         } else if (strcmp(arg, "--hash-every") == 0) {
             bad = parse_count(arg, value, &v->hash_every);
+            i++;
+        } else if (strcmp(arg, "--size") == 0) {
+            if (!value) {
+                return refuse(arg, NULL, "needs WxH");
+            }
+            if (!parse_size(value, &v->window_w, &v->window_h)) {
+                return refuse(arg, value, "must be WxH, whole numbers from 320x180 to 1920x1080");
+            }
             i++;
         } else if (strcmp(arg, "--camera") == 0) {
             if (!value) {
@@ -682,8 +714,9 @@ int body_sync_view_main(int argc, char **argv, const body_sync_scene_entry_t *ex
         goto done;
     }
     engine = true;
-    g_nt_window.width = WINDOW_W;
-    g_nt_window.height = WINDOW_H;
+    /* In points: the framebuffer, and so a take, is this times the display's pixel ratio. */
+    g_nt_window.width = v->window_w;
+    g_nt_window.height = v->window_h;
     g_nt_window.title = title;
     g_nt_window.resizable = false;
     /* Both return nothing; what they publish says whether they came up. */

@@ -177,11 +177,13 @@ absent. In the Studio's feature consumer the program is the target
 `body_sync_stand_view`, outside the default build; a game adds its own target
 (INSTALL.md) and builds it with its own `node tools/game.mjs build`.
 
-`body_sync_stand_view <scenario> [--view host|g1|g2|g3] [--ghost] [--seed N] [--frames N] [--camera ex,ey,ez,tx,ty,tz[,fov]] [--record file.mp4] [--shot file.png] [--shot-tick N] [--hash-every N]`
+`body_sync_stand_view <scenario> [--view host|g1|g2|g3] [--ghost] [--seed N] [--frames N] [--size WxH] [--camera ex,ey,ez,tx,ty,tz[,fov]] [--record file.mp4] [--shot file.png] [--shot-tick N] [--hash-every N]`
 draws one endpoint's world (default g1) from `body_sync_stand_body` alone,
 with a camera that frames the scene's bodies from outside and above, or the
 one `--camera` places (eye, target, vertical field of view in degrees, 50 by
-default). `--ghost` draws the host's
+default). `--size` sets the window, 800x450 by default, from 320x180 to
+1920x1080; it is in points, so the framebuffer and a recording are that size
+times the display's pixel ratio (1280x720 on a display at ratio 1). `--ghost` draws the host's
 bodies as red outlines over a guest's view, so the copy's lag and any
 divergence show. Keys: Space pauses, V cycles the view, R restarts, Esc quits;
 during a recording only Esc works, so a take is one view from tick 1 to its
@@ -230,7 +232,8 @@ clears. `configure_gfx` edits the renderer's description before it starts;
 `ready` holds tick 0, the recording and `--shot-tick` until the game's packs
 are loaded (30 s at most, then the run is refused); `camera` may move the
 viewer's proposal each frame, for example behind the viewed endpoint's own
-character, which it is handed; `shutdown` runs whenever `init` was called. The frame carries the view
+character, which it is handed with the simulated seconds since the previous
+frame (0 when no tick ran, so easing stops while paused); `shutdown` runs whenever `init` was called. The frame carries the view
 and projection matrices and the camera's eye, target, vertical field of view,
 near and far. A character's view carries its facing in its rotation and its
 `activity` (idle, walk, carry, throw, punch) on every endpoint.
