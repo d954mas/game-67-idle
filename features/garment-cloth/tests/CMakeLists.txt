@@ -22,4 +22,5 @@ add_test(NAME test_garment_cook COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURR
 add_test(NAME test_garment_binding COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_binding.py")
 add_test(NAME test_garment_shape COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_shape.py")
 add_test(NAME test_garment_keyframes COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_keyframes.py")
-set_tests_properties(test_garment_cloth test_garment_cook test_garment_binding test_garment_shape test_garment_keyframes test_garment_pose test_garment_render PROPERTIES LABELS "core")
+add_test(NAME test_garment_proxy COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_proxy.py")
+set_tests_properties(test_garment_cloth test_garment_cook test_garment_binding test_garment_shape test_garment_keyframes test_garment_proxy test_garment_pose test_garment_render PROPERTIES LABELS "core")

@@ -15,6 +15,20 @@ typedef struct {
   float face[2 * CLOTH_EDGES / 3][3];
 } ClothRenderNormals;
 
+typedef struct {
+  float r0_t[3][3]; /* Transpose of orthonormal rest frame R_0 = [T_0, B_0, N_0]. */
+  float p0[3];      /* Rest vertex position in local/actor space (m). */
+  int ref_neighbor; /* Neighbor vertex index defining tangent orientation. */
+} ClothVertexBasis;
+
+/* Build rest-pose smooth orthonormal frames for every proxy vertex. */
+bool cloth_vertex_frames_prepare(const ClothMesh *mesh, ClothVertexBasis out[CLOTH_VERTICES]);
+
+/* Evaluate 3x4 row-major rigid-rotation skinning matrices (12 floats per vertex)
+ * mapping rest points near vertex v to its posed frame: M_v(x) = R_v * R_0^T * (x - p0) + p_v. */
+bool cloth_vertex_frames_eval(const ClothMesh *mesh, const ClothVertexBasis basis[CLOTH_VERTICES],
+                              const float posed[][3], float out_mat34[][12]);
+
 /* Evaluate once per dressed proxy. Duplicated seam vertices have independent normals. */
 bool cloth_render_normals(const ClothMesh *mesh, const float positions[][3], ClothRenderNormals *out);
 float cloth_render_normal_agreement(const ClothRenderBinding *binding, const ClothFace *faces,

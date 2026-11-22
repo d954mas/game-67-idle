@@ -40,7 +40,8 @@ def _tethers(points, adjacent, pins, slack):
     return [(pin, length * slack if pin >= 0 else 0.0) for length, pin in nearest]
 
 
-def cook_mesh(out, name, points, faces, pins, *, wearable=False, tether_slack=None):
+def cook_mesh(out, name, points, faces, pins, *, wearable=False, tether_slack=None,
+              edge_kinds=None, anim_drive=None):
     """Emit one ClothMesh. Wearables need a pin on every piece and a movable vertex."""
     if not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", name):
         raise ValueError(f"{name!r}: invalid C symbol")
@@ -94,7 +95,7 @@ def cook_mesh(out, name, points, faces, pins, *, wearable=False, tether_slack=No
     inv = 1 / areas
     inv[pins] = 0
     edges = []
-    for sides in adjacent.values():
+    for key, sides in adjacent.items():
         a, b, c = sides[0]
         d = sides[1][2] if len(sides) == 2 else -1
         axis = points[b] - points[a]
@@ -104,7 +105,10 @@ def cook_mesh(out, name, points, faces, pins, *, wearable=False, tether_slack=No
             n1 = np.cross(axis, points[c] - points[a])
             n2 = np.cross(points[d] - points[a], axis)
             angle = math.atan2(np.dot(axis / length, np.cross(n1, n2)), np.dot(n1, n2))
-        edges.append(f"{{{a},{b},{c},{d},{length:.9e}F,{angle:.9e}F}}")
+        kind = int(edge_kinds.get(key, 0)) if edge_kinds is not None else 0
+        if kind not in (0, 1, 2):
+            raise ValueError(f"{name}: invalid edge kind {kind} at {key}")
+        edges.append(f"{{{a},{b},{c},{d},{length:.9e}F,{angle:.9e}F,{kind}}}")
     array(out, f"float {name}_rest[][3]", map(vector, points))
     array(out, f"ClothFace {name}_faces[]", ("{%d,%d,%d}" % tuple(f) for f in faces))
     array(out, f"ClothEdge {name}_edges[]", edges)
@@ -114,5 +118,12 @@ def cook_mesh(out, name, points, faces, pins, *, wearable=False, tether_slack=No
         tethers = name + "_tethers"
         limits = _tethers(points, adjacent, pins, tether_slack)
         array(out, f"ClothTether {tethers}[]", (f"{{{pin},{length:.9e}F}}" for pin, length in limits))
+    drive_sym = "0"
+    if anim_drive is not None:
+        drive_arr = np.asarray(anim_drive, dtype=np.float64)
+        if drive_arr.shape != (len(points),) or not np.isfinite(drive_arr).all() or np.any((drive_arr < 0) | (drive_arr > 1)):
+            raise ValueError(f"{name}: anim_drive must be finite [0, 1] per vertex")
+        drive_sym = name + "_anim_drive"
+        out.write(f"static const float {drive_sym}[] = {vector(drive_arr)};\n")
     out.write(f"static const ClothMesh {name} = {{{len(points)}, {len(faces)}, {len(edges)}, "
-              f"{name}_rest, {name}_inv, {name}_faces, {name}_edges, {tethers}}};\n")
+              f"{name}_rest, {name}_inv, {name}_faces, {name}_edges, {tethers}, {drive_sym}}};\n")

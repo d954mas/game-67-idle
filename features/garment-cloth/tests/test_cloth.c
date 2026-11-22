@@ -33,7 +33,7 @@ static void test_material_restores_signed_fold(void) {
 }
 
 static void test_capsule_axis_crosses_face_interior(void) {
-    ClothCapsule body = {{0, 0.25F, -1}, {0, 0.25F, 1}, 0.1F};
+    ClothCapsule body = {.a = {0, 0.25F, -1}, .b = {0, 0.25F, 1}, .radius = 0.1F};
     float bary[3], normal[3];
     float depth = cloth_face_contact(seam.rest[0], seam.rest[1], seam.rest[2], &body, 0, bary, normal);
     TEST_ASSERT_TRUE(fabsf(depth - body.radius) < 0.00001F);
@@ -44,7 +44,7 @@ static void test_capsule_axis_crosses_face_interior(void) {
 static void test_single_pinned_seam_contact_has_bounded_displacement(void) {
     ClothMaterial m = stiff;
     m.iterations = 1;
-    ClothCapsule body = {{0, 0.001F, 0.002F}, {0, 0.001F, 0.002F}, 0.008F};
+    ClothCapsule body = {.a = {0, 0.001F, 0.002F}, .b = {0, 0.001F, 0.002F}, .radius = 0.008F};
     cloth_reset(&cloth, &seam, seam.rest);
     cloth_step(&cloth, &seam, &m, dt, seam.rest, NULL, &body, 1);
     ClothMetrics residual = cloth_measure(&cloth, &seam, &m, dt, seam.rest, &body, 1);
@@ -145,9 +145,9 @@ static void test_strain_sweeps_precede_final_shape_envelope(void) {
     memcpy(pose, seam.rest, sizeof pose);
     pose[2][1] *= 2.0F;
     ClothGuide guides[3] = {
-        {{0,0,1},0,0}, {{0,0,1},0,0}, {{0,0,1},0,0}
+        {.normal = {0,0,1}}, {.normal = {0,0,1}}, {.normal = {0,0,1}}
     };
-    ClothCapsule obstacle = {{0,0.7F,0.05F},{0,0.8F,0.05F},0.2F};
+    ClothCapsule obstacle = {.a = {0,0.7F,0.05F}, .b = {0,0.8F,0.05F}, .radius = 0.2F};
     cloth_reset(&cloth, &mesh, pose);
     cloth_step(&cloth, &mesh, &m, dt, pose, guides, &obstacle, 1);
     TEST_ASSERT_TRUE(cloth.frame_valid && cloth.x[2][1] < pose[2][1]);
@@ -173,14 +173,14 @@ static void test_render_offset_follows_the_deformed_face_normal(void) {
 static void test_shaped_envelope_wins_over_capsule_and_tracks_pose(void) {
     float pose[3][3];
     ClothGuide guide[3] = {
-        {{0, 0, 1}, 0, 0}, {{0, 0, 1}, 0, 0}, {{0, 0, 0.9998F}, 0.15F, 0.004F}
+        {.normal = {0, 0, 1}}, {.normal = {0, 0, 1}}, {.normal = {0, 0, 0.9998F}, .travel = 0.15F, .backstop = 0.004F}
     };
     ClothMaterial m = stiff;
     m.iterations = 1;
     memcpy(pose, seam.rest, sizeof pose);
     pose[0][0] += 0.03F;
     pose[2][2] += 0.02F;
-    ClothCapsule capsule = {{0, 1, 0.03F}, {0, 1, 0.03F}, 0.1F};
+    ClothCapsule capsule = {.a = {0, 1, 0.03F}, .b = {0, 1, 0.03F}, .radius = 0.1F};
     cloth_reset(&cloth, &seam, seam.rest);
     cloth_step(&cloth, &seam, &m, dt, pose, guide, &capsule, 1);
     TEST_ASSERT_TRUE(pose[2][2] - cloth.x[2][2] > guide[2].backstop);
@@ -212,7 +212,7 @@ static void test_shaped_envelope_wins_over_capsule_and_tracks_pose(void) {
 
 static void test_shaped_null_guide_matches_ordinary_and_bad_guide_rejects_frame(void) {
     static ClothState ordinary;
-    ClothCapsule body = {{0, 1, 0.03F}, {0, 1, 0.03F}, 0.1F};
+    ClothCapsule body = {.a = {0, 1, 0.03F}, .b = {0, 1, 0.03F}, .radius = 0.1F};
     cloth_reset(&ordinary, &seam, seam.rest);
     cloth_reset(&cloth, &seam, seam.rest);
     for (int i = 0; i < 3; ++i) {
@@ -220,14 +220,14 @@ static void test_shaped_null_guide_matches_ordinary_and_bad_guide_rejects_frame(
         cloth_step_shaped(&cloth, &seam, &stiff, dt, seam.rest, NULL, &body, 1);
     }
     TEST_ASSERT_EQUAL_MEMORY(ordinary.x, cloth.x, sizeof seam_rest);
-    TEST_ASSERT_EQUAL_MEMORY(ordinary.previous, cloth.previous, sizeof seam_rest);
+    TEST_ASSERT_EQUAL_MEMORY(ordinary.velocity, cloth.velocity, sizeof seam_rest);
     ClothGuide guide[3] = {
-        {{0, 0, 1}, 1, 1}, {{0, 0, 1}, 1, 1}, {{0, 0, 1}, NAN, 0}
+        {{0, 0, 1}, 1, 1, 0}, {{0, 0, 1}, 1, 1, 0}, {{0, 0, 1}, NAN, 0, 0}
     };
     cloth_step_shaped(&cloth, &seam, &stiff, dt, seam.rest, guide, &body, 1);
     TEST_ASSERT_FALSE(cloth.frame_valid);
     TEST_ASSERT_EQUAL_MEMORY(ordinary.x, cloth.x, sizeof seam_rest);
-    TEST_ASSERT_EQUAL_MEMORY(ordinary.previous, cloth.previous, sizeof seam_rest);
+    TEST_ASSERT_EQUAL_MEMORY(ordinary.velocity, cloth.velocity, sizeof seam_rest);
 }
 
 static void test_shaped_backstop_holds_after_world_coordinate_rounding(void) {
@@ -238,9 +238,9 @@ static void test_shaped_backstop_holds_after_world_coordinate_rounding(void) {
         pose[i][2] += 130.1F;
     }
     ClothGuide guide[3] = {
-        {{0, 0, 1}, 0, 0}, {{0, 0, 1}, 0, 0}, {{0.6F, 0, 0.8F}, 0.003F, 0}
+        {.normal = {0, 0, 1}}, {.normal = {0, 0, 1}}, {.normal = {0.6F, 0, 0.8F}, .travel = 0.003F}
     };
-    ClothCapsule capsule = {{0}, {0}, 0.1F};
+    ClothCapsule capsule = {.radius = 0.1F};
     memcpy(capsule.a, pose[2], sizeof capsule.a);
     capsule.a[2] += 0.01F;
     memcpy(capsule.b, capsule.a, sizeof capsule.b);
@@ -264,7 +264,8 @@ static void test_surface_offset_uses_posed_areas_and_preserves_history_and_pins(
     cloth_reset(&cloth, &mesh, pose);
     TEST_ASSERT_TRUE(cloth_offset_surface(&mesh, cloth.x, offsets, output));
     TEST_ASSERT_EQUAL_MEMORY(pose, cloth.x, sizeof pose);
-    TEST_ASSERT_EQUAL_MEMORY(pose, cloth.previous, sizeof pose);
+    float zero_v[4][3] = {{0}};
+    TEST_ASSERT_EQUAL_MEMORY(zero_v, cloth.velocity, sizeof zero_v);
     TEST_ASSERT_TRUE(fabsf(output[0][1] - 0.40F / sqrtf(5.0F)) < 1e-6F);
     TEST_ASSERT_TRUE(fabsf(output[0][2] - 0.20F / sqrtf(5.0F)) < 1e-6F);
     TEST_ASSERT_EQUAL_MEMORY(pose[1], output[1], sizeof pose[1]);
@@ -311,6 +312,328 @@ static void test_surface_offset_rejects_overlaps_and_nonfinite_inputs_before_wri
     TEST_ASSERT_EQUAL_MEMORY(fold.rest, storage, sizeof fold_rest);
 }
 
+static void test_round_cone_tapered_capsule_geometry_and_degeneracy(void) {
+    /* Tapered limb from y=0 (r=0.2) to y=1 (r=0.1). Slant normal tilts upward (+Y). */
+    ClothCapsule cone = {.a = {0, 0, 0}, .b = {0, 1, 0}, .radius = 0.2F, .radius_b = 0.1F};
+    float n[3], t = -1.0F;
+    float p_mid[3] = {0.10F, 0.5F, 0.0F};
+    float depth = cloth_point_capsule_contact(p_mid, &cone, 0.0F, n, &t);
+    /* Exact signed distance at (x=0.1, y=0.5): (0.1*sqrt(0.99) + 0.5*0.1)/1 - 0.2 = -0.050501256 */
+    float a = sqrtf(1.0F - 0.01F);
+    float expected_depth = 0.2F - (0.1F * a + 0.5F * 0.1F);
+    TEST_ASSERT_TRUE(fabsf(depth - expected_depth) < 1e-5F);
+    TEST_ASSERT_TRUE(n[0] > 0.99F && n[1] > 0.09F && fabsf(n[2]) < 1e-5F);
+    TEST_ASSERT_TRUE(t > 0.0F && t < 1.0F);
+    /* Near narrow cap: point outside narrow radius (0.12 > 0.10) must not collide. */
+    float p_narrow_out[3] = {0.12F, 1.0F, 0.0F};
+    TEST_ASSERT_TRUE(cloth_point_capsule_contact(p_narrow_out, &cone, 0.0F, n, &t) == 0.0F);
+    /* Near wide cap: same radial distance 0.12 < 0.20 must collide. */
+    float p_wide_in[3] = {0.12F, 0.0F, 0.0F};
+    TEST_ASSERT_TRUE(cloth_point_capsule_contact(p_wide_in, &cone, 0.0F, n, &t) > 0.07F);
+    /* Degenerate containment (|r_a - r_b| >= L): reduces cleanly to dominating sphere without NaN. */
+    ClothCapsule nested = {.a = {0, 0, 0}, .b = {0, 0.05F, 0}, .radius = 0.2F, .radius_b = 0.05F};
+    float d_nested = cloth_point_capsule_contact((float[]){0.1F, 0.0F, 0.0F}, &nested, 0.0F, n, &t);
+    TEST_ASSERT_TRUE(isfinite(d_nested) && fabsf(d_nested - 0.1F) < 1e-5F);
+}
+
+static void test_temporal_side_recovery_prevents_tunneling_across_axis(void) {
+    /* Leg sweeps in +Z past a vertex that started on the +Z side and ended slightly past axis (-Z). */
+    ClothCapsule leg = {
+        .a = {0, 0, 0.05F}, .b = {0, 1, 0.05F}, .radius = 0.08F, .radius_b = 0.06F,
+        .prev_a = {0, 0, -0.05F}, .prev_b = {0, 1, -0.05F},
+        .flags = CLOTH_COLLIDER_INSIDE, .has_prev = 1
+    };
+    float prev_p[3] = {0, 0.5F, 0.04F};  /* +0.09m in front of prev axis */
+    float curr_p[3] = {0, 0.5F, 0.03F};  /* -0.02m behind curr axis (crossed center!) */
+    float n[3], t = 0.0F;
+    float depth = cloth_point_capsule_contact_swept(curr_p, prev_p, &leg, 0.0F, NULL, n, &t);
+    /* Must push back toward +Z (previous side), NOT -Z, and exit exactly onto r_local = 0.07. */
+    TEST_ASSERT_TRUE(n[2] > 0.99F);
+    float exited_z = curr_p[2] + depth * n[2];
+    TEST_ASSERT_TRUE(exited_z > leg.a[2] + 0.065F && exited_z < leg.a[2] + 0.075F);
+}
+
+static void test_reference_frame_inertia_gravity_and_aero_drag(void) {
+    /* 1. Aero drag damps normal velocity without slowing tangential vertical fall. */
+    ClothMaterial low_drag = {.density = 0.2F, .stretch = 0.00001F, .drag = 0.1F, .aero_drag = 0.0F, .iterations = 2};
+    ClothMaterial high_aero = low_drag;
+    high_aero.aero_drag = 12.0F;
+
+    /* Vertical hanging panel in XY plane (normal along +Z). */
+    float vert_rest[3][3] = {{-0.2F, 1.0F, 0}, {0.2F, 1.0F, 0}, {0.0F, 0.6F, 0}};
+    float vert_inv[3] = {0, 0, 1};
+    ClothFace vert_face = {0, 1, 2};
+    ClothEdge vert_edges[3] = {
+        {0, 1, 2, -1, 0.4F, 0, CLOTH_EDGE_WEFT},
+        {0, 2, 1, -1, hypotf(0.2F, 0.4F), 0, CLOTH_EDGE_WARP},
+        {1, 2, 0, -1, hypotf(0.2F, 0.4F), 0, CLOTH_EDGE_WARP}
+    };
+    ClothMesh panel = {.vertices = 3, .faces = 1, .edges = 3, .rest = vert_rest, .inv_area = vert_inv,
+                       .face = &vert_face, .edge = vert_edges};
+    static ClothState s_no_aero, s_aero;
+    cloth_reset(&s_no_aero, &panel, vert_rest);
+    cloth_reset(&s_aero, &panel, vert_rest);
+    /* Give purely normal (+Z) flapping velocity: aero_drag must damp it strongly. */
+    s_no_aero.velocity[2][2] = 2.0F;
+    s_aero.velocity[2][2] = 2.0F;
+    cloth_step(&s_no_aero, &panel, &low_drag, dt, vert_rest, NULL, NULL, 0);
+    cloth_step(&s_aero, &panel, &high_aero, dt, vert_rest, NULL, NULL, 0);
+    TEST_ASSERT_TRUE(s_aero.velocity[2][2] < s_no_aero.velocity[2][2] * 0.95F);
+
+    /* 2. Reference frame linear acceleration pushes cloth in opposite direction scaled by linear_inertia. */
+    ClothFrame frame_zero = {.linear_accel = {10.0F, 0, 0}, .linear_inertia = 0.0F};
+    ClothFrame frame_half = {.linear_accel = {10.0F, 0, 0}, .linear_inertia = 0.5F};
+    cloth_reset(&s_no_aero, &panel, vert_rest);
+    cloth_reset(&s_aero, &panel, vert_rest);
+    cloth_step_framed(&s_no_aero, &panel, &low_drag, dt, &frame_zero, vert_rest, NULL, NULL, 0);
+    cloth_step_framed(&s_aero, &panel, &low_drag, dt, &frame_half, vert_rest, NULL, NULL, 0);
+    TEST_ASSERT_TRUE(s_aero.x[2][0] < s_no_aero.x[2][0]);
+
+    /* 3. gravity_scale speeds downward settling. */
+    ClothMaterial heavy_g = low_drag;
+    heavy_g.gravity_scale = 2.0F;
+    float lifted[3][3];
+    memcpy(lifted, vert_rest, sizeof lifted);
+    lifted[2][1] = 0.9F;
+    lifted[2][2] = 0.35F;
+    cloth_reset(&s_no_aero, &panel, lifted);
+    cloth_reset(&s_aero, &panel, lifted);
+    for (int i = 0; i < 20; ++i) {
+        cloth_step(&s_no_aero, &panel, &low_drag, dt, vert_rest, NULL, NULL, 0);
+        cloth_step(&s_aero, &panel, &heavy_g, dt, vert_rest, NULL, NULL, 0);
+    }
+    TEST_ASSERT_TRUE(s_aero.x[2][1] < s_no_aero.x[2][1]);
+}
+
+static void test_anim_drive_xpbd_convergence_and_collider_occlusion_guard(void) {
+    float drive_weights[3] = {0.0F, 0.0F, 1.0F};
+    ClothMesh mesh = seam;
+    mesh.anim_drive = drive_weights;
+    ClothMaterial m2 = stiff;
+    m2.iterations = 2;
+    m2.anim_drive = 400.0F;
+    ClothMaterial m8 = m2;
+    m8.iterations = 8;
+
+    float displaced[3][3];
+    memcpy(displaced, seam.rest, sizeof displaced);
+    displaced[2][2] = 0.25F;
+    static ClothState s2, s8;
+    cloth_reset(&s2, &mesh, displaced);
+    cloth_reset(&s8, &mesh, displaced);
+    cloth_step(&s2, &mesh, &m2, dt, seam.rest, NULL, NULL, 0);
+    cloth_step(&s8, &mesh, &m8, dt, seam.rest, NULL, NULL, 0);
+    /* Pulls toward anchor (z -> 0) and is iteration-count consistent (XPBD lambda). */
+    TEST_ASSERT_TRUE(s2.x[2][2] < displaced[2][2] - 0.005F);
+    TEST_ASSERT_TRUE(fabsf(s2.x[2][2] - s8.x[2][2]) < 0.01F);
+
+    /* Occlusion guard: when anchor sits inside an INSIDE body capsule, AnimDrive must not pull cloth into it. */
+    ClothCapsule body = {.a = {0, 1.0F, 0.0F}, .b = {0, 1.0F, 0.0F}, .radius = 0.15F, .flags = CLOTH_COLLIDER_INSIDE};
+    float outside[3][3];
+    memcpy(outside, seam.rest, sizeof outside);
+    outside[2][2] = 0.20F;
+    ClothMaterial no_drive = m2;
+    no_drive.anim_drive = 0.0F;
+    cloth_reset(&s2, &mesh, outside);
+    cloth_reset(&s8, &mesh, outside);
+    cloth_step(&s2, &mesh, &m2, dt, seam.rest, NULL, &body, 1);
+    cloth_step(&s8, &mesh, &no_drive, dt, seam.rest, NULL, &body, 1);
+    TEST_ASSERT_TRUE(fabsf(s2.x[2][2] - s8.x[2][2]) < 1e-5F);
+}
+
+static void test_anisotropic_warp_weft_edges_and_spherical_backstop(void) {
+    /* Compare warp-only vs softened-weft stretching on a stretched triangle. */
+    ClothEdge aniso_edges[3] = {
+        {0, 1, 2, -1, 1.0F, 0, CLOTH_EDGE_WARP},
+        {0, 2, 1, -1, hypotf(0.5F, 1.0F), 0, CLOTH_EDGE_WEFT},
+        {1, 2, 0, -1, hypotf(0.5F, 1.0F), 0, CLOTH_EDGE_WEFT}
+    };
+    ClothMesh mesh = seam;
+    mesh.edge = aniso_edges;
+    mesh.tether = NULL;
+    float pulled[3][3];
+    memcpy(pulled, seam.rest, sizeof pulled);
+    pulled[2][1] = 1.4F;
+    ClothMaterial iso = {.density = 0.2F, .stretch = 1e-4F, .drag = 0.5F, .iterations = 2};
+    ClothMaterial soft_weft = iso;
+    soft_weft.weft_stretch_scale = 50.0F;
+    static ClothState s_iso, s_soft;
+    cloth_reset(&s_iso, &mesh, pulled);
+    cloth_reset(&s_soft, &mesh, pulled);
+    cloth_step(&s_iso, &mesh, &iso, dt, seam.rest, NULL, NULL, 0);
+    cloth_step(&s_soft, &mesh, &soft_weft, dt, seam.rest, NULL, NULL, 0);
+    TEST_ASSERT_TRUE(s_soft.x[2][1] > s_iso.x[2][1]);
+
+    /* Spherical backstop allows curved tangential wrap where planar backstop blocks at z=0. */
+    ClothGuide g_plane[3] = {{{0,0,1}, 0, 0, 0}, {{0,0,1}, 0, 0, 0}, {{0,0,1}, 0.5F, 0.0F, 0.0F}};
+    ClothGuide g_sphere[3] = {{{0,0,1}, 0, 0, 0}, {{0,0,1}, 0, 0, 0}, {{0,0,1}, 0.5F, 0.0F, 0.1F}};
+    float wrapped[3][3];
+    memcpy(wrapped, seam.rest, sizeof wrapped);
+    wrapped[2][0] = 0.12F;
+    wrapped[2][2] = -0.05F;
+    cloth_reset(&s_iso, &seam, wrapped);
+    cloth_reset(&s_soft, &seam, wrapped);
+    cloth_step(&s_iso, &seam, &iso, dt, seam.rest, g_plane, NULL, 0);
+    cloth_step(&s_soft, &seam, &iso, dt, seam.rest, g_sphere, NULL, 0);
+    TEST_ASSERT_TRUE(s_iso.x[2][2] >= -1e-4F);
+    TEST_ASSERT_TRUE(s_soft.x[2][2] < -0.01F);
+}
+
+static void test_contact_velocity_friction_and_max_speed(void) {
+    ClothMaterial m = {.density = 0.2F, .stretch = 1e-4F, .drag = 0.0F, .iterations = 2,
+                       .contact_friction = 0.5F, .max_speed_mps = 3.0F};
+    ClothCapsule leg = {
+        .a = {0, 1.0F, 0.02F}, .b = {0, 1.0F, 0.02F}, .radius = 0.1F,
+        .prev_a = {0, 1.0F, 0.0F}, .prev_b = {0, 1.0F, 0.0F},
+        .flags = CLOTH_COLLIDER_INSIDE, .has_prev = 1
+    };
+    cloth_reset(&cloth, &seam, seam.rest);
+    cloth.velocity[2][0] = 4.0F;
+    cloth_step(&cloth, &seam, &m, dt, seam.rest, NULL, &leg, 1);
+    TEST_ASSERT_TRUE(cloth.frame_valid);
+    TEST_ASSERT_TRUE(cloth_measure(&cloth, &seam, &m, dt, seam.rest, &leg, 1).speed <= m.max_speed_mps + 1e-4F);
+    /* Tangential slip in X damped by contact_friction. */
+    TEST_ASSERT_TRUE(cloth.velocity[2][0] < 3.0F);
+}
+
+static void test_invalid_v1_inputs_rejected_without_mutating_state(void) {
+    cloth_reset(&cloth, &seam, seam.rest);
+    ClothMaterial bad = stiff;
+    bad.contact_friction = 1.5F;
+    TEST_ASSERT_FALSE(cloth_frame_valid(&seam, &bad, dt, seam.rest, NULL, NULL, 0));
+    bad = stiff;
+    bad.gravity_scale = -1.0F;
+    TEST_ASSERT_FALSE(cloth_frame_valid(&seam, &bad, dt, seam.rest, NULL, NULL, 0));
+    ClothFrame bad_frame = {.linear_accel = {NAN, 0, 0}, .linear_inertia = 0.5F};
+    cloth_step_framed(&cloth, &seam, &stiff, dt, &bad_frame, seam.rest, NULL, NULL, 0);
+    TEST_ASSERT_FALSE(cloth.frame_valid);
+    TEST_ASSERT_EQUAL_MEMORY(seam.rest, cloth.x, sizeof seam_rest);
+}
+
+static void test_lap_bridge_activates_only_on_bilateral_seated_flexion(void) {
+    ClothCapsule out[2];
+    const float up[3] = {0, 1, 0};
+    const float lh[3] = {0.10F, 0.85F, 0}, rh[3] = {-0.10F, 0.85F, 0};
+    const float lk_stand[3] = {0.10F, 0.45F, 0}, rk_stand[3] = {-0.10F, 0.45F, 0};
+    const float lk_sit[3] = {0.10F, 0.85F, 0.40F}, rk_sit[3] = {-0.10F, 0.85F, 0.40F};
+    /* Standing: 0 capsules. */
+    TEST_ASSERT_EQUAL_INT(0, cloth_build_lap_bridge(lh, lk_stand, rh, rk_stand, up, 128.0F, 100.0F, 0.07F, 0.06F, out));
+    /* Single-leg kick: 0 capsules. */
+    TEST_ASSERT_EQUAL_INT(0, cloth_build_lap_bridge(lh, lk_sit, rh, rk_stand, up, 128.0F, 100.0F, 0.07F, 0.06F, out));
+    /* Bilateral seated pose: 2 transverse bridge capsules spanning between left and right thighs. */
+    TEST_ASSERT_EQUAL_INT(2, cloth_build_lap_bridge(lh, lk_sit, rh, rk_sit, up, 128.0F, 100.0F, 0.07F, 0.06F, out));
+    TEST_ASSERT_TRUE(out[0].a[0] > 0.05F && out[0].b[0] < -0.05F);
+    TEST_ASSERT_TRUE(out[1].a[2] > out[0].a[2]);
+    TEST_ASSERT_TRUE(out[0].radius > 0.065F && out[1].radius > 0.055F);
+}
+
+static void test_compression_limit_softens_shortening_without_weakening_tension(void) {
+    ClothMesh mesh = seam;
+    mesh.tether = NULL;
+    ClothMaterial rigid = stiff;
+    rigid.stretch = 0.00001F;
+    rigid.iterations = 1;
+    ClothMaterial soft = rigid;
+    soft.compression_limit = 0.15F;
+
+    /* Compressed edge (90% of rest length): soft compression yields less rebound than rigid compression. */
+    float comp[3][3];
+    memcpy(comp, seam.rest, sizeof comp);
+    comp[2][1] = seam.rest[2][1] * 0.90F;
+    cloth_reset(&cloth, &mesh, comp);
+    cloth_step(&cloth, &mesh, &rigid, dt, seam.rest, NULL, NULL, 0);
+    float rigid_comp_y = cloth.x[2][1];
+    cloth_reset(&cloth, &mesh, comp);
+    cloth_step(&cloth, &mesh, &soft, dt, seam.rest, NULL, NULL, 0);
+    float soft_comp_y = cloth.x[2][1];
+    TEST_ASSERT_TRUE(fabsf(soft_comp_y - comp[2][1]) < fabsf(rigid_comp_y - comp[2][1]));
+
+    /* Extended edge (120% of rest length): tension stiffness is unchanged. */
+    float ext[3][3];
+    memcpy(ext, seam.rest, sizeof ext);
+    ext[2][1] = seam.rest[2][1] * 1.20F;
+    cloth_reset(&cloth, &mesh, ext);
+    cloth_step(&cloth, &mesh, &rigid, dt, seam.rest, NULL, NULL, 0);
+    float rigid_ext_y = cloth.x[2][1];
+    cloth_reset(&cloth, &mesh, ext);
+    cloth_step(&cloth, &mesh, &soft, dt, seam.rest, NULL, NULL, 0);
+    TEST_ASSERT_TRUE(fabsf(cloth.x[2][1] - rigid_ext_y) < 1e-6F);
+
+    /* Out-of-range compression_limit is rejected without mutating state. */
+    ClothMaterial bad = soft;
+    bad.compression_limit = 0.6F;
+    TEST_ASSERT_FALSE(cloth_frame_valid(&mesh, &bad, dt, seam.rest, NULL, NULL, 0));
+}
+
+static void test_bend_sliver_triangle_stays_bounded_and_finite(void) {
+    /* Two triangles sharing hinge (0-1) of length 0.1m, where triangle (0,1,3) is a 0.2mm sliver. */
+    const float sliver_rest[4][3] = {
+        {0.0F, 0.0F, 0.0F}, {0.10F, 0.0F, 0.0F}, {0.05F, 0.08F, 0.0F}, {0.05F, -0.0002F, 0.0F}
+    };
+    const float sliver_inv[4] = {0.0F, 0.0F, 200.0F, 80000.0F};
+    const ClothFace sliver_faces[2] = {{0, 1, 2}, {1, 0, 3}};
+    const ClothEdge sliver_edges[5] = {
+        {0, 1, 2, 3, 0.10F, 0.0F, CLOTH_EDGE_WEFT},
+        {0, 2, 1, -1, hypotf(0.05F, 0.08F), 0.0F, CLOTH_EDGE_WARP},
+        {1, 2, 0, -1, hypotf(0.05F, 0.08F), 0.0F, CLOTH_EDGE_WARP},
+        {0, 3, 1, -1, hypotf(0.05F, 0.0002F), 0.0F, CLOTH_EDGE_WARP},
+        {1, 3, 0, -1, hypotf(0.05F, 0.0002F), 0.0F, CLOTH_EDGE_WARP}
+    };
+    ClothMesh mesh = {.vertices = 4, .faces = 2, .edges = 5, .rest = sliver_rest, .inv_area = sliver_inv,
+                      .face = sliver_faces, .edge = sliver_edges};
+    float bent[4][3];
+    memcpy(bent, sliver_rest, sizeof bent);
+    bent[2][2] = 0.04F;
+    bent[3][2] = -0.0001F;
+    ClothMaterial m = stiff;
+    m.bend = 50.0F;
+    cloth_reset(&cloth, &mesh, bent);
+    for (int i = 0; i < 10; ++i) cloth_step(&cloth, &mesh, &m, dt, sliver_rest, NULL, NULL, 0);
+    ClothMetrics met = cloth_measure(&cloth, &mesh, &m, dt, sliver_rest, NULL, 0);
+    TEST_ASSERT_TRUE(met.finite);
+    TEST_ASSERT_TRUE(met.stretch < 0.25F);
+    TEST_ASSERT_TRUE(met.speed < 10.0F);
+}
+
+static void test_reset_over_body_places_seated_skirt_above_thigh_without_impaling(void) {
+    /* 3-row vertical front skirt strip (y = 0.90 pinned -> 0.75 -> 0.60, z = 0.06) impaled by a
+       horizontal seated thigh capsule along +Z at y = 0.72, radius = 0.08. */
+    const float strip_rest[6][3] = {
+        {-0.05F, 0.90F, 0.06F}, {0.05F, 0.90F, 0.06F},
+        {-0.05F, 0.75F, 0.06F}, {0.05F, 0.75F, 0.06F},
+        {-0.05F, 0.60F, 0.06F}, {0.05F, 0.60F, 0.06F}
+    };
+    const float strip_inv[6] = {0.0F, 0.0F, 100.0F, 100.0F, 100.0F, 100.0F};
+    const ClothFace strip_faces[4] = {{0, 2, 1}, {1, 2, 3}, {2, 4, 3}, {3, 4, 5}};
+    const ClothEdge strip_edges[9] = {
+        {0, 1, 2, -1, 0.10F, 0, CLOTH_EDGE_WEFT},
+        {2, 3, 1, 4, 0.10F, 0, CLOTH_EDGE_WEFT},
+        {4, 5, 3, -1, 0.10F, 0, CLOTH_EDGE_WEFT},
+        {0, 2, 1, -1, 0.15F, 0, CLOTH_EDGE_WARP},
+        {1, 3, 2, -1, 0.15F, 0, CLOTH_EDGE_WARP},
+        {2, 4, 3, -1, 0.15F, 0, CLOTH_EDGE_WARP},
+        {3, 5, 4, -1, 0.15F, 0, CLOTH_EDGE_WARP},
+        {1, 2, 0, 3, hypotf(0.10F, 0.15F), 0, CLOTH_EDGE_DIAG},
+        {3, 4, 2, 5, hypotf(0.10F, 0.15F), 0, CLOTH_EDGE_DIAG}
+    };
+    ClothMesh mesh = {.vertices = 6, .faces = 4, .edges = 9, .rest = strip_rest, .inv_area = strip_inv,
+                      .face = strip_faces, .edge = strip_edges};
+    ClothGuide guide[6];
+    for (int i = 0; i < 6; ++i) guide[i] = (ClothGuide){.normal = {0, 0, 1}, .travel = 0.5F, .backstop = 0.5F};
+    ClothCapsule thigh = {.a = {0.0F, 0.72F, 0.0F}, .b = {0.0F, 0.72F, 0.40F}, .radius = 0.08F, .flags = CLOTH_COLLIDER_INSIDE};
+    ClothMaterial m = stiff;
+    m.thickness = 0.005F;
+    m.compression_limit = 0.35F;
+
+    cloth_reset_over_body(&cloth, &mesh, &m, strip_rest, guide, &thigh, 1);
+    /* Every free vertex must lie ON TOP of the thigh (y > 0.72), never trapped underneath! */
+    for (int i = 2; i < 6; ++i) TEST_ASSERT_TRUE(cloth.x[i][1] > thigh.a[1]);
+    ClothMetrics met = cloth_measure(&cloth, &mesh, &m, dt, strip_rest, &thigh, 1);
+    TEST_ASSERT_TRUE(met.finite);
+    TEST_ASSERT_TRUE(met.stretch < 0.25F);
+    TEST_ASSERT_TRUE(met.penetration < 0.01F);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_material_restores_signed_fold);
@@ -327,5 +650,16 @@ int main(void) {
     RUN_TEST(test_surface_offset_uses_posed_areas_and_preserves_history_and_pins);
     RUN_TEST(test_surface_offset_falls_back_as_a_whole_when_a_normal_is_undefined);
     RUN_TEST(test_surface_offset_rejects_overlaps_and_nonfinite_inputs_before_writing);
+    RUN_TEST(test_round_cone_tapered_capsule_geometry_and_degeneracy);
+    RUN_TEST(test_temporal_side_recovery_prevents_tunneling_across_axis);
+    RUN_TEST(test_reference_frame_inertia_gravity_and_aero_drag);
+    RUN_TEST(test_anim_drive_xpbd_convergence_and_collider_occlusion_guard);
+    RUN_TEST(test_anisotropic_warp_weft_edges_and_spherical_backstop);
+    RUN_TEST(test_contact_velocity_friction_and_max_speed);
+    RUN_TEST(test_invalid_v1_inputs_rejected_without_mutating_state);
+    RUN_TEST(test_lap_bridge_activates_only_on_bilateral_seated_flexion);
+    RUN_TEST(test_compression_limit_softens_shortening_without_weakening_tension);
+    RUN_TEST(test_bend_sliver_triangle_stays_bounded_and_finite);
+    RUN_TEST(test_reset_over_body_places_seated_skirt_above_thigh_without_impaling);
     return UNITY_END();
 }
