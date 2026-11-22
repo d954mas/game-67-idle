@@ -70,6 +70,10 @@ void garment_actor_clear(GarmentActor *actor);
 bool garment_actor_prepare(GarmentActor *actor, const GarmentSet *set, const nt_skeletal_skeleton_t *skel);
 bool garment_actor_update(GarmentActor *actor, const GarmentSet *set, const nt_skeletal_skeleton_t *skel,
                           const nt_skeletal_mat34_t *pose, const float world[16], float dt, bool render);
+/* The caller owns the world-space face for this call, including the initial or teleport reset. */
+bool garment_actor_update_supported(GarmentActor *actor, const GarmentSet *set, const nt_skeletal_skeleton_t *skel,
+                                    const nt_skeletal_mat34_t *pose, const float world[16], float dt, bool render,
+                                    const ClothSupport *world_support);
 
 /* A negative weight_joint selects the AnimDrive mask; other values are skeleton joint indices. */
 bool garment_actor_debug_lines(const GarmentActor *actor, const nt_skeletal_skeleton_t *skel,

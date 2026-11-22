@@ -796,8 +796,134 @@ static void test_xpbd_timestep_and_resolution_invariance_at_earth_gravity(void) 
     TEST_ASSERT_TRUE(fabsf(drop_240 - drop_fine) / fmaxf(drop_240, drop_fine) < 0.05F);
 }
 
+static const float level_seam[][3] = {{-0.02F,1,-0.04F}, {0.02F,1,-0.04F}, {0,1,0}};
+static const ClothEdge level_edges[] = {
+    {0,1,2,-1,0.04F,0,0}, {1,2,0,-1,0.04472136F,0,0}, {2,0,1,-1,0.04472136F,0,0}
+};
+static const float free_mass[] = {1, 1, 1};
+
+static void test_fabric_can_leave_a_support_and_move_back_under_its_edge(void) {
+    ClothMesh mesh = seam;
+    mesh.rest = level_seam;
+    mesh.edge = level_edges;
+    mesh.inv_area = free_mass;
+    mesh.tether = NULL;
+    ClothMaterial material = {.density = 1, .stretch = 1.0F, .thickness = 0.005F, .iterations = 2};
+    const ClothSupport face = {.center = {0,1.01F,0}, .half_u = {0.1F,0,0}, .half_v = {0,0,-0.1F}, .depth = 0.06F};
+    const ClothFrame frame = {.support = &face};
+    TEST_ASSERT_TRUE(cloth_reset_supported(&cloth, &mesh, &material, mesh.rest, NULL, NULL, 0, &face));
+    TEST_ASSERT_TRUE(fabsf(cloth.x[2][1] - 1.015F) < 1e-5F);
+    for (int i = 0; i < 3; ++i) cloth.velocity[i][0] = 2.0F;
+    for (int step = 0; step < 24; ++step)
+        cloth_step_framed(&cloth, &mesh, &material, dt, &frame, mesh.rest, NULL, NULL, 0);
+    TEST_ASSERT_TRUE(cloth.x[2][0] > 0.2F);
+    TEST_ASSERT_TRUE(cloth.x[2][1] < 0.98F);
+    for (int i = 0; i < 3; ++i) cloth.velocity[i][0] = -2.0F;
+    for (int step = 0; step < 24; ++step)
+        cloth_step_framed(&cloth, &mesh, &material, dt, &frame, mesh.rest, NULL, NULL, 0);
+    TEST_ASSERT_TRUE(fabsf(cloth.x[2][0]) < 0.05F);
+    TEST_ASSERT_TRUE(cloth.x[2][1] < 0.98F);
+}
+
+static void test_support_preserves_hanging_material_at_reset_and_catches_inherited_drops(void) {
+    ClothMesh mesh = seam;
+    mesh.rest = level_seam;
+    mesh.edge = level_edges;
+    mesh.inv_area = free_mass;
+    mesh.tether = NULL;
+    const ClothMaterial material = {.density = 1, .stretch = 1.0F, .thickness = 0.005F, .iterations = 2};
+    const ClothSupport support = {.center = {0,1.01F,0}, .half_u = {1,0,0}, .half_v = {0,0,-1}, .depth = 0.12F};
+    const ClothFrame frame = {.support = &support, .anchor_shift_y = -0.18F};
+    const float below[][3] = {{-0.02F,0,-0.04F}, {0.02F,0,-0.04F}, {0,0,0}};
+    TEST_ASSERT_TRUE(cloth_reset_supported(&cloth, &mesh, &material, below, NULL, NULL, 0, &support));
+    TEST_ASSERT_TRUE(fabsf(cloth.x[0][1]) < 0.001F && fabsf(cloth.x[1][1]) < 0.001F);
+    TEST_ASSERT_TRUE(cloth_reset_supported(&cloth, &mesh, &material, level_seam, NULL, NULL, 0, &support));
+    TEST_ASSERT_TRUE(fabsf(cloth.x[2][1] - 1.015F) < 1e-5F);
+    cloth_step_framed(&cloth, &mesh, &material, dt, &frame, level_seam, NULL, NULL, 0);
+    TEST_ASSERT_TRUE(fabsf(cloth.x[2][1] - 1.015F) < 1e-5F);
+}
+
+static void test_support_catches_a_spanning_edge_with_both_endpoints_outside(void) {
+    const float spanning[][3] = {{-0.5F,0.97F,0}, {0.5F,0.97F,0}, {0,0.97F,-1}};
+    ClothMesh mesh = seam;
+    mesh.rest = spanning;
+    mesh.inv_area = free_mass;
+    mesh.tether = NULL;
+    const ClothSupport face = {.center = {0,1,0}, .half_u = {0.1F,0,0}, .half_v = {0,0,-0.1F}, .depth = 0.15F};
+    const ClothFrame frame = {.support = &face};
+    const ClothMaterial material = {.density = 1, .stretch = 1.0F, .thickness = 0.005F, .iterations = 2};
+    TEST_ASSERT_TRUE(cloth_reset_supported(&cloth, &mesh, &material, spanning, NULL, NULL, 0, &face));
+    for (int step = 0; step < 5; ++step) {
+        TEST_ASSERT_TRUE(cloth.x[0][0] < -0.1F && cloth.x[1][0] > 0.1F);
+        TEST_ASSERT_TRUE(0.5F * (cloth.x[0][1] + cloth.x[1][1]) >= face.center[1]);
+        cloth_step_framed(&cloth, &mesh, &material, dt, &frame, spanning, NULL, NULL, 0);
+    }
+}
+
+static void test_convex_support_leaves_beveled_corners_free(void) {
+    ClothMesh mesh = seam;
+    mesh.rest = level_seam;
+    mesh.edge = level_edges;
+    mesh.inv_area = free_mass;
+    mesh.tether = NULL;
+    const ClothMaterial material = {.density = 1, .stretch = 1.0F, .thickness = 0.005F, .iterations = 2};
+    const ClothSupport face = {.center = {0,1.01F,0}, .half_u = {0.2F,0,0}, .half_v = {0,0,-0.2F},
+        .depth = 0.12F, .plane_count = 7, .planes = {{1,0,0,-0.2F},{-1,0,0,-0.2F},{0,1,0,0},
+            {0,-1,0,-0.12F},{0,0,1,-0.2F},{0,0,-1,-0.2F},{1,0,1,-0.2F}}};
+    TEST_ASSERT_TRUE(cloth_reset_supported(&cloth, &mesh, &material, mesh.rest, NULL, NULL, 0, &face));
+    TEST_ASSERT_TRUE(fabsf(cloth.x[2][1] - 1.015F) < 1e-5F);
+    const ClothFrame drop = {.support = &face, .anchor_shift_y = -0.10F};
+    cloth_step_framed(&cloth, &mesh, &material, dt, &drop, mesh.rest, NULL, NULL, 0);
+    TEST_ASSERT_TRUE(fabsf(cloth.x[2][1] - 1.015F) < 1e-5F);
+    float corner[3][3];
+    for (int i = 0; i < 3; ++i) {
+        corner[i][0] = level_seam[i][0] + 0.16F;
+        corner[i][1] = level_seam[i][1];
+        corner[i][2] = level_seam[i][2] + 0.16F;
+    }
+    TEST_ASSERT_TRUE(cloth_reset_supported(&cloth, &mesh, &material, corner, NULL, NULL, 0, &face));
+    for (int i = 0; i < 3; ++i)
+        for (int k = 0; k < 3; ++k) TEST_ASSERT_TRUE(fabsf(cloth.x[i][k] - corner[i][k]) < 1e-5F);
+}
+
+static void test_support_keeps_the_reachable_guide_and_the_blocked_panels_exit_side(void) {
+    const float rest[][3] = {{-0.02F,1.26F,0}, {0.02F,1.26F,0}, {0.02F,0.55F,-0.17F}, {0,0.65F,-0.10F}};
+    const float posed[][3] = {{-0.02F,1.26F,0}, {0.02F,1.26F,0}, {0.02F,0.78F,0.09F}, {0.01F,1.17F,0.50F}};
+    const float mass[] = {0,0,1,1};
+    const ClothTether tether[] = {{0,0}, {1,0}, {1,1}, {0,1}};
+    ClothMesh mesh = fold;
+    mesh.rest = rest;
+    mesh.inv_area = mass;
+    mesh.tether = tether;
+    const ClothGuide guide[] = {
+        {.normal = {0,0,1}}, {.normal = {0,0,1}},
+        {.normal = {0,0,1}, .travel = 0.001F}, {.normal = {0,0,1}, .travel = 0.001F}
+    };
+    ClothMaterial material = {.density = 1, .stretch = 1, .iterations = 2};
+    const ClothSupport face = {.center = {0,1,0}, .half_u = {0.25F,0,0}, .half_v = {0,0,-0.25F}, .depth = 0.12F};
+    const ClothFrame frame = {.support = &face, .strict_guide = true};
+    TEST_ASSERT_TRUE(cloth_reset_supported(&cloth, &mesh, &material, posed, guide, NULL, 0, &face));
+    cloth_step_framed(&cloth, &mesh, &material, dt, &frame, posed, guide, NULL, 0);
+    TEST_ASSERT_TRUE(fabsf(cloth.x[2][2] - posed[2][2]) < 0.0011F);
+    material.support_drape = 0.5F;
+    TEST_ASSERT_TRUE(cloth_reset_supported(&cloth, &mesh, &material, posed, guide, NULL, 0, &face));
+    cloth_step_framed(&cloth, &mesh, &material, dt, &frame, posed, guide, NULL, 0);
+    TEST_ASSERT_TRUE(cloth.x[2][2] > posed[2][2] && cloth.x[2][2] < 0.25F);
+    material.support_drape = 1.0F;
+    TEST_ASSERT_TRUE(cloth_reset_supported(&cloth, &mesh, &material, posed, guide, NULL, 0, &face));
+    cloth_step_framed(&cloth, &mesh, &material, dt, &frame, posed, guide, NULL, 0);
+    for (int axis = 0; axis < 3; ++axis)
+        TEST_ASSERT_TRUE(fabsf(cloth.x[3][axis] - posed[3][axis]) < 0.0011F);
+    TEST_ASSERT_TRUE(cloth.x[2][1] < posed[2][1] && cloth.x[2][2] >= 0.25F);
+}
+
 int main(void) {
     UNITY_BEGIN();
+    RUN_TEST(test_fabric_can_leave_a_support_and_move_back_under_its_edge);
+    RUN_TEST(test_support_preserves_hanging_material_at_reset_and_catches_inherited_drops);
+    RUN_TEST(test_support_catches_a_spanning_edge_with_both_endpoints_outside);
+    RUN_TEST(test_convex_support_leaves_beveled_corners_free);
+    RUN_TEST(test_support_keeps_the_reachable_guide_and_the_blocked_panels_exit_side);
     RUN_TEST(test_material_restores_signed_fold);
     RUN_TEST(test_capsule_axis_crosses_face_interior);
     RUN_TEST(test_single_pinned_seam_contact_has_bounded_displacement);

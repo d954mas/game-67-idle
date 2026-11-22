@@ -1,6 +1,7 @@
 #include "garment/actor.h"
 #include "garment/contact.h"
 #include "hash/nt_hash.h"
+#include "math/nt_math.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -245,10 +246,45 @@ static void geometry_stats(GarmentStats *stats, const GarmentPiece *s, const Clo
     }
 }
 
+static bool local_support(const ClothSupport *source, const float world[16], ClothSupport *local) {
+    mat3 basis, inverse;
+    for (int i = 0; i < 3; ++i) glm_vec3_copy((float *)&world[4 * i], basis[i]);
+    float det = glm_mat3_det(basis);
+    if (!isfinite(det) || fabsf(det) < 1e-12F) return false;
+    glm_mat3_inv(basis, inverse);
+    vec3 center;
+    glm_vec3_sub((float *)source->center, (float *)&world[12], center);
+    glm_mat3_mulv(inverse, center, local->center);
+    glm_mat3_mulv(inverse, (float *)source->half_u, local->half_u);
+    glm_mat3_mulv(inverse, (float *)source->half_v, local->half_v);
+    if (det < 0.0F) glm_vec3_negate(local->half_v);
+    if (source->plane_count < 0 || source->plane_count > CLOTH_SUPPORT_PLANES) return false;
+    local->plane_count = source->plane_count;
+    for (int f = 0; f < source->plane_count; ++f) {
+        for (int k = 0; k < 3; ++k)
+            local->planes[f][k] = glm_vec3_dot(basis[k], (float *)source->planes[f]);
+        local->planes[f][3] = source->planes[f][3];
+    }
+    local->depth = source->depth;
+    if (source->depth > 0.0F) {
+        vec3 world_area, local_area;
+        glm_vec3_cross((float *)source->half_u, (float *)source->half_v, world_area);
+        glm_vec3_cross(local->half_u, local->half_v, local_area);
+        /* Volume scales by the determinant even when the local face is skewed. */
+        float area = glm_vec3_norm(local_area);
+        if (area <= 1e-12F) return false;
+        local->depth *= glm_vec3_norm(world_area) / (fabsf(det) * area);
+    }
+    return true;
+}
+
 static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_skeleton_t *skel,
-                     const nt_skeletal_mat34_t *pose, const float transform[16], float dt) {
+                     const nt_skeletal_mat34_t *pose, const float transform[16], float dt,
+                     const ClothSupport *world_support) {
     if (!set || !skel || !pose || !transform || !isfinite(dt) || dt < 0)
         return false;
+    ClothSupport support;
+    if (world_support && !local_support(world_support, transform, &support)) return false;
     if (!garment_actor_prepare(a, set, skel))
         return false;
     nt_skeletal_mat34_t world;
@@ -314,8 +350,9 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
         if (s->continuous_cap_count > scratch.current.cap_count)
             s->continuous_cap_count = scratch.current.cap_count;
         if (reset) {
-            cloth_reset_over_body(&s->cloth, g->mesh, &g->material, scratch.current.anchors,
-                                  scratch.current.guide, scratch.current.caps, scratch.current.cap_count);
+            cloth_reset_supported(&s->cloth, g->mesh, &g->material, scratch.current.anchors,
+                                  scratch.current.guide, scratch.current.caps, scratch.current.cap_count,
+                                  world_support ? &support : NULL);
             memcpy(s->sim_anchors, scratch.current.anchors, bytes);
             s->sim_cap_count = scratch.current.cap_count;
             s->continuous_cap_count = scratch.current.cap_count;
@@ -330,7 +367,8 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
             .max_fictitious_accel = 28.0F,
             .floor_y = 0.0F,
             .floor_enabled = true,
-            .suppress_anim_drive = scratch.current.cap_count > g->collider_count
+            .suppress_anim_drive = scratch.current.cap_count > g->collider_count,
+            .support = world_support ? &support : NULL
         };
         for (int j = 0; j < steps; ++j) {
             float u = clamped_dt > 1e-6F ? fminf(1.0F, ((float)(j + 1) * step - a->remainder) / clamped_dt) : 1.0F;
@@ -345,15 +383,8 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
                     ++pin_count;
                 }
             }
-            if (pin_count > 0) {
-                float dy = (curr_pin_y - prev_pin_y) / (float)pin_count;
-                if (dy < 0.0F) {
-                    for (int v = 0; v < g->mesh->vertices; ++v) {
-                        if (g->mesh->inv_area[v] > 0.0F)
-                            s->cloth.x[v][1] += g->downward_follow * dy;
-                    }
-                }
-            }
+            float dy = pin_count ? (curr_pin_y - prev_pin_y) / (float)pin_count : 0.0F;
+            frame.anchor_shift_y = g->downward_follow * fminf(dy, 0.0F);
             cloth_step_framed(&s->cloth, g->mesh, &g->material, step, &frame, scratch.step.anchors,
                               scratch.step.guide, scratch.step.caps, scratch.step.cap_count);
             memcpy(s->sim_anchors, scratch.step.anchors, bytes);
@@ -407,7 +438,13 @@ static bool prepare_vertex_frames(GarmentActor *a) {
 
 bool garment_actor_update(GarmentActor *a, const GarmentSet *set, const nt_skeletal_skeleton_t *skel,
                           const nt_skeletal_mat34_t *pose, const float transform[16], float dt, bool render) {
-    if (!simulate(a, set, skel, pose, transform, dt)) return false;
+    return garment_actor_update_supported(a, set, skel, pose, transform, dt, render, NULL);
+}
+
+bool garment_actor_update_supported(GarmentActor *a, const GarmentSet *set, const nt_skeletal_skeleton_t *skel,
+                                    const nt_skeletal_mat34_t *pose, const float transform[16], float dt, bool render,
+                                    const ClothSupport *world_support) {
+    if (!simulate(a, set, skel, pose, transform, dt, world_support)) return false;
     if (!render) return true;
     if (!prepare_vertex_frames(a)) return false;
     int offset = 0;

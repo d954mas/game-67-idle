@@ -236,6 +236,36 @@ normal. If an offset vertex has a missing or cancelling normal, or an offset
 exceeds the coordinate range, the function copies the entire input pose to
 the output and returns `false`.
 
+## Scene contact
+
+Pass the upper face of a supporting scene object to `garment_actor_update_supported`.
+Transform the center as a point and each half-edge as a vector using the object's
+current world transform. Their cross product points toward the cloth. For a level
+Y-up surface, use the positive X and negative Z half-edges in that order.
+Set `depth` to the measured distance in world meters from the top to the underside.
+The actor converts the face to its own simulation space for the duration of the call.
+Pass `NULL` when the character has no supporting object.
+
+For a shaped cushion, supply its closed outward planes in `ClothSupport.planes`
+and set `plane_count`. A plane in model space satisfies `dot(n, x - center) + d <= 0`
+inside the cushion. Transform its normal by the inverse transpose of the object's
+world basis and keep the offset relative to the transformed center. Leave the
+count at zero for a rectangular support. The optional offline tool
+`tools/fit_support.py furniture.glb --top X Y Z --error 0.01` fits the connected
+component nearest the top center and prints the plane array for the furniture asset.
+
+At spawn or teleport, the solver resolves overlaps toward the nearest face.
+It also checks mesh edges that cross the object between two endpoints.
+Leave the material's `support_drape` at zero when the ordinary contact already
+lays the piece over the object. For long fabric whose animated guide would pull
+it through the object, use a weight from zero to one. The blocked guide moves
+toward the rim on its animated side and recovers its hanging length from its
+sewn attachment. A reachable guide above the object keeps its animated pose.
+Fabric can slide off the edge and swing back underneath. Zero depth represents
+a one-sided sheet.
+The low-level solver accepts the same face in simulation coordinates through
+`cloth_reset_supported` and `ClothFrame.support`.
+
 ## Inspect a posed garment
 
 For a NeoTolis character, include `garment/actor.h`. Keep a zero-initialized `GarmentActor` for each wearer and share the immutable `GarmentSet`. Pass the character's final model-space skeletal pose, its world transform and elapsed seconds once per animation update. A successful update with `render=true` exposes `actor.palette` and `actor.palette_count` for drawing. In the workbench, inspect that same actor and pose:

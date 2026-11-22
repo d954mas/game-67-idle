@@ -60,7 +60,18 @@ typedef struct {
     float compression_limit;  /* 0..0.5 free edge shortening fraction before compression stiffness engages. */
     uint32_t collider_mask;   /* 0 collides with all capsules; otherwise requires mask match. */
     float reset_carry_range_m; /* Optional distance over which inner colliders support inherited seam displacement at reset. */
+    float support_drape;       /* 0..1 share of a hanging panel's blocked guide redirected around a scene support. */
 } ClothMaterial;
+/* Finite, one-sided face. The cross product half_u x half_v points out of the surface. */
+#define CLOTH_SUPPORT_PLANES 48
+typedef struct {
+    float center[3], half_u[3], half_v[3];
+    float depth; /* Distance from the top face to the underside, in meters. Zero is a sheet. */
+    int plane_count;
+    /* Optional closed convex hull inside the face bounds. Inside satisfies n dot (x - center) + d <= 0. */
+    float planes[CLOTH_SUPPORT_PLANES][4];
+} ClothSupport;
+
 /* Reference-frame motion over the current substep in simulation (actor-root) space. */
 typedef struct {
     float linear_accel[3];      /* Root linear acceleration (m/s^2) in simulation space. */
@@ -73,6 +84,8 @@ typedef struct {
     bool floor_enabled;         /* When true, prevents free cloth vertices from dropping below floor_y + thickness. */
     bool suppress_anim_drive;   /* When true, skips anim_drive for this substep (e.g. seated drape). */
     bool strict_guide;          /* Give the final pose envelope priority over contacts and tethers. */
+    const ClothSupport *support; /* Optional scene surface in simulation space for this substep. */
+    float anchor_shift_y;        /* Free-vertex translation inherited from seam motion before integration (m). */
 } ClothFrame;
 typedef struct {
     float normal[3], travel, backstop;
@@ -100,6 +113,9 @@ void cloth_reset(ClothState *s, const ClothMesh *mesh, const float pose[][3]);
 bool cloth_reset_over_body(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
                            const float anchors[][3], const ClothGuide *guide,
                            const ClothCapsule *body, int count);
+bool cloth_reset_supported(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
+                           const float anchors[][3], const ClothGuide *guide,
+                           const ClothCapsule *body, int count, const ClothSupport *support);
 void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,
                 const float anchors[][3], const ClothGuide *guide, const ClothCapsule *body, int count);
 void cloth_step_framed(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,

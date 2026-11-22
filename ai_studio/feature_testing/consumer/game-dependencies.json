@@ -68,8 +68,8 @@
     {
       "id": "garment-cloth",
       "source": "features/garment-cloth",
-      "version": "1.3.0",
-      "compatibility": "validated with independent hinge, pinned seam, capsule contact, shape-limit and pose-driven mask fixtures"
+      "version": "1.4.0",
+      "compatibility": "validated with hinge, pinned seam, capsule contact, finite support, shape-limit and pose-driven mask fixtures"
     },
     {
       "id": "net-bits",

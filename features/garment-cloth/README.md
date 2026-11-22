@@ -15,6 +15,7 @@ the animated pose in one Y-up coordinate space measured in meters.
 | `garment_asset.load_asset` | Opens an item asset by path and checks piece identity. The game can bind the same asset to different looks. |
 | `garment_fit_capsules.fit_body_capsules` | Fits the segments declared in a character's body asset to rest-space vertices and joint names. |
 | `garment/actor.h` | Binds a cooked outfit to a NeoTolis skeleton, advances the cloth at fixed intervals, and supplies a posed palette and inspection overlays. Each wearer owns its state. [Small consumer](tests/test_actor.c) · [Integration](INSTALL.md#inspect-a-posed-garment). |
+| `ClothSupport` | A finite, one-sided scene surface supplied per wearer. Its center and two half-edges describe a cushion or ledge in its actual pose. [Scene contact](INSTALL.md#scene-contact). |
 | `garment/debug.h` | Draws weight and tether overlays from a posed cloth mesh and wire outlines for current body capsules and skeleton links. Send its line segments to the host's debug renderer. [Integration example](INSTALL.md#inspect-a-posed-garment). |
 | `garment_cook.cook_mesh` | Produces a C mesh from ordered triangle indices, rest positions and pins. The cooker derives lumped masses, edge lengths and signed hinge angles. |
 | `ClothMaterial` | Surface density in kg/m², length and angular compliance, exponential velocity drag per second, contact thickness in meters and solver passes per substep. Zero compliance gives a rigid constraint at convergence. |

@@ -115,8 +115,29 @@ static void test_shared_asset_instances_keep_their_own_pins_contacts_and_inspect
     }
 }
 
+static void test_world_support_applies_only_to_the_wearer_above_its_finite_face(void) {
+    const uint32_t ids[] = {nt_hash32_str("collar").value, nt_hash32_str("clasp").value};
+    const uint16_t parents[] = {UINT16_MAX, 0};
+    const nt_skeletal_skeleton_t rig = {.joint_id = ids, .joint_count = 2, .parent = parents};
+    nt_skeletal_mat34_t pose[] = {identity, identity};
+    const float transform[] = {0,0,-2,0, 0,1,0,0, 1,0,0,0, 12,2,-4,1};
+    const ClothSupport face = {.center = {12,3.1F,-6}, .half_u = {0,0,-0.4F}, .half_v = {-0.18F,0.12F,0}, .depth = 0.3F};
+    pose[1].r[0][3] = 3.0F;
+    for (int frame = 0; frame < 10; ++frame) {
+        float elapsed = frame ? 1.0F / 60.0F : 0.0F;
+        TEST_ASSERT_TRUE(garment_actor_update_supported(&actors[0], &set, &rig, pose, transform, elapsed, true, &face));
+        TEST_ASSERT_TRUE(garment_actor_update(&actors[1], &set, &rig, pose, transform, elapsed, true));
+        const float *p = actors[0].palette[2].r[0];
+        TEST_ASSERT_TRUE(0.18F * (p[1] - 1.1F) + 0.12F * p[2] >= -1e-5F);
+        for (int axis = 0; axis < 3; ++axis)
+            TEST_ASSERT_TRUE(fabsf(actors[1].palette[4].r[0][axis] - actors[0].palette[4].r[0][axis]) < 1e-5F);
+        TEST_ASSERT_TRUE(actors[1].palette[2].r[0][1] < 1.05F);
+    }
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_shared_asset_instances_keep_their_own_pins_contacts_and_inspection);
+    RUN_TEST(test_world_support_applies_only_to_the_wearer_above_its_finite_face);
     return UNITY_END();
 }
