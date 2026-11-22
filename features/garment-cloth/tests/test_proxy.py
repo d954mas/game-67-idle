@@ -8,7 +8,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from garment_binding import bind_vertex_frames, pack_vertex_binding_u16x4, unpack_vertex_binding_u16x4
 from garment_cook import cook_mesh
-from garment_fit_capsules import fit_tapered_capsule
+from garment_fit_capsules import fit_body_capsules, fit_tapered_capsule
 from garment_proxy import (
     EDGE_DIAG,
     EDGE_WARP,
@@ -68,6 +68,25 @@ class TestProxyAndBinding(unittest.TestCase):
         self.assertGreater(ra, rb + 0.025)
         self.assertAlmostEqual(ra, 0.092, delta=0.008)
         self.assertAlmostEqual(rb, 0.052, delta=0.008)
+
+    def test_body_fit_uses_asset_groups_and_joint_samples(self):
+        points, joints, segments = [], [], {}
+        for joint, radius in (("port", .1), ("starboard", .2)):
+            segments[joint] = dict(a=[joint, [0, 0, 0]], b=[joint, [0, 1, 0]],
+                                   sample_joints=[joint], group="sleeves", radius_group="arms",
+                                   max_radius_m=.5)
+            for y in np.linspace(0, 1, 24):
+                points.append([radius, y, 0])
+                joints.append(joint)
+        body = dict(shapes={"crew": dict(percentile=100, margin_m=0, segments=list(segments))},
+                    min_radius_m=.01, segments=segments)
+        rows = fit_body_capsules(points, joints, body, "crew", {"sleeves": {"start_y_m": .25}})
+        for (bone, a, _, b, ra, rb), joint in zip(rows, segments):
+            self.assertEqual((bone, a[1], b[1]), (joint, .25, 1))
+            self.assertEqual((ra, rb), (.2, .2))
+            self.assertEqual(segments[joint]["a"][1], [0, 0, 0])
+        with self.assertRaisesRegex(ValueError, "unknown fit group"):
+            fit_body_capsules(points, joints, body, "crew", {"sleve": {}})
 
     def test_3vertex_binding_pack_roundtrip_and_slit_isolation(self):
         # Two triangles separated by a coincident slit at x=0 (vertices 0,1 vs 3,4).

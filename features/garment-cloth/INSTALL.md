@@ -16,6 +16,23 @@ game's `dependencies.json`.
 
 ## Cook
 
+An item can point directly to a garment JSON file. Read it with
+`garment_asset.load_asset(path)`. An asset contains a nonempty `pieces` list
+with unique piece IDs and can define local body support profiles in `supports`.
+The host resolves the mesh, fabric and body profile for the piece. For example,
+a coat using one prepared skinned GLB primitive and a painted seam can use
+
+```json
+{"pieces":[{"id":"coat","surface":0,"pins":"_PINS","material":"wool","support":"torso","tether_slack":1.03}]}
+```
+
+For radii measured from a character mesh, pass rest-space points in meters,
+one joint name per point, and the authored body description to
+`garment_fit_capsules.fit_body_capsules(points, joints, body, shape)`.
+Each shape lists segments in contact order. Each segment names its two
+attachment joints, rest endpoints and joints whose vertices supply the fit.
+Several garments can reuse a body description and select their own fit.
+
 Put the feature's `tools/` on the authoring Python path. Supply meters,
 consistent triangle winding and zero-based indices. A slit has separate
 vertices on its two free sides. A sewn region shares vertices. The cooker

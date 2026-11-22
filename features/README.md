@@ -208,7 +208,7 @@ possibility, not a feature.
   volume of a camera slice. The game owns the depth atlas, the passes and the
   knobs (cascade count, splits, resolution, PCF margin). Reference:
   `shadow-cascades/README.md` + `shadow-cascades/INSTALL.md`.
-- [Garment cloth](garment-cloth/README.md) (`L0`, `1.2.0`) simulates an
+- [Garment cloth](garment-cloth/README.md) (`L0`, `1.3.0`) simulates an
   authored triangle proxy with XPBD stretch and signed bending, skeletal
   motion limits and capsule contacts. Optional masks apply local corrections
   from live joint angles or distances. [Install and cook a mesh](garment-cloth/INSTALL.md).
