@@ -17,7 +17,11 @@ the animated pose in one Y-up coordinate space measured in meters.
 | `ClothMaterial.max_edge_strain`, `strain_passes` | Optional tensile strain limit. A value of 0.12 begins shortening edges above 112% of rest length. Set 1–32 extra edge sweeps per substep to enable it. Zero sweeps use the ordinary solver. |
 | `ClothGuide` | A per-vertex motion sphere around the animated anchor and an inward backstop plane. Supply a unit outward normal, travel radius and inward allowance in meters. A null guide disables these limits. |
 | `ClothTether` | Optional one-sided distance limit to the closest pin by edge-path length. It bounds accumulated extension under a small solver budget and permits shorter, folded paths. |
-| `cloth_reset`, `cloth_step` | Bind a cooked mesh and initial pose, then advance one fixed physics interval using its end pose and capsules. The previous positions retain inertia across calls. |
+| `cloth_reset`, `cloth_reset_over_body`, `cloth_step`, `cloth_step_framed` | Bind a cooked mesh and initial pose (optionally resolving initial body penetration outward from pinned seams for mid-pose spawns), then advance one fixed substep with explicit velocity, reference-frame fictitious inertia, optional floor plane and anim-drive suppression. |
+| `ClothMaterial` (v1.0 extensions) | Anisotropic `WARP`/`WEFT`/`DIAG` stretch and bend scales, Grinspun Discrete Shells area-scaled bending with sliver-triangle regularization, tension-field soft compression (`compression_limit`), normal-only `aero_drag`, `gravity_scale`, XPBD `anim_drive` with collider occlusion guard, `contact_friction`, `max_speed_mps` and `collider_mask`. |
+| `garment/contact.h` | Exact closed-form tapered round-cone SDF (`cloth_point_capsule_contact`), temporal previous-side recovery (`cloth_point_capsule_contact_swept`), face interior contact (`cloth_face_contact`) and bone-free bilateral seated lap-bridge builder (`cloth_build_lap_bridge`). |
+| `cloth_vertex_frames_prepare`, `cloth_vertex_frames_eval`, `cloth_vertex_quats_eval` | Smooth per-vertex orthonormal transfer (`3x4` rigid frames or non-degenerate hybrid barycentric-position + unit-quaternion records with `det(R) == 1` on sharp folds). |
+| `garment_proxy.py`, `garment_fit_capsules.py` | Checkerboard quad triangulation, geodesic depth, warp/weft edge classification, bind-pose validation, long-edge subdivision, quality-driven isotropic remeshing (`improve_mesh_quality`) and tapered body-capsule fitting (`fit_tapered_capsule`). |
 | `cloth_step_shaped` | Advance the same simulation, then enforce each free vertex's travel sphere and backstop around its current animated target. Pins follow their anchors. A null guide gives the same step as `cloth_step`. |
 | `cloth_offset_surface` | Apply signed offsets in meters along area-weighted normals of the posed proxy to a separate output buffer. Pins and vertices with zero offset retain their exact input positions. |
 | `cloth_pose_distance`, `cloth_pose_angle` | Evaluate a smooth 0–1 activation at the current pose. Inputs are two points in meters or three points defining an unsigned angle. Either threshold order is supported. |
@@ -57,13 +61,14 @@ detection are outside its coverage.
 
 ## Compatibility
 
-Version `0.3.0` supports up to 512 proxy vertices and 1536 unique edges per
-instance. It uses Earth gravity along negative Y. The current material
-model uses the same edge compliance in every fabric direction. A PATCH
-preserves public inputs and corrects implementation defects. A MINOR
-adds compatible input options or metrics. A MAJOR changes coordinate,
-ownership, material or data-layout contracts. Rebuild C cooks and all
-linked targets on upgrade.
+Version `1.0.0` supports up to 512 proxy vertices and 1536 unique edges per
+instance. It uses explicit velocity integration in Y-up meters, anisotropic
+`WARP`/`WEFT`/`DIAG` XPBD constraints with Grinspun Discrete Shells bending,
+tapered round-cone contacts, collision-aware reset and smooth per-vertex
+quaternion/frame surface transfer. A PATCH preserves public inputs and corrects
+implementation defects. A MINOR adds compatible input options or metrics. A
+MAJOR changes coordinate, ownership, material or data-layout contracts. Rebuild
+C cooks and all linked targets on upgrade.
 
 ## Extension points
 

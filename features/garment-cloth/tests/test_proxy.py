@@ -105,5 +105,22 @@ class TestProxyAndBinding(unittest.TestCase):
         self.assertLessEqual(int(counts.max()), 2)
 
 
+    def test_improve_mesh_quality_flips_sliver_and_preserves_boundary(self):
+        from garment_proxy import improve_mesh_quality, _tri_min_angle_deg
+        # Diamond with a long skinny diagonal (0-2) that should flip to short diagonal (1-3).
+        pts = np.array([
+            [0.0, 0.0, 0.0],
+            [0.5, -0.1, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.5, 0.1, 0.0],
+        ], dtype=np.float64)
+        tris = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int32)
+        before = min(_tri_min_angle_deg(pts[a], pts[b], pts[c]) for a, b, c in tris)
+        rp, rf = improve_mesh_quality(pts, tris, iterations=4)
+        after = min(_tri_min_angle_deg(rp[a], rp[b], rp[c]) for a, b, c in rf)
+        self.assertGreater(after, before + 5.0)
+        np.testing.assert_allclose(rp, pts, atol=1e-12)
+
+
 if __name__ == "__main__":
     unittest.main()

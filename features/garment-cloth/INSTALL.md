@@ -220,7 +220,7 @@ exposes the focused CTests after the first build.
 
 ```powershell
 node ai_studio/feature_testing/run.mjs
-ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R "^test_garment_(cloth|cook|binding|shape|keyframes)$" --output-on-failure
+ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R "^test_garment_(cloth|cook|binding|shape|keyframes|pose|render|proxy)$" --output-on-failure
 ```
 
 Then run the consuming game's animation and body-fit fixtures. To uninstall,

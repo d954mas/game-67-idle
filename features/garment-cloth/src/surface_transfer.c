@@ -146,6 +146,81 @@ bool cloth_vertex_frames_prepare(const ClothMesh *mesh, ClothVertexBasis out[CLO
     return true;
 }
 
+static void mat3_to_quat(const float m[3][3], float q[4]) {
+    float trace = m[0][0] + m[1][1] + m[2][2];
+    if (trace > 0.0F) {
+        float s = 2.0F * sqrtf(trace + 1.0F);
+        q[3] = 0.25F * s;
+        q[0] = (m[2][1] - m[1][2]) / s;
+        q[1] = (m[0][2] - m[2][0]) / s;
+        q[2] = (m[1][0] - m[0][1]) / s;
+    } else if (m[0][0] > m[1][1] && m[0][0] > m[2][2]) {
+        float s = 2.0F * sqrtf(1.0F + m[0][0] - m[1][1] - m[2][2]);
+        q[3] = (m[2][1] - m[1][2]) / s;
+        q[0] = 0.25F * s;
+        q[1] = (m[0][1] + m[1][0]) / s;
+        q[2] = (m[0][2] + m[2][0]) / s;
+    } else if (m[1][1] > m[2][2]) {
+        float s = 2.0F * sqrtf(1.0F + m[1][1] - m[0][0] - m[2][2]);
+        q[3] = (m[0][2] - m[2][0]) / s;
+        q[0] = (m[0][1] + m[1][0]) / s;
+        q[1] = 0.25F * s;
+        q[2] = (m[1][2] + m[2][1]) / s;
+    } else {
+        float s = 2.0F * sqrtf(1.0F + m[2][2] - m[0][0] - m[1][1]);
+        q[3] = (m[1][0] - m[0][1]) / s;
+        q[0] = (m[0][2] + m[2][0]) / s;
+        q[1] = (m[1][2] + m[2][1]) / s;
+        q[2] = 0.25F * s;
+    }
+    float len = sqrtf(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
+    if (isfinite(len) && len > 1e-8F) {
+        float sign = q[3] < 0.0F ? -1.0F : 1.0F;
+        for (int k = 0; k < 4; ++k) q[k] *= sign / len;
+    } else {
+        q[0] = q[1] = q[2] = 0.0F;
+        q[3] = 1.0F;
+    }
+}
+
+bool cloth_vertex_quats_eval(const ClothMesh *mesh, const ClothVertexBasis basis[CLOTH_VERTICES],
+                             const float posed[][3], float out_packed12[][12]) {
+    if (!mesh || !basis || !posed || !out_packed12 ||
+        mesh->vertices < 3 || mesh->vertices > CLOTH_VERTICES) return false;
+
+    float normals[CLOTH_VERTICES][3];
+    if (!vertex_normals(mesh, posed, normals)) return false;
+
+    for (int i = 0; i < mesh->vertices; ++i) {
+        int nb = basis[i].ref_neighbor;
+        if (nb < 0 || nb >= mesh->vertices) return false;
+        float r_curr[3][3], rot[3][3], q[4];
+        build_frame(posed[i], posed[nb], normals[i], r_curr);
+        for (int row = 0; row < 3; ++row) {
+            for (int col = 0; col < 3; ++col) {
+                rot[row][col] = r_curr[row][0] * basis[i].r0_t[0][col] +
+                                r_curr[row][1] * basis[i].r0_t[1][col] +
+                                r_curr[row][2] * basis[i].r0_t[2][col];
+            }
+        }
+        mat3_to_quat(rot, q);
+        float *o = out_packed12[i];
+        o[0] = posed[i][0];
+        o[1] = posed[i][1];
+        o[2] = posed[i][2];
+        o[3] = q[0];
+        o[4] = basis[i].p0[0];
+        o[5] = basis[i].p0[1];
+        o[6] = basis[i].p0[2];
+        o[7] = q[1];
+        o[8] = q[2];
+        o[9] = q[3];
+        o[10] = 0.0F;
+        o[11] = 0.0F;
+    }
+    return true;
+}
+
 bool cloth_vertex_frames_eval(const ClothMesh *mesh, const ClothVertexBasis basis[CLOTH_VERTICES],
                               const float posed[][3], float out_mat34[][12]) {
     if (!mesh || !basis || !posed || !out_mat34 ||

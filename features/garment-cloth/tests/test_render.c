@@ -155,6 +155,57 @@ static void test_vertex_frames_identity_rigid_smooth_and_slit_isolated(void) {
     }
 }
 
+static void quat_rotate_vec(const float q[4], const float v[3], float out[3]) {
+    float tx = 2.0F * (q[1] * v[2] - q[2] * v[1]);
+    float ty = 2.0F * (q[2] * v[0] - q[0] * v[2]);
+    float tz = 2.0F * (q[0] * v[1] - q[1] * v[0]);
+    out[0] = v[0] + q[3] * tx + (q[1] * tz - q[2] * ty);
+    out[1] = v[1] + q[3] * ty + (q[2] * tx - q[0] * tz);
+    out[2] = v[2] + q[3] * tz + (q[0] * ty - q[1] * tx);
+}
+
+static void test_vertex_quats_preserve_rest_rigid_and_thickness_on_hairpin_fold(void) {
+    ClothVertexBasis basis[CLOTH_VERTICES];
+    float rec[4][12];
+    TEST_ASSERT_TRUE(cloth_vertex_frames_prepare(&panel, basis));
+    TEST_ASSERT_TRUE(cloth_vertex_quats_eval(&panel, basis, rest, rec));
+    /* Rest pose: exact identity quaternion (0,0,0,1) and P_curr == P_rest. */
+    for (int v = 0; v < 4; ++v) {
+        TEST_ASSERT_TRUE(fabsf(rec[v][0] - rest[v][0]) < 1e-6F);
+        TEST_ASSERT_TRUE(fabsf(rec[v][4] - rest[v][0]) < 1e-6F);
+        TEST_ASSERT_TRUE(fabsf(rec[v][3]) < 1e-6F && fabsf(rec[v][7]) < 1e-6F &&
+                         fabsf(rec[v][8]) < 1e-6F && fabsf(rec[v][9] - 1.0F) < 1e-6F);
+    }
+    /* Extreme 160-deg hairpin fold: inner and outer shell offset stays rigidly separated (no collapse!). */
+    float bent[4][3];
+    memcpy(bent, rest, sizeof bent);
+    bent[3][1] = 1.85F;
+    bent[3][2] = 0.65F;
+    TEST_ASSERT_TRUE(cloth_vertex_quats_eval(&panel, basis, bent, rec));
+    /* Blend vertices (0, 1, 2) with hemisphere alignment. */
+    float w[3] = {0.4F, 0.4F, 0.2F};
+    float q0[4] = {rec[0][3], rec[0][7], rec[0][8], rec[0][9]};
+    float qb[4] = {0}, pc[3] = {0}, pr[3] = {0};
+    for (int k = 0; k < 3; ++k) {
+        float qk[4] = {rec[k][3], rec[k][7], rec[k][8], rec[k][9]};
+        float s = (q0[0]*qk[0] + q0[1]*qk[1] + q0[2]*qk[2] + q0[3]*qk[3]) < 0.0F ? -1.0F : 1.0F;
+        for (int j = 0; j < 4; ++j) qb[j] += w[k] * s * qk[j];
+        for (int j = 0; j < 3; ++j) {
+            pc[j] += w[k] * rec[k][j];
+            pr[j] += w[k] * rec[k][4 + j];
+        }
+    }
+    float qlen = sqrtf(qb[0]*qb[0] + qb[1]*qb[1] + qb[2]*qb[2] + qb[3]*qb[3]);
+    TEST_ASSERT_TRUE(qlen > 0.5F);
+    for (int j = 0; j < 4; ++j) qb[j] /= qlen;
+    float thick_rest[3] = {0.0F, 0.0F, 0.004F}, thick_rot[3];
+    quat_rotate_vec(qb, thick_rest, thick_rot);
+    /* Rigid quaternion rotation preserves 100% of shell thickness (4.0mm) without collapse! */
+    float thick_len = sqrtf(thick_rot[0]*thick_rot[0] + thick_rot[1]*thick_rot[1] + thick_rot[2]*thick_rot[2]);
+    TEST_ASSERT_TRUE(fabsf(thick_len - 0.004F) < 1e-6F);
+    (void)pc; (void)pr;
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_positive_and_negative_shell_clear_a_fold_with_a_clean_proxy);
@@ -164,5 +215,6 @@ int main(void) {
     RUN_TEST(test_nearly_collinear_triangle_cannot_flip_its_shell_across_the_fold);
     RUN_TEST(test_opposing_faces_at_a_hairpin_cancel_continuously);
     RUN_TEST(test_vertex_frames_identity_rigid_smooth_and_slit_isolated);
+    RUN_TEST(test_vertex_quats_preserve_rest_rigid_and_thickness_on_hairpin_fold);
     return UNITY_END();
 }

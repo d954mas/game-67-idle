@@ -634,6 +634,95 @@ static void test_reset_over_body_places_seated_skirt_above_thigh_without_impalin
     TEST_ASSERT_TRUE(met.penetration < 0.01F);
 }
 
+static void build_grid_strip(int nx, int ny, float width, float length,
+                             float rest[][3], float inv_area[], ClothFace faces[], ClothEdge edges[],
+                             ClothMesh *out) {
+    int nv = (nx + 1) * (ny + 1);
+    float dx = width / (float)nx, dy = length / (float)ny;
+    float area[CLOTH_VERTICES] = {0};
+    int nf = 0;
+    for (int j = 0; j <= ny; ++j) {
+        for (int i = 0; i <= nx; ++i) {
+            int id = j * (nx + 1) + i;
+            rest[id][0] = (float)i * dx - 0.5F * width;
+            rest[id][1] = 1.0F;
+            rest[id][2] = (float)j * dy; /* Starts horizontal in +Z (cantilever release). */
+        }
+    }
+    for (int j = 0; j < ny; ++j) {
+        for (int i = 0; i < nx; ++i) {
+            int v00 = j * (nx + 1) + i, v10 = v00 + 1;
+            int v01 = v00 + (nx + 1), v11 = v01 + 1;
+            faces[nf++] = (ClothFace){(uint16_t)v00, (uint16_t)v10, (uint16_t)v11};
+            faces[nf++] = (ClothFace){(uint16_t)v00, (uint16_t)v11, (uint16_t)v01};
+            float tri_a = 0.5F * dx * dy;
+            area[v00] += tri_a * (2.0F / 3.0F);
+            area[v10] += tri_a * (1.0F / 3.0F);
+            area[v11] += tri_a * (2.0F / 3.0F);
+            area[v01] += tri_a * (1.0F / 3.0F);
+        }
+    }
+    for (int v = 0; v < nv; ++v) inv_area[v] = (v <= nx) ? 0.0F : (1.0F / area[v]);
+    int ne = 0;
+    for (int f = 0; f < nf; ++f) {
+        int ids[3] = {faces[f].a, faces[f].b, faces[f].c};
+        for (int k = 0; k < 3; ++k) {
+            int a = ids[k], b = ids[(k + 1) % 3], c = ids[(k + 2) % 3];
+            int lo = a < b ? a : b, hi = a < b ? b : a;
+            int found = -1;
+            for (int e = 0; e < ne; ++e) {
+                if (edges[e].a == lo && edges[e].b == hi) { found = e; break; }
+            }
+            if (found >= 0) {
+                edges[found].d = c;
+            } else {
+                float d0 = rest[hi][0] - rest[lo][0], d2 = rest[hi][2] - rest[lo][2];
+                uint8_t kind = (fabsf(d0) < 1e-6F) ? CLOTH_EDGE_WARP
+                             : (fabsf(d2) < 1e-6F) ? CLOTH_EDGE_WEFT : CLOTH_EDGE_DIAG;
+                edges[ne++] = (ClothEdge){lo, hi, c, -1, hypotf(d0, d2), 0.0F, kind};
+            }
+        }
+    }
+    *out = (ClothMesh){.vertices = nv, .faces = nf, .edges = ne, .rest = rest,
+                       .inv_area = inv_area, .face = faces, .edge = edges};
+}
+
+static float run_cantilever_tip_drop(int nx, int ny, int hz, float duration_s, const ClothMaterial *m) {
+    static float rest[CLOTH_VERTICES][3];
+    static float inv_area[CLOTH_VERTICES];
+    static ClothFace faces[2 * CLOTH_EDGES / 3];
+    static ClothEdge edges[CLOTH_EDGES];
+    ClothMesh mesh;
+    build_grid_strip(nx, ny, 0.20F, 0.36F, rest, inv_area, faces, edges, &mesh);
+    cloth_reset(&cloth, &mesh, rest);
+    float step = 1.0F / (float)hz;
+    int steps = (int)lroundf(duration_s * (float)hz);
+    for (int s = 0; s < steps; ++s) {
+        cloth_step(&cloth, &mesh, m, step, rest, NULL, NULL, 0);
+    }
+    float tip_y = 0.0F;
+    for (int i = 0; i <= nx; ++i) tip_y += cloth.x[ny * (nx + 1) + i][1];
+    return 1.0F - tip_y / (float)(nx + 1);
+}
+
+static void test_xpbd_timestep_and_resolution_invariance_at_earth_gravity(void) {
+    ClothMaterial m = {
+        .density = 0.22F, .stretch = 0.00001F, .bend = 400.0F, .drag = 0.35F,
+        .thickness = 0.005F, .iterations = 4, .max_edge_strain = 0.12F, .strain_passes = 2,
+        .gravity_scale = 1.0F, .aero_drag = 0.60F, .compression_limit = 0.20F
+    };
+    /* 1. Timestep invariance: 120 Hz vs 240 Hz agrees within 5%. */
+    float drop_120 = run_cantilever_tip_drop(2, 4, 120, 0.25F, &m);
+    float drop_240 = run_cantilever_tip_drop(2, 4, 240, 0.25F, &m);
+    TEST_ASSERT_TRUE(drop_120 > 0.10F && drop_240 > 0.10F);
+    TEST_ASSERT_TRUE(fabsf(drop_120 - drop_240) / fmaxf(drop_120, drop_240) < 0.05F);
+
+    /* 2. Mesh-resolution invariance: 1x (2x4) vs 2x (4x8) agrees within 5%. */
+    float drop_fine = run_cantilever_tip_drop(4, 8, 240, 0.25F, &m);
+    TEST_ASSERT_TRUE(drop_fine > 0.10F);
+    TEST_ASSERT_TRUE(fabsf(drop_240 - drop_fine) / fmaxf(drop_240, drop_fine) < 0.05F);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_material_restores_signed_fold);
@@ -661,5 +750,6 @@ int main(void) {
     RUN_TEST(test_compression_limit_softens_shortening_without_weakening_tension);
     RUN_TEST(test_bend_sliver_triangle_stays_bounded_and_finite);
     RUN_TEST(test_reset_over_body_places_seated_skirt_above_thigh_without_impaling);
+    RUN_TEST(test_xpbd_timestep_and_resolution_invariance_at_earth_gravity);
     return UNITY_END();
 }
