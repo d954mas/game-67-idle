@@ -136,6 +136,25 @@ static void test_strain_limit_respects_pins_slack_and_material_validation(void) 
     TEST_ASSERT_FALSE(cloth_frame_valid(&mesh, &m, dt, seam.rest, NULL, NULL, 0));
 }
 
+static void test_strain_cannot_pull_a_free_vertex_into_the_body(void) {
+    ClothMaterial material = {.density = 0.2F, .stretch = 100.0F, .iterations = 1, .max_edge_strain = 0.1F};
+    ClothCapsule body = {.a = {0.024F, 0.061F, -0.002F}, .b = {0.024F, 0.061F, -0.002F}, .radius = 0.05F};
+    float pose[3][3], normal[3], t;
+    memcpy(pose, small_seam.rest, sizeof pose);
+    pose[2][0] = 0.04F;
+    pose[2][1] = 0.12F;
+    for (int v = 0; v < 3; ++v)
+        TEST_ASSERT_TRUE(cloth_point_capsule_contact(pose[v], &body, 0, normal, &t) == 0.0F);
+    for (int passes = 0; passes <= 3; ++passes) {
+        material.strain_passes = passes;
+        cloth_reset(&cloth, &small_seam, pose);
+        cloth_step(&cloth, &small_seam, &material, dt, pose, NULL, &body, 1);
+        TEST_ASSERT_TRUE(cloth.frame_valid);
+        TEST_ASSERT_EQUAL_MEMORY(pose, cloth.x, 2 * sizeof pose[0]);
+        TEST_ASSERT_TRUE(cloth_point_capsule_contact(cloth.x[2], &body, 0, normal, &t) <= 1e-6F);
+    }
+}
+
 static void test_strain_sweeps_precede_final_shape_envelope(void) {
     ClothMesh mesh = seam;
     ClothMaterial m = stiff;
@@ -228,6 +247,39 @@ static void test_shaped_null_guide_matches_ordinary_and_bad_guide_rejects_frame(
     TEST_ASSERT_FALSE(cloth.frame_valid);
     TEST_ASSERT_EQUAL_MEMORY(ordinary.x, cloth.x, sizeof seam_rest);
     TEST_ASSERT_EQUAL_MEMORY(ordinary.velocity, cloth.velocity, sizeof seam_rest);
+}
+
+static void test_loose_final_guide_preserves_filtered_velocity(void) {
+    static ClothState ordinary;
+    ClothGuide guides[4];
+    for (int i = 0; i < 4; ++i)
+        guides[i] = (ClothGuide){.normal = {0, 1, 0}, .travel = 10, .backstop = 10};
+    ClothMaterial material = {.density = .2F, .iterations = 1, .stretch = .1F, .bend = .1F, .max_speed_mps = .01F};
+    cloth_reset(&ordinary, &fold, fold.rest);
+    cloth_reset(&cloth, &fold, fold.rest);
+    ordinary.velocity[3][0] = cloth.velocity[3][0] = 2.0F;
+    cloth_step(&ordinary, &fold, &material, dt, fold.rest, guides, NULL, 0);
+    cloth_step_shaped(&cloth, &fold, &material, dt, fold.rest, guides, NULL, 0);
+    TEST_ASSERT_TRUE(cloth.frame_valid && ordinary.frame_valid);
+    TEST_ASSERT_EQUAL_MEMORY(ordinary.x, cloth.x, sizeof fold_rest);
+    TEST_ASSERT_EQUAL_MEMORY(ordinary.velocity, cloth.velocity, sizeof fold_rest);
+    TEST_ASSERT_TRUE(cloth.velocity[3][0] <= material.max_speed_mps);
+}
+
+static void test_invalid_reset_preserves_coordinates_and_rejects_excess_capsules(void) {
+    ClothCapsule body[CLOTH_CAPSULES + 1] = {0};
+    ClothMaterial invalid = stiff;
+    invalid.density = -1.0F;
+    TEST_ASSERT_TRUE(cloth_reset_over_body(&cloth, &seam, &stiff, seam.rest, NULL, NULL, 0));
+    cloth.x[2][1] += 0.25F;
+    float y = cloth.x[2][1];
+    TEST_ASSERT_FALSE(cloth_reset_over_body(&cloth, &seam, &invalid, seam.rest, NULL, NULL, 0));
+    TEST_ASSERT_FALSE(cloth.frame_valid);
+    TEST_ASSERT_TRUE(y == cloth.x[2][1]);
+    TEST_ASSERT_TRUE(cloth_frame_valid(&seam, &stiff, dt, seam.rest, NULL, body, CLOTH_CAPSULES));
+    TEST_ASSERT_FALSE(cloth_reset_over_body(&cloth, &seam, &stiff, seam.rest, NULL, body, CLOTH_CAPSULES + 1));
+    TEST_ASSERT_FALSE(cloth.frame_valid);
+    TEST_ASSERT_TRUE(y == cloth.x[2][1]);
 }
 
 static void test_shaped_backstop_holds_after_world_coordinate_rounding(void) {
@@ -632,6 +684,27 @@ static void test_reset_over_body_places_seated_skirt_above_thigh_without_impalin
     TEST_ASSERT_TRUE(met.finite);
     TEST_ASSERT_TRUE(met.stretch < 0.25F);
     TEST_ASSERT_TRUE(met.penetration < 0.01F);
+
+    float seated[6][3];
+    memcpy(seated, cloth.x, sizeof seated);
+    m.reset_carry_range_m = 0.02F;
+    cloth_reset_over_body(&cloth, &mesh, &m, strip_rest, guide, &thigh, 1);
+    TEST_ASSERT_EQUAL_MEMORY(seated, cloth.x, sizeof seated);
+
+    ClothCapsule crossbar = {.a = {-0.055F, 0.77F, 0.05F}, .b = {0.055F, 0.77F, 0.05F}, .radius = 0.08F};
+    m.reset_carry_range_m = 0.0F;
+    cloth_reset_over_body(&cloth, &mesh, &m, strip_rest, guide, &crossbar, 1);
+    float hem = fabsf(cloth.x[5][2] - strip_rest[5][2]);
+    ClothMetrics full = cloth_measure(&cloth, &mesh, &m, dt, strip_rest, &crossbar, 1);
+    m.reset_carry_range_m = 0.02F;
+    cloth_reset_over_body(&cloth, &mesh, &m, strip_rest, guide, &crossbar, 1);
+    ClothMetrics local = cloth_measure(&cloth, &mesh, &m, dt, strip_rest, &crossbar, 1);
+    TEST_ASSERT_TRUE(local.finite && local.pin_error == 0.0F && local.stretch < full.stretch);
+    TEST_ASSERT_TRUE(local.penetration <= full.penetration + 1e-6F);
+    TEST_ASSERT_TRUE(fabsf(cloth.x[5][2] - strip_rest[5][2]) < hem);
+
+    m.reset_carry_range_m = -0.1F;
+    TEST_ASSERT_FALSE(cloth_frame_valid(&mesh, &m, dt, strip_rest, guide, &crossbar, 1));
 }
 
 static void build_grid_strip(int nx, int ny, float width, float length,
@@ -731,10 +804,13 @@ int main(void) {
     RUN_TEST(test_invalid_inputs_never_index_or_advance_state);
     RUN_TEST(test_tether_limits_extension_and_preserves_slack);
     RUN_TEST(test_strain_limit_respects_pins_slack_and_material_validation);
+    RUN_TEST(test_strain_cannot_pull_a_free_vertex_into_the_body);
     RUN_TEST(test_strain_sweeps_precede_final_shape_envelope);
     RUN_TEST(test_render_offset_follows_the_deformed_face_normal);
     RUN_TEST(test_shaped_envelope_wins_over_capsule_and_tracks_pose);
     RUN_TEST(test_shaped_null_guide_matches_ordinary_and_bad_guide_rejects_frame);
+    RUN_TEST(test_loose_final_guide_preserves_filtered_velocity);
+    RUN_TEST(test_invalid_reset_preserves_coordinates_and_rejects_excess_capsules);
     RUN_TEST(test_shaped_backstop_holds_after_world_coordinate_rounding);
     RUN_TEST(test_surface_offset_uses_posed_areas_and_preserves_history_and_pins);
     RUN_TEST(test_surface_offset_falls_back_as_a_whole_when_a_normal_is_undefined);

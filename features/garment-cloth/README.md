@@ -12,9 +12,12 @@ the animated pose in one Y-up coordinate space measured in meters.
 
 | Input or operation | Meaning |
 |---|---|
+| `garment/actor.h` | Binds a cooked outfit to a NeoTolis skeleton, advances the cloth at fixed intervals, and supplies a posed palette and inspection overlays. Each wearer owns its state. [Small consumer](tests/test_actor.c) · [Integration](INSTALL.md#inspect-a-posed-garment). |
+| `garment/debug.h` | Draws weight and tether overlays from a posed cloth mesh and wire outlines for current body capsules and skeleton links. Send its line segments to the host's debug renderer. [Integration example](INSTALL.md#inspect-a-posed-garment). |
 | `garment_cook.cook_mesh` | Produces a C mesh from ordered triangle indices, rest positions and pins. The cooker derives lumped masses, edge lengths and signed hinge angles. |
 | `ClothMaterial` | Surface density in kg/m², length and angular compliance, exponential velocity drag per second, contact thickness in meters and solver passes per substep. Zero compliance gives a rigid constraint at convergence. |
 | `ClothMaterial.max_edge_strain`, `strain_passes` | Optional tensile strain limit. A value of 0.12 begins shortening edges above 112% of rest length. Set 1–32 extra edge sweeps per substep to enable it. Zero sweeps use the ordinary solver. |
+| `ClothMaterial.reset_carry_range_m` | Positive distance in meters outside a body collider over which a free vertex inherits less displacement from its neighbors at spawn or teleport. At reset, the solver also evaluates the fully propagated pose and keeps the localized pose only if it lowers peak edge strain without increasing peak capsule penetration beyond numerical tolerance. Zero uses full propagation. |
 | `ClothGuide` | A per-vertex motion sphere around the animated anchor and an inward backstop plane. Supply a unit outward normal, travel radius and inward allowance in meters. A null guide disables these limits. |
 | `ClothTether` | Optional one-sided distance limit to the closest pin by edge-path length. It bounds accumulated extension under a small solver budget and permits shorter, folded paths. |
 | `cloth_reset`, `cloth_reset_over_body`, `cloth_step`, `cloth_step_framed` | Bind a cooked mesh and initial pose (optionally resolving initial body penetration outward from pinned seams for mid-pose spawns), then advance one fixed substep with explicit velocity, reference-frame fictitious inertia, optional floor plane and anim-drive suppression. |
@@ -55,13 +58,13 @@ Measure residual strain, contact and solve time together when tuning an item.
 The contact metric is discrete and relative to the supplied capsules. A
 consumer qualifies garments on its actual skinned body and visible render
 mesh. Record release-device cost, large pose changes, layering and the worst
-animation-frame residuals. This version supplies one-way body contacts.
-Self-contact, inter-garment contact, friction and continuous collision
-detection are outside its coverage.
+animation-frame residuals. This version supplies one-way body contacts and
+velocity-level tangential friction relative to moving colliders. Self-contact,
+inter-garment contact and continuous collision detection are outside its coverage.
 
 ## Compatibility
 
-Version `1.0.0` supports up to 512 proxy vertices and 1536 unique edges per
+Version `1.1.0` supports up to 512 proxy vertices and 1536 unique edges per
 instance. It uses explicit velocity integration in Y-up meters, anisotropic
 `WARP`/`WEFT`/`DIAG` XPBD constraints with Grinspun Discrete Shells bending,
 tapered round-cone contacts, collision-aware reset and smooth per-vertex

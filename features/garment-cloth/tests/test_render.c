@@ -1,4 +1,6 @@
 #include "garment/render_binding.h"
+#include "garment/contact.h"
+#include "garment/debug.h"
 #include "unity.h"
 #include <string.h>
 
@@ -206,8 +208,65 @@ static void test_vertex_quats_preserve_rest_rigid_and_thickness_on_hairpin_fold(
     (void)pc; (void)pr;
 }
 
+typedef struct {
+    int weights, tethers, capsules, bones;
+    float weight_at_origin[3], tether_color[3];
+    const ClothCapsule *body;
+} DebugLines;
+
+static void inspect_line(void *user, unsigned layer, const float a[3], const float b[3], const float rgb[3]) {
+    DebugLines *capture = user;
+    if (layer == CLOTH_DEBUG_WEIGHTS) {
+        ++capture->weights;
+        if (a[0] == 0 && a[1] == 0 && a[2] == 0) memcpy(capture->weight_at_origin, rgb, sizeof capture->weight_at_origin);
+    } else if (layer == CLOTH_DEBUG_TETHERS) {
+        ++capture->tethers;
+        memcpy(capture->tether_color, rgb, sizeof capture->tether_color);
+        TEST_ASSERT_TRUE(a[0] == 1 && b[0] == 0);
+    } else if (layer == CLOTH_DEBUG_CAPSULES) {
+        float normal[3];
+        ++capture->capsules;
+        TEST_ASSERT_TRUE(fabsf(0.002F - cloth_point_capsule_contact(a, capture->body, 0.002F, normal, NULL)) < 1e-5F);
+        TEST_ASSERT_TRUE(fabsf(0.002F - cloth_point_capsule_contact(b, capture->body, 0.002F, normal, NULL)) < 1e-5F);
+    } else if (layer == CLOTH_DEBUG_SKELETON) {
+        ++capture->bones;
+        TEST_ASSERT_TRUE(a[0] == 0 && b[0] == 1);
+    } else {
+        TEST_FAIL_MESSAGE("unexpected debug layer");
+    }
+}
+
+static void test_debug_draw_uses_selected_weights_live_tether_and_round_cone_surface(void) {
+    const float inv[] = {0, 1, 1, 1}, drive[] = {0, 0.3F, 0, 0}, selected[] = {1, 0, 0, 0};
+    const ClothEdge edge = {.a=0,.b=1};
+    const ClothTether tether[] = {{0,0}, {0,0.8F}, {-1,0}, {-1,0}};
+    ClothMesh m = panel;
+    m.edges = 1; m.edge = &edge; m.inv_area = inv; m.anim_drive = drive; m.tether = tether;
+    DebugLines lines = {0};
+    cloth_debug_mesh(&m, rest, NULL, 0, inspect_line, &lines);
+    TEST_ASSERT_EQUAL_INT(0, lines.weights + lines.tethers);
+    cloth_debug_mesh(&m, rest, NULL, CLOTH_DEBUG_WEIGHTS, inspect_line, &lines);
+    TEST_ASSERT_TRUE(lines.weights > 0 && lines.weight_at_origin[2] > lines.weight_at_origin[0]);
+    cloth_debug_mesh(&m, rest, selected, CLOTH_DEBUG_WEIGHTS | CLOTH_DEBUG_TETHERS, inspect_line, &lines);
+    TEST_ASSERT_TRUE(lines.weight_at_origin[0] > lines.weight_at_origin[2]);
+    TEST_ASSERT_EQUAL_INT(1, lines.tethers);
+    TEST_ASSERT_TRUE(lines.tether_color[0] > lines.tether_color[1]);
+    cloth_debug_bone(rest[0], rest[1], inspect_line, &lines);
+    TEST_ASSERT_EQUAL_INT(1, lines.bones);
+
+    ClothCapsule cap = {.a={0.1F,0.3F,0.1F},.b={0.2F,0.7F,0.4F},.radius=0.18F,.radius_b=0.09F};
+    lines.body = &cap;
+    cloth_debug_capsule(&cap, inspect_line, &lines);
+    TEST_ASSERT_TRUE(lines.capsules > 0);
+    cap.radius_b = 0;
+    cloth_debug_capsule(&cap, inspect_line, &lines);
+    memcpy(cap.b, cap.a, sizeof cap.b);
+    cloth_debug_capsule(&cap, inspect_line, &lines);
+}
+
 int main(void) {
     UNITY_BEGIN();
+    RUN_TEST(test_debug_draw_uses_selected_weights_live_tether_and_round_cone_surface);
     RUN_TEST(test_positive_and_negative_shell_clear_a_fold_with_a_clean_proxy);
     RUN_TEST(test_rest_crease_and_extrapolated_bind_follow_a_rigid_pose);
     RUN_TEST(test_split_seams_do_not_share_fold_attenuation);

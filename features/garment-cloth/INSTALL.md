@@ -42,6 +42,12 @@ seam lips coincide in the rest pose, pass `face_candidates` with the
 allowed simulation face indices per render vertex to preserve the side
 assignment as the seam opens.
 
+When the render and simulation surfaces share source vertex indices, use
+`garment_binding.pack_indexed_surface(vertex_count, pins, palette_offset)`
+for the packed vertex-frame stream. Pins keep their ordinary skinning and
+each free vertex follows its own simulation vertex, including at coincident
+slit edges. The offset counts preceding pieces' simulation vertices.
+
 For a garment with a thin render shell, a sharply folded proxy triangle
 can turn its signed normal offset toward the body. To fade the local shell
 height as that happens, cook one reference value per render binding with
@@ -213,6 +219,36 @@ normal. If an offset vertex has a missing or cancelling normal, or an offset
 exceeds the coordinate range, the function copies the entire input pose to
 the output and returns `false`.
 
+## Inspect a posed garment
+
+For a NeoTolis character, include `garment/actor.h`. Keep a zero-initialized `GarmentActor` for each wearer and share the immutable `GarmentSet`. Pass the character's final model-space skeletal pose, its world transform and elapsed seconds once per animation update. A successful update with `render=true` exposes `actor.palette` and `actor.palette_count` for drawing. In the workbench, inspect that same actor and pose:
+
+```c
+if (garment_actor_update(&actor, outfit, rig, pose, world, dt, true)) {
+    draw_garment_surface(actor.palette, actor.palette_count);
+    garment_actor_debug_lines(&actor, rig, pose, layers, selected_joint, draw_line, view);
+}
+```
+
+`draw_garment_surface` and `draw_line` are host drawing functions. The line callback receives endpoints in model space and their RGB color. Apply the garment's model transform and camera. Set `selected_joint` to a skeleton index for skinning weights or `-1` for animation-drive weights. On a frozen pose, call only the debug function to change layers. Call `garment_actor_clear(&actor)` when releasing the wearer. The [isolated actor test](tests/test_actor.c) exercises different wearers of one asset with a two-joint rig.
+
+For a host supplying its own posed vertices, include `garment/debug.h` and use the geometry helpers directly:
+
+```c
+cloth_debug_mesh(mesh, display_positions, weights, layers, draw_line, view);
+if (layers & CLOTH_DEBUG_CAPSULES) {
+    for (int i = 0; i < contact_count; ++i)
+        cloth_debug_capsule(&contacts[i], draw_line, view);
+}
+if (layers & CLOTH_DEBUG_SKELETON) {
+    for (int i = 0; i < joint_count; ++i)
+        if (parent[i] >= 0)
+            cloth_debug_bone(joint_position[parent[i]], joint_position[i], draw_line, view);
+}
+```
+
+Call the mesh helper for each simulated piece. Pass `NULL` for its cooked animation-drive weights, or one float per proxy vertex for a selected joint's anchor-skinning weights. When the host interpolates the displayed pose, call the helper separately with `CLOTH_DEBUG_WEIGHTS` on the displayed positions and `CLOTH_DEBUG_TETHERS` on the physical positions. The tether color then measures actual distance against the cooked limit. Use the capsule endpoints and both radii from that same physical step and the skeleton from the displayed pose. Toggling layers changes only drawing.
+
 ## Verify
 
 From the Studio root, run the feature owner checks. The native fixture also
@@ -220,7 +256,7 @@ exposes the focused CTests after the first build.
 
 ```powershell
 node ai_studio/feature_testing/run.mjs
-ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R "^test_garment_(cloth|cook|binding|shape|keyframes|pose|render|proxy)$" --output-on-failure
+ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R "^test_garment_" --output-on-failure
 ```
 
 Then run the consuming game's animation and body-fit fixtures. To uninstall,

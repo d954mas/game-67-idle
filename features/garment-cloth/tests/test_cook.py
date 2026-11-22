@@ -49,5 +49,6 @@ if __name__ == "__main__":
         with Path(sys.argv[2]).open("w", encoding="ascii", newline="\n") as out:
             cook_mesh(out, "fold", POINTS, FACES, [0, 1, 2], wearable=True)
             cook_mesh(out, "seam", POINTS[:3], FACES[:1], [0, 1], wearable=True, tether_slack=1.0)
+            cook_mesh(out, "small_seam", np.asarray(POINTS[:3]) * 0.055, FACES[:1], [0, 1], wearable=True)
     else:
         unittest.main()

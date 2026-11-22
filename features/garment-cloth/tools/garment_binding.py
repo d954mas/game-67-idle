@@ -143,6 +143,22 @@ def pack_vertex_binding_u16x4(v0, v1, v2, w0, w1, w2, amount=1.0):
     return (lo & 0xFFFF, (lo >> 16) & 0xFFFF, hi & 0xFFFF, (hi >> 16) & 0xFFFF)
 
 
+def pack_indexed_surface(vertex_count, pins, palette_offset=0):
+    """Bind a render surface sharing the simulation indices. Pins keep ordinary skinning."""
+    if not 0 < vertex_count <= 2047 or not 0 <= palette_offset <= 2047 - vertex_count:
+        raise ValueError("indexed surface exceeds the vertex palette")
+    movable = np.ones(vertex_count, dtype=bool)
+    for pin in pins:
+        if not isinstance(pin, (int, np.integer)) or isinstance(pin, bool) or not 0 <= pin < vertex_count:
+            raise ValueError("invalid indexed surface pin")
+        movable[pin] = False
+    rows = np.zeros((vertex_count, 4), dtype="<u2")
+    for index in np.flatnonzero(movable):
+        vertex = palette_offset + int(index) + 1
+        rows[index] = pack_vertex_binding_u16x4(vertex, vertex, vertex, 1., 0., 0.)
+    return rows
+
+
 def unpack_vertex_binding_u16x4(row):
     """Unpack a 4 x uint16 smooth 3-vertex binding row into (is_vertex_mode, (v0,v1,v2), (w0,w1,w2))."""
     g0, g1, g2, g3 = (int(x) for x in row)

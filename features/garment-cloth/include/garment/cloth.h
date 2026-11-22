@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-enum { CLOTH_VERTICES = 512, CLOTH_EDGES = 1536, CLOTH_MAX_STRAIN_PASSES = 32 };
+enum { CLOTH_VERTICES = 512, CLOTH_EDGES = 1536, CLOTH_CAPSULES = 64, CLOTH_MAX_STRAIN_PASSES = 32 };
 
 enum {
     CLOTH_EDGE_WARP = 0,
@@ -59,6 +59,7 @@ typedef struct {
     float max_speed_mps;      /* 0 disables post-step velocity clamp. */
     float compression_limit;  /* 0..0.5 free edge shortening fraction before compression stiffness engages. */
     uint32_t collider_mask;   /* 0 collides with all capsules; otherwise requires mask match. */
+    float reset_carry_range_m; /* Optional distance over which inner colliders support inherited seam displacement at reset. */
 } ClothMaterial;
 /* Reference-frame motion over the current substep in simulation (actor-root) space. */
 typedef struct {
@@ -71,6 +72,7 @@ typedef struct {
     float floor_y;              /* Optional horizontal floor plane height (m) when floor_enabled. */
     bool floor_enabled;         /* When true, prevents free cloth vertices from dropping below floor_y + thickness. */
     bool suppress_anim_drive;   /* When true, skips anim_drive for this substep (e.g. seated drape). */
+    bool strict_guide;          /* Give the final pose envelope priority over contacts and tethers. */
 } ClothFrame;
 typedef struct {
     float normal[3], travel, backstop;
@@ -95,7 +97,7 @@ bool cloth_frame_valid(const ClothMesh *mesh, const ClothMaterial *m, float dt,
                        const float anchors[][3], const ClothGuide *guide, const ClothCapsule *body, int count);
 void cloth_reset(ClothState *s, const ClothMesh *mesh, const float pose[][3]);
 /* Reset cloth onto anchors and resolve initial body penetration outward from pinned seams. */
-void cloth_reset_over_body(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
+bool cloth_reset_over_body(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
                            const float anchors[][3], const ClothGuide *guide,
                            const ClothCapsule *body, int count);
 void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,

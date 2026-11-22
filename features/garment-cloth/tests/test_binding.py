@@ -5,10 +5,18 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from garment_binding import bind_surface, fold_rest_agreements
+from garment_binding import bind_surface, fold_rest_agreements, pack_indexed_surface, unpack_vertex_binding_u16x4
 
 
 class SurfaceBinding(unittest.TestCase):
+    def test_indexed_surface_binds_only_movable_vertices_of_this_piece(self):
+        rows = pack_indexed_surface(6, [0, 2, 5], palette_offset=11)
+        self.assertEqual(np.flatnonzero(rows.any(axis=1)).tolist(), [1, 3, 4])
+        for index in (1, 3, 4):
+            _, ids, weights = unpack_vertex_binding_u16x4(rows[index])
+            self.assertEqual(ids, (12 + index, 0, 0))
+            self.assertEqual(weights, (1., 0., 0.))
+
     def test_folded_rest_reference_is_continuous_across_opposed_equal_areas(self):
         p = np.array([(0,0,0), (1,0,0), (0,1,0), (0,1,0)], dtype=float)
         for height in (0.999999, 1, 1.000001):

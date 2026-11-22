@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "garment-cloth",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "title": "Garment cloth",
   "status": "opt-in",
   "kind": "gameplay-foundation",
@@ -9,9 +9,13 @@
   "copy_model": "in-place",
   "layer": "L0",
   "owners": ["features/garment-cloth"],
-  "dependencies": ["engine nt_core and nt_math", "Python with NumPy for authoring", "SciPy for the optional SectionGuide fitter and surface projection"],
+  "dependencies": ["engine nt_core and nt_math", "engine nt_skeletal and nt_hash for skeletal actors", "Python with NumPy for authoring", "SciPy for the optional SectionGuide fitter and surface projection"],
   "provides": [
     "garment_cloth",
+    "garment_actor_prepare",
+    "garment_actor_update",
+    "garment_actor_debug_lines",
+    "garment_actor_clear",
     "cloth_mesh_valid",
     "cloth_frame_valid",
     "cloth_reset",
@@ -24,6 +28,9 @@
     "cloth_pose_angle",
     "cloth_pose_offsets",
     "cloth_measure",
+    "cloth_debug_mesh",
+    "cloth_debug_capsule",
+    "cloth_debug_bone",
     "cloth_point_capsule_contact",
     "cloth_point_capsule_contact_swept",
     "cloth_face_contact",
@@ -39,6 +46,7 @@
     "garment_binding.bind_surface",
     "garment_binding.fold_rest_agreements",
     "garment_binding.bind_vertex_frames",
+    "garment_binding.pack_indexed_surface",
     "garment_binding.pack_vertex_binding_u16x4",
     "garment_proxy.triangulate_quads_checkerboard",
     "garment_proxy.geodesic_depth",
@@ -57,7 +65,7 @@
   "manuals": {"install": "features/garment-cloth/INSTALL.md"},
   "commands": {
     "owner": "node ai_studio/feature_testing/run.mjs",
-    "test_core": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"^test_garment_(cloth|cook|binding|shape|keyframes|pose|render|proxy)$\" --output-on-failure"
+    "test_core": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"^test_garment_(actor|cloth|cook|binding|shape|keyframes|pose|render|proxy)$\" --output-on-failure"
   },
-  "registers": {"cmake_targets": ["garment_cloth"], "ctest_targets": ["test_garment_cloth", "test_garment_cook", "test_garment_binding", "test_garment_shape", "test_garment_keyframes", "test_garment_pose", "test_garment_render", "test_garment_proxy"]}
+  "registers": {"cmake_targets": ["garment_cloth"], "ctest_targets": ["test_garment_actor", "test_garment_cloth", "test_garment_cook", "test_garment_binding", "test_garment_shape", "test_garment_keyframes", "test_garment_pose", "test_garment_render", "test_garment_proxy"]}
 }

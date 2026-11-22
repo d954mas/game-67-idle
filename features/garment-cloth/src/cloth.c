@@ -56,7 +56,8 @@ static bool frame_motion_valid(const ClothFrame *frame) {
 
 bool cloth_frame_valid(const ClothMesh *mesh, const ClothMaterial *m, float dt,
                        const float anchors[][3], const ClothGuide *guide, const ClothCapsule *body, int count) {
-    if (!mesh || mesh->vertices < 3 || mesh->vertices > CLOTH_VERTICES || !m || !anchors || count < 0 || (count && !body) ||
+    if (!mesh || mesh->vertices < 3 || mesh->vertices > CLOTH_VERTICES || !m || !anchors ||
+        count < 0 || count > CLOTH_CAPSULES || (count && !body) ||
         !isfinite(dt) || dt <= 0 || !isfinite(m->density) || m->density <= 0 || !isfinite(m->stretch) || m->stretch < 0 ||
         !isfinite(m->bend) || m->bend < 0 || !isfinite(m->drag) || m->drag < 0 ||
         !isfinite(m->thickness) || m->thickness < 0 || m->iterations < 1 ||
@@ -71,6 +72,7 @@ bool cloth_frame_valid(const ClothMesh *mesh, const ClothMaterial *m, float dt,
         !isfinite(m->weft_max_strain) || m->weft_max_strain < 0 ||
         !isfinite(m->contact_friction) || m->contact_friction < 0 || m->contact_friction > 1.0F ||
         !isfinite(m->max_speed_mps) || m->max_speed_mps < 0 ||
+        !isfinite(m->reset_carry_range_m) || m->reset_carry_range_m < 0 ||
         !isfinite(m->compression_limit) || m->compression_limit < 0 || m->compression_limit > 0.5F) return false;
     float scale = m->density / (dt * dt);
     if (!isfinite(scale) || !isfinite(m->stretch * scale) || !isfinite(m->bend * scale)) return false;
@@ -321,7 +323,7 @@ static inline bool box_overlaps(const float amin[3], const float amax[3],
 }
 
 typedef struct {
-    CapsuleBox boxes[64];
+    CapsuleBox boxes[CLOTH_CAPSULES];
     float all_min[3], all_max[3];
     float min_safe_edge2;
     float min_face_thresh2;
@@ -337,7 +339,7 @@ static void build_broadphase(const ClothMaterial *m, const ClothCapsule *body, i
         bp->all_max[k] = -FLT_MAX;
     }
     float thickness = m->thickness;
-    for (int j = 0; j < count && bp->count < 64; ++j) {
+    for (int j = 0; j < count; ++j) {
         if (!capsule_active(m, body + j)) continue;
         float ra = body[j].radius + thickness;
         float rb = cloth_capsule_radius_b(body + j) + thickness;
@@ -642,36 +644,35 @@ static void project_tangent_if_contact(float corr[3], int v, const ContactAccum 
     if (into < 0.0F) glm_vec3_muladds(n, -into, corr);
 }
 
-static void limit_strain(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, const ContactAccum *acc) {
+static bool limit_strain_pass(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
+                              const ContactAccum *acc, bool reverse) {
     float warp_ratio = 1.0F + m->max_edge_strain;
     float weft_ratio = 1.0F + (m->weft_max_strain > 0.0F ? m->weft_max_strain : m->max_edge_strain);
-    for (int pass = 0; pass < m->strain_passes; ++pass) {
-        bool moved = false;
-        for (int k = 0; k < mesh->edges; ++k) {
-            const ClothEdge *e = &mesh->edge[pass % 2 == 0 ? k : mesh->edges - 1 - k];
-            vec3 delta;
-            glm_vec3_sub(s->x[e->b], s->x[e->a], delta);
-            float ratio = (e->kind == CLOTH_EDGE_WARP) ? warp_ratio : weft_ratio;
-            float length = glm_vec3_norm(delta), target = ratio * e->length;
-            float wa = mesh->inv_area[e->a], wb = mesh->inv_area[e->b];
-            if (length <= target || wa + wb == 0.0F) continue;
-            moved = true;
-            float scale = (length - target) / (length * (wa + wb));
-            if (wa > 0.0F) {
-                vec3 corr;
-                glm_vec3_scale(delta, scale * wa, corr);
-                project_tangent_if_contact(corr, e->a, acc);
-                glm_vec3_add(s->x[e->a], corr, s->x[e->a]);
-            }
-            if (wb > 0.0F) {
-                vec3 corr;
-                glm_vec3_scale(delta, -scale * wb, corr);
-                project_tangent_if_contact(corr, e->b, acc);
-                glm_vec3_add(s->x[e->b], corr, s->x[e->b]);
-            }
+    bool moved = false;
+    for (int k = 0; k < mesh->edges; ++k) {
+        const ClothEdge *e = &mesh->edge[reverse ? mesh->edges - 1 - k : k];
+        vec3 delta;
+        glm_vec3_sub(s->x[e->b], s->x[e->a], delta);
+        float ratio = (e->kind == CLOTH_EDGE_WARP) ? warp_ratio : weft_ratio;
+        float length = glm_vec3_norm(delta), target = ratio * e->length;
+        float wa = mesh->inv_area[e->a], wb = mesh->inv_area[e->b];
+        if (length <= target || wa + wb == 0.0F) continue;
+        moved = true;
+        float scale = (length - target) / (length * (wa + wb));
+        if (wa > 0.0F) {
+            vec3 corr;
+            glm_vec3_scale(delta, scale * wa, corr);
+            project_tangent_if_contact(corr, e->a, acc);
+            glm_vec3_add(s->x[e->a], corr, s->x[e->a]);
         }
-        if (!moved) break;
+        if (wb > 0.0F) {
+            vec3 corr;
+            glm_vec3_scale(delta, -scale * wb, corr);
+            project_tangent_if_contact(corr, e->b, acc);
+            glm_vec3_add(s->x[e->b], corr, s->x[e->b]);
+        }
     }
+    return moved;
 }
 
 static void compute_vertex_normals(const ClothMesh *mesh, const float pos[][3], float out[][3]) {
@@ -692,6 +693,8 @@ static void compute_vertex_normals(const ClothMesh *mesh, const float pos[][3], 
         else glm_vec3_zero(out[i]);
     }
 }
+
+static void cap_shape_residual(float x[3], const float anchor[3], const ClothGuide *g);
 
 void cloth_step_framed(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,
                        const ClothFrame *frame, const float anchors[][3], const ClothGuide *guide,
@@ -821,11 +824,23 @@ void cloth_step_framed(ClothState *s, const ClothMesh *mesh, const ClothMaterial
         project_body(s, mesh, m, x_prev, guide, body, &bp, frame, inv_dt, pass == m->iterations - 1, &acc);
     }
 
-    if (m->strain_passes) limit_strain(s, mesh, m, &acc);
+    bool pending_contact = false;
+    for (int pass = 0; pass < m->strain_passes; ++pass) {
+        bool moved = limit_strain_pass(s, mesh, m, &acc, pass % 2 != 0);
+        if (!moved && !pending_contact) break;
+        pending_contact = bp.count || (frame && frame->floor_enabled);
+        if (pending_contact && (pass % 2 != 0 || pass + 1 == m->strain_passes)) {
+            /* A length projection can enter a collider that was clear on the preceding sweep. */
+            project_body(s, mesh, m, x_prev, guide, body, &bp, frame, inv_dt, true, &acc);
+            pending_contact = false;
+        }
+    }
 
     for (int i = 0; i < mesh->vertices; ++i) {
         if (mesh->inv_area[i] == 0.0F) continue;
         vec3 v_free, v;
+        if (guide && frame && frame->strict_guide)
+            cap_shape_residual(s->x[i], anchors[i], &guide[i]);
         glm_vec3_copy(s->velocity[i], v_free);
         for (int k = 0; k < 3; ++k) v[k] = (s->x[i][k] - x_prev[i][k]) * inv_dt;
         if (acc.count[i] > 0) {
@@ -870,6 +885,7 @@ void cloth_step_framed(ClothState *s, const ClothMesh *mesh, const ClothMaterial
             if (spd > m->max_speed_mps) glm_vec3_scale(v, m->max_speed_mps / spd, v);
         }
         glm_vec3_copy(v, s->velocity[i]);
+        if (!finite_point(s->x[i]) || !finite_point(v)) s->frame_valid = false;
     }
 }
 
@@ -1017,13 +1033,21 @@ static void cap_shape_residual(float x[3], const float anchor[3], const ClothGui
     memcpy(x, anchor, 3 * sizeof *x);
 }
 
-void cloth_reset_over_body(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
-                           const float anchors[][3], const ClothGuide *guide,
-                           const ClothCapsule *body, int count) {
-    cloth_reset(s, mesh, anchors);
-    if (!s || !s->frame_valid || !m || !body || count <= 0) return;
-    if (!cloth_frame_valid(mesh, m, 1.0F / 60.0F, anchors, guide, body, count)) return;
+static float reset_support_weight(const float point[3], const ClothMaterial *m, const ClothCapsule *body,
+                                  int count, float range) {
+    float reach = 0.0F;
+    for (int i = 0; i < count; ++i) {
+        if (body[i].flags != CLOTH_COLLIDER_INSIDE || !capsule_active(m, &body[i])) continue;
+        vec3 normal;
+        float depth = cloth_point_capsule_contact(point, &body[i], m->thickness + range, normal, NULL);
+        reach = fmaxf(reach, depth);
+    }
+    return fminf(1.0F, reach / range);
+}
 
+static void reset_contact_pose(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
+                               const float anchors[][3], const ClothGuide *guide,
+                               const ClothCapsule *body, int count, float carry_range) {
     int n = mesh->vertices;
     int deg[CLOTH_VERTICES] = {0};
     for (int e = 0; e < mesh->edges; ++e) {
@@ -1094,7 +1118,12 @@ void cloth_reset_over_body(ClothState *s, const ClothMesh *mesh, const ClothMate
             glm_vec3_scale(avg_disp, inv_p, avg_disp);
             glm_vec3_scale(parent_avg, inv_p, parent_avg);
             parent_rest_len *= inv_p;
-            glm_vec3_add(s->x[v], avg_disp, s->x[v]);
+            if (carry_range > 0.0F && glm_vec3_norm2(avg_disp) > 0.0F) {
+                float weight = reset_support_weight(anchors[v], m, body, count, carry_range);
+                glm_vec3_muladds(avg_disp, weight, s->x[v]);
+            } else {
+                glm_vec3_add(s->x[v], avg_disp, s->x[v]);
+            }
         }
         const float *gn = guide ? guide[v].normal : NULL;
         vec3 cn_sum = {0.0F, 0.0F, 0.0F};
@@ -1155,27 +1184,42 @@ void cloth_reset_over_body(ClothState *s, const ClothMesh *mesh, const ClothMate
         }
         project_body(s, mesh, m, s->x, guide, body, &bp, NULL, 1.0F, true, NULL);
     }
-    memset(s->velocity, 0, (size_t)n * sizeof s->velocity[0]);
+}
+
+bool cloth_reset_over_body(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
+                           const float anchors[][3], const ClothGuide *guide,
+                           const ClothCapsule *body, int count) {
+    const float evaluation_dt = 1.0F / 60.0F;
+    if (!s) return false;
+    if (!cloth_frame_valid(mesh, m, evaluation_dt, anchors, guide, body, count)) {
+        s->mesh = NULL;
+        s->frame_valid = false;
+        return false;
+    }
+    cloth_reset(s, mesh, anchors);
+    if (!s->frame_valid || count == 0) return s->frame_valid;
+    reset_contact_pose(s, mesh, m, anchors, guide, body, count, 0.0F);
+    if (m->reset_carry_range_m == 0.0F) return true;
+
+    /* A deeply folded sheet can need support to propagate beyond the nearest collider. */
+    ClothMetrics propagated = cloth_measure(s, mesh, m, evaluation_dt, anchors, body, count);
+    if (propagated.finite && propagated.stretch == 0.0F) return true;
+    float saved[CLOTH_VERTICES][3];
+    size_t bytes = (size_t)mesh->vertices * sizeof s->x[0];
+    memcpy(saved, s->x, bytes);
+    memcpy(s->x, anchors, bytes);
+    reset_contact_pose(s, mesh, m, anchors, guide, body, count, m->reset_carry_range_m);
+    ClothMetrics local = cloth_measure(s, mesh, m, evaluation_dt, anchors, body, count);
+    if (!local.finite || (propagated.finite &&
+        (local.stretch >= propagated.stretch || local.penetration > propagated.penetration + 1e-6F)))
+        memcpy(s->x, saved, bytes);
+    return true;
 }
 
 void cloth_step_shaped(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,
                        const float anchors[][3], const ClothGuide *guide, const ClothCapsule *body, int count) {
-    float x_before[CLOTH_VERTICES][3];
-    bool valid_before = s && mesh && s->mesh == mesh && mesh->vertices <= CLOTH_VERTICES;
-    if (valid_before) memcpy(x_before, s->x, (size_t)mesh->vertices * sizeof x_before[0]);
-    cloth_step(s, mesh, m, dt, anchors, guide, body, count);
-    if (!s || !s->frame_valid || !guide) return;
-    float inv_dt = 1.0F / dt;
-    for (int i = 0; i < mesh->vertices; ++i) {
-        if (!finite_point(s->x[i]) || !finite_point(s->velocity[i])) {
-            s->frame_valid = false;
-            return;
-        }
-        if (mesh->inv_area[i] != 0.0F) {
-            cap_shape_residual(s->x[i], anchors[i], &guide[i]);
-            for (int k = 0; k < 3; ++k) s->velocity[i][k] = (s->x[i][k] - x_before[i][k]) * inv_dt;
-        }
-    }
+    const ClothFrame frame = {.strict_guide = true};
+    cloth_step_framed(s, mesh, m, dt, guide ? &frame : NULL, anchors, guide, body, count);
 }
 
 ClothMetrics cloth_measure(const ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,
