@@ -186,12 +186,29 @@ static bool depenetrate_reset_vertex(float p[3], const float *guide_n, bool has_
     return false;
 }
 
+static inline float fast_atan_unit(float z) {
+    float z2 = z * z;
+    return z * (0.9998660F + z2 * (-0.3302995F + z2 * (0.1801410F + z2 * (-0.0851330F + z2 * 0.0208351F))));
+}
+
+static inline float fast_atan2f(float y, float x) {
+    float ay = fabsf(y), ax = fabsf(x);
+    if (ax == 0.0F && ay == 0.0F) return 0.0F;
+    float r = (ax >= ay) ? fast_atan_unit(ay / ax) : (0.5F * NT_PI - fast_atan_unit(ax / ay));
+    if (x < 0.0F) r = NT_PI - r;
+    return y < 0.0F ? -r : r;
+}
+
 static void stretch(ClothState *s, const ClothEdge *e, const float *w, float alpha,
                     float compress_limit, float *lambda) {
+    float wa = w[e->a], wb = w[e->b];
+    float weight = wa + wb;
+    if (weight <= 0.0F) return;
     vec3 dx;
     glm_vec3_sub(s->x[e->b], s->x[e->a], dx);
-    float length = glm_vec3_norm(dx), weight = w[e->a] + w[e->b];
-    if (length < 1e-8F || weight <= 0) return;
+    float len2 = glm_vec3_norm2(dx);
+    if (len2 < 1e-16F) return;
+    float length = sqrtf(len2);
     float target = e->length;
     if (compress_limit > 0.0F && length < e->length) {
         /* Preserve circumferential WEFT hoops against radial collapse while allowing WARP/DIAG
@@ -207,12 +224,14 @@ static void stretch(ClothState *s, const ClothEdge *e, const float *w, float alp
     }
     float dl = (target - length - alpha * *lambda) / (weight + alpha);
     *lambda += dl;
-    glm_vec3_muladds(dx, -dl * w[e->a] / length, s->x[e->a]);
-    glm_vec3_muladds(dx, dl * w[e->b] / length, s->x[e->b]);
+    float inv_len = dl / length;
+    if (wa > 0.0F) glm_vec3_muladds(dx, -inv_len * wa, s->x[e->a]);
+    if (wb > 0.0F) glm_vec3_muladds(dx, inv_len * wb, s->x[e->b]);
 }
 
 static void bend(ClothState *s, const ClothEdge *e, const float *w, float alpha, float *lambda) {
-    int ids[] = {e->a, e->b, e->c, e->d};
+    float wa = w[e->a], wb = w[e->b], wc = w[e->c], wd = w[e->d];
+    if (wa + wb + wc + wd <= 0.0F) return;
     vec3 edge, ac, ad, n1, n2, cross, grad[4];
     glm_vec3_sub(s->x[e->b], s->x[e->a], edge);
     glm_vec3_sub(s->x[e->c], s->x[e->a], ac);
@@ -221,35 +240,41 @@ static void bend(ClothState *s, const ClothEdge *e, const float *w, float alpha,
     glm_vec3_cross(ad, edge, n2);
     float edge2 = glm_vec3_norm2(edge), a2 = glm_vec3_norm2(n1), b2 = glm_vec3_norm2(n2);
     if (edge2 < 1e-12F || a2 < 1e-15F || b2 < 1e-15F) return;
-    float length = sqrtf(edge2);
-    float norm1 = sqrtf(a2), norm2 = sqrtf(b2);
     /* Guard sliver triangles whose small altitude h = |n| / L explodes dihedral gradients. */
     float min_norm = 0.05F * edge2;
-    if (norm1 < min_norm || norm2 < min_norm) return;
+    float min_norm2 = min_norm * min_norm;
+    if (a2 < min_norm2 || b2 < min_norm2) return;
+    float length = sqrtf(edge2);
+    float norm1 = sqrtf(a2), norm2 = sqrtf(b2);
     float reg_norm = 0.15F * edge2;
-    float a2_reg = fmaxf(a2, reg_norm * reg_norm);
-    float b2_reg = fmaxf(b2, reg_norm * reg_norm);
+    float reg_norm2 = reg_norm * reg_norm;
+    float a2_reg = a2 > reg_norm2 ? a2 : reg_norm2;
+    float b2_reg = b2 > reg_norm2 ? b2 : reg_norm2;
+    float inv_edge2 = 1.0F / edge2;
     glm_vec3_cross(n1, n2, cross);
-    float angle = atan2f(glm_vec3_dot(edge, cross) / length, glm_vec3_dot(n1, n2));
+    float angle = fast_atan2f(glm_vec3_dot(edge, cross) / length, glm_vec3_dot(n1, n2));
     float error = angle - e->angle;
     if (error > NT_PI) error -= 2.0F * NT_PI;
     if (error < -NT_PI) error += 2.0F * NT_PI;
     glm_vec3_scale(n1, -length / a2_reg, grad[2]);
     glm_vec3_scale(n2, -length / b2_reg, grad[3]);
-    float u = glm_vec3_dot(ac, edge) / edge2, v = glm_vec3_dot(ad, edge) / edge2;
+    float u = glm_vec3_dot(ac, edge) * inv_edge2, v = glm_vec3_dot(ad, edge) * inv_edge2;
     glm_vec3_scale(grad[2], -u, grad[1]);
     glm_vec3_muladds(grad[3], -v, grad[1]);
     glm_vec3_scale(grad[2], u - 1.0F, grad[0]);
     glm_vec3_muladds(grad[3], v - 1.0F, grad[0]);
-    float weight = 0;
-    for (int i = 0; i < 4; ++i) weight += w[ids[i]] * glm_vec3_norm2(grad[i]);
-    if (weight <= 0) return;
+    float weight = wa * glm_vec3_norm2(grad[0]) + wb * glm_vec3_norm2(grad[1]) +
+                   wc * glm_vec3_norm2(grad[2]) + wd * glm_vec3_norm2(grad[3]);
+    if (weight <= 0.0F) return;
     /* Grinspun Discrete Shells geometric compliance factor: (A1 + A2) / (3 * L^2). */
-    float geom = fmaxf(0.15F, fminf(2.0F, (norm1 + norm2) / (6.0F * edge2)));
+    float geom = fmaxf(0.15F, fminf(2.0F, (norm1 + norm2) * (inv_edge2 * (1.0F / 6.0F))));
     float alpha_e = alpha * geom;
     float dl = (-error - alpha_e * *lambda) / (weight + alpha_e);
     *lambda += dl;
-    for (int i = 0; i < 4; ++i) glm_vec3_muladds(grad[i], dl * w[ids[i]], s->x[ids[i]]);
+    if (wa > 0.0F) glm_vec3_muladds(grad[0], dl * wa, s->x[e->a]);
+    if (wb > 0.0F) glm_vec3_muladds(grad[1], dl * wb, s->x[e->b]);
+    if (wc > 0.0F) glm_vec3_muladds(grad[2], dl * wc, s->x[e->c]);
+    if (wd > 0.0F) glm_vec3_muladds(grad[3], dl * wd, s->x[e->d]);
 }
 
 typedef struct {
@@ -275,8 +300,11 @@ static void record_contact(ContactAccum *acc, int v, const float n[3], const Clo
 
 typedef struct {
     float min[3], max[3];
-    float r_min;
+    float u[3];
+    float ra, rb, dr, r_min, r_max, r_max2, safe_edge2;
+    float len, inv_len, cone_a, inv_cone_a, cos_slope, sin_slope;
     int idx;
+    bool degenerate;
 } CapsuleBox;
 
 static inline bool point_in_box(const float p[3], const float bmin[3], const float bmax[3]) {
@@ -295,11 +323,15 @@ static inline bool box_overlaps(const float amin[3], const float amax[3],
 typedef struct {
     CapsuleBox boxes[64];
     float all_min[3], all_max[3];
+    float min_safe_edge2;
+    float min_face_thresh2;
     int count;
 } CapsuleBroadphase;
 
 static void build_broadphase(const ClothMaterial *m, const ClothCapsule *body, int count, CapsuleBroadphase *bp) {
     bp->count = 0;
+    bp->min_safe_edge2 = FLT_MAX;
+    bp->min_face_thresh2 = FLT_MAX;
     for (int k = 0; k < 3; ++k) {
         bp->all_min[k] = FLT_MAX;
         bp->all_max[k] = -FLT_MAX;
@@ -312,7 +344,39 @@ static void build_broadphase(const ClothMaterial *m, const ClothCapsule *body, i
         float r_max = fmaxf(ra, rb);
         CapsuleBox *b = &bp->boxes[bp->count++];
         b->idx = j;
+        b->ra = ra;
+        b->rb = rb;
+        b->dr = ra - rb;
         b->r_min = fminf(ra, rb);
+        b->r_max = r_max;
+        b->r_max2 = r_max * r_max;
+        /* Chord sagitta <= 0.5*thickness even at 14% strain when L_rest^2 <= 3*thickness*r_min. */
+        b->safe_edge2 = 3.0F * thickness * b->r_min;
+        if (b->safe_edge2 < bp->min_safe_edge2) bp->min_safe_edge2 = b->safe_edge2;
+        float ft = 1.5F * b->r_min;
+        float ft2 = ft * ft;
+        if (ft2 < bp->min_face_thresh2) bp->min_face_thresh2 = ft2;
+        vec3 ba;
+        glm_vec3_sub((float *)body[j].b, (float *)body[j].a, ba);
+        float len2 = glm_vec3_norm2(ba);
+        b->degenerate = len2 <= 1e-12F || b->dr * b->dr >= len2;
+        if (!b->degenerate) {
+            b->len = sqrtf(len2);
+            b->inv_len = 1.0F / b->len;
+            glm_vec3_scale(ba, b->inv_len, b->u);
+            b->cone_a = sqrtf(fmaxf(0.0F, len2 - b->dr * b->dr));
+            b->inv_cone_a = b->cone_a > 1e-8F ? (1.0F / b->cone_a) : 0.0F;
+            b->cos_slope = b->cone_a * b->inv_len;
+            b->sin_slope = b->dr * b->inv_len;
+        } else {
+            b->len = 0.0F;
+            b->inv_len = 0.0F;
+            glm_vec3_zero(b->u);
+            b->cone_a = 0.0F;
+            b->inv_cone_a = 0.0F;
+            b->cos_slope = 1.0F;
+            b->sin_slope = 0.0F;
+        }
         for (int k = 0; k < 3; ++k) {
             b->min[k] = fminf(body[j].a[k], body[j].b[k]) - r_max;
             b->max[k] = fmaxf(body[j].a[k], body[j].b[k]) + r_max;
@@ -320,6 +384,73 @@ static void build_broadphase(const ClothMaterial *m, const ClothCapsule *body, i
             if (b->max[k] > bp->all_max[k]) bp->all_max[k] = b->max[k];
         }
     }
+}
+
+static inline float box_sphere_contact(const float p[3], const float center[3], float radius, float normal[3]) {
+    vec3 delta;
+    glm_vec3_sub((float *)p, (float *)center, delta);
+    float d2 = glm_vec3_norm2(delta);
+    if (d2 >= radius * radius) return 0.0F;
+    float d = sqrtf(d2);
+    if (d > 1e-7F) glm_vec3_scale(delta, 1.0F / d, normal);
+    else glm_vec3_copy((vec3){0.0F, 1.0F, 0.0F}, normal);
+    return radius - d;
+}
+
+/* Precomputed round-cone SDF matching cloth_point_capsule_contact_swept with zero sqrt on misses. */
+static float box_point_contact_swept(const float p[3], const float prev_p[3],
+                                     const ClothCapsule *cap, const CapsuleBox *bx,
+                                     float margin, const float fallback[3],
+                                     float normal[3], float *t_out) {
+    float depth = 0.0F, t = 0.0F;
+    if (bx->degenerate) {
+        if (bx->ra >= bx->rb) {
+            t = 0.0F;
+            depth = box_sphere_contact(p, cap->a, bx->ra, normal);
+        } else {
+            t = 1.0F;
+            depth = box_sphere_contact(p, cap->b, bx->rb, normal);
+        }
+    } else {
+        vec3 pa;
+        glm_vec3_sub((float *)p, (float *)cap->a, pa);
+        float y = glm_vec3_dot(pa, (float *)bx->u);
+        if (y < -bx->ra || y > bx->len + bx->rb) return 0.0F;
+        vec3 w = {pa[0] - y * bx->u[0], pa[1] - y * bx->u[1], pa[2] - y * bx->u[2]};
+        float w2 = glm_vec3_norm2(w);
+        if (w2 >= bx->r_max2) return 0.0F;
+        float x = sqrtf(w2);
+        float s = (-x * bx->dr + y * bx->cone_a) * bx->inv_len;
+        if (s <= 0.0F) {
+            t = 0.0F;
+            depth = box_sphere_contact(p, cap->a, bx->ra, normal);
+        } else if (s >= bx->cone_a) {
+            t = 1.0F;
+            depth = box_sphere_contact(p, cap->b, bx->rb, normal);
+        } else {
+            float signed_dist = x * bx->cos_slope + y * bx->sin_slope - bx->ra;
+            if (signed_dist >= 0.0F) return 0.0F;
+            t = glm_clamp(s * bx->inv_cone_a, 0.0F, 1.0F);
+            vec3 w_hat;
+            if (x > 1e-7F) {
+                glm_vec3_scale(w, 1.0F / x, w_hat);
+            } else {
+                vec3 ref = {fabsf(bx->u[0]) > 0.9F ? 0.0F : 1.0F, fabsf(bx->u[0]) > 0.9F ? 1.0F : 0.0F, 0.0F};
+                glm_vec3_cross((float *)bx->u, ref, w_hat);
+                float wlen = glm_vec3_norm(w_hat);
+                if (wlen > 1e-7F) glm_vec3_scale(w_hat, 1.0F / wlen, w_hat);
+                else glm_vec3_copy((vec3){0.0F, 1.0F, 0.0F}, w_hat);
+            }
+            for (int k = 0; k < 3; ++k) normal[k] = bx->cos_slope * w_hat[k] + bx->sin_slope * bx->u[k];
+            depth = -signed_dist;
+        }
+    }
+    if (depth <= 0.0F) return 0.0F;
+    if (cap->flags == CLOTH_COLLIDER_INSIDE && (cap->has_prev || fallback)) {
+        return cloth_point_capsule_contact_swept(p, prev_p, cap, margin, fallback, normal, t_out);
+    }
+    *t_out = t;
+    return depth;
 }
 
 static void project_body(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
@@ -357,19 +488,22 @@ static void project_body(ClothState *s, const ClothMesh *mesh, const ClothMateri
             const ClothCapsule *cap = body + bx->idx;
             vec3 normal;
             float t = 0.0F;
-            float depth = cloth_point_capsule_contact_swept(s->x[i], x_prev[i], cap, thickness,
-                                                            fallback, normal, &t);
+            float depth = box_point_contact_swept(s->x[i], x_prev[i], cap, bx, thickness,
+                                                  fallback, normal, &t);
             if (depth <= 0.0F) continue;
             glm_vec3_muladds(normal, depth, s->x[i]);
             if (acc) record_contact(acc, i, normal, cap, t, inv_dt, depth);
         }
     }
+    if (!full_contact) return;
 
-    /* 2. Exact round-cone SDF on edge midpoints (covers triangle edges without barycentric blowup). */
+    /* 2. Exact round-cone SDF on edge midpoints (skip chords whose sagitta stays within thickness). */
+    const float min_safe_edge2 = bp->min_safe_edge2;
     for (int e = 0; e < mesh->edges; ++e) {
         const ClothEdge *edge = &mesh->edge[e];
         float wa = mesh->inv_area[edge->a], wb = mesh->inv_area[edge->b];
-        if (wa + wb <= 0.0F) continue;
+        float elen2 = edge->length * edge->length;
+        if (wa + wb <= 0.0F || elen2 <= min_safe_edge2) continue;
         vec3 mid;
         for (int k = 0; k < 3; ++k) mid[k] = 0.5F * (s->x[edge->a][k] + s->x[edge->b][k]);
         if (!point_in_box(mid, all_min, all_max)) continue;
@@ -378,7 +512,7 @@ static void project_body(ClothState *s, const ClothMesh *mesh, const ClothMateri
         bool lazy_init = false;
         for (int bi = 0; bi < active_count; ++bi) {
             const CapsuleBox *bx = &boxes[bi];
-            if (!point_in_box(mid, bx->min, bx->max)) continue;
+            if (elen2 <= bx->safe_edge2 || !point_in_box(mid, bx->min, bx->max)) continue;
             if (!lazy_init) {
                 for (int k = 0; k < 3; ++k) prev_mid[k] = 0.5F * (x_prev[edge->a][k] + x_prev[edge->b][k]);
                 if (guide) {
@@ -390,8 +524,8 @@ static void project_body(ClothState *s, const ClothMesh *mesh, const ClothMateri
             const ClothCapsule *cap = body + bx->idx;
             vec3 normal;
             float t = 0.0F;
-            float depth = cloth_point_capsule_contact_swept(mid, prev_mid, cap, thickness,
-                                                            fallback, normal, &t);
+            float depth = box_point_contact_swept(mid, prev_mid, cap, bx, thickness,
+                                                  fallback, normal, &t);
             if (depth <= 0.0F) continue;
             /* Midpoint shift = 0.5*(da + db) = depth => scale = 2*depth/(wa+wb), capped near pins. */
             float max_w = fmaxf(wa, wb);
@@ -407,11 +541,16 @@ static void project_body(ClothState *s, const ClothMesh *mesh, const ClothMateri
             for (int k = 0; k < 3; ++k) mid[k] = 0.5F * (s->x[edge->a][k] + s->x[edge->b][k]);
         }
     }
-    if (!full_contact) return;
 
     /* 3. Face-interior fallback only when a triangle is large relative to a capsule radius. */
+    const float min_face_thresh2 = bp->min_face_thresh2;
     for (int f = 0; f < mesh->faces; ++f) {
         const ClothFace face = mesh->face[f];
+        float e0 = glm_vec3_distance2((float *)mesh->rest[face.a], (float *)mesh->rest[face.b]);
+        float e1 = glm_vec3_distance2((float *)mesh->rest[face.b], (float *)mesh->rest[face.c]);
+        float e2 = glm_vec3_distance2((float *)mesh->rest[face.c], (float *)mesh->rest[face.a]);
+        float max_e2 = fmaxf(e0, fmaxf(e1, e2));
+        if (max_e2 <= min_face_thresh2) continue;
         const float *pa = s->x[face.a], *pb = s->x[face.b], *pc = s->x[face.c];
         float fmin[3], fmax[3];
         for (int k = 0; k < 3; ++k) {
@@ -419,21 +558,12 @@ static void project_body(ClothState *s, const ClothMesh *mesh, const ClothMateri
             fmax[k] = fmaxf(pa[k], fmaxf(pb[k], pc[k]));
         }
         if (!box_overlaps(fmin, fmax, all_min, all_max)) continue;
-        bool edges_measured = false;
-        float max_e = 0.0F, min_e = 0.0F;
+        float min_e2 = fminf(e0, fminf(e1, e2));
         int ids[] = {face.a, face.b, face.c};
         for (int bi = 0; bi < active_count; ++bi) {
             const CapsuleBox *bx = &boxes[bi];
-            if (!box_overlaps(fmin, fmax, bx->min, bx->max)) continue;
-            if (!edges_measured) {
-                float e0 = glm_vec3_distance((float *)mesh->rest[face.a], (float *)mesh->rest[face.b]);
-                float e1 = glm_vec3_distance((float *)mesh->rest[face.b], (float *)mesh->rest[face.c]);
-                float e2 = glm_vec3_distance((float *)mesh->rest[face.c], (float *)mesh->rest[face.a]);
-                max_e = fmaxf(e0, fmaxf(e1, e2));
-                min_e = fminf(e0, fminf(e1, e2));
-                edges_measured = true;
-            }
-            if (max_e <= 1.5F * bx->r_min) continue;
+            float thresh = 1.5F * bx->r_min;
+            if (max_e2 <= thresh * thresh || !box_overlaps(fmin, fmax, bx->min, bx->max)) continue;
             const ClothCapsule *cap = body + bx->idx;
             vec3 bary, normal;
             float depth = cloth_face_contact(pa, pb, pc, cap, thickness, bary, normal);
@@ -446,7 +576,7 @@ static void project_body(ClothState *s, const ClothMesh *mesh, const ClothMateri
             }
             if (weight < 1e-8F || largest < 1e-8F) continue;
             /* Clamp against the shortest face edge so an irregular triangle cannot spike strain. */
-            float impulse = fminf(depth / weight, 0.25F * min_e / largest);
+            float impulse = fminf(depth / weight, 0.25F * sqrtf(min_e2) / largest);
             for (int i = 0; i < 3; ++i) {
                 if (mesh->inv_area[ids[i]] <= 0.0F) continue;
                 float shift = impulse * bary[i] * mesh->inv_area[ids[i]];
