@@ -101,22 +101,6 @@ def pack_vertex_binding_u16x4(v0, v1, v2, w0, w1, w2, amount=1.0):
     return (lo & 0xFFFF, (lo >> 16) & 0xFFFF, hi & 0xFFFF, (hi >> 16) & 0xFFFF)
 
 
-def pack_indexed_surface(vertex_count, pins, palette_offset=0):
-    """Bind a render surface sharing the simulation indices. Pins keep ordinary skinning."""
-    if not 0 < vertex_count <= 2047 or not 0 <= palette_offset <= 2047 - vertex_count:
-        raise ValueError("indexed surface exceeds the vertex palette")
-    movable = np.ones(vertex_count, dtype=bool)
-    for pin in pins:
-        if not isinstance(pin, (int, np.integer)) or isinstance(pin, bool) or not 0 <= pin < vertex_count:
-            raise ValueError("invalid indexed surface pin")
-        movable[pin] = False
-    rows = np.zeros((vertex_count, 4), dtype="<u2")
-    for index in np.flatnonzero(movable):
-        vertex = palette_offset + int(index) + 1
-        rows[index] = pack_vertex_binding_u16x4(vertex, vertex, vertex, 1., 0., 0.)
-    return rows
-
-
 def unpack_vertex_binding_u16x4(row):
     """Unpack a 4 x uint16 smooth 3-vertex binding row into (is_vertex_mode, (v0,v1,v2), (w0,w1,w2))."""
     g0, g1, g2, g3 = (int(x) for x in row)
@@ -130,3 +114,105 @@ def unpack_vertex_binding_u16x4(row):
     q1 = (hi >> 11) & 0x3FF
     q2 = (hi >> 21) & 0x3FF
     return is_vmode, (v0, v1, v2), (q0 / 1023.0, q1 / 1023.0, q2 / 1023.0)
+
+
+def render_owners(positions, faces, take, corners):
+    owners = np.full(len(positions), -1, dtype=int)
+    if not corners:
+        return owners
+    keys = [tuple(p) for p in np.round(positions, 7)]
+    active_faces = faces[take[faces].any(axis=1)]
+    for face in active_faces:
+        ordered = sorted(face, key=keys.__getitem__)
+        values = corners.get(tuple(keys[v] for v in ordered))
+        if values is not None:
+            for v, owner in zip(ordered, values):
+                owners[v] = owner if owners[v] in (-1, owner) else -2
+    # Hem and UV splits duplicate the same outer corner with different render normals.
+    coincident = {}
+    for vi in np.flatnonzero(owners >= 0):
+        key = keys[vi]
+        if coincident.setdefault(key, owners[vi]) != owners[vi]:
+            coincident[key] = -2
+    # A short thickness edge connects the lining at a cut to its own outer lip.
+    lining = {}
+    for triangle in active_faces:
+        for v, u in zip(triangle, np.roll(triangle, 1)):
+            ka, kb = keys[v], keys[u]
+            if kb in coincident:
+                ka, kb = kb, ka
+            if ka in coincident and kb not in coincident and sum((x-y)**2 for x,y in zip(ka,kb)) < .008**2:
+                owner = coincident[ka]
+                if lining.setdefault(kb, owner) != owner:
+                    lining[kb] = -2
+    for vi in np.flatnonzero(take & (owners == -1)):
+        owners[vi] = coincident.get(keys[vi], lining.get(keys[vi], -1))
+    return owners
+
+
+def surface_rows(proxy, triangles, positions, faces, take, corners, distance):
+    owners = render_owners(positions, faces, take, corners)
+    unique, inverse = np.unique(np.column_stack((positions[take], owners[take])), axis=0, return_inverse=True)
+    rows = bind_vertex_frames(proxy, triangles, unique[:, :3], distance)
+    if corners:
+        incident = [[] for _ in proxy]
+        for index, face in enumerate(triangles):
+            for v in face:
+                incident[v].append(index)
+        for i, (target, row) in enumerate(zip(unique, rows)):
+            owner = int(target[3])
+            if owner < 0:
+                continue
+            # Nearby folds can be meters apart along the sheet. Keep projections on the owner's patch.
+            patch = incident[owner]
+            if not np.isin(row[:3], triangles[patch]).any():
+                rows[i], = bind_vertex_frames(proxy, triangles, [target[:3]], distance, face_candidates=[patch])
+    return inverse, rows
+
+
+BINDING_DISTANCE_M = 0.16
+LINING_GAP_M = 0.008  # solidified shells closer than this are one fabric layer
+
+
+def bind_render(positions, faces, normals, labels, freedom, pieces, palette_offsets):
+    """The 4 x uint16 `_GARMENT` stream of one render primitive.
+
+    pieces: per piece (label, proxy points, proxy triangles, proxy corners or None, proxy pin mask); the corners
+    keep a render vertex on its own side of a cut and apply to the primitive the proxy was built from.
+    A render pin (freedom 0) is skinned. A free vertex follows the cloth by the bound proxy triangle's interpolated
+    "not a pin" indicator, so it is skinned where every bound proxy vertex is a pin and fully simulated where none is. Inner-lining vertices take
+    their outer shell partner's binding, which keeps a solidified shell's thickness through any fold.
+    """
+    from scipy.spatial import cKDTree
+    stream = np.zeros((len(positions), 4), dtype="<u2")
+    amount = np.zeros(len(positions))
+    for (label, proxy, triangles, corners, pins), offset in zip(pieces, palette_offsets):
+        take = labels == label
+        if not take.any():
+            continue
+        inverse, rows = surface_rows(proxy, triangles, positions, faces, take, corners, BINDING_DISTANCE_M)
+        rows = list(rows)
+        take_idx = np.flatnonzero(take)
+        if normals is not None:
+            a, b, c = proxy[triangles].transpose(1, 0, 2)
+            p_vn = np.zeros_like(proxy)
+            for col in triangles.T:
+                np.add.at(p_vn, col, np.cross(b - a, c - a))
+            p_vn /= np.maximum(np.linalg.norm(p_vn, axis=1, keepdims=True), 1e-12)
+            bound = np.array([sum(w * p_vn[v] for v, w in zip(rows[int(u)][:3], rows[int(u)][3:])) for u in inverse])
+            dots = np.einsum("ij,ij->i", normals[take_idx], bound)
+            outer, inner = np.flatnonzero(dots > 0.15), np.flatnonzero(dots < -0.15)
+            if len(outer) and len(inner):
+                gap, nearest = cKDTree(positions[take_idx[outer]]).query(positions[take_idx[inner]], k=1)
+                partner = outer[nearest]
+                opposite = np.einsum("ij,ij->i", normals[take_idx[inner]], normals[take_idx[partner]]) < -0.5
+                paired = (gap < LINING_GAP_M) & opposite
+                inverse = inverse.copy()
+                inverse[inner[paired]] = inverse[partner[paired]]
+        free = ~np.asarray(pins, bool)
+        for local, vertex in enumerate(take_idx):
+            v0, v1, v2, w0, w1, w2 = rows[int(inverse[local])]
+            amount[vertex] = (w0 * free[v0] + w1 * free[v1] + w2 * free[v2]) if freedom[vertex] > 0 else 0.0
+            stream[vertex] = pack_vertex_binding_u16x4(offset + v0 + 1, offset + v1 + 1, offset + v2 + 1,
+                                                       w0, w1, w2, amount[vertex])
+    return stream, amount

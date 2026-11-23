@@ -113,7 +113,7 @@ static void test_debug_draw_uses_selected_weights_live_tether_and_round_cone_sur
     const ClothEdge edge = {.a=0,.b=1};
     const ClothTether tether[] = {{0,0}, {0,0.8F}, {-1,0}, {-1,0}};
     ClothMesh m = panel;
-    m.edges = 1; m.edge = &edge; m.inv_area = inv; m.anim_drive = drive; m.tether = tether;
+    m.edges = 1; m.edge = &edge; m.inv_area = inv; m.drive = drive; m.tether = tether;
     DebugLines lines = {0};
     cloth_debug_mesh(&m, rest, NULL, 0, inspect_line, &lines);
     TEST_ASSERT_EQUAL_INT(0, lines.weights + lines.tethers);

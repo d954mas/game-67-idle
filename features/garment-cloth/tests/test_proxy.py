@@ -13,7 +13,9 @@ from garment_proxy import (
     EDGE_WARP,
     EDGE_WEFT,
     classify_edges,
+    closest_surface_points,
     geodesic_depth,
+    outer_faces,
     subdivide_long_edges,
     triangulate_quads_checkerboard,
     validate_proxy,
@@ -21,6 +23,16 @@ from garment_proxy import (
 
 
 class TestProxyAndBinding(unittest.TestCase):
+    def test_outer_sheet_excludes_sloped_hem_rim(self):
+        points = np.array([[0., 0., 1.], [1., 0., 1.], [0., 1., 1.], [0., .0001, .99]])
+        faces = np.array([[0, 1, 2], [2, 1, 0], [0, 1, 3]])
+        for shell in ({"axis_xz_m": [0, 0]}, {"outward": [0, 0, 5]}):
+            np.testing.assert_array_equal(outer_faces(points, faces, shell), faces[[0, 2]])
+            np.testing.assert_array_equal(outer_faces(points * 10, faces, {**shell, "min_cosine": .1}), faces[[0]])
+        for invalid in (-.1, 1., True, "0.1", float("nan")):
+            with self.assertRaisesRegex(ValueError, "min_cosine"):
+                outer_faces(points, faces, {"outward": [0, 0, 1], "min_cosine": invalid})
+
     def test_checkerboard_quad_triangulation_and_geodesic_warp_weft(self):
         # 3x3 regular grid lying horizontally in XZ (non-vertical, proving independence from Y).
         pts = np.array([[x * 0.1, 0.0, z * 0.1] for z in range(3) for x in range(3)], dtype=float)
@@ -43,8 +55,8 @@ class TestProxyAndBinding(unittest.TestCase):
         self.assertEqual(kinds[(0, 3)], EDGE_WARP)
         self.assertEqual(kinds[(3, 4)], EDGE_WEFT)
         self.assertEqual(kinds[(0, 4)], EDGE_DIAG)
-        mesh = cook_mesh("cape", pts, faces, pins, wearable=True, edge_kinds=kinds, anim_drive=1.0 - norm)
-        np.testing.assert_array_equal(mesh["anim_drive"], 1.0 - norm)
+        mesh = cook_mesh("cape", pts, faces, pins, wearable=True, edge_kinds=kinds, drive=(1.0 - norm) * 100.0)
+        np.testing.assert_array_equal(mesh["drive"], (1.0 - norm) * 100.0)
 
     def test_validate_proxy_detects_bind_pose_penetration_and_edge_limit(self):
         pts = np.array([[0.0, 1.0, 0.0], [0.1, 1.0, 0.0], [0.05, 0.9, 0.0]])
@@ -136,6 +148,15 @@ class TestProxyAndBinding(unittest.TestCase):
         after = min(_tri_min_angle_deg(rp[a], rp[b], rp[c]) for a, b, c in rf)
         self.assertGreater(after, before + 5.0)
         np.testing.assert_allclose(rp, pts, atol=1e-12)
+
+
+    def test_closest_point_is_exact_on_a_triangle_face_edge_and_corner(self):
+        v = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], float)
+        f = np.array([[0, 1, 2]])
+        face, bary, d = closest_surface_points([[0.2, 0.2, 1], [2, -1, 0], [-1, 0.5, 0]], v, f)
+        np.testing.assert_allclose(d, [1, np.sqrt(2), 1])
+        np.testing.assert_allclose(bary[0], [0.6, 0.2, 0.2])
+        np.testing.assert_allclose(bary[1], [0, 1, 0])
 
 
 if __name__ == "__main__":

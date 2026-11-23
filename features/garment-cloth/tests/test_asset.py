@@ -7,7 +7,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 import garment_blob
-from garment_blob import COLLIDER, LAP, MATERIAL_FIELDS, decode, encode, single
+from garment_blob import COLLIDER, MATERIAL_FIELDS, decode, encode, single
 from garment_cook import cook_mesh
 
 IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]
@@ -16,12 +16,12 @@ IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]
 def synthetic():
     """Two pieces: one with every optional section, one with none."""
     panel = cook_mesh("panel", [[-0.5, 0, 0], [0.5, 0, 0], [0, 1, 0.1], [0, 0.3, 1]], [[0, 1, 2], [1, 0, 3]], [0, 1],
-                      wearable=True, tether_slack=1.05, anim_drive=[0, 0, 0.35, 1 / 3])
+                      wearable=True, tether_slack=1.05, drive=[0, 0, 140 * 0.35, 140 / 3])
     sash = cook_mesh("sash", [[0, 0, 0], [0.2, 0, 0], [0.1, -0.4, 0.05]], [[0, 1, 2]], [0, 1], wearable=True)
     material = {name: (i + 1 if name in ("iterations", "strain_passes") else 0.01 * (i + 1) + 1 / 7)
                 for i, name in enumerate(MATERIAL_FIELDS)}
-    material.update(contact_friction=0.6, support_drape=0.25, compression_limit=0.2)
-    return dict(outfit_id="synthetic", owned_joints=["Hem", "SashEnd"], pieces=[
+    material.update(contact_friction=0.6, compression_limit=0.2)
+    return dict(outfit_id="synthetic", pieces=[
         dict(id="panel", mesh=panel, material=material, render_vertices=7,
              linear_inertia=0.45, angular_inertia=1 / 3, downward_follow=0.7,
              bones=[("Root", [0.1 * i + 1 / 9 for i in range(12)]), ("Hem", IDENTITY)],
@@ -30,8 +30,7 @@ def synthetic():
                            normal=[[0, 0, 1], [0, 0.6, 0.8], [1, 0, 0], [0, -1, 0]],
                            travel=[0.003, 0.004, 0.0191, 0.02], backstop=[0.003, 0.0035, 0.0176, 0.018]),
              colliders=[(0, 1, [-0.062, 1.005, 0.004], [0.062, 1.005, 0.004], 0.084, 0.07, 0),
-                        (1, 1, [0.1, 0.2, 0.3], [0.1, 0.4, 0.3], 0.05, 0, 1)],
-             lap=dict(bone=[0, 1, 1, 0, 0, 1], start_deg=122, full_deg=98, proximal_m=0.058, distal_m=0.046)),
+                        (1, 1, [0.1, 0.2, 0.3], [0.1, 0.4, 0.3], 0.05, 0, 1)]),
         dict(id="sash", mesh=sash, material=dict(density=0.3, iterations=1), bones=[("SashEnd", IDENTITY)],
              vertices=dict(bone=[[0, 0, 0, 0]] * 3, weight=[[1, 0, 0, 0]] * 3, normal=[[0, 0, 1]] * 3,
                            travel=[0, 0, 0.1], backstop=[0, 0, 0.1])),
@@ -39,7 +38,7 @@ def synthetic():
 
 
 def build(garment):
-    return encode(garment["outfit_id"], garment["pieces"], garment["owned_joints"])
+    return encode(garment["outfit_id"], garment["pieces"])
 
 
 class TestBlob(unittest.TestCase):
@@ -49,14 +48,12 @@ class TestBlob(unittest.TestCase):
         self.assertEqual(len(data) % 4, 0)
         back = decode(data)
         self.assertEqual(back["id"], "synthetic")
-        self.assertEqual(back["owned_joints"], garment["owned_joints"])
         again = encode(back["id"], [dict(p, mesh=dict(p["mesh"], edges=p["mesh"]["edges"].tolist(),
                                                       tethers=None if p["mesh"]["tethers"] is None else p["mesh"]["tethers"].tolist()),
                                          vertices=dict(bone=p["vertices"]["bone"], weight=p["vertices"]["weight"],
                                                        normal=p["vertices"]["normal"], travel=p["vertices"]["travel_m"],
                                                        backstop=p["vertices"]["backstop_m"]),
-                                         colliders=[tuple(c) for c in p["colliders"].tolist()]) for p in back["pieces"]],
-                       back["owned_joints"])
+                                         colliders=[tuple(c) for c in p["colliders"].tolist()]) for p in back["pieces"]])
         self.assertEqual(again, data)
         panel, source = back["pieces"][0], garment["pieces"][0]
         np.testing.assert_array_equal(panel["mesh"]["rest"], single(source["mesh"]["rest"]))
@@ -64,10 +61,10 @@ class TestBlob(unittest.TestCase):
         self.assertEqual(panel["material"]["iterations"], source["material"]["iterations"])
         self.assertEqual(back["pieces"][1]["mesh"]["tethers"], None)
         self.assertEqual(len(back["pieces"][1]["colliders"]), 0)
-        self.assertIsNone(back["pieces"][1]["lap"])
+        np.testing.assert_array_equal(back["pieces"][1]["mesh"]["drive"], np.zeros(3, np.float32))
 
     def test_outfit_without_cloth_round_trips(self):
-        self.assertEqual(decode(encode("plain", [])), dict(id="plain", pieces=[], owned_joints=[]))
+        self.assertEqual(decode(encode("plain", [])), dict(id="plain", pieces=[]))
 
     def test_single_reads_ten_significant_digits_like_a_c_literal(self):
         # Just below a single-precision midpoint the 10-digit literal 1.000000060 rounds up; a direct cast rounds down.
@@ -86,14 +83,14 @@ class TestBlob(unittest.TestCase):
             (lambda p: p["mesh"]["edges"].__setitem__(1, (0, 1, 2, -1, 1.0, 0.0, 3)), "panel: mesh.edges.kind[1]"),
             (lambda p: p["mesh"]["faces"].__setitem__(1, (1, 1, 3)), "panel: mesh.faces[1]"),
             (lambda p: p["mesh"]["tethers"].__setitem__(3, (2, 0.1)), "panel: mesh.tethers.pin[3]"),
-            (lambda p: p["mesh"]["anim_drive"].__setitem__(2, 1.5), "panel: mesh.anim_drive[2]"),
+            (lambda p: p["mesh"]["drive"].__setitem__(2, -1.0), "panel: mesh.drive[2]"),
             (lambda p: p["vertices"]["bone"].__setitem__(1, [2, 0, 0, 0]), "panel: vertices.bone[1]"),
             (lambda p: p["vertices"]["travel"].__setitem__(0, -0.1), "panel: vertices.travel_m[0]"),
+            (lambda p: p["vertices"]["backstop"].__setitem__(1, -0.1), "panel: vertices.backstop_m[1]"),
             (lambda p: p["bones"].__setitem__(0, ("Root", [np.inf] * 12)), "panel: bones.inverse_bind[0]"),
             (lambda p: p["colliders"].__setitem__(1, (1, 2, [0, 0, 0], [0, 1, 0], 0.1, 0, 0)), "panel: colliders.bone_b[1]"),
             (lambda p: p["colliders"].__setitem__(0, (0, 1, [0, 0, 0], [0, 1, 0], -0.1, 0, 0)), "panel: colliders.radius_m[0]"),
-            (lambda p: p["colliders"].extend([p["colliders"][0]] * 29), "panel: colliders plus the lap"),
-            (lambda p: p["lap"].__setitem__("bone", [0, 1, 1, 0, 0, 5]), "panel: lap.bone"),
+            (lambda p: p["colliders"].extend([p["colliders"][0]] * 31), "panel: colliders exceed"),
             (lambda p: p["material"].__setitem__("density", 0), "panel: material.density"),
             (lambda p: p["material"].__setitem__("contact_friction", 1.5), "panel: material.contact_friction"),
             (lambda p: p["material"].__setitem__("compression_limit", 0.6), "panel: material.compression_limit"),
@@ -111,7 +108,6 @@ class TestBlob(unittest.TestCase):
             (lambda p: p["mesh"].__setitem__("faces", np.asarray(p["mesh"]["faces"], np.float64)), "panel: mesh.faces must be integers"),
             (lambda p: p["vertices"].__setitem__("bone", p["vertices"]["bone"] + 65536), "panel: vertices.bone[0] must be in"),
             (lambda p: p["colliders"].__setitem__(0, (0, 1.0, [0, 0, 0], [0, 1, 0], 0.1, 0, 0)), "panel: colliders.bone_b must be integers"),
-            (lambda p: p["lap"].__setitem__("bone", [0, 1, 1, 0, 0, 1.0]), "panel: lap.bone must be integers"),
             (lambda p: p["material"].__setitem__("iterations", 2 ** 31), "panel: material.iterations must be in"),
             (lambda p: p.__setitem__("render_vertices", 7.0), "panel: render_vertices must be"),
         ])
@@ -123,7 +119,7 @@ class TestBlob(unittest.TestCase):
             panel["mesh"] = copy.deepcopy(panel["mesh"])
             panel["mesh"]["rest"] = np.array(panel["mesh"]["rest"])
             panel["mesh"]["inv_area"] = np.array(panel["mesh"]["inv_area"])
-            panel["mesh"]["anim_drive"] = np.array(panel["mesh"]["anim_drive"])
+            panel["mesh"]["drive"] = np.array(panel["mesh"]["drive"])
             panel["vertices"] = {k: np.array(v) for k, v in panel["vertices"].items()}
             edit(panel)
             with self.subTest(message), self.assertRaisesRegex(ValueError, "^synthetic/" + message.replace("[", r"\[")):
@@ -151,14 +147,13 @@ def emit_expected(out, garment, blob_path, empty_path):
         out.write(f"static const ClothEdge {s}_edges[] = {{" + ",".join(
             f"{{{e['a']},{e['b']},{e['c']},{e['d']},{c_float(e['length'])},{c_float(e['angle'])},{e['kind']}}}"
             for e in mesh["edges"]) + "};\n")
-        tethers = drive = colliders = lap = "NULL"
+        tethers = colliders = "NULL"
         if mesh["tethers"] is not None:
             tethers = f"{s}_tethers"
             out.write(f"static const ClothTether {tethers}[] = {{" + ",".join(
                 f"{{{t['pin']},{c_float(t['max_length'])}}}" for t in mesh["tethers"]) + "};\n")
-        if mesh["anim_drive"] is not None:
-            drive = f"{s}_drive"
-            out.write(f"static const float {drive}[] = {c_floats(mesh['anim_drive'])};\n")
+        drive = f"{s}_drive"
+        out.write(f"static const float {drive}[] = {c_floats(mesh['drive'])};\n")
         out.write(f"static const ClothMesh {s}_mesh = {{{len(mesh['rest'])},{len(mesh['faces'])},{len(mesh['edges'])},"
                   f"{s}_rest,{s}_inv,{s}_faces,{s}_edges,{tethers},{drive}}};\n")
         out.write(f"static const GarmentVertex {s}_vertices[] = {{" + ",".join(
@@ -169,20 +164,12 @@ def emit_expected(out, garment, blob_path, empty_path):
             out.write(f"static const GarmentCollider {colliders}[] = {{" + ",".join(
                 f"{{{c['bone_a']},{c['bone_b']},{c_floats(c['point_a'])},{c_floats(c['point_b'])},"
                 f"{c_float(c['radius_m'])},{c_float(c['radius_b_m'])},{c['flags']}}}" for c in piece["colliders"]) + "};\n")
-        if piece["lap"] is not None:
-            lap = f"&{s}_lap"
-            l = piece["lap"]
-            out.write(f"static const GarmentLap {s}_lap = {{{{{','.join(map(str, l['bone']))}}},{c_float(l['start_deg'])},"
-                      f"{c_float(l['full_deg'])},{c_float(l['proximal_m'])},{c_float(l['distal_m'])}}};\n")
         material = ",".join(f".{k}={v}" if isinstance(v, int) else f".{k}={c_float(v)}" for k, v in piece["material"].items())
         rows.append(f'{{"{piece["id"]}",{s}_bones,{len(piece["bones"])},&{s}_mesh,{s}_vertices,{{{material}}},{colliders},'
                     f'{len(piece["colliders"])},{piece["render_vertices"]},{c_float(piece["linear_inertia"])},'
-                    f'{c_float(piece["angular_inertia"])},{lap},{c_float(piece["downward_follow"])}}}')
+                    f'{c_float(piece["angular_inertia"])},{c_float(piece["downward_follow"])}}}')
     out.write("static const GarmentAsset expected_pieces[] = {" + ",".join(rows) + "};\n")
-    owned = garment["owned_joints"]
-    out.write("static const char *const expected_owned[] = {" + ",".join(f'"{n}"' for n in owned) + "};\n")
-    out.write(f'static const GarmentSet expected_set = {{"{garment["outfit_id"]}",expected_pieces,{len(rows)},'
-              f"expected_owned,{len(owned)}}};\n")
+    out.write(f'static const GarmentSet expected_set = {{"{garment["outfit_id"]}",expected_pieces,{len(rows)}}};\n')
     limits = (("CLOTH_VERTICES", "VERTICES_MAX"), ("CLOTH_EDGES", "EDGES_MAX"), ("CLOTH_MAX_STRAIN_PASSES", "STRAIN_PASSES_MAX"),
               ("GARMENT_PIECES_MAX", "PIECES_MAX"), ("GARMENT_BONES_MAX", "BONES_MAX"),
               ("GARMENT_CAPSULES_MAX", "CAPSULES_MAX"), ("GARMENT_BLOB_ALIGN", "ALIGN"), ("GARMENT_BLOB_VERSION", "VERSION"))

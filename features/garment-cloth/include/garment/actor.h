@@ -9,12 +9,11 @@
 typedef struct {
     const char *id;
     bool ready, finite;
-    int pieces, vertices, driven_joints, render_vertices, missing_bindings, surface_faces;
+    int pieces, vertices, render_vertices, missing_bindings, surface_faces;
     unsigned steps;
     float max_displacement_m, max_strain, pin_error_m;
 } GarmentStats;
 
-/* Capsules include the two a lap bridge adds to the authored colliders. */
 enum { GARMENT_PIECES_MAX = 8, GARMENT_BONES_MAX = 160, GARMENT_CAPSULES_MAX = 32 };
 
 typedef struct {
@@ -30,10 +29,6 @@ typedef struct {
     float point_a[3], point_b[3], radius_m, radius_b_m;
     uint8_t flags;
 } GarmentCollider;
-typedef struct {
-    uint16_t bone[6]; /* Pairs for the trunk (base to top) and each thigh (hip to knee). */
-    float start_deg, full_deg, proximal_m, distal_m;
-} GarmentLap;
 typedef struct GarmentAsset {
     const char *id;
     const GarmentBone *bones;
@@ -45,16 +40,12 @@ typedef struct GarmentAsset {
     int collider_count;
     int render_vertices;
     float linear_inertia, angular_inertia;
-    const GarmentLap *lap;
     float downward_follow;
 } GarmentAsset;
 typedef struct {
     const char *id;
     const GarmentAsset *pieces;
     int piece_count;
-    /* Skin joints the cloth drives; other secondary motion must leave them alone. */
-    const char *const *owned_joints;
-    int owned_joint_count;
 } GarmentSet;
 
 typedef struct {
@@ -79,7 +70,7 @@ bool garment_actor_update(GarmentActor *actor, const GarmentSet *set, const nt_s
                           const nt_skeletal_mat34_t *pose, const float world[16], float dt, bool render,
                           const ClothSupport *world_support);
 
-/* A negative weight_joint selects the AnimDrive mask; other values are skeleton joint indices. */
+/* A negative weight_joint shows the drive map; other values are skeleton joint indices. */
 bool garment_actor_debug_lines(const GarmentActor *actor, const nt_skeletal_skeleton_t *skel,
                               const nt_skeletal_mat34_t *pose, unsigned layers, int weight_joint,
                               ClothDebugLine emit, void *user);

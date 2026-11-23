@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from garment_cook import cook_mesh, _tethers
+from garment_cook import cook_mesh, top_influences, _tethers
 
 
 POINTS = [[-0.5, 0, 0], [0.5, 0, 0], [0, 1, 0], [0, 0, 1]]
@@ -13,6 +13,12 @@ FACES = [[0, 1, 2], [1, 0, 3]]
 
 
 class TestCook(unittest.TestCase):
+    def test_top_influences_keep_four_and_renormalize(self):
+        joints, values = top_influences([[0.1, 0.4, 0.2, 0.05, 0.25], [1, 0, 0, 0, 0]])
+        self.assertEqual(joints[0].tolist(), [1, 4, 2, 0])
+        np.testing.assert_allclose(values.sum(1), 1)
+        self.assertEqual(joints[1].tolist(), [0, 0, 0, 0])
+
     def test_check_winding_before_writing(self):
         with self.assertRaisesRegex(ValueError, "winding"):
             cook_mesh("panel", POINTS, [[0, 1, 2], [0, 1, 3]], [0])
@@ -56,6 +62,7 @@ def emit(out, name, mesh):
     if mesh["tethers"] is not None:
         tethers = name + "_tethers"
         array(f"ClothTether {tethers}[]", (f"{{{pin},{length:.9e}F}}" for pin, length in mesh["tethers"]))
+    # Fixtures start undriven; a test that needs a drive sets its own array.
     out.write(f"static const ClothMesh {name} = {{{len(mesh['rest'])}, {len(mesh['faces'])}, {len(mesh['edges'])}, "
               f"{name}_rest, {name}_inv, {name}_faces, {name}_edges, {tethers}, 0}};\n")
 

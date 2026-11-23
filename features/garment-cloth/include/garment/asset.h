@@ -10,11 +10,10 @@
    GARMENT_BLOB_ALIGN from the blob start, so a 4-byte-aligned blob gives every record its alignment. */
 #define GARMENT_BLOB_TAG(a, b, c, d) ((uint32_t)(a) | (uint32_t)(b) << 8 | (uint32_t)(c) << 16 | (uint32_t)(d) << 24)
 #define GARMENT_BLOB_MAGIC GARMENT_BLOB_TAG('G', 'R', 'M', 'T')
-enum { GARMENT_BLOB_VERSION = 1, GARMENT_BLOB_ALIGN = 16, GARMENT_BLOB_OUTFIT = 0xFFFF };
+enum { GARMENT_BLOB_VERSION = 2, GARMENT_BLOB_ALIGN = 16, GARMENT_BLOB_OUTFIT = 0xFFFF };
 
 /* Outfit-wide sections carry piece = GARMENT_BLOB_OUTFIT; the others carry their piece index. */
 #define GARMENT_SECTION_STRINGS GARMENT_BLOB_TAG('S', 'T', 'R', 'S')   /* char: NUL-terminated UTF-8 */
-#define GARMENT_SECTION_OWNED GARMENT_BLOB_TAG('O', 'W', 'N', 'J')     /* uint32_t string offsets */
 #define GARMENT_SECTION_PIECE GARMENT_BLOB_TAG('P', 'I', 'E', 'C')     /* GarmentBlobPiece, one */
 #define GARMENT_SECTION_BONES GARMENT_BLOB_TAG('B', 'O', 'N', 'E')     /* GarmentBlobBone */
 #define GARMENT_SECTION_REST GARMENT_BLOB_TAG('R', 'E', 'S', 'T')      /* float[3] */
@@ -22,10 +21,9 @@ enum { GARMENT_BLOB_VERSION = 1, GARMENT_BLOB_ALIGN = 16, GARMENT_BLOB_OUTFIT = 
 #define GARMENT_SECTION_FACES GARMENT_BLOB_TAG('F', 'A', 'C', 'E')     /* ClothFace */
 #define GARMENT_SECTION_EDGES GARMENT_BLOB_TAG('E', 'D', 'G', 'E')     /* ClothEdge */
 #define GARMENT_SECTION_TETHERS GARMENT_BLOB_TAG('T', 'E', 'T', 'H')   /* ClothTether, optional */
-#define GARMENT_SECTION_DRIVE GARMENT_BLOB_TAG('D', 'R', 'I', 'V')     /* float, optional */
+#define GARMENT_SECTION_DRIVE GARMENT_BLOB_TAG('D', 'R', 'I', 'V')     /* float, s^-2 */
 #define GARMENT_SECTION_VERTICES GARMENT_BLOB_TAG('V', 'E', 'R', 'T')  /* GarmentVertex */
 #define GARMENT_SECTION_COLLIDERS GARMENT_BLOB_TAG('C', 'O', 'L', 'L') /* GarmentCollider, optional */
-#define GARMENT_SECTION_LAP GARMENT_BLOB_TAG('L', 'A', 'P', ' ')       /* GarmentLap, optional, one */
 
 typedef struct {
     uint32_t magic;

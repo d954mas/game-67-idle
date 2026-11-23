@@ -52,8 +52,7 @@ static void same_piece(const GarmentAsset *e, const GarmentAsset *v) {
     same_edges(em->edge, vm->edge, em->edges);
     TEST_ASSERT_EQUAL(em->tether == NULL, vm->tether == NULL);
     if (em->tether) TEST_ASSERT_EQUAL_MEMORY(em->tether, vm->tether, (size_t)em->vertices * sizeof em->tether[0]);
-    TEST_ASSERT_EQUAL(em->anim_drive == NULL, vm->anim_drive == NULL);
-    if (em->anim_drive) TEST_ASSERT_EQUAL_MEMORY(em->anim_drive, vm->anim_drive, (size_t)em->vertices * sizeof(float));
+    TEST_ASSERT_EQUAL_MEMORY(em->drive, vm->drive, (size_t)em->vertices * sizeof(float));
     TEST_ASSERT_EQUAL_MEMORY(e->vertices, v->vertices, (size_t)em->vertices * sizeof e->vertices[0]);
     TEST_ASSERT_EQUAL_MEMORY(&e->material, &v->material, sizeof e->material);
     TEST_ASSERT_EQUAL_INT(e->collider_count, v->collider_count);
@@ -63,11 +62,6 @@ static void same_piece(const GarmentAsset *e, const GarmentAsset *v) {
     TEST_ASSERT_EQUAL_MEMORY(&e->linear_inertia, &v->linear_inertia, sizeof(float));
     TEST_ASSERT_EQUAL_MEMORY(&e->angular_inertia, &v->angular_inertia, sizeof(float));
     TEST_ASSERT_EQUAL_MEMORY(&e->downward_follow, &v->downward_follow, sizeof(float));
-    TEST_ASSERT_EQUAL(e->lap == NULL, v->lap == NULL);
-    if (e->lap) {
-        TEST_ASSERT_EQUAL_MEMORY(e->lap->bone, v->lap->bone, sizeof e->lap->bone);
-        TEST_ASSERT_EQUAL_MEMORY(&e->lap->start_deg, &v->lap->start_deg, 4 * sizeof(float));
-    }
 }
 
 /* shift 4 leaves the blob only 4-byte aligned, the least the format promises to work with. */
@@ -76,8 +70,6 @@ static void check_view(size_t shift) {
     uint8_t *data = read_file(GARMENT_FIXTURE_BLOB, &size, shift);
     const GarmentSet *set = garment_asset_view(data + shift, size);
     TEST_ASSERT_EQUAL_STRING(expected_set.id, set->id);
-    TEST_ASSERT_EQUAL_INT(expected_set.owned_joint_count, set->owned_joint_count);
-    for (int i = 0; i < set->owned_joint_count; ++i) TEST_ASSERT_EQUAL_STRING(expected_set.owned_joints[i], set->owned_joints[i]);
     TEST_ASSERT_EQUAL_INT(expected_set.piece_count, set->piece_count);
     for (int p = 0; p < set->piece_count; ++p) {
         same_piece(&expected_set.pieces[p], &set->pieces[p]);

@@ -220,16 +220,14 @@ static void test_reference_frame_inertia_and_aero_drag(void) {
     TEST_ASSERT_TRUE(s_aero.x[2][0] < s_no_aero.x[2][0]);
 }
 
-static void test_anim_drive_xpbd_convergence_and_collider_occlusion_guard(void) {
-    float drive_weights[3] = {0.0F, 0.0F, 1.0F};
+static void test_drive_converges_toward_the_target_independently_of_iterations(void) {
+    float drive[3] = {0.0F, 0.0F, 400.0F};
     ClothMesh mesh = seam;
-    mesh.anim_drive = drive_weights;
+    mesh.drive = drive;
     ClothMaterial m2 = stiff;
     m2.iterations = 2;
-    m2.anim_drive = 400.0F;
     ClothMaterial m8 = m2;
     m8.iterations = 8;
-
     float displaced[3][3];
     memcpy(displaced, seam.rest, sizeof displaced);
     displaced[2][2] = 0.25F;
@@ -238,22 +236,98 @@ static void test_anim_drive_xpbd_convergence_and_collider_occlusion_guard(void) 
     cloth_reset(&s8, &mesh, displaced);
     cloth_step(&s2, &mesh, &m2, dt, NULL, seam.rest, NULL, NULL, 0);
     cloth_step(&s8, &mesh, &m8, dt, NULL, seam.rest, NULL, NULL, 0);
-    /* Pulls toward anchor (z -> 0) and is iteration-count consistent (XPBD lambda). */
     TEST_ASSERT_TRUE(s2.x[2][2] < displaced[2][2] - 0.005F);
     TEST_ASSERT_TRUE(fabsf(s2.x[2][2] - s8.x[2][2]) < 0.01F);
+}
 
-    /* Occlusion guard: when anchor sits inside an INSIDE body capsule, AnimDrive must not pull cloth into it. */
-    ClothCapsule body = {.a = {0, 1.0F, 0.0F}, .b = {0, 1.0F, 0.0F}, .radius = 0.15F, .flags = CLOTH_COLLIDER_INSIDE};
-    float outside[3][3];
-    memcpy(outside, seam.rest, sizeof outside);
-    outside[2][2] = 0.20F;
-    ClothMaterial no_drive = m2;
-    no_drive.anim_drive = 0.0F;
-    cloth_reset(&s2, &mesh, outside);
-    cloth_reset(&s8, &mesh, outside);
-    cloth_step(&s2, &mesh, &m2, dt, NULL, seam.rest, NULL, &body, 1);
-    cloth_step(&s8, &mesh, &no_drive, dt, NULL, seam.rest, NULL, &body, 1);
-    TEST_ASSERT_TRUE(fabsf(s2.x[2][2] - s8.x[2][2]) < 1e-5F);
+/* A free vertex whose skinned target lies inside a capsule is driven to the capsule surface, not into it. */
+static void test_target_inside_a_capsule_is_pushed_to_its_surface(void) {
+    float drive[3] = {0.0F, 0.0F, 4000.0F};
+    ClothMesh mesh = seam;
+    mesh.drive = drive;
+    mesh.tether = NULL;
+    ClothMaterial m = stiff;
+    m.thickness = 0.005F;
+    m.stretch = 1.0F;
+    const ClothCapsule ball = {.a = {0, 1.0F, 0}, .b = {0, 1.0F, 0}, .radius = 0.15F, .flags = CLOTH_COLLIDER_INSIDE};
+    float target[3][3];
+    memcpy(target, seam.rest, sizeof target);
+    target[2][0] = 0.0F; target[2][1] = 1.0F; target[2][2] = 0.05F; /* inside the ball, off its centre */
+    cloth_reset(&cloth, &mesh, target);
+    float pushed[3][3];
+    for (int i = 0; i < 400; ++i) {
+        memcpy(pushed, target, sizeof pushed);
+        cloth_push_targets(&cloth, &mesh, &m, pushed, NULL, &ball, 1, NULL);
+        cloth_step(&cloth, &mesh, &m, dt, NULL, pushed, NULL, &ball, 1);
+    }
+    const float d = sqrtf(cloth.x[2][0] * cloth.x[2][0] + (cloth.x[2][1] - 1.0F) * (cloth.x[2][1] - 1.0F) + cloth.x[2][2] * cloth.x[2][2]);
+    TEST_ASSERT_TRUE(fabsf(d - (ball.radius + m.thickness)) < 0.01F);
+    TEST_ASSERT_TRUE(fabsf(cloth.target[2][2] - (ball.radius + m.thickness)) < 1e-4F);
+    /* The pin keeps its own anchor. */
+    TEST_ASSERT_EQUAL_MEMORY(target[0], cloth.target[0], sizeof target[0]);
+}
+
+/* A target that crosses a limb's axis between substeps keeps exiting on the side it came from. */
+static void test_pushed_target_keeps_its_side_when_the_target_crosses_the_axis(void) {
+    float drive[3] = {0.0F, 0.0F, 100.0F};
+    ClothMesh mesh = seam;
+    mesh.drive = drive;
+    mesh.tether = NULL;
+    ClothMaterial m = stiff;
+    m.thickness = 0.005F;
+    ClothCapsule leg = {.a = {0, 0, 0}, .b = {0, 2.0F, 0}, .radius = 0.1F, .flags = CLOTH_COLLIDER_INSIDE};
+    float target[3][3];
+    memcpy(target, seam.rest, sizeof target);
+    target[2][0] = 0.0F; target[2][1] = 1.0F; target[2][2] = 0.2F;
+    cloth_reset(&cloth, &mesh, target);
+    const float zs[] = {0.06F, 0.01F, -0.04F, -0.08F};
+    for (int i = 0; i < 4; ++i) {
+        target[2][2] = zs[i];
+        memcpy(leg.prev_a, leg.a, sizeof leg.a);
+        memcpy(leg.prev_b, leg.b, sizeof leg.b);
+        leg.has_prev = 1U;
+        float pushed[3][3];
+        memcpy(pushed, target, sizeof pushed);
+        cloth_push_targets(&cloth, &mesh, &m, pushed, NULL, &leg, 1, NULL);
+        cloth_step(&cloth, &mesh, &m, dt, NULL, pushed, NULL, &leg, 1);
+        TEST_ASSERT_TRUE(cloth.target[2][2] >= leg.radius + m.thickness - 1e-4F);
+    }
+}
+
+/* A free vertex may sink below its target along the target normal only by its backstop. */
+static void test_backstop_limits_sinking_below_the_target(void) {
+    ClothMesh mesh = seam;
+    mesh.tether = NULL;
+    ClothMaterial m = stiff;
+    m.stretch = 1.0F;
+    const ClothGuide guide[3] = {{.normal = {0, 0, 1}, .travel = 1.0F, .backstop = 1.0F},
+                                 {.normal = {0, 0, 1}, .travel = 1.0F, .backstop = 1.0F},
+                                 {.normal = {0, 0, 1}, .travel = 1.0F, .backstop = 0.01F}};
+    float sunk[3][3];
+    memcpy(sunk, seam.rest, sizeof sunk);
+    sunk[2][2] = -0.2F;
+    cloth_reset(&cloth, &mesh, sunk);
+    cloth_step(&cloth, &mesh, &m, dt, NULL, seam.rest, guide, NULL, 0);
+    TEST_ASSERT_TRUE(cloth.x[2][2] >= seam.rest[2][2] - 0.01F - 1e-5F);
+}
+
+/* A target inside a seat leaves through the face it entered by. */
+static void test_pushed_target_leaves_a_support_through_its_entry_face(void) {
+    float drive[3] = {0.0F, 0.0F, 100.0F};
+    ClothMesh mesh = seam;
+    mesh.drive = drive;
+    mesh.tether = NULL;
+    const ClothMaterial material = {.density = 1, .stretch = 1.0F, .thickness = 0.005F, .iterations = 2};
+    const ClothSupport seat = {.center = {0, 1.0F, 0}, .half_u = {1, 0, 0}, .half_v = {0, 0, -1}, .depth = 0.12F};
+    const ClothFrame frame = {.support = &seat};
+    float target[3][3];
+    memcpy(target, seam.rest, sizeof target);
+    target[2][0] = 0.0F; target[2][1] = 1.05F; target[2][2] = 0.0F;
+    cloth_reset(&cloth, &mesh, target);
+    target[2][1] = 0.96F; /* sank below the top face, nearer the top than the underside */
+    cloth_push_targets(&cloth, &mesh, &material, target, NULL, NULL, 0, &seat);
+    cloth_step(&cloth, &mesh, &material, dt, &frame, target, NULL, NULL, 0);
+    TEST_ASSERT_TRUE(fabsf(cloth.target[2][1] - (seat.center[1] + material.thickness)) < 1e-5F);
 }
 
 static void test_anisotropic_warp_weft_edges(void) {
@@ -303,23 +377,6 @@ static void test_invalid_frame_motion_is_rejected_without_mutating_state(void) {
     cloth_step(&cloth, &seam, &stiff, dt, &bad_frame, seam.rest, NULL, NULL, 0);
     TEST_ASSERT_FALSE(cloth.frame_valid);
     TEST_ASSERT_EQUAL_MEMORY(seam.rest, cloth.x, sizeof seam_rest);
-}
-
-static void test_lap_bridge_activates_only_on_bilateral_seated_flexion(void) {
-    ClothCapsule out[2];
-    const float up[3] = {0, 1, 0};
-    const float lh[3] = {0.10F, 0.85F, 0}, rh[3] = {-0.10F, 0.85F, 0};
-    const float lk_stand[3] = {0.10F, 0.45F, 0}, rk_stand[3] = {-0.10F, 0.45F, 0};
-    const float lk_sit[3] = {0.10F, 0.85F, 0.40F}, rk_sit[3] = {-0.10F, 0.85F, 0.40F};
-    /* Standing: 0 capsules. */
-    TEST_ASSERT_EQUAL_INT(0, cloth_build_lap_bridge(lh, lk_stand, rh, rk_stand, up, 128.0F, 100.0F, 0.07F, 0.06F, out));
-    /* Single-leg kick: 0 capsules. */
-    TEST_ASSERT_EQUAL_INT(0, cloth_build_lap_bridge(lh, lk_sit, rh, rk_stand, up, 128.0F, 100.0F, 0.07F, 0.06F, out));
-    /* Bilateral seated pose: 2 transverse bridge capsules spanning between left and right thighs. */
-    TEST_ASSERT_EQUAL_INT(2, cloth_build_lap_bridge(lh, lk_sit, rh, rk_sit, up, 128.0F, 100.0F, 0.07F, 0.06F, out));
-    TEST_ASSERT_TRUE(out[0].a[0] > 0.05F && out[0].b[0] < -0.05F);
-    TEST_ASSERT_TRUE(out[1].a[2] > out[0].a[2]);
-    TEST_ASSERT_TRUE(out[0].radius > 0.065F && out[1].radius > 0.055F);
 }
 
 static void test_compression_limit_softens_shortening_without_weakening_tension(void) {
@@ -621,29 +678,6 @@ static void test_convex_support_leaves_beveled_corners_free(void) {
         for (int k = 0; k < 3; ++k) TEST_ASSERT_TRUE(fabsf(cloth.x[i][k] - corner[i][k]) < 1e-5F);
 }
 
-static void test_support_keeps_the_reachable_guide_and_the_blocked_panels_exit_side(void) {
-    const float rest[][3] = {{-0.02F,1.26F,0}, {0.02F,1.26F,0}, {0.02F,0.55F,-0.17F}, {0,0.65F,-0.10F}};
-    const float posed[][3] = {{-0.02F,1.26F,0}, {0.02F,1.26F,0}, {0.02F,0.78F,0.09F}, {0.01F,1.17F,0.50F}};
-    const float mass[] = {0,0,1,1};
-    const ClothTether tether[] = {{0,0}, {1,0}, {1,1}, {0,1}};
-    ClothMesh mesh = fold;
-    mesh.rest = rest;
-    mesh.inv_area = mass;
-    mesh.tether = tether;
-    const ClothGuide guide[] = {
-        {.normal = {0,0,1}}, {.normal = {0,0,1}},
-        {.normal = {0,0,1}, .travel = 0.001F}, {.normal = {0,0,1}, .travel = 0.001F}
-    };
-    const ClothMaterial material = {.density = 1, .stretch = 1, .iterations = 2, .support_drape = 1.0F};
-    const ClothSupport face = {.center = {0,1,0}, .half_u = {0.25F,0,0}, .half_v = {0,0,-0.25F}, .depth = 0.12F};
-    const ClothFrame frame = {.support = &face};
-    TEST_ASSERT_TRUE(cloth_reset_supported(&cloth, &mesh, &material, posed, guide, NULL, 0, &face));
-    cloth_step(&cloth, &mesh, &material, dt, &frame, posed, guide, NULL, 0);
-    for (int axis = 0; axis < 3; ++axis)
-        TEST_ASSERT_TRUE(fabsf(cloth.x[3][axis] - posed[3][axis]) < 0.0011F);
-    TEST_ASSERT_TRUE(cloth.x[2][1] < posed[2][1] && cloth.x[2][2] >= 0.25F);
-}
-
 static void test_framed_step_keeps_free_cloth_above_the_ground_plane(void) {
     const float above[][3] = {{-0.02F,0.05F,-0.04F}, {0.02F,0.05F,-0.04F}, {0,0.05F,0}};
     ClothMesh mesh = seam;
@@ -675,7 +709,6 @@ int main(void) {
     RUN_TEST(test_support_preserves_hanging_material_at_reset_and_catches_inherited_drops);
     RUN_TEST(test_support_catches_a_spanning_edge_with_both_endpoints_outside);
     RUN_TEST(test_convex_support_leaves_beveled_corners_free);
-    RUN_TEST(test_support_keeps_the_reachable_guide_and_the_blocked_panels_exit_side);
     RUN_TEST(test_material_restores_signed_fold);
     RUN_TEST(test_capsule_axis_crosses_face_interior);
     RUN_TEST(test_single_pinned_seam_contact_has_bounded_displacement);
@@ -686,11 +719,14 @@ int main(void) {
     RUN_TEST(test_round_cone_tapered_capsule_geometry_and_degeneracy);
     RUN_TEST(test_temporal_side_recovery_prevents_tunneling_across_axis);
     RUN_TEST(test_reference_frame_inertia_and_aero_drag);
-    RUN_TEST(test_anim_drive_xpbd_convergence_and_collider_occlusion_guard);
+    RUN_TEST(test_drive_converges_toward_the_target_independently_of_iterations);
+    RUN_TEST(test_target_inside_a_capsule_is_pushed_to_its_surface);
+    RUN_TEST(test_pushed_target_keeps_its_side_when_the_target_crosses_the_axis);
+    RUN_TEST(test_pushed_target_leaves_a_support_through_its_entry_face);
+    RUN_TEST(test_backstop_limits_sinking_below_the_target);
     RUN_TEST(test_anisotropic_warp_weft_edges);
     RUN_TEST(test_contact_velocity_friction_and_max_speed);
     RUN_TEST(test_invalid_frame_motion_is_rejected_without_mutating_state);
-    RUN_TEST(test_lap_bridge_activates_only_on_bilateral_seated_flexion);
     RUN_TEST(test_compression_limit_softens_shortening_without_weakening_tension);
     RUN_TEST(test_bend_sliver_triangle_stays_bounded_and_finite);
     RUN_TEST(test_reset_over_body_places_seated_skirt_above_thigh_without_impaling);

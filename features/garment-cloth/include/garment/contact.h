@@ -22,16 +22,13 @@ float cloth_point_capsule_contact_swept(const float p[3], const float prev_p[3],
                                         const float fallback_normal[3],
                                         float normal[3], float *t_out);
 
+/* The temporal side recovery of cloth_point_capsule_contact_swept for a contact already found at axial t with
+ * the given depth and normal; returns the depth along the chosen exit and updates normal. */
+float cloth_capsule_exit_side(const float p[3], const float prev_p[3], const ClothCapsule *body, float margin,
+                              const float fallback_normal[3], float t, float depth, float normal[3]);
+
 /* Closest points on the triangle and capsule axis. Includes face interiors and crossing segments. */
 float cloth_face_contact(const float a[3], const float b[3], const float c[3], const ClothCapsule *body,
                          float margin, float weights[3], float normal[3]);
-
-/* Pose-activated transverse lap-bridge capsules spanning two flexed bilateral limbs (e.g. seated thighs).
- * Activates smoothly only when both limbs flex toward torso_up below max_angle_deg; returns 0..2 capsules. */
-int cloth_build_lap_bridge(const float left_a[3], const float left_b[3],
-                           const float right_a[3], const float right_b[3],
-                           const float torso_up[3], float max_angle_deg, float full_angle_deg,
-                           float radius_proximal, float radius_distal,
-                           ClothCapsule out[2]);
 
 #endif

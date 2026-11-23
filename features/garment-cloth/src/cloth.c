@@ -56,6 +56,7 @@ void cloth_reset(ClothState *s, const ClothMesh *mesh, const float pose[][3]) {
     }
     size_t bytes = (size_t)mesh->vertices * sizeof s->x[0];
     memcpy(s->x, pose, bytes);
+    memcpy(s->target, pose, bytes);
     memset(s->velocity, 0, bytes);
     s->mesh = mesh;
     s->frame_valid = true;
@@ -315,81 +316,6 @@ static bool clip_hull(SupportPlane *p, vec3 from, vec3 to, float *enter, float *
     return true;
 }
 
-static bool support_blocks(SupportPlane *p, const float from[3], const float to[3]) {
-    vec3 a, b;
-    glm_vec3_sub((float *)from, p->center, a);
-    glm_vec3_sub((float *)to, p->center, b);
-    float enter = 0.0F, leave = 1.0F;
-    if (p->plane_count) return clip_hull(p, a, b, &enter, &leave, NULL);
-    return clip_interval(glm_vec3_dot(a, p->normal), glm_vec3_dot(b, p->normal),
-                         -p->depth, 0.0F, &enter, &leave) &&
-           clip_interval(glm_vec3_dot(a, p->u), glm_vec3_dot(b, p->u), -1.0F, 1.0F, &enter, &leave) &&
-           clip_interval(glm_vec3_dot(a, p->v), glm_vec3_dot(b, p->v), -1.0F, 1.0F, &enter, &leave);
-}
-
-static int sheet_root(int parents[], int i) {
-    while (parents[i] != i) {
-        parents[i] = parents[parents[i]];
-        i = parents[i];
-    }
-    return i;
-}
-
-typedef struct {
-    int parents[CLOTH_VERTICES];
-    bool below[CLOTH_VERTICES], hangs[CLOTH_VERTICES];
-} DrapeWork;
-
-static const float (*drape_anchors(const ClothMesh *mesh, const float anchors[][3], SupportPlane *p,
-                                  float weight, float result[][3], DrapeWork *w))[3] {
-    if (!p || weight == 0.0F || p->depth <= 0.0F || !mesh->tether) return anchors;
-    int *parents = w->parents;
-    bool *below = w->below, *hangs = w->hangs;
-    bool any = false;
-    for (int i = 0; i < mesh->vertices; ++i) {
-        vec3 offset;
-        glm_vec3_sub((float *)anchors[i], p->center, offset);
-        parents[i] = i;
-        below[i] = mesh->inv_area[i] > 0.0F && glm_vec3_dot(offset, p->normal) < -p->depth;
-        any |= below[i];
-    }
-    if (!any) return anchors;
-    memset(hangs, 0, (size_t)mesh->vertices * sizeof *hangs);
-    for (int i = 0; i < mesh->edges; ++i)
-        parents[sheet_root(parents, mesh->edge[i].a)] = sheet_root(parents, mesh->edge[i].b);
-    for (int i = 0; i < mesh->vertices; ++i)
-        if (below[i]) hangs[sheet_root(parents, i)] = true;
-
-    memcpy(result, anchors, (size_t)mesh->vertices * sizeof result[0]);
-    for (int i = 0; i < mesh->vertices; ++i) {
-        int pin = mesh->tether[i].pin;
-        if (pin < 0 || mesh->inv_area[i] == 0.0F || !hangs[sheet_root(parents, i)]) continue;
-        /* When a solid separates the seam from the hanging panel, the animated leg is an unreachable guide. */
-        vec3 offset, target;
-        glm_vec3_sub((float *)mesh->rest[i], (float *)mesh->rest[pin], offset);
-        glm_vec3_add(offset, (float *)anchors[pin], offset);
-        glm_vec3_sub(offset, p->center, offset);
-        float height = glm_vec3_dot(offset, p->normal);
-        glm_vec3_sub((float *)anchors[i], p->center, target);
-        float u = fabsf(glm_vec3_dot(target, p->u)), v = fabsf(glm_vec3_dot(target, p->v));
-        float target_height = glm_vec3_dot(target, p->normal);
-        float margin = fminf((1.0F - u) * p->u_scale, (1.0F - v) * p->v_scale);
-        if (height >= 0.0F || target_height >= 0.0F || margin <= 0.0F || !support_blocks(p, anchors[pin], anchors[i])) continue;
-        /* The animated panel selects its side of the rim. The seam supplies only the hanging length. */
-        vec3 tangent, hanging;
-        glm_vec3_copy(target, tangent);
-        glm_vec3_muladds(p->normal, -target_height, tangent);
-        glm_vec3_copy((float *)anchors[i], hanging);
-        glm_vec3_muladds(p->normal, height - target_height, hanging);
-        float radius = fmaxf(u, v);
-        if (radius > 1e-6F) glm_vec3_muladds(tangent, 1.04F / radius - 1.0F, hanging);
-        float blend = fminf(1.0F, fminf(margin, -target_height) / (0.25F * p->depth));
-        blend = blend * blend * (3.0F - 2.0F * blend);
-        glm_vec3_lerp((float *)anchors[i], hanging, weight * blend * fminf(1.0F, -height / p->depth), result[i]);
-    }
-    return (const float (*)[3])result;
-}
-
 static bool project_support_edge(ClothState *s, const ClothMesh *mesh, const ClothEdge *edge, SupportPlane *p,
                                  float thick) {
     float wa = mesh->inv_area[edge->a], wb = mesh->inv_area[edge->b];
@@ -444,14 +370,15 @@ static bool project_support_edge(ClothState *s, const ClothMesh *mesh, const Clo
     return true;
 }
 
-static bool project_support(ClothState *s, const ClothMesh *mesh, SupportPlane *p, float thick,
-                            const float previous[][3], float anchor_shift_y, ContactAccum *acc) {
-    if (!p) return false;
+/* Free points x (cloth or targets) inside the support leave through the face they entered by, judged from
+   previous; without a previous point they take the nearest exit. */
+static bool support_points(float (*x)[3], const ClothMesh *mesh, SupportPlane *p, float thick,
+                           const float previous[][3], float anchor_shift_y, ContactAccum *acc) {
     bool hit = false;
     for (int i = 0; i < mesh->vertices; ++i) {
         if (mesh->inv_area[i] == 0.0F) continue;
         vec3 offset;
-        glm_vec3_sub(s->x[i], p->center, offset);
+        glm_vec3_sub(x[i], p->center, offset);
         float height = glm_vec3_dot(offset, p->normal);
         float u = glm_vec3_dot(offset, p->u), v = glm_vec3_dot(offset, p->v);
         if (height >= thick || fabsf(u) > 1.0F + thick / p->u_scale ||
@@ -479,7 +406,7 @@ static bool project_support(ClothState *s, const ClothMesh *mesh, SupportPlane *
             }
             if (face < 0) continue;
             float shift = thick - nearest;
-            glm_vec3_muladds(p->planes[face], shift, s->x[i]);
+            glm_vec3_muladds(p->planes[face], shift, x[i]);
             if (acc) record_contact(acc, i, p->planes[face], NULL, 0.0F, 0.0F, shift);
             hit = true;
             continue;
@@ -517,10 +444,17 @@ static bool project_support(ClothState *s, const ClothMesh *mesh, SupportPlane *
             }
         }
         float shift = distance + thick;
-        glm_vec3_muladds(normal, shift, s->x[i]);
+        glm_vec3_muladds(normal, shift, x[i]);
         if (acc) record_contact(acc, i, normal, NULL, 0.0F, 0.0F, shift);
         hit = true;
     }
+    return hit;
+}
+
+static bool project_support(ClothState *s, const ClothMesh *mesh, SupportPlane *p, float thick,
+                            const float previous[][3], float anchor_shift_y, ContactAccum *acc) {
+    if (!p) return false;
+    bool hit = support_points(s->x, mesh, p, thick, previous, anchor_shift_y, acc);
     if (p->depth > 0.0F) {
         for (int i = 0; i < mesh->edges; ++i)
             if (project_support_edge(s, mesh, &mesh->edge[i], p, thick)) hit = true;
@@ -559,8 +493,7 @@ typedef struct {
 } CapsuleBroadphase;
 
 typedef struct {
-    float draped[CLOTH_VERTICES][3], x_prev[CLOTH_VERTICES][3], v_normals[CLOTH_VERTICES][3];
-    uint8_t anim_ok[CLOTH_VERTICES];
+    float pushed[CLOTH_VERTICES][3], x_prev[CLOTH_VERTICES][3], v_normals[CLOTH_VERTICES][3];
     ContactAccum acc;
     CapsuleBroadphase bp;
 } StepWork;
@@ -573,18 +506,17 @@ typedef struct {
 } ContactPoseWork;
 
 typedef struct {
-    float draped[CLOTH_VERTICES][3], saved[CLOTH_VERTICES][3];
+    float pushed[CLOTH_VERTICES][3], saved[CLOTH_VERTICES][3];
     ContactPoseWork pose;
 } ResetWork;
 
 /* Solver arrays stay off the call stack, which is 64 KiB on the web. Public entry points never nest
-   or call user code, so they share the union; drape runs inside a step or a reset and has its own. */
+   or call user code, so they share the union. */
 static _Thread_local struct {
     union {
         StepWork step;
         ResetWork reset;
     } entry;
-    DrapeWork drape;
 } work;
 
 static void build_broadphase(const ClothMaterial *m, const ClothCapsule *body, int count, CapsuleBroadphase *bp) {
@@ -655,7 +587,7 @@ static inline float box_sphere_contact(const float p[3], const float center[3], 
     return radius - d;
 }
 
-/* Precomputed round-cone SDF matching cloth_point_capsule_contact_swept with zero sqrt on misses. */
+/* Precomputed round-cone SDF with the same temporal side recovery as cloth_point_capsule_contact_swept and zero sqrt on misses. */
 static float box_point_contact_swept(const float p[3], const float prev_p[3],
                                      const ClothCapsule *cap, const CapsuleBox *bx,
                                      float margin, const float fallback[3],
@@ -705,10 +637,50 @@ static float box_point_contact_swept(const float p[3], const float prev_p[3],
     }
     if (depth <= 0.0F) return 0.0F;
     if (cap->flags == CLOTH_COLLIDER_INSIDE && (cap->has_prev || fallback)) {
-        return cloth_point_capsule_contact_swept(p, prev_p, cap, margin, fallback, normal, t_out);
+        *t_out = t;
+        return cloth_capsule_exit_side(p, prev_p, cap, margin, fallback, t, depth, normal);
     }
     *t_out = t;
     return depth;
+}
+
+enum { TARGET_PASSES = 2 };
+
+/* The target of a free vertex is its skinned anchor pushed out of the body capsules, then out of the support, in
+   TARGET_PASSES Gauss-Seidel passes with the cloth's own contact margin. previous holds the pushed targets of the
+   last substep, which keep each exit on the side the target came from. Pins keep their anchor. */
+static void push_targets(const ClothMesh *mesh, const ClothMaterial *m, const float anchors[][3],
+                         const ClothGuide *guide, const ClothCapsule *body, const CapsuleBroadphase *bp,
+                         SupportPlane *support, const float (*previous)[3], float out[][3]) {
+    memcpy(out, anchors, (size_t)mesh->vertices * sizeof out[0]);
+    for (int pass = 0; pass < TARGET_PASSES; ++pass) {
+        for (int i = 0; bp->count && i < mesh->vertices; ++i) {
+            if (mesh->inv_area[i] == 0.0F || !point_in_box(out[i], bp->all_min, bp->all_max)) continue;
+            for (int bi = 0; bi < bp->count; ++bi) {
+                const CapsuleBox *bx = &bp->boxes[bi];
+                if (!point_in_box(out[i], bx->min, bx->max)) continue;
+                vec3 normal;
+                float t = 0.0F;
+                float depth = box_point_contact_swept(out[i], previous ? previous[i] : NULL, body + bx->idx, bx, m->thickness,
+                                                      guide ? guide[i].normal : NULL, normal, &t);
+                if (depth > 0.0F) glm_vec3_muladds(normal, depth, out[i]);
+            }
+        }
+        if (support) support_points(out, mesh, support, m->thickness, previous, 0.0F, NULL);
+    }
+}
+
+void cloth_push_targets(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float anchors[][3],
+                        const ClothGuide *guide, const ClothCapsule *body, int count, const ClothSupport *support) {
+    NT_ASSERT(s && mesh && m && anchors && count >= 0 && count <= CLOTH_CAPSULES);
+    SupportPlane plane;
+    if (!prepare_support(support, &plane)) support = NULL;
+    StepWork *w = &work.entry.step;
+    build_broadphase(m, body, count, &w->bp);
+    const float (*previous)[3] = s->frame_valid && s->mesh == mesh ? (const float (*)[3])s->target : NULL;
+    push_targets(mesh, m, (const float (*)[3])anchors, guide, body, &w->bp, support ? &plane : NULL, previous, w->pushed);
+    memcpy(anchors, w->pushed, (size_t)mesh->vertices * sizeof anchors[0]);
+    memcpy(s->target, w->pushed, (size_t)mesh->vertices * sizeof s->target[0]);
 }
 
 static void project_body(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
@@ -943,10 +915,8 @@ void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, fl
     if (!s->frame_valid) return;
 
     StepWork *w = &work.entry.step;
-    anchors = drape_anchors(mesh, anchors, support, m->support_drape, w->draped, &work.drape);
     float (*x_prev)[3] = w->x_prev;
     float (*v_normals)[3] = w->v_normals;
-    uint8_t *anim_ok = w->anim_ok;
     ContactAccum *acc = &w->acc;
     size_t v_count = (size_t)mesh->vertices;
     memset(acc->normal, 0, v_count * sizeof acc->normal[0]);
@@ -956,6 +926,7 @@ void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, fl
 
     CapsuleBroadphase *bp = &w->bp;
     build_broadphase(m, body, count, bp);
+    const float (*target)[3] = anchors;
 
     float inv_dt = 1.0F / dt;
     float retain = expf(-m->drag * dt);
@@ -1001,25 +972,6 @@ void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, fl
         glm_vec3_muladds(s->velocity[i], dt, s->x[i]);
     }
 
-    bool use_anim = mesh->anim_drive != NULL && m->anim_drive > 0.0F && !(frame && frame->suppress_anim_drive);
-    if (use_anim) {
-        for (int i = 0; i < mesh->vertices; ++i) {
-            anim_ok[i] = (mesh->inv_area[i] > 0.0F && mesh->anim_drive[i] > 0.0F) ? 1U : 0U;
-            if (!anim_ok[i] || bp->count == 0 || !point_in_box(anchors[i], bp->all_min, bp->all_max)) continue;
-            /* Do not drive cloth toward an anchor occluded inside a body collider. */
-            for (int bi = 0; bi < bp->count; ++bi) {
-                const CapsuleBox *bx = &bp->boxes[bi];
-                const ClothCapsule *cap = body + bx->idx;
-                if (cap->flags != CLOTH_COLLIDER_INSIDE || !point_in_box(anchors[i], bx->min, bx->max)) continue;
-                vec3 tmp_n;
-                if (cloth_point_capsule_contact(anchors[i], cap, m->thickness, tmp_n, NULL) > 0.0F) {
-                    anim_ok[i] = 0U;
-                    break;
-                }
-            }
-        }
-    }
-
     /* Weights are inverse area; multiplying compliance by density cancels the same factor in mass. */
     float scale = m->density / (dt * dt);
     float weft_s = m->weft_stretch_scale > 0.0F ? m->weft_stretch_scale : 1.0F;
@@ -1031,19 +983,17 @@ void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, fl
     memset(s->anim_lambda, 0, (size_t)mesh->vertices * sizeof(float));
 
     for (int pass = 0; pass < m->iterations; ++pass) {
-        if (use_anim) {
-            for (int i = 0; i < mesh->vertices; ++i) {
-                if (!anim_ok[i]) continue;
-                float w2 = mesh->anim_drive[i] * m->anim_drive;
-                float alpha = 1.0F / (w2 * dt * dt);
-                vec3 dx;
-                glm_vec3_sub(s->x[i], (float *)anchors[i], dx);
-                float dist = glm_vec3_norm(dx);
-                if (dist < 1e-8F) continue;
-                float dl = (-dist - alpha * s->anim_lambda[i]) / (1.0F + alpha);
-                s->anim_lambda[i] += dl;
-                glm_vec3_muladds(dx, dl / dist, s->x[i]);
-            }
+        for (int i = 0; mesh->drive && i < mesh->vertices; ++i) {
+            float w2 = mesh->drive[i];
+            if (mesh->inv_area[i] == 0.0F || w2 <= 0.0F) continue;
+            float alpha = 1.0F / (w2 * dt * dt);
+            vec3 dx;
+            glm_vec3_sub(s->x[i], (float *)target[i], dx);
+            float dist = glm_vec3_norm(dx);
+            if (dist < 1e-8F) continue;
+            float dl = (-dist - alpha * s->anim_lambda[i]) / (1.0F + alpha);
+            s->anim_lambda[i] += dl;
+            glm_vec3_muladds(dx, dl / dist, s->x[i]);
         }
         for (int k = 0; k < mesh->edges; ++k) {
             int i = (pass % 2 == 0) ? k : mesh->edges - 1 - k;
@@ -1062,7 +1012,7 @@ void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, fl
         if (mesh->tether) project_tethers(s, mesh);
         if (guide) {
             for (int i = 0; i < mesh->vertices; ++i) {
-                if (mesh->inv_area[i] != 0.0F) project_guide(s->x[i], anchors[i], &guide[i]);
+                if (mesh->inv_area[i] != 0.0F) project_guide(s->x[i], target[i], &guide[i]);
             }
         }
         project_body(s, mesh, m, x_prev, guide, body, bp, frame, inv_dt, pass == m->iterations - 1, acc);
@@ -1296,7 +1246,10 @@ bool cloth_reset_supported(ClothState *s, const ClothMesh *mesh, const ClothMate
         return false;
     }
     ResetWork *w = &work.entry.reset;
-    anchors = drape_anchors(mesh, anchors, support, m->support_drape, w->draped, &work.drape);
+    /* Free cloth starts on its pushed target. */
+    build_broadphase(m, body, count, &w->pose.bp);
+    push_targets(mesh, m, anchors, guide, body, &w->pose.bp, support, NULL, w->pushed);
+    anchors = (const float (*)[3])w->pushed;
     cloth_reset(s, mesh, anchors);
     if (!s->frame_valid) return false;
     if (!count && !project_support(s, mesh, support, m->thickness, NULL, 0.0F, NULL)) return true;

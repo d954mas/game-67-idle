@@ -85,7 +85,6 @@ static void test_body_guide_reaches_surface_palette_before_first_physics_tick(vo
     nt_skeletal_mat34_t pose[] = {{.r = {{0, -1, 0, .25F}, {1, 0, 0, -.1F}, {0, 0, 1, .05F}}}, identity};
     step_panel(actor, pose, 0);
     TEST_ASSERT_EQUAL_INT(3, actor->palette_count);
-    TEST_ASSERT_EQUAL_INT(0, actor->stats.driven_joints);
     /* Each palette record carries the guide joint's rotation as a quaternion and its translation. */
     for (int v = 0; v < 3; ++v) {
         const float qx = actor->palette[v].r[0][3], qy = actor->palette[v].r[1][3];

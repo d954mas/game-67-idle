@@ -16,7 +16,8 @@ void cloth_debug_mesh(const ClothMesh *mesh, const float positions[][3], const f
                       unsigned layers, ClothDebugLine emit, void *user) {
     if (!mesh || !positions || !emit) return;
     if (layers & CLOTH_DEBUG_WEIGHTS) {
-        if (!weights) weights = mesh->anim_drive;
+        float strongest = 0.0F;
+        for (int i = 0; !weights && mesh->drive && i < mesh->vertices; ++i) strongest = fmaxf(strongest, mesh->drive[i]);
         for (int e = 0; e < mesh->edges; ++e) {
             const int vertices[] = {mesh->edge[e].a, mesh->edge[e].b};
             float middle[3];
@@ -24,7 +25,7 @@ void cloth_debug_mesh(const ClothMesh *mesh, const float positions[][3], const f
                 middle[k] = 0.5F * (positions[vertices[0]][k] + positions[vertices[1]][k]);
             for (int side = 0; side < 2; ++side) {
                 const int i = vertices[side];
-                const float w = weights ? weights[i] : 0.0F;
+                const float w = weights ? weights[i] : (strongest > 0.0F ? mesh->drive[i] / strongest : 0.0F);
                 const float rgb[] = {0.16F + 0.84F * w, 0.42F - 0.24F * w, 1.0F - 0.86F * w};
                 emit(user, CLOTH_DEBUG_WEIGHTS, positions[i], middle, rgb);
             }

@@ -17,7 +17,6 @@ typedef struct {
 
 typedef struct GarmentPiece {
     int joint[GARMENT_BONES_MAX];
-    int lap_joint[6];
     ClothState cloth;
     GarmentFrame previous;
     float sim_anchors[CLOTH_VERTICES][3];
@@ -72,9 +71,6 @@ static bool bind_actor(GarmentActor *a, const GarmentSet *set, const nt_skeletal
                 ++a->stats.missing_bindings;
             piece->joint[i] = j;
         }
-        if (asset->lap)
-            for (int k = 0; k < 6; ++k)
-                piece->lap_joint[k] = piece->joint[asset->lap->bone[k]];
         a->stats.vertices += asset->mesh->vertices;
         a->stats.render_vertices += asset->render_vertices;
     }
@@ -154,21 +150,6 @@ static bool sample_frame_local(const GarmentAsset *g, const GarmentPiece *s, con
         f->caps[i].flags = c->flags;
     }
     f->cap_count = g->collider_count;
-    if (g->lap) {
-        float hips[3], spine[3], lh[3], lk[3], rh[3], rk[3], up[3];
-        for (int k = 0; k < 3; ++k) {
-            hips[k] = pose[s->lap_joint[0]].r[k][3];
-            spine[k] = pose[s->lap_joint[1]].r[k][3];
-            lh[k] = pose[s->lap_joint[2]].r[k][3];
-            lk[k] = pose[s->lap_joint[3]].r[k][3];
-            rh[k] = pose[s->lap_joint[4]].r[k][3];
-            rk[k] = pose[s->lap_joint[5]].r[k][3];
-            up[k] = spine[k] - hips[k];
-        }
-        f->cap_count += cloth_build_lap_bridge(lh, lk, rh, rk, up, g->lap->start_deg, g->lap->full_deg,
-                                               g->lap->proximal_m, g->lap->distal_m,
-                                               f->caps + f->cap_count);
-    }
     return true;
 }
 
@@ -326,7 +307,7 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
 
     a->stats.max_strain = a->stats.pin_error_m = a->stats.max_displacement_m = 0;
     a->stats.finite = true;
-    a->stats.surface_faces = a->stats.driven_joints = 0;
+    a->stats.surface_faces = 0;
     for (int p = 0; p < set->piece_count; ++p) {
         const GarmentAsset *g = &set->pieces[p];
         GarmentPiece *s = &a->pieces[p];
@@ -341,10 +322,25 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
             cloth_reset_supported(&s->cloth, g->mesh, &g->material, scratch.current.anchors,
                                   scratch.current.guide, scratch.current.caps, scratch.current.cap_count,
                                   world_support ? &support : NULL);
+            /* The reset placed the cloth on the pushed targets; those are this sample's targets. */
+            memcpy(scratch.current.anchors, s->cloth.target, bytes);
             memcpy(s->sim_anchors, scratch.current.anchors, bytes);
             s->sim_cap_count = scratch.current.cap_count;
             s->continuous_cap_count = scratch.current.cap_count;
             memcpy(s->sim_caps, scratch.current.caps, (size_t)s->sim_cap_count * sizeof *s->sim_caps);
+        } else {
+            /* The pushed target depends on the pose alone, so it is found once per sample; the sweep from the last
+               sample's capsules keeps each exit on its side. */
+            for (int c = 0; c < scratch.current.cap_count; ++c) {
+                ClothCapsule *cap = &scratch.current.caps[c];
+                cap->has_prev = c < s->previous.cap_count ? 1U : 0U;
+                if (cap->has_prev) {
+                    memcpy(cap->prev_a, s->previous.caps[c].a, sizeof cap->prev_a);
+                    memcpy(cap->prev_b, s->previous.caps[c].b, sizeof cap->prev_b);
+                }
+            }
+            cloth_push_targets(&s->cloth, g->mesh, &g->material, scratch.current.anchors, scratch.current.guide,
+                               scratch.current.caps, scratch.current.cap_count, world_support ? &support : NULL);
         }
         ClothFrame frame = {
             .linear_accel = {local_accel[0], local_accel[1], local_accel[2]},
@@ -352,7 +348,6 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
             .angular_accel_y = yaw_accel,
             .linear_inertia = g->linear_inertia,
             .angular_inertia = g->angular_inertia,
-            .suppress_anim_drive = scratch.current.cap_count > g->collider_count,
             .support = world_support ? &support : NULL
         };
         for (int j = 0; j < steps; ++j) {

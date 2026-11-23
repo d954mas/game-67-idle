@@ -1,10 +1,15 @@
-"""Topology-agnostic proxy utilities: checkerboard quad triangulation, geodesic depth, warp/weft classification and bind-pose checks."""
+"""Simulation proxy of a render garment: the outer sewn sheet, its reduction to a vertex budget, geodesic depth,
+warp/weft classification and bind-pose checks."""
 from __future__ import annotations
 
 import heapq
 import math
+from collections import defaultdict
 
 import numpy as np
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
+from scipy.spatial import cKDTree
 
 EDGE_WARP = 0
 EDGE_WEFT = 1
@@ -365,3 +370,220 @@ def improve_mesh_quality(points, faces, *, source_points=None, iterations=8, min
                 pts[v] = cand
 
     return pts, tris
+
+
+def outer_faces(positions, faces, shell):
+    if shell is None:
+        return faces
+    a, b, c = positions[faces].transpose(1, 0, 2)
+    normal = np.cross(b-a, c-a)
+    if "axis_xz_m" in shell:
+        center = np.asarray(shell["axis_xz_m"], dtype=float)
+        if center.shape != (2,) or not np.isfinite(center).all():
+            raise ValueError("invalid skirt axis")
+        outward = (a+b+c)/3
+        outward[:, [0,2]] -= center
+        outward[:, 1] = 0
+    else:
+        axis = np.asarray(shell["outward"], dtype=float)
+        if axis.shape != (3,) or not np.isfinite(axis).all() or np.linalg.norm(axis) == 0:
+            raise ValueError("invalid outer surface direction")
+        outward = np.broadcast_to(axis, normal.shape)
+    projection = np.einsum("ij,ij->i", normal, outward)
+    cutoff = shell.get("min_cosine", 0.0)
+    if type(cutoff) not in (float, int) or not 0 <= cutoff < 1:
+        raise ValueError("outer surface min_cosine must be a number in [0, 1)")
+    if cutoff:
+        # The narrow rim of a sloping hem can face slightly outwards.
+        projection = projection - cutoff * np.linalg.norm(normal, axis=1) * np.linalg.norm(outward, axis=1)
+    return faces[projection > 0]
+
+
+def sewn_sheet(positions, triangles):
+    # Split-edge fans must stay separate at a vent even when their positions coincide.
+    welded, inverse = np.unique(np.round(positions, 7), axis=0, return_inverse=True)
+    ids = inverse[triangles]
+    area = np.cross(welded[ids[:, 1]] - welded[ids[:, 0]], welded[ids[:, 2]] - welded[ids[:, 0]])
+    keep = np.linalg.norm(area, axis=1) >= 2e-8
+    ids, source = ids[keep], triangles[keep]
+    parent = list(range(3 * len(ids)))
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def join(a, b):
+        parent[root(a)] = root(b)
+
+    edges = defaultdict(list)
+    for face, values in enumerate(ids):
+        for k, a in enumerate(values):
+            q = (k + 1) % 3
+            b = values[q]
+            edges[min(a, b), max(a, b)].append((int(a), int(b), 3 * face + k, 3 * face + q))
+
+    face_pairs = []
+    for sides in edges.values():
+        if len(sides) == 2:
+            left, right = sides
+            if left[0] == right[1]:
+                join(left[2], right[3])
+                join(left[3], right[2])
+                face_pairs.append((left[2] // 3, right[2] // 3))
+    if not face_pairs:
+        raise ValueError("garment has no connected triangle sheet")
+    pairs = np.asarray(face_pairs)
+    graph = coo_matrix((np.ones(len(pairs)), pairs.T), shape=(len(ids), len(ids)))
+    _, parts = connected_components(graph, directed=False)
+    # Decorative piping and separate overlaid details follow their painted joints.
+    sizes = np.bincount(parts, weights=np.linalg.norm(area[keep], axis=1))
+    selected = np.where(parts == np.argmax(sizes))[0]
+    corners = (3 * selected[:, None] + np.arange(3)).ravel()
+    _, first, vertices = np.unique([root(int(i)) for i in corners], return_index=True, return_inverse=True)
+    originals = source.ravel()[corners[first]]
+    return positions[originals], vertices.reshape(-1, 3), originals, source[selected]
+
+
+def simplify(points, triangles, budget):
+    source_points = points.copy()
+    owners = np.arange(len(points))
+    while len(points) > budget:
+        a, b, c = points[triangles].transpose(1, 0, 2)
+        face_normals = np.cross(b-a, c-a)
+        face_sets = [set() for _ in points]
+        neighbors = [set() for _ in points]
+        for i, (a, b, c) in enumerate(triangles):
+            for x, y, z in ((a,b,c), (b,c,a), (c,a,b)):
+                face_sets[x].add(i)
+                neighbors[x].update((y,z))
+        all_edges = np.sort(np.concatenate([triangles[:, [0,1]], triangles[:, [1,2]], triangles[:, [2,0]]]), axis=1)
+        edges, counts = np.unique(all_edges, return_counts=True, axis=0)
+        boundary = set(edges[counts == 1].ravel())
+        if max(counts) > 2:
+            raise ValueError("nonmanifold reduction input")
+        lengths = np.linalg.norm(points[edges[:, 0]] - points[edges[:, 1]], axis=1)
+        occupied, moved = set(), {}
+        mapping = np.arange(len(points))
+        for i in np.argsort(lengths, kind="stable"):
+            x, y = edges[i]
+            if x in occupied or y in occupied or (x in boundary and y in boundary and counts[i] != 1):
+                continue
+            if len(neighbors[x] & neighbors[y]) != counts[i]:
+                continue
+            middle = (points[x] + points[y]) * 0.5
+            if (x in boundary) != (y in boundary):
+                middle = points[x if x in boundary else y]
+            affected = sorted(face_sets[x] ^ face_sets[y])
+            if not affected:
+                continue
+            tr = triangles[affected]
+            pos = points[tr].copy()
+            pos[(tr == x) | (tr == y)] = middle
+            new = np.cross(pos[:,1]-pos[:,0], pos[:,2]-pos[:,0])
+            length = np.linalg.norm(new, axis=1)
+            old = face_normals[affected]
+            if np.any(length < 2e-8) or np.any(np.einsum("ij,ij->i", new, old) <= 0.1 * length * np.linalg.norm(old, axis=1)):
+                continue
+            moved[x] = middle
+            mapping[y] = x
+            occupied.update(neighbors[x] | neighbors[y] | {x,y})
+            if len(points) - len(moved) == budget:
+                break
+        if not moved:
+            raise ValueError(f"cannot reach {budget} vertices while preserving seams and face orientation ({len(points)} remain)")
+        points = points.copy()
+        for i, v in moved.items():
+            points[i] = v
+        triangles = mapping[triangles]
+        valid = (triangles[:,0] != triangles[:,1]) & (triangles[:,1] != triangles[:,2]) & (triangles[:,0] != triangles[:,2])
+        used, triangles = np.unique(triangles[valid], return_inverse=True)
+        owners = np.searchsorted(used, mapping[owners])
+        points, triangles = points[used], triangles.reshape(-1, 3)
+    if len(points) < budget:
+        points, triangles = subdivide_long_edges(points, triangles, max_edge_m=0.070, max_vertices=budget)
+    points, triangles = improve_mesh_quality(points, triangles, source_points=source_points, iterations=10)
+    return points, triangles, owners
+
+
+def corner_owners(positions, source_faces, owners):
+    # Recolored looks can reorder or split render vertices at UV seams.
+    keys = [tuple(p) for p in np.round(positions, 7)]
+    result = {}
+    for face, values in zip(source_faces, owners):
+        corners = sorted((keys[v], int(owner)) for v, owner in zip(face, values))
+        key = tuple(p for p, _ in corners)
+        value = tuple(owner for _, owner in corners)
+        if result.setdefault(key, value) != value:
+            result[key] = None
+    return result
+
+
+def _closest_on_triangles(p, a, b, c):
+    """Ericson's closest point on each triangle row; returns the point and its barycentric coordinates."""
+    ab, ac, ap = b - a, c - a, p - a
+    d1, d2 = np.einsum("ij,ij->i", ab, ap), np.einsum("ij,ij->i", ac, ap)
+    bp = p - b
+    d3, d4 = np.einsum("ij,ij->i", ab, bp), np.einsum("ij,ij->i", ac, bp)
+    cp = p - c
+    d5, d6 = np.einsum("ij,ij->i", ab, cp), np.einsum("ij,ij->i", ac, cp)
+    va, vb, vc = d3 * d6 - d5 * d4, d5 * d2 - d1 * d6, d1 * d4 - d3 * d2
+    with np.errstate(divide="ignore", invalid="ignore"):
+        denom = va + vb + vc
+        v, w = vb / denom, vc / denom
+        bary = np.column_stack([1 - v - w, v, w])
+        t_ab, t_ac = d1 / (d1 - d3), d2 / (d2 - d6)
+        t_bc = (d4 - d3) / ((d4 - d3) + (d5 - d6))
+    cases = [((d1 <= 0) & (d2 <= 0), np.array([1, 0, 0])), ((d3 >= 0) & (d4 <= d3), np.array([0, 1, 0])),
+             ((d6 >= 0) & (d5 <= d6), np.array([0, 0, 1]))]
+    out = bary.copy()
+    edge = [((vc <= 0) & (d1 >= 0) & (d3 <= 0), lambda t: np.column_stack([1 - t, t, 0 * t]), t_ab),
+            ((vb <= 0) & (d2 >= 0) & (d6 <= 0), lambda t: np.column_stack([1 - t, 0 * t, t]), t_ac),
+            ((va <= 0) & (d4 - d3 >= 0) & (d5 - d6 >= 0), lambda t: np.column_stack([0 * t, 1 - t, t]), t_bc)]
+    done = np.zeros(len(p), bool)
+    for mask, corner in cases:
+        m = mask & ~done
+        out[m] = corner
+        done |= m
+    for mask, make, t in edge:
+        m = mask & ~done
+        if m.any():
+            out[m] = make(t[m])
+        done |= m
+    point = out[:, :1] * a + out[:, 1:2] * b + out[:, 2:] * c
+    return point, out
+
+
+def closest_surface_points(points, vertices, faces):
+    """Exact closest point on a triangle mesh: (face, barycentrics, distance) per query point."""
+    points, vertices, faces = np.asarray(points, float), np.asarray(vertices, float), np.asarray(faces)
+    tri = vertices[faces]
+    centers = tri.mean(1)
+    radius = np.linalg.norm(tri - centers[:, None], axis=2).max(1)
+    tree = cKDTree(centers)
+    _, near = tree.query(points, k=min(8, len(faces)))
+    near = near.reshape(len(points), -1)
+    best_face = np.zeros(len(points), int)
+    best_bary = np.zeros((len(points), 3))
+    best = np.full(len(points), np.inf)
+
+    def consider(rows, cand):
+        nonlocal best
+        q, bary = _closest_on_triangles(points[rows], tri[cand, 0], tri[cand, 1], tri[cand, 2])
+        d = np.linalg.norm(points[rows] - q, axis=1)
+        better = d < best[rows]
+        r = rows[better]
+        best[r], best_face[r], best_bary[r] = d[better], cand[better], bary[better]
+
+    every = np.arange(len(points))
+    for k in range(near.shape[1]):
+        consider(every, near[:, k])
+    # A triangle can be closer than its centroid suggests: test every one whose bounding sphere reaches the bound.
+    rmax = radius.max()
+    for i, cand in enumerate(tree.query_ball_point(points, best + rmax)):
+        cand = np.asarray(cand, int)
+        cand = cand[np.linalg.norm(centers[cand] - points[i], axis=1) - radius[cand] <= best[i]]
+        if len(cand):
+            consider(np.full(len(cand), i), cand)
+    return best_face, best_bary, best

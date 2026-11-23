@@ -32,7 +32,7 @@ typedef struct {
     const ClothFace *face;
     const ClothEdge *edge;
     const ClothTether *tether; /* Optional per-vertex path-length limit; pin = -1 on unattached islands. */
-    const float *anim_drive;   /* Optional per-vertex 0..1 AnimDrive weight mask. */
+    const float *drive;        /* Optional squared angular frequency (s^-2) of each vertex's spring to its target. */
 } ClothMesh;
 typedef struct {
     float a[3], b[3];
@@ -48,7 +48,6 @@ typedef struct {
     float max_edge_strain;    /* Fractional extension limit for warp edges during strain limiting. */
     int strain_passes;        /* Zero disables the optional one-sided projection. */
     float aero_drag;          /* Normal-to-surface aerodynamic drag (1/s). */
-    float anim_drive;         /* XPBD animation-drive stiffness (s^-2); 0 disables. */
     float weft_stretch_scale; /* 0 defaults to 1.0; >1 softens weft edges relative to stretch. */
     float diag_stretch_scale; /* 0 defaults to 1.0; >1 softens diagonal shear edges. */
     float weft_bend_scale;    /* 0 defaults to 1.0; >1 softens weft/diag hinges. */
@@ -57,7 +56,6 @@ typedef struct {
     float max_speed_mps;      /* 0 disables post-step velocity clamp. */
     float compression_limit;  /* 0..0.5 free edge shortening fraction before compression stiffness engages. */
     float reset_carry_range_m; /* Optional distance over which inner colliders support inherited seam displacement at reset. */
-    float support_drape;       /* 0..1 share of a hanging panel's blocked guide redirected around a scene support. */
 } ClothMaterial;
 /* Finite, one-sided face. The cross product half_u x half_v points out of the surface. */
 #define CLOTH_SUPPORT_PLANES 48
@@ -77,10 +75,11 @@ typedef struct {
     float angular_accel_y;      /* Root yaw acceleration around +Y (rad/s^2). */
     float linear_inertia;       /* 0..1 share of root linear inertia applied to cloth. */
     float angular_inertia;      /* 0..1 share of root yaw inertia applied to cloth. */
-    bool suppress_anim_drive;   /* When true, skips anim_drive for this substep (e.g. seated drape). */
     const ClothSupport *support; /* Optional scene surface in simulation space for this substep. */
     float anchor_shift_y;        /* Free-vertex translation inherited from seam motion before integration (m). */
 } ClothFrame;
+/* Skinned normal of a target (contact fallback), the radius a free vertex may stray from its target and how far it
+   may sink below the target along that normal. */
 typedef struct {
     float normal[3], travel, backstop;
 } ClothGuide;
@@ -91,13 +90,18 @@ typedef struct {
     float velocity[CLOTH_VERTICES][3];
     float stretch_lambda[CLOTH_EDGES], bend_lambda[CLOTH_EDGES];
     float anim_lambda[CLOTH_VERTICES];
+    /* Each free vertex's target after the last push out of the body and the support; the next push exits a
+       collider on the side this point was on, so a target that crosses a limb's axis does not flip sides. */
+    float target[CLOTH_VERTICES][3];
 } ClothState;
 typedef struct {
     float stretch, penetration, pin_error, speed;
     bool finite;
 } ClothMetrics;
 
-/* All points are in one Y-up meter space. Anchors and capsules must be sampled at substep end. */
+/* All points are in one Y-up meter space. Anchors and capsules must be sampled at substep end. A free vertex is driven
+   toward and bounded around its anchor, which the caller has pushed out of the body (cloth_push_targets); pins
+   follow their anchors. */
 bool cloth_frame_valid(const ClothMesh *mesh, const ClothMaterial *m, float dt,
                        const float anchors[][3], const ClothGuide *guide, const ClothCapsule *body, int count);
 void cloth_reset(ClothState *s, const ClothMesh *mesh, const float pose[][3]);
@@ -105,6 +109,11 @@ void cloth_reset(ClothState *s, const ClothMesh *mesh, const float pose[][3]);
 bool cloth_reset_supported(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
                            const float anchors[][3], const ClothGuide *guide,
                            const ClothCapsule *body, int count, const ClothSupport *support);
+/* Push the free vertices' skinned anchors out of the body capsules and then the support, in place: two
+   Gauss-Seidel passes with the contact margin, each exit on the side the last pushed target was on. Call it once
+   per pose sample; the steps between two samples interpolate the pushed targets. Pins keep their anchors. */
+void cloth_push_targets(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float anchors[][3],
+                        const ClothGuide *guide, const ClothCapsule *body, int count, const ClothSupport *support);
 /* NULL frame: an inertial frame without fictitious forces, ground plane or scene support. */
 void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,
                 const ClothFrame *frame, const float anchors[][3], const ClothGuide *guide,

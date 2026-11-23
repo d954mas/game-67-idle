@@ -14,100 +14,62 @@ target_link_libraries(game PRIVATE garment_cloth)
 Record the feature source and version from `feature.json` in the consuming
 game's `dependencies.json`.
 
+## Author the model
+
+The cook reads its contract from the garment GLB. Each piece is the set of vertices whose float attribute
+`_CLOTH_PIECE` holds the piece's number (any unique positive integer; 0 or no attribute is not cloth), across every
+primitive. `_CLOTH` is the piece's freedom: 0 is a pin that follows skinning and anchors the tethers, and a free
+vertex is driven toward its target at `drive_hz` x (1 - `_CLOTH`). A piece's border with any other part must be a pin,
+so the render seam is closed by construction. Skin weights reference the body's joints only. They are the cloth's
+target, the pose each free vertex is driven toward, and are authored like the weights of any skinned garment; the
+feature does not generate them.
+
+Put the feature's `tools/` on the authoring Python path. To paint `_CLOTH` and drop the garment joints:
+
+```python
+from garment_glb import Glb
+from garment_paint import baseline_freedom
+
+freedom = baseline_freedom(piece_points, piece_faces, seam_fraction=0.05, curve=(0.85, 0.42, 0.8), sewn=border)
+model = Glb(path)
+model.set_attribute(primitive, "_CLOTH", freedom)            # appended once, rewritten in place afterwards
+model.truncate_skin(len(body_joints))                         # garment joints must be the trailing nodes
+path.write_bytes(model.to_bytes())
+```
+
 ## Cook
 
-An item can point directly to a garment JSON file. Read it with
-`garment_asset.load_asset(path)`. An asset contains a nonempty `pieces` list
-with unique piece IDs and can define local body support profiles in `supports`.
-The host resolves the mesh, fabric and body profile for the piece. For example,
-a coat using one prepared skinned GLB primitive and a painted seam can use
-
-```json
-{"pieces":[{"id":"coat","surface":0,"pins":"_PINS","material":"wool","support":"torso","tether_slack":1.03}]}
-```
-
-For radii measured from a character mesh, pass rest-space points in meters,
-one joint name per point, and the authored body description to
-`garment_fit_capsules.fit_body_capsules(points, joints, body, shape)`.
-Each shape lists segments in contact order. Each segment names its two
-attachment joints, rest endpoints and joints whose vertices supply the fit.
-Several garments can reuse a body description and select their own fit.
-
-Put the feature's `tools/` on the authoring Python path. Supply meters,
-consistent triangle winding and zero-based indices. A slit has separate
-vertices on its two free sides. A sewn region shares vertices. The cooker
-uses NumPy during the build. `cook_mesh` returns one piece's mesh arrays, and
-`garment_blob.encode` writes an outfit's pieces as one blob:
+`garment_cook.cook_outfit` builds each piece's simulation proxy from the outer sheet of its `source_material`
+primitive, interpolates `_CLOTH` and the weights onto it, and writes the blob. `bind_outfit` binds the render
+vertices of the model, or of another model wearing the same garment, to the proxy, and `stage_model` adds the
+`_GARMENT` attribute the shader reads:
 
 ```python
-from garment_blob import encode
-from garment_cook import cook_mesh
+from garment_cook import bind_outfit, cook_outfit, depfile_text, stage_model
 
-mesh = cook_mesh("coat", rest_positions, triangles, pinned_indices, wearable=True, tether_slack=1.03)
-# bones: (joint name, row-major 3x4 inverse bind matrix) pairs; influences index into them.
-piece = dict(id="coat", mesh=mesh, bones=bones,
-             vertices=dict(bone=influences, weight=weights, normal=normals, travel=travel_m, backstop=backstop_m),
-             material=dict(density=0.24, stretch=1e-5, bend=0.4, drag=2.0, thickness=0.003, iterations=6),
-             colliders=[(bone_a, bone_b, point_a, point_b, radius_m, radius_b_m, 0)], render_vertices=count)
-blob_path.write_bytes(encode("coat", [piece], owned_joints=["CoatBack"]))
+piece = dict(id="coat", piece=1, source_material="cloth", outer_surface=None, budget=240, drive_hz=1.9, swing=0.33,
+             material=dict(density=0.24, stretch=1e-5, bend=0.4, drag=2.0, thickness=0.003, iterations=2),
+             colliders=[("Hips", [-0.07, 0.9, 0], "Hips", [0.07, 0.9, 0], 0.09, 0.0, 0)],
+             linear_inertia=0.45, angular_inertia=0.35, downward_follow=0.85)
+blob, sheets, report = cook_outfit("coat", Glb(path), [piece], body_joints)
+staged_path.write_bytes(stage_model(Glb(path), bind_outfit(Glb(path), sheets, body_joints)))
+depfile_path.write_text(depfile_text(blob_path, inputs))
 ```
 
-Use `wearable=True` for attached items. Every connected piece must have a
-pin and the garment needs a movable vertex. Free test sheets can use the
-default. Invalid winding, repeated or degenerate triangles, out-of-bounds
-indices and capacity overflows fail the cook. `encode` checks every value the
-solver trusts and fails with the outfit, piece and field it rejects; the solver
-asserts only the blob's structure at load. Write the blob under the build
-directory with the input assets, `garment_cook.py` and `garment_blob.py` listed
-as build dependencies, and add it to the pack with `nt_builder_add_blob`. Tools
-read a blob back with `garment_blob.decode`. For a distinct render mesh, use
-`garment_binding.bind_surface(points, faces, render_points, max_distance)`.
-When two seam lips coincide in the rest pose, pass `face_candidates` with the
-allowed simulation face indices per render vertex to preserve the side
-assignment as the seam opens.
+`swing` is the travel radius per metre of fabric to the nearest pin and `backstop_per_m` how far below its target, along the skinned normal, a free vertex may sink per metre. Colliders are round cones in rest model space,
+the margin is the fabric thickness, and flag 1 marks an outside obstacle. The report lists, per piece, the free
+proxy vertices that already lie inside their own colliders at rest. The cook refuses a lost label, a label no
+recipe piece names, `_CLOTH` off a piece or on a free border, and weights outside the body rig; `garment_blob.encode`
+checks every value the solver trusts and names the outfit, piece and field it rejects. Add the blob to the pack with
+`nt_builder_add_blob`; tools read it back with `garment_blob.decode`.
 
-When the render and simulation surfaces share source vertex indices, use
-`garment_binding.pack_indexed_surface(vertex_count, pins, palette_offset)`
-for the packed vertex-frame stream. Pins keep their ordinary skinning and
-each free vertex follows its own simulation vertex, including at coincident
-slit edges. The offset counts preceding pieces' simulation vertices.
+For radii measured from a character mesh, pass rest-space points in meters, one joint name per point, and the
+authored body description to `garment_fit_capsules.fit_body_capsules(points, joints, body, shape)`.
 
-`tether_slack=1.0` limits each reachable free vertex to the rest edge-path
-length to its nearest attachment. `1.03` adds three percent allowance.
-Omit the argument or pass `None` to disable tethers. Unpinned components
-remain free. Body contact runs after tethers and may leave residual extension
-when the two constraints conflict.
-
-## Author keyframes
-
-### Drive a mask from a clip
-
-This four-vertex panel keeps its top edge fixed. The local correction moves
-the lower edge outward by 2 cm at tick 4 and fades to zero at tick 8.
-
-```python
-import numpy as np
-from garment_keyframes import normal_offsets, vertex_map
-
-panel = np.array([[0, 1, 0], [1, 1, 0], [0, 0, 0], [1, 0, 0]], dtype=float)
-travel_m = vertex_map([0, 0, 0.04, 0.04], len(panel))
-offsets_m = normal_offsets([{
-    "weights": [0, 0, 1, 1], "offset_m": 0.02,
-    "keys": [[0, 0], [4, 1], [8, 0]],
-}], panel, count=9)
-```
-
-The painted
-weights and activation values range from 0 to 1. For a spatial patch,
-supply `center_m` and three positive `radii_m`. Patch contributions add,
-and a negative `offset_m` reverses the displacement direction. Each
-activation key and patch amplitude uses a finite real scalar. A patch can
-start or end active at the corresponding clip boundary. For an
-authored full-surface pose, call `authored_track(keys, count, panel, faces,
-load_obj, directory)`. Its first and last keys cover ticks 0 and
-`count - 1`. Each key contains `tick` and either `vertices_m` or `obj`.
-For OBJ keys the loader takes a path and returns positions and ordered
-triangles matching the proxy. The result has shape `(count, vertices, 3)`.
+`cook_mesh` remains the low-level step for one surface: invalid winding, repeated or degenerate triangles,
+out-of-bounds indices and capacity overflows fail it, and `wearable=True` requires a pin on every connected piece.
+`tether_slack=1.0` limits each reachable free vertex to the rest edge-path length to its nearest pin; `1.03` adds
+three percent. Body contact runs after tethers and may leave residual extension when the two conflict.
 
 ## Load a cooked outfit
 
@@ -137,9 +99,7 @@ if (winner != outfit->winner) {
 
 A blob payload only needs 4-byte alignment; engine blob payloads have at least
 the alignment of `malloc`. An outfit cooked without cloth views as NULL, so
-track whether its blob is in by the winner, not by the view. A set's
-`owned_joints` lists the skin joints the cloth drives, which other secondary
-motion should leave alone.
+track whether its blob is in by the winner, not by the view.
 
 ## Simulate
 
@@ -189,14 +149,11 @@ world basis and keep the offset relative to the transformed center. Leave the
 count at zero for a rectangular support.
 
 At spawn or teleport, the solver resolves overlaps toward the nearest face.
-It also checks mesh edges that cross the object between two endpoints.
-Leave the material's `support_drape` at zero when the ordinary contact already
-lays the piece over the object. For long fabric whose animated guide would pull
-it through the object, use a weight from zero to one. The blocked guide moves
-toward the rim on its animated side and recovers its hanging length from its
-sewn attachment. A reachable guide above the object keeps its animated pose.
-Fabric can slide off the edge and swing back underneath. Zero depth represents
-a one-sided sheet.
+It also checks mesh edges that cross the object between two endpoints. A free
+vertex's target inside the object leaves it through the face it entered by, after
+the body capsules, so the drive never pulls fabric into the seat. Fabric can
+slide off the edge and swing back underneath. Zero depth represents a one-sided
+sheet.
 The low-level solver accepts the same face in simulation coordinates through
 `cloth_reset_supported` and `ClothFrame.support`.
 
