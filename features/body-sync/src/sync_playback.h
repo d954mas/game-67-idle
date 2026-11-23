@@ -178,6 +178,7 @@ typedef struct sync_play {
     bool at_rest;
     bool frozen;
     bool jumped; /* its timeline jumped this tick */
+    bool early;  /* playback time is before its first snapshot: held there, no moment of it */
 } sync_play_t;
 
 void sync_playback_sample(const sync_playback_t *p, uint16_t slot, sync_play_t *out);

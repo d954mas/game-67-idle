@@ -114,6 +114,17 @@ void stand_metrics_playback(stand_metrics_t *metrics, uint32_t guest, double lag
     metrics->jump_max[guest] = jump > metrics->jump_max[guest] ? jump : metrics->jump_max[guest];
 }
 
+void stand_metrics_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m) {
+    if (guest >= metrics->guests || !isfinite(correction_m)) {
+        return;
+    }
+    if (correction_m > 2.0) {
+        metrics->snaps[guest]++;
+        return;
+    }
+    metrics->jump_max[guest] = correction_m > metrics->jump_max[guest] ? correction_m : metrics->jump_max[guest];
+}
+
 void stand_metrics_response(stand_metrics_t *metrics, uint32_t guest, double ticks) {
     if (guest < metrics->guests && isfinite(ticks)) {
         stand_hist_add(&metrics->response[guest], ticks);

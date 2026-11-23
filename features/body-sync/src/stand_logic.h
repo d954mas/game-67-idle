@@ -222,6 +222,8 @@ void stand_metrics_jerk(stand_metrics_t *metrics, uint32_t guest, double jerk_m)
    move since the last tick, and whether a render offset was giving a move back meanwhile. */
 void stand_metrics_playback(stand_metrics_t *metrics, uint32_t guest, double lag_m, double path_m, double behind_ticks, bool moved,
                             double drawn_move_m, double owner_move_m, bool offset_active);
+/* A predicted copy's drawn move that its own step does not explain: into jump.max. */
+void stand_metrics_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m);
 void stand_metrics_end_tick(stand_metrics_t *metrics);
 /* The second layer's measures (body_sync_metrics.h "local response", "rest"). */
 void stand_metrics_response(stand_metrics_t *metrics, uint32_t guest, double ticks);

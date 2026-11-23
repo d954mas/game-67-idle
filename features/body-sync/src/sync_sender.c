@@ -246,6 +246,9 @@ uint32_t sync_sender_write(sync_sender_t *s, uint8_t seat, bool sim, uint8_t *bu
         const sync_body_input_t *in = &s->inputs[slot];
         sync_record_t r = in->state;
         r.slot = slot;
+        if (in->replay_seat == seat) {
+            r.origin = (sync_origin_t){.relayed = true, .seat = seat, .age = in->replay_tick};
+        }
         r.at_rest = in->asleep;
         r.sim = sim || in->asleep;
         r.rare.groups = pending_groups(b);

@@ -246,10 +246,50 @@ static void test_what_a_hit_is(void) {
     TEST_ASSERT_TRUE(sync_soft_hit(&soft, v, w, gravity));
 }
 
+/* Compared at event time, the pull closes the aligned error, not the gap to the owner's older pose
+   now; a gross aligned error is left alone; a placement adds the error to the present pose. */
+static void test_the_pull_at_event_time(void) {
+    sync_soft_enter(&soft, false, 0);
+    at(0.0f);
+    owner_at(-0.8f, false); /* the owner's playback pose lies behind, in this copy's past */
+    in.aligned = true;
+    in.aligned_error[0] = 0.05f; /* at the same event time the owner was 5 cm ahead */
+    decide(false);
+    TEST_ASSERT_EQUAL(SYNC_SOFT_VELOCITY, out.action);
+    TEST_ASSERT_TRUE_MESSAGE(out.velocity[0] > 0.0f, "the copy was steered back toward the older pose");
+    in.aligned_error[0] = SYNC_SOFT_SNAP_M + 0.5f;
+    decide(false);
+    /* A differing outcome goes to a pose the owner's body had, never to this side's plus the error. */
+    TEST_ASSERT_EQUAL_MESSAGE(SYNC_SOFT_PLACE, out.action, "a differing outcome was not set on the playback pose");
+    NEAR(1e-4, -0.8f, out.position[0]);
+    TEST_ASSERT_TRUE_MESSAGE(soft.apart, "a copy set on the playback pose was still compared at event time");
+    sync_soft_enter(&soft, false, 0);
+    at(2.0f);
+    owner_at(0.0f, false);
+    in.aligned = true;
+    in.aligned_error[0] = 0.3f;
+    /* A long pull at event time is this side's simulation against the host's: not placed while
+       the owner moves; once it rests, placed at this copy's own pose plus the error. */
+    for (uint32_t i = 0; i <= 2u * SYNC_SOFT_STALL_TICKS; i++) {
+        decide(false);
+        TEST_ASSERT_NOT_EQUAL_MESSAGE(SYNC_SOFT_PLACE, out.action, "a long pull at event time was placed while its owner moved");
+    }
+    in.owner_rests = true;
+    decide(false);
+    TEST_ASSERT_EQUAL(SYNC_SOFT_PLACE, out.action);
+    NEAR(1e-4, 2.3f, out.position[0]);
+    in.aligned = false;
+    in.waiting = true;
+    decide(false);
+    TEST_ASSERT_EQUAL_MESSAGE(SYNC_SOFT_NONE, out.action, "a copy with nothing to compare yet was moved");
+    in.waiting = false;
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_dead_zone_and_hysteresis);
     RUN_TEST(test_the_pause);
+    RUN_TEST(test_the_pull_at_event_time);
     RUN_TEST(test_a_held_touch_lets_the_pull_run_after_a_chain);
     RUN_TEST(test_the_pull_and_its_limits);
     RUN_TEST(test_a_stalled_pull_is_placed);

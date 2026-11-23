@@ -428,7 +428,7 @@ static void test_create_refuses_limits_too_wide_for_the_wire(void) {
     ok = body_sync_create(&config);
     TEST_ASSERT_NOT_NULL(ok);
     body_sync_destroy(ok);
-    TEST_ASSERT_EQUAL_STRING("real 0.7.0", body_sync_implementation());
+    TEST_ASSERT_EQUAL_STRING("real 0.7.1", body_sync_implementation());
 }
 
 /* A carried body and a character move with velocity zero (teleported each step), yet they go
@@ -733,14 +733,15 @@ static uint32_t forge(uint16_t slot, float x, uint8_t origin, uint8_t age) {
     return sync_packet_finish(&w);
 }
 
-/* The host takes no relayed record from a guest, and a guest none that names the host or
-   itself: either would let a peer drive another's timeline. */
+/* The host takes no relayed record from a guest, and a guest none that names the host: either
+   would let a peer drive another's timeline. One naming the guest itself is the host's replay of
+   that guest's throw, played on the host's own timeline. */
 static void test_a_forged_relay_is_refused(void) {
     tick_all();
     uint32_t size = forge(0, 1.0f, OTHER, 3);
     TEST_ASSERT_EQUAL(BODY_SYNC_FORMAT, body_sync_receive_state(host.sync, GUEST, tick_no, packet, size));
     size = forge(0, 1.0f, GUEST, 3);
-    TEST_ASSERT_EQUAL(BODY_SYNC_FORMAT, body_sync_receive_state(guest.sync, BODY_SYNC_SEAT_HOST, tick_no, packet, size));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_state(guest.sync, BODY_SYNC_SEAT_HOST, tick_no, packet, size));
     size = forge(0, 1.0f, OTHER, 3);
     TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_state(guest.sync, BODY_SYNC_SEAT_HOST, tick_no, packet, size));
 }
@@ -1058,7 +1059,7 @@ static void test_a_copy_taking_flight_is_placed_not_swept(void) {
         tick_all();
     }
     b3Vec3 at = b3Body_GetPosition(guest.bodies[5]);
-    b3Body_SetTransform(guest.bodies[5], (b3Vec3){at.x, at.y, at.z + 0.8f}, b3Quat_identity); /* this side's prediction */
+    b3Body_SetTransform(guest.bodies[5], (b3Vec3){at.x, at.y, at.z + 0.4f}, b3Quat_identity); /* this side's prediction */
     b3Body_SetAwake(host.bodies[5], true);
     b3Body_SetLinearVelocity(host.bodies[5], (b3Vec3){0.0f, 0.0f, -8.0f}); /* away from its neighbours along x */
     bool driven = false;
@@ -1224,11 +1225,14 @@ static void test_a_hit_pauses_the_pull(void) {
     for (int i = 0; i < 3; i++) {
         tick_driving((b3Vec3){0.0f, 0.0f, 0.0f}, &asleep);
     }
-    float away = apart(host.bodies[0], guest.bodies[0]);
-    TEST_ASSERT_TRUE_MESSAGE(away > 0.05f, "the hit did not move the copy");
+    TEST_ASSERT_TRUE_MESSAGE(fabsf(b3Body_GetPosition(guest.bodies[0]).x) > 0.05f, "the hit did not move the copy");
+    /* The host moves its body aside meanwhile: a pull would draw the copy toward it. */
+    b3Vec3 at = b3Body_GetPosition(guest.bodies[0]);
+    b3Body_SetTransform(host.bodies[0], (b3Vec3){at.x, at.y, at.z + 0.3f}, b3Quat_identity);
+    b3Body_SetLinearVelocity(host.bodies[0], (b3Vec3){0.0f, 0.0f, 0.0f});
     for (int i = 0; i < 15; i++) {
         tick_driving((b3Vec3){0.0f, 0.0f, 0.0f}, &asleep);
-        TEST_ASSERT_TRUE_MESSAGE(apart(host.bodies[0], guest.bodies[0]) > 0.5f * away, "the pull ran inside the pause");
+        TEST_ASSERT_TRUE_MESSAGE(b3Body_GetPosition(guest.bodies[0]).z < 0.1f, "the pull ran inside the pause");
     }
     for (int i = 0; i < 240; i++) {
         tick_all();

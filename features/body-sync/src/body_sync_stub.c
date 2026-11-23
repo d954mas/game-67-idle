@@ -53,7 +53,7 @@ struct body_sync {
     char error[128];
 };
 
-const char *body_sync_implementation(void) { return "stub 0.7.0"; }
+const char *body_sync_implementation(void) { return "stub 0.7.1"; }
 
 const char *body_sync_traffic_kind_name(body_sync_traffic_kind_t kind) {
     static const char *names[] = {"header", "copy", "sim", "held", "authority"};

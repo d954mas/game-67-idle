@@ -13,7 +13,9 @@
      head       slot 10 bits, generation low SYNC_GEN_BITS, sim 1, rest 1, rare 1, relayed 1
      origin     relayed only: the owner seat 2, the age SYNC_RELAY_AGE_BITS (host ticks between taking
                 that owner's state and this packet's tick: the record plays on the owner's
-                timeline at packet tick - age; an older state is not relayed)
+                timeline at packet tick - age; an older state is not relayed). A record naming
+                the receiving seat itself is the host's replay of that seat's own throw: its age
+                is the low bits of the thrower's own tick of the step the record shows
      pose       copy: position on a 1/512 m grid, rotation smallest three at 9 bits
                 sim:  position on a 1/4096 m grid, rotation smallest three at 15 bits
      motion     sim and not at rest: velocity on a 1/32 m/s grid in [-max_speed, max_speed],

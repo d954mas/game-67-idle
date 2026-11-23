@@ -34,6 +34,7 @@ enum {
 _Static_assert(BODY_SYNC_ACTIVITY_PUNCH <= 255, "a character's activity is one data byte");
 #define REST_SPEED 0.05f
 #define REST_OFFSET_M 0.001f
+#define REST_OFFSET_RAD 0.002f /* about a tenth of a degree */
 #define REST_MOVE_M 1e-4 /* a tenth of a millimetre: no eye sees it, above a pose's float noise */
 #define REST_STILL REST_SPEED /* a body this slow rests though awake (a pile against a character), as for the run's end */
 #define RESPONSE_M 0.01f /* the host's move that makes a hit real */
@@ -69,6 +70,11 @@ typedef struct owner_ring {
 typedef struct copy_track {
     body_sync_id_t id;
     bool valid;
+    /* A predicted copy: its physics pose after the last step and after this apply, and the render
+       offset then; what the seam moved it beyond its own step is its visible correction. */
+    bool self_valid;
+    uint32_t ticks_at; /* the endpoint's ticks run then: measured across exactly one */
+    float stepped[3], applied[3], offset_at[3];
     uint8_t owner;
     bool offset; /* a render offset was set */
     double played; /* owner tick */
@@ -932,6 +938,8 @@ static void after_apply(body_sync_stand_t *st, endpoint_t *ep) {
         if ((body_sync_flags(ep->sync, stand_world_id(w, slot)) & KNOCK_FLAG) != 0) {
             s->knocked = true;
         }
+        float rot[4];
+        pose_of(ep, slot, ep->tracks[slot].applied, rot);
     }
     stand_character_t *c = &ep->character;
     if (c->held && !body_sync_is_local(ep->sync, c->held)) {
@@ -1020,7 +1028,10 @@ static void endpoint_tick(body_sync_stand_t *st, endpoint_t *ep) {
             body_sync_set_peer_tick(ep->sync, seat, coop_session_peer_tick(ep->session, seat));
         }
     }
-    body_sync_apply(ep->sync, k);
+    /* The seam counts in the tick its state packets carry: the host names a replayed step by
+       the thrower's own tick (README "Replayed throws"). */
+    uint32_t seam_tick = coop_session_tick(ep->session);
+    body_sync_apply(ep->sync, seam_tick);
     after_apply(st, ep);
     act(st, ep, k);
     if (is_host_ep(ep)) {
@@ -1033,7 +1044,7 @@ static void endpoint_tick(body_sync_stand_t *st, endpoint_t *ep) {
     note_hits(st, ep);
     record_owner(ep, coop_session_tick(ep->session)); /* the tick its state packets carry */
     impacts(st, ep);
-    body_sync_collect(ep->sync, k);
+    body_sync_collect(ep->sync, seam_tick);
     send_all(st, ep);
     coop_session_end_tick(ep->session);
     ep->ticks_run++;
@@ -1473,6 +1484,38 @@ static void sample_layer(body_sync_stand_t *st) {
     }
 }
 
+/* A predicted copy's visible correction this tick: the seam's move at the apply (a placement)
+   plus the change of its render offset, which together are the drawn move its own step does not
+   explain. True when the copy is predicted (and so not measured against its owner's playback). */
+static bool sample_predicted(body_sync_stand_t *st, endpoint_t *ep, uint32_t e, uint32_t slot, body_sync_id_t id) {
+    copy_track_t *t = &ep->tracks[slot];
+    stand_slot_t *s = &ep->world->slots[slot];
+    body_sync_authority_t a;
+    bool predicted = s->live && s->desc.motion != BODY_SYNC_MOTION_STATIC && !body_sync_is_local(ep->sync, id) && body_sync_is_predicted(ep->sync, id) &&
+                     body_sync_authority(ep->sync, id, &a) && a.seat < st->endpoints && (e == 0) != (a.seat == 0);
+    if (!predicted) {
+        t->self_valid = false;
+        return false;
+    }
+    float here[3], rot[4], offset[3], turn[4];
+    pose_of(ep, slot, here, rot);
+    body_sync_render_offset(ep->sync, id, offset, turn);
+    if (t->self_valid && t->id == id && ep->ticks_run == t->ticks_at + 1u) {
+        float c[3];
+        for (int i = 0; i < 3; i++) {
+            c[i] = t->applied[i] - t->stepped[i] + offset[i] - t->offset_at[i];
+        }
+        stand_metrics_correction(&st->metrics, e == 0 ? (uint32_t)a.seat - 1u : e - 1u, (double)sqrtf(c[0] * c[0] + c[1] * c[1] + c[2] * c[2]));
+    }
+    t->id = id;
+    t->valid = false;
+    t->self_valid = true;
+    t->ticks_at = ep->ticks_run;
+    memcpy(t->stepped, here, sizeof(here));
+    memcpy(t->offset_at, offset, sizeof(offset));
+    return true;
+}
+
 /* Every copy that its owner sends to directly, against that owner's own path. */
 static void sample_playback(body_sync_stand_t *st) {
     for (uint32_t e = 0; e < st->endpoints; e++) {
@@ -1486,7 +1529,12 @@ static void sample_playback(body_sync_stand_t *st) {
             body_sync_id_t id = stand_world_id(ep->world, slot);
             body_sync_authority_t a;
             double played = 0.0;
-            /* A predicted copy (the second layer) is not its playback: the layer's measures watch it. */
+            /* A predicted copy (the second layer) is not its playback: its own step explains its
+               move, and what the seam did to it besides (a placement, an offset's release) is
+               its correction. */
+            if (sample_predicted(st, ep, e, slot, id)) {
+                continue;
+            }
             bool counts = s->live && s->desc.motion != BODY_SYNC_MOTION_STATIC && !body_sync_is_local(ep->sync, id) && !body_sync_is_predicted(ep->sync, id) &&
                           body_sync_authority(ep->sync, id, &a) && a.seat < st->endpoints && (e == 0) != (a.seat == 0) &&
                           st->ep[a.seat].built && body_sync_playback(ep->sync, id, &played);
@@ -1664,13 +1712,16 @@ static bool world_at_rest(const stand_world_t *w) {
     return true;
 }
 
-/* A copy whose render offset still slides it is still moving on screen. */
+/* A copy whose render offset still slides or turns it is still moving on screen. */
 static bool drawn_at_rest(const endpoint_t *ep) {
     for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
         const stand_slot_t *s = &ep->world->slots[slot];
         float offset[3], turn[4];
-        if (s->live && s->desc.motion != BODY_SYNC_MOTION_STATIC && body_sync_render_offset(ep->sync, stand_world_id(ep->world, slot), offset, turn) &&
-            offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2] > REST_OFFSET_M * REST_OFFSET_M) {
+        if (!s->live || s->desc.motion == BODY_SYNC_MOTION_STATIC || !body_sync_render_offset(ep->sync, stand_world_id(ep->world, slot), offset, turn)) {
+            continue;
+        }
+        float w = fabsf(turn[3]) < 1.0f ? fabsf(turn[3]) : 1.0f;
+        if (offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2] > REST_OFFSET_M * REST_OFFSET_M || 2.0f * acosf(w) > REST_OFFSET_RAD) {
             return false;
         }
     }

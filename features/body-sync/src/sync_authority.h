@@ -159,8 +159,10 @@ typedef enum sync_hold_kind {
     SYNC_HOLD_DRIVEN = 0, /* kinematic, driven to the playback pose (sync_drive_reachable) */
     SYNC_HOLD_CORRECTED,  /* dynamic, the owner's velocity plus a bounded correction (sync_drive_dynamic) */
     SYNC_HOLD_SOFT,       /* dynamic, simulated here and pulled softly (sync_soft.h) */
+    SYNC_HOLD_REPLAY,     /* dynamic, the owner's flight simulated here from its state (sync_replay.h) */
 } sync_hold_kind_t;
-/* CORRECTED as holds_dynamic says. SOFT on a guest with the layer on (`light`: class LIGHT and
+/* REPLAY where holds_dynamic says and the owner's newest state flies it: held until settled,
+   no holder. CORRECTED for the rest of holds_dynamic. SOFT on a guest with the layer on (`light`: class LIGHT and
    mass at most light_mass_max) for a body of another seat with no holder, no settled hold (not
    in flight) and not kinematic at its owner. DRIVEN otherwise: heavy copies, characters, held
    and flying bodies stay as 0.6.0 holds them. */

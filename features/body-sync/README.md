@@ -96,7 +96,7 @@ left carried falls where it is.
 
 ## The real seam
 
-Five parts decide; the Box3D shell (`src/body_sync_real.c`) only reads bodies,
+Seven parts decide; the Box3D shell (`src/body_sync_real.c`) only reads bodies,
 calls them and moves bodies as they say. None of the parts includes Box3D
 (`body_sync_types.h` holds the seam's plain types), so their tests run alone.
 
@@ -112,6 +112,12 @@ calls them and moves bodies as they say. None of the parts includes Box3D
   a velocity estimated from its last two poses.
 - **Playback** (`sync_playback`): where each copy is drawn and how it is held;
   see "Playback" below.
+- **Replay** (`sync_replay`): the host's replay of a guest's throw, and the
+  rounding of the thrown body to the wire at its release; see "Replayed throws"
+  below.
+- **Policy** (`sync_policy`): when a body a side simulates goes back to the
+  host, the one handover the caller does not ask for (a flight at its first
+  hit). Another policy replaces these two files alone.
 - **Authority** (`sync_authority`): claims, answers, releases, forced moves,
   the reliable records, shared with the stub; also where each body's state
   goes and in which record kind, when a settled hold ends, what a holder
@@ -204,7 +210,9 @@ the staleness bound
 needs room for at least one record after the characters, and that minimum
 gives it. A guest's bodies reach the other guests one tick after the host took
 them, stamped with their age. One real seam takes about 2.7 MB (1.4 MB of it the
-playback buffer) and a stub about 400 KB, fixed at create. The capacity a caller passes is what the transport carries
+playback buffer) and a stub about 400 KB, fixed at create; a guest with the layer
+on also keeps every body's states for 64 ticks to compare at event time, about
+6.5 MB more. The capacity a caller passes is what the transport carries
 after its own prefix: `coop_session_state_max`, which is the link's
 `max_unreliable` minus the session's header. The seam's reliable records go
 on their own lane and are not in the budget; on the stand's heaviest scenes a
@@ -295,6 +303,7 @@ starved body shows as a catch-up the render offset or a dynamic hold smooths
   to 4.61 m against 4.54 m, a heavy one stopping the character at 0.70 m
   against 0.69 m). A body local again continues from the newest state received;
   one already local keeps its own velocities.
+- **A replayed throw** (host only) is the third way; see "Replayed throws".
 - **The speed cap.** A copy is never driven faster than `max_speed` or turned
   faster than `max_spin`: a pose it cannot reach in one step (a teleport, a
   jump of the timeline, a starved body whose next snapshot is many ticks ahead)
@@ -316,6 +325,82 @@ starved body shows as a catch-up the render offset or a dynamic hold smooths
   caller may change the rest of a copy's filters and add shapes meanwhile.
   Bind refuses a body of more than 4 shapes then. `body_sync_playback` reports the owner tick a copy shows,
   for measurement.
+
+## Replayed throws
+
+A body a guest throws or drops (a hold until settled, no holder, not kinematic
+there) flies free until its first hit, and that flight follows from one state.
+So the host does not show it through the playback delay and a catch-up
+correction: from the first flight state it receives (the release, or the next
+one when that packet was lost) it places its own body there once, with that
+state's velocity and spin, and simulates it freely (`src/sync_replay.h`). A
+resting pile is the same in both worlds, so the same start gives the same impact
+and outcome, a fixed shift later (the host's step h replays the owner's step
+h - shift; 0 ticks of delay at RTT 0 on the stand, 3 at 100 ms).
+Nothing is integrated ahead and nothing is cast: a throw that lands before the
+host hears of it starts there from the guest's free-flight pose all the same.
+
+- **Same bits.** The guest's own body takes the value its record carries at the
+  release (sim grid: 1/4096 m, 1/32 m/s, 1/16 rad/s), at no other tick. The
+  replayed flight then equals the thrower's to the bit (measured 0.0000 m). A
+  rest pose is not rounded: rounding at every sleep moved the pile's rest
+  divergence 0.105 to 0.107 m and raised `load_overflow`'s steps from 8-12 to
+  18-20.
+- **Checks, not steering.** Later flight records are compared with the host's
+  own pose after the step they map to; off by more than 25 cm (the guest's body
+  met something the host lacks) the replay restarts from that record, the
+  render offset taking the move. After the host's body touched a non-static
+  body nothing is checked: that outcome is the host's.
+- **Awake before the hit.** Within the reach the second layer's marking uses
+  (its travel in three steps plus 5 cm) the replayed body wakes what it may hit:
+  a sleeping island struck by an awake body joins the solver a step late, which
+  gave the host another impact (the ball left the pile at 9.5 m/s against the
+  guest's 4.0 m/s in `layer_pile`).
+- **Handover.** The flight's first hit returns it to the host (`sync_policy`);
+  the host keeps its own simulation, which ran the same flight, and never
+  resumes from the guest's older state.
+- **Others.** While it replays, the host sends its own body to the other guests
+  on its timeline, so they see it meet what it hits when that moves, and to the
+  thrower, which times its own events by it ("Event time" below).
+- **The thrower's own tick.** A record of the replay to its thrower names that
+  seat in its relayed origin, and its 6-bit age carries the low bits of the
+  thrower's own tick of the step the record shows. The thrower takes the newest
+  of its ticks with those bits (the record came back within a round trip of
+  it), so its event lag is the host's tick minus its own, whatever the two
+  clocks' offset. Past a measured round trip of 48 ticks (800 ms) the bits no
+  longer name one step; the lag is not taken and the copies keep the pause and
+  the pull. The seam's tick is the one its state packets carry
+  (`body_sync_apply`), as the host names steps by it.
+- **Back to the thrower as a copy.** After the hand-back the thrower's body is
+  a soft copy that keeps its own simulation, the same flight the host replayed:
+  it is never driven along the host's older path, and until the playback
+  reaches the replay's first snapshot there is nothing to compare, so it waits.
+  The replay's records carry the thrower's own flight hold and authority and do
+  not set the copy's. Once a claim is granted, a state the owner sent before the
+  grant is never filed (it once put the thrown ball back at its spawn, 2 m away,
+  at its first hit).
+
+With the layer off the throws are replayed for every guest too, and the
+thrower's copies follow the host's playback as before: `pile_throw`'s
+divergence max went 2.78 to 1.11 m, `edge_throw_cut`'s 4.15 to 1.00 m. Its
+`lag_divergence_max` reads 0.60 m (2.14 before): a replayed body is measured
+against its owner at the replayed step's own tick (`body_sync_playback`); against
+the delayed playback tick it read 4.44 m, the replay's lead over a clock that
+the 3 s cut had stopped.
+
+Measured at RTT 0 and 100 ms, jitter 0 and 20 ms with 2% loss: the thrown body
+meets its target at the same speed on both sides (`layer_pile` 11.98 m/s,
+`openspace_pile` 11.77, `openspace_wall` 8.93; before, the host's copy arrived
+at 15.6 and 16.7 m/s behind its catch-up), and the body it hits moves at the
+same speed within 7% (`openspace_*` within 1%; before, 6.3 against 4.1 m/s).
+
+What still differs at RTT 0: in the first step of the woken island the host's
+pile sags 2 mm (Box3D solves a woken island's contacts a step late) while the
+guest's soft copies, dynamic since the marking, do not; and kinematic copies in
+the rest hold share no contacts, so the guest's copies meet the impact without
+the host's warm-started impulses. The marking walks kinematic copies within
+2 cm of each other, so the whole resting heap turns soft at once, as the host's
+island wakes whole.
 
 The stand's host rule grants a guest's grab within the reach plus 1 m of slack
 (`STAND_CLAIM_SLACK_M`): the host sees the claimant's character one way plus the
@@ -367,8 +452,23 @@ A soft copy is steered to the owner's playback pose:
   the host's older pose, then follows the host once its answer plays. A chain of
   pauses runs at most 60 ticks; a touch held longer no longer pauses until a
   tick without one.
-- **Snap.** Past 1 m from the owner's pose it is placed, the render offset
-  taking the jump.
+- **Event time.** After this side's own throw the host's snapshots of what it
+  set going run behind this side's event time by the replay's shift, which the
+  thrower learns from the replay's own records ("The thrower's own tick"
+  above). For 300 ticks after the last of them a soft copy is compared with its
+  own state at the event time the playback shows, less what the layer itself
+  changed since (no correction is applied twice), and the error is added to it
+  now: it is never steered back along its own path. That holds with the owner
+  still too, since an owner still at playback time may be one the host has yet
+  to hit. A long pull there places nothing until the owner rests: its error is
+  this side's simulation against the host's, not a pinned body. An error past
+  1 m means the outcomes differ (the host's character in the path): the copy
+  snaps to the playback pose, a pose the host's body had, and follows the
+  playback, compared now, until its owner rests. The state history this takes
+  is 64 ticks, kept on a guest with the layer only; past it (a round trip near
+  800 ms) the copy keeps the pause and the pull.
+- **Snap.** Past 1 m from the owner's pose, outside a pause, it is placed, the
+  render offset taking the jump.
 - **Dead zone.** It is pulled only past 1 cm or 2 degrees, and the pull stops
   under half of each.
 - **Pull.** `v += 0.3 * (v_owner + clamp(error / 0.25 s, 2 m/s) - v)`, spin
@@ -378,6 +478,9 @@ A soft copy is steered to the owner's playback pose:
 - **Flight.** While the owner moves it at 4 m/s or more it is driven
   kinematic along the owner's path, soft again under 1 m/s; the change to
   driven is a placement, never a sweep that would bat the soft copies near it.
+  A copy this side set going (in its pause, or within a known event lag, its own
+  thrown body handed back included) is its own prediction of that motion and is
+  not driven.
 
 Going back to the rest hold inside the dead zone sets the copy on the pose
 exactly; further off it is placed and the offset takes it. The layer never
@@ -597,9 +700,14 @@ sends to directly, at the owner tick P the copy shows (`body_sync_playback`):
 a cut corner free of any time shift), `step.count` (ticks where the drawn move
 exceeds 1.25 times the owner's move over the same playback interval plus
 1 cm, counted in body-ticks; those while the copy's render offset gives a
-move back are `offset_step.count`, a slide by design), `jump.max` (the drawn
-move less the owner's, largest), `snap.count` (drawn moves past 2 m, the
-offset's reach, not counted as jumps) and `behind_ticks` (max, p95: how many
+move back are `offset_step.count`, a slide by design), `jump.max` (the
+visible correction, largest: the drawn move less the owner's; for a flight the
+host replays P is the replayed step's own tick, so a replay running ahead of the
+playback is no jump; for a predicted copy, which no playback explains, the
+seam's own move of it at the apply plus the change of its render offset, the
+part of its drawn move its own step did not make), `snap.count` (drawn moves
+past 2 m, the offset's reach, not counted as jumps) and `behind_ticks` (max,
+p95: how many
 owner ticks a copy plays behind its owner's newest; a frozen or late clock shows
 here). A check of a playback metric on a guest with no copy measured fails: no
 sample is no evidence. Each scenario says which of its bounds are derived and
@@ -663,7 +771,14 @@ counted, limits too wide refuse create, a take-over keeps the drawn pose while
 physics continues from the newest state, a copy is never driven past
 `max_speed`, and a relayed state carries its age and stops past 63 ticks. Every scenario, must-fail case and
 the two-process run is a test on each implementation (`test_body_sync_stub_*`
-for the stub). `test_body_sync_logic` (core) parses every shipped scenario, refuses a corpus
+for the stub). `test_body_sync_replay` (core) runs the replay's start, shift, checks,
+restart and landing, rounding at a release only, the policy, the history
+between ticks and the ledger of the layer's own corrections.
+`test_body_sync_throw` (core) throws into `pile60` on the stand at 0 and
+100 ms (the ball meets the pile at the same speed within 1%, the body it hits
+moves at the same speed within 10%) and at 600 ms, where the ball lands before
+the host hears of the throw and sinks no deeper than when heard at once.
+`test_body_sync_logic` (core) parses every shipped scenario, refuses a corpus
 of broken lines with their line numbers, fuzzes the parser (truncations, bit
 flips, random bytes), and checks the schedule, the host rules' verdicts, the
 stand's records (round trip, direction, truncation, bounds, random bytes),
@@ -721,7 +836,11 @@ words `rate` and `expect moved`, the playback metrics and schema
 `body_sync_is_predicted`, `body_sync_is_layer_copy`, `body_sync_round_trip`,
 the scenario word `light_mass`, `expect moved ...
 layer <length>`, the CLI and viewer flag `--light-mass`, and the layer
-metrics. A MAJOR changes a call, a struct layout, the
+metrics; 0.7.1 the replayed throw, rounding to the wire at a release, the
+event-time comparison, the thrower's own tick in the age of a relayed record
+naming its receiver, and the seam's tick read as the packets' tick (behaviour
+only: no call or field change; a record naming its receiver was refused before,
+so no older peer sends one). A MAJOR changes a call, a struct layout, the
 meaning of a result, a scenario statement or the metrics schema name.
 The real seam and the stub keep one contract and differ in
 `body_sync_implementation()`; neither one's wire format is a compatibility

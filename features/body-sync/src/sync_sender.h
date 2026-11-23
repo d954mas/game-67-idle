@@ -72,6 +72,11 @@ typedef struct sync_body_input {
     bool held;
     bool flying;
     bool asleep;
+    /* The seat that gets this record as the host's replay of its own throw (an origin naming that
+       seat), BODY_SYNC_SEATS_MAX for none, and the low SYNC_RELAY_AGE_BITS of that seat's own
+       tick of the step this record shows, carried in its age. */
+    uint8_t replay_seat;
+    uint8_t replay_tick;
     sync_record_t state;
 } sync_body_input_t;
 

@@ -22,3 +22,7 @@ expect result throw done
 expect result catch granted
 expect agree_at_rest 5cm
 expect no_stuck
+# Derived: a copy's visible correction in a tick (its drawn move less its owner's at the same
+# event time, or less its own step for a predicted copy) is at most a render offset's release,
+# 0.15 of at most 2 m: 0.3 m. A placement the offset does not take shows as its whole move.
+expect jump.max <= 0.3m

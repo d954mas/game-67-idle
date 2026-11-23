@@ -84,8 +84,15 @@ typedef struct body_sync_config {
        Resting, it is held exactly on its owner's pose like any copy. Its owner still judges it:
        nothing of a soft copy is sent, and nothing on the wire changes. A push by a body the seam
        does not bind moves a copy here only: the host never learns of it, so the pull takes it
-       back once the pause chain ends. Each guest may use its
-       own knob; the host ignores it, and so does the stub. */
+       back once the pause chain ends. After this side's own throw a soft copy is compared with
+       its own state at the event time its playback shows and corrected in the present, never
+       steered back along its own path. Each guest may use its own knob; the host ignores it,
+       and so does the stub.
+
+       Independent of the knob, on the real seam: the host simulates a guest's thrown or dropped
+       body (held until settled) from the first flight state received instead of playing it
+       back; the thrower's body takes its record's rounded state at the release, and every
+       side's body takes its rest record's pose as it falls asleep. */
     float light_mass_max;
 } body_sync_config_t;
 
@@ -94,7 +101,7 @@ typedef struct body_sync_config {
    262144 m/s, max_spin below 524288 rad/s), its state_budget has no room for one widest record
    per seat and one more (the real one's staleness bound needs a record after the characters,
    counted as one a seat: more characters a seat need a budget with room for them),
-   or memory is short. All memory is taken here: the real seam about 2.7 MB, the stub about
+   or memory is short. All memory is taken here: the real seam about 8 MB, the stub about
    400 KB. */
 body_sync_t *body_sync_create(const body_sync_config_t *config);
 /* Puts back the mask bits it took off LIGHT copies (character_category); everything else a
@@ -102,8 +109,8 @@ body_sync_t *body_sync_create(const body_sync_config_t *config);
    Destroy the seam before its world. */
 void body_sync_destroy(body_sync_t *sync);
 
-/* The linked implementation and its version, for logs and metrics: "real 0.7.0" or
-   "stub 0.7.0". */
+/* The linked implementation and its version, for logs and metrics: "real 0.7.1" or
+   "stub 0.7.1". */
 const char *body_sync_implementation(void);
 
 /* Text of the last INVALID or FORMAT this seam returned, "" before any. */
@@ -240,7 +247,10 @@ body_sync_result_t body_sync_receive_state(body_sync_t *sync, uint8_t seat, uint
 /* One reliable seam record from `seat` (a claim, a release, an authority announcement). */
 body_sync_result_t body_sync_receive_record(body_sync_t *sync, uint8_t seat, uint32_t tick, const uint8_t *data, uint32_t size);
 
-/* Before the step: copies are moved toward their poses for `tick` (how, buffer or none, is the
+/* `tick` here and at collect is this side's own tick, the one its state packets carry
+   (coop_session_tick): the host names the steps of a replayed throw to its thrower by it.
+
+   Before the step: copies are moved toward their poses for `tick` (how, buffer or none, is the
    implementation's), authority changes received so far take effect, and a body that became
    local continues from its newest state as body_sync_is_local says. */
 void body_sync_apply(body_sync_t *sync, uint32_t tick);
@@ -288,8 +298,9 @@ void body_sync_pop_record(body_sync_t *sync, uint8_t seat);
 bool body_sync_render_offset(const body_sync_t *sync, body_sync_id_t id, float position[3], float rotation[4]);
 
 /* Measurement: the owner's tick a copy shows now, in that owner's tick count; for a local body
-   the endpoint's own last collect tick. False when unknown. The stub reports the tick of the
-   newest state received. */
+   the endpoint's own last collect tick; for a flight the host replays, the owner's tick of the
+   step it just simulated (its collect tick less the replay's shift), not the playback's older
+   one. False when unknown. The stub reports the tick of the newest state received. */
 bool body_sync_playback(const body_sync_t *sync, body_sync_id_t id, double *owner_tick);
 
 /* Measurement: true for a copy this side simulates itself now and pulls toward its owner (the

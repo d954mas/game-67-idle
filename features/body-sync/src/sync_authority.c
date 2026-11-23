@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "sync_authority.h"
+#include "sync_policy.h"
 
 static bool newer16(uint16_t a, uint16_t b) { return (int16_t)(uint16_t)(a - b) > 0; }
 
@@ -568,12 +569,12 @@ bool sync_authority_holds_dynamic(const sync_authority_t *a, const sync_authorit
 }
 
 sync_hold_kind_t sync_authority_hold_kind(const sync_authority_t *a, const sync_authority_body_t *b, bool owner_kinematic, bool light) {
-    if (sync_authority_holds_dynamic(a, b, owner_kinematic)) {
-        return SYNC_HOLD_CORRECTED;
-    }
     /* A copy's holder and hold are its owner's, as last received. */
     body_sync_id_t holder = b->has_in ? b->in_holder : b->holder;
     uint8_t hold = b->has_in ? b->in_hold : b->hold;
+    if (sync_authority_holds_dynamic(a, b, owner_kinematic)) {
+        return b->has_in && holder == BODY_SYNC_ID_NONE && hold == BODY_SYNC_HOLD_UNTIL_SETTLED ? SYNC_HOLD_REPLAY : SYNC_HOLD_CORRECTED;
+    }
     bool free = holder == BODY_SYNC_ID_NONE && hold != BODY_SYNC_HOLD_UNTIL_SETTLED;
     if (light && !sync_authority_is_host(a) && !sync_authority_local(a, b) && free && !owner_kinematic) {
         return SYNC_HOLD_SOFT;
@@ -583,7 +584,11 @@ sync_hold_kind_t sync_authority_hold_kind(const sync_authority_t *a, const sync_
 
 bool sync_authority_settle(sync_authority_t *a, body_sync_id_t id, bool asleep, bool touched_moving) {
     sync_authority_body_t *b = sync_authority_body(a, id);
-    if (!b || !sync_authority_local(a, b) || b->hold != BODY_SYNC_HOLD_UNTIL_SETTLED || !(asleep || touched_moving)) {
+    if (!b || !sync_authority_local(a, b)) {
+        return false;
+    }
+    sync_policy_in_t in = {.hold = b->hold, .asleep = asleep, .touched_body = touched_moving};
+    if (!sync_policy_returns(&in)) {
         return false;
     }
     sync_authority_settled(a, id);

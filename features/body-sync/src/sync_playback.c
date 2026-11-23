@@ -445,6 +445,7 @@ void sync_playback_sample(const sync_playback_t *p, uint16_t slot, sync_play_t *
     }
     if (last < 0) {
         hold(&b->snapshots[0], out);
+        out->early = true;
         return;
     }
     const sync_snapshot_t *s0 = &b->snapshots[last];
