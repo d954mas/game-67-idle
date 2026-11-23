@@ -179,7 +179,7 @@ bool stub_wire_read_state(const uint8_t *data, uint32_t size, uint32_t seats, co
         b->number = get_u16(f + 1);
         b->hold = f[3];
         b->holder = get_u32(f + 4);
-        if (b->seat >= seats || b->hold > 1 || (b->holder != 0 && !id_ok(b->holder))) {
+        if (b->seat >= seats || b->hold > STUB_HOLD_MAX || (b->holder != 0 && !id_ok(b->holder))) {
             return fail(error, error_size, "authority out of range");
         }
         b->data_size = f[8];
@@ -292,7 +292,7 @@ bool stub_wire_read_record(const uint8_t *data, uint32_t size, uint32_t seats, b
             return fail(error, error_size, "holder or forced out of range");
         }
     }
-    if (out->hold > 1) {
+    if (out->hold > STUB_HOLD_MAX) {
         return fail(error, error_size, "hold out of range");
     }
     return true;

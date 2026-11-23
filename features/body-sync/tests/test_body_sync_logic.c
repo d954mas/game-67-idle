@@ -332,6 +332,33 @@ static void test_unseen_delays_are_unbounded(void) {
     free(r);
 }
 
+/* A driven body's rest by its window: a copy-grid step a quarter second (closed in one tick at
+   0.2 m/s) rests; a drive kept at 6 cm/s, a centimetre's snap in one tick and a turn past a step
+   in one tick do not. */
+static void test_a_driven_body_rests_by_its_window(void) {
+    stand_drive_t d;
+    float speed, spin;
+    memset(&d, 0, sizeof(d));
+    for (uint32_t i = 0; i < 120; i++) {
+        stand_drive_note(&d, i % STAND_DRIVE_TICKS == 0 ? 0.0034f / STAND_DT : 0.0f, 0.0f);
+        stand_drive_motion(&d, STAND_DT, &speed, &spin);
+        TEST_ASSERT_TRUE_MESSAGE(speed < 0.05f && spin < 0.5f, "a step of the copy grid read as motion");
+    }
+    memset(&d, 0, sizeof(d));
+    for (uint32_t i = 0; i < STAND_DRIVE_TICKS; i++) {
+        stand_drive_note(&d, 0.06f, 0.0f);
+    }
+    stand_drive_motion(&d, STAND_DT, &speed, &spin);
+    TEST_ASSERT_TRUE_MESSAGE(speed >= 0.05f, "a drive kept above the rest speed read as rest");
+    memset(&d, 0, sizeof(d));
+    stand_drive_note(&d, 0.01f / STAND_DT, 0.0f);
+    stand_drive_motion(&d, STAND_DT, &speed, &spin);
+    TEST_ASSERT_TRUE_MESSAGE(speed >= 0.05f, "a centimetre's snap read as rest");
+    stand_drive_note(&d, 0.0f, 0.04f / STAND_DT);
+    stand_drive_motion(&d, STAND_DT, &speed, &spin);
+    TEST_ASSERT_TRUE_MESSAGE(spin >= 0.5f, "a turn past a step in one tick read as rest");
+}
+
 static void test_histogram_quantiles(void) {
     stand_hist_t *h = calloc(1, sizeof(*h));
     for (int i = 1; i <= 1000; i++) {
@@ -407,7 +434,7 @@ static void test_json_is_complete_and_repeatable(void) {
 static void test_catalog_validates_and_broken_scenes_are_refused(void) {
     uint32_t count = 0;
     const body_sync_scene_entry_t *catalog = body_sync_scene_catalog(&count);
-    TEST_ASSERT_EQUAL_UINT32(9, count);
+    TEST_ASSERT_EQUAL_UINT32(10, count);
     body_sync_error_t error;
     for (uint32_t i = 0; i < count; i++) {
         catalog[i].build(&scene);
@@ -503,6 +530,7 @@ int main(void) {
     RUN_TEST(test_records_round_trip_and_refuse);
     RUN_TEST(test_new_forms_are_read);
     RUN_TEST(test_unseen_delays_are_unbounded);
+    RUN_TEST(test_a_driven_body_rests_by_its_window);
     RUN_TEST(test_histogram_quantiles);
     RUN_TEST(test_json_is_complete_and_repeatable);
     RUN_TEST(test_catalog_validates_and_broken_scenes_are_refused);

@@ -92,9 +92,7 @@ static void build_stack10(body_sync_scene_t *s) {
     add_player(s, 3.0f, 0.0f, -HALF_PI);
 }
 
-static void build_pile60(body_sync_scene_t *s) {
-    body_sync_scene_reset(s, "pile60");
-    add_floor(s);
+static void add_pile60(body_sync_scene_t *s) {
     int n = 0;
     for (int y = 0; y < 3; y++) {
         for (int x = 0; x < 5; x++) {
@@ -106,9 +104,29 @@ static void build_pile60(body_sync_scene_t *s) {
             }
         }
     }
+}
+
+static void build_pile60(body_sync_scene_t *s) {
+    body_sync_scene_reset(s, "pile60");
+    add_floor(s);
+    add_pile60(s);
     add_sphere(s, "ball", 0.15f, 2.0f, -0.6f, 0.15f, 0.0f, BODY_SYNC_BODY_GRABBABLE, 5);
     add_player(s, -3.0f, -2.0f, HALF_PI);
     add_player(s, -1.6f, 0.0f, HALF_PI);
+}
+
+/* pile60 for three agents at once: two throwers on its south and north sides, each with a ball
+   in reach, and two players west of it on the line a runner takes through its middle. */
+static void build_pile60_four(body_sync_scene_t *s) {
+    body_sync_scene_reset(s, "pile60_four");
+    add_floor(s);
+    add_pile60(s);
+    add_sphere(s, "ball_s", 0.15f, 2.0f, 2.0f, 0.15f, -1.8f, BODY_SYNC_BODY_GRABBABLE, 5);
+    add_sphere(s, "ball_n", 0.15f, 2.0f, 2.0f, 0.15f, 1.8f, BODY_SYNC_BODY_GRABBABLE, 5);
+    add_player(s, -3.0f, -1.5f, HALF_PI);
+    add_player(s, 2.0f, -2.7f, 0.0f);
+    add_player(s, 2.0f, 2.7f, 2.0f * HALF_PI);
+    add_player(s, -3.0f, 1.5f, HALF_PI);
 }
 
 static void build_cabinet_mug(body_sync_scene_t *s) {
@@ -225,6 +243,7 @@ static const body_sync_scene_entry_t catalog[] = {
     {"breakables", "glass and a box with contents: spawns, removals, slot generations", build_breakables},
     {"load300", "300 bodies and four players: the load ceiling", build_load300},
     {"wall_boxes", "floor and wall, a crate and six light boxes at the wall's foot: a bounce into light bodies", build_wall_boxes},
+    {"pile60_four", "pile60 with four players and two balls: two throws at once and a runner", build_pile60_four},
 };
 
 const body_sync_scene_entry_t *body_sync_scene_catalog(uint32_t *count) {

@@ -53,7 +53,7 @@ struct body_sync {
     char error[128];
 };
 
-const char *body_sync_implementation(void) { return "stub 0.7.0"; }
+const char *body_sync_implementation(void) { return "stub 0.8.0"; }
 
 const char *body_sync_traffic_kind_name(body_sync_traffic_kind_t kind) {
     static const char *names[] = {"header", "copy", "sim", "held", "authority"};
@@ -613,6 +613,20 @@ bool body_sync_playback(const body_sync_t *s, body_sync_id_t id, double *owner_t
 bool body_sync_is_predicted(const body_sync_t *s, body_sync_id_t id) {
     (void)s;
     (void)id;
+    return false;
+}
+
+bool body_sync_is_pull_paused(const body_sync_t *s, body_sync_id_t id) {
+    (void)s;
+    (void)id;
+    return false;
+}
+
+bool body_sync_lost_take(const body_sync_t *s, body_sync_id_t id, uint32_t *count, float *hand_back_m) {
+    (void)s;
+    (void)id;
+    *count = 0;
+    *hand_back_m = 0.0f;
     return false;
 }
 

@@ -112,13 +112,33 @@ bool sync_receiver_store(sync_receiver_t *r, uint8_t from, uint32_t tick, const 
         memset(b->angular, 0, sizeof(b->angular));
     }
     sync_rare_t rare = record->rare;
+    /* Groups merged from a newer record are newer than these: every group still unacknowledged
+       when that record went out went out in it again. */
+    bool rare_newer = !same_sender || tick_newer(tick, b->rare_tick);
     b->newest = *record;
     b->has = true;
     b->fresh = true;
     b->from = from;
     b->tick = tick;
     b->ordered = true;
-    keep_rare(b, &rare);
+    if (rare_newer) {
+        b->rare_tick = tick;
+        keep_rare(b, &rare);
+    }
+    b->newest.rare = b->rare;
+    return true;
+}
+
+bool sync_receiver_merge_rare(sync_receiver_t *r, uint8_t from, uint32_t tick, const sync_record_t *record) {
+    if (record->slot >= BODY_SYNC_BODIES_MAX) {
+        return false;
+    }
+    sync_received_t *b = &r->bodies[record->slot];
+    if (!b->has || !b->ordered || b->from != from || !tick_newer(tick, b->rare_tick)) {
+        return false;
+    }
+    b->rare_tick = tick;
+    keep_rare(b, &record->rare);
     b->newest.rare = b->rare;
     return true;
 }

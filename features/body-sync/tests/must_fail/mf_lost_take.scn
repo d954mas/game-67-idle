@@ -1,0 +1,19 @@
+# Two guests throw into one pile on one tick: some of their takes lose while their claims wait,
+# so a bound no hand-back can meet must fail.
+scenario mf_lost_take
+scene pile60_four
+seed 71
+guests 2
+end 6s
+light_mass 20kg
+authority interaction
+
+net g1 rtt 100ms jitter 20ms loss 2%
+net g2 rtt 100ms jitter 20ms loss 2%
+
+p1 grab ball_s as a1
+p2 grab ball_n as a2
+at 1200ms p1 throw 2 0.3 -0.1 speed 8 as t1
+at 1200ms p2 throw 2 0.3 0.1 speed 8 as t2
+
+expect lost_takes.max <= 0.001m

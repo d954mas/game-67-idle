@@ -27,6 +27,9 @@ typedef struct sync_received {
     /* Rare groups are sticky: the last value of each group received stays until replaced. */
     uint8_t known;
     sync_rare_t rare;
+    /* The sender's tick of the newest record whose groups are kept: ahead of `tick` after a
+       merge without the pose (sync_receiver_merge_rare). */
+    uint32_t rare_tick;
 } sync_received_t;
 
 /* Host: what each guest last declared about a body it sends, in its own tick order. */
@@ -67,6 +70,12 @@ sync_intake_t sync_receiver_host_intake(sync_receiver_t *r, uint8_t seat, uint32
 /* One decoded record from `from` stamped `tick`. False (stale) when that sender's same or a
    newer tick already arrived for the body; nothing of a stale record is kept. */
 bool sync_receiver_store(sync_receiver_t *r, uint8_t from, uint32_t tick, const sync_record_t *record);
+/* Only the record's rare groups, for a body this side simulates while its claim waits: the
+   sender counts every group a packet carried as known once the packet arrived and does not send
+   it again unchanged, so a group dropped here would stay unknown. The stored pose stays. False
+   (nothing kept) for a record not newer than the groups kept, or with no ordered state of that
+   sender to order it against. */
+bool sync_receiver_merge_rare(sync_receiver_t *r, uint8_t from, uint32_t tick, const sync_record_t *record);
 
 typedef enum sync_copy_move {
     SYNC_COPY_HOLD = 0, /* stop where it is */

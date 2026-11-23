@@ -260,8 +260,156 @@ static void test_the_world_hash_sees_what_it_names(void) {
     free(b);
 }
 
+/* The lag-aligned gap sees a sync that shows its owner a tick early and a guest that draws its own
+   bodies off what it sends: each planted from the start of a run whose bound holds without it. */
+static body_sync_stand_t *run_planted(const char *text, uint32_t shift, float drift) {
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(text, strlen(text), &scenario, &error), error.text);
+    scene_named(scenario.scene)->build(&scene);
+    body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+    body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
+    TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
+    stand_testing_plant_shift(stand, shift);
+    stand_testing_plant_drift(stand, drift);
+    body_sync_stand_run(stand);
+    return stand;
+}
+
+
+static uint32_t aligned_line(body_sync_stand_t *stand) {
+    const body_sync_report_t *r = body_sync_stand_report(stand);
+    return r->checks[r->check_count - 1].line;
+}
+
+/* Walking characters, played as copies both ways. The host's corrected copy of a walking guest
+   trails its target by up to a tick of the walk (3.6 m/s: 6 cm); the bound adds a quarter. */
+static const char *walk_aligned_text = "scenario planted\nscene two_chars_item\nseed 7\nguests 1\nsettle 3s\nnet g1 rtt 100ms jitter 10ms loss 2%\n"
+                                       "p0 walk 2 1\np0 wait 500ms\np0 walk -2 0\np1 walk -2 -1 speed 2.5\np1 walk 2 0\n"
+                                       "expect aligned_gap.max <= 7.5cm\n";
+/* A pile the guest owns by interaction, which the host shows: measured p95 10 cm clean, 19 cm
+   with the guest drawing its bodies 10 cm off. */
+static const char *pile_aligned_text = "scenario planted\nscene pile60\nseed 52\nguests 1\nend 8s\nlight_mass 20kg\nauthority interaction\n"
+                                       "net g1 rtt 100ms jitter 20ms loss 2%\np1 grab ball\np1 wait 300ms\np1 throw pile31 speed 12\n"
+                                       "expect aligned_gap.p95 <= 15cm\n";
+
+static void test_aligned_gap_fails_on_states_shown_a_tick_early(void) {
+    body_sync_stand_t *clean = run_planted(walk_aligned_text, 0, 0.0f);
+    body_sync_stand_t *shifted = run_planted(walk_aligned_text, 1, 0.0f);
+    TEST_ASSERT_TRUE(body_sync_stand_report(clean)->passed);
+    fails(shifted, aligned_line(shifted), "aligned_gap.max");
+    body_sync_stand_destroy(clean);
+    body_sync_stand_destroy(shifted);
+}
+
+static void test_aligned_gap_fails_on_a_guest_drawing_its_bodies_off_what_it_sends(void) {
+    body_sync_stand_t *clean = run_planted(pile_aligned_text, 0, 0.0f);
+    body_sync_stand_t *drifted = run_planted(pile_aligned_text, 0, 0.1f);
+    TEST_ASSERT_TRUE(body_sync_stand_report(clean)->passed);
+    fails(drifted, aligned_line(drifted), "aligned_gap.p95");
+    body_sync_stand_destroy(clean);
+    body_sync_stand_destroy(drifted);
+}
+
+/* A move of a body the guest simulates that its own step did not make, and a copy knocked off
+   its rest once the world rested: each planted at the end of a tick of a run whose bound holds
+   without it. */
+static body_sync_stand_t *run_jolted(const char *text, uint32_t tick, float metres, bool local) {
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(text, strlen(text), &scenario, &error), error.text);
+    scene_named(scenario.scene)->build(&scene);
+    body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+    body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
+    TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
+    stand_testing_plant_jolt(stand, tick, metres, local);
+    body_sync_stand_run(stand);
+    return stand;
+}
+
+static const char *owned_pile_text = "scenario planted\nscene pile60\nseed 52\nguests 1\nend 6s\nlight_mass 20kg\nauthority interaction\n"
+                                     "net g1 rtt 100ms jitter 20ms loss 2%\np1 grab ball\np1 wait 300ms\np1 throw pile31 speed 12\n"
+                                     "expect local_correction.max <= 1cm\n";
+static const char *resting_pile_text = "scenario planted\nscene pile60\nseed 52\nguests 1\nend 6s\nlight_mass 20kg\n"
+                                       "net g1 rtt 100ms jitter 20ms loss 2%\np1 wait 100ms\nexpect rest_breaks.count <= 0\n";
+
+static void test_local_correction_fails_on_a_seam_move_of_a_local_body(void) {
+    body_sync_stand_t *clean = run_jolted(owned_pile_text, 0, 0.0f, true);
+    body_sync_stand_t *jolted = run_jolted(owned_pile_text, 60, 0.05f, true);
+    TEST_ASSERT_TRUE(body_sync_stand_report(clean)->passed);
+    fails(jolted, aligned_line(jolted), "local_correction.max");
+    body_sync_stand_destroy(clean);
+    body_sync_stand_destroy(jolted);
+}
+
+static void test_rest_breaks_fails_on_a_copy_knocked_after_rest(void) {
+    body_sync_stand_t *clean = run_jolted(resting_pile_text, 0, 0.0f, false);
+    body_sync_stand_t *jolted = run_jolted(resting_pile_text, 240, 0.05f, false);
+    TEST_ASSERT_TRUE(body_sync_stand_report(clean)->passed);
+    fails(jolted, aligned_line(jolted), "rest_breaks.count");
+    body_sync_stand_destroy(clean);
+    body_sync_stand_destroy(jolted);
+}
+
+/* A held copy of a pile kept awake by the heroine standing in it, churned back and forth by 4 mm
+   every other tick: each return is under one tick's snap (a step of the copy grid closed at
+   once), but kept up it is motion, and the driven body's rest window must see it. One such
+   return alone is the grid's step and rests. */
+static const char *standing_pile_text = "scenario planted\nscene pile60\nseed 53\nguests 1\nend 14s\nlight_mass 20kg\n"
+                                        "net g1 rtt 100ms jitter 20ms loss 2%\np1 walk 0.5 0\np1 walk 3.6 0 speed 2.5\nexpect rest_breaks.count <= 0\n";
+static void test_rest_breaks_fails_on_a_held_copy_churned_in_steps(void) {
+    body_sync_error_t error;
+    body_sync_stand_t *runs[2];
+    for (int k = 0; k < 2; k++) {
+        TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(standing_pile_text, strlen(standing_pile_text), &scenario, &error), error.text);
+        scene_named(scenario.scene)->build(&scene);
+        body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+        runs[k] = body_sync_stand_create(&config, &error);
+        TEST_ASSERT_NOT_NULL_MESSAGE(runs[k], error.text);
+        stand_testing_plant_jitter(runs[k], 700, 0.004f, 2, k == 0 ? 1u : 30u);
+        body_sync_stand_run(runs[k]);
+    }
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_stand_report(runs[0])->passed, "one step's return broke the rest");
+    fails(runs[1], aligned_line(runs[1]), "rest_breaks.count");
+    body_sync_stand_destroy(runs[0]);
+    body_sync_stand_destroy(runs[1]);
+}
+
+/* A guest walks through the pile, its boxes the host's copies under the second layer; her copy of
+   a box in her path held kinematic is a stall the sync added (the local reference pushes it
+   aside), and the pace check must see it. */
+static const char *pace_text = "scenario planted\nscene pile60\nseed 53\nguests 1\nsettle 5s\nlight_mass 20kg\n"
+                               "net g1 rtt 100ms jitter 20ms loss 2%\np1 walk 0.5 0\np1 walk 3.6 0 speed 2.5 as run\nexpect pace run\n";
+static void test_pace_fails_on_a_copy_held_in_the_walkers_path(void) {
+    body_sync_error_t error;
+    body_sync_stand_t *runs[2];
+    for (int k = 0; k < 2; k++) {
+        TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(pace_text, strlen(pace_text), &scenario, &error), error.text);
+        scene_named(scenario.scene)->build(&scene);
+        body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+        runs[k] = body_sync_stand_create(&config, &error);
+        TEST_ASSERT_NOT_NULL_MESSAGE(runs[k], error.text);
+        /* The pile's near face, two boxes high across her path: pile0..3 and pile20..23. */
+        for (int b = 0; k == 1 && b < 8; b++) {
+            char name[16];
+            snprintf(name, sizeof(name), "pile%d", b < 4 ? b : 16 + b);
+            stand_testing_plant_wall(runs[k], 1, name);
+        }
+        body_sync_stand_run(runs[k]);
+    }
+    const body_sync_report_t *clean = body_sync_stand_report(runs[0]);
+    TEST_ASSERT_TRUE_MESSAGE(clean->passed, clean->checks[0].detail);
+    fails(runs[1], aligned_line(runs[1]), "behind the reference");
+    body_sync_stand_destroy(runs[0]);
+    body_sync_stand_destroy(runs[1]);
+}
+
 int main(void) {
     UNITY_BEGIN();
+    RUN_TEST(test_pace_fails_on_a_copy_held_in_the_walkers_path);
+    RUN_TEST(test_local_correction_fails_on_a_seam_move_of_a_local_body);
+    RUN_TEST(test_rest_breaks_fails_on_a_copy_knocked_after_rest);
+    RUN_TEST(test_rest_breaks_fails_on_a_held_copy_churned_in_steps);
+    RUN_TEST(test_aligned_gap_fails_on_states_shown_a_tick_early);
+    RUN_TEST(test_aligned_gap_fails_on_a_guest_drawing_its_bodies_off_what_it_sends);
     RUN_TEST(test_agree_fails_on_a_body_only_a_guest_has);
     RUN_TEST(test_agree_fails_on_a_body_a_guest_lacks);
     RUN_TEST(test_agree_fails_on_a_moved_copy);

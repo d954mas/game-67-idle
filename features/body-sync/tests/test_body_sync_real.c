@@ -6,6 +6,7 @@
 #include "features/body_sync/body_sync.h"
 #include "stub_wire.h"
 #include "sync_codec.h"
+#include "box3d/constants.h"
 #include "sync_soft.h"
 #include "unity.h"
 
@@ -31,6 +32,17 @@ static int box3d_asserts;
 static float max_speed = 100.0f; /* a test may rebuild the sides with another */
 static float light_mass = 0.0f;  /* the second layer, for the tests that rebuild with it on */
 static uint64_t character_category = 0; /* for the tests that rebuild with one */
+static body_sync_authority_mode_t authority_mode = BODY_SYNC_AUTHORITY_HOST;
+/* Velocities a test holds on bodies of a side, set after its apply as a game would. */
+typedef struct drive {
+    struct side *side;
+    uint32_t body;
+    b3Vec3 v;
+} drive_t;
+static drive_t drives[4];
+static uint32_t drive_count;
+static bool lose_guest_fates; /* the guest's packets arrive, but it hears each lost */
+static uint32_t playback_delay = 1; /* ticks; the harness delivers every packet in its tick */
 static const body_sync_id_t ID0 = 1u << 16;
 
 static int count_assert(const char *condition, const char *file, int line) {
@@ -64,9 +76,10 @@ static void build(side_t *s, uint8_t seat) {
                                  .max_speed = max_speed,
                                  .light_mass_max = light_mass,
                                  .character_category = character_category,
+                                 .authority = authority_mode,
                                  .max_spin = 200.0f,
-                                 .delay_min = 1, /* the harness delivers every packet in its tick */
-                                 .delay_max = 1};
+                                 .delay_min = playback_delay,
+                                 .delay_max = playback_delay};
     s->sync = body_sync_create(&config);
     TEST_ASSERT_NOT_NULL(s->sync);
     for (uint32_t i = 0; i < BODIES; i++) {
@@ -85,6 +98,8 @@ static void build(side_t *s, uint8_t seat) {
 void setUp(void) {
     b3SetAssertFcn(count_assert);
     box3d_asserts = 0;
+    drive_count = 0;
+    lose_guest_fates = false;
     build(&host, BODY_SYNC_SEAT_HOST);
     build(&guest, GUEST);
     build(&other, OTHER);
@@ -130,7 +145,7 @@ static void state(side_t *from, side_t *to) {
         uint16_t n = from->numbers[to->seat]++;
         body_sync_state_sent(from->sync, to->seat, n);
         if (fate_delay == 0 || fate_count == 256) {
-            body_sync_resolve(from->sync, to->seat, n, true);
+            body_sync_resolve(from->sync, to->seat, n, !(lose_guest_fates && from == &guest));
         } else {
             fates[fate_count].from = from;
             fates[fate_count].seat = to->seat;
@@ -152,6 +167,11 @@ static void records(side_t *from, side_t *to) {
 
 static void step(side_t *s) {
     body_sync_apply(s->sync, tick_no);
+    for (uint32_t k = 0; k < drive_count; k++) {
+        if (drives[k].side == s) {
+            b3Body_SetLinearVelocity(s->bodies[drives[k].body], drives[k].v);
+        }
+    }
     b3World_Step(s->world, 1.0f / 60.0f, 4);
     body_sync_collect(s->sync, tick_no);
 }
@@ -189,6 +209,11 @@ static float speed_of(b3BodyId body) {
 
 static float apart(b3BodyId a, b3BodyId b) {
     b3Vec3 p = b3Body_GetPosition(a), q = b3Body_GetPosition(b);
+    return sqrtf((p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y) + (p.z - q.z) * (p.z - q.z));
+}
+
+static float apart_from(b3BodyId body, b3Vec3 q) {
+    b3Vec3 p = b3Body_GetPosition(body);
     return sqrtf((p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y) + (p.z - q.z) * (p.z - q.z));
 }
 
@@ -428,7 +453,7 @@ static void test_create_refuses_limits_too_wide_for_the_wire(void) {
     ok = body_sync_create(&config);
     TEST_ASSERT_NOT_NULL(ok);
     body_sync_destroy(ok);
-    TEST_ASSERT_EQUAL_STRING("real 0.7.0", body_sync_implementation());
+    TEST_ASSERT_EQUAL_STRING("real 0.8.0", body_sync_implementation());
 }
 
 /* A carried body and a character move with velocity zero (teleported each step), yet they go
@@ -460,7 +485,8 @@ static void test_carried_bodies_characters_and_relayed_flags(void) {
 }
 
 /* A take-over moves physics to the newest state received and leaves the drawn pose where the
-   copy showed it: the render offset holds the difference, and physics never sees it. */
+   copy showed it: the render offset holds the difference, and physics never sees it. It happens
+   at the claim, so the caller's own moves from then on are never undone. */
 static void test_a_take_over_keeps_the_drawn_pose(void) {
     tick_all();
     tick_all();
@@ -475,9 +501,9 @@ static void test_a_take_over_keeps_the_drawn_pose(void) {
     drawn.x += offset[0];
     drawn.y += offset[1];
     drawn.z += offset[2];
-    grant(&guest, id, BODY_SYNC_HOLD_UNTIL_RELEASE);
-    tick_no++;
-    body_sync_apply(guest.sync, tick_no);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_assign(host.sync, id, GUEST, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    records(&host, &guest);
+    body_sync_apply(guest.sync, ++tick_no);
     b3Vec3 p = b3Body_GetPosition(guest.bodies[2]);
     TEST_ASSERT_TRUE(body_sync_render_offset(guest.sync, id, offset, turn));
     /* The host's copy records carry 1/512 m. */
@@ -485,6 +511,49 @@ static void test_a_take_over_keeps_the_drawn_pose(void) {
                              "physics did not continue from the newest state");
     TEST_ASSERT_TRUE_MESSAGE(fabsf(p.x + offset[0] - drawn.x) < 1e-4f && fabsf(p.y + offset[1] - drawn.y) < 1e-4f, "the drawn pose jumped");
     TEST_ASSERT_TRUE(fabsf(offset[0]) > 0.05f); /* the copy played a tick behind the newest */
+}
+
+/* A claim takes over from the pose the claimant shows, as a take does: a moving copy is not put
+   ahead to the newest state, and its render offset is not grown. */
+static void test_a_claim_goes_on_from_the_pose_the_claimant_shows(void) {
+    tick_all();
+    tick_all();
+    for (int i = 0; i < 6; i++) {
+        b3Body_SetLinearVelocity(host.bodies[2], (b3Vec3){6.0f, 0.0f, 0.0f});
+        tick_all();
+    }
+    const body_sync_id_t id = body_sync_id_make(2, 1);
+    b3Vec3 shown = b3Body_GetPosition(guest.bodies[2]);
+    TEST_ASSERT_TRUE_MESSAGE(fabsf(b3Body_GetPosition(host.bodies[2]).x - shown.x) > 0.05f, "the copy played its owner's present");
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_claim(guest.sync, id, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(guest.bodies[2], shown) < 1e-4f, "the claim moved the body");
+}
+
+/* What the caller does with a body it just claimed stays done: a grab carries it to the hand and
+   makes it kinematic before the next apply, which must neither put it back at the newest state
+   nor leave that jump in the render offset (the drawn body would overshoot the hand). */
+static void test_a_claimed_body_keeps_what_the_caller_did_to_it(void) {
+    tick_all();
+    tick_all();
+    const body_sync_id_t id = body_sync_id_make(2, 1);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_claim(guest.sync, id, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    const b3Vec3 hand = {2.0f, 1.0f, 1.5f};
+    b3Body_SetType(guest.bodies[2], b3_kinematicBody);
+    b3Body_SetTransform(guest.bodies[2], hand, b3Quat_identity);
+    b3World_Step(guest.world, 1.0f / 60.0f, 4);
+    body_sync_collect(guest.sync, tick_no);
+    records(&guest, &host);
+    body_sync_claim_event_t c;
+    while (body_sync_poll_claim(host.sync, &c)) {
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_answer(host.sync, &c, true));
+    }
+    records(&host, &guest);
+    body_sync_apply(guest.sync, ++tick_no);
+    TEST_ASSERT_EQUAL_MESSAGE(b3_kinematicBody, b3Body_GetType(guest.bodies[2]), "the apply undid the caller's motion type");
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(guest.bodies[2], hand) < 1e-4f, "the apply put the body back");
+    float offset[3], turn[4];
+    bool has = body_sync_render_offset(guest.sync, id, offset, turn);
+    TEST_ASSERT_TRUE_MESSAGE(!has || sqrtf(offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2]) < 1e-3f, "the drawn body overshoots the hand");
 }
 
 /* A copy is never driven past max_speed: a move it could not make in one step is a placement,
@@ -629,7 +698,9 @@ static void test_a_copy_again_plays_what_came_while_it_was_local(void) {
 }
 
 /* A body a guest took and moved, a copy again before the host says anything newer, stays where
-   the guest left it: it never goes back to the snapshots from before its take. */
+   the guest left it: it never goes back to the snapshots from before its take, and reports no
+   playback, before the apply that drives it as a copy nor after it: those snapshots are no
+   picture of what it shows. */
 static void test_a_copy_again_does_not_replay_old_snapshots(void) {
     tick_all();
     tick_all();
@@ -640,10 +711,13 @@ static void test_a_copy_again_does_not_replay_old_snapshots(void) {
     tick_no++;
     step(&guest);
     TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    double played;
+    TEST_ASSERT_FALSE_MESSAGE(body_sync_playback(guest.sync, ID0, &played), "a copy not yet driven reported a playback");
     tick_no++;
     step(&guest);
     b3Vec3 at = b3Body_GetPosition(guest.bodies[0]);
     TEST_ASSERT_TRUE_MESSAGE(fabsf(at.x - 5.0f) < 0.05f && fabsf(at.z - 5.0f) < 0.05f, "a copy went back to snapshots from before its take");
+    TEST_ASSERT_FALSE_MESSAGE(body_sync_playback(guest.sync, ID0, &played), "a copy with only snapshots from before its take reported a playback");
 }
 
 /* A body that was local from its bind and becomes a copy for the first time keeps its drawn
@@ -1569,6 +1643,864 @@ static void test_a_copy_another_guest_dropped_stops_this_sides_body(void) { walk
 static void test_a_copy_another_guest_threw_stops_this_sides_body_where_it_landed(void) { walk_into_handed_back(1); }
 static void test_a_body_the_host_threw_stops_this_sides_body_where_it_landed(void) { walk_into_handed_back(2); }
 
+/* ---- authority follows interaction ---- */
+
+static void interaction_on(void) {
+    tearDown();
+    light_mass = 100.0f;
+    authority_mode = BODY_SYNC_AUTHORITY_INTERACTION;
+    setUp();
+    light_mass = 0.0f;
+    authority_mode = BODY_SYNC_AUTHORITY_HOST;
+}
+
+static body_sync_id_t id_of(uint32_t i) { return body_sync_id_make(i, 1); }
+
+/* Body `i` of `s` carried by `s` (a holder named: one of its agents, the game moving it) at x, z. */
+static void hand(side_t *s, uint32_t i, float x, float z) {
+    grant(s, id_of(i), BODY_SYNC_HOLD_UNTIL_RELEASE);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_holder(s->sync, id_of(i), id_of(BODIES - 1)));
+    tick_all(); /* its take-over's placement first */
+    b3Body_SetTransform(s->bodies[i], (b3Vec3){x, 0.2f, z}, b3Quat_identity);
+}
+
+static void drive(side_t *s, uint32_t i, b3Vec3 v) {
+    TEST_ASSERT_TRUE(drive_count < 4);
+    drives[drive_count++] = (drive_t){s, i, v};
+}
+
+static void stop_driving(side_t *s, uint32_t i) {
+    for (uint32_t k = 0; k < drive_count; k++) {
+        if (drives[k].side == s && drives[k].body == i) {
+            drives[k] = drives[--drive_count];
+            return;
+        }
+    }
+}
+
+/* The hand put away: still carried, out of every contact. */
+static void put_away(side_t *s, uint32_t i) {
+    stop_driving(s, i);
+    b3Body_SetTransform(s->bodies[i], (b3Vec3){-30.0f, 0.2f, -30.0f}, b3Quat_identity);
+    b3Body_SetLinearVelocity(s->bodies[i], (b3Vec3){0.0f, 0.0f, 0.0f});
+    b3Body_SetAngularVelocity(s->bodies[i], (b3Vec3){0.0f, 0.0f, 0.0f});
+}
+
+/* A scene change made on every side alike, before anyone moves it. */
+static void place_everywhere(uint32_t i, float x, float y, float z) {
+    side_t *sides[] = {&host, &guest, &other};
+    for (int k = 0; k < 3; k++) {
+        b3Body_SetTransform(sides[k]->bodies[i], (b3Vec3){x, y, z}, b3Quat_identity);
+        b3Body_SetAwake(sides[k]->bodies[i], true); /* the host sends the new pose */
+    }
+}
+
+static uint8_t seat_on_host(uint32_t i) {
+    body_sync_authority_t a;
+    TEST_ASSERT_TRUE(body_sync_authority(host.sync, id_of(i), &a));
+    return a.seat;
+}
+
+static void settle_interaction(void) {
+    interaction_on();
+    for (int i = 0; i < 90; i++) {
+        tick_all();
+    }
+}
+
+/* Ticks until `i` is local on `s`; false after `max`. */
+static bool tick_until_local(side_t *s, uint32_t i, int max) {
+    for (int k = 0; k < max; k++) {
+        tick_all();
+        if (body_sync_is_local(s->sync, id_of(i))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* A take goes on from the pose the copy shows. A copy in flight plays the playback delay behind
+   the newest state, which a placement at the take would jump to. */
+static void test_a_take_keeps_the_copys_pose(void) {
+    playback_delay = 6;
+    settle_interaction();
+    playback_delay = 1;
+    hand(&guest, 1, 3.0f, -1.2f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, 0.5f});
+    b3Body_SetLinearVelocity(host.bodies[3], (b3Vec3){0.0f, 1.5f, -6.0f});
+    bool taken = false;
+    for (int k = 0; k < 60 && !taken; k++) {
+        tick_all();
+        taken = body_sync_is_local(guest.sync, id_of(3));
+    }
+    TEST_ASSERT_TRUE_MESSAGE(taken, "the hand never took the thrown box");
+    b3Vec3 before = b3Body_GetPosition(guest.bodies[3]);
+    body_sync_apply(guest.sync, ++tick_no);
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(guest.bodies[3], before) < 1e-3f, "the take moved the body");
+}
+
+/* The take's body goes out dynamic: the reads come before the takes, and a copy in flight is
+   driven kinematic until its resume. The claim here reaches the host before the take tick's
+   state, which the host then takes at the number that state declares. */
+static void test_a_taken_body_never_goes_out_kinematic(void) {
+    settle_interaction();
+    hand(&guest, 1, 3.0f, -1.2f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, 0.5f});
+    b3Body_SetLinearVelocity(host.bodies[3], (b3Vec3){0.0f, 1.5f, -6.0f});
+    bool owned = false;
+    for (int k = 0; k < 60; k++) {
+        tick_no++;
+        step(&host);
+        step(&guest);
+        step(&other);
+        records(&guest, &host);
+        records(&other, &host);
+        state(&host, &guest);
+        state(&host, &other);
+        state(&guest, &host);
+        state(&other, &host);
+        records(&host, &guest);
+        records(&host, &other);
+        owned = owned || seat_on_host(3) == GUEST;
+        TEST_ASSERT_EQUAL_MESSAGE(b3_dynamicBody, b3Body_GetType(host.bodies[3]), "the host heard the take kinematic");
+    }
+    TEST_ASSERT_TRUE_MESSAGE(owned, "the hand never took the thrown box");
+}
+
+/* A pile leaning on a character never sleeps: it creeps, its owner's pose crossing a step of the
+   copy grid now and then. Box 2 creeps at `speed` away from box 3, resting 3 cm off it; the
+   guest's copies are watched while it does. */
+static void creep_box(float speed, bool *left_hold, bool *neighbour_left, float *gap) {
+    layer_on();
+    place_everywhere(3, 2.43f, 0.2f, 0.0f);
+    for (int i = 0; i < 150; i++) {
+        tick_all();
+    }
+    *left_hold = *neighbour_left = false;
+    *gap = 0.0f;
+    const float d = speed / 60.0f * 0.70710678f; /* diagonal: the grid steps in two axes */
+    for (int i = 0; i < 240; i++) {
+        b3Vec3 p = b3Body_GetPosition(host.bodies[2]);
+        b3Body_SetTransform(host.bodies[2], (b3Vec3){p.x - d, p.y, p.z + d}, b3Body_GetRotation(host.bodies[2]));
+        b3Body_SetAwake(host.bodies[2], true);
+        tick_all();
+        *left_hold = *left_hold || body_sync_is_predicted(guest.sync, id_of(2));
+        *neighbour_left = *neighbour_left || body_sync_is_predicted(guest.sync, id_of(3));
+        float g = apart(host.bodies[2], guest.bodies[2]);
+        *gap = g > *gap ? g : *gap;
+    }
+}
+
+/* Slower than the creep bound the owner rests: its copy stays in the rest hold, following on the
+   grid within a step and the grid's rounding, and its catch-up steps (0.2 m/s for a tick) turn
+   no resting neighbour soft. Faster than the bound it moves, and the copy leaves the hold. */
+static void test_a_creeping_pile_stays_in_the_rest_hold(void) {
+    bool left, neighbour;
+    float gap;
+    creep_box(0.015f, &left, &neighbour, &gap); /* the random sweep's creep */
+    TEST_ASSERT_FALSE_MESSAGE(left, "a creeping owner's copy left the rest hold");
+    TEST_ASSERT_FALSE_MESSAGE(neighbour, "a held copy's catch-up step turned its resting neighbour soft");
+    TEST_ASSERT_TRUE_MESSAGE(gap <= 2.0f * SYNC_SOFT_HOLD_M, "the held copy did not follow its creeping owner");
+    creep_box(0.06f, &left, &neighbour, &gap); /* twice the creep bound */
+    TEST_ASSERT_TRUE_MESSAGE(left, "an owner moving past the creep bound kept its copy in the rest hold");
+}
+
+/* A guest that never hears the host hold its rest pose keeps the body; it returns once it does. */
+static void test_a_return_waits_for_the_hosts_acknowledgement(void) {
+    settle_interaction();
+    hand(&guest, 1, 2.0f, 0.6f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.0f});
+    TEST_ASSERT_TRUE(tick_until_local(&guest, 2, 60));
+    for (int k = 0; k < 10; k++) {
+        tick_all();
+    }
+    put_away(&guest, 1);
+    lose_guest_fates = true; /* every state reaches the host; the guest hears each lost */
+    for (int k = 0; k < 150; k++) {
+        tick_all();
+        TEST_ASSERT_TRUE_MESSAGE(body_sync_is_local(guest.sync, id_of(2)), "returned before the host acknowledged the rest pose");
+    }
+    TEST_ASSERT_TRUE_MESSAGE(speed_of(guest.bodies[2]) < 1e-3f, "the box never came to rest");
+    lose_guest_fates = false;
+    for (int k = 0; k < 60 && seat_on_host(2) != BODY_SYNC_SEAT_HOST; k++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_SEAT_HOST, seat_on_host(2));
+}
+
+/* The host's character meets a guest's body owned by interaction: the copy keeps the character's
+   bits, so the touch takes it back. Without them the guest's own simulation would still push the
+   box ahead of the character's copy there, and the host's agent would never come first. */
+static void test_the_hosts_character_is_stopped_by_a_guests_body(void) {
+    character_category = 0x2;
+    settle_interaction();
+    character_category = 0;
+    b3ShapeId shape;
+    b3Body_GetShapes(host.bodies[BODIES - 1], &shape, 1);
+    b3Filter f = b3Shape_GetFilter(shape);
+    f.categoryBits = 0x2;
+    b3Shape_SetFilter(shape, f, true);
+    hand(&guest, 1, 2.0f, 0.6f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.0f});
+    TEST_ASSERT_TRUE(tick_until_local(&guest, 2, 60));
+    put_away(&guest, 1);
+    lose_guest_fates = true; /* the guest keeps the box */
+    for (int k = 0; k < 30; k++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL_UINT8(GUEST, seat_on_host(2));
+    b3Vec3 box = b3Body_GetPosition(host.bodies[2]);
+    b3Body_SetTransform(host.bodies[BODIES - 1], (b3Vec3){box.x, 0.2f, box.z - 1.0f}, b3Quat_identity);
+    drive(&host, BODIES - 1, (b3Vec3){0.0f, 0.0f, 1.0f});
+    for (int k = 0; k < 90 && seat_on_host(2) != BODY_SYNC_SEAT_HOST; k++) {
+        tick_all();
+        float gap = b3Body_GetPosition(host.bodies[2]).z - b3Body_GetPosition(host.bodies[BODIES - 1]).z;
+        TEST_ASSERT_TRUE_MESSAGE(gap > 0.3f, "the host's character walked through the guest's box");
+    }
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(BODY_SYNC_SEAT_HOST, seat_on_host(2), "the host's character met the box and never took it back");
+    body_sync_traffic_t t;
+    body_sync_traffic(host.sync, GUEST, &t);
+    TEST_ASSERT_EQUAL_UINT32(1, t.reclaims);
+}
+
+/* The host's state of a body sent before it granted the take, arriving after the grant, is
+   dropped: played once the body is a copy again, it would pull it back to where it was then. */
+static void test_a_state_from_before_the_grant_is_dropped(void) {
+    settle_interaction();
+    hand(&guest, 1, 2.0f, 0.6f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.0f});
+    drive(&host, 2, (b3Vec3){0.0f, 0.0f, -0.3f}); /* the host moves it: its states go out */
+    bool taken = false;
+    uint8_t late[1500];
+    uint32_t late_size = 0;
+    for (int k = 0; k < 60 && !taken; k++) {
+        tick_no++;
+        step(&host);
+        step(&guest);
+        step(&other);
+        taken = body_sync_is_local(guest.sync, id_of(2));
+        if (taken) {
+            stop_driving(&host, 2);
+            TEST_ASSERT_TRUE(body_sync_write_state(host.sync, GUEST, late, 1200, &late_size));
+            body_sync_state_sent(host.sync, GUEST, host.numbers[GUEST]);
+            body_sync_resolve(host.sync, GUEST, host.numbers[GUEST]++, true);
+        } else {
+            state(&host, &guest);
+        }
+        state(&host, &other);
+        state(&guest, &host);
+        state(&other, &host);
+        records(&guest, &host);
+        records(&host, &guest);
+        records(&host, &other);
+        records(&other, &host);
+    }
+    TEST_ASSERT_TRUE_MESSAGE(taken, "the hand never took the box");
+    TEST_ASSERT_EQUAL_UINT8(GUEST, seat_on_host(2));
+    body_sync_traffic_t t0, t1;
+    body_sync_traffic(guest.sync, BODY_SYNC_SEAT_HOST, &t0);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_state(guest.sync, BODY_SYNC_SEAT_HOST, tick_no, late, late_size));
+    body_sync_traffic(guest.sync, BODY_SYNC_SEAT_HOST, &t1);
+    TEST_ASSERT_TRUE_MESSAGE(t1.stale > t0.stale, "the state from before the grant was kept");
+    for (int k = 0; k < 10; k++) {
+        tick_all();
+    }
+    put_away(&guest, 1);
+    for (int k = 0; k < 300 && body_sync_is_local(guest.sync, id_of(2)); k++) {
+        tick_all();
+    }
+    TEST_ASSERT_FALSE_MESSAGE(body_sync_is_local(guest.sync, id_of(2)), "the box never returned");
+    b3Vec3 rest = b3Body_GetPosition(guest.bodies[2]);
+    for (int k = 0; k < 30; k++) {
+        tick_all();
+        TEST_ASSERT_TRUE_MESSAGE(apart_from(guest.bodies[2], rest) < 0.01f, "the copy went back to a pose from before the grant");
+    }
+}
+
+/* A body owned by interaction returns only once every owned body it touches is quiet too. */
+static void test_a_quiet_body_waits_for_its_moving_neighbour(void) {
+    settle_interaction();
+    place_everywhere(3, 2.0f, 0.6f, 0.0f); /* on box 2 */
+    for (int k = 0; k < 30; k++) {
+        tick_all();
+    }
+    hand(&guest, 1, 2.0f, 0.5f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.0f});
+    for (int k = 0; k < 60 && !(body_sync_is_local(guest.sync, id_of(2)) && body_sync_is_local(guest.sync, id_of(3))); k++) {
+        tick_all();
+    }
+    TEST_ASSERT_TRUE(body_sync_is_local(guest.sync, id_of(2)) && body_sync_is_local(guest.sync, id_of(3)));
+    for (int k = 0; k < 3; k++) {
+        tick_all();
+    }
+    put_away(&guest, 1);
+    drive(&guest, 3, (b3Vec3){0.1f, 0.0f, 0.0f}); /* sliding on box 2, slower than sleep */
+    b3Body_EnableSleep(guest.bodies[3], false);
+    b3Vec3 still = b3Body_GetPosition(guest.bodies[2]);
+    for (int k = 0; k < 120; k++) {
+        tick_all();
+        TEST_ASSERT_TRUE_MESSAGE(body_sync_is_local(guest.sync, id_of(2)), "returned while a body it touches still moved");
+        still = k == 60 ? b3Body_GetPosition(guest.bodies[2]) : still;
+    }
+    /* Quiet itself (under SYNC_POLICY_QUIET_M over the last second): only its neighbour holds it. */
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(guest.bodies[2], still) < 0.002f, "box 2 never came to rest");
+    stop_driving(&guest, 3);
+    b3Body_EnableSleep(guest.bodies[3], true);
+    for (int k = 0; k < 120 && seat_on_host(2) != BODY_SYNC_SEAT_HOST; k++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_SEAT_HOST, seat_on_host(2));
+}
+
+/* A body the host's agent sets going is the host's until it rests: a guest's touch never takes it. */
+static void test_what_the_hosts_agent_sets_going_stays_the_hosts(void) {
+    settle_interaction();
+    b3Body_SetTransform(host.bodies[BODIES - 1], (b3Vec3){2.0f, 0.2f, 0.6f}, b3Quat_identity);
+    drive(&host, BODIES - 1, (b3Vec3){0.0f, 0.0f, -1.0f});
+    hand(&guest, 1, 1.4f, -0.3f);
+    for (int k = 0; k < 10; k++) {
+        tick_all();
+    }
+    drive(&guest, 1, (b3Vec3){1.0f, 0.0f, 0.0f});
+    for (int k = 0; k < 60; k++) {
+        tick_all();
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(BODY_SYNC_SEAT_HOST, seat_on_host(2), "a guest took a body the host's agent set going");
+    }
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(guest.bodies[1], b3Body_GetPosition(guest.bodies[2])) < 0.5f, "the hand never reached the box");
+}
+
+/* A body owned by interaction takes only a body at rest at its owner: one its owner moves was set
+   going by someone else. */
+static void test_an_owned_body_never_takes_a_moving_one(void) {
+    settle_interaction();
+    place_everywhere(3, 2.0f, 0.2f, -0.7f);
+    for (int k = 0; k < 30; k++) {
+        tick_all();
+    }
+    drive(&host, 3, (b3Vec3){0.0f, 0.0f, -0.3f});
+    hand(&guest, 1, 2.0f, 0.6f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.2f});
+    bool met = false;
+    for (int k = 0; k < 90; k++) {
+        tick_all();
+        met = met || apart(guest.bodies[2], guest.bodies[3]) < 0.45f;
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(BODY_SYNC_SEAT_HOST, seat_on_host(3), "an owned body took one its owner moves");
+    }
+    TEST_ASSERT_TRUE_MESSAGE(met, "the owned box never met the moving one");
+    TEST_ASSERT_EQUAL_UINT8(GUEST, seat_on_host(2));
+}
+
+/* A take names a body: the host grants it only where its own world shows one of the claimant's
+   agents touching it. Claims of far bodies no agent of the guest's is near are refused; the
+   hand's real take is granted. */
+static void test_a_take_of_a_body_no_agent_touches_is_refused(void) {
+    settle_interaction();
+    hand(&guest, 1, 2.0f, 0.6f);
+    for (int k = 0; k < 10; k++) {
+        tick_all();
+    }
+    uint32_t stale = 0;
+    for (uint32_t i = 16; i < 32; i++) {
+        stub_record_t r = {.type = STUB_REC_CLAIM, .id = id_of(i), .hold = BODY_SYNC_HOLD_UNTIL_REST, .sequence = (uint16_t)(900 + i)};
+        uint32_t size = stub_wire_put_record(&r, packet, sizeof(packet));
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_record(host.sync, GUEST, tick_no, packet, size));
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(BODY_SYNC_SEAT_HOST, seat_on_host(i), "a forged take of a far body was granted");
+    }
+    (void)stale;
+    body_sync_traffic_t t;
+    body_sync_traffic(host.sync, GUEST, &t);
+    TEST_ASSERT_EQUAL_UINT32(16, t.take_refusals);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.0f});
+    for (int k = 0; k < 60 && seat_on_host(2) != GUEST; k++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(GUEST, seat_on_host(2), "the hand's own take was refused");
+}
+
+/* One tick with the guest's records to the host held back while `hold`: its take waits as long
+   as the test says, the host's states reaching it, and acknowledged, meanwhile. */
+static void tick_holding(bool hold) {
+    tick_no++;
+    step(&host);
+    step(&guest);
+    step(&other);
+    state(&host, &guest);
+    state(&host, &other);
+    state(&guest, &host);
+    state(&other, &host);
+    records(&host, &guest);
+    records(&host, &other);
+    if (!hold) {
+        records(&guest, &host);
+    }
+    records(&other, &host);
+}
+
+static b3Vec3 drawn_at(const side_t *s, uint32_t i) {
+    float offset[3], turn[4];
+    TEST_ASSERT_TRUE(body_sync_render_offset(s->sync, id_of(i), offset, turn));
+    b3Vec3 p = b3Body_GetPosition(s->bodies[i]);
+    return (b3Vec3){p.x + offset[0], p.y + offset[1], p.z + offset[2]};
+}
+
+static float distance_of(b3Vec3 a, b3Vec3 b) { return sqrtf((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) + (a.z - b.z) * (a.z - b.z)); }
+
+/* The hand takes a box; while its claim waits up to `wait` ticks, the host's character sets the
+   box going from behind, so the host refuses the take, and the hand presses on. The refusals of
+   the hand's takes while the host's agent holds the box. */
+static uint32_t refused_take(uint32_t wait) {
+    settle_interaction();
+    hand(&guest, 1, 2.0f, 0.6f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.0f});
+    bool taken = false;
+    for (int k = 0; k < 60 && !taken; k++) {
+        tick_holding(true);
+        taken = body_sync_is_local(guest.sync, id_of(2));
+    }
+    TEST_ASSERT_TRUE_MESSAGE(taken, "the hand never took the box");
+    /* The host's character pushes the box along x from behind, the hand presses its side and
+       keeps up with it. */
+    b3Vec3 box = b3Body_GetPosition(host.bodies[2]);
+    b3Body_SetTransform(host.bodies[BODIES - 1], (b3Vec3){box.x - 0.45f, 0.2f, box.z}, b3Quat_identity);
+    drive(&host, BODIES - 1, (b3Vec3){1.5f, 0.0f, 0.0f});
+    stop_driving(&guest, 1);
+    drive(&guest, 1, (b3Vec3){1.5f, 0.0f, -0.3f});
+    /* The guest's records reach the host once every `wait` ticks: each take waits up to that. */
+    body_sync_traffic_t t;
+    body_sync_authority_t a;
+    bool active = false, ended = false;
+    uint32_t before = 0, refusals = 0;
+    for (uint32_t k = 0; k < 150; k++) {
+        tick_holding(k % wait != wait - 1u);
+        TEST_ASSERT_TRUE(body_sync_authority(host.sync, id_of(2), &a));
+        bool now = a.seat == BODY_SYNC_SEAT_HOST && a.hold == BODY_SYNC_HOLD_UNTIL_REST;
+        body_sync_traffic(host.sync, GUEST, &t);
+        if (now && !active) {
+            before = t.take_refusals;
+        }
+        ended = ended || (active && !now);
+        active = active || now;
+        if (active && !ended) {
+            refusals = t.take_refusals - before;
+        }
+    }
+    TEST_ASSERT_TRUE_MESSAGE(active, "the host's character never set the box going");
+    return refusals;
+}
+
+/* The host counts each rare group as known once the packet that carried it arrived. A take that
+   waits drops the host's states of its body (it simulates the body itself), so a guest that also
+   dropped their groups would hold the hold from before its take once refused, and take the box
+   the host's agent sets going again at every touch. */
+static void test_a_refused_take_is_not_repeated(void) {
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(1, refused_take(20), "a take the host refused for its own agent's push was sent again");
+}
+
+/* A refused take hands the box to the host's picture without a visible jump, however far the
+   take carried it. Bound: the render offset's release at its snap reach, 0.15 of 2 m (README
+   "Metrics", jump.max), beyond the owner's own move. */
+static void test_a_refused_take_does_not_jump(void) {
+    /* The host's copy of the hand plays 20 ticks behind: while the take waits, the hand carries the
+       box away on the guest and the host's world still holds it where its character touched it. */
+    playback_delay = 20;
+    settle_interaction();
+    playback_delay = 1;
+    hand(&guest, 1, 1.4f, 0.0f);
+    drive(&guest, 1, (b3Vec3){4.0f, 0.0f, 0.0f});
+    bool taken = false;
+    for (int k = 0; k < 60 && !taken; k++) {
+        tick_holding(true);
+        taken = body_sync_is_local(guest.sync, id_of(2));
+    }
+    TEST_ASSERT_TRUE_MESSAGE(taken, "the hand never took the box");
+    b3Vec3 box = b3Body_GetPosition(host.bodies[2]);
+    b3Body_SetTransform(host.bodies[BODIES - 1], (b3Vec3){box.x, 0.2f, box.z - 0.45f}, b3Quat_identity);
+    drive(&host, BODIES - 1, (b3Vec3){0.0f, 0.0f, 0.5f});
+    b3Vec3 drawn = drawn_at(&guest, 2), owner = b3Body_GetPosition(host.bodies[2]), body = b3Body_GetPosition(guest.bodies[2]);
+    float owner_moved = 0.0f, jump = 0.0f, placed = 0.0f;
+    bool refused = false;
+    for (uint32_t k = 0; k < 150; k++) {
+        tick_holding(k < 40u);
+        b3Vec3 d = drawn_at(&guest, 2), o = b3Body_GetPosition(host.bodies[2]), p = b3Body_GetPosition(guest.bodies[2]);
+        /* The copy plays a tick behind: its owner's move is this tick's or the one before. */
+        float moved = distance_of(o, owner), allowed = moved > owner_moved ? moved : owner_moved;
+        float j = distance_of(d, drawn) - allowed;
+        jump = j > jump ? j : jump;
+        placed = distance_of(p, body) > placed ? distance_of(p, body) : placed;
+        drawn = d;
+        owner = o;
+        body = p;
+        owner_moved = moved;
+        refused = refused || (k >= 40u && !body_sync_is_local(guest.sync, id_of(2)));
+    }
+    TEST_ASSERT_TRUE_MESSAGE(refused, "the host never refused the take");
+    TEST_ASSERT_TRUE_MESSAGE(placed > SYNC_OFFSET_SNAP_M, "the refusal never placed the box past the offset's snap reach");
+    TEST_ASSERT_TRUE_MESSAGE(jump <= (1.0f - SYNC_OFFSET_FAST) * SYNC_OFFSET_SNAP_M, "the refused take's drawn pose jumped");
+}
+
+/* Only a walk this side's own body starts wakes a resting heap whole: a soft copy flying at a row
+   of resting copies 1 cm apart frees the one it comes at, not the row behind it, which a walk
+   through the touch distance would free in the same apply. */
+static void test_a_soft_copy_does_not_wake_a_heap_whole(void) {
+    layer_on();
+    const float row[3] = {-0.95f, -1.36f, -1.77f};
+    for (uint32_t k = 0; k < 3; k++) {
+        place_everywhere(2u + k, row[k], 0.2f, 0.0f);
+    }
+    for (int i = 0; i < 60; i++) {
+        tick_all();
+    }
+    for (uint32_t k = 0; k < 3; k++) {
+        TEST_ASSERT_FALSE_MESSAGE(body_sync_is_predicted(guest.sync, body_sync_id_make(2u + k, 1)), "the row was not resting in the hold");
+    }
+    grant(&guest, body_sync_id_make(1, 1), BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    b3Body_SetTransform(guest.bodies[1], (b3Vec3){0.6f, 0.2f, 0.0f}, b3Quat_identity);
+    int asleep = 0;
+    for (int i = 0; i < 7; i++) {
+        tick_driving((b3Vec3){-3.0f, 0.0f, 0.0f}, &asleep); /* into body 0 and on: soft, slower than a flight */
+    }
+    bool reached = false;
+    for (int i = 0; i < 40 && !reached; i++) {
+        tick_driving((b3Vec3){0.0f, 0.0f, 0.0f}, &asleep);
+        reached = body_sync_is_predicted(guest.sync, body_sync_id_make(2, 1));
+        if (reached) {
+            TEST_ASSERT_FALSE_MESSAGE(body_sync_is_predicted(guest.sync, body_sync_id_make(4, 1)), "a soft copy woke the resting row whole");
+        }
+    }
+    TEST_ASSERT_TRUE_MESSAGE(reached, "the flying copy never reached the row");
+}
+
+/* The host's take-back goes on from its own simulation of the body: its pose does not move at
+   the reclaim, though the guest's newest state of the moving body is elsewhere. */
+static void test_a_take_back_goes_on_from_the_hosts_own_pose(void) {
+    character_category = 0x2;
+    playback_delay = 6; /* the host's copy plays well behind the guest's newest state */
+    settle_interaction();
+    character_category = 0;
+    playback_delay = 1;
+    b3ShapeId shape;
+    b3Body_GetShapes(host.bodies[BODIES - 1], &shape, 1);
+    b3Filter f = b3Shape_GetFilter(shape);
+    f.categoryBits = 0x2;
+    b3Shape_SetFilter(shape, f, true);
+    hand(&guest, 1, 2.0f, 0.6f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.0f});
+    TEST_ASSERT_TRUE(tick_until_local(&guest, 2, 60));
+    for (int k = 0; k < 10; k++) {
+        tick_all();
+    }
+    b3Vec3 box = b3Body_GetPosition(host.bodies[2]);
+    b3Body_SetTransform(host.bodies[BODIES - 1], (b3Vec3){box.x, 0.2f, box.z - 0.7f}, b3Quat_identity);
+    drive(&host, BODIES - 1, (b3Vec3){0.0f, 0.0f, 1.5f});
+    bool back = false;
+    for (int k = 0; k < 60 && !back; k++) {
+        tick_all();
+        back = seat_on_host(2) == BODY_SYNC_SEAT_HOST;
+    }
+    TEST_ASSERT_TRUE_MESSAGE(back, "the host's character never took the box back");
+    b3Vec3 before = b3Body_GetPosition(host.bodies[2]);
+    body_sync_apply(host.sync, ++tick_no);
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(host.bodies[2], before) < 1e-3f, "the take-back moved the host's body");
+}
+
+/* The take-back of a body the guest drives fast: the host's copy plays the playback delay behind
+   the guest's newest state, and a take-back placed there would jump the host's body that far. */
+static void test_a_take_back_of_a_fast_body_keeps_the_hosts_pose(void) {
+    character_category = 0x2;
+    playback_delay = 6;
+    settle_interaction();
+    character_category = 0;
+    playback_delay = 1;
+    b3ShapeId shape;
+    b3Body_GetShapes(host.bodies[BODIES - 1], &shape, 1);
+    b3Filter f = b3Shape_GetFilter(shape);
+    f.categoryBits = 0x2;
+    b3Shape_SetFilter(shape, f, true);
+    hand(&guest, 1, 2.0f, 0.6f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.0f});
+    TEST_ASSERT_TRUE(tick_until_local(&guest, 2, 60));
+    stop_driving(&guest, 1);
+    drive(&guest, 2, (b3Vec3){0.0f, 0.0f, -2.5f});
+    for (int k = 0; k < 6; k++) {
+        tick_all();
+    }
+    b3Vec3 box = b3Body_GetPosition(host.bodies[2]);
+    b3Body_SetTransform(host.bodies[BODIES - 1], (b3Vec3){box.x, 0.2f, box.z - 0.6f}, b3Quat_identity);
+    drive(&host, BODIES - 1, (b3Vec3){0.0f, 0.0f, 1.5f});
+    bool back = false;
+    for (int k = 0; k < 60 && !back; k++) {
+        tick_all();
+        back = seat_on_host(2) == BODY_SYNC_SEAT_HOST;
+    }
+    TEST_ASSERT_TRUE_MESSAGE(back, "the host's character never took the box back");
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(host.bodies[2], b3Body_GetPosition(guest.bodies[2])) > 0.1f, "the host's copy was not behind the guest's newest state");
+    b3Vec3 before = b3Body_GetPosition(host.bodies[2]);
+    body_sync_apply(host.sync, ++tick_no);
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(host.bodies[2], before) < 1e-3f, "the take-back of a fast body moved the host's body");
+}
+
+/* Where bodies two guests own by interaction touch, the host takes both back. */
+static void test_the_host_takes_back_two_guests_touching_bodies(void) {
+    settle_interaction();
+    hand(&guest, 0, 1.55f, 1.0f);
+    hand(&other, 5, 3.45f, 1.0f);
+    drive(&guest, 0, (b3Vec3){1.0f, 0.0f, 0.0f});
+    drive(&other, 5, (b3Vec3){-1.0f, 0.0f, 0.0f});
+    body_sync_traffic_t g, o;
+    bool both = false;
+    for (int k = 0; k < 90 && !both; k++) {
+        tick_all();
+        body_sync_traffic(host.sync, GUEST, &g);
+        body_sync_traffic(host.sync, OTHER, &o);
+        both = g.reclaims > 0 && o.reclaims > 0;
+    }
+    TEST_ASSERT_TRUE_MESSAGE(g.takes > 0 && o.takes > 0, "a guest never took its box");
+    TEST_ASSERT_TRUE_MESSAGE(both, "the host left two guests' touching bodies with them");
+}
+
+/* How deep a kinematic body lies inside `body` as its last step's contacts saw it, in metres. */
+static float kinematic_depth_in(b3BodyId body) {
+    float deepest = 0.0f;
+    b3ContactData contacts[16];
+    int n = b3Body_GetContactData(body, contacts, 16);
+    for (int k = 0; k < n; k++) {
+        b3BodyId a = b3Shape_GetBody(contacts[k].shapeIdA), b = b3Shape_GetBody(contacts[k].shapeIdB);
+        b3BodyId them = B3_ID_EQUALS(a, body) ? b : a;
+        for (int m = 0; m < contacts[k].manifoldCount && b3Body_GetType(them) == b3_kinematicBody; m++) {
+            for (int p = 0; p < contacts[k].manifolds[m].pointCount; p++) {
+                deepest = fmaxf(deepest, -contacts[k].manifolds[m].points[p].separation);
+            }
+        }
+    }
+    return deepest;
+}
+
+/* One tick with the guest's body `c` run along x at `run` before its step, as a controller does
+   (the rest of its velocity left to the world); none when `run` is NULL. */
+static void tick_running(uint32_t c, const float *run) {
+    tick_no++;
+    step(&host);
+    body_sync_apply(guest.sync, tick_no);
+    if (run) {
+        b3Vec3 v = b3Body_GetLinearVelocity(guest.bodies[c]);
+        b3Body_SetLinearVelocity(guest.bodies[c], (b3Vec3){*run, v.y, v.z});
+    }
+    b3World_Step(guest.world, 1.0f / 60.0f, 4);
+    body_sync_collect(guest.sync, tick_no);
+    step(&other);
+    state(&host, &guest);
+    state(&guest, &host);
+    records(&guest, &host);
+    records(&host, &guest);
+}
+
+/* This guest's character runs into a row of resting light copies, and her own copy on the host
+   pushes them past the flight speed. Here her push already moved them, soft; driven kinematic
+   along the owner's older path while still against her, they would be placed inside her and
+   fling her. Derived bounds: nothing she meets moves faster than her run, and Box3D pushes a
+   body out of an overlap at no more than its contact speed (3 m/s), so she never passes their
+   sum; no driven copy lies in her deeper than Box3D's linear slop, the depth of a resting
+   contact. */
+static void test_a_run_into_copies_its_own_push_sets_flying_does_not_fling_her(void) {
+    const uint32_t c = BODIES - 1, row[4] = {1, 2, 3, 4};
+    const float run = 6.0f, contact_speed = 3.0f;
+    playback_delay = 6; /* the host's picture plays well behind her own pushes */
+    layer_on();
+    playback_delay = 1;
+    for (int k = 0; k < 4; k++) {
+        place_everywhere(row[k], 2.0f + 0.41f * (float)k, 0.2f, -3.0f);
+    }
+    place_everywhere(c, 1.4f, 0.2f, -3.0f);
+    for (int i = 0; i < 150; i++) {
+        tick_all();
+    }
+    grant(&guest, id_of(c), BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    bool flew = false;
+    float fastest = 0.0f, deepest = 0.0f;
+    for (int i = 0; i < 45; i++) {
+        tick_running(c, &run);
+        fastest = fmaxf(fastest, speed_of(guest.bodies[c]));
+        deepest = fmaxf(deepest, kinematic_depth_in(guest.bodies[c]));
+        for (int k = 0; k < 4; k++) {
+            flew = flew || speed_of(host.bodies[row[k]]) >= SYNC_SOFT_FLIGHT_SPEED;
+        }
+    }
+    TEST_ASSERT_TRUE_MESSAGE(flew, "her copy on the host never set the row flying: the case is not met");
+    char what[96];
+    snprintf(what, sizeof(what), "her character was flung to %.2f m/s", (double)fastest);
+    TEST_ASSERT_TRUE_MESSAGE(fastest <= run + contact_speed, what);
+    snprintf(what, sizeof(what), "a kinematic copy lay %.4f m inside her", (double)deepest);
+    TEST_ASSERT_TRUE_MESSAGE(deepest <= B3_LINEAR_SLOP, what);
+}
+
+/* A copy far from this guest's standing character, out of every reach and mark, whose owner
+   flies straight through where she stands: on the host her copy is filtered out of its way, so
+   only this side's older owner path crosses her. Driven along that path it would be placed and
+   swept into her; it is never inside her deeper than Box3D's linear slop. */
+static void test_a_flying_copys_path_through_her_never_places_it_inside_her(void) {
+    const uint32_t c = BODIES - 1, flyer = 1;
+    playback_delay = 6;
+    layer_on();
+    playback_delay = 1;
+    place_everywhere(flyer, 1.0f, 0.2f, -3.0f);
+    place_everywhere(c, 4.0f, 0.2f, -3.0f);
+    b3ShapeId shape;
+    b3Body_GetShapes(host.bodies[c], &shape, 1);
+    b3Filter f = b3Shape_GetFilter(shape);
+    f.categoryBits = 0x4u;
+    b3Shape_SetFilter(shape, f, true);
+    b3Body_GetShapes(host.bodies[flyer], &shape, 1);
+    f = b3Shape_GetFilter(shape);
+    f.maskBits = ~0x4ull;
+    b3Shape_SetFilter(shape, f, true);
+    for (int i = 0; i < 150; i++) {
+        tick_all();
+    }
+    grant(&guest, id_of(c), BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    drive(&host, flyer, (b3Vec3){8.0f, 0.0f, 0.0f});
+    float deepest = 0.0f;
+    for (int i = 0; i < 60; i++) {
+        tick_running(c, NULL);
+        deepest = fmaxf(deepest, kinematic_depth_in(guest.bodies[c]));
+    }
+    TEST_ASSERT_TRUE_MESSAGE(b3Body_GetPosition(host.bodies[flyer]).x > 5.0f, "the owner never flew past where she stood: the case is not met");
+    char what[96];
+    snprintf(what, sizeof(what), "a kinematic copy lay %.4f m inside her", (double)deepest);
+    TEST_ASSERT_TRUE_MESSAGE(deepest <= B3_LINEAR_SLOP, what);
+}
+
+/* Another guest's throw, held until it settles, flies through where this guest's character
+   stands; on the thrower her copy is filtered out of its way, so the owner's path crosses her.
+   It strikes her here, never passes through her. Derived bound: the two cubes' inscribed spheres
+   (0.2 m each) overlap no deeper than the cubes do, and the flight reaches at most one step of
+   travel (v dt) plus Box3D's linear slop into her before the contact acts, so their centres stay
+   0.4 m less that apart. The host holds the throw dynamic with the character bits on. */
+static void test_another_seats_throw_never_passes_through_this_sides_character(void) {
+    const uint32_t c = BODIES - 1, flyer = 1;
+    const float speed = 8.0f, inner = 0.2f, dt = 1.0f / 60.0f;
+    const uint64_t her_bits = 0x1u;
+    character_category = her_bits;
+    layer_on();
+    character_category = 0;
+    side_t *sides[3] = {&host, &guest, &other};
+    for (int k = 0; k < 3; k++) {
+        for (uint32_t b = 0; b < BODIES; b++) {
+            b3ShapeId shape;
+            b3Body_GetShapes(sides[k]->bodies[b], &shape, 1);
+            b3Filter f = b3Shape_GetFilter(shape);
+            f.categoryBits = b == c ? her_bits : 0x2u;
+            if (sides[k] == &other && b == flyer) {
+                f.maskBits = ~her_bits;
+            }
+            b3Shape_SetFilter(shape, f, true);
+        }
+    }
+    place_everywhere(flyer, 1.0f, 0.2f, -3.0f);
+    place_everywhere(c, 4.0f, 0.2f, -3.0f);
+    for (int i = 0; i < 150; i++) {
+        tick_all();
+    }
+    grant(&guest, id_of(c), BODY_SYNC_HOLD_UNTIL_RELEASE);
+    grant(&other, id_of(flyer), BODY_SYNC_HOLD_UNTIL_SETTLED);
+    tick_all();
+    drive(&other, flyer, (b3Vec3){speed, 0.0f, 0.0f});
+    float nearest = INFINITY;
+    int host_ticks = 0, host_bits = 0;
+    for (int i = 0; i < 60; i++) {
+        tick_all();
+        nearest = fminf(nearest, apart(guest.bodies[flyer], guest.bodies[c]));
+        body_sync_authority_t a;
+        if (body_sync_authority(host.sync, id_of(flyer), &a) && a.seat == OTHER && a.hold == BODY_SYNC_HOLD_UNTIL_SETTLED) {
+            host_ticks++;
+            host_bits += (mask_of(host.bodies[flyer]) & her_bits) != 0;
+        }
+    }
+    TEST_ASSERT_TRUE_MESSAGE(b3Body_GetPosition(other.bodies[flyer]).x > 5.0f, "the owner never flew past where she stood: the case is not met");
+    TEST_ASSERT_TRUE_MESSAGE(host_ticks > 0, "the host never held the throw: the case is not met");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(host_ticks, host_bits, "the host's copy of the throw let its character through");
+    char what[96];
+    snprintf(what, sizeof(what), "the throw's centre came %.3f m from hers", (double)nearest);
+    TEST_ASSERT_TRUE_MESSAGE(nearest >= 2.0f * inner - (speed * dt + B3_LINEAR_SLOP), what);
+}
+
+/* A carried box pressed at a lean's speed into a body this side owns, pinned against a wall: the
+   body is quiet but leaned on. Returned there, its copy would be a wall the box pushes into and the
+   push would take it again, take and return for as long as the press lasts. */
+static void test_a_body_leaned_on_by_its_owner_never_ping_pongs(void) {
+    settle_interaction();
+    hand(&guest, 1, 2.0f, 0.6f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.0f});
+    TEST_ASSERT_TRUE(tick_until_local(&guest, 2, 60));
+    stop_driving(&guest, 1);
+    for (int k = 0; k < 30; k++) {
+        tick_all(); /* box 2 slides to a stop */
+    }
+    b3Vec3 at = b3Body_GetPosition(guest.bodies[2]);
+    side_t *sides[] = {&host, &guest, &other};
+    for (int k = 0; k < 3; k++) {
+        b3BodyDef def = b3DefaultBodyDef();
+        def.position = (b3Vec3){at.x, 0.5f, at.z - 0.3f};
+        b3BodyId wall = b3CreateBody(sides[k]->world, &def);
+        b3ShapeDef shape = b3DefaultShapeDef();
+        b3BoxHull slab = b3MakeBoxHull(1.0f, 0.5f, 0.1f);
+        b3CreateHullShape(wall, &shape, &slab.base);
+    }
+    b3Body_SetTransform(guest.bodies[1], (b3Vec3){at.x, 0.2f, at.z + 0.401f}, b3Quat_identity);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -0.04f});
+    int retakes = 0;
+    bool was_local = true;
+    for (int k = 0; k < 900; k++) {
+        tick_all();
+        bool local = body_sync_is_local(guest.sync, id_of(2));
+        retakes += local && !was_local ? 1 : 0;
+        was_local = local;
+    }
+    /* One take may start the press (the box is set against it); every further one is a cycle. */
+    TEST_ASSERT_TRUE_MESSAGE(retakes <= 1, "a body leaned on by its owner went back and forth");
+}
+
+/* A throw leaves the hand inside its thrower's reach, and on another side her copy and its copy
+   play from different states. Every side keeps them apart until the throw has travelled her
+   half-width, its own half-diagonal and the speculative distance at its release speed, and no
+   longer: a later touch is a real one. */
+static void test_a_throw_is_kept_off_its_thrower_until_it_clears_her_on_every_side(void) {
+    layer_on();
+    const uint32_t box = 1, her = BODIES - 1;
+    const float speed = 6.0f, dt = 1.0f / 60.0f, half = 0.2f;
+    place_everywhere(her, 4.0f, 0.2f, -3.0f);
+    place_everywhere(box, 4.45f, 0.2f, -3.0f);
+    for (int i = 0; i < 30; i++) {
+        tick_all();
+    }
+    grant(&guest, id_of(box), BODY_SYNC_HOLD_UNTIL_RELEASE);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_holder(guest.sync, id_of(box), id_of(her)));
+    for (int i = 0; i < 10; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_holder(guest.sync, id_of(box), BODY_SYNC_ID_NONE));
+    grant(&guest, id_of(box), BODY_SYNC_HOLD_UNTIL_SETTLED);
+    b3Body_SetLinearVelocity(guest.bodies[box], (b3Vec3){speed, 0.0f, 0.0f});
+    side_t *sides[3] = {&guest, &host, &other};
+    int kept[3] = {0, 0, 0};
+    for (int i = 0; i < 60; i++) {
+        tick_all();
+        for (int k = 0; k < 3; k++) {
+            kept[k] += b3Body_GetJointCount(sides[k]->bodies[her]) > 0 ? 1 : 0;
+        }
+    }
+    const float s = B3_SPECULATIVE_DISTANCE;
+    const int bound = (int)ceilf((half + s + (half + s) * sqrtf(3.0f)) / (speed * dt));
+    const char *names[3] = {"the thrower", "the host", "the other guest"};
+    for (int k = 0; k < 3; k++) {
+        char what[96];
+        snprintf(what, sizeof(what), "%s kept the throw off her for %d ticks (1..%d)", names[k], kept[k], bound);
+        TEST_ASSERT_TRUE_MESSAGE(kept[k] >= 1 && kept[k] <= bound, what);
+    }
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_worlds_at_rest_agree_and_go_quiet);
@@ -1580,6 +2512,8 @@ int main(void) {
     RUN_TEST(test_create_refuses_limits_too_wide_for_the_wire);
     RUN_TEST(test_carried_bodies_characters_and_relayed_flags);
     RUN_TEST(test_a_take_over_keeps_the_drawn_pose);
+    RUN_TEST(test_a_claimed_body_keeps_what_the_caller_did_to_it);
+    RUN_TEST(test_a_claim_goes_on_from_the_pose_the_claimant_shows);
     RUN_TEST(test_a_copy_is_never_driven_past_max_speed);
     RUN_TEST(test_a_relayed_state_carries_its_age);
     RUN_TEST(test_a_guests_body_is_dynamic_on_the_host);
@@ -1608,6 +2542,7 @@ int main(void) {
     RUN_TEST(test_a_pushed_soft_copy_taken_keeps_its_pose);
     RUN_TEST(test_a_released_body_goes_on_from_its_own_pose);
     RUN_TEST(test_a_hit_pauses_the_pull);
+    RUN_TEST(test_a_soft_copy_does_not_wake_a_heap_whole);
     RUN_TEST(test_a_layer_copy_keeps_the_character_bits);
     RUN_TEST(test_the_layer_mass_threshold);
     RUN_TEST(test_a_bad_light_mass_is_refused);
@@ -1625,5 +2560,25 @@ int main(void) {
     RUN_TEST(test_marks_spread_through_a_touching_row);
     RUN_TEST(test_the_rest_hold_is_joined_exactly);
     RUN_TEST(test_the_pause_scales_with_the_measured_round_trip);
+    RUN_TEST(test_a_take_keeps_the_copys_pose);
+    RUN_TEST(test_a_taken_body_never_goes_out_kinematic);
+    RUN_TEST(test_a_creeping_pile_stays_in_the_rest_hold);
+    RUN_TEST(test_a_return_waits_for_the_hosts_acknowledgement);
+    RUN_TEST(test_the_hosts_character_is_stopped_by_a_guests_body);
+    RUN_TEST(test_a_state_from_before_the_grant_is_dropped);
+    RUN_TEST(test_a_quiet_body_waits_for_its_moving_neighbour);
+    RUN_TEST(test_what_the_hosts_agent_sets_going_stays_the_hosts);
+    RUN_TEST(test_an_owned_body_never_takes_a_moving_one);
+    RUN_TEST(test_the_host_takes_back_two_guests_touching_bodies);
+    RUN_TEST(test_a_take_of_a_body_no_agent_touches_is_refused);
+    RUN_TEST(test_a_refused_take_is_not_repeated);
+    RUN_TEST(test_a_refused_take_does_not_jump);
+    RUN_TEST(test_a_take_back_goes_on_from_the_hosts_own_pose);
+    RUN_TEST(test_a_take_back_of_a_fast_body_keeps_the_hosts_pose);
+    RUN_TEST(test_a_run_into_copies_its_own_push_sets_flying_does_not_fling_her);
+    RUN_TEST(test_a_flying_copys_path_through_her_never_places_it_inside_her);
+    RUN_TEST(test_another_seats_throw_never_passes_through_this_sides_character);
+    RUN_TEST(test_a_body_leaned_on_by_its_owner_never_ping_pongs);
+    RUN_TEST(test_a_throw_is_kept_off_its_thrower_until_it_clears_her_on_every_side);
     return UNITY_END();
 }

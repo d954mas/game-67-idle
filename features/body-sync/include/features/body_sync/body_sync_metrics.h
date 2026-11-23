@@ -73,10 +73,25 @@ extern "C" {
      lag_divergence.max lag_divergence.p95 path_error.max path_error.p95 jump.max [m]
      step.count offset_step.count snap.count [body-ticks]   behind_ticks.max behind_ticks.p95 [ticks]
      response_ticks.max response_ticks.p95 [ticks]   response_misses.count [hits]   rest_jitter.max [m]
-     rest_wakes.count [body-ticks]   rest_lag_ticks.max [ticks]   soft_places.max [placements]
+     rest_wakes.count [body-ticks]   rest_breaks.count [breaks]   host_wakes.count [wakes]   rest_lag_ticks.max [ticks]   soft_places.max [placements]
+     aligned_gap.max aligned_gap.p95 local_correction.max [m]
+     takes.count take_refusals.count reclaims.count returns.count [bodies]
+   - lag-aligned gap: two pictures of one moment, while the body moves. A copy an endpoint plays
+     (a guest the host's bodies, the host a guest's) against what its owner drew at the owner tick
+     the copy shows, a body a guest predicts (the second layer) too, in its pause or past it: the
+     snap places it within 1 m of that pose and its render offset adds at most 2 m. It takes the
+     latency out of divergence for every way a body is shown, so it compares the policies.
+     prediction_gap (reported only): a prediction in a pause that began with its owner at rest
+     against the host's picture when the host's playback of that guest's character reaches the
+     guest's tick; past the contact the two simulations differ by chaos, not lateness.
+   - local correction: what the seam moved a body a guest simulates (its character excepted)
+     beyond its own step, its move at the apply plus the change of its render offset: the
+     thrower's own corrections.
    - local response: a hit is a contact that begins, in a guest's step, between a body that guest
      simulates (its character, or a body under its authority) and a LIGHT copy on its world whose
-     body on the host then moves 1 cm or more within 60 ticks (the hit was real). Its response is
+     body on the host then moves 1 cm or more within 60 ticks to a pose 1 cm or more from where
+     the guest drew the copy at the hit (the hit was real; a host catching up to a push the guest
+     showed before the hit is no hit of the host's). Its response is
      the guest's ticks from that step until the copy's drawn position there is 1 mm or more from
      where it was drawn at the step (a copy waiting for the host does not move at all), if that
      comes within 24 ticks; later it is a miss, counted in response_misses (the pull moved it, not
@@ -86,6 +101,12 @@ extern "C" {
      than 5 cm/s, the run's own rest) for the last 30 ticks and nothing this guest simulates touches it, rest_jitter
      is the largest drawn move in a tick of a copy whose host body sleeps (one kept awake, against a
      character, is followed on the copy grid) and rest_wakes counts the ticks a copy starts to move;
+     rest_breaks counts the times a guest's whole world, once it had rested 30 ticks after the
+     scenario's last action, stopped resting (a copy woken, moved or drawn off its host body);
+     a rest that ends only because host bodies moved (a pile creeping against a character slips)
+     is the host's physics and counts in host_wakes instead; creep_max (reported only) is the
+     fastest an awake host body moved while the world rested. A driven (kinematic) body rests by
+     its speed over 15 ticks: a copy of a still owner steps on the copy grid;
      with no such body-tick both checks fail. rest_lag_ticks is the longest run of ticks a copy
      moved while its host body rested and nothing of the guest's touched it for 60 ticks (a copy
      that never comes to rest). soft_places counts, per predicted copy, the placements its render
@@ -135,6 +156,24 @@ typedef struct body_sync_guest_metrics {
     double path_error_max_m, path_error_p95_m;
     uint32_t step_count, offset_step_count, snap_count;
     double jump_max_m;
+    /* The lag-aligned gap: each picture of a moving body against its owner's own picture at the
+       owner tick it shows (README "Metrics"); local_correction: what the seam moved a body this
+       guest simulates beyond its own step (the thrower's corrections), an offset left from its
+       time as a copy decaying uncounted. */
+    double aligned_gap_max_m, aligned_gap_p95_m;
+    uint32_t aligned_samples;
+    /* Reported only: a prediction in a pause that began with its owner at rest against the host's
+       answer at the guest's moment (README "Metrics"). Two simulations of one contact: past it
+       they differ by chaos, which no bound derives. */
+    double prediction_gap_max_m, prediction_gap_p95_m;
+    double local_correction_max_m;
+    /* Authority following interaction: the guest's takes the host granted and refused, its bodies
+       the host's agents took back, and those it returned at rest. */
+    uint32_t takes, take_refusals, reclaims, returns;
+    /* Its takes that lost while their claim waited, and the farthest drawn pose handed back to the
+       winner's (body_sync_lost_take); the glide off it is left out of the lag-aligned gap. */
+    uint32_t lost_takes;
+    double lost_take_max_m;
     double behind_max_ticks, behind_p95_ticks;
     uint64_t playback_samples; /* copy-ticks the playback measures saw */
     /* The second layer's measures (body_sync_metrics.h "local response", "rest"). */
@@ -142,6 +181,9 @@ typedef struct body_sync_guest_metrics {
     uint32_t response_events, response_misses;
     double rest_jitter_max_m;
     uint32_t rest_wakes;
+    uint32_t rest_breaks;
+    uint32_t host_wakes; /* rests that ended only because host bodies moved: the host's physics */
+    double creep_max;    /* m/s, the fastest an awake host body moved while this guest's world rested */
     uint32_t rest_ticks;         /* copy-ticks the rest measures saw; none fails their checks */
     uint32_t rest_lag_max_ticks; /* the longest a copy moved on while its owner rested, untouched */
     uint32_t soft_places_max;    /* the most placements one predicted copy took (a stall, a snap) */
@@ -187,6 +229,7 @@ typedef struct body_sync_report {
     uint64_t seed;
     uint32_t tick_hz;
     float light_mass_max;  /* the second layer run, kilograms; 0 off */
+    uint8_t authority;     /* body_sync_authority_mode_t the seams ran */
     uint32_t ticks;        /* scenario ticks run */
     uint32_t rest_tick;    /* first tick the host's world was at rest after the last item; UINT32_MAX: never */
     uint32_t guest_count;

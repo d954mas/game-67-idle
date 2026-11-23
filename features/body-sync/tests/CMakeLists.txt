@@ -33,6 +33,7 @@ body_sync_test(test_body_sync_sender LIBS body_sync_parts)
 body_sync_test(test_body_sync_authority LIBS body_sync_parts)
 body_sync_test(test_body_sync_playback LIBS body_sync_parts)
 body_sync_test(test_body_sync_soft LIBS body_sync_parts)
+body_sync_test(test_body_sync_policy LIBS body_sync_parts)
 body_sync_test(test_body_sync_real LIBS body_sync net_bits)
 body_sync_test(test_body_sync_stand LIBS body_sync_stand body_sync)
 body_sync_test(test_body_sync_free_step LIBS body_sync_stand body_sync)
@@ -57,7 +58,7 @@ set(BODY_SYNC_REAL_SCENARIOS char_push layer_bounce layer_pile layer_push layer_
 set(BODY_SYNC_TWICE_SCENARIOS two_walk bounce_wall cut_short cut_long hitch_guest hitch_host rate_mismatch rate_rough two_ping)
 set(BODY_SYNC_IMPLS "body_sync_stand_cli|" "body_sync_stand_cli_stub|stub_")
 
-set(core_tests test_body_sync_logic test_body_sync_playback test_body_sync_soft test_body_sync_wire test_body_sync_stub test_body_sync_seam_real test_body_sync_codec test_body_sync_sender test_body_sync_authority test_body_sync_real
+set(core_tests test_body_sync_logic test_body_sync_playback test_body_sync_soft test_body_sync_policy test_body_sync_wire test_body_sync_stub test_body_sync_seam_real test_body_sync_codec test_body_sync_sender test_body_sync_authority test_body_sync_real
     test_body_sync_stand test_body_sync_checks)
 set(slow_tests test_body_sync_free_step)
 foreach(impl IN LISTS BODY_SYNC_IMPLS)
@@ -112,6 +113,23 @@ foreach(scn IN LISTS BODY_SYNC_REAL_SCENARIOS)
         list(APPEND slow_tests test_body_sync_two_processes_${scn})
     endif()
 endforeach()
+# Authority following interaction (the real seam only): its own scenes, and the second layer's,
+# the throws' and the heap's scenes run under it with the layer on.
+set(BODY_SYNC_AUTHORITY_SCENARIOS authority_host_push authority_two_guests authority_two_guests_far authority_leave
+    authority_three_host authority_three_guest authority_three_cross)
+set(BODY_SYNC_INTERACTION_SCENARIOS layer_bounce layer_pile layer_push layer_rest layer_stand layer_nudge layer_leave pile_throw throw_catch
+    load_four char_push edge_throw_cut pile_settle_loss10)
+foreach(scn IN LISTS BODY_SYNC_AUTHORITY_SCENARIOS)
+    add_test(NAME test_body_sync_scn_${scn}
+        COMMAND body_sync_stand_cli "${BODY_SYNC_SCENARIOS}/${scn}.scn" --out "${CMAKE_CURRENT_BINARY_DIR}/${scn}.json" --quiet)
+    list(APPEND slow_tests test_body_sync_scn_${scn})
+endforeach()
+foreach(scn IN LISTS BODY_SYNC_INTERACTION_SCENARIOS)
+    add_test(NAME test_body_sync_interaction_scn_${scn}
+        COMMAND body_sync_stand_cli "${BODY_SYNC_SCENARIOS}/${scn}.scn" --authority interaction --light-mass ${BODY_SYNC_LAYER_KG}
+                --out "${CMAKE_CURRENT_BINARY_DIR}/interaction_${scn}.json" --quiet)
+    list(APPEND slow_tests test_body_sync_interaction_scn_${scn})
+endforeach()
 add_test(NAME test_body_sync_stub_contrast_char_push
     COMMAND "${CMAKE_COMMAND}" -DCLI=$<TARGET_FILE:body_sync_stand_cli_stub> -DSCENARIO=${BODY_SYNC_SCENARIOS}/char_push.scn
             -DOUT=${CMAKE_CURRENT_BINARY_DIR} -DTAG=stub_ -DRC=1 "-DEXPECT=FAIL line 24 moved~cabinet moved" -P "${CMAKE_CURRENT_LIST_DIR}/expect_fail.cmake")
@@ -154,3 +172,8 @@ body_sync_must_fail(mf_angle_zero 1 "FAIL line 9 agree_at_rest~turned")
 body_sync_must_fail(mf_no_copy 1 "FAIL line 8 metric~no copy was measured")
 body_sync_must_fail(mf_behind 1 "FAIL line 9 metric~behind_ticks.max")
 body_sync_must_fail(mf_layer_off 1 "FAIL line 14 metric~response_ticks.max")
+# The stub takes nothing by interaction, so only the real seam has a take that can lose.
+add_test(NAME test_body_sync_mf_lost_take
+    COMMAND "${CMAKE_COMMAND}" -DCLI=$<TARGET_FILE:body_sync_stand_cli> -DSCENARIO=${BODY_SYNC_MUST_FAIL}/mf_lost_take.scn
+            -DOUT=${CMAKE_CURRENT_BINARY_DIR} -DTAG= -DRC=1 "-DEXPECT=FAIL line 19 metric~lost_takes.max" -P "${CMAKE_CURRENT_LIST_DIR}/expect_fail.cmake")
+set_tests_properties(test_body_sync_mf_lost_take PROPERTIES LABELS "core")

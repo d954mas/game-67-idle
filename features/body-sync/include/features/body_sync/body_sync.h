@@ -87,6 +87,14 @@ typedef struct body_sync_config {
        back once the pause chain ends. Each guest may use its
        own knob; the host ignores it, and so does the stub. */
     float light_mass_max;
+    /* Who owns a free body; every endpoint must use the same mode and light_mass_max (the
+       caller's handshake). INTERACTION (src/sync_policy.h, README "Authority follows
+       interaction"): a seat's character, what it carries or threw and what it owns this way take
+       the light bodies (light_mass_max, which must then be above 0) they set moving; the taker
+       simulates them and the host shows them through playback until they rest, when the seam
+       hands them back. The host grants or refuses those takes itself; its own agents come first.
+       The stub ignores it. */
+    body_sync_authority_mode_t authority;
 } body_sync_config_t;
 
 /* NULL when the config is out of range, its limits are too wide for the implementation's wire
@@ -102,8 +110,8 @@ body_sync_t *body_sync_create(const body_sync_config_t *config);
    Destroy the seam before its world. */
 void body_sync_destroy(body_sync_t *sync);
 
-/* The linked implementation and its version, for logs and metrics: "real 0.7.0" or
-   "stub 0.7.0". */
+/* The linked implementation and its version, for logs and metrics: "real 0.8.0" or
+   "stub 0.8.0". */
 const char *body_sync_implementation(void);
 
 /* Text of the last INVALID or FORMAT this seam returned, "" before any. */
@@ -180,7 +188,9 @@ bool body_sync_authority(const body_sync_t *sync, body_sync_id_t id, body_sync_a
 bool body_sync_is_local(const body_sync_t *sync, body_sync_id_t id);
 
 /* Optimistic take: the body becomes local here at once and a claim, with this endpoint's next
-   claim sequence (never 0, also across the wrap), goes to the host. The claimant simulates the
+   claim sequence (never 0, also across the wrap), goes to the host. A copy takes over within
+   the call (its pose, velocities and motion as body_sync_is_local says), so what the caller
+   does to the body from then on (a grab carries it to the hand) is never undone. The claimant simulates the
    body until the host answers that claim; the host ignores its poses until it is granted. An
    answer to an older claim of this endpoint (one it released since) changes nothing here. On
    the host a claim takes effect at once, reaches no queue, and is announced to every guest. A
@@ -288,14 +298,28 @@ void body_sync_pop_record(body_sync_t *sync, uint8_t seat);
 bool body_sync_render_offset(const body_sync_t *sync, body_sync_id_t id, float position[3], float rotation[4]);
 
 /* Measurement: the owner's tick a copy shows now, in that owner's tick count; for a local body
-   the endpoint's own last collect tick. False when unknown. The stub reports the tick of the
-   newest state received. */
+   the endpoint's own last collect tick. False when unknown, and while a copy has no state to
+   play: one turned back into a copy, until the next apply drives it and its owner's first state
+   since has come. The stub reports the tick of the newest state received. */
 bool body_sync_playback(const body_sync_t *sync, body_sync_id_t id, double *owner_tick);
 
 /* Measurement: true for a copy this side simulates itself now and pulls toward its owner (the
    second layer, light_mass_max), whose drawn pose is a prediction rather than its playback pose;
    false for one held on its owner's pose. Always false for the stub and with the layer off. */
 bool body_sync_is_predicted(const body_sync_t *sync, body_sync_id_t id);
+
+/* Measurement: true for a predicted copy whose pull waited at the last apply (the layer's pause
+   after this side's touch or hit): its drawn pose is this side's own answer, which the owner
+   shows at this side's moment. Past the pause it follows its playback pose. Always false for
+   the stub and with the layer off. */
+bool body_sync_is_pull_paused(const body_sync_t *sync, body_sync_id_t id);
+
+/* Measurement: a take of this side's that lost while its claim waited turns back into a copy, its
+   drawn pose handed back to the winner's (README "Conflicts"). Sets how many this body had here
+   and the latest one's distance from the drawn pose to the winner's playback pose; true while the
+   drawn pose still glides off it (its render offset outside the layer's 1 cm dead zone). Always
+   false and 0 for the stub. */
+bool body_sync_lost_take(const body_sync_t *sync, body_sync_id_t id, uint32_t *count, float *hand_back_m);
 
 /* True for a copy the second layer holds (soft, in the rest hold or in flight): the seam keeps
    character_category's bits on it, so a game that sets its own collision filters must not take

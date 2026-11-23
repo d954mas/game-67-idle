@@ -1,0 +1,52 @@
+# As authority_three_host, with the third guest's heroine as the runner: she meets bodies the
+# throwers own, which she may not take, and copies the host's world moves because her own copy
+# there pushes them.
+scenario authority_three_guest
+scene pile60_four
+seed 71
+guests 3
+# A hard end well past rest, so the rest measures watch the world at rest for seconds.
+end 16s
+light_mass 20kg
+authority interaction
+
+net g1 rtt 100ms jitter 20ms loss 2%
+net g2 rtt 100ms jitter 20ms loss 2%
+net g3 rtt 100ms jitter 20ms loss 2%
+
+p1 grab ball_s as a1
+p2 grab ball_n as a2
+p3 walk -1.2 0 as start
+at 1200ms p1 throw 2 0.3 -0.1 speed 8 as t1
+at 1200ms p2 throw 2 0.3 0.1 speed 8 as t2
+at 1300ms p3 walk 5.5 0 speed 4 as run
+# Derived: the run starts at 1.3 s and covers 6.7 m at 4 m/s (1.68 s); the pile's 1 m at half
+# speed adds 0.25 s, reaching speed and stopping within 0.2 m a quarter second: 3.5 s. A runner
+# the pile holds or flings is cut off here and the run fails.
+at 3500ms p3 wait 100ms as stop
+
+expect result a1 granted
+expect result a2 granted
+expect result run done
+expect agree_at_rest 1cm 2deg
+expect no_stuck
+# Once at rest after the last action, a guest's world stays at rest: 0.
+expect rest_breaks.count <= 0
+# No pass-through: a light copy a guest's own character walks into without contact is a miss.
+expect response_misses.count <= 0
+# Derived: a body a guest simulates is moved by the seam only at a take, which keeps its pose
+# (README "Authority follows interaction"): float noise, 1 cm.
+expect local_correction.max <= 1cm
+# Derived: a render offset's release, 0.15 of at most 2 m.
+expect jump.max <= 0.3m
+# Derived for every copy, predicted or not, paused or not, against its owner at the copy's
+# playback tick: the snap keeps it within 1 m of that pose and its render offset adds at most
+# 2 m: 3 m. A prediction from rest against the host's answer is prediction_gap, reported only.
+expect aligned_gap.max <= 3m
+# Derived: a take that lost hands its drawn pose back to the winner's inside the glide's reach
+# (SYNC_OFFSET_LOST_M, 5 m); past it the offset clears and the loser's picture jumps.
+expect lost_takes.max <= 5m
+# Liveness: each rule ran at all (takes, a take of another guest's body refused, a take-back).
+expect takes.count >= 1
+expect take_refusals.count >= 1
+expect reclaims.count >= 1

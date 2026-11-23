@@ -27,6 +27,7 @@ enum {
     /* The locks byte: linear x y z, angular x y z from bit 0; bits 6 and 7 are refused. */
     STUB_LOCKS_ALL = 0x3F,
     STUB_RECORD_BYTES_MAX = 27,
+    STUB_HOLD_MAX = 2, /* body_sync_hold_t's largest, BODY_SYNC_HOLD_UNTIL_REST */
     STUB_SLOTS = 1024, /* BODY_SYNC_BODIES_MAX; asserted in the stub */
 };
 

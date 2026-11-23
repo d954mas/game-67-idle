@@ -21,6 +21,7 @@
 
 #include "features/body_sync/body_sync_types.h"
 #include "stub_wire.h"
+#include "sync_policy.h"
 
 typedef struct sync_authority_body {
     bool bound;
@@ -64,6 +65,7 @@ typedef struct sync_authority_body {
     bool data_mine;
     bool kinematic_mine; /* the owner changed the motion type since the last resume */
     bool locks_mine;     /* the owner changed the locks since the last resume */
+    bool takable;        /* light for the interaction policy: class LIGHT within light_mass_max */
 } sync_authority_body_t;
 
 typedef struct sync_authority_pending {
@@ -93,6 +95,19 @@ typedef struct sync_authority {
     uint64_t owed[BODY_SYNC_SEATS_MAX][SYNC_AUTHORITY_OWED_WORDS];
     uint16_t answer[BODY_SYNC_SEATS_MAX][BODY_SYNC_BODIES_MAX];
     bool forced[BODY_SYNC_SEATS_MAX][BODY_SYNC_BODIES_MAX]; /* the owed move answers no claim */
+    sync_policy_mode_t mode;
+    /* Counts for body_sync_traffic: a guest's takes sent and returns, the host's answers by seat. */
+    uint32_t takes_sent, returns_sent;
+    uint32_t granted[BODY_SYNC_SEATS_MAX], refused_takes[BODY_SYNC_SEATS_MAX], reclaimed[BODY_SYNC_SEATS_MAX];
+    /* Host: bodies each seat owns by interaction, kept as they move; each seat's take budget
+       (SYNC_POLICY_TAKE_BURST_TICKS) and the tick it was last topped up. */
+    uint32_t owned_by[BODY_SYNC_SEATS_MAX];
+    float take_budget[BODY_SYNC_SEATS_MAX];
+    uint32_t take_budget_tick[BODY_SYNC_SEATS_MAX];
+    /* Host: the shell's measure of a take's evidence (sync_policy_grant_in_t agent_gap, *reach).
+       None: every take counts as touching, for the parts tested without a world. */
+    float (*take_gap)(void *context, uint8_t seat, uint32_t slot, float *reach);
+    void *take_context;
     char *error; /* the shell's last-error text, written on INVALID */
     size_t error_size;
 } sync_authority_t;
@@ -161,9 +176,9 @@ typedef enum sync_hold_kind {
     SYNC_HOLD_SOFT,       /* dynamic, simulated here and pulled softly (sync_soft.h) */
 } sync_hold_kind_t;
 /* CORRECTED as holds_dynamic says. SOFT on a guest with the layer on (`light`: class LIGHT and
-   mass at most light_mass_max) for a body of another seat with no holder, no settled hold (not
-   in flight) and not kinematic at its owner. DRIVEN otherwise: heavy copies, characters, held
-   and flying bodies stay as 0.6.0 holds them. */
+   mass at most light_mass_max; the caller passes it for a flight held until settled only near
+   this side's agents) for a body of another seat with no holder and not kinematic at its owner.
+   DRIVEN otherwise: heavy copies, characters and held bodies stay as 0.6.0 holds them. */
 sync_hold_kind_t sync_authority_hold_kind(const sync_authority_t *a, const sync_authority_body_t *b, bool owner_kinematic, bool light);
 
 /* Whether this side's packets carry moving bodies as sim records: a guest's do, since the host
@@ -171,8 +186,29 @@ sync_hold_kind_t sync_authority_hold_kind(const sync_authority_t *a, const sync_
 bool sync_authority_sends_sim(const sync_authority_t *a);
 
 /* A local body with a settled hold, after the step: asleep, or touched a moving body other
-   than its last holder. True when that ended the hold (see sync_authority_settled). */
-bool sync_authority_settle(sync_authority_t *a, body_sync_id_t id, bool asleep, bool touched_moving);
+   than its last holder (`touched_untakable`: one this side may not take). The policy decides
+   (sync_policy_flight): true when the hold ended (see sync_authority_settled); a flight that goes
+   on owned by interaction takes the hold until rest instead. */
+bool sync_authority_settle(sync_authority_t *a, body_sync_id_t id, bool asleep, bool touched_moving, bool touched_untakable);
+
+/* ---- authority follows interaction (sync_policy.h) ---- */
+
+/* Guest: an optimistic take of a body one of its agents set moving, as a claim with the hold
+   until rest that the host answers itself. FULL when the queue to the host has no room. */
+body_sync_result_t sync_authority_take(sync_authority_t *a, body_sync_id_t id);
+/* The authority number a local body's state declares: while a take waits, the number its grant
+   will give (the host's move adds one), so the host takes its states from the grant on instead
+   of a round trip later; a refusal or any other move gives another number, and they stay
+   rejected. */
+uint16_t sync_authority_declared_number(const sync_authority_t *a, const sync_authority_body_t *b);
+/* Bodies `seat` owns by interaction now (a hold until rest); this guest's own count includes its
+   takes waiting for the grant. */
+uint32_t sync_authority_owned(const sync_authority_t *a, uint8_t seat);
+/* Host: its own body set going by its agents (hold until rest), or that hold ended. */
+void sync_authority_host_active(sync_authority_t *a, body_sync_id_t id, bool active);
+/* Host: one of its agents touched a guest's body owned by interaction: it comes back to the host
+   at once, forced, still owned by interaction there. */
+body_sync_result_t sync_authority_reclaim(sync_authority_t *a, body_sync_id_t id);
 
 /* The id a record's holder names on this side, by slot and low generation bits; NONE when no
    body of that generation is bound there. */

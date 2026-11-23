@@ -68,7 +68,18 @@ typedef enum body_sync_hold {
        contact with a non-static body other than its last holder, or when it falls asleep, so
        one side judges its contacts. Contacts are seen only on shapes with contact events on. */
     BODY_SYNC_HOLD_UNTIL_SETTLED,
+    /* Owned by interaction (config authority INTERACTION): the seat whose action set it moving
+       simulates it until it and what it touches rest, then the seam hands it back to the host;
+       on the host's own body it marks one the host's agents set going. Only the seam sets it: a
+       caller's claim with it is INVALID. */
+    BODY_SYNC_HOLD_UNTIL_REST,
 } body_sync_hold_t;
+
+/* Who owns a free body (body_sync_config_t.authority). */
+typedef enum body_sync_authority_mode {
+    BODY_SYNC_AUTHORITY_HOST = 0,    /* the host, but for what a guest carries or threw in flight */
+    BODY_SYNC_AUTHORITY_INTERACTION, /* the seat whose action set it moving, until it rests */
+} body_sync_authority_mode_t;
 
 typedef struct body_sync_authority {
     uint8_t seat;    /* the seat that simulates the body */
@@ -114,6 +125,13 @@ typedef struct body_sync_traffic {
        but did not fit a packet, and the most ticks an awake body went between two packets. */
     uint64_t deferred;
     uint32_t stale_max_ticks;
+    /* Authority following interaction (zero under the host policy and for the stub). On a guest,
+       for the host: takes sent and bodies returned at rest. On the host, for a guest: its takes
+       granted and refused, and its bodies the host's agents took back. */
+    uint32_t takes;
+    uint32_t take_refusals;
+    uint32_t reclaims;
+    uint32_t returns;
 } body_sync_traffic_t;
 
 #ifdef __cplusplus

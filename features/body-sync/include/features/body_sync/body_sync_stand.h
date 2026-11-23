@@ -63,6 +63,10 @@ typedef struct body_sync_stand_config {
        runs in both modes. The report names the mode run. */
     bool override_light_mass;
     float light_mass_max;
+    /* Every seam's authority mode (body_sync_authority_mode_t) instead of the scenario's own
+       `authority`: the command line's --authority, so one scenario runs under both policies. */
+    bool override_authority;
+    uint8_t authority;
 } body_sync_stand_config_t;
 
 /* Builds every endpoint's world, seam, session and the network, and connects the guests. NULL

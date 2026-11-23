@@ -14,4 +14,10 @@ p1 walk -3 2 as away
 expect result away done
 expect agree_at_rest 1cm 2deg
 expect rest_wakes.count <= 0
+# Once at rest after the last action, a guest's world stays at rest: 0.
+expect rest_breaks.count <= 0
 expect rest_jitter.max <= 0m
+# Derived: a copy's visible correction in a tick (its drawn move less its owner's at the same
+# event time, or less its own step for a predicted copy) is at most a render offset's release,
+# 0.15 of at most 2 m: 0.3 m. A placement the offset does not take shows as its whole move.
+expect jump.max <= 0.3m

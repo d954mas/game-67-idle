@@ -39,7 +39,7 @@ one process or in two.
 
 | Header | What it gives |
 |---|---|
-| `features/body_sync/body_sync.h` | The seam: `create` with the box and speeds a peer's numbers must stay in, seats joined and left, `bind`/`unbind` an id to a `b3BodyId` with its starting authority and number, authority (`claim`, `release`, `poll_claim`, `answer`, `assign`, `set_holder`, `set_flags`), the tick (`set_peer_tick`, `receive_state`, `receive_record`, `apply`, `collect`, `write_state`, `state_sent`, `unresolved`/`resolve`, `peek_record`/`pop_record`), `render_offset`, `traffic` by kind, the second layer's `is_predicted`, `is_layer_copy` and `round_trip`. Includes Box3D. |
+| `features/body_sync/body_sync.h` | The seam: `create` with the box and speeds a peer's numbers must stay in, seats joined and left, `bind`/`unbind` an id to a `b3BodyId` with its starting authority and number, authority (`claim`, `release`, `poll_claim`, `answer`, `assign`, `set_holder`, `set_flags`), the tick (`set_peer_tick`, `receive_state`, `receive_record`, `apply`, `collect`, `write_state`, `state_sent`, `unresolved`/`resolve`, `peek_record`/`pop_record`), `render_offset`, `traffic` by kind, the second layer's `is_predicted`, `is_pull_paused`, `is_layer_copy`, `lost_take` and `round_trip`. Includes Box3D. |
 | `features/body_sync/body_sync_scene.h` | Scenes as C data: body descriptors (shape, size, mass or density, friction, restitution, linear and angular damping, pose, motion, role, flags, model tag, routes, breakable templates), player spawns, the character's tuning, `validate`, the 8-scene catalog and lookup in it or in a caller's table. |
 | `features/body_sync/body_sync_scenario.h` | The scenario grammar (top comment), the parsed struct, `parse` and `load`, which refuse with a line and a reason. |
 | `features/body_sync/body_sync_metrics.h` | Metric definitions and names, the report structs, schema `body_sync.metrics.v2`. |
@@ -96,7 +96,7 @@ left carried falls where it is.
 
 ## The real seam
 
-Five parts decide; the Box3D shell (`src/body_sync_real.c`) only reads bodies,
+Six parts decide; the Box3D shell (`src/body_sync_real.c`) only reads bodies,
 calls them and moves bodies as they say. None of the parts includes Box3D
 (`body_sync_types.h` holds the seam's plain types), so their tests run alone.
 
@@ -112,6 +112,10 @@ calls them and moves bodies as they say. None of the parts includes Box3D
   a velocity estimated from its last two poses.
 - **Playback** (`sync_playback`): where each copy is drawn and how it is held;
   see "Playback" below.
+- **Policy** (`sync_policy`): every handover the caller does not ask for (a
+  flight's end, and under authority following interaction the takes, the
+  host's answers, its agents first and the returns at rest); see "Authority
+  follows interaction".
 - **Authority** (`sync_authority`): claims, answers, releases, forced moves,
   the reliable records, shared with the stub; also where each body's state
   goes and in which record kind, when a settled hold ends, what a holder
@@ -132,13 +136,13 @@ One record, bits:
 | rare (when its bit is set) | 5-bit group mask, then the groups present | |
 | - motion | kinematic 1, locks 6 | |
 | - flags | the caller's 4 bits | |
-| - authority | seat 2, number 16, hold 1 | |
+| - authority | seat 2, number 16, hold 2 | |
 | - holder | present 1, slot 10, generation 4 | |
 | - data | size 4, then that many bytes | 0..8 bytes, the caller's |
 
 On the stand's limits (box 80 x 65 x 80 m, 100 m/s, 200 rad/s) a copy is 96
 bits, a moving sim record 201, a rest record 123, a relayed record 8 more,
-every rare group 50 more and the data group 4 plus 8 a byte.
+every rare group 51 more and the data group 4 plus 8 a byte.
 The generation goes as its low **4 bits**: a stale record whose generation
 matches modulo 16 reads as current; records are newest-wins per sender, so
 only a pose sent before a respawn and read after it could pass. The grids hold while every coordinate of the box is below 2048 m in
@@ -241,7 +245,12 @@ starved body shows as a catch-up the render offset or a dynamic hold smooths
   a body it still simulates, which are buffered for when it is a copy again: a
   claimant refused plays the owner's states from before and during its claim,
   while a body whose take was confirmed drops the snapshots from before it (it
-  simulated on since) and stays where it is until the owner's next state.
+  simulated on since) and stays where it is until the owner's next state. The
+  rare groups those records carry are kept while the claim waits (its hold,
+  holder, flags, motion and data, not the pose): the host counts each group a
+  packet carried as known once the packet arrived and never sends it again
+  unchanged, so a refused claimant dropping them would hold the groups from
+  before its take, and take a body the host's agents set going again and again.
 - **The far rule.** From a timeline's first sample on, a sample further ahead of
   the clock line than 75 ticks (`delay_max` 15 plus the jump's 60) disagrees with
   it. Alone it is dropped and counted (`rejected`): a forged or corrupt tick would
@@ -315,7 +324,7 @@ starved body shows as a catch-up the render offset or a dynamic hold smooths
   shape id, when the body is local again, unbound or the seam destroyed; the
   caller may change the rest of a copy's filters and add shapes meanwhile.
   Bind refuses a body of more than 4 shapes then. `body_sync_playback` reports the owner tick a copy shows,
-  for measurement.
+  for measurement, and none while it has nothing to play.
 
 The stand's host rule grants a guest's grab within the reach plus 1 m of slack
 (`STAND_CLAIM_SLACK_M`): the host sees the claimant's character one way plus the
@@ -336,22 +345,42 @@ holder, is not held until settled and whose owner is not kinematic has two
 holds on a guest (`src/sync_soft.h`):
 
 - **Rest hold.** Its owner rests (asleep there, or within a copy-grid step of
-  one pose for 15 ticks: a pile leaning on a character that is driven every
-  tick never sleeps) and nothing of this side's moves at it: it is driven
+  one pose for 15 ticks, a step being how far two copy records of one still
+  pose may decode apart: a cell's diagonal, 3.4 mm, and twice the 9-bit
+  rotation's error bound, 0.0195 rad; a pile leaning on a character that is driven every
+  tick never sleeps; once resting, an owner that creeps rests on while each step takes it 8
+  ticks or more, 27 mm/s, half the stillness so creep near the speed that lets it rest does
+  not flap; the random sweep's creep reaches 15 mm/s) and nothing of this side's moves at it: it is driven
   kinematic on the owner's pose like any copy, exact at rest, outside every
   island, and keeps the character bits. A copy of a still but awake owner
-  follows it only past a grid step (2 mm), so it does not creep with the
-  owner's rounded pose.
+  follows it only past that step, so it does not creep with the owner's
+  rounded pose. A copy a body of this side's leans on (a contact that acted,
+  closing slower than a push) stays out of the hold and soft while the lean
+  lasts: held kinematic where her character presses in, it would push her out
+  of the overlap the soft copy let her into, lifting her onto the pile or
+  reading as a push that frees the heap again and again. A body this side
+  returned at rest rests in the hold where it shows it until the host's first
+  state of it comes. On the host, a light copy of a guest's body whose owner
+  rests within that step stays as the host's world settled it, uncorrected.
 - **Soft.** Every body of this side's moving faster than a lean (0.25 m/s at
   any point, spin times its extent counted: its own character and bodies, soft
-  copies a hit set going, a copy in flight) marks the light copies within its
+  copies a hit set going, a copy in flight; not a copy in the rest hold, whose step
+  of the copy grid is its owner's creep) marks the light copies within its
   travel in three steps plus 5 cm, and through contacts every light copy
-  touching them; those, and every copy whose owner moves, are dynamic and
+  touching them. Copies held kinematic share no contacts, so the walk also
+  passes from a kinematic copy to every copy within 2 cm (Box3D's speculative
+  margin) of it, and so wakes a resting heap whole as the host's island wakes;
+  only a walk this side's own body or a copy in flight started does so. A soft
+  copy moves by the pull or by settling as it leaves the hold, and a heap it
+  woke whole would settle the same way again, never at rest. Those, and every
+  copy whose owner moves, are dynamic and
   simulated here, so its own character pushes them in the same step. A copy
   pulled back by the layer marks nothing. The game moves its bodies after
   `body_sync_apply`, so a push from standstill is seen at collect instead: a
-  contact impulse from a body of this side's (bound or not) past stopping it
-  from 0.05 m/s marks the copy, and through contacts the copies behind it;
+  contact of a body of this side's (bound or not) that closed faster than
+  0.05 m/s before the solve marks the copy, and through contacts the copies
+  behind it (not its impulse: a lean pushed out of an overlap, or a weight
+  borne, has a large one and no approach);
   pushed or pressed, a copy's pull waits. A resting copy is a wall for one step
   at most.
 
@@ -378,6 +407,19 @@ A soft copy is steered to the owner's playback pose:
 - **Flight.** While the owner moves it at 4 m/s or more it is driven
   kinematic along the owner's path, soft again under 1 m/s; the change to
   driven is a placement, never a sweep that would bat the soft copies near it.
+  It stays soft in flight while a body this side simulates (its character,
+  what it carries) presses it or marks it within reach: the owner moves it
+  that fast because that body's copy pushes it there, and placed on the
+  owner's older path it would land inside that body and fling it. Marks from
+  copies, the flying copy's own among them, do not count. Another seat's
+  throw, held until it settles, is no free copy but flies by this rule too:
+  driven along its owner's path at any speed with the character bits, soft
+  only while this side's body presses it or marks it within reach, so it
+  strikes this side's character instead of passing through her.
+- **No overlap.** A driven copy is never placed or swept onto a pose that
+  lies inside a body this side simulates deeper than Box3D's linear slop
+  (shape against shape, where the two collide): that step it stays soft, the
+  contact parts them, and it is driven again once its pose is clear.
 
 Going back to the rest hold inside the dead zone sets the copy on the pose
 exactly; further off it is placed and the offset takes it. The layer never
@@ -392,8 +434,17 @@ the layer the guest's heroine is pressed by her soft copies by a hair, which
 is what kept the host's pile awake.
 
 Layer copies keep the character bits; `body_sync_is_layer_copy` names them,
-so a game that sets its own filters does not take the bits off them. The stand
+so a game that sets its own filters does not take the bits off them. On the
+host a guest's throw, held dynamic until it settles, keeps them too: the
+host's characters meet its flight as the thrower's copy of them does. The stand
 counts a light copy its character walks into without contact as a missed hit.
+
+A throw (released at the flight speed, 4 m/s, or faster) leaves the hand inside its thrower's
+reach, and on another side her copy and its copy play from different states: every side keeps
+the two apart with a filter joint until the throw has travelled her half-width and its own
+half-diagonal (Box3D's bounds, speculative distance included) at its release speed, a copy
+reading its owner's speed; about 0.61 m and 10 ticks at 4 m/s for a 0.3 m capsule and a 0.3 m box. A drop
+is met as any body.
 
 The layer scenes bound `rest_lag_ticks.max` at 98 ticks, derived for a 250 ms
 round trip (one-way 8 ticks); each further ~33 ms of round trip adds a tick.
@@ -406,6 +457,113 @@ at 100 to 300 ms; the 2 is a copy resting in the hold met from standstill), worl
 the heroine standing in a pile (`layer_stand`), no jitter at rest. The cost is
 a moving pile that differs from the host's until it rests (`pause_divergence`,
 divergence).
+
+## Authority follows interaction
+
+`body_sync_config_t.authority` picks who owns a free body; every endpoint uses
+the same mode and `light_mass_max` (the caller's handshake). HOST (0, the
+default) is 0.7.0's rule. INTERACTION (`src/sync_policy.h`, the one place its
+rules live) gives a light body (class LIGHT, at most `light_mass_max`, not
+kinematic at its owner, carried by nobody) to the seat whose action set it
+moving, and through it whatever that body sets moving, until they rest; the
+others show it through playback. The thrower then has nothing to correct: the
+host shows the thrower's result. Corrections remain where two players touch the
+same bodies, and there the second layer is the loser's correction. The stub
+ignores the mode.
+
+- **Agents.** A seat's character, a body it carries or threw, and a body it
+  owns by interaction. An agent takes a light body it touches while it moves
+  faster than a lean (0.25 m/s at the contact, spin times its extent counted),
+  or, a character or what it carries, pushes it from standstill (the second
+  layer's push rule). Between bodies in a pile a push would count their weight
+  on each other, so an owned body takes only by its motion, and only a body
+  that rests at its owner: one its owner moves was set going by someone else,
+  and taking it on would hand a contested heap between two guests through the
+  host. A character standing in a pile owns nothing.
+- **The take.** On a guest it is optimistic: at collect after the step of the
+  contact the body becomes local (a claim with the hold until rest), simulated
+  on from what this side shows (a take never moves the body; the newest state
+  received may be older than the copy's pose), and goes out from the next tick.
+  The host answers the claim itself, never through `body_sync_poll_claim`:
+  granted when the body is the host's, free and not set going by the host's
+  own agents, the seat has take budget left (16 a tick, up to 8 ticks of it
+  kept for a hitch of the record lane), and the host's own world shows one of
+  the claimant's agents within reach of the body: its gap to the agent's copy,
+  or to the agent's newest state, at most 15 cm plus what the agent and the
+  body travel over a round trip and a playback delay (the time the host's copy
+  trails the guest). A take whose agent the host refused, or a forged claim of
+  a body no agent is near, is refused. While its take waits, a body's state declares the number the
+  grant will give, so the host takes its states from the grant on, not a round
+  trip later. Only the claimant hears the grant; the other guests read the new
+  owner from the state the host relays.
+- **A flight.** A thrown or dropped body that first touches a body its thrower
+  may take stays the thrower's, owned by interaction; one that touches a body
+  it may not take (heavy, a character, owned elsewhere) goes back to the host
+  as under HOST.
+- **Conflicts.** The host first: a body the host's agents touch is the
+  host's until it rests (a hold until rest there), and no guest may take it;
+  the host's agent touching a guest's body owned by interaction takes it back
+  at once, the host going on from its own simulation of it. Then the earliest
+  confirmed toucher: a take of a body another guest owns is refused, and no
+  body moves between guests. The loser's body turns back into a copy that the
+  second layer corrects toward the winner's at once, as any copy that strays:
+  no handover pause, which would let the loser's picture run on a round trip
+  more; past 1 m it is placed and its render offset takes the jump, up to 5 m
+  rather than the offset's usual 2 m (the random three-participant sweep's
+  farthest was 3.1 m), closing 0.15 m a tick beyond 2 m: the loser's picture
+  glides to the winner's instead of jumping (`body_sync_lost_take`; the stand counts it in
+  `lost_takes.count`, the hand-back in `lost_takes.max`, bound by the glide's 5 m reach, and
+  leaves the glide out of `aligned_gap`). A guest takes no
+  body whose last known hold is the host's own agents' (the rare groups kept
+  while a claim waits make a refused claim's hold known). Where bodies two guests own this way
+  touch, the host takes both back, as its own agents' touch does: each guest
+  would lean on a copy of the other's that is a round trip through the host
+  late, and the heap would creep and never rest (`authority_two_guests_far`).
+  The priority is one constant in the policy (`SYNC_POLICY_PRIORITY`).
+- **The host's hold.** A guest's body owned by interaction is held on the host
+  as any dynamic copy (owner's velocity and the closed error), and keeps
+  `character_category`'s bits there, so the host's character meets it; that
+  touch is how the host's agents come first. The claim reaches the host one
+  way, its first state one playback delay before the host plays the contact,
+  so the body holds its first snapshot until the thrower's ball, on the same
+  timeline, reaches it.
+- **The return.** A guest releases a body once it is quiet (asleep, or within
+  2 mm and 0.004 rad of one pose for 15 ticks: the second layer's stillness),
+  every body it owns by interaction that touches it is quiet, and the host has
+  acknowledged its rest pose and every rare group: the host then continues from
+  the very pose the guest has, or, when its own copy lies within the second
+  layer's dead zone of it (1 cm, 0.035 rad), from its copy's pose with the
+  guest's velocities: placed a fraction of a millimetre off its neighbours
+  there, the body would drop or be pushed out and wake the heap. A quiet body
+  goes out as a rest pose though awake. The host ends its own hold the same way, without the
+  acknowledgement, and only once its agents have been off the body for 15 ticks plus the farthest
+  guest's measured round trip (`sync_policy_host_hold_ticks`): an agent leaving at the slowest
+  speed that marks (0.25 m/s) is inside the marking walk's reach (three steps of travel plus 5 cm)
+  for 15 ticks, and a guest's take sent on the end's first state lands a round trip later, so a
+  walk that brushes a body twice keeps one hold instead of ending it and refusing the take.
+  A body this side gave back while its own character or a body she carries pressed it is not
+  taken again by this side until that press ends: its copy under the press would be taken by the
+  push, quiet and go back again, over and over.
+- **Bounds.** A body owned by interaction goes back after 600 ticks (10 s)
+  without an agent touching it however it moves (a body rolling for ever), and
+  at once when it leaves the box. A guest owns at most 64 such bodies, its
+  takes still waiting for the grant counted (over a 300 ms round trip a heap's
+  contacts would otherwise send hundreds, every one past 64 refused): the
+  pile scenes' 60 and the ball, and 64 moving sim records (25 bytes each) are
+  already 1.6 times a 1000-byte budget, so each waits about two packets
+  (README "Staleness bound"). It sends at most 16 takes and 16 releases a
+  tick: 128 and 320 bytes on the reliable lane, the host's answers 432 bytes
+  (27 a record); a heap's contacts spread over the next ticks.
+- **A guest that leaves** hands its bodies back as any seat does (from its
+  newest state, velocities included); they are the host's until they rest.
+- **Untrusted bytes.** A claim with a hold past the hold until rest is FORMAT;
+  a take of a heavy, carried, kinematic or foreign body, or past the 64, is
+  refused, never asserted. A caller's claim with the hold until rest is
+  INVALID.
+
+`body_sync_traffic` counts the takes, refusals, take-backs and returns
+(`takes`, `take_refusals`, `reclaims`, `returns`); the stand reports them per
+guest.
 
 ## Running the stand
 
@@ -460,7 +618,8 @@ expect agree_at_rest <length> [<angle>] | no_stuck | effects_once | left <guest>
 expect result <label> <done|granted|refused|hit|missed|rejected|failed>
 expect one_of <outcome> <label> <label> ...
 expect moved <body> <=|>= <length>  # the body's travel on the host, first tick to last
-expect <metric> <= <value>
+expect pace <label>                 # a walk to a point keeps up with a local reference run
+expect <metric> <=|>= <value>
 ```
 
 Units are required: `250ms`, `1.5s`, `90t` (ticks), `5cm`, `0.05m`, `3deg`,
@@ -471,7 +630,21 @@ ends. A grab is optimistic: the action ends at once, and its label's outcome
 becomes `granted` or `refused` when the host's answer arrives. A grab out of
 reach fails; scenarios walk first. An angle written in `agree_at_rest` is
 always a bound, `0deg` included. With `guests 0` the checks that compare a
-guest are refused. The whole of `scenarios/edge_throw_cut.scn`:
+guest are refused.
+
+`expect pace <label>` holds a walk to a point to what physics alone does with
+it: once the run ends, the stand runs the same scenario, seed and modes again on
+the host's world alone, every player's character local there and no network,
+and compares the walk's progress (its start distance less the nearest it came)
+tick by tick from its start. At every tick the walk must be no more than 0.2 m
+(a walk's arrival distance) behind the reference's progress L ticks earlier,
+where L is what the network may hold back of what the walker meets: two of the
+run's slowest one-way paths (another guest's body crosses to the host and on to
+her), her playback delay at most (15 ticks), and the longest cut, stall or deaf
+spell. A runner pushing chairs into a wall does so in the reference too; a copy
+that stops her where the reference's body gave way fails (planted in
+`test_body_sync_checks`: her copies of the pile's near face held kinematic). An
+absolute `expect result <walk> done` stays where it is derived, a free walk. The whole of `scenarios/edge_throw_cut.scn`:
 
 ```text
 # A guest throws, and its link is cut while the body flies.
@@ -610,6 +783,52 @@ P is its newest received tick, so those read near zero there: its stutter is
 in time and shows in `jerk`. A guest's body relayed to another guest plays on
 a clock the stand cannot map back and is left out of them.
 
+**The lag-aligned gap** (`aligned_gap.max`, `.p95`) compares two pictures of one
+moment while a body moves: a copy, predicted or not, in its pause or past it,
+against what its owner drew at the owner tick the copy shows. Its bound is
+derived: the snap keeps a copy within 1 m of that pose, paused or not, and its
+render offset adds at most 2 m, so 3 m. Against the host at the guest's moment a
+copy would be off by its speed times the round trip and two delays however true
+it plays. `prediction_gap` (max, p95; reported only, no check) compares a
+predicted copy in its pause, the guest's own answer to its touch
+(`body_sync_is_pull_paused`), with the host's picture when the host shows that
+guest's moment (its playback of the guest's character reaches the guest's tick),
+for a pause that began with the host's body at rest at the tick the copy showed
+then. Both sides simulate one contact from one rest pose; past it they differ by
+chaos, not lateness, and no bound derives that. A pause that began while its
+owner moved the body, or on another guest's body (a relayed clock, and each side
+meets that guest's motion at its own stage: 3.06 m on a random three-participant
+pile at 300 ms), has no shared moment and is measured only at the playback tick.
+A copy with nothing to play (one just turned back from
+local, before its owner's first state since) is not measured. It is the policies' common measure: same-tick divergence
+(and `pause_divergence`) counts the shower's latency, which under authority
+following interaction sits on the host. `local_correction.max` is what the seam
+moved a body a guest simulates beyond its own step (its move at the apply plus
+its render offset's change): the thrower's own corrections, 0 by construction
+under interaction outside a contest. An offset left from the body's time as a
+copy only decays by the seam's law, that copy's correction ending, and is not
+counted; once the seam sets the offset while the guest simulates the body,
+every change counts. Planted in `test_body_sync_checks`: a move of a local body
+outside its step fails `local_correction`, and a copy knocked after rest fails
+`rest_breaks`.
+A guest's claim of a copy takes over within the claim, from the pose the
+claimant shows (as a take does): a placement at the newest state would leave its
+jump in the offset, and the game's carry would take that offset off the hand
+(0.09 to 0.23 m on the game's `openspace_wall` and `openspace_carry`, 0.05 m on
+`throw_catch`). The measure replays the seam's offset decay on the previous
+tick's offset, so an offset dropped or grown counts, and it counts from the
+tick a body turns local, against its pose once the tick's actions are done.
+`rest_breaks.count` counts the times a guest's whole world, at rest for 30
+ticks after the scenario's last action, stops resting. A rest that ends only
+because host bodies moved (a pile creeping against a character slips) is the
+host's physics: it counts in `host_wakes.count`, and `creep_max` reports the
+fastest an awake host body moved while the world rested. A driven (kinematic)
+body rests by its mean speed over 15 ticks, a tick's move past 6.8 mm counting
+whole: a copy of a still or creeping owner steps on the copy grid, 3.4 mm in a
+tick (`src/stand_logic.h`). Planted in `test_body_sync_checks`: copies
+shown a tick early and a guest drawing its own bodies 10 cm off what it sends
+each fail a bound the clean run holds.
+
 A guest whose session ended fails `agree_at_rest`, `no_stuck` and
 `effects_once` with "gN left at tick T" unless the scenario says `expect left
 gN`; a check never passes on a guest it did not compare.
@@ -660,8 +879,16 @@ agree and go quiet, a guest's body comes back moving, an old grant's pose is
 rejected, flags, type, holder and locks move with authority, both receive
 calls are fuzzed through apply, a step and collect with Box3D's asserts
 counted, limits too wide refuse create, a take-over keeps the drawn pose while
-physics continues from the newest state, a copy is never driven past
-`max_speed`, and a relayed state carries its age and stops past 63 ticks. Every scenario, must-fail case and
+physics continues from the newest state, what the caller does to a body it
+just claimed (moved to the hand, made kinematic) stays done, a copy is never driven past
+`max_speed`, and a relayed state carries its age and stops past 63 ticks.
+Under authority following interaction it runs each rule on its own: a take
+keeps the copy's pose, a taken body never goes out kinematic, a return waits
+for the host's acknowledgement (the guest's packets arrive, their fates come
+back lost) and for the owned bodies it touches to be quiet, the host's
+character is stopped by a guest's body, a state from before the grant is
+dropped, what the host's agent sets going stays the host's, an owned body
+never takes a moving one, and the host takes back two guests' touching bodies. Every scenario, must-fail case and
 the two-process run is a test on each implementation (`test_body_sync_stub_*`
 for the stub). `test_body_sync_logic` (core) parses every shipped scenario, refuses a corpus
 of broken lines with their line numbers, fuzzes the parser (truncations, bit
@@ -680,6 +907,18 @@ through with its mask restored exactly at the take, and fuzz of both receive
 calls through apply, a step and collect with Box3D's own asserts counted. `test_body_sync_stand` (core) builds
 every catalog scene on four endpoints with equal world hashes, walks the view,
 and runs `two_walk` twice in one process for byte-equal JSON.
+`test_body_sync_policy` (core) runs the authority policy alone and the takes it
+drives through authority: a flight that meets a takable body stays its
+thrower's, who takes what (a lean takes nothing, a push does; heavy, carried,
+kinematic, host-set, foreign bodies and the two bounds refuse), the host's
+grants, its agents first, the contested touch of two guests' bodies, the
+return at rest and its bounds, stillness, the optimistic take on the wire with
+the predicted number, a guest's count with its takes still waiting, a
+refusal, two guests, a take-back, and a claim with an unknown hold as FORMAT.
+The scenes `authority_host_push`, `authority_two_guests`,
+`authority_two_guests_far` and `authority_leave` and the
+second layer's, the throws' and the heap's scenes under `--authority
+interaction` (`test_body_sync_interaction_scn_*`, slow) run it on the stand.
 `test_body_sync_checks` (core) plants a defect after a clean run (a body only
 a guest has, one a guest lacks, a moved copy, a kinematic body nobody holds, a
 body under a seat that left, a knock applied twice, a broken body back, a
@@ -717,7 +956,11 @@ with the state, the report printer and the viewer's drawer hook; 0.6.0 the
 playback receiver: opaque data, `character_category`, `delay_min` and
 `delay_max`, `body_sync_playback`, the relayed origin on the wire, the scenario
 words `rate` and `expect moved`, the playback metrics and schema
-`body_sync.metrics.v2`; 0.7.0 the second layer: `light_mass_max`,
+`body_sync.metrics.v2`; 0.8.0 authority following interaction: `authority`
+and the hold until rest (two bits on the wire), the traffic's take counts, the
+scenario word `authority`, `>=` in metric checks, the CLI and viewer flag
+`--authority`, `body_sync_is_pull_paused`, `aligned_gap`, `local_correction` and the take counts in the
+metrics; 0.7.0 the second layer: `light_mass_max`,
 `body_sync_is_predicted`, `body_sync_is_layer_copy`, `body_sync_round_trip`,
 the scenario word `light_mass`, `expect moved ...
 layer <length>`, the CLI and viewer flag `--light-mass`, and the layer

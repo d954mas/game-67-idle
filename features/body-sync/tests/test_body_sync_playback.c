@@ -396,7 +396,7 @@ static void test_render_offset(void) {
     sync_offset_t o;
     sync_offset_clear(&o);
     const float a[3] = {0, 0, 0}, b[3] = {1.5f, 0, 0}, q[4] = {0, 0, 0, 1};
-    sync_offset_absorb(&o, a, q, b, q);
+    sync_offset_absorb(&o, a, q, b, q, SYNC_OFFSET_SNAP_M);
     SAME(-1.5f, o.position[0]);
     sync_offset_decay(&o);
     NEAR(1e-6f, -1.5f * SYNC_OFFSET_FAST, o.position[0]);
@@ -408,8 +408,20 @@ static void test_render_offset(void) {
     TEST_ASSERT_TRUE(o.position[0] < 0.6f * SYNC_OFFSET_SLOW && o.position[0] > 0.6f * SYNC_OFFSET_FAST);
     const float far[3] = {2.5f, 0, 0};
     sync_offset_clear(&o);
-    sync_offset_absorb(&o, a, q, far, q);
+    sync_offset_absorb(&o, a, q, far, q, SYNC_OFFSET_SNAP_M);
     SAME(0.0f, o.position[0]);
+    /* A lost take keeps it, and its drawn pose never moves more than the release at the snap
+       reach in a tick, 0.15 of 2 m; past the reach it closes by 0.15 m. */
+    sync_offset_absorb(&o, a, q, far, q, SYNC_OFFSET_LOST_M);
+    SAME(-2.5f, o.position[0]);
+    sync_offset_decay(&o);
+    NEAR(1e-5f, -2.5f + (1.0f - SYNC_OFFSET_FAST) * SYNC_OFFSET_FAR_M, o.position[0]);
+    for (int k = 0; k < 120; k++) {
+        float before = o.position[0];
+        sync_offset_decay(&o);
+        TEST_ASSERT_TRUE(o.position[0] - before <= (1.0f - SYNC_OFFSET_FAST) * SYNC_OFFSET_SNAP_M + 1e-6f && o.position[0] - before >= 0.0f);
+    }
+    TEST_ASSERT_TRUE(fabsf(o.position[0]) < 0.01f);
 }
 
 /* The rate of a sender at 60 Hz heard by a 59.5 Hz endpoint, and the line a relay ages by. */
@@ -599,7 +611,8 @@ static void test_a_rebase_keeps_the_owner_tick(void) {
 }
 
 /* forget_until drops the snapshot at its tick too; a copy waiting at its newest snapshot keeps
-   that snapshot's motion for a dynamic hold. */
+   that snapshot's motion for a dynamic hold. With every snapshot dropped it plays nothing, and
+   reports no owner tick: its timeline's would name a picture it does not show. */
 static void test_forget_until_and_a_waiting_copys_motion(void) {
     sync_playback_init(&pb, 60, 0, 0);
     for (uint32_t k = 10; k <= 14; k++) {
@@ -614,6 +627,12 @@ static void test_forget_until_and_a_waiting_copys_motion(void) {
     sync_playback_sample(&pb, 3, &play);
     TEST_ASSERT_FALSE(play.frozen);
     SAME(3.0f, play.velocity[0]);
+    double tick;
+    TEST_ASSERT_TRUE(sync_playback_tick(&pb, 3, &tick));
+    sync_playback_forget_until(&pb, 3, 14);
+    sync_playback_sample(&pb, 3, &play);
+    TEST_ASSERT_FALSE(play.known);
+    TEST_ASSERT_FALSE_MESSAGE(sync_playback_tick(&pb, 3, &tick), "a body with nothing to play reported its timeline's tick");
 }
 
 /* The locked axes' part of a turn, and only that. */

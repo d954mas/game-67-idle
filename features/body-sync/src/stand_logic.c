@@ -4,6 +4,25 @@
 
 #include "stand_logic.h"
 
+/* ---- a driven body's rest ---- */
+
+void stand_drive_note(stand_drive_t *drive, float speed, float spin) {
+    drive->speed[drive->next] = speed;
+    drive->spin[drive->next] = spin;
+    drive->next = (drive->next + 1u) % STAND_DRIVE_TICKS;
+}
+
+void stand_drive_motion(const stand_drive_t *drive, float dt, float *speed, float *spin) {
+    uint32_t last = (drive->next + STAND_DRIVE_TICKS - 1u) % STAND_DRIVE_TICKS;
+    float v = 0.0f, w = 0.0f;
+    for (uint32_t i = 0; i < STAND_DRIVE_TICKS; i++) {
+        v += drive->speed[i];
+        w += drive->spin[i];
+    }
+    *speed = drive->speed[last] * dt > STAND_DRIVE_STEP_M ? drive->speed[last] : v / (float)STAND_DRIVE_TICKS;
+    *spin = drive->spin[last] * dt > STAND_DRIVE_STEP_RAD ? drive->spin[last] : w / (float)STAND_DRIVE_TICKS;
+}
+
 /* ---- random draws ---- */
 
 void stand_rng_seed(stand_rng_t *rng, uint64_t seed) { rng->state = seed ^ 0x6A09E667F3BCC909ull; }
@@ -471,7 +490,7 @@ const char *stand_verb_name(body_sync_verb_t verb) {
 }
 
 const char *stand_expect_name(body_sync_expect_kind_t kind) {
-    static const char *names[] = {"none", "agree_at_rest", "no_stuck", "effects_once", "result", "one_of", "metric", "left", "moved"};
+    static const char *names[] = {"none", "agree_at_rest", "no_stuck", "effects_once", "result", "one_of", "metric", "left", "moved", "pace"};
     return (unsigned)kind < sizeof(names) / sizeof(names[0]) ? names[kind] : "none";
 }
 

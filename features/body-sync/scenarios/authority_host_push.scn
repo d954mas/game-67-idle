@@ -1,0 +1,34 @@
+# Authority follows interaction, the host first: the guest throws the ball into the pile and the
+# host's heroine walks into the same pile while it still moves. The bodies the guest set going are
+# the guest's until her character touches them; then the host takes them back and the guest's
+# copies are pulled to the host's (the second layer's correction for the loser).
+scenario authority_host_push
+scene pile60
+seed 61
+guests 1
+end 14s
+light_mass 20kg
+authority interaction
+
+net g1 rtt 100ms jitter 20ms loss 2%
+
+p1 grab ball as grab
+p1 wait 300ms
+p1 throw pile31 speed 12 as throw
+at 600ms p0 walk 3.4 -0.2 speed 3 as host_push
+
+expect result grab granted
+expect result throw done
+expect result host_push done
+expect agree_at_rest 1cm 2deg
+expect no_stuck
+# Derived: a body this guest simulates is moved by the seam only at a take, which keeps its pose
+# (README "Authority follows interaction"): nothing but float noise, 1 cm.
+expect local_correction.max <= 1cm
+# Derived as in layer_pile: a render offset's release, 0.15 of at most 2 m.
+expect jump.max <= 0.3m
+# Measured 58 takes, 4 bodies taken back by the host's heroine and 56 returns at rest (seed 61);
+# the bounds say each rule ran at all.
+expect takes.count >= 20
+expect reclaims.count >= 1
+expect returns.count >= 20

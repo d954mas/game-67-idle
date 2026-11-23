@@ -187,17 +187,64 @@ static void test_when_an_owner_rests(void) {
     play.known = false;
     play.at_rest = true;
     TEST_ASSERT_FALSE_MESSAGE(sync_soft_owner_rests(&still, &play), "an unknown owner rested");
+    /* A gap in the playback leaves the count alone, and a rest known beforehand goes on at once. */
+    memset(&still, 0, sizeof(still));
+    owner_at(1.0f, false);
+    sync_soft_still_at(&still, play.position, play.rotation);
+    sync_play_t gap = play;
+    gap.known = false;
+    gap.position[0] = 9.0f;
+    TEST_ASSERT_FALSE(sync_soft_owner_rests(&still, &gap));
+    TEST_ASSERT_TRUE_MESSAGE(sync_soft_owner_rests(&still, &play), "a playback gap restarted the owner's rest");
+}
+
+/* An owner rested, then moved a copy-grid cell (1/512 m) every `every` ticks: whether it still
+   rests after `ticks`, and at its first tick of motion past the second step. */
+static bool rests_creeping(uint32_t every, uint32_t ticks) {
+    sync_soft_still_t still;
+    memset(&still, 0, sizeof(still));
+    owner_at(1.0f, false);
+    for (uint32_t i = 0; i <= SYNC_SOFT_STILL_TICKS; i++) {
+        sync_soft_owner_rests(&still, &play);
+    }
+    bool rests = true;
+    for (uint32_t i = 1; i <= ticks; i++) {
+        if (i % every == 0) {
+            play.position[0] += 1.0f / 512.0f;
+        }
+        rests = sync_soft_owner_rests(&still, &play);
+    }
+    return rests;
+}
+
+/* A resting owner that creeps goes on resting while each step takes SYNC_SOFT_CREEP_TICKS or
+   more; a faster one is moving by its second step; one jump past a step past the edge at once. */
+static void test_a_creeping_owner_rests(void) {
+    /* Two cells cross the step: a cell every 4 ticks is a step in 8, the creep bound. */
+    TEST_ASSERT_TRUE_MESSAGE(rests_creeping(SYNC_SOFT_CREEP_TICKS / 2u, 600), "an owner creeping at the bound stopped resting");
+    TEST_ASSERT_TRUE_MESSAGE(rests_creeping(7, 600), "an owner creeping near the sweep's creep stopped resting");
+    TEST_ASSERT_FALSE_MESSAGE(rests_creeping(1, 6), "an owner moving a cell a tick still rested after two steps");
+    sync_soft_still_t still;
+    memset(&still, 0, sizeof(still));
+    owner_at(1.0f, false);
+    for (uint32_t i = 0; i <= SYNC_SOFT_STILL_TICKS; i++) {
+        sync_soft_owner_rests(&still, &play);
+    }
+    play.position[0] += 2.0f * SYNC_SOFT_HOLD_M + 1e-4f;
+    TEST_ASSERT_FALSE_MESSAGE(sync_soft_owner_rests(&still, &play), "a jump of two steps from rest still rested");
 }
 
 /* The rest hold: a resting owner, no pause, nothing of this side's coming. */
 static void test_the_rest_hold(void) {
     sync_soft_enter(&soft, false, 0);
-    TEST_ASSERT_TRUE(sync_soft_rest_hold(true, &soft, true, false));
-    TEST_ASSERT_FALSE(sync_soft_rest_hold(false, &soft, true, false));
-    TEST_ASSERT_FALSE_MESSAGE(sync_soft_rest_hold(true, &soft, true, true), "a copy something comes at was held kinematic");
+    TEST_ASSERT_TRUE(sync_soft_rest_hold(true, &soft, true, false, false));
+    TEST_ASSERT_FALSE(sync_soft_rest_hold(false, &soft, true, false, false));
+    TEST_ASSERT_FALSE_MESSAGE(sync_soft_rest_hold(true, &soft, true, true, false), "a copy something comes at was held kinematic");
+    TEST_ASSERT_FALSE_MESSAGE(sync_soft_rest_hold(true, &soft, true, false, true), "a copy this side leans on was held kinematic");
+    TEST_ASSERT_FALSE_MESSAGE(sync_soft_rest_hold(true, &soft, false, false, true), "a held copy this side leans on stayed kinematic");
     soft.pause = 5;
-    TEST_ASSERT_FALSE_MESSAGE(sync_soft_rest_hold(true, &soft, true, false), "a paused soft copy was held kinematic");
-    TEST_ASSERT_TRUE_MESSAGE(sync_soft_rest_hold(true, &soft, false, false), "a stale pause of a driven copy counted");
+    TEST_ASSERT_FALSE_MESSAGE(sync_soft_rest_hold(true, &soft, true, false, false), "a paused soft copy was held kinematic");
+    TEST_ASSERT_TRUE_MESSAGE(sync_soft_rest_hold(true, &soft, false, false, false), "a stale pause of a driven copy counted");
 }
 
 /* Who marks: a point of a body moving faster than a lean, its spin counted at its extent, out to
@@ -213,11 +260,11 @@ static void test_who_marks_and_how_far(void) {
     TEST_ASSERT_FALSE(sync_soft_mover(none, turn, 0.05f, 1.0f / 60.0f, &reach)); /* a thin one turning is a lean */
 }
 
-/* A push is a contact impulse past stopping the pusher from a lean's speed. */
+/* A push is a contact closing faster than a lean before the solve. */
 static void test_what_a_push_is(void) {
-    TEST_ASSERT_FALSE(sync_soft_pushed(0.0f, 60.0f));
-    TEST_ASSERT_FALSE(sync_soft_pushed(0.9f * 60.0f * SYNC_SOFT_LEAN_SPEED, 60.0f));
-    TEST_ASSERT_TRUE_MESSAGE(sync_soft_pushed(60.0f * 0.2f, 60.0f), "a walk at 0.2 m/s stopped by a copy was no push");
+    TEST_ASSERT_FALSE(sync_soft_pushed(0.0f));
+    TEST_ASSERT_FALSE(sync_soft_pushed(0.9f * SYNC_SOFT_LEAN_SPEED));
+    TEST_ASSERT_TRUE_MESSAGE(sync_soft_pushed(0.2f), "a walk at 0.2 m/s stopped by a copy was no push");
 }
 
 /* The pause: the measured round trip, the delay and 2 ticks, inside the floor and the cap. */
@@ -254,6 +301,7 @@ int main(void) {
     RUN_TEST(test_the_pull_and_its_limits);
     RUN_TEST(test_a_stalled_pull_is_placed);
     RUN_TEST(test_when_an_owner_rests);
+    RUN_TEST(test_a_creeping_owner_rests);
     RUN_TEST(test_the_rest_hold);
     RUN_TEST(test_who_marks_and_how_far);
     RUN_TEST(test_what_a_push_is);

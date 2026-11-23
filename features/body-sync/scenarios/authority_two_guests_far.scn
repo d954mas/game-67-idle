@@ -1,0 +1,34 @@
+# authority_two_guests with the first guest 300 ms away: its throw reaches the heap after the
+# other's, and over the round trip a guest has many takes waiting at once. Where the two guests'
+# bodies meet, the host takes both back; without that the heap creeps and never rests.
+scenario authority_two_guests_far
+scene load300
+seed 63
+guests 2
+settle 12s
+light_mass 20kg
+authority interaction
+
+net g1 rtt 300ms jitter 20ms loss 2%
+net g2 rtt 250ms jitter 30ms loss 2%
+
+p1 walk load290
+p1 grab load290 as a1
+p1 wait 300ms
+p1 throw 0 0.5 0 speed 9 as t1
+p2 walk load209
+p2 grab load209 as a2
+p2 wait 300ms
+p2 throw 0 0.5 0 speed 9 as t2
+
+expect result a1 granted
+expect result a2 granted
+expect agree_at_rest 5cm
+expect no_stuck
+# Derived: as in authority_host_push, a take keeps the pose: 1 cm.
+expect local_correction.max <= 1cm
+# Measured 55 and 63 takes, 11 and 30 refused, 40 and 38 taken back where the guests' bodies
+# met (seed 63).
+expect takes.count >= 10
+expect take_refusals.count >= 1
+expect reclaims.count >= 1

@@ -157,6 +157,33 @@ bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, con
                          size_t error_size);
 body_sync_stand_kind_t stand_record_kind(stand_record_type_t type);
 
+/* ---- a driven body's rest ---- */
+
+/* A driven (kinematic) body has no motion of its own: its velocity is what the last drive asked
+   of one step, and a copy of a still or creeping owner moves by the copy grid, up to a step (a
+   cell's diagonal, 3.4 mm; 0.0195 rad) in one tick, 0.2 m/s and 1.2 rad/s, now and then. Its rest
+   is judged by its mean speed and spin over the last STAND_DRIVE_TICKS ticks. Window: an owner
+   creeping at c (at most the seam's creep bound, a step an eighth of a second, 27 mm/s; the
+   random sweep's creep reaches 15 mm/s) and one step of rounding move a copy c*T + 3.4 mm over
+   T, under the rest speed (5 cm/s) for T > 0.15 s; 15 ticks (0.25 s) bound the path at 12.5 mm
+   against 10.2 mm at the creep bound, 7.2 mm at the sweep's creep. A tick's move past
+   STAND_DRIVE_STEP_M or STAND_DRIVE_STEP_RAD counts at its own speed: the rest hold lets a copy
+   trail its owner by a step and close it in one tick while the owner's record moves a step more
+   (twice a step); a centimetre's snap is no rounding. */
+enum { STAND_DRIVE_TICKS = 15 };
+#define STAND_DRIVE_STEP_M 0.0068f
+#define STAND_DRIVE_STEP_RAD 0.039f
+
+typedef struct stand_drive {
+    float speed[STAND_DRIVE_TICKS], spin[STAND_DRIVE_TICKS];
+    uint32_t next;
+} stand_drive_t;
+/* Notes one tick's speed (m/s) and spin (rad/s). */
+void stand_drive_note(stand_drive_t *drive, float speed, float spin);
+/* What the body moves at for its rest: the window's means, or the last tick's own speed or spin
+   when that tick moved it past a step (`dt` the tick, seconds). */
+void stand_drive_motion(const stand_drive_t *drive, float dt, float *speed, float *spin);
+
 /* ---- metrics ---- */
 
 enum { STAND_HIST_BINS = 422 };
@@ -199,11 +226,16 @@ typedef struct stand_metrics {
     stand_hist_t lag[BODY_SYNC_GUESTS_MAX], path[BODY_SYNC_GUESTS_MAX], behind[BODY_SYNC_GUESTS_MAX];
     uint32_t steps[BODY_SYNC_GUESTS_MAX], offset_steps[BODY_SYNC_GUESTS_MAX], snaps[BODY_SYNC_GUESTS_MAX];
     double jump_max[BODY_SYNC_GUESTS_MAX];
+    stand_hist_t aligned[BODY_SYNC_GUESTS_MAX], prediction[BODY_SYNC_GUESTS_MAX];
+    double local_correction[BODY_SYNC_GUESTS_MAX];
+    uint32_t lost_takes[BODY_SYNC_GUESTS_MAX];
+    double lost_take_max[BODY_SYNC_GUESTS_MAX];
     stand_hist_t response[BODY_SYNC_GUESTS_MAX];
     double rest_jitter[BODY_SYNC_GUESTS_MAX], copy_speed[BODY_SYNC_GUESTS_MAX], pause_divergence[BODY_SYNC_GUESTS_MAX];
     uint32_t first_hit[BODY_SYNC_GUESTS_MAX]; /* tick + 1 of the first hit answered or missed; 0 none */
-    uint32_t rest_wakes[BODY_SYNC_GUESTS_MAX], rest_ticks[BODY_SYNC_GUESTS_MAX], response_misses[BODY_SYNC_GUESTS_MAX];
-    uint32_t rest_lag[BODY_SYNC_GUESTS_MAX], soft_places[BODY_SYNC_GUESTS_MAX];
+    uint32_t rest_wakes[BODY_SYNC_GUESTS_MAX], rest_breaks[BODY_SYNC_GUESTS_MAX], rest_ticks[BODY_SYNC_GUESTS_MAX], response_misses[BODY_SYNC_GUESTS_MAX];
+    uint32_t rest_lag[BODY_SYNC_GUESTS_MAX], soft_places[BODY_SYNC_GUESTS_MAX], host_wakes[BODY_SYNC_GUESTS_MAX];
+    double creep[BODY_SYNC_GUESTS_MAX];
     uint32_t bytes_second[BODY_SYNC_GUESTS_MAX][2][BODY_SYNC_KINDS_ALL][BODY_SYNC_TIME_MAX_S];
     uint64_t bytes_total[BODY_SYNC_GUESTS_MAX][2][BODY_SYNC_KINDS_ALL];
     double link_rate_sum[BODY_SYNC_GUESTS_MAX][2];
@@ -222,11 +254,26 @@ void stand_metrics_jerk(stand_metrics_t *metrics, uint32_t guest, double jerk_m)
    move since the last tick, and whether a render offset was giving a move back meanwhile. */
 void stand_metrics_playback(stand_metrics_t *metrics, uint32_t guest, double lag_m, double path_m, double behind_ticks, bool moved,
                             double drawn_move_m, double owner_move_m, bool offset_active);
+/* A predicted copy's drawn move that its own step does not explain: into jump.max. */
+void stand_metrics_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m);
+/* One sample of the lag-aligned gap (body_sync_metrics.h). */
+void stand_metrics_aligned(stand_metrics_t *metrics, uint32_t guest, double gap_m);
+/* A prediction in a pause from rest against the host's answer at the guest's moment: reported only. */
+void stand_metrics_prediction(stand_metrics_t *metrics, uint32_t guest, double gap_m);
+/* A body the guest simulates moved by the seam, not by its own step: into local_correction.max. */
+void stand_metrics_local_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m);
+/* A take of the guest's that lost, its drawn pose handed back `hand_back_m` from the winner's. */
+void stand_metrics_lost_take(stand_metrics_t *metrics, uint32_t guest, double hand_back_m);
 void stand_metrics_end_tick(stand_metrics_t *metrics);
 /* The second layer's measures (body_sync_metrics.h "local response", "rest"). */
 void stand_metrics_response(stand_metrics_t *metrics, uint32_t guest, double ticks);
 void stand_metrics_response_miss(stand_metrics_t *metrics, uint32_t guest);
 void stand_metrics_rest(stand_metrics_t *metrics, uint32_t guest, double jitter_m, bool wake);
+/* A guest's world at rest stopped resting: a break of its own, or a host wake (`host`: only host
+   bodies moved). */
+void stand_metrics_rest_break(stand_metrics_t *metrics, uint32_t guest, bool host);
+/* An awake host body's speed while the guest's world rests (m/s). */
+void stand_metrics_creep(stand_metrics_t *metrics, uint32_t guest, double speed);
 void stand_metrics_rest_lag(stand_metrics_t *metrics, uint32_t guest, uint32_t ticks);
 void stand_metrics_soft_place(stand_metrics_t *metrics, uint32_t guest, uint32_t places);
 void stand_metrics_copy_speed(stand_metrics_t *metrics, uint32_t guest, double speed);

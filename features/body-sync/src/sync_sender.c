@@ -350,3 +350,11 @@ void sync_sender_resolve(sync_sender_t *s, uint8_t seat, uint16_t number, bool a
         return;
     }
 }
+
+bool sync_sender_rest_acked(const sync_sender_t *s, uint8_t seat, uint16_t slot) {
+    if (seat >= BODY_SYNC_SEATS_MAX || slot >= BODY_SYNC_BODIES_MAX) {
+        return false;
+    }
+    const sync_seat_body_t *b = &s->bodies[seat][slot];
+    return b->eligible && b->asleep && b->rest_acked && !pending_groups(b);
+}

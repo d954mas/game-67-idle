@@ -515,7 +515,7 @@ const sync_rare_t *sync_playback_rare(const sync_playback_t *p, uint16_t slot, u
 }
 
 bool sync_playback_tick(const sync_playback_t *p, uint16_t slot, double *owner_tick) {
-    if (slot >= BODY_SYNC_BODIES_MAX || !p->bodies[slot].has) {
+    if (slot >= BODY_SYNC_BODIES_MAX || !p->bodies[slot].has || p->bodies[slot].count == 0) {
         return false;
     }
     const sync_timeline_t *t = &p->timelines[p->bodies[slot].timeline];
@@ -649,8 +649,9 @@ static void quat_mul(const float a[4], const float b[4], float out[4]) {
 }
 
 void sync_offset_absorb(sync_offset_t *o, const float before_position[3], const float before_rotation[4], const float after_position[3],
-                        const float after_rotation[4]) {
+                        const float after_rotation[4], float reach) {
     /* drawn = offset + physics, drawn rotation = offset rotation * physics rotation */
+    float was = length3(o->position);
     for (int i = 0; i < 3; i++) {
         o->position[i] += before_position[i] - after_position[i];
     }
@@ -658,18 +659,24 @@ void sync_offset_absorb(sync_offset_t *o, const float before_position[3], const 
     quat_mul(o->rotation, before_rotation, drawn);
     quat_mul(drawn, inverse, o->rotation);
     normalize(o->rotation);
-    if (length3(o->position) > SYNC_OFFSET_SNAP_M) {
+    /* Only this jump clears it: a placement that leaves a lost take's wider offset no wider keeps
+       its glide. */
+    float now = length3(o->position);
+    if (!(now <= reach) && !(now <= was)) {
         sync_offset_clear(o);
     }
 }
 
 void sync_offset_decay(sync_offset_t *o) {
     float d = length3(o->position);
-    if (d > SYNC_OFFSET_SNAP_M) {
+    if (!(d <= SYNC_OFFSET_LOST_M)) {
         sync_offset_clear(o);
         return;
     }
-    float k = d <= SYNC_OFFSET_NEAR_M ? SYNC_OFFSET_SLOW
+    /* Past the snap reach (a lost take's only) it closes by the release at 1 m, 0.15 m a tick: half
+       the release at the reach, which a glide held at it would graze every tick. */
+    float k = d <= SYNC_OFFSET_NEAR_M  ? SYNC_OFFSET_SLOW
+              : d > SYNC_OFFSET_SNAP_M ? 1.0f - (1.0f - SYNC_OFFSET_FAST) * SYNC_OFFSET_FAR_M / d
               : d >= SYNC_OFFSET_FAR_M ? SYNC_OFFSET_FAST
                                        : SYNC_OFFSET_SLOW + (SYNC_OFFSET_FAST - SYNC_OFFSET_SLOW) * (d - SYNC_OFFSET_NEAR_M) / (SYNC_OFFSET_FAR_M - SYNC_OFFSET_NEAR_M);
     for (int i = 0; i < 3; i++) {

@@ -507,7 +507,7 @@ stand_char_status_t stand_character_tick(stand_character_t *c, stand_world_t *w)
         }
         float dx = tx - pos[0], dz = tz - pos[2];
         float distance = sqrtf(dx * dx + dz * dz);
-        if (!goal && distance < 0.2f) {
+        if (!goal && distance < STAND_ARRIVE_M) {
             c->mode = STAND_CHAR_IDLE;
             status = STAND_CHAR_DONE;
             break;

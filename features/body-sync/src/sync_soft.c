@@ -15,23 +15,38 @@ static void clamp3(float v[3], float limit) {
 }
 
 bool sync_soft_owner_rests(sync_soft_still_t *still, const sync_play_t *play) {
+    if (!play->known) {
+        return false; /* no pose to count from: the count waits */
+    }
     float moved[3], turned[3];
     for (int i = 0; i < 3; i++) {
         moved[i] = play->position[i] - still->anchor[i];
     }
     sync_turn_between(still->anchor_rotation, play->rotation, turned);
-    if (still->ticks > 0 && length3(moved) <= SYNC_SOFT_HOLD_M && length3(turned) <= SYNC_SOFT_HOLD_RAD) {
+    float m = length3(moved), t = length3(turned);
+    if (still->ticks > 0 && m <= SYNC_SOFT_HOLD_M && t <= SYNC_SOFT_HOLD_RAD) {
         still->ticks = still->ticks < UINT16_MAX ? (uint16_t)(still->ticks + 1u) : still->ticks;
+        still->resting = still->resting || still->ticks > SYNC_SOFT_STILL_TICKS;
     } else {
+        /* A creeping pose crosses a step's edge by at most one decoded step (a record's rounding
+           moves it a cell at once); further is a move however long the step was held. */
+        still->resting = still->resting && still->ticks >= SYNC_SOFT_CREEP_TICKS && m <= 2.0f * SYNC_SOFT_HOLD_M && t <= 2.0f * SYNC_SOFT_HOLD_RAD;
         memcpy(still->anchor, play->position, sizeof(still->anchor));
         memcpy(still->anchor_rotation, play->rotation, sizeof(still->anchor_rotation));
         still->ticks = 1;
     }
-    return play->known && (play->at_rest || still->ticks > SYNC_SOFT_STILL_TICKS);
+    return play->at_rest || still->resting;
 }
 
-bool sync_soft_rest_hold(bool owner_rests, const sync_soft_t *s, bool soft_now, bool marked) {
-    return owner_rests && !marked && (!soft_now || s->pause == 0);
+void sync_soft_still_at(sync_soft_still_t *still, const float position[3], const float rotation[4]) {
+    memcpy(still->anchor, position, sizeof(still->anchor));
+    memcpy(still->anchor_rotation, rotation, sizeof(still->anchor_rotation));
+    still->ticks = SYNC_SOFT_STILL_TICKS + 1u;
+    still->resting = true;
+}
+
+bool sync_soft_rest_hold(bool owner_rests, const sync_soft_t *s, bool soft_now, bool marked, bool leaned) {
+    return owner_rests && !marked && !leaned && (!soft_now || s->pause == 0);
 }
 
 bool sync_soft_mover(const float velocity[3], const float angular[3], float extent, float dt, float *reach) {
@@ -40,7 +55,7 @@ bool sync_soft_mover(const float velocity[3], const float angular[3], float exte
     return speed > SYNC_SOFT_TOUCH_SPEED;
 }
 
-bool sync_soft_pushed(float normal_impulse, float pusher_mass) { return normal_impulse > pusher_mass * SYNC_SOFT_LEAN_SPEED; }
+bool sync_soft_pushed(float approach_speed) { return approach_speed > SYNC_SOFT_LEAN_SPEED; }
 
 uint16_t sync_soft_pause(float round_trip_ticks, uint32_t delay_ticks) {
     float ticks = ceilf(round_trip_ticks > 0.0f ? round_trip_ticks : 0.0f) + (float)delay_ticks + 2.0f;
@@ -110,6 +125,7 @@ void sync_soft_decide(sync_soft_t *s, const sync_soft_in_t *now, bool hit, const
         return;
     }
     if (s->pause > 0 && s->chain < SYNC_SOFT_PAUSE_MAX_TICKS) {
+        out->paused = true;
         s->pause--;
         s->chain++;
     } else {

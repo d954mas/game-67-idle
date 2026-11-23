@@ -23,6 +23,8 @@ expect response_ticks.max <= 2t
 expect agree_at_rest 1cm 2deg
 expect no_stuck
 expect rest_wakes.count <= 0
+# Once at rest after the last action, a guest's world stays at rest: 0.
+expect rest_breaks.count <= 0
 expect response_misses.count <= 0
 # Derived: a copy moves on while its owner rests for at most the longest pause (60 ticks, a hit
 # among soft copies), then the owner's stillness (15), the playback delay (at most 15) and the
@@ -34,3 +36,11 @@ expect rest_lag_ticks.max <= 98t
 # (walking in, walking out). 3 x 2 = 6.
 expect soft_places.max <= 6
 expect rest_jitter.max <= 0m
+# Derived: a copy's visible correction in a tick (its drawn move less its owner's at the same
+# event time, or less its own step for a predicted copy) is at most a render offset's release,
+# 0.15 of at most 2 m: 0.3 m. A placement the offset does not take shows as its whole move.
+expect jump.max <= 0.3m
+# Derived: a body this guest simulates is moved by the seam only when it becomes local, and the
+# render offset takes that move under either policy (a take by interaction keeps its pose): float
+# noise, 1 cm.
+expect local_correction.max <= 1cm

@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "features/body_sync/body_sync_scene.h"
+#include "features/body_sync/body_sync_types.h"
 #include "features/net_link/net_link_sim.h"
 
 #ifdef __cplusplus
@@ -31,6 +32,8 @@ extern "C" {
      end <time>                 a hard end instead; the run stops there, rest or not
      light_mass <x>kg           the second layer on every seam, light bodies up to x kg
                                 (0.1..1000); off without it
+     authority <host|interaction>  who owns free bodies on every seam (body_sync_config_t
+                                authority), host by default; interaction needs light_mass
      rate <host|gN> <x>hz       that endpoint steps x times a second of virtual time, 20..240
                                 (59.5hz); its seam keeps BODY_SYNC_TICK_HZ; once per endpoint
 
@@ -80,6 +83,10 @@ extern "C" {
      expect moved <body> <=|>= <length> [layer <length>]
                                                 the scene body's travel on the host from the
                                                 first tick to the last
+     expect pace <label>                        a walk to a point keeps up with the same walk in
+                                                a reference run of the scenario on one world,
+                                                every player local, no network (README
+                                                "Scenario format" derives its margin)
      expect <metric> <= <value>                 metric names of body_sync_metrics.h, the
                                                 worst guest counts
    With `guests 0` the checks that compare a guest (agree_at_rest, left, and every metric but
@@ -189,6 +196,7 @@ typedef enum body_sync_expect_kind {
     BODY_SYNC_EXPECT_METRIC_AT_MOST,
     BODY_SYNC_EXPECT_LEFT,
     BODY_SYNC_EXPECT_MOVED, /* a body's travel on the host from the first tick to the last */
+    BODY_SYNC_EXPECT_PACE,  /* a walk's progress against the same walk in a local reference run */
 } body_sync_expect_kind_t;
 
 typedef struct body_sync_expect {
@@ -218,6 +226,9 @@ typedef struct body_sync_scenario {
     uint32_t rate_mhz[1 + BODY_SYNC_GUESTS_MAX];
     /* The second layer's light_mass_max for every seam, kilograms; 0 off. */
     float light_mass_max;
+    /* body_sync_authority_mode_t for every seam; `authority_set` once the word was read. */
+    uint8_t authority;
+    bool authority_set;
     bool has_end;
     uint32_t end_tick;
     uint32_t action_count;

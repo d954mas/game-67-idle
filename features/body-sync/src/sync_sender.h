@@ -181,5 +181,7 @@ void sync_sender_resolve(sync_sender_t *sender, uint8_t seat, uint16_t number, b
 /* The round trip to a seat in ticks, as the fates measure it (send to acknowledgement, which
    includes the other side's wait to acknowledge); 0 before the first fate. */
 float sync_sender_round_trip(const sync_sender_t *sender, uint8_t seat);
+/* `seat` acknowledged the body's current rest pose and every rare group it carries now. */
+bool sync_sender_rest_acked(const sync_sender_t *sender, uint8_t seat, uint16_t slot);
 
 #endif

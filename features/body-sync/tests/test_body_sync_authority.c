@@ -45,15 +45,15 @@ static void test_routes_and_record_kinds(void) {
 static void test_a_settled_hold_ends_where_it_should(void) {
     start();
     TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_claim(&host, A, BODY_SYNC_HOLD_UNTIL_SETTLED));
-    TEST_ASSERT_FALSE(sync_authority_settle(&host, A, false, false));
+    TEST_ASSERT_FALSE(sync_authority_settle(&host, A, false, false, false));
     TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_HOLD_UNTIL_SETTLED, sync_authority_body(&host, A)->hold);
-    TEST_ASSERT_TRUE(sync_authority_settle(&host, A, true, false));
+    TEST_ASSERT_TRUE(sync_authority_settle(&host, A, true, false, false));
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(BODY_SYNC_HOLD_UNTIL_RELEASE, sync_authority_body(&host, A)->hold, "the host did not end its settled hold");
-    TEST_ASSERT_FALSE(sync_authority_settle(&host, A, true, true)); /* no settled hold any more */
-    TEST_ASSERT_FALSE(sync_authority_settle(&host, B, true, true)); /* not local */
+    TEST_ASSERT_FALSE(sync_authority_settle(&host, A, true, true, true)); /* no settled hold any more */
+    TEST_ASSERT_FALSE(sync_authority_settle(&host, B, true, true, true)); /* not local */
     /* a guest's settled hold ends with a release to the host */
     TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_claim(&guest, B, BODY_SYNC_HOLD_UNTIL_SETTLED));
-    TEST_ASSERT_TRUE(sync_authority_settle(&guest, B, false, true));
+    TEST_ASSERT_TRUE(sync_authority_settle(&guest, B, false, true, true));
     uint8_t record[STUB_RECORD_BYTES_MAX];
     uint32_t size = 0;
     TEST_ASSERT_TRUE(sync_authority_peek(&guest, BODY_SYNC_SEAT_HOST, record, sizeof(record), &size));

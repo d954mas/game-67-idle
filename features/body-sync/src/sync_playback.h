@@ -79,12 +79,18 @@ enum {
 #define SYNC_RATE_HIGH 2.0
 
 /* Render offset decay per tick, as the review sets it: 0.95 up to 25 cm, 0.85 from 1 m, by
-   distance between; past SYNC_OFFSET_SNAP_M none at all (the copy is seen to jump). */
+   distance between; past SYNC_OFFSET_SNAP_M none at all (the copy is seen to jump), but for a
+   lost take's (SYNC_OFFSET_LOST_M). */
 #define SYNC_OFFSET_SLOW 0.95f
 #define SYNC_OFFSET_FAST 0.85f
 #define SYNC_OFFSET_NEAR_M 0.25f
 #define SYNC_OFFSET_FAR_M 1.0f
 #define SYNC_OFFSET_SNAP_M 2.0f
+/* A take that lost while its claim waited keeps the drawn pose up to this far (the random
+   three-participant sweep's farthest is 3.1 m), closing 0.15 m a tick past SYNC_OFFSET_SNAP_M:
+   the loser's picture glides to the winner's instead of jumping. Past it the pictures are of
+   different places. */
+#define SYNC_OFFSET_LOST_M 5.0f
 
 /* A dynamic copy's velocity: the owner's plus the error closed over SYNC_CORRECT_TICKS, the
    correction no faster than SYNC_CORRECT_SPEED (m/s) and SYNC_CORRECT_SPIN (rad/s). */
@@ -183,6 +189,8 @@ typedef struct sync_play {
 void sync_playback_sample(const sync_playback_t *p, uint16_t slot, sync_play_t *out);
 /* The rare groups as of playback time; *known: which groups ever played. */
 const sync_rare_t *sync_playback_rare(const sync_playback_t *p, uint16_t slot, uint8_t *known);
+/* The owner tick the slot plays; false while it has nothing to play (sync_play_t.known): a
+   timeline's tick is no picture of a body whose snapshots were all dropped. */
 bool sync_playback_tick(const sync_playback_t *p, uint16_t slot, double *owner_tick);
 
 /* False for a sample further ahead of the timeline's clock line than SYNC_FAR_TICKS, from the
@@ -232,9 +240,10 @@ typedef struct sync_offset {
 
 void sync_offset_clear(sync_offset_t *o);
 /* The physics pose jumped from `before` to `after`: the offset takes the difference so the drawn
-   pose stays; past SYNC_OFFSET_SNAP_M it is cleared and the copy is seen to jump. */
+   pose stays; past `reach` (SYNC_OFFSET_SNAP_M, or SYNC_OFFSET_LOST_M for a lost take) it is
+   cleared and the copy is seen to jump. */
 void sync_offset_absorb(sync_offset_t *o, const float before_position[3], const float before_rotation[4], const float after_position[3],
-                        const float after_rotation[4]);
+                        const float after_rotation[4], float reach);
 /* Once per local tick. Physics never sees the offset; body_sync_render_offset reports it. */
 void sync_offset_decay(sync_offset_t *o);
 

@@ -56,6 +56,8 @@
 /* How far ahead a mover marks: its travel in this many steps, plus a margin. */
 #define SYNC_SOFT_REACH_STEPS 3.0f
 #define SYNC_SOFT_REACH_M 0.05f
+/* Two kinematic copies closer than this touch for the marking's walk: Box3D's speculative margin. */
+#define SYNC_SOFT_TOUCH_M 0.02f
 /* A push against a copy in the rest hold, as against a wall: a body stopped from this speed. A
    body only leaning on it stops from nothing. */
 #define SYNC_SOFT_LEAN_SPEED 0.05f
@@ -84,12 +86,21 @@
 #define SYNC_SOFT_LAND_SPEED 1.0f
 /* An owner whose playback pose stays within SYNC_SOFT_HOLD_M and SYNC_SOFT_HOLD_RAD of where it
    was SYNC_SOFT_STILL_TICKS ago rests even awake: a quarter second within a step of the copy
-   grid, which a still owner's rounded pose crosses now and then. */
+   grid, which a still owner's rounded pose crosses now and then. A resting owner that creeps (a
+   pile leaning on a character, which never sleeps) goes on resting while each step takes it at
+   least SYNC_SOFT_CREEP_TICKS: half the stillness, so an owner creeping near the speed that lets
+   it rest (a step a quarter second, 13.6 mm/s) does not flap between rest and motion. The creep
+   bound is then a step an eighth of a second, 27 mm/s and 0.15 rad/s; the random sweep's creep
+   reaches 15 mm/s. */
 #define SYNC_SOFT_STILL_TICKS 15u
-/* A copy in the rest hold of a still but awake owner follows it only past this: a copy record's
-   grid (1/512 m) and a step of its rotation, which a still owner's rounded pose wanders by. */
-#define SYNC_SOFT_HOLD_M 0.002f
-#define SYNC_SOFT_HOLD_RAD 0.004f
+#define SYNC_SOFT_CREEP_TICKS 8u
+/* A copy in the rest hold of a still but awake owner follows it only past this: how far apart two
+   copy records of one still pose may decode. Each axis may round a grid step either way (a cell's
+   diagonal, sqrt(3)/512 m); each rotation lies within net_bits_quat_error(9) of the true one, so
+   two lie within twice that (0.0193 rad). Below either, a still owner's wander across a rounding
+   edge reads as a move, and the copy leaves the hold of a heap at rest. */
+#define SYNC_SOFT_HOLD_M 0.0034f
+#define SYNC_SOFT_HOLD_RAD 0.0195f
 
 typedef struct sync_soft {
     bool correcting;    /* past the dead zone and not yet back under half of it */
@@ -118,19 +129,29 @@ typedef enum sync_soft_action {
 typedef struct sync_soft_out {
     sync_soft_action_t action;
     float velocity[3], angular[3];
+    bool paused; /* the pull waited this tick: the pose is this side's own answer to its touch */
 } sync_soft_out_t;
 
 typedef struct sync_soft_still {
     uint16_t ticks;     /* since the owner's pose last left the anchor */
+    bool resting;       /* still for SYNC_SOFT_STILL_TICKS once, and creeping at most since */
     float anchor[3], anchor_rotation[4];
 } sync_soft_still_t;
 
-/* Whether the owner rests for its copy: asleep there, or still for SYNC_SOFT_STILL_TICKS. */
+/* Whether the owner rests for its copy: asleep there, or still for SYNC_SOFT_STILL_TICKS and since
+   then leaving each step no sooner (creep). A step left sooner, or overshot by more than a step,
+   is a move and the count starts again: a move faster than creep is known by its second step. */
 bool sync_soft_owner_rests(sync_soft_still_t *still, const sync_play_t *play);
+/* The owner is known to rest at this pose already (a body this side returned at rest): its first
+   state there continues the rest instead of starting the count. */
+void sync_soft_still_at(sync_soft_still_t *still, const float position[3], const float rotation[4]);
 
-/* The rest hold: the owner rests, the copy is out of a pause and nothing of this side's moves
-   at it. */
-bool sync_soft_rest_hold(bool owner_rests, const sync_soft_t *s, bool soft_now, bool marked);
+/* The rest hold: the owner rests, the copy is out of a pause, nothing of this side's moves at it
+   and nothing of this side's leans on it (`leaned`). A copy held kinematic where a body of this
+   side's presses in would push that body out of the overlap the soft copy let it into (a
+   character lifted onto the pile, or pushed back and read as a push, the heap never resting):
+   it stays soft and gives way instead, while the lean lasts. */
+bool sync_soft_rest_hold(bool owner_rests, const sync_soft_t *s, bool soft_now, bool marked, bool leaned);
 
 /* Whether a body of this side's (local, or a soft copy) marks the copies near it, and how far:
    true when a point of it moves faster than SYNC_SOFT_TOUCH_SPEED, its speed plus its spin times
@@ -138,20 +159,24 @@ bool sync_soft_rest_hold(bool owner_rests, const sync_soft_t *s, bool soft_now, 
    `reach` is that travel in SYNC_SOFT_REACH_STEPS plus SYNC_SOFT_REACH_M. */
 bool sync_soft_mover(const float velocity[3], const float angular[3], float extent, float dt, float *reach);
 
-/* Whether a body of this side's pushed a copy in the rest hold in the last step: the contact's
-   normal impulse is more than stopping `pusher_mass` at SYNC_SOFT_LEAN_SPEED. The game moves its
-   bodies after the apply, so a push from standstill is seen only here, after the step it was
-   stopped in; the copy is soft for the next one, a wall for one step at most. */
-bool sync_soft_pushed(float normal_impulse, float pusher_mass);
+/* Whether a body of this side's pushed a copy in the rest hold in the last step: a contact point
+   that acted closed faster than SYNC_SOFT_LEAN_SPEED before the solve (`approach_speed`, m/s).
+   Not its impulse: a body leaning on a copy that has just turned kinematic is pushed out of the
+   overlap the soft copy let it into, and one standing on it bears its weight, both impulses
+   of many times a stop from the lean speed with no approach at all. The game moves its bodies
+   after the apply, so a push from standstill is seen only here, after the step it was stopped
+   in; the copy is soft for the next one, a wall for one step at most. */
+bool sync_soft_pushed(float approach_speed);
 
 /* The pause in ticks: the round trip to the host as the packet fates measure it, the playback
    delay of the host's snapshots, and 2 (the host's step and the acknowledgement's wait), within
    SYNC_SOFT_PAUSE_TICKS and SYNC_SOFT_PAUSE_MAX_TICKS. */
 uint16_t sync_soft_pause(float round_trip_ticks, uint32_t delay_ticks);
 
-/* A body that becomes a soft copy: from local (a release, a settled throw, a refused claim) it
-   starts paused, so the handover never pulls it toward the older playback pose; from a driven
-   or corrected hold it starts correcting at once. */
+/* A body that becomes a soft copy: from local (a release, a settled throw) it starts paused, so
+   the handover never pulls it toward the older playback pose; from a driven or corrected hold,
+   or a claim that lost while it waited (the playback pose is the winner's), it starts correcting
+   at once. */
 void sync_soft_enter(sync_soft_t *s, bool from_local, uint16_t pause_ticks);
 
 /* After the step: whether it hit the body, from its velocities then against those the apply left

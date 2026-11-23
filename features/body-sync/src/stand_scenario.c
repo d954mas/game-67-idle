@@ -563,6 +563,13 @@ static bool expect(parser_t *p, const line_words_t *w) {
         }
         e.label_count = 1;
         copy_text(e.labels[0], sizeof(e.labels[0]), w->word[2]);
+    } else if (strcmp(what, "pace") == 0) {
+        e.kind = BODY_SYNC_EXPECT_PACE;
+        if (w->count != 3 || !name_word(w->word[2], BODY_SYNC_LABEL_MAX - 1)) {
+            return refuse(p, "pace needs one label%s", "");
+        }
+        e.label_count = 1;
+        copy_text(e.labels[0], sizeof(e.labels[0]), w->word[2]);
     } else if (strcmp(what, "one_of") == 0) {
         e.kind = BODY_SYNC_EXPECT_ONE_OF;
         if (w->count < 5 || w->count > 3 + BODY_SYNC_EXPECT_LABELS_MAX) {
@@ -587,9 +594,10 @@ static bool expect(parser_t *p, const line_words_t *w) {
         if (!stand_metric_unit(what, &unit)) {
             return refuse(p, "unknown check or metric '%s'", what);
         }
-        if (w->count != 4 || strcmp(w->word[2], "<=") != 0) {
-            return refuse(p, "a metric check reads: expect %s <= <value>", what);
+        if (w->count != 4 || (strcmp(w->word[2], "<=") != 0 && strcmp(w->word[2], ">=") != 0)) {
+            return refuse(p, "a metric check reads: expect %s <=|>= <value>", what);
         }
+        e.at_least = strcmp(w->word[2], ">=") == 0;
         e.kind = BODY_SYNC_EXPECT_METRIC_AT_MOST;
         copy_text(e.metric, sizeof(e.metric), what);
         const char *value = w->word[3];
@@ -725,6 +733,18 @@ static bool statement(parser_t *p, const line_words_t *w) {
         s->light_mass_max = (float)kg;
         return true;
     }
+    if (strcmp(head, "authority") == 0) {
+        bool host = w->count == 2 && strcmp(w->word[1], "host") == 0, interaction = w->count == 2 && strcmp(w->word[1], "interaction") == 0;
+        if (!host && !interaction) {
+            return refuse(p, "authority reads: authority host|interaction%s", "");
+        }
+        if (s->authority_set) {
+            return refuse(p, "authority is set twice%s", "");
+        }
+        s->authority = interaction ? BODY_SYNC_AUTHORITY_INTERACTION : BODY_SYNC_AUTHORITY_HOST;
+        s->authority_set = true;
+        return true;
+    }
     if (strcmp(head, "rate") == 0) {
         uint8_t who;
         double hz;
@@ -841,12 +861,19 @@ static bool finish(parser_t *p) {
         const body_sync_expect_t *e = &s->expects[i];
         for (uint32_t l = 0; l < e->label_count; l++) {
             bool found = false;
-            for (uint32_t a = 0; a < s->action_count && !found; a++) {
+            uint32_t a = 0;
+            for (; a < s->action_count && !found; a++) {
                 found = strcmp(s->actions[a].label, e->labels[l]) == 0;
             }
             if (!found) {
                 p->line = e->line;
                 return refuse(p, "no action is labelled '%s'", e->labels[l]);
+            }
+            /* Progress toward a point is the same measure on both runs; a body moves. */
+            const body_sync_action_t *walk = &s->actions[a - 1];
+            if (e->kind == BODY_SYNC_EXPECT_PACE && (walk->verb != BODY_SYNC_VERB_WALK || walk->target.is_body)) {
+                p->line = e->line;
+                return refuse(p, "pace needs a walk to a point, and '%s' is not one", e->labels[l]);
             }
         }
         if (e->kind == BODY_SYNC_EXPECT_LEFT && e->endpoint > s->guests) {
