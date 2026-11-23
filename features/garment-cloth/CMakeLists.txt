@@ -6,4 +6,6 @@ target_compile_definitions(garment_cloth PUBLIC FEATURE_GARMENT_CLOTH=1)
 target_compile_features(garment_cloth PUBLIC c_std_11)
 target_link_libraries(garment_cloth PUBLIC nt_skeletal PRIVATE nt_core nt_math nt_hash)
 nt_set_warning_flags(garment_cloth)
+# The web stack is 64 KiB, so per-vertex arrays live in thread-local scratch. Unoptimized and sanitized Debug frames are larger.
+target_compile_options(garment_cloth PRIVATE $<$<NOT:$<CONFIG:Debug>>:-Wframe-larger-than=2048>)
 nt_set_sanitizer_flags(garment_cloth)

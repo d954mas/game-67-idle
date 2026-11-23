@@ -1,13 +1,19 @@
 #include "garment/render_binding.h"
 
+#include <string.h>
+
 bool cloth_render_normals(const ClothMesh *mesh, const float positions[][3], ClothRenderNormals *out) {
     if (!mesh || !mesh->face || !positions || !out || mesh->vertices < 3 || mesh->vertices > CLOTH_VERTICES ||
         mesh->faces < 1 || mesh->faces > 2*CLOTH_EDGES/3) return false;
     for (int i = 0; i < mesh->vertices; ++i) {
         for (int k = 0; k < 3; ++k) if (!isfinite(positions[i][k])) return false;
     }
-    double area_sum[CLOTH_VERTICES][3] = {{0}};
-    double area_weight[CLOTH_VERTICES] = {0};
+    static _Thread_local struct {
+        double area_sum[CLOTH_VERTICES][3], area_weight[CLOTH_VERTICES];
+    } work;
+    double (*area_sum)[3] = work.area_sum, *area_weight = work.area_weight;
+    memset(area_sum, 0, (size_t)mesh->vertices * sizeof area_sum[0]);
+    memset(area_weight, 0, (size_t)mesh->vertices * sizeof area_weight[0]);
     for (int f = 0; f < mesh->faces; ++f) {
         ClothFace face = mesh->face[f];
         if (face.a >= mesh->vertices || face.b >= mesh->vertices || face.c >= mesh->vertices ||

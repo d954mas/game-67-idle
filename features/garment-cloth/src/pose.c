@@ -2,6 +2,7 @@
 #include "garment/cloth.h"
 
 #include <math.h>
+#include <string.h>
 
 static bool finite_point(const float p[3]) {
     return p && isfinite(p[0]) && isfinite(p[1]) && isfinite(p[2]);
@@ -44,7 +45,8 @@ bool cloth_pose_angle(const float a[3], const float pivot[3], const float b[3],
 bool cloth_pose_offsets(int vertices, const ClothPoseOffset *layers, int layer_count, float max_abs_m, float *offsets_m) {
     if (vertices < 1 || vertices > CLOTH_VERTICES || layer_count < 0 || (layer_count && !layers) ||
         !isfinite(max_abs_m) || max_abs_m < 0 || !offsets_m) return false;
-    double sums[CLOTH_VERTICES] = {0};
+    static _Thread_local double sums[CLOTH_VERTICES];
+    memset(sums, 0, (size_t)vertices * sizeof sums[0]);
     for (int i = 0; i < layer_count; ++i) {
         const ClothPoseOffset *layer = &layers[i];
         if (!layer->weights || !isfinite(layer->offset_m) || !isfinite(layer->activation) ||

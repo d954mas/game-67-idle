@@ -32,6 +32,10 @@ static _Thread_local struct {
     GarmentFrame current, step;
     nt_skeletal_mat34_t skin[BONES_MAX];
     float dressed[CLOTH_VERTICES][3];
+    ClothVertexBasis basis[CLOTH_VERTICES];
+    float mats[CLOTH_VERTICES][12];
+    /* Held across emit callbacks, so an update called from emit must not share them. */
+    float weights[CLOTH_VERTICES], display[CLOTH_VERTICES][3];
 } scratch;
 
 void garment_actor_clear(GarmentActor *actor) {
@@ -423,11 +427,10 @@ static bool prepare_vertex_frames(GarmentActor *a) {
     int offset = 0;
     for (int p = 0; p < a->set->piece_count; ++p) {
         const ClothMesh *m = a->set->pieces[p].mesh;
-        ClothVertexBasis local_basis[CLOTH_VERTICES];
-        if (!cloth_vertex_frames_prepare(m, local_basis)) {
+        if (!cloth_vertex_frames_prepare(m, scratch.basis)) {
             free(basis); free(frames); return false;
         }
-        memcpy(basis + offset, local_basis, (size_t)m->vertices * sizeof *basis);
+        memcpy(basis + offset, scratch.basis, (size_t)m->vertices * sizeof *basis);
         offset += m->vertices;
     }
     a->vertex_basis = basis;
@@ -461,11 +464,10 @@ bool garment_actor_update_supported(GarmentActor *a, const GarmentSet *set, cons
             }
             a->stats.max_displacement_m = fmaxf(a->stats.max_displacement_m, sqrtf(d2));
         }
-        float mats[CLOTH_VERTICES][12];
-        if (!cloth_vertex_quats_eval(m, a->vertex_basis + offset, scratch.dressed, mats))
+        if (!cloth_vertex_quats_eval(m, a->vertex_basis + offset, scratch.dressed, scratch.mats))
             return false;
         for (int v = 0; v < m->vertices; ++v)
-            memcpy(&a->palette[offset + v], mats[v], sizeof a->palette[0]);
+            memcpy(&a->palette[offset + v], scratch.mats[v], sizeof a->palette[0]);
         offset += m->vertices;
     }
     return true;
@@ -496,7 +498,7 @@ bool garment_actor_debug_lines(const GarmentActor *actor, const nt_skeletal_skel
         const GarmentPiece *piece = &actor->pieces[p];
         if (layers & CLOTH_DEBUG_WEIGHTS) {
             if (!actor->palette || offset + asset->mesh->vertices > actor->palette_count) return false;
-            float weights[CLOTH_VERTICES], display[CLOTH_VERTICES][3];
+            float *weights = scratch.weights, (*display)[3] = scratch.display;
             for (int i = 0; i < asset->mesh->vertices; ++i) {
                 memcpy(display[i], actor->palette[offset + i].r[0], sizeof display[i]);
                 if (weight_joint < 0) continue;

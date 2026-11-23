@@ -86,15 +86,22 @@ static bool vertex_normals(const ClothMesh *mesh, const float pos[][3], float ou
     return true;
 }
 
+/* Per-thread so concurrent actors can transfer at once; the entry points below never nest. */
+static _Thread_local struct {
+    float normals[CLOTH_VERTICES][3];
+    int best_neighbor[CLOTH_VERTICES];
+    float best_score[CLOTH_VERTICES];
+} work;
+
 bool cloth_vertex_frames_prepare(const ClothMesh *mesh, ClothVertexBasis out[CLOTH_VERTICES]) {
     if (!mesh || !out || !mesh->rest || !mesh->face ||
         mesh->vertices < 3 || mesh->vertices > CLOTH_VERTICES || mesh->faces < 1) return false;
 
-    float normals[CLOTH_VERTICES][3];
+    float (*normals)[3] = work.normals;
     if (!vertex_normals(mesh, mesh->rest, normals)) return false;
 
-    int best_neighbor[CLOTH_VERTICES];
-    float best_score[CLOTH_VERTICES];
+    int *best_neighbor = work.best_neighbor;
+    float *best_score = work.best_score;
     for (int i = 0; i < mesh->vertices; ++i) {
         best_neighbor[i] = -1;
         best_score[i] = -1.0F;
@@ -188,7 +195,7 @@ bool cloth_vertex_quats_eval(const ClothMesh *mesh, const ClothVertexBasis basis
     if (!mesh || !basis || !posed || !out_packed12 ||
         mesh->vertices < 3 || mesh->vertices > CLOTH_VERTICES) return false;
 
-    float normals[CLOTH_VERTICES][3];
+    float (*normals)[3] = work.normals;
     if (!vertex_normals(mesh, posed, normals)) return false;
 
     for (int i = 0; i < mesh->vertices; ++i) {
@@ -226,7 +233,7 @@ bool cloth_vertex_frames_eval(const ClothMesh *mesh, const ClothVertexBasis basi
     if (!mesh || !basis || !posed || !out_mat34 ||
         mesh->vertices < 3 || mesh->vertices > CLOTH_VERTICES) return false;
 
-    float normals[CLOTH_VERTICES][3];
+    float (*normals)[3] = work.normals;
     if (!vertex_normals(mesh, posed, normals)) return false;
 
     for (int i = 0; i < mesh->vertices; ++i) {
