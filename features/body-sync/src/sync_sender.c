@@ -301,6 +301,8 @@ void sync_sender_sent(sync_sender_t *s, uint8_t seat, uint16_t number) {
     s->sent_next[seat] = (s->sent_next[seat] + 1u) % SYNC_SENT_WINDOW;
 }
 
+float sync_sender_round_trip(const sync_sender_t *s, uint8_t seat) { return seat < s->seats ? s->round_trip[seat] : 0.0f; }
+
 uint32_t sync_sender_unresolved(const sync_sender_t *s, uint8_t seat, uint16_t *numbers, uint32_t max) {
     if (seat >= s->seats) {
         return 0;
@@ -328,6 +330,9 @@ void sync_sender_resolve(sync_sender_t *s, uint8_t seat, uint16_t number, bool a
         if (!arrived) {
             return;
         }
+        float sample = (float)(int32_t)(s->tick - p->tick);
+        float *rtt = &s->round_trip[seat];
+        *rtt = *rtt <= 0.0f ? sample : *rtt + (sample - *rtt) / 8.0f; /* TCP's smoothing */
         for (uint32_t k = 0; k < p->count; k++) {
             const sync_sent_record_t *e = &p->records[k];
             sync_seat_body_t *b = &s->bodies[seat][e->slot];

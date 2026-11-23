@@ -39,7 +39,7 @@ one process or in two.
 
 | Header | What it gives |
 |---|---|
-| `features/body_sync/body_sync.h` | The seam: `create` with the box and speeds a peer's numbers must stay in, seats joined and left, `bind`/`unbind` an id to a `b3BodyId` with its starting authority and number, authority (`claim`, `release`, `poll_claim`, `answer`, `assign`, `set_holder`, `set_flags`), the tick (`set_peer_tick`, `receive_state`, `receive_record`, `apply`, `collect`, `write_state`, `state_sent`, `unresolved`/`resolve`, `peek_record`/`pop_record`), `render_offset`, `traffic` by kind. Includes Box3D. |
+| `features/body_sync/body_sync.h` | The seam: `create` with the box and speeds a peer's numbers must stay in, seats joined and left, `bind`/`unbind` an id to a `b3BodyId` with its starting authority and number, authority (`claim`, `release`, `poll_claim`, `answer`, `assign`, `set_holder`, `set_flags`), the tick (`set_peer_tick`, `receive_state`, `receive_record`, `apply`, `collect`, `write_state`, `state_sent`, `unresolved`/`resolve`, `peek_record`/`pop_record`), `render_offset`, `traffic` by kind, the second layer's `is_predicted`, `is_layer_copy` and `round_trip`. Includes Box3D. |
 | `features/body_sync/body_sync_scene.h` | Scenes as C data: body descriptors (shape, size, mass or density, friction, restitution, linear and angular damping, pose, motion, role, flags, model tag, routes, breakable templates), player spawns, the character's tuning, `validate`, the 8-scene catalog and lookup in it or in a caller's table. |
 | `features/body_sync/body_sync_scenario.h` | The scenario grammar (top comment), the parsed struct, `parse` and `load`, which refuse with a line and a reason. |
 | `features/body_sync/body_sync_metrics.h` | Metric definitions and names, the report structs, schema `body_sync.metrics.v2`. |
@@ -322,6 +322,90 @@ The stand's host rule grants a guest's grab within the reach plus 1 m of slack
 playback delay late, and 1 m covers 280 ms at walking speed. A game's own rule
 should judge the reach at the claimant's tick instead (from the claim, or the
 claimant's state at that tick), not on the host's late copy.
+
+## The second layer
+
+`body_sync_config_t.light_mass_max` (kilograms, 0..1e6; 0, the default, is off)
+turns on local prediction of light bodies on a guest. With 0 the seam equals
+0.6.0 apart from the version string, the new fields and one host-side change
+below; it is not byte-for-byte the same code. Each guest may choose its own
+knob; the host ignores it, and nothing of a soft copy is ever sent.
+
+A copy of the host's body that is LIGHT, weighs at most the knob, has no
+holder, is not held until settled and whose owner is not kinematic has two
+holds on a guest (`src/sync_soft.h`):
+
+- **Rest hold.** Its owner rests (asleep there, or within a copy-grid step of
+  one pose for 15 ticks: a pile leaning on a character that is driven every
+  tick never sleeps) and nothing of this side's moves at it: it is driven
+  kinematic on the owner's pose like any copy, exact at rest, outside every
+  island, and keeps the character bits. A copy of a still but awake owner
+  follows it only past a grid step (2 mm), so it does not creep with the
+  owner's rounded pose.
+- **Soft.** Every body of this side's moving faster than a lean (0.25 m/s at
+  any point, spin times its extent counted: its own character and bodies, soft
+  copies a hit set going, a copy in flight) marks the light copies within its
+  travel in three steps plus 5 cm, and through contacts every light copy
+  touching them; those, and every copy whose owner moves, are dynamic and
+  simulated here, so its own character pushes them in the same step. A copy
+  pulled back by the layer marks nothing. The game moves its bodies after
+  `body_sync_apply`, so a push from standstill is seen at collect instead: a
+  contact impulse from a body of this side's (bound or not) past stopping it
+  from 0.05 m/s marks the copy, and through contacts the copies behind it;
+  pushed or pressed, a copy's pull waits. A resting copy is a wall for one step
+  at most.
+
+A soft copy is steered to the owner's playback pose:
+
+- **Pause.** A hit (the step changed its velocity by 1 m/s or its spin by
+  4 rad/s beyond the apply and gravity), a touch by a moving body of this
+  side's or a push stops the pull for `sync_soft_pause`: the round trip to the
+  host as the packet fates measure it (`body_sync_round_trip`), plus the
+  playback delay and 2 ticks, 24 to 60 ticks: the host's answer lands before
+  the pull starts up to a round trip of about 700 ms (60 = round trip +
+  delay + 2). Past that the pull starts first: the copy is taken back toward
+  the host's older pose, then follows the host once its answer plays. A chain of
+  pauses runs at most 60 ticks; a touch held longer no longer pauses until a
+  tick without one.
+- **Snap.** Past 1 m from the owner's pose it is placed, the render offset
+  taking the jump.
+- **Dead zone.** It is pulled only past 1 cm or 2 degrees, and the pull stops
+  under half of each.
+- **Pull.** `v += 0.3 * (v_owner + clamp(error / 0.25 s, 2 m/s) - v)`, spin
+  likewise with 4 rad/s. A pull still running after 30 ticks (pinned, packed)
+  is a placement.
+- **Speed.** Its speed never passes the seam's `max_speed` and `max_spin`.
+- **Flight.** While the owner moves it at 4 m/s or more it is driven
+  kinematic along the owner's path, soft again under 1 m/s; the change to
+  driven is a placement, never a sweep that would bat the soft copies near it.
+
+Going back to the rest hold inside the dead zone sets the copy on the pose
+exactly; further off it is placed and the offset takes it. The layer never
+puts a body to sleep (that sleeps its whole island, this side's own bodies
+with it). Grab and release of a soft copy keep its pose.
+
+**The host-side change.** A dynamic hold (the host's copy of a guest's
+character or carried body) of an owner standing still leaves an error under
+1 mm and 0.2 degrees alone instead of correcting it every tick: any velocity
+set wakes the island, so a pile against a standing heroine never slept. With
+the layer the guest's heroine is pressed by her soft copies by a hair, which
+is what kept the host's pile awake.
+
+Layer copies keep the character bits; `body_sync_is_layer_copy` names them,
+so a game that sets its own filters does not take the bits off them. The stand
+counts a light copy its character walks into without contact as a missed hit.
+
+The layer scenes bound `rest_lag_ticks.max` at 98 ticks, derived for a 250 ms
+round trip (one-way 8 ticks); each further ~33 ms of round trip adds a tick.
+
+Cost at -O2 (`load_four`, 300 bodies, three guests): the layer adds 0.39 ms a
+guest-tick, of which marking is 0.25 ms.
+
+What it claims, measured on the stand: hits answer within 0-2 ticks (`response_ticks`
+at 100 to 300 ms; the 2 is a copy resting in the hold met from standstill), worlds rest and agree within 1 cm and 2 degrees with
+the heroine standing in a pile (`layer_stand`), no jitter at rest. The cost is
+a moving pile that differs from the host's until it rests (`pause_divergence`,
+divergence).
 
 ## Running the stand
 
@@ -633,7 +717,11 @@ with the state, the report printer and the viewer's drawer hook; 0.6.0 the
 playback receiver: opaque data, `character_category`, `delay_min` and
 `delay_max`, `body_sync_playback`, the relayed origin on the wire, the scenario
 words `rate` and `expect moved`, the playback metrics and schema
-`body_sync.metrics.v2`. A MAJOR changes a call, a struct layout, the
+`body_sync.metrics.v2`; 0.7.0 the second layer: `light_mass_max`,
+`body_sync_is_predicted`, `body_sync_is_layer_copy`, `body_sync_round_trip`,
+the scenario word `light_mass`, `expect moved ...
+layer <length>`, the CLI and viewer flag `--light-mass`, and the layer
+metrics. A MAJOR changes a call, a struct layout, the
 meaning of a result, a scenario statement or the metrics schema name.
 The real seam and the stub keep one contract and differ in
 `body_sync_implementation()`; neither one's wire format is a compatibility

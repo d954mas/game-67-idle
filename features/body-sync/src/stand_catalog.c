@@ -63,6 +63,23 @@ static void build_floor_wall(body_sync_scene_t *s) {
     add_player(s, 0.0f, 0.0f, HALF_PI);
 }
 
+/* The second layer's bounce: a crate the guest throws at the wall falls back into light boxes
+   standing at its foot, on the guest's side of the throw. */
+static void build_wall_boxes(body_sync_scene_t *s) {
+    body_sync_scene_reset(s, "wall_boxes");
+    add_floor(s);
+    uint32_t wall = add_box(s, "wall", 0.25f, 1.5f, 4.0f, 0.0f, 6.0f, 1.5f, 0.0f, 0, 2);
+    s->bodies[wall].motion = BODY_SYNC_MOTION_STATIC;
+    add_box(s, "crate", 0.2f, 0.2f, 0.2f, 3.0f, 1.0f, 0.2f, 0.0f, BODY_SYNC_BODY_GRABBABLE, 3);
+    for (int i = 0; i < 6; i++) {
+        char name[BODY_SYNC_NAME_MAX];
+        snprintf(name, sizeof(name), "light%d", i);
+        add_box(s, name, 0.15f, 0.15f, 0.15f, 1.0f, 5.2f - 0.35f * (float)(i / 3), 0.15f, 0.35f * (float)(i % 3 - 1), BODY_SYNC_BODY_GRABBABLE, 4);
+    }
+    add_player(s, -3.0f, -2.0f, HALF_PI);
+    add_player(s, 0.0f, 0.0f, HALF_PI);
+}
+
 static void build_stack10(body_sync_scene_t *s) {
     body_sync_scene_reset(s, "stack10");
     add_floor(s);
@@ -207,6 +224,7 @@ static const body_sync_scene_entry_t catalog[] = {
     {"two_chars_item", "two characters and one item: grab dispute, passing by throw", build_two_chars_item},
     {"breakables", "glass and a box with contents: spawns, removals, slot generations", build_breakables},
     {"load300", "300 bodies and four players: the load ceiling", build_load300},
+    {"wall_boxes", "floor and wall, a crate and six light boxes at the wall's foot: a bounce into light bodies", build_wall_boxes},
 };
 
 const body_sync_scene_entry_t *body_sync_scene_catalog(uint32_t *count) {

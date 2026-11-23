@@ -1,0 +1,36 @@
+# The second layer: the guest walks into the pile of 60 light boxes, stands in it 5 s while it
+# rests around her in the hold, then walks out: the boxes she leaves through answer at once.
+scenario layer_leave
+scene pile60
+seed 53
+guests 1
+# A hard end well past rest, so the rest measures watch the world at rest for seconds.
+end 20s
+light_mass 20kg
+
+net g1 rtt 100ms jitter 20ms loss 2%
+
+p1 walk 0.5 0 as near
+p1 walk 3.6 0 speed 2.5 as push
+p1 wait 5s
+p1 walk 3.6 -1.6 as out
+
+expect result push done
+# Derived: the copy answers in its own step (0), or one later when the hit lands at the step's
+# end (1), plus one step when it rested in the hold and the body met it from standstill (a wall
+# for one step: README "The second layer"): 2.
+expect response_ticks.max <= 2t
+expect agree_at_rest 1cm 2deg
+expect no_stuck
+expect rest_wakes.count <= 0
+expect response_misses.count <= 0
+# Derived: a copy moves on while its owner rests for at most the longest pause (60 ticks, a hit
+# among soft copies), then the owner's stillness (15), the playback delay (at most 15) and the
+# one-way delay (8 at 250 ms, one more a tick per extra ~33 ms); in the rest hold it stops at
+# once. 60 + 15 + 15 + 8 = 98.
+expect rest_lag_ticks.max <= 98t
+# Derived: per episode of this side's contact a copy may take one snap (past 1 m), one stalled
+# pull (30 ticks unpressed) and one rest-hold entry off the dead zone: 3. Episodes here: 3
+# (walking in, standing, walking out). 3 x 3 = 9.
+expect soft_places.max <= 9
+expect rest_jitter.max <= 0m

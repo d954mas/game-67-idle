@@ -536,13 +536,15 @@ static bool expect(parser_t *p, const line_words_t *w) {
         }
     } else if (strcmp(what, "moved") == 0) {
         e.kind = BODY_SYNC_EXPECT_MOVED;
-        if (w->count != 5 || !name_word(w->word[2], BODY_SYNC_NAME_MAX - 1) || (strcmp(w->word[3], "<=") != 0 && strcmp(w->word[3], ">=") != 0)) {
-            return refuse(p, "moved reads: expect moved <body> <=|>= <length>%s", "");
+        if ((w->count != 5 && (w->count != 7 || strcmp(w->word[5], "layer") != 0)) || !name_word(w->word[2], BODY_SYNC_NAME_MAX - 1) ||
+            (strcmp(w->word[3], "<=") != 0 && strcmp(w->word[3], ">=") != 0)) {
+            return refuse(p, "moved reads: expect moved <body> <=|>= <length> [layer <length>]%s", "");
         }
-        float m;
-        if (!length_word(p, w->word[4], &m)) {
+        float m, lm = -1.0f;
+        if (!length_word(p, w->word[4], &m) || (w->count == 7 && !length_word(p, w->word[6], &lm))) {
             return false;
         }
+        e.layer_limit = (double)lm;
         copy_text(e.body, sizeof(e.body), w->word[2]);
         e.at_least = w->word[3][0] == '>';
         e.limit = (double)m;
@@ -709,6 +711,18 @@ static bool statement(parser_t *p, const line_words_t *w) {
             seed = seed * 10u + digit;
         }
         s->seed = seed;
+        return true;
+    }
+    if (strcmp(head, "light_mass") == 0) {
+        double kg;
+        const char *unit;
+        if (w->count != 2 || !quantity(w->word[1], &kg, &unit) || strcmp(unit, "kg") != 0 || !(kg >= 0.1 && kg <= 1000.0)) {
+            return refuse(p, "light_mass reads: light_mass <0.1..1000>kg%s", "");
+        }
+        if (s->light_mass_max > 0.0f) {
+            return refuse(p, "light_mass is set twice%s", "");
+        }
+        s->light_mass_max = (float)kg;
         return true;
     }
     if (strcmp(head, "rate") == 0) {

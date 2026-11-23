@@ -1,0 +1,17 @@
+# A stack the layer holds at rest for 10 s: it must not jitter. Bounds, derived: no rest wake, no
+# rest jitter, agreement at 1 cm and 2 degrees.
+scenario layer_rest
+scene stack10
+seed 54
+guests 1
+end 10s
+light_mass 20kg
+
+net g1 rtt 100ms jitter 20ms loss 2%
+
+p1 walk -3 2 as away
+
+expect result away done
+expect agree_at_rest 1cm 2deg
+expect rest_wakes.count <= 0
+expect rest_jitter.max <= 0m

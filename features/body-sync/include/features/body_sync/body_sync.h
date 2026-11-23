@@ -75,6 +75,18 @@ typedef struct body_sync_config {
        The stub ignores them. */
     uint32_t delay_min;
     uint32_t delay_max;
+    /* The second layer, kilograms, 0..1e6 (else create refuses); 0 (the default) is off. On a
+       guest, a copy of class LIGHT and at most this mass, owned by another seat, neither held nor
+       in flight under its owner, and not kinematic there, keeps character_category's bits and,
+       while something of this side's moves at it or its owner moves, is simulated here as a
+       dynamic body pulled softly toward its owner's playback pose: it answers this endpoint's own
+       character and thrown bodies at once instead of standing until the owner's state comes.
+       Resting, it is held exactly on its owner's pose like any copy. Its owner still judges it:
+       nothing of a soft copy is sent, and nothing on the wire changes. A push by a body the seam
+       does not bind moves a copy here only: the host never learns of it, so the pull takes it
+       back once the pause chain ends. Each guest may use its
+       own knob; the host ignores it, and so does the stub. */
+    float light_mass_max;
 } body_sync_config_t;
 
 /* NULL when the config is out of range, its limits are too wide for the implementation's wire
@@ -90,8 +102,8 @@ body_sync_t *body_sync_create(const body_sync_config_t *config);
    Destroy the seam before its world. */
 void body_sync_destroy(body_sync_t *sync);
 
-/* The linked implementation and its version, for logs and metrics: "real 0.6.0" or
-   "stub 0.6.0". */
+/* The linked implementation and its version, for logs and metrics: "real 0.7.0" or
+   "stub 0.7.0". */
 const char *body_sync_implementation(void);
 
 /* Text of the last INVALID or FORMAT this seam returned, "" before any. */
@@ -279,6 +291,22 @@ bool body_sync_render_offset(const body_sync_t *sync, body_sync_id_t id, float p
    the endpoint's own last collect tick. False when unknown. The stub reports the tick of the
    newest state received. */
 bool body_sync_playback(const body_sync_t *sync, body_sync_id_t id, double *owner_tick);
+
+/* Measurement: true for a copy this side simulates itself now and pulls toward its owner (the
+   second layer, light_mass_max), whose drawn pose is a prediction rather than its playback pose;
+   false for one held on its owner's pose. Always false for the stub and with the layer off. */
+bool body_sync_is_predicted(const body_sync_t *sync, body_sync_id_t id);
+
+/* True for a copy the second layer holds (soft, in the rest hold or in flight): the seam keeps
+   character_category's bits on it, so a game that sets its own collision filters must not take
+   them off it as it does for other LIGHT copies. Always false for the stub and with the layer
+   off. */
+bool body_sync_is_layer_copy(const body_sync_t *sync, body_sync_id_t id);
+
+/* Measurement: the round trip to a seat in ticks, from a state packet's send to its arrival fate
+   (body_sync_resolve), smoothed; 0 before the first fate and for the stub. The second layer's
+   pause is built from it. */
+float body_sync_round_trip(const body_sync_t *sync, uint8_t seat);
 
 /* ---- measurements ---- */
 

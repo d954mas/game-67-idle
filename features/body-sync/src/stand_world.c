@@ -151,6 +151,17 @@ void stand_world_step(stand_world_t *w) {
             w->hits[w->hit_count++] = (stand_hit_t){.slot_a = a, .slot_b = b, .speed = events.hitEvents[i].approachSpeed};
         }
     }
+    /* A touch that begins too slow for a hit event (a walk into a pile) is a hit of speed 0: it
+       breaks nothing, and the second layer's response counts it. */
+    for (int i = 0; i < events.beginCount && w->hit_count < STAND_HITS_MAX; i++) {
+        if (!b3Shape_IsValid(events.beginEvents[i].shapeIdA) || !b3Shape_IsValid(events.beginEvents[i].shapeIdB)) {
+            continue;
+        }
+        uint32_t a = slot_of_shape(events.beginEvents[i].shapeIdA), b = slot_of_shape(events.beginEvents[i].shapeIdB);
+        if (a != UINT32_MAX && b != UINT32_MAX) {
+            w->hits[w->hit_count++] = (stand_hit_t){.slot_a = a, .slot_b = b, .speed = 0.0f};
+        }
+    }
 }
 
 static void fnv(uint64_t *h, const void *data, size_t size) {

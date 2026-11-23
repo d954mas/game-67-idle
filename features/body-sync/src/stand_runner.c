@@ -22,6 +22,7 @@ enum {
     PACKET_MAX = 2048,
     CATCH_UP_MAX = 8,         /* ticks a stalled endpoint runs in one frame when it comes back */
     REST_TICKS = 30,          /* 0.5 s of stillness counts as rest */
+    LAG_TICKS = 60,           /* the layer's longest pause: a copy touched within it may still move */
     STUCK_TICKS = 120,        /* 2 s */
     CONNECT_TICKS_MAX = 600,  /* 10 s for each guest to be seated */
     KNOCK_FLAG = 1u << 0,     /* seam flag bit the stand gives a knocked mannequin */
@@ -33,6 +34,15 @@ enum {
 _Static_assert(BODY_SYNC_ACTIVITY_PUNCH <= 255, "a character's activity is one data byte");
 #define REST_SPEED 0.05f
 #define REST_OFFSET_M 0.001f
+#define REST_MOVE_M 1e-4 /* a tenth of a millimetre: no eye sees it, above a pose's float noise */
+#define REST_STILL REST_SPEED /* a body this slow rests though awake (a pile against a character), as for the run's end */
+#define RESPONSE_M 0.01f /* the host's move that makes a hit real */
+/* The copy's answer: its drawn pose starts to move. A soft hit moves a body by millimetres a
+   tick; a copy that waits for the host does not move at all. */
+#define ANSWER_M 0.001f
+/* A hit is watched 60 ticks for the host's move; the copy answers within the layer's pause (24
+   ticks) or it missed: moved later, it was the pull, not the hit. */
+enum { RESPONSE_TICKS = 60, RESPONSE_WINDOW = 24 };
 #define MOVED_M 0.05f
 #define OWNER_JUMP_M 0.5f /* an owner's move in one tick past any throw: it was set there */
 
@@ -97,6 +107,26 @@ typedef struct endpoint {
     uint8_t knock_seen[STAND_BODIES_MAX];
     uint8_t knock_count[STAND_BODIES_MAX];
     uint32_t spawn_id[STAND_BODIES_MAX];
+    /* The second layer's measures: hits not yet answered, and each copy's rest. */
+    struct {
+        uint32_t slot, id, tick;
+        float drawn[3], host[3];
+        bool host_moved, moved, counted;
+        uint32_t answer;
+    } hits[64];
+    uint32_t hit_count;
+    uint32_t touched_tick[STAND_BODIES_MAX]; /* stand tick + 1 a body it simulates hit this copy */
+    uint32_t world_rest_run;
+    uint32_t local_tick[STAND_BODIES_MAX]; /* stand tick + 1 this guest last simulated the body */
+    bool was_resting[STAND_BODIES_MAX];
+    uint32_t rest_lag[STAND_BODIES_MAX];   /* ticks moving while its owner rests, untouched */
+    uint32_t soft_places[STAND_BODIES_MAX]; /* placements of a predicted copy (its offset jumped) */
+    float offset_prev[STAND_BODIES_MAX];
+    bool host_awake[STAND_BODIES_MAX];
+    bool standing; /* every character of this guest slower than a mover: what it touches trembles, if it moves */
+    bool passed[STAND_BODIES_MAX]; /* this guest's character is inside it now, counted once */
+    uint32_t host_flip[STAND_BODIES_MAX]; /* tick its host body last fell asleep or woke */
+    float layer_prev[STAND_BODIES_MAX][3]; /* drawn at the last sample, for the rest measures */
     uint8_t spawn_count[STAND_BODIES_MAX];
     uint32_t claim_stale;
 } endpoint_t;
@@ -131,6 +161,7 @@ struct body_sync_stand {
     body_sync_scene_t scene;
     body_sync_scenario_t scenario;
     bool series;
+    float light_mass;
     uint64_t seed;
     uint32_t endpoints;
     net_link_sim_t *sim;
@@ -894,7 +925,8 @@ static void after_apply(body_sync_stand_t *st, endpoint_t *ep) {
         body_sync_authority_t a;
         body_sync_id_t id = stand_world_id(w, slot);
         if (body_sync_authority(ep->sync, id, &a)) {
-            bool light_copy = !body_sync_is_local(ep->sync, id) && !(s->desc.flags & BODY_SYNC_BODY_HEAVY);
+            /* The seam keeps the character bits on a layer copy: its own character pushes it or meets it. */
+            bool light_copy = !body_sync_is_local(ep->sync, id) && !(s->desc.flags & BODY_SYNC_BODY_HEAVY) && !body_sync_is_layer_copy(ep->sync, id);
             stand_world_set_held(w, slot, a.holder != BODY_SYNC_ID_NONE, light_copy ? (uint64_t)STAND_CAT_CHARACTER : 0u);
         }
         if ((body_sync_flags(ep->sync, stand_world_id(w, slot)) & KNOCK_FLAG) != 0) {
@@ -934,6 +966,46 @@ static void record_owner(endpoint_t *ep, uint32_t k) {
     }
 }
 
+/* A guest's step hit a LIGHT copy with a body it simulates: the hit waits for its response. */
+static void note_hits(body_sync_stand_t *st, endpoint_t *ep) {
+    if (is_host_ep(ep)) {
+        return;
+    }
+    for (uint32_t i = 0; i < ep->world->hit_count; i++) {
+        const stand_hit_t *h = &ep->world->hits[i];
+        for (int side = 0; side < 2; side++) {
+            uint32_t mine = side ? h->slot_b : h->slot_a, copy = side ? h->slot_a : h->slot_b;
+            const stand_slot_t *c = &ep->world->slots[copy];
+            body_sync_id_t mid = stand_world_id(ep->world, mine), cid = stand_world_id(ep->world, copy);
+            if (!mid || !cid || !body_sync_is_local(ep->sync, mid) || body_sync_is_local(ep->sync, cid) || c->character ||
+                c->desc.motion == BODY_SYNC_MOTION_STATIC || (c->desc.flags & BODY_SYNC_BODY_HEAVY)) {
+                continue;
+            }
+            ep->touched_tick[copy] = st->now + 1u;
+            if (h->speed <= 0.0f) {
+                continue; /* a graze: it touches, it does not hit */
+            }
+            bool pending = false;
+            for (uint32_t k = 0; k < ep->hit_count; k++) {
+                pending = pending || ep->hits[k].slot == copy;
+            }
+            const stand_slot_t *hs = stand_world_slot(st->ep[0].world, cid);
+            if (pending || ep->hit_count >= 64 || !hs || ep->hist_id[copy] != cid) {
+                continue;
+            }
+            float rot[4];
+            uint32_t k = ep->hit_count++;
+            ep->hits[k].slot = copy;
+            ep->hits[k].id = cid;
+            ep->hits[k].tick = st->now;
+            ep->hits[k].host_moved = ep->hits[k].moved = ep->hits[k].counted = false;
+            ep->hits[k].answer = 0;
+            memcpy(ep->hits[k].drawn, ep->prev_pos[copy], sizeof(ep->hits[k].drawn)); /* drawn before the step */
+            pose_of(&st->ep[0], copy, ep->hits[k].host, rot);
+        }
+    }
+}
+
 static void endpoint_tick(body_sync_stand_t *st, endpoint_t *ep) {
     uint32_t k = ep->ticks_run;
     coop_session_set_time(ep->session, net_link_sim_time(st->sim));
@@ -958,6 +1030,7 @@ static void endpoint_tick(body_sync_stand_t *st, endpoint_t *ep) {
     }
     character_tick(st, ep);
     stand_world_step(ep->world);
+    note_hits(st, ep);
     record_owner(ep, coop_session_tick(ep->session)); /* the tick its state packets carry */
     impacts(st, ep);
     body_sync_collect(ep->sync, k);
@@ -1219,6 +1292,187 @@ static double owner_move(const owner_ring_t *r, double from, double to, const fl
     return jumped && whole > d ? whole : d;
 }
 
+/* The second layer's measures on each guest: hits answered, copies at rest, copy speeds. */
+/* A light copy this guest's own character walks into without touching it (driven, its character
+   bits off: she passes through) is a hit the layer missed: counted with the misses, once per
+   entry. Into means her capsule, PASS_M thinner, overlaps the copy's shapes with no contact
+   between the bodies. */
+#define PASS_M 0.03f
+typedef struct passing {
+    body_sync_stand_t *st;
+    endpoint_t *ep;
+    b3BodyId her;
+    bool inside[STAND_BODIES_MAX];
+} passing_t;
+
+static bool in_contact(b3BodyId a, b3BodyId b) {
+    b3ContactData contacts[32];
+    int n = b3Body_GetContactData(a, contacts, 32);
+    for (int i = 0; i < n; i++) {
+        if (b3Shape_IsValid(contacts[i].shapeIdA) && b3Shape_IsValid(contacts[i].shapeIdB) &&
+            (B3_ID_EQUALS(b3Shape_GetBody(contacts[i].shapeIdA), b) || B3_ID_EQUALS(b3Shape_GetBody(contacts[i].shapeIdB), b))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool passing_shape(b3ShapeId shape, void *context) {
+    passing_t *ps = context;
+    b3BodyId body = b3Shape_GetBody(shape);
+    for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
+        stand_slot_t *s = &ps->ep->world->slots[slot];
+        if (s->live && B3_ID_EQUALS(s->body, body)) {
+            body_sync_id_t id = stand_world_id(ps->ep->world, slot);
+            ps->inside[slot] = !s->character && s->desc.motion != BODY_SYNC_MOTION_STATIC && !(s->desc.flags & BODY_SYNC_BODY_HEAVY) &&
+                               s->desc.mass <= ps->st->light_mass && !body_sync_is_local(ps->ep->sync, id) &&
+                               !body_sync_is_layer_copy(ps->ep->sync, id) && !in_contact(ps->her, body);
+            break;
+        }
+    }
+    return true;
+}
+
+static void passed_through(body_sync_stand_t *st, endpoint_t *ep, uint32_t gi) {
+    if (st->light_mass <= 0.0f) {
+        return;
+    }
+    static passing_t ps;
+    memset(ps.inside, 0, sizeof(ps.inside));
+    ps.st = st;
+    ps.ep = ep;
+    for (uint32_t c = 0; c < STAND_BODIES_MAX; c++) {
+        stand_slot_t *ch = &ep->world->slots[c];
+        b3ShapeId shape;
+        if (!ch->live || !ch->character || !body_sync_is_local(ep->sync, stand_world_id(ep->world, c)) || b3Body_GetShapes(ch->body, &shape, 1) != 1 ||
+            b3Shape_GetType(shape) != b3_capsuleShape) {
+            continue;
+        }
+        b3Capsule cap = b3Shape_GetCapsule(shape); /* a character never tips: its local axis is the world's */
+        const b3Vec3 points[2] = {cap.center1, cap.center2};
+        b3ShapeProxy proxy = {.points = points, .count = 2, .radius = cap.radius - PASS_M};
+        ps.her = ch->body;
+        b3World_OverlapShape(ep->world->world, b3Body_GetPosition(ch->body), &proxy, b3DefaultQueryFilter(), passing_shape, &ps);
+    }
+    for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
+        if (ps.inside[slot] && !ep->passed[slot]) {
+            stand_metrics_response_miss(&st->metrics, gi);
+        }
+        ep->passed[slot] = ps.inside[slot];
+    }
+}
+
+static void sample_layer(body_sync_stand_t *st) {
+    endpoint_t *host = &st->ep[0];
+    for (uint32_t g = 1; g < st->endpoints; g++) {
+        endpoint_t *ep = &st->ep[g];
+        if (!ep->built || !ep->active) {
+            continue;
+        }
+        uint32_t gi = g - 1u;
+        for (uint32_t k = 0; k < ep->hit_count;) {
+            float drawn[3], at[3], rot[4];
+            stand_slot_t *gs = stand_world_slot(ep->world, ep->hits[k].id), *hs = stand_world_slot(host->world, ep->hits[k].id);
+            bool done = !gs || !hs || st->now - ep->hits[k].tick >= RESPONSE_TICKS;
+            if (!done) {
+                pose_of(host, ep->hits[k].slot, at, rot);
+                ep->hits[k].host_moved = ep->hits[k].host_moved || stand_distance3(at, ep->hits[k].host) >= RESPONSE_M;
+                drawn_pose(ep, ep->hits[k].slot, drawn, rot);
+                /* Moved here before the host did: decided once the host moves, or dropped. */
+                if (stand_distance3(drawn, ep->hits[k].drawn) >= ANSWER_M && !ep->hits[k].moved && st->now - ep->hits[k].tick <= RESPONSE_WINDOW) {
+                    ep->hits[k].moved = true;
+                    ep->hits[k].answer = st->now - ep->hits[k].tick;
+                }
+                if (ep->hits[k].moved && ep->hits[k].host_moved && !ep->hits[k].counted) {
+                    stand_metrics_response(&st->metrics, gi, (double)ep->hits[k].answer);
+                    ep->hits[k].counted = true;
+                }
+                /* Kept to the pause's end, where the gap to the host is what the pull starts from. */
+                if (st->now - ep->hits[k].tick == RESPONSE_WINDOW && ep->hits[k].host_moved) {
+                    stand_metrics_layer_hit(&st->metrics, gi, ep->hits[k].tick, (double)stand_distance3(drawn, at));
+                }
+                done = ep->hits[k].counted && st->now - ep->hits[k].tick >= RESPONSE_WINDOW;
+            } else if (ep->hits[k].host_moved && !ep->hits[k].counted && gs && hs) {
+                stand_metrics_response_miss(&st->metrics, gi); /* the host moved it, this guest did not in the window */
+            }
+            if (done) {
+                ep->hits[k] = ep->hits[--ep->hit_count];
+            } else {
+                k++;
+            }
+        }
+        /* The rest measures watch a world at rest that agrees: every copy and its host body
+           resting (asleep, or slower than REST_STILL: a pile against a character never sleeps),
+           within 1 cm and drawn where it is, for REST_TICKS; a copy this guest's body touches rests
+           too. Its moves count as jitter while she stands still (a pile trembling against her),
+           not while she pushes.
+           A move inside it is jitter, a copy starting to move a wake. */
+        ep->standing = true;
+        for (uint32_t c = 0; c < STAND_BODIES_MAX; c++) {
+            stand_slot_t *ch = &ep->world->slots[c];
+            if (ch->live && ch->character && body_sync_is_local(ep->sync, stand_world_id(ep->world, c)) && stand_world_speed(ep->world, c) >= 0.25f) { /* the layer's mover speed */
+                ep->standing = false;
+            }
+        }
+        /* She walking is no rest: what she sets moving as she leaves a pile is her doing. */
+        bool was_rest = ep->world_rest_run >= REST_TICKS && ep->standing, now_rest = ep->standing;
+        for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
+            stand_slot_t *s = &ep->world->slots[slot];
+            body_sync_id_t id = stand_world_id(ep->world, slot);
+            stand_slot_t *hs = s->live ? stand_world_slot(host->world, id) : NULL;
+            if (!s->live || !hs || s->desc.motion == BODY_SYNC_MOTION_STATIC || s->character) {
+                ep->was_resting[slot] = false;
+                ep->rest_lag[slot] = 0;
+                continue;
+            }
+            if (body_sync_is_local(ep->sync, id)) {
+                ep->local_tick[slot] = st->now + 1u; /* this guest's own action: no rest of the layer's */
+                ep->was_resting[slot] = false;
+                ep->rest_lag[slot] = 0;
+                continue;
+            }
+            stand_metrics_copy_speed(&st->metrics, gi, (double)stand_world_speed(ep->world, slot));
+            bool asleep = !b3Body_IsAwake(s->body) || stand_world_speed(ep->world, slot) < REST_STILL;
+            bool host_asleep = !b3Body_IsAwake(hs->body) || stand_world_speed(host->world, slot) < REST_STILL;
+            if (b3Body_IsAwake(hs->body) != ep->host_awake[slot]) {
+                ep->host_awake[slot] = b3Body_IsAwake(hs->body);
+                ep->host_flip[slot] = st->now;
+            }
+            /* The host body falling asleep sends its exact rest pose, which replaces the rounded one
+               a copy of a still, awake owner stood on: one move a rest, once it has landed. */
+            bool host_steady = st->now - ep->host_flip[slot] >= LAG_TICKS;
+            bool touched = ep->touched_tick[slot] == st->now + 1u || (ep->local_tick[slot] && st->now + 1u - ep->local_tick[slot] < REST_TICKS);
+            bool near = ep->touched_tick[slot] + LAG_TICKS > st->now + 1u || (ep->local_tick[slot] && st->now + 1u - ep->local_tick[slot] < LAG_TICKS);
+            ep->rest_lag[slot] = host_asleep && !asleep && !near ? ep->rest_lag[slot] + 1u : 0u;
+            stand_metrics_rest_lag(&st->metrics, gi, ep->rest_lag[slot]);
+            float offset[3], spin[4];
+            float offset_now = body_sync_render_offset(ep->sync, id, offset, spin) ? sqrtf(offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2]) : 0.0f;
+            if (body_sync_is_predicted(ep->sync, id) && offset_now > ep->offset_prev[slot] + (float)REST_MOVE_M * 10.0f) {
+                stand_metrics_soft_place(&st->metrics, gi, ++ep->soft_places[slot]);
+            }
+            ep->offset_prev[slot] = offset_now;
+            float drawn[3], rot[4], host_at[3], here[3];
+            drawn_pose(ep, slot, drawn, rot);
+            pose_of(host, slot, host_at, rot);
+            pose_of(ep, slot, here, rot);
+            /* A render offset still decaying is a correction's tail, not a rest. */
+            bool shown = stand_distance3(drawn, here) <= (float)REST_MOVE_M;
+            now_rest = now_rest && asleep && host_asleep && host_steady && shown && stand_distance3(drawn, host_at) <= RESPONSE_M;
+            /* Only a body asleep on the host has an exact pose to hold; one kept awake (against a
+               character) is followed on the copy grid, its steps the host's own creep. */
+            if (was_rest && (!touched || ep->standing) && !b3Body_IsAwake(hs->body)) {
+                double move = (double)stand_distance3(drawn, ep->layer_prev[slot]);
+                move = move > REST_MOVE_M ? move : 0.0; /* float noise of a pose read back */
+                stand_metrics_rest(&st->metrics, gi, move, ep->was_resting[slot] && !asleep && host_asleep);
+            }
+            ep->was_resting[slot] = asleep;
+            memcpy(ep->layer_prev[slot], drawn, sizeof(drawn));
+        }
+        ep->world_rest_run = now_rest ? ep->world_rest_run + 1u : 0u;
+        passed_through(st, ep, gi);
+    }
+}
+
 /* Every copy that its owner sends to directly, against that owner's own path. */
 static void sample_playback(body_sync_stand_t *st) {
     for (uint32_t e = 0; e < st->endpoints; e++) {
@@ -1232,7 +1486,8 @@ static void sample_playback(body_sync_stand_t *st) {
             body_sync_id_t id = stand_world_id(ep->world, slot);
             body_sync_authority_t a;
             double played = 0.0;
-            bool counts = s->live && s->desc.motion != BODY_SYNC_MOTION_STATIC && !body_sync_is_local(ep->sync, id) &&
+            /* A predicted copy (the second layer) is not its playback: the layer's measures watch it. */
+            bool counts = s->live && s->desc.motion != BODY_SYNC_MOTION_STATIC && !body_sync_is_local(ep->sync, id) && !body_sync_is_predicted(ep->sync, id) &&
                           body_sync_authority(ep->sync, id, &a) && a.seat < st->endpoints && (e == 0) != (a.seat == 0) &&
                           st->ep[a.seat].built && body_sync_playback(ep->sync, id, &played);
             float drawn[3], rot[4], truth[3];
@@ -1331,6 +1586,7 @@ static void sample(body_sync_stand_t *st) {
             ep->hist_n[slot] = ep->hist_n[slot] >= 2 ? 2 : (uint8_t)(ep->hist_n[slot] + 1);
         }
     }
+    sample_layer(st);
     sample_playback(st);
     stand_metrics_end_tick(&st->metrics);
 
@@ -1759,6 +2015,7 @@ static void evaluate(body_sync_stand_t *st) {
     snprintf(r->implementation, sizeof(r->implementation), "%s", body_sync_implementation());
     r->seed = st->seed;
     r->tick_hz = BODY_SYNC_TICK_HZ;
+    r->light_mass_max = st->light_mass;
     r->ticks = st->now;
     r->rest_tick = st->rest_tick;
     stand_metrics_summarize(&st->metrics, r);
@@ -1866,9 +2123,9 @@ static void evaluate(body_sync_stand_t *st) {
                 d = (double)stand_distance3(at, st->start_position[body_sync_id_slot(id)]);
             }
             c->value = d;
-            c->limit = x->limit;
-            c->passed = d >= 0.0 && (x->at_least ? d >= x->limit : d <= x->limit);
-            snprintf(c->detail, sizeof(c->detail), "%s moved %.3g m on the host, expected %s %.3g m", x->body, d, x->at_least ? ">=" : "<=", x->limit);
+            c->limit = st->light_mass > 0.0f && x->layer_limit >= 0.0 ? x->layer_limit : x->limit;
+            c->passed = d >= 0.0 && (x->at_least ? d >= c->limit : d <= c->limit);
+            snprintf(c->detail, sizeof(c->detail), "%s moved %.3g m on the host, expected %s %.3g m", x->body, d, x->at_least ? ">=" : "<=", c->limit);
             break;
         }
         case BODY_SYNC_EXPECT_LEFT: {
@@ -1974,6 +2231,7 @@ body_sync_stand_t *body_sync_stand_create(const body_sync_stand_config_t *config
     st->scenario = *config->scenario;
     st->series = config->series;
     st->seed = config->override_seed ? config->seed : st->scenario.seed;
+    st->light_mass = config->override_light_mass ? config->light_mass_max : st->scenario.light_mass_max;
     st->endpoints = 1u + st->scenario.guests;
     st->rest_tick = UINT32_MAX;
     st->limits = stand_limits_of(&st->scene);
@@ -2014,7 +2272,8 @@ body_sync_stand_t *body_sync_stand_create(const body_sync_stand_config_t *config
                                  .tick_hz = BODY_SYNC_TICK_HZ,
                                  .max_speed = st->limits.max_speed,
                                  .max_spin = st->limits.max_spin,
-                                 .character_category = STAND_CAT_CHARACTER};
+                                 .character_category = STAND_CAT_CHARACTER,
+                                 .light_mass_max = st->light_mass};
         memcpy(sc.bounds_min, st->limits.bounds_min, sizeof(sc.bounds_min));
         memcpy(sc.bounds_max, st->limits.bounds_max, sizeof(sc.bounds_max));
         ep->sync = body_sync_create(&sc);

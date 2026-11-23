@@ -154,6 +154,18 @@ uint8_t sync_authority_route(const sync_authority_t *a, uint32_t slot, bool have
    kinematic and driven to its playback pose. */
 bool sync_authority_holds_dynamic(const sync_authority_t *a, const sync_authority_body_t *b, bool owner_kinematic);
 
+/* The hold of a copy here, holds_dynamic's successor once the second layer lands. */
+typedef enum sync_hold_kind {
+    SYNC_HOLD_DRIVEN = 0, /* kinematic, driven to the playback pose (sync_drive_reachable) */
+    SYNC_HOLD_CORRECTED,  /* dynamic, the owner's velocity plus a bounded correction (sync_drive_dynamic) */
+    SYNC_HOLD_SOFT,       /* dynamic, simulated here and pulled softly (sync_soft.h) */
+} sync_hold_kind_t;
+/* CORRECTED as holds_dynamic says. SOFT on a guest with the layer on (`light`: class LIGHT and
+   mass at most light_mass_max) for a body of another seat with no holder, no settled hold (not
+   in flight) and not kinematic at its owner. DRIVEN otherwise: heavy copies, characters, held
+   and flying bodies stay as 0.6.0 holds them. */
+sync_hold_kind_t sync_authority_hold_kind(const sync_authority_t *a, const sync_authority_body_t *b, bool owner_kinematic, bool light);
+
 /* Whether this side's packets carry moving bodies as sim records: a guest's do, since the host
    may take any of them back at any tick; the host's go to guests as copies. */
 bool sync_authority_sends_sim(const sync_authority_t *a);

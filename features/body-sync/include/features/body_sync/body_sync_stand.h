@@ -58,6 +58,11 @@ typedef struct body_sync_stand_config {
     bool override_seed; /* run with `seed` instead of the scenario's, for sweeps */
     uint64_t seed;
     bool series; /* per-tick and per-second series in the JSON; the summary is always there */
+    /* Every seam's light_mass_max (the second layer), kilograms, instead of the scenario's own
+       `light_mass` (0 when it names none: off): the command line's --light-mass, so one scenario
+       runs in both modes. The report names the mode run. */
+    bool override_light_mass;
+    float light_mass_max;
 } body_sync_stand_config_t;
 
 /* Builds every endpoint's world, seam, session and the network, and connects the guests. NULL

@@ -199,6 +199,11 @@ typedef struct stand_metrics {
     stand_hist_t lag[BODY_SYNC_GUESTS_MAX], path[BODY_SYNC_GUESTS_MAX], behind[BODY_SYNC_GUESTS_MAX];
     uint32_t steps[BODY_SYNC_GUESTS_MAX], offset_steps[BODY_SYNC_GUESTS_MAX], snaps[BODY_SYNC_GUESTS_MAX];
     double jump_max[BODY_SYNC_GUESTS_MAX];
+    stand_hist_t response[BODY_SYNC_GUESTS_MAX];
+    double rest_jitter[BODY_SYNC_GUESTS_MAX], copy_speed[BODY_SYNC_GUESTS_MAX], pause_divergence[BODY_SYNC_GUESTS_MAX];
+    uint32_t first_hit[BODY_SYNC_GUESTS_MAX]; /* tick + 1 of the first hit answered or missed; 0 none */
+    uint32_t rest_wakes[BODY_SYNC_GUESTS_MAX], rest_ticks[BODY_SYNC_GUESTS_MAX], response_misses[BODY_SYNC_GUESTS_MAX];
+    uint32_t rest_lag[BODY_SYNC_GUESTS_MAX], soft_places[BODY_SYNC_GUESTS_MAX];
     uint32_t bytes_second[BODY_SYNC_GUESTS_MAX][2][BODY_SYNC_KINDS_ALL][BODY_SYNC_TIME_MAX_S];
     uint64_t bytes_total[BODY_SYNC_GUESTS_MAX][2][BODY_SYNC_KINDS_ALL];
     double link_rate_sum[BODY_SYNC_GUESTS_MAX][2];
@@ -218,6 +223,14 @@ void stand_metrics_jerk(stand_metrics_t *metrics, uint32_t guest, double jerk_m)
 void stand_metrics_playback(stand_metrics_t *metrics, uint32_t guest, double lag_m, double path_m, double behind_ticks, bool moved,
                             double drawn_move_m, double owner_move_m, bool offset_active);
 void stand_metrics_end_tick(stand_metrics_t *metrics);
+/* The second layer's measures (body_sync_metrics.h "local response", "rest"). */
+void stand_metrics_response(stand_metrics_t *metrics, uint32_t guest, double ticks);
+void stand_metrics_response_miss(stand_metrics_t *metrics, uint32_t guest);
+void stand_metrics_rest(stand_metrics_t *metrics, uint32_t guest, double jitter_m, bool wake);
+void stand_metrics_rest_lag(stand_metrics_t *metrics, uint32_t guest, uint32_t ticks);
+void stand_metrics_soft_place(stand_metrics_t *metrics, uint32_t guest, uint32_t places);
+void stand_metrics_copy_speed(stand_metrics_t *metrics, uint32_t guest, double speed);
+void stand_metrics_layer_hit(stand_metrics_t *metrics, uint32_t guest, uint32_t tick, double pause_divergence);
 void stand_metrics_bytes(stand_metrics_t *metrics, uint32_t guest, int direction, uint32_t kind, uint64_t bytes, uint32_t tick);
 void stand_metrics_link(stand_metrics_t *metrics, uint32_t guest, int direction, double bytes_per_s);
 void stand_metrics_closed(stand_metrics_t *metrics, uint8_t seat, uint32_t tick, uint32_t reason, const char *reason_name);

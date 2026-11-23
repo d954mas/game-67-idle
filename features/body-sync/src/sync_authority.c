@@ -567,6 +567,20 @@ bool sync_authority_holds_dynamic(const sync_authority_t *a, const sync_authorit
     return sync_authority_is_host(a) && !sync_authority_local(a, b) && b->seat != BODY_SYNC_SEAT_HOST && !owner_kinematic;
 }
 
+sync_hold_kind_t sync_authority_hold_kind(const sync_authority_t *a, const sync_authority_body_t *b, bool owner_kinematic, bool light) {
+    if (sync_authority_holds_dynamic(a, b, owner_kinematic)) {
+        return SYNC_HOLD_CORRECTED;
+    }
+    /* A copy's holder and hold are its owner's, as last received. */
+    body_sync_id_t holder = b->has_in ? b->in_holder : b->holder;
+    uint8_t hold = b->has_in ? b->in_hold : b->hold;
+    bool free = holder == BODY_SYNC_ID_NONE && hold != BODY_SYNC_HOLD_UNTIL_SETTLED;
+    if (light && !sync_authority_is_host(a) && !sync_authority_local(a, b) && free && !owner_kinematic) {
+        return SYNC_HOLD_SOFT;
+    }
+    return SYNC_HOLD_DRIVEN;
+}
+
 bool sync_authority_settle(sync_authority_t *a, body_sync_id_t id, bool asleep, bool touched_moving) {
     sync_authority_body_t *b = sync_authority_body(a, id);
     if (!b || !sync_authority_local(a, b) || b->hold != BODY_SYNC_HOLD_UNTIL_SETTLED || !(asleep || touched_moving)) {

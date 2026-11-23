@@ -239,7 +239,7 @@ possibility, not a feature.
   reliable records stamped with the tick, baselines on a low-priority lane,
   RTT and per-peer tick estimates. The game owns the loop; peer bytes are
   untrusted. [Install](coop-net/INSTALL.md).
-- [Body sync](body-sync/README.md) (`L2`, `0.6.0`, opt-in, depends on `box3d`,
+- [Body sync](body-sync/README.md) (`L2`, `0.7.0`, opt-in, depends on `box3d`,
   `net-bits` and `coop-net`): the seam through which one endpoint's Box3D bodies become
   bytes and back (ids with generations, optimistic claims answered by the
   host, holders, settled holds): a budgeted bit-packed sender on `net-bits`

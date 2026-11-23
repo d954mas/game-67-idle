@@ -461,6 +461,11 @@ void sync_playback_sample(const sync_playback_t *p, uint16_t slot, sync_play_t *
                a dynamic hold, which would otherwise brake every time playback catches up. */
             memcpy(out->velocity, s0->velocity, sizeof(out->velocity));
             memcpy(out->angular, s0->angular, sizeof(out->angular));
+            const sync_snapshot_t *prev = last > 0 ? &b->snapshots[last - 1] : NULL;
+            int32_t back = prev ? (int32_t)(s0->tick - prev->tick) : 0;
+            for (int i = 0; !s0->sim && back > 0 && i < 3; i++) {
+                out->velocity[i] = (s0->position[i] - prev->position[i]) / ((float)back * p->dt); /* as below */
+            }
         }
         return;
     }
@@ -495,6 +500,11 @@ void sync_playback_sample(const sync_playback_t *p, uint16_t slot, sync_play_t *
     for (int i = 0; i < 3; i++) {
         out->velocity[i] = s0->velocity[i] + (s1->velocity[i] - s0->velocity[i]) * u;
         out->angular[i] = s0->angular[i] + (s1->angular[i] - s0->angular[i]) * u;
+        /* Copy records carry no velocity: the line between the two gives it, for a hold that
+           feeds its owner's motion forward. */
+        if (!s0->sim || !s1->sim) {
+            out->velocity[i] = (s1->position[i] - s0->position[i]) / ((float)span * p->dt);
+        }
     }
 }
 
@@ -543,7 +553,7 @@ bool sync_playback_line_tick(const sync_playback_t *p, uint8_t timeline, uint32_
 }
 
 /* The rotation taking `from` to `to` on the shorter arc, as axis times angle. */
-static void turn_between(const float from[4], const float to[4], float out[3]) {
+void sync_turn_between(const float from[4], const float to[4], float out[3]) {
     /* to * conj(from) */
     float ax = -from[0], ay = -from[1], az = -from[2], aw = from[3];
     float x = to[3] * ax + to[0] * aw + to[1] * az - to[2] * ay;
@@ -570,7 +580,7 @@ bool sync_drive_reachable(const float now_position[3], const float now_rotation[
                           float max_spin) {
     float d[3] = {play->position[0] - now_position[0], play->position[1] - now_position[1], play->position[2] - now_position[2]};
     float w[3];
-    turn_between(now_rotation, play->rotation, w);
+    sync_turn_between(now_rotation, play->rotation, w);
     return length3(d) <= max_speed * dt && length3(w) <= max_spin * dt;
 }
 
@@ -585,12 +595,19 @@ static void clamp3(float v[3], float limit) {
 
 void sync_drive_dynamic(const float now_position[3], const float now_rotation[4], const sync_play_t *play, float dt, float velocity[3],
                         float angular[3]) {
-    float fix[3], turn[3];
+    float fix[3], turn[3], err[3];
     for (int i = 0; i < 3; i++) {
-        fix[i] = (play->position[i] - now_position[i]) / (SYNC_CORRECT_TICKS * dt);
+        err[i] = play->position[i] - now_position[i];
+        fix[i] = err[i] / (SYNC_CORRECT_TICKS * dt);
+    }
+    sync_turn_between(now_rotation, play->rotation, turn);
+    if (length3(play->velocity) < SYNC_CORRECT_STILL_SPEED && length3(play->angular) < SYNC_CORRECT_STILL_SPIN &&
+        length3(err) <= SYNC_CORRECT_REST_M && length3(turn) <= SYNC_CORRECT_REST_RAD) {
+        memset(velocity, 0, 3 * sizeof(float));
+        memset(angular, 0, 3 * sizeof(float));
+        return;
     }
     clamp3(fix, SYNC_CORRECT_SPEED);
-    turn_between(now_rotation, play->rotation, turn);
     for (int i = 0; i < 3; i++) {
         turn[i] /= SYNC_CORRECT_TICKS * dt;
     }
@@ -605,7 +622,7 @@ static void quat_mul(const float a[4], const float b[4], float out[4]);
 
 bool sync_drive_locked_turn(const float now[4], const float target[4], uint8_t locked_axes, float out[4]) {
     float w[3];
-    turn_between(now, target, w);
+    sync_turn_between(now, target, w);
     for (int i = 0; i < 3; i++) {
         w[i] = (locked_axes & (1u << i)) ? w[i] : 0.0f;
     }

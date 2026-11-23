@@ -221,6 +221,7 @@ static void test_hermite_for_sim_linear_for_copy(void) {
         file_at(1, k, &r);
         r.slot = 2;
         r.sim = false;
+        r.velocity[1] = 0.0f; /* a copy record carries none */
         file_at(2, k, &r);
     }
     set_playback(12.0);
@@ -232,6 +233,26 @@ static void test_hermite_for_sim_linear_for_copy(void) {
     float y10 = v0 * 10.0f * dt + 0.5f * g * 100.0f * dt * dt, y14 = v0 * 14.0f * dt + 0.5f * g * 196.0f * dt * dt;
     NEAR(1e-6f, 0.5f * (y10 + y14), copy.position[1]);
     TEST_ASSERT_TRUE(fabsf(copy.position[1] - arc) > 1e-4f);
+    /* Copy records carry no velocity: the line between the two gives it. */
+    NEAR(1e-3f, (y14 - y10) / (4.0f * dt), copy.velocity[1]);
+}
+
+/* A dynamic hold of a still owner leaves a hair of error alone (any velocity set wakes the
+   island around it) and corrects past it. */
+static void test_a_still_owner_is_not_corrected_for_a_hair(void) {
+    sync_play_t play;
+    memset(&play, 0, sizeof(play));
+    play.known = true;
+    play.rotation[3] = 1.0f;
+    const float q[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    float near_p[3] = {0.5f * SYNC_CORRECT_REST_M, 0.0f, 0.0f}, far_p[3] = {5.0f * SYNC_CORRECT_REST_M, 0.0f, 0.0f}, v[3], w[3];
+    sync_drive_dynamic(near_p, q, &play, 1.0f / 60.0f, v, w);
+    TEST_ASSERT_TRUE_MESSAGE(v[0] == 0.0f && v[1] == 0.0f && v[2] == 0.0f, "a hair of error was corrected");
+    sync_drive_dynamic(far_p, q, &play, 1.0f / 60.0f, v, w);
+    TEST_ASSERT_TRUE(v[0] < 0.0f);
+    play.velocity[0] = 0.5f; /* a moving owner is always followed */
+    sync_drive_dynamic(near_p, q, &play, 1.0f / 60.0f, v, w);
+    TEST_ASSERT_TRUE(v[0] > 0.0f);
 }
 
 /* Rotation turns the shorter way, even when the owner's quaternion changed sign. */
@@ -619,6 +640,7 @@ int main(void) {
     RUN_TEST(test_the_clock_before_it_knows_and_after_a_rejoin);
     RUN_TEST(test_freeze_and_jump);
     RUN_TEST(test_hermite_for_sim_linear_for_copy);
+    RUN_TEST(test_a_still_owner_is_not_corrected_for_a_hair);
     RUN_TEST(test_rotation_takes_the_shorter_arc);
     RUN_TEST(test_a_rest_pose_is_exact);
     RUN_TEST(test_rare_groups_play_on_time_and_stay);

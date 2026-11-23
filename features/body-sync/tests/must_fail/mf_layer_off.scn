@@ -1,0 +1,14 @@
+# Without the layer a pile cannot answer a guest's hit within a tick: it waits for the host.
+scenario mf_layer_off
+scene pile60
+seed 52
+guests 1
+settle 10s
+
+net g1 rtt 100ms jitter 20ms loss 2%
+
+p1 grab ball as grab
+p1 wait 300ms
+p1 throw pile31 speed 12 as throw
+
+expect response_ticks.max <= 1t

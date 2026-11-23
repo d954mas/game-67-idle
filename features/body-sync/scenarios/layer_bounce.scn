@@ -1,0 +1,41 @@
+# The second layer's bounce: the guest throws the crate at the wall and it falls back into six
+# light boxes the host owns. With the layer the boxes answer in the step the crate reaches them;
+# without it they stand until the host's answer plays (one way, the host's delay, one way, this
+# guest's delay: about 16 ticks here). Bounds, derived: response_ticks.max 2 (the copy moves in
+# the contact's own step; one tick for a contact that begins at a step's end; one more step when a
+# resting copy is met from standstill); rest at 1 cm and 2 degrees, no rest wakes, no rest jitter.
+scenario layer_bounce
+scene wall_boxes
+seed 51
+guests 1
+# A hard end well past rest, so the rest measures watch the world at rest for seconds.
+end 14s
+light_mass 20kg
+
+net g1 rtt 100ms jitter 20ms loss 2%
+
+p1 walk crate
+p1 grab crate as grab
+p1 wait 300ms
+p1 throw wall speed 12 as throw
+
+expect result grab granted
+expect result throw done
+# Derived: the copy answers in its own step (0), or one later when the hit lands at the step's
+# end (1), plus one step when it rested in the hold and the body met it from standstill (a wall
+# for one step: README "The second layer"): 2.
+expect response_ticks.max <= 2t
+expect agree_at_rest 1cm 2deg
+expect no_stuck
+expect rest_wakes.count <= 0
+expect response_misses.count <= 0
+# Derived: a copy moves on while its owner rests for at most the longest pause (60 ticks, a hit
+# among soft copies), then the owner's stillness (15), the playback delay (at most 15) and the
+# one-way delay (8 at 250 ms, one more a tick per extra ~33 ms); in the rest hold it stops at
+# once. 60 + 15 + 15 + 8 = 98.
+expect rest_lag_ticks.max <= 98t
+# Derived: per episode of this side's contact a copy may take one snap (past 1 m), one stalled
+# pull (30 ticks unpressed) and one rest-hold entry off the dead zone: 3. Episodes here: 1
+# (the crate's hit). 3 x 1 = 3.
+expect soft_places.max <= 3
+expect rest_jitter.max <= 0m

@@ -53,7 +53,7 @@ struct body_sync {
     char error[128];
 };
 
-const char *body_sync_implementation(void) { return "stub 0.6.0"; }
+const char *body_sync_implementation(void) { return "stub 0.7.0"; }
 
 const char *body_sync_traffic_kind_name(body_sync_traffic_kind_t kind) {
     static const char *names[] = {"header", "copy", "sim", "held", "authority"};
@@ -608,6 +608,24 @@ bool body_sync_playback(const body_sync_t *s, body_sync_id_t id, double *owner_t
     }
     *owner_tick = (double)e->in_tick;
     return true;
+}
+
+bool body_sync_is_predicted(const body_sync_t *s, body_sync_id_t id) {
+    (void)s;
+    (void)id;
+    return false;
+}
+
+float body_sync_round_trip(const body_sync_t *s, uint8_t seat) {
+    (void)s;
+    (void)seat;
+    return 0.0f;
+}
+
+bool body_sync_is_layer_copy(const body_sync_t *s, body_sync_id_t id) {
+    (void)s;
+    (void)id;
+    return false;
 }
 
 bool body_sync_render_offset(const body_sync_t *s, body_sync_id_t id, float position[3], float rotation[4]) {

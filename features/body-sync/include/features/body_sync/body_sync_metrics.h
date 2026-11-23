@@ -40,7 +40,8 @@ extern "C" {
                                a move past 2 m (the render offset's reach) is a snap, counted
                                apart and not a jump
      Each is attributed to the guest on the path: the copy's endpoint, or the owner when the
-     copy is on the host. A check of any of them on a guest with no copy measured fails: no
+     copy is on the host. A copy the second layer predicts (body_sync_is_predicted) is left out:
+     its drawn pose is not its playback, and the layer's own measures below watch it. A check of any of them on a guest with no copy measured fails: no
      sample is no evidence.
    - jerk: for each copy the guest draws, |d(t) - d(t-1)| where d(t) is the drawn position's
      move over tick t: a sudden change of motion. Bodies at rest on both ticks are skipped.
@@ -71,6 +72,25 @@ extern "C" {
      deferred.count [records]: records due that a packet's budget left out, both directions
      lag_divergence.max lag_divergence.p95 path_error.max path_error.p95 jump.max [m]
      step.count offset_step.count snap.count [body-ticks]   behind_ticks.max behind_ticks.p95 [ticks]
+     response_ticks.max response_ticks.p95 [ticks]   response_misses.count [hits]   rest_jitter.max [m]
+     rest_wakes.count [body-ticks]   rest_lag_ticks.max [ticks]   soft_places.max [placements]
+   - local response: a hit is a contact that begins, in a guest's step, between a body that guest
+     simulates (its character, or a body under its authority) and a LIGHT copy on its world whose
+     body on the host then moves 1 cm or more within 60 ticks (the hit was real). Its response is
+     the guest's ticks from that step until the copy's drawn position there is 1 mm or more from
+     where it was drawn at the step (a copy waiting for the host does not move at all), if that
+     comes within 24 ticks; later it is a miss, counted in response_misses (the pull moved it, not
+     the hit). Only contacts that raise a hit event count, not grazes. A guest with no hit fails
+     a check.
+   - rest: over body-ticks where every copy and its host body have rested (asleep, or slower
+     than 5 cm/s, the run's own rest) for the last 30 ticks and nothing this guest simulates touches it, rest_jitter
+     is the largest drawn move in a tick of a copy whose host body sleeps (one kept awake, against a
+     character, is followed on the copy grid) and rest_wakes counts the ticks a copy starts to move;
+     with no such body-tick both checks fail. rest_lag_ticks is the longest run of ticks a copy
+     moved while its host body rested and nothing of the guest's touched it for 60 ticks (a copy
+     that never comes to rest). soft_places counts, per predicted copy, the placements its render
+     offset took (a stalled pull, a snap): a copy pinned and placed over and over shows there.
+     copy_speed_max is reported only.
    - flush_over_limit: ticks where one path's state packet and that tick's seam records
      together pass the session's largest state payload: a transport that packs one flush into
      one datagram would split them there. */
@@ -117,6 +137,18 @@ typedef struct body_sync_guest_metrics {
     double jump_max_m;
     double behind_max_ticks, behind_p95_ticks;
     uint64_t playback_samples; /* copy-ticks the playback measures saw */
+    /* The second layer's measures (body_sync_metrics.h "local response", "rest"). */
+    double response_max_ticks, response_p95_ticks;
+    uint32_t response_events, response_misses;
+    double rest_jitter_max_m;
+    uint32_t rest_wakes;
+    uint32_t rest_ticks;         /* copy-ticks the rest measures saw; none fails their checks */
+    uint32_t rest_lag_max_ticks; /* the longest a copy moved on while its owner rested, untouched */
+    uint32_t soft_places_max;    /* the most placements one predicted copy took (a stall, a snap) */
+    double copy_speed_max; /* m/s, the fastest any copy on this guest moved */
+    double first_hit_tick;         /* the stand tick of the first hit measured; -1 none */
+    double pause_divergence_max_m; /* the largest gap, drawn here to the host's pose, a hit body
+                                      shows at the pause's end (24 ticks after the hit) */
     body_sync_bytes_t to_guest; /* the host's sends to this seat */
     body_sync_bytes_t to_host;  /* this seat's sends to the host */
     double rtt_ms, loss;        /* the session's last estimate on the host, negative unknown */
@@ -154,6 +186,7 @@ typedef struct body_sync_report {
     char implementation[BODY_SYNC_NAME_MAX]; /* body_sync_implementation() */
     uint64_t seed;
     uint32_t tick_hz;
+    float light_mass_max;  /* the second layer run, kilograms; 0 off */
     uint32_t ticks;        /* scenario ticks run */
     uint32_t rest_tick;    /* first tick the host's world was at rest after the last item; UINT32_MAX: never */
     uint32_t guest_count;

@@ -40,7 +40,8 @@
    cut path), its rare groups passed on to the next. At playback time t a body
    takes the snapshots around t: position by cubic Hermite when both carry velocities (sim
    records) kept inside the box of the two snapshots' positions, linearly otherwise;
-   rotation by normalized lerp on the shorter arc; velocities
+   rotation by normalized lerp on the shorter arc; velocities (for copy records, which carry
+   none, the line's between the two snapshots)
    linearly. Before its first snapshot it holds that one's pose; past its newest it holds that
    pose with that snapshot's velocities (for a dynamic hold; none once frozen), frozen once t
    is SYNC_FREEZE_TICKS past it, and is driven on when the
@@ -198,6 +199,9 @@ bool sync_playback_admit(sync_playback_t *p, uint8_t timeline, uint32_t sample, 
    timeline has heard anything. */
 bool sync_playback_line_tick(const sync_playback_t *p, uint8_t timeline, uint32_t sample, uint32_t *local);
 
+/* The rotation taking `from` to `to` on the shorter arc, as world axis times angle (radians). */
+void sync_turn_between(const float from[4], const float to[4], float out[3]);
+
 /* A kinematic copy: false when reaching the pose in one step needs more than max_speed or
    max_spin; the shell then places it there and hands the jump to the render offset. */
 bool sync_drive_reachable(const float now_position[3], const float now_rotation[4], const sync_play_t *play, float dt, float max_speed,
@@ -209,7 +213,15 @@ bool sync_drive_reachable(const float now_position[3], const float now_rotation[
 #define SYNC_FACING_SET_RAD 0.00872665f /* half a degree */
 bool sync_drive_locked_turn(const float now[4], const float target[4], uint8_t locked_axes, float out[4]);
 
-/* A dynamic copy's velocities for this step: the owner's plus the bounded correction. */
+/* A dynamic copy's velocities for this step: the owner's plus the bounded correction. An owner
+   standing still (its velocities under these) whose pose is within SYNC_CORRECT_REST_M and
+   SYNC_CORRECT_REST_RAD gets zero: a correction of a hair it cannot close (pressed by what it
+   stands among) would set a velocity every tick, and any velocity set wakes the island, so the
+   bodies around it would never sleep. */
+#define SYNC_CORRECT_REST_M 0.001f
+#define SYNC_CORRECT_REST_RAD 0.0035f
+#define SYNC_CORRECT_STILL_SPEED 0.001f
+#define SYNC_CORRECT_STILL_SPIN 0.002f
 void sync_drive_dynamic(const float now_position[3], const float now_rotation[4], const sync_play_t *play, float dt, float velocity[3],
                         float angular[3]);
 
