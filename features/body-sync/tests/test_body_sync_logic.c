@@ -518,8 +518,34 @@ static void test_catalog_validates_and_broken_scenes_are_refused(void) {
     TEST_ASSERT_FALSE(body_sync_scene_validate(&scene, &error));
 }
 
+/* A rest's end: a copy rests only drawn on its host body, and a copy that moves after its host body
+   crept faster than the seam's creep bound (a copy-grid step, 3.4 mm, in under 8 ticks) is the
+   host's wake, though that creep (40 mm/s) is under the run's rest speed (50 mm/s). */
+static void test_a_copy_following_its_creeping_owner_is_no_break(void) {
+    TEST_ASSERT_TRUE(stand_copy_rests(true, true, 0.009f, 0.01f));
+    TEST_ASSERT_FALSE_MESSAGE(stand_copy_rests(true, true, 0.02f, 0.01f), "a copy drawn 2 cm off its host body rests");
+    TEST_ASSERT_FALSE(stand_copy_rests(false, true, 0.0f, 0.01f));
+    TEST_ASSERT_FALSE(stand_copy_rests(true, false, 0.0f, 0.01f));
+    enum { N = 38 };
+    float path[N][3];
+    for (int speed_mm_s = 10; speed_mm_s <= 50; speed_mm_s += 10) {
+        for (int k = 0; k < N; k++) {
+            path[k][0] = (float)speed_mm_s * 0.001f * (float)k / 60.0f;
+            path[k][1] = path[k][2] = 0.0f;
+        }
+        bool moved = stand_path_moved((const float (*)[3])path, N, 0.0034f, 8u);
+        TEST_ASSERT_EQUAL_MESSAGE(speed_mm_s > 27, moved, "the seam's creep bound read wrong");
+    }
+    TEST_ASSERT_FALSE(stand_path_moved((const float (*)[3])path, 8u, 0.0034f, 8u)); /* too short to tell */
+    TEST_ASSERT_TRUE_MESSAGE(stand_copy_breaks(true, false, false), "a copy moving off a still host body is no break");
+    TEST_ASSERT_FALSE_MESSAGE(stand_copy_breaks(true, false, true), "a copy following its creeping host body is a break");
+    TEST_ASSERT_FALSE(stand_copy_breaks(true, true, false));
+    TEST_ASSERT_FALSE(stand_copy_breaks(false, false, false));
+}
+
 int main(void) {
     UNITY_BEGIN();
+    RUN_TEST(test_a_copy_following_its_creeping_owner_is_no_break);
     RUN_TEST(test_shipped_scenarios_parse);
     RUN_TEST(test_parse_reads_the_grammar);
     RUN_TEST(test_net_items_sorted_by_tick);

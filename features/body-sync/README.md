@@ -350,7 +350,9 @@ holds on a guest (`src/sync_soft.h`):
   rotation's error bound, 0.0195 rad; a pile leaning on a character that is driven every
   tick never sleeps; once resting, an owner that creeps rests on while each step takes it 8
   ticks or more, 27 mm/s, half the stillness so creep near the speed that lets it rest does
-  not flap; the random sweep's creep reaches 15 mm/s) and nothing of this side's moves at it: it is driven
+  not flap; a host body's own creep is not bounded, one slipping against a character reached
+  48 mm/s, and a faster one is a move that takes its copy out of the hold, which the stand
+  counts as a host wake) and nothing of this side's moves at it: it is driven
   kinematic on the owner's pose like any copy, exact at rest, outside every
   island, and keeps the character bits. A copy of a still but awake owner
   follows it only past that step, so it does not creep with the owner's
@@ -395,8 +397,13 @@ A soft copy is steered to the owner's playback pose:
   the pull starts up to a round trip of about 700 ms (60 = round trip +
   delay + 2). Past that the pull starts first: the copy is taken back toward
   the host's older pose, then follows the host once its answer plays. A chain of
-  pauses runs at most 60 ticks; a touch held longer no longer pauses until a
-  tick without one.
+  pauses runs at most 60 paused ticks and lasts across the gaps between
+  touches: each tick with neither a pause nor a touch takes one off it, and a
+  spent chain pauses nothing until it has drained to 0. A touch every other
+  tick, which a chain reset on any free tick let pause 582 ticks of 600, is
+  paused at most (W + 60) / 2 of any W ticks; the stand's `pause_window.max`
+  (paused ticks of one prediction in any 120, between two take-backs) checks
+  it at 90.
 - **Snap.** Past 1 m from the owner's pose it is placed, the render offset
   taking the jump.
 - **Dead zone.** It is pulled only past 1 cm or 2 degrees, and the pull stops
@@ -807,8 +814,12 @@ a clock the stand cannot map back and is left out of them.
 **The lag-aligned gap** (`aligned_gap.max`, `.p95`) compares two pictures of one
 moment while a body moves: a copy, and a predicted copy once its pull runs (the
 pull steers it to the playback pose), against what its owner drew at the owner
-tick the copy shows. Its bound is derived: the snap keeps a copy within 1 m of
-that pose and its render offset adds at most 2 m, so 3 m. Against the host at the
+tick the copy shows. Its bound is derived: the snap keeps a copy's physics within
+1 m of its owner's physics at that tick, its render offset adds at most 2 m, and
+the owner's drawn picture carries the owner's own offset, at most 2 m more (a
+placement on the owner, as the host's take-over of a guest's grab, glides there
+as well): 5 m. A host-mode grab in the 100-throw sweep reached 4.79 m that way, a
+copy's 1.26 m glide against the host's own. Against the host at the
 guest's moment a copy would be off by its speed times the round trip and two
 delays however true it plays. A predicted copy in its pause
 (`body_sync_is_pull_paused`) is the guest's own answer to its touch, drawn ahead

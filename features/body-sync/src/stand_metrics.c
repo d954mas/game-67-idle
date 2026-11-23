@@ -125,9 +125,16 @@ void stand_metrics_correction(stand_metrics_t *metrics, uint32_t guest, double c
     metrics->jump_max[guest] = correction_m > metrics->jump_max[guest] ? correction_m : metrics->jump_max[guest];
 }
 
-void stand_metrics_aligned(stand_metrics_t *metrics, uint32_t guest, double gap_m) {
+void stand_metrics_aligned(stand_metrics_t *metrics, uint32_t guest, double gap_m, bool predicted) {
     if (guest < metrics->guests && isfinite(gap_m)) {
         stand_hist_add(&metrics->aligned[guest], gap_m);
+        metrics->aligned_predicted[guest] += predicted ? 1u : 0u;
+    }
+}
+
+void stand_metrics_pause_window(stand_metrics_t *metrics, uint32_t guest, uint32_t ticks) {
+    if (guest < metrics->guests && ticks > metrics->pause_window[guest]) {
+        metrics->pause_window[guest] = ticks;
     }
 }
 
@@ -320,6 +327,8 @@ void stand_metrics_summarize(const stand_metrics_t *metrics, body_sync_report_t 
         out->rest_ticks = metrics->rest_ticks[g];
         out->rest_lag_max_ticks = metrics->rest_lag[g];
         out->soft_places_max = metrics->soft_places[g];
+        out->pause_window_max_ticks = metrics->pause_window[g];
+        out->aligned_predicted_samples = metrics->aligned_predicted[g];
         out->copy_speed_max = metrics->copy_speed[g];
         out->first_hit_tick = metrics->first_hit[g] ? (double)(metrics->first_hit[g] - 1u) : -1.0;
         out->pause_divergence_max_m = metrics->pause_divergence[g];
@@ -357,7 +366,7 @@ static const struct {
     {"snap.count", STAND_UNIT_COUNT},         {"offset_step.count", STAND_UNIT_COUNT},     {"behind_ticks.max", STAND_UNIT_TICKS},
     {"behind_ticks.p95", STAND_UNIT_TICKS},      {"response_ticks.max", STAND_UNIT_TICKS},    {"response_ticks.p95", STAND_UNIT_TICKS},
     {"rest_jitter.max", STAND_UNIT_LENGTH},      {"rest_wakes.count", STAND_UNIT_COUNT},      {"rest_breaks.count", STAND_UNIT_COUNT},      {"host_wakes.count", STAND_UNIT_COUNT},      {"rest_lag_ticks.max", STAND_UNIT_TICKS},
-    {"soft_places.max", STAND_UNIT_COUNT},       {"response_misses.count", STAND_UNIT_COUNT},
+    {"soft_places.max", STAND_UNIT_COUNT},       {"response_misses.count", STAND_UNIT_COUNT},  {"pause_window.max", STAND_UNIT_TICKS},
     {"aligned_gap.max", STAND_UNIT_LENGTH},      {"aligned_gap.p95", STAND_UNIT_LENGTH},      {"local_correction.max", STAND_UNIT_LENGTH},
     {"takes.count", STAND_UNIT_COUNT},           {"take_refusals.count", STAND_UNIT_COUNT},   {"reclaims.count", STAND_UNIT_COUNT},
     {"returns.count", STAND_UNIT_COUNT},         {"lost_takes.count", STAND_UNIT_COUNT},      {"lost_takes.max", STAND_UNIT_LENGTH},
@@ -475,6 +484,8 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             v = (double)m->rest_lag_max_ticks;
         } else if (strcmp(name, "soft_places.max") == 0) {
             v = (double)m->soft_places_max;
+        } else if (strcmp(name, "pause_window.max") == 0) {
+            v = (double)m->pause_window_max_ticks;
         } else if (strcmp(name, "response_misses.count") == 0) {
             v = (double)m->response_misses;
         } else if (strcmp(name, "behind_ticks.max") == 0) {
@@ -868,6 +879,12 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         put(&j, ",");
         key(&j, "soft_places_max");
         putf(&j, "%u", gm->soft_places_max);
+        put(&j, ",");
+        key(&j, "pause_window_max_ticks");
+        putf(&j, "%u", gm->pause_window_max_ticks);
+        put(&j, ",");
+        key(&j, "aligned_predicted_samples");
+        putf(&j, "%u", gm->aligned_predicted_samples);
         put(&j, ",");
         key(&j, "copy_speed_max");
         number(&j, gm->copy_speed_max);

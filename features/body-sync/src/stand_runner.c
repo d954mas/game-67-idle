@@ -11,6 +11,7 @@
 #include "stand_testing.h"
 #include "stand_world.h"
 #include "sync_playback.h"
+#include "sync_soft.h"
 
 _Static_assert(STAND_BODIES_MAX == BODY_SYNC_BODIES_MAX, "stand_logic.h repeats the slot count");
 _Static_assert(BODY_SYNC_SEAM_KINDS == BODY_SYNC_TRAFFIC_COUNT, "body_sync_metrics.h repeats the seam's kind count");
@@ -31,7 +32,10 @@ enum {
        behind (a second before it jumps, the delay, one way) plus the path window. */
     RING_TICKS = 128,
     PATH_TICKS = 30,
+    /* The window of pause_window.max: two of the layer's longest pause chains. */
+    PAUSE_WINDOW = 2 * SYNC_SOFT_PAUSE_MAX_TICKS,
 };
+_Static_assert(PAUSE_WINDOW <= RING_TICKS, "the pause window is read from the drawn ring");
 _Static_assert(BODY_SYNC_ACTIVITY_PUNCH <= 255, "a character's activity is one data byte");
 #define REST_SPEED 0.05f
 #define REST_OFFSET_M 0.001f
@@ -140,6 +144,10 @@ typedef struct endpoint {
     uint32_t hit_count;
     uint32_t touched_tick[STAND_BODIES_MAX]; /* stand tick + 1 a body it simulates hit this copy */
     uint32_t world_rest_run;
+    uint16_t pause_window[STAND_BODIES_MAX]; /* a copy's paused ticks of the last PAUSE_WINDOW drawn */
+    uint32_t pause_since[STAND_BODIES_MAX];  /* session tick its prediction was last taken back */
+    bool pause_reset[STAND_BODIES_MAX];      /* placed since: the window starts again */
+    uint32_t pause_window_max;
     uint32_t local_tick[STAND_BODIES_MAX]; /* stand tick + 1 this guest last simulated the body */
     bool was_resting[STAND_BODIES_MAX];
     uint32_t rest_lag[STAND_BODIES_MAX];   /* ticks moving while its owner rests, untouched */
@@ -1092,6 +1100,19 @@ static void record_drawn(const body_sync_stand_t *st, endpoint_t *ep, uint32_t k
         if (r->id != id) {
             memset(r, 0, sizeof(*r));
             r->id = id;
+            ep->pause_reset[slot] = true;
+        }
+        /* The window counts one prediction's pauses since it was last taken back: its start (a copy
+           held or driven before), a snap or a stalled pull's placement; each starts a new chain. */
+        if (ep->pause_reset[slot] || !body_sync_is_predicted(ep->sync, id)) {
+            ep->pause_window[slot] = 0;
+            ep->pause_since[slot] = k;
+            ep->pause_reset[slot] = false;
+        }
+        /* The paused tick that leaves the window, while the ring still holds it. */
+        if (k >= PAUSE_WINDOW && k - PAUSE_WINDOW >= ep->pause_since[slot] && r->tag[(k - PAUSE_WINDOW) % RING_TICKS] == k - PAUSE_WINDOW + 1u &&
+            ep->drawn_paused[(size_t)slot * RING_TICKS + (k - PAUSE_WINDOW) % RING_TICKS] && ep->pause_window[slot] > 0) {
+            ep->pause_window[slot]--;
         }
         float rot[4], *at = r->position[k % RING_TICKS];
         drawn_pose(ep, slot, at, rot);
@@ -1110,6 +1131,10 @@ static void record_drawn(const body_sync_stand_t *st, endpoint_t *ep, uint32_t k
             mark = mark ? mark : pause_mark(st, ep, slot, id);
         }
         paused[k % RING_TICKS] = mark;
+        if (mark) {
+            ep->pause_window[slot]++;
+            ep->pause_window_max = ep->pause_window[slot] > ep->pause_window_max ? ep->pause_window[slot] : ep->pause_window_max;
+        }
     }
 }
 
@@ -1626,6 +1651,28 @@ static float rest_speed(const endpoint_t *ep, uint32_t slot) {
     return speed;
 }
 
+/* The host body's own path over the owner ticks a copy showed in the last REST_TICKS (the pull
+   after the seam lets a copy out of the rest hold, and the copy's rest window), as the seam's
+   test of a move reads it: a copy-grid step left within SYNC_SOFT_CREEP_TICKS. */
+static bool host_moved_at_play(const endpoint_t *host, const endpoint_t *ep, uint32_t slot, body_sync_id_t id) {
+    double played = 0.0;
+    const owner_ring_t *r = host->drawn_rings ? &host->drawn_rings[slot] : NULL;
+    if (!r || r->id != id || !body_sync_playback(ep->sync, id, &played)) {
+        return false;
+    }
+    float path[REST_TICKS + SYNC_SOFT_CREEP_TICKS][3];
+    uint32_t count = 0;
+    int64_t newest = (int64_t)floor(played);
+    for (int64_t k = newest - (int64_t)(REST_TICKS + SYNC_SOFT_CREEP_TICKS) + 1; k <= newest; k++) {
+        if (ring_at(r, k, path[count])) {
+            count++;
+        } else {
+            count = 0; /* a gap in the ring: only a run of consecutive ticks is a path */
+        }
+    }
+    return stand_path_moved((const float (*)[3])path, count, SYNC_SOFT_HOLD_M, SYNC_SOFT_CREEP_TICKS);
+}
+
 static void sample_layer(body_sync_stand_t *st) {
     endpoint_t *host = &st->ep[0];
     for (uint32_t g = 1; g < st->endpoints; g++) {
@@ -1634,6 +1681,7 @@ static void sample_layer(body_sync_stand_t *st) {
             continue;
         }
         uint32_t gi = g - 1u;
+        stand_metrics_pause_window(&st->metrics, gi, ep->pause_window_max);
         for (uint32_t k = 0; k < ep->hit_count;) {
             float drawn[3], at[3], rot[4];
             stand_slot_t *gs = stand_world_slot(ep->world, ep->hits[k].id), *hs = stand_world_slot(host->world, ep->hits[k].id);
@@ -1725,6 +1773,7 @@ static void sample_layer(body_sync_stand_t *st) {
             float offset_now = body_sync_render_offset(ep->sync, id, offset, spin) ? sqrtf(offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2]) : 0.0f;
             if (body_sync_is_predicted(ep->sync, id) && offset_now > ep->offset_prev[slot] + (float)REST_MOVE_M * 10.0f) {
                 stand_metrics_soft_place(&st->metrics, gi, ++ep->soft_places[slot]);
+                ep->pause_reset[slot] = true;
             }
             ep->offset_prev[slot] = offset_now;
             float drawn[3], rot[4], host_at[3], here[3];
@@ -1733,9 +1782,9 @@ static void sample_layer(body_sync_stand_t *st) {
             pose_of(ep, slot, here, rot);
             /* A render offset still decaying is a correction's tail, not a rest. */
             bool shown = stand_distance3(drawn, here) <= (float)REST_MOVE_M;
-            bool host_rests = host_asleep && host_steady, copy_rests = asleep && shown && stand_distance3(drawn, host_at) <= RESPONSE_M;
+            bool host_rests = host_asleep && host_steady, copy_rests = stand_copy_rests(asleep, shown, stand_distance3(drawn, host_at), RESPONSE_M);
             now_rest = now_rest && host_rests && copy_rests;
-            guest_moved = guest_moved || (host_rests && !copy_rests);
+            guest_moved = guest_moved || stand_copy_breaks(host_rests, copy_rests, !copy_rests && host_moved_at_play(host, ep, slot, id));
             if (was_rest && host_asleep && b3Body_IsAwake(hs->body)) {
                 stand_metrics_creep(&st->metrics, gi, (double)rest_speed(host, slot));
             }
@@ -1871,7 +1920,7 @@ static void sample_aligned(body_sync_stand_t *st) {
                     }
                     continue;
                 }
-                stand_metrics_aligned(&st->metrics, g - 1u, (double)stand_distance3(drawn, truth));
+                stand_metrics_aligned(&st->metrics, g - 1u, (double)stand_distance3(drawn, truth), body_sync_is_predicted(e->sync, id));
             }
             /* A guest's prediction of the host's body in its pause, at the moment the host shows. */
             const owner_ring_t *r = &guest->drawn_rings[slot];

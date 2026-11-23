@@ -4,6 +4,22 @@
 
 #include "stand_logic.h"
 
+/* ---- a rest's end ---- */
+
+bool stand_copy_rests(bool slow, bool shown, float host_gap_m, float near_m) { return slow && shown && host_gap_m <= near_m; }
+
+bool stand_path_moved(const float (*path)[3], uint32_t count, float step_m, uint32_t ticks) {
+    for (uint32_t k = ticks; k < count; k++) {
+        float d[3] = {path[k][0] - path[k - ticks][0], path[k][1] - path[k - ticks][1], path[k][2] - path[k - ticks][2]};
+        if (sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) > step_m) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool stand_copy_breaks(bool host_rests, bool copy_rests, bool host_moved_at_play) { return host_rests && !copy_rests && !host_moved_at_play; }
+
 /* ---- a driven body's rest ---- */
 
 void stand_drive_note(stand_drive_t *drive, float speed, float spin) {

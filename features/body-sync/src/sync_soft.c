@@ -104,18 +104,28 @@ void sync_soft_decide(sync_soft_t *s, const sync_soft_in_t *now, bool hit, const
     }
     sync_turn_between(now->rotation, play->rotation, turn);
     float distance = length3(err), angle = length3(turn);
+    /* A pose or an owner's motion that is no number has no error to close: the body is held still
+       rather than sent off on a NaN velocity. */
+    float owner_motion = length3(play->velocity) + length3(play->angular);
+    if (!isfinite(distance) || !isfinite(angle) || !isfinite(owner_motion)) {
+        s->correcting = false;
+        s->stall = 0;
+        out->action = SYNC_SOFT_VELOCITY;
+        keep(s, out->velocity, out->angular);
+        return;
+    }
 
-
-    /* A touch that outlasts a whole chain is no longer a hit: the pull runs under it until a tick
-       without one. */
+    /* A touch while the chain is spent is no longer a hit: the pull runs under it until the chain
+       has drained. */
     bool touched = hit || now->touches_local;
-    if (touched && s->chain < SYNC_SOFT_PAUSE_MAX_TICKS) {
+    if (touched && !s->spent) {
         uint16_t pause = now->pause_ticks ? now->pause_ticks : (uint16_t)SYNC_SOFT_PAUSE_TICKS;
         s->pause = pause > s->pause ? pause : s->pause;
     }
     if (distance > SYNC_SOFT_SNAP_M) {
         s->pause = 0;
         s->chain = 0;
+        s->spent = false;
         s->correcting = false;
         out->action = SYNC_SOFT_PLACE;
         memcpy(out->velocity, play->velocity, sizeof(out->velocity));
@@ -124,15 +134,17 @@ void sync_soft_decide(sync_soft_t *s, const sync_soft_in_t *now, bool hit, const
         keep(s, out->velocity, out->angular);
         return;
     }
-    if (s->pause > 0 && s->chain < SYNC_SOFT_PAUSE_MAX_TICKS) {
+    if (s->pause > 0 && !s->spent) {
         out->paused = true;
         s->pause--;
         s->chain++;
+        s->spent = s->chain >= SYNC_SOFT_PAUSE_MAX_TICKS;
     } else {
         s->pause = 0; /* the chain's cap ends a pause however it was renewed */
-        if (!touched) {
-            s->chain = 0;
+        if (!touched && s->chain > 0) {
+            s->chain--;
         }
+        s->spent = s->spent && s->chain > 0;
         float dead_rad = now->owner_rests ? SYNC_SOFT_REST_RAD : SYNC_SOFT_DEAD_RAD;
         bool outside = distance > SYNC_SOFT_DEAD_M || angle > dead_rad;
         bool inside_half = distance < 0.5f * SYNC_SOFT_DEAD_M && angle < 0.5f * dead_rad;

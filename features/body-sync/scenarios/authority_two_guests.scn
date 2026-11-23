@@ -23,7 +23,9 @@ p2 throw 0 0.5 0 speed 9 as t2
 
 expect result a1 granted
 expect result a2 granted
-expect agree_at_rest 5cm
+# Derived: at rest each copy lies within the second layer's dead zone of its owner (1 cm, 2 degrees,
+# README "The second layer"), as in every layer scene.
+expect agree_at_rest 1cm 2deg
 expect no_stuck
 # Derived: as in authority_host_push, a take keeps the pose: 1 cm.
 expect local_correction.max <= 1cm
@@ -31,3 +33,6 @@ expect local_correction.max <= 1cm
 # the other set going first is refused.
 expect takes.count >= 10
 expect take_refusals.count >= 1
+# Derived: between two take-backs a prediction's pull is paused at most (120 + 60) / 2 of any
+# 120 ticks (sync_soft.h: the chain cap 60, drained a tick per tick without a touch): 90.
+expect pause_window.max <= 90t

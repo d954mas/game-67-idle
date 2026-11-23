@@ -157,14 +157,31 @@ bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, con
                          size_t error_size);
 body_sync_stand_kind_t stand_record_kind(stand_record_type_t type);
 
+/* ---- a rest's end ---- */
+
+/* A copy rests with its host body: slower than the run's rest (`slow`), drawn where its physics
+   is (`shown`: no render offset still decaying) and drawn within `near_m` of its host body. */
+bool stand_copy_rests(bool slow, bool shown, float host_gap_m, float near_m);
+/* The owner's exact path, oldest first, moved by the seam's test of a move (sync_soft_owner_rests):
+   at some tick it was more than `step_m` from where it was `ticks` before. */
+bool stand_path_moved(const float (*path)[3], uint32_t count, float step_m, uint32_t ticks);
+/* A copy that does not rest while its host body rests ends the world's rest by this guest's doing,
+   unless the host body's own path at the owner ticks the copy showed moved (`host_moved_at_play`):
+   the seam takes a copy of an owner moving that fast out of the rest hold and pulls it after, so
+   the copy's move is the host's physics (a host wake). The host body's speed now is no test: the
+   copy shows it a playback delay late, and an owner creeping between the seam's creep bound and the
+   run's rest speed is a move to the seam and a rest to the stand. */
+bool stand_copy_breaks(bool host_rests, bool copy_rests, bool host_moved_at_play);
+
 /* ---- a driven body's rest ---- */
 
 /* A driven (kinematic) body has no motion of its own: its velocity is what the last drive asked
    of one step, and a copy of a still or creeping owner moves by the copy grid, up to a step (a
    cell's diagonal, 3.4 mm; 0.0195 rad) in one tick, 0.2 m/s and 1.2 rad/s, now and then. Its rest
    is judged by its mean speed and spin over the last STAND_DRIVE_TICKS ticks. Window: an owner
-   creeping at c (at most the seam's creep bound, a step an eighth of a second, 27 mm/s; the
-   random sweep's creep reaches 15 mm/s) and one step of rounding move a copy c*T + 3.4 mm over
+   creeping at c (in the rest hold at most the seam's creep bound, a step an eighth of a second,
+   27 mm/s: a faster owner takes its copy out of the hold, stand_copy_breaks; nothing bounds a host
+   body's own creep, which the stand has seen reach 48 mm/s) and one step of rounding move a copy c*T + 3.4 mm over
    T, under the rest speed (5 cm/s) for T > 0.15 s; 15 ticks (0.25 s) bound the path at 12.5 mm
    against 10.2 mm at the creep bound, 7.2 mm at the sweep's creep. A tick's move past
    STAND_DRIVE_STEP_M or STAND_DRIVE_STEP_RAD counts at its own speed: the rest hold lets a copy
@@ -235,6 +252,7 @@ typedef struct stand_metrics {
     uint32_t first_hit[BODY_SYNC_GUESTS_MAX]; /* tick + 1 of the first hit answered or missed; 0 none */
     uint32_t rest_wakes[BODY_SYNC_GUESTS_MAX], rest_breaks[BODY_SYNC_GUESTS_MAX], rest_ticks[BODY_SYNC_GUESTS_MAX], response_misses[BODY_SYNC_GUESTS_MAX];
     uint32_t rest_lag[BODY_SYNC_GUESTS_MAX], soft_places[BODY_SYNC_GUESTS_MAX], host_wakes[BODY_SYNC_GUESTS_MAX];
+    uint32_t aligned_predicted[BODY_SYNC_GUESTS_MAX], pause_window[BODY_SYNC_GUESTS_MAX];
     double creep[BODY_SYNC_GUESTS_MAX];
     uint32_t bytes_second[BODY_SYNC_GUESTS_MAX][2][BODY_SYNC_KINDS_ALL][BODY_SYNC_TIME_MAX_S];
     uint64_t bytes_total[BODY_SYNC_GUESTS_MAX][2][BODY_SYNC_KINDS_ALL];
@@ -256,8 +274,10 @@ void stand_metrics_playback(stand_metrics_t *metrics, uint32_t guest, double lag
                             double drawn_move_m, double owner_move_m, bool offset_active);
 /* A predicted copy's drawn move that its own step does not explain: into jump.max. */
 void stand_metrics_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m);
-/* One sample of the lag-aligned gap (body_sync_metrics.h). */
-void stand_metrics_aligned(stand_metrics_t *metrics, uint32_t guest, double gap_m);
+/* One sample of the lag-aligned gap (body_sync_metrics.h), `predicted` of a copy the layer predicts. */
+void stand_metrics_aligned(stand_metrics_t *metrics, uint32_t guest, double gap_m, bool predicted);
+/* The most paused ticks one copy of this guest's had in a pause window so far. */
+void stand_metrics_pause_window(stand_metrics_t *metrics, uint32_t guest, uint32_t ticks);
 /* A prediction in a pause from rest against the host's answer at the guest's moment: reported only. */
 void stand_metrics_prediction(stand_metrics_t *metrics, uint32_t guest, double gap_m);
 /* A prediction in a pause with no shared moment against its owner at the playback tick: reported only. */

@@ -74,6 +74,8 @@ extern "C" {
      step.count offset_step.count snap.count [body-ticks]   behind_ticks.max behind_ticks.p95 [ticks]
      response_ticks.max response_ticks.p95 [ticks]   response_misses.count [hits]   rest_jitter.max [m]
      rest_wakes.count [body-ticks]   rest_breaks.count [breaks]   host_wakes.count [wakes]   rest_lag_ticks.max [ticks]   soft_places.max [placements]
+     pause_window.max [ticks]: the most ticks one copy's pull was paused in any 120 it was drawn
+       (twice the layer's chain cap; the cap bounds it by (120 + 60) / 2, sync_soft.h)
      aligned_gap.max aligned_gap.p95 local_correction.max [m]
      takes.count take_refusals.count reclaims.count returns.count [bodies]
    - lag-aligned gap: two pictures of one moment, while the body moves. A copy an endpoint plays
@@ -109,7 +111,10 @@ extern "C" {
      rest_breaks counts the times a guest's whole world, once it had rested 30 ticks after the
      scenario's last action, stopped resting (a copy woken, moved or drawn off its host body);
      a rest that ends only because host bodies moved (a pile creeping against a character slips)
-     is the host's physics and counts in host_wakes instead; creep_max (reported only) is the
+     is the host's physics and counts in host_wakes instead: so does a copy that moves because its
+     host body's path, at the owner ticks the copy showed over the last 30, left a copy-grid step
+     within 8 ticks (the seam's own test of a move, which takes the copy out of the rest hold);
+     creep_max (reported only) is the
      fastest an awake host body moved while the world rested. A driven (kinematic) body rests by
      its speed over 15 ticks: a copy of a still owner steps on the copy grid;
      with no such body-tick both checks fail. rest_lag_ticks is the longest run of ticks a copy
@@ -195,6 +200,8 @@ typedef struct body_sync_guest_metrics {
     uint32_t rest_ticks;         /* copy-ticks the rest measures saw; none fails their checks */
     uint32_t rest_lag_max_ticks; /* the longest a copy moved on while its owner rested, untouched */
     uint32_t soft_places_max;    /* the most placements one predicted copy took (a stall, a snap) */
+    uint32_t pause_window_max_ticks;   /* the most ticks one copy's pull was paused in any 120 */
+    uint32_t aligned_predicted_samples; /* lag-aligned samples of copies the layer predicts */
     double copy_speed_max; /* m/s, the fastest any copy on this guest moved */
     double first_hit_tick;         /* the stand tick of the first hit measured; -1 none */
     double pause_divergence_max_m; /* the largest gap, drawn here to the host's pose, a hit body

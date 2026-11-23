@@ -118,11 +118,64 @@ static void test_a_held_touch_lets_the_pull_run_after_a_chain(void) {
     }
     TEST_ASSERT_EQUAL_UINT32(SYNC_SOFT_PAUSE_MAX_TICKS, paused);
     TEST_ASSERT_EQUAL_UINT32_MESSAGE(2u * SYNC_SOFT_PAUSE_MAX_TICKS, pulled_after, "a held touch kept re-pausing the pull");
+    /* A spent chain drains one tick per tick without a touch: a touch pauses again only after as
+       many untouched ticks as the chain was paused. */
     in.touches_local = false;
-    decide(false); /* a tick without it: the next touch pauses again */
+    for (uint32_t i = 0; i + 1u < SYNC_SOFT_PAUSE_MAX_TICKS; i++) {
+        decide(false);
+    }
     in.touches_local = true;
     decide(false);
-    TEST_ASSERT_EQUAL(SYNC_SOFT_NONE, out.action);
+    TEST_ASSERT_EQUAL_MESSAGE(SYNC_SOFT_VELOCITY, out.action, "a touch paused before the chain drained");
+    in.touches_local = false;
+    decide(false);
+    decide(false);
+    in.touches_local = true;
+    decide(false);
+    TEST_ASSERT_EQUAL_MESSAGE(SYNC_SOFT_NONE, out.action, "a drained chain did not pause");
+}
+
+/* A touch on some ticks only: whatever its rhythm, the pause takes at most (W + cap) / 2 of any
+   W-tick window, and the pull runs in the rest. */
+static void test_an_intermittent_touch_is_still_taken_back(void) {
+    enum { TICKS = 600, WINDOW = 2 * SYNC_SOFT_PAUSE_MAX_TICKS };
+    for (uint32_t every = 1; every <= 30u; every++) {
+        sync_soft_enter(&soft, false, 0);
+        at(0.0f);
+        owner_at(0.5f, false); /* always past the dead zone, under the snap */
+        bool paused[TICKS];
+        uint32_t window = 0, worst = 0;
+        for (uint32_t t = 0; t < TICKS; t++) {
+            in.touches_local = (t % every) == 0u;
+            decide(false);
+            paused[t] = out.paused;
+            window += paused[t] ? 1u : 0u;
+            if (t >= WINDOW) {
+                window -= paused[t - WINDOW] ? 1u : 0u;
+            }
+            worst = window > worst ? window : worst;
+        }
+        TEST_ASSERT_TRUE_MESSAGE(worst <= (WINDOW + SYNC_SOFT_PAUSE_MAX_TICKS) / 2u, "a touch every few ticks kept the pull paused");
+    }
+    in.touches_local = false;
+}
+
+/* A pose or an owner's motion that is no number holds the body still. */
+static void test_no_number_holds_the_body(void) {
+    for (int which = 0; which < 4; which++) {
+        sync_soft_enter(&soft, false, 0);
+        at(0.0f);
+        owner_at(0.3f, false);
+        in.velocity[0] = 1.0f;
+        float *bad = which == 0 ? &play.position[0] : which == 1 ? &in.rotation[0] : which == 2 ? &play.velocity[1] : &in.position[2];
+        *bad = NAN;
+        decide(false);
+        TEST_ASSERT_EQUAL_MESSAGE(SYNC_SOFT_VELOCITY, out.action, "a NaN pose was left to its simulation");
+        for (int i = 0; i < 3; i++) {
+            TEST_ASSERT_TRUE_MESSAGE(out.velocity[i] == 0.0f && out.angular[i] == 0.0f, "a NaN pose moved the body");
+        }
+        TEST_ASSERT_FALSE(soft.correcting);
+    }
 }
 
 /* The pull: the owner's velocity plus the error over SYNC_SOFT_PULL_S, limited and blended; the
@@ -296,6 +349,8 @@ int main(void) {
     RUN_TEST(test_dead_zone_and_hysteresis);
     RUN_TEST(test_the_pause);
     RUN_TEST(test_a_held_touch_lets_the_pull_run_after_a_chain);
+    RUN_TEST(test_an_intermittent_touch_is_still_taken_back);
+    RUN_TEST(test_no_number_holds_the_body);
     RUN_TEST(test_the_pull_and_its_limits);
     RUN_TEST(test_a_stalled_pull_is_placed);
     RUN_TEST(test_when_an_owner_rests);

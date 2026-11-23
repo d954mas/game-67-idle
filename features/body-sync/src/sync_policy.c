@@ -3,6 +3,15 @@
 #include <math.h>
 
 #include "features/body_sync/body_sync_types.h"
+#include "sync_soft.h"
+
+/* An agent that takes is one that marks: one speed for both rules. */
+_Static_assert(SYNC_POLICY_AGENT_MM_S == SYNC_SOFT_TOUCH_MM_S, "the take speed is the second layer's touch speed");
+/* The host's hold outlasts the marking walk's reach of an agent leaving at the touch speed: its
+   travel in SYNC_SOFT_REACH_TICKS steps plus SYNC_SOFT_REACH_MM, covered at that speed, in 60 Hz
+   ticks (sync_policy.h). */
+_Static_assert(SYNC_POLICY_HOST_CLEAR_TICKS * SYNC_SOFT_TOUCH_MM_S >= SYNC_SOFT_REACH_TICKS * SYNC_SOFT_TOUCH_MM_S + SYNC_SOFT_REACH_MM * 60,
+               "the host's hold is shorter than the marking walk's reach");
 
 static bool agent_moves(float speed, bool pushed) { return speed > SYNC_POLICY_AGENT_SPEED || pushed; }
 
@@ -92,13 +101,16 @@ bool sync_policy_returns_at_rest(const sync_policy_rest_in_t *in) {
 }
 
 uint32_t sync_policy_host_hold_ticks(float round_trip_ticks) {
-    float rtt = round_trip_ticks > 0.0f && round_trip_ticks < (float)SYNC_POLICY_AGE_TICKS ? round_trip_ticks : 0.0f;
+    /* A hold past the age bound changes nothing (the age returns the body first): a longer round
+       trip holds to that bound, never shorter. A NaN one is unknown, as 0. */
+    float rtt = round_trip_ticks > 0.0f ? (round_trip_ticks < (float)SYNC_POLICY_AGE_TICKS ? round_trip_ticks : (float)SYNC_POLICY_AGE_TICKS) : 0.0f;
     return SYNC_POLICY_HOST_CLEAR_TICKS + (uint32_t)ceilf(rtt);
 }
 
+/* NaN in, NaN out: a rotation that is no number is never within the quiet turn. */
 static float turn_angle(const float a[4], const float b[4]) {
     float d = fabsf(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]);
-    return 2.0f * acosf(d < 1.0f ? d : 1.0f);
+    return 2.0f * acosf(d >= 1.0f ? 1.0f : d);
 }
 
 bool sync_policy_quiet(sync_policy_still_t *still, const float position[3], const float rotation[4], bool asleep) {

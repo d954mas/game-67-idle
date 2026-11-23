@@ -22,3 +22,6 @@ expect left g1
 expect no_stuck
 # Measured 20 takes before the cut (seed 62).
 expect takes.count >= 1
+# Derived: between two take-backs a prediction's pull is paused at most (120 + 60) / 2 of any
+# 120 ticks (sync_soft.h: the chain cap 60, drained a tick per tick without a touch): 90.
+expect pause_window.max <= 90t

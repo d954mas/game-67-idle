@@ -32,3 +32,6 @@ expect jump.max <= 0.3m
 expect takes.count >= 20
 expect reclaims.count >= 1
 expect returns.count >= 20
+# Derived: between two take-backs a prediction's pull is paused at most (120 + 60) / 2 of any
+# 120 ticks (sync_soft.h: the chain cap 60, drained a tick per tick without a touch): 90.
+expect pause_window.max <= 90t

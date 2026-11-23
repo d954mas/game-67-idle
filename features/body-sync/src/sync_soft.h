@@ -21,9 +21,12 @@
                what this side's apply and gravity gave it): no pull, the local contact plays out.
                The pause is the measured round trip to the host plus the playback delay and a
                margin, at least SYNC_SOFT_PAUSE_TICKS: the host's answer lands before the pull
-               starts. A chain of pauses runs at most SYNC_SOFT_PAUSE_MAX_TICKS; a touch that
-               outlasts it no longer pauses until a tick without one, so a body hit over and over
-               or pressed for ever is still taken back.
+               starts. A chain of pauses runs at most SYNC_SOFT_PAUSE_MAX_TICKS paused ticks, and
+               it lasts across the gaps between touches: each tick neither paused nor touched
+               takes one tick off it. A spent chain pauses nothing until it has drained to 0, so
+               a body hit over and over or pressed for ever is still taken back: in any window
+               of W ticks it is paused at most (W + SYNC_SOFT_PAUSE_MAX_TICKS) / 2 of them (paused
+               ticks less drained ones never pass the cap, and the two share the window).
      snap      position error |e| past SYNC_SOFT_SNAP_M, paused or not: placed at the playback
                pose with the owner's velocities, the render offset taking the move.
      dead zone pulled only once the error passes SYNC_SOFT_DEAD_M or SYNC_SOFT_DEAD_RAD, until it
@@ -52,10 +55,13 @@
 #define SYNC_SOFT_DEAD_RAD 0.035f
 /* A touch pauses the pull while the toucher moves faster than this (a walk, a throw); one that
    only leans on it does not. A body of this side's moving faster marks the copies near it. */
-#define SYNC_SOFT_TOUCH_SPEED 0.25f
+#define SYNC_SOFT_TOUCH_MM_S 250 /* in mm/s, for the policy's compile-time checks */
+#define SYNC_SOFT_TOUCH_SPEED ((float)SYNC_SOFT_TOUCH_MM_S / 1000.0f)
 /* How far ahead a mover marks: its travel in this many steps, plus a margin. */
-#define SYNC_SOFT_REACH_STEPS 3.0f
-#define SYNC_SOFT_REACH_M 0.05f
+#define SYNC_SOFT_REACH_TICKS 3
+#define SYNC_SOFT_REACH_MM 50
+#define SYNC_SOFT_REACH_STEPS ((float)SYNC_SOFT_REACH_TICKS)
+#define SYNC_SOFT_REACH_M ((float)SYNC_SOFT_REACH_MM / 1000.0f)
 /* Two kinematic copies closer than this touch for the marking's walk: Box3D's speculative margin. */
 #define SYNC_SOFT_TOUCH_M 0.02f
 /* A push against a copy in the rest hold, as against a wall: a body stopped from this speed. A
@@ -90,8 +96,9 @@
    pile leaning on a character, which never sleeps) goes on resting while each step takes it at
    least SYNC_SOFT_CREEP_TICKS: half the stillness, so an owner creeping near the speed that lets
    it rest (a step a quarter second, 13.6 mm/s) does not flap between rest and motion. The creep
-   bound is then a step an eighth of a second, 27 mm/s and 0.15 rad/s; the random sweep's creep
-   reaches 15 mm/s. */
+   bound is then a step an eighth of a second, 27 mm/s and 0.15 rad/s. Nothing bounds the owner's
+   own creep (a host body slipping against a character reached 48 mm/s): a faster one is a move,
+   its copy leaves the hold and is pulled after it. */
 #define SYNC_SOFT_STILL_TICKS 15u
 #define SYNC_SOFT_CREEP_TICKS 8u
 /* A copy in the rest hold of a still but awake owner follows it only past this: how far apart two
@@ -112,7 +119,8 @@
 typedef struct sync_soft {
     bool correcting;    /* past the dead zone and not yet back under half of it */
     uint16_t pause;     /* ticks of pause left */
-    uint16_t chain;     /* ticks since the pause's first trigger, while it lasts */
+    uint16_t chain;     /* paused ticks of this chain, less the ticks since without a pause or a touch */
+    bool spent;         /* the chain reached its cap: no pause until it drains to 0 */
     uint16_t stall;     /* ticks this pull has run */
     float velocity[3];  /* what the apply left the body with, to tell a hit from the pull */
     float angular[3];

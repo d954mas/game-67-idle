@@ -41,8 +41,9 @@ typedef enum sync_policy_priority {
 
 /* An agent moving faster than this at its contact (its speed plus spin times its extent) takes;
    one only leaning on a body does not, so a character standing in a pile never owns it. The second
-   layer's touch speed. */
-#define SYNC_POLICY_AGENT_SPEED 0.25f
+   layer's touch speed (asserted in sync_policy.c). */
+#define SYNC_POLICY_AGENT_MM_S 250
+#define SYNC_POLICY_AGENT_SPEED ((float)SYNC_POLICY_AGENT_MM_S / 1000.0f)
 /* A body still within these of one pose for this many ticks is quiet though awake (a pile leaning
    on a character that is driven every tick never sleeps): the second layer's stillness. */
 #define SYNC_POLICY_QUIET_TICKS 15u

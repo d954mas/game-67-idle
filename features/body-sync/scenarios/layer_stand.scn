@@ -43,3 +43,6 @@ expect jump.max <= 0.3m
 # render offset takes that move under either policy (a take by interaction keeps its pose): float
 # noise, 1 cm.
 expect local_correction.max <= 1cm
+# Derived: between two take-backs a prediction's pull is paused at most (120 + 60) / 2 of any
+# 120 ticks (sync_soft.h: the chain cap 60, drained a tick per tick without a touch): 90.
+expect pause_window.max <= 90t

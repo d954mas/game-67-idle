@@ -86,10 +86,12 @@ enum {
 #define SYNC_OFFSET_NEAR_M 0.25f
 #define SYNC_OFFSET_FAR_M 1.0f
 #define SYNC_OFFSET_SNAP_M 2.0f
-/* A take that lost while its claim waited keeps the drawn pose up to this far (the random
-   three-participant sweep's farthest is 3.1 m), closing 0.15 m a tick past SYNC_OFFSET_SNAP_M:
-   the loser's picture glides to the winner's instead of jumping. Past it the pictures are of
-   different places. */
+/* A take that lost while its claim waited keeps the drawn pose up to this far, closing 0.15 m a
+   tick past SYNC_OFFSET_SNAP_M: the loser's picture glides to the winner's instead of jumping. A
+   cap, not a derivation: how far two simulations of one contested body part over a round trip is
+   chaos (the random three-participant sweep's farthest is 3.1 m), and a glide of 5 m, 20 ticks
+   past 2 m, is the longest still read as one body moving; past it the pictures are of different
+   places and a jump is the honest picture. */
 #define SYNC_OFFSET_LOST_M 5.0f
 
 /* A dynamic copy's velocity: the owner's plus the error closed over SYNC_CORRECT_TICKS, the

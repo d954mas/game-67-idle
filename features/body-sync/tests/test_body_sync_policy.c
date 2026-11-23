@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -206,7 +207,12 @@ static void test_the_hosts_hold_outlasts_a_walks_second_touch(void) {
     }
     sync_policy_rest_in_t r = {.host = true, .quiet = true, .neighbours_quiet = true, .round_trip_ticks = 1e9f};
     r.age = SYNC_POLICY_HOST_CLEAR_TICKS;
-    TEST_ASSERT_TRUE_MESSAGE(sync_policy_returns_at_rest(&r), "an unmeasured or absurd round trip adds nothing");
+    TEST_ASSERT_FALSE_MESSAGE(sync_policy_returns_at_rest(&r), "a round trip past the age bound shortened the hold");
+    r.age = SYNC_POLICY_AGE_TICKS;
+    TEST_ASSERT_TRUE_MESSAGE(sync_policy_returns_at_rest(&r), "the age bound did not end the hold");
+    r.round_trip_ticks = 0.0f;
+    r.age = SYNC_POLICY_HOST_CLEAR_TICKS;
+    TEST_ASSERT_TRUE_MESSAGE(sync_policy_returns_at_rest(&r), "an unmeasured round trip added to the hold");
 }
 
 /* Bodies of two guests owned by interaction that touch go to the host: nothing else is contested. */
@@ -244,6 +250,28 @@ static void test_quiet_is_asleep_or_still_for_a_quarter_second(void) {
     p[0] += 0.01f;
     TEST_ASSERT_FALSE(sync_policy_quiet(&still, p, q, false));
     TEST_ASSERT_TRUE(sync_policy_quiet(&still, p, q, true));
+}
+
+/* A pose that is no number is never quiet, however long it stays so; a round trip past the age
+   bound or no number holds within the bounds. */
+static void test_no_number_is_never_quiet(void) {
+    for (int which = 0; which < 2; which++) {
+        sync_policy_still_t still = {0};
+        float p[3] = {1.0f, 2.0f, 3.0f}, q[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+        (which ? q : p)[0] = NAN;
+        for (uint32_t i = 0; i < 3u * SYNC_POLICY_QUIET_TICKS; i++) {
+            TEST_ASSERT_FALSE_MESSAGE(sync_policy_quiet(&still, p, q, false), "a NaN pose read as still");
+        }
+    }
+    uint32_t last = 0;
+    for (float rtt = 0.0f; rtt <= 4.0f * (float)SYNC_POLICY_AGE_TICKS; rtt += 7.0f) {
+        uint32_t hold = sync_policy_host_hold_ticks(rtt);
+        TEST_ASSERT_TRUE_MESSAGE(hold >= last, "a longer round trip held shorter");
+        TEST_ASSERT_TRUE(hold <= SYNC_POLICY_HOST_CLEAR_TICKS + SYNC_POLICY_AGE_TICKS);
+        last = hold;
+    }
+    TEST_ASSERT_EQUAL_UINT32(SYNC_POLICY_HOST_CLEAR_TICKS, sync_policy_host_hold_ticks(NAN));
+    TEST_ASSERT_EQUAL_UINT32(SYNC_POLICY_HOST_CLEAR_TICKS + SYNC_POLICY_AGE_TICKS, sync_policy_host_hold_ticks(INFINITY));
 }
 
 /* ---- the take on the wire ---- */
@@ -715,6 +743,7 @@ int main(void) {
     RUN_TEST(test_the_hosts_agents_come_first);
     RUN_TEST(test_a_body_returns_once_it_and_its_neighbours_rest_and_the_host_holds_its_pose);
     RUN_TEST(test_quiet_is_asleep_or_still_for_a_quarter_second);
+    RUN_TEST(test_no_number_is_never_quiet);
     RUN_TEST(test_the_hosts_hold_outlasts_a_walks_second_touch);
     RUN_TEST(test_two_guests_touching_bodies_go_to_the_host);
     RUN_TEST(test_a_take_is_optimistic_and_granted_by_the_host_itself);

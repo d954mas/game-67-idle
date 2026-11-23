@@ -37,14 +37,20 @@ expect response_misses.count <= 0
 expect local_correction.max <= 1cm
 # Derived: a render offset's release, 0.15 of at most 2 m.
 expect jump.max <= 0.3m
-# Derived for every copy, predicted or not, paused or not, against its owner at the copy's
-# playback tick: the snap keeps it within 1 m of that pose and its render offset adds at most
-# 2 m: 3 m. A prediction from rest against the host's answer is prediction_gap, reported only.
-expect aligned_gap.max <= 3m
-# Derived: a take that lost hands its drawn pose back to the winner's inside the glide's reach
-# (SYNC_OFFSET_LOST_M, 5 m); past it the offset clears and the loser's picture jumps.
+# Derived for every copy, predicted or not, against its owner's drawn picture at the copy's
+# playback tick: the snap keeps its physics within 1 m of the owner's physics there, its render
+# offset adds at most 2 m, and the owner's picture carries its own offset of at most 2 m (a
+# placement of the owner's own, as a grab's take-over, glides there too): 5 m. A prediction in
+# its pause leaves the gap (prediction_gap and flight_pause_gap, reported only).
+expect aligned_gap.max <= 5m
+# A cap, not a derivation: the glide's reach (SYNC_OFFSET_LOST_M, 5 m), past which the offset
+# clears and the loser's picture jumps. The check is that no lost take is seen to jump; how far
+# two pictures of one contested body part is chaos no bound derives.
 expect lost_takes.max <= 5m
 # Liveness: each rule ran at all (takes, a take of another guest's body refused, a take-back).
 expect takes.count >= 1
 expect take_refusals.count >= 1
 expect reclaims.count >= 1
+# Derived: between two take-backs a prediction's pull is paused at most (120 + 60) / 2 of any
+# 120 ticks (sync_soft.h: the chain cap 60, drained a tick per tick without a touch): 90.
+expect pause_window.max <= 90t

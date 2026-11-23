@@ -305,6 +305,9 @@ static void test_aligned_gap_fails_on_a_guest_drawing_its_bodies_off_what_it_sen
     body_sync_stand_t *clean = run_planted(pile_aligned_text, 0, 0.0f);
     body_sync_stand_t *drifted = run_planted(pile_aligned_text, 0, 0.1f);
     TEST_ASSERT_TRUE(body_sync_stand_report(clean)->passed);
+    /* The pile is the host's and the guest predicts it: its pulled copies are in the gap too, or a
+       prediction that strays once its pause is over is measured by nothing. */
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_stand_report(clean)->guests[0].aligned_predicted_samples > 0u, "no predicted copy was measured");
     fails(drifted, aligned_line(drifted), "aligned_gap.p95");
     body_sync_stand_destroy(clean);
     body_sync_stand_destroy(drifted);
@@ -313,9 +316,9 @@ static void test_aligned_gap_fails_on_a_guest_drawing_its_bodies_off_what_it_sen
 /* A predicted copy in its pause is the guest's own answer to its touch, drawn ahead of the tick it
    plays: the lead leaves aligned_gap as it was and shows in prediction_gap. The pile is the host's,
    so the guest predicts it, and the ball's hit pauses copies at rest. The plant moves no body, so
-   the gap equals the clean run's to the bit. A 10 m lead puts a sample past 7 m: the unplanted
-   copy lies within 3 m of the host's picture (the snap's 1 m and the offset's 2 m), and the clean
-   run stays under 7 m. */
+   the gap equals the clean run's to the bit. A 12.5 m lead puts a sample past 7 m: the unplanted
+   copy lies within 5 m of the host's picture (the snap's 1 m, its offset's 2 m and the host's own
+   offset's 2 m), and the clean run stays under 7 m. */
 static const char *host_pile_text = "scenario planted\nscene pile60\nseed 52\nguests 1\nend 6s\nlight_mass 20kg\nauthority host\n"
                                     "net g1 rtt 100ms jitter 20ms loss 2%\np1 grab ball\np1 wait 300ms\np1 throw pile31 speed 12\n";
 
@@ -327,7 +330,7 @@ static void test_a_paused_predictions_lead_stays_out_of_aligned_gap(void) {
     body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
     body_sync_stand_t *led = body_sync_stand_create(&config, &error);
     TEST_ASSERT_NOT_NULL_MESSAGE(led, error.text);
-    stand_testing_plant_lead(led, 10.0f);
+    stand_testing_plant_lead(led, 12.5f);
     body_sync_stand_run(led);
     const body_sync_guest_metrics_t *c = &body_sync_stand_report(clean)->guests[0], *l = &body_sync_stand_report(led)->guests[0];
     TEST_ASSERT_TRUE_MESSAGE(c->aligned_samples > 0, "no aligned sample: the case is not met");

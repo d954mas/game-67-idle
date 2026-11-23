@@ -21,3 +21,6 @@ expect rest_jitter.max <= 0m
 # event time, or less its own step for a predicted copy) is at most a render offset's release,
 # 0.15 of at most 2 m: 0.3 m. A placement the offset does not take shows as its whole move.
 expect jump.max <= 0.3m
+# Derived: between two take-backs a prediction's pull is paused at most (120 + 60) / 2 of any
+# 120 ticks (sync_soft.h: the chain cap 60, drained a tick per tick without a touch): 90.
+expect pause_window.max <= 90t
