@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 
 #include "sync_authority.h"
@@ -73,8 +74,13 @@ static void test_a_guest_takes_a_free_light_body_its_moving_agent_touches(void) 
 static void test_the_host_grants_free_bodies_only(void) {
     sync_policy_grant_in_t in = {.mode = SYNC_POLICY_INTERACTION, .light = true, .claimant = 1, .seat = BODY_SYNC_SEAT_HOST, .budget = 1.0f};
     TEST_ASSERT_TRUE(sync_policy_grants(&in));
-    in.seat = 1; /* a duplicate of its own */
+    in.seat = 1; /* the caller gave it the claimant under its own hold: that hold stays */
+    TEST_ASSERT_FALSE(sync_policy_grants(&in));
+    in.hold = BODY_SYNC_HOLD_UNTIL_REST; /* a duplicate of its own take, without budget too */
+    in.budget = 0.0f;
     TEST_ASSERT_TRUE(sync_policy_grants(&in));
+    in.hold = BODY_SYNC_HOLD_UNTIL_RELEASE;
+    in.budget = 1.0f;
     in.seat = 2; /* earliest confirmed toucher wins */
     TEST_ASSERT_FALSE(sync_policy_grants(&in));
     in.seat = BODY_SYNC_SEAT_HOST;
@@ -334,6 +340,7 @@ static void test_the_host_bounds_a_seats_takes_per_tick(void) {
     }
     uint32_t granted = 0, stale = 0;
     char why[96];
+    h.now = 100;
     for (uint32_t i = 0; i < N; i++) {
         stub_record_t r = {.type = STUB_REC_CLAIM, .id = body_sync_id_make(i, 1), .hold = BODY_SYNC_HOLD_UNTIL_REST, .sequence = (uint16_t)(i + 1)};
         uint8_t buffer[SYNC_AUTHORITY_RECORD_BYTES];
@@ -351,6 +358,7 @@ static void test_the_host_bounds_a_seats_takes_per_tick(void) {
     TEST_ASSERT_EQUAL_UINT32(0, sync_authority_owned(&h, GUEST));
     /* A tick later: one tick's worth more, and the running count follows the grants. */
     uint32_t more = 0;
+    h.now = 101;
     for (uint32_t i = 0; i < 40; i++) {
         stub_record_t r = {.type = STUB_REC_CLAIM, .id = body_sync_id_make(i, 1), .hold = BODY_SYNC_HOLD_UNTIL_REST, .sequence = (uint16_t)(N + i + 1)};
         uint8_t buffer[SYNC_AUTHORITY_RECORD_BYTES];
@@ -427,6 +435,278 @@ static void test_a_claim_with_an_unknown_hold_is_refused_as_format(void) {
     TEST_ASSERT_EQUAL(BODY_SYNC_INVALID, sync_authority_claim(&guest, BOX, BODY_SYNC_HOLD_UNTIL_REST));
 }
 
+/* One claim record of `seat` received by the host (a take with the hold until rest), or a
+   release at `number` crossing the claim `sequence`. */
+static void send_claim(sync_authority_t *h, uint8_t seat, body_sync_id_t id, uint8_t hold, uint16_t sequence) {
+    stub_record_t r = {.type = STUB_REC_CLAIM, .id = id, .hold = hold, .sequence = sequence};
+    uint8_t buffer[SYNC_AUTHORITY_RECORD_BYTES];
+    uint32_t size = stub_wire_put_record(&r, buffer, sizeof(buffer)), stale = 0;
+    char why[96];
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_receive(h, seat, 1000u + 8u * sequence, buffer, size, &stale, why, sizeof(why)));
+}
+
+static void send_release(sync_authority_t *h, uint8_t seat, body_sync_id_t id, uint16_t number, uint16_t sequence) {
+    stub_record_t r = {.type = STUB_REC_RELEASE, .id = id, .number = number, .sequence = sequence};
+    uint8_t buffer[SYNC_AUTHORITY_RECORD_BYTES];
+    uint32_t size = stub_wire_put_record(&r, buffer, sizeof(buffer)), stale = 0;
+    char why[96];
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_receive(h, seat, 1000u + 8u * sequence, buffer, size, &stale, why, sizeof(why)));
+}
+
+static void host_with_bodies(sync_authority_t *h, char *err, size_t size, uint32_t n) {
+    sync_authority_init(h, BODY_SYNC_SEAT_HOST, SEATS, err, size);
+    h->mode = SYNC_POLICY_INTERACTION;
+    sync_authority_seat_joined(h, GUEST);
+    sync_authority_seat_joined(h, OTHER);
+    for (uint32_t i = 0; i < n; i++) {
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_bind(h, body_sync_id_make(i, 1), BODY_SYNC_SEAT_HOST, 0));
+        sync_authority_body(h, body_sync_id_make(i, 1))->takable = true;
+    }
+}
+
+/* The budget runs on the host's own ticks. A take and its release, a thousand times in one host
+   tick, each stamped 8 ticks after the last (a stamp is the sender's to choose): no more grants
+   than one full burst, SYNC_POLICY_TAKES_PER_TICK * SYNC_POLICY_TAKE_BURST_TICKS. */
+static void test_the_take_budget_runs_on_the_hosts_clock(void) {
+    static sync_authority_t h;
+    char err[128];
+    host_with_bodies(&h, err, sizeof(err), 1);
+    h.now = 500;
+    const body_sync_id_t id = body_sync_id_make(0, 1);
+    for (uint16_t i = 1; i <= 1000; i++) {
+        send_claim(&h, GUEST, id, BODY_SYNC_HOLD_UNTIL_REST, i);
+        send_release(&h, GUEST, id, sync_authority_body(&h, id)->number, i);
+    }
+    char what[64];
+    snprintf(what, sizeof(what), "%u takes granted in one host tick", (unsigned)h.granted[GUEST]);
+    TEST_ASSERT_TRUE_MESSAGE(h.granted[GUEST] >= 1 && h.granted[GUEST] <= SYNC_POLICY_TAKES_PER_TICK * SYNC_POLICY_TAKE_BURST_TICKS, what);
+}
+
+/* What owned_by keeps as bodies move must be what the slots say, after any sequence of every
+   call that moves a body or its hold, honest or forged. A host's release of a guest's body is
+   INVALID: that guest gives it back. */
+static void test_the_owned_count_matches_the_slots_after_any_sequence(void) {
+    static sync_authority_t h;
+    char err[128];
+    enum { B = 24 };
+    host_with_bodies(&h, err, sizeof(err), B);
+    uint32_t seed = 12345u;
+    uint16_t sequence = 1;
+    for (uint32_t step = 0; step < 20000; step++) {
+        seed = seed * 1664525u + 1013904223u;
+        uint32_t pick = seed >> 8;
+        uint32_t i = pick % B, op = (pick / B) % 14;
+        uint8_t seat = (uint8_t)(1u + (pick / (B * 14u)) % 2u);
+        body_sync_id_t id = body_sync_id_make(i, 1);
+        sync_authority_body_t *b = sync_authority_body(&h, id);
+        if (!b) {
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_bind(&h, id, BODY_SYNC_SEAT_HOST, 0));
+            sync_authority_body(&h, id)->takable = true;
+            continue;
+        }
+        body_sync_claim_event_t c;
+        switch (op) {
+        case 0:
+        case 1:
+            send_claim(&h, seat, id, BODY_SYNC_HOLD_UNTIL_REST, sequence++);
+            break;
+        case 2:
+            send_claim(&h, seat, id, (uint8_t)(pick % 3u), sequence++);
+            if (sync_authority_poll(&h, &c)) {
+                sync_authority_answer(&h, &c, (pick & 1u) != 0);
+            }
+            break;
+        case 3:
+            send_release(&h, seat, id, (pick & 1u) ? b->number : (uint16_t)(b->number - 1u), b->granted_seq);
+            break;
+        case 4:
+            sync_authority_claim(&h, id, (body_sync_hold_t)(pick % 3u));
+            break;
+        case 5: {
+            bool local = b->seat == BODY_SYNC_SEAT_HOST;
+            TEST_ASSERT_EQUAL(local ? BODY_SYNC_OK : BODY_SYNC_INVALID, sync_authority_release(&h, id));
+            break;
+        }
+        case 6:
+            sync_authority_assign(&h, id, (uint8_t)(pick % 3u), (body_sync_hold_t)((pick / 3u) % 3u));
+            break;
+        case 7:
+            sync_authority_reclaim(&h, id);
+            break;
+        case 8:
+            sync_authority_host_active(&h, id, (pick & 1u) != 0);
+            break;
+        case 9:
+            sync_authority_settled(&h, id);
+            break;
+        case 10:
+            sync_authority_settle(&h, id, (pick & 1u) != 0, (pick & 2u) != 0, (pick & 4u) != 0);
+            break;
+        case 11:
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_unbind(&h, id));
+            break;
+        case 12:
+            sync_authority_seat_left(&h, seat);
+            sync_authority_seat_joined(&h, seat);
+            break;
+        default:
+            h.now++;
+            break;
+        }
+        for (uint8_t s = 1; s < SEATS; s++) {
+            uint32_t n = 0;
+            for (uint32_t k = 0; k < BODY_SYNC_BODIES_MAX; k++) {
+                const sync_authority_body_t *x = &h.bodies[k];
+                n += x->bound && x->seat == s && x->hold == BODY_SYNC_HOLD_UNTIL_REST ? 1u : 0u;
+            }
+            char what[64];
+            snprintf(what, sizeof(what), "seat %u after step %u (op %u)", (unsigned)s, (unsigned)step, (unsigned)op);
+            TEST_ASSERT_EQUAL_UINT32_MESSAGE(n, sync_authority_owned(&h, s), what);
+        }
+    }
+}
+
+/* A take of a body the guest already holds: under the caller's own hold it is refused and the hold
+   stays; owned by interaction it is answered. Neither moves the number, the count or tells anyone
+   else, so duplicates cannot grow the 64. */
+static void test_a_duplicate_take_moves_nothing(void) {
+    static sync_authority_t h;
+    char err[128];
+    enum { B = SYNC_POLICY_OWNED_MAX + 8 };
+    host_with_bodies(&h, err, sizeof(err), B);
+    uint16_t sequence = 1;
+    for (uint32_t i = 0; i < B; i++) {
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_assign(&h, body_sync_id_make(i, 1), GUEST, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    }
+    for (uint32_t i = 0; i < B; i++) {
+        body_sync_id_t id = body_sync_id_make(i, 1);
+        uint16_t number = sync_authority_body(&h, id)->number;
+        send_claim(&h, GUEST, id, BODY_SYNC_HOLD_UNTIL_REST, sequence++);
+        TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_HOLD_UNTIL_RELEASE, sync_authority_body(&h, id)->hold);
+        TEST_ASSERT_EQUAL_UINT16(number, sync_authority_body(&h, id)->number);
+    }
+    TEST_ASSERT_EQUAL_UINT32(0, sync_authority_owned(&h, GUEST));
+    TEST_ASSERT_EQUAL_UINT32(B, h.refused_takes[GUEST]);
+    /* One taken by interaction, then its duplicate. */
+    body_sync_id_t box = body_sync_id_make(B, 1);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_bind(&h, box, BODY_SYNC_SEAT_HOST, 0));
+    sync_authority_body(&h, box)->takable = true;
+    send_claim(&h, GUEST, box, BODY_SYNC_HOLD_UNTIL_REST, sequence++);
+    TEST_ASSERT_EQUAL_UINT8(GUEST, sync_authority_body(&h, box)->seat);
+    uint16_t number = sync_authority_body(&h, box)->number;
+    uint8_t buffer[SYNC_AUTHORITY_RECORD_BYTES];
+    uint32_t size;
+    while (sync_authority_pop(&h, GUEST) || sync_authority_pop(&h, OTHER)) {
+    }
+    uint16_t dup = sequence++;
+    send_claim(&h, GUEST, box, BODY_SYNC_HOLD_UNTIL_REST, dup);
+    TEST_ASSERT_EQUAL_UINT16(number, sync_authority_body(&h, box)->number);
+    TEST_ASSERT_EQUAL_UINT32(1, sync_authority_owned(&h, GUEST));
+    TEST_ASSERT_EQUAL_UINT32(1, h.granted[GUEST]);
+    TEST_ASSERT_FALSE(sync_authority_peek(&h, OTHER, buffer, sizeof(buffer), &size));
+    TEST_ASSERT_TRUE_MESSAGE(sync_authority_peek(&h, GUEST, buffer, sizeof(buffer), &size), "the duplicate went unanswered");
+    stub_record_t answer;
+    char why[96];
+    TEST_ASSERT_TRUE(stub_wire_read_record(buffer, size, SEATS, true, &answer, why, sizeof(why)));
+    TEST_ASSERT_EQUAL_UINT16(dup, answer.sequence);
+    TEST_ASSERT_EQUAL_UINT8(GUEST, answer.seat);
+}
+
+static uint32_t gap_calls;
+static float counting_gap(void *context, uint8_t seat, uint32_t slot, float *reach) {
+    (void)context, (void)seat, (void)slot;
+    gap_calls++;
+    *reach = SYNC_POLICY_TAKE_SLOP_M;
+    return 0.0f;
+}
+
+/* The evidence scans every body on the real seam: a take any cheaper rule refuses never asks it,
+   nor does a duplicate. */
+static void test_the_evidence_is_asked_last(void) {
+    static sync_authority_t h;
+    char err[128];
+    host_with_bodies(&h, err, sizeof(err), 8);
+    h.take_gap = counting_gap;
+    uint16_t sequence = 1;
+    sync_authority_body(&h, body_sync_id_make(0, 1))->takable = false;   /* heavy */
+    sync_authority_host_active(&h, body_sync_id_make(1, 1), true);         /* the host's agents' */
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_assign(&h, body_sync_id_make(2, 1), OTHER, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_set_holder(&h, body_sync_id_make(3, 1), body_sync_id_make(7, 1))); /* carried */
+    for (uint32_t i = 0; i < 4; i++) {
+        send_claim(&h, GUEST, body_sync_id_make(i, 1), BODY_SYNC_HOLD_UNTIL_REST, sequence++);
+    }
+    TEST_ASSERT_EQUAL_UINT32(4, h.refused_takes[GUEST]);
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, gap_calls, "a take refused by a cheaper rule asked for the evidence");
+    send_claim(&h, GUEST, body_sync_id_make(4, 1), BODY_SYNC_HOLD_UNTIL_REST, sequence++);
+    TEST_ASSERT_EQUAL_UINT8(GUEST, sync_authority_body(&h, body_sync_id_make(4, 1))->seat);
+    TEST_ASSERT_EQUAL_UINT32(1, gap_calls);
+    send_claim(&h, GUEST, body_sync_id_make(4, 1), BODY_SYNC_HOLD_UNTIL_REST, sequence++);
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(1, gap_calls, "a duplicate asked for the evidence");
+    /* The budget spent, a take is refused without it too. */
+    h.take_budget[GUEST] = 0.0f;
+    send_claim(&h, GUEST, body_sync_id_make(5, 1), BODY_SYNC_HOLD_UNTIL_REST, sequence++);
+    TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_SEAT_HOST, sync_authority_body(&h, body_sync_id_make(5, 1))->seat);
+    TEST_ASSERT_EQUAL_UINT32(1, gap_calls);
+}
+
+/* A refused take's states declare the number a grant would have given. The refusal of a body the
+   host holds moves the number on, so no later grant to that seat ever gives that number; a
+   refusal of another guest's body leaves the number its owner's states carry. */
+static void test_a_refused_take_moves_the_number_on(void) {
+    setup_three();
+    sync_authority_host_active(&host, BOX, true);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_take(&guest, BOX));
+    uint16_t declared = sync_authority_declared_number(&guest, sync_authority_body(&guest, BOX));
+    deliver(&guest, GUEST, &host, BODY_SYNC_SEAT_HOST);
+    deliver(&host, BODY_SYNC_SEAT_HOST, &guest, GUEST);
+    TEST_ASSERT_FALSE(sync_authority_local(&guest, sync_authority_body(&guest, BOX)));
+    sync_authority_host_active(&host, BOX, false);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_take(&guest, BOX));
+    deliver(&guest, GUEST, &host, BODY_SYNC_SEAT_HOST);
+    TEST_ASSERT_EQUAL_UINT8(GUEST, sync_authority_body(&host, BOX)->seat);
+    TEST_ASSERT_TRUE_MESSAGE(sync_authority_body(&host, BOX)->number != declared, "a later grant gives the number the refused take declared");
+    /* The other guest's refused take of the guest's body leaves the guest's number. */
+    uint16_t owners = sync_authority_body(&host, BOX)->number;
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_take(&other, BOX));
+    deliver(&other, OTHER, &host, BODY_SYNC_SEAT_HOST);
+    TEST_ASSERT_EQUAL_UINT8(GUEST, sync_authority_body(&host, BOX)->seat);
+    TEST_ASSERT_EQUAL_UINT16(owners, sync_authority_body(&host, BOX)->number);
+}
+
+/* An unbound owned body leaves the count: a full guest unbinds one and may take another. */
+static void test_an_unbound_owned_body_frees_its_place(void) {
+    static sync_authority_t h;
+    char err[128];
+    enum { B = SYNC_POLICY_OWNED_MAX + 1 };
+    host_with_bodies(&h, err, sizeof(err), B);
+    uint16_t sequence = 1;
+    for (uint32_t i = 0; i < SYNC_POLICY_OWNED_MAX; i++) {
+        send_claim(&h, GUEST, body_sync_id_make(i, 1), BODY_SYNC_HOLD_UNTIL_REST, sequence++);
+    }
+    TEST_ASSERT_EQUAL_UINT32(SYNC_POLICY_OWNED_MAX, sync_authority_owned(&h, GUEST));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_unbind(&h, body_sync_id_make(0, 1)));
+    TEST_ASSERT_EQUAL_UINT32(SYNC_POLICY_OWNED_MAX - 1u, sync_authority_owned(&h, GUEST));
+    send_claim(&h, GUEST, body_sync_id_make(B - 1, 1), BODY_SYNC_HOLD_UNTIL_REST, sequence++);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(GUEST, sync_authority_body(&h, body_sync_id_make(B - 1, 1))->seat, "the take after an unbind was refused");
+}
+
+/* A take replaces the seat's pending claim of the same body: only its newest claim counts, and
+   the caller never polls the older one. */
+static void test_a_take_withdraws_the_seats_pending_claim(void) {
+    static sync_authority_t h;
+    char err[128];
+    host_with_bodies(&h, err, sizeof(err), 2);
+    body_sync_id_t id = body_sync_id_make(0, 1);
+    send_claim(&h, GUEST, id, BODY_SYNC_HOLD_UNTIL_RELEASE, 1);
+    TEST_ASSERT_EQUAL_UINT32(1, h.pending_count);
+    send_claim(&h, GUEST, id, BODY_SYNC_HOLD_UNTIL_REST, 2);
+    TEST_ASSERT_EQUAL_UINT8(GUEST, sync_authority_body(&h, id)->seat);
+    TEST_ASSERT_EQUAL_UINT32(0, h.pending_count);
+    body_sync_claim_event_t c;
+    TEST_ASSERT_FALSE_MESSAGE(sync_authority_poll(&h, &c), "the claim the take replaced was polled");
+    TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_HOLD_UNTIL_REST, sync_authority_body(&h, id)->hold);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_a_flight_that_meets_a_takable_body_stays_its_throwers);
@@ -445,5 +725,12 @@ int main(void) {
     RUN_TEST(test_two_guests_the_earliest_wins);
     RUN_TEST(test_the_host_takes_back_what_its_agent_touches);
     RUN_TEST(test_a_claim_with_an_unknown_hold_is_refused_as_format);
+    RUN_TEST(test_the_take_budget_runs_on_the_hosts_clock);
+    RUN_TEST(test_the_owned_count_matches_the_slots_after_any_sequence);
+    RUN_TEST(test_a_duplicate_take_moves_nothing);
+    RUN_TEST(test_the_evidence_is_asked_last);
+    RUN_TEST(test_a_refused_take_moves_the_number_on);
+    RUN_TEST(test_an_unbound_owned_body_frees_its_place);
+    RUN_TEST(test_a_take_withdraws_the_seats_pending_claim);
     return UNITY_END();
 }

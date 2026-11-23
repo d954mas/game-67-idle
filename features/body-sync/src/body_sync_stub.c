@@ -335,6 +335,7 @@ static b3MotionLocks locks_of(uint8_t bits) {
 
 void body_sync_apply(body_sync_t *s, uint32_t tick) {
     s->now = tick;
+    s->authority.now = tick;
     for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
         sync_authority_body_t *a = auth_of(s, slot);
         entry_t *e = &s->entries[slot];
@@ -428,6 +429,7 @@ static bool touched_moving(const b3ContactEvents *events, b3BodyId body, b3BodyI
 
 void body_sync_collect(body_sync_t *s, uint32_t tick) {
     s->now = tick;
+    s->authority.now = tick;
     b3ContactEvents events = b3World_GetContactEvents(s->config.world);
     for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
         sync_authority_body_t *a = auth_of(s, slot);

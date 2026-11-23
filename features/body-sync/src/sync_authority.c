@@ -179,6 +179,8 @@ static void forget_seat(sync_authority_t *a, uint8_t seat) {
 void sync_authority_seat_joined(sync_authority_t *a, uint8_t seat) {
     forget_seat(a, seat);
     a->joined[seat] = true;
+    a->take_budget[seat] = (float)(SYNC_POLICY_TAKES_PER_TICK * SYNC_POLICY_TAKE_BURST_TICKS);
+    a->take_budget_tick[seat] = a->now;
 }
 
 void sync_authority_seat_left(sync_authority_t *a, uint8_t seat) {
@@ -279,6 +281,10 @@ body_sync_result_t sync_authority_release(sync_authority_t *a, body_sync_id_t id
         return BODY_SYNC_UNKNOWN;
     }
     if (sync_authority_is_host(a)) {
+        /* A guest's body is that guest's to give back; its hold here is what owned_by counts. */
+        if (!sync_authority_local(a, b)) {
+            return invalid(a, "release: the body is not simulated here");
+        }
         b->hold = BODY_SYNC_HOLD_UNTIL_RELEASE;
         b->holder = BODY_SYNC_ID_NONE;
         return BODY_SYNC_OK;
@@ -459,14 +465,13 @@ void sync_authority_from_state(sync_authority_t *a, sync_authority_body_t *b, ui
 /* Host: a guest's take, answered here by the policy. Only the claimant hears the grant at once:
    the other guests read the new owner from the state the host relays, so a pile's takes do not
    cost an announcement per guest; one with its own claim pending hears its refusal. */
-static void touch_claim(sync_authority_t *a, uint8_t seat, sync_authority_body_t *b, uint16_t sequence, uint32_t tick) {
+static void touch_claim(sync_authority_t *a, uint8_t seat, sync_authority_body_t *b, uint16_t sequence) {
     uint32_t slot = slot_of(a, b);
-    uint32_t elapsed = tick - a->take_budget_tick[seat];
+    uint32_t elapsed = a->now - a->take_budget_tick[seat];
     elapsed = elapsed < SYNC_POLICY_TAKE_BURST_TICKS ? elapsed : SYNC_POLICY_TAKE_BURST_TICKS;
     float budget = a->take_budget[seat] + (float)(SYNC_POLICY_TAKES_PER_TICK * elapsed), cap = (float)(SYNC_POLICY_TAKES_PER_TICK * SYNC_POLICY_TAKE_BURST_TICKS);
     a->take_budget[seat] = budget < cap ? budget : cap;
-    a->take_budget_tick[seat] = tick;
-    float reach = 0.0f, gap = a->take_gap ? a->take_gap(a->take_context, seat, slot, &reach) : 0.0f;
+    a->take_budget_tick[seat] = a->now;
     sync_authority_pending_t *p = &a->pending[seat][slot];
     if (p->active) {
         p->active = false; /* only the claimant's newest claim of a body counts */
@@ -480,17 +485,28 @@ static void touch_claim(sync_authority_t *a, uint8_t seat, sync_authority_body_t
                                  .held = b->holder != BODY_SYNC_ID_NONE,
                                  .kinematic = b->motion_known && b->kinematic,
                                  .owned = sync_authority_owned(a, seat),
-                                 .budget = a->take_budget[seat],
-                                 .agent_gap = gap,
-                                 .agent_reach = reach};
+                                 .budget = a->take_budget[seat]};
+    /* The evidence is the one input that scans every body: it is asked only of a take that every
+       other rule grants, and a duplicate needs none. */
+    bool granted = sync_policy_grants(&in);
+    if (granted && b->seat != seat && a->take_gap) {
+        in.agent_gap = a->take_gap(a->take_context, seat, slot, &in.agent_reach);
+        granted = sync_policy_grants(&in);
+    }
     a->take_budget[seat] -= a->take_budget[seat] >= 1.0f ? 1.0f : 0.0f;
     a->answer[seat][slot] = sequence;
-    if (sync_policy_grants(&in)) {
-        a->granted[seat] += b->seat != seat ? 1u : 0u;
+    if (granted && b->seat == seat) {
+        /* A duplicate of a take already granted: answered, and nothing moves. */
+        a->owed[seat][slot / 64] |= 1ull << (slot % 64);
+    } else if (granted) {
+        a->granted[seat]++;
         host_move_to(a, b, seat, BODY_SYNC_HOLD_UNTIL_REST, sequence, false, (uint8_t)(1u << seat));
         b->holder = BODY_SYNC_ID_NONE;
     } else {
         a->refused_takes[seat]++;
+        /* The refused take's states declared this number plus one: moved on, it can never be a
+           later grant's. Another guest's body keeps its number, which that owner's states carry. */
+        b->number += b->seat == BODY_SYNC_SEAT_HOST ? 1u : 0u;
         a->owed[seat][slot / 64] |= 1ull << (slot % 64);
     }
 }
@@ -515,7 +531,7 @@ body_sync_result_t sync_authority_receive(sync_authority_t *a, uint8_t seat, uin
             return BODY_SYNC_FORMAT;
         }
         if (r.hold == BODY_SYNC_HOLD_UNTIL_REST) {
-            touch_claim(a, seat, b, r.sequence, tick);
+            touch_claim(a, seat, b, r.sequence);
             break;
         }
         if (!p->active) {

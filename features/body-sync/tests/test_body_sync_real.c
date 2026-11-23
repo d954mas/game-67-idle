@@ -7,6 +7,7 @@
 #include "stub_wire.h"
 #include "sync_codec.h"
 #include "box3d/constants.h"
+#include "sync_policy.h"
 #include "sync_soft.h"
 #include "unity.h"
 
@@ -2614,6 +2615,197 @@ static void test_a_throw_is_kept_off_its_thrower_until_it_clears_her_on_every_si
     }
 }
 
+/* One tick as tick_all, without the guest's states to the host unless `states`, and without the
+   guest at all unless `joined`. */
+static void tick_part(bool joined, bool states) {
+    tick_no++;
+    step(&host);
+    if (joined) {
+        step(&guest);
+    }
+    step(&other);
+    if (joined) {
+        state(&host, &guest);
+    }
+    state(&host, &other);
+    if (joined && states) {
+        state(&guest, &host);
+    }
+    state(&other, &host);
+    if (joined) {
+        records(&host, &guest);
+    }
+    records(&host, &other);
+    if (joined) {
+        records(&guest, &host);
+    }
+    records(&other, &host);
+}
+
+/* A body this side owns by interaction and then carries is the game's to move: never given back
+   while carried, held still out of every contact past the age bound (SYNC_POLICY_AGE_TICKS). */
+static void test_a_carried_owned_body_is_never_given_back(void) {
+    settle_interaction();
+    hand(&guest, 1, 2.0f, 0.6f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.0f});
+    TEST_ASSERT_TRUE(tick_until_local(&guest, 2, 60));
+    for (int k = 0; k < 10; k++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_holder(guest.sync, id_of(2), id_of(BODIES - 1)));
+    put_away(&guest, 1);
+    int lost_at = -1;
+    for (int k = 0; k < (int)SYNC_POLICY_AGE_TICKS + 100 && lost_at < 0; k++) {
+        b3Body_SetTransform(guest.bodies[2], (b3Vec3){-20.0f, 1.0f, -20.0f}, b3Quat_identity);
+        b3Body_SetLinearVelocity(guest.bodies[2], (b3Vec3){0.0f, 0.0f, 0.0f});
+        tick_all();
+        lost_at = body_sync_is_local(guest.sync, id_of(2)) ? -1 : k;
+    }
+    char m[96];
+    snprintf(m, sizeof m, "the guest gave back the body it carries after %d ticks", lost_at);
+    TEST_ASSERT_TRUE_MESSAGE(lost_at < 0, m);
+}
+
+/* A throw's filter is a joint in the caller's world, which outlives the seam: it goes with it. */
+static void test_destroy_leaves_no_filter_in_the_world(void) {
+    layer_on();
+    const uint32_t box = 1, her = BODIES - 1;
+    place_everywhere(her, 4.0f, 0.2f, -3.0f);
+    place_everywhere(box, 4.45f, 0.2f, -3.0f);
+    for (int i = 0; i < 30; i++) {
+        tick_all();
+    }
+    grant(&guest, id_of(box), BODY_SYNC_HOLD_UNTIL_RELEASE);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_holder(guest.sync, id_of(box), id_of(her)));
+    for (int i = 0; i < 10; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_holder(guest.sync, id_of(box), BODY_SYNC_ID_NONE));
+    grant(&guest, id_of(box), BODY_SYNC_HOLD_UNTIL_SETTLED);
+    b3Body_SetLinearVelocity(guest.bodies[box], (b3Vec3){6.0f, 0.0f, 0.0f});
+    tick_all();
+    TEST_ASSERT_TRUE_MESSAGE(b3Body_GetJointCount(guest.bodies[her]) > 0, "no filter kept the throw off her: the case is not met");
+    body_sync_destroy(guest.sync);
+    guest.sync = NULL;
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, b3Body_GetJointCount(guest.bodies[her]), "the destroyed seam left its filter in the world");
+}
+
+/* A copy of more than 4 shapes far from every agent of this side lies inside none of them: at
+   rest it stays in the rest hold, never soft. */
+static void test_a_many_shaped_copy_far_from_every_agent_is_held(void) {
+    layer_on();
+    const uint32_t box = 5;
+    side_t *sides[] = {&host, &guest, &other};
+    b3ShapeDef def = b3DefaultShapeDef();
+    for (int k = 0; k < 3; k++) {
+        for (int c = 0; c < 4; c++) {
+            b3Sphere ball = {{c & 1 ? 0.1f : -0.1f, 0.0f, c & 2 ? 0.1f : -0.1f}, 0.05f};
+            b3CreateSphereShape(sides[k]->bodies[box], &def, &ball);
+        }
+    }
+    TEST_ASSERT_TRUE(b3Body_GetShapeCount(guest.bodies[box]) > 4);
+    hand(&guest, 1, -20.0f, -20.0f); /* an agent of the guest's, far away */
+    for (int i = 0; i < 60; i++) {
+        tick_all();
+    }
+    int soft = 0;
+    for (int i = 0; i < 60; i++) {
+        tick_all();
+        soft += body_sync_is_predicted(guest.sync, id_of(box)) ? 1 : 0;
+    }
+    char what[80];
+    snprintf(what, sizeof(what), "the far copy of 5 shapes was soft for %d of 60 ticks", soft);
+    TEST_ASSERT_TRUE_MESSAGE(soft == 0, what);
+}
+
+/* The take's evidence at the edge of its reach. The guest's hand jumps next to a box and runs at
+   it at 6 m/s; the host's copy plays 6 ticks behind, still where the hand stood, and the guest's
+   last 3 states before the contact are lost. Only the newest state the host holds is near the
+   box, 0.3 m off it, and only the hand's sent speed reaches that far: 0.15 m slop plus 6 m/s over
+   the delay and a tick, 0.85 m. The shown copy is metres away and at rest. */
+static void test_a_take_at_the_edge_of_its_reach_is_granted(void) {
+    playback_delay = 6;
+    settle_interaction();
+    playback_delay = 1;
+    hand(&guest, 1, -3.0f, 0.0f);
+    for (int k = 0; k < 30; k++) {
+        tick_all();
+    }
+    b3Vec3 box = b3Body_GetPosition(guest.bodies[2]);
+    b3Body_SetTransform(guest.bodies[1], (b3Vec3){box.x - 0.9f, 0.2f, box.z}, b3Quat_identity);
+    drive(&guest, 1, (b3Vec3){6.0f, 0.0f, 0.0f});
+    tick_all();
+    tick_all();
+    bool taken = false;
+    float shown = 0.0f;
+    for (int k = 0; k < 8 && !taken; k++) {
+        tick_part(true, false);
+        taken = body_sync_is_local(guest.sync, id_of(2));
+        shown = apart(host.bodies[1], host.bodies[2]);
+    }
+    TEST_ASSERT_TRUE_MESSAGE(taken, "the hand never took the box");
+    TEST_ASSERT_TRUE_MESSAGE(shown > 2.0f, "the host's copy of the hand was near the box: the case is not met");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(GUEST, seat_on_host(2), "a take within reach of the newest state and the sent speed was refused");
+}
+
+/* A guest that leaves mid-heap hands its bodies back from its newest state, and they are the
+   host's until they rest: held until rest there, so no other guest takes them while they move,
+   and that hold ends once they are quiet, within the age bound. */
+static void test_a_leavers_moving_bodies_are_the_hosts_until_they_rest(void) {
+    settle_interaction();
+    hand(&guest, 1, 2.0f, 0.6f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.5f});
+    for (int k = 0; k < 60 && seat_on_host(2) != GUEST; k++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(GUEST, seat_on_host(2), "the hand never took the box");
+    tick_all();
+    TEST_ASSERT_TRUE_MESSAGE(speed_of(guest.bodies[2]) > SYNC_POLICY_AGENT_SPEED, "the box was not moving: the case is not met");
+    body_sync_seat_left(host.sync, GUEST);
+    body_sync_authority_t a;
+    TEST_ASSERT_TRUE(body_sync_authority(host.sync, id_of(2), &a));
+    TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_SEAT_HOST, a.seat);
+    TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_HOLD_UNTIL_REST, a.hold, "the leaver's moving body lost its hold until rest");
+    int ended = -1;
+    for (int k = 0; k < (int)SYNC_POLICY_AGE_TICKS + 60 && ended < 0; k++) {
+        tick_part(false, false);
+        TEST_ASSERT_TRUE(body_sync_authority(host.sync, id_of(2), &a));
+        ended = a.hold == BODY_SYNC_HOLD_UNTIL_RELEASE ? k : -1;
+    }
+    TEST_ASSERT_TRUE_MESSAGE(ended >= 0, "the leaver's body never came back to the host's own");
+}
+
+/* A body is given back only once its take is answered: while the take waits the host drops the
+   body's states (they declare the grant's number, not yet its own), so their acknowledgement
+   says nothing of what the host holds, and a release then would hand back a pose the host never
+   had. The take held back 120 ticks while the box comes to rest, it stays the guest's. */
+static void test_a_body_is_not_given_back_while_its_take_waits(void) {
+    settle_interaction();
+    hand(&guest, 1, 2.0f, 0.6f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.0f});
+    bool taken = false;
+    for (int k = 0; k < 60 && !taken; k++) {
+        tick_holding(true);
+        taken = body_sync_is_local(guest.sync, id_of(2));
+    }
+    TEST_ASSERT_TRUE_MESSAGE(taken, "the hand never took the box");
+    for (int k = 0; k < 10; k++) {
+        tick_holding(true);
+    }
+    put_away(&guest, 1);
+    int still = 0;
+    for (int k = 0; k < 120; k++) {
+        tick_holding(true);
+        TEST_ASSERT_TRUE_MESSAGE(body_sync_is_local(guest.sync, id_of(2)), "the box was given back while its take waited");
+        still += speed_of(guest.bodies[2]) < 1e-3f ? 1 : 0;
+    }
+    TEST_ASSERT_TRUE_MESSAGE(still > (int)SYNC_POLICY_QUIET_TICKS, "the box never came to rest: the case is not met");
+    for (int k = 0; k < 120 && body_sync_is_local(guest.sync, id_of(2)); k++) {
+        tick_all();
+    }
+    TEST_ASSERT_FALSE_MESSAGE(body_sync_is_local(guest.sync, id_of(2)), "the box was never given back after the grant");
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_worlds_at_rest_agree_and_go_quiet);
@@ -2695,5 +2887,11 @@ int main(void) {
     RUN_TEST(test_another_seats_throw_never_passes_through_this_sides_character);
     RUN_TEST(test_a_body_leaned_on_by_its_owner_never_ping_pongs);
     RUN_TEST(test_a_throw_is_kept_off_its_thrower_until_it_clears_her_on_every_side);
+    RUN_TEST(test_a_carried_owned_body_is_never_given_back);
+    RUN_TEST(test_destroy_leaves_no_filter_in_the_world);
+    RUN_TEST(test_a_many_shaped_copy_far_from_every_agent_is_held);
+    RUN_TEST(test_a_take_at_the_edge_of_its_reach_is_granted);
+    RUN_TEST(test_a_leavers_moving_bodies_are_the_hosts_until_they_rest);
+    RUN_TEST(test_a_body_is_not_given_back_while_its_take_waits);
     return UNITY_END();
 }

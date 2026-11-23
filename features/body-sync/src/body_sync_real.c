@@ -138,7 +138,8 @@ static float speed_of(b3BodyId body) {
 
 /* Host: a take's evidence (sync_policy_grants). The claimant's agents as the host shows them: its
    characters, what it carries, throws or owns by interaction; the gap between boxes to the body,
-   and the reach their copies may trail the guest's contact by. */
+   and the reach their copies may trail the guest's contact by: travel over a round trip, a
+   playback delay and a tick (SYNC_POLICY_TAKE_SLOP_M derives it). */
 static float take_gap(void *context, uint8_t seat, uint32_t slot, float *reach) {
     body_sync_t *s = context;
     const entry_t *e = &s->entries[slot];
@@ -234,6 +235,10 @@ void body_sync_destroy(body_sync_t *sync) {
         entry_t *e = &sync->entries[slot];
         if (sync->authority.bodies[slot].bound && b3Body_IsValid(e->body)) {
             sync_masks_restore(&e->masks, e->body);
+        }
+        /* The world is the caller's and outlives the seam: its filters go with it. */
+        if (b3Joint_IsValid(e->release_filter)) {
+            b3DestroyJoint(e->release_filter, false);
         }
     }
     free(sync);
@@ -662,9 +667,6 @@ static bool lands_in_agent(const body_sync_t *s, b3BodyId copy, const float p[3]
         return false;
     }
     b3ShapeId mine[4];
-    if (b3Body_GetShapeCount(copy) > 4) {
-        return true;
-    }
     int own = b3Body_GetShapes(copy, mine, 4);
     b3Vec3 at = b3Body_GetPosition(copy);
     b3AABB box = b3Body_ComputeAABB(copy);
@@ -686,7 +688,7 @@ static bool lands_in_agent(const body_sync_t *s, b3BodyId copy, const float p[3]
             continue;
         }
         b3ShapeId shapes[4];
-        if (b3Body_GetShapeCount(body) > 4) {
+        if (b3Body_GetShapeCount(copy) > 4 || b3Body_GetShapeCount(body) > 4) {
             return true;
         }
         int n = b3Body_GetShapes(body, shapes, 4);
@@ -1243,6 +1245,7 @@ static void release_filters(body_sync_t *s) {
 
 void body_sync_apply(body_sync_t *s, uint32_t tick) {
     s->now = tick;
+    s->authority.now = tick;
     sync_playback_advance(&s->playback, tick);
     mark_reached(s);
     gather_agents(s);
@@ -1632,6 +1635,12 @@ static void rest_return(body_sync_t *s, uint32_t tick) {
             a->claim_pending) {
             continue;
         }
+        /* A body this side carries is its agent's, moved by the game: it neither rests nor ages
+           out while carried, and its age starts when the carrier lets go. */
+        if (a->holder != BODY_SYNC_ID_NONE) {
+            e->agent_tick = tick;
+            continue;
+        }
         bool neighbours = true;
         b3ContactData contacts[32];
         int n = b3Body_GetContactData(e->body, contacts, 32);
@@ -1752,6 +1761,7 @@ static void press_through(body_sync_t *s, uint32_t tick) {
 
 void body_sync_collect(body_sync_t *s, uint32_t tick) {
     s->now = tick;
+    s->authority.now = tick;
     rest_return(s, tick);
     b3ContactEvents events = b3World_GetContactEvents(s->config.world);
     for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {

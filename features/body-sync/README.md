@@ -491,14 +491,20 @@ ignores the mode.
   The host answers the claim itself, never through `body_sync_poll_claim`:
   granted when the body is the host's, free and not set going by the host's
   own agents, the seat has take budget left (16 a tick, up to 8 ticks of it
-  kept for a hitch of the record lane), and the host's own world shows one of
+  kept for a hitch of the record lane, counted on the host's own ticks, never a
+  record's stamp), and the host's own world shows one of
   the claimant's agents within reach of the body: its gap to the agent's copy,
   or to the agent's newest state, at most 15 cm plus what the agent and the
-  body travel over a round trip and a playback delay (the time the host's copy
-  trails the guest). A take whose agent the host refused, or a forged claim of
+  body travel over a round trip, a playback delay and a tick. The claim and the
+  contact's state cross the same one-way trip, so the agent's copy trails the
+  contact by a delay and the tick; a claim the record lane resends finds it
+  about a round trip ahead instead; and the body the guest touched was its copy
+  of the host's, a one-way trip and a delay old, with the claim's way back on
+  top (`src/sync_policy.h` derives the slop). A take whose agent the host refused, or a forged claim of
   a body no agent is near, is refused. While its take waits, a body's state declares the number the
   grant will give, so the host takes its states from the grant on, not a round
-  trip later. Only the claimant hears the grant; the other guests read the new
+  trip later. A refusal of a body the host holds moves its number on, so a late
+  state of the refused take never matches a later grant. Only the claimant hears the grant; the other guests read the new
   owner from the state the host relays.
 - **A flight.** A thrown or dropped body that first touches a body its thrower
   may take stays the thrower's, owned by interaction; one that touches a body
@@ -550,7 +556,8 @@ ignores the mode.
   push, quiet and go back again, over and over.
 - **Bounds.** A body owned by interaction goes back after 600 ticks (10 s)
   without an agent touching it however it moves (a body rolling for ever), and
-  at once when it leaves the box. A guest owns at most 64 such bodies, its
+  at once when it leaves the box; one this side carries neither rests nor ages
+  out until it is let go. A guest owns at most 64 such bodies, its
   takes still waiting for the grant counted (over a 300 ms round trip a heap's
   contacts would otherwise send hundreds, every one past 64 refused): the
   pile scenes' 60 and the ball, and 64 moving sim records (25 bytes each) are
@@ -561,8 +568,10 @@ ignores the mode.
 - **A guest that leaves** hands its bodies back as any seat does (from its
   newest state, velocities included); they are the host's until they rest.
 - **Untrusted bytes.** A claim with a hold past the hold until rest is FORMAT;
-  a take of a heavy, carried, kinematic or foreign body, or past the 64, is
-  refused, never asserted. A caller's claim with the hold until rest is
+  a take of a heavy, carried, kinematic or foreign body, past the 64, or of a
+  body the caller gave the guest under another hold, is refused, never asserted;
+  a duplicate take of a body the guest owns this way is answered and moves
+  nothing. A caller's claim with the hold until rest is
   INVALID.
 
 `body_sync_traffic` counts the takes, refusals, take-backs and returns

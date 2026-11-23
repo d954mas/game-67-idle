@@ -47,8 +47,11 @@ bool sync_policy_grants(const sync_policy_grant_in_t *in) {
     if (in->mode != SYNC_POLICY_INTERACTION || !in->light || in->held || in->kinematic || in->claimant == BODY_SYNC_SEAT_HOST) {
         return false;
     }
+    /* Already the claimant's by interaction: a duplicate, answered without a move. A body the
+       caller granted under another hold stays under it: taken, it would leave the caller's hold
+       and the bound of 64. */
     if (in->seat == in->claimant) {
-        return true; /* already the claimant's: a duplicate costs nothing */
+        return in->hold == BODY_SYNC_HOLD_UNTIL_REST;
     }
     /* A take claims a body an agent touched: the host's own world must show one of the
        claimant's agents there, or a guest could take any body it names. */

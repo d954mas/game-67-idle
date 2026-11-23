@@ -58,9 +58,14 @@ typedef enum sync_policy_priority {
 /* The host's own budget: a seat's takes beyond 16 a tick are refused, the unused budget of up to
    8 ticks kept for takes a hitch of the record lane delivers at once. */
 #define SYNC_POLICY_TAKE_BURST_TICKS 8u
-/* A take's evidence on the host: one of the claimant's agents within reach of the body. Its copy
-   there shows the guest's agent a one-way trip and a playback delay late, so it may trail the
-   contact by what the agent and the body travel in that time (sync_policy_take_reach). The slop
+/* A take's evidence on the host: one of the claimant's agents within reach of the body, judged
+   when the claim arrives, before that tick's apply. The claim and the contact's state cross the
+   same one-way trip, so the agent's copy trails the contact by a playback delay and a tick; a
+   claim the record lane resends arrives a round trip and more late, the copy then that much less
+   the delay ahead of the contact. The body the guest touched was its copy of the host's body, a
+   one-way trip and a playback delay old, and the claim takes the way back: the host's body is a
+   round trip, a delay and a tick on. Both stay within a round trip, a playback delay and a tick
+   of travel (sync_policy_take_reach; the guest's delay taken as the host's own). The slop
    is what that leaves: a contact starts at Box3D's 2 cm speculative distance, a pose rounds to
    the copy grid (a 3.4 mm cell diagonal) and its turn by up to 0.0195 rad (1 cm at the corner of
    a 0.5 m body), 0.035 m in all. Over the stand's authority and layer scenes at 100-300 ms no

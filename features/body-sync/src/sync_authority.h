@@ -100,10 +100,13 @@ typedef struct sync_authority {
     uint32_t takes_sent, returns_sent;
     uint32_t granted[BODY_SYNC_SEATS_MAX], refused_takes[BODY_SYNC_SEATS_MAX], reclaimed[BODY_SYNC_SEATS_MAX];
     /* Host: bodies each seat owns by interaction, kept as they move; each seat's take budget
-       (SYNC_POLICY_TAKE_BURST_TICKS) and the tick it was last topped up. */
+       (SYNC_POLICY_TAKE_BURST_TICKS) and the tick it was last topped up. The budget runs on
+       `now`, the shell's last apply or collect tick: a record's tick is its sender's stamp, and
+       stamps far apart would refill it at will. */
     uint32_t owned_by[BODY_SYNC_SEATS_MAX];
     float take_budget[BODY_SYNC_SEATS_MAX];
     uint32_t take_budget_tick[BODY_SYNC_SEATS_MAX];
+    uint32_t now;
     /* Host: the shell's measure of a take's evidence (sync_policy_grant_in_t agent_gap, *reach).
        None: every take counts as touching, for the parts tested without a world. */
     float (*take_gap)(void *context, uint8_t seat, uint32_t slot, float *reach);
@@ -115,8 +118,9 @@ typedef struct sync_authority {
 void sync_authority_init(sync_authority_t *a, uint8_t self, uint8_t seats, char *error, size_t error_size);
 bool sync_authority_is_host(const sync_authority_t *a);
 
-/* Joining forgets what the seat was owed and its claims. Leaving does too, and on the host
-   every body of that seat returns to the host with its received hold and holder. */
+/* Joining forgets what the seat was owed and its claims and starts its take budget full.
+   Leaving forgets too, and on the host every body of that seat returns to the host with its
+   received hold and holder. */
 void sync_authority_seat_joined(sync_authority_t *a, uint8_t seat);
 void sync_authority_seat_left(sync_authority_t *a, uint8_t seat);
 
@@ -198,8 +202,10 @@ bool sync_authority_settle(sync_authority_t *a, body_sync_id_t id, bool asleep, 
 body_sync_result_t sync_authority_take(sync_authority_t *a, body_sync_id_t id);
 /* The authority number a local body's state declares: while a take waits, the number its grant
    will give (the host's move adds one), so the host takes its states from the grant on instead
-   of a round trip later; a refusal or any other move gives another number, and they stay
-   rejected. */
+   of a round trip later. A refusal of a body the host holds moves the number on as well, so the
+   states a refused take declared never match a later grant to the same seat; a refusal of a
+   body another guest owns leaves that owner's number, and the states stay rejected as long as
+   the body is not the claimant's. */
 uint16_t sync_authority_declared_number(const sync_authority_t *a, const sync_authority_body_t *b);
 /* Bodies `seat` owns by interaction now (a hold until rest); this guest's own count includes its
    takes waiting for the grant. */
