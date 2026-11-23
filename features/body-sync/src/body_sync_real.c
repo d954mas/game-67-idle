@@ -943,7 +943,7 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
        too small for the offset to carry; one further off is placed, the offset taking it. */
     bool home = sqrtf(home_e[0] * home_e[0] + home_e[1] * home_e[1] + home_e[2] * home_e[2]) <= SYNC_SOFT_DEAD_M &&
                 sqrtf(home_r[0] * home_r[0] + home_r[1] * home_r[1] + home_r[2] * home_r[2]) <= SYNC_SOFT_DEAD_RAD;
-    bool rest_hold = e->light && sync_soft_rest_hold(owner_rests, &e->soft_state, e->soft, e->marked == s->now + 1u, e->leaned);
+    bool rest_hold = e->light && sync_soft_rest_hold(owner_rests, &e->soft_state, e->soft, e->marked == s->now + 1u);
     /* In flight a copy stays soft while a body this side simulates presses it or is about to
        meet it: the owner may move it that fast only because that body's copy there pushes it,
        and placed kinematic on the owner's older path it would land inside that body and fling
@@ -1678,7 +1678,7 @@ static void rest_return(body_sync_t *s, uint32_t tick) {
 /* How a body of this side's (bound and local, or not bound at all) pressed a layer copy in the
    step: the game moves its bodies after the apply, so a push from standstill is stopped once by
    the rest hold and seen here, and a slow push keeps the copy soft while it lasts; a lean keeps
-   it out of the rest hold (sync_soft_rest_hold). */
+   a copy in flight soft (drive_copy). */
 typedef enum pressed { PRESSED_NONE = 0, PRESSED_LEAN, PRESSED_PUSH } pressed_t;
 static pressed_t pressed_by_this_side(const body_sync_t *s, b3BodyId body) {
     pressed_t pressed = PRESSED_NONE;

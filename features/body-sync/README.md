@@ -354,11 +354,12 @@ holds on a guest (`src/sync_soft.h`):
   kinematic on the owner's pose like any copy, exact at rest, outside every
   island, and keeps the character bits. A copy of a still but awake owner
   follows it only past that step, so it does not creep with the owner's
-  rounded pose. A copy a body of this side's leans on (a contact that acted,
-  closing slower than a push) stays out of the hold and soft while the lean
-  lasts: held kinematic where her character presses in, it would push her out
-  of the overlap the soft copy let her into, lifting her onto the pile or
-  reading as a push that frees the heap again and again. A body this side
+  rounded pose. A copy a body of this side's only leans on (a contact that
+  acted, closing slower than a push) rests in the hold too: held on its
+  owner's pose it pushes her only where that pose lies inside her, which No
+  overlap below keeps soft; kept soft under her lean, it could follow its
+  creeping owner only by a pull her lean pins, which stalls into a placement
+  while the world rests. A body this side
   returned at rest rests in the hold where it shows it until the host's first
   state of it comes. On the host, a light copy of a guest's body whose owner
   rests within that step stays as the host's world settled it, uncorrected.

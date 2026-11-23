@@ -101,9 +101,10 @@
    edge reads as a move, and the copy leaves the hold of a heap at rest. */
 #define SYNC_SOFT_HOLD_M 0.0034f
 #define SYNC_SOFT_HOLD_RAD 0.0195f
-/* While its owner rests, a soft copy (one a lean keeps out of the rest hold) closes a turn past
-   half the dead zone, down to half of that: the dead zone's own 2 degrees plus a copy record's
-   rotation error (net_bits_quat_error(9), 0.0097 rad: the pull aims at the decoded pose) and the
+/* While its owner rests, a soft copy (one a pause, a mark or an overlap keeps out of the rest
+   hold) closes a turn past half the dead zone, down to half of that: the dead zone's own 2
+   degrees plus a copy record's rotation error (net_bits_quat_error(9), 0.0097 rad: the pull
+   aims at the decoded pose) and the
    host's dead band (SYNC_CORRECT_REST_RAD, 0.0035 rad) would pass the stand's 2 degrees at rest
    (0.0349 rad). 0.0175 + 0.0097 + 0.0035 = 0.0307 rad, 0.24 degrees inside it. */
 #define SYNC_SOFT_REST_RAD (0.5f * SYNC_SOFT_DEAD_RAD)
@@ -153,12 +154,12 @@ bool sync_soft_owner_rests(sync_soft_still_t *still, const sync_play_t *play);
    state there continues the rest instead of starting the count. */
 void sync_soft_still_at(sync_soft_still_t *still, const float position[3], const float rotation[4]);
 
-/* The rest hold: the owner rests, the copy is out of a pause, nothing of this side's moves at it
-   and nothing of this side's leans on it (`leaned`). A copy held kinematic where a body of this
-   side's presses in would push that body out of the overlap the soft copy let it into (a
-   character lifted onto the pile, or pushed back and read as a push, the heap never resting):
-   it stays soft and gives way instead, while the lean lasts. */
-bool sync_soft_rest_hold(bool owner_rests, const sync_soft_t *s, bool soft_now, bool marked, bool leaned);
+/* The rest hold: the owner rests, the copy is out of a pause and nothing of this side's moves at
+   it. A body of this side's only leaning on it does not keep it out: held on its owner's pose the
+   copy pushes that body only where the pose lies inside it past Box3D's slop, which the shell's
+   overlap rule keeps soft; a copy kept soft under the lean follows its creeping owner only by a
+   pull the lean pins, which stalls into a placement while the world rests. */
+bool sync_soft_rest_hold(bool owner_rests, const sync_soft_t *s, bool soft_now, bool marked);
 
 /* Whether a body of this side's (local, or a soft copy) marks the copies near it, and how far:
    true when a point of it moves faster than SYNC_SOFT_TOUCH_SPEED, its speed plus its spin times

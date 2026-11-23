@@ -237,14 +237,12 @@ static void test_a_creeping_owner_rests(void) {
 /* The rest hold: a resting owner, no pause, nothing of this side's coming. */
 static void test_the_rest_hold(void) {
     sync_soft_enter(&soft, false, 0);
-    TEST_ASSERT_TRUE(sync_soft_rest_hold(true, &soft, true, false, false));
-    TEST_ASSERT_FALSE(sync_soft_rest_hold(false, &soft, true, false, false));
-    TEST_ASSERT_FALSE_MESSAGE(sync_soft_rest_hold(true, &soft, true, true, false), "a copy something comes at was held kinematic");
-    TEST_ASSERT_FALSE_MESSAGE(sync_soft_rest_hold(true, &soft, true, false, true), "a copy this side leans on was held kinematic");
-    TEST_ASSERT_FALSE_MESSAGE(sync_soft_rest_hold(true, &soft, false, false, true), "a held copy this side leans on stayed kinematic");
+    TEST_ASSERT_TRUE(sync_soft_rest_hold(true, &soft, true, false));
+    TEST_ASSERT_FALSE(sync_soft_rest_hold(false, &soft, true, false));
+    TEST_ASSERT_FALSE_MESSAGE(sync_soft_rest_hold(true, &soft, true, true), "a copy something comes at was held kinematic");
     soft.pause = 5;
-    TEST_ASSERT_FALSE_MESSAGE(sync_soft_rest_hold(true, &soft, true, false, false), "a paused soft copy was held kinematic");
-    TEST_ASSERT_TRUE_MESSAGE(sync_soft_rest_hold(true, &soft, false, false, false), "a stale pause of a driven copy counted");
+    TEST_ASSERT_FALSE_MESSAGE(sync_soft_rest_hold(true, &soft, true, false), "a paused soft copy was held kinematic");
+    TEST_ASSERT_TRUE_MESSAGE(sync_soft_rest_hold(true, &soft, false, false), "a stale pause of a driven copy counted");
 }
 
 /* Who marks: a point of a body moving faster than a lean, its spin counted at its extent, out to

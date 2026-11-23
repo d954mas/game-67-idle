@@ -1864,13 +1864,31 @@ static void test_a_copy_resting_against_this_sides_body_stays_in_the_rest_hold(v
     TEST_ASSERT_TRUE_MESSAGE(deepest > B3_LINEAR_SLOP / sqrtf(3.0f) && deepest <= B3_LINEAR_SLOP, "the copy never rested that deep in her body: the case is not met");
 }
 
-/* A copy her held box lies on is leaned on: soft while its owner rests, out of the rest hold. Left
-   1.95 degrees off its owner, inside the dead zone, it would rest there, and a copy record's
-   rotation error (net_bits_quat_error(9), 0.0097 rad) on top would pass the stand's 2 degrees
-   at rest. It ends within 2 degrees less that error. */
-static void test_a_leaned_copy_at_rest_closes_its_turn(void) {
+/* Whether a contact between the two bodies pushed them apart in the last step: the seam's lean. */
+static bool leans_on(b3BodyId body, b3BodyId on) {
+    b3ContactData contacts[16];
+    int n = b3Body_GetContactData(on, contacts, 16);
+    for (int k = 0; k < n; k++) {
+        b3BodyId a = b3Shape_GetBody(contacts[k].shapeIdA), b = b3Shape_GetBody(contacts[k].shapeIdB);
+        if (!B3_ID_EQUALS(a, body) && !B3_ID_EQUALS(b, body)) {
+            continue;
+        }
+        for (int m = 0; m < contacts[k].manifoldCount; m++) {
+            for (int p = 0; p < contacts[k].manifolds[m].pointCount; p++) {
+                if (contacts[k].manifolds[m].points[p].totalNormalImpulse > 0.0f) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+/* A copy her held box lies on is leaned on, and rests in the hold as any copy of a resting owner:
+   kept soft, it could follow its owner's creep only by a pull her box pins, which stalls into a
+   placement while the world rests. Held, it is never predicted and nothing places it. */
+static void test_a_leaned_copy_rests_in_the_hold(void) {
     const uint32_t copy = 0, mine = 1;
-    const float limit = 2.0f * 3.14159265f / 180.0f, wire = 0.0097f, off = 1.95f * 3.14159265f / 180.0f;
     layer_on();
     place_everywhere(copy, 4.0f, 0.2f, -1.5f);
     place_everywhere(mine, 4.0f, 0.6f, -1.5f);
@@ -1878,22 +1896,26 @@ static void test_a_leaned_copy_at_rest_closes_its_turn(void) {
         tick_all();
     }
     grant(&guest, id_of(mine), BODY_SYNC_HOLD_UNTIL_RELEASE);
-    for (int i = 0; i < 60; i++) {
-        tick_all();
+    for (int i = 0; i < 150; i++) {
+        tick_all(); /* the take, the owner's stillness and the offset of the first placements */
     }
-    TEST_ASSERT_TRUE_MESSAGE(body_sync_is_predicted(guest.sync, id_of(copy)), "her box does not lean on the copy: the case is not met");
-    b3Body_SetTransform(guest.bodies[copy], b3Body_GetPosition(guest.bodies[copy]), (b3Quat){{0.0f, sinf(0.5f * off), 0.0f}, cosf(0.5f * off)});
-    for (int i = 0; i < 240; i++) {
+    int leaned = 0, soft = 0;
+    float offset_m = 0.0f, offset_rad = 0.0f;
+    for (int i = 0; i < 180; i++) {
         tick_all();
+        leaned += leans_on(guest.bodies[mine], guest.bodies[copy]) ? 1 : 0;
+        soft += body_sync_is_predicted(guest.sync, id_of(copy)) ? 1 : 0;
+        float offset[3], spin[4];
+        if (body_sync_render_offset(guest.sync, id_of(copy), offset, spin)) {
+            offset_m = fmaxf(offset_m, sqrtf(offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2]));
+            offset_rad = fmaxf(offset_rad, 2.0f * acosf(fminf(1.0f, fabsf(spin[3]))));
+        }
     }
-    TEST_ASSERT_TRUE_MESSAGE(body_sync_is_predicted(guest.sync, id_of(copy)), "the lean ended: the case is not met");
-    b3Quat a = b3Body_GetRotation(guest.bodies[copy]), b = b3Body_GetRotation(host.bodies[copy]);
-    float qa[4] = {a.v.x, a.v.y, a.v.z, a.s}, qb[4] = {b.v.x, b.v.y, b.v.z, b.s}, turn[3];
-    sync_turn_between(qa, qb, turn);
-    float angle = sqrtf(turn[0] * turn[0] + turn[1] * turn[1] + turn[2] * turn[2]);
-    char what[80];
-    snprintf(what, sizeof(what), "the leaned copy rests %.4f rad off its owner", (double)angle);
-    TEST_ASSERT_TRUE_MESSAGE(angle <= limit - wire, what);
+    TEST_ASSERT_TRUE_MESSAGE(leaned == 180, "her box does not lean on the copy throughout: the case is not met");
+    char what[96];
+    snprintf(what, sizeof(what), "the leaned copy was soft for %d ticks, its offset reached %.4f m %.4f rad", soft, (double)offset_m, (double)offset_rad);
+    /* A placement shows as millimetres or a hundredth of a radian; under these is float noise. */
+    TEST_ASSERT_TRUE_MESSAGE(soft == 0 && offset_m < 1e-4f && offset_rad < 1e-3f, what);
 }
 
 /* A guest that never hears the host hold its rest pose keeps the body; it returns once it does. */
@@ -2655,7 +2677,7 @@ int main(void) {
     RUN_TEST(test_a_taken_body_never_goes_out_kinematic);
     RUN_TEST(test_a_creeping_pile_stays_in_the_rest_hold);
     RUN_TEST(test_a_copy_resting_against_this_sides_body_stays_in_the_rest_hold);
-    RUN_TEST(test_a_leaned_copy_at_rest_closes_its_turn);
+    RUN_TEST(test_a_leaned_copy_rests_in_the_hold);
     RUN_TEST(test_a_return_waits_for_the_hosts_acknowledgement);
     RUN_TEST(test_the_hosts_character_is_stopped_by_a_guests_body);
     RUN_TEST(test_a_state_from_before_the_grant_is_dropped);

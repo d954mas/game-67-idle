@@ -45,8 +45,8 @@ void sync_soft_still_at(sync_soft_still_t *still, const float position[3], const
     still->resting = true;
 }
 
-bool sync_soft_rest_hold(bool owner_rests, const sync_soft_t *s, bool soft_now, bool marked, bool leaned) {
-    return owner_rests && !marked && !leaned && (!soft_now || s->pause == 0);
+bool sync_soft_rest_hold(bool owner_rests, const sync_soft_t *s, bool soft_now, bool marked) {
+    return owner_rests && !marked && (!soft_now || s->pause == 0);
 }
 
 bool sync_soft_mover(const float velocity[3], const float angular[3], float extent, float dt, float *reach) {
