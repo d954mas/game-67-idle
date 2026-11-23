@@ -51,24 +51,6 @@ static void test_single_pinned_seam_contact_has_bounded_displacement(void) {
     TEST_ASSERT_TRUE(fabsf(cloth.x[2][2]) < 0.5F);
 }
 
-static void test_invalid_inputs_never_index_or_advance_state(void) {
-    ClothMesh bad = seam;
-    bad.vertices = CLOTH_VERTICES + 1;
-    cloth_reset(&cloth, &bad, seam.rest);
-    TEST_ASSERT_NULL(cloth.mesh);
-    ClothFace face = {0, 1, UINT16_MAX};
-    bad = seam;
-    bad.face = &face;
-    TEST_ASSERT_FALSE(cloth_mesh_valid(&bad));
-    cloth_reset(&cloth, &seam, seam.rest);
-    ClothMaterial bad_material = stiff;
-    bad_material.drag = NAN;
-    TEST_ASSERT_FALSE(cloth_frame_valid(&seam, &bad_material, dt, seam.rest, NULL, NULL, 0));
-    cloth_step(&cloth, &seam, &bad_material, dt, NULL, seam.rest, NULL, NULL, 0);
-    TEST_ASSERT_EQUAL_MEMORY(seam.rest, cloth.x, sizeof seam_rest);
-    TEST_ASSERT_FALSE(cloth_measure(&cloth, &seam, &stiff, dt, seam.rest, NULL, 0).finite);
-}
-
 static void test_tether_limits_extension_and_preserves_slack(void) {
     ClothMaterial elastic = stiff;
     elastic.stretch = 100.0F;
@@ -99,7 +81,7 @@ static void test_tether_limits_extension_and_preserves_slack(void) {
     TEST_ASSERT_EQUAL_MEMORY(free_tip, cloth.x[2], sizeof free_tip);
 }
 
-static void test_strain_limit_respects_pins_slack_and_material_validation(void) {
+static void test_strain_limit_respects_pins_and_slack(void) {
     ClothMesh mesh = seam;
     mesh.tether = NULL;
     ClothMaterial m = stiff;
@@ -128,11 +110,6 @@ static void test_strain_limit_respects_pins_slack_and_material_validation(void) 
     cloth_reset(&cloth, &mesh, pose);
     cloth_step(&cloth, &mesh, &m, dt, NULL, seam.rest, NULL, NULL, 0);
     TEST_ASSERT_EQUAL_MEMORY(tip, cloth.x[2], sizeof tip);
-    m.strain_passes = CLOTH_MAX_STRAIN_PASSES + 1;
-    TEST_ASSERT_FALSE(cloth_frame_valid(&mesh, &m, dt, seam.rest, NULL, NULL, 0));
-    m.strain_passes = 0;
-    m.max_edge_strain = NAN;
-    TEST_ASSERT_FALSE(cloth_frame_valid(&mesh, &m, dt, seam.rest, NULL, NULL, 0));
 }
 
 static void test_strain_cannot_pull_a_free_vertex_into_the_body(void) {
@@ -154,16 +131,11 @@ static void test_strain_cannot_pull_a_free_vertex_into_the_body(void) {
     }
 }
 
-static void test_invalid_reset_preserves_coordinates_and_rejects_excess_capsules(void) {
+static void test_reset_rejects_excess_capsules_and_preserves_coordinates(void) {
     ClothCapsule body[CLOTH_CAPSULES + 1] = {0};
-    ClothMaterial invalid = stiff;
-    invalid.density = -1.0F;
     TEST_ASSERT_TRUE(cloth_reset_supported(&cloth, &seam, &stiff, seam.rest, NULL, NULL, 0, NULL));
     cloth.x[2][1] += 0.25F;
     float y = cloth.x[2][1];
-    TEST_ASSERT_FALSE(cloth_reset_supported(&cloth, &seam, &invalid, seam.rest, NULL, NULL, 0, NULL));
-    TEST_ASSERT_FALSE(cloth.frame_valid);
-    TEST_ASSERT_TRUE(y == cloth.x[2][1]);
     TEST_ASSERT_TRUE(cloth_frame_valid(&seam, &stiff, dt, seam.rest, NULL, body, CLOTH_CAPSULES));
     TEST_ASSERT_FALSE(cloth_reset_supported(&cloth, &seam, &stiff, seam.rest, NULL, body, CLOTH_CAPSULES + 1, NULL));
     TEST_ASSERT_FALSE(cloth.frame_valid);
@@ -325,11 +297,8 @@ static void test_contact_velocity_friction_and_max_speed(void) {
     TEST_ASSERT_TRUE(cloth.velocity[2][0] < 3.0F);
 }
 
-static void test_invalid_v1_inputs_rejected_without_mutating_state(void) {
+static void test_invalid_frame_motion_is_rejected_without_mutating_state(void) {
     cloth_reset(&cloth, &seam, seam.rest);
-    ClothMaterial bad = stiff;
-    bad.contact_friction = 1.5F;
-    TEST_ASSERT_FALSE(cloth_frame_valid(&seam, &bad, dt, seam.rest, NULL, NULL, 0));
     ClothFrame bad_frame = {.linear_accel = {NAN, 0, 0}, .linear_inertia = 0.5F};
     cloth_step(&cloth, &seam, &stiff, dt, &bad_frame, seam.rest, NULL, NULL, 0);
     TEST_ASSERT_FALSE(cloth.frame_valid);
@@ -384,11 +353,6 @@ static void test_compression_limit_softens_shortening_without_weakening_tension(
     cloth_reset(&cloth, &mesh, ext);
     cloth_step(&cloth, &mesh, &soft, dt, NULL, seam.rest, NULL, NULL, 0);
     TEST_ASSERT_TRUE(fabsf(cloth.x[2][1] - rigid_ext_y) < 1e-6F);
-
-    /* Out-of-range compression_limit is rejected without mutating state. */
-    ClothMaterial bad = soft;
-    bad.compression_limit = 0.6F;
-    TEST_ASSERT_FALSE(cloth_frame_valid(&mesh, &bad, dt, seam.rest, NULL, NULL, 0));
 }
 
 static void test_bend_sliver_triangle_stays_bounded_and_finite(void) {
@@ -476,9 +440,6 @@ static void test_reset_over_body_places_seated_skirt_above_thigh_without_impalin
     TEST_ASSERT_TRUE(local.finite && local.pin_error == 0.0F && local.stretch < full.stretch);
     TEST_ASSERT_TRUE(local.penetration <= full.penetration + 1e-6F);
     TEST_ASSERT_TRUE(fabsf(cloth.x[5][2] - strip_rest[5][2]) < hem);
-
-    m.reset_carry_range_m = -0.1F;
-    TEST_ASSERT_FALSE(cloth_frame_valid(&mesh, &m, dt, strip_rest, guide, &crossbar, 1));
 }
 
 static void build_grid_strip(int nx, int ny, float width, float length,
@@ -718,18 +679,17 @@ int main(void) {
     RUN_TEST(test_material_restores_signed_fold);
     RUN_TEST(test_capsule_axis_crosses_face_interior);
     RUN_TEST(test_single_pinned_seam_contact_has_bounded_displacement);
-    RUN_TEST(test_invalid_inputs_never_index_or_advance_state);
     RUN_TEST(test_tether_limits_extension_and_preserves_slack);
-    RUN_TEST(test_strain_limit_respects_pins_slack_and_material_validation);
+    RUN_TEST(test_strain_limit_respects_pins_and_slack);
     RUN_TEST(test_strain_cannot_pull_a_free_vertex_into_the_body);
-    RUN_TEST(test_invalid_reset_preserves_coordinates_and_rejects_excess_capsules);
+    RUN_TEST(test_reset_rejects_excess_capsules_and_preserves_coordinates);
     RUN_TEST(test_round_cone_tapered_capsule_geometry_and_degeneracy);
     RUN_TEST(test_temporal_side_recovery_prevents_tunneling_across_axis);
     RUN_TEST(test_reference_frame_inertia_and_aero_drag);
     RUN_TEST(test_anim_drive_xpbd_convergence_and_collider_occlusion_guard);
     RUN_TEST(test_anisotropic_warp_weft_edges);
     RUN_TEST(test_contact_velocity_friction_and_max_speed);
-    RUN_TEST(test_invalid_v1_inputs_rejected_without_mutating_state);
+    RUN_TEST(test_invalid_frame_motion_is_rejected_without_mutating_state);
     RUN_TEST(test_lap_bridge_activates_only_on_bilateral_seated_flexion);
     RUN_TEST(test_compression_limit_softens_shortening_without_weakening_tension);
     RUN_TEST(test_bend_sliver_triangle_stays_bounded_and_finite);

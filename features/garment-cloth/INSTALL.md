@@ -36,23 +36,31 @@ Several garments can reuse a body description and select their own fit.
 Put the feature's `tools/` on the authoring Python path. Supply meters,
 consistent triangle winding and zero-based indices. A slit has separate
 vertices on its two free sides. A sewn region shares vertices. The cooker
-uses NumPy during the build and writes immutable C arrays to a text stream.
+uses NumPy during the build. `cook_mesh` returns one piece's mesh arrays, and
+`garment_blob.encode` writes an outfit's pieces as one blob:
 
 ```python
+from garment_blob import encode
 from garment_cook import cook_mesh
 
-with output_header.open("w", encoding="ascii") as stream:
-    cook_mesh(stream, "panel", rest_positions, triangles, pinned_indices,
-              wearable=True, tether_slack=1.03)
+mesh = cook_mesh("coat", rest_positions, triangles, pinned_indices, wearable=True, tether_slack=1.03)
+# bones: (joint name, row-major 3x4 inverse bind matrix) pairs; influences index into them.
+piece = dict(id="coat", mesh=mesh, bones=bones,
+             vertices=dict(bone=influences, weight=weights, normal=normals, travel=travel_m, backstop=backstop_m),
+             material=dict(density=0.24, stretch=1e-5, bend=0.4, drag=2.0, thickness=0.003, iterations=6),
+             colliders=[(bone_a, bone_b, point_a, point_b, radius_m, radius_b_m, 0)], render_vertices=count)
+blob_path.write_bytes(encode("coat", [piece], owned_joints=["CoatBack"]))
 ```
 
 Use `wearable=True` for attached items. Every connected piece must have a
 pin and the garment needs a movable vertex. Free test sheets can use the
 default. Invalid winding, repeated or degenerate triangles, out-of-bounds
-indices and capacity overflows fail the cook. Include the generated header
-in a single C translation unit after `garment/cloth.h`. Generate it under
-the build directory with the input assets and `garment_cook.py` listed as
-build dependencies. For a distinct render mesh, use
+indices and capacity overflows fail the cook. `encode` checks every value the
+solver trusts and fails with the outfit, piece and field it rejects; the solver
+asserts only the blob's structure at load. Write the blob under the build
+directory with the input assets, `garment_cook.py` and `garment_blob.py` listed
+as build dependencies, and add it to the pack with `nt_builder_add_blob`. Tools
+read a blob back with `garment_blob.decode`. For a distinct render mesh, use
 `garment_binding.bind_surface(points, faces, render_points, max_distance)`.
 When two seam lips coincide in the rest pose, pass `face_candidates` with the
 allowed simulation face indices per render vertex to preserve the side
@@ -101,11 +109,42 @@ load_obj, directory)`. Its first and last keys cover ticks 0 and
 For OBJ keys the loader takes a path and returns positions and ordered
 triangles matching the proxy. The result has shape `(count, vertices, 3)`.
 
+## Load a cooked outfit
+
+Request the blob with the outfit's model and view it once its winner is
+published. The view points into the payload, so release it, and every actor
+bound to it, before the blob's slot publishes another winner or its pack is
+unmounted. Check after each `nt_resource_step`:
+
+```c
+#include "garment/asset.h"
+
+uint32_t winner = nt_resource_is_ready(blob) ? nt_resource_winner_gen(blob) : 0;
+if (winner != outfit->winner) {
+    if (outfit->set) {
+        garment_actor_clear(&wearer->actor);
+        garment_asset_free(outfit->set);
+        outfit->set = NULL;
+    }
+    outfit->winner = winner;
+    if (winner) {
+        uint32_t size = 0;
+        const uint8_t *bytes = nt_resource_get_blob(blob, &size);
+        outfit->set = garment_asset_view(bytes, size);
+    }
+}
+```
+
+A blob payload only needs 4-byte alignment; engine blob payloads have at least
+the alignment of `malloc`. An outfit cooked without cloth views as NULL, so
+track whether its blob is in by the winner, not by the view. A set's
+`owned_joints` lists the skin joints the cloth drives, which other secondary
+motion should leave alone.
+
 ## Simulate
 
 ```c
 #include "garment/cloth.h"
-#include "panel.gen.h"
 
 static ClothState state;
 static const ClothMaterial fabric = {
@@ -113,18 +152,20 @@ static const ClothMaterial fabric = {
     .drag = 2.0F, .thickness = 0.003F, .iterations = 6
 };
 
+static const ClothMesh *panel; /* outfit->pieces[0].mesh from the view */
+
 void equip_panel(const float pose[][3]) {
-    cloth_reset(&state, &panel, pose);
+    cloth_reset(&state, panel, pose);
 }
 
 void step_panel(float seconds, const float pose[][3], const ClothGuide *limits,
                 const ClothCapsule *capsules, int capsule_count) {
-    cloth_step(&state, &panel, &fabric, seconds, NULL, pose, limits, capsules, capsule_count);
+    cloth_step(&state, panel, &fabric, seconds, NULL, pose, limits, capsules, capsule_count);
 }
 ```
 
-Keep `panel` and its arrays alive and immutable through every use of
-`state`. Reset succeeds when `state.mesh == &panel`. Each pose and guide
+Keep the view and its blob alive and immutable through every use of
+`state`. Reset succeeds when `state.mesh == panel`. Each pose and guide
 array must cover every simulation vertex. Pins follow their current anchor.
 The capsule endpoints define the centerline. Sample the rig and colliders
 at physics frequency, then present `state.x`. A known translation can be
@@ -161,7 +202,7 @@ The low-level solver accepts the same face in simulation coordinates through
 
 ## Inspect a posed garment
 
-For a NeoTolis character, include `garment/actor.h`. Keep a zero-initialized `GarmentActor` for each wearer and share the immutable `GarmentSet`. Pass the character's final model-space skeletal pose, its world transform and elapsed seconds once per animation update. A successful update with `render=true` exposes `actor.palette` and `actor.palette_count` for drawing. In the workbench, inspect that same actor and pose:
+For a NeoTolis character, include `garment/actor.h`. Keep a zero-initialized `GarmentActor` for each wearer and share the outfit's `GarmentSet` view. Pass the character's final model-space skeletal pose, its world transform and elapsed seconds once per animation update. A successful update with `render=true` exposes `actor.palette` and `actor.palette_count` for drawing. In the workbench, inspect that same actor and pose:
 
 ```c
 if (garment_actor_update(&actor, outfit, rig, pose, world, dt, true, NULL)) {

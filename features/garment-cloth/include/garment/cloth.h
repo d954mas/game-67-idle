@@ -98,7 +98,6 @@ typedef struct {
 } ClothMetrics;
 
 /* All points are in one Y-up meter space. Anchors and capsules must be sampled at substep end. */
-bool cloth_mesh_valid(const ClothMesh *mesh);
 bool cloth_frame_valid(const ClothMesh *mesh, const ClothMaterial *m, float dt,
                        const float anchors[][3], const ClothGuide *guide, const ClothCapsule *body, int count);
 void cloth_reset(ClothState *s, const ClothMesh *mesh, const float pose[][3]);

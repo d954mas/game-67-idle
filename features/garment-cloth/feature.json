@@ -5,7 +5,7 @@
   "title": "Garment cloth",
   "status": "opt-in",
   "kind": "gameplay-foundation",
-  "summary": "Caller-owned triangle cloth with anisotropic XPBD constraints, Grinspun Discrete Shells bending, tension-field compression, tapered round-cone swept contacts, collision-aware reset, non-degenerate quaternion surface transfer, isotropic proxy remeshing and body-capsule fitting.",
+  "summary": "Caller-owned triangle cloth with anisotropic XPBD constraints, Grinspun Discrete Shells bending, tension-field compression, tapered round-cone swept contacts, collision-aware reset, non-degenerate quaternion surface transfer, isotropic proxy remeshing, body-capsule fitting and one cooked blob per outfit viewed in place.",
   "copy_model": "in-place",
   "layer": "L0",
   "owners": ["features/garment-cloth"],
@@ -16,7 +16,8 @@
     "garment_actor_update",
     "garment_actor_debug_lines",
     "garment_actor_clear",
-    "cloth_mesh_valid",
+    "garment_asset_view",
+    "garment_asset_free",
     "cloth_frame_valid",
     "cloth_reset",
     "cloth_reset_supported",
@@ -32,6 +33,9 @@
     "cloth_vertex_frames_prepare",
     "cloth_vertex_quats_eval",
     "garment_cook.cook_mesh",
+    "garment_blob.encode",
+    "garment_blob.decode",
+    "garment_blob.single",
     "garment_binding.bind_surface",
     "garment_binding.bind_vertex_frames",
     "garment_binding.pack_indexed_surface",
@@ -54,7 +58,7 @@
   "manuals": {"install": "features/garment-cloth/INSTALL.md"},
   "commands": {
     "owner": "node ai_studio/feature_testing/run.mjs",
-    "test_core": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"^test_garment_(actor|cloth|cook|binding|keyframes|render|proxy)$\" --output-on-failure"
+    "test_core": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"^test_garment_(actor|asset|blob|cloth|cook|binding|keyframes|render|proxy)$\" --output-on-failure"
   },
-  "registers": {"cmake_targets": ["garment_cloth"], "ctest_targets": ["test_garment_actor", "test_garment_cloth", "test_garment_cook", "test_garment_binding", "test_garment_keyframes", "test_garment_render", "test_garment_proxy"]}
+  "registers": {"cmake_targets": ["garment_cloth"], "ctest_targets": ["test_garment_actor", "test_garment_asset", "test_garment_blob", "test_garment_cloth", "test_garment_cook", "test_garment_binding", "test_garment_keyframes", "test_garment_render", "test_garment_proxy"]}
 }

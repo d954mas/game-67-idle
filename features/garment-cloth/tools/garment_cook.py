@@ -1,20 +1,9 @@
-"""Cook an oriented triangle surface in meters into immutable garment/cloth.h data."""
+"""Cook an oriented triangle surface in meters into the arrays of a garment/cloth.h ClothMesh."""
 import math
 import heapq
-import re
 from numbers import Integral
 
 import numpy as np
-
-
-def vector(values):
-    return "{" + ",".join(f"{float(x):.9e}F" for x in values) + "}"
-
-
-def array(out, decl, rows):
-    out.write(f"static const {decl} = {{\n")
-    out.write(",\n".join(rows))
-    out.write("\n};\n")
 
 
 def _tethers(points, adjacent, pins, slack):
@@ -40,11 +29,9 @@ def _tethers(points, adjacent, pins, slack):
     return [(pin, length * slack if pin >= 0 else 0.0) for length, pin in nearest]
 
 
-def cook_mesh(out, name, points, faces, pins, *, wearable=False, tether_slack=None,
+def cook_mesh(name, points, faces, pins, *, wearable=False, tether_slack=None,
               edge_kinds=None, anim_drive=None):
-    """Emit one ClothMesh. Wearables need a pin on every piece and a movable vertex."""
-    if not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", name):
-        raise ValueError(f"{name!r}: invalid C symbol")
+    """Return one ClothMesh as garment_blob mesh arrays. Wearables need a pin on every piece and a movable vertex."""
     points = np.asarray(points, dtype=np.float64)
     if points.ndim != 2 or points.shape[1] != 3 or not np.isfinite(points).all() or not 3 <= len(points) <= 512:
         raise ValueError(f"{name}: invalid positions or vertex capacity exceeded")
@@ -108,22 +95,13 @@ def cook_mesh(out, name, points, faces, pins, *, wearable=False, tether_slack=No
         kind = int(edge_kinds.get(key, 0)) if edge_kinds is not None else 0
         if kind not in (0, 1, 2):
             raise ValueError(f"{name}: invalid edge kind {kind} at {key}")
-        edges.append(f"{{{a},{b},{c},{d},{length:.9e}F,{angle:.9e}F,{kind}}}")
-    array(out, f"float {name}_rest[][3]", map(vector, points))
-    array(out, f"ClothFace {name}_faces[]", ("{%d,%d,%d}" % tuple(f) for f in faces))
-    array(out, f"ClothEdge {name}_edges[]", edges)
-    out.write(f"static const float {name}_inv[] = {vector(inv)};\n")
-    tethers = "0"
+        edges.append((a, b, c, d, float(length), float(angle), kind))
+    tethers = None
     if tether_slack is not None and pins:
-        tethers = name + "_tethers"
-        limits = _tethers(points, adjacent, pins, tether_slack)
-        array(out, f"ClothTether {tethers}[]", (f"{{{pin},{length:.9e}F}}" for pin, length in limits))
-    drive_sym = "0"
+        tethers = _tethers(points, adjacent, pins, tether_slack)
+    drive = None
     if anim_drive is not None:
-        drive_arr = np.asarray(anim_drive, dtype=np.float64)
-        if drive_arr.shape != (len(points),) or not np.isfinite(drive_arr).all() or np.any((drive_arr < 0) | (drive_arr > 1)):
+        drive = np.asarray(anim_drive, dtype=np.float64)
+        if drive.shape != (len(points),) or not np.isfinite(drive).all() or np.any((drive < 0) | (drive > 1)):
             raise ValueError(f"{name}: anim_drive must be finite [0, 1] per vertex")
-        drive_sym = name + "_anim_drive"
-        out.write(f"static const float {drive_sym}[] = {vector(drive_arr)};\n")
-    out.write(f"static const ClothMesh {name} = {{{len(points)}, {len(faces)}, {len(edges)}, "
-              f"{name}_rest, {name}_inv, {name}_faces, {name}_edges, {tethers}, {drive_sym}}};\n")
+    return dict(rest=points, inv_area=inv, faces=[tuple(f) for f in faces], edges=edges, tethers=tethers, anim_drive=drive)

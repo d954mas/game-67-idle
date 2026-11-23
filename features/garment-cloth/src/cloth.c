@@ -1,5 +1,6 @@
 #include "garment/cloth.h"
 #include "garment/contact.h"
+#include "core/nt_assert.h"
 #include "math/nt_math.h"
 
 #include <float.h>
@@ -10,38 +11,6 @@ static bool finite_point(const float p[3]) {
     return isfinite(p[0]) && isfinite(p[1]) && isfinite(p[2]);
 }
 
-bool cloth_mesh_valid(const ClothMesh *mesh) {
-    if (!mesh || mesh->vertices < 3 || mesh->vertices > CLOTH_VERTICES ||
-        mesh->edges < 3 || mesh->edges > CLOTH_EDGES || mesh->faces < 1 || mesh->faces > 2 * mesh->edges / 3 ||
-        !mesh->rest || !mesh->inv_area || !mesh->face || !mesh->edge) return false;
-    for (int i = 0; i < mesh->vertices; ++i) {
-        if (!finite_point(mesh->rest[i]) || !isfinite(mesh->inv_area[i]) || mesh->inv_area[i] < 0) return false;
-        if (mesh->tether) {
-            ClothTether t = mesh->tether[i];
-            if (t.pin < -1 || t.pin >= mesh->vertices || !isfinite(t.max_length) || t.max_length < 0 ||
-                (t.pin >= 0 && mesh->inv_area[t.pin] != 0.0F)) return false;
-        }
-        if (mesh->anim_drive) {
-            float w = mesh->anim_drive[i];
-            if (!isfinite(w) || w < 0.0F || w > 1.0F) return false;
-        }
-    }
-    for (int i = 0; i < mesh->faces; ++i) {
-        ClothFace f = mesh->face[i];
-        if (f.a >= mesh->vertices || f.b >= mesh->vertices || f.c >= mesh->vertices ||
-            f.a == f.b || f.b == f.c || f.c == f.a) return false;
-    }
-    for (int i = 0; i < mesh->edges; ++i) {
-        const ClothEdge *e = mesh->edge + i;
-        if (e->a < 0 || e->a >= mesh->vertices || e->b < 0 || e->b >= mesh->vertices ||
-            e->c < 0 || e->c >= mesh->vertices || e->d < -1 || e->d >= mesh->vertices ||
-            e->a == e->b || e->a == e->c || e->a == e->d || e->b == e->c || e->b == e->d || e->c == e->d ||
-            !isfinite(e->length) || e->length <= 0 || !isfinite(e->angle) || fabsf(e->angle) > NT_PI ||
-            e->kind > CLOTH_EDGE_DIAG) return false;
-    }
-    return true;
-}
-
 static bool frame_motion_valid(const ClothFrame *frame) {
     if (!frame) return true;
     return finite_point(frame->linear_accel) && isfinite(frame->anchor_shift_y) && isfinite(frame->angular_vel_y) && isfinite(frame->angular_accel_y) &&
@@ -49,26 +18,11 @@ static bool frame_motion_valid(const ClothFrame *frame) {
            isfinite(frame->angular_inertia) && frame->angular_inertia >= 0.0F && frame->angular_inertia <= 1.0F;
 }
 
+/* Mesh and material are cooked and trusted; only the per-frame inputs are checked. */
 bool cloth_frame_valid(const ClothMesh *mesh, const ClothMaterial *m, float dt,
                        const float anchors[][3], const ClothGuide *guide, const ClothCapsule *body, int count) {
-    if (!mesh || mesh->vertices < 3 || mesh->vertices > CLOTH_VERTICES || !m || !anchors ||
-        count < 0 || count > CLOTH_CAPSULES || (count && !body) ||
-        !isfinite(dt) || dt <= 0 || !isfinite(m->density) || m->density <= 0 || !isfinite(m->stretch) || m->stretch < 0 ||
-        !isfinite(m->bend) || m->bend < 0 || !isfinite(m->drag) || m->drag < 0 ||
-        !isfinite(m->thickness) || m->thickness < 0 || m->iterations < 1 ||
-        !isfinite(m->max_edge_strain) || m->max_edge_strain < 0 ||
-        m->strain_passes < 0 || m->strain_passes > CLOTH_MAX_STRAIN_PASSES ||
-        !isfinite(m->aero_drag) || m->aero_drag < 0 ||
-        !isfinite(m->anim_drive) || m->anim_drive < 0 ||
-        !isfinite(m->weft_stretch_scale) || m->weft_stretch_scale < 0 ||
-        !isfinite(m->diag_stretch_scale) || m->diag_stretch_scale < 0 ||
-        !isfinite(m->weft_bend_scale) || m->weft_bend_scale < 0 ||
-        !isfinite(m->weft_max_strain) || m->weft_max_strain < 0 ||
-        !isfinite(m->contact_friction) || m->contact_friction < 0 || m->contact_friction > 1.0F ||
-        !isfinite(m->max_speed_mps) || m->max_speed_mps < 0 ||
-        !isfinite(m->reset_carry_range_m) || m->reset_carry_range_m < 0 ||
-        !isfinite(m->support_drape) || m->support_drape < 0.0F || m->support_drape > 1.0F ||
-        !isfinite(m->compression_limit) || m->compression_limit < 0 || m->compression_limit > 0.5F) return false;
+    NT_ASSERT(mesh && mesh->vertices >= 3 && mesh->vertices <= CLOTH_VERTICES && m);
+    if (!anchors || count < 0 || count > CLOTH_CAPSULES || (count && !body) || !isfinite(dt) || dt <= 0) return false;
     float scale = m->density / (dt * dt);
     if (!isfinite(scale) || !isfinite(m->stretch * scale) || !isfinite(m->bend * scale)) return false;
     for (int i = 0; i < mesh->vertices; ++i) {
@@ -95,7 +49,8 @@ void cloth_reset(ClothState *s, const ClothMesh *mesh, const float pose[][3]) {
     if (!s) return;
     s->mesh = NULL;
     s->frame_valid = false;
-    if (!cloth_mesh_valid(mesh) || !pose) return;
+    NT_ASSERT(mesh && mesh->vertices >= 3 && mesh->vertices <= CLOTH_VERTICES);
+    if (!pose) return;
     for (int i = 0; i < mesh->vertices; ++i) {
         if (!finite_point(pose[i])) return;
     }
@@ -1336,11 +1291,6 @@ bool cloth_reset_supported(ClothState *s, const ClothMesh *mesh, const ClothMate
     SupportPlane plane;
     SupportPlane *support = face ? &plane : NULL;
     if (!prepare_support(face, &plane) || !cloth_frame_valid(mesh, m, evaluation_dt, anchors, guide, body, count)) {
-        s->mesh = NULL;
-        s->frame_valid = false;
-        return false;
-    }
-    if (!cloth_mesh_valid(mesh)) {
         s->mesh = NULL;
         s->frame_valid = false;
         return false;

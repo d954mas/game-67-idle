@@ -14,10 +14,12 @@ the animated pose in one Y-up coordinate space measured in meters.
 |---|---|
 | `garment_asset.load_asset` | Opens an item asset by path and checks piece identity. The game can bind the same asset to different looks. |
 | `garment_fit_capsules.fit_body_capsules` | Fits the segments declared in a character's body asset to rest-space vertices and joint names. |
+| `garment/asset.h` | The cooked-outfit blob: header, section table and record layouts. `garment_asset_view` asserts the blob's structure once and returns the `GarmentSet` the actor binds, pointing into the blob; `garment_asset_free` releases that view. [Round trip](tests/test_asset.c) · [Loading](INSTALL.md#load-a-cooked-outfit). |
+| `garment_blob.encode`, `garment_blob.decode` | Write one outfit's pieces as a blob and read it back. The writer checks every value the solver trusts (finite numbers, ranges, capacities, indices) and names the outfit, piece and field it rejects. `garment_blob.single` is its single-precision rounding. |
 | `garment/actor.h` | Binds a cooked outfit to a NeoTolis skeleton, advances the cloth at fixed intervals, and supplies a posed palette and inspection overlays. Each wearer owns its state. [Small consumer](tests/test_actor.c) · [Integration](INSTALL.md#inspect-a-posed-garment). |
 | `ClothSupport` | A finite, one-sided scene surface supplied per wearer. Its center and two half-edges describe a cushion or ledge in its actual pose. [Scene contact](INSTALL.md#scene-contact). |
 | `garment/debug.h` | Draws weight and tether overlays from a posed cloth mesh and wire outlines for current body capsules and skeleton links. Send its line segments to the host's debug renderer. [Integration example](INSTALL.md#inspect-a-posed-garment). |
-| `garment_cook.cook_mesh` | Produces a C mesh from ordered triangle indices, rest positions and pins. The cooker derives lumped masses, edge lengths and signed hinge angles. |
+| `garment_cook.cook_mesh` | Produces the mesh arrays of one piece from ordered triangle indices, rest positions and pins. The cooker derives lumped masses, edge lengths and signed hinge angles. |
 | `ClothMaterial` | Surface density in kg/m², length and angular compliance, exponential velocity drag per second, contact thickness in meters and solver passes per substep. Zero compliance gives a rigid constraint at convergence. |
 | `ClothMaterial.max_edge_strain`, `strain_passes` | Optional tensile strain limit. A value of 0.12 begins shortening edges above 112% of rest length. Set 1–32 extra edge sweeps per substep to enable it. Zero sweeps use the ordinary solver. |
 | `ClothMaterial.reset_carry_range_m` | Positive distance in meters outside a body collider over which a free vertex inherits less displacement from its neighbors at spawn or teleport. At reset, the solver also evaluates the fully propagated pose and keeps the localized pose only if it lowers peak edge strain without increasing peak capsule penetration beyond numerical tolerance. Zero uses full propagation. |
@@ -32,7 +34,7 @@ the animated pose in one Y-up coordinate space measured in meters.
 | `garment_keyframes.vertex_map` | Expand a scalar radius or validate a nonnegative, finite value per proxy vertex. |
 | `garment_keyframes.authored_track` | Linearly sample full-proxy position keys onto integer ticks. Keys supply vertices in meters or an OBJ name resolved by the caller's mesh loader. |
 | `garment_keyframes.normal_offsets` | Bake signed meter offsets per tick and vertex from overlapping painted or ellipsoidal patches with smooth activation keys. |
-| `cloth_mesh_valid`, `cloth_frame_valid` | Check the index ranges, storage capacities, numeric inputs and guide contract. Reset also checks the mesh and pose. An invalid frame preserves positions and velocities, and clears `state.frame_valid` so the host can report it. |
+| `cloth_frame_valid` | Checks one frame's inputs: time step, anchors, guide contract and capsules. The mesh and material are cooked data and are only asserted for capacity. Reset also checks the pose. An invalid frame preserves positions and velocities, and clears `state.frame_valid` so the host can report it. |
 | `cloth_measure` | Returns maximum positive edge strain, body-proxy penetration and pin drift in meters, maximum speed in m/s and state finiteness. Strain is a ratio to the rest length. |
 | `garment/contact.h` | Queries a triangle against a capsule including its effective thickness. For a positive penetration the outputs identify the nearest triangle point and correction direction. |
 
@@ -41,7 +43,10 @@ the animated pose in one Y-up coordinate space measured in meters.
 The independent feature-test consumer cooks a folded surface and a pinned
 panel, then runs them through the public C target. Its core checks cover
 oriented hinges, triangle-interior contact, bounded corrections near a sewn
-edge, bad inputs, winding and disconnected pieces.
+edge, bad frame inputs, winding and disconnected pieces. The blob tests write a
+synthetic two-piece outfit in Python and compare every field the C view reads
+with the writer's values bit for bit, including a blob that is only 4-byte
+aligned; the writer's tests reject each value the solver no longer checks.
 
 The optional strain sweeps follow the ordinary constraints. They preserve
 pins and can move free vertices outside a motion guide or a tether. Capsule
@@ -64,8 +69,10 @@ instance. It uses explicit velocity integration in Y-up meters, anisotropic
 tapered round-cone contacts, collision-aware reset and smooth per-vertex
 quaternion/frame surface transfer. A PATCH preserves public inputs and corrects
 implementation defects. A MINOR adds compatible input options or metrics. A
-MAJOR changes coordinate, ownership, material or data-layout contracts. Rebuild
-C cooks and all linked targets on upgrade.
+MAJOR changes coordinate, ownership, material or data-layout contracts. The blob
+carries `GARMENT_BLOB_VERSION`; a change to its records bumps it, and the view
+asserts the version, so recook every outfit and rebuild all linked targets on
+upgrade.
 
 ## Extension points
 

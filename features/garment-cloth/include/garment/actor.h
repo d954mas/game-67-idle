@@ -14,6 +14,9 @@ typedef struct {
     float max_displacement_m, max_strain, pin_error_m;
 } GarmentStats;
 
+/* Capsules include the two a lap bridge adds to the authored colliders. */
+enum { GARMENT_PIECES_MAX = 8, GARMENT_BONES_MAX = 160, GARMENT_CAPSULES_MAX = 32 };
+
 typedef struct {
     const char *name;
     float inverse_bind[12];
@@ -49,6 +52,9 @@ typedef struct {
     const char *id;
     const GarmentAsset *pieces;
     int piece_count;
+    /* Skin joints the cloth drives; other secondary motion must leave them alone. */
+    const char *const *owned_joints;
+    int owned_joint_count;
 } GarmentSet;
 
 typedef struct {

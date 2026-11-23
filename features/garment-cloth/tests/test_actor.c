@@ -43,7 +43,7 @@ static const GarmentAsset garment = {
     .material = {.density = 0.2F, .stretch = 0.01F, .iterations = 2},
     .colliders = &clasp_collider, .collider_count = 1,
 };
-static const GarmentSet set = {"mantle", &garment, 1};
+static const GarmentSet set = {.id = "mantle", .pieces = &garment, .piece_count = 1};
 static const nt_skeletal_mat34_t identity = {.r = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}}};
 static const float world[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 static GarmentActor actors[2];
@@ -52,6 +52,89 @@ void setUp(void) {}
 void tearDown(void) {
     garment_actor_clear(&actors[0]);
     garment_actor_clear(&actors[1]);
+}
+
+/* One free corner on a two-joint rig: "leg" carries the pinned edge, "hem" carries a contact capsule. */
+static void step_panel(GarmentActor *actor, const nt_skeletal_mat34_t pose[2], float dt) {
+    static const float positions[][3] = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+    static const float panel_inv_area[] = {0, 0, 1};
+    static const ClothFace face = {0, 1, 2};
+    static const ClothEdge panel_edges[] = {{0, 1, 2, -1, 1, 0, 0}, {0, 2, 1, -1, 1, 0, 0}, {1, 2, 0, -1, 1.41421356F, 0, 0}};
+    static const ClothMesh panel_mesh = {.vertices = 3, .faces = 1, .edges = 3, .rest = positions, .inv_area = panel_inv_area,
+                                         .face = &face, .edge = panel_edges};
+    static const GarmentBone panel_bones[] = {{"leg", {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0}},
+                                              {"hem", {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0}}};
+    static const GarmentVertex panel_vertices[] = {{.weight = {1}, .normal = {0, 0, 1}},
+                                                   {.weight = {1}, .normal = {0, 0, 1}},
+                                                   {.weight = {1}, .normal = {0, 0, 1}, .travel_m = 1.0F, .backstop_m = 1.0F}};
+    static const GarmentCollider hem_capsule = {
+        .bone_a = 1, .bone_b = 1, .point_a = {-0.13F, 0.9F, 0}, .point_b = {-0.13F, 1.1F, 0}, .radius_m = 0.12F};
+    static const GarmentAsset piece = {.id = "panel", .bones = panel_bones, .bone_count = 2, .mesh = &panel_mesh,
+                                       .vertices = panel_vertices,
+                                       .material = {.density = 0.2F, .iterations = 1, .stretch = 0.03F, .contact_friction = 1.0F},
+                                       .colliders = &hem_capsule, .collider_count = 1};
+    static const GarmentSet outfit = {.id = "panel", .pieces = &piece, .piece_count = 1};
+    const uint32_t ids[] = {nt_hash32_str("leg").value, nt_hash32_str("hem").value};
+    const nt_skeletal_skeleton_t rig = {.joint_id = ids, .joint_count = 2};
+    const float transform[] = {0, 0, -1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 3, 2, 8, 1};
+    TEST_ASSERT_TRUE(garment_actor_update(actor, &outfit, &rig, pose, transform, dt, true, NULL));
+}
+
+static void test_body_guide_reaches_surface_palette_before_first_physics_tick(void) {
+    GarmentActor *actor = &actors[0];
+    nt_skeletal_mat34_t pose[] = {{.r = {{0, -1, 0, .25F}, {1, 0, 0, -.1F}, {0, 0, 1, .05F}}}, identity};
+    step_panel(actor, pose, 0);
+    TEST_ASSERT_EQUAL_INT(3, actor->palette_count);
+    TEST_ASSERT_EQUAL_INT(0, actor->stats.driven_joints);
+    /* Each palette record carries the guide joint's rotation as a quaternion and its translation. */
+    for (int v = 0; v < 3; ++v) {
+        const float qx = actor->palette[v].r[0][3], qy = actor->palette[v].r[1][3];
+        const float qz = actor->palette[v].r[2][0], qw = actor->palette[v].r[2][1];
+        const float rot[3][3] = {
+            {1 - 2 * (qy * qy + qz * qz), 2 * (qx * qy - qw * qz), 2 * (qx * qz + qw * qy)},
+            {2 * (qx * qy + qw * qz), 1 - 2 * (qx * qx + qz * qz), 2 * (qy * qz - qw * qx)},
+            {2 * (qx * qz - qw * qy), 2 * (qy * qz + qw * qx), 1 - 2 * (qx * qx + qy * qy)},
+        };
+        for (int i = 0; i < 3; ++i) {
+            float t = actor->palette[v].r[0][i];
+            for (int j = 0; j < 3; ++j) {
+                TEST_ASSERT_TRUE(fabsf(pose[0].r[i][j] - rot[i][j]) < 1e-5F);
+                t -= rot[i][j] * actor->palette[v].r[1][j];
+            }
+            TEST_ASSERT_TRUE(fabsf(pose[0].r[i][3] - t) < 1e-5F);
+        }
+    }
+    /* Less than one physics tick of time: the pinned record still follows the moved guide. */
+    pose[0].r[0][3] += .02F;
+    step_panel(actor, pose, .001F);
+    TEST_ASSERT_EQUAL_UINT(0, actor->stats.steps);
+    TEST_ASSERT_TRUE(fabsf(pose[0].r[0][3] - actor->palette[0].r[0][0]) < 1e-5F);
+}
+
+/* The same motion fed at 30, 60, 120 Hz and an uneven 40/120 Hz cadence leaves the corner in one place. */
+static void test_moving_capsule_contact_matches_across_pose_rates(void) {
+    const int rates[] = {30, 60, 120, 60};
+    float reference[3] = {0};
+    GarmentActor *actor = &actors[0];
+    for (int trial = 0; trial < 4; ++trial) {
+        nt_skeletal_mat34_t pose[] = {identity, identity};
+        garment_actor_clear(actor);
+        step_panel(actor, pose, 0.0F);
+        float elapsed = 0.0F;
+        for (int i = 0; i < rates[trial] / 3; ++i) {
+            const float dt = trial == 3 ? (i % 2 ? 1.0F / 40.0F : 1.0F / 120.0F) : 1.0F / (float)rates[trial];
+            elapsed += dt;
+            pose[1].r[0][3] = elapsed;
+            step_panel(actor, pose, dt);
+        }
+        TEST_ASSERT_EQUAL_UINT(GARMENT_SIM_HZ / 3, actor->stats.steps);
+        const float *corner = actor->palette[2].r[0];
+        TEST_ASSERT_TRUE(corner[0] > 0.1F);
+        for (int axis = 0; axis < 3; ++axis) {
+            if (trial == 0) reference[axis] = corner[axis];
+            else TEST_ASSERT_TRUE(fabsf(reference[axis] - corner[axis]) < 1e-4F);
+        }
+    }
 }
 
 typedef struct {
@@ -139,5 +222,7 @@ int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_shared_asset_instances_keep_their_own_pins_contacts_and_inspection);
     RUN_TEST(test_world_support_applies_only_to_the_wearer_above_its_finite_face);
+    RUN_TEST(test_body_guide_reaches_surface_palette_before_first_physics_tick);
+    RUN_TEST(test_moving_capsule_contact_matches_across_pose_rates);
     return UNITY_END();
 }

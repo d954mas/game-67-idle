@@ -1,4 +1,3 @@
-import io
 import sys
 import unittest
 from pathlib import Path
@@ -44,10 +43,8 @@ class TestProxyAndBinding(unittest.TestCase):
         self.assertEqual(kinds[(0, 3)], EDGE_WARP)
         self.assertEqual(kinds[(3, 4)], EDGE_WEFT)
         self.assertEqual(kinds[(0, 4)], EDGE_DIAG)
-        out = io.StringIO()
-        cook_mesh(out, "cape", pts, faces, pins, wearable=True, edge_kinds=kinds, anim_drive=1.0 - norm)
-        text = out.getvalue()
-        self.assertIn("cape_anim_drive", text)
+        mesh = cook_mesh("cape", pts, faces, pins, wearable=True, edge_kinds=kinds, anim_drive=1.0 - norm)
+        np.testing.assert_array_equal(mesh["anim_drive"], 1.0 - norm)
 
     def test_validate_proxy_detects_bind_pose_penetration_and_edge_limit(self):
         pts = np.array([[0.0, 1.0, 0.0], [0.1, 1.0, 0.0], [0.05, 0.9, 0.0]])

@@ -1,5 +1,6 @@
 #include "garment/actor.h"
 #include "garment/contact.h"
+#include "core/nt_assert.h"
 #include "hash/nt_hash.h"
 #include "math/nt_math.h"
 
@@ -7,22 +8,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { PIECES_MAX = 8, BONES_MAX = 160, CAPSULES_MAX = 32 };
-
 typedef struct {
     float anchors[CLOTH_VERTICES][3];
     ClothGuide guide[CLOTH_VERTICES];
-    ClothCapsule caps[CAPSULES_MAX];
+    ClothCapsule caps[GARMENT_CAPSULES_MAX];
     int cap_count;
 } GarmentFrame;
 
 typedef struct GarmentPiece {
-    int joint[BONES_MAX];
+    int joint[GARMENT_BONES_MAX];
     int lap_joint[6];
     ClothState cloth;
     GarmentFrame previous;
     float sim_anchors[CLOTH_VERTICES][3];
-    ClothCapsule sim_caps[CAPSULES_MAX];
+    ClothCapsule sim_caps[GARMENT_CAPSULES_MAX];
     int sim_cap_count;
     int continuous_cap_count; /* A pose-only frame can remove a generated collider between physical steps. */
 } GarmentPiece;
@@ -30,7 +29,7 @@ typedef struct GarmentPiece {
 /* Concurrent actor updates use separate scratch; simulation never calls back into user code. */
 static _Thread_local struct {
     GarmentFrame current, step;
-    nt_skeletal_mat34_t skin[BONES_MAX];
+    nt_skeletal_mat34_t skin[GARMENT_BONES_MAX];
     float dressed[CLOTH_VERTICES][3];
     ClothVertexBasis basis[CLOTH_VERTICES];
     float mats[CLOTH_VERTICES][12];
@@ -46,13 +45,15 @@ void garment_actor_clear(GarmentActor *actor) {
     memset(actor, 0, sizeof *actor);
 }
 
+/* The set comes from garment_asset_view, which asserted its structure; only the skeleton is checked here. */
 static bool bind_actor(GarmentActor *a, const GarmentSet *set, const nt_skeletal_skeleton_t *skel) {
     garment_actor_clear(a);
     a->set = set;
     a->rig = skel->rig_compat_id.value;
     a->stats.id = set->id;
     a->stats.finite = true;
-    if (!set->pieces || !skel->joint_id || set->piece_count <= 0 || set->piece_count > PIECES_MAX)
+    NT_ASSERT(set->pieces && set->piece_count > 0 && set->piece_count <= GARMENT_PIECES_MAX);
+    if (!skel->joint_id)
         return false;
     a->pieces = calloc((size_t)set->piece_count, sizeof *a->pieces);
     if (!a->pieces) {
@@ -62,12 +63,7 @@ static bool bind_actor(GarmentActor *a, const GarmentSet *set, const nt_skeletal
     for (int p = 0; p < set->piece_count; ++p) {
         const GarmentAsset *asset = &set->pieces[p];
         GarmentPiece *piece = &a->pieces[p];
-        if (!asset->bones || !cloth_mesh_valid(asset->mesh) || asset->bone_count < 1 || asset->bone_count > BONES_MAX ||
-            asset->collider_count < 0 || asset->collider_count > CAPSULES_MAX || !asset->vertices ||
-            (asset->collider_count && !asset->colliders))
-            return false;
         for (int i = 0; i < asset->bone_count; ++i) {
-            if (!asset->bones[i].name) return false;
             uint32_t id = nt_hash32_str(asset->bones[i].name).value;
             int j = 0;
             while (j < skel->joint_count && skel->joint_id[j] != id)
@@ -76,20 +72,9 @@ static bool bind_actor(GarmentActor *a, const GarmentSet *set, const nt_skeletal
                 ++a->stats.missing_bindings;
             piece->joint[i] = j;
         }
-        if (asset->lap) {
-            if (asset->collider_count + 2 > CAPSULES_MAX) return false;
-            for (int k = 0; k < 6; ++k) {
-                if (asset->lap->bone[k] >= asset->bone_count) return false;
+        if (asset->lap)
+            for (int k = 0; k < 6; ++k)
                 piece->lap_joint[k] = piece->joint[asset->lap->bone[k]];
-            }
-        }
-        for (int i = 0; i < asset->mesh->vertices; ++i)
-            for (int j = 0; j < 4; ++j)
-                if (asset->vertices[i].bone[j] >= asset->bone_count)
-                    return false;
-        for (int i = 0; i < asset->collider_count; ++i)
-            if (asset->colliders[i].bone_a >= asset->bone_count || asset->colliders[i].bone_b >= asset->bone_count)
-                return false;
         a->stats.vertices += asset->mesh->vertices;
         a->stats.render_vertices += asset->render_vertices;
     }
