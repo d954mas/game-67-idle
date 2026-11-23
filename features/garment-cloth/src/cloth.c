@@ -10,10 +10,6 @@ static bool finite_point(const float p[3]) {
     return isfinite(p[0]) && isfinite(p[1]) && isfinite(p[2]);
 }
 
-static bool capsule_active(const ClothMaterial *m, const ClothCapsule *c) {
-    return m->collider_mask == 0U || c->mask == 0U || (m->collider_mask & c->mask) != 0U;
-}
-
 bool cloth_mesh_valid(const ClothMesh *mesh) {
     if (!mesh || mesh->vertices < 3 || mesh->vertices > CLOTH_VERTICES ||
         mesh->edges < 3 || mesh->edges > CLOTH_EDGES || mesh->faces < 1 || mesh->faces > 2 * mesh->edges / 3 ||
@@ -50,8 +46,7 @@ static bool frame_motion_valid(const ClothFrame *frame) {
     if (!frame) return true;
     return finite_point(frame->linear_accel) && isfinite(frame->anchor_shift_y) && isfinite(frame->angular_vel_y) && isfinite(frame->angular_accel_y) &&
            isfinite(frame->linear_inertia) && frame->linear_inertia >= 0.0F && frame->linear_inertia <= 1.0F &&
-           isfinite(frame->angular_inertia) && frame->angular_inertia >= 0.0F && frame->angular_inertia <= 1.0F &&
-           isfinite(frame->max_fictitious_accel) && frame->max_fictitious_accel >= 0.0F;
+           isfinite(frame->angular_inertia) && frame->angular_inertia >= 0.0F && frame->angular_inertia <= 1.0F;
 }
 
 bool cloth_frame_valid(const ClothMesh *mesh, const ClothMaterial *m, float dt,
@@ -63,7 +58,6 @@ bool cloth_frame_valid(const ClothMesh *mesh, const ClothMaterial *m, float dt,
         !isfinite(m->thickness) || m->thickness < 0 || m->iterations < 1 ||
         !isfinite(m->max_edge_strain) || m->max_edge_strain < 0 ||
         m->strain_passes < 0 || m->strain_passes > CLOTH_MAX_STRAIN_PASSES ||
-        !isfinite(m->gravity_scale) || m->gravity_scale < 0 ||
         !isfinite(m->aero_drag) || m->aero_drag < 0 ||
         !isfinite(m->anim_drive) || m->anim_drive < 0 ||
         !isfinite(m->weft_stretch_scale) || m->weft_stretch_scale < 0 ||
@@ -83,8 +77,7 @@ bool cloth_frame_valid(const ClothMesh *mesh, const ClothMaterial *m, float dt,
             const ClothGuide *g = guide + i;
             float length2 = glm_vec3_norm2((float *)g->normal);
             if (!isfinite(length2) || fabsf(length2 - 1.0F) > 0.002F ||
-                !isfinite(g->travel) || g->travel < 0 || !isfinite(g->backstop) || g->backstop < 0 ||
-                !isfinite(g->backstop_radius) || g->backstop_radius < 0) return false;
+                !isfinite(g->travel) || g->travel < 0 || !isfinite(g->backstop) || g->backstop < 0) return false;
         }
     }
     for (int i = 0; i < count; ++i) {
@@ -635,7 +628,6 @@ static _Thread_local struct {
     union {
         StepWork step;
         ResetWork reset;
-        double offset_area[CLOTH_VERTICES];
     } entry;
     DrapeWork drape;
 } work;
@@ -650,7 +642,6 @@ static void build_broadphase(const ClothMaterial *m, const ClothCapsule *body, i
     }
     float thickness = m->thickness;
     for (int j = 0; j < count; ++j) {
-        if (!capsule_active(m, body + j)) continue;
         float ra = body[j].radius + thickness;
         float rb = cloth_capsule_radius_b(body + j) + thickness;
         float r_max = fmaxf(ra, rb);
@@ -770,8 +761,8 @@ static void project_body(ClothState *s, const ClothMesh *mesh, const ClothMateri
                          const ClothCapsule *body, const CapsuleBroadphase *bp,
                          const ClothFrame *frame, float inv_dt, bool full_contact, ContactAccum *acc) {
     float thickness = m->thickness;
-    if (frame && frame->floor_enabled) {
-        float y_min = frame->floor_y + thickness;
+    if (frame) {
+        float y_min = thickness;
         const float floor_n[3] = {0.0F, 1.0F, 0.0F};
         for (int i = 0; i < mesh->vertices; ++i) {
             if (mesh->inv_area[i] == 0.0F) continue;
@@ -915,25 +906,8 @@ static void project_tethers(ClothState *s, const ClothMesh *mesh) {
 static void project_guide(float x[3], const float anchor[3], const ClothGuide *g) {
     vec3 offset;
     glm_vec3_sub(x, (float *)anchor, offset);
-    if (g->backstop_radius > 0.0F) {
-        /* Spherical backstop behind anchor: ||x - (anchor - (R + backstop) * n)|| >= R. */
-        float R = g->backstop_radius;
-        float shift = R + g->backstop;
-        vec3 rel;
-        for (int k = 0; k < 3; ++k) rel[k] = offset[k] + shift * g->normal[k];
-        float d2 = glm_vec3_norm2(rel);
-        if (d2 < R * R) {
-            if (d2 > 1e-12F) {
-                float d = sqrtf(d2);
-                for (int k = 0; k < 3; ++k) offset[k] = rel[k] * (R / d) - shift * g->normal[k];
-            } else {
-                for (int k = 0; k < 3; ++k) offset[k] = -g->backstop * g->normal[k];
-            }
-        }
-    } else {
-        float inward = -glm_vec3_dot(offset, (float *)g->normal) - g->backstop;
-        if (inward > 0.0F) glm_vec3_muladds((float *)g->normal, inward, offset);
-    }
+    float inward = -glm_vec3_dot(offset, (float *)g->normal) - g->backstop;
+    if (inward > 0.0F) glm_vec3_muladds((float *)g->normal, inward, offset);
     float length = glm_vec3_norm(offset);
     if (length > g->travel) {
         if (g->travel == 0.0F) glm_vec3_zero(offset);
@@ -1003,11 +977,9 @@ static void compute_vertex_normals(const ClothMesh *mesh, const float pos[][3], 
     }
 }
 
-static void cap_shape_residual(float x[3], const float anchor[3], const ClothGuide *g);
-
-void cloth_step_framed(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,
-                       const ClothFrame *frame, const float anchors[][3], const ClothGuide *guide,
-                       const ClothCapsule *body, int count) {
+void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,
+                const ClothFrame *frame, const float anchors[][3], const ClothGuide *guide,
+                const ClothCapsule *body, int count) {
     if (!s) return;
     SupportPlane plane;
     SupportPlane *support = frame && frame->support ? &plane : NULL;
@@ -1031,10 +1003,9 @@ void cloth_step_framed(ClothState *s, const ClothMesh *mesh, const ClothMaterial
     build_broadphase(m, body, count, bp);
 
     float inv_dt = 1.0F / dt;
-    float g_scale = m->gravity_scale > 0.0F ? m->gravity_scale : 1.0F;
     float retain = expf(-m->drag * dt);
     float aero_damp = m->aero_drag > 0.0F ? (1.0F - expf(-m->aero_drag * dt)) : 0.0F;
-    float max_fict = (frame && frame->max_fictitious_accel > 0.0F) ? frame->max_fictitious_accel : 30.0F;
+    const float max_fict = 28.0F; /* m/s^2: a root-acceleration spike must not fling the cloth */
 
     float anchor_shift_y = frame ? frame->anchor_shift_y : 0.0F;
     if (anchor_shift_y != 0.0F) {
@@ -1050,7 +1021,7 @@ void cloth_step_framed(ClothState *s, const ClothMesh *mesh, const ClothMaterial
             for (int k = 0; k < 3; ++k) s->velocity[i][k] = (anchors[i][k] - x_prev[i][k]) * inv_dt;
             continue;
         }
-        vec3 accel = {0.0F, -9.81F * g_scale, 0.0F};
+        vec3 accel = {0.0F, -9.81F, 0.0F};
         if (frame) {
             vec3 fict = {
                 -frame->linear_inertia * frame->linear_accel[0],
@@ -1147,7 +1118,7 @@ void cloth_step_framed(ClothState *s, const ClothMesh *mesh, const ClothMaterial
     for (int pass = 0; pass < m->strain_passes; ++pass) {
         bool moved = limit_strain_pass(s, mesh, m, acc, pass % 2 != 0);
         if (!moved && !pending_contact) break;
-        pending_contact = bp->count || support || (frame && frame->floor_enabled);
+        pending_contact = bp->count || support || frame;
         if (pending_contact && (pass % 2 != 0 || pass + 1 == m->strain_passes)) {
             /* A length projection can enter a collider that was clear on the preceding sweep. */
             project_body(s, mesh, m, x_prev, guide, body, bp, frame, inv_dt, true, acc);
@@ -1159,8 +1130,6 @@ void cloth_step_framed(ClothState *s, const ClothMesh *mesh, const ClothMaterial
     for (int i = 0; i < mesh->vertices; ++i) {
         if (mesh->inv_area[i] == 0.0F) continue;
         vec3 v_free, v;
-        if (guide && frame && frame->strict_guide)
-            cap_shape_residual(s->x[i], anchors[i], &guide[i]);
         glm_vec3_copy(s->velocity[i], v_free);
         for (int k = 0; k < 3; ++k) v[k] = (s->x[i][k] - x_prev[i][k]) * inv_dt;
         if (acc->count[i] > 0) {
@@ -1209,156 +1178,11 @@ void cloth_step_framed(ClothState *s, const ClothMesh *mesh, const ClothMaterial
     }
 }
 
-void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,
-                const float anchors[][3], const ClothGuide *guide, const ClothCapsule *body, int count) {
-    cloth_step_framed(s, mesh, m, dt, NULL, anchors, guide, body, count);
-}
-
-static double dot3(const double a[3], const double b[3]) {
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
-
-static bool buffers_overlap(const void *a, size_t a_bytes, const void *b, size_t b_bytes) {
-    uintptr_t first = (uintptr_t)a, second = (uintptr_t)b;
-    return first <= second ? second - first < a_bytes : first - second < b_bytes;
-}
-
-bool cloth_offset_surface(const ClothMesh *mesh, const float positions[][3], const float offsets_m[], float output[][3]) {
-    if (!positions || !offsets_m || !output || !cloth_mesh_valid(mesh)) return false;
-    size_t n = (size_t)mesh->vertices, bytes = n * sizeof output[0];
-    if (buffers_overlap(output, bytes, positions, bytes) ||
-        buffers_overlap(output, bytes, offsets_m, n * sizeof *offsets_m) ||
-        buffers_overlap(output, bytes, mesh, sizeof *mesh) ||
-        buffers_overlap(output, bytes, mesh->rest, bytes) ||
-        buffers_overlap(output, bytes, mesh->inv_area, n * sizeof *mesh->inv_area) ||
-        buffers_overlap(output, bytes, mesh->face, (size_t)mesh->faces * sizeof *mesh->face) ||
-        buffers_overlap(output, bytes, mesh->edge, (size_t)mesh->edges * sizeof *mesh->edge) ||
-        (mesh->tether && buffers_overlap(output, bytes, mesh->tether, n * sizeof *mesh->tether))) return false;
-    bool active = false;
-    for (int i = 0; i < mesh->vertices; ++i) {
-        if (!finite_point(positions[i]) || !isfinite(offsets_m[i])) return false;
-        active |= offsets_m[i] != 0.0F && mesh->inv_area[i] != 0.0F;
-    }
-    if (!active) {
-        memcpy(output, positions, bytes);
-        return true;
-    }
-
-    double *area_sum = work.entry.offset_area;
-    memset(area_sum, 0, n * sizeof *area_sum);
-    memset(output, 0, bytes);
-    for (int f = 0; f < mesh->faces; ++f) {
-        ClothFace face = mesh->face[f];
-        double ab[3], ac[3];
-        for (int k = 0; k < 3; ++k) {
-            ab[k] = (double)positions[face.b][k] - (double)positions[face.a][k];
-            ac[k] = (double)positions[face.c][k] - (double)positions[face.a][k];
-        }
-        double normal[] = {ab[1]*ac[2] - ab[2]*ac[1], ab[2]*ac[0] - ab[0]*ac[2], ab[0]*ac[1] - ab[1]*ac[0]};
-        double area2 = dot3(normal, normal);
-        if (area2 <= 1e-14 * dot3(ab, ab) * dot3(ac, ac)) continue;
-        double area = sqrt(area2);
-        int ids[] = {face.a, face.b, face.c};
-        for (int j = 0; j < 3; ++j) {
-            int i = ids[j];
-            if (offsets_m[i] == 0.0F || mesh->inv_area[i] == 0.0F) continue;
-            /* The area-weighted mean fits in float even when a posed triangle's area does not. */
-            double total = area_sum[i] + area, inverse = 1.0 / total;
-            for (int k = 0; k < 3; ++k) {
-                output[i][k] = (float)(((double)output[i][k] * area_sum[i] + normal[k]) * inverse);
-            }
-            area_sum[i] = total;
-        }
-    }
-    for (int i = 0; i < mesh->vertices; ++i) {
-        if (offsets_m[i] == 0.0F || mesh->inv_area[i] == 0.0F) {
-            memcpy(output[i], positions[i], sizeof output[i]);
-            continue;
-        }
-        double normal[] = {(double)output[i][0], (double)output[i][1], (double)output[i][2]};
-        double normal2 = dot3(normal, normal);
-        if (normal2 <= 1e-12) {
-            memcpy(output, positions, bytes);
-            return false;
-        }
-        double scale = (double)offsets_m[i] / sqrt(normal2);
-        for (int k = 0; k < 3; ++k) {
-            double value = (double)positions[i][k] + scale * normal[k];
-            if (fabs(value) > (double)FLT_MAX) {
-                memcpy(output, positions, bytes);
-                return false;
-            }
-            output[i][k] = (float)value;
-        }
-    }
-    return true;
-}
-
-static void cap_shape_residual(float x[3], const float anchor[3], const ClothGuide *g) {
-    double travel = (double)g->travel, backstop = (double)g->backstop, bs_r = (double)g->backstop_radius;
-    if (travel == 0.0) {
-        memcpy(x, anchor, 3 * sizeof *x);
-        return;
-    }
-    double normal[] = {(double)g->normal[0], (double)g->normal[1], (double)g->normal[2]};
-    double delta[3];
-    double normal_length = sqrt(dot3(normal, normal));
-    for (int k = 0; k < 3; ++k) {
-        normal[k] /= normal_length;
-        delta[k] = (double)x[k] - (double)anchor[k];
-    }
-    if (bs_r > 0.0) {
-        double shift = bs_r + backstop;
-        double rel[3] = {delta[0] + shift * normal[0], delta[1] + shift * normal[1], delta[2] + shift * normal[2]};
-        double d2 = dot3(rel, rel);
-        if (d2 >= bs_r * bs_r && dot3(delta, delta) <= travel * travel) return;
-        if (d2 < bs_r * bs_r) {
-            if (d2 > 1e-16) {
-                double d = sqrt(d2);
-                for (int k = 0; k < 3; ++k) delta[k] = rel[k] * (bs_r / d) - shift * normal[k];
-            } else {
-                for (int k = 0; k < 3; ++k) delta[k] = -backstop * normal[k];
-            }
-        }
-    } else {
-        double inward = -dot3(delta, normal) - backstop;
-        if (inward <= 0.0 && dot3(delta, delta) <= travel * travel) return;
-        if (inward > 0.0) {
-            for (int k = 0; k < 3; ++k) delta[k] += inward * normal[k];
-        }
-    }
-    double length = sqrt(dot3(delta, delta));
-    if (length > travel) {
-        for (int k = 0; k < 3; ++k) delta[k] *= travel / length;
-    }
-
-    /* Float world coordinates can round a boundary point outside either limit. Only then
-       move toward a point strictly inside both bounds; the anchor is always representable. */
-    for (double bias = 0.0; bias < 1.0; bias = bias == 0.0 ? 1e-6 : bias * 16.0) {
-        double actual[3];
-        for (int k = 0; k < 3; ++k) {
-            double offset = delta[k] + bias * (0.5 * travel * normal[k] - delta[k]);
-            x[k] = (float)((double)anchor[k] + offset);
-            actual[k] = (double)x[k] - (double)anchor[k];
-        }
-        bool back_ok = true;
-        if (bs_r > 0.0) {
-            double shift = bs_r + backstop;
-            double rel[3] = {actual[0] + shift * normal[0], actual[1] + shift * normal[1], actual[2] + shift * normal[2]};
-            back_ok = dot3(rel, rel) >= bs_r * bs_r;
-        } else {
-            back_ok = dot3(actual, normal) >= -backstop;
-        }
-        if (dot3(actual, actual) <= travel * travel && back_ok) return;
-    }
-    memcpy(x, anchor, 3 * sizeof *x);
-}
-
 static float reset_support_weight(const float point[3], const ClothMaterial *m, const ClothCapsule *body,
                                   int count, float range) {
     float reach = 0.0F;
     for (int i = 0; i < count; ++i) {
-        if (body[i].flags != CLOTH_COLLIDER_INSIDE || !capsule_active(m, &body[i])) continue;
+        if (body[i].flags != CLOTH_COLLIDER_INSIDE) continue;
         vec3 normal;
         float depth = cloth_point_capsule_contact(point, &body[i], m->thickness + range, normal, NULL);
         reach = fmaxf(reach, depth);
@@ -1448,7 +1272,7 @@ static void reset_contact_pose(ClothState *s, const ClothMesh *mesh, const Cloth
         bool hit = false;
         for (int pass = 0; pass < 2; ++pass) {
             for (int c = 0; c < count; ++c) {
-                if (!capsule_active(m, body + c) || body[c].flags != CLOTH_COLLIDER_INSIDE) continue;
+                if (body[c].flags != CLOTH_COLLIDER_INSIDE) continue;
                 vec3 cn;
                 if (depenetrate_reset_vertex(s->x[v], gn, pcnt > 0, parent_avg, body + c, m->thickness, cn)) {
                     glm_vec3_add(cn_sum, cn, cn_sum);
@@ -1473,7 +1297,7 @@ static void reset_contact_pose(ClothState *s, const ClothMesh *mesh, const Cloth
                     float slide = sqrtf(fmaxf(0.0F, parent_rest_len * parent_rest_len - cur_len * cur_len));
                     glm_vec3_muladds(tang, slide, s->x[v]);
                     for (int c = 0; c < count; ++c) {
-                        if (!capsule_active(m, body + c) || body[c].flags != CLOTH_COLLIDER_INSIDE) continue;
+                        if (body[c].flags != CLOTH_COLLIDER_INSIDE) continue;
                         vec3 cn2;
                         depenetrate_reset_vertex(s->x[v], gn, true, parent_avg, body + c, m->thickness, cn2);
                     }
@@ -1502,12 +1326,6 @@ static void reset_contact_pose(ClothState *s, const ClothMesh *mesh, const Cloth
         project_body(s, mesh, m, s->x, guide, body, &w->bp, NULL, 1.0F, true, NULL);
         project_support(s, mesh, support, m->thickness, NULL, 0.0F, NULL);
     }
-}
-
-bool cloth_reset_over_body(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
-                           const float anchors[][3], const ClothGuide *guide,
-                           const ClothCapsule *body, int count) {
-    return cloth_reset_supported(s, mesh, m, anchors, guide, body, count, NULL);
 }
 
 bool cloth_reset_supported(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
@@ -1549,12 +1367,6 @@ bool cloth_reset_supported(ClothState *s, const ClothMesh *mesh, const ClothMate
     return true;
 }
 
-void cloth_step_shaped(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,
-                       const float anchors[][3], const ClothGuide *guide, const ClothCapsule *body, int count) {
-    const ClothFrame frame = {.strict_guide = true};
-    cloth_step_framed(s, mesh, m, dt, guide ? &frame : NULL, anchors, guide, body, count);
-}
-
 ClothMetrics cloth_measure(const ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,
                            const float anchors[][3], const ClothCapsule *body, int count) {
     if (!s || !s->frame_valid || s->mesh != mesh || !cloth_frame_valid(mesh, m, dt, anchors, NULL, body, count)) return (ClothMetrics){0};
@@ -1572,7 +1384,6 @@ ClothMetrics cloth_measure(const ClothState *s, const ClothMesh *mesh, const Clo
     for (int j = 0; j < mesh->faces; ++j) {
         const ClothFace face = mesh->face[j];
         for (int i = 0; i < count; ++i) {
-            if (!capsule_active(m, body + i)) continue;
             vec3 weights, normal;
             out.penetration = fmaxf(out.penetration, cloth_face_contact(s->x[face.a], s->x[face.b], s->x[face.c],
                                                                         body + i, m->thickness, weights, normal));

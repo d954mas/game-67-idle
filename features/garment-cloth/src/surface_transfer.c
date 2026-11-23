@@ -1,4 +1,4 @@
-#include "garment/render_binding.h"
+#include "garment/surface_transfer.h"
 
 #include <math.h>
 #include <string.h>
@@ -224,36 +224,6 @@ bool cloth_vertex_quats_eval(const ClothMesh *mesh, const ClothVertexBasis basis
         o[9] = q[3];
         o[10] = 0.0F;
         o[11] = 0.0F;
-    }
-    return true;
-}
-
-bool cloth_vertex_frames_eval(const ClothMesh *mesh, const ClothVertexBasis basis[CLOTH_VERTICES],
-                              const float posed[][3], float out_mat34[][12]) {
-    if (!mesh || !basis || !posed || !out_mat34 ||
-        mesh->vertices < 3 || mesh->vertices > CLOTH_VERTICES) return false;
-
-    float (*normals)[3] = work.normals;
-    if (!vertex_normals(mesh, posed, normals)) return false;
-
-    for (int i = 0; i < mesh->vertices; ++i) {
-        int nb = basis[i].ref_neighbor;
-        if (nb < 0 || nb >= mesh->vertices) return false;
-        float r_curr[3][3];
-        build_frame(posed[i], posed[nb], normals[i], r_curr);
-        /* M = R_curr * R_0^T; translation = posed[i] - M * p0. */
-        float *m = out_mat34[i];
-        for (int row = 0; row < 3; ++row) {
-            float tx = posed[i][row];
-            for (int col = 0; col < 3; ++col) {
-                float val = r_curr[row][0] * basis[i].r0_t[0][col] +
-                            r_curr[row][1] * basis[i].r0_t[1][col] +
-                            r_curr[row][2] * basis[i].r0_t[2][col];
-                m[row * 4 + col] = val;
-                tx -= val * basis[i].p0[col];
-            }
-            m[row * 4 + 3] = tx;
-        }
     }
     return true;
 }

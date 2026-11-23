@@ -2,48 +2,6 @@
 import numpy as np
 
 
-def fold_rest_agreements(points, faces, bindings):
-    """Reference agreement between each support face and its local rest surface."""
-    p, triangles = np.asarray(points, dtype=float), np.asarray(faces)
-    if (p.ndim != 2 or p.shape[1] != 3 or not np.isfinite(p).all()
-            or triangles.ndim != 2 or triangles.shape[1] != 3 or not len(triangles)
-            or not np.issubdtype(triangles.dtype, np.integer)
-            or np.any(triangles < 0) or np.any(triangles >= len(p))):
-        raise ValueError("invalid rest proxy")
-    a, b, c = p[triangles].transpose(1, 0, 2)
-    ab, ac, bc = b-a, c-a, c-b
-    area = np.cross(ab, ac)
-    area2 = np.einsum("ij,ij->i", area, area)
-    span2 = np.maximum.reduce([np.einsum("ij,ij->i", edge, edge) for edge in (ab, ac, bc)])
-    if not np.isfinite(area2).all() or not np.isfinite(span2).all():
-        raise ValueError("invalid rest binding triangle")
-    collapsed = area2 <= 1e-14 * span2**2
-    area[collapsed] = 0
-    lengths = np.sqrt(np.where(collapsed, 0, area2))
-    fn = np.zeros_like(area)
-    np.divide(area, lengths[:, None], out=fn, where=~collapsed[:, None])
-    vn = np.zeros_like(p)
-    incident_areas = np.zeros(len(p))
-    for indices in triangles.T:
-        np.add.at(vn, indices, area)
-        np.add.at(incident_areas, indices, lengths)
-    np.divide(vn, incident_areas[:, None], out=vn, where=incident_areas[:, None] > 0)
-
-    rows = np.asarray(bindings, dtype=float)
-    if rows.shape in ((0,), (0, 4)):
-        return np.empty(0)
-    if (rows.ndim != 2 or rows.shape[1] != 4 or not np.isfinite(rows).all()
-            or np.any(rows[:, 0] != np.floor(rows[:, 0]))
-            or np.any(rows[:, 0] < 0) or np.any(rows[:, 0] >= len(triangles))):
-        raise ValueError("invalid render binding")
-    face = rows[:, 0].astype(int)
-    u, v = rows[:, 1], rows[:, 2]
-    bary = np.maximum(np.stack((1-u-v, u, v), axis=1), 0)
-    smooth = np.einsum("ij,ijk->ik", bary, vn[triangles[face]])
-    dot = np.einsum("ij,ij->i", smooth, fn[face])
-    return np.clip(dot / bary.sum(axis=1), -1, 1)
-
-
 def bind_surface(points, faces, render_points, max_distance, *, face_candidates=None):
     """Optional face index lists per render vertex disambiguate coincident seam lips or garment layers."""
     p, target = np.asarray(points, dtype=float), np.asarray(render_points, dtype=float)

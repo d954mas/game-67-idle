@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-add_library(garment_cloth STATIC src/cloth.c src/contact.c src/pose.c src/render_binding.c src/surface_transfer.c src/debug.c src/actor.c)
+add_library(garment_cloth STATIC src/cloth.c src/contact.c src/surface_transfer.c src/debug.c src/actor.c)
 target_include_directories(garment_cloth PUBLIC include)
 target_compile_definitions(garment_cloth PUBLIC FEATURE_GARMENT_CLOTH=1)
 target_compile_features(garment_cloth PUBLIC c_std_11)

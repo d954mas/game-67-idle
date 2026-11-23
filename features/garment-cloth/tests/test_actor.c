@@ -93,7 +93,7 @@ static void test_shared_asset_instances_keep_their_own_pins_contacts_and_inspect
             const int fps = i == 0 ? 30 : 60;
             if (i == 0 && frame % 2 != 0) continue;
             poses[i][1].r[0][3] = offsets[i] * (float)frame / 60.0F;
-            TEST_ASSERT_TRUE(garment_actor_update(&actors[i], &set, &rig, poses[i], world, frame ? 1.0F / (float)fps : 0, true));
+            TEST_ASSERT_TRUE(garment_actor_update(&actors[i], &set, &rig, poses[i], world, frame ? 1.0F / (float)fps : 0, true, NULL));
         }
     }
     for (int i = 0; i < 2; ++i) {
@@ -125,8 +125,8 @@ static void test_world_support_applies_only_to_the_wearer_above_its_finite_face(
     pose[1].r[0][3] = 3.0F;
     for (int frame = 0; frame < 10; ++frame) {
         float elapsed = frame ? 1.0F / 60.0F : 0.0F;
-        TEST_ASSERT_TRUE(garment_actor_update_supported(&actors[0], &set, &rig, pose, transform, elapsed, true, &face));
-        TEST_ASSERT_TRUE(garment_actor_update(&actors[1], &set, &rig, pose, transform, elapsed, true));
+        TEST_ASSERT_TRUE(garment_actor_update(&actors[0], &set, &rig, pose, transform, elapsed, true, &face));
+        TEST_ASSERT_TRUE(garment_actor_update(&actors[1], &set, &rig, pose, transform, elapsed, true, NULL));
         const float *p = actors[0].palette[2].r[0];
         TEST_ASSERT_TRUE(0.18F * (p[1] - 1.1F) + 0.12F * p[2] >= -1e-5F);
         for (int axis = 0; axis < 3; ++axis)

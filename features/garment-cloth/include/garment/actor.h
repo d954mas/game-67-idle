@@ -2,7 +2,7 @@
 #define GARMENT_ACTOR_H
 
 #include "garment/cloth.h"
-#include "garment/render_binding.h"
+#include "garment/surface_transfer.h"
 #include "garment/debug.h"
 #include "skeletal/nt_skeletal.h"
 
@@ -20,7 +20,7 @@ typedef struct {
 } GarmentBone;
 typedef struct {
     uint16_t bone[4];
-    float weight[4], normal[3], travel_m, backstop_m, backstop_radius_m;
+    float weight[4], normal[3], travel_m, backstop_m;
 } GarmentVertex;
 typedef struct {
     uint16_t bone_a, bone_b;
@@ -68,12 +68,10 @@ typedef struct {
 enum { GARMENT_SIM_HZ = 180, GARMENT_MAX_SUBSTEPS = GARMENT_SIM_HZ / 15 };
 void garment_actor_clear(GarmentActor *actor);
 bool garment_actor_prepare(GarmentActor *actor, const GarmentSet *set, const nt_skeletal_skeleton_t *skel);
+/* The caller owns the world-space face for this call, including the initial or teleport reset; NULL is none. */
 bool garment_actor_update(GarmentActor *actor, const GarmentSet *set, const nt_skeletal_skeleton_t *skel,
-                          const nt_skeletal_mat34_t *pose, const float world[16], float dt, bool render);
-/* The caller owns the world-space face for this call, including the initial or teleport reset. */
-bool garment_actor_update_supported(GarmentActor *actor, const GarmentSet *set, const nt_skeletal_skeleton_t *skel,
-                                    const nt_skeletal_mat34_t *pose, const float world[16], float dt, bool render,
-                                    const ClothSupport *world_support);
+                          const nt_skeletal_mat34_t *pose, const float world[16], float dt, bool render,
+                          const ClothSupport *world_support);
 
 /* A negative weight_joint selects the AnimDrive mask; other values are skeleton joint indices. */
 bool garment_actor_debug_lines(const GarmentActor *actor, const nt_skeletal_skeleton_t *skel,

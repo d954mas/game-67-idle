@@ -210,8 +210,7 @@ possibility, not a feature.
   `shadow-cascades/README.md` + `shadow-cascades/INSTALL.md`.
 - [Garment cloth](garment-cloth/README.md) (`L0`, `1.3.0`) simulates an
   authored triangle proxy with XPBD stretch and signed bending, skeletal
-  motion limits and capsule contacts. Optional masks apply local corrections
-  from live joint angles or distances. [Install and cook a mesh](garment-cloth/INSTALL.md).
+  motion limits and capsule contacts. [Install and cook a mesh](garment-cloth/INSTALL.md).
 - [Net bits](net-bits/README.md) (`L0`, `0.1.0`, opt-in): a bit-level codec
   for game state from untrusted peers: whole numbers in a range, reals on a
   grid within half a step, smallest-three rotations with a stated error bound,

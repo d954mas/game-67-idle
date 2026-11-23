@@ -158,7 +158,6 @@ static bool sample_frame_local(const GarmentAsset *g, const GarmentPiece *s, con
             return false;
         f->guide[i].travel = v->travel_m;
         f->guide[i].backstop = v->backstop_m;
-        f->guide[i].backstop_radius = v->backstop_radius_m;
     }
     for (int i = 0; i < g->collider_count; ++i) {
         const GarmentCollider *c = &g->colliders[i];
@@ -368,9 +367,6 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
             .angular_accel_y = yaw_accel,
             .linear_inertia = g->linear_inertia,
             .angular_inertia = g->angular_inertia,
-            .max_fictitious_accel = 28.0F,
-            .floor_y = 0.0F,
-            .floor_enabled = true,
             .suppress_anim_drive = scratch.current.cap_count > g->collider_count,
             .support = world_support ? &support : NULL
         };
@@ -389,8 +385,8 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
             }
             float dy = pin_count ? (curr_pin_y - prev_pin_y) / (float)pin_count : 0.0F;
             frame.anchor_shift_y = g->downward_follow * fminf(dy, 0.0F);
-            cloth_step_framed(&s->cloth, g->mesh, &g->material, step, &frame, scratch.step.anchors,
-                              scratch.step.guide, scratch.step.caps, scratch.step.cap_count);
+            cloth_step(&s->cloth, g->mesh, &g->material, step, &frame, scratch.step.anchors,
+                       scratch.step.guide, scratch.step.caps, scratch.step.cap_count);
             memcpy(s->sim_anchors, scratch.step.anchors, bytes);
             if (!s->cloth.frame_valid)
                 break;
@@ -440,13 +436,8 @@ static bool prepare_vertex_frames(GarmentActor *a) {
 }
 
 bool garment_actor_update(GarmentActor *a, const GarmentSet *set, const nt_skeletal_skeleton_t *skel,
-                          const nt_skeletal_mat34_t *pose, const float transform[16], float dt, bool render) {
-    return garment_actor_update_supported(a, set, skel, pose, transform, dt, render, NULL);
-}
-
-bool garment_actor_update_supported(GarmentActor *a, const GarmentSet *set, const nt_skeletal_skeleton_t *skel,
-                                    const nt_skeletal_mat34_t *pose, const float transform[16], float dt, bool render,
-                                    const ClothSupport *world_support) {
+                          const nt_skeletal_mat34_t *pose, const float transform[16], float dt, bool render,
+                          const ClothSupport *world_support) {
     if (!simulate(a, set, skel, pose, transform, dt, world_support)) return false;
     if (!render) return true;
     if (!prepare_vertex_frames(a)) return false;
@@ -513,11 +504,7 @@ bool garment_actor_debug_lines(const GarmentActor *actor, const nt_skeletal_skel
         if (layers & CLOTH_DEBUG_TETHERS)
             cloth_debug_mesh(asset->mesh, piece->cloth.x, NULL, CLOTH_DEBUG_TETHERS, emit, user);
         if (layers & CLOTH_DEBUG_CAPSULES) {
-            for (int i = 0; i < piece->sim_cap_count; ++i) {
-                const ClothCapsule *cap = &piece->sim_caps[i];
-                if (asset->material.collider_mask && cap->mask && !(asset->material.collider_mask & cap->mask)) continue;
-                cloth_debug_capsule(cap, emit, user);
-            }
+            for (int i = 0; i < piece->sim_cap_count; ++i) cloth_debug_capsule(&piece->sim_caps[i], emit, user);
         }
     }
     return true;
