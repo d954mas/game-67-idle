@@ -1805,6 +1805,97 @@ static void test_a_creeping_pile_stays_in_the_rest_hold(void) {
     TEST_ASSERT_TRUE_MESSAGE(left, "an owner moving past the creep bound kept its copy in the rest hold");
 }
 
+/* A host's copy resting against this guest's own body, the two pictures of their contact a few
+   millimetres apart (each world settled its pile its own way, and the copy grid rounds both), is
+   a resting contact, not an overlap: the copy stays in the rest hold and nothing places it. Both
+   pictures are held still, as a pile pins them. The disagreement, 4 mm, is under Box3D's linear
+   slop (5 mm) and over the slop's share of a cube's face when the cube's corners are pulled in by
+   it (5 mm / sqrt(3), 2.9 mm); the owner's pose sits on the copy grid, so the copy plays it
+   exactly. A placement moves the render offset by at least 2 mm in a tick (the pull's own steps
+   are slower and the offset decays). */
+static float kinematic_depth_in(b3BodyId body);
+static void test_a_copy_resting_against_this_sides_body_stays_in_the_rest_hold(void) {
+    const uint32_t mine = 2, copy = 3;
+    const float d = 0.004f;
+    settle_interaction();
+    hand(&guest, 1, 2.0f, 0.6f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.0f});
+    TEST_ASSERT_TRUE(tick_until_local(&guest, mine, 60)); /* taken by interaction: no holder */
+    put_away(&guest, 1);
+    lose_guest_fates = true; /* she keeps it */
+    const b3Vec3 owner = {2.0f + 203.0f / 512.0f, 0.2f, -1.5f}, at = {owner.x - 0.4f + d, 0.2f, -1.5f};
+    const b3Vec3 still = {0.0f, 0.0f, 0.0f};
+    float prev = 0.0f, deepest = 0.0f;
+    int placements = 0, soft = 0;
+    for (int i = 0; i < 180; i++) {
+        tick_no++;
+        b3Body_SetTransform(host.bodies[copy], owner, b3Quat_identity);
+        b3Body_SetLinearVelocity(host.bodies[copy], still);
+        b3Body_SetAngularVelocity(host.bodies[copy], still);
+        step(&host);
+        /* Her body is held before her apply, as a game that moved it, and again before her step. */
+        b3Body_SetTransform(guest.bodies[mine], at, b3Quat_identity);
+        body_sync_apply(guest.sync, tick_no);
+        b3Body_SetTransform(guest.bodies[mine], at, b3Quat_identity);
+        b3Body_SetLinearVelocity(guest.bodies[mine], still);
+        b3Body_SetAngularVelocity(guest.bodies[mine], still);
+        b3World_Step(guest.world, 1.0f / 60.0f, 4);
+        body_sync_collect(guest.sync, tick_no);
+        step(&other);
+        state(&host, &guest);
+        state(&guest, &host);
+        records(&guest, &host);
+        records(&host, &guest);
+        if (i < 60) {
+            continue; /* the owner's jump to its pose, its stillness and the playback delay */
+        }
+        float offset[3], spin[4];
+        float now = body_sync_render_offset(guest.sync, id_of(copy), offset, spin) ? sqrtf(offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2]) : 0.0f;
+        placements += i > 60 && now - prev >= 0.002f ? 1 : 0;
+        prev = now;
+        soft += body_sync_is_predicted(guest.sync, id_of(copy)) ? 1 : 0;
+        deepest = fmaxf(deepest, kinematic_depth_in(guest.bodies[mine]));
+    }
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_is_local(guest.sync, id_of(mine)), "she gave her body back: the case is not met");
+    char what[96];
+    snprintf(what, sizeof(what), "the copy left the rest hold for %d ticks and was placed %d times", soft, placements);
+    TEST_ASSERT_TRUE_MESSAGE(soft == 0 && placements == 0, what);
+    /* Held kinematic, the copy shows the depth Box3D sees: the case's. */
+    TEST_ASSERT_TRUE_MESSAGE(deepest > B3_LINEAR_SLOP / sqrtf(3.0f) && deepest <= B3_LINEAR_SLOP, "the copy never rested that deep in her body: the case is not met");
+}
+
+/* A copy her held box lies on is leaned on: soft while its owner rests, out of the rest hold. Left
+   1.95 degrees off its owner, inside the dead zone, it would rest there, and a copy record's
+   rotation error (net_bits_quat_error(9), 0.0097 rad) on top would pass the stand's 2 degrees
+   at rest. It ends within 2 degrees less that error. */
+static void test_a_leaned_copy_at_rest_closes_its_turn(void) {
+    const uint32_t copy = 0, mine = 1;
+    const float limit = 2.0f * 3.14159265f / 180.0f, wire = 0.0097f, off = 1.95f * 3.14159265f / 180.0f;
+    layer_on();
+    place_everywhere(copy, 4.0f, 0.2f, -1.5f);
+    place_everywhere(mine, 4.0f, 0.6f, -1.5f);
+    for (int i = 0; i < 90; i++) {
+        tick_all();
+    }
+    grant(&guest, id_of(mine), BODY_SYNC_HOLD_UNTIL_RELEASE);
+    for (int i = 0; i < 60; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_is_predicted(guest.sync, id_of(copy)), "her box does not lean on the copy: the case is not met");
+    b3Body_SetTransform(guest.bodies[copy], b3Body_GetPosition(guest.bodies[copy]), (b3Quat){{0.0f, sinf(0.5f * off), 0.0f}, cosf(0.5f * off)});
+    for (int i = 0; i < 240; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_is_predicted(guest.sync, id_of(copy)), "the lean ended: the case is not met");
+    b3Quat a = b3Body_GetRotation(guest.bodies[copy]), b = b3Body_GetRotation(host.bodies[copy]);
+    float qa[4] = {a.v.x, a.v.y, a.v.z, a.s}, qb[4] = {b.v.x, b.v.y, b.v.z, b.s}, turn[3];
+    sync_turn_between(qa, qb, turn);
+    float angle = sqrtf(turn[0] * turn[0] + turn[1] * turn[1] + turn[2] * turn[2]);
+    char what[80];
+    snprintf(what, sizeof(what), "the leaned copy rests %.4f rad off its owner", (double)angle);
+    TEST_ASSERT_TRUE_MESSAGE(angle <= limit - wire, what);
+}
+
 /* A guest that never hears the host hold its rest pose keeps the body; it returns once it does. */
 static void test_a_return_waits_for_the_hosts_acknowledgement(void) {
     settle_interaction();
@@ -2563,6 +2654,8 @@ int main(void) {
     RUN_TEST(test_a_take_keeps_the_copys_pose);
     RUN_TEST(test_a_taken_body_never_goes_out_kinematic);
     RUN_TEST(test_a_creeping_pile_stays_in_the_rest_hold);
+    RUN_TEST(test_a_copy_resting_against_this_sides_body_stays_in_the_rest_hold);
+    RUN_TEST(test_a_leaned_copy_at_rest_closes_its_turn);
     RUN_TEST(test_a_return_waits_for_the_hosts_acknowledgement);
     RUN_TEST(test_the_hosts_character_is_stopped_by_a_guests_body);
     RUN_TEST(test_a_state_from_before_the_grant_is_dropped);

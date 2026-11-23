@@ -434,7 +434,7 @@ static void test_json_is_complete_and_repeatable(void) {
 static void test_catalog_validates_and_broken_scenes_are_refused(void) {
     uint32_t count = 0;
     const body_sync_scene_entry_t *catalog = body_sync_scene_catalog(&count);
-    TEST_ASSERT_EQUAL_UINT32(10, count);
+    TEST_ASSERT_EQUAL_UINT32(11, count);
     body_sync_error_t error;
     for (uint32_t i = 0; i < count; i++) {
         catalog[i].build(&scene);

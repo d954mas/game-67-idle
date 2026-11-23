@@ -133,8 +133,9 @@ void sync_soft_decide(sync_soft_t *s, const sync_soft_in_t *now, bool hit, const
         if (!touched) {
             s->chain = 0;
         }
-        bool outside = distance > SYNC_SOFT_DEAD_M || angle > SYNC_SOFT_DEAD_RAD;
-        bool inside_half = distance < 0.5f * SYNC_SOFT_DEAD_M && angle < 0.5f * SYNC_SOFT_DEAD_RAD;
+        float dead_rad = now->owner_rests ? SYNC_SOFT_REST_RAD : SYNC_SOFT_DEAD_RAD;
+        bool outside = distance > SYNC_SOFT_DEAD_M || angle > dead_rad;
+        bool inside_half = distance < 0.5f * SYNC_SOFT_DEAD_M && angle < 0.5f * dead_rad;
         bool was = s->correcting;
         s->correcting = s->correcting ? !inside_half : outside;
         /* A copy pressed by this side's body is not pinned: its stall waits while the press lasts. */

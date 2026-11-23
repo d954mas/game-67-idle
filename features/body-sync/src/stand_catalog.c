@@ -233,6 +233,20 @@ static void build_load300(body_sync_scene_t *s) {
     add_player(s, 4.0f, 4.0f, -2.3561945f);
 }
 
+/* A runner's lane to the wall, a light crate across it near the wall and a ball for a thrower
+   north of the lane: the ball sent along the crate's width clears the lane; a runner who meets the
+   crate first pins it to the wall and stops its depth (0.8 m) short. */
+static void build_wall_plank(body_sync_scene_t *s) {
+    body_sync_scene_reset(s, "wall_plank");
+    add_floor(s);
+    uint32_t wall = add_box(s, "wall", 0.25f, 1.5f, 4.0f, 0.0f, 6.0f, 1.5f, 0.0f, 0, 2);
+    s->bodies[wall].motion = BODY_SYNC_MOTION_STATIC;
+    add_box(s, "plank", 0.4f, 0.4f, 0.5f, 3.0f, 4.9f, 0.4f, 0.0f, BODY_SYNC_BODY_GRABBABLE, 3);
+    add_sphere(s, "ball", 0.15f, 8.0f, 4.95f, 0.15f, 2.2f, BODY_SYNC_BODY_GRABBABLE, 5);
+    add_player(s, -2.0f, 0.0f, HALF_PI);
+    add_player(s, 4.95f, 2.9f, 2.0f * HALF_PI);
+}
+
 static const body_sync_scene_entry_t catalog[] = {
     {"floor_wall", "floor and wall with one body: bounce, fast throw, tunnelling", build_floor_wall},
     {"stack10", "a stack of 10 boxes: rest, divergence, jitter", build_stack10},
@@ -244,6 +258,7 @@ static const body_sync_scene_entry_t catalog[] = {
     {"load300", "300 bodies and four players: the load ceiling", build_load300},
     {"wall_boxes", "floor and wall, a crate and six light boxes at the wall's foot: a bounce into light bodies", build_wall_boxes},
     {"pile60_four", "pile60 with four players and two balls: two throws at once and a runner", build_pile60_four},
+    {"wall_plank", "a crate across a runner's lane to a wall and a ball to clear it: a late throw leaves her debris", build_wall_plank},
 };
 
 const body_sync_scene_entry_t *body_sync_scene_catalog(uint32_t *count) {

@@ -418,8 +418,11 @@ A soft copy is steered to the owner's playback pose:
   strikes this side's character instead of passing through her.
 - **No overlap.** A driven copy is never placed or swept onto a pose that
   lies inside a body this side simulates deeper than Box3D's linear slop
-  (shape against shape, where the two collide): that step it stays soft, the
-  contact parts them, and it is driven again once its pose is clear.
+  (shape against shape, where the two collide), the depth Box3D's contact
+  manifold reports: that step it stays soft, the contact parts them, and it
+  is driven again once its pose is clear. A copy resting against that body,
+  the two pictures of their contact a few millimetres apart, is no overlap
+  and stays in the rest hold.
 
 Going back to the rest hold inside the dead zone sets the copy on the pose
 exactly; further off it is placed and the offset takes it. The layer never
@@ -641,9 +644,17 @@ tick by tick from its start. At every tick the walk must be no more than 0.2 m
 where L is what the network may hold back of what the walker meets: two of the
 run's slowest one-way paths (another guest's body crosses to the host and on to
 her), her playback delay at most (15 ticks), and the longest cut, stall or deaf
-spell. A runner pushing chairs into a wall does so in the reference too; a copy
-that stops her where the reference's body gave way fails (planted in
-`test_body_sync_checks`: her copies of the pile's near face held kinematic). An
+spell. What the others do reaches her world up to L ticks late, and a body met
+later is met elsewhere on her path: a guest's throw the host plays late can
+leave debris in her way that the same throw on time had cleared, or line chairs
+up against a wall that it would have piled over. So the reference is run with
+every other player acting 0, 1, ... L ticks late, and the walk passes when it
+keeps pace with one of them (`wall_plank`: a ball that clears a crate from her
+lane on time, cut off long enough that she pins the crate to the wall first;
+held to the on-time reference alone it fails). A runner pushing chairs into a
+wall does so in the reference too; a copy that stops her where every
+reference's body gave way fails (planted in `test_body_sync_checks`: her copies
+of the pile's near face held kinematic). An
 absolute `expect result <walk> done` stays where it is derived, a free walk. The whole of `scenarios/edge_throw_cut.scn`:
 
 ```text
@@ -784,21 +795,24 @@ in time and shows in `jerk`. A guest's body relayed to another guest plays on
 a clock the stand cannot map back and is left out of them.
 
 **The lag-aligned gap** (`aligned_gap.max`, `.p95`) compares two pictures of one
-moment while a body moves: a copy, predicted or not, in its pause or past it,
-against what its owner drew at the owner tick the copy shows. Its bound is
-derived: the snap keeps a copy within 1 m of that pose, paused or not, and its
-render offset adds at most 2 m, so 3 m. Against the host at the guest's moment a
-copy would be off by its speed times the round trip and two delays however true
-it plays. `prediction_gap` (max, p95; reported only, no check) compares a
-predicted copy in its pause, the guest's own answer to its touch
-(`body_sync_is_pull_paused`), with the host's picture when the host shows that
-guest's moment (its playback of the guest's character reaches the guest's tick),
-for a pause that began with the host's body at rest at the tick the copy showed
-then. Both sides simulate one contact from one rest pose; past it they differ by
-chaos, not lateness, and no bound derives that. A pause that began while its
-owner moved the body, or on another guest's body (a relayed clock, and each side
-meets that guest's motion at its own stage: 3.06 m on a random three-participant
-pile at 300 ms), has no shared moment and is measured only at the playback tick.
+moment while a body moves: a copy, and a predicted copy once its pull runs (the
+pull steers it to the playback pose), against what its owner drew at the owner
+tick the copy shows. Its bound is derived: the snap keeps a copy within 1 m of
+that pose and its render offset adds at most 2 m, so 3 m. Against the host at the
+guest's moment a copy would be off by its speed times the round trip and two
+delays however true it plays. A predicted copy in its pause
+(`body_sync_is_pull_paused`) is the guest's own answer to its touch, drawn ahead
+of the tick it plays; read there, its lead would count as an error the player
+never sees, so it leaves the gap for two reported-only figures (max, p95; no
+check). `prediction_gap` takes a pause that began with the host's body at rest at
+the tick the copy showed then, against the host's picture when the host shows
+that guest's moment (its playback of the guest's character reaches the guest's
+tick). Both sides simulate one contact from one rest pose; past it they differ by
+chaos, not lateness, and no bound derives that. `flight_pause_gap` takes a pause
+that began while its owner moved the body, which has no shared moment, against
+the owner at the playback tick, its lead included. Another guest's body (a
+relayed clock, and each side meets that guest's motion at its own stage: 3.06 m
+on a random three-participant pile at 300 ms) is in none of the three.
 A copy with nothing to play (one just turned back from
 local, before its owner's first state since) is not measured. It is the policies' common measure: same-tick divergence
 (and `pause_divergence`) counts the shower's latency, which under authority

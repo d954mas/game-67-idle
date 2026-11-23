@@ -190,6 +190,7 @@ struct body_sync_stand {
     float light_mass;
     uint32_t plant_shift; /* stand_testing_plant_shift */
     float plant_drift;    /* stand_testing_plant_drift */
+    float plant_lead;     /* stand_testing_plant_lead */
     uint32_t plant_jolt_tick; /* stand_testing_plant_jolt; 0 none */
     float plant_jolt_m;
     bool plant_jolt_local;
@@ -221,13 +222,17 @@ struct body_sync_stand {
     uint32_t rest_tick;
     bool started;
     float start_position[STAND_BODIES_MAX][3]; /* the host's, at the first tick: `expect moved` */
-    /* `expect pace`: the reference run, the host's world alone with every player local and no
-       network; and per check, the walk's progress (its start distance less the nearest it came)
-       by tick since it started, on this run and on the reference. */
+    /* `expect pace`: a reference run is the host's world alone with every player local and no
+       network, the players other than `ref_walker` acting `ref_shift` ticks late; per check, the
+       walk's progress (its start distance less the nearest it came) by tick since it started. */
     bool local;
-    bool pace_built;
-    float *pace[BODY_SYNC_SCENARIO_EXPECTS_MAX], *pace_ref[BODY_SYNC_SCENARIO_EXPECTS_MAX];
-    uint32_t pace_len[BODY_SYNC_SCENARIO_EXPECTS_MAX], pace_ref_len[BODY_SYNC_SCENARIO_EXPECTS_MAX];
+    uint32_t ref_shift;
+    uint8_t ref_walker;
+    bool plant_pace_on_time; /* stand_testing_plant_pace_on_time */
+    float *pace[BODY_SYNC_SCENARIO_EXPECTS_MAX];
+    uint32_t pace_len[BODY_SYNC_SCENARIO_EXPECTS_MAX];
+    bool pace_checked[BODY_SYNC_SCENARIO_EXPECTS_MAX]; /* the ended run's verdict, kept: each costs up to lag + 1 reference runs */
+    body_sync_check_metrics_t pace_check[BODY_SYNC_SCENARIO_EXPECTS_MAX];
     bool pace_closed[BODY_SYNC_SCENARIO_EXPECTS_MAX]; /* its walk ended: the last sample is in */
     float pace_start[BODY_SYNC_SCENARIO_EXPECTS_MAX], pace_best[BODY_SYNC_SCENARIO_EXPECTS_MAX];
     float one_way_max_ms;  /* the slowest one-way path the run set, jitter and reordering included */
@@ -670,7 +675,11 @@ static void act_player(body_sync_stand_t *st, endpoint_t *ep, uint8_t player, ui
 
 static void act(body_sync_stand_t *st, endpoint_t *ep, uint32_t tick) {
     for (uint8_t p = 0; p < BODY_SYNC_ENDPOINTS_MAX; p++) {
-        act_player(st, ep, p, tick);
+        bool late = st->local && p != st->ref_walker;
+        if (late && tick < st->ref_shift) {
+            continue;
+        }
+        act_player(st, ep, p, late ? tick - st->ref_shift : tick);
     }
 }
 
@@ -1088,6 +1097,9 @@ static void record_drawn(const body_sync_stand_t *st, endpoint_t *ep, uint32_t k
         drawn_pose(ep, slot, at, rot);
         if (!is_host_ep(ep) && st->plant_drift != 0.0f && body_sync_is_local(ep->sync, id) && !s->character) {
             at[0] += st->plant_drift;
+        }
+        if (!is_host_ep(ep) && body_sync_is_predicted(ep->sync, id) && body_sync_is_pull_paused(ep->sync, id)) {
+            at[0] += st->plant_lead;
         }
         bool went_on = r->tag[(k - 1u) % RING_TICKS] == k; /* the tick before is recorded */
         r->tag[k % RING_TICKS] = k + 1u;
@@ -1807,14 +1819,15 @@ static void note_lost_takes(body_sync_stand_t *st) {
 }
 
 /* The lag-aligned gap: a copy E plays (on a guest the host's bodies, on the host a guest's),
-   predicted or not, paused or not, against what its owner O drew at the owner tick E shows. The
-   snap keeps its physics within 1 m of that pose, paused or not, and its render offset adds at
-   most 2 m. Bodies relayed between guests play on a clock the stand cannot map back and are left
-   out. The prediction gap: a predicted copy in a pause that began with its owner at rest, this
-   guest's own answer to its touch, against the host's picture when the host shows that guest's
-   moment (its playback of the guest's character reaches the guest's tick). Both simulate one
-   contact from one rest pose, so past it they differ by chaos, and it is reported only. A pause
-   that began on a moving owner, or on a third seat's body, has no such shared moment. */
+   predicted or not, against what its owner O drew at the owner tick E shows; the snap keeps its
+   physics within 1 m of that pose and its render offset adds at most 2 m. Bodies relayed between
+   guests play on a clock the stand cannot map back and are left out. A predicted copy in its pause
+   is this guest's own answer to its touch, drawn ahead of the tick it plays, so it leaves the gap
+   and is reported only. The prediction gap: a pause that began with its owner at rest, against
+   the host's picture when the host shows that guest's moment (its playback of the guest's
+   character reaches the guest's tick); both simulate one contact from one rest pose, so past it
+   they differ by chaos. A pause begun on a moving owner shares no such moment: the flight-pause
+   gap measures it at the playback tick, its lead included. */
 static void sample_aligned(body_sync_stand_t *st) {
     endpoint_t *host = &st->ep[0];
     for (uint32_t g = 1; g < st->endpoints; g++) {
@@ -1849,6 +1862,14 @@ static void sample_aligned(body_sync_stand_t *st) {
                     pose_of(e, slot, drawn, rot);
                 } else {
                     drawn_pose(e, slot, drawn, rot);
+                }
+                if (body_sync_is_predicted(e->sync, id) && body_sync_is_pull_paused(e->sync, id)) {
+                    drawn[0] += st->plant_lead;
+                    uint8_t pause = e->drawn_paused ? e->drawn_paused[(size_t)slot * RING_TICKS + e->ring_newest % RING_TICKS] : PAUSE_IN_FLIGHT;
+                    if (pause != PAUSE_FROM_REST) {
+                        stand_metrics_flight_pause(&st->metrics, g - 1u, (double)stand_distance3(drawn, truth));
+                    }
+                    continue;
                 }
                 stand_metrics_aligned(&st->metrics, g - 1u, (double)stand_distance3(drawn, truth));
             }
@@ -2525,62 +2546,102 @@ static uint32_t pace_lag_ticks(const body_sync_stand_t *st) {
 
 static body_sync_stand_t *create_stand(const body_sync_stand_config_t *config, bool local, body_sync_error_t *error);
 
-/* The reference for the pace checks, once the run has ended: the same scenario, seed and modes on
-   the host's world alone, every player's character local there, no network. */
-static void build_pace_ref(body_sync_stand_t *st) {
+/* A reference for pace check `i`, once the run has ended: the same scenario, seed and modes on the
+   host's world alone, every player's character local there, no network, and every player but the
+   walker acting `shift` ticks late. Returns its walk's progress, NULL when it never ran. */
+static float *pace_reference(body_sync_stand_t *st, uint32_t i, uint8_t walker, uint32_t shift, uint32_t *len) {
     body_sync_stand_config_t config = {.scene = &st->scene, .scenario = &st->scenario, .override_seed = true, .seed = st->seed,
                                        .override_light_mass = true, .light_mass_max = st->light_mass,
                                        .override_authority = true, .authority = st->authority};
     body_sync_error_t error;
     body_sync_stand_t *ref = create_stand(&config, true, &error);
-    st->pace_built = true;
+    *len = 0;
     if (!ref) {
-        return;
+        return NULL;
     }
+    ref->ref_walker = walker;
+    ref->ref_shift = shift;
     while (body_sync_stand_tick(ref)) {
     }
-    for (uint32_t i = 0; i < st->scenario.expect_count; i++) {
-        st->pace_ref[i] = ref->pace[i];
-        st->pace_ref_len[i] = ref->pace_len[i];
-        ref->pace[i] = NULL;
-    }
+    float *out = ref->pace[i];
+    *len = ref->pace_len[i];
+    ref->pace[i] = NULL;
     body_sync_stand_destroy(ref);
+    return out;
 }
 
-/* `expect pace`: at every tick of the walk, its progress is at least the reference's `lag` ticks
-   earlier, less the walk's arrival distance (within it a walk is done on either run). */
+static void check_pace_now(body_sync_stand_t *st, uint32_t i, const char *label, body_sync_check_metrics_t *c);
+
+/* `expect pace`: at every tick of the walk, its progress is at least a reference's `lag` ticks
+   earlier, less the walk's arrival distance (within it a walk is done on either run). What the
+   others do reaches the walker's world up to `lag` ticks late, and a body met later is met
+   elsewhere on her path: a throw the host plays a round trip late can leave debris in her way
+   that the same throw on time had cleared. So the walk keeps pace with one reference at least
+   among the others' delays 0..lag, tried at every tick; a copy that stops her where every one of
+   them gave way still fails. */
 static void check_pace(body_sync_stand_t *st, uint32_t i, body_sync_check_metrics_t *c) {
+    const char *label = st->scenario.expects[i].labels[0];
     if (!st->ended) {
         c->passed = false;
         c->value = -1.0;
-        snprintf(c->detail, sizeof(c->detail), "%s: the run has not ended", st->scenario.expects[i].labels[0]);
+        snprintf(c->detail, sizeof(c->detail), "%s: the run has not ended", label);
         return;
     }
-    if (!st->pace_built) {
-        build_pace_ref(st);
+    if (!st->pace_checked[i]) {
+        st->pace_checked[i] = true;
+        check_pace_now(st, i, label, &st->pace_check[i]);
     }
+    c->passed = st->pace_check[i].passed;
+    c->value = st->pace_check[i].value;
+    c->limit = st->pace_check[i].limit;
+    snprintf(c->detail, sizeof(c->detail), "%s", st->pace_check[i].detail);
+}
+
+static void check_pace_now(body_sync_stand_t *st, uint32_t i, const char *label, body_sync_check_metrics_t *c) {
     uint32_t lag = pace_lag_ticks(st);
     c->limit = (double)STAND_ARRIVE_M;
-    c->value = 0.0;
-    if (st->pace_ref_len[i] == 0 || st->pace_len[i] == 0) {
-        c->passed = false;
-        c->value = -1.0;
-        snprintf(c->detail, sizeof(c->detail), "%s: %s never started", st->scenario.expects[i].labels[0],
-                 st->pace_ref_len[i] == 0 ? "the reference run's walk" : "the walk");
+    c->value = -1.0;
+    c->passed = false;
+    int32_t index = label_index(st, label);
+    if (index < 0 || st->pace_len[i] == 0) {
+        snprintf(c->detail, sizeof(c->detail), "%s: the walk never started", label);
         return;
     }
-    uint32_t worst_at = 0;
-    for (uint32_t k = lag; k < st->pace_len[i]; k++) {
-        uint32_t r = k - lag < st->pace_ref_len[i] ? k - lag : st->pace_ref_len[i] - 1u;
-        double behind = (double)st->pace_ref[i][r] - (double)st->pace[i][k];
-        if (behind > c->value) {
-            c->value = behind;
-            worst_at = k;
-        }
+    uint8_t walker = st->scenario.actions[index].player;
+    bool others = false;
+    for (uint32_t a = 0; a < st->scenario.action_count; a++) {
+        others = others || st->scenario.actions[a].player != walker;
     }
-    c->passed = c->value <= c->limit;
-    snprintf(c->detail, sizeof(c->detail), "%s: %.3g m behind the reference %u ticks earlier, at tick %u of the walk", st->scenario.expects[i].labels[0],
-             c->value, lag, worst_at);
+    uint32_t last = others && !st->plant_pace_on_time ? lag : 0u, worst_at = 0, at_shift = 0;
+    for (uint32_t shift = 0; shift <= last && !c->passed; shift++) {
+        uint32_t ref_len;
+        float *ref = pace_reference(st, i, walker, shift, &ref_len);
+        if (ref && ref_len > 0) {
+            double value = 0.0;
+            uint32_t at = 0;
+            for (uint32_t k = lag; k < st->pace_len[i]; k++) {
+                uint32_t r = k - lag < ref_len ? k - lag : ref_len - 1u;
+                double behind = (double)ref[r] - (double)st->pace[i][k];
+                if (behind > value) {
+                    value = behind;
+                    at = k;
+                }
+            }
+            if (c->value < 0.0 || value < c->value) {
+                c->value = value;
+                worst_at = at;
+                at_shift = shift;
+            }
+            c->passed = c->value <= c->limit;
+        }
+        free(ref);
+    }
+    if (c->value < 0.0) {
+        snprintf(c->detail, sizeof(c->detail), "%s: the reference run's walk never started", label);
+        return;
+    }
+    snprintf(c->detail, sizeof(c->detail), "%s: %.3g m behind the reference %u ticks earlier (others %u ticks late), at tick %u of the walk", label,
+             c->value, lag, at_shift, worst_at);
 }
 
 static void evaluate(body_sync_stand_t *st) {
@@ -2796,7 +2857,6 @@ void body_sync_stand_destroy(body_sync_stand_t *st) {
     net_link_sim_destroy(st->sim);
     for (uint32_t i = 0; i < BODY_SYNC_SCENARIO_EXPECTS_MAX; i++) {
         free(st->pace[i]);
-        free(st->pace_ref[i]);
     }
     free(st);
 }
@@ -3082,6 +3142,9 @@ void stand_testing_mark_left(body_sync_stand_t *st, uint8_t seat) { mark_left(st
 
 void stand_testing_plant_shift(body_sync_stand_t *st, uint32_t ticks) { st->plant_shift = ticks; }
 void stand_testing_plant_drift(body_sync_stand_t *st, float metres) { st->plant_drift = metres; }
+void stand_testing_plant_lead(body_sync_stand_t *st, float metres) { st->plant_lead = metres; }
+void stand_testing_plant_pace_on_time(body_sync_stand_t *st) { st->plant_pace_on_time = true; }
+
 void stand_testing_plant_wall(body_sync_stand_t *st, uint32_t endpoint, const char *body) {
     uint32_t slot = body_sync_scene_find_body(&st->scene, body);
     st->plant_wall_endpoint = endpoint;

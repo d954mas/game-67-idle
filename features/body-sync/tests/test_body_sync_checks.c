@@ -310,6 +310,34 @@ static void test_aligned_gap_fails_on_a_guest_drawing_its_bodies_off_what_it_sen
     body_sync_stand_destroy(drifted);
 }
 
+/* A predicted copy in its pause is the guest's own answer to its touch, drawn ahead of the tick it
+   plays: the lead leaves aligned_gap as it was and shows in prediction_gap. The pile is the host's,
+   so the guest predicts it, and the ball's hit pauses copies at rest. The plant moves no body, so
+   the gap equals the clean run's to the bit. A 10 m lead puts a sample past 7 m: the unplanted
+   copy lies within 3 m of the host's picture (the snap's 1 m and the offset's 2 m), and the clean
+   run stays under 7 m. */
+static const char *host_pile_text = "scenario planted\nscene pile60\nseed 52\nguests 1\nend 6s\nlight_mass 20kg\nauthority host\n"
+                                    "net g1 rtt 100ms jitter 20ms loss 2%\np1 grab ball\np1 wait 300ms\np1 throw pile31 speed 12\n";
+
+static void test_a_paused_predictions_lead_stays_out_of_aligned_gap(void) {
+    body_sync_stand_t *clean = run_planted(host_pile_text, 0, 0.0f);
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(host_pile_text, strlen(host_pile_text), &scenario, &error), error.text);
+    scene_named(scenario.scene)->build(&scene);
+    body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+    body_sync_stand_t *led = body_sync_stand_create(&config, &error);
+    TEST_ASSERT_NOT_NULL_MESSAGE(led, error.text);
+    stand_testing_plant_lead(led, 10.0f);
+    body_sync_stand_run(led);
+    const body_sync_guest_metrics_t *c = &body_sync_stand_report(clean)->guests[0], *l = &body_sync_stand_report(led)->guests[0];
+    TEST_ASSERT_TRUE_MESSAGE(c->aligned_samples > 0, "no aligned sample: the case is not met");
+    TEST_ASSERT_TRUE_MESSAGE(c->aligned_gap_max_m == l->aligned_gap_max_m && c->aligned_gap_p95_m == l->aligned_gap_p95_m, "a paused prediction's lead raised aligned_gap");
+    TEST_ASSERT_TRUE_MESSAGE(l->prediction_gap_max_m > 7.0, "a paused prediction's lead from rest is missing from prediction_gap");
+    TEST_ASSERT_TRUE_MESSAGE(c->prediction_gap_max_m < 7.0, "the clean run already reads the lead");
+    body_sync_stand_destroy(clean);
+    body_sync_stand_destroy(led);
+}
+
 /* A move of a body the guest simulates that its own step did not make, and a copy knocked off
    its rest once the world rested: each planted at the end of a tick of a run whose bound holds
    without it. */
@@ -402,14 +430,48 @@ static void test_pace_fails_on_a_copy_held_in_the_walkers_path(void) {
     body_sync_stand_destroy(runs[1]);
 }
 
+/* The host runs (4 m/s from x -2) to x 5.6, 0.15 m beyond what the wall at 5.75 lets her
+   capsule (0.3 m) reach, so on time she arrives within the 0.2 m of a walk. She meets the crate
+   (x 4.5..5.3) about 1.6 s into the walk, at 2.6 s; the guest's ball, thrown at 2.2 s over 1.8 m
+   at 11.5 m/s, has knocked it out of the lane by 2.4 s. The cut holds the throw back on the host
+   until after 3.0 s: she pins the crate to the wall and stops its depth short, 0.6 m or so, which
+   no time lag absorbs. The lag (two one-way paths of 60 ms, 15 ticks of playback delay and the
+   cut's 60) spans the throw's delay, so a reference with the guest late keeps her pace; the
+   on-time reference alone fails her. */
+static const char *late_throw_text = "scenario planted\nscene wall_plank\nseed 7\nguests 1\nsettle 5s\nnet g1 rtt 100ms jitter 10ms loss 2%\n"
+                                     "at 2000ms cut g1 for 1s\np1 grab ball\nat 2200ms p1 throw 4.8 0.4 0.4 speed 11.5\n"
+                                     "at 1000ms p0 walk 5.6 0 speed 4 as run\nexpect pace run\n";
+static void test_pace_holds_a_walk_to_the_others_played_late(void) {
+    body_sync_error_t error;
+    body_sync_stand_t *runs[2];
+    for (int k = 0; k < 2; k++) {
+        TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(late_throw_text, strlen(late_throw_text), &scenario, &error), error.text);
+        scene_named(scenario.scene)->build(&scene);
+        body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+        runs[k] = body_sync_stand_create(&config, &error);
+        TEST_ASSERT_NOT_NULL_MESSAGE(runs[k], error.text);
+        if (k == 1) {
+            stand_testing_plant_pace_on_time(runs[k]);
+        }
+        body_sync_stand_run(runs[k]);
+    }
+    const body_sync_report_t *clean = body_sync_stand_report(runs[0]);
+    TEST_ASSERT_TRUE_MESSAGE(clean->passed, clean->checks[0].detail);
+    fails(runs[1], aligned_line(runs[1]), "behind the reference");
+    body_sync_stand_destroy(runs[0]);
+    body_sync_stand_destroy(runs[1]);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_pace_fails_on_a_copy_held_in_the_walkers_path);
+    RUN_TEST(test_pace_holds_a_walk_to_the_others_played_late);
     RUN_TEST(test_local_correction_fails_on_a_seam_move_of_a_local_body);
     RUN_TEST(test_rest_breaks_fails_on_a_copy_knocked_after_rest);
     RUN_TEST(test_rest_breaks_fails_on_a_held_copy_churned_in_steps);
     RUN_TEST(test_aligned_gap_fails_on_states_shown_a_tick_early);
     RUN_TEST(test_aligned_gap_fails_on_a_guest_drawing_its_bodies_off_what_it_sends);
+    RUN_TEST(test_a_paused_predictions_lead_stays_out_of_aligned_gap);
     RUN_TEST(test_agree_fails_on_a_body_only_a_guest_has);
     RUN_TEST(test_agree_fails_on_a_body_a_guest_lacks);
     RUN_TEST(test_agree_fails_on_a_moved_copy);

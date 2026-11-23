@@ -137,6 +137,12 @@ void stand_metrics_prediction(stand_metrics_t *metrics, uint32_t guest, double g
     }
 }
 
+void stand_metrics_flight_pause(stand_metrics_t *metrics, uint32_t guest, double gap_m) {
+    if (guest < metrics->guests && isfinite(gap_m)) {
+        stand_hist_add(&metrics->flight_pause[guest], gap_m);
+    }
+}
+
 void stand_metrics_lost_take(stand_metrics_t *metrics, uint32_t guest, double hand_back_m) {
     if (guest < metrics->guests && isfinite(hand_back_m)) {
         metrics->lost_takes[guest]++;
@@ -324,6 +330,8 @@ void stand_metrics_summarize(const stand_metrics_t *metrics, body_sync_report_t 
         out->aligned_gap_p95_m = stand_hist_quantile(&metrics->aligned[g], 0.95);
         out->prediction_gap_max_m = metrics->prediction[g].max;
         out->prediction_gap_p95_m = stand_hist_quantile(&metrics->prediction[g], 0.95);
+        out->flight_pause_gap_max_m = metrics->flight_pause[g].max;
+        out->flight_pause_gap_p95_m = stand_hist_quantile(&metrics->flight_pause[g], 0.95);
         out->local_correction_max_m = metrics->local_correction[g];
         out->lost_takes = metrics->lost_takes[g];
         out->lost_take_max_m = metrics->lost_take_max[g];
@@ -777,6 +785,12 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         put(&j, ",");
         key(&j, "prediction_gap_p95");
         number(&j, gm->prediction_gap_p95_m);
+        put(&j, ",");
+        key(&j, "flight_pause_gap_max");
+        number(&j, gm->flight_pause_gap_max_m);
+        put(&j, ",");
+        key(&j, "flight_pause_gap_p95");
+        number(&j, gm->flight_pause_gap_p95_m);
         put(&j, ",");
         key(&j, "local_correction_max");
         number(&j, gm->local_correction_max_m);

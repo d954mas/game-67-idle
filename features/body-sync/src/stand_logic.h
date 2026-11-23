@@ -226,7 +226,7 @@ typedef struct stand_metrics {
     stand_hist_t lag[BODY_SYNC_GUESTS_MAX], path[BODY_SYNC_GUESTS_MAX], behind[BODY_SYNC_GUESTS_MAX];
     uint32_t steps[BODY_SYNC_GUESTS_MAX], offset_steps[BODY_SYNC_GUESTS_MAX], snaps[BODY_SYNC_GUESTS_MAX];
     double jump_max[BODY_SYNC_GUESTS_MAX];
-    stand_hist_t aligned[BODY_SYNC_GUESTS_MAX], prediction[BODY_SYNC_GUESTS_MAX];
+    stand_hist_t aligned[BODY_SYNC_GUESTS_MAX], prediction[BODY_SYNC_GUESTS_MAX], flight_pause[BODY_SYNC_GUESTS_MAX];
     double local_correction[BODY_SYNC_GUESTS_MAX];
     uint32_t lost_takes[BODY_SYNC_GUESTS_MAX];
     double lost_take_max[BODY_SYNC_GUESTS_MAX];
@@ -260,6 +260,8 @@ void stand_metrics_correction(stand_metrics_t *metrics, uint32_t guest, double c
 void stand_metrics_aligned(stand_metrics_t *metrics, uint32_t guest, double gap_m);
 /* A prediction in a pause from rest against the host's answer at the guest's moment: reported only. */
 void stand_metrics_prediction(stand_metrics_t *metrics, uint32_t guest, double gap_m);
+/* A prediction in a pause with no shared moment against its owner at the playback tick: reported only. */
+void stand_metrics_flight_pause(stand_metrics_t *metrics, uint32_t guest, double gap_m);
 /* A body the guest simulates moved by the seam, not by its own step: into local_correction.max. */
 void stand_metrics_local_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m);
 /* A take of the guest's that lost, its drawn pose handed back `hand_back_m` from the winner's. */

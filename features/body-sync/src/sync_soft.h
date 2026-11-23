@@ -101,6 +101,12 @@
    edge reads as a move, and the copy leaves the hold of a heap at rest. */
 #define SYNC_SOFT_HOLD_M 0.0034f
 #define SYNC_SOFT_HOLD_RAD 0.0195f
+/* While its owner rests, a soft copy (one a lean keeps out of the rest hold) closes a turn past
+   half the dead zone, down to half of that: the dead zone's own 2 degrees plus a copy record's
+   rotation error (net_bits_quat_error(9), 0.0097 rad: the pull aims at the decoded pose) and the
+   host's dead band (SYNC_CORRECT_REST_RAD, 0.0035 rad) would pass the stand's 2 degrees at rest
+   (0.0349 rad). 0.0175 + 0.0097 + 0.0035 = 0.0307 rad, 0.24 degrees inside it. */
+#define SYNC_SOFT_REST_RAD (0.5f * SYNC_SOFT_DEAD_RAD)
 
 typedef struct sync_soft {
     bool correcting;    /* past the dead zone and not yet back under half of it */
@@ -118,6 +124,7 @@ typedef struct sync_soft_in {
     bool touches_local;   /* in contact with a moving body this endpoint simulates */
     float max_speed, max_spin;
     uint16_t pause_ticks; /* the pause after a touch or hit; 0 for SYNC_SOFT_PAUSE_TICKS */
+    bool owner_rests;     /* the turn's dead zone is SYNC_SOFT_REST_RAD */
 } sync_soft_in_t;
 
 typedef enum sync_soft_action {

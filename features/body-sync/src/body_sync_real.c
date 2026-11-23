@@ -591,21 +591,87 @@ static void gather_agents(body_sync_t *s) {
     }
 }
 
+/* How deep two shapes on these transforms overlap, as Box3D's contact manifold measures it: the
+   depth its solver pushes out and contact data reports. 0 when apart; false for a pair without a
+   convex manifold (a compound, a mesh). */
+static bool overlap_depth(b3ShapeId a, b3WorldTransform ta, b3ShapeId b, b3WorldTransform tb, float *depth) {
+    b3ShapeType kind_a = b3Shape_GetType(a), kind_b = b3Shape_GetType(b);
+    int rank_a = kind_a == b3_hullShape ? 2 : kind_a == b3_capsuleShape ? 1 : kind_a == b3_sphereShape ? 0 : -1;
+    int rank_b = kind_b == b3_hullShape ? 2 : kind_b == b3_capsuleShape ? 1 : kind_b == b3_sphereShape ? 0 : -1;
+    if (rank_a < 0 || rank_b < 0) {
+        return false;
+    }
+    /* Each collider takes the higher of hull, capsule, sphere as its first shape. */
+    if (rank_a < rank_b) {
+        b3ShapeId sa = a;
+        b3WorldTransform st = ta;
+        int sr = rank_a;
+        a = b, ta = tb, rank_a = rank_b;
+        b = sa, tb = st, rank_b = sr;
+    }
+    b3LocalManifoldPoint points[B3_MAX_MANIFOLD_POINTS];
+    b3LocalManifold m = {0};
+    m.points = points;
+    b3Transform b_in_a = b3InvMulWorldTransforms(ta, tb);
+    b3SimplexCache simplex = {0};
+    b3SATCache sat = {0};
+    b3Sphere sphere_a, sphere_b;
+    b3Capsule capsule_a, capsule_b;
+    switch (rank_a * 3 + rank_b) {
+    case 0:
+        sphere_a = b3Shape_GetSphere(a), sphere_b = b3Shape_GetSphere(b);
+        b3CollideSpheres(&m, B3_MAX_MANIFOLD_POINTS, &sphere_a, &sphere_b, b_in_a);
+        break;
+    case 3:
+        capsule_a = b3Shape_GetCapsule(a), sphere_b = b3Shape_GetSphere(b);
+        b3CollideCapsuleAndSphere(&m, B3_MAX_MANIFOLD_POINTS, &capsule_a, &sphere_b, b_in_a);
+        break;
+    case 4:
+        capsule_a = b3Shape_GetCapsule(a), capsule_b = b3Shape_GetCapsule(b);
+        b3CollideCapsules(&m, B3_MAX_MANIFOLD_POINTS, &capsule_a, &capsule_b, b_in_a);
+        break;
+    case 6:
+        sphere_b = b3Shape_GetSphere(b);
+        b3CollideHullAndSphere(&m, B3_MAX_MANIFOLD_POINTS, b3Shape_GetHull(a), &sphere_b, b_in_a, &simplex);
+        break;
+    case 7:
+        capsule_b = b3Shape_GetCapsule(b);
+        b3CollideHullAndCapsule(&m, B3_MAX_MANIFOLD_POINTS, b3Shape_GetHull(a), &capsule_b, b_in_a, &simplex);
+        break;
+    default:
+        b3CollideHulls(&m, B3_MAX_MANIFOLD_POINTS, b3Shape_GetHull(a), b3Shape_GetHull(b), b_in_a, &sat);
+        break;
+    }
+    float deepest = 0.0f;
+    for (int i = 0; i < m.pointCount; i++) {
+        deepest = fmaxf(deepest, -points[i].separation);
+    }
+    *depth = deepest;
+    return true;
+}
+
 /* Whether a copy set on the pose (p, q) lies inside one of this side's agents, shape against
-   shape where the two collide, deeper than Box3D's linear slop: a copy resting against an agent
-   touches it that deep and is no overlap. A shape the test cannot shrink counts as inside once
-   the boxes meet. */
+   shape where the two collide, deeper than Box3D's linear slop. Two pictures of a resting
+   contact differ by the copy grid (SYNC_SOFT_HOLD_M, 3.4 mm) and by how each world settled its
+   pile: under the slop that is a resting contact, not an overlap. The depth is the manifold's,
+   not a shrunk shape's: pulling a hull's corners in by the slop moves its faces in by less (a
+   cube's by slop / sqrt(3)). A pair the manifold cannot measure counts as inside once the boxes
+   meet. */
 static bool lands_in_agent(const body_sync_t *s, b3BodyId copy, const float p[3], const float q[4]) {
     if (s->agent_count == 0) {
         return false;
     }
+    b3ShapeId mine[4];
+    if (b3Body_GetShapeCount(copy) > 4) {
+        return true;
+    }
+    int own = b3Body_GetShapes(copy, mine, 4);
     b3Vec3 at = b3Body_GetPosition(copy);
     b3AABB box = b3Body_ComputeAABB(copy);
     float half[3] = {0.5f * (box.upperBound.x - box.lowerBound.x), 0.5f * (box.upperBound.y - box.lowerBound.y), 0.5f * (box.upperBound.z - box.lowerBound.z)};
     float off[3] = {0.5f * (box.upperBound.x + box.lowerBound.x) - at.x, 0.5f * (box.upperBound.y + box.lowerBound.y) - at.y, 0.5f * (box.upperBound.z + box.lowerBound.z) - at.z};
     /* Its reach from its origin, whatever the target rotation. */
     float reach = sqrtf(half[0] * half[0] + half[1] * half[1] + half[2] * half[2]) + sqrtf(off[0] * off[0] + off[1] * off[1] + off[2] * off[2]);
-    const float slop = B3_LINEAR_SLOP;
     b3WorldTransform target = {{p[0], p[1], p[2]}, quat_of(q)};
     for (uint32_t k = 0; k < s->agent_count; k++) {
         b3BodyId body = s->entries[s->agents[k]].body;
@@ -626,48 +692,16 @@ static bool lands_in_agent(const body_sync_t *s, b3BodyId copy, const float p[3]
         int n = b3Body_GetShapes(body, shapes, 4);
         b3WorldTransform t = b3Body_GetTransform(body);
         for (int j = 0; j < n; j++) {
-            b3Vec3 points[B3_MAX_SHAPE_CAST_POINTS];
-            b3ShapeProxy proxy = {points, 0, 0.0f};
-            switch (b3Shape_GetType(shapes[j])) {
-            case b3_sphereShape: {
-                b3Sphere sphere = b3Shape_GetSphere(shapes[j]);
-                points[0] = b3RotateVector(t.q, sphere.center);
-                proxy.count = 1;
-                proxy.radius = sphere.radius - slop;
-                break;
-            }
-            case b3_capsuleShape: {
-                b3Capsule capsule = b3Shape_GetCapsule(shapes[j]);
-                points[0] = b3RotateVector(t.q, capsule.center1);
-                points[1] = b3RotateVector(t.q, capsule.center2);
-                proxy.count = 2;
-                proxy.radius = capsule.radius - slop;
-                break;
-            }
-            case b3_hullShape: {
-                const b3HullData *hull = b3Shape_GetHull(shapes[j]);
-                const b3Vec3 *hp = b3GetHullPoints(hull);
-                if (!hp || hull->vertexCount > B3_MAX_SHAPE_CAST_POINTS) {
+            b3Filter f = b3Shape_GetFilter(shapes[j]);
+            for (int i = 0; i < own; i++) {
+                b3Filter g = b3Shape_GetFilter(mine[i]);
+                if (b3Shape_IsSensor(shapes[j]) || b3Shape_IsSensor(mine[i]) || (f.categoryBits & g.maskBits) == 0 || (g.categoryBits & f.maskBits) == 0) {
+                    continue;
+                }
+                float depth;
+                if (!overlap_depth(shapes[j], t, mine[i], target, &depth) || depth > B3_LINEAR_SLOP) {
                     return true;
                 }
-                for (int i = 0; i < hull->vertexCount; i++) {
-                    b3Vec3 v = hp[i], c = hull->center, in = {c.x - v.x, c.y - v.y, c.z - v.z};
-                    float len = sqrtf(in.x * in.x + in.y * in.y + in.z * in.z), f = len > slop ? slop / len : 1.0f;
-                    points[i] = b3RotateVector(t.q, (b3Vec3){v.x + f * in.x, v.y + f * in.y, v.z + f * in.z});
-                }
-                proxy.count = hull->vertexCount;
-                break;
-            }
-            default:
-                return true;
-            }
-            proxy.radius = fmaxf(proxy.radius, 0.0f);
-            b3Filter f = b3Shape_GetFilter(shapes[j]);
-            b3QueryFilter filter = b3DefaultQueryFilter();
-            filter.categoryBits = f.categoryBits;
-            filter.maskBits = f.maskBits;
-            if (b3Body_OverlapShape(copy, t.p, &proxy, filter, target)) {
-                return true;
             }
         }
     }
@@ -852,6 +886,7 @@ static void drive_soft(body_sync_t *s, uint32_t slot, const float p[3], const fl
     in.max_speed = s->config.max_speed;
     in.max_spin = s->config.max_spin;
     in.pause_ticks = soft_pause(s);
+    in.owner_rests = e->owner_rests;
     sync_soft_out_t out;
     sync_soft_decide(&e->soft_state, &in, e->soft_hit, play, &out);
     e->soft_hit = false;

@@ -78,12 +78,17 @@ extern "C" {
      takes.count take_refusals.count reclaims.count returns.count [bodies]
    - lag-aligned gap: two pictures of one moment, while the body moves. A copy an endpoint plays
      (a guest the host's bodies, the host a guest's) against what its owner drew at the owner tick
-     the copy shows, a body a guest predicts (the second layer) too, in its pause or past it: the
-     snap places it within 1 m of that pose and its render offset adds at most 2 m. It takes the
-     latency out of divergence for every way a body is shown, so it compares the policies.
-     prediction_gap (reported only): a prediction in a pause that began with its owner at rest
-     against the host's picture when the host's playback of that guest's character reaches the
-     guest's tick; past the contact the two simulations differ by chaos, not lateness.
+     the copy shows, a body a guest predicts (the second layer) too once its pull runs: the snap
+     places it within 1 m of that pose and its render offset adds at most 2 m. It takes the
+     latency out of divergence for every way a body is shown, so it compares the policies. A
+     prediction in its pause is this guest's own answer to its touch, drawn ahead of the playback
+     tick, and is measured apart, reported only:
+     prediction_gap: a pause that began with its owner at rest, against the host's picture when the
+     host's playback of that guest's character reaches the guest's tick; past the contact the two
+     simulations differ by chaos, not lateness.
+     flight_pause_gap: a pause that began while its owner moved the body, which shares no such
+     moment, against the owner at the playback tick; it holds the pause's lead on that tick. A
+     third seat's body plays a relayed clock and is left out of all three.
    - local correction: what the seam moved a body a guest simulates (its character excepted)
      beyond its own step, its move at the apply plus the change of its render offset: the
      thrower's own corrections.
@@ -166,6 +171,9 @@ typedef struct body_sync_guest_metrics {
        answer at the guest's moment (README "Metrics"). Two simulations of one contact: past it
        they differ by chaos, which no bound derives. */
     double prediction_gap_max_m, prediction_gap_p95_m;
+    /* Reported only: a prediction in a pause begun on a moving owner (no shared moment) against the
+       owner at the playback tick it is drawn ahead of. */
+    double flight_pause_gap_max_m, flight_pause_gap_p95_m;
     double local_correction_max_m;
     /* Authority following interaction: the guest's takes the host granted and refused, its bodies
        the host's agents took back, and those it returned at rest. */
