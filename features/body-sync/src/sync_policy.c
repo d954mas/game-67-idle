@@ -17,7 +17,7 @@ _Static_assert(SYNC_POLICY_HOST_CLEAR_TICKS * SYNC_SOFT_TOUCH_MM_S >= SYNC_SOFT_
 static bool agent_moves(float speed, bool pushed) { return speed > SYNC_POLICY_AGENT_SPEED || pushed; }
 
 sync_flight_t sync_policy_flight(const sync_policy_flight_in_t *in) {
-    if (in->asleep) {
+    if (in->asleep || (in->until_rest && in->age >= SYNC_POLICY_AGE_TICKS)) {
         return SYNC_FLIGHT_RETURNS;
     }
     if (!in->touched_body) {

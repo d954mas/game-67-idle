@@ -47,6 +47,13 @@ static void test_a_flight_held_until_rest_ends_only_asleep(void) {
     }
     sync_policy_flight_in_t in = {.mode = SYNC_POLICY_INTERACTION, .touched_body = true, .until_rest = true};
     TEST_ASSERT_EQUAL(SYNC_FLIGHT_INTERACTS, sync_policy_flight(&in));
+    /* One that never sleeps goes back at the age bound, and only held until rest. */
+    in = (sync_policy_flight_in_t){.mode = SYNC_POLICY_HOST, .until_rest = true, .age = SYNC_POLICY_AGE_TICKS - 1u};
+    TEST_ASSERT_EQUAL(SYNC_FLIGHT_ON, sync_policy_flight(&in));
+    in.age = SYNC_POLICY_AGE_TICKS;
+    TEST_ASSERT_EQUAL(SYNC_FLIGHT_RETURNS, sync_policy_flight(&in));
+    in.until_rest = false;
+    TEST_ASSERT_EQUAL(SYNC_FLIGHT_ON, sync_policy_flight(&in));
 }
 
 static void test_a_guest_takes_a_free_light_body_its_moving_agent_touches(void) {
@@ -581,7 +588,7 @@ static void test_the_owned_count_matches_the_slots_after_any_sequence(void) {
             sync_authority_settled(&h, id);
             break;
         case 10:
-            sync_authority_settle(&h, id, (pick & 1u) != 0, (pick & 2u) != 0, (pick & 4u) != 0);
+            sync_authority_settle(&h, id, (pick & 1u) != 0, (pick & 2u) != 0, (pick & 4u) != 0, 0);
             break;
         case 11:
             TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_unbind(&h, id));

@@ -629,7 +629,9 @@ ignores the mode.
   stub too). CONTACT, the default, ends it at its first contact with a body that
   is not static (above), or when it sleeps; REST only when it sleeps, its thrower
   judging every contact until then, and the host holding it dynamic as a copy
-  meanwhile. Every endpoint uses the same. Measured against each other on the
+  meanwhile. A REST flight that never sleeps (rolling, pressed awake) goes back
+  after 600 ticks of flight, the 10 s a body owned by interaction is kept with
+  no agent on it (`SYNC_POLICY_AGE_TICKS`), so no throw owns a body for ever. Every endpoint uses the same. Measured against each other on the
   stand's random sweep (a pile and light and heavy tables, 100 and 300 ms): REST hands the
   pictures back at rest, about 1 mm of `return_jump` where CONTACT shows the
   hand-over's glide (p50 0.13 to 0.21 m, past 2 m at 300 ms), but the host's

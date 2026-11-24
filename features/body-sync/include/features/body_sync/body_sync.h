@@ -98,7 +98,8 @@ typedef struct body_sync_config {
     /* When a guest's or the host's own flight goes back to the host (README "Authority follows
        interaction", "A flight"); every endpoint uses the same, as with authority. CONTACT, the
        default, ends it at its first contact with a body that is not static; REST keeps it its
-       thrower's until it sleeps. The stub follows it too. */
+       thrower's until it sleeps, or 10 s (SYNC_POLICY_AGE_TICKS) for one that never does. The
+       stub follows it too. */
     body_sync_flight_end_t flight_end;
 } body_sync_config_t;
 
@@ -365,7 +366,8 @@ body_sync_result_t body_sync_teleported(body_sync_t *sync, body_sync_id_t id);
 /* Measurement: the owner's tick a copy shows now, in that owner's tick count; for a local body
    the endpoint's own last collect tick. False when unknown, and while a copy has no state to
    play: one turned back into a copy, until the next apply drives it and its owner's first state
-   since has come. The stub reports the tick of the newest state received. */
+   since has come. The stub reports the tick of the newest state received, once a state received
+   since the body turned into a copy has driven it. */
 bool body_sync_playback(const body_sync_t *sync, body_sync_id_t id, double *owner_tick);
 
 /* Measurement: true for a copy this side simulates itself now and pulls toward its owner (the

@@ -74,7 +74,9 @@ typedef enum sync_policy_priority {
    four times the derived bound and stays inside that empty band. */
 #define SYNC_POLICY_TAKE_SLOP_M 0.15f
 
-/* A thrown or dropped body's flight (a hold until settled), after a step. */
+/* A thrown or dropped body's flight (a hold until settled), after a step. Held until rest, a flight
+   that never sleeps (rolling, pressed awake) goes back after SYNC_POLICY_AGE_TICKS as a body owned
+   by interaction does with no agent on it: no throw owns a body for ever. */
 typedef enum sync_flight {
     SYNC_FLIGHT_ON = 0,    /* keeps flying under its thrower */
     SYNC_FLIGHT_RETURNS,   /* back to the host (on the host: the hold ends) */
@@ -87,6 +89,7 @@ typedef struct sync_policy_flight_in {
     bool touched_body;       /* began touching a body that is neither static nor its last holder */
     bool touched_untakable;  /* ...one of which this seat may not take (heavy, a character, owned elsewhere) */
     bool until_rest;         /* body_sync_config_t.flight_end REST: a touch ends no flight */
+    uint32_t age;            /* ticks this side has flown it */
 } sync_policy_flight_in_t;
 sync_flight_t sync_policy_flight(const sync_policy_flight_in_t *in);
 

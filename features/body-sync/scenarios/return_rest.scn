@@ -22,7 +22,8 @@ expect no_stuck
 # Derived: both sides hold one rest pose when the body goes back. The guest's rest state carries its
 # pose to the bit, the host's copy rests on it or, within the second layer's dead zone (1 cm), goes
 # on from its own pose, and a copy in the rest hold takes a state within a copy-grid step (3.4 mm)
-# of its pose without moving: no picture moves more than the dead zone, 1 cm, in the window.
+# of its pose without moving: no picture moves more than the dead zone, 1 cm, in the window. The
+# stub, with no layer, places a copy asleep at its owner on that exact pose: less.
 expect return_jump.max <= 1cm
 # The host's picture and the thrower's were both handed back: 2 windows.
 expect return_jump.count >= 2

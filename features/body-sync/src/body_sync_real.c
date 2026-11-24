@@ -70,6 +70,7 @@ typedef struct entry {
     sync_policy_still_t still;
     bool quiet;
     uint32_t agent_tick;
+    uint32_t flight_ticks; /* collects in a row this side has flown it (a hold until settled) */
     bool keep_own;
     bool returned_at_rest; /* released at a rest pose the host acknowledged, nothing played since */
     bool returned_pressed; /* released under this side's own press (sync_policy_take_in_t), still pressed */
@@ -2150,12 +2151,15 @@ void body_sync_collect(body_sync_t *s, uint32_t tick) {
         if (!a->bound || !b3Body_IsValid(e->body)) {
             continue;
         }
-        if (sync_authority_local(&s->authority, a) && a->hold == BODY_SYNC_HOLD_UNTIL_SETTLED) {
+        bool flying = sync_authority_local(&s->authority, a) && a->hold == BODY_SYNC_HOLD_UNTIL_SETTLED;
+        e->flight_ticks = flying ? e->flight_ticks + 1u : 0u;
+        if (flying) {
             const sync_authority_body_t *h = sync_authority_body_const(&s->authority, a->last_holder);
             b3BodyId ignore = h ? s->entries[body_sync_id_slot(a->last_holder)].body : b3_nullBodyId;
             bool untakable;
             bool touched = touched_moving(s, &events, e->body, ignore, &untakable);
-            sync_authority_settle(&s->authority, body_sync_id_make(slot, a->generation), !b3Body_IsAwake(e->body), touched, untakable);
+            sync_authority_settle(&s->authority, body_sync_id_make(slot, a->generation), !b3Body_IsAwake(e->body), touched, untakable,
+                                  e->flight_ticks);
             if (a->hold == BODY_SYNC_HOLD_UNTIL_REST) {
                 e->agent_tick = tick;
             }

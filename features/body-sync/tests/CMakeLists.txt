@@ -174,7 +174,7 @@ set(BODY_SYNC_SLOW_SCENARIOS stack_punch pile_throw cabinet_carry mannequin_hits
     edge_throw_cut edge_stall edge_deaf load_overflow pile_settle_loss10 throw_catch
     bounce_wall cut_short cut_long hitch_guest hitch_host rate_mismatch rate_rough two_ping latency_drop
     throw_dummy throw_glass_door throw_walker recall_flight recall_carry remove_owned
-    catch_guest_throw_100 catch_guest_throw_250 catch_race catch_miss)
+    catch_guest_throw_100 catch_guest_throw_250 catch_race catch_miss return_rest)
 # The same scenarios with the second layer on (the real seam; the stub has no layer): their
 # checks hold in both modes. The layer scenes name it themselves.
 set(BODY_SYNC_LAYER_KG 20)
@@ -183,7 +183,7 @@ set(BODY_SYNC_LAYER_KG 20)
 # mug_table: a guest's flight the host holds dynamic, where the stub's kinematic copy shoves what it
 # strikes (its contrast below).
 set(BODY_SYNC_REAL_SCENARIOS char_push layer_bounce layer_pile layer_push layer_rest layer_stand layer_nudge layer_leave
-    mug_table_100 mug_table_250 mug_table_jitter return_rest)
+    mug_table_100 mug_table_250 mug_table_jitter)
 # One seed, two processes, byte-equal metrics: the core case and the playback's edges.
 set(BODY_SYNC_TWICE_SCENARIOS two_walk bounce_wall cut_short cut_long hitch_guest hitch_host rate_mismatch rate_rough two_ping)
 set(BODY_SYNC_IMPLS "body_sync_stand_cli|" "body_sync_stand_cli_stub|stub_")

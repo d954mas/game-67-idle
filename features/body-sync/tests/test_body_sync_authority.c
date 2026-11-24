@@ -47,15 +47,15 @@ static void test_routes_and_record_kinds(void) {
 static void test_a_settled_hold_ends_where_it_should(void) {
     start();
     TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_claim(&host, A, BODY_SYNC_HOLD_UNTIL_SETTLED));
-    TEST_ASSERT_FALSE(sync_authority_settle(&host, A, false, false, false));
+    TEST_ASSERT_FALSE(sync_authority_settle(&host, A, false, false, false, 0));
     TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_HOLD_UNTIL_SETTLED, sync_authority_body(&host, A)->hold);
-    TEST_ASSERT_TRUE(sync_authority_settle(&host, A, true, false, false));
+    TEST_ASSERT_TRUE(sync_authority_settle(&host, A, true, false, false, 0));
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(BODY_SYNC_HOLD_UNTIL_RELEASE, sync_authority_body(&host, A)->hold, "the host did not end its settled hold");
-    TEST_ASSERT_FALSE(sync_authority_settle(&host, A, true, true, true)); /* no settled hold any more */
-    TEST_ASSERT_FALSE(sync_authority_settle(&host, B, true, true, true)); /* not local */
+    TEST_ASSERT_FALSE(sync_authority_settle(&host, A, true, true, true, 0)); /* no settled hold any more */
+    TEST_ASSERT_FALSE(sync_authority_settle(&host, B, true, true, true, 0)); /* not local */
     /* a guest's settled hold ends with a release to the host */
     TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_claim(&guest, B, BODY_SYNC_HOLD_UNTIL_SETTLED));
-    TEST_ASSERT_TRUE(sync_authority_settle(&guest, B, false, true, true));
+    TEST_ASSERT_TRUE(sync_authority_settle(&guest, B, false, true, true, 0));
     uint8_t record[STUB_RECORD_BYTES_MAX];
     uint32_t size = 0;
     TEST_ASSERT_TRUE(sync_authority_peek(&guest, BODY_SYNC_SEAT_HOST, record, sizeof(record), &size));
@@ -651,7 +651,7 @@ static void test_contact_after_a_flight_returns(void) {
     deliver(&host, BODY_SYNC_SEAT_HOST, &guest, 1);
     TEST_ASSERT_TRUE(sync_authority_contact_number(&guest, sync_authority_body(&guest, A), &n));
     TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, check(1, n));
-    TEST_ASSERT_TRUE(sync_authority_settle(&guest, A, false, true, true)); /* it met a body it may not take */
+    TEST_ASSERT_TRUE(sync_authority_settle(&guest, A, false, true, true, 0)); /* it met a body it may not take */
     deliver(&guest, 1, &host, BODY_SYNC_SEAT_HOST);
     TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_SEAT_HOST, sync_authority_body(&host, A)->seat);
     expect_grace(1, n, "the claim of the contact that ended the flight");

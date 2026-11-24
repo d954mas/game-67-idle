@@ -47,6 +47,10 @@ typedef struct entry {
     /* Host: the state received is an old owner's, from before the body moved to another guest: a
        take-over goes on from the copy as shown, not from that owner's motion. */
     bool in_old;
+    /* A state received since the body last turned into a copy has driven it: until then the copy
+       plays nothing, and the newest state is an older ownership's (body_sync_playback). */
+    bool in_played;
+    uint32_t flight_ticks; /* collects in a row this side has flown it (a hold until settled) */
     stub_body_state_t in;
     sync_masks_t masks;
 } entry_t;
@@ -528,6 +532,8 @@ void body_sync_apply(body_sync_t *s, uint32_t tick) {
         if (!e->copy_mode) {
             e->copy_mode = true;
             e->placed = false;
+            e->in_played = false;
+            e->flight_ticks = 0;
             b3Body_SetType(e->body, b3_kinematicBody);
             /* A lock would drop the angular velocity that turns a copy to its owner's rotation
                (a character's facing); the owner's locks travel in its state instead. */
@@ -538,6 +544,7 @@ void body_sync_apply(body_sync_t *s, uint32_t tick) {
         }
         if (e->has_in && e->in_fresh) {
             e->in_fresh = false;
+            e->in_played = true;
             const stub_body_state_t *in = &e->in;
             b3Vec3 target = {in->position[0], in->position[1], in->position[2]};
             b3Vec3 now = b3Body_GetPosition(e->body);
@@ -629,13 +636,18 @@ void body_sync_collect(body_sync_t *s, uint32_t tick) {
         o->seat = a->seat;
         o->number = sync_authority_declared_number(&s->authority, a);
         e->has_out = true;
+        e->flight_ticks = a->hold == BODY_SYNC_HOLD_UNTIL_SETTLED ? e->flight_ticks + 1u : 0u;
         if (a->hold == BODY_SYNC_HOLD_UNTIL_SETTLED) {
             b3BodyId ignore = b3_nullBodyId;
             const entry_t *h = entry_const(s, a->last_holder);
             if (h) {
                 ignore = h->body;
             }
-            if (o->asleep || (s->config.flight_end == BODY_SYNC_FLIGHT_END_CONTACT && touched_moving(&events, e->body, ignore))) {
+            /* The stub takes nothing by interaction: the host policy's rule, every touch untakable. */
+            bool touched = touched_moving(&events, e->body, ignore);
+            sync_policy_flight_in_t in = {.mode = SYNC_POLICY_HOST, .asleep = o->asleep, .touched_body = touched, .touched_untakable = touched,
+                                          .until_rest = s->config.flight_end == BODY_SYNC_FLIGHT_END_REST, .age = e->flight_ticks};
+            if (sync_policy_flight(&in) == SYNC_FLIGHT_RETURNS) {
                 uint8_t hold = sync_authority_settled(&s->authority, o->id);
                 if (is_host(s)) {
                     o->hold = hold;
@@ -783,7 +795,7 @@ bool body_sync_playback(const body_sync_t *s, body_sync_id_t id, double *owner_t
         *owner_tick = (double)s->now;
         return true;
     }
-    if (!e->has_in) {
+    if (!e->has_in || !e->in_played) {
         return false;
     }
     *owner_tick = (double)e->in_tick;

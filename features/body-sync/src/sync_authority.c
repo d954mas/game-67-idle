@@ -842,13 +842,13 @@ sync_hold_kind_t sync_authority_hold_kind(const sync_authority_t *a, const sync_
     return SYNC_HOLD_DRIVEN;
 }
 
-bool sync_authority_settle(sync_authority_t *a, body_sync_id_t id, bool asleep, bool touched_moving, bool touched_untakable) {
+bool sync_authority_settle(sync_authority_t *a, body_sync_id_t id, bool asleep, bool touched_moving, bool touched_untakable, uint32_t age) {
     sync_authority_body_t *b = sync_authority_body(a, id);
     if (!b || !sync_authority_local(a, b) || b->hold != BODY_SYNC_HOLD_UNTIL_SETTLED) {
         return false;
     }
     sync_policy_flight_in_t in = {.mode = a->mode, .asleep = asleep, .touched_body = touched_moving, .touched_untakable = touched_untakable,
-                                 .until_rest = a->flight_until_rest};
+                                 .until_rest = a->flight_until_rest, .age = age};
     switch (sync_policy_flight(&in)) {
     case SYNC_FLIGHT_ON:
         return false;

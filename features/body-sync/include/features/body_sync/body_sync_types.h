@@ -87,7 +87,7 @@ typedef enum body_sync_authority_mode {
    in both. */
 typedef enum body_sync_flight_end {
     BODY_SYNC_FLIGHT_END_CONTACT = 0, /* at its first contact with a body that is not static, or asleep */
-    BODY_SYNC_FLIGHT_END_REST,        /* only once asleep: its thrower judges every contact until then */
+    BODY_SYNC_FLIGHT_END_REST,        /* once asleep, or after 10 s awake: its thrower judges every contact until then */
 } body_sync_flight_end_t;
 
 typedef struct body_sync_authority {

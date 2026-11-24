@@ -344,7 +344,7 @@ bool sync_authority_sends_sim(const sync_authority_t *a);
    than its last holder (`touched_untakable`: one this side may not take). The policy decides
    (sync_policy_flight): true when the hold ended (see sync_authority_settled); a flight that goes
    on owned by interaction takes the hold until rest instead. */
-bool sync_authority_settle(sync_authority_t *a, body_sync_id_t id, bool asleep, bool touched_moving, bool touched_untakable);
+bool sync_authority_settle(sync_authority_t *a, body_sync_id_t id, bool asleep, bool touched_moving, bool touched_untakable, uint32_t age);
 
 /* ---- authority follows interaction (sync_policy.h) ---- */
 
